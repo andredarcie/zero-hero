@@ -7,7 +7,7 @@ export type EditorCellCollision = {
   upper: boolean;
 };
 
-export type LevelItemType = 'key';
+export type LevelItemType = 'key' | 'sword';
 
 export type LevelItemExport = {
   type: LevelItemType;

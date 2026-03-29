@@ -6,7 +6,10 @@ import { clampCell, gridToWorld } from '@/game/shared/grid';
 
 export class PlayerMovementController {
   private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
+  private readonly swipeThresholdPx = 24;
   private isMoving = false;
+  private touchStart: { pointerId: number; x: number; y: number } | null = null;
+  private queuedMove: { deltaColumn: number; deltaRow: number } | null = null;
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -15,26 +18,36 @@ export class PlayerMovementController {
     private readonly onStep: (column: number, row: number) => void,
   ) {
     this.cursors = scene.input.keyboard?.createCursorKeys();
+    this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handlePointerDown, this);
+    this.scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.handlePointerMove, this);
+    this.scene.input.on(Phaser.Input.Events.POINTER_UP, this.handlePointerUpOrCancel, this);
+    this.scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUpOrCancel, this);
   }
 
   public update(position: GridCell, metrics: BoardMetrics): GridCell {
-    if (this.isMoving || !this.cursors) {
+    if (this.isMoving) {
       return position;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) {
+    if (this.queuedMove) {
+      const { deltaColumn, deltaRow } = this.queuedMove;
+      this.queuedMove = null;
+      return this.tryMove(position, metrics, deltaColumn, deltaRow);
+    }
+
+    if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.left)) {
       return this.tryMove(position, metrics, -1, 0);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
+    if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
       return this.tryMove(position, metrics, 1, 0);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
+    if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
       return this.tryMove(position, metrics, 0, -1);
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.down)) {
+    if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.down)) {
       return this.tryMove(position, metrics, 0, 1);
     }
 
@@ -50,6 +63,62 @@ export class PlayerMovementController {
 
   public get moving(): boolean {
     return this.isMoving;
+  }
+
+  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    this.touchStart = {
+      pointerId: pointer.id,
+      x: pointer.x,
+      y: pointer.y,
+    };
+  }
+
+  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!pointer.isDown || !this.touchStart || this.touchStart.pointerId !== pointer.id || this.queuedMove || this.isMoving) {
+      return;
+    }
+
+    const swipeMove = this.resolveSwipe(pointer.x - this.touchStart.x, pointer.y - this.touchStart.y);
+
+    if (!swipeMove) {
+      return;
+    }
+
+    this.queuedMove = swipeMove;
+    this.touchStart = null;
+  }
+
+  private handlePointerUpOrCancel(pointer: Phaser.Input.Pointer): void {
+    if (!this.touchStart || this.touchStart.pointerId !== pointer.id) {
+      return;
+    }
+
+    if (!this.queuedMove && !this.isMoving) {
+      this.queuedMove = this.resolveSwipe(pointer.x - this.touchStart.x, pointer.y - this.touchStart.y);
+    }
+
+    this.touchStart = null;
+  }
+
+  private resolveSwipe(deltaX: number, deltaY: number): { deltaColumn: number; deltaRow: number } | null {
+    const horizontalDistance = Math.abs(deltaX);
+    const verticalDistance = Math.abs(deltaY);
+
+    if (horizontalDistance < this.swipeThresholdPx && verticalDistance < this.swipeThresholdPx) {
+      return null;
+    }
+
+    if (horizontalDistance >= verticalDistance) {
+      return {
+        deltaColumn: deltaX >= 0 ? 1 : -1,
+        deltaRow: 0,
+      };
+    }
+
+    return {
+      deltaColumn: 0,
+      deltaRow: deltaY >= 0 ? 1 : -1,
+    };
   }
 
   private tryMove(position: GridCell, metrics: BoardMetrics, deltaColumn: number, deltaRow: number): GridCell {

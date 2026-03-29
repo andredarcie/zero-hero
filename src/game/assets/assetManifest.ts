@@ -14,6 +14,8 @@ type ImageAsset = {
   path: string;
 };
 
+const resolveAssetUrl = (path: string): string => `${import.meta.env.BASE_URL}${path.replace(/^\/+/u, '')}`;
+
 const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
   {
     key: ASSET_KEYS.hero,
@@ -48,17 +50,25 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     key: ASSET_KEYS.keyItemIcon,
     path: '/assets/ui/icons/key_icon.png',
   },
+  {
+    key: ASSET_KEYS.swordItem,
+    path: '/assets/items/equipment/sword.png',
+  },
+  {
+    key: ASSET_KEYS.swordItemIcon,
+    path: '/assets/ui/icons/sword_icon.png',
+  },
 ] as const;
 
 export const preloadSharedAssets = (scene: Phaser.Scene): void => {
   SHARED_SPRITESHEETS.forEach((asset) => {
-    scene.load.spritesheet(asset.key, asset.path, {
+    scene.load.spritesheet(asset.key, resolveAssetUrl(asset.path), {
       frameWidth: asset.frameWidth,
       frameHeight: asset.frameHeight,
     });
   });
 
   SHARED_IMAGES.forEach((asset) => {
-    scene.load.image(asset.key, asset.path);
+    scene.load.image(asset.key, resolveAssetUrl(asset.path));
   });
 };

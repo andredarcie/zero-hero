@@ -344,6 +344,11 @@
       "type": "key",
       "column": 3,
       "row": 3
+    },
+    {
+      "type": "sword",
+      "column": 4,
+      "row": 3
     }
   ]
 }

@@ -27,6 +27,7 @@ export class GameBoardRenderer {
   private readonly heartsSprites: Phaser.GameObjects.Sprite[];
   private readonly itemSlotSprite: Phaser.GameObjects.Image;
   private readonly itemSlotContentSprite: Phaser.GameObjects.Image;
+  private hudItemAnchor = { x: 0, y: 0, size: 0 };
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -71,6 +72,10 @@ export class GameBoardRenderer {
     this.itemSlotContentSprite
       .setTexture(textureKey)
       .setVisible(true);
+  }
+
+  public getHudItemAnchor(): { x: number; y: number; size: number } {
+    return { ...this.hudItemAnchor };
   }
 
   private drawGrid(metrics: BoardMetrics): void {
@@ -156,5 +161,11 @@ export class GameBoardRenderer {
     this.itemSlotContentSprite
       .setPosition(slotX - (slotSize / 2), slotY)
       .setDisplaySize(itemSize, itemSize);
+
+    this.hudItemAnchor = {
+      x: slotX - (slotSize / 2),
+      y: slotY,
+      size: itemSize,
+    };
   }
 }

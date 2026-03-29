@@ -5,6 +5,7 @@ export const DEFAULT_GAME_HEIGHT = 240;
 export const GRID_COLUMNS = 8;
 export const GRID_ROWS = 8;
 export const TILESET_FRAME_SIZE = 16;
+export const ITEM_FRAME_SIZE = 16;
 export const MIN_BOARD_TILE_SIZE = 24;
 export const MAX_CHARACTER_SIZE = 52;
 export const BOARD_PANEL_PADDING = 16;
@@ -69,4 +70,6 @@ export const ASSET_KEYS = {
   hudSlot: 'hud-slot',
   keyItem: 'key-item',
   keyItemIcon: 'key-item-icon',
+  swordItem: 'sword-item',
+  swordItemIcon: 'sword-item-icon',
 } as const;

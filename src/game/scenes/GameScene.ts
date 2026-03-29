@@ -7,6 +7,7 @@ import { isBlockedLevelCell, listBlockedCells, normalizeLevel, resolveSpawnCell 
 import { type LevelExport, type LevelItemExport } from '@/game/levelEditor';
 import { ItemBase } from '@/game/items/ItemBase';
 import { KeyItem } from '@/game/items/KeyItem';
+import { SwordItem } from '@/game/items/SwordItem';
 import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { animateGrassRustle } from '@/game/runtime/RuntimeEffects';
@@ -65,6 +66,7 @@ export class GameScene extends Phaser.Scene {
   private playerCell: GridCell = this.spawnCell;
   private readonly items: ItemBase[] = [];
   private collectedItem: ItemBase | null = null;
+  private collectingItem = false;
 
   public constructor() {
     super(GameScene.key);
@@ -131,18 +133,21 @@ export class GameScene extends Phaser.Scene {
     switch (item.type) {
       case 'key':
         return new KeyItem(this, { column: item.column, row: item.row });
+      case 'sword':
+        return new SwordItem(this, { column: item.column, row: item.row });
       default:
         return null;
     }
   }
 
   private tryCollectItemAtPlayerPosition(): void {
-    if (this.collectedItem) {
+    if (this.collectedItem || this.collectingItem) {
       return;
     }
 
     const item = this.items.find((entry) => (
       !entry.isCollected
+      && !entry.isCollecting
       && entry.position.column === this.playerCell.column
       && entry.position.row === this.playerCell.row
     ));
@@ -151,9 +156,18 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    item.collect();
-    this.collectedItem = item;
-    this.boardRenderer?.setHudItemTexture(item.hudTexture);
+    const hudTarget = this.boardRenderer?.getHudItemAnchor();
+
+    if (!hudTarget) {
+      return;
+    }
+
+    this.collectingItem = true;
+    void item.collectToHud(hudTarget).then(() => {
+      this.collectedItem = item;
+      this.collectingItem = false;
+      this.boardRenderer?.setHudItemTexture(item.hudTexture);
+    });
   }
 
   private createAnimations(): void {
