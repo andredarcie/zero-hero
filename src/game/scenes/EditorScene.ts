@@ -25,9 +25,11 @@ import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import { EditorBoard } from '@/game/editor/EditorBoard';
 import { createButton, createButtonLabel, createToast, defaultBottomButtonY } from '@/game/editor/EditorUi';
 import { TilePalette } from '@/game/editor/TilePalette';
-import { buildLevelExportJson, cloneLevelExport, createEmptyLevelState, type EditorLayer, type LevelExport } from '@/game/levelEditor';
+import { buildLevelExportJson, cloneLevelExport, createEmptyLevelState, type EditorLayer, type LevelExport, type LevelItemType, type LevelObjectType } from '@/game/levelEditor';
 import { cloneLoadedLevel, listLevels, loadLevelByFileName, saveLevelByFileName, type LevelListEntry } from '@/game/levelApi';
 import { resolveBoardCell } from '@/game/shared/grid';
+
+type EditorMode = 'tile' | 'item' | 'object';
 
 type BoardMetrics = {
   tileSize: number;
@@ -55,7 +57,10 @@ type LevelButton = {
 
 type EditorSnapshot = {
   mode: 'editor';
+  editorMode: EditorMode;
   selectedTile: number | null;
+  selectedItemType: LevelItemType | null;
+  selectedObjectType: LevelObjectType | null;
   selectedLayer: EditorLayer;
   collisionEnabled: boolean;
   hoveredCell: { column: number; row: number } | null;
@@ -67,6 +72,8 @@ type EditorSnapshot = {
 
 export class EditorScene extends Phaser.Scene {
   public static readonly key = 'editor';
+  private static readonly modeSectionY = BOARD_PANEL_PADDING + 146;
+  private static readonly levelSectionY = BOARD_PANEL_PADDING + 282;
 
   private boardMetrics: BoardMetrics = {
     tileSize: MIN_BOARD_TILE_SIZE,
@@ -85,7 +92,10 @@ export class EditorScene extends Phaser.Scene {
     height: 0,
   };
   private level = createEmptyLevelState();
+  private selectedMode: EditorMode = 'tile';
   private selectedTile: number | null = 0;
+  private selectedItemType: LevelItemType | null = 'key';
+  private selectedObjectType: LevelObjectType | null = 'lookedDoor';
   private selectedLayer: EditorLayer = 'ground';
   private collisionEnabled = false;
   private hoveredCell: { column: number; row: number } | null = null;
@@ -96,6 +106,16 @@ export class EditorScene extends Phaser.Scene {
   private board?: EditorBoard;
   private tilePalette?: TilePalette;
   private statusText?: Phaser.GameObjects.Text;
+  private modeTileButton?: Phaser.GameObjects.Rectangle;
+  private modeItemButton?: Phaser.GameObjects.Rectangle;
+  private modeObjectButton?: Phaser.GameObjects.Rectangle;
+  private modeTileLabel?: Phaser.GameObjects.Text;
+  private modeItemLabel?: Phaser.GameObjects.Text;
+  private modeObjectLabel?: Phaser.GameObjects.Text;
+  private itemSelectButton?: Phaser.GameObjects.Rectangle;
+  private itemSelectLabel?: Phaser.GameObjects.Text;
+  private objectSelectButton?: Phaser.GameObjects.Rectangle;
+  private objectSelectLabel?: Phaser.GameObjects.Text;
   private layerGroundButton?: Phaser.GameObjects.Rectangle;
   private layerUpperButton?: Phaser.GameObjects.Rectangle;
   private layerGroundLabel?: Phaser.GameObjects.Text;
@@ -128,6 +148,8 @@ export class EditorScene extends Phaser.Scene {
     this.refreshBoard();
     this.refreshStatus();
     this.refreshLayerButtons();
+    this.refreshModeButtons();
+    this.refreshEntityButtons();
     registerSceneDebugHooks(this, () => this.renderSnapshot());
     void this.refreshLevelList(true);
   }
@@ -157,7 +179,47 @@ export class EditorScene extends Phaser.Scene {
       wordWrap: { width: EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2) },
     }).setDepth(SCENE_DEPTHS.ui);
 
-    this.add.text(BOARD_PANEL_PADDING, BOARD_PANEL_PADDING + 232, 'Levels em /levels', {
+    this.add.text(BOARD_PANEL_PADDING, EditorScene.modeSectionY, 'Modo de edicao', {
+      color: '#a8dadc',
+      fontFamily: FONT_FAMILY,
+      fontSize: '12px',
+    }).setDepth(SCENE_DEPTHS.ui);
+
+    this.modeTileButton = createButton(this, BOARD_PANEL_PADDING, EditorScene.modeSectionY + 22, 84, EDITOR_BUTTON_HEIGHT, () => {
+      this.selectedMode = 'tile';
+      this.refreshModeButtons();
+      this.refreshEntityButtons();
+      this.refreshStatus();
+    });
+    this.modeTileLabel = createButtonLabel(this, BOARD_PANEL_PADDING + 42, EditorScene.modeSectionY + 37, 'Tile');
+
+    this.modeItemButton = createButton(this, BOARD_PANEL_PADDING + 92, EditorScene.modeSectionY + 22, 84, EDITOR_BUTTON_HEIGHT, () => {
+      this.selectedMode = 'item';
+      this.refreshModeButtons();
+      this.refreshEntityButtons();
+      this.refreshStatus();
+    });
+    this.modeItemLabel = createButtonLabel(this, BOARD_PANEL_PADDING + 134, EditorScene.modeSectionY + 37, 'Item');
+
+    this.modeObjectButton = createButton(this, BOARD_PANEL_PADDING + 184, EditorScene.modeSectionY + 22, 104, EDITOR_BUTTON_HEIGHT, () => {
+      this.selectedMode = 'object';
+      this.refreshModeButtons();
+      this.refreshEntityButtons();
+      this.refreshStatus();
+    });
+    this.modeObjectLabel = createButtonLabel(this, BOARD_PANEL_PADDING + 236, EditorScene.modeSectionY + 37, 'Objeto');
+
+    this.itemSelectButton = createButton(this, BOARD_PANEL_PADDING, EditorScene.modeSectionY + 58, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_BUTTON_HEIGHT, () => {
+      this.cycleItemSelection();
+    });
+    this.itemSelectLabel = createButtonLabel(this, EDITOR_PANEL_WIDTH / 2, EditorScene.modeSectionY + 73, '');
+
+    this.objectSelectButton = createButton(this, BOARD_PANEL_PADDING, EditorScene.modeSectionY + 94, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_BUTTON_HEIGHT, () => {
+      this.cycleObjectSelection();
+    });
+    this.objectSelectLabel = createButtonLabel(this, EDITOR_PANEL_WIDTH / 2, EditorScene.modeSectionY + 109, '');
+
+    this.add.text(BOARD_PANEL_PADDING, EditorScene.levelSectionY, 'Levels em /levels', {
       color: '#a8dadc',
       fontFamily: FONT_FAMILY,
       fontSize: '12px',
@@ -239,6 +301,11 @@ export class EditorScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-G', () => { this.selectedLayer = 'ground'; this.refreshLayerButtons(); this.refreshStatus(); });
     this.input.keyboard?.on('keydown-U', () => { this.selectedLayer = 'upper'; this.refreshLayerButtons(); this.refreshStatus(); });
     this.input.keyboard?.on('keydown-C', () => { this.collisionEnabled = !this.collisionEnabled; this.refreshLayerButtons(); this.refreshStatus(); });
+    this.input.keyboard?.on('keydown-T', () => { this.selectedMode = 'tile'; this.refreshModeButtons(); this.refreshEntityButtons(); this.refreshStatus(); });
+    this.input.keyboard?.on('keydown-I', () => { this.selectedMode = 'item'; this.refreshModeButtons(); this.refreshEntityButtons(); this.refreshStatus(); });
+    this.input.keyboard?.on('keydown-O', () => { this.selectedMode = 'object'; this.refreshModeButtons(); this.refreshEntityButtons(); this.refreshStatus(); });
+    this.input.keyboard?.on('keydown-J', () => { this.cycleItemSelection(); });
+    this.input.keyboard?.on('keydown-K', () => { this.cycleObjectSelection(); });
     this.input.keyboard?.on('keydown-E', () => { void this.handleExport(); });
     this.input.keyboard?.on('keydown-S', () => { void this.handleSave(); });
   }
@@ -254,6 +321,8 @@ export class EditorScene extends Phaser.Scene {
     this.board?.refreshHover(this.boardMetrics, this.hoveredCell);
     this.refreshStatus();
     this.refreshLayerButtons();
+    this.refreshModeButtons();
+    this.refreshEntityButtons();
     this.refreshLevelButtons();
   }
 
@@ -313,11 +382,14 @@ export class EditorScene extends Phaser.Scene {
       `Arquivo: ${this.currentFileName ?? 'nenhum'}`,
       `Level: ${this.level.meta.name}`,
       `Alteracoes pendentes: ${this.dirty ? 'sim' : 'nao'}`,
+      `Modo ativo: ${this.selectedMode === 'tile' ? 'tile' : this.selectedMode === 'item' ? 'item' : 'objeto'}`,
       `Tile ativo: ${tileLabel}`,
+      `Item ativo: ${this.selectedItemType ?? 'limpar'}`,
+      `Objeto ativo: ${this.selectedObjectType ?? 'limpar'}`,
       `Camada ativa: ${this.selectedLayer === 'ground' ? 'chao' : 'superior'}`,
       `Colisao ao pintar: ${this.collisionEnabled ? 'ligada' : 'desligada'}`,
       hoverText,
-      'Atalhos: G chao | U superior | C colisao | S salvar | E copiar',
+      'Atalhos: T tile | I item | O objeto | J item | K objeto | G/U camada | C colisao | S salvar | E copiar',
     ]);
   }
 
@@ -339,6 +411,17 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
+  private refreshModeButtons(): void {
+    this.updateButtonState(this.modeTileButton, this.modeTileLabel, this.selectedMode === 'tile');
+    this.updateButtonState(this.modeItemButton, this.modeItemLabel, this.selectedMode === 'item');
+    this.updateButtonState(this.modeObjectButton, this.modeObjectLabel, this.selectedMode === 'object');
+  }
+
+  private refreshEntityButtons(): void {
+    this.updateButtonState(this.itemSelectButton, this.itemSelectLabel, this.selectedMode === 'item', `Item: ${this.selectedItemType ?? 'limpar'}`);
+    this.updateButtonState(this.objectSelectButton, this.objectSelectLabel, this.selectedMode === 'object', `Objeto: ${this.selectedObjectType ?? 'limpar'}`);
+  }
+
   private refreshLevelButtons(): void {
     this.levelButtons.forEach((button) => {
       button.background.destroy();
@@ -348,7 +431,7 @@ export class EditorScene extends Phaser.Scene {
 
     this.availableLevels.slice(0, EDITOR_LEVEL_LIST_MAX).forEach((entry, index) => {
       const x = BOARD_PANEL_PADDING;
-      const y = BOARD_PANEL_PADDING + 256 + (index * (EDITOR_LEVEL_BUTTON_HEIGHT + 6));
+      const y = EditorScene.levelSectionY + 24 + (index * (EDITOR_LEVEL_BUTTON_HEIGHT + 6));
       const active = entry.fileName === this.currentFileName;
       const background = this.add.rectangle(x, y, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_LEVEL_BUTTON_HEIGHT, active ? 0xf4a261 : 0x17323b, 1)
         .setOrigin(0)
@@ -368,6 +451,30 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private paintCell(column: number, row: number): void {
+    if (this.selectedMode === 'item') {
+      this.level.items = this.level.items.filter((item) => !(item.column === column && item.row === row));
+      if (this.selectedItemType) {
+        this.level.items.push({ type: this.selectedItemType, column, row });
+      }
+
+      this.dirty = true;
+      this.refreshBoard();
+      this.refreshStatus();
+      return;
+    }
+
+    if (this.selectedMode === 'object') {
+      this.level.objects = this.level.objects.filter((object) => !(object.column === column && object.row === row));
+      if (this.selectedObjectType) {
+        this.level.objects.push({ type: this.selectedObjectType, column, row });
+      }
+
+      this.dirty = true;
+      this.refreshBoard();
+      this.refreshStatus();
+      return;
+    }
+
     if (this.selectedLayer === 'ground') {
       if (this.selectedTile !== null) {
         this.level.layers.ground[row][column] = this.selectedTile;
@@ -380,6 +487,22 @@ export class EditorScene extends Phaser.Scene {
 
     this.dirty = true;
     this.refreshBoard();
+    this.refreshStatus();
+  }
+
+  private cycleItemSelection(): void {
+    const itemTypes: Array<LevelItemType | null> = ['key', 'sword', null];
+    const currentIndex = itemTypes.findIndex((itemType) => itemType === this.selectedItemType);
+    this.selectedItemType = itemTypes[(currentIndex + 1) % itemTypes.length];
+    this.refreshEntityButtons();
+    this.refreshStatus();
+  }
+
+  private cycleObjectSelection(): void {
+    const objectTypes: Array<LevelObjectType | null> = ['lookedDoor', null];
+    const currentIndex = objectTypes.findIndex((objectType) => objectType === this.selectedObjectType);
+    this.selectedObjectType = objectTypes[(currentIndex + 1) % objectTypes.length];
+    this.refreshEntityButtons();
     this.refreshStatus();
   }
 
@@ -467,7 +590,10 @@ export class EditorScene extends Phaser.Scene {
   private renderSnapshot(): string {
     return JSON.stringify({
       mode: 'editor',
+      editorMode: this.selectedMode,
       selectedTile: this.selectedTile,
+      selectedItemType: this.selectedItemType,
+      selectedObjectType: this.selectedObjectType,
       selectedLayer: this.selectedLayer,
       collisionEnabled: this.collisionEnabled,
       hoveredCell: this.hoveredCell,

@@ -28,10 +28,11 @@ const ensureLevelShape = (input: unknown): LevelExport => {
       upper: candidate.collisions?.upper?.map((row) => [...row]) ?? base.collisions.upper.map((row) => [...row]),
     },
     items: candidate.items?.map((item) => ({ ...item })) ?? base.items.map((item) => ({ ...item })),
+    objects: candidate.objects?.map((object) => ({ ...object })) ?? base.objects.map((object) => ({ ...object })),
   };
 };
 
-const buildApiUrl = (path: string): string => new URL(path, import.meta.env.BASE_URL).toString();
+const buildApiUrl = (path: string): string => `${import.meta.env.BASE_URL}${path.replace(/^\/+/u, '')}`;
 
 export const listLevels = async (): Promise<LevelListEntry[]> => {
   const response = await window.fetch(buildApiUrl('api/levels'));

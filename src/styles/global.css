@@ -1,8 +1,7 @@
 :root {
   color-scheme: dark;
   font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
-  background:
-    radial-gradient(circle at top, #264653 0%, #132028 45%, #091218 100%);
+  background: #000000;
   color: #f1faee;
 }
 
@@ -22,6 +21,7 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   overflow: hidden;
+  background: #000000;
 }
 
 #app {

@@ -4,10 +4,12 @@ import level01Data from '../../../levels/level_01.json';
 import { ANIMATION_KEYS, ASSET_KEYS, GAMEPLAY_HERO_MAX_SIZE, GAMEPLAY_HERO_SCALE, HERO_FRAMES, HUD_RESERVED_ROWS, MIN_BOARD_TILE_SIZE, SCENE_DEPTHS, TIMINGS } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import { isBlockedLevelCell, listBlockedCells, normalizeLevel, resolveSpawnCell } from '@/game/maps/levelRuntime';
-import { type LevelExport, type LevelItemExport } from '@/game/levelEditor';
+import { type LevelExport, type LevelItemExport, type LevelObjectExport } from '@/game/levelEditor';
 import { ItemBase } from '@/game/items/ItemBase';
 import { KeyItem } from '@/game/items/KeyItem';
 import { SwordItem } from '@/game/items/SwordItem';
+import { LookedDoorObject } from '@/game/objects/LookedDoorObject';
+import { ObjectBase } from '@/game/objects/ObjectBase';
 import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { animateGrassRustle } from '@/game/runtime/RuntimeEffects';
@@ -29,6 +31,7 @@ type GameSnapshot = {
     upperLayer: Array<Array<number | null>>;
     blockedCells: Array<{ column: number; row: number }>;
     items: Array<{ type: string; column: number; row: number; collected: boolean }>;
+    objects: Array<{ type: string; column: number; row: number; open: boolean; blocksMovement: boolean }>;
     levelName: string;
   };
   player: {
@@ -64,17 +67,20 @@ export class GameScene extends Phaser.Scene {
   private player?: Phaser.GameObjects.Sprite;
   private movementController?: PlayerMovementController;
   private playerCell: GridCell = this.spawnCell;
+  private readonly objects: ObjectBase[] = [];
   private readonly items: ItemBase[] = [];
   private collectedItem: ItemBase | null = null;
   private collectingItem = false;
+  private blockedPickupCellKey: string | null = null;
 
   public constructor() {
     super(GameScene.key);
   }
 
   public create(): void {
-    this.cameras.main.setBackgroundColor('#1d3557');
+    this.cameras.main.setBackgroundColor('#000000');
     this.boardRenderer = new GameBoardRenderer(this, this.level);
+    this.objects.push(...this.level.objects.map((object) => this.createObject(object)).filter((object): object is ObjectBase => object !== null));
     this.items.push(...this.level.items.map((item) => this.createItem(item)).filter((item): item is ItemBase => item !== null));
     this.player = this.add.sprite(0, 0, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
       .setDisplaySize(this.boardMetrics.characterSize, this.boardMetrics.characterSize)
@@ -85,7 +91,7 @@ export class GameScene extends Phaser.Scene {
     this.movementController = new PlayerMovementController(
       this,
       this.player,
-      (column, row) => isBlockedLevelCell(this.level, column, row),
+      (column, row) => this.isBlockedCell(column, row),
       (column, row) => animateGrassRustle(this, this.boardRenderer?.getGrassSprite(column, row), this.boardMetrics),
     );
 
@@ -96,6 +102,7 @@ export class GameScene extends Phaser.Scene {
 
   public shutdown(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    this.objects.forEach((object) => object.destroy());
     this.items.forEach((item) => item.destroy());
   }
 
@@ -104,7 +111,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.updateDoorStates();
     this.playerCell = this.movementController.update(this.playerCell, this.boardMetrics);
+    this.objects.forEach((object) => object.render(this.boardMetrics));
+    this.items.forEach((item) => item.render(this.boardMetrics));
+
+    if (this.blockedPickupCellKey && this.blockedPickupCellKey !== this.toCellKey(this.playerCell)) {
+      this.blockedPickupCellKey = null;
+    }
+
     this.tryCollectItemAtPlayerPosition();
   }
 
@@ -121,6 +136,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.boardRenderer?.render(this.boardMetrics);
+    this.objects.forEach((object) => object.render(this.boardMetrics));
     this.items.forEach((item) => item.render(this.boardMetrics));
     this.boardRenderer?.setHudItemTexture(this.collectedItem?.hudTexture ?? null);
     this.player?.setDisplaySize(this.boardMetrics.characterSize, this.boardMetrics.characterSize);
@@ -140,8 +156,49 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private createObject(object: LevelObjectExport): ObjectBase | null {
+    switch (object.type) {
+      case 'lookedDoor':
+        return new LookedDoorObject(this, { column: object.column, row: object.row });
+      default:
+        return null;
+    }
+  }
+
+  private isBlockedCell(column: number, row: number): boolean {
+    if (isBlockedLevelCell(this.level, column, row)) {
+      return true;
+    }
+
+    const blockingObject = this.objects.find((object) => (
+      object.position.column === column
+      && object.position.row === row
+      && object.blocksMovement
+    ));
+
+    if (!blockingObject) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private updateDoorStates(): void {
+    const hasKey = this.collectedItem instanceof KeyItem;
+
+    this.objects.forEach((object) => {
+      if (object instanceof LookedDoorObject) {
+        object.setOpen(hasKey);
+      }
+    });
+  }
+
   private tryCollectItemAtPlayerPosition(): void {
-    if (this.collectedItem || this.collectingItem) {
+    if (this.collectingItem) {
+      return;
+    }
+
+    if (this.blockedPickupCellKey === this.toCellKey(this.playerCell)) {
       return;
     }
 
@@ -163,11 +220,24 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.collectingItem = true;
+    const previousItem = this.collectedItem;
+
+    if (previousItem) {
+      previousItem.dropAt({ column: this.playerCell.column, row: this.playerCell.row }, this.boardMetrics);
+      this.collectedItem = null;
+      this.blockedPickupCellKey = this.toCellKey(this.playerCell);
+      this.boardRenderer?.setHudItemTexture(null);
+    }
+
     void item.collectToHud(hudTarget).then(() => {
       this.collectedItem = item;
       this.collectingItem = false;
       this.boardRenderer?.setHudItemTexture(item.hudTexture);
     });
+  }
+
+  private toCellKey(cell: GridCell): string {
+    return `${cell.column},${cell.row}`;
   }
 
   private createAnimations(): void {
@@ -210,6 +280,13 @@ export class GameScene extends Phaser.Scene {
           column: item.position.column,
           row: item.position.row,
           collected: item.isCollected,
+        })),
+        objects: this.objects.map((object) => ({
+          type: object.constructor.name,
+          column: object.position.column,
+          row: object.position.row,
+          open: object instanceof LookedDoorObject ? object.isOpen : false,
+          blocksMovement: object.blocksMovement,
         })),
         levelName: this.level.meta.name,
       },

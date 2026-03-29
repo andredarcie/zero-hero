@@ -16,6 +16,8 @@ type EditorBoardMetrics = {
 export class EditorBoard {
   private readonly boardTileSprites: Phaser.GameObjects.Sprite[] = [];
   private readonly upperTileSprites: Phaser.GameObjects.Sprite[] = [];
+  private readonly itemSprites: Phaser.GameObjects.Sprite[] = [];
+  private readonly objectSprites: Phaser.GameObjects.Sprite[] = [];
   private readonly collisionMarkers: Phaser.GameObjects.Text[] = [];
   private readonly boardGrid: Phaser.GameObjects.Graphics;
   private readonly hoverHighlight: Phaser.GameObjects.Rectangle;
@@ -33,6 +35,8 @@ export class EditorBoard {
       for (let column = 0; column < GRID_COLUMNS; column += 1) {
         this.boardTileSprites.push(scene.add.sprite(0, 0, ASSET_KEYS.forestTileset, 0).setOrigin(0).setDepth(1));
         this.upperTileSprites.push(scene.add.sprite(0, 0, ASSET_KEYS.forestTileset, 0).setOrigin(0).setDepth(3));
+        this.itemSprites.push(scene.add.sprite(0, 0, ASSET_KEYS.keyItemIcon).setOrigin(0.5).setDepth(SCENE_DEPTHS.item).setVisible(false));
+        this.objectSprites.push(scene.add.sprite(0, 0, ASSET_KEYS.lookedDoorObject).setOrigin(0.5).setDepth(SCENE_DEPTHS.object).setVisible(false));
         this.collisionMarkers.push(scene.add.text(0, 0, 'C', {
           color: '#ff6b6b',
           fontFamily: FONT_FAMILY,
@@ -53,12 +57,17 @@ export class EditorBoard {
 
         this.boardTileSprites[index].setPosition(x, y).setDisplaySize(metrics.tileSize, metrics.tileSize);
         this.upperTileSprites[index].setPosition(x, y).setDisplaySize(metrics.tileSize, metrics.tileSize);
+        this.itemSprites[index].setPosition(x + (metrics.tileSize / 2), y + (metrics.tileSize / 2));
+        this.objectSprites[index].setPosition(x + (metrics.tileSize / 2), y + (metrics.tileSize / 2));
         this.collisionMarkers[index].setPosition(x + (metrics.tileSize / 2), y + (metrics.tileSize / 2));
       }
     }
   }
 
   public render(level: LevelExport, metrics: EditorBoardMetrics): void {
+    const itemLookup = new Map(level.items.map((item) => [`${item.column},${item.row}`, item] as const));
+    const objectLookup = new Map(level.objects.map((object) => [`${object.column},${object.row}`, object] as const));
+
     for (let row = 0; row < GRID_ROWS; row += 1) {
       for (let column = 0; column < GRID_COLUMNS; column += 1) {
         const index = toIndex(column, row);
@@ -66,11 +75,27 @@ export class EditorBoard {
         const upperTile = level.layers.upper[row][column];
         const groundCollision = level.collisions.ground[row][column];
         const upperCollision = level.collisions.upper[row][column];
+        const item = itemLookup.get(`${column},${row}`);
+        const object = objectLookup.get(`${column},${row}`);
 
         this.boardTileSprites[index].setFrame(groundTile).setVisible(true);
         this.upperTileSprites[index].setVisible(upperTile !== null);
         if (upperTile !== null) {
           this.upperTileSprites[index].setFrame(upperTile);
+        }
+
+        this.itemSprites[index].setVisible(Boolean(item));
+        if (item) {
+          this.itemSprites[index]
+            .setTexture(item.type === 'sword' ? ASSET_KEYS.swordItem : ASSET_KEYS.keyItemIcon, item.type === 'sword' ? 0 : undefined)
+            .setDisplaySize(Math.floor(metrics.tileSize * 0.58), Math.floor(metrics.tileSize * 0.58));
+        }
+
+        this.objectSprites[index].setVisible(Boolean(object));
+        if (object) {
+          this.objectSprites[index]
+            .setTexture(ASSET_KEYS.lookedDoorObject)
+            .setDisplaySize(Math.floor(metrics.tileSize * 0.72), Math.floor(metrics.tileSize * 0.72));
         }
 
         this.collisionMarkers[index]

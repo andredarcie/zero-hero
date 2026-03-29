@@ -350,5 +350,12 @@
       "column": 4,
       "row": 3
     }
+  ],
+  "objects": [
+    {
+      "type": "lookedDoor",
+      "column": 5,
+      "row": 3
+    }
   ]
 }

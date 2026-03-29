@@ -18,7 +18,7 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   parent,
   width: getViewportSize().width,
   height: getViewportSize().height,
-  backgroundColor: '#1d3557',
+  backgroundColor: '#000000',
   pixelArt: true,
   roundPixels: true,
   scale: {

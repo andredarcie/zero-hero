@@ -18,6 +18,9 @@ export const HUD_HEARTS_SCALE = 0.52;
 export const HUD_SLOT_SCALE = 0.72;
 export const HUD_INNER_PADDING_SCALE = 0.18;
 export const HUD_ITEM_SCALE = 0.56;
+export const ITEM_FLOAT_AMPLITUDE = 3;
+export const ITEM_FLOAT_SPEED = 0.0034;
+export const ITEM_SCALE_PULSE = 0.04;
 export const EDITOR_PANEL_WIDTH = 320;
 export const EDITOR_BUTTON_HEIGHT = 30;
 export const EDITOR_BUTTON_WIDTH = 90;
@@ -36,6 +39,7 @@ export const SCENE_DEPTHS = {
   grid: 5,
   item: 8,
   player: 10,
+  object: 18,
   upper: 20,
   ui: 20,
   uiOverlay: 21,
@@ -72,4 +76,10 @@ export const ASSET_KEYS = {
   keyItemIcon: 'key-item-icon',
   swordItem: 'sword-item',
   swordItemIcon: 'sword-item-icon',
+  itemShadow: 'item-shadow',
+  lookedDoorObject: 'looked-door-object',
+} as const;
+
+export const ITEM_FRAMES = {
+  swordIdle: 0,
 } as const;

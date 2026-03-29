@@ -35,6 +35,12 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameWidth: 7,
     frameHeight: 7,
   },
+  {
+    key: ASSET_KEYS.swordItem,
+    path: '/assets/items/equipment/sword.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
 ] as const;
 
 const SHARED_IMAGES: readonly ImageAsset[] = [
@@ -51,12 +57,16 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     path: '/assets/ui/icons/key_icon.png',
   },
   {
-    key: ASSET_KEYS.swordItem,
-    path: '/assets/items/equipment/sword.png',
-  },
-  {
     key: ASSET_KEYS.swordItemIcon,
     path: '/assets/ui/icons/sword_icon.png',
+  },
+  {
+    key: ASSET_KEYS.itemShadow,
+    path: '/assets/effects/ambient/item_shadow.png',
+  },
+  {
+    key: ASSET_KEYS.lookedDoorObject,
+    path: '/assets/environment/structures/locked_door.png',
   },
 ] as const;
 
