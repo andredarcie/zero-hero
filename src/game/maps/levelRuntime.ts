@@ -20,6 +20,7 @@ export const normalizeLevel = (level: LevelExport): LevelExport => {
       ground: level.collisions.ground.map((row) => [...row]),
       upper: level.collisions.upper.map((row) => [...row]),
     },
+    items: (level.items ?? []).map((item) => ({ ...item })),
   };
 };
 

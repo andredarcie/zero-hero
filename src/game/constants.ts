@@ -16,6 +16,7 @@ export const HUD_HEALTH_MAX = 3;
 export const HUD_HEARTS_SCALE = 0.52;
 export const HUD_SLOT_SCALE = 0.72;
 export const HUD_INNER_PADDING_SCALE = 0.18;
+export const HUD_ITEM_SCALE = 0.56;
 export const EDITOR_PANEL_WIDTH = 320;
 export const EDITOR_BUTTON_HEIGHT = 30;
 export const EDITOR_BUTTON_WIDTH = 90;
@@ -32,6 +33,7 @@ export const SCENE_DEPTHS = {
   ground: 0,
   decorBelowPlayer: 4,
   grid: 5,
+  item: 8,
   player: 10,
   upper: 20,
   ui: 20,
@@ -65,4 +67,6 @@ export const ASSET_KEYS = {
   forestTileset: 'forest-tileset',
   hudHearts: 'hud-hearts',
   hudSlot: 'hud-slot',
+  keyItem: 'key-item',
+  keyItemIcon: 'key-item-icon',
 } as const;

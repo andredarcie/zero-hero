@@ -98,8 +98,32 @@ const levelsApiPlugin = (): Plugin => ({
   },
 });
 
+const spaFallbackPlugin = (): Plugin => ({
+  name: 'spa-fallback',
+  apply: 'build',
+  async closeBundle() {
+    const distDir = fileURLToPath(new URL('./dist', import.meta.url));
+    const indexPath = path.join(distDir, 'index.html');
+    const fallbackPath = path.join(distDir, '404.html');
+    const indexHtml = await fs.readFile(indexPath, 'utf8');
+
+    await fs.writeFile(fallbackPath, indexHtml, 'utf8');
+  },
+});
+
+const resolveBasePath = (): string => {
+  if (!process.env.GITHUB_ACTIONS) {
+    return '/';
+  }
+
+  const repositoryName = process.env.GITHUB_REPOSITORY?.split('/')[1];
+
+  return repositoryName ? `/${repositoryName}/` : '/';
+};
+
 export default defineConfig({
-  plugins: [levelsApiPlugin()],
+  base: resolveBasePath(),
+  plugins: [levelsApiPlugin(), spaFallbackPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

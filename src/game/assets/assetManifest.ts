@@ -40,6 +40,14 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     key: ASSET_KEYS.hudSlot,
     path: '/assets/ui/hud/hud_slot.png',
   },
+  {
+    key: ASSET_KEYS.keyItem,
+    path: '/assets/items/collectibles/key.png',
+  },
+  {
+    key: ASSET_KEYS.keyItemIcon,
+    path: '/assets/ui/icons/key_icon.png',
+  },
 ] as const;
 
 export const preloadSharedAssets = (scene: Phaser.Scene): void => {

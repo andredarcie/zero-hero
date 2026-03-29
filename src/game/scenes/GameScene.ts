@@ -4,7 +4,9 @@ import level01Data from '../../../levels/level_01.json';
 import { ANIMATION_KEYS, ASSET_KEYS, GAMEPLAY_HERO_MAX_SIZE, GAMEPLAY_HERO_SCALE, HERO_FRAMES, HUD_RESERVED_ROWS, MIN_BOARD_TILE_SIZE, SCENE_DEPTHS, TIMINGS } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import { isBlockedLevelCell, listBlockedCells, normalizeLevel, resolveSpawnCell } from '@/game/maps/levelRuntime';
-import { type LevelExport } from '@/game/levelEditor';
+import { type LevelExport, type LevelItemExport } from '@/game/levelEditor';
+import { ItemBase } from '@/game/items/ItemBase';
+import { KeyItem } from '@/game/items/KeyItem';
 import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { animateGrassRustle } from '@/game/runtime/RuntimeEffects';
@@ -25,6 +27,7 @@ type GameSnapshot = {
     groundLayer: number[][];
     upperLayer: Array<Array<number | null>>;
     blockedCells: Array<{ column: number; row: number }>;
+    items: Array<{ type: string; column: number; row: number; collected: boolean }>;
     levelName: string;
   };
   player: {
@@ -36,6 +39,7 @@ type GameSnapshot = {
     moving: boolean;
     width: number;
     height: number;
+    item: string | null;
   };
   note: string;
 };
@@ -59,6 +63,8 @@ export class GameScene extends Phaser.Scene {
   private player?: Phaser.GameObjects.Sprite;
   private movementController?: PlayerMovementController;
   private playerCell: GridCell = this.spawnCell;
+  private readonly items: ItemBase[] = [];
+  private collectedItem: ItemBase | null = null;
 
   public constructor() {
     super(GameScene.key);
@@ -67,6 +73,7 @@ export class GameScene extends Phaser.Scene {
   public create(): void {
     this.cameras.main.setBackgroundColor('#1d3557');
     this.boardRenderer = new GameBoardRenderer(this, this.level);
+    this.items.push(...this.level.items.map((item) => this.createItem(item)).filter((item): item is ItemBase => item !== null));
     this.player = this.add.sprite(0, 0, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
       .setDisplaySize(this.boardMetrics.characterSize, this.boardMetrics.characterSize)
       .setOrigin(0.5)
@@ -87,6 +94,7 @@ export class GameScene extends Phaser.Scene {
 
   public shutdown(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    this.items.forEach((item) => item.destroy());
   }
 
   public update(): void {
@@ -95,6 +103,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.playerCell = this.movementController.update(this.playerCell, this.boardMetrics);
+    this.tryCollectItemAtPlayerPosition();
   }
 
   private handleResize(gameSize: Phaser.Structs.Size | { width: number; height: number }): void {
@@ -110,10 +119,41 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.boardRenderer?.render(this.boardMetrics);
+    this.items.forEach((item) => item.render(this.boardMetrics));
+    this.boardRenderer?.setHudItemTexture(this.collectedItem?.hudTexture ?? null);
     this.player?.setDisplaySize(this.boardMetrics.characterSize, this.boardMetrics.characterSize);
     if (this.movementController) {
       this.playerCell = this.movementController.syncPlayerToGrid(this.playerCell, this.boardMetrics);
     }
+  }
+
+  private createItem(item: LevelItemExport): ItemBase | null {
+    switch (item.type) {
+      case 'key':
+        return new KeyItem(this, { column: item.column, row: item.row });
+      default:
+        return null;
+    }
+  }
+
+  private tryCollectItemAtPlayerPosition(): void {
+    if (this.collectedItem) {
+      return;
+    }
+
+    const item = this.items.find((entry) => (
+      !entry.isCollected
+      && entry.position.column === this.playerCell.column
+      && entry.position.row === this.playerCell.row
+    ));
+
+    if (!item) {
+      return;
+    }
+
+    item.collect();
+    this.collectedItem = item;
+    this.boardRenderer?.setHudItemTexture(item.hudTexture);
   }
 
   private createAnimations(): void {
@@ -151,6 +191,12 @@ export class GameScene extends Phaser.Scene {
         groundLayer: this.level.layers.ground,
         upperLayer: this.level.layers.upper,
         blockedCells: listBlockedCells(this.level),
+        items: this.items.map((item) => ({
+          type: item.constructor.name,
+          column: item.position.column,
+          row: item.position.row,
+          collected: item.isCollected,
+        })),
         levelName: this.level.meta.name,
       },
       player: {
@@ -162,6 +208,7 @@ export class GameScene extends Phaser.Scene {
         moving: this.movementController?.moving ?? false,
         width: this.boardMetrics.characterSize,
         height: this.boardMetrics.characterSize,
+        item: this.collectedItem?.constructor.name ?? null,
       },
       note: 'Origin at top-left. Player moves one cell at a time inside the grid.',
     };

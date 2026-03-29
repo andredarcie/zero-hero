@@ -27,11 +27,14 @@ const ensureLevelShape = (input: unknown): LevelExport => {
       ground: candidate.collisions?.ground?.map((row) => [...row]) ?? base.collisions.ground.map((row) => [...row]),
       upper: candidate.collisions?.upper?.map((row) => [...row]) ?? base.collisions.upper.map((row) => [...row]),
     },
+    items: candidate.items?.map((item) => ({ ...item })) ?? base.items.map((item) => ({ ...item })),
   };
 };
 
+const buildApiUrl = (path: string): string => new URL(path, import.meta.env.BASE_URL).toString();
+
 export const listLevels = async (): Promise<LevelListEntry[]> => {
-  const response = await window.fetch('/api/levels');
+  const response = await window.fetch(buildApiUrl('api/levels'));
 
   if (!response.ok) {
     throw new Error('Falha ao listar levels');
@@ -41,7 +44,7 @@ export const listLevels = async (): Promise<LevelListEntry[]> => {
 };
 
 export const loadLevelByFileName = async (fileName: string): Promise<LevelExport> => {
-  const response = await window.fetch(`/api/levels/${encodeURIComponent(fileName)}`);
+  const response = await window.fetch(buildApiUrl(`api/levels/${encodeURIComponent(fileName)}`));
 
   if (!response.ok) {
     throw new Error(`Falha ao carregar ${fileName}`);
@@ -51,7 +54,7 @@ export const loadLevelByFileName = async (fileName: string): Promise<LevelExport
 };
 
 export const saveLevelByFileName = async (fileName: string, level: LevelExport): Promise<LevelExport> => {
-  const response = await window.fetch(`/api/levels/${encodeURIComponent(fileName)}`, {
+  const response = await window.fetch(buildApiUrl(`api/levels/${encodeURIComponent(fileName)}`), {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',

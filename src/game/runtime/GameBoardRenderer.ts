@@ -5,6 +5,7 @@ import {
   HUD_BACKGROUND_COLOR,
   HUD_HEALTH_MAX,
   HUD_HEARTS_SCALE,
+  HUD_ITEM_SCALE,
   HUD_INNER_PADDING_SCALE,
   HUD_SLOT_SCALE,
   SCENE_DEPTHS,
@@ -25,6 +26,7 @@ export class GameBoardRenderer {
   private readonly hudBar: Phaser.GameObjects.Rectangle;
   private readonly heartsSprites: Phaser.GameObjects.Sprite[];
   private readonly itemSlotSprite: Phaser.GameObjects.Image;
+  private readonly itemSlotContentSprite: Phaser.GameObjects.Image;
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -44,6 +46,10 @@ export class GameBoardRenderer {
     this.itemSlotSprite = scene.add.image(0, 0, ASSET_KEYS.hudSlot)
       .setOrigin(1, 0.5)
       .setDepth(SCENE_DEPTHS.uiLabel);
+    this.itemSlotContentSprite = scene.add.image(0, 0, ASSET_KEYS.keyItemIcon)
+      .setOrigin(0.5)
+      .setVisible(false)
+      .setDepth(SCENE_DEPTHS.uiLabel);
   }
 
   public render(metrics: BoardMetrics): void {
@@ -54,6 +60,17 @@ export class GameBoardRenderer {
 
   public getGrassSprite(column: number, row: number): Phaser.GameObjects.Sprite | undefined {
     return this.grassSprites.get(toCellKey(column, row));
+  }
+
+  public setHudItemTexture(textureKey: string | null): void {
+    if (!textureKey) {
+      this.itemSlotContentSprite.setVisible(false);
+      return;
+    }
+
+    this.itemSlotContentSprite
+      .setTexture(textureKey)
+      .setVisible(true);
   }
 
   private drawGrid(metrics: BoardMetrics): void {
@@ -118,6 +135,9 @@ export class GameBoardRenderer {
     const heartsHeight = Math.max(8, Math.floor(metrics.tileSize * HUD_HEARTS_SCALE));
     const heartWidth = heartsHeight;
     const slotSize = Math.max(12, Math.floor(metrics.tileSize * HUD_SLOT_SCALE));
+    const itemSize = Math.max(10, Math.floor(metrics.tileSize * HUD_ITEM_SCALE));
+    const slotX = metrics.offsetX + metrics.width - hudPadding;
+    const slotY = hudY + (hudHeight / 2);
 
     this.hudBar
       .setPosition(metrics.offsetX, hudY)
@@ -130,7 +150,11 @@ export class GameBoardRenderer {
     });
 
     this.itemSlotSprite
-      .setPosition(metrics.offsetX + metrics.width - hudPadding, hudY + (hudHeight / 2))
+      .setPosition(slotX, slotY)
       .setDisplaySize(slotSize, slotSize);
+
+    this.itemSlotContentSprite
+      .setPosition(slotX - (slotSize / 2), slotY)
+      .setDisplaySize(itemSize, itemSize);
   }
 }

@@ -338,5 +338,12 @@
         true
       ]
     ]
-  }
+  },
+  "items": [
+    {
+      "type": "key",
+      "column": 3,
+      "row": 3
+    }
+  ]
 }

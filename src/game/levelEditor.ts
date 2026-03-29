@@ -7,6 +7,14 @@ export type EditorCellCollision = {
   upper: boolean;
 };
 
+export type LevelItemType = 'key';
+
+export type LevelItemExport = {
+  type: LevelItemType;
+  column: number;
+  row: number;
+};
+
 export type LevelExport = {
   meta: {
     name: string;
@@ -24,6 +32,7 @@ export type LevelExport = {
     ground: boolean[][];
     upper: boolean[][];
   };
+  items: LevelItemExport[];
 };
 
 export const DEFAULT_GROUND_TILE = 5;
@@ -61,6 +70,7 @@ export const createEmptyLevelState = (): LevelExport => ({
     ground: createFilledBooleanGrid(false),
     upper: createFilledBooleanGrid(false),
   },
+  items: [],
 });
 
 export const cloneLevelExport = (level: LevelExport): LevelExport => ({
@@ -73,6 +83,7 @@ export const cloneLevelExport = (level: LevelExport): LevelExport => ({
     ground: level.collisions.ground.map((row) => [...row]),
     upper: level.collisions.upper.map((row) => [...row]),
   },
+  items: level.items.map((item) => ({ ...item })),
 });
 
 export const buildLevelExportJson = (level: LevelExport): string => JSON.stringify(
