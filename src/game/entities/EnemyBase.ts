@@ -1,0 +1,195 @@
+import Phaser from 'phaser';
+
+import { SCENE_DEPTHS } from '@/game/constants';
+import type { WorldCamera } from '@/game/runtime/WorldCamera';
+
+export abstract class EnemyBase {
+  public worldX: number;
+  public worldY: number;
+  public pendingRemoval = false;
+
+  private health: number;
+  private readonly maxHealth: number;
+  private alive = true;
+
+  protected readonly scene: Phaser.Scene;
+  protected readonly sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+  private readonly healthBar: Phaser.GameObjects.Graphics;
+
+  /** Override to return the hurt texture key; if defined, flashes on takeDamage */
+  protected hurtTexture?: string;
+
+  /** Override to return the normal texture key used to restore after hurt flash */
+  protected abstract get normalTexture(): string;
+
+  /** Override to control display scale (default 1.0) */
+  protected get spriteScale(): number {
+    return 1.0;
+  }
+
+  public constructor(
+    scene: Phaser.Scene,
+    worldX: number,
+    worldY: number,
+    maxHealth: number,
+    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+  ) {
+    this.scene = scene;
+    this.worldX = worldX;
+    this.worldY = worldY;
+    this.maxHealth = maxHealth;
+    this.health = maxHealth;
+    this.sprite = sprite;
+    this.healthBar = scene.add.graphics().setDepth(SCENE_DEPTHS.player + 2);
+  }
+
+  public get isAlive(): boolean {
+    return this.alive;
+  }
+
+  public takeDamage(): boolean {
+    if (!this.alive) return false;
+    this.health -= 1;
+
+    if (this.hurtTexture) {
+      this.sprite.setTexture(this.hurtTexture);
+      this.scene.time.delayedCall(150, () => {
+        if (this.alive) {
+          this.sprite.setTexture(this.normalTexture);
+        }
+      });
+    }
+
+    if (this.health <= 0) {
+      this.die();
+      return true;
+    }
+    return false;
+  }
+
+  public abstract update(
+    delta: number,
+    playerX: number,
+    playerY: number,
+    isBlocked: (wx: number, wy: number) => boolean,
+  ): boolean;
+
+  public render(tileSize: number, camera: WorldCamera): void {
+    if (!this.alive) return;
+
+    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
+    const scale = this.spriteScale;
+
+    this.sprite
+      .setPosition(screen.x, screen.y)
+      .setDisplaySize(tileSize * scale, tileSize * scale);
+
+    this.healthBar.clear();
+    const barW = Math.floor(tileSize * 0.75);
+    const barH = Math.max(2, Math.floor(tileSize * 0.12));
+    const barX = screen.x - Math.floor(barW / 2);
+    const barY = screen.y - Math.floor(tileSize * 0.65);
+
+    this.healthBar.fillStyle(0x220000, 1);
+    this.healthBar.fillRect(barX, barY, barW, barH);
+    this.healthBar.fillStyle(0xee2222, 1);
+    this.healthBar.fillRect(barX, barY, Math.round(barW * (this.health / this.maxHealth)), barH);
+  }
+
+  public destroy(): void {
+    if (this.scene.tweens) {
+      this.scene.tweens.killTweensOf(this.sprite);
+    }
+    this.sprite.destroy();
+    this.healthBar.destroy();
+  }
+
+  protected die(): void {
+    this.alive = false;
+    this.healthBar.clear();
+    this.onDeath();
+    this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: 0,
+      scaleX: 0.1,
+      scaleY: 0.1,
+      duration: 280,
+      ease: 'Power2.easeIn',
+      onComplete: () => {
+        this.sprite.setVisible(false);
+        this.pendingRemoval = true;
+      },
+    });
+  }
+
+  /** Override to add death effects (pool, spawn, etc.) */
+  protected onDeath(): void {
+    // no-op by default
+  }
+
+  protected moveToward(
+    targetX: number,
+    targetY: number,
+    isBlocked: (wx: number, wy: number) => boolean,
+  ): void {
+    const dx = targetX - this.worldX;
+    const dy = targetY - this.worldY;
+
+    const primary: [number, number] = Math.abs(dx) >= Math.abs(dy)
+      ? [Math.sign(dx), 0]
+      : [0, Math.sign(dy)];
+    const secondary: [number, number] = Math.abs(dx) >= Math.abs(dy)
+      ? [0, Math.sign(dy)]
+      : [Math.sign(dx), 0];
+
+    for (const [ox, oy] of [primary, secondary]) {
+      const nx = this.worldX + ox;
+      const ny = this.worldY + oy;
+      if (ox === 0 && oy === 0) continue;
+      if (!isBlocked(nx, ny)) {
+        this.worldX = nx;
+        this.worldY = ny;
+        this.sprite.setFlipX(ox < 0);
+        return;
+      }
+    }
+  }
+
+  protected moveAway(
+    fromX: number,
+    fromY: number,
+    isBlocked: (wx: number, wy: number) => boolean,
+  ): void {
+    const dx = this.worldX - fromX;
+    const dy = this.worldY - fromY;
+
+    const primary: [number, number] = Math.abs(dx) >= Math.abs(dy)
+      ? [Math.sign(dx) || 1, 0]
+      : [0, Math.sign(dy) || 1];
+    const secondary: [number, number] = Math.abs(dx) >= Math.abs(dy)
+      ? [0, Math.sign(dy) || 1]
+      : [Math.sign(dx) || 1, 0];
+
+    for (const [ox, oy] of [primary, secondary]) {
+      const nx = this.worldX + ox;
+      const ny = this.worldY + oy;
+      if (!isBlocked(nx, ny)) {
+        this.worldX = nx;
+        this.worldY = ny;
+        this.sprite.setFlipX(ox < 0);
+        return;
+      }
+    }
+  }
+
+  protected wander(isBlocked: (wx: number, wy: number) => boolean): void {
+    const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    const [ox, oy] = dirs[Phaser.Math.Between(0, 3)];
+    const nx = this.worldX + ox;
+    const ny = this.worldY + oy;
+    if (!isBlocked(nx, ny)) {
+      this.worldX = nx;
+      this.worldY = ny;
+    }
+  }
+}

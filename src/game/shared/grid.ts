@@ -1,4 +1,4 @@
-import { CHARACTER_SIZE, GRID_COLUMNS, GRID_ROWS, MAX_CHARACTER_SIZE, TILE_SIZE } from '@/game/constants';
+import { CHARACTER_SIZE, CHUNK_SIZE, GRID_COLUMNS, GRID_ROWS, MAX_CHARACTER_SIZE, TILE_SIZE } from '@/game/constants';
 
 export type GridCell = {
   column: number;
@@ -63,6 +63,21 @@ export const toIndex = (column: number, row: number, columns = GRID_COLUMNS): nu
 export const gridToWorld = (column: number, row: number, metrics: BoardMetrics): { x: number; y: number } => ({
   x: metrics.offsetX + ((column + 0.5) * metrics.tileSize),
   y: metrics.offsetY + ((row + 0.5) * metrics.tileSize),
+});
+
+export type WorldCoord = {
+  worldX: number;
+  worldY: number;
+};
+
+export const worldToChunkCoord = (worldX: number, worldY: number): { cx: number; cy: number } => ({
+  cx: Math.floor(worldX / CHUNK_SIZE),
+  cy: Math.floor(worldY / CHUNK_SIZE),
+});
+
+export const worldToLocalCoord = (worldX: number, worldY: number): { lx: number; ly: number } => ({
+  lx: ((worldX % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
+  ly: ((worldY % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE,
 });
 
 export const resolveBoardCell = (

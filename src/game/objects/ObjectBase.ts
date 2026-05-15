@@ -1,8 +1,8 @@
 import type Phaser from 'phaser';
 
 import { ITEM_FRAME_SIZE, SCENE_DEPTHS } from '@/game/constants';
-import type { BoardMetrics, GridCell } from '@/game/shared/grid';
-import { gridToWorld } from '@/game/shared/grid';
+import type { GridCell } from '@/game/shared/grid';
+import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 export abstract class ObjectBase {
   protected readonly sprite: Phaser.GameObjects.Sprite;
@@ -31,14 +31,10 @@ export abstract class ObjectBase {
     return false;
   }
 
-  public render(metrics: BoardMetrics): void {
-    const world = gridToWorld(this.cell.column, this.cell.row, metrics);
-    const size = Math.max(ITEM_FRAME_SIZE, Math.floor(metrics.tileSize * 0.8 * this.worldSizeMultiplier));
-
-    this.sprite
-      .setPosition(world.x, world.y)
-      .setDisplaySize(size, size)
-      .setVisible(true);
+  public render(tileSize: number, camera: WorldCamera): void {
+    const screen = camera.tileToScreen(this.cell.column, this.cell.row, tileSize);
+    const size = Math.max(ITEM_FRAME_SIZE, Math.floor(tileSize * 0.8 * this.worldSizeMultiplier));
+    this.sprite.setPosition(screen.x, screen.y).setDisplaySize(size, size).setVisible(true);
   }
 
   public destroy(): void {

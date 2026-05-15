@@ -1,21 +1,23 @@
 import Phaser from 'phaser';
 
 import { ANIMATION_KEYS, HERO_FRAMES, TIMINGS } from '@/game/constants';
-import type { BoardMetrics, GridCell } from '@/game/shared/grid';
-import { clampCell, gridToWorld } from '@/game/shared/grid';
+import type { WorldCamera } from './WorldCamera';
 
 export class PlayerMovementController {
   private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
   private readonly swipeThresholdPx = 24;
   private isMoving = false;
+  private moveDuration: number = TIMINGS.moveDurationMs;
   private touchStart: { pointerId: number; x: number; y: number } | null = null;
-  private queuedMove: { deltaColumn: number; deltaRow: number } | null = null;
+  private queuedMove: { dx: number; dy: number } | null = null;
 
   public constructor(
     private readonly scene: Phaser.Scene,
     private readonly player: Phaser.GameObjects.Sprite,
-    private readonly isBlockedCell: (column: number, row: number) => boolean,
-    private readonly onStep: (column: number, row: number) => void,
+    private readonly camera: WorldCamera,
+    private readonly isBlockedCell: (worldX: number, worldY: number) => boolean,
+    private readonly onStep: (worldX: number, worldY: number) => void,
+    private readonly onBumpBlocked?: (worldX: number, worldY: number) => void,
   ) {
     this.cursors = scene.input.keyboard?.createCursorKeys();
     this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handlePointerDown, this);
@@ -24,41 +26,39 @@ export class PlayerMovementController {
     this.scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUpOrCancel, this);
   }
 
-  public update(position: GridCell, metrics: BoardMetrics): GridCell {
+  public update(worldX: number, worldY: number): { worldX: number; worldY: number } {
     if (this.isMoving) {
-      return position;
+      return { worldX, worldY };
     }
 
     if (this.queuedMove) {
-      const { deltaColumn, deltaRow } = this.queuedMove;
+      const { dx, dy } = this.queuedMove;
       this.queuedMove = null;
-      return this.tryMove(position, metrics, deltaColumn, deltaRow);
+      return this.tryMove(worldX, worldY, dx, dy);
     }
 
     if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.left)) {
-      return this.tryMove(position, metrics, -1, 0);
+      return this.tryMove(worldX, worldY, -1, 0);
     }
-
     if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
-      return this.tryMove(position, metrics, 1, 0);
+      return this.tryMove(worldX, worldY, 1, 0);
     }
-
     if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
-      return this.tryMove(position, metrics, 0, -1);
+      return this.tryMove(worldX, worldY, 0, -1);
     }
-
     if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.down)) {
-      return this.tryMove(position, metrics, 0, 1);
+      return this.tryMove(worldX, worldY, 0, 1);
     }
 
-    return position;
+    return { worldX, worldY };
   }
 
-  public syncPlayerToGrid(position: GridCell, metrics: BoardMetrics): GridCell {
-    const clamped = clampCell(position, metrics);
-    const world = gridToWorld(clamped.column, clamped.row, metrics);
-    this.player.setPosition(world.x, world.y);
-    return clamped;
+  public setMoveDuration(ms: number): void {
+    this.moveDuration = ms;
+  }
+
+  public syncPlayerToScreen(): void {
+    this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
   }
 
   public get moving(): boolean {
@@ -66,91 +66,63 @@ export class PlayerMovementController {
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    this.touchStart = {
-      pointerId: pointer.id,
-      x: pointer.x,
-      y: pointer.y,
-    };
+    this.touchStart = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
     if (!pointer.isDown || !this.touchStart || this.touchStart.pointerId !== pointer.id || this.queuedMove || this.isMoving) {
       return;
     }
-
     const swipeMove = this.resolveSwipe(pointer.x - this.touchStart.x, pointer.y - this.touchStart.y);
-
-    if (!swipeMove) {
-      return;
-    }
-
+    if (!swipeMove) return;
     this.queuedMove = swipeMove;
     this.touchStart = null;
   }
 
   private handlePointerUpOrCancel(pointer: Phaser.Input.Pointer): void {
-    if (!this.touchStart || this.touchStart.pointerId !== pointer.id) {
-      return;
-    }
-
+    if (!this.touchStart || this.touchStart.pointerId !== pointer.id) return;
     if (!this.queuedMove && !this.isMoving) {
       this.queuedMove = this.resolveSwipe(pointer.x - this.touchStart.x, pointer.y - this.touchStart.y);
     }
-
     this.touchStart = null;
   }
 
-  private resolveSwipe(deltaX: number, deltaY: number): { deltaColumn: number; deltaRow: number } | null {
-    const horizontalDistance = Math.abs(deltaX);
-    const verticalDistance = Math.abs(deltaY);
-
-    if (horizontalDistance < this.swipeThresholdPx && verticalDistance < this.swipeThresholdPx) {
-      return null;
-    }
-
-    if (horizontalDistance >= verticalDistance) {
-      return {
-        deltaColumn: deltaX >= 0 ? 1 : -1,
-        deltaRow: 0,
-      };
-    }
-
-    return {
-      deltaColumn: 0,
-      deltaRow: deltaY >= 0 ? 1 : -1,
-    };
+  private resolveSwipe(deltaX: number, deltaY: number): { dx: number; dy: number } | null {
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+    if (absX < this.swipeThresholdPx && absY < this.swipeThresholdPx) return null;
+    if (absX >= absY) return { dx: deltaX >= 0 ? 1 : -1, dy: 0 };
+    return { dx: 0, dy: deltaY >= 0 ? 1 : -1 };
   }
 
-  private tryMove(position: GridCell, metrics: BoardMetrics, deltaColumn: number, deltaRow: number): GridCell {
-    const next = clampCell({
-      column: position.column + deltaColumn,
-      row: position.row + deltaRow,
-    }, metrics);
+  private tryMove(worldX: number, worldY: number, dx: number, dy: number): { worldX: number; worldY: number } {
+    const nextX = worldX + dx;
+    const nextY = worldY + dy;
 
-    if ((next.column === position.column && next.row === position.row) || this.isBlockedCell(next.column, next.row)) {
-      return position;
+    if (this.isBlockedCell(nextX, nextY)) {
+      this.onBumpBlocked?.(nextX, nextY);
+      return { worldX, worldY };
     }
 
     this.isMoving = true;
-    this.onStep(next.column, next.row);
+    this.onStep(nextX, nextY);
 
-    if (deltaRow < 0) {
+    if (dy < 0) {
       this.player.anims.stop();
       this.player.setFrame(HERO_FRAMES.idleUp);
-    } else if (deltaRow > 0) {
+    } else if (dy > 0) {
       this.player.anims.stop();
       this.player.setFrame(HERO_FRAMES.idleDown);
     } else {
       this.player.play(ANIMATION_KEYS.heroWalk, true);
-      this.player.setFlipX(deltaColumn < 0);
+      this.player.setFlipX(dx < 0);
     }
 
-    const world = gridToWorld(next.column, next.row, metrics);
     this.scene.tweens.add({
-      targets: this.player,
-      x: world.x,
-      y: world.y,
-      duration: TIMINGS.moveDurationMs,
+      targets: this.camera,
+      worldX: nextX,
+      worldY: nextY,
+      duration: this.moveDuration,
       ease: 'Steps(4)',
       onComplete: () => {
         this.player.anims.stop();
@@ -159,6 +131,6 @@ export class PlayerMovementController {
       },
     });
 
-    return next;
+    return { worldX: nextX, worldY: nextY };
   }
 }

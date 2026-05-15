@@ -41,6 +41,18 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },
+  {
+    key: ASSET_KEYS.slime,
+    path: '/assets/characters/enemies/slime/Slime.png',
+    frameWidth: 16,
+    frameHeight: 16,
+  },
+  {
+    key: ASSET_KEYS.bigSlime,
+    path: '/assets/characters/enemies/slime/BigSlime.png',
+    frameWidth: 16,
+    frameHeight: 16,
+  },
 ] as const;
 
 const SHARED_IMAGES: readonly ImageAsset[] = [
@@ -67,6 +79,54 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   {
     key: ASSET_KEYS.lookedDoorObject,
     path: '/assets/environment/structures/locked_door.png',
+  },
+  {
+    key: ASSET_KEYS.undead,
+    path: '/assets/characters/enemies/undead/undead.png',
+  },
+  {
+    key: ASSET_KEYS.undeadHurt,
+    path: '/assets/characters/enemies/undead/undead_hurt.png',
+  },
+  {
+    key: ASSET_KEYS.coin,
+    path: '/assets/items/collectibles/coin.png',
+  },
+  {
+    key: ASSET_KEYS.bat,
+    path: '/assets/characters/enemies/bat/bat.png',
+  },
+  {
+    key: ASSET_KEYS.batHurt,
+    path: '/assets/characters/enemies/bat/bat_hurt.png',
+  },
+  {
+    key: ASSET_KEYS.mage,
+    path: '/assets/characters/enemies/mage/mage__1.png',
+  },
+  {
+    key: ASSET_KEYS.mageHurt,
+    path: '/assets/characters/enemies/mage/mage_hurt.png',
+  },
+  {
+    key: ASSET_KEYS.magicBall,
+    path: '/assets/characters/enemies/mage/magic_ball.png',
+  },
+  {
+    key: ASSET_KEYS.slimePool,
+    path: '/assets/characters/enemies/slime/SlimePool.png',
+  },
+  {
+    key: ASSET_KEYS.bigSlimePool,
+    path: '/assets/characters/enemies/slime/BigSlimePool.png',
+  },
+  {
+    key: ASSET_KEYS.spider,
+    path: '/assets/characters/enemies/spider/spider.png',
+  },
+  {
+    key: ASSET_KEYS.webSpider,
+    path: '/assets/effects/ambient/web_spider.png',
   },
 ] as const;
 

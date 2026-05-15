@@ -9,8 +9,8 @@ import {
   SCENE_DEPTHS,
   TIMINGS,
 } from '@/game/constants';
-import type { BoardMetrics, GridCell } from '@/game/shared/grid';
-import { gridToWorld } from '@/game/shared/grid';
+import type { GridCell } from '@/game/shared/grid';
+import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 export abstract class ItemBase {
   protected readonly sprite: Phaser.GameObjects.Sprite;
@@ -56,28 +56,26 @@ export abstract class ItemBase {
     return this.collecting;
   }
 
-  public render(metrics: BoardMetrics): void {
-    if (this.collecting) {
-      return;
-    }
+  public render(tileSize: number, camera: WorldCamera): void {
+    if (this.collecting) return;
 
-    const world = gridToWorld(this.cell.column, this.cell.row, metrics);
-    const size = Math.max(ITEM_FRAME_SIZE, Math.floor(metrics.tileSize * 0.6 * this.worldSizeMultiplier));
+    const screen = camera.tileToScreen(this.cell.column, this.cell.row, tileSize);
+    const size = Math.max(ITEM_FRAME_SIZE, Math.floor(tileSize * 0.6 * this.worldSizeMultiplier));
     const time = this.scene.time.now + this.floatOffsetSeed;
-    const bob = Math.sin(time * ITEM_FLOAT_SPEED) * Math.max(2, Math.floor(metrics.tileSize * (ITEM_FLOAT_AMPLITUDE / 24)));
+    const bob = Math.sin(time * ITEM_FLOAT_SPEED) * Math.max(2, Math.floor(tileSize * (ITEM_FLOAT_AMPLITUDE / 24)));
     const pulse = 1 + (Math.sin((time * ITEM_FLOAT_SPEED) + 1.2) * ITEM_SCALE_PULSE);
     const shimmer = 0.82 + (Math.sin((time * ITEM_FLOAT_SPEED * 1.35) + 0.6) * 0.18);
     const shadowWidth = Math.max(10, Math.floor(size * 0.78));
     const shadowHeight = Math.max(4, Math.floor(size * 0.26));
-    const shadowScale = 1 - (Math.max(-1, bob) / Math.max(10, metrics.tileSize * 1.8));
+    const shadowScale = 1 - (Math.max(-1, bob) / Math.max(10, tileSize * 1.8));
 
     this.shadow
-      .setPosition(world.x, world.y + Math.floor(metrics.tileSize * 0.24))
+      .setPosition(screen.x, screen.y + Math.floor(tileSize * 0.24))
       .setDisplaySize(shadowWidth * shadowScale, shadowHeight)
       .setAlpha(0.45)
       .setVisible(!this.collected);
     this.sprite
-      .setPosition(world.x, world.y + bob)
+      .setPosition(screen.x, screen.y + bob)
       .setDisplaySize(size * pulse, size * pulse)
       .setAlpha(shimmer)
       .setVisible(!this.collected);
@@ -86,9 +84,7 @@ export abstract class ItemBase {
   public collectToHud(target: { x: number; y: number; size: number }): Promise<void> {
     this.collecting = true;
     this.collected = false;
-    this.sprite
-      .setVisible(true)
-      .setAlpha(1);
+    this.sprite.setVisible(true).setAlpha(1);
     this.shadow.setVisible(false);
     this.sprite.setDepth(SCENE_DEPTHS.uiOverlay);
 
@@ -104,26 +100,21 @@ export abstract class ItemBase {
         onComplete: () => {
           this.collecting = false;
           this.collected = true;
-          this.sprite
-            .setVisible(false)
-            .setAlpha(1)
-            .setDepth(SCENE_DEPTHS.item);
+          this.sprite.setVisible(false).setAlpha(1).setDepth(SCENE_DEPTHS.item);
           resolve();
         },
       });
     });
   }
 
-  public dropAt(cell: GridCell, metrics: BoardMetrics): void {
+  public dropAt(cell: GridCell, tileSize: number, camera: WorldCamera): void {
     this.cell.column = cell.column;
     this.cell.row = cell.row;
     this.collecting = false;
     this.collected = false;
     this.shadow.setVisible(true);
-    this.sprite
-      .setDepth(SCENE_DEPTHS.item)
-      .setAlpha(1);
-    this.render(metrics);
+    this.sprite.setDepth(SCENE_DEPTHS.item).setAlpha(1);
+    this.render(tileSize, camera);
   }
 
   public destroy(): void {

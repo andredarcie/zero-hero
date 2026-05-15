@@ -1,19 +1,16 @@
 import type Phaser from 'phaser';
 
 import { TIMINGS } from '@/game/constants';
-import type { BoardMetrics } from '@/game/shared/grid';
 
 export const animateGrassRustle = (
   scene: Phaser.Scene,
   grass: Phaser.GameObjects.Sprite | undefined,
-  metrics: BoardMetrics,
+  tileSize: number,
 ): void => {
-  if (!grass) {
-    return;
-  }
+  if (!grass) return;
 
-  const baseScaleX = metrics.tileSize / grass.width;
-  const baseScaleY = metrics.tileSize / grass.height;
+  const baseScaleX = tileSize / grass.width;
+  const baseScaleY = tileSize / grass.height;
 
   scene.tweens.killTweensOf(grass);
   grass.setScale(baseScaleX, baseScaleY);
