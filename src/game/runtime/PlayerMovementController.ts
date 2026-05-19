@@ -6,16 +6,25 @@ import type { WorldCamera } from './WorldCamera';
 const SCROLL_MS_PER_TILE = 20;
 const MOVE_EASE = 'Sine.Out';
 const SCROLL_EASE = 'Sine.InOut';
+const HOLD_REPEAT_DELAY_MS = 280;
+const HOLD_REPEAT_INTERVAL_MS = 140;
 
 export class PlayerMovementController {
   private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
-  private readonly swipeThresholdPx = 24;
+  private readonly swipeThresholdPx = 20;
   private isMoving = false;
   private moveDuration: number = TIMINGS.moveDurationMs;
   private tileSize = 0;
   private touchStart: { pointerId: number; x: number; y: number } | null = null;
   private queuedMove: { dx: number; dy: number } | null = null;
   private activeTransition?: Phaser.Tweens.TweenChain;
+
+  private heldDirection: { dx: number; dy: number } | null = null;
+  private holdRepeatTimer: Phaser.Time.TimerEvent | null = null;
+
+  private readonly boundTouchStart: (e: TouchEvent) => void;
+  private readonly boundTouchMove: (e: TouchEvent) => void;
+  private readonly boundTouchEnd: (e: TouchEvent) => void;
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -27,10 +36,23 @@ export class PlayerMovementController {
     private readonly onScreenTransitionComplete?: (chunkX: number, chunkY: number) => void,
   ) {
     this.cursors = scene.input.keyboard?.createCursorKeys();
+
+    // Mouse fallback (non-touch devices)
     this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handlePointerDown, this);
     this.scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.handlePointerMove, this);
     this.scene.input.on(Phaser.Input.Events.POINTER_UP, this.handlePointerUpOrCancel, this);
     this.scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUpOrCancel, this);
+
+    // Window-level touch listeners so swipe works anywhere on screen, not just inside the canvas
+    this.boundTouchStart = this.handleTouchStart.bind(this);
+    this.boundTouchMove = this.handleTouchMove.bind(this);
+    this.boundTouchEnd = this.handleTouchEnd.bind(this);
+    window.addEventListener('touchstart', this.boundTouchStart, { passive: true });
+    window.addEventListener('touchmove', this.boundTouchMove, { passive: true });
+    window.addEventListener('touchend', this.boundTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', this.boundTouchEnd, { passive: true });
+
+    this.scene.events.once(Phaser.Scenes.Events.DESTROY, this.removeWindowListeners, this);
   }
 
   public update(worldX: number, worldY: number): { worldX: number; worldY: number } {
@@ -80,29 +102,95 @@ export class PlayerMovementController {
     this.scene.tweens.killTweensOf(this.player);
     this.isMoving = false;
     this.queuedMove = null;
+    this.stopHold();
     this.camera.transitioning = false;
     this.syncPlayerToWorld(worldX, worldY, this.tileSize || this.player.displayWidth || this.player.width);
   }
 
+  private stopHold(): void {
+    this.heldDirection = null;
+    this.holdRepeatTimer?.remove();
+    this.holdRepeatTimer = null;
+  }
+
+  private startHold(dir: { dx: number; dy: number }): void {
+    this.stopHold();
+    this.heldDirection = dir;
+    this.queuedMove = { ...dir };
+    this.holdRepeatTimer = this.scene.time.addEvent({
+      delay: HOLD_REPEAT_DELAY_MS,
+      callback: () => {
+        this.holdRepeatTimer = this.scene.time.addEvent({
+          delay: HOLD_REPEAT_INTERVAL_MS,
+          callback: () => {
+            if (this.heldDirection && !this.queuedMove) {
+              this.queuedMove = { ...this.heldDirection };
+            }
+          },
+          loop: true,
+        });
+      },
+    });
+  }
+
+  private removeWindowListeners(): void {
+    window.removeEventListener('touchstart', this.boundTouchStart);
+    window.removeEventListener('touchmove', this.boundTouchMove);
+    window.removeEventListener('touchend', this.boundTouchEnd);
+    window.removeEventListener('touchcancel', this.boundTouchEnd);
+  }
+
+  private handleTouchStart(e: TouchEvent): void {
+    if (this.touchStart !== null) return;
+    const t = e.changedTouches[0];
+    this.touchStart = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
+  }
+
+  private handleTouchMove(e: TouchEvent): void {
+    if (!this.touchStart) return;
+    const t = Array.from(e.changedTouches).find((c) => c.identifier === this.touchStart!.pointerId);
+    if (!t) return;
+    const dir = this.resolveSwipe(t.clientX - this.touchStart.x, t.clientY - this.touchStart.y);
+    if (!dir) return;
+
+    const dirChanged = !this.heldDirection || this.heldDirection.dx !== dir.dx || this.heldDirection.dy !== dir.dy;
+    if (dirChanged) {
+      // Update origin so direction is re-evaluated relative to the new anchor
+      this.touchStart = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
+      this.startHold(dir);
+    }
+  }
+
+  private handleTouchEnd(e: TouchEvent): void {
+    if (!this.touchStart) return;
+    const t = Array.from(e.changedTouches).find((c) => c.identifier === this.touchStart!.pointerId);
+    if (!t) return;
+    // If the finger lifted before threshold was reached, treat as a short tap (no-op here)
+    this.stopHold();
+    this.touchStart = null;
+  }
+
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+    if (pointer.wasTouch) return;
     this.touchStart = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    if (!pointer.isDown || !this.touchStart || this.touchStart.pointerId !== pointer.id || this.queuedMove || this.isMoving) {
-      return;
+    if (pointer.wasTouch) return;
+    if (!pointer.isDown || !this.touchStart || this.touchStart.pointerId !== pointer.id) return;
+    const dir = this.resolveSwipe(pointer.x - this.touchStart.x, pointer.y - this.touchStart.y);
+    if (!dir) return;
+    const dirChanged = !this.heldDirection || this.heldDirection.dx !== dir.dx || this.heldDirection.dy !== dir.dy;
+    if (dirChanged) {
+      this.touchStart = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
+      this.startHold(dir);
     }
-    const swipeMove = this.resolveSwipe(pointer.x - this.touchStart.x, pointer.y - this.touchStart.y);
-    if (!swipeMove) return;
-    this.queuedMove = swipeMove;
-    this.touchStart = null;
   }
 
   private handlePointerUpOrCancel(pointer: Phaser.Input.Pointer): void {
+    if (pointer.wasTouch) return;
     if (!this.touchStart || this.touchStart.pointerId !== pointer.id) return;
-    if (!this.queuedMove && !this.isMoving) {
-      this.queuedMove = this.resolveSwipe(pointer.x - this.touchStart.x, pointer.y - this.touchStart.y);
-    }
+    this.stopHold();
     this.touchStart = null;
   }
 
