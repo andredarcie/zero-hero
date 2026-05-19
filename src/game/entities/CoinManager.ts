@@ -1,3 +1,4 @@
+import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import Phaser from 'phaser';
 
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -72,6 +73,13 @@ export class CoinManager {
     }
   }
 
+  public resetForScreenChange(): void {
+    for (const coin of this.coins) {
+      coin.destroy();
+    }
+    this.coins.length = 0;
+  }
+
   public destroy(): void {
     for (const coin of this.coins) {
       coin.destroy();
@@ -86,12 +94,15 @@ export class CoinManager {
     chunkManager: ChunkManager,
   ): Array<{ x: number; y: number }> {
     const candidates: Array<{ x: number; y: number }> = [];
+    const screenCx = Math.floor(originX / CHUNK_COLUMNS);
+    const screenCy = Math.floor(originY / CHUNK_ROWS);
 
     for (let dy = -SCATTER_RADIUS; dy <= SCATTER_RADIUS; dy++) {
       for (let dx = -SCATTER_RADIUS; dx <= SCATTER_RADIUS; dx++) {
         if (dx === 0 && dy === 0) continue;
         const tx = originX + dx;
         const ty = originY + dy;
+        if (Math.floor(tx / CHUNK_COLUMNS) !== screenCx || Math.floor(ty / CHUNK_ROWS) !== screenCy) continue;
         if (!chunkManager.isCellBlocked(tx, ty)) {
           candidates.push({ x: tx, y: ty });
         }

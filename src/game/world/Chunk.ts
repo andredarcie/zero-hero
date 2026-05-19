@@ -1,4 +1,4 @@
-import { CHUNK_SIZE } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 
 export type ChunkData = {
   cx: number;
@@ -8,4 +8,4 @@ export type ChunkData = {
   collisions: boolean[][];
 };
 
-export { CHUNK_SIZE };
+export { CHUNK_COLUMNS, CHUNK_ROWS };

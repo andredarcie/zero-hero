@@ -2,13 +2,11 @@ import Phaser from 'phaser';
 
 import { ASSET_KEYS, ITEM_FRAMES, SCENE_DEPTHS } from '@/game/constants';
 
-const ORBIT_SPEED = 0.012; // rad/ms — ~2 rev/s
-const ORBIT_RADIUS_FACTOR = 1.05;
-const FADE_DURATION = 180;
+const SLASH_DURATION = 170;
+const SLASH_SWEEP_DEG = 75;
+const SLASH_DIST_FACTOR = 0.6;
 
-export class SwordOrbit {
-  private angle = 0;
-  private visible = false;
+export class SwordSlash {
   private readonly sprite: Phaser.GameObjects.Sprite;
   private readonly scene: Phaser.Scene;
 
@@ -22,38 +20,29 @@ export class SwordOrbit {
       .setVisible(false);
   }
 
-  public update(playerScreenX: number, playerScreenY: number, tileSize: number, delta: number, hasNearbyEnemy: boolean): void {
-    if (hasNearbyEnemy !== this.visible) {
-      this.visible = hasNearbyEnemy;
-      this.scene.tweens.killTweensOf(this.sprite);
-      if (hasNearbyEnemy) {
-        this.sprite.setVisible(true);
-        this.scene.tweens.add({ targets: this.sprite, alpha: 1, duration: FADE_DURATION, ease: 'Power2.easeOut' });
-      } else {
-        this.scene.tweens.add({
-          targets: this.sprite, alpha: 0, duration: FADE_DURATION, ease: 'Power2.easeIn',
-          onComplete: () => { this.sprite.setVisible(false); },
-        });
-      }
-    }
+  // dx/dy: direction of attack (-1, 0, or 1)
+  public slash(playerScreenX: number, playerScreenY: number, dx: number, dy: number, tileSize: number): void {
+    this.scene.tweens.killTweensOf(this.sprite);
 
-    if (!hasNearbyEnemy) return;
-
-    this.angle += ORBIT_SPEED * delta;
-    const radius = tileSize * ORBIT_RADIUS_FACTOR;
+    const dist = tileSize * SLASH_DIST_FACTOR;
     const size = Math.max(10, Math.floor(tileSize * 0.65));
+    const attackAngleDeg = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
 
     this.sprite
-      .setPosition(playerScreenX + Math.cos(this.angle) * radius, playerScreenY + Math.sin(this.angle) * radius)
+      .setPosition(playerScreenX + dx * dist, playerScreenY + dy * dist)
       .setDisplaySize(size, size)
-      .setAngle(Phaser.Math.RadToDeg(this.angle) + 90);
-  }
+      .setAngle(attackAngleDeg - SLASH_SWEEP_DEG / 2)
+      .setAlpha(1)
+      .setVisible(true);
 
-  public getWorldTile(playerWorldX: number, playerWorldY: number): { x: number; y: number } {
-    return {
-      x: Math.round(playerWorldX + Math.cos(this.angle) * ORBIT_RADIUS_FACTOR),
-      y: Math.round(playerWorldY + Math.sin(this.angle) * ORBIT_RADIUS_FACTOR),
-    };
+    this.scene.tweens.add({
+      targets: this.sprite,
+      angle: attackAngleDeg + SLASH_SWEEP_DEG / 2,
+      alpha: 0,
+      duration: SLASH_DURATION,
+      ease: 'Power2.easeOut',
+      onComplete: () => { this.sprite.setVisible(false); },
+    });
   }
 
   public destroy(): void {

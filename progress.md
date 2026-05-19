@@ -46,3 +46,21 @@ pm run build passaram apos a refatoracao.
 - Nota final: a refatoracao estrutural foi validada visualmente com capturas headless das rotas / e /editor.
 - Nota final: gameplay e editor renderizaram corretamente apos a correcao do init antecipado de GameScene.
 - Nota final: ha um aviso de chunk grande no build do Vite, mas o build conclui com sucesso.
+
+- Overworld procedural foi trocado por um mapa fixo de 32 blocos, organizado como 8x4 screens.
+- Estrutura de chunk do runtime foi refatorada de quadrado para dimensoes separadas, usando 16x11 tiles visiveis por screen para espelhar o overworld de Zelda 1 no NES.
+- Camera/runtime agora tratam a tela ativa por bloco em vez de viewport aberta; a renderizacao visivel foi limitada a um unico screen de cada vez.
+- Validacao local apos a refatoracao Zelda 1: npm run typecheck e npm run lint passaram.
+- HUD redesenhada no estilo subscreen do Zelda 1: quadro de mapa integrado ao topo, contadores centrais, slots B/A e bloco `-LIFE-` a direita.
+- Minimap de canto foi removido e substituido por um mapa de screens dentro da HUD.
+- Enemies agora respeitam a tela ativa: spawn apenas no bloco atual, update/render limitados ao screen corrente e bloqueio para nao cruzar para outro bloco.
+- Validacao local apos HUD/inimigos: npm run typecheck, npm run lint e npm run build passaram.
+- Observacao de QA: a captura headless do client Playwright continuou saindo preta, mas a inspecao no browser do MCP mostrou a HUD nova renderizando corretamente.
+- Mundo agora tem conteudo fixo por screen em `ScreenContent.ts`: inimigos e pickups sao definidos deterministicamente no boot, sem spawn por tempo e sem `Math.random` durante a partida.
+- `EnemyManager`, `HeartPickupManager` e `SwordPickupManager` foram simplificados para carregar blueprints da tela ativa, destruindo e recriando entidades conforme o jogador troca de screen.
+- A espada foi posicionada em uma screen fixa ao leste da tela inicial; coracoes aparecem em screens fixas derivadas deterministicamente do mapa.
+- Validacao local apos conteudo fixo: npm run typecheck, npm run lint e npm run build passaram.
+- Troca de cenario foi convertida para scroll animado em duas fases no estilo Zelda: passo final para fora da tela antiga e, depois, scroll linear da camera para a proxima screen.
+- Durante o scroll, a simulacao de inimigos, moedas e pickups fica congelada para evitar movimento/colisao no meio da transicao.
+- `WorldCamera` agora expõe estado de transicao e range visivel inteiro com floor/ceil para suportar screens parciais durante o scroll.
+- Validacao local apos a transicao animada: npm run typecheck, npm run lint e npm run build passaram.

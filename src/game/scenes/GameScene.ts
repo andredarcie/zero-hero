@@ -3,7 +3,8 @@ import Phaser from 'phaser';
 import {
   ANIMATION_KEYS,
   ASSET_KEYS,
-  CHUNK_SIZE,
+  CHUNK_COLUMNS,
+  CHUNK_ROWS,
   FONT_FAMILY,
   GAMEPLAY_HERO_MAX_SIZE,
   GAMEPLAY_HERO_SCALE,
@@ -13,15 +14,12 @@ import {
   MIN_BOARD_TILE_SIZE,
   SCENE_DEPTHS,
   TIMINGS,
-  WORLD_VIEWPORT_COLS,
-  WORLD_VIEWPORT_ROWS,
 } from '@/game/constants';
 import { CoinManager } from '@/game/entities/CoinManager';
-import type { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager } from '@/game/entities/EnemyManager';
 import { HeartPickupManager } from '@/game/entities/HeartPickupManager';
 import { SwordPickupManager } from '@/game/entities/SwordPickupManager';
-import { SwordOrbit } from '@/game/runtime/SwordOrbit';
+import { SwordSlash } from '@/game/runtime/SwordOrbit';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
 import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
 import { MinimapRenderer } from '@/game/runtime/MinimapRenderer';
@@ -30,6 +28,8 @@ import { animateGrassRustle } from '@/game/runtime/RuntimeEffects';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { createBoardMetrics, type BoardMetrics } from '@/game/shared/grid';
 import { ChunkManager } from '@/game/world/ChunkManager';
+import { buildScreenContentMap, type ScreenContent } from '@/game/world/ScreenContent';
+import { START_SCREEN_PLAYER_X, START_SCREEN_PLAYER_Y } from '@/game/world/WorldGenerator';
 
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
@@ -40,10 +40,8 @@ export class GameScene extends Phaser.Scene {
   private coinManager?: CoinManager;
   private heartPickupManager?: HeartPickupManager;
   private swordPickupManager?: SwordPickupManager;
-  private swordOrbit?: SwordOrbit;
+  private swordSlash?: SwordSlash;
   private swordEquipped = false;
-  private readonly swordLastHit = new WeakMap<EnemyBase, number>();
-  private swordHitCooldown = 500;
   private boardRenderer?: GameBoardRenderer;
   private minimapRenderer?: MinimapRenderer;
   private player?: Phaser.GameObjects.Sprite;
@@ -60,34 +58,40 @@ export class GameScene extends Phaser.Scene {
   private shopButton?: Phaser.GameObjects.Text;
   private eKey?: Phaser.Input.Keyboard.Key;
   private upgrades: UpgradeState = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
+  private activeScreen = { cx: 0, cy: 0 };
 
   public constructor() {
     super(GameScene.key);
   }
 
   public create(): void {
+    const startWorldX = START_SCREEN_PLAYER_X;
+    const startWorldY = START_SCREEN_PLAYER_Y;
+
     this.isDead = false;
     this.playerMaxHealth = HUD_HEALTH_MAX;
     this.playerHealth = HUD_HEALTH_MAX;
     this.playerInvincible = false;
-    this.playerWorld = { worldX: 0, worldY: 0 };
+    this.playerWorld = { worldX: startWorldX, worldY: startWorldY };
+    this.activeScreen = {
+      cx: Math.floor(startWorldX / CHUNK_COLUMNS),
+      cy: Math.floor(startWorldY / CHUNK_ROWS),
+    };
     this.shopOpen = false;
     this.upgrades = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
-    this.swordHitCooldown = 500;
-
-    const seed = (this.scene.settings.data as Record<string, number> | undefined)?.seed
-      ?? Math.floor(Math.random() * 1_000_000);
 
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
-    this.chunkManager = new ChunkManager(seed);
-    this.enemyManager = new EnemyManager(this);
+    this.chunkManager = new ChunkManager();
+    const screenContent: Map<string, ScreenContent> = buildScreenContentMap(this.chunkManager);
+    this.enemyManager = new EnemyManager(this, screenContent);
     this.coinManager = new CoinManager(this);
-    this.heartPickupManager = new HeartPickupManager(this);
-    this.swordPickupManager = new SwordPickupManager(this);
+    this.heartPickupManager = new HeartPickupManager(this, screenContent);
+    this.swordPickupManager = new SwordPickupManager(this, screenContent);
     this.swordEquipped = false;
-    this.swordOrbit = undefined;
+    this.swordSlash = undefined;
     this.camera = new WorldCamera(0, 0, 0, 0);
+    this.camera.setActiveScreen(startWorldX, startWorldY);
     this.boardRenderer = new GameBoardRenderer(this);
     this.minimapRenderer = new MinimapRenderer(this);
 
@@ -108,6 +112,7 @@ export class GameScene extends Phaser.Scene {
       },
       (wx, wy) => animateGrassRustle(this, this.boardRenderer?.getGrassSprite(wx, wy), this.tileSize),
       (wx, wy) => this.handlePlayerBump(wx, wy),
+      (cx, cy) => this.handleScreenTransitionComplete(cx, cy),
     );
 
     this.eKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E);
@@ -116,6 +121,7 @@ export class GameScene extends Phaser.Scene {
       fontFamily: FONT_FAMILY, fontSize: '10px', color: '#9977bb',
     })
       .setDepth(SCENE_DEPTHS.uiLabel)
+      .setVisible(false)
       .setInteractive({ useHandCursor: true })
       .on('pointerover', () => { this.shopButton?.setColor('#cc99ff'); })
       .on('pointerout',  () => { this.shopButton?.setColor('#9977bb'); })
@@ -123,6 +129,7 @@ export class GameScene extends Phaser.Scene {
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
+    this.loadActiveScreenContent();
   }
 
   public shutdown(): void {
@@ -131,9 +138,9 @@ export class GameScene extends Phaser.Scene {
     this.coinManager?.destroy();
     this.heartPickupManager?.destroy();
     this.swordPickupManager?.destroy();
-    this.swordOrbit?.destroy();
+    this.swordSlash?.destroy();
     this.shopOverlay?.destroy();
-    this.swordOrbit = undefined;
+    this.swordSlash = undefined;
   }
 
   public update(_time: number, delta: number): void {
@@ -143,7 +150,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.playerWorld = this.movementController.update(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.syncActiveScreenState();
     this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize);
+    const isScreenTransitioning = this.camera.transitioning;
 
     const isPickupOccupied = (x: number, y: number): boolean =>
       (this.heartPickupManager?.hasPickupAt(x, y) ?? false) ||
@@ -152,82 +161,63 @@ export class GameScene extends Phaser.Scene {
     const isItemOccupied = (x: number, y: number): boolean =>
       isPickupOccupied(x, y) || (this.enemyManager?.getEnemyAt(x, y) !== null);
 
-    this.spawnInVisibleChunks(isPickupOccupied);
-
     if (this.enemyManager) {
-      const attacked = this.enemyManager.update(
-        delta,
-        this.playerWorld.worldX,
-        this.playerWorld.worldY,
-        (wx, wy) => this.chunkManager?.isCellBlocked(wx, wy) ?? false,
-      );
-      if (attacked) this.handleEnemyAttackPlayer();
+      if (!isScreenTransitioning) {
+        const attacked = this.enemyManager.update(
+          delta,
+          this.playerWorld.worldX,
+          this.playerWorld.worldY,
+          (wx, wy) => this.chunkManager?.isCellBlocked(wx, wy) ?? false,
+        );
+        if (attacked) this.handleEnemyAttackPlayer();
+      }
       this.enemyManager.render(this.tileSize, this.camera);
     }
 
     if (this.coinManager && this.camera) {
       const hudCoin = this.boardRenderer?.getHudCoinAnchor() ?? { x: 0, y: 0 };
-      this.coinManager.update(
-        this.playerWorld.worldX,
-        this.playerWorld.worldY,
-        hudCoin,
-        (total) => this.boardRenderer?.setCoinCount(total, this),
-      );
+      if (!isScreenTransitioning) {
+        this.coinManager.update(
+          this.playerWorld.worldX,
+          this.playerWorld.worldY,
+          hudCoin,
+          (total) => this.boardRenderer?.setCoinCount(total, this),
+        );
+      }
       this.coinManager.render(this.tileSize, this.camera);
     }
 
     if (this.heartPickupManager && this.chunkManager) {
-      this.heartPickupManager.update(
-        delta,
-        this.playerWorld.worldX,
-        this.playerWorld.worldY,
-        this.playerHealth,
-        this.chunkManager,
-        isItemOccupied,
-        () => {
-          this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
-          this.boardRenderer?.setHealth(this.playerHealth);
-        },
-      );
+      if (!isScreenTransitioning) {
+        this.heartPickupManager.update(
+          delta,
+          this.playerWorld.worldX,
+          this.playerWorld.worldY,
+          this.playerHealth,
+          this.chunkManager,
+          isItemOccupied,
+          () => {
+            this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
+            this.boardRenderer?.setHealth(this.playerHealth);
+          },
+        );
+      }
       this.heartPickupManager.render(this.tileSize, this.camera!);
     }
 
     if (this.swordPickupManager && this.chunkManager) {
-      this.swordPickupManager.update(
-        delta,
-        this.playerWorld.worldX,
-        this.playerWorld.worldY,
-        this.swordEquipped,
-        this.chunkManager,
-        isItemOccupied,
-        () => this.equipSword(),
-      );
-      this.swordPickupManager.render(this.tileSize, this.camera!);
-    }
-
-    if (this.swordOrbit && this.camera && this.enemyManager) {
-      const NEARBY = 6;
-      const hasNearbyEnemy = this.enemyManager.getAliveEnemies().some(
-        (e) => Math.abs(e.worldX - this.playerWorld.worldX) <= NEARBY &&
-               Math.abs(e.worldY - this.playerWorld.worldY) <= NEARBY,
-      );
-      const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
-      this.swordOrbit.update(screen.x, screen.y, this.tileSize, delta, hasNearbyEnemy);
-
-      if (hasNearbyEnemy) {
-        const tile = this.swordOrbit.getWorldTile(this.playerWorld.worldX, this.playerWorld.worldY);
-        const hit = this.enemyManager.getEnemyAt(tile.x, tile.y);
-        if (hit) {
-          const lastHit = this.swordLastHit.get(hit) ?? 0;
-          if (this.time.now - lastHit > this.swordHitCooldown) {
-            this.swordLastHit.set(hit, this.time.now);
-            hit.takeDamage();
-            if (!hit.isAlive && this.chunkManager) {
-              this.coinManager?.spawnCoins(hit.worldX, hit.worldY, this.chunkManager);
-            }
-          }
-        }
+      if (!isScreenTransitioning) {
+        this.swordPickupManager.update(
+          delta,
+          this.playerWorld.worldX,
+          this.playerWorld.worldY,
+          this.swordEquipped,
+          this.chunkManager,
+          isItemOccupied,
+          () => this.equipSword(),
+        );
       }
+      this.swordPickupManager.render(this.tileSize, this.camera!);
     }
 
     if (this.playerInvincible) {
@@ -238,7 +228,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.minimapRenderer?.update(this.camera, this.chunkManager, this.enemyManager);
+    this.minimapRenderer?.update(this.playerWorld.worldX, this.playerWorld.worldY, this.chunkManager);
   }
 
   private handleResize(gameSize: Phaser.Structs.Size | { width: number; height: number }): void {
@@ -247,27 +237,30 @@ export class GameScene extends Phaser.Scene {
 
     this.tileSize = this.computeTileSize(width, height);
 
+    const reservedTopHeight = this.tileSize * HUD_RESERVED_ROWS;
     const screenCenterX = Math.floor(width / 2);
-    const screenCenterY = Math.floor(this.tileSize + (height - this.tileSize) / 2);
+    const screenCenterY = Math.floor(reservedTopHeight + (height - reservedTopHeight) / 2);
 
     if (this.camera) {
       this.camera.screenCenterX = screenCenterX;
       this.camera.screenCenterY = screenCenterY;
+      this.camera.viewportColumns = CHUNK_COLUMNS;
+      this.camera.viewportRows = CHUNK_ROWS;
     }
 
     const hudMetrics = this.buildHudMetrics(width, height, this.tileSize);
     this.boardRenderer?.render(hudMetrics);
-    this.minimapRenderer?.layout(width, height);
+    this.minimapRenderer?.layout(this.boardRenderer?.getHudMapBounds() ?? { x: 0, y: 0, width: 0, height: 0 });
 
     this.player?.setDisplaySize(this.tileSize, this.tileSize);
-    this.movementController?.syncPlayerToScreen();
+    this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
     this.shopButton?.setPosition(width / 2, Math.floor(this.tileSize * 0.5)).setOrigin(0.5);
   }
 
   private computeTileSize(width: number, height: number): number {
     const metrics = createBoardMetrics(width, height, {
-      columns: WORLD_VIEWPORT_COLS,
-      rows: WORLD_VIEWPORT_ROWS,
+      columns: CHUNK_COLUMNS,
+      rows: CHUNK_ROWS,
       minTileSize: MIN_BOARD_TILE_SIZE,
       characterScale: GAMEPLAY_HERO_SCALE,
       maxCharacterSize: GAMEPLAY_HERO_MAX_SIZE,
@@ -277,40 +270,57 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildHudMetrics(width: number, height: number, tileSize: number): BoardMetrics {
+    const reservedTopHeight = tileSize * HUD_RESERVED_ROWS;
     return {
-      columns: WORLD_VIEWPORT_COLS,
-      rows: WORLD_VIEWPORT_ROWS,
+      columns: CHUNK_COLUMNS,
+      rows: CHUNK_ROWS,
       tileSize,
       offsetX: 0,
-      offsetY: tileSize,
+      offsetY: reservedTopHeight,
       width,
-      height: height - tileSize,
+      height: height - reservedTopHeight,
       characterSize: tileSize,
     };
   }
 
-  private spawnInVisibleChunks(isOccupied: (wx: number, wy: number) => boolean): void {
-    if (!this.camera || !this.chunkManager || !this.enemyManager) return;
-    const range = this.camera.getVisibleRange(this.tileSize);
-    const cxMin = Math.floor(range.minX / CHUNK_SIZE) - 1;
-    const cxMax = Math.ceil(range.maxX / CHUNK_SIZE) + 1;
-    const cyMin = Math.floor(range.minY / CHUNK_SIZE) - 1;
-    const cyMax = Math.ceil(range.maxY / CHUNK_SIZE) + 1;
-    for (let cy = cyMin; cy <= cyMax; cy++) {
-      for (let cx = cxMin; cx <= cxMax; cx++) {
-        this.enemyManager.spawnForChunk(cx, cy, this.chunkManager, isOccupied);
-      }
-    }
+  private syncActiveScreenState(): void {
+    if (this.camera?.transitioning) return;
+
+    const nextCx = Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS);
+    const nextCy = Math.floor(this.playerWorld.worldY / CHUNK_ROWS);
+    if (nextCx === this.activeScreen.cx && nextCy === this.activeScreen.cy) return;
+
+    this.activeScreen = { cx: nextCx, cy: nextCy };
+    this.loadActiveScreenContent();
+  }
+
+  private handleScreenTransitionComplete(cx: number, cy: number): void {
+    this.activeScreen = { cx, cy };
+    this.coinManager?.resetForScreenChange();
+    this.loadActiveScreenContent();
+  }
+
+  private loadActiveScreenContent(): void {
+    this.enemyManager?.enterScreen(this.activeScreen.cx, this.activeScreen.cy);
+    this.heartPickupManager?.enterScreen(this.activeScreen.cx, this.activeScreen.cy);
+    this.swordPickupManager?.enterScreen(this.activeScreen.cx, this.activeScreen.cy, this.swordEquipped);
   }
 
   private handlePlayerBump(wx: number, wy: number): void {
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (!enemy) return;
 
-    enemy.takeDamage();
-    if (this.swordEquipped) enemy.takeDamage();
+    const hits = this.swordEquipped ? 1 + this.upgrades.swordSpeed : 1;
+    for (let i = 0; i < hits; i++) enemy.takeDamage();
 
-    if (this.player) this.tweens.killTweensOf(this.player);
+    if (this.swordEquipped && this.swordSlash && this.camera) {
+      const dx = wx - this.playerWorld.worldX;
+      const dy = wy - this.playerWorld.worldY;
+      const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+      this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
+    }
+
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
     this.player?.setTint(0xffff00);
     this.time.delayedCall(120, () => { this.player?.clearTint(); });
 
@@ -352,8 +362,6 @@ export class GameScene extends Phaser.Scene {
       this.playerHealth = Math.min(this.playerHealth + 1, this.playerMaxHealth);
       this.boardRenderer?.setMaxHearts(this.playerMaxHealth);
       this.boardRenderer?.setHealth(this.playerHealth);
-    } else if (id === 'swordSpeed') {
-      this.swordHitCooldown = Math.max(80, 500 - this.upgrades.swordSpeed * 150);
     } else if (id === 'moveSpeed') {
       this.movementController?.setMoveDuration(Math.max(60, 140 - this.upgrades.moveSpeed * 20));
     } else if (id === 'magnet') {
@@ -370,8 +378,8 @@ export class GameScene extends Phaser.Scene {
   private equipSword(): void {
     this.swordEquipped = true;
     this.swordPickupManager?.onSwordEquipped();
-    this.swordOrbit?.destroy();
-    this.swordOrbit = new SwordOrbit(this);
+    this.swordSlash?.destroy();
+    this.swordSlash = new SwordSlash(this);
     this.boardRenderer?.setHudItemTexture(ASSET_KEYS.swordItemIcon);
   }
 
@@ -389,7 +397,7 @@ export class GameScene extends Phaser.Scene {
     this.playerInvincible = true;
     this.invincibleTimer = 1500;
 
-    if (this.player) this.tweens.killTweensOf(this.player);
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
     this.player?.setTint(0xff4444);
     this.tweens.add({
       targets: this.player,
@@ -403,7 +411,7 @@ export class GameScene extends Phaser.Scene {
 
   private triggerDeath(): void {
     this.isDead = true;
-    if (this.player) this.tweens.killTweensOf(this.player);
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
 
     const { width, height } = this.scale;
 
@@ -448,8 +456,7 @@ export class GameScene extends Phaser.Scene {
       ease: 'Power2',
       onComplete: () => {
         this.time.delayedCall(1400, () => {
-          const newSeed = Math.floor(Math.random() * 1_000_000);
-          this.scene.restart({ seed: newSeed });
+          this.scene.restart();
         });
       },
     });

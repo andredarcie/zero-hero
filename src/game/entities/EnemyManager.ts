@@ -1,8 +1,9 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 
-import { CHUNK_SIZE } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import type { ChunkManager } from '@/game/world/ChunkManager';
+import type { EnemySpawn, ScreenContent } from '@/game/world/ScreenContent';
+import { toScreenKey } from '@/game/world/ScreenContent';
 import type { EnemyBase } from './EnemyBase';
 import { BatEnemy } from './enemies/BatEnemy';
 import { BigSlimeEnemy } from './enemies/BigSlimeEnemy';
@@ -11,47 +12,27 @@ import { SlimeEnemy } from './enemies/SlimeEnemy';
 import { SpiderEnemy } from './enemies/SpiderEnemy';
 import { UndeadEnemy } from './enemies/UndeadEnemy';
 
-const SPAWN_CHANCE = 0.95;
-const MIN_PER_CHUNK = 6;
-const MAX_PER_CHUNK = 12;
-const SAFE_RADIUS = 6;
-
 export class EnemyManager {
   private readonly enemies: EnemyBase[] = [];
-  private readonly spawnedChunks = new Set<string>();
+  private currentScreenKey = '';
 
-  public constructor(private readonly scene: Phaser.Scene) {}
+  public constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly contentByScreen: Map<string, ScreenContent>,
+  ) {}
 
-  public spawnForChunk(
-    cx: number,
-    cy: number,
-    chunkManager: ChunkManager,
-    isOccupied?: (wx: number, wy: number) => boolean,
-  ): void {
-    const key = `${cx},${cy}`;
-    if (this.spawnedChunks.has(key)) return;
-    this.spawnedChunks.add(key);
+  public enterScreen(cx: number, cy: number): void {
+    const key = toScreenKey(cx, cy);
+    if (key === this.currentScreenKey) return;
 
-    if (Math.random() > SPAWN_CHANCE) return;
+    this.clearCurrentEnemies();
+    this.currentScreenKey = key;
 
-    const count = Phaser.Math.Between(MIN_PER_CHUNK, MAX_PER_CHUNK);
-    const dist = Math.abs(cx) + Math.abs(cy);
+    const content = this.contentByScreen.get(key);
+    if (!content) return;
 
-    for (let i = 0; i < count; i++) {
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const lx = Phaser.Math.Between(1, CHUNK_SIZE - 2);
-        const ly = Phaser.Math.Between(1, CHUNK_SIZE - 2);
-        const wx = cx * CHUNK_SIZE + lx;
-        const wy = cy * CHUNK_SIZE + ly;
-
-        if (Math.max(Math.abs(wx), Math.abs(wy)) < SAFE_RADIUS) continue;
-        if (chunkManager.isCellBlocked(wx, wy)) continue;
-        if (this.getEnemyAt(wx, wy)) continue;
-        if (isOccupied?.(wx, wy)) continue;
-
-        this.enemies.push(this.createEnemy(dist, wx, wy));
-        break;
-      }
+    for (const spawn of content.enemies) {
+      this.enemies.push(this.createEnemy(spawn, cx, cy));
     }
   }
 
@@ -102,38 +83,44 @@ export class EnemyManager {
   }
 
   public destroy(): void {
+    this.clearCurrentEnemies();
+    this.currentScreenKey = '';
+  }
+
+  private clearCurrentEnemies(): void {
     for (const enemy of this.enemies) {
       enemy.destroy();
     }
     this.enemies.length = 0;
   }
 
-  private createEnemy(chunkDist: number, wx: number, wy: number): EnemyBase {
-    if (chunkDist <= 2) {
-      return Math.random() < 0.5
-        ? new BatEnemy(this.scene, wx, wy)
-        : new SlimeEnemy(this.scene, wx, wy);
-    }
-    if (chunkDist <= 5) {
-      return Math.random() < 0.5
-        ? new UndeadEnemy(this.scene, wx, wy)
-        : new SpiderEnemy(this.scene, wx, wy);
-    }
-    // dist 6+
-    return Math.random() < 0.5
-      ? new MageEnemy(this.scene, wx, wy)
-      : new BigSlimeEnemy(this.scene, wx, wy, (spawnWx, spawnWy) => {
-          this.spawnSlimePair(spawnWx, spawnWy);
+  private createEnemy(spawn: EnemySpawn, cx: number, cy: number): EnemyBase {
+    switch (spawn.type) {
+      case 'bat':
+        return new BatEnemy(this.scene, spawn.worldX, spawn.worldY);
+      case 'slime':
+        return new SlimeEnemy(this.scene, spawn.worldX, spawn.worldY);
+      case 'undead':
+        return new UndeadEnemy(this.scene, spawn.worldX, spawn.worldY);
+      case 'spider':
+        return new SpiderEnemy(this.scene, spawn.worldX, spawn.worldY);
+      case 'mage':
+        return new MageEnemy(this.scene, spawn.worldX, spawn.worldY);
+      case 'bigSlime':
+        return new BigSlimeEnemy(this.scene, spawn.worldX, spawn.worldY, (spawnWx, spawnWy) => {
+          this.spawnSlimePair(spawnWx, spawnWy, cx, cy);
         });
+    }
   }
 
-  private spawnSlimePair(wx: number, wy: number): void {
+  private spawnSlimePair(wx: number, wy: number, cx: number, cy: number): void {
     const offsets: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     let spawned = 0;
     for (const [ox, oy] of offsets) {
       if (spawned >= 2) break;
       const nx = wx + ox;
       const ny = wy + oy;
+      if (toScreenKey(Math.floor(nx / CHUNK_COLUMNS), Math.floor(ny / CHUNK_ROWS)) !== toScreenKey(cx, cy)) continue;
       if (!this.getEnemyAt(nx, ny)) {
         this.enemies.push(new SlimeEnemy(this.scene, nx, ny));
         spawned += 1;

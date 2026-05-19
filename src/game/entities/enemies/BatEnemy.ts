@@ -38,7 +38,7 @@ export class BatEnemy extends EnemyBase {
     delta: number,
     playerWorldX: number,
     playerWorldY: number,
-    isBlocked: (wx: number, wy: number) => boolean,
+    _isBlocked: (wx: number, wy: number) => boolean,
   ): boolean {
     if (!this.isAlive) return false;
 

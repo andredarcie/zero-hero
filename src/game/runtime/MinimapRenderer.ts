@@ -1,114 +1,70 @@
-import type Phaser from 'phaser';
+import Phaser from 'phaser';
 
-import { CHUNK_SIZE, SCENE_DEPTHS } from '@/game/constants';
-import type { EnemyManager } from '@/game/entities/EnemyManager';
+import { CHUNK_COLUMNS, CHUNK_ROWS, SCENE_DEPTHS } from '@/game/constants';
 import type { ChunkManager } from '@/game/world/ChunkManager';
-import type { WorldCamera } from './WorldCamera';
+import {
+  WORLD_CHUNK_COLUMNS,
+  WORLD_CHUNK_ROWS,
+  WORLD_MIN_CHUNK_X,
+  WORLD_MIN_CHUNK_Y,
+} from '@/game/world/WorldGenerator';
 
-const TILES_W = 120;
-const TILES_H = 90;
-const PX = 1;
-const W = TILES_W * PX;
-const H = TILES_H * PX;
-const MARGIN = 8;
-
-const COLOR_GROUND = 0x4a7c59;
-const COLOR_DECOR = 0x3a6349;
-const COLOR_OBSTACLE = 0x152b1e;
-const COLOR_PLAYER = 0xffffff;
+const BG_COLOR = 0x1f5f2f;
+const GRID_COLOR = 0x0b1f0f;
+const SCREEN_COLOR = 0x5fa35f;
+const PLAYER_COLOR = 0x80d010;
 
 export class MinimapRenderer {
-  private readonly bg: Phaser.GameObjects.Rectangle;
   private readonly graphics: Phaser.GameObjects.Graphics;
-  private originX = 0;
-  private originY = 0;
-  private lastTileX = NaN;
-  private lastTileY = NaN;
+  private bounds = { x: 0, y: 0, width: 0, height: 0 };
+  private lastChunkX = NaN;
+  private lastChunkY = NaN;
 
-  public constructor(private readonly scene: Phaser.Scene) {
-    this.bg = scene.add.rectangle(0, 0, W + 6, H + 6, 0x000000, 0.65)
-      .setOrigin(0)
-      .setDepth(SCENE_DEPTHS.ui);
-    this.graphics = scene.add.graphics()
-      .setDepth(SCENE_DEPTHS.uiOverlay);
+  public constructor(scene: Phaser.Scene) {
+    this.graphics = scene.add.graphics().setDepth(SCENE_DEPTHS.uiOverlay);
   }
 
-  public layout(canvasW: number, canvasH: number): void {
-    this.originX = canvasW - MARGIN - W;
-    this.originY = canvasH - MARGIN - H;
-    this.bg.setPosition(this.originX - 3, this.originY - 3);
-    this.lastTileX = NaN;
+  public layout(bounds: { x: number; y: number; width: number; height: number }): void {
+    this.bounds = { ...bounds };
+    this.lastChunkX = NaN;
   }
 
-  public update(camera: WorldCamera, chunkManager: ChunkManager, enemyManager?: EnemyManager): void {
-    const tileX = Math.round(camera.worldX);
-    const tileY = Math.round(camera.worldY);
-    if (tileX === this.lastTileX && tileY === this.lastTileY) {
-      return;
-    }
-    this.lastTileX = tileX;
-    this.lastTileY = tileY;
+  public update(playerWorldX: number, playerWorldY: number, chunkManager: ChunkManager): void {
+    const chunkX = Math.floor(playerWorldX / CHUNK_COLUMNS);
+    const chunkY = Math.floor(playerWorldY / CHUNK_ROWS);
+    if (chunkX === this.lastChunkX && chunkY === this.lastChunkY) return;
+    this.lastChunkX = chunkX;
+    this.lastChunkY = chunkY;
+
+    const { x, y, width, height } = this.bounds;
+    if (!width || !height) return;
+
+    const cellW = width / WORLD_CHUNK_COLUMNS;
+    const cellH = height / WORLD_CHUNK_ROWS;
 
     this.graphics.clear();
+    this.graphics.fillStyle(BG_COLOR, 1);
+    this.graphics.fillRect(x, y, width, height);
 
-    const halfW = TILES_W / 2;
-    const halfH = TILES_H / 2;
-    const ground: Array<[number, number]> = [];
-    const decor: Array<[number, number]> = [];
-    const obstacles: Array<[number, number]> = [];
+    for (let row = 0; row < WORLD_CHUNK_ROWS; row++) {
+      for (let column = 0; column < WORLD_CHUNK_COLUMNS; column++) {
+        const cx = WORLD_MIN_CHUNK_X + column;
+        const cy = WORLD_MIN_CHUNK_Y + row;
+        if (!chunkManager.hasChunkCoordinate(cx, cy)) continue;
 
-    for (let dy = 0; dy < TILES_H; dy++) {
-      for (let dx = 0; dx < TILES_W; dx++) {
-        const wx = tileX - halfW + dx;
-        const wy = tileY - halfH + dy;
-        const cx = Math.floor(wx / CHUNK_SIZE);
-        const cy = Math.floor(wy / CHUNK_SIZE);
+        const cellX = x + column * cellW;
+        const cellY = y + row * cellH;
 
-        if (!chunkManager.hasChunk(cx, cy)) {
-          continue;
-        }
+        this.graphics.lineStyle(1, GRID_COLOR, 1);
+        this.graphics.strokeRect(cellX, cellY, cellW, cellH);
+        this.graphics.fillStyle(SCREEN_COLOR, 1);
+        this.graphics.fillRect(cellX + 1, cellY + 1, Math.max(1, cellW - 2), Math.max(1, cellH - 2));
 
-        const tile = chunkManager.getTile(wx, wy);
-
-        if (tile.collision) {
-          obstacles.push([dx, dy]);
-        } else if (tile.upper !== null) {
-          decor.push([dx, dy]);
-        } else {
-          ground.push([dx, dy]);
+        if (cx === chunkX && cy === chunkY) {
+          this.graphics.fillStyle(PLAYER_COLOR, 1);
+          this.graphics.fillRect(cellX + Math.max(1, cellW * 0.25), cellY + Math.max(1, cellH * 0.25), Math.max(3, cellW * 0.5), Math.max(3, cellH * 0.5));
         }
       }
     }
-
-    this.graphics.fillStyle(COLOR_GROUND, 1);
-    for (const [dx, dy] of ground) {
-      this.graphics.fillRect(this.originX + dx * PX, this.originY + dy * PX, PX, PX);
-    }
-
-    this.graphics.fillStyle(COLOR_DECOR, 1);
-    for (const [dx, dy] of decor) {
-      this.graphics.fillRect(this.originX + dx * PX, this.originY + dy * PX, PX, PX);
-    }
-
-    this.graphics.fillStyle(COLOR_OBSTACLE, 1);
-    for (const [dx, dy] of obstacles) {
-      this.graphics.fillRect(this.originX + dx * PX, this.originY + dy * PX, PX, PX);
-    }
-
-    if (enemyManager) {
-      this.graphics.fillStyle(0xff2222, 1);
-      for (const enemy of enemyManager.getAliveEnemies()) {
-        const edx = enemy.worldX - (tileX - halfW);
-        const edy = enemy.worldY - (tileY - halfH);
-        if (edx >= 0 && edx < TILES_W && edy >= 0 && edy < TILES_H) {
-          this.graphics.fillRect(this.originX + edx * PX, this.originY + edy * PX, PX, PX);
-        }
-      }
-    }
-
-    const px = this.originX + (halfW - 0.5) * PX;
-    const py = this.originY + (halfH - 0.5) * PX;
-    this.graphics.fillStyle(COLOR_PLAYER, 1);
-    this.graphics.fillRect(Math.round(px), Math.round(py), PX, PX);
   }
 }

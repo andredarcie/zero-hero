@@ -11,7 +11,7 @@ export const MAX_CHARACTER_SIZE = 52;
 export const BOARD_PANEL_PADDING = 16;
 export const TILE_GAP = 6;
 export const FONT_FAMILY = "'Press Start 2P', monospace";
-export const HUD_RESERVED_ROWS = 1;
+export const HUD_RESERVED_ROWS = 3;
 export const HUD_BACKGROUND_COLOR = 0x000000;
 export const HUD_HEALTH_MAX = 3;
 export const HUD_HEARTS_SCALE = 0.52;
@@ -33,7 +33,8 @@ export const EDITOR_PALETTE_TILE_SIZE = 32;
 export const GAMEPLAY_HERO_SCALE = 1;
 export const GAMEPLAY_HERO_MAX_SIZE = Number.MAX_SAFE_INTEGER;
 
-export const CHUNK_SIZE = 16;
+export const CHUNK_COLUMNS = 16;
+export const CHUNK_ROWS = 11;
 export const WORLD_VIEWPORT_COLS = 10;
 export const WORLD_VIEWPORT_ROWS = 8;
 

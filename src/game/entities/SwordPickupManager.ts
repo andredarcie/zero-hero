@@ -1,25 +1,39 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import type { ChunkManager } from '@/game/world/ChunkManager';
+import type { PickupSpawn, ScreenContent } from '@/game/world/ScreenContent';
+import { toScreenKey } from '@/game/world/ScreenContent';
 import { SwordPickup } from './SwordPickup';
-
-const INITIAL_DELAY = 2_000;
-const MIN_INTERVAL = 1_500;
-const PITY_RATE = 2;
-
-const SCATTER_RADIUS = 5;
 
 export class SwordPickupManager {
   private readonly pickups: SwordPickup[] = [];
-  private elapsed = 0;
-  private totalWithoutSword = 0;
+  private currentScreenKey = '';
 
-  public constructor(private readonly scene: Phaser.Scene) {}
+  public constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly contentByScreen: Map<string, ScreenContent>,
+  ) {}
+
+  public enterScreen(cx: number, cy: number, swordEquipped: boolean): void {
+    const key = toScreenKey(cx, cy);
+    if (key === this.currentScreenKey) return;
+
+    this.clearCurrentPickups();
+    this.currentScreenKey = key;
+
+    if (swordEquipped) return;
+
+    const content = this.contentByScreen.get(key);
+    if (!content) return;
+
+    for (const pickup of content.pickups) {
+      if (pickup.type !== 'sword') continue;
+      this.pickups.push(this.createSword(pickup));
+    }
+  }
 
   public onSwordEquipped(): void {
-    this.elapsed = 0;
-    this.totalWithoutSword = 0;
+    this.clearCurrentPickups();
   }
 
   public hasPickupAt(x: number, y: number): boolean {
@@ -27,12 +41,12 @@ export class SwordPickupManager {
   }
 
   public update(
-    delta: number,
+    _delta: number,
     playerWorldX: number,
     playerWorldY: number,
-    swordEquipped: boolean,
-    chunkManager: ChunkManager,
-    isOccupied: (x: number, y: number) => boolean,
+    _swordEquipped: boolean,
+    _chunkManager: unknown,
+    _isOccupied: (x: number, y: number) => boolean,
     onEquip: () => void,
   ): void {
     for (const pickup of this.pickups) {
@@ -45,20 +59,6 @@ export class SwordPickupManager {
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       if (this.pickups[i].isCollected) this.pickups.splice(i, 1);
     }
-
-    if (swordEquipped) return;
-    if (this.pickups.some((p) => !p.isCollected)) return;
-
-    this.elapsed += delta;
-    this.totalWithoutSword += delta;
-
-    const interval = Math.max(MIN_INTERVAL, INITIAL_DELAY - this.totalWithoutSword * PITY_RATE);
-
-    if (this.elapsed < interval) return;
-    this.elapsed = 0;
-
-    const tile = this.pickFreeTile(playerWorldX, playerWorldY, chunkManager, isOccupied);
-    if (tile) this.pickups.push(new SwordPickup(this.scene, tile.x, tile.y));
   }
 
   public render(tileSize: number, camera: WorldCamera): void {
@@ -66,28 +66,16 @@ export class SwordPickupManager {
   }
 
   public destroy(): void {
+    this.clearCurrentPickups();
+    this.currentScreenKey = '';
+  }
+
+  private clearCurrentPickups(): void {
     for (const pickup of this.pickups) pickup.destroy();
     this.pickups.length = 0;
   }
 
-  private pickFreeTile(
-    originX: number,
-    originY: number,
-    chunkManager: ChunkManager,
-    isOccupied: (x: number, y: number) => boolean,
-  ): { x: number; y: number } | null {
-    const candidates: Array<{ x: number; y: number }> = [];
-    for (let dy = -SCATTER_RADIUS; dy <= SCATTER_RADIUS; dy++) {
-      for (let dx = -SCATTER_RADIUS; dx <= SCATTER_RADIUS; dx++) {
-        if (Math.abs(dx) < 2 && Math.abs(dy) < 2) continue;
-        const tx = originX + dx;
-        const ty = originY + dy;
-        if (chunkManager.isCellBlocked(tx, ty)) continue;
-        if (isOccupied(tx, ty)) continue;
-        candidates.push({ x: tx, y: ty });
-      }
-    }
-    if (candidates.length === 0) return null;
-    return candidates[Phaser.Math.Between(0, candidates.length - 1)];
+  private createSword(pickup: PickupSpawn): SwordPickup {
+    return new SwordPickup(this.scene, pickup.worldX, pickup.worldY);
   }
 }
