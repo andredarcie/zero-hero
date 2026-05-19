@@ -20,6 +20,7 @@ import { EnemyManager } from '@/game/entities/EnemyManager';
 import { HeartPickupManager } from '@/game/entities/HeartPickupManager';
 import { SwordPickupManager } from '@/game/entities/SwordPickupManager';
 import { SwordSlash } from '@/game/runtime/SwordOrbit';
+import { CampfireObject } from '@/game/objects/CampfireObject';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
 import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
 import { MinimapRenderer } from '@/game/runtime/MinimapRenderer';
@@ -42,6 +43,8 @@ export class GameScene extends Phaser.Scene {
   private swordPickupManager?: SwordPickupManager;
   private swordSlash?: SwordSlash;
   private swordEquipped = false;
+  private swordOnFire = false;
+  private campfire?: CampfireObject;
   private boardRenderer?: GameBoardRenderer;
   private minimapRenderer?: MinimapRenderer;
   private player?: Phaser.GameObjects.Sprite;
@@ -59,6 +62,20 @@ export class GameScene extends Phaser.Scene {
   private eKey?: Phaser.Input.Keyboard.Key;
   private upgrades: UpgradeState = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
   private activeScreen = { cx: 0, cy: 0 };
+
+  // Lighting
+  private darknessOverlay?: Phaser.GameObjects.RenderTexture;
+  private lightCircleImg?: Phaser.GameObjects.Image;
+  private playerShadow?: Phaser.GameObjects.Ellipse;
+  private readonly lightFlicker = { radius: 1.0, velocity: 0 };
+
+  // Footprints
+  private footprintStep = false;
+
+  // Breathing idle
+  private breathingTween?: Phaser.Tweens.Tween;
+  private lastStepTime = 0;
+  private breathingBaseY = 0;
 
   public constructor() {
     super(GameScene.key);
@@ -89,6 +106,7 @@ export class GameScene extends Phaser.Scene {
     this.heartPickupManager = new HeartPickupManager(this, screenContent);
     this.swordPickupManager = new SwordPickupManager(this, screenContent);
     this.swordEquipped = false;
+    this.swordOnFire = false;
     this.swordSlash = undefined;
     this.camera = new WorldCamera(0, 0, 0, 0);
     this.camera.setActiveScreen(startWorldX, startWorldY);
@@ -108,6 +126,7 @@ export class GameScene extends Phaser.Scene {
       this.camera,
       (wx, wy) => {
         if (this.enemyManager?.getEnemyAt(wx, wy)) return true;
+        if (this.campfire && wx === this.campfire.worldX && wy === this.campfire.worldY) return true;
         return this.chunkManager?.isCellBlocked(wx, wy) ?? false;
       },
       (wx, wy) => animateGrassRustle(this, this.boardRenderer?.getGrassSprite(wx, wy), this.tileSize),
@@ -129,6 +148,11 @@ export class GameScene extends Phaser.Scene {
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
+
+    // Campfire placed 2 tiles right and 4 tiles up from player spawn, in the start chunk
+    this.campfire = new CampfireObject(this, startWorldX + 2, startWorldY - 4);
+
+    this.initLighting();
     this.loadActiveScreenContent();
   }
 
@@ -139,17 +163,45 @@ export class GameScene extends Phaser.Scene {
     this.heartPickupManager?.destroy();
     this.swordPickupManager?.destroy();
     this.swordSlash?.destroy();
+    this.campfire?.destroy();
     this.shopOverlay?.destroy();
+    this.breathingTween?.destroy();
+    this.breathingTween = undefined;
+    this.lightCircleImg?.destroy();
+    this.darknessOverlay?.destroy();
+    this.playerShadow?.destroy();
+    if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
     this.swordSlash = undefined;
+    this.campfire = undefined;
+    this.lightCircleImg = undefined;
+    this.darknessOverlay = undefined;
+    this.playerShadow = undefined;
   }
 
   public update(_time: number, delta: number): void {
     if (this.eKey && Phaser.Input.Keyboard.JustDown(this.eKey)) this.toggleShop();
+
+    if (this.camera) {
+      this.updateLighting(delta);
+      this.updatePlayerShadow();
+    }
+
     if (this.isDead || this.shopOpen || !this.movementController || !this.boardRenderer || !this.chunkManager || !this.camera) {
       return;
     }
 
+    const prevWorldX = this.playerWorld.worldX;
+    const prevWorldY = this.playerWorld.worldY;
     this.playerWorld = this.movementController.update(this.playerWorld.worldX, this.playerWorld.worldY);
+    const stepDx = this.playerWorld.worldX - prevWorldX;
+    const stepDy = this.playerWorld.worldY - prevWorldY;
+    if ((stepDx !== 0 || stepDy !== 0) && !this.camera.transitioning) {
+      this.spawnFootprint(prevWorldX, prevWorldY, stepDx, stepDy);
+      this.lastStepTime = this.time.now;
+      this.stopBreathing();
+    } else if (this.time.now - this.lastStepTime > 180) {
+      this.startBreathing();
+    }
     this.syncActiveScreenState();
     this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize);
     const isScreenTransitioning = this.camera.transitioning;
@@ -228,6 +280,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    if (this.campfire) this.campfire.render(this.tileSize, this.camera);
+
     this.minimapRenderer?.update(this.playerWorld.worldX, this.playerWorld.worldY, this.chunkManager);
   }
 
@@ -255,6 +309,11 @@ export class GameScene extends Phaser.Scene {
     this.player?.setDisplaySize(this.tileSize, this.tileSize);
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
     this.shopButton?.setPosition(width / 2, Math.floor(this.tileSize * 0.5)).setOrigin(0.5);
+
+    if (this.darknessOverlay) {
+      const hudH = this.tileSize * HUD_RESERVED_ROWS;
+      this.darknessOverlay.setPosition(0, hudH).resize(width, Math.max(1, height - hudH));
+    }
   }
 
   private computeTileSize(width: number, height: number): number {
@@ -307,6 +366,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handlePlayerBump(wx: number, wy: number): void {
+    // Campfire interaction — swing sword, then ignite
+    if (this.campfire && wx === this.campfire.worldX && wy === this.campfire.worldY) {
+      this.campfire.onHit();
+      if (this.swordEquipped && this.swordSlash && this.camera) {
+        const dx = wx - this.playerWorld.worldX;
+        const dy = wy - this.playerWorld.worldY;
+        const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+        this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
+        if (!this.swordOnFire) {
+          // Ignite at the moment the blade reaches the campfire (end of main swing arc)
+          this.time.delayedCall(150, () => { this.igniteSword(); });
+        }
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (!enemy) return;
 
@@ -319,6 +395,7 @@ export class GameScene extends Phaser.Scene {
       const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
       this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
       enemy.triggerKnockback(dx, dy, this.tileSize);
+      if (this.swordOnFire && enemy.isAlive) this.spawnFireHitEffect(wx, wy);
     }
 
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -327,6 +404,41 @@ export class GameScene extends Phaser.Scene {
 
     if (!enemy.isAlive && this.chunkManager) {
       this.coinManager?.spawnCoins(enemy.worldX, enemy.worldY, this.chunkManager);
+    }
+  }
+
+  private igniteSword(): void {
+    this.swordOnFire = true;
+    this.swordSlash?.setOnFire(true);
+    this.boardRenderer?.setHudSwordOnFire(true);
+    // Orange flash on the player as the fire transfers
+    this.player?.setTint(0xff6600);
+    this.time.delayedCall(250, () => { this.player?.clearTint(); });
+  }
+
+  private spawnFireHitEffect(wx: number, wy: number): void {
+    if (!this.camera) return;
+    const screen = this.camera.tileToScreen(wx, wy, this.tileSize);
+    const fireKeys = [ASSET_KEYS.tinyFire0, ASSET_KEYS.tinyFire1, ASSET_KEYS.tinyFire2];
+    const baseSize = Math.floor(this.tileSize * 0.38);
+
+    for (let i = 0; i < 3; i++) {
+      const ox = Phaser.Math.Between(-Math.floor(this.tileSize * 0.28), Math.floor(this.tileSize * 0.28));
+      const oy = Phaser.Math.Between(-Math.floor(this.tileSize * 0.15), Math.floor(this.tileSize * 0.10));
+      const f  = this.add
+        .image(screen.x + ox, screen.y + oy, fireKeys[i % fireKeys.length])
+        .setDisplaySize(baseSize, baseSize)
+        .setDepth(SCENE_DEPTHS.player + 3)
+        .setOrigin(0.5);
+
+      this.tweens.add({
+        targets: f,
+        alpha:   0,
+        y:       f.y - Math.floor(this.tileSize * 0.55),
+        duration: 320 + i * 90,
+        ease:    'Power2.easeOut',
+        onComplete: () => { f.destroy(); },
+      });
     }
   }
 
@@ -460,6 +572,141 @@ export class GameScene extends Phaser.Scene {
           this.scene.restart();
         });
       },
+    });
+  }
+
+  private initLighting(): void {
+    // Radial gradient: white (opaque) centre → transparent edge, used with erase() to punch light holes
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0,    'rgba(255,255,255,1)');
+    grad.addColorStop(0.45, 'rgba(255,255,255,0.85)');
+    grad.addColorStop(0.75, 'rgba(255,255,255,0.35)');
+    grad.addColorStop(1,    'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    this.textures.addCanvas('_campfire_light', canvas);
+
+    const { width, height } = this.scale;
+    const hudH = this.tileSize * HUD_RESERVED_ROWS;
+
+    this.darknessOverlay = this.add
+      .renderTexture(0, hudH, width, Math.max(1, height - hudH))
+      .setDepth(SCENE_DEPTHS.lighting)
+      .setOrigin(0);
+
+    // Off-display-list image used solely as the erase stamp
+    this.lightCircleImg = this.make.image({ key: '_campfire_light', add: false });
+
+    this.playerShadow = this.add
+      .ellipse(0, 0, 1, 1, 0x000000, 0.55)
+      .setDepth(SCENE_DEPTHS.decorBelowPlayer)
+      .setVisible(false);
+  }
+
+  private updateLighting(delta: number): void {
+    if (!this.darknessOverlay || !this.lightCircleImg) return;
+
+    // Perlin-free flicker: random-walk on radius scale
+    this.lightFlicker.velocity += (Math.random() - 0.5) * 0.018;
+    this.lightFlicker.velocity *= 0.85;
+    this.lightFlicker.radius = Phaser.Math.Clamp(
+      this.lightFlicker.radius + this.lightFlicker.velocity * (delta / 16),
+      0.80, 1.20,
+    );
+
+    const rt = this.darknessOverlay;
+    rt.clear();
+    rt.fill(0x06061a, 1);
+    rt.setAlpha(0.45);
+
+    if (this.campfire && this.camera) {
+      const hudH = this.tileSize * HUD_RESERVED_ROWS;
+      const cfScreen = this.camera.tileToScreen(this.campfire.worldX, this.campfire.worldY, this.tileSize);
+      const cfRadius = this.tileSize * 4.5 * this.lightFlicker.radius;
+      this.lightCircleImg.setDisplaySize(cfRadius * 2, cfRadius * 2);
+      rt.erase(this.lightCircleImg, cfScreen.x, cfScreen.y - hudH);
+    }
+
+    // Small ambient glow around the player — always visible so gameplay isn't pitch-black
+    if (this.camera) {
+      const hudH = this.tileSize * HUD_RESERVED_ROWS;
+      const pScreen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+      const pRadius = this.tileSize * 4.5;
+      this.lightCircleImg.setDisplaySize(pRadius * 2, pRadius * 2);
+      rt.erase(this.lightCircleImg, pScreen.x, pScreen.y - hudH);
+    }
+  }
+
+  private updatePlayerShadow(): void {
+    this.playerShadow?.setVisible(false);
+  }
+
+  private startBreathing(): void {
+    if (!this.player || this.breathingTween?.isPlaying()) return;
+    this.breathingTween?.destroy();
+    // Save center-origin Y, then pivot to bottom so scale only grows upward
+    this.breathingBaseY = this.player.y;
+    this.player.setOrigin(0.5, 1.0);
+    this.player.y = this.breathingBaseY + this.tileSize * 0.5;
+    const sx = this.player.scaleX;
+    const sy = this.player.scaleY;
+    this.breathingTween = this.tweens.add({
+      targets: this.player,
+      scaleY: sy * 1.045,
+      scaleX: sx * 0.972,
+      duration: 1100,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    });
+  }
+
+  private stopBreathing(): void {
+    if (!this.breathingTween) return;
+    this.breathingTween.stop();
+    this.breathingTween.destroy();
+    this.breathingTween = undefined;
+    // Restore center origin and reset scale/position
+    this.player?.setOrigin(0.5, 0.5);
+    this.player?.setDisplaySize(this.tileSize, this.tileSize);
+    if (this.player) this.player.y = this.breathingBaseY;
+  }
+
+  private spawnFootprint(fromWorldX: number, fromWorldY: number, dx: number, dy: number): void {
+    if (!this.camera) return;
+
+    // Alternate left / right foot using perpendicular offset
+    const sign = this.footprintStep ? 1 : -1;
+    this.footprintStep = !this.footprintStep;
+
+    // Perpendicular to movement direction
+    const perpX = -dy;
+    const perpY = dx;
+    const offset = this.tileSize * 0.17;
+
+    const screen = this.camera.tileToScreen(fromWorldX, fromWorldY, this.tileSize);
+    const fx = screen.x + perpX * offset * sign;
+    const fy = screen.y + perpY * offset * sign + this.tileSize * 0.28;
+
+    const w = Math.max(3, Math.floor(this.tileSize * (dy !== 0 ? 0.30 : 0.16)));
+    const h = Math.max(3, Math.floor(this.tileSize * (dx !== 0 ? 0.30 : 0.16)));
+
+    const print = this.add
+      .ellipse(fx, fy, w, h, 0x1a0e06, 0.75)
+      .setDepth(SCENE_DEPTHS.decorBelowPlayer - 1);
+
+    this.tweens.add({
+      targets: print,
+      alpha: 0,
+      y: fy - this.tileSize * 0.22,
+      duration: 750,
+      ease: 'Power1.easeIn',
+      onComplete: () => { print.destroy(); },
     });
   }
 

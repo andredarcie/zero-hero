@@ -46,6 +46,7 @@ export const SCENE_DEPTHS = {
   player: 10,
   object: 18,
   upper: 20,
+  lighting: 25,
   ui: 30,
   uiOverlay: 31,
   uiLabel: 32,
@@ -97,6 +98,13 @@ export const ASSET_KEYS = {
   bigSlimePool: 'big-slime-pool',
   spider: 'spider',
   webSpider: 'web-spider',
+  swordOnFire: 'sword-on-fire',
+  campfireFrame0: 'campfire-f0',
+  campfireFrame1: 'campfire-f1',
+  campfireFrame2: 'campfire-f2',
+  tinyFire0: 'tiny-fire0',
+  tinyFire1: 'tiny-fire1',
+  tinyFire2: 'tiny-fire2',
 } as const;
 
 export const ITEM_FRAMES = {

@@ -18,6 +18,8 @@ export class SwordSlash {
   private readonly sprite: Phaser.GameObjects.Sprite;
   private readonly trails: Phaser.GameObjects.Sprite[];
 
+  private onFire = false;
+
   // kept across onUpdate so we don't recalculate each frame
   private slashHandleX = 0;
   private slashHandleY = 0;
@@ -38,6 +40,10 @@ export class SwordSlash {
 
     this.sprite = makeSprite(SCENE_DEPTHS.player + 1);
     this.trails = Array.from({ length: TRAIL_COUNT }, () => makeSprite(TRAIL_DEPTH));
+  }
+
+  public setOnFire(value: boolean): void {
+    this.onFire = value;
   }
 
   /** dx/dy: cardinal attack direction (-1, 0, or 1) */
@@ -70,9 +76,13 @@ export class SwordSlash {
     this.trailStep    = SLASH_SWEEP_DEG / (TRAIL_COUNT + 2);
 
     // hide trails until first onUpdate
-    this.trails.forEach(t => t.setAlpha(0).setVisible(false));
+    const trailTint = this.onFire ? 0xff5500 : 0xffffff;
+    this.trails.forEach(t => t.setAlpha(0).setVisible(false).setTint(trailTint));
 
+    const texture = this.onFire ? ASSET_KEYS.swordOnFire : ASSET_KEYS.swordItem;
     this.sprite
+      .setTexture(texture, ITEM_FRAMES.swordIdle)
+      .setTint(this.onFire ? 0xffaa44 : 0xffffff)
       .setPosition(this.slashHandleX, this.slashHandleY)
       .setDisplaySize(size * 1.20, size * 1.20) // starts 20% bigger for impact pop
       .setAngle(startAngle)

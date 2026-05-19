@@ -33,7 +33,9 @@ export class GameBoardRenderer {
   private readonly itemSlotSprite: Phaser.GameObjects.Image;
   private readonly swordSlotSprite: Phaser.GameObjects.Image;
   private readonly itemSlotContentSprite: Phaser.GameObjects.Image;
-  private readonly swordSlotContentSprite: Phaser.GameObjects.Image;
+  private readonly swordSlotContentSprite: Phaser.GameObjects.Sprite;
+  private readonly swordFireOverlay: Phaser.GameObjects.Image;
+  private swordFireTimer?: Phaser.Time.TimerEvent;
   private readonly coinIcon: Phaser.GameObjects.Image;
   private readonly keyIcon: Phaser.GameObjects.Image;
   private readonly lifeLabel: Phaser.GameObjects.Text;
@@ -68,10 +70,14 @@ export class GameBoardRenderer {
       .setOrigin(0.5)
       .setVisible(false)
       .setDepth(SCENE_DEPTHS.uiLabel);
-    this.swordSlotContentSprite = scene.add.image(0, 0, ASSET_KEYS.swordItemIcon)
+    this.swordSlotContentSprite = scene.add.sprite(0, 0, ASSET_KEYS.swordItemIcon)
       .setOrigin(0.5)
       .setVisible(false)
       .setDepth(SCENE_DEPTHS.uiLabel);
+    this.swordFireOverlay = scene.add.image(0, 0, ASSET_KEYS.tinyFire0)
+      .setOrigin(0.5)
+      .setVisible(false)
+      .setDepth(SCENE_DEPTHS.uiLabel + 1);
 
     this.coinIcon = scene.add.image(0, 0, ASSET_KEYS.coin)
       .setOrigin(0.5)
@@ -209,6 +215,29 @@ export class GameBoardRenderer {
     this.swordSlotContentSprite.setTexture(textureKey).setVisible(true);
   }
 
+  public setHudSwordOnFire(onFire: boolean): void {
+    if (onFire) {
+      this.swordSlotContentSprite.setTexture(ASSET_KEYS.swordOnFire, 0).setTint(0xffcc66);
+      this.swordFireOverlay.setVisible(true);
+      let fi = 0;
+      const frames = [ASSET_KEYS.tinyFire0, ASSET_KEYS.tinyFire1, ASSET_KEYS.tinyFire2] as const;
+      this.swordFireTimer?.destroy();
+      this.swordFireTimer = this.scene.time.addEvent({
+        delay: 140,
+        loop: true,
+        callback: () => {
+          fi = (fi + 1) % frames.length;
+          this.swordFireOverlay.setTexture(frames[fi]);
+        },
+      });
+    } else {
+      this.swordFireTimer?.destroy();
+      this.swordFireTimer = undefined;
+      this.swordFireOverlay.setVisible(false);
+      this.swordSlotContentSprite.setTexture(ASSET_KEYS.swordItemIcon).clearTint();
+    }
+  }
+
   public getHudItemAnchor(): { x: number; y: number; size: number } {
     return { ...this.hudItemAnchor };
   }
@@ -308,6 +337,11 @@ export class GameBoardRenderer {
     this.swordSlotSprite.setPosition(aSlotX, slotsY).setDisplaySize(slotSize, slotSize);
     this.itemSlotContentSprite.setPosition(bSlotX, slotsY).setDisplaySize(itemSize, itemSize);
     this.swordSlotContentSprite.setPosition(aSlotX, slotsY).setDisplaySize(itemSize, itemSize);
+    // Fire overlay floats at the blade tip (upper half of the slot)
+    const fireOverlaySize = Math.floor(itemSize * 0.60);
+    this.swordFireOverlay
+      .setPosition(aSlotX, slotsY - Math.floor(itemSize * 0.38))
+      .setDisplaySize(fireOverlaySize, fireOverlaySize);
     this.bLabel.setPosition(bSlotX, slotLabelY).setFontSize(`${unit}px`);
     this.aLabel.setPosition(aSlotX, slotLabelY).setFontSize(`${unit}px`);
 

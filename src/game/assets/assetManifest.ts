@@ -42,6 +42,12 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    key: ASSET_KEYS.swordOnFire,
+    path: '/assets/items/equipment/sword_on_fire.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     key: ASSET_KEYS.slime,
     path: '/assets/characters/enemies/slime/Slime.png',
     frameWidth: 16,
@@ -128,6 +134,12 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     key: ASSET_KEYS.webSpider,
     path: '/assets/effects/ambient/web_spider.png',
   },
+  { key: ASSET_KEYS.campfireFrame0, path: '/assets/effects/fire/sprite_fire0.png' },
+  { key: ASSET_KEYS.campfireFrame1, path: '/assets/effects/fire/sprite_fire1.png' },
+  { key: ASSET_KEYS.campfireFrame2, path: '/assets/effects/fire/sprite_fire2.png' },
+  { key: ASSET_KEYS.tinyFire0,      path: '/assets/effects/fire/sprite_tiny_fire0.png' },
+  { key: ASSET_KEYS.tinyFire1,      path: '/assets/effects/fire/sprite_tiny_fire1.png' },
+  { key: ASSET_KEYS.tinyFire2,      path: '/assets/effects/fire/sprite_tiny_fire2.png' },
 ] as const;
 
 export const preloadSharedAssets = (scene: Phaser.Scene): void => {
