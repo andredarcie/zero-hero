@@ -7,7 +7,6 @@ import {
   HUD_HEALTH_MAX,
   HUD_HEARTS_SCALE,
   HUD_ITEM_SCALE,
-  HUD_INNER_PADDING_SCALE,
   HUD_SLOT_SCALE,
   SCENE_DEPTHS,
 } from '@/game/constants';
@@ -85,7 +84,7 @@ export class GameBoardRenderer {
       fontFamily: FONT_FAMILY,
       fontSize: '8px',
       color,
-      resolution: window.devicePixelRatio,
+      resolution: Math.max(2, Math.ceil(window.devicePixelRatio)),
     }).setDepth(SCENE_DEPTHS.uiLabel);
 
     this.lifeLabel = makeHudText('-LIFE-', '#f8f8f8');
@@ -246,116 +245,87 @@ export class GameBoardRenderer {
   }
 
   private renderHud(metrics: BoardMetrics): void {
-    const hudHeight = metrics.offsetY;
-    const hudY = metrics.offsetY - hudHeight;
-    const hudPadding = Math.max(6, Math.floor(metrics.tileSize * HUD_INNER_PADDING_SCALE));
-    const unit = Math.max(8, Math.floor(metrics.tileSize * 0.44));
-    const heartsHeight = Math.max(8, Math.floor(metrics.tileSize * HUD_HEARTS_SCALE));
-    const heartWidth = heartsHeight;
-    const slotSize = Math.max(16, Math.floor(metrics.tileSize * HUD_SLOT_SCALE));
-    const itemSize = Math.max(10, Math.floor(metrics.tileSize * HUD_ITEM_SCALE));
-    const mapPanelWidth = Math.max(82, Math.floor(metrics.width * 0.25));
-    const mapPanelHeight = Math.max(50, hudHeight - (hudPadding * 2));
-    const mapX = metrics.offsetX + hudPadding;
-    const mapY = hudY + hudPadding;
-    const countersX = mapX + mapPanelWidth + Math.max(12, Math.floor(metrics.tileSize * 0.82));
-    const firstCounterY = hudY + Math.floor(hudHeight * 0.26);
-    const secondCounterY = hudY + Math.floor(hudHeight * 0.49);
-    const thirdCounterY = hudY + Math.floor(hudHeight * 0.72);
-    const itemCenterX = metrics.offsetX + Math.floor(metrics.width * 0.58);
-    const itemRowY = hudY + Math.floor(hudHeight * 0.58);
-    const bSlotX = itemCenterX - Math.floor(slotSize * 0.85);
-    const aSlotX = itemCenterX + Math.floor(slotSize * 0.85);
-    const slotLabelY = itemRowY - Math.floor(slotSize * 0.95);
-    const lifeLabelX = metrics.offsetX + metrics.width - Math.max(126, Math.floor(metrics.width * 0.28));
-    const lifeLabelY = hudY + Math.floor(hudHeight * 0.28);
-    const heartsStartX = lifeLabelX;
-    const heartsStartY = hudY + Math.floor(hudHeight * 0.57);
+    const hudH = metrics.offsetY;
+    const pad = Math.max(4, Math.floor(metrics.tileSize * 0.13));
+    // cap unit so text stays readable at any tileSize
+    const unit = Math.max(7, Math.min(10, Math.floor(metrics.tileSize * 0.34)));
+    const heartsH = Math.max(10, Math.floor(metrics.tileSize * HUD_HEARTS_SCALE));
+    const slotSize = Math.max(18, Math.floor(metrics.tileSize * HUD_SLOT_SCALE));
+    const itemSize = Math.max(12, Math.floor(metrics.tileSize * HUD_ITEM_SCALE));
 
+    // ── Minimap (left) ─ world is 8×4 chunks → 2:1 ratio ──────────────────
+    const mapW = Math.max(64, Math.floor(metrics.width * 0.18));
+    const mapH = Math.max(32, Math.round(mapW * 0.5));
+    const mapX = metrics.offsetX + pad;
+    const mapY = Math.round((hudH - mapH) / 2);
+
+    // ── Counters (coin / key / bomb) ────────────────────────────────────────
+    const ctX = mapX + mapW + Math.max(8, Math.floor(metrics.tileSize * 0.48));
+    const ctY1 = Math.round(hudH * 0.20);
+    const ctY2 = Math.round(hudH * 0.50);
+    const ctY3 = Math.round(hudH * 0.80);
+
+    // ── Item slots (center) ─────────────────────────────────────────────────
+    const slotsX = metrics.offsetX + Math.round(metrics.width * 0.60);
+    const slotsY = Math.round(hudH * 0.58);
+    const slotSpacing = Math.floor(slotSize * 0.92);
+    const bSlotX = slotsX - slotSpacing;
+    const aSlotX = slotsX + slotSpacing;
+    const slotLabelY = slotsY - Math.floor(slotSize * 0.88);
+
+    // ── Hearts / LIFE (right) ───────────────────────────────────────────────
+    const heartW = heartsH;
+    const heartsBlockW = HUD_HEALTH_MAX * heartW;
+    const lifeX = metrics.offsetX + metrics.width - heartsBlockW - pad;
+    const lifeY = Math.round(hudH * 0.18);
+    const heartsY = Math.round(hudH * 0.56);
+
+    // ── Draw ────────────────────────────────────────────────────────────────
     this.hudBar
-      .setPosition(metrics.offsetX, hudY)
-      .setSize(metrics.width, hudHeight);
+      .setPosition(metrics.offsetX, 0)
+      .setSize(metrics.width, hudH);
 
     this.hudGraphics.clear();
-    this.hudGraphics.lineStyle(2, 0xf8f8f8, 1);
-    this.hudGraphics.strokeRect(mapX, mapY, mapPanelWidth, mapPanelHeight);
-    this.hudGraphics.fillStyle(0x000000, 1);
-    this.hudGraphics.fillRect(mapX + 2, mapY + 2, mapPanelWidth - 4, mapPanelHeight - 4);
 
-    this.coinIcon
-      .setPosition(countersX, firstCounterY)
-      .setDisplaySize(unit, unit);
-    this.keyIcon
-      .setPosition(countersX, secondCounterY)
-      .setDisplaySize(unit, unit);
-
-    this.hudGraphics.lineStyle(2, 0xf8f8f8, 1);
-    this.hudGraphics.strokeCircle(countersX, thirdCounterY, Math.max(4, Math.floor(unit * 0.34)));
+    // bomb icon (circle + fuse)
+    this.hudGraphics.lineStyle(1, 0xf8f8f8, 1);
+    this.hudGraphics.strokeCircle(ctX, ctY3, Math.max(3, Math.floor(unit * 0.38)));
     this.hudGraphics.strokeLineShape(new Phaser.Geom.Line(
-      countersX + Math.max(3, Math.floor(unit * 0.18)),
-      thirdCounterY - Math.max(4, Math.floor(unit * 0.34)),
-      countersX + Math.max(7, Math.floor(unit * 0.42)),
-      thirdCounterY - Math.max(7, Math.floor(unit * 0.54)),
+      ctX + Math.max(2, Math.floor(unit * 0.22)),
+      ctY3 - Math.max(3, Math.floor(unit * 0.38)),
+      ctX + Math.max(5, Math.floor(unit * 0.48)),
+      ctY3 - Math.max(5, Math.floor(unit * 0.58)),
     ));
 
-    this.rupeeLabel
-      .setPosition(countersX + unit, firstCounterY)
-      .setFontSize(`${unit}px`);
-    this.keyLabel
-      .setPosition(countersX + unit, secondCounterY)
-      .setFontSize(`${unit}px`);
-    this.bombLabel
-      .setPosition(countersX + unit, thirdCounterY)
-      .setFontSize(`${unit}px`);
+    this.coinIcon.setPosition(ctX, ctY1).setDisplaySize(unit, unit);
+    this.keyIcon.setPosition(ctX, ctY2).setDisplaySize(unit, unit);
 
-    this.heartsSprites.forEach((heartSprite, index) => {
-      const row = Math.floor(index / HEARTS_PER_ROW);
-      const column = index % HEARTS_PER_ROW;
-      heartSprite
-        .setPosition(heartsStartX + (column * heartWidth), heartsStartY + (row * Math.floor(heartsHeight * 0.9)))
-        .setDisplaySize(heartWidth, heartsHeight);
+    this.rupeeLabel.setPosition(ctX + unit + 2, ctY1).setFontSize(`${unit}px`);
+    this.keyLabel.setPosition(ctX + unit + 2, ctY2).setFontSize(`${unit}px`);
+    this.bombLabel.setPosition(ctX + unit + 2, ctY3).setFontSize(`${unit}px`);
+
+    this.itemSlotSprite.setPosition(bSlotX, slotsY).setDisplaySize(slotSize, slotSize);
+    this.swordSlotSprite.setPosition(aSlotX, slotsY).setDisplaySize(slotSize, slotSize);
+    this.itemSlotContentSprite.setPosition(bSlotX, slotsY).setDisplaySize(itemSize, itemSize);
+    this.swordSlotContentSprite.setPosition(aSlotX, slotsY).setDisplaySize(itemSize, itemSize);
+    this.bLabel.setPosition(bSlotX, slotLabelY).setFontSize(`${unit}px`);
+    this.aLabel.setPosition(aSlotX, slotLabelY).setFontSize(`${unit}px`);
+
+    this.lifeLabel.setPosition(lifeX, lifeY).setFontSize(`${unit}px`);
+    this.heartsSprites.forEach((s, i) => {
+      s.setPosition(lifeX + i * heartW, heartsY).setDisplaySize(heartW, heartsH);
     });
-
-    this.itemSlotSprite
-      .setPosition(bSlotX, itemRowY)
-      .setDisplaySize(slotSize, slotSize);
-    this.swordSlotSprite
-      .setPosition(aSlotX, itemRowY)
-      .setDisplaySize(slotSize, slotSize);
-
-    this.itemSlotContentSprite
-      .setPosition(bSlotX, itemRowY)
-      .setDisplaySize(itemSize, itemSize);
-    this.swordSlotContentSprite
-      .setPosition(aSlotX, itemRowY)
-      .setDisplaySize(itemSize, itemSize);
-
-    this.bLabel
-      .setPosition(bSlotX, slotLabelY)
-      .setFontSize(`${unit}px`);
-    this.aLabel
-      .setPosition(aSlotX, slotLabelY)
-      .setFontSize(`${unit}px`);
-
-    this.lifeLabel
-      .setPosition(lifeLabelX, lifeLabelY)
-      .setFontSize(`${unit}px`);
-
-    this.hudItemAnchor = {
-      x: bSlotX,
-      y: itemRowY,
-      size: itemSize,
-    };
 
     this.mapLabel.setVisible(false);
     this.coinLabel.setVisible(false);
 
-    this.hudCoinAnchor = { x: countersX, y: firstCounterY };
+    this.hudItemAnchor = { x: bSlotX, y: slotsY, size: itemSize };
+    this.hudCoinAnchor = { x: ctX, y: ctY1 };
     this.hudMapBounds = {
-      x: mapX + 4,
-      y: mapY + 4,
-      width: mapPanelWidth - 8,
-      height: mapPanelHeight - 8,
+      x: mapX + 3,
+      y: mapY + 3,
+      width: mapW - 6,
+      height: mapH - 6,
     };
   }
 }

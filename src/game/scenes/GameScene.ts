@@ -118,7 +118,7 @@ export class GameScene extends Phaser.Scene {
     this.eKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
     this.shopButton = this.add.text(0, 0, '[ LOJA ]', {
-      fontFamily: FONT_FAMILY, fontSize: '10px', color: '#9977bb',
+      fontFamily: FONT_FAMILY, fontSize: '10px', color: '#9977bb', resolution: Math.max(2, Math.ceil(window.devicePixelRatio)),
     })
       .setDepth(SCENE_DEPTHS.uiLabel)
       .setVisible(false)
@@ -425,7 +425,7 @@ export class GameScene extends Phaser.Scene {
       color: '#cc2222',
       stroke: '#000000',
       strokeThickness: 4,
-      resolution: window.devicePixelRatio,
+      resolution: Math.max(2, Math.ceil(window.devicePixelRatio)),
     })
       .setOrigin(0.5)
       .setAlpha(0)
@@ -435,7 +435,7 @@ export class GameScene extends Phaser.Scene {
       fontFamily: FONT_FAMILY,
       fontSize: `${Math.floor(this.tileSize * 0.55)}px`,
       color: '#aaaaaa',
-      resolution: window.devicePixelRatio,
+      resolution: Math.max(2, Math.ceil(window.devicePixelRatio)),
     })
       .setOrigin(0.5)
       .setAlpha(0)

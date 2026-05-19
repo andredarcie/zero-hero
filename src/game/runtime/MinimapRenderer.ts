@@ -9,10 +9,10 @@ import {
   WORLD_MIN_CHUNK_Y,
 } from '@/game/world/WorldGenerator';
 
-const BG_COLOR = 0x1f5f2f;
-const GRID_COLOR = 0x0b1f0f;
-const SCREEN_COLOR = 0x5fa35f;
-const PLAYER_COLOR = 0x80d010;
+const BG_COLOR = 0x000000;
+const EMPTY_COLOR = 0x111a11;
+const VISITED_COLOR = 0x3a7a3a;
+const PLAYER_COLOR = 0x80ff20;
 
 export class MinimapRenderer {
   private readonly graphics: Phaser.GameObjects.Graphics;
@@ -39,31 +39,29 @@ export class MinimapRenderer {
     const { x, y, width, height } = this.bounds;
     if (!width || !height) return;
 
-    const cellW = width / WORLD_CHUNK_COLUMNS;
-    const cellH = height / WORLD_CHUNK_ROWS;
+    const gap = 1;
+    const cellW = Math.floor(width / WORLD_CHUNK_COLUMNS);
+    const cellH = Math.floor(height / WORLD_CHUNK_ROWS);
 
     this.graphics.clear();
-    this.graphics.fillStyle(BG_COLOR, 1);
-    this.graphics.fillRect(x, y, width, height);
+
+    this.graphics.fillStyle(BG_COLOR, 0.7);
+    this.graphics.fillRect(x - 2, y - 2, width + 4, height + 4);
 
     for (let row = 0; row < WORLD_CHUNK_ROWS; row++) {
-      for (let column = 0; column < WORLD_CHUNK_COLUMNS; column++) {
-        const cx = WORLD_MIN_CHUNK_X + column;
+      for (let col = 0; col < WORLD_CHUNK_COLUMNS; col++) {
+        const cx = WORLD_MIN_CHUNK_X + col;
         const cy = WORLD_MIN_CHUNK_Y + row;
-        if (!chunkManager.hasChunkCoordinate(cx, cy)) continue;
+        const visited = chunkManager.hasChunkCoordinate(cx, cy);
+        const isPlayer = cx === chunkX && cy === chunkY;
 
-        const cellX = x + column * cellW;
-        const cellY = y + row * cellH;
+        const bx = Math.round(x + col * cellW);
+        const by = Math.round(y + row * cellH);
+        const bw = cellW - gap;
+        const bh = cellH - gap;
 
-        this.graphics.lineStyle(1, GRID_COLOR, 1);
-        this.graphics.strokeRect(cellX, cellY, cellW, cellH);
-        this.graphics.fillStyle(SCREEN_COLOR, 1);
-        this.graphics.fillRect(cellX + 1, cellY + 1, Math.max(1, cellW - 2), Math.max(1, cellH - 2));
-
-        if (cx === chunkX && cy === chunkY) {
-          this.graphics.fillStyle(PLAYER_COLOR, 1);
-          this.graphics.fillRect(cellX + Math.max(1, cellW * 0.25), cellY + Math.max(1, cellH * 0.25), Math.max(3, cellW * 0.5), Math.max(3, cellH * 0.5));
-        }
+        this.graphics.fillStyle(isPlayer ? PLAYER_COLOR : visited ? VISITED_COLOR : EMPTY_COLOR, 1);
+        this.graphics.fillRect(bx, by, bw, bh);
       }
     }
   }

@@ -33,10 +33,10 @@ export const EDITOR_PALETTE_TILE_SIZE = 32;
 export const GAMEPLAY_HERO_SCALE = 1;
 export const GAMEPLAY_HERO_MAX_SIZE = Number.MAX_SAFE_INTEGER;
 
-export const CHUNK_COLUMNS = 16;
-export const CHUNK_ROWS = 11;
+export const CHUNK_COLUMNS = 12;
+export const CHUNK_ROWS = 12;
 export const WORLD_VIEWPORT_COLS = 10;
-export const WORLD_VIEWPORT_ROWS = 8;
+export const WORLD_VIEWPORT_ROWS = 12;
 
 export const SCENE_DEPTHS = {
   ground: 0,

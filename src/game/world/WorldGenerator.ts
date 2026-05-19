@@ -6,8 +6,8 @@ const DECOR_FRAMES = [0, 6, 7, 8, 11] as const;
 const COLLISION_FRAMES = [4, 10, 15, 16, 17] as const;
 const EDGE_OPENING_X_START = 6;
 const EDGE_OPENING_X_END = 9;
-const EDGE_OPENING_Y_START = 4;
-const EDGE_OPENING_Y_END = 6;
+const EDGE_OPENING_Y_START = 5;
+const EDGE_OPENING_Y_END = 7;
 const CENTER_X = Math.floor(CHUNK_COLUMNS / 2);
 const CENTER_Y = Math.floor(CHUNK_ROWS / 2);
 
@@ -163,7 +163,7 @@ const addThemeDetails = (
       }
       break;
     case 'pillars':
-      for (const [lx, ly] of [[4, 3], [11, 3], [4, 7], [11, 7], [CENTER_X, CENTER_Y]] as const) {
+      for (const [lx, ly] of [[4, 3], [11, 3], [4, 9], [11, 9], [CENTER_X, CENTER_Y]] as const) {
         if (lx === CENTER_X && ly === CENTER_Y && blueprint.openings.north && blueprint.openings.south && blueprint.openings.east && blueprint.openings.west) {
           continue;
         }
