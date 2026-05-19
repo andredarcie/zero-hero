@@ -11,6 +11,9 @@ export abstract class EnemyBase {
   private health: number;
   private readonly maxHealth: number;
   private alive = true;
+  private knockbackOffsetX = 0;
+  private knockbackOffsetY = 0;
+  private knockbackSquash = 1.0;
 
   protected readonly scene: Phaser.Scene;
   protected readonly sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
@@ -74,21 +77,39 @@ export abstract class EnemyBase {
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean;
 
+  public triggerKnockback(dx: number, dy: number, tileSize: number): void {
+    if (!this.alive) return;
+    this.scene.tweens.killTweensOf(this);
+    this.knockbackOffsetX = dx * tileSize * 0.38;
+    this.knockbackOffsetY = dy * tileSize * 0.38;
+    this.knockbackSquash = 0.78;
+    this.scene.tweens.add({
+      targets: this,
+      knockbackOffsetX: 0,
+      knockbackOffsetY: 0,
+      knockbackSquash: 1.0,
+      duration: 230,
+      ease: 'Power3.easeOut',
+    });
+  }
+
   public render(tileSize: number, camera: WorldCamera): void {
     if (!this.alive) return;
 
     const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    const scale = this.spriteScale;
+    const scale = this.spriteScale * this.knockbackSquash;
+    const sx = screen.x + this.knockbackOffsetX;
+    const sy = screen.y + this.knockbackOffsetY;
 
     this.sprite
-      .setPosition(screen.x, screen.y)
+      .setPosition(sx, sy)
       .setDisplaySize(tileSize * scale, tileSize * scale);
 
     this.healthBar.clear();
     const barW = Math.floor(tileSize * 0.75);
     const barH = Math.max(2, Math.floor(tileSize * 0.12));
-    const barX = screen.x - Math.floor(barW / 2);
-    const barY = screen.y - Math.floor(tileSize * 0.65);
+    const barX = sx - Math.floor(barW / 2);
+    const barY = sy - Math.floor(tileSize * 0.65);
 
     this.healthBar.fillStyle(0x220000, 1);
     this.healthBar.fillRect(barX, barY, barW, barH);
@@ -99,6 +120,7 @@ export abstract class EnemyBase {
   public destroy(): void {
     if (this.scene.tweens) {
       this.scene.tweens.killTweensOf(this.sprite);
+      this.scene.tweens.killTweensOf(this);
     }
     this.sprite.destroy();
     this.healthBar.destroy();

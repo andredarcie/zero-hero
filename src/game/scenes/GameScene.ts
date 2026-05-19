@@ -318,6 +318,7 @@ export class GameScene extends Phaser.Scene {
       const dy = wy - this.playerWorld.worldY;
       const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
       this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
+      enemy.triggerKnockback(dx, dy, this.tileSize);
     }
 
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
