@@ -16,6 +16,12 @@ export class CoinManager {
 
   public get coinTotal(): number { return this.total; }
 
+  public getActiveWorldPositions(): Array<{ worldX: number; worldY: number }> {
+    return this.coins
+      .filter((c) => !c.isCollected)
+      .map((c) => ({ worldX: c.tileX, worldY: c.tileY }));
+  }
+
   public setMagnetRadius(r: number): void { this.magnetRadius = r; }
 
   public spendCoins(amount: number): boolean {

@@ -40,6 +40,10 @@ export class EnemyManager {
     return this.enemies.find((e) => e.isAlive && e.worldX === worldX && e.worldY === worldY) ?? null;
   }
 
+  public getActiveWorldPositions(): Array<{ worldX: number; worldY: number }> {
+    return this.enemies.filter((e) => e.isAlive).map((e) => ({ worldX: e.worldX, worldY: e.worldY }));
+  }
+
   public getAliveEnemies(): readonly EnemyBase[] {
     return this.enemies.filter((e) => e.isAlive);
   }

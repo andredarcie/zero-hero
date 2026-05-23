@@ -11,6 +11,16 @@ import {
 
 export type EnemyKind = 'bat' | 'slime' | 'undead' | 'spider' | 'mage' | 'bigSlime';
 export type PickupKind = 'heart' | 'sword';
+export type NpcKind =
+  | 'blackCat'
+  | 'mimic'
+  | 'astronaut'
+  | 'businessMan'
+  | 'radiationSuit'
+  | 'painter'
+  | 'salesman'
+  | 'poet'
+  | 'death';
 
 export type EnemySpawn = {
   type: EnemyKind;
@@ -24,9 +34,16 @@ export type PickupSpawn = {
   worldY: number;
 };
 
+export type NpcSpawn = {
+  type: NpcKind;
+  worldX: number;
+  worldY: number;
+};
+
 export type ScreenContent = {
   enemies: EnemySpawn[];
   pickups: PickupSpawn[];
+  npcs: NpcSpawn[];
 };
 
 const hash = (a: number, b: number, c: number, d: number): number => {
@@ -77,6 +94,37 @@ const takeDeterministicTiles = (
   return picked;
 };
 
+const ALL_NPC_KINDS: readonly NpcKind[] = [
+  'blackCat', 'mimic', 'astronaut', 'businessMan', 'radiationSuit', 'painter', 'salesman', 'poet', 'death',
+];
+
+const buildNpcAssignment = (): Map<string, NpcKind> => {
+  // Collect all non-start screens
+  const screens: Array<{ cx: number; cy: number }> = [];
+  for (let cy = WORLD_MIN_CHUNK_Y; cy <= WORLD_MAX_CHUNK_Y; cy++) {
+    for (let cx = WORLD_MIN_CHUNK_X; cx <= WORLD_MAX_CHUNK_X; cx++) {
+      if (cx === START_SCREEN_CHUNK_X && cy === START_SCREEN_CHUNK_Y) continue;
+      screens.push({ cx, cy });
+    }
+  }
+
+  // Fisher-Yates shuffle driven by the hash function
+  for (let i = screens.length - 1; i > 0; i--) {
+    const j = hash(i, 0, 809, 3) % (i + 1);
+    const tmp = screens[i];
+    screens[i] = screens[j];
+    screens[j] = tmp;
+  }
+
+  const assignment = new Map<string, NpcKind>();
+  for (let k = 0; k < ALL_NPC_KINDS.length; k++) {
+    assignment.set(screenKey(screens[k].cx, screens[k].cy), ALL_NPC_KINDS[k]);
+  }
+  return assignment;
+};
+
+const NPC_ASSIGNMENT = buildNpcAssignment();
+
 const resolveEnemyRoster = (cx: number, cy: number): EnemyKind[] => {
   const dist = Math.abs(cx - START_SCREEN_CHUNK_X) + Math.abs(cy - START_SCREEN_CHUNK_Y);
   const count = dist <= 2 ? 2 : dist <= 5 ? 3 : 4;
@@ -89,6 +137,8 @@ const resolveEnemyRoster = (cx: number, cy: number): EnemyKind[] => {
   return Array.from({ length: count }, (_, index) => pool[hash(cx, cy, 17, index) % pool.length]);
 };
 
+export const ENEMY_BORDER_MARGIN = 2;
+
 export const buildScreenContentMap = (chunkManager: ChunkManager): Map<string, ScreenContent> => {
   const content = new Map<string, ScreenContent>();
 
@@ -98,20 +148,37 @@ export const buildScreenContentMap = (chunkManager: ChunkManager): Map<string, S
       const openTiles = collectOpenTiles(cx, cy, chunkManager);
 
       if (cx === START_SCREEN_CHUNK_X && cy === START_SCREEN_CHUNK_Y) {
-        content.set(key, { enemies: [], pickups: [] });
+        content.set(key, { enemies: [], pickups: [], npcs: [] });
         continue;
       }
 
       const enemies: EnemySpawn[] = [];
       const pickups: PickupSpawn[] = [];
-      const roster = resolveEnemyRoster(cx, cy);
-      const enemyTiles = takeDeterministicTiles(openTiles, cx, cy, roster.length, 101);
+      const npcs: NpcSpawn[] = [];
 
-      roster.forEach((type, index) => {
-        const tile = enemyTiles[index];
-        if (!tile) return;
-        enemies.push({ type, worldX: tile.worldX, worldY: tile.worldY });
-      });
+      const npcKind = NPC_ASSIGNMENT.get(key) ?? null;
+      if (npcKind) {
+        const npcTile = takeDeterministicTiles(openTiles, cx, cy, 1, 702)[0];
+        if (npcTile) npcs.push({ type: npcKind, worldX: npcTile.worldX, worldY: npcTile.worldY });
+      }
+
+      if (!npcKind) {
+        const enemyPool = openTiles.filter((t) => {
+          const lx = t.worldX - cx * CHUNK_COLUMNS;
+          const ly = t.worldY - cy * CHUNK_ROWS;
+          return lx >= ENEMY_BORDER_MARGIN && lx < CHUNK_COLUMNS - ENEMY_BORDER_MARGIN
+              && ly >= ENEMY_BORDER_MARGIN && ly < CHUNK_ROWS - ENEMY_BORDER_MARGIN;
+        });
+
+        const roster = resolveEnemyRoster(cx, cy);
+        const enemyTiles = takeDeterministicTiles(enemyPool, cx, cy, roster.length, 101);
+
+        roster.forEach((type, index) => {
+          const tile = enemyTiles[index];
+          if (!tile) return;
+          enemies.push({ type, worldX: tile.worldX, worldY: tile.worldY });
+        });
+      }
 
       if (cx === START_SCREEN_CHUNK_X + 1 && cy === START_SCREEN_CHUNK_Y) {
         const swordTile = takeDeterministicTiles(openTiles, cx, cy, 1, 303)[0];
@@ -127,7 +194,7 @@ export const buildScreenContentMap = (chunkManager: ChunkManager): Map<string, S
         }
       }
 
-      content.set(key, { enemies, pickups });
+      content.set(key, { enemies, pickups, npcs });
     }
   }
 
@@ -135,3 +202,5 @@ export const buildScreenContentMap = (chunkManager: ChunkManager): Map<string, S
 };
 
 export const toScreenKey = screenKey;
+
+export const getNpcChunkCoords = (): ReadonlySet<string> => new Set(NPC_ASSIGNMENT.keys());

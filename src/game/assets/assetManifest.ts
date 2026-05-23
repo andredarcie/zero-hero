@@ -48,6 +48,12 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    key: ASSET_KEYS.npcs,
+    path: '/assets/characters/npcs/npcs.png',
+    frameWidth: 16,
+    frameHeight: 16,
+  },
+  {
     key: ASSET_KEYS.slime,
     path: '/assets/characters/enemies/slime/Slime.png',
     frameWidth: 16,
@@ -65,6 +71,18 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   {
     key: ASSET_KEYS.hudSlot,
     path: '/assets/ui/hud/hud_slot.png',
+  },
+  {
+    key: ASSET_KEYS.npcSalesman,
+    path: '/assets/characters/npcs/salesman.png',
+  },
+  {
+    key: ASSET_KEYS.npcPoet,
+    path: '/assets/characters/npcs/poet.png',
+  },
+  {
+    key: ASSET_KEYS.npcDeath,
+    path: '/assets/ui/states/death.png',
   },
   {
     key: ASSET_KEYS.keyItem,

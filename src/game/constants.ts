@@ -73,8 +73,21 @@ export const TIMINGS = {
   toastFadeDurationMs: 300,
 } as const;
 
+export const NPC_FRAMES = {
+  blackCat: 0,
+  mimic: 1,
+  astronaut: 2,
+  businessMan: 3,
+  radiationSuit: 4,
+  painter: 5,
+} as const;
+
 export const ASSET_KEYS = {
   hero: 'hero',
+  npcs: 'npcs',
+  npcSalesman: 'npc-salesman',
+  npcPoet: 'npc-poet',
+  npcDeath: 'npc-death',
   forestTileset: 'forest-tileset',
   hudHearts: 'hud-hearts',
   hudSlot: 'hud-slot',
@@ -106,6 +119,23 @@ export const ASSET_KEYS = {
   tinyFire1: 'tiny-fire1',
   tinyFire2: 'tiny-fire2',
 } as const;
+
+type NpcVisual = {
+  key: string;
+  frame?: number;
+};
+
+export const NPC_VISUALS: Record<string, NpcVisual> = {
+  blackCat: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.blackCat },
+  mimic: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.mimic },
+  astronaut: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.astronaut },
+  businessMan: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.businessMan },
+  radiationSuit: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.radiationSuit },
+  painter: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.painter },
+  salesman: { key: ASSET_KEYS.npcSalesman },
+  poet: { key: ASSET_KEYS.npcPoet },
+  death: { key: ASSET_KEYS.npcDeath },
+};
 
 export const ITEM_FRAMES = {
   swordIdle: 0,
