@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, SCENE_DEPTHS } from '@/game/constants';
+import { ASSET_KEYS, SCENE_DEPTHS, ySortDepth } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 const FRAME_DURATION = 140; // ms per animation frame
@@ -60,8 +60,8 @@ export class CampfireObject {
     const size    = Math.max(12, Math.floor(tileSize * 0.88));
     const glowSz  = Math.floor(size * 2.2);
 
-    this.sprite.setPosition(screen.x, screen.y).setDisplaySize(size, size);
-    this.glow.setPosition(screen.x, screen.y).setDisplaySize(glowSz, glowSz);
+    this.sprite.setPosition(screen.x, screen.y).setDisplaySize(size, size).setDepth(ySortDepth(this.worldY));
+    this.glow.setPosition(screen.x, screen.y).setDisplaySize(glowSz, glowSz).setDepth(ySortDepth(this.worldY) - 0.05);
   }
 
   /** Called when the player hits the campfire — brief flare-up */

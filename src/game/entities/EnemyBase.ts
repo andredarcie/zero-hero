@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { SCENE_DEPTHS } from '@/game/constants';
+import { SCENE_DEPTHS, ySortDepth } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 export abstract class EnemyBase {
@@ -103,8 +103,10 @@ export abstract class EnemyBase {
 
     this.sprite
       .setPosition(sx, sy)
-      .setDisplaySize(tileSize * scale, tileSize * scale);
+      .setDisplaySize(tileSize * scale, tileSize * scale)
+      .setDepth(ySortDepth(this.worldY));
 
+    this.healthBar.setDepth(ySortDepth(this.worldY) + 0.02);
     this.healthBar.clear();
     const barW = Math.floor(tileSize * 0.75);
     const barH = Math.max(2, Math.floor(tileSize * 0.12));

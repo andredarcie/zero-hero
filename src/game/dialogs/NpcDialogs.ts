@@ -19,16 +19,15 @@ const r = (text: string): DialogLine => ({ speaker: 'narrator', text });
 
 export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
   blackCat: {
-    npcName: 'GATO PRETO',
+    npcName: 'CAT',
     npcColorHex: '#cc99ff',
     npcAssetKey: NPC_VISUALS.blackCat.key,
     npcFrame: NPC_VISUALS.blackCat.frame,
     lines: [
-      r('O gato te olha fixamente. Seus olhos refletem o vazio.'),
-      n('...'),
-      r('Ele pisca uma vez. Lentamente.'),
-      n('Miau.'),
-      r('Voce nao entende. Mas sente que era importante.'),
+      n('You must be the hero who seeks to find the sword?'),
+      n('Yes. I am a talking cat'),
+      n('And you\'re a naked primate in an armor'),
+      n('Well the game is still in the Alpha version, so I think it\'s impossible for you to find the sword'),
     ],
   },
 
@@ -47,58 +46,45 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
   },
 
   astronaut: {
-    npcName: 'ASTRONAUTA',
+    npcName: 'ASTRONAUT',
     npcColorHex: '#44ccff',
     npcAssetKey: NPC_VISUALS.astronaut.key,
     npcFrame: NPC_VISUALS.astronaut.frame,
     lines: [
-      r('Ele verifica os instrumentos no capacete. Algo esta errado.'),
-      n('Houston, temos um problema. Estou em... uma floresta?'),
-      n('Os sensores indicam: oxigenio, gravidade, inimigos.'),
-      r('Ele olha para os slimes ao longe.'),
-      n('Pior do que Marte. Definitivamente pior do que Marte.'),
+      n('My ship crashes in this place, I\'m trying to find its parts'),
+      n('But I think they landed on a part of the map that isn\'t available in the alpha version.'),
     ],
   },
 
   businessMan: {
-    npcName: 'EXECUTIVO',
+    npcName: 'BUSINESSMAN',
     npcColorHex: '#ffdd44',
     npcAssetKey: NPC_VISUALS.businessMan.key,
     npcFrame: NPC_VISUALS.businessMan.frame,
     lines: [
-      n('Excelente! Voce chegou na hora certa.'),
-      r('Ele ajeita a gravata. Segura papeis em uma floresta.'),
-      n('Seguro contra slimes. Plano basico, 500 moedas por mes.'),
-      n('Para voce? 499. Minha esposa vai me matar.'),
-      r('Ele nao percebe que esta em uma floresta.'),
+      n('Work hard and you\'ll find the sword you\'re looking for'),
     ],
   },
 
   radiationSuit: {
-    npcName: 'DR. AZEVEDO',
+    npcName: 'WORKMAN',
     npcColorHex: '#66ff44',
     npcAssetKey: NPC_VISUALS.radiationSuit.key,
     npcFrame: NPC_VISUALS.radiationSuit.frame,
     lines: [
-      r('Ele usa um medidor de radiacao que bipa sem parar.'),
-      n('PARE! Os niveis estao em 6.8 milisierverts. Critico.'),
-      n('As arvores sao antenas. Sempre foram.'),
-      r('Suas maos tremem levemente.'),
-      n('Monitoro isso ha 3 anos. A verdade vai emergir.'),
+      n('I used an ax to cut uranium, but you can cut other things with it'),
     ],
   },
 
   painter: {
-    npcName: 'ARTISTA',
+    npcName: 'ARTIST',
     npcColorHex: '#ff88aa',
     npcAssetKey: NPC_VISUALS.painter.key,
     npcFrame: NPC_VISUALS.painter.frame,
     lines: [
-      r('Ela olha para a copa das arvores. A tela esta vazia.'),
-      n('Voce ve como a luz atravessa as arvores?'),
-      n('E tragicamente perfeita.'),
-      r('Ela suspira. Um suspiro artistico.'),
-      n('Minha ultima obra vendeu por tres moedas. A critica foi devastadora.'),
+      n('You must be the warrior Zero!'),
+      n('I was on a journey to find the perfect place to do a painting.'),
+      n('But these bushes are getting in the way.'),
     ],
   },
 
@@ -115,26 +101,29 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
   },
 
   poet: {
-    npcName: 'POETA',
+    npcName: 'POET',
     npcColorHex: '#9bb7ff',
     npcAssetKey: NPC_VISUALS.poet.key,
     lines: [
-      r('Ele encara uma arvore como se ela tivesse dito algo profundo.'),
-      n('No musgo repousa o eco do heroi que ainda nao caiu.'),
-      n('Toda espada e um verso quando encontra o destino certo.'),
-      r('Voce nao tem certeza se foi inspirado ou ameacado.'),
+      n('You are not a hero.'),
+      n('Sorry for my manners, it\'s just that I\'m sad.'),
+      n('I lost my inspiration to write poems.'),
+      n('Imagine a poet who doesn\'t write poems, I totally lost my identity.'),
+      n('Maybe one day I can get back to writing poems.'),
+      n('You know that writing poems doesn\'t make any money.'),
+      n('You can make money being a hero?'),
     ],
   },
 
   death: {
-    npcName: 'MORTE',
+    npcName: 'DEATH',
     npcColorHex: '#f3f4f6',
     npcAssetKey: NPC_VISUALS.death.key,
     lines: [
-      r('Uma presenca silenciosa bloqueia o vento por um instante.'),
-      n('Ainda nao.'),
-      r('A figura inclina a cabeca, como se estivesse conferindo uma lista.'),
-      n('Mas continue assim e nos veremos em breve.'),
+      n('Nihilist knight! Do you accept a game of chess for your soul?'),
+      n('You died but you haven\'t reached the end of your journey'),
+      n('Thanks for playing the Alpha version of the game!'),
+      n('Submit your feedback'),
     ],
   },
 };

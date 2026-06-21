@@ -54,6 +54,14 @@ export const SCENE_DEPTHS = {
   toast: 40,
 } as const;
 
+// 2.5D depth sorting: entities lower on screen (greater worldY) are closer to the
+// camera, so they draw in front. The band stays above pickups (item=8) and well below
+// the lighting overlay (25). worldY spans roughly [-24, 23], giving depths ~9.6..14.3.
+const Y_SORT_BASE = 12;
+const Y_SORT_STEP = 0.1;
+export const ySortDepth = (worldY: number, bias = 0): number =>
+  Y_SORT_BASE + (worldY * Y_SORT_STEP) + bias;
+
 export const HERO_FRAMES = {
   idleDown: 3,
   idleUp: 4,

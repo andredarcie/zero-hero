@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
-import { NPC_VISUALS, SCENE_DEPTHS } from '@/game/constants';
+import { NPC_VISUALS, SCENE_DEPTHS, ySortDepth } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import type { NpcKind, NpcSpawn, ScreenContent } from '@/game/world/ScreenContent';
+import type { NpcKind, ScreenContent } from '@/game/world/ScreenContent';
 import { toScreenKey } from '@/game/world/ScreenContent';
 
 class NpcEntity {
@@ -25,7 +25,10 @@ class NpcEntity {
 
   public render(tileSize: number, camera: WorldCamera): void {
     const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    this.sprite.setPosition(screen.x, screen.y).setDisplaySize(tileSize, tileSize);
+    this.sprite
+      .setPosition(screen.x, screen.y)
+      .setDisplaySize(tileSize, tileSize)
+      .setDepth(ySortDepth(this.worldY));
   }
 
   public destroy(): void {

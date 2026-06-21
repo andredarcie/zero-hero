@@ -9,6 +9,7 @@ import {
   HUD_ITEM_SCALE,
   HUD_SLOT_SCALE,
   SCENE_DEPTHS,
+  ySortDepth,
 } from '@/game/constants';
 import type { BoardMetrics } from '@/game/shared/grid';
 import type { ChunkManager } from '@/game/world/ChunkManager';
@@ -17,11 +18,14 @@ import type { WorldCamera } from './WorldCamera';
 const LOW_GRASS_TILE = 0;
 const FULL_HEART_FRAME = 4;
 const EMPTY_HEART_FRAME = 0;
-const HEARTS_PER_ROW = 8;
+// How far obstacle tops (trees/walls) lift off the ground for the 2.5D "standing up" look.
+const TREE_LIFT_FACTOR = 0.16;
 
 type TileEntry = {
   ground: Phaser.GameObjects.Sprite;
   upper: Phaser.GameObjects.Sprite | null;
+  shadow: Phaser.GameObjects.Ellipse | null;
+  isObstacle: boolean;
 };
 
 export class GameBoardRenderer {
@@ -154,9 +158,17 @@ export class GameBoardRenderer {
           .setDisplaySize(tileSize, tileSize);
 
         if (entry.upper) {
+          // Obstacles lift up off the ground; flat decor (grass) stays put.
+          const lift = entry.isObstacle ? Math.round(tileSize * TREE_LIFT_FACTOR) : 0;
           entry.upper
-            .setPosition(screenX, screenY)
+            .setPosition(screenX, screenY - lift)
             .setDisplaySize(tileSize, tileSize);
+        }
+
+        if (entry.shadow) {
+          entry.shadow
+            .setPosition(screenX, screenY + Math.round(tileSize * 0.30))
+            .setDisplaySize(tileSize * 0.72, tileSize * 0.30);
         }
       }
     }
@@ -168,6 +180,7 @@ export class GameBoardRenderer {
           entry.upper.destroy();
           this.grassSprites.delete(key);
         }
+        entry.shadow?.destroy();
         this.tileSprites.delete(key);
       }
     }
@@ -256,9 +269,13 @@ export class GameBoardRenderer {
       .setDisplaySize(tileSize, tileSize)
       .setDepth(SCENE_DEPTHS.ground);
 
+    const isObstacle = tile.upper !== null && tile.collision;
+
     let upper: Phaser.GameObjects.Sprite | null = null;
     if (tile.upper !== null) {
-      const depth = tile.collision ? SCENE_DEPTHS.upper : SCENE_DEPTHS.decorBelowPlayer;
+      // Obstacles join the Y-sort band so the hero can pass in front of / behind them;
+      // flat decor stays below the player.
+      const depth = tile.collision ? ySortDepth(worldY) : SCENE_DEPTHS.decorBelowPlayer;
       upper = this.scene.add
         .sprite(0, 0, ASSET_KEYS.forestTileset, tile.upper)
         .setOrigin(0.5)
@@ -270,7 +287,14 @@ export class GameBoardRenderer {
       }
     }
 
-    return { ground, upper };
+    // Ground shadow that anchors lifted obstacles so they read as standing up.
+    const shadow = isObstacle
+      ? this.scene.add
+        .ellipse(0, 0, tileSize, tileSize, 0x000000, 0.26)
+        .setDepth(SCENE_DEPTHS.ground + 1)
+      : null;
+
+    return { ground, upper, shadow, isObstacle };
   }
 
   private renderHud(metrics: BoardMetrics): void {

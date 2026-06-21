@@ -11,6 +11,7 @@ import {
 import { BootScene } from '@/game/scenes/BootScene';
 import { EditorScene } from '@/game/scenes/EditorScene';
 import { GameScene } from '@/game/scenes/GameScene';
+import { IntroScene } from '@/game/scenes/IntroScene';
 import { PreloadScene } from '@/game/scenes/PreloadScene';
 
 export type AppMode = 'game' | 'editor';
@@ -53,5 +54,5 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
     width: getCanvasSizeForMode(mode).width,
     height: getCanvasSizeForMode(mode).height,
   },
-  scene: [BootScene, PreloadScene, mode === 'editor' ? EditorScene : GameScene],
+  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene] : [IntroScene, GameScene])],
 });

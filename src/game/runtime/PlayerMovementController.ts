@@ -8,9 +8,20 @@ const MOVE_EASE = 'Sine.Out';
 const SCROLL_EASE = 'Sine.InOut';
 const HOLD_REPEAT_DELAY_MS = 280;
 const HOLD_REPEAT_INTERVAL_MS = 140;
+// While a movement key is held the hero keeps walking, a bit faster per tile.
+const HOLD_MOVE_SPEED_FACTOR = 0.62;
+// Throttle repeated bumps (e.g. holding into a wall/enemy) so they don't fire every frame.
+const HELD_BUMP_COOLDOWN_MS = 220;
 
 export class PlayerMovementController {
   private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
+  private readonly wasd: {
+    up?: Phaser.Input.Keyboard.Key;
+    down?: Phaser.Input.Keyboard.Key;
+    left?: Phaser.Input.Keyboard.Key;
+    right?: Phaser.Input.Keyboard.Key;
+  };
+  private lastBumpTime = 0;
   private readonly swipeThresholdPx = 20;
   private isMoving = false;
   private moveDuration: number = TIMINGS.moveDurationMs;
@@ -35,7 +46,14 @@ export class PlayerMovementController {
     private readonly onBumpBlocked?: (worldX: number, worldY: number) => void,
     private readonly onScreenTransitionComplete?: (chunkX: number, chunkY: number) => void,
   ) {
-    this.cursors = scene.input.keyboard?.createCursorKeys();
+    const keyboard = scene.input.keyboard;
+    this.cursors = keyboard?.createCursorKeys();
+    this.wasd = {
+      up: keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      down: keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      left: keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      right: keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+    };
 
     // Mouse fallback (non-touch devices)
     this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handlePointerDown, this);
@@ -52,6 +70,8 @@ export class PlayerMovementController {
     window.addEventListener('touchend', this.boundTouchEnd, { passive: true });
     window.addEventListener('touchcancel', this.boundTouchEnd, { passive: true });
 
+    // Clean up on shutdown (scene restart) AND destroy so window listeners never accumulate.
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.removeWindowListeners, this);
     this.scene.events.once(Phaser.Scenes.Events.DESTROY, this.removeWindowListeners, this);
   }
 
@@ -63,23 +83,49 @@ export class PlayerMovementController {
     if (this.queuedMove) {
       const { dx, dy } = this.queuedMove;
       this.queuedMove = null;
-      return this.tryMove(worldX, worldY, dx, dy);
+      return this.tryMove(worldX, worldY, dx, dy, true);
     }
 
-    if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.left)) {
-      return this.tryMove(worldX, worldY, -1, 0);
-    }
-    if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
-      return this.tryMove(worldX, worldY, 1, 0);
-    }
-    if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
-      return this.tryMove(worldX, worldY, 0, -1);
-    }
-    if (this.cursors && Phaser.Input.Keyboard.JustDown(this.cursors.down)) {
-      return this.tryMove(worldX, worldY, 0, 1);
+    const dir = this.readDirection();
+    if (dir) {
+      // A fresh tap steps once at normal speed; a held key keeps moving, faster.
+      return this.tryMove(worldX, worldY, dir.dx, dir.dy, !dir.just);
     }
 
     return { worldX, worldY };
+  }
+
+  // Resolve a single movement direction from arrow keys and WASD. A just-pressed key
+  // wins for snappy taps; otherwise a key that is still held keeps the hero walking.
+  private readDirection(): { dx: number; dy: number; just: boolean } | null {
+    const c = this.cursors;
+    const w = this.wasd;
+
+    const justPressed = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean => {
+      const ja = a ? Phaser.Input.Keyboard.JustDown(a) : false;
+      const jb = b ? Phaser.Input.Keyboard.JustDown(b) : false;
+      return ja || jb;
+    };
+    const held = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean =>
+      Boolean(a?.isDown) || Boolean(b?.isDown);
+
+    // Evaluate every key every frame so JustDown state never lingers to the next frame.
+    const leftJust = justPressed(c?.left, w.left);
+    const rightJust = justPressed(c?.right, w.right);
+    const upJust = justPressed(c?.up, w.up);
+    const downJust = justPressed(c?.down, w.down);
+
+    if (leftJust) return { dx: -1, dy: 0, just: true };
+    if (rightJust) return { dx: 1, dy: 0, just: true };
+    if (upJust) return { dx: 0, dy: -1, just: true };
+    if (downJust) return { dx: 0, dy: 1, just: true };
+
+    if (held(c?.left, w.left)) return { dx: -1, dy: 0, just: false };
+    if (held(c?.right, w.right)) return { dx: 1, dy: 0, just: false };
+    if (held(c?.up, w.up)) return { dx: 0, dy: -1, just: false };
+    if (held(c?.down, w.down)) return { dx: 0, dy: 1, just: false };
+
+    return null;
   }
 
   public setMoveDuration(ms: number): void {
@@ -202,12 +248,22 @@ export class PlayerMovementController {
     return { dx: 0, dy: deltaY >= 0 ? 1 : -1 };
   }
 
-  private tryMove(worldX: number, worldY: number, dx: number, dy: number): { worldX: number; worldY: number } {
+  private tryMove(
+    worldX: number,
+    worldY: number,
+    dx: number,
+    dy: number,
+    viaHold = false,
+  ): { worldX: number; worldY: number } {
     const nextX = worldX + dx;
     const nextY = worldY + dy;
 
     if (this.isBlockedCell(nextX, nextY)) {
-      this.onBumpBlocked?.(nextX, nextY);
+      const now = this.scene.time.now;
+      if (!viaHold || now - this.lastBumpTime >= HELD_BUMP_COOLDOWN_MS) {
+        this.lastBumpTime = now;
+        this.onBumpBlocked?.(nextX, nextY);
+      }
       return { worldX, worldY };
     }
 
@@ -222,6 +278,9 @@ export class PlayerMovementController {
     this.setFacing(dx, dy, dx !== 0);
 
     const tileSize = this.tileSize || this.player.displayWidth || this.player.width;
+    const stepDuration = viaHold
+      ? Math.max(60, Math.round(this.moveDuration * HOLD_MOVE_SPEED_FACTOR))
+      : this.moveDuration;
 
     if (crossesScreen) {
       this.camera.transitioning = true;
@@ -246,7 +305,7 @@ export class PlayerMovementController {
             targets: this.player,
             x: exitTarget.x,
             y: exitTarget.y,
-            duration: this.moveDuration,
+            duration: stepDuration,
             ease: MOVE_EASE,
           },
           {
@@ -289,7 +348,7 @@ export class PlayerMovementController {
         targets: this.player,
         x: target.x,
         y: target.y,
-        duration: this.moveDuration,
+        duration: stepDuration,
         ease: MOVE_EASE,
         onComplete: () => {
           this.setFacing(dx, dy, false);

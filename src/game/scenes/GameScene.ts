@@ -14,6 +14,7 @@ import {
   MIN_BOARD_TILE_SIZE,
   SCENE_DEPTHS,
   TIMINGS,
+  ySortDepth,
 } from '@/game/constants';
 import { CoinManager } from '@/game/entities/CoinManager';
 import { EnemyManager } from '@/game/entities/EnemyManager';
@@ -106,6 +107,10 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
+    // Phaser does not auto-call shutdown(); wire it so scene.restart() (death) cleans up
+    // listeners/textures instead of leaking them across runs.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+
     this.chunkManager = new ChunkManager();
     const screenContent: Map<string, ScreenContent> = buildScreenContentMap(this.chunkManager);
     this.enemyManager = new EnemyManager(this, screenContent);
@@ -163,7 +168,22 @@ export class GameScene extends Phaser.Scene {
     this.campfire = new CampfireObject(this, startWorldX + 2, startWorldY - 4);
 
     this.initLighting();
+    this.initPostProcessing();
     this.loadActiveScreenContent();
+  }
+
+  private initPostProcessing(): void {
+    // Post FX run on the WebGL renderer only; the Canvas fallback simply skips them.
+    if (this.sys.game.renderer.type !== Phaser.WEBGL) return;
+
+    const cam = this.cameras.main;
+
+    // Richer, slightly punchier colors. (No bloom: Phaser's Bloom has no luminance
+    // threshold, so it glows the whole frame white instead of just the light sources.)
+    cam.postFX.addColorMatrix().saturate(0.14);
+
+    // Moody darkened edges that deepen the nighttime mood and focus the eye.
+    cam.postFX.addVignette(0.5, 0.5, 0.85, 0.4);
   }
 
   public shutdown(): void {
@@ -211,6 +231,8 @@ export class GameScene extends Phaser.Scene {
     const prevWorldX = this.playerWorld.worldX;
     const prevWorldY = this.playerWorld.worldY;
     this.playerWorld = this.movementController.update(this.playerWorld.worldX, this.playerWorld.worldY);
+    // Y-sort the hero so it walks in front of / behind obstacles by row.
+    this.player?.setDepth(ySortDepth(this.playerWorld.worldY, 0.03));
     const stepDx = this.playerWorld.worldX - prevWorldX;
     const stepDy = this.playerWorld.worldY - prevWorldY;
     if (stepDx !== 0 || stepDy !== 0) {
@@ -579,6 +601,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private triggerDeath(): void {
+    if (this.isDead) return;
     this.isDead = true;
     getSoundManager().playPlayerDeath();
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -624,27 +647,23 @@ export class GameScene extends Phaser.Scene {
       duration: 600,
       delay: 200,
       ease: 'Power2',
-      onComplete: () => {
-        const doRestart = (): void => { this.scene.restart(); };
+    });
 
-        // Auto-restart after 1400 ms; player can also tap/press any key to skip
-        const autoTimer = this.time.delayedCall(1400, doRestart);
+    // Restart handling is independent of the tween above, so a stalled/dropped tween can
+    // never leave the player stuck on the "YOU DIED" screen.
+    let restarting = false;
+    const doRestart = (): void => {
+      if (restarting) return;
+      restarting = true;
+      this.scene.restart();
+    };
 
-        const onPointer = (): void => { autoTimer.remove(); doRestart(); };
-        this.input.once(Phaser.Input.Events.POINTER_DOWN, onPointer, this);
-
-        const keys = [
-          this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-          this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER),
-          this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
-        ];
-        const onKey = (): void => {
-          autoTimer.remove();
-          this.input.off(Phaser.Input.Events.POINTER_DOWN, onPointer, this);
-          doRestart();
-        };
-        for (const k of keys) k?.once('down', onKey, this);
-      },
+    // Auto-restart, and after a short grace period let the player skip with any key / tap.
+    const autoTimer = this.time.delayedCall(1600, doRestart);
+    this.time.delayedCall(700, () => {
+      const skip = (): void => { autoTimer.remove(); doRestart(); };
+      this.input.once(Phaser.Input.Events.POINTER_DOWN, skip);
+      this.input.keyboard?.once('keydown', skip);
     });
   }
 
@@ -662,6 +681,7 @@ export class GameScene extends Phaser.Scene {
     grad.addColorStop(1,    'rgba(255,255,255,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
+    if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
     this.textures.addCanvas('_campfire_light', canvas);
 
     const { width, height } = this.scale;
@@ -677,8 +697,8 @@ export class GameScene extends Phaser.Scene {
     this.lightCircleImg = this.make.image({ key: '_campfire_light', add: false });
 
     this.playerShadow = this.add
-      .ellipse(0, 0, 1, 1, 0x000000, 0.55)
-      .setDepth(SCENE_DEPTHS.decorBelowPlayer)
+      .ellipse(0, 0, 1, 1, 0x000000, 0.3)
+      .setDepth(SCENE_DEPTHS.decorBelowPlayer + 0.5)
       .setVisible(false);
   }
 
@@ -735,7 +755,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updatePlayerShadow(): void {
-    this.playerShadow?.setVisible(false);
+    if (!this.playerShadow || !this.camera) return;
+    const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+    this.playerShadow
+      .setVisible(!this.isDead)
+      .setPosition(screen.x, screen.y + Math.round(this.tileSize * 0.34))
+      .setDisplaySize(this.tileSize * 0.6, this.tileSize * 0.26);
   }
 
   private startBreathing(): void {

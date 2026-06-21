@@ -38,6 +38,6 @@ export class PreloadScene extends Phaser.Scene {
 
   public create(): void {
     const mode = this.registry.get('appMode') as AppMode | undefined;
-    this.scene.start(mode === 'editor' ? 'editor' : 'game');
+    this.scene.start(mode === 'editor' ? 'editor' : 'intro');
   }
 }
