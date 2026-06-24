@@ -11,6 +11,14 @@ export const MAX_CHARACTER_SIZE = 52;
 export const BOARD_PANEL_PADDING = 16;
 export const TILE_GAP = 6;
 export const FONT_FAMILY = "'Press Start 2P', monospace";
+
+// Resolution for every Text object. The game canvas renders at 1x (Scale.NONE, no
+// devicePixelRatio scaling) with NEAREST sampling (pixelArt: true). A Text with
+// resolution R rasterizes its glyphs to an R× canvas, then draws it scaled by 1/R into the
+// 1x buffer — and that NEAREST downscale is what smears the pixel font. Rendering at 1
+// keeps a 1:1 texel→pixel mapping so glyphs stay razor sharp; the canvas'
+// image-rendering: pixelated handles any hi-DPI upscale crisply.
+export const TEXT_RESOLUTION = 1;
 export const HUD_RESERVED_ROWS = 3;
 export const HUD_BACKGROUND_COLOR = 0x000000;
 export const HUD_HEALTH_MAX = 3;

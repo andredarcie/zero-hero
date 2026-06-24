@@ -14,6 +14,22 @@ export type DialogScript = {
   lines: DialogLine[];
 };
 
+// Per-NPC "voice": a base frequency + waveform played as a blip on each typed letter, so
+// every character sounds distinct (old-RPG talking style).
+export type DialogVoice = { freq: number; wave: OscillatorType };
+
+export const DIALOG_VOICES: Record<NpcKind, DialogVoice> = {
+  blackCat: { freq: 540, wave: 'triangle' },
+  mimic: { freq: 300, wave: 'square' },
+  astronaut: { freq: 470, wave: 'square' },
+  businessMan: { freq: 250, wave: 'sawtooth' },
+  radiationSuit: { freq: 340, wave: 'square' },
+  painter: { freq: 620, wave: 'sine' },
+  salesman: { freq: 410, wave: 'triangle' },
+  poet: { freq: 360, wave: 'sine' },
+  death: { freq: 150, wave: 'square' },
+};
+
 const n = (text: string): DialogLine => ({ speaker: 'npc', text });
 const r = (text: string): DialogLine => ({ speaker: 'narrator', text });
 

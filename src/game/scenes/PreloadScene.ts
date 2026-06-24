@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { FONT_FAMILY } from '@/game/constants';
+import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { preloadSharedAssets } from '@/game/assets/assetManifest';
 import type { AppMode } from '@/game/config';
 
@@ -22,6 +22,7 @@ export class PreloadScene extends Phaser.Scene {
         color: '#f1faee',
         fontFamily: FONT_FAMILY,
         fontSize: '12px',
+        resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5);
 

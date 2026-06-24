@@ -7,6 +7,7 @@ import {
   WORLD_MAX_CHUNK_Y,
   WORLD_MIN_CHUNK_X,
   WORLD_MIN_CHUNK_Y,
+  isInsideStaticWorld,
 } from './WorldGenerator';
 
 export type EnemyKind = 'bat' | 'slime' | 'undead' | 'spider' | 'mage' | 'bigSlime';
@@ -98,8 +99,9 @@ const ALL_NPC_KINDS: readonly NpcKind[] = [
   'blackCat', 'mimic', 'astronaut', 'businessMan', 'radiationSuit', 'painter', 'salesman', 'poet', 'death',
 ];
 
+// Curated assignment of the nine named NPCs to screens inside the original hand-authored
+// region, so the intro area always has them. Beyond that region NPCs are procedural.
 const buildNpcAssignment = (): Map<string, NpcKind> => {
-  // Collect all non-start screens
   const screens: Array<{ cx: number; cy: number }> = [];
   for (let cy = WORLD_MIN_CHUNK_Y; cy <= WORLD_MAX_CHUNK_Y; cy++) {
     for (let cx = WORLD_MIN_CHUNK_X; cx <= WORLD_MAX_CHUNK_X; cx++) {
@@ -108,7 +110,6 @@ const buildNpcAssignment = (): Map<string, NpcKind> => {
     }
   }
 
-  // Fisher-Yates shuffle driven by the hash function
   for (let i = screens.length - 1; i > 0; i--) {
     const j = hash(i, 0, 809, 3) % (i + 1);
     const tmp = screens[i];
@@ -125,6 +126,13 @@ const buildNpcAssignment = (): Map<string, NpcKind> => {
 
 const NPC_ASSIGNMENT = buildNpcAssignment();
 
+// Out in the open world, roughly one chunk in six hosts a wandering NPC.
+const proceduralNpc = (cx: number, cy: number): NpcKind | null => {
+  if (isInsideStaticWorld(cx, cy)) return null;
+  if (hash(cx, cy, 909, 1) % 6 !== 0) return null;
+  return ALL_NPC_KINDS[hash(cx, cy, 909, 2) % ALL_NPC_KINDS.length];
+};
+
 const resolveEnemyRoster = (cx: number, cy: number): EnemyKind[] => {
   const dist = Math.abs(cx - START_SCREEN_CHUNK_X) + Math.abs(cy - START_SCREEN_CHUNK_Y);
   const count = dist <= 2 ? 2 : dist <= 5 ? 3 : 4;
@@ -139,68 +147,62 @@ const resolveEnemyRoster = (cx: number, cy: number): EnemyKind[] => {
 
 export const ENEMY_BORDER_MARGIN = 2;
 
-export const buildScreenContentMap = (chunkManager: ChunkManager): Map<string, ScreenContent> => {
-  const content = new Map<string, ScreenContent>();
-
-  for (let cy = WORLD_MIN_CHUNK_Y; cy <= WORLD_MAX_CHUNK_Y; cy++) {
-    for (let cx = WORLD_MIN_CHUNK_X; cx <= WORLD_MAX_CHUNK_X; cx++) {
-      const key = screenKey(cx, cy);
-      const openTiles = collectOpenTiles(cx, cy, chunkManager);
-
-      if (cx === START_SCREEN_CHUNK_X && cy === START_SCREEN_CHUNK_Y) {
-        content.set(key, { enemies: [], pickups: [], npcs: [] });
-        continue;
-      }
-
-      const enemies: EnemySpawn[] = [];
-      const pickups: PickupSpawn[] = [];
-      const npcs: NpcSpawn[] = [];
-
-      const npcKind = NPC_ASSIGNMENT.get(key) ?? null;
-      if (npcKind) {
-        const npcTile = takeDeterministicTiles(openTiles, cx, cy, 1, 702)[0];
-        if (npcTile) npcs.push({ type: npcKind, worldX: npcTile.worldX, worldY: npcTile.worldY });
-      }
-
-      if (!npcKind) {
-        const enemyPool = openTiles.filter((t) => {
-          const lx = t.worldX - cx * CHUNK_COLUMNS;
-          const ly = t.worldY - cy * CHUNK_ROWS;
-          return lx >= ENEMY_BORDER_MARGIN && lx < CHUNK_COLUMNS - ENEMY_BORDER_MARGIN
-              && ly >= ENEMY_BORDER_MARGIN && ly < CHUNK_ROWS - ENEMY_BORDER_MARGIN;
-        });
-
-        const roster = resolveEnemyRoster(cx, cy);
-        const enemyTiles = takeDeterministicTiles(enemyPool, cx, cy, roster.length, 101);
-
-        roster.forEach((type, index) => {
-          const tile = enemyTiles[index];
-          if (!tile) return;
-          enemies.push({ type, worldX: tile.worldX, worldY: tile.worldY });
-        });
-      }
-
-      if (cx === START_SCREEN_CHUNK_X + 1 && cy === START_SCREEN_CHUNK_Y) {
-        const swordTile = takeDeterministicTiles(openTiles, cx, cy, 1, 303)[0];
-        if (swordTile) {
-          pickups.push({ type: 'sword', worldX: swordTile.worldX, worldY: swordTile.worldY });
-        }
-      }
-
-      if ((hash(cx, cy, 401, 0) % 3) === 0) {
-        const heartTile = takeDeterministicTiles(openTiles, cx, cy, 1, 402)[0];
-        if (heartTile) {
-          pickups.push({ type: 'heart', worldX: heartTile.worldX, worldY: heartTile.worldY });
-        }
-      }
-
-      content.set(key, { enemies, pickups, npcs });
-    }
+const computeChunkContent = (cx: number, cy: number, chunkManager: ChunkManager): ScreenContent => {
+  if (cx === START_SCREEN_CHUNK_X && cy === START_SCREEN_CHUNK_Y) {
+    return { enemies: [], pickups: [], npcs: [] };
   }
 
+  const key = screenKey(cx, cy);
+  const openTiles = collectOpenTiles(cx, cy, chunkManager);
+  const enemies: EnemySpawn[] = [];
+  const pickups: PickupSpawn[] = [];
+  const npcs: NpcSpawn[] = [];
+
+  const npcKind = NPC_ASSIGNMENT.get(key) ?? proceduralNpc(cx, cy);
+  if (npcKind) {
+    const npcTile = takeDeterministicTiles(openTiles, cx, cy, 1, 702)[0];
+    if (npcTile) npcs.push({ type: npcKind, worldX: npcTile.worldX, worldY: npcTile.worldY });
+  } else {
+    const enemyPool = openTiles.filter((t) => {
+      const lx = ((t.worldX % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+      const ly = ((t.worldY % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+      return lx >= ENEMY_BORDER_MARGIN && lx < CHUNK_COLUMNS - ENEMY_BORDER_MARGIN
+          && ly >= ENEMY_BORDER_MARGIN && ly < CHUNK_ROWS - ENEMY_BORDER_MARGIN;
+    });
+
+    const roster = resolveEnemyRoster(cx, cy);
+    const enemyTiles = takeDeterministicTiles(enemyPool, cx, cy, roster.length, 101);
+    roster.forEach((type, index) => {
+      const tile = enemyTiles[index];
+      if (tile) enemies.push({ type, worldX: tile.worldX, worldY: tile.worldY });
+    });
+  }
+
+  // The sword waits one screen east of the start.
+  if (cx === START_SCREEN_CHUNK_X + 1 && cy === START_SCREEN_CHUNK_Y) {
+    const swordTile = takeDeterministicTiles(openTiles, cx, cy, 1, 303)[0];
+    if (swordTile) pickups.push({ type: 'sword', worldX: swordTile.worldX, worldY: swordTile.worldY });
+  }
+
+  if ((hash(cx, cy, 401, 0) % 3) === 0) {
+    const heartTile = takeDeterministicTiles(openTiles, cx, cy, 1, 402)[0];
+    if (heartTile) pickups.push({ type: 'heart', worldX: heartTile.worldX, worldY: heartTile.worldY });
+  }
+
+  return { enemies, pickups, npcs };
+};
+
+// Lazy + cached content for any chunk in the infinite world.
+const contentCache = new Map<string, ScreenContent>();
+
+export const getChunkContent = (cx: number, cy: number, chunkManager: ChunkManager): ScreenContent => {
+  const key = screenKey(cx, cy);
+  let content = contentCache.get(key);
+  if (!content) {
+    content = computeChunkContent(cx, cy, chunkManager);
+    contentCache.set(key, content);
+  }
   return content;
 };
 
 export const toScreenKey = screenKey;
-
-export const getNpcChunkCoords = (): ReadonlySet<string> => new Set(NPC_ASSIGNMENT.keys());

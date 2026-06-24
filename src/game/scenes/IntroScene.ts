@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, FONT_FAMILY, HERO_FRAMES } from '@/game/constants';
+import { ASSET_KEYS, FONT_FAMILY, HERO_FRAMES, TEXT_RESOLUTION } from '@/game/constants';
 
 type Segment = { text: string; color: string };
 
@@ -77,7 +77,7 @@ export class IntroScene extends Phaser.Scene {
 
     // Build both voice lines hidden, positioned and centered, ready to type
     const fontSize = Phaser.Math.Clamp(Math.floor(width / 26), 8, 16);
-    const res = Math.max(2, Math.ceil(window.devicePixelRatio));
+    const res = TEXT_RESOLUTION;
     const lineYs = [Math.round(height * 0.62), Math.round(height * 0.72)];
 
     INTRO_LINES.forEach((raw, i) => {
@@ -160,7 +160,7 @@ export class IntroScene extends Phaser.Scene {
 
   private showPrompt(): void {
     const { width, height } = this.scale;
-    const res = Math.max(2, Math.ceil(window.devicePixelRatio));
+    const res = TEXT_RESOLUTION;
     this.promptText = this.add
       .text(width / 2, Math.round(height * 0.9), '[ press any key ]', {
         fontFamily: FONT_FAMILY,

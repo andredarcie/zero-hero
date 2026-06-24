@@ -1,3 +1,14 @@
+/* Self-hosted pixel font — no CDN dependency. Vite bundles, hashes, and rewrites this
+   URL for the deploy base path. The game gates its boot on this font being loaded
+   (see src/main.ts) so text never renders with a fallback. */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style: normal;
+  font-weight: 400;
+  src: url('./fonts/PressStart2P-latin.woff2') format('woff2');
+  font-display: block;
+}
+
 :root {
   color-scheme: dark;
   font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;

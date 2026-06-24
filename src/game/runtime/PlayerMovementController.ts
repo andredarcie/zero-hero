@@ -1,11 +1,9 @@
 import Phaser from 'phaser';
 
-import { ANIMATION_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, TIMINGS } from '@/game/constants';
+import { ANIMATION_KEYS, HERO_FRAMES, TIMINGS } from '@/game/constants';
 import type { WorldCamera } from './WorldCamera';
 
-const SCROLL_MS_PER_TILE = 20;
 const MOVE_EASE = 'Sine.Out';
-const SCROLL_EASE = 'Sine.InOut';
 const HOLD_REPEAT_DELAY_MS = 280;
 const HOLD_REPEAT_INTERVAL_MS = 140;
 // While a movement key is held the hero keeps walking, a bit faster per tile.
@@ -28,7 +26,7 @@ export class PlayerMovementController {
   private tileSize = 0;
   private touchStart: { pointerId: number; x: number; y: number } | null = null;
   private queuedMove: { dx: number; dy: number } | null = null;
-  private activeTransition?: Phaser.Tweens.TweenChain;
+  private activeTween?: Phaser.Tweens.Tween;
 
   private heldDirection: { dx: number; dy: number } | null = null;
   private holdRepeatTimer: Phaser.Time.TimerEvent | null = null;
@@ -44,7 +42,6 @@ export class PlayerMovementController {
     private readonly isBlockedCell: (worldX: number, worldY: number) => boolean,
     private readonly onStep: (worldX: number, worldY: number) => void,
     private readonly onBumpBlocked?: (worldX: number, worldY: number) => void,
-    private readonly onScreenTransitionComplete?: (chunkX: number, chunkY: number) => void,
   ) {
     const keyboard = scene.input.keyboard;
     this.cursors = keyboard?.createCursorKeys();
@@ -70,7 +67,6 @@ export class PlayerMovementController {
     window.addEventListener('touchend', this.boundTouchEnd, { passive: true });
     window.addEventListener('touchcancel', this.boundTouchEnd, { passive: true });
 
-    // Clean up on shutdown (scene restart) AND destroy so window listeners never accumulate.
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.removeWindowListeners, this);
     this.scene.events.once(Phaser.Scenes.Events.DESTROY, this.removeWindowListeners, this);
   }
@@ -88,7 +84,6 @@ export class PlayerMovementController {
 
     const dir = this.readDirection();
     if (dir) {
-      // A fresh tap steps once at normal speed; a held key keeps moving, faster.
       return this.tryMove(worldX, worldY, dir.dx, dir.dy, !dir.just);
     }
 
@@ -96,7 +91,7 @@ export class PlayerMovementController {
   }
 
   // Resolve a single movement direction from arrow keys and WASD. A just-pressed key
-  // wins for snappy taps; otherwise a key that is still held keeps the hero walking.
+  // wins for snappy taps; otherwise a held key keeps the hero walking.
   private readDirection(): { dx: number; dy: number; just: boolean } | null {
     const c = this.cursors;
     const w = this.wasd;
@@ -109,7 +104,6 @@ export class PlayerMovementController {
     const held = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean =>
       Boolean(a?.isDown) || Boolean(b?.isDown);
 
-    // Evaluate every key every frame so JustDown state never lingers to the next frame.
     const leftJust = justPressed(c?.left, w.left);
     const rightJust = justPressed(c?.right, w.right);
     const upJust = justPressed(c?.up, w.up);
@@ -132,10 +126,11 @@ export class PlayerMovementController {
     this.moveDuration = ms;
   }
 
+  /** Snap the camera onto a world tile with the hero pinned at screen centre. */
   public syncPlayerToWorld(worldX: number, worldY: number, tileSize: number): void {
     this.tileSize = tileSize;
-    const screen = this.camera.tileToScreen(worldX, worldY, tileSize);
-    this.player.setPosition(screen.x, screen.y);
+    this.camera.centerOn(worldX, worldY);
+    this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
   }
 
   public get moving(): boolean {
@@ -143,13 +138,11 @@ export class PlayerMovementController {
   }
 
   public interruptMovement(worldX: number, worldY: number): void {
-    this.activeTransition?.stop();
-    this.activeTransition = undefined;
-    this.scene.tweens.killTweensOf(this.player);
+    this.activeTween?.stop();
+    this.activeTween = undefined;
     this.isMoving = false;
     this.queuedMove = null;
     this.stopHold();
-    this.camera.transitioning = false;
     this.syncPlayerToWorld(worldX, worldY, this.tileSize || this.player.displayWidth || this.player.width);
   }
 
@@ -201,7 +194,6 @@ export class PlayerMovementController {
 
     const dirChanged = !this.heldDirection || this.heldDirection.dx !== dir.dx || this.heldDirection.dy !== dir.dy;
     if (dirChanged) {
-      // Update origin so direction is re-evaluated relative to the new anchor
       this.touchStart = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
       this.startHold(dir);
     }
@@ -211,7 +203,6 @@ export class PlayerMovementController {
     if (!this.touchStart) return;
     const t = Array.from(e.changedTouches).find((c) => c.identifier === this.touchStart!.pointerId);
     if (!t) return;
-    // If the finger lifted before threshold was reached, treat as a short tap (no-op here)
     this.stopHold();
     this.touchStart = null;
   }
@@ -269,116 +260,36 @@ export class PlayerMovementController {
 
     this.isMoving = true;
     this.onStep(nextX, nextY);
-    const currentChunkX = Math.floor(worldX / CHUNK_COLUMNS);
-    const currentChunkY = Math.floor(worldY / CHUNK_ROWS);
-    const nextChunkX = Math.floor(nextX / CHUNK_COLUMNS);
-    const nextChunkY = Math.floor(nextY / CHUNK_ROWS);
-    const crossesScreen = currentChunkX !== nextChunkX || currentChunkY !== nextChunkY;
-
     this.setFacing(dx, dy, dx !== 0);
 
-    const tileSize = this.tileSize || this.player.displayWidth || this.player.width;
     const stepDuration = viaHold
       ? Math.max(60, Math.round(this.moveDuration * HOLD_MOVE_SPEED_FACTOR))
       : this.moveDuration;
 
-    if (crossesScreen) {
-      this.camera.transitioning = true;
-      const exitTarget = this.camera.tileToScreen(nextX, nextY, tileSize);
-      const settledTarget = this.getSettledScreenPosition(nextX, nextY, tileSize);
-      const startOriginX = this.camera.screenOriginX;
-      const startOriginY = this.camera.screenOriginY;
-      const nextOriginX = nextChunkX * CHUNK_COLUMNS;
-      const nextOriginY = nextChunkY * CHUNK_ROWS;
-      const scrollDuration = this.getScrollDurationMs(dx, dy);
-      const transitionState = {
-        cameraX: startOriginX * tileSize,
-        cameraY: startOriginY * tileSize,
-        playerX: exitTarget.x,
-        playerY: exitTarget.y,
-      };
-
-      this.activeTransition?.stop();
-      this.activeTransition = this.scene.tweens.chain({
-        tweens: [
-          {
-            targets: this.player,
-            x: exitTarget.x,
-            y: exitTarget.y,
-            duration: stepDuration,
-            ease: MOVE_EASE,
-          },
-          {
-            targets: transitionState,
-            cameraX: nextOriginX * tileSize,
-            cameraY: nextOriginY * tileSize,
-            playerX: settledTarget.x,
-            playerY: settledTarget.y,
-            duration: scrollDuration,
-            ease: SCROLL_EASE,
-            onStart: () => {
-              this.setFacing(dx, dy, dx !== 0);
-            },
-            onUpdate: () => {
-              const scrollPixelsX = Math.round(transitionState.cameraX);
-              const scrollPixelsY = Math.round(transitionState.cameraY);
-              this.camera.screenOriginX = scrollPixelsX / tileSize;
-              this.camera.screenOriginY = scrollPixelsY / tileSize;
-              this.player.setPosition(
-                Math.round(transitionState.playerX),
-                Math.round(transitionState.playerY),
-              );
-            },
-          },
-        ],
-        onComplete: () => {
-          this.activeTransition = undefined;
-          this.camera.setActiveScreen(nextX, nextY);
-          this.camera.transitioning = false;
-          this.syncPlayerToWorld(nextX, nextY, tileSize);
-          this.setFacing(dx, dy, false);
-          this.onScreenTransitionComplete?.(nextChunkX, nextChunkY);
-          this.isMoving = false;
-        },
-      });
-    } else {
-      const target = this.camera.tileToScreen(nextX, nextY, tileSize);
-
-      this.scene.tweens.add({
-        targets: this.player,
-        x: target.x,
-        y: target.y,
-        duration: stepDuration,
-        ease: MOVE_EASE,
-        onComplete: () => {
-          this.setFacing(dx, dy, false);
-          this.isMoving = false;
-        },
-      });
-    }
+    // The hero stays pinned at screen centre; the camera (and therefore the world) scrolls
+    // smoothly from the old tile to the new one.
+    const renderState = { rx: worldX, ry: worldY };
+    this.activeTween?.stop();
+    this.activeTween = this.scene.tweens.add({
+      targets: renderState,
+      rx: nextX,
+      ry: nextY,
+      duration: stepDuration,
+      ease: MOVE_EASE,
+      onUpdate: () => {
+        this.camera.centerOn(renderState.rx, renderState.ry);
+        this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+      },
+      onComplete: () => {
+        this.activeTween = undefined;
+        this.camera.centerOn(nextX, nextY);
+        this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+        this.setFacing(dx, dy, false);
+        this.isMoving = false;
+      },
+    });
 
     return { worldX: nextX, worldY: nextY };
-  }
-
-  private getSettledScreenPosition(
-    worldX: number,
-    worldY: number,
-    tileSize: number,
-  ): { x: number; y: number } {
-    const left = this.camera.screenCenterX - (this.camera.viewportColumns * tileSize) / 2;
-    const top = this.camera.screenCenterY - (this.camera.viewportRows * tileSize) / 2;
-    const localX = ((worldX % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
-    const localY = ((worldY % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-
-    return {
-      x: Math.round(left + (localX + 0.5) * tileSize),
-      y: Math.round(top + (localY + 0.5) * tileSize),
-    };
-  }
-
-  private getScrollDurationMs(dx: number, _dy: number): number {
-    const tiles = dx !== 0 ? this.camera.viewportColumns : this.camera.viewportRows;
-    return Math.max(180, Math.round(tiles * SCROLL_MS_PER_TILE));
   }
 
   private setFacing(dx: number, dy: number, moving: boolean): void {

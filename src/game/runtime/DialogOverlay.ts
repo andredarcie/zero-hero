@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 
-import { FONT_FAMILY, SCENE_DEPTHS } from '@/game/constants';
-import type { DialogScript } from '@/game/dialogs/NpcDialogs';
+import { FONT_FAMILY, SCENE_DEPTHS, TEXT_RESOLUTION } from '@/game/constants';
+import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
+import { getSoundManager } from '@/game/audio/SoundManager';
 
 const DEPTH = SCENE_DEPTHS.toast + 5;
 const CHAR_DELAY_MS = 28;
@@ -25,10 +26,13 @@ export class DialogOverlay {
   private readonly enterKey: Phaser.Input.Keyboard.Key | undefined;
   private readonly escKey: Phaser.Input.Keyboard.Key | undefined;
 
+  private currentIsNarrator = false;
+
   public constructor(
     private readonly scene: Phaser.Scene,
     private readonly script: DialogScript,
     private readonly onClose: () => void,
+    private readonly voice?: DialogVoice,
   ) {
     const { width, height } = scene.scale;
     const panelH = Math.max(110, Math.round(height * 0.36));
@@ -68,7 +72,7 @@ export class DialogOverlay {
     const textX = divX + PAD;
     const textAreaW = (panelX + panelW - PAD) - textX;
     const fontSize = Math.max(6, Math.min(9, Math.floor(panelH / 15)));
-    const res = Math.max(2, Math.ceil(window.devicePixelRatio));
+    const res = TEXT_RESOLUTION;
 
     this.speakerLabel = reg(scene.add.text(textX, panelY + PAD, '', {
       fontFamily: FONT_FAMILY, fontSize: `${fontSize}px`,
@@ -136,6 +140,7 @@ export class DialogOverlay {
 
     const line = this.script.lines[index];
     const isNarrator = line.speaker === 'narrator';
+    this.currentIsNarrator = isNarrator;
 
     this.speakerLabel.setText(isNarrator ? '' : this.script.npcName);
     this.bodyText.setColor(isNarrator ? NAR_TEXT_COLOR : NPC_TEXT_COLOR);
@@ -149,6 +154,11 @@ export class DialogOverlay {
       callback: () => {
         this.charIndex++;
         this.bodyText.setText(fullText.slice(0, this.charIndex));
+        // Old-RPG "talking" blip: one per couple of letters, skipping spaces and narration.
+        const ch = fullText[this.charIndex - 1];
+        if (this.voice && !this.currentIsNarrator && ch && ch !== ' ' && this.charIndex % 2 === 0) {
+          getSoundManager().playDialogBlip(this.voice.freq, this.voice.wave);
+        }
         if (this.charIndex >= fullText.length) {
           this.typewriterEvent?.remove();
           this.typewriterEvent = undefined;

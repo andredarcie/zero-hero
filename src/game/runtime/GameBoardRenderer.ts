@@ -9,6 +9,7 @@ import {
   HUD_ITEM_SCALE,
   HUD_SLOT_SCALE,
   SCENE_DEPTHS,
+  TEXT_RESOLUTION,
   ySortDepth,
 } from '@/game/constants';
 import type { BoardMetrics } from '@/game/shared/grid';
@@ -94,7 +95,7 @@ export class GameBoardRenderer {
       fontFamily: FONT_FAMILY,
       fontSize: '8px',
       color,
-      resolution: Math.max(2, Math.ceil(window.devicePixelRatio)),
+      resolution: TEXT_RESOLUTION,
     }).setDepth(SCENE_DEPTHS.uiLabel);
 
     this.lifeLabel = makeHudText('-LIFE-', '#f8f8f8');
@@ -135,17 +136,14 @@ export class GameBoardRenderer {
   public updateWorld(camera: WorldCamera, chunkManager: ChunkManager, tileSize: number): void {
     const range = camera.getVisibleRange(tileSize);
     const nextKeys = new Set<string>();
-    const left = camera.screenCenterX - (camera.viewportColumns * tileSize) / 2;
-    const top = camera.screenCenterY - (camera.viewportRows * tileSize) / 2;
-    const baseX = Math.round(left + ((range.minX - camera.screenOriginX) + 0.5) * tileSize);
-    const baseY = Math.round(top + ((range.minY - camera.screenOriginY) + 0.5) * tileSize);
 
     for (let ty = range.minY; ty <= range.maxY; ty++) {
-      const screenY = baseY + ((ty - range.minY) * tileSize);
       for (let tx = range.minX; tx <= range.maxX; tx++) {
         const key = `${tx},${ty}`;
         nextKeys.add(key);
-        const screenX = baseX + ((tx - range.minX) * tileSize);
+        const screen = camera.tileToScreen(tx, ty, tileSize);
+        const screenX = screen.x;
+        const screenY = screen.y;
 
         let entry = this.tileSprites.get(key);
         if (!entry) {

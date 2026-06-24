@@ -1,9 +1,7 @@
 import type Phaser from 'phaser';
 
-import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { EnemySpawn, ScreenContent } from '@/game/world/ScreenContent';
-import { toScreenKey } from '@/game/world/ScreenContent';
 import type { EnemyBase } from './EnemyBase';
 import { BatEnemy } from './enemies/BatEnemy';
 import { BigSlimeEnemy } from './enemies/BigSlimeEnemy';
@@ -13,39 +11,44 @@ import { SpiderEnemy } from './enemies/SpiderEnemy';
 import { UndeadEnemy } from './enemies/UndeadEnemy';
 
 export class EnemyManager {
-  private readonly enemies: EnemyBase[] = [];
-  private currentScreenKey = '';
+  // Enemies grouped by the chunk they belong to, streamed in/out as the player roams.
+  private readonly byChunk = new Map<string, EnemyBase[]>();
 
   public constructor(
     private readonly scene: Phaser.Scene,
-    private readonly contentByScreen: Map<string, ScreenContent>,
+    private readonly getContent: (cx: number, cy: number) => ScreenContent,
   ) {}
 
-  public enterScreen(cx: number, cy: number): void {
-    const key = toScreenKey(cx, cy);
-    if (key === this.currentScreenKey) return;
-
-    this.clearCurrentEnemies();
-    this.currentScreenKey = key;
-
-    const content = this.contentByScreen.get(key);
-    if (!content) return;
-
-    for (const spawn of content.enemies) {
-      this.enemies.push(this.createEnemy(spawn, cx, cy));
+  public syncChunks(active: Set<string>): void {
+    for (const [key, list] of this.byChunk) {
+      if (active.has(key)) continue;
+      for (const enemy of list) enemy.destroy();
+      this.byChunk.delete(key);
+    }
+    for (const key of active) {
+      if (this.byChunk.has(key)) continue;
+      const [cx, cy] = key.split(',').map(Number);
+      const list = this.getContent(cx, cy).enemies.map((spawn) => this.createEnemy(spawn, key));
+      this.byChunk.set(key, list);
     }
   }
 
+  private all(): EnemyBase[] {
+    const out: EnemyBase[] = [];
+    for (const list of this.byChunk.values()) out.push(...list);
+    return out;
+  }
+
   public getEnemyAt(worldX: number, worldY: number): EnemyBase | null {
-    return this.enemies.find((e) => e.isAlive && e.worldX === worldX && e.worldY === worldY) ?? null;
+    return this.all().find((e) => e.isAlive && e.worldX === worldX && e.worldY === worldY) ?? null;
   }
 
   public getActiveWorldPositions(): Array<{ worldX: number; worldY: number }> {
-    return this.enemies.filter((e) => e.isAlive).map((e) => ({ worldX: e.worldX, worldY: e.worldY }));
+    return this.all().filter((e) => e.isAlive).map((e) => ({ worldX: e.worldX, worldY: e.worldY }));
   }
 
   public getAliveEnemies(): readonly EnemyBase[] {
-    return this.enemies.filter((e) => e.isAlive);
+    return this.all().filter((e) => e.isAlive);
   }
 
   public update(
@@ -55,14 +58,15 @@ export class EnemyManager {
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean {
     let playerAttacked = false;
+    const all = this.all();
 
-    for (const enemy of this.enemies) {
+    for (const enemy of all) {
       if (!enemy.isAlive) continue;
 
       const blockedForEnemy = (wx: number, wy: number): boolean => {
         if (isBlocked(wx, wy)) return true;
         if (wx === playerWorldX && wy === playerWorldY) return true;
-        return this.enemies.some((e) => e !== enemy && e.isAlive && e.worldX === wx && e.worldY === wy);
+        return all.some((e) => e !== enemy && e.isAlive && e.worldX === wx && e.worldY === wy);
       };
 
       if (enemy.update(delta, playerWorldX, playerWorldY, blockedForEnemy)) {
@@ -70,10 +74,12 @@ export class EnemyManager {
       }
     }
 
-    for (let i = this.enemies.length - 1; i >= 0; i--) {
-      if (this.enemies[i].pendingRemoval) {
-        this.enemies[i].destroy();
-        this.enemies.splice(i, 1);
+    for (const list of this.byChunk.values()) {
+      for (let i = list.length - 1; i >= 0; i--) {
+        if (list[i].pendingRemoval) {
+          list[i].destroy();
+          list.splice(i, 1);
+        }
       }
     }
 
@@ -81,24 +87,17 @@ export class EnemyManager {
   }
 
   public render(tileSize: number, camera: WorldCamera): void {
-    for (const enemy of this.enemies) {
-      enemy.render(tileSize, camera);
-    }
+    for (const enemy of this.all()) enemy.render(tileSize, camera);
   }
 
   public destroy(): void {
-    this.clearCurrentEnemies();
-    this.currentScreenKey = '';
-  }
-
-  private clearCurrentEnemies(): void {
-    for (const enemy of this.enemies) {
-      enemy.destroy();
+    for (const list of this.byChunk.values()) {
+      for (const enemy of list) enemy.destroy();
     }
-    this.enemies.length = 0;
+    this.byChunk.clear();
   }
 
-  private createEnemy(spawn: EnemySpawn, cx: number, cy: number): EnemyBase {
+  private createEnemy(spawn: EnemySpawn, chunkKey: string): EnemyBase {
     switch (spawn.type) {
       case 'bat':
         return new BatEnemy(this.scene, spawn.worldX, spawn.worldY);
@@ -112,21 +111,22 @@ export class EnemyManager {
         return new MageEnemy(this.scene, spawn.worldX, spawn.worldY);
       case 'bigSlime':
         return new BigSlimeEnemy(this.scene, spawn.worldX, spawn.worldY, (spawnWx, spawnWy) => {
-          this.spawnSlimePair(spawnWx, spawnWy, cx, cy);
+          this.spawnSlimePair(spawnWx, spawnWy, chunkKey);
         });
     }
   }
 
-  private spawnSlimePair(wx: number, wy: number, cx: number, cy: number): void {
+  private spawnSlimePair(wx: number, wy: number, chunkKey: string): void {
+    const list = this.byChunk.get(chunkKey);
+    if (!list) return;
     const offsets: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     let spawned = 0;
     for (const [ox, oy] of offsets) {
       if (spawned >= 2) break;
       const nx = wx + ox;
       const ny = wy + oy;
-      if (toScreenKey(Math.floor(nx / CHUNK_COLUMNS), Math.floor(ny / CHUNK_ROWS)) !== toScreenKey(cx, cy)) continue;
       if (!this.getEnemyAt(nx, ny)) {
-        this.enemies.push(new SlimeEnemy(this.scene, nx, ny));
+        list.push(new SlimeEnemy(this.scene, nx, ny));
         spawned += 1;
       }
     }

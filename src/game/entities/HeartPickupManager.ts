@@ -1,37 +1,41 @@
 import type Phaser from 'phaser';
 
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import type { PickupSpawn, ScreenContent } from '@/game/world/ScreenContent';
-import { toScreenKey } from '@/game/world/ScreenContent';
+import type { ScreenContent } from '@/game/world/ScreenContent';
 import { HeartPickup } from './HeartPickup';
 
 export class HeartPickupManager {
-  private readonly hearts: HeartPickup[] = [];
-  private currentScreenKey = '';
+  private readonly byChunk = new Map<string, HeartPickup[]>();
 
   public constructor(
     private readonly scene: Phaser.Scene,
-    private readonly contentByScreen: Map<string, ScreenContent>,
+    private readonly getContent: (cx: number, cy: number) => ScreenContent,
   ) {}
 
-  public enterScreen(cx: number, cy: number): void {
-    const key = toScreenKey(cx, cy);
-    if (key === this.currentScreenKey) return;
-
-    this.clearCurrentHearts();
-    this.currentScreenKey = key;
-
-    const content = this.contentByScreen.get(key);
-    if (!content) return;
-
-    for (const pickup of content.pickups) {
-      if (pickup.type !== 'heart') continue;
-      this.hearts.push(this.createHeart(pickup));
+  public syncChunks(active: Set<string>): void {
+    for (const [key, list] of this.byChunk) {
+      if (active.has(key)) continue;
+      for (const heart of list) heart.destroy();
+      this.byChunk.delete(key);
+    }
+    for (const key of active) {
+      if (this.byChunk.has(key)) continue;
+      const [cx, cy] = key.split(',').map(Number);
+      const list = this.getContent(cx, cy).pickups
+        .filter((p) => p.type === 'heart')
+        .map((p) => new HeartPickup(this.scene, p.worldX, p.worldY));
+      this.byChunk.set(key, list);
     }
   }
 
+  private all(): HeartPickup[] {
+    const out: HeartPickup[] = [];
+    for (const list of this.byChunk.values()) out.push(...list);
+    return out;
+  }
+
   public hasPickupAt(x: number, y: number): boolean {
-    return this.hearts.some((h) => !h.isCollected && h.tileX === x && h.tileY === y);
+    return this.all().some((h) => !h.isCollected && h.tileX === x && h.tileY === y);
   }
 
   public update(
@@ -43,39 +47,28 @@ export class HeartPickupManager {
     _isOccupied: (x: number, y: number) => boolean,
     onHeal: () => void,
   ): void {
-    for (const heart of this.hearts) {
+    for (const heart of this.all()) {
       if (!heart.isCollectable || heart.isCollected) continue;
       if (heart.tileX === playerWorldX && heart.tileY === playerWorldY) {
         heart.collect(onHeal);
       }
     }
 
-    for (let i = this.hearts.length - 1; i >= 0; i--) {
-      if (this.hearts[i].isCollected) {
-        this.hearts.splice(i, 1);
+    for (const list of this.byChunk.values()) {
+      for (let i = list.length - 1; i >= 0; i--) {
+        if (list[i].isCollected) list.splice(i, 1);
       }
     }
   }
 
   public render(tileSize: number, camera: WorldCamera): void {
-    for (const heart of this.hearts) {
-      heart.render(tileSize, camera);
-    }
+    for (const heart of this.all()) heart.render(tileSize, camera);
   }
 
   public destroy(): void {
-    this.clearCurrentHearts();
-    this.currentScreenKey = '';
-  }
-
-  private clearCurrentHearts(): void {
-    for (const heart of this.hearts) {
-      heart.destroy();
+    for (const list of this.byChunk.values()) {
+      for (const heart of list) heart.destroy();
     }
-    this.hearts.length = 0;
-  }
-
-  private createHeart(pickup: PickupSpawn): HeartPickup {
-    return new HeartPickup(this.scene, pickup.worldX, pickup.worldY);
+    this.byChunk.clear();
   }
 }

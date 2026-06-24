@@ -3,6 +3,11 @@ dist/
 .playwright-mcp/
 .DS_Store
 coverage/
+
+# Playtest harness output (screenshots + reports) — never committed.
+# Keep the folder itself (.gitkeep) but ignore every run inside it.
+playtest/results/*
+!playtest/results/.gitkeep
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

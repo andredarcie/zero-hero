@@ -1,39 +1,21 @@
 import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { ChunkData } from './Chunk';
-import {
-  WORLD_MAX_CHUNK_X,
-  WORLD_MAX_CHUNK_Y,
-  WORLD_MIN_CHUNK_X,
-  WORLD_MIN_CHUNK_Y,
-  generateChunk,
-  isInsideStaticWorld,
-} from './WorldGenerator';
+import { generateChunk } from './WorldGenerator';
 
 export class ChunkManager {
+  // Lazily generated + cached. The world is infinite; chunks materialize as the player roams.
   private readonly cache = new Map<string, ChunkData>();
-
-  public constructor() {
-    for (let cy = WORLD_MIN_CHUNK_Y; cy <= WORLD_MAX_CHUNK_Y; cy++) {
-      for (let cx = WORLD_MIN_CHUNK_X; cx <= WORLD_MAX_CHUNK_X; cx++) {
-        const chunk = generateChunk(cx, cy);
-        this.cache.set(this.key(cx, cy), chunk);
-      }
-    }
-  }
 
   private key(cx: number, cy: number): string {
     return `${cx},${cy}`;
   }
 
   public getChunk(cx: number, cy: number): ChunkData {
-    if (!isInsideStaticWorld(cx, cy)) {
-      return generateChunk(cx, cy);
-    }
-
     const key = this.key(cx, cy);
-    const chunk = this.cache.get(key);
+    let chunk = this.cache.get(key);
     if (!chunk) {
-      throw new Error(`Chunk ausente no mapa fixo: ${key}`);
+      chunk = generateChunk(cx, cy);
+      this.cache.set(key, chunk);
     }
     return chunk;
   }
@@ -51,8 +33,9 @@ export class ChunkManager {
     };
   }
 
-  public hasChunkCoordinate(cx: number, cy: number): boolean {
-    return isInsideStaticWorld(cx, cy);
+  // Every coordinate exists in the open world.
+  public hasChunkCoordinate(_cx: number, _cy: number): boolean {
+    return true;
   }
 
   public hasChunk(cx: number, cy: number): boolean {
@@ -60,11 +43,6 @@ export class ChunkManager {
   }
 
   public isCellBlocked(worldX: number, worldY: number): boolean {
-    const cx = Math.floor(worldX / CHUNK_COLUMNS);
-    const cy = Math.floor(worldY / CHUNK_ROWS);
-    if (!this.hasChunkCoordinate(cx, cy)) {
-      return true;
-    }
     return this.getTile(worldX, worldY).collision;
   }
 }

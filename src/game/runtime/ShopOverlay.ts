@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, FONT_FAMILY, HERO_FRAMES, SCENE_DEPTHS } from '@/game/constants';
+import { ASSET_KEYS, FONT_FAMILY, HERO_FRAMES, SCENE_DEPTHS, TEXT_RESOLUTION } from '@/game/constants';
 
 export type UpgradeId = 'maxHealth' | 'swordSpeed' | 'moveSpeed' | 'magnet';
 
@@ -96,7 +96,7 @@ export class ShopOverlay {
 
     const reg = <T extends Phaser.GameObjects.GameObject>(o: T): T => { this.all.push(o); return o; };
     const txt = (x: number, y: number, s: string, size: number, color: string, origin = [0, 0] as [number, number]) =>
-      reg(scene.add.text(x, y, s, { fontFamily: FONT_FAMILY, fontSize: `${size}px`, color, resolution: 2 })
+      reg(scene.add.text(x, y, s, { fontFamily: FONT_FAMILY, fontSize: `${size}px`, color, resolution: TEXT_RESOLUTION })
         .setOrigin(...origin).setDepth(DEPTH + 2));
 
     // backdrop
@@ -197,7 +197,7 @@ export class ShopOverlay {
 
     const btnY = y + CARD_H - BTN_H / 2 - 4;
     const btnBg = reg(this.scene.add.rectangle(cx, btnY, this.cardW - 8, BTN_H, 0x1a1038).setDepth(d).setStrokeStyle(1, 0x5533aa));
-    const btnLabel = reg(this.scene.add.text(cx, btnY, '', { fontFamily: FONT_FAMILY, fontSize: '8px', color: '#ffffff', resolution: 2 }).setOrigin(0.5).setDepth(d + 1));
+    const btnLabel = reg(this.scene.add.text(cx, btnY, '', { fontFamily: FONT_FAMILY, fontSize: '8px', color: '#ffffff', resolution: TEXT_RESOLUTION }).setOrigin(0.5).setDepth(d + 1));
 
     return { bg, icon, nameText, descText, dotsText, btnBg, btnLabel };
   }

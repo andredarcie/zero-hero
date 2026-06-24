@@ -1,17 +1,29 @@
 import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 
+/**
+ * Open-world camera that stays centered on the hero. `camX`/`camY` are the (fractional)
+ * world-tile coordinates currently under the screen centre; the hero is always drawn there
+ * and the world scrolls underneath as `camX`/`camY` follow them.
+ */
 export class WorldCamera {
-  public screenOriginX: number;
-  public screenOriginY: number;
+  public camX: number;
+  public camY: number;
   public screenCenterX: number;
   public screenCenterY: number;
-  public viewportColumns: number;
+  public viewportColumns: number; // visible tile counts (used for the streaming window)
   public viewportRows: number;
-  public transitioning: boolean;
+  public transitioning: boolean; // kept for API compatibility; always false now
 
-  public constructor(screenOriginX = 0, screenOriginY = 0, screenCenterX = 0, screenCenterY = 0, viewportColumns = CHUNK_COLUMNS, viewportRows = CHUNK_ROWS) {
-    this.screenOriginX = screenOriginX;
-    this.screenOriginY = screenOriginY;
+  public constructor(
+    camX = 0,
+    camY = 0,
+    screenCenterX = 0,
+    screenCenterY = 0,
+    viewportColumns = CHUNK_COLUMNS,
+    viewportRows = CHUNK_ROWS,
+  ) {
+    this.camX = camX;
+    this.camY = camY;
     this.screenCenterX = screenCenterX;
     this.screenCenterY = screenCenterY;
     this.viewportColumns = viewportColumns;
@@ -19,30 +31,26 @@ export class WorldCamera {
     this.transitioning = false;
   }
 
-  public setActiveScreen(worldX: number, worldY: number): void {
-    this.screenOriginX = Math.floor(worldX / CHUNK_COLUMNS) * CHUNK_COLUMNS;
-    this.screenOriginY = Math.floor(worldY / CHUNK_ROWS) * CHUNK_ROWS;
+  public centerOn(worldX: number, worldY: number): void {
+    this.camX = worldX;
+    this.camY = worldY;
   }
 
   public tileToScreen(tileX: number, tileY: number, tileSize: number): { x: number; y: number } {
-    const left = this.screenCenterX - (this.viewportColumns * tileSize) / 2;
-    const top = this.screenCenterY - (this.viewportRows * tileSize) / 2;
     return {
-      x: Math.round(left + (tileX - this.screenOriginX + 0.5) * tileSize),
-      y: Math.round(top + (tileY - this.screenOriginY + 0.5) * tileSize),
+      x: Math.round(this.screenCenterX + (tileX - this.camX) * tileSize),
+      y: Math.round(this.screenCenterY + (tileY - this.camY) * tileSize),
     };
   }
 
-  public getVisibleRange(_tileSize: number, buffer = 0): { minX: number; maxX: number; minY: number; maxY: number } {
-    const minX = Math.floor(this.screenOriginX - buffer);
-    const maxX = Math.ceil(this.screenOriginX + this.viewportColumns - 1 + buffer);
-    const minY = Math.floor(this.screenOriginY - buffer);
-    const maxY = Math.ceil(this.screenOriginY + this.viewportRows - 1 + buffer);
+  public getVisibleRange(_tileSize: number, buffer = 2): { minX: number; maxX: number; minY: number; maxY: number } {
+    const halfCols = this.viewportColumns / 2;
+    const halfRows = this.viewportRows / 2;
     return {
-      minX,
-      maxX,
-      minY,
-      maxY,
+      minX: Math.floor(this.camX - halfCols - buffer),
+      maxX: Math.ceil(this.camX + halfCols + buffer),
+      minY: Math.floor(this.camY - halfRows - buffer),
+      maxY: Math.ceil(this.camY + halfRows + buffer),
     };
   }
 }

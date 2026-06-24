@@ -13,9 +13,11 @@ import {
   HUD_RESERVED_ROWS,
   MIN_BOARD_TILE_SIZE,
   SCENE_DEPTHS,
+  TEXT_RESOLUTION,
   TIMINGS,
   ySortDepth,
 } from '@/game/constants';
+import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/game/debug/debugHooks';
 import { CoinManager } from '@/game/entities/CoinManager';
 import { EnemyManager } from '@/game/entities/EnemyManager';
 import { NpcManager } from '@/game/entities/NpcManager';
@@ -24,8 +26,9 @@ import { SwordPickupManager } from '@/game/entities/SwordPickupManager';
 import { SwordSlash } from '@/game/runtime/SwordOrbit';
 import { CampfireObject } from '@/game/objects/CampfireObject';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
+import { SwordGetOverlay } from '@/game/runtime/SwordGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
-import { NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
+import { NPC_DIALOGS, DIALOG_VOICES } from '@/game/dialogs/NpcDialogs';
 import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
 import { MinimapRenderer } from '@/game/runtime/MinimapRenderer';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
@@ -34,7 +37,7 @@ import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { createBoardMetrics, type BoardMetrics } from '@/game/shared/grid';
 import { ChunkManager } from '@/game/world/ChunkManager';
-import { buildScreenContentMap, ENEMY_BORDER_MARGIN, getNpcChunkCoords, type ScreenContent } from '@/game/world/ScreenContent';
+import { ENEMY_BORDER_MARGIN, getChunkContent, type ScreenContent } from '@/game/world/ScreenContent';
 import { START_SCREEN_PLAYER_X, START_SCREEN_PLAYER_Y } from '@/game/world/WorldGenerator';
 
 export class GameScene extends Phaser.Scene {
@@ -66,10 +69,14 @@ export class GameScene extends Phaser.Scene {
   private shopOverlay?: ShopOverlay;
   private dialogOpen = false;
   private dialogOverlay?: DialogOverlay;
+  private itemGetOpen = false;
+  private swordGetOverlay?: SwordGetOverlay;
   private shopButton?: Phaser.GameObjects.Text;
   private eKey?: Phaser.Input.Keyboard.Key;
   private upgrades: UpgradeState = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
-  private activeScreen = { cx: 0, cy: 0 };
+  // Center chunk of the streamed window; NaN forces the first stream.
+  private streamCenter = { cx: NaN, cy: NaN };
+  private debugApi?: GameDebugApi;
 
   // Lighting
   private darknessOverlay?: Phaser.GameObjects.RenderTexture;
@@ -77,8 +84,9 @@ export class GameScene extends Phaser.Scene {
   private playerShadow?: Phaser.GameObjects.Ellipse;
   private readonly lightFlicker = { radius: 1.0, velocity: 0 };
 
-  // Footprints
+  // Footprints (world-anchored so they scroll with the ground)
   private footprintStep = false;
+  private readonly footprints: Array<{ obj: Phaser.GameObjects.Ellipse; worldX: number; worldY: number; offX: number; offY: number }> = [];
 
   // Breathing idle
   private breathingTween?: Phaser.Tweens.Tween;
@@ -98,34 +106,33 @@ export class GameScene extends Phaser.Scene {
     this.playerHealth = HUD_HEALTH_MAX;
     this.playerInvincible = false;
     this.playerWorld = { worldX: startWorldX, worldY: startWorldY };
-    this.activeScreen = {
-      cx: Math.floor(startWorldX / CHUNK_COLUMNS),
-      cy: Math.floor(startWorldY / CHUNK_ROWS),
-    };
+    this.streamCenter = { cx: NaN, cy: NaN };
     this.shopOpen = false;
     this.upgrades = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
 
     this.cameras.main.setBackgroundColor('#1a1a2e');
+
+    // Decode the chiptune SFX + music, and start the looping background track.
+    getSoundManager().preload();
+    getSoundManager().startMusic();
 
     // Phaser does not auto-call shutdown(); wire it so scene.restart() (death) cleans up
     // listeners/textures instead of leaking them across runs.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
 
     this.chunkManager = new ChunkManager();
-    const screenContent: Map<string, ScreenContent> = buildScreenContentMap(this.chunkManager);
-    this.enemyManager = new EnemyManager(this, screenContent);
-    this.npcManager = new NpcManager(this, screenContent);
+    const getContent = (cx: number, cy: number): ScreenContent => getChunkContent(cx, cy, this.chunkManager!);
+    this.enemyManager = new EnemyManager(this, getContent);
+    this.npcManager = new NpcManager(this, getContent);
     this.coinManager = new CoinManager(this);
-    this.heartPickupManager = new HeartPickupManager(this, screenContent);
-    this.swordPickupManager = new SwordPickupManager(this, screenContent);
+    this.heartPickupManager = new HeartPickupManager(this, getContent);
+    this.swordPickupManager = new SwordPickupManager(this, getContent);
     this.swordEquipped = false;
     this.swordOnFire = false;
     this.swordSlash = undefined;
-    this.camera = new WorldCamera(0, 0, 0, 0);
-    this.camera.setActiveScreen(startWorldX, startWorldY);
+    this.camera = new WorldCamera(startWorldX, startWorldY, 0, 0);
     this.boardRenderer = new GameBoardRenderer(this);
     this.minimapRenderer = new MinimapRenderer(this);
-    this.minimapRenderer.setNpcScreens(getNpcChunkCoords());
 
     this.player = this.add
       .sprite(0, 0, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
@@ -146,13 +153,12 @@ export class GameScene extends Phaser.Scene {
       },
       (wx, wy) => animateGrassRustle(this, this.boardRenderer?.getGrassSprite(wx, wy), this.tileSize),
       (wx, wy) => this.handlePlayerBump(wx, wy),
-      (cx, cy) => this.handleScreenTransitionComplete(cx, cy),
     );
 
     this.eKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
     this.shopButton = this.add.text(0, 0, '[ LOJA ]', {
-      fontFamily: FONT_FAMILY, fontSize: '10px', color: '#9977bb', resolution: Math.max(2, Math.ceil(window.devicePixelRatio)),
+      fontFamily: FONT_FAMILY, fontSize: '10px', color: '#9977bb', resolution: TEXT_RESOLUTION,
     })
       .setDepth(SCENE_DEPTHS.uiLabel)
       .setVisible(false)
@@ -168,30 +174,63 @@ export class GameScene extends Phaser.Scene {
     this.campfire = new CampfireObject(this, startWorldX + 2, startWorldY - 4);
 
     this.initLighting();
-    this.initPostProcessing();
-    this.loadActiveScreenContent();
+    this.streamChunks(true);
+
+    this.registerDebugApi();
   }
 
-  private initPostProcessing(): void {
-    // Post FX run on the WebGL renderer only; the Canvas fallback simply skips them.
-    if (this.sys.game.renderer.type !== Phaser.WEBGL) return;
-
-    const cam = this.cameras.main;
-
-    // Richer, slightly punchier colors. (No bloom: Phaser's Bloom has no luminance
-    // threshold, so it glows the whole frame white instead of just the light sources.)
-    cam.postFX.addColorMatrix().saturate(0.14);
-
-    // Moody darkened edges that deepen the nighttime mood and focus the eye.
-    cam.postFX.addVignette(0.5, 0.5, 0.85, 0.4);
+  // Deterministic control surface for the playtest harness (see /playtest). Lets the agent
+  // inspect live state and pop the exact UI it wants to validate (dialog / shop).
+  private registerDebugApi(): void {
+    this.debugApi = {
+      getState: () => ({
+        scene: GameScene.key,
+        player: { worldX: this.playerWorld.worldX, worldY: this.playerWorld.worldY },
+        health: this.playerHealth,
+        maxHealth: this.playerMaxHealth,
+        swordEquipped: this.swordEquipped,
+        swordOnFire: this.swordOnFire,
+        coins: this.coinManager?.coinTotal ?? 0,
+        dialogOpen: this.dialogOpen,
+        shopOpen: this.shopOpen,
+        itemGetOpen: this.itemGetOpen,
+        isDead: this.isDead,
+        activeScreen: {
+          cx: Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS),
+          cy: Math.floor(this.playerWorld.worldY / CHUNK_ROWS),
+        },
+      }),
+      openDialog: (kind = 'blackCat') => {
+        if (this.dialogOpen || this.shopOpen || this.isDead) return false;
+        this.openNpcDialog(kind);
+        return true;
+      },
+      closeDialog: () => {
+        this.dialogOverlay?.destroy();
+        this.dialogOverlay = undefined;
+        this.dialogOpen = false;
+      },
+      openShop: () => this.openShop(),
+      closeShop: () => this.closeShop(),
+      triggerSwordGet: () => { if (!this.itemGetOpen) this.equipSword(); },
+      listNpcKinds: () => Object.keys(NPC_DIALOGS) as Array<keyof typeof NPC_DIALOGS>,
+    };
+    registerGameDebugApi(this.debugApi);
   }
 
   public shutdown(): void {
+    if (this.debugApi) {
+      clearGameDebugApi(this.debugApi);
+      this.debugApi = undefined;
+    }
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.enemyManager?.destroy();
     this.npcManager?.destroy();
     this.dialogOverlay?.destroy();
     this.dialogOverlay = undefined;
+    this.swordGetOverlay?.destroy();
+    this.swordGetOverlay = undefined;
+    this.itemGetOpen = false;
     this.coinManager?.destroy();
     this.heartPickupManager?.destroy();
     this.swordPickupManager?.destroy();
@@ -200,6 +239,7 @@ export class GameScene extends Phaser.Scene {
     this.shopOverlay?.destroy();
     this.breathingTween?.destroy();
     this.breathingTween = undefined;
+    this.footprints.length = 0;
     this.lightCircleImg?.destroy();
     this.darknessOverlay?.destroy();
     this.playerShadow?.destroy();
@@ -216,6 +256,9 @@ export class GameScene extends Phaser.Scene {
       this.dialogOverlay?.update();
       return;
     }
+
+    // Item-get presentation freezes gameplay; only its own tweens keep running.
+    if (this.itemGetOpen) return;
 
     if (this.eKey && Phaser.Input.Keyboard.JustDown(this.eKey)) this.toggleShop();
 
@@ -238,15 +281,13 @@ export class GameScene extends Phaser.Scene {
     if (stepDx !== 0 || stepDy !== 0) {
       this.lastStepTime = this.time.now;
       this.stopBreathing();
-      if (!this.camera.transitioning) {
-        this.spawnFootprint(prevWorldX, prevWorldY, stepDx, stepDy);
-      }
-    } else if (!this.camera.transitioning && this.time.now - this.lastStepTime > 180) {
+      this.spawnFootprint(prevWorldX, prevWorldY, stepDx, stepDy);
+    } else if (this.time.now - this.lastStepTime > 180) {
       this.startBreathing();
     }
-    this.syncActiveScreenState();
+    this.streamChunks();
     this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize);
-    const isScreenTransitioning = this.camera.transitioning;
+    this.updateFootprints();
 
     const isPickupOccupied = (x: number, y: number): boolean =>
       (this.heartPickupManager?.hasPickupAt(x, y) ?? false) ||
@@ -256,69 +297,61 @@ export class GameScene extends Phaser.Scene {
       isPickupOccupied(x, y) || (this.enemyManager?.getEnemyAt(x, y) !== null);
 
     if (this.enemyManager) {
-      if (!isScreenTransitioning) {
-        const attacked = this.enemyManager.update(
-          delta,
-          this.playerWorld.worldX,
-          this.playerWorld.worldY,
-          (wx, wy) => {
-            if (this.chunkManager?.isCellBlocked(wx, wy)) return true;
-            const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
-            const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-            if (lx < ENEMY_BORDER_MARGIN || lx >= CHUNK_COLUMNS - ENEMY_BORDER_MARGIN) return true;
-            if (ly < ENEMY_BORDER_MARGIN || ly >= CHUNK_ROWS - ENEMY_BORDER_MARGIN) return true;
-            return false;
-          },
-        );
-        if (attacked) this.handleEnemyAttackPlayer();
-      }
+      const attacked = this.enemyManager.update(
+        delta,
+        this.playerWorld.worldX,
+        this.playerWorld.worldY,
+        (wx, wy) => {
+          if (this.chunkManager?.isCellBlocked(wx, wy)) return true;
+          const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+          const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+          if (lx < ENEMY_BORDER_MARGIN || lx >= CHUNK_COLUMNS - ENEMY_BORDER_MARGIN) return true;
+          if (ly < ENEMY_BORDER_MARGIN || ly >= CHUNK_ROWS - ENEMY_BORDER_MARGIN) return true;
+          return false;
+        },
+      );
+      if (attacked) this.handleEnemyAttackPlayer();
       this.enemyManager.render(this.tileSize, this.camera);
     }
 
     if (this.coinManager && this.camera) {
       const hudCoin = this.boardRenderer?.getHudCoinAnchor() ?? { x: 0, y: 0 };
-      if (!isScreenTransitioning) {
-        this.coinManager.update(
-          this.playerWorld.worldX,
-          this.playerWorld.worldY,
-          hudCoin,
-          (total) => { getSoundManager().playCoinPickup(); this.boardRenderer?.setCoinCount(total, this); },
-        );
-      }
+      this.coinManager.update(
+        this.playerWorld.worldX,
+        this.playerWorld.worldY,
+        hudCoin,
+        (total) => { getSoundManager().playCoinPickup(); this.boardRenderer?.setCoinCount(total, this); },
+      );
       this.coinManager.render(this.tileSize, this.camera);
     }
 
     if (this.heartPickupManager && this.chunkManager) {
-      if (!isScreenTransitioning) {
-        this.heartPickupManager.update(
-          delta,
-          this.playerWorld.worldX,
-          this.playerWorld.worldY,
-          this.playerHealth,
-          this.chunkManager,
-          isItemOccupied,
-          () => {
-            getSoundManager().playHeartPickup();
-            this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
-            this.boardRenderer?.setHealth(this.playerHealth);
-          },
-        );
-      }
+      this.heartPickupManager.update(
+        delta,
+        this.playerWorld.worldX,
+        this.playerWorld.worldY,
+        this.playerHealth,
+        this.chunkManager,
+        isItemOccupied,
+        () => {
+          getSoundManager().playHeartPickup();
+          this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
+          this.boardRenderer?.setHealth(this.playerHealth);
+        },
+      );
       this.heartPickupManager.render(this.tileSize, this.camera!);
     }
 
     if (this.swordPickupManager && this.chunkManager) {
-      if (!isScreenTransitioning) {
-        this.swordPickupManager.update(
-          delta,
-          this.playerWorld.worldX,
-          this.playerWorld.worldY,
-          this.swordEquipped,
-          this.chunkManager,
-          isItemOccupied,
-          () => this.equipSword(),
-        );
-      }
+      this.swordPickupManager.update(
+        delta,
+        this.playerWorld.worldX,
+        this.playerWorld.worldY,
+        this.swordEquipped,
+        this.chunkManager,
+        isItemOccupied,
+        () => this.equipSword(),
+      );
       this.swordPickupManager.render(this.tileSize, this.camera!);
     }
 
@@ -349,8 +382,9 @@ export class GameScene extends Phaser.Scene {
     if (this.camera) {
       this.camera.screenCenterX = screenCenterX;
       this.camera.screenCenterY = screenCenterY;
-      this.camera.viewportColumns = CHUNK_COLUMNS;
-      this.camera.viewportRows = CHUNK_ROWS;
+      // Visible tile counts around the centered hero (used for the streaming window).
+      this.camera.viewportColumns = Math.ceil(width / this.tileSize);
+      this.camera.viewportRows = Math.ceil((height - reservedTopHeight) / this.tileSize);
     }
 
     const hudMetrics = this.buildHudMetrics(width, height, this.tileSize);
@@ -393,28 +427,36 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  private syncActiveScreenState(): void {
-    if (this.camera?.transitioning) return;
+  // Stream content for the 3x3 chunk window around the player, loading/unloading as the
+  // hero roams the open world.
+  private streamChunks(force = false): void {
+    const pcx = Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS);
+    const pcy = Math.floor(this.playerWorld.worldY / CHUNK_ROWS);
+    if (!force && pcx === this.streamCenter.cx && pcy === this.streamCenter.cy) return;
+    this.streamCenter = { cx: pcx, cy: pcy };
 
-    const nextCx = Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS);
-    const nextCy = Math.floor(this.playerWorld.worldY / CHUNK_ROWS);
-    if (nextCx === this.activeScreen.cx && nextCy === this.activeScreen.cy) return;
+    const active = new Set<string>();
+    const radius = 1;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        active.add(`${pcx + dx},${pcy + dy}`);
+      }
+    }
 
-    this.activeScreen = { cx: nextCx, cy: nextCy };
-    this.loadActiveScreenContent();
+    this.enemyManager?.syncChunks(active);
+    this.npcManager?.syncChunks(active);
+    this.heartPickupManager?.syncChunks(active);
+    this.swordPickupManager?.syncChunks(active, this.swordEquipped);
   }
 
-  private handleScreenTransitionComplete(cx: number, cy: number): void {
-    this.activeScreen = { cx, cy };
-    this.coinManager?.resetForScreenChange();
-    this.loadActiveScreenContent();
-  }
-
-  private loadActiveScreenContent(): void {
-    this.enemyManager?.enterScreen(this.activeScreen.cx, this.activeScreen.cy);
-    this.npcManager?.enterScreen(this.activeScreen.cx, this.activeScreen.cy);
-    this.heartPickupManager?.enterScreen(this.activeScreen.cx, this.activeScreen.cy);
-    this.swordPickupManager?.enterScreen(this.activeScreen.cx, this.activeScreen.cy, this.swordEquipped);
+  // Footprints are placed in world space and re-projected every frame so they stay glued to
+  // the ground as the world scrolls under the centered hero.
+  private updateFootprints(): void {
+    if (!this.camera) return;
+    for (const f of this.footprints) {
+      const s = this.camera.tileToScreen(f.worldX, f.worldY, this.tileSize);
+      f.obj.setPosition(s.x + f.offX, s.y + f.offY);
+    }
   }
 
   private handlePlayerBump(wx: number, wy: number): void {
@@ -445,7 +487,10 @@ export class GameScene extends Phaser.Scene {
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (!enemy) return;
 
-    const hits = this.swordEquipped ? 1 + this.upgrades.swordSpeed : 1;
+    // No sword, no fight — the hero can't hurt enemies until the blade is found.
+    if (!this.swordEquipped) return;
+
+    const hits = 1 + this.upgrades.swordSpeed;
     for (let i = 0; i < hits; i++) enemy.takeDamage();
 
     if (this.swordEquipped && this.swordSlash && this.camera) {
@@ -509,11 +554,14 @@ export class GameScene extends Phaser.Scene {
   private openNpcDialog(kind: import('@/game/world/ScreenContent').NpcKind): void {
     if (this.dialogOpen) return;
     this.dialogOpen = true;
+    // Focus on the conversation: fade the music down while the NPC talks.
+    getSoundManager().fadeMusicOut();
     this.dialogOverlay = new DialogOverlay(this, NPC_DIALOGS[kind], () => {
       this.dialogOverlay?.destroy();
       this.dialogOverlay = undefined;
       this.dialogOpen = false;
-    });
+      getSoundManager().fadeMusicIn();
+    }, DIALOG_VOICES[kind]);
   }
 
   private toggleShop(): void {
@@ -565,12 +613,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private equipSword(): void {
-    getSoundManager().playSwordPickup();
     this.swordEquipped = true;
     this.swordPickupManager?.onSwordEquipped();
     this.swordSlash?.destroy();
     this.swordSlash = new SwordSlash(this);
     this.boardRenderer?.setHudItemTexture(ASSET_KEYS.swordItemIcon);
+    this.showSwordGet();
+  }
+
+  // Zelda-style "item get" beat: freeze the game, spotlight the hero, raise the sword.
+  private showSwordGet(): void {
+    if (this.itemGetOpen) return;
+    this.itemGetOpen = true;
+    getSoundManager().fadeMusicOut();
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.swordGetOverlay = new SwordGetOverlay(this, () => {
+      this.swordGetOverlay?.destroy();
+      this.swordGetOverlay = undefined;
+      this.itemGetOpen = false;
+      getSoundManager().fadeMusicIn();
+    });
   }
 
   private handleEnemyAttackPlayer(): void {
@@ -618,7 +680,7 @@ export class GameScene extends Phaser.Scene {
       color: '#cc2222',
       stroke: '#000000',
       strokeThickness: 4,
-      resolution: Math.max(2, Math.ceil(window.devicePixelRatio)),
+      resolution: TEXT_RESOLUTION,
     })
       .setOrigin(0.5)
       .setAlpha(0)
@@ -628,7 +690,7 @@ export class GameScene extends Phaser.Scene {
       fontFamily: FONT_FAMILY,
       fontSize: `${Math.floor(this.tileSize * 0.55)}px`,
       color: '#aaaaaa',
-      resolution: Math.max(2, Math.ceil(window.devicePixelRatio)),
+      resolution: TEXT_RESOLUTION,
     })
       .setOrigin(0.5)
       .setAlpha(0)
@@ -726,10 +788,10 @@ export class GameScene extends Phaser.Scene {
       rt.erase(this.lightCircleImg, cfScreen.x, cfScreen.y - hudH);
     }
 
-    // Player ambient glow
+    // Player ambient glow — the hero is pinned at screen centre.
     if (this.camera) {
       const hudH = this.tileSize * HUD_RESERVED_ROWS;
-      const pScreen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+      const pScreen = { x: this.camera.screenCenterX, y: this.camera.screenCenterY };
       const pRadius = this.tileSize * 4.5;
       this.lightCircleImg.clearTint().setDisplaySize(pRadius * 2, pRadius * 2);
       rt.erase(this.lightCircleImg, pScreen.x, pScreen.y - hudH);
@@ -741,6 +803,12 @@ export class GameScene extends Phaser.Scene {
       for (const pos of this.enemyManager?.getActiveWorldPositions() ?? []) {
         const eScreen = this.camera.tileToScreen(pos.worldX, pos.worldY, this.tileSize);
         rt.erase(this.lightCircleImg, eScreen.x, eScreen.y - hudH2);
+      }
+
+      // NPC lights — every NPC carries a warm glow around them
+      for (const pos of this.npcManager?.getActiveWorldPositions() ?? []) {
+        const nScreen = this.camera.tileToScreen(pos.worldX, pos.worldY, this.tileSize);
+        rt.erase(this.lightCircleImg, nScreen.x, nScreen.y - hudH2);
       }
 
       // Coin lights — small erase hole + separate yellow additive glow
@@ -756,10 +824,11 @@ export class GameScene extends Phaser.Scene {
 
   private updatePlayerShadow(): void {
     if (!this.playerShadow || !this.camera) return;
-    const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+    const cx = this.camera.screenCenterX;
+    const cy = this.camera.screenCenterY;
     this.playerShadow
       .setVisible(!this.isDead)
-      .setPosition(screen.x, screen.y + Math.round(this.tileSize * 0.34))
+      .setPosition(cx, cy + Math.round(this.tileSize * 0.34))
       .setDisplaySize(this.tileSize * 0.6, this.tileSize * 0.26);
   }
 
@@ -806,25 +875,30 @@ export class GameScene extends Phaser.Scene {
     const perpX = -dy;
     const perpY = dx;
     const offset = this.tileSize * 0.17;
+    const offX = perpX * offset * sign;
+    const offY = perpY * offset * sign + this.tileSize * 0.28;
 
-    const screen = this.camera.tileToScreen(fromWorldX, fromWorldY, this.tileSize);
-    const fx = screen.x + perpX * offset * sign;
-    const fy = screen.y + perpY * offset * sign + this.tileSize * 0.28;
-
+    const s = this.camera.tileToScreen(fromWorldX, fromWorldY, this.tileSize);
     const w = Math.max(3, Math.floor(this.tileSize * (dy !== 0 ? 0.30 : 0.16)));
     const h = Math.max(3, Math.floor(this.tileSize * (dx !== 0 ? 0.30 : 0.16)));
 
     const print = this.add
-      .ellipse(fx, fy, w, h, 0x1a0e06, 0.75)
+      .ellipse(s.x + offX, s.y + offY, w, h, 0x1a0e06, 0.75)
       .setDepth(SCENE_DEPTHS.decorBelowPlayer - 1);
+
+    const entry = { obj: print, worldX: fromWorldX, worldY: fromWorldY, offX, offY };
+    this.footprints.push(entry);
 
     this.tweens.add({
       targets: print,
       alpha: 0,
-      y: fy - this.tileSize * 0.22,
-      duration: 750,
+      duration: 700,
       ease: 'Power1.easeIn',
-      onComplete: () => { print.destroy(); },
+      onComplete: () => {
+        print.destroy();
+        const i = this.footprints.indexOf(entry);
+        if (i >= 0) this.footprints.splice(i, 1);
+      },
     });
   }
 
