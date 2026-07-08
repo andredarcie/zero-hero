@@ -115,19 +115,17 @@ export const ASSET_KEYS = {
   lookedDoorObject: 'looked-door-object',
   undead: 'undead',
   undeadHurt: 'undead-hurt',
+  undeadBorn0: 'undead-born-0',
+  undeadBorn1: 'undead-born-1',
+  undeadBorn2: 'undead-born-2',
+  undeadBorn3: 'undead-born-3',
+  undeadBorn4: 'undead-born-4',
+  undeadBorn5: 'undead-born-5',
+  undeadBorn6: 'undead-born-6',
   coin: 'coin',
-  bat: 'bat',
-  batHurt: 'bat-hurt',
   mage: 'mage',
-  mageHurt: 'mage-hurt',
-  magicBall: 'magic-ball',
-  slime: 'slime',
-  slimePool: 'slime-pool',
-  bigSlime: 'big-slime',
-  bigSlimePool: 'big-slime-pool',
-  spider: 'spider',
-  webSpider: 'web-spider',
   swordOnFire: 'sword-on-fire',
+  dryBush: 'dry-bush',
   campfireFrame0: 'campfire-f0',
   campfireFrame1: 'campfire-f1',
   campfireFrame2: 'campfire-f2',
@@ -135,6 +133,24 @@ export const ASSET_KEYS = {
   tinyFire1: 'tiny-fire1',
   tinyFire2: 'tiny-fire2',
 } as const;
+
+// The skull's rise-from-the-ground animation, in playback order (see UndeadEnemy).
+export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [
+  ASSET_KEYS.undeadBorn0,
+  ASSET_KEYS.undeadBorn1,
+  ASSET_KEYS.undeadBorn2,
+  ASSET_KEYS.undeadBorn3,
+  ASSET_KEYS.undeadBorn4,
+  ASSET_KEYS.undeadBorn5,
+  ASSET_KEYS.undeadBorn6,
+];
+
+// Light radii in tiles. The hero's ambient glow and each campfire punch holes of this size
+// in the darkness overlay; the same radius is what undead refuse to step into (they live
+// only in the dark). The safety ring is slightly wider than the light so the HUD flips to
+// "PERIGO" right at the visible light edge, never while the player still looks lit.
+export const LIGHT_RADIUS_TILES = 4.5;
+export const CAMPFIRE_SAFE_RADIUS_TILES = 5;
 
 type NpcVisual = {
   key: string;
@@ -150,9 +166,24 @@ export const NPC_VISUALS: Record<string, NpcVisual> = {
   painter: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.painter },
   salesman: { key: ASSET_KEYS.npcSalesman },
   poet: { key: ASSET_KEYS.npcPoet },
+  wizard: { key: ASSET_KEYS.mage },
   death: { key: ASSET_KEYS.npcDeath },
 };
 
 export const ITEM_FRAMES = {
   swordIdle: 0,
 } as const;
+
+// key.png is a 16x32 sheet of two stacked keys: the top (blue) is the held/HUD item and the
+// swing sprite (like the sword), the bottom (white outline) is what sits on the map.
+export const KEY_FRAMES = {
+  held: 0,
+  pickup: 1,
+} as const;
+
+// Upper-layer tileset frames that depict trees. Trees are solid "by default":
+// ChunkManager.isCellBlocked treats these as collision even where a cell has no authored
+// collision painted, so every tree — placed in the editor, generated, or hand-authored —
+// blocks the hero and enemies alike (both consult isCellBlocked). Frame ids index
+// forest_tile_set.png (3 columns): 3 & 21 are dead trees, 4/14/15/16/17/18 are pines.
+export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21]);

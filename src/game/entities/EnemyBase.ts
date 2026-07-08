@@ -22,6 +22,9 @@ export abstract class EnemyBase {
   /** Override to return the hurt texture key; if defined, flashes on takeDamage */
   protected hurtTexture?: string;
 
+  /** Subclasses can hide the health bar (e.g. while the spawn animation plays). */
+  protected healthBarVisible = true;
+
   /** Override to return the normal texture key used to restore after hurt flash */
   protected abstract get normalTexture(): string;
 
@@ -74,6 +77,7 @@ export abstract class EnemyBase {
     delta: number,
     playerX: number,
     playerY: number,
+    playerSafe: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean;
 
@@ -108,6 +112,7 @@ export abstract class EnemyBase {
 
     this.healthBar.setDepth(ySortDepth(this.worldY) + 0.02);
     this.healthBar.clear();
+    if (!this.healthBarVisible) return;
     const barW = Math.floor(tileSize * 0.75);
     const barH = Math.max(2, Math.floor(tileSize * 0.12));
     const barX = sx - Math.floor(barW / 2);
@@ -149,6 +154,27 @@ export abstract class EnemyBase {
   /** Override to add death effects (pool, spawn, etc.) */
   protected onDeath(): void {
     // no-op by default
+  }
+
+  /**
+   * Quiet removal (no loot, no onDeath): the undead crumbles back into the ground when the
+   * hero reaches a campfire's safety. Distinct from die(), which is a combat kill.
+   */
+  public despawn(): void {
+    if (!this.alive) return;
+    this.alive = false;
+    this.healthBar.clear();
+    this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: 0,
+      y: this.sprite.y + this.sprite.displayHeight * 0.35,
+      duration: 420,
+      ease: 'Power2.easeIn',
+      onComplete: () => {
+        this.sprite.setVisible(false);
+        this.pendingRemoval = true;
+      },
+    });
   }
 
   protected moveToward(

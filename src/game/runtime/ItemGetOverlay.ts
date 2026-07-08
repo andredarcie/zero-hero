@@ -4,7 +4,6 @@ import {
   ASSET_KEYS,
   FONT_FAMILY,
   HERO_FRAMES,
-  ITEM_FRAMES,
   SCENE_DEPTHS,
   TEXT_RESOLUTION,
 } from '@/game/constants';
@@ -28,12 +27,15 @@ const ensureGlowTexture = (scene: Phaser.Scene): void => {
   scene.textures.addCanvas(GLOW_TEXTURE, canvas);
 };
 
+export type ItemGetConfig = { texture: string; frame: number; label: string };
+
 /**
- * "You got the sword!" presentation — the classic item-get beat. Freezes gameplay, shows
- * the hero centered on a darkened screen, and the sword rises above their head with a burst
- * of light, rays, sparkles, a flash and a screen shake. Original effect (no copied assets).
+ * The classic "item get" beat, shown the first time the hero picks up a given item. Freezes
+ * gameplay, shows the hero centered on a darkened screen, and the item rises above their head
+ * with a burst of light, rays, sparkles, a flash and a screen shake. The raised sprite and the
+ * caption come from the `item` config so it works for the sword, the key, or anything else.
  */
-export class SwordGetOverlay {
+export class ItemGetOverlay {
   private readonly objs: Phaser.GameObjects.GameObject[] = [];
   private readonly timers: Phaser.Time.TimerEvent[] = [];
   private raySpin?: Phaser.Tweens.Tween;
@@ -42,6 +44,7 @@ export class SwordGetOverlay {
 
   public constructor(
     private readonly scene: Phaser.Scene,
+    private readonly item: ItemGetConfig,
     private readonly onClose: () => void,
   ) {
     ensureGlowTexture(scene);
@@ -50,7 +53,7 @@ export class SwordGetOverlay {
     const unit = Math.min(width, height);
     const heroSize = Math.round(unit * 0.24);
     const heroY = Math.round(height * 0.6);
-    const swordTopY = Math.round(heroY - heroSize * 0.95);
+    const itemTopY = Math.round(heroY - heroSize * 0.95);
     const D = SCENE_DEPTHS.toast + 30;
 
     const reg = <T extends Phaser.GameObjects.GameObject>(o: T): T => { this.objs.push(o); return o; };
@@ -61,11 +64,11 @@ export class SwordGetOverlay {
     scene.tweens.add({ targets: dim, fillAlpha: 0.84, duration: 260, ease: 'Sine.Out' });
 
     // ── backlight + rotating rays (hidden until the apex) ───────────────
-    const glow = reg(scene.add.image(cx, swordTopY, GLOW_TEXTURE)
+    const glow = reg(scene.add.image(cx, itemTopY, GLOW_TEXTURE)
       .setDepth(D + 1).setBlendMode(Phaser.BlendModes.ADD)
       .setDisplaySize(heroSize * 3.2, heroSize * 3.2).setAlpha(0));
 
-    const rays = reg(this.buildRays(cx, swordTopY, Math.max(width, height))
+    const rays = reg(this.buildRays(cx, itemTopY, Math.max(width, height))
       .setDepth(D + 1).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0).setScale(0.2));
 
     // ── hero, centered, popping in ──────────────────────────────────────
@@ -74,12 +77,12 @@ export class SwordGetOverlay {
     hero.setScale(hero.scaleX * 0.3);
     scene.tweens.add({ targets: hero, scaleX: hero.scaleX / 0.3, scaleY: hero.scaleY / 0.3, duration: 320, ease: 'Back.easeOut' });
 
-    // ── the sword: starts at the hero's hands, rises above the head ─────
-    const swordSize = Math.round(heroSize * 0.85);
-    const sword = reg(scene.add.image(cx, heroY - Math.round(heroSize * 0.05), ASSET_KEYS.swordItem, ITEM_FRAMES.swordIdle)
-      .setOrigin(0.5).setDepth(D + 3).setDisplaySize(swordSize * 0.7, swordSize * 0.7).setAngle(-12).setAlpha(0));
+    // ── the item: starts at the hero's hands, rises above the head ──────
+    const itemSize = Math.round(heroSize * 0.85);
+    const itemSprite = reg(scene.add.image(cx, heroY - Math.round(heroSize * 0.05), this.item.texture, this.item.frame)
+      .setOrigin(0.5).setDepth(D + 3).setDisplaySize(itemSize * 0.7, itemSize * 0.7).setAngle(-12).setAlpha(0));
 
-    const label = reg(scene.add.text(cx, Math.round(height * 0.82), 'VOCE PEGOU A ESPADA!', {
+    const label = reg(scene.add.text(cx, Math.round(height * 0.82), this.item.label, {
       fontFamily: FONT_FAMILY,
       fontSize: `${Math.max(8, Math.round(unit * 0.03))}px`,
       color: '#ffe9a8',
@@ -89,19 +92,19 @@ export class SwordGetOverlay {
       resolution: TEXT_RESOLUTION,
     }).setOrigin(0.5).setDepth(D + 3).setAlpha(0)) as Phaser.GameObjects.Text;
 
-    // Raise the sword after the hero settles, then fire the burst at the apex.
+    // Raise the item after the hero settles, then fire the burst at the apex.
     this.after(280, () => {
       getSoundManager().playSwordSlash();
-      sword.setAlpha(1);
+      itemSprite.setAlpha(1);
       scene.tweens.add({
-        targets: sword,
-        y: swordTopY,
+        targets: itemSprite,
+        y: itemTopY,
         angle: 0,
-        displayWidth: swordSize,
-        displayHeight: swordSize,
+        displayWidth: itemSize,
+        displayHeight: itemSize,
         duration: 560,
         ease: 'Back.easeOut',
-        onComplete: () => this.burst(cx, swordTopY, D, hero, glow, rays, label),
+        onComplete: () => this.burst(cx, itemTopY, D, hero, glow, rays, label),
       });
     });
 
@@ -171,7 +174,7 @@ export class SwordGetOverlay {
       });
     }
 
-    // a steady glint on the blade tip
+    // a steady glint on the item
     const glint = scene.add.star(cx, cy, 4, 1.6, Math.max(5, Math.round(scene.scale.height * 0.02)), 0xffffff)
       .setDepth(depth + 4).setBlendMode(Phaser.BlendModes.ADD);
     this.objs.push(glint);

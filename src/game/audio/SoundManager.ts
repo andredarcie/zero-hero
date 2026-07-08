@@ -214,90 +214,108 @@ class SoundManager {
   // Each plays the downloaded sample, falling back to the procedural synth.
 
   public playFootstep(): void {
-    // Frequent + subtle: kept fully procedural so it never gets repetitive or loud.
-    this.noise('lowpass', 160, 1.0, 0.10, 0.055);
+    // Frequent + subtle: kept fully procedural so it never gets repetitive or loud. Low and
+    // soft — a muffled footfall on soil, not a click.
+    this.noise('lowpass', 120, 1.0, 0.09, 0.06);
   }
 
   public playSwordSlash(): void {
     if (this.playSample('swordSlash')) return;
-    this.noise('highpass', 2200, 0.6, 0.28, 0.11);
-    this.osc('sawtooth', 190, 55, 0.18, 0.10);
+    // Heavy, low air-cut instead of a bright hiss.
+    this.noise('lowpass', 900, 0.7, 0.26, 0.13);
+    this.osc('sawtooth', 150, 45, 0.16, 0.12);
   }
 
   public playEnemyHit(): void {
     if (this.playSample('enemyHit')) return;
-    this.noise('bandpass', 520, 2.5, 0.48, 0.07);
-    this.osc('square', 180, 80, 0.22, 0.07);
+    // Low, meaty thud.
+    this.noise('lowpass', 320, 1.2, 0.42, 0.09);
+    this.osc('sawtooth', 140, 55, 0.26, 0.12);
   }
 
   public playEnemyDeath(): void {
     if (this.playSample('enemyDeath')) return;
-    const notes = [196, 147, 98] as const;
+    // Low guttural collapse.
+    const notes = [150, 110, 73] as const;
     notes.forEach((freq, i) => {
-      this.osc('sawtooth', freq, freq * 0.65, 0.28, 0.13, i * 0.10);
-      this.noise('bandpass', 380, 1.5, 0.18, 0.07, i * 0.10);
+      this.osc('sawtooth', freq, freq * 0.6, 0.26, 0.16, i * 0.09);
+      this.noise('lowpass', 300, 1.0, 0.16, 0.10, i * 0.09);
     });
   }
 
   public playPlayerHurt(): void {
     if (this.playSample('playerHurt')) return;
-    this.osc('square', 220, 210, 0.32, 0.22);
-    this.osc('square', 233, 220, 0.20, 0.20);
-    this.noise('bandpass', 600, 1.5, 0.24, 0.09);
+    // Low pained grunt.
+    this.osc('sawtooth', 150, 90, 0.30, 0.24);
+    this.osc('sawtooth', 160, 96, 0.16, 0.22);
+    this.noise('lowpass', 400, 1.0, 0.20, 0.12);
   }
 
   public playPlayerDeath(): void {
     if (this.playSample('playerDeath')) return;
-    const notes = [220, 196, 175, 165, 147, 110] as const;
+    // Slow dark descent into a low drone.
+    const notes = [220, 165, 131, 110, 82, 55] as const;
     notes.forEach((freq, i) => {
-      this.osc('sawtooth', freq, freq * 0.78, 0.26, 0.18, i * 0.15);
+      this.osc('triangle', freq, freq * 0.9, 0.26, 0.20, i * 0.16);
     });
-    this.noise('lowpass', 200, 0.8, 0.22, 0.55, notes.length * 0.15 + 0.05);
+    this.noise('lowpass', 150, 0.8, 0.22, 0.6, notes.length * 0.16 + 0.05);
   }
 
   public playCoinPickup(): void {
     if (this.playSample('coinPickup')) return;
-    this.osc('square', 880, 880, 0.20, 0.06);
-    this.osc('square', 1319, 1319, 0.24, 0.09, 0.065);
+    // Soft, muffled low tick — not a bright coin blip.
+    this.osc('sine', 330, 300, 0.18, 0.14);
   }
 
   public playHeartPickup(): void {
     if (this.playSample('heartPickup')) return;
-    this.osc('triangle', 440, 440, 0.28, 0.16);
-    this.osc('triangle', 523, 523, 0.18, 0.16, 0.04);
-    this.osc('triangle', 659, 659, 0.12, 0.14, 0.08);
+    // Warm low minor-third swell (A3 → C4).
+    this.osc('triangle', 220, 220, 0.26, 0.22);
+    this.osc('triangle', 262, 262, 0.18, 0.28, 0.06);
   }
 
   public playSwordPickup(): void {
     if (this.playSample('swordPickup')) return;
-    this.noise('highpass', 3200, 1.2, 0.18, 0.05);
-    this.osc('sine', 1200, 580, 0.42, 0.40);
-    this.osc('sine', 2400, 1200, 0.14, 0.32);
+    // Solemn, epic root-fifth-octave (A2 / E3 / A3), low and weighty.
+    this.osc('sawtooth', 110, 110, 0.30, 0.50);
+    this.osc('sawtooth', 165, 165, 0.16, 0.40, 0.18);
+    this.osc('sawtooth', 220, 220, 0.20, 0.50, 0.36);
   }
 
   public playIgnite(): void {
     if (this.playSample('ignite')) return;
-    this.noise('bandpass', 900, 1.8, 0.38, 0.30);
-    this.noise('highpass', 2800, 1.0, 0.20, 0.18, 0.14);
-    this.osc('sawtooth', 130, 320, 0.15, 0.28, 0.05);
+    // Deep, muffled roar.
+    this.noise('lowpass', 500, 1.2, 0.36, 0.32);
+    this.osc('sawtooth', 90, 200, 0.14, 0.30, 0.05);
+  }
+
+  public playUndeadSpawn(): void {
+    // No dedicated sample — procedural. Bones grinding up through soil: two gritty
+    // filtered-noise scrapes plus a low rising groan.
+    this.noise('bandpass', 700, 2.0, 0.16, 0.16);
+    this.noise('bandpass', 1300, 2.5, 0.10, 0.12, 0.12);
+    this.osc('sawtooth', 55, 130, 0.16, 0.42);
+    this.osc('triangle', 42, 84, 0.13, 0.5, 0.06);
   }
 
   public playFireHit(): void {
-    // No dedicated sample — procedural.
-    this.noise('bandpass', 2600, 2.0, 0.28, 0.09);
-    this.osc('sawtooth', 380, 200, 0.10, 0.07);
+    // No dedicated sample — procedural. Low fiery crackle, not a bright zap.
+    this.noise('lowpass', 700, 1.5, 0.24, 0.10);
+    this.osc('sawtooth', 200, 110, 0.12, 0.08);
   }
 
   public playShopOpen(): void {
     if (this.playSample('shopOpen')) return;
-    this.osc('sine', 440, 440, 0.18, 0.08);
-    this.osc('sine', 880, 880, 0.22, 0.12, 0.07);
+    // Low, subdued menu tone (down).
+    this.osc('sine', 196, 196, 0.18, 0.09);
+    this.osc('sine', 131, 131, 0.20, 0.16, 0.07);
   }
 
   public playShopClose(): void {
     if (this.playSample('shopClose')) return;
-    this.osc('sine', 880, 880, 0.20, 0.08);
-    this.osc('sine', 440, 440, 0.16, 0.10, 0.07);
+    // Low, subdued menu tone (up).
+    this.osc('sine', 131, 131, 0.18, 0.09);
+    this.osc('sine', 196, 196, 0.16, 0.16, 0.07);
   }
 }
 

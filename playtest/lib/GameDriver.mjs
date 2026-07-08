@@ -153,7 +153,7 @@ export class GameDriver {
 
   /**
    * Region clip in CSS pixels for focused legibility shots.
-   * 'full' = whole canvas, 'hud' = top bar, 'dialog' = bottom panel area.
+   * 'full' = whole canvas, 'hud' = top bar, 'dialog' = right-side conversation panel.
    */
   async canvasRegion(region) {
     const box = await this.canvasBox();
@@ -161,11 +161,13 @@ export class GameDriver {
       return { x: box.x, y: box.y, width: box.width, height: Math.round(box.height * 0.22) };
     }
     if (region === 'dialog') {
+      // Disco Elysium-style panel: full height, hugging the right edge (~46% of width).
+      const panelWidth = Math.round(box.width * 0.5);
       return {
-        x: box.x,
-        y: box.y + Math.round(box.height * 0.5),
-        width: box.width,
-        height: Math.round(box.height * 0.5),
+        x: box.x + box.width - panelWidth,
+        y: box.y,
+        width: panelWidth,
+        height: box.height,
       };
     }
     return box; // 'full'

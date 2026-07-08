@@ -27,6 +27,7 @@ export const DIALOG_VOICES: Record<NpcKind, DialogVoice> = {
   painter: { freq: 620, wave: 'sine' },
   salesman: { freq: 410, wave: 'triangle' },
   poet: { freq: 360, wave: 'sine' },
+  wizard: { freq: 220, wave: 'sine' },
   death: { freq: 150, wave: 'square' },
 };
 
@@ -128,6 +129,17 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
       n('Maybe one day I can get back to writing poems.'),
       n('You know that writing poems doesn\'t make any money.'),
       n('You can make money being a hero?'),
+    ],
+  },
+
+  wizard: {
+    npcName: 'MAGO',
+    npcColorHex: '#a97bff',
+    npcAssetKey: NPC_VISUALS.wizard.key,
+    lines: [
+      n('Ah, the chosen one. I felt your steps ripple through the weave of fate.'),
+      n('I could conjure the sword you seek... but my spellbook only compiles in the full release.'),
+      n('Press on, hero. And beware the mages who would rather cast than converse.'),
     ],
   },
 

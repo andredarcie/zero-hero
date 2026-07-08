@@ -35,20 +35,23 @@ export class GameBoardRenderer {
   private readonly hudBar: Phaser.GameObjects.Rectangle;
   private readonly hudGraphics: Phaser.GameObjects.Graphics;
   private readonly heartsSprites: Phaser.GameObjects.Sprite[];
+  // Single held-item slot (the hero carries one item at a time): a frame plus the content
+  // sprite that shows the current item (sword / key) and an optional fire overlay.
   private readonly itemSlotSprite: Phaser.GameObjects.Image;
-  private readonly swordSlotSprite: Phaser.GameObjects.Image;
-  private readonly itemSlotContentSprite: Phaser.GameObjects.Image;
-  private readonly swordSlotContentSprite: Phaser.GameObjects.Sprite;
+  private readonly itemSlotContentSprite: Phaser.GameObjects.Sprite;
   private readonly swordFireOverlay: Phaser.GameObjects.Image;
   private swordFireTimer?: Phaser.Time.TimerEvent;
   private readonly coinIcon: Phaser.GameObjects.Image;
   private readonly keyIcon: Phaser.GameObjects.Image;
+  // Safety indicator: campfire + "SEGURO" near a fire, blinking skull + "PERIGO" in the dark.
+  private readonly safetyIcon: Phaser.GameObjects.Image;
+  private readonly safetyLabel: Phaser.GameObjects.Text;
+  private safetyBlinkTween?: Phaser.Tweens.Tween;
+  private safetySafe: boolean | null = null;
   private readonly lifeLabel: Phaser.GameObjects.Text;
   private readonly rupeeLabel: Phaser.GameObjects.Text;
   private readonly keyLabel: Phaser.GameObjects.Text;
   private readonly bombLabel: Phaser.GameObjects.Text;
-  private readonly bLabel: Phaser.GameObjects.Text;
-  private readonly aLabel: Phaser.GameObjects.Text;
   private readonly mapLabel: Phaser.GameObjects.Text;
   private readonly coinLabel: Phaser.GameObjects.Text;
   private hudItemAnchor = { x: 0, y: 0, size: 0 };
@@ -68,14 +71,7 @@ export class GameBoardRenderer {
     this.itemSlotSprite = scene.add.image(0, 0, ASSET_KEYS.hudSlot)
       .setOrigin(0.5)
       .setDepth(SCENE_DEPTHS.uiLabel);
-    this.swordSlotSprite = scene.add.image(0, 0, ASSET_KEYS.hudSlot)
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.uiLabel);
-    this.itemSlotContentSprite = scene.add.image(0, 0, ASSET_KEYS.keyItemIcon)
-      .setOrigin(0.5)
-      .setVisible(false)
-      .setDepth(SCENE_DEPTHS.uiLabel);
-    this.swordSlotContentSprite = scene.add.sprite(0, 0, ASSET_KEYS.swordItemIcon)
+    this.itemSlotContentSprite = scene.add.sprite(0, 0, ASSET_KEYS.swordItemIcon)
       .setOrigin(0.5)
       .setVisible(false)
       .setDepth(SCENE_DEPTHS.uiLabel);
@@ -98,12 +94,16 @@ export class GameBoardRenderer {
       resolution: TEXT_RESOLUTION,
     }).setDepth(SCENE_DEPTHS.uiLabel);
 
+    this.safetyIcon = scene.add.image(0, 0, ASSET_KEYS.campfireFrame1)
+      .setOrigin(0.5)
+      .setDepth(SCENE_DEPTHS.uiLabel);
+    this.safetyLabel = makeHudText('SEGURO', '#7fd97f').setOrigin(0, 0.5);
+    this.setSafety(true);
+
     this.lifeLabel = makeHudText('-LIFE-', '#f8f8f8');
     this.rupeeLabel = makeHudText('x000', '#f8f8f8');
     this.keyLabel = makeHudText('x00', '#f8f8f8');
     this.bombLabel = makeHudText('x00', '#f8f8f8');
-    this.bLabel = makeHudText('B', '#f8f8f8');
-    this.aLabel = makeHudText('A', '#f8f8f8');
     this.mapLabel = makeHudText('MAP', '#f8f8f8');
 
     this.coinLabel = makeHudText('000', '#f8f8f8').setOrigin(0, 0.5);
@@ -111,8 +111,6 @@ export class GameBoardRenderer {
     this.keyLabel.setOrigin(0, 0.5);
     this.bombLabel.setOrigin(0, 0.5);
     this.lifeLabel.setOrigin(0, 0.5);
-    this.bLabel.setOrigin(0.5);
-    this.aLabel.setOrigin(0.5);
     this.mapLabel.setOrigin(0.5, 0);
   }
 
@@ -218,17 +216,46 @@ export class GameBoardRenderer {
     });
   }
 
-  public setHudItemTexture(textureKey: string | null): void {
+  /**
+   * Flip the HUD safety indicator: `true` = near a campfire (steady campfire + SEGURO),
+   * `false` = out in the dark (blinking skull + PERIGO). Cheap to call every frame.
+   */
+  public setSafety(safe: boolean): void {
+    if (safe === this.safetySafe) return;
+    this.safetySafe = safe;
+
+    this.safetyBlinkTween?.stop();
+    this.safetyBlinkTween = undefined;
+    this.safetyIcon.setAlpha(1);
+    this.safetyLabel.setAlpha(1);
+
+    if (safe) {
+      this.safetyIcon.setTexture(ASSET_KEYS.campfireFrame1);
+      this.safetyLabel.setText('SEGURO').setColor('#7fd97f');
+    } else {
+      this.safetyIcon.setTexture(ASSET_KEYS.undead);
+      this.safetyLabel.setText('PERIGO').setColor('#ff5555');
+      this.safetyBlinkTween = this.scene.tweens.add({
+        targets: [this.safetyIcon, this.safetyLabel],
+        alpha: 0.25,
+        duration: 380,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
+  }
+
+  public setHudItemTexture(textureKey: string | null, frame?: string | number): void {
     if (!textureKey) {
-      this.swordSlotContentSprite.setVisible(false);
+      this.itemSlotContentSprite.setVisible(false);
       return;
     }
-    this.swordSlotContentSprite.setTexture(textureKey).setVisible(true);
+    this.itemSlotContentSprite.setTexture(textureKey, frame).setVisible(true);
   }
 
   public setHudSwordOnFire(onFire: boolean): void {
     if (onFire) {
-      this.swordSlotContentSprite.setTexture(ASSET_KEYS.swordOnFire, 0).setTint(0xffcc66);
+      this.itemSlotContentSprite.setTexture(ASSET_KEYS.swordOnFire, 0).setTint(0xffcc66);
       this.swordFireOverlay.setVisible(true);
       let fi = 0;
       const frames = [ASSET_KEYS.tinyFire0, ASSET_KEYS.tinyFire1, ASSET_KEYS.tinyFire2] as const;
@@ -245,7 +272,7 @@ export class GameBoardRenderer {
       this.swordFireTimer?.destroy();
       this.swordFireTimer = undefined;
       this.swordFireOverlay.setVisible(false);
-      this.swordSlotContentSprite.setTexture(ASSET_KEYS.swordItemIcon).clearTint();
+      this.itemSlotContentSprite.setTexture(ASSET_KEYS.swordItemIcon).clearTint();
     }
   }
 
@@ -304,7 +331,7 @@ export class GameBoardRenderer {
     const slotSize = Math.max(18, Math.floor(metrics.tileSize * HUD_SLOT_SCALE));
     const itemSize = Math.max(12, Math.floor(metrics.tileSize * HUD_ITEM_SCALE));
 
-    // ── Minimap (left) ─ world is 8×4 chunks → 2:1 ratio ──────────────────
+    // ── Minimap (left) ─ player-centered radar of nearby chunks ───────────
     const mapW = Math.max(64, Math.floor(metrics.width * 0.18));
     const mapH = Math.max(32, Math.round(mapW * 0.5));
     const mapX = metrics.offsetX + pad;
@@ -316,13 +343,9 @@ export class GameBoardRenderer {
     const ctY2 = Math.round(hudH * 0.50);
     const ctY3 = Math.round(hudH * 0.80);
 
-    // ── Item slots (center) ─────────────────────────────────────────────────
-    const slotsX = metrics.offsetX + Math.round(metrics.width * 0.60);
+    // ── Item slot (center) — the hero carries a single item at a time ────────
+    const slotX = metrics.offsetX + Math.round(metrics.width * 0.60);
     const slotsY = Math.round(hudH * 0.58);
-    const slotSpacing = Math.floor(slotSize * 0.92);
-    const bSlotX = slotsX - slotSpacing;
-    const aSlotX = slotsX + slotSpacing;
-    const slotLabelY = slotsY - Math.floor(slotSize * 0.88);
 
     // ── Hearts / LIFE (right) ───────────────────────────────────────────────
     const heartW = heartsH;
@@ -355,17 +378,22 @@ export class GameBoardRenderer {
     this.keyLabel.setPosition(ctX + unit + 2, ctY2).setFontSize(`${unit}px`);
     this.bombLabel.setPosition(ctX + unit + 2, ctY3).setFontSize(`${unit}px`);
 
-    this.itemSlotSprite.setPosition(bSlotX, slotsY).setDisplaySize(slotSize, slotSize);
-    this.swordSlotSprite.setPosition(aSlotX, slotsY).setDisplaySize(slotSize, slotSize);
-    this.itemSlotContentSprite.setPosition(bSlotX, slotsY).setDisplaySize(itemSize, itemSize);
-    this.swordSlotContentSprite.setPosition(aSlotX, slotsY).setDisplaySize(itemSize, itemSize);
+    // ── Safety indicator — between the counters and the item slot ───────────
+    const safetyIconSize = Math.max(10, Math.floor(unit * 1.5));
+    const safetyX = metrics.offsetX + Math.round(metrics.width * 0.38);
+    const safetyY = Math.round(hudH * 0.58);
+    this.safetyIcon.setPosition(safetyX, safetyY).setDisplaySize(safetyIconSize, safetyIconSize);
+    this.safetyLabel
+      .setPosition(safetyX + Math.ceil(safetyIconSize * 0.65) + 3, safetyY)
+      .setFontSize(`${unit}px`);
+
+    this.itemSlotSprite.setPosition(slotX, slotsY).setDisplaySize(slotSize, slotSize);
+    this.itemSlotContentSprite.setPosition(slotX, slotsY).setDisplaySize(itemSize, itemSize);
     // Fire overlay floats at the blade tip (upper half of the slot)
     const fireOverlaySize = Math.floor(itemSize * 0.60);
     this.swordFireOverlay
-      .setPosition(aSlotX, slotsY - Math.floor(itemSize * 0.38))
+      .setPosition(slotX, slotsY - Math.floor(itemSize * 0.38))
       .setDisplaySize(fireOverlaySize, fireOverlaySize);
-    this.bLabel.setPosition(bSlotX, slotLabelY).setFontSize(`${unit}px`);
-    this.aLabel.setPosition(aSlotX, slotLabelY).setFontSize(`${unit}px`);
 
     this.lifeLabel.setPosition(lifeX, lifeY).setFontSize(`${unit}px`);
     this.heartsSprites.forEach((s, i) => {
@@ -375,7 +403,7 @@ export class GameBoardRenderer {
     this.mapLabel.setVisible(false);
     this.coinLabel.setVisible(false);
 
-    this.hudItemAnchor = { x: bSlotX, y: slotsY, size: itemSize };
+    this.hudItemAnchor = { x: slotX, y: slotsY, size: itemSize };
     this.hudCoinAnchor = { x: ctX, y: ctY1 };
     this.hudMapBounds = {
       x: mapX + 3,

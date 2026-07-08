@@ -1,9 +1,11 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, SOLID_UPPER_FRAMES } from '@/game/constants';
 import type { ChunkData } from './Chunk';
-import { generateChunk } from './WorldGenerator';
+import { getChunkTerrain, isInsideWorld } from './WorldData';
 
 export class ChunkManager {
-  // Lazily generated + cached. The world is infinite; chunks materialize as the player roams.
+  // Chunks come from the authored world.json (via WorldData); out-of-bounds coordinates
+  // resolve to solid void so the finite world has hard edges. Cached because getTile is
+  // called per-visible-tile every frame.
   private readonly cache = new Map<string, ChunkData>();
 
   private key(cx: number, cy: number): string {
@@ -14,7 +16,7 @@ export class ChunkManager {
     const key = this.key(cx, cy);
     let chunk = this.cache.get(key);
     if (!chunk) {
-      chunk = generateChunk(cx, cy);
+      chunk = getChunkTerrain(cx, cy);
       this.cache.set(key, chunk);
     }
     return chunk;
@@ -33,9 +35,9 @@ export class ChunkManager {
     };
   }
 
-  // Every coordinate exists in the open world.
-  public hasChunkCoordinate(_cx: number, _cy: number): boolean {
-    return true;
+  // The world is finite now: a coordinate "exists" only inside the authored bounds.
+  public hasChunkCoordinate(cx: number, cy: number): boolean {
+    return isInsideWorld(cx, cy);
   }
 
   public hasChunk(cx: number, cy: number): boolean {
@@ -43,6 +45,8 @@ export class ChunkManager {
   }
 
   public isCellBlocked(worldX: number, worldY: number): boolean {
-    return this.getTile(worldX, worldY).collision;
+    const tile = this.getTile(worldX, worldY);
+    // Trees block by default: an upper tree tile is solid even where no collision was painted.
+    return tile.collision || (tile.upper !== null && SOLID_UPPER_FRAMES.has(tile.upper));
   }
 }

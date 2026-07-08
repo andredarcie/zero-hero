@@ -54,5 +54,7 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
     width: getCanvasSizeForMode(mode).width,
     height: getCanvasSizeForMode(mode).height,
   },
-  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene] : [IntroScene, GameScene])],
+  // Editor mode also registers GameScene so the editor can live-playtest the world in
+  // memory (EditorScene.startPlaytest) without saving or leaving the page.
+  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene, GameScene] : [IntroScene, GameScene])],
 });

@@ -46,13 +46,17 @@ export class SwordSlash {
     this.onFire = value;
   }
 
-  /** dx/dy: cardinal attack direction (-1, 0, or 1) */
+  /**
+   * dx/dy: cardinal attack direction (-1, 0, or 1). Pass `item` to swing a different sprite
+   * (e.g. the key on a door) with the exact same arc — no fire, its own texture/frame.
+   */
   public slash(
     playerScreenX: number,
     playerScreenY: number,
     dx: number,
     dy: number,
     tileSize: number,
+    item?: { texture: string; frame: number },
   ): void {
     this.scene.tweens.killTweensOf(this.sprite);
     this.trails.forEach(t => this.scene.tweens.killTweensOf(t));
@@ -75,14 +79,18 @@ export class SwordSlash {
     this.slashSize    = size;
     this.trailStep    = SLASH_SWEEP_DEG / (TRAIL_COUNT + 2);
 
-    // hide trails until first onUpdate
-    const trailTint = this.onFire ? 0xff5500 : 0xffffff;
-    this.trails.forEach(t => t.setAlpha(0).setVisible(false).setTint(trailTint));
+    // A custom item (e.g. the key) never catches fire; only the bare sword can.
+    const onFire = this.onFire && item === undefined;
+    const texture = item ? item.texture : (onFire ? ASSET_KEYS.swordOnFire : ASSET_KEYS.swordItem);
+    const frame = item ? item.frame : ITEM_FRAMES.swordIdle;
 
-    const texture = this.onFire ? ASSET_KEYS.swordOnFire : ASSET_KEYS.swordItem;
+    // hide trails until first onUpdate (they mirror the main sprite's texture/frame)
+    const trailTint = onFire ? 0xff5500 : 0xffffff;
+    this.trails.forEach(t => t.setTexture(texture, frame).setAlpha(0).setVisible(false).setTint(trailTint));
+
     this.sprite
-      .setTexture(texture, ITEM_FRAMES.swordIdle)
-      .setTint(this.onFire ? 0xffaa44 : 0xffffff)
+      .setTexture(texture, frame)
+      .setTint(onFire ? 0xffaa44 : 0xffffff)
       .setPosition(this.slashHandleX, this.slashHandleY)
       .setDisplaySize(size * 1.20, size * 1.20) // starts 20% bigger for impact pop
       .setAngle(startAngle)

@@ -1,17 +1,15 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
-import type { ChunkManager } from './ChunkManager';
-import {
-  START_SCREEN_CHUNK_X,
-  START_SCREEN_CHUNK_Y,
-  WORLD_MAX_CHUNK_X,
-  WORLD_MAX_CHUNK_Y,
-  WORLD_MIN_CHUNK_X,
-  WORLD_MIN_CHUNK_Y,
-  isInsideStaticWorld,
-} from './WorldGenerator';
+// Runtime types for per-chunk ("per-screen") content. The world is now finite and fully
+// authored in world.json; placement of enemies/NPCs/pickups is data, read through
+// WorldData.ts. The procedural generation that used to live here has moved to
+// scripts/worldgen/ (seed tooling only). This module is intentionally side-effect-free so
+// importing a value from it (ENEMY_BORDER_MARGIN) never pulls generation code into the
+// game bundle.
 
-export type EnemyKind = 'bat' | 'slime' | 'undead' | 'spider' | 'mage' | 'bigSlime';
-export type PickupKind = 'heart' | 'sword';
+// The skull ("undead") is the game's only enemy, and it is never authored: the world ships
+// with zero enemies and the UndeadSpawnDirector summons skulls around the hero in the dark.
+// The kind (and the per-chunk `enemies` arrays in world.json) remain only for schema compat.
+export type EnemyKind = 'undead';
+export type PickupKind = 'heart' | 'sword' | 'key';
 export type NpcKind =
   | 'blackCat'
   | 'mimic'
@@ -21,6 +19,7 @@ export type NpcKind =
   | 'painter'
   | 'salesman'
   | 'poet'
+  | 'wizard'
   | 'death';
 
 export type EnemySpawn = {
@@ -46,163 +45,3 @@ export type ScreenContent = {
   pickups: PickupSpawn[];
   npcs: NpcSpawn[];
 };
-
-const hash = (a: number, b: number, c: number, d: number): number => {
-  let v = (((a * 73856093) ^ (b * 19349663) ^ (c * 83492791) ^ (d * 48397741)) >>> 0);
-  v = (((v >> 16) ^ v) * 0x45d9f3b) >>> 0;
-  v = (((v >> 16) ^ v) * 0x45d9f3b) >>> 0;
-  return ((v >> 16) ^ v) >>> 0;
-};
-
-const screenKey = (cx: number, cy: number): string => `${cx},${cy}`;
-
-const collectOpenTiles = (cx: number, cy: number, chunkManager: ChunkManager): Array<{ worldX: number; worldY: number }> => {
-  const tiles: Array<{ worldX: number; worldY: number }> = [];
-  for (let ly = 1; ly < CHUNK_ROWS - 1; ly++) {
-    for (let lx = 1; lx < CHUNK_COLUMNS - 1; lx++) {
-      const worldX = (cx * CHUNK_COLUMNS) + lx;
-      const worldY = (cy * CHUNK_ROWS) + ly;
-      if (chunkManager.isCellBlocked(worldX, worldY)) continue;
-      tiles.push({ worldX, worldY });
-    }
-  }
-  return tiles;
-};
-
-const takeDeterministicTiles = (
-  openTiles: Array<{ worldX: number; worldY: number }>,
-  cx: number,
-  cy: number,
-  count: number,
-  salt: number,
-): Array<{ worldX: number; worldY: number }> => {
-  const picked: Array<{ worldX: number; worldY: number }> = [];
-  const used = new Set<number>();
-  if (openTiles.length === 0) return picked;
-
-  for (let i = 0; i < count; i++) {
-    let index = hash(cx, cy, salt, i) % openTiles.length;
-    let guard = 0;
-    while (used.has(index) && guard < openTiles.length) {
-      index = (index + 1) % openTiles.length;
-      guard += 1;
-    }
-    if (used.has(index)) break;
-    used.add(index);
-    picked.push(openTiles[index]);
-  }
-
-  return picked;
-};
-
-const ALL_NPC_KINDS: readonly NpcKind[] = [
-  'blackCat', 'mimic', 'astronaut', 'businessMan', 'radiationSuit', 'painter', 'salesman', 'poet', 'death',
-];
-
-// Curated assignment of the nine named NPCs to screens inside the original hand-authored
-// region, so the intro area always has them. Beyond that region NPCs are procedural.
-const buildNpcAssignment = (): Map<string, NpcKind> => {
-  const screens: Array<{ cx: number; cy: number }> = [];
-  for (let cy = WORLD_MIN_CHUNK_Y; cy <= WORLD_MAX_CHUNK_Y; cy++) {
-    for (let cx = WORLD_MIN_CHUNK_X; cx <= WORLD_MAX_CHUNK_X; cx++) {
-      if (cx === START_SCREEN_CHUNK_X && cy === START_SCREEN_CHUNK_Y) continue;
-      screens.push({ cx, cy });
-    }
-  }
-
-  for (let i = screens.length - 1; i > 0; i--) {
-    const j = hash(i, 0, 809, 3) % (i + 1);
-    const tmp = screens[i];
-    screens[i] = screens[j];
-    screens[j] = tmp;
-  }
-
-  const assignment = new Map<string, NpcKind>();
-  for (let k = 0; k < ALL_NPC_KINDS.length; k++) {
-    assignment.set(screenKey(screens[k].cx, screens[k].cy), ALL_NPC_KINDS[k]);
-  }
-  return assignment;
-};
-
-const NPC_ASSIGNMENT = buildNpcAssignment();
-
-// Out in the open world, roughly one chunk in six hosts a wandering NPC.
-const proceduralNpc = (cx: number, cy: number): NpcKind | null => {
-  if (isInsideStaticWorld(cx, cy)) return null;
-  if (hash(cx, cy, 909, 1) % 6 !== 0) return null;
-  return ALL_NPC_KINDS[hash(cx, cy, 909, 2) % ALL_NPC_KINDS.length];
-};
-
-const resolveEnemyRoster = (cx: number, cy: number): EnemyKind[] => {
-  const dist = Math.abs(cx - START_SCREEN_CHUNK_X) + Math.abs(cy - START_SCREEN_CHUNK_Y);
-  const count = dist <= 2 ? 2 : dist <= 5 ? 3 : 4;
-  const pool: EnemyKind[] = dist <= 2
-    ? ['bat', 'slime']
-    : dist <= 5
-    ? ['undead', 'spider']
-    : ['mage', 'bigSlime'];
-
-  return Array.from({ length: count }, (_, index) => pool[hash(cx, cy, 17, index) % pool.length]);
-};
-
-export const ENEMY_BORDER_MARGIN = 2;
-
-const computeChunkContent = (cx: number, cy: number, chunkManager: ChunkManager): ScreenContent => {
-  if (cx === START_SCREEN_CHUNK_X && cy === START_SCREEN_CHUNK_Y) {
-    return { enemies: [], pickups: [], npcs: [] };
-  }
-
-  const key = screenKey(cx, cy);
-  const openTiles = collectOpenTiles(cx, cy, chunkManager);
-  const enemies: EnemySpawn[] = [];
-  const pickups: PickupSpawn[] = [];
-  const npcs: NpcSpawn[] = [];
-
-  const npcKind = NPC_ASSIGNMENT.get(key) ?? proceduralNpc(cx, cy);
-  if (npcKind) {
-    const npcTile = takeDeterministicTiles(openTiles, cx, cy, 1, 702)[0];
-    if (npcTile) npcs.push({ type: npcKind, worldX: npcTile.worldX, worldY: npcTile.worldY });
-  } else {
-    const enemyPool = openTiles.filter((t) => {
-      const lx = ((t.worldX % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
-      const ly = ((t.worldY % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-      return lx >= ENEMY_BORDER_MARGIN && lx < CHUNK_COLUMNS - ENEMY_BORDER_MARGIN
-          && ly >= ENEMY_BORDER_MARGIN && ly < CHUNK_ROWS - ENEMY_BORDER_MARGIN;
-    });
-
-    const roster = resolveEnemyRoster(cx, cy);
-    const enemyTiles = takeDeterministicTiles(enemyPool, cx, cy, roster.length, 101);
-    roster.forEach((type, index) => {
-      const tile = enemyTiles[index];
-      if (tile) enemies.push({ type, worldX: tile.worldX, worldY: tile.worldY });
-    });
-  }
-
-  // The sword waits one screen east of the start.
-  if (cx === START_SCREEN_CHUNK_X + 1 && cy === START_SCREEN_CHUNK_Y) {
-    const swordTile = takeDeterministicTiles(openTiles, cx, cy, 1, 303)[0];
-    if (swordTile) pickups.push({ type: 'sword', worldX: swordTile.worldX, worldY: swordTile.worldY });
-  }
-
-  if ((hash(cx, cy, 401, 0) % 3) === 0) {
-    const heartTile = takeDeterministicTiles(openTiles, cx, cy, 1, 402)[0];
-    if (heartTile) pickups.push({ type: 'heart', worldX: heartTile.worldX, worldY: heartTile.worldY });
-  }
-
-  return { enemies, pickups, npcs };
-};
-
-// Lazy + cached content for any chunk in the infinite world.
-const contentCache = new Map<string, ScreenContent>();
-
-export const getChunkContent = (cx: number, cy: number, chunkManager: ChunkManager): ScreenContent => {
-  const key = screenKey(cx, cy);
-  let content = contentCache.get(key);
-  if (!content) {
-    content = computeChunkContent(cx, cy, chunkManager);
-    contentCache.set(key, content);
-  }
-  return content;
-};
-
-export const toScreenKey = screenKey;

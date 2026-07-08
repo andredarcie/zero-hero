@@ -1,5 +1,9 @@
+// SEED-ONLY terrain generator. This is the former src/game/world/WorldGenerator.ts,
+// relocated here so it is imported ONLY by the offline world.json generator
+// (scripts/generateWorld.ts) and never by the runtime bundle. The live game reads terrain
+// exclusively from world.json via WorldData.ts.
 import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
-import type { ChunkData } from './Chunk';
+import type { ChunkData } from '@/game/world/Chunk';
 
 const GROUND_TILE = 5;
 const DECOR_FRAMES = [0, 6, 7, 8, 11] as const;
@@ -7,9 +11,7 @@ const OBSTACLE_FRAMES = [4, 10, 15, 16, 17] as const;
 const CENTER_X = Math.floor(CHUNK_COLUMNS / 2);
 const CENTER_Y = Math.floor(CHUNK_ROWS / 2);
 
-// The world is now a free, seamless open overworld streamed chunk by chunk. These bounds
-// only mark the original hand-authored region used for curated NPC placement (see
-// ScreenContent); terrain itself extends infinitely in every direction.
+// The original hand-authored region used for curated NPC placement (see contentGen).
 export const WORLD_CHUNK_COLUMNS = 8;
 export const WORLD_CHUNK_ROWS = 4;
 export const WORLD_MIN_CHUNK_X = -4;
@@ -59,8 +61,6 @@ export const generateChunk = (cx: number, cy: number): ChunkData => {
 
       if (isStartClearing(cx, cy, lx, ly)) continue;
 
-      // Deterministic, seamless scatter — no chunk-edge walls, so the world is one
-      // continuous space. Sparse enough to always leave a way through.
       const r = hash(cx, cy, lx + 1, ly + 1);
       const m = r % 100;
       if (m < 9) {

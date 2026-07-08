@@ -1,606 +1,972 @@
 import Phaser from 'phaser';
 
-import {
-  ASSET_KEYS,
-  BOARD_PANEL_PADDING,
-  DEFAULT_GAME_HEIGHT,
-  EDITOR_BUTTON_HEIGHT,
-  EDITOR_BUTTON_WIDTH,
-  EDITOR_EMPTY_TILE_LABEL,
-  EDITOR_LEVEL_BUTTON_HEIGHT,
-  EDITOR_LEVEL_LIST_MAX,
-  EDITOR_NEW_LEVEL_FILE_NAME,
-  EDITOR_PALETTE_COLUMNS,
-  EDITOR_PALETTE_TILE_SIZE,
-  EDITOR_PANEL_WIDTH,
-  FONT_FAMILY,
-  GRID_COLUMNS,
-  GRID_ROWS,
-  MIN_BOARD_TILE_SIZE,
-  SCENE_DEPTHS,
-  TILE_GAP,
-  TIMINGS,
-} from '@/game/constants';
+import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES, NPC_VISUALS, SOLID_UPPER_FRAMES } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
-import { EditorBoard } from '@/game/editor/EditorBoard';
-import { createButton, createButtonLabel, createToast, defaultBottomButtonY } from '@/game/editor/EditorUi';
-import { TilePalette } from '@/game/editor/TilePalette';
-import { buildLevelExportJson, cloneLevelExport, createEmptyLevelState, type EditorLayer, type LevelExport, type LevelItemType, type LevelObjectType } from '@/game/levelEditor';
-import { cloneLoadedLevel, listLevels, loadLevelByFileName, saveLevelByFileName, type LevelListEntry } from '@/game/levelApi';
-import { resolveBoardCell } from '@/game/shared/grid';
+import { EditorDomUi, PANEL_WIDTH, type UiState, type ViewMode } from '@/game/editor/EditorDomUi';
+import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
+import { GameScene } from '@/game/scenes/GameScene';
+import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
+import { setWorldData } from '@/game/world/WorldData';
+import { loadWorld, saveWorld } from '@/game/worldApi';
 
-type EditorMode = 'tile' | 'item' | 'object';
+// World-editor scene: the Phaser side of the engine. It renders the whole authored world
+// as one pannable/zoomable tilemap and translates pointer gestures into EditorStore
+// operations; every panel, palette and modal lives in EditorDomUi (plain DOM).
 
-type BoardMetrics = {
-  tileSize: number;
-  offsetX: number;
-  offsetY: number;
-  width: number;
-  height: number;
+const WORLD_TILE = 16; // px per tile in editor world-space (native tileset frame size)
+const COLLISION_GID = 1000; // synthetic tile id for the painted-collision overlay tileset
+const COLLISION_TEXTURE = 'editor-collision-tile';
+// Trees are solid at runtime even without painted collision (ChunkManager.isCellBlocked +
+// SOLID_UPPER_FRAMES). The editor shows that implicit collision in a distinct amber so
+// authors can see trees block "by default" — and know it isn't erasable painted data.
+const TREE_COLLISION_GID = 1001;
+const TREE_COLLISION_TEXTURE = 'editor-tree-collision-tile';
+const CAMERA_PAD = WORLD_TILE * 10;
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 8;
+// v3: discards persisted state from before the "Inimigos" palette tab was removed.
+const UI_STATE_KEY = 'worldEditorUi.v3';
+
+type CellCoord = { x: number; y: number };
+
+// Enemies can no longer be placed (skulls spawn dynamically at runtime), but legacy world
+// files may still carry them — render those with the undead sprite so they stay erasable.
+const ENEMY_VISUAL: Record<EnemyKind, { key: string; frame?: number }> = {
+  undead: { key: ASSET_KEYS.undead },
 };
 
-type PaletteMetrics = {
-  tileSize: number;
-  columns: number;
-  rows: number;
-  offsetX: number;
-  offsetY: number;
-  width: number;
-  height: number;
+const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
+  heart: { key: ASSET_KEYS.hudHearts, frame: 0 },
+  sword: { key: ASSET_KEYS.swordItem, frame: 0 },
+  key: { key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
 };
 
-type LevelButton = {
-  fileName: string;
-  background: Phaser.GameObjects.Rectangle;
-  label: Phaser.GameObjects.Text;
+const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
+  enemies: 0xff5566,
+  npcs: 0x4488ff,
+  pickups: 0x33cc77,
+  props: 0xffaa33,
 };
 
-type EditorSnapshot = {
-  mode: 'editor';
-  editorMode: EditorMode;
-  selectedTile: number | null;
-  selectedItemType: LevelItemType | null;
-  selectedObjectType: LevelObjectType | null;
-  selectedLayer: EditorLayer;
-  collisionEnabled: boolean;
-  hoveredCell: { column: number; row: number } | null;
-  currentFileName: string | null;
-  availableLevels: string[];
-  dirty: boolean;
-  level: LevelExport;
-};
+const SPAWN_COLOR = 0x00e0ff;
+
+type PersistedUi = { state: UiState; cam?: { centerX: number; centerY: number; zoom: number } };
 
 export class EditorScene extends Phaser.Scene {
   public static readonly key = 'editor';
-  private static readonly modeSectionY = BOARD_PANEL_PADDING + 146;
-  private static readonly levelSectionY = BOARD_PANEL_PADDING + 282;
 
-  private boardMetrics: BoardMetrics = {
-    tileSize: MIN_BOARD_TILE_SIZE,
-    offsetX: 0,
-    offsetY: 0,
-    width: GRID_COLUMNS * MIN_BOARD_TILE_SIZE,
-    height: GRID_ROWS * MIN_BOARD_TILE_SIZE,
+  private store?: EditorStore;
+  private ui?: EditorDomUi;
+  private unlistenStore?: () => void;
+
+  private uiState: UiState = {
+    tool: 'brush',
+    layer: 'ground',
+    tile: 5,
+    brushSize: 1,
+    collisionMode: 'keep',
+    tab: 'tiles',
+    entity: { list: 'npcs', type: 'blackCat' },
+    showGrid: true,
+    // Off by default: the authored world marks every bush as collision, and the red
+    // overlay drowns the terrain at low zoom. Selecting the collision tool re-enables it.
+    showCollisions: false,
+    showEntities: true,
+    viewMode: 'world',
+    chunkX: 0,
+    chunkY: 0,
   };
-  private paletteMetrics: PaletteMetrics = {
-    tileSize: 32,
-    columns: EDITOR_PALETTE_COLUMNS,
-    rows: 1,
-    offsetX: 0,
-    offsetY: 0,
-    width: 0,
-    height: 0,
-  };
-  private level = createEmptyLevelState();
-  private selectedMode: EditorMode = 'tile';
-  private selectedTile: number | null = 0;
-  private selectedItemType: LevelItemType | null = 'key';
-  private selectedObjectType: LevelObjectType | null = 'lookedDoor';
-  private selectedLayer: EditorLayer = 'ground';
-  private collisionEnabled = false;
-  private hoveredCell: { column: number; row: number } | null = null;
-  private currentFileName: string | null = null;
-  private dirty = false;
-  private availableLevels: LevelListEntry[] = [];
-  private readonly levelButtons: LevelButton[] = [];
-  private board?: EditorBoard;
-  private tilePalette?: TilePalette;
-  private statusText?: Phaser.GameObjects.Text;
-  private modeTileButton?: Phaser.GameObjects.Rectangle;
-  private modeItemButton?: Phaser.GameObjects.Rectangle;
-  private modeObjectButton?: Phaser.GameObjects.Rectangle;
-  private modeTileLabel?: Phaser.GameObjects.Text;
-  private modeItemLabel?: Phaser.GameObjects.Text;
-  private modeObjectLabel?: Phaser.GameObjects.Text;
-  private itemSelectButton?: Phaser.GameObjects.Rectangle;
-  private itemSelectLabel?: Phaser.GameObjects.Text;
-  private objectSelectButton?: Phaser.GameObjects.Rectangle;
-  private objectSelectLabel?: Phaser.GameObjects.Text;
-  private layerGroundButton?: Phaser.GameObjects.Rectangle;
-  private layerUpperButton?: Phaser.GameObjects.Rectangle;
-  private layerGroundLabel?: Phaser.GameObjects.Text;
-  private layerUpperLabel?: Phaser.GameObjects.Text;
-  private collisionButton?: Phaser.GameObjects.Rectangle;
-  private collisionLabel?: Phaser.GameObjects.Text;
-  private saveButton?: Phaser.GameObjects.Rectangle;
-  private saveLabel?: Phaser.GameObjects.Text;
-  private exportButton?: Phaser.GameObjects.Rectangle;
-  private exportLabel?: Phaser.GameObjects.Text;
-  private clearButton?: Phaser.GameObjects.Rectangle;
-  private clearLabel?: Phaser.GameObjects.Text;
+
+  private map?: Phaser.Tilemaps.Tilemap;
+  private groundLayer?: Phaser.Tilemaps.TilemapLayer;
+  private upperLayer?: Phaser.Tilemaps.TilemapLayer;
+  private collisionLayer?: Phaser.Tilemaps.TilemapLayer;
+  private gridGfx?: Phaser.GameObjects.Graphics;
+  private chunkMaskGfx?: Phaser.GameObjects.Graphics;
+  private hoverGfx?: Phaser.GameObjects.Graphics;
+  private rectGfx?: Phaser.GameObjects.Graphics;
+  private entityContainer?: Phaser.GameObjects.Container;
+  private loadingText?: Phaser.GameObjects.Text;
+
+  private hovered: CellCoord | null = null;
+  private activeStroke: { erase: boolean; last: CellCoord } | null = null;
+  private rectDrag: CellCoord | null = null;
+  private panning: { lastX: number; lastY: number } | null = null;
+  private lastCamSync = { scrollX: NaN, scrollY: NaN, zoom: NaN };
+  private reloadArmedUntil = 0;
+  private appliedView: { mode: ViewMode | null; chunkX: number; chunkY: number } = { mode: null, chunkX: -1, chunkY: -1 };
 
   public constructor() {
     super(EditorScene.key);
   }
 
   public create(): void {
-    this.cameras.main.setBackgroundColor('#102027');
-    this.board = new EditorBoard(this);
-    this.createUi();
-    this.tilePalette = new TilePalette(this, (tile) => {
-      this.selectedTile = tile;
-      this.tilePalette?.refreshSelection(this.selectedTile);
-      this.refreshStatus();
-    });
-    this.registerInput();
+    // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
+    // down when the scene stops (see also GameScene, which does the same).
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+    this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
+    this.events.on(Phaser.Scenes.Events.SLEEP, this.handleSleep, this);
+
+    this.cameras.main.setBackgroundColor('#0a1013');
+    this.input.mouse?.disableContextMenu();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
-    this.refreshBoard();
-    this.refreshStatus();
-    this.refreshLayerButtons();
-    this.refreshModeButtons();
-    this.refreshEntityButtons();
+
+    this.registerPointerInput();
     registerSceneDebugHooks(this, () => this.renderSnapshot());
-    void this.refreshLevelList(true);
+
+    void this.bootstrap();
   }
 
   public shutdown(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
+    this.events.off(Phaser.Scenes.Events.SLEEP, this.handleSleep, this);
+    this.unlistenStore?.();
+    this.unlistenStore = undefined;
+    this.ui?.destroy();
+    this.ui = undefined;
   }
 
-  private createUi(): void {
-    this.add.text(BOARD_PANEL_PADDING, BOARD_PANEL_PADDING, 'Editor de mapas', {
-      color: '#f1faee',
-      fontFamily: FONT_FAMILY,
-      fontSize: '20px',
-    }).setDepth(SCENE_DEPTHS.ui);
-
-    this.add.text(BOARD_PANEL_PADDING, BOARD_PANEL_PADDING + 28, 'Rota: /editor | listar, editar e salvar em /levels', {
-      color: '#9fc7c9',
-      fontFamily: FONT_FAMILY,
-      fontSize: '12px',
-    }).setDepth(SCENE_DEPTHS.ui);
-
-    this.statusText = this.add.text(BOARD_PANEL_PADDING, BOARD_PANEL_PADDING + 60, '', {
-      color: '#f1faee',
-      fontFamily: FONT_FAMILY,
-      fontSize: '12px',
-      lineSpacing: 3,
-      wordWrap: { width: EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2) },
-    }).setDepth(SCENE_DEPTHS.ui);
-
-    this.add.text(BOARD_PANEL_PADDING, EditorScene.modeSectionY, 'Modo de edicao', {
-      color: '#a8dadc',
-      fontFamily: FONT_FAMILY,
-      fontSize: '12px',
-    }).setDepth(SCENE_DEPTHS.ui);
-
-    this.modeTileButton = createButton(this, BOARD_PANEL_PADDING, EditorScene.modeSectionY + 22, 84, EDITOR_BUTTON_HEIGHT, () => {
-      this.selectedMode = 'tile';
-      this.refreshModeButtons();
-      this.refreshEntityButtons();
-      this.refreshStatus();
-    });
-    this.modeTileLabel = createButtonLabel(this, BOARD_PANEL_PADDING + 42, EditorScene.modeSectionY + 37, 'Tile');
-
-    this.modeItemButton = createButton(this, BOARD_PANEL_PADDING + 92, EditorScene.modeSectionY + 22, 84, EDITOR_BUTTON_HEIGHT, () => {
-      this.selectedMode = 'item';
-      this.refreshModeButtons();
-      this.refreshEntityButtons();
-      this.refreshStatus();
-    });
-    this.modeItemLabel = createButtonLabel(this, BOARD_PANEL_PADDING + 134, EditorScene.modeSectionY + 37, 'Item');
-
-    this.modeObjectButton = createButton(this, BOARD_PANEL_PADDING + 184, EditorScene.modeSectionY + 22, 104, EDITOR_BUTTON_HEIGHT, () => {
-      this.selectedMode = 'object';
-      this.refreshModeButtons();
-      this.refreshEntityButtons();
-      this.refreshStatus();
-    });
-    this.modeObjectLabel = createButtonLabel(this, BOARD_PANEL_PADDING + 236, EditorScene.modeSectionY + 37, 'Objeto');
-
-    this.itemSelectButton = createButton(this, BOARD_PANEL_PADDING, EditorScene.modeSectionY + 58, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_BUTTON_HEIGHT, () => {
-      this.cycleItemSelection();
-    });
-    this.itemSelectLabel = createButtonLabel(this, EDITOR_PANEL_WIDTH / 2, EditorScene.modeSectionY + 73, '');
-
-    this.objectSelectButton = createButton(this, BOARD_PANEL_PADDING, EditorScene.modeSectionY + 94, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_BUTTON_HEIGHT, () => {
-      this.cycleObjectSelection();
-    });
-    this.objectSelectLabel = createButtonLabel(this, EDITOR_PANEL_WIDTH / 2, EditorScene.modeSectionY + 109, '');
-
-    this.add.text(BOARD_PANEL_PADDING, EditorScene.levelSectionY, 'Levels em /levels', {
-      color: '#a8dadc',
-      fontFamily: FONT_FAMILY,
-      fontSize: '12px',
-    }).setDepth(SCENE_DEPTHS.ui);
-
-    this.add.text(BOARD_PANEL_PADDING, BOARD_PANEL_PADDING + 412, 'Camada', {
-      color: '#a8dadc',
-      fontFamily: FONT_FAMILY,
-      fontSize: '12px',
-    }).setDepth(SCENE_DEPTHS.ui);
-
-    this.layerGroundButton = createButton(this, BOARD_PANEL_PADDING, BOARD_PANEL_PADDING + 434, EDITOR_BUTTON_WIDTH, EDITOR_BUTTON_HEIGHT, () => {
-      this.selectedLayer = 'ground';
-      this.refreshLayerButtons();
-      this.refreshStatus();
-    });
-    this.layerGroundLabel = createButtonLabel(this, BOARD_PANEL_PADDING + EDITOR_BUTTON_WIDTH / 2, BOARD_PANEL_PADDING + 449, 'Chao');
-
-    this.layerUpperButton = createButton(this, BOARD_PANEL_PADDING + EDITOR_BUTTON_WIDTH + 12, BOARD_PANEL_PADDING + 434, EDITOR_BUTTON_WIDTH, EDITOR_BUTTON_HEIGHT, () => {
-      this.selectedLayer = 'upper';
-      this.refreshLayerButtons();
-      this.refreshStatus();
-    });
-    this.layerUpperLabel = createButtonLabel(this, BOARD_PANEL_PADDING + EDITOR_BUTTON_WIDTH + 12 + EDITOR_BUTTON_WIDTH / 2, BOARD_PANEL_PADDING + 449, 'Superior');
-
-    this.add.text(BOARD_PANEL_PADDING, BOARD_PANEL_PADDING + 480, 'Colisao', {
-      color: '#a8dadc',
-      fontFamily: FONT_FAMILY,
-      fontSize: '12px',
-    }).setDepth(SCENE_DEPTHS.ui);
-
-    this.collisionButton = createButton(this, BOARD_PANEL_PADDING, BOARD_PANEL_PADDING + 502, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_BUTTON_HEIGHT, () => {
-      this.collisionEnabled = !this.collisionEnabled;
-      this.refreshLayerButtons();
-      this.refreshStatus();
-    });
-    this.collisionLabel = createButtonLabel(this, EDITOR_PANEL_WIDTH / 2, BOARD_PANEL_PADDING + 517, '');
-
-    this.add.text(BOARD_PANEL_PADDING, BOARD_PANEL_PADDING + 550, 'Tiles do forest_tile_set', {
-      color: '#a8dadc',
-      fontFamily: FONT_FAMILY,
-      fontSize: '12px',
-    }).setDepth(SCENE_DEPTHS.ui);
-
-    this.saveButton = createButton(this, BOARD_PANEL_PADDING, defaultBottomButtonY.save, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_BUTTON_HEIGHT, () => {
-      void this.handleSave();
-    });
-    this.saveLabel = createButtonLabel(this, EDITOR_PANEL_WIDTH / 2, DEFAULT_GAME_HEIGHT - 89, 'Salvar arquivo');
-
-    this.exportButton = createButton(this, BOARD_PANEL_PADDING, defaultBottomButtonY.export, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_BUTTON_HEIGHT, () => {
-      void this.handleExport();
-    });
-    this.exportLabel = createButtonLabel(this, EDITOR_PANEL_WIDTH / 2, DEFAULT_GAME_HEIGHT - 53, 'Copiar JSON');
-
-    this.clearButton = createButton(this, BOARD_PANEL_PADDING, defaultBottomButtonY.clear, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_BUTTON_HEIGHT, () => {
-      this.level = cloneLevelExport(createEmptyLevelState());
-      this.currentFileName = EDITOR_NEW_LEVEL_FILE_NAME;
-      this.dirty = true;
-      this.refreshBoard();
-      this.refreshStatus();
-      this.refreshLevelButtons();
-    });
-    this.clearLabel = createButtonLabel(this, EDITOR_PANEL_WIDTH / 2, DEFAULT_GAME_HEIGHT - 17, 'Novo mapa');
+  public update(): void {
+    this.syncCameraDerivedUi();
   }
 
-  private registerInput(): void {
-    this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
-      this.hoveredCell = this.resolveBoardCell(pointer.worldX, pointer.worldY);
-      this.board?.refreshHover(this.boardMetrics, this.hoveredCell);
-    });
+  // ── Boot ────────────────────────────────────────────────────────────────
 
-    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      const cell = this.resolveBoardCell(pointer.worldX, pointer.worldY);
-      if (cell) {
-        this.paintCell(cell.column, cell.row);
+  private async bootstrap(): Promise<void> {
+    this.restoreUi();
+    this.loadingText?.destroy();
+    this.loadingText = this.add.text(PANEL_WIDTH + 24, 24, 'Carregando mundo...', {
+      color: '#f4a261', fontFamily: "'Press Start 2P', monospace", fontSize: '12px',
+    }).setScrollFactor(0);
+
+    let store: EditorStore;
+    try {
+      store = new EditorStore(await loadWorld());
+    } catch (error) {
+      this.loadingText.setText(
+        `Falha ao carregar world.json\n${error instanceof Error ? error.message : String(error)}\n\nClique para tentar de novo`,
+      );
+      this.input.once(Phaser.Input.Events.POINTER_DOWN, () => void this.bootstrap());
+      return;
+    }
+
+    this.loadingText.destroy();
+    this.loadingText = undefined;
+    this.store = store;
+    this.unlistenStore = store.listen((change) => this.handleStoreChange(change));
+
+    this.ui = new EditorDomUi(this, store, this.uiState, {
+      onStateChange: () => this.handleUiStateChange(),
+      onSave: () => void this.handleSave(),
+      onReload: () => this.handleReload(),
+      onPlaytest: () => this.startPlaytest(),
+      onUndo: () => { this.store?.undo(); },
+      onRedo: () => { this.store?.redo(); },
+      onFitView: () => this.fitView(),
+      onNavigate: (tileX, tileY) => this.navigateTo(tileX, tileY),
+      onWorldApply: (settings) => this.applyWorldSettings(settings),
+      onDialogApply: (kind, dialog) => { this.store?.setDialog(kind, dialog); },
+    });
+    this.ui.setLoading(false);
+
+    this.buildWorldObjects();
+    if (!this.restoreCamera()) this.fitView();
+    this.syncViewMode();
+    this.ui.refreshHeader();
+    this.ui.requestMinimapRedraw();
+  }
+
+  // ── World rendering ─────────────────────────────────────────────────────
+
+  private ensureCollisionTexture(): void {
+    if (!this.textures.exists(COLLISION_TEXTURE)) {
+      const gfx = this.add.graphics();
+      gfx.fillStyle(0xff4455, 0.32).fillRect(0, 0, WORLD_TILE, WORLD_TILE);
+      gfx.lineStyle(1, 0xff4455, 0.9).strokeRect(0.5, 0.5, WORLD_TILE - 1, WORLD_TILE - 1);
+      gfx.generateTexture(COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE);
+      gfx.destroy();
+    }
+    if (!this.textures.exists(TREE_COLLISION_TEXTURE)) {
+      // Amber, lighter than the painted-collision red, so trees read as implicitly solid.
+      const gfx = this.add.graphics();
+      gfx.fillStyle(0xf4a261, 0.22).fillRect(0, 0, WORLD_TILE, WORLD_TILE);
+      gfx.lineStyle(1, 0xf4a261, 0.8).strokeRect(0.5, 0.5, WORLD_TILE - 1, WORLD_TILE - 1);
+      gfx.generateTexture(TREE_COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE);
+      gfx.destroy();
+    }
+  }
+
+  // Which collision overlay a cell should show: painted collision wins (red); otherwise a
+  // tree upper-tile is implicitly solid (amber); otherwise nothing. Mirrors the runtime rule
+  // in ChunkManager.isCellBlocked so the editor's collision view matches what actually blocks.
+  private collisionOverlayGid(wx: number, wy: number): number | null {
+    const store = this.store;
+    if (!store) return null;
+    if (store.readCell('collision', wx, wy) === true) return COLLISION_GID;
+    const upper = store.readCell('upper', wx, wy) as number | null;
+    if (upper !== null && SOLID_UPPER_FRAMES.has(upper)) return TREE_COLLISION_GID;
+    return null;
+  }
+
+  private buildWorldObjects(): void {
+    const store = this.store;
+    if (!store) return;
+
+    this.map?.destroy();
+    this.gridGfx?.destroy();
+    this.chunkMaskGfx?.destroy();
+    this.hoverGfx?.destroy();
+    this.rectGfx?.destroy();
+    this.entityContainer?.destroy();
+    this.ensureCollisionTexture();
+
+    const tilesX = store.tilesX;
+    const tilesY = store.tilesY;
+
+    this.map = this.make.tilemap({ tileWidth: WORLD_TILE, tileHeight: WORLD_TILE, width: tilesX, height: tilesY });
+    const tiles = this.map.addTilesetImage('tiles', ASSET_KEYS.forestTileset, WORLD_TILE, WORLD_TILE, 0, 0, 0)!;
+    const collisionTiles = this.map.addTilesetImage('collision', COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE, 0, 0, COLLISION_GID)!;
+    const treeCollisionTiles = this.map.addTilesetImage('treeCollision', TREE_COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE, 0, 0, TREE_COLLISION_GID)!;
+
+    this.groundLayer = this.map.createBlankLayer('ground', tiles, 0, 0)!.setDepth(0);
+    this.upperLayer = this.map.createBlankLayer('upper', tiles, 0, 0)!.setDepth(1);
+    this.collisionLayer = this.map.createBlankLayer('collision', [collisionTiles, treeCollisionTiles], 0, 0)!.setDepth(2);
+
+    for (let wy = 0; wy < tilesY; wy += 1) {
+      for (let wx = 0; wx < tilesX; wx += 1) {
+        this.groundLayer.putTileAt(store.readCell('ground', wx, wy) as number, wx, wy, false);
+        const upper = store.readCell('upper', wx, wy) as number | null;
+        if (upper !== null) this.upperLayer.putTileAt(upper, wx, wy, false);
+        const collisionGid = this.collisionOverlayGid(wx, wy);
+        if (collisionGid !== null) this.collisionLayer.putTileAt(collisionGid, wx, wy, false);
       }
-    });
+    }
 
-    this.input.keyboard?.on('keydown-G', () => { this.selectedLayer = 'ground'; this.refreshLayerButtons(); this.refreshStatus(); });
-    this.input.keyboard?.on('keydown-U', () => { this.selectedLayer = 'upper'; this.refreshLayerButtons(); this.refreshStatus(); });
-    this.input.keyboard?.on('keydown-C', () => { this.collisionEnabled = !this.collisionEnabled; this.refreshLayerButtons(); this.refreshStatus(); });
-    this.input.keyboard?.on('keydown-T', () => { this.selectedMode = 'tile'; this.refreshModeButtons(); this.refreshEntityButtons(); this.refreshStatus(); });
-    this.input.keyboard?.on('keydown-I', () => { this.selectedMode = 'item'; this.refreshModeButtons(); this.refreshEntityButtons(); this.refreshStatus(); });
-    this.input.keyboard?.on('keydown-O', () => { this.selectedMode = 'object'; this.refreshModeButtons(); this.refreshEntityButtons(); this.refreshStatus(); });
-    this.input.keyboard?.on('keydown-J', () => { this.cycleItemSelection(); });
-    this.input.keyboard?.on('keydown-K', () => { this.cycleObjectSelection(); });
-    this.input.keyboard?.on('keydown-E', () => { void this.handleExport(); });
-    this.input.keyboard?.on('keydown-S', () => { void this.handleSave(); });
+    this.gridGfx = this.add.graphics().setDepth(3);
+    this.drawGrid();
+    this.entityContainer = this.add.container(0, 0).setDepth(4);
+    this.renderEntities();
+    this.chunkMaskGfx = this.add.graphics().setDepth(5);
+    this.hoverGfx = this.add.graphics().setDepth(6);
+    this.rectGfx = this.add.graphics().setDepth(7);
+
+    const worldW = tilesX * WORLD_TILE;
+    const worldH = tilesY * WORLD_TILE;
+    this.cameras.main.setBounds(-CAMERA_PAD, -CAMERA_PAD, worldW + CAMERA_PAD * 2, worldH + CAMERA_PAD * 2);
+    this.applyViewToggles();
   }
 
-  private handleResize(gameSize: Phaser.Structs.Size | { width: number; height: number }): void {
-    const { width, height } = gameSize;
-    this.boardMetrics = this.calculateBoardMetrics(width, height);
-    this.paletteMetrics = this.calculatePaletteMetrics(height);
-    this.board?.layout(this.boardMetrics);
-    this.tilePalette?.render(this.paletteMetrics, this.selectedTile);
-    this.layoutBottomButtons(height);
-    this.refreshBoard();
-    this.board?.refreshHover(this.boardMetrics, this.hoveredCell);
-    this.refreshStatus();
-    this.refreshLayerButtons();
-    this.refreshModeButtons();
-    this.refreshEntityButtons();
-    this.refreshLevelButtons();
+  private drawGrid(): void {
+    const store = this.store;
+    const gfx = this.gridGfx;
+    if (!store || !gfx) return;
+    const worldW = store.tilesX * WORLD_TILE;
+    const worldH = store.tilesY * WORLD_TILE;
+
+    gfx.clear();
+    gfx.lineStyle(1, 0xffffff, 0.07);
+    for (let x = 0; x <= store.tilesX; x += 1) gfx.lineBetween(x * WORLD_TILE, 0, x * WORLD_TILE, worldH);
+    for (let y = 0; y <= store.tilesY; y += 1) gfx.lineBetween(0, y * WORLD_TILE, worldW, y * WORLD_TILE);
+
+    // Chunk seams stand out so authors can see the streaming/screen boundaries.
+    gfx.lineStyle(1, 0xf4a261, 0.28);
+    for (let cx = 0; cx <= store.world.meta.worldChunksX; cx += 1) {
+      gfx.lineBetween(cx * CHUNK_COLUMNS * WORLD_TILE, 0, cx * CHUNK_COLUMNS * WORLD_TILE, worldH);
+    }
+    for (let cy = 0; cy <= store.world.meta.worldChunksY; cy += 1) {
+      gfx.lineBetween(0, cy * CHUNK_ROWS * WORLD_TILE, worldW, cy * CHUNK_ROWS * WORLD_TILE);
+    }
   }
 
-  private calculateBoardMetrics(width: number, height: number): BoardMetrics {
-    const availableWidth = Math.max(200, width - EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2));
-    const availableHeight = Math.max(200, height - (BOARD_PANEL_PADDING * 2));
-    const tileSize = Math.max(MIN_BOARD_TILE_SIZE, Math.floor(Math.min(availableWidth / GRID_COLUMNS, availableHeight / GRID_ROWS)));
-    const boardWidth = tileSize * GRID_COLUMNS;
-    const boardHeight = tileSize * GRID_ROWS;
+  private refreshCell(wx: number, wy: number): void {
+    const store = this.store;
+    if (!store || !this.groundLayer || !this.upperLayer || !this.collisionLayer) return;
+    if (!store.isInside(wx, wy)) return;
 
+    this.groundLayer.putTileAt(store.readCell('ground', wx, wy) as number, wx, wy, false);
+    const upper = store.readCell('upper', wx, wy) as number | null;
+    if (upper === null) this.upperLayer.removeTileAt(wx, wy, true, false);
+    else this.upperLayer.putTileAt(upper, wx, wy, false);
+    const collisionGid = this.collisionOverlayGid(wx, wy);
+    if (collisionGid !== null) this.collisionLayer.putTileAt(collisionGid, wx, wy, false);
+    else this.collisionLayer.removeTileAt(wx, wy, true, false);
+  }
+
+  private entityVisual(entity: PlacedEntity): { key: string; frame?: number } {
+    if (entity.list === 'enemies') return ENEMY_VISUAL[entity.type] ?? { key: ASSET_KEYS.undead };
+    if (entity.list === 'npcs') return NPC_VISUALS[entity.type];
+    if (entity.list === 'pickups') return PICKUP_VISUAL[entity.type];
+    return entity.type === 'dryBush' ? { key: ASSET_KEYS.dryBush } : { key: ASSET_KEYS.campfireFrame1 };
+  }
+
+  private renderEntities(): void {
+    const store = this.store;
+    const container = this.entityContainer;
+    if (!store || !container) return;
+    container.removeAll(true);
+
+    const place = (worldX: number, worldY: number, color: number, visual: { key: string; frame?: number }): void => {
+      const cx = (worldX + 0.5) * WORLD_TILE;
+      const cy = (worldY + 0.5) * WORLD_TILE;
+      const chip = this.add.rectangle(cx, cy, WORLD_TILE * 0.86, WORLD_TILE * 0.86, color, 0.32).setStrokeStyle(1, color, 1);
+      const sprite = this.add.sprite(cx, cy, visual.key, visual.frame ?? 0).setDisplaySize(WORLD_TILE * 0.74, WORLD_TILE * 0.74);
+      container.add([chip, sprite]);
+    };
+
+    store.allEntities().forEach((entity) => place(entity.worldX, entity.worldY, CHIP_COLOR[entity.list], this.entityVisual(entity)));
+    const spawn = store.spawn;
+    place(spawn.worldX, spawn.worldY, SPAWN_COLOR, { key: ASSET_KEYS.hero, frame: HERO_FRAMES.idleDown });
+  }
+
+  private applyViewToggles(): void {
+    this.gridGfx?.setVisible(this.uiState.showGrid);
+    this.collisionLayer?.setVisible(this.uiState.showCollisions);
+    this.entityContainer?.setVisible(this.uiState.showEntities);
+  }
+
+  // ── View mode (mundo x chunk) ───────────────────────────────────────────
+
+  private chunkRect(): { x: number; y: number; w: number; h: number } {
     return {
-      tileSize,
-      offsetX: EDITOR_PANEL_WIDTH + Math.max(BOARD_PANEL_PADDING, Math.floor((availableWidth - boardWidth) / 2) + BOARD_PANEL_PADDING),
-      offsetY: Math.max(BOARD_PANEL_PADDING, Math.floor((height - boardHeight) / 2)),
-      width: boardWidth,
-      height: boardHeight,
+      x: this.uiState.chunkX * CHUNK_COLUMNS * WORLD_TILE,
+      y: this.uiState.chunkY * CHUNK_ROWS * WORLD_TILE,
+      w: CHUNK_COLUMNS * WORLD_TILE,
+      h: CHUNK_ROWS * WORLD_TILE,
     };
   }
 
-  private calculatePaletteMetrics(height: number): PaletteMetrics {
-    const texture = this.textures.get(ASSET_KEYS.forestTileset);
-    const frameCount = Math.max(1, texture.frameTotal - 1);
-    const rows = Math.ceil((frameCount + 1) / EDITOR_PALETTE_COLUMNS);
-    const tileSize = EDITOR_PALETTE_TILE_SIZE;
-    const width = (EDITOR_PALETTE_COLUMNS * tileSize) + ((EDITOR_PALETTE_COLUMNS - 1) * TILE_GAP);
-    const contentHeight = (rows * tileSize) + ((rows - 1) * TILE_GAP);
-
+  /** Editable area in tile coords, or null when the whole world is editable (world view). */
+  private editableBounds(): { x0: number; y0: number; x1: number; y1: number } | null {
+    if (this.uiState.viewMode !== 'chunk') return null;
     return {
-      tileSize,
-      columns: EDITOR_PALETTE_COLUMNS,
-      rows,
-      offsetX: BOARD_PANEL_PADDING,
-      offsetY: Math.min(BOARD_PANEL_PADDING + 562, height - contentHeight - 132),
-      width,
-      height: contentHeight,
+      x0: this.uiState.chunkX * CHUNK_COLUMNS,
+      y0: this.uiState.chunkY * CHUNK_ROWS,
+      x1: (this.uiState.chunkX + 1) * CHUNK_COLUMNS - 1,
+      y1: (this.uiState.chunkY + 1) * CHUNK_ROWS - 1,
     };
   }
 
-  private layoutBottomButtons(height: number): void {
-    this.saveButton?.setPosition(BOARD_PANEL_PADDING, height - 104);
-    this.saveLabel?.setPosition(EDITOR_PANEL_WIDTH / 2, height - 89);
-    this.exportButton?.setPosition(BOARD_PANEL_PADDING, height - 68);
-    this.exportLabel?.setPosition(EDITOR_PANEL_WIDTH / 2, height - 53);
-    this.clearButton?.setPosition(BOARD_PANEL_PADDING, height - 32);
-    this.clearLabel?.setPosition(EDITOR_PANEL_WIDTH / 2, height - 17);
+  private isEditable(x: number, y: number): boolean {
+    const bounds = this.editableBounds();
+    return !bounds || (x >= bounds.x0 && x <= bounds.x1 && y >= bounds.y0 && y <= bounds.y1);
   }
 
-  private refreshBoard(): void {
-    this.board?.render(this.level, this.boardMetrics);
+  private clampChunkSelection(): void {
+    const meta = this.store?.world.meta;
+    if (!meta) return;
+    this.uiState.chunkX = Math.max(0, Math.min(meta.worldChunksX - 1, this.uiState.chunkX));
+    this.uiState.chunkY = Math.max(0, Math.min(meta.worldChunksY - 1, this.uiState.chunkY));
   }
 
-  private refreshStatus(): void {
-    const hoverText = this.hoveredCell ? `Cursor: (${this.hoveredCell.column}, ${this.hoveredCell.row})` : 'Cursor: fora do mapa';
-    const tileLabel = this.selectedTile === null ? EDITOR_EMPTY_TILE_LABEL : `Tile ${this.selectedTile}`;
-
-    this.statusText?.setText([
-      `Arquivo: ${this.currentFileName ?? 'nenhum'}`,
-      `Level: ${this.level.meta.name}`,
-      `Alteracoes pendentes: ${this.dirty ? 'sim' : 'nao'}`,
-      `Modo ativo: ${this.selectedMode === 'tile' ? 'tile' : this.selectedMode === 'item' ? 'item' : 'objeto'}`,
-      `Tile ativo: ${tileLabel}`,
-      `Item ativo: ${this.selectedItemType ?? 'limpar'}`,
-      `Objeto ativo: ${this.selectedObjectType ?? 'limpar'}`,
-      `Camada ativa: ${this.selectedLayer === 'ground' ? 'chao' : 'superior'}`,
-      `Colisao ao pintar: ${this.collisionEnabled ? 'ligada' : 'desligada'}`,
-      hoverText,
-      'Atalhos: T tile | I item | O objeto | J item | K objeto | G/U camada | C colisao | S salvar | E copiar',
-    ]);
-  }
-
-  private refreshLayerButtons(): void {
-    this.updateButtonState(this.layerGroundButton, this.layerGroundLabel, this.selectedLayer === 'ground');
-    this.updateButtonState(this.layerUpperButton, this.layerUpperLabel, this.selectedLayer === 'upper');
-    this.updateButtonState(this.collisionButton, this.collisionLabel, this.collisionEnabled, this.collisionEnabled ? 'Com colisao' : 'Sem colisao');
-  }
-
-  private updateButtonState(button: Phaser.GameObjects.Rectangle | undefined, label: Phaser.GameObjects.Text | undefined, active: boolean, text?: string): void {
-    if (!button || !label) {
-      return;
+  /** Applies viewMode/chunk selection when they changed since the last application. */
+  private syncViewMode(): void {
+    const state = this.uiState;
+    // Entering chunk view from world view focuses the chunk under the camera centre.
+    if (state.viewMode === 'chunk' && this.appliedView.mode === 'world') {
+      const cam = this.cameras.main;
+      state.chunkX = Math.floor(cam.midPoint.x / WORLD_TILE / CHUNK_COLUMNS);
+      state.chunkY = Math.floor(cam.midPoint.y / WORLD_TILE / CHUNK_ROWS);
     }
-
-    button.setFillStyle(active ? 0xf4a261 : 0xa8dadc, 1);
-    label.setColor(active ? '#102027' : '#081014');
-    if (text) {
-      label.setText(text);
-    }
+    this.clampChunkSelection();
+    const changed = state.viewMode !== this.appliedView.mode
+      || state.chunkX !== this.appliedView.chunkX
+      || state.chunkY !== this.appliedView.chunkY;
+    if (!changed) return;
+    this.appliedView = { mode: state.viewMode, chunkX: state.chunkX, chunkY: state.chunkY };
+    this.applyViewMode();
+    this.ui?.syncFromState();
   }
 
-  private refreshModeButtons(): void {
-    this.updateButtonState(this.modeTileButton, this.modeTileLabel, this.selectedMode === 'tile');
-    this.updateButtonState(this.modeItemButton, this.modeItemLabel, this.selectedMode === 'item');
-    this.updateButtonState(this.modeObjectButton, this.modeObjectLabel, this.selectedMode === 'object');
-  }
+  private applyViewMode(): void {
+    const store = this.store;
+    if (!store) return;
+    const cam = this.cameras.main;
 
-  private refreshEntityButtons(): void {
-    this.updateButtonState(this.itemSelectButton, this.itemSelectLabel, this.selectedMode === 'item', `Item: ${this.selectedItemType ?? 'limpar'}`);
-    this.updateButtonState(this.objectSelectButton, this.objectSelectLabel, this.selectedMode === 'object', `Objeto: ${this.selectedObjectType ?? 'limpar'}`);
-  }
-
-  private refreshLevelButtons(): void {
-    this.levelButtons.forEach((button) => {
-      button.background.destroy();
-      button.label.destroy();
-    });
-    this.levelButtons.length = 0;
-
-    this.availableLevels.slice(0, EDITOR_LEVEL_LIST_MAX).forEach((entry, index) => {
-      const x = BOARD_PANEL_PADDING;
-      const y = EditorScene.levelSectionY + 24 + (index * (EDITOR_LEVEL_BUTTON_HEIGHT + 6));
-      const active = entry.fileName === this.currentFileName;
-      const background = this.add.rectangle(x, y, EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2), EDITOR_LEVEL_BUTTON_HEIGHT, active ? 0xf4a261 : 0x17323b, 1)
-        .setOrigin(0)
-        .setDepth(SCENE_DEPTHS.uiOverlay)
-        .setStrokeStyle(1, 0x40646d, 1)
-        .setInteractive({ useHandCursor: true })
-        .on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => { void this.loadLevel(entry.fileName); });
-      const label = this.add.text(x + 8, y + 5, `${entry.fileName} | ${entry.levelName}`, {
-        color: active ? '#081014' : '#f1faee',
-        fontFamily: FONT_FAMILY,
-        fontSize: '11px',
-        wordWrap: { width: EDITOR_PANEL_WIDTH - (BOARD_PANEL_PADDING * 2) - 16 },
-      }).setDepth(SCENE_DEPTHS.uiLabel);
-
-      this.levelButtons.push({ fileName: entry.fileName, background, label });
-    });
-  }
-
-  private paintCell(column: number, row: number): void {
-    if (this.selectedMode === 'item') {
-      this.level.items = this.level.items.filter((item) => !(item.column === column && item.row === row));
-      if (this.selectedItemType) {
-        this.level.items.push({ type: this.selectedItemType, column, row });
-      }
-
-      this.dirty = true;
-      this.refreshBoard();
-      this.refreshStatus();
-      return;
-    }
-
-    if (this.selectedMode === 'object') {
-      this.level.objects = this.level.objects.filter((object) => !(object.column === column && object.row === row));
-      if (this.selectedObjectType) {
-        this.level.objects.push({ type: this.selectedObjectType, column, row });
-      }
-
-      this.dirty = true;
-      this.refreshBoard();
-      this.refreshStatus();
-      return;
-    }
-
-    if (this.selectedLayer === 'ground') {
-      if (this.selectedTile !== null) {
-        this.level.layers.ground[row][column] = this.selectedTile;
-      }
-      this.level.collisions.ground[row][column] = this.collisionEnabled;
+    if (this.uiState.viewMode === 'chunk') {
+      const rect = this.chunkRect();
+      const pad = WORLD_TILE * 1.5;
+      cam.setBounds(rect.x - pad, rect.y - pad, rect.w + pad * 2, rect.h + pad * 2);
+      this.fitChunk();
+      this.drawChunkMask();
     } else {
-      this.level.layers.upper[row][column] = this.selectedTile;
-      this.level.collisions.upper[row][column] = this.collisionEnabled;
+      const worldW = store.tilesX * WORLD_TILE;
+      const worldH = store.tilesY * WORLD_TILE;
+      cam.setBounds(-CAMERA_PAD, -CAMERA_PAD, worldW + CAMERA_PAD * 2, worldH + CAMERA_PAD * 2);
+      this.chunkMaskGfx?.clear();
+    }
+    this.persistUi();
+  }
+
+  private fitChunk(): void {
+    const cam = this.cameras.main;
+    const rect = this.chunkRect();
+    const zoom = Phaser.Math.Clamp(Math.min(cam.width / rect.w, cam.height / rect.h) * 0.94, MIN_ZOOM, MAX_ZOOM);
+    cam.setZoom(zoom);
+    cam.centerOn(rect.x + rect.w / 2, rect.y + rect.h / 2);
+  }
+
+  /** Dims everything outside the selected chunk so the focused screen pops out. */
+  private drawChunkMask(): void {
+    const store = this.store;
+    const gfx = this.chunkMaskGfx;
+    if (!store || !gfx) return;
+    const rect = this.chunkRect();
+    const minX = -CAMERA_PAD * 2;
+    const minY = -CAMERA_PAD * 2;
+    const maxX = store.tilesX * WORLD_TILE + CAMERA_PAD * 2;
+    const maxY = store.tilesY * WORLD_TILE + CAMERA_PAD * 2;
+
+    gfx.clear();
+    gfx.fillStyle(0x05090b, 0.78);
+    gfx.fillRect(minX, minY, rect.x - minX, maxY - minY);
+    gfx.fillRect(rect.x + rect.w, minY, maxX - (rect.x + rect.w), maxY - minY);
+    gfx.fillRect(rect.x, minY, rect.w, rect.y - minY);
+    gfx.fillRect(rect.x, rect.y + rect.h, rect.w, maxY - (rect.y + rect.h));
+    gfx.lineStyle(2, 0xf4a261, 0.9);
+    gfx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+  }
+
+  // ── Store events ────────────────────────────────────────────────────────
+
+  private handleStoreChange(change: StoreChange): void {
+    if (change.structure) {
+      this.buildWorldObjects();
+      this.appliedView = { mode: null, chunkX: -1, chunkY: -1 };
+      this.syncViewMode();
+      if (this.uiState.viewMode === 'world') this.fitView();
+    } else if (change.cells) {
+      const seen = new Set<string>();
+      change.cells.forEach((cell) => {
+        const key = `${cell.wx},${cell.wy}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        this.refreshCell(cell.wx, cell.wy);
+      });
+    }
+    if (!change.structure && (change.entities || change.spawn)) this.renderEntities();
+    if (change.cells || change.entities || change.spawn || change.structure) this.ui?.requestMinimapRedraw();
+    this.ui?.refreshHeader();
+    this.refreshHoverStatus();
+  }
+
+  private handleUiStateChange(): void {
+    if (this.uiState.tool === 'collision' && !this.uiState.showCollisions) {
+      this.uiState.showCollisions = true;
+      this.ui?.syncFromState();
+    }
+    this.syncViewMode();
+    this.applyViewToggles();
+    this.drawHover();
+    this.persistUi();
+  }
+
+  // ── Pointer input ───────────────────────────────────────────────────────
+
+  private registerPointerInput(): void {
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => this.onPointerDown(pointer));
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => this.onPointerMove(pointer));
+    this.input.on(Phaser.Input.Events.POINTER_UP, (pointer: Phaser.Input.Pointer) => this.onPointerUp(pointer));
+    this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, (pointer: Phaser.Input.Pointer) => this.onPointerUp(pointer));
+    this.input.on(Phaser.Input.Events.GAME_OUT, () => {
+      this.hovered = null;
+      this.drawHover();
+      this.ui?.setStatus(null);
+    });
+    this.input.on(
+      Phaser.Input.Events.POINTER_WHEEL,
+      (pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => this.onWheel(pointer, dy),
+    );
+  }
+
+  private screenToCell(screenX: number, screenY: number): CellCoord {
+    const cam = this.cameras.main;
+    const worldX = cam.midPoint.x + (screenX - cam.x - cam.width / 2) / cam.zoom;
+    const worldY = cam.midPoint.y + (screenY - cam.y - cam.height / 2) / cam.zoom;
+    return { x: Math.floor(worldX / WORLD_TILE), y: Math.floor(worldY / WORLD_TILE) };
+  }
+
+  private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (!this.store || pointer.x < PANEL_WIDTH) return;
+
+    if (pointer.middleButtonDown() || (this.ui?.spaceHeld && pointer.leftButtonDown())) {
+      this.panning = { lastX: pointer.x, lastY: pointer.y };
+      return;
     }
 
-    this.dirty = true;
-    this.refreshBoard();
-    this.refreshStatus();
+    const cell = this.screenToCell(pointer.x, pointer.y);
+
+    if (pointer.rightButtonDown()) {
+      this.store.beginStroke();
+      this.activeStroke = { erase: true, last: cell };
+      this.applyEraseAt(cell.x, cell.y);
+      return;
+    }
+    if (!pointer.leftButtonDown()) return;
+
+    const tool = this.uiState.tool;
+    if (tool === 'picker') {
+      this.pickTileAt(cell.x, cell.y);
+      return;
+    }
+    if (tool === 'fill') {
+      this.fillAt(cell.x, cell.y);
+      return;
+    }
+    if (tool === 'rect') {
+      this.rectDrag = cell;
+      this.drawRectPreview(cell);
+      return;
+    }
+
+    this.store.beginStroke();
+    this.activeStroke = { erase: false, last: cell };
+    this.applyToolAt(cell.x, cell.y);
   }
 
-  private cycleItemSelection(): void {
-    const itemTypes: Array<LevelItemType | null> = ['key', 'sword', null];
-    const currentIndex = itemTypes.findIndex((itemType) => itemType === this.selectedItemType);
-    this.selectedItemType = itemTypes[(currentIndex + 1) % itemTypes.length];
-    this.refreshEntityButtons();
-    this.refreshStatus();
-  }
+  private onPointerMove(pointer: Phaser.Input.Pointer): void {
+    if (this.panning) {
+      const cam = this.cameras.main;
+      cam.scrollX -= (pointer.x - this.panning.lastX) / cam.zoom;
+      cam.scrollY -= (pointer.y - this.panning.lastY) / cam.zoom;
+      this.panning = { lastX: pointer.x, lastY: pointer.y };
+      return;
+    }
 
-  private cycleObjectSelection(): void {
-    const objectTypes: Array<LevelObjectType | null> = ['lookedDoor', null];
-    const currentIndex = objectTypes.findIndex((objectType) => objectType === this.selectedObjectType);
-    this.selectedObjectType = objectTypes[(currentIndex + 1) % objectTypes.length];
-    this.refreshEntityButtons();
-    this.refreshStatus();
-  }
+    const cell = this.screenToCell(pointer.x, pointer.y);
+    if (!this.hovered || this.hovered.x !== cell.x || this.hovered.y !== cell.y) {
+      this.hovered = cell;
+      this.drawHover();
+      this.refreshHoverStatus();
+    }
 
-  private resolveBoardCell(worldX: number, worldY: number): { column: number; row: number } | null {
-    return resolveBoardCell(worldX, worldY, this.boardMetrics);
-  }
-
-  private async refreshLevelList(autoLoadFirst = false): Promise<void> {
-    try {
-      this.availableLevels = await listLevels();
-      this.refreshLevelButtons();
-
-      if (!autoLoadFirst) {
-        return;
+    if (this.activeStroke) {
+      const last = this.activeStroke.last;
+      if (last.x !== cell.x || last.y !== cell.y) {
+        const erase = this.activeStroke.erase;
+        this.lineCells(last.x, last.y, cell.x, cell.y, (x, y) => {
+          if (erase) this.applyEraseAt(x, y);
+          else this.applyToolAt(x, y);
+        });
+        this.activeStroke.last = cell;
       }
+    }
 
-      if (this.availableLevels[0]) {
-        await this.loadLevel(this.availableLevels[0].fileName);
-      } else {
-        this.currentFileName = EDITOR_NEW_LEVEL_FILE_NAME;
-        this.level = cloneLevelExport(createEmptyLevelState());
-        this.dirty = true;
-        this.refreshStatus();
-      }
-    } catch (error) {
-      this.showToast(error instanceof Error ? error.message : 'Falha ao listar levels');
+    if (this.rectDrag) this.drawRectPreview(cell);
+  }
+
+  private onPointerUp(pointer: Phaser.Input.Pointer): void {
+    if (this.panning) {
+      this.panning = null;
+      this.persistUi();
+      return;
+    }
+    if (this.activeStroke) {
+      this.store?.commitStroke();
+      this.activeStroke = null;
+      return;
+    }
+    if (this.rectDrag) {
+      const end = this.screenToCell(pointer.x, pointer.y);
+      this.applyRect(this.rectDrag, end);
+      this.rectDrag = null;
+      this.rectGfx?.clear();
     }
   }
 
-  private async loadLevel(fileName: string): Promise<void> {
-    try {
-      this.level = cloneLoadedLevel(await loadLevelByFileName(fileName));
-      this.currentFileName = fileName;
-      this.dirty = false;
-      this.refreshBoard();
-      this.refreshStatus();
-      this.refreshLevelButtons();
-      this.showToast(`Level carregado: ${fileName}`);
-    } catch (error) {
-      this.showToast(error instanceof Error ? error.message : 'Falha ao carregar level');
+  private onWheel(pointer: Phaser.Input.Pointer, dy: number): void {
+    if (pointer.x < PANEL_WIDTH) return;
+    const cam = this.cameras.main;
+    const factor = dy > 0 ? 1 / 1.2 : 1.2;
+    const zoom = Phaser.Math.Clamp(cam.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    if (zoom === cam.zoom) return;
+
+    // Zoom towards the cursor: keep the world point under the pointer fixed on screen.
+    const viewX = pointer.x - cam.x - cam.width / 2;
+    const viewY = pointer.y - cam.y - cam.height / 2;
+    const worldX = cam.midPoint.x + viewX / cam.zoom;
+    const worldY = cam.midPoint.y + viewY / cam.zoom;
+    cam.setZoom(zoom);
+    cam.centerOn(worldX - viewX / zoom, worldY - viewY / zoom);
+
+    this.drawHover();
+    this.refreshHoverStatus();
+    this.persistUi();
+  }
+
+  // ── Tool application ────────────────────────────────────────────────────
+
+  private forEachBrushCell(x: number, y: number, fn: (cx: number, cy: number) => void): void {
+    const size = this.uiState.brushSize;
+    const from = size === 3 ? -1 : 0;
+    const to = size === 1 ? 0 : 1;
+    for (let dy = from; dy <= to; dy += 1) {
+      for (let dx = from; dx <= to; dx += 1) fn(x + dx, y + dy);
     }
   }
+
+  private applyToolAt(x: number, y: number): void {
+    const tool = this.uiState.tool;
+    if (tool === 'brush') this.forEachBrushCell(x, y, (cx, cy) => this.paintTileCell(cx, cy));
+    else if (tool === 'eraser') this.forEachBrushCell(x, y, (cx, cy) => this.eraseCell(cx, cy));
+    else if (tool === 'collision') {
+      this.forEachBrushCell(x, y, (cx, cy) => {
+        if (this.isEditable(cx, cy)) this.store?.setCell('collision', cx, cy, true);
+      });
+    } else if (tool === 'entity') this.placeSelectedEntity(x, y);
+    else if (tool === 'spawn' && this.isEditable(x, y)) this.store?.setSpawn(x, y);
+  }
+
+  private applyEraseAt(x: number, y: number): void {
+    if (this.uiState.tool === 'collision') {
+      this.forEachBrushCell(x, y, (cx, cy) => {
+        if (this.isEditable(cx, cy)) this.store?.setCell('collision', cx, cy, false);
+      });
+      return;
+    }
+    this.forEachBrushCell(x, y, (cx, cy) => this.eraseCell(cx, cy));
+  }
+
+  private paintTileCell(x: number, y: number): void {
+    const store = this.store;
+    if (!store || !this.isEditable(x, y)) return;
+    const { layer, tile, collisionMode } = this.uiState;
+    if (tile === null) {
+      if (layer === 'upper') store.setCell('upper', x, y, null);
+    } else {
+      store.setCell(layer, x, y, tile);
+    }
+    if (collisionMode !== 'keep') store.setCell('collision', x, y, collisionMode === 'set');
+  }
+
+  private eraseCell(x: number, y: number): void {
+    const store = this.store;
+    if (!store || !this.isEditable(x, y)) return;
+    store.eraseEntitiesAt(x, y);
+    store.setCell('upper', x, y, null);
+    store.setCell('collision', x, y, false);
+  }
+
+  private placeSelectedEntity(x: number, y: number): void {
+    const store = this.store;
+    if (!store || !this.isEditable(x, y)) return;
+    const sel = this.uiState.entity;
+    if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
+    else if (sel.list === 'pickups') store.placeEntity({ list: 'pickups', type: sel.type, worldX: x, worldY: y });
+    else store.placeEntity({ list: 'props', type: sel.type, worldX: x, worldY: y });
+  }
+
+  private pickTileAt(x: number, y: number): void {
+    const store = this.store;
+    if (!store || !store.isInside(x, y)) return;
+    const upper = store.readCell('upper', x, y) as number | null;
+    if (upper !== null) {
+      this.uiState.tile = upper;
+      this.uiState.layer = 'upper';
+    } else {
+      this.uiState.tile = store.readCell('ground', x, y) as number;
+      this.uiState.layer = 'ground';
+    }
+    this.uiState.tool = 'brush';
+    this.uiState.tab = 'tiles';
+    this.ui?.syncFromState();
+    this.persistUi();
+  }
+
+  private fillAt(x: number, y: number): void {
+    const store = this.store;
+    if (!store || !store.isInside(x, y)) return;
+    const { layer, tile, collisionMode } = this.uiState;
+    if (tile === null && layer === 'ground') {
+      this.ui?.toast('O chao nao pode ficar vazio — escolha um tile');
+      return;
+    }
+    store.beginStroke();
+    const filled = store.floodFill(layer, x, y, tile, this.editableBounds() ?? undefined);
+    if (collisionMode !== 'keep') {
+      filled.forEach((cell) => store.setCell('collision', cell.wx, cell.wy, collisionMode === 'set'));
+    }
+    store.commitStroke();
+    if (filled.length > 0) this.ui?.toast(`Balde: ${filled.length} tiles`);
+  }
+
+  /** Rect corners ordered and, in chunk view, intersected with the editable chunk. */
+  private clampRect(a: CellCoord, b: CellCoord): { x0: number; x1: number; y0: number; y1: number } | null {
+    let x0 = Math.min(a.x, b.x);
+    let x1 = Math.max(a.x, b.x);
+    let y0 = Math.min(a.y, b.y);
+    let y1 = Math.max(a.y, b.y);
+    const bounds = this.editableBounds();
+    if (bounds) {
+      x0 = Math.max(x0, bounds.x0);
+      x1 = Math.min(x1, bounds.x1);
+      y0 = Math.max(y0, bounds.y0);
+      y1 = Math.min(y1, bounds.y1);
+      if (x0 > x1 || y0 > y1) return null;
+    }
+    return { x0, x1, y0, y1 };
+  }
+
+  private applyRect(a: CellCoord, b: CellCoord): void {
+    const store = this.store;
+    if (!store) return;
+    const rect = this.clampRect(a, b);
+    if (!rect) return;
+    const { x0, x1, y0, y1 } = rect;
+    store.beginStroke();
+    for (let y = y0; y <= y1; y += 1) {
+      for (let x = x0; x <= x1; x += 1) this.paintTileCell(x, y);
+    }
+    store.commitStroke();
+  }
+
+  private lineCells(x0: number, y0: number, x1: number, y1: number, fn: (x: number, y: number) => void): void {
+    const dx = Math.abs(x1 - x0);
+    const dy = -Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    let x = x0;
+    let y = y0;
+    for (;;) {
+      fn(x, y);
+      if (x === x1 && y === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x += sx; }
+      if (e2 <= dx) { err += dx; y += sy; }
+    }
+  }
+
+  // ── Overlays / status ───────────────────────────────────────────────────
+
+  private drawHover(): void {
+    const gfx = this.hoverGfx;
+    if (!gfx) return;
+    gfx.clear();
+    const cell = this.hovered;
+    if (!cell || !this.store) return;
+    // In chunk view the outside is masked and read-only; only the picker still works there.
+    if (!this.isEditable(cell.x, cell.y) && this.uiState.tool !== 'picker') return;
+
+    const size = (this.uiState.tool === 'brush' || this.uiState.tool === 'eraser' || this.uiState.tool === 'collision')
+      ? this.uiState.brushSize
+      : 1;
+    const from = size === 3 ? -1 : 0;
+    const span = size === 1 ? 1 : size === 2 ? 2 : 3;
+    gfx.lineStyle(Math.max(1, 2 / this.cameras.main.zoom), 0xf4a261, 0.95);
+    gfx.strokeRect((cell.x + from) * WORLD_TILE, (cell.y + from) * WORLD_TILE, span * WORLD_TILE, span * WORLD_TILE);
+  }
+
+  private drawRectPreview(current: CellCoord): void {
+    const gfx = this.rectGfx;
+    const anchor = this.rectDrag;
+    if (!gfx || !anchor) return;
+    gfx.clear();
+    const rect = this.clampRect(anchor, current);
+    if (!rect) return;
+    const { x0, x1, y0, y1 } = rect;
+    gfx.lineStyle(Math.max(1, 2 / this.cameras.main.zoom), 0xf4a261, 1);
+    gfx.fillStyle(0xf4a261, 0.12);
+    gfx.fillRect(x0 * WORLD_TILE, y0 * WORLD_TILE, (x1 - x0 + 1) * WORLD_TILE, (y1 - y0 + 1) * WORLD_TILE);
+    gfx.strokeRect(x0 * WORLD_TILE, y0 * WORLD_TILE, (x1 - x0 + 1) * WORLD_TILE, (y1 - y0 + 1) * WORLD_TILE);
+  }
+
+  private refreshHoverStatus(): void {
+    const store = this.store;
+    if (!store || !this.ui) return;
+    const cell = this.hovered;
+    if (!cell) {
+      this.ui.setStatus(null);
+      return;
+    }
+    const inside = store.isInside(cell.x, cell.y);
+    this.ui.setStatus({
+      tileX: cell.x,
+      tileY: cell.y,
+      inside,
+      ground: inside ? (store.readCell('ground', cell.x, cell.y) as number) : 0,
+      upper: inside ? (store.readCell('upper', cell.x, cell.y) as number | null) : null,
+      collision: inside ? (store.readCell('collision', cell.x, cell.y) as boolean) : false,
+      entities: inside ? store.entitiesAt(cell.x, cell.y).map((e) => e.type) : [],
+      zoom: this.cameras.main.zoom,
+    });
+  }
+
+  private syncCameraDerivedUi(): void {
+    const cam = this.cameras.main;
+    if (cam.scrollX === this.lastCamSync.scrollX && cam.scrollY === this.lastCamSync.scrollY && cam.zoom === this.lastCamSync.zoom) {
+      return;
+    }
+    this.lastCamSync = { scrollX: cam.scrollX, scrollY: cam.scrollY, zoom: cam.zoom };
+    const view = cam.worldView;
+    this.ui?.updateMinimapViewport({
+      x: view.x / WORLD_TILE,
+      y: view.y / WORLD_TILE,
+      w: view.width / WORLD_TILE,
+      h: view.height / WORLD_TILE,
+    });
+  }
+
+  // ── Camera helpers ──────────────────────────────────────────────────────
+
+  private fitView(): void {
+    const store = this.store;
+    if (!store) return;
+    if (this.uiState.viewMode === 'chunk') {
+      this.fitChunk();
+      this.persistUi();
+      return;
+    }
+    const cam = this.cameras.main;
+    const worldW = store.tilesX * WORLD_TILE;
+    const worldH = store.tilesY * WORLD_TILE;
+    const zoom = Phaser.Math.Clamp(Math.min(cam.width / worldW, cam.height / worldH) * 0.95, MIN_ZOOM, MAX_ZOOM);
+    cam.setZoom(zoom);
+    cam.centerOn(worldW / 2, worldH / 2);
+    this.persistUi();
+  }
+
+  private centerOnTile(tileX: number, tileY: number): void {
+    this.cameras.main.centerOn((tileX + 0.5) * WORLD_TILE, (tileY + 0.5) * WORLD_TILE);
+    this.persistUi();
+  }
+
+  /** Minimap click: world view pans to the tile; chunk view jumps to that chunk. */
+  private navigateTo(tileX: number, tileY: number): void {
+    if (this.uiState.viewMode === 'chunk') {
+      this.uiState.chunkX = Math.floor(tileX / CHUNK_COLUMNS);
+      this.uiState.chunkY = Math.floor(tileY / CHUNK_ROWS);
+      this.syncViewMode();
+      return;
+    }
+    this.centerOnTile(tileX, tileY);
+  }
+
+  private handleResize(size: { width: number; height: number }): void {
+    const { width, height } = size;
+    this.cameras.main.setViewport(PANEL_WIDTH, 0, Math.max(1, width - PANEL_WIDTH), height);
+  }
+
+  // ── Actions ─────────────────────────────────────────────────────────────
 
   private async handleSave(): Promise<void> {
-    const fileName = this.currentFileName ?? EDITOR_NEW_LEVEL_FILE_NAME;
-    this.currentFileName = fileName;
-
+    const store = this.store;
+    if (!store) return;
     try {
-      this.level = cloneLoadedLevel(await saveLevelByFileName(fileName, this.level));
-      this.dirty = false;
-      await this.refreshLevelList(false);
-      this.refreshStatus();
-      this.refreshLevelButtons();
-      this.showToast(`Arquivo salvo: ${fileName}`);
+      // Persist UI first: writing public/world.json makes Vite reload the whole page.
+      this.persistUi();
+      store.world.meta.exportedAt = new Date().toISOString();
+      const warnings = store.validate();
+      await saveWorld(store.world);
+      store.markSaved();
+      this.ui?.toast(
+        warnings.length > 0
+          ? `Salvo com ${warnings.length} aviso(s) — veja em Mundo...`
+          : 'Salvo em public/world.json',
+      );
     } catch (error) {
-      this.showToast(error instanceof Error ? error.message : 'Falha ao salvar level');
+      this.ui?.toast(error instanceof Error ? error.message : 'Falha ao salvar');
     }
   }
 
-  private async handleExport(): Promise<void> {
-    const payload = buildLevelExportJson(this.level);
+  private handleReload(): void {
+    if (this.store?.dirty && this.time.now > this.reloadArmedUntil) {
+      this.reloadArmedUntil = this.time.now + 3000;
+      this.ui?.toast('Ha alteracoes nao salvas — clique de novo para descartar');
+      return;
+    }
+    this.persistUi();
+    this.scene.restart();
+  }
 
+  private applyWorldSettings(settings: { name: string; chunksX: number; chunksY: number }): void {
+    const store = this.store;
+    if (!store) return;
+    store.renameWorld(settings.name);
+    const resized = settings.chunksX !== store.world.meta.worldChunksX || settings.chunksY !== store.world.meta.worldChunksY;
+    if (resized) store.resizeWorld(settings.chunksX, settings.chunksY);
+    this.ui?.refreshHeader();
+    this.ui?.toast(resized ? 'Mundo redimensionado' : 'Mundo atualizado');
+  }
+
+  /** Runs the real GameScene over the in-memory (possibly unsaved) world; ESC comes back. */
+  private startPlaytest(): void {
+    const store = this.store;
+    if (!store) return;
+    this.persistUi();
+    setWorldData(store.snapshotWorld());
+    this.scene.run(GameScene.key);
+    this.scene.sleep();
+  }
+
+  private handleWake(): void {
+    this.ui?.setVisible(true);
+    this.ui?.requestMinimapRedraw();
+  }
+
+  private handleSleep(): void {
+    this.ui?.setVisible(false);
+    this.activeStroke = null;
+    this.rectDrag = null;
+    this.panning = null;
+  }
+
+  // ── Persistence (survives the post-save Vite reload) ────────────────────
+
+  private persistUi(): void {
     try {
-      await window.navigator.clipboard.writeText(payload);
-      this.showToast('JSON copiado para a area de transferencia');
-    } catch {
-      this.showToast('Falha ao copiar. O JSON esta em window.last_exported_level_json');
-    }
-
-    window.last_exported_level_json = payload;
+      const cam = this.cameras.main;
+      const persisted: PersistedUi = {
+        state: this.uiState,
+        cam: { centerX: cam.midPoint.x, centerY: cam.midPoint.y, zoom: cam.zoom },
+      };
+      window.sessionStorage.setItem(UI_STATE_KEY, JSON.stringify(persisted));
+    } catch { /* ignore */ }
   }
 
-  private showToast(message: string): void {
-    const toast = createToast(this, this.boardMetrics.offsetX, this.boardMetrics.offsetY - 12, message);
+  private restoreUi(): void {
+    try {
+      const raw = window.sessionStorage.getItem(UI_STATE_KEY);
+      if (!raw) return;
+      const persisted = JSON.parse(raw) as Partial<PersistedUi>;
+      if (persisted.state && typeof persisted.state === 'object') {
+        this.uiState = { ...this.uiState, ...persisted.state };
+      }
+    } catch { /* ignore */ }
+  }
 
-    this.tweens.add({
-      targets: toast,
-      alpha: 0,
-      delay: TIMINGS.toastFadeDelayMs,
-      duration: TIMINGS.toastFadeDurationMs,
-      onComplete: () => toast.destroy(),
-    });
+  private restoreCamera(): boolean {
+    try {
+      const raw = window.sessionStorage.getItem(UI_STATE_KEY);
+      if (!raw) return false;
+      const persisted = JSON.parse(raw) as Partial<PersistedUi>;
+      if (!persisted.cam) return false;
+      const cam = this.cameras.main;
+      cam.setZoom(Phaser.Math.Clamp(persisted.cam.zoom, MIN_ZOOM, MAX_ZOOM));
+      cam.centerOn(persisted.cam.centerX, persisted.cam.centerY);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private renderSnapshot(): string {
     return JSON.stringify({
       mode: 'editor',
-      editorMode: this.selectedMode,
-      selectedTile: this.selectedTile,
-      selectedItemType: this.selectedItemType,
-      selectedObjectType: this.selectedObjectType,
-      selectedLayer: this.selectedLayer,
-      collisionEnabled: this.collisionEnabled,
-      hoveredCell: this.hoveredCell,
-      currentFileName: this.currentFileName,
-      availableLevels: this.availableLevels.map((entry) => entry.fileName),
-      dirty: this.dirty,
-      level: this.level,
-    } satisfies EditorSnapshot);
+      loaded: Boolean(this.store),
+      tool: this.uiState.tool,
+      layer: this.uiState.layer,
+      tile: this.uiState.tile,
+      tab: this.uiState.tab,
+      viewMode: this.uiState.viewMode,
+      chunk: { cx: this.uiState.chunkX, cy: this.uiState.chunkY },
+      dirty: this.store?.dirty ?? false,
+      world: this.store
+        ? { name: this.store.world.meta.name, chunksX: this.store.world.meta.worldChunksX, chunksY: this.store.world.meta.worldChunksY }
+        : null,
+      spawn: this.store?.spawn ?? null,
+      zoom: this.cameras.main.zoom,
+    });
   }
 }

@@ -3,6 +3,9 @@ import Phaser from 'phaser';
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { preloadSharedAssets } from '@/game/assets/assetManifest';
 import type { AppMode } from '@/game/config';
+import { setWorldData } from '@/game/world/WorldData';
+
+const WORLD_JSON_KEY = 'world';
 
 export class PreloadScene extends Phaser.Scene {
   public static readonly key = 'preload';
@@ -13,6 +16,13 @@ export class PreloadScene extends Phaser.Scene {
 
   public preload(): void {
     preloadSharedAssets(this);
+
+    // The playable world is fully defined by world.json. Load it here (only the game needs
+    // it) so WorldData is ready before GameScene.create runs.
+    const mode = this.registry.get('appMode') as AppMode | undefined;
+    if (mode !== 'editor') {
+      this.load.json(WORLD_JSON_KEY, `${import.meta.env.BASE_URL}world.json`);
+    }
 
     const { width, height } = this.scale;
     const box = this.add.rectangle(width / 2, height / 2, 180, 18, 0x1f2933).setOrigin(0.5);
@@ -39,6 +49,9 @@ export class PreloadScene extends Phaser.Scene {
 
   public create(): void {
     const mode = this.registry.get('appMode') as AppMode | undefined;
+    if (mode !== 'editor') {
+      setWorldData(this.cache.json.get(WORLD_JSON_KEY));
+    }
     this.scene.start(mode === 'editor' ? 'editor' : 'intro');
   }
 }

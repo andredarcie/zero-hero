@@ -134,16 +134,24 @@ function sfxr(params) {
 
 // ── chiptune melody synth (for little NES-style jingles) ──────────────────
 const N = {
+  A2: 110.0, B2: 123.47,
+  C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.0, A3: 220.0, B3: 246.94,
   C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.0, A4: 440.0, B4: 493.88,
   C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.0, B5: 987.77,
   C6: 1046.5, E6: 1318.51,
 };
 
-function note(freq, dur, { wave = 'square', duty = 0.5, vol = 0.5, attack = 0.004, release = 0.03 } = {}) {
+// `lp` (0..1) = one-pole low-pass amount (lower = warmer/darker, 1 = open). `sub` (0..1) mixes
+// in an octave-down sine for weight. Together they turn bright chiptune bleeps into deep,
+// serious tones.
+function note(freq, dur, { wave = 'square', duty = 0.5, vol = 0.5, attack = 0.004, release = 0.03, lp = 1, sub = 0 } = {}) {
   const n = Math.floor(dur * SR);
   const buf = new Float32Array(n);
   const period = SR / freq;
+  const subPeriod = SR / (freq / 2);
   const a = attack * SR, r = release * SR;
+  const coef = lp >= 1 ? 1 : Math.max(0.002, lp);
+  let prev = 0;
   for (let i = 0; i < n; i++) {
     const ph = (i % period) / period;
     let s;
@@ -151,6 +159,12 @@ function note(freq, dur, { wave = 'square', duty = 0.5, vol = 0.5, attack = 0.00
     else if (wave === 'saw') s = 1 - 2 * ph;
     else if (wave === 'sine') s = Math.sin(ph * 2 * Math.PI);
     else s = ph < duty ? 0.5 : -0.5;
+    if (sub > 0) {
+      const sp = (i % subPeriod) / subPeriod;
+      s = s * (1 - sub) + Math.sin(sp * 2 * Math.PI) * sub;
+    }
+    prev += coef * (s - prev); // one-pole low-pass
+    s = prev;
     let amp = 1;
     if (i < a) amp = i / a;
     else if (i > n - r) amp = Math.max(0, (n - i) / r);
@@ -189,29 +203,32 @@ function toWav(samples) {
   return buf;
 }
 
-// ── the sound set (8-bit, fantasy/Zelda/RPG flavored) ─────────────────────
+// ── the sound set (dark, weighty, serious-RPG / Dark-Souls flavored) ───────
+// Design: low fundamentals, muffled low-pass (no bright highs), minor / neutral
+// power-interval motifs (root-fifth-octave, never a cheerful major arpeggio), longer
+// weightier decays. Nothing bleepy or triumphant.
 const sounds = {
-  // Classic ascending two-tone coin blip (the arp must fire before the envelope ends).
-  'coin': () => sfxr({ wave_type: 0, p_base_freq: 0.52, p_env_sustain: 0.08, p_env_punch: 0.5, p_env_decay: 0.22, p_arp_mod: 0.45, p_arp_speed: 0.68, p_duty: 0.35 }),
-  // Short noise "swish" sweeping down — a sword cutting air.
-  'sword-slash': () => sfxr({ wave_type: 3, p_base_freq: 0.5, p_freq_ramp: -0.38, p_env_sustain: 0.05, p_env_decay: 0.22, p_hpf_freq: 0.3 }),
-  // Square zap down — blade connects.
-  'enemy-hit': () => sfxr({ wave_type: 0, p_base_freq: 0.52, p_freq_ramp: -0.45, p_env_sustain: 0.03, p_env_decay: 0.18, p_env_punch: 0.35, p_duty: 0.45 }),
-  // Noisy little explosion/poof — enemy defeated.
-  'enemy-death': () => sfxr({ wave_type: 3, p_base_freq: 0.42, p_freq_ramp: -0.2, p_env_sustain: 0.12, p_env_decay: 0.32, p_env_punch: 0.3 }),
-  // Harsh descending square with a duty sweep — took damage.
-  'hurt': () => sfxr({ wave_type: 0, p_base_freq: 0.34, p_freq_ramp: -0.3, p_env_sustain: 0.07, p_env_decay: 0.24, p_duty: 0.5, p_duty_ramp: 0.3 }),
-  // Rising arpeggio jingle — picked up a heart.
-  'heart': () => melody([{ f: N.C5, d: 0.085 }, { f: N.E5, d: 0.085 }, { f: N.G5, d: 0.085 }, { f: N.C6, d: 0.22 }], { wave: 'square', duty: 0.5 }),
-  // Triumphant item-get fanfare — got the sword.
-  'sword-pickup': () => melody([{ f: N.G4, d: 0.1 }, { f: N.C5, d: 0.1 }, { f: N.E5, d: 0.1 }, { f: N.G5, d: 0.1 }, { f: N.C6, d: 0.44 }], { wave: 'square', duty: 0.5 }),
-  // Sad descending triangle jingle — game over.
-  'game-over': () => melody([{ f: N.C5, d: 0.16 }, { f: N.G4, d: 0.16 }, { f: N.E4, d: 0.16 }, { f: N.C4, d: 0.5 }], { wave: 'triangle', release: 0.06 }),
-  // Short up/down menu blips.
-  'shop-open': () => melody([{ f: N.E5, d: 0.06 }, { f: N.A5, d: 0.12 }], { wave: 'square', duty: 0.25 }),
-  'shop-close': () => melody([{ f: N.A5, d: 0.06 }, { f: N.E5, d: 0.12 }], { wave: 'square', duty: 0.25 }),
-  // Rising noise whoosh with a moving low-pass — the sword catches fire.
-  'ignite': () => sfxr({ wave_type: 3, p_base_freq: 0.2, p_freq_ramp: 0.14, p_env_attack: 0.03, p_env_sustain: 0.12, p_env_decay: 0.34, p_lpf_freq: 0.5, p_lpf_ramp: 0.12 }),
+  // Muted, low "soul" tick — a soft muffled sine, not a bright coin jingle.
+  'coin': () => sfxr({ wave_type: 2, p_base_freq: 0.30, p_freq_ramp: -0.05, p_env_sustain: 0.05, p_env_punch: 0.2, p_env_decay: 0.22, p_lpf_freq: 0.5 }),
+  // Heavy, low air-cut — a weighty whoosh, not a hissy swish.
+  'sword-slash': () => sfxr({ wave_type: 3, p_base_freq: 0.34, p_freq_ramp: -0.30, p_env_sustain: 0.05, p_env_decay: 0.22, p_hpf_freq: 0.10, p_lpf_freq: 0.45 }),
+  // Meaty downward thud — the blade bites, low and punchy.
+  'enemy-hit': () => sfxr({ wave_type: 1, p_base_freq: 0.30, p_freq_ramp: -0.50, p_env_sustain: 0.02, p_env_decay: 0.17, p_env_punch: 0.5, p_lpf_freq: 0.55 }),
+  // Low, muffled collapse — an enemy falls.
+  'enemy-death': () => sfxr({ wave_type: 3, p_base_freq: 0.30, p_freq_ramp: -0.26, p_env_sustain: 0.14, p_env_decay: 0.40, p_env_punch: 0.25, p_lpf_freq: 0.38 }),
+  // Low pained grunt — took damage.
+  'hurt': () => sfxr({ wave_type: 1, p_base_freq: 0.22, p_freq_ramp: -0.24, p_env_sustain: 0.08, p_env_decay: 0.26, p_lpf_freq: 0.50 }),
+  // Warm, subdued heal — a low minor-third swell, not a rising jingle.
+  'heart': () => melody([{ f: N.A3, d: 0.14 }, { f: N.C4, d: 0.34 }], { wave: 'triangle', sub: 0.5, lp: 0.25, vol: 0.5, release: 0.08 }),
+  // Solemn, epic sword-get — root/fifth/octave (no third), low and weighty.
+  'sword-pickup': () => melody([{ f: N.A2, d: 0.22 }, { f: N.E3, d: 0.20 }, { f: N.A3, d: 0.62 }], { wave: 'saw', sub: 0.55, lp: 0.22, vol: 0.5, release: 0.10 }),
+  // Slow, dark descending minor — you died.
+  'game-over': () => melody([{ f: N.A3, d: 0.24 }, { f: N.E3, d: 0.24 }, { f: N.C3, d: 0.24 }, { f: N.A2, d: 0.80 }], { wave: 'triangle', sub: 0.5, lp: 0.22, vol: 0.5, release: 0.12 }),
+  // Low, muted menu tones (down = open, up = close), subdued.
+  'shop-open': () => melody([{ f: N.G3, d: 0.07 }, { f: N.C3, d: 0.16 }], { wave: 'sine', lp: 0.4, vol: 0.45 }),
+  'shop-close': () => melody([{ f: N.C3, d: 0.07 }, { f: N.G3, d: 0.16 }], { wave: 'sine', lp: 0.4, vol: 0.45 }),
+  // Deep, muffled roar rising — the sword catches fire.
+  'ignite': () => sfxr({ wave_type: 3, p_base_freq: 0.15, p_freq_ramp: 0.09, p_env_attack: 0.04, p_env_sustain: 0.14, p_env_decay: 0.42, p_lpf_freq: 0.32, p_lpf_ramp: 0.08 }),
 };
 
 fs.mkdirSync(OUT, { recursive: true });

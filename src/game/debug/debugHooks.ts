@@ -12,11 +12,16 @@ export interface GameDebugState {
   maxHealth: number;
   swordEquipped: boolean;
   swordOnFire: boolean;
+  heldItem: 'none' | 'sword' | 'key';
+  groundItems: Array<{ kind: 'sword' | 'key'; worldX: number; worldY: number }>;
   coins: number;
   dialogOpen: boolean;
   shopOpen: boolean;
   itemGetOpen: boolean;
   isDead: boolean;
+  /** The dark-siege loop: near a campfire = safe; in the dark the danger meter (0..1)
+   *  fills and undead spawn around the hero (see UndeadSpawnDirector). */
+  safety: { safe: boolean; danger: number; undeadCount: number };
   activeScreen: { cx: number; cy: number };
 }
 

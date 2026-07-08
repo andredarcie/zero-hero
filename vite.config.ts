@@ -7,6 +7,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 
 const levelsDir = fileURLToPath(new URL('./levels', import.meta.url));
+const worldJsonPath = fileURLToPath(new URL('./public/world.json', import.meta.url));
 
 const sanitizeFileName = (fileName: string): string | null => {
   if (!/^[A-Za-z0-9._-]+\.json$/u.test(fileName)) {
@@ -99,6 +100,46 @@ const levelsApiPlugin = (): Plugin => ({
   },
 });
 
+// Read/write the single authored world.json (public/world.json). The world editor loads
+// via GET and persists via PUT; the game reads the same file as a static asset. Dev-only,
+// like the levels API above.
+const worldApiPlugin = (): Plugin => ({
+  name: 'world-api',
+  configureServer(server) {
+    server.middlewares.use('/api/world', async (req, res) => {
+      const method = req.method ?? 'GET';
+
+      try {
+        if (method === 'GET') {
+          const content = await fs.readFile(worldJsonPath, 'utf8');
+          res.setHeader('Content-Type', 'application/json');
+          res.end(content);
+          return;
+        }
+
+        if (method === 'PUT') {
+          const body = await readRequestBody(req);
+          const parsed = JSON.parse(body) as object;
+          await fs.writeFile(worldJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+
+        res.statusCode = 405;
+        res.end(JSON.stringify({ error: 'Metodo nao suportado' }));
+      } catch (error) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          error: error instanceof Error ? error.message : 'Erro inesperado',
+        }));
+      }
+    });
+  },
+});
+
 const spaFallbackPlugin = (): Plugin => ({
   name: 'spa-fallback',
   apply: 'build',
@@ -124,7 +165,7 @@ const resolveBasePath = (): string => {
 
 export default defineConfig({
   base: resolveBasePath(),
-  plugins: [levelsApiPlugin(), spaFallbackPlugin()],
+  plugins: [levelsApiPlugin(), worldApiPlugin(), spaFallbackPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

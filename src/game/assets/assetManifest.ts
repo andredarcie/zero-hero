@@ -42,6 +42,13 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // 16x32 sheet of two keys (top = held/HUD, bottom = map pickup); see KEY_FRAMES.
+    key: ASSET_KEYS.keyItem,
+    path: '/assets/items/collectibles/key.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     key: ASSET_KEYS.swordOnFire,
     path: '/assets/items/equipment/sword_on_fire.png',
     frameWidth: TILESET_FRAME_SIZE,
@@ -50,18 +57,6 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
   {
     key: ASSET_KEYS.npcs,
     path: '/assets/characters/npcs/npcs.png',
-    frameWidth: 16,
-    frameHeight: 16,
-  },
-  {
-    key: ASSET_KEYS.slime,
-    path: '/assets/characters/enemies/slime/Slime.png',
-    frameWidth: 16,
-    frameHeight: 16,
-  },
-  {
-    key: ASSET_KEYS.bigSlime,
-    path: '/assets/characters/enemies/slime/BigSlime.png',
     frameWidth: 16,
     frameHeight: 16,
   },
@@ -83,10 +78,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   {
     key: ASSET_KEYS.npcDeath,
     path: '/assets/ui/states/death.png',
-  },
-  {
-    key: ASSET_KEYS.keyItem,
-    path: '/assets/items/collectibles/key.png',
   },
   {
     key: ASSET_KEYS.keyItemIcon,
@@ -112,45 +103,26 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     key: ASSET_KEYS.undeadHurt,
     path: '/assets/characters/enemies/undead/undead_hurt.png',
   },
+  { key: ASSET_KEYS.undeadBorn0, path: '/assets/characters/enemies/undead/undead_born0.png' },
+  { key: ASSET_KEYS.undeadBorn1, path: '/assets/characters/enemies/undead/undead_born1.png' },
+  { key: ASSET_KEYS.undeadBorn2, path: '/assets/characters/enemies/undead/undead_born2.png' },
+  { key: ASSET_KEYS.undeadBorn3, path: '/assets/characters/enemies/undead/undead_born3.png' },
+  { key: ASSET_KEYS.undeadBorn4, path: '/assets/characters/enemies/undead/undead_born4.png' },
+  { key: ASSET_KEYS.undeadBorn5, path: '/assets/characters/enemies/undead/undead_born5.png' },
+  { key: ASSET_KEYS.undeadBorn6, path: '/assets/characters/enemies/undead/undead_born6.png' },
   {
     key: ASSET_KEYS.coin,
     path: '/assets/items/collectibles/coin.png',
   },
   {
-    key: ASSET_KEYS.bat,
-    path: '/assets/characters/enemies/bat/bat.png',
+    key: ASSET_KEYS.dryBush,
+    path: '/assets/environment/props/bush.png',
   },
   {
-    key: ASSET_KEYS.batHurt,
-    path: '/assets/characters/enemies/bat/bat_hurt.png',
-  },
-  {
+    // Still loaded even though the mage enemy is gone: the "wizard" NPC uses this sprite
+    // (see NPC_VISUALS in constants.ts).
     key: ASSET_KEYS.mage,
     path: '/assets/characters/enemies/mage/mage__1.png',
-  },
-  {
-    key: ASSET_KEYS.mageHurt,
-    path: '/assets/characters/enemies/mage/mage_hurt.png',
-  },
-  {
-    key: ASSET_KEYS.magicBall,
-    path: '/assets/characters/enemies/mage/magic_ball.png',
-  },
-  {
-    key: ASSET_KEYS.slimePool,
-    path: '/assets/characters/enemies/slime/SlimePool.png',
-  },
-  {
-    key: ASSET_KEYS.bigSlimePool,
-    path: '/assets/characters/enemies/slime/BigSlimePool.png',
-  },
-  {
-    key: ASSET_KEYS.spider,
-    path: '/assets/characters/enemies/spider/spider.png',
-  },
-  {
-    key: ASSET_KEYS.webSpider,
-    path: '/assets/effects/ambient/web_spider.png',
   },
   { key: ASSET_KEYS.campfireFrame0, path: '/assets/effects/fire/sprite_fire0.png' },
   { key: ASSET_KEYS.campfireFrame1, path: '/assets/effects/fire/sprite_fire1.png' },
