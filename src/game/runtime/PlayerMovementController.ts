@@ -143,6 +143,14 @@ export class PlayerMovementController {
     this.isMoving = false;
     this.queuedMove = null;
     this.stopHold();
+    // Tween.stop() never fires onComplete, so the walk animation (repeat: -1) started in
+    // setFacing would loop forever on a mid-step interrupt (e.g. item pickup). Only a
+    // horizontal step plays it; its stop convention is the idleDown frame — vertical steps
+    // have no animation playing, so their facing frame stays untouched.
+    if (this.player.anims.isPlaying) {
+      this.player.anims.stop();
+      this.player.setFrame(HERO_FRAMES.idleDown);
+    }
     this.syncPlayerToWorld(worldX, worldY, this.tileSize || this.player.displayWidth || this.player.width);
   }
 
