@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import {
   ANIMATION_KEYS,
   ASSET_KEYS,
+  BOMB_FRAMES,
   CAMPFIRE_SAFE_RADIUS_TILES,
   CHUNK_COLUMNS,
   CHUNK_ROWS,
@@ -33,7 +34,11 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { SwordSlash } from '@/game/runtime/SwordOrbit';
 import { CampfireObject } from '@/game/objects/CampfireObject';
 import { DryBushObject } from '@/game/objects/DryBushObject';
+import { DryTreeObject } from '@/game/objects/DryTreeObject';
+import { LavaObject } from '@/game/objects/LavaObject';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
+import { RockObject } from '@/game/objects/RockObject';
+import { TallGrassObject } from '@/game/objects/TallGrassObject';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
@@ -50,8 +55,12 @@ import {
   getCampfires,
   getChunkContent,
   getDryBushes,
+  getDryTrees,
   getHeldItemPickups,
+  getLavaTiles,
   getLockedDoors,
+  getRocks,
+  getTallGrass,
   getDialog,
   getDialogKinds,
   getDialogVoice,
@@ -63,17 +72,39 @@ import {
 // (matching the game's pixel-art scale) instead of a smooth high-res gradient. Higher = chunkier.
 const LIGHT_DOWNSCALE = 6;
 
-// How each held item shows in the HUD slot / flies in (the on-fire sword swaps its own way).
+// How each held item shows in the HUD slot / flies in (a burning item swaps its own way).
 const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = {
   sword: { texture: ASSET_KEYS.swordItemIcon, frame: 0 },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
+  axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
+  bomb: { texture: ASSET_KEYS.bombIcon, frame: 0 },
+  lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
+  pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
+  scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
+  wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
 };
 
 // The raised sprite + caption for each item's first-time "item get" ceremony.
 const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle, label: 'VOCE PEGOU A ESPADA!' },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held, label: 'VOCE PEGOU A CHAVE!' },
+  axe: { texture: ASSET_KEYS.axeIcon, frame: 0, label: 'VOCE PEGOU O MACHADO!' },
+  bomb: { texture: ASSET_KEYS.bombItem, frame: BOMB_FRAMES.item, label: 'VOCE PEGOU A BOMBA! [ESPACO] SOLTA' },
+  lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0, label: 'VOCE PEGOU AS BOTAS DE LAVA!' },
+  pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
+  scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
+  wood: { texture: ASSET_KEYS.woodItem, frame: 0, label: 'VOCE PEGOU A MADEIRA!' },
 };
+
+// What each melee-capable item does to an enemy on a bump. The wood club swings like the
+// sword but hits half as hard, and only the sword benefits from shop upgrades.
+const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
+  sword: 1,
+  wood: 0.5,
+};
+
+const BOMB_FUSE_MS = 1600;
+const BOMB_BLAST_RADIUS_TILES = 2.2;
 
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
@@ -93,10 +124,18 @@ export class GameScene extends Phaser.Scene {
   // "item get" ceremony, so re-picking a dropped item just flies it to the HUD.
   private heldItem: 'none' | HeldItemKind = 'none';
   private readonly seenItems = new Set<HeldItemKind>();
-  private swordOnFire = false;
+  // Fire lives on the held item: the sword or the wood club can be lit at a campfire.
+  private heldOnFire = false;
   private campfires: CampfireObject[] = [];
   private dryBushes: DryBushObject[] = [];
   private lockedDoors: LockedDoorObject[] = [];
+  private dryTrees: DryTreeObject[] = [];
+  private rocks: RockObject[] = [];
+  private tallGrasses: TallGrassObject[] = [];
+  private lavaTiles: LavaObject[] = [];
+  // Lit bombs on the ground, world-anchored so they scroll with the map until they blow.
+  private activeBombs: Array<{ worldX: number; worldY: number; sprite: Phaser.GameObjects.Sprite }> = [];
+  private spaceKey?: Phaser.Input.Keyboard.Key;
   private boardRenderer?: GameBoardRenderer;
   private minimapRenderer?: MinimapRenderer;
   private player?: Phaser.GameObjects.Sprite;
@@ -182,7 +221,7 @@ export class GameScene extends Phaser.Scene {
     this.itemManager.loadAuthored(getHeldItemPickups());
     this.heldItem = 'none';
     this.seenItems.clear();
-    this.swordOnFire = false;
+    this.heldOnFire = false;
     // One reusable swing animator, alive for the whole scene: the sword uses it to attack,
     // the key uses it to strike a door (SwordSlash.slash accepts a custom item sprite).
     this.swordSlash = new SwordSlash(this);
@@ -203,15 +242,17 @@ export class GameScene extends Phaser.Scene {
       this.camera,
       (wx, wy) => {
         // The hero also stops on enemies (to attack them); everything else that blocks is
-        // shared with enemies via isSolidForEntities.
+        // shared with enemies via isSolidForEntities — except lava, which the hero can
+        // cross while wearing the lava boots.
         if (this.enemyManager?.getEnemyAt(wx, wy)) return true;
-        return this.isSolidForEntities(wx, wy);
+        return this.isSolidForEntities(wx, wy, this.heldItem === 'lavaBoots');
       },
       (wx, wy) => animateGrassRustle(this, this.boardRenderer?.getGrassSprite(wx, wy), this.tileSize),
       (wx, wy) => this.handlePlayerBump(wx, wy),
     );
 
     this.eKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+    this.spaceKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
     this.shopButton = this.add.text(0, 0, '[ LOJA ]', {
       fontFamily: FONT_FAMILY, fontSize: '10px', color: '#9977bb', resolution: TEXT_RESOLUTION,
@@ -226,10 +267,14 @@ export class GameScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
 
-    // Campfires, dry bushes and locked doors are authored props in world.json.
+    // All world props are authored in world.json; their collision is resolved at runtime.
     this.campfires = getCampfires().map((c) => new CampfireObject(this, c.worldX, c.worldY));
     this.dryBushes = getDryBushes().map((b) => new DryBushObject(this, b.worldX, b.worldY));
     this.lockedDoors = getLockedDoors().map((d) => new LockedDoorObject(this, d.worldX, d.worldY));
+    this.dryTrees = getDryTrees().map((t) => new DryTreeObject(this, t.worldX, t.worldY));
+    this.rocks = getRocks().map((r) => new RockObject(this, r.worldX, r.worldY));
+    this.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this, g.worldX, g.worldY));
+    this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
 
     this.initLighting();
     this.streamChunks(true);
@@ -268,7 +313,8 @@ export class GameScene extends Phaser.Scene {
         health: this.playerHealth,
         maxHealth: this.playerMaxHealth,
         swordEquipped: this.swordEquipped,
-        swordOnFire: this.swordOnFire,
+        swordOnFire: this.heldOnFire && this.swordEquipped,
+        heldOnFire: this.heldOnFire,
         heldItem: this.heldItem,
         groundItems: this.itemManager?.snapshot() ?? [],
         coins: this.coinManager?.coinTotal ?? 0,
@@ -334,6 +380,11 @@ export class GameScene extends Phaser.Scene {
     this.campfires.forEach((cf) => cf.destroy());
     this.dryBushes.forEach((b) => b.destroy());
     this.lockedDoors.forEach((d) => d.destroy());
+    this.dryTrees.forEach((t) => t.destroy());
+    this.rocks.forEach((r) => r.destroy());
+    this.tallGrasses.forEach((g) => g.destroy());
+    this.lavaTiles.forEach((l) => l.destroy());
+    this.activeBombs.forEach((b) => b.sprite.destroy());
     this.shopOverlay?.destroy();
     this.breathingTween?.destroy();
     this.breathingTween = undefined;
@@ -346,6 +397,11 @@ export class GameScene extends Phaser.Scene {
     this.campfires = [];
     this.dryBushes = [];
     this.lockedDoors = [];
+    this.dryTrees = [];
+    this.rocks = [];
+    this.tallGrasses = [];
+    this.lavaTiles = [];
+    this.activeBombs = [];
     this.lightCircleImg = undefined;
     this.darknessOverlay = undefined;
     this.playerShadow = undefined;
@@ -371,6 +427,11 @@ export class GameScene extends Phaser.Scene {
 
     if (this.isDead || this.shopOpen || !this.movementController || !this.boardRenderer || !this.chunkManager || !this.camera) {
       return;
+    }
+
+    // The bomb is the one consumable: SPACE drops it lit on the hero's tile.
+    if (this.heldItem === 'bomb' && this.spaceKey && Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+      this.placeBomb();
     }
 
     const prevWorldX = this.playerWorld.worldX;
@@ -474,9 +535,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
-    for (const cf of this.campfires) cf.render(this.tileSize, this.camera);
-    for (const b of this.dryBushes) b.render(this.tileSize, this.camera);
-    for (const d of this.lockedDoors) d.render(this.tileSize, this.camera);
+    this.renderProps();
 
     this.minimapRenderer?.update(this.playerWorld.worldX, this.playerWorld.worldY, this.chunkManager);
   }
@@ -597,16 +656,37 @@ export class GameScene extends Phaser.Scene {
     return this.lockedDoors.find((d) => d.worldX === wx && d.worldY === wy);
   }
 
+  private getDryTreeAt(wx: number, wy: number): DryTreeObject | undefined {
+    return this.dryTrees.find((t) => t.worldX === wx && t.worldY === wy);
+  }
+
+  private getRockAt(wx: number, wy: number): RockObject | undefined {
+    return this.rocks.find((r) => r.worldX === wx && r.worldY === wy);
+  }
+
+  private getTallGrassAt(wx: number, wy: number): TallGrassObject | undefined {
+    return this.tallGrasses.find((g) => g.worldX === wx && g.worldY === wy);
+  }
+
+  private getLavaAt(wx: number, wy: number): LavaObject | undefined {
+    return this.lavaTiles.find((l) => l.worldX === wx && l.worldY === wy);
+  }
+
   /**
    * Everything a walking entity (hero or enemy) cannot step onto: authored terrain collision
-   * and trees (via ChunkManager.isCellBlocked), campfires, standing dry bushes, and NPCs.
-   * The hero adds enemies on top (to attack them); enemies add a chunk-border margin.
+   * and trees (via ChunkManager.isCellBlocked), campfires, standing dry bushes/trees/grass,
+   * unbroken rocks, NPCs — and lava, unless the caller can cross it (hero wearing the lava
+   * boots). The hero adds enemies on top (to attack them); enemies add lit tiles.
    */
-  private isSolidForEntities(wx: number, wy: number): boolean {
+  private isSolidForEntities(wx: number, wy: number, lavaPassable = false): boolean {
     if (this.chunkManager?.isCellBlocked(wx, wy)) return true;
     if (this.getCampfireAt(wx, wy)) return true;
     if (this.getDryBushAt(wx, wy)?.blocking) return true;
     if (this.getLockedDoorAt(wx, wy)?.blocking) return true;
+    if (this.getDryTreeAt(wx, wy)?.blocking) return true;
+    if (this.getRockAt(wx, wy)?.blocking) return true;
+    if (this.getTallGrassAt(wx, wy)?.blocking) return true;
+    if (!lavaPassable && this.getLavaAt(wx, wy)) return true;
     if (this.npcManager?.hasNpcAt(wx, wy)) return true;
     return false;
   }
@@ -646,41 +726,82 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Campfire interaction — swing sword, then ignite
+    // Campfire interaction — swing the flammable held item (sword or wood) and light it.
     const campfire = this.getCampfireAt(wx, wy);
     if (campfire) {
       campfire.onHit();
-      if (this.swordEquipped && this.swordSlash && this.camera) {
-        getSoundManager().playSwordSlash();
-        const dx = wx - this.playerWorld.worldX;
-        const dy = wy - this.playerWorld.worldY;
-        const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
-        this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
-        if (!this.swordOnFire) {
-          // Ignite at the moment the blade reaches the campfire (end of main swing arc)
-          this.time.delayedCall(150, () => { this.igniteSword(); });
+      if (this.isFlammableHeld) {
+        this.swingHeld(wx, wy);
+        if (!this.heldOnFire) {
+          // Ignite at the moment the item reaches the campfire (end of main swing arc)
+          this.time.delayedCall(150, () => { this.igniteHeldItem(); });
         }
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
     }
 
-    // Dry bush — the flaming sword sets it alight; it chars to ash and opens the tile.
+    // Dry bush — a flaming item sets it alight; it chars to ash and opens the tile.
     const bush = this.getDryBushAt(wx, wy);
     if (bush?.blocking) {
       bush.shake();
-      if (this.swordEquipped && this.swordSlash && this.camera) {
-        getSoundManager().playSwordSlash();
-        const dx = wx - this.playerWorld.worldX;
-        const dy = wy - this.playerWorld.worldY;
-        const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
-        this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
-        if (this.swordOnFire) {
-          // Ignite when the blade reaches the bush (end of the main swing arc).
+      if (this.isFlammableHeld) {
+        this.swingHeld(wx, wy);
+        if (this.heldOnFire) {
+          // Ignite when the flame reaches the bush (end of the main swing arc).
           this.time.delayedCall(150, () => {
             if (bush.ignite()) this.spawnFireHitEffect(wx, wy);
           });
         }
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // Dry tree — the axe chops it down stage by stage until only a stump is left.
+    const tree = this.getDryTreeAt(wx, wy);
+    if (tree?.blocking) {
+      if (this.heldItem === 'axe') {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(150, () => {
+          if (tree.chop()) getSoundManager().playWoodChop();
+        });
+      } else {
+        tree.shake();
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // Rock — the pickaxe cracks it, then shatters it open.
+    const rock = this.getRockAt(wx, wy);
+    if (rock?.blocking) {
+      if (this.heldItem === 'pickaxe') {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(150, () => {
+          if (rock.smash(this.tileSize)) getSoundManager().playRockSmash();
+        });
+      } else {
+        rock.shake();
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // Tall grass — the scythe mows it down to stubble; fire burns it to the same stubble.
+    const grass = this.getTallGrassAt(wx, wy);
+    if (grass?.blocking && grass.isTall) {
+      if (this.heldItem === 'scythe') {
+        this.swingHeld(wx, wy);
+        getSoundManager().playGrassCut();
+        this.time.delayedCall(110, () => grass.cut());
+      } else if (this.isFlammableHeld && this.heldOnFire) {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(150, () => {
+          if (grass.ignite()) this.spawnFireHitEffect(wx, wy);
+        });
+      } else {
+        grass.shake();
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -717,21 +838,19 @@ export class GameScene extends Phaser.Scene {
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (!enemy) return;
 
-    // No sword, no fight — the hero can't hurt enemies until the blade is found.
-    if (!this.swordEquipped) return;
+    // Only a melee-capable item hurts enemies: the sword (full damage, scaled by upgrades)
+    // or the wood club (half damage, no upgrade scaling).
+    const damage = MELEE_DAMAGE[this.heldItem as HeldItemKind];
+    if (damage === undefined) return;
 
-    const hits = 1 + this.upgrades.swordSpeed;
-    for (let i = 0; i < hits; i++) enemy.takeDamage();
+    const hits = this.heldItem === 'sword' ? 1 + this.upgrades.swordSpeed : 1;
+    for (let i = 0; i < hits; i++) enemy.takeDamage(damage);
 
-    if (this.swordEquipped && this.swordSlash && this.camera) {
-      getSoundManager().playSwordSlash();
-      const dx = wx - this.playerWorld.worldX;
-      const dy = wy - this.playerWorld.worldY;
-      const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
-      this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
-      enemy.triggerKnockback(dx, dy, this.tileSize);
-      if (this.swordOnFire && enemy.isAlive) this.spawnFireHitEffect(wx, wy);
-    }
+    this.swingHeld(wx, wy);
+    const dx = wx - this.playerWorld.worldX;
+    const dy = wy - this.playerWorld.worldY;
+    enemy.triggerKnockback(dx, dy, this.tileSize);
+    if (this.heldOnFire && enemy.isAlive) this.spawnFireHitEffect(wx, wy);
 
     getSoundManager().playEnemyHit();
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -744,14 +863,156 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private igniteSword(): void {
+  /** The held item can catch fire at a campfire: only the sword and the wood club burn. */
+  private get isFlammableHeld(): boolean {
+    return this.heldItem === 'sword' || this.heldItem === 'wood';
+  }
+
+  /**
+   * Swing the current held item at a tile with the sword's slash arc. The sword swings
+   * itself (the animator owns its fire state); every other item swings its own sprite —
+   * burning wood carries its flame into the arc.
+   */
+  private swingHeld(wx: number, wy: number): void {
+    if (!this.swordSlash || !this.camera || this.heldItem === 'none') return;
+    getSoundManager().playSwordSlash();
+    const dx = wx - this.playerWorld.worldX;
+    const dy = wy - this.playerWorld.worldY;
+    const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+    if (this.heldItem === 'sword') {
+      this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
+      return;
+    }
+    const visual = HUD_ITEM_VISUAL[this.heldItem];
+    this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize, {
+      texture: this.heldItem === 'wood' ? ASSET_KEYS.woodItem : visual.texture,
+      frame: this.heldItem === 'wood' ? 0 : visual.frame,
+      onFire: this.heldItem === 'wood' && this.heldOnFire,
+    });
+  }
+
+  // Light the held item (sword or wood club) at a campfire.
+  private igniteHeldItem(): void {
+    if (!this.isFlammableHeld || this.heldOnFire) return;
     getSoundManager().playIgnite();
-    this.swordOnFire = true;
-    this.swordSlash?.setOnFire(true);
-    this.boardRenderer?.setHudSwordOnFire(true);
+    this.heldOnFire = true;
+    if (this.heldItem === 'sword') {
+      this.swordSlash?.setOnFire(true);
+      this.boardRenderer?.setHudItemFire(true, ASSET_KEYS.swordOnFire, 0xffcc66);
+    } else {
+      this.boardRenderer?.setHudItemFire(true, ASSET_KEYS.woodOnFireIcon);
+    }
     // Orange flash on the player as the fire transfers
     this.player?.setTint(0xff6600);
     this.time.delayedCall(250, () => { this.player?.clearTint(); });
+  }
+
+  // ── Bomb ───────────────────────────────────────────────────────────────────
+  // The one consumable: SPACE drops it lit under the hero; after the fuse it explodes —
+  // killing every enemy in the blast and setting fire to everything flammable there.
+  private placeBomb(): void {
+    if (this.heldItem !== 'bomb') return;
+    const worldX = this.playerWorld.worldX;
+    const worldY = this.playerWorld.worldY;
+
+    this.heldItem = 'none';
+    this.heldOnFire = false;
+    this.boardRenderer?.setHudItemFire(false);
+    this.boardRenderer?.setHudItemTexture(null);
+    getSoundManager().playBombPlace();
+
+    const sprite = this.add
+      .sprite(0, 0, ASSET_KEYS.bombItem, BOMB_FRAMES.item)
+      .setOrigin(0.5)
+      .setDepth(ySortDepth(worldY) - 0.3);
+    const bomb = { worldX, worldY, sprite };
+    this.activeBombs.push(bomb);
+
+    // Fuse: accelerating red blink until it blows.
+    this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: BOMB_FUSE_MS,
+      onUpdate: (tween) => {
+        const t = tween.getValue() ?? 0;
+        const blink = Math.sin(t * t * 40) > 0;
+        sprite.setTint(blink ? 0xff4444 : 0xffffff);
+      },
+    });
+    this.time.delayedCall(BOMB_FUSE_MS, () => this.explodeBomb(bomb));
+  }
+
+  private explodeBomb(bomb: { worldX: number; worldY: number; sprite: Phaser.GameObjects.Sprite }): void {
+    const index = this.activeBombs.indexOf(bomb);
+    if (index < 0) return;
+    this.activeBombs.splice(index, 1);
+    bomb.sprite.destroy();
+    if (!this.camera) return;
+
+    getSoundManager().playBombExplode();
+    this.cameras.main.shake(160, 0.008);
+
+    const center = this.camera.tileToScreen(bomb.worldX, bomb.worldY, this.tileSize);
+    const inBlast = (wx: number, wy: number): boolean =>
+      Math.hypot(wx - bomb.worldX, wy - bomb.worldY) <= BOMB_BLAST_RADIUS_TILES;
+
+    // White core flash + expanding ring.
+    const flash = this.add
+      .circle(center.x, center.y, this.tileSize * 0.8, 0xfff3d0, 0.95)
+      .setDepth(SCENE_DEPTHS.upper + 1);
+    this.tweens.add({
+      targets: flash,
+      radius: this.tileSize * BOMB_BLAST_RADIUS_TILES,
+      alpha: 0,
+      duration: 330,
+      ease: 'Cubic.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    // Sparks + little fires scattered over the blast area.
+    const fireKeys = [ASSET_KEYS.tinyFire0, ASSET_KEYS.tinyFire1, ASSET_KEYS.tinyFire2];
+    for (let i = 0; i < 10; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = Math.random() * this.tileSize * BOMB_BLAST_RADIUS_TILES;
+      const isSpark = i % 2 === 0;
+      const size = Math.floor(this.tileSize * (isSpark ? 0.3 : 0.42));
+      const puff = this.add
+        .sprite(center.x + Math.cos(ang) * dist, center.y + Math.sin(ang) * dist,
+          isSpark ? ASSET_KEYS.bombItem : fireKeys[i % fireKeys.length],
+          isSpark ? BOMB_FRAMES.spark : 0)
+        .setDisplaySize(size, size)
+        .setDepth(SCENE_DEPTHS.upper + 1);
+      this.tweens.add({
+        targets: puff,
+        alpha: 0,
+        y: puff.y - this.tileSize * 0.5,
+        duration: 340 + i * 45,
+        ease: 'Power2.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+
+    // Kill every enemy caught in the blast (coins drop like any other kill).
+    for (const enemy of this.enemyManager?.getAliveEnemies() ?? []) {
+      if (!inBlast(enemy.worldX, enemy.worldY)) continue;
+      enemy.takeDamage(999);
+      if (!enemy.isAlive && this.chunkManager) {
+        getSoundManager().playEnemyDeath();
+        this.coinManager?.spawnCoins(enemy.worldX, enemy.worldY, this.chunkManager);
+      }
+    }
+
+    // Set fire to everything flammable in the area.
+    for (const bushObj of this.dryBushes) {
+      if (inBlast(bushObj.worldX, bushObj.worldY) && bushObj.ignite()) {
+        this.spawnFireHitEffect(bushObj.worldX, bushObj.worldY);
+      }
+    }
+    for (const grassObj of this.tallGrasses) {
+      if (inBlast(grassObj.worldX, grassObj.worldY) && grassObj.ignite()) {
+        this.spawnFireHitEffect(grassObj.worldX, grassObj.worldY);
+      }
+    }
   }
 
   private spawnFireHitEffect(wx: number, wy: number): void {
@@ -883,9 +1144,23 @@ export class GameScene extends Phaser.Scene {
     this.heartPickupManager?.render(this.tileSize, this.camera);
     this.itemManager?.render(this.tileSize, this.camera);
     this.npcManager?.render(this.tileSize, this.camera);
+    this.renderProps();
+  }
+
+  private renderProps(): void {
+    if (!this.camera) return;
+    for (const lv of this.lavaTiles) lv.render(this.tileSize, this.camera);
     for (const cf of this.campfires) cf.render(this.tileSize, this.camera);
     for (const b of this.dryBushes) b.render(this.tileSize, this.camera);
     for (const d of this.lockedDoors) d.render(this.tileSize, this.camera);
+    for (const t of this.dryTrees) t.render(this.tileSize, this.camera);
+    for (const r of this.rocks) r.render(this.tileSize, this.camera);
+    for (const g of this.tallGrasses) g.render(this.tileSize, this.camera);
+    for (const bomb of this.activeBombs) {
+      const s = this.camera.tileToScreen(bomb.worldX, bomb.worldY, this.tileSize);
+      const size = Math.max(10, Math.floor(this.tileSize * 0.62));
+      bomb.sprite.setPosition(s.x, s.y).setDisplaySize(size, size).setDepth(ySortDepth(bomb.worldY) - 0.3);
+    }
   }
 
   private toggleShop(): void {
@@ -944,9 +1219,9 @@ export class GameScene extends Phaser.Scene {
     if (previous !== 'none') this.itemManager?.drop(previous, item.worldX, item.worldY);
 
     this.heldItem = item.kind;
-    this.swordOnFire = false;
+    this.heldOnFire = false; // fire never survives a swap — the dropped item lands unlit
     this.swordSlash?.setOnFire(false);
-    this.boardRenderer?.setHudSwordOnFire(false);
+    this.boardRenderer?.setHudItemFire(false);
     this.boardRenderer?.setHudItemTexture(null); // stays empty until the item flies in
 
     getSoundManager().playSwordPickup();
@@ -1200,6 +1475,13 @@ export class GameScene extends Phaser.Scene {
     for (const pos of this.coinManager?.getActiveWorldPositions() ?? []) {
       const s = this.camera.tileToScreen(pos.worldX, pos.worldY, this.tileSize);
       eraseLight(s.x, s.y, coinRadius);
+    }
+
+    // Lava glows: each tile punches a small warm hole (molten rock is its own light).
+    const lavaRadius = this.tileSize * 1.5;
+    for (const lv of this.lavaTiles) {
+      const s = this.camera.tileToScreen(lv.worldX, lv.worldY, this.tileSize);
+      eraseLight(s.x, s.y, lavaRadius);
     }
   }
 

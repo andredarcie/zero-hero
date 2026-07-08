@@ -53,9 +53,10 @@ export abstract class EnemyBase {
     return this.alive;
   }
 
-  public takeDamage(): boolean {
+  /** Apply damage (default 1). Weak weapons pass fractions — e.g. the wood club deals 0.5. */
+  public takeDamage(amount = 1): boolean {
     if (!this.alive) return false;
-    this.health -= 1;
+    this.health -= amount;
 
     if (this.hurtTexture) {
       this.sprite.setTexture(this.hurtTexture);

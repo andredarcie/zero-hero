@@ -87,12 +87,22 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'heart', label: 'Coracao', key: ASSET_KEYS.hudHearts, frame: 0 },
   { type: 'sword', label: 'Espada', key: ASSET_KEYS.swordItem, frame: 0 },
   { type: 'key', label: 'Chave', key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
+  { type: 'axe', label: 'Machado', key: ASSET_KEYS.axeIcon },
+  { type: 'bomb', label: 'Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
+  { type: 'lavaBoots', label: 'Botas de Lava', key: ASSET_KEYS.lavaBootsIcon },
+  { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
+  { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
+  { type: 'wood', label: 'Madeira', key: ASSET_KEYS.woodItem },
 ];
 
 const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [
   { type: 'campfire', label: 'Fogueira', key: ASSET_KEYS.campfireFrame1 },
   { type: 'dryBush', label: 'Mato Seco', key: ASSET_KEYS.dryBush },
   { type: 'lockedDoor', label: 'Porta', key: ASSET_KEYS.lookedDoorObject },
+  { type: 'dryTree', label: 'Arvore Seca', key: ASSET_KEYS.dryTree, frame: 0 },
+  { type: 'rock', label: 'Pedra', key: ASSET_KEYS.rock },
+  { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassWind0 },
+  { type: 'lava', label: 'Lava', key: ASSET_KEYS.lavaFloor },
 ];
 
 const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: string }> = [

@@ -48,7 +48,8 @@ export class SwordSlash {
 
   /**
    * dx/dy: cardinal attack direction (-1, 0, or 1). Pass `item` to swing a different sprite
-   * (e.g. the key on a door) with the exact same arc — no fire, its own texture/frame.
+   * (e.g. the key on a door, a tool) with the exact same arc — its own texture/frame, and
+   * only burning if the item says so (e.g. the flaming wood club).
    */
   public slash(
     playerScreenX: number,
@@ -56,7 +57,7 @@ export class SwordSlash {
     dx: number,
     dy: number,
     tileSize: number,
-    item?: { texture: string; frame: number },
+    item?: { texture: string; frame: number; onFire?: boolean },
   ): void {
     this.scene.tweens.killTweensOf(this.sprite);
     this.trails.forEach(t => this.scene.tweens.killTweensOf(t));
@@ -79,8 +80,9 @@ export class SwordSlash {
     this.slashSize    = size;
     this.trailStep    = SLASH_SWEEP_DEG / (TRAIL_COUNT + 2);
 
-    // A custom item (e.g. the key) never catches fire; only the bare sword can.
-    const onFire = this.onFire && item === undefined;
+    // A custom item burns only when it says so (flaming wood); the bare sword uses the
+    // slash animator's own onFire state.
+    const onFire = item ? (item.onFire ?? false) : this.onFire;
     const texture = item ? item.texture : (onFire ? ASSET_KEYS.swordOnFire : ASSET_KEYS.swordItem);
     const frame = item ? item.frame : ITEM_FRAMES.swordIdle;
 

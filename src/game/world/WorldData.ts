@@ -1,7 +1,7 @@
 import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import type { ChunkData } from './Chunk';
-import type { NpcKind, ScreenContent } from './ScreenContent';
+import type { NpcKind, PickupKind, ScreenContent } from './ScreenContent';
 import { WORLD_SCHEMA_VERSION, type WorldChunk, type WorldData, type WorldProp } from './worldSchema';
 
 // Single seam through which the whole runtime reads the finite, authored world. The data is
@@ -106,13 +106,21 @@ export const getDryBushes = (): WorldProp[] => requireWorld().props.filter((prop
 
 export const getLockedDoors = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'lockedDoor');
 
-// Held items (sword/key) are loaded once, up front — unlike streamed hearts — because the
+export const getDryTrees = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryTree');
+
+export const getRocks = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'rock');
+
+export const getTallGrass = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'tallGrass');
+
+export const getLavaTiles = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'lava');
+
+// Held items (everything except streamed hearts) are loaded once, up front, because the
 // hero can drop and swap them anywhere, so they must persist off-screen.
-export const getHeldItemPickups = (): Array<{ type: 'sword' | 'key'; worldX: number; worldY: number }> => {
-  const out: Array<{ type: 'sword' | 'key'; worldX: number; worldY: number }> = [];
+export const getHeldItemPickups = (): Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> => {
+  const out: Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> = [];
   for (const chunk of requireWorld().chunks) {
     for (const pickup of chunk.pickups) {
-      if (pickup.type === 'sword' || pickup.type === 'key') {
+      if (pickup.type !== 'heart') {
         out.push({ type: pickup.type, worldX: pickup.worldX, worldY: pickup.worldY });
       }
     }

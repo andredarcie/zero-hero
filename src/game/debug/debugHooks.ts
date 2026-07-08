@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { NpcKind } from '@/game/world/ScreenContent';
 
 /**
@@ -12,8 +13,10 @@ export interface GameDebugState {
   maxHealth: number;
   swordEquipped: boolean;
   swordOnFire: boolean;
-  heldItem: 'none' | 'sword' | 'key';
-  groundItems: Array<{ kind: 'sword' | 'key'; worldX: number; worldY: number }>;
+  /** True while the held item (sword or wood club) is ablaze. */
+  heldOnFire: boolean;
+  heldItem: 'none' | HeldItemKind;
+  groundItems: Array<{ kind: HeldItemKind; worldX: number; worldY: number }>;
   coins: number;
   dialogOpen: boolean;
   shopOpen: boolean;

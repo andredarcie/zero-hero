@@ -60,6 +60,20 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameWidth: 16,
     frameHeight: 16,
   },
+  {
+    // 16x32: bomb on top, spark puff below (see BOMB_FRAMES).
+    key: ASSET_KEYS.bombItem,
+    path: '/assets/items/equipment/bomb.png',
+    frameWidth: 16,
+    frameHeight: 16,
+  },
+  {
+    // 16x96: the dry tree shrinking per axe chop (see DRY_TREE_FRAME_COUNT).
+    key: ASSET_KEYS.dryTree,
+    path: '/assets/environment/props/woods.png',
+    frameWidth: 16,
+    frameHeight: 16,
+  },
 ] as const;
 
 const SHARED_IMAGES: readonly ImageAsset[] = [
@@ -118,6 +132,28 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     key: ASSET_KEYS.dryBush,
     path: '/assets/environment/props/bush.png',
   },
+  { key: ASSET_KEYS.axeIcon,        path: '/assets/ui/icons/axe_icon.png' },
+  { key: ASSET_KEYS.bombIcon,       path: '/assets/ui/icons/bomb_icon.png' },
+  { key: ASSET_KEYS.lavaBootsIcon,  path: '/assets/ui/icons/lava_boots_icon.png' },
+  { key: ASSET_KEYS.pickaxeIcon,    path: '/assets/ui/icons/pickaxe_icon.png' },
+  { key: ASSET_KEYS.scytheIcon,     path: '/assets/ui/icons/scythe_icon.png' },
+  { key: ASSET_KEYS.woodIcon,       path: '/assets/ui/icons/wood_icon.png' },
+  { key: ASSET_KEYS.woodOnFireIcon, path: '/assets/ui/icons/wood_on_fire_icon.png' },
+  { key: ASSET_KEYS.woodItem,       path: '/assets/items/collectibles/wood.png' },
+  { key: ASSET_KEYS.rock,           path: '/assets/environment/props/rock.png' },
+  { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock__1.png' },
+  { key: ASSET_KEYS.tallGrassWind0, path: '/assets/environment/props/grass_wind0.png' },
+  { key: ASSET_KEYS.tallGrassWind1, path: '/assets/environment/props/grass_wind1.png' },
+  { key: ASSET_KEYS.cuttingGrass0,  path: '/assets/environment/props/cuting_grass0.png' },
+  { key: ASSET_KEYS.cuttingGrass1,  path: '/assets/environment/props/cuting_grass1.png' },
+  { key: ASSET_KEYS.cuttingGrass2,  path: '/assets/environment/props/cuting_grass2.png' },
+  { key: ASSET_KEYS.cuttingGrass3,  path: '/assets/environment/props/cuting_grass3.png' },
+  { key: ASSET_KEYS.cutGrass,       path: '/assets/environment/props/cut_grass.png' },
+  { key: ASSET_KEYS.cutGrassWind0,  path: '/assets/environment/props/cut_grass_wind0.png' },
+  { key: ASSET_KEYS.cutGrassWind1,  path: '/assets/environment/props/cut_grass_wind1.png' },
+  { key: ASSET_KEYS.grassFire0,     path: '/assets/environment/props/grass_fre_0.png' },
+  { key: ASSET_KEYS.grassFire1,     path: '/assets/environment/props/grass_fre_1.png' },
+  { key: ASSET_KEYS.lavaFloor,      path: '/assets/environment/terrain/lava_floor.png' },
   {
     // Still loaded even though the mage enemy is gone: the "wizard" NPC uses this sprite
     // (see NPC_VISUALS in constants.ts).

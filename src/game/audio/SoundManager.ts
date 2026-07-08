@@ -289,6 +289,40 @@ class SoundManager {
     this.osc('sawtooth', 90, 200, 0.14, 0.30, 0.05);
   }
 
+  public playWoodChop(): void {
+    // No dedicated sample — procedural. Dull axe bite into dry wood: a thock + short crack.
+    this.noise('lowpass', 600, 1.4, 0.34, 0.07);
+    this.osc('square', 190, 90, 0.16, 0.09);
+    this.noise('highpass', 1800, 1.0, 0.08, 0.05, 0.02);
+  }
+
+  public playRockSmash(): void {
+    // No dedicated sample — procedural. Stone clack with a gritty tail.
+    this.noise('bandpass', 2600, 3.0, 0.22, 0.05);
+    this.osc('square', 320, 140, 0.14, 0.07);
+    this.noise('lowpass', 500, 1.0, 0.22, 0.14, 0.02);
+  }
+
+  public playGrassCut(): void {
+    // No dedicated sample — procedural. A quick swish through dry stalks.
+    this.noise('highpass', 2400, 0.8, 0.16, 0.12);
+    this.noise('bandpass', 900, 1.2, 0.10, 0.10, 0.04);
+  }
+
+  public playBombPlace(): void {
+    // No dedicated sample — procedural. Soft thud + fuse hiss starting up.
+    this.noise('lowpass', 300, 1.0, 0.22, 0.08);
+    this.noise('highpass', 3200, 0.8, 0.05, 0.30, 0.06);
+  }
+
+  public playBombExplode(): void {
+    // No dedicated sample — procedural. Deep boom with a rumbling tail.
+    this.osc('sine', 110, 28, 0.6, 0.5);
+    this.noise('lowpass', 900, 0.8, 0.55, 0.20);
+    this.noise('lowpass', 240, 1.0, 0.35, 0.7, 0.10);
+    this.noise('highpass', 1500, 1.0, 0.12, 0.08);
+  }
+
   public playUndeadSpawn(): void {
     // No dedicated sample — procedural. Bones grinding up through soil: two gritty
     // filtered-noise scrapes plus a low rising groan.

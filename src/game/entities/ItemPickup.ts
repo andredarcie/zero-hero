@@ -1,14 +1,31 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, ITEM_FRAMES, KEY_FRAMES, SCENE_DEPTHS } from '@/game/constants';
+import { ASSET_KEYS, BOMB_FRAMES, ITEM_FRAMES, KEY_FRAMES, SCENE_DEPTHS } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
-export type HeldItemKind = 'sword' | 'key';
+// Every carriable item. All share the sword/key behavior: one in hand at a time, swap drops
+// the previous one on the ground. Only the bomb is consumed on use.
+export type HeldItemKind =
+  | 'sword'
+  | 'key'
+  | 'axe'
+  | 'bomb'
+  | 'lavaBoots'
+  | 'pickaxe'
+  | 'scythe'
+  | 'wood';
 
-// How each held item looks lying on the ground (the map sprite).
+// How each held item looks lying on the ground (the map sprite). Tools without a dedicated
+// map sprite reuse their HUD icon — same 16x16 pixel-art scale.
 const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = {
   sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
+  axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
+  bomb: { texture: ASSET_KEYS.bombItem, frame: BOMB_FRAMES.item },
+  lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
+  pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
+  scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
+  wood: { texture: ASSET_KEYS.woodItem, frame: 0 },
 };
 
 // A single held item sitting on the ground — either authored in world.json or dropped when

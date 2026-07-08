@@ -111,6 +111,15 @@ export const ASSET_KEYS = {
   keyItemIcon: 'key-item-icon',
   swordItem: 'sword-item',
   swordItemIcon: 'sword-item-icon',
+  axeIcon: 'axe-icon',
+  bombItem: 'bomb-item',
+  bombIcon: 'bomb-icon',
+  lavaBootsIcon: 'lava-boots-icon',
+  pickaxeIcon: 'pickaxe-icon',
+  scytheIcon: 'scythe-icon',
+  woodItem: 'wood-item',
+  woodIcon: 'wood-icon',
+  woodOnFireIcon: 'wood-on-fire-icon',
   itemShadow: 'item-shadow',
   lookedDoorObject: 'looked-door-object',
   undead: 'undead',
@@ -126,6 +135,21 @@ export const ASSET_KEYS = {
   mage: 'mage',
   swordOnFire: 'sword-on-fire',
   dryBush: 'dry-bush',
+  dryTree: 'dry-tree',
+  rock: 'rock',
+  rockCracked: 'rock-cracked',
+  tallGrassWind0: 'tall-grass-wind0',
+  tallGrassWind1: 'tall-grass-wind1',
+  cuttingGrass0: 'cutting-grass0',
+  cuttingGrass1: 'cutting-grass1',
+  cuttingGrass2: 'cutting-grass2',
+  cuttingGrass3: 'cutting-grass3',
+  cutGrass: 'cut-grass',
+  cutGrassWind0: 'cut-grass-wind0',
+  cutGrassWind1: 'cut-grass-wind1',
+  grassFire0: 'grass-fire0',
+  grassFire1: 'grass-fire1',
+  lavaFloor: 'lava-floor',
   campfireFrame0: 'campfire-f0',
   campfireFrame1: 'campfire-f1',
   campfireFrame2: 'campfire-f2',
@@ -180,6 +204,17 @@ export const KEY_FRAMES = {
   held: 0,
   pickup: 1,
 } as const;
+
+// bomb.png is a 16x32 sheet: top = the bomb itself, bottom = a small spark puff (used as
+// explosion debris).
+export const BOMB_FRAMES = {
+  item: 0,
+  spark: 1,
+} as const;
+
+// woods.png is a 16x96 sheet: the dry tree shrinking one stage per axe chop, frame 0 (full
+// tree) through frame 5 (passable stump).
+export const DRY_TREE_FRAME_COUNT = 6;
 
 // Upper-layer tileset frames that depict trees. Trees are solid "by default":
 // ChunkManager.isCellBlocked treats these as collision even where a cell has no authored

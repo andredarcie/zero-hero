@@ -9,7 +9,18 @@
 // with zero enemies and the UndeadSpawnDirector summons skulls around the hero in the dark.
 // The kind (and the per-chunk `enemies` arrays in world.json) remain only for schema compat.
 export type EnemyKind = 'undead';
-export type PickupKind = 'heart' | 'sword' | 'key';
+// 'heart' streams per chunk (HeartPickupManager); every other kind is a carriable held item
+// loaded once by ItemManager (the hero can drop/swap them anywhere, so they persist off-screen).
+export type PickupKind =
+  | 'heart'
+  | 'sword'
+  | 'key'
+  | 'axe'
+  | 'bomb'
+  | 'lavaBoots'
+  | 'pickaxe'
+  | 'scythe'
+  | 'wood';
 export type NpcKind =
   | 'blackCat'
   | 'mimic'

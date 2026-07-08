@@ -31761,6 +31761,36 @@
           "type": "key",
           "worldX": 55,
           "worldY": 92
+        },
+        {
+          "type": "axe",
+          "worldX": 53,
+          "worldY": 91
+        },
+        {
+          "type": "bomb",
+          "worldX": 55,
+          "worldY": 91
+        },
+        {
+          "type": "lavaBoots",
+          "worldX": 53,
+          "worldY": 93
+        },
+        {
+          "type": "pickaxe",
+          "worldX": 55,
+          "worldY": 93
+        },
+        {
+          "type": "scythe",
+          "worldX": 54,
+          "worldY": 90
+        },
+        {
+          "type": "wood",
+          "worldX": 52,
+          "worldY": 92
         }
       ],
       "npcs": [
@@ -33349,6 +33379,46 @@
       "type": "lockedDoor",
       "worldX": 57,
       "worldY": 92
+    },
+    {
+      "type": "dryTree",
+      "worldX": 56,
+      "worldY": 92
+    },
+    {
+      "type": "rock",
+      "worldX": 54,
+      "worldY": 94
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 53,
+      "worldY": 90
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 55,
+      "worldY": 90
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 52,
+      "worldY": 93
+    },
+    {
+      "type": "lava",
+      "worldX": 56,
+      "worldY": 93
+    },
+    {
+      "type": "lava",
+      "worldX": 57,
+      "worldY": 93
+    },
+    {
+      "type": "lava",
+      "worldX": 58,
+      "worldY": 93
     }
   ],
   "dialogs": {

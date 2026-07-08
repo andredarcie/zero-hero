@@ -6,6 +6,7 @@ import { EditorDomUi, PANEL_WIDTH, type UiState, type ViewMode } from '@/game/ed
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { GameScene } from '@/game/scenes/GameScene';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
+import type { PropKind } from '@/game/world/worldSchema';
 import { setWorldData } from '@/game/world/WorldData';
 import { loadWorld, saveWorld } from '@/game/worldApi';
 
@@ -39,6 +40,22 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   heart: { key: ASSET_KEYS.hudHearts, frame: 0 },
   sword: { key: ASSET_KEYS.swordItem, frame: 0 },
   key: { key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
+  axe: { key: ASSET_KEYS.axeIcon },
+  bomb: { key: ASSET_KEYS.bombItem, frame: 0 },
+  lavaBoots: { key: ASSET_KEYS.lavaBootsIcon },
+  pickaxe: { key: ASSET_KEYS.pickaxeIcon },
+  scythe: { key: ASSET_KEYS.scytheIcon },
+  wood: { key: ASSET_KEYS.woodItem },
+};
+
+const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
+  campfire: { key: ASSET_KEYS.campfireFrame1 },
+  dryBush: { key: ASSET_KEYS.dryBush },
+  lockedDoor: { key: ASSET_KEYS.lookedDoorObject },
+  dryTree: { key: ASSET_KEYS.dryTree, frame: 0 },
+  rock: { key: ASSET_KEYS.rock },
+  tallGrass: { key: ASSET_KEYS.tallGrassWind0 },
+  lava: { key: ASSET_KEYS.lavaFloor },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -298,7 +315,7 @@ export class EditorScene extends Phaser.Scene {
     if (entity.list === 'enemies') return ENEMY_VISUAL[entity.type] ?? { key: ASSET_KEYS.undead };
     if (entity.list === 'npcs') return NPC_VISUALS[entity.type];
     if (entity.list === 'pickups') return PICKUP_VISUAL[entity.type];
-    return entity.type === 'dryBush' ? { key: ASSET_KEYS.dryBush } : { key: ASSET_KEYS.campfireFrame1 };
+    return PROP_VISUAL[entity.type];
   }
 
   private renderEntities(): void {

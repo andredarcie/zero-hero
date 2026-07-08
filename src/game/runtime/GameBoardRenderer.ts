@@ -253,9 +253,16 @@ export class GameBoardRenderer {
     this.itemSlotContentSprite.setTexture(textureKey, frame).setVisible(true);
   }
 
-  public setHudSwordOnFire(onFire: boolean): void {
-    if (onFire) {
-      this.itemSlotContentSprite.setTexture(ASSET_KEYS.swordOnFire, 0).setTint(0xffcc66);
+  /**
+   * Show the held item ablaze in the HUD slot: swap the slot content to its lit texture and
+   * animate a small flame above it. Turning it off only removes the flame/tint — the caller
+   * restores the correct item icon via setHudItemTexture.
+   */
+  public setHudItemFire(onFire: boolean, litTexture?: string, litTint?: number): void {
+    if (onFire && litTexture) {
+      this.itemSlotContentSprite.setTexture(litTexture, 0).setVisible(true);
+      if (litTint !== undefined) this.itemSlotContentSprite.setTint(litTint);
+      else this.itemSlotContentSprite.clearTint();
       this.swordFireOverlay.setVisible(true);
       let fi = 0;
       const frames = [ASSET_KEYS.tinyFire0, ASSET_KEYS.tinyFire1, ASSET_KEYS.tinyFire2] as const;
@@ -272,7 +279,7 @@ export class GameBoardRenderer {
       this.swordFireTimer?.destroy();
       this.swordFireTimer = undefined;
       this.swordFireOverlay.setVisible(false);
-      this.itemSlotContentSprite.setTexture(ASSET_KEYS.swordItemIcon).clearTint();
+      this.itemSlotContentSprite.clearTint();
     }
   }
 

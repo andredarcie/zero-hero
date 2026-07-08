@@ -39,10 +39,12 @@ export type WorldChunk = {
 };
 
 // World-level props (not tied to a chunk) so a campfire/dry bush/door can be free-placed
-// and repeated. `dryBush` blocks the tile until the flaming sword burns it to ash (see
-// DryBushObject); `lockedDoor` blocks until the hero opens it while holding a key (see
-// LockedDoorObject). Their collision is resolved at runtime, not baked into the grid.
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor';
+// and repeated. Their collision is resolved at runtime, not baked into the grid:
+// `dryBush` blocks until fire burns it to ash; `lockedDoor` blocks until opened with a key;
+// `dryTree` blocks until chopped to a stump with the axe; `rock` blocks until broken with
+// the pickaxe; `tallGrass` blocks until cut with the scythe (or burned); `lava` blocks
+// unless the hero wears the lava boots.
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava';
 export type WorldProp = { type: PropKind; worldX: number; worldY: number };
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };

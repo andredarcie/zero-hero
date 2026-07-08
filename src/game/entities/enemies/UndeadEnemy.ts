@@ -51,9 +51,9 @@ export class UndeadEnemy extends EnemyBase {
   }
 
   // Invulnerable while clawing out of the ground.
-  public override takeDamage(): boolean {
+  public override takeDamage(amount = 1): boolean {
     if (this.spawning) return false;
-    return super.takeDamage();
+    return super.takeDamage(amount);
   }
 
   public override update(
