@@ -148,12 +148,13 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
 };
 
 // What each melee-capable item does to an enemy on a bump. The sword is an instant kill — one
-// hit drops any enemy. The wood stick (the "graveto") and the axe are improvised weapons that
-// hit for half — enough to fight skulls in a pinch, but the sword is lethal.
+// hit drops any enemy. The wood stick ("graveto"), axe, and key are improvised weapons that
+// take 3 hits to kill a skull (its max health) — the sword is the only one-hit lethal option.
 const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   sword: 999,
-  wood: 0.5,
-  axe: 0.5,
+  wood: 1,
+  axe: 1,
+  key: 1,
 };
 
 const BOMB_FUSE_MS = 1600;
@@ -1237,8 +1238,17 @@ export class GameScene extends Phaser.Scene {
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (!enemy) return;
 
-    // Only a melee-capable item hurts enemies: the sword (full damage, scaled by upgrades)
-    // or the wood club (half damage, no upgrade scaling).
+    // Bare-handed: the hero can't hurt an enemy, but still shoves it back the way it came.
+    if (this.heldItem === 'none') {
+      const dx = wx - this.playerWorld.worldX;
+      const dy = wy - this.playerWorld.worldY;
+      enemy.triggerKnockback(dx, dy, this.tileSize);
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // Only a melee-capable item hurts enemies: the sword (instant kill, scaled by upgrades)
+    // or the wood club / axe / key (3 hits — the skull's max health).
     const damage = MELEE_DAMAGE[this.heldItem as HeldItemKind];
     if (damage === undefined) return;
 

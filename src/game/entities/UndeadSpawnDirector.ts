@@ -27,7 +27,7 @@ const DECAY_MS = 2500;
 // Spawn cadence and horde size both scale with the meter.
 const INTERVAL_CALM_MS = 3200;
 const INTERVAL_FRENZY_MS = 650;
-const MAX_UNDEAD_AT_FULL_DANGER = 10;
+const MAX_UNDEAD_AT_FULL_DANGER = 4;
 
 // Skulls rise in a ring around the hero: outside the hero's light, close enough to attack.
 const RING_MIN_TILES = 4;

@@ -27,7 +27,7 @@ export const HUD_RESERVED_ROWS = 0;
 export const DIALOG_PANEL_FRACTION = 0.5;
 export const DIALOG_PANEL_MAX_WIDTH = 640;
 // Starting/maximum hearts — gameplay health, not a HUD element (the HUD is gone).
-export const HUD_HEALTH_MAX = 3;
+export const HUD_HEALTH_MAX = 4;
 export const ITEM_FLOAT_AMPLITUDE = 3;
 export const ITEM_FLOAT_SPEED = 0.0034;
 export const ITEM_SCALE_PULSE = 0.04;

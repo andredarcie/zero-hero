@@ -12,7 +12,7 @@
       "worldX": 54,
       "worldY": 92
     },
-    "exportedAt": "2026-07-11T02:47:55.428Z"
+    "exportedAt": "2026-07-11T03:02:28.790Z"
   },
   "chunks": [
     {
@@ -33633,6 +33633,21 @@
       "type": "water",
       "worldX": 44,
       "worldY": 85
+    },
+    {
+      "type": "dryBush",
+      "worldX": 56,
+      "worldY": 94
+    },
+    {
+      "type": "dryBush",
+      "worldX": 58,
+      "worldY": 89
+    },
+    {
+      "type": "dryBush",
+      "worldX": 63,
+      "worldY": 95
     }
   ],
   "dialogs": {
