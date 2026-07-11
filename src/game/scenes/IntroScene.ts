@@ -59,6 +59,20 @@ export class IntroScene extends Phaser.Scene {
 
   public create(): void {
     const { width, height } = this.scale;
+    // Scenes are constructed once and re-entered on every new run (quit-to-title, prophecy
+    // ending). Reset all run state like TitleScene/LanguageScene do — a stale `starting`
+    // swallows every key press and the typewriter writes into destroyed Text objects,
+    // leaving a black screen that never advances.
+    this.lineTexts.length = 0;
+    this.lineFullText.length = 0;
+    this.currentLine = 0;
+    this.charIndex = 0;
+    this.typing = false;
+    this.finished = false;
+    this.starting = false;
+    this.typeEvent = undefined;
+    this.promptText = undefined;
+    this.blink = undefined;
     this.cameras.main.setBackgroundColor('#08080f');
     this.cameras.main.fadeIn(700, 0, 0, 0);
 
