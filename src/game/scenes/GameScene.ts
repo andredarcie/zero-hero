@@ -421,7 +421,12 @@ export class GameScene extends Phaser.Scene {
     // allowed. They're separate props (one per tile) so the editor's "one prop per cell" holds.
     this.waterTiles = [
       ...getWaterTiles().map((w) => new WaterObject(this, w.worldX, w.worldY, false)),
-      ...getBridgeSpots().map((b) => new WaterObject(this, b.worldX, b.worldY, true)),
+      ...getBridgeSpots().map((b) => {
+        const w = new WaterObject(this, b.worldX, b.worldY, true);
+        // A scene-level burst of pale light the moment the last board is nailed home.
+        w.onBuilt = () => this.cameras.main.flash(160, 210, 190, 150);
+        return w;
+      }),
     ];
 
     this.initLighting();
@@ -1070,14 +1075,9 @@ export class GameScene extends Phaser.Scene {
       if (water.canBuild) {
         if (this.heldItem === 'wood') {
           this.clearHeldItem(); // the graveto is consumed
-          const bridged = water.deposit();
-          this.spawnBridgeChips(wx, wy, bridged ? 11 : 5);
-          if (bridged) {
-            getSoundManager().playBridgeBuilt();
-            this.cameras.main.flash(160, 210, 190, 150);
-          } else {
-            getSoundManager().playBridgePlank();
-          }
+          // WaterObject owns the carpentry now: it nails this deposit's boards in with hammer
+          // beats + sawdust, and cross-fades to the finished tile (firing onBuilt) on the last.
+          water.deposit();
         } else {
           this.showNeedItemHint('graveto');
         }

@@ -34,6 +34,7 @@ const SAMPLES = {
   fireHit: { file: 'fire-hit.wav', vol: 0.7 },
   bridgePlank: { file: 'bridge-plank.wav', vol: 0.7 },
   bridgeBuilt: { file: 'bridge-built.wav', vol: 0.75 },
+  hammer: { file: 'hammer.wav', vol: 0.7 }, // nailing a plank home during a bridge build
   footstep0: { file: 'footstep-0.wav', vol: 0.5 },
   footstep1: { file: 'footstep-1.wav', vol: 0.5 },
   footstep2: { file: 'footstep-2.wav', vol: 0.5 },
@@ -473,9 +474,19 @@ class SoundManager {
 
   public playBridgePlank(): void {
     if (this.playSample('bridgePlank', 0.8)) return;
+    // A wet wooden knock — a graveto laid onto the frame over the river.
     this.noise('lowpass', 420, 1.6, 0.26, 0.06);
     this.osc('square', 150, 78, 0.14, 0.10);
     this.osc('triangle', 300, 300, 0.07, 0.05, 0.01);
+    this.noise('highpass', 2600, 0.6, 0.06, 0.10, 0.02); // faint splash tail
+  }
+
+  public playHammer(): void {
+    // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
+    if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;
+    this.noise('bandpass', 3200, 4.0, 0.14, 0.03);
+    this.osc('square', 220, 120, 0.12, 0.05, 0.005);
+    this.osc('triangle', 520, 380, 0.05, 0.04, 0.005);
   }
 
   public playBridgeBuilt(): void {

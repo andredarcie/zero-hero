@@ -445,13 +445,24 @@ const sounds = {
     thump({ f: 58, dur: 0.05, vol: 0.32 }),
   ]), { lpHz: 5200, echo: { delayMs: 96, feedback: 0.22, lpHz: 3800, mix: 0.11, tail: 0.3 }, reverb: { seconds: 0.7, wet: 0.12 } }),
 
-  // Laying a plank: one hollow wooden "tok".
+  // Laying a graveto onto the frame over the river: a hollow wooden "tok" with a wet edge.
   'bridge-plank': () => finalize(mixAt([
     noise({ type: 'bandpass', f0: 430, q: 2.2, dur: 0.05, vol: 0.7 }),
     osc({ wave: 'square', f0: 145, f1: 74, dur: 0.09, vol: 0.28, curve: 6 }),
     osc({ wave: 'triangle', f0: 300, dur: 0.06, vol: 0.1, at: 0.01 }),
+    noise({ type: 'highpass', f0: 2600, f1: 1400, q: 0.6, dur: 0.12, vol: 0.14, at: 0.03, curve: 4 }), // splash tail
     thump({ f: 82, dur: 0.04, vol: 0.3 }),
-  ]), { lpHz: 5400, echo: { delayMs: 64, feedback: 0.18, lpHz: 4000, mix: 0.1, tail: 0.2 }, reverb: { seconds: 0.4, wet: 0.07 } }),
+  ]), { lpHz: 5400, echo: { delayMs: 64, feedback: 0.18, lpHz: 4000, mix: 0.1, tail: 0.2 }, reverb: { seconds: 0.5, wet: 0.09 } }),
+
+  // Hammering a nail through a board: a bright metallic tick over a short hollow-wood knock,
+  // a whisker of ring, a little sub weight. Short and dry — it repeats fast as the bridge lays.
+  'hammer': () => finalize(mixAt([
+    noise({ type: 'bandpass', f0: 3400, q: 4, dur: 0.02, vol: 0.7 }),
+    osc({ wave: 'square', f0: 230, f1: 118, dur: 0.05, vol: 0.34, curve: 7 }),
+    osc({ wave: 'triangle', f0: 620, f1: 430, dur: 0.05, vol: 0.16, curve: 6, at: 0.004 }),
+    noise({ type: 'bandpass', f0: 1500, q: 3, dur: 0.012, vol: 0.16, at: 0.006 }),
+    thump({ f: 90, dur: 0.035, vol: 0.28 }),
+  ]), { lpHz: 6200, echo: { delayMs: 56, feedback: 0.16, lpHz: 4200, mix: 0.09, tail: 0.18 }, reverb: { seconds: 0.4, wet: 0.08 } }),
 
   // Bridge done: planks settle, then three muted harp notes rise (C-E-G — earned, not
   // triumphant; the only major cue in the game, kept low and woody).
