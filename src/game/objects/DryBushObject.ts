@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { ASSET_KEYS, ySortDepth } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
-// A dry bush ("mato seco") blocks its tile until the flaming sword ignites it. It burns for
+// A dry bush ("mato seco") blocks its tile until a flaming torch ignites it. It burns for
 // BURN_MS — charring from brown to ash while little flames flicker on top — then collapses
 // into a passable ash pile. Collision is owned here (see `blocking`) and resolved at runtime,
 // exactly like CampfireObject, so nothing has to touch the baked collision grid.

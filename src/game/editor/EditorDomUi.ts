@@ -92,7 +92,7 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'lavaBoots', label: 'Botas de Lava', key: ASSET_KEYS.lavaBootsIcon },
   { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
   { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
-  { type: 'wood', label: 'Madeira', key: ASSET_KEYS.woodItem },
+  { type: 'wood', label: 'Graveto', key: ASSET_KEYS.woodIcon },
 ];
 
 const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [
@@ -100,9 +100,12 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'dryBush', label: 'Mato Seco', key: ASSET_KEYS.dryBush },
   { type: 'lockedDoor', label: 'Porta', key: ASSET_KEYS.lookedDoorObject },
   { type: 'dryTree', label: 'Arvore Seca', key: ASSET_KEYS.dryTree, frame: 0 },
+  { type: 'dryShrub', label: 'Arbusto Seco', key: ASSET_KEYS.dryShrub },
   { type: 'rock', label: 'Pedra', key: ASSET_KEYS.rock },
   { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassWind0 },
   { type: 'lava', label: 'Lava', key: ASSET_KEYS.lavaFloor },
+  { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },
+  { type: 'bridgeSpot', label: 'Ponto de Ponte', key: ASSET_KEYS.bridge },
 ];
 
 const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: string }> = [

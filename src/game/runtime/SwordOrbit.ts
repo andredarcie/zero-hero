@@ -57,7 +57,7 @@ export class SwordSlash {
     dx: number,
     dy: number,
     tileSize: number,
-    item?: { texture: string; frame: number; onFire?: boolean },
+    item?: { texture: string; frame: number; onFire?: boolean; flipX?: boolean },
   ): void {
     this.scene.tweens.killTweensOf(this.sprite);
     this.trails.forEach(t => this.scene.tweens.killTweensOf(t));
@@ -86,12 +86,17 @@ export class SwordSlash {
     const texture = item ? item.texture : (onFire ? ASSET_KEYS.swordOnFire : ASSET_KEYS.swordItem);
     const frame = item ? item.frame : ITEM_FRAMES.swordIdle;
 
+    // Single-edged tools (the axe) need mirroring so the cutting edge leads the swing instead
+    // of raking with the back of the blade.
+    const flipX = item?.flipX ?? false;
+
     // hide trails until first onUpdate (they mirror the main sprite's texture/frame)
     const trailTint = onFire ? 0xff5500 : 0xffffff;
-    this.trails.forEach(t => t.setTexture(texture, frame).setAlpha(0).setVisible(false).setTint(trailTint));
+    this.trails.forEach(t => t.setTexture(texture, frame).setFlipX(flipX).setAlpha(0).setVisible(false).setTint(trailTint));
 
     this.sprite
       .setTexture(texture, frame)
+      .setFlipX(flipX)
       .setTint(onFire ? 0xffaa44 : 0xffffff)
       .setPosition(this.slashHandleX, this.slashHandleY)
       .setDisplaySize(size * 1.20, size * 1.20) // starts 20% bigger for impact pop

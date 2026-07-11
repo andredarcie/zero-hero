@@ -132,6 +132,12 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     key: ASSET_KEYS.dryBush,
     path: '/assets/environment/props/bush.png',
   },
+  {
+    key: ASSET_KEYS.dryShrub,
+    path: '/assets/environment/props/dry_shrub.png',
+  },
+  // Empty speech bubble shown above the hero's head with the item they still need inside it.
+  { key: ASSET_KEYS.hintBalloon,    path: '/assets/ui/icons/ballon_icon.png' },
   { key: ASSET_KEYS.axeIcon,        path: '/assets/ui/icons/axe_icon.png' },
   { key: ASSET_KEYS.bombIcon,       path: '/assets/ui/icons/bomb_icon.png' },
   { key: ASSET_KEYS.lavaBootsIcon,  path: '/assets/ui/icons/lava_boots_icon.png' },
@@ -154,6 +160,11 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.grassFire0,     path: '/assets/environment/props/grass_fre_0.png' },
   { key: ASSET_KEYS.grassFire1,     path: '/assets/environment/props/grass_fre_1.png' },
   { key: ASSET_KEYS.lavaFloor,      path: '/assets/environment/terrain/lava_floor.png' },
+  { key: ASSET_KEYS.water,          path: '/assets/environment/terrain/water_0.png' },
+  { key: ASSET_KEYS.water1,         path: '/assets/environment/terrain/water_1.png' },
+  { key: ASSET_KEYS.water2,         path: '/assets/environment/terrain/water_2.png' },
+  { key: ASSET_KEYS.water3,         path: '/assets/environment/terrain/water_3.png' },
+  { key: ASSET_KEYS.bridge,         path: '/assets/environment/terrain/bridge.png' },
   {
     // Still loaded even though the mage enemy is gone: the "wizard" NPC uses this sprite
     // (see NPC_VISUALS in constants.ts).

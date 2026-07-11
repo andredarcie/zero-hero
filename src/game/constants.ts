@@ -19,13 +19,15 @@ export const FONT_FAMILY = "'Press Start 2P', monospace";
 // keeps a 1:1 texel→pixel mapping so glyphs stay razor sharp; the canvas'
 // image-rendering: pixelated handles any hi-DPI upscale crisply.
 export const TEXT_RESOLUTION = 1;
-export const HUD_RESERVED_ROWS = 3;
-export const HUD_BACKGROUND_COLOR = 0x000000;
+// The HUD is removed: no rows are reserved at the top, so the game board fills the whole screen.
+export const HUD_RESERVED_ROWS = 0;
+// The dialogue panel hugs this fraction of the canvas width, but never grows past
+// DIALOG_PANEL_MAX_WIDTH — on wide screens 50% would stretch the text past a comfortable
+// reading measure. Shared by DialogOverlay (the panel) and GameScene (the camera pan).
+export const DIALOG_PANEL_FRACTION = 0.5;
+export const DIALOG_PANEL_MAX_WIDTH = 640;
+// Starting/maximum hearts — gameplay health, not a HUD element (the HUD is gone).
 export const HUD_HEALTH_MAX = 3;
-export const HUD_HEARTS_SCALE = 0.52;
-export const HUD_SLOT_SCALE = 0.72;
-export const HUD_INNER_PADDING_SCALE = 0.18;
-export const HUD_ITEM_SCALE = 0.56;
 export const ITEM_FLOAT_AMPLITUDE = 3;
 export const ITEM_FLOAT_SPEED = 0.0034;
 export const ITEM_SCALE_PULSE = 0.04;
@@ -109,6 +111,7 @@ export const ASSET_KEYS = {
   hudSlot: 'hud-slot',
   keyItem: 'key-item',
   keyItemIcon: 'key-item-icon',
+  hintBalloon: 'hint-balloon',
   swordItem: 'sword-item',
   swordItemIcon: 'sword-item-icon',
   axeIcon: 'axe-icon',
@@ -136,6 +139,7 @@ export const ASSET_KEYS = {
   swordOnFire: 'sword-on-fire',
   dryBush: 'dry-bush',
   dryTree: 'dry-tree',
+  dryShrub: 'dry-shrub',
   rock: 'rock',
   rockCracked: 'rock-cracked',
   tallGrassWind0: 'tall-grass-wind0',
@@ -150,6 +154,11 @@ export const ASSET_KEYS = {
   grassFire0: 'grass-fire0',
   grassFire1: 'grass-fire1',
   lavaFloor: 'lava-floor',
+  water: 'water',
+  water1: 'water-1',
+  water2: 'water-2',
+  water3: 'water-3',
+  bridge: 'bridge',
   campfireFrame0: 'campfire-f0',
   campfireFrame1: 'campfire-f1',
   campfireFrame2: 'campfire-f2',
@@ -175,6 +184,15 @@ export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [
 // "PERIGO" right at the visible light edge, never while the player still looks lit.
 export const LIGHT_RADIUS_TILES = 4.5;
 export const CAMPFIRE_SAFE_RADIUS_TILES = 5;
+
+// How long a carried flame (a lit sword or wood club) lasts before it burns out in the dark.
+// Re-igniting at any living fire — a lit campfire or a lava pool — resets it. Short enough
+// that a long dark crossing is tense; tune against shrine spacing.
+export const TORCH_BURN_MS = 5000;
+
+// An NPC standing this close (in tiles) to a still-dead campfire won't hold a real
+// conversation until that fire is lit and the ground around it is safe.
+export const NPC_GATE_RADIUS_TILES = 3.2;
 
 type NpcVisual = {
   key: string;
@@ -216,9 +234,26 @@ export const BOMB_FRAMES = {
 // tree) through frame 5 (passable stump).
 export const DRY_TREE_FRAME_COUNT = 6;
 
+// A felled tree grows back after this long, so the player can never run out of gravetos (the
+// fuel for fire) and soft-lock. It only regrows once its tile is clear of the hero and enemies.
+export const TREE_REGROW_MS = 60000;
+
 // Upper-layer tileset frames that depict trees. Trees are solid "by default":
 // ChunkManager.isCellBlocked treats these as collision even where a cell has no authored
 // collision painted, so every tree — placed in the editor, generated, or hand-authored —
 // blocks the hero and enemies alike (both consult isCellBlocked). Frame ids index
 // forest_tile_set.png (3 columns): 3 & 21 are dead trees, 4/14/15/16/17/18 are pines.
 export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21]);
+
+// Two wood sticks ("gravetos") build one bridge tile over water (see WaterObject); the plank
+// art is a dedicated tile (ASSET_KEYS.bridge = bridge.png).
+export const BRIDGE_GRAVETOS_REQUIRED = 2;
+
+// River water is animated: these frames (water_0..3.png, a seamless-looping ripple cycle) are
+// cycled by WaterObject, exactly like the campfire's flame frames.
+export const WATER_FRAME_KEYS: readonly string[] = [
+  ASSET_KEYS.water,
+  ASSET_KEYS.water1,
+  ASSET_KEYS.water2,
+  ASSET_KEYS.water3,
+];

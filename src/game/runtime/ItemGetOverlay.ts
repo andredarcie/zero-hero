@@ -174,14 +174,6 @@ export class ItemGetOverlay {
       });
     }
 
-    // a steady glint on the item
-    const glint = scene.add.star(cx, cy, 4, 1.6, Math.max(5, Math.round(scene.scale.height * 0.02)), 0xffffff)
-      .setDepth(depth + 4).setBlendMode(Phaser.BlendModes.ADD);
-    this.objs.push(glint);
-    glint.setScale(0);
-    scene.tweens.add({ targets: glint, scale: 1, duration: 220, delay: 120, ease: 'Back.easeOut' });
-    scene.tweens.add({ targets: glint, scale: 0.7, duration: 900, delay: 340, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-
     // label
     label.setScale(0.85);
     scene.tweens.add({ targets: label, alpha: 1, scale: 1, duration: 280, ease: 'Back.easeOut' });

@@ -30,6 +30,9 @@ export class PlayerMovementController {
 
   private heldDirection: { dx: number; dy: number } | null = null;
   private holdRepeatTimer: Phaser.Time.TimerEvent | null = null;
+  // The way the hero is currently facing, mirroring the sprite frame set by setFacing. Starts
+  // facing down (the idle frame). A bump does NOT turn the hero, so it never changes this.
+  private lastFacing: { dx: number; dy: number } = { dx: 0, dy: 1 };
 
   private readonly boundTouchStart: (e: TouchEvent) => void;
   private readonly boundTouchMove: (e: TouchEvent) => void;
@@ -300,7 +303,13 @@ export class PlayerMovementController {
     return { worldX: nextX, worldY: nextY };
   }
 
+  /** The direction the hero's sprite currently faces (set the instant a move begins). */
+  public get facing(): { dx: number; dy: number } {
+    return this.lastFacing;
+  }
+
   private setFacing(dx: number, dy: number, moving: boolean): void {
+    this.lastFacing = { dx, dy };
     if (dy < 0) {
       this.player.anims.stop();
       this.player.setFlipX(false);

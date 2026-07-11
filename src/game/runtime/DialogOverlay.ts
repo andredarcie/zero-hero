@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 
+import { DIALOG_PANEL_FRACTION, DIALOG_PANEL_MAX_WIDTH } from '@/game/constants';
 import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { getSoundManager } from '@/game/audio/SoundManager';
 
@@ -18,7 +19,6 @@ const CHAR_DELAY_MS = 28;
 const STYLE_ID = 'zh-dialog-style';
 const ROOT_ID = 'zh-dialog-root';
 const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
-const PANEL_FRACTION = 0.5; // of the canvas width
 
 const CSS = `
 #${ROOT_ID} { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
@@ -190,7 +190,8 @@ export class DialogOverlay {
   // ── Layout: hug the right PANEL_FRACTION of the canvas, in viewport pixels ──
   private readonly layout = (): void => {
     const rect = this.canvas.getBoundingClientRect();
-    const panelW = Math.round(rect.width * PANEL_FRACTION);
+    // Hug the right fraction of the canvas, but cap the width so text never over-stretches.
+    const panelW = Math.round(Math.min(rect.width * DIALOG_PANEL_FRACTION, DIALOG_PANEL_MAX_WIDTH));
 
     this.panel.style.left = `${Math.round(rect.left + rect.width - panelW)}px`;
     this.panel.style.top = `${Math.round(rect.top)}px`;

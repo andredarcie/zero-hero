@@ -108,11 +108,17 @@ export const getLockedDoors = (): WorldProp[] => requireWorld().props.filter((pr
 
 export const getDryTrees = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryTree');
 
+export const getDryShrubs = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryShrub');
+
 export const getRocks = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'rock');
 
 export const getTallGrass = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'tallGrass');
 
 export const getLavaTiles = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'lava');
+
+export const getWaterTiles = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'water');
+
+export const getBridgeSpots = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'bridgeSpot');
 
 // Held items (everything except streamed hearts) are loaded once, up front, because the
 // hero can drop and swap them anywhere, so they must persist off-screen.

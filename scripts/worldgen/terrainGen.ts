@@ -6,8 +6,9 @@ import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { ChunkData } from '@/game/world/Chunk';
 
 const GROUND_TILE = 5;
-const DECOR_FRAMES = [0, 6, 7, 8, 11] as const;
-const OBSTACLE_FRAMES = [4, 10, 15, 16, 17] as const;
+// Frames 10 (red flowers) and 11 (purple flowers) are walkable decor, not obstacles.
+const DECOR_FRAMES = [0, 6, 7, 8, 10, 11] as const;
+const OBSTACLE_FRAMES = [4, 15, 16, 17] as const;
 const CENTER_X = Math.floor(CHUNK_COLUMNS / 2);
 const CENTER_Y = Math.floor(CHUNK_ROWS / 2);
 

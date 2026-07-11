@@ -111,18 +111,9 @@ export abstract class EnemyBase {
       .setDisplaySize(tileSize * scale, tileSize * scale)
       .setDepth(ySortDepth(this.worldY));
 
-    this.healthBar.setDepth(ySortDepth(this.worldY) + 0.02);
+    // Enemy health bars are intentionally not drawn (removed by design). The graphics object is
+    // kept (and cleared) so nothing else has to change; it just never fills.
     this.healthBar.clear();
-    if (!this.healthBarVisible) return;
-    const barW = Math.floor(tileSize * 0.75);
-    const barH = Math.max(2, Math.floor(tileSize * 0.12));
-    const barX = sx - Math.floor(barW / 2);
-    const barY = sy - Math.floor(tileSize * 0.65);
-
-    this.healthBar.fillStyle(0x220000, 1);
-    this.healthBar.fillRect(barX, barY, barW, barH);
-    this.healthBar.fillStyle(0xee2222, 1);
-    this.healthBar.fillRect(barX, barY, Math.round(barW * (this.health / this.maxHealth)), barH);
   }
 
   public destroy(): void {

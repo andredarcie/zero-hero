@@ -137,9 +137,9 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcColorHex: '#a97bff',
     npcAssetKey: NPC_VISUALS.wizard.key,
     lines: [
-      n('Ah, the chosen one. I felt your steps ripple through the weave of fate.'),
-      n('I could conjure the sword you seek... but my spellbook only compiles in the full release.'),
-      n('Press on, hero. And beware the mages who would rather cast than converse.'),
+      n('Ah, o escolhido. Senti teus passos ondularem pela trama do destino.'),
+      n('Eu poderia conjurar a espada que buscas... mas meu grimório só compila na versão completa.'),
+      n('Segue em frente, herói. E cuidado com os magos que preferem lançar feitiços a conversar.'),
     ],
   },
 
@@ -154,4 +154,40 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
       n('Submit your feedback'),
     ],
   },
+};
+
+// The wizard's story dialogue, which advances with the player's progress (see
+// GameScene.wizardStoryState): the first meeting once they carry the sword and have relit their
+// first fire, the "protect the flame" beat on later visits, and the closing prophecy after the
+// SECOND fire — which ends the intro and returns to the title screen.
+export const WIZARD_STORY: { intro: DialogLine[]; protect: DialogLine[]; prophecy: DialogLine[] } = {
+  intro: [
+    r('O velho mago ajeita o chapéu. Por um instante, seus olhos encontram os seus.'),
+    n('Finalmente... você chegou.'),
+    n('Esperei por este momento durante eras.'),
+    n('Você veio de terras muito distantes.'),
+    n('É Zero... o último herdeiro de uma cruzada esquecida.'),
+    n('Mas ainda não é um cavaleiro.'),
+    n('Ainda precisa se tornar um.'),
+  ],
+  protect: [
+    r('O vento sopra pelas ruínas.'),
+    n('Esta é a última chama do mundo.'),
+    n('Além desta chama... existem apenas trevas.'),
+    n('Um vazio onde até a esperança deixou de existir.'),
+    n('Proteja esta chama.'),
+    n('Enquanto ela continuar acesa... o mundo ainda poderá renascer.'),
+  ],
+  prophecy: [
+    r('Os olhos do mago brilham.'),
+    n('Então... a profecia era verdadeira.'),
+    n('Você trilha o caminho descrito pelos antigos.'),
+    n('A chama primordial desperta mais uma vez.'),
+    n('O que era apenas uma centelha agora começa a iluminar o mundo.'),
+    n('Mas lembre-se...'),
+    n('A chama que salvará este mundo é a mesma que arde dentro de você.'),
+    n('Não permita que ela se apague.'),
+    n('Você jogou a breve introdução de Zero The Hero!'),
+    n('Muito obrigado por tudo!'),
+  ],
 };

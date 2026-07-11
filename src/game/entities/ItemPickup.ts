@@ -25,7 +25,8 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
-  wood: { texture: ASSET_KEYS.woodItem, frame: 0 },
+  // The "graveto": a single stick (the woodIcon art), NOT the 3-log woodItem pile.
+  wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
 };
 
 // A single held item sitting on the ground — either authored in world.json or dropped when

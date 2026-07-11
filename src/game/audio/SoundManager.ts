@@ -1,153 +1,283 @@
 const MASTER_VOL = 0.32;
-const MUSIC_VOL = 0.6; // background-music bed level (under the SFX)
+const MUSIC_VOL = 0.6; // music-bus duck level (under the SFX)
+const AMBIENCE_VOL = 0.4; // the wind bed — always subtle
 
-// 8-bit / old-console chiptune SFX, generated with tools/gen-sfx.mjs (see
-// public/assets/audio/CREDITS.md). Played as decoded samples; the procedural synth below
-// is kept as a fallback for when a sample hasn't finished decoding yet (or fails to load).
-type SampleKey =
-  | 'swordSlash'
-  | 'enemyHit'
-  | 'enemyDeath'
-  | 'coinPickup'
-  | 'heartPickup'
-  | 'swordPickup'
-  | 'playerHurt'
-  | 'playerDeath'
-  | 'shopOpen'
-  | 'shopClose'
-  | 'ignite';
+// All audio is generated offline ("Dark Souls weight, SNES timbre" — see
+// public/assets/audio/CREDITS.md): layered SFX with baked echo/reverb tails, plus four
+// seamless music/ambience loops at 32 kHz. This manager decodes and plays the samples;
+// the procedural synth at the bottom is only a fallback for the first seconds before a
+// sample finishes decoding (or if one fails to load).
 
-const SAMPLES: Record<SampleKey, { file: string; vol: number }> = {
-  swordSlash:  { file: 'sword-slash.wav',  vol: 0.85 },
-  enemyHit:    { file: 'enemy-hit.wav',    vol: 0.90 },
-  enemyDeath:  { file: 'enemy-death.wav',  vol: 0.85 },
-  coinPickup:  { file: 'coin.wav',         vol: 0.80 },
-  heartPickup: { file: 'heart.wav',        vol: 0.75 },
-  swordPickup: { file: 'sword-pickup.wav', vol: 0.80 },
-  playerHurt:  { file: 'hurt.wav',         vol: 0.90 },
-  playerDeath: { file: 'game-over.wav',    vol: 0.80 },
-  shopOpen:    { file: 'shop-open.wav',    vol: 0.55 },
-  shopClose:   { file: 'shop-close.wav',   vol: 0.70 },
-  ignite:      { file: 'ignite.wav',       vol: 0.70 },
+const SAMPLES = {
+  swordSlash: { file: 'sword-slash.wav', vol: 0.8 },
+  enemyHit: { file: 'enemy-hit.wav', vol: 0.85 },
+  enemyDeath: { file: 'enemy-death.wav', vol: 0.8 },
+  coinPickup: { file: 'coin.wav', vol: 0.55 },
+  heartPickup: { file: 'heart.wav', vol: 0.7 },
+  swordPickup: { file: 'sword-pickup.wav', vol: 0.6 },
+  playerHurt: { file: 'hurt.wav', vol: 0.85 },
+  playerDeath: { file: 'game-over.wav', vol: 0.85 },
+  shopOpen: { file: 'shop-open.wav', vol: 0.5 },
+  shopClose: { file: 'shop-close.wav', vol: 0.6 },
+  ignite: { file: 'ignite.wav', vol: 0.75 },
+  woodChop: { file: 'wood-chop.wav', vol: 0.8 },
+  treeFall: { file: 'tree-fall.wav', vol: 0.8 },
+  splash: { file: 'splash.wav', vol: 0.7 },
+  rockSmash: { file: 'rock-smash.wav', vol: 0.8 },
+  grassCut: { file: 'grass-cut.wav', vol: 0.6 },
+  bombPlace: { file: 'bomb-place.wav', vol: 0.6 },
+  bombExplode: { file: 'bomb-explode.wav', vol: 1.0 },
+  undeadSpawn: { file: 'undead-spawn.wav', vol: 0.7 },
+  fireHit: { file: 'fire-hit.wav', vol: 0.7 },
+  bridgePlank: { file: 'bridge-plank.wav', vol: 0.7 },
+  bridgeBuilt: { file: 'bridge-built.wav', vol: 0.75 },
+  footstep0: { file: 'footstep-0.wav', vol: 0.5 },
+  footstep1: { file: 'footstep-1.wav', vol: 0.5 },
+  footstep2: { file: 'footstep-2.wav', vol: 0.5 },
+  footstep3: { file: 'footstep-3.wav', vol: 0.5 },
+} as const;
+type SampleKey = keyof typeof SAMPLES;
+
+// Souls staging: the title theme carries through the intro, exploration gets the quiet
+// dirge, and the combat track only rises while undead are actually out of the ground.
+export type MusicKey = 'title' | 'overworld' | 'danger';
+const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
+  title: { file: 'music-title.wav', vol: 0.8 },
+  overworld: { file: 'music-overworld.wav', vol: 0.9 },
+  danger: { file: 'music-danger.wav', vol: 1.0 },
 };
+const AMBIENCE_FILE = 'ambience-wind.wav';
+
+const FOOTSTEP_KEYS: readonly SampleKey[] = ['footstep0', 'footstep1', 'footstep2', 'footstep3'];
 
 class SoundManager {
   private ctx: AudioContext | null = null;
-  private master!: GainNode;
+  private master!: GainNode; // gain -> "SNES" lowpass -> compressor -> destination
   private readonly buffers = new Map<SampleKey, AudioBuffer>();
   private loadStarted = false;
 
-  // Looping background music (one shared instance across scene restarts).
-  private musicBuffer: AudioBuffer | null = null;
-  private musicSource: AudioBufferSourceNode | null = null;
-  private musicGain: GainNode | null = null;
-  private wantMusic = false;
+  // Music: one bus (ducked for dialogs) with at most two overlapping tracks while
+  // crossfading. `wantTrack` survives until its buffer finishes decoding.
+  private musicBus: GainNode | null = null;
+  private readonly musicBuffers = new Map<MusicKey, AudioBuffer>();
+  private currentMusic: { key: MusicKey; source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private wantTrack: MusicKey | null = null;
+  private wantFadeMs = 1600;
+
+  // The wind bed — plain loop with its own gain, NOT on the music bus, so it keeps
+  // blowing while music ducks for dialogs (Souls: voices over wind, not over silence).
+  private ambienceBuffer: AudioBuffer | null = null;
+  private ambienceSource: AudioBufferSourceNode | null = null;
+  private wantAmbience = false;
+
+  private lastFootstep = -1;
 
   private get audio(): AudioContext {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
       this.master.gain.value = MASTER_VOL;
-      this.master.connect(this.ctx.destination);
+      // Master chain: a gentle low-pass fakes the S-SMP's gaussian-interpolation warmth
+      // (nothing in this game should sound crisp), a soft compressor glues SFX + music.
+      const warmth = this.ctx.createBiquadFilter();
+      warmth.type = 'lowpass';
+      warmth.frequency.value = 7800;
+      warmth.Q.value = 0.5;
+      const glue = this.ctx.createDynamicsCompressor();
+      glue.threshold.value = -20;
+      glue.knee.value = 22;
+      glue.ratio.value = 3;
+      glue.attack.value = 0.006;
+      glue.release.value = 0.28;
+      this.master.connect(warmth);
+      warmth.connect(glue);
+      glue.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     return this.ctx;
   }
 
-  // ── sample loading / playback ─────────────────────────────────────────────
+  /** Poke the AudioContext from a user gesture so autoplay restrictions lift. */
+  public unlock(): void {
+    void this.audio;
+  }
 
-  /** Fetch + decode every downloaded SFX once. Safe (and cheap) to call repeatedly. */
+  // ── sample loading ─────────────────────────────────────────────────────────
+
+  /** Fetch + decode every sample and music loop once. Safe (and cheap) to call repeatedly. */
   public preload(): void {
     if (this.loadStarted) return;
     this.loadStarted = true;
     const ctx = this.audio;
     const base = import.meta.env.BASE_URL;
+    const fetchBuffer = (file: string): Promise<AudioBuffer> =>
+      fetch(`${base}assets/audio/${file}`)
+        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
+        .then((data) => ctx.decodeAudioData(data));
 
     (Object.keys(SAMPLES) as SampleKey[]).forEach((key) => {
-      const url = `${base}assets/audio/${SAMPLES[key].file}`;
-      fetch(url)
-        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
-        .then((data) => ctx.decodeAudioData(data))
+      fetchBuffer(SAMPLES[key].file)
         .then((buffer) => { this.buffers.set(key, buffer); })
         .catch((err) => { console.warn(`[audio] could not load ${SAMPLES[key].file}:`, err); });
     });
 
-    fetch(`${base}assets/audio/music.wav`)
-      .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
-      .then((data) => ctx.decodeAudioData(data))
-      .then((buffer) => { this.musicBuffer = buffer; if (this.wantMusic) this.startMusicNow(); })
-      .catch((err) => { console.warn('[audio] could not load music.wav:', err); });
+    (Object.keys(TRACKS) as MusicKey[]).forEach((key) => {
+      fetchBuffer(TRACKS[key].file)
+        .then((buffer) => {
+          this.musicBuffers.set(key, buffer);
+          if (this.wantTrack === key && this.currentMusic?.key !== key) {
+            this.crossfadeTo(key, buffer, this.wantFadeMs);
+          }
+        })
+        .catch((err) => { console.warn(`[audio] could not load ${TRACKS[key].file}:`, err); });
+    });
+
+    fetchBuffer(AMBIENCE_FILE)
+      .then((buffer) => { this.ambienceBuffer = buffer; if (this.wantAmbience) this.startAmbienceNow(); })
+      .catch((err) => { console.warn(`[audio] could not load ${AMBIENCE_FILE}:`, err); });
   }
 
-  /** Start the looping background music (idempotent — survives scene restarts). */
-  public startMusic(): void {
-    this.wantMusic = true;
-    if (this.musicSource) return;
-    if (this.musicBuffer) this.startMusicNow();
+  // ── music ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Play (or crossfade to) a named track. Idempotent for the already-playing track,
+   * so scenes may call it every frame with the state they want.
+   */
+  public startMusic(key: MusicKey, fadeMs = 1600): void {
+    this.wantTrack = key;
+    this.wantFadeMs = fadeMs;
+    if (this.currentMusic?.key === key) return;
+    const buffer = this.musicBuffers.get(key);
+    if (buffer) this.crossfadeTo(key, buffer, fadeMs);
   }
 
   public stopMusic(): void {
-    this.wantMusic = false;
-    if (this.musicSource) {
-      try { this.musicSource.stop(); } catch { /* already stopped */ }
-      this.musicSource = null;
+    this.wantTrack = null;
+    if (this.currentMusic) {
+      try { this.currentMusic.source.stop(); } catch { /* already stopped */ }
+      this.currentMusic = null;
     }
   }
 
-  private startMusicNow(): void {
-    if (this.musicSource || !this.musicBuffer) return;
+  private ensureMusicBus(): GainNode {
     const ctx = this.audio;
-    if (!this.musicGain) {
-      this.musicGain = ctx.createGain();
-      this.musicGain.gain.value = MUSIC_VOL;
-      this.musicGain.connect(this.master);
+    if (!this.musicBus) {
+      this.musicBus = ctx.createGain();
+      this.musicBus.gain.value = MUSIC_VOL;
+      this.musicBus.connect(this.master);
     }
-    const src = ctx.createBufferSource();
-    src.buffer = this.musicBuffer;
-    src.loop = true;
-    src.connect(this.musicGain);
-    src.start();
-    this.musicSource = src;
+    return this.musicBus;
+  }
+
+  private crossfadeTo(key: MusicKey, buffer: AudioBuffer, fadeMs: number): void {
+    const ctx = this.audio;
+    const bus = this.ensureMusicBus();
+    const now = ctx.currentTime;
+    const fadeS = Math.max(0.05, fadeMs / 1000);
+
+    const old = this.currentMusic;
+    if (!old) {
+      // Fresh start (scene boot / after death): make sure a leftover dialog duck from a
+      // previous life can't leave the new track silent.
+      bus.gain.cancelScheduledValues(now);
+      bus.gain.setValueAtTime(MUSIC_VOL, now);
+    }
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(TRACKS[key].vol, now + fadeS);
+    gain.connect(bus);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(gain);
+    source.start();
+    this.currentMusic = { key, source, gain };
+
+    if (old) {
+      old.gain.gain.cancelScheduledValues(now);
+      old.gain.gain.setValueAtTime(Math.max(old.gain.gain.value, 0.0001), now);
+      old.gain.gain.exponentialRampToValueAtTime(0.0001, now + fadeS);
+      try { old.source.stop(now + fadeS + 0.1); } catch { /* already stopped */ }
+    }
   }
 
   /** Duck the music down to silence (e.g. while an NPC is talking / item-get plays). */
-  public fadeMusicOut(ms = 450): void { this.rampMusic(0, ms); }
+  public fadeMusicOut(ms = 450): void { this.rampMusicBus(0, ms); }
 
   /** Bring the music back up to full. */
-  public fadeMusicIn(ms = 800): void { this.rampMusic(MUSIC_VOL, ms); }
+  public fadeMusicIn(ms = 800): void { this.rampMusicBus(MUSIC_VOL, ms); }
 
-  private rampMusic(target: number, ms: number): void {
-    if (!this.musicGain) return;
+  private rampMusicBus(target: number, ms: number): void {
+    if (!this.musicBus) return;
     const ctx = this.audio;
     const now = ctx.currentTime;
-    const gain = this.musicGain.gain;
+    const gain = this.musicBus.gain;
     gain.cancelScheduledValues(now);
     gain.setValueAtTime(gain.value, now);
     gain.linearRampToValueAtTime(target, now + ms / 1000);
   }
 
-  /**
-   * A short "talking" blip for the dialog typewriter. Each NPC passes its own base
-   * frequency + waveform so voices sound distinct (a tiny random jitter keeps it lively).
-   */
-  public playDialogBlip(freq: number, wave: OscillatorType = 'square'): void {
-    const jitter = 1 + (Math.random() - 0.5) * 0.06;
-    this.osc(wave, freq * jitter, freq * jitter * 0.86, 0.14, 0.05);
+  // ── ambience (wind) ────────────────────────────────────────────────────────
+
+  public startAmbience(): void {
+    this.wantAmbience = true;
+    if (this.ambienceSource) return;
+    if (this.ambienceBuffer) this.startAmbienceNow();
   }
 
-  /** Play a decoded sample. Returns false if it isn't loaded yet (caller falls back). */
-  private playSample(key: SampleKey): boolean {
+  public stopAmbience(): void {
+    this.wantAmbience = false;
+    if (this.ambienceSource) {
+      try { this.ambienceSource.stop(); } catch { /* already stopped */ }
+      this.ambienceSource = null;
+    }
+  }
+
+  private startAmbienceNow(): void {
+    if (this.ambienceSource || !this.ambienceBuffer) return;
+    const ctx = this.audio;
+    const gain = ctx.createGain();
+    gain.gain.value = AMBIENCE_VOL;
+    gain.connect(this.master);
+    const src = ctx.createBufferSource();
+    src.buffer = this.ambienceBuffer;
+    src.loop = true;
+    src.connect(gain);
+    src.start();
+    this.ambienceSource = src;
+  }
+
+  // ── sample playback ────────────────────────────────────────────────────────
+
+  /**
+   * Play a decoded sample. `jitter` is a ± range in semitones applied to the playback
+   * rate so frequent sounds (hits, steps, chops) never machine-gun the exact same file.
+   * Returns false if the sample isn't loaded yet (caller falls back to the synth).
+   */
+  private playSample(key: SampleKey, jitter = 0, volScale = 1): boolean {
     const buffer = this.buffers.get(key);
     if (!buffer) return false;
     const ctx = this.audio; // ensures this.master exists
     const src = ctx.createBufferSource();
     src.buffer = buffer;
+    if (jitter > 0) src.playbackRate.value = Math.pow(2, ((Math.random() * 2 - 1) * jitter) / 12);
     const g = ctx.createGain();
-    g.gain.value = SAMPLES[key].vol;
+    g.gain.value = SAMPLES[key].vol * volScale;
     src.connect(g);
     g.connect(this.master);
     src.start();
     return true;
+  }
+
+  /**
+   * A short "talking" blip for the dialog typewriter. Each NPC passes its own base
+   * frequency + waveform so voices sound distinct (a tiny random jitter keeps it lively).
+   * Deliberately dry and procedural — close, intimate, no room around it.
+   */
+  public playDialogBlip(freq: number, wave: OscillatorType = 'square'): void {
+    const jitter = 1 + (Math.random() - 0.5) * 0.06;
+    this.osc(wave, freq * jitter, freq * jitter * 0.86, 0.14, 0.05);
   }
 
   // ── low-level procedural helpers (fallbacks) ──────────────────────────────
@@ -211,31 +341,32 @@ class SoundManager {
   }
 
   // ── public sound effects ─────────────────────────────────────────────────
-  // Each plays the downloaded sample, falling back to the procedural synth.
+  // Each plays its offline-rendered sample (with jitter where repetition hurts),
+  // falling back to the procedural synth while samples are still decoding.
 
   public playFootstep(): void {
-    // Frequent + subtle: kept fully procedural so it never gets repetitive or loud. Low and
-    // soft — a muffled footfall on soil, not a click.
+    // Rotate the four variants (never the same one twice) + rate jitter.
+    let pick = Math.floor(Math.random() * FOOTSTEP_KEYS.length);
+    if (pick === this.lastFootstep) pick = (pick + 1) % FOOTSTEP_KEYS.length;
+    this.lastFootstep = pick;
+    if (this.playSample(FOOTSTEP_KEYS[pick], 1.2, 0.85 + Math.random() * 0.3)) return;
     this.noise('lowpass', 120, 1.0, 0.09, 0.06);
   }
 
   public playSwordSlash(): void {
-    if (this.playSample('swordSlash')) return;
-    // Heavy, low air-cut instead of a bright hiss.
+    if (this.playSample('swordSlash', 0.7)) return;
     this.noise('lowpass', 900, 0.7, 0.26, 0.13);
     this.osc('sawtooth', 150, 45, 0.16, 0.12);
   }
 
   public playEnemyHit(): void {
-    if (this.playSample('enemyHit')) return;
-    // Low, meaty thud.
+    if (this.playSample('enemyHit', 0.9)) return;
     this.noise('lowpass', 320, 1.2, 0.42, 0.09);
     this.osc('sawtooth', 140, 55, 0.26, 0.12);
   }
 
   public playEnemyDeath(): void {
-    if (this.playSample('enemyDeath')) return;
-    // Low guttural collapse.
+    if (this.playSample('enemyDeath', 0.5)) return;
     const notes = [150, 110, 73] as const;
     notes.forEach((freq, i) => {
       this.osc('sawtooth', freq, freq * 0.6, 0.26, 0.16, i * 0.09);
@@ -244,8 +375,7 @@ class SoundManager {
   }
 
   public playPlayerHurt(): void {
-    if (this.playSample('playerHurt')) return;
-    // Low pained grunt.
+    if (this.playSample('playerHurt', 0.6)) return;
     this.osc('sawtooth', 150, 90, 0.30, 0.24);
     this.osc('sawtooth', 160, 96, 0.16, 0.22);
     this.noise('lowpass', 400, 1.0, 0.20, 0.12);
@@ -253,7 +383,6 @@ class SoundManager {
 
   public playPlayerDeath(): void {
     if (this.playSample('playerDeath')) return;
-    // Slow dark descent into a low drone.
     const notes = [220, 165, 131, 110, 82, 55] as const;
     notes.forEach((freq, i) => {
       this.osc('triangle', freq, freq * 0.9, 0.26, 0.20, i * 0.16);
@@ -262,61 +391,86 @@ class SoundManager {
   }
 
   public playCoinPickup(): void {
-    if (this.playSample('coinPickup')) return;
-    // Soft, muffled low tick — not a bright coin blip.
+    if (this.playSample('coinPickup', 0.4)) return;
     this.osc('sine', 330, 300, 0.18, 0.14);
   }
 
   public playHeartPickup(): void {
     if (this.playSample('heartPickup')) return;
-    // Warm low minor-third swell (A3 → C4).
     this.osc('triangle', 220, 220, 0.26, 0.22);
     this.osc('triangle', 262, 262, 0.18, 0.28, 0.06);
   }
 
   public playSwordPickup(): void {
     if (this.playSample('swordPickup')) return;
-    // Solemn, epic root-fifth-octave (A2 / E3 / A3), low and weighty.
-    this.osc('sawtooth', 110, 110, 0.30, 0.50);
-    this.osc('sawtooth', 165, 165, 0.16, 0.40, 0.18);
-    this.osc('sawtooth', 220, 220, 0.20, 0.50, 0.36);
+    // Fallback mirrors the sample: two quiet notes a fifth apart, nothing more.
+    this.osc('triangle', 220, 220, 0.18, 0.22);
+    this.osc('triangle', 330, 330, 0.14, 0.28, 0.14);
   }
 
   public playIgnite(): void {
     if (this.playSample('ignite')) return;
-    // Deep, muffled roar.
     this.noise('lowpass', 500, 1.2, 0.36, 0.32);
     this.osc('sawtooth', 90, 200, 0.14, 0.30, 0.05);
   }
 
   public playWoodChop(): void {
-    // No dedicated sample — procedural. Dull axe bite into dry wood: a thock + short crack.
+    if (this.playSample('woodChop', 1.0)) return;
     this.noise('lowpass', 600, 1.4, 0.34, 0.07);
     this.osc('square', 190, 90, 0.16, 0.09);
     this.noise('highpass', 1800, 1.0, 0.08, 0.05, 0.02);
   }
 
+  public playBridgePlank(): void {
+    if (this.playSample('bridgePlank', 0.8)) return;
+    this.noise('lowpass', 420, 1.6, 0.26, 0.06);
+    this.osc('square', 150, 78, 0.14, 0.10);
+    this.osc('triangle', 300, 300, 0.07, 0.05, 0.01);
+  }
+
+  public playBridgeBuilt(): void {
+    if (this.playSample('bridgeBuilt')) return;
+    this.noise('lowpass', 500, 1.4, 0.24, 0.06);
+    this.osc('square', 170, 90, 0.14, 0.08);
+    this.osc('square', 150, 80, 0.12, 0.08, 0.07);
+    this.osc('triangle', 262, 262, 0.16, 0.16, 0.10);
+    this.osc('triangle', 330, 330, 0.16, 0.16, 0.20);
+    this.osc('triangle', 392, 392, 0.18, 0.26, 0.30);
+  }
+
+  public playTreeFall(): void {
+    if (this.playSample('treeFall')) return;
+    this.osc('sawtooth', 130, 58, 0.14, 0.34);
+    this.noise('lowpass', 700, 0.8, 0.20, 0.34, 0.16);
+  }
+
+  public playSplash(): void {
+    if (this.playSample('splash', 0.5)) return;
+    this.noise('lowpass', 1100, 0.6, 0.24, 0.16);
+    this.noise('highpass', 2800, 0.5, 0.11, 0.14, 0.02);
+  }
+
   public playRockSmash(): void {
-    // No dedicated sample — procedural. Stone clack with a gritty tail.
+    if (this.playSample('rockSmash', 0.9)) return;
     this.noise('bandpass', 2600, 3.0, 0.22, 0.05);
     this.osc('square', 320, 140, 0.14, 0.07);
     this.noise('lowpass', 500, 1.0, 0.22, 0.14, 0.02);
   }
 
   public playGrassCut(): void {
-    // No dedicated sample — procedural. A quick swish through dry stalks.
+    if (this.playSample('grassCut', 1.2)) return;
     this.noise('highpass', 2400, 0.8, 0.16, 0.12);
     this.noise('bandpass', 900, 1.2, 0.10, 0.10, 0.04);
   }
 
   public playBombPlace(): void {
-    // No dedicated sample — procedural. Soft thud + fuse hiss starting up.
+    if (this.playSample('bombPlace')) return;
     this.noise('lowpass', 300, 1.0, 0.22, 0.08);
     this.noise('highpass', 3200, 0.8, 0.05, 0.30, 0.06);
   }
 
   public playBombExplode(): void {
-    // No dedicated sample — procedural. Deep boom with a rumbling tail.
+    if (this.playSample('bombExplode')) return;
     this.osc('sine', 110, 28, 0.6, 0.5);
     this.noise('lowpass', 900, 0.8, 0.55, 0.20);
     this.noise('lowpass', 240, 1.0, 0.35, 0.7, 0.10);
@@ -324,8 +478,7 @@ class SoundManager {
   }
 
   public playUndeadSpawn(): void {
-    // No dedicated sample — procedural. Bones grinding up through soil: two gritty
-    // filtered-noise scrapes plus a low rising groan.
+    if (this.playSample('undeadSpawn', 0.8)) return;
     this.noise('bandpass', 700, 2.0, 0.16, 0.16);
     this.noise('bandpass', 1300, 2.5, 0.10, 0.12, 0.12);
     this.osc('sawtooth', 55, 130, 0.16, 0.42);
@@ -333,21 +486,19 @@ class SoundManager {
   }
 
   public playFireHit(): void {
-    // No dedicated sample — procedural. Low fiery crackle, not a bright zap.
+    if (this.playSample('fireHit', 0.9)) return;
     this.noise('lowpass', 700, 1.5, 0.24, 0.10);
     this.osc('sawtooth', 200, 110, 0.12, 0.08);
   }
 
   public playShopOpen(): void {
     if (this.playSample('shopOpen')) return;
-    // Low, subdued menu tone (down).
     this.osc('sine', 196, 196, 0.18, 0.09);
     this.osc('sine', 131, 131, 0.20, 0.16, 0.07);
   }
 
   public playShopClose(): void {
     if (this.playSample('shopClose')) return;
-    // Low, subdued menu tone (up).
     this.osc('sine', 131, 131, 0.18, 0.09);
     this.osc('sine', 196, 196, 0.16, 0.16, 0.07);
   }

@@ -52,6 +52,6 @@ export class PreloadScene extends Phaser.Scene {
     if (mode !== 'editor') {
       setWorldData(this.cache.json.get(WORLD_JSON_KEY));
     }
-    this.scene.start(mode === 'editor' ? 'editor' : 'intro');
+    this.scene.start(mode === 'editor' ? 'editor' : 'title');
   }
 }

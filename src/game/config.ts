@@ -1,33 +1,25 @@
 import Phaser from 'phaser';
 
 import {
-  CHUNK_COLUMNS,
-  CHUNK_ROWS,
   DEFAULT_GAME_HEIGHT,
   DEFAULT_GAME_WIDTH,
-  HUD_RESERVED_ROWS,
-  MIN_BOARD_TILE_SIZE,
 } from '@/game/constants';
 import { BootScene } from '@/game/scenes/BootScene';
 import { EditorScene } from '@/game/scenes/EditorScene';
 import { GameScene } from '@/game/scenes/GameScene';
 import { IntroScene } from '@/game/scenes/IntroScene';
 import { PreloadScene } from '@/game/scenes/PreloadScene';
+import { TitleScene } from '@/game/scenes/TitleScene';
 
 export type AppMode = 'game' | 'editor';
 
-const getGameCanvasSize = (): { width: number; height: number } => {
-  const viewportWidth = window.innerWidth || DEFAULT_GAME_WIDTH;
-  const viewportHeight = window.innerHeight || DEFAULT_GAME_HEIGHT;
-  const totalRows = CHUNK_ROWS + HUD_RESERVED_ROWS;
-  const fittedTileSize = Math.floor(Math.min(viewportWidth / CHUNK_COLUMNS, viewportHeight / totalRows));
-  const tileSize = Math.max(MIN_BOARD_TILE_SIZE, Math.min(36, fittedTileSize));
-
-  return {
-    width: CHUNK_COLUMNS * tileSize,
-    height: totalRows * tileSize,
-  };
-};
+// The game canvas fills the whole window (100% of the screen). The tile size is derived from
+// this size at runtime (see GameScene.computeTileSize → min(width/12, height/12)), so the hero
+// stays centred with ~one chunk visible in the shorter dimension and more world along the wider.
+const getGameCanvasSize = (): { width: number; height: number } => ({
+  width: window.innerWidth || DEFAULT_GAME_WIDTH,
+  height: window.innerHeight || DEFAULT_GAME_HEIGHT,
+});
 
 export const getCanvasSizeForMode = (mode: AppMode): { width: number; height: number } => {
   if (mode === 'editor') {
@@ -56,5 +48,5 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   },
   // Editor mode also registers GameScene so the editor can live-playtest the world in
   // memory (EditorScene.startPlaytest) without saving or leaving the page.
-  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene, GameScene] : [IntroScene, GameScene])],
+  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene, GameScene] : [TitleScene, IntroScene, GameScene])],
 });

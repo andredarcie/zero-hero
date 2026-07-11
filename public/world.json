@@ -12,7 +12,7 @@
       "worldX": 54,
       "worldY": 92
     },
-    "exportedAt": "2026-07-08T20:46:55.939Z"
+    "exportedAt": "2026-07-10T22:37:31.474Z"
   },
   "chunks": [
     {
@@ -406,7 +406,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -472,20 +472,6 @@
           false
         ],
         [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
           false,
           false,
           false,
@@ -508,7 +494,21 @@
           false,
           false,
           false,
-          true,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false
@@ -937,12 +937,12 @@
           false,
           false,
           false,
-          true,
           false,
           false,
           false,
           false,
-          true,
+          false,
+          false,
           false,
           false
         ],
@@ -993,7 +993,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           true,
           true,
@@ -1019,13 +1019,13 @@
         [
           false,
           false,
-          true,
           false,
           false,
           false,
           false,
           false,
-          true,
+          false,
+          false,
           false,
           false,
           false
@@ -1542,7 +1542,7 @@
         [
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -1997,8 +1997,8 @@
           false,
           false,
           true,
-          true,
-          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -2012,7 +2012,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -2474,34 +2474,6 @@
           false
         ],
         [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
           false,
           false,
           false,
@@ -2536,6 +2508,34 @@
           false,
           false,
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
           false,
           false,
@@ -2549,7 +2549,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -3041,7 +3041,7 @@
           false,
           true,
           false,
-          true,
+          false,
           false,
           true,
           false
@@ -3086,7 +3086,7 @@
           false,
           false,
           false,
-          true
+          false
         ],
         [
           false,
@@ -3508,7 +3508,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           true,
           false,
@@ -4014,11 +4014,95 @@
           true,
           false,
           false,
+          false,
+          false,
           true,
           false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
           true,
           false,
           false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          true,
           false,
           false,
           false,
@@ -4044,90 +4128,6 @@
           false,
           false,
           false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false
-        ],
-        [
-          true,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          true,
-          false
-        ],
-        [
-          true,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           true,
           false,
@@ -4138,7 +4138,7 @@
         ],
         [
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -4577,13 +4577,13 @@
         ],
         [
           false,
-          true,
           false,
           false,
           false,
           false,
           false,
-          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -4682,7 +4682,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false
@@ -5158,7 +5158,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false
         ],
@@ -5656,7 +5656,21 @@
           false,
           false,
           false,
-          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -5680,20 +5694,6 @@
           false
         ],
         [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
           false,
           true,
           false,
@@ -5703,7 +5703,7 @@
           false,
           false,
           true,
-          true,
+          false,
           false,
           false
         ],
@@ -6106,7 +6106,63 @@
           false,
           false,
           false,
+          false,
+          false,
           true,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          true,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           true,
           false,
@@ -6131,62 +6187,6 @@
           false,
           false,
           false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          true,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
           true,
           false,
           false,
@@ -6214,7 +6214,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -6610,7 +6610,6 @@
         [
           false,
           false,
-          true,
           false,
           false,
           false,
@@ -6619,7 +6618,8 @@
           false,
           false,
           false,
-          true
+          false,
+          false
         ],
         [
           false,
@@ -6646,6 +6646,20 @@
           false,
           false,
           false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
           false
         ],
@@ -6660,20 +6674,6 @@
           false,
           false,
           false,
-          true,
-          false
-        ],
-        [
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false
         ],
@@ -6681,7 +6681,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           true,
           false,
@@ -7161,7 +7161,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false
@@ -7704,20 +7704,6 @@
           false,
           false,
           false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false,
           false,
@@ -7726,15 +7712,29 @@
           false
         ],
         [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false
@@ -7804,13 +7804,7 @@
           "worldY": 17
         }
       ],
-      "npcs": [
-        {
-          "type": "death",
-          "worldX": 76,
-          "worldY": 20
-        }
-      ]
+      "npcs": []
     },
     {
       "cx": 7,
@@ -8172,6 +8166,20 @@
         ],
         [
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
           true,
           false,
           false,
@@ -8179,35 +8187,7 @@
           false,
           false,
           false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
           true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false,
           false
@@ -8231,6 +8211,20 @@
           false,
           false,
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
           true,
           false,
           false,
@@ -8244,10 +8238,10 @@
           false,
           false,
           false,
-          true,
           false,
           false,
-          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -8707,7 +8701,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -8773,7 +8767,6 @@
         ],
         [
           false,
-          true,
           false,
           false,
           false,
@@ -8783,25 +8776,26 @@
           false,
           false,
           false,
-          false
-        ],
-        [
-          true,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          true,
           false,
           false
         ],
         [
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
           false,
           false,
           false,
@@ -9209,8 +9203,36 @@
           false,
           false,
           false,
+          false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -9222,34 +9244,6 @@
           false,
           false,
           false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
           true,
           false,
           true,
@@ -9258,20 +9252,6 @@
           false,
           false,
           true,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false
         ],
         [
@@ -9293,14 +9273,28 @@
           false,
           false,
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
           true,
           false,
           false,
           false,
           false,
           false,
-          true,
-          true
+          false,
+          false
         ],
         [
           false,
@@ -9737,8 +9731,22 @@
           false,
           false,
           false,
-          true,
           false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
           false
         ],
         [
@@ -9752,20 +9760,6 @@
           false,
           false,
           false,
-          true,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false
         ],
@@ -9780,7 +9774,7 @@
           false,
           false,
           false,
-          true,
+          false,
           true
         ],
         [
@@ -9840,7 +9834,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -9856,7 +9850,7 @@
         [
           true,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -9884,13 +9878,7 @@
       ],
       "enemies": [],
       "pickups": [],
-      "npcs": [
-        {
-          "type": "poet",
-          "worldX": 26,
-          "worldY": 32
-        }
-      ]
+      "npcs": []
     },
     {
       "cx": 3,
@@ -10241,48 +10229,6 @@
           false,
           false,
           false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          true,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          true,
-          false,
-          false,
           false,
           false,
           false,
@@ -10296,9 +10242,51 @@
           false,
           false,
           false,
+          true,
           false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
           false,
           true,
           false,
@@ -10322,7 +10310,7 @@
         ],
         [
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -10346,7 +10334,7 @@
           false,
           false,
           false,
-          true
+          false
         ],
         [
           false,
@@ -10770,10 +10758,10 @@
         [
           false,
           false,
-          true,
           false,
           false,
-          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -10887,7 +10875,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -11300,7 +11288,7 @@
         ],
         [
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -11421,7 +11409,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false
         ],
         [
@@ -11800,7 +11788,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -11811,7 +11799,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -11822,7 +11810,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -11921,7 +11909,7 @@
         ],
         [
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -11944,7 +11932,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false
         ],
         [
@@ -11964,13 +11952,7 @@
       ],
       "enemies": [],
       "pickups": [],
-      "npcs": [
-        {
-          "type": "painter",
-          "worldX": 74,
-          "worldY": 28
-        }
-      ]
+      "npcs": []
     },
     {
       "cx": 7,
@@ -12345,62 +12327,6 @@
           false
         ],
         [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
           false,
           false,
           false,
@@ -12431,11 +12357,67 @@
         [
           false,
           false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
           false,
           false,
           false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
           true,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -12841,76 +12823,6 @@
           false,
           false,
           false,
-          true,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           true,
           false,
@@ -12934,7 +12846,77 @@
         [
           false,
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
           false,
           false,
           true,
@@ -13361,62 +13343,6 @@
           false,
           false,
           false,
-          true,
-          false
-        ],
-        [
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false
         ],
@@ -13427,7 +13353,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -13456,6 +13382,62 @@
           false,
           false,
           false,
+          true,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           true,
@@ -13514,7 +13496,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false
         ]
@@ -13884,7 +13866,7 @@
           true,
           false,
           false,
-          true,
+          false,
           false
         ],
         [
@@ -14033,7 +14015,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -14050,13 +14032,7 @@
           "worldY": 41
         }
       ],
-      "npcs": [
-        {
-          "type": "businessMan",
-          "worldX": 26,
-          "worldY": 39
-        }
-      ]
+      "npcs": []
     },
     {
       "cx": 3,
@@ -14417,7 +14393,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -14462,7 +14438,7 @@
           false,
           true,
           false,
-          true,
+          false,
           false,
           false,
           true,
@@ -14494,7 +14470,7 @@
           true,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -14987,7 +14963,7 @@
           false,
           false,
           false,
-          true
+          false
         ],
         [
           false,
@@ -15549,7 +15525,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false
@@ -15982,7 +15958,7 @@
         [
           false,
           false,
-          true,
+          false,
           true,
           false,
           true,
@@ -16535,7 +16511,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           true,
@@ -17042,52 +17018,10 @@
           false,
           false,
           false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false,
           false,
           false
-        ],
-        [
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true
         ],
         [
           false,
@@ -17111,6 +17045,48 @@
           false,
           false,
           false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
           false,
           false,
@@ -17140,9 +17116,9 @@
           false,
           false,
           false,
-          true,
           false,
-          true,
+          false,
+          false,
           false
         ],
         [
@@ -17659,12 +17635,12 @@
           false,
           false,
           false,
-          true,
           false,
           false,
           false,
           false,
-          true,
+          false,
+          false,
           false,
           false
         ],
@@ -18132,7 +18108,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false
         ],
         [
@@ -18214,7 +18190,7 @@
           false,
           false,
           false,
-          true,
+          false,
           true,
           false,
           false
@@ -18611,34 +18587,6 @@
           false,
           false,
           false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
           false,
           false,
           false,
@@ -18653,7 +18601,7 @@
           false,
           false,
           false,
-          false,
+          true,
           false,
           false,
           false
@@ -18666,34 +18614,6 @@
           false,
           false,
           true,
-          false,
-          true,
-          true,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
           false,
           false,
           false,
@@ -18711,12 +18631,68 @@
           false,
           false,
           false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          true,
+          true,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
           false
         ],
         [
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -19151,23 +19127,79 @@
           false,
           false,
           false,
+          false
+        ],
+        [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true
         ],
         [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
           false,
           false,
           false,
@@ -19200,62 +19232,6 @@
           false,
           false,
           false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          true,
-          false,
-          false,
-          true,
           false,
           false,
           false,
@@ -19267,8 +19243,20 @@
         ]
       ],
       "enemies": [],
-      "pickups": [],
-      "npcs": []
+      "pickups": [
+        {
+          "type": "wood",
+          "worldX": 56,
+          "worldY": 57
+        }
+      ],
+      "npcs": [
+        {
+          "type": "death",
+          "worldX": 57,
+          "worldY": 57
+        }
+      ]
     },
     {
       "cx": 5,
@@ -19720,7 +19708,7 @@
           false,
           false,
           false,
-          true,
+          false,
           true,
           false,
           false,
@@ -19786,23 +19774,12 @@
       "enemies": [],
       "pickups": [
         {
-          "type": "sword",
-          "worldX": 63,
-          "worldY": 57
-        },
-        {
           "type": "heart",
           "worldX": 67,
           "worldY": 57
         }
       ],
-      "npcs": [
-        {
-          "type": "death",
-          "worldX": 69,
-          "worldY": 52
-        }
-      ]
+      "npcs": []
     },
     {
       "cx": 6,
@@ -20319,13 +20296,7 @@
       ],
       "enemies": [],
       "pickups": [],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 74,
-          "worldY": 50
-        }
-      ]
+      "npcs": []
     },
     {
       "cx": 7,
@@ -20683,7 +20654,7 @@
           false,
           false,
           false,
-          true
+          false
         ],
         [
           true,
@@ -20785,10 +20756,10 @@
         ],
         [
           false,
-          true,
           false,
           false,
-          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -20814,7 +20785,7 @@
         [
           false,
           false,
-          true,
+          false,
           false,
           true,
           false,
@@ -21211,20 +21182,6 @@
           false,
           false,
           false,
-          true,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          true,
           false,
           false
         ],
@@ -21244,6 +21201,20 @@
         ],
         [
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
           true,
           false,
           false,
@@ -21261,7 +21232,7 @@
           false,
           false,
           false,
-          true,
+          false,
           true,
           false,
           false,
@@ -21764,7 +21735,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           true,
@@ -22312,7 +22283,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -22348,15 +22319,15 @@
         ],
         [
           false,
-          true,
-          false,
-          false,
-          true,
           false,
           false,
           false,
           false,
-          true,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false
         ],
@@ -22858,7 +22829,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false
@@ -23325,55 +23296,13 @@
           true,
           false,
           false,
-          true,
+          false,
           true,
           false,
           false
         ],
         [
           true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          true,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true
-        ],
-        [
-          false,
           false,
           false,
           false,
@@ -23396,12 +23325,54 @@
           false,
           false,
           false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
           false,
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -23444,8 +23415,25 @@
         ]
       ],
       "enemies": [],
-      "pickups": [],
-      "npcs": []
+      "pickups": [
+        {
+          "type": "lavaBoots",
+          "worldX": 55,
+          "worldY": 64
+        },
+        {
+          "type": "bomb",
+          "worldX": 50,
+          "worldY": 63
+        }
+      ],
+      "npcs": [
+        {
+          "type": "businessMan",
+          "worldX": 54,
+          "worldY": 64
+        }
+      ]
     },
     {
       "cx": 5,
@@ -23806,7 +23794,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -23851,7 +23839,7 @@
           false,
           true,
           false,
-          true,
+          false,
           false,
           false,
           true,
@@ -23883,7 +23871,7 @@
           true,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -24375,7 +24363,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -24433,8 +24421,8 @@
           false,
           false,
           false,
-          true,
-          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -24842,62 +24830,6 @@
           false,
           false,
           false,
-          true,
-          false
-        ],
-        [
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false
         ],
@@ -24908,7 +24840,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -24937,6 +24869,62 @@
           false,
           false,
           false,
+          true,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           true,
@@ -24995,7 +24983,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false
         ]
@@ -25473,7 +25461,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -25907,34 +25895,6 @@
           false,
           true,
           true,
-          true,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          true,
           false,
           false,
           false,
@@ -25950,17 +25910,17 @@
           false,
           false,
           false,
+          false,
           true,
           false,
-          false,
-          true
+          false
         ],
         [
+          false,
+          false,
+          false,
+          false,
           true,
-          false,
-          false,
-          false,
-          false,
           false,
           false,
           false,
@@ -25984,13 +25944,13 @@
           false
         ],
         [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -26016,6 +25976,34 @@
           false,
           false,
           false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
           true,
           false,
           false,
@@ -26036,7 +26024,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false
         ]
       ],
@@ -26305,8 +26293,8 @@
           null,
           null,
           15,
-          null,
-          null
+          14,
+          14
         ],
         [
           null,
@@ -26318,25 +26306,25 @@
           null,
           null,
           null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          6,
-          null,
-          6,
-          null,
-          null,
-          null,
+          14,
           null,
           null
         ],
         [
+          null,
+          null,
+          null,
+          null,
+          6,
+          null,
+          6,
+          null,
+          null,
+          14,
+          null,
+          null
+        ],
+        [
           6,
           null,
           null,
@@ -26345,7 +26333,7 @@
           null,
           null,
           null,
-          4,
+          14,
           null,
           15,
           16
@@ -26358,7 +26346,7 @@
           null,
           0,
           null,
-          0,
+          14,
           null,
           null,
           null,
@@ -26372,7 +26360,7 @@
           null,
           null,
           8,
-          null,
+          14,
           null,
           null,
           10,
@@ -26386,7 +26374,7 @@
           null,
           null,
           4,
-          6,
+          14,
           null,
           null,
           null,
@@ -26401,7 +26389,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -26412,7 +26400,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -26423,7 +26411,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -26515,14 +26503,14 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           true,
           true
         ],
         [
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -26545,7 +26533,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false
         ],
         [
@@ -26776,8 +26764,8 @@
           null,
           null,
           null,
-          16,
-          null,
+          14,
+          14,
           7,
           null,
           null,
@@ -26785,13 +26773,13 @@
         ],
         [
           null,
-          4,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
           null,
           null,
           null,
@@ -26799,21 +26787,21 @@
         ],
         [
           null,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          0,
-          null,
-          null,
-          16,
-          null
+          14,
+          14,
+          14
         ],
         [
-          4,
-          null,
+          14,
+          14,
           null,
           null,
           null,
@@ -26832,8 +26820,8 @@
           null,
           null,
           4,
-          null,
-          null,
+          4,
+          4,
           null,
           null,
           null,
@@ -26850,7 +26838,7 @@
           null,
           null,
           null,
-          6,
+          null,
           null
         ],
         [
@@ -26861,9 +26849,9 @@
           null,
           null,
           null,
+          4,
           null,
           null,
-          0,
           null,
           null
         ],
@@ -26871,25 +26859,25 @@
           null,
           null,
           null,
-          0,
+          4,
+          4,
+          4,
+          4,
+          4,
           null,
-          8,
-          null,
-          null,
-          10,
-          7,
-          null,
-          null
+          4,
+          4,
+          4
         ],
         [
           null,
           null,
           null,
-          null,
-          10,
-          null,
-          null,
-          6,
+          4,
+          4,
+          4,
+          4,
+          4,
           null,
           null,
           null,
@@ -26898,9 +26886,9 @@
         [
           null,
           null,
-          null,
-          null,
-          null,
+          4,
+          4,
+          4,
           null,
           7,
           null,
@@ -26946,7 +26934,63 @@
           false,
           false,
           false,
-          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -26978,20 +27022,6 @@
           false,
           false,
           false,
-          true,
-          false
-        ],
-        [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false
         ],
@@ -26999,34 +27029,6 @@
           false,
           false,
           false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          true,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          true,
           false,
           false,
           false,
@@ -27043,20 +27045,6 @@
           false,
           false,
           false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          true,
           false,
           false,
           false,
@@ -27081,7 +27069,13 @@
         ]
       ],
       "enemies": [],
-      "pickups": [],
+      "pickups": [
+        {
+          "type": "sword",
+          "worldX": 47,
+          "worldY": 79
+        }
+      ],
       "npcs": []
     },
     {
@@ -27259,7 +27253,7 @@
       ],
       "upper": [
         [
-          6,
+          null,
           null,
           null,
           null,
@@ -27280,7 +27274,7 @@
           null,
           null,
           null,
-          6,
+          null,
           null,
           4,
           null,
@@ -27315,9 +27309,9 @@
           null
         ],
         [
-          15,
-          16,
-          null,
+          14,
+          14,
+          14,
           null,
           null,
           null,
@@ -27332,8 +27326,8 @@
           null,
           null,
           null,
-          null,
-          null,
+          14,
+          14,
           10,
           null,
           null,
@@ -27347,8 +27341,8 @@
           null,
           null,
           null,
-          null,
-          null,
+          14,
+          14,
           null,
           null,
           null,
@@ -27358,11 +27352,11 @@
         ],
         [
           null,
-          15,
-          null,
-          7,
           null,
           null,
+          4,
+          null,
+          14,
           null,
           null,
           4,
@@ -27375,28 +27369,28 @@
           null,
           null,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
+          4,
+          14,
+          4,
+          4,
+          4,
+          4,
+          4,
           null
         ],
         [
           4,
-          null,
-          null,
-          0,
-          null,
-          null,
-          null,
-          7,
-          null,
-          null,
-          8,
-          null
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
         ],
         [
           4,
@@ -27405,26 +27399,26 @@
           null,
           6,
           null,
+          8,
           null,
           null,
           null,
-          null,
-          null,
-          null
+          4,
+          4
         ],
         [
+          8,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
           4,
-          4,
-          15,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
+          4
         ]
       ],
       "collisions": [
@@ -27464,20 +27458,6 @@
           true,
           false,
           false,
-          true,
-          false,
-          false,
-          false,
-          true
-        ],
-        [
-          true,
-          false,
-          true,
-          true,
-          false,
-          false,
-          false,
           false,
           false,
           false,
@@ -27486,47 +27466,6 @@
         ],
         [
           true,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
           false,
           true,
           false,
@@ -27535,9 +27474,8 @@
           false,
           false,
           false,
-          true,
           false,
-          true,
+          false,
           false
         ],
         [
@@ -27571,7 +27509,49 @@
         [
           false,
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           true,
+          false,
+          true,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -27586,6 +27566,20 @@
           false,
           false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -27916,7 +27910,7 @@
           null
         ],
         [
-          10,
+          4,
           null,
           null,
           null,
@@ -27930,8 +27924,8 @@
           null
         ],
         [
-          null,
-          null,
+          4,
+          4,
           null,
           null,
           7,
@@ -27969,20 +27963,6 @@
           false,
           true,
           false,
-          true,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
           false,
           false,
           false
@@ -27994,11 +27974,11 @@
           false,
           false,
           false,
-          true,
           false,
           false,
           false,
-          true,
+          false,
+          false,
           false
         ],
         [
@@ -28017,7 +27997,21 @@
         ],
         [
           false,
-          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
           false,
           false,
           false,
@@ -28086,7 +28080,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -28486,8 +28480,22 @@
           false,
           false,
           false,
-          true,
           false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
           false
         ],
         [
@@ -28501,20 +28509,6 @@
           false,
           false,
           false,
-          true,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false
         ],
@@ -28529,7 +28523,7 @@
           false,
           false,
           false,
-          true,
+          false,
           true
         ],
         [
@@ -28589,7 +28583,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -28605,7 +28599,7 @@
         [
           true,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -29506,7 +29500,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -29540,7 +29534,7 @@
           true,
           false,
           false,
-          true,
+          false,
           false,
           true
         ],
@@ -29555,40 +29549,12 @@
           true,
           false,
           false,
-          true,
-          false
-        ],
-        [
-          true,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false
         ],
         [
-          false,
-          false,
-          false,
           true,
           false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          true,
           false,
           false,
           false,
@@ -29603,6 +29569,20 @@
         [
           false,
           false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          true,
           false,
           false,
           false,
@@ -29622,11 +29602,25 @@
           false,
           false,
           false,
-          true,
           false,
           false,
-          true,
-          true
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
         ],
         [
           false,
@@ -29665,7 +29659,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false
@@ -29673,13 +29667,7 @@
       ],
       "enemies": [],
       "pickups": [],
-      "npcs": [
-        {
-          "type": "death",
-          "worldX": 10,
-          "worldY": 93
-        }
-      ]
+      "npcs": []
     },
     {
       "cx": 1,
@@ -30041,6 +30029,20 @@
         ],
         [
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
           true,
           false,
           false,
@@ -30048,35 +30050,7 @@
           false,
           false,
           false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
           true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false,
           false
@@ -30100,6 +30074,20 @@
           false,
           false,
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
           true,
           false,
           false,
@@ -30113,10 +30101,10 @@
           false,
           false,
           false,
-          true,
           false,
           false,
-          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -30380,7 +30368,7 @@
           6,
           null,
           null,
-          16,
+          14,
           null,
           null,
           null,
@@ -30394,7 +30382,7 @@
           null,
           null,
           null,
-          null,
+          14,
           null,
           null,
           null,
@@ -30408,11 +30396,11 @@
           null,
           null,
           null,
-          7,
+          14,
           null,
           null,
-          null,
-          null
+          4,
+          4
         ],
         [
           null,
@@ -30422,11 +30410,11 @@
           17,
           10,
           8,
-          10,
-          null,
+          4,
+          4,
           null,
           11,
-          11
+          4
         ],
         [
           null,
@@ -30436,11 +30424,11 @@
           0,
           null,
           null,
+          4,
+          4,
           null,
-          null,
-          16,
-          10,
-          null
+          4,
+          4
         ],
         [
           null,
@@ -30448,9 +30436,9 @@
           null,
           null,
           null,
-          null,
-          null,
-          null,
+          4,
+          4,
+          4,
           null,
           null,
           null,
@@ -30462,13 +30450,13 @@
           null,
           null,
           4,
+          4,
           null,
           null,
           null,
           null,
           null,
-          null,
-          10
+          6
         ],
         [
           null,
@@ -30476,13 +30464,13 @@
           null,
           null,
           null,
-          null,
-          null,
+          4,
+          4,
           null,
           11,
-          null,
-          null,
-          0
+          6,
+          6,
+          6
         ],
         [
           null,
@@ -30491,12 +30479,12 @@
           null,
           6,
           16,
-          null,
+          4,
           11,
           null,
           null,
           null,
-          16
+          6
         ],
         [
           6,
@@ -30505,8 +30493,8 @@
           null,
           null,
           null,
-          null,
-          null,
+          4,
+          4,
           8,
           null,
           null,
@@ -30520,11 +30508,11 @@
           null,
           null,
           null,
-          null,
+          4,
           0,
           null,
-          null,
-          null
+          14,
+          14
         ],
         [
           null,
@@ -30534,11 +30522,11 @@
           4,
           16,
           null,
-          null,
-          null,
-          8,
-          null,
-          null
+          4,
+          4,
+          4,
+          4,
+          4
         ]
       ],
       "collisions": [
@@ -30550,20 +30538,6 @@
           false,
           false,
           false,
-          true,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false,
           false,
@@ -30571,7 +30545,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -30585,63 +30559,7 @@
           false
         ],
         [
-          false,
-          false,
-          false,
-          false,
           true,
-          true,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          true,
-          false
-        ],
-        [
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          true,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true
-        ],
-        [
-          false,
           false,
           false,
           false,
@@ -30659,14 +30577,14 @@
           false,
           false,
           false,
-          false,
           true,
           false,
           false,
           false,
           false,
           false,
-          true
+          false,
+          false
         ],
         [
           false,
@@ -30697,8 +30615,78 @@
           false
         ],
         [
+          true,
+          false,
+          false,
           false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
           true,
           false,
           true,
@@ -30712,7 +30700,13 @@
         ]
       ],
       "enemies": [],
-      "pickups": [],
+      "pickups": [
+        {
+          "type": "key",
+          "worldX": 34,
+          "worldY": 90
+        }
+      ],
       "npcs": []
     },
     {
@@ -30892,8 +30886,8 @@
         [
           null,
           null,
-          null,
-          null,
+          4,
+          4,
           null,
           11,
           null,
@@ -30901,30 +30895,30 @@
           null,
           null,
           6,
-          null
-        ],
-        [
-          null,
-          null,
-          11,
-          17,
-          null,
-          null,
-          null,
-          null,
-          null,
-          0,
-          null,
-          null
+          8
         ],
         [
           null,
           4,
-          17,
+          4,
+          4,
           null,
           null,
           null,
+          5,
           null,
+          0,
+          null,
+          null
+        ],
+        [
+          4,
+          4,
+          4,
+          null,
+          8,
+          null,
+          8,
           null,
           null,
           null,
@@ -30932,24 +30926,24 @@
           null
         ],
         [
-          null,
-          null,
-          null,
+          4,
+          4,
+          4,
           null,
           null,
           null,
           8,
           null,
-          10,
           null,
           null,
-          0
+          null,
+          5
         ],
         [
-          null,
-          6,
-          null,
-          null,
+          4,
+          4,
+          4,
+          4,
           null,
           null,
           0,
@@ -30963,56 +30957,56 @@
           8,
           null,
           null,
-          null,
+          4,
           null,
           11,
           15,
           null,
-          11,
           null,
           null,
-          6
+          null,
+          4
         ],
         [
-          0,
-          null,
+          6,
+          6,
           7,
+          4,
           null,
           null,
           null,
           null,
           null,
-          16,
-          11,
+          null,
           8,
           null
         ],
         [
           6,
           6,
+          6,
+          6,
+          6,
+          6,
           null,
           null,
           null,
           null,
-          null,
-          4,
-          null,
-          16,
           null,
           null
         ],
         [
+          6,
+          6,
           null,
-          null,
-          null,
-          null,
+          4,
           11,
-          0,
-          null,
-          0,
           null,
           null,
           null,
+          null,
+          null,
+          8,
           null
         ],
         [
@@ -31020,7 +31014,7 @@
           null,
           null,
           null,
-          null,
+          4,
           null,
           null,
           null,
@@ -31033,29 +31027,29 @@
           null,
           6,
           null,
-          null,
-          null,
+          4,
+          4,
           6,
           null,
           null,
           null,
           null,
           null,
-          null
+          4
         ],
         [
-          7,
+          4,
           4,
           6,
           7,
-          null,
-          null,
-          null,
-          15,
-          null,
-          null,
-          null,
-          null
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
         ]
       ],
       "collisions": [
@@ -31077,7 +31071,6 @@
           false,
           false,
           false,
-          true,
           false,
           false,
           false,
@@ -31085,89 +31078,6 @@
           false,
           false,
           false,
-          false
-        ],
-        [
-          false,
-          true,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          true,
           false,
           false
         ],
@@ -31215,13 +31125,97 @@
         ],
         [
           false,
-          true,
           false,
           false,
           false,
           false,
           false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -31407,12 +31401,12 @@
       ],
       "upper": [
         [
-          4,
-          4,
+          null,
+          null,
           null,
           11,
           null,
-          null,
+          8,
           11,
           null,
           0,
@@ -31436,9 +31430,9 @@
         ],
         [
           4,
+          4,
           null,
-          null,
-          null,
+          18,
           16,
           17,
           null,
@@ -31446,11 +31440,11 @@
           4,
           15,
           4,
-          null
+          4
         ],
         [
           4,
-          null,
+          4,
           8,
           null,
           null,
@@ -31460,17 +31454,17 @@
           8,
           null,
           4,
-          null
+          4
         ],
         [
           4,
-          null,
+          4,
           16,
           8,
           null,
-          null,
-          null,
-          null,
+          6,
+          6,
+          8,
           null,
           null,
           8,
@@ -31479,12 +31473,12 @@
         [
           16,
           null,
-          null,
-          null,
-          null,
-          8,
-          null,
-          null,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
           null,
           15,
           null,
@@ -31493,13 +31487,13 @@
         [
           4,
           null,
-          null,
-          null,
-          null,
-          null,
-          11,
-          null,
-          null,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          8,
           10,
           null,
           4
@@ -31508,25 +31502,25 @@
           4,
           8,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
+          6,
+          6,
+          6,
+          6,
+          6,
           17,
           null,
           null,
-          4
+          0
         ],
         [
-          4,
+          null,
           null,
           null,
           8,
-          null,
-          null,
-          null,
-          null,
+          6,
+          6,
+          6,
+          6,
           null,
           null,
           6,
@@ -31539,11 +31533,11 @@
           7,
           7,
           null,
-          null,
+          6,
           8,
           8,
           null,
-          null,
+          8,
           4
         ],
         [
@@ -31557,7 +31551,7 @@
           null,
           null,
           null,
-          null,
+          4,
           4
         ],
         [
@@ -31570,15 +31564,15 @@
           null,
           11,
           null,
-          11,
-          11,
+          4,
+          4,
           4
         ]
       ],
       "collisions": [
         [
-          true,
-          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -31633,7 +31627,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           true,
           false,
@@ -31670,20 +31664,6 @@
           false,
           false,
           false,
-          true,
-          false,
-          true
-        ],
-        [
-          true,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
           false,
           false,
           true
@@ -31697,13 +31677,13 @@
           false,
           false,
           false,
+          true,
           false,
           false,
-          false,
-          true
+          false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -31720,7 +31700,7 @@
           true,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -31732,6 +31712,20 @@
         ],
         [
           true,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true
+        ],
+        [
+          false,
           true,
           false,
           false,
@@ -31748,49 +31742,9 @@
       "enemies": [],
       "pickups": [
         {
-          "type": "sword",
-          "worldX": 52,
-          "worldY": 91
-        },
-        {
-          "type": "heart",
-          "worldX": 59,
-          "worldY": 87
-        },
-        {
-          "type": "key",
-          "worldX": 55,
-          "worldY": 92
-        },
-        {
           "type": "axe",
-          "worldX": 53,
-          "worldY": 91
-        },
-        {
-          "type": "bomb",
-          "worldX": 55,
-          "worldY": 91
-        },
-        {
-          "type": "lavaBoots",
-          "worldX": 53,
-          "worldY": 93
-        },
-        {
-          "type": "pickaxe",
-          "worldX": 55,
-          "worldY": 93
-        },
-        {
-          "type": "scythe",
-          "worldX": 54,
+          "worldX": 49,
           "worldY": 90
-        },
-        {
-          "type": "wood",
-          "worldX": 52,
-          "worldY": 92
         }
       ],
       "npcs": [
@@ -31977,7 +31931,7 @@
       "upper": [
         [
           4,
-          null,
+          4,
           null,
           8,
           null,
@@ -31990,9 +31944,9 @@
           8
         ],
         [
-          0,
-          null,
-          null,
+          4,
+          4,
+          4,
           null,
           null,
           null,
@@ -32004,46 +31958,46 @@
           null
         ],
         [
+          4,
+          4,
+          4,
+          4,
+          4,
           null,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          10,
-          null,
-          16,
-          null,
+          4,
+          4,
+          4,
+          4,
           null
         ],
         [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
           null,
           null,
-          null,
-          null,
-          null,
+          4,
+          4
+        ],
+        [
           null,
           11,
-          7,
           null,
           null,
-          6,
-          null
-        ],
-        [
-          null,
-          11,
-          null,
-          null,
-          null,
-          0,
-          null,
+          4,
+          4,
+          4,
           10,
           null,
           null,
           null,
-          null
+          4
         ],
         [
           15,
@@ -32057,13 +32011,13 @@
           null,
           6,
           null,
-          6
+          4
         ],
         [
           null,
           null,
           null,
-          null,
+          8,
           11,
           null,
           null,
@@ -32075,7 +32029,7 @@
         ],
         [
           null,
-          null,
+          8,
           10,
           null,
           null,
@@ -32085,7 +32039,7 @@
           null,
           null,
           11,
-          null
+          4
         ],
         [
           null,
@@ -32099,7 +32053,7 @@
           null,
           null,
           8,
-          null
+          4
         ],
         [
           null,
@@ -32113,21 +32067,21 @@
           6,
           null,
           4,
-          null
+          4
         ],
         [
           7,
           null,
           null,
           10,
-          null,
+          8,
           null,
           null,
           16,
           null,
           null,
           null,
-          11
+          4
         ],
         [
           null,
@@ -32141,12 +32095,26 @@
           null,
           null,
           null,
-          null
+          4
         ]
       ],
       "collisions": [
         [
-          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
           false,
           false,
           false,
@@ -32181,20 +32149,6 @@
           false,
           false,
           false,
-          true,
-          false,
-          true,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
           false,
           false,
           false,
@@ -32209,7 +32163,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -32246,7 +32200,7 @@
         [
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -32289,7 +32243,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false,
           false,
@@ -32315,13 +32269,7 @@
         ]
       ],
       "enemies": [],
-      "pickups": [
-        {
-          "type": "heart",
-          "worldX": 62,
-          "worldY": 86
-        }
-      ],
+      "pickups": [],
       "npcs": []
     },
     {
@@ -32569,7 +32517,7 @@
           16
         ],
         [
-          null,
+          4,
           null,
           null,
           null,
@@ -32583,7 +32531,7 @@
           null
         ],
         [
-          6,
+          4,
           null,
           null,
           null,
@@ -32597,7 +32545,7 @@
           null
         ],
         [
-          null,
+          4,
           null,
           0,
           null,
@@ -32733,7 +32681,7 @@
           false,
           true,
           false,
-          true,
+          false,
           false,
           false,
           true
@@ -32775,20 +32723,6 @@
           false,
           false,
           false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false,
-          false,
           false,
           false,
           false,
@@ -32797,8 +32731,8 @@
         [
           false,
           false,
-          true,
           false,
+          true,
           false,
           false,
           false,
@@ -32810,9 +32744,23 @@
         ],
         [
           false,
-          true,
           false,
           true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          true,
+          false,
+          false,
           false,
           false,
           false,
@@ -33307,7 +33255,7 @@
           false,
           false,
           false,
-          true,
+          false,
           false,
           false
         ],
@@ -33362,13 +33310,114 @@
   "props": [
     {
       "type": "campfire",
+      "worldX": 51,
+      "worldY": 89,
+      "lit": true
+    },
+    {
+      "type": "dryBush",
+      "worldX": 55,
+      "worldY": 72
+    },
+    {
+      "type": "dryBush",
+      "worldX": 54,
+      "worldY": 73
+    },
+    {
+      "type": "tallGrass",
       "worldX": 56,
-      "worldY": 50
+      "worldY": 73
+    },
+    {
+      "type": "dryTree",
+      "worldX": 48,
+      "worldY": 71
+    },
+    {
+      "type": "dryTree",
+      "worldX": 48,
+      "worldY": 73
+    },
+    {
+      "type": "dryTree",
+      "worldX": 49,
+      "worldY": 72
     },
     {
       "type": "campfire",
+      "worldX": 52,
+      "worldY": 64
+    },
+    {
+      "type": "rock",
       "worldX": 51,
-      "worldY": 89
+      "worldY": 64
+    },
+    {
+      "type": "rock",
+      "worldX": 53,
+      "worldY": 64
+    },
+    {
+      "type": "rock",
+      "worldX": 52,
+      "worldY": 63
+    },
+    {
+      "type": "rock",
+      "worldX": 52,
+      "worldY": 66
+    },
+    {
+      "type": "lockedDoor",
+      "worldX": 52,
+      "worldY": 65
+    },
+    {
+      "type": "campfire",
+      "worldX": 57,
+      "worldY": 58
+    },
+    {
+      "type": "lava",
+      "worldX": 56,
+      "worldY": 56
+    },
+    {
+      "type": "lava",
+      "worldX": 57,
+      "worldY": 56
+    },
+    {
+      "type": "lava",
+      "worldX": 55,
+      "worldY": 57
+    },
+    {
+      "type": "lava",
+      "worldX": 55,
+      "worldY": 58
+    },
+    {
+      "type": "lava",
+      "worldX": 58,
+      "worldY": 57
+    },
+    {
+      "type": "lava",
+      "worldX": 58,
+      "worldY": 58
+    },
+    {
+      "type": "lava",
+      "worldX": 56,
+      "worldY": 59
+    },
+    {
+      "type": "lava",
+      "worldX": 57,
+      "worldY": 59
     },
     {
       "type": "dryBush",
@@ -33376,49 +33425,214 @@
       "worldY": 86
     },
     {
+      "type": "campfire",
+      "worldX": 36,
+      "worldY": 91
+    },
+    {
       "type": "lockedDoor",
-      "worldX": 57,
+      "worldX": 48,
       "worldY": 92
     },
     {
       "type": "dryTree",
-      "worldX": 56,
-      "worldY": 92
+      "worldX": 66,
+      "worldY": 90
     },
     {
-      "type": "rock",
-      "worldX": 54,
+      "type": "water",
+      "worldX": 44,
+      "worldY": 82
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 83
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 95
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 77
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 76
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 72
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 73
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 74
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 75
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 71
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 65
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 66
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 67
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 68
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 69
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 70
+    },
+    {
+      "type": "dryTree",
+      "worldX": 43,
+      "worldY": 79
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 33,
+      "worldY": 88
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 33,
+      "worldY": 80
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 32,
+      "worldY": 84
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 37,
+      "worldY": 83
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 84
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 87
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 88
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 89
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 90
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 91
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 93
+    },
+    {
+      "type": "water",
+      "worldX": 44,
       "worldY": 94
     },
     {
-      "type": "tallGrass",
-      "worldX": 53,
+      "type": "dryTree",
+      "worldX": 46,
+      "worldY": 94
+    },
+    {
+      "type": "dryTree",
+      "worldX": 46,
+      "worldY": 82
+    },
+    {
+      "type": "dryTree",
+      "worldX": 47,
       "worldY": 90
     },
     {
-      "type": "tallGrass",
-      "worldX": 55,
-      "worldY": 90
+      "type": "water",
+      "worldX": 44,
+      "worldY": 86
     },
     {
-      "type": "tallGrass",
-      "worldX": 52,
-      "worldY": 93
+      "type": "bridgeSpot",
+      "worldX": 44,
+      "worldY": 92
     },
     {
-      "type": "lava",
-      "worldX": 56,
-      "worldY": 93
+      "type": "water",
+      "worldX": 44,
+      "worldY": 78
     },
     {
-      "type": "lava",
-      "worldX": 57,
-      "worldY": 93
+      "type": "water",
+      "worldX": 44,
+      "worldY": 79
     },
     {
-      "type": "lava",
-      "worldX": 58,
-      "worldY": 93
+      "type": "water",
+      "worldX": 44,
+      "worldY": 80
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 81
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 85
     }
   ],
   "dialogs": {
@@ -33635,15 +33849,15 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Ah, the chosen one. I felt your steps ripple through the weave of fate."
+          "text": "Ah, o escolhido. Senti teus passos ondularem pela trama do destino."
         },
         {
           "speaker": "npc",
-          "text": "I could conjure the sword you seek... but my spellbook only compiles in the full release."
+          "text": "Eu poderia conjurar a espada que buscas... mas meu grimório só compila na versão completa."
         },
         {
           "speaker": "npc",
-          "text": "Press on, hero. And beware the mages who would rather cast than converse."
+          "text": "Segue em frente, herói. E cuidado com os magos que preferem lançar feitiços a conversar."
         }
       ]
     },

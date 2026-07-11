@@ -43,9 +43,14 @@ export type WorldChunk = {
 // `dryBush` blocks until fire burns it to ash; `lockedDoor` blocks until opened with a key;
 // `dryTree` blocks until chopped to a stump with the axe; `rock` blocks until broken with
 // the pickaxe; `tallGrass` blocks until cut with the scythe (or burned); `lava` blocks
-// unless the hero wears the lava boots.
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava';
-export type WorldProp = { type: PropKind; worldX: number; worldY: number };
+// unless the hero wears the lava boots; `water` (a river tile) blocks — a bridge can be built
+// over it ONLY where a `bridgeSpot` marker is placed (2 wood sticks / a felled tree); `dryShrub`
+// is a small dead bush the axe clears (no drop, no regrow) — a pure physical barrier.
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot';
+// `lit` only applies to campfires: an optional override forcing a fire to start already lit.
+// The runtime does not depend on it — the campfire nearest the player start is always the lit
+// "home" fire — so it survives being dropped by editor saves (which re-emit only type/x/y).
+export type WorldProp = { type: PropKind; worldX: number; worldY: number; lit?: boolean };
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };
 

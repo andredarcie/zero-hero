@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { ASSET_KEYS, FONT_FAMILY, HERO_FRAMES, TEXT_RESOLUTION } from '@/game/constants';
+import { getSoundManager } from '@/game/audio/SoundManager';
 
 type Segment = { text: string; color: string };
 
@@ -55,6 +56,11 @@ export class IntroScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor('#08080f');
     this.cameras.main.fadeIn(700, 0, 0, 0);
+
+    // The title theme carries straight through the intro (idempotent if already playing;
+    // also covers dev flows that boot directly into this scene).
+    getSoundManager().preload();
+    getSoundManager().startMusic('title', 1200);
 
     // The sleeping hero, dim and breathing
     const heroSize = Math.round(Math.min(width, height) * 0.2);

@@ -45,7 +45,7 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   lavaBoots: { key: ASSET_KEYS.lavaBootsIcon },
   pickaxe: { key: ASSET_KEYS.pickaxeIcon },
   scythe: { key: ASSET_KEYS.scytheIcon },
-  wood: { key: ASSET_KEYS.woodItem },
+  wood: { key: ASSET_KEYS.woodIcon },
 };
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
@@ -53,9 +53,12 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   dryBush: { key: ASSET_KEYS.dryBush },
   lockedDoor: { key: ASSET_KEYS.lookedDoorObject },
   dryTree: { key: ASSET_KEYS.dryTree, frame: 0 },
+  dryShrub: { key: ASSET_KEYS.dryShrub },
   rock: { key: ASSET_KEYS.rock },
   tallGrass: { key: ASSET_KEYS.tallGrassWind0 },
   lava: { key: ASSET_KEYS.lavaFloor },
+  water: { key: ASSET_KEYS.water },
+  bridgeSpot: { key: ASSET_KEYS.bridge },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {

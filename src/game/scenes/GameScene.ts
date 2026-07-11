@@ -7,6 +7,8 @@ import {
   CAMPFIRE_SAFE_RADIUS_TILES,
   CHUNK_COLUMNS,
   CHUNK_ROWS,
+  DIALOG_PANEL_FRACTION,
+  DIALOG_PANEL_MAX_WIDTH,
   FONT_FAMILY,
   GAMEPLAY_HERO_MAX_SIZE,
   GAMEPLAY_HERO_SCALE,
@@ -14,14 +16,16 @@ import {
   HUD_HEALTH_MAX,
   ITEM_FRAMES,
   KEY_FRAMES,
-  HUD_RESERVED_ROWS,
   LIGHT_RADIUS_TILES,
   MIN_BOARD_TILE_SIZE,
+  NPC_GATE_RADIUS_TILES,
   SCENE_DEPTHS,
   TEXT_RESOLUTION,
   TIMINGS,
+  TORCH_BURN_MS,
   ySortDepth,
 } from '@/game/constants';
+import { WIZARD_STORY, type DialogScript, type DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/game/debug/debugHooks';
 import { CoinManager } from '@/game/entities/CoinManager';
 import { EnemyManager } from '@/game/entities/EnemyManager';
@@ -35,7 +39,9 @@ import { SwordSlash } from '@/game/runtime/SwordOrbit';
 import { CampfireObject } from '@/game/objects/CampfireObject';
 import { DryBushObject } from '@/game/objects/DryBushObject';
 import { DryTreeObject } from '@/game/objects/DryTreeObject';
+import { DryShrubObject } from '@/game/objects/DryShrubObject';
 import { LavaObject } from '@/game/objects/LavaObject';
+import { WaterObject } from '@/game/objects/WaterObject';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
@@ -43,12 +49,11 @@ import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
 import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
-import { MinimapRenderer } from '@/game/runtime/MinimapRenderer';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { animateGrassRustle } from '@/game/runtime/RuntimeEffects';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { createBoardMetrics, type BoardMetrics } from '@/game/shared/grid';
+import { createBoardMetrics } from '@/game/shared/grid';
 import { ChunkManager } from '@/game/world/ChunkManager';
 import type { ScreenContent } from '@/game/world/ScreenContent';
 import {
@@ -56,8 +61,11 @@ import {
   getChunkContent,
   getDryBushes,
   getDryTrees,
+  getDryShrubs,
   getHeldItemPickups,
   getLavaTiles,
+  getWaterTiles,
+  getBridgeSpots,
   getLockedDoors,
   getRocks,
   getTallGrass,
@@ -84,6 +92,21 @@ const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> 
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
 };
 
+// Bumping something you can't use yet pops a speech balloon over the hero's head showing
+// exactly the item still needed. One entry per "locked" interaction — a lit flame for dead
+// fires and dry brush, the matching tool for trees/rock/grass, a key for doors, lava boots
+// for lava. "fire" reuses the burning-torch HUD icon (a lit flame is what the hero must carry).
+const NEED_ITEM_ICON = {
+  fire: { texture: ASSET_KEYS.woodOnFireIcon, frame: 0 },
+  key: { texture: ASSET_KEYS.keyItemIcon, frame: 0 },
+  axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
+  pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
+  scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
+  lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
+  graveto: { texture: ASSET_KEYS.woodIcon, frame: 0 }, // a wood stick, to build a bridge
+} as const;
+type NeedItemKind = keyof typeof NEED_ITEM_ICON;
+
 // The raised sprite + caption for each item's first-time "item get" ceremony.
 const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle, label: 'VOCE PEGOU A ESPADA!' },
@@ -93,18 +116,47 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0, label: 'VOCE PEGOU AS BOTAS DE LAVA!' },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
-  wood: { texture: ASSET_KEYS.woodItem, frame: 0, label: 'VOCE PEGOU A MADEIRA!' },
+  wood: { texture: ASSET_KEYS.woodIcon, frame: 0, label: 'VOCE PEGOU UM GRAVETO!' },
 };
 
-// What each melee-capable item does to an enemy on a bump. The wood club swings like the
-// sword but hits half as hard, and only the sword benefits from shop upgrades.
+// What each melee-capable item does to an enemy on a bump. The sword is an instant kill — one
+// hit drops any enemy. The wood stick (the "graveto") and the axe are improvised weapons that
+// hit for half — enough to fight skulls in a pinch, but the sword is lethal.
 const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
-  sword: 1,
+  sword: 999,
   wood: 0.5,
+  axe: 0.5,
 };
 
 const BOMB_FUSE_MS = 1600;
 const BOMB_BLAST_RADIUS_TILES = 2.2;
+
+// Resting in a lit campfire's safe ring mends one heart every this many ms (leaving the ring
+// resets the timer, so healing is a "warm up by the fire" beat, not passive regen anywhere).
+const HEALTH_REGEN_MS = 2500;
+
+// At or below this many hearts the hero shows the low-health "heartbeat" (a red pixel outline).
+const LOW_HEALTH_HEARTS = 2;
+// The 8 offset directions used to build the red outline around the hero (cardinals + diagonals).
+const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
+  [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1],
+];
+
+// How many river tiles a single felled tree can bridge when it topples ("TIMBER!"). A wider
+// river needs more than one tree.
+const TIMBER_MAX_SPAN = 3;
+
+// How long to hide the back item during a swing (a touch longer than SwordSlash's arc + fade,
+// ~155 + 65ms) so the item never shows on the back and in the swing arc at the same time.
+const SWING_HIDE_MS = 240;
+
+// Shown in place of an NPC's real dialog while the campfire beside them is still dead: they
+// are too frightened of the dark to talk until the fire is lit and the ground turns safe.
+const NPC_LOCKED_LINES: DialogScript['lines'] = [
+  { speaker: 'npc', text: 'Esta escuro demais... eu mal consigo pensar.' },
+  { speaker: 'narrator', text: 'A pessoa encara a fogueira apagada, tremendo.' },
+  { speaker: 'npc', text: 'Acenda a fogueira. Quando este lugar ficar seguro, a gente conversa.' },
+];
 
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
@@ -114,6 +166,9 @@ export class GameScene extends Phaser.Scene {
   private enemyManager?: EnemyManager;
   private spawnDirector?: UndeadSpawnDirector;
   private playerSafe = true;
+  // Music staging: how long the field has been clear of undead (hysteresis so the
+  // combat track doesn't flap while skulls spawn and die in quick succession).
+  private dangerCalmMs = 0;
   private npcManager?: NpcManager;
   private coinManager?: CoinManager;
   private heartPickupManager?: HeartPickupManager;
@@ -124,27 +179,37 @@ export class GameScene extends Phaser.Scene {
   // "item get" ceremony, so re-picking a dropped item just flies it to the HUD.
   private heldItem: 'none' | HeldItemKind = 'none';
   private readonly seenItems = new Set<HeldItemKind>();
-  // Fire lives on the held item: the sword or the wood club can be lit at a campfire.
+  // Fire lives on the held item: only the wood club can be lit at a campfire (the sword can't).
   private heldOnFire = false;
+  // Remaining life of the carried flame, in ms. Counts down while heldOnFire; re-igniting at
+  // any living fire (lit campfire or lava) refills it. Zero snuffs the torch.
+  private torchFuelMs = 0;
   private campfires: CampfireObject[] = [];
   private dryBushes: DryBushObject[] = [];
   private lockedDoors: LockedDoorObject[] = [];
   private dryTrees: DryTreeObject[] = [];
+  private dryShrubs: DryShrubObject[] = [];
   private rocks: RockObject[] = [];
   private tallGrasses: TallGrassObject[] = [];
   private lavaTiles: LavaObject[] = [];
+  private waterTiles: WaterObject[] = [];
   // Lit bombs on the ground, world-anchored so they scroll with the map until they blow.
   private activeBombs: Array<{ worldX: number; worldY: number; sprite: Phaser.GameObjects.Sprite }> = [];
   private spaceKey?: Phaser.Input.Keyboard.Key;
   private boardRenderer?: GameBoardRenderer;
-  private minimapRenderer?: MinimapRenderer;
   private player?: Phaser.GameObjects.Sprite;
+  // The held item, slung diagonally on the hero's back like it's tucked in a satchel.
+  private backItem?: Phaser.GameObjects.Image;
+  // Hides the back item while the same item is mid-swing, so it isn't shown in two places.
+  private backItemSwingTimer?: Phaser.Time.TimerEvent;
   private movementController?: PlayerMovementController;
   private playerWorld = { worldX: 0, worldY: 0 };
   private playerMaxHealth = HUD_HEALTH_MAX;
   private playerHealth = HUD_HEALTH_MAX;
   private playerInvincible = false;
   private invincibleTimer = 0;
+  // Counts up while resting in a campfire's safe ring; mends a heart each HEALTH_REGEN_MS.
+  private healthRegenTimer = 0;
   private tileSize = MIN_BOARD_TILE_SIZE;
   private isDead = false;
   private shopOpen = false;
@@ -158,8 +223,20 @@ export class GameScene extends Phaser.Scene {
   private camShiftTween?: Phaser.Tweens.Tween;
   private dialogNpcWorld?: { worldX: number; worldY: number };
   private itemGetOpen = false;
+  // First-campfire cut-scene: plays once, when the player relights their first dead fire.
+  private firstCampfireLit = false;
+  // Wizard story progression: how many dead fires the hero has relit, and whether the wizard's
+  // intro beat has already played (so a second visit shows the "protect the flame" lines).
+  private litFireCount = 0;
+  private wizardIntroSeen = false;
+  private cutsceneActive = false;
+  // While set, updateLighting erases a growing light hole at this campfire (0..1) — the
+  // slow-motion glow blooming open before the fire fully ignites.
+  private cutsceneFireLight?: { worldX: number; worldY: number; progress: number };
+  // Scales the hero's ambient glow (1 = normal). During the first-campfire cut-scene it fades to
+  // 0 so all the light comes from the blooming fire, then eases back to 1 as we return to the hero.
+  private cutsceneHeroLight = 1;
   private itemGetOverlay?: ItemGetOverlay;
-  private shopButton?: Phaser.GameObjects.Text;
   private eKey?: Phaser.Input.Keyboard.Key;
   private upgrades: UpgradeState = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
   // Center chunk of the streamed window; NaN forces the first stream.
@@ -172,6 +249,13 @@ export class GameScene extends Phaser.Scene {
   private playerShadow?: Phaser.GameObjects.Ellipse;
   private readonly lightFlicker = { radius: 1.0, velocity: 0 };
 
+  // Low-health "heartbeat": a pulsing red PIXEL OUTLINE around the hero (never painting the
+  // sprite itself), ramping up as the last hearts drain. Built the classic pixel-art way —
+  // red-filled copies of the hero sprite offset in 8 directions, drawn behind it, so only the
+  // border shows through.
+  private readonly lowHealthOutlines: Phaser.GameObjects.Sprite[] = [];
+  private heartbeatPhase = 0;
+
   // Footprints (world-anchored so they scroll with the ground)
   private footprintStep = false;
   private readonly footprints: Array<{ obj: Phaser.GameObjects.Ellipse; worldX: number; worldY: number; offX: number; offY: number }> = [];
@@ -180,6 +264,10 @@ export class GameScene extends Phaser.Scene {
   private breathingTween?: Phaser.Tweens.Tween;
   private lastStepTime = 0;
   private breathingBaseY = 0;
+
+  // "You need this item" balloon over the hero's head (see showNeedItemHint)
+  private needItemHint?: Phaser.GameObjects.Container;
+  private needItemHintTween?: Phaser.Tweens.Tween;
 
   public constructor() {
     super(GameScene.key);
@@ -199,9 +287,11 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
-    // Decode the chiptune SFX + music, and start the looping background track.
+    // Decode the SFX + music loops, start the exploration track and the wind bed.
     getSoundManager().preload();
-    getSoundManager().startMusic();
+    getSoundManager().startMusic('overworld', 2000);
+    getSoundManager().startAmbience();
+    this.dangerCalmMs = 0;
 
     // Phaser does not auto-call shutdown(); wire it so scene.restart() (death) cleans up
     // listeners/textures instead of leaking them across runs.
@@ -214,6 +304,13 @@ export class GameScene extends Phaser.Scene {
     this.enemyManager = new EnemyManager(this);
     this.spawnDirector = new UndeadSpawnDirector();
     this.playerSafe = true;
+    this.healthRegenTimer = 0;
+    this.firstCampfireLit = false;
+    this.litFireCount = 0;
+    this.wizardIntroSeen = false;
+    this.cutsceneActive = false;
+    this.cutsceneFireLight = undefined;
+    this.cutsceneHeroLight = 1;
     this.npcManager = new NpcManager(this, getContent);
     this.coinManager = new CoinManager(this);
     this.heartPickupManager = new HeartPickupManager(this, getContent);
@@ -227,12 +324,18 @@ export class GameScene extends Phaser.Scene {
     this.swordSlash = new SwordSlash(this);
     this.camera = new WorldCamera(startWorldX, startWorldY, 0, 0);
     this.boardRenderer = new GameBoardRenderer(this);
-    this.minimapRenderer = new MinimapRenderer(this);
 
     this.player = this.add
       .sprite(0, 0, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
       .setOrigin(0.5)
       .setDepth(SCENE_DEPTHS.player);
+
+    // Item slung on the hero's back — hidden until something is picked up (see updateBackItem).
+    this.backItem = this.add
+      .image(0, 0, ASSET_KEYS.swordItemIcon)
+      .setOrigin(0.5)
+      .setVisible(false)
+      .setDepth(SCENE_DEPTHS.player - 1);
 
     this.createAnimations();
 
@@ -254,27 +357,39 @@ export class GameScene extends Phaser.Scene {
     this.eKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.spaceKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-    this.shopButton = this.add.text(0, 0, '[ LOJA ]', {
-      fontFamily: FONT_FAMILY, fontSize: '10px', color: '#9977bb', resolution: TEXT_RESOLUTION,
-    })
-      .setDepth(SCENE_DEPTHS.uiLabel)
-      .setVisible(false)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerover', () => { this.shopButton?.setColor('#cc99ff'); })
-      .on('pointerout',  () => { this.shopButton?.setColor('#9977bb'); })
-      .on('pointerdown', () => { this.toggleShop(); });
-
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
 
     // All world props are authored in world.json; their collision is resolved at runtime.
-    this.campfires = getCampfires().map((c) => new CampfireObject(this, c.worldX, c.worldY));
+    // Only ONE fire starts lit — the "home" fire, derived as the campfire nearest the player
+    // start (so the premise holds even if an editor save drops an explicit `lit` flag). Every
+    // other campfire is dead until the hero carries a flame to it. An explicit `lit: true` in
+    // world.json can still force extra lit fires.
+    const campfireDefs = getCampfires();
+    let homeIdx = -1;
+    let homeBest = Infinity;
+    campfireDefs.forEach((c, i) => {
+      const d = Math.hypot(c.worldX - startWorldX, c.worldY - startWorldY);
+      if (d < homeBest) { homeBest = d; homeIdx = i; }
+    });
+    this.campfires = campfireDefs.map(
+      (c, i) => new CampfireObject(this, c.worldX, c.worldY, i === homeIdx || c.lit === true),
+    );
     this.dryBushes = getDryBushes().map((b) => new DryBushObject(this, b.worldX, b.worldY));
     this.lockedDoors = getLockedDoors().map((d) => new LockedDoorObject(this, d.worldX, d.worldY));
     this.dryTrees = getDryTrees().map((t) => new DryTreeObject(this, t.worldX, t.worldY));
+    this.dryShrubs = getDryShrubs().map((s) => new DryShrubObject(this, s.worldX, s.worldY));
     this.rocks = getRocks().map((r) => new RockObject(this, r.worldX, r.worldY));
     this.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this, g.worldX, g.worldY));
     this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
+    // Both `water` and `bridgeSpot` are river tiles (WaterObjects render animated water). A
+    // plain `water` tile is an impassable river; a `bridgeSpot` is a river tile you CAN bridge
+    // (buildable = true), marked so the level designer chooses exactly where crossings are
+    // allowed. They're separate props (one per tile) so the editor's "one prop per cell" holds.
+    this.waterTiles = [
+      ...getWaterTiles().map((w) => new WaterObject(this, w.worldX, w.worldY, false)),
+      ...getBridgeSpots().map((b) => new WaterObject(this, b.worldX, b.worldY, true)),
+    ];
 
     this.initLighting();
     this.streamChunks(true);
@@ -298,6 +413,7 @@ export class GameScene extends Phaser.Scene {
 
     this.input.keyboard?.on('keydown-ESC', () => {
       getSoundManager().stopMusic();
+      getSoundManager().stopAmbience();
       this.scene.stop();
       this.scene.wake('editor');
     });
@@ -364,6 +480,9 @@ export class GameScene extends Phaser.Scene {
     this.camShiftTween?.stop();
     this.camShiftTween = undefined;
     this.camShifting = false;
+    this.cutsceneActive = false;
+    this.cutsceneFireLight = undefined;
+    this.cutsceneHeroLight = 1;
     this.dialogNpcWorld = undefined;
     this.enemyManager?.destroy();
     this.spawnDirector = undefined;
@@ -381,33 +500,53 @@ export class GameScene extends Phaser.Scene {
     this.dryBushes.forEach((b) => b.destroy());
     this.lockedDoors.forEach((d) => d.destroy());
     this.dryTrees.forEach((t) => t.destroy());
+    this.dryShrubs.forEach((s) => s.destroy());
     this.rocks.forEach((r) => r.destroy());
     this.tallGrasses.forEach((g) => g.destroy());
     this.lavaTiles.forEach((l) => l.destroy());
+    this.waterTiles.forEach((w) => w.destroy());
     this.activeBombs.forEach((b) => b.sprite.destroy());
     this.shopOverlay?.destroy();
+    this.backItemSwingTimer?.remove();
+    this.backItemSwingTimer = undefined;
+    this.backItem?.destroy();
+    this.backItem = undefined;
     this.breathingTween?.destroy();
     this.breathingTween = undefined;
+    this.needItemHintTween?.stop();
+    this.needItemHintTween = undefined;
+    this.needItemHint?.destroy();
+    this.needItemHint = undefined;
     this.footprints.length = 0;
     this.lightCircleImg?.destroy();
     this.darknessOverlay?.destroy();
     this.playerShadow?.destroy();
+    this.lowHealthOutlines.forEach((o) => o.destroy());
+    this.lowHealthOutlines.length = 0;
     if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
     this.swordSlash = undefined;
     this.campfires = [];
     this.dryBushes = [];
     this.lockedDoors = [];
     this.dryTrees = [];
+    this.dryShrubs = [];
     this.rocks = [];
     this.tallGrasses = [];
     this.lavaTiles = [];
+    this.waterTiles = [];
     this.activeBombs = [];
     this.lightCircleImg = undefined;
     this.darknessOverlay = undefined;
     this.playerShadow = undefined;
+    this.heartbeatPhase = 0;
   }
 
   public update(_time: number, delta: number): void {
+    // Hide the low-health outline up front; the active-play FX below re-shows it each frame if
+    // still low. So any frozen state (dialog, shop, item-get, death) leaves it hidden instead
+    // of stranding it, misaligned, where the hero last was.
+    this.hideLowHealthOutlines();
+
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
     // world frozen here until it finishes — otherwise gameplay would fight the pan.
     if (this.dialogOpen || this.camShifting) {
@@ -415,8 +554,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Item-get presentation freezes gameplay; only its own tweens keep running.
-    if (this.itemGetOpen) return;
+    // The item-get and first-campfire cut-scene both freeze gameplay; only their own tweens run.
+    if (this.itemGetOpen || this.cutsceneActive) return;
 
     if (this.eKey && Phaser.Input.Keyboard.JustDown(this.eKey)) this.toggleShop();
 
@@ -445,12 +584,24 @@ export class GameScene extends Phaser.Scene {
       this.lastStepTime = this.time.now;
       this.stopBreathing();
       this.spawnFootprint(prevWorldX, prevWorldY, stepDx, stepDy);
-    } else if (this.time.now - this.lastStepTime > 180) {
+    } else if (!this.dialogOpen && !this.camShifting && this.time.now - this.lastStepTime > 180) {
+      // A bump into an NPC opens the dialog synchronously inside movementController.update()
+      // above — it already stopped breathing and re-pinned the hero at centre origin. Don't
+      // re-start breathing this frame, or its bottom-origin pose makes the frozen reprojection
+      // draw the hero half a tile high (a visible "jump") for the whole conversation.
       this.startBreathing();
     }
     this.streamChunks();
     this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize);
     this.updateFootprints();
+    this.positionBackItem();
+
+    // Burn the carried flame down; snuff it when the fuel runs out (leaving the hero exposed
+    // in the dark). Re-igniting at a lit campfire or lava refills it.
+    if (this.heldOnFire) {
+      this.torchFuelMs -= delta;
+      if (this.torchFuelMs <= 0) this.extinguishTorch();
+    }
 
     const isPickupOccupied = (x: number, y: number): boolean =>
       (this.heartPickupManager?.hasPickupAt(x, y) ?? false) ||
@@ -463,7 +614,18 @@ export class GameScene extends Phaser.Scene {
     // nothing spawns); in the dark the spawn director ramps the siege up over time.
     const distToFire = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
     this.playerSafe = distToFire <= CAMPFIRE_SAFE_RADIUS_TILES;
-    this.boardRenderer.setSafety(this.playerSafe);
+
+    // Warming up by the fire heals: while safe in the ring, mend a heart every HEALTH_REGEN_MS.
+    if (this.playerSafe && this.playerHealth < this.playerMaxHealth) {
+      this.healthRegenTimer += delta;
+      if (this.healthRegenTimer >= HEALTH_REGEN_MS) {
+        this.healthRegenTimer = 0;
+        this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
+        getSoundManager().playHeartPickup();
+      }
+    } else {
+      this.healthRegenTimer = 0;
+    }
 
     if (this.enemyManager) {
       const attacked = this.enemyManager.update(
@@ -490,15 +652,28 @@ export class GameScene extends Phaser.Scene {
         canSpawnAt: (wx, wy) => this.canSpawnUndeadAt(wx, wy),
         spawn: (wx, wy) => this.enemyManager?.spawnUndead(wx, wy),
       });
+
+      // Souls staging: the combat track rises only while undead are actually out and the
+      // hero is beyond the firelight; it stands down a few calm seconds after the last one
+      // falls. Suppressed while any overlay/cutscene owns the music (they duck the bus).
+      const uiOwnsMusic = this.cutsceneActive || this.dialogOpen || this.shopOpen || this.itemGetOpen;
+      if (this.enemyManager.aliveCount > 0 && !this.playerSafe) {
+        this.dangerCalmMs = 0;
+        if (!uiOwnsMusic) getSoundManager().startMusic('danger', 900);
+      } else {
+        this.dangerCalmMs += delta;
+        if (!uiOwnsMusic && this.dangerCalmMs > 4000) getSoundManager().startMusic('overworld', 2600);
+      }
     }
 
     if (this.coinManager && this.camera) {
-      const hudCoin = this.boardRenderer?.getHudCoinAnchor() ?? { x: 0, y: 0 };
+      // No HUD coin counter anymore — coins are just absorbed into the hero (screen centre).
+      const heroScreen = { x: this.camera.screenCenterX, y: this.camera.screenCenterY };
       this.coinManager.update(
         this.playerWorld.worldX,
         this.playerWorld.worldY,
-        hudCoin,
-        (total) => { getSoundManager().playCoinPickup(); this.boardRenderer?.setCoinCount(total, this); },
+        heroScreen,
+        () => { getSoundManager().playCoinPickup(); },
       );
       this.coinManager.render(this.tileSize, this.camera);
     }
@@ -514,7 +689,6 @@ export class GameScene extends Phaser.Scene {
         () => {
           getSoundManager().playHeartPickup();
           this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
-          this.boardRenderer?.setHealth(this.playerHealth);
         },
       );
       this.heartPickupManager.render(this.tileSize, this.camera!);
@@ -534,10 +708,19 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    this.updateLowHealthFx(delta);
+
+    // Felled trees grow back after a while (renewable gravetos = no soft-lock). The clock only
+    // ticks while the tile is clear — crucially, a dropped item (the graveto) on the stump
+    // pauses it, so the timer truly starts only once that item is picked up.
+    for (const tree of this.dryTrees) {
+      if (tree.updateRegrow(delta, this.isTileClearForRegrow(tree.worldX, tree.worldY))) {
+        tree.regrow();
+      }
+    }
+
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.renderProps();
-
-    this.minimapRenderer?.update(this.playerWorld.worldX, this.playerWorld.worldY, this.chunkManager);
   }
 
   private handleResize(gameSize: Phaser.Structs.Size | { width: number; height: number }): void {
@@ -546,16 +729,12 @@ export class GameScene extends Phaser.Scene {
 
     this.tileSize = this.computeTileSize(width, height);
 
-    const reservedTopHeight = this.tileSize * HUD_RESERVED_ROWS;
-    const screenCenterX = Math.floor(width / 2);
-    const screenCenterY = Math.floor(reservedTopHeight + (height - reservedTopHeight) / 2);
-
     if (this.camera) {
-      this.camera.screenCenterX = screenCenterX;
-      this.camera.screenCenterY = screenCenterY;
+      this.camera.screenCenterX = Math.floor(width / 2);
+      this.camera.screenCenterY = Math.floor(height / 2);
       // Visible tile counts around the centered hero (used for the streaming window).
       this.camera.viewportColumns = Math.ceil(width / this.tileSize);
-      this.camera.viewportRows = Math.ceil((height - reservedTopHeight) / this.tileSize);
+      this.camera.viewportRows = Math.ceil(height / this.tileSize);
       // A resize mid-dialog would recentre the hero under the panel; re-apply the pan offset.
       if (this.dialogOpen) {
         const t = this.dialogScreenCenter(this.dialogNpcWorld);
@@ -564,20 +743,14 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const hudMetrics = this.buildHudMetrics(width, height, this.tileSize);
-    this.boardRenderer?.render(hudMetrics);
-    this.minimapRenderer?.layout(this.boardRenderer?.getHudMapBounds() ?? { x: 0, y: 0, width: 0, height: 0 });
-
     this.player?.setDisplaySize(this.tileSize, this.tileSize);
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
-    this.shopButton?.setPosition(width / 2, Math.floor(this.tileSize * 0.5)).setOrigin(0.5);
 
     if (this.darknessOverlay) {
-      const hudH = this.tileSize * HUD_RESERVED_ROWS;
       this.darknessOverlay
-        .setPosition(0, hudH)
+        .setPosition(0, 0)
         .setScale(LIGHT_DOWNSCALE)
-        .resize(Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil((height - hudH) / LIGHT_DOWNSCALE)));
+        .resize(Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)));
       this.darknessOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
   }
@@ -589,23 +762,9 @@ export class GameScene extends Phaser.Scene {
       minTileSize: MIN_BOARD_TILE_SIZE,
       characterScale: GAMEPLAY_HERO_SCALE,
       maxCharacterSize: GAMEPLAY_HERO_MAX_SIZE,
-      reservedTopRows: HUD_RESERVED_ROWS,
+      reservedTopRows: 0, // HUD removed — no reserved rows, the board fills the screen
     });
     return metrics.tileSize;
-  }
-
-  private buildHudMetrics(width: number, height: number, tileSize: number): BoardMetrics {
-    const reservedTopHeight = tileSize * HUD_RESERVED_ROWS;
-    return {
-      columns: CHUNK_COLUMNS,
-      rows: CHUNK_ROWS,
-      tileSize,
-      offsetX: 0,
-      offsetY: reservedTopHeight,
-      width,
-      height: height - reservedTopHeight,
-      characterSize: tileSize,
-    };
   }
 
   // Stream content for the 3x3 chunk window around the player, loading/unloading as the
@@ -660,6 +819,10 @@ export class GameScene extends Phaser.Scene {
     return this.dryTrees.find((t) => t.worldX === wx && t.worldY === wy);
   }
 
+  private getDryShrubAt(wx: number, wy: number): DryShrubObject | undefined {
+    return this.dryShrubs.find((s) => s.worldX === wx && s.worldY === wy);
+  }
+
   private getRockAt(wx: number, wy: number): RockObject | undefined {
     return this.rocks.find((r) => r.worldX === wx && r.worldY === wy);
   }
@@ -670,6 +833,10 @@ export class GameScene extends Phaser.Scene {
 
   private getLavaAt(wx: number, wy: number): LavaObject | undefined {
     return this.lavaTiles.find((l) => l.worldX === wx && l.worldY === wy);
+  }
+
+  private getWaterAt(wx: number, wy: number): WaterObject | undefined {
+    return this.waterTiles.find((w) => w.worldX === wx && w.worldY === wy);
   }
 
   /**
@@ -684,16 +851,21 @@ export class GameScene extends Phaser.Scene {
     if (this.getDryBushAt(wx, wy)?.blocking) return true;
     if (this.getLockedDoorAt(wx, wy)?.blocking) return true;
     if (this.getDryTreeAt(wx, wy)?.blocking) return true;
+    if (this.getDryShrubAt(wx, wy)?.blocking) return true;
     if (this.getRockAt(wx, wy)?.blocking) return true;
     if (this.getTallGrassAt(wx, wy)?.blocking) return true;
     if (!lavaPassable && this.getLavaAt(wx, wy)) return true;
+    if (this.getWaterAt(wx, wy)?.blocking) return true;
     if (this.npcManager?.hasNpcAt(wx, wy)) return true;
     return false;
   }
 
+  // Distance to the nearest LIT campfire. Dead fires give no safety, no light and don't repel
+  // the undead — they are just cold obstacles until the hero brings a flame.
   private distToNearestCampfireTiles(wx: number, wy: number): number {
     let best = Infinity;
     for (const cf of this.campfires) {
+      if (!cf.isLit) continue;
       best = Math.min(best, Math.hypot(cf.worldX - wx, cf.worldY - wy));
     }
     return best;
@@ -722,19 +894,70 @@ export class GameScene extends Phaser.Scene {
 
     if (this.npcManager?.hasNpcAt(wx, wy)) {
       const kind = this.npcManager.getKindAt(wx, wy);
-      if (kind) this.openNpcDialog(kind, { worldX: wx, worldY: wy });
+      // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
+      if (kind === 'wizard') this.openWizardDialog({ worldX: wx, worldY: wy });
+      else if (kind) this.openNpcDialog(kind, { worldX: wx, worldY: wy });
       return;
     }
 
-    // Campfire interaction — swing the flammable held item (sword or wood) and light it.
+    // Campfire interaction. A LIT fire relights/refuels the carried torch; a DEAD fire is
+    // brought back to life by carrying a flame into it (the heart of the game).
     const campfire = this.getCampfireAt(wx, wy);
     if (campfire) {
       campfire.onHit();
-      if (this.isFlammableHeld) {
+      if (campfire.isLit) {
+        if (this.isFlammableHeld) {
+          this.swingHeld(wx, wy);
+          // Light the torch at the fire, or top it back up if it's already burning.
+          if (!this.heldOnFire) this.time.delayedCall(150, () => { this.igniteHeldItem(); });
+          else this.refuelTorch();
+        }
+      } else if (this.isFlammableHeld && this.heldOnFire) {
+        // Carry the flame into a dead campfire to reignite the world.
         this.swingHeld(wx, wy);
-        if (!this.heldOnFire) {
-          // Ignite at the moment the item reaches the campfire (end of main swing arc)
-          this.time.delayedCall(150, () => { this.igniteHeldItem(); });
+        this.time.delayedCall(150, () => { this.lightCampfire(campfire, wx, wy); });
+      } else {
+        // Dead fire and no flame in hand: show the "bring fire" balloon.
+        this.showNeedItemHint('fire');
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // Lava is molten fire: bumping it with a flammable item (no flame yet) lights the torch,
+    // exactly like a lit campfire. With the lava boots on, the hero walks onto it instead of
+    // bumping, so this only fires when lava is blocking.
+    const lava = this.getLavaAt(wx, wy);
+    if (lava) {
+      if (this.isFlammableHeld && !this.heldOnFire) {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(150, () => { this.igniteHeldItem(); });
+      } else {
+        // Lava is blocking (no boots on) and there's no torch to light here: show the boots.
+        this.showNeedItemHint('lavaBoots');
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // River — only tiles marked with a `bridgeSpot` are buildable. On a buildable spot, bump it
+    // holding a wood stick (a "graveto") to deposit it; two gravetos build the bridge. Plain
+    // river tiles just block (no interaction).
+    const water = this.getWaterAt(wx, wy);
+    if (water?.blocking) {
+      if (water.canBuild) {
+        if (this.heldItem === 'wood') {
+          this.clearHeldItem(); // the graveto is consumed
+          const bridged = water.deposit();
+          this.spawnBridgeChips(wx, wy, bridged ? 11 : 5);
+          if (bridged) {
+            getSoundManager().playBridgeBuilt();
+            this.cameras.main.flash(160, 210, 190, 150);
+          } else {
+            getSoundManager().playBridgePlank();
+          }
+        } else {
+          this.showNeedItemHint('graveto');
         }
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -745,29 +968,65 @@ export class GameScene extends Phaser.Scene {
     const bush = this.getDryBushAt(wx, wy);
     if (bush?.blocking) {
       bush.shake();
-      if (this.isFlammableHeld) {
+      if (this.isFlammableHeld && this.heldOnFire) {
         this.swingHeld(wx, wy);
-        if (this.heldOnFire) {
-          // Ignite when the flame reaches the bush (end of the main swing arc).
-          this.time.delayedCall(150, () => {
-            if (bush.ignite()) this.spawnFireHitEffect(wx, wy);
-          });
-        }
+        // Ignite when the flame reaches the bush (end of the main swing arc).
+        this.time.delayedCall(150, () => {
+          if (bush.ignite()) this.spawnFireHitEffect(wx, wy);
+        });
+      } else {
+        // Needs a lit flame to catch: show the fire balloon.
+        this.showNeedItemHint('fire');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
     }
 
-    // Dry tree — the axe chops it down stage by stage until only a stump is left.
+    // Dry tree — the axe chops it down stage by stage until only a stump is left. On the
+    // felling chop: if water lies beyond in the chop direction, TIMBER! — the trunk topples
+    // across the river as a free log bridge. Otherwise it just drops a graveto on the ground.
     const tree = this.getDryTreeAt(wx, wy);
     if (tree?.blocking) {
       if (this.heldItem === 'axe') {
         this.swingHeld(wx, wy);
+        // Capture the chop direction now (the hero is stopped, but a queued key could shift it).
+        const px = this.playerWorld.worldX;
+        const py = this.playerWorld.worldY;
         this.time.delayedCall(150, () => {
-          if (tree.chop()) getSoundManager().playWoodChop();
+          if (tree.chop()) {
+            getSoundManager().playWoodChop();
+            if (!tree.blocking) {
+              if (this.tryTimberBridge(tree.worldX, tree.worldY, wx - px, wy - py)) {
+                tree.cancelRegrow(); // its trunk became the bridge — no regrowth
+              } else {
+                this.dropTreeStick(tree.worldX, tree.worldY);
+              }
+            }
+          }
         });
       } else {
         tree.shake();
+        this.showNeedItemHint('axe');
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // Dry shrub — a small dead bush the axe clears in one hit. It drops nothing and never grows
+    // back: purely a physical barrier.
+    const shrub = this.getDryShrubAt(wx, wy);
+    if (shrub?.blocking) {
+      if (this.heldItem === 'axe') {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(150, () => {
+          if (shrub.chop()) {
+            getSoundManager().playWoodChop();
+            this.spawnBridgeChips(wx, wy, 4);
+          }
+        });
+      } else {
+        shrub.shake();
+        this.showNeedItemHint('axe');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -783,6 +1042,7 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         rock.shake();
+        this.showNeedItemHint('pickaxe');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -802,6 +1062,7 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         grass.shake();
+        this.showNeedItemHint('scythe');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -813,10 +1074,11 @@ export class GameScene extends Phaser.Scene {
     if (door?.blocking) {
       if (this.heldItem === 'key') {
         // Swing the key at the door with the sword's exact slash arc, then open when the
-        // swing lands (same timing the flaming sword uses to ignite a bush).
+        // swing lands (same timing the flaming torch uses to ignite a bush).
         door.shake();
         if (this.swordSlash && this.camera) {
           getSoundManager().playSwordSlash();
+          this.hideBackItemDuringSwing(); // the key swings out of hand, so hide the back copy
           const dx = wx - this.playerWorld.worldX;
           const dy = wy - this.playerWorld.worldY;
           const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
@@ -830,6 +1092,7 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         door.shake();
+        this.showNeedItemHint('key');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -857,15 +1120,14 @@ export class GameScene extends Phaser.Scene {
     this.player?.setTint(0xffff00);
     this.time.delayedCall(120, () => { this.player?.clearTint(); });
 
-    if (!enemy.isAlive && this.chunkManager) {
+    if (!enemy.isAlive) {
       getSoundManager().playEnemyDeath();
-      this.coinManager?.spawnCoins(enemy.worldX, enemy.worldY, this.chunkManager);
     }
   }
 
-  /** The held item can catch fire at a campfire: only the sword and the wood club burn. */
+  /** The held item can catch fire at a campfire: only the wood club burns — the sword never does. */
   private get isFlammableHeld(): boolean {
-    return this.heldItem === 'sword' || this.heldItem === 'wood';
+    return this.heldItem === 'wood';
   }
 
   /**
@@ -876,6 +1138,9 @@ export class GameScene extends Phaser.Scene {
   private swingHeld(wx: number, wy: number): void {
     if (!this.swordSlash || !this.camera || this.heldItem === 'none') return;
     getSoundManager().playSwordSlash();
+    // The held item flies out in the swing arc, so hide the copy slung on the back for the
+    // swing's duration — otherwise the item appears in two places at once.
+    this.hideBackItemDuringSwing();
     const dx = wx - this.playerWorld.worldX;
     const dy = wy - this.playerWorld.worldY;
     const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
@@ -885,26 +1150,263 @@ export class GameScene extends Phaser.Scene {
     }
     const visual = HUD_ITEM_VISUAL[this.heldItem];
     this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize, {
-      texture: this.heldItem === 'wood' ? ASSET_KEYS.woodItem : visual.texture,
-      frame: this.heldItem === 'wood' ? 0 : visual.frame,
+      texture: visual.texture, // wood uses its single-stick icon (the "graveto")
+      frame: visual.frame,
       onFire: this.heldItem === 'wood' && this.heldOnFire,
+      flipX: this.heldItem === 'axe', // the axe is single-edged — face its blade into the swing
     });
   }
 
-  // Light the held item (sword or wood club) at a campfire.
+  // Light the held item (the wood club — the only flammable item) at a fire source
+  // (lit campfire or lava). The sword is not flammable, so it never reaches here.
   private igniteHeldItem(): void {
     if (!this.isFlammableHeld || this.heldOnFire) return;
     getSoundManager().playIgnite();
     this.heldOnFire = true;
-    if (this.heldItem === 'sword') {
-      this.swordSlash?.setOnFire(true);
-      this.boardRenderer?.setHudItemFire(true, ASSET_KEYS.swordOnFire, 0xffcc66);
-    } else {
-      this.boardRenderer?.setHudItemFire(true, ASSET_KEYS.woodOnFireIcon);
-    }
+    this.refuelTorch();
+    this.updateBackItem(); // the graveto on the back now shows aflame
     // Orange flash on the player as the fire transfers
     this.player?.setTint(0xff6600);
     this.time.delayedCall(250, () => { this.player?.clearTint(); });
+  }
+
+  /** Fill the carried flame back to full. */
+  private refuelTorch(): void {
+    this.torchFuelMs = TORCH_BURN_MS;
+  }
+
+  /** The carried flame burned out in the dark: fall back to an unlit item. */
+  private extinguishTorch(): void {
+    if (!this.heldOnFire) return;
+    this.heldOnFire = false;
+    this.torchFuelMs = 0;
+    this.swordSlash?.setOnFire(false);
+    this.updateBackItem(); // back to the plain graveto once the flame dies
+    this.spawnSmokePuff(this.playerWorld.worldX, this.playerWorld.worldY);
+  }
+
+  /** Bring a dead campfire to life with fanfare, expanding the safe ring under the hero. */
+  private lightCampfire(cf: CampfireObject, wx: number, wy: number): void {
+    if (cf.isLit) return;
+    this.litFireCount += 1; // drives the wizard's story progression
+    // The very first fire the player brings back to life plays the one-time cut-scene.
+    if (!this.firstCampfireLit) {
+      this.firstCampfireLit = true;
+      this.playFirstCampfireCutscene(cf, wx, wy);
+      return;
+    }
+    if (!cf.light()) return;
+    getSoundManager().playIgnite();
+    this.spawnFireHitEffect(wx, wy);
+    this.cameras.main.flash(220, 255, 200, 110);
+    // The new safe ring is born under the hero — clear PERIGO now instead of waiting a frame.
+    const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
+  }
+
+  // The first cut-scene of the game: lighting the first dead fire. Freezes the world, clears all
+  // enemies, pans the camera onto the fire, ignites it in slow motion with its glow blooming open,
+  // hits a bright flash + fire roar at the peak, then pans back to the hero and resumes.
+  private playFirstCampfireCutscene(cf: CampfireObject, wx: number, wy: number): void {
+    if (!this.camera) { cf.light(); return; }
+    this.cutsceneActive = true;
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.stopBreathing();
+    this.hideLowHealthOutlines();
+    this.enemyManager?.despawnAll(); // all enemies vanish to focus on the moment
+    getSoundManager().fadeMusicOut();
+
+    // The hero's own glow cuts out instantly — the campfire becomes the only light on screen.
+    this.cutsceneHeroLight = 0;
+
+    const { width, height } = this.scale;
+    // Screen-centre offset that puts the campfire tile at the true middle of the screen.
+    const fireCenter = {
+      x: Math.round(width / 2 - (cf.worldX - this.playerWorld.worldX) * this.tileSize),
+      y: Math.round(height / 2 - (cf.worldY - this.playerWorld.worldY) * this.tileSize),
+    };
+    const heroCenter = this.baseScreenCenter();
+    this.cutsceneFireLight = { worldX: cf.worldX, worldY: cf.worldY, progress: 0 };
+
+    // Phase 1 — pan the camera off the hero and onto the fire (slow).
+    this.cutscenePan(fireCenter.x, fireCenter.y, 1600, () => {
+      // Phase 2 — slow-motion ignition: the dead fire catches bit by bit and its light blooms.
+      const grow = { t: 0 };
+      this.tweens.add({
+        targets: grow,
+        t: 1,
+        duration: 3400,
+        ease: 'Sine.easeIn',
+        onUpdate: () => {
+          cf.igniteProgress(grow.t);
+          if (this.cutsceneFireLight) this.cutsceneFireLight.progress = grow.t * 0.7;
+          if (Math.random() < 0.08) this.spawnFireHitEffect(wx, wy); // building sparks
+          this.reprojectStatic();
+        },
+        onComplete: () => {
+          // Phase 3 — the peak: full ignition, blinding flash, fire roar.
+          cf.light();
+          this.cutsceneFireLight = undefined; // the real campfire light takes over now
+          this.cameras.main.flash(600, 255, 220, 150);
+          getSoundManager().playIgnite();
+          this.spawnFireHitEffect(wx, wy);
+          this.reprojectStatic();
+          // Hold on the blaze, then pan back to the hero and resume.
+          this.time.delayedCall(1400, () => {
+            // The hero's glow eases back in as the camera returns to him.
+            this.tweens.add({ targets: this, cutsceneHeroLight: 1, duration: 1400, ease: 'Sine.easeOut' });
+            this.cutscenePan(heroCenter.x, heroCenter.y, 1400, () => {
+              this.cutsceneActive = false;
+              this.cutsceneHeroLight = 1;
+              getSoundManager().fadeMusicIn();
+              const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
+              this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
+            });
+          });
+        },
+      });
+    });
+  }
+
+  // Tween the camera's screen-centre to (tx, ty) over `duration`, re-projecting the frozen world
+  // each frame. Like animateScreenCenter but with a custom duration + done callback, and it does
+  // NOT touch camShifting (the cut-scene owns the freeze via cutsceneActive).
+  private cutscenePan(tx: number, ty: number, duration: number, onDone: () => void): void {
+    if (!this.camera) { onDone(); return; }
+    const state = { x: this.camera.screenCenterX, y: this.camera.screenCenterY };
+    this.tweens.add({
+      targets: state,
+      x: tx,
+      y: ty,
+      duration,
+      ease: 'Cubic.easeInOut',
+      onUpdate: () => {
+        if (!this.camera) return;
+        this.camera.screenCenterX = Math.round(state.x);
+        this.camera.screenCenterY = Math.round(state.y);
+        this.reprojectStatic();
+      },
+      onComplete: () => {
+        if (this.camera) {
+          this.camera.screenCenterX = Math.round(tx);
+          this.camera.screenCenterY = Math.round(ty);
+          this.reprojectStatic();
+        }
+        onDone();
+      },
+    });
+  }
+
+  // Pops the speech balloon above the hero's head with `kind`'s icon inside it — the single
+  // "you need THIS item" beat shared by every locked interaction (dead fire → flame, door →
+  // key, dry tree → axe, rock → pickaxe, tall grass → scythe, lava → boots …).
+  private showNeedItemHint(kind: NeedItemKind): void {
+    if (!this.camera) return;
+    const { texture, frame } = NEED_ITEM_ICON[kind];
+    const size = this.tileSize;
+    const iconSize = size * 0.72;
+    // The hero is always pinned at screen centre; sit the balloon's tail just above its head.
+    const cx = this.camera.screenCenterX;
+    const tailY = this.camera.screenCenterY - size * 0.55;
+
+    // Holding into a wall re-bumps every ~220ms: reuse a live balloon (swap the icon, replay
+    // the pop) instead of stacking overlays on top of each other. setTexture resets the sprite
+    // to the new frame's native size, so re-pin the display size after swapping.
+    if (this.needItemHint?.active) {
+      const icon = this.needItemHint.getByName('icon') as Phaser.GameObjects.Image | null;
+      icon?.setTexture(texture, frame).setDisplaySize(iconSize, iconSize);
+      this.needItemHint.setPosition(cx, tailY);
+      this.replayNeedItemHint();
+      return;
+    }
+
+    const balloonH = size * 1.5;
+    const balloonW = balloonH * (26 / 22); // ballon_icon.png is 26x22
+    const balloon = this.add.image(0, 0, ASSET_KEYS.hintBalloon)
+      .setOrigin(0.5, 1) // tail tip anchored at the container origin
+      .setDisplaySize(balloonW, balloonH);
+    // Centre the icon in the bubble body, above the little downward tail.
+    const icon = this.add.image(0, -balloonH * 0.58, texture, frame)
+      .setName('icon')
+      .setDisplaySize(iconSize, iconSize);
+
+    this.needItemHint = this.add.container(cx, tailY, [balloon, icon]).setDepth(SCENE_DEPTHS.toast);
+    this.replayNeedItemHint();
+  }
+
+  // Pop the balloon in (a little overshoot), hold, then float up and fade away.
+  private replayNeedItemHint(): void {
+    const c = this.needItemHint;
+    if (!c) return;
+    this.needItemHintTween?.stop();
+    const baseY = c.y;
+    c.setScale(0.5).setAlpha(1).setY(baseY);
+    this.needItemHintTween = this.tweens.add({
+      targets: c,
+      scale: 1,
+      duration: 170,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.needItemHintTween = this.tweens.add({
+          targets: c,
+          y: baseY - this.tileSize * 0.4,
+          alpha: 0,
+          delay: 700,
+          duration: 320,
+          ease: 'Power1.easeIn',
+          onComplete: () => {
+            c.destroy();
+            if (this.needItemHint === c) this.needItemHint = undefined;
+          },
+        });
+      },
+    });
+  }
+
+  // A few grey puffs rising where a flame died.
+  private spawnSmokePuff(wx: number, wy: number): void {
+    if (!this.camera) return;
+    const s = this.camera.tileToScreen(wx, wy, this.tileSize);
+    for (let i = 0; i < 3; i++) {
+      const ox = Phaser.Math.Between(-4, 4);
+      const puff = this.add
+        .circle(s.x + ox, s.y - this.tileSize * 0.2, Math.max(2, Math.floor(this.tileSize * 0.12)), 0x8a8a8a, 0.55)
+        .setDepth(SCENE_DEPTHS.player + 3);
+      this.tweens.add({
+        targets: puff,
+        y: puff.y - this.tileSize * 0.7,
+        alpha: 0,
+        scale: 1.8,
+        duration: 500 + i * 120,
+        ease: 'Power2.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+  }
+
+  // Wood chips bursting up as a plank is laid — a small spray per deposit, a bigger one when
+  // the bridge finishes. Screen-anchored (the hero is stopped here), like spawnSmokePuff.
+  private spawnBridgeChips(wx: number, wy: number, count: number): void {
+    if (!this.camera) return;
+    const s = this.camera.tileToScreen(wx, wy, this.tileSize);
+    const colors = [0x815938, 0x63452c, 0x966b48];
+    const size = Math.max(2, Math.floor(this.tileSize * 0.13));
+    for (let i = 0; i < count; i++) {
+      const chip = this.add
+        .rectangle(s.x + Phaser.Math.Between(-4, 4), s.y + Phaser.Math.Between(-3, 3), size, size, colors[i % colors.length])
+        .setDepth(SCENE_DEPTHS.player + 3)
+        .setAngle(Phaser.Math.Between(0, 360));
+      this.tweens.add({
+        targets: chip,
+        x: chip.x + Phaser.Math.Between(-6, 6) * (this.tileSize * 0.06),
+        y: chip.y - this.tileSize * (0.35 + Math.random() * 0.5),
+        angle: chip.angle + Phaser.Math.Between(-200, 200),
+        alpha: 0,
+        duration: 320 + i * 18,
+        ease: 'Quad.easeOut',
+        onComplete: () => chip.destroy(),
+      });
+    }
   }
 
   // ── Bomb ───────────────────────────────────────────────────────────────────
@@ -915,10 +1417,7 @@ export class GameScene extends Phaser.Scene {
     const worldX = this.playerWorld.worldX;
     const worldY = this.playerWorld.worldY;
 
-    this.heldItem = 'none';
-    this.heldOnFire = false;
-    this.boardRenderer?.setHudItemFire(false);
-    this.boardRenderer?.setHudItemTexture(null);
+    this.clearHeldItem();
     getSoundManager().playBombPlace();
 
     const sprite = this.add
@@ -992,13 +1491,12 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Kill every enemy caught in the blast (coins drop like any other kill).
+    // Kill every enemy caught in the blast.
     for (const enemy of this.enemyManager?.getAliveEnemies() ?? []) {
       if (!inBlast(enemy.worldX, enemy.worldY)) continue;
       enemy.takeDamage(999);
-      if (!enemy.isAlive && this.chunkManager) {
+      if (!enemy.isAlive) {
         getSoundManager().playEnemyDeath();
-        this.coinManager?.spawnCoins(enemy.worldX, enemy.worldY, this.chunkManager);
       }
     }
 
@@ -1049,6 +1547,45 @@ export class GameScene extends Phaser.Scene {
     if (this.dialogOpen) return;
     const script = getDialog(kind);
     if (!script) return;
+    // An NPC beside a still-dead campfire is too scared to talk: swap in the locked lines.
+    const shown = this.gateDialog(script, npcWorld);
+    this.openDialogScript(shown, npcWorld, getDialogVoice(kind));
+  }
+
+  // The wizard tells the story of Zero, always opening (on the very first talk) with the intro
+  // beat — its narrator line MUST be the first thing he shows. Later visits give "protect the
+  // flame"; the second lit fire unlocks the closing prophecy, which ends the intro.
+  private openWizardDialog(npcWorld: { worldX: number; worldY: number }): void {
+    if (this.dialogOpen) return;
+    const base = getDialog('wizard');
+    if (!base) return;
+    const state = this.wizardStoryState();
+    if (state === 'intro') this.wizardIntroSeen = true;
+    const lines = state === 'intro' ? WIZARD_STORY.intro
+      : state === 'protect' ? WIZARD_STORY.protect
+      : WIZARD_STORY.prophecy;
+    this.openDialogScript(
+      { ...base, lines: [...lines] },
+      npcWorld,
+      getDialogVoice('wizard'),
+      state === 'prophecy' ? () => this.playIntroEnding() : undefined,
+    );
+  }
+
+  private wizardStoryState(): 'intro' | 'protect' | 'prophecy' {
+    if (!this.wizardIntroSeen) return 'intro';       // 1st talk: intro
+    if (this.litFireCount >= 1) return 'prophecy';   // once a fire is lit he jumps to the finale
+    return 'protect';                                // optional 2nd talk before any fire is lit
+  }
+
+  // Open the conversation panel for a ready-made script (pan the camera, dim the music), running
+  // `onClosed` once the dialog is dismissed.
+  private openDialogScript(
+    script: DialogScript,
+    npcWorld: { worldX: number; worldY: number } | undefined,
+    voice: DialogVoice | undefined,
+    onClosed?: () => void,
+  ): void {
     this.dialogOpen = true;
     this.stopBreathing();
     // Pan so the hero + NPC sit centered in the left half; the panel fills the right half.
@@ -1062,17 +1599,36 @@ export class GameScene extends Phaser.Scene {
       this.dialogOpen = false;
       this.endDialogCameraShift();
       getSoundManager().fadeMusicIn();
-    }, getDialogVoice(kind));
+      onClosed?.();
+    }, voice);
+  }
+
+  // Gate an NPC's dialog behind their campfire: if a dead fire sits within range, show the
+  // scared "locked" lines (keeping the NPC's portrait/colour/voice) instead of the real ones.
+  private gateDialog(script: DialogScript, npcWorld?: { worldX: number; worldY: number }): DialogScript {
+    if (!npcWorld) return script;
+    const cf = this.nearestCampfireWithin(npcWorld.worldX, npcWorld.worldY, NPC_GATE_RADIUS_TILES);
+    if (cf && !cf.isLit) return { ...script, lines: NPC_LOCKED_LINES };
+    return script;
+  }
+
+  private nearestCampfireWithin(wx: number, wy: number, radius: number): CampfireObject | undefined {
+    let best: CampfireObject | undefined;
+    let bestD = radius;
+    for (const cf of this.campfires) {
+      const d = Math.hypot(cf.worldX - wx, cf.worldY - wy);
+      if (d <= bestD) { bestD = d; best = cf; }
+    }
+    return best;
   }
 
   // ── Dialog camera pan ──────────────────────────────────────────────────────
   // Base screen anchor during normal play: hero centered horizontally, mid play-area.
   private baseScreenCenter(): { x: number; y: number } {
     const { width, height } = this.scale;
-    const reservedTopHeight = this.tileSize * HUD_RESERVED_ROWS;
     return {
       x: Math.floor(width / 2),
-      y: Math.floor(reservedTopHeight + (height - reservedTopHeight) / 2),
+      y: Math.floor(height / 2),
     };
   }
 
@@ -1081,7 +1637,9 @@ export class GameScene extends Phaser.Scene {
   // only screenCenterX/Y keeps the hero's sprite pinned correctly to the ground it stands on.
   private dialogScreenCenter(npcWorld?: { worldX: number; worldY: number }): { x: number; y: number } {
     const base = this.baseScreenCenter();
-    const leftHalfCenterX = Math.floor(this.scale.width * 0.25);
+    // The panel covers the right side (capped width); centre the hero+NPC in the game area left of it.
+    const panelW = Math.min(this.scale.width * DIALOG_PANEL_FRACTION, DIALOG_PANEL_MAX_WIDTH);
+    const leftHalfCenterX = Math.floor((this.scale.width - panelW) / 2);
     if (!npcWorld) return { x: leftHalfCenterX, y: base.y };
     const dx = npcWorld.worldX - this.playerWorld.worldX;
     const dy = npcWorld.worldY - this.playerWorld.worldY;
@@ -1137,6 +1695,7 @@ export class GameScene extends Phaser.Scene {
     this.updateLighting(0);
     this.updatePlayerShadow();
     this.player?.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+    this.positionBackItem();
     this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize);
     this.updateFootprints();
     this.enemyManager?.render(this.tileSize, this.camera);
@@ -1150,10 +1709,18 @@ export class GameScene extends Phaser.Scene {
   private renderProps(): void {
     if (!this.camera) return;
     for (const lv of this.lavaTiles) lv.render(this.tileSize, this.camera);
+    for (const w of this.waterTiles) {
+      // Show the "build a bridge here" indicator on any un-bridged river tile the hero stands
+      // orthogonally next to — the exact tile a graveto would go into.
+      const dist = Math.abs(w.worldX - this.playerWorld.worldX) + Math.abs(w.worldY - this.playerWorld.worldY);
+      w.setBuildHint(dist === 1 && !this.dialogOpen && !this.shopOpen && !this.isDead);
+      w.render(this.tileSize, this.camera);
+    }
     for (const cf of this.campfires) cf.render(this.tileSize, this.camera);
     for (const b of this.dryBushes) b.render(this.tileSize, this.camera);
     for (const d of this.lockedDoors) d.render(this.tileSize, this.camera);
     for (const t of this.dryTrees) t.render(this.tileSize, this.camera);
+    for (const s of this.dryShrubs) s.render(this.tileSize, this.camera);
     for (const r of this.rocks) r.render(this.tileSize, this.camera);
     for (const g of this.tallGrasses) g.render(this.tileSize, this.camera);
     for (const bomb of this.activeBombs) {
@@ -1196,15 +1763,12 @@ export class GameScene extends Phaser.Scene {
     if (id === 'maxHealth') {
       this.playerMaxHealth += 1;
       this.playerHealth = Math.min(this.playerHealth + 1, this.playerMaxHealth);
-      this.boardRenderer?.setMaxHearts(this.playerMaxHealth);
-      this.boardRenderer?.setHealth(this.playerHealth);
     } else if (id === 'moveSpeed') {
       this.movementController?.setMoveDuration(Math.max(60, 140 - this.upgrades.moveSpeed * 20));
     } else if (id === 'magnet') {
       this.coinManager?.setMagnetRadius(2);
     }
 
-    this.boardRenderer?.setCoinCount(this.coinManager?.coinTotal ?? 0, this);
     this.shopOverlay?.refresh(this.coinManager?.coinTotal ?? 0, this.upgrades);
 
     // Update the UPGRADES_CFG iteration for any upgrade that needs it
@@ -1220,46 +1784,180 @@ export class GameScene extends Phaser.Scene {
 
     this.heldItem = item.kind;
     this.heldOnFire = false; // fire never survives a swap — the dropped item lands unlit
+    this.torchFuelMs = 0;
     this.swordSlash?.setOnFire(false);
-    this.boardRenderer?.setHudItemFire(false);
-    this.boardRenderer?.setHudItemTexture(null); // stays empty until the item flies in
-
-    getSoundManager().playSwordPickup();
+    this.updateBackItem(); // the held item now shows on the hero's back (no HUD slot)
 
     if (this.seenItems.has(item.kind)) {
-      this.flyItemToHud(item.kind);
+      // Repeat pickup: no ceremony, just the pickup chime (the item shows on the back).
+      getSoundManager().playSwordPickup();
     } else {
+      // First-time pickup: the ItemGetOverlay ceremony plays its own pickup chime at the reveal.
       this.seenItems.add(item.kind);
-      this.showItemGet(item.kind, () => this.flyItemToHud(item.kind));
+      this.showItemGet(item.kind, () => {});
     }
   }
 
-  // Fly the collected item from the hero up into the HUD slot, then show it there.
-  private flyItemToHud(kind: HeldItemKind): void {
-    const anchor = this.boardRenderer?.getHudItemAnchor();
-    const visual = HUD_ITEM_VISUAL[kind];
-    if (!anchor || !this.camera) {
-      this.boardRenderer?.setHudItemTexture(visual.texture, visual.frame);
+  // Empty the hero's hand: used when an item is consumed (bomb dropped, graveto deposited into
+  // a bridge). Clears the fire/fuel state; the held item then vanishes from the hero's back.
+  private clearHeldItem(): void {
+    this.heldItem = 'none';
+    this.heldOnFire = false;
+    this.torchFuelMs = 0;
+    this.updateBackItem();
+  }
+
+  // Refresh the item slung on the hero's back to match the held item (hidden when empty). Uses
+  // the same per-item visual as the HUD so what you carry reads the same in both places.
+  private updateBackItem(): void {
+    if (!this.backItem) return;
+    if (this.heldItem === 'none') {
+      this.backItem.setVisible(false);
       return;
     }
-    const startSize = Math.max(anchor.size, Math.floor(this.tileSize * 0.8));
-    const flyer = this.add
-      .sprite(this.camera.screenCenterX, this.camera.screenCenterY, visual.texture, visual.frame)
-      .setDepth(SCENE_DEPTHS.toast + 6)
-      .setDisplaySize(startSize, startSize);
+    // A lit graveto shows its flame on the hero's back too, so the carried fire reads at a glance.
+    const visual = this.heldItem === 'wood' && this.heldOnFire
+      ? { texture: ASSET_KEYS.woodOnFireIcon, frame: 0 }
+      : HUD_ITEM_VISUAL[this.heldItem];
+    // Real size: draw the item at one full tile, the same pixel scale as the hero and the
+    // world sprites — no shrinking.
+    const size = this.tileSize;
+    this.backItem
+      .setTexture(visual.texture, visual.frame)
+      .setDisplaySize(size, size)
+      .setRotation(-0.62) // tilted like a slung tool — "meio cruzado"
+      .setVisible(true);
+    this.positionBackItem();
+  }
+
+  // Pin the back item high on the hero's back, anchored to screen centre (the hero is always
+  // there — breathing keeps it visually centred too — so we don't read player.y). Facing up
+  // means we see his back, so the item sits IN FRONT of the hero (whole object shows); any
+  // other facing puts it BEHIND, where the body hides all but the tip poking over the shoulder.
+  // Facing comes from the movement controller (the sprite's own facing), so it never gets out
+  // of sync with the hero — a bump never flips the item to the front on its own.
+  private positionBackItem(): void {
+    if (!this.backItem?.visible || !this.camera) return;
+    const size = this.tileSize;
+    const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
+    // Facing up: the item sits on the visible back, drawn in front of the hero → whole object.
+    // Otherwise: it rides higher and behind the hero, so only the tip clears his shoulder.
+    const offY = facingUp ? -0.12 : -0.34;
+    this.backItem.setPosition(
+      this.camera.screenCenterX - size * 0.14,
+      this.camera.screenCenterY + size * offY,
+    );
+    const heroDepth = this.player?.depth ?? SCENE_DEPTHS.player;
+    this.backItem.setDepth(facingUp ? heroDepth + 0.02 : heroDepth - 0.02);
+  }
+
+  // Hide the back item for the duration of a swing (reset the timer if the hero swings again),
+  // then restore it via updateBackItem. positionBackItem no-ops while it's hidden.
+  private hideBackItemDuringSwing(): void {
+    if (!this.backItem) return;
+    this.backItem.setVisible(false);
+    this.backItemSwingTimer?.remove();
+    this.backItemSwingTimer = this.time.delayedCall(SWING_HIDE_MS, () => {
+      this.backItemSwingTimer = undefined;
+      if (!this.itemGetOpen) this.updateBackItem(); // updateBackItem keeps it hidden if empty-handed
+    });
+  }
+
+  // A felled tree leaves a stick behind: drop a `wood` pickup on the (now passable) stump tile.
+  // `wood` is the flammable item, so the stick is exactly "an item you can use to make fire".
+  private dropTreeStick(worldX: number, worldY: number): void {
+    if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
+    this.itemManager?.drop('wood', worldX, worldY);
+  }
+
+  // A regrowing tree may only sprout (and only counts its clock) when NOTHING is on its tile —
+  // the hero, an enemy, or an item. The item check is key: a felled tree drops a graveto on its
+  // stump, and the tree must not grow back until that graveto is picked up (the regrow clock
+  // stays paused while it sits there).
+  private isTileClearForRegrow(wx: number, wy: number): boolean {
+    if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) return false;
+    if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
+    if (this.itemManager?.hasItemAt(wx, wy)) return false;
+    return true;
+  }
+
+  // TIMBER! — a tree felled with a river directly beyond it (in the chop direction) topples
+  // across the water and becomes a FREE log bridge (no gravetos spent). `dx,dy` is the unit
+  // chop/topple direction. Returns true if it bridged at least one water tile (then the tree's
+  // wood went into the bridge, so no graveto drops).
+  private tryTimberBridge(treeX: number, treeY: number, dx: number, dy: number): boolean {
+    if ((dx === 0 && dy === 0) || (dx !== 0 && dy !== 0)) return false; // one cardinal direction
+    const spanned: WaterObject[] = [];
+    for (let i = 1; i <= TIMBER_MAX_SPAN; i++) {
+      const w = this.getWaterAt(treeX + dx * i, treeY + dy * i);
+      // TIMBER works on ANY river tile (a felled tree bridges wherever it lands) — unlike the
+      // manual graveto build, which only works on marked bridgeSpots.
+      if (!w || !w.blocking) break;
+      spanned.push(w);
+    }
+    if (spanned.length === 0) return false;
+    this.playTimberFall(treeX, treeY, dx, dy, spanned);
+    return true;
+  }
+
+  // The falling-tree spectacle: a full-tree sprite tips over from its base and slides across
+  // the water, then the log bridge tiles snap in with a splash + shake.
+  private playTimberFall(treeX: number, treeY: number, dx: number, dy: number, spanned: WaterObject[]): void {
+    if (!this.camera) return;
+    const size = this.tileSize;
+    const s = this.camera.tileToScreen(treeX, treeY, size);
+    const faller = this.add
+      .sprite(s.x, s.y + size * 0.5, ASSET_KEYS.dryTree, 0)
+      .setOrigin(0.5, 1) // pivot at the base, like a real tree tipping over
+      .setDisplaySize(size, size)
+      .setDepth(SCENE_DEPTHS.player + 4);
+
+    const dir = dx !== 0 ? Math.sign(dx) : Math.sign(dy);
+    getSoundManager().playTreeFall();
+    this.cameras.main.shake(120, 0.0015);
+
     this.tweens.add({
-      targets: flyer,
-      x: anchor.x,
-      y: anchor.y,
-      displayWidth: anchor.size,
-      displayHeight: anchor.size,
-      duration: 380,
-      ease: 'Cubic.easeIn',
+      targets: faller,
+      angle: 86 * dir,
+      x: s.x + dx * size * 0.8,
+      y: s.y + size * 0.5 + dy * size * 0.6,
+      duration: 460,
+      ease: 'Quad.easeIn',
       onComplete: () => {
-        flyer.destroy();
-        this.boardRenderer?.setHudItemTexture(visual.texture, visual.frame);
+        // The trunk lands: reveal each log tile in sequence with a splash, from near to far.
+        spanned.forEach((w, i) => {
+          this.time.delayedCall(i * 70, () => {
+            w.buildBridgeNow();
+            this.spawnSplash(w.worldX, w.worldY);
+            getSoundManager().playSplash();
+          });
+        });
+        getSoundManager().playBridgeBuilt();
+        this.cameras.main.shake(200, 0.004);
+        this.tweens.add({ targets: faller, alpha: 0, duration: 220, onComplete: () => faller.destroy() });
       },
     });
+  }
+
+  // A quick spray of pale droplets where the trunk hits the river.
+  private spawnSplash(wx: number, wy: number): void {
+    if (!this.camera) return;
+    const s = this.camera.tileToScreen(wx, wy, this.tileSize);
+    const r = Math.max(2, Math.floor(this.tileSize * 0.1));
+    for (let i = 0; i < 6; i++) {
+      const drop = this.add
+        .circle(s.x + Phaser.Math.Between(-5, 5), s.y, r, 0xbfe6ef, 0.85)
+        .setDepth(SCENE_DEPTHS.player + 3);
+      this.tweens.add({
+        targets: drop,
+        y: drop.y - this.tileSize * (0.3 + Math.random() * 0.4),
+        x: drop.x + Phaser.Math.Between(-6, 6),
+        alpha: 0,
+        duration: 260 + i * 20,
+        ease: 'Quad.easeOut',
+        onComplete: () => drop.destroy(),
+      });
+    }
   }
 
   // Zelda-style "item get" beat: freeze the game, spotlight the hero, raise the item.
@@ -1268,6 +1966,11 @@ export class GameScene extends Phaser.Scene {
     this.itemGetOpen = true;
     getSoundManager().fadeMusicOut();
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    // interruptMovement just snapped the camera to the hero's tile mid-frame — after the tiles
+    // were already drawn at the old camera but before props/items. Re-project the whole world
+    // once so everything realigns to the final camera before the ceremony freezes it (otherwise
+    // props/items look shifted a tile until the overlay closes).
+    this.reprojectStatic();
     this.itemGetOverlay = new ItemGetOverlay(this, ITEM_GET_CFG[kind], () => {
       this.itemGetOverlay?.destroy();
       this.itemGetOverlay = undefined;
@@ -1285,13 +1988,14 @@ export class GameScene extends Phaser.Scene {
     this.stopBreathing();
 
     this.playerHealth = Math.max(0, this.playerHealth - 1);
-    this.boardRenderer?.setHealth(this.playerHealth);
-    getSoundManager().playPlayerHurt();
 
+    // The killing blow is silent — the death screen is total silence, so don't play the hurt sfx.
     if (this.playerHealth <= 0) {
       this.triggerDeath();
       return;
     }
+
+    getSoundManager().playPlayerHurt();
 
     this.playerInvincible = true;
     this.invincibleTimer = 1500;
@@ -1308,67 +2012,131 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  // The intro's finale: after the wizard's closing prophecy, the world fades to black, a card
+  // says the introduction is complete, and the game returns to the title screen.
+  private playIntroEnding(): void {
+    this.cutsceneActive = true; // freeze gameplay for the finale
+    this.hideLowHealthOutlines();
+    getSoundManager().fadeMusicOut();
+
+    const { width, height } = this.scale;
+    const D = SCENE_DEPTHS.toast + 5;
+
+    const black = this.add.rectangle(0, 0, width, height, 0x000000, 0).setOrigin(0).setDepth(D);
+    this.tweens.add({
+      targets: black,
+      fillAlpha: 1,
+      duration: 1900,
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        const title = this.add.text(width / 2, Math.round(height * 0.44), 'Fim da Introdução', {
+          fontFamily: "Georgia, 'Times New Roman', 'Book Antiqua', serif",
+          fontStyle: 'italic',
+          fontSize: `${Math.max(24, Math.min(52, Math.round(height * 0.05)))}px`,
+          color: '#e7dcc4',
+          align: 'center',
+          resolution: 2,
+        }).setOrigin(0.5).setAlpha(0).setDepth(D + 1);
+        const sub = this.add.text(width / 2, Math.round(height * 0.56), 'Você concluiu a introdução de Zero The Hero.', {
+          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontSize: `${Math.max(13, Math.min(26, Math.round(height * 0.024)))}px`,
+          color: '#b7ad98',
+          align: 'center',
+          resolution: 2,
+        }).setOrigin(0.5).setAlpha(0).setDepth(D + 1);
+        this.tweens.add({ targets: [title, sub], alpha: 1, duration: 1700, delay: 500, ease: 'Sine.easeInOut' });
+
+        let went = false;
+        const goTitle = (): void => {
+          if (went) return;
+          went = true;
+          // Fully stop the (ducked) track so the next scene does a fresh start — a
+          // crossfade here would inherit the duck and come up silent.
+          getSoundManager().stopMusic();
+          getSoundManager().stopAmbience();
+          // In the editor playtest the title scene isn't registered — just restart instead.
+          if (this.scene.get('title')) this.scene.start('title');
+          else this.scene.restart();
+        };
+        const autoTimer = this.time.delayedCall(7000, goTitle);
+        this.time.delayedCall(3600, () => {
+          const skip = (): void => { autoTimer.remove(); goTitle(); };
+          this.input.once(Phaser.Input.Events.POINTER_DOWN, skip);
+          this.input.keyboard?.once('keydown', skip);
+        });
+      },
+    });
+  }
+
   private triggerDeath(): void {
     if (this.isDead) return;
     this.isDead = true;
+    // Death cuts music and even the wind to nothing; out of that silence swells the low
+    // "you died" cluster, and the hall swallows it back into silence.
+    getSoundManager().stopMusic();
+    getSoundManager().stopAmbience();
     getSoundManager().playPlayerDeath();
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    // update() stops running FX once dead, so clean these up here.
+    this.hideLowHealthOutlines();
+    this.stopBreathing();
 
     const { width, height } = this.scale;
+    const cx = Math.floor(width / 2);
+    const cy = Math.floor(height / 2);
+    const D = SCENE_DEPTHS.toast;
 
-    const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0)
-      .setOrigin(0)
-      .setDepth(SCENE_DEPTHS.toast);
+    // 1. The whole world sinks into black, behind the hero.
+    const black = this.add.rectangle(0, 0, width, height, 0x000000, 0).setOrigin(0).setDepth(D);
+    this.tweens.add({ targets: black, fillAlpha: 1, duration: 1500, ease: 'Sine.easeIn' });
 
-    const label = this.add.text(width / 2, height / 2, 'YOU DIED', {
-      fontFamily: FONT_FAMILY,
-      fontSize: `${Math.floor(this.tileSize * 1.1)}px`,
-      color: '#cc2222',
-      stroke: '#000000',
-      strokeThickness: 4,
-      resolution: TEXT_RESOLUTION,
-    })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setDepth(SCENE_DEPTHS.toast + 1);
+    // 2. Only the hero remains, dead-centre on the void — then it fades away, slowly.
+    if (this.player) this.tweens.killTweensOf(this.player); // drop leftover hurt-blink
+    this.player?.setPosition(cx, cy).setDepth(D + 1).setAlpha(1).clearTint();
 
-    const sub = this.add.text(width / 2, height / 2 + Math.floor(this.tileSize * 1.8), 'respawning...', {
-      fontFamily: FONT_FAMILY,
-      fontSize: `${Math.floor(this.tileSize * 0.55)}px`,
-      color: '#aaaaaa',
-      resolution: TEXT_RESOLUTION,
-    })
-      .setOrigin(0.5)
-      .setAlpha(0)
-      .setDepth(SCENE_DEPTHS.toast + 1);
+    // The item slung on the hero's back fades out together with him — it dies with the hero.
+    this.backItemSwingTimer?.remove();
+    this.backItemSwingTimer = undefined;
+    if (this.backItem?.visible) {
+      this.tweens.killTweensOf(this.backItem);
+      this.backItem.setDepth(D + 1);
+      this.tweens.add({ targets: this.backItem, alpha: 0, duration: 3200, delay: 900, ease: 'Sine.easeIn' });
+    }
 
     this.tweens.add({
-      targets: overlay,
-      fillAlpha: 0.75,
-      duration: 600,
-      ease: 'Power2',
+      targets: this.player,
+      alpha: 0,
+      duration: 3200,
+      delay: 900,
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        // 3. The epitaph rises out of the dark, in the middle of the screen.
+        const line = this.add.text(cx, cy, 'Nada fez sentido,\ntudo foi em vão.', {
+          fontFamily: "Georgia, 'Times New Roman', 'Book Antiqua', serif",
+          fontStyle: 'italic',
+          fontSize: `${Math.max(22, Math.min(48, Math.round(height * 0.046)))}px`,
+          color: '#d0c9ba',
+          align: 'center',
+          lineSpacing: Math.round(height * 0.022),
+          resolution: 2,
+        })
+          .setOrigin(0.5)
+          .setAlpha(0)
+          .setDepth(D + 2);
+        this.tweens.add({ targets: line, alpha: 1, duration: 3000, ease: 'Sine.easeInOut' });
+      },
     });
 
-    this.tweens.add({
-      targets: [label, sub],
-      alpha: 1,
-      duration: 600,
-      delay: 200,
-      ease: 'Power2',
-    });
-
-    // Restart handling is independent of the tween above, so a stalled/dropped tween can
-    // never leave the player stuck on the "YOU DIED" screen.
+    // Restart is independent of the tweens so a stalled tween never traps the player. Let the
+    // words linger, then tap/any key to continue; auto-restart after a long, unhurried grace.
     let restarting = false;
     const doRestart = (): void => {
       if (restarting) return;
       restarting = true;
       this.scene.restart();
     };
-
-    // Auto-restart, and after a short grace period let the player skip with any key / tap.
-    const autoTimer = this.time.delayedCall(1600, doRestart);
-    this.time.delayedCall(700, () => {
+    const autoTimer = this.time.delayedCall(12000, doRestart);
+    this.time.delayedCall(4800, () => {
       const skip = (): void => { autoTimer.remove(); doRestart(); };
       this.input.once(Phaser.Input.Events.POINTER_DOWN, skip);
       this.input.keyboard?.once('keydown', skip);
@@ -1402,13 +2170,12 @@ export class GameScene extends Phaser.Scene {
     this.textures.get('_campfire_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
 
     const { width, height } = this.scale;
-    const hudH = this.tileSize * HUD_RESERVED_ROWS;
 
     // Darkness + light holes render into a LOW-RESOLUTION texture (1/LIGHT_DOWNSCALE) that is
     // scaled back up with NEAREST, so the whole light — body and edge — reads as chunky pixel
     // art. Every erase coordinate/radius in updateLighting is divided by LIGHT_DOWNSCALE.
     this.darknessOverlay = this.add
-      .renderTexture(0, hudH, Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil((height - hudH) / LIGHT_DOWNSCALE)))
+      .renderTexture(0, 0, Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)))
       .setOrigin(0)
       .setScale(LIGHT_DOWNSCALE)
       .setDepth(SCENE_DEPTHS.lighting);
@@ -1422,6 +2189,15 @@ export class GameScene extends Phaser.Scene {
       .ellipse(0, 0, 1, 1, 0x000000, 0.3)
       .setDepth(SCENE_DEPTHS.decorBelowPlayer + 0.5)
       .setVisible(false);
+
+    // Red low-health outline — one red-filled copy of the hero per offset direction, drawn just
+    // behind the hero so only the border shows. Synced to the hero's frame/pose each tick.
+    this.lowHealthOutlines.length = 0;
+    for (let i = 0; i < OUTLINE_DIRS.length; i++) {
+      this.lowHealthOutlines.push(
+        this.add.sprite(0, 0, ASSET_KEYS.hero, HERO_FRAMES.idleDown).setVisible(false),
+      );
+    }
   }
 
   private updateLighting(delta: number): void {
@@ -1443,25 +2219,36 @@ export class GameScene extends Phaser.Scene {
     if (!this.camera) return;
 
     const S = LIGHT_DOWNSCALE;
-    const hudH = this.tileSize * HUD_RESERVED_ROWS;
     const light = this.lightCircleImg;
     // Punch a light hole at screen (sx, sy) of the given screen radius. The overlay texture is
     // 1/S the screen size, so coordinates and sizes are divided by S before erasing.
     const eraseLight = (sx: number, sy: number, radius: number): void => {
       light.setDisplaySize((radius * 2) / S, (radius * 2) / S);
-      rt.erase(light, sx / S, (sy - hudH) / S);
+      rt.erase(light, sx / S, sy / S);
     };
 
-    // Campfire glow (flickers)
+    // Campfire glow (flickers) — only lit fires punch a hole in the dark.
     const cfRadius = this.tileSize * LIGHT_RADIUS_TILES * this.lightFlicker.radius;
     for (const cf of this.campfires) {
+      if (!cf.isLit) continue;
       const cfScreen = this.camera.tileToScreen(cf.worldX, cf.worldY, this.tileSize);
       eraseLight(cfScreen.x, cfScreen.y, cfRadius);
     }
 
-    // Hero ambient glow — pinned at screen centre.
+    // First-campfire cut-scene: the fire isn't "lit" yet, so its glow blooms open slowly here,
+    // scaled by the cut-scene progress (0..1).
+    if (this.cutsceneFireLight) {
+      const cl = this.cutsceneFireLight;
+      const s = this.camera.tileToScreen(cl.worldX, cl.worldY, this.tileSize);
+      eraseLight(s.x, s.y, this.tileSize * LIGHT_RADIUS_TILES * cl.progress);
+    }
+
+    // Hero ambient glow — pinned at screen centre. Fades out during the campfire cut-scene
+    // (cutsceneHeroLight → 0) so the blooming fire is the only light on screen.
     const bodyRadius = this.tileSize * LIGHT_RADIUS_TILES;
-    eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius);
+    if (this.cutsceneHeroLight > 0.001) {
+      eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius * this.cutsceneHeroLight);
+    }
 
     // NPCs carry the same glow. Undead carry NO light: they are creatures of the dark and
     // only become visible when they step into someone else's glow.
@@ -1493,6 +2280,49 @@ export class GameScene extends Phaser.Scene {
       .setVisible(!this.isDead)
       .setPosition(cx, cy + Math.round(this.tileSize * 0.34))
       .setDisplaySize(this.tileSize * 0.6, this.tileSize * 0.26);
+  }
+
+  // Low-health heartbeat: on the last hearts, pulse a red PIXEL OUTLINE around the hero — never
+  // tinting the sprite itself, just a border that throbs, faster/stronger the closer to death.
+  private updateLowHealthFx(delta: number): void {
+    const low = !this.isDead && this.playerHealth > 0 && this.playerHealth <= LOW_HEALTH_HEARTS;
+    const player = this.player;
+    if (!low || !player) {
+      this.hideLowHealthOutlines();
+      if (!low) this.heartbeatPhase = 0;
+      return;
+    }
+
+    // One heart left beats faster/harder than two.
+    const critical = this.playerHealth <= 1;
+    const rate = critical ? 0.010 : 0.006; // radians per ms
+    const intensity = critical ? 0.95 : 0.62;
+    this.heartbeatPhase += delta * rate;
+    // Sharpen the sine into a "thump": calm baseline with a quick red spike.
+    const beat = Math.pow((Math.sin(this.heartbeatPhase) + 1) / 2, 3) * intensity;
+
+    const w = Math.max(2, Math.round(this.tileSize * 0.08)); // outline thickness (screen px)
+    const alpha = Math.min(1, 0.2 + beat); // always faintly present, spiking on the beat
+    const frameName = player.frame.name;
+    const key = player.texture.key;
+    const depth = player.depth - 0.01; // just behind the hero, so only the border shows
+    for (let i = 0; i < this.lowHealthOutlines.length; i++) {
+      const [dx, dy] = OUTLINE_DIRS[i];
+      this.lowHealthOutlines[i]
+        .setTexture(key, frameName)
+        .setFlipX(player.flipX)
+        .setOrigin(player.originX, player.originY)
+        .setScale(player.scaleX, player.scaleY)
+        .setPosition(player.x + dx * w, player.y + dy * w)
+        .setDepth(depth)
+        .setTintFill(0xff2a2a) // solid red silhouette
+        .setAlpha(alpha)
+        .setVisible(true);
+    }
+  }
+
+  private hideLowHealthOutlines(): void {
+    for (const o of this.lowHealthOutlines) o.setVisible(false);
   }
 
   private startBreathing(): void {

@@ -75,6 +75,11 @@ export class EnemyManager {
     return playerAttacked;
   }
 
+  /** Fade every enemy out (e.g. to clear the field during a cut-scene). */
+  public despawnAll(): void {
+    for (const enemy of this.enemies) enemy.despawn();
+  }
+
   public render(tileSize: number, camera: WorldCamera): void {
     for (const enemy of this.enemies) enemy.render(tileSize, camera);
   }
