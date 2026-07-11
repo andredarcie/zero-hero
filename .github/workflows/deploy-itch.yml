@@ -1,0 +1,50 @@
+name: Deploy to itch.io
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# The itch.io build is independent from the GitHub Pages deploy (deploy-pages.yml). itch serves the
+# game inside an iframe, so assets must load from RELATIVE paths (vite --base=./ via build:itch)
+# rather than the /zero-hero/ base that Pages needs for its /editor deep link. Keeping this in its
+# own workflow leaves the working Pages deploy untouched. Requires a BUTLER_API_KEY repo secret
+# (itch.io API key, from https://itch.io/user/settings/api-keys).
+
+permissions:
+  contents: read
+
+concurrency:
+  group: itch-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy-itch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (relative base for itch.io)
+        run: npm run build:itch
+
+      - name: Install butler
+        run: |
+          curl --fail --location --retry 5 --retry-delay 2 --retry-all-errors -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip
+          chmod +x butler
+
+      - name: Deploy to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: ./butler push ./dist andredarcie/zero-the-hero:html5
