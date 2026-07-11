@@ -159,6 +159,11 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   key: 1,
 };
 
+// Standing guard: an idle hero swings his weapon on his own at any enemy that closes to an
+// adjacent tile, so defending doesn't require walking into the attacker (bump-attacking still
+// works as before). This is the minimum delay between automatic swings.
+const AUTO_ATTACK_COOLDOWN_MS = 450;
+
 const BOMB_FUSE_MS = 1600;
 const BOMB_BLAST_RADIUS_TILES = 2.2;
 
@@ -233,6 +238,8 @@ export class GameScene extends Phaser.Scene {
   private invincibleTimer = 0;
   // Combat juice: while > 0 the whole world (tweens included) is frozen on an impact frame.
   private hitstopMs = 0;
+  // Cooldown between automatic defensive swings while standing still.
+  private autoAttackCooldownMs = 0;
   // Returns the hero to screen centre after a hurt-knockback shove.
   private playerKnockTween?: Phaser.Tweens.Tween;
   // Counts up while resting in a campfire's safe ring; mends a heart each HEALTH_REGEN_MS.
@@ -327,6 +334,7 @@ export class GameScene extends Phaser.Scene {
     this.playerHealth = HUD_HEALTH_MAX;
     this.playerInvincible = false;
     this.hitstopMs = 0;
+    this.autoAttackCooldownMs = 0;
     this.tweens.timeScale = 1;
     this.playerKnockTween = undefined;
     this.playerWorld = { worldX: startWorldX, worldY: startWorldY };
@@ -770,6 +778,7 @@ export class GameScene extends Phaser.Scene {
         this.playerWorld.worldX,
         this.playerWorld.worldY,
         this.playerSafe,
+        this.isTorchLit,
         (wx, wy) => {
           // Enemies respect the same solid tiles as the hero (terrain, trees, campfires,
           // dry bushes, NPCs) — and they refuse to step into campfire light: the undead
@@ -779,6 +788,11 @@ export class GameScene extends Phaser.Scene {
         },
       );
       if (attacked) this.handleEnemyAttackPlayer(attacked);
+
+      // Standing guard: the idle hero defends himself against anything that got adjacent.
+      this.autoAttackCooldownMs = Math.max(0, this.autoAttackCooldownMs - delta);
+      this.tryAutoAttack();
+
       this.enemyManager.render(this.tileSize, this.camera);
 
       this.spawnDirector?.update(delta, {
@@ -1336,6 +1350,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.strikeEnemy(enemy, wx, wy);
+  }
+
+  /**
+   * Land a melee blow on an enemy at (wx, wy) with the held item: damage, swing arc,
+   * knockback, and all the impact juice. Shared by the walk-into-it bump attack and the
+   * standing-guard auto-attack. No-op if the held item can't hurt enemies.
+   */
+  private strikeEnemy(enemy: EnemyBase, wx: number, wy: number): void {
     // Only a melee-capable item hurts enemies: the sword (instant kill, scaled by upgrades)
     // or the wood club / axe / key (3 hits — the skull's max health).
     const damage = MELEE_DAMAGE[this.heldItem as HeldItemKind];
@@ -1362,6 +1385,32 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(lethal ? 150 : 90, lethal ? 0.007 : 0.004);
     this.triggerHitstop(lethal ? 110 : 60);
     if (lethal) getSoundManager().playEnemyDeath();
+  }
+
+  /**
+   * Standing guard: while the hero stands still with a melee-capable item in hand, he swings
+   * on his own at any enemy that closes to an adjacent tile — the player doesn't have to walk
+   * into the attacker to defend (though the bump attack still works exactly as before).
+   */
+  private tryAutoAttack(): void {
+    if (this.autoAttackCooldownMs > 0) return;
+    if (this.movementController?.moving) return;
+    if (this.dialogOpen || this.cutsceneActive || this.itemGetOpen || this.camShifting) return;
+    if (MELEE_DAMAGE[this.heldItem as HeldItemKind] === undefined) return;
+
+    const px = this.playerWorld.worldX;
+    const py = this.playerWorld.worldY;
+    const dirs: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (const [dx, dy] of dirs) {
+      const enemy = this.enemyManager?.getEnemyAt(px + dx, py + dy);
+      if (!enemy || enemy.isSpawning) continue;
+      this.autoAttackCooldownMs = AUTO_ATTACK_COOLDOWN_MS;
+      // strikeEnemy repins the hero via interruptMovement; leave the breathing pose first
+      // (same reason handlePlayerBump does) or the repin jumps the sprite half a tile up.
+      this.stopBreathing();
+      this.strikeEnemy(enemy, px + dx, py + dy);
+      return;
+    }
   }
 
   /**
@@ -1443,6 +1492,11 @@ export class GameScene extends Phaser.Scene {
       onFire: this.heldItem === 'wood' && this.heldOnFire,
       flipX: this.heldItem === 'axe', // the axe is single-edged — face its blade into the swing
     });
+  }
+
+  /** Hero is carrying a burning torch (the lit graveto): fire in hand, light, and enemy ward. */
+  private get isTorchLit(): boolean {
+    return this.heldItem === 'wood' && this.heldOnFire;
   }
 
   // Light the held item (the wood club — the only flammable item) at a fire source
@@ -2119,8 +2173,10 @@ export class GameScene extends Phaser.Scene {
       this.backItem.setVisible(false);
       return;
     }
-    // A lit graveto shows its flame on the hero's back too, so the carried fire reads at a glance.
-    const visual = this.heldItem === 'wood' && this.heldOnFire
+    // A lit graveto becomes a torch: carried upright in the hand (flame up), not slung on the
+    // back — the carried fire must read like a real torch at a glance.
+    const torchLit = this.isTorchLit;
+    const visual = torchLit
       ? { texture: ASSET_KEYS.woodOnFireIcon, frame: 0 }
       : HUD_ITEM_VISUAL[this.heldItem];
     // Real size: draw the item at one full tile, the same pixel scale as the hero and the
@@ -2129,7 +2185,7 @@ export class GameScene extends Phaser.Scene {
     this.backItem
       .setTexture(visual.texture, visual.frame)
       .setDisplaySize(size, size)
-      .setRotation(-0.62) // tilted like a slung tool — "meio cruzado"
+      .setRotation(torchLit ? 0 : -0.62) // torch stands upright; other tools ride "meio cruzado"
       .setVisible(true);
     this.positionBackItem();
   }
@@ -2143,6 +2199,17 @@ export class GameScene extends Phaser.Scene {
   private positionBackItem(): void {
     if (!this.backItem?.visible || !this.camera) return;
     const size = this.tileSize;
+    const heroDepth = this.player?.depth ?? SCENE_DEPTHS.player;
+    // Lit torch: gripped upright in the hand at the hero's side, raised so the flame clears
+    // the shoulder — always in front of the body (it's held out, never hidden behind him).
+    if (this.isTorchLit) {
+      this.backItem.setPosition(
+        this.camera.screenCenterX + size * 0.32,
+        this.camera.screenCenterY - size * 0.18,
+      );
+      this.backItem.setDepth(heroDepth + 0.02);
+      return;
+    }
     const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
     // Facing up: the item sits on the visible back, drawn in front of the hero → whole object.
     // Otherwise: it rides higher and behind the hero, so only the tip clears his shoulder.
@@ -2151,7 +2218,6 @@ export class GameScene extends Phaser.Scene {
       this.camera.screenCenterX - size * 0.14,
       this.camera.screenCenterY + size * offY,
     );
-    const heroDepth = this.player?.depth ?? SCENE_DEPTHS.player;
     this.backItem.setDepth(facingUp ? heroDepth + 0.02 : heroDepth - 0.02);
   }
 
@@ -2693,6 +2759,16 @@ export class GameScene extends Phaser.Scene {
     if (this.cutsceneHeroLight > 0.001) {
       eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius * this.cutsceneHeroLight);
       liftFog(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius, this.cutsceneHeroLight);
+      // Carried torch: the hero's glow turns into real firelight — same amber pool and the
+      // same flicker as a campfire, walking with him.
+      if (this.isTorchLit) {
+        const torchRadius = cfRadius * this.cutsceneHeroLight;
+        eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, torchRadius);
+        drawWarm(
+          this.camera.screenCenterX, this.camera.screenCenterY,
+          torchRadius * WARM_POOL_SCALE, WARM_INTENSITY * this.cutsceneHeroLight,
+        );
+      }
     }
 
     // NPCs carry the same glow. Undead carry NO light: they are creatures of the dark and

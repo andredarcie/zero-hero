@@ -59,6 +59,11 @@ export abstract class EnemyBase {
     return this.alive;
   }
 
+  /** True while a spawn animation plays (the enemy is invulnerable); subclasses override. */
+  public get isSpawning(): boolean {
+    return false;
+  }
+
   /** Apply damage (default 1). Weak weapons pass fractions — e.g. the wood club deals 0.5. */
   public takeDamage(amount = 1): boolean {
     if (!this.alive) return false;
@@ -85,6 +90,7 @@ export abstract class EnemyBase {
     playerX: number,
     playerY: number,
     playerSafe: boolean,
+    playerHasTorch: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean;
 

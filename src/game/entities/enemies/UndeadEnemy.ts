@@ -46,7 +46,7 @@ export class UndeadEnemy extends EnemyBase {
     return ASSET_KEYS.undead;
   }
 
-  public get isSpawning(): boolean {
+  public override get isSpawning(): boolean {
     return this.spawning;
   }
 
@@ -61,6 +61,7 @@ export class UndeadEnemy extends EnemyBase {
     playerWorldX: number,
     playerWorldY: number,
     playerSafe: boolean,
+    playerHasTorch: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean {
     if (!this.isAlive) return false;
@@ -100,7 +101,15 @@ export class UndeadEnemy extends EnemyBase {
     this.moveTimer += delta;
     if (this.moveTimer >= MOVE_INTERVAL) {
       this.moveTimer = 0;
-      if (dist > 1 && dist <= DETECTION_RANGE) {
+      if (playerHasTorch) {
+        // A carried flame wards the undead completely: they back away from the bearer
+        // instead of hunting him, and drift aimlessly once out of its reach.
+        if (dist <= DETECTION_RANGE) {
+          this.moveAway(playerWorldX, playerWorldY, isBlocked);
+        } else {
+          this.wander(isBlocked);
+        }
+      } else if (dist > 1 && dist <= DETECTION_RANGE) {
         this.moveToward(playerWorldX, playerWorldY, isBlocked);
       } else if (dist > DETECTION_RANGE) {
         this.wander(isBlocked);
@@ -110,7 +119,8 @@ export class UndeadEnemy extends EnemyBase {
     this.attackTimer += delta;
     if (this.attackTimer >= ATTACK_INTERVAL) {
       this.attackTimer = 0;
-      if (dist === 1) {
+      // The torch keeps the hero untouchable: no undead dares strike its bearer.
+      if (dist === 1 && !playerHasTorch) {
         return true;
       }
     }

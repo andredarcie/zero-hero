@@ -41,6 +41,7 @@ export class EnemyManager {
     playerWorldX: number,
     playerWorldY: number,
     playerSafe: boolean,
+    playerHasTorch: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
   ): EnemyBase | null {
     let attacker: EnemyBase | null = null;
@@ -61,7 +62,7 @@ export class EnemyManager {
         return this.enemies.some((e) => e !== enemy && e.isAlive && e.worldX === wx && e.worldY === wy);
       };
 
-      if (enemy.update(delta, playerWorldX, playerWorldY, playerSafe, blockedForEnemy)) {
+      if (enemy.update(delta, playerWorldX, playerWorldY, playerSafe, playerHasTorch, blockedForEnemy)) {
         attacker ??= enemy;
       }
     }
