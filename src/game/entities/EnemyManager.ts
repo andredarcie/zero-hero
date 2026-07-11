@@ -35,14 +35,15 @@ export class EnemyManager {
     return this.enemies.filter((e) => e.isAlive);
   }
 
+  /** Returns the enemy that landed a blow on the player this tick (null if none). */
   public update(
     delta: number,
     playerWorldX: number,
     playerWorldY: number,
     playerSafe: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
-  ): boolean {
-    let playerAttacked = false;
+  ): EnemyBase | null {
+    let attacker: EnemyBase | null = null;
 
     for (const enemy of this.enemies) {
       if (!enemy.isAlive) continue;
@@ -61,7 +62,7 @@ export class EnemyManager {
       };
 
       if (enemy.update(delta, playerWorldX, playerWorldY, playerSafe, blockedForEnemy)) {
-        playerAttacked = true;
+        attacker ??= enemy;
       }
     }
 
@@ -72,7 +73,7 @@ export class EnemyManager {
       }
     }
 
-    return playerAttacked;
+    return attacker;
   }
 
   /** Fade every enemy out (e.g. to clear the field during a cut-scene). */

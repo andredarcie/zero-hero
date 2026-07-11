@@ -28,6 +28,7 @@ import {
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/game/debug/debugHooks';
 import { CoinManager } from '@/game/entities/CoinManager';
+import type { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager } from '@/game/entities/EnemyManager';
 import { UndeadSpawnDirector } from '@/game/entities/UndeadSpawnDirector';
 import { NpcManager } from '@/game/entities/NpcManager';
@@ -229,6 +230,10 @@ export class GameScene extends Phaser.Scene {
   private playerHealth = HUD_HEALTH_MAX;
   private playerInvincible = false;
   private invincibleTimer = 0;
+  // Combat juice: while > 0 the whole world (tweens included) is frozen on an impact frame.
+  private hitstopMs = 0;
+  // Returns the hero to screen centre after a hurt-knockback shove.
+  private playerKnockTween?: Phaser.Tweens.Tween;
   // Counts up while resting in a campfire's safe ring; mends a heart each HEALTH_REGEN_MS.
   private healthRegenTimer = 0;
   private tileSize = MIN_BOARD_TILE_SIZE;
@@ -312,6 +317,9 @@ export class GameScene extends Phaser.Scene {
     this.playerMaxHealth = HUD_HEALTH_MAX;
     this.playerHealth = HUD_HEALTH_MAX;
     this.playerInvincible = false;
+    this.hitstopMs = 0;
+    this.tweens.timeScale = 1;
+    this.playerKnockTween = undefined;
     this.playerWorld = { worldX: startWorldX, worldY: startWorldY };
     this.streamCenter = { cx: NaN, cy: NaN };
     this.shopOpen = false;
@@ -590,9 +598,24 @@ export class GameScene extends Phaser.Scene {
     this.fogOverlay = undefined;
     this.playerShadow = undefined;
     this.heartbeatPhase = 0;
+    // Never leak a frozen tween clock into the next scene run.
+    this.hitstopMs = 0;
+    if (this.tweens) this.tweens.timeScale = 1;
+    this.playerKnockTween = undefined;
   }
 
   public update(_time: number, delta: number): void {
+    // Hitstop: a melee impact freezes the whole world — tweens included, so knockbacks hold
+    // their pose at full stretch — for a few frames. This countdown MUST run before every
+    // other gate below: a dialog/item-get/cutscene can open on the very frame a hit lands,
+    // and those states return early — if they preceded this block, tweens.timeScale would
+    // stay 0 forever and their own (tween-driven) sequences could never finish.
+    if (this.hitstopMs > 0) {
+      this.hitstopMs -= delta;
+      if (this.hitstopMs > 0) return; // hold the impact frame, FX and all
+      this.tweens.timeScale = 1;
+    }
+
     // Hide the low-health outline up front; the active-play FX below re-shows it each frame if
     // still low. So any frozen state (dialog, shop, item-get, death) leaves it hidden instead
     // of stranding it, misaligned, where the hero last was.
@@ -696,7 +719,7 @@ export class GameScene extends Phaser.Scene {
           return this.isTileLitByCampfire(wx, wy);
         },
       );
-      if (attacked) this.handleEnemyAttackPlayer();
+      if (attacked) this.handleEnemyAttackPlayer(attacked);
       this.enemyManager.render(this.tileSize, this.camera);
 
       this.spawnDirector?.update(delta, {
@@ -711,7 +734,10 @@ export class GameScene extends Phaser.Scene {
       // Souls staging: the combat track rises only while undead are actually out and the
       // hero is beyond the firelight; a few calm seconds after the last one falls it fades
       // back to the wind-only default. Suppressed while any overlay/cutscene owns the music.
-      const uiOwnsMusic = this.cutsceneActive || this.dialogOpen || this.shopOpen || this.itemGetOpen;
+      // isDead matters here: triggerDeath (silence, total) can fire earlier in THIS same
+      // update pass, and without it the danger check below would restart the combat track
+      // right on top of the death screen.
+      const uiOwnsMusic = this.cutsceneActive || this.dialogOpen || this.shopOpen || this.itemGetOpen || this.isDead;
       if (this.enemyManager.aliveCount > 0 && !this.playerSafe) {
         this.dangerCalmMs = 0;
         if (!uiOwnsMusic) getSoundManager().startMusic('danger', 900);
@@ -868,6 +894,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // The screen centre just moved; a live hurt-shove would keep easing toward the OLD
+    // centre and strand the hero off his tile, so finish it before re-pinning.
+    this.cancelPlayerKnockback();
     this.player?.setDisplaySize(this.tileSize, this.tileSize);
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
 
@@ -1242,7 +1271,8 @@ export class GameScene extends Phaser.Scene {
     if (this.heldItem === 'none') {
       const dx = wx - this.playerWorld.worldX;
       const dy = wy - this.playerWorld.worldY;
-      enemy.triggerKnockback(dx, dy, this.tileSize);
+      enemy.triggerKnockback(dx, dy);
+      this.cameras.main.shake(60, 0.002);
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
     }
@@ -1258,7 +1288,7 @@ export class GameScene extends Phaser.Scene {
     this.swingHeld(wx, wy);
     const dx = wx - this.playerWorld.worldX;
     const dy = wy - this.playerWorld.worldY;
-    enemy.triggerKnockback(dx, dy, this.tileSize);
+    enemy.triggerKnockback(dx, dy);
     if (this.heldOnFire && enemy.isAlive) this.spawnFireHitEffect(wx, wy);
 
     getSoundManager().playEnemyHit();
@@ -1266,8 +1296,61 @@ export class GameScene extends Phaser.Scene {
     this.player?.setTint(0xffff00);
     this.time.delayedCall(120, () => { this.player?.clearTint(); });
 
-    if (!enemy.isAlive) {
-      getSoundManager().playEnemyDeath();
+    // Impact juice: sparks at the point of contact, a kick of screen shake, and a few
+    // frames of hitstop — all heavier when the blow kills.
+    const lethal = !enemy.isAlive;
+    this.spawnHitSpark(wx, wy, lethal);
+    this.cameras.main.shake(lethal ? 150 : 90, lethal ? 0.007 : 0.004);
+    this.triggerHitstop(lethal ? 110 : 60);
+    if (lethal) getSoundManager().playEnemyDeath();
+  }
+
+  /**
+   * Freeze the world on the current frame for a beat. tweens.timeScale goes to 0 so every
+   * in-flight tween (knockback stretch, death pop) holds its impact pose; update() counts
+   * the freeze down in real time and restores the timescale.
+   */
+  private triggerHitstop(ms: number): void {
+    this.hitstopMs = Math.max(this.hitstopMs, ms);
+    this.tweens.timeScale = 0;
+  }
+
+  /** Sparks + a white impact flash where a melee blow lands; heavier when the blow kills. */
+  private spawnHitSpark(wx: number, wy: number, lethal: boolean): void {
+    if (!this.camera) return;
+    const c = this.camera.tileToScreen(wx, wy, this.tileSize);
+
+    const flash = this.add
+      .circle(c.x, c.y, this.tileSize * (lethal ? 0.5 : 0.32), 0xffffff, 0.9)
+      .setDepth(SCENE_DEPTHS.upper + 1);
+    this.tweens.add({
+      targets: flash,
+      radius: this.tileSize * (lethal ? 1.0 : 0.6),
+      alpha: 0,
+      duration: lethal ? 210 : 150,
+      ease: 'Cubic.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    const count = lethal ? 7 : 4;
+    const size = Math.max(3, Math.floor(this.tileSize * 0.22));
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2 + Math.random() * 0.8;
+      const dist = this.tileSize * (0.45 + Math.random() * (lethal ? 0.75 : 0.4));
+      const spark = this.add
+        .sprite(c.x, c.y, ASSET_KEYS.bombItem, BOMB_FRAMES.spark)
+        .setDisplaySize(size, size)
+        .setDepth(SCENE_DEPTHS.upper + 1);
+      this.tweens.add({
+        targets: spark,
+        x: c.x + Math.cos(ang) * dist,
+        y: c.y + Math.sin(ang) * dist,
+        alpha: 0,
+        angle: Phaser.Math.Between(-180, 180),
+        duration: 170 + Math.random() * 120,
+        ease: 'Cubic.easeOut',
+        onComplete: () => spark.destroy(),
+      });
     }
   }
 
@@ -2127,7 +2210,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private handleEnemyAttackPlayer(): void {
+  private handleEnemyAttackPlayer(attacker: EnemyBase): void {
     if (this.playerInvincible || this.isDead) return;
 
     // Same reason as handlePlayerBump: reset the breathing pose before the hurt shake repins
@@ -2148,6 +2231,31 @@ export class GameScene extends Phaser.Scene {
     this.invincibleTimer = 1500;
 
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+
+    // Taking a hit lands hard: heavy shake, a red screen flash, hitstop, the skull lunging
+    // into the blow, and the hero physically shoved away from the attacker.
+    this.cameras.main.shake(200, 0.01);
+    this.cameras.main.flash(110, 160, 30, 30);
+    this.triggerHitstop(90);
+    if (this.player && this.camera) {
+      const kdx = Math.sign(this.playerWorld.worldX - attacker.worldX);
+      const kdy = Math.sign(this.playerWorld.worldY - attacker.worldY);
+      attacker.triggerKnockback(kdx, kdy); // lunge toward the hero
+      // The hero sprite is always pinned to screen centre; the shove displaces it and
+      // eases it back. startBreathing waits for this tween, so the return never gets cut.
+      const bx = this.camera.screenCenterX;
+      const by = this.camera.screenCenterY;
+      this.player.setPosition(bx + kdx * this.tileSize * 0.34, by + kdy * this.tileSize * 0.34);
+      this.playerKnockTween = this.tweens.add({
+        targets: this.player,
+        x: bx,
+        y: by,
+        duration: 240,
+        ease: 'Power3.easeOut',
+        onComplete: () => { this.playerKnockTween = undefined; },
+      });
+    }
+
     this.player?.setTint(0xff4444);
     this.tweens.add({
       targets: this.player,
@@ -2218,6 +2326,12 @@ export class GameScene extends Phaser.Scene {
   private triggerDeath(): void {
     if (this.isDead) return;
     this.isDead = true;
+    // A hitstop must never outlive the fight — the death sequence runs on tweens.
+    // (stopBreathing below cancels any in-flight hurt-knockback shove.)
+    this.hitstopMs = 0;
+    this.tweens.timeScale = 1;
+    // One last heavy blow before the silence.
+    this.cameras.main.shake(300, 0.012);
     // Death cuts music and even the wind to nothing; out of that silence swells the low
     // "you died" cluster, and the hall swallows it back into silence.
     getSoundManager().stopMusic();
@@ -2588,6 +2702,9 @@ export class GameScene extends Phaser.Scene {
 
   private startBreathing(): void {
     if (!this.player || this.breathingTween?.isPlaying()) return;
+    // A hurt-knockback shove is still easing the hero back to centre — let it finish;
+    // breathing starts on a later frame, once the tween completes and clears itself.
+    if (this.playerKnockTween) return;
     this.breathingTween?.destroy();
     // Save center-origin Y, then pivot to bottom so scale only grows upward
     this.breathingBaseY = this.player.y;
@@ -2606,7 +2723,24 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Kill an in-flight hurt-knockback shove and re-pin the hero to screen centre. Called
+   * from stopBreathing (every gameplay repin goes through it: dialog pan, death, bumps)
+   * and from handleResize, both of which are about to reposition the hero anyway.
+   */
+  private cancelPlayerKnockback(): void {
+    if (!this.playerKnockTween) return;
+    this.playerKnockTween.stop();
+    this.playerKnockTween = undefined;
+    if (this.player && this.camera) {
+      this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+    }
+  }
+
   private stopBreathing(): void {
+    // Runs before the early return: callers repin the hero, so a live shove must not
+    // keep writing stale coordinates underneath them (e.g. during the dialog camera pan).
+    this.cancelPlayerKnockback();
     if (!this.breathingTween) return;
     this.breathingTween.stop();
     this.breathingTween.destroy();

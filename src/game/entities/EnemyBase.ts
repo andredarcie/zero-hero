@@ -11,9 +11,15 @@ export abstract class EnemyBase {
   private health: number;
   private readonly maxHealth: number;
   private alive = true;
+  // Visual displacement in TILE units, applied at render time on top of the grid position.
+  // Shared by the hit-knockback stretch and the per-step slide (a step starts the sprite
+  // back at the old tile and eases it into the new one).
   private knockbackOffsetX = 0;
   private knockbackOffsetY = 0;
   private knockbackSquash = 1.0;
+  // Footstep feel: alternate a small left/right tilt on every step.
+  private stepFlip = false;
+  private stepTween?: Phaser.Tweens.Tween;
 
   protected readonly scene: Phaser.Scene;
   protected readonly sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
@@ -82,11 +88,11 @@ export abstract class EnemyBase {
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean;
 
-  public triggerKnockback(dx: number, dy: number, tileSize: number): void {
+  public triggerKnockback(dx: number, dy: number): void {
     if (!this.alive) return;
     this.scene.tweens.killTweensOf(this);
-    this.knockbackOffsetX = dx * tileSize * 0.38;
-    this.knockbackOffsetY = dy * tileSize * 0.38;
+    this.knockbackOffsetX = dx * 0.38;
+    this.knockbackOffsetY = dy * 0.38;
     this.knockbackSquash = 0.78;
     this.scene.tweens.add({
       targets: this,
@@ -98,13 +104,40 @@ export abstract class EnemyBase {
     });
   }
 
+  /**
+   * Play the footstep animation for a completed grid step: the sprite starts back at the
+   * old tile and slides into the new one, tilting slightly left/right on alternate steps.
+   */
+  private animateStep(ox: number, oy: number): void {
+    this.scene.tweens.killTweensOf(this);
+    this.knockbackOffsetX = -ox;
+    this.knockbackOffsetY = -oy;
+    this.scene.tweens.add({
+      targets: this,
+      knockbackOffsetX: 0,
+      knockbackOffsetY: 0,
+      duration: 260,
+      ease: 'Sine.easeOut',
+    });
+
+    this.stepFlip = !this.stepFlip;
+    this.stepTween?.stop();
+    this.sprite.setAngle(this.stepFlip ? 9 : -9);
+    this.stepTween = this.scene.tweens.add({
+      targets: this.sprite,
+      angle: 0,
+      duration: 260,
+      ease: 'Sine.easeOut',
+    });
+  }
+
   public render(tileSize: number, camera: WorldCamera): void {
     if (!this.alive) return;
 
     const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
     const scale = this.spriteScale * this.knockbackSquash;
-    const sx = screen.x + this.knockbackOffsetX;
-    const sy = screen.y + this.knockbackOffsetY;
+    const sx = screen.x + this.knockbackOffsetX * tileSize;
+    const sy = screen.y + this.knockbackOffsetY * tileSize;
 
     this.sprite
       .setPosition(sx, sy)
@@ -128,17 +161,33 @@ export abstract class EnemyBase {
   protected die(): void {
     this.alive = false;
     this.healthBar.clear();
+    // The step tilt also tweens sprite.angle; stop it so it can't fight the crumble spin.
+    this.stepTween?.stop();
     this.onDeath();
+    // Impact pop: flash solid white and swell for a beat, then crumble away spinning.
+    this.sprite.setTintFill(0xffffff);
     this.scene.tweens.add({
       targets: this.sprite,
-      alpha: 0,
-      scaleX: 0.1,
-      scaleY: 0.1,
-      duration: 280,
-      ease: 'Power2.easeIn',
+      scaleX: this.sprite.scaleX * 1.35,
+      scaleY: this.sprite.scaleY * 1.35,
+      duration: 70,
+      ease: 'Back.easeOut',
       onComplete: () => {
-        this.sprite.setVisible(false);
-        this.pendingRemoval = true;
+        if (!this.sprite.active) return;
+        this.sprite.clearTint();
+        this.scene.tweens.add({
+          targets: this.sprite,
+          alpha: 0,
+          scaleX: 0.1,
+          scaleY: 0.1,
+          angle: Phaser.Math.Between(-40, 40),
+          duration: 240,
+          ease: 'Power2.easeIn',
+          onComplete: () => {
+            this.sprite.setVisible(false);
+            this.pendingRemoval = true;
+          },
+        });
       },
     });
   }
@@ -149,24 +198,60 @@ export abstract class EnemyBase {
   }
 
   /**
-   * Quiet removal (no loot, no onDeath): the undead crumbles back into the ground when the
-   * hero reaches a campfire's safety. Distinct from die(), which is a combat kill.
+   * Quiet removal (no loot, no onDeath): the dark reclaims its own when the hero reaches a
+   * campfire's safety. The skull turns pitch-black silhouette and melts back into the
+   * ground while wisps of shadow curl up from the spot. Distinct from die(), a combat kill.
    */
   public despawn(): void {
     if (!this.alive) return;
     this.alive = false;
     this.healthBar.clear();
+    this.scene.tweens.killTweensOf(this);
+    this.stepTween?.stop();
+    this.sprite.setAngle(0);
+    this.sprite.setTintFill(0x05060f);
+
+    const baseY = this.sprite.y + this.sprite.displayHeight * 0.5;
+    this.spawnShadowWisps(this.sprite.x, baseY);
     this.scene.tweens.add({
       targets: this.sprite,
+      y: baseY,
+      scaleY: this.sprite.scaleY * 0.08,
       alpha: 0,
-      y: this.sprite.y + this.sprite.displayHeight * 0.35,
-      duration: 420,
+      duration: 520,
       ease: 'Power2.easeIn',
       onComplete: () => {
         this.sprite.setVisible(false);
         this.pendingRemoval = true;
       },
     });
+  }
+
+  /** Pale cold wisps rising from where a despawning skull melted into the ground. */
+  private spawnShadowWisps(x: number, groundY: number): void {
+    const w = this.sprite.displayWidth;
+    for (let i = 0; i < 4; i++) {
+      const wisp = this.scene.add
+        .circle(
+          x + Phaser.Math.Between(-Math.round(w * 0.3), Math.round(w * 0.3)),
+          groundY - Phaser.Math.Between(0, 4),
+          Math.max(2, Math.round(w * 0.12)),
+          0x6c7aa8,
+          0.55,
+        )
+        .setDepth(this.sprite.depth + 1);
+      this.scene.tweens.add({
+        targets: wisp,
+        y: groundY - w * (0.7 + Math.random() * 0.6),
+        x: wisp.x + Phaser.Math.Between(-5, 5),
+        alpha: 0,
+        scale: 0.4,
+        delay: i * 80,
+        duration: 480 + i * 90,
+        ease: 'Sine.easeOut',
+        onComplete: () => wisp.destroy(),
+      });
+    }
   }
 
   protected moveToward(
@@ -192,6 +277,7 @@ export abstract class EnemyBase {
         this.worldX = nx;
         this.worldY = ny;
         this.sprite.setFlipX(ox < 0);
+        this.animateStep(ox, oy);
         return;
       }
     }
@@ -219,6 +305,7 @@ export abstract class EnemyBase {
         this.worldX = nx;
         this.worldY = ny;
         this.sprite.setFlipX(ox < 0);
+        this.animateStep(ox, oy);
         return;
       }
     }
@@ -232,6 +319,8 @@ export abstract class EnemyBase {
     if (!isBlocked(nx, ny)) {
       this.worldX = nx;
       this.worldY = ny;
+      this.sprite.setFlipX(ox < 0);
+      this.animateStep(ox, oy);
     }
   }
 }
