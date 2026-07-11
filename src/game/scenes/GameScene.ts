@@ -170,9 +170,16 @@ const BOMB_BLAST_RADIUS_TILES = 2.2;
 // Resting in a lit campfire's safe ring mends one heart every this many ms (leaving the ring
 // resets the timer, so healing is a "warm up by the fire" beat, not passive regen anywhere).
 const HEALTH_REGEN_MS = 2500;
+// While the fire mends the hero, warm ember motes stream fire→hero on this cadence, so the
+// healing visibly COMES FROM the campfire instead of a heart just popping in the HUD.
+const HEAL_MOTE_INTERVAL_MS = 110;
+const HEAL_MOTE_TRAVEL_MS = 750;
 
 // At or below this many hearts the hero shows the low-health "heartbeat" (a red pixel outline).
 const LOW_HEALTH_HEARTS = 2;
+// Low-health fire compass (Skyrim-style): a small flame marker orbits the hero at this radius,
+// pointing at the nearest lit campfire, so a dying player always knows where safety is.
+const FIRE_COMPASS_ORBIT_TILES = 1.55;
 // The 8 offset directions used to build the red outline around the hero (cardinals + diagonals).
 const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1],
@@ -244,6 +251,10 @@ export class GameScene extends Phaser.Scene {
   private playerKnockTween?: Phaser.Tweens.Tween;
   // Counts up while resting in a campfire's safe ring; mends a heart each HEALTH_REGEN_MS.
   private healthRegenTimer = 0;
+  // Cadence for the ember motes streaming fire→hero while the campfire mends him.
+  private healMoteTimer = 0;
+  // Low-health fire compass: an arrow orbiting the hero, pointing toward the nearest lit fire.
+  private fireCompassArrow?: Phaser.GameObjects.Polygon;
   private tileSize = MIN_BOARD_TILE_SIZE;
   private isDead = false;
   private shopOpen = false;
@@ -643,6 +654,8 @@ export class GameScene extends Phaser.Scene {
     this.playerShadow?.destroy();
     this.lowHealthOutlines.forEach((o) => o.destroy());
     this.lowHealthOutlines.length = 0;
+    this.fireCompassArrow?.destroy();
+    this.fireCompassArrow = undefined;
     if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
     if (this.textures.exists('_warm_light')) this.textures.remove('_warm_light');
     if (this.textures.exists('_fog_light')) this.textures.remove('_fog_light');
@@ -685,8 +698,9 @@ export class GameScene extends Phaser.Scene {
 
     // Hide the low-health outline up front; the active-play FX below re-shows it each frame if
     // still low. So any frozen state (dialog, shop, item-get, death) leaves it hidden instead
-    // of stranding it, misaligned, where the hero last was.
+    // of stranding it, misaligned, where the hero last was. Same deal for the fire compass.
     this.hideLowHealthOutlines();
+    this.hideFireCompass();
 
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
     // world frozen here until it finishes — otherwise gameplay would fight the pan.
@@ -763,13 +777,22 @@ export class GameScene extends Phaser.Scene {
     // Warming up by the fire heals: while safe in the ring, mend a heart every HEALTH_REGEN_MS.
     if (this.playerSafe && this.playerHealth < this.playerMaxHealth) {
       this.healthRegenTimer += delta;
+      // The whole time he mends, warm motes stream from the fire into the hero — the healing
+      // visibly comes FROM the campfire, building up gradually until the heart lands.
+      this.healMoteTimer += delta;
+      if (this.healMoteTimer >= HEAL_MOTE_INTERVAL_MS) {
+        this.healMoteTimer = 0;
+        this.spawnHealMote();
+      }
       if (this.healthRegenTimer >= HEALTH_REGEN_MS) {
         this.healthRegenTimer = 0;
         this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
         getSoundManager().playHeartPickup();
+        this.spawnHealBurst();
       }
     } else {
       this.healthRegenTimer = 0;
+      this.healMoteTimer = 0;
     }
 
     if (this.enemyManager) {
@@ -863,6 +886,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.updateLowHealthFx(delta);
+    this.updateFireCompass();
 
     // Felled trees grow back after a while (renewable gravetos = no soft-lock). The clock only
     // ticks while the tile is clear — crucially, a dropped item (the graveto) on the stump
@@ -1111,6 +1135,18 @@ export class GameScene extends Phaser.Scene {
     for (const cf of this.campfires) {
       if (!cf.isLit) continue;
       best = Math.min(best, Math.hypot(cf.worldX - wx, cf.worldY - wy));
+    }
+    return best;
+  }
+
+  /** The nearest LIT campfire (no radius cap) — the fire that is healing/calling the hero. */
+  private nearestLitCampfire(wx: number, wy: number): CampfireObject | undefined {
+    let best: CampfireObject | undefined;
+    let bestD = Infinity;
+    for (const cf of this.campfires) {
+      if (!cf.isLit) continue;
+      const d = Math.hypot(cf.worldX - wx, cf.worldY - wy);
+      if (d < bestD) { bestD = d; best = cf; }
     }
     return best;
   }
@@ -1703,6 +1739,58 @@ export class GameScene extends Phaser.Scene {
         });
       },
     });
+  }
+
+  // One warm ember mote drifting from the nearest lit campfire into the hero — the visible
+  // stream that says "the fire is healing you". Screen-anchored (the hero rests inside the
+  // ring, so both endpoints barely move over a mote's short life), like spawnSmokePuff.
+  private spawnHealMote(): void {
+    if (!this.camera) return;
+    const cf = this.nearestLitCampfire(this.playerWorld.worldX, this.playerWorld.worldY);
+    if (!cf) return;
+    const from = this.camera.tileToScreen(cf.worldX, cf.worldY, this.tileSize);
+    const spread = Math.floor(this.tileSize * 0.22);
+    const size = Math.max(1, Math.floor(this.tileSize * (0.035 + Math.random() * 0.03)));
+    const mote = this.add
+      .circle(
+        from.x + Phaser.Math.Between(-spread, spread),
+        from.y - this.tileSize * 0.3 + Phaser.Math.Between(-spread, 0),
+        size, 0xffc36b, 0.9,
+      )
+      .setDepth(SCENE_DEPTHS.player + 3);
+    // Rise off the flame first, then sink into the hero's chest, shrinking as it's absorbed.
+    this.tweens.add({
+      targets: mote,
+      x: this.camera.screenCenterX + Phaser.Math.Between(-3, 3),
+      y: this.camera.screenCenterY - this.tileSize * 0.12,
+      scale: 0.35,
+      alpha: 0.55,
+      duration: HEAL_MOTE_TRAVEL_MS,
+      ease: 'Sine.easeInOut',
+      onComplete: () => mote.destroy(),
+    });
+  }
+
+  // The heal tick landed: a warm ring blooms out of the hero, the payoff of the mote stream.
+  private spawnHealBurst(): void {
+    if (!this.camera) return;
+    const cx = this.camera.screenCenterX;
+    const cy = this.camera.screenCenterY;
+    const ring = this.add
+      .circle(cx, cy, this.tileSize * 0.22, 0x000000, 0)
+      .setStrokeStyle(Math.max(2, Math.floor(this.tileSize * 0.06)), 0xffc36b, 0.95)
+      .setDepth(SCENE_DEPTHS.player + 3);
+    this.tweens.add({
+      targets: ring,
+      radius: this.tileSize * 0.85,
+      alpha: 0,
+      duration: 430,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+    // Brief warm glow on the hero himself as the heart mends.
+    this.player?.setTint(0xffd9a0);
+    this.time.delayedCall(220, () => { this.player?.clearTint(); });
   }
 
   // A few grey puffs rising where a flame died.
@@ -2807,27 +2895,32 @@ export class GameScene extends Phaser.Scene {
       .setDisplaySize(this.tileSize * 0.6, this.tileSize * 0.26);
   }
 
-  // Low-health heartbeat: on the last hearts, pulse a red PIXEL OUTLINE around the hero — never
-  // tinting the sprite itself, just a border that throbs, faster/stronger the closer to death.
+  // Damage heartbeat: ANY missing health draws a pulsing PIXEL OUTLINE around the hero — never
+  // tinting the sprite itself, just a border that throbs. Merely scratched (even one heart off
+  // full) reads as a calm yellow glow; on the last hearts it turns red, beating faster and
+  // harder the closer to death.
   private updateLowHealthFx(delta: number): void {
-    const low = !this.isDead && this.playerHealth > 0 && this.playerHealth <= LOW_HEALTH_HEARTS;
+    const hurt = !this.isDead && this.playerHealth > 0 && this.playerHealth < this.playerMaxHealth;
     const player = this.player;
-    if (!low || !player) {
+    if (!hurt || !player) {
       this.hideLowHealthOutlines();
-      if (!low) this.heartbeatPhase = 0;
+      if (!hurt) this.heartbeatPhase = 0;
       return;
     }
 
-    // One heart left beats faster/harder than two.
+    // Three tiers: yellow warning above the red threshold, red on the last hearts, and one
+    // heart left beats fastest/hardest of all.
+    const low = this.playerHealth <= LOW_HEALTH_HEARTS;
     const critical = this.playerHealth <= 1;
-    const rate = critical ? 0.010 : 0.006; // radians per ms
-    const intensity = critical ? 0.95 : 0.62;
+    const rate = critical ? 0.010 : low ? 0.006 : 0.0035; // radians per ms
+    const intensity = critical ? 0.95 : low ? 0.62 : 0.38;
     this.heartbeatPhase += delta * rate;
-    // Sharpen the sine into a "thump": calm baseline with a quick red spike.
+    // Sharpen the sine into a "thump": calm baseline with a quick spike.
     const beat = Math.pow((Math.sin(this.heartbeatPhase) + 1) / 2, 3) * intensity;
 
     const w = Math.max(2, Math.round(this.tileSize * 0.08)); // outline thickness (screen px)
-    const alpha = Math.min(1, 0.2 + beat); // always faintly present, spiking on the beat
+    const alpha = Math.min(1, (low ? 0.2 : 0.14) + beat); // always faintly present, spiking on the beat
+    const color = low ? 0xff2a2a : 0xffd23f; // red = danger, yellow = "you've taken damage"
     const frameName = player.frame.name;
     const key = player.texture.key;
     const depth = player.depth - 0.01; // just behind the hero, so only the border shows
@@ -2840,7 +2933,7 @@ export class GameScene extends Phaser.Scene {
         .setScale(player.scaleX, player.scaleY)
         .setPosition(player.x + dx * w, player.y + dy * w)
         .setDepth(depth)
-        .setTintFill(0xff2a2a) // solid red silhouette
+        .setTintFill(color) // solid silhouette in the tier's color
         .setAlpha(alpha)
         .setVisible(true);
     }
@@ -2848,6 +2941,59 @@ export class GameScene extends Phaser.Scene {
 
   private hideLowHealthOutlines(): void {
     for (const o of this.lowHealthOutlines) o.setVisible(false);
+  }
+
+  // Skyrim-compass-style pointer: while the low-health heartbeat is on (and the hero is not
+  // already inside a fire's safe ring), a faint amber arrow orbits him, pointing at the
+  // nearest lit campfire — a dying player always knows which way safety lies. It throbs
+  // in time with the heartbeat outline so both read as one "you are dying, go THERE" signal.
+  private updateFireCompass(): void {
+    const low = !this.isDead && this.playerHealth > 0 && this.playerHealth <= LOW_HEALTH_HEARTS;
+    const cf = low && !this.playerSafe && this.camera
+      ? this.nearestLitCampfire(this.playerWorld.worldX, this.playerWorld.worldY)
+      : undefined;
+    if (!cf || !this.camera) {
+      this.hideFireCompass();
+      return;
+    }
+
+    if (!this.fireCompassArrow) {
+      // A proper arrow (shaft + head), pointing +x at rotation 0; rotated toward the fire.
+      const len = this.tileSize * 0.36;   // total length
+      const sh = this.tileSize * 0.05;    // shaft half-thickness
+      const hh = this.tileSize * 0.14;    // head half-width
+      const neck = len * 0.08;            // where the shaft ends and the head begins
+      this.fireCompassArrow = this.add
+        .polygon(0, 0, [
+          -len * 0.5, -sh,
+          neck, -sh,
+          neck, -hh,
+          len * 0.5, 0,
+          neck, hh,
+          neck, sh,
+          -len * 0.5, sh,
+        ], 0xffc36b, 0.95)
+        .setDepth(SCENE_DEPTHS.ui);
+    }
+
+    const s = this.camera.tileToScreen(cf.worldX, cf.worldY, this.tileSize);
+    const cx = this.camera.screenCenterX;
+    const cy = this.camera.screenCenterY;
+    const ang = Math.atan2(s.y - cy, s.x - cx);
+    const orbit = this.tileSize * FIRE_COMPASS_ORBIT_TILES;
+    // Throb with the same heartbeat as the red outline (updateLowHealthFx advances the phase).
+    const beat = Math.pow((Math.sin(this.heartbeatPhase) + 1) / 2, 3);
+    const alpha = 0.25 + beat * 0.3; // ghostly — a hint at the edge of vision, not a HUD element
+
+    this.fireCompassArrow
+      .setPosition(cx + Math.cos(ang) * orbit, cy + Math.sin(ang) * orbit)
+      .setRotation(ang)
+      .setAlpha(alpha)
+      .setVisible(true);
+  }
+
+  private hideFireCompass(): void {
+    this.fireCompassArrow?.setVisible(false);
   }
 
   private startBreathing(): void {
