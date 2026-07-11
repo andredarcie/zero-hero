@@ -28,6 +28,10 @@
     "epitaph": "Nada fez sentido,\ntudo foi em vão."
   },
   "editorReturn": "[ESC] voltar ao editor",
+  "tutorial": {
+    "move": "Ande nas 4 direções. Segure para continuar andando.",
+    "combat": "O combate é automático: ande na direção do inimigo para atacar."
+  },
   "items": {
     "get": {
       "sword": "VOCÊ PEGOU A ESPADA!",
@@ -59,6 +63,18 @@
   "dialog": {
     "continue": "Continuar.",
     "close": "[Encerrar.]"
+  },
+  "pause": {
+    "title": "PAUSA",
+    "resume": "Continuar",
+    "music": "Música",
+    "sfx": "Efeitos sonoros",
+    "language": "Idioma",
+    "fullscreen": "Tela cheia",
+    "fullscreenExit": "Sair da tela cheia",
+    "restart": "Reiniciar",
+    "quit": "Sair para o título",
+    "confirm": "Tem certeza?"
   },
   "wizard": {
     "intro": [

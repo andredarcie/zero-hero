@@ -2,6 +2,26 @@ const MASTER_VOL = 0.32;
 const MUSIC_VOL = 0.6; // music-bus duck level (under the SFX)
 const AMBIENCE_VOL = 0.4; // the wind bed — always subtle
 
+// Player-facing volume settings (pause menu sliders), persisted like zh.locale. They sit on
+// dedicated user gain stages so they never fight the internal mix: the dialog duck still
+// ramps the music bus, footstep jitter still scales per-sample — the user volume multiplies
+// on top. The wind bed counts as "music" for the player (it IS the world's soundtrack).
+const VOL_MUSIC_KEY = 'zh.musicVol';
+const VOL_SFX_KEY = 'zh.sfxVol';
+
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+
+const loadVol = (storageKey: string): number => {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (raw !== null) {
+      const v = Number(raw);
+      if (Number.isFinite(v)) return clamp01(v);
+    }
+  } catch { /* storage unavailable */ }
+  return 1;
+};
+
 // All audio is generated offline ("Dark Souls weight, SNES timbre" — see
 // public/assets/audio/CREDITS.md): layered SFX with baked echo/reverb tails, plus four
 // seamless music/ambience loops at 32 kHz. This manager decodes and plays the samples;
@@ -60,6 +80,12 @@ const FOOTSTEP_KEYS: readonly SampleKey[] = ['footstep0', 'footstep1', 'footstep
 class SoundManager {
   private ctx: AudioContext | null = null;
   private master!: GainNode; // gain -> "SNES" lowpass -> compressor -> destination
+  // User volume stages (pause-menu sliders): every SFX routes through sfxUserBus, the music
+  // bus and the wind bed route through musicUserBus. Both feed the master chain.
+  private sfxUserBus!: GainNode;
+  private musicUserBus!: GainNode;
+  private musicVol = loadVol(VOL_MUSIC_KEY);
+  private sfxVol = loadVol(VOL_SFX_KEY);
   private readonly buffers = new Map<SampleKey, AudioBuffer>();
   private loadStarted = false;
 
@@ -99,6 +125,12 @@ class SoundManager {
       this.master.connect(warmth);
       warmth.connect(glue);
       glue.connect(this.ctx.destination);
+      this.sfxUserBus = this.ctx.createGain();
+      this.sfxUserBus.gain.value = this.sfxVol;
+      this.sfxUserBus.connect(this.master);
+      this.musicUserBus = this.ctx.createGain();
+      this.musicUserBus.gain.value = this.musicVol;
+      this.musicUserBus.connect(this.master);
     }
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     return this.ctx;
@@ -186,7 +218,7 @@ class SoundManager {
     if (!this.musicBus) {
       this.musicBus = ctx.createGain();
       this.musicBus.gain.value = MUSIC_VOL;
-      this.musicBus.connect(this.master);
+      this.musicBus.connect(this.musicUserBus);
     }
     return this.musicBus;
   }
@@ -222,6 +254,33 @@ class SoundManager {
       old.gain.gain.exponentialRampToValueAtTime(0.0001, now + fadeS);
       try { old.source.stop(now + fadeS + 0.1); } catch { /* already stopped */ }
     }
+  }
+
+  // ── user volume settings (pause menu) ─────────────────────────────────────
+
+  public getMusicVolume(): number { return this.musicVol; }
+  public getSfxVolume(): number { return this.sfxVol; }
+
+  /** Set the player's music+ambience volume (0..1), persisted across sessions. */
+  public setMusicVolume(vol: number): void {
+    this.musicVol = clamp01(vol);
+    try { localStorage.setItem(VOL_MUSIC_KEY, String(this.musicVol)); } catch { /* storage unavailable */ }
+    this.rampUserBus(this.musicUserBus, this.musicVol);
+  }
+
+  /** Set the player's sound-effects volume (0..1), persisted across sessions. */
+  public setSfxVolume(vol: number): void {
+    this.sfxVol = clamp01(vol);
+    try { localStorage.setItem(VOL_SFX_KEY, String(this.sfxVol)); } catch { /* storage unavailable */ }
+    this.rampUserBus(this.sfxUserBus, this.sfxVol);
+  }
+
+  private rampUserBus(bus: GainNode | undefined, target: number): void {
+    if (!this.ctx || !bus) return; // no AudioContext yet — the bus is created with the saved value
+    const now = this.ctx.currentTime;
+    bus.gain.cancelScheduledValues(now);
+    bus.gain.setValueAtTime(bus.gain.value, now);
+    bus.gain.linearRampToValueAtTime(target, now + 0.06);
   }
 
   /** Duck the music down to silence (e.g. while an NPC is talking / item-get plays). */
@@ -261,7 +320,7 @@ class SoundManager {
     const ctx = this.audio;
     const gain = ctx.createGain();
     gain.gain.value = AMBIENCE_VOL;
-    gain.connect(this.master);
+    gain.connect(this.musicUserBus);
     const src = ctx.createBufferSource();
     src.buffer = this.ambienceBuffer;
     src.loop = true;
@@ -287,7 +346,7 @@ class SoundManager {
     const g = ctx.createGain();
     g.gain.value = SAMPLES[key].vol * volScale;
     src.connect(g);
-    g.connect(this.master);
+    g.connect(this.sfxUserBus);
     src.start();
     return true;
   }
@@ -326,7 +385,7 @@ class SoundManager {
     g.gain.linearRampToValueAtTime(vol, t + Math.min(0.005, duration * 0.1));
     g.gain.exponentialRampToValueAtTime(0.001, t + duration);
     o.connect(g);
-    g.connect(this.master);
+    g.connect(this.sfxUserBus);
     o.start(t);
     o.stop(t + duration + 0.01);
   }
@@ -357,7 +416,7 @@ class SoundManager {
     g.gain.exponentialRampToValueAtTime(0.001, t + duration);
     src.connect(f);
     f.connect(g);
-    g.connect(this.master);
+    g.connect(this.sfxUserBus);
     src.start(t);
     src.stop(t + duration + 0.02);
   }
