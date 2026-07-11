@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { ASSET_KEYS, FONT_FAMILY, HERO_FRAMES, SCENE_DEPTHS, TEXT_RESOLUTION } from '@/game/constants';
+import { t } from '@/game/i18n/i18n';
 
 export type UpgradeId = 'maxHealth' | 'swordSpeed' | 'moveSpeed' | 'magnet';
 
@@ -105,7 +106,7 @@ export class ShopOverlay {
     reg(scene.add.rectangle(cx, panelY + panelH / 2, panelW, panelH, 0x0e0c20).setOrigin(0.5).setDepth(DEPTH + 1).setStrokeStyle(2, 0x5533aa));
 
     // header
-    txt(panelX + PAD, panelY + 14, 'LOJA', 10, '#ddc8ff');
+    txt(panelX + PAD, panelY + 14, t('shop.title'), 10, '#ddc8ff');
     this.coinLabel = txt(cx, panelY + 14, `$ ${coins}`, 9, '#ffd700', [0.5, 0]);
 
     // close button
@@ -154,13 +155,13 @@ export class ShopOverlay {
 
       card.bg.setVisible(true);
       card.icon.setVisible(true).setTexture(cfg.iconKey, cfg.iconFrame).setDisplaySize(ICON_SIZE, ICON_SIZE);
-      card.nameText.setVisible(true).setText(cfg.label);
-      card.descText.setVisible(true).setText(cfg.desc);
+      card.nameText.setVisible(true).setText(t(`shop.upgrades.${cfg.id}.label`));
+      card.descText.setVisible(true).setText(t(`shop.upgrades.${cfg.id}.desc`));
       card.dotsText.setVisible(true).setText(dots(level, cfg.maxLevel)).setColor(level > 0 ? '#cc99ff' : '#443355');
 
       card.btnBg.setVisible(true).setFillStyle(maxed ? 0x1a1830 : (affordable ? 0x3a1a88 : 0x1a1038));
 
-      const btnText = maxed ? 'MAXIMO' : `COMPRAR  $ ${cost}`;
+      const btnText = maxed ? t('shop.max') : `${t('shop.buy')}  $ ${cost}`;
       const btnColor = maxed ? '#443355' : (affordable ? '#ffffff' : '#664466');
       card.btnLabel.setVisible(true).setText(btnText).setColor(btnColor);
 

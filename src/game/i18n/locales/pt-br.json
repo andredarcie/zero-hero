@@ -1,0 +1,180 @@
+{
+  "meta": { "code": "pt-br", "htmlLang": "pt-BR", "name": "Português (BR)" },
+  "loading": "Carregando Zero the Hero",
+  "title": {
+    "words": ["ZERO", "THE", "HERO"],
+    "by": "POR",
+    "author": "ANDRÉ N. DARCIE",
+    "prompt": "pressione qualquer tecla"
+  },
+  "language": {
+    "heading": "Escolha o idioma",
+    "hint": "← →  Enter    ·    ou toque",
+    "options": {
+      "pt-br": "Português",
+      "en": "English"
+    }
+  },
+  "intro": {
+    "line1": "Acorde [color=#868e96]Zero[/color]!",
+    "line2": "Você precisa se tornar [color=#1f92ef]Um[/color].",
+    "prompt": "[ pressione qualquer tecla ]"
+  },
+  "endCard": {
+    "title": "Fim da Introdução",
+    "subtitle": "Você concluiu a introdução de Zero The Hero."
+  },
+  "death": {
+    "epitaph": "Nada fez sentido,\ntudo foi em vão."
+  },
+  "editorReturn": "[ESC] voltar ao editor",
+  "items": {
+    "get": {
+      "sword": "VOCÊ PEGOU A ESPADA!",
+      "key": "VOCÊ PEGOU A CHAVE!",
+      "axe": "VOCÊ PEGOU O MACHADO!",
+      "bomb": "VOCÊ PEGOU A BOMBA! [ESPAÇO] SOLTA",
+      "lavaBoots": "VOCÊ PEGOU AS BOTAS DE LAVA!",
+      "pickaxe": "VOCÊ PEGOU A PICARETA!",
+      "scythe": "VOCÊ PEGOU A FOICE!",
+      "wood": "VOCÊ PEGOU UM GRAVETO!"
+    }
+  },
+  "lockedLines": [
+    { "speaker": "npc", "text": "Está escuro demais... eu mal consigo pensar." },
+    { "speaker": "narrator", "text": "A pessoa encara a fogueira apagada, tremendo." },
+    { "speaker": "npc", "text": "Acenda a fogueira. Quando este lugar ficar seguro, a gente conversa." }
+  ],
+  "shop": {
+    "title": "LOJA",
+    "buy": "COMPRAR",
+    "max": "MÁXIMO",
+    "upgrades": {
+      "maxHealth": { "label": "VIDA MAX", "desc": "+1 coração máximo" },
+      "swordSpeed": { "label": "ESPADA +", "desc": "Ataque mais rápido" },
+      "moveSpeed": { "label": "PASSO +", "desc": "Move mais rápido" },
+      "magnet": { "label": "ÍMÃ MOEDAS", "desc": "Atrai moedas próximas" }
+    }
+  },
+  "dialog": {
+    "continue": "Continuar.",
+    "close": "[Encerrar.]"
+  },
+  "wizard": {
+    "intro": [
+      { "speaker": "narrator", "text": "O velho mago ajeita o chapéu. Por um instante, seus olhos encontram os seus." },
+      { "speaker": "npc", "text": "Finalmente... você chegou." },
+      { "speaker": "npc", "text": "Esperei por este momento durante eras." },
+      { "speaker": "npc", "text": "Você veio de terras muito distantes." },
+      { "speaker": "npc", "text": "É Zero... o último herdeiro de uma cruzada esquecida." },
+      { "speaker": "npc", "text": "Mas ainda não é um cavaleiro." },
+      { "speaker": "npc", "text": "Ainda precisa se tornar um." }
+    ],
+    "protect": [
+      { "speaker": "narrator", "text": "O vento sopra pelas ruínas." },
+      { "speaker": "npc", "text": "Esta é a última chama do mundo." },
+      { "speaker": "npc", "text": "Além desta chama... existem apenas trevas." },
+      { "speaker": "npc", "text": "Um vazio onde até a esperança deixou de existir." },
+      { "speaker": "npc", "text": "Proteja esta chama." },
+      { "speaker": "npc", "text": "Enquanto ela continuar acesa... o mundo ainda poderá renascer." }
+    ],
+    "prophecy": [
+      { "speaker": "narrator", "text": "Os olhos do mago brilham." },
+      { "speaker": "npc", "text": "Então... a profecia era verdadeira." },
+      { "speaker": "npc", "text": "Você trilha o caminho descrito pelos antigos." },
+      { "speaker": "npc", "text": "A chama primordial desperta mais uma vez." },
+      { "speaker": "npc", "text": "O que era apenas uma centelha agora começa a iluminar o mundo." },
+      { "speaker": "npc", "text": "Mas lembre-se..." },
+      { "speaker": "npc", "text": "A chama que salvará este mundo é a mesma que arde dentro de você." },
+      { "speaker": "npc", "text": "Não permita que ela se apague." },
+      { "speaker": "npc", "text": "Você jogou a breve introdução de Zero The Hero!" },
+      { "speaker": "npc", "text": "Muito obrigado por tudo!" }
+    ]
+  },
+  "npc": {
+    "blackCat": {
+      "name": "GATO",
+      "lines": [
+        { "speaker": "npc", "text": "Você deve ser o herói que busca encontrar a espada?" },
+        { "speaker": "npc", "text": "Sim. Eu sou um gato falante." },
+        { "speaker": "npc", "text": "E você é um primata pelado numa armadura." },
+        { "speaker": "npc", "text": "Bom, o jogo ainda está na versão Alpha, então acho impossível você encontrar a espada." }
+      ]
+    },
+    "mimic": {
+      "name": "MÍMICO",
+      "lines": [
+        { "speaker": "npc", "text": "Olá! Eu sou um NPC completamente normal." },
+        { "speaker": "narrator", "text": "Ele sorri de um jeito que não parece natural." },
+        { "speaker": "npc", "text": "Não sou um mímico. Isso seria absurdo." },
+        { "speaker": "narrator", "text": "Seus olhos não piscam. Nenhuma vez." },
+        { "speaker": "npc", "text": "Por favor, continue andando." }
+      ]
+    },
+    "astronaut": {
+      "name": "ASTRONAUTA",
+      "lines": [
+        { "speaker": "npc", "text": "Minha nave caiu neste lugar, estou tentando achar as peças dela." },
+        { "speaker": "npc", "text": "Mas acho que caíram numa parte do mapa que não está disponível na versão alpha." }
+      ]
+    },
+    "businessMan": {
+      "name": "EMPRESÁRIO",
+      "lines": [
+        { "speaker": "npc", "text": "Trabalhe duro e você vai encontrar a espada que procura." }
+      ]
+    },
+    "radiationSuit": {
+      "name": "OPERÁRIO",
+      "lines": [
+        { "speaker": "npc", "text": "Usei um machado pra cortar urânio, mas dá pra cortar outras coisas com ele." }
+      ]
+    },
+    "painter": {
+      "name": "ARTISTA",
+      "lines": [
+        { "speaker": "npc", "text": "Você deve ser o guerreiro Zero!" },
+        { "speaker": "npc", "text": "Eu estava numa jornada pra achar o lugar perfeito pra fazer uma pintura." },
+        { "speaker": "npc", "text": "Mas esses arbustos estão atrapalhando." }
+      ]
+    },
+    "salesman": {
+      "name": "VENDEDOR",
+      "lines": [
+        { "speaker": "npc", "text": "Chegou em boa hora. Tenho ofertas irrelevantes e insistentes." },
+        { "speaker": "narrator", "text": "Ele abre a mochila, mas só há recibos amassados." },
+        { "speaker": "npc", "text": "Nada em estoque. Mas posso anotar seu interesse." },
+        { "speaker": "npc", "text": "Volte amanhã. Ou ontem. Minha agenda é flexível." }
+      ]
+    },
+    "poet": {
+      "name": "POETA",
+      "lines": [
+        { "speaker": "npc", "text": "Você não é um herói." },
+        { "speaker": "npc", "text": "Desculpe os modos, é que estou triste." },
+        { "speaker": "npc", "text": "Perdi minha inspiração pra escrever poemas." },
+        { "speaker": "npc", "text": "Imagine um poeta que não escreve poemas — perdi completamente minha identidade." },
+        { "speaker": "npc", "text": "Talvez um dia eu volte a escrever poemas." },
+        { "speaker": "npc", "text": "Sabe que escrever poemas não dá dinheiro nenhum." },
+        { "speaker": "npc", "text": "Dá pra ganhar dinheiro sendo herói?" }
+      ]
+    },
+    "wizard": {
+      "name": "MAGO",
+      "lines": [
+        { "speaker": "npc", "text": "Ah, o escolhido. Senti teus passos ondularem pela trama do destino." },
+        { "speaker": "npc", "text": "Eu poderia conjurar a espada que buscas... mas meu grimório só compila na versão completa." },
+        { "speaker": "npc", "text": "Segue em frente, herói. E cuidado com os magos que preferem lançar feitiços a conversar." }
+      ]
+    },
+    "death": {
+      "name": "MORTE",
+      "lines": [
+        { "speaker": "npc", "text": "Cavaleiro niilista! Você aceita uma partida de xadrez pela sua alma?" },
+        { "speaker": "npc", "text": "Você morreu, mas não chegou ao fim da sua jornada." },
+        { "speaker": "npc", "text": "Obrigado por jogar a versão Alpha do jogo!" },
+        { "speaker": "npc", "text": "Envie seu feedback." }
+      ]
+    }
+  }
+}

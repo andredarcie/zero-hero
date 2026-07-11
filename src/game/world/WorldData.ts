@@ -1,5 +1,6 @@
 import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
+import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
 import type { NpcKind, PickupKind, ScreenContent } from './ScreenContent';
 import { WORLD_SCHEMA_VERSION, type WorldChunk, type WorldData, type WorldProp } from './worldSchema';
@@ -134,15 +135,19 @@ export const getHeldItemPickups = (): Array<{ type: Exclude<PickupKind, 'heart'>
   return out;
 };
 
+// The visual/audio config (portrait sprite, name colour, frame) stays in world.json; the display
+// NAME and spoken LINES come from the active locale catalog, keyed by NPC kind. If the catalog has
+// no entry for this kind, fall back to the world.json text so nothing goes blank.
 export const getDialog = (kind: NpcKind): DialogScript | undefined => {
   const dialog = requireWorld().dialogs[kind];
   if (!dialog) return undefined;
+  const localized = localizedNpc(kind);
   return {
-    npcName: dialog.npcName,
+    npcName: localized?.name ?? dialog.npcName,
     npcColorHex: dialog.npcColorHex,
     npcAssetKey: dialog.npcAssetKey,
     npcFrame: dialog.npcFrame,
-    lines: dialog.lines,
+    lines: localized?.lines ?? dialog.lines,
   };
 };
 

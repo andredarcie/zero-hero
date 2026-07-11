@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { t, tWords } from '@/game/i18n/i18n';
 
 // The game's start screen. Deliberately theatrical: the screen sits dark until the first
 // gesture (which also unlocks audio), then the title assembles ONE WORD PER WATER DROP —
@@ -55,13 +56,13 @@ export class TitleScene extends Phaser.Scene {
       fontFamily: FONT_FAMILY, fontSize: `${creditSize}px`, color: '#7f7a86', resolution: TEXT_RESOLUTION,
     } as const;
 
-    const titleWords = this.layoutRow(['ZERO', 'THE', 'HERO'], width / 2, Math.round(height * 0.42), titleStyle, titleSize * 0.42);
-    const creditWords = this.layoutRow(['POR', 'ANDRÉ N. DARCIE'], width / 2, Math.round(height * 0.60), creditStyle, creditSize * 0.7);
+    const titleWords = this.layoutRow(tWords('title.words'), width / 2, Math.round(height * 0.42), titleStyle, titleSize * 0.42);
+    const creditWords = this.layoutRow([t('title.by'), t('title.author')], width / 2, Math.round(height * 0.60), creditStyle, creditSize * 0.7);
     this.revealTargets = [...titleWords, ...creditWords];
 
     // Quiet prompt — shown before the reveal begins and again once the title is whole.
     this.prompt = this.add
-      .text(width / 2, Math.round(height * 0.80), 'pressione qualquer tecla', {
+      .text(width / 2, Math.round(height * 0.80), t('title.prompt'), {
         fontFamily: FONT_FAMILY,
         fontSize: `${Phaser.Math.Clamp(Math.floor(width / 64), 7, 12)}px`,
         color: '#5a5560',
@@ -193,7 +194,7 @@ export class TitleScene extends Phaser.Scene {
     getSoundManager().unlock(); // first user gesture — lift the autoplay lock
     this.cameras.main.fadeOut(450, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start('intro');
+      this.scene.start('language');
     });
   };
 }

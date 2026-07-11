@@ -3,6 +3,7 @@ import type Phaser from 'phaser';
 import { DIALOG_PANEL_FRACTION, DIALOG_PANEL_MAX_WIDTH } from '@/game/constants';
 import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { t } from '@/game/i18n/i18n';
 
 // Disco Elysium-style conversation skin. It is rendered as plain DOM layered over the
 // Phaser canvas — the same approach the level editor uses (see EditorDomUi). The game
@@ -294,7 +295,7 @@ export class DialogOverlay {
     this.isTyping = false;
     this.activeBody?.classList.remove('zh-typing');
     const isLast = this.lineIndex >= this.script.lines.length - 1;
-    this.optionLabel.textContent = isLast ? '[Encerrar.]' : 'Continuar.';
+    this.optionLabel.textContent = isLast ? t('dialog.close') : t('dialog.continue');
     this.option.classList.add('zh-show');
     // Keep the just-finished line pinned to the bottom, above the options.
     this.log.scrollTop = this.log.scrollHeight;

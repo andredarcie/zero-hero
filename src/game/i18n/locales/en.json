@@ -1,0 +1,180 @@
+{
+  "meta": { "code": "en", "htmlLang": "en", "name": "English" },
+  "loading": "Loading Zero the Hero",
+  "title": {
+    "words": ["ZERO", "THE", "HERO"],
+    "by": "BY",
+    "author": "ANDRÉ N. DARCIE",
+    "prompt": "press any key"
+  },
+  "language": {
+    "heading": "Choose your language",
+    "hint": "← →  Enter    ·    or tap",
+    "options": {
+      "pt-br": "Português",
+      "en": "English"
+    }
+  },
+  "intro": {
+    "line1": "Wake up [color=#868e96]Zero[/color]!",
+    "line2": "You have to become [color=#1f92ef]One[/color].",
+    "prompt": "[ press any key ]"
+  },
+  "endCard": {
+    "title": "End of the Introduction",
+    "subtitle": "You've completed the introduction of Zero The Hero."
+  },
+  "death": {
+    "epitaph": "Nothing made sense,\nit was all for nothing."
+  },
+  "editorReturn": "[ESC] back to editor",
+  "items": {
+    "get": {
+      "sword": "YOU GOT THE SWORD!",
+      "key": "YOU GOT THE KEY!",
+      "axe": "YOU GOT THE AXE!",
+      "bomb": "YOU GOT THE BOMB! [SPACE] DROP",
+      "lavaBoots": "YOU GOT THE LAVA BOOTS!",
+      "pickaxe": "YOU GOT THE PICKAXE!",
+      "scythe": "YOU GOT THE SCYTHE!",
+      "wood": "YOU GOT A STICK!"
+    }
+  },
+  "lockedLines": [
+    { "speaker": "npc", "text": "It's too dark... I can barely think." },
+    { "speaker": "narrator", "text": "The person stares at the dead fire, shivering." },
+    { "speaker": "npc", "text": "Light the fire. When this place is safe, we can talk." }
+  ],
+  "shop": {
+    "title": "SHOP",
+    "buy": "BUY",
+    "max": "MAX",
+    "upgrades": {
+      "maxHealth": { "label": "MAX HP", "desc": "+1 max heart" },
+      "swordSpeed": { "label": "SWORD +", "desc": "Faster attack" },
+      "moveSpeed": { "label": "STEP +", "desc": "Move faster" },
+      "magnet": { "label": "COIN MAGNET", "desc": "Pulls nearby coins" }
+    }
+  },
+  "dialog": {
+    "continue": "Continue.",
+    "close": "[Close.]"
+  },
+  "wizard": {
+    "intro": [
+      { "speaker": "narrator", "text": "The old wizard adjusts his hat. For a moment, his eyes meet yours." },
+      { "speaker": "npc", "text": "Finally... you've arrived." },
+      { "speaker": "npc", "text": "I have waited for this moment for ages." },
+      { "speaker": "npc", "text": "You have come from lands far away." },
+      { "speaker": "npc", "text": "You are Zero... the last heir of a forgotten crusade." },
+      { "speaker": "npc", "text": "But you are not a knight yet." },
+      { "speaker": "npc", "text": "You still have to become one." }
+    ],
+    "protect": [
+      { "speaker": "narrator", "text": "The wind blows through the ruins." },
+      { "speaker": "npc", "text": "This is the last flame of the world." },
+      { "speaker": "npc", "text": "Beyond this flame... there is only darkness." },
+      { "speaker": "npc", "text": "A void where even hope has ceased to exist." },
+      { "speaker": "npc", "text": "Protect this flame." },
+      { "speaker": "npc", "text": "As long as it stays lit... the world can still be reborn." }
+    ],
+    "prophecy": [
+      { "speaker": "narrator", "text": "The wizard's eyes shine." },
+      { "speaker": "npc", "text": "So... the prophecy was true." },
+      { "speaker": "npc", "text": "You walk the path described by the ancients." },
+      { "speaker": "npc", "text": "The primordial flame awakens once more." },
+      { "speaker": "npc", "text": "What was only a spark now begins to light the world." },
+      { "speaker": "npc", "text": "But remember..." },
+      { "speaker": "npc", "text": "The flame that will save this world is the same one that burns within you." },
+      { "speaker": "npc", "text": "Do not let it go out." },
+      { "speaker": "npc", "text": "You've played the brief introduction of Zero The Hero!" },
+      { "speaker": "npc", "text": "Thank you so much for everything!" }
+    ]
+  },
+  "npc": {
+    "blackCat": {
+      "name": "CAT",
+      "lines": [
+        { "speaker": "npc", "text": "You must be the hero who seeks to find the sword?" },
+        { "speaker": "npc", "text": "Yes. I am a talking cat." },
+        { "speaker": "npc", "text": "And you're a naked primate in an armor." },
+        { "speaker": "npc", "text": "Well, the game is still in the Alpha version, so I think it's impossible for you to find the sword." }
+      ]
+    },
+    "mimic": {
+      "name": "MIMIC",
+      "lines": [
+        { "speaker": "npc", "text": "Hello! I'm a completely normal NPC." },
+        { "speaker": "narrator", "text": "He smiles in a way that doesn't look natural." },
+        { "speaker": "npc", "text": "I'm not a mimic. That would be absurd." },
+        { "speaker": "narrator", "text": "His eyes don't blink. Not once." },
+        { "speaker": "npc", "text": "Please, keep walking." }
+      ]
+    },
+    "astronaut": {
+      "name": "ASTRONAUT",
+      "lines": [
+        { "speaker": "npc", "text": "My ship crashed in this place, I'm trying to find its parts." },
+        { "speaker": "npc", "text": "But I think they landed on a part of the map that isn't available in the alpha version." }
+      ]
+    },
+    "businessMan": {
+      "name": "BUSINESSMAN",
+      "lines": [
+        { "speaker": "npc", "text": "Work hard and you'll find the sword you're looking for." }
+      ]
+    },
+    "radiationSuit": {
+      "name": "WORKMAN",
+      "lines": [
+        { "speaker": "npc", "text": "I used an axe to cut uranium, but you can cut other things with it." }
+      ]
+    },
+    "painter": {
+      "name": "ARTIST",
+      "lines": [
+        { "speaker": "npc", "text": "You must be the warrior Zero!" },
+        { "speaker": "npc", "text": "I was on a journey to find the perfect place to do a painting." },
+        { "speaker": "npc", "text": "But these bushes are getting in the way." }
+      ]
+    },
+    "salesman": {
+      "name": "SALESMAN",
+      "lines": [
+        { "speaker": "npc", "text": "You came at a good time. I've got offers that are irrelevant and insistent." },
+        { "speaker": "narrator", "text": "He opens his backpack, but there are only crumpled receipts." },
+        { "speaker": "npc", "text": "Nothing in stock. But I can write down your interest." },
+        { "speaker": "npc", "text": "Come back tomorrow. Or yesterday. My schedule is flexible." }
+      ]
+    },
+    "poet": {
+      "name": "POET",
+      "lines": [
+        { "speaker": "npc", "text": "You are not a hero." },
+        { "speaker": "npc", "text": "Sorry for my manners, it's just that I'm sad." },
+        { "speaker": "npc", "text": "I lost my inspiration to write poems." },
+        { "speaker": "npc", "text": "Imagine a poet who doesn't write poems, I totally lost my identity." },
+        { "speaker": "npc", "text": "Maybe one day I can get back to writing poems." },
+        { "speaker": "npc", "text": "You know that writing poems doesn't make any money." },
+        { "speaker": "npc", "text": "Can you make money being a hero?" }
+      ]
+    },
+    "wizard": {
+      "name": "WIZARD",
+      "lines": [
+        { "speaker": "npc", "text": "Ah, the chosen one. I felt your steps ripple through the weave of destiny." },
+        { "speaker": "npc", "text": "I could conjure the sword you seek... but my grimoire only compiles in the full version." },
+        { "speaker": "npc", "text": "Go forth, hero. And beware the wizards who'd rather cast spells than talk." }
+      ]
+    },
+    "death": {
+      "name": "DEATH",
+      "lines": [
+        { "speaker": "npc", "text": "Nihilist knight! Do you accept a game of chess for your soul?" },
+        { "speaker": "npc", "text": "You died, but you haven't reached the end of your journey." },
+        { "speaker": "npc", "text": "Thanks for playing the Alpha version of the game!" },
+        { "speaker": "npc", "text": "Submit your feedback." }
+      ]
+    }
+  }
+}

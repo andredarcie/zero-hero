@@ -25,7 +25,7 @@ import {
   TORCH_BURN_MS,
   ySortDepth,
 } from '@/game/constants';
-import { WIZARD_STORY, type DialogScript, type DialogVoice } from '@/game/dialogs/NpcDialogs';
+import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/game/debug/debugHooks';
 import { CoinManager } from '@/game/entities/CoinManager';
 import { EnemyManager } from '@/game/entities/EnemyManager';
@@ -45,6 +45,7 @@ import { WaterObject } from '@/game/objects/WaterObject';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
+import { t, tLines } from '@/game/i18n/i18n';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
@@ -81,13 +82,20 @@ import {
 // (matching the game's pixel-art scale) instead of a smooth high-res gradient. Higher = chunkier.
 const LIGHT_DOWNSCALE = 6;
 
+// The low-res light/fog overlays bleed this many texels past every screen edge: their position is
+// shifted up-left and their size padded on both axes, so the visible viewport falls strictly inside
+// the fully-filled interior of the texture. Without this, upscaling the RenderTexture with NEAREST
+// leaves a ~1px seam at an edge (notably the very top) where the fog/dark is missing. Erase/draw
+// coordinates in updateLighting are inset by LIGHT_MARGIN texels to keep light holes aligned.
+const LIGHT_MARGIN = 1;
+
 // Firelight isn't just "un-dark" — fire sources (campfires + lava) stamp a warm amber pool over
 // the already-dimmed ground so a flame visibly warms the world, against the cold-blue dark. The
 // pool sits slightly inside the light circle (WARM_POOL_SCALE < 1) so its rim fades back to
 // neutral before the darkness; WARM_INTENSITY is the additive strength of the amber core. The
 // hero's own glow deliberately stays neutral, so only real fire reads as warm.
 const WARM_POOL_SCALE = 0.82;
-const WARM_INTENSITY = 0.85;
+const WARM_INTENSITY = 0.5;
 
 // Distance fog — a second, deeper darkness layer stacked over the base dim. It is FULL everywhere
 // and only clears in a WIDE, soft halo around each light source (campfire, hero, NPC, lava), so
@@ -96,7 +104,7 @@ const WARM_INTENSITY = 0.85;
 // of vision. Rendered into the same low-res overlay → chunky pixel fog, matching the light style.
 // FOG_MAX_ALPHA = how black the far dark gets (on top of the base dim); FOG_LIFT_SCALE = how far
 // past a light's own glow the fog is pushed back (× the light radius); FOG_COLOR = its cold tint.
-const FOG_MAX_ALPHA = 0.6;
+const FOG_MAX_ALPHA = 0.38;
 const FOG_LIFT_SCALE = 2.15;
 const FOG_COLOR = 0x02030d;
 
@@ -169,14 +177,6 @@ const TIMBER_MAX_SPAN = 3;
 // How long to hide the back item during a swing (a touch longer than SwordSlash's arc + fade,
 // ~155 + 65ms) so the item never shows on the back and in the swing arc at the same time.
 const SWING_HIDE_MS = 240;
-
-// Shown in place of an NPC's real dialog while the campfire beside them is still dead: they
-// are too frightened of the dark to talk until the fire is lit and the ground turns safe.
-const NPC_LOCKED_LINES: DialogScript['lines'] = [
-  { speaker: 'npc', text: 'Esta escuro demais... eu mal consigo pensar.' },
-  { speaker: 'narrator', text: 'A pessoa encara a fogueira apagada, tremendo.' },
-  { speaker: 'npc', text: 'Acenda a fogueira. Quando este lugar ficar seguro, a gente conversa.' },
-];
 
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
@@ -440,7 +440,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private enableEditorReturn(): void {
-    this.add.text(this.scale.width - 8, 8, '[ESC] voltar ao editor', {
+    this.add.text(this.scale.width - 8, 8, t('editorReturn'), {
       fontFamily: FONT_FAMILY,
       fontSize: '10px',
       color: '#f4a261',
@@ -558,15 +558,18 @@ export class GameScene extends Phaser.Scene {
     this.footprints.length = 0;
     this.lightCircleImg?.destroy();
     this.warmLightImg?.destroy();
+    this.fogLightImg?.destroy();
     this.castShadowPool?.destroy();
     this.castShadowPool = undefined;
     this.darknessOverlay?.destroy();
     this.warmOverlay?.destroy();
+    this.fogOverlay?.destroy();
     this.playerShadow?.destroy();
     this.lowHealthOutlines.forEach((o) => o.destroy());
     this.lowHealthOutlines.length = 0;
     if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
     if (this.textures.exists('_warm_light')) this.textures.remove('_warm_light');
+    if (this.textures.exists('_fog_light')) this.textures.remove('_fog_light');
     this.swordSlash = undefined;
     this.campfires = [];
     this.dryBushes = [];
@@ -580,8 +583,10 @@ export class GameScene extends Phaser.Scene {
     this.activeBombs = [];
     this.lightCircleImg = undefined;
     this.warmLightImg = undefined;
+    this.fogLightImg = undefined;
     this.darknessOverlay = undefined;
     this.warmOverlay = undefined;
+    this.fogOverlay = undefined;
     this.playerShadow = undefined;
     this.heartbeatPhase = 0;
   }
@@ -865,20 +870,29 @@ export class GameScene extends Phaser.Scene {
     this.player?.setDisplaySize(this.tileSize, this.tileSize);
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
 
+    const g = this.lightOverlayGeom(width, height);
     if (this.darknessOverlay) {
       this.darknessOverlay
-        .setPosition(0, 0)
+        .setPosition(g.x, g.y)
         .setScale(LIGHT_DOWNSCALE)
-        .resize(Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)));
+        .resize(g.texW, g.texH);
       this.darknessOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
 
     if (this.warmOverlay) {
       this.warmOverlay
-        .setPosition(0, 0)
+        .setPosition(g.x, g.y)
         .setScale(LIGHT_DOWNSCALE)
-        .resize(Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)));
+        .resize(g.texW, g.texH);
       this.warmOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
+
+    if (this.fogOverlay) {
+      this.fogOverlay
+        .setPosition(g.x, g.y)
+        .setScale(LIGHT_DOWNSCALE)
+        .resize(g.texW, g.texH);
+      this.fogOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
   }
 
@@ -1683,11 +1697,9 @@ export class GameScene extends Phaser.Scene {
     if (!base) return;
     const state = this.wizardStoryState();
     if (state === 'intro') this.wizardIntroSeen = true;
-    const lines = state === 'intro' ? WIZARD_STORY.intro
-      : state === 'protect' ? WIZARD_STORY.protect
-      : WIZARD_STORY.prophecy;
+    const lines = tLines(`wizard.${state}`);
     this.openDialogScript(
-      { ...base, lines: [...lines] },
+      { ...base, lines },
       npcWorld,
       getDialogVoice('wizard'),
       state === 'prophecy' ? () => this.playIntroEnding() : undefined,
@@ -1730,7 +1742,7 @@ export class GameScene extends Phaser.Scene {
   private gateDialog(script: DialogScript, npcWorld?: { worldX: number; worldY: number }): DialogScript {
     if (!npcWorld) return script;
     const cf = this.nearestCampfireWithin(npcWorld.worldX, npcWorld.worldY, NPC_GATE_RADIUS_TILES);
-    if (cf && !cf.isLit) return { ...script, lines: NPC_LOCKED_LINES };
+    if (cf && !cf.isLit) return { ...script, lines: tLines('lockedLines') };
     return script;
   }
 
@@ -2096,7 +2108,7 @@ export class GameScene extends Phaser.Scene {
     // once so everything realigns to the final camera before the ceremony freezes it (otherwise
     // props/items look shifted a tile until the overlay closes).
     this.reprojectStatic();
-    this.itemGetOverlay = new ItemGetOverlay(this, ITEM_GET_CFG[kind], () => {
+    this.itemGetOverlay = new ItemGetOverlay(this, { ...ITEM_GET_CFG[kind], label: t(`items.get.${kind}`) }, () => {
       this.itemGetOverlay?.destroy();
       this.itemGetOverlay = undefined;
       this.itemGetOpen = false;
@@ -2154,7 +2166,7 @@ export class GameScene extends Phaser.Scene {
       duration: 1900,
       ease: 'Sine.easeIn',
       onComplete: () => {
-        const title = this.add.text(width / 2, Math.round(height * 0.44), 'Fim da Introdução', {
+        const title = this.add.text(width / 2, Math.round(height * 0.44), t('endCard.title'), {
           fontFamily: "Georgia, 'Times New Roman', 'Book Antiqua', serif",
           fontStyle: 'italic',
           fontSize: `${Math.max(24, Math.min(52, Math.round(height * 0.05)))}px`,
@@ -2162,7 +2174,7 @@ export class GameScene extends Phaser.Scene {
           align: 'center',
           resolution: 2,
         }).setOrigin(0.5).setAlpha(0).setDepth(D + 1);
-        const sub = this.add.text(width / 2, Math.round(height * 0.56), 'Você concluiu a introdução de Zero The Hero.', {
+        const sub = this.add.text(width / 2, Math.round(height * 0.56), t('endCard.subtitle'), {
           fontFamily: "Georgia, 'Times New Roman', serif",
           fontSize: `${Math.max(13, Math.min(26, Math.round(height * 0.024)))}px`,
           color: '#b7ad98',
@@ -2236,7 +2248,7 @@ export class GameScene extends Phaser.Scene {
       ease: 'Sine.easeIn',
       onComplete: () => {
         // 3. The epitaph rises out of the dark, in the middle of the screen.
-        const line = this.add.text(cx, cy, 'Nada fez sentido,\ntudo foi em vão.', {
+        const line = this.add.text(cx, cy, t('death.epitaph'), {
           fontFamily: "Georgia, 'Times New Roman', 'Book Antiqua', serif",
           fontStyle: 'italic',
           fontSize: `${Math.max(22, Math.min(48, Math.round(height * 0.046)))}px`,
@@ -2266,6 +2278,17 @@ export class GameScene extends Phaser.Scene {
       this.input.once(Phaser.Input.Events.POINTER_DOWN, skip);
       this.input.keyboard?.once('keydown', skip);
     });
+  }
+
+  // Position + texel size for the low-res light overlays, bled LIGHT_MARGIN texels past every
+  // screen edge (see the constant) so the viewport sits strictly inside the filled interior.
+  private lightOverlayGeom(width: number, height: number): { x: number; y: number; texW: number; texH: number } {
+    return {
+      x: -LIGHT_MARGIN * LIGHT_DOWNSCALE,
+      y: -LIGHT_MARGIN * LIGHT_DOWNSCALE,
+      texW: Math.ceil(width / LIGHT_DOWNSCALE) + LIGHT_MARGIN * 2,
+      texH: Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)) + LIGHT_MARGIN * 2,
+    };
   }
 
   private initLighting(): void {
@@ -2333,12 +2356,13 @@ export class GameScene extends Phaser.Scene {
     this.textures.get('_fog_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
 
     const { width, height } = this.scale;
+    const g = this.lightOverlayGeom(width, height);
 
     // Darkness + light holes render into a LOW-RESOLUTION texture (1/LIGHT_DOWNSCALE) that is
     // scaled back up with NEAREST, so the whole light — body and edge — reads as chunky pixel
     // art. Every erase coordinate/radius in updateLighting is divided by LIGHT_DOWNSCALE.
     this.darknessOverlay = this.add
-      .renderTexture(0, 0, Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)))
+      .renderTexture(g.x, g.y, g.texW, g.texH)
       .setOrigin(0)
       .setScale(LIGHT_DOWNSCALE)
       .setDepth(SCENE_DEPTHS.lighting);
@@ -2347,7 +2371,7 @@ export class GameScene extends Phaser.Scene {
     // Warm firelight layer, one notch above the darkness so its amber pools sit on the already
     // dimmed ground. ADD blend: transparent everywhere except where a fire stamps its glow.
     this.warmOverlay = this.add
-      .renderTexture(0, 0, Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)))
+      .renderTexture(g.x, g.y, g.texW, g.texH)
       .setOrigin(0)
       .setScale(LIGHT_DOWNSCALE)
       .setDepth(SCENE_DEPTHS.lighting + 0.1)
@@ -2358,7 +2382,7 @@ export class GameScene extends Phaser.Scene {
     // is full everywhere each frame, then every light erases a wide halo into it, so the dark grows
     // thicker the farther a tile is from any flame. Same low-res texture → chunky pixel fog.
     this.fogOverlay = this.add
-      .renderTexture(0, 0, Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)))
+      .renderTexture(g.x, g.y, g.texW, g.texH)
       .setOrigin(0)
       .setScale(LIGHT_DOWNSCALE)
       .setDepth(SCENE_DEPTHS.lighting + 0.05);
@@ -2411,7 +2435,7 @@ export class GameScene extends Phaser.Scene {
     // 1/S the screen size, so coordinates and sizes are divided by S before erasing.
     const eraseLight = (sx: number, sy: number, radius: number): void => {
       light.setDisplaySize((radius * 2) / S, (radius * 2) / S);
-      rt.erase(light, sx / S, sy / S);
+      rt.erase(light, sx / S + LIGHT_MARGIN, sy / S + LIGHT_MARGIN);
     };
 
     // Warm firelight layer: cleared each frame, then fire sources stamp an amber pool into it.
@@ -2422,7 +2446,7 @@ export class GameScene extends Phaser.Scene {
       if (!warm || !warmImg || intensity <= 0) return;
       warmImg.setAlpha(intensity);
       warmImg.setDisplaySize((radius * 2) / S, (radius * 2) / S);
-      warm.draw(warmImg, sx / S, sy / S);
+      warm.draw(warmImg, sx / S + LIGHT_MARGIN, sy / S + LIGHT_MARGIN);
     };
 
     // Distance fog: full deep dark each frame, then every light pushes it back in a wide halo. The
@@ -2441,7 +2465,7 @@ export class GameScene extends Phaser.Scene {
       fogImg.setAlpha(strength);
       const r = radius * FOG_LIFT_SCALE;
       fogImg.setDisplaySize((r * 2) / S, (r * 2) / S);
-      fog.erase(fogImg, sx / S, sy / S);
+      fog.erase(fogImg, sx / S + LIGHT_MARGIN, sy / S + LIGHT_MARGIN);
     };
 
     // Campfire glow (flickers) — only lit fires punch a hole in the dark AND warm the ground.
@@ -2450,6 +2474,7 @@ export class GameScene extends Phaser.Scene {
       if (!cf.isLit) continue;
       const cfScreen = this.camera.tileToScreen(cf.worldX, cf.worldY, this.tileSize);
       eraseLight(cfScreen.x, cfScreen.y, cfRadius);
+      liftFog(cfScreen.x, cfScreen.y, cfRadius);
       drawWarm(cfScreen.x, cfScreen.y, cfRadius * WARM_POOL_SCALE, WARM_INTENSITY);
     }
 
@@ -2460,6 +2485,7 @@ export class GameScene extends Phaser.Scene {
       const s = this.camera.tileToScreen(cl.worldX, cl.worldY, this.tileSize);
       const r = this.tileSize * LIGHT_RADIUS_TILES * cl.progress;
       eraseLight(s.x, s.y, r);
+      liftFog(s.x, s.y, r, cl.progress);
       drawWarm(s.x, s.y, r * WARM_POOL_SCALE, WARM_INTENSITY * cl.progress);
     }
 
@@ -2468,6 +2494,7 @@ export class GameScene extends Phaser.Scene {
     const bodyRadius = this.tileSize * LIGHT_RADIUS_TILES;
     if (this.cutsceneHeroLight > 0.001) {
       eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius * this.cutsceneHeroLight);
+      liftFog(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius, this.cutsceneHeroLight);
     }
 
     // NPCs carry the same glow. Undead carry NO light: they are creatures of the dark and
@@ -2475,6 +2502,7 @@ export class GameScene extends Phaser.Scene {
     for (const pos of this.npcManager?.getActiveWorldPositions() ?? []) {
       const s = this.camera.tileToScreen(pos.worldX, pos.worldY, this.tileSize);
       eraseLight(s.x, s.y, bodyRadius);
+      liftFog(s.x, s.y, bodyRadius);
     }
 
     // Coins — a smaller hole.
@@ -2490,6 +2518,7 @@ export class GameScene extends Phaser.Scene {
     for (const lv of this.lavaTiles) {
       const s = this.camera.tileToScreen(lv.worldX, lv.worldY, this.tileSize);
       eraseLight(s.x, s.y, lavaRadius);
+      liftFog(s.x, s.y, lavaRadius);
       drawWarm(s.x, s.y, lavaRadius * 1.15, WARM_INTENSITY);
     }
   }

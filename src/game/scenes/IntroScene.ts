@@ -5,6 +5,7 @@ import {
   HERO_FRAMES, MIN_BOARD_TILE_SIZE, TEXT_RESOLUTION,
 } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { t } from '@/game/i18n/i18n';
 import { createBoardMetrics } from '@/game/shared/grid';
 
 type Segment = { text: string; color: string };
@@ -16,11 +17,9 @@ const LINE_PAUSE_MS = 650;
 // ends the intro. Long enough for the singing bowl to swell and both voice lines to speak.
 const GROW_MS = 7000;
 
-// "Woman's Voice" — intro screen. [color=...] words are colored inline.
-const INTRO_LINES: readonly string[] = [
-  'Wake up [color=#868e96]Zero[/color]!',
-  'You have to become [color=#1f92ef]One[/color].',
-];
+// "Woman's Voice" — intro screen, from the active locale. [color=...] words are colored inline
+// (translators keep the markup around the highlighted word: "Zero"/"One").
+const introLines = (): readonly string[] => [t('intro.line1'), t('intro.line2')];
 
 const parseColorMarkup = (line: string): Segment[] => {
   const segments: Segment[] = [];
@@ -114,7 +113,7 @@ export class IntroScene extends Phaser.Scene {
     const res = TEXT_RESOLUTION;
     const lineYs = [Math.round(height * 0.62), Math.round(height * 0.72)];
 
-    INTRO_LINES.forEach((raw, i) => {
+    introLines().forEach((raw, i) => {
       const segs = parseColorMarkup(raw);
       const texts = segs.map((s) =>
         this.add
@@ -182,7 +181,7 @@ export class IntroScene extends Phaser.Scene {
   }
 
   private onLineComplete(index: number): void {
-    if (index < INTRO_LINES.length - 1) {
+    if (index < this.lineFullText.length - 1) {
       this.time.delayedCall(LINE_PAUSE_MS, () => {
         if (!this.starting) this.typeLine(index + 1);
       });
@@ -196,7 +195,7 @@ export class IntroScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const res = TEXT_RESOLUTION;
     this.promptText = this.add
-      .text(width / 2, Math.round(height * 0.9), '[ press any key ]', {
+      .text(width / 2, Math.round(height * 0.9), t('intro.prompt'), {
         fontFamily: FONT_FAMILY,
         fontSize: '7px',
         color: '#5a6472',

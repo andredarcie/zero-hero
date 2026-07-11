@@ -1,7 +1,12 @@
 import '@/styles/global.css';
 import { ZeroTheHeroGame } from '@/game/ZeroTheHeroGame';
+import { applyHtmlLang } from '@/game/i18n/i18n';
 
 const appMode = window.location.pathname.endsWith('/editor') ? 'editor' : 'game';
+
+// Reflect the detected/saved locale on <html lang> before the game boots (the language screen
+// updates it again once the player picks).
+applyHtmlLang();
 
 declare global {
   interface Window {

@@ -156,38 +156,6 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
   },
 };
 
-// The wizard's story dialogue, which advances with the player's progress (see
-// GameScene.wizardStoryState): the first meeting once they carry the sword and have relit their
-// first fire, the "protect the flame" beat on later visits, and the closing prophecy after the
-// SECOND fire — which ends the intro and returns to the title screen.
-export const WIZARD_STORY: { intro: DialogLine[]; protect: DialogLine[]; prophecy: DialogLine[] } = {
-  intro: [
-    r('O velho mago ajeita o chapéu. Por um instante, seus olhos encontram os seus.'),
-    n('Finalmente... você chegou.'),
-    n('Esperei por este momento durante eras.'),
-    n('Você veio de terras muito distantes.'),
-    n('É Zero... o último herdeiro de uma cruzada esquecida.'),
-    n('Mas ainda não é um cavaleiro.'),
-    n('Ainda precisa se tornar um.'),
-  ],
-  protect: [
-    r('O vento sopra pelas ruínas.'),
-    n('Esta é a última chama do mundo.'),
-    n('Além desta chama... existem apenas trevas.'),
-    n('Um vazio onde até a esperança deixou de existir.'),
-    n('Proteja esta chama.'),
-    n('Enquanto ela continuar acesa... o mundo ainda poderá renascer.'),
-  ],
-  prophecy: [
-    r('Os olhos do mago brilham.'),
-    n('Então... a profecia era verdadeira.'),
-    n('Você trilha o caminho descrito pelos antigos.'),
-    n('A chama primordial desperta mais uma vez.'),
-    n('O que era apenas uma centelha agora começa a iluminar o mundo.'),
-    n('Mas lembre-se...'),
-    n('A chama que salvará este mundo é a mesma que arde dentro de você.'),
-    n('Não permita que ela se apague.'),
-    n('Você jogou a breve introdução de Zero The Hero!'),
-    n('Muito obrigado por tudo!'),
-  ],
-};
+// NOTE: the wizard's story beats (intro / protect / prophecy) and the campfire "locked" lines used
+// to live here as constants; they now live in the locale catalogs (src/game/i18n/locales/*.json)
+// under the keys `wizard.*` and `lockedLines`, read at runtime via i18n's tLines().
