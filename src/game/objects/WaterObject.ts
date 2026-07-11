@@ -31,6 +31,11 @@ const PLANK_FILLS = [0x8a6038, 0x6f4a2c] as const;
 const PLANK_HILITE = 0xb2884f; // sunlit top edge of each board
 const PLANK_SHADOW = 0x120a04; // board's own drop shadow (kept faint)
 
+// The very first board (index 0) stays a lot more solid than the rest, even with zero gravetos
+// deposited — a single "sample plank" sitting on the bank so a buildable spot reads at a glance,
+// before the player is close enough to notice the faint full-bridge ghost outline.
+const SAMPLE_PLANK_ALPHA = 0.62;
+
 interface Slat {
   group: Phaser.GameObjects.Container;
   body: Phaser.GameObjects.Rectangle;
@@ -361,7 +366,8 @@ export class WaterObject {
       if (slat.animating) return;
       const isLaid = i < laid;
       slat.laid = isLaid;
-      slat.group.setAlpha(isLaid ? 1 : pulse);
+      const ghostAlpha = i === 0 ? SAMPLE_PLANK_ALPHA : pulse;
+      slat.group.setAlpha(isLaid ? 1 : ghostAlpha);
       slat.group.setScale(1, 1);
       slat.group.setPosition(0, slat.restY);
       slat.shadow.setVisible(isLaid);
