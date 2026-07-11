@@ -28,10 +28,6 @@
     "epitaph": "Nada fez sentido,\ntudo foi em vão."
   },
   "editorReturn": "[ESC] voltar ao editor",
-  "tutorial": {
-    "move": "Ande nas 4 direções. Segure para continuar andando.",
-    "combat": "O combate é automático: ande na direção do inimigo para atacar."
-  },
   "items": {
     "get": {
       "sword": "VOCÊ PEGOU A ESPADA!",

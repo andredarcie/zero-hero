@@ -28,10 +28,6 @@
     "epitaph": "Nothing made sense,\nit was all for nothing."
   },
   "editorReturn": "[ESC] back to editor",
-  "tutorial": {
-    "move": "Move in the 4 directions. Hold to keep walking.",
-    "combat": "Combat is automatic: walk toward an enemy to attack it."
-  },
   "items": {
     "get": {
       "sword": "YOU GOT THE SWORD!",

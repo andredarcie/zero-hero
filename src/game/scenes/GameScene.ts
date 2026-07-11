@@ -181,13 +181,6 @@ const TIMBER_MAX_SPAN = 3;
 // ~155 + 65ms) so the item never shows on the back and in the swing arc at the same time.
 const SWING_HIDE_MS = 240;
 
-// After how many real tiles walked the "how to move" balloon has done its job and hands off
-// to the combat hint, and how long that second balloon lingers before fading on its own.
-const TUTORIAL_MOVE_STEPS = 6;
-const TUTORIAL_COMBAT_HOLD_MS = 6000;
-// Module-scoped so a death restart (scene.restart re-runs create) doesn't re-teach walking.
-let tutorialSeenThisSession = false;
-
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
 
@@ -321,13 +314,6 @@ export class GameScene extends Phaser.Scene {
   // "You need this item" balloon over the hero's head (see showNeedItemHint)
   private needItemHint?: Phaser.GameObjects.Container;
   private needItemHintTween?: Phaser.Tweens.Tween;
-
-  // First-minutes tutorial balloon (see showTutorialBalloon): 'move' pops at spawn, hands
-  // off to 'combat' once the hero has walked a few real tiles, then everything goes away.
-  private tutorialBalloon?: Phaser.GameObjects.Container;
-  private tutorialStep: 'move' | 'combat' | 'done' = 'done';
-  private tutorialStepsTaken = 0;
-  private tutorialFadeTimer?: Phaser.Time.TimerEvent;
 
   public constructor() {
     super(GameScene.key);
@@ -478,14 +464,6 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.input.keyboard?.on('keydown-ESC', () => this.openPauseMenu());
       if (isTouchDevice()) this.pauseTouchButton = new PauseTouchButton(() => this.openPauseMenu());
-      // Teach the very first thing the player must do. Skipped in editor playtests (the
-      // designer already knows how to walk) and on death restarts (once per page load).
-      if (!tutorialSeenThisSession) {
-        tutorialSeenThisSession = true;
-        this.tutorialStep = 'move';
-        this.tutorialStepsTaken = 0;
-        this.showTutorialBalloon(t('tutorial.move'));
-      }
     }
   }
 
@@ -645,11 +623,6 @@ export class GameScene extends Phaser.Scene {
     this.needItemHintTween = undefined;
     this.needItemHint?.destroy();
     this.needItemHint = undefined;
-    this.tutorialFadeTimer?.remove();
-    this.tutorialFadeTimer = undefined;
-    this.tutorialBalloon?.destroy();
-    this.tutorialBalloon = undefined;
-    this.tutorialStep = 'done';
     this.footprints.length = 0;
     this.lightCircleImg?.destroy();
     this.warmLightImg?.destroy();
@@ -707,10 +680,6 @@ export class GameScene extends Phaser.Scene {
     // of stranding it, misaligned, where the hero last was.
     this.hideLowHealthOutlines();
 
-    // The hero is always pinned at the (possibly dialog-panned) screen centre; keep the
-    // tutorial balloon riding over its head even through the frozen states below.
-    this.positionTutorialBalloon();
-
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
     // world frozen here until it finishes — otherwise gameplay would fight the pan.
     if (this.dialogOpen || this.camShifting) {
@@ -748,7 +717,6 @@ export class GameScene extends Phaser.Scene {
       this.lastStepTime = this.time.now;
       this.stopBreathing();
       this.spawnFootprint(prevWorldX, prevWorldY, stepDx, stepDy);
-      this.advanceTutorial();
     } else if (!this.dialogOpen && !this.camShifting && this.time.now - this.lastStepTime > 180) {
       // A bump into an NPC opens the dialog synchronously inside movementController.update()
       // above — it already stopped breathing and re-pinned the hero at centre origin. Don't
@@ -1614,93 +1582,6 @@ export class GameScene extends Phaser.Scene {
         }
         onDone();
       },
-    });
-  }
-
-  // Speech balloon over the hero's head with tutorial TEXT in it (the icon balloon asset is
-  // 26x22 pixel art and can't stretch to hold a sentence, so the bubble is drawn here).
-  // The container origin is the tail tip, sitting just above the hero like showNeedItemHint.
-  private showTutorialBalloon(message: string): void {
-    if (!this.camera) return;
-    this.tutorialBalloon?.destroy();
-    const size = this.tileSize;
-
-    const txt = this.add.text(0, 0, message, {
-      fontFamily: FONT_FAMILY,
-      fontSize: '10px',
-      color: '#2b2620',
-      align: 'center',
-      lineSpacing: 4,
-      resolution: TEXT_RESOLUTION,
-      wordWrap: { width: Math.max(120, Math.min(this.scale.width * 0.55, size * 5.5)) },
-    }).setOrigin(0.5);
-
-    const padX = 10;
-    const padY = 8;
-    const tailH = Math.max(6, Math.round(size * 0.22));
-    const tailW = Math.max(5, Math.round(size * 0.14));
-    const w = Math.ceil(txt.width) + padX * 2;
-    const h = Math.ceil(txt.height) + padY * 2;
-    const bodyBottom = -tailH; // bubble body sits above the tail
-
-    const g = this.add.graphics();
-    g.fillStyle(0xf5efe0, 1);
-    g.lineStyle(2, 0x2b2620, 1);
-    g.fillRoundedRect(-w / 2, bodyBottom - h, w, h, 5);
-    g.strokeRoundedRect(-w / 2, bodyBottom - h, w, h, 5);
-    // Tail: fill punches a gap through the body's bottom border, then stroke only the sides.
-    g.fillTriangle(-tailW, bodyBottom + 2, tailW, bodyBottom + 2, 0, 0);
-    g.lineBetween(-tailW, bodyBottom, 0, 0);
-    g.lineBetween(tailW, bodyBottom, 0, 0);
-
-    txt.setPosition(0, bodyBottom - h / 2);
-
-    this.tutorialBalloon = this.add.container(0, 0, [g, txt]).setDepth(SCENE_DEPTHS.toast);
-    this.positionTutorialBalloon();
-    this.tutorialBalloon.setScale(0.5).setAlpha(0);
-    this.tweens.add({
-      targets: this.tutorialBalloon,
-      scale: 1,
-      alpha: 1,
-      duration: 190,
-      ease: 'Back.easeOut',
-    });
-  }
-
-  private positionTutorialBalloon(): void {
-    if (!this.tutorialBalloon || !this.camera) return;
-    this.tutorialBalloon.setPosition(
-      this.camera.screenCenterX,
-      this.camera.screenCenterY - this.tileSize * 0.55,
-    );
-  }
-
-  // Each real tile walked teaches: after a handful the "how to move" balloon has done its
-  // job and hands off to the combat hint, which lingers a moment and fades on its own.
-  private advanceTutorial(): void {
-    if (this.tutorialStep !== 'move') return;
-    this.tutorialStepsTaken++;
-    if (this.tutorialStepsTaken < TUTORIAL_MOVE_STEPS) return;
-    this.tutorialStep = 'combat';
-    this.showTutorialBalloon(t('tutorial.combat'));
-    this.tutorialFadeTimer = this.time.delayedCall(TUTORIAL_COMBAT_HOLD_MS, () => this.dismissTutorial());
-  }
-
-  // Float the balloon up and away; the tutorial never comes back this session.
-  private dismissTutorial(): void {
-    this.tutorialStep = 'done';
-    this.tutorialFadeTimer?.remove();
-    this.tutorialFadeTimer = undefined;
-    const c = this.tutorialBalloon;
-    if (!c) return;
-    this.tutorialBalloon = undefined;
-    this.tweens.add({
-      targets: c,
-      y: c.y - this.tileSize * 0.4,
-      alpha: 0,
-      duration: 320,
-      ease: 'Power1.easeIn',
-      onComplete: () => c.destroy(),
     });
   }
 
