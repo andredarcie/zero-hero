@@ -3,12 +3,12 @@
 // decoding + the play path are what break in practice.
 const FILES = [
   'sword-slash.wav', 'enemy-hit.wav', 'enemy-death.wav', 'coin.wav', 'heart.wav',
-  'sword-pickup.wav', 'hurt.wav', 'game-over.wav', 'shop-open.wav', 'shop-close.wav',
+  'item-pickup.wav', 'hurt.wav', 'game-over.wav', 'shop-open.wav', 'shop-close.wav',
   'ignite.wav', 'music.wav',
 ];
 // Frequent events shouldn't use long clips (they'd pile up). One-shot moments may be longer.
 const MAX_SECONDS = {
-  'coin.wav': 1.6, 'enemy-hit.wav': 1.5, 'sword-slash.wav': 1.5, 'hurt.wav': 1.8,
+  'coin.wav': 1.6, 'item-pickup.wav': 1.6, 'enemy-hit.wav': 1.5, 'sword-slash.wav': 1.5, 'hurt.wav': 1.8,
 };
 
 export default {

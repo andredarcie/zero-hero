@@ -12,7 +12,7 @@
       "worldX": 54,
       "worldY": 92
     },
-    "exportedAt": "2026-07-10T22:37:31.474Z"
+    "exportedAt": "2026-07-11T02:47:55.428Z"
   },
   "chunks": [
     {
@@ -31415,7 +31415,7 @@
           4
         ],
         [
-          4,
+          null,
           4,
           4,
           17,
@@ -31429,10 +31429,10 @@
           4
         ],
         [
-          4,
+          null,
           4,
           null,
-          18,
+          14,
           16,
           17,
           null,
@@ -31443,7 +31443,7 @@
           4
         ],
         [
-          4,
+          null,
           4,
           8,
           null,
@@ -31585,7 +31585,7 @@
           true
         ],
         [
-          true,
+          false,
           true,
           true,
           true,
@@ -31599,7 +31599,7 @@
           true
         ],
         [
-          true,
+          false,
           false,
           false,
           false,
@@ -31613,7 +31613,7 @@
           false
         ],
         [
-          true,
+          false,
           false,
           false,
           false,

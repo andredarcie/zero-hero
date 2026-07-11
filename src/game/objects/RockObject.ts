@@ -31,6 +31,11 @@ export class RockObject {
     return this.state !== 'broken';
   }
 
+  /** The sprite to cast a firelight shadow from while the rock still stands (null once broken). */
+  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
+    return this.blocking ? this.sprite : null;
+  }
+
   /** One pickaxe hit. Returns true if it landed (rock still stood). */
   public smash(tileSize: number): boolean {
     if (!this.blocking) return false;

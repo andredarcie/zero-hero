@@ -49,6 +49,7 @@ import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
 import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
+import { CastShadowPool, type FireLightCtx, type ShadowCaster } from '@/game/runtime/CastShadow';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { animateGrassRustle } from '@/game/runtime/RuntimeEffects';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -79,6 +80,25 @@ import {
 // then scales back up with NEAREST — so every light circle is made of chunky pixel blocks
 // (matching the game's pixel-art scale) instead of a smooth high-res gradient. Higher = chunkier.
 const LIGHT_DOWNSCALE = 6;
+
+// Firelight isn't just "un-dark" — fire sources (campfires + lava) stamp a warm amber pool over
+// the already-dimmed ground so a flame visibly warms the world, against the cold-blue dark. The
+// pool sits slightly inside the light circle (WARM_POOL_SCALE < 1) so its rim fades back to
+// neutral before the darkness; WARM_INTENSITY is the additive strength of the amber core. The
+// hero's own glow deliberately stays neutral, so only real fire reads as warm.
+const WARM_POOL_SCALE = 0.82;
+const WARM_INTENSITY = 0.85;
+
+// Distance fog — a second, deeper darkness layer stacked over the base dim. It is FULL everywhere
+// and only clears in a WIDE, soft halo around each light source (campfire, hero, NPC, lava), so
+// anywhere out of a flame's reach settles into a thick cold gloom while lit areas stay readable.
+// The result: the farther you are from light, the darker it gets — the dark "fogs in" at the edges
+// of vision. Rendered into the same low-res overlay → chunky pixel fog, matching the light style.
+// FOG_MAX_ALPHA = how black the far dark gets (on top of the base dim); FOG_LIFT_SCALE = how far
+// past a light's own glow the fog is pushed back (× the light radius); FOG_COLOR = its cold tint.
+const FOG_MAX_ALPHA = 0.6;
+const FOG_LIFT_SCALE = 2.15;
+const FOG_COLOR = 0x02030d;
 
 // How each held item shows in the HUD slot / flies in (a burning item swaps its own way).
 const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = {
@@ -245,9 +265,20 @@ export class GameScene extends Phaser.Scene {
 
   // Lighting
   private darknessOverlay?: Phaser.GameObjects.RenderTexture;
+  // Warm additive layer: only fire sources (campfires + lava) stamp an amber pool into it, so
+  // firelight reads as warm against the cold-blue dark while the hero's own glow stays neutral.
+  private warmOverlay?: Phaser.GameObjects.RenderTexture;
+  // Distance-fog layer: a deeper darkness that only clears in a wide halo around each light, so the
+  // world "fogs into" black the farther a tile is from any flame/glow. See FOG_* knobs up top.
+  private fogOverlay?: Phaser.GameObjects.RenderTexture;
   private lightCircleImg?: Phaser.GameObjects.Image;
+  private warmLightImg?: Phaser.GameObjects.Image;
+  private fogLightImg?: Phaser.GameObjects.Image;
   private playerShadow?: Phaser.GameObjects.Ellipse;
   private readonly lightFlicker = { radius: 1.0, velocity: 0 };
+  // Dynamic firelight cast shadows: the tree tiles are handled inside GameBoardRenderer; this pool
+  // covers the runtime props (dry trees, rocks, bushes, shrubs, gates) standing in a flame's glow.
+  private castShadowPool?: CastShadowPool;
 
   // Low-health "heartbeat": a pulsing red PIXEL OUTLINE around the hero (never painting the
   // sprite itself), ramping up as the last hearts drain. Built the classic pixel-art way —
@@ -287,9 +318,11 @@ export class GameScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
-    // Decode the SFX + music loops, start the exploration track and the wind bed.
+    // Decode the SFX + music loops. The world's default "soundtrack" is just the wind bed —
+    // no melodic exploration track — so fade out whatever the intro left playing (the title
+    // theme) and let the wind carry the world. Only combat later raises the danger track.
     getSoundManager().preload();
-    getSoundManager().startMusic('overworld', 2000);
+    getSoundManager().stopMusic(1800);
     getSoundManager().startAmbience();
     this.dangerCalmMs = 0;
 
@@ -519,11 +552,16 @@ export class GameScene extends Phaser.Scene {
     this.needItemHint = undefined;
     this.footprints.length = 0;
     this.lightCircleImg?.destroy();
+    this.warmLightImg?.destroy();
+    this.castShadowPool?.destroy();
+    this.castShadowPool = undefined;
     this.darknessOverlay?.destroy();
+    this.warmOverlay?.destroy();
     this.playerShadow?.destroy();
     this.lowHealthOutlines.forEach((o) => o.destroy());
     this.lowHealthOutlines.length = 0;
     if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
+    if (this.textures.exists('_warm_light')) this.textures.remove('_warm_light');
     this.swordSlash = undefined;
     this.campfires = [];
     this.dryBushes = [];
@@ -536,7 +574,9 @@ export class GameScene extends Phaser.Scene {
     this.waterTiles = [];
     this.activeBombs = [];
     this.lightCircleImg = undefined;
+    this.warmLightImg = undefined;
     this.darknessOverlay = undefined;
+    this.warmOverlay = undefined;
     this.playerShadow = undefined;
     this.heartbeatPhase = 0;
   }
@@ -592,7 +632,11 @@ export class GameScene extends Phaser.Scene {
       this.startBreathing();
     }
     this.streamChunks();
-    this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize);
+    // Firelight cast shadows breathe with the flame flicker (already advanced by updateLighting
+    // above). Build the light context once and thread it through the tree renderer and, later,
+    // the prop shadow pool (after renderProps positions the props).
+    const shadowCtx = this.buildFireLightCtx();
+    this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize, shadowCtx);
     this.updateFootprints();
     this.positionBackItem();
 
@@ -654,15 +698,15 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Souls staging: the combat track rises only while undead are actually out and the
-      // hero is beyond the firelight; it stands down a few calm seconds after the last one
-      // falls. Suppressed while any overlay/cutscene owns the music (they duck the bus).
+      // hero is beyond the firelight; a few calm seconds after the last one falls it fades
+      // back to the wind-only default. Suppressed while any overlay/cutscene owns the music.
       const uiOwnsMusic = this.cutsceneActive || this.dialogOpen || this.shopOpen || this.itemGetOpen;
       if (this.enemyManager.aliveCount > 0 && !this.playerSafe) {
         this.dangerCalmMs = 0;
         if (!uiOwnsMusic) getSoundManager().startMusic('danger', 900);
       } else {
         this.dangerCalmMs += delta;
-        if (!uiOwnsMusic && this.dangerCalmMs > 4000) getSoundManager().startMusic('overworld', 2600);
+        if (!uiOwnsMusic && this.dangerCalmMs > 4000) getSoundManager().stopMusic(2600);
       }
     }
 
@@ -721,6 +765,76 @@ export class GameScene extends Phaser.Scene {
 
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.renderProps();
+
+    // Prop cast shadows, now that renderProps has placed every prop for this frame.
+    this.castShadowPool?.update(this.collectPropCasters(), shadowCtx, this.tileSize, this.camera);
+  }
+
+  // The nearest-lit-flame lookup + flame flicker the cast-shadow maths needs, rebuilt each frame.
+  private buildFireLightCtx(): FireLightCtx {
+    const cam = this.camera!;
+    const tileSize = this.tileSize;
+    const campfires = this.campfires;
+    // Shadows reach a little past the light's resting radius: the glow itself breathes out to
+    // ~LIGHT_RADIUS × 1.2 with the flicker, so objects lit near the edge must still cast (else
+    // some clearly-lit trees would sit shadowless).
+    const radiusTiles = LIGHT_RADIUS_TILES + 1.5;
+    return {
+      flicker: this.lightFlicker.radius,
+      radiusPx: radiusTiles * tileSize,
+      nearest: (wx, wy) => {
+        let best: CampfireObject | undefined;
+        let bestD = Infinity;
+        for (const cf of campfires) {
+          if (!cf.isLit) continue;
+          const d = Math.hypot(cf.worldX - wx, cf.worldY - wy);
+          if (d < bestD) { bestD = d; best = cf; }
+        }
+        if (!best || bestD > radiusTiles) return null;
+        const s = cam.tileToScreen(best.worldX, best.worldY, tileSize);
+        return { sx: s.x, sy: s.y };
+      },
+    };
+  }
+
+  // Every actor/prop that should throw a firelight shadow while standing in a flame's glow: the
+  // hero, the NPCs, and the standing props. Felled/broken/opened props opt out via a null
+  // shadowCaster; tall grass, lava and water are flat and never cast.
+  private collectPropCasters(): ShadowCaster[] {
+    const casters: ShadowCaster[] = [];
+    const add = (
+      arr: ReadonlyArray<{ shadowCaster: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null; worldX: number; worldY: number }>,
+    ): void => {
+      for (const p of arr) {
+        const sprite = p.shadowCaster;
+        if (sprite) casters.push({ sprite, worldX: p.worldX, worldY: p.worldY });
+      }
+    };
+    add(this.dryTrees);
+    add(this.dryShrubs);
+    add(this.dryBushes);
+    add(this.rocks);
+    add(this.lockedDoors);
+
+    // NPCs standing near a lit fire throw shadows too.
+    if (this.npcManager) {
+      for (const c of this.npcManager.getShadowCasters()) casters.push(c);
+    }
+    // The hero, pinned at screen centre — its silhouette sweeps around its feet with the flame.
+    // Anchor it at the fixed screen centre (not its scrolling tile) so the shadow never lags the
+    // hero as the world scrolls under it during a step.
+    if (this.player && this.camera && !this.isDead) {
+      casters.push({
+        sprite: this.player,
+        worldX: this.playerWorld.worldX,
+        worldY: this.playerWorld.worldY,
+        footScreen: {
+          x: this.camera.screenCenterX,
+          y: this.camera.screenCenterY + Math.round(this.tileSize * 0.3),
+        },
+      });
+    }
+    return casters;
   }
 
   private handleResize(gameSize: Phaser.Structs.Size | { width: number; height: number }): void {
@@ -752,6 +866,14 @@ export class GameScene extends Phaser.Scene {
         .setScale(LIGHT_DOWNSCALE)
         .resize(Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)));
       this.darknessOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
+
+    if (this.warmOverlay) {
+      this.warmOverlay
+        .setPosition(0, 0)
+        .setScale(LIGHT_DOWNSCALE)
+        .resize(Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)));
+      this.warmOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
   }
 
@@ -1696,7 +1818,9 @@ export class GameScene extends Phaser.Scene {
     this.updatePlayerShadow();
     this.player?.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
     this.positionBackItem();
-    this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize);
+    // Keep the firelight shadows glued to the props/trees as the camera pans during a dialog.
+    const shadowCtx = this.buildFireLightCtx();
+    this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize, shadowCtx);
     this.updateFootprints();
     this.enemyManager?.render(this.tileSize, this.camera);
     this.coinManager?.render(this.tileSize, this.camera);
@@ -1704,6 +1828,7 @@ export class GameScene extends Phaser.Scene {
     this.itemManager?.render(this.tileSize, this.camera);
     this.npcManager?.render(this.tileSize, this.camera);
     this.renderProps();
+    this.castShadowPool?.update(this.collectPropCasters(), shadowCtx, this.tileSize, this.camera);
   }
 
   private renderProps(): void {
@@ -2169,6 +2294,44 @@ export class GameScene extends Phaser.Scene {
     this.textures.addCanvas('_campfire_light', canvas);
     this.textures.get('_campfire_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
 
+    // Warm firelight stamp — a smooth amber radial (hot core → transparent edge). Drawn ADDITIVELY
+    // into warmOverlay so it warms + brightens the ground near a flame instead of merely undimming
+    // it. Smooth here on purpose: the low-res overlay below turns it chunky like the rest of the
+    // light. The colour is already amber, so it needs no tint when stamped.
+    const warmCanvas = document.createElement('canvas');
+    warmCanvas.width = size;
+    warmCanvas.height = size;
+    const wctx = warmCanvas.getContext('2d')!;
+    const wgrad = wctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    wgrad.addColorStop(0.00, 'rgba(255,170,80,1)');
+    wgrad.addColorStop(0.35, 'rgba(255,140,55,0.72)');
+    wgrad.addColorStop(0.70, 'rgba(220,90,40,0.28)');
+    wgrad.addColorStop(1.00, 'rgba(200,70,30,0)');
+    wctx.fillStyle = wgrad;
+    wctx.fillRect(0, 0, size, size);
+    if (this.textures.exists('_warm_light')) this.textures.remove('_warm_light');
+    this.textures.addCanvas('_warm_light', warmCanvas);
+    this.textures.get('_warm_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
+
+    // Fog-lift stamp — a SMOOTH, wide radial used to erase the distance-fog around a light. Unlike
+    // the stepped lantern stamp above, this fades gradually (full clear at the core → no clear at
+    // the rim) so the gloom creeps back in gently, not in hard rings, the farther you walk out.
+    const fogCanvas = document.createElement('canvas');
+    fogCanvas.width = size;
+    fogCanvas.height = size;
+    const fctx = fogCanvas.getContext('2d')!;
+    const fgrad = fctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    fgrad.addColorStop(0.00, 'rgba(255,255,255,1)');
+    fgrad.addColorStop(0.30, 'rgba(255,255,255,0.9)');
+    fgrad.addColorStop(0.60, 'rgba(255,255,255,0.45)');
+    fgrad.addColorStop(0.82, 'rgba(255,255,255,0.12)');
+    fgrad.addColorStop(1.00, 'rgba(255,255,255,0)');
+    fctx.fillStyle = fgrad;
+    fctx.fillRect(0, 0, size, size);
+    if (this.textures.exists('_fog_light')) this.textures.remove('_fog_light');
+    this.textures.addCanvas('_fog_light', fogCanvas);
+    this.textures.get('_fog_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
+
     const { width, height } = this.scale;
 
     // Darkness + light holes render into a LOW-RESOLUTION texture (1/LIGHT_DOWNSCALE) that is
@@ -2181,9 +2344,33 @@ export class GameScene extends Phaser.Scene {
       .setDepth(SCENE_DEPTHS.lighting);
     this.darknessOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
+    // Warm firelight layer, one notch above the darkness so its amber pools sit on the already
+    // dimmed ground. ADD blend: transparent everywhere except where a fire stamps its glow.
+    this.warmOverlay = this.add
+      .renderTexture(0, 0, Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)))
+      .setOrigin(0)
+      .setScale(LIGHT_DOWNSCALE)
+      .setDepth(SCENE_DEPTHS.lighting + 0.1)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.warmOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
 
-    // Off-display-list image used solely as the erase stamp
+    // Distance fog — a deeper darkness stacked just above the base dim (below the warm layer). It
+    // is full everywhere each frame, then every light erases a wide halo into it, so the dark grows
+    // thicker the farther a tile is from any flame. Same low-res texture → chunky pixel fog.
+    this.fogOverlay = this.add
+      .renderTexture(0, 0, Math.ceil(width / LIGHT_DOWNSCALE), Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)))
+      .setOrigin(0)
+      .setScale(LIGHT_DOWNSCALE)
+      .setDepth(SCENE_DEPTHS.lighting + 0.05);
+    this.fogOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+
+    // Off-display-list images used solely as the erase / warm-draw stamps
     this.lightCircleImg = this.make.image({ key: '_campfire_light', add: false });
+    this.warmLightImg = this.make.image({ key: '_warm_light', add: false });
+    this.fogLightImg = this.make.image({ key: '_fog_light', add: false });
+
+    // Pool of cast-shadow silhouettes for the runtime props.
+    this.castShadowPool = new CastShadowPool(this, SCENE_DEPTHS.castShadow);
 
     this.playerShadow = this.add
       .ellipse(0, 0, 1, 1, 0x000000, 0.3)
@@ -2227,12 +2414,43 @@ export class GameScene extends Phaser.Scene {
       rt.erase(light, sx / S, sy / S);
     };
 
-    // Campfire glow (flickers) — only lit fires punch a hole in the dark.
+    // Warm firelight layer: cleared each frame, then fire sources stamp an amber pool into it.
+    const warm = this.warmOverlay;
+    const warmImg = this.warmLightImg;
+    warm?.clear();
+    const drawWarm = (sx: number, sy: number, radius: number, intensity: number): void => {
+      if (!warm || !warmImg || intensity <= 0) return;
+      warmImg.setAlpha(intensity);
+      warmImg.setDisplaySize((radius * 2) / S, (radius * 2) / S);
+      warm.draw(warmImg, sx / S, sy / S);
+    };
+
+    // Distance fog: full deep dark each frame, then every light pushes it back in a wide halo. The
+    // farther a tile is from any glow, the less the fog is lifted → the darker it stays (fog-in).
+    const fog = this.fogOverlay;
+    const fogImg = this.fogLightImg;
+    if (fog) {
+      fog.clear();
+      fog.fill(FOG_COLOR, 1);
+      fog.setAlpha(FOG_MAX_ALPHA);
+    }
+    // Clear the fog around a light: `strength` (0..1) scales the lift (for the blooming cut-scene
+    // fire); `scale` widens the halo past the light's own glow so the lit pool sits inside clear air.
+    const liftFog = (sx: number, sy: number, radius: number, strength = 1): void => {
+      if (!fog || !fogImg || strength <= 0) return;
+      fogImg.setAlpha(strength);
+      const r = radius * FOG_LIFT_SCALE;
+      fogImg.setDisplaySize((r * 2) / S, (r * 2) / S);
+      fog.erase(fogImg, sx / S, sy / S);
+    };
+
+    // Campfire glow (flickers) — only lit fires punch a hole in the dark AND warm the ground.
     const cfRadius = this.tileSize * LIGHT_RADIUS_TILES * this.lightFlicker.radius;
     for (const cf of this.campfires) {
       if (!cf.isLit) continue;
       const cfScreen = this.camera.tileToScreen(cf.worldX, cf.worldY, this.tileSize);
       eraseLight(cfScreen.x, cfScreen.y, cfRadius);
+      drawWarm(cfScreen.x, cfScreen.y, cfRadius * WARM_POOL_SCALE, WARM_INTENSITY);
     }
 
     // First-campfire cut-scene: the fire isn't "lit" yet, so its glow blooms open slowly here,
@@ -2240,7 +2458,9 @@ export class GameScene extends Phaser.Scene {
     if (this.cutsceneFireLight) {
       const cl = this.cutsceneFireLight;
       const s = this.camera.tileToScreen(cl.worldX, cl.worldY, this.tileSize);
-      eraseLight(s.x, s.y, this.tileSize * LIGHT_RADIUS_TILES * cl.progress);
+      const r = this.tileSize * LIGHT_RADIUS_TILES * cl.progress;
+      eraseLight(s.x, s.y, r);
+      drawWarm(s.x, s.y, r * WARM_POOL_SCALE, WARM_INTENSITY * cl.progress);
     }
 
     // Hero ambient glow — pinned at screen centre. Fades out during the campfire cut-scene
@@ -2264,11 +2484,13 @@ export class GameScene extends Phaser.Scene {
       eraseLight(s.x, s.y, coinRadius);
     }
 
-    // Lava glows: each tile punches a small warm hole (molten rock is its own light).
+    // Lava glows: each tile punches a small warm hole (molten rock is its own light) and, being
+    // molten, casts an even hotter amber pool than a campfire.
     const lavaRadius = this.tileSize * 1.5;
     for (const lv of this.lavaTiles) {
       const s = this.camera.tileToScreen(lv.worldX, lv.worldY, this.tileSize);
       eraseLight(s.x, s.y, lavaRadius);
+      drawWarm(s.x, s.y, lavaRadius * 1.15, WARM_INTENSITY);
     }
   }
 

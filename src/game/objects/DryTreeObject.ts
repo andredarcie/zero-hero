@@ -37,6 +37,11 @@ export class DryTreeObject {
     return this.stage < STUMP_FRAME;
   }
 
+  /** The sprite to cast a firelight shadow from while the tree still stands (null once felled). */
+  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
+    return this.blocking ? this.sprite : null;
+  }
+
   /** One axe chop: shrink a stage. Returns true if the chop landed (tree still standing). */
   public chop(): boolean {
     if (!this.blocking) return false;

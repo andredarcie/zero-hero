@@ -267,18 +267,59 @@ const sounds = {
     noise({ type: 'bandpass', f0: 3200, q: 3, dur: 0.006, vol: 0.1 }),
   ]), { lpHz: 6800, echo: { delayMs: 96, feedback: 0.3, lpHz: 4500, mix: 0.2, tail: 0.4 }, reverb: { seconds: 0.8, wet: 0.12 }, drive: 1.0, peakTo: 0.8 }),
 
+  // A single water drop for the title screen's dramatic reveal. The signature of a real drip
+  // is an UPWARD pitch snap — the air-bubble cavity resonance rising as it collapses — so a
+  // sine sweeps up fast (700 -> 1700) with a quick decay, over a faint low "plunk" body and a
+  // tiny surface tick, then a short cistern reverb. One drop = one word.
+  'water-drop': () => finalize(mixAt([
+    osc({ wave: 'sine', f0: 700, f1: 1700, holdFrac: 0, dur: 0.08, vol: 0.55, attack: 0.002, curve: 5.5 }),
+    noise({ type: 'highpass', f0: 5000, q: 0.7, dur: 0.004, vol: 0.12 }),
+    osc({ wave: 'sine', f0: 300, f1: 210, dur: 0.05, vol: 0.13, attack: 0.001, curve: 7 }),
+  ]), { lpHz: 7200, echo: { delayMs: 180, feedback: 0.24, lpHz: 3800, mix: 0.12, tail: 0.4 }, reverb: { seconds: 1.0, wet: 0.2 }, drive: 1.0, peakTo: 0.85 }),
+
+  // The author's name lands: a cinematic impact for the title's finale — a chest-hit sub drop,
+  // a body boom, a bright metallic clang, and a low A-minor bell toll (A2 + its fifth E3) ringing
+  // out into a huge dark hall. Loud and marcante on purpose; plays once, on "ANDRÉ N. DARCIE".
+  'title-impact': () => finalize(mixAt([
+    osc({ wave: 'sine', f0: 110, f1: 34, dur: 1.1, vol: 0.9, attack: 0.003, curve: 3.5 }),
+    noise({ type: 'lowpass', f0: 700, f1: 150, q: 0.8, dur: 0.6, vol: 0.7, curve: 3.5 }),
+    noise({ type: 'bandpass', f0: 3000, q: 1.5, dur: 0.05, vol: 0.35 }),
+    bell({ f: note('A2'), dur: 2.8, vol: 0.4, tau: 1.9, at: 0.01 }),
+    bell({ f: note('E3'), dur: 2.4, vol: 0.22, tau: 1.5, at: 0.02 }),
+    thump({ f: 60, dur: 0.12, vol: 0.6 }),
+  ]), { lpHz: 6000, echo: { delayMs: 260, feedback: 0.4, lpHz: 3400, mix: 0.2, tail: 1.2 }, reverb: { seconds: 3.2, wet: 0.4, damp: 0.5 }, drive: 1.3, peakTo: 0.96 }),
+
+  // Tibetan singing bowl — the intro's "wake up" swell. Inharmonic bowl partials (1 : 2.76 :
+  // 5.4 : 8.93) each split into a slightly detuned pair so they beat and shimmer like a real
+  // struck bowl, over a soft low "om" drone an octave down. Slow swell, long ring, big temple
+  // hall — meditative and spiritual, growing as the hero grows.
+  'singing-bowl': () => {
+    const bowlBase = note('A3'); // 220 Hz — calm, in the game's key
+    const DUR = 8.2;
+    const partials = [
+      { r: 1.00, v: 0.46, curve: 2.4 },
+      { r: 2.76, v: 0.30, curve: 3.2 },
+      { r: 5.40, v: 0.16, curve: 4.2 },
+      { r: 8.93, v: 0.08, curve: 5.4 },
+    ];
+    const layers = [];
+    for (const p of partials) {
+      for (const cents of [-5, 5]) {
+        layers.push(osc({ wave: 'sine', f0: bowlBase * p.r * Math.pow(2, cents / 1200), dur: DUR, vol: p.v / 2, attack: 0.8, curve: p.curve }));
+      }
+    }
+    layers.push(osc({ wave: 'sine', f0: bowlBase / 2, dur: DUR, vol: 0.18, attack: 1.4, curve: 2.0 })); // om drone
+    return finalize(mixAt(layers), { lpHz: 6200, echo: { delayMs: 320, feedback: 0.3, lpHz: 3400, mix: 0.14, tail: 1.5 }, reverb: { seconds: 4.0, wet: 0.36, damp: 0.4 }, drive: 1.0, peakTo: 0.82 });
+  },
+
   // Warm subdued heal — a low minor third (A3 -> C4), felt more than heard.
   'heart': () => finalize(mixAt([
     osc({ wave: 'triangle', f0: note('A3'), dur: 0.2, vol: 0.42, attack: 0.02, curve: 3.5, sub: 0.5 }),
     osc({ wave: 'triangle', f0: note('C4'), dur: 0.42, vol: 0.4, attack: 0.03, curve: 3.5, at: 0.15, sub: 0.5 }),
   ]), { lpHz: 4400, echo: { delayMs: 160, feedback: 0.35, lpHz: 3600, mix: 0.22, tail: 0.6 }, reverb: { seconds: 1.1, wet: 0.16 }, drive: 1.0 }),
 
-  // Quiet item-get: two muted harp notes (A3 -> E4, a bare fifth), short and understated —
-  // it plays on every pickup, so it must never call attention to itself.
-  'sword-pickup': () => finalize(mixAt([
-    pluck({ f: note('A3'), dur: 0.45, vol: 0.42, bright: 0.38 }),
-    pluck({ f: note('E4'), dur: 0.6, vol: 0.34, bright: 0.4, at: 0.14 }),
-  ]), { lpHz: 4600, echo: { delayMs: 128, feedback: 0.22, lpHz: 3600, mix: 0.1, tail: 0.25 }, reverb: { seconds: 0.6, wet: 0.08 }, drive: 1.0, peakTo: 0.78 }),
+  // NB: the item-get sound is NOT synthesized here — it uses public/assets/audio/item-pickup.wav
+  // (a Freesound recording, see CREDITS.md). SoundManager's `swordPickup` sample points at it.
 
   // Pained grunt — short, low, human-ish.
   'hurt': () => finalize(mixAt([
@@ -435,11 +476,17 @@ for (let v = 0; v < 4; v++) {
   ]), { lpHz: 3000, drive: 1.0, peakTo: 0.75 });
 }
 
+// Optional CLI filter: `node tools/gen-sfx.mjs coin heart` regenerates only the
+// named sounds. Handy because every sound uses Math.random(), so a full run rewrites all
+// the .wav files (perceptually identical, but noisy in git) — pass names to touch just those.
+const only = process.argv.slice(2);
+const selected = only.length ? Object.entries(sounds).filter(([n]) => only.includes(n)) : Object.entries(sounds);
+
 fs.mkdirSync(OUT, { recursive: true });
-for (const [name, gen] of Object.entries(sounds)) {
+for (const [name, gen] of selected) {
   const samples = gen();
   const wav = toWav(samples);
   fs.writeFileSync(path.join(OUT, `${name}.wav`), wav);
   console.log(`${name.padEnd(16)} ${(samples.length / SR).toFixed(2)}s  ${(wav.length / 1024).toFixed(1)}KB`);
 }
-console.log(`\nWrote ${Object.keys(sounds).length} .wav files to ${OUT}`);
+console.log(`\nWrote ${selected.length} .wav file(s) to ${OUT}`);

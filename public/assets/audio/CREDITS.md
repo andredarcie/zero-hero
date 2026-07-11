@@ -1,7 +1,8 @@
 # Audio
 
-All audio here is **generated** (not recorded) by the two offline synths in `tools/` —
-original output, free to use with no attribution. The design brief is "Dark Souls weight,
+Almost all audio here is **generated** (not recorded) by the two offline synths in `tools/` —
+original output, free to use with no attribution. The one exception is the item-get sound
+(`item-pickup.wav`), a third-party recording — see **Third-party samples** below. The design brief is "Dark Souls weight,
 SNES timbre": layered synthesis (transient + body + sub-thump), an SNES-style echo bus
 (short delay with a low-passed feedback loop, like the S-DSP FIR filter), small dark
 reverb tails, and a master low-pass emulating the console's gaussian-interpolation
@@ -18,10 +19,11 @@ node tools/gen-music.mjs   # music + ambience loops (32 kHz stereo, seamless)
 
 | File | Plays | Piece |
 | --- | --- | --- |
-| `music-title.wav` | title + intro screens | "Ember" — A minor, 52 BPM; harp arpeggios, pp choir, church bell; andalusian Am-G-F-E resting on an unresolved V |
-| `music-overworld.wav` | exploring | "Ashen Fields" — E aeolian w/ phrygian bII, 64 BPM; E1 pedal drone, funeral timpani, harp fragments, ocarina lament, hollow open-fifth ending |
+| `menu-drips.wav` | title / menu screen (its only sound) | soft, sparse water drops in a dark cistern; high A-minor pitches, long hall, no pulse or melody |
+| `music-title.wav` | intro screen | "Ember" — A minor, 52 BPM; harp arpeggios, pp choir, church bell; andalusian Am-G-F-E resting on an unresolved V |
+| `music-overworld.wav` | _currently unused_ (exploration is wind-only) | "Ashen Fields" — E aeolian w/ phrygian bII, 64 BPM; E1 pedal drone, funeral timpani, harp fragments, ocarina lament, hollow open-fifth ending |
 | `music-danger.wav` | undead active nearby | "The Hollowing" — E phrygian, 150 BPM; galloping ostinato, timpani, offbeat stabs, one tritone bar before the loop seam |
-| `ambience-wind.wav` | always, under the world | wind bed, zero tonal content (never clashes with any track) |
+| `ambience-wind.wav` | **always, under the world — the default "soundtrack"** | wind bed, zero tonal content (never clashes with any track) |
 
 ## Sound effects (`tools/gen-sfx.mjs`)
 
@@ -31,8 +33,10 @@ node tools/gen-music.mjs   # music + ambience loops (32 kHz stereo, seamless)
 | `enemy-hit.wav` | hitting an enemy — meaty low knock |
 | `enemy-death.wav` | enemy defeated — sagging growls, bone rattle |
 | `coin.wav` | coin pickup — one small dark chime (E5) |
+| `water-drop.wav` | title-screen reveal — one rising "ploop" drop per word (ZERO·THE·HERO·POR) |
+| `title-impact.wav` | title finale — cinematic hit when the author's name lands (sub + boom + A2 bell toll) |
 | `heart.wav` | heart pickup — low minor third swell |
-| `sword-pickup.wav` | item get — two muted harp notes, a bare fifth, understated |
+| `item-pickup.wav` | item get — bright pickup chime (**third-party**, not generated — see below) |
 | `hurt.wav` | player damaged — short low grunt |
 | `game-over.wav` | player death — E+F minor-2nd cluster swell, pitch gives way, distant knell |
 | `shop-open.wav` / `shop-close.wav` | shop — low muted menu tones |
@@ -49,6 +53,12 @@ node tools/gen-music.mjs   # music + ambience loops (32 kHz stereo, seamless)
 | `bridge-plank.wav` | laying a plank — hollow tok |
 | `bridge-built.wav` | bridge done — planks settle, three muted harp notes |
 | `footstep-0..3.wav` | footsteps — four rotated soft soil falls, dry |
+
+## Third-party samples
+
+| File | Source |
+| --- | --- |
+| `item-pickup.wav` | Freesound sound #37089 (freesound.org/s/37089), "item pickup", Freesound community. Converted to mono 44.1 kHz WAV and peak-normalized to −1 dBFS. Verify the specific sound's license on Freesound (community uploads are CC0 / CC-BY). |
 
 Dialog blips stay procedurally synthesized in `src/game/audio/SoundManager.ts` (each NPC
 has its own voice frequency). That same file plays every sample with slight random pitch

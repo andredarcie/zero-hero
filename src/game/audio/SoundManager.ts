@@ -14,7 +14,10 @@ const SAMPLES = {
   enemyDeath: { file: 'enemy-death.wav', vol: 0.8 },
   coinPickup: { file: 'coin.wav', vol: 0.55 },
   heartPickup: { file: 'heart.wav', vol: 0.7 },
-  swordPickup: { file: 'sword-pickup.wav', vol: 0.6 },
+  swordPickup: { file: 'item-pickup.wav', vol: 0.6 }, // item get (Freesound #37089, see CREDITS.md)
+  dropWater: { file: 'water-drop.wav', vol: 0.75 }, // single drop for the title-screen reveal
+  titleImpact: { file: 'title-impact.wav', vol: 0.95 }, // epic hit when the author's name lands
+  singingBowl: { file: 'singing-bowl.wav', vol: 0.8 }, // Tibetan bowl for the intro "wake up"
   playerHurt: { file: 'hurt.wav', vol: 0.85 },
   playerDeath: { file: 'game-over.wav', vol: 0.85 },
   shopOpen: { file: 'shop-open.wav', vol: 0.5 },
@@ -38,13 +41,16 @@ const SAMPLES = {
 } as const;
 type SampleKey = keyof typeof SAMPLES;
 
-// Souls staging: the title theme carries through the intro, exploration gets the quiet
-// dirge, and the combat track only rises while undead are actually out of the ground.
-export type MusicKey = 'title' | 'overworld' | 'danger';
+// Souls staging: the title screen is just dripping water, the wind bed is the world's
+// default "soundtrack", and only the combat track rises while undead are out of the ground.
+// ('title'/'overworld' still exist — the intro uses the title theme; overworld is currently
+// unused since exploration is wind-only, kept for easy revival.)
+export type MusicKey = 'title' | 'overworld' | 'danger' | 'menu';
 const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
   title: { file: 'music-title.wav', vol: 0.8 },
   overworld: { file: 'music-overworld.wav', vol: 0.9 },
   danger: { file: 'music-danger.wav', vol: 1.0 },
+  menu: { file: 'menu-drips.wav', vol: 0.5 }, // soft water drops under the title screen
 };
 const AMBIENCE_FILE = 'ambience-wind.wav';
 
@@ -151,12 +157,27 @@ class SoundManager {
     if (buffer) this.crossfadeTo(key, buffer, fadeMs);
   }
 
-  public stopMusic(): void {
+  /**
+   * Stop the current track. With `fadeMs > 0` the track rings out to silence (used when
+   * combat calms back down to the wind-only default); otherwise it stops instantly.
+   * `currentMusic` is cleared immediately either way, so per-frame callers are idempotent.
+   */
+  public stopMusic(fadeMs = 0): void {
     this.wantTrack = null;
-    if (this.currentMusic) {
-      try { this.currentMusic.source.stop(); } catch { /* already stopped */ }
-      this.currentMusic = null;
+    const cur = this.currentMusic;
+    if (!cur) return;
+    this.currentMusic = null;
+    if (fadeMs <= 0) {
+      try { cur.source.stop(); } catch { /* already stopped */ }
+      return;
     }
+    const ctx = this.audio;
+    const now = ctx.currentTime;
+    const fadeS = Math.max(0.05, fadeMs / 1000);
+    cur.gain.gain.cancelScheduledValues(now);
+    cur.gain.gain.setValueAtTime(Math.max(cur.gain.gain.value, 0.0001), now);
+    cur.gain.gain.exponentialRampToValueAtTime(0.0001, now + fadeS);
+    try { cur.source.stop(now + fadeS + 0.1); } catch { /* already stopped */ }
   }
 
   private ensureMusicBus(): GainNode {
@@ -395,6 +416,32 @@ class SoundManager {
     this.osc('sine', 330, 300, 0.18, 0.14);
   }
 
+  /** A single water drop — the title screen fires one per word as it drops in. */
+  public playWaterDrop(): void {
+    if (this.playSample('dropWater', 0.5)) return; // slight pitch jitter so drops never repeat exactly
+    // Fallback mirrors the sample: an upward pitch snap (the drip "ploop") + a faint low plunk.
+    this.osc('sine', 700, 1700, 0.3, 0.08);
+    this.osc('sine', 300, 210, 0.12, 0.05);
+  }
+
+  /** The cinematic finale hit — the title screen fires this once, when the author's name lands. */
+  public playTitleImpact(): void {
+    if (this.playSample('titleImpact')) return;
+    // Fallback: a sub drop, a low boom, and an A2 toll — the same shape as the sample.
+    this.osc('sine', 110, 34, 0.7, 1.0);
+    this.noise('lowpass', 500, 0.8, 0.5, 0.5);
+    this.osc('triangle', 110, 110, 0.22, 1.6);
+  }
+
+  /** Tibetan singing bowl — the intro's "wake up" swell as the hero grows into the world. */
+  public playSingingBowl(): void {
+    if (this.playSample('singingBowl')) return;
+    // Fallback: a swelling A3 bowl-ish chord (root + fifth + low om), long and calm.
+    this.osc('sine', 220, 220, 0.26, 3.2);
+    this.osc('sine', 330, 330, 0.13, 3.0, 0.1);
+    this.osc('sine', 110, 110, 0.16, 3.6);
+  }
+
   public playHeartPickup(): void {
     if (this.playSample('heartPickup')) return;
     this.osc('triangle', 220, 220, 0.26, 0.22);
@@ -403,9 +450,12 @@ class SoundManager {
 
   public playSwordPickup(): void {
     if (this.playSample('swordPickup')) return;
-    // Fallback mirrors the sample: two quiet notes a fifth apart, nothing more.
-    this.osc('triangle', 220, 220, 0.18, 0.22);
-    this.osc('triangle', 330, 330, 0.14, 0.28, 0.14);
+    // Fallback mirrors the sample: a quick ascending A-minor arpeggio climbing an octave
+    // (A4-C5-E5-A5) — the "item get" rise, warm and short.
+    const notes = [440, 523, 659, 880] as const;
+    notes.forEach((freq, i) => {
+      this.osc('triangle', freq, freq, 0.16, i === notes.length - 1 ? 0.34 : 0.2, i * 0.05);
+    });
   }
 
   public playIgnite(): void {

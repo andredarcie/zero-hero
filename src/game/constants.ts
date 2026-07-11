@@ -52,6 +52,9 @@ export const SCENE_DEPTHS = {
   ground: 0,
   decorBelowPlayer: 4,
   grid: 5,
+  // Dynamic firelight cast shadows lie on the ground: above the tiles/decor, below every actor
+  // (items, player, props) so objects stand on top of their own and each other's shadows.
+  castShadow: 6,
   item: 8,
   player: 10,
   object: 18,

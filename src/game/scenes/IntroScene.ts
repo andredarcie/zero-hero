@@ -1,14 +1,20 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, FONT_FAMILY, HERO_FRAMES, TEXT_RESOLUTION } from '@/game/constants';
+import {
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, FONT_FAMILY, GAMEPLAY_HERO_MAX_SIZE, GAMEPLAY_HERO_SCALE,
+  HERO_FRAMES, MIN_BOARD_TILE_SIZE, TEXT_RESOLUTION,
+} from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { createBoardMetrics } from '@/game/shared/grid';
 
 type Segment = { text: string; color: string };
 
 const DEFAULT_COLOR = '#e9ecef';
 const CHAR_DELAY_MS = 55;
 const LINE_PAUSE_MS = 650;
-const AUTO_START_MS = 4200;
+// The hero grows from a speck to its exact in-game size over this long; reaching full size
+// ends the intro. Long enough for the singing bowl to swell and both voice lines to speak.
+const GROW_MS = 7000;
 
 // "Woman's Voice" — intro screen. [color=...] words are colored inline.
 const INTRO_LINES: readonly string[] = [
@@ -57,28 +63,50 @@ export class IntroScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#08080f');
     this.cameras.main.fadeIn(700, 0, 0, 0);
 
-    // The title theme carries straight through the intro (idempotent if already playing;
-    // also covers dev flows that boot directly into this scene).
+    // The intro's sound is now spiritual: fade out the title-screen drips and let a Tibetan
+    // singing bowl swell as the hero wakes. (preload also covers dev flows that boot here.)
     getSoundManager().preload();
-    getSoundManager().startMusic('title', 1200);
+    getSoundManager().stopMusic(800);
+    getSoundManager().playSingingBowl();
 
-    // The sleeping hero, dim and breathing
-    const heroSize = Math.round(Math.min(width, height) * 0.2);
+    // A soul waking into the world: the hero begins as a tiny, cold speck and GROWS — brightening
+    // from dim to full colour — until it reaches the exact size it will be in gameplay, at which
+    // point the world begins. That target is the game's tile size (the hero is one tile), computed
+    // the same way GameScene does, so the hand-off is seamless.
+    const gameHeroSize = createBoardMetrics(width, height, {
+      columns: CHUNK_COLUMNS,
+      rows: CHUNK_ROWS,
+      minTileSize: MIN_BOARD_TILE_SIZE,
+      characterScale: GAMEPLAY_HERO_SCALE,
+      maxCharacterSize: GAMEPLAY_HERO_MAX_SIZE,
+      reservedTopRows: 0,
+    }).tileSize;
+    const startSize = Math.max(2, Math.round(gameHeroSize * 0.05));
+
     const hero = this.add
-      .image(width / 2, Math.round(height * 0.4), ASSET_KEYS.hero, HERO_FRAMES.idleDown)
+      .image(width / 2, Math.round(height * 0.42), ASSET_KEYS.hero, HERO_FRAMES.idleDown)
       .setOrigin(0.5)
       .setAlpha(0)
-      .setTint(0x5a5a7a)
-      .setDisplaySize(heroSize, heroSize);
-    this.tweens.add({ targets: hero, alpha: 0.85, duration: 1300, ease: 'Sine.easeInOut' });
+      .setTint(0x4a4a6a)
+      .setDisplaySize(startSize, startSize)
+      .setDepth(1);
+    this.tweens.add({ targets: hero, alpha: 1, duration: 1600, ease: 'Sine.easeIn' });
+
+    const cold = Phaser.Display.Color.ValueToColor(0x4a4a6a);
+    const warm = Phaser.Display.Color.ValueToColor(0xffffff);
     this.tweens.add({
       targets: hero,
-      scaleX: hero.scaleX * 1.045,
-      scaleY: hero.scaleY * 1.045,
-      duration: 1900,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+      displayWidth: gameHeroSize,
+      displayHeight: gameHeroSize,
+      duration: GROW_MS,
+      ease: 'Cubic.easeIn',
+      onUpdate: (tween) => {
+        const c = Phaser.Display.Color.Interpolate.ColorWithColor(cold, warm, 100, Math.round(tween.progress * 100));
+        hero.setTint(Phaser.Display.Color.GetColor(c.r, c.g, c.b));
+      },
+      // Reaching full size does NOT advance the scene — the intro waits for the player. It only
+      // proceeds to the game on a key press / tap (handled in handleAdvance once the lines finish).
+      onComplete: () => hero.clearTint(),
     });
 
     // Build both voice lines hidden, positioned and centered, ready to type
@@ -184,7 +212,8 @@ export class IntroScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-    this.time.delayedCall(AUTO_START_MS, () => this.startGame());
+    // No timed auto-start: the intro ends when the hero finishes growing to full size (or the
+    // player presses to skip ahead).
   }
 
   private readonly handleAdvance = (): void => {

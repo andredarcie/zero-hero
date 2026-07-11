@@ -30,6 +30,11 @@ export class DryShrubObject {
     return !this.cleared;
   }
 
+  /** The sprite to cast a firelight shadow from while the shrub still stands (null once cleared). */
+  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
+    return this.blocking ? this.sprite : null;
+  }
+
   /** One axe chop clears the shrub for good. Returns true if it just got cleared. */
   public chop(): boolean {
     if (this.cleared) return false;

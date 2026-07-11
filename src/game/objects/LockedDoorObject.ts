@@ -29,6 +29,11 @@ export class LockedDoorObject {
     return !this.open;
   }
 
+  /** The sprite to cast a firelight shadow from while the door still stands shut (null once open). */
+  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
+    return this.blocking ? this.sprite : null;
+  }
+
   public get isOpen(): boolean {
     return this.open;
   }

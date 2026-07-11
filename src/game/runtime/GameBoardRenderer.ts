@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, SCENE_DEPTHS, ySortDepth } from '@/game/constants';
+import { ASSET_KEYS, SCENE_DEPTHS, SOLID_UPPER_FRAMES, ySortDepth } from '@/game/constants';
 import type { ChunkManager } from '@/game/world/ChunkManager';
+import { projectCastShadow, type FireLightCtx } from './CastShadow';
 import type { WorldCamera } from './WorldCamera';
 
 const LOW_GRASS_TILE = 0;
@@ -12,6 +13,9 @@ type TileEntry = {
   ground: Phaser.GameObjects.Sprite;
   upper: Phaser.GameObjects.Sprite | null;
   shadow: Phaser.GameObjects.Ellipse | null;
+  // Dynamic firelight cast shadow — a black silhouette of the obstacle laid away from the flame,
+  // only for obstacle tiles (trees/walls). Null for flat decor and open ground.
+  castShadow: Phaser.GameObjects.Sprite | null;
   isObstacle: boolean;
 };
 
@@ -23,7 +27,12 @@ export class GameBoardRenderer {
 
   public constructor(private readonly scene: Phaser.Scene) {}
 
-  public updateWorld(camera: WorldCamera, chunkManager: ChunkManager, tileSize: number): void {
+  public updateWorld(
+    camera: WorldCamera,
+    chunkManager: ChunkManager,
+    tileSize: number,
+    shadowCtx?: FireLightCtx,
+  ): void {
     const range = camera.getVisibleRange(tileSize);
     const nextKeys = new Set<string>();
 
@@ -58,6 +67,24 @@ export class GameBoardRenderer {
             .setPosition(screenX, screenY + Math.round(tileSize * 0.30))
             .setDisplaySize(tileSize * 0.72, tileSize * 0.30);
         }
+
+        // Firelight cast shadow: an obstacle standing in a flame's glow throws a silhouette away
+        // from it, anchored at the tile's ground point. Hidden when no lit flame is near.
+        if (entry.castShadow && entry.upper) {
+          if (shadowCtx) {
+            projectCastShadow(
+              entry.castShadow,
+              entry.upper,
+              screenX,
+              screenY + Math.round(tileSize * 0.3),
+              shadowCtx,
+              tx,
+              ty,
+            );
+          } else {
+            entry.castShadow.setVisible(false);
+          }
+        }
       }
     }
 
@@ -69,6 +96,7 @@ export class GameBoardRenderer {
           this.grassSprites.delete(key);
         }
         entry.shadow?.destroy();
+        entry.castShadow?.destroy();
         this.tileSprites.delete(key);
       }
     }
@@ -92,13 +120,18 @@ export class GameBoardRenderer {
       .setDisplaySize(tileSize, tileSize)
       .setDepth(SCENE_DEPTHS.ground);
 
-    const isObstacle = tile.upper !== null && tile.collision;
+    // "Obstacle" mirrors ChunkManager.isCellBlocked: a tile with painted collision OR a tree that
+    // is solid by default (SOLID_UPPER_FRAMES). Both lift, Y-sort and cast a firelight shadow —
+    // otherwise the many solid-by-default trees near a fire would stand there shadowless.
+    const isObstacle = tile.upper !== null && (tile.collision || SOLID_UPPER_FRAMES.has(tile.upper));
 
     let upper: Phaser.GameObjects.Sprite | null = null;
     if (tile.upper !== null) {
-      // Obstacles join the Y-sort band so the hero can pass in front of / behind them;
-      // flat decor stays below the player.
-      const depth = tile.collision ? ySortDepth(worldY) : SCENE_DEPTHS.decorBelowPlayer;
+      // Obstacles join the Y-sort band (above the cast-shadow depth) so the hero can pass in front
+      // of / behind them AND their own shadow stays under them; flat decor stays below the player.
+      // Must key off isObstacle, not tile.collision — else a solid-by-default tree lands at
+      // decorBelowPlayer (below castShadow) and its shadow draws over its own trunk.
+      const depth = isObstacle ? ySortDepth(worldY) : SCENE_DEPTHS.decorBelowPlayer;
       upper = this.scene.add
         .sprite(0, 0, ASSET_KEYS.forestTileset, tile.upper)
         .setOrigin(0.5)
@@ -110,13 +143,23 @@ export class GameBoardRenderer {
       }
     }
 
-    // Ground shadow that anchors lifted obstacles so they read as standing up.
+    // Ground shadow that anchors lifted obstacles so they read as standing up (ambient, always on).
     const shadow = isObstacle
       ? this.scene.add
         .ellipse(0, 0, tileSize, tileSize, 0x000000, 0.26)
         .setDepth(SCENE_DEPTHS.ground + 1)
       : null;
 
-    return { ground, upper, shadow, isObstacle };
+    // Dynamic firelight cast shadow — a black silhouette of this obstacle's own art, reconfigured
+    // each frame by updateWorld. Starts hidden; only shows when a lit flame reaches the tile.
+    const castShadow = isObstacle && tile.upper !== null
+      ? this.scene.add
+        .sprite(0, 0, ASSET_KEYS.forestTileset, tile.upper)
+        .setTintFill(0x000000)
+        .setVisible(false)
+        .setDepth(SCENE_DEPTHS.castShadow)
+      : null;
+
+    return { ground, upper, shadow, castShadow, isObstacle };
   }
 }

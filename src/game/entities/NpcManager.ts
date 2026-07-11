@@ -22,6 +22,11 @@ class NpcEntity {
       .setDepth(SCENE_DEPTHS.player - 1);
   }
 
+  /** The sprite a firelight cast shadow mirrors (NPCs standing in a flame's glow throw shadows). */
+  public get shadowCaster(): Phaser.GameObjects.Image {
+    return this.sprite;
+  }
+
   public render(tileSize: number, camera: WorldCamera): void {
     const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
     // Death looms at twice the size; keep its feet on the tile instead of floating.
@@ -80,6 +85,10 @@ export class NpcManager {
 
   public getActiveWorldPositions(): ReadonlyArray<{ worldX: number; worldY: number }> {
     return this.all().map((n) => ({ worldX: n.worldX, worldY: n.worldY }));
+  }
+
+  public getShadowCasters(): Array<{ sprite: Phaser.GameObjects.Image; worldX: number; worldY: number }> {
+    return this.all().map((n) => ({ sprite: n.shadowCaster, worldX: n.worldX, worldY: n.worldY }));
   }
 
   public render(tileSize: number, camera: WorldCamera): void {

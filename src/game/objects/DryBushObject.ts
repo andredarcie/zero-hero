@@ -50,6 +50,11 @@ export class DryBushObject {
     return this.state !== 'ash';
   }
 
+  /** The sprite to cast a firelight shadow from while the bush still stands (null once ash). */
+  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
+    return this.blocking ? this.sprite : null;
+  }
+
   public get isAsh(): boolean {
     return this.state === 'ash';
   }

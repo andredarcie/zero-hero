@@ -6,6 +6,7 @@
 //                        long silences over an E pedal drone (Souls exploration is QUIET).
 //   music-danger.wav     combat: E phrygian ostinato, timpani gallop, tritone stab. 150 BPM.
 //   ambience-wind.wav    tonal-free wind bed that always plays under the world.
+//   menu-drips.wav       title-screen ambience: soft, sparse water drops in a dark cistern.
 //
 // The SNES character comes from the render chain, not from lo-fi shortcuts:
 //   - 32 000 Hz output (the S-SMP's native rate)
@@ -739,8 +740,101 @@ function renderAmbience() {
   writeWav('ambience-wind.wav', L, R);
 }
 
-renderTitle();
-renderOverworld();
-renderDanger();
-renderAmbience();
+// ═══════════════════════════════════════════════════════════════════════════
+// MENU DRIPS — the title screen's ONLY sound: soft water drops in a stone cistern.
+// Each drop is a fast pitch-dropping sine "plip" with a tiny surface tick, scattered at
+// irregular gaps so it never feels metered, panned around the space and drowned in a long
+// dark hall. Pitches come from a high A-minor set so the drops sit under the title theme
+// that follows without ever forming a tune. No pulse, no melody — just dripping water.
+// ═══════════════════════════════════════════════════════════════════════════
+function renderDrops(events, total, opts) {
+  const o = { vol: 0.5, ...opts };
+  const out = stereo(total);
+  for (const ev of events) {
+    const start = Math.floor(ev.t * SR);
+    const len = Math.min(total - start, Math.floor(ev.dur * SR));
+    if (len <= 0) continue;
+    const f0 = ev.freq;
+    const f1 = f0 * (ev.drop ?? 1.6); // the "ploop": pitch snaps UP as the bubble cavity collapses
+    const decay = ev.decay ?? 50;
+    const pa = (Math.max(-1, Math.min(1, ev.pan ?? 0)) + 1) * 0.25 * Math.PI;
+    const gL = Math.cos(pa) * o.vol * (ev.vel ?? 1);
+    const gR = Math.sin(pa) * o.vol * (ev.vel ?? 1);
+    let ph = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / SR;
+      const f = f0 * Math.pow(f1 / f0, Math.min(1, t / ev.dur));
+      ph += f / SR; if (ph >= 1) ph -= 1;
+      const env = Math.exp(-t * decay);
+      const tick = t < 0.004 ? (Math.random() * 2 - 1) * 0.5 * (1 - t / 0.004) : 0; // surface tick
+      const s = (Math.sin(2 * Math.PI * ph) + tick) * env;
+      out.L[start + i] += s * gL;
+      out.R[start + i] += s * gR;
+    }
+  }
+  return out;
+}
+
+function renderDrips() {
+  const LOOP_S = 15;
+  const total = Math.ceil((LOOP_S + 4) * SR); // headroom for hall/echo tails to fold onto the head
+  const loopLen = Math.round(LOOP_S * SR);
+
+  const PITCHES = ['A4', 'C5', 'D5', 'E5', 'G5', 'A5'];
+  const drops = [];
+  let t = 0.6;
+  let k = 0;
+  // Sparse and unhurried (~one drop every ~1.8 s) so it reads as gentle, patient dripping —
+  // not a busy tick. Onsets kept clear of the loop seam (< LOOP_S - 0.8); only tails cross it.
+  while (t < LOOP_S - 0.8) {
+    const name = PITCHES[Math.floor(Math.random() * PITCHES.length)];
+    drops.push({
+      t,
+      dur: 0.12 + Math.random() * 0.06,
+      freq: freq(name) * (1 + (Math.random() - 0.5) * 0.02),
+      drop: 0.45 + Math.random() * 0.12,
+      decay: 42 + Math.random() * 26,
+      pan: (Math.random() * 2 - 1) * 0.7,
+      vel: 0.45 + Math.random() * 0.45,
+    });
+    // once in a while, a bigger, lower, more centred drop for variety
+    if (k % 4 === 3) {
+      drops.push({ t: t + 0.3, dur: 0.16, freq: freq('E4'), drop: 0.5, decay: 32, pan: (Math.random() * 2 - 1) * 0.3, vel: 0.6 });
+    }
+    t += 1.0 + Math.random() * 1.6;
+    k++;
+  }
+
+  // Lean on the dark hall (reverb) for the cistern space; keep the discrete echo taps light
+  // so the drops don't machine-gun into a metered tick.
+  const tracks = [
+    { buf: renderDrops(drops, total, { vol: 0.5 }), echoSend: 0.14, revSend: 0.62 },
+  ];
+
+  const out = mixdown(tracks, {
+    total, loopLen,
+    echo: { delayMs: 320, feedback: 0.24, lpHz: 3400, spreadMs: 15, gain: 0.6 },
+    reverb: { room: 0.93, damp: 0.44, gain: 1.35 },
+    lpHz: 6800, drive: 1.05,
+  });
+  writeWav('menu-drips.wav', out.L, out.R);
+}
+
+// Optional CLI filter: `node tools/gen-music.mjs menu-drips` regenerates only the named
+// loops. Handy because every renderer uses Math.random(), so a full run rewrites all the
+// .wav files (perceptually identical, but noisy in git) — pass names to touch just those.
+const RENDERERS = {
+  'music-title': renderTitle,
+  'music-overworld': renderOverworld,
+  'music-danger': renderDanger,
+  'ambience-wind': renderAmbience,
+  'menu-drips': renderDrips,
+};
+const only = process.argv.slice(2);
+const selected = only.length ? Object.entries(RENDERERS).filter(([n]) => only.includes(n)) : Object.entries(RENDERERS);
+if (only.length && !selected.length) {
+  console.error(`No renderer matched ${only.join(', ')}. Known: ${Object.keys(RENDERERS).join(', ')}`);
+  process.exit(1);
+}
+for (const [, fn] of selected) fn();
 console.log('\nDone. 32 kHz stereo (SNES output rate), SNES echo bus + dark hall, seamless loops.');
