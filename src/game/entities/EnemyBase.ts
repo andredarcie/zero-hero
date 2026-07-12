@@ -94,6 +94,18 @@ export abstract class EnemyBase {
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean;
 
+  /**
+   * A blow glanced off (spawn invulnerability): flash a pale cold tint for a beat. Tint only —
+   * never the hurtTexture swap, which is the "real damage" signal.
+   */
+  public flashImmune(): void {
+    if (!this.alive) return;
+    this.sprite.setTintFill(0xaec6ff);
+    this.scene.time.delayedCall(90, () => {
+      if (this.alive && this.sprite.active) this.sprite.clearTint();
+    });
+  }
+
   public triggerKnockback(dx: number, dy: number): void {
     if (!this.alive) return;
     this.scene.tweens.killTweensOf(this);

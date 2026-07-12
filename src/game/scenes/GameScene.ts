@@ -175,6 +175,22 @@ const HEALTH_REGEN_MS = 2500;
 const HEAL_MOTE_INTERVAL_MS = 110;
 const HEAL_MOTE_TRAVEL_MS = 750;
 
+// Below this fuel fraction the carried flame starts GUTTERING: its light jitters and closes
+// in, the held torch flickers, and smoke wisps trail off the tip — the burnout announces
+// itself instead of the flame dying without warning on a hidden clock.
+const TORCH_GUTTER_FRAC = 0.4;
+// The torch's light shrinks with its fuel (full circle → this fraction right before it dies),
+// so the closing pool of firelight IS the fuel gauge.
+const TORCH_MIN_LIGHT_FRAC = 0.4;
+
+// The undead danger meter (UndeadSpawnDirector, 0..1) creeps onto the screen as a cold
+// vignette: the deeper the dark wakes, the harder the edges close in — and near full danger
+// it warms from cold night-blue toward blood-red and breathes faster. Without it the siege
+// ramp was totally invisible (only the music changed).
+const DANGER_VIGNETTE_MAX_ALPHA = 0.5;
+const DANGER_VIGNETTE_COLD = 0x0a0d24;
+const DANGER_VIGNETTE_BLOOD = 0x3d0a12;
+
 // At or below this many hearts the hero shows the low-health "heartbeat" (a red pixel outline).
 const LOW_HEALTH_HEARTS = 2;
 // Low-health fire compass (Skyrim-style): a small flame marker orbits the hero at this radius,
@@ -219,6 +235,13 @@ export class GameScene extends Phaser.Scene {
   // Remaining life of the carried flame, in ms. Counts down while heldOnFire; re-igniting at
   // any living fire (lit campfire or lava) refills it. Zero snuffs the torch.
   private torchFuelMs = 0;
+  // Guttering flicker for a dying carried flame — a random-walk like lightFlicker, but its
+  // amplitude grows as the fuel runs out, so the torchlight jitters harder near the end.
+  private readonly torchGutter = { level: 1.0, velocity: 0 };
+  // Cadence for the smoke wisps / embers trailing off a guttering torch.
+  private torchEmberTimer = 0;
+  // Pixel-flame sprite pinned on the torch's tip; its size tracks the remaining fuel.
+  private torchGlow?: Phaser.GameObjects.Image;
   private campfires: CampfireObject[] = [];
   private dryBushes: DryBushObject[] = [];
   private lockedDoors: LockedDoorObject[] = [];
@@ -255,6 +278,9 @@ export class GameScene extends Phaser.Scene {
   private healMoteTimer = 0;
   // Low-health fire compass: an arrow orbiting the hero, pointing toward the nearest lit fire.
   private fireCompassArrow?: Phaser.GameObjects.Polygon;
+  // Screen-edge vignette driven by the undead danger meter (see DANGER_VIGNETTE_* knobs).
+  private dangerVignette?: Phaser.GameObjects.Image;
+  private dangerPulsePhase = 0;
   private tileSize = MIN_BOARD_TILE_SIZE;
   private isDead = false;
   private shopOpen = false;
@@ -656,6 +682,16 @@ export class GameScene extends Phaser.Scene {
     this.lowHealthOutlines.length = 0;
     this.fireCompassArrow?.destroy();
     this.fireCompassArrow = undefined;
+    this.dangerVignette?.destroy();
+    this.dangerVignette = undefined;
+    this.dangerPulsePhase = 0;
+    this.torchGlow?.destroy();
+    this.torchGlow = undefined;
+    this.torchGutter.level = 1.0;
+    this.torchGutter.velocity = 0;
+    this.torchEmberTimer = 0;
+    if (this.textures.exists('_danger_vignette')) this.textures.remove('_danger_vignette');
+    if (this.textures.exists('_torch_flame')) this.textures.remove('_torch_flame');
     if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
     if (this.textures.exists('_warm_light')) this.textures.remove('_warm_light');
     if (this.textures.exists('_fog_light')) this.textures.remove('_fog_light');
@@ -761,6 +797,8 @@ export class GameScene extends Phaser.Scene {
       this.torchFuelMs -= delta;
       if (this.torchFuelMs <= 0) this.extinguishTorch();
     }
+    // After positionBackItem above, so the flame-tip glow rides this frame's torch position.
+    this.updateTorchFx(delta);
 
     const isPickupOccupied = (x: number, y: number): boolean =>
       (this.heartPickupManager?.hasPickupAt(x, y) ?? false) ||
@@ -887,6 +925,7 @@ export class GameScene extends Phaser.Scene {
 
     this.updateLowHealthFx(delta);
     this.updateFireCompass();
+    this.updateDangerVignette(delta);
 
     // Felled trees grow back after a while (renewable gravetos = no soft-lock). The clock only
     // ticks while the tile is clear — crucially, a dropped item (the graveto) on the stump
@@ -1376,6 +1415,19 @@ export class GameScene extends Phaser.Scene {
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (!enemy) return;
 
+    // Still clawing out of the ground: the skull is invulnerable, so the blow GLANCES OFF.
+    // This must not run the normal impact package (sparks, knockback, hitstop) — that made a
+    // negated hit look exactly like a landed one. Instead: the swing still plays, but a cold
+    // deflect ring + a pale flash on the skull say "no damage", with only a token shake.
+    if (enemy.isSpawning) {
+      if (MELEE_DAMAGE[this.heldItem as HeldItemKind] !== undefined) this.swingHeld(wx, wy);
+      enemy.flashImmune();
+      this.spawnDeflect(wx, wy);
+      this.cameras.main.shake(40, 0.0015);
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
     // Bare-handed: the hero can't hurt an enemy, but still shoves it back the way it came.
     if (this.heldItem === 'none') {
       const dx = wx - this.playerWorld.worldX;
@@ -1498,6 +1550,48 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // A blow glancing off an invulnerable target: a cold blue ring + a few pale shards
+  // skittering flat off the point of contact. Deliberately NOT spawnHitSpark's hot white
+  // flash — negated damage must never share the visual language of a landed hit.
+  private spawnDeflect(wx: number, wy: number): void {
+    if (!this.camera) return;
+    const c = this.camera.tileToScreen(wx, wy, this.tileSize);
+
+    const ring = this.add
+      .circle(c.x, c.y, this.tileSize * 0.16, 0x000000, 0)
+      .setStrokeStyle(Math.max(2, Math.floor(this.tileSize * 0.05)), 0xaec6ff, 0.9)
+      .setDepth(SCENE_DEPTHS.upper + 1);
+    this.tweens.add({
+      targets: ring,
+      radius: this.tileSize * 0.55,
+      alpha: 0,
+      duration: 230,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+
+    const size = Math.max(2, Math.floor(this.tileSize * 0.09));
+    for (let i = 0; i < 3; i++) {
+      // Shards fly out of the upper half only (the blow bounced UP and away, not through).
+      const ang = -Math.PI * (0.15 + Math.random() * 0.7);
+      const dist = this.tileSize * (0.35 + Math.random() * 0.3);
+      const shard = this.add
+        .rectangle(c.x, c.y, size, size, 0xaec6ff, 0.85)
+        .setDepth(SCENE_DEPTHS.upper + 1)
+        .setAngle(Phaser.Math.Between(0, 360));
+      this.tweens.add({
+        targets: shard,
+        x: c.x + Math.cos(ang) * dist,
+        y: c.y + Math.sin(ang) * dist,
+        alpha: 0,
+        angle: shard.angle + Phaser.Math.Between(-120, 120),
+        duration: 200 + Math.random() * 90,
+        ease: 'Cubic.easeOut',
+        onComplete: () => shard.destroy(),
+      });
+    }
+  }
+
   /** The held item can catch fire at a campfire: only the wood club burns — the sword never does. */
   private get isFlammableHeld(): boolean {
     return this.heldItem === 'wood';
@@ -1542,7 +1636,7 @@ export class GameScene extends Phaser.Scene {
     getSoundManager().playIgnite();
     this.heldOnFire = true;
     this.refuelTorch();
-    this.updateBackItem(); // the graveto on the back now shows aflame
+    this.updateBackItem(); // the plain graveto stays visible beneath the flame effect
     // Orange flash on the player as the fire transfers
     this.player?.setTint(0xff6600);
     this.time.delayedCall(250, () => { this.player?.clearTint(); });
@@ -1561,6 +1655,107 @@ export class GameScene extends Phaser.Scene {
     this.swordSlash?.setOnFire(false);
     this.updateBackItem(); // back to the plain graveto once the flame dies
     this.spawnSmokePuff(this.playerWorld.worldX, this.playerWorld.worldY);
+  }
+
+  /** Remaining torch fuel as 0..1 (0 when unlit). */
+  private get torchFuelFrac(): number {
+    return this.isTorchLit ? Phaser.Math.Clamp(this.torchFuelMs / TORCH_BURN_MS, 0, 1) : 0;
+  }
+
+  // The carried flame visibly dies instead of running out on a hidden clock: a glow on the
+  // flame tip shrinks with the fuel the whole burn, and once it dips into the gutter zone
+  // the flame flickers erratically (sprite alpha + light jitter via torchGutter, which
+  // updateLighting also reads) while smoke wisps and stray embers trail off the tip at an
+  // accelerating pace. The final snuff (extinguishTorch) still puffs its smoke as before.
+  private updateTorchFx(delta: number): void {
+    const showing = this.isTorchLit && this.backItem?.visible === true && !this.cutsceneActive;
+    if (!showing) {
+      this.torchGlow?.setVisible(false);
+      this.torchGutter.level = 1.0;
+      this.torchGutter.velocity = 0;
+      this.torchEmberTimer = 0;
+      // A dying-flame alpha flicker must never survive onto the relit (or swapped) item.
+      if (this.backItem && this.backItem.alpha !== 1) this.backItem.setAlpha(1);
+      return;
+    }
+
+    const frac = this.torchFuelFrac;
+    // 0 while healthy, ramping to 1 as the fuel crosses the gutter threshold toward empty.
+    const dying = Phaser.Math.Clamp(1 - frac / TORCH_GUTTER_FRAC, 0, 1);
+
+    // Mean-reverting random flicker: the level jitters around a centre that SINKS as the
+    // fuel runs out (a guttering flame sags more than it spikes). Pure random walk pins at
+    // the clamp for long stretches and reads as steady — the pull keeps it oscillating.
+    const gutterCentre = 1 - dying * 0.28;
+    this.torchGutter.velocity +=
+      (Math.random() - 0.5) * (0.03 + dying * 0.16) +
+      (gutterCentre - this.torchGutter.level) * 0.015;
+    this.torchGutter.velocity *= 0.8;
+    this.torchGutter.level = Phaser.Math.Clamp(
+      this.torchGutter.level + this.torchGutter.velocity * (delta / 16),
+      1 - (0.12 + dying * 0.45),
+      1.06,
+    );
+
+    // The torch sprite itself only flickers once it's guttering — a healthy flame is steady.
+    this.backItem!.setAlpha(dying > 0 ? 0.7 + 0.3 * Phaser.Math.Clamp(this.torchGutter.level, 0, 1) : 1);
+
+    // Flame-tip fire: a deliberately blocky, palette-limited sprite. Its two-pixel nudge is
+    // the entire animation language here — no smooth sway, rotation, or additive glow.
+    if (!this.torchGlow) {
+      this.torchGlow = this.add
+        .image(0, 0, '_torch_flame')
+        .setOrigin(0.5, 0.9);
+    }
+    const back = this.backItem!;
+    const lvl = this.torchGutter.level;
+    const flickerStep = (Math.floor(this.time.now / 90) % 3) - 1;
+    const flameW = Math.max(6, Math.round(this.tileSize * (0.16 + 0.26 * frac) / 2) * 2);
+    const flameH = Math.max(10, Math.round(flameW * (1.35 + 0.12 * lvl) / 2) * 2);
+    this.torchGlow
+      .setPosition(Math.round(back.x + flickerStep * 2), Math.round(back.y - this.tileSize * 0.26))
+      .setDisplaySize(flameW, flameH)
+      .setRotation(0)
+      .setTint(dying > 0 ? 0xd8562a : 0xffffff)
+      .setAlpha(dying > 0 ? 0.65 + 0.35 * lvl : 1)
+      .setDepth((this.player?.depth ?? SCENE_DEPTHS.player) + 0.05)
+      .setVisible(true);
+
+    // Smoke + embers off the tip while guttering, faster the closer to burnout.
+    if (dying > 0) {
+      this.torchEmberTimer += delta;
+      if (this.torchEmberTimer >= 340 - dying * 210) {
+        this.torchEmberTimer = 0;
+        this.spawnTorchWisp(back.x, back.y - this.tileSize * 0.34, dying);
+      }
+    } else {
+      this.torchEmberTimer = 0;
+    }
+  }
+
+  // One square pixel wisp off a guttering torch: a tiny ember or smoke block, never a soft puff.
+  private spawnTorchWisp(sx: number, sy: number, dying: number): void {
+    const ember = Math.random() < 0.35;
+    const size = Math.max(2, Math.round(this.tileSize * (ember ? 0.05 : 0.07 + dying * 0.04) / 2) * 2);
+    const wisp = this.add
+      .rectangle(
+        sx + Phaser.Math.Between(-2, 2),
+        sy,
+        size,
+        size,
+        ember ? 0xffb060 : 0x9a9a9a,
+        ember ? 0.95 : 0.5,
+      )
+      .setDepth(SCENE_DEPTHS.player + 3);
+    this.tweens.add({
+      targets: wisp,
+      x: wisp.x + Phaser.Math.Between(-6, 6),
+      y: wisp.y - this.tileSize * (ember ? 0.35 : 0.6),
+      alpha: 0,
+      duration: ember ? 320 : 480 + Math.floor(dying * 160),
+      ease: 'Linear',
+      onComplete: () => wisp.destroy(),
+    });
   }
 
   /** Bring a dead campfire to life with fanfare, expanding the safe ring under the hero. */
@@ -2261,12 +2456,10 @@ export class GameScene extends Phaser.Scene {
       this.backItem.setVisible(false);
       return;
     }
-    // A lit graveto becomes a torch: carried upright in the hand (flame up), not slung on the
-    // back — the carried fire must read like a real torch at a glance.
+    // A lit graveto is held upright in the hand; the separate pixel-flame effect supplies
+    // the fire, so the carried sprite itself always remains the plain stick.
     const torchLit = this.isTorchLit;
-    const visual = torchLit
-      ? { texture: ASSET_KEYS.woodOnFireIcon, frame: 0 }
-      : HUD_ITEM_VISUAL[this.heldItem];
+    const visual = HUD_ITEM_VISUAL[this.heldItem];
     // Real size: draw the item at one full tile, the same pixel scale as the hero and the
     // world sprites — no shrinking.
     const size = this.tileSize;
@@ -2707,6 +2900,34 @@ export class GameScene extends Phaser.Scene {
     this.textures.addCanvas('_fog_light', fogCanvas);
     this.textures.get('_fog_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
 
+    // Torch-tip flame: hand-placed 2×2 colour blocks, using a four-colour retro palette.
+    // No paths or gradients: the jagged silhouette remains recognisably pixel art when scaled.
+    const fw = 14;
+    const fh = 20;
+    const flameCanvas = document.createElement('canvas');
+    flameCanvas.width = fw;
+    flameCanvas.height = fh;
+    const flx = flameCanvas.getContext('2d')!;
+    flx.imageSmoothingEnabled = false;
+    const pixels: ReadonlyArray<readonly [number, number, number, number, string]> = [
+      [6, 0, 2, 2, '#a52b20'],
+      [4, 2, 4, 2, '#d44720'], [8, 2, 2, 2, '#a52b20'],
+      [4, 4, 6, 2, '#e96524'],
+      [2, 6, 8, 2, '#d44720'], [10, 6, 2, 2, '#a52b20'],
+      [2, 8, 10, 4, '#e96524'],
+      [4, 8, 4, 4, '#ffb13b'],
+      [0, 12, 12, 4, '#d44720'],
+      [2, 12, 8, 4, '#e96524'], [4, 12, 4, 4, '#ffb13b'],
+      [2, 16, 8, 2, '#a52b20'], [4, 16, 4, 2, '#e96524'],
+    ];
+    for (const [x, y, width, height, color] of pixels) {
+      flx.fillStyle = color;
+      flx.fillRect(x, y, width, height);
+    }
+    if (this.textures.exists('_torch_flame')) this.textures.remove('_torch_flame');
+    this.textures.addCanvas('_torch_flame', flameCanvas);
+    this.textures.get('_torch_flame').setFilter(Phaser.Textures.FilterMode.NEAREST);
+
     const { width, height } = this.scale;
     const g = this.lightOverlayGeom(width, height);
 
@@ -2739,6 +2960,34 @@ export class GameScene extends Phaser.Scene {
       .setScale(LIGHT_DOWNSCALE)
       .setDepth(SCENE_DEPTHS.lighting + 0.05);
     this.fogOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+
+    // Danger vignette stamp — a WHITE radial (clear centre → solid edge) stretched over the
+    // whole screen and tinted at runtime (cold night-blue → blood-red), so one texture serves
+    // the entire danger ramp. White here; updateDangerVignette owns colour and alpha.
+    const vigSize = 320;
+    const vigCanvas = document.createElement('canvas');
+    vigCanvas.width = vigSize;
+    vigCanvas.height = vigSize;
+    const vctx = vigCanvas.getContext('2d')!;
+    const vgrad = vctx.createRadialGradient(
+      vigSize / 2, vigSize / 2, 0,
+      vigSize / 2, vigSize / 2, vigSize / 2,
+    );
+    vgrad.addColorStop(0.00, 'rgba(255,255,255,0)');
+    vgrad.addColorStop(0.52, 'rgba(255,255,255,0)');
+    vgrad.addColorStop(0.78, 'rgba(255,255,255,0.45)');
+    vgrad.addColorStop(1.00, 'rgba(255,255,255,1)');
+    vctx.fillStyle = vgrad;
+    vctx.fillRect(0, 0, vigSize, vigSize);
+    if (this.textures.exists('_danger_vignette')) this.textures.remove('_danger_vignette');
+    this.textures.addCanvas('_danger_vignette', vigCanvas);
+
+    // Sits above every lighting layer, below the UI: the dark closing in on the screen itself.
+    this.dangerVignette = this.add
+      .image(0, 0, '_danger_vignette')
+      .setOrigin(0)
+      .setDepth(SCENE_DEPTHS.lighting + 0.5)
+      .setVisible(false);
 
     // Off-display-list images used solely as the erase / warm-draw stamps
     this.lightCircleImg = this.make.image({ key: '_campfire_light', add: false });
@@ -2848,13 +3097,18 @@ export class GameScene extends Phaser.Scene {
       eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius * this.cutsceneHeroLight);
       liftFog(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius, this.cutsceneHeroLight);
       // Carried torch: the hero's glow turns into real firelight — same amber pool and the
-      // same flicker as a campfire, walking with him.
+      // same flicker as a campfire, walking with him. The light DIES WITH THE FUEL: the pool
+      // closes in from full size toward TORCH_MIN_LIGHT_FRAC and cools as the flame runs
+      // down, and the gutter jitter (torchGutter, driven by updateTorchFx) shakes it near
+      // the end — the shrinking circle of firelight is the fuel gauge.
       if (this.isTorchLit) {
-        const torchRadius = cfRadius * this.cutsceneHeroLight;
+        const fuel = TORCH_MIN_LIGHT_FRAC + (1 - TORCH_MIN_LIGHT_FRAC) * this.torchFuelFrac;
+        const torchRadius = cfRadius * this.cutsceneHeroLight * fuel * this.torchGutter.level;
         eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, torchRadius);
         drawWarm(
           this.camera.screenCenterX, this.camera.screenCenterY,
-          torchRadius * WARM_POOL_SCALE, WARM_INTENSITY * this.cutsceneHeroLight,
+          torchRadius * WARM_POOL_SCALE,
+          WARM_INTENSITY * this.cutsceneHeroLight * (0.55 + 0.45 * this.torchFuelFrac),
         );
       }
     }
@@ -2994,6 +3248,40 @@ export class GameScene extends Phaser.Scene {
 
   private hideFireCompass(): void {
     this.fireCompassArrow?.setVisible(false);
+  }
+
+  // The undead siege made visible: the spawn director's hidden danger meter (0..1) closes a
+  // vignette over the screen edges. It creeps in as the dark wakes, BREATHES faster the higher
+  // the danger, and past ~half meter its cold blue warms toward blood-red — so the player
+  // feels the spawn cadence ramping long before the horde itself shows it. Near a fire the
+  // meter drains (~2.5s) and the vignette melts away with it.
+  private updateDangerVignette(delta: number): void {
+    const v = this.dangerVignette;
+    if (!v) return;
+    const danger = this.spawnDirector?.danger ?? 0;
+    if (danger < 0.02 || this.isDead || this.cutsceneActive) {
+      v.setVisible(false);
+      this.dangerPulsePhase = 0;
+      return;
+    }
+
+    this.dangerPulsePhase += delta * (0.0011 + danger * 0.0024);
+    // Same sharpened-sine "thump" as the low-health heartbeat, so both danger signals breathe
+    // with one visual language.
+    const breath = Math.pow((Math.sin(this.dangerPulsePhase) + 1) / 2, 2);
+    const alpha = Math.pow(danger, 1.35) * DANGER_VIGNETTE_MAX_ALPHA * (1 - 0.22 * (1 - breath));
+
+    // Cold for most of the ramp; the last stretch bleeds toward red as the frenzy peaks.
+    const heat = Phaser.Math.Clamp((danger - 0.55) / 0.45, 0, 1);
+    const cold = Phaser.Display.Color.ValueToColor(DANGER_VIGNETTE_COLD);
+    const blood = Phaser.Display.Color.ValueToColor(DANGER_VIGNETTE_BLOOD);
+    const mix = Phaser.Display.Color.Interpolate.ColorWithColor(cold, blood, 100, heat * 100);
+
+    v.setDisplaySize(this.scale.width, this.scale.height)
+      .setPosition(0, 0)
+      .setTint(Phaser.Display.Color.GetColor(mix.r, mix.g, mix.b))
+      .setAlpha(alpha)
+      .setVisible(true);
   }
 
   private startBreathing(): void {
