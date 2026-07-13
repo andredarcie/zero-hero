@@ -19,7 +19,9 @@ export class EnemyManager {
   public constructor(private readonly scene: Phaser.Scene) {}
 
   public spawnUndead(worldX: number, worldY: number): void {
-    getSoundManager().playUndeadSpawn();
+    // The warning rumble as the ground starts to crack — playUndeadSpawn fires later, from
+    // inside UndeadEnemy, when the telegraph ends and the skull actually claws out.
+    getSoundManager().playGroundCrack();
     this.enemies.push(new UndeadEnemy(this.scene, worldX, worldY));
   }
 

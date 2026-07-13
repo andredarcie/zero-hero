@@ -18,6 +18,10 @@ export class ZeroTheHeroGame {
   public constructor(parent: string, mode: AppMode) {
     this.mode = mode;
     this.game = new Phaser.Game(createGameConfig(parent, mode));
+    // Dev-only escape hatch, like window.__scene (see debugHooks): a hidden/headless tab
+    // freezes RAF, and stepping the game manually needs the Game BEFORE any scene registers
+    // its hooks (e.g. to drive the preloader forward).
+    if (import.meta.env.DEV) (window as unknown as { __game?: Phaser.Game }).__game = this.game;
     this.game.registry.set('appMode', mode);
     this.handleResizeBound = () => {
       const { width, height } = getCanvasSizeForMode(this.mode);

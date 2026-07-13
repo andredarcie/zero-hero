@@ -11,7 +11,8 @@ export type UndeadSpawnQuery = {
   // Euclidean distance (in tiles) from the hero to the nearest campfire.
   distToFireTiles: number;
   aliveUndead: number;
-  // Tile checks live in GameScene (terrain, props, light, occupancy).
+  // Tile checks live in GameScene (terrain, props, light, occupancy — and reachability:
+  // a skull only rises where it could actually walk to the hero).
   canSpawnAt: (wx: number, wy: number) => boolean;
   spawn: (wx: number, wy: number) => void;
 };
@@ -30,8 +31,10 @@ const INTERVAL_FRENZY_MS = 650;
 const MAX_UNDEAD_AT_FULL_DANGER = 4;
 
 // Skulls rise in a ring around the hero: outside the hero's light, close enough to attack.
+// The max is exported: GameScene's reachability flood-fill (a spawn tile must have a walkable
+// path to the hero) uses it to bound its search area.
 const RING_MIN_TILES = 4;
-const RING_MAX_TILES = 7;
+export const RING_MAX_TILES = 7;
 const PLACEMENT_TRIES = 14;
 
 export class UndeadSpawnDirector {

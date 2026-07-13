@@ -110,6 +110,23 @@ export abstract class EnemyBase {
     });
   }
 
+  /**
+   * Rear back into a HELD pose (the attack wind-up): ease away from the strike direction
+   * and crouch slightly, then stay there — the release (the lunge of a landed hit or a
+   * whiffed triggerKnockback) is its own tween and overwrites this one.
+   */
+  protected poseWindup(awayX: number, awayY: number, ms: number): void {
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.add({
+      targets: this,
+      knockbackOffsetX: awayX * 0.2,
+      knockbackOffsetY: awayY * 0.2,
+      knockbackSquash: 0.86,
+      duration: ms,
+      ease: 'Sine.easeOut',
+    });
+  }
+
   public triggerKnockback(dx: number, dy: number): void {
     if (!this.alive) return;
     this.scene.tweens.killTweensOf(this);

@@ -2,51 +2,67 @@ import Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
-import { Billboard3D } from '@/game/render3d/Billboard3D';
-import { WATER_DEPTH_TILES, world3d } from '@/game/render3d/World3D';
+import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { FX_PUFF_TEXTURE, WATER_DEPTH_TILES, world3d, type Box3D } from '@/game/render3d/World3D';
+import { getBridgeSpots, getWaterTiles } from '@/game/world/WorldData';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 // 3D water ripple frames (flat quads on the ground plane).
 const WATER_3D_FRAMES = ['water-0', 'water-1', 'water-2', 'water-3'] as const;
 
 // A river tile. It blocks like lava until the hero builds a bridge over it by depositing two
-// wood sticks ("gravetos"). Water renders at ground level; the finished bridge is a wooden
-// plank tile (ASSET_KEYS.bridge) the hero then walks across.
-//
-// Building is a little carpentry mini-game: a buildable spot shows the bridge as a set of
-// faint GHOST plank slats floating over the water. Each graveto the hero deposits nails down
-// its share of those slats — they drop in from above one at a time with a hammer beat and a
-// puff of sawdust — so the crossing visibly grows board by board. When the last slat lands the
-// procedural planks cross-fade into the real bridge tile with a settling bounce. Collision is
-// resolved at runtime by GameScene (via `blocking`), exactly like LavaObject.
+// wood sticks ("gravetos"). The river runs in a sunken channel (see WATER_DEPTH_TILES), and
+// the bridge is REAL 3D carpentry spanning it: plank boxes with actual thickness riding on
+// two stringers, on four legs standing down in the riverbed — the water keeps flowing under
+// the finished deck. A buildable spot previews the whole structure as a ghost; each deposited
+// graveto slams its share of the parts down from above (hammer beats, sawdust, a splash for
+// the legs). Collision is resolved at runtime by GameScene (via `blocking`), like LavaObject.
 
 const RIPPLE_MS = 220; // ms per water animation frame
 
-// The finished tile is milled into this many horizontal boards (bridge.png has horizontal
-// grain). The gravetos share them evenly — two gravetos, four boards, two boards per graveto.
+// The deck is milled into this many boards laid ACROSS the walking direction. The gravetos
+// share them evenly — two gravetos, four boards, two boards per graveto.
 const PLANK_ROWS = 4;
 const PLANKS_PER_GRAVETO = Math.max(1, Math.floor(PLANK_ROWS / BRIDGE_GRAVETOS_REQUIRED));
 
-const PLANK_DROP_MS = 200; // per-board fall + settle
-const PLANK_STAGGER_MS = 105; // gap between successive boards nailed in one deposit
-const FINISH_MS = 220; // cross-fade + final bounce once the last board lands
+const PART_DROP_MS = 200; // per-part fall + settle
+const PART_STAGGER_MS = 105; // gap between successive parts nailed in one deposit
+const DROP_FROM_TILES = 0.5; // parts fall in from this high above their rest position
+// First deposit builds the frame (legs + stringers) before its boards; the boards wait this long.
+const FRAME_BEAT_MS = 300;
 
-// Weathered-wood palette for the procedural boards (alternating for a bit of grain).
+// Weathered-wood palette (alternating plank fills for a bit of grain; frame darker below).
 const PLANK_FILLS = [0x8a6038, 0x6f4a2c] as const;
-const PLANK_HILITE = 0xb2884f; // sunlit top edge of each board
-const PLANK_SHADOW = 0x120a04; // board's own drop shadow (kept faint)
+const STRINGER_FILL = 0x5b3d24;
+const POST_FILL = 0x4a3120;
+const SAWDUST_TINT = 0xd9b483;
+const SPLASH_TINT = 0x9fb4dd; // a leg landing in the river kicks water, not sawdust
 
-// The very first board (index 0) stays a lot more solid than the rest, even with zero gravetos
-// deposited — a single "sample plank" sitting on the bank so a buildable spot reads at a glance,
-// before the player is close enough to notice the faint full-bridge ghost outline.
+// Deck geometry, all in tiles. The deck rides just above the banks; everything stays
+// inside its own tile (the fundamental sprite rule applies to geometry too).
+const PLANK_H = 0.04;
+const PLANK_ELEV = 0.028; // centre height → top face ~0.048, a shallow step over the ground
+const PLANK_W = 0.98; // long axis (across the walk direction)
+const PLANK_D = 0.21; // short axis (four boards + seams fill the tile)
+const STRINGER_H = 0.055;
+const STRINGER_W = 0.075;
+const STRINGER_ELEV = PLANK_ELEV - PLANK_H / 2 - STRINGER_H / 2;
+const STRINGER_OFF = 0.3; // the two beams sit this far either side of centre
+const POST_SIZE = 0.085;
+const POST_H = WATER_DEPTH_TILES + STRINGER_ELEV - STRINGER_H / 2; // riverbed up to the beams
+const POST_ELEV = -WATER_DEPTH_TILES + POST_H / 2;
+const POST_OFF_ALONG = 0.35; // near the tile's entry/exit edges (across = under the stringers)
+
+// Ghost preview (the "you can build here" indicator): the whole structure breathes faintly;
+// the first board stays much more solid — a sample plank on the bank that reads at a glance.
 const SAMPLE_PLANK_ALPHA = 0.62;
+const GHOST_BASE = 0.16;
+const GHOST_WAVE = 0.06;
+const GHOST_HINT_BOOST = 1.7; // ghost brightens while the hero stands beside the spot
 
-interface Slat {
-  group: Phaser.GameObjects.Container;
-  body: Phaser.GameObjects.Rectangle;
-  hilite: Phaser.GameObjects.Rectangle;
-  shadow: Phaser.GameObjects.Rectangle;
-  restY: number; // local y where the board rests once laid
+interface DeckPart {
+  box: Box3D;
+  restElev: number;
   laid: boolean;
   animating: boolean;
 }
@@ -59,18 +75,15 @@ export class WaterObject {
   public onBuilt?: () => void;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Billboard3D; // the water (hidden once bridged) — a flat 3D quad
-  private readonly bridge: Billboard3D; // the real plank tile, shown only when finished
-  private readonly buildFx: Phaser.GameObjects.Container; // holds the ghost/laid boards + sawdust
+  private readonly sprite: Billboard3D; // the water — a flat 3D quad; keeps flowing under the deck
   private readonly pips: Phaser.GameObjects.Container;
   private readonly pipDots: Phaser.GameObjects.Arc[] = [];
-  private readonly slats: Slat[] = [];
+  private planks: DeckPart[] = [];
+  private frame: DeckPart[] = []; // 4 legs + 2 stringers, slammed in by the first deposit
   private deposited = 0;
   private hintOn = false;
   private frameIndex = 0;
   private animTimer?: Phaser.Time.TimerEvent;
-  private lastTileSize = 0;
-  private finishing = false; // guards render() from snapping the boards away mid cross-fade
   private dead = false;
   // Only tiles marked with a `bridgeSpot` prop can be bridged; plain river tiles just block.
   private readonly buildable: boolean;
@@ -100,15 +113,8 @@ export class WaterObject {
       loop: true,
     });
 
-    this.bridge = world3d()
-      .addBillboard('bridge', 0, { flat: true, flatY: 0.02 })
-      .setPosition(worldX, worldY)
-      .setDisplaySize(1, 1)
-      .setVisible(false);
-
-    // Construction layer floats just above the water so laid boards hide the ripple beneath
-    // them while ghost boards let it show through.
-    this.buildFx = scene.add.container(0, 0).setDepth(SCENE_DEPTHS.ground + 3).setVisible(false);
+    // A buildable spot shows its ghost preview from the start.
+    if (buildable) this.ensureDeck();
 
     // Build-progress pips ("gravetos needed"), floated above the tile only while the hero is beside it.
     this.pips = scene.add.container(0, 0).setDepth(SCENE_DEPTHS.toast).setVisible(false);
@@ -146,135 +152,163 @@ export class WaterObject {
   public deposit(): boolean {
     if (!this.buildable || this.isBridge) return false;
     const laidBefore = this.deposited * PLANKS_PER_GRAVETO;
+    const firstDeposit = this.deposited === 0;
     this.deposited += 1;
     const laidAfter = this.isBridge ? PLANK_ROWS : this.deposited * PLANKS_PER_GRAVETO;
     getSoundManager().playBridgePlank(); // the "graveto set onto the frame" cue
-    this.nailSlats(laidBefore, laidAfter); // hammer this deposit's share of boards into place
+
+    // The first graveto raises the FRAME (legs splash down into the river, beams settle on
+    // them), then its boards; later deposits just nail more boards onto the waiting frame.
+    if (firstDeposit) this.slamFrame();
+    const boardDelay = firstDeposit ? FRAME_BEAT_MS : 0;
+    for (let k = 0; laidBefore + k < laidAfter && laidBefore + k < PLANK_ROWS; k++) {
+      const index = laidBefore + k;
+      this.scene.time.delayedCall(boardDelay + k * PART_STAGGER_MS, () => this.dropPlank(index));
+    }
     return this.isBridge;
   }
 
   /** Finish the bridge in one go — a tree felled across the river ("TIMBER!") drops for free.
    * Works on any river tile, not just buildable spots (that restriction is only for the manual
-   * graveto build via deposit()). The trunk slamming down IS the animation, so this snaps the
-   * finished tile straight in rather than running the carpentry build. */
+   * graveto build via deposit()). The trunk slamming down IS the animation, so the whole deck
+   * snaps straight in rather than running the carpentry build. */
   public buildBridgeNow(): void {
     if (this.isBridge) return;
     this.deposited = BRIDGE_GRAVETOS_REQUIRED;
-    this.buildFx.setVisible(false);
-    this.completeBridge();
-  }
-
-  // Swap water for the solid plank tile with a small settle. The water is gone, so stop
-  // cycling its ripple frames.
-  private completeBridge(): void {
-    this.animTimer?.destroy();
-    this.animTimer = undefined;
-    this.sprite.setVisible(false);
+    this.ensureDeck();
+    for (const part of [...this.frame, ...this.planks]) {
+      part.laid = true;
+      part.animating = false;
+      part.box.setElevation(part.restElev).setAlpha(1);
+    }
     this.pips.setVisible(false);
-    this.bridge.setVisible(true).setAlpha(1);
-    this.scene.tweens.add({
-      targets: this.bridge,
-      scaleX: { from: 1.12, to: 1 },
-      scaleY: { from: 1.12, to: 1 },
-      duration: 180,
-      ease: 'Back.easeOut',
-    });
   }
 
-  // ── carpentry animation ──────────────────────────────────────────────────
+  // ── carpentry ─────────────────────────────────────────────────────────────
 
-  // Schedule the drop-in for boards [from, to): each falls, settles and is hammered home a
-  // beat after the last. Runs off the render tileSize, so defer to the next render if we've
-  // never been laid out yet.
-  private nailSlats(from: number, to: number): void {
-    for (let k = 0; from + k < to && from + k < PLANK_ROWS; k++) {
-      const index = from + k;
-      this.scene.time.delayedCall(k * PLANK_STAGGER_MS, () => this.dropSlat(index));
+  /**
+   * Lazily build the deck parts (once) as ghosts. The deck orients itself to the river:
+   * boards lie ACROSS the walking direction (perpendicular to the crossing), stringers run
+   * along it — inferred from where the neighbouring river tiles are.
+   */
+  private ensureDeck(): void {
+    if (this.planks.length) return;
+
+    // River neighbours E/W → the crossing runs N-S (default layout). Neighbours N/S only →
+    // the river runs N-S, the crossing runs E-W, so the whole layout rotates 90°.
+    const wet = new Set<string>(
+      [...getWaterTiles(), ...getBridgeSpots()].map((p) => `${p.worldX},${p.worldY}`),
+    );
+    const beside = wet.has(`${this.worldX - 1},${this.worldY}`) || wet.has(`${this.worldX + 1},${this.worldY}`);
+    const above = wet.has(`${this.worldX},${this.worldY - 1}`) || wet.has(`${this.worldX},${this.worldY + 1}`);
+    const rotated = above && !beside;
+
+    const w3 = world3d();
+    const px = (along: number, across: number): [number, number] =>
+      (rotated ? [this.worldX + along, this.worldY + across] : [this.worldX + across, this.worldY + along]);
+
+    for (let i = 0; i < PLANK_ROWS; i++) {
+      const along = -0.5 + (i + 0.5) / PLANK_ROWS;
+      const box = (rotated
+        ? w3.addBox(PLANK_D, PLANK_H, PLANK_W, PLANK_FILLS[i % PLANK_FILLS.length])
+        : w3.addBox(PLANK_W, PLANK_H, PLANK_D, PLANK_FILLS[i % PLANK_FILLS.length]))
+        .setPosition(...px(along, 0))
+        .setElevation(PLANK_ELEV);
+      this.planks.push({ box, restElev: PLANK_ELEV, laid: false, animating: false });
+    }
+
+    for (const side of [-STRINGER_OFF, STRINGER_OFF]) {
+      const beam = (rotated
+        ? w3.addBox(1.0, STRINGER_H, STRINGER_W, STRINGER_FILL)
+        : w3.addBox(STRINGER_W, STRINGER_H, 1.0, STRINGER_FILL))
+        .setPosition(...px(0, side))
+        .setElevation(STRINGER_ELEV);
+      this.frame.push({ box: beam, restElev: STRINGER_ELEV, laid: false, animating: false });
+      for (const end of [-POST_OFF_ALONG, POST_OFF_ALONG]) {
+        const post = w3.addBox(POST_SIZE, POST_H, POST_SIZE, POST_FILL)
+          .setPosition(...px(end, side))
+          .setElevation(POST_ELEV);
+        this.frame.push({ box: post, restElev: POST_ELEV, laid: false, animating: false });
+      }
     }
   }
 
-  private dropSlat(index: number): void {
+  /** First deposit: the four legs splash down into the river, then the beams settle on them. */
+  private slamFrame(): void {
+    this.ensureDeck();
+    this.frame.forEach((part, i) => {
+      const isPost = part.restElev === POST_ELEV;
+      this.scene.time.delayedCall(i * 45, () => {
+        this.dropPart(part, () => {
+          if (isPost) {
+            // A leg landing in the water kicks up a splash, not sawdust.
+            this.spawnBurst(part.box.x, part.box.y, -WATER_DEPTH_TILES + 0.08, SPLASH_TINT);
+          }
+        });
+      });
+    });
+  }
+
+  private dropPlank(index: number): void {
     if (this.dead) return;
-    const slat = this.slats[index];
-    if (!slat) return; // not laid out yet — updateSlats() will show it solid on the next render
-    slat.laid = true;
-    slat.animating = true;
-    const ts = this.lastTileSize || 1;
-    slat.group.setAlpha(0.96);
-    slat.group.y = slat.restY - ts * 0.55; // start above the river
-    slat.group.setScale(1, 0.55); // squashed, opens up as it lands
-    slat.shadow.setVisible(true).setAlpha(0);
+    const part = this.planks[index];
+    if (!part || part.laid) return;
+    this.dropPart(part, () => {
+      getSoundManager().playHammer();
+      this.spawnBurst(part.box.x, part.box.y, PLANK_ELEV + 0.06, SAWDUST_TINT);
+      // The final board of the whole crossing finishes the build.
+      if (this.isBridge && index === PLANK_ROWS - 1) this.finishBridge();
+    });
+  }
+
+  // Drop one part in from above: falls to its rest height and settles solid.
+  private dropPart(part: DeckPart, onLanded?: () => void): void {
+    if (this.dead || part.laid) return;
+    part.laid = true;
+    part.animating = true;
+    part.box.setAlpha(0.96).setElevation(part.restElev + DROP_FROM_TILES);
     this.scene.tweens.add({
-      targets: slat.group,
-      y: slat.restY,
-      scaleY: 1,
-      duration: PLANK_DROP_MS,
+      targets: part.box,
+      elevation: part.restElev,
+      duration: PART_DROP_MS,
       ease: 'Back.easeOut',
       onComplete: () => {
         if (this.dead) return;
-        slat.animating = false;
-        slat.group.setAlpha(1);
-        this.onSlatLanded(index);
+        part.animating = false;
+        part.box.setAlpha(1);
+        onLanded?.();
       },
     });
-    this.scene.tweens.add({ targets: slat.shadow, alpha: 0.34, duration: PLANK_DROP_MS });
   }
 
-  private onSlatLanded(index: number): void {
-    getSoundManager().playHammer();
-    this.spawnSawdust(index);
-    // The final board of the whole crossing tips us into the finished tile.
-    if (this.isBridge && index === PLANK_ROWS - 1) this.finishBridge();
-  }
-
-  // Once the last board is nailed, cross-fade the procedural planks into the real bridge tile.
   private finishBridge(): void {
-    if (this.finishing || this.dead) return;
-    this.finishing = true;
-    this.animTimer?.destroy();
-    this.animTimer = undefined;
-    this.sprite.setVisible(false);
-    this.pips.setVisible(false);
-    this.bridge.setVisible(true).setAlpha(0);
-    this.scene.tweens.add({ targets: this.bridge, alpha: 1, duration: FINISH_MS });
-    this.scene.tweens.add({
-      targets: this.bridge,
-      scaleX: { from: 1.1, to: 1 },
-      scaleY: { from: 1.1, to: 1 },
-      duration: FINISH_MS + 40,
-      ease: 'Back.easeOut',
-    });
-    this.scene.tweens.add({
-      targets: this.buildFx,
-      alpha: 0,
-      duration: FINISH_MS,
-      onComplete: () => {
-        this.buildFx.setVisible(false).setAlpha(1);
-        this.finishing = false;
-      },
-    });
+    if (this.dead) return;
+    // The last hammer blow lands with a physical thump; GameScene adds its flash via onBuilt.
+    world3d().shake(90, 0.03);
     getSoundManager().playBridgeBuilt();
+    this.pips.setVisible(false);
     this.onBuilt?.();
   }
 
-  // A short spray of tan sawdust bursting up where a board is hammered home.
-  private spawnSawdust(index: number): void {
-    const slat = this.slats[index];
-    if (!slat || this.dead) return;
-    const ts = this.lastTileSize || 1;
-    const r = Math.max(1, ts * 0.045);
+  // A short burst of motes where a part lands: tan sawdust for boards, cool spray for legs.
+  private spawnBurst(x: number, y: number, elev: number, tint: number): void {
     for (let i = 0; i < 5; i++) {
-      const speck = this.scene.add
-        .circle(Phaser.Math.Between(-ts * 0.3, ts * 0.3), slat.restY, r, i % 2 ? 0xd9b483 : 0xb98f5c, 0.9);
-      this.buildFx.add(speck);
+      const puff = world3d()
+        .addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 })
+        .setTint(tint)
+        .setPosition(x + (Math.random() - 0.5) * 0.5, y + (Math.random() - 0.5) * 0.2)
+        .setElevation(elev)
+        .setDisplaySize(0.15, 0.15)
+        .setAlpha(0.85);
       this.scene.tweens.add({
-        targets: speck,
-        x: speck.x + Phaser.Math.Between(-6, 6) * (ts * 0.05),
-        y: speck.y - ts * (0.18 + Math.random() * 0.32),
+        targets: puff,
+        elevation: elev + 0.2 + Math.random() * 0.25,
         alpha: 0,
-        duration: 260 + i * 22,
+        scaleX: 0.3,
+        scaleY: 0.3,
+        duration: 280 + i * 30,
         ease: 'Quad.easeOut',
-        onComplete: () => speck.destroy(),
+        onComplete: () => puff.destroy(),
       });
     }
   }
@@ -285,44 +319,19 @@ export class WaterObject {
   }
 
   public render(tileSize: number, camera: WorldCamera): void {
-    // Water + bridge are static 3D quads; only the Phaser-side carpentry FX
-    // (ghost boards, sawdust, pips) still track the projected screen position.
-    const s = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    this.buildFx.setPosition(s.x, s.y);
-    // Only re-lay geometry when the tile size actually changes — sizing every frame would
-    // fight the settle/scale tweens (they'd get snapped back to 1:1 mid-bounce).
-    if (tileSize !== this.lastTileSize) {
-      this.lastTileSize = tileSize;
-      if (this.buildable) this.layoutSlats(tileSize);
-    }
+    // The deck is real world geometry; only the progress pips still live on the 2D overlay.
+    if (this.planks.length) this.updateGhosts();
 
-    if (this.isBridge && !this.finishing) {
-      this.bridge.setVisible(true);
-      this.buildFx.setVisible(false);
+    if (!this.buildable || this.isBridge) {
       this.pips.setVisible(false);
       return;
     }
-    if (this.finishing) return; // the finish tweens own every sprite until they complete
-
-    // Plain (non-buildable) river tiles just block — no ghost boards, no pips.
-    if (!this.buildable) {
-      this.bridge.setVisible(false);
-      this.buildFx.setVisible(false);
-      this.pips.setVisible(false);
-      return;
-    }
-
-    // A buildable spot always shows the crossing as ghost boards (the "you can build here"
-    // marker). Boards already nailed sit solid; the rest breathe faintly to draw the eye.
-    this.ensureSlats(tileSize);
-    this.bridge.setVisible(false);
-    this.buildFx.setVisible(true);
-    this.updateSlats();
 
     // Pips float above only while the hero is beside the spot (or a build is underway).
     const near = this.deposited > 0 || this.hintOn;
     this.pips.setVisible(near);
     if (near) {
+      const s = camera.tileToScreen(this.worldX, this.worldY, tileSize);
       const bob = Math.sin(this.scene.time.now * 0.006) * (tileSize * 0.06);
       this.pips.setPosition(s.x, s.y - tileSize * 0.62 + bob);
       const gap = tileSize * 0.26;
@@ -335,64 +344,30 @@ export class WaterObject {
     }
   }
 
-  // Lazily build the four board sprites (once), then keep them laid out for the tile size.
-  private ensureSlats(tileSize: number): void {
-    if (this.slats.length) return;
-    for (let i = 0; i < PLANK_ROWS; i++) {
-      const group = this.scene.add.container(0, 0);
-      const shadow = this.scene.add.rectangle(0, 0, 1, 1, PLANK_SHADOW, 0.34).setVisible(false);
-      const body = this.scene.add.rectangle(0, 0, 1, 1, PLANK_FILLS[i % PLANK_FILLS.length]);
-      const hilite = this.scene.add.rectangle(0, 0, 1, 1, PLANK_HILITE, 0.55);
-      group.add([shadow, body, hilite]);
-      this.buildFx.add(group);
-      this.slats.push({ group, body, hilite, shadow, restY: 0, laid: false, animating: false });
-    }
-    this.layoutSlats(tileSize);
-  }
-
-  private layoutSlats(tileSize: number): void {
-    if (!this.slats.length) return;
-    const rowH = tileSize / PLANK_ROWS;
-    const w = tileSize * 0.98;
-    const bodyH = rowH * 0.82; // gap between boards reads as the plank seams
-    this.slats.forEach((slat, i) => {
-      const cy = -tileSize / 2 + (i + 0.5) * rowH;
-      slat.restY = cy;
-      if (!slat.animating) slat.group.setPosition(0, cy);
-      slat.body.setSize(w, bodyH);
-      slat.hilite.setSize(w, Math.max(1, bodyH * 0.22)).setPosition(0, -bodyH * 0.3);
-      slat.shadow.setSize(w, bodyH).setPosition(0, bodyH * 0.16);
-    });
-  }
-
-  // Reflect the current laid/ghost state each frame (skipping any board mid-drop, whose tween
-  // owns its transform + alpha).
-  private updateSlats(): void {
-    const laid = this.isBridge ? PLANK_ROWS : this.deposited * PLANKS_PER_GRAVETO;
-    const pulse = 0.2 + 0.06 * Math.sin(this.scene.time.now * 0.005);
-    this.slats.forEach((slat, i) => {
-      if (slat.animating) return;
-      const isLaid = i < laid;
-      slat.laid = isLaid;
-      const ghostAlpha = i === 0 ? SAMPLE_PLANK_ALPHA : pulse;
-      slat.group.setAlpha(isLaid ? 1 : ghostAlpha);
-      slat.group.setScale(1, 1);
-      slat.group.setPosition(0, slat.restY);
-      slat.shadow.setVisible(isLaid);
-      slat.hilite.setVisible(isLaid);
-    });
+  // Un-laid parts breathe as a faint ghost preview (brighter while the hero stands beside
+  // the spot); parts mid-drop own their own alpha/height until they land.
+  private updateGhosts(): void {
+    const boost = this.hintOn ? GHOST_HINT_BOOST : 1;
+    const pulse = (GHOST_BASE + GHOST_WAVE * Math.sin(this.scene.time.now * 0.005)) * boost;
+    const setGhost = (part: DeckPart, alpha: number): void => {
+      if (part.animating) return;
+      part.box.setAlpha(part.laid ? 1 : Math.min(1, alpha));
+    };
+    this.planks.forEach((part, i) => setGhost(part, i === 0 ? SAMPLE_PLANK_ALPHA : pulse));
+    for (const part of this.frame) setGhost(part, pulse * 0.8);
   }
 
   public destroy(): void {
     this.dead = true;
     this.animTimer?.destroy();
     this.animTimer = undefined;
-    this.scene.tweens.killTweensOf(this.bridge);
-    this.scene.tweens.killTweensOf(this.buildFx);
-    this.slats.forEach((sl) => this.scene.tweens.killTweensOf(sl.group));
+    for (const part of [...this.planks, ...this.frame]) {
+      this.scene.tweens.killTweensOf(part.box);
+      part.box.destroy();
+    }
+    this.planks = [];
+    this.frame = [];
     this.sprite.destroy();
-    this.bridge.destroy();
-    this.buildFx.destroy(true); // destroys the slat groups + any live sawdust children
     this.pips.destroy();
   }
 }

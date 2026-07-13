@@ -27,7 +27,7 @@ import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/ga
 import { CoinManager } from '@/game/entities/CoinManager';
 import type { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager } from '@/game/entities/EnemyManager';
-import { UndeadSpawnDirector } from '@/game/entities/UndeadSpawnDirector';
+import { RING_MAX_TILES, UndeadSpawnDirector } from '@/game/entities/UndeadSpawnDirector';
 import { NpcManager } from '@/game/entities/NpcManager';
 import { HeartPickupManager } from '@/game/entities/HeartPickupManager';
 import { ItemManager } from '@/game/entities/ItemManager';
@@ -131,15 +131,18 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0, label: 'VOCE PEGOU UM GRAVETO!' },
 };
 
-// What each melee-capable item does to an enemy on a bump. The sword is an instant kill — one
-// hit drops any enemy. The wood stick ("graveto"), axe, and key are improvised weapons that
-// take 3 hits to kill a skull (its max health) — the sword is the only one-hit lethal option.
+// What a blow does to a skull (max health 3). Three tiers: bare fists land BARE_HAND_DAMAGE
+// (three punches kill — see strikeEnemy); any common item in hand (key, stick, axe, pickaxe,
+// scythe) lands 1.5 (two blows kill); the sword — or the stick while it BURNS — one-shots.
 const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   sword: 999,
-  wood: 1,
-  axe: 1,
-  key: 1,
+  wood: 1.5,
+  axe: 1.5,
+  key: 1.5,
+  pickaxe: 1.5,
+  scythe: 1.5,
 };
+const BARE_HAND_DAMAGE = 1;
 
 // Standing guard: an idle hero swings his weapon on his own at any enemy that closes to an
 // adjacent tile, so defending doesn't require walking into the attacker (bump-attacking still
@@ -151,7 +154,7 @@ const BOMB_BLAST_RADIUS_TILES = 2.2;
 
 // Resting in a lit campfire's safe ring mends one heart every this many ms (leaving the ring
 // resets the timer, so healing is a "warm up by the fire" beat, not passive regen anywhere).
-const HEALTH_REGEN_MS = 2500;
+const HEALTH_REGEN_MS = 1200;
 // While the fire mends the hero, warm ember motes stream fire→hero on this cadence, so the
 // healing visibly COMES FROM the campfire instead of a heart just popping in the HUD.
 const HEAL_MOTE_INTERVAL_MS = 110;
@@ -197,6 +200,10 @@ const FIRE_COMPASS_ORBIT_TILES = 1.55;
 const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1],
 ];
+// The 4 grid moves a walking entity has — the undead reachability flood-fill steps by these.
+const CARDINAL_DIRS: ReadonlyArray<readonly [number, number]> = [
+  [-1, 0], [1, 0], [0, -1], [0, 1],
+];
 
 // How many river tiles a single felled tree can bridge when it topples ("TIMBER!"). A wider
 // river needs more than one tree.
@@ -213,6 +220,9 @@ export class GameScene extends Phaser.Scene {
   private chunkManager?: ChunkManager;
   private enemyManager?: EnemyManager;
   private spawnDirector?: UndeadSpawnDirector;
+  // Per-frame memo for undeadReachableTiles (the spawn director probes many tiles per tick).
+  private reachableFrame = -1;
+  private readonly reachableTiles = new Set<string>();
   private playerSafe = true;
   // Music staging: how long the field has been clear of undead (hysteresis so the
   // combat track doesn't flap while skulls spawn and die in quick succession).
@@ -1168,13 +1178,51 @@ export class GameScene extends Phaser.Scene {
     return this.distToNearestCampfireTiles(wx, wy) <= LIGHT_RADIUS_TILES;
   }
 
-  // A skull can rise only on an open, dark tile that nothing occupies.
+  // A skull can rise only on an open, dark tile that nothing occupies — and only where it
+  // could actually WALK to the hero (same 4-dir moves and blockers it hunts by). A skull
+  // born across a river or behind a rock wall would just pace its pocket, menacing nobody.
   private canSpawnUndeadAt(wx: number, wy: number): boolean {
     if (this.isSolidForEntities(wx, wy)) return false;
     if (this.isTileLitByCampfire(wx, wy)) return false;
     if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
     if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) return false;
-    return true;
+    return this.undeadReachableTiles().has(`${wx},${wy}`);
+  }
+
+  /**
+   * Every tile an undead could walk to the hero from: a flood-fill out from the hero's tile
+   * over undead-passable ground (not solid, not firelit — the exact blockers they move by),
+   * bounded a few tiles past the spawn ring so a path may detour around a short wall. Other
+   * undead are ignored: they move, so they never permanently seal a path. Memoised per frame
+   * — the director probes up to 14 candidate tiles per spawn tick, and each probe must cost
+   * a set lookup, not its own flood.
+   */
+  private undeadReachableTiles(): Set<string> {
+    const frame = this.game.loop.frame;
+    if (frame === this.reachableFrame) return this.reachableTiles;
+    this.reachableFrame = frame;
+    this.reachableTiles.clear();
+
+    const px = this.playerWorld.worldX;
+    const py = this.playerWorld.worldY;
+    const maxR = RING_MAX_TILES + 3;
+    const queue: Array<readonly [number, number]> = [[px, py]];
+    this.reachableTiles.add(`${px},${py}`);
+    for (let head = 0; head < queue.length; head++) {
+      const [cx, cy] = queue[head];
+      for (const [ox, oy] of CARDINAL_DIRS) {
+        const nx = cx + ox;
+        const ny = cy + oy;
+        if (Math.abs(nx - px) > maxR || Math.abs(ny - py) > maxR) continue;
+        const key = `${nx},${ny}`;
+        if (this.reachableTiles.has(key)) continue;
+        if (this.isSolidForEntities(nx, ny)) continue;
+        if (this.isTileLitByCampfire(nx, ny)) continue;
+        this.reachableTiles.add(key);
+        queue.push([nx, ny]);
+      }
+    }
+    return this.reachableTiles;
   }
 
   private handlePlayerBump(wx: number, wy: number): void {
@@ -1401,34 +1449,28 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Bare-handed: the hero can't hurt an enemy, but still shoves it back the way it came.
-    if (this.heldItem === 'none') {
-      const dx = wx - this.playerWorld.worldX;
-      const dy = wy - this.playerWorld.worldY;
-      enemy.triggerKnockback(dx, dy);
-      this.world3d?.shake(60, 0.045);
-      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-      return;
-    }
-
+    // Bare-handed or armed, a bump IS the attack: fists shove and chip (3 punches kill),
+    // items land their MELEE_DAMAGE tier — strikeEnemy resolves the tier.
     this.strikeEnemy(enemy, wx, wy);
   }
 
   /**
-   * Land a melee blow on an enemy at (wx, wy) with the held item: damage, swing arc,
-   * knockback, and all the impact juice. Shared by the walk-into-it bump attack and the
-   * standing-guard auto-attack. No-op if the held item can't hurt enemies.
+   * Land a melee blow on an enemy at (wx, wy): damage, swing arc, knockback, and all the
+   * impact juice. Shared by the walk-into-it bump attack and the standing-guard auto-attack.
+   * Damage tiers (skull max health 3): bare fists 1 — a punch that also shoves; a common
+   * item 1.5 — two blows kill; the sword or the burning stick one-shots. A non-melee
+   * holdable (bomb, lava boots) can't hurt an enemy at all — no-op.
    */
   private strikeEnemy(enemy: EnemyBase, wx: number, wy: number): void {
-    // Only a melee-capable item hurts enemies: the sword (instant kill, scaled by upgrades)
-    // or the wood club / axe / key (3 hits — the skull's max health).
-    const damage = MELEE_DAMAGE[this.heldItem as HeldItemKind];
-    if (damage === undefined) return;
+    const bareHanded = this.heldItem === 'none';
+    const itemDamage = MELEE_DAMAGE[this.heldItem as HeldItemKind];
+    if (!bareHanded && itemDamage === undefined) return;
+    const damage = bareHanded ? BARE_HAND_DAMAGE : this.heldOnFire ? 999 : itemDamage!;
 
     const hits = this.heldItem === 'sword' ? 1 + this.upgrades.swordSpeed : 1;
     for (let i = 0; i < hits; i++) enemy.takeDamage(damage);
 
-    this.swingHeld(wx, wy);
+    if (!bareHanded) this.swingHeld(wx, wy);
     const dx = wx - this.playerWorld.worldX;
     const dy = wy - this.playerWorld.worldY;
     enemy.triggerKnockback(dx, dy);

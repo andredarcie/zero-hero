@@ -597,6 +597,33 @@ class SoundManager {
     this.noise('highpass', 1500, 1.0, 0.12, 0.08);
   }
 
+  /**
+   * The undead attack wind-up: a short rising hiss — the audio half of the "dodge now"
+   * telegraph (the visual half is the red flash + rear-back pose in UndeadEnemy).
+   * Procedural only — no authored sample yet.
+   */
+  public playUndeadWindup(): void {
+    this.osc('sawtooth', 70, 170, 0.10, 0.32);
+    this.noise('bandpass', 520, 2.2, 0.09, 0.28);
+  }
+
+  /** The strike that met empty air: a thin whoosh, nothing landed. */
+  public playUndeadWhiff(): void {
+    this.noise('highpass', 1600, 1.0, 0.10, 0.09);
+    this.osc('triangle', 220, 90, 0.05, 0.08);
+  }
+
+  /**
+   * The undead spawn telegraph: a low ground-rumble with a gravelly crunch on top, warning
+   * that something is about to claw out of the tile (playUndeadSpawn fires when it does).
+   * Procedural only — no authored sample yet.
+   */
+  public playGroundCrack(): void {
+    this.noise('lowpass', 170, 0.8, 0.30, 0.55);
+    this.noise('bandpass', 950, 3.0, 0.10, 0.20, 0.06);
+    this.osc('triangle', 38, 30, 0.20, 0.6);
+  }
+
   public playUndeadSpawn(): void {
     if (this.playSample('undeadSpawn', 0.8)) return;
     this.noise('bandpass', 700, 2.0, 0.16, 0.16);

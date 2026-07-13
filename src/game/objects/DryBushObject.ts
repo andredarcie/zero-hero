@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
-import { world3d } from '@/game/render3d/World3D';
+import { world3d, type FireLight3D } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 // A dry bush ("mato seco") blocks its tile until a flaming torch ignites it. It burns for
@@ -12,6 +12,13 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
 const BURN_MS = 2200;
 const FIRE_FRAME_MS = 110;
 const FIRE_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
+
+// A burning bush IS a light source: the same warm firelight model as a campfire/torch
+// (flicker, glow pool, cast shadows), just smaller — and only for as long as it burns.
+// The intensity rides the char progress: flares up fast, holds, dies with the last flame.
+const BUSH_LIGHT_SCALE = 0.55;
+const bushLightCurve = (p: number): number =>
+  (p < 12 ? p / 12 : p < 65 ? 1 : Math.max(0, (100 - p) / 35));
 
 // tinyFire billboards offset over the bush (in tile fractions), each a little out of phase.
 const FIRE_SPOTS = [
@@ -33,6 +40,7 @@ export class DryBushObject {
   private readonly sprite: Billboard3D;
   private state: BushState = 'intact';
   private fires: Billboard3D[] = [];
+  private fireLight?: FireLight3D;
   private fireTimer?: Phaser.Time.TimerEvent;
   private fireFrame = 0;
 
@@ -75,6 +83,10 @@ export class DryBushObject {
       loop: true,
     });
 
+    // Real firelight while it burns (see BUSH_LIGHT_SCALE) — driven by the char tween below.
+    this.fireLight = world3d().addFireLight(this.worldX, this.worldY, true);
+    this.fireLight.setIntensityScale(0);
+
     // Char from natural brown (no tint) toward ash grey over the burn.
     this.scene.tweens.addCounter({
       from: 0,
@@ -84,6 +96,7 @@ export class DryBushObject {
         const progress = tween.getValue() ?? 0;
         const c = Phaser.Display.Color.Interpolate.ColorWithColor(WHITE, ASH, 100, progress);
         this.sprite.setTint(Phaser.Display.Color.GetColor(c.r, c.g, c.b));
+        this.fireLight?.setIntensityScale(BUSH_LIGHT_SCALE * bushLightCurve(progress));
       },
       onComplete: () => this.toAsh(),
     });
@@ -119,6 +132,9 @@ export class DryBushObject {
     this.fireTimer = undefined;
     this.fires.forEach((fire) => fire.destroy());
     this.fires = [];
+    // The curve already faded it to zero by now — just release the light.
+    this.fireLight?.destroy();
+    this.fireLight = undefined;
     // A low, greyed, half-faded smudge that reads as leftover ash.
     this.sprite
       .setTint(Phaser.Display.Color.GetColor(ASH.red, ASH.green, ASH.blue))
@@ -139,6 +155,8 @@ export class DryBushObject {
     this.fireTimer?.destroy();
     this.fires.forEach((fire) => fire.destroy());
     this.fires = [];
+    this.fireLight?.destroy();
+    this.fireLight = undefined;
     this.scene.tweens.killTweensOf(this.sprite);
     this.sprite.destroy();
   }

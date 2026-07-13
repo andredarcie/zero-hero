@@ -30,6 +30,7 @@ import { getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv } fro
 export const FX_DOT_TEXTURE = 'fx-dot';
 export const FX_RING_TEXTURE = 'fx-ring';
 export const FX_PUFF_TEXTURE = 'fx-puff';
+export const FX_CRACK_TEXTURE = 'fx-crack';
 
 // ── The 3D world renderer (pixel-art lit) ─────────────────────────────────────
 //
@@ -141,6 +142,27 @@ export interface FireLight3D {
   setIntensityScale(s: number): void;
   readonly worldX: number;
   readonly worldY: number;
+  destroy(): void;
+}
+
+/**
+ * A lit solid-colour BOX in the world (real prop geometry: bridge planks, posts…).
+ * Same Lambert + quantized/capped firelight as the merged terrain, so it belongs to
+ * the diorama instead of reading as a foreign smooth-shaded object. Position is the
+ * box CENTRE in tile coordinates; `elevation` is its centre height in tiles (0 =
+ * ground plane). x/y/elevation/alpha/scaleY are plain properties so Phaser tweens
+ * can drive them, exactly like Billboard3D.
+ */
+export interface Box3D {
+  x: number;
+  y: number;
+  elevation: number;
+  alpha: number;
+  scaleY: number;
+  setPosition(tileX: number, tileY: number): Box3D;
+  setElevation(tiles: number): Box3D;
+  setAlpha(a: number): Box3D;
+  setVisible(v: boolean): Box3D;
   destroy(): void;
 }
 
@@ -607,6 +629,7 @@ export class World3D {
     registerTexture3D(FX_DOT_TEXTURE, dot);
     registerTexture3D(FX_RING_TEXTURE, makeRingTexture());
     registerTexture3D(FX_PUFF_TEXTURE, makePuffTexture());
+    registerTexture3D(FX_CRACK_TEXTURE, makeCrackTexture());
     this.embers = makeParticleField(this.scene, EMBER_COUNT, 0.12, dot);
     for (let i = 0; i < EMBER_COUNT; i++) {
       this.emberState.push({ life: Math.random(), maxLife: 0.9 + Math.random() * 0.9, vx: 0, vy: 0, vz: 0 });
@@ -782,6 +805,49 @@ export class World3D {
         (mesh.material as THREE.Material).dispose();
       },
     };
+  }
+
+  /** See Box3D. Size is in tiles (sizeH = height/thickness); colour is flat (grain via alternating boxes). */
+  public addBox(sizeX: number, sizeH: number, sizeZ: number, color: number): Box3D {
+    const geo = new THREE.BoxGeometry(sizeX, sizeH, sizeZ);
+    // transparent stays on even at alpha 1 so ghost previews and solid props share a material
+    // shape (toggling `transparent` at runtime would force a shader recompile).
+    const mat = new THREE.MeshLambertMaterial({ color, transparent: true });
+    patchPixelMaterial(mat, { quantize: true });
+    const mesh = new THREE.Mesh(geo, mat);
+    this.scene.add(mesh);
+
+    const state = { x: 0, y: 0, elev: 0, alpha: 1, scaleY: 1, visible: true };
+    const apply = (): void => {
+      mesh.position.set(state.x, state.elev, state.y);
+      mesh.scale.y = state.scaleY;
+      mat.opacity = state.alpha;
+      mesh.visible = state.visible && state.alpha > 0.004;
+    };
+    apply();
+
+    const box: Box3D = {
+      get x() { return state.x; },
+      set x(v: number) { state.x = v; apply(); },
+      get y() { return state.y; },
+      set y(v: number) { state.y = v; apply(); },
+      get elevation() { return state.elev; },
+      set elevation(v: number) { state.elev = v; apply(); },
+      get alpha() { return state.alpha; },
+      set alpha(v: number) { state.alpha = v; apply(); },
+      get scaleY() { return state.scaleY; },
+      set scaleY(v: number) { state.scaleY = v; apply(); },
+      setPosition(tileX: number, tileY: number) { state.x = tileX; state.y = tileY; apply(); return box; },
+      setElevation(tiles: number) { state.elev = tiles; apply(); return box; },
+      setAlpha(a: number) { state.alpha = a; apply(); return box; },
+      setVisible(v: boolean) { state.visible = v; apply(); return box; },
+      destroy: () => {
+        this.scene.remove(mesh);
+        geo.dispose();
+        mat.dispose();
+      },
+    };
+    return box;
   }
 
   // ── fire lights ──────────────────────────────────────────────────────────────
@@ -1561,6 +1627,57 @@ const makePuffTexture = (): THREE.DataTexture => {
   const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
+  return tex;
+};
+
+// The undead spawn telegraph: jagged fissures radiating from a point, drawn WHITE so the
+// billboard's tint decides the colour (a cold under-glow, not a brown crack — in the dark
+// where skulls rise, a dark decal on dark ground would be invisible). Low-res + NEAREST so
+// the fissures break into chunky pixel steps like every other FX here.
+const CRACK_TEX_RES = 48;
+const makeCrackTexture = (): THREE.CanvasTexture => {
+  const c = document.createElement('canvas');
+  c.width = c.height = CRACK_TEX_RES;
+  const ctx = c.getContext('2d')!;
+  const r = CRACK_TEX_RES / 2;
+  ctx.strokeStyle = 'rgba(255,255,255,1)';
+  ctx.lineWidth = 2;
+  const arms = 6;
+  for (let a = 0; a < arms; a++) {
+    // Each arm is a random walk outward: step, kink sideways, step — a lightning fork, not a ray.
+    let ang = (a / arms) * Math.PI * 2 + (Math.random() - 0.5) * 0.7;
+    let x = r;
+    let y = r;
+    const reach = r * (0.55 + Math.random() * 0.4);
+    const steps = 4;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    for (let s = 0; s < steps; s++) {
+      const len = (reach / steps) * (0.7 + Math.random() * 0.6);
+      ang += (Math.random() - 0.5) * 0.9;
+      x += Math.cos(ang) * len;
+      y += Math.sin(ang) * len;
+      ctx.lineTo(x, y);
+      // A short side-branch halfway out on some arms sells "shattering", not "asterisk".
+      if (s === 1 && Math.random() < 0.6) {
+        const bAng = ang + (Math.random() < 0.5 ? 1 : -1) * (0.7 + Math.random() * 0.6);
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(bAng) * len * 0.6, y + Math.sin(bAng) * len * 0.6);
+        ctx.moveTo(x, y);
+      }
+    }
+    ctx.stroke();
+  }
+  // A dim pool at the heart of the fissure, so the centre reads hotter than the tips.
+  const g = ctx.createRadialGradient(r, r, 0, r, r, r * 0.5);
+  g.addColorStop(0, 'rgba(255,255,255,0.5)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, CRACK_TEX_RES, CRACK_TEX_RES);
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 };
 
