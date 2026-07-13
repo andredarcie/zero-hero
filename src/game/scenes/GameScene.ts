@@ -24,6 +24,7 @@ import {
 } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/game/debug/debugHooks';
+import { initProfiler, profiler } from '@/game/debug/Profiler';
 import { CoinManager } from '@/game/entities/CoinManager';
 import type { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager } from '@/game/entities/EnemyManager';
@@ -514,6 +515,12 @@ export class GameScene extends Phaser.Scene {
     this.initLighting();
     this.streamChunks(true);
 
+    // The world is fully built, so compile every shader now rather than lazily, one hitch at
+    // a time, on the frames each material is first drawn.
+    this.world3d.prewarmShaders();
+    initProfiler(this.world3d);
+    this.events.on(Phaser.Scenes.Events.PRE_UPDATE, profiler.frameStart, profiler);
+
     this.registerDebugApi();
 
     // Live playtest launched from the world editor: ESC stops the run and wakes the
@@ -572,6 +579,7 @@ export class GameScene extends Phaser.Scene {
     const w3 = this.world3d;
     const cam = this.camera;
     if (!w3 || !cam) return;
+    profiler.begin('render3d');
 
     // The dialog pan shifts WorldCamera.screenCenter; translate that into a
     // camera view offset in tiles so the 3D framing pans the same way.
@@ -601,6 +609,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     w3.render(delta);
+    profiler.end('render3d');
+    // Gameplay gauges: what the game was DOING on a frame is usually the fastest way to
+    // explain what that frame cost.
+    profiler.gauge('enemies', this.enemyManager?.aliveCount ?? 0);
+    profiler.gauge('tweens', this.tweens.getTweens().length);
+    profiler.gauge('displayList', this.children.length);
+    profiler.gauge('litCampfires', this.litFireCount);
+    profiler.frameEnd();
   }
 
   // Draw the hero's state onto its 3D billboard: position from the screen-centre pin
@@ -721,6 +737,8 @@ export class GameScene extends Phaser.Scene {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     // 3D teardown: stop the frame hook, drop the billboards, dispose the renderer.
     this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
+    this.events.off(Phaser.Scenes.Events.PRE_UPDATE, profiler.frameStart, profiler);
+    profiler.detach();
     this.heroBillboard?.destroy();
     this.heroBillboard = undefined;
     // Phaser destroys the scene's own GameObjects on shutdown; drop the handle so a restart
@@ -1307,7 +1325,9 @@ export class GameScene extends Phaser.Scene {
         this.swingHeld(wx, wy);
         // Ignite when the flame reaches the bush (end of the main swing arc).
         this.time.delayedCall(150, () => {
-          if (bush.ignite()) this.spawnFireHitEffect(wx, wy);
+          if (!bush.ignite()) return;
+          profiler.mark('bush.ignite');
+          this.spawnFireHitEffect(wx, wy);
         });
       } else {
         // Needs a lit flame to catch: show the fire balloon.

@@ -8,6 +8,7 @@ import {
   CHUNK_COLUMNS, CHUNK_ROWS, SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds } from '@/game/world/WorldData';
+import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
 import { CAST_MAX_ALPHA, configureCast, makeCastMesh } from './CastShadow3D';
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
@@ -75,6 +76,24 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 const VOID_MARGIN_CHUNKS = 1;
 // Cap on static-solid cast silhouettes drawn at once (trees near a lit fire).
 const CAST_POOL_MAX = 72;
+/**
+ * How many real PointLights the scene keeps for fires. FIXED for the whole run, and
+ * deliberately SMALL — a fire does not own a light, it BORROWS one.
+ *
+ * Two separate costs pull in the same direction here:
+ *  · Changing the count mid-run makes three.js recompile every lit material in the world
+ *    (an ~800ms freeze — this is what made burning a bush hitch). So it must be constant.
+ *  · Every light in the scene is evaluated by every lit FRAGMENT, and our patched shader
+ *    does a world-space snap + flame wobble per light. So each one is a permanent per-pixel
+ *    tax, whether it is lit or sitting at intensity 0. Measured on this world: ~0.35ms of
+ *    frame time per light. So the count must also be small.
+ *
+ * Each frame the pool is handed to the lit fires NEAREST the camera (see the fire loop).
+ * A fire that misses out keeps its glow quad — the big additive halo on the ground, which
+ * is what actually reads as "warm pool" — and only loses its 3D shading contribution, at a
+ * distance where a range-limited point light was contributing almost nothing anyway.
+ */
+const FIRE_LIGHT_SLOTS = 8;
 // River tiles sit this far BELOW the ground plane — a sunken channel (dirt bed +
 // dark banks) so the water reads as recessed, with depth. The bridge still spans it
 // at ground level. WaterObject sets its surface just above the bed at this depth.
@@ -185,8 +204,16 @@ interface FireEntry {
   worldY: number;
   lit: boolean;
   scale: number;
-  light: THREE.PointLight;
   glow: THREE.Mesh; // the visible additive warm halo on the ground around the fire
+  // Each fire computes its own flame every frame — brightness, colour and the dancing
+  // source point — WITHOUT owning a THREE light. A pooled PointLight is then pointed at
+  // whichever fires are nearest the camera (see FIRE_LIGHT_SLOTS). Keeping these here means
+  // an unlit or far-off fire still costs nothing but arithmetic.
+  intensity: number;
+  lx: number; // jittered light position (world tiles)
+  lz: number;
+  color: THREE.Color;
+  camDist: number; // distance to the camera target this frame (drives light assignment)
   flicker: number; // last frame's dance value (reused for the shadow-light height bob)
   level: number; // last frame's instantaneous brightness (~0.6 dim … 1.4 flaring)
   // Realistic-flicker state (see the fire loop in render()):
@@ -444,6 +471,18 @@ export class World3D {
   private dotTexture?: THREE.CanvasTexture;
 
   private readonly fires: FireEntry[] = [];
+  // The scene's fire PointLights: a fixed, small pool, aimed each frame at the lit fires
+  // nearest the camera. Built once at construction — see FIRE_LIGHT_SLOTS.
+  private readonly fireLights: THREE.PointLight[] = [];
+  private activeFireLights = 0;
+  // Glow quads are meshes, not lights: they can come and go freely (no recompile), so they
+  // are pooled only to avoid churning geometry/materials as bushes burn.
+  private readonly freeGlows: THREE.Mesh[] = [];
+  // Rebuilt once per frame so the cast-shadow pass doesn't re-scan every fire (lit or
+  // not, near or not) for every single caster.
+  private readonly litFires: FireEntry[] = [];
+  // Scratch for the per-frame light assignment (never reallocated).
+  private readonly lightCandidates: FireEntry[] = [];
   private readonly camTarget = new THREE.Vector3();
   // Impact kick on the camera (see shake()): amplitude in tiles, decaying to zero.
   private shakeMs = 0;
@@ -514,6 +553,14 @@ export class World3D {
     // shadows are the ground silhouettes below.
     this.shadowLight = new THREE.PointLight(FIRE_COLOR, 0, this.params.fireDist, this.params.fireDecay);
     this.scene.add(this.shadowLight);
+
+    // Every light the scene will ever hold is born here. Nothing adds or removes one after
+    // this point: the count is baked into every compiled shader (see FIRE_LIGHT_SLOTS), and
+    // the hero/torch lights used to be created lazily — two more hidden recompiles, one of
+    // them landing exactly when the player lit the torch.
+    this.createFireLights();
+    this.ensureHeroLight();
+    this.ensureTorchLight();
 
     this.buildTerrain();
     this.initPostProcessing();
@@ -894,39 +941,108 @@ export class World3D {
 
   // ── fire lights ──────────────────────────────────────────────────────────────
 
-  public addFireLight(worldX: number, worldY: number, lit: boolean): FireLight3D {
-    const light = new THREE.PointLight(FIRE_COLOR, 0, this.params.fireDist, this.params.fireDecay);
-    light.position.set(worldX, 1.1, worldY);
-    this.scene.add(light);
+  /**
+   * The scene's fire PointLights, built ONCE at construction and never added to or removed
+   * again. See FIRE_LIGHT_SLOTS: a changing light count recompiles every lit material in the
+   * world (the burning-bush freeze), and every light is a permanent per-fragment cost — so
+   * the count is both fixed and small, and the lights are pointed at whichever fires matter.
+   */
+  private createFireLights(): void {
+    for (let i = 0; i < FIRE_LIGHT_SLOTS; i += 1) {
+      const light = new THREE.PointLight(FIRE_COLOR, 0, this.params.fireDist, this.params.fireDecay);
+      light.position.set(0, 1.1, 0);
+      this.scene.add(light);
+      this.fireLights.push(light);
+    }
+  }
 
-    // The visible warm halo: a big soft additive radial laid flat over the ground,
-    // centred on the fire — this is what actually makes the fire read as a light
-    // source (the cozy yellow glow the 2D game drew). Opacity pulses with the flame.
-    const glowGeo = new THREE.PlaneGeometry(1, 1);
-    glowGeo.rotateX(-Math.PI / 2);
-    const glow = new THREE.Mesh(glowGeo, makeFireGlowMaterial());
-    glow.position.set(worldX, 0.07, worldY);
+  /**
+   * The visible warm halo: a big soft additive radial laid flat over the ground, centred on
+   * the fire — this is what actually makes a fire read as a light source (the cozy yellow
+   * pool the 2D game drew). It is a MESH, not a light: adding one costs a draw call, never a
+   * shader recompile, so every fire keeps its own however many are burning.
+   */
+  private acquireGlow(): THREE.Mesh {
+    const free = this.freeGlows.pop();
+    if (free) {
+      free.visible = true;
+      return free;
+    }
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.rotateX(-Math.PI / 2);
+    const glow = new THREE.Mesh(geo, makeFireGlowMaterial());
     glow.renderOrder = 2;
     this.scene.add(glow);
+    return glow;
+  }
+
+  private releaseGlow(glow: THREE.Mesh): void {
+    glow.visible = false;
+    this.freeGlows.push(glow);
+  }
+
+  /**
+   * Compile every shader up front, at the final light count. Call once per scene, after the
+   * world's props exist and before the first frame — otherwise each material compiles lazily
+   * on the frame it is first drawn, and the player wears it.
+   */
+  public prewarmShaders(): void {
+    this.renderer.compile(this.scene, this.camera);
+  }
+
+  /** Point lights in the scene. Constant for the whole run — see FIRE_LIGHT_SLOTS. */
+  public get lightCount(): number {
+    return this.fireLights.length + 3; // + shadowLight, heroLight, torchLight
+  }
+
+  /** GL counters (draw calls, triangles, compiled programs) for the profiler/HUD. */
+  public get rendererInfo(): THREE.WebGLRenderer['info'] {
+    return this.renderer.info;
+  }
+
+  /** The raw GL context, for the profiler's GPU timer queries. */
+  public get gl(): WebGLRenderingContext | WebGL2RenderingContext {
+    return this.renderer.getContext();
+  }
+
+  /** Live renderer gauges, sampled per frame by the profiler. */
+  public stats(): Record<string, number> {
+    return {
+      sceneObjects: this.scene.children.length,
+      pointLights: this.lightCount,
+      fires: this.fires.length,
+      litFires: this.litFires.length,
+      fireLightsUsed: this.activeFireLights,
+      castCasters: this.castCasters.length,
+      castPool: this.solidCastPool.length,
+      glowsLive: this.fires.length,
+      glowsPooled: this.freeGlows.length,
+    };
+  }
+
+  public addFireLight(worldX: number, worldY: number, lit: boolean): FireLight3D {
+    const glow = this.acquireGlow();
+    glow.position.set(worldX, 0.07, worldY);
 
     const entry: FireEntry = {
-      worldX, worldY, lit, scale: 1, light, glow, flicker: 0, level: 1,
+      worldX, worldY, lit, scale: 1, glow, flicker: 0, level: 1,
       seed: Math.random() * Math.PI * 2, noise: 0, flare: 0, flareTarget: 0,
       flareTimer: Math.random() * 1.5,
+      intensity: 0, lx: worldX, lz: worldY, color: new THREE.Color(FIRE_COLOR), camDist: 0,
     };
     this.fires.push(entry);
+    let released = false;
     return {
       worldX,
       worldY,
       setLit: (v) => { entry.lit = v; },
       setIntensityScale: (s) => { entry.scale = s; },
       destroy: () => {
-        this.scene.remove(light);
-        this.scene.remove(glow);
-        glow.geometry.dispose();
-        (glow.material as THREE.Material).dispose();
+        if (released) return;
+        released = true;
         const i = this.fires.indexOf(entry);
         if (i >= 0) this.fires.splice(i, 1);
+        this.releaseGlow(glow);
       },
     };
   }
@@ -943,14 +1059,12 @@ export class World3D {
     this.torch.strength = Math.max(0, strength01);
   }
 
-  /** Drive the carried torch as a mobile campfire (same dance as addFireLight's fires). */
-  private updateTorch(dt: number, t: number): void {
-    const s = this.torch;
-    if (s.strength <= 0) {
-      if (this.torchLight) this.torchLight.intensity = 0;
-      if (this.torchGlow) (this.torchGlow.material as THREE.MeshBasicMaterial).opacity = 0;
-      return;
-    }
+  /**
+   * The carried torch's light + ground pool. Built eagerly (from sealLights) rather
+   * than on the first lit torch: creating a PointLight mid-run recompiles every lit
+   * material in the scene, so the player used to eat a hitch the moment the flame took.
+   */
+  private ensureTorchLight(): { light: THREE.PointLight; glow: THREE.Mesh } {
     if (!this.torchLight) {
       this.torchLight = new THREE.PointLight(FIRE_COLOR, 0, this.params.fireDist, this.params.fireDecay);
       this.scene.add(this.torchLight);
@@ -961,6 +1075,18 @@ export class World3D {
       this.torchGlow = new THREE.Mesh(glowGeo, makeFireGlowMaterial());
       this.torchGlow.renderOrder = 2;
       this.scene.add(this.torchGlow);
+    }
+    return { light: this.torchLight, glow: this.torchGlow };
+  }
+
+  /** Drive the carried torch as a mobile campfire (same dance as addFireLight's fires). */
+  private updateTorch(dt: number, t: number): void {
+    const s = this.torch;
+    const { light, glow } = this.ensureTorchLight();
+    if (s.strength <= 0) {
+      light.intensity = 0;
+      (glow.material as THREE.MeshBasicMaterial).opacity = 0;
+      return;
     }
     // The exact firelight dance (slow swell + flicker + shimmer + jitter + log-pop flare).
     s.noise += (Math.random() - 0.5) * 0.6;
@@ -981,20 +1107,20 @@ export class World3D {
     s.level = level;
     // A handheld flame reads a touch smaller than a full campfire, but same light model.
     const TORCH_SCALE = 0.85;
-    this.torchLight.distance = this.params.fireDist;
-    this.torchLight.decay = this.params.fireDecay;
-    this.torchLight.intensity = this.params.fireIntensity * TORCH_SCALE * s.strength * level;
-    this.torchLight.position.set(
+    light.distance = this.params.fireDist;
+    light.decay = this.params.fireDecay;
+    light.intensity = this.params.fireIntensity * TORCH_SCALE * s.strength * level;
+    light.position.set(
       s.x + 0.05 * Math.sin(t * 4.6 + s.seed) + nz * 0.04,
       1.0,
       s.y + 0.04 * Math.cos(t * 3.9 + s.seed * 1.5) + nz * 0.03,
     );
     const warm = Math.max(0, Math.min(1, (level - 0.75) / 0.7));
-    this.torchLight.color.copy(FIRE_COOL).lerp(FIRE_HOT, warm);
+    light.color.copy(FIRE_COOL).lerp(FIRE_HOT, warm);
     // The visible warm pool on the ground — what makes the torch read as a light source.
     const gSize = this.params.fireGlowSize * TORCH_SCALE * (0.95 + 0.08 * (level - 1));
     setFireGlow(
-      this.torchGlow, this.torchLight.position.x, this.torchLight.position.z, gSize,
+      glow, light.position.x, light.position.z, gSize,
       s.strength * this.params.fireGlowStrength * TORCH_SCALE * (0.8 + 0.2 * level),
     );
   }
@@ -1006,12 +1132,17 @@ export class World3D {
    * to 0 during the first-campfire cut-scene.
    */
   public setHeroLight(worldX: number, worldY: number, strength01: number): void {
+    const light = this.ensureHeroLight();
+    light.position.set(worldX, 1.2, worldY);
+    light.intensity = this.params.heroLight * Math.max(0, strength01);
+  }
+
+  private ensureHeroLight(): THREE.PointLight {
     if (!this.heroLight) {
       this.heroLight = new THREE.PointLight('#e8e9ec', 0, 8, 1.6);
       this.scene.add(this.heroLight);
     }
-    this.heroLight.position.set(worldX, 1.2, worldY);
-    this.heroLight.intensity = this.params.heroLight * Math.max(0, strength01);
+    return this.heroLight;
   }
 
   // ── firelight cast shadows (2D ground silhouettes) ────────────────────────────
@@ -1024,15 +1155,23 @@ export class World3D {
    */
   private nearestLitFire(x: number, y: number): { worldX: number; worldY: number; level: number } | null {
     let best: { worldX: number; worldY: number; level: number } | null = null;
-    let bestD = Infinity;
-    for (const f of this.fires) {
-      if (!f.lit) continue;
-      const d = Math.hypot(f.worldX - x, f.worldY - y);
-      if (d < bestD) { bestD = d; best = f; }
+    // Squared distances: this runs once per caster AND once per candidate solid tile,
+    // every frame, so it is the hottest loop in the renderer — and the ranking is
+    // identical without the sqrt. `litFires` was filtered for this frame in render().
+    let bestD2 = Infinity;
+    for (const f of this.litFires) {
+      const dx = f.worldX - x;
+      const dy = f.worldY - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD2) { bestD2 = d2; best = f; }
     }
     if (this.torch.strength > 0.15) {
-      const d = Math.hypot(this.torch.x - x, this.torch.y - y);
-      if (d > 0.6 && d < bestD) {
+      const dx = this.torch.x - x;
+      const dy = this.torch.y - y;
+      const d2 = dx * dx + dy * dy;
+      // The torch is skipped for whatever holds it (d ≈ 0), so the hero never casts a
+      // shadow from the flame in his own hand.
+      if (d2 > 0.36 && d2 < bestD2) {
         best = { worldX: this.torch.x, worldY: this.torch.y, level: this.torch.level };
       }
     }
@@ -1068,7 +1207,7 @@ export class World3D {
 
     // Static solid tiles (trees/walls) near a lit fire, from the shared pool.
     let p = 0;
-    const anyLit = this.torch.strength > 0.15 || this.fires.some((f) => f.lit);
+    const anyLit = this.torch.strength > 0.15 || this.litFires.length > 0;
     if (anyLit) {
       for (const tile of this.castableSolids) {
         if (p >= CAST_POOL_MAX) break;
@@ -1210,7 +1349,9 @@ export class World3D {
     const dt = Math.min(dtMs / 1000, 0.05);
     this.elapsed += dt;
     this.shakeMs = Math.max(0, this.shakeMs - dtMs);
+    profiler.begin('rustle');
     this.updateRustles(dt);
+    profiler.end('rustle');
 
     // Live knobs (window.hd3d).
     lightStepsUniform.value = Math.max(0, this.params.lightSteps);
@@ -1251,15 +1392,15 @@ export class World3D {
     // paler gold at a flare's peak) and dances its source point. Each fire layers
     // all of that (seeded so no two sync), then the nearest one hands its dance to
     // the single shadow-casting light so the real cast shadows stretch and shrink.
+    profiler.begin('fires');
     const t = this.elapsed;
     // Live pool-size knobs (window.hd3d.fireDist / fireDecay).
     this.shadowLight.distance = this.params.fireDist;
     this.shadowLight.decay = this.params.fireDecay;
     let nearest: FireEntry | null = null;
     let bestD = Infinity;
+    this.litFires.length = 0;
     for (const f of this.fires) {
-      f.light.distance = this.params.fireDist;
-      f.light.decay = this.params.fireDecay;
       // Irregular jitter: a random walk, low-passed so it wanders instead of buzzing.
       f.noise += (Math.random() - 0.5) * 0.6;
       f.noise *= 0.85;
@@ -1282,46 +1423,101 @@ export class World3D {
       f.flicker = dance;
       f.level = level;
       const on = f.lit ? 1 : 0;
-      f.light.intensity = this.params.fireIntensity * f.scale * on * level;
-      f.light.position.x = f.worldX + 0.05 * Math.sin(t * 4.6 + f.seed) + nz * 0.04;
-      f.light.position.z = f.worldY + 0.04 * Math.cos(t * 3.9 + f.seed * 1.5) + nz * 0.03;
+      // The flame is computed whether or not a real light ends up pointed at it — it is a
+      // few sines, and it keeps the glow pool (below) dancing for every fire on screen.
+      f.intensity = this.params.fireIntensity * f.scale * on * level;
+      f.lx = f.worldX + 0.05 * Math.sin(t * 4.6 + f.seed) + nz * 0.04;
+      f.lz = f.worldY + 0.04 * Math.cos(t * 3.9 + f.seed * 1.5) + nz * 0.03;
       // Colour temperature tracks brightness: hotter flame reads paler/whiter-gold.
       const warm = Math.max(0, Math.min(1, (level - 0.75) / 0.7));
-      f.light.color.copy(FIRE_COOL).lerp(FIRE_HOT, warm);
+      f.color.copy(FIRE_COOL).lerp(FIRE_HOT, warm);
       // The visible warm pool breathes with the flame; it vanishes when unlit.
       const gSize = this.params.fireGlowSize * (0.95 + 0.08 * (level - 1));
       setFireGlow(
-        f.glow, f.light.position.x, f.light.position.z, gSize,
+        f.glow, f.lx, f.lz, gSize,
         on * f.scale * this.params.fireGlowStrength * (0.8 + 0.2 * level),
       );
-      if (f.lit) {
-        const d = Math.hypot(f.worldX - this.camTarget.x, f.worldY - this.camTarget.z);
-        if (d < bestD) { bestD = d; nearest = f; }
+      f.camDist = Math.hypot(f.worldX - this.camTarget.x, f.worldY - this.camTarget.z);
+      // A fire only counts as a light source once it is actually giving off light. A bush
+      // that has just caught (scale ramping up from 0) or is guttering out (scale back to
+      // 0) is lit but BLACK: letting it win the "nearest fire" contest below would hand
+      // the single shadow-casting light an intensity of zero, and every cast shadow in the
+      // clearing would blink out and pop back for the length of the burn.
+      if (f.lit && f.scale > 0.05) {
+        this.litFires.push(f);
+        if (f.camDist < bestD) { bestD = f.camDist; nearest = f; }
       }
     }
+
     if (nearest) {
-      // The plain light hands its full dance (position, colour, intensity) to the
-      // shadow light; its height rises on a flare so the cast shadows leap with it.
+      // The nearest fire hands its full dance (position, colour, intensity) to the shadow
+      // light; its height rises on a flare so the cast shadows leap with it. That light IS
+      // the nearest fire's light — which is why it is skipped in the pool assignment below.
       this.shadowLight.position.set(
-        nearest.light.position.x,
+        nearest.lx,
         this.params.shadowHeight + nearest.flare * 0.4 + nearest.flicker * 0.12,
-        nearest.light.position.z,
+        nearest.lz,
       );
-      this.shadowLight.intensity = nearest.light.intensity;
-      this.shadowLight.color.copy(nearest.light.color);
-      nearest.light.intensity = 0;
+      this.shadowLight.intensity = nearest.intensity;
+      this.shadowLight.color.copy(nearest.color);
     } else {
       this.shadowLight.intensity = 0;
     }
 
+    // Hand the pooled lights to the lit fires closest to the camera. There are only
+    // FIRE_LIGHT_SLOTS of them because every light taxes every lit fragment (see the
+    // constant), and a world can hold far more fires than are ever worth shading — the
+    // lava field alone is eight tiles. Whoever misses out keeps their glow quad, so the
+    // fire still reads as a warm pool on the ground; it just stops shading the 3D around
+    // it, at a range where a distance-limited point light was nearly black anyway.
+    this.lightCandidates.length = 0;
+    for (const f of this.litFires) {
+      if (f !== nearest) this.lightCandidates.push(f);
+    }
+    this.lightCandidates.sort((a, b) => a.camDist - b.camDist);
+    let used = 0;
+    for (; used < this.fireLights.length && used < this.lightCandidates.length; used += 1) {
+      const f = this.lightCandidates[used];
+      const light = this.fireLights[used];
+      light.distance = this.params.fireDist;
+      light.decay = this.params.fireDecay;
+      light.position.set(f.lx, 1.1, f.lz);
+      light.color.copy(f.color);
+      light.intensity = f.intensity;
+    }
+    this.activeFireLights = used;
+    for (let i = used; i < this.fireLights.length; i += 1) this.fireLights[i].intensity = 0;
+    profiler.end('fires');
+
+    profiler.begin('torch');
     this.updateTorch(dt, t);
+    profiler.end('torch');
+    profiler.begin('castShadows');
     this.updateCastShadows();
+    profiler.end('castShadows');
+    profiler.begin('biome');
     this.updateBiomeGrade(dt);
+    profiler.end('biome');
+    profiler.begin('godRays');
     this.updateGodRays(nearest);
+    profiler.end('godRays');
+    profiler.begin('particles');
     this.updateParticles(dt, nearest);
+    profiler.end('particles');
 
     this.finishPass.uniforms.uTime.value = this.elapsed;
+    // Any shader that still needs compiling gets compiled+linked HERE, inside the driver,
+    // on the frame it is first drawn — which is why an invisible shader-cache invalidation
+    // surfaces as a mystery spike in this one section. See Profiler.ts.
+    //
+    // The CPU time of this section is only the SUBMISSION cost; the GPU timer query is what
+    // tells you how long the frame actually took to draw (per-pixel cost — lights, overdraw,
+    // the post chain — is invisible to any CPU clock).
+    profiler.begin('compose');
+    profiler.gpuBegin();
     this.composer.render();
+    profiler.gpuEnd();
+    profiler.end('compose');
   }
 
   /** Embers rise from the nearest lit fire; dust drifts in the air around the hero. */

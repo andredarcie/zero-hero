@@ -27,7 +27,9 @@ export default [
         fetch: 'readonly',
         localStorage: 'readonly',
         navigator: 'readonly',
+        performance: 'readonly',
         requestAnimationFrame: 'readonly',
+        setTimeout: 'readonly',
       },
       parser: tsParser,
       parserOptions: {

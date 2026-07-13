@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { MIN_BOARD_TILE_SIZE } from '@/game/constants';
+import { initProfiler, profiler } from '@/game/debug/Profiler';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { setCurrentWorld3D, World3D, type FireLight3D } from '@/game/render3d/World3D';
 import { createHeroView, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
@@ -182,6 +183,11 @@ export class SurvivorsScene extends Phaser.Scene {
 
     this.input.keyboard?.on('keydown-ESC', () => this.openPauseMenu());
     if (isTouchDevice()) this.pauseTouchButton = new PauseTouchButton(() => this.openPauseMenu());
+
+    // The arena is fully built: compile every shader now, not lazily on first draw.
+    this.world3d.prewarmShaders();
+    initProfiler(this.world3d);
+    this.events.on(Phaser.Scenes.Events.PRE_UPDATE, profiler.frameStart, profiler);
 
     if (import.meta.env.DEV) this.registerDebugApi();
   }
@@ -636,6 +642,7 @@ export class SurvivorsScene extends Phaser.Scene {
     const cam = this.camera;
     const player = this.player;
     if (!w3 || !cam || !player) return;
+    profiler.begin('render3d');
 
     w3.follow(cam.camX, cam.camY);
     this.tileSize = w3.tileScreenSize();
@@ -655,6 +662,8 @@ export class SurvivorsScene extends Phaser.Scene {
     }
 
     w3.render(delta);
+    profiler.end('render3d');
+    profiler.frameEnd();
   }
 
   private handleResize(gameSize: Phaser.Structs.Size | { width: number; height: number }): void {
@@ -730,6 +739,8 @@ export class SurvivorsScene extends Phaser.Scene {
     (window as unknown as { __survivors?: unknown }).__survivors = undefined;
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
+    this.events.off(Phaser.Scenes.Events.PRE_UPDATE, profiler.frameStart, profiler);
+    profiler.detach();
 
     this.weapons?.destroy();
     this.weapons = undefined;

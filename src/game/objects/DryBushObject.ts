@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d, type FireLight3D } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -128,6 +129,7 @@ export class DryBushObject {
 
   private toAsh(): void {
     this.state = 'ash';
+    profiler.mark('bush.ash');
     this.fireTimer?.destroy();
     this.fireTimer = undefined;
     this.fires.forEach((fire) => fire.destroy());
