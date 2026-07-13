@@ -17,7 +17,10 @@ type SheetDef = {
   frameH?: number;
 };
 
-const A = '/assets';
+// Resolved against Vite's base URL — GitHub Pages serves the game under /zero-hero/,
+// so a hardcoded '/assets' misses the prefix, 404s every 3D texture and crashes the
+// first addBillboard (image null). Same pattern as assetManifest's resolveAssetUrl.
+const A = `${import.meta.env.BASE_URL.replace(/\/$/u, '')}/assets`;
 
 // Keys deliberately mirror the game's ASSET_KEYS names where one exists.
 const DEFS: Record<string, SheetDef> = {
