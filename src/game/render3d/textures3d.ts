@@ -29,6 +29,13 @@ const DEFS: Record<string, SheetDef> = {
   'npc-poet': { url: `${A}/characters/npcs/poet.png` },
   'npc-death': { url: `${A}/ui/states/death.png` },
   mage: { url: `${A}/characters/enemies/mage/mage__1.png` },
+  // A fauna do modo Sobreviventes — arte que já vivia em enemies/ sem uso.
+  bat: { url: `${A}/characters/enemies/bat/bat.png` },
+  'bat-hurt': { url: `${A}/characters/enemies/bat/bat_hurt.png` },
+  spider: { url: `${A}/characters/enemies/spider/spider.png` },
+  // Os slimes são folhas 16×32 (corpo em cima, poça embaixo); frame 0 = o corpo.
+  slime: { url: `${A}/characters/enemies/slime/Slime.png`, frameW: 16, frameH: 16 },
+  bigslime: { url: `${A}/characters/enemies/slime/BigSlime.png`, frameW: 16, frameH: 16 },
   undead: { url: `${A}/characters/enemies/undead/undead.png` },
   'undead-hurt': { url: `${A}/characters/enemies/undead/undead_hurt.png` },
   'undead-born-0': { url: `${A}/characters/enemies/undead/undead_born0.png` },

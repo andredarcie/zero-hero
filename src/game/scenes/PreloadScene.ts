@@ -64,9 +64,17 @@ export class PreloadScene extends Phaser.Scene {
     // The 3D world renderer needs its texture set before GameScene builds the
     // world; hold the scene hand-off until both loaders are done.
     void preloadTextures3D().then(() => {
+      const params = new URLSearchParams(window.location.search);
+      // `?survivors` drops straight into the Vampire-Survivors-style mode (also
+      // reachable from the title screen with [S]). Works in any environment —
+      // it's a shareable entry point, not a dev-only shortcut.
+      if (params.has('survivors')) {
+        this.scene.start('survivors');
+        return;
+      }
       // Dev shortcut (localhost only): `?play` skips title/language/intro and
       // drops straight into gameplay — e.g. http://localhost:5209/?play
-      if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('play')) {
+      if (import.meta.env.DEV && params.has('play')) {
         this.scene.start('game');
         return;
       }

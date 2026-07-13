@@ -23,6 +23,7 @@ node tools/gen-music.mjs   # music + ambience loops (32 kHz stereo, seamless)
 | `music-title.wav` | intro screen | "Ember" — A minor, 52 BPM; harp arpeggios, pp choir, church bell; andalusian Am-G-F-E resting on an unresolved V |
 | `music-overworld.wav` | _currently unused_ (exploration is wind-only) | "Ashen Fields" — E aeolian w/ phrygian bII, 64 BPM; E1 pedal drone, funeral timpani, harp fragments, ocarina lament, hollow open-fifth ending |
 | `music-danger.wav` | undead active nearby | "The Hollowing" — E phrygian, 150 BPM; galloping ostinato, timpani, offbeat stabs, one tritone bar before the loop seam |
+| `music-survivors.wav` | the whole Survivors-mode run | "Noite da Horda" — E phrygian, 176 BPM; 16th-note bass motor, four-on-the-floor timpani, offbeat stabs on every upbeat, harp arpeggio machine, falling phrygian sprint into the seam |
 | `ambience-wind.wav` | **always, under the world — the default "soundtrack"** | wind bed, zero tonal content (never clashes with any track) |
 
 ## Sound effects (`tools/gen-sfx.mjs`)

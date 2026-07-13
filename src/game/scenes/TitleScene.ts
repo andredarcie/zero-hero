@@ -24,6 +24,7 @@ export class TitleScene extends Phaser.Scene {
   private revealTimers: Phaser.Time.TimerEvent[] = [];
   private prompt?: Phaser.GameObjects.Text;
   private promptTween?: Phaser.Tweens.Tween;
+  private survivorsPrompt?: Phaser.GameObjects.Text;
 
   public constructor() {
     super(TitleScene.key);
@@ -73,6 +74,20 @@ export class TitleScene extends Phaser.Scene {
       .setDepth(2);
     this.blinkPrompt();
 
+    // A segunda porta do jogo: o modo Sobreviventes (estilo Vampire Survivors).
+    // Aparece só quando o título termina de se montar; qualquer tecla continua
+    // levando à aventura — apenas o S desvia.
+    this.survivorsPrompt = this.add
+      .text(width / 2, Math.round(height * 0.87), t('title.survivors'), {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${Phaser.Math.Clamp(Math.floor(width / 72), 7, 11)}px`,
+        color: '#8a4a3a',
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setAlpha(0)
+      .setDepth(2);
+
     // Small delay before arming input, so a leftover keypress can't fire the reveal instantly.
     this.time.delayedCall(400, () => {
       this.input.keyboard?.on('keydown', this.handleInput, this);
@@ -108,10 +123,21 @@ export class TitleScene extends Phaser.Scene {
   }
 
   // One input handler for the whole screen; behaviour depends on the reveal state.
-  private handleInput(): void {
-    if (this.state === 'idle') this.beginReveal();
-    else if (this.state === 'revealing') this.skipReveal();
-    else this.start();
+  private handleInput(event?: KeyboardEvent | Phaser.Input.Pointer): void {
+    if (this.state === 'idle') {
+      this.beginReveal();
+      return;
+    }
+    if (this.state === 'revealing') {
+      this.skipReveal();
+      return;
+    }
+    // Título completo: S entra no modo Sobreviventes, o resto segue a aventura.
+    if (event instanceof KeyboardEvent && event.key.toLowerCase() === 's') {
+      this.startSurvivors();
+      return;
+    }
+    this.start();
   }
 
   private beginReveal(): void {
@@ -150,6 +176,9 @@ export class TitleScene extends Phaser.Scene {
     if (this.state === 'done') return;
     this.state = 'done';
     this.blinkPrompt();
+    if (this.survivorsPrompt) {
+      this.tweens.add({ targets: this.survivorsPrompt, alpha: 0.75, duration: 600 });
+    }
   }
 
   // The drama of a single word landing. The final word — the author's name — gets its own
@@ -195,6 +224,17 @@ export class TitleScene extends Phaser.Scene {
     this.cameras.main.fadeOut(450, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       this.scene.start('language');
+    });
+  };
+
+  private readonly startSurvivors = (): void => {
+    if (this.starting) return;
+    this.starting = true;
+    getSoundManager().unlock();
+    getSoundManager().playTitleImpact();
+    this.cameras.main.fadeOut(450, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.scene.start('survivors');
     });
   };
 }

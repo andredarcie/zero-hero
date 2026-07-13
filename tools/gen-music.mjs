@@ -687,6 +687,167 @@ function renderDanger() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SURVIVORS — "Noite da Horda" · E phrygian, 176 BPM, 16 bars (~21.8 s loop).
+// The Vampire-Survivors-mode track: FRENETIC by brief. Where "danger" gallops,
+// this one sprints — a 16th-note bass motor that never breathes, four-on-the-
+// floor timpani with extra kicks piling up through the loop, stabs on EVERY
+// offbeat in the back half, a harp arpeggio machine, and an urgent phrygian
+// hook that ends in a falling run straight into the loop seam. Same palette
+// (saw motor / timpani / stabs / pluck / pulse lead / bell) so it still sounds
+// like this game — just with its heart racing.
+// ═══════════════════════════════════════════════════════════════════════════
+function renderSurvivors() {
+  const BPM = 176, SPB = 60 / BPM, BPB = 4, BARS = 16;
+  const loopLen = Math.round(BARS * BPB * SPB * SR);
+  const total = Math.ceil((BARS * BPB * SPB + 3) * SR);
+
+  // Faster harmonic rhythm than danger (a chord per bar, always moving) with the
+  // phrygian bII and the pre-seam tritone kept from the house style.
+  const PROG = ['Em', 'Em', 'C', 'D', 'Em', 'Em', 'F', 'D', 'Am', 'G', 'F', 'C', 'Em', 'D', 'Bb', 'B5'];
+  const ROOT = { Em: 'E2', C: 'C2', D: 'D2', F: 'F2', Am: 'A2', G: 'G2', Bb: 'Bb1', B5: 'B1' };
+  const STAB = {
+    Em: ['E3', 'G3', 'B3', 'E4'],
+    C: ['C3', 'E3', 'G3', 'C4'],
+    D: ['D3', 'F#3', 'A3', 'D4'],
+    F: ['F3', 'A3', 'C4', 'F4'],
+    Am: ['A3', 'C4', 'E4', 'A4'],
+    G: ['G3', 'B3', 'D4', 'G4'],
+    Bb: ['Bb3', 'D4', 'F4', 'Bb4'],
+    B5: ['B3', 'F#4', 'B4', 'F#5'],
+  };
+  // 8-step broken chords for the harp machine (root climbing to the octave and back).
+  const ARP = {
+    Em: ['E3', 'B3', 'E4', 'G4', 'B4', 'G4', 'E4', 'B3'],
+    C: ['C3', 'G3', 'C4', 'E4', 'G4', 'E4', 'C4', 'G3'],
+    D: ['D3', 'A3', 'D4', 'F#4', 'A4', 'F#4', 'D4', 'A3'],
+    F: ['F3', 'C4', 'F4', 'A4', 'C5', 'A4', 'F4', 'C4'],
+    Am: ['A3', 'E4', 'A4', 'C5', 'E5', 'C5', 'A4', 'E4'],
+    G: ['G3', 'D4', 'G4', 'B4', 'D5', 'B4', 'G4', 'D4'],
+    Bb: ['Bb3', 'F4', 'Bb4', 'D5', 'F5', 'D5', 'Bb4', 'F4'],
+    B5: ['B3', 'F#4', 'B4', 'D#5', 'F#5', 'D#5', 'B4', 'F#4'],
+  };
+
+  // The motor: SIXTEENTHS, wall to wall. Octave pops on a fixed accent grid keep
+  // it a sprint instead of a buzz; the second half of the loop pops twice as often.
+  const bass = [];
+  PROG.forEach((ch, bar) => {
+    const r = ROOT[ch];
+    const up = r.replace(/\d/, (d) => String(Number(d) + 1));
+    for (let k = 0; k < 16; k++) {
+      const popEvery = bar < 8 ? 8 : 4; // escalation: octave pop each half-bar, then each beat
+      const isPop = k % popEvery === popEvery - 2;
+      bass.push({
+        t: (bar * BPB + k * 0.25) * SPB,
+        dur: 0.25 * SPB * 0.8,
+        freq: freq(isPop ? up : r),
+        vel: k === 0 ? 1 : (k % 4 === 0 ? 0.9 : 0.66),
+      });
+    }
+  });
+
+  // Four-on-the-floor timpani "kick", with pickups piling on through the loop —
+  // by the last quarter it is pounding half the 8th grid.
+  const timp = [];
+  PROG.forEach((_, bar) => {
+    const t0 = bar * BPB * SPB;
+    for (let beat = 0; beat < 4; beat++) timp.push({ t: t0 + beat * SPB, vol: beat === 0 ? 0.5 : 0.38 });
+    timp.push({ t: t0 + 3.5 * SPB, vol: 0.3 });
+    if (bar >= 8) timp.push({ t: t0 + 1.5 * SPB, vol: 0.3 });
+    if (bar >= 12) timp.push({ t: t0 + 2.5 * SPB, vol: 0.32 });
+  });
+
+  // Stabs: offbeat 8ths — the frantic upbeat skank. Half of them early, ALL of
+  // them once the loop crests.
+  const stabs = [];
+  PROG.forEach((ch, bar) => {
+    const beats = bar < 8 ? [0.5, 1.5, 2.5, 3.5].filter((_, i) => i % 2 === 1) : [0.5, 1.5, 2.5, 3.5];
+    for (const b of beats) {
+      for (const n of STAB[ch]) {
+        stabs.push({ t: (bar * BPB + b) * SPB, dur: 0.22 * SPB, freq: freq(n), vel: b === 3.5 ? 1 : 0.78 });
+      }
+    }
+  });
+
+  // The harp machine: 8th-note arps all along, doubling to 16ths for the final
+  // sprint (bars 12-16) — the "screen full of gems" texture.
+  const harp = [];
+  PROG.forEach((ch, bar) => {
+    const seq = ARP[ch];
+    if (bar < 12) {
+      seq.forEach((n, k) => harp.push({ t: (bar * BPB + k * 0.5) * SPB, dur: 0.7 * SPB, freq: freq(n), vel: k === 0 ? 0.95 : 0.7 }));
+    } else {
+      for (let k = 0; k < 16; k++) {
+        const n = seq[k % 8];
+        harp.push({ t: (bar * BPB + k * 0.25) * SPB, dur: 0.4 * SPB, freq: freq(n), vel: k % 4 === 0 ? 0.9 : 0.62 });
+      }
+    }
+  });
+
+  // The hook — urgent, insisting on the phrygian F over E. Two 4-bar phrases,
+  // then a high restatement, then a falling 16th run that dives into the seam.
+  const lead = [];
+  barMelody(lead, 0, [['E5', 0.5], ['E5', 0.5], [null, 0.5], ['E5', 0.5], ['F5', 0.5], ['E5', 0.5], ['D5', 0.5], ['C5', 0.5]], SPB, BPB);
+  barMelody(lead, 1, [['B4', 1.5], [null, 0.5], ['D5', 0.5], ['C5', 0.5], ['B4', 0.5], ['A4', 0.5]], SPB, BPB);
+  barMelody(lead, 2, [['G4', 0.5], ['A4', 0.5], ['B4', 0.5], ['C5', 0.5], ['E5', 1], ['D5', 1]], SPB, BPB);
+  barMelody(lead, 3, [['D5', 0.5], ['E5', 0.5], ['F#5', 0.5], ['A5', 0.5], ['F#5', 0.5], ['E5', 0.5], ['D5', 1]], SPB, BPB);
+  barMelody(lead, 4, [['E5', 0.5], ['E5', 0.5], [null, 0.5], ['E5', 0.5], ['F5', 0.5], ['G5', 0.5], ['F5', 0.5], ['E5', 0.5]], SPB, BPB);
+  barMelody(lead, 5, [['B4', 2], ['E5', 1], ['D5', 1]], SPB, BPB);
+  barMelody(lead, 6, [['C5', 0.5], ['A4', 0.5], ['C5', 0.5], ['F5', 0.5], ['E5', 1], ['C5', 1]], SPB, BPB);
+  barMelody(lead, 7, [['A4', 0.5], ['B4', 0.5], ['C#5', 0.5], ['D5', 0.5], ['E5', 1], ['F#5', 1]], SPB, BPB);
+  barMelody(lead, 8, [['A5', 1], ['E5', 0.5], ['A4', 0.5], ['C5', 0.5], ['E5', 0.5], ['A5', 1]], SPB, BPB);
+  barMelody(lead, 9, [['G5', 1], ['D5', 0.5], ['B4', 0.5], ['D5', 0.5], ['G5', 0.5], ['B5', 1]], SPB, BPB);
+  barMelody(lead, 10, [['A5', 0.5], ['G5', 0.5], ['F5', 0.5], ['E5', 0.5], ['F5', 1], ['C5', 1]], SPB, BPB);
+  barMelody(lead, 11, [['E5', 0.5], ['G5', 0.5], ['C6', 0.5], ['G5', 0.5], ['E5', 0.5], ['C5', 0.5], ['G4', 1]], SPB, BPB);
+  // final sprint: falling phrygian 16th runs, twice, then the rising arp into the seam
+  barMelody(lead, 12, [
+    ['E6', 0.25], ['D6', 0.25], ['C6', 0.25], ['B5', 0.25], ['A5', 0.25], ['G5', 0.25], ['F5', 0.25], ['E5', 0.25],
+    ['F5', 0.25], ['E5', 0.25], ['D5', 0.25], ['C5', 0.25], ['B4', 0.5], ['E5', 0.5],
+  ], SPB, BPB);
+  barMelody(lead, 13, [['D5', 0.5], ['F#5', 0.5], ['A5', 0.5], ['D6', 0.5], ['A5', 0.5], ['F#5', 0.5], ['A5', 0.5], ['D5', 0.5]], SPB, BPB);
+  barMelody(lead, 14, [
+    ['F5', 0.25], ['E5', 0.25], ['D5', 0.25], ['C5', 0.25], ['Bb4', 0.25], ['C5', 0.25], ['D5', 0.25], ['F5', 0.25],
+    ['Bb4', 1], ['D5', 1],
+  ], SPB, BPB);
+  barMelody(lead, 15, [[null, 1], ['B4', 0.5], ['D#5', 0.5], ['F#5', 0.5], ['B5', 0.5], ['D#6', 0.5], ['F#5', 0.5]], SPB, BPB);
+
+  // High string pad only on the crest (bars 8-16): hysteria, not dread.
+  const pad = [];
+  for (const [bar, tones] of [[8, ['A4', 'C5', 'E5']], [10, ['F4', 'A4', 'C5']], [12, ['E4', 'G4', 'B4']], [14, ['Bb4', 'D5', 'F5']]]) {
+    for (const n of tones) pad.push({ t: bar * BPB * SPB, dur: 2 * BPB * SPB * 0.96, freq: freq(n) });
+  }
+
+  const bells = [0, 8, 12].map((bar) => ({ t: bar * BPB * SPB, dur: 1.8, freq: freq('E5'), vel: 0.7 }));
+
+  const tracks = [
+    { buf: renderInstrument(bass, total, { wave: 'saw', unison: 2, detune: 9, vol: 0.3, attack: 0.004, decay: 0.04, sustain: 0.62, release: 0.04, cutoff: 1050, resonance: 1.1 }), echoSend: 0.08, revSend: 0.05 },
+    { buf: renderTimpani(timp, total, { f0: 58 }), echoSend: 0.1, revSend: 0.12 },
+    { buf: renderInstrument(stabs, total, { wave: 'saw', unison: 3, detune: 12, spread: 0.55, vol: 0.13, attack: 0.004, decay: 0.06, sustain: 0.45, release: 0.05, cutoff: 2400, resonance: 0.9 }), echoSend: 0.45, revSend: 0.1 },
+    { buf: renderPluck(harp, total, { vol: 0.26, decay: 0.9965, bright: 0.6 }), echoSend: 0.55, revSend: 0.1 },
+    { buf: renderInstrument(lead, total, {
+        wave: 'pulse', duty: 0.25, unison: 2, detune: 7, vol: 0.16,
+        attack: 0.004, decay: 0.05, sustain: 0.78, release: 0.07,
+        vibRate: 6.2, vibDepth: 0.008, vibDelay: 0.12, cutoff: 3200, resonance: 1.0,
+      }), echoSend: 0.5, revSend: 0.1 },
+    { buf: renderInstrument(pad, total, {
+        wave: 'saw', unison: 5, detune: 14, spread: 0.7, vol: 0.075,
+        attack: 0.4, decay: 0.3, sustain: 0.92, release: 0.8,
+        vibRate: 5.6, vibDepth: 0.006, vibDelay: 0.3, cutoff: 2200, resonance: 0.8,
+      }), echoSend: 0.25, revSend: 0.35 },
+    { buf: renderBell(bells, total, { vol: 0.1, tau: 1.5, pan: 0.3 }), echoSend: 0.5, revSend: 0.25 },
+  ];
+
+  const out = mixdown(tracks, {
+    total, loopLen,
+    // Tighter, drier space than danger: frenzy reads in the transients, and a big
+    // hall would smear the 16th grid into mud.
+    echo: { delayMs: 128, feedback: 0.28, lpHz: 4400, spreadMs: 6, gain: 0.7 },
+    reverb: { room: 0.72, damp: 0.6, gain: 0.65 },
+    lpHz: 8200, drive: 1.4,
+  });
+  writeWav('music-survivors.wav', out.L, out.R);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // AMBIENCE — wind. No tonal content at all, so it can sit under any track (or
 // under Souls-style silence) without ever clashing. Two decorrelated noise
 // channels through slowly gusting low-pass filters; loop made seamless with an
@@ -827,6 +988,7 @@ const RENDERERS = {
   'music-title': renderTitle,
   'music-overworld': renderOverworld,
   'music-danger': renderDanger,
+  'music-survivors': renderSurvivors,
   'ambience-wind': renderAmbience,
   'menu-drips': renderDrips,
 };

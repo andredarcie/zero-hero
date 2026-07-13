@@ -66,11 +66,13 @@ type SampleKey = keyof typeof SAMPLES;
 // default "soundtrack", and only the combat track rises while undead are out of the ground.
 // ('title'/'overworld' still exist — the intro uses the title theme; overworld is currently
 // unused since exploration is wind-only, kept for easy revival.)
-export type MusicKey = 'title' | 'overworld' | 'danger' | 'menu';
+export type MusicKey = 'title' | 'overworld' | 'danger' | 'survivors' | 'menu';
 const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
   title: { file: 'music-title.wav', vol: 0.8 },
   overworld: { file: 'music-overworld.wav', vol: 0.9 },
   danger: { file: 'music-danger.wav', vol: 1.0 },
+  // The Vampire-Survivors mode runs on one relentless 176 BPM loop, wall to wall.
+  survivors: { file: 'music-survivors.wav', vol: 1.0 },
   menu: { file: 'menu-drips.wav', vol: 0.5 }, // soft water drops under the title screen
 };
 const AMBIENCE_FILE = 'ambience-wind.wav';

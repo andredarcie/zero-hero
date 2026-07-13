@@ -11,6 +11,7 @@ import { IntroScene } from '@/game/scenes/IntroScene';
 import { LanguageScene } from '@/game/scenes/LanguageScene';
 import { PreloadScene } from '@/game/scenes/PreloadScene';
 import { TitleScene } from '@/game/scenes/TitleScene';
+import { SurvivorsScene } from '@/game/survivors/SurvivorsScene';
 
 export type AppMode = 'game' | 'editor';
 
@@ -54,5 +55,5 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   },
   // Editor mode also registers GameScene so the editor can live-playtest the world in
   // memory (EditorScene.startPlaytest) without saving or leaving the page.
-  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene, GameScene] : [TitleScene, LanguageScene, IntroScene, GameScene])],
+  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene, GameScene] : [TitleScene, LanguageScene, IntroScene, GameScene, SurvivorsScene])],
 });
