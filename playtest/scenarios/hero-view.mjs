@@ -57,6 +57,19 @@ export default {
     assert('Facing left flips the sprite', afterLeft.flipX === true, `flipX=${afterLeft.flipX}`);
     await shot('walked', { note: 'after walking right then left' });
 
+    // ── The item slung on the back ───────────────────────────────────────────
+    // The item billboard is CENTRED, so its -35° tilt pivots about its middle. With the
+    // default foot origin it pivoted about its bottom edge and the blade swung clean out of
+    // the hero's silhouette. Facing down, the body should hide all but the tip.
+    await page.evaluate(() => {
+      const s = window.__scene;
+      s.heldItem = 'sword';
+      s.heldOnFire = false;
+      s.updateBackItem();
+    });
+    await driver.settle(400);
+    await shot('back-item', { note: 'sword slung on the back: only the tip clears the shoulder' });
+
     // ── Breathing: the feet must stay planted ────────────────────────────────
     // The old sprite flipped its origin to the bottom to grow upward; the billboard already
     // stands on its feet. If the foot line moves while breathing, the hero visibly hops.

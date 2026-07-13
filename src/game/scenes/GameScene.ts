@@ -2460,7 +2460,12 @@ export class GameScene extends Phaser.Scene {
     const torchLit = this.isTorchLit;
     const visual = BACK_ITEM_VISUAL_3D[this.heldItem];
     if (!this.backItemBb) {
-      this.backItemBb = this.world3d?.addBillboard(visual.texture, visual.frame);
+      // CENTRED, unlike the standing sprites: a billboard's origin is normally its feet, and
+      // setAngle pivots about that origin. A tree or an enemy SHOULD rock about its foot — but
+      // a carried item hangs in the air, and pivoting it about its bottom edge swings the whole
+      // blade out of the hero's silhouette instead of tilting it in place. The 2D sprite this
+      // replaced rotated about its centre (setOrigin(0.5)); this restores that.
+      this.backItemBb = this.world3d?.addBillboard(visual.texture, visual.frame, { centered: true });
       if (!this.backItemBb) return;
     }
     // Real size: draw the item at one full tile, the same pixel scale as the hero and the
@@ -2485,15 +2490,18 @@ export class GameScene extends Phaser.Scene {
     if (!bb?.visible || !hb) return;
     // Lit torch: gripped upright in the hand at the hero's side, raised so the flame clears
     // the shoulder — always in front of the body (it's held out, never hidden behind him).
+    // The billboard is centred (see updateBackItem), so its elevation is the height of the
+    // sprite's MIDDLE, not of its feet: half a tile more than the offsets the 2D sprite used,
+    // which measured from the hero's centre.
     if (this.isTorchLit) {
-      bb.setPosition(hb.x + 0.32, hb.y + 0.02).setElevation(0.18);
+      bb.setPosition(hb.x + 0.32, hb.y + 0.02).setElevation(0.68);
       return;
     }
     const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
     // Facing up: the item sits on the visible back, drawn in front of the hero → whole object.
     // Otherwise: it rides higher and behind the hero, so only the tip clears his shoulder.
     bb.setPosition(hb.x - 0.14, hb.y + (facingUp ? 0.02 : -0.02))
-      .setElevation(facingUp ? 0.12 : 0.34);
+      .setElevation(facingUp ? 0.62 : 0.84);
   }
 
   // Hide the back item for the duration of a swing (reset the timer if the hero swings again),
