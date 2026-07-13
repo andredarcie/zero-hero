@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 
+import { getSoundManager } from '@/game/audio/SoundManager';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_RING_TEXTURE, world3d } from '@/game/render3d/World3D';
 import {
   ELITE_HP_MUL, ELITE_XP, ENEMY_DEFS, MAX_ALIVE_ENEMIES,
-  waveForTime, type SEnemyKind, type WaveDef,
+  waveForTime, type EnemyShotKind, type SEnemyDef, type SEnemyKind, type WaveDef,
 } from './SurvivorsConfig';
 import { ARENA_MAX_X, ARENA_MAX_Y, ARENA_MIN_X, ARENA_MIN_Y } from './survivorsWorld';
 
@@ -17,11 +18,35 @@ import { ARENA_MAX_X, ARENA_MAX_Y, ARENA_MIN_X, ARENA_MIN_Y } from './survivorsW
 // queries de acerto das armas. Nenhum GameObject Phaser por inimigo.
 
 const SPAWN_RADIUS_TILES = 11; // logo além da borda visível
+// Torretas nascem mais perto: são controle de área — fora da vista seriam mudas.
+const STATIONARY_SPAWN_RADIUS_TILES = 8;
 const REPOSITION_RADIUS_TILES = 17; // mais longe que isso, o inimigo "dá a volta"
 const CONTACT_PAD_TILES = 0.36; // raio de contato do herói
 const HURT_FLASH_MS = 90;
 const SPAWN_GROW_MS = 260;
 const CELL = 1; // célula do spatial hash, em tiles
+
+// ── projéteis inimigos (mago/arqueiro/torreta) ────────────────────────────────
+const SHOT_POOL = 90;
+const SHOT_HIT_RADIUS_TILES = 0.38;
+const SHOT_TTL_MS = 4200;
+const SHOT_VISUAL: Record<EnemyShotKind, { tex: string; size: number; spinDegPerSec: number }> = {
+  magic: { tex: 'magic-ball', size: 0.42, spinDegPerSec: 300 },
+  arrow: { tex: 'arrow-undead', size: 0.5, spinDegPerSec: 0 },
+  bullet: { tex: 'turret-bullet', size: 0.3, spinDegPerSec: 540 },
+};
+
+class EnemyShot {
+  public active = false;
+  public kind: EnemyShotKind = 'magic';
+  public x = 0;
+  public y = 0;
+  public vx = 0;
+  public vy = 0;
+  public damage = 0;
+  public ttlMs = 0;
+  public sprite?: Billboard3D;
+}
 
 export class SEnemy {
   public active = false;
@@ -43,6 +68,13 @@ export class SEnemy {
   public knockX = 0;
   public knockY = 0;
   public bobPhase = 0;
+  // Atirador: recarga do disparo e o vento de conjuração em andamento.
+  public attackCdMs = 0;
+  public castMs = 0;
+  // Investida (aranha): relógio do ciclo espreita→bote.
+  public dashClockMs = 0;
+  // Kiter (mago): sentido em que rodeia o herói (+1 horário, -1 anti-horário).
+  public strafeSign = 1;
   /** Última vez que ESTE inimigo feriu o herói (gate extra ao invuln global). */
   public lastContactMs = -99999;
   /** A Alma da Fogueira (aura evoluída) retarda quem toca o fogo até aqui. */
@@ -58,6 +90,8 @@ export interface HordeCallbacks {
   onKilled: (enemy: SEnemy) => void;
   /** Um inimigo está em contato com o herói neste frame. */
   onContact: (enemy: SEnemy) => void;
+  /** Um projétil inimigo atingiu o herói (dano + origem, p/ knockback). */
+  onShotHit: (damage: number, fromX: number, fromY: number) => void;
 }
 
 export class SurvivorsHorde {
@@ -66,6 +100,8 @@ export class SurvivorsHorde {
   // Spatial hash reconstruído por frame: célula → inimigos nela.
   private readonly grid = new Map<number, SEnemy[]>();
   private readonly queryOut: SEnemy[] = [];
+  // Projéteis inimigos (pool próprio — nunca interagem com os do jogador).
+  private readonly shots: EnemyShot[] = [];
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -81,8 +117,16 @@ export class SurvivorsHorde {
     for (const e of this.pool) if (e.active && !e.dying) fn(e);
   }
 
-  public spawn(kind: SEnemyKind, wave: WaveDef, px: number, py: number, elite = false): SEnemy | null {
-    if (this.alive >= MAX_ALIVE_ENEMIES && !elite && kind !== 'reaper') return null;
+  public spawn(
+    kind: SEnemyKind,
+    wave: WaveDef,
+    px: number,
+    py: number,
+    elite = false,
+    /** Posição exata (filhotes do bigslime nascem onde o pai estourou). */
+    at?: { x: number; y: number },
+  ): SEnemy | null {
+    if (this.alive >= MAX_ALIVE_ENEMIES && !elite && kind !== 'reaper' && !at) return null;
     const e = this.acquire();
     if (!e) return null;
 
@@ -105,8 +149,14 @@ export class SurvivorsHorde {
     e.lastContactMs = -99999;
     e.slowUntilMs = 0;
     e.lastBurnMs.clear();
+    // Atiradores nascem com a recarga defasada, para magos/torretas da mesma
+    // leva não sincronizarem os disparos num paredão único.
+    e.attackCdMs = 700 + Math.random() * (def.ranged?.cooldownMs ?? 0) * 0.5;
+    e.castMs = 0;
+    e.dashClockMs = def.dash ? Math.random() * def.dash.intervalMs : 0;
+    e.strafeSign = Math.random() < 0.5 ? 1 : -1;
 
-    const pos = this.pickSpawnPoint(px, py);
+    const pos = at ?? this.pickSpawnPoint(px, py, def.stationary ? STATIONARY_SPAWN_RADIUS_TILES : SPAWN_RADIUS_TILES);
     e.x = pos.x;
     e.y = pos.y;
 
@@ -128,6 +178,7 @@ export class SurvivorsHorde {
       .setElevation(0)
       .setVisible(true);
     e.sprite.clearTint();
+    if (def.tint !== undefined && !elite) e.sprite.setTint(def.tint);
     if (elite) {
       // O anel vermelho pulsante no chão é o "sou um chefe" — o sprite continua
       // do tamanho do tile (regra da casa: nada vaza do próprio tile).
@@ -163,9 +214,11 @@ export class SurvivorsHorde {
     const def = ENEMY_DEFS[e.kind];
     if (def.hurtTexKey) e.sprite?.setTexture(def.hurtTexKey, 0);
     else e.sprite?.setTintFill(0xffffff);
+    // Torreta é fincada no chão: golpes quase não a deslocam.
+    const mass = def.stationary ? 0.15 : 1;
     const len = Math.hypot(knockDirX, knockDirY) || 1;
-    e.knockX += (knockDirX / len) * knockTiles * 8;
-    e.knockY += (knockDirY / len) * knockTiles * 8;
+    e.knockX += (knockDirX / len) * knockTiles * 8 * mass;
+    e.knockY += (knockDirY / len) * knockTiles * 8 * mass;
 
     if (e.hp <= 0) {
       this.kill(e, true);
@@ -228,11 +281,7 @@ export class SurvivorsHorde {
       if (e.spawnMs > 0) e.spawnMs = Math.max(0, e.spawnMs - deltaMs);
       if (e.hurtMs > 0) {
         e.hurtMs -= deltaMs;
-        if (e.hurtMs <= 0) {
-          if (def.hurtTexKey) e.sprite?.setTexture(def.texKey, 0);
-          else if (!e.elite) e.sprite?.clearTint();
-          else e.sprite?.setTint(0xffb0a0);
-        }
+        if (e.hurtMs <= 0) this.restoreLook(e, def);
       }
 
       // Perseguição: direto ao herói (VS não tem pathfinding; o campo é aberto).
@@ -241,28 +290,94 @@ export class SurvivorsHorde {
       const dist = Math.hypot(dxp, dyp) || 1;
 
       // Quem ficou para trás dá a volta: reposiciona no anel à frente do herói,
-      // como no VS — a pressão nunca cai porque o jogador correu bem.
+      // como no VS — a pressão nunca cai porque o jogador correu bem. A torreta
+      // não dá a volta (é um lugar, não um perseguidor): some em silêncio.
       if (dist > REPOSITION_RADIUS_TILES && !e.elite && e.kind !== 'reaper') {
-        const pos = this.pickSpawnPoint(px, py);
+        if (def.stationary) {
+          this.vanish(e);
+          continue;
+        }
+        const pos = this.pickSpawnPoint(px, py, SPAWN_RADIUS_TILES);
         e.x = pos.x;
         e.y = pos.y;
         continue;
       }
 
-      // A parede de corpos: o inimigo PRESSIONA até a borda do herói e para lá —
-      // nunca sobrepõe (senão o cone da espada perde a direção e o contato vira
-      // um moedor). O toque acontece nessa borda, como no VS.
-      const stopDist = e.radius + CONTACT_PAD_TILES - 0.08;
-      const chase = dist > stopDist ? 1 : 0;
+      // Atirador: quando o herói entra no alcance, telegrafa (arte de conjuração
+      // ou flash pálido) e dispara ao fim do vento — parado enquanto conjura.
+      let casting = false;
+      if (def.ranged) {
+        e.attackCdMs -= deltaMs;
+        if (e.castMs > 0) {
+          casting = true;
+          e.castMs -= deltaMs;
+          if (e.castMs <= 0) {
+            this.fireShots(e, def, px, py);
+            if (e.hurtMs <= 0) this.restoreLook(e, def);
+          }
+        } else if (e.attackCdMs <= 0 && dist <= def.ranged.rangeTiles && dist > 1.1) {
+          e.attackCdMs = def.ranged.cooldownMs;
+          e.castMs = def.ranged.telegraphMs;
+          casting = true;
+          if (e.hurtMs <= 0) {
+            if (def.ranged.castTexKey) e.sprite?.setTexture(def.ranged.castTexKey, 0);
+            else e.sprite?.setTintFill(0xffe9b0);
+          }
+        }
+      }
+
       const slowMul = nowMs < e.slowUntilMs ? 0.6 : 1;
-      let vx = (dxp / dist) * e.speed * e.speedMul * slowMul * chase;
-      let vy = (dyp / dist) * e.speed * e.speedMul * slowMul * chase;
+      // A investida da aranha: espreita devagar e dispara o bote no ciclo.
+      let dashMul = 1;
+      if (def.dash) {
+        e.dashClockMs = (e.dashClockMs + deltaMs) % def.dash.intervalMs;
+        dashMul = e.dashClockMs < def.dash.durationMs ? def.dash.speedMul : def.dash.restMul;
+      }
+      const speedNow = e.speed * e.speedMul * slowMul * dashMul;
+
+      let vx = 0;
+      let vy = 0;
+      if (casting || def.stationary) {
+        // Parado: conjurando, ou a torreta que nunca anda.
+      } else if (def.keepDistanceTiles) {
+        // Kiter (mago): mantém-se fora do alcance da espada, rodeando o herói.
+        const kd = def.keepDistanceTiles;
+        if (dist > kd + 1.2) {
+          vx = (dxp / dist) * speedNow;
+          vy = (dyp / dist) * speedNow;
+        } else if (dist < kd - 0.8) {
+          vx = -(dxp / dist) * speedNow;
+          vy = -(dyp / dist) * speedNow;
+        } else {
+          vx = (-dyp / dist) * speedNow * 0.6 * e.strafeSign;
+          vy = (dxp / dist) * speedNow * 0.6 * e.strafeSign;
+        }
+      } else {
+        // A parede de corpos: o inimigo PRESSIONA até a borda do herói e para lá —
+        // nunca sobrepõe (senão o cone da espada perde a direção e o contato vira
+        // um moedor). O toque acontece nessa borda, como no VS.
+        const stopDist = e.radius + CONTACT_PAD_TILES - 0.08;
+        if (dist > stopDist) {
+          vx = (dxp / dist) * speedNow;
+          vy = (dyp / dist) * speedNow;
+          // Morcegos tecem: um vaivém perpendicular que faz o voo esvoaçar em
+          // vez de vir em linha reta — cada um numa fase própria.
+          if (def.flies) {
+            const weave = Math.sin(e.bobPhase * 1.7) * speedNow * 0.55;
+            vx += (-dyp / dist) * weave;
+            vy += (dxp / dist) * weave;
+          }
+        }
+      }
 
       // Separação: um empurrão para fora dos vizinhos da mesma célula. O(k) por
       // inimigo, e é o que transforma o "trem" em uma MARÉ que envolve o herói.
-      const sep = this.separation(e);
-      vx += sep.x * 2.2;
-      vy += sep.y * 2.2;
+      // (A torreta é fincada: ninguém a empurra.)
+      if (!def.stationary) {
+        const sep = this.separation(e);
+        vx += sep.x * 2.2;
+        vy += sep.y * 2.2;
+      }
 
       // Knockback de arma decai por cima da perseguição.
       if (e.knockX !== 0 || e.knockY !== 0) {
@@ -286,6 +401,8 @@ export class SurvivorsHorde {
 
       this.renderEnemy(e, nowMs, dt, dxp);
     }
+
+    this.updateShots(deltaMs, px, py);
   }
 
   /** Inimigos vivos num círculo — o hit-test de todas as armas. */
@@ -346,11 +463,122 @@ export class SurvivorsHorde {
       e.dying = false;
     }
     this.pool.length = 0;
+    for (const s of this.shots) {
+      s.sprite?.destroy();
+      s.sprite = undefined;
+      s.active = false;
+    }
+    this.shots.length = 0;
     this.grid.clear();
     this.alive = 0;
   }
 
   // ── internos ─────────────────────────────────────────────────────────────────
+
+  /** Devolve textura+tint "de descanso" após um flash (dano/conjuração). */
+  private restoreLook(e: SEnemy, def: SEnemyDef): void {
+    const tex = e.castMs > 0 && def.ranged?.castTexKey ? def.ranged.castTexKey : def.texKey;
+    e.sprite?.setTexture(tex, 0);
+    if (e.elite) e.sprite?.setTint(0xffb0a0);
+    else if (def.tint !== undefined) e.sprite?.setTint(def.tint);
+    else e.sprite?.clearTint();
+  }
+
+  /** Remoção silenciosa, sem loot nem animação (torreta fora do alcance). */
+  private vanish(e: SEnemy): void {
+    if (!e.active || e.dying) return;
+    this.alive -= 1;
+    e.eliteRing?.destroy();
+    e.eliteRing = undefined;
+    e.sprite?.setVisible(false);
+    this.release(e);
+  }
+
+  // ── projéteis inimigos ───────────────────────────────────────────────────────
+
+  private fireShots(e: SEnemy, def: SEnemyDef, px: number, py: number): void {
+    const r = def.ranged;
+    if (!r) return;
+    getSoundManager().playUndeadWhiff();
+    if (r.radial) {
+      // O leque da torreta: N balas em roda, a primeira mirada no herói — dá
+      // sempre uma linha de fuga entre os raios.
+      const base = Math.atan2(py - e.y, px - e.x);
+      for (let i = 0; i < r.radial; i++) {
+        const a = base + (i / r.radial) * Math.PI * 2;
+        this.spawnShot(e, r.shot, Math.cos(a), Math.sin(a), r.shotSpeed, r.shotDamage);
+      }
+      return;
+    }
+    const dx = px - e.x;
+    const dy = py - e.y;
+    const d = Math.hypot(dx, dy) || 1;
+    this.spawnShot(e, r.shot, dx / d, dy / d, r.shotSpeed, r.shotDamage);
+  }
+
+  private spawnShot(e: SEnemy, kind: EnemyShotKind, nx: number, ny: number, speed: number, damage: number): void {
+    let s = this.shots.find((c) => !c.active) ?? null;
+    if (!s) {
+      if (this.shots.length >= SHOT_POOL) return;
+      s = new EnemyShot();
+      this.shots.push(s);
+    }
+    const vis = SHOT_VISUAL[kind];
+    s.active = true;
+    s.kind = kind;
+    s.x = e.x;
+    s.y = e.y;
+    s.vx = nx * speed;
+    s.vy = ny * speed;
+    s.damage = damage;
+    s.ttlMs = SHOT_TTL_MS;
+    if (!s.sprite) {
+      s.sprite = world3d().addBillboard(vis.tex, 0, { emissive: true, emissiveBoost: 1.4, castShadow: false });
+    } else {
+      s.sprite.setTexture(vis.tex, 0);
+    }
+    s.sprite
+      .setPosition(s.x, s.y)
+      .setDisplaySize(vis.size, vis.size)
+      .setElevation(0.45)
+      .setAlpha(1)
+      .setVisible(true);
+    // A flecha aponta na direção do voo; orbes/balas giram no updateShots.
+    s.sprite.setAngle(kind === 'arrow' ? Math.atan2(ny, nx) * (180 / Math.PI) + 90 : 0);
+  }
+
+  private updateShots(deltaMs: number, px: number, py: number): void {
+    const dt = deltaMs / 1000;
+    for (const s of this.shots) {
+      if (!s.active) continue;
+      s.ttlMs -= deltaMs;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      if (
+        s.ttlMs <= 0
+        || s.x < ARENA_MIN_X || s.x > ARENA_MAX_X
+        || s.y < ARENA_MIN_Y || s.y > ARENA_MAX_Y
+      ) {
+        this.releaseShot(s);
+        continue;
+      }
+      const dx = s.x - px;
+      const dy = s.y - py;
+      if (dx * dx + dy * dy <= SHOT_HIT_RADIUS_TILES * SHOT_HIT_RADIUS_TILES) {
+        this.cb.onShotHit(s.damage, s.x, s.y);
+        this.releaseShot(s);
+        continue;
+      }
+      const vis = SHOT_VISUAL[s.kind];
+      s.sprite?.setPosition(s.x, s.y);
+      if (vis.spinDegPerSec > 0 && s.sprite) s.sprite.setAngle(s.sprite.angle + vis.spinDegPerSec * dt);
+    }
+  }
+
+  private releaseShot(s: EnemyShot): void {
+    s.active = false;
+    s.sprite?.setVisible(false);
+  }
 
   private acquire(): SEnemy | null {
     for (const e of this.pool) {
@@ -438,20 +666,21 @@ export class SurvivorsHorde {
     }
   }
 
-  private pickSpawnPoint(px: number, py: number): { x: number; y: number } {
+  private pickSpawnPoint(px: number, py: number, radiusTiles: number): { x: number; y: number } {
     // Um anel logo fora da vista; junto ao muro, tenta outros ângulos antes de
     // aceitar o que der (nunca a menos de 6 tiles do herói).
+    const minDist = Math.min(6, radiusTiles - 1);
     for (let attempt = 0; attempt < 6; attempt++) {
       const angle = Math.random() * Math.PI * 2;
       const x = Phaser.Math.Clamp(
-        px + Math.cos(angle) * SPAWN_RADIUS_TILES, ARENA_MIN_X + 0.6, ARENA_MAX_X - 0.6,
+        px + Math.cos(angle) * radiusTiles, ARENA_MIN_X + 0.6, ARENA_MAX_X - 0.6,
       );
       const y = Phaser.Math.Clamp(
-        py + Math.sin(angle) * SPAWN_RADIUS_TILES, ARENA_MIN_Y + 0.6, ARENA_MAX_Y - 0.6,
+        py + Math.sin(angle) * radiusTiles, ARENA_MIN_Y + 0.6, ARENA_MAX_Y - 0.6,
       );
-      if (Math.hypot(x - px, y - py) >= 6) return { x, y };
+      if (Math.hypot(x - px, y - py) >= minDist) return { x, y };
     }
-    return { x: Phaser.Math.Clamp(px + SPAWN_RADIUS_TILES, ARENA_MIN_X + 0.6, ARENA_MAX_X - 0.6), y: py };
+    return { x: Phaser.Math.Clamp(px + radiusTiles, ARENA_MIN_X + 0.6, ARENA_MAX_X - 0.6), y: py };
   }
 }
 

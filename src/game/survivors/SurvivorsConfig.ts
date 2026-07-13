@@ -8,7 +8,10 @@
 
 export type WeaponKind = 'sword' | 'axe' | 'scythe' | 'bomb' | 'torch' | 'aura';
 export type PassiveKind = 'might' | 'boots' | 'amulet' | 'reach' | 'heart' | 'magnet';
-export type SEnemyKind = 'undead' | 'bat' | 'spider' | 'slime' | 'bigslime' | 'reaper';
+export type SEnemyKind =
+  | 'undead' | 'bat' | 'spider' | 'slime' | 'bigslime'
+  | 'mage' | 'archer' | 'turret' | 'reaper';
+export type EnemyShotKind = 'magic' | 'arrow' | 'bullet';
 
 // ── Run ────────────────────────────────────────────────────────────────────────
 
@@ -46,6 +49,28 @@ export interface SEnemyDef {
   hurtTexKey?: string; // sem ela, o flash de dano é tint branco
   flies?: boolean; // morcegos flutuam (bob de elevação)
   hop?: boolean; // slimes pulam (bounce de escala)
+  /** Tint permanente (diferencia variantes que dividem a mesma arte). */
+  tint?: number;
+  /** Não anda: controla área de onde nasceu (torreta). Nasce mais perto da vista. */
+  stationary?: boolean;
+  /** Kiter: mantém ESTA distância do herói, rodeando-o (mago). */
+  keepDistanceTiles?: number;
+  /** Investida: anda devagar e periodicamente dispara um bote (aranha). */
+  dash?: { intervalMs: number; durationMs: number; speedMul: number; restMul: number };
+  /** Ao morrer, divide-se nestes filhos (bigslime → 2 slimes) e deixa a poça. */
+  splitsInto?: { kind: SEnemyKind; count: number; poolTexKey: string };
+  /** Atirador: dispara projéteis quando o herói entra no alcance. */
+  ranged?: {
+    rangeTiles: number;
+    cooldownMs: number;
+    telegraphMs: number; // vento de "carregando" antes do tiro (reação do jogador)
+    castTexKey?: string; // arte de conjuração durante o telegraph (mago)
+    shot: EnemyShotKind;
+    shotSpeed: number; // tiles/s
+    shotDamage: number;
+    /** N projéteis em leque radial em vez de um tiro mirado (torreta). */
+    radial?: number;
+  };
 }
 
 export const ENEMY_DEFS: Record<SEnemyKind, SEnemyDef> = {
@@ -53,9 +78,37 @@ export const ENEMY_DEFS: Record<SEnemyKind, SEnemyDef> = {
   // 0 morre em UM golpe — a fantasia de poder começa de pé, como no VS.
   undead: { hp: 9, speed: 1.7, damage: 6, xp: 1, radius: 0.34, texKey: 'undead', hurtTexKey: 'undead-hurt' },
   bat: { hp: 5, speed: 3.1, damage: 4, xp: 1, radius: 0.3, texKey: 'bat', hurtTexKey: 'bat-hurt', flies: true },
-  spider: { hp: 8, speed: 2.5, damage: 5, xp: 2, radius: 0.32, texKey: 'spider' },
+  // A aranha caça como aranha: rastejo espreitando, depois o BOTE.
+  spider: {
+    hp: 8, speed: 2.1, damage: 5, xp: 2, radius: 0.32, texKey: 'spider',
+    dash: { intervalMs: 2200, durationMs: 550, speedMul: 2.6, restMul: 0.55 },
+  },
   slime: { hp: 24, speed: 1.15, damage: 8, xp: 3, radius: 0.36, texKey: 'slime', hop: true },
-  bigslime: { hp: 65, speed: 0.95, damage: 11, xp: 8, radius: 0.4, texKey: 'bigslime', hop: true },
+  // O grandão estoura em dois filhotes — matar um vira matar três.
+  bigslime: {
+    hp: 65, speed: 0.95, damage: 11, xp: 8, radius: 0.4, texKey: 'bigslime', hop: true,
+    splitsInto: { kind: 'slime', count: 2, poolTexKey: 'bigslime-pool' },
+  },
+  // O mago é um kiter: rodeia fora do alcance da espada e conjura bolas mágicas
+  // (a arte de conjuração é o telegraph — dá tempo de sair da linha).
+  mage: {
+    hp: 10, speed: 2.0, damage: 5, xp: 3, radius: 0.32, texKey: 'mage', hurtTexKey: 'mage-hurt',
+    keepDistanceTiles: 5.2,
+    ranged: { rangeTiles: 7.5, cooldownMs: 2800, telegraphMs: 420, castTexKey: 'mage-cast', shot: 'magic', shotSpeed: 4.4, shotDamage: 10 },
+  },
+  // O arqueiro é o undead pálido que PARA para atirar: flecha rápida e rasa.
+  archer: {
+    hp: 11, speed: 1.4, damage: 6, xp: 2, radius: 0.34, texKey: 'undead', hurtTexKey: 'undead-hurt',
+    tint: 0x9fd8ff,
+    ranged: { rangeTiles: 7, cooldownMs: 3200, telegraphMs: 300, shot: 'arrow', shotSpeed: 7.5, shotDamage: 8 },
+  },
+  // A torreta não anda: nasce perto da vista e nega a área com leques radiais
+  // de balas lentas — o "bullet hell de bolso" que força o jogador a se mover.
+  turret: {
+    hp: 40, speed: 0, damage: 6, xp: 6, radius: 0.36, texKey: 'turret',
+    stationary: true,
+    ranged: { rangeTiles: 9, cooldownMs: 3600, telegraphMs: 350, shot: 'bullet', shotSpeed: 3.2, shotDamage: 7, radial: 6 },
+  },
   // A MORTE: intocável e mais rápida que o herói — encerra a run, como no VS.
   reaper: { hp: Number.MAX_SAFE_INTEGER, speed: 5.4, damage: 9999, xp: 0, radius: 0.42, texKey: 'npc-death' },
 };
@@ -74,25 +127,29 @@ export interface WaveDef {
   speedMul: number;
 }
 
+// A variedade chega CEDO (pedido do jogador): aranha no minuto 1, mago no 2,
+// arqueiro no 3, torreta no 4 — cada minuto apresenta um comportamento novo.
+// A frequência é controlada repetindo kinds no array (sorteio uniforme):
+// ['undead','undead','mage'] = mago em ~1/3 dos spawns.
 export const WAVES: readonly WaveDef[] = [
-  { kinds: ['undead'], spawnIntervalMs: 1700, minAlive: 6, hpMul: 1.0, speedMul: 1.0 },
-  { kinds: ['undead'], spawnIntervalMs: 1300, minAlive: 12, hpMul: 1.15, speedMul: 1.0 },
-  { kinds: ['undead', 'bat'], spawnIntervalMs: 1050, minAlive: 18, hpMul: 1.3, speedMul: 1.0 },
-  { kinds: ['undead', 'bat'], spawnIntervalMs: 950, minAlive: 24, hpMul: 1.5, speedMul: 1.02 },
-  { kinds: ['undead', 'bat', 'spider'], spawnIntervalMs: 850, minAlive: 30, hpMul: 1.75, speedMul: 1.04 },
+  { kinds: ['undead', 'undead', 'undead', 'bat'], spawnIntervalMs: 1600, minAlive: 6, hpMul: 1.0, speedMul: 1.0 },
+  { kinds: ['undead', 'undead', 'bat', 'spider'], spawnIntervalMs: 1250, minAlive: 12, hpMul: 1.15, speedMul: 1.0 },
+  { kinds: ['undead', 'undead', 'bat', 'spider', 'mage'], spawnIntervalMs: 1000, minAlive: 18, hpMul: 1.3, speedMul: 1.0 },
+  { kinds: ['undead', 'spider', 'slime', 'archer', 'mage'], spawnIntervalMs: 950, minAlive: 24, hpMul: 1.5, speedMul: 1.02 },
+  { kinds: ['undead', 'bat', 'slime', 'mage', 'turret'], spawnIntervalMs: 850, minAlive: 30, hpMul: 1.75, speedMul: 1.04 },
   // Minuto 5: enxame de morcegos — o "evento" clássico de VS que força movimento.
-  { kinds: ['bat', 'bat', 'bat', 'spider'], spawnIntervalMs: 450, minAlive: 42, hpMul: 1.9, speedMul: 1.06 },
-  { kinds: ['undead', 'slime', 'bat'], spawnIntervalMs: 800, minAlive: 44, hpMul: 2.2, speedMul: 1.06 },
-  { kinds: ['undead', 'slime', 'spider'], spawnIntervalMs: 750, minAlive: 50, hpMul: 2.55, speedMul: 1.08 },
-  { kinds: ['slime', 'bigslime', 'undead'], spawnIntervalMs: 700, minAlive: 56, hpMul: 2.9, speedMul: 1.08 },
-  // Minuto 9: enxame de aranhas.
-  { kinds: ['spider', 'spider', 'spider', 'bat'], spawnIntervalMs: 420, minAlive: 66, hpMul: 3.3, speedMul: 1.1 },
-  { kinds: ['undead', 'bat', 'spider', 'slime'], spawnIntervalMs: 600, minAlive: 72, hpMul: 3.8, speedMul: 1.12 },
-  { kinds: ['undead', 'bat', 'spider', 'slime', 'bigslime'], spawnIntervalMs: 550, minAlive: 80, hpMul: 4.3, speedMul: 1.14 },
-  { kinds: ['slime', 'bigslime', 'spider'], spawnIntervalMs: 500, minAlive: 88, hpMul: 4.9, speedMul: 1.16 },
-  { kinds: ['undead', 'bat', 'spider', 'slime', 'bigslime'], spawnIntervalMs: 430, minAlive: 100, hpMul: 5.6, speedMul: 1.18 },
-  // Minuto 14: o frenesi final antes d'A MORTE.
-  { kinds: ['bat', 'spider', 'slime', 'bigslime', 'undead'], spawnIntervalMs: 340, minAlive: 115, hpMul: 6.4, speedMul: 1.22 },
+  { kinds: ['bat', 'bat', 'bat', 'spider', 'archer'], spawnIntervalMs: 450, minAlive: 42, hpMul: 1.9, speedMul: 1.06 },
+  { kinds: ['undead', 'slime', 'bat', 'mage', 'bigslime'], spawnIntervalMs: 800, minAlive: 44, hpMul: 2.2, speedMul: 1.06 },
+  { kinds: ['undead', 'slime', 'spider', 'archer', 'turret'], spawnIntervalMs: 750, minAlive: 50, hpMul: 2.55, speedMul: 1.08 },
+  { kinds: ['slime', 'bigslime', 'undead', 'mage'], spawnIntervalMs: 700, minAlive: 56, hpMul: 2.9, speedMul: 1.08 },
+  // Minuto 9: enxame de aranhas, com arqueiros mordendo pelas costas.
+  { kinds: ['spider', 'spider', 'spider', 'bat', 'archer'], spawnIntervalMs: 420, minAlive: 66, hpMul: 3.3, speedMul: 1.1 },
+  { kinds: ['undead', 'bat', 'spider', 'slime', 'mage', 'turret'], spawnIntervalMs: 600, minAlive: 72, hpMul: 3.8, speedMul: 1.12 },
+  { kinds: ['undead', 'bat', 'spider', 'slime', 'bigslime', 'archer'], spawnIntervalMs: 550, minAlive: 80, hpMul: 4.3, speedMul: 1.14 },
+  { kinds: ['slime', 'bigslime', 'spider', 'mage', 'turret'], spawnIntervalMs: 500, minAlive: 88, hpMul: 4.9, speedMul: 1.16 },
+  { kinds: ['undead', 'bat', 'spider', 'slime', 'bigslime', 'mage', 'archer'], spawnIntervalMs: 430, minAlive: 100, hpMul: 5.6, speedMul: 1.18 },
+  // Minuto 14: o frenesi final antes d'A MORTE — o bestiário inteiro.
+  { kinds: ['bat', 'spider', 'slime', 'bigslime', 'undead', 'mage', 'archer', 'turret'], spawnIntervalMs: 340, minAlive: 115, hpMul: 6.4, speedMul: 1.22 },
 ];
 
 export const waveForTime = (elapsedSec: number): WaveDef =>

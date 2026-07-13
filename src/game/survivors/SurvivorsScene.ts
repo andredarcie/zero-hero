@@ -16,7 +16,7 @@ import { PickupField, rollDrop, scatter, type PickupKind } from './Pickups';
 import {
   CHEST_GOLD_MAX, CHEST_GOLD_MIN, CHEST_UPGRADE_ODDS, COIN_GOLD_VALUE,
   DROP_CHANCE_COIN, DROP_CHANCE_HEART, DROP_CHANCE_MAGNET, ELITE_KINDS,
-  ELITE_TIMES_SEC, HEART_HEAL_AMOUNT, PLAYER_BASE, REAPER_WARNING_SEC,
+  ELITE_TIMES_SEC, ENEMY_DEFS, HEART_HEAL_AMOUNT, PLAYER_BASE, REAPER_WARNING_SEC,
   RUN_DURATION_SEC, STARTING_WEAPON, WEAPON_DEFS, waveForTime, xpToNextLevel,
 } from './SurvivorsConfig';
 import { HordeDirector, SurvivorsHorde, type SEnemy } from './SurvivorsEnemies';
@@ -166,6 +166,7 @@ export class SurvivorsScene extends Phaser.Scene {
     this.horde = new SurvivorsHorde(this, {
       onKilled: (e) => this.handleEnemyKilled(e),
       onContact: (e) => this.handleEnemyContact(e),
+      onShotHit: (damage, fromX, fromY) => this.handleShotHit(damage, fromX, fromY),
     });
     this.director = new HordeDirector();
     this.gems = new XPGemField((value) => this.handleGemCollected(value));
@@ -328,6 +329,24 @@ export class SurvivorsScene extends Phaser.Scene {
 
     this.gems?.spawn(e.x, e.y, e.xp);
 
+    // O bigslime estoura em filhotes sobre a própria poça — matar um vira três.
+    const def = ENEMY_DEFS[e.kind];
+    if (def.splitsInto && this.horde) {
+      const wave = waveForTime(this.elapsedMs / 1000);
+      for (let i = 0; i < def.splitsInto.count; i++) {
+        const at = scatter(e.x, e.y);
+        this.horde.spawn(def.splitsInto.kind, wave, this.player?.x ?? e.x, this.player?.y ?? e.y, false, { x: at.x, y: at.y });
+      }
+      const pool = this.world3d?.addBillboard(def.splitsInto.poolTexKey, 0, { flat: true, castShadow: false });
+      if (pool) {
+        pool.setPosition(e.x, e.y).setDisplaySize(0.95, 0.95).setAlpha(0.85);
+        this.tweens.add({
+          targets: pool, alpha: 0, duration: 1400, ease: 'Quad.easeIn',
+          onComplete: () => pool.destroy(),
+        });
+      }
+    }
+
     if (e.elite) {
       const drop = scatter(e.x, e.y);
       this.pickups?.spawn('chest', drop.x, drop.y);
@@ -349,10 +368,20 @@ export class SurvivorsScene extends Phaser.Scene {
     const now = this.time.now;
     if (now - e.lastContactMs < CONTACT_REHIT_MS) return;
     e.lastContactMs = now;
+    this.applyPlayerDamage(e.damage, e.x, e.y);
+  }
 
+  /** Projétil inimigo (bola mágica, flecha, bala): só o invuln global gateia. */
+  private handleShotHit(damage: number, fromX: number, fromY: number): void {
+    if (this.runOver || this.godMode) return;
+    if (this.invulnMs > 0) return;
+    this.applyPlayerDamage(damage, fromX, fromY);
+  }
+
+  private applyPlayerDamage(damage: number, fromX: number, fromY: number): void {
     this.invulnMs = PLAYER_BASE.invulnMs;
-    this.playerHp -= e.damage;
-    this.player?.applyKnockback(e.x, e.y);
+    this.playerHp -= damage;
+    this.player?.applyKnockback(fromX, fromY);
     getSoundManager().playPlayerHurt();
     this.world3d?.shake(160, 0.045);
 

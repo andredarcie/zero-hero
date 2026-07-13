@@ -64,6 +64,27 @@ const CSS = `
 }
 @keyframes zhs-pop { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
 #${ROOT_ID} .zhs-slot img.zhs-pop { animation: zhs-pop 150ms ease-out; }
+/* Relógios de recarga JUNTO do herói (sempre no centro da tela): uma fileira de
+   mini-ícones circulares com sweep radial — o olhar nunca precisa subir à HUD. */
+#${ROOT_ID} .zhs-ccd {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, 46px);
+  display: flex; gap: 6px;
+}
+#${ROOT_ID} .zhs-ccd .zhs-ccd-slot {
+  position: relative; width: 24px; height: 24px; border-radius: 50%;
+  background: rgba(8, 8, 14, 0.5); border: 2px solid rgba(216, 209, 192, 0.3);
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+#${ROOT_ID} .zhs-ccd img { width: 14px; height: 14px; position: relative; z-index: 1; }
+#${ROOT_ID} .zhs-ccd .zhs-ccd-fill {
+  position: absolute; inset: 0; border-radius: 50%; z-index: 2; pointer-events: none;
+}
+#${ROOT_ID} .zhs-ccd .zhs-ccd-slot.zhs-ready {
+  border-color: #ffd24a; box-shadow: 0 0 6px rgba(245, 197, 66, 0.65);
+}
+#${ROOT_ID} .zhs-ccd img.zhs-pop { animation: zhs-pop 150ms ease-out; }
 #${ROOT_ID} .zhs-hpwrap {
   position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
   width: 200px; height: 12px; background: rgba(8, 8, 14, 0.82); border: 2px solid #2c2620;
@@ -106,6 +127,9 @@ export class SurvivorsHud {
   private lastSlotsKey = '';
   // Slot de cada arma: o véu de recarga + o ícone (para o pop de disparo).
   private readonly cooldownFills = new Map<WeaponKind, { fill: HTMLDivElement; img: HTMLImageElement; lastFrac: number }>();
+  // Os relógios radiais sob o herói (a leitura principal, pedida pelo jogador).
+  private readonly centerRow: HTMLDivElement;
+  private readonly centerFills = new Map<WeaponKind, { slot: HTMLDivElement; fill: HTMLDivElement; img: HTMLImageElement; lastFrac: number }>();
 
   public constructor() {
     ensureStyle();
@@ -167,6 +191,10 @@ export class SurvivorsHud {
     this.banner.className = 'zhs-banner';
     this.root.appendChild(this.banner);
 
+    this.centerRow = document.createElement('div');
+    this.centerRow.className = 'zhs-ccd';
+    this.root.appendChild(this.centerRow);
+
     document.body.appendChild(this.root);
   }
 
@@ -215,22 +243,54 @@ export class SurvivorsHud {
     for (const p of passives) {
       this.passiveRow.appendChild(this.slot(iconUrl(PASSIVE_DEFS[p.kind].icon), String(p.level), false));
     }
+
+    // Os relógios radiais sob o herói. A tocha fica de fora: é contínua — um
+    // anel eternamente "pronto" seria só ruído colado no personagem.
+    this.centerRow.textContent = '';
+    this.centerFills.clear();
+    for (const w of weapons) {
+      if (w.kind === 'torch') continue;
+      const slot = document.createElement('div');
+      slot.className = 'zhs-ccd-slot';
+      const img = document.createElement('img');
+      img.src = iconUrl(WEAPON_DEFS[w.kind].icon);
+      const fill = document.createElement('div');
+      fill.className = 'zhs-ccd-fill';
+      slot.append(img, fill);
+      this.centerRow.appendChild(slot);
+      this.centerFills.set(w.kind, { slot, fill, img, lastFrac: 0 });
+    }
   }
 
-  /** Atualiza o véu de recarga de cada arma (chamado todo frame — só estilos). */
+  /** Atualiza os relógios de recarga (chamado todo frame — só estilos). */
   public setCooldowns(states: ReadonlyArray<{ kind: WeaponKind; frac: number }>): void {
     for (const { kind, frac } of states) {
+      // O véu vertical do slot da HUD (canto superior esquerdo).
       const slot = this.cooldownFills.get(kind);
-      if (!slot) continue;
-      slot.fill.style.height = `${Math.round(frac * 100)}%`;
-      // O salto de vazio→cheio É o disparo: o ícone dá um pop no mesmo instante.
-      if (frac > slot.lastFrac + 0.5) {
-        slot.img.classList.remove('zhs-pop');
-        void slot.img.offsetWidth; // reinicia a animação CSS
-        slot.img.classList.add('zhs-pop');
+      if (slot) {
+        slot.fill.style.height = `${Math.round(frac * 100)}%`;
+        if (frac > slot.lastFrac + 0.5) this.pop(slot.img);
+        slot.lastFrac = frac;
       }
-      slot.lastFrac = frac;
+      // O relógio radial sob o herói: sweep cônico que se esvazia até liberar.
+      const center = this.centerFills.get(kind);
+      if (center) {
+        const deg = Math.round(frac * 360);
+        center.fill.style.background = deg > 0
+          ? `conic-gradient(rgba(4, 4, 10, 0.78) ${deg}deg, transparent ${deg}deg)`
+          : 'transparent';
+        center.slot.classList.toggle('zhs-ready', frac <= 0.02);
+        if (frac > center.lastFrac + 0.5) this.pop(center.img);
+        center.lastFrac = frac;
+      }
     }
+  }
+
+  /** O salto de vazio→cheio É o disparo: o ícone dá um pop no mesmo instante. */
+  private pop(img: HTMLImageElement): void {
+    img.classList.remove('zhs-pop');
+    void img.offsetWidth; // reinicia a animação CSS
+    img.classList.add('zhs-pop');
   }
 
   /** Aviso central (elite, A MORTE) — some sozinho. */
