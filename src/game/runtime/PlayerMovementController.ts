@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
-import { ANIMATION_KEYS, HERO_FRAMES, TIMINGS } from '@/game/constants';
+import { HERO_FRAMES, TIMINGS } from '@/game/constants';
+import { setHeroWalking, type HeroView } from './HeroView';
 import type { WorldCamera } from './WorldCamera';
 
 const MOVE_EASE = 'Sine.Out';
@@ -40,7 +41,7 @@ export class PlayerMovementController {
 
   public constructor(
     private readonly scene: Phaser.Scene,
-    private readonly player: Phaser.GameObjects.Sprite,
+    private readonly hero: HeroView,
     private readonly camera: WorldCamera,
     private readonly isBlockedCell: (worldX: number, worldY: number) => boolean,
     private readonly onStep: (worldX: number, worldY: number) => void,
@@ -133,7 +134,12 @@ export class PlayerMovementController {
   public syncPlayerToWorld(worldX: number, worldY: number, tileSize: number): void {
     this.tileSize = tileSize;
     this.camera.centerOn(worldX, worldY);
-    this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+    this.pinToCentre();
+  }
+
+  private pinToCentre(): void {
+    this.hero.x = this.camera.screenCenterX;
+    this.hero.y = this.camera.screenCenterY;
   }
 
   public get moving(): boolean {
@@ -146,15 +152,14 @@ export class PlayerMovementController {
     this.isMoving = false;
     this.queuedMove = null;
     this.stopHold();
-    // Tween.stop() never fires onComplete, so the walk animation (repeat: -1) started in
-    // setFacing would loop forever on a mid-step interrupt (e.g. item pickup). Only a
-    // horizontal step plays it; its stop convention is the idleDown frame — vertical steps
-    // have no animation playing, so their facing frame stays untouched.
-    if (this.player.anims.isPlaying) {
-      this.player.anims.stop();
-      this.player.setFrame(HERO_FRAMES.idleDown);
+    // Tween.stop() never fires onComplete, so the walk cycle started in setFacing would run
+    // forever on a mid-step interrupt (e.g. item pickup). Only a horizontal step animates;
+    // its stop convention is the idleDown frame — vertical steps hold their facing frame.
+    if (this.hero.walking) {
+      setHeroWalking(this.hero, false);
+      this.hero.frame = HERO_FRAMES.idleDown;
     }
-    this.syncPlayerToWorld(worldX, worldY, this.tileSize || this.player.displayWidth || this.player.width);
+    this.syncPlayerToWorld(worldX, worldY, this.tileSize || this.hero.sizePx);
   }
 
   private stopHold(): void {
@@ -289,12 +294,12 @@ export class PlayerMovementController {
       ease: MOVE_EASE,
       onUpdate: () => {
         this.camera.centerOn(renderState.rx, renderState.ry);
-        this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+        this.pinToCentre();
       },
       onComplete: () => {
         this.activeTween = undefined;
         this.camera.centerOn(nextX, nextY);
-        this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+        this.pinToCentre();
         this.setFacing(dx, dy, false);
         this.isMoving = false;
       },
@@ -310,27 +315,28 @@ export class PlayerMovementController {
 
   private setFacing(dx: number, dy: number, moving: boolean): void {
     this.lastFacing = { dx, dy };
+    const hero = this.hero;
     if (dy < 0) {
-      this.player.anims.stop();
-      this.player.setFlipX(false);
-      this.player.setFrame(HERO_FRAMES.idleUp);
+      setHeroWalking(hero, false);
+      hero.flipX = false;
+      hero.frame = HERO_FRAMES.idleUp;
       return;
     }
 
     if (dy > 0) {
-      this.player.anims.stop();
-      this.player.setFlipX(false);
-      this.player.setFrame(HERO_FRAMES.idleDown);
+      setHeroWalking(hero, false);
+      hero.flipX = false;
+      hero.frame = HERO_FRAMES.idleDown;
       return;
     }
 
-    this.player.setFlipX(dx < 0);
+    hero.flipX = dx < 0;
     if (moving) {
-      this.player.play(ANIMATION_KEYS.heroWalk, true);
+      setHeroWalking(hero, true);
       return;
     }
 
-    this.player.anims.stop();
-    this.player.setFrame(HERO_FRAMES.idleDown);
+    setHeroWalking(hero, false);
+    hero.frame = HERO_FRAMES.idleDown;
   }
 }

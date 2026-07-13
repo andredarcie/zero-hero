@@ -6,6 +6,7 @@ import audio from './audio.mjs';
 import swordGet from './sword-get.mjs';
 import textLegibility from './text-legibility.mjs';
 import hd2dFx from './hd2d-fx.mjs';
+import heroView from './hero-view.mjs';
 
 export const scenarios = {
   smoke,
@@ -16,6 +17,7 @@ export const scenarios = {
   'sword-get': swordGet,
   'text-legibility': textLegibility,
   'hd2d-fx': hd2dFx,
+  'hero-view': heroView,
 };
 
 // What `npm run playtest` runs when no scenario is named.

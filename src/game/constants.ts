@@ -82,10 +82,6 @@ export const HERO_FRAMES = {
   walkEnd: 3,
 } as const;
 
-export const ANIMATION_KEYS = {
-  heroWalk: 'hero-walk',
-} as const;
-
 export const TIMINGS = {
   moveDurationMs: 140,
   walkFrameRate: 12,

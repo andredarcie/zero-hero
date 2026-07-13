@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 
 import {
-  ANIMATION_KEYS,
   ASSET_KEYS,
   BOMB_FRAMES,
   CAMPFIRE_SAFE_RADIUS_TILES,
@@ -21,9 +20,7 @@ import {
   NPC_GATE_RADIUS_TILES,
   SCENE_DEPTHS,
   TEXT_RESOLUTION,
-  TIMINGS,
   TORCH_BURN_MS,
-  ySortDepth,
 } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/game/debug/debugHooks';
@@ -56,6 +53,7 @@ import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
+import { createHeroView, heroFootY, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
@@ -253,11 +251,15 @@ export class GameScene extends Phaser.Scene {
   // Lit bombs on the ground — world-anchored billboards ticking until they blow.
   private activeBombs: Array<{ worldX: number; worldY: number; sprite: Billboard3D }> = [];
   private spaceKey?: Phaser.Input.Keyboard.Key;
-  private player?: Phaser.GameObjects.Sprite;
+  // The hero has no Phaser GameObject in the world: he is plain state (tweened like any
+  // object) drawn by the 3D billboard alone. See HeroView.
+  private readonly hero: HeroView = createHeroView();
   // The held item, slung diagonally on the hero's back like it's tucked in a satchel.
   // In-world it's a 3D billboard riding the hero billboard (so the body occludes it
   // properly); the 2D image only returns for the screen-space death elegy.
   private backItem?: Phaser.GameObjects.Image;
+  // The hero's 2D stand-in, struck only for the screen-space death elegy.
+  private deathHero?: Phaser.GameObjects.Sprite;
   private backItemBb?: Billboard3D;
   // Hides the back item while the same item is mid-swing, so it isn't shown in two places.
   private backItemSwingTimer?: Phaser.Time.TimerEvent;
@@ -340,7 +342,6 @@ export class GameScene extends Phaser.Scene {
   // Breathing idle
   private breathingTween?: Phaser.Tweens.Tween;
   private lastStepTime = 0;
-  private breathingBaseY = 0;
 
   // "You need this item" balloon over the hero's head (see showNeedItemHint)
   private needItemHint?: Phaser.GameObjects.Container;
@@ -430,14 +431,6 @@ export class GameScene extends Phaser.Scene {
     this.camera.world3d = this.world3d;
     this.world3d.follow(startWorldX, startWorldY, true);
 
-    // The hero's Phaser sprite stays as the invisible "state carrier" — every
-    // movement/knockback/breathing/hurt tween keeps driving it — and render3D
-    // mirrors it onto this 3D billboard, which is what the player actually sees.
-    this.player = this.add
-      .sprite(0, 0, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.player)
-      .setVisible(false);
     this.heroBillboard = this.world3d.addBillboard('hero', HERO_FRAMES.idleDown, { castGroundShadow: true })
       .setPosition(startWorldX, startWorldY)
       .setDisplaySize(1, 1);
@@ -450,11 +443,9 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false)
       .setDepth(SCENE_DEPTHS.player - 1);
 
-    this.createAnimations();
-
     this.movementController = new PlayerMovementController(
       this,
-      this.player,
+      this.hero,
       this.camera,
       (wx, wy) => {
         // The hero also stops on enemies (to attack them); everything else that blocks is
@@ -584,6 +575,10 @@ export class GameScene extends Phaser.Scene {
     // every remaining Phaser-side FX scales itself by.
     this.tileSize = w3.tileScreenSize();
 
+    // The walk cycle: Phaser's animation component used to drive the sprite's frame from
+    // the display list, which kept ticking even when update() early-returned (dialog pan,
+    // cut-scene). POST_UPDATE runs on those frames too, so it ticks in the same places.
+    tickHeroView(this.hero, delta);
     this.syncHeroBillboard();
 
     // Hero glow + carried torch as real lights riding the hero.
@@ -598,49 +593,44 @@ export class GameScene extends Phaser.Scene {
     w3.render(delta);
   }
 
-  // Mirror the (hidden) Phaser hero sprite onto its 3D billboard: position from
-  // the screen-centre pin + any knockback offset, size/frame/flip/tint verbatim.
+  // Draw the hero's state onto its 3D billboard: position from the screen-centre pin
+  // + any knockback offset, size/frame/flip/tint verbatim.
   private syncHeroBillboard(): void {
     const b = this.heroBillboard;
-    const p = this.player;
+    const h = this.hero;
     const cam = this.camera;
-    if (!b || !p || !cam) return;
+    if (!b || !cam) return;
     const ts = Math.max(1, this.tileSize);
 
-    // Anchor the mapping at the sprite's FEET, not its origin: breathing pivots the
-    // origin to the bottom (and shifts p.y half a tile to compensate), so reading p.y
-    // raw made the billboard lurch half a tile at every step start/stop — the hero
-    // looked like he was hopping. The foot line is continuous across origin flips,
-    // and the foot-anchored billboard grows upward from planted feet while breathing.
-    const footY = p.y + (1 - p.originY) * p.displayHeight;
+    // Anchor the mapping at the hero's FEET, not his centre: the billboard is planted on the
+    // ground of its tile and grows upward, so breathing (which stretches scaleY) must not move
+    // the foot line — otherwise the hero looks like he is hopping.
     b.setPosition(
-      cam.camX + (p.x - cam.screenCenterX) / ts,
-      cam.camY + (footY - cam.screenCenterY) / ts - 0.5,
+      cam.camX + (h.x - cam.screenCenterX) / ts,
+      cam.camY + (heroFootY(h) - cam.screenCenterY) / ts - 0.5,
     );
-    b.setDisplaySize(Math.max(0.05, p.displayWidth / ts), Math.max(0.05, p.displayHeight / ts));
-    const frame = Number.parseInt(String(p.frame.name), 10);
-    b.setTexture('hero', Number.isNaN(frame) ? HERO_FRAMES.idleDown : frame);
-    b.setFlipX(p.flipX);
-    b.setAlpha(p.alpha);
+    b.setDisplaySize(
+      Math.max(0.05, (h.sizePx * h.scaleX) / ts),
+      Math.max(0.05, (h.sizePx * h.scaleY) / ts),
+    );
+    b.setTexture('hero', h.frame);
+    b.setFlipX(h.flipX);
+    b.setAlpha(h.alpha);
 
     // The carried item and the contact shadow ride the just-synced hero position.
     this.positionBackItem();
     this.playerShadow?.setPosition(b.x, b.y + 0.1);
     this.playerShadow?.setVisible(!this.isDead);
 
-    // Death plays its 2D screen-space elegy with the Phaser sprite; hide the body.
+    // Death plays its 2D screen-space elegy with a Phaser stand-in; hide the 3D body.
     b.setVisible(!this.isDead);
     if (this.isDead) {
       this.backItemBb?.setVisible(false);
       return;
     }
 
-    if (p.isTinted) {
-      if (p.tintFill) b.setTintFill(p.tintTopLeft);
-      else b.setTint(p.tintTopLeft);
-    } else {
-      b.clearTint();
-    }
+    if (h.tint !== null) b.setTint(h.tint);
+    else b.clearTint();
   }
 
   private enableEditorReturn(): void {
@@ -723,6 +713,9 @@ export class GameScene extends Phaser.Scene {
     this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
     this.heroBillboard?.destroy();
     this.heroBillboard = undefined;
+    // Phaser destroys the scene's own GameObjects on shutdown; drop the handle so a restart
+    // never finds a stale one.
+    this.deathHero = undefined;
     if (window.hd3d === this.world3d?.params) window.hd3d = undefined;
     setCurrentWorld3D(undefined);
     this.world3d?.dispose();
@@ -847,8 +840,6 @@ export class GameScene extends Phaser.Scene {
     const prevWorldX = this.playerWorld.worldX;
     const prevWorldY = this.playerWorld.worldY;
     this.playerWorld = this.movementController.update(this.playerWorld.worldX, this.playerWorld.worldY);
-    // Y-sort the hero so it walks in front of / behind obstacles by row.
-    this.player?.setDepth(ySortDepth(this.playerWorld.worldY, 0.03));
     const stepDx = this.playerWorld.worldX - prevWorldX;
     const stepDy = this.playerWorld.worldY - prevWorldY;
     if (stepDx !== 0 || stepDy !== 0) {
@@ -993,7 +984,7 @@ export class GameScene extends Phaser.Scene {
       this.invincibleTimer -= delta;
       if (this.invincibleTimer <= 0) {
         this.playerInvincible = false;
-        this.player?.setAlpha(1);
+        this.hero.alpha = 1;
       }
     }
 
@@ -1040,7 +1031,7 @@ export class GameScene extends Phaser.Scene {
     // The screen centre just moved; a live hurt-shove would keep easing toward the OLD
     // centre and strand the hero off his tile, so finish it before re-pinning.
     this.cancelPlayerKnockback();
-    this.player?.setDisplaySize(this.tileSize, this.tileSize);
+    this.hero.sizePx = this.tileSize;
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
   }
 
@@ -1445,8 +1436,8 @@ export class GameScene extends Phaser.Scene {
 
     getSoundManager().playEnemyHit();
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-    this.player?.setTint(0xffff00);
-    this.time.delayedCall(120, () => { this.player?.clearTint(); });
+    this.hero.tint = 0xffff00;
+    this.time.delayedCall(120, () => { this.hero.tint = null; });
 
     // Impact juice: sparks at the point of contact, a kick of screen shake, and a few
     // frames of hitstop — all heavier when the blow kills.
@@ -1650,8 +1641,8 @@ export class GameScene extends Phaser.Scene {
     this.refuelTorch();
     this.updateBackItem(); // the plain graveto stays visible beneath the flame effect
     // Orange flash on the player as the fire transfers
-    this.player?.setTint(0xff6600);
-    this.time.delayedCall(250, () => { this.player?.clearTint(); });
+    this.hero.tint = 0xff6600;
+    this.time.delayedCall(250, () => { this.hero.tint = null; });
   }
 
   /** Fill the carried flame back to full. */
@@ -1997,8 +1988,8 @@ export class GameScene extends Phaser.Scene {
   private spawnHealBurst(): void {
     this.spawnShockwave(this.playerWorld.worldX, this.playerWorld.worldY, 0xffc36b, 0.44, 1.7, 430);
     // Brief warm glow on the hero himself as the heart mends.
-    this.player?.setTint(0xffd9a0);
-    this.time.delayedCall(220, () => { this.player?.clearTint(); });
+    this.hero.tint = 0xffd9a0;
+    this.time.delayedCall(220, () => { this.hero.tint = null; });
   }
 
   // A few grey puffs rising where a flame died.
@@ -2348,7 +2339,8 @@ export class GameScene extends Phaser.Scene {
   // render3D on POST_UPDATE keeps the 3D camera itself panning).
   private reprojectStatic(): void {
     if (!this.camera || !this.chunkManager) return;
-    this.player?.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+    this.hero.x = this.camera.screenCenterX;
+    this.hero.y = this.camera.screenCenterY;
     this.positionBackItem();
     this.updateFootprints();
     this.enemyManager?.render(this.tileSize, this.camera);
@@ -2659,17 +2651,18 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(200, 0.01);
     this.cameras.main.flash(110, 160, 30, 30);
     this.triggerHitstop(90);
-    if (this.player && this.camera) {
+    if (this.camera) {
       const kdx = Math.sign(this.playerWorld.worldX - attacker.worldX);
       const kdy = Math.sign(this.playerWorld.worldY - attacker.worldY);
       attacker.triggerKnockback(kdx, kdy); // lunge toward the hero
-      // The hero sprite is always pinned to screen centre; the shove displaces it and
-      // eases it back. startBreathing waits for this tween, so the return never gets cut.
+      // The hero is always pinned to screen centre; the shove displaces him and eases him
+      // back. startBreathing waits for this tween, so the return never gets cut.
       const bx = this.camera.screenCenterX;
       const by = this.camera.screenCenterY;
-      this.player.setPosition(bx + kdx * this.tileSize * 0.34, by + kdy * this.tileSize * 0.34);
+      this.hero.x = bx + kdx * this.tileSize * 0.34;
+      this.hero.y = by + kdy * this.tileSize * 0.34;
       this.playerKnockTween = this.tweens.add({
-        targets: this.player,
+        targets: this.hero,
         x: bx,
         y: by,
         duration: 240,
@@ -2678,14 +2671,17 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    this.player?.setTint(0xff4444);
+    this.hero.tint = 0xff4444;
     this.tweens.add({
-      targets: this.player,
+      targets: this.hero,
       alpha: 0.3,
       duration: 80,
       yoyo: true,
       repeat: 5,
-      onComplete: () => { this.player?.setAlpha(1).clearTint(); },
+      onComplete: () => {
+        this.hero.alpha = 1;
+        this.hero.tint = null;
+      },
     });
   }
 
@@ -2789,10 +2785,18 @@ export class GameScene extends Phaser.Scene {
     });
 
     // 2. Only the hero remains, dead-centre on the void — then it fades away, slowly.
-    // The death elegy is a 2D screen-space scene: the (normally hidden, 3D-mirrored)
-    // Phaser hero returns for it while syncHeroBillboard hides the 3D body.
-    if (this.player) this.tweens.killTweensOf(this.player); // drop leftover hurt-blink
-    this.player?.setPosition(cx, cy).setDepth(D + 1).setAlpha(1).clearTint().setVisible(true);
+    // The death elegy is a 2D screen-space scene, so it gets a Phaser stand-in struck from
+    // the hero's last pose; syncHeroBillboard hides the 3D body for as long as it holds.
+    this.tweens.killTweensOf(this.hero); // drop a leftover hurt-blink
+    this.hero.alpha = 1;
+    this.hero.tint = null;
+    this.deathHero?.destroy();
+    this.deathHero = this.add
+      .sprite(cx, cy, ASSET_KEYS.hero, this.hero.frame)
+      .setOrigin(0.5)
+      .setDisplaySize(this.tileSize, this.tileSize)
+      .setFlipX(this.hero.flipX)
+      .setDepth(D + 1);
 
     // The item slung on the hero's back fades out together with him — it dies with the hero.
     // The in-world billboard hides with the 3D body (syncHeroBillboard); its 2D twin dresses
@@ -2821,7 +2825,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.tweens.add({
-      targets: this.player,
+      targets: this.deathHero,
       alpha: 0,
       duration: 3200,
       delay: 900,
@@ -3017,21 +3021,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startBreathing(): void {
-    if (!this.player || this.breathingTween?.isPlaying()) return;
+    if (this.breathingTween?.isPlaying()) return;
     // A hurt-knockback shove is still easing the hero back to centre — let it finish;
     // breathing starts on a later frame, once the tween completes and clears itself.
     if (this.playerKnockTween) return;
     this.breathingTween?.destroy();
-    // Save center-origin Y, then pivot to bottom so scale only grows upward
-    this.breathingBaseY = this.player.y;
-    this.player.setOrigin(0.5, 1.0);
-    this.player.y = this.breathingBaseY + this.tileSize * 0.5;
-    const sx = this.player.scaleX;
-    const sy = this.player.scaleY;
+    // The billboard stands on its feet, so stretching it only grows it upward — no origin
+    // pivot needed (the old Phaser sprite had to flip its origin and offset y to fake this).
     this.breathingTween = this.tweens.add({
-      targets: this.player,
-      scaleY: sy * 1.045,
-      scaleX: sx * 0.972,
+      targets: this.hero,
+      scaleY: 1.045,
+      scaleX: 0.972,
       duration: 1100,
       ease: 'Sine.easeInOut',
       yoyo: true,
@@ -3048,8 +3048,9 @@ export class GameScene extends Phaser.Scene {
     if (!this.playerKnockTween) return;
     this.playerKnockTween.stop();
     this.playerKnockTween = undefined;
-    if (this.player && this.camera) {
-      this.player.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
+    if (this.camera) {
+      this.hero.x = this.camera.screenCenterX;
+      this.hero.y = this.camera.screenCenterY;
     }
   }
 
@@ -3061,10 +3062,10 @@ export class GameScene extends Phaser.Scene {
     this.breathingTween.stop();
     this.breathingTween.destroy();
     this.breathingTween = undefined;
-    // Restore center origin and reset scale/position
-    this.player?.setOrigin(0.5, 0.5);
-    this.player?.setDisplaySize(this.tileSize, this.tileSize);
-    if (this.player) this.player.y = this.breathingBaseY;
+    // Back to rest: no squash, one tile tall.
+    this.hero.scaleX = 1;
+    this.hero.scaleY = 1;
+    this.hero.sizePx = this.tileSize;
   }
 
   private spawnFootprint(fromWorldX: number, fromWorldY: number, dx: number, dy: number): void {
@@ -3106,16 +3107,4 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private createAnimations(): void {
-    if (this.anims.exists(ANIMATION_KEYS.heroWalk)) return;
-    this.anims.create({
-      key: ANIMATION_KEYS.heroWalk,
-      frames: this.anims.generateFrameNumbers(ASSET_KEYS.hero, {
-        start: HERO_FRAMES.walkStart,
-        end: HERO_FRAMES.walkEnd,
-      }),
-      frameRate: TIMINGS.walkFrameRate,
-      repeat: -1,
-    });
-  }
 }
