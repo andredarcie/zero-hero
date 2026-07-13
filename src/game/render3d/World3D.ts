@@ -13,7 +13,8 @@ import { CAST_MAX_ALPHA, configureCast, makeCastMesh } from './CastShadow3D';
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
 import {
-  flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, patchPixelMaterial,
+  FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform,
+  lightWobbleUniform, patchPixelMaterial,
 } from './pixelArtLight';
 import { getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv } from './textures3d';
 
@@ -88,8 +89,20 @@ const FIRE_COLOR = '#ffc873';
 // firelight lerps between these by its instantaneous brightness.
 const FIRE_COOL = new THREE.Color(1.0, 0.5, 0.2);
 const FIRE_HOT = new THREE.Color(1.0, 0.87, 0.62);
-// The visible warm haze around the fire (additive) — a golden yellow, like the 2D glow.
-const FIRE_GLOW_COLOR = new THREE.Color(1.0, 0.72, 0.36);
+// The fire pool's AUTHORED colour ramp (the A Short Hike lesson: each light band is a
+// colour a painter chose, not one colour darkened by math). Stops sampled from the
+// flame sprite's own palette (#F1CC36 yellow core / #C83E3E red body): a pale-gold
+// heart, a golden-orange mid band, an ember-red rim. Shared by every fire glow and the
+// carried torch; live-tunable via window.hd3d.fireRampCore/Mid/Rim.
+const fireRampCoreUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#ffe6a2') };
+const fireRampMidUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#f9a04e') };
+const fireRampRimUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#a34e2e') };
+// The pool's own paint resolution, in texels per tile — COARSER than the art (8 = one
+// light block per 2×2 art pixels, cleanly aligned to the art grid). This is A Short
+// Hike's low-res trick applied to the light alone: the smooth authored gradient
+// crunches into subtle chunky blocks while the frame and the sprites stay sharp.
+// 2×2 approved live by the user; 4×4 was tried and read too coarse.
+const fireGlowResUniform: THREE.IUniform = { value: 8 };
 
 // Ambient particle counts (additive Points — brasas rising off the fire, dust in the air,
 // fireflies drifting in lit clearings, low mist wisps veiling the dark ground).
@@ -109,9 +122,9 @@ const AO_MAX = 0.5;
 // woodland, and the one a lava basin drags it toward, plus how far the lava's influence reaches.
 const BIOME_LAVA_RADIUS = 11; // tiles
 
-// Which tileset frame the out-of-focus canopy in the corners is cut from (a tree; see SOLID_UPPER_FRAMES).
-const FOREGROUND_TREE_FRAME = 3;
-const GRADE_WOOD_SHADOW = new THREE.Vector3(0.88, 0.95, 1.10); // cool blue shadows
+// Tinted shadows, the A Short Hike way: the dark is a COLOUR (violet-blue), never just
+// darker — it's what makes the fire pool's warmth read as warmth.
+const GRADE_WOOD_SHADOW = new THREE.Vector3(0.88, 0.91, 1.14);
 const GRADE_WOOD_HIGH = new THREE.Vector3(1.12, 1.02, 0.86); // warm amber highlights
 const GRADE_LAVA_SHADOW = new THREE.Vector3(1.06, 0.92, 0.86); // even the dark runs warm here
 const GRADE_LAVA_HIGH = new THREE.Vector3(1.20, 0.98, 0.72); // molten amber
@@ -146,7 +159,8 @@ export interface FireLight3D {
 }
 
 /**
- * A lit solid-colour BOX in the world (real prop geometry: bridge planks, posts…).
+ * A lit BOX in the world (real prop geometry: bridge planks, posts…), skinned with
+ * either a flat colour or a pixel-art texture (see woodTexture.ts).
  * Same Lambert + quantized/capped firelight as the merged terrain, so it belongs to
  * the diorama instead of reading as a foreign smooth-shaded object. Position is the
  * box CENTRE in tile coordinates; `elevation` is its centre height in tiles (0 =
@@ -197,6 +211,8 @@ export interface World3DParams {
   lightSteps: number;
   /** Light texels per tile (0 = smooth per-pixel light). See pixelArtLight.lightResUniform. */
   lightRes: number;
+  /** How far (tiles) the firelight's contours dent organically (0 = perfect circles). */
+  lightWobble: number;
   /** How far direct light may push a surface past its art colour (fire pool brightness). */
   lightCap: number;
   ambient: number;
@@ -209,6 +225,14 @@ export interface World3DParams {
    *  an additive radial sprite on the ground — size in tiles, strength = its opacity. */
   fireGlowSize: number;
   fireGlowStrength: number;
+  /** The pool's authored band colours (the A Short Hike painted lighting ramp):
+   *  hottest ring → outermost ring. */
+  fireRampCore: string;
+  fireRampMid: string;
+  fireRampRim: string;
+  /** The pool's paint resolution in texels/tile — coarser than the art on purpose
+   *  (8 = 2×2-art-pixel blocks): the low-res firelight. 0 = smooth. */
+  fireGlowRes: number;
   /** Height (tiles) of the shadow-casting fire light: HIGHER = shorter cast shadows
    *  (the 2D game had short shadows); low = long, raking, physically-fiery shadows. */
   shadowHeight: number;
@@ -284,13 +308,15 @@ export class World3D {
     // The post chain (bloom at half res + the DoF/finish pass) roughly doubles the fill rate, and
     // fill is exactly what a phone GPU is short of. So a phone renders at half resolution and the
     // browser scales the frame back up with NEAREST — which the pixel-art look wants anyway, and
-    // which costs a quarter of the fragments. Desktop keeps 1:1. Override live via hd3d.pixelScale.
+    // which costs a quarter of the fragments. Desktop keeps 1:1 — a half-res DESKTOP frame made
+    // the whole game read jagged (user feedback: the ASH treatment belongs to the firelight only).
     pixelScale: isHandheld() ? 2 : 1,
-    // Retro light banding OFF. It quantises the fire's pool into flat tiers (the 2D
-    // "stepped lantern"), and it is dithered so the tiers don't ring the fire like a
-    // bullseye — but at the art's pixel size a dither reads as a screen-door stipple over
-    // the ground, which looks dirty. The pool gets its pixel-art character from landing on
-    // the art's pixel grid (lightRes) instead. Tune live via window.hd3d.lightSteps.
+    // A Short Hike-style firelight (user: "pode seguir à risca a forma do Short Hike"):
+    // the falloff is SMOOTH (0 = no banding) but painted by the authored colour ramp
+    // (fireRamp*) and evaluated on the art's own pixel grid (lightRes) — like ASH, the
+    // pixel look comes from RESOLUTION, not from quantised circles. Set ≥ 1 to band it
+    // into flat retro tiers instead (the earlier "3 círculos" look; straight quantise —
+    // a Bayer dither read as dirty stipple). Live via window.hd3d.lightSteps.
     lightSteps: 0,
     // The light is drawn on a grid of texels-per-tile, so a fire's pool comes out in blocks
     // instead of a silky HD gradient sliding under the art. It MUST match the tileset's own
@@ -298,15 +324,19 @@ export class World3D {
     // as coarse as the art, which read as a checkerboard laid OVER the pixels rather than as
     // pixel art. Now one light texel == one art pixel. 0 = smooth.
     lightRes: TILESET_FRAME_SIZE,
+    // The tiers' edges dent and crawl (~±0.6 tiles) instead of drawing compass circles —
+    // "faça mais como a vida real, luz imperfeita" (user feedback). See lightWobbleUniform.
+    lightWobble: 1.2,
     // Cap on how far direct light pushes a surface past its art colour. Kept LOW so
     // white sprite pixels never overdrive into an absurd bloom glare (user feedback);
     // the warm fire POOL comes from the additive glow disc below, not from
     // over-brightening the art. Below ~ACES(1.55) stays under the bloom threshold.
     lightCap: 1.55,
-    // Ambient sits low enough that the warm fire pool dominates its clearing (as in
-    // the 2D reference), but high enough that the dirt's pixel-art detail still reads
-    // dimly out in the cool dark. Tuned live against the 2D screenshot.
-    ambient: 4.0,
+    // Lifted from 4.0 (user: "faça o jogo ser menos escuro de modo geral") — the unlit
+    // forest is now readable everywhere and the night mood comes from the cool tint and
+    // the warm-vs-cold contrast, not from crushing the dark to near-black. The fire pool
+    // (additive) still clearly owns its clearing.
+    ambient: 8.5,
     fireIntensity: 265,
     // Wide, soft warm pool (the 2D game's cozy campfire glow): far reach, gentle falloff.
     fireDist: 32,
@@ -318,6 +348,14 @@ export class World3D {
     // Warm cozy pool like the 2D — NOT a blown-out white core. Kept modest after the
     // user found a stronger glow too bright vs the (dim, cozy) 2D reference.
     fireGlowStrength: 0.6,
+    // Authored from the flame sprite's own palette (#F1CC36 / #C83E3E) and tuned live
+    // against the night: the rim must melt into the dark as warm ember, not alarm red.
+    fireRampCore: '#ffe6a2',
+    fireRampMid: '#f9a04e',
+    fireRampRim: '#a34e2e',
+    // One light block per 2×2 art pixels — low-res painted light, aligned to the art
+    // grid so it never reads as a foreign checkerboard (4×4 was tried: too coarse).
+    fireGlowRes: 8,
     // Shadow-casting fire light height: a balance so objects near the fire cast a
     // SHORT but clearly VISIBLE shadow radiating away from it (like the 2D game) —
     // too high (~4.5) hid the shadows under the objects; ground-level threw long ones.
@@ -330,7 +368,8 @@ export class World3D {
     // warm colour, and his white pixels (horns/eyes) don't glare under a bright glow.
     heroLight: 28,
     fogDensity: 0.02,
-    moon: 2.1,
+    // Raised with the ambient (see above) — a fuller moon for a brighter night.
+    moon: 3.6,
     // Near-neutral (just a hint of cool) so tree-green etc. read as the art's own
     // colours instead of being tinted teal by a saturated blue night fill.
     ambientColor: '#b4b7c2',
@@ -347,7 +386,7 @@ export class World3D {
     focusBand: 0.16,
     dofBlur: 3.2,
     dofNear: 0.55,
-    vignette: 0.24,
+    vignette: 0.16, // eased with the brighter night — 0.24 re-darkened the corners
     grain: 0.02,
     // Occasional twinkles near lit fires + a faint low haze — tuned live to sit
     // just under "noticeable" so they never wash the dark or read as floating orbs.
@@ -807,12 +846,15 @@ export class World3D {
     };
   }
 
-  /** See Box3D. Size is in tiles (sizeH = height/thickness); colour is flat (grain via alternating boxes). */
-  public addBox(sizeX: number, sizeH: number, sizeZ: number, color: number): Box3D {
+  /** See Box3D. Size is in tiles (sizeH = height/thickness); skin is a flat colour or a
+   *  pixel-art texture (the bridge's wood grain — see woodTexture.ts). */
+  public addBox(sizeX: number, sizeH: number, sizeZ: number, skin: number | THREE.Texture): Box3D {
     const geo = new THREE.BoxGeometry(sizeX, sizeH, sizeZ);
     // transparent stays on even at alpha 1 so ghost previews and solid props share a material
     // shape (toggling `transparent` at runtime would force a shader recompile).
-    const mat = new THREE.MeshLambertMaterial({ color, transparent: true });
+    const mat = new THREE.MeshLambertMaterial(
+      typeof skin === 'number' ? { color: skin, transparent: true } : { map: skin, transparent: true },
+    );
     patchPixelMaterial(mat, { quantize: true });
     const mesh = new THREE.Mesh(geo, mat);
     this.scene.add(mesh);
@@ -1173,7 +1215,12 @@ export class World3D {
     // Live knobs (window.hd3d).
     lightStepsUniform.value = Math.max(0, this.params.lightSteps);
     lightResUniform.value = Math.max(0, this.params.lightRes);
+    lightWobbleUniform.value = Math.max(0, this.params.lightWobble);
     lightCapUniform.value = this.params.lightCap;
+    fireRampCoreUniform.value.set(this.params.fireRampCore);
+    fireRampMidUniform.value.set(this.params.fireRampMid);
+    fireRampRimUniform.value.set(this.params.fireRampRim);
+    fireGlowResUniform.value = Math.max(0, this.params.fireGlowRes);
     flowTimeUniform.value = this.elapsed;
     this.ambientLight.intensity = this.params.ambient;
     this.ambientLight.color.set(this.params.ambientColor);
@@ -1696,10 +1743,9 @@ const makeSoftDotTexture = (): THREE.CanvasTexture => {
   return tex;
 };
 
-// The additive campfire glow laid over the ground. Rendered at a LOW resolution and
-// sampled with NEAREST so the warm pool breaks into chunky pixel blocks (the 2D game's
-// downscaled light overlay), not a smooth HD gradient. The soft radial falloff is kept
-// (so the pool still fades into the night) — the low res just quantises it into pixels.
+// The additive campfire glow laid over the ground. Evaluated on the art's own pixel
+// grid and banded into flat tiers (lightSteps), so the warm pool reads as a hand-shaded
+// pixel-art circle of light — chunky stepped rings — instead of a smooth HD gradient.
 /** The uniforms a fire's warm pool needs to place itself, kept on the material. */
 type GlowUniforms = { center: THREE.IUniform<THREE.Vector2>; radius: THREE.IUniform<number> };
 
@@ -1715,8 +1761,9 @@ type GlowUniforms = { center: THREE.IUniform<THREE.Vector2>; radius: THREE.IUnif
  * never swim as the camera pans or the flame jitters — only their brightness dances.
  */
 const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
+  // Colour comes from the authored band ramp in the shader (fireRamp* uniforms), so the
+  // material's own colour stays white.
   const mat = new THREE.MeshBasicMaterial({
-    color: FIRE_GLOW_COLOR,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
@@ -1732,8 +1779,13 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uGlowCenter = glow.center;
     shader.uniforms.uGlowRadius = glow.radius;
-    shader.uniforms.uLightRes = lightResUniform;
+    shader.uniforms.uLightRes = fireGlowResUniform; // the pool paints COARSER than the art
     shader.uniforms.uLightSteps = lightStepsUniform;
+    shader.uniforms.uLightWobble = lightWobbleUniform;
+    shader.uniforms.uFlowTime = flowTimeUniform;
+    shader.uniforms.uRampCore = fireRampCoreUniform;
+    shader.uniforms.uRampMid = fireRampMidUniform;
+    shader.uniforms.uRampRim = fireRampRimUniform;
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'varying vec2 vGlowPos;\nvoid main() {')
       .replace(
@@ -1748,6 +1800,12 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
          uniform float uGlowRadius;
          uniform float uLightRes;
          uniform float uLightSteps;
+         uniform float uLightWobble;
+         uniform float uFlowTime;
+         uniform vec3 uRampCore;
+         uniform vec3 uRampMid;
+         uniform vec3 uRampRim;
+         ${FIRE_WOBBLE_GLSL}
          varying vec2 vGlowPos;
          // The falloff the canvas gradient used to bake: a hot core that drops away fast,
          // then a long soft skirt out to the rim.
@@ -1758,17 +1816,6 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
            if (r < 0.75) return mix(0.25, 0.06, (r - 0.45) / 0.30);
            return mix(0.06, 0.0, (r - 0.75) / 0.25);
          }
-         // Ordered 4x4 Bayer threshold, indexed by the light texel itself.
-         const float BAYER[16] = float[16](
-            0.0,  8.0,  2.0, 10.0,
-           12.0,  4.0, 14.0,  6.0,
-            3.0, 11.0,  1.0,  9.0,
-           15.0,  7.0, 13.0,  5.0
-         );
-         float bayer(vec2 texel) {
-           vec2 p = mod(texel, 4.0);
-           return BAYER[int(p.y) * 4 + int(p.x)] / 16.0;
-         }
          void main() {`,
       )
       .replace(
@@ -1778,16 +1825,33 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
          vec2 glowPos = uLightRes > 0.0
            ? (glowTexel + 0.5) / uLightRes
            : vGlowPos;
+         // Imperfect firelight: dent the rings with the shared wobble field (the same
+         // one warping the direct light, so all the contours lobe together). The dents
+         // grow from the core to the rim — up close a flame's pool is roundish; its far
+         // skirt is what breaks up.
+         float rBase = distance(glowPos, uGlowCenter) / max(0.0001, uGlowRadius);
+         glowPos += vec2(
+           fireWobble(glowPos, uFlowTime),
+           fireWobble(glowPos.yx + 31.7, uFlowTime)
+         ) * (uLightWobble * (0.35 + 0.65 * min(rBase, 1.0)));
          float glowA = glowCurve(distance(glowPos, uGlowCenter) / max(0.0001, uGlowRadius));
-         // Retro banding: the pool falls off in flat tiers (the 2D game's stepped lantern)
-         // rather than a silky HD ramp. Quantised STRAIGHT, the tiers ring the fire like a
-         // bullseye — so the threshold is dithered with an ordered Bayer matrix keyed to the
-         // light texel: the band edges break up into a pixel pattern, which is how a 16-bit
-         // artist shaded a pool of light. The dither is world-locked (it indexes the texel,
-         // not the screen), so it never crawls under the camera.
+         // Retro banding: the pool falls off in FLAT TIERS (the stepped pixel-art lantern)
+         // rather than a silky HD ramp. Quantised straight — no dither: the tier edges are
+         // already stair-stepped by the art-pixel snap above, which is exactly how a pixel
+         // artist draws a circle of light (a Bayer dither here read as dirty stipple).
          if (uLightSteps >= 1.0) {
-           glowA = floor(glowA * uLightSteps + bayer(glowTexel)) / uLightSteps;
+           glowA = floor(glowA * uLightSteps + 0.5) / uLightSteps;
          }
+         // The A Short Hike lighting ramp: each band wears its own AUTHORED colour —
+         // ember-red rim, golden-orange mid, pale-gold heart — the way a pixel artist
+         // paints a pool of firelight, instead of one colour fading by alpha alone.
+         // With uLightSteps bands the stops land exactly on rim/mid/core.
+         float rampT = uLightSteps >= 2.0
+           ? clamp((glowA * uLightSteps - 1.0) / (uLightSteps - 1.0), 0.0, 1.0)
+           : glowA;
+         diffuseColor.rgb *= rampT < 0.5
+           ? mix(uRampRim, uRampMid, rampT * 2.0)
+           : mix(uRampMid, uRampCore, rampT * 2.0 - 1.0);
          diffuseColor.a *= glowA;`,
       );
   };

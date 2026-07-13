@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { getWoodTexture } from '@/game/render3d/woodTexture';
 import { FX_PUFF_TEXTURE, WATER_DEPTH_TILES, world3d, type Box3D } from '@/game/render3d/World3D';
 import { getBridgeSpots, getWaterTiles } from '@/game/world/WorldData';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -31,10 +32,9 @@ const DROP_FROM_TILES = 0.5; // parts fall in from this high above their rest po
 // First deposit builds the frame (legs + stringers) before its boards; the boards wait this long.
 const FRAME_BEAT_MS = 300;
 
-// Weathered-wood palette (alternating plank fills for a bit of grain; frame darker below).
-const PLANK_FILLS = [0x8a6038, 0x6f4a2c] as const;
-const STRINGER_FILL = 0x5b3d24;
-const POST_FILL = 0x4a3120;
+// The deck's wood is pixel art painted with the game's own wood-sprite palette —
+// see woodTexture.ts. Boards alternate the two plank patterns (staggered butt-joint
+// seams, like bridge.png); the frame below uses the darker stringer/post grain.
 const SAWDUST_TINT = 0xd9b483;
 const SPLASH_TINT = 0x9fb4dd; // a leg landing in the river kicks water, not sawdust
 
@@ -209,23 +209,26 @@ export class WaterObject {
 
     for (let i = 0; i < PLANK_ROWS; i++) {
       const along = -0.5 + (i + 0.5) / PLANK_ROWS;
+      const grain = getWoodTexture(i % 2 === 0 ? 'plankA' : 'plankB', rotated);
       const box = (rotated
-        ? w3.addBox(PLANK_D, PLANK_H, PLANK_W, PLANK_FILLS[i % PLANK_FILLS.length])
-        : w3.addBox(PLANK_W, PLANK_H, PLANK_D, PLANK_FILLS[i % PLANK_FILLS.length]))
+        ? w3.addBox(PLANK_D, PLANK_H, PLANK_W, grain)
+        : w3.addBox(PLANK_W, PLANK_H, PLANK_D, grain))
         .setPosition(...px(along, 0))
         .setElevation(PLANK_ELEV);
       this.planks.push({ box, restElev: PLANK_ELEV, laid: false, animating: false });
     }
 
+    // Stringers run ALONG the crossing (perpendicular to the boards), so their grain
+    // transposes in the opposite case from the planks'.
     for (const side of [-STRINGER_OFF, STRINGER_OFF]) {
       const beam = (rotated
-        ? w3.addBox(1.0, STRINGER_H, STRINGER_W, STRINGER_FILL)
-        : w3.addBox(STRINGER_W, STRINGER_H, 1.0, STRINGER_FILL))
+        ? w3.addBox(1.0, STRINGER_H, STRINGER_W, getWoodTexture('stringer', false))
+        : w3.addBox(STRINGER_W, STRINGER_H, 1.0, getWoodTexture('stringer', true)))
         .setPosition(...px(0, side))
         .setElevation(STRINGER_ELEV);
       this.frame.push({ box: beam, restElev: STRINGER_ELEV, laid: false, animating: false });
       for (const end of [-POST_OFF_ALONG, POST_OFF_ALONG]) {
-        const post = w3.addBox(POST_SIZE, POST_H, POST_SIZE, POST_FILL)
+        const post = w3.addBox(POST_SIZE, POST_H, POST_SIZE, getWoodTexture('post'))
           .setPosition(...px(end, side))
           .setElevation(POST_ELEV);
         this.frame.push({ box: post, restElev: POST_ELEV, laid: false, animating: false });

@@ -7,9 +7,9 @@ import * as THREE from 'three';
 // · The direct light is CAPPED at ~the art's own colours (diffuse × 1.25), so
 //   light REVEALS the artwork — like the 2D game's darkness-erase did — and a
 //   hot flame core can never wash sprites out to white.
-// · Optional retro banding: with lightSteps ≥ 1 the direct light quantizes into
-//   that many flat brightness tiers (a stepped SNES "lantern"). 0 = OFF, the
-//   default — smooth high-quality falloff.
+// · Retro banding: with lightSteps ≥ 1 the direct light quantizes into that many
+//   flat brightness tiers (a stepped SNES "lantern"); 0 = smooth. World3D's params
+//   default it ON — the firelight must read as low-res pixel art, not an HD ramp.
 // · The light itself is LOW RES: it is evaluated on a fixed grid of world-space
 //   "light texels" (lightRes per tile), not per screen pixel. See below.
 
@@ -43,6 +43,42 @@ export const lightResUniform: THREE.IUniform = { value: 16 };
 
 /** Shared elapsed-seconds clock for animated surface FX (lava flow, water glint). */
 export const flowTimeUniform: THREE.IUniform = { value: 0 };
+
+/**
+ * IMPERFECT FIRELIGHT — how far (in tiles) the light's contours get dented.
+ *
+ * Real flamelight is never a compass circle: the flame's shape, smoke and the
+ * ground's unevenness lobe it. Quantised into flat tiers the perfection got
+ * WORSE — hard rings read as drawn with a compass (user feedback). So every
+ * fragment samples its firelight from a position nudged by a slow-crawling
+ * world-anchored noise field (fireWobble below): the tiers stay flat pixel-art
+ * bands, but their edges swell and dent organically. The same field warps the
+ * fire's glow disc, so all the contours dent together. 0 = perfect circles.
+ * Live-tunable via window.hd3d.lightWobble.
+ */
+export const lightWobbleUniform: THREE.IUniform = { value: 1.2 };
+
+/**
+ * The wobble field, shared by the world materials and the fire-glow disc: cheap
+ * value noise over WORLD position (locked to the ground — it never swims under a
+ * camera pan), lobes ~1.5 tiles wide, drifting slowly so the imperfection lives.
+ * Returns ±0.5; callers scale by uLightWobble.
+ */
+export const FIRE_WOBBLE_GLSL = /* glsl */ `
+  float zhHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float zhNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(zhHash(i), zhHash(i + vec2(1.0, 0.0)), u.x),
+      mix(zhHash(i + vec2(0.0, 1.0)), zhHash(i + vec2(1.0, 1.0)), u.x),
+      u.y);
+  }
+  float fireWobble(vec2 worldPos, float t) {
+    return zhNoise(worldPos * 0.7 + vec2(t * 0.11, -t * 0.08)) - 0.5;
+  }
+`;
 
 /**
  * How far direct light may push a surface past its own art colour before it caps.
@@ -144,6 +180,8 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
     // and must not be re-snapped per fragment.)
     if (opts.quantize && !opts.footDistance) {
       shader.uniforms.uLightRes = lightResUniform;
+      shader.uniforms.uLightWobble = lightWobbleUniform;
+      shader.uniforms.uFlowTime = flowTimeUniform;
       shader.vertexShader = shader.vertexShader
         .replace('void main() {', 'varying vec3 vLightGridPos;\nvoid main() {')
         .replace(
@@ -154,7 +192,13 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       shader.fragmentShader = shader.fragmentShader
         .replace(
           'void main() {',
-          'uniform float uLightRes;\nvarying vec3 vLightGridPos;\nvoid main() {',
+          // worldFx materials already declared uFlowTime above.
+          `uniform float uLightRes;
+           uniform float uLightWobble;
+           ${opts.worldFx ? '' : 'uniform float uFlowTime;'}
+           ${FIRE_WOBBLE_GLSL}
+           varying vec3 vLightGridPos;
+           void main() {`,
         )
         .replace(
           '#include <lights_fragment_begin>',
@@ -163,6 +207,14 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
             `vec3 geometryPosition = - vViewPosition;
              if (uLightRes > 0.0) {
                vec3 lightTexel = (floor(vLightGridPos * uLightRes) + 0.5) / uLightRes;
+               // Imperfect firelight: the texel pretends to sit a little off its true
+               // spot, so its distance to every POINT light (fire/torch) warps and the
+               // banded pool lobes organically. The directional moon has no distance —
+               // the flat night fill stays untouched.
+               lightTexel.xz += vec2(
+                 fireWobble(lightTexel.xz, uFlowTime),
+                 fireWobble(lightTexel.zx + 31.7, uFlowTime)
+               ) * uLightWobble;
                geometryPosition = (viewMatrix * vec4(lightTexel, 1.0)).xyz;
              }`,
           ),
