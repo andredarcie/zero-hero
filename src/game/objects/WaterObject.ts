@@ -1,8 +1,13 @@
 import Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { ASSET_KEYS, BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS, WATER_FRAME_KEYS } from '@/game/constants';
+import { BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import { WATER_DEPTH_TILES, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
+
+// 3D water ripple frames (flat quads on the ground plane).
+const WATER_3D_FRAMES = ['water-0', 'water-1', 'water-2', 'water-3'] as const;
 
 // A river tile. It blocks like lava until the hero builds a bridge over it by depositing two
 // wood sticks ("gravetos"). Water renders at ground level; the finished bridge is a wooden
@@ -54,8 +59,8 @@ export class WaterObject {
   public onBuilt?: () => void;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Phaser.GameObjects.Image; // the water (hidden once bridged)
-  private readonly bridge: Phaser.GameObjects.Image; // the real plank tile, shown only when finished
+  private readonly sprite: Billboard3D; // the water (hidden once bridged) — a flat 3D quad
+  private readonly bridge: Billboard3D; // the real plank tile, shown only when finished
   private readonly buildFx: Phaser.GameObjects.Container; // holds the ghost/laid boards + sawdust
   private readonly pips: Phaser.GameObjects.Container;
   private readonly pipDots: Phaser.GameObjects.Arc[] = [];
@@ -78,11 +83,16 @@ export class WaterObject {
 
     // Animated water: cycle the ripple frames (water_0..3). Desynced per tile — a random start
     // frame and a jittered frame time — so a river shimmers unevenly instead of pulsing as one.
-    this.frameIndex = Phaser.Math.Between(0, WATER_FRAME_KEYS.length - 1);
-    this.sprite = scene.add
-      .image(0, 0, WATER_FRAME_KEYS[this.frameIndex])
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.ground + 1);
+    this.frameIndex = Phaser.Math.Between(0, WATER_3D_FRAMES.length - 1);
+    this.sprite = world3d()
+      // The river runs in a channel BELOW the ground (World3D sinks its bed and walls it
+      // with banks): the surface sits just above that bed, so the water reads as recessed.
+      .addBillboard(WATER_3D_FRAMES[this.frameIndex], 0, {
+        flat: true, flatY: -WATER_DEPTH_TILES + 0.03, worldFx: 'waterGlint',
+      })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(1, 1)
+      .setTint(0x9fb4dd); // cool moonlit sheen, like the 2D night grade gave it
     this.animTimer = scene.time.addEvent({
       delay: RIPPLE_MS + Phaser.Math.Between(-40, 40),
       callback: this.nextFrame,
@@ -90,10 +100,10 @@ export class WaterObject {
       loop: true,
     });
 
-    this.bridge = scene.add
-      .image(0, 0, ASSET_KEYS.bridge)
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.ground + 2)
+    this.bridge = world3d()
+      .addBillboard('bridge', 0, { flat: true, flatY: 0.02 })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(1, 1)
       .setVisible(false);
 
     // Construction layer floats just above the water so laid boards hide the ripple beneath
@@ -110,8 +120,8 @@ export class WaterObject {
   }
 
   private nextFrame(): void {
-    this.frameIndex = (this.frameIndex + 1) % WATER_FRAME_KEYS.length;
-    this.sprite.setTexture(WATER_FRAME_KEYS[this.frameIndex]);
+    this.frameIndex = (this.frameIndex + 1) % WATER_3D_FRAMES.length;
+    this.sprite.setTexture(WATER_3D_FRAMES[this.frameIndex]);
   }
 
   public get isBridge(): boolean {
@@ -164,8 +174,8 @@ export class WaterObject {
     this.bridge.setVisible(true).setAlpha(1);
     this.scene.tweens.add({
       targets: this.bridge,
-      scaleX: { from: this.bridge.scaleX * 1.12, to: this.bridge.scaleX },
-      scaleY: { from: this.bridge.scaleY * 1.12, to: this.bridge.scaleY },
+      scaleX: { from: 1.12, to: 1 },
+      scaleY: { from: 1.12, to: 1 },
       duration: 180,
       ease: 'Back.easeOut',
     });
@@ -229,8 +239,8 @@ export class WaterObject {
     this.scene.tweens.add({ targets: this.bridge, alpha: 1, duration: FINISH_MS });
     this.scene.tweens.add({
       targets: this.bridge,
-      scaleX: { from: this.bridge.scaleX * 1.1, to: this.bridge.scaleX },
-      scaleY: { from: this.bridge.scaleY * 1.1, to: this.bridge.scaleY },
+      scaleX: { from: 1.1, to: 1 },
+      scaleY: { from: 1.1, to: 1 },
       duration: FINISH_MS + 40,
       ease: 'Back.easeOut',
     });
@@ -275,16 +285,14 @@ export class WaterObject {
   }
 
   public render(tileSize: number, camera: WorldCamera): void {
+    // Water + bridge are static 3D quads; only the Phaser-side carpentry FX
+    // (ghost boards, sawdust, pips) still track the projected screen position.
     const s = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    this.sprite.setPosition(s.x, s.y);
-    this.bridge.setPosition(s.x, s.y);
     this.buildFx.setPosition(s.x, s.y);
     // Only re-lay geometry when the tile size actually changes — sizing every frame would
     // fight the settle/scale tweens (they'd get snapped back to 1:1 mid-bounce).
     if (tileSize !== this.lastTileSize) {
       this.lastTileSize = tileSize;
-      this.sprite.setDisplaySize(tileSize, tileSize);
-      this.bridge.setDisplaySize(tileSize, tileSize);
       if (this.buildable) this.layoutSlats(tileSize);
     }
 
@@ -381,7 +389,7 @@ export class WaterObject {
     this.animTimer = undefined;
     this.scene.tweens.killTweensOf(this.bridge);
     this.scene.tweens.killTweensOf(this.buildFx);
-    this.slats.forEach((s) => this.scene.tweens.killTweensOf(s.group));
+    this.slats.forEach((sl) => this.scene.tweens.killTweensOf(sl.group));
     this.sprite.destroy();
     this.bridge.destroy();
     this.buildFx.destroy(true); // destroys the slat groups + any live sawdust children

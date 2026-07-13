@@ -64,9 +64,11 @@ const main = async () => {
         );
         shotIndex += 1;
         let clip;
-        let sel = selector;
+        const sel = selector;
         if (region) clip = await driver.canvasRegion(region);
-        else if (!selector) sel = 'canvas'; // default: tight, crisp canvas-only shot
+        // Default: the whole viewport. The game renders across TWO stacked canvases now
+        // (the 3D world under the transparent Phaser UI layer), so shooting a single
+        // canvas element would capture only half the frame.
         await driver.screenshot(file, { clip, selector: sel });
         const snapshot = state ?? (await driver.getState());
         report.addStep({ scenario: name, name: shotName, note, screenshot: file, state: snapshot });
@@ -77,7 +79,9 @@ const main = async () => {
         report.addAssert({ scenario: name, label, ok: condition, detail });
 
       try {
-        await driver.open('/');
+        // `?play` boots straight into the GameScene (dev only), skipping the language
+        // pick, the title and the wizard intro — keying past them was flaky.
+        await driver.open(scenario.needsGame ? '/?play' : '/');
         if (scenario.needsGame) await driver.startGame();
         await scenario.run({ driver, shot, assert, log });
       } catch (err) {
@@ -90,7 +94,7 @@ const main = async () => {
         // Best-effort failure screenshot.
         try {
           const file = path.join(shotsDir, `${name}__ERROR.png`);
-          await driver.screenshot(file, { selector: 'canvas' });
+          await driver.screenshot(file, {});
           report.addStep({ scenario: name, name: 'ERROR', note: 'state at failure', screenshot: file });
         } catch {
           /* ignore */

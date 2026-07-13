@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, ySortDepth } from '@/game/constants';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 // Tall grass ("mato alto") blocks its tile and sways in the wind. The scythe cuts it — a
@@ -9,20 +10,15 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
 // (see `blocking`), like the other runtime props.
 
 const WIND_FRAME_MS = 420;
-const TALL_WIND = [ASSET_KEYS.tallGrassWind0, ASSET_KEYS.tallGrassWind1] as const;
-const CUT_WIND = [ASSET_KEYS.cutGrassWind0, ASSET_KEYS.cutGrassWind1] as const;
+const TALL_WIND = ['tall-grass-wind-0', 'tall-grass-wind-1'] as const;
+const CUT_WIND = ['cut-grass-wind-0', 'cut-grass-wind-1'] as const;
 
 const CUTTING_FRAME_MS = 90;
-const CUTTING = [
-  ASSET_KEYS.cuttingGrass0,
-  ASSET_KEYS.cuttingGrass1,
-  ASSET_KEYS.cuttingGrass2,
-  ASSET_KEYS.cuttingGrass3,
-] as const;
+const CUTTING = ['cutting-grass-0', 'cutting-grass-1', 'cutting-grass-2', 'cutting-grass-3'] as const;
 
 const BURN_FRAME_MS = 140;
 const BURN_CYCLES = 6; // ~1.7s of licking flames before it settles into charred stubble
-const BURNING = [ASSET_KEYS.grassFire0, ASSET_KEYS.grassFire1] as const;
+const BURNING = ['grass-fire-0', 'grass-fire-1'] as const;
 
 const CHARRED_TINT = 0x585450;
 
@@ -33,7 +29,7 @@ export class TallGrassObject {
   public readonly worldY: number;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Phaser.GameObjects.Image;
+  private readonly sprite: Billboard3D;
   private state: GrassState = 'tall';
   private charred = false;
   private windFrame = 0;
@@ -44,10 +40,10 @@ export class TallGrassObject {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    this.sprite = scene.add
-      .image(0, 0, TALL_WIND[0])
-      .setOrigin(0.5)
-      .setDepth(ySortDepth(worldY));
+    this.sprite = world3d()
+      .addBillboard(TALL_WIND[0], 0, { groundShadow: { rx: 0.36, rz: 0.34, alpha: 0.24 } })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(0.94, 0.94);
 
     // Desynchronize neighbouring patches so a field doesn't sway in lockstep.
     this.windFrame = Phaser.Math.Between(0, 1);
@@ -128,6 +124,8 @@ export class TallGrassObject {
     this.actionTimer?.destroy();
     this.actionTimer = undefined;
     this.sprite.setTexture(CUT_WIND[this.windFrame % CUT_WIND.length]);
+    // Stubble hugs the ground: shorter, and charred if fire did the cutting.
+    this.sprite.setDisplaySize(0.94, 0.5);
     if (charred) this.sprite.setTint(CHARRED_TINT).setAlpha(0.85);
   }
 
@@ -137,13 +135,8 @@ export class TallGrassObject {
     else if (this.state === 'cut') this.sprite.setTexture(CUT_WIND[this.windFrame]);
   }
 
-  public render(tileSize: number, camera: WorldCamera): void {
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    const size = Math.max(12, Math.floor(tileSize * 0.94));
-    // Stubble lies flat under the hero's feet; standing grass joins the y-sort band.
-    const depth = this.state === 'cut' ? ySortDepth(this.worldY) - 0.4 : ySortDepth(this.worldY);
-    this.sprite.setPosition(screen.x, screen.y).setDepth(depth);
-    if (this.sprite.displayWidth !== size) this.sprite.setDisplaySize(size, size);
+  public render(_tileSize: number, _camera: WorldCamera): void {
+    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

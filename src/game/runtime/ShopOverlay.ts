@@ -132,6 +132,11 @@ export class ShopOverlay {
     for (const obj of this.all) obj.destroy();
   }
 
+  /** Visit every canvas object of the shop (GameScene routes them to its crisp UI camera). */
+  public forEachObject(cb: (obj: Phaser.GameObjects.GameObject) => void): void {
+    for (const obj of this.all) cb(obj);
+  }
+
   private renderCards(): void {
     for (let slot = 0; slot < MAX_SHOP_ITEMS; slot++) {
       const card = this.cards[slot];

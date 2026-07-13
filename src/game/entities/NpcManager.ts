@@ -1,11 +1,15 @@
 import Phaser from 'phaser';
 
-import { NPC_VISUALS, SCENE_DEPTHS, ySortDepth } from '@/game/constants';
+import { NPC_VISUALS } from '@/game/constants';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { NpcKind, ScreenContent } from '@/game/world/ScreenContent';
 
 // Tiny pixel-art "!" shown above an NPC whose current dialog the player hasn't heard yet.
 // Core glyph only — a dark outline is added programmatically around every filled pixel.
+// Stays a Phaser overlay sprite: it is a UI marker, not a body in the world, and the
+// projected tileToScreen keeps it glued above the 3D NPC.
 const EXCLAIM_TEXTURE_KEY = 'npc-exclaim';
 const EXCLAIM_GLYPH = [
   '.###.',
@@ -48,7 +52,7 @@ class NpcEntity {
   public readonly worldY: number;
   public readonly kind: NpcKind;
 
-  private readonly sprite: Phaser.GameObjects.Image;
+  private readonly sprite: Billboard3D;
   private readonly exclaim: Phaser.GameObjects.Image;
 
   public constructor(scene: Phaser.Scene, worldX: number, worldY: number, kind: NpcKind) {
@@ -56,10 +60,12 @@ class NpcEntity {
     this.worldY = worldY;
     this.kind = kind;
     const visual = NPC_VISUALS[kind];
-    this.sprite = scene.add
-      .image(0, 0, visual.key, visual.frame)
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.player - 1);
+    // Death looms at twice the size; the billboard anchors at the feet either way.
+    const size = kind === 'death' ? 2 : 1;
+    this.sprite = world3d()
+      .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(size, size);
     ensureExclaimTexture(scene);
     this.exclaim = scene.add
       .image(0, 0, EXCLAIM_TEXTURE_KEY)
@@ -67,31 +73,22 @@ class NpcEntity {
       .setVisible(false);
   }
 
-  /** The sprite a firelight cast shadow mirrors (NPCs standing in a flame's glow throw shadows). */
-  public get shadowCaster(): Phaser.GameObjects.Image {
-    return this.sprite;
-  }
-
   public render(tileSize: number, camera: WorldCamera, showExclaim: boolean, timeMs: number): void {
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    // Death looms at twice the size; keep its feet on the tile instead of floating.
-    const scale = this.kind === 'death' ? 2 : 1;
-    const size = tileSize * scale;
-    const yOffset = (size - tileSize) / 2;
-    this.sprite
-      .setPosition(screen.x, screen.y - yOffset)
-      .setDisplaySize(size, size)
-      .setDepth(ySortDepth(this.worldY));
     this.exclaim.setVisible(showExclaim);
     if (showExclaim) {
+      const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
       // Chunky pixel scaling (integer multiple of the source texels) + a gentle bob.
       const px = Math.max(1, Math.round(tileSize / 24));
       const bob = Math.round(Math.sin(timeMs / 280) * px);
+      const height = this.kind === 'death' ? 2 : 1;
       this.exclaim
         .setScale(px)
-        .setPosition(screen.x, screen.y - yOffset - size / 2 - px * 2 + bob)
-        .setDepth(ySortDepth(this.worldY) + 1);
+        .setPosition(screen.x, screen.y - tileSize * height - px * 2 + bob);
     }
+  }
+
+  public hideExclaim(): void {
+    this.exclaim.setVisible(false);
   }
 
   public destroy(): void {
@@ -145,15 +142,20 @@ export class NpcManager {
     return this.all().map((n) => ({ worldX: n.worldX, worldY: n.worldY }));
   }
 
-  public getShadowCasters(): Array<{ sprite: Phaser.GameObjects.Image; worldX: number; worldY: number }> {
-    return this.all().map((n) => ({ sprite: n.shadowCaster, worldX: n.worldX, worldY: n.worldY }));
-  }
-
   public render(tileSize: number, camera: WorldCamera): void {
     const now = this.scene.time.now;
     for (const npc of this.all()) {
       npc.render(tileSize, camera, this.hasNewDialog(npc.kind, npc.worldX, npc.worldY), now);
     }
+  }
+
+  /**
+   * Drop every "!" marker. The markers are Phaser overlay sprites, so they do NOT sink with
+   * the world when the death fade darkens the 3D canvas — and render() stops running once the
+   * hero is dead, which would otherwise leave one hanging over the black.
+   */
+  public hideExclaims(): void {
+    for (const npc of this.all()) npc.hideExclaim();
   }
 
   public destroy(): void {

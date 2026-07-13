@@ -126,7 +126,6 @@ export const ASSET_KEYS = {
   woodItem: 'wood-item',
   woodIcon: 'wood-icon',
   woodOnFireIcon: 'wood-on-fire-icon',
-  itemShadow: 'item-shadow',
   lookedDoorObject: 'looked-door-object',
   undead: 'undead',
   undeadHurt: 'undead-hurt',

@@ -112,3 +112,8 @@ pm run build passaram apos a refatoracao.
 - Validacao da chama pixelada: npm run typecheck e npx eslint src/game/scenes/GameScene.ts passaram. O lint completo continua bloqueado por configuracao preexistente: scripts/generateWorld.ts e scripts/worldgen/{contentGen,terrainGen}.ts nao fazem parte do tsconfig usado pelo ESLint.
 
 - Tocha carregada agora mantem o sprite comum do graveto; a chama pixelada separada e o unico elemento que representa o fogo. npm run typecheck e npx eslint src/game/scenes/GameScene.ts passaram.
+
+- Espada, graveto e machado no chao agora usam Pickup3D: um mesh Three.js fino, com frente e verso texturizados pelos sprites pixel-art existentes, sombra de contato e giro continuo no eixo Y. A primeira versao de planos cruzados foi corrigida porque duplicava visualmente a lamina do machado; o modelo atual mantem uma unica silhueta.
+- Validacao: npm run typecheck e npx eslint src/game/render3d/Pickup3D.ts src/game/render3d/World3D.ts src/game/entities/ItemPickup.ts passaram. O build completo tambem passou antes do ajuste geometrico final (a alteracao final passou no typecheck e lint).
+
+- Pickup3D deixou de usar planos: espada, machado e graveto agora sao modelos Three.js low-poly reais, formados respectivamente por caixa/cilindro/esfera (lamina, guarda e punho), caixa+cilindro (cabeca unica e cabo) e cilindro+ponteira. Cada parte recebe o sprite original como mapa de textura, responde a iluminacao e projeta sombra; todos continuam girando no eixo Y enquanto estao no chao. Validacao: cliente Playwright executou sem erros; lint dos tres arquivos e npm run build passaram.

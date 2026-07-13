@@ -16,10 +16,12 @@
     "playtest:all": "node playtest/run.mjs all"
   },
   "dependencies": {
-    "phaser": "^3.90.0"
+    "phaser": "^3.90.0",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
+    "@types/three": "^0.185.1",
     "@typescript-eslint/eslint-plugin": "^8.44.0",
     "@typescript-eslint/parser": "^8.44.0",
     "eslint": "^9.36.0",

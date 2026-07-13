@@ -1,6 +1,7 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 
-import { ASSET_KEYS, ySortDepth } from '@/game/constants';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 // A locked door prop. It blocks its tile until the hero bumps it while holding a key, which
@@ -11,27 +12,22 @@ export class LockedDoorObject {
   public readonly worldY: number;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Phaser.GameObjects.Image;
+  private readonly sprite: Billboard3D;
   private open = false;
 
   public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    this.sprite = scene.add
-      .image(0, 0, ASSET_KEYS.lookedDoorObject)
-      .setOrigin(0.5)
-      .setDepth(ySortDepth(worldY));
+    this.sprite = world3d()
+      .addBillboard('locked-door-object', 0, { groundShadow: true })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(0.98, 0.98);
   }
 
   /** The tile is impassable while the door is shut. */
   public get blocking(): boolean {
     return !this.open;
-  }
-
-  /** The sprite to cast a firelight shadow from while the door still stands shut (null once open). */
-  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
-    return this.blocking ? this.sprite : null;
   }
 
   public get isOpen(): boolean {
@@ -42,11 +38,11 @@ export class LockedDoorObject {
   public unlock(): boolean {
     if (this.open) return false;
     this.open = true;
-    // Swing open: lift and fade to a faint frame so the doorway reads as passable.
+    // Swing open: fold thin and fade to a faint frame so the doorway reads as passable.
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleX: this.sprite.scaleX * 0.2,
+      scaleX: 0.2,
       alpha: 0.25,
       duration: 260,
       ease: 'Back.easeIn',
@@ -69,12 +65,8 @@ export class LockedDoorObject {
     });
   }
 
-  public render(tileSize: number, camera: WorldCamera): void {
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    const size = Math.max(12, Math.floor(tileSize * 0.98));
-    this.sprite.setPosition(screen.x, screen.y).setDepth(ySortDepth(this.worldY));
-    // Only size when it changes, so the open tween's scaleX isn't clobbered each frame.
-    if (this.sprite.displayWidth !== size) this.sprite.setDisplaySize(size, size);
+  public render(_tileSize: number, _camera: WorldCamera): void {
+    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

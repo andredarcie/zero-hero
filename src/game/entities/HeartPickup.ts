@@ -1,12 +1,13 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 
-import { ASSET_KEYS, SCENE_DEPTHS } from '@/game/constants';
+import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
-const FULL_HEART_FRAME = 4;
+const HEART_SIZE = 0.65; // tiles
 
 export class HeartPickup {
-  private readonly sprite: Phaser.GameObjects.Sprite;
+  private readonly sprite: Billboard3D;
   private collectable = false;
   private collected = false;
 
@@ -15,16 +16,17 @@ export class HeartPickup {
     public readonly tileX: number,
     public readonly tileY: number,
   ) {
-    this.sprite = scene.add
-      .sprite(0, 0, ASSET_KEYS.hudHearts, FULL_HEART_FRAME)
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.item)
-      .setScale(0)
+    // Full-bright: a heart must read even in the dark, like every collectible.
+    this.sprite = world3d()
+      .addBillboard('heart', 0, { emissive: true })
+      .setPosition(tileX, tileY)
+      .setDisplaySize(0, 0)
       .setAlpha(0);
 
     scene.tweens.add({
       targets: this.sprite,
-      scale: 1,
+      displayWidth: HEART_SIZE,
+      displayHeight: HEART_SIZE,
       alpha: 1,
       duration: 200,
       ease: 'Back.easeOut',
@@ -42,10 +44,10 @@ export class HeartPickup {
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.add({
       targets: this.sprite,
-      y: this.sprite.y - 20,
+      elevation: 0.5,
       alpha: 0,
-      scaleX: 1.6,
-      scaleY: 1.6,
+      displayWidth: HEART_SIZE * 1.6,
+      displayHeight: HEART_SIZE * 1.6,
       duration: 300,
       ease: 'Power2.easeOut',
       onComplete: () => {
@@ -55,16 +57,12 @@ export class HeartPickup {
     });
   }
 
-  public render(tileSize: number, camera: WorldCamera): void {
+  public render(_tileSize: number, _camera: WorldCamera): void {
     if (this.collected) return;
-
-    const screen = camera.tileToScreen(this.tileX, this.tileY, tileSize);
     const bob = this.collectable
-      ? Math.sin(this.scene.time.now * 0.004) * Math.max(1, tileSize * 0.1)
+      ? (Math.sin(this.scene.time.now * 0.004) + 1) * 0.5 * 0.1
       : 0;
-    const size = Math.max(10, Math.floor(tileSize * 0.65));
-
-    this.sprite.setPosition(screen.x, screen.y + bob).setDisplaySize(size, size);
+    this.sprite.setElevation(bob);
   }
 
   public destroy(): void {

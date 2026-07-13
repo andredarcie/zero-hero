@@ -39,6 +39,11 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   width: getCanvasSizeForMode(mode).width,
   height: getCanvasSizeForMode(mode).height,
   backgroundColor: '#1d3557',
+  // The world itself renders on a Three.js canvas UNDERNEATH this one (see
+  // render3d/World3D.ts): Phaser draws logic-side FX + canvas UI over it, so
+  // its canvas must be transparent. Scenes that want a solid backdrop (title,
+  // intro, editor) set their own camera background color.
+  transparent: true,
   pixelArt: true,
   roundPixels: true,
   scale: {

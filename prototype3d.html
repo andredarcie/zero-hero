@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zero the Hero — Protótipo 3D (HD-2D real)</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      canvas { display: block; }
+      #hint {
+        position: fixed; left: 12px; bottom: 10px; z-index: 10;
+        color: rgba(216, 209, 192, 0.75);
+        font: 12px Georgia, 'Times New Roman', serif;
+        letter-spacing: 0.08em;
+        text-shadow: 0 1px 2px #000;
+        pointer-events: none;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hint">WASD / setas — andar &nbsp;·&nbsp; protótipo HD-2D em Three.js (mundo 3D real: luz, sombra e profundidade)</div>
+    <script type="module" src="/src/prototype3d/main.ts"></script>
+  </body>
+</html>

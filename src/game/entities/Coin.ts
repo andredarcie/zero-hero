@@ -1,13 +1,20 @@
 import Phaser from 'phaser';
 
 import { ASSET_KEYS, SCENE_DEPTHS } from '@/game/constants';
+import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
+const COIN_SIZE = 0.55; // tiles
+
 export class Coin {
-  private readonly sprite: Phaser.GameObjects.Image;
+  private readonly sprite: Billboard3D;
   private readonly pos: { x: number; y: number; angle: number };
   private collectable = false;
   private collected = false;
+  // Last projected screen spot — anchors the 2D fly-to-HUD visual on collect.
+  private lastScreen = { x: 0, y: 0 };
+  private lastTileSize = 48;
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -19,16 +26,18 @@ export class Coin {
   ) {
     this.pos = { x: startWorldX, y: startWorldY, angle: 0 };
 
-    this.sprite = scene.add
-      .image(0, 0, ASSET_KEYS.coin)
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.item)
-      .setScale(0)
+    // Full-bright: a coin must glint even in the dark (the 2D game punched a
+    // small light hole over every coin for the same reason).
+    this.sprite = world3d()
+      .addBillboard('coin', 0, { emissive: true })
+      .setPosition(startWorldX, startWorldY)
+      .setDisplaySize(0, 0)
       .setAlpha(0);
 
-    scene.tweens.add({
+    this.scene.tweens.add({
       targets: this.sprite,
-      scale: 1,
+      displayWidth: COIN_SIZE,
+      displayHeight: COIN_SIZE,
       alpha: 1,
       duration: 120,
       delay: spawnDelay,
@@ -49,25 +58,34 @@ export class Coin {
     this.scene.tweens.killTweensOf(this.pos);
     this.scene.tweens.killTweensOf(this.sprite);
 
+    // The world coin pops in place (3D), then a 2D twin carries the flight to the HUD —
+    // the counter lives on the screen plane, so the last leg is screen-space by nature.
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleX: 1.6,
-      scaleY: 1.6,
+      displayWidth: COIN_SIZE * 1.6,
+      displayHeight: COIN_SIZE * 1.6,
       duration: 80,
       ease: 'Power2.easeOut',
       yoyo: true,
       onComplete: () => {
+        this.sprite.setVisible(false);
+        const size = Math.max(8, Math.floor(this.lastTileSize * COIN_SIZE));
+        const fly = this.scene.add
+          .image(this.lastScreen.x, this.lastScreen.y, ASSET_KEYS.coin)
+          .setOrigin(0.5)
+          .setDepth(SCENE_DEPTHS.uiOverlay)
+          .setDisplaySize(size, size);
         this.scene.tweens.add({
-          targets: this.sprite,
+          targets: fly,
           x: hudTarget.x,
           y: hudTarget.y,
-          scaleX: 0.4,
-          scaleY: 0.4,
+          displayWidth: size * 0.4,
+          displayHeight: size * 0.4,
           alpha: 0.8,
           duration: 280,
           ease: 'Power3.easeIn',
           onComplete: () => {
-            this.sprite.setVisible(false);
+            fly.destroy();
             onComplete();
           },
         });
@@ -78,16 +96,16 @@ export class Coin {
   public render(tileSize: number, camera: WorldCamera): void {
     if (this.collected) return;
 
-    const screen = camera.tileToScreen(this.pos.x, this.pos.y, tileSize);
     const bob = this.collectable
-      ? Math.sin(this.scene.time.now * 0.005) * Math.max(1, tileSize * 0.08)
+      ? (Math.sin(this.scene.time.now * 0.005) + 1) * 0.5 * 0.08
       : 0;
-    const size = Math.max(8, Math.floor(tileSize * 0.55));
-
     this.sprite
-      .setPosition(screen.x, screen.y + bob)
-      .setAngle(this.pos.angle)
-      .setDisplaySize(size, size);
+      .setPosition(this.pos.x, this.pos.y)
+      .setAngle(this.pos.angle);
+    if (this.collectable) this.sprite.setElevation(bob);
+
+    this.lastScreen = camera.tileToScreen(this.pos.x, this.pos.y, tileSize);
+    this.lastTileSize = tileSize;
   }
 
   public destroy(): void {
@@ -98,35 +116,43 @@ export class Coin {
 
   private startScatter(targetWorldX: number, targetWorldY: number, delay: number): void {
     const spinDir = Math.random() > 0.5 ? 1 : -1;
-    const midY = (this.pos.y + targetWorldY) / 2 - 1.5;
 
+    // Ground travel and the arc are separate axes in 3D: the coin slides to its tile
+    // while its elevation hops up and bounces back down onto the ground.
     this.scene.tweens.add({
       targets: this.pos,
       x: targetWorldX,
-      y: midY,
-      angle: spinDir * 180,
+      y: targetWorldY,
+      angle: spinDir * 360,
+      duration: 400,
+      delay,
+      ease: 'Power2.easeOut',
+      onComplete: () => {
+        this.pos.angle = 0;
+        this.sprite.setAngle(0);
+        this.collectable = true;
+        this.scene.tweens.add({
+          targets: this.sprite,
+          displayWidth: COIN_SIZE * 1.3,
+          displayHeight: COIN_SIZE * 1.3,
+          duration: 100,
+          yoyo: true,
+          ease: 'Power2.easeOut',
+        });
+      },
+    });
+    this.scene.tweens.add({
+      targets: this.sprite,
+      elevation: 0.85,
       duration: 180,
       delay,
       ease: 'Power2.easeOut',
       onComplete: () => {
         this.scene.tweens.add({
-          targets: this.pos,
-          y: targetWorldY,
-          angle: spinDir * 360,
+          targets: this.sprite,
+          elevation: 0,
           duration: 220,
           ease: 'Bounce.easeOut',
-          onComplete: () => {
-            this.pos.angle = 0;
-            this.collectable = true;
-            this.scene.tweens.add({
-              targets: this.sprite,
-              scaleX: 1.3,
-              scaleY: 1.3,
-              duration: 100,
-              yoyo: true,
-              ease: 'Power2.easeOut',
-            });
-          },
         });
       },
     });

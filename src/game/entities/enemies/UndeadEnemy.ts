@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, SCENE_DEPTHS, UNDEAD_BORN_FRAME_KEYS } from '@/game/constants';
+import { ASSET_KEYS, UNDEAD_BORN_FRAME_KEYS } from '@/game/constants';
 import { EnemyBase } from '@/game/entities/EnemyBase';
+import { world3d } from '@/game/render3d/World3D';
 
 const MAX_HEALTH = 3;
 const MOVE_INTERVAL = 850;
@@ -29,10 +30,10 @@ export class UndeadEnemy extends EnemyBase {
   private readonly sunsetDelay: number;
 
   public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
-    const sprite = scene.add
-      .image(0, 0, UNDEAD_BORN_FRAME_KEYS[0])
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.player);
+    const sprite = world3d()
+      .addBillboard(UNDEAD_BORN_FRAME_KEYS[0], 0, { groundShadow: { rx: 0.36, rz: 0.34, alpha: 0.32 } })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(1, 1);
 
     super(scene, worldX, worldY, MAX_HEALTH, sprite);
 

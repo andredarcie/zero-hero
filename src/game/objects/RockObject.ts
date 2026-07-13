@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, ySortDepth } from '@/game/constants';
+import { ySortDepth } from '@/game/constants';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 // A rock blocks its tile until the hero breaks it with the pickaxe: the first hit cracks it
@@ -14,26 +16,23 @@ export class RockObject {
   public readonly worldY: number;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Phaser.GameObjects.Image;
+  private readonly sprite: Billboard3D;
   private state: RockState = 'intact';
+  // Last projected screen position — anchors the Phaser-side shard FX to the 3D rock.
+  private lastScreen = { x: 0, y: 0 };
 
   public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    this.sprite = scene.add
-      .image(0, 0, ASSET_KEYS.rock)
-      .setOrigin(0.5)
-      .setDepth(ySortDepth(worldY));
+    this.sprite = world3d()
+      .addBillboard('rock', 0, { groundShadow: true })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(0.88, 0.88);
   }
 
   public get blocking(): boolean {
     return this.state !== 'broken';
-  }
-
-  /** The sprite to cast a firelight shadow from while the rock still stands (null once broken). */
-  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
-    return this.blocking ? this.sprite : null;
   }
 
   /** One pickaxe hit. Returns true if it landed (rock still stood). */
@@ -42,7 +41,7 @@ export class RockObject {
 
     if (this.state === 'intact') {
       this.state = 'cracked';
-      this.sprite.setTexture(ASSET_KEYS.rockCracked);
+      this.sprite.setTexture('rock-cracked');
       this.shake();
       return true;
     }
@@ -60,7 +59,6 @@ export class RockObject {
     this.sprite.setAngle(0);
     this.scene.tweens.add({
       targets: this.sprite,
-      x: this.sprite.x,
       angle: { from: -3, to: 3 },
       duration: 50,
       yoyo: true,
@@ -71,8 +69,8 @@ export class RockObject {
   }
 
   private spawnShards(tileSize: number): void {
-    // Little grey chips scatter from the rock's spot and fade.
-    const { x, y } = this.sprite;
+    // Little grey chips scatter from the rock's screen spot and fade (2D overlay FX).
+    const { x, y } = this.lastScreen;
     for (let i = 0; i < 5; i += 1) {
       const size = Math.max(2, Math.floor(tileSize * Phaser.Math.FloatBetween(0.08, 0.16)));
       const shard = this.scene.add
@@ -93,10 +91,7 @@ export class RockObject {
 
   public render(tileSize: number, camera: WorldCamera): void {
     if (this.state === 'broken') return;
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    const size = Math.max(12, Math.floor(tileSize * 0.88));
-    this.sprite.setPosition(screen.x, screen.y).setDepth(ySortDepth(this.worldY));
-    if (this.sprite.displayWidth !== size) this.sprite.setDisplaySize(size, size);
+    this.lastScreen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
   }
 
   public destroy(): void {

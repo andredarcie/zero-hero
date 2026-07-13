@@ -1,6 +1,7 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 
-import { ASSET_KEYS, ySortDepth } from '@/game/constants';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 // A small dry shrub ("arbusto seco") — the same bare-brown look as the dry tree but bush-sized.
@@ -12,17 +13,17 @@ export class DryShrubObject {
   public readonly worldY: number;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Phaser.GameObjects.Sprite;
+  private readonly sprite: Billboard3D;
   private cleared = false;
 
   public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    this.sprite = scene.add
-      .sprite(0, 0, ASSET_KEYS.dryShrub)
-      .setOrigin(0.5)
-      .setDepth(ySortDepth(worldY));
+    this.sprite = world3d()
+      .addBillboard('dry-shrub', 0, { groundShadow: { alpha: 0.3 } })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(0.72, 0.72);
   }
 
   /** Impassable until the axe clears it. */
@@ -30,21 +31,15 @@ export class DryShrubObject {
     return !this.cleared;
   }
 
-  /** The sprite to cast a firelight shadow from while the shrub still stands (null once cleared). */
-  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
-    return this.blocking ? this.sprite : null;
-  }
-
   /** One axe chop clears the shrub for good. Returns true if it just got cleared. */
   public chop(): boolean {
     if (this.cleared) return false;
     this.cleared = true;
-    // render() bails out once cleared, so it won't clobber this shrink-away poof.
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleX: 0,
-      scaleY: 0,
+      scaleX: 0.01,
+      scaleY: 0.01,
       angle: 45,
       alpha: 0,
       duration: 220,
@@ -69,12 +64,8 @@ export class DryShrubObject {
     });
   }
 
-  public render(tileSize: number, camera: WorldCamera): void {
-    if (this.cleared) return; // gone — leave the poof tween alone
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    const size = Math.max(10, Math.floor(tileSize * 0.72)); // bush-sized, smaller than a tree
-    this.sprite.setPosition(screen.x, screen.y).setDepth(ySortDepth(this.worldY));
-    if (this.sprite.displayWidth !== size) this.sprite.setDisplaySize(size, size);
+  public render(_tileSize: number, _camera: WorldCamera): void {
+    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

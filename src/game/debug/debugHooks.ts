@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
+import type { World3DParams } from '@/game/render3d/World3D';
 import type { NpcKind } from '@/game/world/ScreenContent';
 
 /**
@@ -52,6 +53,8 @@ declare global {
     last_exported_level_json?: string;
     /** Live game control/inspection API, present only while the GameScene is active. */
     gameDebug?: GameDebugApi;
+    /** Live 3D-renderer knobs, present only while the GameScene is active (see render3d/World3D.ts). */
+    hd3d?: World3DParams;
   }
 }
 
@@ -59,6 +62,8 @@ export const registerSceneDebugHooks = (
   scene: Phaser.Scene,
   renderGameToText: () => string,
 ): void => {
+  // Dev-only escape hatch: the live scene for console inspection (playtests/debugging).
+  if (import.meta.env.DEV) (window as unknown as { __scene?: Phaser.Scene }).__scene = scene;
   window.render_game_to_text = renderGameToText;
   window.advanceTime = (ms: number) => {
     const step = 1000 / 60;
@@ -72,8 +77,12 @@ export const registerSceneDebugHooks = (
   };
 };
 
-export const registerGameDebugApi = (api: GameDebugApi): void => {
+export const registerGameDebugApi = (api: GameDebugApi, scene?: Phaser.Scene): void => {
   window.gameDebug = api;
+  // Dev-only escape hatch: the live scene for console inspection (playtests/debugging).
+  if (scene && import.meta.env.DEV) {
+    (window as unknown as { __scene?: Phaser.Scene }).__scene = scene;
+  }
 };
 
 export const clearGameDebugApi = (api: GameDebugApi): void => {

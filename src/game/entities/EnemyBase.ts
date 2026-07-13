@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
-import { SCENE_DEPTHS, ySortDepth } from '@/game/constants';
+import { SCENE_DEPTHS } from '@/game/constants';
+import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 export abstract class EnemyBase {
@@ -22,8 +23,11 @@ export abstract class EnemyBase {
   private stepTween?: Phaser.Tweens.Tween;
 
   protected readonly scene: Phaser.Scene;
-  protected readonly sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+  protected readonly sprite: Billboard3D;
   private readonly healthBar: Phaser.GameObjects.Graphics;
+  // Last projected screen position/scale — anchors Phaser-side FX (shadow wisps).
+  private lastScreen = { x: 0, y: 0 };
+  private lastTileSize = 48;
 
   /** Override to return the hurt texture key; if defined, flashes on takeDamage */
   protected hurtTexture?: string;
@@ -44,7 +48,7 @@ export abstract class EnemyBase {
     worldX: number,
     worldY: number,
     maxHealth: number,
-    sprite: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite,
+    sprite: Billboard3D,
   ) {
     this.scene = scene;
     this.worldX = worldX;
@@ -152,15 +156,14 @@ export abstract class EnemyBase {
   public render(tileSize: number, camera: WorldCamera): void {
     if (!this.alive) return;
 
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
+    // The billboard lives in tile space; knockback/step offsets are already tile units.
     const scale = this.spriteScale * this.knockbackSquash;
-    const sx = screen.x + this.knockbackOffsetX * tileSize;
-    const sy = screen.y + this.knockbackOffsetY * tileSize;
-
     this.sprite
-      .setPosition(sx, sy)
-      .setDisplaySize(tileSize * scale, tileSize * scale)
-      .setDepth(ySortDepth(this.worldY));
+      .setPosition(this.worldX + this.knockbackOffsetX, this.worldY + this.knockbackOffsetY)
+      .setDisplaySize(scale, scale);
+
+    this.lastScreen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
+    this.lastTileSize = tileSize;
 
     // Enemy health bars are intentionally not drawn (removed by design). The graphics object is
     // kept (and cleared) so nothing else has to change; it just never fills.
@@ -182,7 +185,7 @@ export abstract class EnemyBase {
     // The step tilt also tweens sprite.angle; stop it so it can't fight the crumble spin.
     this.stepTween?.stop();
     this.onDeath();
-    // Impact pop: flash solid white and swell for a beat, then crumble away spinning.
+    // Impact pop: flash white-hot (HDR → bloom) and swell for a beat, then crumble away spinning.
     this.sprite.setTintFill(0xffffff);
     this.scene.tweens.add({
       targets: this.sprite,
@@ -229,12 +232,10 @@ export abstract class EnemyBase {
     this.sprite.setAngle(0);
     this.sprite.setTintFill(0x05060f);
 
-    const baseY = this.sprite.y + this.sprite.displayHeight * 0.5;
-    this.spawnShadowWisps(this.sprite.x, baseY);
+    this.spawnShadowWisps();
     this.scene.tweens.add({
       targets: this.sprite,
-      y: baseY,
-      scaleY: this.sprite.scaleY * 0.08,
+      scaleY: 0.08,
       alpha: 0,
       duration: 520,
       ease: 'Power2.easeIn',
@@ -245,9 +246,11 @@ export abstract class EnemyBase {
     });
   }
 
-  /** Pale cold wisps rising from where a despawning skull melted into the ground. */
-  private spawnShadowWisps(x: number, groundY: number): void {
-    const w = this.sprite.displayWidth;
+  /** Pale cold wisps rising from where a despawning skull melted into the ground (2D overlay FX). */
+  private spawnShadowWisps(): void {
+    const w = this.lastTileSize;
+    const x = this.lastScreen.x;
+    const groundY = this.lastScreen.y;
     for (let i = 0; i < 4; i++) {
       const wisp = this.scene.add
         .circle(
@@ -257,7 +260,7 @@ export abstract class EnemyBase {
           0x6c7aa8,
           0.55,
         )
-        .setDepth(this.sprite.depth + 1);
+        .setDepth(SCENE_DEPTHS.player + 1);
       this.scene.tweens.add({
         targets: wisp,
         y: groundY - w * (0.7 + Math.random() * 0.6),

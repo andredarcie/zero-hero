@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getLocale, setLocale, t, type Locale } from '@/game/i18n/i18n';
+import { getDofIntensity, setDofIntensity } from '@/game/runtime/graphicsSettings';
 
 // The pause screen is plain DOM layered over the Phaser canvas — the same approach as
 // DialogOverlay / EditorDomUi. That choice matters twice here: serif text and native range
@@ -109,6 +110,7 @@ export class PauseMenu {
   private readonly resumeBtn: HTMLDivElement;
   private readonly musicLabel: HTMLSpanElement;
   private readonly sfxLabel: HTMLSpanElement;
+  private readonly dofLabel: HTMLSpanElement;
   private readonly langLabel: HTMLSpanElement;
   private readonly langBtns = new Map<Locale, HTMLSpanElement>();
   private readonly fullscreenBtn?: HTMLDivElement;
@@ -149,6 +151,11 @@ export class PauseMenu {
       sound.setSfxVolume(v);
     }, () => sound.playCoinPickup()); // preview blip on release so the level is judgeable
     this.sfxLabel = sfx;
+
+    // Depth of field: the tilt-shift blur is the HD-2D signature, but a permanently soft screen
+    // edge gives some players eye strain — so it's an accessibility slider (0 = a crisp diorama).
+    // The renderer reads it every frame, so it takes hold the moment the game resumes.
+    this.dofLabel = this.sliderRow(panel, getDofIntensity(), (v) => setDofIntensity(v));
 
     // Language: swaps the catalog immediately; the menu re-labels itself. World text that was
     // already rendered (HUD, dialogs) picks the new locale up on its next build/scene restart.
@@ -270,6 +277,7 @@ export class PauseMenu {
     this.resumeBtn.textContent = t('pause.resume');
     this.musicLabel.textContent = t('pause.music');
     this.sfxLabel.textContent = t('pause.sfx');
+    this.dofLabel.textContent = t('pause.dof');
     this.langLabel.textContent = t('pause.language');
     this.langBtns.forEach((btn, locale) => btn.classList.toggle('zh-active', getLocale() === locale));
     if (this.fullscreenBtn) {

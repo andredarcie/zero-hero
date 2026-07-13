@@ -102,10 +102,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     path: '/assets/ui/icons/sword_icon.png',
   },
   {
-    key: ASSET_KEYS.itemShadow,
-    path: '/assets/effects/ambient/item_shadow.png',
-  },
-  {
     key: ASSET_KEYS.lookedDoorObject,
     path: '/assets/environment/structures/locked_door.png',
   },

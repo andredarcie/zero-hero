@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, ySortDepth } from '@/game/constants';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 // A dry bush ("mato seco") blocks its tile until a flaming torch ignites it. It burns for
@@ -10,13 +11,13 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 const BURN_MS = 2200;
 const FIRE_FRAME_MS = 110;
-const FIRE_KEYS = [ASSET_KEYS.tinyFire0, ASSET_KEYS.tinyFire1, ASSET_KEYS.tinyFire2] as const;
+const FIRE_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
 
-// tinyFire sprites offset over the bush (fractions of tileSize), each a little out of phase.
+// tinyFire billboards offset over the bush (in tile fractions), each a little out of phase.
 const FIRE_SPOTS = [
-  { ox: -0.16, oy: -0.02, scale: 0.5, phase: 0 },
-  { ox: 0.14, oy: 0.06, scale: 0.42, phase: 1 },
-  { ox: 0.0, oy: -0.2, scale: 0.6, phase: 2 },
+  { ox: -0.16, oy: 0.06, scale: 0.5, phase: 0 },
+  { ox: 0.14, oy: 0.1, scale: 0.42, phase: 1 },
+  { ox: 0.0, oy: 0.0, scale: 0.6, phase: 2 },
 ] as const;
 
 const WHITE = new Phaser.Display.Color(255, 255, 255);
@@ -29,9 +30,9 @@ export class DryBushObject {
   public readonly worldY: number;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Phaser.GameObjects.Image;
+  private readonly sprite: Billboard3D;
   private state: BushState = 'intact';
-  private fires: Phaser.GameObjects.Image[] = [];
+  private fires: Billboard3D[] = [];
   private fireTimer?: Phaser.Time.TimerEvent;
   private fireFrame = 0;
 
@@ -39,20 +40,15 @@ export class DryBushObject {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    this.sprite = scene.add
-      .image(0, 0, ASSET_KEYS.dryBush)
-      .setOrigin(0.5)
-      .setDepth(ySortDepth(worldY));
+    this.sprite = world3d()
+      .addBillboard('dry-bush', 0, { groundShadow: true })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(0.9, 0.9);
   }
 
   /** The tile is impassable while the bush stands or burns; ash lets the hero walk through. */
   public get blocking(): boolean {
     return this.state !== 'ash';
-  }
-
-  /** The sprite to cast a firelight shadow from while the bush still stands (null once ash). */
-  public get shadowCaster(): Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null {
-    return this.blocking ? this.sprite : null;
   }
 
   public get isAsh(): boolean {
@@ -65,10 +61,11 @@ export class DryBushObject {
     this.state = 'burning';
 
     for (let i = 0; i < FIRE_SPOTS.length; i += 1) {
-      const fire = this.scene.add
-        .image(0, 0, FIRE_KEYS[i % FIRE_KEYS.length])
-        .setOrigin(0.5, 1)
-        .setDepth(ySortDepth(this.worldY) + 0.1);
+      const spot = FIRE_SPOTS[i];
+      const fire = world3d()
+        .addBillboard(FIRE_KEYS[i % FIRE_KEYS.length], 0, { emissive: true })
+        .setPosition(this.worldX + spot.ox, this.worldY + spot.oy)
+        .setDisplaySize(spot.scale, spot.scale * 1.3);
       this.fires.push(fire);
     }
     this.fireTimer = this.scene.time.addEvent({
@@ -128,34 +125,21 @@ export class DryBushObject {
       .setAlpha(0.7);
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleY: this.sprite.scaleY * 0.55,
+      scaleY: 0.5,
       duration: 260,
       ease: 'Power2.easeIn',
     });
   }
 
-  public render(tileSize: number, camera: WorldCamera): void {
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    const size = Math.max(12, Math.floor(tileSize * 0.9));
-
-    this.sprite.setPosition(screen.x, screen.y).setDepth(ySortDepth(this.worldY));
-    if (this.sprite.displayWidth !== size) this.sprite.setDisplaySize(size, size);
-
-    // Anchor flames to the base of the bush and let them lick upward.
-    for (let i = 0; i < this.fires.length; i += 1) {
-      const spot = FIRE_SPOTS[i];
-      const fire = this.fires[i];
-      fire
-        .setPosition(screen.x + spot.ox * tileSize, screen.y + tileSize * 0.42 + spot.oy * tileSize)
-        .setDisplaySize(tileSize * spot.scale, tileSize * spot.scale * 1.3)
-        .setDepth(ySortDepth(this.worldY) + 0.1);
-    }
+  public render(_tileSize: number, _camera: WorldCamera): void {
+    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {
     this.fireTimer?.destroy();
     this.fires.forEach((fire) => fire.destroy());
     this.fires = [];
+    this.scene.tweens.killTweensOf(this.sprite);
     this.sprite.destroy();
   }
 }

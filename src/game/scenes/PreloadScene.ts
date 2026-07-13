@@ -4,6 +4,7 @@ import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { preloadSharedAssets } from '@/game/assets/assetManifest';
 import type { AppMode } from '@/game/config';
 import { t } from '@/game/i18n/i18n';
+import { preloadTextures3D } from '@/game/render3d/textures3d';
 import { setWorldData } from '@/game/world/WorldData';
 
 const WORLD_JSON_KEY = 'world';
@@ -50,9 +51,26 @@ export class PreloadScene extends Phaser.Scene {
 
   public create(): void {
     const mode = this.registry.get('appMode') as AppMode | undefined;
-    if (mode !== 'editor') {
-      setWorldData(this.cache.json.get(WORLD_JSON_KEY));
+    if (mode === 'editor') {
+      // The editor never uses the 3D world renderer — but its live playtest
+      // does, so the textures still load (in the background) before any play.
+      void preloadTextures3D();
+      this.scene.start('editor');
+      return;
     }
-    this.scene.start(mode === 'editor' ? 'editor' : 'title');
+
+    setWorldData(this.cache.json.get(WORLD_JSON_KEY));
+
+    // The 3D world renderer needs its texture set before GameScene builds the
+    // world; hold the scene hand-off until both loaders are done.
+    void preloadTextures3D().then(() => {
+      // Dev shortcut (localhost only): `?play` skips title/language/intro and
+      // drops straight into gameplay — e.g. http://localhost:5209/?play
+      if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('play')) {
+        this.scene.start('game');
+        return;
+      }
+      this.scene.start('title');
+    });
   }
 }

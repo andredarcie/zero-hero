@@ -1,17 +1,14 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, SCENE_DEPTHS, ySortDepth } from '@/game/constants';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import { world3d, type FireLight3D } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 const FRAME_DURATION = 140; // ms per animation frame
-const FRAME_KEYS = [
-  ASSET_KEYS.campfireFrame0,
-  ASSET_KEYS.campfireFrame1,
-  ASSET_KEYS.campfireFrame2,
-] as const;
+const FIRE_TEXTURES = ['campfire-0', 'campfire-1', 'campfire-2'] as const;
 
 // Warm gold-amber cast, not a red-orange. A real campfire's light is yellowish (~1900K);
-// the extra green channel here (vs a pure orange) is what reads as "yellow" in the bloom.
+// the extra green channel here (vs a pure orange) is what reads as "yellow" in the glow.
 const GLOW_TINT = 0xffbb33;
 const GLOW_ALPHA = 0.34;
 
@@ -20,13 +17,20 @@ const GLOW_ALPHA = 0.34;
 const DEAD_TINT = 0x2a2016;
 const DEAD_ALPHA = 0.85;
 
+const SIZE = 0.88; // tiles
+const GLOW_SCALE = 2.2;
+
+// The campfire in the 3D world: an animated flipbook billboard plus the soft additive glow
+// halo behind it, exactly like the 2D sprite pair — and a REAL warm point light: the flicker,
+// the lit pool and the true cast shadows all come from the renderer (see render3d/World3D.ts).
 export class CampfireObject {
   public readonly worldX: number;
   public readonly worldY: number;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Phaser.GameObjects.Image;
-  private readonly glow: Phaser.GameObjects.Image;
+  private readonly sprite: Billboard3D;
+  private readonly glow: Billboard3D;
+  private readonly fireLight: FireLight3D;
   private frameIndex = 0;
   private animTimer?: Phaser.Time.TimerEvent;
   private lit: boolean;
@@ -37,21 +41,22 @@ export class CampfireObject {
     this.worldY = worldY;
     this.lit    = lit;
 
-    // Soft warm glow behind the fire (additive blend for bloom feel). Hidden while unlit.
-    this.glow = scene.add
-      .image(0, 0, FRAME_KEYS[0])
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.object - 1)
+    // Soft warm glow behind the fire (additive blend). Hidden while unlit.
+    this.glow = world3d()
+      .addBillboard(FIRE_TEXTURES[0], 0, { additive: true })
+      .setPosition(worldX, worldY + 0.01)
+      .setDisplaySize(SIZE * GLOW_SCALE, SIZE * GLOW_SCALE)
       .setTint(GLOW_TINT)
       .setAlpha(GLOW_ALPHA)
-      .setBlendMode(Phaser.BlendModes.ADD)
       .setVisible(lit);
 
-    // Main animated fire sprite
-    this.sprite = scene.add
-      .image(0, 0, FRAME_KEYS[0])
-      .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.object);
+    // Main animated fire sprite — full-bright and HDR so the flame itself glows and
+    // blooms (a flame is its own light source), like the 2D game's glowing fire.
+    this.sprite = world3d()
+      .addBillboard(FIRE_TEXTURES[0], 0, { emissive: true, emissiveBoost: 4 })
+      .setPosition(worldX, worldY)
+      .setDisplaySize(SIZE, SIZE);
+    this.fireLight = world3d().addFireLight(worldX, worldY, lit);
 
     if (lit) {
       this.startAnim();
@@ -81,6 +86,8 @@ export class CampfireObject {
       .setTint(Phaser.Display.Color.GetColor(warm.r, warm.g, warm.b))
       .setAlpha(DEAD_ALPHA + (1 - DEAD_ALPHA) * c);
     this.glow.setTint(GLOW_TINT).setVisible(c > 0.05).setAlpha(GLOW_ALPHA * c);
+    this.fireLight.setLit(c > 0.02);
+    this.fireLight.setIntensityScale(c);
   }
 
   private startAnim(): void {
@@ -94,19 +101,14 @@ export class CampfireObject {
   }
 
   private nextFrame(): void {
-    this.frameIndex = (this.frameIndex + 1) % FRAME_KEYS.length;
-    const key = FRAME_KEYS[this.frameIndex];
+    this.frameIndex = (this.frameIndex + 1) % FIRE_TEXTURES.length;
+    const key = FIRE_TEXTURES[this.frameIndex];
     this.sprite.setTexture(key);
     this.glow.setTexture(key);
   }
 
-  public render(tileSize: number, camera: WorldCamera): void {
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    const size    = Math.max(12, Math.floor(tileSize * 0.88));
-    const glowSz  = Math.floor(size * 2.2);
-
-    this.sprite.setPosition(screen.x, screen.y).setDisplaySize(size, size).setDepth(ySortDepth(this.worldY));
-    this.glow.setPosition(screen.x, screen.y).setDisplaySize(glowSz, glowSz).setDepth(ySortDepth(this.worldY) - 0.05);
+  public render(_tileSize: number, _camera: WorldCamera): void {
+    // Static in world space — the 3D camera does the moving now.
   }
 
   /**
@@ -119,8 +121,10 @@ export class CampfireObject {
 
     this.sprite.clearTint().setAlpha(1);
     this.startAnim();
+    this.fireLight.setLit(true);
+    this.fireLight.setIntensityScale(1);
 
-    // Glow blooms in from nothing to its resting alpha, with a brief over-bright flare.
+    // Glow blooms in from nothing to its resting alpha.
     this.glow.setVisible(true).setAlpha(0);
     this.scene.tweens.killTweensOf(this.glow);
     this.scene.tweens.add({
@@ -134,8 +138,8 @@ export class CampfireObject {
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleX: 1.9,
-      scaleY: 1.9,
+      displayWidth: SIZE * 1.9,
+      displayHeight: SIZE * 1.9,
       duration: 140,
       yoyo: true,
       ease: 'Power2.easeOut',
@@ -146,11 +150,12 @@ export class CampfireObject {
 
   /** Called when the player hits the campfire — brief flare-up */
   public onHit(): void {
+    const flare = this.lit ? 2.0 : 1.4;
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleX: this.lit ? 2.0 : 1.4,
-      scaleY: this.lit ? 2.0 : 1.4,
+      displayWidth: SIZE * flare,
+      displayHeight: SIZE * flare,
       duration: 90,
       yoyo: true,
       ease: 'Power2.easeOut',
@@ -168,7 +173,10 @@ export class CampfireObject {
   public destroy(): void {
     this.animTimer?.destroy();
     this.animTimer = undefined;
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.scene.tweens.killTweensOf(this.glow);
     this.sprite.destroy();
     this.glow.destroy();
+    this.fireLight.destroy();
   }
 }

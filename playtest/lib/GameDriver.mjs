@@ -69,6 +69,13 @@ export class GameDriver {
       if (state?.scene === 'game') break;
       await this.press('Enter', { count: 1, delay: 550, holdMs: 80 });
     }
+    // Keying past the language pick / title / wizard intro is timing-dependent and has never
+    // been reliable. `?play` boots straight into the GameScene (dev only) — the sure road in.
+    const inGame = await this.getState();
+    if (inGame?.scene !== 'game') {
+      log('Intro did not skip on keypress; reloading into ?play.');
+      await this.open('/?play');
+    }
     await this.page.waitForFunction(
       () => window.gameDebug?.getState()?.scene === 'game',
       null,
@@ -145,8 +152,10 @@ export class GameDriver {
   }
 
   // ── Screenshots ──────────────────────────────────────────────────────────
+  // The Phaser canvas — the 3D world canvas sits under it at the same size/position, so
+  // either one frames the board; naming it explicitly keeps the locator unambiguous.
   async canvasBox() {
-    const box = await this.page.locator('canvas').boundingBox();
+    const box = await this.page.locator('#app canvas').boundingBox();
     if (!box) throw new Error('Canvas not found on page.');
     return box;
   }

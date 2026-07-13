@@ -47,14 +47,16 @@ import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
 import { t, tLines } from '@/game/i18n/i18n';
+import { Billboard3D } from '@/game/render3d/Billboard3D';
+import {
+  FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE,
+  setCurrentWorld3D, World3D, type GroundEllipse,
+} from '@/game/render3d/World3D';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
-import { GameBoardRenderer } from '@/game/runtime/GameBoardRenderer';
-import { CastShadowPool, type FireLightCtx, type ShadowCaster } from '@/game/runtime/CastShadow';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
-import { animateGrassRustle } from '@/game/runtime/RuntimeEffects';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { createBoardMetrics } from '@/game/shared/grid';
@@ -79,37 +81,6 @@ import {
   getPlayerStart,
 } from '@/game/world/WorldData';
 
-// The darkness/light overlay renders into a texture this many times smaller than the screen,
-// then scales back up with NEAREST — so every light circle is made of chunky pixel blocks
-// (matching the game's pixel-art scale) instead of a smooth high-res gradient. Higher = chunkier.
-const LIGHT_DOWNSCALE = 6;
-
-// The low-res light/fog overlays bleed this many texels past every screen edge: their position is
-// shifted up-left and their size padded on both axes, so the visible viewport falls strictly inside
-// the fully-filled interior of the texture. Without this, upscaling the RenderTexture with NEAREST
-// leaves a ~1px seam at an edge (notably the very top) where the fog/dark is missing. Erase/draw
-// coordinates in updateLighting are inset by LIGHT_MARGIN texels to keep light holes aligned.
-const LIGHT_MARGIN = 1;
-
-// Firelight isn't just "un-dark" — fire sources (campfires + lava) stamp a warm amber pool over
-// the already-dimmed ground so a flame visibly warms the world, against the cold-blue dark. The
-// pool sits slightly inside the light circle (WARM_POOL_SCALE < 1) so its rim fades back to
-// neutral before the darkness; WARM_INTENSITY is the additive strength of the amber core. The
-// hero's own glow deliberately stays neutral, so only real fire reads as warm.
-const WARM_POOL_SCALE = 0.82;
-const WARM_INTENSITY = 0.5;
-
-// Distance fog — a second, deeper darkness layer stacked over the base dim. It is FULL everywhere
-// and only clears in a WIDE, soft halo around each light source (campfire, hero, NPC, lava), so
-// anywhere out of a flame's reach settles into a thick cold gloom while lit areas stay readable.
-// The result: the farther you are from light, the darker it gets — the dark "fogs in" at the edges
-// of vision. Rendered into the same low-res overlay → chunky pixel fog, matching the light style.
-// FOG_MAX_ALPHA = how black the far dark gets (on top of the base dim); FOG_LIFT_SCALE = how far
-// past a light's own glow the fog is pushed back (× the light radius); FOG_COLOR = its cold tint.
-const FOG_MAX_ALPHA = 0.38;
-const FOG_LIFT_SCALE = 2.15;
-const FOG_COLOR = 0x02030d;
-
 // How each held item shows in the HUD slot / flies in (a burning item swaps its own way).
 const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = {
   sword: { texture: ASSET_KEYS.swordItemIcon, frame: 0 },
@@ -120,6 +91,19 @@ const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> 
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
+};
+
+// The same per-item art resolved through the 3D texture registry (textures3d keys),
+// for the back-item billboard that rides the hero in the world.
+const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number }> = {
+  sword: { texture: 'sword-icon', frame: 0 },
+  key: { texture: 'key-item', frame: KEY_FRAMES.held },
+  axe: { texture: 'axe-icon', frame: 0 },
+  bomb: { texture: 'bomb-icon', frame: 0 },
+  lavaBoots: { texture: 'lava-boots-icon', frame: 0 },
+  pickaxe: { texture: 'pickaxe-icon', frame: 0 },
+  scythe: { texture: 'scythe-icon', frame: 0 },
+  wood: { texture: 'wood-icon', frame: 0 },
 };
 
 // Bumping something you can't use yet pops a speech balloon over the hero's head showing
@@ -182,6 +166,21 @@ const TORCH_GUTTER_FRAC = 0.4;
 // The torch's light shrinks with its fuel (full circle → this fraction right before it dies),
 // so the closing pool of firelight IS the fuel gauge.
 const TORCH_MIN_LIGHT_FRAC = 0.4;
+// The flame on the torch's tip: the same little fire that burns on a lit bush, cycling at a
+// deliberately coarse cadence — the frame flip IS the animation, there is no smooth sway.
+const TORCH_FLAME_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
+const TORCH_FLAME_FRAME_MS = 110;
+
+// Chest height, in tiles: where a blow lands and where the world's one-shot FX (flash, sparks,
+// motes) hang. The 2D game pinned them to the sprite's screen centre; in 3D they live at the
+// body's real height, so they are lit, occluded and blurred like anything else out there.
+const FX_BODY_ELEV = 0.5;
+const FLASH_SIZE = 0.5; // tiles across, before the hit's growth tween
+
+// What every one-shot FX billboard shares: it hangs around its point (centred), the night fog
+// never touches it, and it never writes depth — see Billboard3D for why each of those matters
+// to a translucent particle.
+const FX_BILLBOARD = { centered: true, fog: false, depthWrite: false } as const;
 
 // The undead danger meter (UndeadSpawnDirector, 0..1) creeps onto the screen as a cold
 // vignette: the deeper the dark wakes, the harder the edges close in — and near full danger
@@ -240,8 +239,8 @@ export class GameScene extends Phaser.Scene {
   private readonly torchGutter = { level: 1.0, velocity: 0 };
   // Cadence for the smoke wisps / embers trailing off a guttering torch.
   private torchEmberTimer = 0;
-  // Pixel-flame sprite pinned on the torch's tip; its size tracks the remaining fuel.
-  private torchGlow?: Phaser.GameObjects.Image;
+  // Pixel-flame billboard pinned on the torch's tip; its size tracks the remaining fuel.
+  private torchFlameBb?: Billboard3D;
   private campfires: CampfireObject[] = [];
   private dryBushes: DryBushObject[] = [];
   private lockedDoors: LockedDoorObject[] = [];
@@ -251,13 +250,15 @@ export class GameScene extends Phaser.Scene {
   private tallGrasses: TallGrassObject[] = [];
   private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
-  // Lit bombs on the ground, world-anchored so they scroll with the map until they blow.
-  private activeBombs: Array<{ worldX: number; worldY: number; sprite: Phaser.GameObjects.Sprite }> = [];
+  // Lit bombs on the ground — world-anchored billboards ticking until they blow.
+  private activeBombs: Array<{ worldX: number; worldY: number; sprite: Billboard3D }> = [];
   private spaceKey?: Phaser.Input.Keyboard.Key;
-  private boardRenderer?: GameBoardRenderer;
   private player?: Phaser.GameObjects.Sprite;
   // The held item, slung diagonally on the hero's back like it's tucked in a satchel.
+  // In-world it's a 3D billboard riding the hero billboard (so the body occludes it
+  // properly); the 2D image only returns for the screen-space death elegy.
   private backItem?: Phaser.GameObjects.Image;
+  private backItemBb?: Billboard3D;
   // Hides the back item while the same item is mid-swing, so it isn't shown in two places.
   private backItemSwingTimer?: Phaser.Time.TimerEvent;
   private movementController?: PlayerMovementController;
@@ -279,7 +280,7 @@ export class GameScene extends Phaser.Scene {
   // Low-health fire compass: an arrow orbiting the hero, pointing toward the nearest lit fire.
   private fireCompassArrow?: Phaser.GameObjects.Polygon;
   // Screen-edge vignette driven by the undead danger meter (see DANGER_VIGNETTE_* knobs).
-  private dangerVignette?: Phaser.GameObjects.Image;
+  // It lives in the 3D post chain (World3D.setDangerVignette) — this only paces its breath.
   private dangerPulsePhase = 0;
   private tileSize = MIN_BOARD_TILE_SIZE;
   private isDead = false;
@@ -322,28 +323,14 @@ export class GameScene extends Phaser.Scene {
   private streamCenter = { cx: NaN, cy: NaN };
   private debugApi?: GameDebugApi;
 
-  // Lighting
-  private darknessOverlay?: Phaser.GameObjects.RenderTexture;
-  // Warm additive layer: only fire sources (campfires + lava) stamp an amber pool into it, so
-  // firelight reads as warm against the cold-blue dark while the hero's own glow stays neutral.
-  private warmOverlay?: Phaser.GameObjects.RenderTexture;
-  // Distance-fog layer: a deeper darkness that only clears in a wide halo around each light, so the
-  // world "fogs into" black the farther a tile is from any flame/glow. See FOG_* knobs up top.
-  private fogOverlay?: Phaser.GameObjects.RenderTexture;
-  private lightCircleImg?: Phaser.GameObjects.Image;
-  private warmLightImg?: Phaser.GameObjects.Image;
-  private fogLightImg?: Phaser.GameObjects.Image;
-  private playerShadow?: Phaser.GameObjects.Ellipse;
-  private readonly lightFlicker = { radius: 1.0, velocity: 0 };
-  // Dynamic firelight cast shadows: the tree tiles are handled inside GameBoardRenderer; this pool
-  // covers the runtime props (dry trees, rocks, bushes, shrubs, gates) standing in a flame's glow.
-  private castShadowPool?: CastShadowPool;
+  // The hero's flat contact shadow on the 3D ground (real cast shadows come from the fire light).
+  private playerShadow?: GroundEllipse;
 
   // Low-health "heartbeat": a pulsing red PIXEL OUTLINE around the hero (never painting the
   // sprite itself), ramping up as the last hearts drain. Built the classic pixel-art way —
-  // red-filled copies of the hero sprite offset in 8 directions, drawn behind it, so only the
-  // border shows through.
-  private readonly lowHealthOutlines: Phaser.GameObjects.Sprite[] = [];
+  // red-filled copies of the hero billboard offset in 8 directions, drawn just behind it, so
+  // only the border shows through.
+  private readonly lowHealthOutlines: Billboard3D[] = [];
   private heartbeatPhase = 0;
 
   // Footprints (world-anchored so they scroll with the ground)
@@ -358,6 +345,13 @@ export class GameScene extends Phaser.Scene {
   // "You need this item" balloon over the hero's head (see showNeedItemHint)
   private needItemHint?: Phaser.GameObjects.Container;
   private needItemHintTween?: Phaser.Tweens.Tween;
+
+  // The real HD-2D: the whole world renders in true 3D (render3d/World3D.ts) on a
+  // canvas UNDER this transparent Phaser one. Phaser keeps logic, input, canvas UI
+  // and screen-space FX; the hero's hidden Phaser sprite (all the movement/juice
+  // code still drives it) is mirrored onto a 3D billboard every frame.
+  private world3d?: World3D;
+  private heroBillboard?: Billboard3D;
 
   public constructor() {
     super(GameScene.key);
@@ -379,7 +373,17 @@ export class GameScene extends Phaser.Scene {
     this.shopOpen = false;
     this.upgrades = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
 
-    this.cameras.main.setBackgroundColor('#1a1a2e');
+    // Phaser's canvas is transparent: the 3D world shows through from below.
+    // Build the renderer before ANY world object — they attach their billboards to it.
+    this.world3d = new World3D();
+    setCurrentWorld3D(this.world3d);
+    // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
+    // Promote the Phaser canvas into its own stacking level so the whole 2D side —
+    // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
+    this.game.canvas.style.position = 'relative';
+    this.game.canvas.style.zIndex = '1';
+    window.hd3d = this.world3d.params;
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
 
     // Decode the SFX + music loops. The world's default "soundtrack" is just the wind bed —
     // no melodic exploration track — so fade out whatever the intro left playing (the title
@@ -423,14 +427,23 @@ export class GameScene extends Phaser.Scene {
     // the key uses it to strike a door (SwordSlash.slash accepts a custom item sprite).
     this.swordSlash = new SwordSlash(this);
     this.camera = new WorldCamera(startWorldX, startWorldY, 0, 0);
-    this.boardRenderer = new GameBoardRenderer(this);
+    this.camera.world3d = this.world3d;
+    this.world3d.follow(startWorldX, startWorldY, true);
 
+    // The hero's Phaser sprite stays as the invisible "state carrier" — every
+    // movement/knockback/breathing/hurt tween keeps driving it — and render3D
+    // mirrors it onto this 3D billboard, which is what the player actually sees.
     this.player = this.add
       .sprite(0, 0, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
       .setOrigin(0.5)
-      .setDepth(SCENE_DEPTHS.player);
+      .setDepth(SCENE_DEPTHS.player)
+      .setVisible(false);
+    this.heroBillboard = this.world3d.addBillboard('hero', HERO_FRAMES.idleDown, { castGroundShadow: true })
+      .setPosition(startWorldX, startWorldY)
+      .setDisplaySize(1, 1);
 
-    // Item slung on the hero's back — hidden until something is picked up (see updateBackItem).
+    // The 2D back-item image only appears in the screen-space death elegy (the in-world
+    // carried item is a billboard — see updateBackItem); it idles hidden until then.
     this.backItem = this.add
       .image(0, 0, ASSET_KEYS.swordItemIcon)
       .setOrigin(0.5)
@@ -450,7 +463,8 @@ export class GameScene extends Phaser.Scene {
         if (this.enemyManager?.getEnemyAt(wx, wy)) return true;
         return this.isSolidForEntities(wx, wy, this.heldItem === 'lavaBoots');
       },
-      (wx, wy) => animateGrassRustle(this, this.boardRenderer?.getGrassSprite(wx, wy), this.tileSize),
+      // Ground grass decor lives in the baked 3D mesh; the renderer wobbles its quad in place.
+      (wx, wy) => this.world3d?.rustleDecor(wx, wy),
       (wx, wy) => this.handlePlayerBump(wx, wy),
     );
 
@@ -548,6 +562,87 @@ export class GameScene extends Phaser.Scene {
     this.scene.resume();
   }
 
+  // ── the 3D frame ─────────────────────────────────────────────────────────────
+  // Runs on POST_UPDATE so it sees this frame's final state (movement tweens
+  // included) and keeps running even when update() early-returns (dialog pan,
+  // cut-scenes). Freezes with the scene on pause — a still backdrop for the menu.
+
+  private render3D(_time: number, delta: number): void {
+    const w3 = this.world3d;
+    const cam = this.camera;
+    if (!w3 || !cam) return;
+
+    // The dialog pan shifts WorldCamera.screenCenter; translate that into a
+    // camera view offset in tiles so the 3D framing pans the same way.
+    const ts = Math.max(1, this.tileSize);
+    const defCx = Math.floor(this.scale.width / 2);
+    const defCy = Math.floor(this.scale.height / 2);
+    w3.setViewOffset((defCx - cam.screenCenterX) / ts, (defCy - cam.screenCenterY) / ts);
+    w3.follow(cam.camX, cam.camY);
+
+    // The projected size of one tile at screen centre IS the legacy "tileSize"
+    // every remaining Phaser-side FX scales itself by.
+    this.tileSize = w3.tileScreenSize();
+
+    this.syncHeroBillboard();
+
+    // Hero glow + carried torch as real lights riding the hero.
+    const hb = this.heroBillboard;
+    if (hb) {
+      w3.setHeroLight(hb.x, hb.y, this.cutsceneHeroLight);
+      const torchOn = this.isTorchLit && !this.cutsceneActive;
+      const fuel = TORCH_MIN_LIGHT_FRAC + (1 - TORCH_MIN_LIGHT_FRAC) * this.torchFuelFrac;
+      w3.setTorchLight(hb.x, hb.y, torchOn ? fuel * this.torchGutter.level : 0);
+    }
+
+    w3.render(delta);
+  }
+
+  // Mirror the (hidden) Phaser hero sprite onto its 3D billboard: position from
+  // the screen-centre pin + any knockback offset, size/frame/flip/tint verbatim.
+  private syncHeroBillboard(): void {
+    const b = this.heroBillboard;
+    const p = this.player;
+    const cam = this.camera;
+    if (!b || !p || !cam) return;
+    const ts = Math.max(1, this.tileSize);
+
+    // Anchor the mapping at the sprite's FEET, not its origin: breathing pivots the
+    // origin to the bottom (and shifts p.y half a tile to compensate), so reading p.y
+    // raw made the billboard lurch half a tile at every step start/stop — the hero
+    // looked like he was hopping. The foot line is continuous across origin flips,
+    // and the foot-anchored billboard grows upward from planted feet while breathing.
+    const footY = p.y + (1 - p.originY) * p.displayHeight;
+    b.setPosition(
+      cam.camX + (p.x - cam.screenCenterX) / ts,
+      cam.camY + (footY - cam.screenCenterY) / ts - 0.5,
+    );
+    b.setDisplaySize(Math.max(0.05, p.displayWidth / ts), Math.max(0.05, p.displayHeight / ts));
+    const frame = Number.parseInt(String(p.frame.name), 10);
+    b.setTexture('hero', Number.isNaN(frame) ? HERO_FRAMES.idleDown : frame);
+    b.setFlipX(p.flipX);
+    b.setAlpha(p.alpha);
+
+    // The carried item and the contact shadow ride the just-synced hero position.
+    this.positionBackItem();
+    this.playerShadow?.setPosition(b.x, b.y + 0.1);
+    this.playerShadow?.setVisible(!this.isDead);
+
+    // Death plays its 2D screen-space elegy with the Phaser sprite; hide the body.
+    b.setVisible(!this.isDead);
+    if (this.isDead) {
+      this.backItemBb?.setVisible(false);
+      return;
+    }
+
+    if (p.isTinted) {
+      if (p.tintFill) b.setTintFill(p.tintTopLeft);
+      else b.setTint(p.tintTopLeft);
+    } else {
+      b.clearTint();
+    }
+  }
+
   private enableEditorReturn(): void {
     this.add.text(this.scale.width - 8, 8, t('editorReturn'), {
       fontFamily: FONT_FAMILY,
@@ -615,7 +710,7 @@ export class GameScene extends Phaser.Scene {
       },
       listNpcKinds: () => getDialogKinds(),
     };
-    registerGameDebugApi(this.debugApi);
+    registerGameDebugApi(this.debugApi, this);
   }
 
   public shutdown(): void {
@@ -624,6 +719,15 @@ export class GameScene extends Phaser.Scene {
       this.debugApi = undefined;
     }
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    // 3D teardown: stop the frame hook, drop the billboards, dispose the renderer.
+    this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
+    this.heroBillboard?.destroy();
+    this.heroBillboard = undefined;
+    if (window.hd3d === this.world3d?.params) window.hd3d = undefined;
+    setCurrentWorld3D(undefined);
+    this.world3d?.dispose();
+    this.world3d = undefined;
+    if (this.camera) this.camera.world3d = undefined;
     this.camShiftTween?.stop();
     this.camShiftTween = undefined;
     this.camShifting = false;
@@ -662,6 +766,8 @@ export class GameScene extends Phaser.Scene {
     this.backItemSwingTimer = undefined;
     this.backItem?.destroy();
     this.backItem = undefined;
+    this.backItemBb?.destroy();
+    this.backItemBb = undefined;
     this.breathingTween?.destroy();
     this.breathingTween = undefined;
     this.needItemHintTween?.stop();
@@ -669,32 +775,18 @@ export class GameScene extends Phaser.Scene {
     this.needItemHint?.destroy();
     this.needItemHint = undefined;
     this.footprints.length = 0;
-    this.lightCircleImg?.destroy();
-    this.warmLightImg?.destroy();
-    this.fogLightImg?.destroy();
-    this.castShadowPool?.destroy();
-    this.castShadowPool = undefined;
-    this.darknessOverlay?.destroy();
-    this.warmOverlay?.destroy();
-    this.fogOverlay?.destroy();
     this.playerShadow?.destroy();
+    this.playerShadow = undefined;
     this.lowHealthOutlines.forEach((o) => o.destroy());
     this.lowHealthOutlines.length = 0;
     this.fireCompassArrow?.destroy();
     this.fireCompassArrow = undefined;
-    this.dangerVignette?.destroy();
-    this.dangerVignette = undefined;
     this.dangerPulsePhase = 0;
-    this.torchGlow?.destroy();
-    this.torchGlow = undefined;
+    this.torchFlameBb?.destroy();
+    this.torchFlameBb = undefined;
     this.torchGutter.level = 1.0;
     this.torchGutter.velocity = 0;
     this.torchEmberTimer = 0;
-    if (this.textures.exists('_danger_vignette')) this.textures.remove('_danger_vignette');
-    if (this.textures.exists('_torch_flame')) this.textures.remove('_torch_flame');
-    if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
-    if (this.textures.exists('_warm_light')) this.textures.remove('_warm_light');
-    if (this.textures.exists('_fog_light')) this.textures.remove('_fog_light');
     this.swordSlash = undefined;
     this.campfires = [];
     this.dryBushes = [];
@@ -706,13 +798,6 @@ export class GameScene extends Phaser.Scene {
     this.lavaTiles = [];
     this.waterTiles = [];
     this.activeBombs = [];
-    this.lightCircleImg = undefined;
-    this.warmLightImg = undefined;
-    this.fogLightImg = undefined;
-    this.darknessOverlay = undefined;
-    this.warmOverlay = undefined;
-    this.fogOverlay = undefined;
-    this.playerShadow = undefined;
     this.heartbeatPhase = 0;
     // Never leak a frozen tween clock into the next scene run.
     this.hitstopMs = 0;
@@ -750,12 +835,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.eKey && Phaser.Input.Keyboard.JustDown(this.eKey)) this.toggleShop();
 
-    if (this.camera) {
-      this.updateLighting(delta);
-      this.updatePlayerShadow();
-    }
-
-    if (this.isDead || this.shopOpen || !this.movementController || !this.boardRenderer || !this.chunkManager || !this.camera) {
+    if (this.isDead || this.shopOpen || !this.movementController || !this.chunkManager || !this.camera) {
       return;
     }
 
@@ -783,13 +863,7 @@ export class GameScene extends Phaser.Scene {
       this.startBreathing();
     }
     this.streamChunks();
-    // Firelight cast shadows breathe with the flame flicker (already advanced by updateLighting
-    // above). Build the light context once and thread it through the tree renderer and, later,
-    // the prop shadow pool (after renderProps positions the props).
-    const shadowCtx = this.buildFireLightCtx();
-    this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize, shadowCtx);
     this.updateFootprints();
-    this.positionBackItem();
 
     // Burn the carried flame down; snuff it when the fuel runs out (leaving the hero exposed
     // in the dark). Re-igniting at a lit campfire or lava refills it.
@@ -938,82 +1012,15 @@ export class GameScene extends Phaser.Scene {
 
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.renderProps();
-
-    // Prop cast shadows, now that renderProps has placed every prop for this frame.
-    this.castShadowPool?.update(this.collectPropCasters(), shadowCtx, this.tileSize, this.camera);
-  }
-
-  // The nearest-lit-flame lookup + flame flicker the cast-shadow maths needs, rebuilt each frame.
-  private buildFireLightCtx(): FireLightCtx {
-    const cam = this.camera!;
-    const tileSize = this.tileSize;
-    const campfires = this.campfires;
-    // Shadows reach a little past the light's resting radius: the glow itself breathes out to
-    // ~LIGHT_RADIUS × 1.2 with the flicker, so objects lit near the edge must still cast (else
-    // some clearly-lit trees would sit shadowless).
-    const radiusTiles = LIGHT_RADIUS_TILES + 1.5;
-    return {
-      flicker: this.lightFlicker.radius,
-      radiusPx: radiusTiles * tileSize,
-      nearest: (wx, wy) => {
-        let best: CampfireObject | undefined;
-        let bestD = Infinity;
-        for (const cf of campfires) {
-          if (!cf.isLit) continue;
-          const d = Math.hypot(cf.worldX - wx, cf.worldY - wy);
-          if (d < bestD) { bestD = d; best = cf; }
-        }
-        if (!best || bestD > radiusTiles) return null;
-        const s = cam.tileToScreen(best.worldX, best.worldY, tileSize);
-        return { sx: s.x, sy: s.y };
-      },
-    };
-  }
-
-  // Every actor/prop that should throw a firelight shadow while standing in a flame's glow: the
-  // hero, the NPCs, and the standing props. Felled/broken/opened props opt out via a null
-  // shadowCaster; tall grass, lava and water are flat and never cast.
-  private collectPropCasters(): ShadowCaster[] {
-    const casters: ShadowCaster[] = [];
-    const add = (
-      arr: ReadonlyArray<{ shadowCaster: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | null; worldX: number; worldY: number }>,
-    ): void => {
-      for (const p of arr) {
-        const sprite = p.shadowCaster;
-        if (sprite) casters.push({ sprite, worldX: p.worldX, worldY: p.worldY });
-      }
-    };
-    add(this.dryTrees);
-    add(this.dryShrubs);
-    add(this.dryBushes);
-    add(this.rocks);
-    add(this.lockedDoors);
-
-    // NPCs standing near a lit fire throw shadows too.
-    if (this.npcManager) {
-      for (const c of this.npcManager.getShadowCasters()) casters.push(c);
-    }
-    // The hero, pinned at screen centre — its silhouette sweeps around its feet with the flame.
-    // Anchor it at the fixed screen centre (not its scrolling tile) so the shadow never lags the
-    // hero as the world scrolls under it during a step.
-    if (this.player && this.camera && !this.isDead) {
-      casters.push({
-        sprite: this.player,
-        worldX: this.playerWorld.worldX,
-        worldY: this.playerWorld.worldY,
-        footScreen: {
-          x: this.camera.screenCenterX,
-          y: this.camera.screenCenterY + Math.round(this.tileSize * 0.3),
-        },
-      });
-    }
-    return casters;
+    // Cast shadows are real: the fire's shadow light in the 3D renderer throws them.
   }
 
   private handleResize(gameSize: Phaser.Structs.Size | { width: number; height: number }): void {
     const { width, height } = gameSize;
     this.cameras.main.setViewport(0, 0, width, height);
 
+    // Seed tileSize from the classic board metric; render3D refines it to the
+    // true projected tile size on the next frame.
     this.tileSize = this.computeTileSize(width, height);
 
     if (this.camera) {
@@ -1035,31 +1042,6 @@ export class GameScene extends Phaser.Scene {
     this.cancelPlayerKnockback();
     this.player?.setDisplaySize(this.tileSize, this.tileSize);
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
-
-    const g = this.lightOverlayGeom(width, height);
-    if (this.darknessOverlay) {
-      this.darknessOverlay
-        .setPosition(g.x, g.y)
-        .setScale(LIGHT_DOWNSCALE)
-        .resize(g.texW, g.texH);
-      this.darknessOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-    }
-
-    if (this.warmOverlay) {
-      this.warmOverlay
-        .setPosition(g.x, g.y)
-        .setScale(LIGHT_DOWNSCALE)
-        .resize(g.texW, g.texH);
-      this.warmOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-    }
-
-    if (this.fogOverlay) {
-      this.fogOverlay
-        .setPosition(g.x, g.y)
-        .setScale(LIGHT_DOWNSCALE)
-        .resize(g.texW, g.texH);
-      this.fogOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-    }
   }
 
   private computeTileSize(width: number, height: number): number {
@@ -1423,7 +1405,7 @@ export class GameScene extends Phaser.Scene {
       if (MELEE_DAMAGE[this.heldItem as HeldItemKind] !== undefined) this.swingHeld(wx, wy);
       enemy.flashImmune();
       this.spawnDeflect(wx, wy);
-      this.cameras.main.shake(40, 0.0015);
+      this.world3d?.shake(40, 0.03);
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
     }
@@ -1433,7 +1415,7 @@ export class GameScene extends Phaser.Scene {
       const dx = wx - this.playerWorld.worldX;
       const dy = wy - this.playerWorld.worldY;
       enemy.triggerKnockback(dx, dy);
-      this.cameras.main.shake(60, 0.002);
+      this.world3d?.shake(60, 0.045);
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
     }
@@ -1470,7 +1452,7 @@ export class GameScene extends Phaser.Scene {
     // frames of hitstop — all heavier when the blow kills.
     const lethal = !enemy.isAlive;
     this.spawnHitSpark(wx, wy, lethal);
-    this.cameras.main.shake(lethal ? 150 : 90, lethal ? 0.007 : 0.004);
+    this.world3d?.shake(lethal ? 150 : 90, lethal ? 0.15 : 0.09);
     this.triggerHitstop(lethal ? 110 : 60);
     if (lethal) getSoundManager().playEnemyDeath();
   }
@@ -1513,34 +1495,46 @@ export class GameScene extends Phaser.Scene {
 
   /** Sparks + a white impact flash where a melee blow lands; heavier when the blow kills. */
   private spawnHitSpark(wx: number, wy: number, lethal: boolean): void {
-    if (!this.camera) return;
-    const c = this.camera.tileToScreen(wx, wy, this.tileSize);
+    const w3 = this.world3d;
+    if (!w3) return;
 
-    const flash = this.add
-      .circle(c.x, c.y, this.tileSize * (lethal ? 0.5 : 0.32), 0xffffff, 0.9)
-      .setDepth(SCENE_DEPTHS.upper + 1);
+    // A hot flash at the point of contact: an additive dot hanging at chest height, blooming
+    // outward. It lives in the world (it is lit, bloomed and blurred with everything else)
+    // rather than being a circle painted on the canvas.
+    const flash = w3
+      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
+      .setTint(0xffffff)
+      .setPosition(wx, wy)
+      .setElevation(FX_BODY_ELEV)
+      .setDisplaySize(FLASH_SIZE * (lethal ? 1.5 : 1), FLASH_SIZE * (lethal ? 1.5 : 1));
+    const flashTo = FLASH_SIZE * (lethal ? 3 : 1.9);
     this.tweens.add({
       targets: flash,
-      radius: this.tileSize * (lethal ? 1.0 : 0.6),
+      scaleX: flashTo,
+      scaleY: flashTo,
       alpha: 0,
       duration: lethal ? 210 : 150,
       ease: 'Cubic.easeOut',
       onComplete: () => flash.destroy(),
     });
 
+    // Sparks thrown off the blow, flying out across the ground plane and arcing up a little.
     const count = lethal ? 7 : 4;
-    const size = Math.max(3, Math.floor(this.tileSize * 0.22));
     for (let i = 0; i < count; i++) {
       const ang = (i / count) * Math.PI * 2 + Math.random() * 0.8;
-      const dist = this.tileSize * (0.45 + Math.random() * (lethal ? 0.75 : 0.4));
-      const spark = this.add
-        .sprite(c.x, c.y, ASSET_KEYS.bombItem, BOMB_FRAMES.spark)
-        .setDisplaySize(size, size)
-        .setDepth(SCENE_DEPTHS.upper + 1);
+      const dist = 0.45 + Math.random() * (lethal ? 0.75 : 0.4);
+      const spark = w3
+        .addBillboard(ASSET_KEYS.bombItem, BOMB_FRAMES.spark, {
+          ...FX_BILLBOARD, emissive: true, alphaTest: 0.05, emissiveBoost: 2,
+        })
+        .setPosition(wx, wy)
+        .setElevation(FX_BODY_ELEV)
+        .setDisplaySize(0.22, 0.22);
       this.tweens.add({
         targets: spark,
-        x: c.x + Math.cos(ang) * dist,
-        y: c.y + Math.sin(ang) * dist,
+        x: wx + Math.cos(ang) * dist,
+        y: wy + Math.sin(ang) * dist * 0.7, // foreshortened: the ground plane is tilted away
+        elevation: FX_BODY_ELEV + 0.1 + Math.random() * 0.25,
         alpha: 0,
         angle: Phaser.Math.Between(-180, 180),
         duration: 170 + Math.random() * 120,
@@ -1554,42 +1548,60 @@ export class GameScene extends Phaser.Scene {
   // skittering flat off the point of contact. Deliberately NOT spawnHitSpark's hot white
   // flash — negated damage must never share the visual language of a landed hit.
   private spawnDeflect(wx: number, wy: number): void {
-    if (!this.camera) return;
-    const c = this.camera.tileToScreen(wx, wy, this.tileSize);
+    const w3 = this.world3d;
+    if (!w3) return;
 
-    const ring = this.add
-      .circle(c.x, c.y, this.tileSize * 0.16, 0x000000, 0)
-      .setStrokeStyle(Math.max(2, Math.floor(this.tileSize * 0.05)), 0xaec6ff, 0.9)
-      .setDepth(SCENE_DEPTHS.upper + 1);
-    this.tweens.add({
-      targets: ring,
-      radius: this.tileSize * 0.55,
-      alpha: 0,
-      duration: 230,
-      ease: 'Cubic.easeOut',
-      onComplete: () => ring.destroy(),
-    });
+    // The cold shockwave washes out over the GROUND (a flat ring), where the 2D game could only
+    // draw a circle on the screen. Same rule as before: never spawnHitSpark's hot white flash.
+    this.spawnShockwave(wx, wy, 0xaec6ff, 0.32, 1.1, 230);
 
-    const size = Math.max(2, Math.floor(this.tileSize * 0.09));
     for (let i = 0; i < 3; i++) {
       // Shards fly out of the upper half only (the blow bounced UP and away, not through).
       const ang = -Math.PI * (0.15 + Math.random() * 0.7);
-      const dist = this.tileSize * (0.35 + Math.random() * 0.3);
-      const shard = this.add
-        .rectangle(c.x, c.y, size, size, 0xaec6ff, 0.85)
-        .setDepth(SCENE_DEPTHS.upper + 1)
-        .setAngle(Phaser.Math.Between(0, 360));
+      const dist = 0.35 + Math.random() * 0.3;
+      const shard = w3
+        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true })
+        .setTint(0xaec6ff)
+        .setPosition(wx, wy)
+        .setElevation(FX_BODY_ELEV)
+        .setDisplaySize(0.12, 0.12)
+        .setAlpha(0.85);
       this.tweens.add({
         targets: shard,
-        x: c.x + Math.cos(ang) * dist,
-        y: c.y + Math.sin(ang) * dist,
+        x: wx + Math.cos(ang) * dist,
+        elevation: FX_BODY_ELEV + Math.abs(Math.sin(ang)) * dist,
         alpha: 0,
-        angle: shard.angle + Phaser.Math.Between(-120, 120),
         duration: 200 + Math.random() * 90,
         ease: 'Cubic.easeOut',
         onComplete: () => shard.destroy(),
       });
     }
+  }
+
+  /**
+   * An impact wave washing out over the ground: a flat additive ring at the tile, growing from
+   * `from` to `to` tiles across. Shared by the landed hit, the deflected blow and the heal tick,
+   * so every "something struck here" beat speaks with one shape.
+   */
+  private spawnShockwave(
+    wx: number, wy: number, color: number, from: number, to: number, durationMs: number,
+  ): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const ring = w3
+      .addBillboard(FX_RING_TEXTURE, 0, { additive: true, flat: true, flatY: 0.05, fog: false, depthWrite: false })
+      .setTint(color)
+      .setPosition(wx, wy)
+      .setDisplaySize(from, from);
+    this.tweens.add({
+      targets: ring,
+      scaleX: to,
+      scaleY: to,
+      alpha: 0,
+      duration: durationMs,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
   }
 
   /** The held item can catch fire at a campfire: only the wood club burns — the sword never does. */
@@ -1668,14 +1680,14 @@ export class GameScene extends Phaser.Scene {
   // updateLighting also reads) while smoke wisps and stray embers trail off the tip at an
   // accelerating pace. The final snuff (extinguishTorch) still puffs its smoke as before.
   private updateTorchFx(delta: number): void {
-    const showing = this.isTorchLit && this.backItem?.visible === true && !this.cutsceneActive;
+    const showing = this.isTorchLit && this.backItemBb?.visible === true && !this.cutsceneActive;
     if (!showing) {
-      this.torchGlow?.setVisible(false);
+      this.torchFlameBb?.setVisible(false);
       this.torchGutter.level = 1.0;
       this.torchGutter.velocity = 0;
       this.torchEmberTimer = 0;
       // A dying-flame alpha flicker must never survive onto the relit (or swapped) item.
-      if (this.backItem && this.backItem.alpha !== 1) this.backItem.setAlpha(1);
+      if (this.backItemBb && this.backItemBb.alpha !== 1) this.backItemBb.setAlpha(1);
       return;
     }
 
@@ -1698,59 +1710,71 @@ export class GameScene extends Phaser.Scene {
     );
 
     // The torch sprite itself only flickers once it's guttering — a healthy flame is steady.
-    this.backItem!.setAlpha(dying > 0 ? 0.7 + 0.3 * Phaser.Math.Clamp(this.torchGutter.level, 0, 1) : 1);
+    this.backItemBb!.setAlpha(dying > 0 ? 0.7 + 0.3 * Phaser.Math.Clamp(this.torchGutter.level, 0, 1) : 1);
 
-    // Flame-tip fire: a deliberately blocky, palette-limited sprite. Its two-pixel nudge is
-    // the entire animation language here — no smooth sway, rotation, or additive glow.
-    if (!this.torchGlow) {
-      this.torchGlow = this.add
-        .image(0, 0, '_torch_flame')
-        .setOrigin(0.5, 0.9);
+    // Flame-tip fire: a real 3D emissive billboard (the same tiny-fire sprite that burns on a
+    // lit bush), so the flame blooms in the post and sits IN the world — where it used to be a
+    // flat 2D image pasted over the canvas, outside the bloom and the tone mapping. Its cycling
+    // frames and a one-notch sideways nudge are the whole animation language: no smooth sway.
+    const bb = this.backItemBb!;
+    if (!this.torchFlameBb) {
+      this.torchFlameBb = this.world3d?.addBillboard(
+        TORCH_FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 4 },
+      );
+      if (!this.torchFlameBb) return;
     }
-    const back = this.backItem!;
     const lvl = this.torchGutter.level;
     const flickerStep = (Math.floor(this.time.now / 90) % 3) - 1;
-    const flameW = Math.max(6, Math.round(this.tileSize * (0.16 + 0.26 * frac) / 2) * 2);
-    const flameH = Math.max(10, Math.round(flameW * (1.35 + 0.12 * lvl) / 2) * 2);
-    this.torchGlow
-      .setPosition(Math.round(back.x + flickerStep * 2), Math.round(back.y - this.tileSize * 0.26))
+    const flameW = 0.16 + 0.26 * frac; // tiles
+    const flameH = flameW * (1.35 + 0.12 * lvl);
+    const frameKey = TORCH_FLAME_KEYS[
+      Math.floor(this.time.now / TORCH_FLAME_FRAME_MS) % TORCH_FLAME_KEYS.length
+    ];
+    // The stick stands 1 tile tall from elevation 0.18; the flame licks just past its tip.
+    this.torchFlameBb
+      .setTexture(frameKey)
+      .setPosition(bb.x + flickerStep * 0.03, bb.y)
+      .setElevation(0.94 - flameH * 0.1)
       .setDisplaySize(flameW, flameH)
-      .setRotation(0)
-      .setTint(dying > 0 ? 0xd8562a : 0xffffff)
       .setAlpha(dying > 0 ? 0.65 + 0.35 * lvl : 1)
-      .setDepth((this.player?.depth ?? SCENE_DEPTHS.player) + 0.05)
       .setVisible(true);
+    // A guttering flame reddens; a healthy one keeps its HDR boost (clearTint restores it).
+    if (dying > 0) this.torchFlameBb.setTint(0xd8562a);
+    else this.torchFlameBb.clearTint();
 
     // Smoke + embers off the tip while guttering, faster the closer to burnout.
     if (dying > 0) {
       this.torchEmberTimer += delta;
       if (this.torchEmberTimer >= 340 - dying * 210) {
         this.torchEmberTimer = 0;
-        this.spawnTorchWisp(back.x, back.y - this.tileSize * 0.34, dying);
+        this.spawnTorchWisp(bb.x, bb.y, dying);
       }
     } else {
       this.torchEmberTimer = 0;
     }
   }
 
-  // One square pixel wisp off a guttering torch: a tiny ember or smoke block, never a soft puff.
-  private spawnTorchWisp(sx: number, sy: number, dying: number): void {
+  // One wisp off a guttering torch: a tiny ember or a puff of smoke, rising off the flame's tip.
+  // (wx, wy) is the torch's tile; the wisp starts just above its head.
+  private spawnTorchWisp(wx: number, wy: number, dying: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
     const ember = Math.random() < 0.35;
-    const size = Math.max(2, Math.round(this.tileSize * (ember ? 0.05 : 0.07 + dying * 0.04) / 2) * 2);
-    const wisp = this.add
-      .rectangle(
-        sx + Phaser.Math.Between(-2, 2),
-        sy,
-        size,
-        size,
-        ember ? 0xffb060 : 0x9a9a9a,
-        ember ? 0.95 : 0.5,
-      )
-      .setDepth(SCENE_DEPTHS.player + 3);
+    const size = ember ? 0.07 : 0.1 + dying * 0.05;
+    // An ember glows (additive, HDR → it blooms); smoke only occludes.
+    const wisp = w3
+      .addBillboard(ember ? FX_DOT_TEXTURE : FX_PUFF_TEXTURE, 0, ember
+        ? { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 }
+        : { ...FX_BILLBOARD, emissive: true, alphaTest: 0.02 })
+      .setTint(ember ? 0xffb060 : 0xcac5bd)
+      .setPosition(wx + (Math.random() - 0.5) * 0.08, wy)
+      .setElevation(1.06)
+      .setDisplaySize(size, size)
+      .setAlpha(ember ? 0.95 : 0.5);
     this.tweens.add({
       targets: wisp,
-      x: wisp.x + Phaser.Math.Between(-6, 6),
-      y: wisp.y - this.tileSize * (ember ? 0.35 : 0.6),
+      x: wisp.x + (Math.random() - 0.5) * 0.24,
+      elevation: 1.06 + (ember ? 0.35 : 0.6),
       alpha: 0,
       duration: ember ? 320 : 480 + Math.floor(dying * 160),
       ease: 'Linear',
@@ -1940,25 +1964,28 @@ export class GameScene extends Phaser.Scene {
   // stream that says "the fire is healing you". Screen-anchored (the hero rests inside the
   // ring, so both endpoints barely move over a mote's short life), like spawnSmokePuff.
   private spawnHealMote(): void {
-    if (!this.camera) return;
+    const w3 = this.world3d;
+    if (!w3) return;
     const cf = this.nearestLitCampfire(this.playerWorld.worldX, this.playerWorld.worldY);
     if (!cf) return;
-    const from = this.camera.tileToScreen(cf.worldX, cf.worldY, this.tileSize);
-    const spread = Math.floor(this.tileSize * 0.22);
-    const size = Math.max(1, Math.floor(this.tileSize * (0.035 + Math.random() * 0.03)));
-    const mote = this.add
-      .circle(
-        from.x + Phaser.Math.Between(-spread, spread),
-        from.y - this.tileSize * 0.3 + Phaser.Math.Between(-spread, 0),
-        size, 0xffc36b, 0.9,
-      )
-      .setDepth(SCENE_DEPTHS.player + 3);
-    // Rise off the flame first, then sink into the hero's chest, shrinking as it's absorbed.
+    const spread = 0.22;
+    const size = 0.07 + Math.random() * 0.06;
+    const mote = w3
+      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
+      .setTint(0xffc36b)
+      .setPosition(cf.worldX + (Math.random() - 0.5) * spread * 2, cf.worldY + (Math.random() - 0.5) * spread)
+      .setElevation(0.3 + Math.random() * spread)
+      .setDisplaySize(size, size)
+      .setAlpha(0.9);
+    // It drifts off the flame and sinks into the hero's chest, shrinking as it's absorbed —
+    // a real path through the world now, so it passes behind whatever stands between them.
     this.tweens.add({
       targets: mote,
-      x: this.camera.screenCenterX + Phaser.Math.Between(-3, 3),
-      y: this.camera.screenCenterY - this.tileSize * 0.12,
-      scale: 0.35,
+      x: this.playerWorld.worldX + (Math.random() - 0.5) * 0.12,
+      y: this.playerWorld.worldY,
+      elevation: FX_BODY_ELEV,
+      scaleX: size * 0.35,
+      scaleY: size * 0.35,
       alpha: 0.55,
       duration: HEAL_MOTE_TRAVEL_MS,
       ease: 'Sine.easeInOut',
@@ -1966,23 +1993,9 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // The heal tick landed: a warm ring blooms out of the hero, the payoff of the mote stream.
+  // The heal tick landed: a warm wave blooms out of the hero, the payoff of the mote stream.
   private spawnHealBurst(): void {
-    if (!this.camera) return;
-    const cx = this.camera.screenCenterX;
-    const cy = this.camera.screenCenterY;
-    const ring = this.add
-      .circle(cx, cy, this.tileSize * 0.22, 0x000000, 0)
-      .setStrokeStyle(Math.max(2, Math.floor(this.tileSize * 0.06)), 0xffc36b, 0.95)
-      .setDepth(SCENE_DEPTHS.player + 3);
-    this.tweens.add({
-      targets: ring,
-      radius: this.tileSize * 0.85,
-      alpha: 0,
-      duration: 430,
-      ease: 'Cubic.easeOut',
-      onComplete: () => ring.destroy(),
-    });
+    this.spawnShockwave(this.playerWorld.worldX, this.playerWorld.worldY, 0xffc36b, 0.44, 1.7, 430);
     // Brief warm glow on the hero himself as the heart mends.
     this.player?.setTint(0xffd9a0);
     this.time.delayedCall(220, () => { this.player?.clearTint(); });
@@ -1990,18 +2003,24 @@ export class GameScene extends Phaser.Scene {
 
   // A few grey puffs rising where a flame died.
   private spawnSmokePuff(wx: number, wy: number): void {
-    if (!this.camera) return;
-    const s = this.camera.tileToScreen(wx, wy, this.tileSize);
+    const w3 = this.world3d;
+    if (!w3) return;
     for (let i = 0; i < 3; i++) {
-      const ox = Phaser.Math.Between(-4, 4);
-      const puff = this.add
-        .circle(s.x + ox, s.y - this.tileSize * 0.2, Math.max(2, Math.floor(this.tileSize * 0.12)), 0x8a8a8a, 0.55)
-        .setDepth(SCENE_DEPTHS.player + 3);
+      // Unlit but NOT additive: smoke must not glow — it veils. The near-zero alphaTest lets it
+      // fade out instead of popping when its opacity crosses the default cutoff.
+      const puff = w3
+        .addBillboard(FX_PUFF_TEXTURE, 0, { ...FX_BILLBOARD, emissive: true, alphaTest: 0.02 })
+        .setTint(0xcac5bd)
+        .setPosition(wx + (Math.random() - 0.5) * 0.16, wy)
+        .setElevation(0.35)
+        .setDisplaySize(0.26, 0.26)
+        .setAlpha(0.38);
       this.tweens.add({
         targets: puff,
-        y: puff.y - this.tileSize * 0.7,
+        elevation: 1.05,
         alpha: 0,
-        scale: 1.8,
+        scaleX: 0.47,
+        scaleY: 0.47,
         duration: 500 + i * 120,
         ease: 'Power2.easeOut',
         onComplete: () => puff.destroy(),
@@ -2038,17 +2057,17 @@ export class GameScene extends Phaser.Scene {
   // The one consumable: SPACE drops it lit under the hero; after the fuse it explodes —
   // killing every enemy in the blast and setting fire to everything flammable there.
   private placeBomb(): void {
-    if (this.heldItem !== 'bomb') return;
+    if (this.heldItem !== 'bomb' || !this.world3d) return;
     const worldX = this.playerWorld.worldX;
     const worldY = this.playerWorld.worldY;
 
     this.clearHeldItem();
     getSoundManager().playBombPlace();
 
-    const sprite = this.add
-      .sprite(0, 0, ASSET_KEYS.bombItem, BOMB_FRAMES.item)
-      .setOrigin(0.5)
-      .setDepth(ySortDepth(worldY) - 0.3);
+    const sprite = this.world3d
+      .addBillboard('bomb-item', BOMB_FRAMES.item)
+      .setPosition(worldX, worldY)
+      .setDisplaySize(0.62, 0.62);
     const bomb = { worldX, worldY, sprite };
     this.activeBombs.push(bomb);
 
@@ -2066,7 +2085,7 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(BOMB_FUSE_MS, () => this.explodeBomb(bomb));
   }
 
-  private explodeBomb(bomb: { worldX: number; worldY: number; sprite: Phaser.GameObjects.Sprite }): void {
+  private explodeBomb(bomb: { worldX: number; worldY: number; sprite: Billboard3D }): void {
     const index = this.activeBombs.indexOf(bomb);
     if (index < 0) return;
     this.activeBombs.splice(index, 1);
@@ -2139,27 +2158,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnFireHitEffect(wx: number, wy: number): void {
-    if (!this.camera) return;
+    const w3 = this.world3d;
+    if (!w3) return;
     getSoundManager().playFireHit();
-    const screen = this.camera.tileToScreen(wx, wy, this.tileSize);
-    const fireKeys = [ASSET_KEYS.tinyFire0, ASSET_KEYS.tinyFire1, ASSET_KEYS.tinyFire2];
-    const baseSize = Math.floor(this.tileSize * 0.38);
 
     for (let i = 0; i < 3; i++) {
-      const ox = Phaser.Math.Between(-Math.floor(this.tileSize * 0.28), Math.floor(this.tileSize * 0.28));
-      const oy = Phaser.Math.Between(-Math.floor(this.tileSize * 0.15), Math.floor(this.tileSize * 0.10));
-      const f  = this.add
-        .image(screen.x + ox, screen.y + oy, fireKeys[i % fireKeys.length])
-        .setDisplaySize(baseSize, baseSize)
-        .setDepth(SCENE_DEPTHS.player + 3)
-        .setOrigin(0.5);
+      const f = w3
+        .addBillboard(TORCH_FLAME_KEYS[i % TORCH_FLAME_KEYS.length], 0, {
+          ...FX_BILLBOARD, emissive: true, alphaTest: 0.05, emissiveBoost: 3,
+        })
+        .setPosition(wx + (Math.random() - 0.5) * 0.56, wy + (Math.random() - 0.5) * 0.3)
+        .setElevation(FX_BODY_ELEV)
+        .setDisplaySize(0.38, 0.38);
 
       this.tweens.add({
         targets: f,
-        alpha:   0,
-        y:       f.y - Math.floor(this.tileSize * 0.55),
+        alpha: 0,
+        elevation: FX_BODY_ELEV + 0.55,
         duration: 320 + i * 90,
-        ease:    'Power2.easeOut',
+        ease: 'Power2.easeOut',
         onComplete: () => { f.destroy(); },
       });
     }
@@ -2327,16 +2344,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Re-project the frozen world to the current camera anchor without advancing any gameplay.
-  // Used to redraw every frame of the dialog camera pan (update() is short-circuited then).
+  // Used to redraw every frame of the dialog camera pan (update() is short-circuited then;
+  // render3D on POST_UPDATE keeps the 3D camera itself panning).
   private reprojectStatic(): void {
-    if (!this.camera || !this.boardRenderer || !this.chunkManager) return;
-    this.updateLighting(0);
-    this.updatePlayerShadow();
+    if (!this.camera || !this.chunkManager) return;
     this.player?.setPosition(this.camera.screenCenterX, this.camera.screenCenterY);
     this.positionBackItem();
-    // Keep the firelight shadows glued to the props/trees as the camera pans during a dialog.
-    const shadowCtx = this.buildFireLightCtx();
-    this.boardRenderer.updateWorld(this.camera, this.chunkManager, this.tileSize, shadowCtx);
     this.updateFootprints();
     this.enemyManager?.render(this.tileSize, this.camera);
     this.coinManager?.render(this.tileSize, this.camera);
@@ -2344,7 +2357,6 @@ export class GameScene extends Phaser.Scene {
     this.itemManager?.render(this.tileSize, this.camera);
     this.npcManager?.render(this.tileSize, this.camera);
     this.renderProps();
-    this.castShadowPool?.update(this.collectPropCasters(), shadowCtx, this.tileSize, this.camera);
   }
 
   private renderProps(): void {
@@ -2364,11 +2376,7 @@ export class GameScene extends Phaser.Scene {
     for (const s of this.dryShrubs) s.render(this.tileSize, this.camera);
     for (const r of this.rocks) r.render(this.tileSize, this.camera);
     for (const g of this.tallGrasses) g.render(this.tileSize, this.camera);
-    for (const bomb of this.activeBombs) {
-      const s = this.camera.tileToScreen(bomb.worldX, bomb.worldY, this.tileSize);
-      const size = Math.max(10, Math.floor(this.tileSize * 0.62));
-      bomb.sprite.setPosition(s.x, s.y).setDisplaySize(size, size).setDepth(ySortDepth(bomb.worldY) - 0.3);
-    }
+    // Bombs are world-anchored billboards; nothing to reproject here.
   }
 
   private toggleShop(): void {
@@ -2451,62 +2459,55 @@ export class GameScene extends Phaser.Scene {
   // Refresh the item slung on the hero's back to match the held item (hidden when empty). Uses
   // the same per-item visual as the HUD so what you carry reads the same in both places.
   private updateBackItem(): void {
-    if (!this.backItem) return;
     if (this.heldItem === 'none') {
-      this.backItem.setVisible(false);
+      this.backItemBb?.setVisible(false);
       return;
     }
     // A lit graveto is held upright in the hand; the separate pixel-flame effect supplies
     // the fire, so the carried sprite itself always remains the plain stick.
     const torchLit = this.isTorchLit;
-    const visual = HUD_ITEM_VISUAL[this.heldItem];
+    const visual = BACK_ITEM_VISUAL_3D[this.heldItem];
+    if (!this.backItemBb) {
+      this.backItemBb = this.world3d?.addBillboard(visual.texture, visual.frame);
+      if (!this.backItemBb) return;
+    }
     // Real size: draw the item at one full tile, the same pixel scale as the hero and the
     // world sprites — no shrinking.
-    const size = this.tileSize;
-    this.backItem
+    this.backItemBb
       .setTexture(visual.texture, visual.frame)
-      .setDisplaySize(size, size)
-      .setRotation(torchLit ? 0 : -0.62) // torch stands upright; other tools ride "meio cruzado"
+      .setDisplaySize(1, 1)
+      .setAngle(torchLit ? 0 : -35.5) // torch stands upright; other tools ride "meio cruzado"
       .setVisible(true);
     this.positionBackItem();
   }
 
-  // Pin the back item high on the hero's back, anchored to screen centre (the hero is always
-  // there — breathing keeps it visually centred too — so we don't read player.y). Facing up
-  // means we see his back, so the item sits IN FRONT of the hero (whole object shows); any
-  // other facing puts it BEHIND, where the body hides all but the tip poking over the shoulder.
+  // Pin the back item high on the hero's back, riding the hero billboard. Facing up means we
+  // see his back, so the item sits IN FRONT of the hero (a hair nearer the camera → the whole
+  // object shows); any other facing tucks it BEHIND (a hair further), where the body hides all
+  // but the tip poking over the shoulder — the z-buffer does what depth-sorting did in 2D.
   // Facing comes from the movement controller (the sprite's own facing), so it never gets out
   // of sync with the hero — a bump never flips the item to the front on its own.
   private positionBackItem(): void {
-    if (!this.backItem?.visible || !this.camera) return;
-    const size = this.tileSize;
-    const heroDepth = this.player?.depth ?? SCENE_DEPTHS.player;
+    const bb = this.backItemBb;
+    const hb = this.heroBillboard;
+    if (!bb?.visible || !hb) return;
     // Lit torch: gripped upright in the hand at the hero's side, raised so the flame clears
     // the shoulder — always in front of the body (it's held out, never hidden behind him).
     if (this.isTorchLit) {
-      this.backItem.setPosition(
-        this.camera.screenCenterX + size * 0.32,
-        this.camera.screenCenterY - size * 0.18,
-      );
-      this.backItem.setDepth(heroDepth + 0.02);
+      bb.setPosition(hb.x + 0.32, hb.y + 0.02).setElevation(0.18);
       return;
     }
     const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
     // Facing up: the item sits on the visible back, drawn in front of the hero → whole object.
     // Otherwise: it rides higher and behind the hero, so only the tip clears his shoulder.
-    const offY = facingUp ? -0.12 : -0.34;
-    this.backItem.setPosition(
-      this.camera.screenCenterX - size * 0.14,
-      this.camera.screenCenterY + size * offY,
-    );
-    this.backItem.setDepth(facingUp ? heroDepth + 0.02 : heroDepth - 0.02);
+    bb.setPosition(hb.x - 0.14, hb.y + (facingUp ? 0.02 : -0.02))
+      .setElevation(facingUp ? 0.12 : 0.34);
   }
 
   // Hide the back item for the duration of a swing (reset the timer if the hero swings again),
   // then restore it via updateBackItem. positionBackItem no-ops while it's hidden.
   private hideBackItemDuringSwing(): void {
-    if (!this.backItem) return;
-    this.backItem.setVisible(false);
+    this.backItemBb?.setVisible(false);
     this.backItemSwingTimer?.remove();
     this.backItemSwingTimer = this.time.delayedCall(SWING_HIDE_MS, () => {
       this.backItemSwingTimer = undefined;
@@ -2752,36 +2753,70 @@ export class GameScene extends Phaser.Scene {
     this.hitstopMs = 0;
     this.tweens.timeScale = 1;
     // One last heavy blow before the silence.
-    this.cameras.main.shake(300, 0.012);
+    this.world3d?.shake(300, 0.26);
     // Death cuts music and even the wind to nothing; out of that silence swells the low
     // "you died" cluster, and the hall swallows it back into silence.
     getSoundManager().stopMusic();
     getSoundManager().stopAmbience();
     getSoundManager().playPlayerDeath();
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-    // update() stops running FX once dead, so clean these up here.
+    // update() stops running FX once dead, so clean these up here. The Phaser overlays matter
+    // more than they used to: the fade happens INSIDE the 3D post now, so anything still drawn
+    // on the canvas above the world would hang over the black instead of sinking with it.
     this.hideLowHealthOutlines();
     this.stopBreathing();
+    this.hideFireCompass();
+    this.npcManager?.hideExclaims();
+    // The hero's 3D body leaves the world for the elegy; his torch flame goes with it.
+    this.torchFlameBb?.setVisible(false);
 
     const { width, height } = this.scale;
     const cx = Math.floor(width / 2);
     const cy = Math.floor(height / 2);
     const D = SCENE_DEPTHS.toast;
 
-    // 1. The whole world sinks into black, behind the hero.
-    const black = this.add.rectangle(0, 0, width, height, 0x000000, 0).setOrigin(0).setDepth(D);
-    this.tweens.add({ targets: black, fillAlpha: 1, duration: 1500, ease: 'Sine.easeIn' });
+    // 1. The whole world sinks into black, behind the hero — driven from INSIDE the post
+    // (World3D.setWorldFade), so the diorama drains of colour and dims with its own bloom,
+    // fire glow and grain, instead of a flat black rectangle being pasted over the top.
+    this.world3d?.setDangerVignette(0, DANGER_VIGNETTE_COLD);
+    const fade = { t: 0 };
+    this.tweens.add({
+      targets: fade,
+      t: 1,
+      duration: 1500,
+      ease: 'Sine.easeIn',
+      onUpdate: () => this.world3d?.setWorldFade(fade.t),
+    });
 
     // 2. Only the hero remains, dead-centre on the void — then it fades away, slowly.
+    // The death elegy is a 2D screen-space scene: the (normally hidden, 3D-mirrored)
+    // Phaser hero returns for it while syncHeroBillboard hides the 3D body.
     if (this.player) this.tweens.killTweensOf(this.player); // drop leftover hurt-blink
-    this.player?.setPosition(cx, cy).setDepth(D + 1).setAlpha(1).clearTint();
+    this.player?.setPosition(cx, cy).setDepth(D + 1).setAlpha(1).clearTint().setVisible(true);
 
     // The item slung on the hero's back fades out together with him — it dies with the hero.
+    // The in-world billboard hides with the 3D body (syncHeroBillboard); its 2D twin dresses
+    // up in the same pose for the screen-space elegy.
     this.backItemSwingTimer?.remove();
     this.backItemSwingTimer = undefined;
-    if (this.backItem?.visible) {
+    if (this.backItemBb?.visible && this.backItem && this.heldItem !== 'none') {
+      this.backItemBb.setVisible(false);
+      const torchLit = this.isTorchLit;
+      const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
+      const visual = HUD_ITEM_VISUAL[this.heldItem];
+      const ts = this.tileSize;
       this.tweens.killTweensOf(this.backItem);
-      this.backItem.setDepth(D + 1);
+      this.backItem
+        .setTexture(visual.texture, visual.frame)
+        .setDisplaySize(ts, ts)
+        .setRotation(torchLit ? 0 : -0.62)
+        .setPosition(
+          torchLit ? cx + ts * 0.32 : cx - ts * 0.14,
+          torchLit ? cy - ts * 0.18 : cy + ts * (facingUp ? -0.12 : -0.34),
+        )
+        .setAlpha(1)
+        .setDepth(D + 1)
+        .setVisible(true);
       this.tweens.add({ targets: this.backItem, alpha: 0, duration: 3200, delay: 900, ease: 'Sine.easeIn' });
     }
 
@@ -2825,328 +2860,30 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // Position + texel size for the low-res light overlays, bled LIGHT_MARGIN texels past every
-  // screen edge (see the constant) so the viewport sits strictly inside the filled interior.
-  private lightOverlayGeom(width: number, height: number): { x: number; y: number; texW: number; texH: number } {
-    return {
-      x: -LIGHT_MARGIN * LIGHT_DOWNSCALE,
-      y: -LIGHT_MARGIN * LIGHT_DOWNSCALE,
-      texW: Math.ceil(width / LIGHT_DOWNSCALE) + LIGHT_MARGIN * 2,
-      texH: Math.max(1, Math.ceil(height / LIGHT_DOWNSCALE)) + LIGHT_MARGIN * 2,
-    };
-  }
-
   private initLighting(): void {
-    // Smooth radial gradient light stamp (white centre → transparent edge). It stays smooth;
-    // the pixel-art chunkiness comes from the low-resolution darkness overlay below, not here.
-    const size = 64;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d')!;
-    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    // HARD, discrete rings (duplicate stops = no smooth blend). A stepped SNES-era "lantern"
-    // with a few flat brightness tiers, not a soft PS5 glow. Combined with the low-res overlay
-    // below this reads as chunky, banded pixel light.
-    grad.addColorStop(0.00, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.45, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.45, 'rgba(255,255,255,0.66)');
-    grad.addColorStop(0.68, 'rgba(255,255,255,0.66)');
-    grad.addColorStop(0.68, 'rgba(255,255,255,0.33)');
-    grad.addColorStop(0.88, 'rgba(255,255,255,0.33)');
-    grad.addColorStop(0.88, 'rgba(255,255,255,0)');
-    grad.addColorStop(1.00, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-    if (this.textures.exists('_campfire_light')) this.textures.remove('_campfire_light');
-    this.textures.addCanvas('_campfire_light', canvas);
-    this.textures.get('_campfire_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    // Real lighting lives in the 3D renderer (cold ambient night, warm fire point lights
+    // with true breathing cast shadows, hero glow — all quantized into pixel-art bands;
+    // see render3d/World3D.ts + pixelArtLight.ts), and so do the world FX that used to be
+    // painted flat over the canvas: the torch flame is a billboard, the danger vignette and
+    // the death fade are post uniforms. What's left here are the hero-anchored 3D helpers.
 
-    // Warm firelight stamp — a smooth amber radial (hot core → transparent edge). Drawn ADDITIVELY
-    // into warmOverlay so it warms + brightens the ground near a flame instead of merely undimming
-    // it. Smooth here on purpose: the low-res overlay below turns it chunky like the rest of the
-    // light. The colour is already amber, so it needs no tint when stamped.
-    const warmCanvas = document.createElement('canvas');
-    warmCanvas.width = size;
-    warmCanvas.height = size;
-    const wctx = warmCanvas.getContext('2d')!;
-    const wgrad = wctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    wgrad.addColorStop(0.00, 'rgba(255,170,80,1)');
-    wgrad.addColorStop(0.35, 'rgba(255,140,55,0.72)');
-    wgrad.addColorStop(0.70, 'rgba(220,90,40,0.28)');
-    wgrad.addColorStop(1.00, 'rgba(200,70,30,0)');
-    wctx.fillStyle = wgrad;
-    wctx.fillRect(0, 0, size, size);
-    if (this.textures.exists('_warm_light')) this.textures.remove('_warm_light');
-    this.textures.addCanvas('_warm_light', warmCanvas);
-    this.textures.get('_warm_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-    // Fog-lift stamp — a SMOOTH, wide radial used to erase the distance-fog around a light. Unlike
-    // the stepped lantern stamp above, this fades gradually (full clear at the core → no clear at
-    // the rim) so the gloom creeps back in gently, not in hard rings, the farther you walk out.
-    const fogCanvas = document.createElement('canvas');
-    fogCanvas.width = size;
-    fogCanvas.height = size;
-    const fctx = fogCanvas.getContext('2d')!;
-    const fgrad = fctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    fgrad.addColorStop(0.00, 'rgba(255,255,255,1)');
-    fgrad.addColorStop(0.30, 'rgba(255,255,255,0.9)');
-    fgrad.addColorStop(0.60, 'rgba(255,255,255,0.45)');
-    fgrad.addColorStop(0.82, 'rgba(255,255,255,0.12)');
-    fgrad.addColorStop(1.00, 'rgba(255,255,255,0)');
-    fctx.fillStyle = fgrad;
-    fctx.fillRect(0, 0, size, size);
-    if (this.textures.exists('_fog_light')) this.textures.remove('_fog_light');
-    this.textures.addCanvas('_fog_light', fogCanvas);
-    this.textures.get('_fog_light').setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-    // Torch-tip flame: hand-placed 2×2 colour blocks, using a four-colour retro palette.
-    // No paths or gradients: the jagged silhouette remains recognisably pixel art when scaled.
-    const fw = 14;
-    const fh = 20;
-    const flameCanvas = document.createElement('canvas');
-    flameCanvas.width = fw;
-    flameCanvas.height = fh;
-    const flx = flameCanvas.getContext('2d')!;
-    flx.imageSmoothingEnabled = false;
-    const pixels: ReadonlyArray<readonly [number, number, number, number, string]> = [
-      [6, 0, 2, 2, '#a52b20'],
-      [4, 2, 4, 2, '#d44720'], [8, 2, 2, 2, '#a52b20'],
-      [4, 4, 6, 2, '#e96524'],
-      [2, 6, 8, 2, '#d44720'], [10, 6, 2, 2, '#a52b20'],
-      [2, 8, 10, 4, '#e96524'],
-      [4, 8, 4, 4, '#ffb13b'],
-      [0, 12, 12, 4, '#d44720'],
-      [2, 12, 8, 4, '#e96524'], [4, 12, 4, 4, '#ffb13b'],
-      [2, 16, 8, 2, '#a52b20'], [4, 16, 4, 2, '#e96524'],
-    ];
-    for (const [x, y, width, height, color] of pixels) {
-      flx.fillStyle = color;
-      flx.fillRect(x, y, width, height);
-    }
-    if (this.textures.exists('_torch_flame')) this.textures.remove('_torch_flame');
-    this.textures.addCanvas('_torch_flame', flameCanvas);
-    this.textures.get('_torch_flame').setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-    const { width, height } = this.scale;
-    const g = this.lightOverlayGeom(width, height);
-
-    // Darkness + light holes render into a LOW-RESOLUTION texture (1/LIGHT_DOWNSCALE) that is
-    // scaled back up with NEAREST, so the whole light — body and edge — reads as chunky pixel
-    // art. Every erase coordinate/radius in updateLighting is divided by LIGHT_DOWNSCALE.
-    this.darknessOverlay = this.add
-      .renderTexture(g.x, g.y, g.texW, g.texH)
-      .setOrigin(0)
-      .setScale(LIGHT_DOWNSCALE)
-      .setDepth(SCENE_DEPTHS.lighting);
-    this.darknessOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-    // Warm firelight layer, one notch above the darkness so its amber pools sit on the already
-    // dimmed ground. ADD blend: transparent everywhere except where a fire stamps its glow.
-    this.warmOverlay = this.add
-      .renderTexture(g.x, g.y, g.texW, g.texH)
-      .setOrigin(0)
-      .setScale(LIGHT_DOWNSCALE)
-      .setDepth(SCENE_DEPTHS.lighting + 0.1)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    this.warmOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-    // Distance fog — a deeper darkness stacked just above the base dim (below the warm layer). It
-    // is full everywhere each frame, then every light erases a wide halo into it, so the dark grows
-    // thicker the farther a tile is from any flame. Same low-res texture → chunky pixel fog.
-    this.fogOverlay = this.add
-      .renderTexture(g.x, g.y, g.texW, g.texH)
-      .setOrigin(0)
-      .setScale(LIGHT_DOWNSCALE)
-      .setDepth(SCENE_DEPTHS.lighting + 0.05);
-    this.fogOverlay.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-
-    // Danger vignette stamp — a WHITE radial (clear centre → solid edge) stretched over the
-    // whole screen and tinted at runtime (cold night-blue → blood-red), so one texture serves
-    // the entire danger ramp. White here; updateDangerVignette owns colour and alpha.
-    const vigSize = 320;
-    const vigCanvas = document.createElement('canvas');
-    vigCanvas.width = vigSize;
-    vigCanvas.height = vigSize;
-    const vctx = vigCanvas.getContext('2d')!;
-    const vgrad = vctx.createRadialGradient(
-      vigSize / 2, vigSize / 2, 0,
-      vigSize / 2, vigSize / 2, vigSize / 2,
-    );
-    vgrad.addColorStop(0.00, 'rgba(255,255,255,0)');
-    vgrad.addColorStop(0.52, 'rgba(255,255,255,0)');
-    vgrad.addColorStop(0.78, 'rgba(255,255,255,0.45)');
-    vgrad.addColorStop(1.00, 'rgba(255,255,255,1)');
-    vctx.fillStyle = vgrad;
-    vctx.fillRect(0, 0, vigSize, vigSize);
-    if (this.textures.exists('_danger_vignette')) this.textures.remove('_danger_vignette');
-    this.textures.addCanvas('_danger_vignette', vigCanvas);
-
-    // Sits above every lighting layer, below the UI: the dark closing in on the screen itself.
-    this.dangerVignette = this.add
-      .image(0, 0, '_danger_vignette')
-      .setOrigin(0)
-      .setDepth(SCENE_DEPTHS.lighting + 0.5)
-      .setVisible(false);
-
-    // Off-display-list images used solely as the erase / warm-draw stamps
-    this.lightCircleImg = this.make.image({ key: '_campfire_light', add: false });
-    this.warmLightImg = this.make.image({ key: '_warm_light', add: false });
-    this.fogLightImg = this.make.image({ key: '_fog_light', add: false });
-
-    // Pool of cast-shadow silhouettes for the runtime props.
-    this.castShadowPool = new CastShadowPool(this, SCENE_DEPTHS.castShadow);
-
-    this.playerShadow = this.add
-      .ellipse(0, 0, 1, 1, 0x000000, 0.3)
-      .setDepth(SCENE_DEPTHS.decorBelowPlayer + 0.5)
-      .setVisible(false);
+    // The hero's contact shadow — a flat dark ellipse riding the hero billboard.
+    this.playerShadow = this.world3d?.addGroundEllipse(0.34, 0.32, 0.34);
+    this.playerShadow?.setVisible(false);
 
     // Red low-health outline — one red-filled copy of the hero per offset direction, drawn just
-    // behind the hero so only the border shows. Synced to the hero's frame/pose each tick.
+    // behind the hero billboard so only the border shows. Synced to the hero's pose each tick.
+    // Emissive: the outline is a flat UI-ish colour, never shaded by the world's lights.
+    this.lowHealthOutlines.forEach((o) => o.destroy());
     this.lowHealthOutlines.length = 0;
-    for (let i = 0; i < OUTLINE_DIRS.length; i++) {
-      this.lowHealthOutlines.push(
-        this.add.sprite(0, 0, ASSET_KEYS.hero, HERO_FRAMES.idleDown).setVisible(false),
-      );
-    }
-  }
-
-  private updateLighting(delta: number): void {
-    if (!this.darknessOverlay || !this.lightCircleImg) return;
-
-    // Perlin-free flicker: random-walk on radius scale
-    this.lightFlicker.velocity += (Math.random() - 0.5) * 0.018;
-    this.lightFlicker.velocity *= 0.85;
-    this.lightFlicker.radius = Phaser.Math.Clamp(
-      this.lightFlicker.radius + this.lightFlicker.velocity * (delta / 16),
-      0.80, 1.20,
-    );
-
-    const rt = this.darknessOverlay;
-    rt.clear();
-    rt.fill(0x06061a, 1);
-    rt.setAlpha(0.45);
-
-    if (!this.camera) return;
-
-    const S = LIGHT_DOWNSCALE;
-    const light = this.lightCircleImg;
-    // Punch a light hole at screen (sx, sy) of the given screen radius. The overlay texture is
-    // 1/S the screen size, so coordinates and sizes are divided by S before erasing.
-    const eraseLight = (sx: number, sy: number, radius: number): void => {
-      light.setDisplaySize((radius * 2) / S, (radius * 2) / S);
-      rt.erase(light, sx / S + LIGHT_MARGIN, sy / S + LIGHT_MARGIN);
-    };
-
-    // Warm firelight layer: cleared each frame, then fire sources stamp an amber pool into it.
-    const warm = this.warmOverlay;
-    const warmImg = this.warmLightImg;
-    warm?.clear();
-    const drawWarm = (sx: number, sy: number, radius: number, intensity: number): void => {
-      if (!warm || !warmImg || intensity <= 0) return;
-      warmImg.setAlpha(intensity);
-      warmImg.setDisplaySize((radius * 2) / S, (radius * 2) / S);
-      warm.draw(warmImg, sx / S + LIGHT_MARGIN, sy / S + LIGHT_MARGIN);
-    };
-
-    // Distance fog: full deep dark each frame, then every light pushes it back in a wide halo. The
-    // farther a tile is from any glow, the less the fog is lifted → the darker it stays (fog-in).
-    const fog = this.fogOverlay;
-    const fogImg = this.fogLightImg;
-    if (fog) {
-      fog.clear();
-      fog.fill(FOG_COLOR, 1);
-      fog.setAlpha(FOG_MAX_ALPHA);
-    }
-    // Clear the fog around a light: `strength` (0..1) scales the lift (for the blooming cut-scene
-    // fire); `scale` widens the halo past the light's own glow so the lit pool sits inside clear air.
-    const liftFog = (sx: number, sy: number, radius: number, strength = 1): void => {
-      if (!fog || !fogImg || strength <= 0) return;
-      fogImg.setAlpha(strength);
-      const r = radius * FOG_LIFT_SCALE;
-      fogImg.setDisplaySize((r * 2) / S, (r * 2) / S);
-      fog.erase(fogImg, sx / S + LIGHT_MARGIN, sy / S + LIGHT_MARGIN);
-    };
-
-    // Campfire glow (flickers) — only lit fires punch a hole in the dark AND warm the ground.
-    const cfRadius = this.tileSize * LIGHT_RADIUS_TILES * this.lightFlicker.radius;
-    for (const cf of this.campfires) {
-      if (!cf.isLit) continue;
-      const cfScreen = this.camera.tileToScreen(cf.worldX, cf.worldY, this.tileSize);
-      eraseLight(cfScreen.x, cfScreen.y, cfRadius);
-      liftFog(cfScreen.x, cfScreen.y, cfRadius);
-      drawWarm(cfScreen.x, cfScreen.y, cfRadius * WARM_POOL_SCALE, WARM_INTENSITY);
-    }
-
-    // First-campfire cut-scene: the fire isn't "lit" yet, so its glow blooms open slowly here,
-    // scaled by the cut-scene progress (0..1).
-    if (this.cutsceneFireLight) {
-      const cl = this.cutsceneFireLight;
-      const s = this.camera.tileToScreen(cl.worldX, cl.worldY, this.tileSize);
-      const r = this.tileSize * LIGHT_RADIUS_TILES * cl.progress;
-      eraseLight(s.x, s.y, r);
-      liftFog(s.x, s.y, r, cl.progress);
-      drawWarm(s.x, s.y, r * WARM_POOL_SCALE, WARM_INTENSITY * cl.progress);
-    }
-
-    // Hero ambient glow — pinned at screen centre. Fades out during the campfire cut-scene
-    // (cutsceneHeroLight → 0) so the blooming fire is the only light on screen.
-    const bodyRadius = this.tileSize * LIGHT_RADIUS_TILES;
-    if (this.cutsceneHeroLight > 0.001) {
-      eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius * this.cutsceneHeroLight);
-      liftFog(this.camera.screenCenterX, this.camera.screenCenterY, bodyRadius, this.cutsceneHeroLight);
-      // Carried torch: the hero's glow turns into real firelight — same amber pool and the
-      // same flicker as a campfire, walking with him. The light DIES WITH THE FUEL: the pool
-      // closes in from full size toward TORCH_MIN_LIGHT_FRAC and cools as the flame runs
-      // down, and the gutter jitter (torchGutter, driven by updateTorchFx) shakes it near
-      // the end — the shrinking circle of firelight is the fuel gauge.
-      if (this.isTorchLit) {
-        const fuel = TORCH_MIN_LIGHT_FRAC + (1 - TORCH_MIN_LIGHT_FRAC) * this.torchFuelFrac;
-        const torchRadius = cfRadius * this.cutsceneHeroLight * fuel * this.torchGutter.level;
-        eraseLight(this.camera.screenCenterX, this.camera.screenCenterY, torchRadius);
-        drawWarm(
-          this.camera.screenCenterX, this.camera.screenCenterY,
-          torchRadius * WARM_POOL_SCALE,
-          WARM_INTENSITY * this.cutsceneHeroLight * (0.55 + 0.45 * this.torchFuelFrac),
+    if (this.world3d) {
+      for (let i = 0; i < OUTLINE_DIRS.length; i++) {
+        this.lowHealthOutlines.push(
+          this.world3d.addBillboard('hero', HERO_FRAMES.idleDown, { emissive: true }).setVisible(false),
         );
       }
     }
 
-    // NPCs carry the same glow. Undead carry NO light: they are creatures of the dark and
-    // only become visible when they step into someone else's glow.
-    for (const pos of this.npcManager?.getActiveWorldPositions() ?? []) {
-      const s = this.camera.tileToScreen(pos.worldX, pos.worldY, this.tileSize);
-      eraseLight(s.x, s.y, bodyRadius);
-      liftFog(s.x, s.y, bodyRadius);
-    }
-
-    // Coins — a smaller hole.
-    const coinRadius = this.tileSize * 1.8;
-    for (const pos of this.coinManager?.getActiveWorldPositions() ?? []) {
-      const s = this.camera.tileToScreen(pos.worldX, pos.worldY, this.tileSize);
-      eraseLight(s.x, s.y, coinRadius);
-    }
-
-    // Lava glows: each tile punches a small warm hole (molten rock is its own light) and, being
-    // molten, casts an even hotter amber pool than a campfire.
-    const lavaRadius = this.tileSize * 1.5;
-    for (const lv of this.lavaTiles) {
-      const s = this.camera.tileToScreen(lv.worldX, lv.worldY, this.tileSize);
-      eraseLight(s.x, s.y, lavaRadius);
-      liftFog(s.x, s.y, lavaRadius);
-      drawWarm(s.x, s.y, lavaRadius * 1.15, WARM_INTENSITY);
-    }
-  }
-
-  private updatePlayerShadow(): void {
-    if (!this.playerShadow || !this.camera) return;
-    const cx = this.camera.screenCenterX;
-    const cy = this.camera.screenCenterY;
-    this.playerShadow
-      .setVisible(!this.isDead)
-      .setPosition(cx, cy + Math.round(this.tileSize * 0.34))
-      .setDisplaySize(this.tileSize * 0.6, this.tileSize * 0.26);
   }
 
   // Damage heartbeat: ANY missing health draws a pulsing PIXEL OUTLINE around the hero — never
@@ -3155,8 +2892,8 @@ export class GameScene extends Phaser.Scene {
   // harder the closer to death.
   private updateLowHealthFx(delta: number): void {
     const hurt = !this.isDead && this.playerHealth > 0 && this.playerHealth < this.playerMaxHealth;
-    const player = this.player;
-    if (!hurt || !player) {
+    const hb = this.heroBillboard;
+    if (!hurt || !hb) {
       this.hideLowHealthOutlines();
       if (!hurt) this.heartbeatPhase = 0;
       return;
@@ -3172,22 +2909,21 @@ export class GameScene extends Phaser.Scene {
     // Sharpen the sine into a "thump": calm baseline with a quick spike.
     const beat = Math.pow((Math.sin(this.heartbeatPhase) + 1) / 2, 3) * intensity;
 
-    const w = Math.max(2, Math.round(this.tileSize * 0.08)); // outline thickness (screen px)
+    const w = 0.08; // outline thickness in tiles (was tileSize * 0.08 screen px)
     const alpha = Math.min(1, (low ? 0.2 : 0.14) + beat); // always faintly present, spiking on the beat
     const color = low ? 0xff2a2a : 0xffd23f; // red = danger, yellow = "you've taken damage"
-    const frameName = player.frame.name;
-    const key = player.texture.key;
-    const depth = player.depth - 0.01; // just behind the hero, so only the border shows
     for (let i = 0; i < this.lowHealthOutlines.length; i++) {
       const [dx, dy] = OUTLINE_DIRS[i];
       this.lowHealthOutlines[i]
-        .setTexture(key, frameName)
-        .setFlipX(player.flipX)
-        .setOrigin(player.originX, player.originY)
-        .setScale(player.scaleX, player.scaleY)
-        .setPosition(player.x + dx * w, player.y + dy * w)
-        .setDepth(depth)
-        .setTintFill(color) // solid silhouette in the tier's color
+        .setTexture(hb.texKey, hb.frame)
+        .setFlipX(hb.flipX)
+        .setDisplaySize(Math.abs(hb.displayWidth), hb.displayHeight)
+        // Screen-up offsets become elevation (screen +y is down → negative elevation);
+        // z sits a hair behind the hero so only the border shows through (the z-buffer
+        // plays the old "depth - 0.01" role).
+        .setPosition(hb.x + dx * w, hb.y - 0.01)
+        .setElevation(hb.elevation - dy * w)
+        .setTintFill(color)
         .setAlpha(alpha)
         .setVisible(true);
     }
@@ -3256,11 +2992,11 @@ export class GameScene extends Phaser.Scene {
   // feels the spawn cadence ramping long before the horde itself shows it. Near a fire the
   // meter drains (~2.5s) and the vignette melts away with it.
   private updateDangerVignette(delta: number): void {
-    const v = this.dangerVignette;
-    if (!v) return;
+    const w3 = this.world3d;
+    if (!w3) return;
     const danger = this.spawnDirector?.danger ?? 0;
     if (danger < 0.02 || this.isDead || this.cutsceneActive) {
-      v.setVisible(false);
+      w3.setDangerVignette(0, DANGER_VIGNETTE_COLD);
       this.dangerPulsePhase = 0;
       return;
     }
@@ -3277,11 +3013,7 @@ export class GameScene extends Phaser.Scene {
     const blood = Phaser.Display.Color.ValueToColor(DANGER_VIGNETTE_BLOOD);
     const mix = Phaser.Display.Color.Interpolate.ColorWithColor(cold, blood, 100, heat * 100);
 
-    v.setDisplaySize(this.scale.width, this.scale.height)
-      .setPosition(0, 0)
-      .setTint(Phaser.Display.Color.GetColor(mix.r, mix.g, mix.b))
-      .setAlpha(alpha)
-      .setVisible(true);
+    w3.setDangerVignette(alpha, Phaser.Display.Color.GetColor(mix.r, mix.g, mix.b));
   }
 
   private startBreathing(): void {
