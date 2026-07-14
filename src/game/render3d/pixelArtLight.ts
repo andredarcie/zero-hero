@@ -306,7 +306,9 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
              float rnd = fract(sin(dot(cell, vec2(41.3, 289.1))) * 43758.5453);
              float ph = fract(rnd + uFlowTime * 0.20);
              float flash = smoothstep(0.93, 1.0, sin(ph * 6.2831853) * 0.5 + 0.5);
-             gl_FragColor.rgb += vec3(0.45, 0.58, 0.82) * flash * 0.95;
+             // 0.38, not the original 0.95: this adds BEFORE tone mapping, so at 0.95 a
+             // glint pixel cleared the bloom threshold and the river read as neon sparks.
+             gl_FragColor.rgb += vec3(0.45, 0.58, 0.82) * flash * 0.38;
            }`,
         );
       }

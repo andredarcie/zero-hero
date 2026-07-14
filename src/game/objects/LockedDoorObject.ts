@@ -22,7 +22,10 @@ export class LockedDoorObject {
     this.sprite = world3d()
       .addBillboard('locked-door-object', 0, { groundShadow: true })
       .setPosition(worldX, worldY)
-      .setDisplaySize(0.98, 0.98);
+      .setDisplaySize(0.98, 0.98)
+      // Same treatment as the rocks: the door's white bars bloomed under the night
+      // ambient. Neutral so the bars stay white — only the glow goes, not the colour.
+      .setTint(0xcfcfcf);
   }
 
   /** The tile is impassable while the door is shut. */

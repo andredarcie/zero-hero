@@ -28,7 +28,13 @@ export class RockObject {
     this.sprite = world3d()
       .addBillboard('rock', 0, { groundShadow: true })
       .setPosition(worldX, worldY)
-      .setDisplaySize(0.88, 0.88);
+      .setDisplaySize(0.88, 0.88)
+      // The rock art is near-white, and a white sprite under the night ambient blows out
+      // to a glaring bloom halo (the "neon marble" at the north shrine). A NEUTRAL light
+      // grey keeps the hue white — the rock still reads white against the dark — while
+      // pulling the peak just under the bloom threshold so it stops glowing. (User: the
+      // white must STAY white; only the glow goes.)
+      .setTint(0xc9c9c9);
   }
 
   public get blocking(): boolean {

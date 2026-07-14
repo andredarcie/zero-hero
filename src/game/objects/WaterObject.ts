@@ -105,7 +105,11 @@ export class WaterObject {
       })
       .setPosition(worldX, worldY)
       .setDisplaySize(1, 1)
-      .setTint(0x9fb4dd); // cool moonlit sheen, like the 2D night grade gave it
+      // Night water is DARK with moonlit glints, not a bright ribbon: the art's daylight
+      // blue at the old #9fb4dd read as neon cutting through the night (and its sparkle
+      // pixels fed the bloom). Slate-navy keeps the river legible as water while sitting
+      // in the same value range as the rest of the nocturnal palette.
+      .setTint(0x66779e);
     this.animTimer = scene.time.addEvent({
       delay: RIPPLE_MS + Phaser.Math.Between(-40, 40),
       callback: this.nextFrame,

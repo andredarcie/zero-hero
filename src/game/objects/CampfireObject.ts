@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
-import { world3d, type FireLight3D } from '@/game/render3d/World3D';
+import { FX_DOT_TEXTURE, world3d, type FireLight3D } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 const FRAME_DURATION = 140; // ms per animation frame
@@ -13,9 +13,26 @@ const GLOW_TINT = 0xffbb33;
 const GLOW_ALPHA = 0.34;
 
 // An unlit campfire is cold, dead wood: the same fire sprite tinted dark ash-brown with no
-// glow and no animation, so it reads as charred logs waiting for a flame.
-const DEAD_TINT = 0x2a2016;
-const DEAD_ALPHA = 0.85;
+// flame and no animation, so it reads as charred logs waiting for a flame. Lifted from
+// #2a2016 — at that value the pile was a black smudge on the night ground, and the object
+// the whole loop is about FINDING had no visual presence at all.
+const DEAD_TINT = 0x3b2c1f;
+const DEAD_ALPHA = 0.9;
+
+// …and the logs are not entirely dead: a stubborn ember pulses deep in the pile — the same
+// additive glow mesh the lit fire uses, retextured to a soft dot and dimmed way down. It is
+// a beacon, not a light: it never touches the light pool, so the rule that nothing may add
+// a light at runtime stays intact, and it gives the player something to walk toward in the
+// dark. The pulse is slow — a heartbeat, not a flicker — so it cannot be confused with a
+// fire that is actually burning.
+const EMBER_TINT = 0xd44a1e;
+// Bright enough to read from across a dark clearing even at the pulse's LOW point —
+// at 0.05..0.13 the beacon only existed for half of each beat, which on a still frame
+// (or a quick glance) is the same as not existing.
+const EMBER_ALPHA_LOW = 0.11;
+const EMBER_ALPHA_HIGH = 0.24;
+const EMBER_PULSE_MS = 1400;
+const EMBER_SCALE = 1.4; // of SIZE — a small mound of warmth, far under the lit glow's 2.2
 
 const SIZE = 0.88; // tiles
 const GLOW_SCALE = 2.2;
@@ -62,7 +79,35 @@ export class CampfireObject {
       this.startAnim();
     } else {
       this.sprite.setTint(DEAD_TINT).setAlpha(DEAD_ALPHA);
+      this.startEmber();
     }
+  }
+
+  /** The dead pile's pulsing ember (see EMBER_TINT above). Reuses the glow mesh. */
+  private startEmber(): void {
+    this.glow
+      .setTexture(FX_DOT_TEXTURE)
+      .setTint(EMBER_TINT)
+      .setDisplaySize(SIZE * EMBER_SCALE, SIZE * EMBER_SCALE)
+      .setAlpha(EMBER_ALPHA_LOW)
+      .setVisible(true);
+    this.scene.tweens.add({
+      targets: this.glow,
+      alpha: EMBER_ALPHA_HIGH,
+      duration: EMBER_PULSE_MS,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  /** Back from ember duty to the lit fire's warm halo (texture, tint, size). */
+  private restoreGlow(): void {
+    this.scene.tweens.killTweensOf(this.glow);
+    this.glow
+      .setTexture(FIRE_TEXTURES[this.frameIndex])
+      .setTint(GLOW_TINT)
+      .setDisplaySize(SIZE * GLOW_SCALE, SIZE * GLOW_SCALE);
   }
 
   public get isLit(): boolean {
@@ -75,6 +120,7 @@ export class CampfireObject {
   public igniteProgress(t: number): void {
     if (this.lit) return;
     const c = Phaser.Math.Clamp(t, 0, 1);
+    this.restoreGlow(); // the ember hands over to the warming halo
     if (c > 0.02) this.startAnim();
     const warm = Phaser.Display.Color.Interpolate.ColorWithColor(
       Phaser.Display.Color.IntegerToColor(DEAD_TINT),
@@ -124,7 +170,8 @@ export class CampfireObject {
     this.fireLight.setLit(true);
     this.fireLight.setIntensityScale(1);
 
-    // Glow blooms in from nothing to its resting alpha.
+    // Glow blooms in from nothing to its resting alpha (ember duty ends here).
+    this.restoreGlow();
     this.glow.setVisible(true).setAlpha(0);
     this.scene.tweens.killTweensOf(this.glow);
     this.scene.tweens.add({
