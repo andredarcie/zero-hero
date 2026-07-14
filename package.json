@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "generate:world": "tsx scripts/generateWorld.ts",
+    "generate:lab": "node scripts/gen-lab.mjs",
     "lint": "eslint . --ext .ts",
     "playtest": "node playtest/run.mjs",
     "playtest:text": "node playtest/run.mjs text-legibility",

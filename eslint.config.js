@@ -11,7 +11,7 @@ export default [
   {
     // Playtest harness: plain Node ESM scripts that also embed browser-context callbacks
     // (page.evaluate). Give them both Node and browser globals.
-    files: ['playtest/**/*.mjs', 'tools/**/*.mjs'],
+    files: ['playtest/**/*.mjs', 'tools/**/*.mjs', 'scripts/**/*.mjs'],
     languageOptions: {
       sourceType: 'module',
       globals: { ...globals.node, ...globals.browser },

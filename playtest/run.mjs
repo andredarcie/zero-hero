@@ -80,8 +80,9 @@ const main = async () => {
 
       try {
         // `?play` boots straight into the GameScene (dev only), skipping the language
-        // pick, the title and the wizard intro — keying past them was flaky.
-        await driver.open(scenario.needsGame ? '/?play' : '/');
+        // pick, the title and the wizard intro — keying past them was flaky. A scenario
+        // may override the entry route (e.g. the puzzle lab enters via /lab?play).
+        await driver.open(scenario.route ?? (scenario.needsGame ? '/?play' : '/'));
         if (scenario.needsGame) await driver.startGame();
         await scenario.run({ driver, shot, assert, log });
       } catch (err) {

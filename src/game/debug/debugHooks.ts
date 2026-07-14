@@ -23,6 +23,8 @@ export interface GameDebugState {
   shopOpen: boolean;
   itemGetOpen: boolean;
   isDead: boolean;
+  /** How many campfires in the loaded world are currently lit (puzzle progress). */
+  litFires: number;
   /** The dark-siege loop: near a campfire = safe; in the dark the danger meter (0..1)
    *  fills and undead spawn around the hero (see UndeadSpawnDirector). */
   safety: { safe: boolean; danger: number; undeadCount: number };

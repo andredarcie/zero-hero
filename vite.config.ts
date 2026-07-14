@@ -8,6 +8,14 @@ import { defineConfig, type Plugin } from 'vite';
 
 const levelsDir = fileURLToPath(new URL('./levels', import.meta.url));
 const worldJsonPath = fileURLToPath(new URL('./public/world.json', import.meta.url));
+const labJsonPath = fileURLToPath(new URL('./public/lab.json', import.meta.url));
+
+// The world API serves exactly two whitelisted files: the real overworld and the /lab
+// puzzle-laboratory sandbox. Anything else in ?file= is rejected.
+const WORLD_FILES: Record<string, string> = {
+  world: worldJsonPath,
+  lab: labJsonPath,
+};
 
 const sanitizeFileName = (fileName: string): string | null => {
   if (!/^[A-Za-z0-9._-]+\.json$/u.test(fileName)) {
@@ -100,18 +108,27 @@ const levelsApiPlugin = (): Plugin => ({
   },
 });
 
-// Read/write the single authored world.json (public/world.json). The world editor loads
-// via GET and persists via PUT; the game reads the same file as a static asset. Dev-only,
-// like the levels API above.
+// Read/write the authored world files. The world editor (/editor) loads public/world.json;
+// the puzzle lab (/lab) loads public/lab.json — selected via ?file=. GET loads, PUT persists;
+// the game reads the same files as static assets. Dev-only, like the levels API above.
 const worldApiPlugin = (): Plugin => ({
   name: 'world-api',
   configureServer(server) {
     server.middlewares.use('/api/world', async (req, res) => {
       const method = req.method ?? 'GET';
+      const fileId = new URL(req.url ?? '/', 'http://localhost').searchParams.get('file') ?? 'world';
+      const targetPath = WORLD_FILES[fileId];
 
       try {
+        if (!targetPath) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Arquivo de mundo invalido' }));
+          return;
+        }
+
         if (method === 'GET') {
-          const content = await fs.readFile(worldJsonPath, 'utf8');
+          const content = await fs.readFile(targetPath, 'utf8');
           res.setHeader('Content-Type', 'application/json');
           res.end(content);
           return;
@@ -120,7 +137,7 @@ const worldApiPlugin = (): Plugin => ({
         if (method === 'PUT') {
           const body = await readRequestBody(req);
           const parsed = JSON.parse(body) as object;
-          await fs.writeFile(worldJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+          await fs.writeFile(targetPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
 
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ ok: true }));

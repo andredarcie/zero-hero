@@ -23,6 +23,7 @@ import {
   TIMINGS,
   TORCH_BURN_MS,
 } from '@/game/constants';
+import type { AppMode } from '@/game/config';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
@@ -413,9 +414,11 @@ export class GameScene extends Phaser.Scene {
     this.chunkManager = new ChunkManager();
     const getContent = (cx: number, cy: number): ScreenContent => getChunkContent(cx, cy);
     // No enemy lives in the authored world: every skull is summoned around the hero by the
-    // spawn director while they linger in the dark, away from campfires.
+    // spawn director while they linger in the dark, away from campfires. The puzzle lab
+    // (/lab) runs WITHOUT the siege: skulls respawning mid-test are pure noise when the
+    // point is validating a puzzle idea — test darkness pressure in the real world instead.
     this.enemyManager = new EnemyManager(this);
-    this.spawnDirector = new UndeadSpawnDirector();
+    this.spawnDirector = this.registry.get('appMode') === 'lab' ? undefined : new UndeadSpawnDirector();
     this.playerSafe = true;
     this.healthRegenTimer = 0;
     this.firstCampfireLit = false;
@@ -527,7 +530,12 @@ export class GameScene extends Phaser.Scene {
     // Live playtest launched from the world editor: ESC stops the run and wakes the
     // sleeping EditorScene, with the in-memory (possibly unsaved) world still loaded.
     // In the real game ESC pauses instead (plus a discreet touch button on mobile).
-    if (this.registry.get('appMode') === 'editor') {
+    // The lab only gets the return handler when it actually came FROM the editor —
+    // `/lab?play` boots the GameScene directly, with no editor scene to wake.
+    const appMode = this.registry.get('appMode') as AppMode | undefined;
+    const launchedFromEditor = appMode === 'editor'
+      || (appMode === 'lab' && (this.scene.isActive('editor') || this.scene.isSleeping('editor')));
+    if (launchedFromEditor) {
       this.enableEditorReturn();
     } else {
       this.input.keyboard?.on('keydown-ESC', () => this.openPauseMenu());
@@ -701,6 +709,7 @@ export class GameScene extends Phaser.Scene {
         shopOpen: this.shopOpen,
         itemGetOpen: this.itemGetOpen,
         isDead: this.isDead,
+        litFires: this.campfires.filter((cf) => cf.isLit).length,
         safety: {
           safe: this.playerSafe,
           danger: this.spawnDirector?.danger ?? 0,

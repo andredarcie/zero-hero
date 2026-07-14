@@ -8,7 +8,7 @@ import { GameScene } from '@/game/scenes/GameScene';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropKind } from '@/game/world/worldSchema';
 import { setWorldData } from '@/game/world/WorldData';
-import { loadWorld, saveWorld } from '@/game/worldApi';
+import { loadWorld, saveWorld, type WorldFileId } from '@/game/worldApi';
 
 // World-editor scene: the Phaser side of the engine. It renders the whole authored world
 // as one pannable/zoomable tilemap and translates pointer gestures into EditorStore
@@ -154,6 +154,18 @@ export class EditorScene extends Phaser.Scene {
 
   // ── Boot ────────────────────────────────────────────────────────────────
 
+  // The /lab route runs this same scene over the puzzle-laboratory sandbox file instead of
+  // the real overworld (see main.ts / worldApi.ts).
+  private get worldFileId(): WorldFileId {
+    return this.registry.get('appMode') === 'lab' ? 'lab' : 'world';
+  }
+
+  // Editor and lab persist UI/camera separately: their worlds have different sizes, so a
+  // camera restored from the other mode would strand the view off-map.
+  private get uiStateKey(): string {
+    return this.worldFileId === 'lab' ? `${UI_STATE_KEY}.lab` : UI_STATE_KEY;
+  }
+
   private async bootstrap(): Promise<void> {
     this.restoreUi();
     this.loadingText?.destroy();
@@ -163,10 +175,10 @@ export class EditorScene extends Phaser.Scene {
 
     let store: EditorStore;
     try {
-      store = new EditorStore(await loadWorld());
+      store = new EditorStore(await loadWorld(this.worldFileId));
     } catch (error) {
       this.loadingText.setText(
-        `Falha ao carregar world.json\n${error instanceof Error ? error.message : String(error)}\n\nClique para tentar de novo`,
+        `Falha ao carregar ${this.worldFileId}.json\n${error instanceof Error ? error.message : String(error)}\n\nClique para tentar de novo`,
       );
       this.input.once(Phaser.Input.Events.POINTER_DOWN, () => void this.bootstrap());
       return;
@@ -878,12 +890,12 @@ export class EditorScene extends Phaser.Scene {
       this.persistUi();
       store.world.meta.exportedAt = new Date().toISOString();
       const warnings = store.validate();
-      await saveWorld(store.world);
+      await saveWorld(store.world, this.worldFileId);
       store.markSaved();
       this.ui?.toast(
         warnings.length > 0
           ? `Salvo com ${warnings.length} aviso(s) — veja em Mundo...`
-          : 'Salvo em public/world.json',
+          : `Salvo em public/${this.worldFileId}.json`,
       );
     } catch (error) {
       this.ui?.toast(error instanceof Error ? error.message : 'Falha ao salvar');
@@ -941,13 +953,13 @@ export class EditorScene extends Phaser.Scene {
         state: this.uiState,
         cam: { centerX: cam.midPoint.x, centerY: cam.midPoint.y, zoom: cam.zoom },
       };
-      window.sessionStorage.setItem(UI_STATE_KEY, JSON.stringify(persisted));
+      window.sessionStorage.setItem(this.uiStateKey, JSON.stringify(persisted));
     } catch { /* ignore */ }
   }
 
   private restoreUi(): void {
     try {
-      const raw = window.sessionStorage.getItem(UI_STATE_KEY);
+      const raw = window.sessionStorage.getItem(this.uiStateKey);
       if (!raw) return;
       const persisted = JSON.parse(raw) as Partial<PersistedUi>;
       if (persisted.state && typeof persisted.state === 'object') {
@@ -958,7 +970,7 @@ export class EditorScene extends Phaser.Scene {
 
   private restoreCamera(): boolean {
     try {
-      const raw = window.sessionStorage.getItem(UI_STATE_KEY);
+      const raw = window.sessionStorage.getItem(this.uiStateKey);
       if (!raw) return false;
       const persisted = JSON.parse(raw) as Partial<PersistedUi>;
       if (!persisted.cam) return false;

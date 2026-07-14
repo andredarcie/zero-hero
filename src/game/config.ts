@@ -13,7 +13,9 @@ import { PreloadScene } from '@/game/scenes/PreloadScene';
 import { TitleScene } from '@/game/scenes/TitleScene';
 import { SurvivorsScene } from '@/game/survivors/SurvivorsScene';
 
-export type AppMode = 'game' | 'editor';
+// 'lab' is the puzzle laboratory (/lab): the same editor + playtest pair as 'editor', but
+// loading/saving public/lab.json instead of the real overworld.
+export type AppMode = 'game' | 'editor' | 'lab';
 
 // The game canvas fills the whole window (100% of the screen). The tile size is derived from
 // this size at runtime (see GameScene.computeTileSize → min(width/12, height/12)), so the hero
@@ -55,5 +57,5 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   },
   // Editor mode also registers GameScene so the editor can live-playtest the world in
   // memory (EditorScene.startPlaytest) without saving or leaving the page.
-  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene, GameScene] : [TitleScene, LanguageScene, IntroScene, GameScene, SurvivorsScene])],
+  scene: [BootScene, PreloadScene, ...(mode === 'editor' || mode === 'lab' ? [EditorScene, GameScene] : [TitleScene, LanguageScene, IntroScene, GameScene, SurvivorsScene])],
 });

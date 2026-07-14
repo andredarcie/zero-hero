@@ -20,9 +20,12 @@ export class PreloadScene extends Phaser.Scene {
     preloadSharedAssets(this);
 
     // The playable world is fully defined by world.json. Load it here (only the game needs
-    // it) so WorldData is ready before GameScene.create runs.
+    // it) so WorldData is ready before GameScene.create runs. The lab loads its own sandbox
+    // file so `/lab?play` can boot straight into gameplay; the editor fetches via /api/world.
     const mode = this.registry.get('appMode') as AppMode | undefined;
-    if (mode !== 'editor') {
+    if (mode === 'lab') {
+      this.load.json(WORLD_JSON_KEY, `${import.meta.env.BASE_URL}lab.json`);
+    } else if (mode !== 'editor') {
       this.load.json(WORLD_JSON_KEY, `${import.meta.env.BASE_URL}world.json`);
     }
 
@@ -56,6 +59,21 @@ export class PreloadScene extends Phaser.Scene {
       // does, so the textures still load (in the background) before any play.
       void preloadTextures3D();
       this.scene.start('editor');
+      return;
+    }
+
+    if (mode === 'lab') {
+      // `/lab` opens the puzzle-laboratory editor; `/lab?play` skips it and boots the
+      // sandbox world directly in the GameScene (how the playtest harness enters).
+      if (new URLSearchParams(window.location.search).has('play')) {
+        setWorldData(this.cache.json.get(WORLD_JSON_KEY));
+        void preloadTextures3D().then(() => {
+          this.scene.start('game');
+        });
+      } else {
+        void preloadTextures3D();
+        this.scene.start('editor');
+      }
       return;
     }
 

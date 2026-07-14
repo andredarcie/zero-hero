@@ -2,7 +2,11 @@ import '@/styles/global.css';
 import { ZeroTheHeroGame } from '@/game/ZeroTheHeroGame';
 import { applyHtmlLang } from '@/game/i18n/i18n';
 
-const appMode = window.location.pathname.endsWith('/editor') ? 'editor' : 'game';
+// `/editor` edits the real overworld (public/world.json); `/lab` is the puzzle laboratory —
+// the same editor UI over a small separate sandbox world (public/lab.json) for prototyping
+// puzzle ideas without touching the game world.
+const pathname = window.location.pathname;
+const appMode = pathname.endsWith('/editor') ? 'editor' : pathname.endsWith('/lab') ? 'lab' : 'game';
 
 // Reflect the detected/saved locale on <html lang> before the game boots (the language screen
 // updates it again once the player picks).
