@@ -111,7 +111,14 @@ addPickup('lavaBoots', 6, 10); // o premio do puzzle 1 E a ferramenta do puzzle 
 // Ilha (9..10, 7..8) cercada por um anel de lava COMPLETO — sem brecha nenhuma.
 // Dentro: a fogueira morta e um graveto largado. Fora: nada que ajude.
 addProp('campfire', 10, 7);
-addPickup('wood', 9, 8); // o graveto que espera do outro lado — o coracao do puzzle
+// O graveto fica no canto OPOSTO a entrada (o heroi entra por (9,7)/(9,8)), e isso e a coisa
+// mais importante do puzzle: se ele estivesse no tile de entrada, o jogador pisaria nele sem
+// querer e a troca aconteceria SOZINHA — o passo esperto seria executado pelo sistema, nao
+// pelo jogador. Longe da entrada, a ordem natural vira: entra com as botas -> esbarra na
+// fogueira -> leva o balao de "precisa de fogo" -> percebe que NAO TEM MAO LIVRE -> olha o
+// graveto do outro lado e entende que pegar significa LARGAR AS BOTAS, de proposito, numa
+// ilha cercada de lava. Essa hesitacao e o puzzle.
+addPickup('wood', 10, 8);
 
 for (const [wx, wy] of [[9, 6], [10, 6], [8, 7], [11, 7], [8, 8], [11, 8], [9, 9], [10, 9]]) {
   addProp('lava', wx, wy);

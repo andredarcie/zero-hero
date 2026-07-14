@@ -132,26 +132,41 @@ export default {
     await goTo(7, 8);
     await shot('p2-impossible', { note: 'Dead fire + a stick, ringed by unbroken lava. Boots in hand: no free hand for fire.' });
 
-    await goTo(9, 8); // over the lava (only the boots allow this) and onto the graveto
+    await goTo(9, 7); // over the lava — only the boots allow this
+
+    // The tension, and the reason the graveto sits in the FAR corner: standing on the island
+    // with the boots in hand, the hero has no free hand for fire. The dead fire must refuse
+    // him. If this ever passed, the swap would be happening by accident, not by decision.
+    await bump('right', 2); // bump the dead campfire at (10,7) while holding the boots
+    await sleep(500);
+    const noHand = await state();
+    assert('Boots in hand cannot light the fire (no free hand)',
+      noHand.litFires === 1 && noHand.heldItem === 'lavaBoots',
+      `litFires=${noHand.litFires} held=${noHand.heldItem}`);
+    await shot('p2-no-free-hand', { note: 'On the island, boots in hand: the fire refuses. The stick is across the island.' });
+
+    // So the hero must CHOOSE to drop the boots — deliberately, on a lava-ringed island.
+    // Round the campfire from the south: (9,7) -> (10,7) is the fire itself, not a path.
+    await goTo(9, 8);
+    await goTo(10, 8); // the far corner: stepping on the graveto drops the boots there
     await dismissItemGet();
     const swapped = await state();
-    assert('On the island the boots swapped for the graveto',
-      swapped.heldItem === 'wood' && swapped.player.worldX === 9 && swapped.player.worldY === 8,
+    assert('The hero chose the stick and dropped the boots',
+      swapped.heldItem === 'wood' && swapped.player.worldX === 10 && swapped.player.worldY === 8,
       `held=${swapped.heldItem} pos=(${swapped.player.worldX},${swapped.player.worldY})`);
     assert('The boots are lying on the island, waiting',
-      swapped.groundItems.some((it) => it.kind === 'lavaBoots' && it.worldX === 9 && it.worldY === 8),
+      swapped.groundItems.some((it) => it.kind === 'lavaBoots' && it.worldX === 10 && it.worldY === 8),
       JSON.stringify(swapped.groundItems));
-    await shot('p2-swap', { note: 'Stepping on the stick DROPPED the boots — the hand is free again' });
+    await shot('p2-swap', { note: 'Dropping the boots on purpose — the moment that looks like a mistake' });
 
     // The lava that trapped the hero is the lighter.
-    await bump('left', 1); // the ring lava at (8,8)
+    await bump('right', 1); // the ring lava at (11,8)
     await sleep(700);
     assert('The ring lava lit the stick', (await state()).heldOnFire === true,
       `heldOnFire=${(await state()).heldOnFire}`);
     await shot('p2-lava-lights', { note: 'The obstacle IS the tool' });
 
-    await goTo(9, 7);
-    await bump('right', 1); // deliver the flame into the dead campfire at (10,7)
+    await bump('up', 1); // deliver the flame into the dead campfire at (10,7)
     let lit = false;
     for (let i = 0; i < 20 && !lit; i += 1) { // the first player-lit fire plays a cutscene
       await sleep(500);
@@ -163,7 +178,8 @@ export default {
 
     // And the exit exists: step off, step back on, swap back to the boots, walk out.
     log('P2: swap back to the boots and walk out — nothing is consumed, so nothing soft-locks');
-    await goTo(9, 8); // back onto the boots (armed now that the hero stepped off)
+    await goTo(9, 8);
+    await goTo(10, 8); // back onto the boots (armed now that the hero stepped off)
     await dismissItemGet();
     assert('Boots back in hand', (await state()).heldItem === 'lavaBoots', `held=${(await state()).heldItem}`);
     await goTo(7, 8); // back out across the lava
