@@ -45,8 +45,12 @@ back — nothing is saved until you hit Salvar, and Salvar only ever writes `lab
   `npm run playtest -- lab-puzzles` enters — a scenario can override its entry route).
 - `npm run generate:lab` rebuilds `lab.json` from `scripts/gen-lab.mjs`. **Author puzzles there**,
   not by hand-editing the JSON.
-- **Keep the lab world tiny.** The first cut was 3×2 chunks and the playtest showed most of the run
-  was the hero *walking between* puzzles. Walking is not a puzzle; it is now 2×1.
+- **Keep the lab world tiny.** The first cut was 3×2 chunks and most of the solve run was the hero
+  *walking between* puzzles. Walking is not a puzzle. It is now **one 12×12 chunk** — the camera
+  frames ~one chunk, so the whole lab sits on a single screen and nothing needs a hike.
+- **A puzzle is only a puzzle if the easy road is shut.** The first lava puzzle rested on the torch
+  burning out on the way over — measured, that is a ~1s margin, i.e. a race, not an insight. Assert
+  the *lock* (bare-handed, the ring must refuse the hero), not just the solution.
 - The undead siege (`UndeadSpawnDirector`) is **off** in lab mode: skulls respawning around the hero
   mid-test are noise when the point is validating a puzzle, and they made the solve run flaky. So
   the lab cannot test anything that depends on darkness pressure — use the real world for that.
