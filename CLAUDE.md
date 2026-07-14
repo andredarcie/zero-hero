@@ -82,6 +82,15 @@ Fire is the exception, and the only place a real puzzle can live. `GameScene.sch
 **Tall grass blocks the hero but conducts fire.** A grass corridor is a wall to you and a highway
 to a flame — that asymmetry is where the lab's "O Pavio" puzzle comes from.
 
+**Items should PRODUCE, not just DELETE.** This is the rule that keeps puzzles from collapsing into
+fetch-and-use. A tool whose only output is *passage* is a password, not a tool. Compare:
+`grass.cut()` and `door.unlock()` produce nothing, while `tree.chop()` yields a graveto — or a
+bridge, depending on where you stood — which is why the axe was the only interesting item in the
+game. So the pickaxe now drops a **stone** (`GameScene.dropStone`), and one stone **fords** a
+bridgeSpot (`WaterObject.placeStone`). Stone is wood's opposite: both span a river, but a plank
+deck is *fuel* and a ford never burns (`WaterObject.burn` refuses a ford). Every crossing is now a
+question — do you want a **floor**, or a **fuse**? Ask that of any new item: what does it *make*?
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on

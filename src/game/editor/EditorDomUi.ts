@@ -93,6 +93,7 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
   { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
   { type: 'wood', label: 'Graveto', key: ASSET_KEYS.woodIcon },
+  { type: 'stone', label: 'Pedra', key: ASSET_KEYS.rock },
 ];
 
 const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [

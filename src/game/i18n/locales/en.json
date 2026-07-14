@@ -46,7 +46,8 @@
       "lavaBoots": "YOU GOT THE LAVA BOOTS!",
       "pickaxe": "YOU GOT THE PICKAXE!",
       "scythe": "YOU GOT THE SCYTHE!",
-      "wood": "YOU GOT A STICK!"
+      "wood": "YOU GOT A STICK!",
+      "stone": "YOU GOT A STONE!"
     }
   },
   "lockedLines": [

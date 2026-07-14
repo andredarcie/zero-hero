@@ -17,6 +17,7 @@ import uiTour from './ui-tour.mjs';
 import survivorsTour from './survivors-tour.mjs';
 import cemetery from './cemetery.mjs';
 import labPuzzles from './lab-puzzles.mjs';
+import labStone from './lab-stone.mjs';
 
 export const scenarios = {
   smoke,
@@ -38,6 +39,7 @@ export const scenarios = {
   'survivors-tour': survivorsTour,
   cemetery,
   'lab-puzzles': labPuzzles,
+  'lab-stone': labStone,
 };
 
 // What `npm run playtest` runs when no scenario is named.

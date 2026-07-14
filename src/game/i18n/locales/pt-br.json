@@ -46,7 +46,8 @@
       "lavaBoots": "VOCÊ PEGOU AS BOTAS DE LAVA!",
       "pickaxe": "VOCÊ PEGOU A PICARETA!",
       "scythe": "VOCÊ PEGOU A FOICE!",
-      "wood": "VOCÊ PEGOU UM GRAVETO!"
+      "wood": "VOCÊ PEGOU UM GRAVETO!",
+      "stone": "VOCÊ PEGOU UMA PEDRA!"
     }
   },
   "lockedLines": [

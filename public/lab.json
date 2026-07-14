@@ -541,6 +541,11 @@
           "worldY": 5
         },
         {
+          "type": "pickaxe",
+          "worldX": 1,
+          "worldY": 5
+        },
+        {
           "type": "axe",
           "worldX": 10,
           "worldY": 8
@@ -568,6 +573,11 @@
       "lit": true
     },
     {
+      "type": "rock",
+      "worldX": 1,
+      "worldY": 3
+    },
+    {
       "type": "tallGrass",
       "worldX": 5,
       "worldY": 2
@@ -593,7 +603,7 @@
       "worldY": 2
     },
     {
-      "type": "water",
+      "type": "bridgeSpot",
       "worldX": 7,
       "worldY": 2
     },

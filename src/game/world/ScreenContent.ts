@@ -20,7 +20,8 @@ export type PickupKind =
   | 'lavaBoots'
   | 'pickaxe'
   | 'scythe'
-  | 'wood';
+  | 'wood'
+  | 'stone';
 export type NpcKind =
   | 'blackCat'
   | 'mimic'

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
+import { ASSET_KEYS, BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { getWoodTexture } from '@/game/render3d/woodTexture';
 import { FX_PUFF_TEXTURE, WATER_DEPTH_TILES, world3d, type Box3D } from '@/game/render3d/World3D';
@@ -42,6 +42,9 @@ const SPLASH_TINT = 0x9fb4dd; // a leg landing in the river kicks water, not saw
 // inside its own tile (the fundamental sprite rule applies to geometry too).
 const PLANK_H = 0.04;
 const PLANK_ELEV = 0.028; // centre height → top face ~0.048, a shallow step over the ground
+// The stone ford sits a touch proud of the water, and drops in from above when placed.
+const FORD_ELEV = 0.06;
+const FORD_DROP_FROM = 0.9;
 const PLANK_W = 0.98; // long axis (across the walk direction)
 const PLANK_D = 0.21; // short axis (four boards + seams fill the tile)
 const STRINGER_H = 0.055;
@@ -81,6 +84,8 @@ export class WaterObject {
   private planks: DeckPart[] = [];
   private frame: DeckPart[] = []; // 4 legs + 2 stringers, slammed in by the first deposit
   private deposited = 0;
+  private forded = false; // a stone dropped in the river — walkable, and it never burns
+  private ford?: Billboard3D;
   private hintOn = false;
   private frameIndex = 0;
   private animTimer?: Phaser.Time.TimerEvent;
@@ -138,14 +143,26 @@ export class WaterObject {
     return this.deposited >= BRIDGE_GRAVETOS_REQUIRED;
   }
 
-  /** Water blocks the hero and enemies; a finished bridge is walkable. */
-  public get blocking(): boolean {
-    return !this.isBridge;
+  /**
+   * A stone ford: one rock dropped in the river, and you can step across it.
+   *
+   * It is the plank bridge's OPPOSITE, and that is the whole reason it exists. Both make the
+   * tile walkable; only the wooden one is FUEL. A deck carries fire across the water (and is
+   * eaten doing it — see burn()); a ford never will. So a crossing stops being a chore with one
+   * right answer and becomes a question: do you want a floor, or do you want a fuse?
+   */
+  public get isFord(): boolean {
+    return this.forded;
   }
 
-  /** Whether a bridge can be built here at all (a `bridgeSpot` marker was placed on this tile). */
+  /** Water blocks the hero and enemies; a finished bridge — or a stone ford — is walkable. */
+  public get blocking(): boolean {
+    return !this.isBridge && !this.forded;
+  }
+
+  /** Whether anything can be laid here at all (a `bridgeSpot` marker was placed on this tile). */
   public get canBuild(): boolean {
-    return this.buildable && !this.isBridge;
+    return this.buildable && !this.isBridge && !this.forded;
   }
 
   public get progress(): number {
@@ -170,6 +187,41 @@ export class WaterObject {
       this.scene.time.delayedCall(boardDelay + k * PART_STAGGER_MS, () => this.dropPlank(index));
     }
     return this.isBridge;
+  }
+
+  /**
+   * Drop a stone in the river: ONE is enough, and it is done — no carpentry, no second trip.
+   * Cheaper than the two-graveto deck, and it never burns. What it costs you is the fuse: fire
+   * stops dead at a ford (see burn()), so a river crossed in stone is a river fire cannot cross.
+   *
+   * Returns false off a buildable spot, or if something already spans this tile.
+   */
+  public placeStone(): boolean {
+    if (!this.buildable || this.isBridge || this.forded) return false;
+    this.forded = true;
+    this.pips.setVisible(false);
+
+    // The ghost deck (the "you could build here" preview) is not what got built — hide it.
+    for (const part of [...this.frame, ...this.planks]) part.box.setVisible(false);
+
+    getSoundManager().playSplash();
+    // The stone drops from above and settles just proud of the water, a stepping stone.
+    this.ford = world3d()
+      .addBillboard(ASSET_KEYS.rock, 0, { groundShadow: { rx: 0.34, rz: 0.3, alpha: 0.3 } })
+      .setPosition(this.worldX, this.worldY)
+      .setDisplaySize(0.92, 0.92)
+      .setElevation(FORD_DROP_FROM);
+    this.scene.tweens.add({
+      targets: this.ford,
+      elevation: FORD_ELEV,
+      duration: 260,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        getSoundManager().playRockSmash();
+        this.scene.cameras.main.shake(90, 0.003);
+      },
+    });
+    return true;
   }
 
   /** Finish the bridge in one go — a tree felled across the river ("TIMBER!") drops for free.
@@ -199,6 +251,9 @@ export class WaterObject {
    * through open water).
    */
   public burn(): boolean {
+    // A stone ford is not fuel. This single line is what makes the pickaxe a real choice:
+    // cross in wood and the fire can follow you; cross in stone and it cannot.
+    if (this.forded) return false;
     if (!this.isBridge || this.dead) return false;
 
     const parts = [...this.frame, ...this.planks];
@@ -415,6 +470,11 @@ export class WaterObject {
     }
     this.planks = [];
     this.frame = [];
+    if (this.ford) {
+      this.scene.tweens.killTweensOf(this.ford);
+      this.ford.destroy();
+      this.ford = undefined;
+    }
     this.sprite.destroy();
     this.pips.destroy();
   }

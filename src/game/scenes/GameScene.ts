@@ -92,6 +92,7 @@ const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> 
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
+  stone: { texture: ASSET_KEYS.rock, frame: 0 },
 };
 
 // The same per-item art resolved through the 3D texture registry (textures3d keys),
@@ -105,6 +106,7 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
   scythe: { texture: 'scythe-icon', frame: 0 },
   wood: { texture: 'wood-icon', frame: 0 },
+  stone: { texture: 'rock', frame: 0 },
 };
 
 // Bumping something you can't use yet pops a speech balloon over the hero's head showing
@@ -132,6 +134,7 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0, label: 'VOCE PEGOU UM GRAVETO!' },
+  stone: { texture: ASSET_KEYS.rock, frame: 0, label: 'VOCE PEGOU UMA PEDRA!' },
 };
 
 // What a blow does to a skull (max health 3). Three tiers: bare fists land BARE_HAND_DAMAGE
@@ -144,6 +147,7 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   key: 1.5,
   pickaxe: 1.5,
   scythe: 1.5,
+  stone: 1.5, // a rock in the fist is as good as any other blunt tool
 };
 const BARE_HAND_DAMAGE = 1;
 
@@ -1321,13 +1325,18 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // River — only tiles marked with a `bridgeSpot` are buildable. On a buildable spot, bump it
-    // holding a wood stick (a "graveto") to deposit it; two gravetos build the bridge. Plain
-    // river tiles just block (no interaction).
+    // River — only tiles marked with a `bridgeSpot` are buildable. Two things can span it, and
+    // WHICH you choose is a real decision, not a formality:
+    //   - two gravetos build a plank deck. It is wood: fire runs across it (and eats it).
+    //   - ONE stone fords it. Cheaper, instant, permanent — and fire stops dead at it.
+    // A floor, or a fuse. Plain river tiles just block (no interaction).
     const water = this.getWaterAt(wx, wy);
     if (water?.blocking) {
       if (water.canBuild) {
-        if (this.heldItem === 'wood') {
+        if (this.heldItem === 'stone') {
+          this.clearHeldItem(); // the stone goes into the river
+          water.placeStone();
+        } else if (this.heldItem === 'wood') {
           this.clearHeldItem(); // the graveto is consumed
           // WaterObject owns the carpentry now: it nails this deposit's boards in with hammer
           // beats + sawdust, and cross-fades to the finished tile (firing onBuilt) on the last.
@@ -1411,13 +1420,20 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Rock — the pickaxe cracks it, then shatters it open.
+    // Rock — the pickaxe cracks it, then shatters it open, and the shattered rock LEAVES A
+    // STONE BEHIND. That drop is the whole point of the item: a pickaxe that only removed its
+    // obstacle produced nothing but passage, which makes it a password rather than a tool.
+    // Now its output (stone) is another interaction's input (a ford across the river) — the
+    // same shape as the axe, which is the only item that was ever interesting for exactly this
+    // reason: a felled tree becomes firewood, or a bridge.
     const rock = this.getRockAt(wx, wy);
     if (rock?.blocking) {
       if (this.heldItem === 'pickaxe') {
         this.swingHeld(wx, wy);
         this.time.delayedCall(150, () => {
-          if (rock.smash(this.tileSize)) getSoundManager().playRockSmash();
+          if (!rock.smash(this.tileSize)) return;
+          getSoundManager().playRockSmash();
+          if (!rock.blocking) this.dropStone(rock.worldX, rock.worldY); // shattered, not just cracked
         });
       } else {
         rock.shake();
@@ -2680,6 +2696,13 @@ export class GameScene extends Phaser.Scene {
   private dropTreeStick(worldX: number, worldY: number): void {
     if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
     this.itemManager?.drop('wood', worldX, worldY);
+  }
+
+  // A shattered rock leaves a stone behind, on the tile it used to block. Wood's opposite:
+  // it fords a river and it will never carry a flame (see WaterObject.placeStone / burn).
+  private dropStone(worldX: number, worldY: number): void {
+    if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
+    this.itemManager?.drop('stone', worldX, worldY);
   }
 
   // A regrowing tree may only sprout (and only counts its clock) when NOTHING is on its tile —

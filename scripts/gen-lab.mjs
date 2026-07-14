@@ -81,13 +81,29 @@ addNpc('blackCat', 6, 5);
 addPickup('axe', 6, 6);
 addPickup('heart', 2, 5);
 
+// A picareta e a pedra dela. Quebrar a rocha nao "abre" nada — ela LARGA UMA PEDRA no chao,
+// e essa pedra e o oposto do graveto: as duas vencem o rio, mas so o deck de madeira e
+// COMBUSTIVEL. Ver o corredor do pavio abaixo.
+// Fora da coluna x=3: e por ela que se desce do corredor do pavio ate a arvore do graveto, e
+// um item no caminho seria pego SEM QUERER — trocando o machado da mao no meio da tarefa.
+addPickup('pickaxe', 1, 5);
+addProp('rock', 1, 3);
+
 // ── "O PAVIO" (norte) ───────────────────────────────────────────────────────
 // O corredor de mato alto: um MURO para o heroi, uma ESTRADA para o fogo.
 for (const wx of [5, 6, 8, 9, 10]) addProp('tallGrass', wx, 2);
 
-// O rio corta o corredor em (7,2): o fogo para aqui. A arvore de (7,3), derrubada PARA O
-// NORTE, deita o tronco exatamente sobre ele (TIMBER) — e a ponte de madeira leva a chama.
-addProp('water', 7, 2);
+// O rio corta o corredor em (7,2): o fogo para aqui. E este unico tile pode ser vencido de
+// TRES jeitos, com consequencias diferentes — e por isso ele e um `bridgeSpot`, nao agua comum:
+//
+//   1. derrubar a arvore de (7,3) PARA O NORTE  -> tronco (TIMBER). E madeira: conduz a chama.
+//   2. dois gravetos                            -> deck de tabuas. Tambem madeira: conduz.
+//   3. UMA PEDRA (da picareta), por cima em (7,1) -> vau. Atravessa VOCE, mas o fogo MORRE ali.
+//
+// Ou seja: o jogador escolhe entre um PISO e um PAVIO. Escolher pedra nao trava o puzzle — o
+// vau e pisavel, entao da para atravessar a pe e tocar fogo no mato do outro lado com a tocha
+// na mao. Custa a elegancia, nao a partida.
+addProp('bridgeSpot', 7, 2);
 addProp('dryTree', 7, 3);
 
 // A fogueira selada: agua nos dois lados, borda do mundo a leste, mato alto (bloqueante) a

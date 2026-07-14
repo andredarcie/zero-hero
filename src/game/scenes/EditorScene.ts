@@ -46,6 +46,7 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   pickaxe: { key: ASSET_KEYS.pickaxeIcon },
   scythe: { key: ASSET_KEYS.scytheIcon },
   wood: { key: ASSET_KEYS.woodIcon },
+  stone: { key: ASSET_KEYS.rock },
 };
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {

@@ -15,7 +15,13 @@ export type HeldItemKind =
   | 'lavaBoots'
   | 'pickaxe'
   | 'scythe'
-  | 'wood';
+  | 'wood'
+  // A chunk of rock, left behind when the pickaxe shatters one. The pickaxe used to just
+  // DELETE its obstacle — the only thing it produced was passage, which makes it a password
+  // and not a tool. Now it produces MATTER, and that matter is the wood stick's opposite:
+  // both cross a river, but a plank deck burns (and carries fire across) while a stone ford
+  // never will. So every crossing becomes a question — do I want a floor, or a fuse?
+  | 'stone';
 
 // How each held item looks lying on the ground (textures3d keys). Tools without a dedicated
 // map sprite reuse their HUD icon — same 16x16 pixel-art scale.
@@ -29,6 +35,7 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   scythe: { texture: 'scythe-icon', frame: 0 },
   // The "graveto": a single stick (the woodIcon art), NOT the 3-log woodItem pile.
   wood: { texture: 'wood-icon', frame: 0 },
+  stone: { texture: 'rock', frame: 0 },
 };
 
 const GROUND_SIZE = 0.7; // tiles
