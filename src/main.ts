@@ -1,5 +1,6 @@
 import '@/styles/global.css';
 import { ZeroTheHeroGame } from '@/game/ZeroTheHeroGame';
+import { installDevLauncher } from '@/game/debug/DevLauncher';
 import { applyHtmlLang } from '@/game/i18n/i18n';
 
 // `/editor` edits the real overworld (public/world.json); `/lab` is the puzzle laboratory —
@@ -26,6 +27,9 @@ const startGame = (): void => {
   const game = new ZeroTheHeroGame('app', appMode);
   window.zeroTheHeroGame = game;
 };
+
+// [I] anywhere in dev pops the launcher (jogo / lab / editor). No-ops in a real build.
+installDevLauncher();
 
 const fonts = document.fonts;
 if (fonts && typeof fonts.load === 'function') {
