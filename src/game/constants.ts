@@ -251,12 +251,18 @@ export const DRY_TREE_FRAME_COUNT = 6;
 // fuel for fire) and soft-lock. It only regrows once its tile is clear of the hero and enemies.
 export const TREE_REGROW_MS = 60000;
 
-// Upper-layer tileset frames that depict trees. Trees are solid "by default":
-// ChunkManager.isCellBlocked treats these as collision even where a cell has no authored
-// collision painted, so every tree — placed in the editor, generated, or hand-authored —
-// blocks the hero and enemies alike (both consult isCellBlocked). Frame ids index
-// forest_tile_set.png (3 columns): 3 & 21 are dead trees, 4/14/15/16/17/18 are pines.
-export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21]);
+// Upper-layer tileset frames that stand UP off the ground. Being listed here means three
+// things at once, which is why it is the only switch a standing tile needs:
+//   1. ChunkManager.isCellBlocked treats the cell as collision even with none painted, so the
+//      tile blocks the hero and enemies alike (both consult isCellBlocked);
+//   2. World3D.buildTerrain builds it as an upright quad that casts a shadow, instead of the
+//      flat sticker every other upper tile becomes;
+//   3. the editor paints its implicit collision in amber (vs the red of hand-painted).
+// An upper-layer frame that is NOT here lies flat on the floor and is walked straight through —
+// which is what you want for bones and rubble, and never what you want for a headstone.
+// Frame ids index forest_tile_set.png (3 columns): 3 & 21 are dead trees, 4/14/15/16/17/18 are
+// pines, and 22 & 25 are the cemetery's spiked head and tomb.
+export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25]);
 
 // Two wood sticks ("gravetos") build one bridge tile over water (see WaterObject); the plank
 // art is a dedicated tile (ASSET_KEYS.bridge = bridge.png).

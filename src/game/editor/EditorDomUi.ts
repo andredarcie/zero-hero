@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 
-import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS } from '@/game/constants';
+import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS, SOLID_UPPER_FRAMES } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropKind, WorldDialog } from '@/game/world/worldSchema';
@@ -108,6 +108,72 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'bridgeSpot', label: 'Ponto de Ponte', key: ASSET_KEYS.bridge },
 ];
 
+// The tiles palette used to be an anonymous grid of "Tile 23" cells, so a whole cemetery sitting
+// in the bottom rows of forest_tile_set.png was invisible to whoever was building the map. Tiles
+// are grouped and named here instead. Any frame missing from this table still shows up, under
+// "Outros" — the palette enumerates the tileset, so a new row of art is never hidden by omission.
+//
+// `layer` is the layer the tile is DRAWN for, and picking it switches the active layer. That is
+// not a convenience: the ground mesh ignores alpha (MeshLambertMaterial, no alphaTest), so a tile
+// with transparent pixels — the bones, the skull — painted onto the ground reads as a black
+// square, while an opaque floor tile on the upper layer hides the ground it should be part of.
+type TileDef = { frame: number; label: string; layer: TileLayerId };
+
+const TILE_GROUPS: ReadonlyArray<{ title: string; tiles: readonly TileDef[] }> = [
+  {
+    title: 'Chao',
+    tiles: [
+      { frame: 5, label: 'Terra', layer: 'ground' },
+      { frame: 6, label: 'Terra 2', layer: 'ground' },
+    ],
+  },
+  {
+    title: 'Floresta',
+    tiles: [
+      { frame: 4, label: 'Pinheiro', layer: 'upper' },
+      { frame: 14, label: 'Pinheiro 2', layer: 'upper' },
+      { frame: 15, label: 'Pinheiro com Frutos', layer: 'upper' },
+      { frame: 16, label: 'Pinheiro com Flores', layer: 'upper' },
+      { frame: 17, label: 'Pinheiro 3', layer: 'upper' },
+      { frame: 18, label: 'Pinheiro 4', layer: 'upper' },
+      { frame: 3, label: 'Arvore Seca', layer: 'upper' },
+      { frame: 21, label: 'Arvore Seca 2', layer: 'upper' },
+      { frame: 1, label: 'Arbusto Florido', layer: 'upper' },
+      { frame: 12, label: 'Pedregulho', layer: 'upper' },
+      { frame: 13, label: 'Pedras', layer: 'upper' },
+      { frame: 10, label: 'Cogumelos Vermelhos', layer: 'upper' },
+      { frame: 11, label: 'Cogumelos Roxos', layer: 'upper' },
+      { frame: 0, label: 'Folhagem', layer: 'upper' },
+      { frame: 7, label: 'Folhagem 2', layer: 'upper' },
+      { frame: 8, label: 'Folhagem 3', layer: 'upper' },
+      { frame: 19, label: 'Folhagem 4', layer: 'upper' },
+      { frame: 20, label: 'Folhagem 5', layer: 'upper' },
+      { frame: 9, label: 'Gravetos', layer: 'upper' },
+      { frame: 2, label: 'Graveto Solto', layer: 'upper' },
+    ],
+  },
+  {
+    // The cemetery. Ground first, then the things that stand on it, then the litter.
+    title: 'Cemiterio',
+    tiles: [
+      { frame: 23, label: 'Chao de Pedra', layer: 'ground' },
+      { frame: 24, label: 'Chao de Pedra com Musgo', layer: 'ground' },
+      { frame: 29, label: 'Laje Rachada', layer: 'ground' },
+      { frame: 30, label: 'Laje Rachada 2', layer: 'ground' },
+      { frame: 32, label: 'Laje com Musgo', layer: 'ground' },
+      { frame: 31, label: 'Cova Aberta', layer: 'ground' },
+      { frame: 25, label: 'Tumulo', layer: 'upper' },
+      { frame: 22, label: 'Cabeca na Estaca', layer: 'upper' },
+      { frame: 27, label: 'Caveira e Ossos', layer: 'upper' },
+      { frame: 28, label: 'Ossos', layer: 'upper' },
+    ],
+  },
+];
+
+const TILE_DEFS: ReadonlyMap<number, TileDef> = new Map(
+  TILE_GROUPS.flatMap((group) => group.tiles).map((tile) => [tile.frame, tile]),
+);
+
 const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: string }> = [
   { id: 'brush', label: 'Pincel', kbd: 'B', hint: 'Pinta tiles na camada ativa' },
   { id: 'eraser', label: 'Borracha', kbd: 'E', hint: 'Limpa camada superior, colisao e entidades' },
@@ -171,7 +237,10 @@ const CSS = `
 
 #zh-editor-root .zh-tabs { display: flex; gap: 2px; padding: 4px 12px 0; }
 #zh-editor-root .zh-tabs .zh-btn { flex: 1; border-radius: 4px 4px 0 0; border-bottom: none; padding: 5px 2px; font-size: 10px; }
-#zh-editor-root .zh-palette { margin: 0 12px; border: 1px solid #2b4551; border-radius: 0 0 4px 4px; background: #101d23; padding: 6px; display: flex; flex-wrap: wrap; gap: 4px; min-height: 84px; max-height: 210px; overflow-y: auto; }
+#zh-editor-root .zh-palette { margin: 0 12px; border: 1px solid #2b4551; border-radius: 0 0 4px 4px; background: #101d23; padding: 6px; display: flex; flex-wrap: wrap; gap: 4px; min-height: 84px; max-height: 280px; overflow-y: auto; }
+/* flex-basis 100% so a section title takes a whole row of the wrapping palette grid. */
+#zh-editor-root .zh-group { flex: 0 0 100%; margin: 4px 0 0; color: #8ecae6; font-family: 'Press Start 2P', monospace; font-size: 8px; letter-spacing: 0.5px; border-bottom: 1px solid #2b4551; padding-bottom: 3px; }
+#zh-editor-root .zh-group:first-child { margin-top: 0; }
 #zh-editor-root .zh-cell { width: 40px; height: 40px; border: 1px solid #2b4551; border-radius: 3px; background: #16272e; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; position: relative; }
 #zh-editor-root .zh-cell:hover { border-color: #f4a261; }
 #zh-editor-root .zh-cell.selected { border: 2px solid #f4a261; box-shadow: 0 0 6px rgba(244, 162, 97, 0.6); }
@@ -604,7 +673,26 @@ export class EditorDomUi {
       const texture = this.scene.textures.get(ASSET_KEYS.forestTileset);
       const frameCount = Math.max(1, texture.frameTotal - 1);
       this.paletteEl.appendChild(this.tileCell(null));
-      for (let frame = 0; frame < frameCount; frame += 1) this.paletteEl.appendChild(this.tileCell(frame));
+
+      const shown = new Set<number>();
+      for (const group of TILE_GROUPS) {
+        const tiles = group.tiles.filter((tile) => tile.frame < frameCount);
+        if (tiles.length === 0) continue;
+        this.paletteEl.appendChild(this.groupHeader(group.title));
+        for (const tile of tiles) {
+          shown.add(tile.frame);
+          this.paletteEl.appendChild(this.tileCell(tile.frame));
+        }
+      }
+
+      // Whatever the table doesn't name — a blank frame, or a row of art added after this was
+      // written. The tileset is the source of truth; this list only orders and names it.
+      const rest: number[] = [];
+      for (let frame = 0; frame < frameCount; frame += 1) if (!shown.has(frame)) rest.push(frame);
+      if (rest.length > 0) {
+        this.paletteEl.appendChild(this.groupHeader('Outros'));
+        for (const frame of rest) this.paletteEl.appendChild(this.tileCell(frame));
+      }
       return;
     }
 
@@ -642,10 +730,17 @@ export class EditorDomUi {
     }
   }
 
+  private groupHeader(title: string): HTMLDivElement {
+    const header = document.createElement('div');
+    header.className = 'zh-group';
+    header.textContent = title;
+    return header;
+  }
+
   private tileCell(frame: number | null): HTMLButtonElement {
     const cell = document.createElement('button');
     cell.className = 'zh-cell';
-    cell.title = frame === null ? 'Limpar (camada superior)' : `Tile ${frame}`;
+    cell.title = frame === null ? 'Limpar (camada superior)' : this.tileTooltip(frame);
     cell.classList.toggle('selected', this.state.tile === frame);
     if (frame === null) {
       const x = document.createElement('span');
@@ -661,9 +756,21 @@ export class EditorDomUi {
     cell.addEventListener('click', () => {
       this.state.tile = frame;
       if (this.state.tool !== 'brush' && this.state.tool !== 'rect' && this.state.tool !== 'fill') this.state.tool = 'brush';
+      // Named tiles carry the layer they were drawn for — see TileDef. Painting the tomb onto the
+      // ground, or the bones onto a layer that ignores their alpha, is never what was meant.
+      const def = frame === null ? undefined : TILE_DEFS.get(frame);
+      if (def) this.state.layer = def.layer;
       this.changed();
     });
     return cell;
+  }
+
+  private tileTooltip(frame: number): string {
+    const def = TILE_DEFS.get(frame);
+    if (!def) return `Tile ${frame}`;
+    const layer = def.layer === 'ground' ? 'chao' : 'superior';
+    const solid = SOLID_UPPER_FRAMES.has(frame) ? ', bloqueia' : '';
+    return `${def.label} — tile ${frame} (camada ${layer}${solid})`;
   }
 
   // ── Status bar ──────────────────────────────────────────────────────────
