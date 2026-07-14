@@ -2476,11 +2476,11 @@ export class GameScene extends Phaser.Scene {
       this.playerMaxHealth += 1;
       this.playerHealth = Math.min(this.playerHealth + 1, this.playerMaxHealth);
     } else if (id === 'moveSpeed') {
-      // ms per tile, now that the walk runs at one constant speed. The old numbers were the
-      // duration of a *tapped* step, which a held walk then scaled by 0.62 behind your back;
-      // these track the speeds that actually came out of that, level for level (100→67).
+      // ms per tile, now that the walk runs at one constant speed. Three levels take the base
+      // walk (150ms/tile, 6.7 tiles/s) up to 105ms — 9.5 tiles/s, about the pace the whole game
+      // used to move at. So the boots are what earn the old speed rather than starting there.
       this.movementController?.setMoveDuration(
-        Math.max(60, TIMINGS.moveDurationMs - this.upgrades.moveSpeed * 11),
+        Math.max(90, TIMINGS.moveDurationMs - this.upgrades.moveSpeed * 15),
       );
     } else if (id === 'magnet') {
       this.coinManager?.setMagnetRadius(2);

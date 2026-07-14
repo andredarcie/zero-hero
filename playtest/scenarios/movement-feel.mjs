@@ -70,7 +70,10 @@ const SAMPLE = `async (dir, tiles, useTouch) => {
   };
   s.events.on('postupdate', onFrame);
 
-  const deadline = performance.now() + tiles * 140 + 200;
+  // Budget from the walk's real step duration, so re-tuning the speed never silently truncates
+  // a run (a run cut short reads as a hero who stopped, which is exactly what we are testing for).
+  const stepMs = s.movementController.stepMs;
+  const deadline = performance.now() + tiles * stepMs * 1.3 + 200;
   while (performance.now() < deadline) {
     // Stop the moment a wall comes into view. A hero jammed against rock reads exactly like a
     // hero who has stalled, and it would poison every number below.

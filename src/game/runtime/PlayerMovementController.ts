@@ -27,8 +27,13 @@ import type { WorldCamera } from './WorldCamera';
 
 /** Milliseconds per tile. Constant: tapping covers ground at the same rate as holding. */
 const DEFAULT_STEP_MS = TIMINGS.moveDurationMs;
-/** A direction asked for near the end of a step is kept, and spent on the tile boundary. */
-const INPUT_BUFFER_MS = 120;
+/**
+ * Slack on top of a step: a press made ANYWHERE inside a step must still be alive when that step
+ * reaches its tile boundary and can spend it. Tie it to the step or the two drift apart — a fixed
+ * 120ms buffer silently ate a tap made early in a 150ms step. Braid holds a button 230ms; this
+ * lands in the same country.
+ */
+const INPUT_BUFFER_SLACK_MS = 30;
 /** Drag needed before the gesture commits to a direction. */
 const SWIPE_THRESHOLD_PX = 11;
 /** The drag anchor trails the finger on a leash this long, so turning around stays cheap. */
@@ -211,7 +216,7 @@ export class PlayerMovementController {
   private takeDirection(): (Dir & { fresh: boolean }) | null {
     const buffered = this.bufferedDir;
     this.bufferedDir = null;
-    if (buffered && this.scene.time.now - this.bufferedAtMs <= INPUT_BUFFER_MS) {
+    if (buffered && this.scene.time.now - this.bufferedAtMs <= this.stepMs + INPUT_BUFFER_SLACK_MS) {
       return { ...buffered, fresh: true };
     }
 
