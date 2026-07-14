@@ -21,6 +21,7 @@ npm run typecheck        # tsc --noEmit
 npm run lint             # eslint (scripts/worldgen has 3 pre-existing parser errors — ignore)
 npm run build            # typecheck + vite build
 npm run generate:world   # regenerate public/world.json
+npm run generate:lab     # regenerate public/lab.json (the puzzle lab's sandbox world)
 npm run playtest         # default scenarios
 npm run playtest -- all  # every scenario
 ```
@@ -32,6 +33,25 @@ harness at it:
 npx vite --port 5180 --strictPort
 PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 ```
+
+## The puzzle lab (`/lab`)
+
+`/lab` is where puzzle ideas get built and validated without touching the real world. It is the
+same editor as `/editor`, but pointed at its own sandbox file (`public/lab.json`) through
+`/api/world?file=lab`. Build the puzzle, press **P** to play the in-memory world, **ESC** to come
+back — nothing is saved until you hit Salvar, and Salvar only ever writes `lab.json`.
+
+- `/lab?play` skips the editor and boots the sandbox straight into `GameScene` (how
+  `npm run playtest -- lab-puzzles` enters — a scenario can override its entry route).
+- `npm run generate:lab` rebuilds `lab.json` from `scripts/gen-lab.mjs`. **Author puzzles there**,
+  not by hand-editing the JSON.
+- **Keep the lab world tiny.** The first cut was 3×2 chunks and the playtest showed most of the run
+  was the hero *walking between* puzzles. Walking is not a puzzle; it is now 2×1.
+- The undead siege (`UndeadSpawnDirector`) is **off** in lab mode: skulls respawning around the hero
+  mid-test are noise when the point is validating a puzzle, and they made the solve run flaky. So
+  the lab cannot test anything that depends on darkness pressure — use the real world for that.
+- The ESC return-to-editor handler is gated on the editor scene actually existing, because
+  `/lab?play` has no editor to wake.
 
 ## Verifying a change
 
