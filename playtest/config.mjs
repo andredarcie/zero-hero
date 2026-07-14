@@ -23,6 +23,10 @@ export const config = {
   // A little slow-mo keeps the run watchable and lets frames settle before screenshots.
   slowMoMs: Number(process.env.PLAYTEST_SLOWMO ?? 50),
 
+  // PLAYTEST_UNTHROTTLED=1 unlocks vsync, so a frame costs what it costs instead of whatever
+  // the refresh rate says. Required for ANY performance measurement — see UNTHROTTLED_ARGS.
+  unthrottled: process.env.PLAYTEST_UNTHROTTLED === '1',
+
   port,
   baseUrl: externalBaseUrl ?? `http://localhost:${port}`,
   autoStartServer: !externalBaseUrl,

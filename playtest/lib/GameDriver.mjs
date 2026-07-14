@@ -5,6 +5,22 @@
 // pop the dialog/shop UI for inspection. Scenarios talk to this, never to Playwright directly.
 import { chromium } from 'playwright';
 
+/**
+ * Let the frame run as fast as the machine can draw it (PLAYTEST_UNTHROTTLED=1).
+ *
+ * With vsync on, a desktop GPU simply DOWNCLOCKS to meet the refresh: strip the entire post
+ * chain out of the frame and the reported GPU time does not budge, because the hardware just
+ * did the smaller job more slowly. Every measurement lands on the refresh interval and every
+ * optimisation looks like it changed nothing. Unlocked, the frame costs what it costs.
+ */
+const UNTHROTTLED_ARGS = [
+  '--disable-gpu-vsync',
+  '--disable-frame-rate-limit',
+  '--disable-background-timer-throttling',
+  '--disable-renderer-backgrounding',
+  '--disable-backgrounding-occluded-windows',
+];
+
 import { config } from '../config.mjs';
 import { log } from './report.mjs';
 
@@ -34,7 +50,11 @@ export class GameDriver {
 
   static async launch() {
     // headless is forced false in config — a real, visible window is required (WebGL).
-    const browser = await chromium.launch({ headless: config.headless, slowMo: config.slowMoMs });
+    const browser = await chromium.launch({
+      headless: config.headless,
+      slowMo: config.slowMoMs,
+      args: config.unthrottled ? UNTHROTTLED_ARGS : [],
+    });
     const context = await browser.newContext({
       viewport: config.viewport,
       deviceScaleFactor: config.deviceScaleFactor,

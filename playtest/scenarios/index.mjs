@@ -9,6 +9,12 @@ import hd2dFx from './hd2d-fx.mjs';
 import heroView from './hero-view.mjs';
 import movementFeel from './movement-feel.mjs';
 import perfBurn from './perf-burn.mjs';
+import perfProfile from './perf-profile.mjs';
+import gpuBudget from './_gpu-budget.mjs';
+import sceneGraph from './_scene-graph.mjs';
+import quadCensus from './_quad-census.mjs';
+import lightProbe from './_light-probe.mjs';
+import pw from './_pw.mjs';
 
 export const scenarios = {
   smoke,
@@ -22,6 +28,12 @@ export const scenarios = {
   'hero-view': heroView,
   'movement-feel': movementFeel,
   'perf-burn': perfBurn,
+  'perf-profile': perfProfile,
+  '_gpu-budget': gpuBudget,
+  '_scene-graph': sceneGraph,
+  '_quad-census': quadCensus,
+  '_light-probe': lightProbe,
+  _pw: pw,
 };
 
 // What `npm run playtest` runs when no scenario is named.

@@ -88,6 +88,48 @@ export const FIRE_WOBBLE_GLSL = /* glsl */ `
  */
 export const lightCapUniform: THREE.IUniform = { value: 1.25 };
 
+/**
+ * Skip the point lights that are switched OFF.
+ *
+ * The scene's point-light COUNT is frozen on purpose (World3D: FIRE_LIGHT_SLOTS) — three.js bakes
+ * it into every compiled shader's cache key, so moving it recompiles every lit material in the
+ * world. The price of that bargain is a fixed loop: eight fire slots are evaluated by EVERY lit
+ * fragment on screen whether or not a fire is currently borrowing them, and an idle slot still
+ * pays for its vector, its length(), its attenuation pow() and its BRDF — to add exactly nothing.
+ * Most of the time only one or two fires are near enough to hold a light, so most of that loop is
+ * arithmetic performed on darkness.
+ *
+ * three.js folds intensity into the light's colour uniform, so an idle slot is literally black.
+ * Skipping a black light is EXACT rather than an approximation: `getPointLightInfo` would hand
+ * back `color * attenuation` = 0, and RE_Direct would add `dotNL * 0` = 0. And the branch tests a
+ * uniform, so every fragment in a warp takes it together — there is no divergence to pay for.
+ *
+ * Surgery on three's own chunk, so it is scoped to the point-light block by index: the same
+ * `RE_Direct(...)` line appears in the spot- and directional-light loops, and a blind replace
+ * would wrap those too.
+ */
+const skipDarkPointLights = (chunk: string): string => {
+  const blockStart = chunk.indexOf('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )');
+  if (blockStart < 0) return chunk;
+  const blockEnd = chunk.indexOf('#pragma unroll_loop_end', blockStart);
+  if (blockEnd < 0) return chunk;
+
+  const head = chunk.slice(0, blockStart);
+  const block = chunk.slice(blockStart, blockEnd);
+  const tail = chunk.slice(blockEnd);
+
+  const getInfo = 'getPointLightInfo( pointLight, geometryPosition, directLight );';
+  const reDirect = 'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );';
+  // A three.js upgrade that renames either line leaves the chunk untouched: slower, never wrong.
+  if (!block.includes(getInfo) || !block.includes(reDirect)) return chunk;
+
+  const guarded = block
+    .replace(getInfo, `if ( pointLight.color.r + pointLight.color.g + pointLight.color.b > 0.0 ) {\n\t\t${getInfo}`)
+    .replace(reDirect, `${reDirect}\n\t\t}`);
+
+  return head + guarded + tail;
+};
+
 type PatchOpts = {
   /** Quantize the direct light into lightStepsUniform bands. */
   quantize?: boolean;
@@ -115,13 +157,37 @@ type PatchOpts = {
   worldFx?: 'lavaFlow' | 'waterGlint';
 };
 
+/**
+ * Every shader compile, with the stack that CREATED the material (dev only).
+ *
+ * A program is compiled and linked by the driver on the frame its material is first drawn, and it
+ * costs 50–300ms — a visible freeze. The profiler can already see that a compile happened, but not
+ * whose: `onBeforeCompile` runs deep inside the renderer, so its own stack names three.js and
+ * nothing else. The stack that matters is the one from when the material was BORN, so take it
+ * there and carry it to the compile. Read it with `__shaderCompiles` after a run.
+ */
+const compileLog: Array<{ key: string; atMs: number; createdBy: string }> = [];
+if (import.meta.env.DEV) {
+  (window as unknown as { __shaderCompiles: typeof compileLog }).__shaderCompiles = compileLog;
+}
+
 /** Compose every shader patch a lit pixel-art material needs (single onBeforeCompile). */
 export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void => {
   // Three caches compiled programs by this key; without it, materials patched
   // DIFFERENTLY would silently share whichever variant compiled first.
   mat.customProgramCacheKey = () =>
     `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}`;
+
+  const bornAt = import.meta.env.DEV ? new Error().stack ?? '' : '';
+
   mat.onBeforeCompile = (shader) => {
+    if (import.meta.env.DEV) {
+      compileLog.push({
+        key: mat.customProgramCacheKey?.() ?? '?',
+        atMs: Math.round(performance.now()),
+        createdBy: bornAt.split('\n').slice(2, 6).map((l) => l.trim()).join(' ← '),
+      });
+    }
     if (opts.worldFx) {
       // A world-space position varying so the FX tiles seamlessly across a field.
       shader.uniforms.uFlowTime = flowTimeUniform;
@@ -178,7 +244,8 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
     // blocks that are pinned to the world — the 2D game's downscaled light overlay, rebuilt.
     // (Only lit world materials take this; billboards with footDistance light from their foot
     // and must not be re-snapped per fragment.)
-    if (opts.quantize && !opts.footDistance) {
+    const wantsSnap = Boolean(opts.quantize) && !opts.footDistance;
+    if (wantsSnap) {
       shader.uniforms.uLightRes = lightResUniform;
       shader.uniforms.uLightWobble = lightWobbleUniform;
       shader.uniforms.uFlowTime = flowTimeUniform;
@@ -189,37 +256,42 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
           `#include <begin_vertex>
            vLightGridPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`,
         );
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          'void main() {',
-          // worldFx materials already declared uFlowTime above.
-          `uniform float uLightRes;
-           uniform float uLightWobble;
-           ${opts.worldFx ? '' : 'uniform float uFlowTime;'}
-           ${FIRE_WOBBLE_GLSL}
-           varying vec3 vLightGridPos;
-           void main() {`,
-        )
-        .replace(
-          '#include <lights_fragment_begin>',
-          THREE.ShaderChunk.lights_fragment_begin.replace(
-            'vec3 geometryPosition = - vViewPosition;',
-            `vec3 geometryPosition = - vViewPosition;
-             if (uLightRes > 0.0) {
-               vec3 lightTexel = (floor(vLightGridPos * uLightRes) + 0.5) / uLightRes;
-               // Imperfect firelight: the texel pretends to sit a little off its true
-               // spot, so its distance to every POINT light (fire/torch) warps and the
-               // banded pool lobes organically. The directional moon has no distance —
-               // the flat night fill stays untouched.
-               lightTexel.xz += vec2(
-                 fireWobble(lightTexel.xz, uFlowTime),
-                 fireWobble(lightTexel.zx + 31.7, uFlowTime)
-               ) * uLightWobble;
-               geometryPosition = (viewMatrix * vec4(lightTexel, 1.0)).xyz;
-             }`,
-          ),
-        );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'void main() {',
+        // worldFx materials already declared uFlowTime above.
+        `uniform float uLightRes;
+         uniform float uLightWobble;
+         ${opts.worldFx ? '' : 'uniform float uFlowTime;'}
+         ${FIRE_WOBBLE_GLSL}
+         varying vec3 vLightGridPos;
+         void main() {`,
+      );
     }
+
+    // The light loop itself. Every lit material skips its dark lights; only the world materials
+    // (never the foot-lit billboards) additionally snap the lookup to the light grid.
+    let lightsChunk = THREE.ShaderChunk.lights_fragment_begin;
+    if (wantsSnap) {
+      lightsChunk = lightsChunk.replace(
+        'vec3 geometryPosition = - vViewPosition;',
+        `vec3 geometryPosition = - vViewPosition;
+         if (uLightRes > 0.0) {
+           vec3 lightTexel = (floor(vLightGridPos * uLightRes) + 0.5) / uLightRes;
+           // Imperfect firelight: the texel pretends to sit a little off its true
+           // spot, so its distance to every POINT light (fire/torch) warps and the
+           // banded pool lobes organically. The directional moon has no distance —
+           // the flat night fill stays untouched.
+           lightTexel.xz += vec2(
+             fireWobble(lightTexel.xz, uFlowTime),
+             fireWobble(lightTexel.zx + 31.7, uFlowTime)
+           ) * uLightWobble;
+           geometryPosition = (viewMatrix * vec4(lightTexel, 1.0)).xyz;
+         }`,
+      );
+    }
+    lightsChunk = skipDarkPointLights(lightsChunk);
+    // A MeshBasicMaterial has no light loop at all, so this is a no-op there.
+    shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', lightsChunk);
     if (opts.normalUp) {
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <normal_fragment_begin>',

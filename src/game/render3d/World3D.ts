@@ -18,6 +18,7 @@ import {
   lightWobbleUniform, patchPixelMaterial,
 } from './pixelArtLight';
 import { getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv } from './textures3d';
+import { getWoodTexture } from './woodTexture';
 
 // The shapes every one-shot world FX is built from — a glowing dot (sparks, embers, motes), a
 // hollow ring (impact shockwaves) and a soft puff (smoke). Registered as textures at init; spawn
@@ -504,6 +505,8 @@ export class World3D {
   // ── firelight cast shadows (2D ground silhouettes) ──
   // One persistent silhouette per dynamic caster (hero, props, NPCs, enemies)…
   private readonly castCasters: Array<{ bb: Billboard3D; mesh: THREE.Mesh }> = [];
+  /** Invisible stand-ins that hold the runtime shaders' programs alive. See prewarmShaders. */
+  private readonly warmups: Array<{ setVisible(v: boolean): unknown }> = [];
   // …and a reused pool for whichever static solid tiles are near a lit fire this frame.
   private readonly solidCastPool: THREE.Mesh[] = [];
 
@@ -526,6 +529,11 @@ export class World3D {
     this.renderer.shadowMap.enabled = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = this.params.exposure;
+    // three.js clears info.render at the top of EVERY renderer.render(), and the post chain runs
+    // a dozen of them per frame — so a profiler reading the counters afterwards sees only the
+    // last fullscreen copy (1 call, 1 triangle) and reports that as the whole world. Take the
+    // reset over ourselves, once per frame, and let the passes accumulate into one honest total.
+    this.renderer.info.autoReset = false;
     this.applyPixelScale();
 
     this.scene.background = new THREE.Color('#070811');
@@ -987,7 +995,61 @@ export class World3D {
    * on the frame it is first drawn, and the player wears it.
    */
   public prewarmShaders(): void {
+    // renderer.compile() only knows about materials that are IN the scene right now. Everything
+    // the game makes LATER — the first ember, the first puff, the first skeleton, the first coin —
+    // is compiled and linked by the driver on the frame it is first drawn, and that costs 50–300ms
+    // of frozen game. The profile caught two of them: a stall at +1s and another at +6s, each a
+    // quarter of a second, each blamed on nothing in particular.
+    //
+    // So stand in for them. One throwaway billboard per option SHAPE the game creates at runtime
+    // puts the program in the cache before the real object ever asks for it — only the shape
+    // reaches the program's cache key, never the texture or the position. Note the fogless FX:
+    // USE_FOG is baked into the program, so a fogless puff is a different shader from a foggy
+    // coin, however alike the two look on screen.
+    //
+    // This list is guarded rather than trusted: perf-profile fails if ANY program compiles during
+    // play, so a new billboard shape that forgets to register here cannot stay forgotten.
+    const runtimeVariants: Billboard3DOptions[] = [
+      { emissive: true },                     // coin, heart, dropped item, campfire flame
+      { additive: true },                     // fire glow, embers
+      { groundShadow: true },                 // a skeleton, an NPC: lit, with a contact blob
+      { castGroundShadow: true },             // the hero
+      { centered: true },                     // the item raised on ITEM GET
+      { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 },
+      { centered: true, fog: false, depthWrite: false, additive: true },
+      { flat: true, fog: false, depthWrite: false, additive: true },   // the ring, the ground crack
+      { flat: true, additive: true },                                  // survivors' ground rings
+    ];
+    for (const opts of runtimeVariants) {
+      this.warmups.push(new Billboard3D(this.scene, FX_DOT_TEXTURE, 0, opts).setDisplaySize(0.001, 0.001));
+    }
+
+    // The bridge deck. Its boxes are born when you WALK to a river — the chunk streamer builds the
+    // water, and a buildable spot immediately ghosts in its deck — so they are not here to be
+    // compiled now. And a Lambert BOX wearing a texture, with neither vertex colours nor an alpha
+    // test, is a program shape nothing else in this world has: the first river you approach used
+    // to cost a frozen quarter of a second.
+    this.warmups.push(this.addBox(0.001, 0.001, 0.001, getWoodTexture('plankA', false)));
+
+    // Compile against the COMPOSER'S render target, not against the canvas.
+    //
+    // This is the whole ball game. The world is never drawn to the canvas: EffectComposer draws it
+    // into an offscreen target and the post chain resolves that to the screen. And three bakes the
+    // target's colour space into the program's cache key — linear for an offscreen target, sRGB for
+    // the canvas. So a prewarm that leaves the canvas bound compiles a complete set of programs the
+    // game will never ask for, and the game then compiles its REAL set lazily, one 50–300ms freeze
+    // at a time, on the frame each material is first drawn. It looked like the prewarm was running
+    // (it was) and doing nothing (it was), which is the worst kind of bug to read.
+    const prevTarget = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.composer.renderTarget1);
     this.renderer.compile(this.scene, this.camera);
+    this.renderer.setRenderTarget(prevTarget);
+
+    // Hide them, but do NOT destroy them. destroy() disposes the material, three drops that
+    // material's reference to the program, and a program nobody references any more is deleted
+    // outright — so tearing the stand-ins down would undo the very compile they were built for.
+    // They cost nine invisible quads for the run; the alternative costs a quarter-second freeze.
+    for (const w of this.warmups) w.setVisible(false);
   }
 
   /** Point lights in the scene. Constant for the whole run — see FIRE_LIGHT_SLOTS. */
@@ -1349,6 +1411,9 @@ export class World3D {
     const dt = Math.min(dtMs / 1000, 0.05);
     this.elapsed += dt;
     this.shakeMs = Math.max(0, this.shakeMs - dtMs);
+    // We own the reset now (autoReset is off), so the frame's counters cover every pass the
+    // composer runs, not just the last one.
+    this.renderer.info.reset();
     profiler.begin('rustle');
     this.updateRustles(dt);
     profiler.end('rustle');
