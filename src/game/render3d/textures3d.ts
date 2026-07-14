@@ -140,6 +140,35 @@ export const registerTexture3D = (key: string, texture: THREE.Texture): void => 
 };
 
 /**
+ * The UV window a spritesheet frame occupies: `uv * repeat + offset`.
+ *
+ * This is the transform getTexture3D bakes into its cloned texture, pulled out so a shader that
+ * addresses a frame ITSELF (the instanced cast-shadow field, which samples one shared tileset for
+ * every solid it shadows) computes the identical window. Two copies of this arithmetic would drift.
+ */
+export const frameUvWindow = (
+  key: string,
+  frame: number,
+): { offsetX: number; offsetY: number; repeatX: number; repeatY: number } => {
+  const def = DEFS[key];
+  const base = baseTextures.get(key);
+  if (!def || !base) throw new Error(`textures3d: chave desconhecida '${key}'`);
+  const img = base.image as { width: number; height: number };
+  if (def.frameW === undefined) return { offsetX: 0, offsetY: 0, repeatX: 1, repeatY: 1 };
+
+  const cols = Math.max(1, Math.floor(img.width / (def.frameW ?? img.width)));
+  const rows = Math.max(1, Math.floor(img.height / (def.frameH ?? img.height)));
+  const col = frame % cols;
+  const row = Math.floor(frame / cols);
+  return {
+    offsetX: col / cols,
+    offsetY: (rows - 1 - row) / rows,
+    repeatX: 1 / cols,
+    repeatY: 1 / rows,
+  };
+};
+
+/**
  * A texture for `key`, optionally narrowed to a spritesheet `frame` (row-major,
  * like Phaser's). Frame variants are cached clones sharing the base image.
  */
@@ -153,14 +182,10 @@ export const getTexture3D = (key: string, frame = 0): THREE.Texture => {
   const hit = frameTextures.get(cacheKey);
   if (hit) return hit;
 
-  const img = base.image as { width: number; height: number };
-  const cols = Math.max(1, Math.floor(img.width / (def.frameW ?? img.width)));
-  const rows = Math.max(1, Math.floor(img.height / (def.frameH ?? img.height)));
-  const col = frame % cols;
-  const row = Math.floor(frame / cols);
+  const w = frameUvWindow(key, frame);
   const t = base.clone();
-  t.repeat.set(1 / cols, 1 / rows);
-  t.offset.set(col / cols, (rows - 1 - row) / rows);
+  t.repeat.set(w.repeatX, w.repeatY);
+  t.offset.set(w.offsetX, w.offsetY);
   t.needsUpdate = true;
   frameTextures.set(cacheKey, t);
   return t;

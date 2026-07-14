@@ -14,7 +14,7 @@ import * as THREE from 'three';
 
 const FOOT_Y = 0.015; // sits just above the ground (over the contact blob)
 export const CAST_MAX_ALPHA = 0.6; // darkness right beside the flame
-const WIDTH_FACTOR = 0.92; // shadows are a touch slimmer than the object
+export const WIDTH_FACTOR = 0.92; // shadows are a touch slimmer than the object
 // A silhouette laid flat on the ground is foreshortened by the tilted camera, so it
 // must run LONGER than the 2D screen-space shadow to read the same. Even hugging the
 // flame it clearly reaches past the object's foot; at the light's edge it rakes long.
@@ -44,6 +44,191 @@ export const makeCastMesh = (): THREE.Mesh => {
 };
 
 /**
+ * Every STATIC solid's cast shadow, in ONE draw call.
+ *
+ * There is a shadow per tree, rock and wall standing near a lit fire, and they were 36 of the
+ * frame's 120 draw calls — each one a program bind, a whole set of uniform uploads, and two
+ * triangles. They were also where most of the frame's garbage came from: three allocates inside its
+ * uniform setters, so the GC bill tracks the draw count, and the collector was stopping the world
+ * for 300ms at a time.
+ *
+ * Two properties make batching them EXACT rather than merely close:
+ *
+ *  · They all take their silhouette from the same image. getTexture3D hands out clones of the
+ *    tileset that differ only in which frame of it they window onto, so one shared texture plus a
+ *    per-instance UV window reproduces every one of them (frameUvWindow, so the arithmetic lives
+ *    in exactly one place and cannot drift).
+ *
+ *  · They are all PURE BLACK. Blending N layers of one colour is commutative — the result is
+ *    dst · Π(1 - aᵢ) whichever way round you do it — so the arbitrary order inside an instanced
+ *    batch lands on precisely the pixel the back-to-front sorted version did. This would NOT hold
+ *    for coloured sprites.
+ *
+ * The alpha is applied per instance BEFORE the alpha test, exactly where the material's `opacity`
+ * uniform used to sit: a fading shadow's silhouette shrinks as its alpha drops below the 0.4
+ * threshold, and that erosion is part of the look.
+ */
+export class SolidCastField {
+  public readonly mesh: THREE.InstancedMesh;
+  private readonly uvWindow: THREE.InstancedBufferAttribute;
+  private readonly alpha: THREE.InstancedBufferAttribute;
+  private readonly matrix = new THREE.Matrix4();
+  private readonly position = new THREE.Vector3();
+  private readonly quaternion = new THREE.Quaternion();
+  private readonly euler = new THREE.Euler();
+  private readonly scale = new THREE.Vector3();
+  /** Collected this frame, then sorted back-to-front in end(). */
+  private readonly pending: Array<{
+    objX: number; objY: number;
+    uv: { offsetX: number; offsetY: number; repeatX: number; repeatY: number };
+    width: number; length: number; rotY: number; alpha: number; depth: number;
+  }> = [];
+
+  public constructor(capacity: number, map: THREE.Texture) {
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.translate(0, 0.5, 0); // origin at the foot
+    geo.rotateX(-Math.PI / 2); // lay flat, head along -Z
+
+    this.uvWindow = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
+    this.alpha = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
+    this.uvWindow.setUsage(THREE.DynamicDrawUsage);
+    this.alpha.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('aUvWindow', this.uvWindow);
+    geo.setAttribute('aCastAlpha', this.alpha);
+
+    const mat = new THREE.MeshBasicMaterial({
+      map,
+      color: 0x000000,
+      transparent: true,
+      opacity: 1, // per-instance now; see the shader patch below
+      depthWrite: false,
+      alphaTest: 0.4,
+      side: THREE.DoubleSide,
+    });
+    mat.customProgramCacheKey = () => 'solidCastField';
+    mat.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          'void main() {',
+          `attribute vec4 aUvWindow;
+           attribute float aCastAlpha;
+           varying float vCastAlpha;
+           void main() {`,
+        )
+        // Window onto this instance's frame of the sheet, in place of the material's single
+        // map transform — which is what the per-shadow cloned textures used to buy.
+        .replace(
+          '#include <uv_vertex>',
+          `#include <uv_vertex>
+           vMapUv = uv * aUvWindow.zw + aUvWindow.xy;
+           vCastAlpha = aCastAlpha;`,
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', 'varying float vCastAlpha;\nvoid main() {')
+        // Exactly where `opacity` sat: BEFORE the alpha test, so a faint shadow erodes.
+        .replace(
+          '#include <map_fragment>',
+          '#include <map_fragment>\n diffuseColor.a *= vCastAlpha;',
+        );
+    };
+
+    this.mesh = new THREE.InstancedMesh(geo, mat, capacity);
+    this.mesh.count = 0;
+    this.mesh.renderOrder = 4; // after the additive fire glow, like the single meshes did
+    // The instances scatter across the clearing, so one bounding sphere would either cull them
+    // all wrongly or bound the whole world. It is a single draw either way.
+    this.mesh.frustumCulled = false;
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  }
+
+  public begin(): void {
+    this.pending.length = 0;
+  }
+
+  /** One shadow. Mirrors configureCast's transform exactly. */
+  public add(
+    objX: number,
+    objY: number,
+    uv: { offsetX: number; offsetY: number; repeatX: number; repeatY: number },
+    width: number,
+    length: number,
+    rotY: number,
+    alpha: number,
+  ): void {
+    if (this.pending.length >= this.mesh.instanceMatrix.count) return;
+    this.pending.push({ objX, objY, uv, width, length, rotY, alpha, depth: 0 });
+  }
+
+  /**
+   * Write the batch, FARTHEST FIRST.
+   *
+   * The one thing a batch cannot inherit is three's transparent sort. These shadows overlap, they
+   * blend, and — because the scene has fog — their source colour is not quite the pure black that
+   * would make the blend commutative: the fog tints each of them by its own depth. Drawn in an
+   * arbitrary order they land on a slightly different pixel from the sorted ones, which is a
+   * visible difference where three or four rake across each other. So sort them here, by the same
+   * key three used (view depth, back to front) — 36 numbers, once a frame.
+   */
+  public end(camX: number, camZ: number): void {
+    const list = this.pending;
+    for (const p of list) {
+      const dx = p.objX - camX;
+      const dz = p.objY - camZ;
+      p.depth = dx * dx + dz * dz;
+    }
+    list.sort((a, b) => b.depth - a.depth);
+
+    for (let i = 0; i < list.length; i += 1) {
+      const p = list[i];
+      this.position.set(p.objX, FOOT_Y, p.objY);
+      this.quaternion.setFromEuler(this.euler.set(0, p.rotY, 0));
+      this.scale.set(p.width, 1, p.length);
+      this.matrix.compose(this.position, this.quaternion, this.scale);
+      this.mesh.setMatrixAt(i, this.matrix);
+      this.uvWindow.setXYZW(i, p.uv.offsetX, p.uv.offsetY, p.uv.repeatX, p.uv.repeatY);
+      this.alpha.setX(i, p.alpha);
+    }
+
+    this.mesh.count = list.length;
+    this.mesh.visible = list.length > 0;
+    this.mesh.instanceMatrix.needsUpdate = true;
+    this.uvWindow.needsUpdate = true;
+    this.alpha.needsUpdate = true;
+  }
+}
+
+/**
+ * The geometry of one cast shadow: where it lands, how long it rakes, how dark it is.
+ * Shared by the single-mesh path (actors, each with its own sprite) and the instanced field.
+ */
+export const castTransform = (
+  objX: number,
+  objY: number,
+  height: number,
+  fireX: number,
+  fireY: number,
+  level: number,
+  radius: number,
+  alpha: number,
+): { length: number; rotY: number; alpha: number } | null => {
+  const dx = objX - fireX;
+  const dz = objY - fireY;
+  const dist = Math.hypot(dx, dz) || 1e-3;
+  const t = Math.min(1, dist / radius);
+
+  const distStretch = NEAR_STRETCH + (FAR_STRETCH - NEAR_STRETCH) * t;
+  const flameStretch = 1.5 - 0.5 * level; // low flame → long shadow
+  const a = alpha * (1 - t * t);
+  if (a <= 0.02) return null;
+
+  return {
+    length: height * distStretch * Math.max(0.4, flameStretch),
+    rotY: Math.atan2(-dx / dist, -dz / dist),
+    alpha: a,
+  };
+};
+
+/**
  * Lay `mesh` down as `objX,objY`'s shadow cast away from a flame at `fireX,fireY`.
  * `level` is the flame's instantaneous brightness (~0.6 dim … 1.4 flaring), `radius`
  * its reach in tiles, `alpha` the darkness beside it. Hides the mesh past the reach.
@@ -63,29 +248,16 @@ export const configureCast = (
   radius: number,
   alpha: number,
 ): boolean => {
-  const dx = objX - fireX;
-  const dz = objY - fireY;
-  const dist = Math.hypot(dx, dz) || 1e-3;
-  const t = Math.min(1, dist / radius);
-
-  // Length: longer the farther from the flame (grazing light), and longer as the
-  // flame dips (level < 1 → taller shadow) — the inverse coupling that made the 2D
-  // shadows wax and wane with the fire.
-  const distStretch = NEAR_STRETCH + (FAR_STRETCH - NEAR_STRETCH) * t;
-  const flameStretch = 1.5 - 0.5 * level; // low flame → long shadow
-  const length = height * distStretch * Math.max(0.4, flameStretch);
-
-  // Fade toward the light's edge (the ground there is already black); darkest beside it.
-  const a = alpha * (1 - t * t);
-  if (a <= 0.02) { mesh.visible = false; return false; }
+  const cast = castTransform(objX, objY, height, fireX, fireY, level, radius, alpha);
+  if (!cast) { mesh.visible = false; return false; }
 
   const mat = mesh.material as THREE.MeshBasicMaterial;
   if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
-  mat.opacity = a;
+  mat.opacity = cast.alpha;
   mesh.position.set(objX, FOOT_Y, objY);
   // Base head direction is -Z; rotate it onto the away-from-flame direction.
-  mesh.rotation.y = Math.atan2(-dx / dist, -dz / dist);
-  mesh.scale.set((flipX ? -1 : 1) * width * WIDTH_FACTOR, 1, length);
+  mesh.rotation.y = cast.rotY;
+  mesh.scale.set((flipX ? -1 : 1) * width * WIDTH_FACTOR, 1, cast.length);
   mesh.visible = true;
   return true;
 };

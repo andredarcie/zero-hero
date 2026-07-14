@@ -81,7 +81,11 @@ const show = (log, label, r) => {
   }
   if (r.spikes.length) {
     log(`  ${r.spikes.length} spike(s):`);
-    for (const sp of r.spikes.slice(0, 8)) log(`    f${sp.frame} ${sp.dt}ms — ${sp.cause}`);
+    for (const sp of r.spikes.slice(0, 8)) {
+      const worst = (sp.worst ?? []).map((w) => `${w.section} ${w.ms}ms`).join(' · ');
+      log(`    f${sp.frame} ${sp.dt}ms — ${sp.cause}`);
+      if (worst) log(`        sections: ${worst}`);
+    }
   }
 };
 

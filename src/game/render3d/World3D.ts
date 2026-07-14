@@ -10,14 +10,16 @@ import {
 import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds } from '@/game/world/WorldData';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
-import { CAST_MAX_ALPHA, configureCast, makeCastMesh } from './CastShadow3D';
+import {
+  CAST_MAX_ALPHA, castTransform, configureCast, makeCastMesh, SolidCastField, WIDTH_FACTOR as CAST_WIDTH_FACTOR,
+} from './CastShadow3D';
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform,
   lightWobbleUniform, patchPixelMaterial,
 } from './pixelArtLight';
-import { getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv } from './textures3d';
+import { frameUvWindow, getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv } from './textures3d';
 import { getWoodTexture } from './woodTexture';
 
 // The shapes every one-shot world FX is built from — a glowing dot (sparks, embers, motes), a
@@ -508,7 +510,8 @@ export class World3D {
   /** Invisible stand-ins that hold the runtime shaders' programs alive. See prewarmShaders. */
   private readonly warmups: Array<{ setVisible(v: boolean): unknown }> = [];
   // …and a reused pool for whichever static solid tiles are near a lit fire this frame.
-  private readonly solidCastPool: THREE.Mesh[] = [];
+  /** Every static solid's cast shadow, batched into one instanced draw. See SolidCastField. */
+  private solidCastField!: SolidCastField;
 
   public constructor() {
     this.canvas = document.createElement('canvas');
@@ -866,6 +869,12 @@ export class World3D {
     );
     ellipses.renderOrder = 3; // after the additive fire glow, so the blob isn't washed out
     this.scene.add(ellipses);
+
+    // …and the firelight shadow each of them THROWS, all of it in one draw. It used to be one mesh
+    // per solid — 36 of the frame's 120 draw calls, and with them the bulk of its garbage, since
+    // three allocates inside its uniform setters and the GC bill tracks the draw count.
+    this.solidCastField = new SolidCastField(CAST_POOL_MAX, getBaseTexture3D('forest-tileset'));
+    this.scene.add(this.solidCastField.mesh);
   }
 
   // ── dynamic actors ───────────────────────────────────────────────────────────
@@ -1076,7 +1085,7 @@ export class World3D {
       litFires: this.litFires.length,
       fireLightsUsed: this.activeFireLights,
       castCasters: this.castCasters.length,
-      castPool: this.solidCastPool.length,
+      castPool: this.solidCastField.mesh.count,
       glowsLive: this.fires.length,
       glowsPooled: this.freeGlows.length,
     };
@@ -1267,25 +1276,29 @@ export class World3D {
       );
     }
 
-    // Static solid tiles (trees/walls) near a lit fire, from the shared pool.
-    let p = 0;
+    // Static solid tiles (trees/walls) near a lit fire — every one of them in a SINGLE draw.
+    // They all silhouette the same image (the tileset) and they are all pure black, which is what
+    // lets them batch without changing a pixel. See SolidCastField.
+    const field = this.solidCastField;
+    field.begin();
     const anyLit = this.torch.strength > 0.15 || this.litFires.length > 0;
     if (anyLit) {
+      let p = 0;
       for (const tile of this.castableSolids) {
         if (p >= CAST_POOL_MAX) break;
         const fire = this.nearestLitFire(tile.x, tile.z);
         if (!fire) continue;
         if (Math.hypot(tile.x - fire.worldX, tile.z - fire.worldY) > radius) continue;
-        let mesh = this.solidCastPool[p];
-        if (!mesh) { mesh = makeCastMesh(); this.scene.add(mesh); this.solidCastPool[p] = mesh; }
-        configureCast(
-          mesh, tile.x, tile.z, getTexture3D('forest-tileset', tile.frame), false,
-          1, 1, fire.worldX, fire.worldY, fire.level, radius, alpha,
+        const cast = castTransform(tile.x, tile.z, 1, fire.worldX, fire.worldY, fire.level, radius, alpha);
+        if (!cast) continue;
+        field.add(
+          tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
+          CAST_WIDTH_FACTOR, cast.length, cast.rotY, cast.alpha,
         );
-        p++;
+        p += 1;
       }
     }
-    for (; p < this.solidCastPool.length; p++) this.solidCastPool[p].visible = false;
+    field.end(this.camTarget.x, this.camTarget.z);
   }
 
   // ── grass rustle (the 2D board's step-on-grass wobble, on the baked decor) ────
