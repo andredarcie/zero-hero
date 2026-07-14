@@ -11,7 +11,8 @@ import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldB
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
 import {
-  CAST_MAX_ALPHA, castTransform, configureCast, makeCastMesh, SolidCastField, WIDTH_FACTOR as CAST_WIDTH_FACTOR,
+  applyCast, CAST_MAX_ALPHA, castTransform, handoffCast, makeCastMesh, SolidCastField,
+  WIDTH_FACTOR as CAST_WIDTH_FACTOR,
 } from './CastShadow3D';
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
@@ -56,7 +57,10 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 // SHADOWS ARE NOT SHADOW MAPS. `renderer.shadowMap.enabled` is false, on
 // purpose: the ground shadows are 2D fakes — a soft contact blob under every
 // standing thing (groundShadow.ts) plus a projected silhouette pointing away
-// from the shadow light (CastShadow3D.ts). They are cheaper, fully art-directed,
+// from the shadow light (CastShadow3D.ts), plus a faint MOON silhouette on a
+// fixed heading so the forest keeps its depth between fires (statics bake into
+// one static instanced draw; an actor's one shadow mesh swings from flame-cast
+// to moon-cast at a pool's edge). They are cheaper, fully art-directed,
 // and they hold the pixel look; a real shadow map fought all three. (The
 // castShadow / customDepthMaterial flags left on the meshes are inert while the
 // map is off — they are the door back to real shadows, not a live feature.)
@@ -278,6 +282,15 @@ export interface World3DParams {
    *  (past it an object throws no shadow) and the darkness right beside the flame. */
   castShadowRadius: number;
   castShadowAlpha: number;
+  /**
+   * Moonlight cast shadows — the directional counterpart of the fire silhouettes, so
+   * the forest keeps its depth BETWEEN fires. Alpha is the darkness (0 = off); length
+   * is in caster heights. The heading follows the moon light itself. Static solids
+   * bake into one instanced draw (fillMoonCastField); each actor's single shadow mesh
+   * swings from flame-cast to moon-cast at a fire pool's edge (handoffCast).
+   */
+  moonShadowAlpha: number;
+  moonShadowLength: number;
   heroLight: number;
   fogDensity: number;
   /** Cool directional moonlight that fills the night (0 = off). */
@@ -407,6 +420,13 @@ export class World3D {
     // is lit enough for a shadow to read), darkest beside it (see CastShadow3D.ts).
     castShadowRadius: 7.5,
     castShadowAlpha: CAST_MAX_ALPHA,
+    // Faint and long: moonlight is a fill, not a spotlight. The shadow must GROUND a
+    // tree — never compete with a fire's 0.6-dark breathing casts, and never crush the
+    // (already dark) unlit forest floor. Length reads longer than the moon's real
+    // elevation would throw, because the tilted camera foreshortens anything laid flat
+    // (same reason the fire casts run 1.3–3.2×).
+    moonShadowAlpha: 0.22,
+    moonShadowLength: 2.1,
     // The hero's neutral self-glow is dim so that near a fire he takes the fire's
     // warm colour, and his white pixels (horns/eyes) don't glare under a bright glow.
     heroLight: 28,
@@ -526,6 +546,12 @@ export class World3D {
   // …and a reused pool for whichever static solid tiles are near a lit fire this frame.
   /** Every static solid's cast shadow, batched into one instanced draw. See SolidCastField. */
   private solidCastField!: SolidCastField;
+  /** Every static solid's MOON shadow — filled once at build, the moon never moves. */
+  private moonCastField!: SolidCastField;
+  /** Ground heading a moon shadow points along (from the moon light's own position). */
+  private moonCastRotY = 0;
+  /** The knob values the moon field was last baked with; a live tune refills it. */
+  private readonly appliedMoonShadow = { alpha: -1, length: -1 };
 
   public constructor() {
     this.canvas = document.createElement('canvas');
@@ -571,6 +597,13 @@ export class World3D {
     this.moonLight = new THREE.DirectionalLight(this.params.moonColor, this.params.moon);
     this.moonLight.position.set(-6, 10, -4);
     this.scene.add(this.moonLight);
+    // Where the moon throws a ground shadow: along the horizontal component of its
+    // light's travel (target − position). Derived from the light so they cannot drift
+    // apart — retune the moon's position and every shadow follows.
+    const mx = -this.moonLight.position.x;
+    const mz = -this.moonLight.position.z;
+    const md = Math.hypot(mx, mz) || 1;
+    this.moonCastRotY = Math.atan2(-mx / md, -mz / md);
 
     // Snapped each frame to the lit fire nearest the camera: it carries that fire's
     // intensity/colour so the clearing is lit from one warm point (the fires' own
@@ -894,6 +927,42 @@ export class World3D {
     // three allocates inside its uniform setters and the GC bill tracks the draw count.
     this.solidCastField = new SolidCastField(CAST_POOL_MAX, getBaseTexture3D('forest-tileset'));
     this.scene.add(this.solidCastField.mesh);
+
+    // …and the MOON shadow each of them throws, likewise one draw — but this one is baked
+    // ONCE, not refilled per frame: the moon never moves, so neither do these. Sized to hold
+    // every castable solid in the world; only the on-screen fragments cost anything.
+    this.moonCastField = new SolidCastField(
+      Math.max(1, this.castableSolids.length), getBaseTexture3D('forest-tileset'),
+    );
+    this.scene.add(this.moonCastField.mesh);
+    this.fillMoonCastField();
+  }
+
+  /**
+   * Bake every exposed solid's moonlight shadow into its instanced field — once, and again
+   * only when the hd3d knobs move. Unlike the fire casts these transforms are constant.
+   *
+   * end() wants a camera to sort back-to-front (overlapping fog-tinted blacks blend
+   * order-dependently — see SolidCastField), but the game camera only ever TRANSLATES:
+   * its view direction is fixed, so view depth is simply "north is far" for the whole
+   * run, and a virtual camera far to the south bakes the correct order for every frame.
+   */
+  private fillMoonCastField(): void {
+    const alpha = this.params.moonShadowAlpha;
+    const length = this.params.moonShadowLength;
+    const field = this.moonCastField;
+    field.begin();
+    if (alpha > 0.02) {
+      for (const tile of this.castableSolids) {
+        field.add(
+          tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
+          CAST_WIDTH_FACTOR, length, this.moonCastRotY, alpha,
+        );
+      }
+    }
+    field.end(0, 1e6);
+    this.appliedMoonShadow.alpha = alpha;
+    this.appliedMoonShadow.length = length;
   }
 
   // ── dynamic actors ───────────────────────────────────────────────────────────
@@ -1105,6 +1174,7 @@ export class World3D {
       fireLightsUsed: this.activeFireLights,
       castCasters: this.castCasters.length,
       castPool: this.solidCastField.mesh.count,
+      moonCastPool: this.moonCastField.mesh.count,
       glowsLive: this.fires.length,
       glowsPooled: this.freeGlows.length,
     };
@@ -1269,14 +1339,20 @@ export class World3D {
   }
 
   /**
-   * Lay down each caster's black silhouette pointing away from its nearest flame
-   * (see CastShadow3D.ts). Dynamic casters (hero/props/NPCs/enemies) each own a
-   * mesh; static solid tiles borrow from a pool, so only those near a lit fire this
-   * frame consume one.
+   * Lay down each caster's black silhouette pointing away from its nearest flame —
+   * or along the moon's heading where no flame reaches (see CastShadow3D.ts).
+   * Dynamic casters (hero/props/NPCs/enemies) each own a mesh; static solid tiles
+   * borrow from a pool, so only those near a lit fire this frame consume one.
    */
   private updateCastShadows(): void {
     const radius = Math.max(0.5, this.params.castShadowRadius);
     const alpha = this.params.castShadowAlpha;
+    const moonAlpha = this.params.moonShadowAlpha;
+    const moonLength = this.params.moonShadowLength;
+    // Live tuning (window.hd3d): the statics' moon field is baked, so a knob move re-bakes it.
+    if (moonAlpha !== this.appliedMoonShadow.alpha || moonLength !== this.appliedMoonShadow.length) {
+      this.fillMoonCastField();
+    }
 
     for (let i = this.castCasters.length - 1; i >= 0; i--) {
       const c = this.castCasters[i];
@@ -1287,11 +1363,17 @@ export class World3D {
         this.castCasters.splice(i, 1);
         continue;
       }
-      const fire = c.bb.visible ? this.nearestLitFire(c.bb.x, c.bb.y) : null;
-      if (!fire) { c.mesh.visible = false; continue; }
-      configureCast(
+      if (!c.bb.visible) { c.mesh.visible = false; continue; }
+      const height = Math.abs(c.bb.scaleY);
+      const fire = this.nearestLitFire(c.bb.x, c.bb.y);
+      const fireCast = fire
+        ? castTransform(c.bb.x, c.bb.y, height, fire.worldX, fire.worldY, fire.level, radius, alpha)
+        : null;
+      const cast = handoffCast(fireCast, this.moonCastRotY, moonLength * height, moonAlpha);
+      if (!cast) { c.mesh.visible = false; continue; }
+      applyCast(
         c.mesh, c.bb.x, c.bb.y, getTexture3D(c.bb.texKey, c.bb.frame), c.bb.flipX,
-        Math.abs(c.bb.scaleX), Math.abs(c.bb.scaleY), fire.worldX, fire.worldY, fire.level, radius, alpha,
+        Math.abs(c.bb.scaleX), cast.length, cast.rotY, cast.alpha,
       );
     }
 

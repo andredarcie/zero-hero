@@ -87,8 +87,9 @@ const SETTLE = `async (tileX, tileY, steps) => {
   // bloom then spread over half the frame.
   if (window.__isolateShadows) {
     const field = w3.solidCastField ? w3.solidCastField.mesh : null;
+    const moonField = w3.moonCastField ? w3.moonCastField.mesh : null;
     const pool = w3.solidCastPool ?? [];
-    const keep = new Set([field, ...pool].filter(Boolean));
+    const keep = new Set([field, moonField, ...pool].filter(Boolean));
     w3.scene.traverse((o) => {
       if (!o.isMesh && !o.isPoints) return;
       if (keep.has(o)) return;

@@ -10,6 +10,12 @@ import * as THREE from 'three';
 // flat on the ground, anchored at its foot, rotated to point away from the flame
 // and stretched along its length. It fades out toward the edge of the light.
 //
+// The MOON casts the same silhouettes: a fixed faint heading that gives the forest
+// its depth between fires, where until now everything floated on flat ground. The
+// moon never moves, so the static solids' moon shadows bake into one instanced
+// draw at build time (World3D.fillMoonCastField) and actors' single shadow meshes
+// swing from flame-cast to moon-cast at a pool's edge (handoffCast below).
+//
 // The knobs mirror the 2D constants so the look is identical.
 
 const FOOT_Y = 0.015; // sits just above the ground (over the contact blob)
@@ -64,9 +70,13 @@ export const makeCastMesh = (): THREE.Mesh => {
  *    batch lands on precisely the pixel the back-to-front sorted version did. This would NOT hold
  *    for coloured sprites.
  *
- * The alpha is applied per instance BEFORE the alpha test, exactly where the material's `opacity`
- * uniform used to sit: a fading shadow's silhouette shrinks as its alpha drops below the 0.4
- * threshold, and that erosion is part of the look.
+ * The alpha is applied per instance AFTER the alpha test. The test's job is only to CUT the
+ * silhouette out of the sheet, and the centre-pinned fetch below hands it binary alphas, so the
+ * cut is the same whichever side of the test the darkness multiplies in — except for a faint
+ * shadow: multiplied in BEFORE (as the material's `opacity` used to be), any instance dimmer
+ * than the 0.4 threshold was discarded whole. That is why a moonlight shadow (~0.2 dark, its
+ * whole reason to exist) rendered as nothing, and why a fire shadow used to blink out at ~58%
+ * of the pool radius instead of fading to the edge.
  */
 export class SolidCastField {
   public readonly mesh: THREE.InstancedMesh;
@@ -141,10 +151,12 @@ export class SolidCastField {
       );
       shader.fragmentShader = shader.fragmentShader
         .replace('void main() {', 'uniform vec2 uMapSize;\nvarying float vCastAlpha;\nvoid main() {')
-        // Exactly where `opacity` sat: BEFORE the alpha test, so a faint shadow erodes.
+        .replace('#include <map_fragment>', mapChunk)
+        // AFTER the test — see the class comment: the test only cuts the silhouette, and a
+        // faint (moonlight) instance must survive it to be faint rather than absent.
         .replace(
-          '#include <map_fragment>',
-          `${mapChunk}\n diffuseColor.a *= vCastAlpha;`,
+          '#include <alphatest_fragment>',
+          '#include <alphatest_fragment>\n diffuseColor.a *= vCastAlpha;',
         );
     };
 
@@ -245,28 +257,56 @@ export const castTransform = (
 };
 
 /**
- * Lay `mesh` down as `objX,objY`'s shadow cast away from a flame at `fireX,fireY`.
- * `level` is the flame's instantaneous brightness (~0.6 dim … 1.4 flaring), `radius`
- * its reach in tiles, `alpha` the darkness beside it. Hides the mesh past the reach.
- * Returns true if the shadow is visible.
+ * One caster's shadow this frame: the flame's cast when a fire reaches it, the MOON's
+ * otherwise — and a swing between the two at the edge of the pool.
+ *
+ * The moon is the fallback, not an addition: a second mesh per actor would double the
+ * shadow draw calls (and Survivors fields a hundred actors), so each caster keeps its
+ * single quad and this decides where it points. The handoff has to be a blend because
+ * both shadows are visible at the crossover: the fire's fades to nothing at its pool's
+ * edge, and snapping a 0.16-dark shadow to a new angle the frame the pool ends reads as
+ * a glitch. Instead the angle/length swing from flame-cast to moon-cast as the fire's
+ * grip (its alpha, relative to the moon's) lets go — like walking out of a lamplit
+ * circle at night.
  */
-export const configureCast = (
+export const handoffCast = (
+  fire: { length: number; rotY: number; alpha: number } | null,
+  moonRotY: number,
+  moonLength: number,
+  moonAlpha: number,
+): { length: number; rotY: number; alpha: number } | null => {
+  if (moonAlpha <= 0.02) return fire; // moon shadows off — pure fire behaviour
+  if (!fire) return { length: moonLength, rotY: moonRotY, alpha: moonAlpha };
+  const w = Math.min(1, fire.alpha / moonAlpha);
+  // Swing the short way round the circle.
+  let d = (fire.rotY - moonRotY) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return {
+    length: moonLength + (fire.length - moonLength) * w,
+    rotY: moonRotY + d * w,
+    // max, not lerp: a lerp dips BELOW the moon's darkness mid-handoff (fire 0.08 →
+    // 0.12 → moon 0.16), a visible pulse as the caster walks a straight line.
+    alpha: Math.max(fire.alpha, moonAlpha),
+  };
+};
+
+/**
+ * Lay `mesh` down as `objX,objY`'s ground-silhouette shadow: `length` tiles along the
+ * `rotY` heading at darkness `alpha` (see castTransform / handoffCast for where those
+ * come from).
+ */
+export const applyCast = (
   mesh: THREE.Mesh,
   objX: number,
   objY: number,
   tex: THREE.Texture,
   flipX: boolean,
   width: number,
-  height: number,
-  fireX: number,
-  fireY: number,
-  level: number,
-  radius: number,
+  length: number,
+  rotY: number,
   alpha: number,
-): boolean => {
-  const cast = castTransform(objX, objY, height, fireX, fireY, level, radius, alpha);
-  if (!cast) { mesh.visible = false; return false; }
-
+): void => {
   const mat = mesh.material as THREE.MeshBasicMaterial;
   // `needsUpdate` looks like waste here — it makes three rebuild the program's cache key, and the
   // program cannot change, since a caster always has a map. It is not waste: three only refreshes a
@@ -274,11 +314,16 @@ export const configureCast = (
   // texture the shadow was born with, and the hero's shadow freezes on one frame of his walk cycle
   // while he walks. (Tried it. The visual diff caught it, over the hero, to the pixel.)
   if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
-  mat.opacity = cast.alpha;
+  mat.opacity = alpha;
+  // The test must scale with the darkness or it eats the shadow: three tests the
+  // texel's alpha × opacity, so at a fixed 0.4 any shadow dimmer than 0.4 discarded
+  // whole — a moonlight shadow rendered as nothing, and a fire shadow blinked out at
+  // ~58% of the pool radius. Scaled, it still cuts the silhouette at texel alpha 0.4
+  // exactly as before (alphaTest is a live uniform in three — no recompile).
+  mat.alphaTest = Math.max(0.01, 0.4 * alpha);
   mesh.position.set(objX, FOOT_Y, objY);
-  // Base head direction is -Z; rotate it onto the away-from-flame direction.
-  mesh.rotation.y = cast.rotY;
-  mesh.scale.set((flipX ? -1 : 1) * width * WIDTH_FACTOR, 1, cast.length);
+  // Base head direction is -Z; rotate it onto the shadow's heading.
+  mesh.rotation.y = rotY;
+  mesh.scale.set((flipX ? -1 : 1) * width * WIDTH_FACTOR, 1, length);
   mesh.visible = true;
-  return true;
 };
