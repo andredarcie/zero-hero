@@ -252,6 +252,11 @@ export const configureCast = (
   if (!cast) { mesh.visible = false; return false; }
 
   const mat = mesh.material as THREE.MeshBasicMaterial;
+  // `needsUpdate` looks like waste here — it makes three rebuild the program's cache key, and the
+  // program cannot change, since a caster always has a map. It is not waste: three only refreshes a
+  // material's uniforms when its version moves, so without it `uniforms.map` keeps pointing at the
+  // texture the shadow was born with, and the hero's shadow freezes on one frame of his walk cycle
+  // while he walks. (Tried it. The visual diff caught it, over the hero, to the pixel.)
   if (mat.map !== tex) { mat.map = tex; mat.needsUpdate = true; }
   mat.opacity = cast.alpha;
   mesh.position.set(objX, FOOT_Y, objY);

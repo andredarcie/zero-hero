@@ -49,6 +49,33 @@ real state. Add a scenario in `playtest/scenarios/` and register it in `index.mj
 proves nothing — a fix that removes a stall can quietly cost frame time, and you will not see it
 without the before.
 
+**Unlock vsync for any perf measurement**: `PLAYTEST_UNTHROTTLED=1 PLAYTEST_SLOWMO=0`. With vsync on
+a desktop GPU simply *downclocks* to meet the refresh — strip the whole post chain out of the frame
+and the reported GPU time does not budge, because the hardware just did the smaller job more slowly.
+Every variant then measures the same and every optimisation looks like it changed nothing.
+
+## Proving a render change is invisible
+
+`npm run playtest -- visual-ref` writes deterministic reference shots; `node playtest/compare-visual.mjs
+<dirA> <dirB>` diffs them pixel by pixel. Two runs of the same build differ by **0 pixels**, so
+anything the diff reports is real. Use it for every performance change that touches the renderer.
+
+    git stash && npm run playtest -- visual-ref
+    mv playtest/results/visual playtest/results/visual-main
+    git stash pop && npm run playtest -- visual-ref
+    node playtest/compare-visual.mjs playtest/results/visual-main playtest/results/visual
+
+`VISUAL_ISOLATE=shadows` strips the frame back to the ground and the cast shadows with no post chain
+— the bloom smears any local change across half the image, so it will tell you a shadow moved when
+what moved was a mote of dust.
+
+**The trap that will waste your afternoon:** three.js burns `Math.random()` draws on every object's
+UUID. So a change that merely allocates a *different number of objects* at boot shifts the shared
+generator — and every flame then gets a different seed and flickers to a different rhythm. A cast
+shadow's LENGTH is driven by its flame's brightness, so two byte-identical renderers will "fail" the
+pixel diff by 40% of the frame for a reason that has nothing to do with rendering. `visual-ref` pins
+the seeds themselves for exactly this reason. If a diff looks structural, check the fire state first.
+
 ## Profiler
 
 `src/game/debug/Profiler.ts`. `?prof` boots with it running, **F3** toggles the HUD,
@@ -85,3 +112,12 @@ lights cannot. `npm run playtest -- perf-burn` guards this.
 - **NPC dialogue lives in `public/world.json`**, not only in `NPC_DIALOGS` — a new NPC needs both.
 - Materials with `onBeforeCompile` **must** set `customProgramCacheKey`, or differently-patched
   materials silently share whichever variant compiled first.
+- **`prewarmShaders()` must run with the composer's render target bound.** The world is never drawn
+  to the canvas — EffectComposer draws it into an offscreen target — and three bakes the target's
+  *colour space* into the program's cache key. A prewarm that leaves the canvas bound compiles a
+  complete, correct, useless set of programs the game never asks for, and the game then compiles its
+  real set lazily, one 50–300ms freeze at a time. `perf-profile` fails if a single program compiles
+  during play; a new billboard option shape must register a stand-in in `prewarmShaders`.
+- A cast shadow's `mat.needsUpdate = true` on a texture swap looks like waste and is not: three only
+  refreshes a material's uniforms when its version moves, so without it the hero's shadow freezes on
+  one frame of his walk cycle while he walks.

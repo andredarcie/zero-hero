@@ -509,6 +509,7 @@ export class World3D {
   private readonly castCasters: Array<{ bb: Billboard3D; mesh: THREE.Mesh }> = [];
   /** Invisible stand-ins that hold the runtime shaders' programs alive. See prewarmShaders. */
   private readonly warmups: Array<{ setVisible(v: boolean): unknown }> = [];
+  private readonly projectScratch = new THREE.Vector3();
   // …and a reused pool for whichever static solid tiles are near a lit fire this frame.
   /** Every static solid's cast shadow, batched into one instanced draw. See SolidCastField. */
   private solidCastField!: SolidCastField;
@@ -1396,6 +1397,15 @@ export class World3D {
     this.finishPass.uniforms.uFade.value = Math.max(0, Math.min(1, t));
   }
 
+  /** Last CSS string pushed into each live colour, so an unchanged knob costs nothing. */
+  private readonly appliedColors: Record<string, string> = {};
+
+  private applyColor(key: string, target: THREE.Color, css: string): void {
+    if (this.appliedColors[key] === css) return;
+    this.appliedColors[key] = css;
+    target.set(css);
+  }
+
   /** Dialog pan: shift what sits at screen centre, in tile units. */
   public setViewOffset(dxTiles: number, dyTiles: number): void {
     this.viewOffsetX = dxTiles;
@@ -1404,7 +1414,10 @@ export class World3D {
 
   /** World tile → CSS pixel position on screen (for Phaser-side overlays/FX). */
   public projectTile(worldX: number, worldY: number, elevationTiles = 0): { x: number; y: number } {
-    const v = new THREE.Vector3(worldX, elevationTiles, worldY).project(this.camera);
+    // Scratch, not a fresh Vector3: every 2D overlay in the game (footprints, pips, balloons, the
+    // fire compass) projects through here several times a frame, and the garbage adds up into the
+    // collector's next pause.
+    const v = this.projectScratch.set(worldX, elevationTiles, worldY).project(this.camera);
     return {
       x: Math.round((v.x * 0.5 + 0.5) * window.innerWidth),
       y: Math.round((-v.y * 0.5 + 0.5) * window.innerHeight),
@@ -1436,15 +1449,18 @@ export class World3D {
     lightResUniform.value = Math.max(0, this.params.lightRes);
     lightWobbleUniform.value = Math.max(0, this.params.lightWobble);
     lightCapUniform.value = this.params.lightCap;
-    fireRampCoreUniform.value.set(this.params.fireRampCore);
-    fireRampMidUniform.value.set(this.params.fireRampMid);
-    fireRampRimUniform.value.set(this.params.fireRampRim);
+    // These five are CSS STRINGS, live-tunable through window.hd3d — and Color.set(string) parses
+    // the CSS every time it is called. Re-reading them each frame meant five regex parses a frame
+    // to arrive back at the colour that was already there. Only re-parse when the knob moves.
+    this.applyColor('fireRampCore', fireRampCoreUniform.value, this.params.fireRampCore);
+    this.applyColor('fireRampMid', fireRampMidUniform.value, this.params.fireRampMid);
+    this.applyColor('fireRampRim', fireRampRimUniform.value, this.params.fireRampRim);
     fireGlowResUniform.value = Math.max(0, this.params.fireGlowRes);
     flowTimeUniform.value = this.elapsed;
     this.ambientLight.intensity = this.params.ambient;
-    this.ambientLight.color.set(this.params.ambientColor);
+    this.applyColor('ambient', this.ambientLight.color, this.params.ambientColor);
     this.moonLight.intensity = this.params.moon;
-    this.moonLight.color.set(this.params.moonColor);
+    this.applyColor('moon', this.moonLight.color, this.params.moonColor);
     if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = this.params.fogDensity;
     if (this.params.fov !== this.appliedFov) {
       this.camera.fov = this.params.fov;
