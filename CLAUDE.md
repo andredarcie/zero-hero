@@ -57,6 +57,31 @@ back — nothing is saved until you hit Salvar, and Salvar only ever writes `lab
 - The ESC return-to-editor handler is gated on the editor scene actually existing, because
   `/lab?play` has no editor to wake.
 
+## Fire spreads (the one system the player steers)
+
+Every other obstacle in this game is a **lock with exactly one key** — axe→tree, pickaxe→rock,
+key→door — and `showNeedItemHint` then *shows you the icon of the key you are missing*. That table
+is why puzzles here kept collapsing into "fetch item, use item, repeat": there is only ever one
+right answer and the game hands it to you.
+
+Fire is the exception, and the only place a real puzzle can live. `GameScene.scheduleFireSpread` /
+`igniteFlammableAt`: a burning tile sets its 4-neighbours alight after `FIRE_SPREAD_MS`.
+
+- **Fuel:** tall grass, dry bushes, and **built bridges** (they are wood — `WaterObject.burn()`
+  collapses the deck into the river and the tile blocks again). Stone, water, lava and bare ground
+  are firebreaks — which is what finally gives the scythe and the axe a use beyond opening their
+  own tile.
+- **A DEAD campfire catches from an adjacent flame.** That is the whole point: a fire can be lit
+  without the hero ever standing next to it. Lay a path of fuel and let the fire walk there.
+- **A LIT campfire never spreads.** It is a sink, not a source — otherwise every hearth would set
+  its own meadow alight the moment it was lit, and the overworld would burn down on contact.
+- Chains terminate because each object's `ignite()` refuses if it is already burning or spent.
+- The light budget survives it: burning bushes *borrow* from the fire-light pool, so a cascade
+  cannot move the light count. `perf-burn` guards this.
+
+**Tall grass blocks the hero but conducts fire.** A grass corridor is a wall to you and a highway
+to a flame — that asymmetry is where the lab's "O Pavio" puzzle comes from.
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on

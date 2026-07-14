@@ -155,6 +155,11 @@ const AUTO_ATTACK_COOLDOWN_MS = 450;
 const BOMB_FUSE_MS = 1600;
 const BOMB_BLAST_RADIUS_TILES = 2.2;
 
+// How long a burning tile takes to set its neighbours alight. Slow enough that the fire is a
+// thing you WATCH travel (and can still run from), fast enough that a fuse pays off inside one
+// held thought. See GameScene.scheduleFireSpread.
+const FIRE_SPREAD_MS = 850;
+
 // Resting in a lit campfire's safe ring mends one heart every this many ms (leaving the ring
 // resets the timer, so healing is a "warm up by the fire" beat, not passive regen anywhere).
 const HEALTH_REGEN_MS = 1200;
@@ -1346,6 +1351,7 @@ export class GameScene extends Phaser.Scene {
           if (!bush.ignite()) return;
           profiler.mark('bush.ignite');
           this.spawnFireHitEffect(wx, wy);
+          this.scheduleFireSpread(wx, wy); // it will carry to whatever is touching it
         });
       } else {
         // Needs a lit flame to catch: show the fire balloon.
@@ -1431,7 +1437,9 @@ export class GameScene extends Phaser.Scene {
       } else if (this.isFlammableHeld && this.heldOnFire) {
         this.swingHeld(wx, wy);
         this.time.delayedCall(150, () => {
-          if (grass.ignite()) this.spawnFireHitEffect(wx, wy);
+          if (!grass.ignite()) return;
+          this.spawnFireHitEffect(wx, wy);
+          this.scheduleFireSpread(wx, wy); // grass carries fire — this is the fuse
         });
       } else {
         grass.shake();
@@ -2215,17 +2223,82 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Set fire to everything flammable in the area.
+    // Set fire to everything flammable in the area — and each of those then spreads on its
+    // own, so the bomb is a way to start a fire somewhere the hero cannot stand.
     for (const bushObj of this.dryBushes) {
       if (inBlast(bushObj.worldX, bushObj.worldY) && bushObj.ignite()) {
         this.spawnFireHitEffect(bushObj.worldX, bushObj.worldY);
+        this.scheduleFireSpread(bushObj.worldX, bushObj.worldY);
       }
     }
     for (const grassObj of this.tallGrasses) {
       if (inBlast(grassObj.worldX, grassObj.worldY) && grassObj.ignite()) {
         this.spawnFireHitEffect(grassObj.worldX, grassObj.worldY);
+        this.scheduleFireSpread(grassObj.worldX, grassObj.worldY);
       }
     }
+  }
+
+  // ── Fire spread ────────────────────────────────────────────────────────────
+  // Fire is the one system in this world the player STEERS instead of unlocks. Everything
+  // else here is a lock and a key — bump the rock with the pickaxe, the tree with the axe —
+  // a 1:1 table with exactly one right answer, which the hint balloon then hands you. Fire is
+  // different: it travels on its own, through whatever will carry it, and it does not care
+  // what you still needed. So the question stops being "which item?" and becomes "what will
+  // this reach, and what do I have to cut away first so it doesn't?".
+  //
+  // The fuel graph is: tall grass, dry bushes, and BUILT BRIDGES (they are wood — see
+  // WaterObject.burn). Stone, water, lava and bare ground are firebreaks; the scythe and the
+  // axe MAKE firebreaks, which is what finally gives them a use beyond opening their own tile.
+  //
+  // A DEAD CAMPFIRE catches from an adjacent flame — that is the whole point. It means a fire
+  // can be lit WITHOUT the hero ever standing next to it: lay a path of fuel and let the fire
+  // walk there. But a LIT campfire never spreads outward: it is a sink, not a source.
+  // Otherwise every hearth in the world would set its own meadow alight the moment it was lit.
+  private scheduleFireSpread(wx: number, wy: number): void {
+    this.time.delayedCall(FIRE_SPREAD_MS, () => {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        this.igniteFlammableAt(wx + dx, wy + dy);
+      }
+    });
+  }
+
+  /**
+   * Set alight whatever burns on this tile, and chain the spread onward from it. Each object's
+   * own ignite() refuses if it is already burning or spent, which is what terminates the chain.
+   * Returns true if something caught here.
+   */
+  private igniteFlammableAt(wx: number, wy: number): boolean {
+    const bush = this.getDryBushAt(wx, wy);
+    if (bush?.ignite()) {
+      this.spawnFireHitEffect(wx, wy);
+      this.scheduleFireSpread(wx, wy);
+      return true;
+    }
+
+    const grass = this.getTallGrassAt(wx, wy);
+    if (grass?.ignite()) {
+      this.spawnFireHitEffect(wx, wy);
+      this.scheduleFireSpread(wx, wy);
+      return true;
+    }
+
+    // A bridge is wood: it carries the flame across the water and is eaten doing it.
+    const water = this.getWaterAt(wx, wy);
+    if (water?.burn()) {
+      this.spawnFireHitEffect(wx, wy);
+      this.scheduleFireSpread(wx, wy);
+      return true;
+    }
+
+    // The destination. Fire stops here — a lit hearth does not go on to burn the world down.
+    const campfire = this.getCampfireAt(wx, wy);
+    if (campfire && !campfire.isLit) {
+      this.lightCampfire(campfire, wx, wy);
+      return true;
+    }
+
+    return false;
   }
 
   private spawnFireHitEffect(wx: number, wy: number): void {

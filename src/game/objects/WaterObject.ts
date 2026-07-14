@@ -188,6 +188,47 @@ export class WaterObject {
     this.pips.setVisible(false);
   }
 
+  /**
+   * The bridge is WOOD, so fire spreads across it — and eats it. It carries the flame to
+   * whatever is on the far bank, chars, and collapses into the river: the tile blocks again
+   * and the spot goes back to buildable. That is deliberate, not a punishment: it means a
+   * bridge can be laid as a FUSE rather than as a floor, and the player has to decide which
+   * of the two they want it to be, because it cannot be both.
+   *
+   * Returns true only if there was a standing bridge here to burn (so fire does not chain
+   * through open water).
+   */
+  public burn(): boolean {
+    if (!this.isBridge || this.dead) return false;
+
+    const parts = [...this.frame, ...this.planks];
+    for (const part of parts) {
+      this.scene.tweens.killTweensOf(part.box);
+      // The deck burns through and drops into the channel: each board sinks below the water
+      // line and fades out, a beat apart, so the collapse reads plank by plank.
+      this.scene.tweens.add({
+        targets: part.box,
+        elevation: part.restElev - WATER_DEPTH_TILES,
+        alpha: 0,
+        duration: 900,
+        delay: Phaser.Math.Between(0, 260),
+        ease: 'Quad.easeIn',
+      });
+    }
+
+    // Reset the carpentry: the deck parts are gone, so the next build must lay them again.
+    this.scene.time.delayedCall(950, () => {
+      if (this.dead) return;
+      for (const part of parts) part.box.destroy();
+      this.planks = [];
+      this.frame = [];
+      this.deposited = 0;
+      if (this.buildable) this.ensureDeck(); // the ghost preview comes back
+    });
+
+    return true;
+  }
+
   // ── carpentry ─────────────────────────────────────────────────────────────
 
   /**

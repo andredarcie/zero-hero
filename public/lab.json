@@ -9,7 +9,7 @@
     "tileSize": 8,
     "tilesetKey": "forest-tileset",
     "playerStart": {
-      "worldX": 6,
+      "worldX": 5,
       "worldY": 6
     },
     "exportedAt": "2026-07-14T00:00:00.000Z"
@@ -205,6 +205,20 @@
         ],
         [
           null,
+          11,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
           null,
           null,
           null,
@@ -232,17 +246,17 @@
           null
         ],
         [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
           null,
           null,
           null,
           7,
           null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
           null
         ],
         [
@@ -251,21 +265,63 @@
           null,
           null,
           null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
           null,
           null,
           10,
           null,
           null,
           null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
           null,
           null,
           null,
@@ -296,62 +352,6 @@
           null,
           null,
           null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          12,
-          null,
-          12,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          11,
-          12,
-          null,
-          12,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          12,
-          12,
-          12,
           null,
           null,
           null,
@@ -491,23 +491,9 @@
           false,
           false,
           false,
-          true,
-          false,
-          true,
           false,
           false,
           false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          true,
           false,
           false,
           false,
@@ -519,9 +505,23 @@
           false,
           false,
           false,
-          true,
-          true,
-          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
           false,
           false,
           false,
@@ -531,35 +531,30 @@
       "enemies": [],
       "pickups": [
         {
+          "type": "axe",
+          "worldX": 6,
+          "worldY": 6
+        },
+        {
           "type": "heart",
-          "worldX": 8,
+          "worldX": 2,
           "worldY": 5
         },
         {
           "type": "axe",
-          "worldX": 5,
-          "worldY": 7
-        },
-        {
-          "type": "key",
-          "worldX": 0,
-          "worldY": 3
+          "worldX": 10,
+          "worldY": 8
         },
         {
           "type": "lavaBoots",
           "worldX": 6,
           "worldY": 10
-        },
-        {
-          "type": "wood",
-          "worldX": 10,
-          "worldY": 8
         }
       ],
       "npcs": [
         {
           "type": "blackCat",
-          "worldX": 5,
+          "worldX": 6,
           "worldY": 5
         }
       ]
@@ -568,159 +563,64 @@
   "props": [
     {
       "type": "campfire",
-      "worldX": 6,
+      "worldX": 5,
       "worldY": 5,
       "lit": true
     },
     {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 0
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 0
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 1
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 1
-    },
-    {
-      "type": "water",
-      "worldX": 2,
+      "type": "tallGrass",
+      "worldX": 5,
       "worldY": 2
     },
     {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 3
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 3
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 4
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 4
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 5
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 5
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 6
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 6
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 7
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 7
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 8
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 8
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 9
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 9
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 10
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 10
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 11
-    },
-    {
-      "type": "water",
-      "worldX": 3,
-      "worldY": 11
-    },
-    {
-      "type": "dryTree",
-      "worldX": 4,
-      "worldY": 7
-    },
-    {
-      "type": "water",
-      "worldX": 0,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 1,
-      "worldY": 3
-    },
-    {
-      "type": "water",
-      "worldX": 0,
-      "worldY": 4
-    },
-    {
-      "type": "dryTree",
-      "worldX": 0,
-      "worldY": 5
-    },
-    {
-      "type": "lockedDoor",
+      "type": "tallGrass",
       "worldX": 6,
-      "worldY": 9
+      "worldY": 2
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 8,
+      "worldY": 2
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 9,
+      "worldY": 2
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 10,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 7,
+      "worldY": 2
+    },
+    {
+      "type": "dryTree",
+      "worldX": 7,
+      "worldY": 3
+    },
+    {
+      "type": "campfire",
+      "worldX": 11,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 11,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 11,
+      "worldY": 3
+    },
+    {
+      "type": "dryTree",
+      "worldX": 3,
+      "worldY": 8
     },
     {
       "type": "campfire",
@@ -728,6 +628,41 @@
       "worldY": 7
     },
     {
+      "type": "dryTree",
+      "worldX": 10,
+      "worldY": 9
+    },
+    {
+      "type": "lava",
+      "worldX": 8,
+      "worldY": 7
+    },
+    {
+      "type": "lava",
+      "worldX": 8,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 8,
+      "worldY": 9
+    },
+    {
+      "type": "lava",
+      "worldX": 11,
+      "worldY": 7
+    },
+    {
+      "type": "lava",
+      "worldX": 11,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 11,
+      "worldY": 9
+    },
+    {
       "type": "lava",
       "worldX": 9,
       "worldY": 6
@@ -739,33 +674,13 @@
     },
     {
       "type": "lava",
-      "worldX": 8,
-      "worldY": 7
-    },
-    {
-      "type": "lava",
-      "worldX": 11,
-      "worldY": 7
-    },
-    {
-      "type": "lava",
-      "worldX": 8,
-      "worldY": 8
-    },
-    {
-      "type": "lava",
-      "worldX": 11,
-      "worldY": 8
-    },
-    {
-      "type": "lava",
       "worldX": 9,
-      "worldY": 9
+      "worldY": 10
     },
     {
       "type": "lava",
       "worldX": 10,
-      "worldY": 9
+      "worldY": 10
     }
   ],
   "dialogs": {
@@ -785,15 +700,19 @@
         },
         {
           "speaker": "npc",
-          "text": "Regra numero um: uma arvore cai para LONGE de quem a corta. Onde voce pisa decide onde ela deita."
+          "text": "O fogo CAMINHA. Ele pula de mato em mato, de tabua em tabua — e nao pergunta se voce ainda precisava daquilo."
         },
         {
           "speaker": "npc",
-          "text": "Regra numero dois: voce so carrega UMA coisa por vez. Pegar algo novo larga o que estava na mao — ali mesmo, no chao."
+          "text": "Uma arvore cai para LONGE de quem a corta. Onde voce pisa decide onde ela deita."
         },
         {
           "speaker": "npc",
-          "text": "O resto voce descobre sozinho. E dai que vem a graca. Miau."
+          "text": "E voce so carrega UMA coisa por vez. Pegar algo novo larga o que estava na mao, ali mesmo no chao."
+        },
+        {
+          "speaker": "npc",
+          "text": "Tem fogueira ai que nenhuma chave alcanca. Pense em quem mais pode chegar la. Miau."
         }
       ]
     }
