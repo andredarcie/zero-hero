@@ -12,6 +12,7 @@ import perfBurn from './perf-burn.mjs';
 import perfProfile from './perf-profile.mjs';
 import visualRef from './visual-ref.mjs';
 import aaTruth from './aa-truth.mjs';
+import tour from './tour.mjs';
 
 export const scenarios = {
   smoke,
@@ -28,6 +29,7 @@ export const scenarios = {
   'perf-profile': perfProfile,
   'visual-ref': visualRef,
   'aa-truth': aaTruth,
+  tour,
 };
 
 // What `npm run playtest` runs when no scenario is named.
