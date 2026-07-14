@@ -1,24 +1,35 @@
 #!/usr/bin/env node
 // Gera public/lab.json — o mundo do Laboratorio de Puzzles (/lab).
 //
-// Um mundo MINIMO (2x1 chunks = 24x12 tiles): quase zero caminhada — o spawn ve os dois
-// puzzles, e cada travessia tem poucos passos. Andar pelo cenario nao e puzzle.
+// UM UNICO CHUNK (12x12) — o minimo que o engine aceita. E de proposito: a camera enquadra
+// ~um chunk, entao o laboratorio INTEIRO cabe numa tela so. O jogador ve os dois puzzles, a
+// porta trancada e o premio sem rolar o cenario, e nenhuma travessia passa de ~4 passos.
+// Andar nao e puzzle: cada tile de caminhada a toa e tempo roubado da ideia.
 //
-//   - CENTRO (hub): spawn, fogueira acesa, gato-guia e a sala do tesouro trancada.
-//   - OESTE, PUZZLE 1 "O Lenhador": um rio corta o mapa de ponta a ponta; nenhuma ponte e
-//     nenhum bridgeSpot — a UNICA travessia e derrubar arvores NA DIRECAO da agua
-//     (mecanica TIMBER). A chave do tesouro mora numa ilha que so um segundo tombo
-//     bem mirado alcanca: a arvore A (colada na margem) ensina, a arvore B (anel d'agua
-//     com uma unica direcao valida de tombo) testa.
-//   - LESTE, PUZZLE 2 "Fogo Emprestado": fogueira morta cercada por um fosso de lava com
-//     uma unica falha: um mato seco. Fogo carregado do hub morre no caminho
-//     (TORCH_BURN_MS) — a sacada e usar a propria lava do fosso como isqueiro: acender o
-//     graveto ali, queimar o mato, atravessar a brecha e entregar a chama.
+// Os dois puzzles se ENCADEIAM — o premio do primeiro e a ferramenta do segundo — e cada um
+// e construido sobre uma regra que o jogador ja carrega mas nunca foi obrigado a PENSAR:
 //
-// Principios aplicados: lock-before-key (porta e fogueira morta visiveis antes das
-// chaves), chaves multiuso (tocha queima mato E acende fogueira; lava e obstaculo E
-// isqueiro), feedback educativo (tombo errado solta graveto e a arvore renasce em 60s),
-// sem soft-lock (nada essencial e consumivel).
+//   PUZZLE 1 — "O Lenhador" (oeste). O rio nao tem bridgeSpot: a unica travessia e a mecanica
+//   TIMBER (arvore derrubada NA DIRECAO da agua vira ponte). A arvore A, colada na margem,
+//   ENSINA — mas ensina um modelo errado ("arvore perto de agua = ponte"). A arvore B CORRIGE
+//   o modelo: a ilha da chave so tem uma face de agua, entao existe UMA unica direcao de tombo
+//   valida e o jogador e forcado a perceber a regra real — a arvore cai para LONGE de quem
+//   corta, logo e a SUA POSICAO que mira a ponte. Errar so custa 60s (a arvore renasce).
+//   Premio: a chave -> a porta -> as BOTAS DE LAVA, que sao a ferramenta do puzzle 2.
+//
+//   PUZZLE 2 — "A Travessia Impossivel" (leste). Uma fogueira morta numa ilha inteiramente
+//   cercada de lava. Para atravessar a lava e preciso estar segurando as BOTAS. Para acender
+//   uma fogueira morta e preciso estar segurando um GRAVETO ACESO. E o heroi so carrega UMA
+//   coisa por vez. O puzzle parece impossivel — e essa impossibilidade aparente E o puzzle.
+//
+//   A saida usa tres regras do jogo de uma vez:
+//     1. ha um graveto largado DENTRO da ilha, visivel de fora (o "lock" antes da "key");
+//     2. pegar um item DERRUBA o que estava na mao, no tile do item novo (ItemManager.drop) —
+//        entao da para TROCAR de ferramenta ja do outro lado, e as botas ficam esperando ali;
+//     3. a lava que te prendeu e uma FONTE DE FOGO: encostar o graveto nela acende a tocha.
+//   Ou seja: atravessa com as botas, pisa no graveto (as botas caem ali), acende o graveto na
+//   propria lava do anel, acende a fogueira, volta ao tile das botas para trocar e sai.
+//   Nada e consumido: da para desfazer qualquer passo, entao nao existe soft-lock.
 //
 // Uso: node scripts/gen-lab.mjs   (ou: npm run generate:lab)
 
@@ -26,7 +37,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const CHUNKS_X = 2;
+const CHUNKS_X = 1;
 const CHUNKS_Y = 1;
 const COLS = 12;
 const ROWS = 12;
@@ -37,105 +48,84 @@ const outPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'p
 
 // ── Terreno ─────────────────────────────────────────────────────────────────
 
-const chunks = [];
-for (let cy = 0; cy < CHUNKS_Y; cy++) {
-  for (let cx = 0; cx < CHUNKS_X; cx++) {
-    chunks.push({
-      cx,
-      cy,
-      ground: Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => GROUND_TILE)),
-      upper: Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => null)),
-      collisions: Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => false)),
-      enemies: [],
-      pickups: [],
-      npcs: [],
-    });
-  }
-}
+const chunk = {
+  cx: 0,
+  cy: 0,
+  ground: Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => GROUND_TILE)),
+  upper: Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => null)),
+  collisions: Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => false)),
+  enemies: [],
+  pickups: [],
+  npcs: [],
+};
 
-const chunkAt = (wx, wy) => chunks.find((c) => c.cx === Math.floor(wx / COLS) && c.cy === Math.floor(wy / ROWS));
 const setUpper = (wx, wy, frame, solid = false) => {
-  const c = chunkAt(wx, wy);
-  c.upper[wy % ROWS][wx % COLS] = frame;
-  if (solid) c.collisions[wy % ROWS][wx % COLS] = true;
+  chunk.upper[wy][wx] = frame;
+  if (solid) chunk.collisions[wy][wx] = true;
 };
-const addPickup = (type, wx, wy) => {
-  chunkAt(wx, wy).pickups.push({ type, worldX: wx, worldY: wy });
-};
-const addNpc = (type, wx, wy) => {
-  chunkAt(wx, wy).npcs.push({ type, worldX: wx, worldY: wy });
-};
-
-// ── Props ───────────────────────────────────────────────────────────────────
+const addPickup = (type, wx, wy) => chunk.pickups.push({ type, worldX: wx, worldY: wy });
+const addNpc = (type, wx, wy) => chunk.npcs.push({ type, worldX: wx, worldY: wy });
 
 const props = [];
-const addProp = (type, wx, wy, extra = {}) => {
-  props.push({ type, worldX: wx, worldY: wy, ...extra });
-};
+const addProp = (type, wx, wy, extra = {}) => props.push({ type, worldX: wx, worldY: wy, ...extra });
 
-// HUB — spawn em (13,6), fogueira-lar acesa logo acima (ela PRECISA ser a fogueira mais
-// proxima do playerStart: e assim que o runtime escolhe o fogo inicial).
-addProp('campfire', 13, 4, { lit: true });
-addNpc('blackCat', 12, 4);
-addPickup('heart', 14, 9);
-
-// Sala do tesouro (x 15..18, y 0..2): paredes de pedregulho + porta trancada ao sul.
-// A porta fica VISIVEL do spawn — o cadeado aparece antes da chave (lock before key).
-const wallCells = [
-  [15, 0], [16, 0], [17, 0], [18, 0],
-  [15, 1], [18, 1],
-  [15, 2], [17, 2], [18, 2],
-];
-for (const [wx, wy] of wallCells) setUpper(wx, wy, WALL_TILE, true);
-addProp('lockedDoor', 16, 2);
-addPickup('sword', 16, 1);
-addPickup('bomb', 17, 1);
-
-// Flores soltas dao vida ao hub sem atrapalhar a leitura dos puzzles.
-setUpper(11, 3, 10);
-setUpper(15, 5, 11);
-setUpper(10, 9, 7);
+// ── HUB (centro) ────────────────────────────────────────────────────────────
+// Spawn (6,6). A fogueira-lar precisa ser a MAIS PROXIMA do playerStart: e assim que o
+// runtime escolhe qual fogo ja nasce aceso.
+addProp('campfire', 6, 5, { lit: true });
+addNpc('blackCat', 5, 5);
+addPickup('heart', 8, 5);
 
 // ── PUZZLE 1 — "O Lenhador" (oeste) ────────────────────────────────────────
-// O rio atravessa o mapa inteiro (y 0..11) para nao existir contorno por cima/baixo.
-for (let wy = 0; wy < CHUNKS_Y * ROWS; wy++) {
-  addProp('water', 4, wy);
-  addProp('water', 5, wy);
+// O rio corta o mapa de ponta a ponta (x 2 e 3, y 0..11): nao existe contorno.
+for (let wy = 0; wy < ROWS; wy++) {
+  addProp('water', 2, wy);
+  addProp('water', 3, wy);
 }
 
-// Arvore A: colada na margem leste, alinhada com o rio. Quem chega do hub derruba para
-// oeste quase por instinto — e o tronco vira a ponte (TIMBER ensina a mecanica).
-addProp('dryTree', 6, 8);
-addPickup('axe', 8, 8);
+// Arvore A (ensina): 1 passo do spawn. Quem pega o machado em (5,7) ja esta de frente para
+// ela, corta para oeste por instinto — e o tronco deita sobre o rio.
+addPickup('axe', 5, 7);
+addProp('dryTree', 4, 7);
 
-// Arvore B + ilha da chave: o teste. O anel d'agua deixa UMA unica direcao de tombo
-// valida (de pe ao sul, cortando para o norte). Errar o lado derruba a arvore em terra
-// e ela so renasce em 60s — feedback educativo, sem soft-lock.
-const islandRing = [
-  [0, 2], [1, 2], [2, 2],
-  [0, 3], [2, 3],
-  [0, 4], [1, 4], [2, 4],
-];
-for (const [wx, wy] of islandRing) addProp('water', wx, wy);
-addPickup('key', 1, 3);
-addProp('dryTree', 1, 5);
+// Arvore B (testa): a ilha da chave (0,3) so toca agua ao norte (0,2), a leste (1,3) e ao sul
+// (0,4) — a oeste e a borda solida do mundo. A unica arvore e a (0,5), entao existe UMA unica
+// direcao de tombo que constroi a ponte: de pe em (0,6), cortando para o NORTE. Cortar de
+// (1,5) derruba a arvore em terra firme e nao leva a lugar nenhum.
+addProp('water', 0, 2);
+addProp('water', 1, 3);
+addProp('water', 0, 4);
+addPickup('key', 0, 3);
+addProp('dryTree', 0, 5);
 
-// ── PUZZLE 2 — "Fogo Emprestado" (leste) ───────────────────────────────────
-// Fogueira morta no centro de um fosso de lava; a unica falha do anel e um mato seco.
-// A lava e obstaculo E isqueiro: o graveto acende NELA, queima o mato, atravessa a
-// brecha e entrega a chama — tudo dentro da janela da tocha.
-addProp('campfire', 21, 6);
-const moat = [
-  [20, 5], [21, 5], [22, 5],
-  [20, 6], [22, 6],
-  [20, 7], [22, 7],
-];
-for (const [wx, wy] of moat) addProp('lava', wx, wy);
-addProp('dryBush', 21, 7);
-addPickup('wood', 18, 8);
+// ── A porta (o elo entre os dois puzzles) ──────────────────────────────────
+// Logo abaixo do spawn: o jogador ve a porta e o que ha atras dela desde o primeiro frame,
+// muito antes de ter a chave — e o caminho de volta da ilha ate ela e curto.
+for (const [wx, wy] of [[5, 9], [7, 9], [5, 10], [7, 10], [5, 11], [6, 11], [7, 11]]) {
+  setUpper(wx, wy, WALL_TILE, true);
+}
+addProp('lockedDoor', 6, 9);
+addPickup('lavaBoots', 6, 10); // o premio do puzzle 1 E a ferramenta do puzzle 2
+
+// ── PUZZLE 2 — "A Travessia Impossivel" (leste) ────────────────────────────
+// Ilha (9..10, 7..8) cercada por um anel de lava COMPLETO — sem brecha nenhuma.
+// Dentro: a fogueira morta e um graveto largado. Fora: nada que ajude.
+addProp('campfire', 10, 7);
+addPickup('wood', 9, 8); // o graveto que espera do outro lado — o coracao do puzzle
+
+for (const [wx, wy] of [[9, 6], [10, 6], [8, 7], [11, 7], [8, 8], [11, 8], [9, 9], [10, 9]]) {
+  addProp('lava', wx, wy);
+}
+
+// Flores soltas: vida no cenario sem sujar a leitura dos puzzles.
+setUpper(7, 4, 10);
+setUpper(4, 10, 11);
+setUpper(9, 3, 7);
 
 // ── Dialogo do gato-guia ────────────────────────────────────────────────────
-// As dicas moram aqui (justica: toda informacao necessaria esta DENTRO do jogo).
+// O gato enuncia as REGRAS, nunca as solucoes. Um puzzle cuja resposta o NPC entrega de
+// bandeja deixa de ter eureka — mas uma regra que o jogador nao tem como ler na arte
+// (a direcao do tombo, o limite de um item na mao) precisa estar dita em algum lugar.
 
 const dialogs = {
   blackCat: {
@@ -146,9 +136,9 @@ const dialogs = {
     voice: { freq: 540, wave: 'triangle' },
     lines: [
       { speaker: 'npc', text: 'Miau. Bem-vindo ao Laboratorio de Puzzles.' },
-      { speaker: 'npc', text: 'A oeste, o rio. O machado derruba arvores... e uma arvore cai sempre PARA LONGE de quem corta.' },
-      { speaker: 'npc', text: 'A leste, uma fogueira morta cercada de lava. Fogo carregado morre rapido no escuro — melhor acender perto do destino.' },
-      { speaker: 'npc', text: 'E a porta trancada ali atras? Dizem que a chave mora numa ilha. Miau.' },
+      { speaker: 'npc', text: 'Regra numero um: uma arvore cai para LONGE de quem a corta. Onde voce pisa decide onde ela deita.' },
+      { speaker: 'npc', text: 'Regra numero dois: voce so carrega UMA coisa por vez. Pegar algo novo larga o que estava na mao — ali mesmo, no chao.' },
+      { speaker: 'npc', text: 'O resto voce descobre sozinho. E dai que vem a graca. Miau.' },
     ],
   },
 };
@@ -165,14 +155,14 @@ const world = {
     chunkRows: ROWS,
     tileSize: 8,
     tilesetKey: 'forest-tileset',
-    playerStart: { worldX: 13, worldY: 6 },
+    playerStart: { worldX: 6, worldY: 6 },
     exportedAt: '2026-07-14T00:00:00.000Z',
   },
-  chunks,
+  chunks: [chunk],
   props,
   dialogs,
 };
 
 await fs.writeFile(outPath, `${JSON.stringify(world, null, 2)}\n`, 'utf8');
 console.log(`Laboratorio de Puzzles gerado em ${outPath}`);
-console.log(`  ${CHUNKS_X}x${CHUNKS_Y} chunks, ${props.length} props, spawn em (${world.meta.playerStart.worldX}, ${world.meta.playerStart.worldY})`);
+console.log(`  ${COLS}x${ROWS} tiles (1 chunk — cabe numa tela), ${props.length} props, spawn (${world.meta.playerStart.worldX}, ${world.meta.playerStart.worldY})`);
