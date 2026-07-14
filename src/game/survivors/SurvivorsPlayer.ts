@@ -1,7 +1,12 @@
 import Phaser from 'phaser';
 
 import { HERO_FRAMES } from '@/game/constants';
-import { setHeroWalking, type HeroView } from '@/game/runtime/HeroView';
+import {
+  setHeroWalking,
+  WALK_CYCLE_FRAMES,
+  WALK_CYCLE_FRAMES_UP,
+  type HeroView,
+} from '@/game/runtime/HeroView';
 import { ARENA_MAX_X, ARENA_MAX_Y, ARENA_MIN_X, ARENA_MIN_Y } from './survivorsWorld';
 
 // ── Movimento contínuo do herói (o único input do modo, como no VS) ───────────
@@ -97,6 +102,9 @@ export class SurvivorsPlayer {
       this.facingY = dy;
       this.x += dx * speedTilesPerSec * dt;
       this.y += dy * speedTilesPerSec * dt;
+      // O ciclo de passos e o quique andam por DISTÂNCIA (ver HeroView), então os pés não
+      // patinam quando a bota/haste sobe a velocidade.
+      this.hero.walkDist += speedTilesPerSec * dt;
     }
 
     // Empurrão de dano por cima do input, decaindo em ~150ms.
@@ -128,25 +136,21 @@ export class SurvivorsPlayer {
     this.knockY = (ay / len) * strengthTiles * 6;
   }
 
-  // A convenção de frames do herói: vertical segura idleUp/idleDown, horizontal
-  // (e diagonais) anima o ciclo de passos com flip — igual ao jogo-base.
+  // A convenção de frames do herói, igual à do jogo-base: os frames 0..3 são o ciclo de
+  // caminhada DE FRENTE (os lados o pegam emprestado espelhado) e o 4 é a única pose de
+  // costas — então subir não tem ciclo de pernas próprio e vive do quique.
   private applyFacing(dx: number, dy: number, moving: boolean): void {
     const hero = this.hero;
+    const goingUp = dy < 0 && Math.abs(dx) < 0.35;
+    hero.flipX = Math.abs(dx) >= 0.35 ? dx < 0 : false;
+    hero.walkFrames = goingUp ? WALK_CYCLE_FRAMES_UP : WALK_CYCLE_FRAMES;
+
     if (!moving) {
-      if (hero.walking) {
-        setHeroWalking(hero, false);
-        hero.frame = HERO_FRAMES.idleDown;
-      }
+      if (hero.walking) setHeroWalking(hero, false);
+      hero.frame = goingUp ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
       return;
     }
-    if (Math.abs(dx) >= 0.35) {
-      hero.flipX = dx < 0;
-      setHeroWalking(hero, true);
-      return;
-    }
-    setHeroWalking(hero, false);
-    hero.flipX = false;
-    hero.frame = dy < 0 ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
+    setHeroWalking(hero, true);
   }
 
   // ── joystick de arrasto ──────────────────────────────────────────────────────

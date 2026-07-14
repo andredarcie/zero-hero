@@ -29,10 +29,32 @@ export interface HeroView {
   flipX: boolean;
   /** null = no tint. */
   tint: number | null;
-  /** Walk cycle state: only a horizontal step animates; everything else holds a frame. */
   walking: boolean;
-  walkMs: number;
+  /**
+   * Tiles walked, ever. The walk cycle and the bob are driven by DISTANCE, not by time —
+   * so the feet never skate when the speed changes (the shop's boots upgrade), and, above
+   * all, so the cycle survives a tile boundary. It used to be a plain `walkMs` timer that
+   * `setHeroWalking` reset on every step: with a 87ms step against a 12fps cycle the hero
+   * barely reached frame 1 before snapping back to frame 0, so he walked on the spot.
+   */
+  walkDist: number;
+  /**
+   * The frames the walk cycle runs through, set by whoever owns the facing. The art has a
+   * front-facing 4-frame cycle (0..3) and a SINGLE back-facing frame (4) — so walking up
+   * has no leg cycle of its own, and leans on the bob alone for its life.
+   */
+  walkFrames: readonly number[];
+  /** Elevation in tiles: the bounce of a footfall. The contact shadow ignores it, by design. */
+  bobLift: number;
 }
+
+/** Front-facing cycle. The sides borrow it flipped — at 16px that reads fine. */
+export const WALK_CYCLE_FRAMES: readonly number[] = Array.from(
+  { length: HERO_FRAMES.walkEnd - HERO_FRAMES.walkStart + 1 },
+  (_, i) => HERO_FRAMES.walkStart + i,
+);
+/** There is exactly one frame of the hero's back, so "up" holds it and bobs. */
+export const WALK_CYCLE_FRAMES_UP: readonly number[] = [HERO_FRAMES.idleUp];
 
 export const createHeroView = (): HeroView => ({
   x: 0,
@@ -45,30 +67,50 @@ export const createHeroView = (): HeroView => ({
   flipX: false,
   tint: null,
   walking: false,
-  walkMs: 0,
+  walkDist: 0,
+  walkFrames: WALK_CYCLE_FRAMES,
+  bobLift: 0,
 });
 
-const WALK_FRAME_COUNT = HERO_FRAMES.walkEnd - HERO_FRAMES.walkStart + 1;
-const WALK_FRAME_MS = 1000 / TIMINGS.walkFrameRate;
-
-/** Advance the walk cycle — what Phaser's animation component used to do for the sprite. */
-export const tickHeroView = (hero: HeroView, deltaMs: number): void => {
-  if (!hero.walking) return;
-  hero.walkMs += deltaMs;
-  const step = Math.floor(hero.walkMs / WALK_FRAME_MS) % WALK_FRAME_COUNT;
-  hero.frame = HERO_FRAMES.walkStart + step;
-};
+/** Tiles covered by one frame of the cycle. Two frames = one footfall, four = a full stride. */
+const TILES_PER_FRAME = TIMINGS.walkCycleTiles / 4;
+const TILES_PER_FOOTFALL = TILES_PER_FRAME * 2;
+/** Peak of the bounce, in tiles — about one pixel on a 16px sprite. Keep it small. */
+const BOB_LIFT_TILES = 0.055;
+/** Fraction of a footfall spent rising. Well under half: the hero pops up and sinks back. */
+const BOB_RISE = 0.35;
 
 /**
- * Start or stop the walk cycle. Starting always restarts at the first frame, which is what
- * `play(heroWalk, true)` did: each step stopped the animation on completion, so the next one
- * began it afresh.
+ * Advance the walk cycle — what Phaser's animation component used to do for the sprite.
+ *
+ * Driven by `walkDist`, so it is the hero's *movement* that turns his legs over rather than a
+ * wall clock that happens to run alongside it.
  */
+export const tickHeroView = (hero: HeroView, _deltaMs: number): void => {
+  if (!hero.walking) {
+    hero.bobLift = 0;
+    return;
+  }
+
+  const frames = hero.walkFrames;
+  hero.frame = frames[Math.floor(hero.walkDist / TILES_PER_FRAME) % frames.length];
+
+  // The bounce. A natural walk does not ride a sine wave — it rises fast off the back foot and
+  // sinks slowly onto the front one (SLYNYRD, Pixelblog 55: "down 1, down 1, up 2"). A symmetric
+  // curve here reads as a robot hovering.
+  const phase = (hero.walkDist / TILES_PER_FOOTFALL) % 1;
+  hero.bobLift = BOB_LIFT_TILES * (phase < BOB_RISE
+    ? phase / BOB_RISE
+    : 1 - (phase - BOB_RISE) / (1 - BOB_RISE));
+};
+
+/** Start or stop the walk cycle. Starting restarts the stride from its first contact frame. */
 export const setHeroWalking = (hero: HeroView, walking: boolean): void => {
   if (walking && !hero.walking) {
-    hero.walkMs = 0;
-    hero.frame = HERO_FRAMES.walkStart;
+    hero.walkDist = 0;
+    hero.frame = hero.walkFrames[0];
   }
+  if (!walking) hero.bobLift = 0;
   hero.walking = walking;
 };
 

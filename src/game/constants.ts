@@ -83,8 +83,18 @@ export const HERO_FRAMES = {
 } as const;
 
 export const TIMINGS = {
-  moveDurationMs: 140,
-  walkFrameRate: 12,
+  /**
+   * Milliseconds to cross one tile, at a constant speed — a tap covers ground at exactly the
+   * same rate as a held key. It used to be the duration of a per-tile tween, and *which* number
+   * you got depended on how you typed: 140ms for a fresh press, but 87ms (×0.62) while holding.
+   */
+  moveDurationMs: 100,
+  /**
+   * Tiles covered by one full 4-frame stride. The walk cycle is driven by distance, not by a
+   * frame rate (see HeroView), so the legs stay locked to the ground at any walk speed. 3.2
+   * tiles reproduces the old 12fps look at the old held-walk speed.
+   */
+  walkCycleTiles: 3.2,
   grassRustleDurationMs: 110,
   toastFadeDelayMs: 1600,
   toastFadeDurationMs: 300,

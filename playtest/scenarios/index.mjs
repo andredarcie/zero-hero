@@ -7,6 +7,7 @@ import swordGet from './sword-get.mjs';
 import textLegibility from './text-legibility.mjs';
 import hd2dFx from './hd2d-fx.mjs';
 import heroView from './hero-view.mjs';
+import movementFeel from './movement-feel.mjs';
 import perfBurn from './perf-burn.mjs';
 
 export const scenarios = {
@@ -19,6 +20,7 @@ export const scenarios = {
   'text-legibility': textLegibility,
   'hd2d-fx': hd2dFx,
   'hero-view': heroView,
+  'movement-feel': movementFeel,
   'perf-burn': perfBurn,
 };
 

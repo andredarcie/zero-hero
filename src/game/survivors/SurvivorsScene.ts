@@ -652,6 +652,7 @@ export class SurvivorsScene extends Phaser.Scene {
     const b = this.heroBillboard;
     if (b) {
       b.setPosition(player.x, player.y);
+      b.setElevation(this.hero.bobLift); // o quique do passo (a sombra de contato o ignora)
       b.setDisplaySize(Math.max(0.05, this.hero.scaleX), Math.max(0.05, this.hero.scaleY));
       b.setTexture('hero', this.hero.frame);
       b.setFlipX(this.hero.flipX);

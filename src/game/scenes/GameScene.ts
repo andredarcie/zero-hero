@@ -20,6 +20,7 @@ import {
   NPC_GATE_RADIUS_TILES,
   SCENE_DEPTHS,
   TEXT_RESOLUTION,
+  TIMINGS,
   TORCH_BURN_MS,
 } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
@@ -635,6 +636,10 @@ export class GameScene extends Phaser.Scene {
       cam.camX + (h.x - cam.screenCenterX) / ts,
       cam.camY + (heroFootY(h) - cam.screenCenterY) / ts - 0.5,
     );
+    // The walk bob. It has to be elevation and not a shift of y: y is the ground plane here, so
+    // nudging it would send the hero *backwards into the scene* instead of up into the air. The
+    // contact shadow deliberately ignores elevation, so it stays planted while he bounces.
+    b.setElevation(h.bobLift);
     b.setDisplaySize(
       Math.max(0.05, (h.sizePx * h.scaleX) / ts),
       Math.max(0.05, (h.sizePx * h.scaleY) / ts),
@@ -867,7 +872,11 @@ export class GameScene extends Phaser.Scene {
 
     const prevWorldX = this.playerWorld.worldX;
     const prevWorldY = this.playerWorld.worldY;
-    this.playerWorld = this.movementController.update(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.playerWorld = this.movementController.update(
+      this.playerWorld.worldX,
+      this.playerWorld.worldY,
+      delta,
+    );
     const stepDx = this.playerWorld.worldX - prevWorldX;
     const stepDy = this.playerWorld.worldY - prevWorldY;
     if (stepDx !== 0 || stepDy !== 0) {
@@ -2467,7 +2476,12 @@ export class GameScene extends Phaser.Scene {
       this.playerMaxHealth += 1;
       this.playerHealth = Math.min(this.playerHealth + 1, this.playerMaxHealth);
     } else if (id === 'moveSpeed') {
-      this.movementController?.setMoveDuration(Math.max(60, 140 - this.upgrades.moveSpeed * 20));
+      // ms per tile, now that the walk runs at one constant speed. The old numbers were the
+      // duration of a *tapped* step, which a held walk then scaled by 0.62 behind your back;
+      // these track the speeds that actually came out of that, level for level (100→67).
+      this.movementController?.setMoveDuration(
+        Math.max(60, TIMINGS.moveDurationMs - this.upgrades.moveSpeed * 11),
+      );
     } else if (id === 'magnet') {
       this.coinManager?.setMagnetRadius(2);
     }
@@ -2555,15 +2569,17 @@ export class GameScene extends Phaser.Scene {
     // The billboard is centred (see updateBackItem), so its elevation is the height of the
     // sprite's MIDDLE, not of its feet: half a tile more than the offsets the 2D sprite used,
     // which measured from the hero's centre.
+    // Whatever he carries rides the walk bob with him, or it floats while he bounces underneath.
+    const bob = this.hero.bobLift;
     if (this.isTorchLit) {
-      bb.setPosition(hb.x + 0.32, hb.y + 0.02).setElevation(0.68);
+      bb.setPosition(hb.x + 0.32, hb.y + 0.02).setElevation(0.68 + bob);
       return;
     }
     const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
     // Facing up: the item sits on the visible back, drawn in front of the hero → whole object.
     // Otherwise: it rides higher and behind the hero, so only the tip clears his shoulder.
     bb.setPosition(hb.x - 0.14, hb.y + (facingUp ? 0.02 : -0.02))
-      .setElevation(facingUp ? 0.62 : 0.84);
+      .setElevation((facingUp ? 0.62 : 0.84) + bob);
   }
 
   // Hide the back item for the duration of a swing (reset the timer if the hero swings again),

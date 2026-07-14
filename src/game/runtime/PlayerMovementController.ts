@@ -1,16 +1,51 @@
 import Phaser from 'phaser';
 
 import { HERO_FRAMES, TIMINGS } from '@/game/constants';
-import { setHeroWalking, type HeroView } from './HeroView';
+import { setHeroWalking, WALK_CYCLE_FRAMES, WALK_CYCLE_FRAMES_UP, type HeroView } from './HeroView';
 import type { WorldCamera } from './WorldCamera';
 
-const MOVE_EASE = 'Sine.Out';
-const HOLD_REPEAT_DELAY_MS = 280;
-const HOLD_REPEAT_INTERVAL_MS = 140;
-// While a movement key is held the hero keeps walking, a bit faster per tile.
-const HOLD_MOVE_SPEED_FACTOR = 0.62;
-// Throttle repeated bumps (e.g. holding into a wall/enemy) so they don't fire every frame.
+/**
+ * The hero walks locked to the grid — one tile at a time, always aligned — but the walk itself
+ * is CONTINUOUS: the render position advances at a constant speed and whatever is left of the
+ * frame that crosses a tile boundary is carried straight into the next step.
+ *
+ * It used to be a chain of tweens, one per tile, eased `Sine.Out`. That cost two things. The
+ * ease drops the speed to *zero* at the end of every tile, so walking in a straight line was a
+ * lurch — go, stop, go, stop, ten times a second. And because the next tween was only born in
+ * the following update(), a whole frame was spent standing still on each tile on top of that.
+ *
+ * Zelda: Link's Awakening walks at a flat 16 subpixels per frame with no acceleration at all
+ * (measured in RAM: zeldaspeedruns.com/ladx/general/movement-speeds). The smoothness comes from
+ * never braking; the life comes from the animation — the bob — not from a velocity curve. That
+ * is the model here.
+ *
+ * Touch feeds the SAME held direction the keyboard does, read every frame. It used to run its
+ * own key-repeat engine instead: a 280ms wait, then a step queued every 140ms against a step
+ * that took 87ms — so the hero stood frozen ~53ms on every tile, and the phone walked 40%
+ * slower than the keyboard and juddered while doing it. Both now enter through one path.
+ */
+
+/** Milliseconds per tile. Constant: tapping covers ground at the same rate as holding. */
+const DEFAULT_STEP_MS = TIMINGS.moveDurationMs;
+/** A direction asked for near the end of a step is kept, and spent on the tile boundary. */
+const INPUT_BUFFER_MS = 120;
+/** Drag needed before the gesture commits to a direction. */
+const SWIPE_THRESHOLD_PX = 11;
+/** The drag anchor trails the finger on a leash this long, so turning around stays cheap. */
+const SWIPE_ANCHOR_LEASH_PX = 18;
+/** Throttle repeated bumps (holding into a wall or an enemy) so they don't fire every frame. */
 const HELD_BUMP_COOLDOWN_MS = 220;
+/**
+ * A stall (a shader compile, a backgrounded tab) must not fling the hero across the map. It can
+ * never tunnel through a wall — every tile the loop below enters is tested first — but a 500ms
+ * frame would still teleport him five tiles.
+ */
+const MAX_FRAME_MS = 50;
+
+interface Dir {
+  dx: number;
+  dy: number;
+}
 
 export class PlayerMovementController {
   private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
@@ -20,20 +55,32 @@ export class PlayerMovementController {
     left?: Phaser.Input.Keyboard.Key;
     right?: Phaser.Input.Keyboard.Key;
   };
-  private lastBumpTime = 0;
-  private readonly swipeThresholdPx = 20;
-  private isMoving = false;
-  private moveDuration: number = TIMINGS.moveDurationMs;
-  private tileSize = 0;
-  private touchStart: { pointerId: number; x: number; y: number } | null = null;
-  private queuedMove: { dx: number; dy: number } | null = null;
-  private activeTween?: Phaser.Tweens.Tween;
 
-  private heldDirection: { dx: number; dy: number } | null = null;
-  private holdRepeatTimer: Phaser.Time.TimerEvent | null = null;
+  private lastBumpTime = 0;
+  private tileSize = 0;
+  private stepMs: number = DEFAULT_STEP_MS;
+
+  /**
+   * The step in flight. `stepFrom` is the tile it left; the world position the GameScene owns is
+   * already the DESTINATION — it commits the instant a step begins, exactly as the tween version
+   * did. The skeleton's wind-up locks onto that tile and a dodge is decided against it, so the
+   * logical position must keep leading the visible one by a step.
+   */
+  private stepFrom: { x: number; y: number } | null = null;
+  private stepDir: Dir | null = null;
+  /** 0..1 along the step in flight. Overflow past 1 is carried into the next tile, never dropped. */
+  private stepProgress = 0;
+
+  /** The direction the drag is holding — read every frame, exactly like a key. */
+  private touchDir: Dir | null = null;
+  private touchAnchor: { pointerId: number; x: number; y: number } | null = null;
+
+  private bufferedDir: Dir | null = null;
+  private bufferedAtMs = 0;
+
   // The way the hero is currently facing, mirroring the sprite frame set by setFacing. Starts
   // facing down (the idle frame). A bump does NOT turn the hero, so it never changes this.
-  private lastFacing: { dx: number; dy: number } = { dx: 0, dy: 1 };
+  private lastFacing: Dir = { dx: 0, dy: 1 };
 
   private readonly boundTouchStart: (e: TouchEvent) => void;
   private readonly boundTouchMove: (e: TouchEvent) => void;
@@ -62,7 +109,7 @@ export class PlayerMovementController {
     this.scene.input.on(Phaser.Input.Events.POINTER_UP, this.handlePointerUpOrCancel, this);
     this.scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUpOrCancel, this);
 
-    // Window-level touch listeners so swipe works anywhere on screen, not just inside the canvas
+    // Window-level touch listeners so the drag works anywhere on screen, not just inside the canvas
     this.boundTouchStart = this.handleTouchStart.bind(this);
     this.boundTouchMove = this.handleTouchMove.bind(this);
     this.boundTouchEnd = this.handleTouchEnd.bind(this);
@@ -75,59 +122,142 @@ export class PlayerMovementController {
     this.scene.events.once(Phaser.Scenes.Events.DESTROY, this.removeWindowListeners, this);
   }
 
-  public update(worldX: number, worldY: number): { worldX: number; worldY: number } {
-    if (this.isMoving) {
-      return { worldX, worldY };
+  public update(worldX: number, worldY: number, deltaMs: number): { worldX: number; worldY: number } {
+    // JustDown is a destructive read: drain it every frame or a press sits on the key and fires
+    // minutes later. Draining it INTO the buffer is what stops a quick tap mid-step from vanishing.
+    this.pollFreshPress();
+
+    const dt = Math.min(deltaMs, MAX_FRAME_MS);
+    let wx = worldX;
+    let wy = worldY;
+
+    if (this.stepDir) {
+      const advance = dt / this.stepMs;
+      this.stepProgress += advance;
+      this.hero.walkDist += advance; // the leg cycle turns with the ground, not with a clock
     }
 
-    if (this.queuedMove) {
-      const { dx, dy } = this.queuedMove;
-      this.queuedMove = null;
-      return this.tryMove(worldX, worldY, dx, dy, true);
+    // Each turn of this loop spends one tile boundary crossed on this frame. On a normal frame it
+    // runs at most once — the loop only exists so a long frame can't swallow a step whole.
+    for (;;) {
+      if (this.stepDir && this.stepProgress < 1) break; // mid-tile: nothing to decide yet
+      const carry = this.stepDir ? this.stepProgress - 1 : 0;
+
+      const next = this.takeDirection();
+      if (!next) {
+        if (this.stepDir) this.endWalk(wx, wy);
+        break;
+      }
+
+      const nx = wx + next.dx;
+      const ny = wy + next.dy;
+      if (this.isBlockedCell(nx, ny)) {
+        const now = this.scene.time.now;
+        if (next.fresh || now - this.lastBumpTime >= HELD_BUMP_COOLDOWN_MS) {
+          this.lastBumpTime = now;
+          this.onBumpBlocked?.(nx, ny);
+        }
+        // A wall does not turn the hero (it never did) — and it ends the walk on the tile he is
+        // standing on, rather than leaving him wedged part-way into it.
+        if (this.stepDir) this.endWalk(wx, wy);
+        break;
+      }
+
+      this.stepFrom = { x: wx, y: wy };
+      this.stepDir = next;
+      this.stepProgress = carry;
+      wx = nx;
+      wy = ny;
+      this.onStep(nx, ny);
+      this.setFacing(next.dx, next.dy, true);
     }
 
-    const dir = this.readDirection();
-    if (dir) {
-      return this.tryMove(worldX, worldY, dir.dx, dir.dy, !dir.just);
+    if (this.stepDir && this.stepFrom) {
+      // The hero stays pinned at screen centre; the camera (and therefore the world) scrolls
+      // smoothly from the tile he left to the one he is entering.
+      const t = Math.min(1, this.stepProgress);
+      this.camera.centerOn(
+        this.stepFrom.x + this.stepDir.dx * t,
+        this.stepFrom.y + this.stepDir.dy * t,
+      );
+      this.pinToCentre();
     }
 
-    return { worldX, worldY };
+    return { worldX: wx, worldY: wy };
   }
 
-  // Resolve a single movement direction from arrow keys and WASD. A just-pressed key
-  // wins for snappy taps; otherwise a held key keeps the hero walking.
-  private readDirection(): { dx: number; dy: number; just: boolean } | null {
+  /** Land the walk squarely on a tile and drop the legs. */
+  private endWalk(worldX: number, worldY: number): void {
+    this.stepDir = null;
+    this.stepFrom = null;
+    this.stepProgress = 0;
+    this.camera.centerOn(worldX, worldY);
+    this.pinToCentre();
+    this.setFacing(this.lastFacing.dx, this.lastFacing.dy, false);
+  }
+
+  /** Keep the newest fresh key press alive for INPUT_BUFFER_MS so a tile boundary can spend it. */
+  private pollFreshPress(): void {
+    const dir = this.readJustPressed();
+    if (!dir) return;
+    this.bufferedDir = dir;
+    this.bufferedAtMs = this.scene.time.now;
+  }
+
+  /**
+   * The direction to spend on this tile boundary. A recent tap outranks a held key — that is what
+   * makes a quick turn register instead of being eaten by the step already in flight.
+   */
+  private takeDirection(): (Dir & { fresh: boolean }) | null {
+    const buffered = this.bufferedDir;
+    this.bufferedDir = null;
+    if (buffered && this.scene.time.now - this.bufferedAtMs <= INPUT_BUFFER_MS) {
+      return { ...buffered, fresh: true };
+    }
+
+    const held = this.readHeld();
+    return held ? { ...held, fresh: false } : null;
+  }
+
+  private readJustPressed(): Dir | null {
     const c = this.cursors;
     const w = this.wasd;
-
-    const justPressed = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean => {
+    const just = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean => {
       const ja = a ? Phaser.Input.Keyboard.JustDown(a) : false;
       const jb = b ? Phaser.Input.Keyboard.JustDown(b) : false;
       return ja || jb;
     };
-    const held = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean =>
-      Boolean(a?.isDown) || Boolean(b?.isDown);
 
-    const leftJust = justPressed(c?.left, w.left);
-    const rightJust = justPressed(c?.right, w.right);
-    const upJust = justPressed(c?.up, w.up);
-    const downJust = justPressed(c?.down, w.down);
+    // Every key must be polled, not just the winner: JustDown clears the flag it reads, so an
+    // early return would strand the others' flags set and fire them on some later frame.
+    const left = just(c?.left, w.left);
+    const right = just(c?.right, w.right);
+    const up = just(c?.up, w.up);
+    const down = just(c?.down, w.down);
 
-    if (leftJust) return { dx: -1, dy: 0, just: true };
-    if (rightJust) return { dx: 1, dy: 0, just: true };
-    if (upJust) return { dx: 0, dy: -1, just: true };
-    if (downJust) return { dx: 0, dy: 1, just: true };
-
-    if (held(c?.left, w.left)) return { dx: -1, dy: 0, just: false };
-    if (held(c?.right, w.right)) return { dx: 1, dy: 0, just: false };
-    if (held(c?.up, w.up)) return { dx: 0, dy: -1, just: false };
-    if (held(c?.down, w.down)) return { dx: 0, dy: 1, just: false };
-
+    if (left) return { dx: -1, dy: 0 };
+    if (right) return { dx: 1, dy: 0 };
+    if (up) return { dx: 0, dy: -1 };
+    if (down) return { dx: 0, dy: 1 };
     return null;
   }
 
+  /** A held key, or the drag — which is a key like any other as far as the walk is concerned. */
+  private readHeld(): Dir | null {
+    const c = this.cursors;
+    const w = this.wasd;
+    const held = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean =>
+      Boolean(a?.isDown) || Boolean(b?.isDown);
+
+    if (held(c?.left, w.left)) return { dx: -1, dy: 0 };
+    if (held(c?.right, w.right)) return { dx: 1, dy: 0 };
+    if (held(c?.up, w.up)) return { dx: 0, dy: -1 };
+    if (held(c?.down, w.down)) return { dx: 0, dy: 1 };
+    return this.touchDir;
+  }
+
   public setMoveDuration(ms: number): void {
-    this.moveDuration = ms;
+    this.stepMs = Math.max(40, ms);
   }
 
   /** Snap the camera onto a world tile with the hero pinned at screen centre. */
@@ -143,49 +273,22 @@ export class PlayerMovementController {
   }
 
   public get moving(): boolean {
-    return this.isMoving;
+    return this.stepDir !== null;
   }
 
   public interruptMovement(worldX: number, worldY: number): void {
-    this.activeTween?.stop();
-    this.activeTween = undefined;
-    this.isMoving = false;
-    this.queuedMove = null;
-    this.stopHold();
-    // Tween.stop() never fires onComplete, so the walk cycle started in setFacing would run
-    // forever on a mid-step interrupt (e.g. item pickup). Only a horizontal step animates;
-    // its stop convention is the idleDown frame — vertical steps hold their facing frame.
+    this.stepDir = null;
+    this.stepFrom = null;
+    this.stepProgress = 0;
+    this.bufferedDir = null;
+    // Drop the drag's held direction, but keep its anchor: the finger is still on the glass, and
+    // the next touchmove re-arms it. (The old code did the same via stopHold + a live touchStart.)
+    this.touchDir = null;
     if (this.hero.walking) {
       setHeroWalking(this.hero, false);
-      this.hero.frame = HERO_FRAMES.idleDown;
+      this.hero.frame = this.lastFacing.dy < 0 ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
     }
     this.syncPlayerToWorld(worldX, worldY, this.tileSize || this.hero.sizePx);
-  }
-
-  private stopHold(): void {
-    this.heldDirection = null;
-    this.holdRepeatTimer?.remove();
-    this.holdRepeatTimer = null;
-  }
-
-  private startHold(dir: { dx: number; dy: number }): void {
-    this.stopHold();
-    this.heldDirection = dir;
-    this.queuedMove = { ...dir };
-    this.holdRepeatTimer = this.scene.time.addEvent({
-      delay: HOLD_REPEAT_DELAY_MS,
-      callback: () => {
-        this.holdRepeatTimer = this.scene.time.addEvent({
-          delay: HOLD_REPEAT_INTERVAL_MS,
-          callback: () => {
-            if (this.heldDirection && !this.queuedMove) {
-              this.queuedMove = { ...this.heldDirection };
-            }
-          },
-          loop: true,
-        });
-      },
-    });
   }
 
   private removeWindowListeners(): void {
@@ -196,147 +299,108 @@ export class PlayerMovementController {
   }
 
   private handleTouchStart(e: TouchEvent): void {
-    if (this.touchStart !== null) return;
+    if (this.touchAnchor !== null) return;
     const t = e.changedTouches[0];
-    this.touchStart = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
+    this.touchAnchor = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
   }
 
   private handleTouchMove(e: TouchEvent): void {
-    if (!this.touchStart) return;
-    const t = Array.from(e.changedTouches).find((c) => c.identifier === this.touchStart!.pointerId);
+    const anchor = this.touchAnchor;
+    if (!anchor) return;
+    const t = Array.from(e.changedTouches).find((c) => c.identifier === anchor.pointerId);
     if (!t) return;
-    const dir = this.resolveSwipe(t.clientX - this.touchStart.x, t.clientY - this.touchStart.y);
-    if (!dir) return;
-
-    const dirChanged = !this.heldDirection || this.heldDirection.dx !== dir.dx || this.heldDirection.dy !== dir.dy;
-    if (dirChanged) {
-      this.touchStart = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
-      this.startHold(dir);
-    }
+    this.trackDrag(anchor, t.clientX, t.clientY);
   }
 
   private handleTouchEnd(e: TouchEvent): void {
-    if (!this.touchStart) return;
-    const t = Array.from(e.changedTouches).find((c) => c.identifier === this.touchStart!.pointerId);
-    if (!t) return;
-    this.stopHold();
-    this.touchStart = null;
+    const anchor = this.touchAnchor;
+    if (!anchor) return;
+    if (!Array.from(e.changedTouches).some((c) => c.identifier === anchor.pointerId)) return;
+    this.touchDir = null;
+    this.touchAnchor = null;
   }
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
     if (pointer.wasTouch) return;
-    this.touchStart = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
+    this.touchAnchor = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
     if (pointer.wasTouch) return;
-    if (!pointer.isDown || !this.touchStart || this.touchStart.pointerId !== pointer.id) return;
-    const dir = this.resolveSwipe(pointer.x - this.touchStart.x, pointer.y - this.touchStart.y);
-    if (!dir) return;
-    const dirChanged = !this.heldDirection || this.heldDirection.dx !== dir.dx || this.heldDirection.dy !== dir.dy;
-    if (dirChanged) {
-      this.touchStart = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
-      this.startHold(dir);
-    }
+    const anchor = this.touchAnchor;
+    if (!pointer.isDown || !anchor || anchor.pointerId !== pointer.id) return;
+    this.trackDrag(anchor, pointer.x, pointer.y);
   }
 
   private handlePointerUpOrCancel(pointer: Phaser.Input.Pointer): void {
     if (pointer.wasTouch) return;
-    if (!this.touchStart || this.touchStart.pointerId !== pointer.id) return;
-    this.stopHold();
-    this.touchStart = null;
+    if (!this.touchAnchor || this.touchAnchor.pointerId !== pointer.id) return;
+    this.touchDir = null;
+    this.touchAnchor = null;
   }
 
-  private resolveSwipe(deltaX: number, deltaY: number): { dx: number; dy: number } | null {
-    const absX = Math.abs(deltaX);
-    const absY = Math.abs(deltaY);
-    if (absX < this.swipeThresholdPx && absY < this.swipeThresholdPx) return null;
-    if (absX >= absY) return { dx: deltaX >= 0 ? 1 : -1, dy: 0 };
-    return { dx: 0, dy: deltaY >= 0 ? 1 : -1 };
-  }
+  /**
+   * Turn the drag into a held direction — and let the ANCHOR chase the finger on a short leash.
+   *
+   * The anchor used to be re-planted under the finger on every change of direction, so reversing
+   * meant dragging the whole threshold again from a standing start, and the hero kept walking the
+   * old way until you had. Leashed, the finger is never more than SWIPE_ANCHOR_LEASH_PX from the
+   * anchor, so the vector always describes where the thumb is heading *now*.
+   *
+   * There is no "let go by returning to centre": you walk while the finger is out, and you stop by
+   * lifting it. That is the gesture as it stands — a drag, nothing to learn.
+   */
+  private trackDrag(anchor: { x: number; y: number }, px: number, py: number): void {
+    let dx = px - anchor.x;
+    let dy = py - anchor.y;
+    const len = Math.hypot(dx, dy);
 
-  private tryMove(
-    worldX: number,
-    worldY: number,
-    dx: number,
-    dy: number,
-    viaHold = false,
-  ): { worldX: number; worldY: number } {
-    const nextX = worldX + dx;
-    const nextY = worldY + dy;
-
-    if (this.isBlockedCell(nextX, nextY)) {
-      const now = this.scene.time.now;
-      if (!viaHold || now - this.lastBumpTime >= HELD_BUMP_COOLDOWN_MS) {
-        this.lastBumpTime = now;
-        this.onBumpBlocked?.(nextX, nextY);
-      }
-      return { worldX, worldY };
+    if (len > SWIPE_ANCHOR_LEASH_PX) {
+      const pull = (len - SWIPE_ANCHOR_LEASH_PX) / len;
+      anchor.x += dx * pull;
+      anchor.y += dy * pull;
+      dx = px - anchor.x;
+      dy = py - anchor.y;
     }
 
-    this.isMoving = true;
-    this.onStep(nextX, nextY);
-    this.setFacing(dx, dy, dx !== 0);
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    // Inside the dead zone the last direction stands: a thumb wobbling on the glass must not
+    // stutter the hero between two tiles.
+    if (absX < SWIPE_THRESHOLD_PX && absY < SWIPE_THRESHOLD_PX) return;
 
-    const stepDuration = viaHold
-      ? Math.max(60, Math.round(this.moveDuration * HOLD_MOVE_SPEED_FACTOR))
-      : this.moveDuration;
-
-    // The hero stays pinned at screen centre; the camera (and therefore the world) scrolls
-    // smoothly from the old tile to the new one.
-    const renderState = { rx: worldX, ry: worldY };
-    this.activeTween?.stop();
-    this.activeTween = this.scene.tweens.add({
-      targets: renderState,
-      rx: nextX,
-      ry: nextY,
-      duration: stepDuration,
-      ease: MOVE_EASE,
-      onUpdate: () => {
-        this.camera.centerOn(renderState.rx, renderState.ry);
-        this.pinToCentre();
-      },
-      onComplete: () => {
-        this.activeTween = undefined;
-        this.camera.centerOn(nextX, nextY);
-        this.pinToCentre();
-        this.setFacing(dx, dy, false);
-        this.isMoving = false;
-      },
-    });
-
-    return { worldX: nextX, worldY: nextY };
+    this.touchDir = absX >= absY
+      ? { dx: dx >= 0 ? 1 : -1, dy: 0 }
+      : { dx: 0, dy: dy >= 0 ? 1 : -1 };
   }
 
   /** The direction the hero's sprite currently faces (set the instant a move begins). */
-  public get facing(): { dx: number; dy: number } {
+  public get facing(): Dir {
     return this.lastFacing;
   }
 
   private setFacing(dx: number, dy: number, moving: boolean): void {
     this.lastFacing = { dx, dy };
     const hero = this.hero;
-    if (dy < 0) {
-      setHeroWalking(hero, false);
+
+    // Frames 0..3 are the front-facing walk cycle (its last frame doubles as the idle pose), and
+    // frame 4 is the hero's back. So down gets its own proper cycle, the sides borrow it flipped,
+    // and up — which has a single frame — carries its motion in the bob alone. Walking up or down
+    // used to animate NOTHING: a still sprite, dead centre of the screen, world sliding under it.
+    if (dy !== 0) {
       hero.flipX = false;
-      hero.frame = HERO_FRAMES.idleUp;
-      return;
+      hero.walkFrames = dy < 0 ? WALK_CYCLE_FRAMES_UP : WALK_CYCLE_FRAMES;
+    } else {
+      hero.flipX = dx < 0;
+      hero.walkFrames = WALK_CYCLE_FRAMES;
     }
 
-    if (dy > 0) {
-      setHeroWalking(hero, false);
-      hero.flipX = false;
-      hero.frame = HERO_FRAMES.idleDown;
-      return;
-    }
-
-    hero.flipX = dx < 0;
     if (moving) {
       setHeroWalking(hero, true);
       return;
     }
 
     setHeroWalking(hero, false);
-    hero.frame = HERO_FRAMES.idleDown;
+    hero.frame = dy < 0 ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
   }
 }
