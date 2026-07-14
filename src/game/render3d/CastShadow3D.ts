@@ -89,6 +89,15 @@ export class SolidCastField {
     geo.translate(0, 0.5, 0); // origin at the foot
     geo.rotateX(-Math.PI / 2); // lay flat, head along -Z
 
+    // The tileset is filtered LINEAR now, for the tiles' sake (textures3d) — and a shadow is the
+    // one thing here that must NOT be resampled: it is a silhouette cut out of the sheet by an
+    // alphaTest, and a bilinear fetch would blur the alpha and creep the cutout's edge. So fetch
+    // dead-centre of the texel, which is NEAREST reproduced exactly, and these come out the same
+    // pixels they always did. (Jagged, and that is fine — the shadows are not what we are fixing.)
+    const mapSize = new THREE.Vector2(1, 1);
+    const img = map.image as { width: number; height: number } | undefined;
+    if (img?.width && img.height) mapSize.set(img.width, img.height);
+
     this.uvWindow = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
     this.alpha = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1);
     this.uvWindow.setUsage(THREE.DynamicDrawUsage);
@@ -123,12 +132,19 @@ export class SolidCastField {
            vMapUv = uv * aUvWindow.zw + aUvWindow.xy;
            vCastAlpha = aCastAlpha;`,
         );
+      shader.uniforms.uMapSize = { value: mapSize };
+      // Expand map_fragment ourselves so the fetch can be pinned to the texel's centre (see above).
+      const fetch = 'texture2D( map, vMapUv )';
+      const mapChunk = THREE.ShaderChunk.map_fragment.replace(
+        fetch,
+        'texture2D( map, ( floor( vMapUv * uMapSize ) + 0.5 ) / uMapSize )',
+      );
       shader.fragmentShader = shader.fragmentShader
-        .replace('void main() {', 'varying float vCastAlpha;\nvoid main() {')
+        .replace('void main() {', 'uniform vec2 uMapSize;\nvarying float vCastAlpha;\nvoid main() {')
         // Exactly where `opacity` sat: BEFORE the alpha test, so a faint shadow erodes.
         .replace(
           '#include <map_fragment>',
-          '#include <map_fragment>\n diffuseColor.a *= vCastAlpha;',
+          `${mapChunk}\n diffuseColor.a *= vCastAlpha;`,
         );
     };
 

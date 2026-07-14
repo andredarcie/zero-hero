@@ -45,6 +45,82 @@ export const lightResUniform: THREE.IUniform = { value: 16 };
 export const flowTimeUniform: THREE.IUniform = { value: 0 };
 
 /**
+ * TEXEL ANTI-ALIASING — 1 = the art's pixel grid is anti-aliased, 0 = plain NEAREST.
+ * Live-tunable via window.hd3d.texelAa, which is the A/B for the whole effect below.
+ */
+export const texelAaUniform: THREE.IUniform = { value: 1 };
+
+/**
+ * THE JAGGIES, AND WHY THEY ARE NOT THE ART'S FAULT.
+ *
+ * A tile is 16 art pixels wide and it lies on a plane in perspective, so one art pixel almost never
+ * lands on a whole number of screen pixels: it covers 2.6 of them, or 1.3, and a different amount
+ * again one row further back. NEAREST has only one answer to that question — it picks whichever
+ * texel the pixel's exact centre fell in — so a texel comes out 3 screen pixels wide here and 2
+ * there, and a straight run of them breaks into a ragged staircase that crawls as the camera moves.
+ * That is the serrilhado, and no amount of care in the artwork can fix it: it is a sampling
+ * artefact, produced between the art and the screen.
+ *
+ * The honest fix is to ask what fraction of the pixel each texel actually covers, and MSAA/SSAA
+ * answer that by rendering more samples — more fragments, which is exactly the bill we refuse to
+ * pay. But for a flat grid of texels the coverage is analytic: `fwidth` says how many texels one
+ * screen pixel spans, so we know how far the pixel reaches across the seam without sampling
+ * anything twice.
+ *
+ * So keep the sample at the texel's CENTRE — a flat, crisp, unfiltered texel, exactly the pixel art
+ * NEAREST would have drawn — until the pixel actually straddles a seam, and only there slide the
+ * sample across it, letting the GPU's own bilinear unit blend the two texels in proportion to the
+ * pixel's coverage. The texel interiors stay hard (this is NOT the bilinear mush that would soften
+ * the art); only the boundary between them gets anti-aliased.
+ *
+ * It costs a handful of ALU per fragment and — the point of the whole exercise — the SAME single
+ * texture fetch as before: no extra taps, no extra pass, no extra render target. Requires the
+ * texture to be LinearFilter (see textures3d): with NEAREST the GPU rounds the slid UV back to the
+ * same texel and the whole thing silently degrades to what it does today.
+ *
+ * `bounds` is the frame's texel-centre box inside the sheet. The tileset is an ATLAS, and a bilinear
+ * fetch reaches half a texel past the UV it is given — right into the neighbouring tile's art. So
+ * the slid sample is clamped to the frame's own texels, which is per-tile CLAMP_TO_EDGE and the
+ * reason the quad UVs no longer need the inset they used to carry.
+ */
+export const TEXEL_AA_GLSL = /* glsl */ `
+  uniform vec2 uMapSize;
+  uniform float uTexelAa;
+  vec2 zhTexelUv(vec2 uv, vec4 bounds) {
+    vec2 t = uv * uMapSize;                   // UV in texels
+    vec2 centre = floor(t) + 0.5;             // this texel's centre: what NEAREST would fetch
+    vec2 seam = floor(t + 0.5);               // the texel boundary the fragment sits nearest to
+    vec2 px = max(fwidth(t), vec2(1e-5));     // texels covered by one screen pixel
+    // Ride the seam only while the pixel straddles it; elsewhere this clamps to the texel centre.
+    vec2 aa = seam + clamp((t - seam) / px, -0.5, 0.5);
+    return clamp(mix(centre, aa, uTexelAa) / uMapSize, bounds.xy, bounds.zw);
+  }
+`;
+
+/** Per-material texel-AA state: the sheet's size, and the frame of it a material samples. */
+export type TexelAaUniforms = { size: THREE.IUniform; bounds?: THREE.IUniform };
+
+/**
+ * Aim the uniforms at whatever frame `tex` currently windows onto (offset/repeat — the transform
+ * getTexture3D bakes into its clones), inset by half a texel so a bilinear fetch cannot reach the
+ * next frame in the sheet. Call it again whenever the material's map is swapped (a walk cycle).
+ */
+export const syncTexelAaUniforms = (u: TexelAaUniforms, tex: THREE.Texture): void => {
+  const img = tex.image as { width: number; height: number } | undefined;
+  if (!img?.width || !img.height) return;
+  (u.size.value as THREE.Vector2).set(img.width, img.height);
+  if (!u.bounds) return;
+  const hx = 0.5 / img.width;
+  const hy = 0.5 / img.height;
+  (u.bounds.value as THREE.Vector4).set(
+    tex.offset.x + hx,
+    tex.offset.y + hy,
+    tex.offset.x + tex.repeat.x - hx,
+    tex.offset.y + tex.repeat.y - hy,
+  );
+};
+
+/**
  * IMPERFECT FIRELIGHT — how far (in tiles) the light's contours get dented.
  *
  * Real flamelight is never a compass circle: the flame's shape, smoke and the
@@ -155,6 +231,13 @@ type PatchOpts = {
    * instead of repeating the same pattern per tile.
    */
   worldFx?: 'lavaFlow' | 'waterGlint';
+  /**
+   * Anti-alias the art's texel grid (see TEXEL_AA_GLSL). With `bounds` the sampled frame comes from
+   * a uniform — one frame per material, swapped as a whole (a billboard's walk cycle). Without it,
+   * the frame comes from a per-vertex `aUvBounds` attribute, which is what the merged tile meshes
+   * need: one mesh, and every quad in it windows onto a different frame of the tileset.
+   */
+  texelAa?: TexelAaUniforms;
 };
 
 /**
@@ -176,7 +259,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
   // Three caches compiled programs by this key; without it, materials patched
   // DIFFERENTLY would silently share whichever variant compiled first.
   mat.customProgramCacheKey = () =>
-    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}`;
+    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}`;
 
   const bornAt = import.meta.env.DEV ? new Error().stack ?? '' : '';
 
@@ -338,6 +421,49 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
              diffuseColor.rgb * uLightCap
            );`,
         );
+    }
+
+    // ── Texel-grid AA (see TEXEL_AA_GLSL) ────────────────────────────────────
+    // Runs LAST, and it must: every patch above that touches the map APPENDS itself after the
+    // `#include <map_fragment>` token and leaves the token standing, so this — the one that
+    // finally expands the token into real code — has to be the one holding the pen at the end.
+    if (opts.texelAa) {
+      const chunk = THREE.ShaderChunk.map_fragment;
+      const fetch = 'texture2D( map, vMapUv )';
+      // A three.js upgrade that renames the fetch leaves the chunk untouched: the art stays
+      // NEAREST-crisp exactly as it is today, never wrong. (Same bargain as skipDarkPointLights.)
+      if (chunk.includes(fetch)) {
+        // The frame is one uniform per material, or — for the merged tile meshes, where every quad
+        // in the one mesh windows onto a different frame — a per-vertex attribute.
+        const perQuad = !opts.texelAa.bounds;
+        const bounds = perQuad ? 'vUvBounds' : 'uUvBounds';
+        shader.uniforms.uMapSize = opts.texelAa.size;
+        shader.uniforms.uTexelAa = texelAaUniform;
+        if (perQuad) {
+          shader.vertexShader = shader.vertexShader
+            .replace(
+              'void main() {',
+              'attribute vec4 aUvBounds;\nvarying vec4 vUvBounds;\nvoid main() {',
+            )
+            .replace(
+              '#include <begin_vertex>',
+              '#include <begin_vertex>\n vUvBounds = aUvBounds;',
+            );
+        } else {
+          shader.uniforms.uUvBounds = opts.texelAa.bounds as THREE.IUniform;
+        }
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            'void main() {',
+            `${perQuad ? 'varying vec4 vUvBounds;' : 'uniform vec4 uUvBounds;'}
+             ${TEXEL_AA_GLSL}
+             void main() {`,
+          )
+          .replace(
+            '#include <map_fragment>',
+            chunk.replace(fetch, `texture2D( map, zhTexelUv( vMapUv, ${bounds} ) )`),
+          );
+      }
     }
   };
 };

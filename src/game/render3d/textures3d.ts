@@ -117,8 +117,20 @@ export const preloadTextures3D = (): Promise<void> => {
   const loader = new THREE.TextureLoader(manager);
   for (const [key, def] of Object.entries(DEFS)) {
     const t = loader.load(def.url);
-    t.magFilter = THREE.NearestFilter;
-    t.minFilter = THREE.NearestFilter;
+    // The TILESET alone is filtered LINEAR — everything else stays NEAREST.
+    //
+    // Not a softening: the tile materials never sample between two texels except inside the
+    // one-pixel band where a pixel genuinely straddles a seam (zhTexelUv, pixelArtLight), and there
+    // the GPU's bilinear unit is precisely the tool for the job — it is what turns the ragged
+    // staircase of a tile floor in perspective into a clean edge, for free. Texel interiors are
+    // still fetched dead-centre, so the art comes out as crisp as NEAREST drew it.
+    //
+    // Sprites keep NEAREST: they face the camera, their pixels land square, and they have no
+    // staircase to fix. NEAREST also makes the AA maths a no-op, so a sheet only opts in by
+    // switching its filter here — which is why this line is the whole switch.
+    const smooth = key === 'forest-tileset';
+    t.magFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter;
+    t.minFilter = smooth ? THREE.LinearFilter : THREE.NearestFilter;
     t.colorSpace = THREE.SRGBColorSpace;
     baseTextures.set(key, t);
   }
@@ -191,22 +203,40 @@ export const getTexture3D = (key: string, frame = 0): THREE.Texture => {
   return t;
 };
 
-/** Tileset frame UVs for the merged ground/decor meshes (not a cloned texture). */
+/**
+ * Tileset frame UVs for the merged ground/decor meshes (not a cloned texture).
+ *
+ * `u0…v1` is the frame's exact box — the quad covers all 16 texels of its tile, at equal width, so
+ * the pixel grid runs unbroken from one tile into the next. `cu0…cv1` is that box pulled in by half
+ * a texel: the box of the frame's texel CENTRES, which is where zhTexelUv clamps its sample so a
+ * bilinear fetch can never reach across into the neighbouring frame of the atlas.
+ *
+ * The quad UVs used to carry a 0.35-texel inset for the same reason ("keeps NEAREST off
+ * neighbours"). It bought safety by cropping every tile's border pixels to two-thirds of their
+ * width — a hitch in the pixel grid at every tile boundary, which is the opposite of what we want
+ * from a fix for the jaggies. The shader clamp does the job exactly, so the inset is gone.
+ */
 export const tilesetFrameUv = (
   frame: number,
-): { u0: number; u1: number; v0: number; v1: number } => {
+): {
+  u0: number; u1: number; v0: number; v1: number;
+  cu0: number; cu1: number; cv0: number; cv1: number;
+} => {
   const base = baseTextures.get('forest-tileset');
   const img = base?.image as { width: number; height: number } | undefined;
   const cols = img ? img.width / 16 : 3;
   const rows = img ? img.height / 16 : 9;
   const col = frame % cols;
   const row = Math.floor(frame / cols);
-  const inset = 0.35 / 16; // fraction of a frame; keeps NEAREST off neighbours
+  const u0 = col / cols;
+  const u1 = (col + 1) / cols;
+  const v0 = (rows - row - 1) / rows;
+  const v1 = (rows - row) / rows;
+  const hx = 0.5 / (img ? img.width : cols * 16);
+  const hy = 0.5 / (img ? img.height : rows * 16);
   return {
-    u0: (col + inset) / cols,
-    u1: (col + 1 - inset) / cols,
-    v0: (rows - row - 1 + inset) / rows,
-    v1: (rows - row - inset) / rows,
+    u0, u1, v0, v1,
+    cu0: u0 + hx, cu1: u1 - hx, cv0: v0 + hy, cv1: v1 - hy,
   };
 };
 

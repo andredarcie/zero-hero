@@ -17,7 +17,8 @@ import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from 
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform,
-  lightWobbleUniform, patchPixelMaterial,
+  lightWobbleUniform, patchPixelMaterial, syncTexelAaUniforms, texelAaUniform,
+  type TexelAaUniforms,
 } from './pixelArtLight';
 import { frameUvWindow, getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv } from './textures3d';
 import { getWoodTexture } from './woodTexture';
@@ -237,6 +238,13 @@ export interface World3DParams {
    * before); raise it for a deliberately chunkier retro frame.
    */
   pixelScale: number;
+  /**
+   * Anti-alias the TILES' pixel grid: 1 = on (default), 0 = the raw NEAREST staircase.
+   * The tile art stays crisp either way — only the seam between two texels changes. It is a
+   * shader-side A/B of the whole effect (see pixelArtLight/TEXEL_AA_GLSL), so flipping it live
+   * through window.hd3d.texelAa costs nothing and recompiles nothing.
+   */
+  texelAa: number;
   /** Retro light banding: ≥ 1 = that many flat brightness tiers; 0 = smooth (default). */
   lightSteps: number;
   /** Light texels per tile (0 = smooth per-pixel light). See pixelArtLight.lightResUniform. */
@@ -341,6 +349,11 @@ export class World3D {
     // which costs a quarter of the fragments. Desktop keeps 1:1 — a half-res DESKTOP frame made
     // the whole game read jagged (user feedback: the ASH treatment belongs to the firelight only).
     pixelScale: isHandheld() ? 2 : 1,
+    // A tile floor in perspective cannot land its 16px art on whole screen pixels, and NEAREST
+    // answers that by breaking every straight run of texels into a ragged staircase that crawls
+    // as the camera moves. This anti-aliases the texel seams analytically — same single texture
+    // fetch, no extra pass. See pixelArtLight/TEXEL_AA_GLSL.
+    texelAa: 1,
     // A Short Hike-style firelight (user: "pode seguir à risca a forma do Short Hike"):
     // the falloff is SMOOTH (0 = no banding) but painted by the authored colour ramp
     // (fireRamp*) and evaluated on the art's own pixel grid (lightRes) — like ASH, the
@@ -805,8 +818,13 @@ export class World3D {
     for (const l of getLavaTiles()) this.lavaSpots.push({ x: l.worldX, y: l.worldY });
 
     const tileset = getBaseTexture3D('forest-tileset');
+    // Every tile mesh samples the one atlas, so they share the one size uniform. No `bounds` here:
+    // each mesh merges thousands of quads, each windowing onto its own frame, so the frame travels
+    // per vertex (aUvBounds) instead. See pixelArtLight/TEXEL_AA_GLSL.
+    const tileAa: TexelAaUniforms = { size: { value: new THREE.Vector2() } };
+    syncTexelAaUniforms(tileAa, tileset); // the sheet's pixel size; every base texture is loaded by now
     const groundMat = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
-    patchPixelMaterial(groundMat, { quantize: true });
+    patchPixelMaterial(groundMat, { quantize: true, texelAa: tileAa });
     const ground = new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet), groundMat);
     this.scene.add(ground);
 
@@ -828,7 +846,7 @@ export class World3D {
     const decorMat = new THREE.MeshLambertMaterial({
       map: tileset, transparent: true, alphaTest: 0.35, depthWrite: false, vertexColors: true,
     });
-    patchPixelMaterial(decorMat, { quantize: true });
+    patchPixelMaterial(decorMat, { quantize: true, texelAa: tileAa });
     this.decorGeo = buildFlatTileGeometry(decorTiles, 0.02, solidSet);
     const decor = new THREE.Mesh(this.decorGeo, decorMat);
     this.scene.add(decor);
@@ -839,7 +857,7 @@ export class World3D {
     // All standing trees/walls merged into ONE upright mesh (one draw call, one shadow).
     // Lit like the ground at their feet — same treatment the dynamic billboards get.
     const solidMat = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
-    patchPixelMaterial(solidMat, { quantize: true, normalUp: true });
+    patchPixelMaterial(solidMat, { quantize: true, normalUp: true, texelAa: tileAa });
     const solids = new THREE.Mesh(buildUprightTileGeometry(this.solidTiles), solidMat);
     solids.castShadow = true;
     solids.customDepthMaterial = new THREE.MeshDepthMaterial({
@@ -1445,6 +1463,7 @@ export class World3D {
     profiler.end('rustle');
 
     // Live knobs (window.hd3d).
+    texelAaUniform.value = Math.min(1, Math.max(0, this.params.texelAa));
     lightStepsUniform.value = Math.max(0, this.params.lightSteps);
     lightResUniform.value = Math.max(0, this.params.lightRes);
     lightWobbleUniform.value = Math.max(0, this.params.lightWobble);
@@ -2194,6 +2213,7 @@ const buildFlatTileGeometry = (
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
+  const bounds: number[] = [];
   const nrm: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
@@ -2203,6 +2223,10 @@ const buildFlatTileGeometry = (
     const f = tilesetFrameUv(frame);
     pos.push(x - 0.5, y, z - 0.5, x + 0.5, y, z - 0.5, x + 0.5, y, z + 0.5, x - 0.5, y, z + 0.5);
     uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
+    // Which frame of the atlas this quad may sample, so the texel-AA fetch cannot slide into the
+    // next tile's art (pixelArtLight/zhTexelUv). Per vertex because it is ONE mesh: the whole
+    // ground is a single draw and every quad in it windows onto a different tile.
+    for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
     // Baked ambient occlusion, the only "relief" a flat tile is allowed: a corner hemmed in by
     // standing tiles (trees, walls) sees less of the sky, so it goes darker. This is depth from
@@ -2223,6 +2247,7 @@ const buildFlatTileGeometry = (
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
@@ -2267,6 +2292,7 @@ const buildUprightTileGeometry = (
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
+  const bounds: number[] = [];
   const nrm: number[] = [];
   const idx: number[] = [];
   tiles.forEach(({ x, z, frame }, i) => {
@@ -2274,6 +2300,7 @@ const buildUprightTileGeometry = (
     // Upright quad on the tile, facing the (fixed-yaw) camera direction (+z).
     pos.push(x - 0.5, 1, z, x + 0.5, 1, z, x + 0.5, 0, z, x - 0.5, 0, z);
     uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
+    for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1);
     const b = i * 4;
     idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
@@ -2281,6 +2308,7 @@ const buildUprightTileGeometry = (
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setIndex(idx);
   return geo;
