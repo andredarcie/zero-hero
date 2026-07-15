@@ -8,27 +8,34 @@ export default {
   palette: {
     A: '#63452c', // dark wood — seams, shadow side, rims
     B: '#815938', // base wood
-    C: '#886644', // lit wood (left)
-    D: '#1d2b53', // ink navy hoops
+    C: '#886644', // mid-lit wood
+    L: '#b7916a', // highlight — full top of the wood ramp; v2 stopped at C and read flat
+    D: '#1d2b53', // ink navy hoop base
+    E: '#324476', // hoop catching the light (left end)
+    F: '#141d38', // hoop shadow (right end)
   },
   frames: [[
     '................',
     '................',
-    '....AAAAAAAA....',
-    '...ACCBBBBBBA...',
-    '...DDDDDDDDDD...',
-    '..CCCABBABBAAA..',
-    '.CCCCABBABBAAAA.',
-    '.CCCCABBABBAAAA.',
-    '.CCCCABBABBAAAA.',
-    '..CCCABBABBAAA..',
-    '..CCCABBABBAAA..',
-    '...DDDDDDDDDD...',
-    '...CCABBABBAA...',
+    '....LLCCCBBA....',
+    '...ACCBBBBBAA...',
+    '...EEDDDDDDFF...',
+    '..CLLCBABBAAAA..',
+    '.CLLLCBBABBAAAA.',
+    '.CLLLCBBABBAAAA.',
+    '.CLLCBBBABBAAAA.',
+    '..CLLCBABBAAAA..',
+    '..CCLCBABBAAAA..',
+    '...EDDDDDDDFF...',
+    '...CCCBABBAAA...',
     '....AAAAAAAA....',
     '................',
     '................',
   ]],
-  notes: 'Wood ramp #63452c/#815938/#886644 + ink hoops. Flat left-light like rock.png. '
-    + 'Bulge in the middle rows (14 wide) tapering to 8 at the rims — the boxy first draft read as a crate.',
+  notes: 'v3, after "muito chapado" feedback. Fixes, all classic pixel-art practice applied inside '
+    + 'the game palette: full value range of the wood ramp (highlight #b7916a was unused in v2); '
+    + 'cylinder highlight as a BAND ~20% in from the lit edge that tapers at top/bottom of the '
+    + 'bulge, instead of stripe shading glued to the silhouette; hoops shaded with the ink ramp '
+    + '(#324476 lit end, #141d38 shadow end) like vase.png does; stave seams shift out one column '
+    + 'at the bulge rows so the planks bow with the form; bottom row all-dark as ground contact.',
 };

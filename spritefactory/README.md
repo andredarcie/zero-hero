@@ -56,6 +56,25 @@ O critério de pronto é duplo, e os dois valem: **o linter passa** (regras obje
 **o preview convence** (a parte que só o olho pega: silhueta, peso, leitura à noite). Não pule o
 passo 4 — o linter não vê forma.
 
+## Boas práticas que o linter não vê (aprendidas no barril, v2 → v3)
+
+O linter garante paleta/contagem/alpha, mas "chapado" é um defeito de FORMA. Checklist para o
+passo 4 (olhar o preview), destilado da prática clássica de pixel art aplicada dentro deste estilo:
+
+- **Use a ramp inteira.** O barril v2 parava no meio da ramp de wood (L 0.28→0.40) e ficou chapado;
+  o v3 usa até o topo (#b7916a, L 0.57). Range de valor estreito = papelão.
+- **Cluster shading, não listras.** Claro/base/escuro em faixas verticais uniformes achata qualquer
+  cilindro. A luz forma MANCHAS que seguem a forma.
+- **Highlight de cilindro fica a ~20% da borda iluminada**, nunca colado na silhueta — e afina no
+  topo/base onde a superfície curva para longe da luz.
+- **Cada material sombreia com a própria ramp.** Arco de metal monocromático é chapado; o vaso do
+  jogo sombreia navy com navy (#141d38/#1d2b53/#324476) — faça igual.
+- **Detalhes acompanham a forma.** Juntas de tábuas retas negam o bojo; no v3 as seams abrem uma
+  coluna nas linhas do bojo.
+- **O lado da sombra come detalhe** (seams somem no escuro — correto), e **a última linha escura
+  ancora o objeto no chão**.
+- Comparação viva: `out/barrel-v2-vs-v3.png` (gere com git show + build, ou guarde a sua).
+
 ## Formato de spec (`sprites/<nome>.mjs`)
 
 ```js
