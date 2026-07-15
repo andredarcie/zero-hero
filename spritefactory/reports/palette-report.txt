@@ -1,0 +1,412 @@
+Palette audit — 151 PNGs, 1167 distinct opaque colours, 237 canonical.
+
+== blue (50) ==
+  #091518  px=     55  files=  3  L=0.06
+  #0d1a1e  px=    202  files=  1  L=0.08
+  #141d38  px=    204  files= 11  L=0.15
+  #141d39  px=     30  files=  2  L=0.15
+  #151e3a  px=     61  files=  2  L=0.15
+  #151f3b  px=     33  files=  2  L=0.16
+  #16203d  px=     34  files=  2  L=0.16
+  #172140  px=     68  files=  2  L=0.17
+  #172240  px=     47  files=  4  L=0.17
+  #172241  px=     40  files=  2  L=0.17
+  #182345  px=     32  files=  2  L=0.18
+  #1d3b45  px=   1754  files=  2  L=0.19
+  #1a2649  px=     95  files=  2  L=0.19
+  #1a264a  px=     62  files=  2  L=0.20
+  #1b284e  px=     46  files=  2  L=0.21
+  #1b284f  px=     25  files=  2  L=0.21
+  #00396b  px=     44  files=  2  L=0.21
+  #1d2b53  px=   2398  files= 22  L=0.22
+  #1e2d57  px=     47  files=  2  L=0.23
+  #202f5b  px=     47  files=  2  L=0.24
+  #20305d  px=     69  files=  2  L=0.25
+  #20305e  px=     45  files=  2  L=0.25
+  #223261  px=     41  files=  2  L=0.26
+  #223363  px=     64  files=  2  L=0.26
+  #265160  px=    763  files=  2  L=0.26
+  #223464  px=     69  files=  2  L=0.26
+  #223364  px=     51  files=  2  L=0.26
+  #223467  px=    171  files=  2  L=0.27
+  #14766c  px=     54  files=  3  L=0.27
+  #243668  px=     72  files=  2  L=0.27
+  #243669  px=    249  files=  6  L=0.28
+  #334c62  px=    800  files=  2  L=0.29
+  #0b8a8f  px=    797  files=  4  L=0.30
+  #324476  px=     81  files=  8  L=0.33
+  #39228b  px=     10  files=  2  L=0.34
+  #1d9588  px=     36  files=  3  L=0.35
+  #12a192  px=    122  files=  2  L=0.35
+  #405e7a  px=    278  files=  2  L=0.36
+  #1063ab  px=    720  files=  5  L=0.37
+  #3f607e  px=    324  files=  2  L=0.37
+  #20ab9c  px=      6  files=  3  L=0.40
+  #472ca9  px=     28  files=  2  L=0.42
+  #27a9af  px=    126  files=  4  L=0.42
+  #557998  px=    480  files=  5  L=0.46
+  #5f8cb3  px=     80  files=  5  L=0.54
+  #3cacd7  px=    146  files=  2  L=0.54
+  #a1a6bb  px=     97  files=  2  L=0.68
+  #a9abbe  px=    280  files=  5  L=0.70
+  #bbf2f4  px=     25  files=  4  L=0.85
+  #d5edf7  px=    904  files=  2  L=0.90
+
+== gray (44) ==
+  #272b2d  px=     47  files=  7  L=0.16
+  #2d2d2d  px=     18  files=  2  L=0.18
+  #323232  px=    344  files=  2  L=0.20
+  #363432  px=    347  files=  1  L=0.20
+  #343434  px=     27  files=  2  L=0.20
+  #313638  px=    218  files=  9  L=0.21
+  #3b3b3b  px=    317  files=  1  L=0.23
+  #3a3f3f  px=    469  files=  5  L=0.24
+  #3d3d3d  px=   1538  files= 17  L=0.24
+  #404040  px=      4  files=  2  L=0.25
+  #42454c  px=    112  files=  2  L=0.28
+  #494949  px=    102  files=  4  L=0.29
+  #474a52  px=      7  files=  2  L=0.30
+  #4f4f4f  px=     81  files=  2  L=0.31
+  #5c5c5c  px=    207  files=  2  L=0.36
+  #5d6165  px=    168  files=  7  L=0.38
+  #5c5f68  px=    307  files=  2  L=0.38
+  #636672  px=     31  files=  2  L=0.42
+  #676a76  px=     18  files=  2  L=0.43
+  #6e717d  px=     37  files=  2  L=0.46
+  #70737f  px=     67  files=  2  L=0.47
+  #737784  px=     58  files=  2  L=0.48
+  #787b87  px=      6  files=  2  L=0.50
+  #787a8b  px=    102  files=  2  L=0.51
+  #7a7d89  px=      5  files=  2  L=0.51
+  #7c7e8b  px=     88  files=  3  L=0.52
+  #7c7f8b  px=      6  files=  2  L=0.52
+  #858585  px=    120  files=  9  L=0.52
+  #838796  px=   1987  files= 12  L=0.55
+  #848897  px=    101  files=  2  L=0.55
+  #9294a1  px=     10  files=  2  L=0.60
+  #9597a4  px=     72  files=  2  L=0.61
+  #9699a5  px=      3  files=  2  L=0.62
+  #9799a6  px=     77  files=  2  L=0.62
+  #989aa7  px=   2881  files= 18  L=0.63
+  #a8aab2  px=     31  files=  2  L=0.68
+  #a9abb3  px=      5  files=  2  L=0.68
+  #aaacb4  px=      2  files=  2  L=0.69
+  #acaeb6  px=      7  files=  2  L=0.69
+  #b5b5b5  px=    414  files=  9  L=0.71
+  #c3c3c3  px=    256  files=  1  L=0.76
+  #c2c3c7  px=     50  files=  2  L=0.77
+  #cdcdcd  px=    716  files= 12  L=0.80
+  #d6d6d6  px=    215  files=  2  L=0.84
+
+== green (5) ==
+  #2a4015  px=     19  files=  2  L=0.17
+  #39571c  px=     97  files=  3  L=0.23
+  #454b36  px=    230  files=  2  L=0.25
+  #626b4d  px=    282  files=  2  L=0.36
+  #64b964  px=    236  files=  1  L=0.56
+
+== orange/brown (109) ==
+  #2f1a05  px=    168  files=  2  L=0.10
+  #371e06  px=    139  files=  2  L=0.12
+  #603812  px=     13  files=  2  L=0.22
+  #543b25  px=    311  files=  1  L=0.24
+  #6b3d11  px=      4  files=  2  L=0.24
+  #733e11  px=     71  files=  3  L=0.26
+  #724113  px=    303  files=  3  L=0.26
+  #7a5a0e  px=    284  files=  1  L=0.27
+  #5c462e  px=     11  files=  2  L=0.27
+  #5e4730  px=     12  files=  2  L=0.28
+  #63452c  px=    296  files=  9  L=0.28
+  #624b34  px=      7  files=  2  L=0.29
+  #844c18  px=     28  files=  2  L=0.31
+  #684e34  px=      7  files=  2  L=0.31
+  #6b4f34  px=      6  files=  3  L=0.31
+  #6a5036  px=      5  files=  2  L=0.31
+  #6d5236  px=      7  files=  2  L=0.32
+  #6e5237  px=      8  files=  2  L=0.32
+  #6a533c  px=      2  files=  2  L=0.33
+  #6f5438  px=     19  files=  4  L=0.33
+  #6e5339  px=      3  files=  2  L=0.33
+  #6f553b  px=      2  files=  2  L=0.33
+  #6e563d  px=      8  files=  2  L=0.34
+  #73573a  px=    101  files=  2  L=0.34
+  #74573a  px=    432  files=  4  L=0.34
+  #74583c  px=     11  files=  2  L=0.35
+  #76593c  px=    111  files=  2  L=0.35
+  #735a41  px=     13  files=  3  L=0.35
+  #7a5c3d  px=      4  files=  2  L=0.36
+  #765d42  px=     12  files=  3  L=0.36
+  #815938  px=    665  files= 10  L=0.36
+  #7a5c3f  px=     69  files=  2  L=0.36
+  #7a5e41  px=     19  files=  3  L=0.37
+  #7b5e41  px=     70  files=  2  L=0.37
+  #7d5f3f  px=      4  files=  4  L=0.37
+  #826a3e  px=    348  files=  6  L=0.38
+  #7d6043  px=      8  files=  2  L=0.38
+  #7c6044  px=      6  files=  2  L=0.38
+  #b08213  px=    276  files=  1  L=0.38
+  #826841  px=     45  files=  3  L=0.38
+  #826244  px=     11  files=  2  L=0.39
+  #836344  px=      8  files=  2  L=0.39
+  #816346  px=      7  files=  2  L=0.39
+  #826649  px=      8  files=  2  L=0.40
+  #886644  px=    376  files= 18  L=0.40
+  #866747  px=     14  files=  3  L=0.40
+  #896745  px=     70  files=  2  L=0.40
+  #8a6845  px=     16  files=  4  L=0.41
+  #84684b  px=      4  files=  2  L=0.41
+  #8b6946  px=    176  files=  4  L=0.41
+  #86694b  px=     14  files=  3  L=0.41
+  #896949  px=     10  files=  3  L=0.41
+  #8c6a47  px=     32  files=  4  L=0.41
+  #8a6b4c  px=     58  files=  2  L=0.42
+  #8a6d4e  px=     14  files=  3  L=0.42
+  #906d4a  px=     32  files=  4  L=0.43
+  #916e4b  px=    100  files=  2  L=0.43
+  #8e6d4e  px=     12  files=  2  L=0.43
+  #8d6e50  px=     14  files=  3  L=0.43
+  #966b48  px=     69  files=  5  L=0.44
+  #90704f  px=     11  files=  2  L=0.44
+  #926f4d  px=      5  files=  2  L=0.44
+  #91704f  px=      4  files=  2  L=0.44
+  #e14400  px=    214  files=  3  L=0.44
+  #907151  px=    114  files=  3  L=0.44
+  #94714e  px=     32  files=  4  L=0.44
+  #95724e  px=     32  files=  4  L=0.45
+  #ad7037  px=     10  files=  2  L=0.45
+  #96734f  px=     32  files=  4  L=0.45
+  #937453  px=    118  files=  3  L=0.45
+  #a36943  px=     69  files=  6  L=0.45
+  #967450  px=      8  files=  2  L=0.45
+  #987551  px=    162  files=  3  L=0.46
+  #9c7854  px=     69  files=  2  L=0.47
+  #cf5825  px=     31  files=  2  L=0.48
+  #9c7a58  px=      6  files=  2  L=0.48
+  #9f7a57  px=      6  files=  2  L=0.48
+  #a27b55  px=    103  files=  2  L=0.48
+  #9e7c5a  px=      5  files=  2  L=0.49
+  #a17c58  px=     60  files=  2  L=0.49
+  #ab7450  px=     16  files=  2  L=0.49
+  #a27e59  px=      9  files=  2  L=0.49
+  #a2895b  px=     88  files=  6  L=0.50
+  #a37e5a  px=     32  files=  4  L=0.50
+  #a78159  px=    122  files=  3  L=0.50
+  #a8835e  px=    151  files=  4  L=0.51
+  #a9845f  px=     32  files=  4  L=0.52
+  #ac8761  px=     64  files=  4  L=0.53
+  #b97d55  px=     42  files=  2  L=0.53
+  #f4b41b  px=    404  files=  2  L=0.53
+  #ad8862  px=    116  files=  3  L=0.53
+  #ae8963  px=     32  files=  4  L=0.54
+  #af8a63  px=    120  files=  4  L=0.54
+  #b18861  px=    110  files=  2  L=0.54
+  #b08a64  px=    125  files=  3  L=0.54
+  #b48c63  px=    107  files=  2  L=0.55
+  #bf7958  px=     87  files=  2  L=0.55
+  #b48e68  px=     16  files=  4  L=0.56
+  #ef692f  px=     20  files=  2  L=0.56
+  #b69069  px=     80  files=  4  L=0.56
+  #b7916a  px=    134  files= 13  L=0.57
+  #d69366  px=     20  files=  2  L=0.62
+  #ccbd99  px=     12  files=  2  L=0.70
+  #d4c2b1  px=     82  files=  2  L=0.76
+  #cfc6b8  px=    291  files=  3  L=0.77
+  #d0c7b9  px=    376  files=  1  L=0.77
+  #e0d1af  px=     36  files=  3  L=0.78
+  #e8daba  px=      8  files=  2  L=0.82
+  #e3dad1  px=    106  files=  2  L=0.85
+
+== outline/black (4) ==
+  #000000  px=  24184  files= 20  L=0.00
+  #0d0e0f  px=     18  files=  2  L=0.05
+  #111214  px=    287  files=  1  L=0.07
+  #262626  px=     70  files=  2  L=0.15
+
+== purple/pink (6) ==
+  #3e2533  px=    505  files=  5  L=0.19
+  #452939  px=    889  files=  5  L=0.22
+  #620d47  px=    106  files=  2  L=0.22
+  #882c98  px=    146  files=  2  L=0.38
+  #bb0d6e  px=   1405  files=  1  L=0.39
+  #af3fc3  px=     89  files=  2  L=0.51
+
+== red (6) ==
+  #a53030  px=    184  files= 25  L=0.42
+  #c23714  px=     23  files=  2  L=0.42
+  #ef3a0c  px=     12  files=  2  L=0.49
+  #c83e3e  px=    656  files= 18  L=0.51
+  #e7462a  px=    145  files=  3  L=0.54
+  #e83b3b  px=     17  files=  2  L=0.57
+
+== white (5) ==
+  #d9d9d9  px=   1440  files=  1  L=0.85
+  #e5e5e5  px=      8  files=  2  L=0.90
+  #ecebeb  px=    265  files=  1  L=0.92
+  #f4f4f4  px=     28  files=  2  L=0.96
+  #ffffff  px=   2658  files=  2  L=1.00
+
+== yellow (8) ==
+  #4d4f2c  px=     73  files=  7  L=0.24
+  #82810f  px=     16  files=  2  L=0.28
+  #626439  px=    780  files= 12  L=0.31
+  #8a8d49  px=    117  files=  6  L=0.42
+  #c9c81b  px=    324  files=  6  L=0.45
+  #d9d835  px=     60  files=  2  L=0.53
+  #f1cc36  px=    137  files= 14  L=0.58
+  #f8e394  px=    256  files=  1  L=0.78
+
+== per-sprite stats (sorted by colour count) ==
+  cols  WxH      opq%  semi%  file
+   182  64x64     100%   0.0%  items/3d/scythe.png
+   162  64x64     100%   0.0%  items/3d/lavaBoots.png
+   144  64x64     100%   0.0%  items/3d/pickaxe.png
+   143  64x64     100%   0.0%  items/3d/heart.png
+   107  64x64     100%   0.0%  items/3d/bomb.png
+    95  64x64     100%   0.0%  items/3d/axe.png
+    92  64x64     100%   0.0%  items/3d/sword.png
+    81  64x64     100%   0.0%  items/3d/lavaBoots_glow.png
+    67  64x64     100%   0.0%  items/3d/wood.png
+    43  32x144     77%   0.0%  environment/tilesets/dungeon.png
+    41  32x48      29%   0.0%  characters/npcs/npcs.png
+    41  64x64     100%   0.0%  items/3d/key.png
+    37  48x176     43%   4.0%  environment/tilesets/forest_tile_set.png
+    15  16x96      40%   0.0%  environment/props/wardrobes.png
+    14  64x64     100%   0.0%  items/3d/coin.png
+    13  48x48      78%   0.0%  environment/tilesets/desert_tileset.png
+    12  100x50     31%   3.8%  environment/structures/Gate.png
+    11  16x16      48%   0.0%  characters/npcs/salesman.png
+     9  16x32      77%   0.0%  characters/npcs/watchman.png
+     8  16x16      31%   0.0%  characters/npcs/npc.png
+     8  16x16      31%   0.0%  characters/npcs/poet.png
+     8  80x16      64%   0.0%  characters/player/hero.png
+     8  16x48      12%   0.0%  environment/props/mushroom.png
+     8  16x32      16%   0.0%  environment/props/mushroom__1.png
+     8  16x32      31%   0.0%  items/collectibles/heart_bottle.png
+     7  16x16      51%   0.0%  characters/enemies/mage/mage_hurt.png
+     7  16x16      40%   0.0%  characters/enemies/mage/mage__1.png
+     7  16x32      40%   0.0%  items/equipment/sword_on_fire.png
+     7  600x162     7%   0.0%  misc/TA15la.png
+     6  16x16      51%   0.0%  characters/enemies/mage/mage_magic.png
+     6  16x16      36%   0.0%  characters/enemies/undead/arrow_undead.png
+     6  16x16       9%   0.0%  environment/props/torch_0.png
+     6  16x16       8%   0.0%  environment/props/torch_1.png
+     6  16x16     100%   0.0%  environment/terrain/lava_floor.png
+     6  32x48      83%   0.0%  environment/tilesets/snow_tileset.png
+     5  16x16      24%   0.0%  characters/enemies/undead/undead_born2.png
+     5  16x16      34%   0.0%  characters/enemies/undead/undead_born3.png
+     5  16x16      36%   0.0%  characters/enemies/undead/undead_born4.png
+     5  16x16      41%   0.0%  characters/enemies/undead/undead_born5.png
+     5  16x16      42%   0.0%  characters/enemies/undead/undead_born6.png
+     5  16x16      24%   0.0%  effects/fire/sprite_fire0.png
+     5  16x16      26%   0.0%  effects/fire/sprite_fire1.png
+     5  16x16      24%   0.0%  effects/fire/sprite_fire2.png
+     5  16x16      16%   0.0%  environment/props/mushroom (1).png
+     5  16x16      16%   0.0%  environment/props/mushroom_1.png
+     5  16x16      16%   0.0%  environment/props/mushroom_2.png
+     5  96x96      16%   0.0%  environment/props/mushroom__2.png
+     5  16x32      30%   0.0%  items/equipment/sword.png
+     5  16x16      28%   0.0%  ui/icons/lava_boots_icon.png
+     5  16x16      20%   0.0%  ui/icons/pickaxe_icon.png
+     5  16x16      20%   0.0%  ui/icons/pickaxe_icon__1.png
+     5  16x16      29%   0.0%  ui/icons/sword_icon.png
+     5  16x16      17%   0.0%  ui/icons/wood_on_fire_icon.png
+     5  32x32      26%   0.0%  ui/states/death.png
+     4  16x32      44%   0.0%  characters/enemies/slime/BigSlime.png
+     4  16x32      14%   0.0%  characters/enemies/slime/Slime.png
+     4  16x16      32%   0.0%  characters/enemies/spider/spider.png
+     4  16x16      16%   0.0%  characters/enemies/undead/undead_born0.png
+     4  16x16      20%   0.0%  characters/enemies/undead/undead_born1.png
+     4  16x16      30%   0.0%  environment/props/cuting_grass0.png
+     4  16x16      28%   0.0%  environment/props/cuting_grass1.png
+     4  16x16      26%   0.0%  environment/props/cuting_grass2.png
+     4  16x16      21%   0.0%  environment/props/cuting_grass3.png
+     4  16x16      32%   0.0%  environment/props/cut_grass_wind0.png
+     4  16x16      32%   0.0%  environment/props/cut_grass_wind1.png
+     4  16x16     100%   0.0%  environment/props/grass_fre_0.png
+     4  16x16     100%   0.0%  environment/props/grass_fre_1.png
+     4  16x16     100%   0.0%  environment/props/grass_wind0.png
+     4  16x16     100%   0.0%  environment/props/grass_wind1.png
+     4  16x16      56%   0.0%  environment/props/vase_1.png
+     4  16x16     100%   0.0%  environment/terrain/bridge.png
+     4  16x32      29%   0.0%  items/collectibles/heart.png
+     4  16x32      41%   0.0%  items/collectibles/heart_container.png
+     4  16x32      37%   0.0%  items/collectibles/key.png
+     4  16x32      14%   0.0%  items/equipment/bomb.png
+     4  16x16      24%   0.0%  ui/icons/axe_icon.png
+     4  16x16      18%   0.0%  ui/icons/scythe_icon.png
+     3  16x16      33%   0.0%  characters/enemies/undead/undead.png
+     3  80x16      64%   0.0%  characters/player/hero_hurt.png
+     3  16x16      16%   0.0%  effects/fire/sprite_tiny_fire0.png
+     3  16x16      16%   0.0%  effects/fire/sprite_tiny_fire0__1.png
+     3  16x16      17%   0.0%  effects/fire/sprite_tiny_fire1.png
+     3  16x16      17%   0.0%  effects/fire/sprite_tiny_fire1__1.png
+     3  16x16      15%   0.0%  effects/fire/sprite_tiny_fire2.png
+     3  16x16      15%   0.0%  effects/fire/sprite_tiny_fire2__1.png
+     3  16x16      28%   0.0%  environment/props/bush.png
+     3  16x16      18%   0.0%  environment/props/cut_grass.png
+     3  16x16      20%   0.0%  environment/props/dry_shrub.png
+     3  16x16      41%   0.0%  environment/props/tree.png
+     3  16x16      38%   0.0%  environment/props/vase.png
+     3  16x16      38%   0.0%  environment/props/vase_0.png
+     3  16x16      29%   0.0%  environment/props/vase_2.png
+     3  16x16      20%   0.0%  environment/props/vase_3.png
+     3  16x16      42%   0.0%  environment/structures/locked_door.png
+     3  16x16      93%   0.0%  environment/terrain/water_0.png
+     3  16x16      93%   0.0%  environment/terrain/water_1.png
+     3  16x16      93%   0.0%  environment/terrain/water_2.png
+     3  16x16      93%   0.0%  environment/terrain/water_3.png
+     3  35x7       52%   0.0%  ui/hud/hearts.png
+     3  16x16      23%   0.0%  ui/icons/bomb_icon.png
+     3  16x16      24%   0.0%  ui/icons/key_icon.png
+     3  16x16      14%   0.0%  ui/icons/wood_icon.png
+     3  16x16      14%   0.0%  ui/states/off.png
+     3  16x16      14%   0.0%  ui/states/on.png
+     2  16x16      27%   0.0%  characters/enemies/bat/bat.png
+     2  16x16      36%   0.0%  characters/enemies/mage/magic_ball.png
+     2  16x16       5%   0.0%  effects/combat/ashes.png
+     2  16x16      54%   0.0%  effects/portals/portal_0.png
+     2  16x16      38%   0.0%  effects/portals/portal_1.png
+     2  16x16      43%   0.0%  environment/props/rock.png
+     2  16x16      43%   0.0%  environment/props/rock__1.png
+     2  16x16      13%   0.0%  environment/props/vase_4.png
+     2  16x16       9%   0.0%  environment/props/vase_5.png
+     2  16x16       6%   0.0%  environment/props/vase_6.png
+     2  16x96      12%   0.0%  environment/props/woods.png
+     2  16x32      20%   0.0%  environment/structures/up_down_block.png
+     2  16x16     100%   0.0%  environment/terrain/dungeon_floor.png
+     2  16x16     100%   0.0%  environment/terrain/dungeon_floor__1.png
+     2  16x16     100%   0.0%  environment/terrain/grass.png
+     2  16x96      12%   0.0%  environment/tilesets/forest_tile_set (2).png
+     2  16x16      17%   0.0%  items/collectibles/wood.png
+     2  22x22      29%   0.0%  ui/hud/hud_slot.png
+     2  16x16      23%   0.0%  ui/states/up.png
+     1  16x16      27%   0.0%  characters/enemies/bat/bat_hurt.png
+     1  16x16      13%   0.0%  characters/enemies/slime/BigSlimeFootSteps.png
+     1  16x16      13%   0.0%  characters/enemies/slime/BigSlimePool.png
+     1  16x16       5%   0.0%  characters/enemies/slime/SlimeFootSteps.png
+     1  16x16      13%   0.0%  characters/enemies/slime/SlimePool.png
+     1  16x16      31%   0.0%  characters/enemies/turret/turret.png
+     1  16x16      26%   0.0%  characters/enemies/turret/turret_bullet.png
+     1  16x16      30%   0.0%  characters/enemies/undead/undead_hurt.png
+     1  64x64      26%   0.0%  effects/ambient/cloud_fog.png
+     1  16x16       8%   0.0%  effects/ambient/item_shadow.png
+     1  32x48      17%   0.0%  effects/ambient/web_spider.png
+     1  1x1       100%   0.0%  effects/combat/blood.png
+     1  16x16       2%   0.0%  effects/combat/foot_steps.png
+     1  16x16      18%   0.0%  effects/combat/pool_of_blood.png
+     1  16x16      23%   0.0%  effects/combat/pool_of_blood__1.png
+     1  16x16      30%   0.0%  effects/portals/Respawn.png
+     1  16x16      28%   0.0%  environment/props/board.png
+     1  16x16      42%   0.0%  environment/props/suspicious.png
+     1  16x16      18%   0.0%  environment/structures/build.png
+     1  16x16     100%   0.0%  environment/terrain/sand.png
+     1  16x16     100%   0.0%  environment/terrain/wall.png
+     1  16x16      30%   0.0%  items/collectibles/ballon.png
+     1  16x16       9%   0.0%  items/collectibles/coin.png
+     1  16x16       6%   0.0%  items/equipment/arrow.png
+     1  60x6       58%   0.0%  ui/hud/numbers.png
+     1  26x22      66%   0.0%  ui/icons/ballon_icon.png
+     1  2x2       100%   0.0%  ui/icons/hero_icon.png
+     1  16x16      42%   0.0%  ui/states/alert.png
+
+Semi-transparent pixels overall: 523 of 224186 (0.23%) — alpha is effectively BINARY.
