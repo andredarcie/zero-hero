@@ -11,7 +11,20 @@
 //
 // Levels: 'fail' blocks the build, 'warn' ships but demands a look, 'info' is context.
 
-import { isGameColor, nearestGameColor, hexToRgb, rgbToHex, dist, luma } from './palette.mjs';
+import { isGameColor, nearestGameColor, hexToRgb, rgbToHex, dist, luma, RAMPS } from './palette.mjs';
+
+// Map a colour to the named ramp it belongs to (exact member, else nearest ramp colour's family).
+const rampFamily = (hex) => {
+  for (const [name, colors] of Object.entries(RAMPS)) if (colors.includes(hex)) return name;
+  let best = null; let bestD = Infinity;
+  for (const [name, colors] of Object.entries(RAMPS)) {
+    for (const c of colors) {
+      const d = dist(hexToRgb(hex), hexToRgb(c));
+      if (d < bestD) { bestD = d; best = name; }
+    }
+  }
+  return best;
+};
 
 const NIGHT_GROUND = hexToRgb('#452939'); // the tall-grass maroon the world floor reads as at night
 const DAY_GROUND = hexToRgb('#64b964');   // the grass tile
@@ -118,6 +131,32 @@ export const analyzeSprite = (image, opts = {}) => {
         let best = 0;
         for (const hex of counts.keys()) best = Math.max(best, Math.abs(luma(hexToRgb(hex)) - bgLuma));
         if (best < 30) add('warn', 'contrast', `${tag}every colour sits within ${best.toFixed(0)} luma of the ${name} — the sprite will vanish there`);
+      }
+    }
+
+    // ---- form / flatness ("chapado") -----------------------------------------------------
+    // The lesson of barrel v2→v3: a prop can pass every colour rule and still read as cardboard
+    // when its dominant material only uses the middle of its ramp. Measure it: group the frame's
+    // colours by ramp family; if one family owns ≥50% of the pixels and its used colours span
+    // less than 35 luma, the form is flat. Threshold calibrated on shipped art: vase.png's
+    // navy-on-navy spans 39 (passes), barrel v2's wood spanned 33 (fails). Props and items only —
+    // 16×16 characters are flat silhouettes by design (the hero is), effects glow, terrain tiles.
+    if ((kind === 'prop' || kind === 'item') && counts.size >= 3 && opaque >= 50) {
+      const famPx = new Map(); const famColors = new Map();
+      for (const [hex, n] of counts) {
+        const fam = rampFamily(hex);
+        famPx.set(fam, (famPx.get(fam) ?? 0) + n);
+        if (!famColors.has(fam)) famColors.set(fam, []);
+        famColors.get(fam).push(hex);
+      }
+      const [domFam, domPx] = [...famPx.entries()].sort((a, b) => b[1] - a[1])[0];
+      const used = famColors.get(domFam);
+      if (domPx / opaque >= 0.5 && used.length >= 2) {
+        const lumas = used.map((h) => luma(hexToRgb(h)));
+        const spread = Math.max(...lumas) - Math.min(...lumas);
+        if (spread < 35) {
+          add('warn', 'value-range', `${tag}dominant material (${domFam}) spans only ${spread.toFixed(0)} luma — reads flat ("chapado"); reach for the top of the ${domFam} ramp and shade in clusters (README: boas práticas de forma)`);
+        }
       }
     }
 

@@ -56,10 +56,13 @@ O critério de pronto é duplo, e os dois valem: **o linter passa** (regras obje
 **o preview convence** (a parte que só o olho pega: silhueta, peso, leitura à noite). Não pule o
 passo 4 — o linter não vê forma.
 
-## Boas práticas que o linter não vê (aprendidas no barril, v2 → v3)
+## Boas práticas de FORMA (aprendidas no barril, v2 → v3 — agora são o padrão)
 
-O linter garante paleta/contagem/alpha, mas "chapado" é um defeito de FORMA. Checklist para o
-passo 4 (olhar o preview), destilado da prática clássica de pixel art aplicada dentro deste estilo:
+"Chapado" é um defeito de forma, e desde o v3 do barril ele é PADRÃO ENFORÇADO: a regra
+`value-range` do linter mede o span de luminância do material dominante (≥50% dos pixels, ≥3 cores
+no frame) e avisa abaixo de 35 luma — calibrada nos shipped: o navy-sobre-navy do vaso passa (39),
+o barril v2 falha (33). Vale para props e itens; personagens 16×16 são silhuetas por design.
+O resto do checklist continua sendo trabalho do olho no passo 4:
 
 - **Use a ramp inteira.** O barril v2 parava no meio da ramp de wood (L 0.28→0.40) e ficou chapado;
   o v3 usa até o topo (#b7916a, L 0.57). Range de valor estreito = papelão.
