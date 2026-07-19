@@ -12,8 +12,8 @@ import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldB
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
 import {
-  applyCast, CAST_MAX_ALPHA, castTransform, handoffCast, makeCastMesh, SolidCastField,
-  WIDTH_FACTOR as CAST_WIDTH_FACTOR,
+  applyCast, CAST_MAX_ALPHA, type CastPose, castTransformInto, handoffCastInto, makeCastMesh,
+  SolidCastField, WIDTH_FACTOR as CAST_WIDTH_FACTOR,
 } from './CastShadow3D';
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
@@ -64,9 +64,9 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 // fixed heading so the forest keeps its depth between fires (statics bake into
 // one static instanced draw; an actor's one shadow mesh swings from flame-cast
 // to moon-cast at a pool's edge). They are cheaper, fully art-directed,
-// and they hold the pixel look; a real shadow map fought all three. (The
-// castShadow / customDepthMaterial flags left on the meshes are inert while the
-// map is off — they are the door back to real shadows, not a live feature.)
+// and they hold the pixel look; a real shadow map fought all three. (The old
+// inert castShadow / customDepthMaterial flags are gone — they allocated a dead
+// depth material per billboard; git history is the door back to real shadows.)
 //
 // The LOOK is pixel art wrapped in an HD-2D finish: the world renders at
 // 1/pixelScale resolution with NEAREST-filtered tile art (chunky pixels), the
@@ -105,6 +105,17 @@ const seaVariant = (x: number, z: number): number => {
 };
 // Cap on static-solid cast silhouettes drawn at once (trees near a lit fire).
 const CAST_POOL_MAX = 72;
+// Actor silhouettes batch per sprite sheet once this many casters share one this frame
+// (below it, the single-mesh path keeps the adventure's draw order bit-identical).
+const ACTOR_BATCH_MIN = 3;
+// Instance capacity of one per-sheet actor field (Survivors peaks near a hundred undead
+// but they spread across the animation's frames/sheets; 160 holds a worst case sheet).
+const ACTOR_FIELD_CAPACITY = 160;
+// NUMERIC tile/bucket keys for the shadow pass's lookups. A `${x},${z}` string key would
+// allocate on every probe of the hottest loops; these fold the coordinate into one number.
+// The +4096 offset keeps negatives (the void ring runs past the world bounds) positive.
+const tileKey = (x: number, z: number): number => (x + 4096) * 16384 + (z + 4096);
+const bucketKey = (x: number, z: number): number => ((x + 4096) >> 2) * 16384 + ((z + 4096) >> 2);
 /**
  * How many real PointLights the scene keeps for fires. FIXED for the whole run, and
  * deliberately SMALL — a fire does not own a light, it BORROWS one.
@@ -241,6 +252,30 @@ export interface Box3D {
   destroy(): void;
 }
 
+/**
+ * A standing solid tile (tree/wall), as the shadow pass sees it. The optional fields are
+ * cast-pass bookkeeping, written in place so the per-frame loops allocate nothing:
+ * `mark` dedupes a tile reachable from two fires' candidate lists, `lastFire` is the
+ * heading hysteresis (P5 — between two fires "nearest" must not flip with the flicker),
+ * `moonSlot` is where its baked moon silhouette landed, so the statics' fire→moon
+ * handoff can retune that one instance's darkness without a re-bake.
+ */
+interface SolidTileEntry {
+  x: number;
+  z: number;
+  frame: number;
+  mark?: number;
+  lastFire?: FireEntry | 'torch' | null;
+  moonSlot?: number;
+}
+
+/** Anything that remembers which flame last threw its shadow (heading hysteresis).
+ *  Exported as an opaque handle: long-lived groundCastAt callers (the robotic arm) hold
+ *  one so their shadow's heading gets the same hysteresis the billboard casters have. */
+export interface CastMemory {
+  lastFire?: FireEntry | 'torch' | null;
+}
+
 interface FireEntry {
   worldX: number;
   worldY: number;
@@ -325,6 +360,32 @@ export interface World3DParams {
    */
   moonShadowAlpha: number;
   moonShadowLength: number;
+  /**
+   * Heading hysteresis for the cast shadows, as a distance RATIO (1 = off). Midway between
+   * two lit fires, "nearest" flips with the flames' breathing and the shadow snaps direction
+   * every few frames — so the incumbent flame keeps a caster until a challenger is clearly
+   * closer (its distance under ratio × the incumbent's).
+   */
+  castHysteresis: number;
+  /**
+   * How much a caster's ELEVATION moves its silhouette (1 = full, 0 = the old pinned look):
+   * a lifted caster's shadow slides away from the light and thins, so a jump/bob reads on
+   * the ground — the same projection the robotic arm's skeleton shadow already used.
+   */
+  castElevation: number;
+  /**
+   * Stop silhouettes at the water's edge (1 = on). The river/lava/sea beds are SUNKEN, and
+   * a quad laid at ground level would float in the air across the channel — so a cast that
+   * reaches a sunken tile is clamped at the bank and dimmed.
+   */
+  castWaterClamp: number;
+  /**
+   * Give the STATIC solids the same fire→moon handoff the actors have (1 = on): inside a
+   * lit pool a tree's baked moon silhouette fades by the fire cast's strength, so a tree
+   * and an NPC on the same pool edge behave the same instead of the tree wearing two
+   * shadows at once.
+   */
+  moonHandoff: number;
   heroLight: number;
   fogDensity: number;
   /** Cool directional moonlight that fills the night (0 = off). */
@@ -461,6 +522,11 @@ export class World3D {
     // (same reason the fire casts run 1.3–3.2×).
     moonShadowAlpha: 0.22,
     moonShadowLength: 2.1,
+    // Switch flames only when the challenger is 15% closer — see the param doc (P5).
+    castHysteresis: 0.85,
+    castElevation: 1,
+    castWaterClamp: 1,
+    moonHandoff: 1,
     // The hero's neutral self-glow is dim so that near a fire he takes the fire's
     // warm colour, and his white pixels (horns/eyes) don't glare under a bright glow.
     heroLight: 28,
@@ -562,11 +628,11 @@ export class World3D {
   private viewOffsetY = 0;
   private appliedPixelScale = 0;
 
-  private readonly solidTiles: Array<{ x: number; z: number; frame: number }> = [];
+  private readonly solidTiles: SolidTileEntry[] = [];
   // Exposed solid tiles only (few solid neighbours — clearing edges / lone trees).
   // Deep-in-the-forest-wall tiles are excluded: their overlapping blobs/shadows would
   // merge into one dark block, so only these get a contact blob and cast a shadow.
-  private readonly castableSolids: Array<{ x: number; z: number; frame: number }> = [];
+  private readonly castableSolids: SolidTileEntry[] = [];
   private decorGeo!: THREE.BufferGeometry;
   private readonly grassQuads = new Map<string, number>(); // "x,z" → vertex start
   private readonly activeRustles = new Map<string, GrassRustle>();
@@ -592,7 +658,43 @@ export class World3D {
 
   // ── firelight cast shadows (2D ground silhouettes) ──
   // One persistent silhouette per dynamic caster (hero, props, NPCs, enemies)…
-  private readonly castCasters: Array<{ bb: Billboard3D; mesh: THREE.Mesh }> = [];
+  private readonly castCasters: Array<{ bb: Billboard3D; mesh: THREE.Mesh } & CastMemory> = [];
+  /**
+   * Batched actor silhouettes, one instanced field per SPRITE SHEET (P8): a hundred
+   * Survivors undead used to be a hundred shadow draws; sharing a sheet they are one.
+   * A sheet only batches once ≥ ACTOR_BATCH_MIN casters wear it this frame — below that
+   * the single-mesh path stays, which keeps the adventure's draw ORDER (and therefore
+   * its fog-tinted blending) byte-identical to the pre-batching renderer.
+   */
+  private readonly actorCastFields = new Map<string, SolidCastField>();
+  /** Per-frame caster count per sheet — reused, cleared each frame (no allocation). */
+  private readonly sheetCounts = new Map<string, number>();
+  /**
+   * Which sheets MAY batch — explicitly opted in (SurvivorsScene enables its horde
+   * sheets). Batching folds a sheet's silhouettes into one mesh at one place in the
+   * transparent queue, which is a different fog-blend order from N individually-sorted
+   * quads: on the Survivors horde nobody can tell, but in the adventure the tall grass
+   * batched itself and the reference shots caught the blend shift. Opt-in keeps the
+   * adventure byte-identical and gives the horde its 100-draws→1 win.
+   */
+  private readonly actorBatchSheets = new Set<string>();
+  // ── the cast pass's reusable scratch (zero per-frame allocation — see plano.md P8) ──
+  private readonly fireCastScratch: CastPose = { length: 0, rotY: 0, alpha: 0 };
+  private readonly castScratch: CastPose = { length: 0, rotY: 0, alpha: 0 };
+  private readonly nearestScratch = { worldX: 0, worldY: 0, level: 0 };
+  /** Per-lit-fire candidate solids within castShadowRadius. Fires never move, so this is
+   *  built once per fire (and dropped when a tree falls / the radius knob turns) instead
+   *  of scanning every castable solid × every fire × every frame — the old hottest loop. */
+  private readonly fireCastLists = new Map<FireEntry, SolidTileEntry[]>();
+  private fireListRadius = -1;
+  /** Spatial hash of castable solids (4×4-tile buckets) for the one MOBILE flame, the torch. */
+  private readonly solidBuckets = new Map<number, SolidTileEntry[]>();
+  /** Monotonic id stamped on tiles as the cast pass visits them (cross-list dedupe). */
+  private castFrameId = 0;
+  /** Sunken ground tiles (river/lava/sea beds) — where a cast silhouette must stop (2b). */
+  private readonly sunkenTiles = new Set<number>();
+  /** Moon-field instances dimmed by the statics' handoff, to restore next frame. */
+  private readonly moonDimmed: SolidTileEntry[] = [];
   /** Invisible stand-ins that hold the runtime shaders' programs alive. See prewarmShaders. */
   private readonly warmups: Array<{ setVisible(v: boolean): unknown }> = [];
   private readonly projectScratch = new THREE.Vector3();
@@ -981,10 +1083,6 @@ export class World3D {
     this.solidGeo = buildUprightTileGeometry(this.solidTiles);
     this.solidTiles.forEach((tile, i) => this.solidQuads.set(`${tile.x},${tile.z}`, i * 4));
     const solids = new THREE.Mesh(this.solidGeo, solidMat);
-    solids.castShadow = true;
-    solids.customDepthMaterial = new THREE.MeshDepthMaterial({
-      depthPacking: THREE.RGBADepthPacking, map: tileset, alphaTest: 0.5,
-    });
     this.scene.add(solids);
 
     // Only EXPOSED solids (clearing edges, lone trees) get a grounding blob and cast a
@@ -1000,6 +1098,18 @@ export class World3D {
       }
       if (neighbours <= 4) this.castableSolids.push(t);
     }
+
+    // The shadow pass's spatial index (see updateCastShadows): buckets answer "which
+    // castable solids sit near the TORCH" without scanning the world, and the sunken set
+    // is where a silhouette must stop instead of floating over the river/lava/sea channel.
+    for (const t of this.castableSolids) {
+      const bk = bucketKey(t.x, t.z);
+      const bucket = this.solidBuckets.get(bk);
+      if (bucket) bucket.push(t);
+      else this.solidBuckets.set(bk, [t]);
+    }
+    for (const t of bedTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
+    for (const t of lavaBedTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
 
     // The soft ambient ground blob each obstacle had in 2D ("anchors lifted obstacles so
     // they read as standing up") — merged into one mesh, all sharing the soft blob texture.
@@ -1044,14 +1154,18 @@ export class World3D {
     field.begin();
     if (alpha > 0.02) {
       for (const tile of this.castableSolids) {
+        tile.moonSlot = undefined;
         field.add(
           tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
           CAST_WIDTH_FACTOR, length, this.moonCastRotY, alpha,
           frameFootPad('forest-tileset', tile.frame),
+          tile, // handed back below with the slot the sort assigned — the handoff's handle
         );
       }
     }
-    field.end(0, 1e6);
+    field.end(0, 1e6, (ref, slot) => { (ref as SolidTileEntry).moonSlot = slot; });
+    // A re-bake rewrote every instance's alpha, so nothing is dimmed any more.
+    this.moonDimmed.length = 0;
     this.appliedMoonShadow.alpha = alpha;
     this.appliedMoonShadow.length = length;
   }
@@ -1138,9 +1252,17 @@ export class World3D {
 
     const castIndex = this.castableSolids.findIndex((t) => t.x === worldX && t.z === worldY);
     if (castIndex >= 0) {
-      this.castableSolids.splice(castIndex, 1);
+      const [gone] = this.castableSolids.splice(castIndex, 1);
       // The blob/solid quad maps index the GEOMETRY, which never shrinks, so this splice
       // cannot invalidate them. Only the two cast fields read this array.
+      // The felled tile also leaves the shadow pass's spatial index: the per-fire candidate
+      // lists hold tile refs (cheapest to just rebuild lazily), and its bucket entry goes.
+      this.fireCastLists.clear();
+      const bucket = this.solidBuckets.get(bucketKey(worldX, worldY));
+      if (bucket) {
+        const bi = bucket.indexOf(gone);
+        if (bi >= 0) bucket.splice(bi, 1);
+      }
       this.fillMoonCastField();
     }
   }
@@ -1161,7 +1283,7 @@ export class World3D {
     ) {
       const mesh = makeCastMesh();
       this.scene.add(mesh);
-      this.castCasters.push({ bb, mesh });
+      this.castCasters.push({ bb, mesh, lastFire: null });
     }
     return bb;
   }
@@ -1177,18 +1299,37 @@ export class World3D {
    * where the standing sprites' stretched silhouettes put their pixels, so a projected chain
    * GROWS OUT of its base's own cast shadow instead of contradicting it.
    */
-  public groundCastAt(x: number, z: number): { dirX: number; dirZ: number; unitLen: number; alpha: number } | null {
+  public groundCastAt(
+    x: number,
+    z: number,
+    memory?: CastMemory,
+  ): { dirX: number; dirZ: number; unitLen: number; alpha: number } | null {
     const radius = Math.max(0.5, this.params.castShadowRadius);
+    const heightScale = 2.2 / Math.max(0.5, this.params.shadowHeight);
+    // Callers that live across frames (the robotic arm) pass their own memory so the
+    // heading hysteresis holds for them too; a memory-less call gets a fresh (reset)
+    // holder — hysteresis needs history, and a shared default would leak one caller's
+    // incumbent flame into another's.
+    const mem = memory ?? this.groundCastFallback;
+    if (!memory) mem.lastFire = null;
     // Same rule as the actors: standing on a lit fire tile has no stable heading.
-    const fire = this.onLitFireTile(x, z) ? null : this.nearestLitFire(x, z);
-    const fireCast = fire
-      ? castTransform(x, z, 1, fire.worldX, fire.worldY, fire.level, radius, this.params.castShadowAlpha)
-      : null;
-    const cast = handoffCast(fireCast, this.moonCastRotY, this.params.moonShadowLength, this.params.moonShadowAlpha);
-    if (!cast) return null;
+    const fromFire = !this.onLitFireTile(x, z)
+      && this.nearestLitFireInto(x, z, mem, this.nearestScratch)
+      && castTransformInto(
+        this.fireCastScratch, x, z, 1,
+        this.nearestScratch.worldX, this.nearestScratch.worldY, this.nearestScratch.level,
+        radius, this.params.castShadowAlpha, heightScale,
+      );
+    if (!handoffCastInto(
+      this.castScratch, fromFire ? this.fireCastScratch : null,
+      this.moonCastRotY, this.params.moonShadowLength, this.params.moonShadowAlpha,
+    )) return null;
+    const cast = this.castScratch;
     // The heading is stored as a quad rotation (head along -Z); the ground vector is its image.
     return { dirX: -Math.sin(cast.rotY), dirZ: -Math.cos(cast.rotY), unitLen: cast.length, alpha: cast.alpha };
   }
+
+  private readonly groundCastFallback: CastMemory = {};
 
   /**
    * How LIT a world point is: 0 = moonlight only, 1 = standing in a flame.
@@ -1441,6 +1582,7 @@ export class World3D {
         released = true;
         const i = this.fires.indexOf(entry);
         if (i >= 0) this.fires.splice(i, 1);
+        this.fireCastLists.delete(entry); // its candidate-solids cache goes with it
         this.releaseGlow(glow);
       },
     };
@@ -1552,11 +1694,22 @@ export class World3D {
    * objects just like a campfire — but it's skipped for whatever holds it (dist
    * ≈ 0), so the hero never casts a shadow from the flame in his own hand.
    */
-  private nearestLitFire(x: number, y: number): { worldX: number; worldY: number; level: number } | null {
-    let best: { worldX: number; worldY: number; level: number } | null = null;
-    // Squared distances: this runs once per caster AND once per candidate solid tile,
-    // every frame, so it is the hottest loop in the renderer — and the ranking is
-    // identical without the sqrt. `litFires` was filtered for this frame in render().
+  /**
+   * The flame that owns `holder`'s shadow this frame, written into `out` (no allocation —
+   * this runs once per caster and once per candidate solid, every frame). Squared
+   * distances throughout; `litFires` was filtered for this frame in render().
+   *
+   * `holder.lastFire` is the heading HYSTERESIS (P5): midway between two lit fires the
+   * nearest one flips with the flames' breathing, and the shadow used to snap direction
+   * with it. The incumbent keeps the caster until a challenger is castHysteresis× closer.
+   */
+  private nearestLitFireInto(
+    x: number,
+    y: number,
+    holder: CastMemory,
+    out: { worldX: number; worldY: number; level: number },
+  ): boolean {
+    let best: FireEntry | 'torch' | null = null;
     let bestD2 = Infinity;
     for (const f of this.litFires) {
       const dx = f.worldX - x;
@@ -1564,17 +1717,80 @@ export class World3D {
       const d2 = dx * dx + dy * dy;
       if (d2 < bestD2) { bestD2 = d2; best = f; }
     }
+    let torchD2 = Infinity;
     if (this.torch.strength > 0.15) {
       const dx = this.torch.x - x;
       const dy = this.torch.y - y;
-      const d2 = dx * dx + dy * dy;
+      torchD2 = dx * dx + dy * dy;
       // The torch is skipped for whatever holds it (d ≈ 0), so the hero never casts a
       // shadow from the flame in his own hand.
-      if (d2 > 0.36 && d2 < bestD2) {
-        best = { worldX: this.torch.x, worldY: this.torch.y, level: this.torch.level };
-      }
+      if (torchD2 > 0.36 && torchD2 < bestD2) { best = 'torch'; bestD2 = torchD2; }
     }
-    return best;
+    if (!best) {
+      holder.lastFire = null;
+      return false;
+    }
+
+    const hyst = this.params.castHysteresis;
+    const prev = holder.lastFire;
+    if (prev && prev !== best && hyst < 1) {
+      let prevD2 = Infinity;
+      if (prev === 'torch') {
+        if (this.torch.strength > 0.15 && torchD2 > 0.36) prevD2 = torchD2;
+      } else if (prev.lit && prev.scale > 0.05) {
+        const dx = prev.worldX - x;
+        const dy = prev.worldY - y;
+        prevD2 = dx * dx + dy * dy;
+      }
+      // Keep the incumbent unless the challenger is clearly closer (ratio² on squared d).
+      if (prevD2 !== Infinity && bestD2 > prevD2 * hyst * hyst) best = prev;
+    }
+    holder.lastFire = best;
+
+    if (best === 'torch') {
+      out.worldX = this.torch.x;
+      out.worldY = this.torch.y;
+      out.level = this.torch.level;
+    } else {
+      out.worldX = best.worldX;
+      out.worldY = best.worldY;
+      out.level = best.level;
+    }
+    return true;
+  }
+
+  /** Per-lit-fire candidate solids, built once per fire — fires never move (see the field). */
+  private listForFire(f: FireEntry, radius: number): SolidTileEntry[] {
+    let list = this.fireCastLists.get(f);
+    if (!list) {
+      list = [];
+      const r2 = radius * radius;
+      for (const t of this.castableSolids) {
+        const dx = t.x - f.worldX;
+        const dz = t.z - f.worldY;
+        if (dx * dx + dz * dz <= r2) list.push(t);
+      }
+      this.fireCastLists.set(f, list);
+    }
+    return list;
+  }
+
+  /**
+   * Stop a silhouette at the water's edge (2b): march the heading in half-tile steps and
+   * clamp the length just short of the first SUNKEN tile (river/lava/sea bed) it would
+   * cross — a ground-level quad over a sunken channel floats in mid-air otherwise. Starts
+   * past the caster's own tile, so standing on a bridge (or wading with the boots) never
+   * self-clamps. Returns the (possibly shorter) length.
+   */
+  private clampCastAtSunken(x: number, z: number, rotY: number, length: number): number {
+    const dirX = -Math.sin(rotY);
+    const dirZ = -Math.cos(rotY);
+    for (let s = 0.6; s < length; s += 0.5) {
+      const tx = Math.round(x + dirX * s);
+      const tz = Math.round(z + dirZ * s);
+      if (this.sunkenTiles.has(tileKey(tx, tz))) return Math.max(0.3, s - 0.25);
+    }
+    return length;
   }
 
   /**
@@ -1605,10 +1821,39 @@ export class World3D {
     const alpha = this.params.castShadowAlpha;
     const moonAlpha = this.params.moonShadowAlpha;
     const moonLength = this.params.moonShadowLength;
+    // The shadowHeight knob made honest (0d): it always promised "higher light = shorter
+    // shadows" but only ever moved the LIGHT. Normalized so the tuned default (2.2) is
+    // exactly the old behaviour.
+    const heightScale = 2.2 / Math.max(0.5, this.params.shadowHeight);
     // Live tuning (window.hd3d): the statics' moon field is baked, so a knob move re-bakes it.
     if (moonAlpha !== this.appliedMoonShadow.alpha || moonLength !== this.appliedMoonShadow.length) {
       this.fillMoonCastField();
     }
+
+    // Restore the moon instances the statics' handoff dimmed last frame (2d) — the pass
+    // below re-dims whichever still sit inside a lit pool.
+    if (this.moonDimmed.length > 0) {
+      const full = this.appliedMoonShadow.alpha;
+      for (const tile of this.moonDimmed) {
+        if (tile.moonSlot !== undefined) this.moonCastField.setInstanceAlpha(tile.moonSlot, full);
+      }
+      this.moonDimmed.length = 0;
+    }
+
+    // ── dynamic casters ──
+    // Count sheets first: one worn by ACTOR_BATCH_MIN+ casters this frame batches into a
+    // single instanced draw (P8 — Survivors' hundred undead were a hundred shadow draws).
+    // Below the threshold the single-mesh path stays, which keeps the adventure's draw
+    // order — and therefore its fog-tinted transparent blending — identical to before.
+    this.sheetCounts.clear();
+    if (this.actorBatchSheets.size > 0) {
+      for (const c of this.castCasters) {
+        if (c.bb.active && c.bb.visible && this.actorBatchSheets.has(c.bb.texKey)) {
+          this.sheetCounts.set(c.bb.texKey, (this.sheetCounts.get(c.bb.texKey) ?? 0) + 1);
+        }
+      }
+    }
+    for (const f of this.actorCastFields.values()) f.begin();
 
     for (let i = this.castCasters.length - 1; i >= 0; i--) {
       const c = this.castCasters[i];
@@ -1624,43 +1869,192 @@ export class World3D {
       // Standing ON a lit fire tile gives no stable heading (the flame is underfoot, and a ring of
       // equal fires flips which is "nearest" with every bob) — so drop the directional cast there
       // and let the contact blob carry the shadow. Otherwise: point away from the nearest flame.
-      const fire = this.onLitFireTile(c.bb.x, c.bb.y) ? null : this.nearestLitFire(c.bb.x, c.bb.y);
-      const fireCast = fire
-        ? castTransform(c.bb.x, c.bb.y, height, fire.worldX, fire.worldY, fire.level, radius, alpha)
-        : null;
-      const cast = handoffCast(fireCast, this.moonCastRotY, moonLength * height, moonAlpha);
-      if (!cast) { c.mesh.visible = false; continue; }
-      applyCast(
-        c.mesh, c.bb.x, c.bb.y, getTexture3D(c.bb.texKey, c.bb.frame), c.bb.flipX,
-        Math.abs(c.bb.scaleX), cast.length, cast.rotY, cast.alpha,
-        frameFootPad(c.bb.texKey, c.bb.frame),
-      );
-    }
+      const fromFire = !this.onLitFireTile(c.bb.x, c.bb.y)
+        && this.nearestLitFireInto(c.bb.x, c.bb.y, c, this.nearestScratch)
+        && castTransformInto(
+          this.fireCastScratch, c.bb.x, c.bb.y, height,
+          this.nearestScratch.worldX, this.nearestScratch.worldY, this.nearestScratch.level,
+          radius, alpha, heightScale,
+        );
+      if (!handoffCastInto(
+        this.castScratch, fromFire ? this.fireCastScratch : null,
+        this.moonCastRotY, moonLength * height, moonAlpha,
+      )) { c.mesh.visible = false; continue; }
+      const cast = this.castScratch;
 
-    // Static solid tiles (trees/walls) near a lit fire — every one of them in a SINGLE draw.
-    // They all silhouette the same image (the tileset) and they are all pure black, which is what
-    // lets them batch without changing a pixel. See SolidCastField.
+      // A sprite spun in the camera plane (the bomb's wobble) turns its silhouette with
+      // it (2e) — the quad has no yaw, so the spin IS the ground rotation, mirrored.
+      let rotY = cast.rotY;
+      const spin = c.bb.mesh.rotation.z;
+      if (spin !== 0) rotY -= spin;
+
+      // Elevation (2a): a lifted caster's silhouette slides away from the light and
+      // thins — the same projection the arm's skeleton shadow already used (groundCastAt),
+      // now the rule for every caster. Sells the walk bob, the coin arc, the ITEM GET.
+      let ax = c.bb.x;
+      let az = c.bb.y;
+      let a = cast.alpha;
+      const elev = c.bb.elevation * this.params.castElevation;
+      if (elev > 0) {
+        const unit = cast.length / Math.max(0.05, height);
+        ax -= Math.sin(rotY) * elev * unit;
+        az -= Math.cos(rotY) * elev * unit;
+        a /= 1 + 1.2 * elev;
+      }
+
+      // The silhouette stops at the water's edge instead of floating over the channel (2b).
+      let length = cast.length;
+      if (this.params.castWaterClamp > 0) {
+        length = this.clampCastAtSunken(ax, az, rotY, length);
+        if (length < cast.length) a *= 0.6;
+      }
+
+      const width = Math.abs(c.bb.scaleX);
+      const batched = (this.sheetCounts.get(c.bb.texKey) ?? 0) >= ACTOR_BATCH_MIN;
+      if (batched) {
+        c.mesh.visible = false;
+        this.actorFieldFor(c.bb.texKey).add(
+          ax, az, frameUvWindow(c.bb.texKey, c.bb.frame),
+          (c.bb.flipX ? -1 : 1) * width * CAST_WIDTH_FACTOR, length, rotY, a,
+          frameFootPad(c.bb.texKey, c.bb.frame),
+        );
+      } else {
+        applyCast(
+          c.mesh, ax, az, getTexture3D(c.bb.texKey, c.bb.frame), c.bb.flipX,
+          width, length, rotY, a,
+          frameFootPad(c.bb.texKey, c.bb.frame),
+        );
+      }
+    }
+    for (const f of this.actorCastFields.values()) f.end(this.camTarget.x, this.camTarget.z);
+
+    // ── static solid tiles (trees/walls) near a lit flame — one instanced draw ──
+    // Candidates come from the per-fire lists plus the torch's spatial buckets (P8): the
+    // world is never scanned per frame any more. `mark` dedupes a tile two flames reach.
     const field = this.solidCastField;
     field.begin();
-    const anyLit = this.torch.strength > 0.15 || this.litFires.length > 0;
-    if (anyLit) {
-      let p = 0;
-      for (const tile of this.castableSolids) {
-        if (p >= CAST_POOL_MAX) break;
-        const fire = this.nearestLitFire(tile.x, tile.z);
-        if (!fire) continue;
-        if (Math.hypot(tile.x - fire.worldX, tile.z - fire.worldY) > radius) continue;
-        const cast = castTransform(tile.x, tile.z, 1, fire.worldX, fire.worldY, fire.level, radius, alpha);
-        if (!cast) continue;
-        field.add(
-          tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
-          CAST_WIDTH_FACTOR, cast.length, cast.rotY, cast.alpha,
-          frameFootPad('forest-tileset', tile.frame),
-        );
-        p += 1;
+    const torchLive = this.torch.strength > 0.15;
+    if (torchLive || this.litFires.length > 0) {
+      if (this.fireListRadius !== radius) { // the radius knob moved — the lists are stale
+        this.fireCastLists.clear();
+        this.fireListRadius = radius;
+      }
+      this.castFrameId += 1;
+      const id = this.castFrameId;
+      for (const f of this.litFires) {
+        const list = this.listForFire(f, radius);
+        for (const tile of list) {
+          if (tile.mark === id) continue;
+          tile.mark = id;
+          this.emitSolidCast(tile, radius, alpha, heightScale, moonAlpha);
+        }
+      }
+      if (torchLive) {
+        const r2 = radius * radius;
+        const bx0 = (Math.round(this.torch.x - radius) + 4096) >> 2;
+        const bx1 = (Math.round(this.torch.x + radius) + 4096) >> 2;
+        const bz0 = (Math.round(this.torch.y - radius) + 4096) >> 2;
+        const bz1 = (Math.round(this.torch.y + radius) + 4096) >> 2;
+        for (let bx = bx0; bx <= bx1; bx++) {
+          for (let bz = bz0; bz <= bz1; bz++) {
+            const bucket = this.solidBuckets.get(bx * 16384 + bz);
+            if (!bucket) continue;
+            for (const tile of bucket) {
+              if (tile.mark === id) continue;
+              const dx = tile.x - this.torch.x;
+              const dz = tile.z - this.torch.y;
+              if (dx * dx + dz * dz > r2) continue;
+              tile.mark = id;
+              this.emitSolidCast(tile, radius, alpha, heightScale, moonAlpha);
+            }
+          }
+        }
       }
     }
     field.end(this.camTarget.x, this.camTarget.z);
+  }
+
+  /** One static tile's fire silhouette into the field — plus its moon handoff (2d). */
+  private emitSolidCast(
+    tile: SolidTileEntry,
+    radius: number,
+    alpha: number,
+    heightScale: number,
+    moonAlpha: number,
+  ): void {
+    if (this.solidCastField.pendingCount >= CAST_POOL_MAX) return;
+    if (!this.nearestLitFireInto(tile.x, tile.z, tile, this.nearestScratch)) return;
+    const n = this.nearestScratch;
+    const dx = tile.x - n.worldX;
+    const dz = tile.z - n.worldY;
+    if (dx * dx + dz * dz > radius * radius) return;
+    if (!castTransformInto(
+      this.fireCastScratch, tile.x, tile.z, 1, n.worldX, n.worldY, n.level, radius, alpha, heightScale,
+    )) return;
+    const p = this.fireCastScratch;
+
+    // An axe blow mid-shudder shakes the silhouette with the tile (2e) — same damped
+    // sine as updateTileShakes. (String key only while a shake is live; the map is
+    // almost always empty, so the hot path never composes one.)
+    let rotY = p.rotY;
+    if (this.activeTileShakes.size > 0) {
+      const sh = this.activeTileShakes.get(`${tile.x},${tile.z}`);
+      if (sh && sh.t < 1) {
+        rotY += Math.sin(sh.t * Math.PI * 2 * TILE_SHAKE_CYCLES) * TILE_SHAKE_LEAN * (1 - sh.t);
+      }
+    }
+
+    // The silhouette stops at the water's edge (2b).
+    let length = p.length;
+    let a = p.alpha;
+    if (this.params.castWaterClamp > 0) {
+      length = this.clampCastAtSunken(tile.x, tile.z, rotY, length);
+      if (length < p.length) a *= 0.6;
+    }
+
+    this.solidCastField.add(
+      tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
+      CAST_WIDTH_FACTOR, length, rotY, a,
+      frameFootPad('forest-tileset', tile.frame),
+    );
+
+    // The statics' fire→moon handoff (2d): inside a lit pool the tile's baked moon
+    // silhouette lets go by the fire cast's strength — an actor's handoffCast, applied to
+    // the one instance — so a tree and an NPC on the same pool edge behave the same,
+    // instead of the tree wearing fire AND moon shadows at once.
+    if (this.params.moonHandoff > 0 && moonAlpha > 0.02 && tile.moonSlot !== undefined) {
+      const w = Math.min(1, a / moonAlpha);
+      if (w > 0.02) {
+        this.moonCastField.setInstanceAlpha(tile.moonSlot, moonAlpha * (1 - w));
+        this.moonDimmed.push(tile);
+      }
+    }
+  }
+
+  /**
+   * The per-sheet actor field, created on first demand. Meshes may come and go freely
+   * (only LIGHTS are frozen), and a new field never compiles a shader mid-run: its
+   * material shape matches solidCastField's cache key, whose program has been alive
+   * since buildTerrain.
+   */
+  private actorFieldFor(texKey: string): SolidCastField {
+    let field = this.actorCastFields.get(texKey);
+    if (!field) {
+      field = new SolidCastField(ACTOR_FIELD_CAPACITY, getBaseTexture3D(texKey));
+      field.begin(); // joins mid-cycle on its first frame
+      this.scene.add(field.mesh);
+      this.actorCastFields.set(texKey, field);
+    }
+    return field;
+  }
+
+  /**
+   * Opt a set of sprite sheets into batched cast shadows (see actorBatchSheets). Called by
+   * the scene that fields a HORDE (Survivors) with the sheets its mobs wear; sheets not
+   * opted in keep the individually-sorted single-mesh path.
+   */
+  public enableActorCastBatching(texKeys: readonly string[]): void {
+    for (const k of texKeys) this.actorBatchSheets.add(k);
   }
 
   // ── grass rustle (the 2D board's step-on-grass wobble, on the baked decor) ────

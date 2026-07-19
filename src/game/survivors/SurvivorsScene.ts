@@ -146,13 +146,23 @@ export class SurvivorsScene extends Phaser.Scene {
       .setPosition(start.worldX, start.worldY)
       .setDisplaySize(1, 1);
 
+    // A horda compartilha meia dúzia de sheets entre ~130 corpos: as silhuetas de sombra
+    // delas batcham num InstancedMesh por sheet (World3D.actorBatchSheets) — ~100 draws
+    // de sombra viram ~6. Opt-in explícito porque o batch muda a ordem de blend das
+    // silhuetas sobrepostas; na horda é invisível, e a aventura (que não chama isto)
+    // continua byte-idêntica.
+    this.world3d.enableActorCastBatching([
+      'undead', 'undead-hurt', 'bat', 'bat-hurt', 'spider',
+      'slime', 'bigslime', 'mage', 'mage-hurt', 'mage-cast', 'turret',
+    ]);
+
     this.player = new SurvivorsPlayer(this, this.hero, start.worldX, start.worldY);
 
     // As fogueiras-marco: luz real + chama de pixel animada por flip de frame.
     this.fires = ARENA_CAMPFIRES.map((c) => ({
       light: this.world3d!.addFireLight(c.worldX, c.worldY, true),
       flame: this.world3d!
-        .addBillboard(CAMPFIRE_FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 1.7, castShadow: false })
+        .addBillboard(CAMPFIRE_FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 1.7 })
         .setPosition(c.worldX, c.worldY)
         .setDisplaySize(0.9, 0.9),
     }));
@@ -343,7 +353,7 @@ export class SurvivorsScene extends Phaser.Scene {
         const at = scatter(e.x, e.y);
         this.horde.spawn(def.splitsInto.kind, wave, this.player?.x ?? e.x, this.player?.y ?? e.y, false, { x: at.x, y: at.y });
       }
-      const pool = this.world3d?.addBillboard(def.splitsInto.poolTexKey, 0, { flat: true, castShadow: false });
+      const pool = this.world3d?.addBillboard(def.splitsInto.poolTexKey, 0, { flat: true });
       if (pool) {
         pool.setPosition(e.x, e.y).setDisplaySize(0.95, 0.95).setAlpha(0.85);
         this.tweens.add({

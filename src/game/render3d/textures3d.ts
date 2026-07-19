@@ -175,26 +175,43 @@ export const registerTexture3D = (key: string, texture: THREE.Texture): void => 
  * addresses a frame ITSELF (the instanced cast-shadow field, which samples one shared tileset for
  * every solid it shadows) computes the identical window. Two copies of this arithmetic would drift.
  */
+// frameUvWindow is called once per shadowed solid per FRAME (the instanced cast fields
+// window each silhouette onto its tile's frame), and the values are constants of the
+// sheet — so the object is built once per (key, frame) and cached. Two-level (map by key,
+// array by frame) rather than a `key#frame` string key: composing that string would itself
+// be one small allocation per shadow per frame, i.e. the very garbage this cache removes.
+// Callers must treat the result as read-only.
+type UvWindow = { offsetX: number; offsetY: number; repeatX: number; repeatY: number };
+const uvWindows = new Map<string, Array<UvWindow | undefined>>();
 export const frameUvWindow = (
   key: string,
   frame: number,
-): { offsetX: number; offsetY: number; repeatX: number; repeatY: number } => {
+): UvWindow => {
+  let perFrame = uvWindows.get(key);
+  if (!perFrame) {
+    perFrame = [];
+    uvWindows.set(key, perFrame);
+  }
+  const hit = perFrame[frame];
+  if (hit) return hit;
   const def = DEFS[key];
   const base = baseTextures.get(key);
   if (!def || !base) throw new Error(`textures3d: chave desconhecida '${key}'`);
   const img = base.image as { width: number; height: number };
-  if (def.frameW === undefined) return { offsetX: 0, offsetY: 0, repeatX: 1, repeatY: 1 };
-
   const cols = Math.max(1, Math.floor(img.width / (def.frameW ?? img.width)));
   const rows = Math.max(1, Math.floor(img.height / (def.frameH ?? img.height)));
   const col = frame % cols;
   const row = Math.floor(frame / cols);
-  return {
-    offsetX: col / cols,
-    offsetY: (rows - 1 - row) / rows,
-    repeatX: 1 / cols,
-    repeatY: 1 / rows,
-  };
+  const win = def.frameW === undefined
+    ? { offsetX: 0, offsetY: 0, repeatX: 1, repeatY: 1 }
+    : {
+      offsetX: col / cols,
+      offsetY: (rows - 1 - row) / rows,
+      repeatX: 1 / cols,
+      repeatY: 1 / rows,
+    };
+  perFrame[frame] = win;
+  return win;
 };
 
 /**

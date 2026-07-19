@@ -57,7 +57,7 @@ import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
   FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE,
-  setCurrentWorld3D, World3D, type GroundEllipse,
+  setCurrentWorld3D, World3D,
 } from '@/game/render3d/World3D';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
@@ -405,8 +405,6 @@ export class GameScene extends Phaser.Scene {
   private streamCenter = { cx: NaN, cy: NaN };
   private debugApi?: GameDebugApi;
 
-  // The hero's flat contact shadow on the 3D ground (real cast shadows come from the fire light).
-  private playerShadow?: GroundEllipse;
 
   // Low-health "heartbeat": a pulsing red PIXEL OUTLINE around the hero (never painting the
   // sprite itself), ramping up as the last hearts drain. Built the classic pixel-art way —
@@ -519,7 +517,13 @@ export class GameScene extends Phaser.Scene {
     this.camera.world3d = this.world3d;
     this.world3d.follow(startWorldX, startWorldY, true);
 
-    this.heroBillboard = this.world3d.addBillboard('hero', HERO_FRAMES.idleDown, { castGroundShadow: true })
+    // The hero's contact blob rides the billboard like every other actor's (the manual
+    // GroundEllipse this replaces was the last special case); zBias is the +0.1 forward
+    // nudge the old ellipse always had, peeking the shadow past his boots.
+    this.heroBillboard = this.world3d.addBillboard('hero', HERO_FRAMES.idleDown, {
+      castGroundShadow: true,
+      groundShadow: { rx: 0.34, rz: 0.32, alpha: 0.34, zBias: 0.1 },
+    })
       .setPosition(startWorldX, startWorldY)
       .setDisplaySize(1, 1);
 
@@ -767,10 +771,9 @@ export class GameScene extends Phaser.Scene {
     b.setFlipX(h.flipX);
     b.setAlpha(h.alpha);
 
-    // The carried item and the contact shadow ride the just-synced hero position.
+    // The carried item rides the just-synced hero position (the contact blob is the
+    // billboard's own groundShadow now — it follows by itself, and hides with the body).
     this.positionBackItem();
-    this.playerShadow?.setPosition(b.x, b.y + 0.1);
-    this.playerShadow?.setVisible(!this.isDead);
 
     // Death plays its 2D screen-space elegy with a Phaser stand-in; hide the 3D body.
     b.setVisible(!this.isDead);
@@ -927,8 +930,6 @@ export class GameScene extends Phaser.Scene {
     this.needItemHint?.destroy();
     this.needItemHint = undefined;
     this.footprints.length = 0;
-    this.playerShadow?.destroy();
-    this.playerShadow = undefined;
     this.lowHealthOutlines.forEach((o) => o.destroy());
     this.lowHealthOutlines.length = 0;
     this.fireCompassArrow?.destroy();
@@ -3930,10 +3931,6 @@ export class GameScene extends Phaser.Scene {
     // see render3d/World3D.ts + pixelArtLight.ts), and so do the world FX that used to be
     // painted flat over the canvas: the torch flame is a billboard, the danger vignette and
     // the death fade are post uniforms. What's left here are the hero-anchored 3D helpers.
-
-    // The hero's contact shadow — a flat dark ellipse riding the hero billboard.
-    this.playerShadow = this.world3d?.addGroundEllipse(0.34, 0.32, 0.34);
-    this.playerShadow?.setVisible(false);
 
     // Red low-health outline — one red-filled copy of the hero per offset direction, drawn just
     // behind the hero billboard so only the border shows. Synced to the hero's pose each tick.

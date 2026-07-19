@@ -165,7 +165,6 @@ export class SurvivorsHorde {
         groundShadow: { rx: 0.34, rz: 0.3, alpha: 0.3 },
         // Sombras projetadas reais em 130 corpos custariam caro no shadow map;
         // a horda fica só com o blob de contato.
-        castShadow: false,
       });
     } else {
       e.sprite.setTexture(def.texKey, 0);
@@ -533,7 +532,7 @@ export class SurvivorsHorde {
     s.damage = damage;
     s.ttlMs = SHOT_TTL_MS;
     if (!s.sprite) {
-      s.sprite = world3d().addBillboard(vis.tex, 0, { emissive: true, emissiveBoost: 1.4, castShadow: false });
+      s.sprite = world3d().addBillboard(vis.tex, 0, { emissive: true, emissiveBoost: 1.4 });
     } else {
       s.sprite.setTexture(vis.tex, 0);
     }

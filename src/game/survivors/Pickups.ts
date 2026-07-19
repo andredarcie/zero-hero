@@ -60,7 +60,7 @@ export class PickupField {
     // e dois quads coplanares piscariam um através do outro (ver DEPTH_LAYER em Billboard3D).
     if (!p.sprite) {
       p.sprite = world3d().addBillboard(visual.tex, 0, {
-        emissive: true, castShadow: false, depthLayer: 'ground',
+        emissive: true, depthLayer: 'ground',
       });
     } else {
       p.sprite.setTexture(visual.tex, 0);

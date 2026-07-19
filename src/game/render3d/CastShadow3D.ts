@@ -51,6 +51,26 @@ export const castAnchor = (
   return { x: objX + Math.sin(rotY) * back, y: objY + Math.cos(rotY) * back };
 };
 
+// Shared scratch for the hot paths below (applyCast runs per caster per frame, add per
+// instance per frame): the anchor math without the fresh {x, y} per call.
+const anchorScratch = { x: 0, y: 0 };
+const castAnchorInto = (
+  objX: number,
+  objY: number,
+  length: number,
+  rotY: number,
+  footPad: number,
+): void => {
+  if (footPad <= 0) {
+    anchorScratch.x = objX;
+    anchorScratch.y = objY;
+    return;
+  }
+  const back = footPad * length;
+  anchorScratch.x = objX + Math.sin(rotY) * back;
+  anchorScratch.y = objY + Math.cos(rotY) * back;
+};
+
 /** A flat ground silhouette quad: foot at the origin, body extending along -Z, unit sized. */
 export const makeCastMesh = (): THREE.Mesh => {
   const geo = new THREE.PlaneGeometry(1, 1);
@@ -111,12 +131,25 @@ export class SolidCastField {
   private readonly quaternion = new THREE.Quaternion();
   private readonly euler = new THREE.Euler();
   private readonly scale = new THREE.Vector3();
-  /** Collected this frame, then sorted back-to-front in end(). */
-  private readonly pending: Array<{
-    objX: number; objY: number;
-    uv: { offsetX: number; offsetY: number; repeatX: number; repeatY: number };
-    width: number; length: number; rotY: number; alpha: number; depth: number;
-  }> = [];
+  // Collected this frame, then sorted back-to-front in end() — as PRE-ALLOCATED flat
+  // buffers, not an array of fresh objects. This begin/add/end cycle runs every frame for
+  // every instance; the object-literal version it replaces was the shadow path's main
+  // source of per-frame garbage (~70+ objects a frame with two fires lit).
+  private readonly pendX: Float32Array;
+  private readonly pendZ: Float32Array;
+  private readonly pendUv: Float32Array; // 4 per entry: offsetX offsetY repeatX repeatY
+  private readonly pendW: Float32Array;
+  private readonly pendL: Float32Array;
+  private readonly pendRot: Float32Array;
+  private readonly pendA: Float32Array;
+  private readonly pendDepth: Float32Array;
+  /** Caller tags (fillMoonCastField's tiles); only written when a ref is passed to add(). */
+  private readonly pendRef: unknown[];
+  /** Sort permutation, reused across frames. */
+  private readonly order: number[] = [];
+  private pendCount = 0;
+  private readonly byDepthDesc = (a: number, b: number): number =>
+    this.pendDepth[b] - this.pendDepth[a];
 
   public constructor(capacity: number, map: THREE.Texture) {
     const geo = new THREE.PlaneGeometry(1, 1);
@@ -184,6 +217,16 @@ export class SolidCastField {
         );
     };
 
+    this.pendX = new Float32Array(capacity);
+    this.pendZ = new Float32Array(capacity);
+    this.pendUv = new Float32Array(capacity * 4);
+    this.pendW = new Float32Array(capacity);
+    this.pendL = new Float32Array(capacity);
+    this.pendRot = new Float32Array(capacity);
+    this.pendA = new Float32Array(capacity);
+    this.pendDepth = new Float32Array(capacity);
+    this.pendRef = new Array(capacity).fill(undefined);
+
     this.mesh = new THREE.InstancedMesh(geo, mat, capacity);
     this.mesh.count = 0;
     this.mesh.renderOrder = 4; // after the additive fire glow, like the single meshes did
@@ -194,10 +237,20 @@ export class SolidCastField {
   }
 
   public begin(): void {
-    this.pending.length = 0;
+    this.pendCount = 0;
   }
 
-  /** One shadow. Mirrors applyCast's transform exactly. */
+  /** How many shadows were queued since begin(). */
+  public get pendingCount(): number {
+    return this.pendCount;
+  }
+
+  /**
+   * One shadow. Mirrors applyCast's transform exactly. `ref` is an optional caller tag
+   * handed back by end()'s onPlace with the instance slot the entry landed in after the
+   * sort — how fillMoonCastField learns which slot is which tile, so the per-instance
+   * alpha can be retuned later (the statics' fire→moon handoff) without a re-bake.
+   */
   public add(
     objX: number,
     objY: number,
@@ -207,12 +260,25 @@ export class SolidCastField {
     rotY: number,
     alpha: number,
     footPad = 0,
+    ref?: unknown,
   ): void {
-    if (this.pending.length >= this.mesh.instanceMatrix.count) return;
+    const i = this.pendCount;
+    if (i >= this.mesh.instanceMatrix.count) return;
     // Stored ALREADY anchored (see castAnchor) — the sort below wants the quad's own position
     // anyway, and this keeps the instanced path and the single-mesh path the same transform.
-    const at = castAnchor(objX, objY, length, rotY, footPad);
-    this.pending.push({ objX: at.x, objY: at.y, uv, width, length, rotY, alpha, depth: 0 });
+    castAnchorInto(objX, objY, length, rotY, footPad);
+    this.pendX[i] = anchorScratch.x;
+    this.pendZ[i] = anchorScratch.y;
+    this.pendUv[i * 4] = uv.offsetX;
+    this.pendUv[i * 4 + 1] = uv.offsetY;
+    this.pendUv[i * 4 + 2] = uv.repeatX;
+    this.pendUv[i * 4 + 3] = uv.repeatY;
+    this.pendW[i] = width;
+    this.pendL[i] = length;
+    this.pendRot[i] = rotY;
+    this.pendA[i] = alpha;
+    this.pendRef[i] = ref;
+    this.pendCount = i + 1;
   }
 
   /**
@@ -225,38 +291,99 @@ export class SolidCastField {
    * visible difference where three or four rake across each other. So sort them here, by the same
    * key three used (view depth, back to front) — 36 numbers, once a frame.
    */
-  public end(camX: number, camZ: number): void {
-    const list = this.pending;
-    for (const p of list) {
-      const dx = p.objX - camX;
-      const dz = p.objY - camZ;
-      p.depth = dx * dx + dz * dz;
+  public end(camX: number, camZ: number, onPlace?: (ref: unknown, slot: number) => void): void {
+    const n = this.pendCount;
+    for (let i = 0; i < n; i += 1) {
+      const dx = this.pendX[i] - camX;
+      const dz = this.pendZ[i] - camZ;
+      this.pendDepth[i] = dx * dx + dz * dz;
     }
-    list.sort((a, b) => b.depth - a.depth);
+    this.order.length = n;
+    for (let i = 0; i < n; i += 1) this.order[i] = i;
+    this.order.sort(this.byDepthDesc);
 
-    for (let i = 0; i < list.length; i += 1) {
-      const p = list[i];
-      this.position.set(p.objX, FOOT_Y, p.objY);
-      this.quaternion.setFromEuler(this.euler.set(0, p.rotY, 0));
-      this.scale.set(p.width, 1, p.length);
+    for (let slot = 0; slot < n; slot += 1) {
+      const p = this.order[slot];
+      this.position.set(this.pendX[p], FOOT_Y, this.pendZ[p]);
+      this.quaternion.setFromEuler(this.euler.set(0, this.pendRot[p], 0));
+      this.scale.set(this.pendW[p], 1, this.pendL[p]);
       this.matrix.compose(this.position, this.quaternion, this.scale);
-      this.mesh.setMatrixAt(i, this.matrix);
-      this.uvWindow.setXYZW(i, p.uv.offsetX, p.uv.offsetY, p.uv.repeatX, p.uv.repeatY);
-      this.alpha.setX(i, p.alpha);
+      this.mesh.setMatrixAt(slot, this.matrix);
+      this.uvWindow.setXYZW(
+        slot, this.pendUv[p * 4], this.pendUv[p * 4 + 1], this.pendUv[p * 4 + 2], this.pendUv[p * 4 + 3],
+      );
+      this.alpha.setX(slot, this.pendA[p]);
+      if (onPlace) onPlace(this.pendRef[p], slot);
     }
 
-    this.mesh.count = list.length;
-    this.mesh.visible = list.length > 0;
+    this.mesh.count = n;
+    this.mesh.visible = n > 0;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.uvWindow.needsUpdate = true;
     this.alpha.needsUpdate = true;
   }
+
+  /**
+   * Retune one instance's darkness in place (the statics' fire→moon handoff), without
+   * touching its transform. Only meaningful on a field whose contents are NOT refilled
+   * every frame (the baked moon field); a per-frame field overwrites it in end().
+   */
+  public setInstanceAlpha(slot: number, alpha: number): void {
+    this.alpha.setX(slot, alpha);
+    this.alpha.needsUpdate = true;
+  }
+}
+
+/** A cast shadow's placement, as plain mutable fields — the shape every helper below fills. */
+export interface CastPose {
+  length: number;
+  rotY: number;
+  alpha: number;
 }
 
 /**
  * The geometry of one cast shadow: where it lands, how long it rakes, how dark it is.
  * Shared by the single-mesh path (actors, each with its own sprite) and the instanced field.
+ *
+ * Writes into `out` and returns whether there is a shadow at all — the allocating wrapper
+ * below exists for cold callers. This runs once per caster and once per candidate solid,
+ * every frame: returning a fresh object here (as it originally did) put hundreds of
+ * short-lived objects per frame on the GC, in the project whose worst historical stall was
+ * a 300ms stop-the-world collection.
+ *
+ * `heightScale` is the shadowHeight knob made honest: the hd3d param always PROMISED
+ * "higher light = shorter shadows" but only ever moved the light itself. Callers pass
+ * (2.2 / shadowHeight), normalized so the tuned default is exactly the old behaviour.
  */
+export const castTransformInto = (
+  out: CastPose,
+  objX: number,
+  objY: number,
+  height: number,
+  fireX: number,
+  fireY: number,
+  level: number,
+  radius: number,
+  alpha: number,
+  heightScale = 1,
+): boolean => {
+  const dx = objX - fireX;
+  const dz = objY - fireY;
+  const dist = Math.hypot(dx, dz) || 1e-3;
+  const t = Math.min(1, dist / radius);
+
+  const distStretch = NEAR_STRETCH + (FAR_STRETCH - NEAR_STRETCH) * t;
+  const flameStretch = 1.5 - 0.5 * level; // low flame → long shadow
+  const a = alpha * (1 - t * t);
+  if (a <= 0.02) return false;
+
+  out.length = height * distStretch * Math.max(0.4, flameStretch) * heightScale;
+  out.rotY = Math.atan2(-dx / dist, -dz / dist);
+  out.alpha = a;
+  return true;
+};
+
+/** Allocating wrapper over castTransformInto, for cold (once-per-frame-per-object) callers. */
 export const castTransform = (
   objX: number,
   objY: number,
@@ -266,22 +393,12 @@ export const castTransform = (
   level: number,
   radius: number,
   alpha: number,
-): { length: number; rotY: number; alpha: number } | null => {
-  const dx = objX - fireX;
-  const dz = objY - fireY;
-  const dist = Math.hypot(dx, dz) || 1e-3;
-  const t = Math.min(1, dist / radius);
-
-  const distStretch = NEAR_STRETCH + (FAR_STRETCH - NEAR_STRETCH) * t;
-  const flameStretch = 1.5 - 0.5 * level; // low flame → long shadow
-  const a = alpha * (1 - t * t);
-  if (a <= 0.02) return null;
-
-  return {
-    length: height * distStretch * Math.max(0.4, flameStretch),
-    rotY: Math.atan2(-dx / dist, -dz / dist),
-    alpha: a,
-  };
+  heightScale = 1,
+): CastPose | null => {
+  const out: CastPose = { length: 0, rotY: 0, alpha: 0 };
+  return castTransformInto(out, objX, objY, height, fireX, fireY, level, radius, alpha, heightScale)
+    ? out
+    : null;
 };
 
 /**
@@ -297,26 +414,46 @@ export const castTransform = (
  * grip (its alpha, relative to the moon's) lets go — like walking out of a lamplit
  * circle at night.
  */
-export const handoffCast = (
-  fire: { length: number; rotY: number; alpha: number } | null,
+export const handoffCastInto = (
+  out: CastPose,
+  fire: CastPose | null,
   moonRotY: number,
   moonLength: number,
   moonAlpha: number,
-): { length: number; rotY: number; alpha: number } | null => {
-  if (moonAlpha <= 0.02) return fire; // moon shadows off — pure fire behaviour
-  if (!fire) return { length: moonLength, rotY: moonRotY, alpha: moonAlpha };
+): boolean => {
+  if (moonAlpha <= 0.02) { // moon shadows off — pure fire behaviour
+    if (!fire) return false;
+    if (out !== fire) { out.length = fire.length; out.rotY = fire.rotY; out.alpha = fire.alpha; }
+    return true;
+  }
+  if (!fire) {
+    out.length = moonLength;
+    out.rotY = moonRotY;
+    out.alpha = moonAlpha;
+    return true;
+  }
   const w = Math.min(1, fire.alpha / moonAlpha);
   // Swing the short way round the circle.
   let d = (fire.rotY - moonRotY) % (Math.PI * 2);
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;
-  return {
-    length: moonLength + (fire.length - moonLength) * w,
-    rotY: moonRotY + d * w,
-    // max, not lerp: a lerp dips BELOW the moon's darkness mid-handoff (fire 0.08 →
-    // 0.12 → moon 0.16), a visible pulse as the caster walks a straight line.
-    alpha: Math.max(fire.alpha, moonAlpha),
-  };
+  out.length = moonLength + (fire.length - moonLength) * w;
+  out.rotY = moonRotY + d * w;
+  // max, not lerp: a lerp dips BELOW the moon's darkness mid-handoff (fire 0.08 →
+  // 0.12 → moon 0.16), a visible pulse as the caster walks a straight line.
+  out.alpha = Math.max(fire.alpha, moonAlpha);
+  return true;
+};
+
+/** Allocating wrapper over handoffCastInto, for cold callers (the robotic arm's projector). */
+export const handoffCast = (
+  fire: CastPose | null,
+  moonRotY: number,
+  moonLength: number,
+  moonAlpha: number,
+): CastPose | null => {
+  const out: CastPose = { length: 0, rotY: 0, alpha: 0 };
+  return handoffCastInto(out, fire, moonRotY, moonLength, moonAlpha) ? out : null;
 };
 
 /**
@@ -350,8 +487,8 @@ export const applyCast = (
   // ~58% of the pool radius. Scaled, it still cuts the silhouette at texel alpha 0.4
   // exactly as before (alphaTest is a live uniform in three — no recompile).
   mat.alphaTest = Math.max(0.01, 0.4 * alpha);
-  const at = castAnchor(objX, objY, length, rotY, footPad);
-  mesh.position.set(at.x, FOOT_Y, at.y);
+  castAnchorInto(objX, objY, length, rotY, footPad);
+  mesh.position.set(anchorScratch.x, FOOT_Y, anchorScratch.y);
   // Base head direction is -Z; rotate it onto the shadow's heading.
   mesh.rotation.y = rotY;
   mesh.scale.set((flipX ? -1 : 1) * width * WIDTH_FACTOR, 1, length);

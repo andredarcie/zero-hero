@@ -92,14 +92,13 @@ export interface Billboard3DOptions {
    * a dark hole through the warm pool of firelight and reads as a smudge instead of smoke.
    */
   depthWrite?: boolean;
-  castShadow?: boolean;
   /**
    * The 2D grounding blob under a standing object (trees, NPCs, enemies, props):
    * a soft dark contact shadow that follows the billboard's foot. Pass `true` for
    * a sensible default, or override the blob radii (tiles) / darkness. Ignored on
    * flat/emissive/additive billboards (ground, water, flames, glows, pickups).
    */
-  groundShadow?: boolean | { rx?: number; rz?: number; alpha?: number };
+  groundShadow?: boolean | { rx?: number; rz?: number; alpha?: number; zBias?: number };
   /**
    * Firelight cast shadow: a black silhouette laid on the ground pointing away
    * from the nearest lit flame (see CastShadow3D.ts). World3D registers and drives
@@ -120,9 +119,10 @@ export interface Billboard3DOptions {
 export class Billboard3D {
   public readonly mesh: THREE.Mesh;
   private readonly mat: THREE.MeshLambertMaterial | THREE.MeshBasicMaterial;
-  private readonly depthMat?: THREE.MeshDepthMaterial;
   // The 2D grounding blob (soft contact shadow) that follows this sprite's foot.
   private readonly groundShadow?: THREE.Mesh;
+  /** Forward (+z) nudge of the contact blob, in tiles — the hero's blob peeks past his boots. */
+  private readonly groundShadowZBias: number = 0;
   private readonly flat: boolean;
   private readonly flatY: number;
   // Phaser's setTintFill paints the sprite a SOLID colour (keeping only the
@@ -204,16 +204,11 @@ export class Billboard3D {
     else if (!opts.centered) geo.translate(0, 0.5, 0); // upright: origin at the feet
     this.mesh = new THREE.Mesh(geo, this.mat);
 
-    const wantsShadow = opts.castShadow ?? (!this.flat && !unlit);
-    if (wantsShadow) {
-      this.mesh.castShadow = true;
-      this.depthMat = new THREE.MeshDepthMaterial({
-        depthPacking: THREE.RGBADepthPacking,
-        map: tex,
-        alphaTest: 0.5,
-      });
-      this.mesh.customDepthMaterial = this.depthMat;
-    }
+    // NO shadow-map plumbing here on purpose. Real shadow maps are off for the whole game
+    // (billboards are slivers seen from a light — see World3D), and every billboard used to
+    // allocate a MeshDepthMaterial anyway "for the door back": hundreds of dead material
+    // objects per run. If shadow maps ever return, recreate the customDepthMaterial here
+    // (RGBADepthPacking + map + alphaTest 0.5 — see git history).
 
     // The soft grounding blob (2D contact ellipse). A sibling mesh on the ground —
     // NOT a child of the upright quad, so it never inherits the sprite's squash,
@@ -222,6 +217,7 @@ export class Billboard3D {
     if (opts.groundShadow && !this.flat) {
       const cfg = opts.groundShadow === true ? {} : opts.groundShadow;
       this.groundShadow = makeShadowBlob(cfg.rx ?? 0.44, cfg.rz ?? 0.4, cfg.alpha ?? 0.34);
+      this.groundShadowZBias = cfg.zBias ?? 0;
       parent.add(this.groundShadow);
     }
 
@@ -240,7 +236,7 @@ export class Billboard3D {
     if (this.groundShadow) {
       // Stays pinned to the foot on the ground (ignores the sprite's elevation, so
       // a bobbing/lifted sprite still throws a steady blob), scaled by its width.
-      this.groundShadow.position.set(this.tileX, this.groundShadow.position.y, z);
+      this.groundShadow.position.set(this.tileX, this.groundShadow.position.y, z + this.groundShadowZBias);
       this.groundShadow.scale.set(this.w, 1, this.w);
       this.groundShadow.visible = this.visible;
     }
@@ -287,7 +283,6 @@ export class Billboard3D {
     this.frameCur = frame;
     const tex = getTexture3D(texKey, frame);
     this.mat.map = tex;
-    if (this.depthMat) this.depthMat.map = tex;
     return this;
   }
 
@@ -403,7 +398,6 @@ export class Billboard3D {
     this.parent.remove(this.mesh);
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
-    this.depthMat?.dispose();
     if (this.groundShadow) {
       this.parent.remove(this.groundShadow);
       this.groundShadow.geometry.dispose();

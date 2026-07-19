@@ -1,7 +1,7 @@
 import { itemGroundVisual, type HeldItemKind } from '@/game/entities/ItemPickup';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { ShadowStrip } from '@/game/render3d/groundShadow';
-import { world3d } from '@/game/render3d/World3D';
+import { type CastMemory, world3d } from '@/game/render3d/World3D';
 import type { PropDir } from '@/game/world/worldSchema';
 
 // O braco robotico ("inserter"). Pega o item que estiver no tile de ORIGEM e poe no de DESTINO,
@@ -242,6 +242,9 @@ export class RoboticArmObject {
   private readonly upperShadow: ShadowStrip;
   private readonly foreShadow: ShadowStrip;
   private readonly clawShadow: ShadowStrip;
+  // A histerese de direcao da sombra (ver World3D.nearestLitFireInto) precisa de memoria
+  // por objeto — entre duas fogueiras o "fogo mais proximo" nao pode alternar com o flicker.
+  private readonly castMemory: CastMemory = {};
 
   /** Onde a dobra caiu neste quadro. Publico porque e o que prova que as juntas se encontram. */
   public elbowX = 0;
@@ -684,7 +687,7 @@ export class RoboticArmObject {
     // juntas projetadas com um elo de sombra por parte. O ombro projeta exatamente onde a
     // cabeca da silhueta da base cai, entao a corrente nasce de dentro dela; os dedos da garra
     // pendurada fecham a ponta, e o elo deles ENCURTA quando a garra mergulha rente ao chao.
-    const cast = world3d().groundCastAt(this.worldX, this.worldY);
+    const cast = world3d().groundCastAt(this.worldX, this.worldY, this.castMemory);
     if (!cast) {
       this.upperShadow.hide();
       this.foreShadow.hide();

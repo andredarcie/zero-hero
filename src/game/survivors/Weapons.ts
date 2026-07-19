@@ -322,7 +322,7 @@ export class WeaponSystem {
       const tx = target ? target.x : ctx.playerX + Phaser.Math.FloatBetween(-4, 4);
       const ty = target ? target.y : ctx.playerY + Phaser.Math.FloatBetween(-4, 4);
 
-      const bomb = world3d().addBillboard('bomb-item', 0, { emissive: true, castShadow: false });
+      const bomb = world3d().addBillboard('bomb-item', 0, { emissive: true });
       bomb.setPosition(ctx.playerX, ctx.playerY).setDisplaySize(0.5, 0.5);
 
       // O voo: linha reta no chão + parábola na elevação, tudo em um tween.
@@ -392,7 +392,7 @@ export class WeaponSystem {
     // O anel de chamas acompanha o nível: cria/destrói orbes conforme o count.
     while (this.torchOrbs.length < stats.count) {
       this.torchOrbs.push(world3d().addBillboard(TORCH_FLAME_KEYS[0], 0, {
-        emissive: true, emissiveBoost: 1.8, castShadow: false,
+        emissive: true, emissiveBoost: 1.8,
       }).setDisplaySize(0.5, 0.5));
     }
     while (this.torchOrbs.length > stats.count) this.torchOrbs.pop()?.destroy();
@@ -486,7 +486,7 @@ export class WeaponSystem {
     p.ttlMs = opts.ttlMs;
     p.hit.clear();
     if (!p.sprite) {
-      p.sprite = world3d().addBillboard(texKey, 0, { emissive: true, castShadow: false });
+      p.sprite = world3d().addBillboard(texKey, 0, { emissive: true });
     } else {
       p.sprite.setTexture(texKey, 0);
     }

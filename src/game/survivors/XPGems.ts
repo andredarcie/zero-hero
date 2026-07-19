@@ -71,7 +71,6 @@ export class XPGemField {
       gem.sprite = world3d().addBillboard(XP_GEM_TEXTURE, 0, {
         emissive: true,
         emissiveBoost: 1.5,
-        castShadow: false,
       });
     }
     gem.sprite
