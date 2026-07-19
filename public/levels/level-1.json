@@ -1,6 +1,6 @@
 {
   "meta": {
-    "name": "laboratorio-de-puzzles",
+    "name": "A Espada na Pedra",
     "schemaVersion": 1,
     "worldChunksX": 1,
     "worldChunksY": 1,
@@ -9,10 +9,11 @@
     "tileSize": 8,
     "tilesetKey": "forest-tileset",
     "playerStart": {
-      "worldX": 5,
-      "worldY": 6
+      "worldX": 6,
+      "worldY": 7
     },
-    "exportedAt": "2026-07-14T00:00:00.000Z"
+    "puzzle": true,
+    "exportedAt": "2026-07-19T01:28:32.254Z"
   },
   "chunks": [
     {
@@ -190,21 +191,6 @@
       ],
       "upper": [
         [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
           11,
           null,
           null,
@@ -215,38 +201,10 @@
           null,
           null,
           null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
           null,
           null
         ],
         [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
           null,
           null,
           7,
@@ -257,19 +215,6 @@
           null,
           null,
           null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
           null,
           null
         ],
@@ -310,15 +255,71 @@
           null,
           null,
           null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
           null,
           null,
           10,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          7,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          11
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
           null,
           null,
           null,
@@ -531,91 +532,120 @@
       "enemies": [],
       "pickups": [
         {
+          "type": "key",
+          "worldX": 9,
+          "worldY": 0
+        },
+        {
           "type": "axe",
-          "worldX": 6,
+          "worldX": 0,
+          "worldY": 5
+        },
+        {
+          "type": "bucket",
+          "worldX": 1,
           "worldY": 6
         },
         {
-          "type": "heart",
-          "worldX": 2,
-          "worldY": 5
+          "type": "wood",
+          "worldX": 4,
+          "worldY": 7
         },
         {
-          "type": "pickaxe",
-          "worldX": 1,
-          "worldY": 5
-        },
-        {
-          "type": "axe",
-          "worldX": 10,
+          "type": "scythe",
+          "worldX": 6,
           "worldY": 8
         },
         {
-          "type": "lavaBoots",
-          "worldX": 6,
+          "type": "bomb",
+          "worldX": 2,
           "worldY": 10
+        },
+        {
+          "type": "pickaxe",
+          "worldX": 0,
+          "worldY": 11
+        },
+        {
+          "type": "stone",
+          "worldX": 4,
+          "worldY": 10
+        },
+        {
+          "type": "lavaBoots",
+          "worldX": 5,
+          "worldY": 11
+        },
+        {
+          "type": "heart",
+          "worldX": 11,
+          "worldY": 9
+        },
+        {
+          "type": "sword",
+          "worldX": 11,
+          "worldY": 11
         }
       ],
       "npcs": [
         {
           "type": "blackCat",
-          "worldX": 6,
-          "worldY": 5
+          "worldX": 7,
+          "worldY": 7
         }
       ]
     }
   ],
   "props": [
     {
-      "type": "campfire",
-      "worldX": 5,
-      "worldY": 5,
-      "lit": true
-    },
-    {
-      "type": "rock",
-      "worldX": 1,
-      "worldY": 3
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 5,
-      "worldY": 2
-    },
-    {
       "type": "tallGrass",
       "worldX": 6,
-      "worldY": 2
+      "worldY": 0
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 7,
+      "worldY": 0
     },
     {
       "type": "tallGrass",
       "worldX": 8,
-      "worldY": 2
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 9,
-      "worldY": 2
+      "worldY": 0
     },
     {
       "type": "tallGrass",
       "worldX": 10,
-      "worldY": 2
+      "worldY": 0
     },
     {
-      "type": "bridgeSpot",
-      "worldX": 7,
-      "worldY": 2
-    },
-    {
-      "type": "dryTree",
-      "worldX": 7,
-      "worldY": 3
+      "type": "tallGrass",
+      "worldX": 9,
+      "worldY": 0
     },
     {
       "type": "campfire",
       "worldX": 11,
-      "worldY": 2
+      "worldY": 0
+    },
+    {
+      "type": "water",
+      "worldX": 6,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 7,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 9,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 10,
+      "worldY": 1
     },
     {
       "type": "water",
@@ -623,79 +653,253 @@
       "worldY": 1
     },
     {
+      "type": "bridgeSpot",
+      "worldX": 8,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 0,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 1,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 2,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 4,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 5,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 6,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 7,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 9,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 10,
+      "worldY": 2
+    },
+    {
       "type": "water",
       "worldX": 11,
+      "worldY": 2
+    },
+    {
+      "type": "bridgeSpot",
+      "worldX": 3,
+      "worldY": 2
+    },
+    {
+      "type": "bridgeSpot",
+      "worldX": 8,
+      "worldY": 2
+    },
+    {
+      "type": "dryTree",
+      "worldX": 8,
+      "worldY": 3
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 8,
+      "worldY": 4
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 8,
       "worldY": 3
     },
     {
       "type": "dryTree",
-      "worldX": 3,
+      "worldX": 0,
+      "worldY": 4
+    },
+    {
+      "type": "dryTree",
+      "worldX": 1,
+      "worldY": 4
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 2,
+      "worldY": 5
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 2,
+      "worldY": 6
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 2,
+      "worldY": 7
+    },
+    {
+      "type": "campfire",
+      "worldX": 5,
+      "worldY": 7,
+      "lit": true
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 8,
+      "worldY": 5
+    },
+    {
+      "type": "lava",
+      "worldX": 0,
       "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 1,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 2,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 3,
+      "worldY": 9
+    },
+    {
+      "type": "lava",
+      "worldX": 3,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 3,
+      "worldY": 11
+    },
+    {
+      "type": "rock",
+      "worldX": 0,
+      "worldY": 9
+    },
+    {
+      "type": "rock",
+      "worldX": 1,
+      "worldY": 10
+    },
+    {
+      "type": "rock",
+      "worldX": 1,
+      "worldY": 11
+    },
+    {
+      "type": "bombSpot",
+      "worldX": 1,
+      "worldY": 9
+    },
+    {
+      "type": "dryBush",
+      "worldX": 4,
+      "worldY": 9
+    },
+    {
+      "type": "lava",
+      "worldX": 5,
+      "worldY": 10
+    },
+    {
+      "type": "water",
+      "worldX": 4,
+      "worldY": 11
+    },
+    {
+      "type": "water",
+      "worldX": 6,
+      "worldY": 11
+    },
+    {
+      "type": "water",
+      "worldX": 9,
+      "worldY": 8
+    },
+    {
+      "type": "water",
+      "worldX": 10,
+      "worldY": 8
+    },
+    {
+      "type": "water",
+      "worldX": 11,
+      "worldY": 8
+    },
+    {
+      "type": "water",
+      "worldX": 9,
+      "worldY": 9
+    },
+    {
+      "type": "water",
+      "worldX": 9,
+      "worldY": 11
+    },
+    {
+      "type": "rock",
+      "worldX": 8,
+      "worldY": 10
+    },
+    {
+      "type": "lockedDoor",
+      "worldX": 9,
+      "worldY": 10,
+      "floodgate": true
     },
     {
       "type": "campfire",
       "worldX": 10,
-      "worldY": 7
+      "worldY": 9,
+      "lit": true
     },
     {
-      "type": "dryTree",
+      "type": "moonflower",
       "worldX": 10,
-      "worldY": 9
+      "worldY": 11
     },
     {
-      "type": "lava",
-      "worldX": 8,
-      "worldY": 7
-    },
-    {
-      "type": "lava",
-      "worldX": 8,
-      "worldY": 8
-    },
-    {
-      "type": "lava",
-      "worldX": 8,
-      "worldY": 9
-    },
-    {
-      "type": "lava",
+      "type": "moonflower",
       "worldX": 11,
-      "worldY": 7
-    },
-    {
-      "type": "lava",
-      "worldX": 11,
-      "worldY": 8
-    },
-    {
-      "type": "lava",
-      "worldX": 11,
-      "worldY": 9
-    },
-    {
-      "type": "lava",
-      "worldX": 9,
-      "worldY": 6
-    },
-    {
-      "type": "lava",
-      "worldX": 10,
-      "worldY": 6
-    },
-    {
-      "type": "lava",
-      "worldX": 9,
       "worldY": 10
     },
     {
-      "type": "lava",
-      "worldX": 10,
-      "worldY": 10
+      "type": "inserter",
+      "worldX": 5,
+      "worldY": 5,
+      "dir": 1
     }
   ],
   "dialogs": {
     "blackCat": {
-      "npcName": "GATO DO LAB",
+      "npcName": "GATO DA ESPADA",
       "npcColorHex": "#cc99ff",
       "npcAssetKey": "npcs",
       "npcFrame": 0,
@@ -706,23 +910,23 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Miau. Bem-vindo ao Laboratorio de Puzzles."
+          "text": "Miau. A espada dorme atras das flores que so abrem no ESCURO — e do fosso que so a chave drena."
         },
         {
           "speaker": "npc",
-          "text": "O fogo CAMINHA. Ele pula de mato em mato, de tabua em tabua — e nao pergunta se voce ainda precisava daquilo."
+          "text": "Cada ferramenta FAZ alguma coisa, e o que ela faz e a chave da porta seguinte. A foice colhe SEMENTES: plante nos buracos, regue com o balde e o mato brota onde voce precisar dele. O machado derruba a arvore SOBRE o rio; a picareta faz pedra."
         },
         {
           "speaker": "npc",
-          "text": "Uma arvore cai para LONGE de quem a corta. Onde voce pisa decide onde ela deita."
+          "text": "Pedra apaga lava e vira vau. Mas repare: o fogo cruza a ponte de madeira e a COME — e nunca pisa num vau de pedra."
         },
         {
           "speaker": "npc",
-          "text": "E voce so carrega UMA coisa por vez. Pegar algo novo larga o que estava na mao, ali mesmo no chao."
+          "text": "As botas atravessam VOCE, nada mais: por cima da lava e da agua vai so quem esta de maos vazias. Quer levar carga? Fabrique o chao."
         },
         {
           "speaker": "npc",
-          "text": "Tem fogueira ai que nenhuma chave alcanca. Pense em quem mais pode chegar la. Miau."
+          "text": "La no quarteirao de lava, pise na MARCA segurando a bomba — ela se arma sozinha. Depois, a saida se MINERA: a pedra da cela esfria o muro. E nao corte o pavio que ainda vai acender. Miau."
         }
       ]
     }

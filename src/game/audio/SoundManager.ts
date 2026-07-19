@@ -542,6 +542,43 @@ class SoundManager {
     this.noise('highpass', 2600, 0.6, 0.06, 0.10, 0.02); // faint splash tail
   }
 
+  /**
+   * A garra do braco robotico fechando em cima de um item. Sintetizado direto, sem sample: e um
+   * som que toca sozinho e pode repetir muitas vezes seguidas numa esteira de bracos, entao ele
+   * precisa ser CURTO e discreto — um servo curtinho subindo e o "tac" seco da pinca travando em
+   * cima dele. Nada de peso metalico grande, que viraria martelada a cada tres segundos.
+   */
+  public playArmGrab(): void {
+    // Volumes na mesma faixa do playHammer (0.12-0.14). A primeira versao usava 0.045-0.07 e
+    // simplesmente nao se ouvia: "discreto" virou inaudivel debaixo da trilha e do vento. Leve
+    // ainda e — so que agora leve de verdade, e nao ausente.
+    this.osc('square', 190, 340, 0.11, 0.08); // o servo subindo
+    this.noise('bandpass', 2800, 4.0, 0.13, 0.05, 0.05); // a pinca travando
+    this.osc('triangle', 470, 350, 0.075, 0.07, 0.05);
+  }
+
+  /**
+   * O servo do braco robotico girando. Toca no comeco da meia-volta e dura o tanto que ela dura —
+   * e o unico som do conjunto que nao e um impacto, e e ele que da a sensacao de MAQUINA em vez
+   * de uma sequencia de estalos soltos. Grave e baixo: ele vai tocar a cada item, pra sempre.
+   */
+  public playArmServo(): void {
+    this.osc('triangle', 118, 132, 0.055, 0.42);
+    this.osc('square', 236, 264, 0.022, 0.42);
+  }
+
+  /** A pinca abrindo e a carga assentando no chao — mais leve que a mordida da pegada. */
+  public playArmRelease(): void {
+    this.osc('square', 300, 190, 0.06, 0.06);
+    this.noise('lowpass', 900, 1.2, 0.09, 0.07, 0.04); // a carga tocando o chao
+  }
+
+  /** O toque seco do braco chegando ao fim do curso, ja de volta em repouso. */
+  public playArmPark(): void {
+    this.noise('bandpass', 1500, 3.0, 0.05, 0.035);
+    this.osc('triangle', 150, 110, 0.045, 0.05);
+  }
+
   public playHammer(): void {
     // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
     if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;

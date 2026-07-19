@@ -14,7 +14,15 @@
     "by": "POR",
     "author": "ANDRÉ N. DARCIE",
     "prompt": "pressione qualquer tecla",
-    "survivors": "[S] MODO SOBREVIVENTES"
+    "survivors": "[S] MODO SOBREVIVENTES",
+    "playAdventure": "Jogar aventura",
+    "playLevels": "Jogar levels"
+  },
+  "levelSelect": {
+    "heading": "Escolha um level",
+    "back": "Voltar",
+    "loading": "Carregando levels...",
+    "empty": "Nenhum level disponível ainda."
   },
   "language": {
     "heading": "Escolha o idioma",
@@ -42,12 +50,15 @@
       "sword": "VOCÊ PEGOU A ESPADA!",
       "key": "VOCÊ PEGOU A CHAVE!",
       "axe": "VOCÊ PEGOU O MACHADO!",
-      "bomb": "VOCÊ PEGOU A BOMBA! [ESPAÇO] SOLTA",
+      "bomb": "VOCÊ PEGOU A BOMBA! LEVE-A ATÉ A MARCA",
       "lavaBoots": "VOCÊ PEGOU AS BOTAS DE LAVA!",
       "pickaxe": "VOCÊ PEGOU A PICARETA!",
       "scythe": "VOCÊ PEGOU A FOICE!",
       "wood": "VOCÊ PEGOU UM GRAVETO!",
-      "stone": "VOCÊ PEGOU UMA PEDRA!"
+      "stone": "VOCÊ PEGOU UMA PEDRA!",
+      "seeds": "VOCÊ PEGOU SEMENTES! PLANTE NUM BURACO",
+      "bucket": "VOCÊ PEGOU UM BALDE! ENCHA NO RIO",
+      "bucketFull": "BALDE CHEIO DE ÁGUA!"
     }
   },
   "lockedLines": [
@@ -91,6 +102,12 @@
     "continue": "Continuar.",
     "close": "[Encerrar.]"
   },
+  "levelButtons": {
+    "restart": "Reiniciar o level",
+    "restartConfirm": "Tem certeza? Toque de novo",
+    "pause": "Pausa",
+    "stuckHint": "Travou? ↻ recomeça o level"
+  },
   "pause": {
     "title": "PAUSA",
     "resume": "Continuar",
@@ -102,6 +119,7 @@
     "fullscreenExit": "Sair da tela cheia",
     "restart": "Reiniciar",
     "quit": "Sair para o título",
+    "levelList": "Voltar aos levels",
     "confirm": "Tem certeza?"
   },
   "wizard": {

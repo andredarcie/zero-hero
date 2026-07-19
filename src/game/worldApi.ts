@@ -2,10 +2,10 @@ import type { WorldData } from '@/game/world/worldSchema';
 
 // Editor-side client for the dev-server world API (see vite.config.ts). Loads the current
 // world file and persists edits back to it. Dev-only, which is exactly where the
-// editor runs. `world` is the real overworld (public/world.json); `lab` is the puzzle
-// laboratory sandbox (public/lab.json) edited via /lab.
+// editor runs. `world` is the real overworld (public/world.json); `level-N` is a puzzle
+// level (public/levels/level-N.json) edited via /lab (the puzzle laboratory).
 
-export type WorldFileId = 'world' | 'lab';
+export type WorldFileId = 'world' | `level-${number}`;
 
 const buildApiUrl = (path: string): string => `${import.meta.env.BASE_URL}${path.replace(/^\/+/u, '')}`;
 

@@ -1,0 +1,9 @@
+inserter-hand: 4 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 12x9 at (2,2), coverage 13%
+  [info] bbox: frame 1: content 4x9 at (6,2), coverage 13%
+  [info] bbox: frame 2: content 16x16 at (0,0), coverage 100%
+  [info] bbox: frame 3: content 4x4 at (6,6), coverage 5%
+  frame 0: #7c7e8b×18 #989aa7×14 #1d2b53×2
+  frame 1: #989aa7×12 #1d2b53×12 #7c7e8b×8
+  frame 2: #7c7e8b×80 #5d6165×64 #1d2b53×64 #989aa7×48
+  frame 3: #7c7e8b×5 #1d2b53×4 #989aa7×3

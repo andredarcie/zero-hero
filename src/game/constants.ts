@@ -161,6 +161,12 @@ export const ASSET_KEYS = {
   cuttingGrass1: 'cutting-grass1',
   cuttingGrass2: 'cutting-grass2',
   cuttingGrass3: 'cutting-grass3',
+  seedsItem: 'seeds-item',
+  plantHole: 'plant-hole',
+  plantMound: 'plant-mound',
+  // O braco robotico (spritefactory): 4 frames = 4 orientacoes, e a garra que viaja em 2.
+  inserter: 'inserter',
+  inserterHand: 'inserter-hand',
   cutGrass: 'cut-grass',
   cutGrassWind0: 'cut-grass-wind0',
   cutGrassWind1: 'cut-grass-wind1',
@@ -233,6 +239,14 @@ export const ITEM_FRAMES = {
 // swing sprite (like the sword), the bottom (white outline) is what sits on the map.
 export const KEY_FRAMES = {
   held: 0,
+  pickup: 1,
+} as const;
+
+// heart.png is a 16x32 sheet built on the same convention as key.png: the top heart is the plain
+// one (ink navy, for a lit UI slot), the bottom one carries a bone outline so it reads lying on
+// the dark ground — which is the only place the game shows a heart, so `pickup` is what it uses.
+export const HEART_FRAMES = {
+  plain: 0,
   pickup: 1,
 } as const;
 

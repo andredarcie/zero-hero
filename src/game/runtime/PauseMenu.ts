@@ -13,6 +13,8 @@ import { getDofIntensity, setDofIntensity } from '@/game/runtime/graphicsSetting
 const STYLE_ID = 'zh-pause-style';
 const ROOT_ID = 'zh-pause-root';
 const TOUCH_BTN_ID = 'zh-pause-touch-btn';
+const LEVEL_BTNS_ID = 'zh-level-btns';
+const LEVEL_HINT_ID = 'zh-level-hint';
 const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 // Destructive actions (restart / quit) arm on the first tap and only fire on the second;
 // the label snaps back after this long so a stray tap can't linger armed forever.
@@ -87,6 +89,41 @@ const CSS = `
 #${TOUCH_BTN_ID} span {
   width: 4px; height: 14px; background: rgba(216, 209, 192, 0.65); border-radius: 1px;
 }
+#${LEVEL_BTNS_ID} {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  right: calc(10px + env(safe-area-inset-right, 0px));
+  z-index: 45;
+  display: flex; gap: 8px;
+  font-family: ${SERIF};
+}
+#${LEVEL_BTNS_ID} .zh-level-btn {
+  width: 42px; height: 42px; padding: 0;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  background: rgba(10, 8, 6, 0.3); border: 1px solid rgba(216, 209, 192, 0.3);
+  border-radius: 8px; cursor: pointer; color: rgba(216, 209, 192, 0.7);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+#${LEVEL_BTNS_ID} .zh-level-btn:hover {
+  background: rgba(10, 8, 6, 0.55); border-color: rgba(216, 209, 192, 0.55);
+  color: rgba(231, 220, 196, 0.95);
+}
+#${LEVEL_BTNS_ID} .zh-level-btn.zh-armed {
+  color: #e5b558; border-color: rgba(229, 181, 88, 0.8); background: rgba(56, 38, 10, 0.55);
+}
+#${LEVEL_BTNS_ID} .zh-level-btn span {
+  width: 4px; height: 14px; background: currentColor; border-radius: 1px;
+}
+#${LEVEL_HINT_ID} {
+  position: absolute; top: 48px; right: 0;
+  white-space: nowrap; pointer-events: none;
+  background: rgba(10, 8, 6, 0.78); border: 1px solid rgba(216, 209, 192, 0.3);
+  border-radius: 6px; padding: 0.35em 0.65em;
+  color: #d8d1c0; font-size: 12px;
+  opacity: 0; transition: opacity 220ms ease;
+}
+#${LEVEL_HINT_ID}.zh-show { opacity: 1; }
 `;
 
 const ensureStyle = (): void => {
@@ -102,6 +139,8 @@ export interface PauseMenuCallbacks {
   onRestart: () => void;
   /** Absent (editor playtest — the title scene isn't registered) hides the quit entry. */
   onQuit?: () => void;
+  /** Present only while playing a level: jump back to the level list. */
+  onLevelList?: () => void;
 }
 
 export class PauseMenu {
@@ -114,6 +153,7 @@ export class PauseMenu {
   private readonly langLabel: HTMLSpanElement;
   private readonly langBtns = new Map<Locale, HTMLSpanElement>();
   private readonly fullscreenBtn?: HTMLDivElement;
+  private readonly levelListBtn?: HTMLDivElement;
   private readonly restartBtn: HTMLDivElement;
   private readonly quitBtn?: HTMLDivElement;
   private destroyed = false;
@@ -192,6 +232,14 @@ export class PauseMenu {
     }
 
     panel.appendChild(this.separator());
+
+    // Playing a level: a quick door back to the level list (navigation, so no two-tap guard —
+    // a puzzle attempt has nothing to lose but itself).
+    if (this.cb.onLevelList) {
+      const onLevelList = this.cb.onLevelList;
+      this.levelListBtn = this.button(panel, onLevelList);
+      this.levelListBtn.classList.add('zh-dim');
+    }
 
     this.restartBtn = this.button(panel, () => this.confirmThen(this.restartBtn, this.cb.onRestart));
     this.restartBtn.classList.add('zh-dim');
@@ -285,6 +333,7 @@ export class PauseMenu {
         ? t('pause.fullscreenExit')
         : t('pause.fullscreen');
     }
+    if (this.levelListBtn) this.levelListBtn.textContent = t('pause.levelList');
     this.restartBtn.textContent = t('pause.restart');
     if (this.quitBtn) this.quitBtn.textContent = t('pause.quit');
   }
@@ -330,5 +379,114 @@ export class PauseTouchButton {
 
   public destroy(): void {
     this.el.remove();
+  }
+}
+
+// ── level mode floating buttons (restart + pause) ─────────────────────────────
+
+export interface LevelButtonsCallbacks {
+  onRestart: () => void;
+  onPause: () => void;
+}
+
+/**
+ * Two square buttons pinned top-right for the whole level run — every device, not just touch.
+ * A puzzle can be SPENT into a corner (the fuse burnt early, the bomb wasted), and the honest
+ * way out is starting over; that lesson dies if restart hides inside ESC. So the level mode
+ * says it out loud: a reload button always in sight, plus a hint pill on boot ("stuck? this
+ * restarts"). Restart is destructive, so it uses the pause menu's two-tap arm: the first tap
+ * turns the button amber and shows the confirm pill, the second (within CONFIRM_RESET_MS)
+ * fires; the arm decays back on its own.
+ */
+export class LevelButtons {
+  private readonly root: HTMLDivElement;
+  private readonly restartBtn: HTMLButtonElement;
+  private readonly hint: HTMLDivElement;
+  private armTimer?: number;
+  private hintTimer?: number;
+  private destroyed = false;
+
+  public constructor(private readonly cb: LevelButtonsCallbacks) {
+    ensureStyle();
+    this.root = document.createElement('div');
+    this.root.id = LEVEL_BTNS_ID;
+
+    // Restart: a stroked circular arrow (inline SVG — crisp at any DPI, inherits currentColor).
+    this.restartBtn = document.createElement('button');
+    this.restartBtn.id = 'zh-level-restart';
+    this.restartBtn.type = 'button';
+    this.restartBtn.className = 'zh-level-btn';
+    this.restartBtn.title = t('levelButtons.restart');
+    this.restartBtn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">'
+      + '<path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>'
+      + '<path d="M20.5 3.5v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '</svg>';
+    this.restartBtn.addEventListener('click', () => this.handleRestartTap());
+    this.root.appendChild(this.restartBtn);
+
+    // Pause: the same two bars as the touch pause button.
+    const pauseBtn = document.createElement('button');
+    pauseBtn.id = 'zh-level-pause';
+    pauseBtn.type = 'button';
+    pauseBtn.className = 'zh-level-btn';
+    pauseBtn.title = t('levelButtons.pause');
+    pauseBtn.append(document.createElement('span'), document.createElement('span'));
+    pauseBtn.addEventListener('click', () => { this.disarm(); this.cb.onPause(); });
+    this.root.appendChild(pauseBtn);
+
+    // The hint pill under the buttons — the level mode SAYING that restarting is part of play.
+    this.hint = document.createElement('div');
+    this.hint.id = LEVEL_HINT_ID;
+    this.root.appendChild(this.hint);
+
+    document.body.appendChild(this.root);
+    this.showHint(t('levelButtons.stuckHint'), 6000);
+  }
+
+  private handleRestartTap(): void {
+    if (this.restartBtn.classList.contains('zh-armed')) {
+      this.disarm();
+      this.cb.onRestart();
+      return;
+    }
+    this.restartBtn.classList.add('zh-armed');
+    this.showHint(t('levelButtons.restartConfirm'));
+    if (this.armTimer) window.clearTimeout(this.armTimer);
+    this.armTimer = window.setTimeout(() => this.disarm(), CONFIRM_RESET_MS);
+  }
+
+  private disarm(): void {
+    if (this.armTimer) window.clearTimeout(this.armTimer);
+    this.armTimer = undefined;
+    this.restartBtn.classList.remove('zh-armed');
+    this.hideHint();
+  }
+
+  private showHint(text: string, autoHideMs?: number): void {
+    if (this.hintTimer) window.clearTimeout(this.hintTimer);
+    this.hintTimer = undefined;
+    this.hint.textContent = text;
+    this.hint.classList.add('zh-show');
+    if (autoHideMs) this.hintTimer = window.setTimeout(() => this.hideHint(), autoHideMs);
+  }
+
+  private hideHint(): void {
+    if (this.hintTimer) window.clearTimeout(this.hintTimer);
+    this.hintTimer = undefined;
+    this.hint.classList.remove('zh-show');
+  }
+
+  public setVisible(visible: boolean): void {
+    if (!visible) this.disarm();
+    this.root.style.display = visible ? 'flex' : 'none';
+  }
+
+  public destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    if (this.armTimer) window.clearTimeout(this.armTimer);
+    if (this.hintTimer) window.clearTimeout(this.hintTimer);
+    this.root.remove();
   }
 }

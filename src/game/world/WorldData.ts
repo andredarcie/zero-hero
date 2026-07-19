@@ -101,6 +101,9 @@ export const getChunkContent = (cx: number, cy: number): ScreenContent => {
 
 export const getPlayerStart = (): { worldX: number; worldY: number } => requireWorld().meta.playerStart;
 
+// A puzzle world (a /levels level): the runtime suppresses the undead siege for it, like the lab.
+export const isPuzzleWorld = (): boolean => requireWorld().meta.puzzle === true;
+
 export const getCampfires = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'campfire');
 
 export const getDryBushes = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryBush');
@@ -120,6 +123,19 @@ export const getLavaTiles = (): WorldProp[] => requireWorld().props.filter((prop
 export const getWaterTiles = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'water');
 
 export const getBridgeSpots = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'bridgeSpot');
+
+// A night-blooming flower: a closed bud (blocks) while a campfire burns near it, open petal-bridge
+// (walkable) in the dark. See MoonflowerObject.
+export const getMoonflowers = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'moonflower');
+
+// The walkable mark where a carried bomb plants itself on step. See BombSpotObject.
+export const getBombSpots = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'bombSpot');
+
+// The dug hole where carried seeds plant themselves on step. See PlantSpotObject.
+export const getPlantSpots = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'plantSpot');
+// The robotic arm. Carries `dir` (which way it faces), the only prop whose extra field is load
+// bearing — it decides which tile the arm takes from and which it puts to.
+export const getInserters = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'inserter');
 
 // Held items (everything except streamed hearts) are loaded once, up front, because the
 // hero can drop and swap them anywhere, so they must persist off-screen.

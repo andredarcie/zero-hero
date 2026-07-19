@@ -14,7 +14,15 @@
     "by": "BY",
     "author": "ANDRÉ N. DARCIE",
     "prompt": "press any key",
-    "survivors": "[S] SURVIVORS MODE"
+    "survivors": "[S] SURVIVORS MODE",
+    "playAdventure": "Play adventure",
+    "playLevels": "Play levels"
+  },
+  "levelSelect": {
+    "heading": "Choose a level",
+    "back": "Back",
+    "loading": "Loading levels...",
+    "empty": "No levels available yet."
   },
   "language": {
     "heading": "Choose your language",
@@ -42,12 +50,15 @@
       "sword": "YOU GOT THE SWORD!",
       "key": "YOU GOT THE KEY!",
       "axe": "YOU GOT THE AXE!",
-      "bomb": "YOU GOT THE BOMB! [SPACE] DROP",
+      "bomb": "YOU GOT THE BOMB! CARRY IT TO THE MARK",
       "lavaBoots": "YOU GOT THE LAVA BOOTS!",
       "pickaxe": "YOU GOT THE PICKAXE!",
       "scythe": "YOU GOT THE SCYTHE!",
       "wood": "YOU GOT A STICK!",
-      "stone": "YOU GOT A STONE!"
+      "stone": "YOU GOT A STONE!",
+      "seeds": "YOU GOT SEEDS! PLANT THEM IN A HOLE",
+      "bucket": "YOU GOT A BUCKET! FILL IT AT THE RIVER",
+      "bucketFull": "BUCKET FULL OF WATER!"
     }
   },
   "lockedLines": [
@@ -90,6 +101,12 @@
   "dialog": {
     "continue": "Continue.",
     "close": "[Close.]"
+  },
+  "levelButtons": {
+    "restart": "Restart the level",
+    "restartConfirm": "Are you sure? Tap again",
+    "pause": "Pause",
+    "stuckHint": "Stuck? ↻ restarts the level"
   },
   "pause": {
     "title": "PAUSED",

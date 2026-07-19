@@ -199,6 +199,19 @@ export class GameDriver {
         height: box.height,
       };
     }
+    if (region === 'hero') {
+      // A tight square around the hero, who is pinned to the centre of the screen. For reading an
+      // ANIMATION — a swing, an impact, the debris off it — where a full 1280×800 frame renders
+      // the whole event across about forty pixels and you cannot tell a pickaxe from a puff.
+      const width = Math.round(box.width * 0.34);
+      const height = Math.round(box.height * 0.46);
+      return {
+        x: box.x + Math.round((box.width - width) / 2),
+        y: box.y + Math.round((box.height - height) / 2),
+        width,
+        height,
+      };
+    }
     return box; // 'full'
   }
 

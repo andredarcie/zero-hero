@@ -78,6 +78,76 @@ export const makeShadowBlob = (rx: number, rz: number, alpha: number): THREE.Mes
 };
 
 /**
+ * A soft shadow STRIP between two ground points — one LIMB of a projected silhouette.
+ *
+ * The per-billboard cast shadows assume a sprite STANDING at its tile; an articulated
+ * machine's parts float between joints, so its silhouette must be drawn by whoever
+ * knows the skeleton: project each joint onto the ground (World3D.groundCastAt) and
+ * lay one strip per limb between the projected points. Chained strips share their
+ * joints, so the silhouette is connected BY CONSTRUCTION — and because the projection
+ * matches the standing sprites' stretch stylization, the chain grows out of the base
+ * sprite's own cast shadow instead of contradicting it.
+ *
+ * HARD-edged, like every cast silhouette. The sprites' shadows are alpha-test CUTOUTS —
+ * straight, crisp, pixelated by the low-res frame — and a first version of these strips
+ * used the soft radial blob texture instead: side by side with the base's crisp
+ * silhouette the limbs read as BLUR, two shadow languages on one machine (user feedback).
+ * A plain black quad has exactly the cutout's edge. `set(…, fade)` scales the opacity —
+ * pass the cast's own alpha so the limb darkens and breathes like every other silhouette.
+ */
+export class ShadowStrip {
+  private readonly mesh: THREE.Mesh;
+  private readonly mat: THREE.MeshBasicMaterial;
+  private readonly baseAlpha: number;
+
+  public constructor(parent: THREE.Object3D, thickness: number, alpha: number) {
+    this.baseAlpha = alpha;
+    this.mat = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: alpha,
+      depthWrite: false,
+    });
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.rotateX(-Math.PI / 2); // lie flat on the ground
+    this.mesh = new THREE.Mesh(geo, this.mat);
+    // A hair above the blobs (0.02) so strip-over-blob never z-fights; both only
+    // darken, so the stacking order is invisible — the offset just settles the test.
+    this.mesh.position.y = 0.024;
+    // After the additive fire glow (2) and the contact blobs (3), like every cast
+    // silhouette (see makeCastMesh): it must darken the lit pool, not wash out in it.
+    this.mesh.renderOrder = 4;
+    this.mesh.scale.set(0.001, 1, thickness);
+    parent.add(this.mesh);
+  }
+
+  public set(ax: number, az: number, bx: number, bz: number, fade = 1): void {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    this.mesh.visible = true;
+    this.mesh.position.set(ax + dx / 2, this.mesh.position.y, az + dz / 2);
+    // Rotation about +Y maps local +X to (cos θ, 0, -sin θ) — hence the negation.
+    this.mesh.rotation.y = -Math.atan2(dz, dx);
+    // Half a thickness of overhang past each joint: chained strips CAP each other's ends,
+    // so a bend never opens a wedge of light at the shared joint.
+    this.mesh.scale.x = len + this.mesh.scale.z;
+    this.mat.opacity = this.baseAlpha * fade;
+  }
+
+  /** No light to cast by this frame (no lit fire in reach, moon shadows off). */
+  public hide(): void {
+    this.mesh.visible = false;
+  }
+
+  public destroy(): void {
+    this.mesh.parent?.remove(this.mesh);
+    this.mesh.geometry.dispose();
+    this.mat.dispose();
+  }
+}
+
+/**
  * One merged geometry of soft blob quads — the static solid tiles (trees/walls)
  * all share a single draw call. Each quad is UV-mapped to the whole blob texture.
  */

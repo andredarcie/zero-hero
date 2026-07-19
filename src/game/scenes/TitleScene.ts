@@ -2,29 +2,35 @@ import Phaser from 'phaser';
 
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { setActiveLevel } from '@/game/runtime/activeLevel';
 import { t, tWords } from '@/game/i18n/i18n';
 
-// The game's start screen. Deliberately theatrical: the screen sits dark until the first
-// gesture (which also unlocks audio), then the title assembles ONE WORD PER WATER DROP —
-// ZERO · THE · HERO · POR · ANDRÉ N. DARCIE — each word dropping in on its own drip with a
-// flash, a small camera jolt and a spreading ripple. Once the title is whole, the prompt
-// returns and the next key/tap begins the run (Preload → Title → Intro → Game).
-type TitleState = 'idle' | 'revealing' | 'done';
+// The game's start screen. It used to be theatrical — the title assembling one word per water
+// drop — but it now shows the title and the credit STRAIGHT AWAY and offers a choice: play the
+// adventure, or play the standalone puzzle levels. The menu flow reaches it already localized
+// (Language → Title), so the buttons render in the chosen language.
+//
+//   • Jogar aventura → the story intro, then the wizard's opening area (Intro → Game).
+//   • Jogar levels   → the level list (LevelSelectScene), then the chosen level.
+//   • [S]            → the Vampire-Survivors-style mode.
+const ACCENT = 0xf5d97a;
+const BTN_FILL = 0x14141f;
+const BTN_FILL_SEL = 0x22222f;
+const BTN_STROKE = 0x3a3a4a;
 
-const REVEAL_START_MS = 350; // pause after the first gesture before the first drop
-const REVEAL_GAP_MS = 1000; // one word per ~second — slow, patient, dripping
+interface MenuButton {
+  bg: Phaser.GameObjects.Rectangle;
+  label: Phaser.GameObjects.Text;
+  activate: () => void;
+}
 
 export class TitleScene extends Phaser.Scene {
   public static readonly key = 'title';
 
-  private state: TitleState = 'idle';
+  private buttons: MenuButton[] = [];
+  private selected = 0;
   private starting = false;
-  private revealTargets: Phaser.GameObjects.Text[] = [];
-  private revealIndex = 0;
-  private revealTimers: Phaser.Time.TimerEvent[] = [];
-  private prompt?: Phaser.GameObjects.Text;
-  private promptTween?: Phaser.Tweens.Tween;
-  private survivorsPrompt?: Phaser.GameObjects.Text;
+  private survivorsHint?: Phaser.GameObjects.Text;
 
   public constructor() {
     super(TitleScene.key);
@@ -32,209 +38,156 @@ export class TitleScene extends Phaser.Scene {
 
   public create(): void {
     const { width, height } = this.scale;
-    this.state = 'idle';
     this.starting = false;
-    this.revealTargets = [];
-    this.revealIndex = 0;
-    this.revealTimers = [];
+    this.buttons = [];
+    this.selected = 0;
     this.cameras.main.setBackgroundColor('#08080d');
-    this.cameras.main.fadeIn(900, 0, 0, 0);
+    this.cameras.main.fadeIn(500, 0, 0, 0);
 
-    // Decode the SFX + loops and ask for the menu ambience (soft water drops). The
-    // AudioContext stays locked until the first gesture, so nothing sounds yet — the drips
-    // bed and the reveal drops both bloom the moment the player first presses a key/taps.
-    getSoundManager().preload();
-    getSoundManager().startMusic('menu', 1600);
+    // The menu bed is already playing (started on the language screen, which comes first and
+    // unlocks audio) — so the title just shows itself; nothing to wait for.
 
-    // The title words and the credit, laid out in their final places but invisible — each
-    // will drop in on its own beat.
     const titleSize = Phaser.Math.Clamp(Math.floor(width / 18), 20, 56);
     const creditSize = Phaser.Math.Clamp(Math.floor(width / 46), 9, 18);
-    const titleStyle = {
-      fontFamily: FONT_FAMILY, fontSize: `${titleSize}px`, color: '#cfc9bd', resolution: TEXT_RESOLUTION,
-    } as const;
-    const creditStyle = {
-      fontFamily: FONT_FAMILY, fontSize: `${creditSize}px`, color: '#7f7a86', resolution: TEXT_RESOLUTION,
-    } as const;
 
-    const titleWords = this.layoutRow(tWords('title.words'), width / 2, Math.round(height * 0.42), titleStyle, titleSize * 0.42);
-    const creditWords = this.layoutRow([t('title.by'), t('title.author')], width / 2, Math.round(height * 0.60), creditStyle, creditSize * 0.7);
-    this.revealTargets = [...titleWords, ...creditWords];
-
-    // Quiet prompt — shown before the reveal begins and again once the title is whole.
-    this.prompt = this.add
-      .text(width / 2, Math.round(height * 0.80), t('title.prompt'), {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(Math.floor(width / 64), 7, 12)}px`,
-        color: '#5a5560',
-        resolution: TEXT_RESOLUTION,
+    this.add
+      .text(width / 2, Math.round(height * 0.28), tWords('title.words').join(' '), {
+        fontFamily: FONT_FAMILY, fontSize: `${titleSize}px`, color: '#e7dcc4', resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
-      .setAlpha(0)
       .setDepth(2);
-    this.blinkPrompt();
 
-    // A segunda porta do jogo: o modo Sobreviventes (estilo Vampire Survivors).
-    // Aparece só quando o título termina de se montar; qualquer tecla continua
-    // levando à aventura — apenas o S desvia.
-    this.survivorsPrompt = this.add
-      .text(width / 2, Math.round(height * 0.87), t('title.survivors'), {
+    this.add
+      .text(width / 2, Math.round(height * 0.42), `${t('title.by')} ${t('title.author')}`, {
+        fontFamily: FONT_FAMILY, fontSize: `${creditSize}px`, color: '#8a8594', resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
+
+    // The two doors of the game, stacked and centred.
+    this.buttons = [
+      this.makeButton(t('title.playAdventure'), Math.round(height * 0.62), () => this.startAdventure()),
+      this.makeButton(t('title.playLevels'), Math.round(height * 0.74), () => this.startLevels()),
+    ];
+    this.applySelection();
+
+    this.survivorsHint = this.add
+      .text(width / 2, Math.round(height * 0.90), t('title.survivors'), {
         fontFamily: FONT_FAMILY,
         fontSize: `${Phaser.Math.Clamp(Math.floor(width / 72), 7, 11)}px`,
         color: '#8a4a3a',
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
-      .setAlpha(0)
+      .setDepth(2)
+      .setAlpha(0.75);
+
+    // Arm input a beat later so the key/tap that left the language screen can't fire a button.
+    this.time.delayedCall(300, () => {
+      this.input.keyboard?.on('keydown', this.handleKey, this);
+    });
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
+  }
+
+  private makeButton(text: string, y: number, activate: () => void): MenuButton {
+    const { width } = this.scale;
+    const w = Phaser.Math.Clamp(width * 0.42, 200, 360);
+    const h = Phaser.Math.Clamp(this.scale.height * 0.09, 40, 64);
+    const bg = this.add
+      .rectangle(width / 2, y, w, h, BTN_FILL, 1)
+      .setStrokeStyle(2, BTN_STROKE)
+      .setDepth(1)
+      .setInteractive({ useHandCursor: true });
+    const label = this.add
+      .text(width / 2, y, text, {
+        fontFamily: FONT_FAMILY,
+        fontSize: `${Phaser.Math.Clamp(Math.floor(width / 40), 11, 22)}px`,
+        color: '#cfc9bd',
+        resolution: TEXT_RESOLUTION,
+      })
+      .setOrigin(0.5)
       .setDepth(2);
 
-    // Small delay before arming input, so a leftover keypress can't fire the reveal instantly.
-    this.time.delayedCall(400, () => {
-      this.input.keyboard?.on('keydown', this.handleInput, this);
-      this.input.on(Phaser.Input.Events.POINTER_DOWN, this.handleInput, this);
-    });
+    const index = this.buttons.length;
+    bg.on(Phaser.Input.Events.POINTER_OVER, () => this.setSelected(index));
+    bg.on(Phaser.Input.Events.POINTER_DOWN, () => { this.setSelected(index); activate(); });
+    return { bg, label, activate };
   }
 
-  // Build a horizontal row of word Texts centred on cx, each invisible, and return them in order.
-  private layoutRow(
-    words: readonly string[],
-    cx: number,
-    y: number,
-    style: Phaser.Types.GameObjects.Text.TextStyle,
-    gap: number,
-  ): Phaser.GameObjects.Text[] {
-    const objs = words.map((w) => this.add.text(0, y, w, style).setOrigin(0.5).setDepth(3).setAlpha(0));
-    const total = objs.reduce((s, o) => s + o.width, 0) + gap * Math.max(0, objs.length - 1);
-    let x = cx - total / 2;
-    for (const o of objs) {
-      o.setX(x + o.width / 2);
-      x += o.width + gap;
-    }
-    return objs;
-  }
-
-  private blinkPrompt(): void {
-    if (!this.prompt) return;
-    this.promptTween?.stop();
-    this.prompt.setAlpha(0);
-    this.promptTween = this.tweens.add({
-      targets: this.prompt, alpha: 0.6, duration: 900, delay: 300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-    });
-  }
-
-  // One input handler for the whole screen; behaviour depends on the reveal state.
-  private handleInput(event?: KeyboardEvent | Phaser.Input.Pointer): void {
-    if (this.state === 'idle') {
-      this.beginReveal();
-      return;
-    }
-    if (this.state === 'revealing') {
-      this.skipReveal();
-      return;
-    }
-    // Título completo: S entra no modo Sobreviventes, o resto segue a aventura.
-    if (event instanceof KeyboardEvent && event.key.toLowerCase() === 's') {
-      this.startSurvivors();
-      return;
-    }
-    this.start();
-  }
-
-  private beginReveal(): void {
-    this.state = 'revealing';
-    getSoundManager().unlock(); // first gesture — lift the autoplay lock so the drops sound
-    this.promptTween?.stop();
-    if (this.prompt) this.tweens.add({ targets: this.prompt, alpha: 0, duration: 250 });
-    this.revealTimers = this.revealTargets.map((_, i) =>
-      this.time.delayedCall(REVEAL_START_MS + i * REVEAL_GAP_MS, () => this.revealNext()));
-  }
-
-  private revealNext(): void {
-    if (this.revealIndex >= this.revealTargets.length) return;
-    this.revealWord(this.revealTargets[this.revealIndex]);
-    this.revealIndex += 1;
-    if (this.revealIndex >= this.revealTargets.length) {
-      this.time.delayedCall(1100, () => this.finishReveal());
-    }
-  }
-
-  // Pressing during the reveal fast-forwards: drop the remaining words in a quick cascade.
-  private skipReveal(): void {
-    this.revealTimers.forEach((t) => t.remove(false));
-    this.revealTimers = [];
-    let k = 0;
-    while (this.revealIndex < this.revealTargets.length) {
-      const o = this.revealTargets[this.revealIndex];
-      this.revealIndex += 1;
-      this.time.delayedCall(k * 110, () => this.revealWord(o));
-      k += 1;
-    }
-    this.time.delayedCall(k * 110 + 500, () => this.finishReveal());
-  }
-
-  private finishReveal(): void {
-    if (this.state === 'done') return;
-    this.state = 'done';
-    this.blinkPrompt();
-    if (this.survivorsPrompt) {
-      this.tweens.add({ targets: this.survivorsPrompt, alpha: 0.75, duration: 600 });
-    }
-  }
-
-  // The drama of a single word landing. The final word — the author's name — gets its own
-  // cinematic treatment (an impact hit, a full-screen flash, a hard jolt, a gold flare and a
-  // shockwave) instead of the water drop the other words get.
-  private revealWord(o: Phaser.GameObjects.Text): void {
-    const isFinale = o === this.revealTargets[this.revealTargets.length - 1];
-    if (isFinale) {
-      this.revealFinale(o);
-      return;
-    }
+  private setSelected(index: number): void {
+    if (this.starting || index === this.selected) return;
+    this.selected = index;
+    this.applySelection();
     getSoundManager().playWaterDrop();
-    o.setAlpha(0).setScale(1.35).setTintFill(0xffffff);
-    this.tweens.add({ targets: o, alpha: 1, duration: 200, ease: 'Quad.easeOut' });
-    this.tweens.add({ targets: o, scale: 1, duration: 460, ease: 'Back.easeOut' });
-    this.time.delayedCall(150, () => o.clearTint());
-    this.cameras.main.shake(140, 0.004);
+  }
 
-    const ripple = this.add
-      .ellipse(o.x, o.y + o.height * 0.34, Math.max(12, o.width * 0.5), 6, 0x9fb4c8, 0.45)
-      .setDepth(1);
-    this.tweens.add({
-      targets: ripple, scaleX: 2.4, scaleY: 3.2, alpha: 0, duration: 680, ease: 'Cubic.easeOut',
-      onComplete: () => ripple.destroy(),
+  private move(delta: number): void {
+    const n = this.buttons.length;
+    if (n === 0) return;
+    this.setSelected((this.selected + delta + n) % n);
+  }
+
+  private applySelection(): void {
+    this.buttons.forEach((btn, i) => {
+      const sel = i === this.selected;
+      btn.bg.setFillStyle(sel ? BTN_FILL_SEL : BTN_FILL, 1);
+      btn.bg.setStrokeStyle(sel ? 3 : 2, sel ? ACCENT : BTN_STROKE);
+      btn.label.setColor(sel ? '#fff2c8' : '#8a8594');
     });
   }
 
-  private revealFinale(o: Phaser.GameObjects.Text): void {
-    getSoundManager().playTitleImpact();
-    // Kept simple: the author's name appears in gold — like the other words but a touch larger
-    // and warmer — over the epic impact. No screen flash or shockwave; just a soft camera jolt.
-    o.setAlpha(0).setScale(1.4).setTintFill(0xfff2c8);
-    this.tweens.add({ targets: o, alpha: 1, duration: 240, ease: 'Quad.easeOut' });
-    this.tweens.add({ targets: o, scale: 1, duration: 540, ease: 'Back.easeOut' });
-    this.time.delayedCall(220, () => o.setTintFill(0xf5d97a)); // settle to solid gold (fill, so it reads over the dim base colour)
-    this.cameras.main.shake(180, 0.005);
-  }
-
-  private readonly start = (): void => {
+  private readonly handleKey = (event: KeyboardEvent): void => {
     if (this.starting) return;
-    this.starting = true;
-    getSoundManager().unlock(); // first user gesture — lift the autoplay lock
-    this.cameras.main.fadeOut(450, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start('language');
-    });
+    switch (event.key) {
+      case 'ArrowUp':
+      case 'ArrowLeft':
+        this.move(-1);
+        break;
+      case 'ArrowDown':
+      case 'ArrowRight':
+        this.move(1);
+        break;
+      case 'Enter':
+      case ' ':
+        this.buttons[this.selected]?.activate();
+        break;
+      case '1':
+        this.buttons[0]?.activate();
+        break;
+      case '2':
+        this.buttons[1]?.activate();
+        break;
+      default:
+        // The second door is a keystroke, not a button: [S] drops into Survivors.
+        if (event.key.toLowerCase() === 's') this.startSurvivors();
+        break;
+    }
   };
 
-  private readonly startSurvivors = (): void => {
+  private fadeThen(go: () => void): void {
     if (this.starting) return;
     this.starting = true;
     getSoundManager().unlock();
+    this.cameras.main.fadeOut(400, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, go);
+  }
+
+  private startAdventure(): void {
+    setActiveLevel(null); // the story runs the real overworld, not a level
+    this.fadeThen(() => this.scene.start('intro'));
+  }
+
+  private startLevels(): void {
+    this.fadeThen(() => this.scene.start('levelselect'));
+  }
+
+  private startSurvivors(): void {
     getSoundManager().playTitleImpact();
-    this.cameras.main.fadeOut(450, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start('survivors');
-    });
-  };
+    this.fadeThen(() => this.scene.start('survivors'));
+  }
+
+  private teardown(): void {
+    this.input.keyboard?.off('keydown', this.handleKey, this);
+  }
 }

@@ -36,7 +36,7 @@ import { HeartPickupManager } from '@/game/entities/HeartPickupManager';
 import { ItemManager } from '@/game/entities/ItemManager';
 import type { CollectedItem } from '@/game/entities/ItemManager';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
-import { SwordSlash } from '@/game/runtime/SwordOrbit';
+import { CHOP_DRIVE_AT_MS, CHOP_IMPACT_MS, CHOP_TOTAL_MS, SwordSlash } from '@/game/runtime/SwordOrbit';
 import { CampfireObject } from '@/game/objects/CampfireObject';
 import { DryBushObject } from '@/game/objects/DryBushObject';
 import { DryTreeObject } from '@/game/objects/DryTreeObject';
@@ -46,14 +46,21 @@ import { WaterObject } from '@/game/objects/WaterObject';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
+import { PlantSpotObject } from '@/game/objects/PlantSpotObject';
+import { RoboticArmObject, type ArmWorldPort } from '@/game/objects/RoboticArmObject';
+import { MoonflowerObject } from '@/game/objects/MoonflowerObject';
+import { BombSpotObject } from '@/game/objects/BombSpotObject';
 import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
   FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE,
   setCurrentWorld3D, World3D, type GroundEllipse,
 } from '@/game/render3d/World3D';
+import { registerBucketTextures } from '@/game/render3d/bucketTexture';
+import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
-import { PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
+import { getActiveLevel } from '@/game/runtime/activeLevel';
+import { LevelButtons, PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
 import { createHeroView, heroFootY, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
@@ -72,7 +79,11 @@ import {
   getHeldItemPickups,
   getLavaTiles,
   getWaterTiles,
+  getBombSpots,
   getBridgeSpots,
+  getPlantSpots,
+  getInserters,
+  getMoonflowers,
   getLockedDoors,
   getRocks,
   getTallGrass,
@@ -80,6 +91,7 @@ import {
   getDialogKinds,
   getDialogVoice,
   getPlayerStart,
+  isPuzzleWorld,
 } from '@/game/world/WorldData';
 
 // How each held item shows in the HUD slot / flies in (a burning item swaps its own way).
@@ -93,6 +105,9 @@ const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> 
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
   stone: { texture: ASSET_KEYS.rock, frame: 0 },
+  seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 },
+  bucket: { texture: 'bucket-icon', frame: 0 },
+  bucketFull: { texture: 'bucket-full-icon', frame: 0 },
 };
 
 // The same per-item art resolved through the 3D texture registry (textures3d keys),
@@ -107,6 +122,9 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   scythe: { texture: 'scythe-icon', frame: 0 },
   wood: { texture: 'wood-icon', frame: 0 },
   stone: { texture: 'rock', frame: 0 },
+  seeds: { texture: 'seeds-item', frame: 0 },
+  bucket: { texture: 'bucket-icon', frame: 0 },
+  bucketFull: { texture: 'bucket-full-icon', frame: 0 },
 };
 
 // Bumping something you can't use yet pops a speech balloon over the hero's head showing
@@ -121,6 +139,9 @@ const NEED_ITEM_ICON = {
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
   graveto: { texture: ASSET_KEYS.woodIcon, frame: 0 }, // a wood stick, to build a bridge
+  bomb: { texture: ASSET_KEYS.bombIcon, frame: 0 }, // stepping on a bombSpot empty-handed
+  seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 }, // stepping on an open plantSpot hole
+  water: { texture: 'bucket-full-icon', frame: 0 }, // bumping a dry mound: it wants watering
 } as const;
 type NeedItemKind = keyof typeof NEED_ITEM_ICON;
 
@@ -129,12 +150,15 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle, label: 'VOCE PEGOU A ESPADA!' },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held, label: 'VOCE PEGOU A CHAVE!' },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0, label: 'VOCE PEGOU O MACHADO!' },
-  bomb: { texture: ASSET_KEYS.bombItem, frame: BOMB_FRAMES.item, label: 'VOCE PEGOU A BOMBA! [ESPACO] SOLTA' },
+  bomb: { texture: ASSET_KEYS.bombItem, frame: BOMB_FRAMES.item, label: 'VOCE PEGOU A BOMBA! LEVE-A ATE A MARCA' },
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0, label: 'VOCE PEGOU AS BOTAS DE LAVA!' },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0, label: 'VOCE PEGOU UM GRAVETO!' },
   stone: { texture: ASSET_KEYS.rock, frame: 0, label: 'VOCE PEGOU UMA PEDRA!' },
+  seeds: { texture: ASSET_KEYS.seedsItem, frame: 0, label: 'VOCE PEGOU SEMENTES! PLANTE NUM BURACO' },
+  bucket: { texture: 'bucket-icon', frame: 0, label: 'VOCE PEGOU UM BALDE! ENCHA NO RIO' },
+  bucketFull: { texture: 'bucket-full-icon', frame: 0, label: 'BALDE CHEIO DE AGUA!' },
 };
 
 // What a blow does to a skull (max health 3). Three tiers: bare fists land BARE_HAND_DAMAGE
@@ -194,6 +218,14 @@ const FLASH_SIZE = 0.5; // tiles across, before the hit's growth tween
 // never touches it, and it never writes depth — see Billboard3D for why each of those matters
 // to a translucent particle.
 const FX_BILLBOARD = { centered: true, fog: false, depthWrite: false } as const;
+
+// How far in front of a rock's centre its struck FACE is (tiles). The pick's debris comes off the
+// face the hero is swinging at, not out of the middle of the tile he cannot even see.
+const ROCK_FACE_TILES = 0.34;
+// Granite greys for the chips — a solid FILL (see spawnRockDebris), so these are the exact colours
+// that fly. Pale enough to read against the night ground, and short of the near-white that sends an
+// unlit sprite over the bloom threshold and turns a stone chip into a spark.
+const ROCK_CHIP_TINTS = [0xb4bac1, 0x99a0a8, 0xc3c9cf, 0x848c95] as const;
 
 // The undead danger meter (UndeadSpawnDirector, 0..1) creeps onto the screen as a cold
 // vignette: the deeper the dark wakes, the harder the edges close in — and near full danger
@@ -268,11 +300,17 @@ export class GameScene extends Phaser.Scene {
   private dryShrubs: DryShrubObject[] = [];
   private rocks: RockObject[] = [];
   private tallGrasses: TallGrassObject[] = [];
+  // Night-blooming flowers: shut (blocking) near a lit campfire, open (walkable) in the dark.
+  private moonflowers: MoonflowerObject[] = [];
+  // Walk-on marks where a carried bomb plants itself (the game has no "use item" button).
+  private bombSpots: BombSpotObject[] = [];
+  // Canteiros: dug holes where seeds plant on step, mounds water on bump, grass regrows.
+  private plantSpots: PlantSpotObject[] = [];
+  private inserters: RoboticArmObject[] = [];
   private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
   // Lit bombs on the ground — world-anchored billboards ticking until they blow.
   private activeBombs: Array<{ worldX: number; worldY: number; sprite: Billboard3D }> = [];
-  private spaceKey?: Phaser.Input.Keyboard.Key;
   // The hero has no Phaser GameObject in the world: he is plain state (tweened like any
   // object) drawn by the 3D billboard alone. See HeroView.
   private readonly hero: HeroView = createHeroView();
@@ -341,7 +379,8 @@ export class GameScene extends Phaser.Scene {
   // all freeze on the current frame); the DOM keeps working because it lives off-canvas.
   private pauseMenu?: PauseMenu;
   private pauseTouchButton?: PauseTouchButton;
-  private eKey?: Phaser.Input.Keyboard.Key;
+  // Level runs only: the always-visible restart + pause squares top-right (see LevelButtons).
+  private levelButtons?: LevelButtons;
   private upgrades: UpgradeState = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
   // Center chunk of the streamed window; NaN forces the first stream.
   private streamCenter = { cx: NaN, cy: NaN };
@@ -400,6 +439,10 @@ export class GameScene extends Phaser.Scene {
     // Build the renderer before ANY world object — they attach their billboards to it.
     this.world3d = new World3D();
     setCurrentWorld3D(this.world3d);
+    // Generate the bucket's + moonflower's pixel art into both texture pipelines before any
+    // prop/item is built (their billboards resolve their textures on construction below).
+    registerBucketTextures(this);
+    registerMoonflowerTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -424,10 +467,12 @@ export class GameScene extends Phaser.Scene {
     const getContent = (cx: number, cy: number): ScreenContent => getChunkContent(cx, cy);
     // No enemy lives in the authored world: every skull is summoned around the hero by the
     // spawn director while they linger in the dark, away from campfires. The puzzle lab
-    // (/lab) runs WITHOUT the siege: skulls respawning mid-test are pure noise when the
-    // point is validating a puzzle idea — test darkness pressure in the real world instead.
+    // (/lab) AND the standalone puzzle levels (/levels, meta.puzzle) run WITHOUT the siege:
+    // skulls respawning mid-solve are pure noise when the point is a puzzle — test darkness
+    // pressure in the real world instead.
     this.enemyManager = new EnemyManager(this);
-    this.spawnDirector = this.registry.get('appMode') === 'lab' ? undefined : new UndeadSpawnDirector();
+    const siegeOff = this.registry.get('appMode') === 'lab' || isPuzzleWorld();
+    this.spawnDirector = siegeOff ? undefined : new UndeadSpawnDirector();
     this.playerSafe = true;
     this.healthRegenTimer = 0;
     this.firstCampfireLit = false;
@@ -473,18 +518,19 @@ export class GameScene extends Phaser.Scene {
       this.camera,
       (wx, wy) => {
         // The hero also stops on enemies (to attack them); everything else that blocks is
-        // shared with enemies via isSolidForEntities — except lava, which the hero can
-        // cross while wearing the lava boots.
+        // shared with enemies via isSolidForEntities — except the hazards (lava AND water),
+        // which the hero wades while holding the lava boots.
         if (this.enemyManager?.getEnemyAt(wx, wy)) return true;
         return this.isSolidForEntities(wx, wy, this.heldItem === 'lavaBoots');
       },
-      // Ground grass decor lives in the baked 3D mesh; the renderer wobbles its quad in place.
-      (wx, wy) => this.world3d?.rustleDecor(wx, wy),
+      // Fires once per tile ENTERED (never per frame): decor rustle + walk-on interactions.
+      (wx, wy) => {
+        this.world3d?.rustleDecor(wx, wy);
+        this.handleTileEntered(wx, wy);
+      },
       (wx, wy) => this.handlePlayerBump(wx, wy),
     );
 
-    this.eKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    this.spaceKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
@@ -505,11 +551,18 @@ export class GameScene extends Phaser.Scene {
       (c, i) => new CampfireObject(this, c.worldX, c.worldY, i === homeIdx || c.lit === true),
     );
     this.dryBushes = getDryBushes().map((b) => new DryBushObject(this, b.worldX, b.worldY));
-    this.lockedDoors = getLockedDoors().map((d) => new LockedDoorObject(this, d.worldX, d.worldY));
+    this.lockedDoors = getLockedDoors().map((d) => new LockedDoorObject(this, d.worldX, d.worldY, d.floodgate === true));
     this.dryTrees = getDryTrees().map((t) => new DryTreeObject(this, t.worldX, t.worldY));
     this.dryShrubs = getDryShrubs().map((s) => new DryShrubObject(this, s.worldX, s.worldY));
     this.rocks = getRocks().map((r) => new RockObject(this, r.worldX, r.worldY));
     this.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this, g.worldX, g.worldY));
+    this.moonflowers = getMoonflowers().map((m) => new MoonflowerObject(this, m.worldX, m.worldY));
+    this.bombSpots = getBombSpots().map((s) => new BombSpotObject(this, s.worldX, s.worldY));
+    this.plantSpots = getPlantSpots().map((s) => new PlantSpotObject(this, s.worldX, s.worldY));
+    // `dir ?? 1`: um braco sem direcao gravada aponta pro leste. Ele nunca fica sem direcao de
+    // verdade (o editor sempre grava uma), mas o default evita que um JSON antigo vire um prop
+    // quebrado — e leste e o que o editor oferece primeiro.
+    this.inserters = getInserters().map((a) => new RoboticArmObject(a.worldX, a.worldY, a.dir ?? 1));
     this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
     // Both `water` and `bridgeSpot` are river tiles (WaterObjects render animated water). A
     // plain `water` tile is an impassable river; a `bridgeSpot` is a river tile you CAN bridge
@@ -548,8 +601,26 @@ export class GameScene extends Phaser.Scene {
       this.enableEditorReturn();
     } else {
       this.input.keyboard?.on('keydown-ESC', () => this.openPauseMenu());
-      if (isTouchDevice()) this.pauseTouchButton = new PauseTouchButton(() => this.openPauseMenu());
+      // A level run shows restart + pause squares top-right on EVERY device: a puzzle can be
+      // spent into a corner (fuse burnt early, bomb wasted), and starting over is part of play —
+      // that has to be said on screen, not buried inside ESC. The adventure keeps the discreet
+      // touch-only pause button.
+      if (getActiveLevel() !== null) {
+        this.levelButtons = new LevelButtons({
+          onRestart: () => this.restartRun(),
+          onPause: () => this.openPauseMenu(),
+        });
+      } else if (isTouchDevice()) {
+        this.pauseTouchButton = new PauseTouchButton(() => this.openPauseMenu());
+      }
     }
+  }
+
+  /** Restart the current run — shared by the pause menu entry and the level restart button. */
+  private restartRun(): void {
+    if (this.pauseMenu) return; // the floating buttons are hidden while the menu is up anyway
+    getSoundManager().stopMusic();
+    this.scene.restart(); // WorldData still holds this level, so it rebuilds the same one
   }
 
   private openPauseMenu(): void {
@@ -558,16 +629,27 @@ export class GameScene extends Phaser.Scene {
     if (this.pauseMenu || this.dialogOpen || this.camShifting || this.shopOpen
       || this.itemGetOpen || this.cutsceneActive || this.isDead) return;
     this.pauseTouchButton?.setVisible(false);
+    this.levelButtons?.setVisible(false);
     // scene.get('title') is undefined in the editor playtest config; without it "quit" would
     // have nowhere to go, so the entry is hidden (mirrors the intro-ending fallback).
     const canQuit = Boolean(this.scene.get('title'));
+    // Playing a level (not the adventure): offer a jump back to the level list. Gated on the
+    // scene existing too — the lab/editor configs don't register it.
+    const inLevel = getActiveLevel() !== null && Boolean(this.scene.get('levelselect'));
     this.pauseMenu = new PauseMenu(this, {
       onResume: () => this.closePauseMenu(),
       onRestart: () => {
         this.closePauseMenu();
-        getSoundManager().stopMusic();
-        this.scene.restart();
+        this.restartRun();
       },
+      onLevelList: inLevel
+        ? () => {
+          this.closePauseMenu();
+          getSoundManager().stopMusic();
+          getSoundManager().stopAmbience();
+          this.scene.start('levelselect');
+        }
+        : undefined,
       onQuit: canQuit
         ? () => {
           this.closePauseMenu();
@@ -585,6 +667,7 @@ export class GameScene extends Phaser.Scene {
     this.pauseMenu.destroy();
     this.pauseMenu = undefined;
     this.pauseTouchButton?.setVisible(true);
+    this.levelButtons?.setVisible(true);
     this.scene.resume();
   }
 
@@ -791,6 +874,8 @@ export class GameScene extends Phaser.Scene {
     this.pauseMenu = undefined;
     this.pauseTouchButton?.destroy();
     this.pauseTouchButton = undefined;
+    this.levelButtons?.destroy();
+    this.levelButtons = undefined;
     this.coinManager?.destroy();
     this.heartPickupManager?.destroy();
     this.itemManager?.destroy();
@@ -802,6 +887,10 @@ export class GameScene extends Phaser.Scene {
     this.dryShrubs.forEach((s) => s.destroy());
     this.rocks.forEach((r) => r.destroy());
     this.tallGrasses.forEach((g) => g.destroy());
+    this.moonflowers.forEach((m) => m.destroy());
+    this.bombSpots.forEach((s) => s.destroy());
+    this.plantSpots.forEach((s) => s.destroy());
+    this.inserters.forEach((a) => a.destroy());
     this.lavaTiles.forEach((l) => l.destroy());
     this.waterTiles.forEach((w) => w.destroy());
     this.activeBombs.forEach((b) => b.sprite.destroy());
@@ -839,6 +928,10 @@ export class GameScene extends Phaser.Scene {
     this.dryShrubs = [];
     this.rocks = [];
     this.tallGrasses = [];
+    this.moonflowers = [];
+    this.bombSpots = [];
+    this.plantSpots = [];
+    this.inserters = [];
     this.lavaTiles = [];
     this.waterTiles = [];
     this.activeBombs = [];
@@ -877,16 +970,13 @@ export class GameScene extends Phaser.Scene {
     // The item-get and first-campfire cut-scene both freeze gameplay; only their own tweens run.
     if (this.itemGetOpen || this.cutsceneActive) return;
 
-    if (this.eKey && Phaser.Input.Keyboard.JustDown(this.eKey)) this.toggleShop();
-
     if (this.isDead || this.shopOpen || !this.movementController || !this.chunkManager || !this.camera) {
       return;
     }
 
-    // The bomb is the one consumable: SPACE drops it lit on the hero's tile.
-    if (this.heldItem === 'bomb' && this.spaceKey && Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
-      this.placeBomb();
-    }
+    // No item buttons exist: the game is walk-only. The bomb plants itself on its spot mark and
+    // seeds sow themselves into an open hole when the hero steps there carrying them (see
+    // handleTileEntered). The shop opens by bumping a lit campfire (the Souls bonfire).
 
     const prevWorldX = this.playerWorld.worldX;
     const prevWorldY = this.playerWorld.worldY;
@@ -1055,6 +1145,9 @@ export class GameScene extends Phaser.Scene {
         tree.regrow();
       }
     }
+    // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
+    this.updatePlantSpots();
+    this.updateInserters(delta);
 
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.renderProps();
@@ -1166,6 +1259,23 @@ export class GameScene extends Phaser.Scene {
     return this.tallGrasses.find((g) => g.worldX === wx && g.worldY === wy);
   }
 
+
+  private getMoonflowerAt(wx: number, wy: number): MoonflowerObject | undefined {
+    return this.moonflowers.find((m) => m.worldX === wx && m.worldY === wy);
+  }
+
+  private getBombSpotAt(wx: number, wy: number): BombSpotObject | undefined {
+    return this.bombSpots.find((s) => s.worldX === wx && s.worldY === wy);
+  }
+
+  private getInserterAt(wx: number, wy: number): RoboticArmObject | undefined {
+    return this.inserters.find((a) => a.worldX === wx && a.worldY === wy);
+  }
+
+  private getPlantSpotAt(wx: number, wy: number): PlantSpotObject | undefined {
+    return this.plantSpots.find((s) => s.worldX === wx && s.worldY === wy);
+  }
+
   private getLavaAt(wx: number, wy: number): LavaObject | undefined {
     return this.lavaTiles.find((l) => l.worldX === wx && l.worldY === wy);
   }
@@ -1180,7 +1290,7 @@ export class GameScene extends Phaser.Scene {
    * unbroken rocks, NPCs — and lava, unless the caller can cross it (hero wearing the lava
    * boots). The hero adds enemies on top (to attack them); enemies add lit tiles.
    */
-  private isSolidForEntities(wx: number, wy: number, lavaPassable = false): boolean {
+  private isSolidForEntities(wx: number, wy: number, hazardsPassable = false): boolean {
     if (this.chunkManager?.isCellBlocked(wx, wy)) return true;
     if (this.getCampfireAt(wx, wy)) return true;
     if (this.getDryBushAt(wx, wy)?.blocking) return true;
@@ -1189,8 +1299,17 @@ export class GameScene extends Phaser.Scene {
     if (this.getDryShrubAt(wx, wy)?.blocking) return true;
     if (this.getRockAt(wx, wy)?.blocking) return true;
     if (this.getTallGrassAt(wx, wy)?.blocking) return true;
-    if (!lavaPassable && this.getLavaAt(wx, wy)) return true;
-    if (this.getWaterAt(wx, wy)?.blocking) return true;
+    if (this.getMoonflowerAt(wx, wy)?.blocking) return true; // a shut bud blocks; an open bloom doesn't
+    if (this.getPlantSpotAt(wx, wy)?.blocking) return true; // a planted mound is a body; the hole isn't
+    // The arm is a machine, so it is solid — and that is exactly what makes it worth placing.
+    // It hands an item across the very tile the hero has to walk around.
+    if (this.getInserterAt(wx, wy)?.blocking) return true;
+    // Lava and water are the two hazards the lava boots ("botas de risco") let the hero wade —
+    // enemies always pass hazardsPassable=false, so a river stays a wall to them. A lava tile
+    // cooled to basalt by a dropped stone is solid ground everyone walks, boots or no boots.
+    const lava = this.getLavaAt(wx, wy);
+    if (lava && !lava.solidified && !hazardsPassable) return true;
+    if (this.getWaterAt(wx, wy)?.blocking && !hazardsPassable) return true;
     if (this.npcManager?.hasNpcAt(wx, wy)) return true;
     return false;
   }
@@ -1291,11 +1410,24 @@ export class GameScene extends Phaser.Scene {
     if (campfire) {
       campfire.onHit();
       if (campfire.isLit) {
-        if (this.isFlammableHeld) {
+        if (this.heldItem === 'bucketFull') {
+          // Throw the bucket of water on the fire — the water leaves the bucket with the swing,
+          // ARCS across as a slug of droplets, and the fire hisses out when it LANDS. The one
+          // deliberate way to UNDO a fire (one use, then back to the river).
+          this.swingHeld(wx, wy);
+          this.time.delayedCall(120, () => {
+            this.throwBucketWater(wx, wy, () => this.douseCampfire(campfire, wx, wy));
+          });
+        } else if (this.isFlammableHeld) {
           this.swingHeld(wx, wy);
           // Light the torch at the fire, or top it back up if it's already burning.
           if (!this.heldOnFire) this.time.delayedCall(150, () => { this.igniteHeldItem(); });
           else this.refuelTorch();
+        } else if (this.registry.get('appMode') !== 'lab' && !isPuzzleWorld()) {
+          // Any other bump on a lit hearth is RESTING at it: the upgrade shop opens — the game's
+          // Souls bonfire, and the walk-only replacement for the old E key. Adventure only: a
+          // puzzle level has no coins and no enemies, so a shop there would be pure noise.
+          this.openShop();
         }
       } else if (this.isFlammableHeld && this.heldOnFire) {
         // Carry the flame into a dead campfire to reignite the world.
@@ -1313,13 +1445,25 @@ export class GameScene extends Phaser.Scene {
     // exactly like a lit campfire. With the lava boots on, the hero walks onto it instead of
     // bumping, so this only fires when lava is blocking.
     const lava = this.getLavaAt(wx, wy);
-    if (lava) {
-      if (this.isFlammableHeld && !this.heldOnFire) {
-        this.swingHeld(wx, wy);
-        this.time.delayedCall(150, () => { this.igniteHeldItem(); });
-      } else {
-        // Lava is blocking (no boots on) and there's no torch to light here: show the boots.
-        this.showNeedItemHint('lavaBoots');
+    if (lava && !lava.solidified) {
+      // While a stone is still SINKING in (`cooling`), the tile blocks and takes no interaction —
+      // the hero cannot cross a half-placed stone, so he just waits for it to settle. Interactions
+      // apply only to still-molten lava.
+      if (!lava.cooling) {
+        if (this.heldItem === 'stone') {
+          // A stone dropped into the melt sinks to a stepping-stone crown — the lava twin of the
+          // stone ford. It costs the stone but frees the hand (no boots needed to cross here once
+          // it settles), and the tile is a firebreak forever after.
+          this.swingHeld(wx, wy); // toss the stone into the lava
+          this.clearHeldItem();
+          this.time.delayedCall(150, () => { this.solidifyLava(lava, wx, wy); });
+        } else if (this.isFlammableHeld && !this.heldOnFire) {
+          this.swingHeld(wx, wy);
+          this.time.delayedCall(150, () => { this.igniteHeldItem(); });
+        } else {
+          // Lava is blocking (no boots on) and there's no torch to light here: show the boots.
+          this.showNeedItemHint('lavaBoots');
+        }
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -1332,7 +1476,11 @@ export class GameScene extends Phaser.Scene {
     // A floor, or a fuse. Plain river tiles just block (no interaction).
     const water = this.getWaterAt(wx, wy);
     if (water?.blocking) {
-      if (water.canBuild) {
+      if (this.heldItem === 'bucket') {
+        // Dip the empty bucket in the river to fill it — works on ANY river tile, not just a
+        // bridgeSpot (you are drawing water, not building). The full bucket douses a campfire.
+        this.fillBucket(wx, wy);
+      } else if (water.canBuild) {
         if (this.heldItem === 'stone') {
           this.clearHeldItem(); // the stone goes into the river
           water.placeStone();
@@ -1429,15 +1577,48 @@ export class GameScene extends Phaser.Scene {
     const rock = this.getRockAt(wx, wy);
     if (rock?.blocking) {
       if (this.heldItem === 'pickaxe') {
-        this.swingHeld(wx, wy);
-        this.time.delayedCall(150, () => {
-          if (!rock.smash(this.tileSize)) return;
+        // The direction of the blow, captured now: the delayed impact below must not read the
+        // hero's facing again, since a queued key could have turned him in the meantime.
+        const dirX = Math.sign(wx - this.playerWorld.worldX);
+        const dirY = Math.sign(wy - this.playerWorld.worldY);
+        this.swingPickaxe(wx, wy);
+        this.time.delayedCall(CHOP_IMPACT_MS, () => {
+          if (!rock.smash(dirX, dirY)) return;
           getSoundManager().playRockSmash();
-          if (!rock.blocking) this.dropStone(rock.worldX, rock.worldY); // shattered, not just cracked
+          const shattered = !rock.blocking;
+          this.spawnRockDebris(wx, wy, dirX, dirY, shattered);
+          if (shattered) this.dropStone(rock.worldX, rock.worldY); // shattered, not just cracked
         });
       } else {
         rock.shake();
         this.showNeedItemHint('pickaxe');
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // Moonflower — a shut bud in the light. No item opens it; only the DARK does (put out the
+    // campfires nearby, e.g. with the bucket). A bump just rustles it — the cat's lines carry the
+    // rule, so there is no missing-item balloon here.
+    const flower = this.getMoonflowerAt(wx, wy);
+    if (flower?.blocking) {
+      flower.shake();
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // A planted mound — the seed under fresh earth, waiting for water. Bump with the FULL
+    // bucket to water it (the douse gesture turned nurturing); the grass sprouts a while later.
+    // A dry-handed bump shows the "needs water" balloon; an already-watered mound just waits.
+    const plantSpot = this.getPlantSpotAt(wx, wy);
+    if (plantSpot?.blocking) {
+      if (plantSpot.isMound && this.heldItem === 'bucketFull') {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(120, () => {
+          this.throwBucketWater(wx, wy, () => this.waterPlantSpot(plantSpot, wx, wy));
+        });
+      } else if (plantSpot.isMound) {
+        this.showNeedItemHint('water');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -1449,7 +1630,9 @@ export class GameScene extends Phaser.Scene {
       if (this.heldItem === 'scythe') {
         this.swingHeld(wx, wy);
         getSoundManager().playGrassCut();
-        this.time.delayedCall(110, () => grass.cut());
+        // The mow drops a handful of SEEDS on the stubble — the scythe's product. Plant them in
+        // a dug hole (plantSpot), water, and the grass grows back: the renewable fuel loop.
+        this.time.delayedCall(110, () => { if (grass.cut()) this.dropSeeds(grass.worldX, grass.worldY); });
       } else if (this.isFlammableHeld && this.heldOnFire) {
         this.swingHeld(wx, wy);
         this.time.delayedCall(150, () => {
@@ -1485,7 +1668,11 @@ export class GameScene extends Phaser.Scene {
           });
         }
         this.time.delayedCall(150, () => {
-          if (door.unlock()) getSoundManager().playShopOpen();
+          if (!door.unlock()) return;
+          getSoundManager().playShopOpen();
+          // A floodgate drains the water it dammed — a key that reshapes the map, not just opens
+          // a tile: a new path AND a fresh firebreak where the river used to run.
+          if (door.isFloodgate) this.openFloodgate(door.worldX, door.worldY);
         });
       } else {
         door.shake();
@@ -1639,6 +1826,138 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Steel into granite. EVERY blow throws stone — not just the one that opens the tile — because
+   * a first hit that merely swapped the sprite for a cracked one was the whole reason mining read
+   * as pressing a button twice.
+   *
+   * The chips are real debris in the 3D world: they burst off the struck FACE (not the middle of
+   * the tile), arc back at the hero, fall under gravity, BOUNCE where they land and lie in the
+   * grass a moment before they go. The old shatter drew flat rectangles on the Phaser canvas at
+   * `lastScreen` — a screen position nothing ever refreshed, so the "shards" fired off the
+   * top-left corner of the screen. (dirX, dirY) points from the hero into the rock.
+   */
+  private spawnRockDebris(wx: number, wy: number, dirX: number, dirY: number, shattered: boolean): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+
+    // The point of contact: the face he is actually hitting, at about chest height on the rock.
+    const ix = wx - dirX * ROCK_FACE_TILES;
+    const iy = wy - dirY * ROCK_FACE_TILES;
+    const iz = 0.52;
+    // Where the stone goes. The blow throws it back at the man swinging — but he is standing
+    // BETWEEN the rock and the camera, so a chip thrown straight back at him flies into his own
+    // billboard and is never seen. So the spray is a wide V: out to BOTH SIDES of the blow, with
+    // only a bias backwards. It is what a struck rock does anyway (the chip leaves along the
+    // face, not along the pick), and it is the only version of it the player can watch.
+    const back = Math.atan2(-dirY, -dirX);
+
+    for (let i = 0; i < (shattered ? 12 : 7); i++) {
+      const side = i % 2 === 0 ? 1 : -1;
+      const ang  = back + side * (0.55 + Math.random() * 0.95);
+      const dist = 0.3 + Math.random() * (shattered ? 0.8 : 0.45);
+      const size = 0.11 + Math.random() * (shattered ? 0.13 : 0.08);
+      const riseMs = 110 + Math.random() * 70;
+      const fallMs = 300 + Math.random() * 140;
+      // Unlit, like every other one-shot FX in this world (see spawnSmokePuff's note). A chip is a
+      // piece of the rock, so a LIT one is the honest choice and it was the first thing I tried —
+      // and at night it renders BLACK: a rock you cannot see, coming off a rock you can. The night
+      // owns the world; it does not get to own the feedback.
+      //
+      // And it is FILLED, not tinted: a tint multiplies the rock's art, and a chip is small enough
+      // that it samples the mound's dark body pixels and comes out charcoal. Fill keeps the
+      // silhouette and paints it granite.
+      const chip = w3
+        .addBillboard(ASSET_KEYS.rock, 0, { ...FX_BILLBOARD, emissive: true, alphaTest: 0.05 })
+        .setTintFill(ROCK_CHIP_TINTS[i % ROCK_CHIP_TINTS.length])
+        .setPosition(ix, iy)
+        .setElevation(iz)
+        .setDisplaySize(size, size);
+
+      // Horizontal flight: it leaves fast and drags to a stop over the whole arc (the y throw is
+      // foreshortened — the ground plane is tilted away from us).
+      this.tweens.add({
+        targets: chip,
+        x: ix + Math.cos(ang) * dist,
+        y: iy + Math.sin(ang) * dist * 0.7,
+        angle: Phaser.Math.Between(-540, 540), // end over end
+        duration: riseMs + fallMs,
+        ease: 'Quad.easeOut',
+      });
+      // …and the gravity arc under it: up off the face, then down, and it BOUNCES where it lands.
+      // That bounce is the entire difference between a chip of rock and a puff of smoke.
+      this.tweens.add({
+        targets: chip,
+        elevation: iz + 0.22 + Math.random() * 0.3,
+        duration: riseMs,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: chip,
+            elevation: 0.03, // on the ground, where it stays
+            duration: fallMs,
+            ease: 'Bounce.easeOut',
+            onComplete: () => {
+              this.tweens.add({
+                targets: chip,
+                alpha: 0,
+                delay: 260, // it lies there first — debris that vanishes on landing never landed
+                duration: 240,
+                onComplete: () => chip.destroy(),
+              });
+            },
+          });
+        },
+      });
+    }
+
+    // Dust knocked out of the crack, and the sparks of the point biting stone.
+    for (let i = 0; i < (shattered ? 4 : 2); i++) {
+      const puff = w3
+        .addBillboard(FX_PUFF_TEXTURE, 0, { ...FX_BILLBOARD, emissive: true, alphaTest: 0.02 })
+        .setTint(0xb0a89c)
+        .setPosition(ix + (Math.random() - 0.5) * 0.3, iy + (Math.random() - 0.5) * 0.2)
+        .setElevation(iz - 0.15)
+        .setDisplaySize(0.24, 0.24)
+        .setAlpha(0.4);
+      this.tweens.add({
+        targets: puff,
+        elevation: iz + 0.35 + Math.random() * 0.2,
+        scaleX: 0.55,
+        scaleY: 0.55,
+        alpha: 0,
+        duration: 420 + i * 90,
+        ease: 'Power2.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+    for (let i = 0; i < 2; i++) {
+      const ang = back + (i === 0 ? 1 : -1) * (0.4 + Math.random() * 0.8); // off the face, like the chips
+      const spark = w3
+        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
+        .setTint(0xffe0a8) // struck steel, not fire: a pale gold, and gone in a blink
+        .setPosition(ix, iy)
+        .setElevation(iz)
+        .setDisplaySize(0.08, 0.08);
+      this.tweens.add({
+        targets: spark,
+        x: ix + Math.cos(ang) * 0.4,
+        y: iy + Math.sin(ang) * 0.28,
+        elevation: iz + 0.12,
+        alpha: 0,
+        duration: 110 + Math.random() * 70,
+        ease: 'Cubic.easeOut',
+        onComplete: () => spark.destroy(),
+      });
+    }
+
+    // The blow lands in the room, not just on the rock: the world takes a kick and a few frames
+    // of hitstop — the same juice a melee hit gets, because this IS one.
+    if (shattered) this.spawnShockwave(wx, wy, 0xb6bcc4, 0.3, 1.05, 260);
+    w3.shake(shattered ? 150 : 70, shattered ? 0.11 : 0.045);
+    this.triggerHitstop(shattered ? 80 : 45);
+  }
+
   // A blow glancing off an invulnerable target: a cold blue ring + a few pale shards
   // skittering flat off the point of contact. Deliberately NOT spawnHitSpark's hot white
   // flash — negated damage must never share the visual language of a landed hit.
@@ -1728,6 +2047,28 @@ export class GameScene extends Phaser.Scene {
       frame: visual.frame,
       onFire: this.heldItem === 'wood' && this.heldOnFire,
       flipX: this.heldItem === 'axe', // the axe is single-edged — face its blade into the swing
+    });
+  }
+
+  /**
+   * The pickaxe against stone swings the MINING swing (SwordSlash.chop), not the sword's arc:
+   * raised over the head, held there, and driven down into one spot. Combat keeps the flat slash
+   * — nobody hauls a pick over their head at a skeleton standing on top of them — so mining is the
+   * only place this motion belongs, and it is the only swing that lands late (CHOP_IMPACT_MS).
+   */
+  private swingPickaxe(wx: number, wy: number): void {
+    if (!this.swordSlash || !this.camera) return;
+    // The whoosh belongs to the DRIVE, not to the wind-up: a pick hauled slowly overhead makes no
+    // sound at all, and the noise is what tells the player the blow is now unstoppable.
+    this.time.delayedCall(CHOP_DRIVE_AT_MS, () => getSoundManager().playSwordSlash());
+    this.hideBackItemDuringSwing(CHOP_TOTAL_MS); // a chop is far longer than a slash
+    const dx = wx - this.playerWorld.worldX;
+    const dy = wy - this.playerWorld.worldY;
+    const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+    const visual = HUD_ITEM_VISUAL.pickaxe;
+    this.swordSlash.chop(screen.x, screen.y, dx, dy, this.tileSize, {
+      texture: visual.texture,
+      frame: visual.frame,
     });
   }
 
@@ -2148,19 +2489,71 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ── Bomb ───────────────────────────────────────────────────────────────────
-  // The one consumable: SPACE drops it lit under the hero; after the fuse it explodes —
+  // ── Bomb / seeds ────────────────────────────────────────────────────────────
+  // The game is walk-only — no "use item" button — so every placement has a walk-on affordance:
+  // a spot mark (a breathing purple ghost of the thing that goes there). The hero stepping onto
+  // it with the right item in hand places it, exactly like stepping on a pickup collects it.
+  // With anything else in hand the step pops the need-item balloon showing what the mark wants.
+  private handleTileEntered(wx: number, wy: number): void {
+    // A ORIGEM de um braco robotico: pisar nela segurando qualquer coisa DEPOSITA a carga ali,
+    // e a maquina leva dali em diante. Isto nao e um atalho de conveniencia — sem ele o braco
+    // seria impossivel de alimentar. O jogo nao tem botao de largar item: o heroi so pousa o que
+    // carrega TROCANDO por outro item que ja esteja no chao, e a origem de um braco comeca vazia.
+    // A garra parada no ar sobre o tile, com a sombra caindo embaixo, e o aviso de que pisar ali
+    // faz alguma coisa (a mesma gramatica da bomba-fantasma no bombSpot).
+    //
+    // Vem antes de tudo porque um tile de origem e um destino deliberado: se ele coincidir com
+    // outra marca, entregar a carga a maquina e a leitura mais forte.
+    const feeding = this.inserters.find((arm) => {
+      const [ix, iy] = arm.inputTile;
+      return ix === wx && iy === wy;
+    });
+    if (feeding && this.heldItem !== 'none' && !this.itemManager?.hasItemAt(wx, wy)) {
+      const kind = this.heldItem;
+      this.clearHeldItem();
+      this.itemManager?.drop(kind, wx, wy);
+      return;
+    }
+
+    const bombSpot = this.getBombSpotAt(wx, wy);
+    if (bombSpot && !bombSpot.isSpent) {
+      if (this.heldItem === 'bomb') {
+        bombSpot.use(); // the ghost materialises into the real bomb
+        this.placeBombAt(wx, wy);
+      } else {
+        this.showNeedItemHint('bomb');
+      }
+      return;
+    }
+
+    // An open planting hole: step on it carrying seeds and they go into the ground — the mound
+    // rises the moment the hero steps OFF (see updatePlantSpots), then wants the bucket. The
+    // "needs seeds" balloon shows once per open-hole period: holes sit on walking lanes, and a
+    // balloon on every crossing would be noise, not teaching.
+    const plantSpot = this.getPlantSpotAt(wx, wy);
+    if (plantSpot && plantSpot.isHole) {
+      if (this.heldItem === 'seeds') {
+        this.clearHeldItem(); // the seeds are sown
+        plantSpot.plant();
+      } else if (!plantSpot.hintShown) {
+        plantSpot.hintShown = true;
+        this.showNeedItemHint('seeds');
+      }
+    }
+  }
+
+  // The one consumable: planted on a bombSpot, it sits lit; after the fuse it explodes —
   // killing every enemy in the blast and setting fire to everything flammable there.
-  private placeBomb(): void {
+  private placeBombAt(worldX: number, worldY: number): void {
     if (this.heldItem !== 'bomb' || !this.world3d) return;
-    const worldX = this.playerWorld.worldX;
-    const worldY = this.playerWorld.worldY;
 
     this.clearHeldItem();
     getSoundManager().playBombPlace();
 
     const sprite = this.world3d
-      .addBillboard('bomb-item', BOMB_FRAMES.item)
+      // The hero is STANDING on this tile as the bomb is planted, and walks off it while the
+      // fuse burns: ground layer, or the two upright quads are coplanar (see DEPTH_LAYER).
+      .addBillboard('bomb-item', BOMB_FRAMES.item, { depthLayer: 'ground' })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.62, 0.62);
     const bomb = { worldX, worldY, sprite };
@@ -2178,6 +2571,82 @@ export class GameScene extends Phaser.Scene {
       },
     });
     this.time.delayedCall(BOMB_FUSE_MS, () => this.explodeBomb(bomb));
+  }
+
+  // ── The farming loop (plantSpot) ────────────────────────────────────────────
+  // Seeds (the scythe's product) planted in a hole + a bucket of water = REAL tall grass, a
+  // little later and with a sprout animation. From then on it is grass like any other — blocks,
+  // conducts fire, falls to the scythe (yielding seeds again). When that grass is consumed, the
+  // hole reopens (see updatePlantSpots): the loop is renewable by design — placeable fuel the
+  // player GROWS, so a burnt fuse is never a dead end.
+  private static readonly PLANT_GROW_MS = 3500;
+  private static readonly PLANT_REOPEN_MS = 2600;
+
+  // The thrown water LANDED on a planted mound: the earth darkens, drinks, and germination
+  // starts. (The bucket already emptied at the throw — see throwBucketWater.)
+  private waterPlantSpot(spot: PlantSpotObject, wx: number, wy: number): void {
+    if (!spot.water(GameScene.PLANT_GROW_MS, () => this.growPlantedGrass(spot))) return;
+    getSoundManager().playSplash();
+    this.spawnSmokePuff(wx, wy); // the mist of the pour settling over the wet earth
+  }
+
+  /** The watered mound germinated: sprout the real grass (waiting for the tile to be clear). */
+  private growPlantedGrass(spot: PlantSpotObject): void {
+    if (!spot.isWatered) return; // scene reset re-guard
+    if (!this.isTileClearForRegrow(spot.worldX, spot.worldY)) {
+      this.time.delayedCall(400, () => this.growPlantedGrass(spot));
+      return;
+    }
+    const grass = new TallGrassObject(this, spot.worldX, spot.worldY);
+    grass.sproutIn();
+    this.tallGrasses.push(grass);
+    spot.setGrown(grass);
+    getSoundManager().playGrassCut(); // the blades pushing out — the same dry rustle
+  }
+
+  /**
+   * Drive every robotic arm. The arms get a tiny port instead of the scene itself: an arm only
+   * ever needs to ask four things about the world, and handing it `this` would let it reach the
+   * other three thousand lines by accident.
+   *
+   * `blocked` deliberately passes hazardsPassable=false — the lava boots are the HERO's
+   * privilege, not the machine's. An arm will not lay an item down in a river or on lava, where
+   * it would be stranded on a tile the hero can only reach wearing the one item that cannot
+   * carry anything out.
+   */
+  private updateInserters(delta: number): void {
+    if (!this.inserters.length) return;
+    const port: ArmWorldPort = {
+      hasItem: (x, y) => this.itemManager?.hasItemAt(x, y) ?? false,
+      take: (x, y) => this.itemManager?.takeAt(x, y) ?? null,
+      put: (kind, x, y) => this.itemManager?.drop(kind, x, y),
+      blocked: (x, y) => this.isSolidForEntities(x, y),
+      grabbed: () => getSoundManager().playArmGrab(),
+      swinging: () => getSoundManager().playArmServo(),
+      released: () => getSoundManager().playArmRelease(),
+    };
+    for (const arm of this.inserters) arm.update(delta, port);
+  }
+
+  // Watch the plots each frame: raise the mound of a sown hole the moment the hero steps off
+  // it (a dome must never be born blocking under someone's feet — the dropped-item arming
+  // rule), and reopen the hole of a plot whose grown grass was consumed (cut/burnt).
+  private updatePlantSpots(): void {
+    for (const spot of this.plantSpots) {
+      if (spot.isSown
+        && (spot.worldX !== this.playerWorld.worldX || spot.worldY !== this.playerWorld.worldY)) {
+        spot.raiseMound();
+        continue;
+      }
+      const grass = spot.grownGrass;
+      if (!grass || grass.blocking || spot.reopenPending) continue;
+      spot.reopenPending = true;
+      this.time.delayedCall(GameScene.PLANT_REOPEN_MS, () => {
+        this.tallGrasses = this.tallGrasses.filter((g) => g !== grass);
+        grass.destroy(); // the stubble decays away and the dug hole shows again
+        spot.reopen();
+      });
+    }
   }
 
   private explodeBomb(bomb: { worldX: number; worldY: number; sprite: Billboard3D }): void {
@@ -2253,6 +2722,22 @@ export class GameScene extends Phaser.Scene {
         this.scheduleFireSpread(grassObj.worldX, grassObj.worldY);
       }
     }
+
+    // The blast shatters rock in range and throws the pieces as usable STONE: the bomb PRODUCES
+    // matter, it does not only clear a path. One charge can open a wall AND hand you the fords
+    // to cross the river beyond it. (Two blows finish any rock: intact -> cracked -> broken.)
+    let brokeRock = false;
+    for (const rockObj of this.rocks) {
+      if (!inBlast(rockObj.worldX, rockObj.worldY) || !rockObj.blocking) continue;
+      rockObj.smash(0, 0);
+      rockObj.smash(0, 0);
+      if (!rockObj.blocking) {
+        this.spawnRockDebris(rockObj.worldX, rockObj.worldY, 0, -1, true);
+        this.dropStone(rockObj.worldX, rockObj.worldY);
+        brokeRock = true;
+      }
+    }
+    if (brokeRock) getSoundManager().playRockSmash();
   }
 
   // ── Fire spread ────────────────────────────────────────────────────────────
@@ -2296,6 +2781,15 @@ export class GameScene extends Phaser.Scene {
     if (grass?.ignite()) {
       this.spawnFireHitEffect(wx, wy);
       this.scheduleFireSpread(wx, wy);
+      return true;
+    }
+
+    // A placed bomb is a PAYLOAD on the fuse: fire reaching it sets it off. So you can blow up
+    // something you could never stand next to — lay a fuse to the bomb and let the fire arrive,
+    // the same idea as lighting a campfire the hero cannot reach.
+    const bomb = this.activeBombs.find((b) => b.worldX === wx && b.worldY === wy);
+    if (bomb) {
+      this.explodeBomb(bomb);
       return true;
     }
 
@@ -2535,13 +3029,17 @@ export class GameScene extends Phaser.Scene {
     for (const d of this.lockedDoors) d.render(this.tileSize, this.camera);
     for (const t of this.dryTrees) t.render(this.tileSize, this.camera);
     for (const s of this.dryShrubs) s.render(this.tileSize, this.camera);
-    for (const r of this.rocks) r.render(this.tileSize, this.camera);
+    // (no rocks: they have no 2D FX left to re-project — see RockObject)
     for (const g of this.tallGrasses) g.render(this.tileSize, this.camera);
+    // Moonflowers: shut while a LIT campfire is within ~2.6 tiles, open (walkable) in the dark.
+    // Driven here because the campfires live in GameScene; the flower owns only look + collision.
+    for (const mf of this.moonflowers) {
+      const nearFire = this.campfires.some((cf) => cf.isLit
+        && Math.hypot(cf.worldX - mf.worldX, cf.worldY - mf.worldY) <= 2.6);
+      mf.setNearFire(nearFire);
+      mf.render(this.tileSize, this.camera);
+    }
     // Bombs are world-anchored billboards; nothing to reproject here.
-  }
-
-  private toggleShop(): void {
-    if (this.shopOpen) this.closeShop(); else this.openShop();
   }
 
   private openShop(): void {
@@ -2681,11 +3179,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Hide the back item for the duration of a swing (reset the timer if the hero swings again),
-  // then restore it via updateBackItem. positionBackItem no-ops while it's hidden.
-  private hideBackItemDuringSwing(): void {
+  // then restore it via updateBackItem. positionBackItem no-ops while it's hidden. The pickaxe's
+  // overhead chop runs about twice as long as a slash, so it passes its own duration — otherwise
+  // the pick would reappear on his back while it is still buried in the rock.
+  private hideBackItemDuringSwing(durationMs = SWING_HIDE_MS): void {
     this.backItemBb?.setVisible(false);
     this.backItemSwingTimer?.remove();
-    this.backItemSwingTimer = this.time.delayedCall(SWING_HIDE_MS, () => {
+    this.backItemSwingTimer = this.time.delayedCall(durationMs, () => {
       this.backItemSwingTimer = undefined;
       if (!this.itemGetOpen) this.updateBackItem(); // updateBackItem keeps it hidden if empty-handed
     });
@@ -2698,11 +3198,182 @@ export class GameScene extends Phaser.Scene {
     this.itemManager?.drop('wood', worldX, worldY);
   }
 
+  // Mowing tall grass leaves a handful of SEEDS behind, on the stubble tile — the scythe's
+  // product, and what makes it a producer, not a password: plant them in a plantSpot hole,
+  // water, and the grass returns. Like the graveto, they wait until the hero steps off and on.
+  private dropSeeds(worldX: number, worldY: number): void {
+    if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
+    this.itemManager?.drop('seeds', worldX, worldY);
+  }
+
   // A shattered rock leaves a stone behind, on the tile it used to block. Wood's opposite:
   // it fords a river and it will never carry a flame (see WaterObject.placeStone / burn).
   private dropStone(worldX: number, worldY: number): void {
     if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
     this.itemManager?.drop('stone', worldX, worldY);
+  }
+
+  // A stone dropped into lava cools it into basalt: a permanent walkable firebreak (LavaObject
+  // owns the visual swap + releasing its heat-light). Steam and a thump sell the quench. This is
+  // the lava counterpart of a stone ford — a floor over the hazard that never becomes a fuse.
+  private solidifyLava(lava: LavaObject, worldX: number, worldY: number): void {
+    if (!lava.solidify()) return;
+    this.spawnSmokePuff(worldX, worldY);
+    this.world3d?.shake(90, 0.02);
+  }
+
+  // Dip the empty bucket in the river: it comes up full. Empty→full shows as the art the hero
+  // carries (no HUD). A splash sells the dip.
+  private fillBucket(wx: number, wy: number): void {
+    if (this.heldItem !== 'bucket') return;
+    this.swingHeld(wx, wy); // the bucket arcs down into the water
+    this.heldItem = 'bucketFull';
+    getSoundManager().playSplash();
+    this.updateBackItem();
+  }
+
+  // The thrown water LANDED on a lit campfire: it hisses out to cold logs and steam rises —
+  // a double puff, because a whole bucketload quenching embers is a CLOUD, not a wisp. (The
+  // bucket already emptied at the throw.) Killing this fire may end the safe ring under the
+  // hero, so the safety flag is recomputed here (the mirror of lightCampfire).
+  private douseCampfire(cf: CampfireObject, wx: number, wy: number): void {
+    if (!cf.extinguish()) return;
+    getSoundManager().playSplash();
+    this.spawnSmokePuff(wx, wy); // steam off the dead logs...
+    this.time.delayedCall(140, () => this.spawnSmokePuff(wx, wy)); // ...billowing in two breaths
+    const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
+  }
+
+  // The water leaves the bucket NOW — the hand empties with the throw, not with the landing —
+  // and a slug of droplets carries it to the target; `onLand` fires when it arrives.
+  private throwBucketWater(wx: number, wy: number, onLand: () => void): void {
+    if (this.heldItem !== 'bucketFull') return;
+    this.heldItem = 'bucket';
+    this.updateBackItem();
+    this.spawnWaterThrow(wx, wy, onLand);
+  }
+
+  // A thrown bucketload: bulk puffs carry the water's MASS under bright additive glints, all
+  // riding one parabola from the hero's hands to the target tile (spread + stagger so it reads
+  // as a slosh, not a projectile). The douse/watering happens where the water actually IS —
+  // when it lands — capped by a low splash burst, not at the end of an invisible swing.
+  private spawnWaterThrow(toX: number, toY: number, onLand: () => void): void {
+    const w3 = this.world3d;
+    if (!w3) { onLand(); return; }
+    const FLIGHT_MS = 220;
+    const fromX = this.playerWorld.worldX;
+    const fromY = this.playerWorld.worldY;
+    const startX = fromX + (toX - fromX) * 0.3; // leaves from the bucket's arc, not the hero's feet
+    const startY = fromY + (toY - fromY) * 0.3;
+
+    for (let i = 0; i < 9; i++) {
+      const isBulk = i < 3;
+      const drop = w3
+        .addBillboard(isBulk ? FX_PUFF_TEXTURE : FX_DOT_TEXTURE, 0, {
+          ...FX_BILLBOARD, additive: !isBulk, emissive: isBulk, emissiveBoost: isBulk ? 1 : 1.5,
+        })
+        .setTint(isBulk ? 0x9fb4dd : 0xbbf2f4)
+        .setPosition(startX, startY)
+        .setElevation(0.42)
+        .setDisplaySize(isBulk ? 0.3 : 0.13, isBulk ? 0.24 : 0.13)
+        .setAlpha(isBulk ? 0.85 : 1);
+      const tx = toX + (Math.random() - 0.5) * 0.42;
+      const ty = toY + (Math.random() - 0.5) * 0.3;
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: FLIGHT_MS,
+        delay: i * 14, // the slug stretches: front droplets land while the tail is still flying
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          drop.setPosition(startX + (tx - startX) * k, startY + (ty - startY) * k);
+          // A real toss: up out of the bucket, over the top, down onto the target.
+          drop.setElevation(0.42 + (0.06 - 0.42) * k + 0.24 * Math.sin(Math.PI * k));
+        },
+        onComplete: () => drop.destroy(),
+      });
+    }
+
+    this.time.delayedCall(FLIGHT_MS + 60, () => {
+      onLand();
+      this.spawnWaterSplash(toX, toY);
+    });
+  }
+
+  // The landing: a foam sheet bursts outward low over the target while beads bounce off it.
+  private spawnWaterSplash(wx: number, wy: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const sheet = w3
+      .addBillboard(FX_PUFF_TEXTURE, 0, { ...FX_BILLBOARD, additive: true })
+      .setTint(0x9fb4dd)
+      .setPosition(wx, wy)
+      .setElevation(0.08)
+      .setDisplaySize(0.3, 0.24)
+      .setAlpha(0.8);
+    this.tweens.add({
+      targets: sheet,
+      scaleX: 2.6,
+      scaleY: 2.1,
+      alpha: 0,
+      duration: 240,
+      ease: 'Cubic.easeOut',
+      onComplete: () => sheet.destroy(),
+    });
+    for (let i = 0; i < 5; i++) {
+      const ang = (i / 5) * Math.PI * 2 + Math.random() * 0.7;
+      const dist = 0.28 + Math.random() * 0.3;
+      const bead = w3
+        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 1.5 })
+        .setTint(0xbbf2f4)
+        .setPosition(wx, wy)
+        .setElevation(0.12)
+        .setDisplaySize(0.12, 0.12);
+      this.tweens.add({
+        targets: bead,
+        x: wx + Math.cos(ang) * dist,
+        y: wy + Math.sin(ang) * dist * 0.7, // foreshortened: the ground plane is tilted away
+        elevation: 0.02,
+        alpha: 0,
+        duration: 190 + Math.random() * 90,
+        ease: 'Quad.easeOut',
+        onComplete: () => bead.destroy(),
+      });
+    }
+  }
+
+  // A floodgate opened: drain the whole connected run of standing water it was holding back. A
+  // flood-fill from the gate's neighbours across contiguous river tiles — so the designer never
+  // lists which tiles a gate controls; the water it dams is simply the water it touches. The
+  // drained bed is walkable AND a firebreak, reshaping both the crossing and the fire map.
+  //
+  // The EMPTYING IS A WAVE: each tile's visual drains one beat after the tile nearer the gate
+  // (state still flips instantly — collision and the fill itself must not wait on theatrics).
+  // The order is the message: water flowing OUT THROUGH THE DOOR reads as plumbing; the first
+  // cut's synchronized fade read as the water glitching away.
+  private openFloodgate(doorX: number, doorY: number): void {
+    const DRAIN_WAVE_MS = 150; // per BFS ring — a 5-tile moat empties in under a second
+    const seen = new Set<string>();
+    const queue: Array<[number, number, number]> = [[doorX, doorY, 0]];
+    let drainedAny = false;
+    while (queue.length) {
+      const [x, y, depth] = queue.shift() as [number, number, number];
+      const key = `${x},${y}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const water = this.getWaterAt(x, y);
+      // Spread only through STANDING water (a bridge/ford/already-drained tile dams the drain).
+      if ((x !== doorX || y !== doorY) && (!water || !water.blocking)) continue;
+      if (water?.drain(depth * DRAIN_WAVE_MS)) drainedAny = true;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        queue.push([x + dx, y + dy, depth + 1]);
+      }
+    }
+    if (drainedAny) {
+      this.cameras.main.flash(220, 150, 180, 205);
+      this.world3d?.shake(130, 0.02);
+    }
   }
 
   // A regrowing tree may only sprout (and only counts its clock) when NOTHING is on its tile —

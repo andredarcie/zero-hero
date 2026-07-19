@@ -106,6 +106,10 @@ const FIRE_LIGHT_SLOTS = 8;
 // dark banks) so the water reads as recessed, with depth. The bridge still spans it
 // at ground level. WaterObject sets its surface just above the bed at this depth.
 export const WATER_DEPTH_TILES = 0.42;
+// Lava tiles sink into a well too, but a SHALLOWER one than the river — molten rock pools
+// in a low basin, not a deep channel. Same treatment (dropped bed + dark charred banks), less
+// deep. LavaObject sets its surface just above the bed at this depth.
+export const LAVA_DEPTH_TILES = 0.16;
 // The rustleable ground decor (low grass) — same frame the 2D board renderer tracked.
 const LOW_GRASS_TILE = 0;
 // Golden-amber firelight (~the 2D warm pool's tint). Keeping the green channel high
@@ -819,8 +823,11 @@ export class World3D {
     const waterSet = new Set<string>(
       [...getWaterTiles(), ...getBridgeSpots()].map((p) => `${p.worldX},${p.worldY}`),
     );
+    // Lava tiles sink into their own (shallower) basin, the same way water tiles do.
+    const lavaSet = new Set<string>(getLavaTiles().map((p) => `${p.worldX},${p.worldY}`));
     const groundTiles: Array<{ x: number; z: number; frame: number }> = [];
     const bedTiles: Array<{ x: number; z: number; frame: number }> = [];
+    const lavaBedTiles: Array<{ x: number; z: number; frame: number }> = [];
     const decorTiles: Array<{ x: number; z: number; frame: number }> = [];
 
     for (let cy = b.minCy - VOID_MARGIN_CHUNKS; cy <= b.maxCy + VOID_MARGIN_CHUNKS; cy++) {
@@ -831,7 +838,10 @@ export class World3D {
             const wx = cx * CHUNK_COLUMNS + col;
             const wy = cy * CHUNK_ROWS + row;
             const tile = { x: wx, z: wy, frame: chunk.ground[row][col] };
-            (waterSet.has(`${wx},${wy}`) ? bedTiles : groundTiles).push(tile);
+            const tk = `${wx},${wy}`;
+            if (waterSet.has(tk)) bedTiles.push(tile);
+            else if (lavaSet.has(tk)) lavaBedTiles.push(tile);
+            else groundTiles.push(tile);
             const upper = chunk.upper[row][col];
             if (upper === null) continue;
             if (chunk.collisions[row][col] || SOLID_UPPER_FRAMES.has(upper)) {
@@ -869,6 +879,16 @@ export class World3D {
       const bankMat = new THREE.MeshLambertMaterial({ color: 0x2a2016, side: THREE.DoubleSide });
       patchPixelMaterial(bankMat, { quantize: true });
       this.scene.add(new THREE.Mesh(buildBankGeometry(waterSet, bedTiles, WATER_DEPTH_TILES), bankMat));
+    }
+
+    // The lava basin: the same recipe, shallower — a dropped bed to close the well's bottom and
+    // dark CHARRED banks (near-black basalt) walling it where the melt meets the land.
+    if (lavaBedTiles.length > 0) {
+      const lavaBed = new THREE.Mesh(buildFlatTileGeometry(lavaBedTiles, -LAVA_DEPTH_TILES, solidSet), groundMat);
+      this.scene.add(lavaBed);
+      const lavaBankMat = new THREE.MeshLambertMaterial({ color: 0x1a1008, side: THREE.DoubleSide });
+      patchPixelMaterial(lavaBankMat, { quantize: true });
+      this.scene.add(new THREE.Mesh(buildBankGeometry(lavaSet, lavaBedTiles, LAVA_DEPTH_TILES), lavaBankMat));
     }
 
     // depthWrite MUST stay false: this flat decor sits at y=0.02, just above the
@@ -971,12 +991,43 @@ export class World3D {
     const bb = new Billboard3D(this.scene, texKey, frame, opts);
     // Standing objects (a contact blob, or an explicit request) also throw a
     // firelight cast shadow — a ground silhouette driven each frame in render().
-    if ((opts.groundShadow || opts.castGroundShadow) && !opts.flat && !opts.additive && !opts.emissive) {
+    // `castGroundShadow: false` opts OUT even with a blob: a FLOATING part (the robotic arm's
+    // claw) keeps its contact blob, but the per-sprite silhouette assumes the caster STANDS at
+    // its tile — for a part in the air the streak sprouts from the wrong place, and the owner
+    // draws a projected silhouette of its own (see groundCastAt).
+    if (
+      (opts.groundShadow || opts.castGroundShadow) && opts.castGroundShadow !== false
+      && !opts.flat && !opts.additive && !opts.emissive
+    ) {
       const mesh = makeCastMesh();
       this.scene.add(mesh);
       this.castCasters.push({ bb, mesh });
     }
     return bb;
+  }
+
+  /**
+   * The ground-shadow projection at (x, z), for objects that must cast their OWN silhouette
+   * (an articulated machine whose parts float between joints — no sprite stands at any tile,
+   * so the per-billboard cast is unusable). Returns the same stylization every standing prop
+   * uses — nearest lit flame with the moon handoff at the pool's edge (castTransform /
+   * handoffCast) — reduced to what a projector needs: the ground DIRECTION the shadow runs
+   * along, how far one tile of height lands along it (`unitLen`), and the darkness. A world
+   * point at elevation e therefore shadows at `plan(P) + dir · e · unitLen` — which is exactly
+   * where the standing sprites' stretched silhouettes put their pixels, so a projected chain
+   * GROWS OUT of its base's own cast shadow instead of contradicting it.
+   */
+  public groundCastAt(x: number, z: number): { dirX: number; dirZ: number; unitLen: number; alpha: number } | null {
+    const radius = Math.max(0.5, this.params.castShadowRadius);
+    // Same rule as the actors: standing on a lit fire tile has no stable heading.
+    const fire = this.onLitFireTile(x, z) ? null : this.nearestLitFire(x, z);
+    const fireCast = fire
+      ? castTransform(x, z, 1, fire.worldX, fire.worldY, fire.level, radius, this.params.castShadowAlpha)
+      : null;
+    const cast = handoffCast(fireCast, this.moonCastRotY, this.params.moonShadowLength, this.params.moonShadowAlpha);
+    if (!cast) return null;
+    // The heading is stored as a quad rotation (head along -Z); the ground vector is its image.
+    return { dirX: -Math.sin(cast.rotY), dirZ: -Math.cos(cast.rotY), unitLen: cast.length, alpha: cast.alpha };
   }
 
   /**
@@ -1339,6 +1390,23 @@ export class World3D {
   }
 
   /**
+   * True when a caster is standing ON a lit fire tile (now possible: the hero walks lava with the
+   * boots, or a stone-capped lava tile that keeps its glow). A directional cast shadow makes no
+   * sense there — "point away from the flame" is atan2(≈0,≈0) at the fire underfoot, and among a
+   * ring of equal fires the nearest one flips with the hero's breathing bob — both strobe the
+   * silhouette. So on a fire tile we drop the directional cast and let the contact blob be the
+   * shadow (see updateCastShadows). ≈0.6 tiles, the same radius the torch-holder guard uses.
+   */
+  private onLitFireTile(x: number, y: number): boolean {
+    for (const f of this.litFires) {
+      const dx = f.worldX - x;
+      const dy = f.worldY - y;
+      if (dx * dx + dy * dy < 0.36) return true;
+    }
+    return false;
+  }
+
+  /**
    * Lay down each caster's black silhouette pointing away from its nearest flame —
    * or along the moon's heading where no flame reaches (see CastShadow3D.ts).
    * Dynamic casters (hero/props/NPCs/enemies) each own a mesh; static solid tiles
@@ -1365,7 +1433,10 @@ export class World3D {
       }
       if (!c.bb.visible) { c.mesh.visible = false; continue; }
       const height = Math.abs(c.bb.scaleY);
-      const fire = this.nearestLitFire(c.bb.x, c.bb.y);
+      // Standing ON a lit fire tile gives no stable heading (the flame is underfoot, and a ring of
+      // equal fires flips which is "nearest" with every bob) — so drop the directional cast there
+      // and let the contact blob carry the shadow. Otherwise: point away from the nearest flame.
+      const fire = this.onLitFireTile(c.bb.x, c.bb.y) ? null : this.nearestLitFire(c.bb.x, c.bb.y);
       const fireCast = fire
         ? castTransform(c.bb.x, c.bb.y, height, fire.worldX, fire.worldY, fire.level, radius, alpha)
         : null;

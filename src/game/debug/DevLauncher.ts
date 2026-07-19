@@ -24,8 +24,9 @@ const ENTRIES: Entry[] = [
   { group: 'Jogo', label: 'Jogar o jogo', hint: 'Do começo: idioma, título e intro', url: '/' },
   { group: 'Jogo', label: 'Jogar pulando a intro', hint: 'Cai direto no mundo (?play)', url: '/?play' },
   { group: 'Jogo', label: 'Survivors', hint: 'Modo Vampire-Survivors (?survivors)', url: '/?survivors' },
-  { group: 'Laboratório de puzzles', label: 'Jogar o laboratório', hint: 'Joga lab.json direto', url: '/lab?play' },
-  { group: 'Laboratório de puzzles', label: 'Abrir o laboratório', hint: 'Editor do lab — monte o puzzle e [P] testa', url: '/lab' },
+  { group: 'Laboratório de puzzles', label: 'Jogar o level 1', hint: 'Joga levels/level-1.json direto', url: '/lab?play' },
+  { group: 'Laboratório de puzzles', label: 'Editar o level 1', hint: 'Editor do lab — monte o puzzle e [P] testa', url: '/lab' },
+  { group: 'Laboratório de puzzles', label: 'Editar o level 2', hint: 'Editor do lab apontado no level 2', url: '/lab?level=2' },
   { group: 'Editor', label: 'Abrir o editor do mundo', hint: 'Edita o mundo real (world.json)', url: '/editor' },
 ];
 

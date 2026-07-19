@@ -97,9 +97,22 @@ export default {
 }
 ```
 
+## O poster do arsenal (marketing)
+
+`node spritefactory/poster.mjs` → `out/poster-itens.png`: a folha com todos os itens do jogo,
+composta pixel a pixel com a **arte real** (os mesmos PNGs que o jogo carrega) e a paleta do jogo.
+Não é mockup — mudou um sprite em `public/assets`, roda de novo e o poster acompanha. Um item novo
+= uma linha em `ITEMS`.
+
+Duas decisões que valem para qualquer peça futura: os ícones levam o **halo roxo dos pickups**
+(`ItemPickup.OUTLINE_COLOR`), porque metade da arte é navy e navy sobre a noite navy não existe —
+foi assim que o jogo já resolveu isso no chão; e o texto é a fonte pixel da casa (`lib/pixelfont.mjs`,
+5×7), em caixa alta sem acento, que é a voz do próprio jogo nos rótulos do mundo.
+
 ## Arquivos
 
 - `factory.mjs` — CLI (`build` / `check` / `dump` / `palette` / `install`)
+- `poster.mjs` — o poster do arsenal (acima); `lib/pixelfont.mjs` — a fonte 5×7
 - `extract-palette.mjs` — regenera paleta e auditoria a partir de `public/assets`
 - `lib/png.mjs` — PNG decode/encode sem dependências
 - `lib/palette.mjs` — ramps curadas + nearest-colour ("você quis dizer")

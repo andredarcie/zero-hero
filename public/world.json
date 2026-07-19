@@ -33648,6 +33648,11 @@
       "type": "dryBush",
       "worldX": 63,
       "worldY": 95
+    },
+    {
+      "type": "bombSpot",
+      "worldX": 52,
+      "worldY": 62
     }
   ],
   "dialogs": {

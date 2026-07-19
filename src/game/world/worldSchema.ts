@@ -16,6 +16,9 @@ export type WorldMeta = {
   tileSize: number;
   tilesetKey: string;
   playerStart: { worldX: number; worldY: number };
+  // A puzzle world (the /levels files) — the undead siege is suppressed for it, the way it
+  // already is in the lab. Absent/false on the real overworld.
+  puzzle?: boolean;
   exportedAt: string;
 };
 
@@ -45,12 +48,39 @@ export type WorldChunk = {
 // the pickaxe; `tallGrass` blocks until cut with the scythe (or burned); `lava` blocks
 // unless the hero wears the lava boots; `water` (a river tile) blocks — a bridge can be built
 // over it ONLY where a `bridgeSpot` marker is placed (2 wood sticks / a felled tree); `dryShrub`
-// is a small dead bush the axe clears (no drop, no regrow) — a pure physical barrier.
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot';
+// is a small dead bush the axe clears (no drop, no regrow) — a pure physical barrier; `bombSpot`
+// is the walkable mark where a carried bomb plants itself when the hero steps on it (the game is
+// walk-only — no "use item" button — so placing is a step like collecting is); `plantSpot` is a
+// small dug hole: step on it carrying SEEDS (the scythe's product) to plant — a mound covers the
+// hole, a full bucket waters it, and real tall grass sprouts after a while; consume that grass
+// (scythe → new seeds, or fire) and the hole reopens. The game's renewable, placeable fuel.
+// `inserter`: the robotic arm. It takes whatever item is lying on the tile behind it and puts it
+// on the tile in front — the only thing in the game that moves an item without the hero carrying
+// it, which is why it can cross a barrier the hero cannot.
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter';
+
+// Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
+// sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.
+export type PropDir = 0 | 1 | 2 | 3;
 // `lit` only applies to campfires: an optional override forcing a fire to start already lit.
 // The runtime does not depend on it — the campfire nearest the player start is always the lit
 // "home" fire — so it survives being dropped by editor saves (which re-emit only type/x/y).
-export type WorldProp = { type: PropKind; worldX: number; worldY: number; lit?: boolean };
+// `floodgate` only applies to a `lockedDoor`: opening it (with a key) DRAINS the run of water it
+// holds back, opening a path AND laying a firebreak. Like `lit`, an editor save drops the flag,
+// so floodgate doors are authored in gen-levels, not built in the editor.
+// `dir` only applies to an `inserter`, and unlike `lit`/`floodgate` above it is NOT droppable.
+// Those two are authored in gen-levels and the runtime can live without them; a rotation is
+// placed by hand in the editor and IS the prop's behaviour — which tile it takes from and which
+// it puts to. So the editor store had to learn to carry `dir` through place/erase/undo, instead
+// of re-emitting bare type/x/y the way it does for every other prop.
+export type WorldProp = {
+  type: PropKind;
+  worldX: number;
+  worldY: number;
+  lit?: boolean;
+  floodgate?: boolean;
+  dir?: PropDir;
+};
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };
 

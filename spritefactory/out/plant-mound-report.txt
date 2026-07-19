@@ -1,0 +1,5 @@
+plant-mound: 1 frame(s) — 0 fail, 2 warn
+  [warn] near-duplicate: #452939 and #3e2533 differ by d=10.0 — invisible at 1x, merge them
+  [info] bbox: content 12x7 at (2,7), coverage 23%
+  [warn] value-range: dominant material (nightsoil) spans only 5 luma — reads flat ("chapado"); reach for the top of the nightsoil ramp and shade in clusters (README: boas práticas de forma)
+  frame 0: #63452c×21 #452939×17 #3e2533×12 #815938×6 #f1cc36×2

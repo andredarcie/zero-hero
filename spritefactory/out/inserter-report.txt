@@ -1,0 +1,9 @@
+inserter: 4 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 12x10 at (2,4), coverage 32%
+  [info] bbox: frame 1: content 12x10 at (2,4), coverage 32%
+  [info] bbox: frame 2: content 12x10 at (2,4), coverage 32%
+  [info] bbox: frame 3: content 12x10 at (2,4), coverage 32%
+  frame 0: #989aa7×26 #7c7e8b×20 #5d6165×19 #141d38×12 #1d2b53×4 #f1cc36×2
+  frame 1: #989aa7×26 #7c7e8b×20 #5d6165×19 #141d38×12 #1d2b53×4 #f1cc36×2
+  frame 2: #989aa7×28 #5d6165×19 #7c7e8b×18 #141d38×12 #1d2b53×4 #f1cc36×2
+  frame 3: #989aa7×26 #7c7e8b×20 #5d6165×19 #141d38×12 #1d2b53×4 #f1cc36×2

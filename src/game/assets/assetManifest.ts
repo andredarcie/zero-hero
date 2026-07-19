@@ -35,6 +35,20 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameWidth: 7,
     frameHeight: 7,
   },
+  // O braco robotico entra como SHEET (e nao como imagem solta) porque o editor precisa poder
+  // desenhar uma orientacao especifica: a paleta e o tabuleiro mostram o frame da direcao.
+  {
+    key: ASSET_KEYS.inserter,
+    path: '/assets/environment/props/inserter.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    key: ASSET_KEYS.inserterHand,
+    path: '/assets/environment/props/inserter_hand.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
   {
     key: ASSET_KEYS.swordItem,
     path: '/assets/items/equipment/sword.png',
@@ -150,6 +164,9 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.cuttingGrass1,  path: '/assets/environment/props/cuting_grass1.png' },
   { key: ASSET_KEYS.cuttingGrass2,  path: '/assets/environment/props/cuting_grass2.png' },
   { key: ASSET_KEYS.cuttingGrass3,  path: '/assets/environment/props/cuting_grass3.png' },
+  { key: ASSET_KEYS.seedsItem,      path: '/assets/items/collectibles/seeds.png' },
+  { key: ASSET_KEYS.plantHole,      path: '/assets/environment/props/plant_hole.png' },
+  { key: ASSET_KEYS.plantMound,     path: '/assets/environment/props/plant_mound.png' },
   { key: ASSET_KEYS.cutGrass,       path: '/assets/environment/props/cut_grass.png' },
   { key: ASSET_KEYS.cutGrassWind0,  path: '/assets/environment/props/cut_grass_wind0.png' },
   { key: ASSET_KEYS.cutGrassWind1,  path: '/assets/environment/props/cut_grass_wind1.png' },

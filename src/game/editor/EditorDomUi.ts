@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS, SOLID_UPPER_FRAMES } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
-import type { PropKind, WorldDialog } from '@/game/world/worldSchema';
+import type { PropDir, PropKind, WorldDialog } from '@/game/world/worldSchema';
 
 // The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
 // world viewport, this module renders everything else (tools, palettes, minimap, modals).
@@ -36,6 +36,10 @@ export type UiState = {
   showGrid: boolean;
   showCollisions: boolean;
   showEntities: boolean;
+  // A direcao com que o proximo prop direcional sera colocado (hoje so o braco robotico).
+  // Vive no estado da UI, e nao na selecao da paleta, porque e uma preferencia do PINCEL —
+  // igual ao tamanho do brush: escolhe-se uma vez e vale pras proximas colocadas.
+  propDir: PropDir;
   // Chunk view: camera locked and fitted to one chunk, edits confined to it.
   viewMode: ViewMode;
   chunkX: number;
@@ -94,6 +98,8 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
   { type: 'wood', label: 'Graveto', key: ASSET_KEYS.woodIcon },
   { type: 'stone', label: 'Pedra', key: ASSET_KEYS.rock },
+  { type: 'seeds', label: 'Sementes', key: ASSET_KEYS.seedsItem },
+  { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
 ];
 
 const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [
@@ -107,7 +113,21 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'lava', label: 'Lava', key: ASSET_KEYS.lavaFloor },
   { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },
   { type: 'bridgeSpot', label: 'Ponto de Ponte', key: ASSET_KEYS.bridge },
+  { type: 'moonflower', label: 'Flor da Lua', key: 'moonflower-bloom' }, // arte gerada no boot
+  { type: 'bombSpot', label: 'Marca de Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
+  { type: 'plantSpot', label: 'Buraco de Plantio', key: ASSET_KEYS.plantHole, frame: 0 },
+  { type: 'inserter', label: 'Braco Robotico (G gira)', key: ASSET_KEYS.inserter, frame: 1 },
 ];
+
+// Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
+// que o editor faz e "esta peca gira?" — e quando existir a segunda peca giratoria, ela entra
+// aqui e ganha o G de graca.
+const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter']);
+
+export const isDirectionalProp = (type: PropKind): boolean => DIRECTIONAL_PROPS.has(type);
+
+/** O nome da direcao, pro editor poder dizer pra onde a peca esta virada. */
+export const PROP_DIR_LABEL: Record<PropDir, string> = { 0: 'Norte', 1: 'Leste', 2: 'Sul', 3: 'Oeste' };
 
 // The tiles palette used to be an anonymous grid of "Tile 23" cells, so a whole cemetery sitting
 // in the bottom rows of forest_tile_set.png was invisible to whoever was building the map. Tiles
@@ -979,6 +999,13 @@ export class EditorDomUi {
     const toolByKey: Record<string, ToolId> = { b: 'brush', e: 'eraser', r: 'rect', f: 'fill', i: 'picker', c: 'collision', s: 'spawn' };
     if (toolByKey[key]) {
       this.state.tool = toolByKey[key];
+      this.changed();
+      return;
+    }
+    // G de GIRAR. Nao e R (o Factorio usaria R) porque aqui R ja e a ferramenta retangulo, e
+    // roubar um atalho de ferramenta pra girar um unico prop seria um mau negocio.
+    if (key === 'g' && this.state.entity.list === 'props' && isDirectionalProp(this.state.entity.type)) {
+      this.state.propDir = (((this.state.propDir ?? 1) + 1) % 4) as PropDir;
       this.changed();
       return;
     }

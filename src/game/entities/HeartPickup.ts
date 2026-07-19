@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 
+import { HEART_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -16,9 +17,12 @@ export class HeartPickup {
     public readonly tileX: number,
     public readonly tileY: number,
   ) {
-    // Full-bright: a heart must read even in the dark, like every collectible.
+    // Full-bright: a heart must read even in the dark, like every collectible. GROUND layer,
+    // like every collectible too: the hero collects it by STANDING on it (see DEPTH_LAYER).
+    // The PICKUP frame — the bone-outlined one the artist drew for exactly this, the same
+    // convention key.png uses for its map key.
     this.sprite = world3d()
-      .addBillboard('heart', 0, { emissive: true })
+      .addBillboard('heart', HEART_FRAMES.pickup, { emissive: true, depthLayer: 'ground' })
       .setPosition(tileX, tileY)
       .setDisplaySize(0, 0)
       .setAlpha(0);

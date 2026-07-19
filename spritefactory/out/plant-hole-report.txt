@@ -1,0 +1,4 @@
+plant-hole: 1 frame(s) — 0 fail, 1 warn
+  [info] bbox: content 11x8 at (2,4), coverage 25%
+  [warn] contrast: every colour sits within 24 luma of the night ground — the sprite will vanish there
+  frame 0: #3e2533×18 #141d38×17 #63452c×13 #1d2b53×12 #324476×4

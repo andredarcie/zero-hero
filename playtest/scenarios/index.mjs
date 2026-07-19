@@ -15,9 +15,11 @@ import aaTruth from './aa-truth.mjs';
 import tour from './tour.mjs';
 import uiTour from './ui-tour.mjs';
 import survivorsTour from './survivors-tour.mjs';
+import agua from './agua.mjs';
 import cemetery from './cemetery.mjs';
-import labPuzzles from './lab-puzzles.mjs';
-import labStone from './lab-stone.mjs';
+import espada from './espada.mjs';
+import menuFlow from './menu-flow.mjs';
+import braco from './braco.mjs';
 
 export const scenarios = {
   smoke,
@@ -37,9 +39,11 @@ export const scenarios = {
   tour,
   'ui-tour': uiTour,
   'survivors-tour': survivorsTour,
+  agua,
   cemetery,
-  'lab-puzzles': labPuzzles,
-  'lab-stone': labStone,
+  espada,
+  'menu-flow': menuFlow,
+  braco,
 };
 
 // What `npm run playtest` runs when no scenario is named.

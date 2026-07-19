@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { ASSET_KEYS, BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
+import { BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { getStoneTexture } from '@/game/render3d/stoneTexture';
 import { getWoodTexture } from '@/game/render3d/woodTexture';
 import { FX_PUFF_TEXTURE, WATER_DEPTH_TILES, world3d, type Box3D } from '@/game/render3d/World3D';
 import { getBridgeSpots, getWaterTiles } from '@/game/world/WorldData';
@@ -42,8 +43,22 @@ const SPLASH_TINT = 0x9fb4dd; // a leg landing in the river kicks water, not saw
 // inside its own tile (the fundamental sprite rule applies to geometry too).
 const PLANK_H = 0.04;
 const PLANK_ELEV = 0.028; // centre height → top face ~0.048, a shallow step over the ground
-// The stone ford sits a touch proud of the water, and drops in from above when placed.
-const FORD_ELEV = 0.06;
+
+// ── The stone ford ───────────────────────────────────────────────────────────
+// A bridge SPANS the channel — its deck rides at ground level on legs. A ford does the
+// opposite: the stones SIT ON THE RIVERBED and break the surface. That distinction is the
+// whole reason the first cut looked wrong. Its boxes were centred at +0.04 (ground level, like
+// the planks), which — with a channel 0.42 tiles deep — left them hovering a third of a tile
+// ABOVE the water: rocks floating in mid-air over the river.
+//
+// So each part is built from where its TOP FACE should land, and grown DOWN to the bed.
+const BED_Y = -WATER_DEPTH_TILES; // the channel floor the stones rest on
+const WATER_Y = -WATER_DEPTH_TILES + 0.03; // the surface they break through
+// Tops. The slab you actually walk on sits a shallow step above the ground, like the deck's
+// planks — but the boulders must crest CLEARLY ABOVE it, or they hide behind the slab and the
+// whole ford flattens into one grey rectangle (which is exactly what the first cut did). Three
+// different heights, so the silhouette is lumpy river rock rather than a paving stone.
+const FORD_TOPS = { slab: 0.05, tall: 0.22, mid: 0.16, low: 0.1 };
 const FORD_DROP_FROM = 0.9;
 const PLANK_W = 0.98; // long axis (across the walk direction)
 const PLANK_D = 0.21; // short axis (four boards + seams fill the tile)
@@ -84,8 +99,10 @@ export class WaterObject {
   private planks: DeckPart[] = [];
   private frame: DeckPart[] = []; // 4 legs + 2 stringers, slammed in by the first deposit
   private deposited = 0;
-  private forded = false; // a stone dropped in the river — walkable, and it never burns
-  private ford?: Billboard3D;
+  private forded = false; // stones dropped in the river — walkable, and they never burn
+  private drained = false; // a floodgate opened upstream — the channel emptied, bed walkable
+  private fordParts: Array<{ box: Box3D; ox: number; oy: number; rest: number }> = [];
+  private fordFoam: Billboard3D[] = []; // the current tearing white around them
   private hintOn = false;
   private frameIndex = 0;
   private animTimer?: Phaser.Time.TimerEvent;
@@ -155,14 +172,19 @@ export class WaterObject {
     return this.forded;
   }
 
-  /** Water blocks the hero and enemies; a finished bridge — or a stone ford — is walkable. */
+  /** True once a floodgate drained this tile: the bed is exposed and walkable, and it is a firebreak. */
+  public get isDrained(): boolean {
+    return this.drained;
+  }
+
+  /** Water blocks the hero and enemies; a finished bridge, a stone ford, or a drained bed is walkable. */
   public get blocking(): boolean {
-    return !this.isBridge && !this.forded;
+    return !this.isBridge && !this.forded && !this.drained;
   }
 
   /** Whether anything can be laid here at all (a `bridgeSpot` marker was placed on this tile). */
   public get canBuild(): boolean {
-    return this.buildable && !this.isBridge && !this.forded;
+    return this.buildable && !this.isBridge && !this.forded && !this.drained;
   }
 
   public get progress(): number {
@@ -204,24 +226,115 @@ export class WaterObject {
     // The ghost deck (the "you could build here" preview) is not what got built — hide it.
     for (const part of [...this.frame, ...this.planks]) part.box.setVisible(false);
 
-    getSoundManager().playSplash();
-    // The stone drops from above and settles just proud of the water, a stepping stone.
-    this.ford = world3d()
-      .addBillboard(ASSET_KEYS.rock, 0, { groundShadow: { rx: 0.34, rz: 0.3, alpha: 0.3 } })
-      .setPosition(this.worldX, this.worldY)
-      .setDisplaySize(0.92, 0.92)
-      .setElevation(FORD_DROP_FROM);
-    this.scene.tweens.add({
-      targets: this.ford,
-      elevation: FORD_ELEV,
-      duration: 260,
-      ease: 'Quad.easeIn',
-      onComplete: () => {
-        getSoundManager().playRockSmash();
-        this.scene.cameras.main.shake(90, 0.003);
-      },
+    // REAL box geometry, like the bridge deck beside it. A camera-facing billboard here was a
+    // sticker of a rock standing upright in the river — the same "sheet of paper" the tall
+    // grass used to be. A ford is a big worn SLAB you step on, with smaller boulders wedged
+    // around it holding it in the current, each one a box with actual thickness sitting IN the
+    // sunken channel (the river bed is WATER_DEPTH_TILES below the ground plane).
+    const w3 = world3d();
+    // Each stone is grown DOWN from the height its crown should reach to the riverbed, so it
+    // stands IN the channel rather than hovering over it. Offsets are deliberately NOT
+    // symmetric: a ford is rubble that fell where it fell, and a tidy cross of stones would
+    // read as masonry.
+    const stand = (
+      kind: 'slab' | 'boulder',
+      sizeX: number,
+      sizeZ: number,
+      top: number,
+      ox: number,
+      oy: number,
+    ): { box: Box3D; ox: number; oy: number; rest: number } => {
+      const height = top - BED_Y;
+      const box = w3.addBox(sizeX, height, sizeZ, getStoneTexture(kind));
+      return { box, ox, oy, rest: BED_Y + height / 2 }; // elevation is the box's CENTRE
+    };
+
+    // The slab is kept well INSIDE the tile so dark water still shows at the corners — a stone
+    // that fills its square edge to edge reads as a paved tile, not as a rock in a river.
+    this.fordParts = [
+      stand('slab', 0.6, 0.52, FORD_TOPS.slab, 0.0, 0.04), // the face you step on
+      stand('boulder', 0.32, 0.28, FORD_TOPS.tall, -0.31, -0.2),
+      stand('boulder', 0.26, 0.24, FORD_TOPS.mid, 0.33, 0.18),
+      stand('boulder', 0.2, 0.18, FORD_TOPS.low, 0.26, -0.3),
+    ];
+
+    // The current breaking on the stones. This is the detail that actually sells a ford: a rock
+    // sitting in still blackness reads as a rock sitting on a floor, but water piling up and
+    // tearing white around its edges reads as a river. Little foam puffs around the rim, each
+    // breathing out of phase with the others so the seam never pulses in lockstep.
+    for (let i = 0; i < 6; i++) {
+      const ang = (i / 6) * Math.PI * 2 + 0.4;
+      const foam = world3d()
+        .addBillboard(FX_PUFF_TEXTURE, 0, { flat: true, fog: false, depthWrite: false, additive: true })
+        .setTint(0xbcd6e2)
+        .setPosition(this.worldX + Math.cos(ang) * 0.42, this.worldY + Math.sin(ang) * 0.36)
+        .setElevation(WATER_Y + 0.012)
+        .setDisplaySize(0.34, 0.3)
+        .setAlpha(0);
+      this.fordFoam.push(foam);
+      this.scene.tweens.add({
+        targets: foam,
+        alpha: { from: 0.1, to: 0.3 },
+        duration: 900 + i * 130,
+        delay: 500 + i * 90, // wait for the stones to land before the water reacts to them
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    // The slab lands first and hardest; the boulders tumble in after it, a beat apart.
+    this.fordParts.forEach((part, i) => {
+      part.box
+        .setPosition(this.worldX + part.ox, this.worldY + part.oy)
+        .setElevation(part.rest + FORD_DROP_FROM);
+      this.scene.tweens.add({
+        targets: part.box,
+        elevation: part.rest,
+        duration: 220,
+        delay: i * 110,
+        ease: 'Quad.easeIn',
+        onComplete: () => {
+          getSoundManager().playSplash();
+          this.spawnFordSpray(this.worldX + part.ox, this.worldY + part.oy, i === 0);
+          if (i === 0) {
+            getSoundManager().playRockSmash();
+            this.scene.cameras.main.shake(110, 0.004);
+          }
+        },
+      });
     });
+
     return true;
+  }
+
+  /**
+   * The water's answer to a rock: a ring of white spray thrown up where it broke the surface.
+   * Flat, fogless puffs that expand and die — the same FX family the carpentry's sawdust uses,
+   * tinted to river foam instead of pine.
+   */
+  private spawnFordSpray(x: number, y: number, big: boolean): void {
+    const count = big ? 8 : 4;
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2 + Math.random() * 0.6;
+      const reach = (big ? 0.42 : 0.26) * (0.6 + Math.random() * 0.6);
+      const drop = world3d()
+        .addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 })
+        .setTint(0xdfeef5) // river foam, not sawdust
+        .setPosition(x, y)
+        .setElevation(WATER_Y) // thrown up FROM the surface the rock just punched through
+        .setDisplaySize(0.12, 0.12);
+      this.scene.tweens.add({
+        targets: drop,
+        x: x + Math.cos(ang) * reach,
+        y: y + Math.sin(ang) * reach * 0.5, // the ground plane is foreshortened
+        elevation: WATER_Y + (big ? 0.34 : 0.2),
+        alpha: 0,
+        duration: 340 + Math.random() * 180,
+        ease: 'Quad.easeOut',
+        onComplete: () => drop.destroy(),
+      });
+    }
   }
 
   /** Finish the bridge in one go — a tree felled across the river ("TIMBER!") drops for free.
@@ -238,6 +351,71 @@ export class WaterObject {
       part.box.setElevation(part.restElev).setAlpha(1);
     }
     this.pips.setVisible(false);
+  }
+
+  /**
+   * A floodgate opened upstream: the water drains out of this tile and the bed is left bare. The
+   * tile becomes permanently walkable — a new path — and, being dry ground now, a FIREBREAK (burn()
+   * already refuses anything that is not a standing bridge). One-way, like the ford. Returns true
+   * only if standing water actually drained here (a bridged/forded/already-drained tile is a no-op).
+   *
+   * `delayMs` is this tile's beat in the emptying WAVE (openFloodgate passes BFS-depth × beat):
+   * the state flips NOW — the flood-fill and collision must not care about theatrics — but the
+   * water is SEEN flowing out through the gate, tile after tile. The first cut faded every tile
+   * at once, silently: players read that as the water glitching away ("a agua sumiu do nada"),
+   * because nothing said drain. Motion order is what says it.
+   */
+  public drain(delayMs = 0): boolean {
+    if (this.drained || this.isBridge || this.forded) return false;
+    this.drained = true;
+    this.pips.setVisible(false);
+    if (delayMs <= 0) this.playDrainFx();
+    else this.scene.time.delayedCall(delayMs, () => this.playDrainFx());
+    return true;
+  }
+
+  // The tile visibly EMPTIES: the surface sinks under the bed while it fades (draining, not
+  // vanishing), a ring of foam gasps out with it, and each tile gurgles as its turn comes.
+  private playDrainFx(): void {
+    if (this.dead) return;
+    this.animTimer?.destroy();
+    this.animTimer = undefined;
+    // The ghost deck preview is gone for good — destroy it so render() stops re-showing it.
+    for (const part of [...this.frame, ...this.planks]) {
+      this.scene.tweens.killTweensOf(part.box);
+      part.box.destroy();
+    }
+    this.planks = [];
+    this.frame = [];
+    getSoundManager().playSplash();
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: 0,
+      elevation: -0.1, // additive on the flat quad: dips the surface below the bed plane
+      duration: 700,
+      ease: 'Quad.easeIn',
+      onComplete: () => this.sprite.setVisible(false),
+    });
+    // The last of the current tearing white as the tile empties — the ford's foam language.
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2 + 0.7;
+      const foam = world3d()
+        .addBillboard(FX_PUFF_TEXTURE, 0, { flat: true, fog: false, depthWrite: false, additive: true })
+        .setTint(SPLASH_TINT)
+        .setPosition(this.worldX + Math.cos(ang) * 0.3, this.worldY + Math.sin(ang) * 0.26)
+        .setElevation(WATER_Y + 0.02)
+        .setDisplaySize(0.4, 0.34)
+        .setAlpha(0.85);
+      this.scene.tweens.add({
+        targets: foam,
+        alpha: 0,
+        elevation: BED_Y + 0.02,
+        duration: 620,
+        ease: 'Quad.easeIn',
+        onComplete: () => foam.destroy(),
+      });
+    }
   }
 
   /**
@@ -418,7 +596,7 @@ export class WaterObject {
 
   /** GameScene flags this each frame: true when the hero stands next to a buildable un-bridged tile. */
   public setBuildHint(on: boolean): void {
-    this.hintOn = on && this.buildable && !this.isBridge;
+    this.hintOn = on && this.buildable && !this.isBridge && !this.drained;
   }
 
   public render(tileSize: number, camera: WorldCamera): void {
@@ -470,11 +648,16 @@ export class WaterObject {
     }
     this.planks = [];
     this.frame = [];
-    if (this.ford) {
-      this.scene.tweens.killTweensOf(this.ford);
-      this.ford.destroy();
-      this.ford = undefined;
+    for (const part of this.fordParts) {
+      this.scene.tweens.killTweensOf(part.box);
+      part.box.destroy();
     }
+    this.fordParts = [];
+    for (const foam of this.fordFoam) {
+      this.scene.tweens.killTweensOf(foam);
+      foam.destroy();
+    }
+    this.fordFoam = [];
     this.sprite.destroy();
     this.pips.destroy();
   }

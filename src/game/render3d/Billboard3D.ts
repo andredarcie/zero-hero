@@ -23,7 +23,42 @@ import { getTexture3D } from './textures3d';
 // billboards anchor at the FOOT (bottom-centre sits on the ground at its tile);
 // flat quads lie on the ground slightly above it.
 
+/**
+ * DEPTH LAYERS — the fix for two sprites that share a tile.
+ *
+ * Every upright billboard is a camera-facing quad. Two of them at the same tile are therefore
+ * EXACTLY COPLANAR, and a depth test between coplanar surfaces has no winner: the result comes
+ * down to floating-point noise, so it flips per pixel and per frame and the pair strobes — the
+ * hero standing on an item, and the item blinking out through his boots. That is not a bug in
+ * any one prop; it is what coplanar geometry DOES, which is why it kept coming back each time
+ * it was patched prop by prop with a hand-placed nudge.
+ *
+ * So the order is DECLARED instead of left to the GPU. Anything the hero can stand ON sits in
+ * the `ground` layer, a hair further from the camera; actors keep the tile's true depth. The
+ * offset rides the view axis (worldY is the 3D z, and the camera sits at +z looking toward -z —
+ * see World3D.updateCamera — so subtracting worldY pushes a sprite AWAY), and it is orders of
+ * magnitude above depth-buffer precision, so the winner is the same on every frame and every
+ * GPU. It is the same trick the pickup outline has always used, promoted to a rule.
+ *
+ * The nudge is along the CAMERA axis, so on screen it costs a pixel or two of vertical shift —
+ * the item reads as sitting a touch behind the hero's feet, which is exactly the truth.
+ */
+export const DEPTH_LAYER = {
+  /** Owns its tile: hero, enemies, NPCs, trees, rocks, standing grass. The default. */
+  actor: 0,
+  /** Walkable clutter: ground items, spot marks, planted bombs, cut stubble. */
+  ground: 0.06,
+} as const;
+export type DepthLayerName = keyof typeof DEPTH_LAYER;
+
 export interface Billboard3DOptions {
+  /**
+   * Which depth layer this sprite belongs to (default `actor`). Pass `ground` for ANYTHING the
+   * hero can stand on top of — see DEPTH_LAYER above; without it the two quads z-fight and
+   * strobe. Switchable at runtime (setDepthLayer) for a prop that becomes walkable, like grass
+   * mown to stubble.
+   */
+  depthLayer?: DepthLayerName;
   /** Lie flat on the ground (water, lava, item shadows) instead of standing. */
   flat?: boolean;
   /** Additive blending (fire glows, magic) — unlit, and never casts a shadow. */
@@ -98,6 +133,8 @@ export class Billboard3D {
   private tileX = 0;
   private tileY = 0;
   private elev = 0;
+  /** Tiles pushed away from the camera to keep this sprite off an actor's plane (DEPTH_LAYER). */
+  private depthBias: number;
   private w = 1;
   private h = 1;
   private baseColor = new THREE.Color(1, 1, 1);
@@ -115,6 +152,7 @@ export class Billboard3D {
   ) {
     this.flat = opts.flat ?? false;
     this.flatY = opts.flatY ?? 0.02;
+    this.depthBias = DEPTH_LAYER[opts.depthLayer ?? 'actor'];
     this.texKeyCur = texKey;
     this.frameCur = frame;
     const tex = getTexture3D(texKey, frame);
@@ -190,13 +228,16 @@ export class Billboard3D {
 
   private apply(): void {
     if (this.destroyed) return;
-    this.mesh.position.set(this.tileX, (this.flat ? this.flatY : 0) + this.elev, this.tileY);
+    // The depth bias rides the view axis (see DEPTH_LAYER): ground clutter sits a hair behind
+    // the actor plane so the two never tie in the depth test.
+    const z = this.tileY - this.depthBias;
+    this.mesh.position.set(this.tileX, (this.flat ? this.flatY : 0) + this.elev, z);
     this.mesh.scale.set(this.w, this.flat ? 1 : this.h, this.flat ? this.h : 1);
     this.mesh.visible = this.visible;
     if (this.groundShadow) {
       // Stays pinned to the foot on the ground (ignores the sprite's elevation, so
       // a bobbing/lifted sprite still throws a steady blob), scaled by its width.
-      this.groundShadow.position.set(this.tileX, this.groundShadow.position.y, this.tileY);
+      this.groundShadow.position.set(this.tileX, this.groundShadow.position.y, z);
       this.groundShadow.scale.set(this.w, 1, this.w);
       this.groundShadow.visible = this.visible;
     }
@@ -216,6 +257,17 @@ export class Billboard3D {
   public setDisplaySize(w: number, h: number): this {
     this.w = w;
     this.h = h;
+    this.apply();
+    return this;
+  }
+
+  /**
+   * Move this sprite between depth layers at runtime — for a prop that BECOMES walkable (tall
+   * grass mown to stubble): the instant the hero can share the tile, the sprite must leave the
+   * actor plane. See DEPTH_LAYER.
+   */
+  public setDepthLayer(layer: DepthLayerName): this {
+    this.depthBias = DEPTH_LAYER[layer];
     this.apply();
     return this;
   }

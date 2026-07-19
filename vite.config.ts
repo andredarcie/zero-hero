@@ -8,13 +8,14 @@ import { defineConfig, type Plugin } from 'vite';
 
 const levelsDir = fileURLToPath(new URL('./levels', import.meta.url));
 const worldJsonPath = fileURLToPath(new URL('./public/world.json', import.meta.url));
-const labJsonPath = fileURLToPath(new URL('./public/lab.json', import.meta.url));
+const levelJsonDir = fileURLToPath(new URL('./public/levels', import.meta.url));
 
-// The world API serves exactly two whitelisted files: the real overworld and the /lab
-// puzzle-laboratory sandbox. Anything else in ?file= is rejected.
-const WORLD_FILES: Record<string, string> = {
-  world: worldJsonPath,
-  lab: labJsonPath,
+// The world API serves the real overworld (`world`) and the puzzle levels (`level-N`, edited
+// via /lab). Everything else in ?file= is rejected — the resolver returns null.
+const resolveWorldFile = (fileId: string): string | null => {
+  if (fileId === 'world') return worldJsonPath;
+  const level = /^level-(\d+)$/u.exec(fileId);
+  return level ? path.join(levelJsonDir, `level-${level[1]}.json`) : null;
 };
 
 const sanitizeFileName = (fileName: string): string | null => {
@@ -109,15 +110,15 @@ const levelsApiPlugin = (): Plugin => ({
 });
 
 // Read/write the authored world files. The world editor (/editor) loads public/world.json;
-// the puzzle lab (/lab) loads public/lab.json — selected via ?file=. GET loads, PUT persists;
-// the game reads the same files as static assets. Dev-only, like the levels API above.
+// the puzzle lab (/lab) loads public/levels/level-N.json — selected via ?file=level-N. GET
+// loads, PUT persists; the game reads the same files as static assets. Dev-only.
 const worldApiPlugin = (): Plugin => ({
   name: 'world-api',
   configureServer(server) {
     server.middlewares.use('/api/world', async (req, res) => {
       const method = req.method ?? 'GET';
       const fileId = new URL(req.url ?? '/', 'http://localhost').searchParams.get('file') ?? 'world';
-      const targetPath = WORLD_FILES[fileId];
+      const targetPath = resolveWorldFile(fileId);
 
       try {
         if (!targetPath) {

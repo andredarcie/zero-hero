@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 
 import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES, NPC_VISUALS, SOLID_UPPER_FRAMES } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
-import { EditorDomUi, PANEL_WIDTH, type UiState, type ViewMode } from '@/game/editor/EditorDomUi';
+import { EditorDomUi, PANEL_WIDTH, isDirectionalProp, type UiState, type ViewMode } from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
+import { registerBucketTextures } from '@/game/render3d/bucketTexture';
+import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { GameScene } from '@/game/scenes/GameScene';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropKind } from '@/game/world/worldSchema';
@@ -26,7 +28,9 @@ const CAMERA_PAD = WORLD_TILE * 10;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 8;
 // v3: discards persisted state from before the "Inimigos" palette tab was removed.
-const UI_STATE_KEY = 'worldEditorUi.v3';
+// v4: UiState ganhou `propDir`. A chave sobe de versao junto com a FORMA do estado — um estado
+// v3 restaurado hoje viria sem propDir e o primeiro braco colocado nasceria com `dir: undefined`.
+const UI_STATE_KEY = 'worldEditorUi.v4';
 
 type CellCoord = { x: number; y: number };
 
@@ -47,6 +51,8 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   scythe: { key: ASSET_KEYS.scytheIcon },
   wood: { key: ASSET_KEYS.woodIcon },
   stone: { key: ASSET_KEYS.rock },
+  seeds: { key: ASSET_KEYS.seedsItem },
+  bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
 };
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
@@ -60,6 +66,12 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   lava: { key: ASSET_KEYS.lavaFloor },
   water: { key: ASSET_KEYS.water },
   bridgeSpot: { key: ASSET_KEYS.bridge },
+  moonflower: { key: 'moonflower-bloom' }, // generated at boot (registerMoonflowerTextures)
+  bombSpot: { key: ASSET_KEYS.bombItem, frame: 0 },
+  plantSpot: { key: ASSET_KEYS.plantHole, frame: 0 },
+  // O frame aqui e so o default da paleta: no tabuleiro, entityVisual troca pelo frame da
+  // direcao gravada, pra o editor mostrar pra onde CADA braco esta virado.
+  inserter: { key: ASSET_KEYS.inserter, frame: 1 },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -93,6 +105,7 @@ export class EditorScene extends Phaser.Scene {
     // overlay drowns the terrain at low zoom. Selecting the collision tool re-enables it.
     showCollisions: false,
     showEntities: true,
+    propDir: 1, // leste
     viewMode: 'world',
     chunkX: 0,
     chunkY: 0,
@@ -122,6 +135,10 @@ export class EditorScene extends Phaser.Scene {
   }
 
   public create(): void {
+    // The bucket + moonflower pixel art is generated at boot (into the Phaser texture manager here
+    // so the palette can show them, and the 3D registry for the live playtest).
+    registerBucketTextures(this);
+    registerMoonflowerTextures(this);
     // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
@@ -155,16 +172,18 @@ export class EditorScene extends Phaser.Scene {
 
   // ── Boot ────────────────────────────────────────────────────────────────
 
-  // The /lab route runs this same scene over the puzzle-laboratory sandbox file instead of
-  // the real overworld (see main.ts / worldApi.ts).
+  // The /lab route runs this same scene over a puzzle LEVEL file (public/levels/level-N.json)
+  // instead of the real overworld — `?level=N` picks which (default 1). See main.ts / worldApi.ts.
   private get worldFileId(): WorldFileId {
-    return this.registry.get('appMode') === 'lab' ? 'lab' : 'world';
+    if (this.registry.get('appMode') !== 'lab') return 'world';
+    const raw = new URLSearchParams(window.location.search).get('level');
+    return `level-${raw && /^\d+$/u.test(raw) ? Number(raw) : 1}`;
   }
 
-  // Editor and lab persist UI/camera separately: their worlds have different sizes, so a
-  // camera restored from the other mode would strand the view off-map.
+  // Editor and each lab level persist UI/camera separately: their worlds have different sizes,
+  // so a camera restored from another would strand the view off-map.
   private get uiStateKey(): string {
-    return this.worldFileId === 'lab' ? `${UI_STATE_KEY}.lab` : UI_STATE_KEY;
+    return this.worldFileId === 'world' ? UI_STATE_KEY : `${UI_STATE_KEY}.${this.worldFileId}`;
   }
 
   private async bootstrap(): Promise<void> {
@@ -331,6 +350,11 @@ export class EditorScene extends Phaser.Scene {
     if (entity.list === 'enemies') return ENEMY_VISUAL[entity.type] ?? { key: ASSET_KEYS.undead };
     if (entity.list === 'npcs') return NPC_VISUALS[entity.type];
     if (entity.list === 'pickups') return PICKUP_VISUAL[entity.type];
+    // Um prop com direcao desenha o frame da SUA direcao — e assim que se olha um mapa cheio de
+    // bracos e se ve, sem clicar em nada, pra que lado cada um empurra.
+    if (entity.dir !== undefined && isDirectionalProp(entity.type)) {
+      return { key: PROP_VISUAL[entity.type].key, frame: entity.dir };
+    }
     return PROP_VISUAL[entity.type];
   }
 
@@ -687,6 +711,9 @@ export class EditorScene extends Phaser.Scene {
     const sel = this.uiState.entity;
     if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
     else if (sel.list === 'pickups') store.placeEntity({ list: 'pickups', type: sel.type, worldX: x, worldY: y });
+    // Um prop que gira e colocado COM a direcao corrente; os outros seguem sem o campo, pra
+    // nao encher o JSON de `dir` em pedra e mato que nao tem pra onde olhar.
+    else if (isDirectionalProp(sel.type)) store.placeEntity({ list: 'props', type: sel.type, worldX: x, worldY: y, dir: this.uiState.propDir });
     else store.placeEntity({ list: 'props', type: sel.type, worldX: x, worldY: y });
   }
 

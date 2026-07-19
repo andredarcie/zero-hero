@@ -27,9 +27,11 @@ export class Coin {
     this.pos = { x: startWorldX, y: startWorldY, angle: 0 };
 
     // Full-bright: a coin must glint even in the dark (the 2D game punched a
-    // small light hole over every coin for the same reason).
+    // small light hole over every coin for the same reason). GROUND layer: a coin exists to be
+    // walked over — it is the tile the hero is heading for — so without a declared layer the
+    // two quads go coplanar and the coin strobes through his boots (see DEPTH_LAYER).
     this.sprite = world3d()
-      .addBillboard('coin', 0, { emissive: true })
+      .addBillboard('coin', 0, { emissive: true, depthLayer: 'ground' })
       .setPosition(startWorldX, startWorldY)
       .setDisplaySize(0, 0)
       .setAlpha(0);

@@ -76,6 +76,17 @@ const DEFS: Record<string, SheetDef> = {
   'cutting-grass-2': { url: `${A}/environment/props/cuting_grass2.png` },
   'cutting-grass-3': { url: `${A}/environment/props/cuting_grass3.png` },
   'cut-grass': { url: `${A}/environment/props/cut_grass.png` },
+  // O mato alto EM PE (spritefactory): touceira lateral p/ billboard upright, 2 frames de vento.
+  'tall-grass-up': { url: `${A}/environment/props/tall_grass_up.png`, frameW: 16, frameH: 16 },
+  // O ciclo de plantio (spritefactory): buraco cavado, monte da semente coberta, e as sementes.
+  // O braco robotico (spritefactory). O sheet da base tem 4 frames e eles NAO sao animacao:
+  // sao as 4 orientacoes (0=N 1=L 2=S 3=O). Um billboard nao tem yaw — setAngle gira no plano
+  // da camera, nao no mundo — entao "girar o prop" so pode existir como escolha de frame.
+  inserter: { url: `${A}/environment/props/inserter.png`, frameW: 16, frameH: 16 },
+  'inserter-hand': { url: `${A}/environment/props/inserter_hand.png`, frameW: 16, frameH: 16 },
+  'plant-hole': { url: `${A}/environment/props/plant_hole.png` },
+  'plant-mound': { url: `${A}/environment/props/plant_mound.png` },
+  'seeds-item': { url: `${A}/items/collectibles/seeds.png` },
   'cut-grass-wind-0': { url: `${A}/environment/props/cut_grass_wind0.png` },
   'cut-grass-wind-1': { url: `${A}/environment/props/cut_grass_wind1.png` },
   'grass-fire-0': { url: `${A}/environment/props/grass_fre_0.png` },
@@ -87,7 +98,10 @@ const DEFS: Record<string, SheetDef> = {
   'water-3': { url: `${A}/environment/terrain/water_3.png` },
   bridge: { url: `${A}/environment/terrain/bridge.png` },
   coin: { url: `${A}/items/collectibles/coin.png` },
-  heart: { url: `${A}/items/collectibles/heart.png` },
+  // heart.png e um SHEET 16x32, igual key.png: em cima o coracao liso (navy), embaixo o de mapa,
+  // com contorno claro. Sem frameW aqui, getTexture3D devolvia a folha INTEIRA e o pickup
+  // desenhava os dois coracoes espremidos num quadrado de 0.65 tile. Ver HEART_FRAMES.
+  heart: { url: `${A}/items/collectibles/heart.png`, frameW: 16, frameH: 16 },
   'wood-item': { url: `${A}/items/collectibles/wood.png` },
   // key.png: 16×32 — top frame is the held/HUD key, bottom the map pickup.
   'key-item': { url: `${A}/items/collectibles/key.png`, frameW: 16, frameH: 16 },

@@ -195,6 +195,29 @@ export class CampfireObject {
     return true;
   }
 
+  /**
+   * Douse a lit campfire back to cold, dead logs (a thrown bucket of water). The inverse of
+   * light(): stop the flame, drop the heat-light, restore the dead tint, and hand the glow mesh
+   * back to its stubborn ember. Returns true only on the transition, so the caller plays the hiss
+   * once. The `litFires` game count reads `isLit` live, so it drops on its own.
+   */
+  public extinguish(): boolean {
+    if (!this.lit) return false;
+    this.lit = false;
+
+    this.animTimer?.destroy();
+    this.animTimer = undefined;
+    this.frameIndex = 0;
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.scene.tweens.killTweensOf(this.glow);
+    this.sprite.setTexture(FIRE_TEXTURES[0]).setTint(DEAD_TINT).setAlpha(DEAD_ALPHA);
+    this.fireLight.setLit(false);
+    this.fireLight.setIntensityScale(0);
+    this.startEmber(); // cold logs, with the dead pile's pulsing ember
+
+    return true;
+  }
+
   /** Called when the player hits the campfire — brief flare-up */
   public onHit(): void {
     const flare = this.lit ? 2.0 : 1.4;

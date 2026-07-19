@@ -9,12 +9,13 @@ import { EditorScene } from '@/game/scenes/EditorScene';
 import { GameScene } from '@/game/scenes/GameScene';
 import { IntroScene } from '@/game/scenes/IntroScene';
 import { LanguageScene } from '@/game/scenes/LanguageScene';
+import { LevelSelectScene } from '@/game/scenes/LevelSelectScene';
 import { PreloadScene } from '@/game/scenes/PreloadScene';
 import { TitleScene } from '@/game/scenes/TitleScene';
 import { SurvivorsScene } from '@/game/survivors/SurvivorsScene';
 
 // 'lab' is the puzzle laboratory (/lab): the same editor + playtest pair as 'editor', but
-// loading/saving public/lab.json instead of the real overworld.
+// loading/saving a puzzle level (public/levels/level-N.json, ?level=N) instead of the overworld.
 export type AppMode = 'game' | 'editor' | 'lab';
 
 // The game canvas fills the whole window (100% of the screen). The tile size is derived from
@@ -57,5 +58,5 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   },
   // Editor mode also registers GameScene so the editor can live-playtest the world in
   // memory (EditorScene.startPlaytest) without saving or leaving the page.
-  scene: [BootScene, PreloadScene, ...(mode === 'editor' || mode === 'lab' ? [EditorScene, GameScene] : [TitleScene, LanguageScene, IntroScene, GameScene, SurvivorsScene])],
+  scene: [BootScene, PreloadScene, ...(mode === 'editor' || mode === 'lab' ? [EditorScene, GameScene] : [LanguageScene, TitleScene, LevelSelectScene, IntroScene, GameScene, SurvivorsScene])],
 });

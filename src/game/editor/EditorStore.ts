@@ -1,7 +1,7 @@
 import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
 import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
-import type { PropKind, WorldChunk, WorldData, WorldDialog } from '@/game/world/worldSchema';
+import type { PropDir, PropKind, WorldChunk, WorldData, WorldDialog } from '@/game/world/worldSchema';
 
 // Ground frame used for cells that never received paint — the same frame the runtime uses
 // for the void outside the world, so "empty" reads consistently in game and editor.
@@ -20,7 +20,10 @@ export type PlacedEntity =
   | { list: 'enemies'; type: EnemyKind; worldX: number; worldY: number }
   | { list: 'npcs'; type: NpcKind; worldX: number; worldY: number }
   | { list: 'pickups'; type: PickupKind; worldX: number; worldY: number }
-  | { list: 'props'; type: PropKind; worldX: number; worldY: number };
+  // `dir` so o braco robotico usa. Ele viaja em TODO o caminho de place/erase/undo porque, ao
+  // contrario de `lit` e `floodgate` (que a gente deixa cair de proposito num save do editor),
+  // a direcao E o comportamento da peca: perde-la nao empobrece o prop, quebra ele.
+  | { list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir };
 
 export type EntityListId = PlacedEntity['list'];
 
@@ -48,8 +51,12 @@ const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 
+// A direcao PRECISA entrar nesta comparacao. placeEntity trata "ja tem isso aqui" como um
+// no-op, e sem o `dir` girar um braco no proprio tile seria exatamente isso: o editor
+// concluiria que nada mudou e o giro nao aconteceria.
 const sameEntity = (a: PlacedEntity, b: PlacedEntity): boolean =>
-  a.list === b.list && a.type === b.type && a.worldX === b.worldX && a.worldY === b.worldY;
+  a.list === b.list && a.type === b.type && a.worldX === b.worldX && a.worldY === b.worldY
+  && (a.list !== 'props' || b.list !== 'props' || a.dir === b.dir);
 
 const buildEmptyChunk = (cx: number, cy: number): WorldChunk => ({
   cx,
@@ -250,7 +257,7 @@ export class EditorStore {
       chunk.pickups.forEach((p) => { if (p.worldX === wx && p.worldY === wy) found.push({ list: 'pickups', ...p }); });
     }
     this.world.props.forEach((p) => {
-      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY });
+      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir });
     });
     return found;
   }
@@ -262,7 +269,7 @@ export class EditorStore {
       chunk.npcs.forEach((n) => all.push({ list: 'npcs', ...n }));
       chunk.pickups.forEach((p) => all.push({ list: 'pickups', ...p }));
     });
-    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY }));
+    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir }));
     return all;
   }
 
@@ -290,7 +297,7 @@ export class EditorStore {
 
   private addEntityToWorld(entity: PlacedEntity): void {
     if (entity.list === 'props') {
-      this.world.props.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY });
+      this.world.props.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY, ...(entity.dir === undefined ? {} : { dir: entity.dir }) });
       return;
     }
     const chunk = this.chunkAt(entity.worldX, entity.worldY);

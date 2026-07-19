@@ -56,8 +56,12 @@ export class PickupField {
     p.bobPhase = Math.random() * Math.PI * 2;
 
     // O pool troca a textura do slot; o glow aditivo embaixo só existe no baú.
+    // Camada GROUND: coletar é passar POR CIMA — o herói divide o tile com a gema o tempo todo,
+    // e dois quads coplanares piscariam um através do outro (ver DEPTH_LAYER em Billboard3D).
     if (!p.sprite) {
-      p.sprite = world3d().addBillboard(visual.tex, 0, { emissive: true, castShadow: false });
+      p.sprite = world3d().addBillboard(visual.tex, 0, {
+        emissive: true, castShadow: false, depthLayer: 'ground',
+      });
     } else {
       p.sprite.setTexture(visual.tex, 0);
     }

@@ -1,0 +1,11 @@
+tall-grass-up: 5 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 10x14 at (4,1), coverage 23%
+  [info] bbox: frame 1: content 10x14 at (4,1), coverage 23%
+  [info] bbox: frame 2: content 10x14 at (4,1), coverage 23%
+  [info] bbox: frame 3: content 9x13 at (4,2), coverage 22%
+  [info] bbox: frame 4: content 8x5 at (4,10), coverage 9%
+  frame 0: #626439×34 #4d4f2c×13 #3e2533×8 #8a8d49×4
+  frame 1: #626439×31 #4d4f2c×16 #3e2533×8 #8a8d49×4
+  frame 2: #626439×33 #4d4f2c×14 #3e2533×8 #8a8d49×4
+  frame 3: #626439×31 #4d4f2c×12 #3e2533×8 #8a8d49×5
+  frame 4: #626439×8 #3e2533×8 #8a8d49×3 #4d4f2c×3

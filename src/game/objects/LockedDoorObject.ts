@@ -14,18 +14,28 @@ export class LockedDoorObject {
   private readonly scene: Phaser.Scene;
   private readonly sprite: Billboard3D;
   private open = false;
+  // A floodgate: opening it drains the water it holds back (GameScene.openFloodgate). It reads as
+  // a water gate rather than a plain door — same lock, different consequence.
+  private readonly floodgate: boolean;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, floodgate = false) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
+    this.floodgate = floodgate;
     this.sprite = world3d()
       .addBillboard('locked-door-object', 0, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.98, 0.98)
-      // Same treatment as the rocks: the door's white bars bloomed under the night
-      // ambient. Neutral so the bars stay white — only the glow goes, not the colour.
-      .setTint(0xcfcfcf);
+      // Same treatment as the rocks: the door's white bars bloomed under the night ambient.
+      // Neutral so the bars stay white — only the glow goes. A floodgate is tinted cool blue to
+      // telegraph that it holds water, not just a room.
+      .setTint(floodgate ? 0x7fb0d8 : 0xcfcfcf);
+  }
+
+  /** True if opening this door should drain the water it dams (a floodgate, not a plain door). */
+  public get isFloodgate(): boolean {
+    return this.floodgate;
   }
 
   /** The tile is impassable while the door is shut. */

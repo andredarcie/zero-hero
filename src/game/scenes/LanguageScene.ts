@@ -4,10 +4,14 @@ import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { LOCALES, getLocale, setLocale, t, type Locale } from '@/game/i18n/i18n';
 
-// Language picker, shown right after the title (Title → Language → Intro → Game). Built to work
+// Language picker — the FIRST screen of the menu flow (Language → Title → aventura|levels). It
+// comes before the title so the title's buttons render in the chosen language. Built to work
 // equally on PC and touch: two large panels the player can drive with arrows + Enter, the number
 // keys 1/2, or a hover/click/tap. The layout is responsive — panels sit side by side in landscape
 // and stack in portrait (phones) — and re-lays out on resize/orientation change.
+//
+// Being first, it also owns audio bring-up: the AudioContext stays locked until a user gesture,
+// so the menu music + drips are queued here and bloom on the first key/tap (which unlocks them).
 const ACCENT = 0xf5d97a;
 const PANEL_FILL = 0x14141f;
 const PANEL_FILL_SEL = 0x22222f;
@@ -40,6 +44,11 @@ export class LanguageScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor('#08080d');
     this.cameras.main.fadeIn(400, 0, 0, 0);
+
+    // Decode the SFX + loops and queue the menu ambience; it's silent until the first gesture
+    // lifts the autoplay lock (unlockAudio, below).
+    getSoundManager().preload();
+    getSoundManager().startMusic('menu', 1600);
 
     this.heading = this.add
       .text(0, 0, t('language.heading'), {
@@ -80,7 +89,7 @@ export class LanguageScene extends Phaser.Scene {
       // Hover highlights (desktop); a click/tap picks that language and moves on (touch-friendly:
       // one gesture, no separate confirm step).
       bg.on(Phaser.Input.Events.POINTER_OVER, () => this.setSelected(i));
-      bg.on(Phaser.Input.Events.POINTER_DOWN, () => this.confirm(i));
+      bg.on(Phaser.Input.Events.POINTER_DOWN, () => { this.unlockAudio(); this.confirm(i); });
 
       this.panels.push({ locale, bg, label });
     });
@@ -134,6 +143,11 @@ export class LanguageScene extends Phaser.Scene {
     panel.label.setPosition(x, y);
   }
 
+  // First gesture on this (the first) screen lifts the autoplay lock so the menu bed sounds.
+  private unlockAudio(): void {
+    getSoundManager().unlock();
+  }
+
   private setSelected(index: number): void {
     if (this.confirming || index === this.selected) return;
     this.selected = index;
@@ -157,6 +171,7 @@ export class LanguageScene extends Phaser.Scene {
 
   private readonly handleKey = (event: KeyboardEvent): void => {
     if (this.confirming) return;
+    this.unlockAudio();
     switch (event.key) {
       case 'ArrowLeft':
       case 'ArrowUp':
@@ -191,7 +206,7 @@ export class LanguageScene extends Phaser.Scene {
 
     this.cameras.main.fadeOut(350, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.start('intro');
+      this.scene.start('title');
     });
   }
 
