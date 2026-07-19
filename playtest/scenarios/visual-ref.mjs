@@ -44,7 +44,18 @@ const SETTLE = `async (tileX, tileY, steps) => {
   const w3 = s.world3d;
   g.loop.stop();
 
+  // VISUAL_HD3D='{"castWaterClamp":0,…}' pins hd3d knobs for the shots — how a change that
+  // is part refactor, part deliberate visual feature proves the refactor half alone is
+  // pixel-identical (knobs off), and then shows the feature half isolated (knobs on).
+  if (window.__hd3dOverrides) Object.assign(w3.params, window.__hd3dOverrides);
+
   s.enemyManager?.despawnAll();          // enemies wander; they are not what we are comparing
+  // The undead siege keeps SUMMONING during the stepped window (the hero idles in the
+  // dark), and a skull's birth telegraph is drawn with the boot-time crack texture — art
+  // that is GENERATED from Math.random at boot, so any build that shifts the boot draw
+  // count redraws the crack differently and the diff blames the renderer for a fissure
+  // shape. Same class of noise as the wandering enemies: out of the reference.
+  s.spawnDirector = undefined;
   s.playerWorld = { worldX: tileX, worldY: tileY };
   s.movementController.syncPlayerToWorld(tileX, tileY, s.tileSize);
 
@@ -74,9 +85,13 @@ const SETTLE = `async (tileX, tileY, steps) => {
   }
 
   // The hero's idle breathing is a Phaser tween, and its PHASE is set by the wall-clock moment it
-  // happened to start during boot — so the two runs caught him mid-breath a pixel apart. Drop it;
-  // the stepped clock will start it again at the same step on both sides.
+  // happened to start during boot — so the two runs caught him mid-breath a pixel apart. Dropping
+  // it and letting the stepped clock restart it was NOT enough: the restart path still landed on
+  // a different phase between runs (two shots of the SAME build differed by ~0.3% of the frame,
+  // all of it around the hero — the state dump's scaleX/scaleY caught it). So for the reference
+  // shots the breathing is stubbed out entirely: the hero holds scale 1, deterministically.
   s.stopBreathing();
+  s.startBreathing = () => {};
   s.hero.scaleX = 1;
   s.hero.scaleY = 1;
   s.lastStepTime = 0;
@@ -155,6 +170,9 @@ export default {
     await page.addInitScript(SEED_SCRIPT);
     if (process.env.VISUAL_ISOLATE === 'shadows') {
       await page.addInitScript('window.__isolateShadows = true;');
+    }
+    if (process.env.VISUAL_HD3D) {
+      await page.addInitScript(`window.__hd3dOverrides = ${process.env.VISUAL_HD3D};`);
     }
     await driver.open('/?play');
     await driver.settle(1200);
