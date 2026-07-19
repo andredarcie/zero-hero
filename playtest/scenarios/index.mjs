@@ -22,6 +22,8 @@ import menuFlow from './menu-flow.mjs';
 import braco from './braco.mjs';
 import machado from './machado.mjs';
 import sombras from './sombras.mjs';
+import caixaPlaca from './caixa-placa.mjs';
+import rodaAgua from './roda-agua.mjs';
 
 export const scenarios = {
   smoke,
@@ -48,6 +50,8 @@ export const scenarios = {
   braco,
   machado,
   sombras,
+  'caixa-placa': caixaPlaca,
+  'roda-agua': rodaAgua,
 };
 
 // What `npm run playtest` runs when no scenario is named.

@@ -168,6 +168,9 @@ export const ASSET_KEYS = {
   // O braco robotico (spritefactory): 4 frames = 4 orientacoes, e a garra que viaja em 2.
   inserter: 'inserter',
   inserterHand: 'inserter-hand',
+  woodenCrate: 'wooden-crate',
+  pressurePlate: 'pressure-plate',
+  waterWheel: 'water-wheel',
   cutGrass: 'cut-grass',
   cutGrassWind0: 'cut-grass-wind0',
   cutGrassWind1: 'cut-grass-wind1',
@@ -186,6 +189,13 @@ export const ASSET_KEYS = {
   tinyFire1: 'tiny-fire1',
   tinyFire2: 'tiny-fire2',
 } as const;
+
+// Sprite Factory sheet: placa solta em cima, pressionada embaixo.
+export const PRESSURE_PLATE_FRAMES = { up: 0, down: 1 } as const;
+
+// Sprite Factory: oito orientacoes do rotor, primeiro apagadas e depois com o dinamo ativo.
+// O banco duplicado deixa a roda parar em qualquer orientacao sem a lampada teleportar o rotor.
+export const WATER_WHEEL_FRAMES = { phases: 8, off: 0, powered: 8 } as const;
 
 // The skull's rise-from-the-ground animation, in playback order (see UndeadEnemy).
 export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [

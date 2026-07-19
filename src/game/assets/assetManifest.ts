@@ -50,6 +50,20 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: placa solta (0) e pressionada (1), empilhadas na coluna.
+    key: ASSET_KEYS.pressurePlate,
+    path: '/assets/environment/props/pressure_plate.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: 8 fases do rotor desligadas + as mesmas 8 com o dinamo energizado.
+    key: ASSET_KEYS.waterWheel,
+    path: '/assets/environment/props/water_wheel.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     key: ASSET_KEYS.swordItem,
     path: '/assets/items/equipment/sword.png',
     frameWidth: TILESET_FRAME_SIZE,
@@ -158,6 +172,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.woodOnFireIcon, path: '/assets/ui/icons/wood_on_fire_icon.png' },
   { key: ASSET_KEYS.woodItem,       path: '/assets/items/collectibles/wood.png' },
   { key: ASSET_KEYS.rock,           path: '/assets/environment/props/rock.png' },
+  { key: ASSET_KEYS.woodenCrate,    path: '/assets/environment/props/wooden_crate.png' },
   { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock__1.png' },
   { key: ASSET_KEYS.tallGrassWind0, path: '/assets/environment/props/grass_wind0.png' },
   { key: ASSET_KEYS.tallGrassWind1, path: '/assets/environment/props/grass_wind1.png' },

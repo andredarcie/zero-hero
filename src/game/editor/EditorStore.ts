@@ -23,7 +23,7 @@ export type PlacedEntity =
   // `dir` so o braco robotico usa. Ele viaja em TODO o caminho de place/erase/undo porque, ao
   // contrario de `lit` e `floodgate` (que a gente deixa cair de proposito num save do editor),
   // a direcao E o comportamento da peca: perde-la nao empobrece o prop, quebra ele.
-  | { list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir };
+  | { list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir; variable?: string };
 
 export type EntityListId = PlacedEntity['list'];
 
@@ -31,7 +31,8 @@ type Op =
   | { kind: 'cells'; changes: CellChange[] }
   | { kind: 'entities'; added: PlacedEntity[]; removed: PlacedEntity[] }
   | { kind: 'spawn'; prev: { worldX: number; worldY: number }; next: { worldX: number; worldY: number } }
-  | { kind: 'dialog'; npc: NpcKind; prev: WorldDialog | undefined; next: WorldDialog | undefined };
+  | { kind: 'dialog'; npc: NpcKind; prev: WorldDialog | undefined; next: WorldDialog | undefined }
+  | { kind: 'variables'; prev: Record<string, boolean>; next: Record<string, boolean> };
 
 // What changed in one notification — consumers refresh only the affected visuals. `cells`
 // carries coordinates; readers should re-read current values from the store (works for
@@ -41,6 +42,7 @@ export type StoreChange = {
   entities?: boolean;
   spawn?: boolean;
   dialogs?: boolean;
+  variables?: boolean;
   structure?: boolean;
   meta?: boolean;
 };
@@ -56,7 +58,7 @@ const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 // concluiria que nada mudou e o giro nao aconteceria.
 const sameEntity = (a: PlacedEntity, b: PlacedEntity): boolean =>
   a.list === b.list && a.type === b.type && a.worldX === b.worldX && a.worldY === b.worldY
-  && (a.list !== 'props' || b.list !== 'props' || a.dir === b.dir);
+  && (a.list !== 'props' || b.list !== 'props' || (a.dir === b.dir && a.variable === b.variable));
 
 const buildEmptyChunk = (cx: number, cy: number): WorldChunk => ({
   cx,
@@ -84,6 +86,7 @@ export class EditorStore {
 
   public constructor(world: WorldData) {
     this.world = world;
+    this.world.globalVariables ??= {};
     this.rebuildIndex();
   }
 
@@ -257,7 +260,7 @@ export class EditorStore {
       chunk.pickups.forEach((p) => { if (p.worldX === wx && p.worldY === wy) found.push({ list: 'pickups', ...p }); });
     }
     this.world.props.forEach((p) => {
-      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir });
+      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir, variable: p.variable });
     });
     return found;
   }
@@ -269,7 +272,7 @@ export class EditorStore {
       chunk.npcs.forEach((n) => all.push({ list: 'npcs', ...n }));
       chunk.pickups.forEach((p) => all.push({ list: 'pickups', ...p }));
     });
-    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir }));
+    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir, variable: p.variable }));
     return all;
   }
 
@@ -297,7 +300,13 @@ export class EditorStore {
 
   private addEntityToWorld(entity: PlacedEntity): void {
     if (entity.list === 'props') {
-      this.world.props.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY, ...(entity.dir === undefined ? {} : { dir: entity.dir }) });
+      this.world.props.push({
+        type: entity.type,
+        worldX: entity.worldX,
+        worldY: entity.worldY,
+        ...(entity.dir === undefined ? {} : { dir: entity.dir }),
+        ...(entity.variable === undefined ? {} : { variable: entity.variable }),
+      });
       return;
     }
     const chunk = this.chunkAt(entity.worldX, entity.worldY);
@@ -359,6 +368,30 @@ export class EditorStore {
     this.recordOp({ kind: 'dialog', npc: kind, prev, next: clone(next) });
     this.markDirty();
     this.emit({ dialogs: true });
+  }
+
+  // ── Global puzzle variables ─────────────────────────────────────────────
+
+  public get globalVariables(): Record<string, boolean> {
+    return { ...(this.world.globalVariables ?? {}) };
+  }
+
+  public variableUsage(name: string): number {
+    return this.world.props.filter((prop) => prop.variable === name).length;
+  }
+
+  public replaceGlobalVariables(next: Record<string, boolean>): void {
+    const prev = this.globalVariables;
+    const normalised: Record<string, boolean> = {};
+    Object.entries(next).forEach(([rawName, value]) => {
+      const name = rawName.trim();
+      if (name.length > 0) normalised[name] = value === true;
+    });
+    if (JSON.stringify(prev) === JSON.stringify(normalised)) return;
+    this.world.globalVariables = normalised;
+    this.recordOp({ kind: 'variables', prev, next: { ...normalised } });
+    this.markDirty();
+    this.emit({ variables: true });
   }
 
   // ── World meta ──────────────────────────────────────────────────────────
@@ -441,10 +474,12 @@ export class EditorStore {
       toAdd.forEach((e) => this.addEntityToWorld(e));
     } else if (op.kind === 'spawn') {
       this.world.meta.playerStart = { ...(forward ? op.next : op.prev) };
-    } else {
+    } else if (op.kind === 'dialog') {
       const dialog = forward ? op.next : op.prev;
       if (dialog) this.world.dialogs[op.npc] = clone(dialog);
       else delete this.world.dialogs[op.npc];
+    } else {
+      this.world.globalVariables = clone(forward ? op.next : op.prev);
     }
   }
 
@@ -455,7 +490,8 @@ export class EditorStore {
         change.cells = (change.cells ?? []).concat(op.changes.map((c) => ({ wx: c.wx, wy: c.wy })));
       } else if (op.kind === 'entities') change.entities = true;
       else if (op.kind === 'spawn') change.spawn = true;
-      else change.dialogs = true;
+      else if (op.kind === 'dialog') change.dialogs = true;
+      else change.variables = true;
     });
     return change;
   }
@@ -481,6 +517,33 @@ export class EditorStore {
     // Enemies are no longer authored (skulls spawn dynamically in the dark); anything left
     // in the file is legacy data the runtime ignores — flag it so the author can erase it.
     if (legacyEnemies > 0) warnings.push(`${legacyEnemies} inimigo(s) legado(s) no arquivo — o jogo ignora inimigos colocados; use a borracha para remover`);
+    const variables = this.world.globalVariables ?? {};
+    const unboundPlates = this.world.props.filter((prop) => prop.type === 'pressurePlate' && !prop.variable).length;
+    const unboundWheels = this.world.props.filter((prop) => prop.type === 'waterWheel' && !prop.variable).length;
+    const missingVariables = new Set(
+      this.world.props
+        .filter((prop) => prop.variable && !(prop.variable in variables))
+        .map((prop) => prop.variable!),
+    );
+    if (unboundPlates > 0) warnings.push(`${unboundPlates} placa(s) de pressao sem variavel global vinculada`);
+    if (unboundWheels > 0) warnings.push(`${unboundWheels} roda(s) d'agua sem saida de energia vinculada`);
+    if (missingVariables.size > 0) warnings.push(`Mecanismo(s) usam variavel(is) inexistente(s): ${[...missingVariables].join(', ')}`);
+
+    // A roda ja representa agua no proprio tile, mas precisa de continuidade ortogonal para que
+    // exista corrente. O pincel garante que ela so substitua um rio; esta validacao cobre mundos
+    // antigos/editados a mao e trechos isolados de um unico tile.
+    const wet = new Set(
+      this.world.props
+        .filter((prop) => prop.type === 'water' || prop.type === 'bridgeSpot' || prop.type === 'waterWheel')
+        .map((prop) => `${prop.worldX},${prop.worldY}`),
+    );
+    const dryWheels = this.world.props.filter((prop) => prop.type === 'waterWheel' && ![
+      `${prop.worldX - 1},${prop.worldY}`,
+      `${prop.worldX + 1},${prop.worldY}`,
+      `${prop.worldX},${prop.worldY - 1}`,
+      `${prop.worldX},${prop.worldY + 1}`,
+    ].some((key) => wet.has(key))).length;
+    if (dryWheels > 0) warnings.push(`${dryWheels} roda(s) d'agua sem continuidade de rio — nao vao gerar energia`);
     return warnings;
   }
 

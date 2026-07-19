@@ -53,6 +53,9 @@ import { PlantSpotObject } from '@/game/objects/PlantSpotObject';
 import { RoboticArmObject, type ArmWorldPort } from '@/game/objects/RoboticArmObject';
 import { MoonflowerObject } from '@/game/objects/MoonflowerObject';
 import { BombSpotObject } from '@/game/objects/BombSpotObject';
+import { WoodenCrateObject } from '@/game/objects/WoodenCrateObject';
+import { PressurePlateObject } from '@/game/objects/PressurePlateObject';
+import { WaterWheelObject, type WaterFlow } from '@/game/objects/WaterWheelObject';
 import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
@@ -68,6 +71,7 @@ import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverla
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
 import { createHeroView, heroFootY, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
+import { GlobalVariables } from '@/game/runtime/GlobalVariables';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { createBoardMetrics } from '@/game/shared/grid';
@@ -86,6 +90,10 @@ import {
   getBridgeSpots,
   getPlantSpots,
   getInserters,
+  getWoodenCrates,
+  getPressurePlates,
+  getWaterWheels,
+  getGlobalVariables,
   getMoonflowers,
   getLockedDoors,
   getRocks,
@@ -326,6 +334,10 @@ export class GameScene extends Phaser.Scene {
   // Canteiros: dug holes where seeds plant on step, mounds water on bump, grass regrows.
   private plantSpots: PlantSpotObject[] = [];
   private inserters: RoboticArmObject[] = [];
+  private woodenCrates: WoodenCrateObject[] = [];
+  private pressurePlates: PressurePlateObject[] = [];
+  private waterWheels: WaterWheelObject[] = [];
+  private globalVariables = new GlobalVariables();
   private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
   // Lit bombs on the ground — world-anchored billboards ticking until they blow.
@@ -585,7 +597,17 @@ export class GameScene extends Phaser.Scene {
     // `dir ?? 1`: um braco sem direcao gravada aponta pro leste. Ele nunca fica sem direcao de
     // verdade (o editor sempre grava uma), mas o default evita que um JSON antigo vire um prop
     // quebrado — e leste e o que o editor oferece primeiro.
-    this.inserters = getInserters().map((a) => new RoboticArmObject(a.worldX, a.worldY, a.dir ?? 1));
+    this.inserters = getInserters().map(
+      (a) => new RoboticArmObject(a.worldX, a.worldY, a.dir ?? 1, a.variable),
+    );
+    this.globalVariables = new GlobalVariables(getGlobalVariables());
+    this.woodenCrates = getWoodenCrates().map((crate) => new WoodenCrateObject(this, crate.worldX, crate.worldY));
+    this.pressurePlates = getPressurePlates().map(
+      (plate) => new PressurePlateObject(this, plate.worldX, plate.worldY, plate.variable),
+    );
+    this.waterWheels = getWaterWheels().map(
+      (wheel) => new WaterWheelObject(this, wheel.worldX, wheel.worldY, wheel.variable),
+    );
     this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
     // Both `water` and `bridgeSpot` are river tiles (WaterObjects render animated water). A
     // plain `water` tile is an impassable river; a `bridgeSpot` is a river tile you CAN bridge
@@ -593,6 +615,10 @@ export class GameScene extends Phaser.Scene {
     // allowed. They're separate props (one per tile) so the editor's "one prop per cell" holds.
     this.waterTiles = [
       ...getWaterTiles().map((w) => new WaterObject(this, w.worldX, w.worldY, false)),
+      // A roda substitui o prop `water` no editor, mas continua sendo um tile de rio no
+      // runtime. Renderizar a agua no mesmo ponto deixa as pas realmente dentro do canal e,
+      // principalmente, permite drenar exatamente a agua que move o rotor.
+      ...getWaterWheels().map((w) => new WaterObject(this, w.worldX, w.worldY, false)),
       ...getBridgeSpots().map((b) => {
         const w = new WaterObject(this, b.worldX, b.worldY, true);
         // A scene-level burst of pale light the moment the last board is nailed home.
@@ -600,6 +626,9 @@ export class GameScene extends Phaser.Scene {
         return w;
       }),
     ];
+    // Circuitos so podem ser calculados depois que a agua existe: a roda le os quatro tiles
+    // vizinhos, e um gerador sem corrente deve nascer apagado, nunca true por um frame.
+    this.updateMechanismCircuits(0);
 
     this.initLighting();
     this.streamChunks(true);
@@ -818,6 +847,31 @@ export class GameScene extends Phaser.Scene {
         heldOnFire: this.heldOnFire,
         heldItem: this.heldItem,
         groundItems: this.itemManager?.snapshot() ?? [],
+        crates: this.woodenCrates.map((crate) => ({ worldX: crate.worldX, worldY: crate.worldY })),
+        pressurePlates: this.pressurePlates.map((plate) => ({
+          worldX: plate.worldX,
+          worldY: plate.worldY,
+          variable: plate.variable,
+          pressed: plate.pressed,
+        })),
+        waterWheels: this.waterWheels.map((wheel) => ({
+          worldX: wheel.worldX,
+          worldY: wheel.worldY,
+          variable: wheel.variable,
+          hasFlow: wheel.hasFlow,
+          speed: Number(wheel.speed.toFixed(3)),
+          generating: wheel.isGenerating,
+          frame: wheel.frame,
+          rotation: Number(wheel.rotation.toFixed(3)),
+        })),
+        inserters: this.inserters.map((arm) => ({
+          worldX: arm.worldX,
+          worldY: arm.worldY,
+          variable: arm.variable,
+          powered: arm.isPowered,
+          busy: arm.isBusy,
+        })),
+        globalVariables: this.globalVariables.snapshot(),
         coins: this.coinManager?.coinTotal ?? 0,
         dialogOpen: this.dialogOpen,
         shopOpen: this.shopOpen,
@@ -913,6 +967,9 @@ export class GameScene extends Phaser.Scene {
     this.bombSpots.forEach((s) => s.destroy());
     this.plantSpots.forEach((s) => s.destroy());
     this.inserters.forEach((a) => a.destroy());
+    this.woodenCrates.forEach((crate) => crate.destroy());
+    this.pressurePlates.forEach((plate) => plate.destroy());
+    this.waterWheels.forEach((wheel) => wheel.destroy());
     this.lavaTiles.forEach((l) => l.destroy());
     this.waterTiles.forEach((w) => w.destroy());
     this.activeBombs.forEach((b) => b.sprite.destroy());
@@ -952,6 +1009,10 @@ export class GameScene extends Phaser.Scene {
     this.bombSpots = [];
     this.plantSpots = [];
     this.inserters = [];
+    this.woodenCrates = [];
+    this.pressurePlates = [];
+    this.waterWheels = [];
+    this.globalVariables = new GlobalVariables();
     this.lavaTiles = [];
     this.waterTiles = [];
     this.activeBombs = [];
@@ -1167,6 +1228,9 @@ export class GameScene extends Phaser.Scene {
     }
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.updatePlantSpots();
+    // Produtores primeiro, consumidores depois: placa/roda atualizam a rede no MESMO frame em
+    // que o braco consulta energia, sem um pulso atrasado ao abrir ou fechar um circuito.
+    this.updateMechanismCircuits(delta);
     this.updateInserters(delta);
 
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
@@ -1302,6 +1366,14 @@ export class GameScene extends Phaser.Scene {
     return this.inserters.find((a) => a.worldX === wx && a.worldY === wy);
   }
 
+  private getWoodenCrateAt(wx: number, wy: number): WoodenCrateObject | undefined {
+    return this.woodenCrates.find((crate) => crate.worldX === wx && crate.worldY === wy);
+  }
+
+  private getWaterWheelAt(wx: number, wy: number): WaterWheelObject | undefined {
+    return this.waterWheels.find((wheel) => wheel.worldX === wx && wheel.worldY === wy);
+  }
+
   private getPlantSpotAt(wx: number, wy: number): PlantSpotObject | undefined {
     return this.plantSpots.find((s) => s.worldX === wx && s.worldY === wy);
   }
@@ -1334,6 +1406,8 @@ export class GameScene extends Phaser.Scene {
     // The arm is a machine, so it is solid — and that is exactly what makes it worth placing.
     // It hands an item across the very tile the hero has to walk around.
     if (this.getInserterAt(wx, wy)?.blocking) return true;
+    if (this.getWoodenCrateAt(wx, wy)?.blocking) return true;
+    if (this.getWaterWheelAt(wx, wy)?.blocking) return true;
     // Lava and water are the two hazards the lava boots ("botas de risco") let the hero wade —
     // enemies always pass hazardsPassable=false, so a river stays a wall to them. A lava tile
     // cooled to basalt by a dropped stone is solid ground everyone walks, boots or no boots.
@@ -1425,6 +1499,29 @@ export class GameScene extends Phaser.Scene {
     // must happen from the canonical centre origin — otherwise the hero visibly jumps up
     // half a tile. Bumps aren't steps, so nothing else stops breathing here.
     this.stopBreathing();
+
+    // Walk-only push: colliding with a crate attempts exactly one cardinal shove. The hero
+    // stays on the current tile after the bump; on the next step they can enter the space the
+    // crate vacated. A blocked destination rattles the box but never traps or overlaps state.
+    const crate = this.getWoodenCrateAt(wx, wy);
+    if (crate) {
+      const dx = Math.sign(wx - this.playerWorld.worldX);
+      const dy = Math.sign(wy - this.playerWorld.worldY);
+      const nextX = wx + dx;
+      const nextY = wy + dy;
+      const occupied = this.isSolidForEntities(nextX, nextY)
+        || (this.enemyManager?.getEnemyAt(nextX, nextY) ?? null) !== null
+        || (nextX === this.playerWorld.worldX && nextY === this.playerWorld.worldY)
+        || (this.heartPickupManager?.hasPickupAt(nextX, nextY) ?? false)
+        || (this.itemManager?.hasItemAt(nextX, nextY) ?? false)
+        || this.activeBombs.some((bomb) => bomb.worldX === nextX && bomb.worldY === nextY);
+      if (dx !== 0 || dy !== 0) {
+        if (occupied) crate.refusePush(dx, dy);
+        else crate.push(dx, dy);
+      }
+      this.updateMechanismCircuits(0);
+      return;
+    }
 
     if (this.npcManager?.hasNpcAt(wx, wy)) {
       const kind = this.npcManager.getKindAt(wx, wy);
@@ -2685,7 +2782,65 @@ export class GameScene extends Phaser.Scene {
       swinging: () => getSoundManager().playArmServo(),
       released: () => getSoundManager().playArmRelease(),
     };
-    for (const arm of this.inserters) arm.update(delta, port);
+    for (const arm of this.inserters) {
+      // Sem vinculo = compatibilidade: os bracos ja existentes continuam autoalimentados.
+      // Com vinculo = falha segura: variavel inexistente/false deixa a maquina parada e escura.
+      const powered = arm.variable ? this.globalVariables.get(arm.variable) : true;
+      arm.update(delta, port, powered);
+    }
+  }
+
+  /**
+   * Recalcula todos os PRODUTORES de circuito juntos. Placas e rodas que compartilham nome sao
+   * ligadas em paralelo (OR): qualquer fonte mantem a rede energizada. Fazer a agregacao aqui,
+   * em vez de cada objeto escrever direto, impede a ultima fonte do frame de apagar as demais.
+   */
+  private updateMechanismCircuits(delta: number): void {
+    if (!this.pressurePlates.length && !this.waterWheels.length) return;
+    const controlled = new Map<string, boolean>();
+
+    for (const plate of this.pressurePlates) {
+      const occupied = (plate.worldX === this.playerWorld.worldX && plate.worldY === this.playerWorld.worldY)
+        || this.getWoodenCrateAt(plate.worldX, plate.worldY) !== undefined
+        || (this.enemyManager?.getEnemyAt(plate.worldX, plate.worldY) ?? null) !== null;
+      plate.setPressed(occupied);
+      if (!plate.variable || !this.globalVariables.has(plate.variable)) continue;
+      controlled.set(plate.variable, (controlled.get(plate.variable) ?? false) || occupied);
+    }
+
+    for (const wheel of this.waterWheels) {
+      const flow = this.waterFlowAt(wheel.worldX, wheel.worldY);
+      const effectsVisible = Math.hypot(
+        wheel.worldX - this.playerWorld.worldX,
+        wheel.worldY - this.playerWorld.worldY,
+      ) <= 10;
+      wheel.update(delta, flow, effectsVisible);
+      if (!wheel.variable || !this.globalVariables.has(wheel.variable)) continue;
+      controlled.set(
+        wheel.variable,
+        (controlled.get(wheel.variable) ?? false) || wheel.isGenerating,
+      );
+    }
+
+    controlled.forEach((value, name) => this.globalVariables.set(name, value));
+  }
+
+  /** A roda ocupa o proprio canal. Ela so recebe corrente quando a agua sob as pas ainda existe
+   * e o rio continua por um vizinho ortogonal ativo; drenar o tile da maquina corta a fonte. */
+  private waterFlowAt(worldX: number, worldY: number): WaterFlow | null {
+    const underWheel = this.getWaterAt(worldX, worldY);
+    if (!underWheel || underWheel.isDrained) return null;
+    const dirs: readonly WaterFlow[] = [
+      { dx: 0, dy: -1 },
+      { dx: 1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 0 },
+    ];
+    for (const dir of dirs) {
+      const water = this.getWaterAt(worldX + dir.dx, worldY + dir.dy);
+      if (water && !water.isDrained) return dir;
+    }
+    return null;
   }
 
   // Watch the plots each frame: raise the mound of a sown hole the moment the hero steps off

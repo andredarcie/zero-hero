@@ -1,11 +1,13 @@
 ﻿import Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES, NPC_VISUALS,
-  SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES,
+  SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
-import { EditorDomUi, PANEL_WIDTH, isDirectionalProp, type UiState, type ViewMode } from '@/game/editor/EditorDomUi';
+import {
+  EditorDomUi, PANEL_WIDTH, isDirectionalProp, isVariableProp, type UiState, type ViewMode,
+} from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
@@ -33,7 +35,8 @@ const MAX_ZOOM = 8;
 // v3: discards persisted state from before the "Inimigos" palette tab was removed.
 // v4: UiState ganhou `propDir`. A chave sobe de versao junto com a FORMA do estado — um estado
 // v3 restaurado hoje viria sem propDir e o primeiro braco colocado nasceria com `dir: undefined`.
-const UI_STATE_KEY = 'worldEditorUi.v4';
+// v5: UiState ganhou `propVariable`, o vinculo usado pelo proximo mecanismo de circuito.
+const UI_STATE_KEY = 'worldEditorUi.v5';
 
 type CellCoord = { x: number; y: number };
 
@@ -76,6 +79,9 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   // O frame aqui e so o default da paleta: no tabuleiro, entityVisual troca pelo frame da
   // direcao gravada, pra o editor mostrar pra onde CADA braco esta virado.
   inserter: { key: ASSET_KEYS.inserter, frame: 1 },
+  woodenCrate: { key: ASSET_KEYS.woodenCrate },
+  pressurePlate: { key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
+  waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -110,6 +116,7 @@ export class EditorScene extends Phaser.Scene {
     showCollisions: false,
     showEntities: true,
     propDir: 1, // leste
+    propVariable: '',
     viewMode: 'world',
     chunkX: 0,
     chunkY: 0,
@@ -511,6 +518,7 @@ export class EditorScene extends Phaser.Scene {
       });
     }
     if (!change.structure && (change.entities || change.spawn)) this.renderEntities();
+    if (change.variables) this.ui?.syncFromState();
     if (change.cells || change.entities || change.spawn || change.structure) this.ui?.requestMinimapRedraw();
     this.ui?.refreshHeader();
     this.refreshHoverStatus();
@@ -719,10 +727,29 @@ export class EditorScene extends Phaser.Scene {
     const sel = this.uiState.entity;
     if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
     else if (sel.list === 'pickups') store.placeEntity({ list: 'pickups', type: sel.type, worldX: x, worldY: y });
-    // Um prop que gira e colocado COM a direcao corrente; os outros seguem sem o campo, pra
-    // nao encher o JSON de `dir` em pedra e mato que nao tem pra onde olhar.
-    else if (isDirectionalProp(sel.type)) store.placeEntity({ list: 'props', type: sel.type, worldX: x, worldY: y, dir: this.uiState.propDir });
-    else store.placeEntity({ list: 'props', type: sel.type, worldX: x, worldY: y });
+    else {
+      // A roda nao fica na margem: ela substitui um tile de rio ja desenhado. Assim o editor
+      // impede uma maquina seca antes mesmo de salvar, sem criar uma segunda camada de props.
+      if (sel.type === 'waterWheel') {
+        const currentProp = store.entitiesAt(x, y).find((entity) => entity.list === 'props');
+        const isRiver = currentProp?.type === 'water'
+          || currentProp?.type === 'bridgeSpot'
+          || currentProp?.type === 'waterWheel';
+        if (!isRiver) {
+          this.ui?.toast("A roda d'agua so pode ser instalada em um tile de rio");
+          return;
+        }
+      }
+      // Direcao e circuito sao propriedades independentes: o braco usa as duas; placa e roda
+      // usam so a variavel. Campos irrelevantes continuam fora do JSON de pedras e vegetacao.
+      store.placeEntity({
+        list: 'props', type: sel.type, worldX: x, worldY: y,
+        ...(isDirectionalProp(sel.type) ? { dir: this.uiState.propDir } : {}),
+        ...(isVariableProp(sel.type) && this.uiState.propVariable
+          ? { variable: this.uiState.propVariable }
+          : {}),
+      });
+    }
   }
 
   private pickTileAt(x: number, y: number): void {

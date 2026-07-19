@@ -147,6 +147,18 @@ export const getPlantSpots = (): WorldProp[] => requireWorld().props.filter((pro
 // bearing — it decides which tile the arm takes from and which it puts to.
 export const getInserters = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'inserter');
 
+// A solid box the hero moves by walking into it; it never occupies the hero's hand slot.
+export const getWoodenCrates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'woodenCrate');
+
+// Walkable floor switches. `variable` names the global boolean circuit they drive.
+export const getPressurePlates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'pressurePlate');
+
+// In-river generators. The prop owns water on its tile and requires that active water to
+// continue through a neighbour before publishing power into the prop's named variable.
+export const getWaterWheels = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'waterWheel');
+
+export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });
+
 // Held items (everything except streamed hearts) are loaded once, up front, because the
 // hero can drop and swap them anywhere, so they must persist off-screen.
 export const getHeldItemPickups = (): Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> => {

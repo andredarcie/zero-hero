@@ -8,7 +8,9 @@ import {
   CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAME, SEA_TILE_FRAMES, SOLID_UPPER_FRAMES,
   TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
-import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds } from '@/game/world/WorldData';
+import {
+  getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWaterWheels, getWorldBounds,
+} from '@/game/world/WorldData';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
 import {
@@ -1027,10 +1029,11 @@ export class World3D {
 
   private buildTerrain(): void {
     const b = getWorldBounds();
-    // River tiles (plain water + buildable bridge spots) sink into a channel below the
-    // ground: their ground quad drops to the bed level and gets dark banks around it.
+    // River tiles (plain water + buildable bridge spots + in-river wheels) sink into a
+    // channel below the ground: their ground quad drops to the bed and gets dark banks.
     const waterSet = new Set<string>(
-      [...getWaterTiles(), ...getBridgeSpots()].map((p) => `${p.worldX},${p.worldY}`),
+      [...getWaterTiles(), ...getBridgeSpots(), ...getWaterWheels()]
+        .map((p) => `${p.worldX},${p.worldY}`),
     );
     // Lava tiles sink into their own (shallower) basin, the same way water tiles do.
     const lavaSet = new Set<string>(getLavaTiles().map((p) => `${p.worldX},${p.worldY}`));
@@ -1578,6 +1581,24 @@ export class World3D {
       },
     };
     return box;
+  }
+
+  /**
+   * Low-poly prop geometry that needs to rotate as a real THREE hierarchy (the water wheel's
+   * torus, spokes, paddles and axle). It uses the exact same quantized Lambert material as
+   * `addBox`, so custom geometry receives the game's fire/moon lighting instead of looking like
+   * a foreign smooth PBR model. Ownership of geometry/material stays with the caller.
+   */
+  public addLitMesh(geometry: THREE.BufferGeometry, skin: number | THREE.Texture): THREE.Mesh {
+    const material = new THREE.MeshLambertMaterial(
+      typeof skin === 'number'
+        ? { color: skin, transparent: true, flatShading: true }
+        : { map: skin, transparent: true, flatShading: true },
+    );
+    patchPixelMaterial(material, { quantize: true });
+    const mesh = new THREE.Mesh(geometry, material);
+    this.scene.add(mesh);
+    return mesh;
   }
 
   // ── fire lights ──────────────────────────────────────────────────────────────

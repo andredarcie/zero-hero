@@ -324,6 +324,35 @@ reach where the hero cannot.*
   the real `EditorStore`, presses P, and asserts the transfer — the authoring path, because that is
   what the piece is for.
 
+## The water wheel (`waterWheel`) — a real in-river 3D generator
+
+`src/game/objects/WaterWheelObject.ts`. The wheel is a named boolean circuit producer with a real
+Three.js rotor: low-poly rim, connected spokes, volumetric paddles, hub, axle, submerged trestle
+and dynamo housing. The whole rotor is one hierarchy and turns continuously through
+`rotor.rotation.z`; the runtime sprite sheet is not faking its motion.
+
+- **The wheel occupies the river tile itself.** In the editor it may only replace an existing
+  `water`/`bridgeSpot` prop. At runtime that prop creates its own non-buildable `WaterObject`, and
+  `World3D.buildTerrain` includes wheel tiles in the sunken river set. Forgetting the latter leaves
+  the water quad below an ordinary ground tile, making a logically wet wheel look dry.
+- **Standing water is not enough.** `waterFlowAt` requires active, non-drained water under the
+  rotor and at least one active orthogonal river neighbour. Draining the wheel's own tile removes
+  its source even while an adjacent tile stays full.
+- **Power comes from angular speed, not directly from the water predicate.** The rotor accelerates
+  against inertia, closes its circuit above a threshold and coasts after flow stops. This keeps the
+  dínamo alive briefly during slowdown instead of snapping wheel, light and consumer off together.
+- **Circuit producers combine by OR.** Pressure plates and water wheels sharing a variable are
+  aggregated once per frame before consumers update. A robotic arm with a `variable` only moves
+  while that circuit is live; an old unbound arm remains self-powered for compatibility.
+- **Sprite Factory still owns the authored pixel asset.** `spritefactory/sprites/water-wheel.mjs`
+  builds 8 rotor phases in off/on banks with the official wood/stone/green palette (0 FAIL,
+  0 WARN). Phaser uses it for the editor palette and placement icon; gameplay uses the 3D model.
+- Juice is stateful: water spray follows the detected flow, paddles have a repeating splash SFX,
+  startup shakes, the dynamo emits a green pulse/sparks and its physical lamp changes colour.
+- `npm run playtest -- roda-agua` guards dry-placement rejection, in-river authoring, continuous
+  3D angle change, acceleration, power delivery to an arm, draining under the wheel, coast and
+  final shutdown. `caixa-placa` and `braco` are the circuit/consumer regressions.
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on

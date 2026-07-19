@@ -84,6 +84,9 @@ const DEFS: Record<string, SheetDef> = {
   // da camera, nao no mundo — entao "girar o prop" so pode existir como escolha de frame.
   inserter: { url: `${A}/environment/props/inserter.png`, frameW: 16, frameH: 16 },
   'inserter-hand': { url: `${A}/environment/props/inserter_hand.png`, frameW: 16, frameH: 16 },
+  'wooden-crate': { url: `${A}/environment/props/wooden_crate.png` },
+  'pressure-plate': { url: `${A}/environment/props/pressure_plate.png`, frameW: 16, frameH: 16 },
+  'water-wheel': { url: `${A}/environment/props/water_wheel.png`, frameW: 16, frameH: 16 },
   'plant-hole': { url: `${A}/environment/props/plant_hole.png` },
   'plant-mound': { url: `${A}/environment/props/plant_mound.png` },
   'seeds-item': { url: `${A}/items/collectibles/seeds.png` },

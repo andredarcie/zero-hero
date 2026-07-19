@@ -18,6 +18,26 @@ export interface GameDebugState {
   heldOnFire: boolean;
   heldItem: 'none' | HeldItemKind;
   groundItems: Array<{ kind: HeldItemKind; worldX: number; worldY: number }>;
+  crates: Array<{ worldX: number; worldY: number }>;
+  pressurePlates: Array<{ worldX: number; worldY: number; variable?: string; pressed: boolean }>;
+  waterWheels: Array<{
+    worldX: number;
+    worldY: number;
+    variable?: string;
+    hasFlow: boolean;
+    speed: number;
+    generating: boolean;
+    frame: number;
+    rotation: number;
+  }>;
+  inserters: Array<{
+    worldX: number;
+    worldY: number;
+    variable?: string;
+    powered: boolean;
+    busy: boolean;
+  }>;
+  globalVariables: Record<string, boolean>;
   coins: number;
   dialogOpen: boolean;
   shopOpen: boolean;

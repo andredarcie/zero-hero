@@ -56,8 +56,9 @@ export type WorldChunk = {
 // (scythe → new seeds, or fire) and the hole reopens. The game's renewable, placeable fuel.
 // `inserter`: the robotic arm. It takes whatever item is lying on the tile behind it and puts it
 // on the tile in front — the only thing in the game that moves an item without the hero carrying
-// it, which is why it can cross a barrier the hero cannot.
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter';
+// it, which is why it can cross a barrier the hero cannot. `waterWheel` is its believable power
+// source: installed inside a continuous river, it publishes power into a named variable.
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter' | 'woodenCrate' | 'pressurePlate' | 'waterWheel';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.
@@ -80,6 +81,10 @@ export type WorldProp = {
   lit?: boolean;
   floodgate?: boolean;
   dir?: PropDir;
+  // Pressure plates and water wheels publish into this named circuit; an inserter may consume
+  // it as optional power. The field lives on the prop because each mechanism can use a different
+  // circuit. An unbound inserter keeps legacy self-powered behaviour.
+  variable?: string;
 };
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };
@@ -99,4 +104,7 @@ export type WorldData = {
   chunks: WorldChunk[]; // exactly worldChunksX * worldChunksY entries
   props: WorldProp[];
   dialogs: Partial<Record<NpcKind, WorldDialog>>;
+  // Named boolean puzzle state. Optional keeps every schema-v1 world written before global
+  // variables valid; the editor normalises it to an empty record as soon as it opens one.
+  globalVariables?: Record<string, boolean>;
 };

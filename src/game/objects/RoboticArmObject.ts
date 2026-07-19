@@ -57,6 +57,7 @@ const HAND_FRAME_PIVOT = 3;
 // #a9abbe) e, sem esse desconto, a maquina sai mais quente que tudo em volta e o bloom a
 // transforma num borrao branco a noite — foi o que o primeiro playtest mostrou na tela.
 const METAL_TINT = 0xc9c9c9;
+const UNPOWERED_TINT = 0x6f767d;
 
 // TODO QUAD DE ARTE TEM EXATAMENTE 1 TILE. Isso nao e arbitrario: um tile do jogo vale 16 pixels
 // de arte e os sprites sao 16x16, entao 1 tile e a unica escala em que cada texel cai em um pixel.
@@ -295,6 +296,7 @@ export class RoboticArmObject {
   // delta ja foi somado antes dele; uma bandeira armada no enter() e o jeito honesto.
   private pendingSwingSfx = false;
   private pendingReleaseSfx = false;
+  private powered = true;
 
   public handX: number;
   public handY: number;
@@ -304,6 +306,8 @@ export class RoboticArmObject {
     public readonly worldX: number,
     public readonly worldY: number,
     public readonly dir: PropDir = 1,
+    /** Sem variavel, preserva o comportamento legado autoalimentado. Com variavel, exige true. */
+    public readonly variable?: string,
   ) {
     // A direcao vira FRAME, nunca rotacao: Billboard3D.setAngle gira no plano da camera
     // (mesh.rotation.z), o que inclinaria o desenho em vez de vira-lo pro lado.
@@ -419,10 +423,19 @@ export class RoboticArmObject {
 
   public get isBusy(): boolean { return this.phase !== 'idle'; }
 
-  public update(delta: number, port: ArmWorldPort): void {
+  public get isPowered(): boolean { return this.powered; }
+
+  public update(delta: number, port: ArmWorldPort, powered = true): void {
+    this.setPowered(powered);
+    this.prevHandAngle = this.handAngle;
+    // Cortar energia congela a transmissao onde ela estiver — inclusive segurando carga. O
+    // pendulo ainda assenta pela gravidade, e retomar energia continua o mesmo gesto sem perda.
+    if (!powered) {
+      this.updateCargo(delta);
+      return;
+    }
     this.elapsed += delta;
     this.aliveMs += delta;
-    this.prevHandAngle = this.handAngle;
     const [inX, inY] = this.inputTile;
     const [outX, outY] = this.outputTile;
 
@@ -541,6 +554,19 @@ export class RoboticArmObject {
     }
 
     this.updateCargo(delta);
+  }
+
+  private setPowered(powered: boolean): void {
+    if (this.powered === powered) return;
+    this.powered = powered;
+    const tint = powered ? METAL_TINT : UNPOWERED_TINT;
+    this.base.setTint(tint);
+    this.upperArm.setTint(tint);
+    this.foreArm.setTint(tint);
+    this.shoulderPivot.setTint(tint);
+    this.elbowPivot.setTint(tint);
+    this.hand.setTint(tint);
+    this.carried?.setTint(powered ? 0xffffff : 0xa2a5a8);
   }
 
   private enter(next: ArmPhase): void {

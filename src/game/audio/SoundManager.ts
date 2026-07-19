@@ -579,6 +579,33 @@ class SoundManager {
     this.osc('triangle', 150, 110, 0.045, 0.05);
   }
 
+  /** A corrente vence a inercia: madeira pesada, eixo metalico e a primeira pa pegando agua. */
+  public playWaterWheelStart(): void {
+    this.noise('lowpass', 520, 1.1, 0.16, 0.18);
+    this.osc('triangle', 72, 108, 0.12, 0.28);
+    this.noise('bandpass', 1350, 2.8, 0.08, 0.07, 0.06);
+  }
+
+  /** Batida recorrente de uma pa no rio; propositalmente curta e baixa para poder repetir. */
+  public playWaterWheelPaddle(speed01 = 1): void {
+    const strength = Math.max(0.35, Math.min(1, speed01));
+    this.noise('lowpass', 760, 0.85, 0.055 * strength, 0.09);
+    this.osc('triangle', 92, 70, 0.028 * strength, 0.1, 0.015);
+  }
+
+  /** O dinamo alcancou tensao: confirmacao curta, ascendente e harmonica, sem fanfarra. */
+  public playWaterWheelPower(): void {
+    this.osc('triangle', 196, 247, 0.08, 0.16);
+    this.osc('square', 392, 494, 0.035, 0.13, 0.045);
+    this.noise('bandpass', 2400, 3.5, 0.045, 0.055, 0.08);
+  }
+
+  /** A agua parou de empurrar; o tom cai, mas a animacao ainda conserva momento por um tempo. */
+  public playWaterWheelStop(): void {
+    this.osc('triangle', 108, 62, 0.065, 0.32);
+    this.noise('lowpass', 390, 1.2, 0.055, 0.16, 0.03);
+  }
+
   public playHammer(): void {
     // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
     if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;

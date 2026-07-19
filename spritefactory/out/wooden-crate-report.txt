@@ -1,0 +1,3 @@
+wooden-crate: 1 frame(s) — 0 fail, 0 warn
+  [info] bbox: content 12x12 at (2,2), coverage 54%
+  frame 0: #b7916a×47 #815938×38 #1d2b53×18 #886644×14 #141d38×12 #63452c×9

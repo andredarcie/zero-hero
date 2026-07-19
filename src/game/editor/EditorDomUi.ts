@@ -1,8 +1,8 @@
 ﻿import type Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS,
-  SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES,
+  SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
@@ -43,6 +43,9 @@ export type UiState = {
   // Vive no estado da UI, e nao na selecao da paleta, porque e uma preferencia do PINCEL —
   // igual ao tamanho do brush: escolhe-se uma vez e vale pras proximas colocadas.
   propDir: PropDir;
+  // Global boolean selected for the next circuit-capable prop placed by this brush.
+  // Plate/wheel publish into it; a configured inserter consumes it as electrical power.
+  propVariable: string;
   // Chunk view: camera locked and fitted to one chunk, edits confined to it.
   viewMode: ViewMode;
   chunkX: number;
@@ -121,6 +124,9 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'bombSpot', label: 'Marca de Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
   { type: 'plantSpot', label: 'Buraco de Plantio', key: ASSET_KEYS.plantHole, frame: 0 },
   { type: 'inserter', label: 'Braco Robotico (G gira)', key: ASSET_KEYS.inserter, frame: 1 },
+  { type: 'woodenCrate', label: 'Caixote de Madeira', key: ASSET_KEYS.woodenCrate },
+  { type: 'pressurePlate', label: 'Placa de Pressao', key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
+  { type: 'waterWheel', label: "Roda d'Agua Geradora", key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
 ];
 
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
@@ -128,7 +134,12 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
 // aqui e ganha o G de graca.
 const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter']);
 
+// Producers and consumers share the same tiny named-circuit authoring surface. Keeping this a
+// set means the next electrical prop gets variable persistence and the dropdown in one place.
+const VARIABLE_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['pressurePlate', 'waterWheel', 'inserter']);
+
 export const isDirectionalProp = (type: PropKind): boolean => DIRECTIONAL_PROPS.has(type);
+export const isVariableProp = (type: PropKind): boolean => VARIABLE_PROPS.has(type);
 
 /** O nome da direcao, pro editor poder dizer pra onde a peca esta virada. */
 export const PROP_DIR_LABEL: Record<PropDir, string> = { 0: 'Norte', 1: 'Leste', 2: 'Sul', 3: 'Oeste' };
@@ -303,6 +314,9 @@ const CSS = `
 #zh-editor-root .zh-line-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
 #zh-editor-root .zh-line-row select { width: 96px; flex: none; }
 #zh-editor-root .zh-line-row .zh-btn { padding: 4px 7px; flex: none; }
+#zh-editor-root .zh-var-row { display: grid; grid-template-columns: minmax(150px, 1fr) auto auto auto; gap: 8px; align-items: center; margin-bottom: 7px; }
+#zh-editor-root .zh-var-row code { color: #d8eef2; overflow: hidden; text-overflow: ellipsis; }
+#zh-editor-root .zh-var-empty { color: #6d949d; margin: 6px 0 12px; }
 #zh-editor-root .zh-help-table { width: 100%; border-collapse: collapse; }
 #zh-editor-root .zh-help-table td { padding: 3px 8px 3px 0; border-bottom: 1px solid #14232b; }
 #zh-editor-root .zh-help-table td:first-child { color: #f4a261; white-space: nowrap; font-family: monospace; }
@@ -387,6 +401,7 @@ export class EditorDomUi {
       this.button('&#9654; Testar', 'Joga o mundo em edicao sem salvar (P) — ESC volta', () => this.cb.onPlaytest()),
       this.button('Recarregar', 'Descarta e recarrega do world.json', () => this.cb.onReload()),
       this.button('Mundo&#8230;', 'Nome, tamanho e validacao do mundo', () => this.openWorldModal()),
+      this.button('Variaveis&#8230;', 'Cria estados booleanos globais para mecanismos do mundo', () => this.openVariablesModal()),
       this.button('Dialogos&#8230;', 'Editor de dialogos dos NPCs', () => this.openDialogModal()),
       this.button('Ajuda (?)', 'Atalhos e controles', () => this.openHelpModal()),
     );
@@ -667,6 +682,44 @@ export class EditorDomUi {
         brushSeg.appendChild(btn);
       });
       this.optionsEl.appendChild(brushSeg);
+    }
+
+    if (this.state.tool === 'entity' && this.state.entity.list === 'props' && isVariableProp(this.state.entity.type)) {
+      const propType = this.state.entity.type;
+      const names = Object.keys(this.store.globalVariables).sort((a, b) => a.localeCompare(b));
+      if (this.state.propVariable && !names.includes(this.state.propVariable)) this.state.propVariable = '';
+
+      const select = document.createElement('select');
+      const empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = names.length === 0 ? 'Crie uma variavel primeiro' : 'Sem vinculo';
+      select.appendChild(empty);
+      names.forEach((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        option.selected = name === this.state.propVariable;
+        select.appendChild(option);
+      });
+      select.value = this.state.propVariable;
+      select.disabled = names.length === 0;
+      select.addEventListener('change', () => {
+        this.state.propVariable = select.value;
+        this.changed();
+      });
+
+      const fieldLabel = propType === 'waterWheel' ? 'Saida de energia'
+        : propType === 'inserter' ? 'Alimentacao' : 'Variavel global';
+      const row = this.field(fieldLabel, select);
+      row.style.marginTop = '7px';
+      this.optionsEl.appendChild(row);
+      if (propType === 'inserter') {
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size:10px;color:#6d949d;margin:3px 0 5px;line-height:1.4;';
+        hint.textContent = 'Sem vinculo: funciona como antes. Vinculado: so trabalha com energia.';
+        this.optionsEl.appendChild(hint);
+      }
+      this.optionsEl.appendChild(this.button('+ Gerenciar variaveis', 'Cria e remove variaveis booleanas do mundo', () => this.openVariablesModal()));
     }
 
     const checks = document.createElement('div');
@@ -1156,6 +1209,89 @@ export class EditorDomUi {
     );
   }
 
+  public openVariablesModal(): void {
+    const { body, foot } = this.modalShell('Variaveis globais');
+    const working: Record<string, boolean> = { ...this.store.globalVariables };
+
+    const intro = document.createElement('p');
+    intro.textContent = 'Estados booleanos do mundo. Placas e rodas geram sinal; mecanismos vinculados, como o braco robotico, podem consumi-lo.';
+    body.appendChild(intro);
+
+    const list = document.createElement('div');
+    body.appendChild(list);
+
+    const renderList = (): void => {
+      list.innerHTML = '';
+      const names = Object.keys(working).sort((a, b) => a.localeCompare(b));
+      if (names.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'zh-var-empty';
+        empty.textContent = 'Nenhuma variavel criada.';
+        list.appendChild(empty);
+      }
+      names.forEach((name) => {
+        const row = document.createElement('div');
+        row.className = 'zh-var-row';
+        const code = document.createElement('code');
+        code.textContent = name;
+        const initial = document.createElement('input');
+        initial.type = 'checkbox';
+        initial.checked = working[name];
+        initial.addEventListener('change', () => { working[name] = initial.checked; });
+        const initialLabel = document.createElement('label');
+        initialLabel.append(initial, document.createTextNode(' Inicial true'));
+        const usage = this.store.variableUsage(name);
+        const usageText = document.createElement('span');
+        usageText.textContent = usage === 0 ? 'sem vinculos' : `${usage} mecanismo(s)`;
+        usageText.style.color = usage === 0 ? '#6d949d' : '#f4a261';
+        const del = this.button('Remover', usage > 0 ? 'Remova ou troque o vinculo dos mecanismos primeiro' : 'Remove a variavel', () => {
+          delete working[name];
+          renderList();
+        });
+        del.disabled = usage > 0;
+        row.append(code, initialLabel, usageText, del);
+        list.appendChild(row);
+      });
+    };
+
+    const addRow = document.createElement('div');
+    addRow.className = 'zh-line-row';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'ex.: porta_norte_aberta';
+    const add = this.button('+ Criar', 'Nomes aceitam letras, numeros, ponto, hifen e sublinhado', () => {
+      const name = nameInput.value.trim();
+      if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(name)) {
+        this.toast('Nome invalido: comece com letra ou _ e nao use espacos');
+        return;
+      }
+      if (name in working) {
+        this.toast('Essa variavel ja existe');
+        return;
+      }
+      working[name] = false;
+      nameInput.value = '';
+      renderList();
+    });
+    nameInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { event.preventDefault(); add.click(); }
+    });
+    addRow.append(nameInput, add);
+    body.append(this.sectionLabel('Nova variavel'), addRow);
+    renderList();
+
+    foot.append(
+      this.button('Cancelar', '', () => this.closeModal()),
+      this.button('Aplicar', 'Grava as variaveis no mundo; Ctrl+Z desfaz', () => {
+        this.store.replaceGlobalVariables(working);
+        if (this.state.propVariable && !(this.state.propVariable in working)) this.state.propVariable = '';
+        this.closeModal();
+        this.syncFromState();
+        this.toast('Variaveis globais aplicadas');
+      }, 'primary'),
+    );
+  }
+
   public openDialogModal(initialKind: NpcKind = NPC_KINDS[0]): void {
     const { body, foot } = this.modalShell('Dialogos dos NPCs');
     let currentKind = initialKind;
@@ -1311,6 +1447,7 @@ export class EditorDomUi {
       ['Ctrl+Z / Ctrl+Y', 'Desfazer / refazer'],
       ['Ctrl+S', 'Salvar world.json'],
       ['P', 'Testar o mundo em edicao (ESC volta ao editor)'],
+      ['Variaveis...', 'Cria booleanos globais; selecione um ao pintar uma placa de pressao'],
       ['0', 'Enquadrar o mundo na tela'],
     ];
     const table = document.createElement('table');

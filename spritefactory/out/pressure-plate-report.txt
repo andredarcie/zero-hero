@@ -1,0 +1,5 @@
+pressure-plate: 2 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 12x12 at (2,2), coverage 56%
+  [info] bbox: frame 1: content 12x12 at (2,2), coverage 56%
+  frame 0: #7c7e8b×57 #5d6165×40 #989aa7×31 #141d38×12 #1d2b53×4
+  frame 1: #7c7e8b×41 #5d6165×30 #1d2b53×24 #989aa7×21 #008751×12 #141d38×12 #7dde99×4
