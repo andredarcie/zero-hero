@@ -123,6 +123,8 @@ const DEFS: Record<string, SheetDef> = {
 
 const baseTextures = new Map<string, THREE.Texture>();
 const frameTextures = new Map<string, THREE.Texture>();
+const framePixels = new Map<string, ImageData | null>();
+const footPads = new Map<string, number>();
 let loaded: Promise<void> | null = null;
 
 /** Kick (or reuse) the one-time load of every registered image. */
@@ -193,6 +195,78 @@ export const frameUvWindow = (
     repeatX: 1 / cols,
     repeatY: 1 / rows,
   };
+};
+
+/**
+ * The base image's pixels, read back once per sheet (or null when the texture was BUILT at
+ * runtime rather than loaded — a DataTexture's image is a raw array, not something a canvas
+ * can draw, and every caller here treats "unknown" as "no padding", which is the behaviour
+ * these textures already had).
+ */
+const sheetPixels = (key: string): ImageData | null => {
+  const hit = framePixels.get(key);
+  if (hit !== undefined) return hit;
+  let data: ImageData | null = null;
+  try {
+    const img = baseTextures.get(key)?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+    if (img?.width && img.height) {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        data = ctx.getImageData(0, 0, img.width, img.height);
+      }
+    }
+  } catch {
+    data = null;
+  }
+  framePixels.set(key, data);
+  return data;
+};
+
+/**
+ * How much of a frame is EMPTY below its art, as a fraction of the frame's height.
+ *
+ * A frame is a box; the drawing inside it need not fill it. Almost all of this game's art is
+ * flush with the bottom of its frame — a sprite stands on the frame's floor — but not all of
+ * it: the rock leaves two rows of nothing under it, and the dry tree's stump three.
+ *
+ * Upright, that margin costs nothing: the rows are transparent and the quad's foot is the
+ * frame's floor either way. A CAST SHADOW is where it bites, because a shadow lays that same
+ * frame FLAT and STRETCHES it along the ground — so two transparent pixels stop being two
+ * pixels and become `pad × length` tiles of bare ground between an object and its own
+ * silhouette. That is exactly why the rock's shadow sat half a tile downwind of the rock.
+ *
+ * It is a property of the drawing and of nothing else, so it is measured from the drawing —
+ * once per frame, at the same alpha the shadow's own alphaTest cuts the silhouette with, so
+ * the pad counts precisely the rows the shadow will not draw.
+ */
+export const frameFootPad = (key: string, frame = 0): number => {
+  const cacheKey = `${key}#${frame}`;
+  const hit = footPads.get(cacheKey);
+  if (hit !== undefined) return hit;
+
+  let pad = 0;
+  const def = DEFS[key];
+  const img = sheetPixels(key);
+  if (def && img) {
+    const fw = def.frameW ?? img.width;
+    const fh = def.frameH ?? img.height;
+    const cols = Math.max(1, Math.floor(img.width / fw));
+    const x0 = (frame % cols) * fw;
+    const y0 = Math.floor(frame / cols) * fh;
+    for (let y = fh - 1; y >= 0; y--) {
+      let opaque = false;
+      for (let x = 0; x < fw; x++) {
+        if (img.data[((y0 + y) * img.width + (x0 + x)) * 4 + 3] > 102) { opaque = true; break; }
+      }
+      if (opaque) { pad = (fh - 1 - y) / fh; break; }
+    }
+  }
+  footPads.set(cacheKey, pad);
+  return pad;
 };
 
 /**

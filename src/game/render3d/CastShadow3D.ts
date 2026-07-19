@@ -27,6 +27,30 @@ export const WIDTH_FACTOR = 0.92; // shadows are a touch slimmer than the object
 const NEAR_STRETCH = 1.3; // length multiplier hugging the flame
 const FAR_STRETCH = 3.2; // length multiplier at the edge of the light (long, grazing)
 
+/**
+ * Where the quad's ORIGIN has to sit so the ART's own bottom edge lands on the object's foot.
+ *
+ * The silhouette is the whole FRAME laid flat, and any transparent rows under the art travel with
+ * it — stretched by `length`, so a two-pixel margin stops being two pixels and becomes a visible
+ * strip of bare ground between an object and its shadow (see frameFootPad, which measures it).
+ * Pulling the origin BACK along the heading by that same fraction of the length puts the drawing's
+ * foot where the object actually stands. A no-op (footPad = 0) for every sprite already flush with
+ * its frame, which is nearly all of them — so this fixes the outliers without touching the rest.
+ */
+export const castAnchor = (
+  objX: number,
+  objY: number,
+  length: number,
+  rotY: number,
+  footPad: number,
+): { x: number; y: number } => {
+  if (footPad <= 0) return { x: objX, y: objY };
+  const back = footPad * length;
+  // The quad's head points along -Z before the rotation, so (-sin, -cos) is its ground heading
+  // and moving AGAINST it is a plus.
+  return { x: objX + Math.sin(rotY) * back, y: objY + Math.cos(rotY) * back };
+};
+
 /** A flat ground silhouette quad: foot at the origin, body extending along -Z, unit sized. */
 export const makeCastMesh = (): THREE.Mesh => {
   const geo = new THREE.PlaneGeometry(1, 1);
@@ -173,7 +197,7 @@ export class SolidCastField {
     this.pending.length = 0;
   }
 
-  /** One shadow. Mirrors configureCast's transform exactly. */
+  /** One shadow. Mirrors applyCast's transform exactly. */
   public add(
     objX: number,
     objY: number,
@@ -182,9 +206,13 @@ export class SolidCastField {
     length: number,
     rotY: number,
     alpha: number,
+    footPad = 0,
   ): void {
     if (this.pending.length >= this.mesh.instanceMatrix.count) return;
-    this.pending.push({ objX, objY, uv, width, length, rotY, alpha, depth: 0 });
+    // Stored ALREADY anchored (see castAnchor) — the sort below wants the quad's own position
+    // anyway, and this keeps the instanced path and the single-mesh path the same transform.
+    const at = castAnchor(objX, objY, length, rotY, footPad);
+    this.pending.push({ objX: at.x, objY: at.y, uv, width, length, rotY, alpha, depth: 0 });
   }
 
   /**
@@ -306,6 +334,7 @@ export const applyCast = (
   length: number,
   rotY: number,
   alpha: number,
+  footPad = 0,
 ): void => {
   const mat = mesh.material as THREE.MeshBasicMaterial;
   // `needsUpdate` looks like waste here — it makes three rebuild the program's cache key, and the
@@ -321,7 +350,8 @@ export const applyCast = (
   // ~58% of the pool radius. Scaled, it still cuts the silhouette at texel alpha 0.4
   // exactly as before (alphaTest is a live uniform in three — no recompile).
   mat.alphaTest = Math.max(0.01, 0.4 * alpha);
-  mesh.position.set(objX, FOOT_Y, objY);
+  const at = castAnchor(objX, objY, length, rotY, footPad);
+  mesh.position.set(at.x, FOOT_Y, at.y);
   // Base head direction is -Z; rotate it onto the shadow's heading.
   mesh.rotation.y = rotY;
   mesh.scale.set((flipX ? -1 : 1) * width * WIDTH_FACTOR, 1, length);

@@ -32,8 +32,8 @@ export default {
     '.ESSSSKWLKSSSSK.',
     '.ESSSSKWLKSSSSK.',
     '.ESSSSKWLKSSSSK.',
-    '.EESS......SSKK.',
-    '..E..........K..',
+    '.EESS..WL..SSKK.',
+    '..E....WL....K..',
     '.......WL.......',
     '.......WL.......',
     '.......WL.......',
@@ -43,7 +43,14 @@ export default {
     '.......WL.......',
     '................',
   ]],
-  notes: 'v2. A lamina ALARGA para fora: estreita junto ao olho (so as linhas 3-5 tocam o cabo) e '
+  notes: 'v3. O CABO E CONTINUO. Na v2 ele existia nas linhas 3-5 (dentro da cabeca) e recomecava '
+    + 'na linha 8, com as linhas 6-7 transparentes nas colunas 7-8: um buraco de 2px que soltava a '
+    + 'cabeca do cabo — o machado lia como uma lamina flutuando acima de um cabo separado. A causa '
+    + 'foi espelhar o afunilamento da cabeca de cima para baixo sem repor os pixels do cabo embaixo: '
+    + 'em cima o vazio esta certo (o cabo morre no olho, nada sobra acima), embaixo ele e o defeito. '
+    + 'O contraste de material piorava (cabo quente #886644/#b7916a contra aco frio), entao nao havia '
+    + 'nem ponte de valor atravessando o vao. '
+    + 'v2. A lamina ALARGA para fora: estreita junto ao olho (so as linhas 3-5 tocam o cabo) e '
     + 'cheia no fio (linhas 1-7 na coluna extrema). A primeira versao afinava para fora e lia '
     + 'como asa/nuvem, nao como machado — a flare e a silhueta inteira. O fio vira uma COLUNA '
     + 'de 7px: E na col 1 (luz da esquerda), K na col 14 (sombra), com o miolo S entre elas. '

@@ -51,8 +51,18 @@ export default {
       '...DDDDBBDDDD...',
       '......DDDD......',
     ],
-    // Estagio 2 — o TOCO. Some a folhagem inteira: so o cepo e a face cortada. Baixo e largo,
-    // deitado nas ultimas linhas do tile, para ler como "no chao" e nao como um poste curto.
+    // Estagio 2 — o TOCO. Some a folhagem inteira: sobra o mesmo tronco, cortado mais rente.
+    // A LARGURA E A DO TRONCO DE VERDADE: 2px nas colunas 7-8, medido do frame 4 (linha 14 do
+    // pinheiro shipped e literalmente '...DDDDBBDDDD...'). A primeira versao era um cepo de 6px
+    // em #815938 macico com o pe em #3a3f3f — tres vezes o tronco que ele diz ter sido, numa cor
+    // que no pinheiro inteiro aparece em 7 pixels soltos, e com o pe mais claro que o dos vizinhos.
+    // Lia como um bloco novo plantado ali, nao como o que sobrou da arvore: o estagio 1 decepa um
+    // tronco de 2px e o estagio 2 o fazia CRESCER.
+    //
+    // O pe e preto (D) como o de toda arvore em pe, e a linha 15 e a do frame 4 VERBATIM, entao o
+    // contato com o chao e identico ao dos pinheiros ao lado. Mas a linha 14 ESTREITA (de 12px
+    // para 6): aquela largura toda e a sombra da COPA, e sem copa acesa por cima ela vira o mesmo
+    // borrao escuro que reprovou a primeira tentativa do estagio 1.
     [
       '................',
       '................',
@@ -65,11 +75,11 @@ export default {
       '................',
       '................',
       '................',
-      '......HHHH......',
-      '.....CBBBBC.....',
-      '.....CBBBBC.....',
-      '....CBBBBBBC....',
-      '.....CCCCCC.....',
+      '.......HH.......',
+      '.......BB.......',
+      '.......BB.......',
+      '.....DDBBDD.....',
+      '......DDDD......',
     ],
   ],
   notes: 'Dois estagios compartilhados por toda arvore-tile. O estagio 1 reusa VERBATIM as linhas '

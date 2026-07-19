@@ -182,6 +182,9 @@ export class Billboard3D {
         quantize: true,
         normalUp: !this.flat,
         footDistance: !this.flat,
+        // A centred quad keeps its origin at its MIDDLE (see the geometry below), so its foot
+        // is half a unit down — without this it lights from its chest. See footAnchorY.
+        footAnchorY: opts.centered ? -0.5 : 0,
         fill: { color: this.uFillColor, mix: this.uFillMix },
         worldFx: opts.worldFx,
       });

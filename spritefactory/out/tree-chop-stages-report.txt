@@ -1,8 +1,9 @@
-tree-chop-stages: 2 frame(s) — 0 fail, 3 warn
+tree-chop-stages: 2 frame(s) — 0 fail, 4 warn
   [info] bbox: frame 0: content 12x8 at (2,8), coverage 21%
   [warn] edge-touch: frame 0: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
   [warn] black-outline: frame 0: 14px of pure #000000 — this game's "black" is the ink navy #1d2b53; flat silhouettes, not black-outlined cartoons
-  [info] bbox: frame 1: content 8x5 at (4,11), coverage 12%
+  [info] bbox: frame 1: content 6x5 at (5,11), coverage 6%
   [warn] edge-touch: frame 1: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
+  [warn] black-outline: frame 1: 8px of pure #000000 — this game's "black" is the ink navy #1d2b53; flat silhouettes, not black-outlined cartoons
   frame 0: #626439×22 #000000×14 #3a3f3f×11 #815938×6 #b7916a×2
-  frame 1: #815938×14 #3a3f3f×12 #b7916a×4
+  frame 1: #000000×8 #815938×6 #b7916a×2

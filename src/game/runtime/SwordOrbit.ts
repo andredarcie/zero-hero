@@ -13,6 +13,24 @@ const TRAIL_COUNT  = 4;
 const TRAIL_ALPHAS = [0.50, 0.30, 0.16, 0.07] as const;
 const TRAIL_DEPTH  = SCENE_DEPTHS.player; // behind main sprite
 
+// ── Standing in the world's light ────────────────────────────────────────────
+//
+// The swing is the last WORLD object drawn on the Phaser canvas, which sits ABOVE the 3D one:
+// it gets no lighting, no tone mapping and no night grade. Left alone it renders at full art
+// brightness over a night-dark world, so a light-palette tool (the steel axe is greys and bone)
+// swung like a lightbulb while the hero holding it stood in shadow — the "branco estourado".
+// So the sprite is TINTED by the light where the hero is standing (World3D.lightLevelAt):
+// moonlight at 0, the art's own colours at 1. It only has to sit in the hero's value range.
+const SWING_DARK = 0x5a5c78; // the multiply tint under moonlight alone — cool, like the night
+/** Blend the night tint toward white by `level` (0..1) and pack it back into a Phaser tint. */
+const swingTint = (level: number): number => {
+  const t = Math.max(0, Math.min(1, level));
+  const lerp = (dark: number): number => Math.round(dark + (255 - dark) * t);
+  return (lerp((SWING_DARK >> 16) & 0xff) << 16)
+    | (lerp((SWING_DARK >> 8) & 0xff) << 8)
+    | lerp(SWING_DARK & 0xff);
+};
+
 // ── The mining swing ─────────────────────────────────────────────────────────
 //
 // A pickaxe is not a sword. The slash above is a flat sweep that passes THROUGH its target and
@@ -68,6 +86,8 @@ export class SwordSlash {
   private readonly trails: Phaser.GameObjects.Sprite[];
 
   private onFire = false;
+  /** Light where the swing happens, 0..1 — see SWING_DARK. Set by the caller before each swing. */
+  private lightLevel = 1;
 
   // kept across onUpdate so we don't recalculate each frame
   private slashHandleX = 0;
@@ -97,6 +117,11 @@ export class SwordSlash {
 
   public setOnFire(value: boolean): void {
     this.onFire = value;
+  }
+
+  /** How lit the tile the hero swings from is (World3D.lightLevelAt), 0..1. */
+  public setLightLevel(level: number): void {
+    this.lightLevel = level;
   }
 
   /**
@@ -144,14 +169,17 @@ export class SwordSlash {
     // of raking with the back of the blade.
     const flipX = item?.flipX ?? false;
 
+    // A BURNING item keeps its own warm tint at full strength: it is a light source, not a lit
+    // surface, so the night must not dim it. Everything else stands in the world's light.
+    const litTint = swingTint(this.lightLevel);
     // hide trails until first onUpdate (they mirror the main sprite's texture/frame)
-    const trailTint = onFire ? 0xff5500 : 0xffffff;
+    const trailTint = onFire ? 0xff5500 : litTint;
     this.trails.forEach(t => t.setTexture(texture, frame).setFlipX(flipX).setAlpha(0).setVisible(false).setTint(trailTint));
 
     this.sprite
       .setTexture(texture, frame)
       .setFlipX(flipX)
-      .setTint(onFire ? 0xffaa44 : 0xffffff)
+      .setTint(onFire ? 0xffaa44 : litTint)
       .setPosition(this.slashHandleX, this.slashHandleY)
       .setDisplaySize(size * 1.20, size * 1.20) // starts 20% bigger for impact pop
       .setAngle(startAngle)
@@ -237,14 +265,15 @@ export class SwordSlash {
     s.size  = size * 0.92;
     s.trail = 0;
 
+    const litTint = swingTint(this.lightLevel); // stand in the world's light — see SWING_DARK
     this.sprite
       .setTexture(item.texture, item.frame)
       .setFlipX(false)
-      .setTint(0xffffff)
+      .setTint(litTint)
       .setAlpha(1)
       .setVisible(true);
     this.trails.forEach(t =>
-      t.setTexture(item.texture, item.frame).setFlipX(false).setTint(0xffffff).setAlpha(0).setVisible(false));
+      t.setTexture(item.texture, item.frame).setFlipX(false).setTint(litTint).setAlpha(0).setVisible(false));
     this.applyChop();
 
     const reared = hand(CHOP_HAND_REAR, CHOP_HAND_LIFT);

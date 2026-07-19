@@ -265,6 +265,17 @@ const TIMBER_MAX_SPAN = 3;
 // ~155 + 65ms) so the item never shows on the back and in the swing arc at the same time.
 const SWING_HIDE_MS = 240;
 
+// Where a swing PIVOTS on the hero, in tiles above the ground. Every arc used to be projected at
+// elevation 0 — the tile he STANDS on — so the sword, the axe and the pick all swung from his
+// ankles: the blade raked the ground and, facing north, the whole arc sat past his head instead
+// of in his hands. A swing comes from the HANDS, and the hero is about one tile tall.
+const SWING_HAND_ELEVATION = 0.55;
+// Facing away (north), the pivot is also pulled a little TOWARD the camera, so the arc crosses
+// the hero's body and reads as happening in FRONT of him. Without it a northward swing projects
+// beyond his back — correct in world space, but on screen it reads as him hitting behind himself.
+// The same asymmetry positionBackItem already encodes for the item slung on his back.
+const SWING_BACK_TURNED_NEAR = 0.3;
+
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
 
@@ -2060,7 +2071,7 @@ export class GameScene extends Phaser.Scene {
     this.hideBackItemDuringSwing();
     const dx = wx - this.playerWorld.worldX;
     const dy = wy - this.playerWorld.worldY;
-    const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+    const screen = this.swingAnchor(dy);
     if (this.heldItem === 'sword') {
       this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
       return;
@@ -2075,12 +2086,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * The pickaxe against stone swings the MINING swing (SwordSlash.chop), not the sword's arc:
-   * raised over the head, held there, and driven down into one spot. Combat keeps the flat slash
-   * — nobody hauls a pick over their head at a skeleton standing on top of them — so mining is the
-   * only place this motion belongs, and it is the only swing that lands late (CHOP_IMPACT_MS).
+   * Where a swing pivots on screen: the hero's HANDS, not the tile under his boots, and pulled
+   * toward the camera when his back is turned. See SWING_HAND_ELEVATION / SWING_BACK_TURNED_NEAR.
    */
-  private swingPickaxe(wx: number, wy: number): void {
+  private swingAnchor(dy: number): { x: number; y: number } {
+    // The arc is a 2D sprite over the 3D world, so it has to be TOLD how lit the hero is or it
+    // swings at full art brightness through the night. See World3D.lightLevelAt / SWING_DARK.
+    this.swordSlash?.setLightLevel(
+      this.world3d?.lightLevelAt(this.playerWorld.worldX, this.playerWorld.worldY) ?? 1,
+    );
+    const nearer = dy < 0 ? SWING_BACK_TURNED_NEAR : 0;
+    return this.camera!.tileToScreen(
+      this.playerWorld.worldX,
+      this.playerWorld.worldY + nearer,
+      this.tileSize,
+      SWING_HAND_ELEVATION,
+    );
+  }
+
+  /**
+   * The overhead MINING swing (SwordSlash.chop), not the sword's arc: raised over the head, held
+   * there, and driven down into one spot. It belongs to the two tools heavy enough to earn it —
+   * the pickaxe into stone, and the steel axe into a tree. Combat keeps the flat slash (nobody
+   * hauls a pick over their head at a skeleton standing on top of them), and this is the only
+   * swing that lands late, at CHOP_IMPACT_MS.
+   */
+  private swingChop(item: 'pickaxe' | 'greatAxe', wx: number, wy: number): void {
     if (!this.swordSlash || !this.camera) return;
     // The whoosh belongs to the DRIVE, not to the wind-up: a pick hauled slowly overhead makes no
     // sound at all, and the noise is what tells the player the blow is now unstoppable.
@@ -2088,12 +2119,16 @@ export class GameScene extends Phaser.Scene {
     this.hideBackItemDuringSwing(CHOP_TOTAL_MS); // a chop is far longer than a slash
     const dx = wx - this.playerWorld.worldX;
     const dy = wy - this.playerWorld.worldY;
-    const screen = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
-    const visual = HUD_ITEM_VISUAL.pickaxe;
+    const screen = this.swingAnchor(dy);
+    const visual = HUD_ITEM_VISUAL[item];
     this.swordSlash.chop(screen.x, screen.y, dx, dy, this.tileSize, {
       texture: visual.texture,
       frame: visual.frame,
     });
+  }
+
+  private swingPickaxe(wx: number, wy: number): void {
+    this.swingChop('pickaxe', wx, wy);
   }
 
   /** Hero is carrying a burning torch (the lit graveto): fire in hand, light, and enemy ward. */
@@ -3174,12 +3209,19 @@ export class GameScene extends Phaser.Scene {
     this.positionBackItem();
   }
 
-  // Pin the back item high on the hero's back, riding the hero billboard. Facing up means we
-  // see his back, so the item sits IN FRONT of the hero (a hair nearer the camera → the whole
-  // object shows); any other facing tucks it BEHIND (a hair further), where the body hides all
-  // but the tip poking over the shoulder — the z-buffer does what depth-sorting did in 2D.
-  // Facing comes from the movement controller (the sprite's own facing), so it never gets out
-  // of sync with the hero — a bump never flips the item to the front on its own.
+  // Pin the item on the hero's back, riding the hero billboard. Its ELEVATION is the same at every
+  // facing; only its DEPTH follows him, and it has to, because "on his back" is a side of a body:
+  // when he faces the camera his back is the far side (item behind, the body hides all but what
+  // clears his shoulder — the z-buffer doing what depth-sorting did in 2D), and when he faces UP
+  // his back is the side we are looking at, so the item is NEARER than he is.
+  //
+  // Pushing it behind at every facing looked like the simpler rule and deleted the item outright in
+  // the one pose that exists to show it: facing north the hero quad covers it completely and not a
+  // pixel of the axe survives. What actually earned the old complaint ("vejo apenas o que dá pra ver
+  // do machado, não ele completo") was not the near depth — it was riding at elevation 0.84, above
+  // the hero's 0→1 body, where nothing could occlude it at any depth and it floated over his head.
+  // Elevation is what fixes that, and it stays fixed at 0.55 here for every facing: the item spans
+  // 0.05→1.05, i.e. across his spine, so facing up reads as a tool STRAPPED ON, not hovering.
   private positionBackItem(): void {
     const bb = this.backItemBb;
     const hb = this.heroBillboard;
@@ -3195,11 +3237,10 @@ export class GameScene extends Phaser.Scene {
       bb.setPosition(hb.x + 0.32, hb.y + 0.02).setElevation(0.68 + bob);
       return;
     }
+    // Facing comes from the movement controller (the sprite's own facing), so the item can never
+    // get out of sync with the body the hero is actually showing.
     const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
-    // Facing up: the item sits on the visible back, drawn in front of the hero → whole object.
-    // Otherwise: it rides higher and behind the hero, so only the tip clears his shoulder.
-    bb.setPosition(hb.x - 0.14, hb.y + (facingUp ? 0.02 : -0.02))
-      .setElevation((facingUp ? 0.62 : 0.84) + bob);
+    bb.setPosition(hb.x - 0.10, hb.y + (facingUp ? 0.02 : -0.02)).setElevation(0.55 + bob);
   }
 
   // Hide the back item for the duration of a swing (reset the timer if the hero swings again),
@@ -3259,7 +3300,14 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    this.swingHeld(wx, wy);
+    // The OVERHEAD chop, not the sword's flat sweep. Felling a pine is the pickaxe's motion, not
+    // a duelist's: hauled up, hung on its own weight, driven into one spot. The timing here always
+    // assumed it — the blow is scheduled at CHOP_IMPACT_MS, the chop's impact frame — but the call
+    // played a slash, which is over (arc + fade, ~220ms) BEFORE the hit lands at 245ms, with the
+    // axe already back on the hero's back at SWING_HIDE_MS. So the sound, the chips and the tree
+    // dropping a stage all fired at nothing. Swinging the motion the timings belong to fixes the
+    // look and the sync in one move.
+    this.swingChop('greatAxe', wx, wy);
     this.time.delayedCall(CHOP_IMPACT_MS, () => {
       const felled = this.chopTreeTile(wx, wy);
       if (felled === null) return; // gone already (a second swing landing late)
@@ -3298,6 +3346,11 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
     this.setTreeTileFrame(wx, wy, next);
+    // The blow landed on a tree that is STILL STANDING, so rock it — the same answer the dry tree
+    // gives the plain axe (DryTreeObject's chop recoil). A tile cannot tween like a prop, so the
+    // lean is written into the merged mesh; see World3D.shakeSolidTile. The felling blow above
+    // gets none: there is no tree left to shudder, it comes down instead.
+    this.world3d?.shakeSolidTile(wx, wy);
     return false;
   }
 
@@ -3810,7 +3863,6 @@ export class GameScene extends Phaser.Scene {
     if (this.backItemBb?.visible && this.backItem && this.heldItem !== 'none') {
       this.backItemBb.setVisible(false);
       const torchLit = this.isTorchLit;
-      const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
       const visual = HUD_ITEM_VISUAL[this.heldItem];
       const ts = this.tileSize;
       this.tweens.killTweensOf(this.backItem);
@@ -3818,9 +3870,13 @@ export class GameScene extends Phaser.Scene {
         .setTexture(visual.texture, visual.frame)
         .setDisplaySize(ts, ts)
         .setRotation(torchLit ? 0 : -0.62)
+        // Same pose as the living billboard, converted to screen space: the 2D hero is centred at
+        // cy with origin 0.5, i.e. elevation 0.5, so an elevation E sits at -(E - 0.5) tiles.
+        // positionBackItem's 0.55 is therefore -0.05 — and it no longer splits on facing, since
+        // the elegy is drawn ON TOP of the corpse either way and only the height ever showed.
         .setPosition(
-          torchLit ? cx + ts * 0.32 : cx - ts * 0.14,
-          torchLit ? cy - ts * 0.18 : cy + ts * (facingUp ? -0.12 : -0.34),
+          torchLit ? cx + ts * 0.32 : cx - ts * 0.10,
+          torchLit ? cy - ts * 0.18 : cy - ts * 0.05,
         )
         .setAlpha(1)
         .setDepth(D + 1)

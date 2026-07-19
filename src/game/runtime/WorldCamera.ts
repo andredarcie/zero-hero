@@ -45,11 +45,22 @@ export class WorldCamera {
     this.camY = worldY;
   }
 
-  public tileToScreen(tileX: number, tileY: number, tileSize: number): { x: number; y: number } {
-    if (this.world3d) return this.world3d.projectTile(tileX, tileY);
+  /**
+   * World tile → screen pixel. `elevationTiles` lifts the point off the ground BEFORE projecting,
+   * which matters for anything anchored to a part of an actor rather than to the tile he stands
+   * on: a swing pivots at the hands, and projecting its pivot at elevation 0 put every arc down
+   * at the hero's feet.
+   */
+  public tileToScreen(
+    tileX: number,
+    tileY: number,
+    tileSize: number,
+    elevationTiles = 0,
+  ): { x: number; y: number } {
+    if (this.world3d) return this.world3d.projectTile(tileX, tileY, elevationTiles);
     return {
       x: Math.round(this.screenCenterX + (tileX - this.camX) * tileSize),
-      y: Math.round(this.screenCenterY + (tileY - this.camY) * tileSize),
+      y: Math.round(this.screenCenterY + (tileY - this.camY) * tileSize - elevationTiles * tileSize),
     };
   }
 

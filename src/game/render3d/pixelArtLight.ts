@@ -221,6 +221,20 @@ type PatchOpts = {
    * origin is the world origin, not a foot).
    */
   footDistance?: boolean;
+  /**
+   * Where that foot IS, in the quad's own local space. An upright billboard's geometry is
+   * translated so its origin sits at its feet, so the default 0 is right for it — but a
+   * CENTRED quad's origin is its MIDDLE, and sampling there lights the sprite from its chest.
+   * A centred quad must pass -0.5 (the bottom edge of a unit quad); the modelView transform
+   * scales it by the sprite's own height, so the sample lands on the real foot at any size.
+   *
+   * This is not cosmetic. The held item is centred and hangs at the hero's chest, ~0.4 tiles
+   * from the hero's own point light (World3D aims one at y=1.2 on his tile) instead of the
+   * ~1.2 tiles his foot-anchored body samples at. With decay 1.6 that is ~6x the irradiance,
+   * which pinned the carried item against uLightCap at ALL times, anywhere, day or night —
+   * the one lit billboard in the game sampling light from inside a light.
+   */
+  footAnchorY?: number;
   /** Wire the solid-colour fill uniforms (Phaser's setTintFill). */
   fill?: { color: THREE.IUniform; mix: THREE.IUniform };
   /**
@@ -259,7 +273,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
   // Three caches compiled programs by this key; without it, materials patched
   // DIFFERENTLY would silently share whichever variant compiled first.
   mat.customProgramCacheKey = () =>
-    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}`;
+    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}`;
 
   const bornAt = import.meta.env.DEV ? new Error().stack ?? '' : '';
 
@@ -315,9 +329,11 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
     }
 
     if (opts.footDistance) {
+      // Baked as a literal, so it is part of the cache key above — two anchors are two programs.
+      const anchorY = (opts.footAnchorY ?? 0).toFixed(2);
       shader.vertexShader = shader.vertexShader.replace(
         'vViewPosition = - mvPosition.xyz;',
-        'vViewPosition = - (modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;',
+        `vViewPosition = - (modelViewMatrix * vec4(0.0, ${anchorY}, 0.0, 1.0)).xyz;`,
       );
     }
 
@@ -418,9 +434,17 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
              reflectedLight.directDiffuse =
                floor(reflectedLight.directDiffuse * uLightSteps) / uLightSteps;
            }
+           // The cap has to cover the TOTAL, not just the direct term. Ambient is added after
+           // this by RE_IndirectDiffuse and it is not small — at ambient 8.5 the Lambert BRDF
+           // alone lands indirectDiffuse near 1.2x the albedo — so capping only the direct half
+           // let a lit surface reach ~2.8x its own art colour and CLIP: the steel axe's head
+           // came out 4000 pixels of pure #ffffff with no interior detail left, and every
+           // bone-white sprite blew out the same way. Budgeting the direct term against what
+           // ambient already spent enforces the ceiling this comment always claimed, and leaves
+           // ambient-only surfaces (1.2 < uLightCap) untouched, so the night keeps its mood.
            reflectedLight.directDiffuse = min(
              reflectedLight.directDiffuse,
-             diffuseColor.rgb * uLightCap
+             max(vec3(0.0), diffuseColor.rgb * uLightCap - reflectedLight.indirectDiffuse)
            );`,
         );
     }

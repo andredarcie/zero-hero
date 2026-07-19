@@ -22,7 +22,9 @@ import {
   lightWobbleUniform, patchPixelMaterial, syncTexelAaUniforms, texelAaUniform,
   type TexelAaUniforms,
 } from './pixelArtLight';
-import { frameUvWindow, getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv } from './textures3d';
+import {
+  frameFootPad, frameUvWindow, getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv,
+} from './textures3d';
 import { getWoodTexture } from './woodTexture';
 
 // The shapes every one-shot world FX is built from — a glowing dot (sparks, embers, motes), a
@@ -121,6 +123,15 @@ const CAST_POOL_MAX = 72;
  * distance where a range-limited point light was contributing almost nothing anyway.
  */
 const FIRE_LIGHT_SLOTS = 8;
+// How far a full-strength flame still counts as "lighting" a point, for lightLevelAt. Tiles.
+const LIGHT_SAMPLE_REACH = 5.5;
+
+// The axe-blow shudder of a standing TILE (see shakeSolidTile). Matched to DryTreeObject's chop
+// recoil so both trees answer an axe the same way: ±7° for ~220ms. The lean is tan(7°) — the
+// horizontal offset that tilting a one-tile-tall quad about its foot puts on its top corners.
+const TILE_SHAKE_SECONDS = 0.22;
+const TILE_SHAKE_CYCLES = 2;
+const TILE_SHAKE_LEAN = 0.123;
 // River tiles sit this far BELOW the ground plane — a sunken channel (dirt bed +
 // dark banks) so the water reads as recessed, with depth. The bridge still spans it
 // at ground level. WaterObject sets its surface just above the bed at this depth.
@@ -559,6 +570,8 @@ export class World3D {
   private decorGeo!: THREE.BufferGeometry;
   private readonly grassQuads = new Map<string, number>(); // "x,z" → vertex start
   private readonly activeRustles = new Map<string, GrassRustle>();
+  /** Standing tiles mid-shudder from an axe blow — see shakeSolidTile. "x,z" → pose. */
+  private readonly activeTileShakes = new Map<string, { vertStart: number; x: number; t: number }>();
 
   // ── felling a tree TILE (the steel axe) ──
   // The forest is terrain, not props: every standing tile is merged into ONE static mesh, and
@@ -1034,6 +1047,7 @@ export class World3D {
         field.add(
           tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
           CAST_WIDTH_FACTOR, length, this.moonCastRotY, alpha,
+          frameFootPad('forest-tileset', tile.frame),
         );
       }
     }
@@ -1174,6 +1188,34 @@ export class World3D {
     if (!cast) return null;
     // The heading is stored as a quad rotation (head along -Z); the ground vector is its image.
     return { dirX: -Math.sin(cast.rotY), dirZ: -Math.cos(cast.rotY), unitLen: cast.length, alpha: cast.alpha };
+  }
+
+  /**
+   * How LIT a world point is: 0 = moonlight only, 1 = standing in a flame.
+   *
+   * This exists for the 2D overlay, which is drawn on the Phaser canvas ABOVE the 3D world and
+   * therefore receives none of its lighting, none of its tone mapping and none of the night
+   * grade. The swing arc is the last world object still living there, and unlit it renders at
+   * FULL art brightness over a night-dark world — which is why the steel axe, whose palette is
+   * light greys and bone, swung like a lightbulb while the hero holding it was in shadow.
+   *
+   * A cheap STAND-IN for the shader, deliberately not a second copy of it: the nearest lit flame
+   * (the same `litFires` set the cast shadows rank each frame, plus the carried torch) with a
+   * linear falloff. It only has to land the sprite in the same value range as the hero swinging
+   * it — anything more faithful would be a second lighting model to keep in sync.
+   */
+  public lightLevelAt(x: number, y: number): number {
+    let best = 0;
+    const consider = (fx: number, fy: number, level: number): void => {
+      const reach = LIGHT_SAMPLE_REACH * Math.max(0.2, level);
+      const d = Math.hypot(fx - x, fy - y);
+      best = Math.max(best, 1 - Math.min(1, d / reach));
+    };
+    for (const f of this.litFires) consider(f.worldX, f.worldY, f.level);
+    // The torch is the one light that rides the hero, so it is the one that most often decides
+    // how a swing of his should read.
+    if (this.torch.strength > 0.15) consider(this.torch.x, this.torch.y, this.torch.level);
+    return best;
   }
 
   /**
@@ -1591,6 +1633,7 @@ export class World3D {
       applyCast(
         c.mesh, c.bb.x, c.bb.y, getTexture3D(c.bb.texKey, c.bb.frame), c.bb.flipX,
         Math.abs(c.bb.scaleX), cast.length, cast.rotY, cast.alpha,
+        frameFootPad(c.bb.texKey, c.bb.frame),
       );
     }
 
@@ -1612,6 +1655,7 @@ export class World3D {
         field.add(
           tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
           CAST_WIDTH_FACTOR, cast.length, cast.rotY, cast.alpha,
+          frameFootPad('forest-tileset', tile.frame),
         );
         p += 1;
       }
@@ -1627,6 +1671,45 @@ export class World3D {
     const vertStart = this.grassQuads.get(key);
     if (vertStart === undefined) return;
     this.activeRustles.set(key, { vertStart, x: worldX, z: worldY, t: 0 });
+  }
+
+  /**
+   * Shudder a standing solid tile, the way DryTreeObject rocks its billboard when the axe bites
+   * (±7° for ~220ms). A prop can do that with a tween on `angle` because it OWNS a mesh; a tile
+   * is four vertices inside the one merged buffer every standing tile shares, so there is nothing
+   * to rotate — the shake has to be written into `position` directly, the grass rustle's trick.
+   *
+   * Only the TOP two corners move. Shifting all four would slide the whole tree sideways, foot
+   * and all; leaning the top over a planted base is what rotation about the foot looks like, and
+   * it is what makes the blow read as landing on a tree that is rooted. `TILE_SHAKE_LEAN` is
+   * tan(7°) on a one-tile-tall quad, so a tile leans exactly as far as the dry tree rocks.
+   */
+  public shakeSolidTile(worldX: number, worldY: number): void {
+    const key = `${worldX},${worldY}`;
+    const vertStart = this.solidQuads.get(key);
+    if (vertStart === undefined) return;
+    // Re-seeded, never accumulated: a second blow landing mid-shudder restarts it from the rest
+    // pose instead of stacking a second offset onto an already-leaning tile.
+    this.activeTileShakes.set(key, { vertStart, x: worldX, t: 0 });
+  }
+
+  private updateTileShakes(dt: number): void {
+    if (this.activeTileShakes.size === 0) return;
+    const pos = this.solidGeo.attributes.position as THREE.BufferAttribute;
+    for (const [key, s] of this.activeTileShakes) {
+      s.t += dt / TILE_SHAKE_SECONDS;
+      const done = s.t >= 1;
+      // A DAMPED shudder: it oscillates and dies into the rest pose, so the tile always lands
+      // back where the merged mesh says it stands. Absolute positions recomputed from the tile's
+      // own x (like updateRustles) — offsets accumulated frame to frame would drift the forest.
+      const lean = done
+        ? 0
+        : Math.sin(s.t * Math.PI * 2 * TILE_SHAKE_CYCLES) * TILE_SHAKE_LEAN * (1 - s.t);
+      pos.setX(s.vertStart, s.x - 0.5 + lean);
+      pos.setX(s.vertStart + 1, s.x + 0.5 + lean);
+      if (done) this.activeTileShakes.delete(key);
+    }
+    pos.needsUpdate = true;
   }
 
   private updateRustles(dt: number): void {
@@ -1759,6 +1842,7 @@ export class World3D {
     this.renderer.info.reset();
     profiler.begin('rustle');
     this.updateRustles(dt);
+    this.updateTileShakes(dt); // same buffer-poking trick, same budget — see shakeSolidTile
     profiler.end('rustle');
 
     // Live knobs (window.hd3d).
