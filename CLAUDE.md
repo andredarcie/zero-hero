@@ -124,10 +124,82 @@ to a flame — that asymmetry is where the lab's "O Pavio" puzzle comes from.
 fetch-and-use. A tool whose only output is *passage* is a password, not a tool. Compare:
 `grass.cut()` and `door.unlock()` produce nothing, while `tree.chop()` yields a graveto — or a
 bridge, depending on where you stood — which is why the axe was the only interesting item in the
-game. So the pickaxe now drops a **stone** (`GameScene.dropStone`), and one stone **fords** a
+game. (Felling a pine *tile* with the steel axe drops a graveto for exactly this reason.)
+So the pickaxe now drops a **stone** (`GameScene.dropStone`), and one stone **fords** a
 bridgeSpot (`WaterObject.placeStone`). Stone is wood's opposite: both span a river, but a plank
 deck is *fuel* and a ford never burns (`WaterObject.burn` refuses a ford). Every crossing is now a
 question — do you want a **floor**, or a **fuse**? Ask that of any new item: what does it *make*?
+
+## The two axes, and why the world's edge had to become the sea
+
+There are two axes, and the second one is the only item in the game that edits **terrain**.
+
+- **`axe` — "Machado".** Unchanged. It bites **dead wood only**: the `dryTree` prop (6 stages,
+  regrows, TIMBER log-bridge) and the `dryShrub`.
+- **`greatAxe` — "Machado de Aço".** Fells **any tree**, and is a strict **superset** of the plain
+  axe (both go through `GameScene.holdsAnAxe`). That matters: if the steel axe did not cut dead
+  wood, finding it could *soft-lock* a puzzle built around the plain one. A new tool must never
+  invalidate the tool the player already has.
+
+**Most trees in this world are not props — they are tiles.** `world.json` holds 846 pine tiles in
+the upper layer (frames 4/14/15/16/17) against 69 props *in total*, and `World3D` merges every
+standing tile into ONE static mesh. That is the whole reason a forest costs one draw call, and it
+is why "cut any tree" could not be solved by adding a `TreeObject`: 846 billboards with contact
+blobs and cast shadows would be a serious perf regression. So the steel axe removes the **tile**:
+
+- `CHOPPABLE_UPPER_FRAMES` (constants) says which standing frames are wood. Deliberately not all
+  of `SOLID_UPPER_FRAMES` — 22 (spiked head) and 25 (tomb) stand up the same way but are masonry.
+- `GameScene.fellTreeTile` clears **both** `chunk.upper` *and* `chunk.collisions` — the worldgen
+  paints an explicit collision under every obstacle frame, so clearing only the frame leaves an
+  invisible wall. Those chunk arrays are the same ones `WorldData` holds, so the edit persists for
+  the run.
+- `World3D.removeSolidTile` un-bakes the tile from the merged buffers in place rather than
+  rebuilding them: it collapses the quad's four vertices onto a point (a degenerate triangle draws
+  nothing) in the solids mesh and in the contact-blob mesh, re-bakes the **ambient occlusion** the
+  tree printed on its neighbours (or the new clearing keeps the shadow of a tree that is gone),
+  drops it from `castableSolids`, and re-fills the moon cast. Rebuilding a ~6000-quad buffer per
+  swing would hitch; this is the `grassQuads` rustle trick applied to three buffers at once.
+- One swing fells it — a tile has no stages to shrink through — and it drops a **graveto**,
+  because an item whose only output is passage is a password (see the PRODUCE rule above).
+- The need-item balloon is shown **only when holding the plain axe**, never bare-handed. The
+  forest is ~850 tiles and the hero scrapes along it constantly; a balloon on every bump would be
+  wallpaper, and the hint only means anything while it stays rare.
+
+**The border is the sea, and that is a consequence of the steel axe, not a decoration.** The world
+edge used to be a wall of **pine tiles** (`WorldData`'s old `VOID_WALL_FRAME = 4`) — made of the
+exact thing the new item exists to destroy, so a player could chop a doorway and walk off the map.
+The fix is not to special-case the axe at the edge (a border you must remember to defend will be
+forgotten by the next feature) but to build the border out of something **no item answers**:
+
+- Out-of-bounds chunks are ground frame `SEA_TILE_FRAME` with no upper layer and collision
+  everywhere. Collision comes from `SOLID_GROUND_FRAMES` (the floor's mirror of
+  `SOLID_UPPER_FRAMES`), which is **unconditional** — so the sea blocks even the **lava boots**,
+  which wade every other hazard. Nothing in the game removes water: the bridge, the ford and the
+  boots all *cross* a river tile, and none of them apply to a ground frame.
+- "Mar" is also paintable in the editor's **Chao** group, and blocks there by the same implicit
+  rule (the editor draws it in the same amber as an implicitly-solid tree).
+- The sea borrows the river's **sunken bed and earthen banks**; those banks are the coastline.
+  Without that it reads as blue floor, not water.
+- It ships **three interchangeable frames** (33/34/35, the same grid cyclically shifted), picked
+  per tile by a hash of the coordinate in `World3D`. The river gets away with one tile because it
+  is ~30 of them; the sea covers thousands, and one frame repeated that far stops reading as water
+  and starts reading as a **grid**. Only `SEA_TILE_FRAME` is ever stored in world data — the
+  variants are art, chosen at build-mesh time, and cost nothing because the frame already travels
+  per vertex (`aUvBounds`).
+- `VOID_MARGIN_CHUNKS` stays at **1**, measured: a second ring of ocean cost ~9% more triangles
+  (53.1k vs 48.8k on main, frame p50 6.9ms vs 6.1ms). One ring lands at 40.2k — *under* main —
+  because the void used to carry an upright pine quad per tile plus its blob and its cast shadow,
+  and open water carries none. The border got cheaper by becoming flat.
+
+`npm run playtest -- machado` guards all of it: the sea blocks (boots included), the steel axe
+cannot open the border, the plain axe cannot fell a pine, the steel axe can and the tile really
+opens (collision too) leaving a graveto, and the steel axe still cuts dead wood.
+
+**A new terrain tile is a new FRAME in an existing atlas, not a new file.** Ground/upper index
+frames of `forest_tile_set.png` (3 columns, row-major) and the whole ground is one mesh sampling
+that one texture. `node spritefactory/install-tile.mjs <name> <tileset> <frame>` installs a built
+sprite into it, growing the sheet by appending rows — **only** appending, since frame ids are
+positional and inserting would silently re-point every tile already authored in `world.json`.
 
 ## The robotic arm (`inserter`) — the one thing that moves an item without the hero
 

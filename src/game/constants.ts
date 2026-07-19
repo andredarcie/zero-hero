@@ -129,6 +129,7 @@ export const ASSET_KEYS = {
   swordItem: 'sword-item',
   swordItemIcon: 'sword-item-icon',
   axeIcon: 'axe-icon',
+  greatAxeIcon: 'great-axe-icon',
   bombItem: 'bomb-item',
   bombIcon: 'bomb-icon',
   lavaBootsIcon: 'lava-boots-icon',
@@ -277,6 +278,31 @@ export const TREE_REGROW_MS = 60000;
 // Frame ids index forest_tile_set.png (3 columns): 3 & 21 are dead trees, 4/14/15/16/17/18 are
 // pines, and 22 & 25 are the cemetery's spiked head and tomb.
 export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25]);
+
+// Which of those standing tiles are TREES — the ones the steel axe (`greatAxe`) can fell.
+// The plain axe only ever bites dead wood (the dryTree/dryShrub props); the steel axe is
+// defined by cutting ANY tree, and most trees in the world are not props at all: they are
+// upper-layer tiles baked into one static mesh (846 of them in world.json). So "any tree"
+// has to mean the tile too, or the item's whole promise is a lie the moment you meet a pine.
+// Deliberately NOT the whole of SOLID_UPPER_FRAMES: 22 (spiked head) and 25 (tomb) stand up
+// the same way but are masonry and bone — an axe that chopped down a gravestone would say
+// the frame set means "scenery", when what it means here is "wood".
+export const CHOPPABLE_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21]);
+
+// Ground-layer frames that BLOCK, the mirror of SOLID_UPPER_FRAMES for the floor. The sea is
+// the only one, and it exists because of the steel axe: the world's edge used to be a wall of
+// pine tiles (WorldData's VOID_WALL_FRAME), which an axe that fells any tree turns into a door
+// out of the map. The sea is the border that no item in the game answers — collision here is
+// implicit and unconditional, so it blocks even the lava boots (which wade every OTHER hazard).
+export const SEA_TILE_FRAME = 33;
+// Three interchangeable paintings of the same water, picked per tile at render time (World3D).
+// The river gets away with ONE tile because it is ~30 of them; the sea covers ~11k, and a single
+// frame repeated that many times stops reading as water and starts reading as a grid — wallpaper
+// (caught in the `machado` playtest shots). The variants are the same grid cyclically shifted,
+// so density and dash length are identical and no variant reads lighter than its neighbours.
+// Only SEA_TILE_FRAME is ever stored in world data; the others exist purely as art.
+export const SEA_TILE_FRAMES: readonly number[] = [SEA_TILE_FRAME, 34, 35];
+export const SOLID_GROUND_FRAMES: ReadonlySet<number> = new Set([SEA_TILE_FRAME]);
 
 // Two wood sticks ("gravetos") build one bridge tile over water (see WaterObject); the plank
 // art is a dedicated tile (ASSET_KEYS.bridge = bridge.png).

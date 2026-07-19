@@ -149,6 +149,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   // Empty speech bubble shown above the hero's head with the item they still need inside it.
   { key: ASSET_KEYS.hintBalloon,    path: '/assets/ui/icons/ballon_icon.png' },
   { key: ASSET_KEYS.axeIcon,        path: '/assets/ui/icons/axe_icon.png' },
+  { key: ASSET_KEYS.greatAxeIcon,   path: '/assets/ui/icons/great_axe_icon.png' },
   { key: ASSET_KEYS.bombIcon,       path: '/assets/ui/icons/bomb_icon.png' },
   { key: ASSET_KEYS.lavaBootsIcon,  path: '/assets/ui/icons/lava_boots_icon.png' },
   { key: ASSET_KEYS.pickaxeIcon,    path: '/assets/ui/icons/pickaxe_icon.png' },

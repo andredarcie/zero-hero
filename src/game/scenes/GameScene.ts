@@ -1,9 +1,10 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 
 import {
   ASSET_KEYS,
   BOMB_FRAMES,
   CAMPFIRE_SAFE_RADIUS_TILES,
+  CHOPPABLE_UPPER_FRAMES,
   CHUNK_COLUMNS,
   CHUNK_ROWS,
   DIALOG_PANEL_FRACTION,
@@ -99,6 +100,7 @@ const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> 
   sword: { texture: ASSET_KEYS.swordItemIcon, frame: 0 },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
+  greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0 },
   bomb: { texture: ASSET_KEYS.bombIcon, frame: 0 },
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
@@ -116,6 +118,7 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   sword: { texture: 'sword-icon', frame: 0 },
   key: { texture: 'key-item', frame: KEY_FRAMES.held },
   axe: { texture: 'axe-icon', frame: 0 },
+  greatAxe: { texture: 'great-axe-icon', frame: 0 },
   bomb: { texture: 'bomb-icon', frame: 0 },
   lavaBoots: { texture: 'lava-boots-icon', frame: 0 },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
@@ -135,6 +138,7 @@ const NEED_ITEM_ICON = {
   fire: { texture: ASSET_KEYS.woodOnFireIcon, frame: 0 },
   key: { texture: ASSET_KEYS.keyItemIcon, frame: 0 },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
+  greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0 },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
@@ -150,6 +154,7 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle, label: 'VOCE PEGOU A ESPADA!' },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held, label: 'VOCE PEGOU A CHAVE!' },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0, label: 'VOCE PEGOU O MACHADO!' },
+  greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0, label: 'MACHADO DE ACO! DERRUBA QUALQUER ARVORE' },
   bomb: { texture: ASSET_KEYS.bombItem, frame: BOMB_FRAMES.item, label: 'VOCE PEGOU A BOMBA! LEVE-A ATE A MARCA' },
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0, label: 'VOCE PEGOU AS BOTAS DE LAVA!' },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
@@ -168,6 +173,7 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   sword: 999,
   wood: 1.5,
   axe: 1.5,
+  greatAxe: 1.5,
   key: 1.5,
   pickaxe: 1.5,
   scythe: 1.5,
@@ -1231,6 +1237,16 @@ export class GameScene extends Phaser.Scene {
     return this.heldItem === 'sword';
   }
 
+  /**
+   * Either axe cuts DEAD wood (dryTree, dryShrub) — the steel axe is strictly the plain axe
+   * plus living trees, never a replacement that invalidates the one the player already has.
+   * Anything gated on this stays gated on the cheap tool, so no puzzle built around the plain
+   * axe can be skipped (or broken) by finding the steel one.
+   */
+  private get holdsAnAxe(): boolean {
+    return this.heldItem === 'axe' || this.heldItem === 'greatAxe';
+  }
+
   private getCampfireAt(wx: number, wy: number): CampfireObject | undefined {
     return this.campfires.find((cf) => cf.worldX === wx && cf.worldY === wy);
   }
@@ -1523,7 +1539,7 @@ export class GameScene extends Phaser.Scene {
     // across the river as a free log bridge. Otherwise it just drops a graveto on the ground.
     const tree = this.getDryTreeAt(wx, wy);
     if (tree?.blocking) {
-      if (this.heldItem === 'axe') {
+      if (this.holdsAnAxe) {
         this.swingHeld(wx, wy);
         // Capture the chop direction now (the hero is stopped, but a queued key could shift it).
         const px = this.playerWorld.worldX;
@@ -1552,7 +1568,7 @@ export class GameScene extends Phaser.Scene {
     // back: purely a physical barrier.
     const shrub = this.getDryShrubAt(wx, wy);
     if (shrub?.blocking) {
-      if (this.heldItem === 'axe') {
+      if (this.holdsAnAxe) {
         this.swingHeld(wx, wy);
         this.time.delayedCall(150, () => {
           if (shrub.chop()) {
@@ -1681,6 +1697,12 @@ export class GameScene extends Phaser.Scene {
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
     }
+
+    // A TREE TILE — the forest itself, and the only thing the steel axe does that the plain axe
+    // cannot. Checked last, after every prop: props stand ON tiles, so a rock or a door in front
+    // of a pine must answer first. Nothing else in the game edits terrain, which is exactly why
+    // this reads as the strongest tool in the world.
+    if (this.tryChopTreeTile(wx, wy)) return;
 
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (!enemy) return;
@@ -3193,6 +3215,82 @@ export class GameScene extends Phaser.Scene {
 
   // A felled tree leaves a stick behind: drop a `wood` pickup on the (now passable) stump tile.
   // `wood` is the flammable item, so the stick is exactly "an item you can use to make fire".
+  /**
+   * The frame of the choppable TREE tile at (wx, wy), or null if that tile is not one.
+   *
+   * Bounded to the authored world on purpose. Outside it there is only open sea, whose terrain
+   * WorldData synthesises fresh on every call — a "chop" out there would edit a throwaway object
+   * and leave the mesh and the collision disagreeing forever. The sea has no upper layer anyway,
+   * so this is belt and braces: the border must not be editable by any means.
+   */
+  private treeTileFrameAt(wx: number, wy: number): number | null {
+    const chunks = this.chunkManager;
+    if (!chunks) return null;
+    const cx = Math.floor(wx / CHUNK_COLUMNS);
+    const cy = Math.floor(wy / CHUNK_ROWS);
+    if (!chunks.hasChunkCoordinate(cx, cy)) return null;
+    const { upper } = chunks.getTile(wx, wy);
+    return upper !== null && CHOPPABLE_UPPER_FRAMES.has(upper) ? upper : null;
+  }
+
+  /**
+   * Fell a tree that is a TILE rather than a prop — the steel axe's whole reason to exist.
+   * Returns true if the bump was about a tree tile at all (whether or not it fell), so the
+   * caller stops there.
+   *
+   * One swing takes it down: a tile has no stages to shrink through (that is the dryTree prop's
+   * job, and its 6-frame sheet), and it leaves no stump — the tile simply opens. What it DOES
+   * leave is a graveto, because an item whose only output is passage is a password and not a
+   * tool: felling a pine has to feed the fire economy exactly like felling a dead tree does.
+   */
+  private tryChopTreeTile(wx: number, wy: number): boolean {
+    if (this.treeTileFrameAt(wx, wy) === null) return false;
+
+    if (this.heldItem !== 'greatAxe') {
+      // Deliberately SILENT bare-handed. The forest is ~850 tiles and the hero scrapes along it
+      // constantly while walking, so a balloon on every bump would be wallpaper — and the
+      // need-item hint only means anything while it stays rare. Holding the PLAIN axe is the
+      // opposite case: the player has an axe and is being refused, and this balloon is the only
+      // place the game ever explains that there are two.
+      if (this.heldItem === 'axe') this.showNeedItemHint('greatAxe');
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return true;
+    }
+
+    this.swingHeld(wx, wy);
+    this.time.delayedCall(CHOP_IMPACT_MS, () => {
+      if (!this.fellTreeTile(wx, wy)) return; // gone already (a second swing landing late)
+      getSoundManager().playWoodChop();
+      this.spawnBridgeChips(wx, wy, 6);
+      this.dropTreeStick(wx, wy);
+    });
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    return true;
+  }
+
+  /**
+   * Take the tree out of the terrain: the chunk data (which is where collision lives, via
+   * SOLID_UPPER_FRAMES) and the merged static mesh (which is where the art lives). Both, or the
+   * world desyncs into an invisible wall / a walk-through tree.
+   *
+   * The chunk arrays here are the SAME arrays WorldData holds, so this edit outlives the chunk
+   * cache — which is what we want (a felled tree stays felled for the run) and is also why it
+   * must never run outside the authored bounds; see treeTileFrameAt.
+   */
+  private fellTreeTile(wx: number, wy: number): boolean {
+    const chunks = this.chunkManager;
+    if (!chunks || this.treeTileFrameAt(wx, wy) === null) return false;
+    const chunk = chunks.getChunk(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS));
+    const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+    const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+    chunk.upper[ly][lx] = null;
+    // The worldgen paints an explicit collision under every obstacle frame as well, so clearing
+    // only the upper frame would leave the tile blocked by an invisible wall.
+    chunk.collisions[ly][lx] = false;
+    this.world3d?.removeSolidTile(wx, wy);
+    return true;
+  }
+
   private dropTreeStick(worldX: number, worldY: number): void {
     if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
     this.itemManager?.drop('wood', worldX, worldY);

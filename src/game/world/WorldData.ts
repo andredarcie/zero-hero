@@ -1,4 +1,4 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAME } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
@@ -17,10 +17,18 @@ type WorldBounds = {
   minTileY: number; maxTileY: number;
 };
 
-// Frames used to render tiles outside the authored 0..N-1 grid, so the finite world has a
-// visible, solid border instead of an abrupt cut.
-const VOID_GROUND_FRAME = 5;
-const VOID_WALL_FRAME = 4;
+// Everything outside the authored 0..N-1 grid is OPEN SEA, so the finite world has a visible,
+// solid border instead of an abrupt cut.
+//
+// It used to be dirt under a wall of pine tiles (frame 4), and that stopped working the day the
+// steel axe learned to fell any tree: the border was made of the exact thing the new item
+// exists to destroy, so a player could simply chop a doorway and walk off the map. The fix is
+// not to special-case the axe at the edge — a border you have to remember to defend will be
+// forgotten by the next feature. It is to build the border out of something no item answers.
+// Water is that thing: nothing in the game removes water. The bridge, the ford and the boots
+// all CROSS a river tile, and none of them apply here, because the sea's collision comes from
+// SOLID_GROUND_FRAMES (unconditional) rather than from a WaterObject (which the boots wade).
+const VOID_GROUND_FRAME = SEA_TILE_FRAME;
 
 const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 
@@ -81,7 +89,9 @@ const buildVoidChunk = (cx: number, cy: number): ChunkData => ({
   cx,
   cy,
   ground: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => VOID_GROUND_FRAME)),
-  upper: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => VOID_WALL_FRAME as number | null)),
+  // No upper layer: open water has nothing standing in it. (A pine wall here would also be
+  // choppable now — see the note on VOID_GROUND_FRAME.)
+  upper: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => null as number | null)),
   collisions: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => true)),
 });
 

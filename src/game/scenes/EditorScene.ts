@@ -1,6 +1,9 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 
-import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES, NPC_VISUALS, SOLID_UPPER_FRAMES } from '@/game/constants';
+import {
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES, NPC_VISUALS,
+  SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+} from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import { EditorDomUi, PANEL_WIDTH, isDirectionalProp, type UiState, type ViewMode } from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
@@ -45,6 +48,7 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   sword: { key: ASSET_KEYS.swordItem, frame: 0 },
   key: { key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   axe: { key: ASSET_KEYS.axeIcon },
+  greatAxe: { key: ASSET_KEYS.greatAxeIcon },
   bomb: { key: ASSET_KEYS.bombItem, frame: 0 },
   lavaBoots: { key: ASSET_KEYS.lavaBootsIcon },
   pickaxe: { key: ASSET_KEYS.pickaxeIcon },
@@ -259,6 +263,10 @@ export class EditorScene extends Phaser.Scene {
     if (store.readCell('collision', wx, wy) === true) return COLLISION_GID;
     const upper = store.readCell('upper', wx, wy) as number | null;
     if (upper !== null && SOLID_UPPER_FRAMES.has(upper)) return TREE_COLLISION_GID;
+    // The sea blocks from the GROUND layer (SOLID_GROUND_FRAMES) — same implicit rule, so it
+    // gets the same amber. Without this the editor would draw a paintable ocean as walkable.
+    const ground = store.readCell('ground', wx, wy) as number | null;
+    if (ground !== null && SOLID_GROUND_FRAMES.has(ground)) return TREE_COLLISION_GID;
     return null;
   }
 

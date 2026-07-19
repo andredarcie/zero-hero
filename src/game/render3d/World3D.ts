@@ -5,7 +5,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 import {
-  CHUNK_COLUMNS, CHUNK_ROWS, SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
+  CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAME, SEA_TILE_FRAMES, SOLID_UPPER_FRAMES,
+  TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds } from '@/game/world/WorldData';
 import { profiler } from '@/game/debug/Profiler';
@@ -81,7 +82,25 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 // GameScene drives this renderer once per frame (render(dt)) and projects any
 // remaining screen-space Phaser FX through projectTile().
 
+// How far past the authored world to mesh the out-of-bounds filler (now open sea).
+//
+// ONE ring, measured. A second ring looked tempting (more ocean at the horizon) and cost ~9%
+// more triangles — 53.1k vs 48.8k on main — which showed up as frame p50 6.9ms against main's
+// 6.1ms. One ring instead comes in UNDER main at 40.2k, because the void used to carry an
+// upright pine quad per tile (plus its blob and its cast shadow) and open water carries none.
+// That is the whole trade: the border got cheaper by becoming flat.
 const VOID_MARGIN_CHUNKS = 1;
+
+/**
+ * Which of the three sea paintings a given ocean tile wears. A cheap integer hash of the
+ * coordinate — deterministic, so the same tile is the same variant on every boot, which is what
+ * keeps the reference screenshots byte-identical between runs.
+ */
+const seaVariant = (x: number, z: number): number => {
+  let h = (x * 73856093) ^ (z * 19349663);
+  h = (h ^ (h >>> 13)) >>> 0;
+  return h % SEA_TILE_FRAMES.length;
+};
 // Cap on static-solid cast silhouettes drawn at once (trees near a lit fire).
 const CAST_POOL_MAX = 72;
 /**
@@ -541,6 +560,23 @@ export class World3D {
   private readonly grassQuads = new Map<string, number>(); // "x,z" → vertex start
   private readonly activeRustles = new Map<string, GrassRustle>();
 
+  // ── felling a tree TILE (the steel axe) ──
+  // The forest is terrain, not props: every standing tile is merged into ONE static mesh, and
+  // that is the only reason 846 trees cost one draw call. So an axe that removes a tree cannot
+  // remove an object — there is no object. It edits the merged buffers in place, collapsing the
+  // four vertices of that one quad onto a point (a degenerate triangle rasterizes nothing). The
+  // grass rustle already addressed a single baked quad this way (`grassQuads`); these are the
+  // same trick applied to the three buffers a standing tile writes into: its upright quad, its
+  // contact blob, and the ambient occlusion it casts on the ground around its feet.
+  private solidGeo!: THREE.BufferGeometry;
+  private groundGeo!: THREE.BufferGeometry;
+  private blobGeo!: THREE.BufferGeometry;
+  private readonly solidQuads = new Map<string, number>();     // "x,z" → vertex start
+  private readonly solidBlobQuads = new Map<string, number>(); // "x,z" → vertex start
+  private readonly groundQuads = new Map<string, number>();    // "x,z" → vertex start
+  /** Live set of standing tiles — shrinks as trees fall, so re-baked AO sees the clearing. */
+  private solidKeys = new Set<string>();
+
   // ── firelight cast shadows (2D ground silhouettes) ──
   // One persistent silhouette per dynamic caster (hero, props, NPCs, enemies)…
   private readonly castCasters: Array<{ bb: Billboard3D; mesh: THREE.Mesh }> = [];
@@ -825,6 +861,11 @@ export class World3D {
     );
     // Lava tiles sink into their own (shallower) basin, the same way water tiles do.
     const lavaSet = new Set<string>(getLavaTiles().map((p) => `${p.worldX},${p.worldY}`));
+    // The SEA (the world's border, and any ocean painted inside it) is a ground FRAME, not a
+    // prop — there is no WaterObject for ~11k tiles. It still has to read as water rather than
+    // as blue floor, so it borrows the river's whole treatment: the same sunken bed and the
+    // same earthen banks where it meets the land. Those banks ARE the coastline.
+    const seaSet = new Set<string>();
     const groundTiles: Array<{ x: number; z: number; frame: number }> = [];
     const bedTiles: Array<{ x: number; z: number; frame: number }> = [];
     const lavaBedTiles: Array<{ x: number; z: number; frame: number }> = [];
@@ -839,7 +880,16 @@ export class World3D {
             const wy = cy * CHUNK_ROWS + row;
             const tile = { x: wx, z: wy, frame: chunk.ground[row][col] };
             const tk = `${wx},${wy}`;
-            if (waterSet.has(tk)) bedTiles.push(tile);
+            if (tile.frame === SEA_TILE_FRAME) {
+              seaSet.add(tk);
+              // Break the tiling: one frame repeated across ~11k tiles reads as a grid, not as
+              // water. The variant is chosen from the coordinate (never random) so the ocean is
+              // identical on every boot — visual-ref diffs to 0 pixels, and three.js's shared
+              // Math.random stream stays untouched (see the visual-ref trap in CLAUDE.md).
+              tile.frame = SEA_TILE_FRAMES[seaVariant(wx, wy)];
+              bedTiles.push(tile);
+            }
+            else if (waterSet.has(tk)) bedTiles.push(tile);
             else if (lavaSet.has(tk)) lavaBedTiles.push(tile);
             else groundTiles.push(tile);
             const upper = chunk.upper[row][col];
@@ -857,6 +907,7 @@ export class World3D {
     // Where the standing tiles are, so the ground can bake an ambient-occlusion corner shade
     // under them (see buildFlatTileGeometry).
     const solidSet = new Set(this.solidTiles.map((t) => `${t.x},${t.z}`));
+    this.solidKeys = solidSet; // kept live: felling a tree deletes from it, so re-baked AO agrees
     // The lava field, for the per-region grade (updateBiomeGrade).
     for (const l of getLavaTiles()) this.lavaSpots.push({ x: l.worldX, y: l.worldY });
 
@@ -868,8 +919,10 @@ export class World3D {
     syncTexelAaUniforms(tileAa, tileset); // the sheet's pixel size; every base texture is loaded by now
     const groundMat = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
     patchPixelMaterial(groundMat, { quantize: true, texelAa: tileAa });
-    const ground = new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet), groundMat);
+    this.groundGeo = buildFlatTileGeometry(groundTiles, 0, solidSet);
+    const ground = new THREE.Mesh(this.groundGeo, groundMat);
     this.scene.add(ground);
+    groundTiles.forEach((tile, i) => this.groundQuads.set(`${tile.x},${tile.z}`, i * 4));
 
     // The sunken riverbed (the same dirt, dropped a level) + the dark earthen banks that
     // wall the channel where it meets the land — together they give the water its depth.
@@ -878,7 +931,8 @@ export class World3D {
       this.scene.add(bed);
       const bankMat = new THREE.MeshLambertMaterial({ color: 0x2a2016, side: THREE.DoubleSide });
       patchPixelMaterial(bankMat, { quantize: true });
-      this.scene.add(new THREE.Mesh(buildBankGeometry(waterSet, bedTiles, WATER_DEPTH_TILES), bankMat));
+      const sunken = seaSet.size > 0 ? new Set([...waterSet, ...seaSet]) : waterSet;
+      this.scene.add(new THREE.Mesh(buildBankGeometry(sunken, bedTiles, WATER_DEPTH_TILES), bankMat));
     }
 
     // The lava basin: the same recipe, shallower — a dropped bed to close the well's bottom and
@@ -911,7 +965,9 @@ export class World3D {
     // Lit like the ground at their feet — same treatment the dynamic billboards get.
     const solidMat = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
     patchPixelMaterial(solidMat, { quantize: true, normalUp: true, texelAa: tileAa });
-    const solids = new THREE.Mesh(buildUprightTileGeometry(this.solidTiles), solidMat);
+    this.solidGeo = buildUprightTileGeometry(this.solidTiles);
+    this.solidTiles.forEach((tile, i) => this.solidQuads.set(`${tile.x},${tile.z}`, i * 4));
+    const solids = new THREE.Mesh(this.solidGeo, solidMat);
     solids.castShadow = true;
     solids.customDepthMaterial = new THREE.MeshDepthMaterial({
       depthPacking: THREE.RGBADepthPacking, map: tileset, alphaTest: 0.5,
@@ -935,10 +991,11 @@ export class World3D {
     // The soft ambient ground blob each obstacle had in 2D ("anchors lifted obstacles so
     // they read as standing up") — merged into one mesh, all sharing the soft blob texture.
     // A touch of forward (+z, toward camera) bias peeks the blob out at the tree's foot.
-    const ellipses = new THREE.Mesh(
-      buildShadowBlobGeometry(this.castableSolids.map((t) => ({ x: t.x, z: t.z + 0.06 })), 0.46, 0.42),
-      makeShadowBlobMaterial(0.34),
+    this.blobGeo = buildShadowBlobGeometry(
+      this.castableSolids.map((t) => ({ x: t.x, z: t.z + 0.06 })), 0.46, 0.42,
     );
+    this.castableSolids.forEach((tile, i) => this.solidBlobQuads.set(`${tile.x},${tile.z}`, i * 4));
+    const ellipses = new THREE.Mesh(this.blobGeo, makeShadowBlobMaterial(0.34));
     ellipses.renderOrder = 3; // after the additive fire glow, so the blob isn't washed out
     this.scene.add(ellipses);
 
@@ -983,6 +1040,61 @@ export class World3D {
     field.end(0, 1e6);
     this.appliedMoonShadow.alpha = alpha;
     this.appliedMoonShadow.length = length;
+  }
+
+  /**
+   * Take one standing tile out of the world — the steel axe felling a tree that is terrain
+   * rather than a prop. Everything a solid tile contributes is baked into a merged buffer at
+   * boot, so this un-bakes it in place instead of rebuilding anything:
+   *
+   *   1. its upright quad in the one solids mesh  → collapsed to a point (draws nothing);
+   *   2. its contact blob in the one blob mesh    → same;
+   *   3. the ambient occlusion it printed on the ground around its feet → re-baked from the
+   *      live solid set, or the clearing keeps the shadow of a tree that is no longer there;
+   *   4. its firelight cast (refilled per frame from castableSolids) → drop it from that list;
+   *   5. its moon cast (baked once) → re-bake, which is why this is not free.
+   *
+   * Collapsing rather than rebuilding matters: the solids mesh holds ~6000 quads (the forest
+   * plus the void ring), and reallocating that buffer per swing would hitch. Caller must also
+   * clear the tile in the chunk data — collision lives there, not here.
+   */
+  public removeSolidTile(worldX: number, worldY: number): void {
+    const key = `${worldX},${worldY}`;
+    const vertStart = this.solidQuads.get(key);
+    if (vertStart === undefined) return; // not a standing tile, or already felled
+    this.solidQuads.delete(key);
+    this.solidKeys.delete(key);
+    collapseQuad(this.solidGeo, vertStart);
+
+    const blobStart = this.solidBlobQuads.get(key);
+    if (blobStart !== undefined) {
+      this.solidBlobQuads.delete(key);
+      collapseQuad(this.blobGeo, blobStart);
+    }
+
+    // Re-bake the AO of the 3x3 around the stump: the felled tile darkened its neighbours'
+    // corners, and each of those corners is a vertex colour on a DIFFERENT quad.
+    const colour = this.groundGeo.attributes.color as THREE.BufferAttribute;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = worldX + dx;
+        const nz = worldY + dz;
+        const start = this.groundQuads.get(`${nx},${nz}`);
+        if (start === undefined) continue; // a riverbed/lava quad — its own mesh, no AO to fix
+        tileAoCorners(nx, nz, this.solidKeys).forEach((shade, c) => {
+          colour.setXYZ(start + c, shade, shade, shade);
+        });
+      }
+    }
+    colour.needsUpdate = true;
+
+    const castIndex = this.castableSolids.findIndex((t) => t.x === worldX && t.z === worldY);
+    if (castIndex >= 0) {
+      this.castableSolids.splice(castIndex, 1);
+      // The blob/solid quad maps index the GEOMETRY, which never shrinks, so this splice
+      // cannot invalidate them. Only the two cast fields read this array.
+      this.fillMoonCastField();
+    }
   }
 
   // ── dynamic actors ───────────────────────────────────────────────────────────
@@ -2359,6 +2471,44 @@ const makeParticleField = (
 
 // ── merged tile geometry builders ─────────────────────────────────────────────
 
+/**
+ * Erase one quad from a merged, indexed geometry by folding its four vertices onto a single
+ * point: both its triangles become degenerate and rasterize zero pixels. The alternative —
+ * rebuilding the buffer without that quad — reallocates and re-uploads the whole mesh, which
+ * for the ~6000-quad forest is a visible hitch on a single axe swing.
+ */
+const collapseQuad = (geo: THREE.BufferGeometry, vertStart: number): void => {
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const x = pos.getX(vertStart);
+  const y = pos.getY(vertStart);
+  const z = pos.getZ(vertStart);
+  for (let i = 0; i < 4; i++) pos.setXYZ(vertStart + i, x, y, z);
+  pos.needsUpdate = true;
+};
+
+// Corner order of a flat quad, as (dx, dz) in half-tiles — the order positions are pushed in.
+const AO_CORNERS: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+
+/**
+ * Baked ambient occlusion for one flat tile, as four corner shades: a corner hemmed in by
+ * standing tiles (trees, walls) sees less of the sky, so it goes darker. This is depth from
+ * LIGHT, not from geometry — the rule of the project is that nothing may grow out of its tile.
+ *
+ * Split out of buildFlatTileGeometry because felling a tree TILE has to re-bake it: the shade
+ * around a tree's feet is baked into its NEIGHBOURS' vertex colours, so a tree that vanished
+ * without this would leave its own shadow printed on the clearing the player just opened.
+ */
+const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<string>): number[] =>
+  AO_CORNERS.map(([dx, dz]) => {
+    let occluders = 0;
+    if (solids) {
+      if (solids.has(`${x + dx},${z}`)) occluders++;
+      if (solids.has(`${x},${z + dz}`)) occluders++;
+      if (solids.has(`${x + dx},${z + dz}`)) occluders++;
+    }
+    return 1 - AO_MAX * (occluders / 3);
+  });
+
 const buildFlatTileGeometry = (
   tiles: Array<{ x: number; z: number; frame: number }>,
   y: number,
@@ -2370,8 +2520,6 @@ const buildFlatTileGeometry = (
   const nrm: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
-  // Corner order of the quad below, as (dx, dz) in half-tiles.
-  const CORNERS: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
   tiles.forEach(({ x, z, frame }, i) => {
     const f = tilesetFrameUv(frame);
     pos.push(x - 0.5, y, z - 0.5, x + 0.5, y, z - 0.5, x + 0.5, y, z + 0.5, x - 0.5, y, z + 0.5);
@@ -2381,19 +2529,7 @@ const buildFlatTileGeometry = (
     // ground is a single draw and every quad in it windows onto a different tile.
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
-    // Baked ambient occlusion, the only "relief" a flat tile is allowed: a corner hemmed in by
-    // standing tiles (trees, walls) sees less of the sky, so it goes darker. This is depth from
-    // LIGHT, not from geometry — the rule of the project is that nothing may grow out of its tile.
-    for (const [dx, dz] of CORNERS) {
-      let occluders = 0;
-      if (solids) {
-        if (solids.has(`${x + dx},${z}`)) occluders++;
-        if (solids.has(`${x},${z + dz}`)) occluders++;
-        if (solids.has(`${x + dx},${z + dz}`)) occluders++;
-      }
-      const shade = 1 - AO_MAX * (occluders / 3);
-      col.push(shade, shade, shade);
-    }
+    for (const shade of tileAoCorners(x, z, solids)) col.push(shade, shade, shade);
     const b = i * 4;
     idx.push(b, b + 3, b + 2, b, b + 2, b + 1);
   });

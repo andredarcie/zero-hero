@@ -11,6 +11,10 @@ export type HeldItemKind =
   | 'sword'
   | 'key'
   | 'axe'
+  // The STEEL axe. The plain axe only bites dead wood (dryTree, dryShrub); this one fells any
+  // tree in the game, including the living pines that make up most of the forest — and those
+  // are terrain tiles, not props, so this is the only item that edits the map itself.
+  | 'greatAxe'
   | 'bomb'
   | 'lavaBoots'
   | 'pickaxe'
@@ -41,6 +45,7 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   sword: { texture: 'sword-item', frame: ITEM_FRAMES.swordIdle },
   key: { texture: 'key-item', frame: KEY_FRAMES.pickup },
   axe: { texture: 'axe-icon', frame: 0 },
+  greatAxe: { texture: 'great-axe-icon', frame: 0 },
   bomb: { texture: 'bomb-item', frame: BOMB_FRAMES.item },
   lavaBoots: { texture: 'lava-boots-icon', frame: 0 },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },

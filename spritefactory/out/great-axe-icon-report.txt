@@ -1,0 +1,3 @@
+great-axe-icon: 1 frame(s) — 0 fail, 0 warn
+  [info] bbox: content 14x14 at (1,1), coverage 31%
+  frame 0: #989aa7×46 #886644×10 #b7916a×10 #cdcdcd×7 #5d6165×7

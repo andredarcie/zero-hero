@@ -16,6 +16,7 @@ export type PickupKind =
   | 'sword'
   | 'key'
   | 'axe'
+  | 'greatAxe'
   | 'bomb'
   | 'lavaBoots'
   | 'pickaxe'

@@ -1,6 +1,9 @@
-import type Phaser from 'phaser';
+﻿import type Phaser from 'phaser';
 
-import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS, SOLID_UPPER_FRAMES } from '@/game/constants';
+import {
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS,
+  SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+} from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind, WorldDialog } from '@/game/world/worldSchema';
@@ -92,6 +95,7 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'sword', label: 'Espada', key: ASSET_KEYS.swordItem, frame: 0 },
   { type: 'key', label: 'Chave', key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   { type: 'axe', label: 'Machado', key: ASSET_KEYS.axeIcon },
+  { type: 'greatAxe', label: 'Machado de Aco', key: ASSET_KEYS.greatAxeIcon },
   { type: 'bomb', label: 'Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
   { type: 'lavaBoots', label: 'Botas de Lava', key: ASSET_KEYS.lavaBootsIcon },
   { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
@@ -146,6 +150,9 @@ const TILE_GROUPS: ReadonlyArray<{ title: string; tiles: readonly TileDef[] }> =
     tiles: [
       { frame: 5, label: 'Terra', layer: 'ground' },
       { frame: 6, label: 'Terra 2', layer: 'ground' },
+      // O mar bloqueia por si so (SOLID_GROUND_FRAMES), sem colisao pintada — e a fronteira
+      // do mundo, e nenhum item do jogo abre agua. Fica no chao porque E chao, nao um prop.
+      { frame: SEA_TILE_FRAME, label: 'Mar', layer: 'ground' },
     ],
   },
   {
@@ -790,7 +797,7 @@ export class EditorDomUi {
     const def = TILE_DEFS.get(frame);
     if (!def) return `Tile ${frame}`;
     const layer = def.layer === 'ground' ? 'chao' : 'superior';
-    const solid = SOLID_UPPER_FRAMES.has(frame) ? ', bloqueia' : '';
+    const solid = SOLID_UPPER_FRAMES.has(frame) || SOLID_GROUND_FRAMES.has(frame) ? ', bloqueia' : '';
     return `${def.label} — tile ${frame} (camada ${layer}${solid})`;
   }
 

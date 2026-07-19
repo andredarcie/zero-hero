@@ -1,4 +1,4 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS, SOLID_UPPER_FRAMES } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES } from '@/game/constants';
 import type { ChunkData } from './Chunk';
 import { getChunkTerrain, isInsideWorld } from './WorldData';
 
@@ -47,6 +47,10 @@ export class ChunkManager {
   public isCellBlocked(worldX: number, worldY: number): boolean {
     const tile = this.getTile(worldX, worldY);
     // Trees block by default: an upper tree tile is solid even where no collision was painted.
-    return tile.collision || (tile.upper !== null && SOLID_UPPER_FRAMES.has(tile.upper));
+    // The sea blocks the same way, but from the GROUND layer — see SOLID_GROUND_FRAMES. Both
+    // are implicit so the editor cannot paint an ocean (or a forest) you can stroll through.
+    return tile.collision
+      || SOLID_GROUND_FRAMES.has(tile.ground)
+      || (tile.upper !== null && SOLID_UPPER_FRAMES.has(tile.upper));
   }
 }
