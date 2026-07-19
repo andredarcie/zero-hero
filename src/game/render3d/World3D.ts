@@ -118,6 +118,10 @@ const MASK_TILES_X = 48;
 const MASK_TILES_Z = 32;
 // Scratch for save/restore around the mask render (never reallocated).
 const maskClearScratch = { color: new THREE.Color() };
+// Shortest cast worth drawing, in tiles. Below this a silhouette is a smudge under the
+// caster's own feet that reads as a MISSING shadow rather than a short one — so the water
+// clamp drops the cast instead of leaving a stub (see emitSolidCast).
+const MIN_CAST_LEN = 0.9;
 // NUMERIC tile/bucket keys for the shadow pass's lookups. A `${x},${z}` string key would
 // allocate on every probe of the hottest loops; these fold the coordinate into one number.
 // The +4096 offset keeps negatives (the void ring runs past the world bounds) positive.
@@ -2040,10 +2044,17 @@ export class World3D {
       }
 
       // The silhouette stops at the water's edge instead of floating over the channel (2b).
+      // Floored at MIN_CAST_LEN, unlike the statics' path: a static keeps a separate baked
+      // moon instance when its fire cast is dropped, but an actor owns exactly ONE quad, so
+      // cutting it to a stub would leave the hero standing on the bank with no shadow at
+      // all. A shadow overhanging the water by half a tile is the lesser wrong.
       let length = cast.length;
       if (this.params.castWaterClamp > 0) {
-        length = this.clampCastAtSunken(ax, az, rotY, length);
-        if (length < cast.length) a *= 0.6;
+        const clamped = this.clampCastAtSunken(ax, az, rotY, length);
+        if (clamped < length) {
+          length = Math.max(MIN_CAST_LEN, clamped);
+          a *= 0.6;
+        }
       }
 
       const width = Math.abs(c.bb.scaleX);
@@ -2142,11 +2153,20 @@ export class World3D {
     }
 
     // The silhouette stops at the water's edge (2b).
+    //
+    // A clamp that leaves a STUB is worse than no cast at all: at 0.35 tiles the silhouette
+    // is a smudge under the trunk that reads as "this tree has no shadow", and it would
+    // still displace the tree's moon shadow below. So below MIN_CAST_LEN the fire cast is
+    // dropped entirely and the tile keeps its full moon grounding — which is also the
+    // truth: that shadow falls on water, at a depth this renderer does not draw.
     let length = p.length;
     let a = p.alpha;
     if (this.params.castWaterClamp > 0) {
       length = this.clampCastAtSunken(tile.x, tile.z, rotY, length);
-      if (length < p.length) a *= 0.6;
+      if (length < p.length) {
+        if (length < MIN_CAST_LEN) return;
+        a *= 0.6;
+      }
     }
 
     this.solidCastField.add(
@@ -2156,13 +2176,22 @@ export class World3D {
     );
 
     // The statics' fire→moon handoff (2d): inside a lit pool the tile's baked moon
-    // silhouette lets go by the fire cast's strength — an actor's handoffCast, applied to
+    // silhouette lets go as the fire cast takes over — an actor's handoffCast, applied to
     // the one instance — so a tree and an NPC on the same pool edge behave the same,
     // instead of the tree wearing fire AND moon shadows at once.
+    //
+    // The fire's darkness DISPLACES the moon's; it never merely scales it down. The first
+    // version dimmed by the ratio a/moonAlpha, which let a faint fire cast (0.07) delete a
+    // third of a 0.22 moon shadow and pay back only 0.07 — pointing somewhere else. Trees
+    // at a pool's edge came out with two faint smudges instead of one readable shadow, and
+    // the ones the water clamp had already shortened looked like they had NO shadow (user
+    // report, and exactly what the numbers showed). Subtracting instead keeps the invariant
+    // the actors' handoff gets from its `max(fire, moon)`: a caster's total shadow presence
+    // never drops below what moonlight alone would have given it.
     if (this.params.moonHandoff > 0 && moonAlpha > 0.02 && tile.moonSlot !== undefined) {
-      const w = Math.min(1, a / moonAlpha);
-      if (w > 0.02) {
-        this.moonCastField.setInstanceAlpha(tile.moonSlot, moonAlpha * (1 - w));
+      const left = Math.max(0, moonAlpha - a);
+      if (left < moonAlpha - 0.005) {
+        this.moonCastField.setInstanceAlpha(tile.moonSlot, left);
         this.moonDimmed.push(tile);
       }
     }

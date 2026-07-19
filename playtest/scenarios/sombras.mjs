@@ -134,7 +134,46 @@ export default {
         out.elevationShift = Math.hypot(lifted.x - flat.x, lifted.z - flat.z);
       }
 
-      // ── 6) the budget: pool cap respected, and NO batched fields in the adventure ──
+      // ── 6) NO TREE LOSES ITS SHADOW ─────────────────────────────────────────
+      // The invariant the statics' handoff exists under: a tile's fire cast DISPLACES its
+      // moon cast, never merely scales it down. The first version dimmed the moon by the
+      // ratio (fireAlpha / moonAlpha), so a faint fire cast deleted a third of the moon
+      // shadow and paid back a third as much darkness pointing elsewhere — trees at a
+      // pool's edge, and any tree whose cast the water clamp had shortened, read as having
+      // NO shadow (user report). So: total presence >= moonAlpha, for every tile, and no
+      // stub-length casts.
+      await frame();
+      const moonAttr = w3.moonCastField.mesh.geometry.getAttribute('aCastAlpha');
+      const fireAttr = w3.solidCastField.mesh.geometry.getAttribute('aCastAlpha');
+      const im = w3.solidCastField.mesh.instanceMatrix.array;
+      const fireByTile = new Map();
+      let shortest = Infinity;
+      for (let i = 0; i < w3.solidCastField.mesh.count; i++) {
+        const o = i * 16;
+        const len = Math.hypot(im[o + 8], im[o + 9], im[o + 10]);
+        if (len < shortest) shortest = len;
+        fireByTile.set(`${Math.round(im[o + 12])},${Math.round(im[o + 14])}`, fireAttr.getX(i));
+      }
+      out.shortestCast = shortest === Infinity ? null : shortest;
+      let starved = 0;
+      let worst = null;
+      for (const t of w3.castableSolids) {
+        if (t.moonSlot === undefined) continue;
+        const moon = moonAttr.getX(t.moonSlot);
+        const fire = fireByTile.get(`${t.x},${t.z}`) ?? 0;
+        // The two shadows point different ways, so presence is the SUM of what is there.
+        const presence = moon + fire;
+        if (presence < w3.params.moonShadowAlpha - 0.01) {
+          starved++;
+          if (!worst || presence < worst.presence) {
+            worst = { x: t.x, z: t.z, moon: +moon.toFixed(3), fire: +fire.toFixed(3), presence: +presence.toFixed(3) };
+          }
+        }
+      }
+      out.starved = starved;
+      out.worstStarved = worst;
+
+      // ── 7) the budget: pool cap respected, and NO batched fields in the adventure ──
       out.castPool = w3.solidCastField.mesh.count;
       out.poolCap = 72;
       out.actorFields = w3.actorCastFields.size;
@@ -144,6 +183,7 @@ export default {
 
     log(`  handoff: maxAlphaJump ${r.maxAlphaJump?.toFixed(4)} · maxAngleJump ${r.maxAngleJump?.toFixed(4)}rad · endAlpha ${r.endAlpha?.toFixed(3)}`);
     log(`  waterClamp len ${r.waterClampLen} · elevationShift ${r.elevationShift?.toFixed(3)} · castPool ${r.castPool} · actorFields ${r.actorFields}`);
+    log(`  sombra mínima ${r.shortestCast?.toFixed(2)} tiles · árvores com menos sombra que o luar: ${r.starved}${r.worstStarved ? ` (pior ${JSON.stringify(r.worstStarved)})` : ''}`);
 
     assert('A lit home fire exists to measure against', r.hasFire === true, JSON.stringify(r));
     // 0.2-tile samples: a smooth handoff moves alpha a few hundredths per step; the alpha
@@ -156,6 +196,16 @@ export default {
     assert('The world has sunken tiles for the clamp to find', r.sunkenCount > 0, `sunken=${r.sunkenCount}`);
     assert('A cast aimed at the channel is clamped at the bank', r.waterClamp === true, `len=${r.waterClampLen}`);
     assert('Elevation slides the silhouette off the caster\'s feet', r.elevationShift > 0.2, `shift=${r.elevationShift}`);
+    assert(
+      'NO tree ends up with less shadow than moonlight alone would give it',
+      r.starved === 0,
+      `${r.starved} tiles starved — worst ${JSON.stringify(r.worstStarved)}`,
+    );
+    assert(
+      'No stub-length casts (a smudge under the trunk reads as a MISSING shadow)',
+      r.shortestCast === null || r.shortestCast >= 0.9,
+      `shortest=${r.shortestCast}`,
+    );
     assert('The solid cast pool respects its cap', r.castPool <= r.poolCap, `pool=${r.castPool}`);
     assert('The adventure runs with ZERO batched actor fields (Survivors opt-in only)', r.actorFields === 0, `fields=${r.actorFields}`);
   },
