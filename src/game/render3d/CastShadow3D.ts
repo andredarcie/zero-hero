@@ -71,6 +71,47 @@ const castAnchorInto = (
   anchorScratch.y = objY + Math.cos(rotY) * back;
 };
 
+/**
+ * MAX blending, for the shadow-mask render target: overlapping silhouettes take the
+ * darker value instead of multiplying together — with the mask, two casts crossing can
+ * never double-darken, which the decal path could not promise.
+ */
+const applyMaxBlending = (mat: THREE.Material): void => {
+  mat.blending = THREE.CustomBlending;
+  mat.blendEquation = THREE.MaxEquation;
+  mat.blendSrc = THREE.OneFactor;
+  mat.blendDst = THREE.OneFactor;
+};
+
+/**
+ * The MASK variant of a silhouette material: instead of multiplying black over the
+ * frame, it writes the cast's VALUE (its darkness, silhouette-cut) into the mask RT's
+ * red channel, max-blended. Same map/opacity/alphaTest surface as the scene material,
+ * so applyCast drives either without knowing which is installed.
+ */
+export const makeCastMaskMaterial = (): THREE.MeshBasicMaterial => {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    depthTest: false,
+    alphaTest: 0.4,
+    side: THREE.DoubleSide,
+    fog: false,
+  });
+  applyMaxBlending(mat);
+  mat.customProgramCacheKey = () => 'castMask';
+  mat.onBeforeCompile = (shader) => {
+    // The fragment's VALUE is its alpha (texel silhouette × opacity); colour is ignored.
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      'gl_FragColor = vec4(vec3(diffuseColor.a), 1.0);',
+    );
+  };
+  return mat;
+};
+
 /** A flat ground silhouette quad: foot at the origin, body extending along -Z, unit sized. */
 export const makeCastMesh = (): THREE.Mesh => {
   const geo = new THREE.PlaneGeometry(1, 1);
@@ -148,6 +189,9 @@ export class SolidCastField {
   /** Sort permutation, reused across frames. */
   private readonly order: number[] = [];
   private pendCount = 0;
+  /** The two material variants (see the constructor); setMaskMode swaps them. */
+  private readonly maskMat: THREE.MeshBasicMaterial;
+  private readonly sceneMat: THREE.MeshBasicMaterial;
   private readonly byDepthDesc = (a: number, b: number): number =>
     this.pendDepth[b] - this.pendDepth[a];
 
@@ -172,50 +216,69 @@ export class SolidCastField {
     geo.setAttribute('aUvWindow', this.uvWindow);
     geo.setAttribute('aCastAlpha', this.alpha);
 
-    const mat = new THREE.MeshBasicMaterial({
-      map,
-      color: 0x000000,
-      transparent: true,
-      opacity: 1, // per-instance now; see the shader patch below
-      depthWrite: false,
-      alphaTest: 0.4,
-      side: THREE.DoubleSide,
-    });
-    mat.customProgramCacheKey = () => 'solidCastField';
-    mat.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          'void main() {',
-          `attribute vec4 aUvWindow;
-           attribute float aCastAlpha;
-           varying float vCastAlpha;
-           void main() {`,
-        )
-        // Window onto this instance's frame of the sheet, in place of the material's single
-        // map transform — which is what the per-shadow cloned textures used to buy.
-        .replace(
-          '#include <uv_vertex>',
-          `#include <uv_vertex>
-           vMapUv = uv * aUvWindow.zw + aUvWindow.xy;
-           vCastAlpha = aCastAlpha;`,
+    // Two materials over the same geometry/attributes: the SCENE one multiplies black
+    // over the frame (the classic decal), the MASK one writes the cast's value into the
+    // shadow-mask RT (max-blended). setMaskMode swaps them; both exist from construction
+    // so the swap never compiles a shader mid-run (prewarm keeps both programs alive).
+    const build = (mask: boolean): THREE.MeshBasicMaterial => {
+      const mat = new THREE.MeshBasicMaterial({
+        map,
+        color: mask ? 0xffffff : 0x000000,
+        transparent: true,
+        opacity: 1, // per-instance now; see the shader patch below
+        depthWrite: false,
+        depthTest: !mask,
+        alphaTest: 0.4,
+        side: THREE.DoubleSide,
+        fog: !mask,
+      });
+      if (mask) applyMaxBlending(mat);
+      mat.customProgramCacheKey = () => (mask ? 'solidCastFieldMask' : 'solidCastField');
+      mat.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader
+          .replace(
+            'void main() {',
+            `attribute vec4 aUvWindow;
+             attribute float aCastAlpha;
+             varying float vCastAlpha;
+             void main() {`,
+          )
+          // Window onto this instance's frame of the sheet, in place of the material's single
+          // map transform — which is what the per-shadow cloned textures used to buy.
+          .replace(
+            '#include <uv_vertex>',
+            `#include <uv_vertex>
+             vMapUv = uv * aUvWindow.zw + aUvWindow.xy;
+             vCastAlpha = aCastAlpha;`,
+          );
+        shader.uniforms.uMapSize = { value: mapSize };
+        // Expand map_fragment ourselves so the fetch can be pinned to the texel's centre (see above).
+        const fetch = 'texture2D( map, vMapUv )';
+        const mapChunk = THREE.ShaderChunk.map_fragment.replace(
+          fetch,
+          'texture2D( map, ( floor( vMapUv * uMapSize ) + 0.5 ) / uMapSize )',
         );
-      shader.uniforms.uMapSize = { value: mapSize };
-      // Expand map_fragment ourselves so the fetch can be pinned to the texel's centre (see above).
-      const fetch = 'texture2D( map, vMapUv )';
-      const mapChunk = THREE.ShaderChunk.map_fragment.replace(
-        fetch,
-        'texture2D( map, ( floor( vMapUv * uMapSize ) + 0.5 ) / uMapSize )',
-      );
-      shader.fragmentShader = shader.fragmentShader
-        .replace('void main() {', 'uniform vec2 uMapSize;\nvarying float vCastAlpha;\nvoid main() {')
-        .replace('#include <map_fragment>', mapChunk)
-        // AFTER the test — see the class comment: the test only cuts the silhouette, and a
-        // faint (moonlight) instance must survive it to be faint rather than absent.
-        .replace(
-          '#include <alphatest_fragment>',
-          '#include <alphatest_fragment>\n diffuseColor.a *= vCastAlpha;',
-        );
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', 'uniform vec2 uMapSize;\nvarying float vCastAlpha;\nvoid main() {')
+          .replace('#include <map_fragment>', mapChunk)
+          // AFTER the test — see the class comment: the test only cuts the silhouette, and a
+          // faint (moonlight) instance must survive it to be faint rather than absent.
+          .replace(
+            '#include <alphatest_fragment>',
+            '#include <alphatest_fragment>\n diffuseColor.a *= vCastAlpha;',
+          );
+        if (mask) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <opaque_fragment>',
+            'gl_FragColor = vec4(vec3(diffuseColor.a), 1.0);',
+          );
+        }
+      };
+      return mat;
     };
+    const mat = build(false);
+    this.sceneMat = mat;
+    this.maskMat = build(true);
 
     this.pendX = new Float32Array(capacity);
     this.pendZ = new Float32Array(capacity);
@@ -331,6 +394,15 @@ export class SolidCastField {
   public setInstanceAlpha(slot: number, alpha: number): void {
     this.alpha.setX(slot, alpha);
     this.alpha.needsUpdate = true;
+  }
+
+  /**
+   * Swap between the scene decal and the mask-RT writer (hd3d.shadowMask). Geometry,
+   * instance attributes and the begin/add/end cycle are untouched — only the material
+   * (and therefore where end()'s output lands) changes.
+   */
+  public setMaskMode(on: boolean): void {
+    this.mesh.material = on ? this.maskMat : this.sceneMat;
   }
 }
 

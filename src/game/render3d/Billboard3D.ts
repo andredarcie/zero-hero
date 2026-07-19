@@ -130,6 +130,12 @@ export class Billboard3D {
   // gets a fill mix uniform patched in (see pixelArtLight.ts).
   private readonly uFillColor: THREE.IUniform = { value: new THREE.Color(0x000000) };
   private readonly uFillMix: THREE.IUniform = { value: 0 };
+  /**
+   * Shadow-mask receive probe (hd3d.shadowMask): the XZ offset this sprite samples the
+   * mask at, steered per frame by World3D toward the sprite's own light so a caster
+   * never stands in its OWN silhouette (it starts at his feet). Lit billboards only.
+   */
+  public readonly maskProbe: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2() };
   private tileX = 0;
   private tileY = 0;
   private elev = 0;
@@ -187,6 +193,7 @@ export class Billboard3D {
         footAnchorY: opts.centered ? -0.5 : 0,
         fill: { color: this.uFillColor, mix: this.uFillMix },
         worldFx: opts.worldFx,
+        maskProbe: this.maskProbe,
       });
     }
     if (opts.fog === false) this.mat.fog = false;

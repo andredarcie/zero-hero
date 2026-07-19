@@ -423,3 +423,18 @@ esqueleto projetado) foi doméstica e cirúrgica.
    `Math.random` compartilhado — diff estrutural → checar o estado do fogo primeiro).
 4. Todo número de perf tem um "antes" (`git stash`, `PLAYTEST_UNTHROTTLED=1`).
 5. Testar exatamente o que mudou — cenário alvo, nunca o solve inteiro.
+
+---
+
+## Apêndice — Estado da execução (2026-07-19, branch `sombras-v2`)
+
+| Fase | Estado | Prova |
+|------|--------|-------|
+| 0 (higiene) | ✅ | `visual-ref` 0/0/0 px vs commit-base com knobs off |
+| 1 (zero-alloc, índice, batch) | ✅ | idem; `sombras`/`machado`/`braco`/`perf-burn` verdes; fps 173→~190 |
+| 2 (elevação, água, histerese, handoff) | ✅ | diff isolado só nas sombras (poças + rio); knobs `hd3d` ao vivo |
+| 3 (máscara, passos i–iii) | ✅ atrás de `hd3d.shadowMask=1` (default 0) | A/B decal↔máscara ao vivo; 0 compiles em play; passos iv–v (penumbra por distância, lua no canal 2) pendentes |
+| 4 (luxo) | — | por demanda, como planejado |
+
+O harness `visual-ref` foi endurecido no caminho (respiração do herói, telegraph do
+cerco, god rays fora das shots) — sem isso nenhuma prova de "0 pixels" era honesta.

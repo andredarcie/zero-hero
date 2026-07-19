@@ -44,6 +44,44 @@ export const lightResUniform: THREE.IUniform = { value: 16 };
 /** Shared elapsed-seconds clock for animated surface FX (lava flow, water glint). */
 export const flowTimeUniform: THREE.IUniform = { value: 0 };
 
+// ── THE SHADOW MASK (hd3d.shadowMask — plano.md fase 3) ──────────────────────
+//
+// The cast silhouettes stop being decals multiplied over the finished frame and become
+// DATA: every fire silhouette is drawn once into a small top-down ortho render target
+// (max-blended, so overlaps never double-darken), and the lit materials sample it to
+// attenuate ONLY the point lights' direct term. Ambient and the moon pass through — a
+// fire's shadow is the absence of THAT fire's light, not a hole burned in the night —
+// and a billboard sampling the mask at its foot finally RECEIVES shade: the hero
+// darkens when he steps into a tree's shadow.
+//
+// All three uniforms are shared and branch-checked per fragment (uMaskOn), so flipping
+// the hd3d knob costs nothing and recompiles nothing.
+export const shadowMaskUniform: THREE.IUniform = { value: null };
+/** World rect the mask covers: (minX, minZ, sizeX, sizeZ) in tiles. */
+export const shadowMaskRectUniform: THREE.IUniform<THREE.Vector4> = {
+  value: new THREE.Vector4(0, 0, 1, 1),
+};
+export const shadowMaskOnUniform: THREE.IUniform = { value: 0 };
+
+/**
+ * The mask sample, shared by the lit materials and the fire-glow disc. `probe` is a
+ * per-material XZ offset for BILLBOARD receivers: a caster's own silhouette starts at
+ * its own feet, so sampling exactly there would make every caster stand in its own
+ * shadow — the probe leans the sample ~half a tile TOWARD the light, just clear of the
+ * self-cast, so a sprite receives every shadow but its own.
+ */
+export const SHADOW_MASK_GLSL = /* glsl */ `
+  uniform sampler2D uShadowMask;
+  uniform vec4 uMaskRect;
+  uniform float uMaskOn;
+  float zhShadowMask(vec2 worldXZ, vec2 probe) {
+    if (uMaskOn < 0.5) return 0.0;
+    vec2 uv = (worldXZ + probe - uMaskRect.xy) / uMaskRect.zw;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
+    return texture2D(uShadowMask, uv).r;
+  }
+`;
+
 /**
  * TEXEL ANTI-ALIASING — 1 = the art's pixel grid is anti-aliased, 0 = plain NEAREST.
  * Live-tunable via window.hd3d.texelAa, which is the A/B for the whole effect below.
@@ -184,7 +222,7 @@ export const lightCapUniform: THREE.IUniform = { value: 1.25 };
  * `RE_Direct(...)` line appears in the spot- and directional-light loops, and a blind replace
  * would wrap those too.
  */
-const skipDarkPointLights = (chunk: string): string => {
+const skipDarkPointLights = (chunk: string, maskPointLights: boolean): string => {
   const blockStart = chunk.indexOf('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )');
   if (blockStart < 0) return chunk;
   const blockEnd = chunk.indexOf('#pragma unroll_loop_end', blockStart);
@@ -199,12 +237,21 @@ const skipDarkPointLights = (chunk: string): string => {
   // A three.js upgrade that renames either line leaves the chunk untouched: slower, never wrong.
   if (!block.includes(getInfo) || !block.includes(reDirect)) return chunk;
 
+  // The shadow mask attenuates ONLY this block — the point lights (fires, torch, hero
+  // glow). The directional moon and the ambient never see it: a fire's shadow is the
+  // absence of that fire's light, not a hole burned through the whole night.
+  const masked = maskPointLights
+    ? `${getInfo}\n\t\tdirectLight.color *= zhMaskLit;`
+    : getInfo;
   const guarded = block
-    .replace(getInfo, `if ( pointLight.color.r + pointLight.color.g + pointLight.color.b > 0.0 ) {\n\t\t${getInfo}`)
+    .replace(getInfo, `if ( pointLight.color.r + pointLight.color.g + pointLight.color.b > 0.0 ) {\n\t\t${masked}`)
     .replace(reDirect, `${reDirect}\n\t\t}`);
 
   return head + guarded + tail;
 };
+
+/** Probe for materials that sample the mask at their own position (the ground). */
+const zeroProbeUniform: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(0, 0) };
 
 type PatchOpts = {
   /** Quantize the direct light into lightStepsUniform bands. */
@@ -252,6 +299,13 @@ type PatchOpts = {
    * need: one mesh, and every quad in it windows onto a different frame of the tileset.
    */
   texelAa?: TexelAaUniforms;
+  /**
+   * Shadow-mask receive probe (see SHADOW_MASK_GLSL): a per-material XZ offset for the
+   * sample. Billboard CASTERS pass their own uniform, steered each frame toward their
+   * light so a sprite never stands in its own silhouette; omitted (the ground, props
+   * without a cast) the sample lands at the fragment's own position.
+   */
+  maskProbe?: THREE.IUniform;
 };
 
 /**
@@ -273,7 +327,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
   // Three caches compiled programs by this key; without it, materials patched
   // DIFFERENTLY would silently share whichever variant compiled first.
   mat.customProgramCacheKey = () =>
-    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}`;
+    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}`;
 
   const bornAt = import.meta.env.DEV ? new Error().stack ?? '' : '';
 
@@ -369,9 +423,40 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       );
     }
 
+    // ── The shadow mask's receive path (see SHADOW_MASK_GLSL) ────────────────
+    // Every LIT material gets it: a world-position varying and one branch-guarded sample
+    // that attenuates the point lights' direct term. Compiled in unconditionally so the
+    // hd3d.shadowMask knob is a uniform flip — never a recompile.
+    if (opts.quantize) {
+      shader.uniforms.uShadowMask = shadowMaskUniform;
+      shader.uniforms.uMaskRect = shadowMaskRectUniform;
+      shader.uniforms.uMaskOn = shadowMaskOnUniform;
+      shader.uniforms.uMaskProbe = opts.maskProbe ?? zeroProbeUniform;
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', 'varying vec3 vZhMaskPos;\nvoid main() {')
+        .replace(
+          '#include <begin_vertex>',
+          '#include <begin_vertex>\n vZhMaskPos = (modelMatrix * vec4(transformed, 1.0)).xyz;',
+        );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        'void main() {',
+        `${SHADOW_MASK_GLSL}
+         uniform vec2 uMaskProbe;
+         varying vec3 vZhMaskPos;
+         void main() {`,
+      );
+    }
+
     // The light loop itself. Every lit material skips its dark lights; only the world materials
     // (never the foot-lit billboards) additionally snap the lookup to the light grid.
     let lightsChunk = THREE.ShaderChunk.lights_fragment_begin;
+    if (opts.quantize) {
+      lightsChunk = lightsChunk.replace(
+        'vec3 geometryPosition = - vViewPosition;',
+        `vec3 geometryPosition = - vViewPosition;
+         float zhMaskLit = 1.0 - zhShadowMask(vZhMaskPos.xz, uMaskProbe);`,
+      );
+    }
     if (wantsSnap) {
       lightsChunk = lightsChunk.replace(
         'vec3 geometryPosition = - vViewPosition;',
@@ -390,7 +475,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
          }`,
       );
     }
-    lightsChunk = skipDarkPointLights(lightsChunk);
+    lightsChunk = skipDarkPointLights(lightsChunk, Boolean(opts.quantize));
     // A MeshBasicMaterial has no light loop at all, so this is a no-op there.
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', lightsChunk);
     if (opts.normalUp) {

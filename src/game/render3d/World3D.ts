@@ -12,14 +12,15 @@ import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldB
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
 import {
-  applyCast, CAST_MAX_ALPHA, type CastPose, castTransformInto, handoffCastInto, makeCastMesh,
-  SolidCastField, WIDTH_FACTOR as CAST_WIDTH_FACTOR,
+  applyCast, CAST_MAX_ALPHA, type CastPose, castTransformInto, handoffCastInto,
+  makeCastMaskMaterial, makeCastMesh, SolidCastField, WIDTH_FACTOR as CAST_WIDTH_FACTOR,
 } from './CastShadow3D';
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform,
-  lightWobbleUniform, patchPixelMaterial, syncTexelAaUniforms, texelAaUniform,
+  lightWobbleUniform, patchPixelMaterial, SHADOW_MASK_GLSL, shadowMaskOnUniform,
+  shadowMaskRectUniform, shadowMaskUniform, syncTexelAaUniforms, texelAaUniform,
   type TexelAaUniforms,
 } from './pixelArtLight';
 import {
@@ -111,6 +112,12 @@ const ACTOR_BATCH_MIN = 3;
 // Instance capacity of one per-sheet actor field (Survivors peaks near a hundred undead
 // but they spread across the animation's frames/sheets; 160 holds a worst case sheet).
 const ACTOR_FIELD_CAPACITY = 160;
+// The shadow mask's coverage, in tiles around the camera target: wider than the view so
+// a silhouette entering from off-screen is already in the data when its caster shows.
+const MASK_TILES_X = 48;
+const MASK_TILES_Z = 32;
+// Scratch for save/restore around the mask render (never reallocated).
+const maskClearScratch = { color: new THREE.Color() };
 // NUMERIC tile/bucket keys for the shadow pass's lookups. A `${x},${z}` string key would
 // allocate on every probe of the hottest loops; these fold the coordinate into one number.
 // The +4096 offset keeps negatives (the void ring runs past the world bounds) positive.
@@ -386,6 +393,21 @@ export interface World3DParams {
    * shadows at once.
    */
   moonHandoff: number;
+  /**
+   * THE SHADOW MASK (plano.md fase 3, experimental — 0 = the classic decal path).
+   * At 1 the fire silhouettes stop being black quads multiplied over the finished frame
+   * and become DATA: drawn once into a small top-down RT (max-blended — overlaps can
+   * never double-darken), which the lit materials sample to attenuate ONLY the point
+   * lights' direct term. Consequences, in order of importance: sprites RECEIVE shade
+   * (the hero darkens inside a tree's shadow), a shadow can never be darker than the
+   * unlit night (ambient and moon pass through), and the CPU sort dies (max-blend is
+   * order-free). Billboards sample at a probe leaned toward their own light so a caster
+   * never stands in its own silhouette. Live-flippable: all programs are compiled at
+   * boot and the flip is a uniform.
+   */
+  shadowMask: number;
+  /** Mask texels per tile (the mask's own pixel-art grain). */
+  shadowMaskRes: number;
   heroLight: number;
   fogDensity: number;
   /** Cool directional moonlight that fills the night (0 = off). */
@@ -527,6 +549,11 @@ export class World3D {
     castElevation: 1,
     castWaterClamp: 1,
     moonHandoff: 1,
+    // OFF by default: the mask changes how shadows compose (subtractive light instead of
+    // multiplied decals), so it ships behind the knob until its look is signed off
+    // against the reference shots (plano.md fase 3's parity gate).
+    shadowMask: 0,
+    shadowMaskRes: 12,
     // The hero's neutral self-glow is dim so that near a fire he takes the fire's
     // warm colour, and his white pixels (horns/eyes) don't glare under a bright glow.
     heroLight: 28,
@@ -658,7 +685,19 @@ export class World3D {
 
   // ── firelight cast shadows (2D ground silhouettes) ──
   // One persistent silhouette per dynamic caster (hero, props, NPCs, enemies)…
-  private readonly castCasters: Array<{ bb: Billboard3D; mesh: THREE.Mesh } & CastMemory> = [];
+  private readonly castCasters: Array<{
+    bb: Billboard3D;
+    mesh: THREE.Mesh;
+    /** The decal material the mesh was born with, and the mask-RT variant — the
+     *  shadowMask toggle swaps them (both programs compiled at boot). */
+    sceneMat: THREE.Material;
+    maskMat: THREE.Material;
+  } & CastMemory> = [];
+  // ── the shadow mask (hd3d.shadowMask — see the param doc) ──
+  private maskTarget!: THREE.WebGLRenderTarget;
+  private readonly maskScene = new THREE.Scene();
+  private maskCamera!: THREE.OrthographicCamera;
+  private appliedMaskMode = false;
   /**
    * Batched actor silhouettes, one instanced field per SPRITE SHEET (P8): a hundred
    * Survivors undead used to be a hundred shadow draws; sharing a sheet they are one.
@@ -776,6 +815,7 @@ export class World3D {
     this.ensureTorchLight();
 
     this.buildTerrain();
+    this.initShadowMask();
     this.initPostProcessing();
     this.initParticles();
     this.initGodRays();
@@ -1139,6 +1179,80 @@ export class World3D {
   }
 
   /**
+   * The shadow mask's plumbing (hd3d.shadowMask — see the param doc): a small top-down
+   * ortho RT following the camera. Built unconditionally (it is tiny) so flipping the
+   * knob mid-run allocates nothing; the mask is only RENDERED while the knob is on.
+   */
+  private initShadowMask(): void {
+    const res = Math.max(4, this.params.shadowMaskRes);
+    this.maskTarget = new THREE.WebGLRenderTarget(MASK_TILES_X * res, MASK_TILES_Z * res, {
+      depthBuffer: false,
+      magFilter: THREE.LinearFilter, // the mask is light data, not art — soft edges are penumbra
+      minFilter: THREE.LinearFilter,
+    });
+    // up = +z so the RT's v axis grows with world z — the exact mapping zhShadowMask
+    // assumes (uv = (worldXZ - rect.xy) / rect.zw).
+    this.maskCamera = new THREE.OrthographicCamera(
+      -MASK_TILES_X / 2, MASK_TILES_X / 2, MASK_TILES_Z / 2, -MASK_TILES_Z / 2, 0.1, 20,
+    );
+    this.maskCamera.up.set(0, 0, 1);
+    shadowMaskUniform.value = this.maskTarget.texture;
+  }
+
+  /**
+   * Move the fire silhouettes between the SCENE (classic decals multiplied over the
+   * frame) and the MASK scene (value writers into the RT). Meshes may come and go
+   * freely — only lights are frozen — and every material variant here compiled at boot
+   * (prewarmShaders), so the flip costs one reparenting walk and zero compiles.
+   */
+  private applyShadowMaskMode(on: boolean): void {
+    this.appliedMaskMode = on;
+    shadowMaskOnUniform.value = on ? 1 : 0;
+    const parent = on ? this.maskScene : this.scene;
+    for (const c of this.castCasters) {
+      c.mesh.removeFromParent();
+      parent.add(c.mesh);
+      c.mesh.material = on ? c.maskMat : c.sceneMat;
+    }
+    this.solidCastField.mesh.removeFromParent();
+    parent.add(this.solidCastField.mesh);
+    this.solidCastField.setMaskMode(on);
+    for (const f of this.actorCastFields.values()) {
+      f.mesh.removeFromParent();
+      parent.add(f.mesh);
+      f.setMaskMode(on);
+    }
+    // The MOON casts and the arm's ShadowStrips stay scene-side for now (they multiply
+    // the final colour either way); migrating them into a second mask channel is the
+    // documented follow-up (plano.md fase 3, passo v).
+  }
+
+  /** Draw this frame's fire silhouettes into the mask RT (mask mode only). */
+  private renderShadowMask(): void {
+    const cam = this.maskCamera;
+    const res = Math.max(4, this.params.shadowMaskRes);
+    // Snap the window to the mask's own texel grid, or the sampled shadows swim
+    // against the world as the camera pans (the lightRes lesson, applied to the RT).
+    const cx = Math.round(this.camTarget.x * res) / res;
+    const cz = Math.round(this.camTarget.z * res) / res;
+    cam.position.set(cx, 10, cz);
+    cam.lookAt(cx, 0, cz);
+    cam.updateMatrixWorld();
+    shadowMaskRectUniform.value.set(
+      cx - MASK_TILES_X / 2, cz - MASK_TILES_Z / 2, MASK_TILES_X, MASK_TILES_Z,
+    );
+    const prevTarget = this.renderer.getRenderTarget();
+    this.renderer.getClearColor(maskClearScratch.color);
+    const prevAlpha = this.renderer.getClearAlpha();
+    this.renderer.setRenderTarget(this.maskTarget);
+    this.renderer.setClearColor(0x000000, 1);
+    this.renderer.clear(true, false, false);
+    this.renderer.render(this.maskScene, cam);
+    this.renderer.setRenderTarget(prevTarget);
+    this.renderer.setClearColor(maskClearScratch.color, prevAlpha);
+  }
+
+  /**
    * Bake every exposed solid's moonlight shadow into its instanced field — once, and again
    * only when the hd3d knobs move. Unlike the fire casts these transforms are constant.
    *
@@ -1282,8 +1396,15 @@ export class World3D {
       && !opts.flat && !opts.additive && !opts.emissive
     ) {
       const mesh = makeCastMesh();
-      this.scene.add(mesh);
-      this.castCasters.push({ bb, mesh, lastFire: null });
+      const sceneMat = mesh.material as THREE.Material;
+      const maskMat = makeCastMaskMaterial();
+      if (this.appliedMaskMode) {
+        this.maskScene.add(mesh);
+        mesh.material = maskMat;
+      } else {
+        this.scene.add(mesh);
+      }
+      this.castCasters.push({ bb, mesh, sceneMat, maskMat, lastFire: null });
     }
     return bb;
   }
@@ -1520,6 +1641,16 @@ export class World3D {
     const prevTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(this.composer.renderTarget1);
     this.renderer.compile(this.scene, this.camera);
+
+    // The shadow mask's material variants too (castMask / solidCastFieldMask): flip the
+    // silhouettes into mask mode for one compile pass so toggling hd3d.shadowMask later
+    // never compiles a program mid-run. The mask RT is bound for it — same colour-space
+    // reasoning as the composer target above.
+    this.applyShadowMaskMode(true);
+    this.renderer.setRenderTarget(this.maskTarget);
+    this.renderer.compile(this.maskScene, this.maskCamera);
+    this.applyShadowMaskMode(false);
+
     this.renderer.setRenderTarget(prevTarget);
 
     // Hide them, but do NOT destroy them. destroy() disposes the material, three drops that
@@ -1858,9 +1989,10 @@ export class World3D {
     for (let i = this.castCasters.length - 1; i >= 0; i--) {
       const c = this.castCasters[i];
       if (!c.bb.active) { // the billboard was destroyed — drop its shadow
-        this.scene.remove(c.mesh);
+        c.mesh.removeFromParent(); // scene or maskScene, whichever mode holds it
         c.mesh.geometry.dispose();
-        (c.mesh.material as THREE.Material).dispose();
+        c.sceneMat.dispose();
+        c.maskMat.dispose();
         this.castCasters.splice(i, 1);
         continue;
       }
@@ -1887,6 +2019,11 @@ export class World3D {
       let rotY = cast.rotY;
       const spin = c.bb.mesh.rotation.z;
       if (spin !== 0) rotY -= spin;
+
+      // Steer the sprite's mask-receive probe toward its own light (opposite the cast
+      // heading): sampling there keeps a caster out of its OWN silhouette, which starts
+      // exactly at its feet. Costs two writes; only read while hd3d.shadowMask is on.
+      c.bb.maskProbe.value.set(Math.sin(rotY) * 0.45, Math.cos(rotY) * 0.45);
 
       // Elevation (2a): a lifted caster's silhouette slides away from the light and
       // thins — the same projection the arm's skeleton shadow already used (groundCastAt),
@@ -2383,7 +2520,10 @@ export class World3D {
     this.updateTorch(dt, t);
     profiler.end('torch');
     profiler.begin('castShadows');
+    const maskOn = this.params.shadowMask > 0;
+    if (maskOn !== this.appliedMaskMode) this.applyShadowMaskMode(maskOn);
     this.updateCastShadows();
+    if (maskOn) this.renderShadowMask();
     profiler.end('castShadows');
     profiler.begin('biome');
     this.updateBiomeGrade(dt);
@@ -2553,6 +2693,16 @@ export class World3D {
       }
     });
     this.dotTexture?.dispose();
+    this.maskScene.traverse((obj) => {
+      const withGeo = obj as THREE.Object3D & {
+        isMesh?: boolean; geometry?: THREE.BufferGeometry; material?: THREE.Material;
+      };
+      if (withGeo.isMesh) {
+        withGeo.geometry?.dispose();
+        withGeo.material?.dispose();
+      }
+    });
+    this.maskTarget.dispose();
     this.composer.dispose();
     this.renderer.dispose();
     this.canvas.remove();
@@ -2872,6 +3022,12 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
     shader.uniforms.uRampCore = fireRampCoreUniform;
     shader.uniforms.uRampMid = fireRampMidUniform;
     shader.uniforms.uRampRim = fireRampRimUniform;
+    // The mask shades the glow POOL too (hd3d.shadowMask): with the decal silhouettes
+    // gone from the scene, the additive haze must dim itself where a cast falls — same
+    // data, same place, instead of a black quad drawn over it.
+    shader.uniforms.uShadowMask = shadowMaskUniform;
+    shader.uniforms.uMaskRect = shadowMaskRectUniform;
+    shader.uniforms.uMaskOn = shadowMaskOnUniform;
     shader.vertexShader = shader.vertexShader
       .replace('void main() {', 'varying vec2 vGlowPos;\nvoid main() {')
       .replace(
@@ -2892,6 +3048,7 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
          uniform vec3 uRampMid;
          uniform vec3 uRampRim;
          ${FIRE_WOBBLE_GLSL}
+         ${SHADOW_MASK_GLSL}
          varying vec2 vGlowPos;
          // The falloff the canvas gradient used to bake: a hot core that drops away fast,
          // then a long soft skirt out to the rim.
@@ -2938,7 +3095,7 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
          diffuseColor.rgb *= rampT < 0.5
            ? mix(uRampRim, uRampMid, rampT * 2.0)
            : mix(uRampMid, uRampCore, rampT * 2.0 - 1.0);
-         diffuseColor.a *= glowA;`,
+         diffuseColor.a *= glowA * (1.0 - zhShadowMask(vGlowPos, vec2(0.0)));`,
       );
   };
   return mat;

@@ -73,6 +73,15 @@ const SETTLE = `async (tileX, tileY, steps) => {
     f.seed = i * 1.7;
     f.noise = 0; f.flare = 0; f.flareTarget = 0; f.flareTimer = 0.9; f.flicker = 0; f.level = 1;
   });
+  // The god rays' fan phases are drawn from Math.random at BOOT and never re-seeded, so
+  // they carry the same boot-time generator drift the flames did (any build allocating a
+  // different number of objects at boot shifts them). Pinning the seeds was tried and the
+  // beams' EDGES still flaked ~0.3% of the frame run-to-run (a high-contrast subpixel
+  // surface at the mercy of any stray in-window generator draw) — so, like the drifting
+  // motes above, the shafts come out of the reference altogether. They are additive
+  // atmosphere; nothing a renderer change does moves ONLY them.
+  for (let i = 0; i < w3.godRaySeed.length; i++) w3.godRaySeed[i] = i * 1.3;
+  w3.params.godRays = 0;
   for (const p of w3.emberState) { p.life = 0; p.maxLife = 1.2; p.vx = 0; p.vy = 0; p.vz = 0; }
   w3.embers.pos.fill(0);
   w3.dustSeeded = false;        // re-scatter the motes from the reseeded generator
