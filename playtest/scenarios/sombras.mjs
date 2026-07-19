@@ -173,10 +173,23 @@ export default {
       out.starved = starved;
       out.worstStarved = worst;
 
-      // ── 7) the budget: pool cap respected, and NO batched fields in the adventure ──
+      // ── 7) the budget: pool not SATURATED, and NO batched fields in the adventure ──
+      // Saturation is the failure that matters: at the cap the pass stops emitting, and
+      // whatever it had not reached yet — often the trees at the hero's feet, since
+      // candidates arrive in fire order — silently loses its shadow.
       out.castPool = w3.solidCastField.mesh.count;
-      out.poolCap = 72;
+      out.poolCap = w3.solidCastField.mesh.instanceMatrix.count;
       out.actorFields = w3.actorCastFields.size;
+
+      // ── 8) EVERY standing tile can cast, not just the exposed ones ──────────
+      // The exposed-only rule (<= 4 solid neighbours) belongs to the contact blobs and the
+      // baked moon field; it must NOT gate the fire cast, or a mobile torch walks up to the
+      // forest wall, lights it brightly, and none of those trees have a shadow (reported).
+      let indexed = 0;
+      for (const bucket of w3.solidBuckets.values()) indexed += bucket.length;
+      out.tilesIndexed = indexed;
+      out.solidTiles = w3.solidTiles.length;
+      out.castableExposed = w3.castableSolids.length;
 
       return out;
     });
@@ -184,6 +197,7 @@ export default {
     log(`  handoff: maxAlphaJump ${r.maxAlphaJump?.toFixed(4)} · maxAngleJump ${r.maxAngleJump?.toFixed(4)}rad · endAlpha ${r.endAlpha?.toFixed(3)}`);
     log(`  waterClamp len ${r.waterClampLen} · elevationShift ${r.elevationShift?.toFixed(3)} · castPool ${r.castPool} · actorFields ${r.actorFields}`);
     log(`  sombra mínima ${r.shortestCast?.toFixed(2)} tiles · árvores com menos sombra que o luar: ${r.starved}${r.worstStarved ? ` (pior ${JSON.stringify(r.worstStarved)})` : ''}`);
+    log(`  pool ${r.castPool}/${r.poolCap} · tiles indexados ${r.tilesIndexed} (de ${r.solidTiles} sólidos; expostos ${r.castableExposed})`);
 
     assert('A lit home fire exists to measure against', r.hasFire === true, JSON.stringify(r));
     // 0.2-tile samples: a smooth handoff moves alpha a few hundredths per step; the alpha
@@ -206,7 +220,16 @@ export default {
       r.shortestCast === null || r.shortestCast >= 0.9,
       `shortest=${r.shortestCast}`,
     );
-    assert('The solid cast pool respects its cap', r.castPool <= r.poolCap, `pool=${r.castPool}`);
+    assert(
+      'The solid cast pool is not saturated (at the cap, visible trees lose their shadow)',
+      r.castPool < r.poolCap,
+      `pool=${r.castPool}/${r.poolCap}`,
+    );
+    assert(
+      'The fire cast indexes EVERY standing tile, not just the exposed ones',
+      r.tilesIndexed === r.solidTiles && r.solidTiles > r.castableExposed,
+      `indexed=${r.tilesIndexed} solids=${r.solidTiles} exposed=${r.castableExposed}`,
+    );
     assert('The adventure runs with ZERO batched actor fields (Survivors opt-in only)', r.actorFields === 0, `fields=${r.actorFields}`);
   },
 };

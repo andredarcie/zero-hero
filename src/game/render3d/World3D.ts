@@ -104,8 +104,22 @@ const seaVariant = (x: number, z: number): number => {
   h = (h ^ (h >>> 13)) >>> 0;
   return h % SEA_TILE_FRAMES.length;
 };
-// Cap on static-solid cast silhouettes drawn at once (trees near a lit fire).
-const CAST_POOL_MAX = 72;
+// Cap on static-solid cast silhouettes drawn at once (trees near a lit flame). Raised from
+// 72 with the camera cull below: an instance is two triangles, and what used to make the
+// number scary — 36 separate DRAW CALLS — has been one instanced draw for a while now.
+// With CAST_CAMERA_REACH bounding the candidates, the count is bounded by what fits on
+// screen (measured: ~40 in the home clearing, ~80 walking a forest wall with a torch).
+const CAST_POOL_MAX = 128;
+/**
+ * How far from the camera target a static tile may be and still spend a pool slot.
+ *
+ * Without this the pool is spent in FIRE order, and a fire the player cannot see is served
+ * first: measured with the torch lit in the home clearing, 13 of 42 slots (31%) were drawing
+ * silhouettes around the lava field ~35 tiles away, off screen, while trees at the hero's
+ * feet went without. The camera frames ~30x17 tiles; 18 covers it with margin for a shadow
+ * whose caster is just off screen but whose silhouette reaches into it.
+ */
+const CAST_CAMERA_REACH = 18;
 // Actor silhouettes batch per sprite sheet once this many casters share one this frame
 // (below it, the single-mesh path keeps the adventure's draw order bit-identical).
 const ACTOR_BATCH_MIN = 3;
@@ -1144,9 +1158,19 @@ export class World3D {
     }
 
     // The shadow pass's spatial index (see updateCastShadows): buckets answer "which
-    // castable solids sit near the TORCH" without scanning the world, and the sunken set
+    // standing tiles sit near the TORCH" without scanning the world, and the sunken set
     // is where a silhouette must stop instead of floating over the river/lava/sea channel.
-    for (const t of this.castableSolids) {
+    //
+    // Indexed over EVERY standing tile, not just the exposed ones. The exposed-only rule
+    // (<= 4 solid neighbours) exists so that packed forest-wall tiles don't each get a
+    // contact blob and merge into one dark block — a real problem, and one that belongs to
+    // the always-on ambient layers (the blob mesh and the baked moon field keep the rule).
+    // For the FIRE cast it was a bad trade the moment the torch existed: a mobile flame
+    // walks right up to the forest wall and lights those tiles brightly, and a brightly lit
+    // tree with no shadow is exactly what the player notices (reported twice). It is also
+    // nearly free — of 846 standing tiles only 93 are excluded, and a cast is only emitted
+    // while a flame is actually in reach.
+    for (const t of this.solidTiles) {
       const bk = bucketKey(t.x, t.z);
       const bucket = this.solidBuckets.get(bk);
       if (bucket) bucket.push(t);
@@ -1368,20 +1392,27 @@ export class World3D {
     }
     colour.needsUpdate = true;
 
-    const castIndex = this.castableSolids.findIndex((t) => t.x === worldX && t.z === worldY);
-    if (castIndex >= 0) {
-      const [gone] = this.castableSolids.splice(castIndex, 1);
-      // The blob/solid quad maps index the GEOMETRY, which never shrinks, so this splice
-      // cannot invalidate them. Only the two cast fields read this array.
-      // The felled tile also leaves the shadow pass's spatial index: the per-fire candidate
-      // lists hold tile refs (cheapest to just rebuild lazily), and its bucket entry goes.
+    // The fire cast pass indexes EVERY standing tile (see buildTerrain), so a felled tree
+    // has to leave that array too or its stump keeps throwing a whole tree's silhouette.
+    // Splicing cannot invalidate solidQuads/solidBlobQuads: those store vertex OFFSETS into
+    // geometry that never shrinks, not indices into these arrays.
+    const solidIndex = this.solidTiles.findIndex((t) => t.x === worldX && t.z === worldY);
+    const felled = solidIndex >= 0 ? this.solidTiles[solidIndex] : undefined;
+    if (solidIndex >= 0) this.solidTiles.splice(solidIndex, 1);
+    if (felled) {
       this.fireCastLists.clear();
       const bucket = this.solidBuckets.get(bucketKey(worldX, worldY));
       if (bucket) {
-        const bi = bucket.indexOf(gone);
+        const bi = bucket.indexOf(felled);
         if (bi >= 0) bucket.splice(bi, 1);
       }
-      this.fillMoonCastField();
+    }
+
+    // …and the exposed set, which is what the contact blobs and the baked MOON field read.
+    const castIndex = this.castableSolids.findIndex((t) => t.x === worldX && t.z === worldY);
+    if (castIndex >= 0) {
+      this.castableSolids.splice(castIndex, 1);
+      this.fillMoonCastField(); // baked once, so a vanished caster means a re-bake
     }
   }
 
@@ -1894,13 +1925,14 @@ export class World3D {
     return true;
   }
 
-  /** Per-lit-fire candidate solids, built once per fire — fires never move (see the field). */
+  /** Per-lit-fire candidate solids, built once per fire — fires never move (see the field).
+   *  Over every standing tile, not just the exposed ones — see the bucket note in buildTerrain. */
   private listForFire(f: FireEntry, radius: number): SolidTileEntry[] {
     let list = this.fireCastLists.get(f);
     if (!list) {
       list = [];
       const r2 = radius * radius;
-      for (const t of this.castableSolids) {
+      for (const t of this.solidTiles) {
         const dx = t.x - f.worldX;
         const dz = t.z - f.worldY;
         if (dx * dx + dz * dz <= r2) list.push(t);
@@ -2131,6 +2163,11 @@ export class World3D {
     moonAlpha: number,
   ): void {
     if (this.solidCastField.pendingCount >= CAST_POOL_MAX) return;
+    // Spend the pool on what the player can SEE (see CAST_CAMERA_REACH): candidates arrive
+    // in fire order, so without this a fire off screen is served before the hero's own.
+    const cdx = tile.x - this.camTarget.x;
+    const cdz = tile.z - this.camTarget.z;
+    if (cdx * cdx + cdz * cdz > CAST_CAMERA_REACH * CAST_CAMERA_REACH) return;
     if (!this.nearestLitFireInto(tile.x, tile.z, tile, this.nearestScratch)) return;
     const n = this.nearestScratch;
     const dx = tile.x - n.worldX;
@@ -2152,19 +2189,23 @@ export class World3D {
       }
     }
 
-    // The silhouette stops at the water's edge (2b).
+    // The silhouette stops at the water's edge (2b) — but the clamp may never REMOVE a
+    // shadow, only shorten one.
     //
-    // A clamp that leaves a STUB is worse than no cast at all: at 0.35 tiles the silhouette
-    // is a smudge under the trunk that reads as "this tree has no shadow", and it would
-    // still displace the tree's moon shadow below. So below MIN_CAST_LEN the fire cast is
-    // dropped entirely and the tile keeps its full moon grounding — which is also the
-    // truth: that shadow falls on water, at a depth this renderer does not draw.
+    // Two wrong versions preceded this. Clamping to the bank could cut a cast to 0.35
+    // tiles: a smudge under the trunk that reads as "this tree has no shadow". Dropping
+    // the cast instead was worse — a whole row of trees along the bank, lit by the fire,
+    // with no fire shadow at all (reported). So a clamp that would leave less than
+    // MIN_CAST_LEN is abandoned and the full silhouette is drawn: a shadow overhanging
+    // the channel is the lesser wrong, which is the same call the actor path makes and
+    // for the same reason. Trees far enough back still stop cleanly at the bank, which is
+    // the case the clamp was built for.
     let length = p.length;
     let a = p.alpha;
     if (this.params.castWaterClamp > 0) {
-      length = this.clampCastAtSunken(tile.x, tile.z, rotY, length);
-      if (length < p.length) {
-        if (length < MIN_CAST_LEN) return;
+      const clamped = this.clampCastAtSunken(tile.x, tile.z, rotY, length);
+      if (clamped < length && clamped >= MIN_CAST_LEN) {
+        length = clamped;
         a *= 0.6;
       }
     }
