@@ -27,23 +27,23 @@ export default {
   },
   frames: [[
     '................',
-    '.ES..........SK.',
-    '.ESSS......SSSK.',
-    '.ESSSSSWLSSSSSK.',
-    '.ESSSSSWLSSSSSK.',
-    '.ESSSSSWLSSSSSK.',
-    '.ESSS......SSSK.',
-    '.ES..........SK.',
+    '..E..........K..',
+    '.EESS......SSKK.',
+    '.ESSSSKWLKSSSSK.',
+    '.ESSSSKWLKSSSSK.',
+    '.ESSSSKWLKSSSSK.',
+    '.EESS......SSKK.',
+    '..E..........K..',
     '.......WL.......',
     '.......WL.......',
     '.......WL.......',
     '.......WL.......',
-    '.......WL.......',
-    '.......WL.......',
+    '.......WW.......',
+    '.......WW.......',
     '.......WL.......',
     '................',
   ]],
-  notes: 'A lamina ALARGA para fora: estreita junto ao olho (so as linhas 3-5 tocam o cabo) e '
+  notes: 'v2. A lamina ALARGA para fora: estreita junto ao olho (so as linhas 3-5 tocam o cabo) e '
     + 'cheia no fio (linhas 1-7 na coluna extrema). A primeira versao afinava para fora e lia '
     + 'como asa/nuvem, nao como machado — a flare e a silhueta inteira. O fio vira uma COLUNA '
     + 'de 7px: E na col 1 (luz da esquerda), K na col 14 (sombra), com o miolo S entre elas. '

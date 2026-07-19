@@ -23,6 +23,8 @@ import {
   TEXT_RESOLUTION,
   TIMINGS,
   TORCH_BURN_MS,
+  TREE_CHOP_STAGE_FRAMES,
+  TREE_TILE_STICK_CHANCE,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
@@ -3259,13 +3261,55 @@ export class GameScene extends Phaser.Scene {
 
     this.swingHeld(wx, wy);
     this.time.delayedCall(CHOP_IMPACT_MS, () => {
-      if (!this.fellTreeTile(wx, wy)) return; // gone already (a second swing landing late)
+      const felled = this.chopTreeTile(wx, wy);
+      if (felled === null) return; // gone already (a second swing landing late)
       getSoundManager().playWoodChop();
-      this.spawnBridgeChips(wx, wy, 6);
-      this.dropTreeStick(wx, wy);
+      this.spawnBridgeChips(wx, wy, felled ? 6 : 4);
+      // Only the LAST chop can pay out, and only sometimes — see TREE_TILE_STICK_CHANCE.
+      if (felled && this.rollTreeTileStick()) this.dropTreeStick(wx, wy);
     });
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
     return true;
+  }
+
+  /**
+   * Whether this felled tile pays out a graveto. Its own method purely so the playtest can
+   * sample the rate without swinging an axe ~200 times through the real input path.
+   */
+  private rollTreeTileStick(): boolean {
+    return Math.random() < TREE_TILE_STICK_CHANCE;
+  }
+
+  /**
+   * One swing against a tree tile. Returns true if this was the FELLING chop, false if the tree
+   * merely dropped to its next stage, null if there was no tree left to hit.
+   *
+   * A tile comes down in stages like the dryTree prop does — full tree, crown gone, stump, gone —
+   * but where the prop shrinks through its own sheet, a tile has to swap to another frame of the
+   * tileset ATLAS, because World3D bakes every standing tile into one mesh sampling that atlas.
+   */
+  private chopTreeTile(wx: number, wy: number): boolean | null {
+    const frame = this.treeTileFrameAt(wx, wy);
+    if (frame === null) return null;
+    const stage = TREE_CHOP_STAGE_FRAMES.indexOf(frame);
+    const next = TREE_CHOP_STAGE_FRAMES[stage + 1]; // stage -1 (a whole tree) → the first stage
+    if (next === undefined) {
+      this.fellTreeTile(wx, wy);
+      return true;
+    }
+    this.setTreeTileFrame(wx, wy, next);
+    return false;
+  }
+
+  /** Move a tree tile to another frame in BOTH places it exists: the chunk data and the mesh. */
+  private setTreeTileFrame(wx: number, wy: number, frame: number): void {
+    const chunks = this.chunkManager;
+    if (!chunks) return;
+    const chunk = chunks.getChunk(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS));
+    const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+    const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+    chunk.upper[ly][lx] = frame;
+    this.world3d?.setSolidTileFrame(wx, wy, frame);
   }
 
   /**

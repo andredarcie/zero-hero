@@ -1,4 +1,4 @@
-export const TILE_SIZE = 8;
+﻿export const TILE_SIZE = 8;
 export const CHARACTER_SIZE = 16;
 export const DEFAULT_GAME_WIDTH = 320;
 export const DEFAULT_GAME_HEIGHT = 240;
@@ -277,7 +277,10 @@ export const TREE_REGROW_MS = 60000;
 // which is what you want for bones and rubble, and never what you want for a headstone.
 // Frame ids index forest_tile_set.png (3 columns): 3 & 21 are dead trees, 4/14/15/16/17/18 are
 // pines, and 22 & 25 are the cemetery's spiked head and tomb.
-export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25]);
+export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([
+  3, 4, 14, 15, 16, 17, 18, 21, 22, 25,
+  36, 37, // the tree-chop stages (see TREE_CHOP_STAGE_FRAMES): a half-felled tree still blocks
+]);
 
 // Which of those standing tiles are TREES — the ones the steel axe (`greatAxe`) can fell.
 // The plain axe only ever bites dead wood (the dryTree/dryShrub props); the steel axe is
@@ -287,7 +290,24 @@ export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16
 // Deliberately NOT the whole of SOLID_UPPER_FRAMES: 22 (spiked head) and 25 (tomb) stand up
 // the same way but are masonry and bone — an axe that chopped down a gravestone would say
 // the frame set means "scenery", when what it means here is "wood".
-export const CHOPPABLE_UPPER_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21]);
+// A tree TILE comes down the way the dryTree prop does — one stage per swing, not in one blow.
+// The prop shrinks through its own 6-frame sheet (woods.png); a tile cannot, because World3D
+// merges every standing tile into ONE mesh sampling the tileset atlas, so a tile's stages have
+// to be frames of that same atlas. These two are SHARED by all eight tree frames: at 16x16 a
+// severed stump keeps no silhouette that says which pine it came from, and eight private
+// ladders would be sixteen frames saying the same thing.
+export const TREE_CHOP_STAGE_FRAMES: readonly number[] = [36, 37]; // wounded (crown gone), stump
+export const CHOPPABLE_UPPER_FRAMES: ReadonlySet<number> = new Set([
+  3, 4, 14, 15, 16, 17, 18, 21, // the standing trees themselves
+  ...TREE_CHOP_STAGE_FRAMES, // …and what a half-felled one becomes, so the next swing continues
+]);
+
+// Chance that felling a common tree yields a graveto. A tile tree is NOT the dry tree's equal:
+// there are ~850 of them against 8 dryTree props, and every one of them dropping a stick would
+// turn the whole map into an infinite fuel dispenser and flatten the fire economy that the
+// scythe, the plant loop and the dryTree's own regrow timer exist to meter. So most of them
+// give nothing, and wood stays worth walking for.
+export const TREE_TILE_STICK_CHANCE = 0.25;
 
 // Ground-layer frames that BLOCK, the mirror of SOLID_UPPER_FRAMES for the floor. The sea is
 // the only one, and it exists because of the steel axe: the world's edge used to be a wall of

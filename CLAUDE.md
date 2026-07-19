@@ -159,8 +159,21 @@ blobs and cast shadows would be a serious perf regression. So the steel axe remo
   tree printed on its neighbours (or the new clearing keeps the shadow of a tree that is gone),
   drops it from `castableSolids`, and re-fills the moon cast. Rebuilding a ~6000-quad buffer per
   swing would hitch; this is the `grassQuads` rustle trick applied to three buffers at once.
-- One swing fells it — a tile has no stages to shrink through — and it drops a **graveto**,
-  because an item whose only output is passage is a password (see the PRODUCE rule above).
+- **It comes down in STAGES, like the dryTree prop** — whole tree → crown gone → stump → open,
+  three swings, and it BLOCKS until the last one. The prop shrinks through its own 6-frame sheet
+  (woods.png); a tile cannot, because the merged mesh samples the tileset atlas, so the stages
+  have to be frames of that atlas too (`TREE_CHOP_STAGE_FRAMES` = 36, 37, drawn by the sprite
+  factory from the shipped pine's own palette). The two stages are **shared by all eight** tree
+  frames: at 16×16 a stump keeps no silhouette saying which pine it came from, and eight private
+  ladders would be sixteen frames saying one thing. `World3D.setSolidTileFrame` swaps the quad's
+  `uv` **and** `aUvBounds` in place (the bounds are not optional — they are the window the
+  texel-AA fetch may sample, and leaving them stale lets the filter slide into the next tile's
+  art), and re-bakes the moon cast so a stump stops throwing a whole tree's shadow.
+- Felling drops a graveto **only ~25% of the time** (`TREE_TILE_STICK_CHANCE`). A tile tree is
+  not the dry tree's equal: there are ~850 of them against 8 dryTree props, and if every one paid
+  out, the map would become an infinite fuel dispenser and flatten the fire economy that the
+  scythe, the planting loop and the dryTree's own regrow timer exist to meter. It still PRODUCES
+  (see the rule above) — just not on demand, so wood stays worth walking for.
 - The need-item balloon is shown **only when holding the plain axe**, never bare-handed. The
   forest is ~850 tiles and the hero scrapes along it constantly; a balloon on every bump would be
   wallpaper, and the hint only means anything while it stays rare.
@@ -192,8 +205,11 @@ forgotten by the next feature) but to build the border out of something **no ite
   and open water carries none. The border got cheaper by becoming flat.
 
 `npm run playtest -- machado` guards all of it: the sea blocks (boots included), the steel axe
-cannot open the border, the plain axe cannot fell a pine, the steel axe can and the tile really
-opens (collision too) leaving a graveto, and the steel axe still cuts dead wood.
+cannot open the border, the plain axe cannot fell a pine, the steel axe walks it down the stage
+ladder (blocking at every stage until the tile really opens, collision too), the graveto rate
+sits near 25%, and the steel axe still cuts dead wood. The stage asserts chop until the tile
+CHANGES rather than counting keypresses — the first key after a teleport is swallowed by the
+just-interrupted movement controller, so counting presses would measure the input, not the ladder.
 
 **A new terrain tile is a new FRAME in an existing atlas, not a new file.** Ground/upper index
 frames of `forest_tile_set.png` (3 columns, row-major) and the whole ground is one mesh sampling
@@ -319,6 +335,15 @@ real state. Add a scenario in `playtest/scenarios/` and register it in `index.mj
   nothing advances and every timing is meaningless.
 - Live handles in dev: `window.__scene` (the Phaser scene), `window.__game`, `window.hd3d` (every
   3D render knob, live-tunable), `window.gameDebug`, `window.__prof`.
+
+**Test EXACTLY what you changed, and nothing else.** Write (or extend) the one scenario that
+covers the new thing and run that. Do **not** replay the whole game to check a pointed change:
+the full puzzle solves (`espada` above all) take minutes each, they are bump-timing sensitive and
+so they flake, and a flake in an unrelated scenario tells you nothing about your change while
+costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Fire and the light
+budget → `perf-burn`. Frame cost → `perf-profile`. Reach for `espada` **only** when the change is
+to level-1's design itself. Same rule for re-runs: one failure in a scenario you did not touch is
+a flake to note, not a suite to run four times.
 
 **When measuring performance, always compare against `main` (`git stash`).** A number on its own
 proves nothing — a fix that removes a stall can quietly cost frame time, and you will not see it

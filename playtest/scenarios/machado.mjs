@@ -13,8 +13,9 @@
 //      assert que da sentido aos outros dois — e a trava, nao a solucao (regra do projeto:
 //      "a puzzle is only a puzzle if the easy road is shut").
 //   3. O machado COMUM nao derruba pinheiro. Sem isto, os dois itens seriam um item so.
-//   4. O machado DE ACO derruba, o tile abre de verdade (colisao vai junto) e deixa um GRAVETO
-//      — porque um item cujo unico produto e passagem e uma senha, nao uma ferramenta.
+//   4. O machado DE ACO derruba POR ESTAGIOS (copa -> toco -> tile aberto), como a arvore seca,
+//      e a arvore continua bloqueando enquanto ha estagio; no fim a colisao cai junto.
+//   4b. E o graveto e RARO (~25%): a arvore comum nao pode virar torneira infinita de lenha.
 //   5. O machado de aco tambem corta madeira MORTA (dryTree), o que faz dele um superconjunto
 //      do machado comum e nao um item paralelo: nenhum puzzle antigo quebra por causa dele.
 
@@ -110,18 +111,38 @@ export default {
     assert('achei uma arvore-tile com vizinho livre', target !== null, JSON.stringify(target));
     log(`ARVORE: tile (${target.x},${target.y}) frame ${target.frame}, batendo de (${target.nx},${target.ny})`);
 
-    const bumpTree = async () => {
+    const treeKey = DIR_KEY[`${target.dx},${target.dy}`];
+    const treeFrame = async () => (await tileAt(target.x, target.y)).upper;
+
+    const bumpTree = async (times = 1) => {
       await teleport(target.nx, target.ny);
       await driver.settle(250);
-      const key = DIR_KEY[`${target.dx},${target.dy}`];
-      await driver.walk(key, 2);
-      await driver.settle(700); // o corte cai em CHOP_IMPACT_MS depois do swing
+      for (let i = 0; i < times; i += 1) {
+        await driver.walk(treeKey, 1);
+        await driver.settle(700); // o corte cai em CHOP_IMPACT_MS depois do swing
+      }
+    };
+
+    // Bate ate o tile MUDAR e devolve o frame novo. Contar teclas nao serve: a primeira tecla
+    // depois de um teleporte se perde (o controlador acabou de ser interrompido), entao um teste
+    // que assumisse "1 tecla = 1 machadada" mediria o input, e nao a escada de estagios. O que
+    // importa provar e a SEQUENCIA — copa, toco, tile aberto — e que ela nao pula degrau.
+    const chopUntilStageChanges = async (from, maxSwings = 6) => {
+      await teleport(target.nx, target.ny);
+      await driver.settle(250);
+      for (let i = 0; i < maxSwings; i += 1) {
+        await driver.walk(treeKey, 1);
+        await driver.settle(700);
+        const now = await treeFrame();
+        if (now !== from) return now;
+      }
+      return from;
     };
 
     // ── 4. O machado COMUM nao derruba pinheiro ──────────────────────────────
     log('MACHADO COMUM: bate no pinheiro e NAO derruba (senao os dois itens seriam um so)');
     await give('axe');
-    await bumpTree();
+    await bumpTree(4);
     const afterPlain = await tileAt(target.x, target.y);
     assert('o pinheiro segue de pe depois do machado comum', afterPlain.upper === target.frame,
       JSON.stringify(afterPlain));
@@ -149,19 +170,48 @@ export default {
     assert('machado de aco na mao (coletado do chao)', (await state()).heldItem === 'greatAxe',
       `held=${(await state()).heldItem}`);
 
-    await bumpTree();
+    // ── 5b. A arvore cai por ESTAGIOS, como a arvore seca ───────────────────
+    // Uma machadada nao derruba: a copa vai embora (frame 36), depois sobra o toco (37), e so a
+    // terceira abre o tile. Enquanto ha estagio, a arvore CONTINUA bloqueando — um toco que ja
+    // deixasse passar tornaria os dois ultimos golpes decorativos.
+    log('ESTAGIOS: copa -> toco -> tile aberto, e so o ultimo golpe abre passagem');
+    const stage1 = await chopUntilStageChanges(target.frame);
+    assert('1o estagio: a copa se foi (frame 36)', stage1 === 36, `veio ${stage1}`);
+    assert('e a arvore ferida AINDA bloqueia', (await solidAt(target.x, target.y)) === true);
+
+    await shot('machado-estagio-copa');
+
+    const stage2 = await chopUntilStageChanges(stage1);
+    assert('2o estagio: sobrou o toco (frame 37)', stage2 === 37, `veio ${stage2}`);
+    assert('e o toco AINDA bloqueia', (await solidAt(target.x, target.y)) === true);
+
+    await shot('machado-estagio-toco');
+
+    const stage3 = await chopUntilStageChanges(stage2);
     const afterSteel = await tileAt(target.x, target.y);
-    assert('o pinheiro CAIU (o tile abriu)', afterSteel.upper === null, JSON.stringify(afterSteel));
+    assert('3o estagio: o pinheiro CAIU (o tile abriu)', stage3 === null,
+      JSON.stringify(afterSteel));
     // A colisao mora no chunk, nao na malha: a worldgen pinta collision=true embaixo de todo
     // frame de obstaculo, entao limpar so o upper deixaria uma parede invisivel.
     assert('e a colisao caiu junto (nada de parede invisivel)',
       (await solidAt(target.x, target.y)) === false, JSON.stringify(afterSteel));
-    // O produto: derrubar tem de ALIMENTAR a economia do fogo, igual derrubar arvore seca.
-    const stick = await evaluate(([x, y]) => (window.gameDebug.getState().groundItems ?? [])
-      .some((i) => i.kind === 'wood' && i.worldX === x && i.worldY === y), [target.x, target.y]);
-    assert('a arvore derrubada deixou um GRAVETO', stick === true);
 
     await shot('machado-aco-derrubou');
+
+    // ── 5c. O graveto e RARO: 25%, nao sempre ───────────────────────────────
+    // Amostrado direto no metodo do sorteio, e nao derrubando ~200 arvores pelo teclado. O que
+    // importa aqui e a TAXA (a arvore-tile nao pode virar torneira infinita de lenha); que o
+    // graveto realmente chega ao chao quando sai o premio, o dropTreeStick ja e o mesmo caminho
+    // usado pela arvore seca. Faixa larga de proposito: e um teste de taxa, nao de RNG.
+    log('GRAVETO: a arvore comum so paga em ~25% das vezes');
+    const rate = await evaluate(() => {
+      const s = window.__scene;
+      let hits = 0;
+      for (let i = 0; i < 4000; i += 1) if (s.rollTreeTileStick()) hits += 1;
+      return hits / 4000;
+    });
+    assert('a chance de graveto fica perto de 25%', rate > 0.20 && rate < 0.30, `taxa=${rate}`);
+    assert('e nao e nem sempre nem nunca', rate > 0 && rate < 1, `taxa=${rate}`);
 
     // ── 6. O machado de aco tambem corta madeira MORTA ───────────────────────
     // Superconjunto, nao item paralelo: se ele nao cortasse o que o machado comum corta, achar

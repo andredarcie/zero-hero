@@ -1058,6 +1058,40 @@ export class World3D {
    * plus the void ring), and reallocating that buffer per swing would hitch. Caller must also
    * clear the tile in the chunk data — collision lives there, not here.
    */
+  /**
+   * Repaint one standing tile with a different atlas frame, in place — a tree dropping to the
+   * next chop stage. Same reasoning as removeSolidTile: the tile is four vertices inside a
+   * merged buffer, so this rewrites their `uv` and `aUvBounds` rather than rebuilding anything.
+   * (`aUvBounds` is not optional. It is the window the texel-AA fetch may sample from; leaving
+   * it on the old frame lets the filter slide into the neighbouring tile's art.)
+   *
+   * The cast-shadow fields sample the atlas too, so the silhouette this tile throws has to
+   * follow it down — otherwise a stump keeps casting the shadow of a whole tree.
+   */
+  public setSolidTileFrame(worldX: number, worldY: number, frame: number): void {
+    const key = `${worldX},${worldY}`;
+    const vertStart = this.solidQuads.get(key);
+    if (vertStart === undefined) return;
+
+    const f = tilesetFrameUv(frame);
+    const uv = this.solidGeo.attributes.uv as THREE.BufferAttribute;
+    const bounds = this.solidGeo.attributes.aUvBounds as THREE.BufferAttribute;
+    // Corner order must match buildUprightTileGeometry exactly.
+    uv.setXY(vertStart, f.u0, f.v1);
+    uv.setXY(vertStart + 1, f.u1, f.v1);
+    uv.setXY(vertStart + 2, f.u1, f.v0);
+    uv.setXY(vertStart + 3, f.u0, f.v0);
+    uv.needsUpdate = true;
+    for (let i = 0; i < 4; i++) bounds.setXYZW(vertStart + i, f.cu0, f.cv0, f.cu1, f.cv1);
+    bounds.needsUpdate = true;
+
+    const cast = this.castableSolids.find((t) => t.x === worldX && t.z === worldY);
+    if (cast) {
+      cast.frame = frame;
+      this.fillMoonCastField(); // baked once, so it has to be re-baked to see the new frame
+    }
+  }
+
   public removeSolidTile(worldX: number, worldY: number): void {
     const key = `${worldX},${worldY}`;
     const vertStart = this.solidQuads.get(key);
