@@ -40,6 +40,10 @@ export class DryBushObject implements WorldProp {
   private readonly scene: Phaser.Scene;
   private readonly sprite: Billboard3D;
   private state: BushState = 'intact';
+
+  // Chamado quando a queima TERMINA (o arbusto assentou em cinza). A cena pendura aqui o
+  // drop de carvao — o objeto so anuncia o momento; produzir item e papel do GameScene.
+  public onBurnedOut?: () => void;
   private fires: Billboard3D[] = [];
   private fireLight?: FireLight3D;
   private fireTimer?: Phaser.Time.TimerEvent;
@@ -147,6 +151,7 @@ export class DryBushObject implements WorldProp {
       duration: 260,
       ease: 'Power2.easeIn',
     });
+    this.onBurnedOut?.();
   }
 
   public destroy(): void {

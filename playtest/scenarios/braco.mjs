@@ -12,6 +12,9 @@
 //   2. TRANSPORTE: um item largado na entrada aparece na saida, sozinho, sem o heroi encostar.
 //   3. A TRAVA: o corpo da maquina e SOLIDO — o item atravessa um tile que o heroi contorna.
 //   4. RECUSA: com a saida ocupada, o braco nao mexe — dois itens no mesmo tile seria um sumico.
+//   5. FOGO: uma tocha ACESA entregue a maquina atravessa ACESA — o combustivel queima em
+//      transito (pode morrer no meio do arco) e a carga pousada acende o que ha de inflamavel
+//      ao lado da saida. E a chama cruzando um muro sem combustivel nenhum.
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -46,17 +49,22 @@ export default {
     log('EDITOR: limpa o terreno em volta de cada braco (o level-1 e denso demais)');
     await driver.page.evaluate((list) => {
       const store = window.__scene.store;
+      const clear = (x, y) => {
+        store.eraseEntitiesAt(x, y); // itens autorais, props (lava, agua, rocha, mato...)
+        store.setCell('upper', x, y, null); // arvores do tileset
+        store.setCell('collision', x, y, false); // colisao pintada a mao
+      };
       for (const p of list) {
         for (let dx = -1; dx <= 1; dx += 1) {
-          for (let dy = -1; dy <= 1; dy += 1) {
-            const x = p.worldX + dx;
-            const y = p.worldY + dy;
-            store.eraseEntitiesAt(x, y); // itens autorais, props (lava, agua, rocha, mato...)
-            store.setCell('upper', x, y, null); // arvores do tileset
-            store.setCell('collision', x, y, false); // colisao pintada a mao
-          }
+          for (let dy = -1; dy <= 1; dy += 1) clear(p.worldX + dx, p.worldY + dy);
         }
       }
+      // A pista do estagio de FOGO (9): o deposito aceso em (5,6) espalha pros 4 vizinhos, e a
+      // carga pousada em (7,6) espalha dali — nada de combustivel do level pode encostar nessa
+      // faixa, senao um incendio alheio contamina o assert. Limpa a fileira inteira e planta UM
+      // capim em (8,6), vizinho da saida: e ele que deve pegar, e so ele.
+      for (let x = 4; x <= 8; x += 1) for (let y = 5; y <= 7; y += 1) clear(x, y);
+      store.placeEntity({ list: 'props', type: 'tallGrass', worldX: 8, worldY: 6 });
     }, PLACED);
 
     log('EDITOR: coloca um braco em cada uma das 4 direcoes pelo EditorStore');
@@ -352,6 +360,99 @@ export default {
     }
     assert('saida livre: o graveto suspenso e entregue', delivered);
 
-    log('OK: gira nas 4 direcoes, atravessa a carga sozinho e recusa empilhar — ate no meio do ciclo.');
+    // ── 9. O FOGO viaja com a carga ─────────────────────────────────────────
+    // A tocha acesa entregue a maquina desce ACESA pro chao, sobe acesa na garra, chega acesa
+    // na saida — e o graveto pousado e uma FONTE: o capim plantado em (8,6) tem de pegar
+    // sozinho. E o unico jeito do jogo de levar chama pra onde nenhuma mao chega.
+    log('JOGO: tocha ACESA entregue ao braco atravessa acesa — e acende o capim do outro lado');
+    await driver.page.evaluate(() => {
+      const items = window.__scene.itemManager;
+      items.takeAt(5, 6);
+      items.takeAt(7, 6);
+    });
+    await sleep(2200); // qualquer ciclo pendente termina
+
+    const litDeposit = await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.heldItem = 'wood';
+      s.heldOnFire = true;
+      s.torchFuelMs = 5000;
+      s.handleTileEntered(5, 6); // o heroi pisa na origem com a tocha acesa
+      const it = s.itemManager.snapshot().find((i) => i.worldX === 5 && i.worldY === 6);
+      return { held: s.heldItem, onFire: s.heldOnFire, ground: it ? { kind: it.kind, lit: !!it.fire } : null };
+    });
+    assert('o deposito poe o graveto ACESO no chao (fogo desceu junto)',
+      litDeposit.ground?.kind === 'wood' && litDeposit.ground?.lit === true, JSON.stringify(litDeposit));
+    assert('e a mao do heroi esvaziou', litDeposit.held === 'none' && litDeposit.onFire === false,
+      JSON.stringify(litDeposit));
+
+    let carriedLit = false;
+    const litGrabDeadline = Date.now() + CYCLE_TIMEOUT_MS;
+    while (Date.now() < litGrabDeadline) {
+      const carried = await driver.page.evaluate(() => {
+        const a = window.__scene.inserters.find((x) => x.worldX === 6 && x.worldY === 6);
+        return { kind: a.carriedKind, lit: !!a.carriedFire };
+      });
+      if (carried.kind === 'wood') { carriedLit = carried.lit; break; }
+      await sleep(80);
+    }
+    assert('a garra carrega a carga ACESA (a chama viaja pendurada)', carriedLit === true);
+    await shot('braco-carga-acesa');
+
+    let litArrived = null;
+    const litArriveDeadline = Date.now() + CYCLE_TIMEOUT_MS;
+    while (Date.now() < litArriveDeadline) {
+      litArrived = await driver.page.evaluate(() => {
+        const it = window.__scene.itemManager.snapshot().find((i) => i.worldX === 7 && i.worldY === 6);
+        return it ? { kind: it.kind, lit: !!it.fire, fuel: it.fire?.fuelMs ?? 0 } : null;
+      });
+      if (litArrived?.kind === 'wood') break;
+      await sleep(200);
+    }
+    assert('o graveto chega ACESO na saida', litArrived?.lit === true, JSON.stringify(litArrived));
+    assert('e o combustivel QUEIMOU em transito (nao congelou na garra)',
+      litArrived.fuel > 0 && litArrived.fuel < 4600, JSON.stringify(litArrived));
+
+    // O capim em (8,6), vizinho da saida, pega da carga pousada (FIRE_SPREAD_MS depois).
+    let grassCaught = false;
+    const spreadDeadline = Date.now() + 4000;
+    while (Date.now() < spreadDeadline) {
+      const st = await driver.page.evaluate(
+        () => window.__scene.tallGrasses.find((g) => g.worldX === 8 && g.worldY === 6)?.state ?? 'missing',
+      );
+      if (st === 'burning' || st === 'cut') { grassCaught = true; break; }
+      await sleep(200);
+    }
+    assert('o capim vizinho da saida PEGA da carga pousada — o fogo cruzou o muro', grassCaught);
+    await shot('braco-fogo-atravessou');
+
+    // ── 10. A chama pode MORRER no meio do arco ─────────────────────────────
+    // Combustivel curto: a esteira inteira leva ~2s, entao 700ms de chama morrem em transito e
+    // a carga chega como madeira apagada — drama de graca, e o contrato de que o relogio da
+    // tocha nunca congela so porque saiu da mao do heroi.
+    log('JOGO: com pouco combustivel a chama morre em transito — chega madeira apagada');
+    await driver.page.evaluate(() => window.__scene.itemManager.takeAt(7, 6));
+    await sleep(400);
+    await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.heldItem = 'wood';
+      s.heldOnFire = true;
+      s.torchFuelMs = 700;
+      s.handleTileEntered(5, 6);
+    });
+    let deadArrived = null;
+    const deadDeadline = Date.now() + CYCLE_TIMEOUT_MS;
+    while (Date.now() < deadDeadline) {
+      deadArrived = await driver.page.evaluate(() => {
+        const it = window.__scene.itemManager.snapshot().find((i) => i.worldX === 7 && i.worldY === 6);
+        return it ? { kind: it.kind, lit: !!it.fire } : null;
+      });
+      if (deadArrived?.kind === 'wood') break;
+      await sleep(200);
+    }
+    assert('a carga chegou como madeira APAGADA (a chama morreu no caminho)',
+      deadArrived?.kind === 'wood' && deadArrived.lit === false, JSON.stringify(deadArrived));
+
+    log('OK: gira nas 4 direcoes, atravessa a carga sozinho, recusa empilhar — e leva FOGO.');
   },
 };

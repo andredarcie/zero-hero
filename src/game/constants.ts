@@ -316,6 +316,14 @@ export const CHOPPABLE_UPPER_FRAMES: ReadonlySet<number> = new Set([
 // give nothing, and wood stays worth walking for.
 export const TREE_TILE_STICK_CHANCE = 0.25;
 
+// Chance that a dry bush, once it finishes BURNING, leaves a lump of charcoal behind — the fire
+// finally PRODUCING something instead of only consuming. Bushes only, never tall grass: grass
+// is the renewable fuse/farming loop and littering it with drops would let a burnt pavio drop a
+// surprise pickup in the hero's path (a step onto it mid-carry is a forced swap). Charcoal is
+// torch FOOD — stepping on it holding the LIT graveto eats it and refills TORCH_BURN_MS — so it
+// stays scarce on purpose: a bush burns once, and most leave only ash.
+export const CHARCOAL_DROP_CHANCE = 0.25;
+
 // Ground-layer frames that BLOCK, the mirror of SOLID_UPPER_FRAMES for the floor. The sea is
 // the only one, and it exists because of the steel axe: the world's edge used to be a wall of
 // pine tiles (WorldData's VOID_WALL_FRAME), which an axe that fells any tree turns into a door

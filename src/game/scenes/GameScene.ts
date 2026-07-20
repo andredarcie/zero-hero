@@ -24,6 +24,7 @@ import {
   TIMINGS,
   TORCH_BURN_MS,
   TREE_CHOP_STAGE_FRAMES,
+  CHARCOAL_DROP_CHANCE,
   TREE_TILE_STICK_CHANCE,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
@@ -64,6 +65,7 @@ import {
   setCurrentWorld3D, World3D,
 } from '@/game/render3d/World3D';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
+import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { getActiveLevel } from '@/game/runtime/activeLevel';
@@ -122,6 +124,7 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
+  charcoal: { texture: 'charcoal-item', frame: 0 },
 };
 
 // The same per-item art resolved through the 3D texture registry (textures3d keys),
@@ -140,6 +143,7 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   seeds: { texture: 'seeds-item', frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
+  charcoal: { texture: 'charcoal-item', frame: 0 },
 };
 
 // Bumping something you can't use yet pops a speech balloon over the hero's head showing
@@ -176,6 +180,7 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   seeds: { texture: ASSET_KEYS.seedsItem, frame: 0, label: 'VOCE PEGOU SEMENTES! PLANTE NUM BURACO' },
   bucket: { texture: 'bucket-icon', frame: 0, label: 'VOCE PEGOU UM BALDE! ENCHA NO RIO' },
   bucketFull: { texture: 'bucket-full-icon', frame: 0, label: 'BALDE CHEIO DE AGUA!' },
+  charcoal: { texture: 'charcoal-item', frame: 0, label: 'CARVAO! PISE NELE COM A TOCHA ACESA' },
 };
 
 // What a blow does to a skull (max health 3). Three tiers: bare fists land BARE_HAND_DAMAGE
@@ -190,6 +195,7 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   pickaxe: 1.5,
   scythe: 1.5,
   stone: 1.5, // a rock in the fist is as good as any other blunt tool
+  charcoal: 1.5, // a lump of coal, likewise
 };
 const BARE_HAND_DAMAGE = 1;
 
@@ -487,6 +493,7 @@ export class GameScene extends Phaser.Scene {
     // Generate the bucket's + moonflower's pixel art into both texture pipelines before any
     // prop/item is built (their billboards resolve their textures on construction below).
     registerBucketTextures(this);
+    registerCharcoalTexture(this);
     registerMoonflowerTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
@@ -601,7 +608,13 @@ export class GameScene extends Phaser.Scene {
     this.campfires = campfireDefs.map(
       (c, i) => new CampfireObject(this, c.worldX, c.worldY, i === homeIdx || c.lit === true),
     );
-    this.dryBushes = getDryBushes().map((b) => new DryBushObject(this, b.worldX, b.worldY));
+    this.dryBushes = getDryBushes().map((b) => {
+      const bush = new DryBushObject(this, b.worldX, b.worldY);
+      // O fogo PRODUZINDO: um arbusto que terminou de arder as vezes deixa carvao (comida da
+      // tocha). So arbustos — nunca o mato alto, que e o loop de pavio/plantio (ver constante).
+      bush.onBurnedOut = () => this.dropCharcoalFromBush(bush.worldX, bush.worldY);
+      return bush;
+    });
     this.lockedDoors = getLockedDoors().map((d) => new LockedDoorObject(this, d.worldX, d.worldY, d.floodgate === true));
     this.dryTrees = getDryTrees().map((t) => new DryTreeObject(this, t.worldX, t.worldY));
     this.dryShrubs = getDryShrubs().map((s) => new DryShrubObject(this, s.worldX, s.worldY));
@@ -1213,6 +1226,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.itemManager) {
+      // O combustivel de um graveto aceso no chao queima na mesma moeda do da mao.
+      this.itemManager.tickFires(delta);
+      // CARVAO sob a tocha ACESA: consome em vez de trocar — o passo COME o carvao e a chama
+      // volta ao combustivel cheio. E o unico jeito walk-only de reabastecer longe de fogo
+      // vivo, e por isso o carvao existe (o fogo produzindo o proprio alimento).
+      if (this.isTorchLit
+        && this.itemManager.kindAt(this.playerWorld.worldX, this.playerWorld.worldY) === 'charcoal') {
+        this.itemManager.takeAt(this.playerWorld.worldX, this.playerWorld.worldY);
+        this.refuelTorch();
+        getSoundManager().playIgnite();
+        this.hero.tint = 0xff6600;
+        this.time.delayedCall(250, () => { this.hero.tint = null; });
+      }
       const collected = this.itemManager.update(this.playerWorld.worldX, this.playerWorld.worldY);
       if (collected) this.onCollectItem(collected);
       this.itemManager.render(this.tileSize, this.camera!);
@@ -2668,8 +2694,13 @@ export class GameScene extends Phaser.Scene {
     });
     if (feeding && this.heldItem !== 'none' && !this.itemManager?.hasItemAt(wx, wy)) {
       const kind = this.heldItem;
+      // Uma tocha ACESA entregue a maquina continua acesa: o fogo desce com o graveto para o
+      // chao (o combustivel segue queimando la — ver ItemPickup.tickFire) e o braco o carrega
+      // adiante. E um graveto aceso POUSADO e uma fonte: os vizinhos inflamaveis pegam.
+      const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
       this.clearHeldItem();
-      this.itemManager?.drop(kind, wx, wy);
+      this.itemManager?.drop(kind, wx, wy, fire);
+      if (fire) this.scheduleFireSpread(wx, wy);
       return;
     }
 
@@ -2782,7 +2813,12 @@ export class GameScene extends Phaser.Scene {
     const port: ArmWorldPort = {
       hasItem: (x, y) => this.itemManager?.hasItemAt(x, y) ?? false,
       take: (x, y) => this.itemManager?.takeAt(x, y) ?? null,
-      put: (kind, x, y) => this.itemManager?.drop(kind, x, y),
+      put: (kind, x, y, fire) => {
+        this.itemManager?.drop(kind, x, y, fire);
+        // A carga chegou ACESA: o graveto pousado e uma fonte de fogo — os vizinhos
+        // inflamaveis pegam. E assim que a chama atravessa um muro sem combustivel nenhum.
+        if (fire) this.scheduleFireSpread(x, y);
+      },
       // Inimigos tambem contam: isSolidForEntities nao os inclui, e sem isto o braco largava a
       // carga debaixo de um undead parado na saida.
       blocked: (x, y) => this.isSolidForEntities(x, y)
@@ -3324,8 +3360,16 @@ export class GameScene extends Phaser.Scene {
     if (previous !== 'none') this.itemManager?.drop(previous, item.worldX, item.worldY);
 
     this.heldItem = item.kind;
-    this.heldOnFire = false; // fire never survives a swap — the dropped item lands unlit
-    this.torchFuelMs = 0;
+    // Um graveto ACESO apanhado do chao sobe aceso, com o combustivel que lhe resta — o par
+    // do deposito no braco. O item LARGADO na troca ainda pousa apagado (a queda apaga);
+    // fogo so desce ao chao pela entrega deliberada a uma maquina.
+    if (item.kind === 'wood' && item.fire) {
+      this.heldOnFire = true;
+      this.torchFuelMs = item.fire.fuelMs;
+    } else {
+      this.heldOnFire = false;
+      this.torchFuelMs = 0;
+    }
     this.swordSlash?.setOnFire(false);
     this.updateBackItem(); // the held item shows on the hero's back — the game's only inventory
 
@@ -3583,6 +3627,14 @@ export class GameScene extends Phaser.Scene {
 
   private dropTreeStick(worldX: number, worldY: number): void {
     this.dropProduct('wood', worldX, worldY);
+  }
+
+  // A burnt-out dry bush sometimes leaves CHARCOAL on its ash — the fire itself producing.
+  // Bushes only, never tall grass: grass is the fuse/farming loop, and a surprise pickup on a
+  // burnt pavio would force a swap on whoever walks it mid-carry (see CHARCOAL_DROP_CHANCE).
+  private dropCharcoalFromBush(worldX: number, worldY: number): void {
+    if (Math.random() >= CHARCOAL_DROP_CHANCE) return;
+    this.dropProduct('charcoal', worldX, worldY);
   }
 
   // Mowing tall grass leaves a handful of SEEDS behind, on the stubble tile — the scythe's

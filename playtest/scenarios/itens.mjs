@@ -14,6 +14,8 @@
 //      da foice/picareta/machado evaporava sem feedback. Agora cai no vizinho livre.
 //   4. BOMBA: explosao ANTECIPADA (fogo alcancando o fusivel) destruia o sprite mas deixava o
 //      tween do pisca-pisca rodando ate o fim do fusivel — setTint num material ja disposed.
+//   5. CARVAO: o arbusto queimado as vezes larga carvao (o fogo PRODUZINDO), e pisar nele com
+//      a tocha ACESA consome e reabastece — nunca vira a troca de itens comum.
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -170,7 +172,68 @@ export default {
     assert('nenhum tween de fusivel sobreviveu a explosao', bombResult.ghostFuses === 0,
       JSON.stringify(bombResult));
 
+    // ── 5. CARVAO: o fogo produz, e a tocha come ─────────────────────────────
+    // Um arbusto seco que TERMINA de arder as vezes deixa carvao (CHARCOAL_DROP_CHANCE) — o
+    // Math.random e pinado em 0 pra provar o ENCANAMENTO (ignite → toAsh → onBurnedOut →
+    // dropProduct), nao a moeda. E pisar no carvao com a tocha ACESA o consome e enche o
+    // combustivel: e reabastecimento, nunca uma troca — a mao segue com o graveto em chamas.
+    log('CARVAO: arbusto queimado larga carvao; a tocha acesa o come ao pisar');
+    const bushInfo = await evaluate(() => {
+      const s = window.__scene;
+      const bush = (s.dryBushes ?? []).find((b) => b.blocking);
+      return bush ? { x: bush.worldX, y: bush.worldY } : null;
+    });
+    assert('o level tem um arbusto seco intacto', bushInfo !== null);
+    await evaluate(() => {
+      window.__realRandom = Math.random;
+      Math.random = () => 0; // a moeda sempre paga: o teste e do encanamento, nao da sorte
+      const s = window.__scene;
+      s.dryBushes.find((b) => b.blocking).ignite();
+    });
+    // BURN_MS do arbusto e 2200; o drop acontece no assentar da cinza.
+    let coal = null;
+    const coalDeadline = Date.now() + 5000;
+    while (Date.now() < coalDeadline) {
+      coal = await evaluate(([x, y]) => {
+        const items = window.__scene.itemManager.snapshot();
+        return items.find((i) => i.kind === 'charcoal'
+          && Math.abs(i.worldX - x) + Math.abs(i.worldY - y) <= 1) ?? null;
+      }, [bushInfo.x, bushInfo.y]);
+      if (coal) break;
+      await sleep(250);
+    }
+    await evaluate(() => { Math.random = window.__realRandom; });
+    assert('a cinza do arbusto deixou um CARVAO no chao', coal !== null, JSON.stringify(coal));
+
+    // A tocha acesa com pouco combustivel pisa no carvao: consome e reabastece.
+    await evaluate(([x, y]) => {
+      const s = window.__scene;
+      s.heldItem = 'wood';
+      s.heldOnFire = true;
+      s.torchFuelMs = 800; // quase apagando
+      s.playerWorld.worldX = x;
+      s.playerWorld.worldY = y;
+      s.movementController.interruptMovement(x, y);
+    }, [coal.worldX, coal.worldY]);
+    await sleep(600); // o consumo roda no update, por frame
+    const afterRefuel = await evaluate(([x, y]) => {
+      const s = window.__scene;
+      const still = s.itemManager.snapshot().find((i) => i.worldX === x && i.worldY === y);
+      return {
+        held: s.heldItem,
+        onFire: s.heldOnFire,
+        fuel: s.torchFuelMs,
+        coalOnGround: still ? still.kind : null,
+      };
+    }, [coal.worldX, coal.worldY]);
+    assert('o carvao foi CONSUMIDO (nao trocado)', afterRefuel.coalOnGround === null,
+      JSON.stringify(afterRefuel));
+    assert('a mao segue com o graveto ACESO', afterRefuel.held === 'wood' && afterRefuel.onFire === true,
+      JSON.stringify(afterRefuel));
+    assert('e o combustivel encheu de volta (era 800, TORCH_BURN_MS e 5000)',
+      afterRefuel.fuel > 3500, JSON.stringify(afterRefuel));
+
     await shot('itens-final');
-    log('OK: ponte, monte, producao e bomba mantem seus contratos.');
+    log('OK: ponte, monte, producao, bomba e carvao mantem seus contratos.');
   },
 };

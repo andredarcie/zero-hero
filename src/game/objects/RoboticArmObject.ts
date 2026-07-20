@@ -1,4 +1,4 @@
-import { itemGroundVisual, type HeldItemKind } from '@/game/entities/ItemPickup';
+import { itemGroundVisual, type HeldItemKind, type ItemFire } from '@/game/entities/ItemPickup';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { ShadowStrip } from '@/game/render3d/groundShadow';
 import { type CastMemory, world3d } from '@/game/render3d/World3D';
@@ -153,6 +153,11 @@ const ELBOW_SIDE = 0.55;
 // ponto e voltar E o balanco) dirigida pela velocidade tangencial do punho. So a componente X
 // (a lateral de tela) e aplicada: um balanco em profundidade e invisivel e so baguncaria a
 // ordem de desenho da pinca.
+// A chama de uma carga ACESA (graveto pegando fogo pendurado na pinca): os mesmos frames
+// tiny-fire de sempre, num relogio proprio (flameMs) que anda mesmo sem energia.
+const CARGO_FLAME_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
+const CARGO_FLAME_FRAME_MS = 110;
+
 const CARGO_LAG_S = 0.085; // quanto de atraso a velocidade imprime (s de deslocamento por vel)
 const CARGO_MAX = 0.16; // teto do deslocamento, em tiles — carga nao e chicote
 const CARGO_OMEGA = 13; // rigidez da mola (rad/s)
@@ -200,10 +205,10 @@ type ArmPhase =
 export type ArmWorldPort = {
   /** Ha um item colhivel neste tile? */
   hasItem(x: number, y: number): boolean;
-  /** Tira o item do chao e devolve o que era (null se nao havia). */
-  take(x: number, y: number): HeldItemKind | null;
-  /** Devolve um item ao chao. */
-  put(kind: HeldItemKind, x: number, y: number): void;
+  /** Tira o item do chao e devolve o que era — fogo incluso, se estava aceso (null se nao havia). */
+  take(x: number, y: number): { kind: HeldItemKind; fire?: ItemFire } | null;
+  /** Devolve um item ao chao — com o fogo que ele ainda carrega, se algum. */
+  put(kind: HeldItemKind, x: number, y: number, fire?: ItemFire): void;
   /** O tile impede que algo seja depositado ali? (parede, pedra, agua, lava…) */
   blocked(x: number, y: number): boolean;
   // Os tres momentos do ciclo que fazem som. O braco nao conhece o SoundManager: ele avisa, e
@@ -264,6 +269,11 @@ export class RoboticArmObject implements WorldProp {
 
   private carried?: Billboard3D;
   private carriedKind: HeldItemKind | null = null;
+  // O fogo pendurado na carga (um graveto ACESO): o combustivel continua queimando durante o
+  // transporte — a chama pode morrer no meio do arco e a carga chegar como madeira apagada.
+  private carriedFire?: ItemFire;
+  private carriedFlame?: Billboard3D;
+  private flameMs = 0;
 
   private phase: ArmPhase = 'idle';
   private elapsed = 0;
@@ -493,7 +503,9 @@ export class RoboticArmObject implements WorldProp {
         const bite = Math.sin(Math.PI * Math.min(1, this.elapsed / GRIP_MS));
         this.place(this.angleIn, REACH, HAND_GRAB - SNAP_DIP * bite);
         if (this.elapsed >= GRIP_MS) {
-          this.carriedKind = port.take(inX, inY);
+          const taken = port.take(inX, inY);
+          this.carriedKind = taken?.kind ?? null;
+          this.carriedFire = taken?.fire;
           if (this.carriedKind) {
             this.spawnCarried(this.carriedKind);
             port.grabbed();
@@ -539,8 +551,9 @@ export class RoboticArmObject implements WorldProp {
         if (outTaken) break;
         if (this.pendingReleaseSfx) { this.pendingReleaseSfx = false; port.released(); }
         if (this.elapsed >= RELEASE_MS) {
-          if (this.carriedKind) port.put(this.carriedKind, outX, outY);
+          if (this.carriedKind) port.put(this.carriedKind, outX, outY, this.carriedFire);
           this.carriedKind = null;
+          this.carriedFire = undefined;
           this.despawnCarried();
           this.enter('rise');
         }
@@ -608,6 +621,17 @@ export class RoboticArmObject implements WorldProp {
    * importante e o de ASSENTAR, que acontece com o braco ja parado no destino.
    */
   private updateCargo(deltaMs: number): void {
+    // O fogo da carga queima SEMPRE — inclusive com a maquina sem energia (congelar a
+    // transmissao nao congela uma chama). Morrendo aqui, a carga segue viagem como madeira.
+    if (this.carriedFire) {
+      this.carriedFire.fuelMs -= deltaMs;
+      this.flameMs += deltaMs;
+      if (this.carriedFire.fuelMs <= 0) {
+        this.carriedFire = undefined;
+        this.carriedFlame?.destroy();
+        this.carriedFlame = undefined;
+      }
+    }
     if (!this.carried) {
       this.cargoSwing = 0;
       this.cargoSwingVel = 0;
@@ -627,6 +651,14 @@ export class RoboticArmObject implements WorldProp {
     // So a componente X da tangente vira imagem: e a unica visivel, e deslocar a carga em Y
     // mudaria a profundidade dela e quebraria a ordem carga-atras-da-pinca (DEPTH_ITEM).
     const disp = this.cargoSwing * -Math.sin(this.handAngle);
+    // A chama cavalga a carga: mesmo pendulo, um fio acima da ponta do graveto pendurado —
+    // e um tico a frente (DEPTH_ITEM - 0.01) pra nao ficar coplanar com a propria carga.
+    if (this.carriedFlame) {
+      this.carriedFlame
+        .setTexture(CARGO_FLAME_KEYS[Math.floor(this.flameMs / CARGO_FLAME_FRAME_MS) % CARGO_FLAME_KEYS.length])
+        .setPosition(this.clawX + disp, this.clawY + DEPTH_ITEM - 0.01)
+        .setElevation(Math.max(0.02, this.handElev - NODE_UP - 0.05) + 0.1);
+    }
     this.carried
       .setPosition(this.clawX + disp, this.clawY + DEPTH_ITEM)
       // Na BOCA da pinca: um tico abaixo do centro da garra, entre os dedos abertos ou presa
@@ -790,11 +822,22 @@ export class RoboticArmObject implements WorldProp {
       .setElevation(Math.max(0.02, this.handElev - NODE_UP - 0.05));
     this.cargoSwing = 0;
     this.cargoSwingVel = 0;
+    // Carga ACESA: a chama viaja com ela. Mesmas opcoes da chama da tocha (programa ja
+    // pre-aquecido pelo prewarmShaders — ver a regra em CLAUDE.md).
+    if (this.carriedFire) {
+      this.flameMs = 0;
+      this.carriedFlame = world3d()
+        .addBillboard(CARGO_FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 4 })
+        .setPosition(this.clawX, this.clawY + DEPTH_ITEM - 0.01)
+        .setDisplaySize(0.24, 0.34);
+    }
   }
 
   private despawnCarried(): void {
     this.carried?.destroy();
     this.carried = undefined;
+    this.carriedFlame?.destroy();
+    this.carriedFlame = undefined;
   }
 
   // Sem render(): o braco nao tem nada pra reprojetar por quadro (o mundo e 3D de verdade, quem

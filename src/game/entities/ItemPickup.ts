@@ -37,7 +37,17 @@ export type HeldItemKind =
   // use, then go back for more water. The one deliberate way to UNDO fire (the scythe only ever
   // pre-empts fuel). Empty vs full shows as the art the hero carries; there is no HUD.
   | 'bucket'
-  | 'bucketFull';
+  | 'bucketFull'
+  // A lump of CHARCOAL — the fire itself finally PRODUCING: a burnt-out dry bush sometimes
+  // leaves one (CHARCOAL_DROP_CHANCE). It is torch food: stepping on it while holding the LIT
+  // graveto consumes it and refills the flame, which makes a long dark crossing plannable
+  // instead of a prayer for lava. Runtime-only, like bucketFull — never authored in a world.
+  | 'charcoal';
+
+// The fire riding a wood item that is NOT in the hero's hand: on the ground, or hanging from
+// the robotic arm's claw. Only `fuelMs` travels — it keeps counting down wherever the item is,
+// so a lit graveto handed to the machine can die mid-swing and arrive as plain wood.
+export type ItemFire = { fuelMs: number };
 
 // How each held item looks lying on the ground (textures3d keys). Tools without a dedicated
 // map sprite reuse their held-item icon — same 16x16 pixel-art scale.
@@ -58,6 +68,8 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   // The bucket art is generated at boot (bucketTexture.ts) into both pipelines.
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
+  // Generated at boot too (charcoalTexture.ts) — the same procedural-pixel-art path.
+  charcoal: { texture: 'charcoal-item', frame: 0 },
 };
 
 /**
@@ -70,6 +82,14 @@ export const itemGroundVisual = (kind: HeldItemKind): { texture: string; frame: 
 
 const GROUND_SIZE = 0.7; // tiles
 const BOB_TILES = 0.09;
+
+// A chama cavalgando um graveto ACESO fora da mao: os mesmos frames tiny-fire dos arbustos,
+// animados em render(). As opcoes do billboard sao IDENTICAS as da chama da tocha
+// (GameScene.torchFlameBb) de proposito — mesmo shape de material, mesmo programa ja compilado
+// pelo prewarmShaders, entao a primeira chama no chao nao custa um hitch de compilacao.
+const FLAME_FRAME_MS = 110;
+const FLAME_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
+const FLAME_ELEV = 0.5; // lambe a ponta do graveto em pe (arte de 0.7 tile)
 
 // Fixed purple outline around every ground pickup — the hero's own indigo cloak, brightened
 // until it reads at night — so collectibles pop against the world at a glance. Same trick as
@@ -94,6 +114,8 @@ export class ItemPickup {
   private readonly outline: Billboard3D[];
   private collectable = false;
   private collected = false;
+  private flame?: Billboard3D;
+  private fireState?: ItemFire;
 
   public armed: boolean;
 
@@ -103,6 +125,7 @@ export class ItemPickup {
     public readonly tileX: number,
     public readonly tileY: number,
     dropped = false,
+    fire?: ItemFire,
   ) {
     const visual = GROUND_VISUAL[kind];
     // Full-bright: pickups must read even in the dark (the 2D game punched a
@@ -138,16 +161,42 @@ export class ItemPickup {
       onComplete: () => { this.collectable = true; },
     });
     if (dropped) this.collectable = true;
+
+    // So o graveto carrega fogo — o mesmo contrato da mao do heroi (isFlammableHeld). A chama
+    // fica um fio a frente do item (tileY - 0.02) pelo mesmo motivo do aro ficar atras: dois
+    // billboards no mesmo tile sao coplanares e estrobam onde se sobrepoem (DEPTH_LAYER).
+    if (fire && kind === 'wood' && fire.fuelMs > 0) {
+      this.fireState = { fuelMs: fire.fuelMs };
+      this.flame = world3d()
+        .addBillboard(FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 4 })
+        .setPosition(tileX, tileY - 0.02)
+        .setDisplaySize(0.3, 0.42);
+    }
   }
 
   public get isCollectable(): boolean { return this.collectable; }
   public get isCollected(): boolean { return this.collected; }
+
+  /** O fogo montado neste item (so um graveto aceso tem), ou undefined. */
+  public get fire(): ItemFire | undefined { return this.fireState; }
+
+  /** O combustivel queima tambem no chao; a chama morre sozinha quando ele acaba. */
+  public tickFire(deltaMs: number): void {
+    if (!this.fireState || this.collected) return;
+    this.fireState.fuelMs -= deltaMs;
+    if (this.fireState.fuelMs <= 0) {
+      this.fireState = undefined;
+      this.flame?.destroy();
+      this.flame = undefined;
+    }
+  }
 
   /** Mark collected — the fly-to-the-hero collect visual is spawned separately by the scene. */
   public collect(): void {
     this.collected = true;
     this.collectable = false;
     this.sprite.setVisible(false);
+    this.flame?.setVisible(false);
     for (const copy of this.outline) copy.setVisible(false);
   }
 
@@ -165,11 +214,20 @@ export class ItemPickup {
         .setElevation(Math.max(0, bob + OUTLINE_DIRS[i][1] * OUTLINE_OFFSET_TILES))
         .setAlpha(alpha);
     }
+    // A chama cavalga o bob e o fade-in junto com o item, ciclando os frames do tiny-fire.
+    if (this.flame) {
+      const step = Math.floor(this.scene.time.now / FLAME_FRAME_MS);
+      this.flame
+        .setTexture(FLAME_KEYS[step % FLAME_KEYS.length])
+        .setElevation(FLAME_ELEV + bob)
+        .setAlpha(alpha);
+    }
   }
 
   public destroy(): void {
     this.scene.tweens.killTweensOf(this.sprite);
     this.sprite.destroy();
+    this.flame?.destroy();
     for (const copy of this.outline) copy.destroy();
   }
 }
