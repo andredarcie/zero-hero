@@ -67,6 +67,7 @@ import {
   setCurrentWorld3D, World3D,
 } from '@/game/render3d/World3D';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
+import { registerBoilerTexture } from '@/game/render3d/boilerTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerWireTextures, wireShapeFromMask } from '@/game/render3d/wireTexture';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
@@ -506,6 +507,7 @@ export class GameScene extends Phaser.Scene {
     registerBucketTextures(this);
     registerCharcoalTexture(this);
     registerWireTextures(this);
+    registerBoilerTexture(this);
     registerMoonflowerTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —

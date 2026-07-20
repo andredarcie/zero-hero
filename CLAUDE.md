@@ -369,11 +369,13 @@ CATCHES fire because of the boiler.
   hysteresis (on at 0.45, off at 0.18): one grass tuft burning 2.2s buys several seconds of live
   circuit, so a pulsed fuse can FEED the furnace without the consumer flickering — stoking is
   the gameplay, the farming loop become a power plant.
-- The model is real THREE geometry (stone firebox, riveted tank, dome, chimney, valve) in the
-  wheel's visual language, including the SAME status-lamp grammar as the dynamo. The ember in
-  the firebox mouth is the readable thermometer; steam puffs pace with pressure; effects/audio
-  only exist near the hero (the wheel's rule). No new THREE lights — the fire that heats it
-  brings its own from the pool.
+- The body is a BILLBOARD like every other world prop (the game's style), boot-generated in
+  three looks swapped on state edges the way a campfire swaps frames: cold / stoked (the
+  firebox mouth ember lights — the readable thermometer) / generating (the dynamo's green
+  status lamp — the one "circuit closed" grammar shared with the wheel). Steam puffs pace with
+  pressure and a near-subliminal tremble marks full regime; effects/audio only exist near the
+  hero (the wheel's rule). No new THREE lights — the fire that heats it brings its own from
+  the pool.
 - Producers still combine by OR per variable; the editor authors it like the wheel ("Saida de
   energia" + the variables modal), warns about unbound boilers, and its palette icon is
   boot-generated (`boilerTexture.ts`) — the runtime never draws the sprite.
