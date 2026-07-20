@@ -59,12 +59,15 @@ export default {
           for (let dy = -1; dy <= 1; dy += 1) clear(p.worldX + dx, p.worldY + dy);
         }
       }
-      // A pista do estagio de FOGO (9): o deposito aceso em (5,6) espalha pros 4 vizinhos, e a
-      // carga pousada em (7,6) espalha dali — nada de combustivel do level pode encostar nessa
-      // faixa, senao um incendio alheio contamina o assert. Limpa a fileira inteira e planta UM
-      // capim em (8,6), vizinho da saida: e ele que deve pegar, e so ele.
+      // A pista do estagio de FOGO (9): a carga ACESA pousada em (7,6) espalha dali — nada de
+      // combustivel do level pode encostar nessa faixa, senao um incendio alheio contamina o
+      // assert. Limpa a fileira inteira e planta DOIS capins com papeis opostos: o de (8,6),
+      // vizinho da SAIDA, deve pegar; o de (4,6), vizinho da ENTRADA, deve SOBREVIVER — o
+      // braco carrega o graveto embora antes do fusivel de 850ms, e fogo nao nasce de um tile
+      // vazio (o espalhamento do deposito e condicional: hasLitItemAt no disparo).
       for (let x = 4; x <= 8; x += 1) for (let y = 5; y <= 7; y += 1) clear(x, y);
       store.placeEntity({ list: 'props', type: 'tallGrass', worldX: 8, worldY: 6 });
+      store.placeEntity({ list: 'props', type: 'tallGrass', worldX: 4, worldY: 6 });
     }, PLACED);
 
     log('EDITOR: coloca um braco em cada uma das 4 direcoes pelo EditorStore');
@@ -424,6 +427,15 @@ export default {
       await sleep(200);
     }
     assert('o capim vizinho da saida PEGA da carga pousada — o fogo cruzou o muro', grassCaught);
+
+    // O gemeo de controle: o capim em (4,6), vizinho da ENTRADA, tem de estar INTACTO. O braco
+    // levou o graveto embora antes do fusivel do deposito vencer — um espalhamento cego aqui
+    // acenderia fogo a partir de um tile vazio (o bug do fantasma que este assert trava).
+    const inputGrass = await driver.page.evaluate(
+      () => window.__scene.tallGrasses.find((g) => g.worldX === 4 && g.worldY === 6)?.state ?? 'missing',
+    );
+    assert('o capim vizinho da ENTRADA sobrevive — sem fogo fantasma de tile vazio',
+      inputGrass === 'tall', `estado: ${inputGrass}`);
     await shot('braco-fogo-atravessou');
 
     // ── 10. A chama pode MORRER no meio do arco ─────────────────────────────

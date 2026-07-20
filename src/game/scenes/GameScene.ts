@@ -1048,6 +1048,10 @@ export class GameScene extends Phaser.Scene {
       list.length = 0;
     }
     this.propRegistry = [];
+    // O índice espacial e o conjunto vivo dos cabos seguem a mesma regra de reset do shutdown:
+    // nada segura wrapper destruído entre um shutdown e o próximo create.
+    this.wireIndex.clear();
+    this.liveWires.clear();
     this.activeBombs.forEach((b) => b.sprite.destroy());
     this.shopOverlay?.destroy();
     this.backItemSwingTimer?.remove();
@@ -2777,7 +2781,7 @@ export class GameScene extends Phaser.Scene {
       const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
       this.clearHeldItem();
       this.itemManager?.drop(kind, wx, wy, fire);
-      if (fire) this.scheduleFireSpread(wx, wy);
+      if (fire) this.scheduleGroundTorchSpread(wx, wy);
       return;
     }
 
@@ -2894,7 +2898,7 @@ export class GameScene extends Phaser.Scene {
         this.itemManager?.drop(kind, x, y, fire);
         // A carga chegou ACESA: o graveto pousado e uma fonte de fogo — os vizinhos
         // inflamaveis pegam. E assim que a chama atravessa um muro sem combustivel nenhum.
-        if (fire) this.scheduleFireSpread(x, y);
+        if (fire) this.scheduleGroundTorchSpread(x, y);
       },
       // Inimigos tambem contam: isSolidForEntities nao os inclui, e sem isto o braco largava a
       // carga debaixo de um undead parado na saida.
@@ -3229,6 +3233,23 @@ export class GameScene extends Phaser.Scene {
   private scheduleFireSpread(wx: number, wy: number): void {
     this.time.delayedCall(FIRE_SPREAD_MS, () => {
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        this.igniteFlammableAt(wx + dx, wy + dy);
+      }
+    });
+  }
+
+  /**
+   * A versao CONDICIONAL do scheduleFireSpread, para um graveto ACESO pousado no chao. Um
+   * arbusto que agendou espalhamento ainda esta queimando quando o fusivel de FIRE_SPREAD_MS
+   * vence — mas um ITEM o braco robotico pode ter CARREGADO EMBORA nesse meio-tempo (o ciclo
+   * de pegar leva ~0.5s, menos que os 850ms do fusivel), e fogo nao nasce de um tile vazio.
+   * O teste no DISPARO (hasLitItemAt) tambem cobre o caso-borda do deposito com combustivel
+   * exatamente zero: pousa como madeira apagada e nao arma espalhamento nenhum.
+   */
+  private scheduleGroundTorchSpread(wx: number, wy: number): void {
+    this.time.delayedCall(FIRE_SPREAD_MS, () => {
+      if (!this.itemManager?.hasLitItemAt(wx, wy)) return;
+      for (const [dx, dy] of CARDINAL_DIRS) {
         this.igniteFlammableAt(wx + dx, wy + dy);
       }
     });
