@@ -1640,6 +1640,26 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // The boiler takes the flame straight from the hero's hand: bump it with the lit torch and
+    // the firebox catches for a few seconds (BoilerObject.stoke) — the same fire-bump grammar
+    // as the dead campfire, but with a TIMER: stoking is a round trip, never a switch. The
+    // torch survives the transfer, exactly like lighting a campfire.
+    const boiler = this.getBoilerAt(wx, wy);
+    if (boiler) {
+      if (this.isFlammableHeld && this.heldOnFire) {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(150, () => {
+          boiler.stoke();
+          this.spawnFireHitEffect(wx, wy);
+        });
+      } else if (!boiler.isHeated && !boiler.isGenerating) {
+        // Cold furnace and no flame in hand: the balloon asks for fire, like a dead campfire.
+        this.showNeedItemHint('fire');
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
     // Lava is molten fire: bumping it with a flammable item (no flame yet) lights the torch,
     // exactly like a lit campfire. With the lava boots on, the hero walks onto it instead of
     // bumping, so this only fires when lava is blocking.

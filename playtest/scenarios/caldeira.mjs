@@ -173,6 +173,66 @@ export default {
     assert('a chama do graveto morreu e o calor morreu junto', torchOut.heated === false,
       JSON.stringify(torchOut));
 
-    log('OK: fogo vizinho vira pressao, pressao vira circuito, circuito move maquina — e coasta.');
+    // ── 5. ESTOCAR: o bump com a tocha acesa acende a fornalha por dentro ────
+    // A gramatica de fogo da casa (fogueira morta, arbusto, mato: tudo acende por bump com o
+    // item em chamas) vale para a fornalha — mas com RELOGIO: a estocada compra uns segundos
+    // de queima interna e apaga sozinha. De maos vazias, nada acontece (e o balao pede fogo).
+    log('JOGO: bump de maos vazias nao acende; bump com a tocha ACESA estoca a fornalha');
+    // Primeiro drena qualquer geracao que sobrou do estagio anterior.
+    let calm = null;
+    const calmDeadline = Date.now() + 9000;
+    while (Date.now() < calmDeadline) {
+      calm = await boilerState();
+      if (!calm.heated && !calm.generating) break;
+      await sleep(300);
+    }
+    assert('a caldeira drenou antes do teste de estocada', calm.generating === false, JSON.stringify(calm));
+
+    await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.heldItem = 'none';
+      s.heldOnFire = false;
+      s.handlePlayerBump(6, 6); // esbarra na fornalha de maos vazias
+    });
+    await sleep(500);
+    const bareBump = await boilerState();
+    assert('de maos vazias a fornalha segue fria', bareBump.heated === false, JSON.stringify(bareBump));
+
+    await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.heldItem = 'wood';
+      s.heldOnFire = true;
+      s.torchFuelMs = 5000;
+      s.handlePlayerBump(6, 6); // a tocha acesa entra na boca da fornalha
+    });
+    let stoked = null;
+    const stokeDeadline = Date.now() + 4000;
+    while (Date.now() < stokeDeadline) {
+      stoked = await boilerState();
+      if (stoked.generating) break;
+      await sleep(150);
+    }
+    assert('a estocada ACENDE a fornalha por dentro (sem nenhuma chama vizinha)',
+      stoked.heated === true, JSON.stringify(stoked));
+    assert('e a queima interna fecha o circuito', stoked.generating === true, JSON.stringify(stoked));
+    const torchAfter = await driver.page.evaluate(() => ({
+      held: window.__scene.heldItem, onFire: window.__scene.heldOnFire,
+    }));
+    assert('a tocha SOBREVIVE a transferencia (como ao acender fogueira)',
+      torchAfter.held === 'wood' && torchAfter.onFire === true, JSON.stringify(torchAfter));
+    await shot('caldeira-estocada');
+
+    // A estocada e um relogio (~4s): a queima interna apaga sozinha e a pressao drena depois.
+    let stokeOut = null;
+    const stokeOutDeadline = Date.now() + 7000;
+    while (Date.now() < stokeOutDeadline) {
+      stokeOut = await boilerState();
+      if (!stokeOut.heated) break;
+      await sleep(250);
+    }
+    assert('a queima da estocada expira sozinha (relogio, nao interruptor)',
+      stokeOut.heated === false, JSON.stringify(stokeOut));
+
+    log('OK: fogo vizinho vira pressao, a tocha estoca por dentro, e tudo coasta e apaga.');
   },
 };

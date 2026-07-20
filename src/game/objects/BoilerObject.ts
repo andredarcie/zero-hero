@@ -33,6 +33,12 @@ const PRESSURE_COOL_MS = 5200; // cheia -> zero sem chama: o "coast" que atraves
 const GEN_ON = 0.45; // o vapor so fecha o circuito com pressao de verdade
 const GEN_OFF = 0.18; // ...e so o abre de novo bem abaixo: histerese, nunca tremeluzir
 const PUFF_MS = 560; // cadencia da valvula soltando vapor em regime
+// Uma ESTOCADA direta da tocha do heroi (bump com o graveto aceso) acende a fornalha por
+// dentro por este tempo. E deliberadamente um RELOGIO, nao um interruptor: com stoke + coast o
+// jogador compra ~8s de circuito por viagem, entao rodar uma maquina so na tocha e possivel —
+// mas e ir e voltar alimentando a fornalha, nunca apertar um botao e ir embora. Fontes fixas
+// (fogueira, lava, pavio) continuam sendo o jeito de deixar a usina ligada sozinha.
+const STOKE_BURN_MS = 4000;
 
 const SPRITE_W = 0.84; // 14px de arte num tile — nada vaza do tile
 const SPRITE_H = SPRITE_W * BOILER_SPRITE_ASPECT;
@@ -46,6 +52,7 @@ export class BoilerObject implements WorldProp {
 
   private pressure01 = 0;
   private heated = false;
+  private stokeMs = 0;
   private powered = false;
   private look: BoilerLook = 'cold';
   private puffMs = PUFF_MS;
@@ -77,9 +84,22 @@ export class BoilerObject implements WorldProp {
   /** Saida eletrica real: segue viva pelo vapor acumulado depois que a chama morre. */
   public get isGenerating(): boolean { return this.powered; }
 
-  public update(deltaMs: number, heated: boolean, effectsVisible: boolean): void {
+  /**
+   * A tocha do heroi acende a fornalha POR DENTRO (bump com o graveto aceso): uma queima com
+   * relogio, realimentavel — re-estocar antes de apagar so enche o relogio de novo. A chama da
+   * tocha nao se gasta na transferencia, como ao acender uma fogueira.
+   */
+  public stoke(): void {
+    this.stokeMs = STOKE_BURN_MS;
+  }
+
+  public update(deltaMs: number, externalHeat: boolean, effectsVisible: boolean): void {
     if (this.dead) return;
     this.aliveMs += deltaMs;
+
+    // Calor de fora (fireHeatAt) OU a queima interna da estocada — a fornalha nao distingue.
+    this.stokeMs = Math.max(0, this.stokeMs - deltaMs);
+    const heated = externalHeat || this.stokeMs > 0;
 
     if (heated !== this.heated) {
       this.heated = heated;
