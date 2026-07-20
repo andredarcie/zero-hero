@@ -59,7 +59,10 @@
       "stone": "YOU GOT A STONE!",
       "seeds": "YOU GOT SEEDS! PLANT THEM IN A HOLE",
       "bucket": "YOU GOT A BUCKET! FILL IT AT THE RIVER",
-      "bucketFull": "BUCKET FULL OF WATER!"
+      "bucketFull": "BUCKET FULL OF WATER!",
+      "charcoal": "CHARCOAL! STEP ON IT WITH A LIT TORCH",
+      "battery": "A BATTERY! CHARGE IT BY STEPPING ON A LIVE WIRE",
+      "batteryFull": "CHARGED BATTERY! STEP ON A DEAD WIRE TO DOCK IT"
     }
   },
   "lockedLines": [

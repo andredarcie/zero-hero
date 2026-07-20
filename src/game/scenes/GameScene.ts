@@ -24,13 +24,19 @@ import {
   TIMINGS,
   TORCH_BURN_MS,
   TREE_CHOP_STAGE_FRAMES,
+  BATTERY_FEED_MS,
   BATTERY_FRAMES,
   CHARCOAL_DROP_CHANCE,
   TREE_TILE_STICK_CHANCE,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
-import { clearGameDebugApi, registerGameDebugApi, type GameDebugApi } from '@/game/debug/debugHooks';
+import {
+  clearGameDebugApi,
+  registerGameDebugApi,
+  registerSceneDebugHooks,
+  type GameDebugApi,
+} from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
 import { CoinManager } from '@/game/entities/CoinManager';
 import type { EnemyBase } from '@/game/entities/EnemyBase';
@@ -339,6 +345,9 @@ export class GameScene extends Phaser.Scene {
   // Remaining life of the carried flame, in ms. Counts down while heldOnFire; re-igniting at
   // any living fire (lit campfire or lava) refills it. Zero snuffs the torch.
   private torchFuelMs = 0;
+  // A carga da batteryFull NA MAO — o par eletrico do torchFuelMs: viaja com o item em toda
+  // troca de maos (chao -> mao -> chao -> garra), entao pegar e re-encaixar nunca recarrega.
+  private heldBatteryChargeMs = 0;
   // Guttering flicker for a dying carried flame — a random-walk like lightFlicker, but its
   // amplitude grows as the fuel runs out, so the torchlight jitters harder near the end.
   private readonly torchGutter = { level: 1.0, velocity: 0 };
@@ -458,6 +467,7 @@ export class GameScene extends Phaser.Scene {
   // Center chunk of the streamed window; NaN forces the first stream.
   private streamCenter = { cx: NaN, cy: NaN };
   private debugApi?: GameDebugApi;
+  private clearDebugHooks?: () => void;
 
 
   // Low-health "heartbeat": a pulsing red PIXEL OUTLINE around the hero (never painting the
@@ -565,6 +575,7 @@ export class GameScene extends Phaser.Scene {
     this.heldItem = 'none';
     this.seenItems.clear();
     this.heldOnFire = false;
+    this.heldBatteryChargeMs = 0;
     // One reusable swing animator, alive for the whole scene: the sword uses it to attack,
     // the key uses it to strike a door (SwordSlash.slash accepts a custom item sprite).
     this.swordSlash = new SwordSlash(this);
@@ -1003,9 +1014,16 @@ export class GameScene extends Phaser.Scene {
       listNpcKinds: () => getDialogKinds(),
     };
     registerGameDebugApi(this.debugApi, this);
+    this.clearDebugHooks?.();
+    this.clearDebugHooks = registerSceneDebugHooks(this, () => JSON.stringify({
+      coordinateSystem: 'tile grid; origin=(0,0) at world top-left; +x east/right, +y south/down',
+      ...this.debugApi?.getState(),
+    }));
   }
 
   public shutdown(): void {
+    this.clearDebugHooks?.();
+    this.clearDebugHooks = undefined;
     if (this.debugApi) {
       clearGameDebugApi(this.debugApi);
       this.debugApi = undefined;
@@ -2791,8 +2809,9 @@ export class GameScene extends Phaser.Scene {
       // chao (o combustivel segue queimando la — ver ItemPickup.tickFire) e o braco o carrega
       // adiante. E um graveto aceso POUSADO e uma fonte: os vizinhos inflamaveis pegam.
       const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
+      const charge = kind === 'batteryFull' ? this.heldBatteryChargeMs : undefined;
       this.clearHeldItem();
-      this.itemManager?.drop(kind, wx, wy, fire);
+      this.itemManager?.drop(kind, wx, wy, fire, charge);
       if (fire) this.scheduleGroundTorchSpread(wx, wy);
       return;
     }
@@ -2802,9 +2821,25 @@ export class GameScene extends Phaser.Scene {
     // O cabo precisa estar energizado AGORA: um fio morto nao enche bateria nenhuma.
     if (this.heldItem === 'battery' && this.liveWires.has(`${wx},${wy}`)) {
       this.heldItem = 'batteryFull';
+      this.heldBatteryChargeMs = BATTERY_FEED_MS; // a rede viva enche ate a boca
       this.updateBackItem();
       getSoundManager().playBatteryCharge();
       this.spawnBatteryChargeFx(wx, wy);
+      return;
+    }
+
+    // O gesto complementar precisa existir porque o jogo NAO tem botao de largar: pisar num
+    // cabo MORTO com a bateria cheia encaixa a carga no proprio tile. Ela nasce desarmada, como
+    // todo item largado sob o heroi, entao nao volta imediatamente para a mao; basta sair e
+    // retornar para recolhe-la. Um cabo ja vivo nao rouba uma carga que nao precisa.
+    if (this.heldItem === 'batteryFull'
+      && this.wireIndex.has(`${wx},${wy}`)
+      && !this.liveWires.has(`${wx},${wy}`)
+      && !this.itemManager?.hasItemAt(wx, wy)) {
+      const charge = this.heldBatteryChargeMs; // a carga desce COM o item (clearHeldItem a zera)
+      this.clearHeldItem();
+      this.itemManager?.drop('batteryFull', wx, wy, undefined, charge);
+      getSoundManager().playBatteryDock();
       return;
     }
 
@@ -2917,8 +2952,8 @@ export class GameScene extends Phaser.Scene {
     const port: ArmWorldPort = {
       hasItem: (x, y) => this.itemManager?.hasItemAt(x, y) ?? false,
       take: (x, y) => this.itemManager?.takeAt(x, y) ?? null,
-      put: (kind, x, y, fire) => {
-        this.itemManager?.drop(kind, x, y, fire);
+      put: (kind, x, y, fire, chargeMs) => {
+        this.itemManager?.drop(kind, x, y, fire, chargeMs);
         // A carga chegou ACESA: o graveto pousado e uma fonte de fogo — os vizinhos
         // inflamaveis pegam. E assim que a chama atravessa um muro sem combustivel nenhum.
         if (fire) this.scheduleGroundTorchSpread(x, y);
@@ -3613,9 +3648,16 @@ export class GameScene extends Phaser.Scene {
   // → the "item get" ceremony; every pickup after that flies straight onto the hero's back.
   private onCollectItem(item: CollectedItem): void {
     const previous = this.heldItem;
-    if (previous !== 'none') this.itemManager?.drop(previous, item.worldX, item.worldY);
+    if (previous !== 'none') {
+      // A batteryFull largada na troca desce com a carga QUE TEM — nunca renasce cheia.
+      this.itemManager?.drop(previous, item.worldX, item.worldY, undefined,
+        previous === 'batteryFull' ? this.heldBatteryChargeMs : undefined);
+    }
 
     this.heldItem = item.kind;
+    this.heldBatteryChargeMs = item.kind === 'batteryFull'
+      ? (item.chargeMs ?? BATTERY_FEED_MS)
+      : 0;
     // Um graveto ACESO apanhado do chao sobe aceso, com o combustivel que lhe resta — o par
     // do deposito no braco. O item LARGADO na troca ainda pousa apagado (a queda apaga);
     // fogo so desce ao chao pela entrega deliberada a uma maquina.
@@ -3645,6 +3687,7 @@ export class GameScene extends Phaser.Scene {
     this.heldItem = 'none';
     this.heldOnFire = false;
     this.torchFuelMs = 0;
+    this.heldBatteryChargeMs = 0;
     this.updateBackItem();
   }
 

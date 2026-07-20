@@ -3,7 +3,14 @@ import type Phaser from 'phaser';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import { ItemPickup, type HeldItemKind, type ItemFire } from './ItemPickup';
 
-export type CollectedItem = { kind: HeldItemKind; worldX: number; worldY: number; fire?: ItemFire };
+export type CollectedItem = {
+  kind: HeldItemKind;
+  worldX: number;
+  worldY: number;
+  fire?: ItemFire;
+  /** Carga restante de uma batteryFull — viaja com o item, nunca reseta numa troca de maos. */
+  chargeMs?: number;
+};
 
 // Owns every held item lying on the ground: the authored sword/key from world.json plus any
 // item the hero drops when swapping. It never streams — items persist off-screen so a dropped
@@ -25,8 +32,8 @@ export class ItemManager {
    * `fire` keeps a lit graveto BURNING where it lands (deposited into a robotic arm, or laid
    * down by the arm itself) — the flame rides the pickup and the fuel keeps counting down.
    */
-  public drop(kind: HeldItemKind, worldX: number, worldY: number, fire?: ItemFire): void {
-    this.items.push(new ItemPickup(this.scene, kind, worldX, worldY, true, fire));
+  public drop(kind: HeldItemKind, worldX: number, worldY: number, fire?: ItemFire, chargeMs?: number): void {
+    this.items.push(new ItemPickup(this.scene, kind, worldX, worldY, true, fire, chargeMs));
   }
 
   public hasItemAt(x: number, y: number): boolean {
@@ -58,13 +65,17 @@ export class ItemManager {
    * its 8 rim copies are positioned once at construction), so the arm re-creates the item at the
    * far side via the normal drop() path instead of teaching pickups to slide.
    */
-  public takeAt(x: number, y: number): { kind: HeldItemKind; fire?: ItemFire } | null {
+  public takeAt(x: number, y: number): { kind: HeldItemKind; fire?: ItemFire; chargeMs?: number } | null {
     const idx = this.items.findIndex(
       (it) => it.isCollectable && !it.isCollected && it.tileX === x && it.tileY === y,
     );
     if (idx < 0) return null;
     const [taken] = this.items.splice(idx, 1);
-    const result = { kind: taken.kind, fire: taken.fire };
+    const result = {
+      kind: taken.kind,
+      fire: taken.fire,
+      chargeMs: taken.kind === 'batteryFull' ? taken.charge : undefined,
+    };
     taken.destroy();
     return result;
   }
@@ -112,7 +123,13 @@ export class ItemManager {
     let collected: CollectedItem | null = null;
     for (const it of this.items) {
       if (it.isCollectable && it.armed && !it.isCollected && it.tileX === heroX && it.tileY === heroY) {
-        collected = { kind: it.kind, worldX: it.tileX, worldY: it.tileY, fire: it.fire };
+        collected = {
+          kind: it.kind,
+          worldX: it.tileX,
+          worldY: it.tileY,
+          fire: it.fire,
+          chargeMs: it.kind === 'batteryFull' ? it.charge : undefined,
+        };
         it.collect();
         break;
       }

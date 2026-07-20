@@ -98,11 +98,10 @@ declare global {
 export const registerSceneDebugHooks = (
   scene: Phaser.Scene,
   renderGameToText: () => string,
-): void => {
-  // Dev-only escape hatch: the live scene for console inspection (playtests/debugging).
-  if (import.meta.env.DEV) (window as unknown as { __scene?: Phaser.Scene }).__scene = scene;
-  window.render_game_to_text = renderGameToText;
-  window.advanceTime = (ms: number) => {
+): (() => void) => {
+  const previousRender = window.render_game_to_text;
+  const previousAdvance = window.advanceTime;
+  const advanceTime = (ms: number): void => {
     const step = 1000 / 60;
     const iterations = Math.max(1, Math.round(ms / step));
     let elapsed = scene.time.now;
@@ -111,6 +110,18 @@ export const registerSceneDebugHooks = (
       elapsed += step;
       scene.game.step(elapsed, step);
     }
+  };
+
+  // Dev-only escape hatch: the live scene for console inspection (playtests/debugging).
+  if (import.meta.env.DEV) (window as unknown as { __scene?: Phaser.Scene }).__scene = scene;
+  window.render_game_to_text = renderGameToText;
+  window.advanceTime = advanceTime;
+
+  // GameScene temporarily replaces the sleeping editor's hooks during live play. Restore the
+  // previous owner on shutdown, but only if nobody newer has taken the globals meanwhile.
+  return () => {
+    if (window.render_game_to_text === renderGameToText) window.render_game_to_text = previousRender;
+    if (window.advanceTime === advanceTime) window.advanceTime = previousAdvance;
   };
 };
 

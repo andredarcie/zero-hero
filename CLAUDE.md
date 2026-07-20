@@ -425,14 +425,19 @@ open circuit — which is exactly what makes the cable a puzzle piece and not de
 **The battery (`battery`/`batteryFull`) — electricity's portable vessel.** The stick carries
 fire, the bucket carries water, the battery carries CURRENT — the item that lets energy cross
 where no cable can be laid (a river in the hero's hand, a wall in the arm's claw). Charge the
-empty one by STEPPING on a LIVE wire while holding it (a dead wire charges nothing); the
-charged one lying on the ground beside (or on) a wire is a SEED for the flood-fill, and it
-drains ONLY while feeding (`BATTERY_FEED_MS`, ~20s of grid uptime) — in the hand it is stable,
-away from cables it waits intact. Spent, it dies into the empty shell in place (nothing
-evaporates) and the island goes dark. Sprite Factory art (`battery.png`, empty/charged window
-in the wire's gold); the empty battery is authorable as a pickup. `npm run playtest -- bateria`
-guards the whole arc: dead wire refuses, live wire charges, an ISLANDED net lights from the
-grounded battery and its arm hauls cargo, and the spent charge leaves the shell.
+empty one by STEPPING on a LIVE wire while holding it (a dead wire charges nothing); step on a
+DEAD wire holding the full one and it DOCKS onto that tile (the walk-only place gesture — a
+live wire never steals a charge it doesn't need). The grounded battery is a SEED for the
+flood-fill, draining ONLY while feeding (`BATTERY_FEED_MS`, ~20s of grid uptime) — in the hand
+it is stable, away from cables it waits intact. The charge TRAVELS with the item through every
+hand-off (ground → hand → ground → the arm's claw, `heldBatteryChargeMs`/`carriedCharge` — the
+electric twin of torch fuel), so pick-up-and-redock never refills it. Spent, it dies into the
+empty shell in place (nothing evaporates) and the island goes dark. Sprite Factory art
+(`battery.png`, empty/charged window in the wire's gold); the empty battery is authorable as a
+pickup. `npm run playtest -- bateria` guards the whole arc: dead wire refuses, live wire
+charges, the dock gesture empties the hand, an ISLANDED net lights from the grounded battery
+and its arm hauls cargo, partial charge survives the pickup cycle, and the spent charge leaves
+the shell.
 
 ## Verifying a change
 

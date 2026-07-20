@@ -10,7 +10,8 @@
 //
 // O que ele prova, nesta ordem:
 //   1. CARREGAR: pisar num cabo VIVO segurando a bateria vazia a enche; num cabo MORTO, nao.
-//   2. TRANSPORTAR + DESCARREGAR: a bateria cheia pousada junto a rede B acende a rede ilhada
+//   2. TRANSPORTAR + DESCARREGAR: pisar na rede B com a bateria cheia ENCAIXA a carga sem
+//      depender de botao de largar; a bateria pousada acende a rede ilhada
 //      e energiza o braco — energia virou carga e cruzou o vao onde nenhum cabo existe.
 //   3. O RELOGIO: a carga drena enquanto alimenta; esgotada, o item vira a CASCA VAZIA no
 //      mesmo tile (nada evapora) e a rede B apaga de volta.
@@ -42,9 +43,15 @@ export default {
         store.placeEntity({ list: 'props', type: 'wire', worldX: x, worldY: y });
       }
       store.placeEntity({ list: 'props', type: 'inserter', worldX: 11, worldY: 4, dir: 2 });
-      return store.allEntities().filter((e) => e.list === 'props' && e.type === 'wire').length;
+      store.placeEntity({ list: 'pickups', type: 'battery', worldX: 4, worldY: 3 });
+      const entities = store.allEntities();
+      return {
+        wires: entities.filter((e) => e.list === 'props' && e.type === 'wire').length,
+        batteries: entities.filter((e) => e.list === 'pickups' && e.type === 'battery').length,
+      };
     });
-    assert('o store guarda os 4 cabos das duas redes', authored === 4, `veio ${authored}`);
+    assert('o store guarda os 4 cabos das duas redes', authored.wires === 4, JSON.stringify(authored));
+    assert('a bateria vazia existe na paleta/autoria do editor', authored.batteries === 1, JSON.stringify(authored));
 
     log('LAB: P joga o mundo editado; a rede A liga (agua + fogueira acesa)');
     await driver.press('p', { count: 1 });
@@ -89,13 +96,18 @@ export default {
     await shot('bateria-carregada');
 
     // ── 2. Transportar + descarregar: a rede ilhada acende ───────────────────
-    log('JOGO: a bateria cheia pousa junto a rede B — a ilha acende e o braco trabalha');
-    await driver.page.evaluate(() => {
+    log('JOGO: pisar no cabo morto encaixa a bateria — a ilha acende e o braco trabalha');
+    const docked = await driver.page.evaluate(() => {
       const s = window.__scene;
-      s.heldItem = 'none'; // a "viagem": o contrato aqui e a descarga, nao o passo-a-passo
-      s.itemManager.drop('batteryFull', 9, 3); // vizinho do cabo (9,4)
+      s.handleTileEntered(9, 4); // bateriaFull veio do passo anterior; este e o gesto walk-only
       s.itemManager.drop('stone', 11, 3); // e uma carga na ENTRADA do braco (11,3)
+      return {
+        held: s.heldItem,
+        docked: s.itemManager.snapshot().find((i) => i.worldX === 9 && i.worldY === 4)?.kind ?? null,
+      };
     });
+    assert('cabo morto ENCAIXA a bateria cheia e esvazia a mao',
+      docked.held === 'none' && docked.docked === 'batteryFull', JSON.stringify(docked));
     let island = null;
     const islandDeadline = Date.now() + 4000;
     while (Date.now() < islandDeadline) {
@@ -127,11 +139,43 @@ export default {
     assert('o braco alimentado por bateria transportou a pedra ate a saida (11,5)', moved);
     await shot('bateria-alimentando-ilha');
 
+    // ── 2b. A carga VIAJA com o item: pegar e re-encaixar NUNCA recarrega ────
+    // O exploit que este assert trava: se a carga fosse binaria, recolher a bateria
+    // meio-drenada e pousar de volta a devolveria CHEIA — energia infinita por ciclagem.
+    log('JOGO: recolher a bateria meio-drenada e re-encaixar mantem a carga parcial');
+    await driver.page.evaluate(() => {
+      const s = window.__scene;
+      const it = s.itemManager.items
+        .find((i) => i.kind === 'batteryFull' && i.tileX === 9 && i.tileY === 4);
+      it.chargeMs = 6000; // meio tanque, para a diferenca ser legivel
+      s.playerWorld.worldX = 9; // o heroi pisa na bateria: coleta normal do update
+      s.playerWorld.worldY = 4;
+      s.movementController.interruptMovement(9, 4);
+    });
+    await sleep(500);
+    const held = await driver.page.evaluate(() => ({
+      held: window.__scene.heldItem,
+      charge: window.__scene.heldBatteryChargeMs,
+    }));
+    assert('a bateria sobe pra mao com a carga PARCIAL (nao cheia)',
+      held.held === 'batteryFull' && held.charge > 0 && held.charge <= 6000, JSON.stringify(held));
+
+    const redock = await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.handleTileEntered(9, 4); // o cabo esta morto de novo (a bateria saiu da rede): encaixa
+      const it = s.itemManager.items
+        .find((i) => i.kind === 'batteryFull' && i.tileX === 9 && i.tileY === 4);
+      return { held: s.heldItem, charge: it?.chargeMs ?? null };
+    });
+    assert('re-encaixada, pousa com a MESMA carga parcial — ciclagem nao recarrega',
+      redock.held === 'none' && redock.charge !== null && redock.charge <= 6000,
+      JSON.stringify(redock));
+
     // ── 3. O relogio: esgota alimentando, e vira a casca vazia no lugar ──────
     log('JOGO: a carga drena enquanto alimenta — esgotada, sobra a casca vazia e a ilha apaga');
     await driver.page.evaluate(() => {
       const it = window.__scene.itemManager.items
-        .find((i) => i.kind === 'batteryFull' && i.tileX === 9 && i.tileY === 3);
+        .find((i) => i.kind === 'batteryFull' && i.tileX === 9 && i.tileY === 4);
       it.chargeMs = 900; // encurta o relogio: o contrato e a morte, nao os 20s
     });
     let spent = null;
@@ -140,7 +184,7 @@ export default {
       spent = await driver.page.evaluate(() => {
         const s = window.gameDebug.getState();
         return {
-          shell: s.groundItems.find((i) => i.worldX === 9 && i.worldY === 3)?.kind ?? null,
+          shell: s.groundItems.find((i) => i.worldX === 9 && i.worldY === 4)?.kind ?? null,
           b1: s.wires.find((w) => w.worldX === 9 && w.worldY === 4)?.live ?? null,
           powered: s.inserters.find((a) => a.worldX === 11 && a.worldY === 4)?.powered ?? null,
         };

@@ -59,7 +59,10 @@
       "stone": "VOCÊ PEGOU UMA PEDRA!",
       "seeds": "VOCÊ PEGOU SEMENTES! PLANTE NUM BURACO",
       "bucket": "VOCÊ PEGOU UM BALDE! ENCHA NO RIO",
-      "bucketFull": "BALDE CHEIO DE ÁGUA!"
+      "bucketFull": "BALDE CHEIO DE ÁGUA!",
+      "charcoal": "CARVÃO! PISE NELE COM A TOCHA ACESA",
+      "battery": "UMA BATERIA! CARREGUE PISANDO NUM CABO VIVO",
+      "batteryFull": "BATERIA CARREGADA! PISE NUM CABO MORTO PARA ENCAIXAR"
     }
   },
   "lockedLines": [

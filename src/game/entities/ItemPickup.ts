@@ -141,6 +141,7 @@ export class ItemPickup {
     public readonly tileY: number,
     dropped = false,
     fire?: ItemFire,
+    chargeMs?: number,
   ) {
     const visual = GROUND_VISUAL[kind];
     // Full-bright: pickups must read even in the dark (the 2D game punched a
@@ -167,7 +168,9 @@ export class ItemPickup {
     // A dropped item lands under the hero, so it's "unarmed" until they step off (the manager
     // arms it); an authored item is armed from the start. Fade in via alpha only — render
     // owns the bob each frame, so a scale tween would just be clobbered.
-    this.chargeMs = kind === 'batteryFull' ? BATTERY_FEED_MS : 0;
+    // A carga VIAJA com o item (como o combustivel da tocha): uma bateria meio-drenada que
+    // sobe pra mao e volta pro chao continua meio-drenada — nunca "recarrega de graca".
+    this.chargeMs = kind === 'batteryFull' ? (chargeMs ?? BATTERY_FEED_MS) : 0;
     this.armed = !dropped;
     this.sprite.setAlpha(0);
     scene.tweens.add({
@@ -195,6 +198,9 @@ export class ItemPickup {
 
   /** O fogo montado neste item (so um graveto aceso tem), ou undefined. */
   public get fire(): ItemFire | undefined { return this.fireState; }
+
+  /** A carga restante desta bateria no chao (0 para qualquer outro item). */
+  public get charge(): number { return this.chargeMs; }
 
   /**
    * Gasta a carga da bateria enquanto ela alimenta uma rede (so a cena sabe quando). Devolve

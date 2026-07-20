@@ -639,6 +639,13 @@ class SoundManager {
     this.noise('highpass', 6000, 1.2, 0.025, 0.05, 0.08);
   }
 
+  /** O canister encaixa no cabo: trava metalica curta + corrente assumindo a rede. */
+  public playBatteryDock(): void {
+    this.noise('bandpass', 1700, 3.2, 0.09, 0.045);
+    this.osc('triangle', 150, 92, 0.07, 0.1, 0.02);
+    this.osc('square', 220, 260, 0.035, 0.08, 0.055);
+  }
+
   public playHammer(): void {
     // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
     if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;

@@ -133,3 +133,15 @@ pm run build passaram apos a refatoracao.
 - Juice final: splash direcionado e SFX ciclico nas pas, som+shake de partida, pulso/anel/faiscas verdes ao energizar, lampada fisica ligada/desligada e brilho de queda de tensao. Efeitos e audio sao limitados por distancia, mas a simulacao continua fora da tela.
 - Playtest final `run-2026-07-19T23-13-47`: todas as assercoes passaram, sem erros de pagina. Cobertura: rejeicao em terra seca, substituicao da agua, continuidade do rio, angulo 3D mudando, aceleracao, geracao, braco transportando carga, drenagem sob a roda, coast e desligamento. As seis capturas foram inspecionadas; mostram o rotor dentro do canal antes/depois da drenagem e o dinamo verde/cinza.
 - Regressoes `caixa-placa` e `braco` passaram juntas no run `run-2026-07-19T23-17-37`. Cliente Playwright padrao do skill tambem executou sobre `?play&level=1` e gerou captura valida. Typecheck, ESLint direcionado e `npm run build` passaram; a fabrica foi reexecutada no fim e manteve 16 frames com 0 FAIL/0 WARN. O unico aviso do build e o chunk grande preexistente do Vite.
+
+- Solicitacao atual: "crie um item genial que ainda esta faltando no jogo".
+- Criada a bateria vazia/carregada, fechando o triangulo de recursos portateis: graveto leva fogo, balde leva agua e bateria leva eletricidade. Ela carrega ao pisar num cabo vivo, permanece estavel durante o transporte, alimenta por 20s uma rede isolada e termina como carcaça vazia recuperavel.
+- Arte da bateria feita na Sprite Factory em dois frames (janela vazia/dourada), 0 FAIL e 0 WARN, integrada ao runtime 3D e ao editor. O ciclo possui efeito/som de carga e som proprio de encaixe.
+- Fechado o gesto walk-only que faltava: pisar num cabo morto com a bateria cheia agora a encaixa no proprio tile, sem exigir um botao de largar nem uma troca artificial com outro pickup. Sair e voltar permite recolher o item normalmente.
+- Textos de item adicionados em pt-BR/en (incluindo o carvao, que ja caia no fallback cru). GameScene agora registra `render_game_to_text` e `advanceTime`, restaurando os hooks anteriores no shutdown; o cliente Playwright padrao voltou a emitir `state-0.json` com coordenadas e estado completo.
+- Validacao final: `npm run typecheck`, ESLint direcionado, `npm run build`, cliente Playwright padrao e playtests `bateria`, `fios` e `itens` passaram. Capturas da bateria carregada/alimentando/esgotada foram inspecionadas. O lint global ainda encontra a configuracao preexistente fora do escopo em `scripts/worldgen` e nos `.mjs` da Sprite Factory; o build mantem apenas o aviso conhecido de chunk grande.
+- TODO resolvido na reconciliacao das duas implementacoes: `chargeMs` agora VIAJA com o item por
+  toda troca de maos (chao -> mao -> chao -> garra do braco), via `heldBatteryChargeMs` na cena
+  (o par eletrico do torchFuelMs), `chargeMs` no CollectedItem/takeAt/drop e `carriedCharge` no
+  braco. Pegar uma bateria meio-drenada e re-encaixar mantem a carga parcial — o exploit de
+  energia infinita por ciclagem esta travado pelo assert 2b do cenario `bateria`.
