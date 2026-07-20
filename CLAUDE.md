@@ -381,6 +381,33 @@ CATCHES fire because of the boiler.
   pressure → circuit → the arm works; extinguish → coast holds, then opens; a lit ground torch
   heats and its burnout cools. `caixa-placa` and `braco` remain the circuit regressions.
 
+## Power wires (`wire`) — current becomes geography
+
+`src/game/objects/WireObject.ts` + `render3d/wireTexture.ts`. Before wires, energy was a named
+variable — a bus with no body. The wire makes the grid PHYSICAL: the author lays cable props
+tile by tile from a producer to the consumer, and current is a per-frame flood-fill over
+orthogonally adjacent wires (`GameScene.updateWireEnergy`), seeded by every producer that is
+GENERATING right now (boiler with steam, turning wheel, pressed plate). A one-tile gap is an
+open circuit — which is exactly what makes the cable a puzzle piece and not decoration.
+
+- **The shape is never authored.** Seven forms (vertical, horizontal, four elbows, junction),
+  resolved from the neighbours — other wires and the grid's machines — at boot in game and live
+  on the editor board (`EditorScene.wireShapeAt`): painting the path IS the authoring, the same
+  rule that gives the arm its direction frame. Textures are boot-generated pairs per shape:
+  the dark cable base, plus a yellow energy core drawn additively on top only while the wire is
+  LIVE (a pulsing glow — current is a living thing, the bombSpot's grammar).
+- **A wire beside a machine converts it to wired mode.** An arm touching ANY wire is powered
+  only by a live wire (OR the wireless variable, if it also has one); with no wire nearby the
+  old behavior stands (variable-gated, or legacy self-powered when unbound). Wires don't need
+  variables at all — a boiler with no variable still energizes its adjacent cables.
+- Wires never block (a floor cable — the hero steps over it) and never burn (rubber is not in
+  the fuel graph). Current has no memory: the live set is derived from sources every frame;
+  what persists is the producers' physics (pressure, spin), never the wire.
+- `npm run playtest -- fios` guards: shapes born from neighbours (h/nw/v/se), a wired unbound
+  arm freezing on a dead grid, the path lighting yellow end to end while an isolated cable
+  stays dark, cargo moving on cable power alone, walkability, and full shutdown when the
+  source dies.
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on

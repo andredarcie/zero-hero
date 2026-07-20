@@ -58,7 +58,7 @@ export type WorldChunk = {
 // on the tile in front — the only thing in the game that moves an item without the hero carrying
 // it, which is why it can cross a barrier the hero cannot. `waterWheel` is its believable power
 // source: installed inside a continuous river, it publishes power into a named variable.
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler';
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.

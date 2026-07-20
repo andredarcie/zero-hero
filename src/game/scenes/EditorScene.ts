@@ -11,6 +11,7 @@ import {
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerBoilerTexture } from '@/game/render3d/boilerTexture';
+import { registerWireTextures, wireShapeFromMask, wireTextureKey } from '@/game/render3d/wireTexture';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { GameScene } from '@/game/scenes/GameScene';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
@@ -84,6 +85,8 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   pressurePlate: { key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
   boiler: { key: 'boiler-icon' }, // arte gerada no boot (registerBoilerTexture, no create)
+  // Default da paleta; no tabuleiro, entityVisual troca pela forma resolvida dos vizinhos.
+  wire: { key: 'wire-h' }, // arte gerada no boot (registerWireTextures, no create)
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -152,6 +155,7 @@ export class EditorScene extends Phaser.Scene {
     // so the palette can show them, and the 3D registry for the live playtest).
     registerBucketTextures(this);
     registerBoilerTexture(this);
+    registerWireTextures(this);
     registerMoonflowerTextures(this);
     // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).
@@ -373,7 +377,22 @@ export class EditorScene extends Phaser.Scene {
     if (entity.dir !== undefined && isDirectionalProp(entity.type)) {
       return { key: PROP_VISUAL[entity.type].key, frame: entity.dir };
     }
+    // Um cabo desenha a forma que os VIZINHOS lhe dao (cabos e maquinas da rede) — a mesma
+    // resolucao do runtime, entao o tabuleiro mostra a rede exatamente como ela vai correr.
+    if (entity.type === 'wire') {
+      return { key: wireTextureKey(this.wireShapeAt(entity.worldX, entity.worldY), false) };
+    }
     return PROP_VISUAL[entity.type];
+  }
+
+  private wireShapeAt(wx: number, wy: number): ReturnType<typeof wireShapeFromMask> {
+    const connects = (x: number, y: number): boolean => (this.store?.entitiesAt(x, y) ?? []).some(
+      (e) => e.list === 'props' && (e.type === 'wire' || e.type === 'boiler'
+        || e.type === 'waterWheel' || e.type === 'pressurePlate' || e.type === 'inserter'),
+    );
+    return wireShapeFromMask(
+      connects(wx, wy - 1), connects(wx + 1, wy), connects(wx, wy + 1), connects(wx - 1, wy),
+    );
   }
 
   private renderEntities(): void {

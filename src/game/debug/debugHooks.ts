@@ -30,6 +30,12 @@ export interface GameDebugState {
     frame: number;
     rotation: number;
   }>;
+  wires: Array<{
+    worldX: number;
+    worldY: number;
+    shape: string;
+    live: boolean;
+  }>;
   boilers: Array<{
     worldX: number;
     worldY: number;

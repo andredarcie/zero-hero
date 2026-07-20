@@ -58,6 +58,7 @@ import { WoodenCrateObject } from '@/game/objects/WoodenCrateObject';
 import { PressurePlateObject } from '@/game/objects/PressurePlateObject';
 import { WaterWheelObject, type WaterFlow } from '@/game/objects/WaterWheelObject';
 import { BoilerObject } from '@/game/objects/BoilerObject';
+import { WireObject } from '@/game/objects/WireObject';
 import type { WorldProp } from '@/game/objects/WorldProp';
 import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -67,6 +68,7 @@ import {
 } from '@/game/render3d/World3D';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
+import { registerWireTextures, wireShapeFromMask } from '@/game/render3d/wireTexture';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { getActiveLevel } from '@/game/runtime/activeLevel';
@@ -98,6 +100,7 @@ import {
   getPressurePlates,
   getBoilers,
   getWaterWheels,
+  getWires,
   getGlobalVariables,
   getMoonflowers,
   getLockedDoors,
@@ -352,6 +355,11 @@ export class GameScene extends Phaser.Scene {
   private pressurePlates: PressurePlateObject[] = [];
   private waterWheels: WaterWheelObject[] = [];
   private boilers: BoilerObject[] = [];
+  // Os cabos de energia + o indice espacial deles e o conjunto dos que estao VIVOS neste frame
+  // (recalculado por flood-fill em updateWireEnergy — a corrente nao tem memoria, so a fonte).
+  private wires: WireObject[] = [];
+  private wireIndex = new Map<string, WireObject>();
+  private liveWires = new Set<string>();
   private globalVariables = new GlobalVariables();
   private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
@@ -497,6 +505,7 @@ export class GameScene extends Phaser.Scene {
     // prop/item is built (their billboards resolve their textures on construction below).
     registerBucketTextures(this);
     registerCharcoalTexture(this);
+    registerWireTextures(this);
     registerMoonflowerTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
@@ -643,6 +652,10 @@ export class GameScene extends Phaser.Scene {
     this.boilers = getBoilers().map(
       (b) => new BoilerObject(this, b.worldX, b.worldY, b.variable),
     );
+    this.wires = getWires().map((w) => new WireObject(this, w.worldX, w.worldY));
+    this.wireIndex = new Map(this.wires.map((w) => [`${w.worldX},${w.worldY}`, w]));
+    this.liveWires = new Set();
+    this.resolveWireShapes();
     this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
     // Both `water` and `bridgeSpot` are river tiles (WaterObjects render animated water). A
     // plain `water` tile is an impassable river; a `bridgeSpot` is a river tile you CAN bridge
@@ -677,6 +690,7 @@ export class GameScene extends Phaser.Scene {
       { list: this.pressurePlates },
       { list: this.waterWheels },
       { list: this.boilers },
+      { list: this.wires },
       // Lava e água são os dois hazards que as botas de lava deixam o herói vadear — inimigos
       // sempre consultam com hazardsPassable=false, então um rio segue sendo parede para eles.
       { list: this.lavaTiles, hazard: true },
@@ -920,6 +934,12 @@ export class GameScene extends Phaser.Scene {
           generating: wheel.isGenerating,
           frame: wheel.frame,
           rotation: Number(wheel.rotation.toFixed(3)),
+        })),
+        wires: this.wires.map((wire) => ({
+          worldX: wire.worldX,
+          worldY: wire.worldY,
+          shape: wire.wireShape,
+          live: wire.isLive,
         })),
         boilers: this.boilers.map((boiler) => ({
           worldX: boiler.worldX,
@@ -1429,6 +1449,14 @@ export class GameScene extends Phaser.Scene {
 
   private getWaterWheelAt(wx: number, wy: number): WaterWheelObject | undefined {
     return this.propAt(this.waterWheels, wx, wy);
+  }
+
+  private getBoilerAt(wx: number, wy: number): BoilerObject | undefined {
+    return this.propAt(this.boilers, wx, wy);
+  }
+
+  private getPressurePlateAt(wx: number, wy: number): PressurePlateObject | undefined {
+    return this.propAt(this.pressurePlates, wx, wy);
   }
 
   private getPlantSpotAt(wx: number, wy: number): PlantSpotObject | undefined {
@@ -2843,9 +2871,15 @@ export class GameScene extends Phaser.Scene {
       released: () => getSoundManager().playArmRelease(),
     };
     for (const arm of this.inserters) {
-      // Sem vinculo = compatibilidade: os bracos ja existentes continuam autoalimentados.
-      // Com vinculo = falha segura: variavel inexistente/false deixa a maquina parada e escura.
-      const powered = arm.variable ? this.globalVariables.get(arm.variable) : true;
+      // Tres modos, do mais fisico ao legado: um braco ENCOSTADO em cabo e um consumidor
+      // cabeado — energia chega se um cabo vizinho esta VIVO (ou pela variavel sem fio, se
+      // tambem houver: as duas redes somam por OR, como os produtores entre si). Sem cabo
+      // nenhum: com vinculo, a variavel decide (falha segura); sem vinculo, autoalimentado
+      // (compatibilidade com os bracos de antes da rede existir).
+      const varPower = arm.variable ? this.globalVariables.get(arm.variable) === true : undefined;
+      const powered = this.wireTouching(arm.worldX, arm.worldY)
+        ? this.liveWireTouching(arm.worldX, arm.worldY) || varPower === true
+        : varPower ?? true;
       arm.update(delta, port, powered);
     }
   }
@@ -2897,6 +2931,80 @@ export class GameScene extends Phaser.Scene {
     }
 
     controlled.forEach((value, name) => this.globalVariables.set(name, value));
+
+    // Com as fontes resolvidas, a corrente corre pelos cabos — antes dos consumidores lerem.
+    this.updateWireEnergy();
+  }
+
+  /**
+   * A forma de cada cabo nasce dos vizinhos — outros cabos e as MAQUINAS da rede (produtores e
+   * consumidores), para o fio visivelmente entrar na caldeira e sair no braco. Fixada uma vez
+   * no boot: cabos e maquinas nao andam. O autor nunca escolhe forma; pintar o caminho e a
+   * autoria inteira (a mesma regra que da ao braco o frame da direcao).
+   */
+  private resolveWireShapes(): void {
+    const machine = (x: number, y: number): boolean =>
+      this.getBoilerAt(x, y) !== undefined
+      || this.getWaterWheelAt(x, y) !== undefined
+      || this.getPressurePlateAt(x, y) !== undefined
+      || this.getInserterAt(x, y) !== undefined;
+    const connects = (x: number, y: number): boolean =>
+      this.wireIndex.has(`${x},${y}`) || machine(x, y);
+    for (const wire of this.wires) {
+      wire.setShape(wireShapeFromMask(
+        connects(wire.worldX, wire.worldY - 1),
+        connects(wire.worldX + 1, wire.worldY),
+        connects(wire.worldX, wire.worldY + 1),
+        connects(wire.worldX - 1, wire.worldY),
+      ));
+    }
+  }
+
+  /**
+   * A corrente e GEOGRAFIA: flood-fill por adjacencia ortogonal, semeado pelos cabos encostados
+   * em um produtor GERANDO agora (caldeira com vapor, roda girada, placa pisada). Roda depois
+   * dos produtores e antes dos consumidores no mesmo frame — a corrente nao tem memoria; o que
+   * persiste e o estado fisico das fontes (pressao, giro), nunca o fio. Um vao de um tile e um
+   * circuito aberto: e isso que faz do cabo uma peca de puzzle e nao decoracao.
+   */
+  private updateWireEnergy(): void {
+    if (!this.wires.length) return;
+    const live = new Set<string>();
+    const queue: Array<readonly [number, number]> = [];
+    const seed = (x: number, y: number): void => {
+      for (const [dx, dy] of CARDINAL_DIRS) {
+        const key = `${x + dx},${y + dy}`;
+        if (this.wireIndex.has(key) && !live.has(key)) {
+          live.add(key);
+          queue.push([x + dx, y + dy]);
+        }
+      }
+    };
+    for (const boiler of this.boilers) if (boiler.isGenerating) seed(boiler.worldX, boiler.worldY);
+    for (const wheel of this.waterWheels) if (wheel.isGenerating) seed(wheel.worldX, wheel.worldY);
+    for (const plate of this.pressurePlates) if (plate.pressed) seed(plate.worldX, plate.worldY);
+    while (queue.length) {
+      const [x, y] = queue.pop()!;
+      seed(x, y);
+    }
+    this.liveWires = live;
+    for (const wire of this.wires) wire.setLive(live.has(`${wire.worldX},${wire.worldY}`));
+  }
+
+  /** Ha um cabo VIVO encostado neste tile? — como um consumidor cabeado recebe energia. */
+  private liveWireTouching(x: number, y: number): boolean {
+    for (const [dx, dy] of CARDINAL_DIRS) {
+      if (this.liveWires.has(`${x + dx},${y + dy}`)) return true;
+    }
+    return false;
+  }
+
+  /** Ha QUALQUER cabo encostado (vivo ou morto)? — o que converte a maquina ao modo cabeado. */
+  private wireTouching(x: number, y: number): boolean {
+    for (const [dx, dy] of CARDINAL_DIRS) {
+      if (this.wireIndex.has(`${x + dx},${y + dy}`)) return true;
+    }
+    return false;
   }
 
   /**
