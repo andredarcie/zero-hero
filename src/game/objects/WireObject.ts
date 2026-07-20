@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import { wireShapeFrame, type WireShape } from '@/game/world/wireShapes';
+import { wireShapeFrame, wireStubFrame, type WireShape, type WireSide } from '@/game/world/wireShapes';
 import type { WorldProp } from './WorldProp';
 
 // O CABO DE ENERGIA no chao: o fio fisico por onde a rede passa. Ate ele existir, energia era
@@ -24,6 +24,11 @@ const WIRE_SIZE = 1; // o cabo cobre o tile inteiro: e ele que liga borda com bo
 export class WireObject implements WorldProp {
   private readonly base: Billboard3D;
   private readonly glow: Billboard3D;
+  // Os PLUGUES: quads que moram no tile da MAQUINA vizinha, da borda compartilhada ate o pe
+  // dela — sem eles o cabo morre na divisa e a maquina flutua com um vao de chao no meio.
+  // Nenhum sprite vaza do proprio tile, entao a continuacao e um segundo quad no tile vizinho
+  // (o truque da garra do braco). Pertencem a ESTE cabo: acendem e apagam com ele.
+  private readonly plugs: Array<{ base: Billboard3D; glow: Billboard3D }> = [];
   private shape: WireShape = 'x';
   private live = false;
   private pulse?: Phaser.Tweens.Tween;
@@ -53,6 +58,36 @@ export class WireObject implements WorldProp {
     this.glow.setTexture('wire', wireShapeFrame(shape, true));
   }
 
+  /**
+   * Quais vizinhos deste cabo sao MAQUINAS (caldeira/roda/placa/braco): em cada um nasce um
+   * plugue no tile da maquina, entrando pela borda compartilhada. O flatY ganha um degrau
+   * por lado — dois cabos plugando na MESMA maquina poem dois quads no mesmo tile, e sem o
+   * degrau eles seriam coplanares onde se cruzam (a regra dos flat quads: separam por flatY).
+   */
+  public setMachineSides(sides: Record<WireSide, boolean>): void {
+    for (const plug of this.plugs) { plug.base.destroy(); plug.glow.destroy(); }
+    this.plugs.length = 0;
+    const DIRS: ReadonlyArray<readonly [WireSide, number, number, WireSide]> = [
+      ['n', 0, -1, 's'], ['e', 1, 0, 'w'], ['s', 0, 1, 'n'], ['w', -1, 0, 'e'],
+    ];
+    for (const [side, dx, dy, entry] of DIRS) {
+      if (!sides[side]) continue;
+      const lift = 0.001 * (1 + DIRS.findIndex(([d]) => d === entry));
+      const base = world3d()
+        .addBillboard('wire', wireStubFrame(entry, false), { flat: true, flatY: BASE_Y + lift })
+        .setPosition(this.worldX + dx, this.worldY + dy)
+        .setDisplaySize(WIRE_SIZE, WIRE_SIZE);
+      const glow = world3d()
+        .addBillboard('wire', wireStubFrame(entry, true), {
+          flat: true, flatY: GLOW_Y + lift, additive: true, fog: false, depthWrite: false,
+        })
+        .setPosition(this.worldX + dx, this.worldY + dy)
+        .setDisplaySize(WIRE_SIZE, WIRE_SIZE)
+        .setVisible(false);
+      this.plugs.push({ base, glow });
+    }
+  }
+
   public get wireShape(): WireShape { return this.shape; }
   public get isLive(): boolean { return this.live; }
 
@@ -60,12 +95,14 @@ export class WireObject implements WorldProp {
   public setLive(live: boolean): void {
     if (live === this.live) return;
     this.live = live;
-    this.glow.setVisible(live);
+    const glows = [this.glow, ...this.plugs.map((p) => p.glow)];
+    glows.forEach((g) => g.setVisible(live));
     if (live) {
       // O nucleo respira — corrente e uma coisa viva, nao uma pintura (a gramatica do bombSpot).
-      this.glow.setAlpha(1);
+      // Os plugues respiram JUNTO: cabo e tomada sao um so fio.
+      glows.forEach((g) => g.setAlpha(1));
       this.pulse = this.scene.tweens.add({
-        targets: this.glow,
+        targets: glows,
         alpha: 0.66,
         duration: 620,
         yoyo: true,
@@ -83,5 +120,7 @@ export class WireObject implements WorldProp {
     this.pulse = undefined;
     this.base.destroy();
     this.glow.destroy();
+    for (const plug of this.plugs) { plug.base.destroy(); plug.glow.destroy(); }
+    this.plugs.length = 0;
   }
 }

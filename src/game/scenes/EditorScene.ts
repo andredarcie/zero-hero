@@ -83,7 +83,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   woodenCrate: { key: ASSET_KEYS.woodenCrate },
   pressurePlate: { key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
-  boiler: { key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.cold },
+  boiler: { key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.coldDry },
   // Default da paleta; no tabuleiro, entityVisual troca pela forma resolvida dos vizinhos.
   wire: { key: ASSET_KEYS.wire, frame: wireShapeFrame('h', false) },
 };

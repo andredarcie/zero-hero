@@ -15,6 +15,19 @@ const ON_BANK = WIRE_SHAPES.length;
 export const wireShapeFrame = (shape: WireShape, on: boolean): number =>
   WIRE_SHAPES.indexOf(shape) + (on ? ON_BANK : 0);
 
+export type WireSide = 'n' | 'e' | 's' | 'w';
+
+const STUB_SIDES: readonly WireSide[] = ['n', 'e', 's', 'w'];
+const STUB_BASE = ON_BANK * 2; // os plugues moram depois dos dois bancos de formas (frame 14)
+
+/**
+ * O frame do PLUGUE — o toco que mora no tile da MAQUINA, correndo da borda `side` (por onde
+ * o cabo entra) ate o pe dela, com o flange de tomada na ponta. E o que faz o cabo conectar
+ * VISUALMENTE na caldeira/braco em vez de morrer na divisa dos tiles.
+ */
+export const wireStubFrame = (side: WireSide, on: boolean): number =>
+  STUB_BASE + STUB_SIDES.indexOf(side) + (on ? STUB_SIDES.length : 0);
+
 /**
  * A forma que um cabo assume dado o que existe nos quatro vizinhos (cabo ou maquina). Dois
  * lados viram reta ou curva; um lado so estica ate ele; tres ou mais (ou nenhum) viram a

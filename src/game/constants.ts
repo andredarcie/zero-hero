@@ -195,8 +195,9 @@ export const PRESSURE_PLATE_FRAMES = { up: 0, down: 1 } as const;
 // Sprite Factory: oito orientacoes do rotor, primeiro apagadas e depois com o dinamo ativo.
 // O banco duplicado deixa a roda parar em qualquer orientacao sem a lampada teleportar o rotor.
 export const WATER_WHEEL_FRAMES = { phases: 8, off: 0, powered: 8 } as const;
-// Sprite Factory boiler.png: fria / fornalha acesa / gerando (lampada verde) — micro-variacao.
-export const BOILER_FRAMES = { cold: 0, hot: 1, on: 2 } as const;
+// Sprite Factory boiler.png: (fria|acesa) × (seca|com agua) + gerando — micro-variacao pura.
+// O visor de nivel vazio e o pedido visual de AGUA, como a boca fria e o pedido de fogo.
+export const BOILER_FRAMES = { coldDry: 0, coldWet: 1, hotDry: 2, hotWet: 3, on: 4 } as const;
 
 // The skull's rise-from-the-ground animation, in playback order (see UndeadEnemy).
 export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [

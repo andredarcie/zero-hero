@@ -41,6 +41,7 @@ export interface GameDebugState {
     worldY: number;
     variable?: string;
     heated: boolean;
+    water: number;
     pressure: number;
     generating: boolean;
   }>;

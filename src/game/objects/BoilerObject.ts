@@ -35,6 +35,10 @@ const PRESSURE_COOL_MS = 5200; // cheia -> zero sem chama: o "coast" que atraves
 const GEN_ON = 0.45; // o vapor so fecha o circuito com pressao de verdade
 const GEN_OFF = 0.18; // ...e so o abre de novo bem abaixo: histerese, nunca tremeluzir
 const PUFF_MS = 560; // cadencia da valvula soltando vapor em regime
+// Quanto tempo de FERVURA um balde d'agua banca. O vapor E a agua indo embora: o tanque so
+// esvazia enquanto ha chama embaixo, e sem agua o fogo ferve um tanque VAZIO — nada de
+// pressao. Fogo e agua, os dois elementos, ambos consumiveis: a usina pede as duas viagens.
+const WATER_BOIL_MS = 45000;
 // Uma ESTOCADA direta da tocha do heroi (bump com o graveto aceso) acende a fornalha por
 // dentro por este tempo. E deliberadamente um RELOGIO, nao um interruptor: com stoke + coast o
 // jogador compra ~20s de circuito por viagem — o suficiente para varios ciclos do braco — mas
@@ -54,8 +58,9 @@ export class BoilerObject implements WorldProp {
   private pressure01 = 0;
   private heated = false;
   private stokeMs = 0;
+  private waterMs = 0;
   private powered = false;
-  private look: BoilerLook = 'cold';
+  private look: BoilerLook = 'coldDry';
   private puffMs = PUFF_MS;
   private aliveMs = 0;
   private dead = false;
@@ -68,7 +73,7 @@ export class BoilerObject implements WorldProp {
     public readonly variable?: string,
   ) {
     this.sprite = world3d()
-      .addBillboard('boiler', BOILER_FRAMES.cold, { groundShadow: true })
+      .addBillboard('boiler', BOILER_FRAMES.coldDry, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(SPRITE_SIZE, SPRITE_SIZE);
   }
@@ -78,6 +83,12 @@ export class BoilerObject implements WorldProp {
 
   /** Ha chama encostada agora (o teste vem da cena — fireHeatAt). */
   public get isHeated(): boolean { return this.heated; }
+
+  /** Ha agua no tanque (o visor azul). Sem ela, fogo ferve um tanque vazio: pressao nenhuma. */
+  public get hasWater(): boolean { return this.waterMs > 0; }
+
+  /** Agua restante normalizada (0 seca, 1 balde recem-despejado), para debug/playtest. */
+  public get waterFrac(): number { return Phaser.Math.Clamp(this.waterMs / WATER_BOIL_MS, 0, 1); }
 
   /** Pressao de vapor normalizada, exposta a debug/playtest (0 fria, 1 regime). */
   public get pressure(): number { return this.pressure01; }
@@ -92,6 +103,11 @@ export class BoilerObject implements WorldProp {
    */
   public stoke(): void {
     this.stokeMs = STOKE_BURN_MS;
+  }
+
+  /** Um balde d'agua entornado no tanque: o visor enche e a fervura tem materia-prima. */
+  public fillWater(): void {
+    this.waterMs = WATER_BOIL_MS;
   }
 
   public update(deltaMs: number, externalHeat: boolean, effectsVisible: boolean): void {
@@ -110,7 +126,11 @@ export class BoilerObject implements WorldProp {
       }
     }
 
-    const target = heated ? 1 : 0;
+    // O vapor E a agua indo embora: fervendo, o tanque esvazia; sem chama, a agua so espera.
+    if (heated && this.waterMs > 0) this.waterMs = Math.max(0, this.waterMs - deltaMs);
+
+    // Pressao exige os DOIS elementos: fogo embaixo de tanque vazio nao pressuriza nada.
+    const target = heated && this.hasWater ? 1 : 0;
     const rampMs = target > this.pressure01 ? PRESSURE_BUILD_MS : PRESSURE_COOL_MS;
     const maxStep = deltaMs / rampMs;
     this.pressure01 += Math.sign(target - this.pressure01)
@@ -134,8 +154,10 @@ export class BoilerObject implements WorldProp {
     }
 
     // O estado e uma TEXTURA, trocada so nas bordas: gerando mostra a lampada verde do dinamo;
-    // aquecida sem pressao mostra a brasa na boca; fria e ferro morto. A leitura de longe.
-    const look: BoilerLook = this.powered ? 'on' : this.heated ? 'hot' : 'cold';
+    // a boca diz o fogo e o visor diz a agua — os dois vazios sao os dois pedidos visuais.
+    const look: BoilerLook = this.powered ? 'on'
+      : this.heated ? (this.hasWater ? 'hotWet' : 'hotDry')
+        : (this.hasWater ? 'coldWet' : 'coldDry');
     if (look !== this.look) {
       this.look = look;
       this.sprite.setTexture('boiler', BOILER_FRAMES[look]);

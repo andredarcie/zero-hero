@@ -45,10 +45,6 @@ export default {
       const s = window.__scene.bombSpots.find((b) => b.worldX === px && b.worldY === py);
       return s ? { spent: s.isSpent } : null;
     }, [x, y]);
-    const haySpotAt = (x, y) => driver.page.evaluate(([px, py]) => {
-      const s = window.__scene.haySpots.find((b) => b.worldX === px && b.worldY === py);
-      return s ? { spent: s.isSpent } : null;
-    }, [x, y]);
     const groundItem = async (kind, x, y) =>
       (await state()).groundItems.some((i) => i.kind === kind && i.worldX === x && i.worldY === y);
 

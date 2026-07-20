@@ -34,6 +34,18 @@ const SHAPES = [
   ['x', { n: true, e: true, s: true, w: true }],
 ];
 
+// Os PLUGUES (frames 14..17 apagados, 18..21 filetes): tocos que o runtime posiciona no TILE
+// DA MAQUINA, correndo da borda compartilhada ate o pe dela — e o que faz o cabo ENTRAR na
+// caldeira/braco em vez de morrer na divisa (nenhum sprite pode vazar do proprio tile, entao
+// a continuacao mora num segundo quad no tile vizinho, o truque da garra do braco). A letra e
+// a borda por onde o cabo entra; o flange de pedra no fim e a tomada presa ao pe da maquina.
+const STUBS = [
+  ['n', { n: true, e: false, s: false, w: false }],
+  ['e', { n: false, e: true, s: false, w: false }],
+  ['s', { n: false, e: false, s: true, w: false }],
+  ['w', { n: false, e: false, s: false, w: true }],
+];
+
 // A capa ocupa a faixa 6..9 (4px). O nucleo energizado, 7..8 (2px).
 const LO = 6;
 const HI = 9;
@@ -94,9 +106,25 @@ export default {
       return pix;
     };
 
+    // O flange do plugue: uma barra de pedra perpendicular na ponta FECHADA do toco — a
+    // tomada parafusada no pe da maquina, na mesma linguagem das bracadeiras das bordas.
+    const drawStub = ([side]) => {
+      const dirs = { n: side === 'n', e: side === 'e', s: side === 's', w: side === 'w' };
+      const pix = drawOff(dirs);
+      const flange = (x, y, i) => pix.set(x, y, i <= 7 ? c.S : c.s);
+      const span = [LO - 1, LO, LO + 1, HI - 1, HI, HI + 1];
+      if (side === 'n') span.forEach((i) => flange(i, HI + 1, i));
+      if (side === 's') span.forEach((i) => flange(i, LO - 1, i));
+      if (side === 'w') span.forEach((i) => flange(HI + 1, i, i));
+      if (side === 'e') span.forEach((i) => flange(LO - 1, i, i));
+      return pix;
+    };
+
     const offs = SHAPES.map(([, dirs]) => drawOff(dirs));
     const ons = SHAPES.map(([, dirs]) => drawOn(dirs));
-    return [...offs, ...ons];
+    const stubs = STUBS.map(drawStub);
+    const stubCores = STUBS.map(([, dirs]) => drawOn(dirs));
+    return [...offs, ...ons, ...stubs, ...stubCores];
   },
   notes: 'Cabo de energia em 14 frames: 7 formas apagadas (v h ne nw se sw x) + os 7 filetes gold '
     + 'do banco aceso, que o runtime deita por cima em aditivo. Capa ink sombreada com a propria '

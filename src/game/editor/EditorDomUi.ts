@@ -127,7 +127,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'woodenCrate', label: 'Caixote de Madeira', key: ASSET_KEYS.woodenCrate },
   { type: 'pressurePlate', label: 'Placa de Pressao', key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   { type: 'waterWheel', label: "Roda d'Agua Geradora", key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
-  { type: 'boiler', label: 'Caldeira a Vapor', key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.cold },
+  { type: 'boiler', label: 'Caldeira a Vapor', key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.coldDry },
   // A forma do cabo nunca se escolhe: ela nasce dos vizinhos, no tabuleiro e no jogo.
   { type: 'wire', label: 'Cabo de Energia', key: ASSET_KEYS.wire, frame: 1 }, // frame 1 = 'h'
 ];

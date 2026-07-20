@@ -367,7 +367,14 @@ furnace with the burning graveto (the house fire-bump grammar; the torch survive
 and it burns internally for ~16s (`stoke`): a timed round trip, never a switch, so running a
 machine on torch alone means feeding the furnace — fixed sources are how a plant stays on.
 While alive (stoked, heated or coasting on steam) the chimney SMOKES — a running plant
-announces itself from afar. Bumped cold and empty-handed, the balloon asks for fire.
+announces itself from afar.
+
+**Steam needs BOTH elements.** Fire under an EMPTY tank pressurizes nothing: bump with the
+full bucket to fill it (the throw empties the bucket, same as dousing), and boiling CONSUMES
+the water (~45s per bucket, draining only while heated — steam is the water leaving). The
+sprite carries both asks as its two dark voids: the cold firebox mouth wants fire, the empty
+sight glass (blue when wet) wants water; the need-item balloon spells out whichever is
+missing, water first. Both are round trips: the plant demands the two elements, repeatedly.
 
 - **Power comes from steam PRESSURE, not from the heat test** — the exact mirror of the wheel's
   angular speed. Pressure builds against thermal inertia (~1.4s) and drains slowly (~5.2s), with

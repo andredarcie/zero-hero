@@ -1,7 +1,11 @@
-boiler: 3 frame(s) — 0 fail, 0 warn
+boiler: 5 frame(s) — 0 fail, 0 warn
   [info] bbox: frame 0: content 10x14 at (3,1), coverage 39%
   [info] bbox: frame 1: content 10x14 at (3,1), coverage 39%
   [info] bbox: frame 2: content 10x14 at (3,1), coverage 39%
-  frame 0: #1d2b53×34 #5d6165×23 #7c7e8b×16 #141d38×15 #989aa7×11
-  frame 1: #1d2b53×34 #5d6165×21 #7c7e8b×16 #989aa7×11 #141d38×7 #a53030×5 #e7462a×5
-  frame 2: #1d2b53×34 #5d6165×19 #7c7e8b×16 #989aa7×11 #141d38×7 #a53030×5 #e7462a×5 #7dde99×2
+  [info] bbox: frame 3: content 10x14 at (3,1), coverage 39%
+  [info] bbox: frame 4: content 10x14 at (3,1), coverage 39%
+  frame 0: #1d2b53×35 #5d6165×30 #7c7e8b×14 #989aa7×11 #141d38×9
+  frame 1: #1d2b53×35 #5d6165×30 #7c7e8b×14 #989aa7×11 #141d38×8 #27a9af×1
+  frame 2: #1d2b53×35 #5d6165×28 #7c7e8b×14 #989aa7×11 #a53030×5 #e7462a×5 #141d38×1
+  frame 3: #1d2b53×35 #5d6165×28 #7c7e8b×14 #989aa7×11 #a53030×5 #e7462a×5 #27a9af×1
+  frame 4: #1d2b53×35 #5d6165×26 #7c7e8b×14 #989aa7×11 #a53030×5 #e7462a×5 #7dde99×2 #27a9af×1

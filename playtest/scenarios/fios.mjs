@@ -101,7 +101,9 @@ export default {
     // ── 3. A corrente acende o caminho — e so o caminho ──────────────────────
     log('JOGO: fogueira acesa -> caldeira gera -> o caminho ACENDE amarelo e o braco trabalha');
     await driver.page.evaluate(() => {
-      window.__scene.campfires.find((c) => c.worldX === 4 && c.worldY === 6).light();
+      const s = window.__scene;
+      s.boilers[0].fillWater(); // a caldeira pede os DOIS elementos; este cenario testa os FIOS
+      s.campfires.find((c) => c.worldX === 4 && c.worldY === 6).light();
     });
     let flow = null;
     const flowDeadline = Date.now() + 5000;

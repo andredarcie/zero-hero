@@ -97,11 +97,30 @@ export default {
       frozen.input === 'stone' && frozen.powered === false, JSON.stringify(frozen));
     await shot('caldeira-fria');
 
-    // ── 2. Acender a fogueira liga a fabrica inteira ─────────────────────────
-    log('JOGO: fogueira acesa -> pressao sobe -> circuito fecha -> o braco transporta');
+    // ── 2a. SECA, o fogo ferve um tanque VAZIO: nada de pressao ──────────────
+    // A regra dos DOIS elementos: fogo sem agua nao gera. O visor vazio e o pedido visual.
+    log('JOGO: fogueira acesa mas tanque SECO — aquece e NAO gera');
     await driver.page.evaluate(() => {
       window.__scene.campfires.find((c) => c.worldX === 5 && c.worldY === 6).light();
     });
+    await sleep(2500);
+    const dry = await boilerState();
+    assert('aquecida porem SECA: fogo sobre tanque vazio nao fecha circuito',
+      dry.heated === true && dry.generating === false && dry.water === 0, JSON.stringify(dry));
+    await shot('caldeira-seca-pedindo-agua');
+
+    // ── 2b. O balde CHEIO entorna no tanque — agora sim a fabrica liga ──────
+    // O caminho real do jogador: bump com bucketFull. O arremesso ESVAZIA o balde (a mesma
+    // regra do douse) e a agua enche o visor quando pousa.
+    log('JOGO: bump com o balde cheio -> tanque cheio -> pressao sobe -> o braco transporta');
+    await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.heldItem = 'bucketFull';
+      s.handlePlayerBump(6, 6);
+    });
+    await sleep(700); // swing (120ms) + voo do arremesso (~220ms) + assentar
+    const bucketAfter = await driver.page.evaluate(() => window.__scene.heldItem);
+    assert('o arremesso ESVAZIOU o balde (bucketFull -> bucket)', bucketAfter === 'bucket', bucketAfter);
 
     let hot = null;
     const hotDeadline = Date.now() + 5000;
@@ -110,7 +129,7 @@ export default {
       if (hot.generating) break;
       await sleep(150);
     }
-    assert('com chama ao lado a caldeira aquece', hot.heated === true, JSON.stringify(hot));
+    assert('com chama E agua a caldeira aquece', hot.heated === true && hot.water > 0, JSON.stringify(hot));
     assert('a pressao fechou o circuito (generating + vapor=true)',
       hot.generating === true && hot.vapor === true && hot.pressure >= 0.4, JSON.stringify(hot));
     await shot('caldeira-gerando');
@@ -200,6 +219,7 @@ export default {
 
     await driver.page.evaluate(() => {
       const s = window.__scene;
+      s.boilers[0].fillWater(); // a fervura dos estagios anteriores consumiu agua: repoe
       s.heldItem = 'wood';
       s.heldOnFire = true;
       s.torchFuelMs = 5000;

@@ -945,6 +945,7 @@ export class GameScene extends Phaser.Scene {
           worldY: boiler.worldY,
           variable: boiler.variable,
           heated: boiler.isHeated,
+          water: Number(boiler.waterFrac.toFixed(3)),
           pressure: Number(boiler.pressure.toFixed(3)),
           generating: boiler.isGenerating,
         })),
@@ -1637,20 +1638,34 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // The boiler takes the flame straight from the hero's hand: bump it with the lit torch and
-    // the firebox catches for a few seconds (BoilerObject.stoke) — the same fire-bump grammar
-    // as the dead campfire, but with a TIMER: stoking is a round trip, never a switch. The
-    // torch survives the transfer, exactly like lighting a campfire.
+    // The boiler asks for BOTH elements, each by its own bump: the lit torch STOKES the
+    // firebox (~16s of internal burn — a timed round trip, never a switch; the torch survives
+    // the transfer, like lighting a campfire), and the full bucket FILLS the tank (the throw
+    // empties the bucket, like dousing). Steam IS the water leaving: only fire over a WET tank
+    // pressurizes, and boiling drains the sight glass until the next bucket. The two dark
+    // voids in the art are the two visual asks (cold mouth = fire, empty glass = water), and
+    // the balloon spells out whichever is missing.
     const boiler = this.getBoilerAt(wx, wy);
     if (boiler) {
-      if (this.isFlammableHeld && this.heldOnFire) {
+      if (this.heldItem === 'bucketFull') {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(120, () => {
+          this.throwBucketWater(wx, wy, () => {
+            boiler.fillWater();
+            getSoundManager().playSplash();
+          });
+        });
+      } else if (this.isFlammableHeld && this.heldOnFire) {
         this.swingHeld(wx, wy);
         this.time.delayedCall(150, () => {
           boiler.stoke();
           this.spawnFireHitEffect(wx, wy);
         });
+      } else if (!boiler.hasWater) {
+        // The empty sight glass asks for water first — a dry tank generates nothing.
+        this.showNeedItemHint('water');
       } else if (!boiler.isHeated && !boiler.isGenerating) {
-        // Cold furnace and no flame in hand: the balloon asks for fire, like a dead campfire.
+        // Wet but cold: the balloon asks for fire, like a dead campfire.
         this.showNeedItemHint('fire');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -2976,6 +2991,14 @@ export class GameScene extends Phaser.Scene {
         connects(wire.worldX, wire.worldY + 1),
         connects(wire.worldX - 1, wire.worldY),
       ));
+      // Vizinho que e MAQUINA ganha um plugue no tile dela — o cabo entra ate o pe em vez de
+      // morrer na divisa (ver WireObject.setMachineSides).
+      wire.setMachineSides({
+        n: machine(wire.worldX, wire.worldY - 1),
+        e: machine(wire.worldX + 1, wire.worldY),
+        s: machine(wire.worldX, wire.worldY + 1),
+        w: machine(wire.worldX - 1, wire.worldY),
+      });
     }
   }
 
