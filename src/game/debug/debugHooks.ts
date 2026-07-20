@@ -30,6 +30,14 @@ export interface GameDebugState {
     frame: number;
     rotation: number;
   }>;
+  boilers: Array<{
+    worldX: number;
+    worldY: number;
+    variable?: string;
+    heated: boolean;
+    pressure: number;
+    generating: boolean;
+  }>;
   inserters: Array<{
     worldX: number;
     worldY: number;

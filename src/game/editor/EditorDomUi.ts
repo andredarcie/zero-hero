@@ -127,6 +127,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'woodenCrate', label: 'Caixote de Madeira', key: ASSET_KEYS.woodenCrate },
   { type: 'pressurePlate', label: 'Placa de Pressao', key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   { type: 'waterWheel', label: "Roda d'Agua Geradora", key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
+  { type: 'boiler', label: 'Caldeira a Vapor', key: 'boiler-icon' }, // arte gerada no boot (registerBoilerTexture)
 ];
 
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
@@ -136,7 +137,7 @@ const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter'])
 
 // Producers and consumers share the same tiny named-circuit authoring surface. Keeping this a
 // set means the next electrical prop gets variable persistence and the dropdown in one place.
-const VARIABLE_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['pressurePlate', 'waterWheel', 'inserter']);
+const VARIABLE_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['pressurePlate', 'waterWheel', 'inserter', 'boiler']);
 
 export const isDirectionalProp = (type: PropKind): boolean => DIRECTIONAL_PROPS.has(type);
 export const isVariableProp = (type: PropKind): boolean => VARIABLE_PROPS.has(type);
@@ -708,7 +709,7 @@ export class EditorDomUi {
         this.changed();
       });
 
-      const fieldLabel = propType === 'waterWheel' ? 'Saida de energia'
+      const fieldLabel = propType === 'waterWheel' || propType === 'boiler' ? 'Saida de energia'
         : propType === 'inserter' ? 'Alimentacao' : 'Variavel global';
       const row = this.field(fieldLabel, select);
       row.style.marginTop = '7px';

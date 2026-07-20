@@ -39,6 +39,11 @@ export class ItemManager {
     return it ? it.kind : null;
   }
 
+  /** A LIT item burns on this tile — a ground torch is a heat source (boilers feel it). */
+  public hasLitItemAt(x: number, y: number): boolean {
+    return this.items.some((it) => !it.isCollected && it.fire !== undefined && it.tileX === x && it.tileY === y);
+  }
+
   /**
    * Lift an item off the ground without the hero touching it — the robotic arm's grab.
    * Returns the kind it took, or null if that tile was empty.

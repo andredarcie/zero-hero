@@ -68,6 +68,11 @@ export class DryBushObject implements WorldProp {
     return this.state === 'ash';
   }
 
+  /** Ardendo AGORA — enquanto durar, este tile e uma fonte de calor (ver GameScene.fireHeatAt). */
+  public get isBurning(): boolean {
+    return this.state === 'burning';
+  }
+
   /** Set the bush alight; only an intact bush can catch. Returns true if it just ignited. */
   public ignite(): boolean {
     if (this.state !== 'intact') return false;

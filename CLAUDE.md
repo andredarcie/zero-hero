@@ -353,6 +353,34 @@ and dynamo housing. The whole rotor is one hierarchy and turns continuously thro
   3D angle change, acceleration, power delivery to an arm, draining under the wheel, coast and
   final shutdown. `caixa-placa` and `braco` are the circuit/consumer regressions.
 
+## The boiler (`boiler`) — fire becomes energy
+
+`src/game/objects/BoilerObject.ts`. The third circuit producer, beside the plate and the wheel —
+and the one that finally connects FIRE, the game's only steerable system, to the power grid. The
+wheel asks "is water flowing here?"; the boiler asks "is there flame touching me?"
+(`GameScene.fireHeatAt`, orthogonal neighbours): a LIT campfire (steady state — the bucket is its
+off switch), a burning bush/grass (the pulse of a planted fuse), lava (geothermal, permanent —
+the melt around a settled crown still burns), or a lit graveto lying on the ground (what the
+robotic arm delivers — flame crossing a wall into a firebox). Heat is not spread: nothing
+CATCHES fire because of the boiler.
+
+- **Power comes from steam PRESSURE, not from the heat test** — the exact mirror of the wheel's
+  angular speed. Pressure builds against thermal inertia (~1.4s) and drains slowly (~5.2s), with
+  hysteresis (on at 0.45, off at 0.18): one grass tuft burning 2.2s buys several seconds of live
+  circuit, so a pulsed fuse can FEED the furnace without the consumer flickering — stoking is
+  the gameplay, the farming loop become a power plant.
+- The model is real THREE geometry (stone firebox, riveted tank, dome, chimney, valve) in the
+  wheel's visual language, including the SAME status-lamp grammar as the dynamo. The ember in
+  the firebox mouth is the readable thermometer; steam puffs pace with pressure; effects/audio
+  only exist near the hero (the wheel's rule). No new THREE lights — the fire that heats it
+  brings its own from the pool.
+- Producers still combine by OR per variable; the editor authors it like the wheel ("Saida de
+  energia" + the variables modal), warns about unbound boilers, and its palette icon is
+  boot-generated (`boilerTexture.ts`) — the runtime never draws the sprite.
+- `npm run playtest -- caldeira` guards: cold boiler = dead grid = frozen arm; lit campfire →
+  pressure → circuit → the arm works; extinguish → coast holds, then opens; a lit ground torch
+  heats and its burnout cools. `caixa-placa` and `braco` remain the circuit regressions.
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on

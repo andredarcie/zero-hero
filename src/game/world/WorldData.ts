@@ -156,6 +156,7 @@ export const getPressurePlates = (): WorldProp[] => requireWorld().props.filter(
 // In-river generators. The prop owns water on its tile and requires that active water to
 // continue through a neighbour before publishing power into the prop's named variable.
 export const getWaterWheels = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'waterWheel');
+export const getBoilers = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'boiler');
 
 export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });
 

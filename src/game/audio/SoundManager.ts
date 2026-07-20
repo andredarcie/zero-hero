@@ -606,6 +606,32 @@ class SoundManager {
     this.noise('lowpass', 390, 1.2, 0.055, 0.16, 0.03);
   }
 
+  /** A chama pegou sob a caldeira: um sopro grave de tiragem, ar sendo puxado pela fornalha. */
+  public playBoilerIgnite(): void {
+    this.noise('lowpass', 300, 1.1, 0.14, 0.24);
+    this.osc('triangle', 58, 92, 0.09, 0.3, 0.03);
+  }
+
+  /** A valvula solta vapor em regime; curto e baixo de proposito, porque repete para sempre. */
+  public playBoilerPuff(pressure01 = 1): void {
+    const strength = Math.max(0.35, Math.min(1, pressure01));
+    this.noise('bandpass', 3100, 1.6, 0.04 * strength, 0.08);
+    this.noise('highpass', 5200, 1.0, 0.02 * strength, 0.05, 0.01);
+  }
+
+  /** O vapor alcancou pressao de circuito: a confirmacao do dinamo, com um xiado por cima. */
+  public playBoilerPower(): void {
+    this.osc('triangle', 175, 220, 0.08, 0.16);
+    this.osc('square', 349, 440, 0.035, 0.13, 0.045);
+    this.noise('highpass', 4200, 1.4, 0.05, 0.1, 0.05);
+  }
+
+  /** A pressao se foi: o tom desce e o ultimo vapor escapa devagar. */
+  public playBoilerStop(): void {
+    this.osc('triangle', 120, 68, 0.06, 0.3);
+    this.noise('bandpass', 2200, 1.4, 0.045, 0.22, 0.04);
+  }
+
   public playHammer(): void {
     // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
     if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;

@@ -527,6 +527,8 @@ export class EditorStore {
     );
     if (unboundPlates > 0) warnings.push(`${unboundPlates} placa(s) de pressao sem variavel global vinculada`);
     if (unboundWheels > 0) warnings.push(`${unboundWheels} roda(s) d'agua sem saida de energia vinculada`);
+    const unboundBoilers = this.world.props.filter((prop) => prop.type === 'boiler' && !prop.variable).length;
+    if (unboundBoilers > 0) warnings.push(`${unboundBoilers} caldeira(s) sem saida de energia vinculada`);
     if (missingVariables.size > 0) warnings.push(`Mecanismo(s) usam variavel(is) inexistente(s): ${[...missingVariables].join(', ')}`);
 
     // A roda ja representa agua no proprio tile, mas precisa de continuidade ortogonal para que

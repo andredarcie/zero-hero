@@ -114,6 +114,11 @@ export class TallGrassObject implements WorldProp {
     return this.state === 'tall';
   }
 
+  /** Ardendo AGORA — enquanto durar, este tile e uma fonte de calor (ver GameScene.fireHeatAt). */
+  public get isBurning(): boolean {
+    return this.state === 'burning';
+  }
+
   /** Scythe swing: the tuft drops out of the arc and settles into passable stubble. */
   public cut(): boolean {
     if (this.state !== 'tall') return false;

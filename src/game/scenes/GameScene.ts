@@ -57,6 +57,7 @@ import { BombSpotObject } from '@/game/objects/BombSpotObject';
 import { WoodenCrateObject } from '@/game/objects/WoodenCrateObject';
 import { PressurePlateObject } from '@/game/objects/PressurePlateObject';
 import { WaterWheelObject, type WaterFlow } from '@/game/objects/WaterWheelObject';
+import { BoilerObject } from '@/game/objects/BoilerObject';
 import type { WorldProp } from '@/game/objects/WorldProp';
 import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -95,6 +96,7 @@ import {
   getInserters,
   getWoodenCrates,
   getPressurePlates,
+  getBoilers,
   getWaterWheels,
   getGlobalVariables,
   getMoonflowers,
@@ -349,6 +351,7 @@ export class GameScene extends Phaser.Scene {
   private woodenCrates: WoodenCrateObject[] = [];
   private pressurePlates: PressurePlateObject[] = [];
   private waterWheels: WaterWheelObject[] = [];
+  private boilers: BoilerObject[] = [];
   private globalVariables = new GlobalVariables();
   private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
@@ -637,6 +640,9 @@ export class GameScene extends Phaser.Scene {
     this.waterWheels = getWaterWheels().map(
       (wheel) => new WaterWheelObject(this, wheel.worldX, wheel.worldY, wheel.variable),
     );
+    this.boilers = getBoilers().map(
+      (b) => new BoilerObject(this, b.worldX, b.worldY, b.variable),
+    );
     this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
     // Both `water` and `bridgeSpot` are river tiles (WaterObjects render animated water). A
     // plain `water` tile is an impassable river; a `bridgeSpot` is a river tile you CAN bridge
@@ -670,6 +676,7 @@ export class GameScene extends Phaser.Scene {
       { list: this.woodenCrates },
       { list: this.pressurePlates },
       { list: this.waterWheels },
+      { list: this.boilers },
       // Lava e água são os dois hazards que as botas de lava deixam o herói vadear — inimigos
       // sempre consultam com hazardsPassable=false, então um rio segue sendo parede para eles.
       { list: this.lavaTiles, hazard: true },
@@ -913,6 +920,14 @@ export class GameScene extends Phaser.Scene {
           generating: wheel.isGenerating,
           frame: wheel.frame,
           rotation: Number(wheel.rotation.toFixed(3)),
+        })),
+        boilers: this.boilers.map((boiler) => ({
+          worldX: boiler.worldX,
+          worldY: boiler.worldY,
+          variable: boiler.variable,
+          heated: boiler.isHeated,
+          pressure: Number(boiler.pressure.toFixed(3)),
+          generating: boiler.isGenerating,
         })),
         inserters: this.inserters.map((arm) => ({
           worldX: arm.worldX,
@@ -2841,7 +2856,7 @@ export class GameScene extends Phaser.Scene {
    * em vez de cada objeto escrever direto, impede a ultima fonte do frame de apagar as demais.
    */
   private updateMechanismCircuits(delta: number): void {
-    if (!this.pressurePlates.length && !this.waterWheels.length) return;
+    if (!this.pressurePlates.length && !this.waterWheels.length && !this.boilers.length) return;
     const controlled = new Map<string, boolean>();
 
     for (const plate of this.pressurePlates) {
@@ -2867,7 +2882,42 @@ export class GameScene extends Phaser.Scene {
       );
     }
 
+    for (const boiler of this.boilers) {
+      const heated = this.fireHeatAt(boiler.worldX, boiler.worldY);
+      const effectsVisible = Math.hypot(
+        boiler.worldX - this.playerWorld.worldX,
+        boiler.worldY - this.playerWorld.worldY,
+      ) <= 10;
+      boiler.update(delta, heated, effectsVisible);
+      if (!boiler.variable || !this.globalVariables.has(boiler.variable)) continue;
+      controlled.set(
+        boiler.variable,
+        (controlled.get(boiler.variable) ?? false) || boiler.isGenerating,
+      );
+    }
+
     controlled.forEach((value, name) => this.globalVariables.set(name, value));
+  }
+
+  /**
+   * Ha CHAMA encostada neste tile? — o espelho de waterFlowAt para a caldeira. Conta tudo que
+   * visivelmente arde num vizinho ortogonal: fogueira ACESA (regime permanente — e o balde a
+   * desliga), arbusto/mato QUEIMANDO (o pulso de um pavio plantado), lava (geotermica: o poco
+   * segue derretido em volta da coroa mesmo com pedra assentada — so a coroa vira chao) e um
+   * graveto ACESO pousado no chao (a entrega do braco robotico — fogo cruzando o muro ate a
+   * fornalha). Calor nao e espalhamento: nada aqui PEGA fogo por causa da caldeira.
+   */
+  private fireHeatAt(worldX: number, worldY: number): boolean {
+    for (const [dx, dy] of CARDINAL_DIRS) {
+      const nx = worldX + dx;
+      const ny = worldY + dy;
+      if (this.getCampfireAt(nx, ny)?.isLit) return true;
+      if (this.getDryBushAt(nx, ny)?.isBurning) return true;
+      if (this.getTallGrassAt(nx, ny)?.isBurning) return true;
+      if (this.getLavaAt(nx, ny)) return true;
+      if (this.itemManager?.hasLitItemAt(nx, ny)) return true;
+    }
+    return false;
   }
 
   /** A roda ocupa o proprio canal. Ela so recebe corrente quando a agua sob as pas ainda existe
