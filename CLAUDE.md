@@ -370,7 +370,9 @@ covers the new thing and run that. Do **not** replay the whole game to check a p
 the full puzzle solves (`espada` above all) take minutes each, they are bump-timing sensitive and
 so they flake, and a flake in an unrelated scenario tells you nothing about your change while
 costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Fire and the light
-budget → `perf-burn`. Frame cost → `perf-profile`. Reach for `espada` **only** when the change is
+budget → `perf-burn`. Frame cost → `perf-profile`. Item-state contracts (a bridge refusing a
+second burn, the mound waiting for a clear tile, production drops falling to a free neighbour,
+the bomb's fuse tween dying with the bomb) → `itens`. Reach for `espada` **only** when the change is
 to level-1's design itself. Same rule for re-runs: one failure in a scenario you did not touch is
 a flake to note, not a suite to run four times.
 

@@ -307,6 +307,51 @@ export default {
     assert('recusando, o braco se INCLINA sobre a carga presa', strainElev > 0.55 && strainElev < 0.75, `elev ${strainElev}`);
     await shot('braco-recusando-inclinado');
 
-    log('OK: gira nas 4 direcoes, atravessa a carga sozinho e recusa empilhar.');
+    // ── 8. A saida ocupada NO MEIO do ciclo tambem recusa ───────────────────
+    // A checagem de saida livre morava so no idle — o ciclo inteiro (pegar, atravessar, largar)
+    // leva ~1.5s, e qualquer coisa que ocupasse a saida NESSE meio tempo (outro braco, um item
+    // largado, um caixote empurrado) recebia a carga POR CIMA: dois itens num tile, e o segundo
+    // e um sumico silencioso. O release tem de revalidar e ESPERAR com a carga na garra.
+    log('JOGO: a saida vaga, o braco parte — e a saida e ocupada NO MEIO do arco');
+    await driver.page.evaluate(() => window.__scene.itemManager.takeAt(7, 6)); // libera: o ciclo comeca
+    let grabbed = false;
+    const grabDeadline = Date.now() + CYCLE_TIMEOUT_MS;
+    while (Date.now() < grabDeadline) {
+      const carried = await driver.page.evaluate(
+        () => window.__scene.inserters.find((a) => a.worldX === 6 && a.worldY === 6).carriedKind,
+      );
+      if (carried === 'wood') { grabbed = true; break; }
+      await sleep(80);
+    }
+    assert('a garra agarrou o graveto (ciclo em andamento)', grabbed);
+
+    // Enquanto a garra atravessa, a saida e ocupada de novo.
+    await driver.page.evaluate(() => window.__scene.itemManager.drop('stone', 7, 6));
+    await sleep(3000); // tempo de sobra pro ciclo alcancar o release
+
+    const midBlock = await driver.page.evaluate(() => {
+      const s = window.__scene;
+      return {
+        outKinds: s.itemManager.snapshot().filter((i) => i.worldX === 7 && i.worldY === 6).map((i) => i.kind),
+        carried: s.inserters.find((a) => a.worldX === 6 && a.worldY === 6).carriedKind,
+      };
+    });
+    assert('o braco NAO empilhou: um item so na saida', midBlock.outKinds.length === 1,
+      JSON.stringify(midBlock));
+    assert('a garra SEGURA a carga esperando a saida vagar', midBlock.carried === 'wood',
+      JSON.stringify(midBlock));
+    await shot('braco-segurando-sobre-saida-ocupada');
+
+    // Saida livre de novo: a entrega que estava suspensa acontece.
+    await driver.page.evaluate(() => window.__scene.itemManager.takeAt(7, 6));
+    let delivered = false;
+    const freeDeadline = Date.now() + CYCLE_TIMEOUT_MS;
+    while (Date.now() < freeDeadline) {
+      if ((await itemAt(7, 6)) === 'wood') { delivered = true; break; }
+      await sleep(200);
+    }
+    assert('saida livre: o graveto suspenso e entregue', delivered);
+
+    log('OK: gira nas 4 direcoes, atravessa a carga sozinho e recusa empilhar — ate no meio do ciclo.');
   },
 };

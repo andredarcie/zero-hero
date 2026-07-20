@@ -269,6 +269,10 @@ const CARDINAL_DIRS: ReadonlyArray<readonly [number, number]> = [
 // river needs more than one tree.
 const TIMBER_MAX_SPAN = 3;
 
+// A planted bomb burning its fuse. The tween handle rides along so an early detonation
+// (fire reaching the payload) can kill the blink together with the sprite.
+type ActiveBomb = { worldX: number; worldY: number; sprite: Billboard3D; fuseTween: Phaser.Tweens.Tween };
+
 // How long to hide the back item during a swing (a touch longer than SwordSlash's arc + fade,
 // ~155 + 65ms) so the item never shows on the back and in the swing arc at the same time.
 const SWING_HIDE_MS = 240;
@@ -341,7 +345,10 @@ export class GameScene extends Phaser.Scene {
   private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
   // Lit bombs on the ground — world-anchored billboards ticking until they blow.
-  private activeBombs: Array<{ worldX: number; worldY: number; sprite: Billboard3D }> = [];
+  // `fuseTween` viaja no registro para a explosao poder MATA-LO: o fogo alcancando a bomba
+  // explode antes do fim do fusivel, e sem parar o tween o pisca continuava rodando setTint
+  // num material ja disposed ate o fusivel "terminar".
+  private activeBombs: ActiveBomb[] = [];
   // The hero has no Phaser GameObject in the world: he is plain state (tweened like any
   // object) drawn by the 3D billboard alone. See HeroView.
   private readonly hero: HeroView = createHeroView();
@@ -2675,8 +2682,10 @@ export class GameScene extends Phaser.Scene {
     const bombSpot = this.getBombSpotAt(wx, wy);
     if (bombSpot && !bombSpot.isSpent) {
       if (this.heldItem === 'bomb') {
-        bombSpot.use(); // the ghost materialises into the real bomb
-        this.placeBombAt(wx, wy);
+        // A ordem importa: primeiro a bomba REALMENTE planta, so entao o fantasma se gasta.
+        // Ao contrario, um placeBombAt recusado (teardown) consumiria a marca sem produzir
+        // bomba nenhuma — um spot gasto em falso e irrecuperavel.
+        if (this.placeBombAt(wx, wy)) bombSpot.use(); // the ghost materialises into the real bomb
       } else {
         this.showNeedItemHint('bomb');
       }
@@ -2701,8 +2710,9 @@ export class GameScene extends Phaser.Scene {
 
   // The one consumable: planted on a bombSpot, it sits lit; after the fuse it explodes —
   // killing every enemy in the blast and setting fire to everything flammable there.
-  private placeBombAt(worldX: number, worldY: number): void {
-    if (this.heldItem !== 'bomb' || !this.world3d) return;
+  // Returns true only if the bomb really was planted (the caller spends the spot on that).
+  private placeBombAt(worldX: number, worldY: number): boolean {
+    if (this.heldItem !== 'bomb' || !this.world3d) return false;
 
     this.clearHeldItem();
     getSoundManager().playBombPlace();
@@ -2713,11 +2723,10 @@ export class GameScene extends Phaser.Scene {
       .addBillboard('bomb-item', BOMB_FRAMES.item, { depthLayer: 'ground' })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.62, 0.62);
-    const bomb = { worldX, worldY, sprite };
-    this.activeBombs.push(bomb);
 
-    // Fuse: accelerating red blink until it blows.
-    this.tweens.addCounter({
+    // Fuse: accelerating red blink until it blows. The handle lives on the bomb record so an
+    // EARLY explosion (fire reaching the payload) can kill the blink with the sprite.
+    const fuseTween = this.tweens.addCounter({
       from: 0,
       to: 1,
       duration: BOMB_FUSE_MS,
@@ -2727,7 +2736,10 @@ export class GameScene extends Phaser.Scene {
         sprite.setTint(blink ? 0xff4444 : 0xffffff);
       },
     });
+    const bomb = { worldX, worldY, sprite, fuseTween };
+    this.activeBombs.push(bomb);
     this.time.delayedCall(BOMB_FUSE_MS, () => this.explodeBomb(bomb));
+    return true;
   }
 
   // ── The farming loop (plantSpot) ────────────────────────────────────────────
@@ -2777,7 +2789,10 @@ export class GameScene extends Phaser.Scene {
       hasItem: (x, y) => this.itemManager?.hasItemAt(x, y) ?? false,
       take: (x, y) => this.itemManager?.takeAt(x, y) ?? null,
       put: (kind, x, y) => this.itemManager?.drop(kind, x, y),
-      blocked: (x, y) => this.isSolidForEntities(x, y),
+      // Inimigos tambem contam: isSolidForEntities nao os inclui, e sem isto o braco largava a
+      // carga debaixo de um undead parado na saida.
+      blocked: (x, y) => this.isSolidForEntities(x, y)
+        || (this.enemyManager?.getEnemyAt(x, y) ?? null) !== null,
       grabbed: () => getSoundManager().playArmGrab(),
       swinging: () => getSoundManager().playArmServo(),
       released: () => getSoundManager().playArmRelease(),
@@ -2848,8 +2863,13 @@ export class GameScene extends Phaser.Scene {
   // rule), and reopen the hole of a plot whose grown grass was consumed (cut/burnt).
   private updatePlantSpots(): void {
     for (const spot of this.plantSpots) {
-      if (spot.isSown
-        && (spot.worldX !== this.playerWorld.worldX || spot.worldY !== this.playerWorld.worldY)) {
+      // The dome must never be born blocking on TOP of something. The original rule only
+      // checked the hero ("um domo nunca nasce sob os pes") — but an item lying on the sown
+      // tile (an arm's deposit, a swap) or an enemy standing there would be engulfed by the
+      // rising mound, unrecoverable behind its collision. isTileClearForRegrow is the same
+      // gate the regrowing tree and the sprouting grass already wait on: hero, enemy, item
+      // and crate all hold the mound down until the tile is truly clear.
+      if (spot.isSown && this.isTileClearForRegrow(spot.worldX, spot.worldY)) {
         spot.raiseMound();
         continue;
       }
@@ -2864,10 +2884,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private explodeBomb(bomb: { worldX: number; worldY: number; sprite: Billboard3D }): void {
+  private explodeBomb(bomb: ActiveBomb): void {
     const index = this.activeBombs.indexOf(bomb);
     if (index < 0) return;
     this.activeBombs.splice(index, 1);
+    // Fire can detonate the payload BEFORE the fuse runs out — kill the blink tween with the
+    // sprite, or it keeps calling setTint on a disposed material until the fuse "ends".
+    bomb.fuseTween.remove();
     bomb.sprite.destroy();
     if (!this.camera) return;
 
@@ -3544,29 +3567,52 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  /**
+   * Deixa o PRODUTO de uma ferramenta no chao. O tile do obstaculo acabou de abrir e e o
+   * lugar natural — mas se um item ja estiver ali (um braco depositou na janela do corte, um
+   * swap), o produto NAO evapora: cai no primeiro vizinho cardeal livre. "Items should
+   * PRODUCE" so vale se a producao chega ao chao; a regra "um item por tile" continua
+   * absoluta — suprimir e o ultimo recurso, apenas com todos os vizinhos tomados.
+   */
+  private dropProduct(kind: HeldItemKind, worldX: number, worldY: number): void {
+    if (!this.itemManager) return;
+    if (!this.itemManager.hasItemAt(worldX, worldY)) {
+      this.itemManager.drop(kind, worldX, worldY);
+      return;
+    }
+    for (const [dx, dy] of CARDINAL_DIRS) {
+      const nx = worldX + dx;
+      const ny = worldY + dy;
+      // isSolidForEntities sem botas: o produto nunca cai num rio, na lava ou dentro de um
+      // corpo solido — um item so pousa onde o heroi pode pisar pra busca-lo.
+      if (this.isSolidForEntities(nx, ny) || this.itemManager.hasItemAt(nx, ny)) continue;
+      this.itemManager.drop(kind, nx, ny);
+      return;
+    }
+  }
+
   private dropTreeStick(worldX: number, worldY: number): void {
-    if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
-    this.itemManager?.drop('wood', worldX, worldY);
+    this.dropProduct('wood', worldX, worldY);
   }
 
   // Mowing tall grass leaves a handful of SEEDS behind, on the stubble tile — the scythe's
   // product, and what makes it a producer, not a password: plant them in a plantSpot hole,
   // water, and the grass returns. Like the graveto, they wait until the hero steps off and on.
   private dropSeeds(worldX: number, worldY: number): void {
-    if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
-    this.itemManager?.drop('seeds', worldX, worldY);
+    this.dropProduct('seeds', worldX, worldY);
   }
 
   // A shattered rock leaves a stone behind, on the tile it used to block. Wood's opposite:
   // it fords a river and it will never carry a flame (see WaterObject.placeStone / burn).
   private dropStone(worldX: number, worldY: number): void {
-    if (this.itemManager?.hasItemAt(worldX, worldY)) return; // never stack two on one tile
-    this.itemManager?.drop('stone', worldX, worldY);
+    this.dropProduct('stone', worldX, worldY);
   }
 
   // A stone dropped into lava cools it into basalt: a permanent walkable firebreak (LavaObject
-  // owns the visual swap + releasing its heat-light). Steam and a thump sell the quench. This is
-  // the lava counterpart of a stone ford — a floor over the hazard that never becomes a fuse.
+  // owns the visual swap; its glow and heat-light deliberately KEEP burning — the melt around
+  // the crown is still molten, only the crown is a floor). Steam and a thump sell the quench.
+  // This is the lava counterpart of a stone ford — a floor over the hazard that never becomes
+  // a fuse.
   private solidifyLava(lava: LavaObject, worldX: number, worldY: number): void {
     if (!lava.solidify()) return;
     this.spawnSmokePuff(worldX, worldY);
@@ -3735,6 +3781,9 @@ export class GameScene extends Phaser.Scene {
     if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) return false;
     if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
     if (this.itemManager?.hasItemAt(wx, wy)) return false;
+    // A pushable crate can be parked on any passable tile — a stump, an open hole — and a
+    // tree or mound growing back THROUGH it would weld two blocking bodies onto one tile.
+    if (this.getWoodenCrateAt(wx, wy)) return false;
     return true;
   }
 

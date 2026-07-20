@@ -525,7 +525,17 @@ export class RoboticArmObject {
         break;
       }
 
-      case 'release':
+      case 'release': {
+        // A saida foi validada no idle — um ciclo inteiro atras (~1.5s). Qualquer coisa pode
+        // te-la ocupado nesse meio tempo: um item largado, um caixote empurrado, a carga de
+        // OUTRO braco. Largar por cima empilharia dois itens num tile — o sumico silencioso
+        // que a checagem do idle existe para impedir — entao ela e refeita AQUI, no instante
+        // da entrega. Ocupada, a garra simplesmente espera de mao baixa segurando a carga
+        // (a mesma leitura da recusa do idle: maquina viva, saida presa) e solta sozinha
+        // assim que o tile vagar.
+        const outTaken = this.carriedKind !== null
+          && (port.blocked(outX, outY) || port.hasItem(outX, outY));
+        if (outTaken) break;
         if (this.pendingReleaseSfx) { this.pendingReleaseSfx = false; port.released(); }
         if (this.elapsed >= RELEASE_MS) {
           if (this.carriedKind) port.put(this.carriedKind, outX, outY);
@@ -534,6 +544,7 @@ export class RoboticArmObject {
           this.enter('rise');
         }
         break;
+      }
 
       case 'rise': {
         // 'rise' e alcancado do DESTINO (largou) e tambem da ORIGEM (o item sumiu antes da

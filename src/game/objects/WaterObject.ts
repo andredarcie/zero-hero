@@ -101,6 +101,12 @@ export class WaterObject {
   private deposited = 0;
   private forded = false; // stones dropped in the river — walkable, and they never burn
   private drained = false; // a floodgate opened upstream — the channel emptied, bed walkable
+  // A deck mid-collapse: burn() lit it and the 950ms reset hasn't run yet. During that window
+  // `deposited` still reads as a standing bridge, so without this flag a multi-tile bridge
+  // double-burns — tile B's spread re-ignites tile A, stacking a SECOND reset that destroys
+  // already-destroyed boxes and orphans the rebuilt ghost deck. TallGrass and DryBush refuse
+  // re-ignition through their state enums; this is the bridge's equivalent.
+  private burning = false;
   private fordParts: Array<{ box: Box3D; ox: number; oy: number; rest: number }> = [];
   private fordFoam: Billboard3D[] = []; // the current tearing white around them
   private hintOn = false;
@@ -342,7 +348,11 @@ export class WaterObject {
    * graveto build via deposit()). The trunk slamming down IS the animation, so the whole deck
    * snaps straight in rather than running the carpentry build. */
   public buildBridgeNow(): void {
-    if (this.isBridge) return;
+    // Ford/drained tiles are no longer water to span, and a deck mid-collapse (burning) still
+    // owns its parts — snapping a fresh deck into any of those would stack two structures on
+    // one tile. tryTimberBridge filters to blocking tiles, but the tree FALLS for ~0.5s and
+    // the world can change under it; this is where that race is caught.
+    if (this.isBridge || this.forded || this.drained || this.burning) return;
     this.deposited = BRIDGE_GRAVETOS_REQUIRED;
     this.ensureDeck();
     for (const part of [...this.frame, ...this.planks]) {
@@ -432,7 +442,8 @@ export class WaterObject {
     // A stone ford is not fuel. This single line is what makes the pickaxe a real choice:
     // cross in wood and the fire can follow you; cross in stone and it cannot.
     if (this.forded) return false;
-    if (!this.isBridge || this.dead) return false;
+    if (!this.isBridge || this.dead || this.burning) return false;
+    this.burning = true;
 
     const parts = [...this.frame, ...this.planks];
     for (const part of parts) {
@@ -452,6 +463,7 @@ export class WaterObject {
     // Reset the carpentry: the deck parts are gone, so the next build must lay them again.
     this.scene.time.delayedCall(950, () => {
       if (this.dead) return;
+      this.burning = false; // the collapse is over — this tile can be bridged (and burned) again
       for (const part of parts) part.box.destroy();
       this.planks = [];
       this.frame = [];

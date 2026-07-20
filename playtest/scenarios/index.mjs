@@ -24,6 +24,7 @@ import machado from './machado.mjs';
 import sombras from './sombras.mjs';
 import caixaPlaca from './caixa-placa.mjs';
 import rodaAgua from './roda-agua.mjs';
+import itens from './itens.mjs';
 
 export const scenarios = {
   smoke,
@@ -52,6 +53,7 @@ export const scenarios = {
   sombras,
   'caixa-placa': caixaPlaca,
   'roda-agua': rodaAgua,
+  itens,
 };
 
 // What `npm run playtest` runs when no scenario is named.
