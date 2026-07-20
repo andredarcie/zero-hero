@@ -49,7 +49,7 @@ export class CoinManager {
   public update(
     playerWorldX: number,
     playerWorldY: number,
-    hudCoinAnchor: { x: number; y: number },
+    absorbAnchor: { x: number; y: number },
     onCollect: (total: number) => void,
   ): void {
     for (const coin of this.coins) {
@@ -59,7 +59,7 @@ export class CoinManager {
       const inRange = dx === 0 && dy === 0;
       const inMagnet = this.magnetRadius > 0 && Math.max(dx, dy) <= this.magnetRadius;
       if (inRange || inMagnet) {
-        coin.collect(hudCoinAnchor, () => {
+        coin.collect(absorbAnchor, () => {
           this.total += 1;
           onCollect(this.total);
         });

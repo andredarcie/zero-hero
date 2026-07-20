@@ -106,7 +106,7 @@ const DEFS: Record<string, SheetDef> = {
   // desenhava os dois coracoes espremidos num quadrado de 0.65 tile. Ver HEART_FRAMES.
   heart: { url: `${A}/items/collectibles/heart.png`, frameW: 16, frameH: 16 },
   'wood-item': { url: `${A}/items/collectibles/wood.png` },
-  // key.png: 16×32 — top frame is the held/HUD key, bottom the map pickup.
+  // key.png: 16×32 — top frame is the held key, bottom the map pickup.
   'key-item': { url: `${A}/items/collectibles/key.png`, frameW: 16, frameH: 16 },
   // bomb.png: 16×32 — bomb on top, spark puff below.
   'bomb-item': { url: `${A}/items/equipment/bomb.png`, frameW: 16, frameH: 16 },

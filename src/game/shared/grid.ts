@@ -25,7 +25,6 @@ export const createBoardMetrics = (
     minTileSize?: number;
     characterScale?: number;
     maxCharacterSize?: number;
-    reservedTopRows?: number;
   },
 ): BoardMetrics => {
   const columns = options?.columns ?? GRID_COLUMNS;
@@ -33,18 +32,16 @@ export const createBoardMetrics = (
   const minTileSize = options?.minTileSize ?? TILE_SIZE * 3;
   const characterScale = options?.characterScale ?? (CHARACTER_SIZE / (TILE_SIZE * 4));
   const maxCharacterSize = options?.maxCharacterSize ?? MAX_CHARACTER_SIZE;
-  const reservedTopRows = options?.reservedTopRows ?? 0;
-  const tileSize = Math.max(minTileSize, Math.floor(Math.min(width / columns, height / (rows + reservedTopRows))));
+  const tileSize = Math.max(minTileSize, Math.floor(Math.min(width / columns, height / rows)));
   const boardWidth = tileSize * columns;
   const boardHeight = tileSize * rows;
-  const reservedTopHeight = tileSize * reservedTopRows;
 
   return {
     columns,
     rows,
     tileSize,
     offsetX: Math.floor((width - boardWidth) / 2),
-    offsetY: reservedTopHeight + Math.floor((height - reservedTopHeight - boardHeight) / 2),
+    offsetY: Math.floor((height - boardHeight) / 2),
     width: boardWidth,
     height: boardHeight,
     characterSize: Math.min(maxCharacterSize, Math.floor(tileSize * characterScale)),

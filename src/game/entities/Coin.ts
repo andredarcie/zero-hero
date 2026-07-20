@@ -12,7 +12,7 @@ export class Coin {
   private readonly pos: { x: number; y: number; angle: number };
   private collectable = false;
   private collected = false;
-  // Last projected screen spot — anchors the 2D fly-to-HUD visual on collect.
+  // Last projected screen spot — anchors the 2D absorb-into-the-hero visual on collect.
   private lastScreen = { x: 0, y: 0 };
   private lastTileSize = 48;
 
@@ -53,15 +53,15 @@ export class Coin {
   public get isCollectable(): boolean { return this.collectable; }
   public get isCollected(): boolean { return this.collected; }
 
-  public collect(hudTarget: { x: number; y: number }, onComplete: () => void): void {
+  public collect(absorbTarget: { x: number; y: number }, onComplete: () => void): void {
     this.collected = true;
     this.collectable = false;
 
     this.scene.tweens.killTweensOf(this.pos);
     this.scene.tweens.killTweensOf(this.sprite);
 
-    // The world coin pops in place (3D), then a 2D twin carries the flight to the HUD —
-    // the counter lives on the screen plane, so the last leg is screen-space by nature.
+    // The world coin pops in place (3D), then a 2D twin carries the flight into the hero
+    // at screen centre — no coin counter, the pickup just reads as absorbed.
     this.scene.tweens.add({
       targets: this.sprite,
       displayWidth: COIN_SIZE * 1.6,
@@ -79,8 +79,8 @@ export class Coin {
           .setDisplaySize(size, size);
         this.scene.tweens.add({
           targets: fly,
-          x: hudTarget.x,
-          y: hudTarget.y,
+          x: absorbTarget.x,
+          y: absorbTarget.y,
           displayWidth: size * 0.4,
           displayHeight: size * 0.4,
           alpha: 0.8,

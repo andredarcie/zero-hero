@@ -94,7 +94,7 @@ const NPC_LABELS: Record<NpcKind, string> = {
 };
 
 const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string; frame?: number }> = [
-  { type: 'heart', label: 'Coracao', key: ASSET_KEYS.hudHearts, frame: 0 },
+  { type: 'heart', label: 'Coracao', key: ASSET_KEYS.hearts, frame: 0 },
   { type: 'sword', label: 'Espada', key: ASSET_KEYS.swordItem, frame: 0 },
   { type: 'key', label: 'Chave', key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   { type: 'axe', label: 'Machado', key: ASSET_KEYS.axeIcon },

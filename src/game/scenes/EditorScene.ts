@@ -47,7 +47,7 @@ const ENEMY_VISUAL: Record<EnemyKind, { key: string; frame?: number }> = {
 };
 
 const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
-  heart: { key: ASSET_KEYS.hudHearts, frame: 0 },
+  heart: { key: ASSET_KEYS.hearts, frame: 0 },
   sword: { key: ASSET_KEYS.swordItem, frame: 0 },
   key: { key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   axe: { key: ASSET_KEYS.axeIcon },

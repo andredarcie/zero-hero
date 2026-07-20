@@ -92,7 +92,6 @@ export class IntroScene extends Phaser.Scene {
       minTileSize: MIN_BOARD_TILE_SIZE,
       characterScale: GAMEPLAY_HERO_SCALE,
       maxCharacterSize: GAMEPLAY_HERO_MAX_SIZE,
-      reservedTopRows: 0,
     }).tileSize;
     const startSize = Math.max(2, Math.round(gameHeroSize * 0.05));
 

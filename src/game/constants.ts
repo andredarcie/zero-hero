@@ -19,15 +19,13 @@ export const FONT_FAMILY = "'Press Start 2P', monospace";
 // keeps a 1:1 texel→pixel mapping so glyphs stay razor sharp; the canvas'
 // image-rendering: pixelated handles any hi-DPI upscale crisply.
 export const TEXT_RESOLUTION = 1;
-// The HUD is removed: no rows are reserved at the top, so the game board fills the whole screen.
-export const HUD_RESERVED_ROWS = 0;
 // The dialogue panel hugs this fraction of the canvas width, but never grows past
 // DIALOG_PANEL_MAX_WIDTH — on wide screens 50% would stretch the text past a comfortable
 // reading measure. Shared by DialogOverlay (the panel) and GameScene (the camera pan).
 export const DIALOG_PANEL_FRACTION = 0.5;
 export const DIALOG_PANEL_MAX_WIDTH = 640;
-// Starting/maximum hearts — gameplay health, not a HUD element (the HUD is gone).
-export const HUD_HEALTH_MAX = 4;
+// Starting/maximum hearts.
+export const PLAYER_HEALTH_MAX = 4;
 export const ITEM_FLOAT_AMPLITUDE = 3;
 export const ITEM_FLOAT_SPEED = 0.0034;
 export const ITEM_SCALE_PULSE = 0.04;
@@ -121,8 +119,7 @@ export const ASSET_KEYS = {
   npcPoet: 'npc-poet',
   npcDeath: 'npc-death',
   forestTileset: 'forest-tileset',
-  hudHearts: 'hud-hearts',
-  hudSlot: 'hud-slot',
+  hearts: 'hearts',
   keyItem: 'key-item',
   keyItemIcon: 'key-item-icon',
   hintBalloon: 'hint-balloon',
@@ -210,8 +207,8 @@ export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [
 
 // Light radii in tiles. The hero's ambient glow and each campfire punch holes of this size
 // in the darkness overlay; the same radius is what undead refuse to step into (they live
-// only in the dark). The safety ring is slightly wider than the light so the HUD flips to
-// "PERIGO" right at the visible light edge, never while the player still looks lit.
+// only in the dark). The safety ring is slightly wider than the light so danger begins
+// right at the visible light edge, never while the player still looks lit.
 export const LIGHT_RADIUS_TILES = 4.5;
 export const CAMPFIRE_SAFE_RADIUS_TILES = 5;
 
@@ -246,7 +243,7 @@ export const ITEM_FRAMES = {
   swordIdle: 0,
 } as const;
 
-// key.png is a 16x32 sheet of two stacked keys: the top (blue) is the held/HUD item and the
+// key.png is a 16x32 sheet of two stacked keys: the top (blue) is the held item and the
 // swing sprite (like the sword), the bottom (white outline) is what sits on the map.
 export const KEY_FRAMES = {
   held: 0,

@@ -152,7 +152,7 @@ export default {
 
     // ── 5. O machado DE ACO derruba, e o tile abre de verdade ────────────────
     // Pegar o item do CHAO de proposito (e nao so atribuir): a coleta passa por GROUND_VISUAL,
-    // HUD_ITEM_VISUAL, BACK_ITEM_VISUAL_3D e ITEM_GET_CFG. Um registro esquecido em qualquer
+    // ITEM_VISUAL_2D, BACK_ITEM_VISUAL_3D e ITEM_GET_CFG. Um registro esquecido em qualquer
     // uma dessas tabelas aparece aqui, e nao numa tela preta semanas depois.
     log('MACHADO DE ACO: pegar do chao (valida as tabelas de arte) e derrubar');
     await give('none');

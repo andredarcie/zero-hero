@@ -13,7 +13,7 @@ import {
   GAMEPLAY_HERO_MAX_SIZE,
   GAMEPLAY_HERO_SCALE,
   HERO_FRAMES,
-  HUD_HEALTH_MAX,
+  PLAYER_HEALTH_MAX,
   ITEM_FRAMES,
   KEY_FRAMES,
   LIGHT_RADIUS_TILES,
@@ -106,8 +106,9 @@ import {
   isPuzzleWorld,
 } from '@/game/world/WorldData';
 
-// How each held item shows in the HUD slot / flies in (a burning item swaps its own way).
-const HUD_ITEM_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = {
+// The per-item 2D art (Phaser texture atlas keys): the swing arc, the overhead chop and the
+// death elegy's back item all draw from here. The 3D twin is BACK_ITEM_VISUAL_3D below.
+const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> = {
   sword: { texture: ASSET_KEYS.swordItemIcon, frame: 0 },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
@@ -144,7 +145,7 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
 // Bumping something you can't use yet pops a speech balloon over the hero's head showing
 // exactly the item still needed. One entry per "locked" interaction — a lit flame for dead
 // fires and dry brush, the matching tool for trees/rock/grass, a key for doors, lava boots
-// for lava. "fire" reuses the burning-torch HUD icon (a lit flame is what the hero must carry).
+// for lava. "fire" reuses the burning-torch icon (a lit flame is what the hero must carry).
 const NEED_ITEM_ICON = {
   fire: { texture: ASSET_KEYS.woodOnFireIcon, frame: 0 },
   key: { texture: ASSET_KEYS.keyItemIcon, frame: 0 },
@@ -209,7 +210,7 @@ const FIRE_SPREAD_MS = 850;
 // resets the timer, so healing is a "warm up by the fire" beat, not passive regen anywhere).
 const HEALTH_REGEN_MS = 1200;
 // While the fire mends the hero, warm ember motes stream fire→hero on this cadence, so the
-// healing visibly COMES FROM the campfire instead of a heart just popping in the HUD.
+// healing visibly COMES FROM the campfire instead of just silently happening.
 const HEAL_MOTE_INTERVAL_MS = 110;
 const HEAL_MOTE_TRAVEL_MS = 750;
 
@@ -310,7 +311,7 @@ export class GameScene extends Phaser.Scene {
   private swordSlash?: SwordSlash;
   // The hero carries a single item at a time. `swordEquipped` is derived from it so the
   // existing combat code is untouched. `seenItems` tracks which kinds have had their one-time
-  // "item get" ceremony, so re-picking a dropped item just flies it to the HUD.
+  // "item get" ceremony, so re-picking a dropped item just flies it onto the hero's back.
   private heldItem: 'none' | HeldItemKind = 'none';
   private readonly seenItems = new Set<HeldItemKind>();
   // Fire lives on the held item: only the wood club can be lit at a campfire (the sword can't).
@@ -371,8 +372,8 @@ export class GameScene extends Phaser.Scene {
   private backItemSwingTimer?: Phaser.Time.TimerEvent;
   private movementController?: PlayerMovementController;
   private playerWorld = { worldX: 0, worldY: 0 };
-  private playerMaxHealth = HUD_HEALTH_MAX;
-  private playerHealth = HUD_HEALTH_MAX;
+  private playerMaxHealth = PLAYER_HEALTH_MAX;
+  private playerHealth = PLAYER_HEALTH_MAX;
   private playerInvincible = false;
   private invincibleTimer = 0;
   // Combat juice: while > 0 the whole world (tweens included) is frozen on an impact frame.
@@ -467,8 +468,8 @@ export class GameScene extends Phaser.Scene {
     const { worldX: startWorldX, worldY: startWorldY } = getPlayerStart();
 
     this.isDead = false;
-    this.playerMaxHealth = HUD_HEALTH_MAX;
-    this.playerHealth = HUD_HEALTH_MAX;
+    this.playerMaxHealth = PLAYER_HEALTH_MAX;
+    this.playerHealth = PLAYER_HEALTH_MAX;
     this.playerInvincible = false;
     this.hitstopMs = 0;
     this.autoAttackCooldownMs = 0;
@@ -1285,7 +1286,6 @@ export class GameScene extends Phaser.Scene {
       minTileSize: MIN_BOARD_TILE_SIZE,
       characterScale: GAMEPLAY_HERO_SCALE,
       maxCharacterSize: GAMEPLAY_HERO_MAX_SIZE,
-      reservedTopRows: 0, // HUD removed — no reserved rows, the board fills the screen
     });
     return metrics.tileSize;
   }
@@ -2175,7 +2175,7 @@ export class GameScene extends Phaser.Scene {
       this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize);
       return;
     }
-    const visual = HUD_ITEM_VISUAL[this.heldItem];
+    const visual = ITEM_VISUAL_2D[this.heldItem];
     this.swordSlash.slash(screen.x, screen.y, dx, dy, this.tileSize, {
       texture: visual.texture, // wood uses its single-stick icon (the "graveto")
       frame: visual.frame,
@@ -2219,7 +2219,7 @@ export class GameScene extends Phaser.Scene {
     const dx = wx - this.playerWorld.worldX;
     const dy = wy - this.playerWorld.worldY;
     const screen = this.swingAnchor(dy);
-    const visual = HUD_ITEM_VISUAL[item];
+    const visual = ITEM_VISUAL_2D[item];
     this.swordSlash.chop(screen.x, screen.y, dx, dy, this.tileSize, {
       texture: visual.texture,
       frame: visual.frame,
@@ -3318,7 +3318,7 @@ export class GameScene extends Phaser.Scene {
 
   // The hero stepped onto a ground item. Swap: the item currently held (if any) drops on the
   // exact tile the new one occupied; the new one becomes the held item. First time for a kind
-  // → the "item get" ceremony; every pickup then flies into the HUD slot.
+  // → the "item get" ceremony; every pickup after that flies straight onto the hero's back.
   private onCollectItem(item: CollectedItem): void {
     const previous = this.heldItem;
     if (previous !== 'none') this.itemManager?.drop(previous, item.worldX, item.worldY);
@@ -3327,7 +3327,7 @@ export class GameScene extends Phaser.Scene {
     this.heldOnFire = false; // fire never survives a swap — the dropped item lands unlit
     this.torchFuelMs = 0;
     this.swordSlash?.setOnFire(false);
-    this.updateBackItem(); // the held item now shows on the hero's back (no HUD slot)
+    this.updateBackItem(); // the held item shows on the hero's back — the game's only inventory
 
     if (this.seenItems.has(item.kind)) {
       // Repeat pickup: no ceremony, just the pickup chime (the item shows on the back).
@@ -3349,7 +3349,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Refresh the item slung on the hero's back to match the held item (hidden when empty). Uses
-  // the same per-item visual as the HUD so what you carry reads the same in both places.
+  // the same per-item art as the swing so what you carry reads the same in both places.
   private updateBackItem(): void {
     if (this.heldItem === 'none') {
       this.backItemBb?.setVisible(false);
@@ -4058,7 +4058,7 @@ export class GameScene extends Phaser.Scene {
     if (this.backItemBb?.visible && this.backItem && this.heldItem !== 'none') {
       this.backItemBb.setVisible(false);
       const torchLit = this.isTorchLit;
-      const visual = HUD_ITEM_VISUAL[this.heldItem];
+      const visual = ITEM_VISUAL_2D[this.heldItem];
       const ts = this.tileSize;
       this.tweens.killTweensOf(this.backItem);
       this.backItem

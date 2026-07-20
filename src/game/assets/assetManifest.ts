@@ -30,8 +30,8 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
-    key: ASSET_KEYS.hudHearts,
-    path: '/assets/ui/hud/hearts.png',
+    key: ASSET_KEYS.hearts,
+    path: '/assets/ui/hearts.png',
     frameWidth: 7,
     frameHeight: 7,
   },
@@ -105,10 +105,6 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
 ] as const;
 
 const SHARED_IMAGES: readonly ImageAsset[] = [
-  {
-    key: ASSET_KEYS.hudSlot,
-    path: '/assets/ui/hud/hud_slot.png',
-  },
   {
     key: ASSET_KEYS.npcSalesman,
     path: '/assets/characters/npcs/salesman.png',

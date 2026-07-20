@@ -198,7 +198,7 @@ export class PauseMenu {
     this.dofLabel = this.sliderRow(panel, getDofIntensity(), (v) => setDofIntensity(v));
 
     // Language: swaps the catalog immediately; the menu re-labels itself. World text that was
-    // already rendered (HUD, dialogs) picks the new locale up on its next build/scene restart.
+    // already rendered (dialogs, overlays) picks the new locale up on its next build/scene restart.
     const langRow = document.createElement('div');
     langRow.className = 'zh-pause-row';
     this.langLabel = document.createElement('span');

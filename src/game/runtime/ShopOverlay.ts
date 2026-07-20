@@ -25,7 +25,7 @@ interface UpgradeCfg {
 const FULL_HEART_FRAME = 4;
 
 export const UPGRADES_CFG: readonly UpgradeCfg[] = [
-  { id: 'maxHealth',  label: 'VIDA MAX',   iconKey: ASSET_KEYS.hudHearts,    iconFrame: FULL_HEART_FRAME, desc: '+1 coracao maximo',     maxLevel: 3, costs: [8, 18, 35] },
+  { id: 'maxHealth',  label: 'VIDA MAX',   iconKey: ASSET_KEYS.hearts,    iconFrame: FULL_HEART_FRAME, desc: '+1 coracao maximo',     maxLevel: 3, costs: [8, 18, 35] },
   { id: 'swordSpeed', label: 'ESPADA +',   iconKey: ASSET_KEYS.swordItemIcon, iconFrame: 0,               desc: 'Ataque mais rapido',    maxLevel: 3, costs: [6, 14, 28] },
   { id: 'moveSpeed',  label: 'PASSO +',    iconKey: ASSET_KEYS.hero,          iconFrame: HERO_FRAMES.idleDown, desc: 'Move mais rapido', maxLevel: 3, costs: [10, 22, 40] },
   { id: 'magnet',     label: 'IMA MOEDAS', iconKey: ASSET_KEYS.coin,          iconFrame: 0,               desc: 'Atrai moedas proximas', maxLevel: 1, costs: [15] },

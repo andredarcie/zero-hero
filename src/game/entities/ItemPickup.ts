@@ -40,7 +40,7 @@ export type HeldItemKind =
   | 'bucketFull';
 
 // How each held item looks lying on the ground (textures3d keys). Tools without a dedicated
-// map sprite reuse their HUD icon — same 16x16 pixel-art scale.
+// map sprite reuse their held-item icon — same 16x16 pixel-art scale.
 const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = {
   sword: { texture: 'sword-item', frame: ITEM_FRAMES.swordIdle },
   key: { texture: 'key-item', frame: KEY_FRAMES.pickup },
@@ -143,7 +143,7 @@ export class ItemPickup {
   public get isCollectable(): boolean { return this.collectable; }
   public get isCollected(): boolean { return this.collected; }
 
-  /** Mark collected — the flying-to-HUD visual is spawned separately by the scene. */
+  /** Mark collected — the fly-to-the-hero collect visual is spawned separately by the scene. */
   public collect(): void {
     this.collected = true;
     this.collectable = false;
