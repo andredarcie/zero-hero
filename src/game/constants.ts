@@ -170,6 +170,7 @@ export const ASSET_KEYS = {
   waterWheel: 'water-wheel',
   boiler: 'boiler',
   wire: 'wire',
+  battery: 'battery',
   cutGrass: 'cut-grass',
   cutGrassWind0: 'cut-grass-wind0',
   cutGrassWind1: 'cut-grass-wind1',
@@ -198,6 +199,12 @@ export const WATER_WHEEL_FRAMES = { phases: 8, off: 0, powered: 8 } as const;
 // Sprite Factory boiler.png: (fria|acesa) × (seca|com agua) + gerando — micro-variacao pura.
 // O visor de nivel vazio e o pedido visual de AGUA, como a boca fria e o pedido de fogo.
 export const BOILER_FRAMES = { coldDry: 0, coldWet: 1, hotDry: 2, hotWet: 3, on: 4 } as const;
+// Sprite Factory battery.png: vazia / carregada (a janela gold) — o balde da eletricidade.
+export const BATTERY_FRAMES = { empty: 0, full: 1 } as const;
+// Quanto tempo de REDE VIVA uma carga banca: pousada junto a um cabo, a bateria e uma semente
+// do flood-fill e drena so ENQUANTO alimenta (na mao ela e estavel — a tensao mora em quanto
+// tempo a rede precisa ficar de pe, nao na viagem, que ja e o drama da tocha).
+export const BATTERY_FEED_MS = 20000;
 
 // The skull's rise-from-the-ground animation, in playback order (see UndeadEnemy).
 export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [

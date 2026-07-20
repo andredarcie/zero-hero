@@ -632,6 +632,13 @@ class SoundManager {
     this.noise('bandpass', 2200, 1.4, 0.045, 0.22, 0.04);
   }
 
+  /** A carga salta do cabo pra bateria: um zap curto SUBINDO, com um tico de brilho no fim. */
+  public playBatteryCharge(): void {
+    this.osc('square', 240, 960, 0.05, 0.12);
+    this.osc('triangle', 480, 1400, 0.04, 0.1, 0.03);
+    this.noise('highpass', 6000, 1.2, 0.025, 0.05, 0.08);
+  }
+
   public playHammer(): void {
     // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
     if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;

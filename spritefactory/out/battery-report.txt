@@ -1,0 +1,5 @@
+battery: 2 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 6x12 at (5,1), coverage 27%
+  [info] bbox: frame 1: content 6x12 at (5,1), coverage 27%
+  frame 0: #1d2b53×18 #5d6165×18 #7c7e8b×13 #141d38×10 #989aa7×9
+  frame 1: #1d2b53×18 #5d6165×18 #7c7e8b×13 #989aa7×9 #f1cc36×6 #f8e394×4

@@ -1,7 +1,7 @@
 ﻿import type Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS,
+  ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS,
   PRESSURE_PLATE_FRAMES, SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
@@ -107,6 +107,7 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'stone', label: 'Pedra', key: ASSET_KEYS.rock },
   { type: 'seeds', label: 'Sementes', key: ASSET_KEYS.seedsItem },
   { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
+  { type: 'battery', label: 'Bateria', key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
 ];
 
 const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [

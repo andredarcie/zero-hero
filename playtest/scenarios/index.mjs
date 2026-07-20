@@ -24,6 +24,7 @@ import machado from './machado.mjs';
 import sombras from './sombras.mjs';
 import caixaPlaca from './caixa-placa.mjs';
 import rodaAgua from './roda-agua.mjs';
+import bateria from './bateria.mjs';
 import caldeira from './caldeira.mjs';
 import fios from './fios.mjs';
 import itens from './itens.mjs';
@@ -55,6 +56,7 @@ export const scenarios = {
   sombras,
   'caixa-placa': caixaPlaca,
   'roda-agua': rodaAgua,
+  bateria,
   caldeira,
   fios,
   itens,

@@ -1,8 +1,8 @@
 ﻿import Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES, NPC_VISUALS,
-  PRESSURE_PLATE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
+  ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES,
+  NPC_VISUALS, PRESSURE_PLATE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import {
@@ -61,6 +61,7 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   stone: { key: ASSET_KEYS.rock },
   seeds: { key: ASSET_KEYS.seedsItem },
   bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
+  battery: { key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
 };
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {

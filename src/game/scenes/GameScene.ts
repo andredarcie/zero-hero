@@ -24,6 +24,7 @@ import {
   TIMINGS,
   TORCH_BURN_MS,
   TREE_CHOP_STAGE_FRAMES,
+  BATTERY_FRAMES,
   CHARCOAL_DROP_CHANCE,
   TREE_TILE_STICK_CHANCE,
 } from '@/game/constants';
@@ -130,6 +131,8 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
+  battery: { texture: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
+  batteryFull: { texture: ASSET_KEYS.battery, frame: BATTERY_FRAMES.full },
 };
 
 // The same per-item art resolved through the 3D texture registry (textures3d keys),
@@ -149,6 +152,8 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
+  battery: { texture: 'battery', frame: BATTERY_FRAMES.empty },
+  batteryFull: { texture: 'battery', frame: BATTERY_FRAMES.full },
 };
 
 // Bumping something you can't use yet pops a speech balloon over the hero's head showing
@@ -186,6 +191,8 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   bucket: { texture: 'bucket-icon', frame: 0, label: 'VOCE PEGOU UM BALDE! ENCHA NO RIO' },
   bucketFull: { texture: 'bucket-full-icon', frame: 0, label: 'BALDE CHEIO DE AGUA!' },
   charcoal: { texture: 'charcoal-item', frame: 0, label: 'CARVAO! PISE NELE COM A TOCHA ACESA' },
+  battery: { texture: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty, label: 'UMA BATERIA! CARREGUE PISANDO NUM CABO VIVO' },
+  batteryFull: { texture: ASSET_KEYS.battery, frame: BATTERY_FRAMES.full, label: 'BATERIA CARREGADA! POUSE JUNTO A UM CABO' },
 };
 
 // What a blow does to a skull (max health 3). Three tiers: bare fists land BARE_HAND_DAMAGE
@@ -201,6 +208,8 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   scythe: 1.5,
   stone: 1.5, // a rock in the fist is as good as any other blunt tool
   charcoal: 1.5, // a lump of coal, likewise
+  battery: 1.5, // an iron canister, likewise
+  batteryFull: 1.5,
 };
 const BARE_HAND_DAMAGE = 1;
 
@@ -1305,9 +1314,12 @@ export class GameScene extends Phaser.Scene {
     }
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.updatePlantSpots();
-    // Produtores primeiro, consumidores depois: placa/roda atualizam a rede no MESMO frame em
-    // que o braco consulta energia, sem um pulso atrasado ao abrir ou fechar um circuito.
+    // Produtores primeiro, a corrente nos cabos depois, consumidores por ultimo: placa/roda/
+    // caldeira atualizam a rede no MESMO frame em que o braco consulta energia, sem um pulso
+    // atrasado ao abrir ou fechar um circuito. Os cabos correm FORA do updateMechanismCircuits
+    // porque tem uma fonte que nao e maquina: a bateria carregada pousada no chao.
     this.updateMechanismCircuits(delta);
+    this.updateWireEnergy(delta);
     this.updateInserters(delta);
 
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
@@ -2785,6 +2797,17 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // Pisar num cabo VIVO segurando a bateria VAZIA a carrega — o espelho exato de encher o
+    // balde no rio e acender o graveto na fogueira: cada elemento tem sua fonte e seu gesto.
+    // O cabo precisa estar energizado AGORA: um fio morto nao enche bateria nenhuma.
+    if (this.heldItem === 'battery' && this.liveWires.has(`${wx},${wy}`)) {
+      this.heldItem = 'batteryFull';
+      this.updateBackItem();
+      getSoundManager().playBatteryCharge();
+      this.spawnBatteryChargeFx(wx, wy);
+      return;
+    }
+
     const bombSpot = this.getBombSpotAt(wx, wy);
     if (bombSpot && !bombSpot.isSpent) {
       if (this.heldItem === 'bomb') {
@@ -2969,9 +2992,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     controlled.forEach((value, name) => this.globalVariables.set(name, value));
-
-    // Com as fontes resolvidas, a corrente corre pelos cabos — antes dos consumidores lerem.
-    this.updateWireEnergy();
   }
 
   /**
@@ -3013,7 +3033,7 @@ export class GameScene extends Phaser.Scene {
    * persiste e o estado fisico das fontes (pressao, giro), nunca o fio. Um vao de um tile e um
    * circuito aberto: e isso que faz do cabo uma peca de puzzle e nao decoracao.
    */
-  private updateWireEnergy(): void {
+  private updateWireEnergy(delta: number): void {
     if (!this.wires.length) return;
     const live = new Set<string>();
     const queue: Array<readonly [number, number]> = [];
@@ -3029,6 +3049,21 @@ export class GameScene extends Phaser.Scene {
     for (const boiler of this.boilers) if (boiler.isGenerating) seed(boiler.worldX, boiler.worldY);
     for (const wheel of this.waterWheels) if (wheel.isGenerating) seed(wheel.worldX, wheel.worldY);
     for (const plate of this.pressurePlates) if (plate.pressed) seed(plate.worldX, plate.worldY);
+    // A bateria carregada pousada no chao e a FONTE PORTATIL: energia que atravessou o rio na
+    // mao do heroi (ou o muro na garra do braco) e agora alimenta a rede encostada nela — e
+    // drena SO enquanto alimenta: junto de cabo nenhum, a carga espera intacta. Pousada EM
+    // CIMA do proprio cabo (a troca deixa o item onde o heroi pisa), o cabo de baixo conta.
+    for (const battery of this.itemManager?.chargedBatteries() ?? []) {
+      const selfKey = `${battery.x},${battery.y}`;
+      const onWire = this.wireIndex.has(selfKey);
+      if (!onWire && !this.wireTouching(battery.x, battery.y)) continue;
+      if (onWire && !live.has(selfKey)) {
+        live.add(selfKey);
+        queue.push([battery.x, battery.y]);
+      }
+      seed(battery.x, battery.y);
+      this.itemManager?.drainBatteryAt(battery.x, battery.y, delta);
+    }
     while (queue.length) {
       const [x, y] = queue.pop()!;
       seed(x, y);
@@ -3848,6 +3883,34 @@ export class GameScene extends Phaser.Scene {
 
   private dropTreeStick(worldX: number, worldY: number): void {
     this.dropProduct('wood', worldX, worldY);
+  }
+
+  /** A carga saltando do cabo pra bateria: anel gold no chao + faiscas subindo da mao. */
+  private spawnBatteryChargeFx(wx: number, wy: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const ring = w3
+      .addBillboard(FX_RING_TEXTURE, 0, { flat: true, flatY: 0.03, additive: true, fog: false, depthWrite: false })
+      .setTint(0xf1cc36)
+      .setPosition(wx, wy)
+      .setDisplaySize(0.2, 0.2)
+      .setAlpha(0.8);
+    this.tweens.add({
+      targets: ring, scaleX: 1.1, scaleY: 1.1, alpha: 0, duration: 420,
+      ease: 'Quad.easeOut', onComplete: () => ring.destroy(),
+    });
+    for (let i = 0; i < 4; i += 1) {
+      const spark = w3
+        .addBillboard(FX_DOT_TEXTURE, 0, { centered: true, fog: false, additive: true, depthWrite: false, emissive: true })
+        .setTint(i % 2 === 0 ? 0xf1cc36 : 0xf8e394)
+        .setPosition(wx + (Math.random() - 0.5) * 0.2, wy + 0.02)
+        .setElevation(0.2)
+        .setDisplaySize(0.055, 0.055);
+      this.tweens.add({
+        targets: spark, elevation: 0.55 + Math.random() * 0.2, alpha: 0,
+        duration: 300 + i * 50, ease: 'Quad.easeOut', onComplete: () => spark.destroy(),
+      });
+    }
   }
 
   // A burnt-out dry bush sometimes leaves CHARCOAL on its ash — the fire itself producing.

@@ -78,6 +78,13 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: bateria vazia/carregada — o vaso portatil da corrente (BATTERY_FRAMES).
+    key: ASSET_KEYS.battery,
+    path: '/assets/items/collectibles/battery.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     key: ASSET_KEYS.swordItem,
     path: '/assets/items/equipment/sword.png',
     frameWidth: TILESET_FRAME_SIZE,

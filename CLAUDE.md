@@ -422,6 +422,18 @@ open circuit — which is exactly what makes the cable a puzzle piece and not de
   stays dark, cargo moving on cable power alone, walkability, and full shutdown when the
   source dies.
 
+**The battery (`battery`/`batteryFull`) — electricity's portable vessel.** The stick carries
+fire, the bucket carries water, the battery carries CURRENT — the item that lets energy cross
+where no cable can be laid (a river in the hero's hand, a wall in the arm's claw). Charge the
+empty one by STEPPING on a LIVE wire while holding it (a dead wire charges nothing); the
+charged one lying on the ground beside (or on) a wire is a SEED for the flood-fill, and it
+drains ONLY while feeding (`BATTERY_FEED_MS`, ~20s of grid uptime) — in the hand it is stable,
+away from cables it waits intact. Spent, it dies into the empty shell in place (nothing
+evaporates) and the island goes dark. Sprite Factory art (`battery.png`, empty/charged window
+in the wire's gold); the empty battery is authorable as a pickup. `npm run playtest -- bateria`
+guards the whole arc: dead wire refuses, live wire charges, an ISLANDED net lights from the
+grounded battery and its arm hauls cargo, and the spent charge leaves the shell.
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on

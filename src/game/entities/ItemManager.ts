@@ -81,6 +81,25 @@ export class ItemManager {
     for (const it of this.items) it.tickFire(deltaMs);
   }
 
+  /** Every charged battery lying on the ground — the grid's portable seeds (updateWireEnergy). */
+  public chargedBatteries(): Array<{ x: number; y: number }> {
+    return this.items
+      .filter((it) => !it.isCollected && it.kind === 'batteryFull')
+      .map((it) => ({ x: it.tileX, y: it.tileY }));
+  }
+
+  /**
+   * Drain the charged battery on this tile for one frame of grid-feeding. When the charge
+   * runs out the item is swapped for its empty shell IN PLACE — the battery visibly dies
+   * into a `battery` pickup the hero can carry back for a recharge (nothing evaporates).
+   */
+  public drainBatteryAt(x: number, y: number, deltaMs: number): void {
+    const it = this.items.find((i) => !i.isCollected && i.kind === 'batteryFull' && i.tileX === x && i.tileY === y);
+    if (!it || !it.drainCharge(deltaMs)) return;
+    this.takeAt(x, y);
+    this.items.push(new ItemPickup(this.scene, 'battery', x, y, true));
+  }
+
   /**
    * Arm any dropped item the hero has stepped off, then collect an armed item under the hero.
    * Returns the collected item (removed from the ground) or null.

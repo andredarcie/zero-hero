@@ -69,6 +69,8 @@ const DEFS: Record<string, SheetDef> = {
   boiler: { url: `${A}/environment/props/boiler.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: cabo de energia — 7 formas apagadas + 7 filetes gold (ver wireShapes.ts).
   wire: { url: `${A}/environment/props/wire.png`, frameW: 16, frameH: 16 },
+  // Sprite Factory: bateria vazia/carregada — ver BATTERY_FRAMES.
+  battery: { url: `${A}/items/collectibles/battery.png`, frameW: 16, frameH: 16 },
   'dry-shrub': { url: `${A}/environment/props/dry_shrub.png` },
   rock: { url: `${A}/environment/props/rock.png` },
   'rock-cracked': { url: `${A}/environment/props/rock__1.png` },

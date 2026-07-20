@@ -1,6 +1,6 @@
 ﻿import type Phaser from 'phaser';
 
-import { BOMB_FRAMES, ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
+import { BATTERY_FEED_MS, BATTERY_FRAMES, BOMB_FRAMES, ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -42,7 +42,16 @@ export type HeldItemKind =
   // leaves one (CHARCOAL_DROP_CHANCE). It is torch food: stepping on it while holding the LIT
   // graveto consumes it and refills the flame, which makes a long dark crossing plannable
   // instead of a prayer for lava. Runtime-only, like bucketFull — never authored in a world.
-  | 'charcoal';
+  | 'charcoal'
+  // The BATTERY: the portable vessel of electricity, closing the elemental triangle — the
+  // stick carries fire, the bucket carries water, the battery carries current. Charge the
+  // empty one by STEPPING on a LIVE wire while holding it; the charged one, lying on the
+  // ground beside a wire, is a SEED for the grid's flood-fill (GameScene.updateWireEnergy)
+  // and drains only while feeding — spent, it reverts to the empty shell. Energy becomes
+  // CARGO: it crosses the river in the hero's hand and crosses walls in the robotic arm's
+  // claw, the two places no cable can be laid. `batteryFull` is runtime-only, like bucketFull.
+  | 'battery'
+  | 'batteryFull';
 
 // The fire riding a wood item that is NOT in the hero's hand: on the ground, or hanging from
 // the robotic arm's claw. Only `fuelMs` travels — it keeps counting down wherever the item is,
@@ -70,6 +79,9 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   // Generated at boot too (charcoalTexture.ts) — the same procedural-pixel-art path.
   charcoal: { texture: 'charcoal-item', frame: 0 },
+  // Sprite Factory sheet (battery.png): the gold window reads charged/empty at a glance.
+  battery: { texture: 'battery', frame: BATTERY_FRAMES.empty },
+  batteryFull: { texture: 'battery', frame: BATTERY_FRAMES.full },
 };
 
 /**
@@ -116,6 +128,9 @@ export class ItemPickup {
   private collected = false;
   private flame?: Billboard3D;
   private fireState?: ItemFire;
+  // A carga de uma batteryFull no chao: drena so enquanto ALIMENTA uma rede de cabos (a cena
+  // chama drainCharge por frame de alimentacao). Na mao do heroi a carga e estavel.
+  private chargeMs: number;
 
   public armed: boolean;
 
@@ -152,6 +167,7 @@ export class ItemPickup {
     // A dropped item lands under the hero, so it's "unarmed" until they step off (the manager
     // arms it); an authored item is armed from the start. Fade in via alpha only — render
     // owns the bob each frame, so a scale tween would just be clobbered.
+    this.chargeMs = kind === 'batteryFull' ? BATTERY_FEED_MS : 0;
     this.armed = !dropped;
     this.sprite.setAlpha(0);
     scene.tweens.add({
@@ -179,6 +195,16 @@ export class ItemPickup {
 
   /** O fogo montado neste item (so um graveto aceso tem), ou undefined. */
   public get fire(): ItemFire | undefined { return this.fireState; }
+
+  /**
+   * Gasta a carga da bateria enquanto ela alimenta uma rede (so a cena sabe quando). Devolve
+   * true no frame em que a carga ACABA — a cena entao troca o item pela casca vazia.
+   */
+  public drainCharge(deltaMs: number): boolean {
+    if (this.kind !== 'batteryFull' || this.chargeMs <= 0) return false;
+    this.chargeMs = Math.max(0, this.chargeMs - deltaMs);
+    return this.chargeMs === 0;
+  }
 
   /** O combustivel queima tambem no chao; a chama morre sozinha quando ele acaba. */
   public tickFire(deltaMs: number): void {

@@ -24,7 +24,8 @@ export type PickupKind =
   | 'wood'
   | 'stone'
   | 'seeds'
-  | 'bucket';
+  | 'bucket'
+  | 'battery';
 export type NpcKind =
   | 'blackCat'
   | 'mimic'
