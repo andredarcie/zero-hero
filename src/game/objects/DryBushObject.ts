@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d, type FireLight3D } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // A dry bush ("mato seco") blocks its tile until a flaming torch ignites it. It burns for
 // BURN_MS — charring from brown to ash while little flames flicker on top — then collapses
@@ -33,7 +33,7 @@ const ASH = new Phaser.Display.Color(88, 84, 80);
 
 type BushState = 'intact' | 'burning' | 'ash';
 
-export class DryBushObject {
+export class DryBushObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -147,10 +147,6 @@ export class DryBushObject {
       duration: 260,
       ease: 'Power2.easeIn',
     });
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

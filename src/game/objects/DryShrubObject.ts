@@ -2,13 +2,13 @@ import type Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // A small dry shrub ("arbusto seco") — the same bare-brown look as the dry tree but bush-sized.
 // It blocks its tile until the hero clears it with the axe. Unlike the tree it drops NOTHING
 // (no graveto) and never grows back: it is purely a physical barrier. Collision is owned here
 // (see `blocking`) and resolved at runtime, exactly like DryTreeObject.
-export class DryShrubObject {
+export class DryShrubObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -62,10 +62,6 @@ export class DryShrubObject {
       ease: 'Sine.easeInOut',
       onComplete: () => this.sprite.setAngle(0),
     });
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // A giant night-blooming flower over a chokepoint. Real moonflowers open in the dark and close in
 // the light — so this one is a CLOSED BUD (it blocks) whenever a campfire burns near it, and BLOOMS
@@ -28,7 +28,7 @@ const GLOW_ALPHA = 0.32;
 const GLOW_TINT = 0xbcd0ff; // pale moonlit blue
 const PULSE_MS = 2200;
 
-export class MoonflowerObject {
+export class MoonflowerObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -174,10 +174,6 @@ export class MoonflowerObject {
       ease: 'Sine.easeInOut',
       onComplete: () => this.bud.setAngle(0),
     });
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

@@ -2,12 +2,12 @@ import type Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // A locked door prop. It blocks its tile until the hero bumps it while holding a key, which
 // opens it for good. Like DryBushObject, its collision lives here (see `blocking`) and is
 // resolved at runtime, not baked into the collision grid. Uses the existing locked_door tile.
-export class LockedDoorObject {
+export class LockedDoorObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -76,10 +76,6 @@ export class LockedDoorObject {
       ease: 'Sine.easeInOut',
       onComplete: () => this.sprite.setAngle(0),
     });
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

@@ -3,11 +3,12 @@ import type Phaser from 'phaser';
 import { ASSET_KEYS } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
+import type { WorldProp } from './WorldProp';
 
 const PUSH_MS = 115;
 
 /** A world prop, not a held item: walking into it attempts to shove it one cardinal tile. */
-export class WoodenCrateObject {
+export class WoodenCrateObject implements WorldProp {
   public worldX: number;
   public worldY: number;
   public readonly blocking = true;

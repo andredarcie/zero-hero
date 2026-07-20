@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 import { TREE_REGROW_MS } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // A dry tree ("árvore seca") blocks its tile until the hero chops it down with the axe.
 // Each chop advances one frame of the woods.png sheet — the tree visibly shrinks stage by
@@ -15,7 +15,7 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
 // loose logs) is deliberately skipped — it reads as three stray sticks, not a chopped stump.
 const STUMP_FRAME = 4;
 
-export class DryTreeObject {
+export class DryTreeObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -110,10 +110,6 @@ export class DryTreeObject {
       ease: 'Sine.easeInOut',
       onComplete: () => this.sprite.setAngle(0),
     });
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

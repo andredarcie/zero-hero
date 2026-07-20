@@ -9,6 +9,7 @@ import { getWoodTexture } from '@/game/render3d/woodTexture';
 import {
   FX_DOT_TEXTURE, FX_RING_TEXTURE, WATER_DEPTH_TILES, world3d,
 } from '@/game/render3d/World3D';
+import type { WorldProp } from './WorldProp';
 
 // A roda ocupa o PROPRIO tile de rio. O vetor diz por qual vizinho a corrente continua e serve
 // apenas para orientar spray; agua debaixo da maquina e a precondicao fisica da geracao.
@@ -33,7 +34,7 @@ const POWER_OFF = 0x454b52;
  * nada e billboard animado no runtime. A Sprite Factory permanece como fonte do icone/editor e
  * da paleta medida — wood/stone/verde sao exatamente os mesmos da folha auditada.
  */
-export class WaterWheelObject {
+export class WaterWheelObject implements WorldProp {
   private readonly root = new THREE.Group();
   private readonly rotor = new THREE.Group();
   private readonly meshes: THREE.Mesh[] = [];

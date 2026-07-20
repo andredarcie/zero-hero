@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
+import type { WorldProp } from './WorldProp';
 
 // A rock blocks its tile until the hero breaks it with the pickaxe: the first blow cracks it
 // (swaps to the cracked sprite), the second shatters it and the tile opens. Both blows shove the
@@ -17,7 +18,7 @@ type RockState = 'intact' | 'cracked' | 'broken';
 /** The rock's resting size in tiles — every squash and every collapse springs back to this. */
 const SIZE = 0.88;
 
-export class RockObject {
+export class RockObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 

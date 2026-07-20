@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_DOT_TEXTURE, world3d, type FireLight3D } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 const FRAME_DURATION = 140; // ms per animation frame
 const FIRE_TEXTURES = ['campfire-0', 'campfire-1', 'campfire-2'] as const;
@@ -40,9 +40,11 @@ const GLOW_SCALE = 2.2;
 // The campfire in the 3D world: an animated flipbook billboard plus the soft additive glow
 // halo behind it, exactly like the 2D sprite pair — and a REAL warm point light: the flicker,
 // the lit pool and the true cast shadows all come from the renderer (see render3d/World3D.ts).
-export class CampfireObject {
+export class CampfireObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
+  // Acesa ou morta, a fogueira é um corpo — o bump nela é a interação (loja/acender), nunca o passo.
+  public readonly blocking = true;
 
   private readonly scene: Phaser.Scene;
   private readonly sprite: Billboard3D;
@@ -151,10 +153,6 @@ export class CampfireObject {
     const key = FIRE_TEXTURES[this.frameIndex];
     this.sprite.setTexture(key);
     this.glow.setTexture(key);
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   /**

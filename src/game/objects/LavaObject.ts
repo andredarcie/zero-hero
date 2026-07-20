@@ -4,7 +4,7 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { getStoneTexture } from '@/game/render3d/stoneTexture';
 import { FX_PUFF_TEXTURE, LAVA_DEPTH_TILES, world3d, type Box3D, type FireLight3D } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // A lava floor tile: a flat, self-lit quad on the 3D ground (the emissive material glows into the
 // bloom pass) that ALSO carries a fire light, because in this world lava is fire — you can relight
@@ -51,7 +51,7 @@ const CROWN_PARTS = [
   { kind: 'boulder', w: 0.2, d: 0.18, top: LAVA_DEPTH_TILES + 0.04, ox: 0.19, oy: 0.14 },
 ] as const;
 
-export class LavaObject {
+export class LavaObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -117,6 +117,14 @@ export class LavaObject {
   /** True once the dropped stone has FULLY settled: now walkable (a stepping stone in the melt). */
   public get solidified(): boolean {
     return this.phase === 'solid';
+  }
+
+  /**
+   * Lava viva (ou esfriando) é um corpo; basalto assentado é chão de todo mundo. Quem pode
+   * VADEAR o que ainda queima (as botas) é decisão do registro de props — entrada `hazard`.
+   */
+  public get blocking(): boolean {
+    return !this.solidified;
   }
 
   /**
@@ -200,10 +208,6 @@ export class LavaObject {
         onComplete: () => drop.destroy(),
       });
     }
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

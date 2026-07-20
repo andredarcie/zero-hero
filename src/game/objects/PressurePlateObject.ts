@@ -3,9 +3,10 @@ import type Phaser from 'phaser';
 import { ASSET_KEYS, PRESSURE_PLATE_FRAMES } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
+import type { WorldProp } from './WorldProp';
 
 /** Walkable floor mechanism; GameScene supplies occupancy and combines linked plates by OR. */
-export class PressurePlateObject {
+export class PressurePlateObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
   public readonly variable?: string;

@@ -3,6 +3,7 @@ import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { ShadowStrip } from '@/game/render3d/groundShadow';
 import { type CastMemory, world3d } from '@/game/render3d/World3D';
 import type { PropDir } from '@/game/world/worldSchema';
+import type { WorldProp } from './WorldProp';
 
 // O braco robotico ("inserter"). Pega o item que estiver no tile de ORIGEM e poe no de DESTINO,
 // sozinho, sem o heroi encostar em nada.
@@ -227,7 +228,7 @@ const easeOutBack = (t: number): number => {
   return p * p * ((k + 1) * p + k) + 1;
 };
 
-export class RoboticArmObject {
+export class RoboticArmObject implements WorldProp {
   private readonly base: Billboard3D;
   private readonly hand: Billboard3D;
   /**

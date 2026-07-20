@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d, type FireLight3D } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // Tall grass ("mato alto") blocks its tile and sways in the wind. The scythe cuts it — the tuft
 // topples and settles into low stubble (which keeps a gentler wind sway) — and fire burns it to
@@ -67,7 +67,7 @@ const CHARRED_TINT = 0x585450;
 
 type GrassState = 'tall' | 'cutting' | 'burning' | 'cut';
 
-export class TallGrassObject {
+export class TallGrassObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -247,10 +247,6 @@ export class TallGrassObject {
   private advanceWind(): void {
     this.windFrame = (this.windFrame + 1) % TALL_WIND_FRAMES;
     if (this.state === 'tall') this.sprite.setTexture(TALL_SHEET, this.windFrame);
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

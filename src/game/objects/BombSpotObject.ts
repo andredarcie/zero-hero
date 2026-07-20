@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 import { BOMB_FRAMES } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // O "local de bomba": a marca visivel onde uma bomba pode ser plantada. O jogo inteiro se opera
 // ANDANDO — nao existe botao de usar item — entao plantar a bomba tambem e um passo: o heroi
@@ -28,7 +28,7 @@ const BREATHE_MS = 1100;
 const GHOST_ALPHA_LO = 0.3;
 const GHOST_ALPHA_HI = 0.68;
 
-export class BombSpotObject {
+export class BombSpotObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -69,10 +69,6 @@ export class BombSpotObject {
     this.scene.tweens.killTweensOf(this.ghost);
     this.ghost.setVisible(false);
     return true;
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

@@ -56,6 +56,7 @@ import { BombSpotObject } from '@/game/objects/BombSpotObject';
 import { WoodenCrateObject } from '@/game/objects/WoodenCrateObject';
 import { PressurePlateObject } from '@/game/objects/PressurePlateObject';
 import { WaterWheelObject, type WaterFlow } from '@/game/objects/WaterWheelObject';
+import type { WorldProp } from '@/game/objects/WorldProp';
 import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
@@ -344,6 +345,13 @@ export class GameScene extends Phaser.Scene {
   private globalVariables = new GlobalVariables();
   private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
+  // O registro único de props: referencia os MESMOS arrays tipados acima, então destruição,
+  // colisão (isSolidForEntities) e reset atravessam todos os props num loop só — um prop novo
+  // é uma entrada aqui, não seis edições espalhadas. Consequência: fora do create/shutdown os
+  // arrays só podem ser mutados IN PLACE (push/splice); reatribuir um deles órfão o registro.
+  // `hazard` marca os dois tiles que as botas de lava vadeiam (lava e água) — todo o resto
+  // bloqueia incondicionalmente pelo próprio `blocking` do prop.
+  private propRegistry: Array<{ list: WorldProp[]; hazard?: boolean }> = [];
   // Lit bombs on the ground — world-anchored billboards ticking until they blow.
   // `fuseTween` viaja no registro para a explosao poder MATA-LO: o fogo alcancando a bomba
   // explode antes do fim do fusivel, e sem parar o tween o pisca continuava rodando setTint
@@ -633,6 +641,27 @@ export class GameScene extends Phaser.Scene {
         return w;
       }),
     ];
+    this.propRegistry = [
+      { list: this.campfires },
+      { list: this.dryBushes },
+      { list: this.lockedDoors },
+      { list: this.dryTrees },
+      { list: this.dryShrubs },
+      { list: this.rocks },
+      { list: this.tallGrasses },
+      { list: this.moonflowers },
+      { list: this.bombSpots },
+      { list: this.plantSpots },
+      { list: this.inserters },
+      { list: this.woodenCrates },
+      { list: this.pressurePlates },
+      { list: this.waterWheels },
+      // Lava e água são os dois hazards que as botas de lava deixam o herói vadear — inimigos
+      // sempre consultam com hazardsPassable=false, então um rio segue sendo parede para eles.
+      { list: this.lavaTiles, hazard: true },
+      { list: this.waterTiles, hazard: true },
+    ];
+
     // Circuitos so podem ser calculados depois que a agua existe: a roda le os quatro tiles
     // vizinhos, e um gerador sem corrente deve nascer apagado, nunca true por um frame.
     this.updateMechanismCircuits(0);
@@ -963,22 +992,13 @@ export class GameScene extends Phaser.Scene {
     this.heartPickupManager?.destroy();
     this.itemManager?.destroy();
     this.swordSlash?.destroy();
-    this.campfires.forEach((cf) => cf.destroy());
-    this.dryBushes.forEach((b) => b.destroy());
-    this.lockedDoors.forEach((d) => d.destroy());
-    this.dryTrees.forEach((t) => t.destroy());
-    this.dryShrubs.forEach((s) => s.destroy());
-    this.rocks.forEach((r) => r.destroy());
-    this.tallGrasses.forEach((g) => g.destroy());
-    this.moonflowers.forEach((m) => m.destroy());
-    this.bombSpots.forEach((s) => s.destroy());
-    this.plantSpots.forEach((s) => s.destroy());
-    this.inserters.forEach((a) => a.destroy());
-    this.woodenCrates.forEach((crate) => crate.destroy());
-    this.pressurePlates.forEach((plate) => plate.destroy());
-    this.waterWheels.forEach((wheel) => wheel.destroy());
-    this.lavaTiles.forEach((l) => l.destroy());
-    this.waterTiles.forEach((w) => w.destroy());
+    // Truncar in place (length = 0) esvazia também o array tipado — é o mesmo objeto — então
+    // nenhum campo fica segurando props destruídos até o próximo create reatribuí-lo.
+    for (const { list } of this.propRegistry) {
+      list.forEach((p) => p.destroy());
+      list.length = 0;
+    }
+    this.propRegistry = [];
     this.activeBombs.forEach((b) => b.sprite.destroy());
     this.shopOverlay?.destroy();
     this.backItemSwingTimer?.remove();
@@ -1005,23 +1025,7 @@ export class GameScene extends Phaser.Scene {
     this.torchGutter.velocity = 0;
     this.torchEmberTimer = 0;
     this.swordSlash = undefined;
-    this.campfires = [];
-    this.dryBushes = [];
-    this.lockedDoors = [];
-    this.dryTrees = [];
-    this.dryShrubs = [];
-    this.rocks = [];
-    this.tallGrasses = [];
-    this.moonflowers = [];
-    this.bombSpots = [];
-    this.plantSpots = [];
-    this.inserters = [];
-    this.woodenCrates = [];
-    this.pressurePlates = [];
-    this.waterWheels = [];
     this.globalVariables = new GlobalVariables();
-    this.lavaTiles = [];
-    this.waterTiles = [];
     this.activeBombs = [];
     this.heartbeatPhase = 0;
     // Never leak a frozen tween clock into the next scene run.
@@ -1332,95 +1336,85 @@ export class GameScene extends Phaser.Scene {
     return this.heldItem === 'axe' || this.heldItem === 'greatAxe';
   }
 
+  // A busca posicional dita UMA vez; os getters tipados abaixo são a superfície que o resto
+  // da cena usa (cada um devolve o tipo concreto do seu sistema).
+  private propAt<T extends WorldProp>(list: T[], wx: number, wy: number): T | undefined {
+    return list.find((p) => p.worldX === wx && p.worldY === wy);
+  }
+
   private getCampfireAt(wx: number, wy: number): CampfireObject | undefined {
-    return this.campfires.find((cf) => cf.worldX === wx && cf.worldY === wy);
+    return this.propAt(this.campfires, wx, wy);
   }
 
   private getDryBushAt(wx: number, wy: number): DryBushObject | undefined {
-    return this.dryBushes.find((b) => b.worldX === wx && b.worldY === wy);
+    return this.propAt(this.dryBushes, wx, wy);
   }
 
   private getLockedDoorAt(wx: number, wy: number): LockedDoorObject | undefined {
-    return this.lockedDoors.find((d) => d.worldX === wx && d.worldY === wy);
+    return this.propAt(this.lockedDoors, wx, wy);
   }
 
   private getDryTreeAt(wx: number, wy: number): DryTreeObject | undefined {
-    return this.dryTrees.find((t) => t.worldX === wx && t.worldY === wy);
+    return this.propAt(this.dryTrees, wx, wy);
   }
 
   private getDryShrubAt(wx: number, wy: number): DryShrubObject | undefined {
-    return this.dryShrubs.find((s) => s.worldX === wx && s.worldY === wy);
+    return this.propAt(this.dryShrubs, wx, wy);
   }
 
   private getRockAt(wx: number, wy: number): RockObject | undefined {
-    return this.rocks.find((r) => r.worldX === wx && r.worldY === wy);
+    return this.propAt(this.rocks, wx, wy);
   }
 
   private getTallGrassAt(wx: number, wy: number): TallGrassObject | undefined {
-    return this.tallGrasses.find((g) => g.worldX === wx && g.worldY === wy);
+    return this.propAt(this.tallGrasses, wx, wy);
   }
 
-
   private getMoonflowerAt(wx: number, wy: number): MoonflowerObject | undefined {
-    return this.moonflowers.find((m) => m.worldX === wx && m.worldY === wy);
+    return this.propAt(this.moonflowers, wx, wy);
   }
 
   private getBombSpotAt(wx: number, wy: number): BombSpotObject | undefined {
-    return this.bombSpots.find((s) => s.worldX === wx && s.worldY === wy);
+    return this.propAt(this.bombSpots, wx, wy);
   }
 
   private getInserterAt(wx: number, wy: number): RoboticArmObject | undefined {
-    return this.inserters.find((a) => a.worldX === wx && a.worldY === wy);
+    return this.propAt(this.inserters, wx, wy);
   }
 
   private getWoodenCrateAt(wx: number, wy: number): WoodenCrateObject | undefined {
-    return this.woodenCrates.find((crate) => crate.worldX === wx && crate.worldY === wy);
+    return this.propAt(this.woodenCrates, wx, wy);
   }
 
   private getWaterWheelAt(wx: number, wy: number): WaterWheelObject | undefined {
-    return this.waterWheels.find((wheel) => wheel.worldX === wx && wheel.worldY === wy);
+    return this.propAt(this.waterWheels, wx, wy);
   }
 
   private getPlantSpotAt(wx: number, wy: number): PlantSpotObject | undefined {
-    return this.plantSpots.find((s) => s.worldX === wx && s.worldY === wy);
+    return this.propAt(this.plantSpots, wx, wy);
   }
 
   private getLavaAt(wx: number, wy: number): LavaObject | undefined {
-    return this.lavaTiles.find((l) => l.worldX === wx && l.worldY === wy);
+    return this.propAt(this.lavaTiles, wx, wy);
   }
 
   private getWaterAt(wx: number, wy: number): WaterObject | undefined {
-    return this.waterTiles.find((w) => w.worldX === wx && w.worldY === wy);
+    return this.propAt(this.waterTiles, wx, wy);
   }
 
   /**
    * Everything a walking entity (hero or enemy) cannot step onto: authored terrain collision
-   * and trees (via ChunkManager.isCellBlocked), campfires, standing dry bushes/trees/grass,
-   * unbroken rocks, NPCs — and lava, unless the caller can cross it (hero wearing the lava
-   * boots). The hero adds enemies on top (to attack them); enemies add lit tiles.
+   * and trees (via ChunkManager.isCellBlocked), every registered prop whose `blocking` says so
+   * (see WorldProp/propRegistry), NPCs — and the two hazard tiles (lava, water), unless the
+   * caller can wade them (hero wearing the lava boots; enemies never can). The hero adds
+   * enemies on top (to attack them).
    */
   private isSolidForEntities(wx: number, wy: number, hazardsPassable = false): boolean {
     if (this.chunkManager?.isCellBlocked(wx, wy)) return true;
-    if (this.getCampfireAt(wx, wy)) return true;
-    if (this.getDryBushAt(wx, wy)?.blocking) return true;
-    if (this.getLockedDoorAt(wx, wy)?.blocking) return true;
-    if (this.getDryTreeAt(wx, wy)?.blocking) return true;
-    if (this.getDryShrubAt(wx, wy)?.blocking) return true;
-    if (this.getRockAt(wx, wy)?.blocking) return true;
-    if (this.getTallGrassAt(wx, wy)?.blocking) return true;
-    if (this.getMoonflowerAt(wx, wy)?.blocking) return true; // a shut bud blocks; an open bloom doesn't
-    if (this.getPlantSpotAt(wx, wy)?.blocking) return true; // a planted mound is a body; the hole isn't
-    // The arm is a machine, so it is solid — and that is exactly what makes it worth placing.
-    // It hands an item across the very tile the hero has to walk around.
-    if (this.getInserterAt(wx, wy)?.blocking) return true;
-    if (this.getWoodenCrateAt(wx, wy)?.blocking) return true;
-    if (this.getWaterWheelAt(wx, wy)?.blocking) return true;
-    // Lava and water are the two hazards the lava boots ("botas de risco") let the hero wade —
-    // enemies always pass hazardsPassable=false, so a river stays a wall to them. A lava tile
-    // cooled to basalt by a dropped stone is solid ground everyone walks, boots or no boots.
-    const lava = this.getLavaAt(wx, wy);
-    if (lava && !lava.solidified && !hazardsPassable) return true;
-    if (this.getWaterAt(wx, wy)?.blocking && !hazardsPassable) return true;
+    for (const entry of this.propRegistry) {
+      if (entry.hazard && hazardsPassable) continue;
+      if (this.propAt(entry.list, wx, wy)?.blocking) return true;
+    }
     if (this.npcManager?.hasNpcAt(wx, wy)) return true;
     return false;
   }
@@ -2877,7 +2871,9 @@ export class GameScene extends Phaser.Scene {
       if (!grass || grass.blocking || spot.reopenPending) continue;
       spot.reopenPending = true;
       this.time.delayedCall(GameScene.PLANT_REOPEN_MS, () => {
-        this.tallGrasses = this.tallGrasses.filter((g) => g !== grass);
+        // Splice in place, never filter-and-reassign: o propRegistry referencia ESTE array.
+        const idx = this.tallGrasses.indexOf(grass);
+        if (idx >= 0) this.tallGrasses.splice(idx, 1);
         grass.destroy(); // the stubble decays away and the dug hole shows again
         spot.reopen();
       });
@@ -3252,9 +3248,11 @@ export class GameScene extends Phaser.Scene {
     this.renderProps();
   }
 
+  // Per-frame prop work. Props are static in world space (the 3D camera does the moving), so
+  // only the two with real per-frame logic appear here — the old per-type render() no-ops are
+  // gone with the 2D projection they used to serve.
   private renderProps(): void {
     if (!this.camera) return;
-    for (const lv of this.lavaTiles) lv.render(this.tileSize, this.camera);
     for (const w of this.waterTiles) {
       // Show the "build a bridge here" indicator on any un-bridged river tile the hero stands
       // orthogonally next to — the exact tile a graveto would go into.
@@ -3262,20 +3260,12 @@ export class GameScene extends Phaser.Scene {
       w.setBuildHint(dist === 1 && !this.dialogOpen && !this.shopOpen && !this.isDead);
       w.render(this.tileSize, this.camera);
     }
-    for (const cf of this.campfires) cf.render(this.tileSize, this.camera);
-    for (const b of this.dryBushes) b.render(this.tileSize, this.camera);
-    for (const d of this.lockedDoors) d.render(this.tileSize, this.camera);
-    for (const t of this.dryTrees) t.render(this.tileSize, this.camera);
-    for (const s of this.dryShrubs) s.render(this.tileSize, this.camera);
-    // (no rocks: they have no 2D FX left to re-project — see RockObject)
-    for (const g of this.tallGrasses) g.render(this.tileSize, this.camera);
     // Moonflowers: shut while a LIT campfire is within ~2.6 tiles, open (walkable) in the dark.
     // Driven here because the campfires live in GameScene; the flower owns only look + collision.
     for (const mf of this.moonflowers) {
       const nearFire = this.campfires.some((cf) => cf.isLit
         && Math.hypot(cf.worldX - mf.worldX, cf.worldY - mf.worldY) <= 2.6);
       mf.setNearFire(nearFire);
-      mf.render(this.tileSize, this.camera);
     }
     // Bombs are world-anchored billboards; nothing to reproject here.
   }

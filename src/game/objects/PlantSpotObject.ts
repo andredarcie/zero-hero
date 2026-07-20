@@ -4,8 +4,8 @@ import { ASSET_KEYS } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { TallGrassObject } from './TallGrassObject';
+import type { WorldProp } from './WorldProp';
 
 // O canteiro: um pequeno buraco cavado no chao onde uma SEMENTE (o produto da foice) pode ser
 // plantada. O ciclo completo, todo operado andando (o jogo nao tem botao de usar item):
@@ -33,7 +33,7 @@ const MOUND_SIZE = 0.72; // domo baixo, dentro do tile (nada vaza do tile)
 const WET_TINT = 0x9a8fae; // terra molhada: mais escura e fria — multiplicado sobre a arte
 const POP_MS = 240; // o monte se ergue quando a semente e plantada
 
-export class PlantSpotObject {
+export class PlantSpotObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
@@ -147,10 +147,6 @@ export class PlantSpotObject {
     this.hintShown = false;
     this.hole.setVisible(true).setAlpha(0);
     this.scene.tweens.add({ targets: this.hole, alpha: 1, duration: 300, ease: 'Sine.easeOut' });
-  }
-
-  public render(_tileSize: number, _camera: WorldCamera): void {
-    // Static in world space — the 3D camera does the moving now.
   }
 
   public destroy(): void {

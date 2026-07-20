@@ -8,6 +8,7 @@ import { getWoodTexture } from '@/game/render3d/woodTexture';
 import { FX_PUFF_TEXTURE, WATER_DEPTH_TILES, world3d, type Box3D } from '@/game/render3d/World3D';
 import { getBridgeSpots, getWaterTiles } from '@/game/world/WorldData';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { WorldProp } from './WorldProp';
 
 // 3D water ripple frames (flat quads on the ground plane).
 const WATER_3D_FRAMES = ['water-0', 'water-1', 'water-2', 'water-3'] as const;
@@ -85,7 +86,7 @@ interface DeckPart {
   animating: boolean;
 }
 
-export class WaterObject {
+export class WaterObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
