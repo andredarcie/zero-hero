@@ -10,7 +10,7 @@ import {
 } from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
-import { registerWireTextures, wireShapeFromMask, wireTextureKey } from '@/game/render3d/wireTexture';
+import { wireShapeFrame, wireShapeFromMask } from '@/game/world/wireShapes';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { GameScene } from '@/game/scenes/GameScene';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
@@ -85,7 +85,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
   boiler: { key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.cold },
   // Default da paleta; no tabuleiro, entityVisual troca pela forma resolvida dos vizinhos.
-  wire: { key: 'wire-h' }, // arte gerada no boot (registerWireTextures, no create)
+  wire: { key: ASSET_KEYS.wire, frame: wireShapeFrame('h', false) },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -153,7 +153,6 @@ export class EditorScene extends Phaser.Scene {
     // The bucket + moonflower pixel art is generated at boot (into the Phaser texture manager here
     // so the palette can show them, and the 3D registry for the live playtest).
     registerBucketTextures(this);
-    registerWireTextures(this);
     registerMoonflowerTextures(this);
     // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).
@@ -378,7 +377,7 @@ export class EditorScene extends Phaser.Scene {
     // Um cabo desenha a forma que os VIZINHOS lhe dao (cabos e maquinas da rede) — a mesma
     // resolucao do runtime, entao o tabuleiro mostra a rede exatamente como ela vai correr.
     if (entity.type === 'wire') {
-      return { key: wireTextureKey(this.wireShapeAt(entity.worldX, entity.worldY), false) };
+      return { key: ASSET_KEYS.wire, frame: wireShapeFrame(this.wireShapeAt(entity.worldX, entity.worldY), false) };
     }
     return PROP_VISUAL[entity.type];
   }

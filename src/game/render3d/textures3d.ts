@@ -67,6 +67,8 @@ const DEFS: Record<string, SheetDef> = {
   'dry-bush': { url: `${A}/environment/props/bush.png` },
   // Sprite Factory: caldeira em 3 estados (fria / fornalha acesa / gerando) — ver BOILER_FRAMES.
   boiler: { url: `${A}/environment/props/boiler.png`, frameW: 16, frameH: 16 },
+  // Sprite Factory: cabo de energia — 7 formas apagadas + 7 filetes gold (ver wireShapes.ts).
+  wire: { url: `${A}/environment/props/wire.png`, frameW: 16, frameH: 16 },
   'dry-shrub': { url: `${A}/environment/props/dry_shrub.png` },
   rock: { url: `${A}/environment/props/rock.png` },
   'rock-cracked': { url: `${A}/environment/props/rock__1.png` },

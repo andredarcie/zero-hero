@@ -71,6 +71,13 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: cabo de energia — 7 formas apagadas + 7 filetes gold (ver wireShapes.ts).
+    key: ASSET_KEYS.wire,
+    path: '/assets/environment/props/wire.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     key: ASSET_KEYS.swordItem,
     path: '/assets/items/equipment/sword.png',
     frameWidth: TILESET_FRAME_SIZE,

@@ -1,0 +1,29 @@
+wire: 14 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 6x16 at (5,0), coverage 27%
+  [info] bbox: frame 1: content 16x6 at (0,5), coverage 27%
+  [info] bbox: frame 2: content 11x11 at (5,0), coverage 27%
+  [info] bbox: frame 3: content 11x11 at (0,0), coverage 27%
+  [info] bbox: frame 4: content 11x11 at (5,5), coverage 27%
+  [info] bbox: frame 5: content 11x11 at (0,5), coverage 27%
+  [info] bbox: frame 6: content 16x16 at (0,0), coverage 47%
+  [info] bbox: frame 7: content 2x16 at (7,0), coverage 13%
+  [info] bbox: frame 8: content 16x2 at (0,7), coverage 13%
+  [info] bbox: frame 9: content 9x9 at (7,0), coverage 13%
+  [info] bbox: frame 10: content 9x9 at (0,0), coverage 13%
+  [info] bbox: frame 11: content 9x9 at (7,7), coverage 13%
+  [info] bbox: frame 12: content 9x9 at (0,7), coverage 13%
+  [info] bbox: frame 13: content 16x16 at (0,0), coverage 23%
+  frame 0: #1d2b53×28 #324476×14 #141d38×14 #7c7e8b×6 #5d6165×6
+  frame 1: #1d2b53×28 #324476×14 #141d38×14 #7c7e8b×6 #5d6165×6
+  frame 2: #1d2b53×29 #324476×14 #141d38×13 #7c7e8b×6 #5d6165×6
+  frame 3: #1d2b53×29 #141d38×17 #324476×10 #7c7e8b×6 #5d6165×6
+  frame 4: #1d2b53×29 #324476×17 #141d38×10 #7c7e8b×6 #5d6165×6
+  frame 5: #1d2b53×29 #324476×14 #141d38×13 #7c7e8b×6 #5d6165×6
+  frame 6: #1d2b53×56 #324476×20 #141d38×20 #7c7e8b×12 #5d6165×12
+  frame 7: #f1cc36×28 #f8e394×4
+  frame 8: #f1cc36×28 #f8e394×4
+  frame 9: #f1cc36×28 #f8e394×4
+  frame 10: #f1cc36×28 #f8e394×4
+  frame 11: #f1cc36×28 #f8e394×4
+  frame 12: #f1cc36×28 #f8e394×4
+  frame 13: #f1cc36×56 #f8e394×4

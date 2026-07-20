@@ -321,9 +321,11 @@ export class RoboticArmObject implements WorldProp {
     public readonly variable?: string,
   ) {
     // A direcao vira FRAME, nunca rotacao: Billboard3D.setAngle gira no plano da camera
-    // (mesh.rotation.z), o que inclinaria o desenho em vez de vira-lo pro lado.
+    // (mesh.rotation.z), o que inclinaria o desenho em vez de vira-lo pro lado. A folha tem
+    // dois bancos (como a roda): dir = sem energia, dir+4 = a lampada de energia VERDE acesa
+    // na coluna. `powered` nasce true, entao o frame inicial ja e o do banco energizado.
     this.base = world3d()
-      .addBillboard('inserter', dir, { groundShadow: true })
+      .addBillboard('inserter', dir + 4, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(BASE_SIZE, BASE_SIZE)
       .setTint(METAL_TINT);
@@ -584,6 +586,9 @@ export class RoboticArmObject implements WorldProp {
   private setPowered(powered: boolean): void {
     if (this.powered === powered) return;
     this.powered = powered;
+    // A lampada de energia na coluna acende/apaga trocando de banco na folha (dir / dir+4) —
+    // o mesmo verde e a mesma gramatica do dinamo da roda e da caldeira: verde = rede viva.
+    this.base.setTexture('inserter', this.dir + (powered ? 4 : 0));
     const tint = powered ? METAL_TINT : UNPOWERED_TINT;
     this.base.setTint(tint);
     this.upperArm.setTint(tint);

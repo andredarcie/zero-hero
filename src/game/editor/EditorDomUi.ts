@@ -129,7 +129,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'waterWheel', label: "Roda d'Agua Geradora", key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
   { type: 'boiler', label: 'Caldeira a Vapor', key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.cold },
   // A forma do cabo nunca se escolhe: ela nasce dos vizinhos, no tabuleiro e no jogo.
-  { type: 'wire', label: 'Cabo de Energia', key: 'wire-h' }, // arte gerada no boot (registerWireTextures)
+  { type: 'wire', label: 'Cabo de Energia', key: ASSET_KEYS.wire, frame: 1 }, // frame 1 = 'h'
 ];
 
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta

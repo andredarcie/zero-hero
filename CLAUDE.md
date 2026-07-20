@@ -364,9 +364,10 @@ the melt around a settled crown still burns), or a lit graveto lying on the grou
 robotic arm delivers — flame crossing a wall into a firebox). Heat is not spread: nothing
 CATCHES fire because of the boiler. And the hero's own lit torch STOKES it directly — bump the
 furnace with the burning graveto (the house fire-bump grammar; the torch survives the transfer)
-and it burns internally for ~4s (`stoke`): a timed round trip, never a switch, so running a
+and it burns internally for ~16s (`stoke`): a timed round trip, never a switch, so running a
 machine on torch alone means feeding the furnace — fixed sources are how a plant stays on.
-Bumped cold and empty-handed, the balloon asks for fire like a dead campfire.
+While alive (stoked, heated or coasting on steam) the chimney SMOKES — a running plant
+announces itself from afar. Bumped cold and empty-handed, the balloon asks for fire.
 
 - **Power comes from steam PRESSURE, not from the heat test** — the exact mirror of the wheel's
   angular speed. Pressure builds against thermal inertia (~1.4s) and drains slowly (~5.2s), with

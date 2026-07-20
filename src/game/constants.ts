@@ -169,6 +169,7 @@ export const ASSET_KEYS = {
   pressurePlate: 'pressure-plate',
   waterWheel: 'water-wheel',
   boiler: 'boiler',
+  wire: 'wire',
   cutGrass: 'cut-grass',
   cutGrassWind0: 'cut-grass-wind0',
   cutGrassWind1: 'cut-grass-wind1',

@@ -68,7 +68,7 @@ import {
 } from '@/game/render3d/World3D';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
-import { registerWireTextures, wireShapeFromMask } from '@/game/render3d/wireTexture';
+import { wireShapeFromMask } from '@/game/world/wireShapes';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { getActiveLevel } from '@/game/runtime/activeLevel';
@@ -505,7 +505,6 @@ export class GameScene extends Phaser.Scene {
     // prop/item is built (their billboards resolve their textures on construction below).
     registerBucketTextures(this);
     registerCharcoalTexture(this);
-    registerWireTextures(this);
     registerMoonflowerTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —

@@ -37,10 +37,10 @@ const GEN_OFF = 0.18; // ...e so o abre de novo bem abaixo: histerese, nunca tre
 const PUFF_MS = 560; // cadencia da valvula soltando vapor em regime
 // Uma ESTOCADA direta da tocha do heroi (bump com o graveto aceso) acende a fornalha por
 // dentro por este tempo. E deliberadamente um RELOGIO, nao um interruptor: com stoke + coast o
-// jogador compra ~8s de circuito por viagem, entao rodar uma maquina so na tocha e possivel —
-// mas e ir e voltar alimentando a fornalha, nunca apertar um botao e ir embora. Fontes fixas
+// jogador compra ~20s de circuito por viagem — o suficiente para varios ciclos do braco — mas
+// ainda e ir e voltar alimentando a fornalha, nunca apertar um botao e ir embora. Fontes fixas
 // (fogueira, lava, pavio) continuam sendo o jeito de deixar a usina ligada sozinha.
-const STOKE_BURN_MS = 4000;
+const STOKE_BURN_MS = 16000;
 
 const SPRITE_SIZE = 0.92; // arte 16x16 da Sprite Factory num tile — nada vaza do tile
 const VALVE_ELEV = 0.5; // ombro do domo, de onde o vapor sopra
@@ -182,14 +182,16 @@ export class BoilerObject implements WorldProp {
       onComplete: () => this.retireEffect(puff),
     });
 
-    if (this.heated) {
+    // A chamine fumega enquanto a maquina esta VIVA — fornalha acesa ou circuito fechado
+    // (o coast tambem fumega: a caldeira LIGADA se anuncia de longe pela coluna de fumaca).
+    if (this.heated || this.powered) {
       const smoke = world3d()
         .addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 })
         .setTint(0x8d8880)
         .setPosition(this.worldX + CHIMNEY_X, this.worldY - 0.02)
         .setElevation(SPRITE_SIZE - 0.05)
-        .setDisplaySize(0.08, 0.08)
-        .setAlpha(0.4);
+        .setDisplaySize(0.1, 0.1)
+        .setAlpha(0.5);
       this.effects.add(smoke);
       this.scene.tweens.add({
         targets: smoke,

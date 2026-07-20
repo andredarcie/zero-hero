@@ -32,7 +32,10 @@ const DAY_GROUND = hexToRgb('#64b964');   // the grass tile
 /**
  * @param image  {width,height,data} RGBA
  * @param opts   { kind, frameW=16, frameH=16, allowNewColors=[], allowOrphans=false, name }
- *   kind: 'prop' | 'item' | 'character' | 'terrain' | 'effect' | 'icon'
+ *   kind: 'prop' | 'item' | 'character' | 'terrain' | 'effect' | 'icon' | 'connector'
+ *     'connector' = art that CONTINUES into the neighbouring tile (power wires): it must touch
+ *     the frame edge on its open ends — edge-touch is the design, not clipping — and it is
+ *     sparse by nature. Everything else (palette, alpha, orphans) is judged like a prop.
  */
 export const analyzeSprite = (image, opts = {}) => {
   const { width, height, data } = image;
@@ -108,6 +111,11 @@ export const analyzeSprite = (image, opts = {}) => {
       if (touchesEdge && kind === 'item') add('warn', 'edge-touch', `${tag}pickup touches the frame edge — items float centred with clear margin (see wood.png, coin.png)`);
       if (touchesEdge && (kind === 'prop' || kind === 'effect') && coverage < 0.5) {
         add('warn', 'edge-touch', `${tag}sparse prop touches the frame edge — will read as clipped; pull it inside the tile`);
+      }
+      // A connector that does NOT reach the edge is broken the other way round: its whole job
+      // is to continue into the neighbour, and a gap at the seam reads as a cut cable.
+      if (!touchesEdge && kind === 'connector') {
+        add('warn', 'edge-gap', `${tag}connector art never reaches the frame edge — the seam to the next tile will show a gap`);
       }
     }
 

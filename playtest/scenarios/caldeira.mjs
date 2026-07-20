@@ -222,13 +222,19 @@ export default {
       torchAfter.held === 'wood' && torchAfter.onFire === true, JSON.stringify(torchAfter));
     await shot('caldeira-estocada');
 
-    // A estocada e um relogio (~4s): a queima interna apaga sozinha e a pressao drena depois.
+    // A estocada e um relogio LONGO (~16s — 4x a primeira versao): aos 5s ela TEM de seguir
+    // acesa (a versao curta ja estaria morta aqui), e ainda assim expira sozinha no fim.
+    await sleep(5000);
+    const midStoke = await boilerState();
+    assert('aos 5s a fornalha SEGUE acesa (a estocada dura 4x mais)',
+      midStoke.heated === true && midStoke.generating === true, JSON.stringify(midStoke));
+
     let stokeOut = null;
-    const stokeOutDeadline = Date.now() + 7000;
+    const stokeOutDeadline = Date.now() + 15000;
     while (Date.now() < stokeOutDeadline) {
       stokeOut = await boilerState();
       if (!stokeOut.heated) break;
-      await sleep(250);
+      await sleep(400);
     }
     assert('a queima da estocada expira sozinha (relogio, nao interruptor)',
       stokeOut.heated === false, JSON.stringify(stokeOut));

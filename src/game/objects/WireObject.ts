@@ -1,8 +1,8 @@
 import type Phaser from 'phaser';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import { wireTextureKey, type WireShape } from '@/game/render3d/wireTexture';
 import { world3d } from '@/game/render3d/World3D';
+import { wireShapeFrame, type WireShape } from '@/game/world/wireShapes';
 import type { WorldProp } from './WorldProp';
 
 // O CABO DE ENERGIA no chao: o fio fisico por onde a rede passa. Ate ele existir, energia era
@@ -10,6 +10,7 @@ import type { WorldProp } from './WorldProp';
 // autor deita o caminho, tile a tile, da fonte (caldeira, roda, placa) ate a maquina que
 // consome, e a corrente e um flood-fill por adjacencia ortogonal (GameScene.updateWireEnergy).
 // Um vao de um tile e um circuito aberto — que e exatamente o que faz dele peca de puzzle.
+// A arte e a folha `wire` da Sprite Factory (7 formas + 7 filetes; ver wireShapes.ts).
 //
 // O cabo NAO bloqueia (e um fio rente ao chao — o heroi pisa por cima) e NAO conduz fogo: capa
 // de borracha nao entra no grafo de combustivel. Sao dois quads flat: a base escura sempre
@@ -33,11 +34,11 @@ export class WireObject implements WorldProp {
     public readonly worldY: number,
   ) {
     this.base = world3d()
-      .addBillboard(wireTextureKey('x', false), 0, { flat: true, flatY: BASE_Y })
+      .addBillboard('wire', wireShapeFrame('x', false), { flat: true, flatY: BASE_Y })
       .setPosition(worldX, worldY)
       .setDisplaySize(WIRE_SIZE, WIRE_SIZE);
     this.glow = world3d()
-      .addBillboard(wireTextureKey('x', true), 0, {
+      .addBillboard('wire', wireShapeFrame('x', true), {
         flat: true, flatY: GLOW_Y, additive: true, fog: false, depthWrite: false,
       })
       .setPosition(worldX, worldY)
@@ -48,8 +49,8 @@ export class WireObject implements WorldProp {
   /** A forma nasce dos vizinhos e e fixada UMA vez no boot (cabos e maquinas nao andam). */
   public setShape(shape: WireShape): void {
     this.shape = shape;
-    this.base.setTexture(wireTextureKey(shape, false));
-    this.glow.setTexture(wireTextureKey(shape, true));
+    this.base.setTexture('wire', wireShapeFrame(shape, false));
+    this.glow.setTexture('wire', wireShapeFrame(shape, true));
   }
 
   public get wireShape(): WireShape { return this.shape; }

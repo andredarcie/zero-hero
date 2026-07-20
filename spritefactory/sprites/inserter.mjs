@@ -26,8 +26,9 @@ const ST_D = '#5d6165'; // stone escura — o lado da sombra
 const INK = '#1d2b53'; // ink navy: o "preto" deste jogo, a estrutura
 const INK_D = '#141d38'; // ink fundo — a linha que ancora a maquina no chao
 const GOLD = '#f1cc36'; // a lampada de status: pra que lado a maquina ENTREGA
+const POWER = '#7dde99'; // a lampada de ENERGIA: o verde da placa/roda/caldeira — rede viva
 
-const PAL = { L: ST_L, M: ST_M, D: ST_D, K: INK, N: INK_D, G: GOLD };
+const PAL = { L: ST_L, M: ST_M, D: ST_D, K: INK, N: INK_D, G: GOLD, V: POWER };
 
 // O pedestal, v3 — base LARGA + coluna giratoria, e a perspectiva corrigida.
 //
@@ -165,13 +166,24 @@ export default {
   kind: 'prop',
   layout: 'row',
   palette: PAL,
-  draw({ Pix }) {
-    return MARKS.map((mark) => {
+  draw({ Pix, hexToRgb }) {
+    // DOIS bancos, como a roda d'agua: frames 0..3 = as 4 direcoes SEM energia (soquete da
+    // lampada apagado, ink na coluna), frames 4..7 = as mesmas 4 com a lampada de energia
+    // VERDE acesa. Append-only: os indices antigos (0..3) continuam validos no editor, que so
+    // conhece direcao; o runtime soma +4 quando a rede da maquina esta viva (setPowered).
+    const drawBank = (powered) => MARKS.map((mark) => {
       const pix = new Pix(16, 16);
-      pix.stampGrid(PEDESTAL, PAL); // a maquina, byte a byte igual nos 4
-      pix.stampGrid(mark, PAL); // por cima: so a lampada, do lado pra onde ela entrega
+      pix.stampGrid(PEDESTAL, PAL); // a maquina, byte a byte igual nos 8
+      pix.stampGrid(mark, PAL); // por cima: a lampada dourada, do lado pra onde ela entrega
+      // A lampada de ENERGIA mora na coluna giratoria, acima do pedestal — o mesmo verde e a
+      // mesma leitura do dinamo da roda e da caldeira: verde aceso = circuito fechado. Apagada
+      // ela e um soquete ink: a MESMA lampada, visivelmente desligada (micro-variacao).
+      const lamp = hexToRgb(powered ? POWER : INK);
+      pix.set(6, 6, lamp);
+      pix.set(7, 6, lamp);
       return pix;
     });
+    return [...drawBank(false), ...drawBank(true)];
   },
   notes: 'v2 — o braco pintado SAIU. Quatro frames = quatro ORIENTACOES (N/L/S/O), nao quadros de animacao: o billboard '
     + 'do jogo nao tem yaw, entao a direcao do prop tem de vir do sheet. Pedestal byte-a-byte '
