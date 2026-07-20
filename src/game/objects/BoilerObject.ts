@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { BOILER_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import { BOILER_SPRITE_ASPECT, boilerTextureKey, type BoilerLook } from '@/game/render3d/boilerTexture';
 import { FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldProp } from './WorldProp';
+
+type BoilerLook = keyof typeof BOILER_FRAMES;
 
 // A CALDEIRA ("boiler"): o terceiro produtor de circuito, ao lado da placa de pressao e da roda
 // d'agua — e o que finalmente liga o FOGO, o unico sistema que o jogador pilota, a rede de
@@ -40,9 +42,8 @@ const PUFF_MS = 560; // cadencia da valvula soltando vapor em regime
 // (fogueira, lava, pavio) continuam sendo o jeito de deixar a usina ligada sozinha.
 const STOKE_BURN_MS = 4000;
 
-const SPRITE_W = 0.84; // 14px de arte num tile — nada vaza do tile
-const SPRITE_H = SPRITE_W * BOILER_SPRITE_ASPECT;
-const VALVE_ELEV = 0.52; // ombro do tanque, de onde o vapor sopra
+const SPRITE_SIZE = 0.92; // arte 16x16 da Sprite Factory num tile — nada vaza do tile
+const VALVE_ELEV = 0.5; // ombro do domo, de onde o vapor sopra
 const CHIMNEY_X = -0.14; // a chamine fica a esquerda do eixo na arte
 const POWER_GREEN = 0x7dde99;
 const STEAM_TINT = 0xdce4ea;
@@ -67,9 +68,9 @@ export class BoilerObject implements WorldProp {
     public readonly variable?: string,
   ) {
     this.sprite = world3d()
-      .addBillboard(boilerTextureKey('cold'), 0, { groundShadow: true })
+      .addBillboard('boiler', BOILER_FRAMES.cold, { groundShadow: true })
       .setPosition(worldX, worldY)
-      .setDisplaySize(SPRITE_W, SPRITE_H);
+      .setDisplaySize(SPRITE_SIZE, SPRITE_SIZE);
   }
 
   /** A fornalha e um corpo de pedra e ferro; ninguem atravessa a maquina. */
@@ -137,7 +138,7 @@ export class BoilerObject implements WorldProp {
     const look: BoilerLook = this.powered ? 'on' : this.heated ? 'hot' : 'cold';
     if (look !== this.look) {
       this.look = look;
-      this.sprite.setTexture(boilerTextureKey(look));
+      this.sprite.setTexture('boiler', BOILER_FRAMES[look]);
     }
 
     // Regime: um tremor quase subliminar — a maquina TRABALHANDO, a mesma ideia do braco que
@@ -186,14 +187,14 @@ export class BoilerObject implements WorldProp {
         .addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 })
         .setTint(0x8d8880)
         .setPosition(this.worldX + CHIMNEY_X, this.worldY - 0.02)
-        .setElevation(SPRITE_H - 0.05)
+        .setElevation(SPRITE_SIZE - 0.05)
         .setDisplaySize(0.08, 0.08)
         .setAlpha(0.4);
       this.effects.add(smoke);
       this.scene.tweens.add({
         targets: smoke,
         x: smoke.x + (Math.random() - 0.5) * 0.1,
-        elevation: SPRITE_H + 0.3,
+        elevation: SPRITE_SIZE + 0.3,
         displayWidth: 0.18,
         displayHeight: 0.18,
         alpha: 0,

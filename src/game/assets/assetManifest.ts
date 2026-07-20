@@ -64,6 +64,13 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: caldeira em 3 estados — fria, fornalha acesa, gerando (lampada verde).
+    key: ASSET_KEYS.boiler,
+    path: '/assets/environment/props/boiler.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     key: ASSET_KEYS.swordItem,
     path: '/assets/items/equipment/sword.png',
     frameWidth: TILESET_FRAME_SIZE,

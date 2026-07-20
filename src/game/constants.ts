@@ -168,6 +168,7 @@ export const ASSET_KEYS = {
   woodenCrate: 'wooden-crate',
   pressurePlate: 'pressure-plate',
   waterWheel: 'water-wheel',
+  boiler: 'boiler',
   cutGrass: 'cut-grass',
   cutGrassWind0: 'cut-grass-wind0',
   cutGrassWind1: 'cut-grass-wind1',
@@ -193,6 +194,8 @@ export const PRESSURE_PLATE_FRAMES = { up: 0, down: 1 } as const;
 // Sprite Factory: oito orientacoes do rotor, primeiro apagadas e depois com o dinamo ativo.
 // O banco duplicado deixa a roda parar em qualquer orientacao sem a lampada teleportar o rotor.
 export const WATER_WHEEL_FRAMES = { phases: 8, off: 0, powered: 8 } as const;
+// Sprite Factory boiler.png: fria / fornalha acesa / gerando (lampada verde) — micro-variacao.
+export const BOILER_FRAMES = { cold: 0, hot: 1, on: 2 } as const;
 
 // The skull's rise-from-the-ground animation, in playback order (see UndeadEnemy).
 export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [

@@ -1,8 +1,8 @@
 ﻿import type Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES,
-  SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
+  ASSET_KEYS, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS,
+  PRESSURE_PLATE_FRAMES, SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
@@ -127,7 +127,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'woodenCrate', label: 'Caixote de Madeira', key: ASSET_KEYS.woodenCrate },
   { type: 'pressurePlate', label: 'Placa de Pressao', key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   { type: 'waterWheel', label: "Roda d'Agua Geradora", key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
-  { type: 'boiler', label: 'Caldeira a Vapor', key: 'boiler-icon' }, // arte gerada no boot (registerBoilerTexture)
+  { type: 'boiler', label: 'Caldeira a Vapor', key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.cold },
   // A forma do cabo nunca se escolhe: ela nasce dos vizinhos, no tabuleiro e no jogo.
   { type: 'wire', label: 'Cabo de Energia', key: 'wire-h' }, // arte gerada no boot (registerWireTextures)
 ];

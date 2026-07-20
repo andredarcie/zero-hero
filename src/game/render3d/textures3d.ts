@@ -65,6 +65,8 @@ const DEFS: Record<string, SheetDef> = {
   // woods.png: 16×96 vertical sheet — the dry tree shrinking per axe chop.
   'dry-tree': { url: `${A}/environment/props/woods.png`, frameW: 16, frameH: 16 },
   'dry-bush': { url: `${A}/environment/props/bush.png` },
+  // Sprite Factory: caldeira em 3 estados (fria / fornalha acesa / gerando) — ver BOILER_FRAMES.
+  boiler: { url: `${A}/environment/props/boiler.png`, frameW: 16, frameH: 16 },
   'dry-shrub': { url: `${A}/environment/props/dry_shrub.png` },
   rock: { url: `${A}/environment/props/rock.png` },
   'rock-cracked': { url: `${A}/environment/props/rock__1.png` },
