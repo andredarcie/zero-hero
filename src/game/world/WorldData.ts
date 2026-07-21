@@ -1,4 +1,4 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAME } from '@/game/constants';
+﻿import { CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAME } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
@@ -129,6 +129,11 @@ export const getSwingGates = (): WorldProp[] => requireWorld().props.filter((pro
 export const getDryTrees = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryTree');
 
 export const getDryShrubs = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryShrub');
+
+// A pedra de FERRO: a mesma rocha, quebrada pelas mesmas duas picaretadas, mas o que ela
+// deixa no chao e um bloco de ferro em vez de uma pedra. Vira RockObject como qualquer outra
+// (com `ore: true`), entao colisao, bomba e picareta valem sem uma linha a mais.
+export const getIronRocks = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'ironRock');
 
 export const getRocks = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'rock');
 

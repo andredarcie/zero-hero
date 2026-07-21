@@ -115,6 +115,7 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
   { type: 'wood', label: 'Graveto', key: ASSET_KEYS.woodIcon },
   { type: 'stone', label: 'Pedra', key: ASSET_KEYS.rock },
+  { type: 'iron', label: 'Bloco de Ferro', key: ASSET_KEYS.ironItem },
   { type: 'seeds', label: 'Sementes', key: ASSET_KEYS.seedsItem },
   { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
   { type: 'battery', label: 'Bateria', key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
@@ -128,6 +129,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'dryTree', label: 'Arvore Seca', key: ASSET_KEYS.dryTree, frame: 0 },
   { type: 'dryShrub', label: 'Arbusto Seco', key: ASSET_KEYS.dryShrub },
   { type: 'rock', label: 'Pedra', key: ASSET_KEYS.rock },
+  { type: 'ironRock', label: 'Pedra de Ferro', key: ASSET_KEYS.ironRock, frame: 0 },
   { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassWind0 },
   { type: 'lava', label: 'Lava', key: ASSET_KEYS.lavaFloor },
   { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },

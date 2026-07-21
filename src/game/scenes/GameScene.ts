@@ -126,6 +126,7 @@ import {
   getPlantSpots,
   getInserters,
   getToolboxes,
+  getIronRocks,
   getWoodenCrates,
   getPressurePlates,
   getBoilers,
@@ -180,6 +181,7 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
   stone: { texture: ASSET_KEYS.rock, frame: 0 },
+  iron: { texture: ASSET_KEYS.ironItem, frame: 0 },
   seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
@@ -201,6 +203,7 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   scythe: { texture: 'scythe-icon', frame: 0 },
   wood: { texture: 'wood-icon', frame: 0 },
   stone: { texture: 'rock', frame: 0 },
+  iron: { texture: 'iron-item', frame: 0 },
   seeds: { texture: 'seeds-item', frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
@@ -222,6 +225,10 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0, label: 'VOCE PEGOU UM GRAVETO!' },
   stone: { texture: ASSET_KEYS.rock, frame: 0, label: 'VOCE PEGOU UMA PEDRA!' },
+  // A unica legenda do jogo que aponta pra OUTRA peca, e ela existe porque o ferro e o unico
+  // item sem uso proprio: sozinho ele nao abre, nao queima, nao atravessa nada. Sem essa linha,
+  // "peguei um bloco de metal e ele nao faz nada" seria a leitura correta — e errada.
+  iron: { texture: ASSET_KEYS.ironItem, frame: 0, label: 'UM BLOCO DE FERRO! SO SERVE NUMA BANCADA' },
   seeds: { texture: ASSET_KEYS.seedsItem, frame: 0, label: 'VOCE PEGOU SEMENTES! PLANTE NUM BURACO' },
   bucket: { texture: 'bucket-icon', frame: 0, label: 'VOCE PEGOU UM BALDE! ENCHA NO RIO' },
   bucketFull: { texture: 'bucket-full-icon', frame: 0, label: 'BALDE CHEIO DE AGUA!' },
@@ -299,6 +306,11 @@ const ROCK_FACE_TILES = 0.34;
 // that fly. Pale enough to read against the night ground, and short of the near-white that sends an
 // unlit sprite over the bloom threshold and turns a stone chip into a spark.
 const ROCK_CHIP_TINTS = [0xb4bac1, 0x99a0a8, 0xc3c9cf, 0x848c95] as const;
+// Os cacos de uma pedra de FERRO. Mesma ideia, paleta quente: a rampa drywood do veio, com um
+// unico cinza sobrando pra lembrar que o minerio vem embrulhado em rocha. E o que faz a pancada
+// numa pedra de minerio parecer diferente ANTES do item cair — a diferenca chega no golpe, nao
+// so no drop.
+const ORE_CHIP_TINTS = [0x826841, 0x733e11, 0x99a0a8, 0x68380f] as const;
 
 // The undead danger meter (UndeadSpawnDirector, 0..1) creeps onto the screen as a cold
 // vignette: the deeper the dark wakes, the harder the edges close in — and near full danger
@@ -699,7 +711,14 @@ export class GameScene extends Phaser.Scene {
     this.swingGates = getSwingGates().map((g) => new SwingGateObject(this, g.worldX, g.worldY));
     this.dryTrees = getDryTrees().map((t) => new DryTreeObject(this, t.worldX, t.worldY));
     this.dryShrubs = getDryShrubs().map((s) => new DryShrubObject(this, s.worldX, s.worldY));
-    this.rocks = getRocks().map((r) => new RockObject(this, r.worldX, r.worldY));
+    // As duas pedras vivem no MESMO array de proposito: colisao, picareta, bomba e o registro
+    // de props ja atravessam `rocks`, e a unica coisa que a de minerio muda e a arte e o que
+    // ela deixa cair. Uma segunda lista significaria repetir todos esses caminhos pra ganhar
+    // um `if` — e esquecer um deles um dia (a bomba foi exatamente o que quase escapou).
+    this.rocks = [
+      ...getRocks().map((r) => new RockObject(this, r.worldX, r.worldY)),
+      ...getIronRocks().map((r) => new RockObject(this, r.worldX, r.worldY, true)),
+    ];
     this.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this, g.worldX, g.worldY));
     this.moonflowers = getMoonflowers().map((m) => new MoonflowerObject(this, m.worldX, m.worldY));
     this.bombSpots = getBombSpots().map((s) => new BombSpotObject(this, s.worldX, s.worldY));
@@ -2326,8 +2345,10 @@ export class GameScene extends Phaser.Scene {
           if (!rock.smash(dirX, dirY)) return;
           getSoundManager().playRockSmash();
           const shattered = !rock.blocking;
-          this.spawnRockDebris(wx, wy, dirX, dirY, shattered);
-          if (shattered) this.dropStone(rock.worldX, rock.worldY); // shattered, not just cracked
+          this.spawnRockDebris(wx, wy, dirX, dirY, shattered, rock.ore);
+          // shattered, not just cracked. Ore leaves IRON — the same two blows, a different
+          // matter: the vein in the art is the promise, and this is it being kept.
+          if (shattered) this.dropRockSpoil(rock);
         });
       } else {
         rock.shake();
@@ -2599,7 +2620,7 @@ export class GameScene extends Phaser.Scene {
    * `lastScreen` — a screen position nothing ever refreshed, so the "shards" fired off the
    * top-left corner of the screen. (dirX, dirY) points from the hero into the rock.
    */
-  private spawnRockDebris(wx: number, wy: number, dirX: number, dirY: number, shattered: boolean): void {
+  private spawnRockDebris(wx: number, wy: number, dirX: number, dirY: number, shattered: boolean, ore = false): void {
     const w3 = this.world3d;
     if (!w3) return;
 
@@ -2613,6 +2634,7 @@ export class GameScene extends Phaser.Scene {
     // only a bias backwards. It is what a struck rock does anyway (the chip leaves along the
     // face, not along the pick), and it is the only version of it the player can watch.
     const back = Math.atan2(-dirY, -dirX);
+    const tints = ore ? ORE_CHIP_TINTS : ROCK_CHIP_TINTS;
 
     for (let i = 0; i < (shattered ? 12 : 7); i++) {
       const side = i % 2 === 0 ? 1 : -1;
@@ -2631,7 +2653,7 @@ export class GameScene extends Phaser.Scene {
       // silhouette and paints it granite.
       const chip = w3
         .addBillboard(ASSET_KEYS.rock, 0, { ...FX_BILLBOARD, emissive: true, alphaTest: 0.05 })
-        .setTintFill(ROCK_CHIP_TINTS[i % ROCK_CHIP_TINTS.length])
+        .setTintFill(tints[i % tints.length])
         .setPosition(ix, iy)
         .setElevation(iz)
         .setDisplaySize(size, size);
@@ -3773,8 +3795,8 @@ export class GameScene extends Phaser.Scene {
       rockObj.smash(0, 0);
       rockObj.smash(0, 0);
       if (!rockObj.blocking) {
-        this.spawnRockDebris(rockObj.worldX, rockObj.worldY, 0, -1, true);
-        this.dropStone(rockObj.worldX, rockObj.worldY);
+        this.spawnRockDebris(rockObj.worldX, rockObj.worldY, 0, -1, true, rockObj.ore);
+        this.dropRockSpoil(rockObj);
         brokeRock = true;
       }
     }
@@ -4470,6 +4492,18 @@ export class GameScene extends Phaser.Scene {
   // it fords a river and it will never carry a flame (see WaterObject.placeStone / burn).
   private dropStone(worldX: number, worldY: number): void {
     this.dropProduct('stone', worldX, worldY);
+  }
+
+  /**
+   * O que uma pedra ESTOURADA deixa pra tras: pedra, ou um bloco de ferro se ela tinha veio.
+   *
+   * Existe como funcao propria porque DOIS caminhos quebram pedra — a picareta e a explosao —
+   * e eles ja tinham divergido uma vez. Com a regra escrita em dois lugares, uma pedra de
+   * minerio aberta a bomba largaria calmamente uma pedra comum, e o jogador levaria um bom
+   * tempo pra desconfiar que o defeito era esse.
+   */
+  private dropRockSpoil(rock: RockObject): void {
+    this.dropProduct(rock.ore ? 'iron' : 'stone', rock.worldX, rock.worldY);
   }
 
   // A stone dropped into lava cools it into basalt: a permanent walkable firebreak (LavaObject

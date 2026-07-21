@@ -1,4 +1,4 @@
-import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
+﻿import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
 
 // The world is now a finite, fully-authored 8x8-chunk map defined entirely by a single
 // `world.json`. These types are the schema shared by the runtime loader (WorldData.ts) and
@@ -66,7 +66,7 @@ export type WorldChunk = {
 // (A B [caixa] resultado). Drop an item on each slot and a RECIPE turns the pair into a third
 // item — the only thing in the game that makes an item out of other items, instead of out of a
 // prop the hero hits with a tool.
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal';
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.

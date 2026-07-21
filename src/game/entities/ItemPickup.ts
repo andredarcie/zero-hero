@@ -26,6 +26,13 @@ export type HeldItemKind =
   // both cross a river, but a plank deck burns (and carries fire across) while a stone ford
   // never will. So every crossing becomes a question — do I want a floor, or a fuse?
   | 'stone'
+  // O BLOCO DE FERRO — o segundo material bruto do jogo, e o primeiro que nao serve pra nada
+  // sozinho. A pedra fica de pe num vau e apaga lava; o graveto vira ponte e carrega fogo; o
+  // ferro NAO tem uso proprio: ele so existe pra entrar numa bandeja da caixa de ferramentas.
+  // Isso e deliberado — a caixa precisava de um insumo cuja unica razao de ser fosse ela, ou
+  // toda receita competiria com o uso direto do proprio insumo. Sai de uma `ironRock`, que e a
+  // mesma pedra da picareta com veio de minerio dentro.
+  | 'iron'
   // A handful of SEEDS ("sementes"), cut from tall grass with the scythe. The grass made
   // renewable and PORTABLE: planted in a dug hole (plantSpot), watered with the bucket, it
   // sprouts REAL tall grass — the first fire conductor the player grows, not one baked into
@@ -72,6 +79,7 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   // The "graveto": a single stick (the woodIcon art), NOT the 3-log woodItem pile.
   wood: { texture: 'wood-icon', frame: 0 },
   stone: { texture: 'rock', frame: 0 },
+  iron: { texture: 'iron-item', frame: 0 },
   // The seeds sprite comes from the sprite factory (spritefactory/sprites/seeds.mjs).
   seeds: { texture: 'seeds-item', frame: 0 },
   // The bucket art is generated at boot (bucketTexture.ts) into both pipelines.

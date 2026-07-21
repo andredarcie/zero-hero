@@ -153,6 +153,10 @@ export const ASSET_KEYS = {
   dryShrub: 'dry-shrub',
   rock: 'rock',
   rockCracked: 'rock-cracked',
+  // A pedra de FERRO: mesma silhueta da rocha, com veio de minerio. Sheet de 2 frames
+  // (inteira / rachada) — o par que a rocha comum guarda em dois arquivos soltos.
+  ironRock: 'iron-rock',
+  ironItem: 'iron-item',
   tallGrassWind0: 'tall-grass-wind0',
   tallGrassWind1: 'tall-grass-wind1',
   cuttingGrass0: 'cutting-grass0',

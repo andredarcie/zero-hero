@@ -1,0 +1,3 @@
+iron: 1 frame(s) — 0 fail, 0 warn
+  [info] bbox: content 12x11 at (2,4), coverage 49%
+  frame 0: #989aa7×31 #7c7e8b×27 #a9abbe×18 #1d2b53×16 #5d6165×16 #141d38×12 #733e11×5 #68380f×1

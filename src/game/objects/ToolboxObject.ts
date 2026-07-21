@@ -59,10 +59,23 @@ const METAL_TINT = 0xd2d2d2;
 export type ToolboxRecipe = { inputs: readonly [HeldItemKind, HeldItemKind]; output: HeldItemKind };
 
 export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
+  // A REGRA: cabo + cabeca. Uma cabeca de cada material da uma ferramenta, e o jogador aprende
+  // isso com UM exemplo — o que e a unica forma de haver receita num jogo sem livro de receitas.
+  //
+  // Note a consequencia dessa regra: `graveto + X` so pode significar UMA coisa, entao o numero
+  // de ferramentas fabricaveis e o numero de MATERIAIS, nunca o numero de ideias. Duas hoje.
+  //
   // Um cabo e uma cabeca de pedra. E a receita mais velha que existe, e e a que ensina a peca:
   // os dois insumos ja sao produtos de OUTRAS ferramentas (a arvore da o graveto, a picareta da
   // a pedra), entao a caixa fecha a cadeia em vez de comecar uma nova.
   { inputs: ['wood', 'stone'], output: 'axe' },
+  // Cabo e lamina de ferro. A FOICE, e nao a picareta, por um motivo que so aparece quando se
+  // desenha a cadeia inteira: o ferro sai de uma pedra de minerio, e pedra se quebra com
+  // picareta. Uma receita que fabricasse a picareta exigiria a picareta pra chegar nos insumos —
+  // circular, e portanto inutil em qualquer level que nao dependesse da bomba pra abrir a
+  // primeira rocha. A foice nao tem esse problema: picareta -> ferro -> foice e uma escada que
+  // sempre sobe. E a foice PRODUZ (sementes), que e o que se pede de qualquer coisa nova aqui.
+  { inputs: ['wood', 'iron'], output: 'scythe' },
 ];
 
 /** O que estes dois itens viram juntos, em qualquer ordem — ou null se nao viram nada. */

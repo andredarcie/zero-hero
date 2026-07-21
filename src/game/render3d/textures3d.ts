@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 
 // ── Texture registry for the 3D world renderer ────────────────────────────────
 //
@@ -79,6 +79,10 @@ const DEFS: Record<string, SheetDef> = {
   battery: { url: `${A}/items/collectibles/battery.png`, frameW: 16, frameH: 16 },
   'dry-shrub': { url: `${A}/environment/props/dry_shrub.png` },
   rock: { url: `${A}/environment/props/rock.png` },
+  // Sprite Factory: a pedra de ferro — frame 0 inteira, frame 1 rachada (a rocha comum guarda
+  // esse par em dois arquivos; aqui e um sheet so).
+  'iron-rock': { url: `${A}/environment/props/iron_rock.png`, frameW: 16, frameH: 16 },
+  'iron-item': { url: `${A}/items/collectibles/iron.png` },
   'rock-cracked': { url: `${A}/environment/props/rock_cracked.png` },
   'locked-door-object': { url: `${A}/environment/structures/locked_door.png` },
   'swing-gate-object': { url: `${A}/environment/structures/swing_gate.png` },

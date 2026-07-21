@@ -1,0 +1,5 @@
+iron-rock: 2 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 14x11 at (1,3), coverage 46%
+  [info] bbox: frame 1: content 14x9 at (1,5), coverage 42%
+  frame 0: #7c7e8b×29 #989aa7×24 #a9abbe×22 #5d6165×19 #3a3f3f×12 #733e11×5 #68380f×4 #826841×2
+  frame 1: #7c7e8b×30 #3a3f3f×24 #a9abbe×17 #989aa7×15 #5d6165×12 #733e11×4 #68380f×4 #826841×1

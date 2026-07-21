@@ -12,8 +12,25 @@ import type { WorldProp } from './WorldProp';
 // The debris the blows throw is NOT here: it belongs to GameScene.spawnRockDebris, because the
 // chips are real objects in the 3D world (they arc, they land, they lie there), not a decoration
 // hanging off the rock's own sprite.
+//
+// ── A PEDRA DE FERRO e a mesma classe ────────────────────────────────────────────────────────
+// `ore` troca as duas texturas por um veio de minerio e nada mais. Deliberadamente NAO troca o
+// numero de pancadas, o recuo, o colapso nem a colisao: quem decide que aquilo ali e outra coisa
+// e o DROP (GameScene solta um bloco de ferro em vez de uma pedra) e a arte — nunca o tempo.
+// Uma pedra de minerio que exigisse tres golpes seria so a mesma decisao tomada mais devagar.
+//
+// E uma classe so, e nao uma subclasse: a diferenca cabe num booleano, enquanto duas classes
+// significariam duas copias do recuo, do colapso e do contrato de colisao — que e exatamente a
+// maneira confiavel de as duas discordarem daqui a um mes.
 
 type RockState = 'intact' | 'cracked' | 'broken';
+
+/** As duas artes de cada tipo de pedra. A comum guarda o par em dois PNGs (e mais velha que o
+ *  sprite factory); o minerio guarda os dois estados como frames 0 e 1 de um sheet so. */
+const LOOK = {
+  plain: { intact: ['rock', 0], cracked: ['rock-cracked', 0] },
+  ore: { intact: ['iron-rock', 0], cracked: ['iron-rock', 1] },
+} as const;
 
 /** The rock's resting size in tiles — every squash and every collapse springs back to this. */
 const SIZE = 0.88;
@@ -26,12 +43,17 @@ export class RockObject implements WorldProp {
   private readonly sprite: Billboard3D;
   private state: RockState = 'intact';
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  /** Minerio: mesma pedra, mesma picareta, mas o que ela deixa no chao e ferro. */
+  public readonly ore: boolean;
+
+  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, ore = false) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
+    this.ore = ore;
+    const look = LOOK[ore ? 'ore' : 'plain'];
     this.sprite = world3d()
-      .addBillboard('rock', 0, { groundShadow: true })
+      .addBillboard(look.intact[0], look.intact[1], { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(SIZE, SIZE)
       // The rock art is near-white, and a white sprite under the night ambient blows out
@@ -55,7 +77,8 @@ export class RockObject implements WorldProp {
 
     if (this.state === 'intact') {
       this.state = 'cracked';
-      this.sprite.setTexture('rock-cracked');
+      const cracked = LOOK[this.ore ? 'ore' : 'plain'].cracked;
+      this.sprite.setTexture(cracked[0], cracked[1]);
       this.recoil(dirX, dirY);
       return true;
     }

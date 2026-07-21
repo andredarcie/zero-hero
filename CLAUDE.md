@@ -339,8 +339,29 @@ reach where the hero cannot.*
     (item A) (item B) [CAIXA] (resultado)
 
 Drop an item on each of the two slot tiles behind it; if the pair is a **recipe**, the machine
-eats both and spits a third item onto the tile in front. The first recipe is the one that explains
-the piece: **graveto + pedra = machado**.
+eats both and spits a third item onto the tile in front.
+
+**The rule is HAFT + HEAD, and it caps itself.** One head material makes one tool:
+
+| receita | de onde vêm os insumos |
+|---|---|
+| `graveto + pedra = machado` | árvore (axe) + pedra (pickaxe) |
+| `graveto + ferro  = foice`  | árvore (axe) + **pedra de ferro** (pickaxe) |
+
+Because the pair is unordered, `graveto + X` can only ever mean ONE tool — so the number of
+craftable tools is the number of **materials**, never the number of ideas. Growing the tree means
+adding raw matter, not adding lines to `TOOLBOX_RECIPES`.
+
+**Why the iron makes the SCYTHE and not the pickaxe.** Iron comes out of an ore rock, and rock is
+what the pickaxe breaks — so a recipe producing the pickaxe would need the pickaxe to reach its
+own ingredients. Circular, and therefore worthless in any level that doesn't hand you a bomb to
+open the first vein. `picareta → ferro → foice` is a staircase that always goes up, and the scythe
+PRODUCES (seeds), which is what the project asks of anything new.
+
+Recipes that are traps, and why: **key** (kills every locked door and the floodgate in one line),
+**sword** (level-1's entire moonflower chain exists to award it), **`pedra + pedra = fogo`**
+(sounds clever, guts the torch's timed round trip), **`graveto + graveto`** (two sticks already
+mean *bridge* in this game's vocabulary).
 
 - **Why it earns a place.** "Items should PRODUCE" has always been satisfied by props: the tree
   gives a graveto, the rock gives a stone, the grass gives seeds — the world is the only factory.
@@ -387,8 +408,37 @@ the piece: **graveto + pedra = machado**.
   warns when a slot or the output lands on collision, the world edge or another solid prop.
 - `npm run playtest -- caixa-ferramentas` guards all of it: the four rotations derive the right
   three tiles, the body blocks, stepping on a tray deposits, the axe is manufactured and both
-  inputs are consumed, a wrong pair is refused without producing anything, and a blocked output
-  holds the product until the tile frees.
+  inputs are consumed, a wrong pair is refused without producing anything, a blocked output holds
+  the product until the tile frees, and the whole iron chain runs end to end.
+
+### The ore rock (`ironRock`) and the iron block (`iron`)
+
+The second raw material, and the prop that yields it. `ironRock` is **the same `RockObject`** with
+`ore: true` — same two pickaxe blows, same recoil, same collapse, same collision, and the bomb
+shatters it exactly like any boulder. What changes is the art and the drop.
+
+- **It must not take a third blow.** An ore rock that costs one more swing is the same decision
+  taken more slowly; the difference has to live in what comes OUT, never in the timing.
+- **One class, not a subclass.** The difference fits in a boolean, while two classes would mean
+  two copies of the recoil, the collapse and the collision contract — the reliable way for them to
+  disagree a month from now. Same reasoning as `isTileOccupied` being shared by the crate and the
+  swing gate.
+- **`GameScene.dropRockSpoil` exists because TWO paths shatter rock** — the pickaxe and the blast —
+  and they had already drifted once. With the rule written in two places, an ore rock opened by a
+  bomb would calmly drop an ordinary stone.
+- **The art is the plain rock's grid, pixel for pixel, with ore painted into it.** Both frames are
+  literal dumps of `rock.png` / `rock_cracked.png`: the player has to recognise the boulder to
+  think of the pickaxe. The ore is drywood BROWN against the lavender stone — a HUE contrast, which
+  survives the night (the dark eats luminance, not warm-vs-cool). The cracked frame runs the vein
+  along the fissure, so the crack promises the next blow instead of just recording the last one.
+  The chips it throws are rust-tinted (`ORE_CHIP_TINTS`), so the blow reads different before the
+  item even lands.
+- **The iron block is the first item with NO use of its own.** Stone fords a river and quenches
+  lava; a stick bridges and carries fire; iron only ever goes into a toolbox tray. That is
+  deliberate — the bench needed an input whose only reason to exist was the bench, or every recipe
+  would compete with its own ingredients' direct uses. It is also the only item whose ITEM GET
+  caption points at another machine, because "I picked up a lump of metal and it does nothing" is
+  otherwise the correct reading, and it is wrong.
 
 ## The water wheel (`waterWheel`) — a real in-river 3D generator
 

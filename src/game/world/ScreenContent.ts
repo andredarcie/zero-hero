@@ -1,4 +1,4 @@
-// Runtime types for per-chunk ("per-screen") content. The world is now finite and fully
+﻿// Runtime types for per-chunk ("per-screen") content. The world is now finite and fully
 // authored in world.json; placement of enemies/NPCs/pickups is data, read through
 // WorldData.ts. The procedural generation that used to live here has moved to
 // scripts/worldgen/ (seed tooling only). This module is intentionally side-effect-free so
@@ -23,6 +23,7 @@ export type PickupKind =
   | 'scythe'
   | 'wood'
   | 'stone'
+  | 'iron'
   | 'seeds'
   | 'bucket'
   | 'battery';

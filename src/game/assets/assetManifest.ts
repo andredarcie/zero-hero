@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+﻿import type Phaser from 'phaser';
 
 import { ASSET_KEYS, TILESET_FRAME_SIZE } from '@/game/constants';
 
@@ -74,6 +74,14 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     // Sprite Factory: cabo de energia — 7 formas apagadas + 7 filetes gold (ver wireShapes.ts).
     key: ASSET_KEYS.wire,
     path: '/assets/environment/props/wire.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: a pedra de ferro — inteira (0) e rachada (1). Entra como SHEET porque
+    // os dois estados sao frames de um arquivo so; a rocha comum e antiga e usa dois PNGs.
+    key: ASSET_KEYS.ironRock,
+    path: '/assets/environment/props/iron_rock.png',
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },
@@ -213,6 +221,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.woodOnFireIcon, path: '/assets/ui/icons/wood_on_fire_icon.png' },
   { key: ASSET_KEYS.woodItem,       path: '/assets/items/collectibles/wood.png' },
   { key: ASSET_KEYS.rock,           path: '/assets/environment/props/rock.png' },
+  { key: ASSET_KEYS.ironItem,       path: '/assets/items/collectibles/iron.png' },
   { key: ASSET_KEYS.woodenCrate,    path: '/assets/environment/props/wooden_crate.png' },
   { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock_cracked.png' },
   { key: ASSET_KEYS.tallGrassWind0, path: '/assets/environment/props/grass_wind0.png' },

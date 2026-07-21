@@ -66,6 +66,7 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   scythe: { key: ASSET_KEYS.scytheIcon },
   wood: { key: ASSET_KEYS.woodIcon },
   stone: { key: ASSET_KEYS.rock },
+  iron: { key: ASSET_KEYS.ironItem },
   seeds: { key: ASSET_KEYS.seedsItem },
   bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
   battery: { key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
@@ -79,6 +80,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   dryTree: { key: ASSET_KEYS.dryTree, frame: 0 },
   dryShrub: { key: ASSET_KEYS.dryShrub },
   rock: { key: ASSET_KEYS.rock },
+  ironRock: { key: ASSET_KEYS.ironRock, frame: 0 },
   tallGrass: { key: ASSET_KEYS.tallGrassWind0 },
   lava: { key: ASSET_KEYS.lavaFloor },
   water: { key: ASSET_KEYS.water },

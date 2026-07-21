@@ -17,6 +17,10 @@
 //   6. A RECUSA: um par que nao e receita nao produz nada e a caixa RECLAMA (refusalCount sobe).
 //   7. A SAIDA PRESA: com o tile da frente ocupado, o produto FICA visivel dentro da caixa e sai
 //      sozinho quando o lugar vaga — nunca dois itens empilhados num tile.
+//   8. A CADEIA DO FERRO, ponta a ponta: a pedra de minerio bloqueia, recusa a mao vazia, cai em
+//      DUAS picaretadas como qualquer rocha — e deixa um BLOCO DE FERRO, nao uma pedra. Esse
+//      ferro, com um graveto, vira a foice. E a unica razao do ferro existir: ele nao abre, nao
+//      queima e nao atravessa nada sozinho.
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -59,6 +63,9 @@ export default {
           for (let dy = -3; dy <= 3; dy += 1) clear(p.worldX + dx, p.worldY + dy);
         }
       }
+      // A pedra de minerio da etapa 8. Vai num tile ja limpo e fora das quatro linhas de bandeja/
+      // saida, com o vizinho oeste livre pro heroi bater nela de la.
+      store.placeEntity({ list: 'props', type: 'ironRock', worldX: 8, worldY: 8 });
     }, PLACED);
 
     log('EDITOR: coloca uma caixa em cada uma das 4 direcoes pelo EditorStore');
@@ -290,6 +297,74 @@ export default {
     }
     assert('saida livre: o machado preso e entregue', delivered);
 
-    log('OK: gira nas 4 direcoes, e alimentada a passos, fabrica o machado, recusa o par errado.');
+    // ── 8. A CADEIA DO FERRO ────────────────────────────────────────────────
+    // A pedra de minerio e a MESMA rocha (duas picaretadas, mesma colisao, mesmo recuo): o que
+    // muda e a arte e o que ela deixa cair. Testar as duas coisas juntas e o ponto — uma pedra de
+    // ferro que largasse uma pedra comum seria um bug silencioso, e o veio pintado na arte seria
+    // uma promessa que o jogo nao cumpre.
+    log('JOGO: a pedra de FERRO — bloqueia, cai em duas picaretadas e deixa ferro (nao pedra)');
+    const oreAt = () => driver.page.evaluate(() => {
+      const r = window.__scene.rocks.find((k) => k.worldX === 8 && k.worldY === 8);
+      return r ? { ore: r.ore, blocking: r.blocking, texture: r.sprite?.texKey ?? null } : null;
+    });
+
+    const ore0 = await oreAt();
+    assert('a pedra de ferro existe e nasce BLOQUEANDO', ore0?.blocking === true, JSON.stringify(ore0));
+    assert('e ela sabe que e minerio', ore0?.ore === true, JSON.stringify(ore0));
+    assert('desenhada com a arte de minerio, nao com a da rocha comum',
+      ore0?.texture === 'iron-rock', JSON.stringify(ore0));
+
+    // O heroi a oeste dela; bater e um bump, o jogo nao tem botao.
+    await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.playerWorld.worldX = 7; s.playerWorld.worldY = 8;
+      s.movementController.interruptMovement(7, 8);
+      s.heldItem = 'none';
+    });
+    await driver.settle(300);
+
+    // A TRAVA primeiro: de maos vazias a pedra so aguenta. Um puzzle so e puzzle se a estrada
+    // facil estiver fechada, e isso se afirma, nao se supoe.
+    await driver.press('ArrowRight', { count: 1 });
+    await driver.settle(500);
+    const bare = await oreAt();
+    assert('de maos vazias a pedra de ferro NAO cede', bare?.blocking === true, JSON.stringify(bare));
+
+    await driver.page.evaluate(() => { window.__scene.heldItem = 'pickaxe'; });
+    await driver.settle(200);
+    await driver.press('ArrowRight', { count: 1 });
+    await driver.settle(700);
+    const cracked = await oreAt();
+    assert('a primeira picaretada racha e ela AINDA bloqueia (sao duas, como toda rocha)',
+      cracked?.blocking === true, JSON.stringify(cracked));
+    await shot('caixa-pedra-de-ferro-rachada');
+
+    await driver.press('ArrowRight', { count: 1 });
+    await driver.settle(900);
+    const brokenOre = await oreAt();
+    assert('a segunda picaretada abre o tile', brokenOre?.blocking === false, JSON.stringify(brokenOre));
+    assert('e o que ficou no chao e FERRO, nao pedra', (await itemAt(8, 8)) === 'iron',
+      `veio ${await itemAt(8, 8)}`);
+    await shot('caixa-ferro-no-chao');
+
+    // …e o ferro so vale alguma coisa na bancada: graveto + ferro = foice.
+    log('JOGO: graveto + ferro na bancada — tem de sair uma FOICE');
+    await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.itemManager.takeAt(7, 6); // limpa a saida do machado anterior
+      s.itemManager.takeAt(8, 8); // recolhe o ferro do chao
+      s.itemManager.drop('wood', 4, 6);
+      s.itemManager.drop('iron', 5, 6);
+    });
+    let scythed = false;
+    const scytheDeadline = Date.now() + CRAFT_TIMEOUT_MS;
+    while (Date.now() < scytheDeadline) {
+      if ((await itemAt(7, 6)) === 'scythe') { scythed = true; break; }
+      await sleep(150);
+    }
+    assert('graveto + ferro = FOICE', scythed, `saida: ${await itemAt(7, 6)}`);
+    await shot('caixa-fabricou-a-foice');
+
+    log('OK: gira nas 4 direcoes, e alimentada a passos, fabrica machado E foice, recusa o par errado.');
   },
 };
