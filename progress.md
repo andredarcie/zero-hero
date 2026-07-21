@@ -145,3 +145,151 @@ pm run build passaram apos a refatoracao.
   (o par eletrico do torchFuelMs), `chargeMs` no CollectedItem/takeAt/drop e `carriedCharge` no
   braco. Pegar uma bateria meio-drenada e re-encaixar mantem a carga parcial — o exploit de
   energia infinita por ciclagem esta travado pelo assert 2b do cenario `bateria`.
+
+- Solicitacao atual: "Crie um portao eletronico, que so pode ser aberto por eletricidade; se o fio
+  fica sem eletricidade ele fecha novamente. Crie essa prop. De alta qualidade."
+- Decisao de integracao: `electronicGate` sera um consumidor fisico da malha de cabos (sem energia
+  sem fio), direcional, solido ate o vao estar livre e fail-safe — perder corrente inicia o
+  fechamento automaticamente. Arte de autoria pela Sprite Factory; runtime em Three.js 3D real.
+- Implementacao base concluida: spec `electronic-gate` com quatro orientacoes foi construida e
+  instalada com 0 FAIL/0 WARN; editor/schema/manifest reconhecem o prop e avisam se ele estiver
+  sem cabo adjacente. `ElectronicGateObject` monta pilares, travessa, grade, faixas de risco,
+  motor e lampada em Three.js; a grade abre/fecha com percurso fisico e colisao pelo vao.
+- Runtime integrado ao flood-fill: somente cabo vivo adjacente energiza o portao; apagar a rede
+  inicia o fechamento fail-safe no mesmo frame. Debug expoe energia, abertura, movimento e
+  blocking. Cenario dedicado `portao-eletronico` adicionado para autoria e ciclo completo.
+- Correcao visual solicitada pelo usuario: descartado integralmente o modelo Three.js volumetrico.
+  O corpo agora e um UNICO `Billboard3D` 2D, igual aos outros props. A Sprite Factory foi
+  redesenhada para 8 frames 16x16 (4 alturas da grade x bancos apagado/energizado), usando apenas
+  a paleta oficial ink/stone/gold/meadow; build final da arte: 0 FAIL e 0 WARN.
+- Primeiro playtest da versao billboard encontrou a omissao do sheet no registro Three.js
+  (`textures3d: chave desconhecida electronic-gate`) antes de entrar no gameplay. Registro 3D
+  adicionado; o teste dedicado sera reexecutado do zero.
+- Segundo playtest passou todas as assercoes sem erro de pagina. Capturas fechada/aberta foram
+  inspecionadas e confirmam o corpo como sprite pixel-art, cabo apagado/aceso e vao realmente
+  vazio no frame aberto. O cenario foi apertado para capturar explicitamente os frames 5/6 na
+  subida e 1/2 na descida, em vez de aceitar um instante ainda no frame extremo.
+- Validacao final da versao 2D: cenario `portao-eletronico` passou novamente com capturas do
+  editor, fechado, subindo (frame 5), aberto (frame 7), descendo sem energia (frame 2) e fechado
+  de novo; todas foram inspecionadas. Regressao `fios`, cliente Playwright padrao, typecheck,
+  ESLint direcionado e build passaram. Unico aviso: chunk grande preexistente do Vite.
+
+- Solicitacao atual: "Revise a qualidade da roda da agua. Faca que ela uma texturua mais fiel
+  possivel ao pixel art do jogo. E faca ela ser possivel ligar aos fios de energia, ela gera
+  energia neles se ligado."
+- Revisao encontrou que a roda usava geometria Three.js (torus/caixas/cilindros) no gameplay,
+  apesar de os demais props usarem sprites. `WaterWheelObject` foi convertido para um unico
+  Billboard3D animado por 8 poses inteiras, preservando aceleracao, coast, limiar do dinamo,
+  respingos e SFX.
+- Arte `water-wheel` v2 refeita em 16x16 na Sprite Factory: silhueta ink, rampa wood completa,
+  carcaca stone, linha de imersao e lampada verde, em bancos off/on. Build da fabrica: 0 FAIL,
+  0 WARN; PNG instalado em `public/assets/environment/props/water_wheel.png`.
+- Cabo adjacente virou a saida principal explicitamente documentada no editor/debug. A roda nao
+  exige mais variavel global quando esta fisicamente cabeada; variavel permanece opcional para
+  compatibilidade com puzzles existentes. Falta atualizar/reexecutar o playtest dedicado com
+  uma rede de fios real e inspecionar as capturas.
+- Ajuste visual apos feedback do usuario: o plugue generico do cabo ia da borda ao centro do tile
+  e atravessava a roda. `resolveWireShapes` agora continua reconhecendo a roda como conexao, mas
+  nao cria nela o prolongamento central; o cabo termina na borda compartilhada, junto da tomada
+  lateral do dinamo. Outras maquinas preservam seus plugues centrais.
+- Correcao de direcao do usuario: a roda deve permanecer 3D. `WaterWheelObject` foi restaurado ao
+  modelo Three.js original (aro low-poly, raios, pas volumetricas, eixo, cavalete e dinamo). A
+  folha pixel-art v2 permanece apenas como icone/editor; as melhorias de cabo direto e tomada
+  lateral sem fio atravessando o rotor foram mantidas.
+- Validacao final: `roda-agua` passou 25/25 assercoes com a roda 3D, dois fios reais e braco sem
+  variavel; capturas ligada/desligada foram inspecionadas e confirmam que o cabo termina na lateral
+  do dinamo sem cruzar o rotor. Regressao `fios`, cliente Playwright padrao, typecheck, ESLint
+  direcionado e build passaram. O build mantem apenas o aviso conhecido de chunk grande.
+
+- Solicitacao atual: "revise a qualidade visual da roda" mantendo a decisao anterior de que ela
+  deve permanecer 3D.
+- Primeira revisao do modelo 3D implementada em `WaterWheelObject`: aro duplo separado em
+  profundidade, raios dianteiros/traseiros, pas texturizadas com cintas metalicas, quatro pernas de
+  cavalete, eixo com tampas e dinamo em camadas (base/corpo/tampa/bobinas/tomada). A lampada ganhou
+  emissivo discreto sem adicionar PointLight. Typecheck e ESLint direcionado passaram; falta o
+  playtest visual e eventuais ajustes de silhueta.
+- Segundo passe visual concluido apos inspecao das capturas: eixo, cubo e tampa do dinamo foram
+  escurecidos para remover a leitura de "cruz branca"; as duas faixas de cobre foram trazidas para
+  a face visivel do gerador. O cabo continua terminando na tomada lateral, sem atravessar o rotor.
+- Validacao final: `roda-agua` passou todo o ciclo de aceleracao, geracao, consumo, coast e
+  desligamento; as capturas ligada/desligada foram inspecionadas. Regressao `fios`, cliente
+  Playwright padrao, typecheck, ESLint direcionado e build passaram. O build mantem somente o aviso
+  conhecido de chunk grande do Vite.
+
+- Solicitacao atual: no `/lab`, criar um gerenciador simples para listar, criar, nomear, abrir,
+  modificar e apagar levels; adicionar um prop de portal roxo que conclui o level e leva ao
+  proximo.
+- Decisao de arquitetura: a autoria passa por uma API dev dedicada sobre `public/levels`, que
+  mantem `index.json` sincronizado com os arquivos reais. O painel de levels fica dentro do DOM do
+  editor e bloqueia trocas/mutacoes enquanto houver alteracoes nao salvas. O portal consulta a
+  ordem desse manifesto para avancar, em vez de assumir que os numeros sao sempre consecutivos.
+- Correcao visual explicita do usuario: o portal nao deve ser geometria 3D. O primeiro arco
+  volumetrico foi descartado; o prop inteiro agora e uma unica imagem 16x16 pixel-art roxa em
+  `Billboard3D`, com pulso de luz em dois degraus e tile caminhavel.
+- Implementacao concluida: o botao `Levels...` abre um painel que lista todos os levels, destaca
+  o atual e permite criar, abrir, renomear e apagar (com protecao do level base). Criar ou salvar
+  atualiza `public/levels/index.json`; operacoes destrutivas ficam bloqueadas enquanto houver
+  alteracoes locais nao salvas.
+- O prop `levelPortal` foi integrado ao schema, paleta do editor e runtime. Ao entrar no tile, o
+  jogador recebe o feedback roxo e o jogo carrega o proximo arquivo na ordem real do manifesto;
+  lacunas numericas sao aceitas e o ultimo level retorna para a selecao/editor.
+- Validacao final: o cenario dedicado `level-manager-portal` criou dois levels, listou, renomeou,
+  abriu, salvou um portal pelo editor, atravessou-o para chegar ao segundo e apagou os temporarios.
+  A captura confirmou que o portal e uma unica imagem 2D pixel-art em billboard. Build, checks de
+  sintaxe e as regressoes `fios` e `portao-eletronico` passaram sem erros de pagina; permanece
+  apenas o aviso conhecido de chunk grande do Vite.
+- Requisito adicional: todo level precisa de um ponto de partida colocado. A antiga ferramenta
+  `Spawn` virou `Ponto Inicial`, com marcador ciano rotulado no mapa, coordenadas no gerenciador e
+  ajuda contextual. Levels novos ja recebem o ponto (6,6); arquivos antigos sem ponto recebem um
+  no centro e ficam marcados como alterados para serem salvos.
+- O Ponto Inicial e requisito de save/playtest: precisa existir, estar dentro do level e ocupar um
+  tile sem colisao. O cenario final `run-2026-07-21T00-07-03` validou criacao automatica, ferramenta,
+  coordenadas na lista, reposicionamento, rejeicao sobre colisao, portal e progressao; todas as
+  assercoes passaram sem erros de pagina. Capturas do painel e do marcador foram inspecionadas.
+
+- Solicitacao atual: ao entrar em um level, mostrar o nome autoral centralizado com a fonte do jogo
+  e remove-lo com uma animacao bonita e elegante.
+- Implementacao inicial: `LevelIntroOverlay` usa `meta.name`, numero do level, moldura pixelada em
+  dourado e uma faixa escura sobre o mundo 3D. O gameplay e os botoes do level ficam bloqueados
+  durante a apresentacao e voltam quando o fade termina. Cenario `level-intro` cobre o ciclo.
+- Primeiro playtest confirmou visual e bloqueio de input; a assercao final tentou andar sobre o
+  NPC a direita do spawn e foi corrigida para usar o tile livre acima. A dica de restart dos
+  botoes tambem volta a contar seus 6 segundos somente depois que a apresentacao termina.
+- O cliente Playwright padrao capturou o letreiro corretamente e revelou o 404 preexistente de
+  `/favicon.ico`; `index.html` agora declara o icone do heroi ja existente como favicon.
+- Validacao visual final: o harness dedicado passou todas as assercoes e as capturas foram
+  inspecionadas. O cliente padrao percorreu entrada e estado final quadro a quadro, gerou quatro
+  estados (aberto -> fechado) sem `errors-*.json`; o processo apenas excedeu o timeout ao fechar o
+  Chromium depois de todos os artefatos ja terem sido gravados.
+- Validacao final de codigo: `npm run build` e ESLint direcionado aos arquivos alterados passaram.
+  O `npm run lint` completo continua bloqueado por erros preexistentes de configuracao/globals em
+  `scripts/worldgen` e `spritefactory`; nenhum erro envolve a apresentacao de level.
+
+- Solicitacao atual: "Faca o portal ser um portal estilo medieval, em volta feito de pedra e no
+  meio roxo so que com animacoes, use particulas. Faca um pixel art de alta qualidade, baseado nos
+  sprites do jogo."
+- Revisao inicial: o portal atual e um canvas 16x16 de frame unico, com moldura cinza uniforme e
+  apenas pulso de alpha. A nova direcao mantem o prop como Billboard3D 2D, cria arco medieval com
+  a rampa stone/ink oficial, vortice roxo animado em quatro frames e particulas pixeladas orbitais.
+- Arte `level-portal` criada na Sprite Factory: quatro frames 16x16, oito cores oficiais, arco de
+  pedra estavel, energia roxa em fluxo e motes embutidos. O build da fabrica passou com 0 FAIL e
+  0 WARN; PNG instalado em `public/assets/environment/props/level_portal.png`.
+- Integracao runtime concluida: sheet carregado por Phaser/Three, animacao de 4 frames, glifo de
+  soleira pulsante e oito particulas pixeladas ascendentes/orbitais. Debug agora expoe frame e
+  numero de particulas visiveis para validacao deterministica.
+- Primeiro playtest encontrou uma defasagem no proprio cenario: ele tentava andar durante a nova
+  apresentacao autoral do level, quando o input fica bloqueado por design. O cenario agora espera
+  `levelIntroOpen=false` antes de capturar e atravessar; nenhuma excecao de pagina foi registrada.
+- A segunda execucao validou visual, particulas e progressao, mas revelou outra premissa antiga do
+  teste: havia agora um Level 2 autoral preexistente, entao apagar os levels QA retorna corretamente
+  a ele, nao obrigatoriamente ao Level 1. A assercao passou a derivar o ultimo level inicial.
+- O cenario dedicado agora tambem amostra dois instantes do portal e exige troca real de frame com
+  particulas visiveis nos dois, alem de salvar as duas capturas para revisao visual da animacao.
+- Validacao final: `level-manager-portal` passou todas as assercoes no run
+  `run-2026-07-21T01-49-34`, sem erros de pagina. O estado mudou do frame 1 para o 3 e manteve oito
+  particulas visiveis; as duas capturas foram inspecionadas e confirmam pedra estavel, fluxo roxo,
+  glifo no chao e motes em posicoes distintas. A travessia continuou carregando o proximo level.
+- A fabrica foi reexecutada no fim e permaneceu com 0 FAIL/0 WARN. `npm run typecheck`, ESLint
+  direcionado, `npm run build` e o cliente Playwright padrao passaram; este ultimo gerou estado e
+  capturas sem `errors-*.json`. O build mantem apenas o aviso preexistente de chunk grande.
+- TODOs: nenhum para esta solicitacao.

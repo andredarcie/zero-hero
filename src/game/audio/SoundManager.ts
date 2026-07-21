@@ -646,6 +646,30 @@ class SoundManager {
     this.osc('square', 220, 260, 0.035, 0.08, 0.055);
   }
 
+  /** Motor do portao assumindo carga (subindo) ou perdendo tensao (descendo por gravidade). */
+  public playElectronicGateMotor(opening: boolean): void {
+    if (opening) {
+      this.osc('triangle', 74, 118, 0.065, 0.48);
+      this.osc('square', 148, 236, 0.022, 0.44, 0.025);
+      this.noise('bandpass', 1300, 2.8, 0.045, 0.12, 0.04);
+    } else {
+      this.osc('triangle', 112, 58, 0.06, 0.38);
+      this.noise('lowpass', 430, 1.4, 0.075, 0.28, 0.03);
+    }
+  }
+
+  /** Fim de curso: leve no alto, pesado e travado quando a grade volta ao chao. */
+  public playElectronicGateStop(opened: boolean): void {
+    this.noise('bandpass', opened ? 1800 : 900, 3, opened ? 0.055 : 0.12, 0.055);
+    this.osc('triangle', opened ? 210 : 92, opened ? 160 : 48, opened ? 0.045 : 0.1, 0.09);
+  }
+
+  /** Grade fechada recebendo um bump: vibracao metalica curta, sem parecer dano/ataque. */
+  public playElectronicGateDenied(): void {
+    this.noise('bandpass', 1200, 4.2, 0.075, 0.045);
+    this.osc('triangle', 180, 145, 0.045, 0.08, 0.01);
+  }
+
   public playHammer(): void {
     // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
     if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;
@@ -754,6 +778,64 @@ class SoundManager {
     if (this.playSample('shopClose')) return;
     this.osc('sine', 131, 131, 0.18, 0.09);
     this.osc('sine', 196, 196, 0.16, 0.16, 0.07);
+  }
+
+  // ── o portao de bater ────────────────────────────────────────────────────
+  // Os dois sons sao o MESMO gesto com finais diferentes, e e isso que ensina a regra sem uma
+  // linha de texto: a dobradica range igual nos dois, so que um termina em vao aberto e o
+  // outro numa batida seca contra o que esta atras.
+
+  /** A folha girando livre: dobradica rangendo e o batente soltando. */
+  public playGateSwing(): void {
+    this.osc('triangle', 210, 95, 0.07, 0.3);
+    this.noise('bandpass', 1100, 2.4, 0.07, 0.16);
+    this.noise('lowpass', 500, 1.0, 0.09, 0.1, 0.2); // a folha assentando no fim do curso
+  }
+
+  /** A folha batendo no que esta do outro lado: o mesmo range, cortado por uma pancada surda. */
+  public playGateStrain(): void {
+    this.osc('triangle', 210, 150, 0.06, 0.1);
+    this.noise('lowpass', 240, 1.2, 0.2, 0.11, 0.08); // o baque contra o obstaculo
+    this.osc('sine', 120, 70, 0.09, 0.14, 0.08);
+  }
+
+  // ── a travessia do portal ────────────────────────────────────────────────
+  // Os tres sons sao um arco so, e por isso valem juntos: a succao SOBE (o portal puxando), a
+  // viagem e um bordao GRAVE e parado (nada acontece, so distancia passando) e a aterrissagem
+  // DESCE e para seco. Nenhum deles usa sample: tocam uma vez por level, e um sample so para
+  // isso seria peso de download por um som que quase ninguem ouve duas vezes seguidas.
+
+  /** O portal inspirando o heroi: um glissando que sobe e afina ate sumir na propria altura. */
+  public playPortalSuck(): void {
+    this.osc('sine', 110, 880, 0.16, 0.85);
+    this.osc('triangle', 220, 1760, 0.07, 0.8, 0.04);
+    // O ar indo junto — passa-banda subindo mantem a impressao de succao, nao de assobio.
+    this.noise('bandpass', 900, 2.2, 0.1, 0.7, 0.06);
+  }
+
+  /** O estalo do heroi atravessando: o unico impacto do conjunto, e o mais curto. */
+  public playPortalSwallow(): void {
+    this.noise('lowpass', 420, 0.9, 0.22, 0.16);
+    this.osc('sine', 320, 60, 0.14, 0.28);
+  }
+
+  /**
+   * O tunel. Longo de proposito (~2.4s): e uma CAMA, nao um efeito — a viagem inteira acontece
+   * em cima dele, e um som curto aqui deixaria a metade da travessia em silencio.
+   */
+  public playPortalTravel(): void {
+    this.osc('sine', 58, 44, 0.12, 2.4);
+    this.osc('triangle', 87, 66, 0.05, 2.4);
+    this.noise('lowpass', 380, 0.7, 0.09, 2.2, 0.08);
+    // Um brilho subindo no fim: a luz do outro lado chegando antes do heroi.
+    this.osc('sine', 330, 990, 0.05, 0.5, 1.85);
+  }
+
+  /** As botas no chao do mundo novo: grave, seco, sem cauda. */
+  public playPortalLand(): void {
+    this.noise('lowpass', 260, 1.1, 0.26, 0.14);
+    this.osc('sine', 140, 55, 0.16, 0.2);
+    this.noise('bandpass', 1600, 2.5, 0.06, 0.05, 0.02); // a poeira
   }
 }
 

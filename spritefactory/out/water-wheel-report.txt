@@ -1,33 +1,33 @@
 water-wheel: 16 frame(s) — 0 fail, 0 warn
-  [info] bbox: frame 0: content 14x13 at (1,1), coverage 45%
-  [info] bbox: frame 1: content 14x13 at (1,1), coverage 44%
-  [info] bbox: frame 2: content 14x13 at (1,1), coverage 45%
-  [info] bbox: frame 3: content 14x13 at (1,1), coverage 43%
-  [info] bbox: frame 4: content 14x13 at (1,1), coverage 45%
-  [info] bbox: frame 5: content 14x13 at (1,1), coverage 43%
-  [info] bbox: frame 6: content 14x13 at (1,1), coverage 44%
-  [info] bbox: frame 7: content 14x13 at (1,1), coverage 44%
-  [info] bbox: frame 8: content 14x13 at (1,1), coverage 45%
-  [info] bbox: frame 9: content 14x13 at (1,1), coverage 44%
-  [info] bbox: frame 10: content 14x13 at (1,1), coverage 45%
-  [info] bbox: frame 11: content 14x13 at (1,1), coverage 43%
-  [info] bbox: frame 12: content 14x13 at (1,1), coverage 45%
-  [info] bbox: frame 13: content 14x13 at (1,1), coverage 43%
-  [info] bbox: frame 14: content 14x13 at (1,1), coverage 44%
-  [info] bbox: frame 15: content 14x13 at (1,1), coverage 44%
-  frame 0: #b7916a×33 #63452c×25 #1d2b53×17 #989aa7×14 #5d6165×10 #7c7e8b×9 #815938×7
-  frame 1: #b7916a×32 #63452c×24 #1d2b53×17 #989aa7×14 #5d6165×10 #7c7e8b×9 #815938×7
-  frame 2: #b7916a×37 #63452c×22 #1d2b53×17 #989aa7×14 #5d6165×10 #7c7e8b×9 #815938×5
-  frame 3: #b7916a×35 #63452c×22 #1d2b53×17 #989aa7×14 #5d6165×10 #7c7e8b×9 #815938×4
-  frame 4: #b7916a×38 #63452c×22 #1d2b53×17 #989aa7×14 #5d6165×10 #7c7e8b×9 #815938×4
-  frame 5: #b7916a×33 #63452c×23 #1d2b53×17 #989aa7×14 #5d6165×10 #7c7e8b×9 #815938×4
-  frame 6: #b7916a×34 #63452c×23 #1d2b53×17 #989aa7×14 #5d6165×10 #7c7e8b×9 #815938×5
-  frame 7: #b7916a×31 #63452c×25 #1d2b53×17 #989aa7×14 #5d6165×10 #7c7e8b×9 #815938×7
-  frame 8: #b7916a×33 #63452c×25 #1d2b53×16 #989aa7×14 #7c7e8b×9 #5d6165×9 #815938×7 #7dde99×2
-  frame 9: #b7916a×32 #63452c×24 #1d2b53×16 #989aa7×14 #7c7e8b×9 #5d6165×9 #815938×7 #7dde99×2
-  frame 10: #b7916a×37 #63452c×22 #1d2b53×16 #989aa7×14 #7c7e8b×9 #5d6165×9 #815938×5 #7dde99×2
-  frame 11: #b7916a×35 #63452c×22 #1d2b53×16 #989aa7×14 #7c7e8b×9 #5d6165×9 #815938×4 #7dde99×2
-  frame 12: #b7916a×38 #63452c×22 #1d2b53×16 #989aa7×14 #7c7e8b×9 #5d6165×9 #815938×4 #7dde99×2
-  frame 13: #b7916a×33 #63452c×23 #1d2b53×16 #989aa7×14 #7c7e8b×9 #5d6165×9 #815938×4 #7dde99×2
-  frame 14: #b7916a×34 #63452c×23 #1d2b53×16 #989aa7×14 #7c7e8b×9 #5d6165×9 #815938×5 #7dde99×2
-  frame 15: #b7916a×31 #63452c×25 #1d2b53×16 #989aa7×14 #7c7e8b×9 #5d6165×9 #815938×7 #7dde99×2
+  [info] bbox: frame 0: content 16x15 at (0,1), coverage 55%
+  [info] bbox: frame 1: content 16x15 at (0,1), coverage 55%
+  [info] bbox: frame 2: content 16x15 at (0,1), coverage 54%
+  [info] bbox: frame 3: content 16x15 at (0,1), coverage 56%
+  [info] bbox: frame 4: content 16x15 at (0,1), coverage 56%
+  [info] bbox: frame 5: content 16x15 at (0,1), coverage 55%
+  [info] bbox: frame 6: content 16x15 at (0,1), coverage 54%
+  [info] bbox: frame 7: content 16x15 at (0,1), coverage 56%
+  [info] bbox: frame 8: content 16x15 at (0,1), coverage 55%
+  [info] bbox: frame 9: content 16x15 at (0,1), coverage 55%
+  [info] bbox: frame 10: content 16x15 at (0,1), coverage 54%
+  [info] bbox: frame 11: content 16x15 at (0,1), coverage 56%
+  [info] bbox: frame 12: content 16x15 at (0,1), coverage 56%
+  [info] bbox: frame 13: content 16x15 at (0,1), coverage 55%
+  [info] bbox: frame 14: content 16x15 at (0,1), coverage 54%
+  [info] bbox: frame 15: content 16x15 at (0,1), coverage 56%
+  frame 0: #1d2b53×66 #b7916a×25 #63452c×22 #557998×14 #989aa7×8 #7c7e8b×6
+  frame 1: #1d2b53×66 #b7916a×24 #63452c×24 #557998×14 #989aa7×8 #7c7e8b×6
+  frame 2: #1d2b53×64 #b7916a×24 #63452c×22 #557998×14 #989aa7×8 #7c7e8b×6
+  frame 3: #1d2b53×66 #b7916a×26 #63452c×20 #557998×14 #989aa7×8 #7c7e8b×6 #815938×3
+  frame 4: #1d2b53×66 #b7916a×26 #63452c×23 #557998×14 #989aa7×8 #7c7e8b×6
+  frame 5: #1d2b53×66 #b7916a×24 #63452c×20 #557998×14 #989aa7×8 #7c7e8b×6 #815938×3
+  frame 6: #1d2b53×63 #b7916a×24 #63452c×23 #557998×14 #989aa7×8 #7c7e8b×6
+  frame 7: #1d2b53×64 #b7916a×26 #63452c×25 #557998×14 #989aa7×8 #7c7e8b×6
+  frame 8: #1d2b53×64 #b7916a×25 #63452c×22 #557998×14 #989aa7×8 #7c7e8b×6 #7dde99×2
+  frame 9: #1d2b53×64 #b7916a×24 #63452c×24 #557998×14 #989aa7×8 #7c7e8b×6 #7dde99×2
+  frame 10: #1d2b53×62 #b7916a×24 #63452c×22 #557998×14 #989aa7×8 #7c7e8b×6 #7dde99×2
+  frame 11: #1d2b53×64 #b7916a×26 #63452c×20 #557998×14 #989aa7×8 #7c7e8b×6 #815938×3 #7dde99×2
+  frame 12: #1d2b53×64 #b7916a×26 #63452c×23 #557998×14 #989aa7×8 #7c7e8b×6 #7dde99×2
+  frame 13: #1d2b53×64 #b7916a×24 #63452c×20 #557998×14 #989aa7×8 #7c7e8b×6 #815938×3 #7dde99×2
+  frame 14: #1d2b53×61 #b7916a×24 #63452c×23 #557998×14 #989aa7×8 #7c7e8b×6 #7dde99×2
+  frame 15: #1d2b53×62 #b7916a×26 #63452c×25 #557998×14 #989aa7×8 #7c7e8b×6 #7dde99×2

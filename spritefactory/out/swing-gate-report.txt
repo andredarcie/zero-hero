@@ -1,0 +1,5 @@
+swing-gate: 1 frame(s) — 0 fail, 2 warn
+  [info] bbox: content 16x16 at (0,0), coverage 34%
+  [warn] edge-touch: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
+  [warn] contrast: every colour sits within 23 luma of the day grass — the sprite will vanish there
+  frame 0: #a9abbe×80 #989aa7×8

@@ -1,0 +1,3 @@
+rock: 1 frame(s) — 0 fail, 0 warn
+  [info] bbox: content 14x11 at (1,3), coverage 46%
+  frame 0: #7c7e8b×36 #989aa7×25 #a9abbe×20 #5d6165×19 #3a3f3f×12 #b5b5b5×5

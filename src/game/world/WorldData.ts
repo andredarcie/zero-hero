@@ -111,6 +111,9 @@ export const getChunkContent = (cx: number, cy: number): ScreenContent => {
 
 export const getPlayerStart = (): { worldX: number; worldY: number } => requireWorld().meta.playerStart;
 
+// The authored display name used by level-select and the in-game level entrance card.
+export const getWorldName = (): string => requireWorld().meta.name;
+
 // A puzzle world (a /levels level): the runtime suppresses the undead siege for it, like the lab.
 export const isPuzzleWorld = (): boolean => requireWorld().meta.puzzle === true;
 
@@ -119,6 +122,9 @@ export const getCampfires = (): WorldProp[] => requireWorld().props.filter((prop
 export const getDryBushes = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryBush');
 
 export const getLockedDoors = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'lockedDoor');
+
+/** O portao de bater: sem chave, mas so abre com o tile de tras livre (SwingGateObject). */
+export const getSwingGates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'swingGate');
 
 export const getDryTrees = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryTree');
 
@@ -158,6 +164,8 @@ export const getPressurePlates = (): WorldProp[] => requireWorld().props.filter(
 export const getWaterWheels = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'waterWheel');
 export const getBoilers = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'boiler');
 export const getWires = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'wire');
+export const getElectronicGates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'electronicGate');
+export const getLevelPortals = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'levelPortal');
 
 export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });
 

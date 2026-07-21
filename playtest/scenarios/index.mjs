@@ -21,13 +21,19 @@ import espada from './espada.mjs';
 import menuFlow from './menu-flow.mjs';
 import braco from './braco.mjs';
 import machado from './machado.mjs';
+import pedra from './pedra.mjs';
+import portalTravessia from './portal-travessia.mjs';
+import portaoDeBater from './portao-de-bater.mjs';
 import sombras from './sombras.mjs';
 import caixaPlaca from './caixa-placa.mjs';
 import rodaAgua from './roda-agua.mjs';
 import bateria from './bateria.mjs';
 import caldeira from './caldeira.mjs';
 import fios from './fios.mjs';
+import portaoEletronico from './portao-eletronico.mjs';
 import itens from './itens.mjs';
+import levelManagerPortal from './level-manager-portal.mjs';
+import levelIntro from './level-intro.mjs';
 
 export const scenarios = {
   smoke,
@@ -53,13 +59,19 @@ export const scenarios = {
   'menu-flow': menuFlow,
   braco,
   machado,
+  pedra,
+  'portal-travessia': portalTravessia,
+  'portao-de-bater': portaoDeBater,
   sombras,
   'caixa-placa': caixaPlaca,
   'roda-agua': rodaAgua,
   bateria,
   caldeira,
   fios,
+  'portao-eletronico': portaoEletronico,
   itens,
+  'level-manager-portal': levelManagerPortal,
+  'level-intro': levelIntro,
 };
 
 // What `npm run playtest` runs when no scenario is named.

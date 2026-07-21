@@ -1,0 +1,17 @@
+electronic-gate: 8 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 14x14 at (1,1), coverage 57%
+  [info] bbox: frame 1: content 14x14 at (1,1), coverage 50%
+  [info] bbox: frame 2: content 14x14 at (1,1), coverage 43%
+  [info] bbox: frame 3: content 14x14 at (1,1), coverage 36%
+  [info] bbox: frame 4: content 14x14 at (1,1), coverage 57%
+  [info] bbox: frame 5: content 14x14 at (1,1), coverage 50%
+  [info] bbox: frame 6: content 14x14 at (1,1), coverage 43%
+  [info] bbox: frame 7: content 14x14 at (1,1), coverage 36%
+  frame 0: #1d2b53×62 #7c7e8b×37 #243669×22 #a9abbe×11 #324476×10 #141d38×2 #f1cc36×2
+  frame 1: #1d2b53×62 #7c7e8b×31 #243669×12 #324476×10 #a9abbe×9 #141d38×2 #f1cc36×2
+  frame 2: #1d2b53×62 #7c7e8b×25 #324476×10 #a9abbe×7 #141d38×2 #f1cc36×2 #243669×2
+  frame 3: #1d2b53×52 #7c7e8b×19 #324476×10 #a9abbe×5 #141d38×2 #f1cc36×2 #243669×2
+  frame 4: #1d2b53×62 #7c7e8b×37 #243669×22 #a9abbe×11 #324476×10 #f1cc36×2 #7dde99×1 #141d38×1
+  frame 5: #1d2b53×62 #7c7e8b×31 #243669×12 #324476×10 #a9abbe×9 #f1cc36×2 #7dde99×1 #141d38×1
+  frame 6: #1d2b53×62 #7c7e8b×25 #324476×10 #a9abbe×7 #f1cc36×2 #243669×2 #7dde99×1 #141d38×1
+  frame 7: #1d2b53×52 #7c7e8b×19 #324476×10 #a9abbe×5 #f1cc36×2 #243669×2 #7dde99×1 #141d38×1

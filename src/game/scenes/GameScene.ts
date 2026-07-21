@@ -28,6 +28,7 @@ import {
   BATTERY_FRAMES,
   CHARCOAL_DROP_CHANCE,
   TREE_TILE_STICK_CHANCE,
+  TILESET_FRAME_SIZE,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
@@ -55,6 +56,7 @@ import { DryShrubObject } from '@/game/objects/DryShrubObject';
 import { LavaObject } from '@/game/objects/LavaObject';
 import { WaterObject } from '@/game/objects/WaterObject';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
+import { SwingGateObject } from '@/game/objects/SwingGateObject';
 import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
 import { PlantSpotObject } from '@/game/objects/PlantSpotObject';
@@ -66,6 +68,8 @@ import { PressurePlateObject } from '@/game/objects/PressurePlateObject';
 import { WaterWheelObject, type WaterFlow } from '@/game/objects/WaterWheelObject';
 import { BoilerObject } from '@/game/objects/BoilerObject';
 import { WireObject } from '@/game/objects/WireObject';
+import { ElectronicGateObject } from '@/game/objects/ElectronicGateObject';
+import { LevelPortalObject } from '@/game/objects/LevelPortalObject';
 import type { WorldProp } from '@/game/objects/WorldProp';
 import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -77,12 +81,29 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { wireShapeFromMask } from '@/game/world/wireShapes';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
+import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
+import {
+  PORTAL_TUNNEL_MIN_CRUISE_MS,
+  destroyPortalTunnel,
+  finishPortalTunnel,
+  portalTunnelActive,
+  PORTAL_TUNNEL_EXIT_MS,
+  portalTunnelElapsedMs,
+  startPortalTunnel,
+} from '@/game/render3d/PortalTunnel';
+import {
+  PORTAL_FALL_HEIGHT_TILES,
+  clearPendingPortalArrival,
+  consumePendingPortalArrival,
+  setPendingPortalArrival,
+} from '@/game/runtime/portalTransition';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
-import { getActiveLevel } from '@/game/runtime/activeLevel';
+import { getActiveLevel, levelFilePath, setActiveLevel } from '@/game/runtime/activeLevel';
+import { LevelIntroOverlay } from '@/game/runtime/LevelIntroOverlay';
 import { LevelButtons, PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
-import { createHeroView, heroFootY, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
+import { createHeroView, heroFootY, resetHeroView, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { GlobalVariables } from '@/game/runtime/GlobalVariables';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -108,17 +129,41 @@ import {
   getBoilers,
   getWaterWheels,
   getWires,
+  getElectronicGates,
+  getLevelPortals,
   getGlobalVariables,
   getMoonflowers,
   getLockedDoors,
+  getSwingGates,
   getRocks,
   getTallGrass,
   getDialog,
   getDialogKinds,
   getDialogVoice,
   getPlayerStart,
+  getWorldName,
   isPuzzleWorld,
+  setWorldData,
 } from '@/game/world/WorldData';
+
+type LevelManifestEntry = { file: string; level: number };
+
+// ── A TRAVESSIA DO PORTAL, batida por batida ────────────────────────────────
+// Quatro tempos, e a ordem deles e o efeito: o heroi some ANTES da viagem comecar, e a viagem
+// acaba ANTES de ele reaparecer. Se dois se sobrepusessem, nenhum dos dois seria visto.
+//
+//   1. succao   — o portal come o heroi e a luz do mundo   (GameScene, level velho)
+//   2. vazio    — o portal girando sozinho no escuro       (GameScene, level velho)
+//   3. tunel    — a viagem                                  (PortalTunnel, sobrevive ao restart)
+//   4. queda    — o heroi cai do ceu no mundo novo          (GameScene, level novo)
+/** Quanto tempo o portal leva para engolir o heroi. */
+const PORTAL_SUCK_MS = 900;
+/** O portal sozinho depois de engolir — a pausa que deixa o gesto ser visto. */
+const PORTAL_EMPTY_MS = 620;
+/** Tempo entre abrir o tunel e destruir a cena por baixo dele (o overlay tem de cobrir antes). */
+const PORTAL_TUNNEL_HANDOFF_MS = 260;
+/** A queda do outro lado: alto o bastante para ter peso, curto o bastante para nao cansar. */
+const PORTAL_FALL_MS = 620;
 
 // The per-item 2D art (Phaser texture atlas keys): the swing arc, the overhead chop and the
 // death elegy's back item all draw from here. The 3D twin is BACK_ITEM_VISUAL_3D below.
@@ -358,6 +403,7 @@ export class GameScene extends Phaser.Scene {
   private campfires: CampfireObject[] = [];
   private dryBushes: DryBushObject[] = [];
   private lockedDoors: LockedDoorObject[] = [];
+  private swingGates: SwingGateObject[] = [];
   private dryTrees: DryTreeObject[] = [];
   private dryShrubs: DryShrubObject[] = [];
   private rocks: RockObject[] = [];
@@ -373,6 +419,19 @@ export class GameScene extends Phaser.Scene {
   private pressurePlates: PressurePlateObject[] = [];
   private waterWheels: WaterWheelObject[] = [];
   private boilers: BoilerObject[] = [];
+  private electronicGates: ElectronicGateObject[] = [];
+  private levelPortals: LevelPortalObject[] = [];
+  private levelIntroOpen = false;
+  private levelIntroOverlay?: LevelIntroOverlay;
+  private levelTransitioning = false;
+  /**
+   * A luz do mundo como ela era antes da succao comer (ambient / moon / exposure).
+   *
+   * So existe para o caminho de ERRO: quando a transicao falha, a cena continua viva e nao pode
+   * ficar no escuro que o portal abriu. No caminho feliz nada e restaurado — o World3D inteiro
+   * e descartado no restart e o do level novo nasce com os padroes.
+   */
+  private litParams?: { ambient: number; moon: number; exposure: number };
   // Os cabos de energia + o indice espacial deles e o conjunto dos que estao VIVOS neste frame
   // (recalculado por flood-fill em updateWireEnergy — a corrente nao tem memoria, so a fonte).
   private wires: WireObject[] = [];
@@ -514,7 +573,13 @@ export class GameScene extends Phaser.Scene {
     this.playerWorld = { worldX: startWorldX, worldY: startWorldY };
     this.streamCenter = { cx: NaN, cy: NaN };
     this.shopOpen = false;
+    this.levelIntroOpen = false;
+    this.levelTransitioning = false;
     this.upgrades = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
+    // O heroi e um campo `readonly` e o Phaser REUSA esta instancia de cena no restart: sem
+    // isto, o que a cena anterior escreveu nele (o alpha da morte, o encolhimento da succao do
+    // portal) chega inteiro no level seguinte e o heroi nasce invisivel.
+    resetHeroView(this.hero);
 
     // Phaser's canvas is transparent: the 3D world shows through from below.
     // Build the renderer before ANY world object — they attach their billboards to it.
@@ -525,6 +590,7 @@ export class GameScene extends Phaser.Scene {
     registerBucketTextures(this);
     registerCharcoalTexture(this);
     registerMoonflowerTextures(this);
+    registerLevelPortalTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -647,6 +713,7 @@ export class GameScene extends Phaser.Scene {
       return bush;
     });
     this.lockedDoors = getLockedDoors().map((d) => new LockedDoorObject(this, d.worldX, d.worldY, d.floodgate === true));
+    this.swingGates = getSwingGates().map((g) => new SwingGateObject(this, g.worldX, g.worldY));
     this.dryTrees = getDryTrees().map((t) => new DryTreeObject(this, t.worldX, t.worldY));
     this.dryShrubs = getDryShrubs().map((s) => new DryShrubObject(this, s.worldX, s.worldY));
     this.rocks = getRocks().map((r) => new RockObject(this, r.worldX, r.worldY));
@@ -670,6 +737,12 @@ export class GameScene extends Phaser.Scene {
     );
     this.boilers = getBoilers().map(
       (b) => new BoilerObject(this, b.worldX, b.worldY, b.variable),
+    );
+    this.electronicGates = getElectronicGates().map(
+      (gate) => new ElectronicGateObject(this, gate.worldX, gate.worldY),
+    );
+    this.levelPortals = getLevelPortals().map(
+      (portal) => new LevelPortalObject(portal.worldX, portal.worldY),
     );
     this.wires = getWires().map((w) => new WireObject(this, w.worldX, w.worldY));
     this.wireIndex = new Map(this.wires.map((w) => [`${w.worldX},${w.worldY}`, w]));
@@ -697,6 +770,7 @@ export class GameScene extends Phaser.Scene {
       { list: this.campfires },
       { list: this.dryBushes },
       { list: this.lockedDoors },
+      { list: this.swingGates },
       { list: this.dryTrees },
       { list: this.dryShrubs },
       { list: this.rocks },
@@ -709,6 +783,8 @@ export class GameScene extends Phaser.Scene {
       { list: this.pressurePlates },
       { list: this.waterWheels },
       { list: this.boilers },
+      { list: this.electronicGates },
+      { list: this.levelPortals },
       { list: this.wires },
       // Lava e água são os dois hazards que as botas de lava deixam o herói vadear — inimigos
       // sempre consultam com hazardsPassable=false, então um rio segue sendo parede para eles.
@@ -756,6 +832,132 @@ export class GameScene extends Phaser.Scene {
         this.pauseTouchButton = new PauseTouchButton(() => this.openPauseMenu());
       }
     }
+
+    const activeLevel = getActiveLevel();
+    // Chegou pelo portal? Entao o level nao comeca: ele ATERRISSA. O cartao de titulo espera o
+    // heroi tocar o chao (ver playPortalArrival), porque anunciar o nome de um lugar onde o
+    // heroi ainda nao pisou e anunciar cedo demais.
+    if (consumePendingPortalArrival()) {
+      void this.playPortalArrival(activeLevel);
+    } else {
+      // Nenhuma chegada pendente e um tunel aberto significa que a viagem foi abandonada no meio
+      // (morte, voltar ao menu, um restart por outro motivo): o overlay nao pode ficar de pe.
+      if (portalTunnelActive()) destroyPortalTunnel();
+      if (activeLevel !== null) this.showLevelIntro(activeLevel);
+    }
+  }
+
+  /**
+   * A CHEGADA — o heroi cai do ceu no mundo novo.
+   *
+   * A cena ja esta inteira montada quando isto roda: o mundo, as luzes e o heroi existem, so
+   * que ele esta a `PORTAL_FALL_HEIGHT_TILES` do chao e o tunel ainda cobre a tela. A ordem e
+   * o ponto — primeiro o mundo fica pronto por tras do overlay, DEPOIS o overlay sai. Nunca
+   * ha um frame de mundo meio-construido a vista.
+   *
+   * A queda usa `Quad.easeIn` porque queda tem gravidade: acelera ate o chao. Um easeOut aqui
+   * (o reflexo de sempre) faria o heroi FLUTUAR para baixo e pousar como uma pena.
+   */
+  private async playPortalArrival(activeLevel: number | null): Promise<void> {
+    const h = this.hero;
+    this.cutsceneActive = true;
+    this.levelButtons?.setVisible(false);
+    // Escala, alpha e giro ja voltaram ao normal no topo do create (resetHeroView) — a unica
+    // coisa que a chegada acrescenta e a altura. A sombra de contato fica no chao enquanto ele
+    // despenca (o billboard ignora elevacao na sombra, por design) e e ela que denuncia ONDE
+    // ele vai cair.
+    h.lift = PORTAL_FALL_HEIGHT_TILES;
+    h.frame = HERO_FRAMES.idleDown;
+
+    // O tunel so sai quando o mundo esta pronto — e nunca antes do cruzeiro minimo, senao um
+    // level que carrega instantaneamente transformaria a viagem num piscar.
+    const remaining = PORTAL_TUNNEL_MIN_CRUISE_MS - portalTunnelElapsedMs();
+    if (remaining > 0) await this.wait(remaining);
+
+    // A queda comeca DENTRO do clarao de saida, nao depois dele: esperar o overlay morrer
+    // entregaria o mundo novo com o heroi pendurado, parado, no ar — e a chegada perderia o
+    // unico frame que ela tem para vender. Assim a tela abre com ele ja despencando.
+    const clearing = finishPortalTunnel();
+    await this.wait(PORTAL_TUNNEL_EXIT_MS * 0.6);
+
+    await new Promise<void>((resolve) => {
+      this.tweens.addCounter({
+        from: PORTAL_FALL_HEIGHT_TILES,
+        to: 0,
+        duration: PORTAL_FALL_MS,
+        ease: 'Quad.easeIn',
+        onUpdate: (tween) => { h.lift = tween.getValue() ?? 0; },
+        onComplete: () => resolve(),
+      });
+    });
+
+    // O impacto: esmaga e volta. O heroi cresce em cima dos proprios pes plantados
+    // (syncHeroBillboard ancora no pe), entao o squash le como peso e nao como um pulo.
+    h.lift = 0;
+    await clearing; // o overlay ja deve ter morrido aqui; garante que ninguem fique para tras
+    getSoundManager().playPortalLand();
+    this.world3d?.shake(260, 0.05);
+    this.spawnLandingDust();
+    this.tweens.add({
+      targets: h,
+      scaleX: 1.28,
+      scaleY: 0.7,
+      duration: 70,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onComplete: () => { h.scaleX = 1; h.scaleY = 1; },
+    });
+
+    this.cutsceneActive = false;
+    if (activeLevel !== null) this.showLevelIntro(activeLevel);
+    else this.levelButtons?.setVisible(true);
+  }
+
+  /** O anel de poeira que a aterrissagem levanta — os mesmos puffs do fogo apagado. */
+  private spawnLandingDust(): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const { worldX, worldY } = this.playerWorld;
+    for (let i = 0; i < 7; i += 1) {
+      const angle = (i / 7) * Math.PI * 2 + Math.random() * 0.4;
+      // Poeira, nao fagulha: emissive e NAO aditivo, igual a fumaca do fogo apagado — poeira
+      // que brilha viraria explosao, e o heroi so chegou.
+      const puff = w3
+        .addBillboard(FX_PUFF_TEXTURE, 0, { ...FX_BILLBOARD, emissive: true, alphaTest: 0.02 })
+        .setTint(0xc9bfae)
+        .setPosition(worldX, worldY)
+        .setElevation(0.12)
+        .setDisplaySize(0.2, 0.2)
+        .setAlpha(0.5);
+      this.tweens.add({
+        targets: { t: 0 },
+        t: 1,
+        duration: 380 + Math.random() * 160,
+        ease: 'Quad.easeOut',
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          const reach = 0.15 + k * 0.62;
+          puff
+            .setPosition(worldX + Math.cos(angle) * reach, worldY + Math.sin(angle) * reach * 0.6)
+            .setElevation(0.12 + k * 0.2)
+            .setDisplaySize(0.2 + k * 0.26, 0.2 + k * 0.26)
+            .setAlpha(0.5 * (1 - k));
+        },
+        onComplete: () => puff.destroy(),
+      });
+    }
+  }
+
+  private showLevelIntro(levelNumber: number): void {
+    this.levelIntroOpen = true;
+    this.levelButtons?.setVisible(false);
+    const overlay = new LevelIntroOverlay(this, levelNumber, getWorldName(), () => {
+      if (this.levelIntroOverlay !== overlay) return;
+      this.levelIntroOverlay = undefined;
+      this.levelIntroOpen = false;
+      this.levelButtons?.revealAfterLevelIntro();
+    });
+    this.levelIntroOverlay = overlay;
   }
 
   /** Restart the current run — shared by the pause menu entry and the level restart button. */
@@ -765,11 +967,208 @@ export class GameScene extends Phaser.Scene {
     this.scene.restart(); // WorldData still holds this level, so it rebuilds the same one
   }
 
+  /**
+   * A SUCCAO — o portal comendo o heroi, e depois a luz do mundo inteiro.
+   *
+   * O heroi ja esta EM CIMA do tile do portal quando isto roda (`handleTileEntered` dispara na
+   * chegada), entao nao ha para onde arrasta-lo: a succao e ele ser puxado para DENTRO, no
+   * lugar. Sobe um pouco (o vortice o descola do chao), gira, encolhe ate nada e so ai apaga —
+   * some por tamanho, nunca por alpha sozinho, que leria como fantasma e nao como sugado.
+   *
+   * O buraco negro come a LUZ junto: `params.ambient`, `moon` e `exposure` sao aplicados por
+   * frame (World3D.syncParams), entao um tween neles apaga o mundo de verdade, sem nenhuma
+   * maquinaria nova — e sem tocar na CONTAGEM de luzes, que e a unica coisa que este renderer
+   * nao perdoa (FIRE_LIGHT_SLOTS: mudar o numero recompila todo shader do mundo).
+   */
+  private playPortalSuck(portal: LevelPortalObject): Promise<void> {
+    const w3 = this.world3d;
+    const h = this.hero;
+    getSoundManager().playPortalSuck();
+    portal.activate();
+    this.world3d?.shake(PORTAL_SUCK_MS, 0.02);
+
+    const lit = w3
+      ? { ambient: w3.params.ambient, moon: w3.params.moon, exposure: w3.params.exposure }
+      : null;
+    this.litParams = lit ?? undefined;
+
+    return new Promise<void>((resolve) => {
+      this.tweens.addCounter({
+        from: 0,
+        to: 1,
+        duration: PORTAL_SUCK_MS,
+        ease: 'Cubic.easeIn', // devagar no comeco: o portal AGARRA antes de puxar
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          portal.setSwallow(k);
+          h.lift = k * 0.85;
+          h.spin = k * k * 540; // o giro so pega no fim, quando ele ja esta sem chao
+          h.scaleX = 1 - k;
+          h.scaleY = 1 - k;
+          // Ele apaga junto com o proprio brilho: a luz que o heroi carrega e comida tambem.
+          this.cutsceneHeroLight = 1 - k;
+          if (lit && w3) {
+            // A luz sai por DOIS caminhos, e os dois sao necessarios.
+            //
+            // `ambient`/`moon` matam as fontes — e a luz indo embora de verdade, com as
+            // sombras e o contraste que vem junto. Mas sozinhos eles nao esvaziam a tela:
+            // num level de lava quem ilumina e o emissive do chao, que nao depende de luz
+            // nenhuma. Media medida num frame do level 1: 45.6 antes, 45.2 no fim da succao.
+            //
+            // `setWorldFade` fecha a conta no POST (dessatura e escurece o frame inteiro, o
+            // mesmo dreno da morte). E o unico lugar onde isso funciona: `params.exposure`
+            // e inerte aqui, porque o mundo e desenhado num render target do EffectComposer
+            // e o three so aplica tone mapping ao desenhar direto no canvas — a mesma
+            // armadilha de alvo-vinculado que o prewarmShaders documenta.
+            w3.setWorldFade(k * 0.88);
+            w3.params.ambient = lit.ambient * (1 - k * 0.96);
+            w3.params.moon = lit.moon * (1 - k * 0.92);
+          }
+        },
+        onComplete: () => {
+          h.alpha = 0;
+          h.scaleX = 0.001;
+          h.scaleY = 0.001;
+          getSoundManager().playPortalSwallow();
+          this.world3d?.shake(240, 0.045);
+          resolve();
+        },
+      });
+    });
+  }
+
+  /** Purple threshold crossed: resolve the next entry from the same manifest as level select. */
+  private async completeLevel(portal: LevelPortalObject): Promise<void> {
+    const current = getActiveLevel();
+    if (this.levelTransitioning || current === null) return;
+    this.levelTransitioning = true;
+    // Congela o jogo ANTES da primeira animacao: a succao dura quase um segundo e o heroi nao
+    // pode aceitar mais um passo enquanto esta sendo engolido.
+    this.cutsceneActive = true;
+    this.levelButtons?.setVisible(false);
+
+    // O manifesto e buscado em PARALELO com a succao, e nao depois dela: a rede nao pode ser o
+    // que decide quanto tempo o portal leva para comer o heroi.
+    const nextEntry = this.resolveNextLevel(current);
+
+    await this.playPortalSuck(portal);
+    // O BEIJO DE VIUVA: o portal sozinho, girando no escuro que ele mesmo abriu. Sem esta
+    // pausa a viagem comeca em cima do proprio heroi sumindo e ninguem ve nenhuma das duas.
+    await this.wait(PORTAL_EMPTY_MS);
+
+    // O tunel nasce AQUI, com a cena velha ainda viva: ele precisa cobrir a tela antes do
+    // restart, e o custo de criar o segundo contexto WebGL fica escondido atras do portal que
+    // ainda esta na frente. `artPixel` faz o pixel do tunel ter a grossura do pixel do mundo.
+    startPortalTunnel(this.world3d ? this.world3d.tileScreenSize() / TILESET_FRAME_SIZE : undefined);
+    getSoundManager().playPortalTravel();
+    // Nada de mexer no BUS de musica aqui. A tentacao e abaixa-lo durante a viagem, mas este
+    // caminho tem duas saidas — o proximo level e o menu, quando nao ha proximo — e so uma
+    // delas voltaria para levanta-lo. O bus ficaria mudo no menu. A cena nova ja resolve a
+    // trilha sozinha (create chama stopMusic + startAmbience).
+    await this.wait(PORTAL_TUNNEL_HANDOFF_MS);
+
+    try {
+      const next = await nextEntry;
+      if (!next) {
+        // Fim da fila: nao ha mundo do outro lado para o heroi cair, entao o tunel nao leva a
+        // lugar nenhum — ele fecha aqui mesmo e o menu recebe a tela.
+        setActiveLevel(null);
+        await finishPortalTunnel();
+        if (this.scene.isSleeping('editor') || this.scene.isActive('editor')) {
+          this.scene.stop();
+          this.scene.wake('editor');
+        } else if (this.scene.get('levelselect')) {
+          this.scene.start('levelselect');
+        } else {
+          const url = new URL(window.location.href);
+          url.searchParams.set('level', String(current));
+          url.searchParams.delete('play');
+          window.location.assign(url.toString());
+        }
+        return;
+      }
+
+      const levelResponse = await window.fetch(levelFilePath(next.level), { cache: 'no-store' });
+      if (!levelResponse.ok) throw new Error(`Falha ao carregar ${next.file}`);
+      setWorldData(await levelResponse.json());
+      setActiveLevel(next.level);
+      // O bilhete que sobrevive ao restart: a proxima GameScene nasce com o heroi no ar.
+      setPendingPortalArrival();
+      // A live test that advances stops owning the old editor store; on the next scene create,
+      // ESC becomes the normal pause menu instead of waking a stale previous-level canvas.
+      if (this.scene.isSleeping('editor') || this.scene.isActive('editor')) this.scene.stop('editor');
+      this.scene.restart();
+    } catch (error) {
+      // A viagem nao pode terminar num tunel eterno: derruba o overlay antes de mostrar o erro,
+      // ou a mensagem fica atras dele.
+      clearPendingPortalArrival();
+      destroyPortalTunnel();
+      this.cameras.main.fadeIn(260, 68, 18, 96);
+      this.restoreWorldLight();
+      this.levelTransitioning = false;
+      this.cutsceneActive = false;
+      this.cutsceneHeroLight = 1;
+      this.levelButtons?.setVisible(true);
+      portal.setSwallow(0);
+      portal.deactivate();
+      // O heroi volta a existir: ele foi encolhido a zero pela succao, e um erro nao pode
+      // deixar o jogador olhando para um level sem personagem.
+      this.hero.alpha = 1;
+      this.hero.scaleX = 1;
+      this.hero.scaleY = 1;
+      this.hero.lift = 0;
+      this.hero.spin = 0;
+      const message = this.add.text(this.scale.width / 2, this.scale.height * 0.2,
+        error instanceof Error ? error.message : 'Falha ao abrir o proximo level', {
+          fontFamily: FONT_FAMILY,
+          fontSize: '10px',
+          color: '#e6b8ff',
+          stroke: '#170b20',
+          strokeThickness: 3,
+          resolution: TEXT_RESOLUTION,
+        }).setOrigin(0.5).setDepth(SCENE_DEPTHS.toast);
+      this.time.delayedCall(2600, () => message.destroy());
+    }
+  }
+
+  /** O manifesto de levels, resolvido em paralelo com a succao (a rede nao dita o ritmo). */
+  private async resolveNextLevel(current: number): Promise<LevelManifestEntry | undefined> {
+    const indexResponse = await window.fetch(
+      `${import.meta.env.BASE_URL}levels/index.json`,
+      { cache: 'no-store' },
+    );
+    if (!indexResponse.ok) throw new Error('Manifesto de levels indisponivel');
+    const rawEntries = await indexResponse.json() as Array<{ file?: string }>;
+    const entries = rawEntries.flatMap((entry): LevelManifestEntry[] => {
+      const match = entry.file ? /^level-(\d+)\.json$/u.exec(entry.file) : null;
+      return match ? [{ file: entry.file!, level: Number(match[1]) }] : [];
+    }).sort((a, b) => a.level - b.level);
+    const currentIndex = entries.findIndex((entry) => entry.level === current);
+    return currentIndex >= 0
+      ? entries[currentIndex + 1]
+      : entries.find((entry) => entry.level > current);
+  }
+
+  /** Devolve a luz que a succao comeu — so importa quando a transicao FALHA e a cena sobrevive. */
+  private restoreWorldLight(): void {
+    const w3 = this.world3d;
+    if (!w3 || !this.litParams) return;
+    w3.setWorldFade(0);
+    w3.params.ambient = this.litParams.ambient;
+    w3.params.moon = this.litParams.moon;
+    w3.params.exposure = this.litParams.exposure;
+  }
+
+  /** Espera em ms presa ao relogio da CENA — pausar o jogo pausa a sequencia junto. */
+  private wait(ms: number): Promise<void> {
+    return new Promise<void>((resolve) => { this.time.delayedCall(ms, resolve); });
+  }
+
   private openPauseMenu(): void {
     // Never pause over another modal state — their overlays own ESC/scrim already, and the
     // dialog camera pan must not be frozen midway.
     if (this.pauseMenu || this.dialogOpen || this.camShifting || this.shopOpen
-      || this.itemGetOpen || this.cutsceneActive || this.isDead) return;
+      || this.itemGetOpen || this.levelIntroOpen || this.cutsceneActive || this.isDead) return;
     this.pauseTouchButton?.setVisible(false);
     this.levelButtons?.setVisible(false);
     // scene.get('title') is undefined in the editor playtest config; without it "quit" would
@@ -881,7 +1280,9 @@ export class GameScene extends Phaser.Scene {
     // The walk bob. It has to be elevation and not a shift of y: y is the ground plane here, so
     // nudging it would send the hero *backwards into the scene* instead of up into the air. The
     // contact shadow deliberately ignores elevation, so it stays planted while he bounces.
-    b.setElevation(h.bobLift);
+    // `lift` is what a cut-scene owns (the portal's suck, the arrival's fall); the bob rides on
+    // top of it so a hero who lands mid-stride still bounces.
+    b.setElevation(h.bobLift + h.lift);
     b.setDisplaySize(
       Math.max(0.05, (h.sizePx * h.scaleX) / ts),
       Math.max(0.05, (h.sizePx * h.scaleY) / ts),
@@ -889,6 +1290,7 @@ export class GameScene extends Phaser.Scene {
     b.setTexture('hero', h.frame);
     b.setFlipX(h.flipX);
     b.setAlpha(h.alpha);
+    b.setAngle(h.spin);
 
     // The carried item rides the just-synced hero position (the contact blob is the
     // billboard's own groundShadow now — it follows by itself, and hides with the body).
@@ -948,6 +1350,7 @@ export class GameScene extends Phaser.Scene {
           worldX: wheel.worldX,
           worldY: wheel.worldY,
           variable: wheel.variable,
+          wired: this.wireTouching(wheel.worldX, wheel.worldY),
           hasFlow: wheel.hasFlow,
           speed: Number(wheel.speed.toFixed(3)),
           generating: wheel.isGenerating,
@@ -976,6 +1379,37 @@ export class GameScene extends Phaser.Scene {
           powered: arm.isPowered,
           busy: arm.isBusy,
         })),
+        electronicGates: this.electronicGates.map((gate) => ({
+          worldX: gate.worldX,
+          worldY: gate.worldY,
+          powered: gate.isPowered,
+          open: gate.isOpen,
+          moving: gate.isMoving,
+          blocking: gate.blocking,
+          openness: Number(gate.openness.toFixed(3)),
+          frame: gate.frame,
+        })),
+        swingGates: this.swingGates.map((g) => ({
+          worldX: g.worldX,
+          worldY: g.worldY,
+          open: g.isOpen,
+          refusals: g.refusalCount,
+        })),
+        levelPortals: this.levelPortals.map((portal) => ({
+          worldX: portal.worldX,
+          worldY: portal.worldY,
+          activated: portal.isActivated,
+          frame: portal.frame,
+          visibleParticles: portal.visibleParticleCount,
+          swallow: portal.swallowAmount,
+        })),
+        heroLift: this.hero.lift,
+        heroScale: this.hero.scaleX,
+        portalTunnel: portalTunnelActive(),
+        activeLevel: getActiveLevel(),
+        levelName: getWorldName(),
+        levelIntroOpen: this.levelIntroOpen,
+        levelTransitioning: this.levelTransitioning,
         globalVariables: this.globalVariables.snapshot(),
         coins: this.coinManager?.coinTotal ?? 0,
         dialogOpen: this.dialogOpen,
@@ -1058,6 +1492,9 @@ export class GameScene extends Phaser.Scene {
     this.itemGetOverlay?.destroy();
     this.itemGetOverlay = undefined;
     this.itemGetOpen = false;
+    this.levelIntroOverlay?.destroy();
+    this.levelIntroOverlay = undefined;
+    this.levelIntroOpen = false;
     this.pauseMenu?.destroy();
     this.pauseMenu = undefined;
     this.pauseTouchButton?.destroy();
@@ -1125,6 +1562,9 @@ export class GameScene extends Phaser.Scene {
       if (this.hitstopMs > 0) return; // hold the impact frame, FX and all
       this.tweens.timeScale = 1;
     }
+
+    for (const portal of this.levelPortals) portal.update(delta);
+    if (this.levelTransitioning || this.levelIntroOpen) return;
 
     // Hide the low-health outline up front; the active-play FX below re-shows it each frame if
     // still low. So any frozen state (dialog, shop, item-get, death) leaves it hidden instead
@@ -1338,6 +1778,7 @@ export class GameScene extends Phaser.Scene {
     // porque tem uma fonte que nao e maquina: a bateria carregada pousada no chao.
     this.updateMechanismCircuits(delta);
     this.updateWireEnergy(delta);
+    this.updateElectronicGates(delta);
     this.updateInserters(delta);
 
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
@@ -1372,6 +1813,7 @@ export class GameScene extends Phaser.Scene {
     this.cancelPlayerKnockback();
     this.hero.sizePx = this.tileSize;
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+    this.levelIntroOverlay?.resize(width, height);
   }
 
   private computeTileSize(width: number, height: number): number {
@@ -1449,6 +1891,28 @@ export class GameScene extends Phaser.Scene {
     return this.propAt(this.lockedDoors, wx, wy);
   }
 
+  private getSwingGateAt(wx: number, wy: number): SwingGateObject | undefined {
+    return this.propAt(this.swingGates, wx, wy);
+  }
+
+  /**
+   * Ha ALGUMA COISA neste tile? Nao "e solido" — solido e o que barra um corpo, e isto aqui e a
+   * pergunta mais ampla: tem qualquer coisa ocupando o lugar.
+   *
+   * Os dois usos precisam exatamente disso e por isso dividem a resposta: o caixote so pode ser
+   * empurrado para um tile vazio, e o portao de bater so pode girar para um tile vazio. Um item
+   * caido no chao nao e solido — o heroi anda por cima dele —, mas ele impede as duas coisas,
+   * e uma segunda copia desta lista era a maneira certa de as duas discordarem daqui a um mes.
+   */
+  private isTileOccupied(wx: number, wy: number): boolean {
+    return this.isSolidForEntities(wx, wy)
+      || (this.enemyManager?.getEnemyAt(wx, wy) ?? null) !== null
+      || (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY)
+      || (this.heartPickupManager?.hasPickupAt(wx, wy) ?? false)
+      || (this.itemManager?.hasItemAt(wx, wy) ?? false)
+      || this.activeBombs.some((bomb) => bomb.worldX === wx && bomb.worldY === wy);
+  }
+
   private getDryTreeAt(wx: number, wy: number): DryTreeObject | undefined {
     return this.propAt(this.dryTrees, wx, wy);
   }
@@ -1487,6 +1951,14 @@ export class GameScene extends Phaser.Scene {
 
   private getBoilerAt(wx: number, wy: number): BoilerObject | undefined {
     return this.propAt(this.boilers, wx, wy);
+  }
+
+  private getElectronicGateAt(wx: number, wy: number): ElectronicGateObject | undefined {
+    return this.propAt(this.electronicGates, wx, wy);
+  }
+
+  private getLevelPortalAt(wx: number, wy: number): LevelPortalObject | undefined {
+    return this.propAt(this.levelPortals, wx, wy);
   }
 
   private getPressurePlateAt(wx: number, wy: number): PressurePlateObject | undefined {
@@ -1613,12 +2085,7 @@ export class GameScene extends Phaser.Scene {
       const dy = Math.sign(wy - this.playerWorld.worldY);
       const nextX = wx + dx;
       const nextY = wy + dy;
-      const occupied = this.isSolidForEntities(nextX, nextY)
-        || (this.enemyManager?.getEnemyAt(nextX, nextY) ?? null) !== null
-        || (nextX === this.playerWorld.worldX && nextY === this.playerWorld.worldY)
-        || (this.heartPickupManager?.hasPickupAt(nextX, nextY) ?? false)
-        || (this.itemManager?.hasItemAt(nextX, nextY) ?? false)
-        || this.activeBombs.some((bomb) => bomb.worldX === nextX && bomb.worldY === nextY);
+      const occupied = this.isTileOccupied(nextX, nextY);
       if (dx !== 0 || dy !== 0) {
         if (occupied) crate.refusePush(dx, dy);
         else crate.push(dx, dy);
@@ -1632,6 +2099,14 @@ export class GameScene extends Phaser.Scene {
       // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
       if (kind === 'wizard') this.openWizardDialog({ worldX: wx, worldY: wy });
       else if (kind) this.openNpcDialog(kind, { worldX: wx, worldY: wy });
+      return;
+    }
+
+    // Grade eletrica fechada: feedback metalico no proprio corpo. Ela nao aceita item/chave —
+    // so um cabo vivo a ergue, e a colisao dinamica ja libera a passagem quando o vao abre.
+    const electronicGate = this.getElectronicGateAt(wx, wy);
+    if (electronicGate?.blocking) {
+      electronicGate.bump();
       return;
     }
 
@@ -1908,6 +2383,27 @@ export class GameScene extends Phaser.Scene {
       } else {
         grass.shake();
         this.showNeedItemHint('scythe');
+      }
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      return;
+    }
+
+    // Portao de bater — a porta sem chave. Ele abre sozinho no esbarrao, DESDE QUE tenha para
+    // onde girar: a folha vai para o lado de la, entao qualquer coisa parada no tile atras dele
+    // trava tudo. Sem balao de item, porque nao ha item — o que destrava e mudar o outro lado.
+    const gate = this.getSwingGateAt(wx, wy);
+    if (gate?.blocking) {
+      // "O outro lado" e medido pelo sentido do esbarrao, nao por uma orientacao autorada: o
+      // portao abre para longe de quem chega, entao ele serve nos dois sentidos e o autor nao
+      // precisa acertar uma rotacao ao coloca-lo.
+      const dx = Math.sign(wx - this.playerWorld.worldX);
+      const dy = Math.sign(wy - this.playerWorld.worldY);
+      if (this.isTileOccupied(wx + dx, wy + dy)) {
+        gate.refuse();
+        getSoundManager().playGateStrain();
+      } else {
+        gate.swingOpen();
+        getSoundManager().playGateSwing();
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -2790,6 +3286,12 @@ export class GameScene extends Phaser.Scene {
   // it with the right item in hand places it, exactly like stepping on a pickup collects it.
   // With anything else in hand the step pops the need-item balloon showing what the mark wants.
   private handleTileEntered(wx: number, wy: number): void {
+    const levelPortal = this.getLevelPortalAt(wx, wy);
+    if (levelPortal) {
+      void this.completeLevel(levelPortal);
+      return;
+    }
+
     // A ORIGEM de um braco robotico: pisar nela segurando qualquer coisa DEPOSITA a carga ali,
     // e a maquina leva dali em diante. Isto nao e um atalho de conveniencia — sem ele o braco
     // seria impossivel de alimentar. O jogo nao tem botao de largar item: o heroi so pousa o que
@@ -2980,6 +3482,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Consumidor fail-safe: qualquer cabo vivo adjacente ergue; perder o ultimo fecha. */
+  private updateElectronicGates(delta: number): void {
+    for (const gate of this.electronicGates) {
+      const powered = this.liveWireTouching(gate.worldX, gate.worldY);
+      const effectsVisible = Math.hypot(
+        gate.worldX - this.playerWorld.worldX,
+        gate.worldY - this.playerWorld.worldY,
+      ) <= 10;
+      gate.update(delta, powered, effectsVisible);
+    }
+  }
+
   /**
    * Recalcula todos os PRODUTORES de circuito juntos. Placas e rodas que compartilham nome sao
    * ligadas em paralelo (OR): qualquer fonte mantem a rede energizada. Fazer a agregacao aqui,
@@ -3040,7 +3554,16 @@ export class GameScene extends Phaser.Scene {
       this.getBoilerAt(x, y) !== undefined
       || this.getWaterWheelAt(x, y) !== undefined
       || this.getPressurePlateAt(x, y) !== undefined
-      || this.getInserterAt(x, y) !== undefined;
+      || this.getInserterAt(x, y) !== undefined
+      || this.getElectronicGateAt(x, y) !== undefined;
+    // A roda tem a tomada desenhada na BORDA direita do proprio sprite. O cabo vizinho ja chega
+    // ate a divisa do tile, portanto o plugue generico (divisa -> centro) atravessaria o rotor.
+    // As demais maquinas ainda precisam desse trecho interno para alcancar o pe central.
+    const needsCenterPlug = (x: number, y: number): boolean =>
+      this.getBoilerAt(x, y) !== undefined
+      || this.getPressurePlateAt(x, y) !== undefined
+      || this.getInserterAt(x, y) !== undefined
+      || this.getElectronicGateAt(x, y) !== undefined;
     const connects = (x: number, y: number): boolean =>
       this.wireIndex.has(`${x},${y}`) || machine(x, y);
     for (const wire of this.wires) {
@@ -3053,10 +3576,10 @@ export class GameScene extends Phaser.Scene {
       // Vizinho que e MAQUINA ganha um plugue no tile dela — o cabo entra ate o pe em vez de
       // morrer na divisa (ver WireObject.setMachineSides).
       wire.setMachineSides({
-        n: machine(wire.worldX, wire.worldY - 1),
-        e: machine(wire.worldX + 1, wire.worldY),
-        s: machine(wire.worldX, wire.worldY + 1),
-        w: machine(wire.worldX - 1, wire.worldY),
+        n: needsCenterPlug(wire.worldX, wire.worldY - 1),
+        e: needsCenterPlug(wire.worldX + 1, wire.worldY),
+        s: needsCenterPlug(wire.worldX, wire.worldY + 1),
+        w: needsCenterPlug(wire.worldX - 1, wire.worldY),
       });
     }
   }
@@ -3082,6 +3605,8 @@ export class GameScene extends Phaser.Scene {
       }
     };
     for (const boiler of this.boilers) if (boiler.isGenerating) seed(boiler.worldX, boiler.worldY);
+    // A roda injeta diretamente em QUALQUER cabo ortogonal quando o dinamo gira. Nao depende de
+    // variable: o fio e a conexao fisica, e o flood-fill leva a energia ate cada consumidor.
     for (const wheel of this.waterWheels) if (wheel.isGenerating) seed(wheel.worldX, wheel.worldY);
     for (const plate of this.pressurePlates) if (plate.pressed) seed(plate.worldX, plate.worldY);
     // A bateria carregada pousada no chao e a FONTE PORTATIL: energia que atravessou o rio na

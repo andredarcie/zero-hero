@@ -7,6 +7,21 @@ import type { WorldData } from '@/game/world/worldSchema';
 
 export type WorldFileId = 'world' | `level-${number}`;
 
+export type LabLevelSummary = {
+  id: string;
+  file: string;
+  level: number;
+  name: string;
+  blurb: string;
+  updatedAt: string;
+  playerStart: { worldX: number; worldY: number } | null;
+};
+
+export type DeleteLabLevelResult = {
+  deleted: number;
+  levels: LabLevelSummary[];
+};
+
 const buildApiUrl = (path: string): string => `${import.meta.env.BASE_URL}${path.replace(/^\/+/u, '')}`;
 
 export const loadWorld = async (file: WorldFileId = 'world'): Promise<WorldData> => {
@@ -26,4 +41,41 @@ export const saveWorld = async (world: WorldData, file: WorldFileId = 'world'): 
   if (!response.ok) {
     throw new Error(`Falha ao salvar ${file}.json`);
   }
+};
+
+const throwApiError = async (response: Response, fallback: string): Promise<never> => {
+  const payload = await response.json().catch(() => null) as { error?: string } | null;
+  throw new Error(payload?.error || fallback);
+};
+
+export const listLabLevels = async (): Promise<LabLevelSummary[]> => {
+  const response = await window.fetch(buildApiUrl('api/lab-levels'), { cache: 'no-store' });
+  if (!response.ok) return throwApiError(response, 'Falha ao listar levels');
+  return response.json() as Promise<LabLevelSummary[]>;
+};
+
+export const createLabLevel = async (name: string): Promise<LabLevelSummary> => {
+  const response = await window.fetch(buildApiUrl('api/lab-levels'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) return throwApiError(response, 'Falha ao criar level');
+  return response.json() as Promise<LabLevelSummary>;
+};
+
+export const renameLabLevel = async (level: number, name: string): Promise<LabLevelSummary> => {
+  const response = await window.fetch(buildApiUrl(`api/lab-levels/${level}`), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!response.ok) return throwApiError(response, 'Falha ao renomear level');
+  return response.json() as Promise<LabLevelSummary>;
+};
+
+export const deleteLabLevel = async (level: number): Promise<DeleteLabLevelResult> => {
+  const response = await window.fetch(buildApiUrl(`api/lab-levels/${level}`), { method: 'DELETE' });
+  if (!response.ok) return throwApiError(response, 'Falha ao apagar level');
+  return response.json() as Promise<DeleteLabLevelResult>;
 };

@@ -12,11 +12,16 @@ import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { wireShapeFrame, wireShapeFromMask } from '@/game/world/wireShapes';
 import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
+import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import { GameScene } from '@/game/scenes/GameScene';
+import { setActiveLevel } from '@/game/runtime/activeLevel';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropKind } from '@/game/world/worldSchema';
 import { setWorldData } from '@/game/world/WorldData';
-import { loadWorld, saveWorld, type WorldFileId } from '@/game/worldApi';
+import {
+  createLabLevel, deleteLabLevel, listLabLevels, loadWorld, renameLabLevel, saveWorld,
+  type WorldFileId,
+} from '@/game/worldApi';
 
 // World-editor scene: the Phaser side of the engine. It renders the whole authored world
 // as one pannable/zoomable tilemap and translates pointer gestures into EditorStore
@@ -68,6 +73,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   campfire: { key: ASSET_KEYS.campfireFrame1 },
   dryBush: { key: ASSET_KEYS.dryBush },
   lockedDoor: { key: ASSET_KEYS.lookedDoorObject },
+  swingGate: { key: ASSET_KEYS.swingGateObject },
   dryTree: { key: ASSET_KEYS.dryTree, frame: 0 },
   dryShrub: { key: ASSET_KEYS.dryShrub },
   rock: { key: ASSET_KEYS.rock },
@@ -85,6 +91,8 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   pressurePlate: { key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
   boiler: { key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.coldDry },
+  electronicGate: { key: ASSET_KEYS.electronicGate, frame: 0 },
+  levelPortal: { key: ASSET_KEYS.levelPortal },
   // Default da paleta; no tabuleiro, entityVisual troca pela forma resolvida dos vizinhos.
   wire: { key: ASSET_KEYS.wire, frame: wireShapeFrame('h', false) },
 };
@@ -155,6 +163,7 @@ export class EditorScene extends Phaser.Scene {
     // so the palette can show them, and the 3D registry for the live playtest).
     registerBucketTextures(this);
     registerMoonflowerTextures(this);
+    registerLevelPortalTextures(this);
     // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
@@ -192,8 +201,12 @@ export class EditorScene extends Phaser.Scene {
   // instead of the real overworld — `?level=N` picks which (default 1). See main.ts / worldApi.ts.
   private get worldFileId(): WorldFileId {
     if (this.registry.get('appMode') !== 'lab') return 'world';
+    return `level-${this.labLevelNumber}`;
+  }
+
+  private get labLevelNumber(): number {
     const raw = new URLSearchParams(window.location.search).get('level');
-    return `level-${raw && /^\d+$/u.test(raw) ? Number(raw) : 1}`;
+    return raw && /^\d+$/u.test(raw) && Number(raw) > 0 ? Number(raw) : 1;
   }
 
   // Editor and each lab level persist UI/camera separately: their worlds have different sizes,
@@ -236,6 +249,16 @@ export class EditorScene extends Phaser.Scene {
       onNavigate: (tileX, tileY) => this.navigateTo(tileX, tileY),
       onWorldApply: (settings) => this.applyWorldSettings(settings),
       onDialogApply: (kind, dialog) => { this.store?.setDialog(kind, dialog); },
+      ...(this.registry.get('appMode') === 'lab' ? {
+        levelManager: {
+          currentLevel: this.labLevelNumber,
+          list: listLabLevels,
+          create: createLabLevel,
+          rename: renameLabLevel,
+          remove: deleteLabLevel,
+          open: (level: number) => this.openLabLevel(level),
+        },
+      } : {}),
     });
     this.ui.setLoading(false);
 
@@ -386,7 +409,8 @@ export class EditorScene extends Phaser.Scene {
   private wireShapeAt(wx: number, wy: number): ReturnType<typeof wireShapeFromMask> {
     const connects = (x: number, y: number): boolean => (this.store?.entitiesAt(x, y) ?? []).some(
       (e) => e.list === 'props' && (e.type === 'wire' || e.type === 'boiler'
-        || e.type === 'waterWheel' || e.type === 'pressurePlate' || e.type === 'inserter'),
+        || e.type === 'waterWheel' || e.type === 'pressurePlate' || e.type === 'inserter'
+        || e.type === 'electronicGate'),
     );
     return wireShapeFromMask(
       connects(wx, wy - 1), connects(wx + 1, wy), connects(wx, wy + 1), connects(wx - 1, wy),
@@ -410,6 +434,19 @@ export class EditorScene extends Phaser.Scene {
     store.allEntities().forEach((entity) => place(entity.worldX, entity.worldY, CHIP_COLOR[entity.list], this.entityVisual(entity)));
     const spawn = store.spawn;
     place(spawn.worldX, spawn.worldY, SPAWN_COLOR, { key: ASSET_KEYS.hero, frame: HERO_FRAMES.idleDown });
+    const startLabel = this.add.text(
+      (spawn.worldX + 0.5) * WORLD_TILE,
+      spawn.worldY * WORLD_TILE - 1,
+      'INICIO',
+      {
+        fontFamily: '"Press Start 2P", monospace',
+        fontSize: '4px',
+        color: '#66d9ef',
+        stroke: '#061014',
+        strokeThickness: 2,
+      },
+    ).setOrigin(0.5, 1);
+    container.add(startLabel);
   }
 
   private applyViewToggles(): void {
@@ -760,8 +797,9 @@ export class EditorScene extends Phaser.Scene {
           return;
         }
       }
-      // Direcao e circuito sao propriedades independentes: o braco usa as duas; placa e roda
-      // usam so a variavel. Campos irrelevantes continuam fora do JSON de pedras e vegetacao.
+      // Direcao e circuito sao propriedades independentes: o braco usa as duas; placa usa a
+      // variavel; roda e caldeira aceitam a variavel como barramento logico opcional. O cabo
+      // fisico da roda e inferido pela adjacencia e nao precisa de campo extra no JSON.
       store.placeEntity({
         list: 'props', type: sel.type, worldX: x, worldY: y,
         ...(isDirectionalProp(sel.type) ? { dir: this.uiState.propDir } : {}),
@@ -965,9 +1003,19 @@ export class EditorScene extends Phaser.Scene {
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
+  private requireValidStartPoint(): boolean {
+    const errors = this.store?.startPointErrors() ?? ['Todo level precisa de um Ponto Inicial'];
+    if (errors.length === 0) return true;
+    this.uiState.tool = 'spawn';
+    this.ui?.syncFromState();
+    this.ui?.toast(errors[0], 3600);
+    return false;
+  }
+
   private async handleSave(): Promise<void> {
     const store = this.store;
     if (!store) return;
+    if (!this.requireValidStartPoint()) return;
     try {
       // Persist UI first: writing public/world.json makes Vite reload the whole page.
       this.persistUi();
@@ -978,7 +1026,9 @@ export class EditorScene extends Phaser.Scene {
       this.ui?.toast(
         warnings.length > 0
           ? `Salvo com ${warnings.length} aviso(s) — veja em Mundo...`
-          : `Salvo em public/${this.worldFileId}.json`,
+          : this.worldFileId === 'world'
+            ? 'Salvo em public/world.json'
+            : `Salvo em public/levels/${this.worldFileId}.json`,
       );
     } catch (error) {
       this.ui?.toast(error instanceof Error ? error.message : 'Falha ao salvar');
@@ -1009,10 +1059,21 @@ export class EditorScene extends Phaser.Scene {
   private startPlaytest(): void {
     const store = this.store;
     if (!store) return;
+    if (!this.requireValidStartPoint()) return;
     this.persistUi();
     setWorldData(store.snapshotWorld());
+    if (this.registry.get('appMode') === 'lab') setActiveLevel(this.labLevelNumber);
     this.scene.run(GameScene.key);
     this.scene.sleep();
+  }
+
+  /** Full navigation is deliberate: public-file mutations trigger Vite reloads anyway. */
+  private openLabLevel(level: number): void {
+    this.persistUi();
+    const url = new URL(window.location.href);
+    url.searchParams.set('level', String(level));
+    url.searchParams.delete('play');
+    window.location.assign(url.toString());
   }
 
   private handleWake(): void {

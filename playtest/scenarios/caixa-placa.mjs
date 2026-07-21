@@ -56,7 +56,13 @@ export default {
     log('LAB: joga o mundo editado em memoria');
     await driver.press('p');
     await driver.page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 15000 });
-    await driver.settle(1800);
+    // Espere o CARTAO DE TITULO fechar, nao um relogio. Ele bloqueia input por design (~2.6s
+    // entre o hold e a saida) e o `settle(1800)` que estava aqui passava raspando: qualquer
+    // custo a mais no boot — um asset novo no manifesto, por exemplo — empurrava o primeiro
+    // passo para dentro do overlay e o caixote "parava de ser empurravel". Nao era o caixote.
+    await driver.page.waitForFunction(() => window.gameDebug?.getState()?.levelIntroOpen === false,
+      null, { timeout: 15000 });
+    await driver.settle(300);
 
     let state = await driver.getState();
     assert('caixote e placa existem no runtime', state.crates.length === 1 && state.pressurePlates.some((p) => p.worldX === 7 && p.worldY === 6));

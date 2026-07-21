@@ -22,17 +22,25 @@ const POWER_THRESHOLD = 0.3; // o dinamo so fecha o circuito depois de ganhar gi
 const SPRAY_MS = 430; // uma batida d'agua a cada grupo de pas, em velocidade nominal
 
 const WATER_SURFACE = -WATER_DEPTH_TILES + 0.03;
-const ROTOR_CENTER_Y = 0.04;
-const ROTOR_RADIUS = 0.46;
+const ROTOR_X = -0.065; // abre espaco para o dinamo na direita sem encolher a roda
+const ROTOR_CENTER_Y = 0.055;
+const ROTOR_RADIUS = 0.43;
+const ROTOR_DEPTH = 0.24;
+const RIM_TUBE = 0.045;
 const WATER_TINTS = [0x9fcbd7, 0xbfe7eb, 0x557998] as const;
 const POWER_GREEN = 0x7dde99;
 const POWER_OFF = 0x454b52;
+const METAL_DARK = 0x454b52;
+const METAL_MID = 0x7c7e8b;
+const COPPER_DARK = 0x815938;
+const COPPER_LIGHT = 0xb7916a;
 
 /**
- * Gerador hidraulico em 3D real. O rotor e uma hierarquia THREE: torus low-poly, tres travessas
- * (seis raios), oito pas, cubo e eixo. `rotation.z` gira tudo em torno do mesmo eixo fisico;
- * nada e billboard animado no runtime. A Sprite Factory permanece como fonte do icone/editor e
- * da paleta medida — wood/stone/verde sao exatamente os mesmos da folha auditada.
+ * Gerador hidraulico em 3D real. O rotor e uma hierarquia THREE: dois aros low-poly separados em
+ * profundidade, seis raios em cada face, oito pas volumetricas, cubo, eixo e ferragens. O cavalete
+ * tambem tem frente e fundo, e o dinamo e montado em camadas com tomada propria na borda do tile.
+ * `rotation.z` gira todo o conjunto fisico; nada e billboard animado no runtime. Materiais usam
+ * as mesmas texturas/paleta pixel-art da carpintaria, pedra e mecanismos do jogo.
  */
 export class WaterWheelObject implements WorldProp {
   private readonly root = new THREE.Group();
@@ -71,65 +79,121 @@ export class WaterWheelObject implements WorldProp {
       return mesh;
     };
 
-    const wood = getWoodTexture('stringer');
+    const rimWood = getWoodTexture('stringer');
+    const paddleWood = getWoodTexture('plankA');
+    const postWood = getWoodTexture('post');
     const darkWood = 0x63452c;
-    const metal = getStoneTexture('slab');
+    const metal = getStoneTexture('boulder');
 
     // ── Cavalete dentro do canal ────────────────────────────────────────────
-    // As pernas nascem no leito e convergem para o eixo. Como a agua esta a -0.39 tile, a base
-    // some parcialmente sob a superficie e a maquina finalmente le como instalada NO rio.
+    // Dois cavaletes A (frente/fundo) deixam a estrutura ter profundidade real. As quatro pernas
+    // nascem no leito e somem parcialmente sob a superficie do canal.
     const legH = ROTOR_CENTER_Y + WATER_DEPTH_TILES;
-    const leftLeg = attach(new THREE.BoxGeometry(0.09, legH, 0.12), wood);
-    leftLeg.position.set(-0.2, -WATER_DEPTH_TILES + legH / 2, 0.035);
-    leftLeg.rotation.z = -0.24;
-    const rightLeg = attach(new THREE.BoxGeometry(0.09, legH, 0.12), wood);
-    rightLeg.position.set(0.2, -WATER_DEPTH_TILES + legH / 2, 0.035);
-    rightLeg.rotation.z = 0.24;
-    const brace = attach(new THREE.BoxGeometry(0.64, 0.08, 0.14), darkWood);
-    brace.position.set(0, ROTOR_CENTER_Y - 0.02, 0.03);
+    for (const z of [-0.12, 0.16]) {
+      const leftLeg = attach(new THREE.BoxGeometry(0.075, legH, 0.075), postWood);
+      leftLeg.position.set(ROTOR_X - 0.22, -WATER_DEPTH_TILES + legH / 2, z);
+      leftLeg.rotation.z = -0.24;
+      const rightLeg = attach(new THREE.BoxGeometry(0.075, legH, 0.075), postWood);
+      rightLeg.position.set(ROTOR_X + 0.22, -WATER_DEPTH_TILES + legH / 2, z);
+      rightLeg.rotation.z = 0.24;
+
+      const saddle = attach(new THREE.BoxGeometry(0.59, 0.065, 0.075), darkWood);
+      saddle.position.set(ROTOR_X, ROTOR_CENTER_Y - 0.025, z);
+    }
+    // Travessa axial liga os dois cavaletes e impede que parecam duas silhuetas soltas.
+    const frameTie = attach(new THREE.BoxGeometry(0.075, 0.075, 0.38), rimWood);
+    frameTie.position.set(ROTOR_X, ROTOR_CENTER_Y - 0.025, 0.02);
 
     // ── Rotor ───────────────────────────────────────────────────────────────
-    this.rotor.position.set(0, ROTOR_CENTER_Y, 0.07);
+    this.rotor.position.set(ROTOR_X, ROTOR_CENTER_Y, 0.02);
     this.root.add(this.rotor);
 
-    const rim = attach(
-      new THREE.TorusGeometry(ROTOR_RADIUS, 0.055, 4, 16),
-      wood,
-      this.rotor,
-    );
-    rim.rotation.z = Math.PI / 16; // facetamento nao alinha todas as emendas nos eixos
+    // Dois aros separados vendem a espessura da roda mesmo parada. O aro de tras e mais escuro;
+    // o da frente leva a textura de madeira da ponte, ambos facetados e sem suavizacao PBR.
+    const rimZs = [-ROTOR_DEPTH / 2, ROTOR_DEPTH / 2] as const;
+    rimZs.forEach((z, face) => {
+      const rim = attach(
+        new THREE.TorusGeometry(ROTOR_RADIUS, RIM_TUBE, 4, 16),
+        face === 0 ? darkWood : rimWood,
+        this.rotor,
+      );
+      rim.position.z = z;
+      rim.rotation.z = Math.PI / 16;
+    });
 
-    // Tres barras inteiras formam seis raios perfeitamente conectados ao cubo. Partes soltas
-    // dariam a mesma leitura quebrada que o primeiro braco robotico teve nas juntas.
-    for (let i = 0; i < 3; i += 1) {
-      const spoke = attach(new THREE.BoxGeometry(ROTOR_RADIUS * 1.72, 0.055, 0.075), wood, this.rotor);
-      spoke.rotation.z = i * Math.PI / 3;
-    }
+    // Cada face recebe tres barras inteiras = seis raios conectados. A face traseira escura e a
+    // dianteira clara criam leitura de gaiola, sem aumentar o numero de raios na silhueta.
+    rimZs.forEach((z, face) => {
+      for (let i = 0; i < 3; i += 1) {
+        const spoke = attach(
+          new THREE.BoxGeometry(ROTOR_RADIUS * 1.72, 0.048, 0.045),
+          face === 0 ? darkWood : rimWood,
+          this.rotor,
+        );
+        spoke.position.z = z;
+        spoke.rotation.z = i * Math.PI / 3;
+      }
+    });
 
-    // Oito pas largas, tangentes ao aro. Sao volumes com profundidade, entao durante o giro a
-    // luz troca de face e vende rotacao mesmo entre duas poses parecidas de silhueta.
+    // Oito pas largas atravessam os dois aros. Cada pa recebe uma cinta metalica escura na raiz:
+    // detalhe simples, grande o bastante para sobreviver ao pixelScale do renderer.
     for (let i = 0; i < 8; i += 1) {
       const angle = (i / 8) * Math.PI * 2;
-      const paddle = attach(new THREE.BoxGeometry(0.2, 0.085, 0.18), darkWood, this.rotor);
-      paddle.position.set(Math.cos(angle) * (ROTOR_RADIUS + 0.015), Math.sin(angle) * (ROTOR_RADIUS + 0.015), 0);
+      const px = Math.cos(angle) * (ROTOR_RADIUS + 0.02);
+      const py = Math.sin(angle) * (ROTOR_RADIUS + 0.02);
+      const paddle = attach(new THREE.BoxGeometry(0.21, 0.08, ROTOR_DEPTH + 0.08), paddleWood, this.rotor);
+      paddle.position.set(px, py, 0);
       paddle.rotation.z = angle + Math.PI / 2;
+
+      const clamp = attach(new THREE.BoxGeometry(0.09, 0.026, ROTOR_DEPTH + 0.095), METAL_DARK, this.rotor);
+      clamp.position.set(px, py, 0);
+      clamp.rotation.z = angle + Math.PI / 2;
     }
 
-    // Cubo + eixo atravessam a roda na profundidade. CylinderGeometry nasce no eixo Y; girar
-    // 90 graus em X o alinha com Z, perpendicular ao plano do rotor.
-    const hub = attach(new THREE.CylinderGeometry(0.115, 0.115, 0.24, 8), 0x7c7e8b, this.rotor);
+    // Cubo principal + tampas nas duas faces: a junta agora tem profundidade e borda legivel.
+    const hub = attach(new THREE.CylinderGeometry(0.105, 0.105, ROTOR_DEPTH + 0.1, 8), METAL_MID, this.rotor);
     hub.rotation.x = Math.PI / 2;
-    const axle = attach(new THREE.CylinderGeometry(0.055, 0.055, 0.5, 8), 0x989aa7);
-    axle.position.set(0, ROTOR_CENTER_Y, 0.02);
+    const capZs = [-ROTOR_DEPTH / 2 - 0.065, ROTOR_DEPTH / 2 + 0.065] as const;
+    capZs.forEach((z, face) => {
+      const cap = attach(
+        new THREE.CylinderGeometry(0.12, 0.12, 0.026, 8),
+        face === 0 ? METAL_DARK : METAL_MID,
+        this.rotor,
+      );
+      cap.position.z = z;
+      cap.rotation.x = Math.PI / 2;
+    });
+    const axle = attach(new THREE.CylinderGeometry(0.05, 0.05, 0.64, 8), METAL_MID);
+    axle.position.set(ROTOR_X, ROTOR_CENTER_Y, 0.02);
     axle.rotation.x = Math.PI / 2;
 
     // ── Dinamo ─────────────────────────────────────────────────────────────
-    // Uma caixa de pedra/metal presa ao mesmo eixo, elevada sobre a agua. A lampada e geometria
-    // na face voltada para a camera, nao um overlay: muda de material junto com o circuito.
-    const housing = attach(new THREE.BoxGeometry(0.28, 0.31, 0.28), metal);
-    housing.position.set(0.39, ROTOR_CENTER_Y + 0.01, 0.025);
-    this.statusLamp = attach(new THREE.BoxGeometry(0.075, 0.09, 0.035), POWER_OFF);
-    this.statusLamp.position.set(0.39, ROTOR_CENTER_Y + 0.02, 0.185);
+    // Eixo frontal leva o movimento ate a caixa. Base, corpo e tampa em degraus substituem o
+    // bloco unico anterior; duas cintas de cobre dizem "bobina/gerador" sem texto ou UI.
+    const driveShaft = attach(new THREE.BoxGeometry(0.35, 0.045, 0.055), METAL_DARK);
+    driveShaft.position.set(0.16, ROTOR_CENTER_Y, 0.185);
+
+    const dynamoBase = attach(new THREE.BoxGeometry(0.34, 0.065, 0.3), METAL_DARK);
+    dynamoBase.position.set(0.37, -0.105, 0.06);
+    const housing = attach(new THREE.BoxGeometry(0.255, 0.255, 0.255), metal);
+    housing.position.set(0.39, 0.035, 0.06);
+    const housingCap = attach(new THREE.BoxGeometry(0.29, 0.055, 0.29), METAL_MID);
+    housingCap.position.set(0.39, 0.19, 0.06);
+    // Bobinas aplicadas NA FACE: no primeiro passe elas atravessavam a profundidade da caixa e
+    // quase desapareciam sob a textura. Agora sao duas faixas frontais de cobre bem separadas.
+    for (const x of [0.325, 0.455]) {
+      const coil = attach(new THREE.BoxGeometry(0.03, 0.205, 0.028), x < 0.4 ? COPPER_LIGHT : COPPER_DARK);
+      coil.position.set(x, 0.025, 0.202);
+    }
+
+    // A tomada avanca ate a borda leste: o cabo do tile vizinho encosta aqui sem cruzar a roda.
+    const socket = attach(new THREE.BoxGeometry(0.12, 0.09, 0.16), METAL_DARK);
+    socket.position.set(0.51, -0.015, 0.075);
+    const terminal = attach(new THREE.BoxGeometry(0.035, 0.035, 0.11), COPPER_LIGHT);
+    terminal.position.set(0.535, -0.015, 0.165);
+
+    this.statusLamp = attach(new THREE.BoxGeometry(0.085, 0.085, 0.035), POWER_OFF);
+    this.statusLamp.position.set(0.39, 0.095, 0.205);
   }
 
   /** O cavalete/eixo ocupam o tile de rio; ninguem atravessa a maquina nem a agua sob ela. */
@@ -184,6 +248,10 @@ export class WaterWheelObject implements WorldProp {
     if (this.powered !== wasPowered) {
       const material = this.statusLamp.material as THREE.MeshLambertMaterial;
       material.color.setHex(this.powered ? POWER_GREEN : POWER_OFF);
+      // Lampada fisica, nao overlay: um emissive baixo mantem o verde legivel na noite sem criar
+      // uma nova PointLight (a quantidade de luzes do renderer e deliberadamente fixa).
+      material.emissive.setHex(this.powered ? 0x183d24 : 0x000000);
+      material.emissiveIntensity = this.powered ? 0.85 : 0;
       if (this.powered) {
         if (effectsVisible) {
           getSoundManager().playWaterWheelPower();

@@ -439,6 +439,98 @@ charges, the dock gesture empties the hand, an ISLANDED net lights from the grou
 and its arm hauls cargo, partial charge survives the pickup cycle, and the spent charge leaves
 the shell.
 
+**The electronic gate (`electronicGate`) — power must stay on.** A gate is a physical wired
+consumer: at least one adjacent cable must be LIVE to raise it. It has no wireless/variable mode;
+an unwired gate is deliberately fail-closed. Losing the last live cable starts closing it in the
+same frame, so a pressure plate, generator coast or battery charge can hold a passage only for as
+long as that source really lasts. Collision follows the visible clearance: the tile stays solid
+through the lower poses and becomes walkable only at the fully raised pose.
+
+The body is one 16x16 `Billboard3D`, not a Three.js model. Sprite Factory owns eight frames in
+`electronic_gate.png`: four grille heights in unpowered/powered banks; the lamp changes from dark
+to the shared circuit green and the adjacent cable supplies the yellow live line. Animation swaps
+whole pixel-art poses (no smooth scaling/fading). The open billboard uses `depthLayer: 'ground'`
+because the hero can occupy its tile. `npm run playtest -- portao-eletronico` covers editor
+authoring, dead-grid collision, intermediate frames, live opening, automatic closing and re-open.
+
+## The swing gate (`swingGate`) — the lock with no key
+
+`src/game/objects/SwingGateObject.ts`. The locked door's twin, minus the lock: same ironwork
+(the art is `locked_door.png` with the keyhole plate replaced by the bars running behind it),
+no key, and it opens by itself when the hero bumps it. **Unless something is standing on the
+tile behind it** — a swing leaf needs room to swing, so a tuft of tall grass back there jams it.
+It shoves, catches and settles back, and stays shut.
+
+This is the one barrier in the game that breaks the rule stated at the top of the fire section:
+every other obstacle is a lock with exactly one key, and `showNeedItemHint` even shows you which
+key you're missing. Here there is no item to find — **what opens it is changing the far side**,
+and the far side is by definition where the hero cannot go. So it only has answers when paired
+with the things that act at a distance: fire, and the robotic arm that carries a lit graveto
+across a line the hero can't cross. It deliberately shows **no need-item balloon**: there is no
+icon for "clear that grass".
+
+- **The refusal must not be the locked door's shake.** That shake is the game's word for "this is
+  solid, forget it" — and this gate is not refusing, it is *trying*. So the leaf actually starts
+  to swing (the sprite narrows ~12%), hits what's behind it and springs back, twice. The player
+  has to see the leaf MOVE to understand the problem is on the other side and not in their hands.
+  The two SFX are the same hinge with different endings: `playGateSwing` opens into clear air,
+  `playGateStrain` is that same creak cut short by a dull thud.
+- **"The other side" is measured from the bump direction, not from an authored rotation.** The
+  gate opens away from whoever arrives, so it works from either side and the author never has to
+  get a facing right when placing it.
+- **`GameScene.isTileOccupied` is shared with the crate push, on purpose.** Both ask the same
+  question — "is there anything at all here?", which is wider than "is it solid": an item lying
+  on the ground is not solid (the hero walks over it) but it stops both a crate and a leaf. Two
+  copies of that list were the reliable way for the two to disagree a month from now.
+- `npm run playtest -- portao-de-bater` builds and solves the whole puzzle the piece exists for:
+  a wall with the gate at one gap and the arm at another, grass behind the gate, the hero hands
+  the arm a lit graveto, the fire walks the grass, and the same bump that only rattled now opens.
+
+## The portal crossing — the one animation told by two scenes
+
+Stepping into a `levelPortal` used to be a 620ms fade to purple. Now it is four beats, and the
+thing that makes it structurally different from every other effect in the game is that **a
+`scene.restart()` happens in the middle of it**: the suck and the tunnel run in the OLD level's
+GameScene, the fall runs in the NEW one, and those are two different objects with a dead world
+between them.
+
+1. **A sucção** (`GameScene.playPortalSuck`, 900ms). The hero is already standing ON the portal
+   tile when `handleTileEntered` fires, so there is nowhere to drag him: he is pulled *in* where
+   he stands — rises, spins, shrinks to nothing. He vanishes by SIZE, never by alpha alone, which
+   would read as a ghost instead of as swallowed. The portal's particles reverse (`setSwallow`):
+   at rest they rise and it exhales, inverted they fall inward and it INHALES.
+2. **O vazio** (620ms). The portal spinning alone in the dark it just made. Without the pause the
+   trip starts on top of the hero disappearing and neither beat is seen.
+3. **O túnel** (`render3d/PortalTunnel.ts`). Owns its own canvas, renderer and rAF loop at
+   `z-index: 3` — it has to, because World3D and the Phaser scene are both destroyed underneath
+   it. Low-res backing store stretched with NEAREST, sized so one tunnel pixel matches one pixel
+   of the world's ART (`tileScreenSize() / 16`): the trip is the only non-16px frame in the game
+   and it must not read as another game's screen. Wall = an open cylinder seen from inside with a
+   generated column texture scrolling along its axis; streaks = instanced quads rotated so their
+   normal points at the tunnel axis (a quad that does not rotate goes edge-on exactly when it
+   passes the side of the screen). It starts BEFORE the restart so the second WebGL context is
+   paid for behind a screen that is already covered.
+4. **A queda** (`GameScene.playPortalArrival`). The world builds behind the overlay, then the
+   overlay leaves — never a frame of half-built world. The fall starts INSIDE the exit flash, not
+   after it, or the level would open on a hero hanging motionless in the air. `Quad.easeIn`,
+   because falling accelerates; the reflex `easeOut` makes him float down like a feather. The
+   level title card waits for his feet to touch.
+
+- **`setPendingPortalArrival` (`runtime/portalTransition.ts`) is the whole bridge across the
+  restart** — one boolean, consumed on read so a death/restart never drops the hero out of the sky.
+- **The suck eats the world's LIGHT, and only one knob does that.** `params.ambient`/`moon` kill
+  the sources, but in a lava level the emissive floor IS the light and the frame does not move
+  (measured: 45.6 → 45.2). `World3D.setWorldFade` (the death drain) finishes it in the post.
+  **`params.exposure` is inert here**: the world is drawn into an EffectComposer render target and
+  three only applies tone mapping when drawing straight to the canvas — the same bound-target trap
+  `prewarmShaders` documents. A test that watched the knob passed on an effect that did not exist.
+- **The hero's view state must be RESET on create** (`resetHeroView`). Phaser reuses the scene
+  instance across `restart()`, and `hero` is a `readonly` field — so the scale-0.001 the suck left
+  behind arrived in the next level and the hero was born invisible.
+- `npm run playtest -- portal-travessia` guards all four beats where each happens, including the
+  tunnel surviving the restart, and measures the darkening on the SCREENSHOT (see the comment on
+  `shotLuma` for the two easier measurements that lie).
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on
@@ -455,7 +547,8 @@ real state. Add a scenario in `playtest/scenarios/` and register it in `index.mj
 covers the new thing and run that. Do **not** replay the whole game to check a pointed change:
 the full puzzle solves (`espada` above all) take minutes each, they are bump-timing sensitive and
 so they flake, and a flake in an unrelated scenario tells you nothing about your change while
-costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Fire and the light
+costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Rock and pickaxe →
+`pedra`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Fire and the light
 budget → `perf-burn`. Frame cost → `perf-profile`. Item-state contracts (a bridge refusing a
 second burn, the mound waiting for a clear tile, production drops falling to a free neighbour,
 the bomb's fuse tween dying with the bomb) → `itens`. Reach for `espada` **only** when the change is

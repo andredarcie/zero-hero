@@ -1,40 +1,33 @@
-// Roda d'agua: autoria -> corrente -> inercia -> energia -> consumidor -> drenagem.
+// Roda d'agua: autoria -> corrente -> inercia -> CABO -> consumidor -> drenagem.
 //
-// Layout controlado:
-//   roda-no-rio (6,6)       item (8,6) -> braco (9,6) -> saida (10,6)
+// Layout controlado (sem variavel global):
+//   roda-no-rio (6,6) -> fio (7,6) -> fio+item (8,6) -> braco (9,6) -> saida (10,6)
 //   agua          (6,7)
 //
-// A roda e 3D, solida e ocupa o proprio tile de agua. Ela so gera com esse tile cheio e o rio
-// continuando ortogonalmente. O braco usa a mesma variavel, provando um consumidor real.
+// A roda e um modelo 3D low-poly, solida e ocupa o proprio tile de agua. Ela so gera com esse tile
+// cheio e o rio continuando ortogonalmente. O braco nao tem variavel: so o cabo vivo o move.
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default {
   name: 'roda-agua',
-  description: "Roda d'agua acelera, energiza um braco e desacelera quando o rio drena.",
+  description: "Roda d'agua 3D acelera, energiza fios e desacelera quando o rio drena.",
   needsGame: false,
   route: '/lab',
   async run({ driver, shot, assert, log }) {
     await driver.settle(2500);
 
-    log('EDITOR: cria o circuito energia_moinho');
-    await driver.page.getByRole('button', { name: /Variaveis/ }).click();
-    await driver.page.getByPlaceholder('ex.: porta_norte_aberta').fill('energia_moinho');
-    await driver.page.getByRole('button', { name: '+ Criar' }).click();
-    await driver.page.getByRole('button', { name: 'Aplicar', exact: true }).click();
-
-    log("EDITOR: seleciona a roda d'agua e vincula sua saida de energia");
+    log("EDITOR: seleciona a roda d'agua; a saida fisica sera um cabo, sem variavel global");
     await driver.page.evaluate(() => {
       const scene = window.__scene;
       scene.uiState.tab = 'props';
       scene.uiState.tool = 'entity';
       scene.uiState.entity = { list: 'props', type: 'waterWheel' };
+      scene.uiState.propVariable = '';
       scene.ui.syncFromState();
     });
-    await driver.page.locator('.zh-field').filter({ hasText: 'Saida de energia' })
-      .locator('select').selectOption('energia_moinho');
 
-    log('EDITOR: limpa a oficina, coloca rio, roda, braco alimentado e uma pedra na entrada');
+    log('EDITOR: limpa a oficina, coloca rio, roda, dois fios, braco cabeado e pedra na entrada');
     const authored = await driver.page.evaluate(() => {
       const scene = window.__scene;
       const store = scene.store;
@@ -58,10 +51,13 @@ export default {
       store.placeEntity({ list: 'props', type: 'water', worldX: 6, worldY: 7 });
       scene.placeSelectedEntity(6, 6);
 
-      // O mesmo propVariable agora alimenta o consumidor. O braco aponta leste: tira de (8,6)
-      // e entrega em (10,6), atravessando o proprio corpo solido em (9,6).
+      // A roda encosta no primeiro cabo; o segundo ocupa a entrada do braco. O item pode repousar
+      // sobre o fio rente ao chao, e o braco aponta leste para entrega-lo em (10,6).
+      store.placeEntity({ list: 'props', type: 'wire', worldX: 7, worldY: 6 });
+      store.placeEntity({ list: 'props', type: 'wire', worldX: 8, worldY: 6 });
       scene.uiState.entity = { list: 'props', type: 'inserter' };
       scene.uiState.propDir = 1;
+      scene.uiState.propVariable = '';
       scene.placeSelectedEntity(9, 6);
       store.placeEntity({ list: 'pickups', type: 'stone', worldX: 8, worldY: 6 });
 
@@ -69,19 +65,22 @@ export default {
       return {
         wheel: props.find((e) => e.type === 'waterWheel' && e.worldX === 6 && e.worldY === 6),
         arm: props.find((e) => e.type === 'inserter' && e.worldX === 9 && e.worldY === 6),
+        wires: props.filter((e) => e.type === 'wire' && e.worldY === 6),
         rejectedDryWheel,
         wheelReplacedWater: !props.some((e) => e.type === 'water' && e.worldX === 6 && e.worldY === 6),
         warnings: store.validate(),
       };
     });
     assert('o editor recusa roda em terreno seco', authored.rejectedDryWheel === true, JSON.stringify(authored));
-    assert('a roda grava a saida energia_moinho', authored.wheel?.variable === 'energia_moinho', JSON.stringify(authored));
-    assert('o braco grava a alimentacao energia_moinho', authored.arm?.variable === 'energia_moinho', JSON.stringify(authored));
+    assert('a roda nao exige variavel global para gerar nos fios', authored.wheel && !authored.wheel.variable, JSON.stringify(authored));
+    assert('o braco cabeado nao usa alimentacao sem fio', authored.arm && !authored.arm.variable, JSON.stringify(authored));
+    assert('dois fios formam o caminho fisico entre roda e braco', authored.wires.length === 2, JSON.stringify(authored));
     assert('a roda substitui a agua no proprio tile', authored.wheelReplacedWater === true, JSON.stringify(authored));
     assert("a roda tem continuidade e passa a validacao hidraulica", !authored.warnings.some((w) => w.includes("roda(s) d'agua sem continuidade")), authored.warnings.join(' | '));
+    assert('a roda cabeada nao recebe aviso de saida ausente', !authored.warnings.some((w) => w.includes("roda(s) d'agua sem cabo")), authored.warnings.join(' | '));
     await shot('roda-editor');
 
-    log('LAB: inicia a oficina; o rotor deve partir parado e ganhar velocidade, nao ligar instantaneamente');
+    log('LAB: inicia a oficina; o rotor deve estar acelerando e a rede acompanhar seu limiar');
     await driver.press('p');
     await driver.page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 15000 });
 
@@ -89,27 +88,31 @@ export default {
     const wheelAtBoot = state.waterWheels.find((wheel) => wheel.worldX === 6 && wheel.worldY === 6);
     const armAtBoot = state.inserters.find((arm) => arm.worldX === 9 && arm.worldY === 6);
     assert('roda e braco existem no runtime', Boolean(wheelAtBoot && armAtBoot), JSON.stringify(state));
+    assert('o runtime reconhece a roda fisicamente cabeada', wheelAtBoot?.wired === true, JSON.stringify(wheelAtBoot));
     assert('o rio foi detectado como corrente', wheelAtBoot?.hasFlow === true, JSON.stringify(wheelAtBoot));
-    assert('o dinamo nasce abaixo do limiar, sem energia instantanea', wheelAtBoot?.generating === false && state.globalVariables.energia_moinho === false, JSON.stringify(wheelAtBoot));
-    assert('o braco vinculado nasce desligado', armAtBoot?.powered === false, JSON.stringify(armAtBoot));
+    assert('a roda ainda esta acelerando no boot', (wheelAtBoot?.speed ?? 0) > 0 && (wheelAtBoot?.speed ?? 1) < 1, JSON.stringify(wheelAtBoot));
+    assert('fios e braco acompanham o limiar do dinamo', wheelAtBoot?.generating
+      ? state.wires.every((wire) => wire.live) && armAtBoot?.powered === true
+      : state.wires.every((wire) => !wire.live) && armAtBoot?.powered === false, JSON.stringify(state));
 
-    await sleep(260);
+    await sleep(460);
     state = await driver.getState();
     const starting = state.waterWheels.find((wheel) => wheel.worldX === 6 && wheel.worldY === 6);
-    assert('a roda esta acelerando gradualmente', starting?.speed > 0.05 && starting.speed < 0.65, JSON.stringify(starting));
-    assert('o rotor 3D mudou de angulo continuamente', Math.abs(starting?.rotation ?? 0) > 0.01, JSON.stringify(starting));
+    assert('a roda ganhou velocidade gradualmente', (starting?.speed ?? 0) > (wheelAtBoot?.speed ?? 0) && (starting?.speed ?? 2) <= 1, JSON.stringify({ wheelAtBoot, starting }));
+    assert('o rotor 3D mudou de angulo continuamente', Math.abs((starting?.rotation ?? 0) - (wheelAtBoot?.rotation ?? 0)) > 0.01, JSON.stringify({ wheelAtBoot, starting }));
     await shot('roda-partida');
 
     await driver.page.waitForFunction(() => {
       const stateNow = window.gameDebug?.getState();
       return stateNow?.waterWheels?.some((wheel) => wheel.worldX === 6 && wheel.generating)
-        && stateNow?.globalVariables?.energia_moinho === true;
+        && stateNow?.wires?.every((wire) => wire.live);
     }, null, { timeout: 5000 });
     state = await driver.getState();
     const powered = state.waterWheels.find((wheel) => wheel.worldX === 6 && wheel.worldY === 6);
     const poweredArm = state.inserters.find((arm) => arm.worldX === 9 && arm.worldY === 6);
     assert('o rotor entrou no banco de frames energizados', powered?.frame >= 8 && powered.frame < 16, JSON.stringify(powered));
-    assert('o circuito verde alimenta o braco no mesmo frame', poweredArm?.powered === true, JSON.stringify(state));
+    assert('a roda acende todos os fios conectados', state.wires.length === 2 && state.wires.every((wire) => wire.live), JSON.stringify(state.wires));
+    assert('os fios vivos alimentam o braco sem variavel', poweredArm?.powered === true && !poweredArm.variable, JSON.stringify(state));
     await shot('roda-energizada');
 
     log('JOGO: espera o braco usar a energia hidraulica para transportar a pedra');
@@ -131,19 +134,20 @@ export default {
     state = await driver.getState();
     const coasting = state.waterWheels.find((wheel) => wheel.worldX === 6 && wheel.worldY === 6);
     assert('sem corrente, a roda ainda gira por inercia', coasting?.hasFlow === false && coasting.speed > 0.45, JSON.stringify(coasting));
-    assert('o dinamo ainda entrega energia no inicio do coast', coasting?.generating === true && state.globalVariables.energia_moinho === true, JSON.stringify(state));
+    assert('o dinamo ainda entrega energia aos fios no inicio do coast', coasting?.generating === true && state.wires.every((wire) => wire.live), JSON.stringify(state));
     await shot('roda-desacelerando');
 
     await driver.page.waitForFunction(() => {
       const stateNow = window.gameDebug?.getState();
       const wheel = stateNow?.waterWheels?.find((item) => item.worldX === 6 && item.worldY === 6);
-      return wheel && wheel.speed === 0 && !wheel.generating && stateNow.globalVariables.energia_moinho === false;
+      return wheel && wheel.speed === 0 && !wheel.generating
+        && stateNow.wires.every((wire) => !wire.live);
     }, null, { timeout: 5000 });
     state = await driver.getState();
     const stopped = state.waterWheels.find((wheel) => wheel.worldX === 6 && wheel.worldY === 6);
     const stoppedArm = state.inserters.find((arm) => arm.worldX === 9 && arm.worldY === 6);
     assert('a roda para no banco apagado, preservando uma orientacao valida', stopped?.frame >= 0 && stopped.frame < 8, JSON.stringify(stopped));
-    assert('sem geracao, circuito e braco desligam', stoppedArm?.powered === false && state.globalVariables.energia_moinho === false, JSON.stringify(state));
+    assert('sem geracao, fios e braco desligam', stoppedArm?.powered === false && state.wires.every((wire) => !wire.live), JSON.stringify(state));
 
     // Libera a saida, poe nova carga na entrada e prova que a falta de energia e comportamento,
     // nao apenas uma lampada apagada.

@@ -78,6 +78,20 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: quatro alturas da grade em bancos sem/com energia; runtime e Billboard3D.
+    key: ASSET_KEYS.electronicGate,
+    path: '/assets/environment/props/electronic_gate.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: arco medieval fixo + quatro fases discretas do vortice roxo.
+    key: ASSET_KEYS.levelPortal,
+    path: '/assets/environment/props/level_portal.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: bateria vazia/carregada — o vaso portatil da corrente (BATTERY_FRAMES).
     key: ASSET_KEYS.battery,
     path: '/assets/items/collectibles/battery.png',
@@ -151,6 +165,10 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     path: '/assets/environment/structures/locked_door.png',
   },
   {
+    key: ASSET_KEYS.swingGateObject,
+    path: '/assets/environment/structures/swing_gate.png',
+  },
+  {
     key: ASSET_KEYS.undead,
     path: '/assets/characters/enemies/undead/undead.png',
   },
@@ -190,7 +208,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.woodItem,       path: '/assets/items/collectibles/wood.png' },
   { key: ASSET_KEYS.rock,           path: '/assets/environment/props/rock.png' },
   { key: ASSET_KEYS.woodenCrate,    path: '/assets/environment/props/wooden_crate.png' },
-  { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock__1.png' },
+  { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock_cracked.png' },
   { key: ASSET_KEYS.tallGrassWind0, path: '/assets/environment/props/grass_wind0.png' },
   { key: ASSET_KEYS.tallGrassWind1, path: '/assets/environment/props/grass_wind1.png' },
   { key: ASSET_KEYS.cuttingGrass0,  path: '/assets/environment/props/cuting_grass0.png' },

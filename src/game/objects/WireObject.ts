@@ -59,10 +59,12 @@ export class WireObject implements WorldProp {
   }
 
   /**
-   * Quais vizinhos deste cabo sao MAQUINAS (caldeira/roda/placa/braco): em cada um nasce um
+   * Quais vizinhos deste cabo precisam de plugue CENTRAL (caldeira/placa/braco/portao): nasce um
    * plugue no tile da maquina, entrando pela borda compartilhada. O flatY ganha um degrau
    * por lado — dois cabos plugando na MESMA maquina poem dois quads no mesmo tile, e sem o
    * degrau eles seriam coplanares onde se cruzam (a regra dos flat quads: separam por flatY).
+   * A roda d'agua e a excecao: seu dinamo termina na borda do sprite, entao o proprio cabo do
+   * tile vizinho encosta na tomada sem este prolongamento atravessar o rotor.
    */
   public setMachineSides(sides: Record<WireSide, boolean>): void {
     for (const plug of this.plugs) { plug.base.destroy(); plug.glow.destroy(); }

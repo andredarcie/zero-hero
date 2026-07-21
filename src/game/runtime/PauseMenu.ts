@@ -482,6 +482,12 @@ export class LevelButtons {
     this.root.style.display = visible ? 'flex' : 'none';
   }
 
+  /** Reveal the controls after the level title and restart the one-time onboarding hint. */
+  public revealAfterLevelIntro(): void {
+    this.root.style.display = 'flex';
+    this.showHint(t('levelButtons.stuckHint'), 6000);
+  }
+
   public destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;

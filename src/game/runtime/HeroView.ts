@@ -46,6 +46,22 @@ export interface HeroView {
   walkFrames: readonly number[];
   /** Elevation in tiles: the bounce of a footfall. The contact shadow ignores it, by design. */
   bobLift: number;
+  /**
+   * Elevation in tiles that a CUT-SCENE owns — the portal's vortex lifting him off the ground,
+   * and the arrival dropping him out of the sky — added on top of the walk bob.
+   *
+   * It has to be its own field: `tickHeroView` zeroes `bobLift` on every frame the hero is not
+   * walking, and every frame of a cut-scene is one of those. Borrowing `bobLift` would have the
+   * fall reset itself sixty times a second.
+   */
+  lift: number;
+  /**
+   * Screen-plane rotation in degrees, 0 = upright. Only the portal turns it: a billboard has no
+   * yaw (see the robotic arm's `dir`), so this spins the ART in the camera plane — which is
+   * exactly what a body tumbling into a vortex does, and the one case where the billboard's
+   * lack of a third axis is the right answer instead of a limitation.
+   */
+  spin: number;
 }
 
 /** Front-facing cycle. The sides borrow it flipped — at 16px that reads fine. */
@@ -70,7 +86,36 @@ export const createHeroView = (): HeroView => ({
   walkDist: 0,
   walkFrames: WALK_CYCLE_FRAMES,
   bobLift: 0,
+  lift: 0,
+  spin: 0,
 });
+
+/**
+ * Devolve o heroi ao estado de nascenca, sem trocar o OBJETO.
+ *
+ * O `hero` da GameScene e um campo `readonly` inicializado uma vez — e o Phaser REUSA a mesma
+ * instancia de cena num `scene.restart()`. Entao tudo o que uma cena escreveu aqui (o alpha da
+ * morte, o tint do dano, e agora a escala 0.001 e o giro que a succao do portal deixam) chega
+ * inteiro na cena seguinte. O heroi do level novo nascia invisivel.
+ *
+ * `x`, `y` e `sizePx` ficam de fora porque nao sao estado do heroi: sao recalculados todo frame
+ * a partir da camera e do tile (syncHeroBillboard / updateHeroSize).
+ */
+export const resetHeroView = (hero: HeroView): void => {
+  const born = createHeroView();
+  hero.scaleX = born.scaleX;
+  hero.scaleY = born.scaleY;
+  hero.alpha = born.alpha;
+  hero.frame = born.frame;
+  hero.flipX = born.flipX;
+  hero.tint = born.tint;
+  hero.walking = born.walking;
+  hero.walkDist = born.walkDist;
+  hero.walkFrames = born.walkFrames;
+  hero.bobLift = born.bobLift;
+  hero.lift = born.lift;
+  hero.spin = born.spin;
+};
 
 /** Tiles covered by one frame of the cycle. Two frames = one footfall, four = a full stride. */
 const TILES_PER_FRAME = TIMINGS.walkCycleTiles / 4;

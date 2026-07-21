@@ -24,6 +24,7 @@ export interface GameDebugState {
     worldX: number;
     worldY: number;
     variable?: string;
+    wired: boolean;
     hasFlow: boolean;
     speed: number;
     generating: boolean;
@@ -52,6 +53,44 @@ export interface GameDebugState {
     powered: boolean;
     busy: boolean;
   }>;
+  electronicGates: Array<{
+    worldX: number;
+    worldY: number;
+    powered: boolean;
+    open: boolean;
+    moving: boolean;
+    blocking: boolean;
+    openness: number;
+    frame: number;
+  }>;
+  /** Os portoes de bater: abertos ou nao, e quantas vezes cada um ja tentou e bateu. */
+  swingGates: Array<{
+    worldX: number;
+    worldY: number;
+    open: boolean;
+    refusals: number;
+  }>;
+  levelPortals: Array<{
+    worldX: number;
+    worldY: number;
+    activated: boolean;
+    frame: number;
+    visibleParticles: number;
+    /** 0..1 — o quanto o portal esta engolindo o heroi (a succao da travessia). */
+    swallow: number;
+  }>;
+  /**
+   * A travessia do portal, vista de fora. Sao as tres coisas que a animacao promete e que um
+   * teste pode cobrar: o heroi encolhe ate sumir (`heroScale`), ele fica NO AR do outro lado
+   * (`heroLift`, em tiles) e o tunel cobre a tela no meio (`portalTunnel`).
+   */
+  heroLift: number;
+  heroScale: number;
+  portalTunnel: boolean;
+  activeLevel: number | null;
+  levelName: string;
+  levelIntroOpen: boolean;
+  levelTransitioning: boolean;
   globalVariables: Record<string, boolean>;
   coins: number;
   dialogOpen: boolean;

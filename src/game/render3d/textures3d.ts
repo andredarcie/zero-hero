@@ -69,12 +69,17 @@ const DEFS: Record<string, SheetDef> = {
   boiler: { url: `${A}/environment/props/boiler.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: cabo de energia — 7 formas apagadas + 7 filetes gold (ver wireShapes.ts).
   wire: { url: `${A}/environment/props/wire.png`, frameW: 16, frameH: 16 },
+  // Sprite Factory: portao 2D — quatro alturas em bancos apagado/energizado.
+  'electronic-gate': { url: `${A}/environment/props/electronic_gate.png`, frameW: 16, frameH: 16 },
+  // Sprite Factory: portal medieval — arco de pedra com quatro fases do vortice roxo.
+  'level-portal-icon': { url: `${A}/environment/props/level_portal.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: bateria vazia/carregada — ver BATTERY_FRAMES.
   battery: { url: `${A}/items/collectibles/battery.png`, frameW: 16, frameH: 16 },
   'dry-shrub': { url: `${A}/environment/props/dry_shrub.png` },
   rock: { url: `${A}/environment/props/rock.png` },
-  'rock-cracked': { url: `${A}/environment/props/rock__1.png` },
+  'rock-cracked': { url: `${A}/environment/props/rock_cracked.png` },
   'locked-door-object': { url: `${A}/environment/structures/locked_door.png` },
+  'swing-gate-object': { url: `${A}/environment/structures/swing_gate.png` },
   'tall-grass-wind-0': { url: `${A}/environment/props/grass_wind0.png` },
   'tall-grass-wind-1': { url: `${A}/environment/props/grass_wind1.png` },
   'cutting-grass-0': { url: `${A}/environment/props/cuting_grass0.png` },

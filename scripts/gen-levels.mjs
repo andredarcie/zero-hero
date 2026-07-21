@@ -5,7 +5,8 @@
 // chunk, entao o level inteiro cabe numa tela e nada exige caminhada (andar nao e puzzle).
 // makeLevel NAO aceita multi-chunk de proposito: o tamanho e fixo para essa regra nao se perder.
 //
-// Ha UM SO level: "A ESPADA NA PEDRA". Todos os onze itens carregaveis, uma tela, uma mao.
+// Este script semeia o Level 1 base: "A ESPADA NA PEDRA". Levels adicionais sao criados no
+// gerenciador do /lab; ao regenerar a base, o manifesto abaixo preserva e relista esses arquivos.
 // O desenho e uma CORRENTE DE PRODUCAO — cada ferramenta fabrica o insumo do passo seguinte,
 // nunca so "abre a propria porta" (a regra do CLAUDE.md: itens PRODUZEM, nao deletam):
 //
@@ -205,17 +206,29 @@ const level = makeLevel({
   },
 });
 
-const index = [
-  {
-    id: 'level-1',
-    file: 'level-1.json',
-    name: level.meta.name,
-    blurb: 'Onze itens, uma mao so: forje o caminho ate a espada com as sobras de cada ferramenta.',
-  },
-];
-
 await fs.mkdir(outDir, { recursive: true });
+let previousIndex = [];
+try {
+  previousIndex = JSON.parse(await fs.readFile(path.join(outDir, 'index.json'), 'utf8'));
+} catch { /* primeira geracao */ }
 await fs.writeFile(path.join(outDir, 'level-1.json'), `${JSON.stringify(level, null, 2)}\n`, 'utf8');
+
+const previousByFile = new Map(previousIndex.map((entry) => [entry.file, entry]));
+const files = (await fs.readdir(outDir))
+  .filter((file) => /^level-\d+\.json$/u.test(file))
+  .sort((a, b) => Number(/\d+/u.exec(a)[0]) - Number(/\d+/u.exec(b)[0]));
+const index = await Promise.all(files.map(async (file) => {
+  const number = Number(/\d+/u.exec(file)[0]);
+  const stored = JSON.parse(await fs.readFile(path.join(outDir, file), 'utf8'));
+  return {
+    id: `level-${number}`,
+    file,
+    name: stored.meta?.name || `Level ${number}`,
+    blurb: number === 1
+      ? 'Onze itens, uma mao so: forje o caminho ate a espada com as sobras de cada ferramenta.'
+      : previousByFile.get(file)?.blurb ?? '',
+  };
+}));
 await fs.writeFile(path.join(outDir, 'index.json'), `${JSON.stringify(index, null, 2)}\n`, 'utf8');
 
 console.log(`Level gerado em ${outDir}`);

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "name": "A Espada na Pedra",
+    "name": "O fogo que ajuda atrapalha",
     "schemaVersion": 1,
     "worldChunksX": 1,
     "worldChunksY": 1,
@@ -9,11 +9,11 @@
     "tileSize": 8,
     "tilesetKey": "forest-tileset",
     "playerStart": {
-      "worldX": 6,
-      "worldY": 7
+      "worldX": 5,
+      "worldY": 10
     },
     "puzzle": true,
-    "exportedAt": "2026-07-19T01:28:32.254Z"
+    "exportedAt": "2026-07-21T17:17:55.075Z"
   },
   "chunks": [
     {
@@ -191,22 +191,50 @@
       ],
       "upper": [
         [
-          11,
+          14,
+          14,
+          14,
           null,
           null,
+          14,
+          4,
           null,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
+          14,
+          14,
+          14
         ],
         [
+          14,
+          14,
+          7,
           null,
           null,
+          null,
+          4,
+          null,
+          14,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          4,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          14,
           7,
           null,
           null,
@@ -214,69 +242,41 @@
           null,
           null,
           null,
+          9,
           null,
-          null,
-          null
+          14
         ],
         [
           null,
           null,
+          9,
           null,
+          7,
           null,
+          4,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
+          7,
+          27,
           10,
           null
         ],
         [
+          20,
           null,
           null,
           null,
           null,
           null,
+          4,
+          4,
           null,
-          null,
-          null,
-          null,
-          7,
-          null,
-          null
+          4,
+          4,
+          4
         ],
         [
           null,
-          null,
+          19,
           null,
           null,
           null,
@@ -290,25 +290,11 @@
         ],
         [
           null,
+          0,
           null,
           null,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
+          7,
           null,
           null,
           null,
@@ -318,19 +304,20 @@
         ],
         [
           null,
+          19,
+          null,
+          7,
           null,
           null,
           null,
+          7,
           null,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
+          0,
+          0
         ],
         [
+          14,
           null,
           null,
           null,
@@ -341,22 +328,35 @@
           null,
           null,
           null,
-          null,
-          null
+          14
         ],
         [
+          14,
+          14,
+          null,
+          null,
+          null,
+          null,
+          7,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          14,
+          14,
           null,
           null,
           null,
           null,
           null,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
+          14,
+          14,
+          14
         ]
       ],
       "collisions": [
@@ -532,369 +532,170 @@
       "enemies": [],
       "pickups": [
         {
-          "type": "key",
-          "worldX": 9,
-          "worldY": 0
-        },
-        {
-          "type": "axe",
-          "worldX": 0,
-          "worldY": 5
+          "type": "pickaxe",
+          "worldX": 1,
+          "worldY": 2
         },
         {
           "type": "bucket",
-          "worldX": 1,
-          "worldY": 6
-        },
-        {
-          "type": "wood",
-          "worldX": 4,
-          "worldY": 7
-        },
-        {
-          "type": "scythe",
-          "worldX": 6,
-          "worldY": 8
-        },
-        {
-          "type": "bomb",
-          "worldX": 2,
-          "worldY": 10
-        },
-        {
-          "type": "pickaxe",
-          "worldX": 0,
-          "worldY": 11
-        },
-        {
-          "type": "stone",
-          "worldX": 4,
-          "worldY": 10
-        },
-        {
-          "type": "lavaBoots",
-          "worldX": 5,
-          "worldY": 11
-        },
-        {
-          "type": "heart",
-          "worldX": 11,
+          "worldX": 10,
           "worldY": 9
         },
         {
-          "type": "sword",
-          "worldX": 11,
-          "worldY": 11
+          "type": "axe",
+          "worldX": 1,
+          "worldY": 9
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 7,
-          "worldY": 7
-        }
-      ]
+      "npcs": []
     }
   ],
   "props": [
     {
-      "type": "tallGrass",
+      "type": "inserter",
       "worldX": 6,
-      "worldY": 0
+      "worldY": 3,
+      "dir": 1
     },
     {
-      "type": "tallGrass",
-      "worldX": 7,
-      "worldY": 0
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 8,
-      "worldY": 0
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 10,
-      "worldY": 0
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 9,
-      "worldY": 0
-    },
-    {
-      "type": "campfire",
-      "worldX": 11,
-      "worldY": 0
-    },
-    {
-      "type": "water",
-      "worldX": 6,
-      "worldY": 1
-    },
-    {
-      "type": "water",
-      "worldX": 7,
-      "worldY": 1
-    },
-    {
-      "type": "water",
-      "worldX": 9,
-      "worldY": 1
-    },
-    {
-      "type": "water",
-      "worldX": 10,
-      "worldY": 1
-    },
-    {
-      "type": "water",
-      "worldX": 11,
-      "worldY": 1
-    },
-    {
-      "type": "bridgeSpot",
-      "worldX": 8,
-      "worldY": 1
-    },
-    {
-      "type": "water",
-      "worldX": 0,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 1,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 2,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 4,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 5,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 6,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 7,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 9,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 10,
-      "worldY": 2
-    },
-    {
-      "type": "water",
-      "worldX": 11,
-      "worldY": 2
-    },
-    {
-      "type": "bridgeSpot",
+      "type": "wire",
       "worldX": 3,
-      "worldY": 2
-    },
-    {
-      "type": "bridgeSpot",
-      "worldX": 8,
-      "worldY": 2
-    },
-    {
-      "type": "dryTree",
-      "worldX": 8,
       "worldY": 3
     },
     {
-      "type": "plantSpot",
-      "worldX": 8,
+      "type": "wire",
+      "worldX": 3,
       "worldY": 4
     },
     {
-      "type": "plantSpot",
-      "worldX": 8,
-      "worldY": 3
+      "type": "wire",
+      "worldX": 3,
+      "worldY": 5
     },
     {
-      "type": "dryTree",
-      "worldX": 0,
-      "worldY": 4
-    },
-    {
-      "type": "dryTree",
-      "worldX": 1,
-      "worldY": 4
-    },
-    {
-      "type": "tallGrass",
+      "type": "wire",
       "worldX": 2,
       "worldY": 5
     },
     {
-      "type": "tallGrass",
-      "worldX": 2,
-      "worldY": 6
+      "type": "boiler",
+      "worldX": 1,
+      "worldY": 5
     },
     {
-      "type": "tallGrass",
-      "worldX": 2,
+      "type": "rock",
+      "worldX": 0,
       "worldY": 7
     },
     {
-      "type": "campfire",
-      "worldX": 5,
-      "worldY": 7,
-      "lit": true
+      "type": "dryTree",
+      "worldX": 10,
+      "worldY": 10
     },
     {
-      "type": "tallGrass",
+      "type": "dryBush",
+      "worldX": 8,
+      "worldY": 4
+    },
+    {
+      "type": "swingGate",
       "worldX": 8,
       "worldY": 5
     },
     {
-      "type": "lava",
-      "worldX": 0,
-      "worldY": 8
-    },
-    {
-      "type": "lava",
-      "worldX": 1,
-      "worldY": 8
-    },
-    {
-      "type": "lava",
-      "worldX": 2,
-      "worldY": 8
-    },
-    {
-      "type": "lava",
-      "worldX": 3,
-      "worldY": 9
-    },
-    {
-      "type": "lava",
-      "worldX": 3,
-      "worldY": 10
-    },
-    {
-      "type": "lava",
-      "worldX": 3,
-      "worldY": 11
-    },
-    {
-      "type": "rock",
-      "worldX": 0,
-      "worldY": 9
-    },
-    {
-      "type": "rock",
-      "worldX": 1,
-      "worldY": 10
-    },
-    {
-      "type": "rock",
-      "worldX": 1,
-      "worldY": 11
-    },
-    {
-      "type": "bombSpot",
-      "worldX": 1,
-      "worldY": 9
-    },
-    {
-      "type": "dryBush",
-      "worldX": 4,
-      "worldY": 9
-    },
-    {
-      "type": "lava",
-      "worldX": 5,
-      "worldY": 10
-    },
-    {
-      "type": "water",
-      "worldX": 4,
-      "worldY": 11
-    },
-    {
-      "type": "water",
-      "worldX": 6,
-      "worldY": 11
-    },
-    {
-      "type": "water",
+      "type": "levelPortal",
       "worldX": 9,
-      "worldY": 8
+      "worldY": 1
     },
     {
-      "type": "water",
-      "worldX": 10,
-      "worldY": 8
-    },
-    {
-      "type": "water",
-      "worldX": 11,
-      "worldY": 8
-    },
-    {
-      "type": "water",
-      "worldX": 9,
-      "worldY": 9
-    },
-    {
-      "type": "water",
-      "worldX": 9,
+      "type": "lava",
+      "worldX": 8,
       "worldY": 11
     },
     {
-      "type": "rock",
+      "type": "lava",
       "worldX": 8,
       "worldY": 10
     },
     {
-      "type": "lockedDoor",
+      "type": "lava",
+      "worldX": 8,
+      "worldY": 9
+    },
+    {
+      "type": "water",
+      "worldX": 3,
+      "worldY": 0
+    },
+    {
+      "type": "water",
+      "worldX": 3,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 2,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 1,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 0,
+      "worldY": 1
+    },
+    {
+      "type": "rock",
+      "worldX": 5,
+      "worldY": 1
+    },
+    {
+      "type": "wire",
+      "worldX": 4,
+      "worldY": 3
+    },
+    {
+      "type": "wire",
+      "worldX": 5,
+      "worldY": 3
+    },
+    {
+      "type": "dryBush",
+      "worldX": 8,
+      "worldY": 3
+    },
+    {
+      "type": "moonflower",
+      "worldX": 8,
+      "worldY": 6
+    },
+    {
+      "type": "lava",
+      "worldX": 8,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
       "worldX": 9,
-      "worldY": 10,
-      "floodgate": true
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 10,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 11,
+      "worldY": 8
     },
     {
       "type": "campfire",
-      "worldX": 10,
-      "worldY": 9,
-      "lit": true
-    },
-    {
-      "type": "moonflower",
-      "worldX": 10,
-      "worldY": 11
-    },
-    {
-      "type": "moonflower",
-      "worldX": 11,
-      "worldY": 10
-    },
-    {
-      "type": "inserter",
-      "worldX": 5,
-      "worldY": 5,
-      "dir": 1
+      "worldX": 7,
+      "worldY": 7
     }
   ],
   "dialogs": {
@@ -930,5 +731,6 @@
         }
       ]
     }
-  }
+  },
+  "globalVariables": {}
 }

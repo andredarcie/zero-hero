@@ -87,6 +87,24 @@ export class EditorStore {
   public constructor(world: WorldData) {
     this.world = world;
     this.world.globalVariables ??= {};
+    // Every authored level owns exactly one start point. Older or hand-edited files may be
+    // missing it; repair those into a visible centre marker and leave the store dirty so the
+    // author explicitly persists the repair on the next save.
+    const rawStart = this.world.meta.playerStart as { worldX?: unknown; worldY?: unknown } | undefined;
+    const startIsValid = rawStart
+      && Number.isInteger(rawStart.worldX)
+      && Number.isInteger(rawStart.worldY)
+      && Number(rawStart.worldX) >= 0
+      && Number(rawStart.worldY) >= 0
+      && Number(rawStart.worldX) < this.world.meta.worldChunksX * CHUNK_COLUMNS
+      && Number(rawStart.worldY) < this.world.meta.worldChunksY * CHUNK_ROWS;
+    if (!startIsValid) {
+      this.world.meta.playerStart = {
+        worldX: Math.floor((this.world.meta.worldChunksX * CHUNK_COLUMNS) / 2),
+        worldY: Math.floor((this.world.meta.worldChunksY * CHUNK_ROWS) / 2),
+      };
+      this.dirty = true;
+    }
     this.rebuildIndex();
   }
 
@@ -345,6 +363,21 @@ export class EditorStore {
     this.emit({ spawn: true });
   }
 
+  /** Hard requirements shared by save and playtest: a start must exist on a walkable tile. */
+  public startPointErrors(): string[] {
+    const start = this.world.meta.playerStart as { worldX?: unknown; worldY?: unknown } | undefined;
+    if (!start || !Number.isInteger(start.worldX) || !Number.isInteger(start.worldY)) {
+      return ['Todo level precisa de um Ponto Inicial'];
+    }
+    const worldX = Number(start.worldX);
+    const worldY = Number(start.worldY);
+    if (!this.isInside(worldX, worldY)) return ['O Ponto Inicial esta fora do level'];
+    if (this.readCell('collision', worldX, worldY) === true) {
+      return ['O Ponto Inicial precisa estar em um tile sem colisao'];
+    }
+    return [];
+  }
+
   // ── Dialogs ─────────────────────────────────────────────────────────────
 
   /** Current dialog for the NPC, or a fresh editable template built from the code defaults. */
@@ -499,13 +532,7 @@ export class EditorStore {
   // ── Validation / stats ──────────────────────────────────────────────────
 
   public validate(): string[] {
-    const warnings: string[] = [];
-    const start = this.world.meta.playerStart;
-    if (!this.isInside(start.worldX, start.worldY)) {
-      warnings.push('Spawn do jogador fora do mundo');
-    } else if (this.readCell('collision', start.worldX, start.worldY) === true) {
-      warnings.push('Spawn do jogador em cima de colisao');
-    }
+    const warnings: string[] = [...this.startPointErrors()];
 
     let onCollision = 0;
     let legacyEnemies = 0;
@@ -519,16 +546,35 @@ export class EditorStore {
     if (legacyEnemies > 0) warnings.push(`${legacyEnemies} inimigo(s) legado(s) no arquivo — o jogo ignora inimigos colocados; use a borracha para remover`);
     const variables = this.world.globalVariables ?? {};
     const unboundPlates = this.world.props.filter((prop) => prop.type === 'pressurePlate' && !prop.variable).length;
-    const unboundWheels = this.world.props.filter((prop) => prop.type === 'waterWheel' && !prop.variable).length;
     const missingVariables = new Set(
       this.world.props
         .filter((prop) => prop.variable && !(prop.variable in variables))
         .map((prop) => prop.variable!),
     );
     if (unboundPlates > 0) warnings.push(`${unboundPlates} placa(s) de pressao sem variavel global vinculada`);
-    if (unboundWheels > 0) warnings.push(`${unboundWheels} roda(s) d'agua sem saida de energia vinculada`);
     const unboundBoilers = this.world.props.filter((prop) => prop.type === 'boiler' && !prop.variable).length;
     if (unboundBoilers > 0) warnings.push(`${unboundBoilers} caldeira(s) sem saida de energia vinculada`);
+    const wires = new Set(
+      this.world.props.filter((prop) => prop.type === 'wire').map((prop) => `${prop.worldX},${prop.worldY}`),
+    );
+    // Cabo e a saida principal da roda. A variavel continua aceita apenas para mundos/puzzles
+    // legados; uma roda sem variavel e perfeitamente valida quando ha um fio ortogonal ligado.
+    const disconnectedWheels = this.world.props.filter((prop) => prop.type === 'waterWheel'
+      && !prop.variable
+      && ![
+        `${prop.worldX - 1},${prop.worldY}`,
+        `${prop.worldX + 1},${prop.worldY}`,
+        `${prop.worldX},${prop.worldY - 1}`,
+        `${prop.worldX},${prop.worldY + 1}`,
+      ].some((key) => wires.has(key))).length;
+    if (disconnectedWheels > 0) warnings.push(`${disconnectedWheels} roda(s) d'agua sem cabo adjacente nem saida logica`);
+    const unwiredGates = this.world.props.filter((prop) => prop.type === 'electronicGate' && ![
+      `${prop.worldX - 1},${prop.worldY}`,
+      `${prop.worldX + 1},${prop.worldY}`,
+      `${prop.worldX},${prop.worldY - 1}`,
+      `${prop.worldX},${prop.worldY + 1}`,
+    ].some((key) => wires.has(key))).length;
+    if (unwiredGates > 0) warnings.push(`${unwiredGates} portao(oes) eletronico(s) sem cabo adjacente — permanecerao fechados`);
     if (missingVariables.size > 0) warnings.push(`Mecanismo(s) usam variavel(is) inexistente(s): ${[...missingVariables].join(', ')}`);
 
     // A roda ja representa agua no proprio tile, mas precisa de continuidade ortogonal para que

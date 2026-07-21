@@ -136,6 +136,7 @@ export const ASSET_KEYS = {
   woodIcon: 'wood-icon',
   woodOnFireIcon: 'wood-on-fire-icon',
   lookedDoorObject: 'looked-door-object',
+  swingGateObject: 'swing-gate-object',
   undead: 'undead',
   undeadHurt: 'undead-hurt',
   undeadBorn0: 'undead-born-0',
@@ -170,6 +171,8 @@ export const ASSET_KEYS = {
   waterWheel: 'water-wheel',
   boiler: 'boiler',
   wire: 'wire',
+  electronicGate: 'electronic-gate',
+  levelPortal: 'level-portal-icon',
   battery: 'battery',
   cutGrass: 'cut-grass',
   cutGrassWind0: 'cut-grass-wind0',
@@ -201,6 +204,8 @@ export const WATER_WHEEL_FRAMES = { phases: 8, off: 0, powered: 8 } as const;
 export const BOILER_FRAMES = { coldDry: 0, coldWet: 1, hotDry: 2, hotWet: 3, on: 4 } as const;
 // Sprite Factory battery.png: vazia / carregada (a janela gold) — o balde da eletricidade.
 export const BATTERY_FRAMES = { empty: 0, full: 1 } as const;
+// Sprite Factory electronic_gate.png: quatro alturas da grade em bancos sem/com energia.
+export const ELECTRONIC_GATE_FRAMES = { phases: 4, off: 0, powered: 4 } as const;
 // Quanto tempo de REDE VIVA uma carga banca: pousada junto a um cabo, a bateria e uma semente
 // do flood-fill e drena so ENQUANTO alimenta (na mao ela e estavel — a tensao mora em quanto
 // tempo a rede precisa ficar de pe, nao na viagem, que ja e o drama da tocha).

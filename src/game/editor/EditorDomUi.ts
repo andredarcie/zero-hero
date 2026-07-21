@@ -7,6 +7,7 @@ import {
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind, WorldDialog } from '@/game/world/worldSchema';
+import type { DeleteLabLevelResult, LabLevelSummary } from '@/game/worldApi';
 
 // The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
 // world viewport, this module renders everything else (tools, palettes, minimap, modals).
@@ -74,6 +75,14 @@ export type EditorUiCallbacks = {
   onNavigate: (tileX: number, tileY: number) => void;
   onWorldApply: (settings: { name: string; chunksX: number; chunksY: number }) => void;
   onDialogApply: (kind: NpcKind, dialog: WorldDialog) => void;
+  levelManager?: {
+    currentLevel: number;
+    list: () => Promise<LabLevelSummary[]>;
+    create: (name: string) => Promise<LabLevelSummary>;
+    rename: (level: number, name: string) => Promise<LabLevelSummary>;
+    remove: (level: number) => Promise<DeleteLabLevelResult>;
+    open: (level: number) => void;
+  };
 };
 
 export const NPC_KINDS: readonly NpcKind[] = [
@@ -114,6 +123,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'campfire', label: 'Fogueira', key: ASSET_KEYS.campfireFrame1 },
   { type: 'dryBush', label: 'Mato Seco', key: ASSET_KEYS.dryBush },
   { type: 'lockedDoor', label: 'Porta', key: ASSET_KEYS.lookedDoorObject },
+  { type: 'swingGate', label: 'Portao de Bater', key: ASSET_KEYS.swingGateObject },
   { type: 'dryTree', label: 'Arvore Seca', key: ASSET_KEYS.dryTree, frame: 0 },
   { type: 'dryShrub', label: 'Arbusto Seco', key: ASSET_KEYS.dryShrub },
   { type: 'rock', label: 'Pedra', key: ASSET_KEYS.rock },
@@ -129,6 +139,8 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'pressurePlate', label: 'Placa de Pressao', key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   { type: 'waterWheel', label: "Roda d'Agua Geradora", key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
   { type: 'boiler', label: 'Caldeira a Vapor', key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.coldDry },
+  { type: 'electronicGate', label: 'Portao Eletronico', key: ASSET_KEYS.electronicGate, frame: 0 },
+  { type: 'levelPortal', label: 'Portal de Saida', key: ASSET_KEYS.levelPortal },
   // A forma do cabo nunca se escolhe: ela nasce dos vizinhos, no tabuleiro e no jogo.
   { type: 'wire', label: 'Cabo de Energia', key: ASSET_KEYS.wire, frame: 1 }, // frame 1 = 'h'
 ];
@@ -225,7 +237,7 @@ const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: s
   { id: 'picker', label: 'Conta-gotas', kbd: 'I', hint: 'Copia o tile sob o cursor' },
   { id: 'collision', label: 'Colisao', kbd: 'C', hint: 'Pinta colisao (botao direito limpa)' },
   { id: 'entity', label: 'Entidade', kbd: '2-4', hint: 'Coloca a entidade escolhida na paleta' },
-  { id: 'spawn', label: 'Spawn', kbd: 'S', hint: 'Define onde o jogador nasce' },
+  { id: 'spawn', label: 'Ponto Inicial', kbd: 'S', hint: 'Obrigatorio: clique onde o jogador deve comecar' },
 ];
 
 const TAB_DEFS: ReadonlyArray<{ id: PaletteTab; label: string; kbd: string }> = [
@@ -321,6 +333,17 @@ const CSS = `
 #zh-editor-root .zh-var-row { display: grid; grid-template-columns: minmax(150px, 1fr) auto auto auto; gap: 8px; align-items: center; margin-bottom: 7px; }
 #zh-editor-root .zh-var-row code { color: #d8eef2; overflow: hidden; text-overflow: ellipsis; }
 #zh-editor-root .zh-var-empty { color: #6d949d; margin: 6px 0 12px; }
+#zh-editor-root .zh-level-create { display: grid; grid-template-columns: 1fr auto; gap: 7px; margin: 8px 0 14px; }
+#zh-editor-root .zh-level-list { display: flex; flex-direction: column; gap: 6px; }
+#zh-editor-root .zh-level-row { display: grid; grid-template-columns: 42px minmax(150px, 1fr) auto auto auto; gap: 6px; align-items: center; padding: 7px; border: 1px solid #1f3540; border-radius: 4px; background: #101d23; }
+#zh-editor-root .zh-level-row.current { border-color: #f4a261; background: #17252a; }
+#zh-editor-root .zh-level-number { color: #8ecae6; font-family: 'Press Start 2P', monospace; font-size: 9px; }
+#zh-editor-root .zh-level-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #dfe9ec; }
+#zh-editor-root .zh-level-start { color: #66d9ef; font-size: 9px; margin-top: 3px; }
+#zh-editor-root .zh-level-current { color: #f4a261; font-size: 9px; margin-left: 6px; }
+#zh-editor-root .zh-level-note { color: #6d949d; margin: 4px 0 10px; }
+#zh-editor-root .zh-level-note.warn { color: #ffb057; }
+#zh-editor-root .zh-level-empty { color: #6d949d; padding: 10px 0; }
 #zh-editor-root .zh-help-table { width: 100%; border-collapse: collapse; }
 #zh-editor-root .zh-help-table td { padding: 3px 8px 3px 0; border-bottom: 1px solid #14232b; }
 #zh-editor-root .zh-help-table td:first-child { color: #f4a261; white-space: nowrap; font-family: monospace; }
@@ -404,6 +427,15 @@ export class EditorDomUi {
       this.button('Salvar', 'Salvar em public/world.json (Ctrl+S)', () => this.cb.onSave(), 'primary'),
       this.button('&#9654; Testar', 'Joga o mundo em edicao sem salvar (P) — ESC volta', () => this.cb.onPlaytest()),
       this.button('Recarregar', 'Descarta e recarrega do world.json', () => this.cb.onReload()),
+    );
+    if (this.cb.levelManager) {
+      const levels = this.button('Levels&#8230;', 'Listar, criar, abrir, renomear e apagar levels do lab', () => {
+        void this.openLevelManager();
+      });
+      levels.id = 'zh-level-manager-open';
+      actions.appendChild(levels);
+    }
+    actions.append(
       this.button('Mundo&#8230;', 'Nome, tamanho e validacao do mundo', () => this.openWorldModal()),
       this.button('Variaveis&#8230;', 'Cria estados booleanos globais para mecanismos do mundo', () => this.openVariablesModal()),
       this.button('Dialogos&#8230;', 'Editor de dialogos dos NPCs', () => this.openDialogModal()),
@@ -673,6 +705,14 @@ export class EditorDomUi {
       this.optionsEl.appendChild(collSeg);
     }
 
+    if (this.state.tool === 'spawn') {
+      const start = this.store.spawn;
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size:10px;color:#66d9ef;margin:4px 0 6px;line-height:1.55;';
+      hint.innerHTML = `<b>Ponto Inicial obrigatorio</b><br>Atual: (${start.worldX}, ${start.worldY}). Clique em um tile livre para mover. Existe exatamente um por level.`;
+      this.optionsEl.appendChild(hint);
+    }
+
     if (this.state.tool === 'brush' || this.state.tool === 'eraser' || this.state.tool === 'collision') {
       const brushSeg = document.createElement('div');
       brushSeg.className = 'zh-seg';
@@ -712,12 +752,18 @@ export class EditorDomUi {
         this.changed();
       });
 
-      const fieldLabel = propType === 'waterWheel' || propType === 'boiler' ? 'Saida de energia'
+      const fieldLabel = propType === 'waterWheel' ? 'Saida logica (opcional)'
+        : propType === 'boiler' ? 'Saida de energia'
         : propType === 'inserter' ? 'Alimentacao' : 'Variavel global';
       const row = this.field(fieldLabel, select);
       row.style.marginTop = '7px';
       this.optionsEl.appendChild(row);
-      if (propType === 'inserter') {
+      if (propType === 'waterWheel') {
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size:10px;color:#6d949d;margin:3px 0 5px;line-height:1.4;';
+        hint.textContent = 'Ligue um fio ao lado da roda para energiza-lo. A saida logica e opcional.';
+        this.optionsEl.appendChild(hint);
+      } else if (propType === 'inserter') {
         const hint = document.createElement('div');
         hint.style.cssText = 'font-size:10px;color:#6d949d;margin:3px 0 5px;line-height:1.4;';
         hint.textContent = 'Sem vinculo: funciona como antes. Vinculado: so trabalha com energia.';
@@ -870,6 +916,8 @@ export class EditorDomUi {
     const toolDef = TOOL_DEFS.find((def) => def.id === this.state.tool);
     const selection = this.state.tool === 'entity'
       ? `${this.state.entity.list}:${this.state.entity.type}`
+      : this.state.tool === 'spawn'
+        ? `(${this.store.spawn.worldX}, ${this.store.spawn.worldY})`
       : this.state.tile === null ? 'limpar' : `tile ${this.state.tile}`;
     const lines: string[] = [];
     const viewSuffix = this.state.viewMode === 'chunk' ? ` — visao chunk (${this.state.chunkX}, ${this.state.chunkY})` : '';
@@ -1157,6 +1205,207 @@ export class EditorDomUi {
     return row;
   }
 
+  /** CRUD surface for the puzzle files the /lab route actually plays. */
+  public async openLevelManager(): Promise<void> {
+    const manager = this.cb.levelManager;
+    if (!manager) return;
+    const { body, foot } = this.modalShell('Levels do Lab');
+    body.id = 'zh-level-manager';
+
+    const intro = document.createElement('p');
+    intro.className = 'zh-level-note';
+    intro.textContent = 'Crie fases vazias, abra qualquer level salvo e mantenha a ordem usada pelos portais.';
+    body.appendChild(intro);
+
+    const dirtyNote = document.createElement('p');
+    dirtyNote.className = `zh-level-note${this.store.dirty ? ' warn' : ''}`;
+    dirtyNote.textContent = this.store.dirty
+      ? 'Salve ou recarregue as alteracoes atuais antes de trocar, criar, renomear ou apagar levels.'
+      : 'O Level 1 e a base do laboratorio; levels criados aqui podem ser apagados.';
+    body.appendChild(dirtyNote);
+
+    const createRow = document.createElement('div');
+    createRow.className = 'zh-level-create';
+    const createInput = document.createElement('input');
+    createInput.id = 'zh-level-create-name';
+    createInput.type = 'text';
+    createInput.maxLength = 80;
+    createInput.placeholder = 'Nome do novo level';
+    const createButton = this.button('+ Criar e abrir', 'Cria um level 12x12 vazio e abre para edicao', () => {
+      void createLevel();
+    }, 'primary');
+    createButton.id = 'zh-level-create';
+    createButton.disabled = this.store.dirty;
+    createRow.append(createInput, createButton);
+    body.appendChild(createRow);
+
+    const list = document.createElement('div');
+    list.id = 'zh-level-list';
+    list.className = 'zh-level-list';
+    list.textContent = 'Carregando levels...';
+    body.appendChild(list);
+    foot.appendChild(this.button('Fechar', '', () => this.closeModal(), 'primary'));
+
+    let levels: LabLevelSummary[] = [];
+    let editing: number | null = null;
+    let deleteArmed: number | null = null;
+
+    const fail = (error: unknown, fallback: string): void => {
+      this.toast(error instanceof Error ? error.message : fallback);
+    };
+
+    const navigateAfterMutation = (level = manager.currentLevel): void => {
+      this.setLoading(true);
+      manager.open(level);
+    };
+
+    const createLevel = async (): Promise<void> => {
+      if (this.store.dirty) {
+        this.toast('Salve ou recarregue as alteracoes atuais primeiro');
+        return;
+      }
+      const name = createInput.value.trim();
+      if (!name) {
+        this.toast('Digite um nome para o novo level');
+        createInput.focus();
+        return;
+      }
+      createButton.disabled = true;
+      try {
+        const created = await manager.create(name);
+        this.toast(`Level ${created.level} criado`);
+        navigateAfterMutation(created.level);
+      } catch (error) {
+        createButton.disabled = false;
+        fail(error, 'Falha ao criar level');
+      }
+    };
+
+    createInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void createLevel();
+      }
+    });
+
+    const renderRows = (): void => {
+      list.innerHTML = '';
+      if (levels.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'zh-level-empty';
+        empty.textContent = 'Nenhum level encontrado.';
+        list.appendChild(empty);
+        return;
+      }
+
+      levels.forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = `zh-level-row${entry.level === manager.currentLevel ? ' current' : ''}`;
+        row.dataset.level = String(entry.level);
+
+        const number = document.createElement('span');
+        number.className = 'zh-level-number';
+        number.textContent = `#${entry.level}`;
+
+        const nameCell = document.createElement('div');
+        if (editing === entry.level) {
+          const input = document.createElement('input');
+          input.id = `zh-level-rename-${entry.level}`;
+          input.type = 'text';
+          input.maxLength = 80;
+          input.value = entry.name;
+          nameCell.appendChild(input);
+          window.queueMicrotask(() => { input.focus(); input.select(); });
+        } else {
+          nameCell.className = 'zh-level-name';
+          const name = document.createElement('div');
+          name.textContent = entry.name;
+          nameCell.appendChild(name);
+          if (entry.level === manager.currentLevel) {
+            const current = document.createElement('span');
+            current.className = 'zh-level-current';
+            current.textContent = 'ABERTO';
+            name.appendChild(current);
+          }
+          const start = document.createElement('div');
+          start.className = 'zh-level-start';
+          start.textContent = entry.playerStart
+            ? `INICIO (${entry.playerStart.worldX}, ${entry.playerStart.worldY})`
+            : 'SEM PONTO INICIAL';
+          nameCell.appendChild(start);
+        }
+
+        const open = this.button(
+          entry.level === manager.currentLevel ? 'Aberto' : 'Abrir',
+          entry.level === manager.currentLevel ? 'Este level ja esta aberto' : `Abrir ${entry.name}`,
+          () => navigateAfterMutation(entry.level),
+        );
+        open.dataset.action = 'open';
+        open.disabled = this.store.dirty || entry.level === manager.currentLevel || editing !== null;
+
+        const rename = this.button(editing === entry.level ? 'Salvar nome' : 'Renomear', 'Alterar o nome exibido', () => {
+          if (editing !== entry.level) {
+            editing = entry.level;
+            deleteArmed = null;
+            renderRows();
+            return;
+          }
+          const input = document.getElementById(`zh-level-rename-${entry.level}`) as HTMLInputElement | null;
+          const name = input?.value.trim() ?? '';
+          if (!name) { this.toast('O nome nao pode ficar vazio'); return; }
+          rename.disabled = true;
+          void manager.rename(entry.level, name)
+            .then(() => navigateAfterMutation())
+            .catch((error) => { rename.disabled = false; fail(error, 'Falha ao renomear level'); });
+        });
+        rename.dataset.action = 'rename';
+        rename.disabled = this.store.dirty;
+
+        const remove = this.button(
+          deleteArmed === entry.level ? 'Confirmar?' : 'Apagar',
+          entry.level === 1 ? 'O Level 1 base nao pode ser apagado' : 'Apagar este arquivo de level',
+          () => {
+            if (deleteArmed !== entry.level) {
+              deleteArmed = entry.level;
+              editing = null;
+              renderRows();
+              window.setTimeout(() => {
+                if (deleteArmed === entry.level && list.isConnected) {
+                  deleteArmed = null;
+                  renderRows();
+                }
+              }, 3200);
+              return;
+            }
+            remove.disabled = true;
+            void manager.remove(entry.level)
+              .then((result) => {
+                const fallback = result.levels.find((level) => level.level > entry.level)?.level
+                  ?? [...result.levels].reverse().find((level) => level.level < entry.level)?.level
+                  ?? 1;
+                navigateAfterMutation(entry.level === manager.currentLevel ? fallback : manager.currentLevel);
+              })
+              .catch((error) => { remove.disabled = false; fail(error, 'Falha ao apagar level'); });
+          },
+        );
+        remove.dataset.action = 'delete';
+        remove.disabled = this.store.dirty || entry.level === 1 || editing !== null;
+
+        row.append(number, nameCell, open, rename, remove);
+        list.appendChild(row);
+      });
+    };
+
+    try {
+      levels = await manager.list();
+      if (!body.isConnected) return;
+      renderRows();
+    } catch (error) {
+      list.textContent = 'Nao foi possivel carregar a lista.';
+      fail(error, 'Falha ao listar levels');
+    }
+  }
+
   public openWorldModal(): void {
     const { body, foot } = this.modalShell('Mundo');
     const meta = this.store.world.meta;
@@ -1441,7 +1690,7 @@ export class EditorDomUi {
       ['Botao direito', 'Apaga (entidades, tile superior e colisao; na ferramenta Colisao, so colisao)'],
       ['Botao do meio / Espaco + arrastar', 'Move a camera'],
       ['Roda do mouse', 'Zoom no cursor'],
-      ['B / E / R / F / I / C / S', 'Pincel, Borracha, Retangulo, Balde, Conta-gotas, Colisao, Spawn'],
+      ['B / E / R / F / I / C / S', 'Pincel, Borracha, Retangulo, Balde, Conta-gotas, Colisao, Ponto Inicial'],
       ['1..5', 'Abas: Tiles, Inimigos, NPCs, Itens, Props'],
       ['Tab', 'Alterna camada chao/superior'],
       ['[ e ]', 'Tamanho do pincel'],
