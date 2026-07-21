@@ -13,7 +13,7 @@
       "worldY": 10
     },
     "puzzle": true,
-    "exportedAt": "2026-07-21T19:45:48.909Z"
+    "exportedAt": "2026-07-21T23:15:36.731Z"
   },
   "chunks": [
     {
@@ -354,8 +354,8 @@
           null,
           null,
           null,
-          14,
-          14,
+          null,
+          null,
           14
         ]
       ],
@@ -696,6 +696,16 @@
       "type": "tallGrass",
       "worldX": 8,
       "worldY": 3
+    },
+    {
+      "type": "dryTree",
+      "worldX": 10,
+      "worldY": 11
+    },
+    {
+      "type": "dryTree",
+      "worldX": 9,
+      "worldY": 11
     }
   ],
   "dialogs": {
