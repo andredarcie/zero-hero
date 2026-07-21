@@ -2,7 +2,8 @@
 
 import {
   ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES, NPC_VISUALS,
-  PRESSURE_PLATE_FRAMES, SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
+  PRESSURE_PLATE_FRAMES, SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, TOOLBOX_FRAMES,
+  WATER_WHEEL_FRAMES,
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
@@ -135,6 +136,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'bombSpot', label: 'Marca de Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
   { type: 'plantSpot', label: 'Buraco de Plantio', key: ASSET_KEYS.plantHole, frame: 0 },
   { type: 'inserter', label: 'Braco Robotico (G gira)', key: ASSET_KEYS.inserter, frame: 1 },
+  { type: 'toolbox', label: 'Caixa de Ferramentas (G gira)', key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
   { type: 'woodenCrate', label: 'Caixote de Madeira', key: ASSET_KEYS.woodenCrate },
   { type: 'pressurePlate', label: 'Placa de Pressao', key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   { type: 'waterWheel', label: "Roda d'Agua Geradora", key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
@@ -147,14 +149,21 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
 
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
 // que o editor faz e "esta peca gira?" — e quando existir a segunda peca giratoria, ela entra
-// aqui e ganha o G de graca.
-const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter']);
+// aqui e ganha o G de graca. (Aconteceu: a caixa de ferramentas.)
+const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter', 'toolbox']);
+
+// …e destes, quais tem a ARTE dividida em um frame por direcao. Sao duas perguntas diferentes e
+// junta-las quebrou a caixa de ferramentas na primeira tentativa: os frames dela sao as poses da
+// tampa, entao desenhar `frame = dir` no tabuleiro punha a caixa aberta e forjando num mapa
+// parado. Quem nao tem frames de direcao ganha uma marca de proa no chip (ver EditorScene).
+const DIR_FRAME_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter']);
 
 // Producers and consumers share the same tiny named-circuit authoring surface. Keeping this a
 // set means the next electrical prop gets variable persistence and the dropdown in one place.
 const VARIABLE_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['pressurePlate', 'waterWheel', 'inserter', 'boiler']);
 
 export const isDirectionalProp = (type: PropKind): boolean => DIRECTIONAL_PROPS.has(type);
+export const hasDirectionFrames = (type: PropKind): boolean => DIR_FRAME_PROPS.has(type);
 export const isVariableProp = (type: PropKind): boolean => VARIABLE_PROPS.has(type);
 
 /** O nome da direcao, pro editor poder dizer pra onde a peca esta virada. */

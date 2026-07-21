@@ -670,6 +670,40 @@ class SoundManager {
     this.osc('triangle', 180, 145, 0.045, 0.08, 0.01);
   }
 
+  // ── a caixa de ferramentas ───────────────────────────────────────────────
+  // Os quatro sons contam UM arco: a tampa abre (agudo, curto), a forja bate (grave, repetida),
+  // o produto salta (sobe e assenta) e a recusa e a mesma dobradica da abertura CORTADA por um
+  // baque — exatamente o truque que o portao de bater usa pra distinguir "abriu" de "tentou".
+
+  /** A trava soltando e a tampa girando na dobradica: metalico, seco, sem drama. */
+  public playToolboxOpen(): void {
+    this.noise('bandpass', 2600, 3.6, 0.1, 0.05);
+    this.osc('square', 240, 420, 0.075, 0.09);
+    this.osc('triangle', 620, 520, 0.045, 0.07, 0.04);
+  }
+
+  /** Uma martelada la dentro. Repete 3x na forja, entao e curta e um tico mais grave a cada vez. */
+  public playToolboxForge(step = 0): void {
+    const drop = step * 18;
+    this.noise('bandpass', 3000 - drop * 30, 4.2, 0.13, 0.035);
+    this.osc('square', 200 - drop, 110 - drop, 0.11, 0.055, 0.005);
+    this.osc('triangle', 480 - drop * 2, 360, 0.05, 0.05, 0.008);
+  }
+
+  /** O item novo saltando pra fora e caindo no chao: glissando curto pra cima e um toque seco. */
+  public playToolboxDeliver(): void {
+    this.osc('triangle', 330, 660, 0.09, 0.13);
+    this.osc('square', 660, 990, 0.035, 0.1, 0.05);
+    this.noise('lowpass', 900, 1.2, 0.085, 0.08, 0.14); // a peca assentando no chao
+  }
+
+  /** Estes dois nao dao em nada: a tampa pula e bate de volta. A dobradica sem o fim feliz. */
+  public playToolboxRefuse(): void {
+    this.osc('square', 240, 300, 0.055, 0.05);
+    this.noise('lowpass', 260, 1.3, 0.16, 0.1, 0.06); // o baque da tampa voltando
+    this.osc('sine', 130, 80, 0.075, 0.12, 0.06);
+  }
+
   public playHammer(): void {
     // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
     if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;

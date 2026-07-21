@@ -61,6 +61,7 @@ import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
 import { PlantSpotObject } from '@/game/objects/PlantSpotObject';
 import { RoboticArmObject, type ArmWorldPort } from '@/game/objects/RoboticArmObject';
+import { ToolboxObject, type ToolboxWorldPort } from '@/game/objects/ToolboxObject';
 import { MoonflowerObject } from '@/game/objects/MoonflowerObject';
 import { BombSpotObject } from '@/game/objects/BombSpotObject';
 import { WoodenCrateObject } from '@/game/objects/WoodenCrateObject';
@@ -124,6 +125,7 @@ import {
   getBridgeSpots,
   getPlantSpots,
   getInserters,
+  getToolboxes,
   getWoodenCrates,
   getPressurePlates,
   getBoilers,
@@ -397,6 +399,8 @@ export class GameScene extends Phaser.Scene {
   // Canteiros: dug holes where seeds plant on step, mounds water on bump, grass regrows.
   private plantSpots: PlantSpotObject[] = [];
   private inserters: RoboticArmObject[] = [];
+  // A bancada: duas bandejas atras, o corpo, a saida na frente. Ver ToolboxObject.
+  private toolboxes: ToolboxObject[] = [];
   private woodenCrates: WoodenCrateObject[] = [];
   private pressurePlates: PressurePlateObject[] = [];
   private waterWheels: WaterWheelObject[] = [];
@@ -706,6 +710,11 @@ export class GameScene extends Phaser.Scene {
     this.inserters = getInserters().map(
       (a) => new RoboticArmObject(a.worldX, a.worldY, a.dir ?? 1, a.variable),
     );
+    // Mesma regra de default do braco (`dir ?? 1`): um JSON antigo nunca vira um prop quebrado,
+    // e leste e a direcao que o editor oferece primeiro.
+    this.toolboxes = getToolboxes().map(
+      (t) => new ToolboxObject(this, t.worldX, t.worldY, t.dir ?? 1),
+    );
     this.globalVariables = new GlobalVariables(getGlobalVariables());
     this.woodenCrates = getWoodenCrates().map((crate) => new WoodenCrateObject(this, crate.worldX, crate.worldY));
     this.pressurePlates = getPressurePlates().map(
@@ -758,6 +767,7 @@ export class GameScene extends Phaser.Scene {
       { list: this.bombSpots },
       { list: this.plantSpots },
       { list: this.inserters },
+      { list: this.toolboxes },
       { list: this.woodenCrates },
       { list: this.pressurePlates },
       { list: this.waterWheels },
@@ -1358,6 +1368,18 @@ export class GameScene extends Phaser.Scene {
           powered: arm.isPowered,
           busy: arm.isBusy,
         })),
+        toolboxes: this.toolboxes.map((box) => ({
+          worldX: box.worldX,
+          worldY: box.worldY,
+          dir: box.dir,
+          slots: box.slotTiles,
+          output: box.outputTile,
+          phase: box.currentPhase,
+          frame: box.currentFrame,
+          busy: box.isBusy,
+          holding: box.heldProduct,
+          refusals: box.refusalCount,
+        })),
         electronicGates: this.electronicGates.map((gate) => ({
           worldX: gate.worldX,
           worldY: gate.worldY,
@@ -1755,6 +1777,9 @@ export class GameScene extends Phaser.Scene {
     this.updateWireEnergy(delta);
     this.updateElectronicGates(delta);
     this.updateInserters(delta);
+    // Depois dos bracos, de proposito: a saida de um braco pode ser a bandeja de uma caixa, e
+    // ler o chao no mesmo frame em que a carga assentou faz a fabrica andar sem um frame de atraso.
+    this.updateToolboxes(delta);
 
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.renderProps();
@@ -1914,6 +1939,15 @@ export class GameScene extends Phaser.Scene {
 
   private getInserterAt(wx: number, wy: number): RoboticArmObject | undefined {
     return this.propAt(this.inserters, wx, wy);
+  }
+
+  private getToolboxAt(wx: number, wy: number): ToolboxObject | undefined {
+    return this.propAt(this.toolboxes, wx, wy);
+  }
+
+  /** A caixa cujo tile de bandeja e este (a marca em que pisar DEPOSITA a carga). */
+  private getToolboxSlotAt(wx: number, wy: number): ToolboxObject | undefined {
+    return this.toolboxes.find((box) => box.slotTiles.some(([sx, sy]) => sx === wx && sy === wy));
   }
 
   private getWoodenCrateAt(wx: number, wy: number): WoodenCrateObject | undefined {
@@ -2082,6 +2116,16 @@ export class GameScene extends Phaser.Scene {
     const electronicGate = this.getElectronicGateAt(wx, wy);
     if (electronicGate?.blocking) {
       electronicGate.bump();
+      return;
+    }
+
+    // A bancada e macica: bater nela chacoalha as ferramentas la dentro. Ela nao aceita item na
+    // cara — a interface dela sao as duas bandejas atras —, entao a resposta ao corpo e so
+    // fisica, como a rocha e a porta: um tremor, nunca uma legenda dizendo o que fazer.
+    const toolbox = this.getToolboxAt(wx, wy);
+    if (toolbox) {
+      toolbox.bump();
+      getSoundManager().playToolboxRefuse();
       return;
     }
 
@@ -3203,6 +3247,24 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // A BANDEJA de uma caixa de ferramentas: exatamente a mesma regra da origem do braco, e pela
+    // mesma razao — sem ela a bancada seria inalimentavel. O jogo nao tem botao de largar item, e
+    // as duas bandejas comecam vazias, entao o heroi nunca teria com o que TROCAR. A bandeja
+    // desenhada no chao, respirando enquanto esta vazia, e o aviso de que pisar ali faz algo.
+    const slotBox = this.getToolboxSlotAt(wx, wy);
+    if (slotBox && this.heldItem !== 'none' && !this.itemManager?.hasItemAt(wx, wy)) {
+      const kind = this.heldItem;
+      // O fogo desce junto (o mesmo contrato do deposito no braco): se o graveto aceso ficar na
+      // bandeja, ele segue queimando ali e acende o que houver de inflamavel ao lado — a caixa
+      // nao e um cofre, e um tile do mundo com uma marca em cima.
+      const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
+      const charge = kind === 'batteryFull' ? this.heldBatteryChargeMs : undefined;
+      this.clearHeldItem();
+      this.itemManager?.drop(kind, wx, wy, fire, charge);
+      if (fire) this.scheduleGroundTorchSpread(wx, wy);
+      return;
+    }
+
     // Pisar num cabo VIVO segurando a bateria VAZIA a carrega — o espelho exato de encher o
     // balde no rio e acender o graveto na fogueira: cada elemento tem sua fonte e seu gesto.
     // O cabo precisa estar energizado AGORA: um fio morto nao enche bateria nenhuma.
@@ -3357,6 +3419,38 @@ export class GameScene extends Phaser.Scene {
         ? this.liveWireTouching(arm.worldX, arm.worldY) || varPower === true
         : varPower ?? true;
       arm.update(delta, port, powered);
+    }
+  }
+
+  /**
+   * Toca cada caixa de ferramentas. Mesmo desenho do braco robotico — um port minusculo em vez da
+   * cena inteira —, e pelo mesmo motivo: a bancada precisa saber cinco coisas sobre o mundo, e
+   * entregar `this` a deixaria alcancar as outras tres mil linhas por acidente.
+   *
+   * `occupied` e a pergunta LARGA (isTileOccupied), nao "e solido": um item caido nao bloqueia o
+   * heroi, mas dois itens no mesmo tile seriam um sumico silencioso — e a mesma razao pela qual o
+   * caixote e o portao de bater ja dividem essa lista.
+   */
+  private updateToolboxes(delta: number): void {
+    if (!this.toolboxes.length) return;
+    const port: ToolboxWorldPort = {
+      kindAt: (x, y) => this.itemManager?.kindAt(x, y) ?? null,
+      take: (x, y) => this.itemManager?.takeAt(x, y)?.kind ?? null,
+      put: (kind, x, y) => this.itemManager?.drop(kind, x, y),
+      occupied: (x, y) => this.isTileOccupied(x, y),
+      opened: () => getSoundManager().playToolboxOpen(),
+      hammered: () => getSoundManager().playToolboxForge(),
+      delivered: () => getSoundManager().playToolboxDeliver(),
+      refused: () => getSoundManager().playToolboxRefuse(),
+    };
+    for (const box of this.toolboxes) {
+      // A regra da roda d'agua: efeito e audio so existem perto do heroi. Uma bancada trabalhando
+      // do outro lado do mapa nao pode martelar no ouvido de ninguem.
+      const effectsVisible = Math.hypot(
+        box.worldX - this.playerWorld.worldX,
+        box.worldY - this.playerWorld.worldY,
+      ) <= 10;
+      box.update(delta, port, effectsVisible);
     }
   }
 

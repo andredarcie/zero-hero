@@ -78,6 +78,13 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: 4 poses do corpo + 2 da bandeja de entrada (ver TOOLBOX_FRAMES).
+    key: ASSET_KEYS.toolbox,
+    path: '/assets/environment/props/toolbox.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: quatro alturas da grade em bancos sem/com energia; runtime e Billboard3D.
     key: ASSET_KEYS.electronicGate,
     path: '/assets/environment/props/electronic_gate.png',

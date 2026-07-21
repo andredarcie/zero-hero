@@ -20,6 +20,7 @@ import cemetery from './cemetery.mjs';
 import espada from './espada.mjs';
 import menuFlow from './menu-flow.mjs';
 import braco from './braco.mjs';
+import caixaFerramentas from './caixa-ferramentas.mjs';
 import machado from './machado.mjs';
 import pedra from './pedra.mjs';
 import portalTravessia from './portal-travessia.mjs';
@@ -58,6 +59,7 @@ export const scenarios = {
   espada,
   'menu-flow': menuFlow,
   braco,
+  'caixa-ferramentas': caixaFerramentas,
   machado,
   pedra,
   'portal-travessia': portalTravessia,

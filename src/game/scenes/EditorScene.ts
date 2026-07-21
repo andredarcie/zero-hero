@@ -2,11 +2,13 @@
 
 import {
   ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES,
-  NPC_VISUALS, PRESSURE_PLATE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, WATER_WHEEL_FRAMES,
+  NPC_VISUALS, PRESSURE_PLATE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, TOOLBOX_FRAMES,
+  WATER_WHEEL_FRAMES,
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import {
-  EditorDomUi, PANEL_WIDTH, isDirectionalProp, isVariableProp, type UiState, type ViewMode,
+  EditorDomUi, PANEL_WIDTH, hasDirectionFrames, isDirectionalProp, isVariableProp,
+  type UiState, type ViewMode,
 } from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
@@ -16,7 +18,7 @@ import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture'
 import { GameScene } from '@/game/scenes/GameScene';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
-import type { PropKind } from '@/game/world/worldSchema';
+import type { PropDir, PropKind } from '@/game/world/worldSchema';
 import { setWorldData } from '@/game/world/WorldData';
 import {
   createLabLevel, deleteLabLevel, listLabLevels, loadWorld, renameLabLevel, saveWorld,
@@ -87,6 +89,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   // O frame aqui e so o default da paleta: no tabuleiro, entityVisual troca pelo frame da
   // direcao gravada, pra o editor mostrar pra onde CADA braco esta virado.
   inserter: { key: ASSET_KEYS.inserter, frame: 1 },
+  toolbox: { key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
   woodenCrate: { key: ASSET_KEYS.woodenCrate },
   pressurePlate: { key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
@@ -103,6 +106,9 @@ const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
   pickups: 0x33cc77,
   props: 0xffaa33,
 };
+
+// N, L, S, O — a mesma tabela do mundo (worldY cresce pra baixo), usada so pela marca de proa.
+const DIR_STEP: ReadonlyArray<readonly [number, number]> = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
 const SPAWN_COLOR = 0x00e0ff;
 
@@ -394,8 +400,10 @@ export class EditorScene extends Phaser.Scene {
     if (entity.list === 'npcs') return NPC_VISUALS[entity.type];
     if (entity.list === 'pickups') return PICKUP_VISUAL[entity.type];
     // Um prop com direcao desenha o frame da SUA direcao — e assim que se olha um mapa cheio de
-    // bracos e se ve, sem clicar em nada, pra que lado cada um empurra.
-    if (entity.dir !== undefined && isDirectionalProp(entity.type)) {
+    // bracos e se ve, sem clicar em nada, pra que lado cada um empurra. So vale para quem tem a
+    // arte dividida por direcao: a caixa de ferramentas gira, mas seus frames sao poses da tampa
+    // (ela recebe a marca de proa em renderEntities).
+    if (entity.dir !== undefined && hasDirectionFrames(entity.type)) {
       return { key: PROP_VISUAL[entity.type].key, frame: entity.dir };
     }
     // Um cabo desenha a forma que os VIZINHOS lhe dao (cabos e maquinas da rede) — a mesma
@@ -423,15 +431,42 @@ export class EditorScene extends Phaser.Scene {
     if (!store || !container) return;
     container.removeAll(true);
 
-    const place = (worldX: number, worldY: number, color: number, visual: { key: string; frame?: number }): void => {
+    const place = (
+      worldX: number,
+      worldY: number,
+      color: number,
+      visual: { key: string; frame?: number },
+      dir?: PropDir,
+    ): void => {
       const cx = (worldX + 0.5) * WORLD_TILE;
       const cy = (worldY + 0.5) * WORLD_TILE;
       const chip = this.add.rectangle(cx, cy, WORLD_TILE * 0.86, WORLD_TILE * 0.86, color, 0.32).setStrokeStyle(1, color, 1);
       const sprite = this.add.sprite(cx, cy, visual.key, visual.frame ?? 0).setDisplaySize(WORLD_TILE * 0.74, WORLD_TILE * 0.74);
       container.add([chip, sprite]);
+      // A marca de PROA: um pino colado na borda do chip do lado pra onde a peca aponta. Existe
+      // so pra quem gira sem ter arte por direcao — sem ela, um mapa com tres caixas de
+      // ferramentas nao diz de que lado ficam as bandejas, e o autor teria de clicar em cada uma.
+      if (dir === undefined) return;
+      const [dx, dy] = DIR_STEP[dir];
+      container.add(this.add.rectangle(
+        cx + dx * WORLD_TILE * 0.4,
+        cy + dy * WORLD_TILE * 0.4,
+        WORLD_TILE * (dx === 0 ? 0.44 : 0.16),
+        WORLD_TILE * (dy === 0 ? 0.44 : 0.16),
+        color,
+        1,
+      ));
     };
 
-    store.allEntities().forEach((entity) => place(entity.worldX, entity.worldY, CHIP_COLOR[entity.list], this.entityVisual(entity)));
+    store.allEntities().forEach((entity) => place(
+      entity.worldX,
+      entity.worldY,
+      CHIP_COLOR[entity.list],
+      this.entityVisual(entity),
+      entity.list === 'props' && isDirectionalProp(entity.type) && !hasDirectionFrames(entity.type)
+        ? entity.dir ?? 1
+        : undefined,
+    ));
     const spawn = store.spawn;
     place(spawn.worldX, spawn.worldY, SPAWN_COLOR, { key: ASSET_KEYS.hero, frame: HERO_FRAMES.idleDown });
     const startLabel = this.add.text(

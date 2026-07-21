@@ -332,6 +332,64 @@ reach where the hero cannot.*
   the real `EditorStore`, presses P, and asserts the transfer — the authoring path, because that is
   what the piece is for.
 
+## The toolbox (`toolbox`) — the one thing that makes an item OUT OF other items
+
+`src/game/objects/ToolboxObject.ts`. Four tiles in a line, derived from `dir`:
+
+    (item A) (item B) [CAIXA] (resultado)
+
+Drop an item on each of the two slot tiles behind it; if the pair is a **recipe**, the machine
+eats both and spits a third item onto the tile in front. The first recipe is the one that explains
+the piece: **graveto + pedra = machado**.
+
+- **Why it earns a place.** "Items should PRODUCE" has always been satisfied by props: the tree
+  gives a graveto, the rock gives a stone, the grass gives seeds — the world is the only factory.
+  The toolbox inverts the source: here the *items* are the input and the map contributes nothing.
+  It is the only place where the answer to "I don't have the axe" can be **"then make one"**, and
+  it gives gravetos and stones a destination beyond local consumption.
+- **`TOOLBOX_RECIPES` is order-independent.** Requiring "the stick in the back tray" would be an
+  invisible rule, and an invisible rule is the same sin as the deleted need-item balloon:
+  information that only exists outside the world.
+- **The slots deposit on step, exactly like the arm's origin tile, and for the same reason.** The
+  game has no drop button — the hero only puts something down by *swapping* with an item already
+  on that tile — and both trays start empty, so a toolbox would otherwise be unfeedable. The tray
+  drawn on the ground BREATHES while empty and goes still and gold when loaded (the bombSpot's
+  grammar): reading "one still missing" is just seeing which of the two is still pulsing.
+- **A robotic arm can feed it, for free.** An arm whose output tile is a toolbox slot runs the
+  factory unattended. No code was written for that — the two pieces just speak the same language
+  (items lying on the ground), which is the point of keeping everything on tiles.
+- **The refusal is PHYSICAL.** A pair that is not a recipe makes the lid jump and slam back with
+  a dull iron thud, every ~2.5s — not continuously, or it becomes background noise. The player
+  sees the machine TRY and give up; it never says what is missing. Same answer when the output
+  tile is occupied: "not now" is the honest word for both, and distinguishing them would be the
+  hint balloon back under another name.
+- **It refuses rather than stacks, and it revalidates at delivery.** The output check at the start
+  of the cycle can go stale over the ~2.3s it takes — so if the tile is taken mid-forge the
+  finished item stays VISIBLE inside the open, still-glowing box until the spot frees. You can see
+  the axe waiting in there.
+- **The inputs are taken at the FIRST frame of the craft**, not at the forge: leaving them on the
+  ground would open a window where the hero (or an arm) walks off with one while the machine is
+  already working, and the box would produce out of nothing.
+- Four beats, ~2.3s, and each one is a pixel-art pose swap, never a scale/fade: lid opens (240ms)
+  → both items arc in and shrink to nothing (460ms) → **the forge** (900ms: hot frame, gold glow,
+  three hammer blows with sparks, tremble that peaks mid-cycle) → the product arcs out and lands
+  (420ms) → lid closes. Sprite Factory owns `toolbox.png`: 4 body poses + 2 tray states, 0 FAIL /
+  0 WARN. The arched handle with a see-through gap is what separates its silhouette from the
+  wooden crate; the base never changes between frames so opening reads as movement, not as a
+  different object appearing.
+- **Its parts need internal depth ordering** (`DEPTH_GLOW`/`DEPTH_ITEM`) — the same trap as the
+  arm's. An east-facing box has its slots, body and output on the SAME `tileY`, so the flying
+  cargo and the forge glow land in the body's own plane and either strobe or vanish behind it.
+- The body is SOLID (bumping it rattles the tools inside), and `dir` travels through the editor's
+  place/erase/undo like the arm's. It is the second directional prop, so it took the **G** key for
+  free — but its frames are lid poses, not directions, so the board draws a **prow nub** on the
+  chip instead of a direction frame (`hasDirectionFrames` vs `isDirectionalProp`). The editor
+  warns when a slot or the output lands on collision, the world edge or another solid prop.
+- `npm run playtest -- caixa-ferramentas` guards all of it: the four rotations derive the right
+  three tiles, the body blocks, stepping on a tray deposits, the axe is manufactured and both
+  inputs are consumed, a wrong pair is refused without producing anything, and a blocked output
+  holds the product until the tile frees.
+
 ## The water wheel (`waterWheel`) — a real in-river 3D generator
 
 `src/game/objects/WaterWheelObject.ts`. The wheel is a named boolean circuit producer with a real
@@ -553,7 +611,8 @@ real state. Add a scenario in `playtest/scenarios/` and register it in `index.mj
 covers the new thing and run that. Do **not** replay the whole game to check a pointed change:
 the full puzzle solves (`espada` above all) take minutes each, they are bump-timing sensitive and
 so they flake, and a flake in an unrelated scenario tells you nothing about your change while
-costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Rock and pickaxe →
+costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Toolbox and its
+recipes → `caixa-ferramentas`. Rock and pickaxe →
 `pedra`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Fire and the light
 budget → `perf-burn`. Frame cost → `perf-profile`. Item-state contracts (a bridge refusing a
 second burn, the mound waiting for a clear tile, production drops falling to a free neighbour,

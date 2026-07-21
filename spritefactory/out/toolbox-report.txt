@@ -1,0 +1,13 @@
+toolbox: 6 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 14x14 at (1,1), coverage 55%
+  [info] bbox: frame 1: content 14x15 at (1,0), coverage 59%
+  [info] bbox: frame 2: content 14x14 at (1,1), coverage 68%
+  [info] bbox: frame 3: content 14x14 at (1,1), coverage 68%
+  [info] bbox: frame 4: content 12x13 at (2,2), coverage 30%
+  [info] bbox: frame 5: content 12x13 at (2,2), coverage 30%
+  frame 0: #7c7e8b×40 #5d6165×30 #a9abbe×28 #1d2b53×20 #141d38×12 #989aa7×8 #f1cc36×2
+  frame 1: #7c7e8b×40 #5d6165×30 #a9abbe×28 #1d2b53×22 #141d38×22 #989aa7×8 #f1cc36×2
+  frame 2: #1d2b53×48 #7c7e8b×35 #141d38×30 #5d6165×28 #324476×10 #a9abbe×10 #989aa7×9 #f1cc36×4
+  frame 3: #1d2b53×54 #7c7e8b×32 #5d6165×25 #141d38×22 #f8e394×17 #f1cc36×11 #a9abbe×10 #989aa7×3
+  frame 4: #989aa7×30 #1d2b53×28 #a9abbe×10 #5d6165×10
+  frame 5: #f1cc36×30 #1d2b53×28 #f8e394×10 #c9c81b×10

@@ -71,6 +71,8 @@ const DEFS: Record<string, SheetDef> = {
   wire: { url: `${A}/environment/props/wire.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: portao 2D — quatro alturas em bancos apagado/energizado.
   'electronic-gate': { url: `${A}/environment/props/electronic_gate.png`, frameW: 16, frameH: 16 },
+  // Sprite Factory: a caixa de ferramentas — 4 poses do corpo + 2 da bandeja (TOOLBOX_FRAMES).
+  toolbox: { url: `${A}/environment/props/toolbox.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: portal medieval — arco de pedra com quatro fases do vortice roxo.
   'level-portal-icon': { url: `${A}/environment/props/level_portal.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: bateria vazia/carregada — ver BATTERY_FRAMES.

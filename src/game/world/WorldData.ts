@@ -153,6 +153,10 @@ export const getPlantSpots = (): WorldProp[] => requireWorld().props.filter((pro
 // bearing — it decides which tile the arm takes from and which it puts to.
 export const getInserters = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'inserter');
 
+// The workbench. Carries `dir` for the same load-bearing reason the arm does: it decides which two
+// tiles behind it are the slots and which tile in front receives the crafted item.
+export const getToolboxes = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'toolbox');
+
 // A solid box the hero moves by walking into it; it never occupies the hero's hand slot.
 export const getWoodenCrates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'woodenCrate');
 

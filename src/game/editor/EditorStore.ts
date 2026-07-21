@@ -577,6 +577,32 @@ export class EditorStore {
     if (unwiredGates > 0) warnings.push(`${unwiredGates} portao(oes) eletronico(s) sem cabo adjacente — permanecerao fechados`);
     if (missingVariables.size > 0) warnings.push(`Mecanismo(s) usam variavel(is) inexistente(s): ${[...missingVariables].join(', ')}`);
 
+    // A caixa de ferramentas ocupa QUATRO tiles: as duas bandejas atras, o corpo e a saida. Como
+    // so o corpo e clicado, e facil colocar uma com a bandeja dentro de uma parede — e ai ela
+    // nunca poderia ser alimentada, sem nada na tela explicando por que. Colisao pintada, borda
+    // do mundo e outro prop solido em qualquer um dos tres tiles derivados: tudo e o mesmo erro.
+    const DIR_STEP: ReadonlyArray<readonly [number, number]> = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    const solidProps = new Set(
+      this.world.props
+        .filter((p) => p.type !== 'wire' && p.type !== 'pressurePlate' && p.type !== 'bombSpot'
+          && p.type !== 'plantSpot' && p.type !== 'moonflower')
+        .map((p) => `${p.worldX},${p.worldY}`),
+    );
+    const badToolboxes = this.world.props.filter((prop) => {
+      if (prop.type !== 'toolbox') return false;
+      const [vx, vy] = DIR_STEP[prop.dir ?? 1];
+      return [-2, -1, 1].some((step) => { // bandeja de tras, bandeja da frente, saida
+        const x = prop.worldX + vx * step;
+        const y = prop.worldY + vy * step;
+        return !this.isInside(x, y)
+          || this.readCell('collision', x, y) === true
+          || solidProps.has(`${x},${y}`);
+      });
+    }).length;
+    if (badToolboxes > 0) {
+      warnings.push(`${badToolboxes} caixa(s) de ferramentas com bandeja ou saida bloqueada`);
+    }
+
     // A roda ja representa agua no proprio tile, mas precisa de continuidade ortogonal para que
     // exista corrente. O pincel garante que ela so substitua um rio; esta validacao cobre mundos
     // antigos/editados a mao e trechos isolados de um unico tile.

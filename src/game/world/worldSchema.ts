@@ -62,7 +62,11 @@ export type WorldChunk = {
 // it, but only if the tile BEHIND it is clear — a swing leaf needs room to swing. It is the one
 // barrier in the game that no item opens; what opens it is changing the far side (burning the
 // grass standing there), which is why it pairs with fire and the robotic arm.
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal';
+// `toolbox` is the workbench: two slot tiles behind it, the machine, and the output tile in front
+// (A B [caixa] resultado). Drop an item on each slot and a RECIPE turns the pair into a third
+// item — the only thing in the game that makes an item out of other items, instead of out of a
+// prop the hero hits with a tool.
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.
@@ -73,7 +77,8 @@ export type PropDir = 0 | 1 | 2 | 3;
 // `floodgate` only applies to a `lockedDoor`: opening it (with a key) DRAINS the run of water it
 // holds back, opening a path AND laying a firebreak. Like `lit`, an editor save drops the flag,
 // so floodgate doors are authored in gen-levels, not built in the editor.
-// `dir` only applies to an `inserter`, and unlike `lit`/`floodgate` above it is NOT droppable.
+// `dir` applies to an `inserter` and to a `toolbox`, and unlike `lit`/`floodgate` above it is NOT
+// droppable.
 // Those two are authored in gen-levels and the runtime can live without them; a rotation is
 // placed by hand in the editor and IS the prop's behaviour — which tile it takes from and which
 // it puts to. So the editor store had to learn to carry `dir` through place/erase/undo, instead
