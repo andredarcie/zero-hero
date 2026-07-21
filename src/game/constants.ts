@@ -157,8 +157,10 @@ export const ASSET_KEYS = {
   // (inteira / rachada) — o par que a rocha comum guarda em dois arquivos soltos.
   ironRock: 'iron-rock',
   ironItem: 'iron-item',
-  tallGrassWind0: 'tall-grass-wind0',
-  tallGrassWind1: 'tall-grass-wind1',
+  // O mato alto EM PE (spritefactory): 4 frames de vento + o toco cortado. E a arte que o
+  // JOGO desenha, entao e a que o editor tem de mostrar — a antiga grass_wind0 era o tile
+  // top-down de fundo opaco, e um icone que nao e o objeto e uma mentira na paleta.
+  tallGrassUp: 'tall-grass-up',
   cuttingGrass0: 'cutting-grass0',
   cuttingGrass1: 'cutting-grass1',
   cuttingGrass2: 'cutting-grass2',

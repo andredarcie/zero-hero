@@ -78,6 +78,14 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: o mato alto em pe — 4 frames de vento + o toco (frame 4). Entra como
+    // SHEET porque o editor precisa desenhar um frame especifico (o 0, o mato inteiro).
+    key: ASSET_KEYS.tallGrassUp,
+    path: '/assets/environment/props/tall_grass_up.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: a pedra de ferro — inteira (0) e rachada (1). Entra como SHEET porque
     // os dois estados sao frames de um arquivo so; a rocha comum e antiga e usa dois PNGs.
     key: ASSET_KEYS.ironRock,
@@ -224,8 +232,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.ironItem,       path: '/assets/items/collectibles/iron.png' },
   { key: ASSET_KEYS.woodenCrate,    path: '/assets/environment/props/wooden_crate.png' },
   { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock_cracked.png' },
-  { key: ASSET_KEYS.tallGrassWind0, path: '/assets/environment/props/grass_wind0.png' },
-  { key: ASSET_KEYS.tallGrassWind1, path: '/assets/environment/props/grass_wind1.png' },
   { key: ASSET_KEYS.cuttingGrass0,  path: '/assets/environment/props/cuting_grass0.png' },
   { key: ASSET_KEYS.cuttingGrass1,  path: '/assets/environment/props/cuting_grass1.png' },
   { key: ASSET_KEYS.cuttingGrass2,  path: '/assets/environment/props/cuting_grass2.png' },

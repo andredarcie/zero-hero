@@ -130,7 +130,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'dryShrub', label: 'Arbusto Seco', key: ASSET_KEYS.dryShrub },
   { type: 'rock', label: 'Pedra', key: ASSET_KEYS.rock },
   { type: 'ironRock', label: 'Pedra de Ferro', key: ASSET_KEYS.ironRock, frame: 0 },
-  { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassWind0 },
+  { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassUp, frame: 0 },
   { type: 'lava', label: 'Lava', key: ASSET_KEYS.lavaFloor },
   { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },
   { type: 'bridgeSpot', label: 'Ponto de Ponte', key: ASSET_KEYS.bridge },

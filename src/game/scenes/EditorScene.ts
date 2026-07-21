@@ -81,7 +81,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   dryShrub: { key: ASSET_KEYS.dryShrub },
   rock: { key: ASSET_KEYS.rock },
   ironRock: { key: ASSET_KEYS.ironRock, frame: 0 },
-  tallGrass: { key: ASSET_KEYS.tallGrassWind0 },
+  tallGrass: { key: ASSET_KEYS.tallGrassUp, frame: 0 },
   lava: { key: ASSET_KEYS.lavaFloor },
   water: { key: ASSET_KEYS.water },
   bridgeSpot: { key: ASSET_KEYS.bridge },

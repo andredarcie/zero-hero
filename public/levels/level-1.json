@@ -13,7 +13,7 @@
       "worldY": 10
     },
     "puzzle": true,
-    "exportedAt": "2026-07-21T17:17:55.075Z"
+    "exportedAt": "2026-07-21T19:45:48.909Z"
   },
   "chunks": [
     {
@@ -255,7 +255,7 @@
           null,
           4,
           null,
-          7,
+          null,
           27,
           10,
           null
@@ -593,11 +593,6 @@
       "worldY": 10
     },
     {
-      "type": "dryBush",
-      "worldX": 8,
-      "worldY": 4
-    },
-    {
       "type": "swingGate",
       "worldX": 8,
       "worldY": 5
@@ -663,11 +658,6 @@
       "worldY": 3
     },
     {
-      "type": "dryBush",
-      "worldX": 8,
-      "worldY": 3
-    },
-    {
       "type": "moonflower",
       "worldX": 8,
       "worldY": 6
@@ -696,6 +686,16 @@
       "type": "campfire",
       "worldX": 7,
       "worldY": 7
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 8,
+      "worldY": 4
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 8,
+      "worldY": 3
     }
   ],
   "dialogs": {
