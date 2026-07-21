@@ -21,7 +21,7 @@ npm run typecheck        # tsc --noEmit
 npm run lint             # eslint (scripts/worldgen has 3 pre-existing parser errors — ignore)
 npm run build            # typecheck + vite build
 npm run generate:world   # regenerate public/world.json
-npm run generate:levels  # regenerate public/levels/level-*.json + index.json (the puzzle levels)
+#  NEVER run `npm run generate:levels` — it OVERWRITES the hand-authored levels. See the warning below.
 npm run playtest         # default scenarios
 npm run playtest -- all  # every scenario
 ```
@@ -39,16 +39,26 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 Each puzzle is a **self-contained level** — a 12×12-chunk world in `public/levels/level-N.json`
 (WorldData format, `meta.puzzle: true`), listed for the player by `public/levels/index.json`. The
 title's **"Jogar levels"** reads that manifest and boots the chosen level (`LevelSelectScene` →
-`setWorldData` → `GameScene`). A shareable/dev deep link is `/?level=N` (skips the menu). There is
-ONE level today: `level-1` **"A Espada na Pedra"** — every carriable item (all 11) in one screen,
-chained so each tool *produces* the next step's input (scythe→seeds→planted grass, axe→TIMBER log-bridge,
-stick→torch, stone→basalt→boots, bomb→jail→pickaxe, fire-fuse→key, key→floodgate, bucket→dark→
-moonflowers→sword). Its two signature locks: the *Quarteirão em Chamas* — a lava-walled region you
-enter over lava with the boots but can only carry cargo OUT of by quenching a wall with a jail
-stone (one hand: boots carry only YOU, so a boots-only zone can never export an item otherwise) —
-and the sanctum douse tile (10,10), reachable only through the floodgate door, so wading the moat
-with boots can't bypass the key. The playtest `espada` asserts every lock bare-handed AND scripts
-the full solve.
+`setWorldData` → `GameScene`). A shareable/dev deep link is `/?level=N` (skips the menu).
+
+## ⚠️ THE LEVELS ON DISK ARE HAND-AUTHORED. NEVER RUN `npm run generate:levels`.
+
+`scripts/gen-levels.mjs` writes `public/levels/level-1.json` and `index.json` **unconditionally**
+(no merge, no prompt). The levels shipping today were built BY HAND in `/lab` and are not what that
+script produces, so running it destroys them. It stays in the repo as scaffolding for a brand-new
+level, and only after its output path is pointed somewhere unoccupied.
+
+Today: `level-1` **"O fogo que ajuda atrapalha"** (fire + boiler + wire + robotic arm + swing gate
+→ portal; pickaxe, bucket and axe) and `level-2` **"Fogo"** (a work in progress). **Read the JSON,
+never this file, for what a level contains** — a hand-authored level changes whenever its author
+opens the lab, and any prose here describing its layout starts rotting the same day.
+
+That has a consequence for tests: **a playtest must AUTHOR the fixture it needs** (enter `/lab`,
+place props through `EditorStore`, press P) instead of relying on a level already containing one.
+`braco`, `caixa-ferramentas`, `portao-de-bater` and `fios` all do this and are immune. The two
+that still read level-1's old content — `espada` (it scripts the full solve of "A Espada na Pedra",
+a level that no longer exists) and `itens` (it needs a `plantSpot` level-1 no longer has) — are
+**stale by design change, not broken by a regression**. Do not "fix" them by editing the level.
 
 `/lab` is where a level gets built/validated without touching the real world — the same editor as
 `/editor`, pointed at a level file (`public/levels/level-N.json`) via `/api/world?file=level-N`.
@@ -57,8 +67,8 @@ back; nothing saves until Salvar, and Salvar only writes that one level file.
 
 - `/lab?play` boots the level straight into `GameScene`. Playtests enter levels via `/?play&level=N`
   (the `espada` scenario) — a scenario overrides its entry route.
-- `npm run generate:levels` rebuilds the level files + `index.json` from `scripts/gen-levels.mjs`.
-  **Author puzzles there** (funny, puzzle-appropriate names in the manifest), not by hand-editing JSON.
+- **Puzzles are authored in `/lab`, by hand, and saved with Salvar** — not in `gen-levels.mjs`
+  (see the warning above: that script would overwrite them).
 - **The game is walk-only — there are NO gameplay buttons at all** (only movement; overlays/menus
   are UI). Everything activates by stepping or bumping. Placements have walk-on affordances: a
   `bombSpot` (breathing purple ghost-bomb) plants the carried bomb on step; with the wrong item
@@ -666,9 +676,13 @@ recipes → `caixa-ferramentas`. Rock and pickaxe →
 `pedra`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Fire and the light
 budget → `perf-burn`. Frame cost → `perf-profile`. Item-state contracts (a bridge refusing a
 second burn, the mound waiting for a clear tile, production drops falling to a free neighbour,
-the bomb's fuse tween dying with the bomb) → `itens`. Reach for `espada` **only** when the change is
-to level-1's design itself. Same rule for re-runs: one failure in a scenario you did not touch is
-a flake to note, not a suite to run four times.
+the bomb's fuse tween dying with the bomb) → `itens`. Same rule for re-runs: one failure in a
+scenario you did not touch is a flake to note, not a suite to run four times.
+
+**`espada` and `itens` are currently RED, and not because of anything you did.** Both assert the
+contents of the old generated `level-1` ("A Espada na Pedra"), which the hand-authored level
+replaced — see the warning at the top. Treat their failure as expected until they are rewritten to
+author their own fixture in `/lab`, and never "repair" them by editing a level file.
 
 **When measuring performance, always compare against `main` (`git stash`).** A number on its own
 proves nothing — a fix that removes a stall can quietly cost frame time, and you will not see it
