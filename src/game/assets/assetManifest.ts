@@ -207,6 +207,11 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.undeadBorn5, path: '/assets/characters/enemies/undead/undead_born5.png' },
   { key: ASSET_KEYS.undeadBorn6, path: '/assets/characters/enemies/undead/undead_born6.png' },
   {
+    // Sprite Factory: o balao de pensamento com a placa de pressao acesa dentro.
+    key: ASSET_KEYS.thoughtPlate,
+    path: '/assets/ui/icons/thought_plate.png',
+  },
+  {
     key: ASSET_KEYS.coin,
     path: '/assets/items/collectibles/coin.png',
   },

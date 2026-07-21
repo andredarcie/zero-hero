@@ -185,6 +185,18 @@ export abstract class EnemyBase {
     // Enemy health bars are intentionally not drawn (removed by design). The graphics object is
     // kept (and cleared) so nothing else has to change; it just never fills.
     this.healthBar.clear();
+
+    this.onRendered(camera, tileSize);
+  }
+
+  /**
+   * Hook for screen-space FX a subclass pins to this body (the undead's thought balloon).
+   * It gets the CAMERA rather than the projected point because anything floating above the
+   * head has to be projected at its own elevation — the 3D perspective shrinks a tile with
+   * depth, so a fixed pixel offset would drift off the head as the creature walks away.
+   */
+  protected onRendered(_camera: WorldCamera, _tileSize: number): void {
+    // no-op by default
   }
 
   public destroy(): void {

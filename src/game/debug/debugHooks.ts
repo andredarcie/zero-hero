@@ -102,6 +102,17 @@ export interface GameDebugState {
   /** The dark-siege loop: near a campfire = safe; in the dark the danger meter (0..1)
    *  fills and undead spawn around the hero (see UndeadSpawnDirector). */
   safety: { safe: boolean; danger: number; undeadCount: number };
+  /**
+   * Cada caveira viva: onde esta, se ainda esta saindo do chao, e a placa de pressao em que
+   * fixou (o balao de pensamento na cabeca dela). `plateTarget` nao-nulo = ela ignorou o heroi
+   * e esta marchando para aquele tile.
+   */
+  undead: Array<{
+    worldX: number;
+    worldY: number;
+    spawning: boolean;
+    plateTarget: { x: number; y: number } | null;
+  }>;
   activeScreen: { cx: number; cy: number };
 }
 

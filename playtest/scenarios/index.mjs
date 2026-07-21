@@ -27,6 +27,7 @@ import portalTravessia from './portal-travessia.mjs';
 import portaoDeBater from './portao-de-bater.mjs';
 import sombras from './sombras.mjs';
 import caixaPlaca from './caixa-placa.mjs';
+import placaUndead from './placa-undead.mjs';
 import rodaAgua from './roda-agua.mjs';
 import bateria from './bateria.mjs';
 import caldeira from './caldeira.mjs';
@@ -66,6 +67,7 @@ export const scenarios = {
   'portao-de-bater': portaoDeBater,
   sombras,
   'caixa-placa': caixaPlaca,
+  'placa-undead': placaUndead,
   'roda-agua': rodaAgua,
   bateria,
   caldeira,

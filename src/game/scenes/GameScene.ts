@@ -1442,6 +1442,7 @@ export class GameScene extends Phaser.Scene {
           danger: this.spawnDirector?.danger ?? 0,
           undeadCount: this.enemyManager?.aliveCount ?? 0,
         },
+        undead: this.enemyManager?.snapshot() ?? [],
         activeScreen: {
           cx: Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS),
           cy: Math.floor(this.playerWorld.worldY / CHUNK_ROWS),
@@ -1685,6 +1686,7 @@ export class GameScene extends Phaser.Scene {
           if (this.isSolidForEntities(wx, wy)) return true;
           return this.isTileLitByCampfire(wx, wy);
         },
+        this.lurablePlates(),
       );
       if (attacked) this.handleEnemyAttackPlayer(attacked);
 
@@ -1991,6 +1993,28 @@ export class GameScene extends Phaser.Scene {
 
   private getPressurePlateAt(wx: number, wy: number): PressurePlateObject | undefined {
     return this.propAt(this.pressurePlates, wx, wy);
+  }
+
+  /**
+   * The plates an undead may fixate on. A skull is DRAWN to a pressure plate — it wants to stand
+   * on it — so the plate becomes a switch the player throws by leading a monster onto it instead
+   * of spending his one hand on a crate. See UndeadEnemy.setPlateTarget.
+   *
+   * Two plates are not on offer, and both for the same reason — a balloon over a creature's head
+   * is a promise, and a promise it cannot keep is worse than no balloon at all:
+   *  - one standing in campfire light: the undead refuse to enter it (same rule that governs
+   *    every other step they take), so that march could never end;
+   *  - one already carrying a crate: the tile is blocked and the plate is pressed anyway.
+   * The HERO standing on a plate is NOT a disqualifier — he walks off, and dropping the fixation
+   * every time he crosses would make the skull dither in the middle of the room.
+   */
+  private lurablePlates(): Array<{ worldX: number; worldY: number }> {
+    if (!this.pressurePlates.length) return [];
+    return this.pressurePlates
+      .filter((plate) => !this.isTileLitByCampfire(plate.worldX, plate.worldY)
+        && !this.getWoodenCrateAt(plate.worldX, plate.worldY)
+        && !this.isSolidForEntities(plate.worldX, plate.worldY))
+      .map((plate) => ({ worldX: plate.worldX, worldY: plate.worldY }));
   }
 
   private getPlantSpotAt(wx: number, wy: number): PlantSpotObject | undefined {

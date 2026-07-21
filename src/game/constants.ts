@@ -145,6 +145,10 @@ export const ASSET_KEYS = {
   undeadBorn4: 'undead-born-4',
   undeadBorn5: 'undead-born-5',
   undeadBorn6: 'undead-born-6',
+  // O balao de PENSAMENTO do morto-vivo (Sprite Factory). Nao confundir com o balao de
+  // item-que-falta, que foi arrancado do jogo: aquele falava com o jogador, este mostra o que a
+  // criatura quer. Por isso a arte e outra (bolhas soltas, nao rabicho de fala) e a chave e outra.
+  thoughtPlate: 'thought-plate',
   coin: 'coin',
   mage: 'mage',
   swordOnFire: 'sword-on-fire',

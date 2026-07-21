@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { EnemyBase } from './EnemyBase';
-import { UndeadEnemy } from './enemies/UndeadEnemy';
+import { DETECTION_RANGE, UndeadEnemy } from './enemies/UndeadEnemy';
 
 // The world itself has zero authored enemies now. Every skull is summoned at runtime by
 // the UndeadSpawnDirector while the hero lingers in the dark, so this manager keeps one
@@ -37,6 +37,78 @@ export class EnemyManager {
     return this.enemies.filter((e) => e.isAlive);
   }
 
+  /** Debug/playtest readout: where every living skull is and which plate it is walking to. */
+  public snapshot(): Array<{
+    worldX: number;
+    worldY: number;
+    spawning: boolean;
+    plateTarget: { x: number; y: number } | null;
+  }> {
+    return this.enemies
+      .filter((e) => e.isAlive)
+      .map((e) => ({
+        worldX: e.worldX,
+        worldY: e.worldY,
+        spawning: e.isSpawning,
+        plateTarget: e.plateTarget ? { x: e.plateTarget.x, y: e.plateTarget.y } : null,
+      }));
+  }
+
+  /**
+   * Hand out pressure-plate fixations: ONE skull per plate. Without the claim, every skull in
+   * range would converge on the same plate and all but the winner would stand next to a taken
+   * tile with a balloon over its head forever — which reads as broken, not as hungry.
+   *
+   * The assignment lives here rather than in the skull because it is the only place that can see
+   * the other skulls. GameScene decides which plates are even offerable (see lurablePlates).
+   */
+  private assignPlateLures(plates: ReadonlyArray<{ worldX: number; worldY: number }>): void {
+    const claimed = new Set<string>();
+    const unclaimed: UndeadEnemy[] = [];
+
+    // Pass 1 — HONOUR the fixations that already exist. A skull standing on its plate has to
+    // keep it (re-assigning would walk it off and strobe the circuit), and a march already under
+    // way must not be re-routed just because a fresher skull clawed out closer to the plate.
+    for (const enemy of this.enemies) {
+      if (!enemy.seeksPlates) {
+        enemy.setPlateTarget(undefined);
+        continue;
+      }
+      const target = enemy.plateTarget;
+      const key = target ? `${target.x},${target.y}` : '';
+      const stillOffered = target !== undefined
+        && plates.some((p) => p.worldX === target.x && p.worldY === target.y);
+      if (stillOffered && !claimed.has(key)) {
+        claimed.add(key);
+      } else {
+        enemy.setPlateTarget(undefined);
+        unclaimed.push(enemy);
+      }
+    }
+
+    // Pass 2 — pair up what is left, closest pair first, so the nearest skull gets the nearest
+    // plate instead of whichever happened to be first in the list.
+    if (!unclaimed.length) return;
+    const pairs: Array<{ enemy: UndeadEnemy; x: number; y: number; dist: number }> = [];
+    for (const enemy of unclaimed) {
+      for (const plate of plates) {
+        if (claimed.has(`${plate.worldX},${plate.worldY}`)) continue;
+        const dist = Math.abs(plate.worldX - enemy.worldX) + Math.abs(plate.worldY - enemy.worldY);
+        if (dist > DETECTION_RANGE) continue; // out of sight is out of mind
+        pairs.push({ enemy, x: plate.worldX, y: plate.worldY, dist });
+      }
+    }
+    pairs.sort((a, b) => a.dist - b.dist);
+    const fixated = new Set<UndeadEnemy>();
+    for (const pair of pairs) {
+      const key = `${pair.x},${pair.y}`;
+      if (fixated.has(pair.enemy) || claimed.has(key)) continue;
+      fixated.add(pair.enemy);
+      claimed.add(key);
+      pair.enemy.setPlateTarget({ x: pair.x, y: pair.y });
+    }
+  }
+
   /** Returns the enemy that landed a blow on the player this tick (null if none). */
   public update(
     delta: number,
@@ -45,8 +117,13 @@ export class EnemyManager {
     playerSafe: boolean,
     playerHasTorch: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
+    lurablePlates: ReadonlyArray<{ worldX: number; worldY: number }> = [],
   ): EnemyBase | null {
     let attacker: EnemyBase | null = null;
+
+    // Before anybody moves: a skull's target for this tick has to be settled, or half the pack
+    // would step using this frame's assignment and half using last frame's.
+    this.assignPlateLures(lurablePlates);
 
     for (const enemy of this.enemies) {
       if (!enemy.isAlive) continue;

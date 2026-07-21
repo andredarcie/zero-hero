@@ -450,6 +450,56 @@ shatters it exactly like any boulder. What changes is the art and the drop.
   caption points at another machine, because "I picked up a lump of metal and it does nothing" is
   otherwise the correct reading, and it is wrong.
 
+## The pressure plate (`pressurePlate`) and the undead that WANTS it
+
+A plate is the oldest circuit producer and the simplest: it needs a **body** on it. Three things
+count, and always have — the **hero**, a pushed **crate**, and **any enemy**
+(`GameScene.updateMechanismCircuits`). The first two are the problem the plate poses: the hero has
+one pair of feet and needs them somewhere else, and a crate only goes where there is room to shove
+it. The third used to be an accident of the occupancy test. Now it is the piece.
+
+**A skull is drawn to a pressure plate.** If one is inside its sight radius (the SAME
+`DETECTION_RANGE` it hunts the hero by — "what a skull can see" has to be one number), a **thought
+balloon with a lit plate in it** rises over its head and it marches there, **ignoring the hero
+completely**: it does not chase him, does not back away from his torch, does not strike even from
+an adjacent tile. It arrives, it **stands there**, and the circuit closes. So a plate near the dark
+is a switch the player throws by *leading a monster onto it* — the undead stop being only a threat
+and become the third body, the only one that walks to the plate by itself.
+
+- **The one lever the hero has is hitting it.** A blow snaps the fixation and keeps the skull
+  plate-blind for `PLATE_BLIND_AFTER_HIT_MS` (`UndeadEnemy.takeDamage`). Without that window the
+  manager would hand the plate straight back on the next frame and the counter-play would be
+  decorative. There is no other cancel: you cannot talk it out of it, and standing in the way only
+  makes it walk around you.
+- **The balloon is NOT the need-item hint balloon coming back.** That one talked to the *player*
+  ("go fetch the pickaxe") and handed him the answer to a lock; it is still gone, and `pedra` still
+  asserts its texture never even loads. This one belongs to the *creature* — the same sentence as
+  the attack wind-up's red flash, an intention shown before it is acted on — and without it a skull
+  walking past the hero reads as a broken chase. Different sentence, different art (Sprite Factory
+  `thought-plate.png`: thought bubbles trailing down, never a speech tail), different asset key.
+  **A new creature intent gets a bubble; a new LOCK still gets only a shake.**
+- **`EnemyManager.assignPlateLures` hands out ONE skull per plate**, honouring existing fixations
+  first (re-assigning would walk a skull off the plate it is holding and strobe the circuit) and
+  pairing the rest closest-first. It lives in the manager because it is the only place that can see
+  the other skulls; a plate claimed by two would leave one standing beside a taken tile forever,
+  which reads as broken rather than as hungry.
+- **`GameScene.lurablePlates` decides what is even offerable**, and refuses two: a plate in campfire
+  light (the undead never enter it, so that march could never end) and a plate under a crate
+  (blocked, and pressed already). A balloon is a promise, and a promise the creature cannot keep is
+  worse than no balloon. The hero standing on a plate is NOT a disqualifier — he walks off, and
+  dropping the fixation every time he crosses would leave the skull dithering mid-room.
+- **The march gives up on PROGRESS, not on a clock** (`PLATE_PATIENCE_MS`): `moveToward` is greedy
+  and there is no pathfinder, so a rock between skull and plate is a dead march. As long as it keeps
+  closing the gap it may take as long as it likes.
+- Nothing that ships today has a plate in it (`world.json` and both levels have zero), so this
+  changes no existing world — it is a tool for the next one. It only exists in the **adventure**:
+  the undead siege is off in a puzzle world (`isPuzzleWorld()`) and skulls are not authorable, so a
+  level cannot use it. A playtest reaches it with `__scene.enemyManager.spawnUndead(x, y)`.
+- `npm run playtest -- placa-undead` builds the whole thing: the skull is born BETWEEN the hero and
+  the plate (hero 3 tiles west, plate 4 east) so walking east is the only reading of "it ignored
+  the hero", then it presses the plate, holds the circuit without flicker, and a single blow drops
+  the balloon and sends it back after the hero. `caixa-placa` remains the hero/crate regression.
+
 ## The water wheel (`waterWheel`) — a real in-river 3D generator
 
 `src/game/objects/WaterWheelObject.ts`. The wheel is a named boolean circuit producer with a real
@@ -673,7 +723,8 @@ the full puzzle solves (`espada` above all) take minutes each, they are bump-tim
 so they flake, and a flake in an unrelated scenario tells you nothing about your change while
 costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Toolbox and its
 recipes → `caixa-ferramentas`. Rock and pickaxe →
-`pedra`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Fire and the light
+`pedra`. Pressure plate + hero/crate → `caixa-placa`; the undead that walks onto one →
+`placa-undead`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Fire and the light
 budget → `perf-burn`. Frame cost → `perf-profile`. Item-state contracts (a bridge refusing a
 second burn, the mound waiting for a clear tile, production drops falling to a free neighbour,
 the bomb's fuse tween dying with the bomb) → `itens`. Same rule for re-runs: one failure in a
