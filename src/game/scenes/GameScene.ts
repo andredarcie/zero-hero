@@ -207,24 +207,6 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   batteryFull: { texture: 'battery', frame: BATTERY_FRAMES.full },
 };
 
-// Bumping something you can't use yet pops a speech balloon over the hero's head showing
-// exactly the item still needed. One entry per "locked" interaction — a lit flame for dead
-// fires and dry brush, the matching tool for trees/rock/grass, a key for doors, lava boots
-// for lava. "fire" reuses the burning-torch icon (a lit flame is what the hero must carry).
-const NEED_ITEM_ICON = {
-  fire: { texture: ASSET_KEYS.woodOnFireIcon, frame: 0 },
-  key: { texture: ASSET_KEYS.keyItemIcon, frame: 0 },
-  axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
-  greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0 },
-  pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
-  scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
-  lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
-  graveto: { texture: ASSET_KEYS.woodIcon, frame: 0 }, // a wood stick, to build a bridge
-  bomb: { texture: ASSET_KEYS.bombIcon, frame: 0 }, // stepping on a bombSpot empty-handed
-  seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 }, // stepping on an open plantSpot hole
-  water: { texture: 'bucket-full-icon', frame: 0 }, // bumping a dry mound: it wants watering
-} as const;
-type NeedItemKind = keyof typeof NEED_ITEM_ICON;
 
 // The raised sprite + caption for each item's first-time "item get" ceremony.
 const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
@@ -544,9 +526,6 @@ export class GameScene extends Phaser.Scene {
   private breathingTween?: Phaser.Tweens.Tween;
   private lastStepTime = 0;
 
-  // "You need this item" balloon over the hero's head (see showNeedItemHint)
-  private needItemHint?: Phaser.GameObjects.Container;
-  private needItemHintTween?: Phaser.Tweens.Tween;
 
   // The real HD-2D: the whole world renders in true 3D (render3d/World3D.ts) on a
   // canvas UNDER this transparent Phaser one. Phaser keeps logic, input, canvas UI
@@ -1526,10 +1505,6 @@ export class GameScene extends Phaser.Scene {
     this.backItemBb = undefined;
     this.breathingTween?.destroy();
     this.breathingTween = undefined;
-    this.needItemHintTween?.stop();
-    this.needItemHintTween = undefined;
-    this.needItemHint?.destroy();
-    this.needItemHint = undefined;
     this.footprints.length = 0;
     this.lowHealthOutlines.forEach((o) => o.destroy());
     this.lowHealthOutlines.length = 0;
@@ -2139,9 +2114,6 @@ export class GameScene extends Phaser.Scene {
         // Carry the flame into a dead campfire to reignite the world.
         this.swingHeld(wx, wy);
         this.time.delayedCall(150, () => { this.lightCampfire(campfire, wx, wy); });
-      } else {
-        // Dead fire and no flame in hand: show the "bring fire" balloon.
-        this.showNeedItemHint('fire');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -2152,8 +2124,8 @@ export class GameScene extends Phaser.Scene {
     // the transfer, like lighting a campfire), and the full bucket FILLS the tank (the throw
     // empties the bucket, like dousing). Steam IS the water leaving: only fire over a WET tank
     // pressurizes, and boiling drains the sight glass until the next bucket. The two dark
-    // voids in the art are the two visual asks (cold mouth = fire, empty glass = water), and
-    // the balloon spells out whichever is missing.
+    // voids in the art are the two visual asks (cold mouth = fire, empty glass = water) — e a
+    // ARTE e quem diz o que falta agora, sem balao nenhum traduzindo.
     const boiler = this.getBoilerAt(wx, wy);
     if (boiler) {
       if (this.heldItem === 'bucketFull') {
@@ -2170,12 +2142,6 @@ export class GameScene extends Phaser.Scene {
           boiler.stoke();
           this.spawnFireHitEffect(wx, wy);
         });
-      } else if (!boiler.hasWater) {
-        // The empty sight glass asks for water first — a dry tank generates nothing.
-        this.showNeedItemHint('water');
-      } else if (!boiler.isHeated && !boiler.isGenerating) {
-        // Wet but cold: the balloon asks for fire, like a dead campfire.
-        this.showNeedItemHint('fire');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -2200,9 +2166,6 @@ export class GameScene extends Phaser.Scene {
         } else if (this.isFlammableHeld && !this.heldOnFire) {
           this.swingHeld(wx, wy);
           this.time.delayedCall(150, () => { this.igniteHeldItem(); });
-        } else {
-          // Lava is blocking (no boots on) and there's no torch to light here: show the boots.
-          this.showNeedItemHint('lavaBoots');
         }
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -2229,8 +2192,6 @@ export class GameScene extends Phaser.Scene {
           // WaterObject owns the carpentry now: it nails this deposit's boards in with hammer
           // beats + sawdust, and cross-fades to the finished tile (firing onBuilt) on the last.
           water.deposit();
-        } else {
-          this.showNeedItemHint('graveto');
         }
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -2250,9 +2211,6 @@ export class GameScene extends Phaser.Scene {
           this.spawnFireHitEffect(wx, wy);
           this.scheduleFireSpread(wx, wy); // it will carry to whatever is touching it
         });
-      } else {
-        // Needs a lit flame to catch: show the fire balloon.
-        this.showNeedItemHint('fire');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -2282,7 +2240,6 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         tree.shake();
-        this.showNeedItemHint('axe');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -2302,7 +2259,6 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         shrub.shake();
-        this.showNeedItemHint('axe');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -2331,15 +2287,14 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         rock.shake();
-        this.showNeedItemHint('pickaxe');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
     }
 
     // Moonflower — a shut bud in the light. No item opens it; only the DARK does (put out the
-    // campfires nearby, e.g. with the bucket). A bump just rustles it — the cat's lines carry the
-    // rule, so there is no missing-item balloon here.
+    // campfires nearby, e.g. with the bucket). A bump just rustles it — the cat's lines carry
+    // the rule.
     const flower = this.getMoonflowerAt(wx, wy);
     if (flower?.blocking) {
       flower.shake();
@@ -2349,7 +2304,7 @@ export class GameScene extends Phaser.Scene {
 
     // A planted mound — the seed under fresh earth, waiting for water. Bump with the FULL
     // bucket to water it (the douse gesture turned nurturing); the grass sprouts a while later.
-    // A dry-handed bump shows the "needs water" balloon; an already-watered mound just waits.
+    // A dry-handed bump just rustles it; an already-watered mound just waits.
     const plantSpot = this.getPlantSpotAt(wx, wy);
     if (plantSpot?.blocking) {
       if (plantSpot.isMound && this.heldItem === 'bucketFull') {
@@ -2357,8 +2312,6 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(120, () => {
           this.throwBucketWater(wx, wy, () => this.waterPlantSpot(plantSpot, wx, wy));
         });
-      } else if (plantSpot.isMound) {
-        this.showNeedItemHint('water');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -2382,7 +2335,6 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         grass.shake();
-        this.showNeedItemHint('scythe');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -2437,7 +2389,6 @@ export class GameScene extends Phaser.Scene {
         });
       } else {
         door.shake();
-        this.showNeedItemHint('key');
       }
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return;
@@ -3121,72 +3072,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  // Pops the speech balloon above the hero's head with `kind`'s icon inside it — the single
-  // "you need THIS item" beat shared by every locked interaction (dead fire → flame, door →
-  // key, dry tree → axe, rock → pickaxe, tall grass → scythe, lava → boots …).
-  private showNeedItemHint(kind: NeedItemKind): void {
-    if (!this.camera) return;
-    const { texture, frame } = NEED_ITEM_ICON[kind];
-    const size = this.tileSize;
-    const iconSize = size * 0.72;
-    // The hero is always pinned at screen centre; sit the balloon's tail just above its head.
-    const cx = this.camera.screenCenterX;
-    const tailY = this.camera.screenCenterY - size * 0.55;
-
-    // Holding into a wall re-bumps every ~220ms: reuse a live balloon (swap the icon, replay
-    // the pop) instead of stacking overlays on top of each other. setTexture resets the sprite
-    // to the new frame's native size, so re-pin the display size after swapping.
-    if (this.needItemHint?.active) {
-      const icon = this.needItemHint.getByName('icon') as Phaser.GameObjects.Image | null;
-      icon?.setTexture(texture, frame).setDisplaySize(iconSize, iconSize);
-      this.needItemHint.setPosition(cx, tailY);
-      this.replayNeedItemHint();
-      return;
-    }
-
-    const balloonH = size * 1.5;
-    const balloonW = balloonH * (26 / 22); // ballon_icon.png is 26x22
-    const balloon = this.add.image(0, 0, ASSET_KEYS.hintBalloon)
-      .setOrigin(0.5, 1) // tail tip anchored at the container origin
-      .setDisplaySize(balloonW, balloonH);
-    // Centre the icon in the bubble body, above the little downward tail.
-    const icon = this.add.image(0, -balloonH * 0.58, texture, frame)
-      .setName('icon')
-      .setDisplaySize(iconSize, iconSize);
-
-    this.needItemHint = this.add.container(cx, tailY, [balloon, icon]).setDepth(SCENE_DEPTHS.toast);
-    this.replayNeedItemHint();
-  }
-
-  // Pop the balloon in (a little overshoot), hold, then float up and fade away.
-  private replayNeedItemHint(): void {
-    const c = this.needItemHint;
-    if (!c) return;
-    this.needItemHintTween?.stop();
-    const baseY = c.y;
-    c.setScale(0.5).setAlpha(1).setY(baseY);
-    this.needItemHintTween = this.tweens.add({
-      targets: c,
-      scale: 1,
-      duration: 170,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        this.needItemHintTween = this.tweens.add({
-          targets: c,
-          y: baseY - this.tileSize * 0.4,
-          alpha: 0,
-          delay: 700,
-          duration: 320,
-          ease: 'Power1.easeIn',
-          onComplete: () => {
-            c.destroy();
-            if (this.needItemHint === c) this.needItemHint = undefined;
-          },
-        });
-      },
-    });
-  }
-
   // One warm ember mote drifting from the nearest lit campfire into the hero — the visible
   // stream that says "the fire is healing you". Screen-anchored (the hero rests inside the
   // ring, so both endpoints barely move over a mote's short life), like spawnSmokePuff.
@@ -3284,7 +3169,7 @@ export class GameScene extends Phaser.Scene {
   // The game is walk-only — no "use item" button — so every placement has a walk-on affordance:
   // a spot mark (a breathing purple ghost of the thing that goes there). The hero stepping onto
   // it with the right item in hand places it, exactly like stepping on a pickup collects it.
-  // With anything else in hand the step pops the need-item balloon showing what the mark wants.
+  // With anything else in hand the step does nothing: the mark's own art is the invitation.
   private handleTileEntered(wx: number, wy: number): void {
     const levelPortal = this.getLevelPortalAt(wx, wy);
     if (levelPortal) {
@@ -3352,24 +3237,17 @@ export class GameScene extends Phaser.Scene {
         // Ao contrario, um placeBombAt recusado (teardown) consumiria a marca sem produzir
         // bomba nenhuma — um spot gasto em falso e irrecuperavel.
         if (this.placeBombAt(wx, wy)) bombSpot.use(); // the ghost materialises into the real bomb
-      } else {
-        this.showNeedItemHint('bomb');
       }
       return;
     }
 
     // An open planting hole: step on it carrying seeds and they go into the ground — the mound
-    // rises the moment the hero steps OFF (see updatePlantSpots), then wants the bucket. The
-    // "needs seeds" balloon shows once per open-hole period: holes sit on walking lanes, and a
-    // balloon on every crossing would be noise, not teaching.
+    // rises the moment the hero steps OFF (see updatePlantSpots), then wants the bucket.
     const plantSpot = this.getPlantSpotAt(wx, wy);
     if (plantSpot && plantSpot.isHole) {
       if (this.heldItem === 'seeds') {
         this.clearHeldItem(); // the seeds are sown
         plantSpot.plant();
-      } else if (!plantSpot.hintShown) {
-        plantSpot.hintShown = true;
-        this.showNeedItemHint('seeds');
       }
     }
   }
@@ -3812,7 +3690,7 @@ export class GameScene extends Phaser.Scene {
   // ── Fire spread ────────────────────────────────────────────────────────────
   // Fire is the one system in this world the player STEERS instead of unlocks. Everything
   // else here is a lock and a key — bump the rock with the pickaxe, the tree with the axe —
-  // a 1:1 table with exactly one right answer, which the hint balloon then hands you. Fire is
+  // a 1:1 table with exactly one right answer. Fire is
   // different: it travels on its own, through whatever will carry it, and it does not care
   // what you still needed. So the question stops being "which item?" and becomes "what will
   // this reach, and what do I have to cut away first so it doesn't?".
@@ -4327,12 +4205,10 @@ export class GameScene extends Phaser.Scene {
     if (this.treeTileFrameAt(wx, wy) === null) return false;
 
     if (this.heldItem !== 'greatAxe') {
-      // Deliberately SILENT bare-handed. The forest is ~850 tiles and the hero scrapes along it
-      // constantly while walking, so a balloon on every bump would be wallpaper — and the
-      // need-item hint only means anything while it stays rare. Holding the PLAIN axe is the
-      // opposite case: the player has an axe and is being refused, and this balloon is the only
-      // place the game ever explains that there are two.
-      if (this.heldItem === 'axe') this.showNeedItemHint('greatAxe');
+      // Silencio, com machado na mao ou sem nada. O pinheiro que recusa o machado comum era o
+      // unico lugar onde o jogo dizia em voz alta que existem DOIS machados; sem os baloes,
+      // quem descobre isso e o jogador, batendo e reparando que o machado de aco derruba o que
+      // o comum nao derruba. E o mesmo preco que todas as outras travas pagaram.
       this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
       return true;
     }

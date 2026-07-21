@@ -11,11 +11,10 @@ import type { WorldProp } from './WorldProp';
  * A regra e fisica, nao um cadeado: um portao de bater gira para o lado de la, entao qualquer
  * coisa parada no tile de tras trava a folha. Encoste com o mato crescido do outro lado e ele
  * empurra, range e volta. Isso e o oposto de tudo o mais que fecha caminho neste jogo — as
- * outras travas tem UMA chave, e `showNeedItemHint` ainda te mostra qual e (CLAUDE.md: "todo
- * obstaculo e uma fechadura com exatamente uma chave"). Aqui nao ha item nenhum a procurar: o
- * que resolve e mudar o MUNDO do outro lado, e o unico jeito de mudar um lado onde voce nao
- * pode entrar e mandar alguma coisa la — o fogo, o braco robotico. Por isso o portao nao mostra
- * balao de item: nao existe icone para "tira o mato dali".
+ * outras travas tem UMA chave (CLAUDE.md: "todo obstaculo e uma fechadura com exatamente uma
+ * chave"). Aqui nao ha item nenhum a procurar: o que resolve e mudar o MUNDO do outro lado, e o
+ * unico jeito de mudar um lado onde voce nao pode entrar e mandar alguma coisa la — o fogo, o
+ * braco robotico.
  *
  * A recusa NAO pode ser o tremor da porta trancada. Aquele tremor e o vocabulario de "isto e
  * solido, esqueca" — e este portao nao esta recusando, esta TENTANDO. Entao ele comeca a abrir

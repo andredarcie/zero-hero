@@ -122,7 +122,6 @@ export const ASSET_KEYS = {
   hearts: 'hearts',
   keyItem: 'key-item',
   keyItemIcon: 'key-item-icon',
-  hintBalloon: 'hint-balloon',
   swordItem: 'sword-item',
   swordItemIcon: 'sword-item-icon',
   axeIcon: 'axe-icon',

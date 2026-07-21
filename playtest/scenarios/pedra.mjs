@@ -85,14 +85,36 @@ export default {
     });
     assert('o mundo tem pelo menos uma pedra', rock !== null, 'nenhuma pedra em __scene.rocks');
 
-    // Fica a OESTE da pedra e bate para leste: a picaretada e um bump, o jogo nao tem botao.
+    // ── O ESBARRAO DE MAOS VAZIAS ──────────────────────────────────────────
+    // O jogo tinha um balao que aparecia aqui e mostrava o icone da picareta. Ele foi removido:
+    // a trava responde FISICAMENTE (a pedra estremece) e nunca com legenda. Sem esta assercao,
+    // alguem religa o balao numa trava nova e ninguem percebe.
     await evaluate(([px, py]) => {
       const s = window.__scene;
       s.playerWorld.worldX = px; s.playerWorld.worldY = py;
       s.movementController.interruptMovement(px, py);
-      s.heldItem = 'pickaxe';
+      s.heldItem = 'none';
     }, [rock.x - 1, rock.y]);
-    await driver.settle(400);
+    await driver.settle(300);
+    await driver.press('ArrowRight', { count: 1 });
+    await driver.settle(500);
+    const bare = await evaluate(() => {
+      const r = window.__scene.rocks?.[0];
+      return {
+        texture: r?.sprite?.texKey ?? null,
+        blocking: r?.blocking ?? null,
+        // A arte do balao nao e mais nem CARREGADA — saiu do manifesto de boot.
+        balloonLoaded: window.__scene.textures.exists('hint-balloon'),
+      };
+    });
+    assert('esbarrar de maos vazias nao quebra nada (a pedra so aguenta)',
+      bare.blocking === true && bare.texture === 'rock', JSON.stringify(bare));
+    assert('e NAO existe mais balao de item-que-falta — nem a arte dele carrega',
+      bare.balloonLoaded === false, JSON.stringify(bare));
+
+    // Fica a OESTE da pedra e bate para leste: a picaretada e um bump, o jogo nao tem botao.
+    await evaluate(() => { window.__scene.heldItem = 'pickaxe'; });
+    await driver.settle(200);
     await shot('pedra-inteira');
 
     const texOf = () => evaluate(() => {

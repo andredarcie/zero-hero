@@ -41,8 +41,6 @@ export class PlantSpotObject implements WorldProp {
   public grownGrass?: TallGrassObject;
   /** GameScene marcou a reabertura (evita agendar duas vezes no loop de update). */
   public reopenPending = false;
-  /** Um balao "precisa de sementes" por periodo de buraco aberto — o (8,4) fica numa via. */
-  public hintShown = false;
 
   private readonly scene: Phaser.Scene;
   private readonly hole: Billboard3D;
@@ -144,7 +142,6 @@ export class PlantSpotObject implements WorldProp {
     this.state = 'hole';
     this.grownGrass = undefined;
     this.reopenPending = false;
-    this.hintShown = false;
     this.hole.setVisible(true).setAlpha(0);
     this.scene.tweens.add({ targets: this.hole, alpha: 1, duration: 300, ease: 'Sine.easeOut' });
   }

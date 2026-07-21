@@ -62,8 +62,8 @@ back; nothing saves until Salvar, and Salvar only writes that one level file.
 - **The game is walk-only — there are NO gameplay buttons at all** (only movement; overlays/menus
   are UI). Everything activates by stepping or bumping. Placements have walk-on affordances: a
   `bombSpot` (breathing purple ghost-bomb) plants the carried bomb on step; with the wrong item
-  in hand the step pops the need-item balloon. Author a bombSpot where the blast must happen —
-  its 2.2-tile radius must cover everything that blast is for. The upgrade shop (adventure only)
+  in hand the step does nothing — the mark's own art is the invitation. Author a bombSpot where
+  the blast must happen — its 2.2-tile radius must cover everything that blast is for. The upgrade shop (adventure only)
   is the Souls bonfire: bump a LIT campfire with anything that isn't a douse (bucketFull) or a
   torch-light (wood) and it opens — the E key is gone.
 - **The farming loop (`plantSpot` + seeds).** The scythe's product is SEEDS (sprites from the
@@ -98,9 +98,17 @@ back; nothing saves until Salvar, and Salvar only writes that one level file.
 ## Fire spreads (the one system the player steers)
 
 Every other obstacle in this game is a **lock with exactly one key** — axe→tree, pickaxe→rock,
-key→door — and `showNeedItemHint` then *shows you the icon of the key you are missing*. That table
-is why puzzles here kept collapsing into "fetch item, use item, repeat": there is only ever one
-right answer and the game hands it to you.
+key→door. That table is why puzzles here kept collapsing into "fetch item, use item, repeat":
+there is only ever one right answer.
+
+**The game no longer NAMES that answer.** There used to be a need-item balloon: bump a lock
+empty-handed and a speech bubble popped over the hero with the icon of the key you were missing.
+It is gone — table, art, every call site. A locked thing still answers a bump, but only
+physically: the rock shudders, the door rattles, the gate strains against what is behind it. The
+hero says "this did not work", never "fetch the pickaxe". Removing it is the same bet the swing
+gate makes: the world teaches, the HUD does not. **A new locked prop gets a shake, not a hint** —
+if the only way a player could know what to do is a caption, the prop's art is what needs
+fixing.
 
 Fire is the exception, and the only place a real puzzle can live. `GameScene.scheduleFireSpread` /
 `igniteFlammableAt`: a burning tile sets its 4-neighbours alight after `FIRE_SPREAD_MS`.
@@ -174,9 +182,9 @@ blobs and cast shadows would be a serious perf regression. So the steel axe remo
   out, the map would become an infinite fuel dispenser and flatten the fire economy that the
   scythe, the planting loop and the dryTree's own regrow timer exist to meter. It still PRODUCES
   (see the rule above) — just not on demand, so wood stays worth walking for.
-- The need-item balloon is shown **only when holding the plain axe**, never bare-handed. The
-  forest is ~850 tiles and the hero scrapes along it constantly; a balloon on every bump would be
-  wallpaper, and the hint only means anything while it stays rare.
+- Refusing a pine is **silent**, with the plain axe or bare-handed. It was the last place the
+  game said out loud that there are two axes; now the player learns it by swinging — the steel
+  axe fells what the plain one cannot. Same price every other lock pays.
 
 **The border is the sea, and that is a consequence of the steel axe, not a decoration.** The world
 edge used to be a wall of **pine tiles** (`WorldData`'s old `VOID_WALL_FRAME = 4`) — made of the
@@ -373,8 +381,8 @@ announces itself from afar.
 full bucket to fill it (the throw empties the bucket, same as dousing), and boiling CONSUMES
 the water (~45s per bucket, draining only while heated — steam is the water leaving). The
 sprite carries both asks as its two dark voids: the cold firebox mouth wants fire, the empty
-sight glass (blue when wet) wants water; the need-item balloon spells out whichever is
-missing, water first. Both are round trips: the plant demands the two elements, repeatedly.
+sight glass (blue when wet) wants water. The ART carries both asks — there is no balloon
+translating them. Both are round trips: the plant demands the two elements, repeatedly.
 
 - **Power comes from steam PRESSURE, not from the heat test** — the exact mirror of the wheel's
   angular speed. Pressure builds against thermal inertia (~1.4s) and drains slowly (~5.2s), with
@@ -462,12 +470,10 @@ tile behind it** — a swing leaf needs room to swing, so a tuft of tall grass b
 It shoves, catches and settles back, and stays shut.
 
 This is the one barrier in the game that breaks the rule stated at the top of the fire section:
-every other obstacle is a lock with exactly one key, and `showNeedItemHint` even shows you which
-key you're missing. Here there is no item to find — **what opens it is changing the far side**,
-and the far side is by definition where the hero cannot go. So it only has answers when paired
-with the things that act at a distance: fire, and the robotic arm that carries a lit graveto
-across a line the hero can't cross. It deliberately shows **no need-item balloon**: there is no
-icon for "clear that grass".
+every other obstacle is a lock with exactly one key. Here there is no item to find — **what opens
+it is changing the far side**, and the far side is by definition where the hero cannot go. So it
+only has answers when paired with the things that act at a distance: fire, and the robotic arm
+that carries a lit graveto across a line the hero can't cross.
 
 - **The refusal must not be the locked door's shake.** That shake is the game's word for "this is
   solid, forget it" — and this gate is not refusing, it is *trying*. So the leaf actually starts
