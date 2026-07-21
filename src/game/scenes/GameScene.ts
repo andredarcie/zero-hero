@@ -1385,6 +1385,10 @@ export class GameScene extends Phaser.Scene {
           worldY: arm.worldY,
           variable: arm.variable,
           powered: arm.isPowered,
+          reversed: arm.isReversed,
+          owes: arm.owesReturn,
+          source: arm.sourceTile,
+          dest: arm.destTile,
           busy: arm.isBusy,
         })),
         toolboxes: this.toolboxes.map((box) => ({
@@ -3274,6 +3278,10 @@ export class GameScene extends Phaser.Scene {
     // A garra parada no ar sobre o tile, com a sombra caindo embaixo, e o aviso de que pisar ali
     // faz alguma coisa (a mesma gramatica da bomba-fantasma no bombSpot).
     //
+    // E sempre `inputTile`, e nao a ponta de onde a garra tira NESTE instante: um braco que
+    // esta desfazendo uma entrega estaciona do outro lado por alguns segundos, e mudar por onde
+    // se alimenta a maquina no meio disso seria uma regra que pisca. Alimenta-se pela entrada.
+    //
     // Vem antes de tudo porque um tile de origem e um destino deliberado: se ele coincidir com
     // outra marca, entregar a carga a maquina e a leitura mais forte.
     const feeding = this.inserters.find((arm) => {
@@ -3460,6 +3468,10 @@ export class GameScene extends Phaser.Scene {
       // tambem houver: as duas redes somam por OR, como os produtores entre si). Sem cabo
       // nenhum: com vinculo, a variavel decide (falha segura); sem vinculo, autoalimentado
       // (compatibilidade com os bracos de antes da rede existir).
+      //
+      // `false` deixa a maquina parada, como sempre — mas antes de morrer ela DESFAZ a entrega
+      // que fez (RoboticArmObject, no topo). Um braco autoalimentado, que nunca ve `false`, e a
+      // unica variante sem volta, porque e a unica sem chave para desligar.
       const varPower = arm.variable ? this.globalVariables.get(arm.variable) === true : undefined;
       const powered = this.wireTouching(arm.worldX, arm.worldY)
         ? this.liveWireTouching(arm.worldX, arm.worldY) || varPower === true

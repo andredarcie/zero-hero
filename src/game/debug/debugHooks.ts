@@ -51,6 +51,12 @@ export interface GameDebugState {
     worldY: number;
     variable?: string;
     powered: boolean;
+    /** Desfazendo a entrega (energia caiu com divida em aberto): `source`/`dest` trocam de ponta. */
+    reversed: boolean;
+    /** Entregou algo que ainda esta no destino — e o que um corte de energia manda desfazer. */
+    owes: boolean;
+    source: readonly [number, number];
+    dest: readonly [number, number];
     busy: boolean;
   }>;
   electronicGates: Array<{

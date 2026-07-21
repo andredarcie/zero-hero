@@ -70,6 +70,25 @@ export default {
       store.placeEntity({ list: 'props', type: 'tallGrass', worldX: 4, worldY: 6 });
     }, PLACED);
 
+    // O QUINTO braco, o unico VINCULADO a rede: (8,9) leste, entrada (7,9) e saida (9,9). Os
+    // quatro de cima nao tem vinculo nenhum, entao sao autoalimentados e nunca veem energia
+    // cair — e sem isso nao ha como testar a inversao. A variavel `motor` fica sem produtor de
+    // proposito: nenhuma placa/roda/caldeira a escreve, entao o cenario e quem manda nela.
+    // A faixa e limpa porque ali mora o lago de lava do level-1.
+    log('EDITOR: coloca o braco CABEADO (8,9) vinculado a variavel motor');
+    await driver.page.evaluate(() => {
+      const store = window.__scene.store;
+      for (let x = 6; x <= 10; x += 1) {
+        for (let y = 8; y <= 10; y += 1) {
+          store.eraseEntitiesAt(x, y);
+          store.setCell('upper', x, y, null);
+          store.setCell('collision', x, y, false);
+        }
+      }
+      store.replaceGlobalVariables({ ...store.globalVariables, motor: false });
+      store.placeEntity({ list: 'props', type: 'inserter', worldX: 8, worldY: 9, dir: 1, variable: 'motor' });
+    });
+
     log('EDITOR: coloca um braco em cada uma das 4 direcoes pelo EditorStore');
     const placedOk = await driver.page.evaluate((list) => {
       const store = window.__scene?.store;
@@ -465,6 +484,84 @@ export default {
     assert('a carga chegou como madeira APAGADA (a chama morreu no caminho)',
       deadArrived?.kind === 'wood' && deadArrived.lit === false, JSON.stringify(deadArrived));
 
-    log('OK: gira nas 4 direcoes, atravessa a carga sozinho, recusa empilhar — e leva FOGO.');
+    // ── 11. CORTAR A ENERGIA DESFAZ A ENTREGA ───────────────────────────────
+    // O braco e a unica peca do jogo que poe um item onde o heroi NAO alcanca — logo a unica
+    // capaz de criar um beco sem saida de verdade. O contrato que fecha esse buraco: desligar a
+    // fonte faz a maquina ir buscar o que entregou e devolver na origem, UMA vez, e so entao
+    // morrer. Aqui usa-se o quinto braco, o unico vinculado a rede (`motor`): os quatro de cima
+    // sao autoalimentados e nunca veem a energia cair.
+    const armState = () => driver.page.evaluate(() => window.gameDebug.getState().inserters
+      .find((a) => a.worldX === 8 && a.worldY === 9));
+
+    const born = await armState();
+    assert('o braco cabeado existe e nasce SEM energia (motor=false)',
+      born?.variable === 'motor' && born.powered === false, JSON.stringify(born));
+
+    // Desligado e sem divida, ele e so um braco desligado: a carga na entrada nao anda.
+    log('JOGO: desligado e sem divida, o braco nao encosta na carga');
+    await driver.page.evaluate(() => window.__scene.itemManager.drop('stone', 7, 9));
+    await sleep(2600);
+    assert('sem energia e sem divida, a pedra FICA na entrada (7,9)', (await itemAt(7, 9)) === 'stone');
+    const idleOff = await armState();
+    assert('e ele nao deve nada a ninguem', idleOff.owes === false && idleOff.reversed === false,
+      JSON.stringify(idleOff));
+
+    // Liga: a entrega normal acontece e ABRE a divida.
+    log('JOGO: liga o motor — a pedra atravessa e a maquina passa a DEVER a devolucao');
+    await driver.page.evaluate(() => window.__scene.globalVariables.set('motor', true));
+    let sent = false;
+    const sendDeadline = Date.now() + CYCLE_TIMEOUT_MS;
+    while (Date.now() < sendDeadline) {
+      if ((await itemAt(9, 9)) === 'stone') { sent = true; break; }
+      await sleep(150);
+    }
+    assert('energizado, o braco leva a pedra de (7,9) pra saida (9,9)', sent);
+    const owing = await armState();
+    assert('e passa a DEVER a devolucao do que entregou', owing.owes === true, JSON.stringify(owing));
+
+    // Corta: a maquina vai buscar de volta. E a promessa toda — a entrega tem volta.
+    log('JOGO: corta o motor — a maquina vai buscar a pedra e devolve na origem');
+    await driver.page.evaluate(() => window.__scene.globalVariables.set('motor', false));
+    let undoing = false;
+    const undoDeadline = Date.now() + 3000;
+    while (Date.now() < undoDeadline) {
+      const st = await armState();
+      if (st.reversed === true) { undoing = true; break; }
+      await sleep(80);
+    }
+    assert('sem energia com divida em aberto, ele entra em modo DESFAZER', undoing);
+    await shot('braco-desfazendo');
+
+    let returned = false;
+    const returnDeadline = Date.now() + CYCLE_TIMEOUT_MS * 2; // o desfazer corre a 0.62x
+    while (Date.now() < returnDeadline) {
+      if ((await itemAt(7, 9)) === 'stone') { returned = true; break; }
+      await sleep(150);
+    }
+    assert('a pedra VOLTA sozinha pra entrada (7,9) — a entrega e reversivel', returned);
+    assert('e a saida (9,9) ficou vazia', (await itemAt(9, 9)) === null);
+
+    // Quitada a divida, ele para de novo — nao vira uma esteira ao contrario levando tudo que
+    // aparecer na saida pra origem. Uma pedra nova na saida tem de ficar exatamente onde esta.
+    log('JOGO: divida quitada, ele volta a ser um braco desligado (nao e esteira reversa)');
+    let settled = null;
+    const settleDeadline = Date.now() + 6000;
+    while (Date.now() < settleDeadline) {
+      settled = await armState();
+      if (settled.reversed === false && settled.busy === false) break;
+      await sleep(150);
+    }
+    assert('ele para de desfazer e volta ao repouso, sem divida',
+      settled.reversed === false && settled.owes === false && settled.busy === false,
+      JSON.stringify(settled));
+
+    await driver.page.evaluate(() => window.__scene.itemManager.drop('wood', 9, 9));
+    await sleep(2600);
+    assert('um item novo na SAIDA nao e sequestrado por um braco desligado',
+      (await itemAt(9, 9)) === 'wood', 'o braco arrastou algo que nunca entregou');
+    await shot('braco-desligado-sem-divida');
+
+    log('OK: gira nas 4 direcoes, atravessa a carga sozinho, recusa empilhar, leva FOGO — e '
+      + 'DESFAZ a entrega quando a energia cai.');
   },
 };

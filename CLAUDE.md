@@ -333,6 +333,24 @@ reach where the hero cannot.*
   would corrupt the cargo-behind-claw draw order.
 - **It refuses rather than stacks.** If the output tile is blocked or already holds an item, the
   arm idles: the ground keeps one item per tile, and two would be a silent disappearance.
+- **Cutting the power UNDOES the delivery — that is the anti-dead-end guarantee.** An unpowered
+  arm is still dead (it does not scan, dip or pick anything up), but if it *did* carry something
+  across while it was live and that item is still sitting on the output tile, losing power sends
+  it to fetch that item and put it back on the input tile, once, and only then does it stop —
+  parked over the input like always. This exists because the arm is the one piece that can place
+  an item where the hero cannot reach, so it is the only piece that can strand a puzzle for good;
+  with the undo, every delivery has a way back and the puzzle becomes *when* to switch the power
+  on and off instead of "careful, this is irreversible". Consequences: cutting power with the
+  cargo still IN the claw also undoes (it goes back to the tile it came from — freezing there
+  would trap the item in the hand forever), and a forward gesture already in flight is ABORTED,
+  never completed, when the power dies with nothing owed. The undo runs at `REVERSE_RATE` (0.62)
+  so grey-and-slow reads as "this is going backwards", not "this is working".
+- **The debt is ONE item and it forgives itself.** Not a history: the ground keeps one item per
+  tile, so what this arm left stranded is at most whatever is on its output tile right now. If
+  that tile empties by another hand, the debt is cleared at the next rest (`owed` in
+  `RoboticArmObject`) — the player already has the item, there is nothing to undo, and a machine
+  that kept owing would later kidnap an item it never delivered. An arm with no variable and no
+  wire is self-powered, never sees power drop, and is therefore the one variant with no undo.
 - **Why stepping on the origin has to deposit.** The game is walk-only: with no drop button, the
   hero can otherwise only put an item down by *swapping* with an item already on that tile — so an
   arm's empty origin could never receive cargo, and the machine would be unfeedable. Walking onto
@@ -340,7 +358,11 @@ reach where the hero cannot.*
   too: `dropStone`, the axe's graveto and the scythe's seeds land on a tile by themselves.)
 - `npm run playtest -- braco` guards all of it. It enters `/lab`, places the four rotations through
   the real `EditorStore`, presses P, and asserts the transfer — the authoring path, because that is
-  what the piece is for.
+  what the piece is for. It also authors a FIFTH arm bound to a variable with no producer (the four
+  others are self-powered and can never be switched off) and drives the undo end to end: dead and
+  owing nothing it ignores the cargo, live it delivers and takes on the debt, cut it fetches the
+  item home, and once square it goes inert again — a fresh item dropped on its output is NOT
+  dragged back, which is the assert that keeps the undo from degenerating into a reverse conveyor.
 
 ## The toolbox (`toolbox`) — the one thing that makes an item OUT OF other items
 

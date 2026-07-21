@@ -17,6 +17,31 @@ import type { WorldProp } from './WorldProp';
 // Ele tambem obedece a regra "itens PRODUZEM, nao so somem": o braco nao consome nada. O item
 // que entra e o mesmo que sai, um tile adiante.
 //
+// ── CORTAR A ENERGIA DESFAZ A ENTREGA (e so isso) ────────────────────────────────────────────
+// Sem energia o braco continua MORTO: nao procura carga, nao mergulha, nao pega nada. O que ele
+// ganhou foi uma DIVIDA. Se ele chegou a levar um item para o destino enquanto estava ligado, e
+// esse item ainda esta la, desligar faz a maquina ir busca-lo e devolve-lo na origem — uma vez —
+// e so entao ela morre, parada sobre a origem como de costume.
+//
+// Isso existe por um motivo de design, nao de fisica: o braco e a unica coisa do jogo que poe um
+// item onde o heroi NAO alcanca. Um braco de mao unica e portanto a unica peca capaz de criar um
+// beco sem saida de verdade — carga entregue do outro lado de um muro, nenhuma mao para busca-la,
+// e o level so tem o botao de recomecar. Com a divida, toda entrega tem volta: o jogador corta a
+// fonte e a maquina devolve o que levou. O puzzle vira QUANDO ligar e QUANDO desligar, em vez de
+// "cuidado, isto aqui e irreversivel".
+//
+// A divida e UM item, e nao um historico — e nao por economia, mas porque o chao guarda um item
+// por tile: o que este braco deixou encalhado e, no maximo, o que esta no tile de saida agora.
+// Ela se PERDOA sozinha assim que aquele tile esvazia por outra mao (`owed` zerado no repouso):
+// se o jogador ja pegou o item, nao ha nada a desfazer, e continuar devendo faria a maquina
+// sequestrar mais tarde um item que ela nunca pos ali.
+//
+// Duas consequencias:
+//   - Desligar com a carga AINDA NA PINCA tambem e desfazer: ela volta pro tile de onde saiu.
+//     Congelar ali deixaria o item preso na garra para sempre, que e o beco que isto ataca.
+//   - Um braco SEM vinculo (sem variavel e sem cabo) e autoalimentado, logo nunca ve a energia
+//     cair. So um braco ligado a rede desfaz — porque so ele tem como ser desligado.
+//
 // ── A ANATOMIA: base -> braco -> antebraco -> garra ──────────────────────────────────────────
 // Igual ao inserter do Factorio: uma base compacta presa ao chao, um eixo giratorio, e dali um
 // braco ARTICULADO de duas partes retangulares — a de baixo maior, a de cima menor — com a garra
@@ -194,6 +219,12 @@ const RISE_MS = 170; // levanta vazia
 const RETURN_MS = 440; // volta pra origem
 const RESCAN_MS = 220; // respiro antes de procurar carga de novo
 
+// O ciclo do DESFAZER (sem energia) corre mais devagar. Nao e balanceamento: e leitura. Um braco
+// cinza com a lampada apagada carregando um item para o lado errado precisa ser obviamente OUTRA
+// coisa que um braco trabalhando, e a velocidade e o sinal que se le antes da cor — sem servo
+// empurrando, o que se ve e uma mola se soltando, nao uma maquina decidindo.
+const REVERSE_RATE = 0.62;
+
 type ArmPhase =
   | 'idle' | 'wind' | 'descend' | 'grip' | 'lift' | 'swing' | 'lower' | 'release' | 'rise' | 'return';
 
@@ -283,11 +314,16 @@ export class RoboticArmObject implements WorldProp {
    *  toda vez que `elapsed` zera num rescan — senao a respiracao soluca a cada 220ms. */
   private aliveMs = 0;
 
-  // O estado da parada: a altura atual do punho ocioso (que persegue respiracao ou inclinacao
-  // suavemente) e de onde o wind parte — ele arma a partir de onde o braco ESTIVER, porque
-  // depois de uma recusa longa o punho esta la embaixo e saltar pro repouso seria um teleporte.
+  // O estado da parada: a altura atual do punho ocioso, que persegue respiracao ou inclinacao
+  // suavemente.
   private idleElev = HAND_HOVER;
-  private windFromElev = HAND_HOVER;
+  /**
+   * De onde a fase atual comecou a mover o punho. TODA fase que muda altura parte daqui, e nao
+   * da altura nominal do inicio dela: o braco arma o bote a partir de onde ESTIVER (depois de
+   * uma recusa longa o punho esta la embaixo), e uma inversao no meio do gesto nao pode fazer
+   * a mao SALTAR — um salto de altura le como teleporte, nunca como maquina.
+   */
+  private phaseFromElev = HAND_HOVER;
 
   // O pendulo da carga: deslocamento ao longo da tangente do arco e sua velocidade.
   private cargoSwing = 0;
@@ -304,12 +340,26 @@ export class RoboticArmObject implements WorldProp {
   private readonly sweep: 1 | -1;
   private handAngle: number;
   private handRadius = REACH;
+  // O arco e sempre descrito de um angulo GRAVADO ate o alvo da fase, e nunca de uma ponta fixa:
+  // uma inversao no meio da meia-volta faz o braco desfazer so o pedaco que ele andou — e a
+  // duracao acompanha esse pedaco, senao um arco curtinho levaria os 560ms de uma volta inteira.
+  private swingFromAngle = 0;
+  private swingMs = SWING_MS;
   private returnFromAngle = 0;
+  private returnMs = RETURN_MS;
   // Os sons disparam na ENTRADA da fase. Nao da pra testar `elapsed === 0` no switch porque o
   // delta ja foi somado antes dele; uma bandeira armada no enter() e o jeito honesto.
   private pendingSwingSfx = false;
   private pendingReleaseSfx = false;
   private powered = true;
+  /** Desfazendo agora: as duas pontas trocaram de papel. Ver setReversed. */
+  private reversed = false;
+  /**
+   * A DIVIDA: o item que este braco entregou no destino e que ainda esta la. E ela, e nada mais,
+   * que o corte de energia manda desfazer — sem divida, um braco desligado e so um braco
+   * desligado. Ver o cabecalho do arquivo.
+   */
+  private owed: HeldItemKind | null = null;
 
   public handX: number;
   public handY: number;
@@ -433,34 +483,77 @@ export class RoboticArmObject implements WorldProp {
     return [this.worldX + vx, this.worldY + vy];
   }
 
+  /**
+   * De onde ele TIRA e onde ele POE AGORA. `inputTile`/`outputTile` sao a geometria AUTORADA
+   * (o que o editor colocou e o que o `dir` diz); estes dois sao o sentido em que a maquina esta
+   * correndo neste instante, e trocam de ponta quando a energia cai. Todo o ciclo — a varredura
+   * do idle, o mergulho, a entrega, o repouso da garra — fala destes, nunca daqueles.
+   */
+  public get sourceTile(): readonly [number, number] {
+    return this.reversed ? this.outputTile : this.inputTile;
+  }
+
+  public get destTile(): readonly [number, number] {
+    return this.reversed ? this.inputTile : this.outputTile;
+  }
+
   /** O angulo em que o destino fica: meia volta a partir da origem, pelo lado escolhido. */
   private get angleOut(): number { return this.angleIn + this.sweep * Math.PI; }
+
+  private get angleSrc(): number { return this.reversed ? this.angleOut : this.angleIn; }
+
+  private get angleDst(): number { return this.reversed ? this.angleIn : this.angleOut; }
 
   public get isBusy(): boolean { return this.phase !== 'idle'; }
 
   public get isPowered(): boolean { return this.powered; }
 
+  /** Andando pra tras: desfazendo a entrega que fez. */
+  public get isReversed(): boolean { return this.reversed; }
+
+  /** Deve uma devolucao: entregou algo que ainda esta no destino. */
+  public get owesReturn(): boolean { return this.owed !== null; }
+
   public update(delta: number, port: ArmWorldPort, powered = true): void {
     this.setPowered(powered);
+    // Sem energia, a maquina so se mexe se DEVER alguma coisa: um item que ela deixou no destino,
+    // ou um que esteja na propria pinca (congelar ali prenderia a carga na garra para sempre).
+    const undoing = !powered && (this.owed !== null || this.carriedKind !== null);
+    this.setReversed(undoing);
     this.prevHandAngle = this.handAngle;
-    // Cortar energia congela a transmissao onde ela estiver — inclusive segurando carga. O
-    // pendulo ainda assenta pela gravidade, e retomar energia continua o mesmo gesto sem perda.
-    if (!powered) {
-      this.updateCargo(delta);
-      return;
+    if (!powered && !undoing) {
+      // Nada a desfazer: a maquina esta MORTA. Um gesto de IDA que tenha comecado antes do corte
+      // e abortado onde estiver — a garra sobe vazia e volta pro repouso. Deixar terminar
+      // entregaria um item com a energia desligada, que e precisamente o que "desligado" nao
+      // pode significar; e congelar no meio do mergulho seria a imagem de uma maquina quebrada.
+      if (this.phase === 'wind' || this.phase === 'descend' || this.phase === 'grip') this.enter('rise');
+      // No repouso ela simplesmente para: nao procura carga, nao mergulha, nao pega nada.
+      if (this.phase === 'idle') {
+        this.updateCargo(delta);
+        return;
+      }
     }
-    this.elapsed += delta;
+    // Todo movimento sem energia corre mais devagar (ver REVERSE_RATE) — desfazendo ou apenas
+    // recolhendo o braco. `aliveMs` (respiracao, tremor) segue o tempo real, porque uma maquina
+    // que ainda se mexe nao esta morta, esta voltando.
+    this.elapsed += powered ? delta : delta * REVERSE_RATE;
     this.aliveMs += delta;
-    const [inX, inY] = this.inputTile;
-    const [outX, outY] = this.outputTile;
+    const [srcX, srcY] = this.sourceTile;
+    const [dstX, dstY] = this.destTile;
 
     switch (this.phase) {
       case 'idle': {
+        // A divida e reconferida NO REPOUSO, que e o unico momento em que ela pode mudar sem ser
+        // por obra da propria maquina: se o que ele entregou nao esta mais no tile de saida,
+        // alguem passou e levou — nao ha o que desfazer. Sem este perdao a maquina ficaria
+        // devendo para sempre e um dia sequestraria um item que ela nunca pos ali.
+        if (this.owed !== null && !port.hasItem(...this.outputTile)) this.owed = null;
+
         // So arranca quando ha carga na origem E o destino esta vazio e livre. A checagem do
         // destino e o que impede a maquina de empilhar dois itens no mesmo tile — o chao do jogo
         // guarda um item por tile, e dois viram um sumico silencioso.
-        const wants = port.hasItem(inX, inY);
-        const outFree = !port.blocked(outX, outY) && !port.hasItem(outX, outY);
+        const wants = port.hasItem(srcX, srcY);
+        const outFree = !port.blocked(dstX, dstY) && !port.hasItem(dstX, dstY);
 
         // Os tres estados legiveis (ver as constantes IDLE_BOB/STRAIN_*): sem nada pra fazer a
         // maquina respira no alto; querendo trabalhar com a saida presa ela se inclina sobre a
@@ -470,7 +563,7 @@ export class RoboticArmObject implements WorldProp {
           ? STRAIN_ELEV + STRAIN_TREMBLE * Math.sin((this.aliveMs * 2 * Math.PI) / STRAIN_TREMBLE_MS)
           : HAND_HOVER + IDLE_BOB * Math.sin((this.aliveMs * 2 * Math.PI) / IDLE_BOB_MS);
         this.idleElev += (target - this.idleElev) * Math.min(1, delta / IDLE_EASE_MS);
-        this.place(this.angleIn, REACH, this.idleElev);
+        this.place(this.angleSrc, REACH, this.idleElev);
 
         if (this.elapsed < RESCAN_MS) break;
         if (!wants || !outFree) { this.elapsed = 0; break; }
@@ -484,19 +577,19 @@ export class RoboticArmObject implements WorldProp {
         // que o punho estava (a respiracao balanca o repouso) e chega em HAND_HOVER, que e de
         // onde o mergulho conta a descida.
         const t = Math.min(1, this.elapsed / WIND_MS);
-        const base = this.windFromElev + (HAND_HOVER - this.windFromElev) * t;
-        this.place(this.angleIn, REACH, base + WIND_LIFT * Math.sin(Math.PI * t));
+        const base = this.phaseFromElev + (HAND_HOVER - this.phaseFromElev) * t;
+        this.place(this.angleSrc, REACH, base + WIND_LIFT * Math.sin(Math.PI * t));
         if (t >= 1) this.enter('descend');
         break;
       }
 
       case 'descend': {
         const t = Math.min(1, this.elapsed / DESCEND_MS);
-        this.place(this.angleIn, REACH, HAND_HOVER + (HAND_GRAB - HAND_HOVER) * easeInQuad(t));
+        this.place(this.angleSrc, REACH, this.phaseFromElev + (HAND_GRAB - this.phaseFromElev) * easeInQuad(t));
         if (t >= 1) {
           // O item pode ter sumido no meio do caminho (o heroi passou e pegou). Se sumiu, a
           // garra sobe vazia em vez de fechar no ar e "carregar" um item que nao existe.
-          this.enter(port.hasItem(inX, inY) ? 'grip' : 'rise');
+          this.enter(port.hasItem(srcX, srcY) ? 'grip' : 'rise');
         }
         break;
       }
@@ -505,9 +598,9 @@ export class RoboticArmObject implements WorldProp {
         // A mordida CRAVA: a pinca afunda um tico ao fechar e volta. Sem isso o fechamento e so
         // uma troca de textura, e troca de textura nao tem peso nenhum.
         const bite = Math.sin(Math.PI * Math.min(1, this.elapsed / GRIP_MS));
-        this.place(this.angleIn, REACH, HAND_GRAB - SNAP_DIP * bite);
+        this.place(this.angleSrc, REACH, HAND_GRAB - SNAP_DIP * bite);
         if (this.elapsed >= GRIP_MS) {
-          const taken = port.take(inX, inY);
+          const taken = port.take(srcX, srcY);
           this.carriedKind = taken?.kind ?? null;
           this.carriedFire = taken?.fire;
           this.carriedCharge = taken?.chargeMs;
@@ -521,24 +614,26 @@ export class RoboticArmObject implements WorldProp {
       }
 
       case 'lift': {
-        // Sobe com estouro: passa da altura de repouso e assenta nela.
+        // Sobe com estouro: passa da altura de repouso e assenta nela. Fica onde o braco ja
+        // aponta — 'lift' e alcancado da origem (acabou de pegar) e tambem de uma INVERSAO no
+        // destino (a energia caiu com a carga na pinca: ergue, para depois voltar com ela).
         const t = Math.min(1, this.elapsed / LIFT_MS);
-        this.place(this.angleIn, REACH, HAND_GRAB + (HAND_HOVER - HAND_GRAB) * easeOutBack(t));
+        this.place(this.handAngle, REACH, this.phaseFromElev + (HAND_HOVER - this.phaseFromElev) * easeOutBack(t));
         if (t >= 1) this.enter('swing');
         break;
       }
 
       case 'swing': {
         if (this.pendingSwingSfx) { this.pendingSwingSfx = false; port.swinging(); }
-        const t = Math.min(1, this.elapsed / SWING_MS);
-        this.sweepTo(this.angleIn, this.angleOut, t);
+        const t = Math.min(1, this.elapsed / this.swingMs);
+        this.sweepTo(this.swingFromAngle, this.angleDst, t);
         if (t >= 1) this.enter('lower');
         break;
       }
 
       case 'lower': {
         const t = Math.min(1, this.elapsed / LOWER_MS);
-        this.place(this.angleOut, REACH, HAND_HOVER + (HAND_GRAB - HAND_HOVER) * t);
+        this.place(this.angleDst, REACH, this.phaseFromElev + (HAND_GRAB - this.phaseFromElev) * t);
         if (t >= 1) this.enter('release');
         break;
       }
@@ -552,11 +647,14 @@ export class RoboticArmObject implements WorldProp {
         // (a mesma leitura da recusa do idle: maquina viva, saida presa) e solta sozinha
         // assim que o tile vagar.
         const outTaken = this.carriedKind !== null
-          && (port.blocked(outX, outY) || port.hasItem(outX, outY));
+          && (port.blocked(dstX, dstY) || port.hasItem(dstX, dstY));
         if (outTaken) break;
         if (this.pendingReleaseSfx) { this.pendingReleaseSfx = false; port.released(); }
         if (this.elapsed >= RELEASE_MS) {
-          if (this.carriedKind) port.put(this.carriedKind, outX, outY, this.carriedFire, this.carriedCharge);
+          if (this.carriedKind) port.put(this.carriedKind, dstX, dstY, this.carriedFire, this.carriedCharge);
+          // Entregar no destino ABRE a divida; devolver na origem a QUITA. As duas pontas do
+          // mesmo movimento, escritas no mesmo lugar para nao poderem discordar.
+          this.owed = this.reversed ? null : this.carriedKind;
           this.carriedKind = null;
           this.carriedFire = undefined;
           this.carriedCharge = undefined;
@@ -567,18 +665,20 @@ export class RoboticArmObject implements WorldProp {
       }
 
       case 'rise': {
-        // 'rise' e alcancado do DESTINO (largou) e tambem da ORIGEM (o item sumiu antes da
-        // pinca fechar), entao ele sobe do angulo em que o braco estiver — nao de um fixo.
+        // 'rise' e alcancado do DESTINO (largou), da ORIGEM (o item sumiu antes da pinca fechar)
+        // e de uma INVERSAO no meio do mergulho, entao ele sobe do angulo e da altura em que o
+        // braco estiver — nunca de um par fixo.
         const t = Math.min(1, this.elapsed / RISE_MS);
-        this.place(this.handAngle, REACH, HAND_GRAB + (HAND_HOVER - HAND_GRAB) * t);
+        this.place(this.handAngle, REACH, this.phaseFromElev + (HAND_HOVER - this.phaseFromElev) * t);
         if (t >= 1) this.enter('return');
         break;
       }
 
       case 'return': {
-        // A volta desfaz o mesmo arco, dobrando de novo no meio.
-        const t = Math.min(1, this.elapsed / RETURN_MS);
-        this.sweepTo(this.returnFromAngle, this.angleIn, t);
+        // A volta desfaz o mesmo arco, dobrando de novo no meio — ate a origem VIGENTE, que
+        // depois de uma inversao e a outra ponta.
+        const t = Math.min(1, this.elapsed / this.returnMs);
+        this.sweepTo(this.returnFromAngle, this.angleSrc, t);
         if (t >= 1) this.enter('idle');
         break;
       }
@@ -592,6 +692,8 @@ export class RoboticArmObject implements WorldProp {
     this.powered = powered;
     // A lampada de energia na coluna acende/apaga trocando de banco na folha (dir / dir+4) —
     // o mesmo verde e a mesma gramatica do dinamo da roda e da caldeira: verde = rede viva.
+    // Apagada, a maquina nao para: ela anda pra tras (ver setReversed). O cinza e a lentidao
+    // do REVERSE_RATE sao juntos o que diz "isto aqui esta desfazendo", e nao "isto trabalha".
     this.base.setTexture('inserter', this.dir + (powered ? 4 : 0));
     const tint = powered ? METAL_TINT : UNPOWERED_TINT;
     this.base.setTint(tint);
@@ -603,14 +705,60 @@ export class RoboticArmObject implements WorldProp {
     this.carried?.setTint(powered ? 0xffffff : 0xa2a5a8);
   }
 
+  /**
+   * Comecou (ou parou) de desfazer: as duas pontas trocaram de papel, entao qualquer fase em
+   * andamento passou a apontar para o tile errado e precisa ser reancorada. Isso nunca e um corte
+   * seco — DESFAZER E DESFAZER O GESTO —, e o que isso significa depende de onde a garra esta.
+   */
+  private setReversed(reversed: boolean): void {
+    if (reversed === this.reversed) return;
+    this.reversed = reversed;
+    switch (this.phase) {
+      // Estava mergulhando pra buscar carga num tile que agora e o DESTINO. Aborta e sobe vazio;
+      // o 'return' que vem em seguida ja mira a origem nova sozinho.
+      case 'wind': case 'descend': case 'grip':
+        this.enter('rise');
+        break;
+      // Com a carga na pinca, desfazer e LEVAR DE VOLTA: ergue e depois refaz o arco ao
+      // contrario. Quando o braco ja esta na ponta de onde tirou (inverteu durante o 'lift'), o
+      // arco que sobra e zero e ele simplesmente devolve o item de onde o tirou. Sem carga —
+      // ela sumiu no caminho — sobe vazio.
+      case 'lift': case 'lower': case 'release':
+        this.enter(this.carriedKind ? 'lift' : 'rise');
+        break;
+      // No meio da meia-volta: gira de volta a partir de onde esta, pelo mesmo caminho e no
+      // tempo do pedaco que andou (ver swingMs).
+      case 'swing':
+        this.enter(this.carriedKind ? 'swing' : 'return');
+        break;
+      // Vazio: so tem de ir esperar sobre a outra ponta — que e exatamente o que 'return' faz.
+      case 'idle': case 'return':
+        this.enter('return');
+        break;
+      // Ja esta subindo vazio, e o 'return' seguinte le a origem nova por conta propria.
+      case 'rise':
+        break;
+    }
+  }
+
   private enter(next: ArmPhase): void {
-    // A volta parte do angulo em que o braco ESTIVER. Ele nem sempre volta do destino: quando o
-    // item some antes da pinca fechar, o braco ainda aponta pra origem, e voltar "do destino"
-    // faria uma meia-volta fantasma sem motivo.
-    if (next === 'return') this.returnFromAngle = this.handAngle;
-    // O wind arma A PARTIR de onde o punho esta (respirando no alto ou inclinado numa recusa
-    // que acabou de destravar) — e a parada seguinte retoma a perseguicao dali tambem.
-    if (next === 'wind') this.windFromElev = this.handElev;
+    // Toda fase que MOVE o punho em altura parte de onde ele esta agora: o bote arma a partir da
+    // altura em que o braco estiver (a respiracao balanca o repouso, e uma recusa longa deixa o
+    // punho la embaixo), e uma inversao no meio do gesto nao pode fazer a mao saltar.
+    this.phaseFromElev = this.handElev;
+    // Os dois arcos partem do angulo em que o braco ESTIVER, nunca de uma ponta fixa: o braco nem
+    // sempre volta do destino (quando o item some antes da pinca fechar ele ainda aponta pra
+    // origem, e voltar "do destino" seria uma meia-volta fantasma), e uma inversao no meio do
+    // arco parte do meio. A duracao acompanha o arco que sobra — o piso evita um giro instantaneo
+    // quando as duas pontas coincidem, que e o caso de inverter durante o 'lift'.
+    if (next === 'swing') {
+      this.swingFromAngle = this.handAngle;
+      this.swingMs = Math.max(140, (SWING_MS * Math.abs(this.angleDst - this.handAngle)) / Math.PI);
+    }
+    if (next === 'return') {
+      this.returnFromAngle = this.handAngle;
+      this.returnMs = Math.max(140, (RETURN_MS * Math.abs(this.angleSrc - this.handAngle)) / Math.PI);
+    }
     if (next === 'idle') this.idleElev = this.handElev;
     this.phase = next;
     this.elapsed = 0;
