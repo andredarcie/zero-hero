@@ -54,6 +54,26 @@ E o **zero** — o momento em que a chama chega ao destino — já tem consequê
 acende uma fogueira morta, pressuriza uma caldeira, detona um bombSpot, queima uma ponte, abre um
 portão de bater via capim. Cada level escolhe o que "chegar a zero" significa.
 
+### O portal apagado — o objetivo do jogo É a mecânica
+
+Para o tema e o objetivo serem a mesma coisa, o portal de saída **nasce apagado**, e a única
+chave que existe no jogo é **o zero de uma contagem chegando até ele**: chama no braseiro do
+portal (a gramática do `fireHeatAt`, a mesma da caldeira) ou fio vivo adjacente (a gramática do
+portão eletrônico). Vencer = atravessar **enquanto ele está aberto**.
+
+Isso fecha o loop inteiro numa frase: **construa a contagem → entregue o zero na porta → vença o
+seu próprio zero até a porta.** A janela de abertura é autorável por level:
+
+- **braseiro** (fogueira morta junto ao portal): o zero acende e a porta *fica* aberta — os
+  levels de aprendizado;
+- **vapor / bateria**: a porta só vive enquanto a fonte durar (coast da caldeira, carga da
+  bateria) — os levels em que, depois da ignição, você corre contra o relógio que você mesmo
+  construiu.
+
+Nos levels de desarme a regra é a mesma e o fogo é UM só: a chama que vai abrir o portal é a
+mesma que ameaça a sua ponte no caminho — o pavio se bifurca, e o que o jogador edita é **por
+qual ramo o relógio anda**. "O fogo que ajuda atrapalha", promovido a regra do jogo.
+
 ## 4. As duas metades do arco: DESARMAR e ENTREGAR
 
 "Count down" tem duas leituras, e o jogo usa as duas:
@@ -100,20 +120,23 @@ apresenta em contagem regressiva:
 
 | # | nome | o que ensina |
 |---|---|---|
-| **5 — "Três batidas"** | tutorial: pavio de 3 tiles até uma fogueira morta. Acenda, veja o tempo *andar*, veja o zero acontecer. | tempo = tiles |
-| **4 — "Corte"** | o primeiro desarme: o fogo nasce aceso e caminhando; abra um firebreak com a foice antes que alcance a ponte que você precisa. | roubar segundos |
+| **5 — "Três batidas"** | tutorial: pavio de 3 tiles até o braseiro do portal. Acenda, veja o tempo *andar*, veja o zero **abrir a porta**. | tempo = tiles; o zero é a chave |
+| **4 — "Corte"** | o primeiro desarme: o pavio se bifurca — um ramo leva ao braseiro do portal, o outro à ponte que você precisa. Corte o ramo errado antes que a chama o alcance. | escolher por qual ramo o relógio anda |
 | **3 — "Comprar tempo custa tempo"** | o pavio existente é curto demais para a travessia; plante e regue mais capim ANTES de acender. | adicionar segundos |
 | **2 — "O relógio pula o muro"** | braço robótico entrega o graveto aceso do outro lado; o capim de trás abre o portão de bater. | a contagem atravessa onde você não pode |
-| **1 — "Tempo engarrafado"** | o zero do pavio pressuriza a caldeira; o portão eletrônico só vive enquanto o vapor durar. Contagem dentro de contagem. | encadear relógios |
-| **0 — "Zero"** | o final: dois pavios de comprimentos diferentes, acesos em momentos diferentes, precisam convergir — e o ponto de convergência é o tile onde o herói precisa estar. Toda contagem termina no Zero. | síntese + o título do jogo como última frase |
+| **1 — "Tempo engarrafado"** | o zero do pavio pressuriza a caldeira, o fio leva a corrente até o portal — que só vive enquanto o vapor durar. Acendeu, corra: a contagem que abriu a porta é a mesma que a fecha. | correr contra o próprio zero |
+| **0 — "Zero"** | o final: dois pavios de comprimentos diferentes, acesos em momentos diferentes, convergem no braseiro do portal — e a janela é curta: o herói precisa estar na porta quando o zero chegar. Toda contagem termina no Zero. | síntese + o título do jogo como última frase |
 
 Ordem de produção (o corte de escopo que salva a jam): **5, 4 e 1 primeiro** — são os três que
 provam o arco (aprender / desarmar / encadear). 3, 2 e 0 entram conforme o tempo render.
 
 ## 8. O código novo é quase nenhum — e isso é a estratégia, não preguiça
 
-- **Vitória:** o `levelPortal` já é a vitória, com a travessia de quatro atos já polida. O pavio
-  não precisa de "win condition" nova — ele **guarda o caminho até o portal**.
+- **Vitória:** continua sendo entrar no `levelPortal` (a travessia de quatro atos já está
+  polida) — mas o portal **nasce apagado** e o zero da contagem é quem o acende. Essa é a única
+  mudança real de código da jam: o portal vira um consumidor como o portão eletrônico (abre com
+  chama no braseiro ou fio vivo adjacente, fecha quando a fonte morre), reusando `fireHeatAt` e
+  a gramática aceso/apagado que fogueira e portão já têm.
 - **Derrota:** um pavio gasto errado é softlock — e o botão ↻ com a pill *"Travou? ↻ recomeça o
   level"* já existe exatamente para isso. Perder = recomeçar informado.
 - **Fases, fogo, braço, caldeira, fios, bateria, portões:** tudo já embarcado e com playtest
@@ -124,13 +147,17 @@ não constrói engine ganha dois dias de level design dos outros.
 
 ### O pouco que vale a pena codar (alto ROI temático)
 
-1. **A batida.** Cada spread de fogo ao longo de uma cadeia toca um *tick* curto — e o intervalo
+1. **O portal apagado** — o único item obrigatório. Estado aceso/apagado no `levelPortal`,
+   ligado por `fireHeatAt` no braseiro ou por fio vivo adjacente — o consumidor que o portão
+   eletrônico já sabe ser. As partículas e a luz do portal só existem aceso: a porta escura É a
+   pergunta que o level faz.
+2. **A batida.** Cada spread de fogo ao longo de uma cadeia toca um *tick* curto — e o intervalo
    entre ticks é o próprio `FIRE_SPREAD_MS`, então o pavio **soa** como um relógio andando. Se a
    cadeia restante for curta, o tick sobe de tom: urgência sem HUD. (Síntese no padrão do
    `playArmGrab`: curto, quieto, nunca vira ruído de fundo.)
-2. **A brasa quente.** Os últimos 2–3 tiles de uma cadeia queimando brilham mais — o "faltam 3
+3. **A brasa quente.** Os últimos 2–3 tiles de uma cadeia queimando brilham mais — o "faltam 3
    segundos" dito em luz, não em número.
-3. **Seletor em contagem regressiva.** `index.json` apresentando 5→0; o card de título de cada
+4. **Seletor em contagem regressiva.** `index.json` apresentando 5→0; o card de título de cada
    level já existe.
 
 Se sobrar tempo (e só se sobrar): um prop-destino "sino de pedra" para o zero ter um gongo — mas
@@ -171,7 +198,8 @@ a fogueira morta acendendo já cumpre o papel.
 > Todo jogo de contagem regressiva te dá um número e medo. O nosso te dá **o relógio na mão**: a
 > contagem é um pavio de capim atravessando o mapa — a foice rouba segundos, a semente compra
 > segundos (e comprar tempo custa tempo), o balde pausa, o braço robótico faz o relógio pular o
-> muro. Você decide quando o tempo começa. E quando chegar a zero — e ela vai chegar — que chegue
-> onde **você** mandou.
+> muro. Você decide quando o tempo começa. E a porta de saída só abre quando a contagem zera
+> **nela** — e só fica aberta enquanto o zero durar. Acendeu? Agora corra contra o relógio que
+> você mesmo construiu.
 >
 > **Zero the Hero: toda contagem termina no Zero.**
