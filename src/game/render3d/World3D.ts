@@ -1673,6 +1673,14 @@ export class World3D {
       { centered: true, fog: false, depthWrite: false, additive: true },
       { flat: true, fog: false, depthWrite: false, additive: true },   // the ring, the ground crack
       { flat: true, additive: true },                                  // survivors' ground rings
+      // The moonflower's two bodies. They are LIT sprites with a lowered alphaTest, because they
+      // CROSS-DISSOLVE into each other (see MoonflowerObject) and the lit default of 0.5 would pop
+      // a fading sprite out of existence instead of fading it. `alphaTest` reaches the program's
+      // cache key, so "the same billboard with a different cutoff" is a different shader — and the
+      // lying one is born hidden, so compile() (which walks only VISIBLE objects) would never see
+      // it and the first bloom of the run would pay for the link.
+      { groundShadow: true, alphaTest: 0.02 },
+      { flat: true, alphaTest: 0.02 },
     ];
     for (const opts of runtimeVariants) {
       this.warmups.push(new Billboard3D(this.scene, FX_DOT_TEXTURE, 0, opts).setDisplaySize(0.001, 0.001));

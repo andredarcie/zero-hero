@@ -94,6 +94,14 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: as 9 poses de UMA flor da lua abrindo (ver MOONFLOWER_FRAMES) — cinco em pe
+    // e quatro deitadas. Entra como SHEET porque o editor precisa desenhar UM frame (o aberto).
+    key: ASSET_KEYS.moonflower,
+    path: '/assets/environment/props/moonflower.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: 4 poses do corpo + 2 da bandeja de entrada (ver TOOLBOX_FRAMES).
     key: ASSET_KEYS.toolbox,
     path: '/assets/environment/props/toolbox.png',

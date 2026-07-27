@@ -73,6 +73,9 @@ const DEFS: Record<string, SheetDef> = {
   'electronic-gate': { url: `${A}/environment/props/electronic_gate.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: a caixa de ferramentas — 4 poses do corpo + 2 da bandeja (TOOLBOX_FRAMES).
   toolbox: { url: `${A}/environment/props/toolbox.png`, frameW: 16, frameH: 16 },
+  // Sprite Factory: a flor da lua — 9 poses de UMA flor abrindo, 5 em pe + 4 deitadas. Os frames
+  // NAO sao uma animacao livre: cada um e um `t` de abertura (ver MOONFLOWER_FRAMES).
+  moonflower: { url: `${A}/environment/props/moonflower.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: portal medieval — arco de pedra com quatro fases do vortice roxo.
   'level-portal-icon': { url: `${A}/environment/props/level_portal.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: bateria vazia/carregada — ver BATTERY_FRAMES.

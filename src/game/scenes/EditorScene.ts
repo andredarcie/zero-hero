@@ -2,8 +2,8 @@
 
 import {
   ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES,
-  NPC_VISUALS, PRESSURE_PLATE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, TOOLBOX_FRAMES,
-  WATER_WHEEL_FRAMES,
+  MOONFLOWER_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+  TOOLBOX_FRAMES, WATER_WHEEL_FRAMES,
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import {
@@ -13,7 +13,6 @@ import {
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { wireShapeFrame, wireShapeFromMask } from '@/game/world/wireShapes';
-import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import { GameScene } from '@/game/scenes/GameScene';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
@@ -85,7 +84,8 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   lava: { key: ASSET_KEYS.lavaFloor },
   water: { key: ASSET_KEYS.water },
   bridgeSpot: { key: ASSET_KEYS.bridge },
-  moonflower: { key: 'moonflower-bloom' }, // generated at boot (registerMoonflowerTextures)
+  // A pose ABERTA: e a que diz o que a peca faz (uma ponte de petalas). Ver MOONFLOWER_FRAMES.
+  moonflower: { key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
   bombSpot: { key: ASSET_KEYS.bombItem, frame: 0 },
   plantSpot: { key: ASSET_KEYS.plantHole, frame: 0 },
   // O frame aqui e so o default da paleta: no tabuleiro, entityVisual troca pelo frame da
@@ -167,10 +167,9 @@ export class EditorScene extends Phaser.Scene {
   }
 
   public create(): void {
-    // The bucket + moonflower pixel art is generated at boot (into the Phaser texture manager here
-    // so the palette can show them, and the 3D registry for the live playtest).
+    // The bucket's pixel art is generated at boot (into the Phaser texture manager here so the
+    // palette can show it, and the 3D registry for the live playtest).
     registerBucketTextures(this);
-    registerMoonflowerTextures(this);
     registerLevelPortalTextures(this);
     // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).

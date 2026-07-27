@@ -81,7 +81,6 @@ import {
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { wireShapeFromMask } from '@/game/world/wireShapes';
-import { registerMoonflowerTextures } from '@/game/render3d/moonflowerTexture';
 import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import {
   PORTAL_TUNNEL_MIN_CRUISE_MS,
@@ -580,11 +579,10 @@ export class GameScene extends Phaser.Scene {
     // Build the renderer before ANY world object — they attach their billboards to it.
     this.world3d = new World3D();
     setCurrentWorld3D(this.world3d);
-    // Generate the bucket's + moonflower's pixel art into both texture pipelines before any
+    // Generate the bucket's + charcoal's pixel art into both texture pipelines before any
     // prop/item is built (their billboards resolve their textures on construction below).
     registerBucketTextures(this);
     registerCharcoalTexture(this);
-    registerMoonflowerTextures(this);
     registerLevelPortalTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
@@ -1419,6 +1417,14 @@ export class GameScene extends Phaser.Scene {
           open: g.isOpen,
           refusals: g.refusalCount,
         })),
+        moonflowers: this.moonflowers.map((mf) => ({
+          worldX: mf.worldX,
+          worldY: mf.worldY,
+          open: mf.isOpen,
+          blocking: mf.blocking,
+          openness: Number(mf.openAmount.toFixed(3)),
+          ...mf.view,
+        })),
         levelPortals: this.levelPortals.map((portal) => ({
           worldX: portal.worldX,
           worldY: portal.worldY,
@@ -1794,6 +1800,8 @@ export class GameScene extends Phaser.Scene {
     }
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.updatePlantSpots();
+    // A flor da lua le a luz das fogueiras e abre/fecha por conta dela.
+    this.updateMoonflowers(delta);
     // Produtores primeiro, a corrente nos cabos depois, consumidores por ultimo: placa/roda/
     // caldeira atualizam a rede no MESMO frame em que o braco consulta energia, sem um pulso
     // atrasado ao abrir ou fechar um circuito. Os cabos correm FORA do updateMechanismCircuits
@@ -4142,14 +4150,29 @@ export class GameScene extends Phaser.Scene {
       w.setBuildHint(dist === 1 && !this.dialogOpen && !this.shopOpen && !this.isDead);
       w.render(this.tileSize, this.camera);
     }
-    // Moonflowers: shut while a LIT campfire is within ~2.6 tiles, open (walkable) in the dark.
-    // Driven here because the campfires live in GameScene; the flower owns only look + collision.
+    // Bombs are world-anchored billboards; nothing to reproject here.
+  }
+
+  /**
+   * Moonflowers: shut while a LIT campfire is within ~2.6 tiles, open (walkable) in the dark. The
+   * proximity test lives here because the campfires do; the flower owns look, collision and juice.
+   *
+   * This runs in update() and NOT in renderProps(), which reprojectStatic() also calls: a dialog
+   * pan must not advance the bloom, and the animation needs a delta that a reprojection has no
+   * business having.
+   */
+  private updateMoonflowers(delta: number): void {
     for (const mf of this.moonflowers) {
       const nearFire = this.campfires.some((cf) => cf.isLit
         && Math.hypot(cf.worldX - mf.worldX, cf.worldY - mf.worldY) <= 2.6);
       mf.setNearFire(nearFire);
+      // A regra da roda d'agua: efeito e audio so existem perto do heroi.
+      const effectsVisible = Math.hypot(
+        mf.worldX - this.playerWorld.worldX,
+        mf.worldY - this.playerWorld.worldY,
+      ) <= 10;
+      mf.update(delta, effectsVisible);
     }
-    // Bombs are world-anchored billboards; nothing to reproject here.
   }
 
   private openShop(): void {

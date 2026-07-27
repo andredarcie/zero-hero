@@ -25,6 +25,7 @@ import machado from './machado.mjs';
 import pedra from './pedra.mjs';
 import portalTravessia from './portal-travessia.mjs';
 import portaoDeBater from './portao-de-bater.mjs';
+import florDaLua from './flor-da-lua.mjs';
 import sombras from './sombras.mjs';
 import caixaPlaca from './caixa-placa.mjs';
 import placaUndead from './placa-undead.mjs';
@@ -65,6 +66,7 @@ export const scenarios = {
   pedra,
   'portal-travessia': portalTravessia,
   'portao-de-bater': portaoDeBater,
+  'flor-da-lua': florDaLua,
   sombras,
   'caixa-placa': caixaPlaca,
   'placa-undead': placaUndead,

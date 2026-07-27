@@ -682,6 +682,60 @@ that carries a lit graveto across a line the hero can't cross.
   a wall with the gate at one gap and the arm at another, grass behind the gate, the hero hands
   the arm a lit graveto, the fire walks the grass, and the same bump that only rattled now opens.
 
+## The moonflower (`moonflower`) — ONE plant drawn nine times
+
+`src/game/objects/MoonflowerObject.ts` + `spritefactory/sprites/moonflower.mjs`. A night-blooming
+flower over a chokepoint: a shut BUD (it blocks) while a lit campfire is within ~2.6 tiles, an open
+petal-BRIDGE (walkable, faintly bioluminescent) once the area goes dark. Reversible — light a fire
+and it folds shut again. It is the only barrier whose key is the *absence* of something.
+
+**The two states are one drawing, not two drawings that resemble each other.** They used to be two
+independent procedural sprites — a green side-on teardrop and a pale top-down rosette — sharing no
+palette, no petal count and no silhouette, so the pair read as two objects swapping places. Now a
+single parametric function (six petals on a receptacle on a stem) is evaluated at nine openness
+values and dumped into one sheet. "Closed" and "open" cannot drift apart, because there is nothing
+to keep in sync: they are the same drawing at `t = 0` and `t = 1`. **Ask this of any prop with
+states** — if two poses need a rule to stay related, they will stop being related.
+
+- **The sheet is split into two BANKS because the game draws the flower in two geometries**, and
+  that split is not cosmetic: the shut bud is an UPRIGHT billboard (volume + a cast shadow, so it
+  reads as an obstacle) and the open bloom is a FLAT quad on the `ground` depth layer (the hero
+  stands on it). Frames 0–4 are standing, with the camera's projection **baked into the art**
+  (`DEPTH_UP` = camHeight/camBack, the same conversion the robotic arm computes at runtime); frames
+  5–8 are plain plan views, which the lying quad's own geometry foreshortens. The cut sits at
+  `MOONFLOWER_FRAMES.handoff` — the last instant the near petal is still in the air.
+- **The banks CROSS-DISSOLVE, and that is why both bodies carry a lowered `alphaTest`.** At the lit
+  default (0.5) a fading sprite pops out of existence instead of fading. The seam does not show
+  because both sides draw the same flower at the same instant; the lying quad also fades in
+  slightly ELEVATED and settles (`LAND_ELEV`), which is what the petals are actually doing.
+  Both shapes need a stand-in in `prewarmShaders` — `alphaTest` reaches the program's cache key,
+  and the lying body is born hidden, so `compile()` (which walks only VISIBLE objects) never sees
+  it and the first bloom of the run would pay for the link.
+- **Openness travels at a RATE, never on a tween.** One number moves toward its target at a speed
+  that depends on where it already is, so a reversal is free: light a fire halfway through the
+  bloom and the petals fold back from exactly where they were. Two tweens would have to be killed
+  and re-aimed, and the flower would jump to a pose belonging to the other animation. The two
+  curves are the animation's whole feel — opening eases in and out (a flower does not snap, ~1.4s),
+  closing HESITATES at full bloom and then whips shut (~0.9s), which is what makes the directions
+  read as two events instead of one clip played backwards.
+- **Collision follows the ART, not the trigger** (`WALKABLE_AT` = 0.78): the tile is still a wall
+  when the flower is half open, and only opens once the petals are on the ground — the electronic
+  gate's rule. Closing crosses the same line immediately, so it blocks again the moment it starts
+  folding.
+- Juice, all of it mesh-and-tween (nothing may add a point light at runtime): pollen motes exhaled
+  at the moment the petals break apart, a halo that overshoots on arrival then breathes, a settle
+  spring at both ends, a tiny world shake as the petals land / slam shut, wind sway on the closed
+  bud, and two synthesised SFX built like the swing gate's pair — one gesture, two endings (air
+  rising into a bell; the same air descending into a dull slap).
+- **`shake()` sets a counter, not a tween.** `render()` owns the bud's angle every frame for the
+  wind, so a tween on the same property is overwritten and the bump is never seen.
+- The proximity test lives in `GameScene.updateMoonflowers`, called from `update()` and **not** from
+  `renderProps()` — which `reprojectStatic()` also calls, and a dialog pan must not advance a bloom.
+- `npm run playtest -- flor-da-lua` authors the fixture in `/lab` and asserts the claim the way it
+  has to be asserted: it asks the RENDERER which sheet each of the two bodies is drawing from. Plus
+  the lock (bare-handed, the bud refuses), real intermediate poses in both banks, a frame where both
+  bodies are on screen at partial alpha, collision still blocking past half-open, and the fold back.
+
 ## The portal crossing — the one animation told by two scenes
 
 Stepping into a `levelPortal` used to be a 620ms fade to purple. Now it is four beats, and the
@@ -746,7 +800,8 @@ so they flake, and a flake in an unrelated scenario tells you nothing about your
 costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Toolbox and its
 recipes → `caixa-ferramentas`. Rock and pickaxe →
 `pedra`. Pressure plate + hero/crate → `caixa-placa`; the undead that walks onto one →
-`placa-undead`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Fire and the light
+`placa-undead`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Moonflower →
+`flor-da-lua`. Fire and the light
 budget → `perf-burn`. Frame cost → `perf-profile`. Item-state contracts (a bridge refusing a
 second burn, the mound waiting for a clear tile, production drops falling to a free neighbour,
 the bomb's fuse tween dying with the bomb) → `itens`. Same rule for re-runs: one failure in a

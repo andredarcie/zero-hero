@@ -833,6 +833,33 @@ class SoundManager {
     this.osc('sine', 120, 70, 0.09, 0.14, 0.08);
   }
 
+  // ── a flor da lua ────────────────────────────────────────────────────────
+  // O par tem a mesma logica do portao de bater: um gesto, dois finais. Abrir SOBE e demora (uma
+  // flor nao estala); fechar DESCE e acaba num tapa surdo de petala batendo em petala. Sao os dois
+  // unicos sons vegetais do jogo, entao nenhum leva metal nem madeira: e ar e um sino.
+  // Sintetizados, sem sample — cada um toca quando a escuridao muda, o que e raro.
+
+  /** A flor abrindo: ar entrando devagar e um sino distante subindo uma quinta. */
+  public playMoonflowerBloom(): void {
+    // O sopro: passa-banda subindo devagar. E ele que da a duracao — a flor abre em ~1,4s, e um
+    // som curto por cima de uma animacao longa faz a animacao parecer atrasada.
+    this.noise('bandpass', 700, 1.4, 0.075, 0.9);
+    this.noise('highpass', 3200, 0.8, 0.03, 0.7, 0.15);
+    // O sino: A4 e a quinta acima, o intervalo mais aberto que existe — a mesma "abertura" do
+    // gesto. Entra depois do sopro comecar, nunca junto: e a flor que ABRIU, nao o ar.
+    this.osc('sine', 440, 440, 0.085, 0.9, 0.28);
+    this.osc('sine', 659, 659, 0.05, 0.8, 0.42);
+    this.osc('triangle', 220, 220, 0.045, 1.0, 0.3);
+  }
+
+  /** A flor fechando: o mesmo ar, agora descendo, cortado pelo tapa das petalas se encontrando. */
+  public playMoonflowerClose(): void {
+    this.noise('bandpass', 1500, 1.6, 0.07, 0.26);
+    this.osc('sine', 520, 180, 0.06, 0.24);
+    // O tapa: grave, curto e sem brilho nenhum. E o que separa "fechou" de "esta fechando".
+    this.noise('lowpass', 300, 1.1, 0.12, 0.09, 0.2);
+  }
+
   // ── a travessia do portal ────────────────────────────────────────────────
   // Os tres sons sao um arco so, e por isso valem juntos: a succao SOBE (o portal puxando), a
   // viagem e um bordao GRAVE e parado (nada acontece, so distancia passando) e a aterrissagem

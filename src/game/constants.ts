@@ -176,6 +176,8 @@ export const ASSET_KEYS = {
   inserter: 'inserter',
   inserterHand: 'inserter-hand',
   woodenCrate: 'wooden-crate',
+  // A flor da lua (spritefactory): as 9 poses de UMA flor abrindo — ver MOONFLOWER_FRAMES.
+  moonflower: 'moonflower',
   pressurePlate: 'pressure-plate',
   waterWheel: 'water-wheel',
   boiler: 'boiler',
@@ -214,6 +216,28 @@ export const WATER_WHEEL_FRAMES = { phases: 8, off: 0, powered: 8 } as const;
 export const BOILER_FRAMES = { coldDry: 0, coldWet: 1, hotDry: 2, hotWet: 3, on: 4 } as const;
 // Sprite Factory battery.png: vazia / carregada (a janela gold) — o balde da eletricidade.
 export const BATTERY_FRAMES = { empty: 0, full: 1 } as const;
+/**
+ * Sprite Factory moonflower.png: NOVE poses de UMA flor abrindo — nao dois desenhos parecidos, a
+ * mesma funcao de desenho avaliada em nove `t` de abertura (ver spritefactory/sprites/moonflower.mjs).
+ *
+ * O sheet vem partido em dois bancos porque o jogo desenha a flor em duas geometrias, e a divisao
+ * nao e capricho: o botao fechado BLOQUEIA (billboard em pe, com sombra, pra ler como obstaculo) e
+ * a flor aberta e PONTE (quad deitado, que o heroi pisa). `standing` carrega a projecao da camera
+ * assada na arte; `lying` e planta baixa, que o proprio quad deitado ja achata.
+ *
+ * `openAt` e o `t` de cada frame — o runtime escolhe a pose por ele, e nao por um indice, pra que
+ * mudar a duracao da animacao nunca precise mexer em contagem de frame.
+ */
+export const MOONFLOWER_FRAMES = {
+  standing: [0, 1, 2, 3, 4],
+  lying: [5, 6, 7, 8],
+  openAt: {
+    standing: [0, 0.13, 0.26, 0.39, 0.52],
+    lying: [0.52, 0.68, 0.84, 1],
+  },
+  /** O `t` em que a arte troca de banco: a ultima pose em que a petala da frente ainda esta no ar. */
+  handoff: 0.52,
+} as const;
 // Sprite Factory electronic_gate.png: quatro alturas da grade em bancos sem/com energia.
 export const ELECTRONIC_GATE_FRAMES = { phases: 4, off: 0, powered: 4 } as const;
 // Sprite Factory toolbox.png: quatro poses do CORPO (fechada, entreaberta, aberta, forjando) mais

@@ -1,0 +1,42 @@
+moonflower: 9 frame(s) — 0 fail, 5 warn
+  [info] new-color: frame 0: #a884f3 is new but declared in allowNewColors
+  [info] new-color: frame 0: #8d6cd1 is new but declared in allowNewColors
+  [info] bbox: frame 0: content 9x14 at (4,2), coverage 29%
+  [warn] edge-touch: frame 0: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
+  [info] new-color: frame 1: #a884f3 is new but declared in allowNewColors
+  [info] new-color: frame 1: #8d6cd1 is new but declared in allowNewColors
+  [info] bbox: frame 1: content 9x13 at (4,3), coverage 33%
+  [warn] edge-touch: frame 1: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
+  [info] new-color: frame 2: #a884f3 is new but declared in allowNewColors
+  [info] new-color: frame 2: #8d6cd1 is new but declared in allowNewColors
+  [info] bbox: frame 2: content 9x13 at (4,3), coverage 38%
+  [warn] edge-touch: frame 2: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
+  [info] new-color: frame 3: #a884f3 is new but declared in allowNewColors
+  [info] new-color: frame 3: #8d6cd1 is new but declared in allowNewColors
+  [info] bbox: frame 3: content 11x13 at (3,3), coverage 44%
+  [warn] edge-touch: frame 3: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
+  [info] new-color: frame 4: #8d6cd1 is new but declared in allowNewColors
+  [info] new-color: frame 4: #a884f3 is new but declared in allowNewColors
+  [info] bbox: frame 4: content 11x13 at (3,3), coverage 45%
+  [warn] edge-touch: frame 4: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
+  [info] new-color: frame 5: #8d6cd1 is new but declared in allowNewColors
+  [info] new-color: frame 5: #a884f3 is new but declared in allowNewColors
+  [info] bbox: frame 5: content 12x12 at (2,2), coverage 44%
+  [info] new-color: frame 6: #8d6cd1 is new but declared in allowNewColors
+  [info] new-color: frame 6: #a884f3 is new but declared in allowNewColors
+  [info] bbox: frame 6: content 14x12 at (1,2), coverage 45%
+  [info] new-color: frame 7: #8d6cd1 is new but declared in allowNewColors
+  [info] new-color: frame 7: #a884f3 is new but declared in allowNewColors
+  [info] bbox: frame 7: content 14x14 at (1,1), coverage 52%
+  [info] new-color: frame 8: #8d6cd1 is new but declared in allowNewColors
+  [info] new-color: frame 8: #a884f3 is new but declared in allowNewColors
+  [info] bbox: frame 8: content 14x14 at (1,1), coverage 52%
+  frame 0: #1d2b53×39 #a884f3×17 #626439×8 #8d6cd1×5 #4d4f2c×3 #cdcdcd×2
+  frame 1: #1d2b53×43 #a884f3×13 #8d6cd1×13 #626439×8 #4d4f2c×5 #cdcdcd×2
+  frame 2: #1d2b53×41 #a884f3×20 #8d6cd1×16 #626439×10 #4d4f2c×7 #cdcdcd×2
+  frame 3: #1d2b53×49 #a884f3×23 #8d6cd1×23 #626439×8 #4d4f2c×6 #cdcdcd×3
+  frame 4: #1d2b53×45 #a884f3×31 #8d6cd1×23 #626439×7 #cdcdcd×5 #4d4f2c×4
+  frame 5: #1d2b53×65 #8d6cd1×20 #a884f3×17 #f1cc36×4 #626439×2 #cdcdcd×2 #4d4f2c×2
+  frame 6: #1d2b53×59 #8d6cd1×26 #a884f3×18 #f1cc36×11 #cdcdcd×1 #f8e394×1
+  frame 7: #1d2b53×63 #8d6cd1×33 #a884f3×20 #f1cc36×11 #cdcdcd×4 #f8e394×1
+  frame 8: #1d2b53×63 #8d6cd1×36 #a884f3×14 #f1cc36×11 #cdcdcd×7 #f8e394×1

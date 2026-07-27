@@ -76,6 +76,25 @@ export interface GameDebugState {
     open: boolean;
     refusals: number;
   }>;
+  /**
+   * A flor da lua: em que ponto da abertura ela esta (`openness`), e o que os DOIS corpos estao
+   * desenhando. `sheet` e lido do proprio billboard — e assim que um teste cobra a promessa de que
+   * o botao fechado e a flor aberta saem da mesma folha, e nao de dois desenhos diferentes.
+   * Nas pontas do ladder um dos dois alphas e 0; no meio da travessia os dois valem, porque as
+   * duas geometrias se dissolvem uma na outra.
+   */
+  moonflowers: Array<{
+    worldX: number;
+    worldY: number;
+    open: boolean;
+    blocking: boolean;
+    openness: number;
+    sheet: string;
+    standingFrame: number;
+    lyingFrame: number;
+    standingAlpha: number;
+    lyingAlpha: number;
+  }>;
   levelPortals: Array<{
     worldX: number;
     worldY: number;
