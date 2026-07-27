@@ -293,6 +293,25 @@ reach where the hero cannot.*
   that posture, a blocked output and a broken machine were the same image. `playArmGrab`
   (synthesised, no sample) fires when the claw closes on cargo — short and quiet on purpose,
   since a row of arms repeats it forever.
+- **The refusal also has to say WHERE the problem is, so it LUNGES** (`LUNGE_*`). Leaning over the
+  cargo says "I want to and cannot", but it says it at the wrong end: the jam is on the OUTPUT, and
+  a machine writhing on top of the item the player just deposited reads as "my deposit failed" or
+  "this thing is broken" — and both send the player looking for the answer in their own hand, the
+  one place it isn't. So every ~2.2s the strain **starts the half-turn**, travels a fraction of the
+  arc toward the output and springs back, with `playArmStrain` (the working servo cut short by a
+  dull thud, exactly the swing gate's `playGateSwing`/`playGateStrain` pair). The eye follows the
+  lunge and the gesture dies pointing at the tile that is taken. This is the swing gate's answer to
+  the same question — "the player has to see the leaf MOVE to understand the problem is on the
+  other side" — and it is a fraction of the arc on purpose: a lunge that reached the destination
+  would stop reading as a failed attempt and start reading as a badly drawn delivery. Spaced, never
+  continuous, for the toolbox's reason: a machine that writhes without pause becomes background and
+  the player stops seeing it. `strained()` is the one arm sound gated on distance (the water
+  wheel's rule) because it is the only one that repeats for as long as the state lasts.
+  **Consequence for the piece as a whole: one delivery per arm until that output tile frees.** A
+  self-powered arm (no variable, no wire) never sees power drop, so it has no undo either — feed it
+  a second item and the item simply waits on the input, visible, swappable, while the machine
+  lunges at the far side. That is the intended, legible dead end, not a bug: authoring an arm whose
+  output the hero can never reach is authoring a one-shot machine.
 - **The hand parks in the air over the ORIGIN tile, with its contact shadow on the ground below.**
   That shadow is the affordance — "put something here and something happens", the same grammar as
   the bombSpot's breathing ghost — and stepping onto that tile carrying anything deposits it
@@ -363,6 +382,9 @@ reach where the hero cannot.*
   owing nothing it ignores the cargo, live it delivers and takes on the debt, cut it fetches the
   item home, and once square it goes inert again — a fresh item dropped on its output is NOT
   dragged back, which is the assert that keeps the undo from degenerating into a reverse conveyor.
+  The refusal's lunge is checked by SAMPLING the claw for two lunge cycles and demanding both halves
+  of the gesture: that it leaves the tile over the input, and that it comes BACK. Without the second
+  half a claw frozen mid-arc would pass, and that is not an attempt — it is a jammed machine.
 
 ## The toolbox (`toolbox`) — the one thing that makes an item OUT OF other items
 

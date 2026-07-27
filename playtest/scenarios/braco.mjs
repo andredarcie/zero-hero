@@ -337,6 +337,41 @@ export default {
     assert('recusando, o braco se INCLINA sobre a carga presa', strainElev > 0.55 && strainElev < 0.75, `elev ${strainElev}`);
     await shot('braco-recusando-inclinado');
 
+    // …e a recusa APONTA: inclinar-se sobre a carga diz "quero e nao posso", mas diz isso no lugar
+    // errado — o problema esta na SAIDA, e uma maquina se contorcendo em cima do item que o jogador
+    // acabou de depositar le como "o deposito falhou" ou "isso quebrou". Nos dois casos ele procura
+    // a resposta na propria mao, que e o unico lugar onde ela nao esta. Entao a recusa ARRANCA a
+    // meia-volta de tempos em tempos e volta (LUNGE_*), como a folha do portao de bater que comeca
+    // a girar e bate: o gesto morre apontando pro tile preso.
+    //
+    // O teste amostra a garra por dois ciclos de investida e cobra as duas metades do gesto — que
+    // ela SAI de cima da entrada, e que VOLTA. Sem a segunda, uma garra que simplesmente ficasse
+    // parada no meio do arco passaria, e isso nao e uma tentativa: e uma maquina emperrada.
+    const lunges = await driver.page.evaluate(async () => {
+      const arm = window.__scene.inserters.find((a) => a.worldX === 6 && a.worldY === 6);
+      const [ix, iy] = arm.inputTile;
+      const seen = [];
+      for (let i = 0; i < 80; i += 1) {
+        seen.push({
+          d: Math.hypot(arm.handX - ix, arm.handY - iy),
+          strain: arm.strainMs,
+        });
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      return {
+        far: Math.max(...seen.map((s) => s.d)),
+        near: Math.min(...seen.map((s) => s.d)),
+        strainGrew: seen[seen.length - 1].strain > seen[0].strain,
+      };
+    });
+    assert('a recusa ARRANCA na direcao da saida (a garra sai de cima da entrada)',
+      lunges.far > 0.35, JSON.stringify(lunges));
+    assert('e a investida VOLTA — e uma tentativa frustrada, nao um braco emperrado',
+      lunges.near < 0.12, JSON.stringify(lunges));
+    assert('e o relogio do impasse corre enquanto ele durar', lunges.strainGrew,
+      JSON.stringify(lunges));
+    await shot('braco-recusando-investida');
+
     // ── 8. A saida ocupada NO MEIO do ciclo tambem recusa ───────────────────
     // A checagem de saida livre morava so no idle — o ciclo inteiro (pegar, atravessar, largar)
     // leva ~1.5s, e qualquer coisa que ocupasse a saida NESSE meio tempo (outro braco, um item

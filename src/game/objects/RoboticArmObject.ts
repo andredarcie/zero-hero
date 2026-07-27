@@ -204,6 +204,25 @@ const STRAIN_TREMBLE = 0.013;
 const STRAIN_TREMBLE_MS = 130;
 const IDLE_EASE_MS = 160; // suaviza a troca respirar<->inclinar (nada de teleporte de altura)
 
+// ── A INVESTIDA da recusa: o gesto que diz ONDE esta o problema ──────────────────────────────
+//
+// Inclinar-se e tremer sobre a carga diz "quero e nao posso", mas diz isso NO LUGAR ERRADO: o
+// problema esta na saida, e o jogador ve a maquina se contorcendo em cima do item que ele acabou
+// de depositar. A leitura que sobra e "meu deposito falhou" ou "essa maquina quebrou" — e nas duas
+// ele procura a solucao na propria mao, que e o unico lugar onde ela nao esta.
+//
+// O portao de bater ja respondeu a essa mesma pergunta: "o jogador tem de ver a folha MOVER pra
+// entender que o problema e do outro lado e nao nas maos dele". Entao a recusa aqui tambem PARTE:
+// de tempos em tempos o braco arranca a meia-volta, anda um pedaco do arco na direcao da saida e
+// volta. O olho segue a investida, e ela morre apontando pro tile que esta preso.
+//
+// Um pedaco, nunca o arco todo: a garra tem de parar bem antes de chegar la, senao a investida
+// deixa de ser uma tentativa frustrada e passa a parecer uma entrega mal desenhada.
+const LUNGE_SPAN = 0.22; // fracao da meia-volta que a investida percorre
+const LUNGE_MS = 340; // ida e volta de UMA investida
+const LUNGE_EVERY_MS = 2200; // e o resto do tempo ela fica inclinada tremendo
+const LUNGE_LIFT = 0.14; // o quanto o punho sobe no meio da investida (ele ARRANCA, nao arrasta)
+
 // Tempos do ciclo. Somados dao ~1.8s por item — da pra VER a maquina descer, agarrar, atravessar
 // e largar, que e o ponto todo de existir uma animacao em vez de um teleporte.
 const WIND_MS = 110; // ANTECIPACAO: sobe um tico antes de mergulhar
@@ -250,6 +269,8 @@ export type ArmWorldPort = {
   swinging(): void;
   /** A pinca abriu e a carga assentou no destino. */
   released(): void;
+  /** A maquina arrancou pra entregar e nao pode: a saida esta presa (ver LUNGE_*). */
+  strained(): void;
 };
 
 // Suaviza partida e chegada, que e como um servo se move: nem arranque seco, nem freada seca.
@@ -317,6 +338,14 @@ export class RoboticArmObject implements WorldProp {
   // O estado da parada: a altura atual do punho ocioso, que persegue respiracao ou inclinacao
   // suavemente.
   private idleElev = HAND_HOVER;
+  /**
+   * Quanto tempo esta maquina esta querendo entregar e nao consegue. E o relogio das INVESTIDAS
+   * (ver LUNGE_*), e nao um contador de estado: zera assim que a recusa acaba, entao a primeira
+   * investida de cada impasse sempre chega no mesmo tempo depois dele comecar.
+   */
+  private strainMs = 0;
+  /** Uma investida, um som. Sem isto o ruido tocaria por quadro durante os 340ms do gesto. */
+  private lungeSounded = false;
   /**
    * De onde a fase atual comecou a mover o punho. TODA fase que muda altura parte daqui, e nao
    * da altura nominal do inicio dela: o braco arma o bote a partir de onde ESTIVER (depois de
@@ -559,11 +588,31 @@ export class RoboticArmObject implements WorldProp {
         // maquina respira no alto; querendo trabalhar com a saida presa ela se inclina sobre a
         // carga e treme. A altura persegue o alvo em vez de saltar pra ele — a recusa e uma
         // postura que a maquina ASSUME, nao um teleporte.
-        const target = wants && !outFree
+        const refusing = wants && !outFree;
+        const target = refusing
           ? STRAIN_ELEV + STRAIN_TREMBLE * Math.sin((this.aliveMs * 2 * Math.PI) / STRAIN_TREMBLE_MS)
           : HAND_HOVER + IDLE_BOB * Math.sin((this.aliveMs * 2 * Math.PI) / IDLE_BOB_MS);
         this.idleElev += (target - this.idleElev) * Math.min(1, delta / IDLE_EASE_MS);
-        this.place(this.angleSrc, REACH, this.idleElev);
+        this.strainMs = refusing ? this.strainMs + delta : 0;
+        // A INVESTIDA (ver LUNGE_*): de tempos em tempos a recusa ARRANCA na direcao da saida e
+        // volta, pra que o gesto morra apontando pro tile que esta preso e nao em cima da carga.
+        // Espacada de proposito — uma maquina se contorcendo sem parar vira ruido de fundo e o
+        // jogador para de ver, que e a mesma razao pela qual a caixa de ferramentas so bate a
+        // tampa a cada 2,5s.
+        const lunge = refusing && this.strainMs % LUNGE_EVERY_MS < LUNGE_MS
+          ? Math.sin(Math.PI * ((this.strainMs % LUNGE_EVERY_MS) / LUNGE_MS))
+          : 0;
+        if (lunge > 0 && !this.lungeSounded) {
+          this.lungeSounded = true;
+          port.strained();
+        } else if (lunge === 0) {
+          this.lungeSounded = false;
+        }
+        this.place(
+          this.angleSrc + this.sweep * Math.PI * LUNGE_SPAN * lunge,
+          REACH,
+          this.idleElev + LUNGE_LIFT * lunge,
+        );
 
         if (this.elapsed < RESCAN_MS) break;
         if (!wants || !outFree) { this.elapsed = 0; break; }

@@ -3453,6 +3453,11 @@ export class GameScene extends Phaser.Scene {
    */
   private updateInserters(delta: number): void {
     if (!this.inserters.length) return;
+    // A regra da roda d'agua, aplicada ao unico som do braco que REPETE enquanto o estado durar:
+    // uma maquina travada do outro lado do mapa nao pode ficar batendo no ouvido de ninguem. Uma
+    // variavel de laco em vez de um port por braco — o port e compartilhado de proposito, e
+    // construir um objeto novo por braco por quadro seria lixo por quadro.
+    let strainAudible = false;
     const port: ArmWorldPort = {
       hasItem: (x, y) => this.itemManager?.hasItemAt(x, y) ?? false,
       take: (x, y) => this.itemManager?.takeAt(x, y) ?? null,
@@ -3469,8 +3474,13 @@ export class GameScene extends Phaser.Scene {
       grabbed: () => getSoundManager().playArmGrab(),
       swinging: () => getSoundManager().playArmServo(),
       released: () => getSoundManager().playArmRelease(),
+      strained: () => { if (strainAudible) getSoundManager().playArmStrain(); },
     };
     for (const arm of this.inserters) {
+      strainAudible = Math.hypot(
+        arm.worldX - this.playerWorld.worldX,
+        arm.worldY - this.playerWorld.worldY,
+      ) <= 10;
       // Tres modos, do mais fisico ao legado: um braco ENCOSTADO em cabo e um consumidor
       // cabeado — energia chega se um cabo vizinho esta VIVO (ou pela variavel sem fio, se
       // tambem houver: as duas redes somam por OR, como os produtores entre si). Sem cabo

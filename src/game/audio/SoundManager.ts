@@ -573,6 +573,18 @@ class SoundManager {
     this.noise('lowpass', 900, 1.2, 0.09, 0.07, 0.04); // a carga tocando o chao
   }
 
+  /**
+   * O braco ARRANCOU pra entregar e nao pode: a saida esta presa. Mesma decisao do par do portao
+   * de bater — e o som de trabalho (playArmServo) com outro final. O servo comeca a girar e morre
+   * num baque surdo em vez de completar a meia-volta, entao "tentou e nao deu" e audivel sem que
+   * nada precise dizer o que falta. Grave e curto: repete a cada 2,2s enquanto o impasse durar.
+   */
+  public playArmStrain(): void {
+    this.osc('triangle', 118, 126, 0.05, 0.12); // o servo, cortado antes de pegar embalo
+    this.noise('lowpass', 260, 1.1, 0.11, 0.08, 0.1); // o baque de fim de curso
+    this.osc('sine', 96, 62, 0.06, 0.14, 0.1);
+  }
+
   /** O toque seco do braco chegando ao fim do curso, ja de volta em repouso. */
   public playArmPark(): void {
     this.noise('bandpass', 1500, 3.0, 0.05, 0.035);
