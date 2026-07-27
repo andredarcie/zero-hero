@@ -39,6 +39,9 @@ import {
   type GameDebugApi,
 } from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
+// TEMPORARIO: o slider de zoom da camera. Uma linha pra tirar quando o enquadramento estiver
+// decidido — ver cameraZoomSlider.ts.
+import { mountCameraZoomSlider, unmountCameraZoomSlider } from '@/game/debug/cameraZoomSlider';
 import { CoinManager } from '@/game/entities/CoinManager';
 import type { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager } from '@/game/entities/EnemyManager';
@@ -590,6 +593,9 @@ export class GameScene extends Phaser.Scene {
     this.game.canvas.style.position = 'relative';
     this.game.canvas.style.zIndex = '1';
     window.hd3d = this.world3d.params;
+    // TEMPORARIO: a reguinha de zoom da camera (dev, e escondida sob automacao). Sai do repo
+    // quando o enquadramento for decidido — ver cameraZoomSlider.ts.
+    mountCameraZoomSlider(this.world3d.params);
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
 
     // Decode the SFX + music loops. The world's default "soundtrack" is just the wind bed —
@@ -1504,6 +1510,7 @@ export class GameScene extends Phaser.Scene {
     // never finds a stale one.
     this.deathHero = undefined;
     if (window.hd3d === this.world3d?.params) window.hd3d = undefined;
+    unmountCameraZoomSlider(); // TEMPORARIO: sem isto o painel fica orfao mexendo num World3D morto
     setCurrentWorld3D(undefined);
     this.world3d?.dispose();
     this.world3d = undefined;
