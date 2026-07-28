@@ -140,6 +140,73 @@ export default {
       farGround.walkable > 60, JSON.stringify(farGround));
     assert('A distancia percorrida foi registrada', (far?.explorer?.depth ?? 0) > 150, `depth=${far?.explorer?.depth}`);
 
+    // ── 2b. A MATA NAO TRANCA O CAMINHO ─────────────────────────────────────
+    //
+    // A regra: uma arvore e paisagem, nunca uma parede. No explorador o heroi carrega o machado
+    // COMUM, que so morde madeira morta — pinheiro e permanente para ele —, entao um bosque
+    // fechado nao e "dificil", e o fim do mundo. E o mesmo vale para o lago, que nenhum item do
+    // jogo remove.
+    //
+    // Isto se garante por PERCOLACAO e nao por sorte (ver FOREST_FILL_PERCENT): a fracao aberta
+    // dentro de um bosque fica acima do limiar critico da grade quadrada, entao o chao aberto e
+    // um unico campo e os bolsoes fechados sao pequenos e finitos. O teste abaixo mede
+    // exatamente isso no mundo VIVO, com o mesmo `isCellBlocked` que barra o heroi.
+    log('MATA: o chao aberto tem de ser UM campo — arvore e paisagem, nao parede');
+    const web = await evaluate(([ox, oy]) => {
+      const cm = window.__scene.chunkManager;
+      const R = 46;
+      const open = new Set();
+      for (let y = oy - R; y <= oy + R; y++) {
+        for (let x = ox - R; x <= ox + R; x++) {
+          if (!cm.isCellBlocked(x, y)) open.add(`${x},${y}`);
+        }
+      }
+      // O maior componente conectado, a partir do tile aberto mais proximo do centro.
+      let seedTile = null;
+      for (let r = 0; r < R && !seedTile; r++) {
+        for (let dy = -r; dy <= r && !seedTile; dy++) {
+          for (let dx = -r; dx <= r && !seedTile; dx++) {
+            if (open.has(`${ox + dx},${oy + dy}`)) seedTile = [ox + dx, oy + dy];
+          }
+        }
+      }
+      const seen = new Set([`${seedTile[0]},${seedTile[1]}`]);
+      const q = [seedTile];
+      for (let h = 0; h < q.length; h++) {
+        const [x, y] = q[h];
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx; const ny = y + dy;
+          if (Math.abs(nx - ox) > R || Math.abs(ny - oy) > R) continue;
+          const k = `${nx},${ny}`;
+          if (seen.has(k) || !open.has(k)) continue;
+          seen.add(k); q.push([nx, ny]);
+        }
+      }
+      return { open: open.size, main: seen.size, pct: +(100 * seen.size / open.size).toFixed(2) };
+    }, [FAR.x, FAR.y]);
+
+    log(`  ${web.main}/${web.open} tiles abertos num campo so (${web.pct}%)`);
+    assert('O chao aberto e um campo so — a mata nao parte o mundo em ilhas',
+      web.pct > 95, JSON.stringify(web));
+
+    // E o que a mata NAO pode fazer é fechar a porta de casa: os quatro portoes do acampamento
+    // saem para o mundo, e nao para um pátio murado.
+    const gates = await evaluate(([cx, cy]) => {
+      const cm = window.__scene.chunkManager;
+      const out = {};
+      for (const [name, dx, dy] of [['norte', 0, -1], ['sul', 0, 1], ['leste', 1, 0], ['oeste', -1, 0]]) {
+        // Anda 40 tiles em linha reta a partir da fogueira contornando o que barrar: aqui basta
+        // contar quantos dos 40 tiles do corredor estao livres.
+        let free = 0;
+        for (let i = 1; i <= 40; i++) if (!cm.isCellBlocked(cx + dx * i, cy + dy * i)) free++;
+        out[name] = free;
+      }
+      return out;
+    }, [CAMP.x, CAMP.y]);
+    log(`  corredores livres em 40 tiles: ${JSON.stringify(gates)}`);
+    assert('Os quatro rumos saindo do acampamento sao majoritariamente andaveis',
+      Object.values(gates).every((free) => free >= 24), JSON.stringify(gates));
+
     // ── 3. LONGE PAGA MAIS ──────────────────────────────────────────────────
     log('RISCO x RECOMPENSA: a mesma caveira paga mais longe de casa');
 

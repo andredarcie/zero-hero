@@ -150,8 +150,25 @@ neutro e não haveria decisão dentro do modo.
 - **Geografia é TILE, prop é o que se mexe.** Árvore/lago são frames do tileset (o lago é tile de
   MAR: bloqueio incondicional, que num mundo gerado é o certo — o gerador não pode garantir que um
   rio tenha margem, ponte ou saída). Fogueira, pedra, árvore seca e portal são props, com a mão
-  fechada. Medido: ~23% dos tiles com pinheiro, ~7% de lago, mata subindo de ~8% perto de casa
-  para ~26% no fundo.
+  fechada.
+- **⚠️ A ÁRVORE NUNCA PODE TRANCAR O CAMINHO, e isso é um NÚMERO e não um cuidado.** No explorador
+  o herói carrega o machado COMUM, que só morde madeira morta — pinheiro é permanente para ele —,
+  e nenhum item do jogo remove um lago. Então mata fechada não é "difícil": é o fim do mundo.
+  Como o herói anda em 4 direções, o chão aberto é um problema de **percolação por sítios** numa
+  grade quadrada, cujo limiar crítico é `p_c ≈ 0.5927`: acima disso o aberto é um único campo
+  infinito e todo bolsão é pequeno e finito; abaixo, quebra em ilhas. `FOREST_FILL_PERCENT` é a
+  chance de um tile virar pinheiro DENTRO de um bosque, então a fração aberta é `1 - fill` e o
+  caminho só é garantido com **fill abaixo de ~40%**. Ele nasceu em 62% (38% de aberto, do lado
+  errado do limiar) e o mundo saía QUEBRADO — flood-fill do acampamento: só 79–92% do chão aberto
+  alcançável, bolsões de até 4.523 tiles e **1 em cada 4 portais nascendo dentro de um**, que é a
+  única saída segura do modo trancada atrás de uma parede. Hoje é 34% → 99% alcançável, maior
+  bolsão 23 tiles. **Subir esse número é reabrir o bug**; a curva medida está no comentário da
+  constante. Percolação garante bolsão *pequeno*, não *zero*, então os props que importam ganham
+  uma segunda garantia, exata: `escapesPocket` só planta onde um flood-fill curto prova que a
+  região tem ≥ 400 tiles (o triplo do maior bolsão medido). O critério é TAMANHO e não distância —
+  a primeira versão perguntava "consegue se afastar 10 tiles?" e um bolsão comprido atravessava a
+  caixa sem sair da ilha. A aventura autorada, para comparar, tem 9,2% dos tiles bloqueados e
+  **99,99% do chão alcançável** (um único tile isolado): denso e fechado não são a mesma coisa.
 - **A armadilha do hash.** `hash()` termina em `(v >> 16) ^ v`, e `>>` em JS é int32 COM SINAL —
   o bit 31 nunca acende, então o hash só devolve `[0, 2^31)`. Dividir por `0xffffffff` dava um
   "ruído" que jamais passava de 0.5 e **todo limiar acima disso era terra que nunca acontecia**:
@@ -176,9 +193,10 @@ neutro e não haveria decisão dentro do modo.
   (o playtest precisa do mesmo mato, e um pino permanente faria o modo mentir onde é testado).
 - `npm run playtest -- explorador` guarda o modo inteiro: o acampamento (seguro, com fogo aceso,
   kit no chão e os quatro portões abertos), o mundo que não acaba a 200 tiles em coordenada
-  negativa, o reassado abaixo de 30ms **sem compilar shader nem mexer numa luz**, a mesma caveira
-  pagando mais longe do que perto, o portal perguntando e a recusa não cobrando nada, os 50% e
-  os 5%.
+  negativa, o reassado abaixo de 30ms **sem compilar shader nem mexer numa luz**, **o chão aberto
+  sendo um campo só** (flood-fill no mundo vivo, pelo mesmo `isCellBlocked` que barra o herói) e
+  os quatro corredores de casa andáveis, a mesma caveira pagando mais longe do que perto, o portal
+  perguntando e a recusa não cobrando nada, os 50% e os 5%.
 
 ## Fire spreads (the one system the player steers)
 
