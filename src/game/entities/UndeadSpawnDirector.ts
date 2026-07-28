@@ -15,6 +15,15 @@ export type UndeadSpawnQuery = {
   // a skull only rises where it could actually walk to the hero).
   canSpawnAt: (wx: number, wy: number) => boolean;
   spawn: (wx: number, wy: number) => void;
+  /**
+   * How hard the dark presses here, 1 = the authored world's baseline.
+   *
+   * The adventure never sets it: its map is finite and every point of it is meant to be worth
+   * the same amount of fear. The explorer mode does, because there "how far from home am I"
+   * is the whole game — the meter fills faster and the horde cap rises the deeper the hero
+   * goes, which is what makes the coins out there worth what they pay.
+   */
+  pressure?: number;
 };
 
 // Time to fill the danger meter: slow just past the safe ring, fast deep in the dark.
@@ -54,15 +63,20 @@ export class UndeadSpawnDirector {
       return;
     }
 
+    const pressure = Math.max(1, query.pressure ?? 1);
     const depth = Math.min((query.distToFireTiles - CAMPFIRE_SAFE_RADIUS_TILES) / DEEP_DARK_TILES, 1);
     const rampMs = RAMP_EDGE_MS + (RAMP_DEEP_MS - RAMP_EDGE_MS) * depth;
-    this.dangerLevel = Math.min(1, this.dangerLevel + delta / rampMs);
+    this.dangerLevel = Math.min(1, this.dangerLevel + (delta * pressure) / rampMs);
 
-    const cap = Math.max(1, Math.round(this.dangerLevel * MAX_UNDEAD_AT_FULL_DANGER));
+    // A pressao levanta o TETO da horda junto com o medidor. Sem isso, andar mais fundo so
+    // encheria a barra mais rapido para bater no mesmo teto de quatro caveiras — o perigo
+    // chegaria mais cedo e depois pararia de crescer exatamente onde a recompensa continua.
+    const cap = Math.max(1, Math.round(this.dangerLevel * MAX_UNDEAD_AT_FULL_DANGER * pressure));
     if (query.aliveUndead >= cap) return;
 
     this.spawnTimer += delta;
-    const interval = INTERVAL_CALM_MS + (INTERVAL_FRENZY_MS - INTERVAL_CALM_MS) * this.dangerLevel;
+    const interval = (INTERVAL_CALM_MS + (INTERVAL_FRENZY_MS - INTERVAL_CALM_MS) * this.dangerLevel)
+      / pressure;
     if (this.spawnTimer < interval) return;
 
     for (let attempt = 0; attempt < PLACEMENT_TRIES; attempt++) {

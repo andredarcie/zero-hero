@@ -1,11 +1,15 @@
-// The menu flow, end to end: Language → the new Title (two buttons, no reveal effect) → the
+// The menu flow, end to end: Language → the new Title (three doors, no reveal effect) → the
 // level list → play a level → the level-aware pause menu.
 //
 // The old title assembled itself one word per water drop and keying past it was flaky; the new
-// one shows the title and the credit straight away and offers two buttons. This scenario drives
-// the whole chain with real keypresses and asserts each screen is what it should be — including
-// that picking a level boots THAT level, and that pausing inside a level offers "back to levels",
-// "restart" and "quit to menu".
+// one shows the title and the credit straight away and offers three doors (aventura / levels /
+// explorador). This scenario drives the whole chain with real keypresses and asserts each screen
+// is what it should be — including that picking a level boots THAT level, and that pausing inside
+// a level offers "back to levels", "restart" and "quit to menu".
+//
+// NOTE: everything from the level LIST onward is red, and has been since the hand-authored levels
+// replaced the generated "A Espada na Pedra" — the same design change that left `espada` and
+// `itens` stale (see CLAUDE.md). The title assertions above that line are live and passing.
 
 const activeScenes = (driver) => driver.page.evaluate(
   () => (window.__game?.scene?.getScenes(true) ?? []).map((s) => s.scene.key),
@@ -32,7 +36,7 @@ const pauseButtons = (driver) => driver.page.evaluate(() => {
 
 export default {
   name: 'menu-flow',
-  description: 'Language → new title (two buttons) → level list → play a level → level-aware pause.',
+  description: 'Language → new title (three doors) → level list → play a level → level-aware pause.',
   needsGame: false,
   route: '/',
   async run({ driver, shot, assert, log }) {
@@ -49,8 +53,10 @@ export default {
     await driver.settle(900); // title fade-in 500 + arm 300
 
     const titleTexts = await sceneTexts(driver, 'title');
-    assert('The title shows both buttons, no reveal effect',
-      titleTexts.includes('Jogar aventura') && titleTexts.includes('Jogar levels'),
+    assert('The title shows all three doors, no reveal effect',
+      titleTexts.includes('Jogar aventura')
+      && titleTexts.includes('Jogar levels')
+      && titleTexts.includes('Jogar explorador'),
       JSON.stringify(titleTexts));
     assert('The title and credit are shown straight away',
       titleTexts.some((t) => t.includes('ZERO')) && titleTexts.some((t) => t.includes('ANDRÉ')),

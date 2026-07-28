@@ -16,7 +16,8 @@
     "prompt": "press any key",
     "survivors": "[S] SURVIVORS MODE",
     "playAdventure": "Play adventure",
-    "playLevels": "Play levels"
+    "playLevels": "Play levels",
+    "playExplorer": "Play explorer"
   },
   "levelSelect": {
     "heading": "Choose a level",
@@ -43,6 +44,22 @@
   },
   "death": {
     "epitaph": "Nothing made sense,\nit was all for nothing."
+  },
+  "explorer": {
+    "hud": {
+      "depth": "distance"
+    },
+    "prompt": {
+      "title": "BACK TO CAMP?",
+      "ledger": "You are carrying {coins} coins.\nGoing back keeps {kept} — and leaves {lost} here.",
+      "yes": "Yes, take me back",
+      "no": "No, I can go further"
+    },
+    "arrival": {
+      "extract": "You made it back.",
+      "death": "You fell out there.",
+      "kept": "{kept} coins banked, {lost} lost to the dark. Distance: {depth} tiles."
+    }
   },
   "editorReturn": "[ESC] back to editor",
   "items": {

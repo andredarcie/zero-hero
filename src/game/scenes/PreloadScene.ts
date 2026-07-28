@@ -5,6 +5,7 @@ import { preloadSharedAssets } from '@/game/assets/assetManifest';
 import type { AppMode } from '@/game/config';
 import { t } from '@/game/i18n/i18n';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
+import { pinExplorerSeed, startExplorerRun } from '@/game/explorer/explorerRun';
 import { preloadTextures3D } from '@/game/render3d/textures3d';
 import { setWorldData } from '@/game/world/WorldData';
 
@@ -108,6 +109,16 @@ export class PreloadScene extends Phaser.Scene {
       // it's a shareable entry point, not a dev-only shortcut.
       if (params.has('survivors')) {
         this.scene.start('survivors');
+        return;
+      }
+      // `?explorer` cai direto numa expedicao ao mundo infinito (tambem a terceira porta do
+      // titulo). `?explorerSeed=N` prende a semente: o playtest precisa do MESMO mato toda vez,
+      // e um mundo sorteado nao pode ser afirmado sobre.
+      if (params.has('explorer')) {
+        const seed = params.get('explorerSeed');
+        if (seed !== null && /^\d+$/u.test(seed)) pinExplorerSeed(Number(seed));
+        startExplorerRun();
+        this.scene.start('game');
         return;
       }
       // `?level=N` is a direct link into a single puzzle level — skip title/language/intro

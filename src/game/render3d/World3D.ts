@@ -700,8 +700,43 @@ export class World3D {
   private readonly solidQuads = new Map<string, number>();     // "x,z" → vertex start
   private readonly solidBlobQuads = new Map<string, number>(); // "x,z" → vertex start
   private readonly groundQuads = new Map<string, number>();    // "x,z" → vertex start
-  /** Live set of standing tiles — shrinks as trees fall, so re-baked AO sees the clearing. */
-  private solidKeys = new Set<string>();
+  /**
+   * Live set of standing tiles — shrinks as trees fall, so re-baked AO sees the clearing.
+   *
+   * Keyed by the NUMERIC tileKey rather than by "x,z". It reads worse and it is not a
+   * micro-optimisation: baking the ground's ambient occlusion asks this set three times per
+   * corner, i.e. TWELVE lookups per ground tile, and with string keys that was twelve string
+   * allocations per tile — ~60% of the whole terrain bake. The explorer mode re-bakes a window
+   * of the world every time the hero crosses a chunk, so that bake had to stop being a hitch.
+   */
+  private solidKeys = new Set<number>();
+  /**
+   * The terrain's own meshes, kept so an infinite world can throw the window away and bake the
+   * next one (see rebuildTerrain). The authored worlds never call it — they bake once at boot.
+   */
+  private readonly terrainMeshes: THREE.Mesh[] = [];
+  /**
+   * Terrain materials are built ONCE and reused across re-bakes. Not for allocation's sake:
+   * three bakes a material's patched program into its cache key, and a fresh material per
+   * re-bake would go looking for that program in the renderer's cache on the frame it is first
+   * drawn — the one thing this project's shader rules exist to prevent.
+   */
+  private terrainMats?: {
+    ground: THREE.MeshLambertMaterial;
+    bank: THREE.MeshLambertMaterial;
+    lavaBank: THREE.MeshLambertMaterial;
+    decor: THREE.MeshLambertMaterial;
+    solid: THREE.MeshLambertMaterial;
+    blob: THREE.Material;
+  };
+  /**
+   * Capacity the moon-cast field is allocated with while the world streams. A re-bake changes
+   * how many exposed solids exist, and an InstancedMesh cannot grow — so a streaming world
+   * over-allocates once instead of building a new field (and a new draw) every chunk crossing.
+   */
+  private moonFieldCapacity = 0;
+  /** How many times the terrain has been baked. >1 means the world streams (explorer mode). */
+  private terrainBakes = 0;
 
   // ── firelight cast shadows (2D ground silhouettes) ──
   // One persistent silhouette per dynamic caster (hero, props, NPCs, enemies)…
@@ -1027,7 +1062,43 @@ export class World3D {
 
   // ── static terrain ───────────────────────────────────────────────────────────
 
+  /**
+   * Throw the baked terrain window away and bake the one `getWorldBounds()` now reports.
+   *
+   * This exists for ONE caller: the explorer mode, whose world has no bounds at all — it is
+   * generated as the hero walks, so the merged meshes can only ever hold a WINDOW of it, and
+   * the window has to move. Everything else in the game bakes once in the constructor and
+   * never calls this.
+   *
+   * What it does not touch is as important as what it does: no light is created or destroyed
+   * (the pool is sealed for the run), and no material is rebuilt (see terrainMats) — so a
+   * re-bake cannot recompile a shader. It is geometry, and geometry may come and go.
+   */
+  public rebuildTerrain(): void {
+    for (const mesh of this.terrainMeshes) {
+      mesh.removeFromParent();
+      mesh.geometry.dispose();
+    }
+    this.terrainMeshes.length = 0;
+    this.solidTiles.length = 0;
+    this.castableSolids.length = 0;
+    this.lavaSpots.length = 0;
+    this.solidQuads.clear();
+    this.solidBlobQuads.clear();
+    this.groundQuads.clear();
+    this.grassQuads.clear();
+    this.solidBuckets.clear();
+    this.sunkenTiles.clear();
+    this.activeRustles.clear();
+    this.activeTileShakes.clear();
+    // Both caches are keyed on tiles that no longer exist.
+    this.fireCastLists.clear();
+    this.fireListRadius = -1;
+    this.buildTerrain();
+  }
+
   private buildTerrain(): void {
+    this.terrainBakes += 1;
     const b = getWorldBounds();
     // River tiles (plain water + buildable bridge spots + in-river wheels) sink into a
     // channel below the ground: their ground quad drops to the bed and gets dark banks.
@@ -1082,69 +1153,77 @@ export class World3D {
 
     // Where the standing tiles are, so the ground can bake an ambient-occlusion corner shade
     // under them (see buildFlatTileGeometry).
-    const solidSet = new Set(this.solidTiles.map((t) => `${t.x},${t.z}`));
+    const solidSet = new Set(this.solidTiles.map((t) => tileKey(t.x, t.z)));
     this.solidKeys = solidSet; // kept live: felling a tree deletes from it, so re-baked AO agrees
     // The lava field, for the per-region grade (updateBiomeGrade).
     for (const l of getLavaTiles()) this.lavaSpots.push({ x: l.worldX, y: l.worldY });
 
     const tileset = getBaseTexture3D('forest-tileset');
-    // Every tile mesh samples the one atlas, so they share the one size uniform. No `bounds` here:
-    // each mesh merges thousands of quads, each windowing onto its own frame, so the frame travels
-    // per vertex (aUvBounds) instead. See pixelArtLight/TEXEL_AA_GLSL.
-    const tileAa: TexelAaUniforms = { size: { value: new THREE.Vector2() } };
-    syncTexelAaUniforms(tileAa, tileset); // the sheet's pixel size; every base texture is loaded by now
-    const groundMat = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
-    patchPixelMaterial(groundMat, { quantize: true, texelAa: tileAa });
+    if (!this.terrainMats) {
+      // Every tile mesh samples the one atlas, so they share the one size uniform. No `bounds`
+      // here: each mesh merges thousands of quads, each windowing onto its own frame, so the
+      // frame travels per vertex (aUvBounds) instead. See pixelArtLight/TEXEL_AA_GLSL.
+      const tileAa: TexelAaUniforms = { size: { value: new THREE.Vector2() } };
+      syncTexelAaUniforms(tileAa, tileset); // the sheet's pixel size; every base texture is loaded by now
+      const ground = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
+      patchPixelMaterial(ground, { quantize: true, texelAa: tileAa });
+      const bank = new THREE.MeshLambertMaterial({ color: 0x2a2016, side: THREE.DoubleSide });
+      patchPixelMaterial(bank, { quantize: true });
+      const lavaBank = new THREE.MeshLambertMaterial({ color: 0x1a1008, side: THREE.DoubleSide });
+      patchPixelMaterial(lavaBank, { quantize: true });
+      // depthWrite MUST stay false: this flat decor sits at y=0.02, just above the
+      // ground-level cast shadows/blobs. If it wrote depth it would occlude those
+      // shadows in tile-shaped patches wherever decor grows (dense around fires) —
+      // the "invisible square blocks eating the shadow" (user feedback). Flat ground
+      // cover never needs to occlude anything, so it simply doesn't write depth.
+      const decor = new THREE.MeshLambertMaterial({
+        map: tileset, transparent: true, alphaTest: 0.35, depthWrite: false, vertexColors: true,
+      });
+      patchPixelMaterial(decor, { quantize: true, texelAa: tileAa });
+      const solid = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
+      patchPixelMaterial(solid, { quantize: true, normalUp: true, texelAa: tileAa });
+      this.terrainMats = { ground, bank, lavaBank, decor, solid, blob: makeShadowBlobMaterial(0.34) };
+    }
+    const mats = this.terrainMats;
+
     this.groundGeo = buildFlatTileGeometry(groundTiles, 0, solidSet);
-    const ground = new THREE.Mesh(this.groundGeo, groundMat);
-    this.scene.add(ground);
+    this.addTerrainMesh(new THREE.Mesh(this.groundGeo, mats.ground));
     groundTiles.forEach((tile, i) => this.groundQuads.set(`${tile.x},${tile.z}`, i * 4));
 
     // The sunken riverbed (the same dirt, dropped a level) + the dark earthen banks that
     // wall the channel where it meets the land — together they give the water its depth.
     if (bedTiles.length > 0) {
-      const bed = new THREE.Mesh(buildFlatTileGeometry(bedTiles, -WATER_DEPTH_TILES, solidSet), groundMat);
-      this.scene.add(bed);
-      const bankMat = new THREE.MeshLambertMaterial({ color: 0x2a2016, side: THREE.DoubleSide });
-      patchPixelMaterial(bankMat, { quantize: true });
+      this.addTerrainMesh(new THREE.Mesh(
+        buildFlatTileGeometry(bedTiles, -WATER_DEPTH_TILES, solidSet), mats.ground,
+      ));
       const sunken = seaSet.size > 0 ? new Set([...waterSet, ...seaSet]) : waterSet;
-      this.scene.add(new THREE.Mesh(buildBankGeometry(sunken, bedTiles, WATER_DEPTH_TILES), bankMat));
+      this.addTerrainMesh(new THREE.Mesh(
+        buildBankGeometry(sunken, bedTiles, WATER_DEPTH_TILES), mats.bank,
+      ));
     }
 
     // The lava basin: the same recipe, shallower — a dropped bed to close the well's bottom and
     // dark CHARRED banks (near-black basalt) walling it where the melt meets the land.
     if (lavaBedTiles.length > 0) {
-      const lavaBed = new THREE.Mesh(buildFlatTileGeometry(lavaBedTiles, -LAVA_DEPTH_TILES, solidSet), groundMat);
-      this.scene.add(lavaBed);
-      const lavaBankMat = new THREE.MeshLambertMaterial({ color: 0x1a1008, side: THREE.DoubleSide });
-      patchPixelMaterial(lavaBankMat, { quantize: true });
-      this.scene.add(new THREE.Mesh(buildBankGeometry(lavaSet, lavaBedTiles, LAVA_DEPTH_TILES), lavaBankMat));
+      this.addTerrainMesh(new THREE.Mesh(
+        buildFlatTileGeometry(lavaBedTiles, -LAVA_DEPTH_TILES, solidSet), mats.ground,
+      ));
+      this.addTerrainMesh(new THREE.Mesh(
+        buildBankGeometry(lavaSet, lavaBedTiles, LAVA_DEPTH_TILES), mats.lavaBank,
+      ));
     }
 
-    // depthWrite MUST stay false: this flat decor sits at y=0.02, just above the
-    // ground-level cast shadows/blobs. If it wrote depth it would occlude those
-    // shadows in tile-shaped patches wherever decor grows (dense around fires) —
-    // the "invisible square blocks eating the shadow" (user feedback). Flat ground
-    // cover never needs to occlude anything, so it simply doesn't write depth.
-    const decorMat = new THREE.MeshLambertMaterial({
-      map: tileset, transparent: true, alphaTest: 0.35, depthWrite: false, vertexColors: true,
-    });
-    patchPixelMaterial(decorMat, { quantize: true, texelAa: tileAa });
     this.decorGeo = buildFlatTileGeometry(decorTiles, 0.02, solidSet);
-    const decor = new THREE.Mesh(this.decorGeo, decorMat);
-    this.scene.add(decor);
+    this.addTerrainMesh(new THREE.Mesh(this.decorGeo, mats.decor));
     decorTiles.forEach((tile, i) => {
       if (tile.frame === LOW_GRASS_TILE) this.grassQuads.set(`${tile.x},${tile.z}`, i * 4);
     });
 
     // All standing trees/walls merged into ONE upright mesh (one draw call, one shadow).
     // Lit like the ground at their feet — same treatment the dynamic billboards get.
-    const solidMat = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
-    patchPixelMaterial(solidMat, { quantize: true, normalUp: true, texelAa: tileAa });
     this.solidGeo = buildUprightTileGeometry(this.solidTiles);
     this.solidTiles.forEach((tile, i) => this.solidQuads.set(`${tile.x},${tile.z}`, i * 4));
-    const solids = new THREE.Mesh(this.solidGeo, solidMat);
-    this.scene.add(solids);
+    this.addTerrainMesh(new THREE.Mesh(this.solidGeo, mats.solid));
 
     // Only EXPOSED solids (clearing edges, lone trees) get a grounding blob and cast a
     // shadow. A tile buried in the forest wall has ~all 8 neighbours solid; giving each
@@ -1154,7 +1233,7 @@ export class World3D {
       let neighbours = 0;
       for (let dz = -1; dz <= 1; dz++) {
         for (let dx = -1; dx <= 1; dx++) {
-          if ((dx || dz) && solidSet.has(`${t.x + dx},${t.z + dz}`)) neighbours++;
+          if ((dx || dz) && solidSet.has(tileKey(t.x + dx, t.z + dz))) neighbours++;
         }
       }
       if (neighbours <= 4) this.castableSolids.push(t);
@@ -1189,24 +1268,42 @@ export class World3D {
       this.castableSolids.map((t) => ({ x: t.x, z: t.z + 0.06 })), 0.46, 0.42,
     );
     this.castableSolids.forEach((tile, i) => this.solidBlobQuads.set(`${tile.x},${tile.z}`, i * 4));
-    const ellipses = new THREE.Mesh(this.blobGeo, makeShadowBlobMaterial(0.34));
+    const ellipses = new THREE.Mesh(this.blobGeo, mats.blob);
     ellipses.renderOrder = 3; // after the additive fire glow, so the blob isn't washed out
-    this.scene.add(ellipses);
+    this.addTerrainMesh(ellipses);
 
     // …and the firelight shadow each of them THROWS, all of it in one draw. It used to be one mesh
     // per solid — 36 of the frame's 120 draw calls, and with them the bulk of its garbage, since
     // three allocates inside its uniform setters and the GC bill tracks the draw count.
-    this.solidCastField = new SolidCastField(CAST_POOL_MAX, getBaseTexture3D('forest-tileset'));
-    this.scene.add(this.solidCastField.mesh);
+    // Fixed capacity, so a streaming re-bake keeps the same field (and the same draw).
+    if (!this.solidCastField) {
+      this.solidCastField = new SolidCastField(CAST_POOL_MAX, getBaseTexture3D('forest-tileset'));
+      this.scene.add(this.solidCastField.mesh);
+    }
 
     // …and the MOON shadow each of them throws, likewise one draw — but this one is baked
     // ONCE, not refilled per frame: the moon never moves, so neither do these. Sized to hold
     // every castable solid in the world; only the on-screen fragments cost anything.
-    this.moonCastField = new SolidCastField(
-      Math.max(1, this.castableSolids.length), getBaseTexture3D('forest-tileset'),
-    );
-    this.scene.add(this.moonCastField.mesh);
+    //
+    // An InstancedMesh cannot grow, and a streaming window's count changes with every re-bake —
+    // so once a window has been re-baked the field is over-allocated with headroom and kept,
+    // instead of allocating a new one (and a new draw) every time the hero crosses a chunk.
+    const needed = Math.max(1, this.castableSolids.length);
+    if (!this.moonCastField || needed > this.moonFieldCapacity) {
+      this.moonCastField?.mesh.removeFromParent();
+      this.moonFieldCapacity = this.terrainBakes > 1
+        ? Math.ceil(needed * 1.5) // already streaming: leave room for the next, denser window
+        : needed;
+      this.moonCastField = new SolidCastField(this.moonFieldCapacity, getBaseTexture3D('forest-tileset'));
+      this.scene.add(this.moonCastField.mesh);
+    }
     this.fillMoonCastField();
+  }
+
+  /** Every terrain mesh goes through here, so a re-bake can take them all back out again. */
+  private addTerrainMesh(mesh: THREE.Mesh): void {
+    this.scene.add(mesh);
+    this.terrainMeshes.push(mesh);
   }
 
   /**
@@ -1370,7 +1467,7 @@ export class World3D {
     const vertStart = this.solidQuads.get(key);
     if (vertStart === undefined) return; // not a standing tile, or already felled
     this.solidQuads.delete(key);
-    this.solidKeys.delete(key);
+    this.solidKeys.delete(tileKey(worldX, worldY));
     collapseQuad(this.solidGeo, vertStart);
 
     const blobStart = this.solidBlobQuads.get(key);
@@ -3266,13 +3363,13 @@ const AO_CORNERS: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1],
  * around a tree's feet is baked into its NEIGHBOURS' vertex colours, so a tree that vanished
  * without this would leave its own shadow printed on the clearing the player just opened.
  */
-const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<string>): number[] =>
+const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<number>): number[] =>
   AO_CORNERS.map(([dx, dz]) => {
     let occluders = 0;
     if (solids) {
-      if (solids.has(`${x + dx},${z}`)) occluders++;
-      if (solids.has(`${x},${z + dz}`)) occluders++;
-      if (solids.has(`${x + dx},${z + dz}`)) occluders++;
+      if (solids.has(tileKey(x + dx, z))) occluders++;
+      if (solids.has(tileKey(x, z + dz))) occluders++;
+      if (solids.has(tileKey(x + dx, z + dz))) occluders++;
     }
     return 1 - AO_MAX * (occluders / 3);
   });
@@ -3280,7 +3377,7 @@ const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<string>): numb
 const buildFlatTileGeometry = (
   tiles: Array<{ x: number; z: number; frame: number }>,
   y: number,
-  solids?: ReadonlySet<string>,
+  solids?: ReadonlySet<number>,
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];

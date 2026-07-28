@@ -1,8 +1,9 @@
 # Zero the Hero
 
 Top-down pixel-art adventure. Phaser 3 drives the game logic, input and UI on a **transparent**
-canvas; the world underneath it is **real 3D** (Three.js). Two modes: the adventure (`GameScene`)
-and a Vampire-Survivors mode (`SurvivorsScene`).
+canvas; the world underneath it is **real 3D** (Three.js). Three modes on the title screen — the
+adventure, the puzzle levels and the **explorer** (all three are `GameScene`) — plus a
+Vampire-Survivors mode (`SurvivorsScene`, still the hidden `[S]`).
 
 ## Workflow rules
 
@@ -104,6 +105,80 @@ back; nothing saves until Salvar, and Salvar only writes that one level file.
   A puzzle can be spent into a corner, so restarting must be advertised, not buried in ESC — a
   hint pill ("Travou? ↻ recomeça o level") shows on boot and doubles as the arm-confirm prompt.
   The adventure keeps only the discreet touch-only pause button.
+
+## O explorador (`src/game/explorer/`) — o mundo infinito, e a única aposta do jogo
+
+A terceira porta do título. Um mundo **gerado enquanto o herói anda**, sem borda em direção
+nenhuma, com um **acampamento seguro** no centro; a base é risco × recompensa, e ela cabe em três
+números:
+
+- **Longe paga mais.** `coinMultiplierAt`: a cada 24 tiles de distância do acampamento a caveira
+  larga um degrau a mais de moeda (teto x8). Em DEGRAUS e não contínuo — o jogador precisa poder
+  dizer "subi de nível" enquanto anda; um número que sobe um centésimo por passo é um gráfico, não
+  uma decisão.
+- **50% se você escolher parar.** Portais nascem no escuro (nunca a menos de 26 tiles de casa) e
+  pisar num deles PERGUNTA (`ExtractPrompt`). Sim = metade da bolsa vira banco e o herói volta
+  vivo. Caro de propósito: se voltar fosse de graça o modo seria "ande até cansar" em vez de
+  "ande até ter medo".
+- **5% se o escuro escolher por você.** Morrer não zera (zerar faz de cada expedição ruim tempo
+  jogado fora) mas 5% é perto o bastante de nada para doer. **Reiniciar pelo menu custa o mesmo
+  que morrer** — se fosse grátis, seria a saída ótima de toda expedição ruim e as duas
+  porcentagens viravam opcionais.
+
+O perigo também escala com a distância (`dangerScaleAt` → `UndeadSpawnQuery.pressure`), mas **mais
+devagar que a recompensa**: se os dois subissem no mesmo passo, ir fundo seria matematicamente
+neutro e não haveria decisão dentro do modo.
+
+- **O mundo entra pelo mesmo buraco de fechadura do `world.json`.** `WorldData.setInfiniteWorld`:
+  troque o que os acessadores respondem e ChunkManager, os managers e o World3D leem o mundo
+  gerado sem saber. Nada foi duplicado; o `getHeldItemPickups` do infinito devolve o **kit** do
+  acampamento (espada / machado / picareta — uma mão só, a primeira decisão do modo).
+- **O renderer segura uma JANELA, não o mundo** (`ExplorerDirector`, raio 2 = 5×5 chunks). A
+  floresta custa um draw call porque é *assada* num mesh só, e um buffer não cresce para sempre —
+  então ao cruzar a fronteira de um chunk a janela se recentraliza e `World3D.rebuildTerrain()`
+  reassa. Medido: **~15-25ms**, uma vez a cada 12 tiles. `terrainMats` guarda os materiais entre
+  reassados **porque um material novo em runtime recompilaria todo shader do mundo** (a lei do
+  projeto): o playtest afirma 0 programas e 0 luzes de diferença através de uma travessia.
+- **`solidKeys` virou `Set<number>`** (`tileKey`) por causa disto: a AO do chão consulta esse
+  conjunto 12× por tile, e com chave de string eram 12 alocações por tile — ~30% do custo do
+  bake (medido 93ms → 67ms no mundo autorado). O bake deixou de ser um evento único.
+- **Props entram e saem com a janela** — "tem prop neste tile?" é busca LINEAR e roda dentro do
+  flood-fill dos inimigos, então guardar tudo que a expedição já viu viraria o gargalo do modo no
+  quinto minuto. O que um prop **lembra** ao sair é o mínimo que muda o jogo: fogueira ACESA (o
+  jogador pagou aquela luz com uma tocha e uma caminhada) e prop CONSUMIDO. A árvore seca de
+  propósito **não** é lembrada: ela já volta sozinha (`TREE_REGROW_MS`).
+- **Geografia é TILE, prop é o que se mexe.** Árvore/lago são frames do tileset (o lago é tile de
+  MAR: bloqueio incondicional, que num mundo gerado é o certo — o gerador não pode garantir que um
+  rio tenha margem, ponte ou saída). Fogueira, pedra, árvore seca e portal são props, com a mão
+  fechada. Medido: ~23% dos tiles com pinheiro, ~7% de lago, mata subindo de ~8% perto de casa
+  para ~26% no fundo.
+- **A armadilha do hash.** `hash()` termina em `(v >> 16) ^ v`, e `>>` em JS é int32 COM SINAL —
+  o bit 31 nunca acende, então o hash só devolve `[0, 2^31)`. Dividir por `0xffffffff` dava um
+  "ruído" que jamais passava de 0.5 e **todo limiar acima disso era terra que nunca acontecia**:
+  o mundo nasceu sem uma única floresta e sem um único lago. `rand01` divide por `0x7fffffff`.
+- **O HUD é a única exceção à lei "o mundo ensina, o HUD não"**, e a exceção é estreita: a lei foi
+  escrita contra LEGENDAS (o balão de item-que-falta, que entregava a resposta de uma fechadura).
+  Aqui a pergunta é "vale mais um chunk?", e os dois termos dela são números que o mundo não tem
+  como dizer. Esconder não ensinaria nada — só faria da aposta um chute.
+- **O prompt quebra o walk-only de propósito**, e só ele: a decisão é IRREVERSÍVEL e custa
+  dinheiro, e tudo o mais no jogo se desfaz andando de volta. Não há tecla para o SIM — Enter,
+  Escape e clique-fora **continuam a expedição**, porque as teclas de reflexo não podem custar
+  metade da bolsa. Recusar não gasta o portal (só a pergunta, até sair do tile).
+- **A volta é a viagem do portal dos levels, inteira** (sucção → vazio → túnel → queda). Não é
+  economia: é a mesma FRASE. O jogo já ensinou que atravessar um portal é assim; voltar por um
+  fade seria uma segunda gramática para a mesma coisa.
+- **O banco é permanente, a bolsa não.** A loja da fogueira (o bonfire de sempre) gasta o BANCO e
+  as melhorias atravessam expedições — gastar em campo o que ainda está em risco esvaziaria a
+  aposta pelo outro lado. Isso finalmente dá à moeda um motivo: `CoinManager.spawnCoins` existia
+  desde sempre e **nunca havia sido chamado uma única vez**.
+- **Cada expedição tem um mundo novo** (`rerollExplorerWorld`); decorar onde ficam os portais
+  mataria a aposta. `?explorer` entra direto, `?explorerSeed=N` prende **só a primeira** expedição
+  (o playtest precisa do mesmo mato, e um pino permanente faria o modo mentir onde é testado).
+- `npm run playtest -- explorador` guarda o modo inteiro: o acampamento (seguro, com fogo aceso,
+  kit no chão e os quatro portões abertos), o mundo que não acaba a 200 tiles em coordenada
+  negativa, o reassado abaixo de 30ms **sem compilar shader nem mexer numa luz**, a mesma caveira
+  pagando mais longe do que perto, o portal perguntando e a recusa não cobrando nada, os 50% e
+  os 5%.
 
 ## Fire spreads (the one system the player steers)
 
@@ -823,16 +898,18 @@ costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco
 recipes → `caixa-ferramentas`. Rock and pickaxe →
 `pedra`. Pressure plate + hero/crate → `caixa-placa`; the undead that walks onto one →
 `placa-undead`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Moonflower →
-`flor-da-lua`. Fire and the light
+`flor-da-lua`. O modo explorador (mundo infinito, janela do terreno, 50%/5%) → `explorador`.
+Fire and the light
 budget → `perf-burn`. Frame cost → `perf-profile`. Item-state contracts (a bridge refusing a
 second burn, the mound waiting for a clear tile, production drops falling to a free neighbour,
 the bomb's fuse tween dying with the bomb) → `itens`. Same rule for re-runs: one failure in a
 scenario you did not touch is a flake to note, not a suite to run four times.
 
-**`espada` and `itens` are currently RED, and not because of anything you did.** Both assert the
-contents of the old generated `level-1` ("A Espada na Pedra"), which the hand-authored level
-replaced — see the warning at the top. Treat their failure as expected until they are rewritten to
-author their own fixture in `/lab`, and never "repair" them by editing a level file.
+**`espada`, `itens` and the second half of `menu-flow` are currently RED, and not because of
+anything you did.** All three assert the contents of the old generated `level-1` ("A Espada na
+Pedra"), which the hand-authored level replaced — see the warning at the top. Treat their failure
+as expected until they are rewritten to author their own fixture in `/lab`, and never "repair"
+them by editing a level file. (`menu-flow`'s title assertions, before the level list, are live.)
 
 **When measuring performance, always compare against `main` (`git stash`).** A number on its own
 proves nothing — a fix that removes a stall can quietly cost frame time, and you will not see it

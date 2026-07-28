@@ -30,9 +30,16 @@ export class CoinManager {
     return true;
   }
 
-  public spawnCoins(worldX: number, worldY: number, chunkManager: ChunkManager): void {
-    const count = Phaser.Math.Between(1, 5);
-    const targets = this.pickScatterTiles(worldX, worldY, count, chunkManager);
+  /**
+   * `count` fixa quantas moedas caem; sem ele, o sorteio de sempre (1..5).
+   *
+   * O explorador precisa do numero exato porque a moeda dele NAO e decoracao: a quantidade e o
+   * multiplicador de profundidade, e o jogador conta. Um sorteio por cima disso apagaria a
+   * unica coisa que a distancia esta tentando dizer.
+   */
+  public spawnCoins(worldX: number, worldY: number, chunkManager: ChunkManager, count?: number): void {
+    const amount = count ?? Phaser.Math.Between(1, 5);
+    const targets = this.pickScatterTiles(worldX, worldY, amount, chunkManager);
 
     targets.forEach((target, i) => {
       this.coins.push(new Coin(

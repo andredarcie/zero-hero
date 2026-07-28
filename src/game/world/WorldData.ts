@@ -38,6 +38,64 @@ let bounds: WorldBounds | null = null;
 
 const EMPTY_CONTENT: ScreenContent = { enemies: [], pickups: [], npcs: [] };
 
+// ── the infinite world (explorer mode) ────────────────────────────────────────
+//
+// Everything above assumes a world that was AUTHORED: a finite grid of chunks read from a
+// file, with an edge made of sea. The explorer mode has no file and no edge — the ground is
+// generated from a seed as the hero walks, in every direction, forever.
+//
+// It plugs in HERE rather than beside WorldData because the whole runtime already reads the
+// world through this one seam: swap what these accessors answer and ChunkManager, the entity
+// managers and World3D are all reading the infinite world without knowing it. Two things a
+// generated world cannot answer for itself stay with the authored one: the NPC dialog catalog
+// (still world.json's) and the tileset metadata.
+//
+// The single subtlety is `bounds`, which stops meaning "the world" and starts meaning "the
+// WINDOW currently baked into the terrain meshes" — see World3D.rebuildTerrain and
+// ExplorerDirector. Nothing but the renderer reads it, because nothing else may: asking an
+// infinite world where it ends is a question with no answer.
+export type InfiniteWorld = {
+  name: string;
+  playerStart: { worldX: number; worldY: number };
+  /** Generated terrain for a chunk. MUST be memoised by the provider: the runtime edits these
+   *  arrays in place (a felled tree clears `upper` + `collisions`) and expects the edit to hold. */
+  chunk: (cx: number, cy: number) => ChunkData;
+  /** Streamed spawns (hearts, NPCs) for a chunk. */
+  content: (cx: number, cy: number) => ScreenContent;
+  /** Carriable items laid out at boot — the explorer's camp kit. */
+  heldItems: () => Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }>;
+};
+
+let infinite: InfiniteWorld | null = null;
+// The props of the chunks currently loaded. The director owns this list and swaps it whole as
+// the window moves; GameScene's prop getters read it instead of the authored world's `props`.
+let streamedProps: WorldProp[] = [];
+
+export const setInfiniteWorld = (provider: InfiniteWorld | null): void => {
+  infinite = provider;
+  if (!provider) streamedProps = [];
+};
+
+export const isInfiniteWorld = (): boolean => infinite !== null;
+
+/** The chunk rectangle the renderer should bake. Only meaningful while a world is infinite. */
+export const setWorldWindow = (minCx: number, minCy: number, maxCx: number, maxCy: number): void => {
+  bounds = {
+    minCx,
+    maxCx,
+    minCy,
+    maxCy,
+    minTileX: minCx * CHUNK_COLUMNS,
+    maxTileX: ((maxCx + 1) * CHUNK_COLUMNS) - 1,
+    minTileY: minCy * CHUNK_ROWS,
+    maxTileY: ((maxCy + 1) * CHUNK_ROWS) - 1,
+  };
+};
+
+export const setStreamedProps = (props: WorldProp[]): void => { streamedProps = props; };
+
+const allProps = (): WorldProp[] => (infinite ? streamedProps : requireWorld().props);
+
 export const setWorldData = (raw: unknown): void => {
   const data = raw as WorldData | null;
   if (!data || typeof data !== 'object' || !data.meta) {
@@ -81,6 +139,7 @@ const requireBounds = (): WorldBounds => {
 export const getWorldBounds = (): WorldBounds => requireBounds();
 
 export const isInsideWorld = (cx: number, cy: number): boolean => {
+  if (infinite) return true; // there is no outside
   const b = requireBounds();
   return cx >= b.minCx && cx <= b.maxCx && cy >= b.minCy && cy <= b.maxCy;
 };
@@ -98,83 +157,87 @@ const buildVoidChunk = (cx: number, cy: number): ChunkData => ({
 // Out-of-bounds chunks are solid void, which is what makes the world edges hard: getTile
 // reports collision=true there and the existing movement/enemy blockers stop at it.
 export const getChunkTerrain = (cx: number, cy: number): ChunkData => {
+  if (infinite) return infinite.chunk(cx, cy);
   const chunk = chunkByKey.get(chunkKey(cx, cy));
   if (!chunk) return buildVoidChunk(cx, cy);
   return { cx, cy, ground: chunk.ground, upper: chunk.upper, collisions: chunk.collisions };
 };
 
 export const getChunkContent = (cx: number, cy: number): ScreenContent => {
+  if (infinite) return infinite.content(cx, cy);
   const chunk = chunkByKey.get(chunkKey(cx, cy));
   if (!chunk) return EMPTY_CONTENT;
   return { enemies: chunk.enemies, pickups: chunk.pickups, npcs: chunk.npcs };
 };
 
-export const getPlayerStart = (): { worldX: number; worldY: number } => requireWorld().meta.playerStart;
+export const getPlayerStart = (): { worldX: number; worldY: number } => (
+  infinite ? infinite.playerStart : requireWorld().meta.playerStart
+);
 
 // The authored display name used by level-select and the in-game level entrance card.
-export const getWorldName = (): string => requireWorld().meta.name;
+export const getWorldName = (): string => (infinite ? infinite.name : requireWorld().meta.name);
 
 // A puzzle world (a /levels level): the runtime suppresses the undead siege for it, like the lab.
 export const isPuzzleWorld = (): boolean => requireWorld().meta.puzzle === true;
 
-export const getCampfires = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'campfire');
+export const getCampfires = (): WorldProp[] => allProps().filter((prop) => prop.type === 'campfire');
 
-export const getDryBushes = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryBush');
+export const getDryBushes = (): WorldProp[] => allProps().filter((prop) => prop.type === 'dryBush');
 
-export const getLockedDoors = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'lockedDoor');
+export const getLockedDoors = (): WorldProp[] => allProps().filter((prop) => prop.type === 'lockedDoor');
 
 /** O portao de bater: sem chave, mas so abre com o tile de tras livre (SwingGateObject). */
-export const getSwingGates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'swingGate');
+export const getSwingGates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'swingGate');
 
-export const getDryTrees = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryTree');
+export const getDryTrees = (): WorldProp[] => allProps().filter((prop) => prop.type === 'dryTree');
 
-export const getDryShrubs = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'dryShrub');
+export const getDryShrubs = (): WorldProp[] => allProps().filter((prop) => prop.type === 'dryShrub');
 
 // A pedra de FERRO: a mesma rocha, quebrada pelas mesmas duas picaretadas, mas o que ela
 // deixa no chao e um bloco de ferro em vez de uma pedra. Vira RockObject como qualquer outra
 // (com `ore: true`), entao colisao, bomba e picareta valem sem uma linha a mais.
-export const getIronRocks = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'ironRock');
+export const getIronRocks = (): WorldProp[] => allProps().filter((prop) => prop.type === 'ironRock');
 
-export const getRocks = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'rock');
+export const getRocks = (): WorldProp[] => allProps().filter((prop) => prop.type === 'rock');
 
-export const getTallGrass = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'tallGrass');
+export const getTallGrass = (): WorldProp[] => allProps().filter((prop) => prop.type === 'tallGrass');
 
-export const getLavaTiles = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'lava');
+export const getLavaTiles = (): WorldProp[] => allProps().filter((prop) => prop.type === 'lava');
 
-export const getWaterTiles = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'water');
+export const getWaterTiles = (): WorldProp[] => allProps().filter((prop) => prop.type === 'water');
 
-export const getBridgeSpots = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'bridgeSpot');
+export const getBridgeSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'bridgeSpot');
 
 // A night-blooming flower: a closed bud (blocks) while a campfire burns near it, open petal-bridge
 // (walkable) in the dark. See MoonflowerObject.
-export const getMoonflowers = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'moonflower');
+export const getMoonflowers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'moonflower');
 
 // The walkable mark where a carried bomb plants itself on step. See BombSpotObject.
-export const getBombSpots = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'bombSpot');
+export const getBombSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'bombSpot');
 
 // The dug hole where carried seeds plant themselves on step. See PlantSpotObject.
-export const getPlantSpots = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'plantSpot');
+export const getPlantSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'plantSpot');
 // The robotic arm. Carries `dir` (which way it faces), the only prop whose extra field is load
 // bearing — it decides which tile the arm takes from and which it puts to.
-export const getInserters = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'inserter');
+export const getInserters = (): WorldProp[] => allProps().filter((prop) => prop.type === 'inserter');
 
 // The workbench. Carries `dir` for the same load-bearing reason the arm does: it decides which two
 // tiles behind it are the slots and which tile in front receives the crafted item.
-export const getToolboxes = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'toolbox');
+export const getToolboxes = (): WorldProp[] => allProps().filter((prop) => prop.type === 'toolbox');
 
 // A solid box the hero moves by walking into it; it never occupies the hero's hand slot.
-export const getWoodenCrates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'woodenCrate');
+export const getWoodenCrates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'woodenCrate');
 
 // Walkable floor switches. `variable` names the global boolean circuit they drive.
-export const getPressurePlates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'pressurePlate');
+export const getPressurePlates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'pressurePlate');
 
 // In-river generators. The prop owns water on its tile and requires that active water to
 // continue through a neighbour before publishing power into the prop's named variable.
-export const getWaterWheels = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'waterWheel');
-export const getBoilers = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'boiler');
-export const getWires = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'wire');
-export const getElectronicGates = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'electronicGate');
-export const getLevelPortals = (): WorldProp[] => requireWorld().props.filter((prop) => prop.type === 'levelPortal');
+export const getWaterWheels = (): WorldProp[] => allProps().filter((prop) => prop.type === 'waterWheel');
+export const getBoilers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'boiler');
+export const getWires = (): WorldProp[] => allProps().filter((prop) => prop.type === 'wire');
+export const getElectronicGates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'electronicGate');
+export const getLevelPortals = (): WorldProp[] => allProps().filter((prop) => prop.type === 'levelPortal');
 
 export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });
 
@@ -182,6 +245,10 @@ export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireW
 // hero can drop and swap them anywhere, so they must persist off-screen.
 export const getHeldItemPickups = (): Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> => {
   const out: Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> = [];
+  // An infinite world has no authored chunks to walk — it lays out its own kit (the explorer's
+  // camp tools), and reading the overworld's chunks here would sprinkle the adventure's sword,
+  // key and lava boots across a camp that never placed them.
+  if (infinite) return infinite.heldItems();
   for (const chunk of requireWorld().chunks) {
     for (const pickup of chunk.pickups) {
       if (pickup.type !== 'heart') {

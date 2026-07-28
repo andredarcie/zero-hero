@@ -37,10 +37,12 @@ import portaoEletronico from './portao-eletronico.mjs';
 import itens from './itens.mjs';
 import levelManagerPortal from './level-manager-portal.mjs';
 import levelIntro from './level-intro.mjs';
+import explorador from './explorador.mjs';
 
 export const scenarios = {
   smoke,
   explore,
+  explorador,
   dialog,
   shop,
   audio,

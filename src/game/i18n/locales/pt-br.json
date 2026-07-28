@@ -16,7 +16,8 @@
     "prompt": "pressione qualquer tecla",
     "survivors": "[S] MODO SOBREVIVENTES",
     "playAdventure": "Jogar aventura",
-    "playLevels": "Jogar levels"
+    "playLevels": "Jogar levels",
+    "playExplorer": "Jogar explorador"
   },
   "levelSelect": {
     "heading": "Escolha um level",
@@ -43,6 +44,22 @@
   },
   "death": {
     "epitaph": "Nada fez sentido,\ntudo foi em vão."
+  },
+  "explorer": {
+    "hud": {
+      "depth": "distancia"
+    },
+    "prompt": {
+      "title": "VOLTAR PRO ACAMPAMENTO?",
+      "ledger": "Voce carrega {coins} moedas.\nVoltando, guarda {kept} — e deixa {lost} aqui.",
+      "yes": "Sim, quero voltar",
+      "no": "Nao, ainda aguento"
+    },
+    "arrival": {
+      "extract": "Voce voltou inteiro.",
+      "death": "Voce caiu la fora.",
+      "kept": "{kept} moedas guardadas, {lost} ficaram no escuro. Distancia: {depth} tiles."
+    }
   },
   "editorReturn": "[ESC] voltar ao editor",
   "items": {

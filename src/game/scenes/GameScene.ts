@@ -75,6 +75,10 @@ import { WireObject } from '@/game/objects/WireObject';
 import { ElectronicGateObject } from '@/game/objects/ElectronicGateObject';
 import { LevelPortalObject } from '@/game/objects/LevelPortalObject';
 import type { WorldProp } from '@/game/objects/WorldProp';
+// O DEF de um prop (o registro de dados: tipo + tile + flags) contra o OBJETO de prop (a coisa
+// viva com sprite e colisao) — dois tipos com o mesmo nome em modulos diferentes. Aqui os dois
+// se encontram, porque o mundo infinito converte um no outro enquanto o heroi anda.
+import type { WorldProp as WorldPropDef } from '@/game/world/worldSchema';
 import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
@@ -101,6 +105,28 @@ import {
   setPendingPortalArrival,
 } from '@/game/runtime/portalTransition';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
+import { ExplorerDirector, type PropMemory } from '@/game/explorer/ExplorerDirector';
+import { ExplorerHud } from '@/game/explorer/ExplorerHud';
+import { ExtractPrompt } from '@/game/explorer/ExtractPrompt';
+import { distanceFromCamp } from '@/game/explorer/explorerWorld';
+import {
+  EXTRACT_KEEP,
+  addExplorerCoins,
+  buyExplorerUpgrade,
+  coinMultiplierAt,
+  coinsForKill,
+  consumeExplorerArrival,
+  dangerScaleAt,
+  endExplorerMode,
+  explorerMeta,
+  explorerRun,
+  extractToCamp,
+  isExplorerMode,
+  loseRunToDeath,
+  noteExplorerKill,
+  rerollExplorerWorld,
+  setExplorerDepth,
+} from '@/game/explorer/explorerRun';
 import { getActiveLevel, levelFilePath, setActiveLevel } from '@/game/runtime/activeLevel';
 import { LevelIntroOverlay } from '@/game/runtime/LevelIntroOverlay';
 import { LevelButtons, PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
@@ -421,6 +447,16 @@ export class GameScene extends Phaser.Scene {
   private boilers: BoilerObject[] = [];
   private electronicGates: ElectronicGateObject[] = [];
   private levelPortals: LevelPortalObject[] = [];
+  /**
+   * O MODO EXPLORADOR. Presente so quando a expedicao esta rodando; nos outros modos e
+   * undefined e nada disto existe. Ele e quem move a janela do mundo infinito (o terreno
+   * assado e os props vivos) enquanto o heroi anda — ver ExplorerDirector.
+   */
+  private explorer?: ExplorerDirector;
+  private explorerHud?: ExplorerHud;
+  private extractPrompt?: ExtractPrompt;
+  /** Portais ja recusados: perguntar de novo a cada passo dentro do mesmo tile seria assedio. */
+  private declinedPortals = new Set<string>();
   private levelIntroOpen = false;
   private levelIntroOverlay?: LevelIntroOverlay;
   private levelTransitioning = false;
@@ -557,6 +593,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   public create(): void {
+    // O MUNDO INFINITO tem que ser ligado antes de qualquer outra coisa: `getPlayerStart()` na
+    // linha seguinte ja pergunta a ele onde fica o acampamento, e o World3D (mais abaixo) assa
+    // o terreno dentro do proprio construtor lendo a janela que o diretor acabou de definir.
+    // Ligar depois seria assar o mundo autorado e so entao trocar o chao debaixo dele.
+    this.explorer = undefined;
+    this.declinedPortals.clear();
+    if (isExplorerMode()) {
+      const run = explorerRun();
+      if (run) {
+        this.explorer = new ExplorerDirector(run.seed);
+        this.explorer.install();
+      }
+    }
+
     const { worldX: startWorldX, worldY: startWorldY } = getPlayerStart();
 
     this.isDead = false;
@@ -572,7 +622,12 @@ export class GameScene extends Phaser.Scene {
     this.shopOpen = false;
     this.levelIntroOpen = false;
     this.levelTransitioning = false;
-    this.upgrades = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
+    // Na aventura as melhorias sao da RUN e morrem com ela. No explorador elas sao a
+    // progressao do modo: compradas com moedas do banco, na fogueira do acampamento, e
+    // atravessam expedicoes — e por isso que valer a pena trazer moeda para casa.
+    this.upgrades = isExplorerMode()
+      ? { ...explorerMeta().upgrades }
+      : { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
     // O heroi e um campo `readonly` e o Phaser REUSA esta instancia de cena no restart: sem
     // isto, o que a cena anterior escreveu nele (o alpha da morte, o encolhimento da succao do
     // portal) chega inteiro no level seguinte e o heroi nasce invisivel.
@@ -688,6 +743,11 @@ export class GameScene extends Phaser.Scene {
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
+
+    // Melhorias que atravessaram expedicoes (explorador) precisam VALER desde o primeiro passo:
+    // comprar vida maxima e nascer com a vida antiga seria pagar por nada.
+    this.applyUpgradeEffects();
+    this.playerHealth = this.playerMaxHealth; // toda expedicao comeca inteira
 
     // All world props are authored in world.json; their collision is resolved at runtime.
     // Only ONE fire starts lit — the "home" fire, derived as the campfire nearest the player
@@ -845,6 +905,15 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // O HUD do explorador (a bolsa e a distancia) e o recibo da expedicao anterior. Depois do
+    // resto da UI de proposito: se a expedicao terminou, o cartao que conta o que sobrou e a
+    // primeira coisa que o jogador deve ler ao acordar no acampamento.
+    if (this.explorer) {
+      this.explorerHud = new ExplorerHud();
+      const arrival = consumeExplorerArrival();
+      if (arrival) this.explorerHud.showArrival(arrival);
+    }
+
     const activeLevel = getActiveLevel();
     // Chegou pelo portal? Entao o level nao comeca: ele ATERRISSA. O cartao de titulo espera o
     // heroi tocar o chao (ver playPortalArrival), porque anunciar o nome de um lugar onde o
@@ -976,6 +1045,13 @@ export class GameScene extends Phaser.Scene {
   private restartRun(): void {
     if (this.pauseMenu) return; // the floating buttons are hidden while the menu is up anyway
     getSoundManager().stopMusic();
+    // No explorador, recomecar CUSTA o mesmo que morrer. Se fosse de graca, seria a saida
+    // otima de toda expedicao ruim — e as duas porcentagens que sustentam o modo passariam a
+    // ser opcionais. Sair do mundo sem passar por um portal e sair perdendo, sempre.
+    if (this.explorer) {
+      loseRunToDeath();
+      rerollExplorerWorld();
+    }
     this.scene.restart(); // WorldData still holds this level, so it rebuilds the same one
   }
 
@@ -1047,6 +1123,67 @@ export class GameScene extends Phaser.Scene {
         },
       });
     });
+  }
+
+  // ── o explorador: a pergunta do portal, e as duas maneiras de a expedicao acabar ──────────
+
+  /**
+   * O heroi pisou num portal la fora. Congela a expedicao e pergunta.
+   *
+   * Recusar nao gasta o portal — ele fica ali, e o jogador pode voltar quando a bolsa pesar
+   * mais. O que a recusa gasta e a PERGUNTA: enquanto o heroi nao sair do tile, ninguem
+   * pergunta de novo, senao continuar andando por cima do portal viraria um interrogatorio.
+   */
+  private askExtraction(portal: LevelPortalObject): void {
+    if (this.extractPrompt || this.levelTransitioning || this.isDead) return;
+    const key = `${portal.worldX},${portal.worldY}`;
+    if (this.declinedPortals.has(key)) return;
+
+    const coins = explorerRun()?.coins ?? 0;
+    this.cutsceneActive = true; // congela o mundo enquanto a pergunta esta na tela
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    getSoundManager().playShopOpen();
+    this.extractPrompt = new ExtractPrompt({
+      coins,
+      kept: Math.floor(coins * EXTRACT_KEEP),
+      onYes: () => {
+        this.extractPrompt = undefined;
+        void this.returnToCamp(portal);
+      },
+      onNo: () => {
+        this.extractPrompt = undefined;
+        this.declinedPortals.add(key);
+        this.cutsceneActive = false;
+      },
+    });
+  }
+
+  /**
+   * SIM: metade da bolsa vira banco e o heroi volta vivo.
+   *
+   * A viagem inteira e a do portal dos levels — succao, vazio, tunel, queda — e isso nao e
+   * reaproveitamento por economia: e a mesma FRASE. O jogo ja ensinou que atravessar um portal
+   * e assim, e uma expedicao que voltasse por um fade seria uma segunda gramatica para a mesma
+   * coisa. A diferenca esta so no outro lado do tunel: em vez do proximo level, o acampamento.
+   */
+  private async returnToCamp(portal: LevelPortalObject): Promise<void> {
+    if (this.levelTransitioning) return;
+    this.levelTransitioning = true;
+    this.cutsceneActive = true;
+    this.explorerHud?.setVisible(false);
+
+    await this.playPortalSuck(portal);
+    await this.wait(PORTAL_EMPTY_MS);
+    startPortalTunnel(this.world3d ? this.world3d.tileScreenSize() / TILESET_FRAME_SIZE : undefined);
+    getSoundManager().playPortalTravel();
+    await this.wait(PORTAL_TUNNEL_HANDOFF_MS);
+
+    // A ordem importa: liquidar ANTES do restart. A cena nova le a chegada (o recibo) no
+    // create, e ela so existe se a conta ja tiver sido fechada.
+    extractToCamp();
+    rerollExplorerWorld();
+    setPendingPortalArrival(); // do outro lado ele CAI no acampamento, como em qualquer viagem
+    this.scene.restart();
   }
 
   /** Purple threshold crossed: resolve the next entry from the same manifest as level select. */
@@ -1208,6 +1345,10 @@ export class GameScene extends Phaser.Scene {
           this.closePauseMenu();
           getSoundManager().stopMusic();
           getSoundManager().stopAmbience();
+          // Sair pelo menu ABANDONA a expedicao: a bolsa que estava em risco fica no escuro,
+          // como em qualquer outra saida que nao seja o portal. O banco (e as melhorias que ele
+          // comprou) ja esta no localStorage e sobrevive — e ele que o modo promete guardar.
+          endExplorerMode();
           this.scene.start('title');
         }
         : undefined,
@@ -1463,6 +1604,29 @@ export class GameScene extends Phaser.Scene {
           cx: Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS),
           cy: Math.floor(this.playerWorld.worldY / CHUNK_ROWS),
         },
+        explorer: this.explorer
+          ? {
+            seed: explorerRun()?.seed ?? 0,
+            carried: explorerRun()?.coins ?? 0,
+            banked: explorerMeta().banked,
+            depth: Number(distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY).toFixed(2)),
+            maxDepth: Number((explorerRun()?.maxDepth ?? 0).toFixed(2)),
+            multiplier: coinMultiplierAt(distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY)),
+            kills: explorerRun()?.kills ?? 0,
+            promptOpen: this.extractPrompt !== undefined,
+            // A instrumentacao da janela: quantas vezes o terreno foi reassado e quanto custou
+            // o ultimo. E o numero que decide se o modo pode existir — ver ExplorerDirector.
+            rebuilds: this.explorer.rebuilds,
+            lastRebuildMs: Number(this.explorer.lastRebuildMs.toFixed(2)),
+            props: {
+              campfires: this.campfires.length,
+              portals: this.levelPortals.length,
+              dryTrees: this.dryTrees.length,
+              rocks: this.rocks.length,
+            },
+            stats: explorerMeta().stats,
+          }
+          : null,
       }),
       openDialog: (kind = 'blackCat') => {
         if (this.dialogOpen || this.shopOpen || this.isDead) return false;
@@ -1539,6 +1703,13 @@ export class GameScene extends Phaser.Scene {
     this.pauseTouchButton = undefined;
     this.levelButtons?.destroy();
     this.levelButtons = undefined;
+    this.explorerHud?.destroy();
+    this.explorerHud = undefined;
+    this.extractPrompt?.destroy();
+    this.extractPrompt = undefined;
+    // O diretor morre com a cena: a janela e a memoria dos props sao da EXPEDICAO, e o create
+    // seguinte instala um novo (com a semente que o explorerRun guardou — esse sim atravessa).
+    this.explorer = undefined;
     this.coinManager?.destroy();
     this.heartPickupManager?.destroy();
     this.itemManager?.destroy();
@@ -1646,6 +1817,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.streamChunks();
     this.updateFootprints();
+    this.updateExplorerHud();
 
     // Burn the carried flame down; snuff it when the fuel runs out (leaving the hero exposed
     // in the dark). Re-igniting at a lit campfire or lava refills it.
@@ -1720,6 +1892,12 @@ export class GameScene extends Phaser.Scene {
         aliveUndead: this.enemyManager.aliveCount,
         canSpawnAt: (wx, wy) => this.canSpawnUndeadAt(wx, wy),
         spawn: (wx, wy) => this.enemyManager?.spawnUndead(wx, wy),
+        // O cerco APERTA com a distancia do acampamento: e o outro lado da moeda que fica mais
+        // valiosa la fora. Sobe mais devagar que a recompensa de proposito (ver dangerScaleAt),
+        // senao ir fundo seria matematicamente neutro e nao haveria decisao nenhuma a tomar.
+        pressure: this.explorer
+          ? dangerScaleAt(distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY))
+          : 1,
       });
 
       // Souls staging: the combat track rises only while undead are actually out and the
@@ -1745,7 +1923,12 @@ export class GameScene extends Phaser.Scene {
         this.playerWorld.worldX,
         this.playerWorld.worldY,
         heroScreen,
-        () => { getSoundManager().playCoinPickup(); },
+        () => {
+          getSoundManager().playCoinPickup();
+          // No explorador a moeda entra na BOLSA da expedicao — que e o numero em risco, e
+          // portanto o unico que o HUD mostra. So metade dela (ou 5%) vira banco no fim.
+          if (this.explorer) addExplorerCoins(1);
+        },
       );
       this.coinManager.render(this.tileSize, this.camera);
     }
@@ -1875,6 +2058,13 @@ export class GameScene extends Phaser.Scene {
     if (!force && pcx === this.streamCenter.cx && pcy === this.streamCenter.cy) return;
     this.streamCenter = { cx: pcx, cy: pcy };
 
+    // O mundo infinito se move junto: a janela de chunks assados no renderer se recentraliza e
+    // os props entram e saem com ela. So aqui, e nunca por frame — este e o unico ponto do
+    // jogo que ja sabe que o heroi trocou de chunk.
+    if (this.explorer && !force) {
+      this.explorer.update(this.playerWorld.worldX, this.playerWorld.worldY, this, this.world3d);
+    }
+
     const active = new Set<string>();
     const radius = 1;
     for (let dy = -radius; dy <= radius; dy++) {
@@ -1887,6 +2077,121 @@ export class GameScene extends Phaser.Scene {
     this.npcManager?.syncChunks(active);
     this.heartPickupManager?.syncChunks(active);
     // Held items (sword/key) are loaded once and never streamed — see ItemManager.
+  }
+
+  // ── ganchos de teste do explorador (dev/playtest) ────────────────────────────
+  //
+  // Os tres existem porque as asserções do modo sao sobre CONTAS — 50% e 5% —, e chegar a uma
+  // bolsa redonda catando moeda de caveira mediria o combate em vez da regra. Sao metodos
+  // publicos e sem nada de esperto: quem chama e `playtest/scenarios/explorador.mjs`.
+
+  /** Poe uma bolsa exata na expedicao. */
+  public explorerDebugSetCoins(amount: number): void {
+    const run = explorerRun();
+    if (!run) return;
+    run.coins = Math.max(0, Math.floor(amount));
+  }
+
+  /** Dispara a extracao pelo portal mais proximo, como se o jogador tivesse dito sim. */
+  public explorerDebugExtract(): void {
+    const portal = this.levelPortals[0] ?? new LevelPortalObject(
+      this.playerWorld.worldX, this.playerWorld.worldY,
+    );
+    void this.returnToCamp(portal);
+  }
+
+  /** Mata o heroi na hora (a cinematica roda inteira, e ela e que fecha a conta). */
+  public explorerDebugKill(): void {
+    this.playerHealth = 0;
+    this.triggerDeath();
+  }
+
+  /** A bolsa e a profundidade, os dois termos da aposta. Ver ExplorerHud. */
+  private updateExplorerHud(): void {
+    if (!this.explorerHud) return;
+    const dist = distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY);
+    setExplorerDepth(dist);
+    this.explorerHud.update(explorerRun()?.coins ?? 0, dist, coinMultiplierAt(dist));
+  }
+
+  // ── o mundo infinito: props entrando e saindo da janela ──────────────────────
+  //
+  // A GameScene e o "host" do ExplorerDirector: ele decide QUAIS chunks estao vivos, ela sabe
+  // como construir e destruir um prop. Os dois metodos abaixo sao esse contrato, e sao a razao
+  // de o modo caber sem tocar em nenhuma das dezenas de leituras de prop espalhadas pela cena:
+  // as listas continuam sendo as mesmas listas, so que agora alguem mexe nelas durante a run.
+
+  /** Constroi os props destes defs e os empurra nas listas tipadas (in place — ver propRegistry). */
+  public spawnStreamedProps(defs: readonly WorldPropDef[]): void {
+    for (const def of defs) {
+      switch (def.type) {
+        case 'campfire':
+          this.campfires.push(new CampfireObject(this, def.worldX, def.worldY, def.lit === true));
+          break;
+        case 'dryTree':
+          this.dryTrees.push(new DryTreeObject(this, def.worldX, def.worldY));
+          break;
+        case 'dryBush': {
+          const bush = new DryBushObject(this, def.worldX, def.worldY);
+          bush.onBurnedOut = () => this.dropCharcoalFromBush(bush.worldX, bush.worldY);
+          this.dryBushes.push(bush);
+          break;
+        }
+        case 'rock':
+          this.rocks.push(new RockObject(this, def.worldX, def.worldY));
+          break;
+        case 'ironRock':
+          this.rocks.push(new RockObject(this, def.worldX, def.worldY, true));
+          break;
+        case 'tallGrass':
+          this.tallGrasses.push(new TallGrassObject(this, def.worldX, def.worldY));
+          break;
+        case 'levelPortal':
+          this.levelPortals.push(new LevelPortalObject(def.worldX, def.worldY));
+          break;
+        default:
+          // O gerador so planta os tipos acima. Um tipo novo cai aqui de proposito: melhor um
+          // prop que nao aparece do que um prop meio construido.
+          break;
+      }
+    }
+  }
+
+  /**
+   * Destroi todo prop cujo chunk saiu da janela, devolvendo ao diretor o que cada um tinha de
+   * memoravel. So duas coisas sao: uma fogueira ACESA (o jogador pagou por aquela luz com uma
+   * tocha e uma caminhada) e um prop CONSUMIDO — pedra quebrada, arvore virada toco, portal ja
+   * usado. Todo o resto o gerador refaz identico a partir da semente.
+   */
+  public despawnPropsOutside(chunks: ReadonlySet<string>): Array<{ key: string; memory: PropMemory }> {
+    const out: Array<{ key: string; memory: PropMemory }> = [];
+    const outside = (p: { worldX: number; worldY: number }): boolean => !chunks.has(
+      `${Math.floor(p.worldX / CHUNK_COLUMNS)},${Math.floor(p.worldY / CHUNK_ROWS)}`,
+    );
+    const sweep = <T extends { worldX: number; worldY: number; destroy(): void }>(
+      list: T[],
+      memoryOf: (prop: T) => PropMemory,
+    ): void => {
+      for (let i = list.length - 1; i >= 0; i--) {
+        const prop = list[i];
+        if (!outside(prop)) continue;
+        out.push({ key: `${prop.worldX},${prop.worldY}`, memory: memoryOf(prop) });
+        prop.destroy();
+        list.splice(i, 1);
+      }
+    };
+
+    sweep(this.campfires, (cf) => ({ lit: cf.isLit }));
+    sweep(this.dryBushes, (bush) => ({ gone: !bush.blocking }));
+    sweep(this.rocks, (rock) => ({ gone: !rock.blocking }));
+    sweep(this.tallGrasses, (grass) => ({ gone: !grass.blocking }));
+    // A arvore seca NAO e lembrada de proposito: ela ja volta sozinha (TREE_REGROW_MS), e o
+    // gerador a devolve inteira — que e exatamente o estado que ela teria daqui a um minuto.
+    // Lembrar o toco transformaria o regrow, que existe para a lenha nunca acabar, em uma
+    // cicatriz permanente no mundo.
+    sweep(this.dryTrees, () => ({}));
+    sweep(this.levelPortals, () => ({}));
+    return out;
   }
 
   // Footprints are placed in world space and re-projected every frame so they stay glued to
@@ -2562,7 +2867,24 @@ export class GameScene extends Phaser.Scene {
     this.spawnHitSpark(wx, wy, lethal);
     this.world3d?.shake(lethal ? 150 : 90, lethal ? 0.15 : 0.09);
     this.triggerHitstop(lethal ? 110 : 60);
-    if (lethal) getSoundManager().playEnemyDeath();
+    if (lethal) {
+      getSoundManager().playEnemyDeath();
+      this.rewardKill(wx, wy);
+    }
+  }
+
+  /**
+   * A caveira caiu: no explorador ela LARGA MOEDA, e quanto mais longe do acampamento, mais.
+   *
+   * `CoinManager.spawnCoins` existia desde sempre e nunca havia sido chamado uma unica vez — a
+   * aventura tem uma loja e nenhuma fonte de moeda. O explorador e o modo que finalmente da a
+   * moeda um motivo: ela e o placar da aposta, e o multiplicador de profundidade e o que
+   * transforma "andar mais" numa decisao em vez de um passeio.
+   */
+  private rewardKill(wx: number, wy: number): void {
+    if (!this.explorer || !this.chunkManager) return;
+    noteExplorerKill();
+    this.coinManager?.spawnCoins(wx, wy, this.chunkManager, coinsForKill(distanceFromCamp(wx, wy)));
   }
 
   /**
@@ -3282,7 +3604,12 @@ export class GameScene extends Phaser.Scene {
   private handleTileEntered(wx: number, wy: number): void {
     const levelPortal = this.getLevelPortalAt(wx, wy);
     if (levelPortal) {
-      void this.completeLevel(levelPortal);
+      // O MESMO portal, duas leituras. Num level ele e a saida para o proximo — nao ha o que
+      // decidir, so passar. No explorador ele e a unica pergunta do modo, e por isso ele
+      // PERGUNTA em vez de engolir: pisar sem querer no caminho de casa nao pode custar metade
+      // da bolsa (ver ExtractPrompt).
+      if (this.explorer) this.askExtraction(levelPortal);
+      else void this.completeLevel(levelPortal);
       return;
     }
 
@@ -4192,13 +4519,25 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * A carteira que a loja gasta.
+   *
+   * Na aventura e a bolsa da run — nao ha outra. No explorador sao as moedas do BANCO, e nunca
+   * as que o heroi carrega: gastar em campo o que ainda esta em risco esvaziaria a aposta pelo
+   * outro lado (bastaria comprar tudo antes de morrer). A fogueira do acampamento so vende o
+   * que ja foi trazido para casa.
+   */
+  private get walletCoins(): number {
+    return this.explorer ? explorerMeta().banked : (this.coinManager?.coinTotal ?? 0);
+  }
+
   private openShop(): void {
     if (this.shopOpen) return;
     getSoundManager().playShopOpen();
     this.shopOpen = true;
     this.shopOverlay = new ShopOverlay(
       this,
-      this.coinManager?.coinTotal ?? 0,
+      this.walletCoins,
       this.upgrades,
       (id) => this.handleBuy(id),
       () => this.closeShop(),
@@ -4214,28 +4553,39 @@ export class GameScene extends Phaser.Scene {
 
   private handleBuy(id: keyof UpgradeState): void {
     const cost = getUpgradeCost(id, this.upgrades[id]);
-    if (cost === null || !this.coinManager?.spendCoins(cost)) return;
+    if (cost === null) return;
+    // A compra sai do banco (explorador, e permanente) ou da bolsa da run (aventura).
+    const paid = this.explorer ? buyExplorerUpgrade(id, cost) : (this.coinManager?.spendCoins(cost) ?? false);
+    if (!paid) return;
 
     this.upgrades[id] += 1;
-
-    if (id === 'maxHealth') {
-      this.playerMaxHealth += 1;
-      this.playerHealth = Math.min(this.playerHealth + 1, this.playerMaxHealth);
-    } else if (id === 'moveSpeed') {
-      // ms per tile, now that the walk runs at one constant speed. Three levels take the base
-      // walk (150ms/tile, 6.7 tiles/s) up to 105ms — 9.5 tiles/s, about the pace the whole game
-      // used to move at. So the boots are what earn the old speed rather than starting there.
-      this.movementController?.setMoveDuration(
-        Math.max(90, TIMINGS.moveDurationMs - this.upgrades.moveSpeed * 15),
-      );
-    } else if (id === 'magnet') {
-      this.coinManager?.setMagnetRadius(2);
-    }
-
-    this.shopOverlay?.refresh(this.coinManager?.coinTotal ?? 0, this.upgrades);
+    this.applyUpgradeEffects();
+    // O coracao comprado ja vem cheio: pagar por vida e continuar ferido seria comprar promessa.
+    if (id === 'maxHealth') this.playerHealth = Math.min(this.playerHealth + 1, this.playerMaxHealth);
+    this.shopOverlay?.refresh(this.walletCoins, this.upgrades);
 
     // Update the UPGRADES_CFG iteration for any upgrade that needs it
     void UPGRADES_CFG; // ensure import is used
+  }
+
+  /**
+   * Traduz os niveis de melhoria em efeito. Chamado na compra E no create, porque no explorador
+   * as melhorias atravessam expedicoes: a cena nasce com elas ja compradas e tem que nascer
+   * com elas ja valendo.
+   *
+   * Idempotente de proposito — ele SETA valores derivados do nivel, nunca incrementa —, ja que
+   * agora tem dois chamadores.
+   */
+  private applyUpgradeEffects(): void {
+    this.playerMaxHealth = PLAYER_HEALTH_MAX + this.upgrades.maxHealth;
+    this.playerHealth = Math.min(Math.max(this.playerHealth, 1), this.playerMaxHealth);
+    // ms per tile, now that the walk runs at one constant speed. Three levels take the base
+    // walk (150ms/tile, 6.7 tiles/s) up to 105ms — 9.5 tiles/s, about the pace the whole game
+    // used to move at. So the boots are what earn the old speed rather than starting there.
+    this.movementController?.setMoveDuration(
+      Math.max(90, TIMINGS.moveDurationMs - this.upgrades.moveSpeed * 15),
+    );
+    if (this.upgrades.magnet > 0) this.coinManager?.setMagnetRadius(2);
   }
 
   // The hero stepped onto a ground item. Swap: the item currently held (if any) drops on the
@@ -5093,6 +5443,14 @@ export class GameScene extends Phaser.Scene {
     const doRestart = (): void => {
       if (restarting) return;
       restarting = true;
+      // No explorador a morte nao e um restart: e o fim de uma EXPEDICAO. 5% da bolsa vira
+      // banco (perto o bastante de nada para doer, longe o bastante de zero para a expedicao
+      // ruim nao ter sido tempo jogado fora), o mundo la fora e resorteado, e o heroi acorda
+      // no acampamento — que e o unico lugar deste modo que nao muda.
+      if (this.explorer) {
+        loseRunToDeath();
+        rerollExplorerWorld();
+      }
       this.scene.restart();
     };
     const autoTimer = this.time.delayedCall(12000, doRestart);

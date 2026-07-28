@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
+import { endExplorerMode, startExplorerRun } from '@/game/explorer/explorerRun';
 import { t, tWords } from '@/game/i18n/i18n';
 
 // The game's start screen. It used to be theatrical — the title assembling one word per water
@@ -64,10 +65,11 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
-    // The two doors of the game, stacked and centred.
+    // The three doors of the game, stacked and centred.
     this.buttons = [
-      this.makeButton(t('title.playAdventure'), Math.round(height * 0.62), () => this.startAdventure()),
-      this.makeButton(t('title.playLevels'), Math.round(height * 0.74), () => this.startLevels()),
+      this.makeButton(t('title.playAdventure'), Math.round(height * 0.58), () => this.startAdventure()),
+      this.makeButton(t('title.playLevels'), Math.round(height * 0.69), () => this.startLevels()),
+      this.makeButton(t('title.playExplorer'), Math.round(height * 0.80), () => this.startExplorer()),
     ];
     this.applySelection();
 
@@ -158,6 +160,9 @@ export class TitleScene extends Phaser.Scene {
       case '2':
         this.buttons[1]?.activate();
         break;
+      case '3':
+        this.buttons[2]?.activate();
+        break;
       default:
         // The second door is a keystroke, not a button: [S] drops into Survivors.
         if (event.key.toLowerCase() === 's') this.startSurvivors();
@@ -175,11 +180,26 @@ export class TitleScene extends Phaser.Scene {
 
   private startAdventure(): void {
     setActiveLevel(null); // the story runs the real overworld, not a level
+    endExplorerMode();
     this.fadeThen(() => this.scene.start('intro'));
   }
 
   private startLevels(): void {
+    endExplorerMode();
     this.fadeThen(() => this.scene.start('levelselect'));
+  }
+
+  /**
+   * A terceira porta: uma expedicao ao mundo infinito.
+   *
+   * Nao passa pela intro. A aventura comeca com uma historia porque ela TEM uma; o explorador
+   * comeca no acampamento porque a unica coisa que ele tem a dizer — quao longe voce se atreve
+   * a ir — so pode ser dita andando.
+   */
+  private startExplorer(): void {
+    setActiveLevel(null);
+    startExplorerRun();
+    this.fadeThen(() => this.scene.start('game'));
   }
 
   private startSurvivors(): void {
