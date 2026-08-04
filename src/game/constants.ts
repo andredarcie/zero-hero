@@ -171,6 +171,9 @@ export const ASSET_KEYS = {
    * borrado. Textura propria = NEAREST como todo o resto, sem nenhum pixel diferente.
    */
   bones: 'bones',
+  // A TEIA que a aranha larga ao andar (Sprite Factory). Marca de chao como a ossada: nao bloqueia,
+  // nao prende, nao fere — diz que ha aranha naquele corredor antes de uma pular nele.
+  spiderWeb: 'spider-web',
   // Os PEDACOS do desmonte: [0] a cabeca, [1] um osso quebrado. O femur inteiro que voa junto e o
   // proprio `undeadBone` — o esqueleto se parte nos mesmos ossos com que batia.
   undeadBits: 'undead-bits',

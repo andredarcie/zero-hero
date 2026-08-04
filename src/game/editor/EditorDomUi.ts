@@ -111,7 +111,7 @@ const ENEMY_DEFS: ReadonlyArray<{ type: EnemyKind; label: string; key: string; f
   { type: 'slime', label: 'Slime — lento, casca dura, NAO teme a tocha', key: ASSET_KEYS.slime, frame: SLIME_FRAMES.rest },
   { type: 'bigslime', label: 'Slime Grande — racha em dois ao morrer', key: ASSET_KEYS.bigSlime, frame: SLIME_FRAMES.rest },
   { type: 'turret', label: 'Torreta — nao anda, leque de balas, ignora a tocha', key: ASSET_KEYS.turret },
-  { type: 'mage', label: 'Mago — mantem 5 tiles de distancia e conjura', key: ASSET_KEYS.mage },
+  { type: 'mage', label: 'Mago — mantem 5 tiles de distancia e conjura', key: ASSET_KEYS.mageCast },
   // O zora e o unico que exige um tile de tipo especifico, e o rotulo tem de dizer isso: colocado
   // em terra ele nao nasce, e o autor nao teria como adivinhar por que aquele tile ficou mudo.
   {

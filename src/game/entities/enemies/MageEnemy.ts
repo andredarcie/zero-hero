@@ -20,12 +20,21 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
  * do bestiario depois do morcego — dois socos —, porque quem e dificil de alcancar nao pode ser
  * dificil de matar tambem.
  *
- * **A arte e emprestada, e isso teve de ser resolvido.** `mage__1.png` e o sprite do NPC "wizard",
- * o velho que conta a historia do jogo. Um inimigo com o corpo de um amigo e uma mentira visual
- * que nenhuma legenda conserta, entao o mago inimigo nasce com um TOM FRIO permanente
- * (COLD_TINT) — um espectro do feiticeiro, nao ele — e o tint volta depois de toda piscada (ver
- * restoreTint). Na CONJURACAO o tom sai: a arte de casting (`mage_magic`, que ja tem o proprio
- * clarao vermelho) aparece na cor cheia, e o contraste frio→quente e o telegrafo.
+ * **ELE TEM CORPO PROPRIO AGORA, e isso conserta dois defeitos de uma vez.**
+ *
+ * A arte normal dele era `mage__1.png` — o sprite do NPC "wizard", o velho que conta a historia do
+ * jogo. Um inimigo com o corpo de um amigo e uma mentira visual que nenhuma legenda conserta, e o
+ * remendo era um TOM FRIO permanente por cima (um espectro do feiticeiro, nao ele).
+ *
+ * O segundo defeito estava escondido debaixo do primeiro: a arte de DANO dele (`mage_hurt.png`)
+ * nunca foi a variante do `mage__1` — ela e a variante do `mage_magic`, mesma silhueta e mesma
+ * paleta. Ou seja, acertar o mago o transformava em OUTRO personagem por 150ms, e ninguem tinha
+ * como notar porque o corpo normal ja era emprestado de um terceiro.
+ *
+ * Agora o corpo padrao e o `mage_magic`: silhueta propria (nao e o wizard), a arte de dano casa com
+ * ela, e o tom frio postico pode sumir — a identidade dele passou a ser o desenho, que e onde ela
+ * devia estar. O telegrafo da conjuracao vira o que e o de todo mundo neste jogo: o clarao de aviso
+ * mais a pose parada mais o som (ver `think`).
  *
  * **A conjuracao e um COMPROMISSO.** Um golpe no meio dela a apagava, e isso caiu junto com o
  * windup cancelavel do andarilho (ver WalkerEnemy.takeDamage): com dano real, trancar um corpo em
@@ -45,8 +54,14 @@ const CAST_INTERVAL_MS = 2800;
 const CAST_TELEGRAPH_MS = 420;
 const CAST_RANGE = 8;
 const SHOT_SPEED = 4.4;
-/** O frio que o separa do NPC mago (ver o cabecalho). */
-const COLD_TINT = 0x9fd8ff;
+/**
+ * O CLARAO DA CONJURACAO — o aviso de que a bola vem, no lugar da troca de arte que existia antes.
+ *
+ * O mesmo vermelho quente do telegrafo de todo o resto do bestiario (`EnemyBase`, WINDUP_FLASH):
+ * um aviso, uma cor. Ele nao precisa dizer QUAL golpe vem — a distancia ja diz (colado e soco,
+ * longe e bola) —, precisa dizer que vem AGORA.
+ */
+const CAST_FLASH = 0xff4a3d;
 
 export class MageEnemy extends WalkerEnemy {
   protected override hurtTexture = ASSET_KEYS.mageHurt;
@@ -63,19 +78,19 @@ export class MageEnemy extends WalkerEnemy {
     private readonly shots: EnemyProjectileManager,
   ) {
     const sprite = world3d()
-      .addBillboard(ASSET_KEYS.mage, 0, { groundShadow: { rx: 0.32, rz: 0.3, alpha: 0.32 } })
+      .addBillboard(ASSET_KEYS.mageCast, 0, { groundShadow: { rx: 0.32, rz: 0.3, alpha: 0.32 } })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.95, 0.95);
     super(scene, worldX, worldY, MAX_HEALTH, sprite, 0.95);
-    this.sprite.setTint(COLD_TINT);
   }
 
   public override get kind(): EnemyKind {
     return 'mage';
   }
 
+  /** O corpo dele, e ele e SO dele: `mage__1` continua sendo o NPC wizard (ver o cabecalho). */
   protected override get normalTexture(): string {
-    return ASSET_KEYS.mage;
+    return ASSET_KEYS.mageCast;
   }
 
   /**
@@ -95,8 +110,9 @@ export class MageEnemy extends WalkerEnemy {
     return DETECTION_RANGE;
   }
 
+  /** A pedra do corpo dele: a chegada levanta po de rocha, e nao terra nem o azul de antes. */
   protected override get arrivalDustTint(): number {
-    return COLD_TINT;
+    return 0x787a8b;
   }
 
   /** Debug/playtest: ele esta no meio de uma conjuracao? */
@@ -127,13 +143,6 @@ export class MageEnemy extends WalkerEnemy {
     return super.canStrike(ctx);
   }
 
-  /** O tom frio e a cor de BASE dele: toda piscada volta pra ela, nunca pro branco do NPC. */
-  protected override restoreTint(): void {
-    // O frio dele é a identidade (a arte é dividida com o NPC mago); o escurecimento de ferido
-    // MULTIPLICA esse tom em vez de substituí-lo — ver EnemyBase.woundedShade.
-    this.sprite.setTint(this.woundedShade(COLD_TINT));
-  }
-
   protected override think(delta: number, ctx: StepContext): void {
     // Conjuracao em curso: comprometido, imovel, na arte de casting — e bater nele NAO a
     // interrompe mais (ver o cabecalho da classe). A resposta e sair da linha.
@@ -155,9 +164,13 @@ export class MageEnemy extends WalkerEnemy {
     if (this.castTimer < CAST_INTERVAL_MS) return;
     this.castTimer = 0;
     this.castMs = CAST_TELEGRAPH_MS;
-    // O tom frio SAI aqui: a arte de conjuracao tem clarao proprio, e e ele que avisa.
-    this.sprite.clearTint();
-    this.sprite.setTexture(ASSET_KEYS.mageCast);
+    // O AVISO. Nao ha mais troca de arte a fazer (o corpo dele JA e a arte de conjuracao), entao o
+    // telegrafo e o mesmo dos outros: um clarao curto, o corpo que para de rodear e o som do
+    // feitico carregando. Tres sinais, como a caveira tem tres.
+    this.sprite.setTintFill(CAST_FLASH);
+    this.scene.time.delayedCall(110, () => {
+      if (this.isAlive && this.sprite.active) this.restoreTint();
+    });
     getSoundManager().playSpellWindup();
   }
 
@@ -214,9 +227,9 @@ export class MageEnemy extends WalkerEnemy {
     getSoundManager().playEnemyShot();
   }
 
+  /** O feitico saiu: o corpo volta ao tom de sempre (o clarao ja se apagou sozinho). */
   private endCastPose(): void {
     if (!this.sprite.active) return;
-    this.sprite.setTexture(this.normalTexture);
     this.restoreTint();
   }
 }

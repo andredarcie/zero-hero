@@ -26,17 +26,26 @@ const WINDUP_MS = 500;
 // Exported because the pressure-plate lure uses the SAME radius: "what a skull can see" has to
 // be one number, or the creature would notice a plate at a distance it cannot notice a hero.
 export const DETECTION_RANGE = 14;
-const BORN_FRAME_MS = 110;
-// Before the skull even exists on screen, the ground TELEGRAPHS it: cold fissures spread
-// across the tile and dust kicks up. Deliberately LONG — the whole point is giving the
-// player time to see the cracking ground and get away from it (user: "dar um tempo pro
-// heroi ver e fugir daquilo"), not a flash followed instantly by a skull. Only after the
-// telegraph does the born animation (clawing out of the ground) start.
-const TELEGRAPH_MS = 3000;
+const BORN_FRAME_MS = 80;
+/**
+ * Antes de a caveira existir na tela, o CHÃO a telegrafa: fissuras frias abrem no tile e a poeira
+ * sobe. O aviso continua sendo um aviso — a resposta a ele é sair de cima —, mas ele foi de 3s
+ * para 1,4s a pedido do jogador, e a conta fecha: um passo custa ~150ms, então 1,4s ainda são
+ * NOVE passos de folga para deixar o tile. Três segundos não davam mais tempo de fugir do que
+ * isso; davam tempo de esperar, que é outra coisa — e num cerco de quatro covas abrindo em
+ * sequência, esperar três segundos por cada uma é o que fazia a pressão do escuro parecer lenta.
+ *
+ * O nascimento em si (`BORN_FRAME_MS`) encurtou junto, de 110 para 80ms por frame: o gesto de sair
+ * do chão passou de 770ms para 560. Somados, um nascimento inteiro caiu de 3,8s para 2,0s.
+ */
+const TELEGRAPH_MS = 1400;
 // The fissure widens in discrete SNAPS (pixel-art: stages, never a smooth scale tween).
 const CRACK_STAGE_SIZES = [0.45, 0.7, 0.95] as const;
 const CRACK_TINT = 0x8fa8ff; // the cold pale blue of everything undead (deflect ring, wisps)
-const DUST_INTERVAL_MS = 240;
+// A cadência da poeira acompanha o aviso encurtado: com 240ms num telegrafo de 1,4s sairiam seis
+// baforadas, e a fenda ficaria com o mesmo ritmo de antes num tempo menos da metade — o que lê
+// como uma animação acelerada, não como um aviso mais curto.
+const DUST_INTERVAL_MS = 150;
 const DUST_TINT = 0x9a9284; // dry earth being pushed up from below
 // Once the hero steps into a campfire's safety the pack crumbles back into the ground,
 // staggered per skull so the horde doesn't vanish in a single frame.

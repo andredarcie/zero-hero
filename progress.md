@@ -2487,6 +2487,47 @@ mesmo pico (−1 dBFS), então num tique de 46 ms um RMS baixo só quer dizer "�
 aparo por RMS seria distorcer o único som que já estava certo. RMS só é régua honesta para som
 sustentado.
 
+## Cinco pedidos do jogador, e os dois defeitos que dois deles desenterraram
+
+- **A fenda ficou rápida.** O telegrafo do nascimento da caveira era de 3s "de propósito", e o
+  próprio comentário registrava o pedido antigo ("dar um tempo pro herói ver e fugir"). O jogador
+  reviu: 3s não davam mais tempo de *fugir* — davam tempo de *esperar*, e num cerco de quatro covas
+  abrindo em sequência era o que fazia a pressão do escuro parecer lenta. Foi para 1,4s, que ainda
+  são nove passos de folga para sair do tile. O nascimento em si caiu junto (110→80ms por frame), e
+  a cadência da poeira acompanhou (240→150ms) — senão a fenda mantinha o ritmo antigo num tempo
+  menor, o que lê como animação acelerada e não como aviso mais curto.
+- **Quem não enxerga o herói não pensa.** `AI_ACTIVE_TILES = 15`, e o número é demonstrável em vez
+  de escolhido: a maior `detectionRange` do bestiário é 14, e fora do alcance o `takeStep` de todas
+  as espécies cai no `wander`. Acima de 15 o único produto de um update seria um passo aleatório
+  fora da tela — que custa uma consulta de terreno, a varredura dos outros corpos e **dois tweens**.
+  15 também cai entre os dois números que já existiam: acima dos 14 em que uma cova acorda (nada
+  congela recém-nascido) e abaixo dos 18 do despejo. A exceção que evita um bug: **quem está com o
+  golpe armado nunca é cortado** — congelar um telegrafo deixaria a guarda erguida para sempre.
+- **A aranha deixa teia.** Era a única espécie que não escrevia nada no mundo (a caveira racha o
+  chão, a gosma deixa poça, o zora abre esteira), e é o corpo mais móvel do jogo. A teia não trava
+  nada: a informação está em quantas há e quão juntas. **Não sai no bote** — no salto ela está no
+  ar, e um rastro contínuo apagaria a diferença entre o rastejo (que se contorna) e o bote (que
+  não). Três tentativas de teia orbicular foram descartadas: de canto lê como diagonais paralelas,
+  centrada com anéis grossos lê como ALVO, e com raios finos o arredondamento quebra cada raio. A
+  forma orbicular era errada de qualquer modo — uma aranha *andando* não fia um orbe, ela arrasta
+  seda.
+- **O mago ganhou corpo próprio, e isso consertou um defeito que ninguém tinha visto.** A arte
+  normal dele era a do NPC *wizard* (`mage__1`), remendada com um tom frio para não ler como o velho
+  amigo. Debaixo desse remendo havia outro defeito: a arte de DANO dele (`mage_hurt`) nunca foi a
+  variante do `mage__1` — **ela é a variante do `mage_magic`**, mesma silhueta e mesma paleta. Ou
+  seja, acertar o mago o transformava em outro personagem por 150ms, e era impossível notar porque
+  o corpo normal já era emprestado de um terceiro. Com `mage_magic` como padrão: silhueta própria, a
+  arte de dano casa, e o tom frio postiço sumiu. O telegrafo da conjuração virou o de todo mundo —
+  clarão, corpo parado, som.
+- **O dobro de mortos-vivos**, e este vem com um aviso medido. As covas moram em `chunk.enemies`
+  (não em `props` — minha primeira contagem olhou no lugar errado e achou zero). Eram 54; o caminho
+  sancionado era o `place-enemies.mjs`, que mira num TOTAL por tela e é idempotente, então bastou um
+  fator só para a espécie. Deu **120**, e as outras sete ficaram idênticas ao byte.
+
+  O aviso: o número que se olha não é covas por tela, é **covas dentro de 14 tiles** — e ele foi de
+  10 para **25** no pior ponto do mapa. O cabeçalho do `TIERS` já apontava **13** como o número
+  quebrado. Está tudo medido e tabelado na constante, e é um número só para dialar.
+
 ## Duas lacunas que a revisão do polimento deixou apontadas, e o conserto das duas
 
 ### Apanhar não custava tempo — a lei valia num sentido só

@@ -31,8 +31,9 @@ const DEFS: Record<string, SheetDef> = {
   'npc-salesman': { url: `${A}/characters/npcs/salesman.png` },
   'npc-poet': { url: `${A}/characters/npcs/poet.png` },
   'npc-death': { url: `${A}/ui/states/death.png` },
-  // Esta arte tem DOIS donos: o NPC "wizard" (NPC_VISUALS.wizard) e o mago inimigo, que por isso
-  // nasce tingido de frio (MageEnemy) — sem isso, o feiticeiro que ataca leria como o velho amigo.
+  // Esta arte e SO do NPC "wizard" (NPC_VISUALS.wizard). O mago INIMIGO usava a mesma e por isso
+  // nascia tingido de frio, um remendo para nao ler como o velho amigo; hoje o corpo dele e o
+  // `mage-cast` (silhueta propria, e a mesma de que o `mage-hurt` sempre foi a variante).
   mage: { url: `${A}/characters/enemies/mage/mage__1.png` },
   'mage-hurt': { url: `${A}/characters/enemies/mage/mage_hurt.png` },
   'mage-cast': { url: `${A}/characters/enemies/mage/mage_magic.png` },
@@ -79,6 +80,7 @@ const DEFS: Record<string, SheetDef> = {
    * exatamente os mesmos pixels.
    */
   bones: { url: `${A}/environment/props/bones.png` },
+  'spider-web': { url: `${A}/environment/props/spider_web.png` },
   'campfire-0': { url: `${A}/effects/fire/sprite_fire0.png` },
   'campfire-1': { url: `${A}/effects/fire/sprite_fire1.png` },
   'campfire-2': { url: `${A}/effects/fire/sprite_fire2.png` },

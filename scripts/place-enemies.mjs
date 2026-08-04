@@ -65,6 +65,33 @@ const TIERS = [
   { maxDist: 6, kinds: ['spider', 'bat', 'undead'], dens: 1 },
   { maxDist: Infinity, kinds: ['undead', 'mage', 'turret', 'bigslime'], dens: 2 },
 ];
+/**
+ * O MORTO-VIVO ANDA EM MAIOR NÚMERO, e este fator é a única coisa que o separa do resto.
+ *
+ * Ele é o corpo-base da aventura — a espécie que o cerco também invoca, a que aprendeu o telegrafo,
+ * a que marcha para placas. As outras seis são PERGUNTAS pontuais (o mago que não deixa chegar, o
+ * zora que mora no rio); a caveira é o ruído de fundo do escuro, e ruído de fundo ralo não é
+ * ameaça, é decoração.
+ *
+ * ⚠ MEXER AQUI MEXE NA DENSIDADE, e o número que se olha NÃO é covas por tela: é **covas dentro de
+ * 14 tiles** (ver o cabeçalho de TIERS). A cova acorda na distância de visão da caveira, que vale
+ * ~4 telas, então cada cova a mais numa zona de morto-vivo é um corpo a mais cercando o herói.
+ *
+ * MEDIDO, e não presumido — as três rodadas, no mundo de hoje:
+ *
+ *   fator | undead | covas em 14 tiles (média / MÁXIMO)
+ *   ------|--------|-----------------------------------
+ *     1   |   54   |  5.3 / 10
+ *     2   |   82   |  6.1 / 16
+ *     3   |  120   |  7.5 / 25   ← atual
+ *
+ * O fator não é a contagem: o alvo por tela esbarra nos tiles válidos e no espaçamento mínimo, e é
+ * por isso que 3 dá 2,2× e não 3×. E fica o aviso que o cabeçalho de TIERS já dava: **13 corpos em
+ * volta do herói** era o número apontado ali como quebrado. O máximo de hoje é quase o dobro disso.
+ * Se a mão disser que é demais, este é o único número a mexer — e o script é idempotente, então
+ * baixá-lo pede restaurar o world.json antes (ele mira num alvo, mas não REMOVE excesso).
+ */
+const UNDEAD_DENS_FACTOR = 3;
 /** A água é uma região por si só: onde ela manda, quem mora é o zora. */
 const ZORA_DENS = 2;
 /** Quanto da tela precisa ser água aberta para ela virar uma tela de zora. */
@@ -195,7 +222,8 @@ const speciesFor = (chunk) => {
 
 const denTargetFor = (chunk, kind) => {
   if (kind === 'zora') return ZORA_DENS;
-  return TIERS.find((t) => chunkDist(chunk) <= t.maxDist).dens;
+  const dens = TIERS.find((t) => chunkDist(chunk) <= t.maxDist).dens;
+  return kind === 'undead' ? dens * UNDEAD_DENS_FACTOR : dens;
 };
 
 // ── A passagem ────────────────────────────────────────────────────────────────────────────────

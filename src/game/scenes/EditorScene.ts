@@ -63,7 +63,7 @@ const ENEMY_VISUAL: Record<EnemyKind, { key: string; frame?: number }> = {
   // O mago inimigo e o NPC mago dividem a arte, e no tabuleiro isso NAO se resolve com tint (o
   // chip e desenhado por um Image de paleta, sem o material tingido do jogo). O que separa os dois
   // ali e a cor do ponto de lista — vermelho de inimigo contra o dos NPCs — e o proprio tooltip.
-  mage: { key: ASSET_KEYS.mage },
+  mage: { key: ASSET_KEYS.mageCast },
   // O chip mostra ele ERGUIDO e nao submerso: o frame submerso nao tem corpo nenhum (so a esteira
   // na agua), e um chip de tabuleiro que nao mostra o bicho nao diz o que nasce ali.
   zora: { key: ASSET_KEYS.zora, frame: ZORA_FRAMES.up },

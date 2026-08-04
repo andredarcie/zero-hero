@@ -1,0 +1,3 @@
+spider-web: 1 frame(s) — 0 fail, 0 warn
+  [info] bbox: content 12x12 at (2,2), coverage 16%
+  frame 0: #cdcdcd×38 #858585×4

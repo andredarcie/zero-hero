@@ -28,6 +28,26 @@ import { ZoraEnemy, type WaterQuery } from './enemies/ZoraEnemy';
 const DESPAWN_DISTANCE_TILES = 18;
 
 /**
+ * ALEM DAQUI, O CORPO NAO PENSA — ele existe, mas nao roda IA nenhuma.
+ *
+ * O numero nao e de gosto, e demonstravel: a maior `detectionRange` do bestiario e 14 (a caveira),
+ * e nenhuma especie faz nada de proprio sem enxergar o heroi — o `takeStep` de todas cai no
+ * `wander` fora do alcance. Entao a 15 tiles a unica coisa que um update produziria e um passo
+ * aleatorio, fora da tela, que custa uma consulta de terreno, uma varredura dos outros corpos e
+ * DOIS tweens (o deslize e o tombo lateral) para mover um pixel que ninguem ve.
+ *
+ * 15 tambem fica entre os dois numeros que ja existiam, e isso importa: acima dos 14 em que uma
+ * cova autorada acorda (nada congela recem-nascido) e abaixo dos 18 em que o corpo e despejado
+ * (nada fica pensando depois de ja estar condenado).
+ *
+ * O que continua correndo mesmo longe: os i-frames, o teste de despejo e — a excecao que evita um
+ * bug — quem esta com um golpe ARMADO. Um corpo congelado no meio do telegrafo guardaria a frente
+ * para sempre (`guardsAgainst` le o relogio do windup), e voltaria a existir defendendo um golpe
+ * que nunca sai.
+ */
+const AI_ACTIVE_TILES = 15;
+
+/**
  * O golpe que chegou no heroi neste frame. `ranged` separa as duas procedencias, e o GameScene
  * precisa da diferenca: num golpe de corpo o bicho INVESTE na direcao do heroi (o tombo pra
  * frente), num tiro nao ha ninguem pra investir — o empurrao vem da direcao do VOO, e quem atirou
@@ -322,10 +342,14 @@ export class EnemyManager {
 
       const farX = Math.abs(enemy.worldX - playerWorldX);
       const farY = Math.abs(enemy.worldY - playerWorldY);
-      if (Math.max(farX, farY) > DESPAWN_DISTANCE_TILES) {
+      const far = Math.max(farX, farY);
+      if (far > DESPAWN_DISTANCE_TILES) {
         enemy.despawn();
         continue;
       }
+      // FORA DE ALCANCE: existe, mas nao pensa (ver AI_ACTIVE_TILES). O golpe armado e a unica
+      // coisa que atravessa o corte — congelar um telegrafo deixaria a guarda erguida para sempre.
+      if (far > AI_ACTIVE_TILES && !enemy.isWindingUp) continue;
 
       // O mundo deste corpo: chao ou voo (voar e a unica diferenca de mundo entre uma especie e
       // outra), mais o heroi e os outros corpos, que ninguem atravessa — inclusive quem voa, que

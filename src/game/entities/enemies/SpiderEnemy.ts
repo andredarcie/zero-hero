@@ -36,6 +36,29 @@ const POUNCE_STEPS = 3;
 /** Descanso entre botes: sem ele, ela pula sem parar e vira um teleporte. */
 const POUNCE_COOLDOWN_MS = 2400;
 
+/**
+ * A TEIA QUE ELA DEIXA AO ANDAR — e ela e a unica coisa que esta especie escrevia no mundo.
+ *
+ * Todo corpo do bestiario deixa marca: a caveira racha o chao e deixa ossada, a gosma deixa a poca
+ * que seca, o zora abre esteira na agua. A aranha — que e o corpo mais MOVEL do jogo, cujo bote
+ * atravessa cinco tiles em 360ms — passava sem deixar nada, entao nao havia como saber que aquele
+ * corredor tem aranha antes de uma pular nele. A teia e esse aviso, e ela nao trava nada: nao
+ * bloqueia, nao prende, nao fere. A informacao esta em QUANTAS ha e quao juntas — uma solta e uma
+ * que cruzou; um punhado no mesmo corredor e uma que MORA ali.
+ *
+ * NAO sai no bote de proposito: no salto ela esta no ar, e um rastro contínuo apagaria a diferenca
+ * entre o rastejo (que se pode contornar) e o bote (que nao se contorna). A teia marca a ronda.
+ */
+const WEB_DROP_CHANCE = 0.22;
+/**
+ * Quanto a teia dura. Longa o bastante para acumular num corredor patrulhado, curta o bastante
+ * para se apagar sozinha — cada uma e um billboard, e billboard e draw call: sem o sumico, uma
+ * aranha de vida longa penduraria uma fila delas atras de si para sempre (a mesma conta que poe
+ * teto nas ossadas, so que resolvida pelo tempo em vez de por uma lista).
+ */
+const WEB_FADE_MS = 9000;
+const WEB_SIZE = 0.72;
+
 export class SpiderEnemy extends WalkerEnemy {
   private crouchMs = 0;
   private pounceStepsLeft = 0;
@@ -111,6 +134,44 @@ export class SpiderEnemy extends WalkerEnemy {
       Math.sign(this.worldY - ctx.playerWorldY),
       CROUCH_MS * 0.9,
     );
+  }
+
+  /**
+   * Andou: as vezes fica seda no tile que ela deixou (ver WEB_DROP_CHANCE).
+   *
+   * A teia e desenhada aqui e nao guardada em lista nenhuma, pelo mesmo caminho da poca da gosma:
+   * o tween que a apaga e o dono dela. E por isso que ela SOBREVIVE a aranha — matar o corpo nao
+   * toca no billboard, e o rastro continua contando onde ela andou depois de ela nao existir mais.
+   */
+  protected override onStepped(): void {
+    if (this.isPouncing || Math.random() >= WEB_DROP_CHANCE) return;
+    const web = world3d()
+      // Quad DEITADO no formato que o `prewarmShaders` ja segura (`flat` + alphaTest baixo, o
+      // mesmo da poca e da ossada): combinacao nova de opcoes seria um shader compilado no meio
+      // de uma perseguicao, que e o pior engasgo que este renderer tem.
+      .addBillboard(ASSET_KEYS.spiderWeb, 0, { flat: true, flatY: 0.02, alphaTest: 0.02 })
+      .setPosition(this.worldX, this.worldY)
+      // Espelhada pela paridade do tile, e nao por sorteio: duas teias vizinhas nao podem ser a
+      // mesma foto, e a mesma passagem tem de deixar sempre a mesma marca.
+      .setFlipX((this.worldX + this.worldY) % 2 === 0)
+      .setDisplaySize(WEB_SIZE, WEB_SIZE)
+      .setAlpha(0);
+    this.scene.tweens.add({
+      targets: web,
+      alpha: 0.75,
+      duration: 220,
+      ease: 'Sine.easeOut',
+      // Assenta depressa e some devagar: seda pousa num instante e leva muito tempo para sumir.
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: web,
+          alpha: 0,
+          duration: WEB_FADE_MS,
+          ease: 'Sine.easeIn',
+          onComplete: () => web.destroy(),
+        });
+      },
+    });
   }
 
   protected override takeStep(ctx: StepContext): void {

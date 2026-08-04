@@ -250,6 +250,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   // A ossada: a frame 27 do forest_tile_set recortada pixel a pixel para uma textura PROPRIA — ver
   // ASSET_KEYS.bones. A arte e a mesma; o que muda e o filtro com que ela e amostrada.
   { key: ASSET_KEYS.bones, path: '/assets/environment/props/bones.png' },
+  { key: ASSET_KEYS.spiderWeb, path: '/assets/environment/props/spider_web.png' },
   {
     // Sprite Factory: o balao de pensamento com a placa de pressao acesa dentro.
     key: ASSET_KEYS.thoughtPlate,
