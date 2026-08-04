@@ -370,6 +370,15 @@ const SWING_LUNGE_TILES = 0.13;
 const SWING_LUNGE_OUT_MS = 60;
 const SWING_LUNGE_BACK_MS = 130;
 /**
+ * Quanto tempo o herói fica na POSE DE ATAQUE (ver HERO_FRAMES.attack).
+ *
+ * Casado com a raiz (`SWING_ROOT_MS`), não com o arco: o arco dura 155ms mais 65 de sumiço, e
+ * deixar a pose até o fim do sumiço mostraria o herói ainda golpeando depois de a lâmina já ter
+ * ido. O que o corpo dele conta é o COMPROMISSO — enquanto os pés estão presos, ele está no golpe;
+ * quando soltam, acabou. Uma coisa só de aprender, dois relógios que terminam juntos.
+ */
+const SWING_POSE_MS = SWING_ROOT_MS;
+/**
  * **O GOLPE VARRE A ÁREA À FRENTE — o bloco 2×3.** O desenho sempre foi uma foice larga em volta
  * do herói e o acerto era UM tile; virou a fileira da frente (3 tiles), e agora são DUAS fileiras:
  * a colada no corpo e a da ponta da lâmina. Seis tiles, até seis corpos no mesmo gesto — que é a
@@ -3157,6 +3166,7 @@ export class GameScene extends Phaser.Scene {
     this.swingLungeTween = undefined;
     this.hero.lungeX = 0;
     this.hero.lungeY = 0;
+    this.hero.attackMs = 0; // nem a pose do golpe atravessa uma morte ou um recomeço
   }
 
   /**
@@ -3293,6 +3303,7 @@ export class GameScene extends Phaser.Scene {
     this.stopBreathing();
     this.movementController?.root(SWING_ROOT_MS);
     this.lungeIntoSwing();
+    this.hero.attackMs = SWING_POSE_MS; // o CORPO entra no golpe, e nao so a lamina
 
     const { x, y } = this.facingTile();
     const armed = this.inventory.has('sword');
@@ -3356,6 +3367,9 @@ export class GameScene extends Phaser.Scene {
     this.attackCooldownMs = SPIN_COOLDOWN_MS;
     this.stopBreathing();
     this.movementController?.root(SPIN_ROOT_MS);
+    // O giro segura a pose por toda a raiz dele (260ms, mais longa que a do toque): o gesto e maior
+    // e o corpo tem de ficar nele o tempo todo, ou o heroi volta ao repouso com a lamina ainda no ar.
+    this.hero.attackMs = SPIN_ROOT_MS;
     this.hideBackItemDuringSwing(SPIN_COOLDOWN_MS);
 
     if (this.swordSlash && this.camera) {
@@ -3427,9 +3441,26 @@ export class GameScene extends Phaser.Scene {
   private sweepArc(tiles: Array<{ x: number; y: number }>, weapon: 'sword' | 'fist' | 'spin'): void {
     let hitSpoken = false;
     let refusalSpoken = false;
+    /**
+     * UM GOLPE POR CORPO, e este conjunto é o que finalmente torna essa frase verdadeira.
+     *
+     * O código garantia um corpo por TILE, que não é a mesma coisa — porque o acerto MOVE o corpo,
+     * e o arco é varrido em ordem. Um bicho no tile da frente (`[1,0]`) é arremessado para
+     * `[2,0]`, que é justamente o tile seguinte da lista: o laço o encontrava de novo, agora dentro
+     * dos próprios i-frames, e desenhava o anel de RECUSA em cima do corpo que a mesma espadada
+     * acabou de acertar. Uma espadada dizia "acertei" e "resvalou" sobre o mesmo bicho — e o anel
+     * frio é o sinal de "espere, ele está piscando", ou seja, ensinava exatamente o contrário do
+     * que tinha acabado de acontecer.
+     *
+     * Ficou invisível por muito tempo por acidente: o anel era gasto pelo orçamento de voz do
+     * gesto (`echo`), então o segundo encontro caía calado. Ao separar as duas vozes — para que uma
+     * recusa legítima nunca fosse silenciada por um acerto — o defeito apareceu.
+     */
+    const resolved = new Set<EnemyBase>();
     for (const tile of tiles) {
       const enemy = this.enemyManager?.getEnemyAt(tile.x, tile.y);
-      if (!enemy) continue;
+      if (!enemy || resolved.has(enemy)) continue;
+      resolved.add(enemy);
       // Ainda saindo do chao: a caveira e invulneravel e o golpe RESVALA — anel frio e clarao
       // palido, nunca o pacote de impacto (que faria um golpe negado parecer um golpe certeiro).
       if (enemy.isSpawning) {
@@ -3605,6 +3636,10 @@ export class GameScene extends Phaser.Scene {
       // de um gesto que nao e uma briga.
       this.movementController?.root(SWING_ROOT_MS);
       this.lungeIntoSwing();
+      // O corpo entra no golpe do B tambem — mas SO neste ramo. As outras coisas que o B balanca
+      // (o machado na arvore, a picareta na rocha) tem gesto proprio, e por cima: um golpe de cima
+      // com a pose de um golpe horizontal seriam duas animacoes discordando no mesmo frame.
+      this.hero.attackMs = SWING_POSE_MS;
       if (enemy.isSpawning) {
         this.swingHeld(wx, wy);
         enemy.flashImmune();
@@ -4130,7 +4165,9 @@ export class GameScene extends Phaser.Scene {
       this.spawnGuardSpark(wx, wy, guardX, guardY);
       if (!refusalSpoken) {
         getSoundManager().playGuardBlock();
-        this.world3d?.shake(50, 0.035);
+        // O baque inclina na direcao do GOLPE (heroi -> corpo), que e o inverso de `guardX/guardY`:
+        // a camera acompanha a lamina indo, mesmo quando ela nao passa.
+        this.world3d?.shake(50, 0.035, -guardX, -guardY);
         this.triggerHitstop(GUARD_HITSTOP_MS);
       }
       return 'refused';
@@ -4179,7 +4216,7 @@ export class GameScene extends Phaser.Scene {
         this.spawnSlamDust(wx + Math.sign(dx) * 0.5, wy + Math.sign(dy) * 0.5);
         if (!hitSpoken) {
           this.triggerHitstop(90);
-          this.world3d?.shake(120, 0.12);
+          this.world3d?.shake(120, 0.12, dx, dy); // a camera vai junto com o corpo contra a parede
           getSoundManager().playBodySlam();
         }
       }
@@ -4212,7 +4249,8 @@ export class GameScene extends Phaser.Scene {
     // herdar o baque leve do arranhao do primeiro.
     const lethal = !enemy.isAlive;
     this.spawnHitSpark(wx, wy, lethal, dx, dy);
-    this.world3d?.shake(lethal ? 150 : 90, lethal ? 0.15 : 0.09);
+    // A mesma direcao das faiscas: o baque sai PARA FORA do golpe, e nao para um lado sorteado.
+    this.world3d?.shake(lethal ? 150 : 90, lethal ? 0.15 : 0.09, dx, dy);
     this.triggerHitstop(lethal ? 110 : 60);
     if (lethal) {
       if (!hitSpoken) getSoundManager().playEnemyDeath();
@@ -6688,7 +6726,10 @@ export class GameScene extends Phaser.Scene {
   private playShieldBlock(fromX: number, fromY: number): void {
     this.spawnDeflect(fromX, fromY);
     getSoundManager().playGuardBlock();
-    this.world3d?.shake(60, 0.04);
+    // Na direcao do VOO da bala (de onde ela veio para o heroi): o escudo aparou, mas o empurrao
+    // que ela trazia continua sendo dela.
+    this.world3d?.shake(60, 0.04,
+      this.playerWorld.worldX - fromX, this.playerWorld.worldY - fromY);
     this.hero.tint = 0xbcd4ff;
     this.time.delayedCall(90, () => { this.hero.tint = null; });
   }

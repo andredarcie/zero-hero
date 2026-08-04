@@ -1,0 +1,8 @@
+hero-attack: 2 frame(s) — 0 fail, 1 warn
+  [info] new-color: frame 0: #b2b2b2 is new but declared in allowNewColors
+  [warn] near-duplicate: frame 0: #1d2b53 and #1b284f differ by d=5.4 — invisible at 1x, merge them
+  [info] bbox: frame 0: content 14x15 at (1,1), coverage 59%
+  [info] new-color: frame 1: #b2b2b2 is new but declared in allowNewColors
+  [info] bbox: frame 1: content 14x16 at (0,0), coverage 66%
+  frame 0: #1d2b53×97 #223467×21 #008751×8 #00985b×7 #1b284f×7 #b2b2b2×6 #027849×3 #c2c3c7×2
+  frame 1: #008751×69 #1d2b53×59 #223467×16 #027849×11 #00985b×7 #b2b2b2×6 #c2c3c7×2

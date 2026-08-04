@@ -78,6 +78,13 @@ export default {
       s.playerHealth = s.playerMaxHealth;
       s.playerInvincible = false;
       s.invincibleTimer = 0;
+      // ATORDOAMENTO ZERADO. Um golpe recebido custa 240ms de botao fechado (PLAYER_STAGGER_MS), e
+      // o buffer de entrada dura 130 — entao um `driver.attack()` disparado com o heroi atordoado
+      // e simplesmente PERDIDO. Como varios blocos daqui soltam uma caveira sem congelar (para
+      // medir atordoamento e guarda de verdade), ela pode acertar o heroi entre dois passos do
+      // cenario e engolir o proximo golpe. Sem esta linha, o teste flakeia por uma regra do jogo
+      // que ele nao esta medindo.
+      s.playerStaggerMs = 0;
       s.creatureTurnGraceUntilMs = 0;
       s.attackCooldownMs = 0;
       if (wantSword) s.inventory.add('sword');
@@ -117,6 +124,7 @@ export default {
         s.playerHealth = s.playerMaxHealth;
         s.playerInvincible = false;
         s.invincibleTimer = 0;
+        s.playerStaggerMs = 0; // ver `reset`: atordoado, o proximo golpe do cenario se perde
         s.creatureTurnGraceUntilMs = 0;
       }, [offsets, HERO.x, HERO.y, freeze]);
       await driver.settle(150);

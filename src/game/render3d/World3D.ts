@@ -97,6 +97,21 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 const VOID_MARGIN_CHUNKS = 1;
 
 /**
+ * O BAQUE DIRECIONAL (ver `shake`): quanto do impacto é uma INCLINAÇÃO na direção do golpe e
+ * quanto continua sendo o chacoalho aleatório.
+ *
+ * A inclinação é a menor das duas de propósito. O que um impacto tem a dizer sobre si é sobretudo
+ * "aconteceu", e só depois "veio dali" — uma câmera que salta forte para um lado a cada golpe
+ * cansa em trinta segundos, e o combate deste jogo acerta muitas vezes por briga. Com 0,55 contra
+ * 0,7, a direção aparece como um viés que se lê sem se notar.
+ *
+ * Um tremor SEM direção não passa por nenhuma das duas: ele mantém o chacoalho cheio (fator 1) e
+ * sai idêntico ao que sempre foi — a bomba, a pedra quebrando e o portão não mudaram um pixel.
+ */
+const SHAKE_LEAN = 0.55;
+const SHAKE_RATTLE = 0.7;
+
+/**
  * Which of the three sea paintings a given ocean tile wears. A cheap integer hash of the
  * coordinate — deterministic, so the same tile is the same variant on every boot, which is what
  * keeps the reference screenshots byte-identical between runs.
@@ -687,6 +702,9 @@ export class World3D {
   private shakeMs = 0;
   private shakeDurMs = 1;
   private shakeAmp = 0;
+  /** Para onde o baque inclina, normalizado em espaco de tile. (0,0) = tremor sem direcao. */
+  private shakeDirX = 0;
+  private shakeDirY = 0;
   private viewOffsetX = 0;
   private viewOffsetY = 0;
   private appliedPixelScale = 0;
@@ -2562,8 +2580,19 @@ export class World3D {
     const sway = this.params.camSway;
     const swayX = Math.sin(this.elapsed * 0.23) * sway;
     const swayY = Math.sin(this.elapsed * 0.31 + 1.7) * sway * 0.6;
-    const ox = swayX + (k > 0 ? (Math.random() * 2 - 1) * k : 0);
-    const oy = swayY + (k > 0 ? (Math.random() * 2 - 1) * k : 0);
+    // A DIRECAO DO BAQUE (ver shake). Sem direcao, `lean` e zero e `rattle` vale 1 — o tremor sai
+    // identico ao de sempre, sem uma conta a mais no caminho quente.
+    //
+    // O eixo `y` do tile vira o eixo VERTICAL da tela e nao a profundidade, de proposito: o que se
+    // quer aqui e a tela pular na direcao do golpe, e mexer na profundidade so mudaria a escala do
+    // mundo por um instante (um zoom, nao um baque).
+    const dirX = this.shakeDirX;
+    const dirY = this.shakeDirY;
+    const aimed = dirX !== 0 || dirY !== 0;
+    const rattle = aimed ? SHAKE_RATTLE : 1;
+    const lean = aimed ? SHAKE_LEAN : 0;
+    const ox = swayX + (k > 0 ? k * (dirX * lean + (Math.random() * 2 - 1) * rattle) : 0);
+    const oy = swayY + (k > 0 ? k * (dirY * lean + (Math.random() * 2 - 1) * rattle) : 0);
     this.camera.position.set(
       this.camTarget.x + ox,
       this.camTarget.y + this.params.camHeight + oy,
@@ -2577,12 +2606,25 @@ export class World3D {
    * Impact kick on the world camera, in TILES (a hit ~0.05, death ~0.3). The 3D world is
    * the diorama now, so a Phaser camera shake would only jolt the UI layer above it.
    */
-  public shake(durationMs: number, amplitudeTiles: number): void {
+  /**
+   * O baque de impacto. `dirX/dirY` sao OPCIONAIS e vem em espaco de TILE (o mesmo par que o golpe
+   * usa): com eles a camera ganha um empurrao naquela direcao por cima do chacoalho; sem eles o
+   * tremor e exatamente o de antes — aleatorio nos dois eixos, sem uma unica conta a mais.
+   *
+   * A parte direcional e uma INCLINACAO e nao um solavanco: o chacoalho continua sendo a maior
+   * parte do movimento (ver SHAKE_LEAN/SHAKE_RATTLE). Um golpe vindo do oeste e um vindo do leste
+   * desenhavam o mesmo tremor, e a direcao e a unica coisa que um impacto tem a dizer sobre si
+   * alem de "aconteceu" — mas exagerar isso vira enjoo de camera, que e o defeito oposto e pior.
+   */
+  public shake(durationMs: number, amplitudeTiles: number, dirX = 0, dirY = 0): void {
     // A landed hit during a fading shake must not cut it short — keep the stronger kick.
     if (this.shakeMs > 0 && amplitudeTiles < this.shakeAmp * (this.shakeMs / this.shakeDurMs)) return;
     this.shakeMs = durationMs;
     this.shakeDurMs = Math.max(1, durationMs);
     this.shakeAmp = amplitudeTiles;
+    const len = Math.hypot(dirX, dirY);
+    this.shakeDirX = len > 1e-4 ? dirX / len : 0;
+    this.shakeDirY = len > 1e-4 ? dirY / len : 0;
   }
 
   /**

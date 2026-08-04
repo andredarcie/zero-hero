@@ -75,6 +75,15 @@ export interface HeroView {
    */
   lungeX: number;
   lungeY: number;
+  /**
+   * Quanto tempo ainda resta da POSE DE ATAQUE, em ms (0 = não está golpeando).
+   *
+   * É um relógio e não um booleano porque quem liga a pose (o golpe) e quem a desliga (o tempo)
+   * são coisas diferentes: o botão não sabe quando o gesto acaba, e amarrar o desligamento a um
+   * `delayedCall` deixaria a pose presa se um segundo golpe saísse antes do primeiro terminar.
+   * Contado em `tickHeroView`, junto com o resto do que anima o corpo.
+   */
+  attackMs: number;
 }
 
 /** Front-facing cycle. The sides borrow it flipped — at 16px that reads fine. */
@@ -103,6 +112,7 @@ export const createHeroView = (): HeroView => ({
   spin: 0,
   lungeX: 0,
   lungeY: 0,
+  attackMs: 0,
 });
 
 /**
@@ -132,6 +142,7 @@ export const resetHeroView = (hero: HeroView): void => {
   hero.spin = born.spin;
   hero.lungeX = born.lungeX;
   hero.lungeY = born.lungeY;
+  hero.attackMs = born.attackMs;
 };
 
 /** Tiles covered by one frame of the cycle. Two frames = one footfall, four = a full stride. */
@@ -148,7 +159,29 @@ const BOB_RISE = 0.35;
  * Driven by `walkDist`, so it is the hero's *movement* that turns his legs over rather than a
  * wall clock that happens to run alongside it.
  */
-export const tickHeroView = (hero: HeroView, _deltaMs: number): void => {
+export const tickHeroView = (hero: HeroView, deltaMs: number): void => {
+  /**
+   * A POSE DE ATAQUE GANHA DE TUDO, e é por isso que ela é a primeira coisa aqui.
+   *
+   * O frame do herói é escrito por três donos: o ciclo de andar (logo abaixo), o `setFacing` do
+   * controlador quando ele para, e agora o golpe. Os dois primeiros correm ANTES desta função no
+   * frame, então basta ela ter a última palavra — mas só se vier antes da porta do `!walking`,
+   * senão um golpe dado parado seria descartado no `return` de baixo, que é justamente o caso mais
+   * comum (o golpe prende os pés).
+   *
+   * `walkDist` continua andando por baixo: quem golpeia em movimento não perde a fase da perna, e
+   * a passada retoma de onde estava em vez de reiniciar no pé errado.
+   */
+  if (hero.attackMs > 0) {
+    hero.attackMs = Math.max(0, hero.attackMs - deltaMs);
+    // A pose de costas é escolhida pela MESMA fonte que o andar usa para escolher o ciclo dele —
+    // não por uma cópia da direção. Duas leituras de "para onde ele olha" podem discordar por um
+    // frame, e discordar aqui seria o herói golpeando de barriga enquanto anda para o norte.
+    hero.frame = hero.walkFrames === WALK_CYCLE_FRAMES_UP ? HERO_FRAMES.attackUp : HERO_FRAMES.attack;
+    hero.bobLift = 0;
+    return;
+  }
+
   if (!hero.walking) {
     hero.bobLift = 0;
     return;

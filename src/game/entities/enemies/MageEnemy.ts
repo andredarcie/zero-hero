@@ -109,6 +109,24 @@ export class MageEnemy extends WalkerEnemy {
   // instante em que o jogador resolvesse o problema que ele propoe, e a peca nao tem nada a dizer
   // depois disso.
 
+  /**
+   * UM AVISO DE CADA VEZ. Conjurando, ele NAO arma o golpe de corpo.
+   *
+   * Os dois gestos telegrafavam ao mesmo tempo: `canStrike` so olhava a distancia, entao um mago
+   * encurralado ficava com a arte de conjuracao no corpo (mais o som do feitico carregando) e, por
+   * cima, a piscada vermelha, a pose recuada e o anel fechando no chao do golpe de corpo. Dois
+   * avisos simultaneos no mesmo bicho nao somam informacao — eles se anulam, porque o jogador nao
+   * tem como saber a QUAL dos dois esta respondendo, e a resposta de cada um e diferente (sair da
+   * linha do tiro, ou sair do tile mirado).
+   *
+   * Ele nao perde o golpe: o relogio de ataque continua correndo e a proxima janela pega o soco,
+   * ja com a conjuracao resolvida. So nao acumula os dois na mesma respiracao.
+   */
+  protected override canStrike(ctx: StepContext): boolean {
+    if (this.castMs > 0) return false;
+    return super.canStrike(ctx);
+  }
+
   /** O tom frio e a cor de BASE dele: toda piscada volta pra ela, nunca pro branco do NPC. */
   protected override restoreTint(): void {
     // O frio dele é a identidade (a arte é dividida com o NPC mago); o escurecimento de ferido

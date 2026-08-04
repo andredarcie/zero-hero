@@ -78,6 +78,18 @@ export const HERO_FRAMES = {
   idleUp: 4,
   walkStart: 0,
   walkEnd: 3,
+  /**
+   * AS POSES DE ATAQUE (Sprite Factory, acrescentadas a folha numa linha nova — nenhum id acima
+   * mudou). Duas, pela mesma regra do andar: o heroi e desenhado de FRENTE para baixo e para os
+   * lados (espelhado) e tem uma unica frame de costas para cima, entao uma pose so apareceria de
+   * barriga enquanto ele golpeia para o norte.
+   *
+   * Existem porque o heroi era o unico corpo do combate que nao se mexia ao atacar: todo bicho se
+   * agacha ao armar, a caveira levanta um osso, a espada tem arco e investida — e o sprite dele
+   * ficava na pose de parado enquanto o gesto inteiro acontecia ao lado.
+   */
+  attack: 5,
+  attackUp: 6,
 } as const;
 
 export const TIMINGS = {
