@@ -62,7 +62,6 @@ export class TurretEnemy extends EnemyBase {
       .setPosition(worldX, worldY)
       .setDisplaySize(1, 1);
     super(scene, worldX, worldY, MAX_HEALTH, sprite);
-    this.healthBarVisible = false;
     this.fireTimer = Phaser.Math.Between(0, FIRE_INTERVAL_MS);
   }
 
@@ -94,6 +93,23 @@ export class TurretEnemy extends EnemyBase {
   public override takeDamage(amount = 1): boolean {
     if (this.isSpawning) return false;
     return super.takeDamage(amount);
+  }
+
+  /**
+   * O AZUL DA CARGA SOBREVIVE A UMA PANCADA.
+   *
+   * Todo caminho de piscada volta pela `restoreTint`, e a dela limpava o tint — entao acertar a
+   * torreta no meio da carga APAGAVA o unico aviso de que o leque vinha, e as seis balas saiam de
+   * uma maquina que parecia adormecida. Um aviso que o jogador desliga batendo e pior que aviso
+   * nenhum: ele ensina que bater e seguro justamente no instante em que nao e.
+   *
+   * E o mesmo remendo que o mago ja tinha (o tom frio dele e identidade); aqui o tom e ESTADO, e
+   * por isso ele so vale enquanto a carga corre. O escurecimento de ferido continua por baixo dos
+   * dois — `woundedShade` multiplica a cor de base em vez de substitui-la.
+   */
+  protected override restoreTint(): void {
+    if (this.chargeMs > 0) this.sprite.setTint(this.woundedShade(CHARGE_TINT));
+    else super.restoreTint();
   }
 
   public override update(
@@ -137,8 +153,11 @@ export class TurretEnemy extends EnemyBase {
       this.fireTimer = 0;
       this.chargeMs = CHARGE_MS;
       // Tint MULTIPLICADO e nao `setTintFill`: preencher de solido apaga a arte e le como
-      // "tomei dano", que e a leitura errada. Ela nao pisca, ela ESQUENTA de azul.
-      this.sprite.setTint(CHARGE_TINT);
+      // "tomei dano", que e a leitura errada. Ela nao pisca, ela ESQUENTA de azul. E entra pela
+      // `restoreTint` (com a carga ja marcada acima) em vez de escrever a cor na mao, para que o
+      // escurecimento de ferido continue por baixo dela: uma torreta quase morta que carrega tem
+      // de continuar lendo como quase morta.
+      this.restoreTint();
       getSoundManager().playTurretCharge();
     }
 

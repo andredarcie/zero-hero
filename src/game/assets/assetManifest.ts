@@ -24,6 +24,14 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: os pedacos em que a caveira se parte ao morrer ([0] cabeca, [1] osso
+    // quebrado). Sheet de duas frames em linha — por isso aqui, e nao na lista de imagens.
+    key: ASSET_KEYS.undeadBits,
+    path: '/assets/characters/enemies/undead/undead_bits.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     key: ASSET_KEYS.forestTileset,
     path: '/assets/environment/tilesets/forest_tile_set.png',
     frameWidth: TILESET_FRAME_SIZE,
@@ -236,6 +244,12 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.undeadBorn4, path: '/assets/characters/enemies/undead/undead_born4.png' },
   { key: ASSET_KEYS.undeadBorn5, path: '/assets/characters/enemies/undead/undead_born5.png' },
   { key: ASSET_KEYS.undeadBorn6, path: '/assets/characters/enemies/undead/undead_born6.png' },
+  // Sprite Factory: a arma da caveira. (Os PEDACOS do desmonte sao um sheet de duas frames, entao
+  // vivem em SHARED_SPRITESHEETS, la em cima.)
+  { key: ASSET_KEYS.undeadBone, path: '/assets/characters/enemies/undead/undead_bone.png' },
+  // A ossada: a frame 27 do forest_tile_set recortada pixel a pixel para uma textura PROPRIA — ver
+  // ASSET_KEYS.bones. A arte e a mesma; o que muda e o filtro com que ela e amostrada.
+  { key: ASSET_KEYS.bones, path: '/assets/environment/props/bones.png' },
   {
     // Sprite Factory: o balao de pensamento com a placa de pressao acesa dentro.
     key: ASSET_KEYS.thoughtPlate,

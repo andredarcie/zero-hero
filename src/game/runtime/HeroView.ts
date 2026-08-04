@@ -62,6 +62,19 @@ export interface HeroView {
    * lack of a third axis is the right answer instead of a limitation.
    */
   spin: number;
+  /**
+   * A INVESTIDA DO GOLPE, em tiles — o corpo do herói indo atrás da lâmina.
+   *
+   * Ele não fazia nada ao golpear: a espada varria e o corpo ficava parado, então os 160ms em que
+   * o golpe prende os pés (SWING_ROOT_MS) liam como TRAVAMENTO em vez de esforço. Um deslocamento
+   * curto para a frente, que sai rápido e volta devagar, é o que transforma a raiz em peso.
+   *
+   * Em tiles e aplicado na POSIÇÃO do billboard (syncHeroBillboard), nunca no `x/y` de tela: aquele
+   * par pertence ao arremesso de dano, que tem o próprio tween e o próprio repin — os dois brigando
+   * pelo mesmo campo é o tipo de bug que só aparece quando se apanha no meio de um golpe.
+   */
+  lungeX: number;
+  lungeY: number;
 }
 
 /** Front-facing cycle. The sides borrow it flipped — at 16px that reads fine. */
@@ -88,6 +101,8 @@ export const createHeroView = (): HeroView => ({
   bobLift: 0,
   lift: 0,
   spin: 0,
+  lungeX: 0,
+  lungeY: 0,
 });
 
 /**
@@ -115,6 +130,8 @@ export const resetHeroView = (hero: HeroView): void => {
   hero.bobLift = born.bobLift;
   hero.lift = born.lift;
   hero.spin = born.spin;
+  hero.lungeX = born.lungeX;
+  hero.lungeY = born.lungeY;
 };
 
 /** Tiles covered by one frame of the cycle. Two frames = one footfall, four = a full stride. */

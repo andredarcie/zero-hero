@@ -24,7 +24,7 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
  */
 
 const MAX_HEALTH = 2;
-const CRAWL_INTERVAL = 700;
+const CRAWL_INTERVAL = 500;
 const POUNCE_INTERVAL = 120;
 const ATTACK_INTERVAL = 1000;
 const WINDUP_MS = 320;

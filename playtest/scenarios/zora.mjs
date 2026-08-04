@@ -217,6 +217,7 @@ export default {
     const underwater = await page.evaluate((rx) => {
       const z = window.__scene.enemyManager.getAliveEnemies()
         .find((e) => e.kind === 'zora' && e.worldX === rx);
+      z.tickHurtInvuln(9999); // fura os i-frames
       const killed = z.takeDamage(999);
       return { killed, stillAlive: z.isAlive, phase: z.zoraPhase };
     }, RIVER_X);
@@ -230,6 +231,7 @@ export default {
     const surfaced = await page.evaluate((rx) => {
       const z = window.__scene.enemyManager.getAliveEnemies()
         .find((e) => e.kind === 'zora' && e.worldX === rx);
+      z.tickHurtInvuln(9999); // fura os i-frames
       const killed = z.takeDamage(999);
       return { killed, stillAlive: z.isAlive, phase: z.zoraPhase };
     }, RIVER_X);

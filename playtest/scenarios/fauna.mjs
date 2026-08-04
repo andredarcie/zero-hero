@@ -288,6 +288,7 @@ export default {
     const killed = await page.evaluate(() => {
       const big = window.__scene.enemyManager.getAliveEnemies().find((e) => e.kind === 'bigslime');
       const at = { x: big.worldX, y: big.worldY };
+      big.tickHurtInvuln(9999); // fura os i-frames: aqui a morte e o instrumento, nao o assunto
       big.takeDamage(999);
       return at;
     });

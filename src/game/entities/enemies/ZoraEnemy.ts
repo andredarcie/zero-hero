@@ -113,7 +113,6 @@ export class ZoraEnemy extends EnemyBase {
     super(scene, worldX, worldY, MAX_HEALTH, sprite);
     this.homeX = worldX;
     this.homeY = worldY;
-    this.healthBarVisible = false;
     this.sprite.setVisible(false); // ele comeca embaixo d'agua: quem aparece e a esteira
     this.wake = world3d()
       // ADITIVO, como a fissura fria da caveira: os dois sao telegrafo de CHAO, e telegrafo que a

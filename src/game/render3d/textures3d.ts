@@ -63,6 +63,22 @@ const DEFS: Record<string, SheetDef> = {
   'undead-born-4': { url: `${A}/characters/enemies/undead/undead_born4.png` },
   'undead-born-5': { url: `${A}/characters/enemies/undead/undead_born5.png` },
   'undead-born-6': { url: `${A}/characters/enemies/undead/undead_born6.png` },
+  // A arma da caveira, a ossada que ela deixa e os pedacos em que ela se parte (Sprite Factory).
+  // Os pedacos sao um sheet de duas frames em linha, entao pedem `frameW/frameH`.
+  'undead-bone': { url: `${A}/characters/enemies/undead/undead_bone.png` },
+  'undead-bits': { url: `${A}/characters/enemies/undead/undead_bits.png`, frameW: 16, frameH: 16 },
+  /**
+   * A OSSADA — a frame 27 do `forest-tileset` recortada pixel a pixel para uma textura PROPRIA, e o
+   * recorte existe SO por causa da linha do filtro logo abaixo.
+   *
+   * O tileset e a unica textura do jogo em LINEAR, e com razao: a malha do terreno busca o centro do
+   * texel por conta propria (`zhTexelUv`) e so deixa o filtro agir na costura entre dois tiles, que
+   * e onde ele conserta a escadinha da perspectiva de graca. Um BILLBOARD nao faz essa conta —
+   * amostra o atlas direto —, entao a ossada, que era o unico sprite do jogo desenhado a partir do
+   * tileset, era tambem o unico desenhado BORRADO. Aqui ela e NEAREST como todo o resto do jogo, com
+   * exatamente os mesmos pixels.
+   */
+  bones: { url: `${A}/environment/props/bones.png` },
   'campfire-0': { url: `${A}/effects/fire/sprite_fire0.png` },
   'campfire-1': { url: `${A}/effects/fire/sprite_fire1.png` },
   'campfire-2': { url: `${A}/effects/fire/sprite_fire2.png` },

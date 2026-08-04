@@ -7,16 +7,20 @@ import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_CRACK_TEXTURE, FX_PUFF_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { EnemyKind } from '@/game/world/ScreenContent';
+import { BoneClub } from './BoneClub';
 
 const MAX_HEALTH = 3;
-const MOVE_INTERVAL = 850;
+const MOVE_INTERVAL = 520;
 const ATTACK_INTERVAL = 1200;
-// The attack is TELEGRAPHED: when the timer fires the skull doesn't hit — it locks onto the
-// hero's CURRENT tile, flashes, rears back and holds for this long before striking. Long
-// enough to read and step off the tile (a step takes ~230ms); the strike hits the locked
-// tile, so moving = a dodge, and any damage taken mid-wind-up interrupts the attack.
+/**
+ * O golpe e TELEGRAFADO: estourado o relogio, a caveira nao fere — ela trava o tile em que o
+ * heroi esta AGORA, marca o chao dele, avisa e bate meio segundo depois, naquele tile. Tempo de
+ * sobra pra ler e sair de la (um passo leva ~230ms), e SAIR E A UNICA RESPOSTA: bater nela nao
+ * cancela mais nada, e de frente nem entra (a guarda). A maquinaria toda mora no `EnemyBase` —
+ * ver o bloco "O TELEGRAFO" la —, porque ela e identica a de todo bicho que arma um golpe, e
+ * enquanto morou so no `WalkerEnemy` a caveira era a unica especie sem nada disso.
+ */
 const WINDUP_MS = 500;
-const WINDUP_FLASH = 0xff4a3d; // hot warning red — distinct from hurt (texture) and immune (pale blue)
 // Skulls are summoned by the dark to hunt the hero, so they chase from farther than the
 // old placed undead did (the spawn ring is 4-7 tiles out; see UndeadSpawnDirector).
 // Exported because the pressure-plate lure uses the SAME radius: "what a skull can see" has to
@@ -54,6 +58,24 @@ const PLATE_PATIENCE_MS = 5000;
 const THOUGHT_SIZE_TILES = 1.05;
 const THOUGHT_ELEVATION_TILES = 1.45;
 
+/**
+ * O DESMONTE — em quantas peças ela se parte, e como elas voam (ver `onCrumble`).
+ *
+ * Um esqueleto tem a morte mais óbvia que existe, e ela não estava sendo usada: a caveira sumia com
+ * o gesto genérico do `EnemyBase` (incha e some girando), que serve para qualquer corpo justamente
+ * porque não diz nada sobre nenhum. A espécie mais vista do jogo morria com a menor frase dele.
+ */
+const PIECE_COUNT = 4;
+const PIECE_SIZE = 0.34;
+/** O quanto uma peça se afasta do corpo, em tiles, e a altura do arco que ela descreve. */
+const PIECE_SPREAD = 0.5;
+const PIECE_PEAK = 0.72;
+/** Subir é rápido (a pancada joga), cair é o dobro (a gravidade demora). */
+const PIECE_RISE_MS = 210;
+const PIECE_FALL_MS = 360;
+/** Quanto a peça ainda fica no chão depois de pousar, antes de o escuro levá-la. */
+const PIECE_LINGER_MS = 240;
+
 export class UndeadEnemy extends EnemyBase {
   protected override hurtTexture = ASSET_KEYS.undeadHurt;
 
@@ -71,10 +93,6 @@ export class UndeadEnemy extends EnemyBase {
   private bornTimer = 0;
   private sunsetTimer = 0;
   private readonly sunsetDelay: number;
-  // Attack wind-up: >0 = committed to a strike on (windupTargetX/Y), counting down.
-  private windupMs = 0;
-  private windupTargetX = 0;
-  private windupTargetY = 0;
   // The pressure-plate fixation. EnemyManager owns the assignment (one skull per plate); the
   // skull owns what it DOES about it: it stops hunting the hero entirely and marches there.
   private plate?: { x: number; y: number };
@@ -83,19 +101,23 @@ export class UndeadEnemy extends EnemyBase {
   private plateBestDist = Infinity;
   private thought?: Phaser.GameObjects.Container;
   private thoughtTween?: Phaser.Tweens.Tween;
+  /**
+   * O OSSO NA MÃO — a arma dela (ver BoneClub). Ela telegrafava o golpe com um clarão, uma pose
+   * recuada e um anel no chão, e batia com NADA: o corpo que ensinou o combate deste jogo era o
+   * único que acertava com a mão vazia.
+   */
+  private bone?: BoneClub;
 
   /**
    * O que ELA deixa no chao ao cair — a ossada (ver CorpseDecals). Vem de fora pelo mesmo motivo
    * que o `splitter` do slime grande: quem sabe quantas ossadas o mundo aguenta e o dono da lista,
    * nao o corpo que acabou de morrer. Opcional porque um teste pode fazer uma caveira sozinha.
    */
-  private readonly onCorpse?: (worldX: number, worldY: number) => void;
 
   public constructor(
     scene: Phaser.Scene,
     worldX: number,
     worldY: number,
-    onCorpse?: (worldX: number, worldY: number) => void,
   ) {
     const sprite = world3d()
       .addBillboard(UNDEAD_BORN_FRAME_KEYS[0], 0, { groundShadow: { rx: 0.36, rz: 0.34, alpha: 0.32 } })
@@ -103,7 +125,6 @@ export class UndeadEnemy extends EnemyBase {
       .setDisplaySize(1, 1);
 
     super(scene, worldX, worldY, MAX_HEALTH, sprite);
-    this.onCorpse = onCorpse;
 
     // Through the telegraph the cracking ground is the only actor — the skull stays hidden.
     this.sprite.setVisible(false);
@@ -114,7 +135,12 @@ export class UndeadEnemy extends EnemyBase {
       .setFlipX(Math.random() < 0.5);
     this.applyCrackStage(0);
 
-    this.healthBarVisible = false;
+    // A arma nasce junto e fica ESCONDIDA: durante a fenda e a saída do chão o corpo ainda não
+    // existe na tela, e um osso pairando sozinho sobre uma rachadura entregaria o bicho antes do
+    // tempo — a chegada é o telegrafo mais longo do jogo justamente para dar tempo de fugir dela.
+    this.bone = new BoneClub(scene, worldX, worldY);
+    this.bone.setVisible(false);
+
     this.moveTimer = Phaser.Math.Between(0, MOVE_INTERVAL);
     this.attackTimer = Phaser.Math.Between(0, ATTACK_INTERVAL);
     this.sunsetDelay = Phaser.Math.Between(SUNSET_MIN_MS, SUNSET_MAX_MS);
@@ -130,6 +156,41 @@ export class UndeadEnemy extends EnemyBase {
 
   public override get isSpawning(): boolean {
     return this.spawning;
+  }
+
+  /**
+   * A CAVEIRA NÃO ESCURECE COM O DANO — e ela é a única espécie que não escurece.
+   *
+   * `woundedShade` é a substituta da barra de vida deste jogo: o corpo perde brilho conforme perde
+   * vida (ver EnemyBase). A ideia está certa e funciona no resto do bestiário, mas ela é
+   * multiplicativa — e multiplicar castiga exatamente quem já é claro. A arte da caveira é osso
+   * (#b5b5b5), o tom mais claro do bestiário inteiro, e no último ponto de vida ela caía de **71%
+   * para 32% de luminância**: menos da metade do brilho, num mundo que a graduação de noite já
+   * escurece. O resultado era o inimigo mais comum do jogo ficando difícil de ver justamente
+   * quando está prestes a morrer — que é o instante em que se precisa mais enxergá-lo.
+   *
+   * O que ela perde é o estado PERSISTENTE de vida. O que continua contando o dano nela: a troca de
+   * textura a cada golpe (`undeadHurt`), a piscada dos i-frames, o arremesso e o atordoamento — e,
+   * com 3 de vida contra 2 de espadada, são dois acertos até cair. É pouca informação a perder por
+   * um corpo que volta a ser legível.
+   *
+   * Devolver a base intacta é o suficiente para desligar tudo: `restoreTint` (aqui e na base)
+   * decide entre `clearTint` e `setTint` lendo justamente este valor — corpo e osso juntos.
+   */
+  protected override woundedShade(base = 0xffffff): number {
+    return base;
+  }
+
+  /**
+   * A ARMA ACOMPANHA O CORPO. Ela não escurece (ver acima), mas o caminho continua ligado: qualquer
+   * tom que o corpo passe a ter — hoje nenhum — tem de valer para o osso também, ou a peça mais
+   * visível do gesto de ameaça seria a única da silhueta com cor própria.
+   */
+  protected override restoreTint(): void {
+    super.restoreTint();
+    const shade = this.woundedShade();
+    if (shade === 0xffffff) this.bone?.clearTint();
+    else this.bone?.setTint(shade);
   }
 
   /**
@@ -161,16 +222,15 @@ export class UndeadEnemy extends EnemyBase {
   // Invulnerable while clawing out of the ground.
   public override takeDamage(amount = 1): boolean {
     if (this.spawning) return false;
-    // A blow landed during the wind-up INTERRUPTS the attack — the reward for reading the
-    // telegraph and striking into it. The attack must be wound up all over again.
-    if (this.windupMs > 0) {
-      this.windupMs = 0;
-      this.attackTimer = 0;
-    }
-    // ...and it SNAPS any plate fixation: whatever the skull wanted, the thing hitting it is
-    // the problem now. The blind window is what makes this real counter-play — without it the
-    // manager would hand the plate straight back on the next frame and the blow would mean
-    // nothing. Note this is the hero's ONLY lever on the lure: he cannot talk it out of it.
+    // O GOLPE ARMADO NAO SE CANCELA MAIS. Um acerto do heroi zerava o windup aqui, e isso caiu
+    // junto com a mesma regra no andarilho e na conjuracao do mago: com dano real, trancar um
+    // corpo em interrupcao vira a estrategia dominante do jogo — bata a cada 260ms e nada nunca
+    // chega a bater em voce. A resposta ao telegrafo volta a ser SAIR DO TILE MIRADO.
+    //
+    // O que o golpe AINDA faz e arrancar a fixacao de placa: whatever the skull wanted, the thing
+    // hitting it is the problem now. The blind window is what makes this real counter-play —
+    // without it the manager would hand the plate straight back on the next frame and the blow
+    // would mean nothing. Note this is the hero's ONLY lever on the lure.
     this.plateBlindMs = PLATE_BLIND_AFTER_HIT_MS;
     this.setPlateTarget(undefined);
     return super.takeDamage(amount);
@@ -212,8 +272,9 @@ export class UndeadEnemy extends EnemyBase {
         this.bornFrame += 1;
         if (this.bornFrame >= UNDEAD_BORN_FRAME_KEYS.length) {
           this.spawning = false;
-          this.healthBarVisible = true;
           this.sprite.setTexture(this.normalTexture);
+          // De pé e armada: o osso aparece com o corpo, nunca antes dele.
+          this.bone?.setVisible(true);
         } else {
           this.sprite.setTexture(UNDEAD_BORN_FRAME_KEYS[this.bornFrame]);
         }
@@ -240,22 +301,13 @@ export class UndeadEnemy extends EnemyBase {
     // MUNDO (o heroi achou uma fogueira, o golpe passou), e nao acoes que ela toma.
     if (this.tickHitstun(delta)) return false;
 
-    // Mid-wind-up: committed to the strike — no moving, no re-arming. When the countdown
-    // ends the blow lands ONLY if the hero is still on the tile it locked onto: stepping
-    // off is a dodge, and the skull snaps at empty air instead. A fixation that arrives
-    // mid-wind-up does NOT cancel it: the skull already committed, and letting the blow
-    // resolve costs 500ms and saves unwinding the held pose the tween left behind.
-    if (this.windupMs > 0) {
-      this.windupMs -= delta;
-      if (this.windupMs > 0) return false;
-      const struck =
-        playerWorldX === this.windupTargetX &&
-        playerWorldY === this.windupTargetY &&
-        !playerHasTorch;
-      if (struck) return true; // GameScene resolves the hit (damage, lunge, shake)
-      this.whiff();
-      return false;
-    }
+    // Mid-wind-up: committed to the strike — no moving, no re-arming. When the countdown ends the
+    // blow lands ONLY if the hero is still on the tile it locked onto (stepping off is a dodge)
+    // and the tile is still within reach — being shoved a tile back by a blow makes it whiff. A
+    // fixation that arrives mid-wind-up does NOT cancel it: the skull already committed.
+    // Ver EnemyBase.tickWindup: a maquinaria e a mesma de todo bicho que arma um golpe.
+    const windup = this.tickWindup(delta, playerWorldX, playerWorldY, playerHasTorch);
+    if (windup !== 'idle') return windup === 'strike';
 
     // FIXATED ON A PLATE: for as long as this lasts the hero simply stops existing. The skull
     // does not chase him, does not back away from his torch and does not strike even from an
@@ -321,34 +373,33 @@ export class UndeadEnemy extends EnemyBase {
       this.attackTimer = 0;
       // The torch keeps the hero untouchable: no undead dares strike its bearer.
       if (dist === 1 && !playerHasTorch) {
-        this.startWindup(playerWorldX, playerWorldY);
+        this.startWindup(playerWorldX, playerWorldY, WINDUP_MS);
       }
     }
 
     return false;
   }
 
-  // Lock onto the hero's tile and telegraph the strike: warning flash + a held rear-back
-  // pose + a rising hiss. The strike itself fires WINDUP_MS later, in update().
-  private startWindup(targetX: number, targetY: number): void {
-    this.windupMs = WINDUP_MS;
-    this.windupTargetX = targetX;
-    this.windupTargetY = targetY;
-    getSoundManager().playUndeadWindup();
-    this.sprite.setTintFill(WINDUP_FLASH);
-    this.scene.time.delayedCall(90, () => {
-      if (this.isAlive && this.sprite.active) this.sprite.clearTint();
-    });
-    this.poseWindup(Math.sign(this.worldX - targetX), Math.sign(this.worldY - targetY), WINDUP_MS * 0.85);
+  /**
+   * ARMANDO: o corpo faz a pose recuada (o `super`) e o OSSO sobe atrás da cabeça, do lado oposto
+   * ao alvo. As duas metades do aviso dizem a mesma coisa, e é isso que faz um telegrafo — a arma
+   * levantada é a promessa que o clarão e o anel no chão já estavam fazendo sozinhos.
+   */
+  protected override startWindup(targetX: number, targetY: number, durationMs: number): void {
+    super.startWindup(targetX, targetY, durationMs);
+    this.bone?.rear(targetX - this.worldX, targetY - this.worldY, durationMs);
   }
 
-  // The hero dodged (or raised the torch) during the wind-up: the skull still commits,
-  // lunging at the tile it locked onto and biting nothing.
-  private whiff(): void {
-    const dx = Math.sign(this.windupTargetX - this.worldX);
-    const dy = Math.sign(this.windupTargetY - this.worldY);
-    this.triggerKnockback(dx, dy); // the lunge-and-settle doubles as the miss animation
-    getSoundManager().playUndeadWhiff();
+  /**
+   * O GOLPE SAI — e o osso desaba por cima do tile mirado, tenha o herói continuado ali ou não.
+   *
+   * Ele bate no VAZIO quando o herói esquiva, de propósito e pela mesma razão que o arco do herói
+   * sai mesmo sem acertar: uma arma que só se movesse quando conecta esconderia o alcance dela, e
+   * aqui esconderia também a coisa mais importante que este gesto tem a ensinar — que sair do tile
+   * FUNCIONA. O jogador precisa ver o osso descer onde ele estava.
+   */
+  protected override onWindupRelease(dirX: number, dirY: number): void {
+    this.bone?.strike(dirX, dirY);
   }
 
   /**
@@ -412,6 +463,13 @@ export class UndeadEnemy extends EnemyBase {
    * on purpose — the balloon hanging still while the body slides under it reads as a balloon.
    */
   protected override onRendered(camera: WorldCamera, tileSize: number): void {
+    // O OSSO SEGUE O CORPO DESENHADO, e não o tile lógico: `render` acabou de somar o recuo do
+    // golpe e o deslize do passo na posição do billboard, e é dela que a arma tem de sair. Ancorada
+    // no tile lógico, ela ficaria parada no ar toda vez que a caveira fosse arremessada, e um tile
+    // à frente do corpo durante cada passo — o mesmo defeito que `visualWorld` resolveu no arco do
+    // herói. Aqui a fonte da verdade é o próprio sprite, que já tem tudo somado.
+    this.bone?.follow(this.sprite.x, this.sprite.y);
+
     const thought = this.thought;
     if (!thought?.active) return;
     const anchor = camera.tileToScreen(this.worldX, this.worldY, tileSize, THOUGHT_ELEVATION_TILES);
@@ -473,21 +531,139 @@ export class UndeadEnemy extends EnemyBase {
   public override despawn(): void {
     this.fadeOutCrack();
     this.hideThought();
+    // O escuro reclama os seus INTEIROS — sem desmonte e sem peças: aqui não houve briga nenhuma,
+    // e o osso derrete junto com a mão que o segurava.
+    this.destroyBone();
     super.despawn();
   }
 
   // A skull that dies mid-march must not leave its wish floating over the empty tile.
   /**
-   * Ela cai e DEIXA a ossada. Vai no `onDeath` e nao no `despawn` de proposito: quando o heroi
-   * alcanca a seguranca de uma fogueira o escuro reclama os proprios de volta (o corpo derrete e
-   * some), e ali nao houve briga nenhuma pra registrar. Osso e o que sobra de quem foi MORTO.
+   * A OSSADA nao e mais responsabilidade dela: quem enterra e o EnemyManager, para TODO corpo
+   * morto (ver EnemyBase.corpseMark). A caveira tinha um caminho proprio — um callback recebido no
+   * construtor — de quando ela era a unica especie que deixava marca; dois caminhos para a mesma
+   * coisa e como um deles envelhece errado. A distincao que aquele comentario guardava continua
+   * valendo e agora vale para todos: `die()` marca, `despawn()` nao — quando o heroi alcanca uma
+   * fogueira o escuro reclama os proprios de volta, e ali nao houve briga nenhuma pra registrar.
    */
   protected override onDeath(): void {
     this.hideThought();
-    this.onCorpse?.(this.worldX, this.worldY);
+  }
+
+  /**
+   * ELA DESMONTA — a morte própria da caveira, no pico do desmanche (ver EnemyBase.onCrumble).
+   *
+   * O corpo SOME neste instante e vira quatro peças no ar: a cabeça, o osso que ela empunhava e
+   * dois pedaços quebrados. O gesto genérico continua rodando por baixo (é ele que conta o relógio
+   * da remoção e solta a ossada no chão) — só que num sprite invisível, porque quem conta a morte
+   * agora são as peças.
+   *
+   * As peças se espalham a FAVOR do golpe que matou (`deathDirection`), quando houve um: a caveira
+   * que leva uma espadada do oeste se parte para o leste. Uma explosão simétrica leria como a coisa
+   * tendo se desfeito sozinha, e o que aconteceu foi que alguém bateu nela.
+   */
+  protected override onCrumble(): void {
+    this.sprite.setVisible(false);
+
+    // O osso que ela segurava deixa de ser arma e vira peça: ele continua exatamente de onde a
+    // órbita o deixou, e não do centro do corpo — a arma estava numa ponta do gesto, e vê-la
+    // saltar para o meio da caveira antes de voar seria o único frame falso da cena.
+    const held = this.bone?.release();
+    this.destroyBone();
+
+    const dir = this.deathDirection;
+    for (let i = 0; i < PIECE_COUNT; i++) {
+      // O leque abre a favor do golpe; sem golpe (uma bomba, o escuro), ele vira o círculo inteiro.
+      const base = dir ? Math.atan2(dir.y, dir.x) : Math.PI * 2 * (i / PIECE_COUNT);
+      const ang = base + (dir ? ((i / (PIECE_COUNT - 1)) * 2 - 1) * 1.15 : 0)
+        + (Math.random() - 0.5) * 0.5;
+      // A primeira peça é a CABEÇA (a que o olho segue), a segunda é o osso que ela empunhava, e o
+      // resto são pedaços quebrados.
+      const from = i === 1 && held ? held : undefined;
+      this.spawnDeathPiece(i, ang, from);
+    }
+  }
+
+  /**
+   * Uma peça do desmonte: sai do corpo, sobe num arco, cai e fica um instante no chão.
+   *
+   * O arco são DOIS tweens de elevação e não um só com yoyo, porque subir e cair não duram o mesmo:
+   * a pancada joga a peça para cima depressa e a gravidade a traz de volta devagar. Um yoyo daria
+   * as duas metades simétricas, que é a curva de uma bola quicando em desenho animado e não a de um
+   * osso sendo arremessado.
+   */
+  private spawnDeathPiece(
+    index: number,
+    angle: number,
+    from?: { x: number; y: number; elevation: number; angle: number },
+  ): void {
+    // [0] a cabeça · [1] o fêmur inteiro (o que ela empunhava) · resto: pedaços quebrados.
+    const art = index === 0
+      ? { texture: ASSET_KEYS.undeadBits, frame: 0, size: PIECE_SIZE * 1.15 }
+      : index === 1
+        ? { texture: ASSET_KEYS.undeadBone, frame: 0, size: PIECE_SIZE }
+        : { texture: ASSET_KEYS.undeadBits, frame: 1, size: PIECE_SIZE * 0.85 };
+
+    const startX = from?.x ?? this.worldX;
+    const startY = from?.y ?? this.worldY;
+    const startElev = from?.elevation ?? 0.42;
+    const dist = PIECE_SPREAD * (0.65 + Math.random() * 0.7);
+
+    const piece = world3d()
+      .addBillboard(art.texture, art.frame, { centered: true, alphaTest: 0.02 })
+      .setPosition(startX, startY)
+      .setElevation(startElev)
+      .setDisplaySize(art.size, art.size)
+      .setAngle(from?.angle ?? Phaser.Math.Between(-180, 180));
+
+    const flight = PIECE_RISE_MS + PIECE_FALL_MS;
+    // O voo horizontal e o giro são UM tween só, correndo por cima dos dois de elevação: no ar a
+    // peça não muda de direção nem para de girar só porque chegou ao topo do arco.
+    this.scene.tweens.add({
+      targets: piece,
+      // O `y` anda menos que o `x` pelo mesmo motivo das faíscas de impacto: o plano do chão está
+      // inclinado para longe da câmera, e um espalhamento circular em tiles lê como elipse errada.
+      x: startX + Math.cos(angle) * dist,
+      y: startY + Math.sin(angle) * dist * 0.62,
+      angle: (from?.angle ?? 0) + Phaser.Math.Between(-320, 320),
+      duration: flight,
+      ease: 'Quad.easeOut', // ela perde velocidade no ar; só a queda continua acelerando
+    });
+    this.scene.tweens.add({
+      targets: piece,
+      elevation: startElev + PIECE_PEAK * (0.7 + Math.random() * 0.6),
+      duration: PIECE_RISE_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: piece,
+          elevation: 0.03, // pousa no chão, não dentro dele
+          duration: PIECE_FALL_MS,
+          ease: 'Quad.easeIn',
+          onComplete: () => {
+            // No chão ela PARA de girar e só some — uma peça que continuasse rodando deitada leria
+            // como pião, e o que ela é agora é lixo de osso esperando o escuro levar.
+            this.scene.tweens.add({
+              targets: piece,
+              alpha: 0,
+              duration: PIECE_LINGER_MS,
+              ease: 'Sine.easeIn',
+              onComplete: () => piece.destroy(),
+            });
+          },
+        });
+      },
+    });
+  }
+
+  /** A arma não sobrevive a quem a segurava — nem morrendo, nem se desfazendo, nem sendo enterrada. */
+  private destroyBone(): void {
+    this.bone?.destroy();
+    this.bone = undefined;
   }
 
   public override destroy(): void {
+    this.destroyBone();
     if (this.crack) {
       if (this.scene.tweens) this.scene.tweens.killTweensOf(this.crack);
       this.crack.destroy();

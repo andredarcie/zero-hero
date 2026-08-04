@@ -1,0 +1,3 @@
+undead-bone: 1 frame(s) — 0 fail, 0 warn
+  [info] bbox: content 8x14 at (4,1), coverage 30%
+  frame 0: #b5b5b5×40 #cdcdcd×18 #858585×18

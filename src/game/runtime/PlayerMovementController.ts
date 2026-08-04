@@ -64,6 +64,8 @@ export class PlayerMovementController {
   private lastBumpTime = 0;
   private tileSize = 0;
   private stepMs: number = DEFAULT_STEP_MS;
+  /** > 0 = os pés estão presos pelo golpe em curso (ver `root`). */
+  private rootedMs = 0;
 
   /**
    * The step in flight. `stepFrom` is the tile it left; the world position the GameScene owns is
@@ -127,12 +129,28 @@ export class PlayerMovementController {
     this.scene.events.once(Phaser.Scenes.Events.DESTROY, this.removeWindowListeners, this);
   }
 
+  /**
+   * PRENDE OS PÉS por `ms` — o compromisso do golpe (GameScene.swingRootMs).
+   *
+   * Fica aqui e não na cena porque o relógio precisa correr no MESMO lugar que decide o passo:
+   * `update` tem saídas antecipadas, e uma raiz contada lá fora sobreviveria a elas.
+   */
+  public root(ms: number): void {
+    this.rootedMs = Math.max(this.rootedMs, ms);
+  }
+
+  /** Os pés estão presos agora? (o escudo do herói lê isto: quem ataca abaixa a guarda) */
+  public get isRooted(): boolean {
+    return this.rootedMs > 0;
+  }
+
   public update(worldX: number, worldY: number, deltaMs: number): { worldX: number; worldY: number } {
     // JustDown is a destructive read: drain it every frame or a press sits on the key and fires
     // minutes later. Draining it INTO the buffer is what stops a quick tap mid-step from vanishing.
     this.pollFreshPress();
 
     const dt = Math.min(deltaMs, MAX_FRAME_MS);
+    if (this.rootedMs > 0) this.rootedMs = Math.max(0, this.rootedMs - dt);
     let wx = worldX;
     let wy = worldY;
 
@@ -147,6 +165,14 @@ export class PlayerMovementController {
     for (;;) {
       if (this.stepDir && this.stepProgress < 1) break; // mid-tile: nothing to decide yet
       const carry = this.stepDir ? this.stepProgress - 1 : 0;
+
+      // O GOLPE PRENDE OS PÉS (ver GameScene.swingRootMs). A raiz impede COMEÇAR um passo, nunca
+      // congela um que já está no meio do tile: parar o herói em cima de uma aresta seria um
+      // soluço no lugar de um peso. O pedido de direção fica no buffer e sai assim que solta.
+      if (this.rootedMs > 0) {
+        if (this.stepDir) this.endWalk(wx, wy);
+        break;
+      }
 
       const next = this.takeDirection();
       if (!next) {
@@ -334,35 +360,17 @@ export class PlayerMovementController {
     this.touchAnchor = null;
   }
 
-  /**
-   * O arrasto de MOUSE anda? (O de dedo sempre anda — ele entra por outros ouvintes.)
-   *
-   * O mouse deste jogo tinha um trabalho só: ser o dedo de quem não tem tela de toque. Com o
-   * revólver ele ganhou outro — MIRAR —, e os dois não cabem no mesmo botão: um clique pra atirar
-   * plantaria a âncora do arrasto e o herói sairia andando junto com o tiro. Então, com o revólver
-   * escolhido, o GameScene desliga isto e o mouse vira mira; qualquer outro item, e ele volta a
-   * ser o dedo. Teclado e toque não sabem que esta chave existe.
-   */
-  public setMouseWalkEnabled(enabled: boolean): void {
-    if (this.mouseWalkEnabled === enabled) return;
-    this.mouseWalkEnabled = enabled;
-    // Desligar com o botão apertado deixaria a direção do arrasto presa e o herói andando sozinho
-    // pra sempre — a mesma armadilha do `keyup` perdido no botão A.
-    if (!enabled) {
-      this.touchDir = null;
-      this.touchAnchor = null;
-    }
-  }
-
-  private mouseWalkEnabled = true;
+  // (Houve aqui um `setMouseWalkEnabled`: o mouse deixava de andar e virava MIRA enquanto o
+  // revólver estava na mão. O revólver foi arrancado inteiro — nada neste jogo se aponta —, e a
+  // chave foi junto: o mouse voltou a ter um trabalho só, ser o dedo de quem não tem tela de toque.)
 
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (pointer.wasTouch || !this.mouseWalkEnabled) return;
+    if (pointer.wasTouch) return;
     this.touchAnchor = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    if (pointer.wasTouch || !this.mouseWalkEnabled) return;
+    if (pointer.wasTouch) return;
     const anchor = this.touchAnchor;
     if (!pointer.isDown || !anchor || anchor.pointerId !== pointer.id) return;
     this.trackDrag(anchor, pointer.x, pointer.y);

@@ -26,7 +26,7 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
 const MAX_HEALTH = 1;
 // Rapido, e por isso o passo dele nao e uma caminhada: e um bater de asa. Menos que ~260ms comeca
 // a ficar impossivel de ler no meio de tres deles.
-const MOVE_INTERVAL = 300;
+const MOVE_INTERVAL = 270;
 const ATTACK_INTERVAL = 1500;
 // Aviso curto — ele e rapido —, mas nunca zero: golpe sem telegrafo desmente a promessa da casa.
 const WINDUP_MS = 280;
@@ -63,6 +63,11 @@ export class BatEnemy extends WalkerEnemy {
 
   // `flies` nao e sobrescrito aqui: ele sai de FLYING_ENEMY_KINDS (ver ScreenContent), a lista que
   // a cova e o editor tambem leem. Um override nesta classe seria a segunda copia da verdade.
+
+  /** O morcego e um borrao no ar: nao encara nada tempo suficiente para guardar. */
+  protected override get guardsWhileWindingUp(): boolean {
+    return false;
+  }
 
   protected override get moveIntervalMs(): number {
     return MOVE_INTERVAL;

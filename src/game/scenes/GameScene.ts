@@ -280,9 +280,20 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
 
 // What a blow does to a skull (max health 3). Three tiers: bare fists land BARE_HAND_DAMAGE
 // (three punches kill — see strikeEnemy); any common item in hand (key, stick, axe, pickaxe,
-// scythe) lands 1.5 (two blows kill); the sword — or the stick while it BURNS — one-shots.
+// scythe) lands 1.5 (two blows kill); the sword lands 2 (also two blows, and the second is the
+// one that matters — see below). O UNICO golpe que ainda mata de uma vez e o graveto ACESO.
 const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
-  sword: 999,
+  // A ESPADA NAO MATA MAIS DE UM GOLPE, e esta linha e a mudanca de design mais cara deste
+  // arquivo. Ela valia 999: todo corpo do jogo morria no primeiro acerto, entao o telegrafo de
+  // 500ms que cada especie carrega NUNCA acontecia, o atordoamento nunca importava, o arremesso
+  // nunca comprava nada e o encontro inteiro era "chegue perto, aperte Z". Nao havia combate —
+  // havia execucao. Com 2 de dano a caveira (3) leva duas espadadas, o slime grande (6) leva
+  // tres, e entre um golpe e o outro o bicho tem tempo de responder, que e onde o combate mora.
+  //
+  // O `A Link to the Past` faz exatamente isso e nem disfarca: o soldado verde da primeira sala
+  // aguenta varias espadadas com a espada inicial, e e por isso que aquela sala consegue ENSINAR
+  // alguma coisa.
+  sword: 2,
   wood: 1.5,
   axe: 1.5,
   greatAxe: 1.5,
@@ -291,6 +302,7 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   scythe: 1.5,
   stone: 1.5, // a rock in the fist is as good as any other blunt tool
   charcoal: 1.5, // a lump of coal, likewise
+  iron: 1.5, // ...e um lingote de metal, que era o unico bloco desta lista que nao batia em nada
   battery: 1.5, // an iron canister, likewise
   batteryFull: 1.5,
 };
@@ -333,6 +345,31 @@ const USE_COOLDOWN_MS = 300;
  */
 const ACTION_BUFFER_MS = 130;
 /**
+ * O COMPROMISSO DO GOLPE: por quanto tempo os pés ficam presos ao apertar A.
+ *
+ * O herói golpeava em pleno passo, na velocidade máxima, e isso é o que fazia o espaçamento não
+ * custar nada: dá para atacar e recuar no mesmo gesto, então nunca há um instante em que estar
+ * perto é perigoso. Preso por um sexto de segundo, atacar vira uma DECISÃO — e é a mesma janela
+ * que o `A Link to the Past` cobra do Link, que fica plantado enquanto a espada varre.
+ *
+ * Curto de propósito: mais que isto e o jogo passa a parecer travado, que é o defeito oposto e
+ * pior. A raiz também não congela um passo em curso — ver PlayerMovementController.root.
+ */
+const SWING_ROOT_MS = 160;
+/** O giro é o gesto caro: ele planta o herói por mais tempo, e é o que ele paga pelos oito tiles. */
+const SPIN_ROOT_MS = 260;
+/**
+ * A INVESTIDA: quanto o corpo do herói avança na direção do golpe, em tiles (ver HeroView.lungeX).
+ *
+ * Pequena de propósito — um oitavo de tile é um pixel e meio na arte, e é o suficiente: o que
+ * vende o peso é a CURVA (sai em 60ms, volta em 130ms, dentro da raiz de 160), não a distância.
+ * Um avanço grande faria o herói parecer que anda ao golpear, e andar é justamente o que a raiz
+ * acabou de proibir.
+ */
+const SWING_LUNGE_TILES = 0.13;
+const SWING_LUNGE_OUT_MS = 60;
+const SWING_LUNGE_BACK_MS = 130;
+/**
  * **O GOLPE VARRE A ÁREA À FRENTE — o bloco 2×3.** O desenho sempre foi uma foice larga em volta
  * do herói e o acerto era UM tile; virou a fileira da frente (3 tiles), e agora são DUAS fileiras:
  * a colada no corpo e a da ponta da lâmina. Seis tiles, até seis corpos no mesmo gesto — que é a
@@ -365,6 +402,21 @@ const SWING_ARC_FAR: ReadonlyArray<readonly [number, number]> = [[2, 0], [2, 1],
 const HITSTUN_MS = 300;
 const HITSTUN_SPIN_MS = 420;
 
+/**
+ * **A RECUSA TAMBÉM É UM IMPACTO.** Quanto o mundo congela quando o golpe do herói NÃO passa.
+ *
+ * O acerto sempre teve hitstop (60ms, 110 quando mata) e as duas recusas não tinham nada — então a
+ * lâmina atravessava uma guarda erguida com MENOS resistência do que atravessava o ar. Um golpe
+ * aparado é um encontro de duas coisas duras, e o hitstop é a ferramenta mais barata e mais direta
+ * que existe para dizer "isto não passou".
+ *
+ * O aparo trava mais que o resvalo porque são coisas diferentes: aparar é aço encontrando aço
+ * (CONTORNE), resvalar é a lâmina escorregando de um corpo que ainda pisca (ESPERE). Os dois ficam
+ * abaixo do hitstop de um acerto — recusar nunca pode pesar mais que conectar.
+ */
+const GUARD_HITSTOP_MS = 55;
+const GLANCE_HITSTOP_MS = 28;
+
 // ── A LAMINA RODOPIANTE ──────────────────────────────────────────────────────
 //
 // Segure o A, o gume junta forca, solte e o heroi gira cortando os OITO vizinhos. E a unica
@@ -383,6 +435,41 @@ const SPIN_READY_MOTE_MS = 90;
  * esbarrao segurado (220ms), ou segurar a seta contra um bicho deixaria de custar caro.
  */
 const CREATURE_TURN_GRACE_MS = 180;
+
+/**
+ * A JANELA DE INVENCIBILIDADE do herói depois de levar um golpe, e a piscada que a mostra.
+ *
+ * Os dois números eram independentes e discordavam: a janela é de 1500ms e a piscada tocava
+ * `repeat: 5` de 80ms com yoyo — 960ms. Nos últimos 540ms o herói parecia vulnerável e não era,
+ * que é exatamente o defeito consertado do lado do inimigo (ver EnemyBase.hurtInvulnMs). Agora a
+ * contagem SAI da janela: um número, e a piscada não pode mais mentir sobre ele.
+ *
+ * `floor` e não `ceil` de propósito — é melhor parar de piscar 60ms antes de a janela fechar do
+ * que continuar piscando depois de já poder apanhar.
+ */
+const PLAYER_INVULN_MS = 1500;
+/**
+ * O ATORDOAMENTO DO HERÓI — quanto tempo um golpe recebido tira dele, e ele existe porque a lei
+ * mais importante do combate só valia num sentido.
+ *
+ * "O acerto compra TEMPO": todo corpo que o herói atinge fica 300ms sem andar e sem armar
+ * (`HITSTUN_MS`). O herói atingido não pagava nada — levava os i-frames, o arremesso e o hitstop, e
+ * podia golpear no frame seguinte. Ou seja, trocar dano era LUCRO para quem tem a espada: apanhar
+ * não custava iniciativa nenhuma, e a única coisa que o telegrafo de 500ms podia comprar do jogador
+ * era um coração.
+ *
+ * 240ms, e o número não é escolhido no vácuo: é exatamente a duração do tween que devolve o herói
+ * ao centro da tela depois do empurrão. Ele recupera o controle no instante em que o corpo assenta,
+ * então o que se vê e o que se pode fazer terminam juntos — mais que isso viraria uma pausa
+ * sentida, e menos deixaria o herói agindo enquanto ainda está sendo jogado para trás.
+ *
+ * Abaixo dos 300ms do inimigo de propósito: quem apanha já perdeu um coração, e o jogo nunca deve
+ * cobrar duas vezes pela mesma falha. E toda a janela cabe dentro dos 1500ms de invencibilidade —
+ * o herói está atordoado, mas nunca atordoado E vulnerável.
+ */
+const PLAYER_STAGGER_MS = 240;
+const PLAYER_BLINK_HALF_MS = 80;
+const PLAYER_BLINK_REPEAT = Math.max(0, Math.floor(PLAYER_INVULN_MS / (PLAYER_BLINK_HALF_MS * 2)) - 1);
 
 const BOMB_FUSE_MS = 1600;
 const BOMB_BLAST_RADIUS_TILES = 2.2;
@@ -633,6 +720,8 @@ export class GameScene extends Phaser.Scene {
   private playerHealth = PLAYER_HEALTH_MAX;
   private playerInvincible = false;
   private invincibleTimer = 0;
+  /** > 0 = o herói ainda pertence ao golpe que levou (ver PLAYER_STAGGER_MS). */
+  private playerStaggerMs = 0;
   // Combat juice: while > 0 the whole world (tweens included) is frozen on an impact frame.
   private hitstopMs = 0;
   // Os dois botoes, cada um com sua cadencia (ver ATTACK_COOLDOWN_MS / USE_COOLDOWN_MS).
@@ -648,10 +737,16 @@ export class GameScene extends Phaser.Scene {
   private chargeMs = 0;
   private chargeReady = false;
   private chargeMoteMs = 0;
-  // Ate quando virar-se para um monstro sai de graca (ver turnedTowardCreature).
+  // Ate quando virar-se para um monstro sai de graca (ver turnedTowardCreature)...
   private creatureTurnGraceUntilMs = 0;
+  // ...e EM QUEM ela foi gasta. A carencia e o perdao de UM esbarrao contra UM corpo, e sem este
+  // par ela era um relogio solto: virar-se para a caveira ao norte comprava 180ms de esbarrao de
+  // graca no slime a leste. Contra matilha — que e metade da aventura — isso e um golpe gratis.
+  private creatureTurnGraceOn?: EnemyBase;
   // Returns the hero to screen centre after a hurt-knockback shove.
   private playerKnockTween?: Phaser.Tweens.Tween;
+  /** A investida do golpe (ver SWING_LUNGE_TILES) — dona exclusiva de hero.lungeX/lungeY. */
+  private swingLungeTween?: Phaser.Tweens.Tween;
   // Counts up while resting in a campfire's safe ring; mends a heart each HEALTH_REGEN_MS.
   private healthRegenTimer = 0;
   // Cadence for the ember motes streaming fire→hero while the campfire mends him.
@@ -1635,6 +1730,12 @@ export class GameScene extends Phaser.Scene {
       readSubScreen: () => this.subScreenView(),
       onSelectItem: (kind) => { this.selectItem(kind as HeldItemKind); },
     });
+    // NENHUM PEDIDO E NENHUMA CARGA ATRAVESSA A PAUSA, e isto e a outra metade do `keyup` perdido
+    // que o `pressAttack` ja documenta. `scene.pause()` adormece o plugin de teclado junto com a
+    // cena: o jogador solta o A com a subtela aberta e o `keyup-Z` nunca chega, entao `attackHeld`
+    // fica preso em `true`. Ao voltar, a lamina termina de carregar sozinha — o sino toca do nada
+    // e o heroi solta faiscas douradas indefinidamente, sem ninguem segurando botao nenhum.
+    this.resetChargeAndBuffers();
     this.scene.pause();
   }
 
@@ -1752,8 +1853,8 @@ export class GameScene extends Phaser.Scene {
     // ground of its tile and grows upward, so breathing (which stretches scaleY) must not move
     // the foot line — otherwise the hero looks like he is hopping.
     b.setPosition(
-      cam.camX + (h.x - cam.screenCenterX) / ts,
-      cam.camY + (heroFootY(h) - cam.screenCenterY) / ts - 0.5,
+      cam.camX + (h.x - cam.screenCenterX) / ts + h.lungeX,
+      cam.camY + (heroFootY(h) - cam.screenCenterY) / ts - 0.5 + h.lungeY,
     );
     // The walk bob. It has to be elevation and not a shift of y: y is the ground plane here, so
     // nudging it would send the hero *backwards into the scene* instead of up into the air. The
@@ -2148,6 +2249,10 @@ export class GameScene extends Phaser.Scene {
     // a valer, sozinha, no frame em que ele fechasse.
     this.attackCooldownMs = Math.max(0, this.attackCooldownMs - delta);
     this.useCooldownMs = Math.max(0, this.useCooldownMs - delta);
+    // O atordoamento corre AQUI e não num tween: este é o mesmo ponto onde as cadências correm, e
+    // ele fica depois de todas as portas de saída antecipada do update — um herói atordoado que
+    // abrisse a subtela não pode continuar se recuperando com o jogo parado.
+    this.playerStaggerMs = Math.max(0, this.playerStaggerMs - delta);
     this.spendActionBuffers(delta);
     this.tickSpinCharge(delta);
     const prevWorldX = this.playerWorld.worldX;
@@ -2167,10 +2272,12 @@ export class GameScene extends Phaser.Scene {
       this.stopBreathing();
       this.spawnFootprint(prevWorldX, prevWorldY, stepDx, stepDy);
     } else if (!this.dialogOpen && !this.camShifting && this.time.now - this.lastStepTime > 180) {
-      // A bump into an NPC opens the dialog synchronously inside movementController.update()
-      // above — it already stopped breathing and re-pinned the hero at centre origin. Don't
-      // re-start breathing this frame, or its bottom-origin pose makes the frozen reprojection
-      // draw the hero half a tile high (a visible "jump") for the whole conversation.
+      // As duas portas acima (`dialogOpen`, `camShifting`) sao a rede de um diálogo que abriu neste
+      // mesmo frame: ele para a respiracao e reancora o heroi no centro, e re-comecar a respiracao
+      // por cima disso faria a pose de origem-no-pe desenhar o heroi meio tile alto — um "pulo"
+      // visivel durante a conversa inteira, porque a reprojecao fica congelada enquanto ela dura.
+      // (O dialogo hoje abre pelo botao B, ver `talkToNpcAt`; antes ele abria de dentro do
+      // `movementController.update()` logo acima, que e de onde esta rede veio.)
       this.startBreathing();
     }
     this.streamChunks();
@@ -2973,6 +3080,14 @@ export class GameScene extends Phaser.Scene {
    * sao DOM e continuam clicaveis — entao a porta tem de estar aqui, e nao so na tecla.
    */
   private canAct(): boolean {
+    // O ATORDOAMENTO NÃO ENTRA AQUI, de propósito — ele é uma CADÊNCIA, não uma porta fechada.
+    //
+    // Esta função separa "o jogo não está jogando agora" (diálogo, loja, morte, menu) de tudo o
+    // mais, e o que ela recusa é DESCARTADO. Um botão apertado no fim de um atordoamento tem de
+    // sair no instante em que ele acaba, que é exatamente o que o buffer existe para fazer (ver
+    // ACTION_BUFFER_MS: "o jogador que encadeia dois golpes no ritmo certo era punido por acertar
+    // o ritmo"). Então o atordoamento mora junto da cadência, em `swingAttack`/`pressUse`, onde o
+    // pedido é ADIADO — e o herói continua perdendo os 240ms, só não perde o aperto.
     return !this.isDead && !this.shopOpen && !this.dialogOpen && !this.camShifting
       && !this.itemGetOpen && !this.cutsceneActive && !this.levelIntroOpen
       && !this.levelTransitioning && !this.pauseMenu && this.movementController !== undefined;
@@ -2985,13 +3100,19 @@ export class GameScene extends Phaser.Scene {
    * levaria um golpe que nao pediu. Ver ACTION_BUFFER_MS.
    */
   private spendActionBuffers(delta: number): void {
+    // O atordoamento adia o GASTO, nunca a contagem — e a diferenca importa nos dois sentidos. Se
+    // a janela congelasse junto, um aperto feito antes da pancada sairia 240ms depois, que e um
+    // golpe que o jogador ja nao pediu (o buffer e curto justamente pra isso nao acontecer). E o
+    // gasto PRECISA ser barrado aqui e nao so la dentro: `swingAttack` re-arma o buffer quando
+    // recusa, entao chama-lo todo frame durante o atordoamento manteria a janela viva pra sempre.
+    const busy = this.playerStaggerMs > 0;
     if (this.attackBufferMs > 0) {
       this.attackBufferMs = Math.max(0, this.attackBufferMs - delta);
-      if (this.attackBufferMs > 0 && this.attackCooldownMs <= 0) this.swingAttack();
+      if (this.attackBufferMs > 0 && this.attackCooldownMs <= 0 && !busy) this.swingAttack();
     }
     if (this.useBufferMs > 0) {
       this.useBufferMs = Math.max(0, this.useBufferMs - delta);
-      if (this.useBufferMs > 0 && this.useCooldownMs <= 0) this.pressUse();
+      if (this.useBufferMs > 0 && this.useCooldownMs <= 0 && !busy) this.pressUse();
     }
   }
 
@@ -3027,14 +3148,36 @@ export class GameScene extends Phaser.Scene {
     this.chargeMs = 0;
     this.chargeReady = false;
     this.chargeMoteMs = 0;
+    // Nem o atordoamento atravessa uma morte ou um recomeço: o herói do run seguinte nasceria sem
+    // conseguir apertar nada, e a causa estaria num golpe que ele levou na partida anterior.
+    this.playerStaggerMs = 0;
     this.creatureTurnGraceUntilMs = 0;
+    this.creatureTurnGraceOn = undefined;
+    this.swingLungeTween?.stop();
+    this.swingLungeTween = undefined;
+    this.hero.lungeX = 0;
+    this.hero.lungeY = 0;
+  }
+
+  /**
+   * ONDE O HEROI ESTA DESENHADO, em tiles fracionarios — que durante um passo NAO e o tile logico.
+   *
+   * A posicao logica pula para o tile de destino no instante em que o passo comeca (e tem de
+   * pular: o telegrafo do bicho trava naquele tile e a esquiva e decidida contra ele), mas o corpo
+   * na tela ainda esta atras, deslizando. Todo efeito preso ao HEROI tem de sair daqui — o
+   * `swingAnchor` ja fazia isso para o arco, e as faiscas de carga e o anel do giro nao faziam:
+   * carregar andando punha o brilho ate um tile a frente de quem estava brilhando.
+   */
+  private heroVisualTile(): { x: number; y: number } {
+    return this.movementController?.visualWorld(this.playerWorld.worldX, this.playerWorld.worldY)
+      ?? { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
   }
 
   /** Uma faisca dourada subindo do heroi: a lamina esta carregada e o jogador tem de ver isso. */
   private spawnChargeMote(): void {
     const w3 = this.world3d;
     if (!w3) return;
-    const { worldX, worldY } = this.playerWorld;
+    const { x: worldX, y: worldY } = this.heroVisualTile();
     const mote = w3
       .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
       .setTint(0xffe9a8)
@@ -3058,10 +3201,13 @@ export class GameScene extends Phaser.Scene {
   private spawnSpinRing(): void {
     const w3 = this.world3d;
     if (!w3) return;
+    // No corpo DESENHADO (ver heroVisualTile): a raiz do giro impede COMECAR um passo, nunca
+    // congela um em curso, entao o giro pode sair com o heroi ainda deslizando entre dois tiles.
+    const at = this.heroVisualTile();
     const ring = w3
       .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
       .setTint(0xfff0b8)
-      .setPosition(this.playerWorld.worldX, this.playerWorld.worldY)
+      .setPosition(at.x, at.y)
       .setElevation(FX_BODY_ELEV)
       .setDisplaySize(0.5, 0.5);
     this.tweens.add({
@@ -3132,23 +3278,61 @@ export class GameScene extends Phaser.Scene {
    */
   private swingAttack(): void {
     if (!this.canAct()) return;
-    // A cadencia nao DESCARTA o pedido, ela o adia — ver ACTION_BUFFER_MS.
-    if (this.attackCooldownMs > 0) {
+    // A cadencia nao DESCARTA o pedido, ela o adia — ver ACTION_BUFFER_MS. O ATORDOAMENTO entra
+    // aqui pelo mesmo motivo e no mesmo lugar: ele e uma cadencia imposta por quem bateu, e o
+    // aperto feito no fim dele tem de sair quando ele acaba (ver PLAYER_STAGGER_MS).
+    if (this.attackCooldownMs > 0 || this.playerStaggerMs > 0) {
       this.attackBufferMs = ACTION_BUFFER_MS;
       return;
     }
     this.attackBufferMs = 0;
-    this.attackCooldownMs = ATTACK_COOLDOWN_MS;
+    // A melhoria da loja se chama "ataque mais rápido" e agora é isso mesmo: ela compra CADÊNCIA.
+    // (Ela multiplicava os golpes por gesto, o que com os i-frames do inimigo seria dano jogado
+    // fora — o segundo e o terceiro cairiam dentro da janela de invulnerabilidade do primeiro.)
+    this.attackCooldownMs = ATTACK_COOLDOWN_MS * (1 - 0.12 * this.upgrades.swordSpeed);
     this.stopBreathing();
+    this.movementController?.root(SWING_ROOT_MS);
+    this.lungeIntoSwing();
 
     const { x, y } = this.facingTile();
     const armed = this.inventory.has('sword');
     if (armed) this.swingSword(x, y);
-    else getSoundManager().playSwordSlash(); // o soco nao tem arco: so o vento
+    // O soco nao tem arco: so o vento — e agora o vento e DELE. Aqui saia um `playSwordSlash`, e
+    // com isso a arma que o heroi nao tem soava exatamente igual a que ele tem: de olhos fechados,
+    // estar armado e estar de maos vazias eram o mesmo gesto. Ver SoundManager.playFistSwing.
+    else getSoundManager().playFistSwing();
 
     // O soco alcança um braço; a espada, duas fileiras. O alcance é da ARMA, e o desenho de cada
     // um diz qual é o seu — o punho não tem fita, e por isso não pode ter a área dela.
     this.sweepArc(this.arcTiles(armed ? 2 : 1), armed ? 'sword' : 'fist');
+  }
+
+  /**
+   * O corpo indo atrás da lâmina (ver SWING_LUNGE_TILES). Sai rápido e volta devagar, que é a
+   * curva de um golpe — o contrário (sair devagar) leria como o herói sendo empurrado.
+   */
+  private lungeIntoSwing(): void {
+    const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
+    // Só o tween da investida é morto — NUNCA um `killTweensOf(this.hero)`, que levaria junto o
+    // arremesso de dano e a respiração, que moram no mesmo objeto e têm donos próprios.
+    this.swingLungeTween?.stop();
+    this.swingLungeTween = this.tweens.add({
+      targets: this.hero,
+      lungeX: f.dx * SWING_LUNGE_TILES,
+      lungeY: f.dy * SWING_LUNGE_TILES,
+      duration: SWING_LUNGE_OUT_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.swingLungeTween = this.tweens.add({
+          targets: this.hero,
+          lungeX: 0,
+          lungeY: 0,
+          duration: SWING_LUNGE_BACK_MS,
+          ease: 'Sine.easeIn',
+          onComplete: () => { this.swingLungeTween = undefined; },
+        });
+      },
+    });
   }
 
   /**
@@ -3161,9 +3345,17 @@ export class GameScene extends Phaser.Scene {
    */
   private spinAttack(): void {
     if (!this.inventory.has('sword')) return; // e a espada que gira; um punho nao rodopia
+    // O GIRO PERDE-SE SE VOCE APANHAR CARREGANDO, e ele precisa da trava EXPLICITA porque e o unico
+    // gesto que ignora a cadencia de proposito ("o jogador ja pagou por ele segurando meio segundo
+    // parado") — sem esta linha, ele seria a unica coisa que sai do meio de um atordoamento.
+    //
+    // E e o risco que a peca sempre cobrou: meio segundo parado no meio da matilha. Perder a carga
+    // ao levar o golpe e a outra metade desse trato, nao um castigo a mais.
+    if (this.playerStaggerMs > 0) return;
     this.attackBufferMs = 0;
     this.attackCooldownMs = SPIN_COOLDOWN_MS;
     this.stopBreathing();
+    this.movementController?.root(SPIN_ROOT_MS);
     this.hideBackItemDuringSwing(SPIN_COOLDOWN_MS);
 
     if (this.swordSlash && this.camera) {
@@ -3219,9 +3411,22 @@ export class GameScene extends Phaser.Scene {
   /**
    * Resolve um golpe contra uma lista de tiles. Um corpo por tile, entao ninguem leva dois golpes
    * do mesmo gesto; e o mesmo caminho de invulneravel-que-resvala do golpe de um tile so.
+   *
+   * O GESTO TEM DUAS VOZES, E ELAS TEM ORCAMENTOS SEPARADOS. O arco varre ate seis tiles e o giro
+   * oito, entao a voz do ACERTO (o baque, a piscada do heroi, o som da morte, o encontrao) e a voz
+   * da RECUSA (o tim da guarda, o tranco do resvalo) precisam sair uma vez cada por gesto — mas
+   * uma nunca pode calar a outra. Com um contador so havia defeito nos DOIS sentidos: um corpo que
+   * resvalou no primeiro tile roubava o som da morte do corpo do lado, e quando NADA landava (um
+   * giro no meio de uma matilha inteira guardando) oito recusas disparavam oito tins no mesmo
+   * frame.
+   *
+   * O que e do CORPO — o anel do resvalo, a faisca da guarda, o pacote de impacto — nao entra em
+   * orcamento nenhum: ele responde por AQUELE corpo, e calar o segundo corpo de um arco e mentir
+   * sobre o que aconteceu com ele. So a voz e uma so.
    */
   private sweepArc(tiles: Array<{ x: number; y: number }>, weapon: 'sword' | 'fist' | 'spin'): void {
-    let landed = 0;
+    let hitSpoken = false;
+    let refusalSpoken = false;
     for (const tile of tiles) {
       const enemy = this.enemyManager?.getEnemyAt(tile.x, tile.y);
       if (!enemy) continue;
@@ -3230,11 +3435,19 @@ export class GameScene extends Phaser.Scene {
       if (enemy.isSpawning) {
         enemy.flashImmune();
         this.spawnDeflect(tile.x, tile.y);
-        this.world3d?.shake(40, 0.03);
+        if (!refusalSpoken) {
+          getSoundManager().playBladeGlance();
+          this.world3d?.shake(40, 0.03);
+          this.triggerHitstop(GLANCE_HITSTOP_MS);
+          refusalSpoken = true;
+        }
         continue;
       }
-      this.strikeEnemy(enemy, tile.x, tile.y, weapon, landed > 0);
-      landed += 1;
+      if (this.strikeEnemy(enemy, tile.x, tile.y, weapon, hitSpoken, refusalSpoken) === 'landed') {
+        hitSpoken = true;
+      } else {
+        refusalSpoken = true;
+      }
     }
   }
 
@@ -3274,7 +3487,7 @@ export class GameScene extends Phaser.Scene {
     // A cadencia adia, nao descarta — a mesma lei do A (ver ACTION_BUFFER_MS). Vale mais aqui do
     // que parece: o B tambem e uma arma (o graveto aceso), e o hitstop de um acerto come 110ms
     // de update inteiros — exatamente o intervalo em que a segunda golpada e apertada.
-    if (this.useCooldownMs > 0) {
+    if (this.useCooldownMs > 0 || this.playerStaggerMs > 0) { // ...e o atordoamento, idem
       this.useBufferMs = ACTION_BUFFER_MS;
       return;
     }
@@ -3285,10 +3498,42 @@ export class GameScene extends Phaser.Scene {
     // PEGAR vem antes de tudo, e nesta ordem: o tile a frente (o B age a frente, e essa e a lei
     // do botao) e depois o de baixo dos pes (o heroi ATRAVESSA item — sem esta segunda chance
     // ele teria de sair do tile e se virar pra pegar o que esta pisando).
-    if (this.pickUpItemAt(x, y) || this.pickUpItemAt(this.playerWorld.worldX, this.playerWorld.worldY)) return;
+    if (this.pickUpItemAt(x, y)) return;
+    // FALAR e o botao B, e ele entra AQUI — depois do tile a frente e antes do de baixo dos pes.
+    // A ordem e a lei do proprio botao: o que esta NA FRENTE ganha do que esta embaixo. Estar de
+    // cara pra um NPC e apertar B significa falar, mesmo que o heroi esteja pisando num graveto.
+    //
+    // E vem antes da porta de "mao vazia" logo abaixo, obviamente: conversar nao depende do que se
+    // carrega, e um heroi com o machado escolhido nao pode ficar mudo por isso.
+    if (this.talkToNpcAt(x, y)) return;
+    if (this.pickUpItemAt(this.playerWorld.worldX, this.playerWorld.worldY)) return;
     if (this.heldItem === 'none') return;
     if (this.useItemAt(x, y)) return;
     this.placeItemAt(x, y);
+  }
+
+  /**
+   * FALAR COM QUEM ESTA A FRENTE. Devolve `false` quando nao ha ninguem ali.
+   *
+   * O dialogo era do ESBARRAO, e por isso era a unica coisa do jogo que acontecia sem ninguem ter
+   * pedido: bastava a seta encostar no NPC — atravessando um vao, fugindo de uma caveira, tentando
+   * contornar o velho pra chegar na fogueira — e a tela parava, a camera panorava e uma conversa
+   * comecava. Um gesto que interrompe o jogo inteiro nao pode ser um acidente de trajeto.
+   *
+   * Agora ele e o B, como usar qualquer outra coisa do mundo, e isso nao acrescenta nada pro
+   * jogador aprender: a parede ja VIRA o heroi (e um NPC bloqueia como qualquer parede), entao
+   * encarar quem se quer ouvir e o mesmo gesto de mira que a arvore e a rocha ja cobravam. A
+   * afordancia tambem ja estava pronta e nao custou um pixel novo — o "!" que flutua sobre quem tem
+   * assunto novo deixou de descrever um acidente e passou a apontar pra um botao.
+   */
+  private talkToNpcAt(wx: number, wy: number): boolean {
+    if (!this.npcManager?.hasNpcAt(wx, wy)) return false;
+    const kind = this.npcManager.getKindAt(wx, wy);
+    if (!kind) return false;
+    // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
+    if (kind === 'wizard') this.openWizardDialog({ worldX: wx, worldY: wy });
+    else this.openNpcDialog(kind, { worldX: wx, worldY: wy });
+    return true;
   }
 
   /**
@@ -3350,11 +3595,25 @@ export class GameScene extends Phaser.Scene {
     // sendo uma arma agora que o A e so a espada.
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (enemy && MELEE_DAMAGE[this.heldItem as HeldItemKind] !== undefined) {
+      // ATACAR PRENDE OS PES — inclusive pelo B. A raiz e a investida moravam so no botao A, e a
+      // exceção caiu justo no golpe mais forte que o jogo tem: o graveto ACESO e a unica coisa que
+      // ainda mata de um golpe, e era tambem a unica que se dava em velocidade maxima de
+      // caminhada. Sem compromisso, espacamento nao custa nada (ver SWING_ROOT_MS).
+      //
+      // So neste ramo, nunca no resto da tabela do B: prender os pes para apanhar um graveto, usar
+      // o machado numa arvore ou pousar uma pedra seria o defeito oposto — o jogo travando no meio
+      // de um gesto que nao e uma briga.
+      this.movementController?.root(SWING_ROOT_MS);
+      this.lungeIntoSwing();
       if (enemy.isSpawning) {
         this.swingHeld(wx, wy);
         enemy.flashImmune();
         this.spawnDeflect(wx, wy);
+        // O mesmo pacote de recusa do botao A (ver sweepArc): anel frio, raspao e um tranco curto.
+        // O B tambem e uma arma, e uma recusa muda de um lado e sonora do outro seriam duas regras.
+        getSoundManager().playBladeGlance();
         this.world3d?.shake(40, 0.03);
+        this.triggerHitstop(GLANCE_HITSTOP_MS);
         return true;
       }
       this.strikeEnemy(enemy, wx, wy, 'item');
@@ -3694,13 +3953,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (this.npcManager?.hasNpcAt(wx, wy)) {
-      const kind = this.npcManager.getKindAt(wx, wy);
-      // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
-      if (kind === 'wizard') this.openWizardDialog({ worldX: wx, worldY: wy });
-      else if (kind) this.openNpcDialog(kind, { worldX: wx, worldY: wy });
-      return;
-    }
+    // (FALAR SAIU DAQUI. O esbarrao abria o dialogo, e com isso conversar era a unica coisa do jogo
+    // que acontecia sem ninguem ter pedido: bastava a seta encostar no NPC — atravessando um vao,
+    // fugindo de uma caveira, tentando contornar o velho pra chegar na fogueira — e a tela parava.
+    // Hoje falar e o botao B, como usar qualquer coisa (ver `talkToNpcAt`). O esbarrao continua
+    // fazendo o que faz com toda parede: VIRA o heroi para o NPC, que e justamente o gesto de mira
+    // que o B precisa. E a afordancia ja existia e nao custou nada — o "!" que flutua sobre quem tem
+    // assunto novo agora aponta para um botao em vez de descrever um acidente.)
 
     // Portao de bater — a porta sem chave, e o unico bloqueio que o CORPO abre. Ele gira para o
     // lado de la, entao qualquer coisa parada no tile atras dele trava tudo, e o sentido do
@@ -3724,7 +3983,7 @@ export class GameScene extends Phaser.Scene {
     // que agora e ela quem ganha a troca.
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (enemy && !enemy.isSpawning) {
-      if (this.turnedTowardCreature(wx, wy)) return;
+      if (this.turnedTowardCreature(wx, wy, enemy)) return;
       this.handleEnemyAttackPlayer({ enemy, ranged: false, fromX: enemy.worldX, fromY: enemy.worldY });
       return;
     }
@@ -3765,8 +4024,12 @@ export class GameScene extends Phaser.Scene {
    * Vale SO para criatura. Caixote, portao de bater, NPC e rocha continuam respondendo ao
    * primeiro esbarrao, venha ele de onde vier: nenhum deles cobra nada por ser tocado, e adiar a
    * resposta deles seria transformar um perdao em atraso.
+   *
+   * E vale so para AQUELA criatura. A carencia perdoa o toque humano que sobra do gesto de virar,
+   * e um toque humano acontece contra um corpo so — cercado, o perdao gasto numa caveira nao pode
+   * comprar meio esbarrao de graca na proxima.
    */
-  private turnedTowardCreature(wx: number, wy: number): boolean {
+  private turnedTowardCreature(wx: number, wy: number, enemy: EnemyBase): boolean {
     const now = this.time.now;
     const f = this.movementController?.facing;
     // O controlador chama o esbarrao ANTES de escrever a nova direcao, entao `facing` aqui ainda
@@ -3776,9 +4039,10 @@ export class GameScene extends Phaser.Scene {
         || Math.sign(wy - this.playerWorld.worldY) !== f.dy);
     if (turning) {
       this.creatureTurnGraceUntilMs = now + CREATURE_TURN_GRACE_MS;
+      this.creatureTurnGraceOn = enemy;
       return true;
     }
-    return now < this.creatureTurnGraceUntilMs;
+    return this.creatureTurnGraceOn === enemy && now < this.creatureTurnGraceUntilMs;
   }
 
   /**
@@ -3806,40 +4070,86 @@ export class GameScene extends Phaser.Scene {
   /**
    * Land a melee blow on an enemy at (wx, wy): damage, swing arc, knockback, and all the
    * impact juice. Um golpe tem tres procedencias, e o `weapon` e quem as separa:
-   *   - `sword`: o botao A com a espada na mochila — mata a caveira de um golpe;
+   *   - `sword`: o botao A com a espada na mochila — 2 de dano, duas espadadas na caveira;
    *   - `fist`:  o botao A sem espada — o soco, tres para matar;
    *   - `item`:  o botao B com o item selecionado — a escada MELEE_DAMAGE de sempre (o graveto
    *              ACESO mata de um golpe, uma ferramenta qualquer em dois). Um item que nao bate
    *              (bomba, botas) nao faz nada.
    * So o golpe de `item` desenha o proprio arco aqui: A ja desenhou o dele antes de acertar,
    * porque ele sai mesmo no vazio.
+   *
+   * Devolve o QUE ACONTECEU com este corpo, porque quem varre um arco precisa saber qual das duas
+   * vozes do gesto foi gasta — ver `sweepArc`.
    */
   private strikeEnemy(
     enemy: EnemyBase,
     wx: number,
     wy: number,
     weapon: 'sword' | 'fist' | 'item' | 'spin',
-    // Este corpo e o SEGUNDO (ou o oitavo) do mesmo gesto — o arco varre tres tiles e o giro
-    // varre oito. O que e do CORPO (dano, faisca, arremesso) acontece uma vez por corpo; o que
-    // e do GESTO (o som do impacto, a piscada do heroi, o baque da morte) acontece uma vez por
-    // gesto, ou um giro no meio da matilha dispara oito sons de acerto no mesmo frame.
-    echo = false,
-  ): void {
+    // O que o GESTO ja disse. Este corpo pode ser o segundo (ou o oitavo) do mesmo golpe: o arco
+    // varre ate seis tiles e o giro oito. O que e do CORPO (dano, faisca, anel, arremesso)
+    // acontece uma vez por corpo; a VOZ — som e piscada do heroi — sai uma vez por gesto, e cada
+    // uma das duas tem o proprio orcamento, ou um resvalo cala a morte do corpo ao lado.
+    hitSpoken = false,
+    refusalSpoken = false,
+  ): 'landed' | 'refused' {
+    // O ARCO SAI ANTES DE SE SABER SE ACERTOU, e por isso ele vem antes das duas recusas abaixo.
+    // E a mesma lei do botao A ("o arco sai mesmo no vazio, de proposito"): um golpe que so
+    // aparece quando conecta esconde o alcance da arma — e, pior aqui, faz o jogador apertar B
+    // contra um corpo piscando e nao ver mao nenhuma se mexer. A faisca de recusa explica o que
+    // aconteceu; ela nao substitui o gesto de ter atacado.
+    if (weapon === 'item') this.swingHeld(wx, wy);
+
+    // O CORPO AINDA ESTA PISCANDO do golpe anterior: o gesto RESVALA. Ele nao pode ser silencioso
+    // (o jogador apertou o botao e viu a lamina passar por dentro do bicho) nem pode ser um
+    // acerto, entao usa o mesmo pacote de recusa do corpo que ainda esta nascendo — anel palido,
+    // sem dano, sem faisca de impacto. Ver EnemyBase.hurtInvulnMs.
+    //
+    // O anel sai SEMPRE, mesmo que outro corpo do mesmo arco ja tenha resvalado: ele e a resposta
+    // DAQUELE corpo. Um resvalo mudo no meio de um giro le como a lamina passando por dentro do
+    // bicho sem nada acontecer, que e a leitura de bug.
+    if (enemy.isHurtInvulnerable) {
+      this.spawnDeflect(wx, wy);
+      if (!refusalSpoken) {
+        getSoundManager().playBladeGlance();
+        this.triggerHitstop(GLANCE_HITSTOP_MS);
+      }
+      return 'refused';
+    }
+
+    // A GUARDA: o bicho que esta armando um golpe encara o que vai bater, e o que vem de la bate
+    // na guarda dele. E a aula que o soldado da primeira sala do `A Link to the Past` da sem uma
+    // linha de texto — atacar de frente nao passa, contornar passa —, e ela so existe dentro da
+    // janela do telegrafo: fora dela, todo lado do corpo vale.
+    const guardX = Math.sign(this.playerWorld.worldX - wx);
+    const guardY = Math.sign(this.playerWorld.worldY - wy);
+    if (enemy.guardsAgainst(guardX, guardY)) {
+      // A faisca e do CORPO (ela diz "ESTE lado esta fechado", e a posicao dela e a informacao);
+      // o tim e o tranco sao a VOZ da recusa, e saem uma vez por gesto. Um giro no meio de uma
+      // matilha inteira guardando disparava oito tins no mesmo frame.
+      this.spawnGuardSpark(wx, wy, guardX, guardY);
+      if (!refusalSpoken) {
+        getSoundManager().playGuardBlock();
+        this.world3d?.shake(50, 0.035);
+        this.triggerHitstop(GUARD_HITSTOP_MS);
+      }
+      return 'refused';
+    }
+
     let damage: number;
     if (weapon === 'fist') damage = BARE_HAND_DAMAGE;
     else if (weapon === 'sword' || weapon === 'spin') {
-      damage = MELEE_DAMAGE.sword ?? 999;
+      damage = MELEE_DAMAGE.sword ?? 2;
     } else {
       const itemDamage = MELEE_DAMAGE[this.heldItem as HeldItemKind];
-      if (itemDamage === undefined) return;
+      if (itemDamage === undefined) return 'refused';
+      // O graveto ACESO segue matando de um golpe, e agora ele e a unica coisa que faz isso: o
+      // fogo e um recurso que se gasta (o combustivel corre, a chama entrega sua posicao no
+      // escuro e a mao fica presa nele), entao ele pode comprar o que a espada deixou de dar.
       damage = this.heldOnFire ? 999 : itemDamage;
     }
 
-    // A melhoria de cadencia da loja e da ESPADA: ela compra golpes por gesto, e so ela.
-    const hits = weapon === 'fist' || weapon === 'item' ? 1 : 1 + this.upgrades.swordSpeed;
-    for (let i = 0; i < hits; i++) enemy.takeDamage(damage);
-
-    if (weapon === 'item') this.swingHeld(wx, wy);
+    enemy.takeDamage(damage);
 
     // ── O ACERTO MUDA O TABULEIRO ──────────────────────────────────────────────
     //
@@ -3857,28 +4167,58 @@ export class GameScene extends Phaser.Scene {
       // A direcao do arremesso e a do heroi para o corpo — inclusive na diagonal, que so o giro
       // produz: um corpo atingido pelo rodopio voa para FORA dele, e nao para um cardinal
       // arredondado que o desenho do golpe nao mostrou.
-      enemy.shove(Math.sign(dx), Math.sign(dy), (tx, ty) => this.canEnemyEnter(enemy, tx, ty));
+      const shoved = enemy.shove(Math.sign(dx), Math.sign(dy), (tx, ty) => this.canEnemyEnter(enemy, tx, ty));
+      // ENCURRALAR PAGA. O arremesso barrado por uma parede era a jogada boa mais silenciosa do
+      // jogo: dava exatamente o mesmo recuo de um empurrao no vazio. Agora o encontrao tem peso
+      // proprio — mais hitstop, tremor mais fundo e a poeira do impacto na PAREDE, no ponto em que
+      // o corpo bateu. E o jogo tem a melhor parede possivel pra isso, que e a luz da fogueira.
+      if (shoved === 'slammed') {
+        // A poeira e do CORPO: ela sai no ponto em que ELE bateu na parede. O baque, o tremor e o
+        // hitstop sao a voz do acerto — o encontrao e a melhor coisa que o gesto fez, entao ele
+        // fala junto com o primeiro golpe que landou e nao se repete a cada corpo encurralado.
+        this.spawnSlamDust(wx + Math.sign(dx) * 0.5, wy + Math.sign(dy) * 0.5);
+        if (!hitSpoken) {
+          this.triggerHitstop(90);
+          this.world3d?.shake(120, 0.12);
+          getSoundManager().playBodySlam();
+        }
+      }
     } else {
-      enemy.triggerKnockback(dx, dy);
+      // O CORPO MORTO TAMBEM VOA. Aqui havia um `triggerKnockback`, e ele nao fazia nada: aquele
+      // metodo sai na primeira linha se o corpo ja morreu, e `render()` para de escrever a posicao
+      // do billboard depois da morte — entao o unico golpe do jogo que nao movia ninguem era
+      // justamente o que matava. Ver EnemyBase.deathFling.
+      enemy.deathFling(dx, dy);
     }
-    if (weapon === 'item' && this.heldOnFire && enemy.isAlive) this.spawnFireHitEffect(wx, wy);
+    // O GRAVETO ACESO SEMPRE DEIXA FOGO NO CORPO. Havia um `&& enemy.isAlive` aqui, e ele tornava
+    // esta linha INALCANCAVEL: a chama da 999 de dano (ela e a unica coisa que ainda mata de um
+    // golpe), entao o corpo nunca esta vivo quando se chega aqui — o unico golpe do jogo que
+    // deveria terminar em fogo era justamente o que nunca mostrava nenhum.
+    if (weapon === 'item' && this.heldOnFire) this.spawnFireHitEffect(wx, wy);
 
-    if (!echo) {
+    if (!hitSpoken) {
       getSoundManager().playEnemyHit();
       this.hero.tint = 0xffff00;
       this.time.delayedCall(120, () => { this.hero.tint = null; });
+      // O QUADRO DE IMPACTO: o hitstop logo abaixo congela a lamina no meio do arco, e este
+      // lampejo e o que diz por que ela parou. Ver SwordSlash.flashHit.
+      this.swordSlash?.flashHit();
     }
 
     // Impact juice: sparks at the point of contact, a kick of screen shake, and a few
-    // frames of hitstop — all heavier when the blow kills.
+    // frames of hitstop — all heavier when the blow kills. O tremor e o hitstop ficam FORA do
+    // orcamento da voz de proposito: os dois se resolvem por si (o hitstop e um `Math.max` e o
+    // tremor e o ultimo que manda), e gastar a vez neles faria uma morte no terceiro tile do arco
+    // herdar o baque leve do arranhao do primeiro.
     const lethal = !enemy.isAlive;
-    this.spawnHitSpark(wx, wy, lethal);
+    this.spawnHitSpark(wx, wy, lethal, dx, dy);
     this.world3d?.shake(lethal ? 150 : 90, lethal ? 0.15 : 0.09);
     this.triggerHitstop(lethal ? 110 : 60);
     if (lethal) {
-      if (!echo) getSoundManager().playEnemyDeath();
+      if (!hitSpoken) getSoundManager().playEnemyDeath();
       this.rewardKill(wx, wy);
     }
+    return 'landed';
   }
 
   /**
@@ -3919,8 +4259,19 @@ export class GameScene extends Phaser.Scene {
     this.tweens.timeScale = 0;
   }
 
-  /** Sparks + a white impact flash where a melee blow lands; heavier when the blow kills. */
-  private spawnHitSpark(wx: number, wy: number, lethal: boolean): void {
+  /**
+   * Sparks + a white impact flash where a melee blow lands; heavier when the blow kills.
+   *
+   * AS FAÍSCAS TÊM DIREÇÃO, e é ela que diz de onde veio o golpe. Elas saíam em 360° uniformes
+   * (`ang = (i/count) * 2π`), então um golpe vindo do oeste e um vindo do leste desenhavam
+   * exatamente a mesma estrela — a única coisa que o impacto tinha a dizer sobre si mesmo era
+   * "aconteceu aqui", e nunca "veio dali". Agora elas saem num LEQUE para fora do golpe, que é a
+   * mesma regra que a faísca da guarda já respeitava (`spawnGuardSpark`: a posição é a informação).
+   *
+   * O golpe que MATA abre o leque quase até o círculo: ali não há mais direção a ensinar, e a
+   * explosão em volta é o vocabulário certo para uma coisa que se desfez.
+   */
+  private spawnHitSpark(wx: number, wy: number, lethal: boolean, dirX = 0, dirY = 0): void {
     const w3 = this.world3d;
     if (!w3) return;
 
@@ -3946,8 +4297,20 @@ export class GameScene extends Phaser.Scene {
 
     // Sparks thrown off the blow, flying out across the ground plane and arcing up a little.
     const count = lethal ? 7 : 4;
+    // O eixo do leque: a direção do golpe (do herói para o corpo). Sem direção — a bomba, o fogo,
+    // um caminho de dano que não vem de um braço — ele volta a ser o círculo de antes.
+    const aimed = dirX !== 0 || dirY !== 0;
+    const axis = aimed ? Math.atan2(dirY, dirX) : 0;
+    // Meio leque, em radianos. O golpe que fere abre ~150° (um leque nítido para a frente); o que
+    // mata abre quase tudo, porque ali o corpo se desfez e não há mais lado nenhum a apontar.
+    const spread = lethal ? Math.PI * 0.82 : Math.PI * 0.42;
     for (let i = 0; i < count; i++) {
-      const ang = (i / count) * Math.PI * 2 + Math.random() * 0.8;
+      // -1..1 ao longo do leque (`count` nunca é 1, então a divisão é segura), mais um tremor por
+      // faísca: sem ele as quatro saem em leque perfeito, que lê como um decalque e não como pó.
+      const fan = ((i / (count - 1)) * 2 - 1) * spread;
+      const ang = aimed
+        ? axis + fan + (Math.random() - 0.5) * 0.35
+        : (i / count) * Math.PI * 2 + Math.random() * 0.8;
       const dist = 0.45 + Math.random() * (lethal ? 0.75 : 0.4);
       const spark = w3
         .addBillboard(ASSET_KEYS.bombItem, BOMB_FRAMES.spark, {
@@ -4131,6 +4494,78 @@ export class GameScene extends Phaser.Scene {
         elevation: FX_BODY_ELEV + Math.abs(Math.sin(ang)) * dist,
         alpha: 0,
         duration: 200 + Math.random() * 90,
+        ease: 'Cubic.easeOut',
+        onComplete: () => shard.destroy(),
+      });
+    }
+  }
+
+  /**
+   * A poeira do ENCONTRÃO: o corpo bateu na parede e ela devolve o pó, no ponto do impacto e
+   * espalhando para os lados dele — nunca para a frente, que é onde o corpo não pôde ir.
+   */
+  private spawnSlamDust(cx: number, cy: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    for (let i = 0; i < 5; i++) {
+      const ang = Math.PI * (0.15 + Math.random() * 0.7) * (i % 2 === 0 ? 1 : -1);
+      const puff = w3
+        .addBillboard(FX_PUFF_TEXTURE, 0, { ...FX_BILLBOARD })
+        .setTint(0x9a9284)
+        .setPosition(cx, cy)
+        .setElevation(FX_BODY_ELEV * 0.6)
+        .setDisplaySize(0.16, 0.16)
+        .setAlpha(0.7);
+      this.tweens.add({
+        targets: puff,
+        x: cx + Math.cos(ang) * 0.4,
+        y: cy + Math.sin(ang) * 0.25,
+        scaleX: 0.34,
+        scaleY: 0.34,
+        alpha: 0,
+        duration: 320,
+        ease: 'Cubic.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+  }
+
+  /**
+   * A GUARDA APARANDO — e ela precisa dizer uma coisa que o resvalo NÃO diz.
+   *
+   * Os dois usavam o mesmo `spawnDeflect`, e são lições opostas: o resvalo dos i-frames significa
+   * ESPERE (o corpo está piscando, bata de novo daqui a pouco) e a guarda significa CONTORNE (este
+   * lado está fechado, o outro não). Ensinar as duas com o mesmo anel centrado é não ensinar
+   * nenhuma.
+   *
+   * Então a guarda não desenha um anel: desenha um LEQUE curto de faíscas na BORDA do corpo, no
+   * lado de onde o golpe veio — a posição é a informação. Cor de aço quente, não o azul frio do
+   * resvalo, pela mesma razão: duas recusas, duas paletas.
+   */
+  private spawnGuardSpark(wx: number, wy: number, fromDx: number, fromDy: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    // O ponto de contato: meio tile na direção de quem bateu — a borda do corpo, não o centro.
+    const cx = wx + fromDx * 0.45;
+    const cy = wy + fromDy * 0.45;
+    // As faíscas saem PARA TRÁS, na direção de quem bateu: o golpe foi devolvido, não absorvido.
+    for (let i = 0; i < 4; i++) {
+      const spread = (i - 1.5) * 0.36;
+      const dx = fromDx !== 0 ? fromDx : spread;
+      const dy = fromDy !== 0 ? fromDy : spread;
+      const shard = w3
+        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true })
+        .setTint(0xffe6b0)
+        .setPosition(cx, cy)
+        .setElevation(FX_BODY_ELEV)
+        .setDisplaySize(0.11, 0.11)
+        .setAlpha(0.95);
+      this.tweens.add({
+        targets: shard,
+        x: cx + dx * 0.34 + (fromDx !== 0 ? spread * 0.5 : 0),
+        y: cy + dy * 0.34 + (fromDy !== 0 ? spread * 0.5 : 0),
+        alpha: 0,
+        duration: 190,
         ease: 'Cubic.easeOut',
         onComplete: () => shard.destroy(),
       });
@@ -5088,14 +5523,41 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Kill every enemy caught in the blast.
+    // Kill every enemy caught in the blast — e a explosao JOGA os corpos para fora dela. Uma bomba
+    // que deixasse tres caveiras se desmanchando em pe, cada uma no seu tile, seria a unica coisa
+    // do jogo com raio de acao e sem sopro. Ver EnemyBase.deathFling: o mesmo arremesso que o golpe
+    // que mata passou a dar, so que a direcao aqui e a do centro da explosao para o corpo.
+    //
+    // A EXPLOSAO PERGUNTA ANTES DE FERIR, como todo caminho de dano deste jogo deve. O
+    // `EnemyBase.takeDamage` ja escrevia a regra e a bomba era a unica que nao a seguia: "quem
+    // chama SEMPRE pergunta antes (`isHurtInvulnerable`) para poder responder na tela — este guarda
+    // e a rede, nao a porta". Sem a pergunta, um corpo que acabou de levar uma espadada ATRAVESSAVA
+    // a explosao inteira e nada aparecia: nem anel, nem som, nem dano. O jogador via a bomba
+    // estourar em cima da caveira e a caveira seguir andando, sem uma unica pista do porque.
+    //
+    // A recusa continua sendo recusa (os i-frames valem para TODA fonte de dano, ou o combate volta
+    // a ser uma serra) — o que muda e que agora ela tem desenho, que e o anel frio de sempre.
+    let blastKilled = false;
+    let blastRefused = false;
     for (const enemy of this.enemyManager?.getAliveEnemies() ?? []) {
       if (!inBlast(enemy.worldX, enemy.worldY)) continue;
+      if (enemy.isHurtInvulnerable) {
+        this.spawnDeflect(enemy.worldX, enemy.worldY);
+        blastRefused = true;
+        continue;
+      }
       enemy.takeDamage(999);
       if (!enemy.isAlive) {
-        getSoundManager().playEnemyDeath();
+        // A VOZ DA EXPLOSAO SAI UMA VEZ, como a do arco (ver sweepArc): uma bomba no meio de uma
+        // matilha disparava um som de morte por corpo, todos no mesmo frame.
+        if (!blastKilled) getSoundManager().playEnemyDeath();
+        blastKilled = true;
+        enemy.deathFling(enemy.worldX - bomb.worldX, enemy.worldY - bomb.worldY);
       }
     }
+    // So se NADA morreu: com um corpo caindo, o som da morte ja disse que a explosao encontrou
+    // gente, e o raspao por cima dele seria uma segunda voz para o mesmo estouro.
+    if (blastRefused && !blastKilled) getSoundManager().playBladeGlance();
 
     // Set fire to everything flammable in the area — and each of those then spreads on its
     // own, so the bomb is a way to start a fire somewhere the hero cannot stand.
@@ -6180,6 +6642,58 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * O ESCUDO — e ele não é um item, é a DIREÇÃO EM QUE O HERÓI OLHA.
+   *
+   * O combate não tinha verbo defensivo nenhum: o único jeito de não apanhar era andar para trás,
+   * e como andar para trás sempre funciona, nunca havia decisão. No `A Link to the Past` metade
+   * da leitura de uma luta é o escudo, que apara sozinho o que vem da frente do Link.
+   *
+   * Aqui ele é intrínseco de propósito. O herói tem UMA mão (a mochila entrega um item por vez) e
+   * um escudo que ocupasse essa mão custaria a tocha, o machado e o balde para comprar uma defesa
+   * — e o jogo já ensinou que a parede VIRA o herói e que virar-se para uma criatura é de graça.
+   * Fazer da direção olhada a defesa não acrescenta botão nenhum: transforma o gesto que o jogador
+   * já faz (encarar) na resposta que faltava.
+   *
+   * **E ele só apara TIRO** (quem chama testa `hit.ranged`), que é a regra do original e a única
+   * que não desmonta o resto do combate. Se encarar aparasse também o golpe de corpo, encarar
+   * seria invencibilidade: todo bicho que anda bate de perto, e o jogador ficaria imune a metade
+   * do bestiário parado, sem se mover. Contra o corpo a resposta continua sendo a que o telegrafo
+   * de 500ms ensina — SAIR DO TILE —, e contra o tiro passa a ser encarar. Dois problemas, duas
+   * respostas, e nenhuma delas resolve a outra.
+   *
+   * Três recusas, e cada uma existe por um motivo:
+   *  - **cone frontal de 90°**: o eixo dominante do golpe tem de ser o eixo encarado, senão o
+   *    escudo viraria uma bolha e apanhar deixaria de ser possível de frente;
+   *  - **não apara durante o próprio golpe** (`SWING_ROOT_MS`): quem ataca abaixa a guarda — é o
+   *    preço que faz atacar ser uma decisão e não um reflexo grátis;
+   *  - **não apara o que nasce em cima dele** (a explosão, o fogo do chão): não há direção de onde
+   *    se defender de uma coisa que já está no seu tile.
+   */
+  private blocksBlowFrom(fromX: number, fromY: number): boolean {
+    if (this.movementController?.isRooted === true) return false;
+    const dx = fromX - this.playerWorld.worldX;
+    const dy = fromY - this.playerWorld.worldY;
+    if (dx === 0 && dy === 0) return false;
+    const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
+    return Math.abs(dx) >= Math.abs(dy)
+      ? Math.sign(dx) === f.dx && f.dx !== 0
+      : Math.sign(dy) === f.dy && f.dy !== 0;
+  }
+
+  /**
+   * O que o jogador VÊ quando o escudo apara: a faísca fria no ponto do impacto, o tim de metal e
+   * um baque curto de câmera. Nada de dano, nada de invencibilidade gasta — aparar não consome a
+   * janela de 1,5s que levar um golpe daria, ou defender seria uma forma cara de apanhar.
+   */
+  private playShieldBlock(fromX: number, fromY: number): void {
+    this.spawnDeflect(fromX, fromY);
+    getSoundManager().playGuardBlock();
+    this.world3d?.shake(60, 0.04);
+    this.hero.tint = 0xbcd4ff;
+    this.time.delayedCall(90, () => { this.hero.tint = null; });
+  }
+
+  /**
    * O heroi levou um golpe. Ele chega por duas procedencias e a diferenca esta em `ranged`: um
    * golpe de CORPO faz o bicho investir na direcao do heroi (o tombo pra frente, que e a metade
    * animada do impacto); um TIRO nao tem ninguem pra investir — o empurrao vem da direcao do voo,
@@ -6188,6 +6702,11 @@ export class GameScene extends Phaser.Scene {
    */
   private handleEnemyAttackPlayer(hit: EnemyHit): void {
     if (this.playerInvincible || this.isDead) return;
+    // O ESCUDO — e ele só apara TIRO. Ver `blocksBlowFrom`.
+    if (hit.ranged && this.blocksBlowFrom(hit.fromX, hit.fromY)) {
+      this.playShieldBlock(hit.fromX, hit.fromY);
+      return;
+    }
 
     // Same reason as handlePlayerBump: reset the breathing pose before the hurt shake repins
     // the hero, so it doesn't jump up half a tile mid-hit.
@@ -6204,7 +6723,14 @@ export class GameScene extends Phaser.Scene {
     getSoundManager().playPlayerHurt();
 
     this.playerInvincible = true;
-    this.invincibleTimer = 1500;
+    this.invincibleTimer = PLAYER_INVULN_MS;
+
+    // O ACERTO COMPRA TEMPO DOS DOIS LADOS. O herói para de andar E de agir enquanto o empurrão o
+    // devolve ao centro — ver PLAYER_STAGGER_MS. São duas travas porque são duas coisas: a raiz
+    // segura os PÉS (e ela sabe não congelar um passo no meio do tile), e `playerStaggerMs` segura
+    // os BOTÕES — adiando o pedido como uma cadência, nunca descartando (ver `spendActionBuffers`).
+    this.playerStaggerMs = PLAYER_STAGGER_MS;
+    this.movementController?.root(PLAYER_STAGGER_MS);
 
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
 
@@ -6238,9 +6764,9 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: this.hero,
       alpha: 0.3,
-      duration: 80,
+      duration: PLAYER_BLINK_HALF_MS,
       yoyo: true,
-      repeat: 5,
+      repeat: PLAYER_BLINK_REPEAT,
       onComplete: () => {
         this.hero.alpha = 1;
         this.hero.tint = null;
@@ -6311,8 +6837,8 @@ export class GameScene extends Phaser.Scene {
     // (stopBreathing below cancels any in-flight hurt-knockback shove.)
     this.hitstopMs = 0;
     this.tweens.timeScale = 1;
-    // Nem golpe guardado, nem carga na lamina, nem feixe no ar sobrevive a morte: o silencio da
-    // tela de morte nao pode ser interrompido por um botao que o heroi apertou enquanto caia.
+    // Nem golpe guardado nem carga na lamina sobrevive a morte: o silencio da tela de morte nao
+    // pode ser interrompido por um botao que o heroi apertou enquanto caia.
     this.resetChargeAndBuffers();
     // One last heavy blow before the silence.
     this.world3d?.shake(300, 0.26);

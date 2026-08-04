@@ -19,8 +19,8 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
  * regra do mundo sobre onde monstro pode existir.)
  *
  * O SLIME GRANDE e a mesma criatura no corpo dobrado, com uma frase extra: ele RACHA. Matar um
- * vira matar tres, e por isso a espada — que mata qualquer coisa de um golpe — nao encerra o
- * assunto com ele. E a unica peca do bestiario que responde ao golpe perfeito com mais trabalho.
+ * vira matar tres — e como ele tem 6 de vida, sao tres espadadas para GANHAR mais dois corpos. E
+ * a unica peca do bestiario que responde ao golpe que matou com mais trabalho, e nao com silencio.
  */
 
 type SlimeVariant = 'slime' | 'bigslime';
@@ -28,14 +28,14 @@ type SlimeVariant = 'slime' | 'bigslime';
 const SLIME_STATS = {
   slime: {
     maxHealth: 4,
-    moveIntervalMs: 1200,
+    moveIntervalMs: 950,
     scale: 0.72,
     texture: ASSET_KEYS.slime,
     pool: ASSET_KEYS.slimePool,
   },
   bigslime: {
     maxHealth: 6,
-    moveIntervalMs: 1500,
+    moveIntervalMs: 1150,
     // 1.0 e o teto: nenhum sprite vaza do seu tile. O contraste com o filhote (0,72) e o que
     // faz "grande" ser legivel sem quebrar a lei.
     scale: 1.0,
@@ -98,6 +98,11 @@ export class SlimeEnemy extends WalkerEnemy {
     return false;
   }
 
+  /** Uma bolha nao tem frente para guardar (ver WalkerEnemy.guardsWhileWindingUp). */
+  protected override get guardsWhileWindingUp(): boolean {
+    return false;
+  }
+
   protected override get moveIntervalMs(): number {
     return SLIME_STATS[this.variant].moveIntervalMs;
   }
@@ -142,6 +147,11 @@ export class SlimeEnemy extends WalkerEnemy {
       return;
     }
     if (ctx.dist > this.detectionRange) this.wander(ctx.isBlocked);
+  }
+
+  /** A poça já É a marca desta espécie — ver CorpseDecals, que por isso nunca a enterra. */
+  protected override get leavesCorpseMark(): boolean {
+    return false;
   }
 
   /** Morrer deixa marca: a poca no chao, secando. E o grande ainda racha em dois. */

@@ -145,6 +145,23 @@ export const ASSET_KEYS = {
   undeadBorn4: 'undead-born-4',
   undeadBorn5: 'undead-born-5',
   undeadBorn6: 'undead-born-6',
+  // A ARMA DELA (Sprite Factory). Um femur simetrico: o billboard gira em torno do proprio centro
+  // durante o golpe, e um osso com no de um lado so leria de ponta-cabeca em metade do arco.
+  undeadBone: 'undead-bone',
+  /**
+   * A OSSADA do chao — a MESMA arte da frame 27 do `forest_tile_set` ("Caveira e Ossos"), recortada
+   * pixel a pixel para um PNG proprio.
+   *
+   * O recorte nao e organizacao: e o CONSERTO da nitidez dela. O `forest-tileset` e a unica textura
+   * do jogo filtrada em LINEAR (ver textures3d) — de proposito, porque a malha do terreno busca o
+   * centro do texel por conta propria e usa o filtro so na costura entre tiles. Um BILLBOARD nao faz
+   * essa conta: ele amostra o atlas direto, entao a ossada era o unico sprite do jogo desenhado
+   * borrado. Textura propria = NEAREST como todo o resto, sem nenhum pixel diferente.
+   */
+  bones: 'bones',
+  // Os PEDACOS do desmonte: [0] a cabeca, [1] um osso quebrado. O femur inteiro que voa junto e o
+  // proprio `undeadBone` — o esqueleto se parte nos mesmos ossos com que batia.
+  undeadBits: 'undead-bits',
   // O balao de PENSAMENTO do morto-vivo (Sprite Factory). Nao confundir com o balao de
   // item-que-falta, que foi arrancado do jogo: aquele falava com o jogador, este mostra o que a
   // criatura quer. Por isso a arte e outra (bolhas soltas, nao rabicho de fala) e a chave e outra.

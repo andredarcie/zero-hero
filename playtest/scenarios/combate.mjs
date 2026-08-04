@@ -13,7 +13,7 @@
 //   1. a MOCHILA guarda em vez de trocar (pegar um item nao larga o anterior);
 //   2. a PAREDE VIRA o heroi — sem isso nao ha como mirar num tile bloqueado, e os dois botoes
 //      nao teriam alvo;
-//   3. o A mata a distancia de um tile, sem encostar;
+//   3. o A ALCANCA o tile da frente, sem o heroi encostar (fere: a espada nao mata de um golpe);
 //   4. o ESBARRAO NAO BATE MAIS — e cobra dano de contato de quem esbarrou;
 //   5. o B usa o item contra a trava que o pede (a rocha e a picareta);
 //   6. o B POUSA o item num tile livre, e o heroi o pega de volta andando por cima;
@@ -113,7 +113,7 @@ export default {
       facing.x === ROCK.x - 1 && facing.y === ROCK.y, JSON.stringify(facing));
 
     // ── 3. O BOTAO A GOLPEIA A DISTANCIA ────────────────────────────────────
-    log('A: a espada mata a caveira do tile a frente, sem encostar nela');
+    log('A: a espada alcanca a caveira do tile a frente, sem encostar nela');
     await page.evaluate(([x, y]) => {
       const s = window.__scene;
       s.heldItem = 'sword';
@@ -134,8 +134,12 @@ export default {
     await driver.attack();
     await driver.settle(600);
     const struck = await driver.getState();
-    assert('o botao A mata a caveira do tile a frente, sem o heroi encostar nela',
-      struck.undead.length === 0, JSON.stringify(struck.undead));
+    // FERE, nao mata: a espada deixou de valer 999 de dano (ver MELEE_DAMAGE.sword). O que este
+    // cenario guarda e o CONTRATO DO BOTAO — o A alcanca o tile da frente sem encostar —, e isso
+    // se prova no dano; contar cadaveres media a tabela de dano de tabela.
+    assert('o botao A fere a caveira do tile a frente, sem o heroi encostar nela',
+      struck.undead.length === 1 && struck.undead[0].health < struck.undead[0].maxHealth,
+      JSON.stringify(struck.undead));
     assert('e o heroi nunca saiu do lugar', struck.player.worldX === ROCK.x - 1
       && struck.player.worldY === ROCK.y, JSON.stringify(struck.player));
     await shot('a-golpeia-a-distancia');
@@ -169,7 +173,10 @@ export default {
       bumped.health === healthBefore - 1, `${healthBefore} -> ${bumped.health}`);
     await page.evaluate(() => {
       // limpa o campo: o resto do cenario e sobre itens, e uma caveira viva atras vira ruido
-      window.__scene.enemyManager.getAliveEnemies().forEach((e) => e.takeDamage(999));
+      window.__scene.enemyManager.getAliveEnemies().forEach((e) => {
+        e.tickHurtInvuln(9999); // gasta a janela de i-frames: matar de proposito nao pode resvalar
+        e.takeDamage(999);
+      });
       window.__scene.playerHealth = window.__scene.playerMaxHealth;
     });
     await driver.settle(400);

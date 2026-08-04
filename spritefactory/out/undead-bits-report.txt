@@ -1,0 +1,5 @@
+undead-bits: 2 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 10x10 at (3,3), coverage 31%
+  [info] bbox: frame 1: content 8x9 at (4,3), coverage 17%
+  frame 0: #cdcdcd×34 #858585×26 #1d2b53×12 #b5b5b5×8
+  frame 1: #b5b5b5×22 #cdcdcd×12 #858585×10

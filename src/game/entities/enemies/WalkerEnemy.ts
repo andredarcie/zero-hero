@@ -19,14 +19,16 @@ import { FX_PUFF_TEXTURE, world3d } from '@/game/render3d/World3D';
  * - **Chegar e um EVENTO, nunca um pop.** Um corpo que aparece do nada ao lado do heroi e injusto.
  *   A caveira racha o chao por 3s; um bicho que nao vem de baixo faz o gesto curto equivalente —
  *   poeira, silhueta crescendo e som — e fica INVULNERAVEL e inerte enquanto isso.
- * - **O golpe e TELEGRAFADO, e ele trava um tile.** Estourado o relogio de ataque, o bicho nao
- *   fere: ele mira o tile em que o heroi esta AGORA, avisa (piscada + pose recuada) e bate
- *   `windupMs` depois, naquele tile. Sair de la e uma esquiva de verdade, e um golpe do heroi no
- *   meio do movimento CANCELA o ataque. Essa e a promessa que a caveira fez primeiro; um bicho
- *   novo que batesse sem aviso a desmentiria.
  * - **A luz de fogueira e parede** (isso mora no `isBlocked` que o GameScene passa) e **a tocha
  *   afasta quem a teme** (`fearsTorch`, em EnemyBase) — os dois unicos poderes que o jogador tem
  *   sobre um bicho sem chegar perto.
+ *
+ * **O TELEGRAFO NAO MORA MAIS AQUI.** O golpe armado, a marca no chao do tile mirado, o brilho da
+ * guarda e a geometria dela desceram para o `EnemyBase` (ver o bloco "O TELEGRAFO" la), e nao por
+ * arrumacao: enquanto viveram nesta classe, a caveira — que nao e um andarilho e que foi quem
+ * ENSINOU o telegrafo — era a unica especie do jogo sem marca no chao, sem guarda e com o golpe
+ * armado ainda cancelavel a pancada. Esta classe so decide QUANDO armar (`canStrike`) e por
+ * QUANTO TEMPO (`windupDurationMs`).
  *
  * O que cada especie diz de proprio esta no arquivo dela: o `think` (estados) e o `takeStep`
  * (como escolhe o proximo tile).
@@ -46,8 +48,6 @@ export type StepContext = {
 /** Quanto dura a chegada, e como ela cresce. */
 const ARRIVE_MS = 900;
 const ARRIVE_START_SCALE = 0.3;
-/** A piscada de aviso do golpe: o mesmo vermelho quente da caveira — um aviso, uma cor. */
-const WINDUP_FLASH = 0xff4a3d;
 
 export abstract class WalkerEnemy extends EnemyBase {
   /** Escala-base do corpo, em tiles. Nunca > 1: nenhum sprite vaza do seu tile. */
@@ -59,10 +59,6 @@ export abstract class WalkerEnemy extends EnemyBase {
   private arriveMs = ARRIVE_MS;
   private arriveScale = ARRIVE_START_SCALE;
   private dustTimer = 0;
-  // Golpe comprometido: > 0 = mirado em (windupTargetX/Y), contando pra bater.
-  private windupLeftMs = 0;
-  private windupTargetX = 0;
-  private windupTargetY = 0;
 
   protected constructor(
     scene: Phaser.Scene,
@@ -74,7 +70,6 @@ export abstract class WalkerEnemy extends EnemyBase {
   ) {
     super(scene, worldX, worldY, maxHealth, sprite);
     this.baseScale = baseScale;
-    this.healthBarVisible = false;
     this.sprite.setAlpha(0.55);
     getSoundManager().playCreatureArrive();
   }
@@ -142,14 +137,9 @@ export abstract class WalkerEnemy extends EnemyBase {
     return !(ctx.playerHasTorch && this.fearsTorch);
   }
 
-  // Invulneravel enquanto chega, e um golpe recebido no meio do movimento o CANCELA (a mesma
-  // recompensa que a caveira da por bater dentro do telegrafo).
+  /** Invulneravel enquanto chega (ver o cabecalho): o corpo existe, mas nao aceita golpe. */
   public override takeDamage(amount = 1): boolean {
     if (this.isSpawning) return false;
-    if (this.windupLeftMs > 0) {
-      this.windupLeftMs = 0;
-      this.attackTimer = 0;
-    }
     return super.takeDamage(amount);
   }
 
@@ -173,6 +163,11 @@ export abstract class WalkerEnemy extends EnemyBase {
     // um ponto de vida e sempre uma TROCA, e trocar dano nunca foi uma decisao.
     if (this.tickHitstun(delta)) return false;
 
+    // Golpe comprometido: nao anda, nao re-arma. Estourado o relogio, o golpe pega SO se o heroi
+    // ainda estiver no tile mirado E o tile ainda estiver ao alcance (ver EnemyBase.tickWindup).
+    const windup = this.tickWindup(delta, playerWorldX, playerWorldY, playerHasTorch);
+    if (windup !== 'idle') return windup === 'strike';
+
     const ctx: StepContext = {
       playerWorldX,
       playerWorldY,
@@ -180,19 +175,6 @@ export abstract class WalkerEnemy extends EnemyBase {
       playerHasTorch,
       isBlocked,
     };
-
-    // Golpe comprometido: nao anda, nao re-arma. Estourado o relogio, o golpe pega SO se o heroi
-    // ainda estiver no tile mirado — sair de la e a esquiva, e a mordida vai no ar.
-    if (this.windupLeftMs > 0) {
-      this.windupLeftMs -= delta;
-      if (this.windupLeftMs > 0) return false;
-      const struck = playerWorldX === this.windupTargetX
-        && playerWorldY === this.windupTargetY
-        && !(playerHasTorch && this.fearsTorch);
-      if (struck) return true; // o GameScene resolve o dano
-      this.whiff();
-      return false;
-    }
 
     this.think(delta, ctx);
 
@@ -208,7 +190,7 @@ export abstract class WalkerEnemy extends EnemyBase {
     this.attackTimer += delta;
     if (this.attackTimer >= this.attackIntervalMs) {
       this.attackTimer = 0;
-      if (this.canStrike(ctx)) this.startWindup(playerWorldX, playerWorldY);
+      if (this.canStrike(ctx)) this.startWindup(playerWorldX, playerWorldY, this.windupDurationMs);
     }
 
     return false;
@@ -263,28 +245,5 @@ export abstract class WalkerEnemy extends EnemyBase {
       ease: 'Power2.easeOut',
       onComplete: () => puff.destroy(),
     });
-  }
-
-  /** Mira o tile, avisa (piscada + pose recuada) e compromete o golpe. */
-  private startWindup(targetX: number, targetY: number): void {
-    const windup = this.windupDurationMs;
-    this.windupLeftMs = windup;
-    this.windupTargetX = targetX;
-    this.windupTargetY = targetY;
-    getSoundManager().playUndeadWindup();
-    this.sprite.setTintFill(WINDUP_FLASH);
-    this.scene.time.delayedCall(90, () => {
-      if (this.isAlive && this.sprite.active) this.restoreTint();
-    });
-    this.poseWindup(Math.sign(this.worldX - targetX), Math.sign(this.worldY - targetY), windup * 0.85);
-  }
-
-  /** O golpe que encontrou o vazio: ele investe no tile mirado e morde ar. */
-  private whiff(): void {
-    this.triggerKnockback(
-      Math.sign(this.windupTargetX - this.worldX),
-      Math.sign(this.windupTargetY - this.worldY),
-    );
-    getSoundManager().playUndeadWhiff();
   }
 }

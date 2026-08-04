@@ -55,7 +55,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 O jogo **não é mais só-andar**. Detalhes e consequências: `progress.md`.
 
     A (Z / J / espaço)  →  a ESPADA, na área à frente do herói. Sem espada, o soco.
-    B (X / K)           →  PEGA o item do chão; senão usa o escolhido no tile à frente, ou o pousa.
+    B (X / K)           →  PEGA o item do chão; FALA com o NPC à frente; senão usa o escolhido
+                           no tile à frente, ou o pousa.
     ESC                 →  a subtela: mochila + corações, e quem escolhe o item do B.
 
 No toque são dois círculos no canto de baixo (`ActionButtons`, ordem do NES: B à esquerda), e eles
@@ -78,8 +79,30 @@ aparecem em qualquer aparelho de dedo (`isTouchDevice`).
 - **Golpe que não mata compra espaço e tempo**: arremessa um tile (`EnemyBase.shove`, consultando o
   **mesmo mundo** em que o bicho anda — luz de fogueira inclusive) e atordoa (`applyHitstun`).
   Espécie que escreve a própria posição (torreta, zora) **precisa** de `canBeShoved = false`.
-- **O esbarrão ficou só com os gestos de corpo**: empurrar caixote, portão de bater, falar com NPC,
-  sentar na fogueira acesa (a loja) — e tomar dano de contato.
+- **NADA morre de um golpe** (`MELEE_DAMAGE.sword` = 2; só o graveto ACESO ainda mata em um). Era
+  999, e com isso o telegrafo de 500ms de cada espécie nunca acontecia: o encontro inteiro era
+  chegar perto e apertar Z. Toda lei abaixo depende desta.
+- **O corpo tem i-FRAMES** (`EnemyBase.hurtInvulnMs`, 450ms) e o golpe que cai neles **resvala**
+  (anel pálido, sem dano). Sem isso um arco de 6 tiles a cada 260ms é uma serra.
+- **O golpe armado do bicho NÃO se cancela batendo nele, e ele GUARDA a frente enquanto arma**
+  (`guardsAgainst`): a resposta ao telegrafo é sair do tile e contornar. Espécie sem frente
+  (gosma, morcego) devolve `guardsWhileWindingUp = false`. **O telegrafo marca o TILE mirado** (um
+  anel que fecha no chão): a resposta é sair de lá, então o lugar tem de estar na tela.
+- **Toda recusa tem desenho PRÓPRIO**: resvalo de i-frames = anel azul frio (espere) · guarda =
+  faíscas quentes NO LADO guardado (contorne), anunciadas por um brilho no mesmo lado durante o
+  telegrafo · encontrão contra parede = poeira + hitstop extra (`shove` devolve
+  `'moved' | 'slammed' | 'immovable'`). Duas recusas com o mesmo pixel não ensinam nenhuma.
+- **NÃO existe barra de vida** (o esqueleto dela foi deletado). Quem conta é o CORPO: ele escurece
+  conforme perde vida (`woundedShade`, que multiplica o tom permanente da espécie em vez de
+  substituí-lo) e deixa MARCA ao morrer — `die()` liga `corpseMark`, `despawn()` não, e quem tem
+  arte própria de morte (a poça da gosma) devolve `leavesCorpseMark = false`.
+- **Atacar PRENDE os pés** (`SWING_ROOT_MS` = 160, o giro 260): sem compromisso, espaçamento não
+  custa nada. `PlayerMovementController.root` impede COMEÇAR um passo, nunca congela um em curso.
+- **O escudo do herói é a DIREÇÃO EM QUE ELE OLHA, e só apara TIRO** (`blocksBlowFrom`, cone de
+  90°; guarda baixa enquanto ataca). Se aparasse golpe de corpo, encarar seria invencibilidade.
+- **O esbarrão ficou só com os gestos de corpo**: empurrar caixote, portão de bater, sentar na
+  fogueira acesa (a loja) — e tomar dano de contato. **Falar NÃO é esbarrão** (é o B): um gesto que
+  para o jogo inteiro não pode acontecer por a seta ter encostado em alguém de passagem.
 - `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…). Devolve
   `false` só quando o item não tem nada a ver com o tile, e **só então** `placeItemAt` pousa ali.
 - **Depositar é o B** (bandejas, buraco de plantio, marca de bomba, entrada do braço…), e **pegar

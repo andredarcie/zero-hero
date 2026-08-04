@@ -140,7 +140,11 @@ export default {
     );
     log('MORTE: encurta o relogio da cova e mata o corpo dela');
     await page.evaluate((ms) => { window.__scene.enemySpawners.respawnMs = ms; }, SHORT_RESPAWN_MS);
-    await page.evaluate(({ x, y }) => window.__scene.enemyManager.getEnemyAt(x, y).takeDamage(999), COVA_A);
+    await page.evaluate(({ x, y }) => {
+      const e = window.__scene.enemyManager.getEnemyAt(x, y);
+      e.tickHurtInvuln(9999); // fura os i-frames: o assunto aqui e a cova, nao o dano
+      e.takeDamage(999);
+    }, COVA_A);
     // A morte tem tween (~310ms) antes de o gerenciador varrer o corpo; o que importa aqui e que
     // a cova ja soltou o ocupante e comecou a contar.
     await driver.settle(200);

@@ -67,7 +67,10 @@ export default {
     /** Campo limpo, heroi inteiro, armado, no lugar e olhando para onde o teste precisa. */
     const reset = (facing, armed = true) => page.evaluate(([fx, fy, wantSword, px, py]) => {
       const s = window.__scene;
-      s.enemyManager.getAliveEnemies().forEach((e) => e.takeDamage(999));
+      s.enemyManager.getAliveEnemies().forEach((e) => {
+        e.tickHurtInvuln(9999); // gasta a janela de i-frames: limpar o campo nao pode resvalar
+        e.takeDamage(999);
+      });
       s.playerWorld.worldX = px;
       s.playerWorld.worldY = py;
       s.movementController.interruptMovement(px, py);
@@ -119,6 +122,10 @@ export default {
       await driver.settle(150);
     };
 
+    /** Todas as caveiras vivas levaram dano? (a espada nao mata mais de um golpe) */
+    const allHurt = (state) => state.undead.length > 0
+      && state.undead.every((u) => u.health < u.maxHealth);
+
     // ── 1. MIRAR NUM MONSTRO E DE GRACA ─────────────────────────────────────
     // A parede vira o heroi, e e assim que se mira — mas um monstro tambem bloqueia, e apertar a
     // seta contra ele cobrava dano de contato. Com a caveira ao NORTE e o heroi olhando pro SUL,
@@ -163,13 +170,13 @@ export default {
     assert('e as seis casas sao as duas fileiras a frente',
       swept3x2 === expected.sort().join(' '), `${swept3x2} != ${expected.sort().join(' ')}`);
 
-    // O acerto tem de concordar com a lista: uma caveira SO na diagonal morre no golpe...
+    // O acerto tem de concordar com a lista: uma caveira SO na diagonal e ferida pelo golpe...
     await spawnReady([[1, -1]]); // nordeste: nunca esteve no tile a frente
     await driver.attack();
     await driver.settle(700);
     const swept = await driver.getState();
     assert('o golpe alcanca a diagonal da frente — o acerto concorda com a arte',
-      swept.undead.length === 0, JSON.stringify(swept.undead));
+      allHurt(swept), JSON.stringify(swept.undead));
 
     // ...e a SEGUNDA fileira tambem: e o alcance novo, o que a orbita da lamina promete.
     await reset({ dx: 0, dy: -1 });
@@ -178,7 +185,7 @@ export default {
     await driver.settle(700);
     const reached = await driver.getState();
     assert('a ponta da lamina alcanca a segunda fileira',
-      reached.undead.length === 0, JSON.stringify(reached.undead));
+      allHurt(reached), JSON.stringify(reached.undead));
 
     // Mas so com CAMINHO: de mao vazia o soco para na primeira fileira.
     await reset({ dx: 0, dy: -1 }, false); // sem espada: o punho
@@ -190,7 +197,8 @@ export default {
     await driver.settle(700);
     const punched = await driver.getState();
     assert('e o soco nao alcanca a segunda fileira',
-      punched.undead.length === 1, JSON.stringify(punched.undead));
+      punched.undead.length === 1 && punched.undead[0].health === punched.undead[0].maxHealth,
+      JSON.stringify(punched.undead));
     await reset({ dx: 0, dy: -1 });
 
     // ...e o que esta ATRAS continua fora: o arco e frontal, nao um circulo.
@@ -209,9 +217,9 @@ export default {
     // bicho seguiam correndo, entao bater e nao bater davam o mesmo tabuleiro no frame seguinte —
     // e sem tabuleiro nao ha espacamento, que e a unica coisa que um combate de grade ensina.
     //
-    // Um SOCO, e nao a espada: a espada mata a caveira de um golpe, e um cadaver nao voa nem se
-    // atordoa. E esta caveira nasce SOLTA — medir atordoamento numa criatura congelada pelo
-    // proprio cenario seria medir o cenario.
+    // Um SOCO, e nao a espada: o punho da 1 de dano contra os 3 de vida da caveira, entao ela
+    // sobra com folga para ser medida — e um cadaver nao voa nem se atordoa. E esta caveira nasce
+    // SOLTA: medir atordoamento numa criatura congelada pelo proprio cenario seria medir o cenario.
     log('ARREMESSO + ATORDOAMENTO: um soco compra um tile de espaco e um tempo de iniciativa');
     await reset({ dx: 0, dy: -1 }, false); // sem espada na mochila: o punho
     await spawnReady([[0, -1]], false);
@@ -237,6 +245,22 @@ export default {
     assert('e o golpe a deixou ATORDOADA — o acerto para o relogio dela',
       struck !== null && struck.stunned === true, JSON.stringify(struck));
 
+    // ── 4b. ENCURRALAR PAGA ─────────────────────────────────────────────────
+    // O arremesso barrado por uma parede era a jogada boa mais silenciosa do jogo: dava o mesmo
+    // recuo de um empurrao no vazio. Agora o `shove` diz o que aconteceu, e 'slammed' e o que a
+    // cena usa pra cobrar mais hitstop, mais tremor e a poeira do impacto.
+    const slam = await page.evaluate(() => {
+      const s = window.__scene;
+      const e = s.enemyManager.getAliveEnemies()[0];
+      e.tickHurtInvuln(9999);
+      const openField = e.shove(0, -1, () => true);   // ha pra onde voar
+      const againstWall = e.shove(0, -1, () => false); // e agora nao ha
+      return { openField, againstWall, canBeShoved: e.canBeShoved };
+    });
+    assert('com espaco atras, o corpo VOA um tile', slam.openField === 'moved', JSON.stringify(slam));
+    assert('contra a parede, o mesmo golpe vira ENCONTRAO',
+      slam.againstWall === 'slammed', JSON.stringify(slam));
+
     // ...e a trava ABRE sozinha: o atordoamento e uma janela de vantagem, nao uma prisao.
     await driver.settle(500); // > HITSTUN_MS (300ms)
     const recovered = await page.evaluate(() => {
@@ -260,12 +284,16 @@ export default {
       surrounded.undead.length === 4, JSON.stringify(surrounded.undead));
     await shot('cercado-antes-do-giro');
 
-    // Primeiro a prova negativa: um toque CURTO nao carrega, e sem carga nao ha giro.
+    // Primeiro a prova negativa: um toque CURTO nao carrega, e sem carga nao ha giro. Ela se mede
+    // em VIDA e nao em cadaveres: com a espada valendo 2 e a caveira 3, um giro que saisse por
+    // engano nao mataria ninguem, e contar corpos passaria de qualquer jeito — a assercao diria
+    // uma coisa e provaria outra.
     await driver.spinAttack(120);
     await driver.settle(400);
     const tapped = await driver.getState();
-    assert('um toque curto no A nao gira — a carga e o preco do golpe',
-      tapped.undead.length === 4, JSON.stringify(tapped.undead));
+    assert('um toque curto no A nao gira — as quatro seguem INTACTAS',
+      tapped.undead.length === 4 && tapped.undead.every((u) => u.health === u.maxHealth),
+      JSON.stringify(tapped.undead));
     assert('e a lamina nao ficou carregada com 120ms de aperto',
       tapped.spinCharged === false, JSON.stringify({ charged: tapped.spinCharged }));
 
@@ -274,7 +302,107 @@ export default {
     await driver.settle(700);
     const spun = await driver.getState();
     assert('a lamina carregada varre as quatro de uma vez',
-      spun.undead.length === 0, JSON.stringify(spun.undead));
+      allHurt(spun), JSON.stringify(spun.undead));
     await shot('depois-do-giro');
+
+    // ── 6. A ESPADA NAO MATA MAIS DE UM GOLPE ───────────────────────────────
+    // A mudanca que devolveu o combate: com 999 de dano, o telegrafo de 500ms que cada especie
+    // carrega nunca chegava a acontecer — todo encontro era "chegue perto, aperte Z". A caveira
+    // tem 3 de vida e a espada da 2: dois golpes, com a resposta dela no meio.
+    log('DANO: duas espadadas para a caveira, e a primeira so a fere');
+    await reset({ dx: 0, dy: -1 });
+    await spawnReady([[0, -1]]);
+    await driver.attack();
+    await driver.settle(600);
+    const firstBlow = await driver.getState();
+    assert('a primeira espadada FERE e nao mata',
+      firstBlow.undead.length === 1 && firstBlow.undead[0].health < firstBlow.undead[0].maxHealth,
+      JSON.stringify(firstBlow.undead));
+
+    // ── 7. OS i-FRAMES DO CORPO ─────────────────────────────────────────────
+    // Duas espadadas dentro da janela de 450ms nao valem duas: a segunda RESVALA. Sem isto o
+    // arco de seis tiles a cada 260ms mataria qualquer coisa antes de ela armar.
+    const rapid = await page.evaluate(() => {
+      const s = window.__scene;
+      const e = s.enemyManager.getAliveEnemies()[0];
+      const before = e.healthNow;
+      s.strikeEnemy(e, e.worldX, e.worldY, 'sword'); // dentro da janela do golpe anterior
+      return { before, after: e.healthNow, invuln: e.isHurtInvulnerable };
+    });
+    assert('golpe dentro dos i-frames RESVALA — nao tira vida',
+      rapid.after === rapid.before, JSON.stringify(rapid));
+
+    await driver.settle(600); // passada a janela (450ms), o proximo golpe volta a valer
+    await driver.attack();
+    await driver.settle(600);
+    const secondBlow = await driver.getState();
+    assert('e a segunda espadada, fora da janela, mata',
+      secondBlow.undead.length === 0, JSON.stringify(secondBlow.undead));
+
+    // ── 8. A GUARDA DO BICHO ────────────────────────────────────────────────
+    // Enquanto arma o golpe, ele encara o tile mirado: o que vem de la bate na guarda. E a aula
+    // de posicionamento do `A Link to the Past`, e ela dura so a janela do telegrafo.
+    //
+    // A CAVEIRA e o corpo certo pra cobrar isto, e nao por comodidade: ela nao e um `WalkerEnemy`
+    // (tem a fissura de 3s, o laco da placa e o desmanche so dela), e enquanto o telegrafo morou
+    // naquela classe ela era a UNICA especie do jogo sem guarda, sem marca no chao e com o golpe
+    // armado ainda cancelavel a pancada — justamente a especie que ensinou o telegrafo. Hoje a
+    // maquinaria mora no `EnemyBase` e as duas leem a mesma. Se este bloco voltar a ficar vermelho,
+    // o que quebrou foi essa unificacao.
+    log('GUARDA: de frente o golpe e aparado; pelo lado, entra');
+    await reset({ dx: 0, dy: -1 });
+    await spawnReady([[0, -1]], false); // solta: precisa poder armar
+    await page.waitForFunction(
+      () => (window.gameDebug?.getState()?.undead ?? []).some((u) => u.windingUp),
+      null, { timeout: 8000 },
+    );
+    // TUDO no MESMO evaluate: a janela do telegrafo dura 500ms, e uma ida e volta de CDP entre
+    // duas leituras perderia a metade do teste.
+    const guard = await page.evaluate(() => {
+      const s = window.__scene;
+      const e = s.enemyManager.getAliveEnemies()[0];
+      const front = e.guardsAgainst(Math.sign(s.playerWorld.worldX - e.worldX),
+        Math.sign(s.playerWorld.worldY - e.worldY));
+      const side = e.guardsAgainst(1, 0);
+      // O COMPROMISSO: o dano entra por um caminho so (`takeDamage`), e ele nao pode mais apagar o
+      // golpe armado. Cancelava, e com dano real isso faria de "trancar o bicho em interrupcao" a
+      // estrategia dominante do jogo inteiro — bata a cada 260ms e nada nunca chega a bater em
+      // voce. A resposta ao telegrafo tem de continuar sendo SAIR DO TILE MIRADO.
+      const before = e.healthNow;
+      e.takeDamage(1);
+      return {
+        windingUp: e.isWindingUp,
+        front,
+        side,
+        hurt: e.healthNow < before,
+        stillWindingUp: e.isWindingUp,
+      };
+    });
+    assert('armando, ele guarda a frente (de onde o heroi bate)',
+      guard.windingUp === true && guard.front === true, JSON.stringify(guard));
+    assert('e o flanco continua aberto — contornar e a resposta',
+      guard.side === false, JSON.stringify(guard));
+    assert('um golpe FERE a caveira no meio do telegrafo...',
+      guard.hurt === true, JSON.stringify(guard));
+    assert('...e nao cancela o golpe que ela ja tinha armado',
+      guard.stillWindingUp === true, JSON.stringify(guard));
+
+    // ── 9. O ESCUDO DO HEROI: ENCARAR E A DEFESA (contra TIRO) ──────────────
+    // Ele so apara projetil (quem chama testa `hit.ranged`): se aparasse o golpe de corpo,
+    // encarar seria invencibilidade contra metade do bestiario, parado. O que este bloco cobra e
+    // a geometria — a direcao olhada e o que decide.
+    log('ESCUDO: encarar o tiro apara; de costas, ele entra');
+    const shield = await page.evaluate(() => {
+      const s = window.__scene;
+      const hx = s.playerWorld.worldX;
+      const hy = s.playerWorld.worldY;
+      s.movementController.lastFacing = { dx: 0, dy: -1 };
+      const facing = s.blocksBlowFrom(hx, hy - 1);   // o golpe vem do NORTE, e ele olha o norte
+      const behind = s.blocksBlowFrom(hx, hy + 1);   // ...e do SUL, pelas costas
+      return { facing, behind };
+    });
+    assert('o golpe que vem da frente e aparado', shield.facing === true, JSON.stringify(shield));
+    assert('e o que vem de tras entra', shield.behind === false, JSON.stringify(shield));
+    await shot('escudo-e-guarda');
   },
 };

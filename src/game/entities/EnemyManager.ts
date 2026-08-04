@@ -83,7 +83,7 @@ export class EnemyManager {
     // The warning rumble as the ground starts to crack — playUndeadSpawn fires later, from
     // inside UndeadEnemy, when the telegraph ends and the skull actually claws out.
     getSoundManager().playGroundCrack();
-    const enemy = new UndeadEnemy(this.scene, worldX, worldY, (cx, cy) => this.corpses.drop(cx, cy));
+    const enemy = new UndeadEnemy(this.scene, worldX, worldY);
     this.enemies.push(enemy);
     return enemy;
   }
@@ -191,6 +191,10 @@ export class EnemyManager {
     worldY: number;
     spawning: boolean;
     plateTarget: { x: number; y: number } | null;
+    health: number;
+    maxHealth: number;
+    invulnerable: boolean;
+    windingUp: boolean;
   }> {
     return this.enemies
       .filter((e) => e.isAlive)
@@ -200,6 +204,12 @@ export class EnemyManager {
         worldY: e.worldY,
         spawning: e.isSpawning,
         plateTarget: e.plateTarget ? { x: e.plateTarget.x, y: e.plateTarget.y } : null,
+        // A vida deixou de ser detalhe interno no dia em que a espada parou de matar de um golpe:
+        // sem ela, um cenario nao consegue distinguir "resvalou" de "acertou e ele aguentou".
+        health: e.healthNow,
+        maxHealth: e.healthMax,
+        invulnerable: e.isHurtInvulnerable,
+        windingUp: e.isWindingUp,
       }));
   }
 
@@ -281,8 +291,34 @@ export class EnemyManager {
     // would step using this frame's assignment and half using last frame's.
     this.assignPlateLures(lurablePlates);
 
+    /**
+     * Onde o corpo CORRENTE pode pisar. UM closure para o laco inteiro (o corpo da vez mora numa
+     * variavel), em vez de um novo por inimigo por frame — e a varredura dos outros corpos num
+     * `for` em vez de um `some`, que aloca mais um closure por consulta. Com a matilha inteira em
+     * volta do heroi sao dezenas de consultas por frame, todas descartaveis.
+     *
+     * O que NAO da pra fazer aqui e um indice tile→corpo montado uma vez por tick: os corpos andam
+     * DURANTE este laco (o inimigo i da um passo e o i+1 consulta), e um indice velho deixaria
+     * dois empilharem no mesmo tile. A varredura linear e a unica resposta que sempre esta certa.
+     */
+    let current: EnemyBase | null = null;
+    let terrainOf: (wx: number, wy: number) => boolean = blocked.onFoot;
+    const blockedForEnemy = (wx: number, wy: number): boolean => {
+      if (terrainOf(wx, wy)) return true;
+      if (wx === playerWorldX && wy === playerWorldY) return true;
+      for (const other of this.enemies) {
+        if (other !== current && other.isAlive && other.worldX === wx && other.worldY === wy) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     for (const enemy of this.enemies) {
       if (!enemy.isAlive) continue;
+      // Os i-frames correm AQUI e não no update da espécie: aquele sai mais cedo no atordoamento,
+      // e um corpo atordoado que não descontasse a própria invulnerabilidade sairia dela tarde.
+      enemy.tickHurtInvuln(delta);
 
       const farX = Math.abs(enemy.worldX - playerWorldX);
       const farY = Math.abs(enemy.worldY - playerWorldY);
@@ -291,14 +327,11 @@ export class EnemyManager {
         continue;
       }
 
-      // Onde ESTE corpo pode pisar: o mundo dele (chao ou voo) mais o heroi e os outros corpos,
-      // que ninguem atravessa — inclusive quem voa, que passa por cima de rio, nao de gente.
-      const terrain = enemy.flies ? blocked.flying : blocked.onFoot;
-      const blockedForEnemy = (wx: number, wy: number): boolean => {
-        if (terrain(wx, wy)) return true;
-        if (wx === playerWorldX && wy === playerWorldY) return true;
-        return this.enemies.some((e) => e !== enemy && e.isAlive && e.worldX === wx && e.worldY === wy);
-      };
+      // O mundo deste corpo: chao ou voo (voar e a unica diferenca de mundo entre uma especie e
+      // outra), mais o heroi e os outros corpos, que ninguem atravessa — inclusive quem voa, que
+      // passa por cima de rio, nao de gente.
+      current = enemy;
+      terrainOf = enemy.flies ? blocked.flying : blocked.onFoot;
 
       if (enemy.update(delta, playerWorldX, playerWorldY, playerSafe, playerHasTorch, blockedForEnemy)) {
         hit ??= { enemy, ranged: false, fromX: enemy.worldX, fromY: enemy.worldY };
@@ -314,10 +347,14 @@ export class EnemyManager {
     }
 
     for (let i = this.enemies.length - 1; i >= 0; i--) {
-      if (this.enemies[i].pendingRemoval) {
-        this.enemies[i].destroy();
-        this.enemies.splice(i, 1);
-      }
+      const gone = this.enemies[i];
+      if (!gone.pendingRemoval) continue;
+      // A MARCA fica no instante em que o corpo termina de sumir — e so quando ele foi MORTO.
+      // `despawn` (o escuro reclamando de volta quem o heroi deixou pra tras) tambem chega aqui, e
+      // uma mancha por bicho que desistiu da cacada encheria o mundo de recibos de nada.
+      if (gone.corpseMark) this.corpses.drop(gone.worldX, gone.worldY, gone.kind);
+      gone.destroy();
+      this.enemies.splice(i, 1);
     }
 
     return hit;

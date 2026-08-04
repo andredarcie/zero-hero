@@ -1,9 +1,94 @@
 import Phaser from 'phaser';
 
+import { getSoundManager } from '@/game/audio/SoundManager';
 import { SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { FX_PUFF_TEXTURE, FX_RING_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import { FLYING_ENEMY_KINDS, type EnemyKind } from '@/game/world/ScreenContent';
+
+/** Ver `hurtInvulnMs`. Os ~32 frames do Link to the Past, arredondados para baixo. */
+const HURT_INVULN_MS = 450;
+/**
+ * Meio ciclo da PISCADA de invulnerabilidade, em ms. A janela inteira pisca — a troca de textura
+ * de dano dura 150ms e a invulnerabilidade dura 450, e nos 300ms de diferença o corpo parecia
+ * exatamente igual a um corpo que aceita dano. O jogador descobria que não aceitava depois de já
+ * ter apertado o botão.
+ *
+ * 80ms dá ~5 lampejos na janela: rápido o bastante para ler como "piscando" e não como "sumindo",
+ * que é a diferença entre um aviso e um defeito de render.
+ */
+const HURT_BLINK_HALF_MS = 80;
+/** Quanto o corpo apaga no vale da piscada. Não vai a zero: um bicho invisível não se acerta. */
+const HURT_BLINK_ALPHA = 0.35;
+
+// ── O TELEGRAFO ──────────────────────────────────────────────────────────────
+//
+// O golpe armado, a marca no chão, o brilho da guarda e a geometria dela. Mora AQUI e não no
+// `WalkerEnemy` porque a caveira não é um andarilho (ela tem a fissura de 3s, o laço da placa e o
+// desmanche, e reescrevê-la para caber num molde comum seria trocar um sistema guardado por
+// playtest por um sistema novo) — e mesmo assim ela telegrafa exatamente igual a todo mundo.
+//
+// Enquanto isto viveu só no andarilho, a caveira — o corpo que o jogador mais encontra, e o que
+// ENSINOU o telegrafo — era a única espécie sem marca no chão, sem guarda e com o golpe armado
+// ainda cancelável a pancada. Duas rotas para o mesmo fato é como uma delas envelhece errada.
+
+/** A piscada de aviso: o mesmo vermelho quente para todo mundo — um aviso, uma cor. */
+const WINDUP_FLASH = 0xff4a3d;
+/**
+ * A MARCA NO CHÃO do tile mirado, e ela é a metade que faltava do telegrafo.
+ *
+ * O aviso dizia "vem golpe" de três maneiras (clarão, pose recuada, som) e nenhuma delas dizia
+ * ONDE — que é a única informação que importa desde que bater no bicho deixou de cancelar o
+ * ataque dele. A resposta ao telegrafo é sair do tile mirado, então o tile mirado tem de estar
+ * na tela.
+ *
+ * É um anel deitado no chão (o mesmo `FX_RING_TEXTURE` da onda de impacto: um choque, uma forma)
+ * que FECHA em vez de abrir — ele encolhe do tamanho do tile até o centro no tempo exato do
+ * windup, e a leitura é literalmente um relógio: quando fecha, bate. Abrir seria a gramática da
+ * coisa que já aconteceu.
+ */
+const WINDUP_MARK_FROM = 1.15;
+const WINDUP_MARK_TO = 0.35;
+/**
+ * O BRILHO DA GUARDA, e ele existe para a guarda deixar de ser uma armadilha.
+ *
+ * O bicho fecha a frente enquanto arma (ver `guardsAgainst`), e nada dizia isso: o jogador
+ * descobria gastando um golpe e ouvindo o tim. Punir uma coisa que não foi mostrada é a diferença
+ * entre "ataquei do lado errado" e "o jogo me trapaceou" — e o telegrafo inteiro deste jogo existe
+ * justamente para nunca cair do lado errado dessa linha.
+ *
+ * É um risco curto na BORDA do corpo, do lado fechado, na mesma paleta quente das faíscas de aparo
+ * (`GameScene.spawnGuardSpark`): a mesma coisa dita duas vezes, antes e depois. Só aparece em quem
+ * realmente guarda — a gosma e o morcego não desenham nada, porque não fecham nada.
+ */
+const GUARD_GLINT_TINT = 0xffe6b0;
+const GUARD_GLINT_SIZE = 0.34;
+/** A que distância do centro do corpo, em tiles: encostado na borda dele, do lado guardado. */
+const GUARD_GLINT_REACH = 0.42;
+
+/**
+ * O ÚLTIMO EMPURRÃO — quanto o corpo MORTO ainda voa na direção do golpe, em tiles.
+ *
+ * Meio tile, e ele é curto de propósito: o corpo já está encolhendo e girando enquanto voa, então
+ * o que se lê é um tranco, não um deslocamento. Mais que isso e a ossada (que fica no tile LÓGICO)
+ * passa a cair longe de onde os pixels pararam. Ver `deathFling`.
+ */
+const DEATH_FLING_TILES = 0.5;
+/** Um pouco mais curto que o desmanche inteiro (70 + 240): ele assenta antes de terminar de sumir. */
+const DEATH_FLING_MS = 260;
+
+/**
+ * O RECUO DE VALOR — a resposta de corpo de quem NÃO tem arte de dano.
+ *
+ * `hurtTexture` só existe em três espécies (caveira, morcego, mago); a aranha, a gosma, a torreta e
+ * o zora caíam num `restoreTint()` que, com a vida cheia, não muda um pixel — o primeiro golpe nelas
+ * não tinha resposta nenhuma no corpo, só faísca e empurrão. A correção não pode ser acender (tint
+ * claro em billboard `emissive` é silhueta chapada que o bloom espalha, e o hitstop a congela
+ * acesa): é ESCURECER. Um mergulho curto de valor, que funciona em qualquer corpo e não pede arte.
+ */
+const HURT_DARKEN_TINT = 0x4e4657;
+const HURT_DARKEN_MS = 110;
 
 export abstract class EnemyBase {
   public worldX: number;
@@ -33,18 +118,43 @@ export abstract class EnemyBase {
    */
   private hitstunMs = 0;
 
+  /**
+   * OS i-FRAMES DO CORPO — quanto tempo ele recusa o PRÓXIMO dano depois de levar um.
+   *
+   * O `A Link to the Past` dá ~32 frames (≈530ms) de invulnerabilidade a quase todo bicho, e não
+   * é enfeite: sem isso, encostar a lâmina vira uma serra. Aqui doeria ainda mais que lá — o
+   * golpe varre SEIS tiles a cada 260ms e a lâmina rodopiante varre oito de uma vez, então um
+   * inimigo com vida de verdade morreria sem nunca ter chegado a armar um ataque, que é
+   * exatamente o defeito que o dano real veio consertar.
+   *
+   * Um pouco MENOR que o atordoamento (300ms) de propósito: a janela de vantagem que o acerto
+   * compra continua sendo de quem bateu — quando o corpo volta a andar, ele já pode ser ferido de
+   * novo. Ao contrário do hitstun, isto NÃO é contado pela espécie: o dano entra por um caminho
+   * só (`takeDamage`), então o relógio corre aqui, no update de todo mundo (ver `tickHurtInvuln`).
+   */
+  private hurtInvulnMs = 0;
+  /** Fase atual da piscada (ver tickHurtInvuln) — só para não reescrever o alpha todo frame. */
+  private blinkDown = false;
+  /** Ver `corpseMark`: ligado por `die()`, lido pelo EnemyManager quando o corpo sai da lista. */
+  private corpseMarkPending = false;
+
+  // O TELEGRAFO (ver o bloco de constantes acima). > 0 = mirado em (windupTargetX/Y), contando
+  // para bater. A marca e o brilho são guardados porque eles têm de MORRER com o golpe que os
+  // criou: são uma promessa, e promessa não pode sobreviver a quem prometeu.
+  private windupLeftMs = 0;
+  private windupTargetX = 0;
+  private windupTargetY = 0;
+  private windupMark?: Billboard3D;
+  private guardGlint?: Billboard3D;
+
   protected readonly scene: Phaser.Scene;
   protected readonly sprite: Billboard3D;
-  private readonly healthBar: Phaser.GameObjects.Graphics;
   // Last projected screen position/scale — anchors Phaser-side FX (shadow wisps).
   private lastScreen = { x: 0, y: 0 };
   private lastTileSize = 48;
 
   /** Override to return the hurt texture key; if defined, flashes on takeDamage */
   protected hurtTexture?: string;
-
-  /** Subclasses can hide the health bar (e.g. while the spawn animation plays). */
-  protected healthBarVisible = true;
 
   /** Override to return the normal texture key used to restore after hurt flash */
   protected abstract get normalTexture(): string;
@@ -67,7 +177,6 @@ export abstract class EnemyBase {
     this.maxHealth = maxHealth;
     this.health = maxHealth;
     this.sprite = sprite;
-    this.healthBar = scene.add.graphics().setDepth(SCENE_DEPTHS.player + 2);
   }
 
   public get isAlive(): boolean {
@@ -155,6 +264,318 @@ export abstract class EnemyBase {
     return true;
   }
 
+  /** Vida atual e total — leitura de fora (o snapshot de debug), nunca escrita. */
+  public get healthNow(): number {
+    return this.health;
+  }
+
+  public get healthMax(): number {
+    return this.maxHealth;
+  }
+
+  /**
+   * Este corpo deixa MARCA ao ser morto? A gosma diz que não: ela tem arte própria de morte (a
+   * poça que seca), e uma mancha genérica por cima seria a segunda marca da mesma morte.
+   */
+  protected get leavesCorpseMark(): boolean {
+    return true;
+  }
+
+  /** Foi morto e ainda deve ser enterrado (lido pelo EnemyManager, uma vez, na remoção). */
+  public get corpseMark(): boolean {
+    return this.corpseMarkPending;
+  }
+
+  private set corpseMark(value: boolean) {
+    this.corpseMarkPending = value;
+  }
+
+  /** Está armando o golpe telegrafado? (a leitura de debug e o playtest da guarda leem isto) */
+  public get isWindingUp(): boolean {
+    return this.windupLeftMs > 0;
+  }
+
+  /** Está piscando de invulnerável agora? (ver hurtInvulnMs) */
+  public get isHurtInvulnerable(): boolean {
+    return this.hurtInvulnMs > 0;
+  }
+
+  /**
+   * Esta espécie tem FRENTE? A caveira, a aranha e o mago encaram o que vão bater; a gosma é uma
+   * bolha e o morcego é um borrão — guarda neles seria uma regra que o corpo não desenha.
+   */
+  protected get guardsWhileWindingUp(): boolean {
+    return true;
+  }
+
+  /**
+   * A GUARDA: este corpo apara um golpe que vem desta direção? (`fromDx/fromDy` apontam DELE para
+   * quem bateu.) Enquanto arma, o bicho encara o tile que mirou: o que vier de lá bate na guarda,
+   * o que vier dos lados ou de trás entra.
+   *
+   * Mora na base e não só no andarilho porque quem pergunta é o golpe do herói, que não sabe (e
+   * não deve saber) de que classe é o corpo à frente dele.
+   */
+  public guardsAgainst(fromDx: number, fromDy: number): boolean {
+    if (this.windupLeftMs <= 0 || !this.guardsWhileWindingUp) return false;
+    const gx = Math.sign(this.windupTargetX - this.worldX);
+    const gy = Math.sign(this.windupTargetY - this.worldY);
+    // Cone frontal de 90°: o eixo dominante do golpe tem de ser o eixo que ele encara.
+    return Math.abs(fromDx) >= Math.abs(fromDy)
+      ? fromDx !== 0 && fromDx === gx
+      : fromDy !== 0 && fromDy === gy;
+  }
+
+  /**
+   * ARMA O GOLPE: mira o tile, MARCA o chão dele, avisa (piscada + pose recuada) e se compromete.
+   *
+   * **O GOLPE ARMADO É UM COMPROMISSO — DELE, E AGORA TAMBÉM SEU.** Um acerto do herói CANCELAVA
+   * o ataque telegrafado. Parecia justo e era o defeito: com dano real, trancar o bicho em
+   * interrupção vira a estratégia dominante do jogo inteiro — bata a cada 260ms e nada nunca chega
+   * a bater em você. Então o windup segue seu curso, e a resposta ao telegrafo volta a ser a que
+   * ele sempre prometeu: SAIR DO TILE MIRADO.
+   */
+  protected startWindup(targetX: number, targetY: number, durationMs: number): void {
+    // A marca do aviso anterior pode sobreviver um frame ao golpe que a criou (o tween dela fecha
+    // logo depois de `tickWindup` resolver). Nenhum ritmo de ataque do jogo chega perto disso, mas
+    // um aviso órfão pendurado num tile é caro demais para depender de um número de balanceamento.
+    this.clearWindup();
+    this.windupLeftMs = durationMs;
+    this.windupTargetX = targetX;
+    this.windupTargetY = targetY;
+    getSoundManager().playUndeadWindup();
+    this.sprite.setTintFill(WINDUP_FLASH);
+    this.scene.time.delayedCall(90, () => {
+      // `restoreTint` e não `clearTint`: o corpo escurece conforme perde vida (ver woundedShade),
+      // e limpar o tint aqui devolveria um bicho ferido ao tom cheio — apagando, justamente no
+      // instante em que ele ameaça, a única leitura de vida que este jogo tem.
+      if (this.alive && this.sprite.active) this.restoreTint();
+    });
+    this.poseWindup(Math.sign(this.worldX - targetX), Math.sign(this.worldY - targetY), durationMs * 0.85);
+    this.markTargetTile(targetX, targetY, durationMs);
+    if (this.guardsWhileWindingUp) this.showGuardGlint(targetX, targetY, durationMs);
+  }
+
+  /**
+   * Conta o golpe armado do frame. A espécie chama isto no topo do próprio update e obedece:
+   *
+   *   - `'idle'`   nenhum golpe armado — siga pensando, andando e atacando;
+   *   - `'busy'`   comprometido: não anda, não re-arma, saia do update AGORA;
+   *   - `'strike'` o golpe caiu no herói — devolva `true`, e o GameScene resolve o dano.
+   *
+   * O acerto pede DUAS coisas, e a segunda existe por causa do arremesso: o herói tem de estar no
+   * tile mirado (sair de lá é a esquiva) **e** o tile mirado tem de continuar ao alcance do corpo.
+   * Sem a segunda, um bicho atingido no meio do telegrafo é jogado um tile para trás, fica
+   * atordoado, e cobra o golpe de DOIS tiles de distância quando volta a si — um golpe que o
+   * jogador vê acontecer por cima de um vão, e que o desenho do bicho nunca prometeu.
+   */
+  protected tickWindup(
+    delta: number,
+    playerWorldX: number,
+    playerWorldY: number,
+    playerHasTorch: boolean,
+  ): 'idle' | 'busy' | 'strike' {
+    if (this.windupLeftMs <= 0) return 'idle';
+    this.windupLeftMs -= delta;
+    if (this.windupLeftMs > 0) return 'busy';
+    this.windupLeftMs = 0;
+
+    // O GOLPE SAI AGORA — acertando ou não. Quem tem arma bate aqui, e é por isso que este aviso
+    // vem antes de decidir o resultado: uma arma que só se movesse quando o golpe conecta seria a
+    // mesma mentira que o arco do herói não conta (ele sai mesmo no vazio, de propósito).
+    this.onWindupRelease(
+      Math.sign(this.windupTargetX - this.worldX),
+      Math.sign(this.windupTargetY - this.worldY),
+    );
+
+    const reach = Math.abs(this.windupTargetX - this.worldX)
+      + Math.abs(this.windupTargetY - this.worldY);
+    const struck = reach <= 1
+      && playerWorldX === this.windupTargetX
+      && playerWorldY === this.windupTargetY
+      && !(playerHasTorch && this.fearsTorch);
+    if (struck) return 'strike';
+    this.whiff();
+    return 'busy';
+  }
+
+  /**
+   * O instante em que o golpe armado SAI, na direção em que ele sai. Nada por padrão — quem tem
+   * ARMA na mão a balança aqui (ver UndeadEnemy e o osso dela).
+   */
+  protected onWindupRelease(_dirX: number, _dirY: number): void {
+    // no-op by default
+  }
+
+  /**
+   * O golpe que encontrou o vazio: ele investe no tile mirado e morde ar.
+   *
+   * E O TILE RESPONDE. O anel do telegrafo fechou sobre um lugar por meio segundo prometendo um
+   * golpe ali, e quando ele saía, ali não acontecia NADA — a esquiva só era desenhada no corpo (a
+   * investida e o som), e o lugar que o jogador acabou de abandonar ficava mudo. Um punhado de
+   * poeira baixa no tile mirado é o que fecha o laço que a marca abriu: o golpe caiu, caiu ALI, e
+   * você não estava lá.
+   */
+  private whiff(): void {
+    this.triggerKnockback(
+      Math.sign(this.windupTargetX - this.worldX),
+      Math.sign(this.windupTargetY - this.worldY),
+    );
+    getSoundManager().playUndeadWhiff();
+    this.spawnWhiffDust(this.windupTargetX, this.windupTargetY);
+  }
+
+  /** A poeira do golpe que bateu no chão: baixa, rasteira e curta — ver `whiff`. */
+  private spawnWhiffDust(tileX: number, tileY: number): void {
+    // Tres, como os cacos do resvalo: um golpe errado nao pode levantar mais pixel que um acerto,
+    // e num cerco os erros sao muito mais frequentes que os acertos.
+    for (let i = 0; i < 3; i++) {
+      const ang = (i / 3) * Math.PI * 2 + Math.random() * 0.9;
+      const puff = world3d()
+        .addBillboard(FX_PUFF_TEXTURE, 0, {
+          centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02,
+        })
+        .setTint(0x9a9284)
+        .setPosition(tileX, tileY)
+        .setElevation(0.04)
+        .setDisplaySize(0.17, 0.17)
+        .setAlpha(0.65);
+      this.scene.tweens.add({
+        targets: puff,
+        // Rasteira de proposito: ela SAI pelo chão em vez de subir, que e o gesto de uma coisa
+        // que bateu na terra. Poeira que sobe e o vocabulario da chegada (ver WalkerEnemy).
+        x: tileX + Math.cos(ang) * 0.42,
+        y: tileY + Math.sin(ang) * 0.26,
+        elevation: 0.12,
+        alpha: 0,
+        scaleX: 0.36,
+        scaleY: 0.36,
+        duration: 260 + Math.random() * 120,
+        ease: 'Cubic.easeOut',
+        onComplete: () => puff.destroy(),
+      });
+    }
+  }
+
+  /**
+   * O anel que fecha sobre o tile mirado (ver WINDUP_MARK_FROM). Ele é deitado e `emissive`: o
+   * aviso tem de ser legível no escuro, que é exatamente onde este jogo acontece — e não pode
+   * trazer luz nenhuma, a lei mais cara da casa (uma luz THREE nova recompila o mundo inteiro).
+   */
+  private markTargetTile(targetX: number, targetY: number, windupMs: number): void {
+    const mark = world3d()
+      .addBillboard(FX_RING_TEXTURE, 0, {
+        additive: true,
+        flat: true,
+        flatY: 0.06,
+        fog: false,
+        depthWrite: false,
+      })
+      .setTint(WINDUP_FLASH)
+      .setPosition(targetX, targetY)
+      .setDisplaySize(WINDUP_MARK_FROM, WINDUP_MARK_FROM)
+      .setAlpha(0.55);
+    this.scene.tweens.add({
+      targets: mark,
+      scaleX: WINDUP_MARK_TO,
+      scaleY: WINDUP_MARK_TO,
+      alpha: 0.95,
+      duration: windupMs,
+      ease: 'Quad.easeIn', // fecha devagar e acelera no fim: o instante do golpe é o que se lê
+      onComplete: () => this.clearWindup(),
+    });
+    this.windupMark = mark;
+  }
+
+  /** O risco de luz no lado fechado do corpo, durante o telegrafo (ver GUARD_GLINT_TINT). */
+  private showGuardGlint(targetX: number, targetY: number, windupMs: number): void {
+    const gx = Math.sign(targetX - this.worldX);
+    const gy = Math.sign(targetY - this.worldY);
+    const glint = world3d()
+      .addBillboard(FX_PUFF_TEXTURE, 0, {
+        centered: true,
+        emissive: true,
+        additive: true,
+        fog: false,
+        depthWrite: false,
+      })
+      .setTint(GUARD_GLINT_TINT)
+      .setPosition(this.worldX + gx * GUARD_GLINT_REACH, this.worldY + gy * GUARD_GLINT_REACH)
+      .setElevation(0.45)
+      .setDisplaySize(GUARD_GLINT_SIZE, GUARD_GLINT_SIZE * 0.5)
+      .setAlpha(0);
+    this.guardGlint = glint;
+    // Acende depressa e RESPIRA até o golpe sair: parado, ele lê como parte da arte do bicho;
+    // pulsando, lê como uma coisa que está ligada agora e que vai acabar.
+    this.scene.tweens.add({
+      targets: glint,
+      alpha: 0.85,
+      duration: 110,
+      ease: 'Sine.easeOut',
+      yoyo: true,
+      hold: Math.max(0, windupMs - 300),
+      onComplete: () => this.clearGuardGlint(),
+    });
+  }
+
+  /**
+   * Apaga o desenho do telegrafo. Ele é uma PROMESSA — "um golpe cai aqui" — e não pode sobreviver
+   * a quem prometeu: um corpo que morre no meio do aviso deixava o anel fechando sozinho sobre um
+   * tile onde nada mais vai acontecer, ensinando o jogador a desviar de fantasma. Chamado de
+   * `die`, `despawn` e `destroy` AQUI, e não em cada espécie, para que nenhuma possa esquecer.
+   */
+  private clearWindup(): void {
+    this.clearGuardGlint();
+    const mark = this.windupMark;
+    if (!mark) return;
+    this.windupMark = undefined;
+    if (this.scene.tweens) this.scene.tweens.killTweensOf(mark);
+    mark.destroy();
+  }
+
+  private clearGuardGlint(): void {
+    const glint = this.guardGlint;
+    if (!glint) return;
+    this.guardGlint = undefined;
+    if (this.scene.tweens) this.scene.tweens.killTweensOf(glint);
+    glint.destroy();
+  }
+
+  /**
+   * Volta a se agachar depois de um solavanco, se o golpe ainda estiver armado.
+   *
+   * O arremesso e o recuo matam os tweens deste objeto (é o mesmo par de campos), e com eles ia a
+   * pose recuada do telegrafo: um corpo empurrado no meio do aviso ficava em pé, neutro e relaxado
+   * — enquanto o anel no chão continuava fechando. As duas metades do mesmo aviso discordavam.
+   */
+  private reposeWindup(): void {
+    if (this.windupLeftMs <= 0 || !this.alive) return;
+    this.poseWindup(
+      Math.sign(this.worldX - this.windupTargetX),
+      Math.sign(this.worldY - this.windupTargetY),
+      Math.max(60, this.windupLeftMs * 0.85),
+    );
+  }
+
+  /**
+   * Conta os i-frames. Chamado pelo EnemyManager para TODO corpo, todo frame — e não pelo update
+   * de cada espécie, que tem saída antecipada no hitstun: um bicho atordoado que não descontasse
+   * a própria invulnerabilidade sairia dela mais tarde do que devia, e o segundo golpe do jogador
+   * cairia no vazio sem que nada na tela explicasse por quê.
+   */
+  public tickHurtInvuln(delta: number): void {
+    if (this.hurtInvulnMs <= 0) return;
+    this.hurtInvulnMs = Math.max(0, this.hurtInvulnMs - delta);
+    // A piscada é DERIVADA do relógio, não tweenada: um tween a mais por golpe seria alocação no
+    // meio da briga, e o relógio já existe. Só escreve no alpha na TROCA de fase — `apply()` do
+    // billboard reescreve o mesh inteiro a cada set, e mandar o mesmo alpha 60 vezes por segundo é
+    // trabalho de graça.
+    const on = this.hurtInvulnMs > 0 && Math.floor(this.hurtInvulnMs / HURT_BLINK_HALF_MS) % 2 === 1;
+    if (on === this.blinkDown) return;
+    this.blinkDown = on;
+    this.sprite.setAlpha(on ? HURT_BLINK_ALPHA : 1);
+  }
+
   /**
    * O EMPURRAO DE VERDADE: o golpe move o corpo um tile, e nao so o desenho dele.
    *
@@ -165,19 +586,30 @@ export abstract class EnemyBase {
    *
    * `canEnter` vem de fora porque quem sabe o que e solido e o GameScene — inclusive a luz de
    * fogueira, que continua sendo parede: arremessar um bicho pra dentro da luz nao pode ser a
-   * porta dos fundos da lei que diz que monstro nao existe nela. Bloqueado, ele bate na parede:
-   * o recuo elastico de sempre, e nenhum terreno ganho.
+   * porta dos fundos da lei que diz que monstro nao existe nela.
+   *
+   * E o que devolve nao e um booleano, e o QUE ACONTECEU — porque bloquear tem dois sentidos
+   * opostos. `'slammed'` e o corpo que bateu numa parede: encurralar e a jogada BOA, e ela era a
+   * mais silenciosa do jogo (caia no mesmo recuo elastico de um empurrao qualquer). `'immovable'`
+   * e a torreta e o zora, que escrevem a propria posicao — ali nao ha parede nenhuma, so um corpo
+   * que nao anda, e celebrar isso ensinaria uma tatica que nao existe.
    */
   public shove(
     dx: number,
     dy: number,
     canEnter: (wx: number, wy: number) => boolean,
-  ): boolean {
-    if (!this.alive) return false;
-    if (dx === 0 && dy === 0) return false;
-    if (!this.canBeShoved || !canEnter(this.worldX + dx, this.worldY + dy)) {
+  ): 'moved' | 'slammed' | 'immovable' {
+    if (!this.alive || (dx === 0 && dy === 0)) return 'immovable';
+    if (!this.canBeShoved) {
       this.triggerKnockback(dx, dy);
-      return false;
+      return 'immovable';
+    }
+    if (!canEnter(this.worldX + dx, this.worldY + dy)) {
+      // O ENCONTRAO: o mesmo recuo, mais fundo e mais esmagado — o corpo chega na parede e para
+      // de verdade, em vez de quicar como quem foi so cutucado.
+      this.triggerKnockback(dx * 1.5, dy * 1.5);
+      this.knockbackSquash = 0.62;
+      return 'slammed';
     }
 
     this.worldX += dx;
@@ -197,8 +629,9 @@ export abstract class EnemyBase {
       knockbackSquash: 1.0,
       duration: 200,
       ease: 'Power3.easeOut',
+      onComplete: () => this.reposeWindup(),
     });
-    return true;
+    return 'moved';
   }
 
   public setPlateTarget(_target?: { x: number; y: number }): void {
@@ -208,6 +641,12 @@ export abstract class EnemyBase {
   /** Apply damage (default 1). Weak weapons pass fractions — e.g. the wood club deals 0.5. */
   public takeDamage(amount = 1): boolean {
     if (!this.alive) return false;
+    // Recusa o golpe que chega dentro da janela de i-frames (ver hurtInvulnMs). Quem chama SEMPRE
+    // pergunta antes (`isHurtInvulnerable`) para poder responder na tela — este guarda é a rede,
+    // não a porta: sem ele, um caminho novo de dano (uma bomba, o fogo do chão) fura a regra em
+    // silêncio e ninguém descobre até o combate voltar a ser uma serra.
+    if (this.hurtInvulnMs > 0) return false;
+    this.hurtInvulnMs = HURT_INVULN_MS;
     this.health -= amount;
 
     // A PISCADA BRANCA FOI ARRANCADA. Um `setTintFill(0xffffff)` num billboard `emissive` nao e
@@ -220,11 +659,27 @@ export abstract class EnemyBase {
       this.scene.time.delayedCall(150, () => {
         if (this.alive) {
           this.sprite.setTexture(this.normalTexture);
+          // ...e ele volta MAIS ESCURO que antes, porque `restoreTint` passa pelo `woundedShade`
+          // (ver abaixo). Com uma exceção: a caveira devolve a base intacta, porque a arte dela é
+          // osso claro e escurecê-la a tornava difícil de ver na noite — ver UndeadEnemy.
+          this.restoreTint();
         }
+      });
+    } else {
+      // SEM ARTE DE DANO: o corpo recua em VALOR (ver HURT_DARKEN_TINT). Antes esta linha era um
+      // `restoreTint()` solto, que com a vida cheia devolve exatamente a cor que já estava lá — ou
+      // seja, quatro das sete espécies não tinham resposta nenhuma de corpo ao primeiro golpe.
+      this.sprite.setTint(HURT_DARKEN_TINT);
+      this.scene.time.delayedCall(HURT_DARKEN_MS, () => {
+        if (this.alive && this.sprite.active) this.restoreTint();
       });
     }
 
     if (this.health <= 0) {
+      // A piscada não pode vazar para a morte: o desmanche tweena o alpha a partir de onde ele
+      // estiver, e começar de 0.35 faria o corpo sumir cedo demais.
+      this.blinkDown = false;
+      this.sprite.setAlpha(1);
       this.die();
       return true;
     }
@@ -258,7 +713,37 @@ export abstract class EnemyBase {
    * la o devolveria branco, e ele leria como o outro personagem por um instante.
    */
   protected restoreTint(): void {
-    this.sprite.clearTint();
+    const shade = this.woundedShade();
+    if (shade === 0xffffff) this.sprite.clearTint();
+    else this.sprite.setTint(shade);
+  }
+
+  /**
+   * O CORPO CONTA QUANTO AGUENTA — a substituta da barra de vida, que este jogo nunca desenhou.
+   *
+   * Havia uma `Graphics` por inimigo, limpa a cada frame e nunca preenchida: a barra tinha sido
+   * removida por design (o mundo ensina, o HUD não) e o esqueleto dela ficou. Mas a decisão de não
+   * ter barra deixou um buraco no dia em que a espada parou de matar de um golpe: com dois ou três
+   * acertos por corpo, o jogador precisa saber se está progredindo, e a piscada de dano dura 150ms
+   * e some.
+   *
+   * Então o corpo ESCURECE conforme perde vida — um tom multiplicativo, permanente, que se soma à
+   * leitura que já existia. É a direção certa por lei da casa: acender um billboard `emissive` é
+   * silhueta chapada que o bloom espalha (ver o comentário do `takeDamage`), escurecer não.
+   *
+   * Recebe a cor BASE e devolve ela escurecida, em vez de devolver um tom absoluto: há espécie com
+   * tom permanente (o mago frio, que divide a arte com o NPC mago), e um tom absoluto apagaria a
+   * identidade dela justamente enquanto ela apanha. Com a vida cheia devolve a base intacta.
+   */
+  protected woundedShade(base = 0xffffff): number {
+    if (this.health >= this.maxHealth) return base;
+    // 0 = intacto, 1 = no último ponto de vida.
+    const hurt = 1 - Math.max(0, this.health - 1) / Math.max(1, this.maxHealth - 1);
+    const mix = (shift: number, floor: number): number => {
+      const from = (base >> shift) & 0xff;
+      return Math.round(from + (from * (floor / 255) - from) * hurt) << shift;
+    };
+    return mix(16, 0x8c) | mix(8, 0x6a) | mix(0, 0x6a);
   }
 
   /**
@@ -278,6 +763,34 @@ export abstract class EnemyBase {
     });
   }
 
+  /**
+   * O ÚLTIMO EMPURRÃO: a direção do golpe que MATOU, aplicada ao corpo que já está caindo.
+   *
+   * Todo golpe que não mata arremessa o corpo um tile (`shove`) — o que mata não movia nada. A cena
+   * chamava `triggerKnockback` para o corpo morto e ela saía na primeira linha (`!alive`); e mesmo
+   * que não saísse, `render()` para de escrever a posição do billboard depois da morte, então o
+   * deslocamento não teria por onde aparecer. O melhor golpe do jogo era o único que deixava o
+   * corpo exatamente onde ele estava, inchando e desmanchando de pé.
+   *
+   * Por isso ele anda na POSIÇÃO do próprio billboard, que é o que o desmanche já usa. A ossada
+   * continua caindo no tile LÓGICO (ver EnemyManager): a marca pertence ao lugar onde ele morreu,
+   * não ao ponto onde os pixels pararam.
+   */
+  public deathFling(dx: number, dy: number): void {
+    if (this.alive || !this.sprite.active) return;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-4) return;
+    // Guardada para quem tem morte própria: as peças da caveira se espalham a favor do golpe.
+    this.deathDir = { x: dx / len, y: dy / len };
+    this.scene.tweens.add({
+      targets: this.sprite,
+      x: this.sprite.x + (dx / len) * DEATH_FLING_TILES,
+      y: this.sprite.y + (dy / len) * DEATH_FLING_TILES,
+      duration: DEATH_FLING_MS,
+      ease: 'Power3.easeOut',
+    });
+  }
+
   public triggerKnockback(dx: number, dy: number): void {
     if (!this.alive) return;
     this.scene.tweens.killTweensOf(this);
@@ -291,6 +804,8 @@ export abstract class EnemyBase {
       knockbackSquash: 1.0,
       duration: 230,
       ease: 'Power3.easeOut',
+      // Assentado o solavanco, o corpo volta a se agachar se o golpe ainda estiver armado.
+      onComplete: () => this.reposeWindup(),
     });
   }
 
@@ -333,10 +848,6 @@ export abstract class EnemyBase {
     this.lastScreen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
     this.lastTileSize = tileSize;
 
-    // Enemy health bars are intentionally not drawn (removed by design). The graphics object is
-    // kept (and cleared) so nothing else has to change; it just never fills.
-    this.healthBar.clear();
-
     this.onRendered(camera, tileSize);
   }
 
@@ -351,17 +862,26 @@ export abstract class EnemyBase {
   }
 
   public destroy(): void {
+    this.clearWindup();
     if (this.scene.tweens) {
       this.scene.tweens.killTweensOf(this.sprite);
       this.scene.tweens.killTweensOf(this);
     }
     this.sprite.destroy();
-    this.healthBar.destroy();
   }
 
   protected die(): void {
     this.alive = false;
-    this.healthBar.clear();
+    // O golpe armado morre com quem o armou. `clearWindup` sozinho apaga só o DESENHO do aviso, e
+    // de propósito: ele também é chamado pelo fim do tween da marca, que fecha no mesmo instante em
+    // que `tickWindup` resolve o golpe — zerar o relógio de lá engoliria o acerto uma vez a cada
+    // tantas. Aqui não há corrida: o corpo acabou.
+    this.windupLeftMs = 0;
+    this.clearWindup();
+    // MORREU (não foi despejado): quem enterra é o EnemyManager, no frame em que o corpo termina
+    // de sumir. Um booleano e não uma chamada aqui porque a marca pertence ao instante em que o
+    // corpo some, e não ao instante em que a vida chega a zero — no meio há uma animação inteira.
+    this.corpseMark = this.leavesCorpseMark;
     // The step tilt also tweens sprite.angle; stop it so it can't fight the crumble spin.
     this.stepTween?.stop();
     this.onDeath();
@@ -377,6 +897,10 @@ export abstract class EnemyBase {
       onComplete: () => {
         if (!this.sprite.active) return;
         this.restoreTint();
+        // O PICO do desmanche: o corpo inchou e vai começar a sumir. É aqui que uma espécie com
+        // morte PRÓPRIA entra (a caveira se parte em pedaços) — depois deste instante o corpo já
+        // está encolhendo, e uma peça que nascesse mais tarde nasceria de um corpo pela metade.
+        this.onCrumble();
         this.scene.tweens.add({
           targets: this.sprite,
           alpha: 0,
@@ -400,6 +924,27 @@ export abstract class EnemyBase {
   }
 
   /**
+   * O pico do desmanche — o instante entre o inchaço e o corpo começar a sumir (ver `die`).
+   *
+   * `onDeath` acontece cedo demais para uma morte com arte própria: ele roda no frame em que a vida
+   * chega a zero, com o corpo ainda inteiro e parado. Este roda no pico do gesto, que é onde uma
+   * silhueta pode se PARTIR sem que o olho perca o fio entre o corpo e as peças.
+   */
+  protected onCrumble(): void {
+    // no-op by default
+  }
+
+  /**
+   * A direção do golpe que matou, se houve uma (ver `deathFling`). Uma morte com arte própria
+   * espalha as peças a favor dela — foi de lá que veio a pancada.
+   */
+  protected get deathDirection(): { x: number; y: number } | undefined {
+    return this.deathDir;
+  }
+
+  private deathDir?: { x: number; y: number };
+
+  /**
    * Quiet removal (no loot, no onDeath): the dark reclaims its own when the hero reaches a
    * campfire's safety. The skull turns pitch-black silhouette and melts back into the
    * ground while wisps of shadow curl up from the spot. Distinct from die(), a combat kill.
@@ -407,10 +952,16 @@ export abstract class EnemyBase {
   public despawn(): void {
     if (!this.alive) return;
     this.alive = false;
-    this.healthBar.clear();
+    this.windupLeftMs = 0; // ver `die()`: o relógio só se zera onde não há corrida com o tween
+    this.clearWindup();
     this.scene.tweens.killTweensOf(this);
     this.stepTween?.stop();
     this.sprite.setAngle(0);
+    // A PISCADA NÃO PODE VAZAR PARA O DESMANCHE — a mesma lei que `die()` já respeitava. O
+    // desmanche tweena o alpha a partir de onde ele estiver, e um corpo despejado no vale da
+    // piscada dos i-frames começaria a derreter em 0.35: meio some, e o resto parece um engasgo.
+    this.blinkDown = false;
+    this.sprite.setAlpha(1);
     this.sprite.setTintFill(0x05060f);
 
     this.spawnShadowWisps();

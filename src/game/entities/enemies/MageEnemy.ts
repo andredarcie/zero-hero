@@ -10,10 +10,10 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
 /**
  * O MAGO — o inimigo que se RECUSA a ficar ao alcance da espada.
  *
- * Todo corpo do jogo, antes dele, resolvia a briga de perto: a espada mata de um golpe, e o unico
- * problema era chegar. O mago inverte o problema. Ele mantem uma distancia (KEEP_DISTANCE), e
- * quando o heroi avanca, ele ANDA PARA TRAS — rodeando, sem nunca virar as costas. A espada
- * continua matando de um golpe; o que ele nega e o golpe.
+ * Todo corpo do jogo, antes dele, resolvia a briga de perto: bastava chegar. O mago inverte o
+ * problema. Ele mantem uma distancia (KEEP_DISTANCE), e quando o heroi avanca, ele ANDA PARA TRAS
+ * — rodeando, sem nunca virar as costas. Nao ha nada de errado com a espada; o que ele nega e a
+ * chance de usa-la.
  *
  * A resposta que o jogo ja tem pra isso e o mapa: encurrale-o numa quina, ou ponha uma parede
  * entre voce e ele (a bola morre na pedra, ver EnemyProjectile). Ele tambem e o corpo mais frouxo
@@ -26,10 +26,16 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
  * (COLD_TINT) — um espectro do feiticeiro, nao ele — e o tint volta depois de toda piscada (ver
  * restoreTint). Na CONJURACAO o tom sai: a arte de casting (`mage_magic`, que ja tem o proprio
  * clarao vermelho) aparece na cor cheia, e o contraste frio→quente e o telegrafo.
+ *
+ * **A conjuracao e um COMPROMISSO.** Um golpe no meio dela a apagava, e isso caiu junto com o
+ * windup cancelavel do andarilho (ver WalkerEnemy.takeDamage): com dano real, trancar um corpo em
+ * interrupcao vira a estrategia dominante do jogo — e o mago, que existe justamente para obrigar
+ * o jogador a se mover, seria o mais facil de anular parado na frente dele. A resposta e sair da
+ * linha.
  */
 
 const MAX_HEALTH = 2;
-const MOVE_INTERVAL = 520;
+const MOVE_INTERVAL = 470;
 const DETECTION_RANGE = 12;
 /** A distancia que ele quer: fora do alcance de um golpe, dentro do alcance do feitico. */
 const KEEP_DISTANCE = 5;
@@ -105,12 +111,14 @@ export class MageEnemy extends WalkerEnemy {
 
   /** O tom frio e a cor de BASE dele: toda piscada volta pra ela, nunca pro branco do NPC. */
   protected override restoreTint(): void {
-    this.sprite.setTint(COLD_TINT);
+    // O frio dele é a identidade (a arte é dividida com o NPC mago); o escurecimento de ferido
+    // MULTIPLICA esse tom em vez de substituí-lo — ver EnemyBase.woundedShade.
+    this.sprite.setTint(this.woundedShade(COLD_TINT));
   }
 
   protected override think(delta: number, ctx: StepContext): void {
-    // Conjuracao em curso: comprometido, imovel, na arte de casting. Bater nele aqui interrompe
-    // (ver takeDamage) — a mesma recompensa por ler um telegrafo que a caveira ensinou.
+    // Conjuracao em curso: comprometido, imovel, na arte de casting — e bater nele NAO a
+    // interrompe mais (ver o cabecalho da classe). A resposta e sair da linha.
     if (this.castMs > 0) {
       this.castMs -= delta;
       if (this.castMs <= 0) {
@@ -133,16 +141,6 @@ export class MageEnemy extends WalkerEnemy {
     this.sprite.clearTint();
     this.sprite.setTexture(ASSET_KEYS.mageCast);
     getSoundManager().playSpellWindup();
-  }
-
-  public override takeDamage(amount = 1): boolean {
-    // Um golpe no meio da conjuracao a APAGA — e ele volta pra fila do relogio.
-    if (!this.isSpawning && this.castMs > 0) {
-      this.castMs = 0;
-      this.castTimer = 0;
-      this.endCastPose();
-    }
-    return super.takeDamage(amount);
   }
 
   /**

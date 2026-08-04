@@ -29,17 +29,20 @@ const loadVol = (storageKey: string): number => {
 // sample finishes decoding (or if one fails to load).
 
 const SAMPLES = {
-  swordSlash: { file: 'sword-slash.wav', vol: 0.8 },
-  enemyHit: { file: 'enemy-hit.wav', vol: 0.85 },
-  enemyDeath: { file: 'enemy-death.wav', vol: 0.8 },
+  // A ESPINHA DO COMBATE. Tudo em `combat/` vem dos pacotes de fantasia importados (ver o bloco
+  // no fim desta tabela, `tools/import-combat-sfx.mjs` e CREDITS.md); os `sword-slash.wav`,
+  // `enemy-hit.wav` e `enemy-death.wav` GERADOS continuam na raiz de `audio/`, intactos.
+  swordSlash: { file: 'combat/sword-swing.wav', vol: 0.8 },
+  enemyHit: { file: 'combat/enemy-hit.wav', vol: 0.85 },
+  enemyDeath: { file: 'combat/enemy-death.wav', vol: 0.8 },
   coinPickup: { file: 'coin.wav', vol: 0.55 },
   heartPickup: { file: 'heart.wav', vol: 0.7 },
   swordPickup: { file: 'item-pickup.wav', vol: 0.6 }, // item get (Freesound #37089, see CREDITS.md)
   dropWater: { file: 'water-drop.wav', vol: 0.75 }, // single drop for the title-screen reveal
   titleImpact: { file: 'title-impact.wav', vol: 0.95 }, // epic hit when the author's name lands
   singingBowl: { file: 'singing-bowl.wav', vol: 0.8 }, // Tibetan bowl for the intro "wake up"
-  playerHurt: { file: 'hurt.wav', vol: 0.85 },
-  playerDeath: { file: 'game-over.wav', vol: 0.85 },
+  playerHurt: { file: 'combat/player-hurt.wav', vol: 0.85 },
+  playerDeath: { file: 'combat/player-death.wav', vol: 0.85 },
   shopOpen: { file: 'shop-open.wav', vol: 0.5 },
   shopClose: { file: 'shop-close.wav', vol: 0.6 },
   ignite: { file: 'ignite.wav', vol: 0.75 },
@@ -50,8 +53,8 @@ const SAMPLES = {
   grassCut: { file: 'grass-cut.wav', vol: 0.6 },
   bombPlace: { file: 'bomb-place.wav', vol: 0.6 },
   bombExplode: { file: 'bomb-explode.wav', vol: 1.0 },
-  undeadSpawn: { file: 'undead-spawn.wav', vol: 0.7 },
-  fireHit: { file: 'fire-hit.wav', vol: 0.7 },
+  undeadSpawn: { file: 'combat/undead-spawn.wav', vol: 0.7 },
+  fireHit: { file: 'combat/fire-hit.wav', vol: 0.7 },
   bridgePlank: { file: 'bridge-plank.wav', vol: 0.7 },
   bridgeBuilt: { file: 'bridge-built.wav', vol: 0.75 },
   hammer: { file: 'hammer.wav', vol: 0.7 }, // nailing a plank home during a bridge build
@@ -59,7 +62,66 @@ const SAMPLES = {
   footstep1: { file: 'footstep-1.wav', vol: 0.5 },
   footstep2: { file: 'footstep-2.wav', vol: 0.5 },
   footstep3: { file: 'footstep-3.wav', vol: 0.5 },
+
+  // ── O COMBATE (ver tools/import-combat-sfx.mjs e CREDITS.md) ─────────────────────────────
+  //
+  // Catorze destes eventos NAO tinham amostra nenhuma: cada um tocava a sintese de emergencia do
+  // proprio SoundManager — a rede que existe pra cobrir um sample que ainda nao decodificou — e
+  // ela tinha virado o som definitivo de metade da briga.
+  //
+  // A FONTE E UM PACOTE DE RPG DE FANTASIA (o "RPG Sound Pack", CC0), e isso importa: houve uma
+  // versao com um pacote retro de fliperama, e o combate acabou com LASER no feitico do mago,
+  // ALARME no telegrafo da caveira e GRITO DE ALIENIGENA na morte. Hoje o mago tem `battle/spell`,
+  // a caveira tem `NPC/shade` (o espectro — que e o que ela e), a gosma tem `NPC/slime` e a aranha
+  // tem `NPC/beetle`. Sobraram SEIS sons do pacote retro, e so nos IMPACTOS: o pacote de fantasia
+  // tem golpe e criatura, mas nao tem nenhuma pancada — e as seis que ficaram sao percussivas e
+  // neutras, sem nada de espacial.
+  //
+  // O volume de cada um e DAQUI, nao do arquivo: o importador normaliza tudo no mesmo pico (-1
+  // dBFS) exatamente pra que a mixagem seja uma decisao de jogo, tomada nesta coluna, e nao um
+  // acidente de quao alto o pacote gravou. E por isso a gosma (0.32) e um sopro e o encontrao
+  // (0.8) e um evento, com o mesmo arquivo de origem tendo a mesma escala.
+  fistSwing: { file: 'combat/fist-swing.wav', vol: 0.62 },
+  spinRelease: { file: 'combat/spin-release.wav', vol: 0.85 },
+  undeadWhiff: { file: 'combat/undead-whiff.wav', vol: 0.45 },
+  spinReady: { file: 'combat/spin-ready.wav', vol: 0.55 },
+  guardBlock: { file: 'combat/guard-block.wav', vol: 0.7 },
+  bladeGlance: { file: 'combat/blade-glance.wav', vol: 0.5 },
+  bodySlam: { file: 'combat/body-slam.wav', vol: 0.8 },
+  enemyShot: { file: 'combat/enemy-shot.wav', vol: 0.55 },
+  // OS TELEGRAFOS SUBIRAM. Estes três (mais o `spellWindup` abaixo) são sons SUSTENTADOS — uma
+  // carga que dura, não um baque —, e por isso o RMS é régua válida para eles: mediam de 8 a 10 dB
+  // abaixo do resto do combate, ou seja, os avisos eram a coisa mais silenciosa da briga. Ficam
+  // ainda abaixo dos golpes de propósito (um aviso não compete com o impacto), mas agora dentro da
+  // mesma conversa.
+  //
+  // Os curtos NÃO foram mexidos pelo mesmo número, e isso importa: todo arquivo aqui sai com o
+  // mesmo pico (-1 dBFS), então num tique de 46ms o RMS baixo só quer dizer "é um tique", não "é
+  // baixo". Corrigir o aparo por RMS seria distorcer o único som que já estava certo.
+  turretCharge: { file: 'combat/turret-charge.wav', vol: 0.55 },
+  zoraSpit: { file: 'combat/zora-spit.wav', vol: 0.66 },
+  spiderPounce: { file: 'combat/spider-pounce.wav', vol: 0.55 },
+  slimeHop: { file: 'combat/slime-hop.wav', vol: 0.32 },
+  creatureArrive: { file: 'combat/creature-arrive.wav', vol: 0.38 },
+  // Os telegrafos que ainda eram sintetizados. O da caveira e um SIBILO DE ESPECTRO e o do mago e
+  // um FEITICO carregando — os dois do bestiario de fantasia, e os dois cortados para caber
+  // exatamente na janela que anunciam.
+  undeadWindup: { file: 'combat/undead-windup.wav', vol: 0.62 },
+  spellWindup: { file: 'combat/spell-windup.wav', vol: 0.7 },
+  zoraSurface: { file: 'combat/zora-surface.wav', vol: 0.4 },
 } as const;
+
+/**
+ * O JITTER DE ALTURA MUDA A DURACAO, e isso decide quais sons podem levar jitter.
+ *
+ * `playSample` varia o tom mexendo em `playbackRate` — que e a mesma coisa que esticar ou encolher
+ * o arquivo no tempo. Para um baque de 90ms isso e invisivel e resolve a repeticao. Para um som
+ * cuja duracao FOI ESCOLHIDA pra casar com uma janela do jogo — a carga da torreta acaba no frame
+ * em que o leque sai, a boca do zora fecha quando o cuspe sai — esticar o arquivo desalinha o
+ * aviso do gesto que ele anuncia. Esses tocam sem jitter, e a repeticao deles nao incomoda porque
+ * sao raros e longos.
+ */
+const HIT_JITTER = 0.9; // semitons, o mesmo do enemyHit
 type SampleKey = keyof typeof SAMPLES;
 
 // Souls staging: the title screen is just dripping water, the wind bed is the world's
@@ -76,6 +138,13 @@ const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
 const AMBIENCE_FILE = 'ambience-wind.wav';
 
 const FOOTSTEP_KEYS: readonly SampleKey[] = ['footstep0', 'footstep1', 'footstep2', 'footstep3'];
+
+/**
+ * Fator de altura para um som SINTETIZADO que se repete — o equivalente do jitter que `playSample`
+ * dá às amostras. ±4% (uns dois terços de semitom) é o bastante para o ouvido parar de reconhecer
+ * a repetição e pouco o bastante para o som continuar sendo o mesmo som.
+ */
+const detune = (): number => 1 + (Math.random() * 2 - 1) * 0.04;
 
 class SoundManager {
   private ctx: AudioContext | null = null;
@@ -441,17 +510,93 @@ class SoundManager {
   }
 
   /**
+   * O SOCO — o botao A sem espada na mochila.
+   *
+   * Ele tocava `playSwordSlash`, e por isso a arma que o heroi NAO tem soava exatamente igual a que
+   * ele tem: a unica diferenca audivel entre estar armado e nao estar era o silencio de nao acertar
+   * a segunda fileira do arco. O golpe de punho tem alcance menor, dano menor e nenhuma lamina — e
+   * agora tem som proprio, seco e sem metal.
+   */
+  public playFistSwing(): void {
+    if (this.playSample('fistSwing', HIT_JITTER)) return;
+    this.noise('lowpass', 700, 0.8, 0.18, 0.09);
+    this.osc('sawtooth', 120, 40, 0.10, 0.09);
+  }
+
+  /**
    * A lamina TERMINOU de carregar (ver GameScene.tickSpinCharge). Duas notas subindo, curtas e
    * limpas — um sino, nunca um zumbido: o zumbido ja e a lingua da maquina (torreta, caldeira),
-   * e este som pertence ao heroi. Sinteticos os tres: sao gestos novos e ainda nao tem amostra.
+   * e este som pertence ao heroi.
    */
   public playSpinReady(): void {
-    this.osc('triangle', 660, 880, 0.14, 0.09);
-    this.osc('sine', 1320, 1760, 0.07, 0.11, 0.04);
+    if (this.playSample('spinReady', 0.5)) return;
+    const d = detune();
+    this.osc('triangle', 660 * d, 880 * d, 0.14, 0.09);
+    this.osc('sine', 1320 * d, 1760 * d, 0.07, 0.11, 0.04);
+  }
+
+  /**
+   * A GUARDA APARANDO — o tim de metal contra metal, dos dois lados do combate: o escudo do herói
+   * e a guarda que um bicho ergue enquanto arma o golpe.
+   *
+   * Tem de ser o OPOSTO do acerto (`playEnemyHit`, que é grave e sujo): agudo, curtíssimo e
+   * limpo. Um golpe aparado que soasse parecido com um golpe certeiro ensinaria a coisa errada
+   * no único instante em que o jogo está tentando ensinar posicionamento.
+   */
+  public playGuardBlock(): void {
+    if (this.playSample('guardBlock', HIT_JITTER)) return;
+    // A VARIAÇÃO não é enfeite: toda amostra deste jogo que se repete já sai com jitter de altura
+    // (o passo roda quatro variantes com ±1,2 semitom, o acerto sai com ±0,9), justamente porque
+    // repetição idêntica denuncia a amostra. Os sons SINTETIZADOS não tinham nada disso — e o
+    // aparo e o encontrão são, por definição, sons que acontecem muitas vezes seguidas na mesma
+    // briga. Uma oitava de ±4% na frequência resolve, e sai de graça: não há amostra para variar,
+    // só um número.
+    const d = detune();
+    this.osc('square', 1760 * d, 1320 * d, 0.1, 0.05);
+    this.osc('triangle', 2640 * d, 1980 * d, 0.06, 0.07, 0.01);
+    this.noise('highpass', 4200 * d, 0.6, 0.12, 0.06);
+  }
+
+  /**
+   * O RESVALO — a lâmina escorregando de um corpo que ainda está piscando de invulnerável.
+   *
+   * Ele era **mudo**, e mudo é a pior resposta que um botão pode dar: o jogador apertou, viu a
+   * lâmina passar por dentro do bicho e não ouviu nada, o que lê como input perdido e não como
+   * recusa. Duas das três recusas do combate estavam assim (esta e o golpe num corpo que ainda
+   * está saindo do chão) — e a lei da casa, "toda recusa tem desenho PRÓPRIO", vale para o ouvido
+   * também: o anel azul frio já dizia ESPERE, e faltava alguém dizer isso em voz alta.
+   *
+   * É o oposto do aparo (`playGuardBlock`, agudo e limpo, metal contra metal): ali houve encontro,
+   * aqui houve ESCORREGÃO. Um raspão curto e abafado, sem cauda e sem brilho — grave o bastante
+   * para nunca ser confundido com um acerto, seco o bastante para não pesar quando sai três vezes
+   * no mesmo giro.
+   */
+  public playBladeGlance(): void {
+    if (this.playSample('bladeGlance', HIT_JITTER)) return;
+    const d = detune();
+    this.noise('bandpass', 820 * d, 2.2, 0.16, 0.055);
+    this.osc('triangle', 400 * d, 260 * d, 0.07, 0.05, 0.01);
+  }
+
+  /**
+   * O ENCONTRÃO — o corpo batendo na parede depois do arremesso.
+   *
+   * Não podia ser o `playRockSmash`, que era o candidato óbvio por ser o impacto pesado que já
+   * existe: aquela amostra diz **pedra QUEBRANDO**, e ela tocaria por cima do baque do acerto toda
+   * vez que o jogador encurralasse uma caveira contra uma árvore. Um som que descreve outra coisa
+   * ensina outra coisa. Este é o oposto de quebrar: um baque surdo e curto, sem cauda e sem
+   * estilhaço — massa encontrando massa.
+   */
+  public playBodySlam(): void {
+    if (this.playSample('bodySlam', HIT_JITTER)) return;
+    const d = detune();
+    this.noise('lowpass', 260 * d, 1.4, 0.5, 0.1);
+    this.osc('sine', 120 * d, 46 * d, 0.34, 0.13);
   }
 
   /** O giro escapando: o vento do arco, grave e largo, com o metal por cima. */
   public playSpinRelease(): void {
+    if (this.playSample('spinRelease', HIT_JITTER)) return;
     this.noise('bandpass', 1100, 0.9, 0.34, 0.26);
     this.osc('sawtooth', 320, 90, 0.2, 0.22);
     this.osc('triangle', 880, 440, 0.1, 0.18, 0.02);
@@ -789,17 +934,21 @@ class SoundManager {
   }
 
   /**
-   * The undead attack wind-up: a short rising hiss — the audio half of the "dodge now"
-   * telegraph (the visual half is the red flash + rear-back pose in UndeadEnemy).
-   * Procedural only — no authored sample yet.
+   * The undead attack wind-up: the audio half of the "dodge now" telegraph (the visual half is the
+   * ground ring closing + the rear-back pose + the bone going up over the head).
+   *
+   * SEM JITTER: os 300ms deste arquivo cabem na janela de 500ms com folga, e esticar o tom
+   * estica a duracao (ver HIT_JITTER) — este e o aviso que menos pode escorregar do gesto.
    */
   public playUndeadWindup(): void {
+    if (this.playSample('undeadWindup')) return;
     this.osc('sawtooth', 70, 170, 0.10, 0.32);
     this.noise('bandpass', 520, 2.2, 0.09, 0.28);
   }
 
   /** The strike that met empty air: a thin whoosh, nothing landed. */
   public playUndeadWhiff(): void {
+    if (this.playSample('undeadWhiff', HIT_JITTER)) return;
     this.noise('highpass', 1600, 1.0, 0.10, 0.09);
     this.osc('triangle', 220, 90, 0.05, 0.08);
   }
@@ -808,6 +957,20 @@ class SoundManager {
    * The undead spawn telegraph: a low ground-rumble with a gravelly crunch on top, warning
    * that something is about to claw out of the tile (playUndeadSpawn fires when it does).
    * Procedural only — no authored sample yet.
+   */
+  /**
+   * O CHÃO RACHANDO antes de a caveira sair — e este é o único evento de combate que ficou na
+   * SÍNTESE, de propósito.
+   *
+   * Ele já foi 8-bit por um dia, com uma explosão longa do pacote: 2,1 SEGUNDOS de bomba (4,5×
+   * mais longa que qualquer outro som do combate) disparando a cada 3,2s de cerco, na abertura de
+   * toda partida. O som tinha sido escolhido por medida — grave, longo, contínuo — passando por
+   * cima do nome da pasta, que dizia *Explosions*.
+   *
+   * O pacote não tem TERRA, e esta é a diferença entre o telegrafo funcionar e não funcionar: ele
+   * é um aviso de TRÊS SEGUNDOS cujo trabalho inteiro é dar tempo de sair do tile. Precisa ser
+   * baixo, contínuo e quase discreto — um evento sonoro grande no lugar de um aviso faz o jogador
+   * reagir ao susto em vez de ao chão. Estas três camadas foram desenhadas exatamente para isso.
    */
   public playGroundCrack(): void {
     this.noise('lowpass', 170, 0.8, 0.30, 0.55);
@@ -830,6 +993,7 @@ class SoundManager {
 
   /** A chegada de um corpo que nao vem de baixo: um roçado seco e um baque leve assentando. */
   public playCreatureArrive(): void {
+    if (this.playSample('creatureArrive', HIT_JITTER)) return;
     this.noise('highpass', 2200, 0.9, 0.07, 0.14);
     this.noise('lowpass', 420, 1.0, 0.11, 0.18, 0.05);
     this.osc('triangle', 150, 90, 0.06, 0.14, 0.04);
@@ -837,12 +1001,16 @@ class SoundManager {
 
   /** O bote da aranha: o estalo da mola soltando, curto e seco. */
   public playSpiderPounce(): void {
+    if (this.playSample('spiderPounce', HIT_JITTER)) return;
     this.osc('square', 480, 180, 0.07, 0.09);
     this.noise('bandpass', 1800, 2.6, 0.09, 0.1);
   }
 
   /** O salto da gosma: um plop molhado, gordo e sem ataque nenhum. */
   public playSlimeHop(): void {
+    // Jitter LARGO (1,4 semitom): a gosma salta sem parar e o plop dela e o som mais repetido do
+    // bestiario — 40ms nao tem duracao nenhuma a perder esticando.
+    if (this.playSample('slimeHop', 1.4)) return;
     this.osc('sine', 190, 70, 0.09, 0.14);
     this.noise('lowpass', 700, 0.9, 0.07, 0.1, 0.02);
   }
@@ -852,12 +1020,16 @@ class SoundManager {
    * carga do jogo sobe (o vento da caveira, o sopro da flor): descer significa acabar.
    */
   public playTurretCharge(): void {
+    // SEM JITTER: os 348ms deste arquivo foram escolhidos contra os 350ms da janela de carga, e
+    // jitter e `playbackRate` — esticar o tom estica a duracao e desalinha o aviso do leque.
+    if (this.playSample('turretCharge')) return;
     this.osc('sawtooth', 180, 620, 0.06, 0.34);
     this.noise('bandpass', 1400, 4.0, 0.04, 0.3);
   }
 
   /** O vento da conjuracao do mago: o mesmo gesto de subir, em ar em vez de metal. */
   public playSpellWindup(): void {
+    if (this.playSample('spellWindup')) return; // sem jitter: telegrafo de 420ms, ver playTurretCharge
     this.noise('bandpass', 900, 2.4, 0.07, 0.4);
     this.osc('sine', 320, 760, 0.05, 0.38);
   }
@@ -868,6 +1040,7 @@ class SoundManager {
    * DISCRETO: e o unico aviso de que o rio tem coisa dentro, e um som grande arruinaria o susto.
    */
   public playZoraSurface(): void {
+    if (this.playSample('zoraSurface', HIT_JITTER)) return;
     this.noise('lowpass', 900, 0.9, 0.12, 0.2);
     this.osc('sine', 220, 90, 0.07, 0.16);
     this.noise('highpass', 3000, 0.7, 0.04, 0.12, 0.06); // as goticulas caindo depois
@@ -875,12 +1048,14 @@ class SoundManager {
 
   /** A boca abrindo com o cuspe carregando dentro: um sugar que SOBE, como toda carga desta casa. */
   public playZoraSpit(): void {
+    if (this.playSample('zoraSpit')) return; // sem jitter: ver playTurretCharge (telegrafo de 400ms)
     this.noise('bandpass', 700, 3.0, 0.06, 0.34);
     this.osc('sine', 180, 520, 0.05, 0.3);
   }
 
   /** O disparo — o instante em que a bala (ou a bola) sai. Curto: o voo ja e visivel. */
   public playEnemyShot(): void {
+    if (this.playSample('enemyShot', HIT_JITTER)) return;
     this.osc('square', 700, 240, 0.08, 0.1);
     this.noise('highpass', 2600, 0.8, 0.06, 0.08);
   }

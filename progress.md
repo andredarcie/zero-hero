@@ -32,7 +32,7 @@
 - Refatoracao estrutural concluida para separar responsabilidades.
 - src/game/assets/assetManifest.ts centraliza preload de assets compartilhados.
 - src/game/shared/grid.ts concentra math e utilitarios de grid.
-- src/game/debug/debugHooks.ts centraliza ender_game_to_text e dvanceTime.
+- src/game/debug/debugHooks.ts centraliza render_game_to_text e advanceTime.
 - src/game/maps/levelRuntime.ts concentra normalizacao de level, spawn e bloqueios.
 - src/game/runtime/ agora abriga renderer do board, controle de movimento e efeitos.
 - src/game/editor/ agora abriga board do editor, palette e helpers de UI.
@@ -2031,6 +2031,550 @@ between them.
 - `npm run playtest -- portal-travessia` guards all four beats where each happens, including the
   tunnel surviving the restart, and measures the darkening on the SCREENSHOT (see the comment on
   `shotLuma` for the two easier measurements that lie).
+
+## O combate que passou a existir — oito peças, e a primeira explica as outras sete
+
+O jogador disse que o combate não estava gostoso, e a auditoria contra o `A Link to the Past`
+([enemy design](https://www.gamedeveloper.com/design/enemy-design-in-link-to-the-past),
+[a primeira sala](https://www.gamedeveloper.com/design/first-combat-of-link-to-the-past),
+[dano e i-frames](https://spannerisms.github.io/damage/)) e contra o guia de combate em ARPG do
+[howtomakeanrpg](https://howtomakeanrpg.com/r/a/realtime-combat-design.html) achou o motivo em uma
+linha de código: `MELEE_DAMAGE.sword = 999`.
+
+**Não havia combate — havia execução.** Todo corpo do jogo morria no primeiro acerto, e por isso
+nada do que existia em volta chegava a acontecer: o telegrafo de 500ms que cada espécie carrega
+nunca era usado (o bicho morria antes de armar), o atordoamento não comprava nada (não havia o que
+atordoar), o arremesso não abria espaço (não havia corpo para afastar) e a lâmina rodopiante não
+resolvia estar cercado (encostar já resolvia). A camada de *juice* — hitstop, tremor, faísca,
+buffer de entrada — estava boa o tempo todo. O que faltava era o **oponente**.
+
+As oito mudanças, e cada uma só faz sentido depois da anterior:
+
+1. **A espada dá 2 de dano.** A caveira (3 de vida) leva duas espadadas, o slime grande (6), três.
+   O graveto **aceso** continua matando de um golpe e agora é a única coisa que faz isso — fogo é
+   recurso que se gasta (o combustível corre, a chama entrega sua posição no escuro, a mão fica
+   presa nele), então ele pode comprar o que a lâmina deixou de dar.
+2. **O corpo ganhou i-frames** de 450ms (os ~32 frames do original). O golpe que cai dentro da
+   janela **resvala** — anel pálido, sem dano —, porque um arco de seis tiles a cada 260ms sem isso
+   é uma serra elétrica. A melhoria "ataque mais rápido" da loja parou de multiplicar golpes por
+   gesto (todos cairiam na mesma janela) e passou a comprar **cadência**, que é o que o nome diz.
+3. **O golpe armado do inimigo deixou de ser cancelável.** Bater nele zerava o windup; com dano
+   real, trancar o bicho em interrupção viraria a estratégia dominante do jogo inteiro. A resposta
+   ao telegrafo voltou a ser a que ele sempre prometeu: **sair do tile mirado**.
+4. **...e enquanto arma, ele guarda a frente** (`guardsAgainst`). É a aula que o soldado da primeira
+   sala do LttP dá sem texto: de frente bate na guarda, contornando entra. Só na janela do
+   telegrafo — guarda permanente viraria um enigma de ângulo — e só em quem tem frente: a gosma é
+   uma bolha e o morcego é um borrão, e os dois devolvem `guardsWhileWindingUp = false`.
+5. **O bestiário andou mais rápido.** O herói dá um passo a cada 150ms e a caveira dava um a cada
+   850 — **5,7× mais lenta**, isto é, fugir era sempre grátis e nunca havia motivo para lutar.
+   Agora ela anda a 520ms (~3×), a aranha a 500, o morcego a 270. A regra que não se quebra: nunca
+   mais rápido que o herói, ou não existe desengajar.
+6. **Atacar prende os pés por 160ms** (o giro, 260). Dava para golpear em pleno passo, na velocidade
+   máxima, então nunca havia um instante em que estar perto custava caro. A raiz impede *começar*
+   um passo e nunca congela um em curso — parar o herói em cima de uma aresta seria um soluço.
+7. **O escudo, e ele é a direção em que o herói olha.** Não havia verbo defensivo nenhum. Ele é
+   intrínseco (o herói tem uma mão só, e um escudo que a ocupasse custaria a tocha e o machado) e
+   **só apara tiro**: se aparasse golpe de corpo, encarar seria invencibilidade contra metade do
+   bestiário, parado. Contra corpo a resposta é sair do tile; contra tiro, encarar. Dois problemas,
+   duas respostas, e nenhuma resolve a outra. A guarda cai enquanto o herói ataca.
+8. **O feixe da espada com vida cheia foi construído e ARRANCADO no mesmo dia**, a pedido do
+   jogador. A ideia era a do original — com a vida cheia a espada dispara, ferido ela para —, e
+   num jogo sem HUD ela é sedutora: a barra de vida vira a arma. O que ela custa é a leitura do
+   combate que as sete peças acima acabaram de montar: um tiro grátis a cada golpe empurra o
+   jogador para longe, e tudo aqui — a área 2×3, o arremesso, a guarda frontal, o escudo que só
+   apara tiro — existe para ensinar a chegar perto e escolher o lado. Fica registrado para não ser
+   reinventado sem essa conta: **a espada deste jogo não atira.**
+
+`npm run playtest -- esgrima` cresceu para cobrir as leis novas (dano real, i-frames, guarda,
+escudo e o encontrão) e `combate` deixou de contar cadáveres: ele guarda o **contrato do botão** —
+o A alcança o tile da frente sem encostar —, e isso agora se prova no dano.
+
+### E o polimento, que é onde as regras viram jogo
+
+As sete peças acima mudaram o que o combate É; nenhuma delas mudou o que ele MOSTRA, e uma regra
+que o jogador não vê não existe. Cinco correções, todas em cima do que já estava lá:
+
+- **Os i-frames piscam.** A troca de textura de dano durava 150ms e a invulnerabilidade dura 450 —
+  nos 300ms de diferença o corpo era indistinguível de um corpo que aceita dano, e o jogador só
+  descobria isso depois de já ter apertado o botão. O alpha agora alterna a cada 80ms pela janela
+  inteira, derivado do próprio relógio (nada de tween novo por golpe) e escrito só na TROCA de
+  fase, porque `apply()` do billboard reescreve o mesh a cada `setAlpha`.
+- **O telegrafo mostra o TILE.** Ele avisava de três maneiras — clarão, pose recuada e som — e
+  nenhuma dizia *onde*, que virou a única informação que importa desde que bater deixou de
+  cancelar. Um anel deitado FECHA sobre o tile mirado no tempo exato do windup: quando fecha, bate.
+  Fechar e não abrir é a diferença entre um relógio e um rastro.
+- **A guarda deixou de falar a língua do resvalo.** Os dois chamavam `spawnDeflect`, e são lições
+  opostas: o resvalo diz *espere*, a guarda diz *contorne*. A guarda ganhou faíscas quentes na
+  BORDA do corpo, no lado de onde o golpe veio — a posição é a informação.
+- **O herói investe ao golpear.** O corpo dele não fazia nada: a lâmina varria e ele ficava parado,
+  então os 160ms de raiz liam como travamento. Um oitavo de tile para a frente, saindo em 60ms e
+  voltando em 130 (`HeroView.lungeX`, campo próprio — o `x/y` de tela pertence ao arremesso de dano
+  e os dois brigando pelo mesmo campo seria um bug que só aparece ao apanhar no meio de um golpe).
+- **Encurralar paga.** O arremesso barrado por parede caía no mesmo recuo elástico de um empurrão
+  qualquer — a jogada boa era a mais silenciosa do jogo. `shove` passou a devolver
+  `'moved' | 'slammed' | 'immovable'` (a distinção importa: torreta e zora não *têm* parede, só não
+  andam) e o encontrão ganhou hitstop, tremor fundo e poeira no ponto de impacto. O jogo tem a
+  melhor parede possível para isto, que é a luz da fogueira.
+
+### A segunda passada, e as três acusações que o código derrubou
+
+Uma auditoria feita para achar o que ainda faltava de polimento listou cinco coisas, e **três
+estavam erradas** — o que vale registrar porque cada erro veio de supor em vez de ler:
+
+- "Os sons de combate não variam" — variam. `playSample(key, jitter, volScale)` recebe jitter em
+  SEMITONS no segundo parâmetro, e `playEnemyHit` já sai com ±0,9. O que não variava eram os sons
+  **sintetizados** (o aparo e o encontrão, escritos horas antes), que não passam por ali.
+- "Sete espécies morrem sem deixar nada" — a gosma já deixava a poça que seca, arte própria dela.
+  Eram cinco.
+- "Só a caveira mostra barra de vida" — **ninguém** mostrava: a barra tinha sido removida por
+  design e o esqueleto ficou, alocando uma `Graphics` por inimigo e limpando-a todo frame para
+  nunca preenchê-la. O `healthBarVisible` era um flag que ninguém lia.
+
+O que de fato foi feito:
+
+- **A piscada do herói passou a sair da janela.** Ela era `repeat: 5` de 80ms (960ms) contra uma
+  invulnerabilidade de 1500 — nos últimos 540ms ele parecia vulnerável e não era, o mesmo defeito
+  que tínhamos acabado de consertar no inimigo. Agora a contagem é derivada de `PLAYER_INVULN_MS`:
+  um número só, e a piscada não pode mais mentir sobre ele.
+- **Morrer deixa marca em todo corpo morto.** `die()` liga `corpseMark`, `despawn()` não (o escuro
+  reclamando os seus não é uma briga a registrar), e o `EnemyManager` enterra no frame em que o
+  corpo termina de sumir. De quebra, a caveira perdeu o caminho PRÓPRIO que tinha para a mesma
+  coisa — um callback recebido no construtor, de quando ela era a única espécie com ossada. Duas
+  rotas para um mesmo fato é como uma delas envelhece errada.
+- **A barra de vida morta foi deletada** e substituída pelo que ela deveria ter dito: o corpo
+  ESCURECE conforme perde vida. `woundedShade(base)` recebe a cor base e a escurece, em vez de
+  devolver um tom absoluto — o mago tem tom frio permanente (a arte é dividida com o NPC mago) e um
+  tom absoluto apagaria a identidade dele justo enquanto ele apanha.
+- **Os sons sintetizados ganharam ±4% de altura**, que é o equivalente do jitter que as amostras
+  já tinham. Aparo e encontrão são, por definição, sons que se repetem muitas vezes na mesma briga.
+- **A guarda passou a ser anunciada.** Ela existia só como punição: o jogador descobria o lado
+  fechado gastando um golpe nele. Agora um risco de luz acende na borda guardada durante o
+  telegrafo, na mesma paleta das faíscas de aparo — a mesma coisa dita antes e depois.
+
+E uma incoerência que a auditoria achou de brinde: **a conjuração do mago ainda era cancelável por
+dano**, sobrevivente da lei que o windup do andarilho tinha acabado de perder. Com i-frames e dano
+real, ele seria o corpo mais fácil do bestiário de anular parado na frente — justamente o inimigo
+que existe para obrigar o jogador a se mover.
+
+### A terceira passada: a caveira não tinha entrado na reforma
+
+O mago era o **segundo** sobrevivente da lei antiga. O primeiro — e o único que importava de verdade
+— era a caveira, e ela não foi esquecida por descuido: ela é o único corpo do bestiário que **não é
+um `WalkerEnemy`**, e o telegrafo inteiro tinha sido escrito dentro daquela classe. Toda a reforma
+passou por cima dela.
+
+O inimigo que o jogador mais encontra, o que **ensinou** o telegrafo, e o único do jogo que:
+
+- ainda tinha o golpe armado cancelável a pancada (a estratégia dominante que a reforma removeu);
+- nunca guardava a frente (`guardsAgainst` era o `false` da base);
+- não marcava o tile mirado, então o aviso dela não dizia *onde* — a única informação que importa
+  desde que bater deixou de cancelar;
+- não acendia o brilho da guarda;
+- reportava `windingUp: false` no `gameDebug`, o que fazia o `esgrima` esperar oito segundos por um
+  estado que nunca chegava e cair nas duas asserções seguintes;
+- voltava ao **tom cheio** ao armar (`clearTint` em vez de `restoreTint`), apagando o `woundedShade`
+  — a leitura de vida — justamente no instante em que ameaça.
+
+A correção **não** foi fazê-la herdar do andarilho: o cabeçalho daquela classe explica, e continua
+certo, por que a fissura de 3s, o laço da placa e o desmanche não cabem num molde comum. Foi mover o
+telegrafo para onde ele sempre pertenceu — o `EnemyBase` —, que é o mesmo raciocínio que já tinha
+tirado a ossada própria da caveira: **duas rotas para o mesmo fato é como uma delas envelhece
+errada.** As sete espécies passaram a ler a mesma máquina; `WalkerEnemy` encolheu 70 linhas e agora
+só decide *quando* armar e *por quanto tempo*.
+
+E no caminho apareceu um defeito que só existia porque o arremesso é novo: **o golpe armado acertava
+por cima de um vão.** O `tickHitstun` sai do update antes do bloco do windup, então um corpo atingido
+no meio do telegrafo é jogado um tile para trás, fica atordoado 300ms, e cobra o golpe de **dois
+tiles de distância** quando volta a si. `tickWindup` passou a exigir que o tile mirado ainda esteja
+ao alcance do corpo; fora disso, `whiff`. (A caveira escapava disso por acidente — porque cancelava
+o próprio windup, que era o outro bug.)
+
+### E o resto da revisão, que é tudo consequência de a reforma ser nova
+
+- **`sweepArc` contava recusa como acerto.** `landed` subia mesmo quando o golpe resvalava nos
+  i-frames ou batia na guarda, então o próximo corpo do mesmo gesto chegava como ECO — sem som de
+  acerto, sem a piscada do herói e sem o baque da morte. No giro, que varre oito tiles, o baque de
+  uma morte era engolido com frequência. `strikeEnemy` agora devolve se o golpe **landou**.
+- **A carga do giro sobrevivia à pausa.** `scene.pause()` adormece o plugin de teclado: soltar o A
+  com a subtela aberta perde o `keyup`, e `attackHeld` ficava preso em `true` para sempre — o sino
+  de "carregada" tocava sozinho ao voltar e o herói soltava faíscas indefinidamente. É a mesma
+  armadilha que o `pressAttack` já documentava e defendia só do lado do *aperto*.
+- **O botão B não pagava nada pelo golpe.** A raiz e a investida moravam só no A, e a exceção caía
+  justo no golpe mais forte do jogo: o graveto **aceso** é a única coisa que ainda mata de uma vez, e
+  era também a única que se dava em velocidade máxima de caminhada. A raiz entra só no ramo que bate
+  numa criatura — prender os pés para apanhar um graveto seria o defeito oposto.
+- **O golpe de item só era desenhado quando acertava.** O arco subiu para antes das duas recusas: um
+  B recusado mostrava faísca e nenhuma mão se mexendo. A faísca explica o que aconteceu; ela não
+  substitui o gesto de ter atacado.
+- **A carência de virar-se era um relógio solto.** Virar-se para a caveira ao norte comprava 180ms de
+  esbarrão de graça no slime a leste. Ela passou a lembrar **em quem** foi gasta — um toque humano
+  acontece contra um corpo só.
+- **`shove` matava a pose do telegrafo.** O `killTweensOf(this)` apagava o agachamento, então um
+  corpo empurrado no meio do aviso ficava em pé e relaxado enquanto o anel no chão continuava
+  fechando: as duas metades do mesmo aviso discordavam. Assentado o solavanco, ele volta a se
+  agachar pelo tempo que sobra.
+- **`despawn()` não desfazia a piscada dos i-frames** — `die()` já tinha essa lei ("a piscada não
+  pode vazar para a morte") e o desmanche não. Um corpo despejado no vale da piscada começava a
+  derreter em alpha 0.35.
+- **As faíscas da carga e o anel do giro ancoravam no tile LÓGICO.** O `swingAnchor` já passava pelo
+  `visualWorld` de propósito (a posição lógica pula para o tile de destino quando o passo começa);
+  esses dois não, então carregar andando punha o brilho até um tile à frente de quem brilhava.
+- **O lingote de ferro não batia**, sozinho numa lista em que a pedra, o carvão e a bateria batem
+  1.5 com o comentário "as good as any other blunt tool".
+- **O `EnemyManager` alocava um closure por corpo por frame**, e cada consulta dele um `some` com
+  outro. Um closure por `update` e uma varredura em `for` resolvem. O que **não** dá para fazer é um
+  índice tile→corpo por tick: os corpos andam DURANTE o laço (o inimigo *i* dá um passo e o *i+1*
+  consulta), e um índice velho deixaria dois empilharem.
+- Saiu junto o `setMouseWalkEnabled` do `PlayerMovementController` — código morto desde que o
+  revólver foi arrancado, com três parágrafos de docstring sobre uma arma que não existe.
+
+`npm run playtest -- esgrima` ganhou a asserção que faltava e é o portão disto: ele cobra a guarda e
+o compromisso **na caveira**, que é onde a unificação pode quebrar de novo.
+
+### O polimento, e o achado que estava escondido no golpe mais importante do jogo
+
+Oito coisas, e a primeira é a que dói mais quando se vê:
+
+- **O golpe que MATA era o único que não movia o corpo.** Todo golpe que não mata arremessa um tile
+  (`shove`); o fatal chamava `triggerKnockback`, que sai na primeira linha se o corpo já morreu — e
+  mesmo que não saísse, `render()` para de escrever a posição do billboard depois da morte, então o
+  deslocamento não teria por onde aparecer. O melhor gesto do jogo deixava a caveira inchando e se
+  desmanchando **de pé, exatamente onde estava**. Agora a morte tem `deathFling`, que anda na
+  posição do próprio billboard (que é o que o desmanche já usa). A bomba ganhou o mesmo sopro: ela
+  era a única coisa do jogo com raio de ação e sem empurrão.
+- **Duas das três recusas eram MUDAS.** Só o aparo tinha som. O resvalo nos i-frames e o golpe num
+  corpo que ainda sai do chão não faziam ruído nenhum — o jogador aperta, vê a lâmina passar por
+  dentro do bicho e não ouve nada, o que lê como **input perdido** e não como recusa. `playBladeGlance`
+  é o oposto do tim do aparo: ali houve encontro, aqui houve escorregão — um raspão curto e abafado.
+- **Nenhuma recusa tinha hitstop.** A lâmina atravessava uma guarda erguida com menos resistência do
+  que atravessava o ar. Aparar é aço contra aço (55ms), resvalar é a lâmina escorregando (28ms), e os
+  dois ficam abaixo do hitstop de um acerto: recusar nunca pode pesar mais que conectar.
+- **A faísca do acerto não tinha direção** — 360° uniformes, então um golpe do oeste e um do leste
+  desenhavam a mesma estrela. Agora ela sai num leque para fora do golpe; o golpe que mata abre o
+  leque quase até o círculo, porque ali não há mais direção a ensinar.
+- **O golpe errado do bicho não marcava o lugar que ele mirou.** O anel fechava sobre um tile por
+  meio segundo prometendo um golpe, e quando ele saía não acontecia nada ali: a esquiva só era
+  desenhada no corpo. A poeira rasteira no tile mirado é o que fecha o laço — o golpe caiu, caiu ALI,
+  e você não estava lá.
+- **Quatro espécies não reagiam em cor ao dano.** `hurtTexture` só existe na caveira, no morcego e no
+  mago; aranha, gosma, torreta e zora caíam num `restoreTint()` que, com a vida cheia, não muda um
+  pixel. A resposta não podia ser acender (a lei do bloom), então é ESCURECER: um mergulho de valor
+  de 110ms que funciona em qualquer corpo e não pede arte nova.
+- **Bater na torreta apagava o aviso de que ela ia atirar** — `restoreTint` limpava o `CHARGE_TINT`,
+  e o leque saía de uma máquina que parecia adormecida. Um aviso que o jogador desliga batendo é pior
+  que aviso nenhum: ensina que bater é seguro justamente no instante em que não é.
+- **A lâmina não reagia ao conectar.** O hitstop já CONGELAVA o arco no meio do gesto — a pose parada
+  existia e faltava a cor. Um lampejo quente no sprite da arma é o *impact frame* clássico, e aqui
+  sai de graça: o arco é um sprite 2D do Phaser por cima do canvas, não um billboard `emissive`, então
+  a lei que proíbe acender um corpo atingido não alcança a arma.
+
+Duas notas de método que valem mais que os itens: o `flashHit` guarda a cor da lâmina num campo
+próprio em vez de ler `tintTopLeft` de volta do Phaser (depender da representação interna do motor
+para uma ida-e-volta é o que uma versão menor quebra em silêncio), e as duas vozes do gesto — a do
+acerto e a da recusa — têm **orçamentos separados** em `sweepArc`, ou um resvalo no primeiro tile do
+arco cala o som da morte no segundo.
+
+## A caveira ganhou um osso, uma ossada de verdade e uma morte própria
+
+Três pedidos do jogador, e os três caem na mesma espécie — a que o jogo mais mostra e a que menos
+tinha para mostrar.
+
+### O osso na mão (`BoneClub.ts`, `undead-bone.png`)
+
+A caveira telegrafava o golpe de três maneiras (clarão, pose recuada, anel fechando no chão) e batia
+com **nada**. O corpo que ensinou o combate deste jogo era o único que acertava de mão vazia.
+
+Agora ela empunha um fêmur, e o gesto é o do herói do outro lado da briga: ao armar, o osso sobe
+atrás da cabeça do lado oposto ao alvo; quando o golpe sai, ele desaba por cima do tile mirado e
+**atravessa**. Ele bate no vazio quando o herói esquiva, de propósito e pela mesma razão que o arco
+do herói sai mesmo sem acertar — é assim que o jogador vê que sair do tile *funciona*.
+
+Duas decisões que não são óbvias:
+
+- **É um `Billboard3D`, e não o caminho do herói.** O arco do herói é um sprite 2D do Phaser
+  desenhado POR CIMA do canvas 3D: não é ocluído por nada e precisa que a cena lhe conte quanta luz
+  existe onde ele está. Isso é aceitável para quem está sempre no centro da tela e sempre na frente
+  de tudo; para um inimigo não é — ele pode estar atrás de uma árvore, e um osso desenhado por cima
+  disso denunciaria a trapaça na hora. Como billboard ele é iluminado e ocluído de graça.
+- **O punho ORBITA o corpo em vez de a arma girar em torno do punho.** O billboard gira em torno do
+  próprio centro (`setOrigin` é no-op por construção), então não há pivô a mover — é o osso inteiro
+  que anda numa circunferência em volta da caveira, girando junto para continuar apontando para
+  fora. E é por isso que a arte tem **nó dos dois lados**: girando pelo centro, um osso com nó de um
+  lado só passaria metade do arco de ponta-cabeça.
+
+A arma segue a posição **desenhada** do corpo (`this.sprite.x/y`, que já traz recuo e deslize
+somados), nunca o tile lógico — é o mesmo defeito que o `visualWorld` resolveu no arco do herói. E
+ela escurece junto com quem a segura (`woundedShade`): um osso claro na mão de uma caveira quase
+morta seria a única peça da silhueta mentindo sobre o estado dela.
+
+### A ossada borrada, e o diagnóstico que estava errado
+
+A marca no chão saía **borrada**, e a leitura óbvia era culpar a arte: é a frame 27 do
+`forest_tile_set`, duas cores, e 16 pixels ampliados três vezes. Foi o que eu concluí, e desenhei
+uma substituta na Sprite Factory. **Estava errado, e o jogador mandou usar a arte dele.** Ele tinha
+razão, e a causa real é bem melhor:
+
+O `forest-tileset` é a **única textura do jogo carregada em `LinearFilter`** (`textures3d.ts`), e
+isso é deliberado e está documentado lá: a malha do terreno busca o centro de cada texel por conta
+própria (`zhTexelUv`) e só deixa o filtro agir na costura entre dois tiles, que é exatamente onde
+ele conserta a escadinha da perspectiva de graça.
+
+**Um billboard não faz essa conta.** Ele amostra o atlas direto — então a ossada, o único *sprite*
+do jogo desenhado a partir do tileset, era também o único desenhado borrado. Nada no PNG denunciava
+isso, e trocar a arte teria "consertado" o sintoma deixando a causa de pé para o próximo sprite que
+puxasse um frame do tileset.
+
+O conserto é a arte autorada recortada **pixel a pixel** para uma textura própria
+(`environment/props/bones.png`, `ASSET_KEYS.bones`), que carrega em NEAREST como todo o resto do
+jogo. Mesma arte, mesmo tamanho, mesma posição — e nítida. A substituta que eu tinha desenhado foi
+deletada.
+
+A lição de método vale mais que a peça: **"a arte é ruim" e "a arte está sendo desenhada errada"
+parecem iguais na tela**, e só a segunda tem conserto que serve para o próximo caso.
+
+### O desmonte (`undead-bits.png`, `EnemyBase.onCrumble`)
+
+Um esqueleto tem a morte mais óbvia que existe e ela não estava sendo usada: a caveira sumia com o
+gesto genérico do `EnemyBase` (incha e some girando), que serve para qualquer corpo justamente
+porque não diz nada sobre nenhum.
+
+Agora ela **se parte**: no pico do desmanche o corpo some e viram quatro peças no ar — a cabeça, o
+osso que ela empunhava e dois pedaços quebrados. O gesto genérico continua rodando por baixo (é ele
+que conta o relógio da remoção e solta a ossada no chão), só que num sprite invisível.
+
+- **O gancho é `onCrumble`, e não `onDeath`.** Aquele roda no frame em que a vida chega a zero, com
+  o corpo inteiro e parado; este roda no pico do inchaço, que é onde uma silhueta pode se partir sem
+  que o olho perca o fio entre o corpo e as peças.
+- **As peças se espalham a FAVOR do golpe** (`deathDirection`, guardada pelo `deathFling`): a
+  caveira que leva uma espadada do oeste se parte para o leste. Uma explosão simétrica leria como a
+  coisa tendo se desfeito sozinha, e o que aconteceu foi que alguém bateu nela.
+- **O osso continua de onde a órbita o deixou**, e não do centro do corpo: a arma estava numa ponta
+  do gesto, e vê-la saltar para o meio da caveira antes de voar seria o único frame falso da cena.
+- **Subir e cair são dois tweens e não um yoyo**: a pancada joga a peça para cima depressa e a
+  gravidade a traz devagar. Simétrico é a curva de uma bola de desenho animado, não a de um osso.
+
+Só uma peça de arte nova precisou existir para isso — a cabeça e um osso quebrado. A terceira peça é
+o próprio fêmur da arma: **o esqueleto se parte nos mesmos ossos com que batia**, e essa rima saiu
+de graça.
+
+## Catorze eventos de combate estavam tocando a rede de emergência
+
+O `SoundManager` tem um contrato bonito: `if (this.playSample(...)) return;` e, abaixo, uma síntese
+de emergência para o caso de a amostra ainda não ter decodificado. **Catorze eventos de combate
+nunca tiveram amostra nenhuma** — a rede virou o som definitivo deles. São justamente os gestos mais
+novos (o aparo, o resvalo, o encontrão, a lâmina rodopiante) e o bestiário inteiro que não é a
+caveira: o bote da aranha, o plop da gosma, a carga da torreta, a boca do zora, o disparo, a chegada
+de um corpo, a fenda no chão.
+
+Eles vêm agora do pacote **CC0** de Juhani Junkala (*The Essential Retro Video Game Sound Effects
+Collection*, 512 sons, domínio público), que por sorte já sai no formato exato do projeto: 44,1 kHz,
+16-bit, mono. O importador (`tools/import-8bit-sfx.mjs`) só normaliza o pico para −1 dBFS, a mesma
+convenção do único sample de terceiros que já existia aqui.
+
+Quatro decisões que valem mais que a lista:
+
+- **A proveniência é DADO, não commit.** A tabela `MAP` do importador diz qual som do pacote virou
+  qual som do jogo e por quê. Sem ela, daqui a seis meses `guard-block.wav` é um WAV anônimo que
+  ninguém sabe refazer — e o projeto já tinha essa disciplina do outro lado (`gen-sfx.mjs` guarda a
+  receita de cada som gerado). Trocar um som é uma linha e um re-run. **O pacote não entra no
+  repositório**: só os 14 arquivos usados.
+- **A escolha foi por nome e por MEDIDA, não por ouvido** — quem montou a tabela não podia ouvir os
+  arquivos. Então a regra foi conservadora: só entrou som cuja pasta no pacote nomeia o *gesto* sem
+  ambiguidade (uma espada é uma espada, um laser é um tiro, um "landing" é algo pousando), e cada
+  escolha foi conferida contra duração, pico, RMS e centroide espectral. Dá para verificar que o
+  aparo é curto e agudo (99 ms, 1464 Hz), que o encontrão é curto e grave (93 ms, 408 Hz) e que a
+  carga da torreta dura 348 ms contra uma janela de 350.
+- **Quatro pastas ficaram de fora de propósito** — *High Pitched*, *Weird*, *Neutral* e *Alarms*. Os
+  nomes delas não dizem que gesto o som faz, e o telegrafo do golpe (`playUndeadWindup`) é o aviso
+  mais importante do combate inteiro: um som errado ali custa mais que a falta dele. Esses seguem na
+  síntese que foi desenhada para eles.
+- **O jitter de altura é `playbackRate`, e portanto muda a DURAÇÃO.** Para um baque de 90 ms isso é
+  invisível e resolve a repetição; para um som cuja duração foi escolhida para casar com uma janela
+  do jogo — a carga que acaba no frame em que o leque sai — esticar o arquivo desalinha o aviso do
+  gesto. A carga da torreta e a boca do zora tocam sem jitter; a gosma, que é o som mais repetido do
+  bestiário, toca com jitter largo.
+
+De brinde, um defeito que só apareceu ao listar os eventos: **o soco tocava o som da espada.** A arma
+que o herói não tem soava exatamente igual à que ele tem — de olhos fechados, estar armado e estar de
+mãos vazias eram o mesmo gesto. Agora o punho tem som próprio, seco e sem metal.
+
+### E depois a decisão de identidade foi tomada: o combate inteiro fala 8-bit
+
+A primeira leva só tapou buracos e deixou a espinha do combate — espadada, acerto, morte do inimigo,
+dano e morte do herói, o graveto aceso, a caveira irrompendo — nos sons gerados. O jogador foi
+direto ao ponto: *"o combate ainda está lotado de som gerado, converta tudo."* Mais dez sons, e
+agora **os 24 eventos de combate tocam amostra** (há um script de auditoria que verifica isso: todo
+método de combate tem de começar por `playSample`).
+
+Duas coisas dessa segunda leva valem mais que a lista:
+
+- **Os importados moram em `audio/8bit/`, e isso é uma trava e não arrumação.** O `gen-sfx.mjs`
+  escreve na raiz de `audio/`, e o CREDITS manda rodá-lo depois de mexer nos presets. Um som
+  importado com o nome de um gerado seria apagado em silêncio na primeira regeneração — e o culpado
+  só apareceria meses depois, quando a espada voltasse a soar diferente sem ninguém ter tocado em
+  áudio. Separados, os originais gerados continuam intactos no disco e **voltar qualquer som é
+  apagar `8bit/` de uma linha em `SAMPLES`**.
+- **Três alturas para três respostas no mesmo ponto da tela.** O acerto que entra é grave (308 Hz),
+  o resvalo nos i-frames é médio (640 Hz) e o aparo é agudo (1464 Hz). O mesmo cuidado separa as
+  duas cargas do bestiário: a torreta a 2515 Hz e o mago a 937 — dá para ouvir *qual* das duas está
+  carregando sem olhar. Isso não é sorte de pacote; foi o critério de escolha, e é o que os números
+  serviam para garantir sem ninguém poder ouvir.
+
+Três escolhas são reconhecidamente fracas e estão marcadas no CREDITS para serem ouvidas primeiro: a
+água do zora (o pacote não tem água), o telegrafo do golpe (é um arquivo de *loop* tocado uma vez) e
+a morte do inimigo (um som só serve caveira, gosma, morcego, aranha, mago, torreta e zora).
+
+### E depois o pacote inteiro estava errado: o combate virou fantasia
+
+O jogador ouviu o resultado e acertou o diagnóstico numa frase: **"esse pacote tem sons futuristas
+estranhos."** Estava certo, e o erro era de origem. O pacote do Junkala é excelente — e é de
+**fliperama/nave**: lasers, robôs, alienígenas, alarmes. Eu tinha tratado "8-bit" como se fosse um
+gênero de conteúdo quando é só uma era de *timbre*, e o combate acabou com **laser** no feitiço do
+mago, **laser** no cuspe do zora, **alarme de pouca vida** no telegrafo da caveira e **grito de
+alienígena** em toda morte.
+
+A fonte agora é o **"RPG Sound Pack" de artisticdude** (CC0, 192 sons) — o pacote de RPG de fantasia
+mais baixado do OpenGameArt —, e a diferença não é de gosto, é de vocabulário: ele vem **arquivado
+por criatura**. A caveira usa `NPC/shade` (o espectro, que é literalmente o que ela é), a gosma usa
+`NPC/slime`, a aranha usa `NPC/beetle`, o mago usa `battle/spell` e o zora usa `inventory/bubble`.
+Dezessete dos vinte e três sons saem de lá.
+
+O pacote retro sobreviveu em **seis, e só nos impactos**: o pacote de fantasia tem golpe e criatura,
+mas não tem *pancada* — nada nele é lâmina encontrando corpo ou corpo encontrando parede. Os seis
+que ficaram são percussivos e neutros, sem nada de espacial.
+
+Duas coisas técnicas que essa troca obrigou, e que valem mais que a lista:
+
+- **O importador corta.** Gravação de fantasia é cinematográfica (`battle/spell.wav` tem 3,25 s) e
+  as janelas do jogo têm 100–500 ms. Um telegrafo precisa acabar quando o golpe cai, então quase
+  tudo entra cortado no começo (que é onde mora a carga) com 22 ms de fade — cortar uma onda no meio
+  do ciclo deixa um degrau, e degrau é **estalo** tocando toda vez.
+- **A normalização passou a ser por ALTO-FALÂNCIA, não por pico** — e é isso que faz dois pacotes
+  soarem como um. Pico mede uma amostra só. Fantasia é gravação orgânica (transiente curto, cauda
+  longa) e o retro é denso e comprimido: alinhados pelo pico, ficam **20 a 30 dB de diferença no
+  volume percebido**, os dois marcados "−1 dBFS" — e foi exatamente o que aconteceu (span de 31 dB,
+  com a espadada sumindo e o baque estourando). A referência virou o RMS da janela mais alta de
+  150 ms, com os picos dobrados no `tanh` em vez de cortados — a mesma saturação suave com que o
+  `gen-sfx.mjs` já termina cada som gerado. Depois disso a coluna `vol` do `SAMPLES` virou mixagem
+  de verdade: os 23 arquivos ficam dentro de 3 dB entre si, e o número ali passou a significar
+  "isto tem de ser mais alto que aquilo" em vez de "este pacote gravou mais baixo".
+
+### E duas voltaram — o erro de trocar a régua da medida pela do significado
+
+O jogador abriu o jogo e ouviu **"um som de explosão absurdo e nem sei do que se trata"**. Era o
+chão rachando antes de a caveira nascer: `Explosions/Long/sfx_exp_long4`, **2,1 segundos**, 4,5×
+mais longo que qualquer outro som do combate, disparando a cada 3,2 s de cerco na abertura de toda
+partida — seguido, três segundos depois, de uma segunda explosão (a caveira irrompendo,
+`Explosions/Short`).
+
+Os dois tinham sido escolhidos por MEDIDA — grave, longo, contínuo — passando por cima do nome da
+pasta, que dizia **Explosions**. A regra declarada no próprio importador ("só entra som cuja pasta
+descreve o gesto sem ambiguidade") existia exatamente para impedir isso, e foi quebrada nos dois
+únicos sons do conjunto que tocam antes de o jogador ter feito qualquer coisa.
+
+Os dois voltaram para o som desenhado para eles: o nascimento para o `undead-spawn.wav` gerado
+("bones grinding up through soil") e o chão rachando para a síntese — ele nunca teve arquivo, e as
+três camadas dele existem para ser um rumor quase subliminar, porque o trabalho da peça é dar três
+segundos de aviso **sem sustar ninguém**. Um evento sonoro grande no lugar de um aviso faz o jogador
+reagir ao susto em vez de reagir ao chão.
+
+**Este pacote não tem TERRA**, e nenhuma medição conserta um som que descreve outra coisa.
+
+De brinde, a mesma auditoria de níveis achou o oposto: os **telegrafos eram a coisa mais silenciosa
+da briga** (a conjuração do mago e o cuspe do zora mediam 10 dB abaixo do resto). Subiram. E ficou
+registrado por que os sons CURTOS não foram corrigidos pelo mesmo número: todo arquivo sai com o
+mesmo pico (−1 dBFS), então num tique de 46 ms um RMS baixo só quer dizer "é um tique" — corrigir o
+aparo por RMS seria distorcer o único som que já estava certo. RMS só é régua honesta para som
+sustentado.
+
+## Duas lacunas que a revisão do polimento deixou apontadas, e o conserto das duas
+
+### Apanhar não custava tempo — a lei valia num sentido só
+
+"O acerto compra TEMPO" é a frase que sustenta o combate: todo corpo que o herói atinge fica 300ms
+sem andar e sem armar (`HITSTUN_MS`). **O herói atingido não pagava nada.** Levava os i-frames, o
+arremesso e o hitstop — e podia golpear no frame seguinte. Trocar dano era LUCRO para quem tem a
+espada, e a única coisa que o telegrafo de 500ms conseguia cobrar era um coração.
+
+Agora um golpe recebido custa **240ms** (`PLAYER_STAGGER_MS`), e o número é o mesmo do tween que
+devolve o herói ao centro da tela: ele recupera o controle no instante em que o corpo assenta, então
+o que se vê e o que se pode fazer terminam juntos. Fica abaixo dos 300ms do inimigo de propósito —
+quem apanha já perdeu um coração, e o jogo não cobra duas vezes pela mesma falha — e cabe inteiro
+dentro dos 1500ms de invencibilidade: atordoado, mas nunca atordoado **e** vulnerável.
+
+Três decisões dentro disso, e a primeira eu errei antes de acertar:
+
+- **O atordoamento é uma CADÊNCIA, não uma porta fechada.** A primeira versão o pôs no `canAct()`, e
+  ali o pedido é *descartado* — o que contradiz a razão de o buffer existir ("o jogador que encadeia
+  dois golpes no ritmo certo era punido por acertar o ritmo"). Ele foi para junto da cadência, onde
+  o aperto é **adiado**: o herói perde os 240ms, não perde o botão.
+- **A janela do buffer continua correndo durante o atordoamento; só o gasto espera.** Se ela
+  congelasse junto, um aperto feito antes da pancada sairia 240ms depois — um golpe que já não foi
+  pedido. E o gasto precisa ser barrado de fora, porque `swingAttack` re-arma o buffer ao recusar:
+  chamá-lo todo frame manteria a janela viva para sempre.
+- **A lâmina rodopiante perde-se se você apanhar carregando**, e ela precisou de trava explícita por
+  ser o único gesto que ignora cadência de propósito. É a outra metade do trato que a peça sempre
+  cobrou: meio segundo parado no meio da matilha.
+
+### A bomba podia falhar em silêncio
+
+`explodeBomb` chamava `takeDamage(999)` sem perguntar nada. O `EnemyBase.takeDamage` já escrevia a
+regra — *"quem chama SEMPRE pergunta antes (`isHurtInvulnerable`) para poder responder na tela —
+este guarda é a rede, não a porta"* — e a bomba era o único caminho de dano do jogo que não a
+seguia. Um corpo que tivesse acabado de levar uma espadada **atravessava a explosão inteira**: sem
+dano, sem anel, sem som. O jogador via a bomba estourar em cima da caveira e a caveira seguir
+andando, sem uma pista do porquê.
+
+A recusa continua sendo recusa (os i-frames valem para toda fonte de dano, ou o combate volta a ser
+uma serra) — o que mudou é que agora ela tem desenho: o mesmo anel frio de sempre. E de brinde, a
+voz da explosão passou a sair **uma vez**: uma bomba no meio de uma matilha disparava um som de
+morte por corpo, todos no mesmo frame — o mesmo defeito de orçamento que o `sweepArc` já tinha
+corrigido no arco.
+
+## A caveira parou de escurecer, e a régua multiplicativa é a razão
+
+`woundedShade` é a substituta da barra de vida: o corpo perde brilho conforme perde vida. A ideia
+está certa e funciona no resto do bestiário — mas ela é **multiplicativa**, e multiplicar castiga
+exatamente quem já é claro.
+
+A arte da caveira é osso (`#b5b5b5`), o tom mais claro do bestiário inteiro. No último ponto de vida
+ela caía de **71% para 32% de luminância** — menos da metade do brilho, num mundo que a graduação de
+noite já escurece. O inimigo mais comum do jogo ficava difícil de ver justamente no instante em que
+mais se precisa enxergá-lo, e foi assim que o jogador reportou: *"a cor do undead vai ficando escura
+demais pra ver com os danos."*
+
+Ela agora devolve a base intacta (`woundedShade` sobrescrito em `UndeadEnemy`), e isso desliga tudo
+de uma vez: `restoreTint` — na base e na dela — decide entre `clearTint` e `setTint` lendo esse
+mesmo valor, então corpo e osso saem juntos.
+
+O que ela perde é o estado **persistente** de vida. O que continua contando o dano nela: a troca de
+textura a cada golpe (`undeadHurt`), a piscada dos i-frames, o arremesso e o atordoamento — e, com
+3 de vida contra 2 de espadada, são dois acertos até cair. É pouca informação a perder por um corpo
+que volta a ser legível.
+
+A lição vale para a próxima espécie clara que entrar: **um tom multiplicativo não é uma régua
+uniforme.** O mesmo fator que dá uma sombra elegante num corpo escuro apaga um corpo claro.
+
+## Falar deixou de ser um acidente de trajeto
+
+O diálogo abria no ESBARRÃO, e com isso conversar era a única coisa do jogo que acontecia sem
+ninguém ter pedido: bastava a seta encostar no NPC — atravessando um vão, fugindo de uma caveira,
+tentando contornar o velho para chegar na fogueira — e a tela parava, a câmera panorava e uma
+conversa começava. **Um gesto que interrompe o jogo inteiro não pode ser um acidente de trajeto.**
+
+Agora falar é o **botão B**, como usar qualquer outra coisa do mundo (`GameScene.talkToNpcAt`), e a
+mudança não acrescenta nada para o jogador aprender:
+
+- a parede já **vira** o herói, e um NPC bloqueia como qualquer parede — encarar quem se quer ouvir
+  é o mesmo gesto de mira que a árvore e a rocha já cobravam;
+- a afordância já estava pronta e não custou um pixel: o **"!"** que flutua sobre quem tem assunto
+  novo (`NpcManager.hasNewDialog`) deixou de descrever um acidente e passou a apontar para um botão.
+
+A ordem dentro do B importa e é a lei do próprio botão — **o que está na frente ganha do que está
+embaixo**: pegar o item do tile à frente, depois falar, depois pegar o de baixo dos pés. Estar de
+cara para um NPC e apertar B significa falar, mesmo pisando num graveto. E falar vem antes da porta
+de "mão vazia": conversar não depende do que se carrega, e um herói com o machado escolhido não pode
+ficar mudo por isso.
 
 ## O combate que mostra o próprio alcance, e o mundo que virou telas
 

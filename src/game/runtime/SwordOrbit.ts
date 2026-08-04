@@ -43,6 +43,14 @@ const TRAIL_DEPTH  = SCENE_DEPTHS.player; // behind main sprite
 // So the sprite is TINTED by the light where the hero is standing (World3D.lightLevelAt):
 // moonlight at 0, the art's own colours at 1. It only has to sit in the hero's value range.
 const SWING_DARK = 0x5a5c78; // the multiply tint under moonlight alone — cool, like the night
+/**
+ * O lampejo do acerto (ver `flashHit`). Quente e claro, mas NÃO branco puro: a arma tem de
+ * continuar sendo a arma no quadro congelado — branco chapado apagaria a silhueta dela, que é
+ * exatamente o defeito que fez a piscada branca ser arrancada do corpo dos inimigos.
+ */
+const HIT_FLASH_TINT = 0xfff0c4;
+/** Curto o bastante para caber dentro do hitstop mais leve (60ms) e morrer com ele. */
+const HIT_FLASH_MS = 70;
 /** Blend the night tint toward white by `level` (0..1) and pack it back into a Phaser tint. */
 const swingLitTint = (level: number): number => {
   const t = Math.max(0, Math.min(1, level));
@@ -123,6 +131,10 @@ export class SwordSlash {
   private onFire = false;
   /** Light where the swing happens, 0..1 — see SWING_DARK. Set by the caller before each swing. */
   private lightLevel = 1;
+  /** A cor com que a lâmina foi pintada neste gesto — para onde `flashHit` a devolve. */
+  private bladeTint = 0xffffff;
+  /** Qual lampejo é o atual: um gesto novo invalida o retorno do anterior (ver `flashHit`). */
+  private flashUntilId = 0;
 
   // kept across onUpdate so we don't recalculate each frame
   private slashHandleX = 0;
@@ -157,6 +169,40 @@ export class SwordSlash {
   /** How lit the tile the hero swings from is (World3D.lightLevelAt), 0..1. */
   public setLightLevel(level: number): void {
     this.lightLevel = level;
+  }
+
+  /**
+   * O QUADRO DE IMPACTO — a lâmina dizendo por que parou.
+   *
+   * O arco varria os mesmos 155°, na mesma velocidade e na mesma cor, acertando ou não. E o jogo já
+   * tinha metade do gesto pronta sem usá-la: o hitstop de um acerto zera `tweens.timeScale`, o que
+   * CONGELA a lâmina no meio do arco por 60-110ms. A pose parada já existia; faltava a cor.
+   *
+   * Então um lampejo quente no sprite da arma no instante do acerto, apagando por conta própria —
+   * `delayedCall` e não tween, porque um tween seria congelado pelo mesmo hitstop que este lampejo
+   * existe para pintar, e a lâmina ficaria acesa até o mundo voltar a andar.
+   *
+   * Aqui isso é de graça, e é o único lugar do combate onde é: o arco é um sprite 2D do Phaser
+   * DESENHADO POR CIMA do canvas 3D, não um billboard `emissive` — então a lei que proíbe acender
+   * um corpo atingido (silhueta chapada que o bloom espalha e o hitstop segura acesa) não alcança
+   * a arma. Ela não passa pelo bloom.
+   */
+  public flashHit(): void {
+    if (!this.sprite.visible) return;
+    // A cor de volta sai de `bladeTint`, e não de ler `tintTopLeft` do sprite: aquele campo é a
+    // representação INTERNA do Phaser (quatro cantos, formato dele), e depender dela para uma
+    // ida-e-volta é o tipo de coisa que uma versão menor do motor quebra em silêncio. Quem pintou
+    // a lâmina sabe de que cor ela é.
+    this.flashUntilId += 1;
+    const id = this.flashUntilId;
+    this.sprite.setTint(HIT_FLASH_TINT);
+    this.scene.time.delayedCall(HIT_FLASH_MS, () => {
+      // Um golpe novo no meio do lampejo repinta a lâmina por conta própria (`slash`/`spin` chamam
+      // `setTint`), e este retorno chegaria depois para desfazer o que o golpe novo acabou de
+      // fazer. O contador é o que faz o lampejo velho perder para o gesto novo.
+      if (id !== this.flashUntilId || !this.sprite.active) return;
+      this.sprite.setTint(this.bladeTint);
+    });
   }
 
   /**
@@ -215,10 +261,11 @@ export class SwordSlash {
     const trailTint = onFire ? 0xff5500 : litTint;
     this.trails.forEach(t => t.setTexture(texture, frame).setFlipX(flipX).setAlpha(0).setVisible(false).setTint(trailTint));
 
+    this.bladeTint = onFire ? 0xffaa44 : litTint;
     this.sprite
       .setTexture(texture, frame)
       .setFlipX(flipX)
-      .setTint(onFire ? 0xffaa44 : litTint)
+      .setTint(this.bladeTint)
       .setPosition(this.slashHandleX, this.slashHandleY)
       .setDisplaySize(size * 1.20, size * 1.20) // starts 20% bigger for impact pop
       .setAngle(startAngle)
@@ -285,10 +332,11 @@ export class SwordSlash {
 
     const litTint = swingLitTint(this.lightLevel);
     const texture = this.onFire ? ASSET_KEYS.swordOnFire : ASSET_KEYS.swordItem;
+    this.bladeTint = this.onFire ? 0xffaa44 : litTint;
     this.sprite
       .setTexture(texture, ITEM_FRAMES.swordIdle)
       .setFlipX(false)
-      .setTint(this.onFire ? 0xffaa44 : litTint)
+      .setTint(this.bladeTint)
       .setAlpha(1)
       .setVisible(true);
     this.trails.forEach(t => t
@@ -377,6 +425,7 @@ export class SwordSlash {
     s.trail = 0;
 
     const litTint = swingLitTint(this.lightLevel); // stand in the world's light — see SWING_DARK
+    this.bladeTint = litTint;
     this.sprite
       .setTexture(item.texture, item.frame)
       .setFlipX(false)

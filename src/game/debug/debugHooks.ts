@@ -145,6 +145,13 @@ export interface GameDebugState {
     worldY: number;
     spawning: boolean;
     plateTarget: { x: number; y: number } | null;
+    /** Vida atual / total — a espada deixou de matar de um golpe, entao isto passou a importar. */
+    health: number;
+    maxHealth: number;
+    /** Piscando de invulneravel (os i-frames do corpo, ver EnemyBase.hurtInvulnMs). */
+    invulnerable: boolean;
+    /** Armando o golpe telegrafado: e a janela em que ele GUARDA a frente. */
+    windingUp: boolean;
   }>;
   /**
    * Os tiros EM VOO (mago e torreta). Unica coisa do jogo em coordenada continua de tile: `x/y`
