@@ -4,7 +4,7 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import { ASSET_KEYS } from '@/game/constants';
 import type { EnemyProjectileManager } from '@/game/entities/EnemyProjectile';
 import { world3d } from '@/game/render3d/World3D';
-import type { EnemyKind } from '@/game/world/ScreenContent';
+import { enemyMaxHealth, type EnemyKind } from '@/game/world/ScreenContent';
 import { WalkerEnemy, type StepContext } from './WalkerEnemy';
 
 /**
@@ -43,7 +43,10 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
  * linha.
  */
 
-const MAX_HEALTH = 2;
+// Sete golpes (ver ENEMY_BLOWS). A especie inteira e "eu me recuso a chegar perto", e com 2 de
+// vida essa recusa era gratis de vencer: bastava fechar a distancia UMA vez. O custo dele nao e
+// bater sete vezes seguidas — e fechar a distancia sete vezes, com ele recuando entre uma e outra.
+const MAX_HEALTH = enemyMaxHealth('mage');
 const MOVE_INTERVAL = 470;
 const DETECTION_RANGE = 12;
 /** A distancia que ele quer: fora do alcance de um golpe, dentro do alcance do feitico. */

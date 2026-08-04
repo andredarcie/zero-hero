@@ -6,10 +6,12 @@ import { EnemyBase } from '@/game/entities/EnemyBase';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_CRACK_TEXTURE, FX_PUFF_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import type { EnemyKind } from '@/game/world/ScreenContent';
+import { enemyMaxHealth, type EnemyKind } from '@/game/world/ScreenContent';
 import { BoneClub } from './BoneClub';
 
-const MAX_HEALTH = 3;
+// Tres golpes (ver ENEMY_BLOWS). Ela e a REGUA: o corpo mais comum do mundo e o que ensina o
+// telegrafo, entao o que ela custa vira a expectativa do jogador pra todo o resto do bestiario.
+const MAX_HEALTH = enemyMaxHealth('undead');
 const MOVE_INTERVAL = 520;
 const ATTACK_INTERVAL = 1200;
 /**

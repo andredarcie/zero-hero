@@ -148,7 +148,8 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import { createBoardMetrics } from '@/game/shared/grid';
 import { ChunkManager } from '@/game/world/ChunkManager';
 import {
-  AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS, type EnemyKind, type ScreenContent,
+  AQUATIC_ENEMY_KINDS, ENEMY_BLOWS, FLYING_ENEMY_KINDS, SWORD_BLOW_DAMAGE,
+  type EnemyKind, type ScreenContent,
 } from '@/game/world/ScreenContent';
 import {
   getCampfires,
@@ -287,13 +288,18 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   // arquivo. Ela valia 999: todo corpo do jogo morria no primeiro acerto, entao o telegrafo de
   // 500ms que cada especie carrega NUNCA acontecia, o atordoamento nunca importava, o arremesso
   // nunca comprava nada e o encontro inteiro era "chegue perto, aperte Z". Nao havia combate —
-  // havia execucao. Com 2 de dano a caveira (3) leva duas espadadas, o slime grande (6) leva
-  // tres, e entre um golpe e o outro o bicho tem tempo de responder, que e onde o combate mora.
+  // havia execucao.
+  //
+  // O numero vem de ScreenContent e nao e escrito aqui porque a vida de TODA especie e derivada
+  // dele (ver ENEMY_BLOWS/enemyMaxHealth): a escada de 2 a 9 espadadas e uma tabela de degraus,
+  // nao de HP, entao mexer nesta linha reescala o bestiario inteiro de uma vez — que e o
+  // comportamento correto, e o oposto do que houve quando ela caiu de 999 pra 2 e so duas
+  // especies foram reconferidas (as outras seis ficaram morrendo de um golpe por meses).
   //
   // O `A Link to the Past` faz exatamente isso e nem disfarca: o soldado verde da primeira sala
   // aguenta varias espadadas com a espada inicial, e e por isso que aquela sala consegue ENSINAR
   // alguma coisa.
-  sword: 2,
+  sword: SWORD_BLOW_DAMAGE,
   wood: 1.5,
   axe: 1.5,
   greatAxe: 1.5,
@@ -2101,6 +2107,9 @@ export class GameScene extends Phaser.Scene {
         }
       },
       listNpcKinds: () => getDialogKinds(),
+      // A escada de vida do bestiario, pro playtest cobrar a LEI (crescente, sem repeticao) em vez
+      // de repetir os numeros dela — uma copia no cenario e a copia que diverge no dia do balanco.
+      enemyBlows: () => ENEMY_BLOWS,
     };
     registerGameDebugApi(this.debugApi, this);
     this.clearDebugHooks?.();

@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { ASSET_KEYS, SLIME_FRAMES } from '@/game/constants';
 import { world3d } from '@/game/render3d/World3D';
-import type { EnemyKind } from '@/game/world/ScreenContent';
+import { enemyMaxHealth, type EnemyKind } from '@/game/world/ScreenContent';
 import { WalkerEnemy, type StepContext } from './WalkerEnemy';
 
 /**
@@ -19,22 +19,27 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
  * regra do mundo sobre onde monstro pode existir.)
  *
  * O SLIME GRANDE e a mesma criatura no corpo dobrado, com uma frase extra: ele RACHA. Matar um
- * vira matar tres — e como ele tem 6 de vida, sao tres espadadas para GANHAR mais dois corpos. E
- * a unica peca do bestiario que responde ao golpe que matou com mais trabalho, e nao com silencio.
+ * vira matar tres — oito espadadas para GANHAR mais dois corpos de quatro cada. E a unica peca do
+ * bestiario que responde ao golpe que matou com mais trabalho, e nao com silencio.
+ *
+ * As duas sao especies SEPARADAS na escada de vida (ver ENEMY_BLOWS), e ficam longe uma da outra
+ * de proposito: a pequena e o terceiro degrau e a grande e o setimo. O filhote precisa ser barato
+ * porque ele nunca vem sozinho — o que se mede num encontro de slime grande nao e o custo de um
+ * corpo, e a SOMA: 8 + 4 + 4 = 16 golpes conectados, o encontro mais caro que este bestiario tem.
  */
 
 type SlimeVariant = 'slime' | 'bigslime';
 
 const SLIME_STATS = {
   slime: {
-    maxHealth: 4,
+    maxHealth: enemyMaxHealth('slime'),
     moveIntervalMs: 950,
     scale: 0.72,
     texture: ASSET_KEYS.slime,
     pool: ASSET_KEYS.slimePool,
   },
   bigslime: {
-    maxHealth: 6,
+    maxHealth: enemyMaxHealth('bigslime'),
     moveIntervalMs: 1150,
     // 1.0 e o teto: nenhum sprite vaza do seu tile. O contraste com o filhote (0,72) e o que
     // faz "grande" ser legivel sem quebrar a lei.

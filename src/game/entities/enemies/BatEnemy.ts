@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 import { ASSET_KEYS } from '@/game/constants';
 import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import type { EnemyKind } from '@/game/world/ScreenContent';
+import { enemyMaxHealth, type EnemyKind } from '@/game/world/ScreenContent';
 import { WalkerEnemy, type StepContext } from './WalkerEnemy';
 
 /**
@@ -23,7 +23,10 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
  * nao e um perigo a ser vencido, e a moldura.
  */
 
-const MAX_HEALTH = 1;
+// O degrau mais baixo da escada (ver ENEMY_BLOWS): DOIS golpes. Era 1 — ele era o corpo que mais
+// desmentia a lei de que nada morre de um golpe, e o unico que a desmentia sem nem ter um golpe
+// armado pra perder. Dois e o piso, e nele o morcego continua sendo o corpo mais barato do jogo.
+const MAX_HEALTH = enemyMaxHealth('bat');
 // Rapido, e por isso o passo dele nao e uma caminhada: e um bater de asa. Menos que ~260ms comeca
 // a ficar impossivel de ler no meio de tres deles.
 const MOVE_INTERVAL = 270;

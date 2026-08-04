@@ -2715,6 +2715,107 @@ citava uma função `updateHeroSize` que não existe há tempos). O `handleResiz
 derivar o `tileSize` da projeção 3D quando o mundo já existe; a fórmula 2D só responde no primeiro
 resize do boot, antes de haver câmera 3D para perguntar.
 
+## A escada de vida — a lei que estava escrita e a tabela que a contradizia
+
+A pergunta era "o que falta de essencial pro combate ficar mais divertido?", e a resposta não foi
+uma mecânica que faltava: foi uma **contradição entre a lei escrita e os números**.
+
+`MELEE_DAMAGE.sword` tinha caído de 999 para 2 com um comentário longo explicando por quê — com
+999, o telegrafo de 500ms que cada espécie carrega nunca chegava a acontecer, e todo encontro era
+"chegue perto, aperte Z". Mas o comentário daquele dia só cita duas espécies: *"a caveira (3) leva
+duas espadadas, o slime grande (6) leva três"*. Foram as duas únicas reconferidas. As outras seis
+ficaram com a vida da época em que tudo morria no primeiro toque:
+
+| espécie | HP antes | espadadas |
+|---|---|---|
+| morcego | 1 | **1** |
+| mago | 2 | **1** |
+| aranha | 2 | **1** |
+| zora | 2 | **1** |
+| caveira | 3 | 2 |
+| gosma / gosma grande | 4 / 6 | 2 / 3 |
+| torreta | 6 | 3 |
+
+**Quatro de oito corpos morriam de um golpe** — a lei do `CLAUDE.md` ("NADA morre de um golpe")
+era falsa em metade do bestiário, e ninguém percebeu porque a linha que a lei cita
+(`MELEE_DAMAGE.sword = 2`) estava certa. O erro não estava onde a lei apontava.
+
+E repare em QUAIS quatro caíram: as de vocabulário mais rico. A aranha tem rastejo → agachada →
+bote → telegrafo → golpe, uma máquina de estados inteira — e morria no primeiro encostão. Toda
+aquela gramática só chegava a rodar se ela alcançasse o herói primeiro, ou seja, **só quando o
+jogador já estava perdendo**. O mago é um duelo à distância que acabava no instante em que você
+fechava a distância uma vez. Não faltava mecânica no combate: faltava o encontro **durar** o
+suficiente para a mecânica que já existia acontecer.
+
+### A escada, e por que ela mora num lugar só
+
+A correção não é uma tabela de HP nova — é uma **escada**: o corpo mais fraco custa dois golpes e
+cada espécie seguinte custa exatamente um a mais, sem repetir nenhum degrau. Isso transforma o
+balanço numa pergunta que tem resposta ("de quem esta espécie é mais difícil?") em vez de numa que
+não tem ("quanto HP ela devia ter?"). Número repetido seriam duas espécies que, na mão, custam a
+mesma coisa.
+
+| degrau | espécie | golpes | HP | tempo até cair |
+|---|---|---|---|---|
+| 1 | morcego | 2 | 4 | 0,45s |
+| 2 | caveira | 3 | 6 | 0,90s |
+| 3 | gosma | 4 | 8 | 1,35s |
+| 4 | aranha | 5 | 10 | 1,80s |
+| 5 | zora | 6 | 12 | 2,25s |
+| 6 | mago | 7 | 14 | 2,70s |
+| 7 | gosma grande | 8 | 16 | 3,15s |
+| 8 | torreta | 9 | 18 | 3,60s |
+
+O tempo não é estimativa: o intervalo mínimo entre dois acertos é o piso dos i-frames
+(`HURT_INVULN_MS`, 450ms), então a escada de golpes **é** uma escada de tempo, em degraus de 0,45s.
+Nenhum corpo do jogo passa de 3,6 segundos.
+
+A ordem sai da frase de cada espécie, não de conveniência. O morcego voa torto e não tem golpe
+armado a perder — é estorvo, e já é difícil de acertar. A caveira é a régua: é a professora do
+telegrafo e o corpo mais comum do mundo, então o que ela custa vira a expectativa de todo o resto.
+A gosma "aguenta pancada" por design e não teme a tocha. A aranha precisa viver o bote. O zora não
+se arremessa e escolhe a própria janela. O mago se recusa a chegar perto, então o custo dele é
+fechar a distância sete vezes, não bater sete vezes seguidas. A torreta é o teto justamente porque
+**não persegue ninguém**: nove golpes só são cobrados de quem escolheu derrubar a parede em vez de
+contorná-la.
+
+A escada mora em `world/ScreenContent.ts` (`ENEMY_BLOWS`), que é módulo folha, e não espalhada em
+oito arquivos — a mesma lei que já valia para `FLYING_ENEMY_KINDS`: *"três cópias seria o jeito
+garantido de as três discordarem daqui a um mês"*, e a tabela velha é a prova de que discordam
+mesmo. Duas consequências valem mais que o comentário:
+
+- **`Record<EnemyKind, number>` é exaustivo**, então espécie nova **não compila** sem declarar um
+  degrau. A lei deixou de depender de alguém ler a documentação.
+- **`SWORD_BLOW_DAMAGE` mora lá também**, e o `MELEE_DAMAGE.sword` do GameScene lê dele. A vida de
+  todo corpo é derivada (`enemyMaxHealth`), então mexer no dano da espada reescala o bestiário
+  inteiro de uma vez — que é o comportamento correto, e o oposto exato do acidente que criou a
+  tabela velha.
+
+`woundedShade` não precisou de nada: ele já era fração de `maxHealth`, então mais vida virou
+sozinho um escurecimento de passo mais fino — o que é uma melhora, porque a leitura de vida do
+corpo ficou mais resolvida justamente nos corpos que agora duram mais.
+
+### O que o `esgrima` passou a cobrar
+
+Os passos 6 e 7 assertavam *"a segunda espadada mata"* — verdade com 3 de vida, mentira com 6. A
+reescrita não troca 2 por 3: ela **lê a tabela do jogo** (`gameDebug.enemyBlows()`) e cobra a LEI,
+que é o que não muda: piso 2, estritamente crescente, sem repetição. Um cenário que guarda números
+vira uma segunda tabela para manter em dia; um que guarda a lei sobrevive ao balanço. A regressão
+que ele existe para pegar também não é um número — é uma espécie entrando num degrau **ocupado**.
+
+Ele ainda mede os golpes **contando**, e por `strikeEnemy` direto e não pelo botão A: cada acerto
+arremessa o corpo um tile, então do terceiro golpe em diante a caveira já saiu do alcance do arco —
+pelo botão, o passo mediria a mira do cenário e não a vida dela.
+
+O `explorador` também mexeu: o laço que mata uma caveira para haver moeda no chão tentava 8 vezes,
+dimensionado para 2 golpes. Com 3 golpes e resvalos de i-frame, o pior caso honesto é o dobro — 16.
+
+### O que continua matando de um golpe, e é de propósito
+
+O **graveto ACESO** (999 de dano). A exceção é do ITEM e não do inimigo: o fogo é recurso que se
+gasta — o combustível corre, a chama entrega sua posição no escuro e a mão fica presa nele —, então
+ele compra o que a espada deixou de dar. A bomba idem. Nenhum dos dois é uma espécie com vida baixa.
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on

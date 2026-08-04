@@ -255,7 +255,11 @@ export default {
       const key = spot.dx === 1 ? 'ArrowRight' : spot.dx === -1 ? 'ArrowLeft'
         : spot.dy === 1 ? 'ArrowDown' : 'ArrowUp';
       let killed = false;
-      for (let i = 0; i < 8 && !killed; i += 1) {
+      // O teto e generoso de proposito: a caveira custa tres espadadas (ver ENEMY_BLOWS) e um
+      // golpe que caia dentro dos 450ms de i-frames RESVALA sem tirar vida, entao o pior caso
+      // honesto e o dobro de tentativas. Este laco nao esta medindo dano — ele so precisa de um
+      // corpo morto pra que haja moeda no chao, e apertar o teto so o faz flakear.
+      for (let i = 0; i < 16 && !killed; i += 1) {
         // ENCARA (a seta contra a caveira so vira o heroi) e golpeia com o A: encostar nela
         // deixou de bater e passou a custar vida — ver o cenario `combate`.
         await driver.press(key, { count: 1 });

@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { ASSET_KEYS } from '@/game/constants';
 import { world3d } from '@/game/render3d/World3D';
-import type { EnemyKind } from '@/game/world/ScreenContent';
+import { enemyMaxHealth, type EnemyKind } from '@/game/world/ScreenContent';
 import { WalkerEnemy, type StepContext } from './WalkerEnemy';
 
 /**
@@ -23,7 +23,11 @@ import { WalkerEnemy, type StepContext } from './WalkerEnemy';
  * andar de lado ate ela cansar de te ver e uma resposta legitima. Perto de uma quina, nao.
  */
 
-const MAX_HEALTH = 2;
+// Cinco golpes (ver ENEMY_BLOWS), e ela era o pior caso da tabela velha: com 2 de vida ela morria
+// no primeiro toque da espada, entao rastejo, agachada e bote — a maquina de estados inteira desta
+// classe — so chegavam a acontecer quando a aranha alcancava o heroi ANTES, ou seja, so quando o
+// jogador ja estava perdendo. A vida dela e o tempo de ela ser a aranha.
+const MAX_HEALTH = enemyMaxHealth('spider');
 const CRAWL_INTERVAL = 500;
 const POUNCE_INTERVAL = 120;
 const ATTACK_INTERVAL = 1000;

@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { World3DParams } from '@/game/render3d/World3D';
-import type { NpcKind } from '@/game/world/ScreenContent';
+import type { EnemyKind, NpcKind } from '@/game/world/ScreenContent';
 
 /**
  * Snapshot of the live GameScene, consumed by the playtest harness (see /playtest)
@@ -191,6 +191,8 @@ export interface GameDebugApi {
   /** Fire the "you got the sword" presentation (for capturing the effect). */
   triggerSwordGet: () => void;
   listNpcKinds: () => NpcKind[];
+  /** Quantas espadadas cada especie aguenta (ver ENEMY_BLOWS em world/ScreenContent). */
+  enemyBlows: () => Readonly<Record<EnemyKind, number>>;
 }
 
 declare global {

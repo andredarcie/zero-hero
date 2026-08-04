@@ -313,11 +313,26 @@ export default {
       allHurt(spun), JSON.stringify(spun.undead));
     await shot('depois-do-giro');
 
-    // ── 6. A ESPADA NAO MATA MAIS DE UM GOLPE ───────────────────────────────
-    // A mudanca que devolveu o combate: com 999 de dano, o telegrafo de 500ms que cada especie
-    // carrega nunca chegava a acontecer — todo encontro era "chegue perto, aperte Z". A caveira
-    // tem 3 de vida e a espada da 2: dois golpes, com a resposta dela no meio.
-    log('DANO: duas espadadas para a caveira, e a primeira so a fere');
+    // ── 6. A ESCADA DE VIDA ─────────────────────────────────────────────────
+    // NENHUM corpo do jogo morre de um golpe, o mais fraco custa DOIS, e cada especie seguinte
+    // custa exatamente um a mais — 2 no morcego, 9 na torreta, sem repetir nenhum degrau.
+    //
+    // Isto e cobrado LENDO a tabela do jogo (gameDebug.enemyBlows), e nao repetindo os numeros
+    // dela aqui: o balanco vai mudar, e um cenario que guarda a LEI sobrevive ao balanco enquanto
+    // um que guarda os numeros vira uma segunda tabela pra manter em dia. A regressao que este
+    // passo existe pra pegar tambem nao e um numero — e uma especie ENTRANDO num degrau ocupado,
+    // que na mao significa dois bichos diferentes que custam a mesma coisa.
+    //
+    // (Ja aconteceu, e por meses: a espada caiu de 999 pra 2 de dano e so a caveira e a gosma
+    // foram reconferidas. Morcego 1, mago 2, aranha 2 e zora 2 ficaram morrendo de um golpe so.)
+    const blows = await page.evaluate(() => window.gameDebug.enemyBlows());
+    const rungs = Object.values(blows).sort((a, b) => a - b);
+    assert('nenhuma especie morre de um golpe — o piso da escada e DOIS',
+      rungs.length >= 8 && rungs[0] === 2, JSON.stringify(blows));
+    assert('a escada e estritamente crescente: nenhum degrau se repete',
+      rungs.every((n, i) => i === 0 || n === rungs[i - 1] + 1), JSON.stringify(blows));
+
+    log(`DANO: ${blows.undead} espadadas para a caveira, e a primeira so a fere`);
     await reset({ dx: 0, dy: -1 });
     await spawnReady([[0, -1]]);
     await driver.attack();
@@ -341,11 +356,32 @@ export default {
       rapid.after === rapid.before, JSON.stringify(rapid));
 
     await driver.settle(600); // passada a janela (450ms), o proximo golpe volta a valer
-    await driver.attack();
-    await driver.settle(600);
-    const secondBlow = await driver.getState();
-    assert('e a segunda espadada, fora da janela, mata',
-      secondBlow.undead.length === 0, JSON.stringify(secondBlow.undead));
+
+    // ...e quantas ela aguenta DE VERDADE: bate ate o corpo cair, sempre fora da janela de
+    // i-frames, e o total medido tem de bater com o degrau que a tabela promete. E a unica
+    // assercao do arquivo que confere a vida CONTANDO golpes em vez de ler um campo — os dois
+    // podem discordar (um dano que arredonda, um resvalo que nao devolve i-frames), e quem joga
+    // conta golpes.
+    //
+    // Vai pelo `strikeEnemy` e nao pelo botao A de proposito: cada acerto ARREMESSA o corpo um
+    // tile (EnemyBase.shove), entao do terceiro golpe em diante a caveira ja saiu do alcance do
+    // arco — pelo botao, este passo mediria a mira do cenario e nao a vida dela.
+    let landed = 1; // a espadada do passo 6
+    for (let i = 0; i < 16; i += 1) {
+      const blow = await page.evaluate(() => {
+        const s = window.__scene;
+        const e = s.enemyManager.getAliveEnemies()[0];
+        if (!e) return { struck: false, dead: true };
+        s.strikeEnemy(e, e.worldX, e.worldY, 'sword');
+        return { struck: true, dead: !e.isAlive };
+      });
+      if (!blow.struck) break;
+      landed += 1;
+      if (blow.dead) break;
+      await driver.settle(600); // os 450ms de i-frames, senao o proximo golpe resvala
+    }
+    assert(`a caveira cai em exatamente ${blows.undead} espadadas — o degrau dela`,
+      landed === blows.undead, JSON.stringify({ medido: landed, tabela: blows.undead }));
 
     // ── 8. A GUARDA DO BICHO ────────────────────────────────────────────────
     // Enquanto arma o golpe, ele encara o tile mirado: o que vem de la bate na guarda. E a aula

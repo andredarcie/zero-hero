@@ -197,7 +197,9 @@ com um `scene.restart()` no meio).
 ## O bestiário (`src/game/entities/enemies/`, um arquivo por espécie)
 
 - **Espécie nova nasce de uma FRASE, não de uma tabela de HP** — o que ela diz que nenhuma outra
-  diz. Números diferentes fazem inimigos diferentes no papel e o mesmo inimigo na mão.
+  diz. Números diferentes fazem inimigos diferentes no papel e o mesmo inimigo na mão. A vida ela
+  **não escolhe**: é um DEGRAU na escada de `ENEMY_BLOWS` (2 a 9 espadadas, crescente e sem
+  repetir), e como não há degrau vago, entrar é dizer de quem ela é mais difícil.
 - **Luz de fogueira é parede pra TODO monstro** — é a alavanca central do jogo e não tem exceção.
   A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
 - **Chegar é um evento e todo golpe é telegrafado** (`WalkerEnemy`). Corpo que aparece do nada, ou

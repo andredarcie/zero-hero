@@ -5,7 +5,7 @@ import { ASSET_KEYS } from '@/game/constants';
 import { EnemyBase } from '@/game/entities/EnemyBase';
 import type { EnemyProjectileManager } from '@/game/entities/EnemyProjectile';
 import { world3d } from '@/game/render3d/World3D';
-import type { EnemyKind } from '@/game/world/ScreenContent';
+import { enemyMaxHealth, type EnemyKind } from '@/game/world/ScreenContent';
 
 /**
  * A TORRETA — a unica coisa viva do bestiario que nao esta viva.
@@ -31,7 +31,10 @@ import type { EnemyKind } from '@/game/world/ScreenContent';
  * torreta e uma decisao com custo — os leques continuam saindo enquanto voce bate.
  */
 
-const MAX_HEALTH = 6;
+// O TETO da escada: nove golpes (ver ENEMY_BLOWS). E o unico corpo do jogo que pode custar tanto
+// sem ser injusto, porque ela nao persegue ninguem — nove golpes so sao cobrados de quem ESCOLHEU
+// derrubar a parede em vez de contorna-la, e os leques continuam saindo durante os nove.
+const MAX_HEALTH = enemyMaxHealth('turret');
 /** Cadencia do leque e o aviso que vem antes dele. */
 const FIRE_INTERVAL_MS = 3600;
 const CHARGE_MS = 350;

@@ -49,6 +49,63 @@ export const FLYING_ENEMY_KINDS: ReadonlySet<EnemyKind> = new Set<EnemyKind>(['b
  * atravessa com ponte, e agora ela e um lugar de onde sai coisa.
  */
 export const AQUATIC_ENEMY_KINDS: ReadonlySet<EnemyKind> = new Set<EnemyKind>(['zora']);
+
+/**
+ * A ESCADA — quantas espadadas cada corpo aguenta, e ela e ESTRITAMENTE CRESCENTE E SEM REPETICAO.
+ *
+ * A regra e uma so e vale pra sempre: nenhum corpo morre de um golpe, o mais fraco custa DOIS, e
+ * cada especie seguinte custa exatamente um a mais que a anterior. Especie nova nao "escolhe um
+ * HP" — ela entra num DEGRAU, e como nao ha degrau vago, entrar significa dizer de quem ela e mais
+ * dificil. Um numero repetido aqui e duas especies que, na mao, sao a mesma.
+ *
+ * Isto existe porque a tabela anterior contradizia a propria lei da casa. A espada baixou de 999
+ * para 2 de dano justamente para o telegrafo de cada especie ter tempo de acontecer — mas so a
+ * caveira e a gosma foram reconferidas naquele dia. As outras seis ficaram com a vida da epoca em
+ * que tudo morria no primeiro toque, e o resultado media-se assim: MORCEGO 1, MAGO 2, ARANHA 2,
+ * ZORA 2 — quatro corpos de um golpe so. A aranha tem rastejo, agachada, bote, telegrafo e golpe,
+ * uma gramatica inteira que so chegava a acontecer se ela te alcancasse primeiro, ou seja, so
+ * quando o jogador ja estava perdendo. Nao faltava mecanica no combate: faltava o encontro DURAR o
+ * suficiente pra mecanica que ja existia acontecer.
+ *
+ * A ORDEM e por quanto a especie custa pra resolver, e cada degrau se justifica pela frase dela:
+ *
+ *   2  MORCEGO    voa torto e nao tem golpe armado — estorvo, e ja e dificil de acertar;
+ *   3  CAVEIRA    a professora, e o corpo mais comum do mundo: e a regua de todo o resto;
+ *   4  GOSMA      lenta, sem medo da tocha, vem sempre — "aguenta pancada" e a frase dela;
+ *   5  ARANHA     precisa viver o rastejo, a agachada e o bote pra ser a aranha;
+ *   6  ZORA       nao se arremessa e escolhe a propria janela: mergulha e volta noutra agua;
+ *   7  MAGO       se recusa a chegar perto, entao o custo dele e o tempo de fechar a distancia;
+ *   8  GOSMA GDE  racha ao morrer: matar um vira matar tres, e ele e o unico que responde ao
+ *                 golpe perfeito com MAIS trabalho;
+ *   9  TORRETA    mobilia imovel que atira em leque. E o teto porque ela nao persegue ninguem —
+ *                 nove golpes so custam caro pra quem ESCOLHE derrubar a parede em vez de passar.
+ *
+ * O intervalo entre dois acertos e o piso dos i-frames (HURT_INVULN_MS, 450ms), entao a escada
+ * tambem e uma escada de TEMPO: 0,45s no morcego e 3,6s na torreta, em degraus de 0,45s.
+ */
+export const ENEMY_BLOWS: Readonly<Record<EnemyKind, number>> = {
+  bat: 2,
+  undead: 3,
+  slime: 4,
+  spider: 5,
+  zora: 6,
+  mage: 7,
+  bigslime: 8,
+  turret: 9,
+};
+
+/**
+ * O dano de uma espadada. Mora AQUI, e nao junto da tabela de itens do GameScene, porque a vida de
+ * cada corpo e derivada dele (ver `enemyMaxHealth`): com o numero nos dois lugares, mexer na espada
+ * mudaria a escada inteira em silencio, que e exatamente o acidente que criou a tabela velha.
+ */
+export const SWORD_BLOW_DAMAGE = 2;
+
+/** A vida de uma especie: o degrau dela vezes o dano da espada. Nunca escreva um HP a mao. */
+export function enemyMaxHealth(kind: EnemyKind): number {
+  return ENEMY_BLOWS[kind] * SWORD_BLOW_DAMAGE;
+}
+
 // 'heart' streams per chunk (HeartPickupManager); every other kind is a carriable held item
 // loaded once by ItemManager (the hero can drop/swap them anywhere, so they persist off-screen).
 export type PickupKind =

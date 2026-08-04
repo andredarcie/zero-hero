@@ -6,7 +6,7 @@ import { EnemyBase } from '@/game/entities/EnemyBase';
 import type { EnemyProjectileManager } from '@/game/entities/EnemyProjectile';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import type { EnemyKind } from '@/game/world/ScreenContent';
+import { enemyMaxHealth, type EnemyKind } from '@/game/world/ScreenContent';
 
 /**
  * O ZORA — o que mora no rio. A mecanica e a do Zola do Zelda 1, sem adaptacao:
@@ -39,7 +39,12 @@ import type { EnemyKind } from '@/game/world/ScreenContent';
  * que a agua faz.
  */
 
-const MAX_HEALTH = 2; // o mesmo do Zola no original: dois golpes de espada de madeira
+// Seis golpes (ver ENEMY_BLOWS). Eram 2, herdados do Zola do original — mas la a espada de madeira
+// matava soldado em dois, e AQUI a caveira ja custa tres: o mesmo numero que significava "duro" no
+// original significava "o mais facil do jogo" aqui. O que o zora cobra nao e so vida: ele nao se
+// arremessa e escolhe a propria janela, entao os seis golpes se pagam em MERGULHOS, nao em tempo
+// parado batendo nele.
+const MAX_HEALTH = enemyMaxHealth('zora');
 
 // O ciclo, em ms. Os numeros vem da leitura do original: o Zola fica escondido bem mais tempo do
 // que aparece, e e essa proporcao (~3:1) que faz a janela ser tensa em vez de trivial.
