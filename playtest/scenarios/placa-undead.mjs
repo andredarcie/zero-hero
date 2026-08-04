@@ -140,6 +140,7 @@ export default {
         x: box?.x, y: box?.y, scale: box?.scaleX, alpha: box?.alpha, visible: box?.visible,
         size: box?.list?.[0]?.displayWidth,
         feetY: feet.y,
+        feetX: feet.x, skullX: skull.worldX, skullY: skull.worldY, tileSize: scene.tileSize,
         view: { w: scene.scale.width, h: scene.scale.height },
       };
     });

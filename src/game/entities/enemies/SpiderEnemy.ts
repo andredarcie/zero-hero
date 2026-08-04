@@ -115,7 +115,6 @@ export class SpiderEnemy extends WalkerEnemy {
       if (this.crouchMs <= 0) {
         this.crouchMs = 0;
         this.pounceStepsLeft = POUNCE_STEPS;
-        getSoundManager().playSpiderPounce();
       }
       return;
     }
@@ -138,6 +137,13 @@ export class SpiderEnemy extends WalkerEnemy {
       Math.sign(this.worldY - ctx.playerWorldY),
       CROUCH_MS * 0.9,
     );
+    // O TELL FALA NO COMEÇO DO TELL. A agachada e o aviso mais longo do jogo fora de windup
+    // (400ms) e era muda e sem cor: o estalo do bote tocava quando o salto JA tinha partido —
+    // um aviso entregue depois da coisa avisada. O clarao e a mesma piscada de ameaca do golpe
+    // armado (a agachada e um compromisso identico), e o som desce junto pra ca; o salto em si
+    // nao precisa de voz — tres passos em 360ms sao a coisa mais visivel que ela faz.
+    this.flashThreat();
+    getSoundManager().playSpiderPounce();
   }
 
   /**

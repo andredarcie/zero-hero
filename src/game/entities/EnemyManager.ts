@@ -56,6 +56,14 @@ const AI_ACTIVE_TILES = 15;
 export type EnemyHit = {
   enemy?: EnemyBase;
   ranged: boolean;
+  /**
+   * O golpe veio de um ESBARRAO do heroi (dano de contato), e nao de um ataque do bicho. A
+   * diferenca importa na janela de invencibilidade: o golpe armado que conecta ali RESVALA com
+   * desenho (a clava bateu e nao mordeu — ver handleEnemyAttackPlayer), mas o encostao do proprio
+   * heroi piscando nao pode disparar um anel por toque — a piscada ja explica por que atravessar
+   * um corpo esta sendo de graca.
+   */
+  bump?: boolean;
   fromX: number;
   fromY: number;
 };
@@ -339,6 +347,9 @@ export class EnemyManager {
       // Os i-frames correm AQUI e não no update da espécie: aquele sai mais cedo no atordoamento,
       // e um corpo atordoado que não descontasse a própria invulnerabilidade sairia dela tarde.
       enemy.tickHurtInvuln(delta);
+      // ...e o tremor do atordoamento pelo MESMO motivo: o estado que ele desenha é exatamente o
+      // estado em que o update da espécie não roda (ver EnemyBase.tickStunFx).
+      enemy.tickStunFx(delta);
 
       const farX = Math.abs(enemy.worldX - playerWorldX);
       const farY = Math.abs(enemy.worldY - playerWorldY);

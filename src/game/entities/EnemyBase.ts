@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import { FX_PUFF_TEXTURE, FX_RING_TEXTURE, world3d } from '@/game/render3d/World3D';
+import { FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import { FLYING_ENEMY_KINDS, type EnemyKind } from '@/game/world/ScreenContent';
 
@@ -90,6 +90,39 @@ const DEATH_FLING_MS = 260;
 const HURT_DARKEN_TINT = 0x4e4657;
 const HURT_DARKEN_MS = 110;
 
+/**
+ * A RECUPERAÇÃO — o terceiro tempo do ataque, que existia só como número e nunca como corpo.
+ *
+ * Todo golpe de bicho tem antecipação (o windup, com clarão, anel e pose) e execução (o bote, o
+ * osso descendo) — e recuperação NENHUMA: o golpe resolvia e no frame seguinte o corpo estava
+ * andando de novo, neutro, como se nada tivesse saído dele. A janela de punição existia na
+ * aritmética (`attackInterval - windup`) e era invisível na tela, então o jogo ensinava "saia do
+ * tile" e nunca ensinava a segunda metade do contrato: AGORA É A SUA VEZ.
+ *
+ * Pouco menos de meio segundo plantado depois de todo golpe (acertando ou errando), com o corpo
+ * caído na pose (ver `poseRecover`): tempo de sobra para UM golpe de resposta, curto demais para
+ * dois. Corre dentro do próprio compromisso do windup (`tickWindup` devolve 'busy'), então nenhuma
+ * espécie precisa saber que ela existe — e a guarda NÃO vale aqui (`guardsAgainst` lê o relógio do
+ * windup): o corpo aberto é exatamente o ponto.
+ */
+const ATTACK_RECOVER_MS = 450;
+
+/**
+ * O INSTANTE DE NOTAR — a fronteira entre vagar e caçar era invisível.
+ *
+ * `takeStep` virava de `wander` para `moveToward` sem um pixel nem um som: o jogador descobria que
+ * foi visto quando o corpo já estava em cima. Todo jogo de leitura marca esse instante (a pose de
+ * alerta do LttP, o "!" do MGS) porque ele é a informação que separa "explorar" de "lutar" — e
+ * aqui ele custa um clarão âmbar de 90ms, duas fagulhas SUBINDO da cabeça (a zona da intenção, a
+ * mesma do balão da caveira) e um sopro curto. Âmbar e não vermelho de propósito: vermelho é
+ * promessa de golpe (WINDUP_FLASH), e notar ainda não é golpe.
+ *
+ * O re-arme existe porque a fronteira de visão OSCILA (os dois corpos andam): perder o herói por
+ * um passo e reavistá-lo não pode disparar outro susto — só uma perda de verdade re-arma.
+ */
+const NOTICE_FLASH = 0xffc46e;
+const NOTICE_REARM_MS = 2500;
+
 export abstract class EnemyBase {
   public worldX: number;
   public worldY: number;
@@ -146,6 +179,16 @@ export abstract class EnemyBase {
   private windupTargetY = 0;
   private windupMark?: Billboard3D;
   private guardGlint?: Billboard3D;
+  // A RECUPERAÇÃO (ver ATTACK_RECOVER_MS): armada por tickWindup no instante em que o golpe sai,
+  // descontada por ele mesmo — enquanto corre, o corpo continua 'busy' e não guarda.
+  private recoverMs = 0;
+  // O relógio de fase do tremor de atordoamento (ver tickStunFx). > 0 também significa "há um
+  // ângulo escrito no sprite que precisa ser zerado quando o atordoamento acabar".
+  private stunWobbleMs = 0;
+  // O INSTANTE DE NOTAR (ver NOTICE_REARM_MS): o que este corpo sabia do herói no último tick.
+  private noticeSeen = false;
+  private noticeVirgin = true;
+  private noticeRearmMs = NOTICE_REARM_MS;
 
   protected readonly scene: Phaser.Scene;
   protected readonly sprite: Billboard3D;
@@ -327,6 +370,22 @@ export abstract class EnemyBase {
   }
 
   /**
+   * A PISCADA DE AMEAÇA — o vermelho quente de "vem coisa", 90ms e de volta ao tom ferido.
+   *
+   * Extraída do startWindup porque ela não é só do golpe armado: a agachada da aranha (um
+   * compromisso de movimento, não um ataque) fala a mesma frase. `restoreTint` e não `clearTint`:
+   * o corpo escurece conforme perde vida (ver woundedShade), e limpar o tint aqui devolveria um
+   * bicho ferido ao tom cheio — apagando, justamente no instante em que ele ameaça, a única
+   * leitura de vida que este jogo tem.
+   */
+  protected flashThreat(): void {
+    this.sprite.setTintFill(WINDUP_FLASH);
+    this.scene.time.delayedCall(90, () => {
+      if (this.alive && this.sprite.active) this.restoreTint();
+    });
+  }
+
+  /**
    * ARMA O GOLPE: mira o tile, MARCA o chão dele, avisa (piscada + pose recuada) e se compromete.
    *
    * **O GOLPE ARMADO É UM COMPROMISSO — DELE, E AGORA TAMBÉM SEU.** Um acerto do herói CANCELAVA
@@ -343,14 +402,8 @@ export abstract class EnemyBase {
     this.windupLeftMs = durationMs;
     this.windupTargetX = targetX;
     this.windupTargetY = targetY;
-    getSoundManager().playUndeadWindup();
-    this.sprite.setTintFill(WINDUP_FLASH);
-    this.scene.time.delayedCall(90, () => {
-      // `restoreTint` e não `clearTint`: o corpo escurece conforme perde vida (ver woundedShade),
-      // e limpar o tint aqui devolveria um bicho ferido ao tom cheio — apagando, justamente no
-      // instante em que ele ameaça, a única leitura de vida que este jogo tem.
-      if (this.alive && this.sprite.active) this.restoreTint();
-    });
+    getSoundManager().playUndeadWindup(this.kind); // a voz da especie (ver ENEMY_VOICE)
+    this.flashThreat();
     this.poseWindup(Math.sign(this.worldX - targetX), Math.sign(this.worldY - targetY), durationMs * 0.85);
     this.markTargetTile(targetX, targetY, durationMs);
     if (this.guardsWhileWindingUp) this.showGuardGlint(targetX, targetY, durationMs);
@@ -375,10 +428,21 @@ export abstract class EnemyBase {
     playerWorldY: number,
     playerHasTorch: boolean,
   ): 'idle' | 'busy' | 'strike' {
-    if (this.windupLeftMs <= 0) return 'idle';
+    if (this.windupLeftMs <= 0) {
+      // A RECUPERAÇÃO (ver ATTACK_RECOVER_MS): o golpe saiu e o corpo ainda pertence a ele —
+      // plantado, caído na pose e SEM guarda (guardsAgainst lê o relógio do windup, que já zerou).
+      // Corre aqui dentro para que nenhuma espécie precise conhecê-la: quem obedece 'busy' no
+      // windup obedece na recuperação de graça.
+      if (this.recoverMs > 0) {
+        this.recoverMs = Math.max(0, this.recoverMs - delta);
+        return 'busy';
+      }
+      return 'idle';
+    }
     this.windupLeftMs -= delta;
     if (this.windupLeftMs > 0) return 'busy';
     this.windupLeftMs = 0;
+    this.recoverMs = ATTACK_RECOVER_MS; // o golpe sai AGORA — e cobra o terceiro tempo dele
 
     // O GOLPE SAI AGORA — acertando ou não. Quem tem arma bate aqui, e é por isso que este aviso
     // vem antes de decidir o resultado: uma arma que só se movesse quando o golpe conecta seria a
@@ -549,12 +613,39 @@ export abstract class EnemyBase {
    * — enquanto o anel no chão continuava fechando. As duas metades do mesmo aviso discordavam.
    */
   private reposeWindup(): void {
-    if (this.windupLeftMs <= 0 || !this.alive) return;
-    this.poseWindup(
-      Math.sign(this.worldX - this.windupTargetX),
-      Math.sign(this.worldY - this.windupTargetY),
-      Math.max(60, this.windupLeftMs * 0.85),
-    );
+    if (!this.alive) return;
+    if (this.windupLeftMs > 0) {
+      this.poseWindup(
+        Math.sign(this.worldX - this.windupTargetX),
+        Math.sign(this.worldY - this.windupTargetY),
+        Math.max(60, this.windupLeftMs * 0.85),
+      );
+      return;
+    }
+    // Sem golpe armado, o solavanco que acabou de assentar pode ser o LANÇAMENTO do próprio golpe
+    // (a investida do whiff, o tombo pra cima do herói): se a recuperação ainda corre, o corpo cai
+    // na pose dela em vez de voltar ao neutro — a metade visível do tempo que ele está pagando.
+    if (this.recoverMs > 0) this.poseRecover(this.recoverMs);
+  }
+
+  /**
+   * A POSE DA RECUPERAÇÃO: o corpo AFUNDA um pouco e fica lá, soltando perto do fim do relógio.
+   *
+   * É o contrário da pose do windup (que recua e segura a mola): aqui a mola já foi gasta. Um
+   * mergulho curto de escala — nunca esticar (esticar vaza do tile, a lei mais antiga da casa) — e
+   * o retorno ao neutro chega junto com o corpo voltar a agir, então o que se vê e o que se pode
+   * punir terminam juntos.
+   */
+  private poseRecover(ms: number): void {
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.add({
+      targets: this,
+      knockbackSquash: 0.9,
+      duration: Math.min(110, ms * 0.4),
+      yoyo: true,
+      hold: Math.max(0, ms - 220),
+      ease: 'Sine.easeOut',
+    });
   }
 
   /**
@@ -563,6 +654,31 @@ export abstract class EnemyBase {
    * a própria invulnerabilidade sairia dela mais tarde do que devia, e o segundo golpe do jogador
    * cairia no vazio sem que nada na tela explicasse por quê.
    */
+  /**
+   * O TREMOR DO ATORDOAMENTO — o hitstun era o único estado de combate sem um pixel próprio.
+   *
+   * `tickHitstun` só devolve `true` e a espécie sai do update: os 300ms que todo golpe compra eram
+   * exatamente iguais, na tela, a um corpo parado por vontade própria. O tremor é derivado do
+   * relógio (nenhum tween novo por golpe, a mesma economia da piscada dos i-frames) e escrito no
+   * ÂNGULO, que é o canal do corpo que o tombo do passo já usa — só que rápido: o passo tomba a
+   * 260ms por meio ciclo, o tremor vibra a ~125ms por ciclo inteiro, e a frequência é o que separa
+   * "andando" de "zonzo". Decai no fim para o corpo assentar antes de voltar a agir.
+   *
+   * Chamado pelo EnemyManager para todo corpo, todo frame — pelo mesmo motivo dos i-frames: o
+   * update da espécie sai cedo justamente no estado que este método desenha.
+   */
+  public tickStunFx(delta: number): void {
+    if (!this.alive) return;
+    if (this.hitstunMs > 0 && !this.isSpawning) {
+      this.stunWobbleMs += delta;
+      const decay = Math.min(1, this.hitstunMs / 200);
+      this.sprite.setAngle(Math.sin(this.stunWobbleMs * 0.05) * 7 * decay);
+    } else if (this.stunWobbleMs > 0) {
+      this.stunWobbleMs = 0;
+      this.sprite.setAngle(0);
+    }
+  }
+
   public tickHurtInvuln(delta: number): void {
     if (this.hurtInvulnMs <= 0) return;
     this.hurtInvulnMs = Math.max(0, this.hurtInvulnMs - delta);
@@ -574,6 +690,68 @@ export abstract class EnemyBase {
     if (on === this.blinkDown) return;
     this.blinkDown = on;
     this.sprite.setAlpha(on ? HURT_BLINK_ALPHA : 1);
+  }
+
+  /**
+   * O INSTANTE DE NOTAR (ver NOTICE_REARM_MS). A espécie diz, todo tick, se ela VÊ o herói — e
+   * este método descobre a fronteira: a primeira transição vagar→caçar dispara o susto
+   * (`startleNotice`). A primeira avaliação da vida semeia em silêncio, porque um corpo que nasce
+   * já vendo o herói acabou de fazer a própria chegada — o telegrafo mais longo do jogo — e um
+   * susto em cima dela seria o mesmo aviso duas vezes.
+   */
+  protected noteSeesHero(sees: boolean, delta: number): void {
+    if (this.noticeVirgin) {
+      this.noticeVirgin = false;
+      this.noticeSeen = sees;
+      return;
+    }
+    if (sees) {
+      if (!this.noticeSeen && this.noticeRearmMs >= NOTICE_REARM_MS) this.startleNotice();
+      this.noticeSeen = true;
+      this.noticeRearmMs = 0;
+    } else {
+      this.noticeSeen = false;
+      this.noticeRearmMs += delta;
+    }
+  }
+
+  /** O susto de notar: clarão âmbar no corpo, duas fagulhas subindo da cabeça, um sopro curto. */
+  private startleNotice(): void {
+    if (!this.alive || this.isSpawning || this.isStunned || this.isWindingUp) return;
+    this.sprite.setTintFill(NOTICE_FLASH);
+    this.scene.time.delayedCall(90, () => {
+      if (this.alive && this.sprite.active) this.restoreTint();
+    });
+    this.spawnNoticeMotes();
+    getSoundManager().playCreatureNotice(this.kind);
+  }
+
+  /**
+   * Duas fagulhas âmbar saltando de cima da cabeça — a ZONA DA INTENÇÃO, a mesma do balão de
+   * placa da caveira: o que o corpo pensa mora acima dele, o que o corpo sofre mora no peito.
+   */
+  private spawnNoticeMotes(): void {
+    for (let i = 0; i < 2; i++) {
+      const mote = world3d()
+        .addBillboard(FX_DOT_TEXTURE, 0, {
+          centered: true, emissive: true, additive: true, fog: false, depthWrite: false,
+        })
+        .setTint(NOTICE_FLASH)
+        .setPosition(this.worldX + (i === 0 ? -0.12 : 0.12), this.worldY)
+        .setElevation(0.95)
+        .setDisplaySize(0.09, 0.09)
+        .setAlpha(0.95);
+      this.scene.tweens.add({
+        targets: mote,
+        elevation: 1.22 + Math.random() * 0.12,
+        alpha: 0,
+        scaleX: 0.4,
+        scaleY: 0.4,
+        duration: 200 + i * 60,
+        ease: 'Cubic.easeOut',
+        onComplete: () => mote.destroy(),
+      });
+    }
   }
 
   /**

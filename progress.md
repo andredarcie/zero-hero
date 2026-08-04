@@ -2816,6 +2816,91 @@ O **graveto ACESO** (999 de dano). A exceção é do ITEM e não do inimigo: o f
 gasta — o combustível corre, a chama entrega sua posição no escuro e a mão fica presa nele —, então
 ele compra o que a espada deixou de dar. A bomba idem. Nenhum dos dois é uma espécie com vida baixa.
 
+## O polimento que a régua da própria casa cobrava — quatro frentes de uma vez
+
+Uma auditoria contra os combates de referência (LttP, Hades, Hollow Knight) achou um padrão: o jogo
+já tinha as ferramentas certas (hitstop escalonado, shake direcional, gramática de recusas,
+telegrafo com anel), mas **a régua não estava aplicada por igual**. Quatro frentes fecharam isso.
+
+### 1. Apanhar pesava menos que bater
+
+- **O golpe recebido não sacudia o mundo.** O herói acertando move o mundo 3D
+  (`world3d.shake` 90/0.09, 150/0.15 na morte); o herói apanhando só tremia a câmera Phaser da UI
+  (`cameras.main.shake(200, 0.01)`) — o mundo ficava parado. Nos elogiados, apanhar é o momento
+  mais pesado. Agora: `shake(170, 0.14)` direcional, entre o acerto e a morte, e o Phaser-shake
+  saiu (dois sistemas de tremor no mesmo golpe dessincronizavam as camadas). O flash vermelho fica.
+- **Golpe inimigo no herói invencível evaporava mudo** (early-return no `handleEnemyAttackPlayer`)
+  — leitura de bug ("a clava me atravessou"). Agora RESVALA com o pacote frio dos i-frames
+  (`spawnDeflect` no tile visual + `playBladeGlance`), e o atacante ainda investe. **Só o golpe de
+  corpo do BICHO**: o tiro já morre com o próprio estouro, e o esbarrão do herói piscando ganhou um
+  flag próprio (`EnemyHit.bump`) para NÃO disparar anel a cada encostão — a piscada já explica.
+- **Item sem entrada em MELEE_DAMAGE contra um corpo não fazia NADA** (nem swing, nem som — o ramo
+  armado exigia dano e `placeItemAt` recusava mudo por tile ocupado). Agora: o item balança
+  (`swingHeld`), o corpo absorve (`triggerKnockback(0,0)`, o agachado da torreta) e um `playItemBonk`
+  surdo diz "encostou, não mordeu". Sem raiz nos pés: cutucar não é atacar.
+- **O resvalo em i-frames não tremia a câmera e o resvalo em corpo nascendo tremia** — a mesma
+  recusa com dois pesos. Os dois agora: `shake(40, 0.03)` direcional.
+
+### 2. Três estados invisíveis da IA ganharam corpo
+
+- **A recuperação** (`ATTACK_RECOVER_MS` 450, em `EnemyBase`): o terceiro tempo do ataque existia
+  só como aritmética (`attackInterval − windup`) e nenhuma pose o mostrava. Agora todo golpe que
+  sai (acertando ou errando) planta o corpo por 450ms, caído na pose (`poseRecover`, mergulho de
+  escala — nunca esticar, sprite não vaza do tile), sem guarda (ela lê o relógio do windup, que já
+  zerou). Corre DENTRO do 'busy' do `tickWindup`, então nenhuma espécie precisou saber dela — e
+  zora/torreta (que nunca chamam `startWindup`) ficam de fora, porque já têm os próprios tempos.
+- **O hitstun era invisível** (`tickHitstun` só devolve true). Agora o corpo TREME — ângulo derivado
+  do relógio (`tickStunFx`, chamado pelo EnemyManager junto dos i-frames, pelo mesmo motivo: a
+  espécie sai cedo do update exatamente nesse estado), ±7° a ~8Hz decaindo. A frequência é o que
+  separa "andando" (tombo de 260ms) de "zonzo".
+- **O instante de notar** (`noteSeesHero`/`startleNotice`): vagar virava caçar sem um pixel. Agora a
+  primeira transição ganha clarão âmbar de 90ms (`NOTICE_FLASH` — âmbar e não vermelho: vermelho é
+  promessa de golpe), duas fagulhas subindo da CABEÇA (a zona da intenção, a mesma do balão da
+  caveira) e um sopro curto (`playCreatureNotice`). A primeira avaliação da vida semeia em silêncio
+  (quem nasce vendo o herói acabou de fazer a chegada — seria o mesmo aviso duas vezes) e o re-arme
+  de 2,5s impede o susto de virar strobe na fronteira de visão, que oscila. A caveira avalia depois
+  da fixação de placa: reaver o herói após o golpe que quebra a fixação É um momento de notar.
+- **A agachada da aranha** (400ms, o tell mais longo fora de windup) era sem cor e sem som — e o
+  `playSpiderPounce` tocava no FIM, quando o salto já tinha partido. O clarão de ameaça
+  (`flashThreat`, extraído do startWindup) e o som desceram para o COMEÇO da agachada; o salto não
+  precisa de voz — três passos em 360ms são a coisa mais visível que ela faz.
+
+### 3. Oito corpos, uma voz — a família de altura
+
+`enemy-hit`, `enemy-death`, `undead-windup` e `creature-arrive` tocavam iguais para as oito
+espécies (a fraqueza que este arquivo já apontava). A resposta não foi 8×4 arquivos novos: é
+`ENEMY_VOICE` no SoundManager — **a mesma amostra em altura fixa por espécie** (morcego 1.3×,
+torreta 0.6×...), como o SNES sempre fez família com um sample. `playSample` ganhou o parâmetro
+`rate`; o jitter aleatório multiplica POR CIMA, então a variação continua dentro da voz de cada
+corpo. A taxa fixa pode entrar até no telegrafo (que recusa jitter aleatório porque rate muda
+duração): a mudança é constante e aprendível — e no morcego ela CONSERTA um desalinho, o aviso de
+~300ms que não cabia na janela de 280ms dele. Os fallbacks sintetizados escalam as frequências
+pela mesma taxa. A voz da chegada saiu do construtor do WalkerEnemy para o primeiro `tickArrival`
+(`kind` é getter abstrato — o TS proíbe lê-lo no construtor, com razão).
+
+### 4. A carga da lâmina falava só no fim
+
+Entre segurar o A e o sino de pronta (450ms), NADA acontecia. Agora, passado um limiar de toque
+(`SPIN_CHARGE_TELL_MS` 120 — sem ele toda espadada viraria começo falso de giro): faíscas de carga
+ralas e pálidas que engrossam com o progresso (`spawnChargeMote(intensity)` — a mesma gramática das
+prontas, em dois volumes) e um zumbido fino SUBINDO (`startSpinChargeHum` — nó vivo com a duração
+embutida, então hitstop não o deixa subindo para sempre; cortado em 50ms por soltar cedo, pausar ou
+morrer). E **a carga perdida no atordoamento ganhou recibo**: soltar a lâmina pronta no stagger a
+desperdiçava em silêncio total — agora um descer curto (`playSpinFizzle`, o inverso do sino) e as
+faíscas de carga CAINDO apagadas (`spawnChargeFizzle` — subir é carregar, cair é o que sobrou).
+
+### O que a validação mediu (e o que ela desenterrou)
+
+`typecheck`, lint (nos arquivos tocados) e `build` limpos. `fauna` e `projeteis` **100% verdes**
+com as mudanças. E três cenários falham HOJE — **idêntico na `main` limpa** (medido por
+stash/rodada A-B, não por suposição): `esgrima` 5 asserções (o soco declara/alcança a segunda
+fileira; o resvalo de i-frames tira vida via `strikeEnemy`; a caveira cai em 2 espadadas),
+`combate` 11 (o cenário aborta em "Cannot read properties of null"), `placa-undead` 1 — um flake
+de FRONTEIRA: o balão da caveira em (7,6) projeta em x=1290 numa tela de 1280, e chegar a (7,6)
+antes da amostra depende da fase sorteada do primeiro passo (`Between(0, 520)`). A asserção agora
+carrega `skullX/feetX/tileSize` no payload para o próximo a olhar isso ver de relance. Nenhuma
+dessas é desta mudança: são a fatura dos cinco commits da reforma que nunca rodaram o gate.
+
 ## Verifying a change
 
 The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on

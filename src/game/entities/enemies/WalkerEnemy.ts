@@ -59,6 +59,9 @@ export abstract class WalkerEnemy extends EnemyBase {
   private arriveMs = ARRIVE_MS;
   private arriveScale = ARRIVE_START_SCALE;
   private dustTimer = 0;
+  // A voz da chegada toca no PRIMEIRO tick e nao no construtor: `kind` e abstrato, e o TS proibe
+  // (com razao) le-lo antes de a subclasse terminar de existir. Um frame de atraso e inaudivel.
+  private arriveVoiced = false;
 
   protected constructor(
     scene: Phaser.Scene,
@@ -71,7 +74,6 @@ export abstract class WalkerEnemy extends EnemyBase {
     super(scene, worldX, worldY, maxHealth, sprite);
     this.baseScale = baseScale;
     this.sprite.setAlpha(0.55);
-    getSoundManager().playCreatureArrive();
   }
 
   /** Intervalo do passo, em ms. E um getter porque uma especie muda de ritmo (o bote da aranha). */
@@ -176,6 +178,12 @@ export abstract class WalkerEnemy extends EnemyBase {
       isBlocked,
     };
 
+    // O INSTANTE DE NOTAR (ver EnemyBase.noteSeesHero): "ver" e a mesma pergunta que o takeStep
+    // padrao faz — dentro do alcance, cacar ou fugir da tocha; fora dele, vagar. A transicao e
+    // que ganha desenho, e ela mora aqui em vez de no takeStep porque especie que reescreve o
+    // passo (o mago, o morcego) nao pode perder o susto junto.
+    this.noteSeesHero(ctx.dist <= this.detectionRange, delta);
+
     this.think(delta, ctx);
 
     this.moveTimer += delta;
@@ -198,6 +206,10 @@ export abstract class WalkerEnemy extends EnemyBase {
 
   /** A chegada: silhueta crescendo do chao com poeira saindo por baixo dela. */
   private tickArrival(delta: number): void {
+    if (!this.arriveVoiced) {
+      this.arriveVoiced = true;
+      getSoundManager().playCreatureArrive(this.kind); // na voz da especie (ver ENEMY_VOICE)
+    }
     this.arriveMs = Math.max(0, this.arriveMs - delta);
     const t = 1 - this.arriveMs / ARRIVE_MS;
     // `Back.Out` PASSA de 1 no fim (e o overshoot que faz o pop), e um corpo de escala 1 passando de

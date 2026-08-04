@@ -361,6 +361,11 @@ export class UndeadEnemy extends EnemyBase {
     const dy = playerWorldY - this.worldY;
     const dist = Math.abs(dx) + Math.abs(dy);
 
+    // O INSTANTE DE NOTAR (ver EnemyBase.noteSeesHero). Fica DEPOIS da fixacao de placa de
+    // proposito: enquanto marcha, o heroi nao existe para ela — e o susto de reave-lo depois de
+    // um golpe quebrar a fixacao e honesto: a pancada comprou exatamente essa atencao.
+    this.noteSeesHero(dist <= DETECTION_RANGE, delta);
+
     this.moveTimer += delta;
     if (this.moveTimer >= MOVE_INTERVAL) {
       this.moveTimer = 0;

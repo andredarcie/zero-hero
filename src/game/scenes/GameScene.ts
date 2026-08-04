@@ -439,6 +439,15 @@ const GLANCE_HITSTOP_MS = 28;
 // meio segundo parado no meio da matilha, e uma cadencia mais longa depois.
 /** Quanto tempo com o A segurado ate a lamina ficar carregada. */
 const SPIN_CHARGE_MS = 450;
+/**
+ * A partir de quando o segurar COMEÇA A FALAR. Os 450ms entre o aperto e o sino eram mudos —
+ * nenhum som, nenhum brilho, nada crescendo — e um gesto que só se comunica quando termina só
+ * existe para quem já sabia dele. Deste ponto em diante sobem faíscas cada vez mais vivas e um
+ * zumbido fino que cresce até o sino (ver tickSpinCharge). O limiar existe por causa do TOQUE:
+ * todo golpe do A é um segurar de alguns frames, e uma carga que falasse no primeiro milissegundo
+ * transformaria cada espadada num começo de giro falso.
+ */
+const SPIN_CHARGE_TELL_MS = 120;
 /** A cadencia depois do giro. Longa de proposito: o gesto e um compromisso, nao uma alternativa. */
 const SPIN_COOLDOWN_MS = 460;
 /** Faisca de carga a cada tantos ms enquanto a lamina esta pronta — o aviso de que ela esta. */
@@ -3144,13 +3153,31 @@ export class GameScene extends Phaser.Scene {
   private tickSpinCharge(delta: number): void {
     if (!this.attackHeld) return;
     if (!this.inventory.has('sword')) return; // sem espada nao ha o que carregar
+    const wasTelling = this.chargeMs >= SPIN_CHARGE_TELL_MS;
     this.chargeMs += delta;
     if (!this.chargeReady && this.chargeMs >= SPIN_CHARGE_MS) {
       this.chargeReady = true;
       this.chargeMoteMs = SPIN_READY_MOTE_MS;
+      getSoundManager().stopSpinChargeHum(); // o sino assume; o zumbido nao pode sobrar por baixo
       getSoundManager().playSpinReady();
     }
-    if (!this.chargeReady) return;
+    if (!this.chargeReady) {
+      // A CARGA EM CURSO (ver SPIN_CHARGE_TELL_MS): passado o limiar de toque, faiscas ralas e
+      // fracas que engrossam ate o sino — a mesma gramatica das prontas, em intensidade crescente,
+      // para que "carregando" e "carregada" sejam a mesma frase em dois volumes. O zumbido nasce
+      // junto e ja sabe quando morrer (a duracao vai no start), entao um update congelado por
+      // hitstop nao o deixa subindo para sempre.
+      if (this.chargeMs >= SPIN_CHARGE_TELL_MS) {
+        if (!wasTelling) getSoundManager().startSpinChargeHum(SPIN_CHARGE_MS - SPIN_CHARGE_TELL_MS);
+        const t = Math.min(1, (this.chargeMs - SPIN_CHARGE_TELL_MS) / (SPIN_CHARGE_MS - SPIN_CHARGE_TELL_MS));
+        this.chargeMoteMs += delta;
+        if (this.chargeMoteMs >= 240 - 130 * t) {
+          this.chargeMoteMs = 0;
+          this.spawnChargeMote(0.35 + 0.55 * t);
+        }
+      }
+      return;
+    }
     this.chargeMoteMs += delta;
     if (this.chargeMoteMs >= SPIN_READY_MOTE_MS) {
       this.chargeMoteMs = 0;
@@ -3166,6 +3193,7 @@ export class GameScene extends Phaser.Scene {
     this.chargeMs = 0;
     this.chargeReady = false;
     this.chargeMoteMs = 0;
+    getSoundManager().stopSpinChargeHum(); // a carga morreu; o som dela nao pode sobreviver
     // Nem o atordoamento atravessa uma morte ou um recomeço: o herói do run seguinte nasceria sem
     // conseguir apertar nada, e a causa estaria num golpe que ele levou na partida anterior.
     this.playerStaggerMs = 0;
@@ -3192,8 +3220,12 @@ export class GameScene extends Phaser.Scene {
       ?? { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
   }
 
-  /** Uma faisca dourada subindo do heroi: a lamina esta carregada e o jogador tem de ver isso. */
-  private spawnChargeMote(): void {
+  /**
+   * Uma faisca dourada subindo do heroi: a lamina esta carregada e o jogador tem de ver isso.
+   * `intensity` < 1 e a carga EM CURSO (ver tickSpinCharge): a mesma faisca, menor e mais palida,
+   * crescendo com o progresso — nunca uma segunda linguagem para o mesmo gesto.
+   */
+  private spawnChargeMote(intensity = 1): void {
     const w3 = this.world3d;
     if (!w3) return;
     const { x: worldX, y: worldY } = this.heroVisualTile();
@@ -3202,8 +3234,8 @@ export class GameScene extends Phaser.Scene {
       .setTint(0xffe9a8)
       .setPosition(worldX + (Math.random() - 0.5) * 0.7, worldY + (Math.random() - 0.5) * 0.5)
       .setElevation(0.1)
-      .setDisplaySize(0.13, 0.13)
-      .setAlpha(0.9);
+      .setDisplaySize(0.07 + 0.06 * intensity, 0.07 + 0.06 * intensity)
+      .setAlpha(0.35 + 0.55 * intensity);
     this.tweens.add({
       targets: mote,
       elevation: 0.55 + Math.random() * 0.35,
@@ -3214,6 +3246,36 @@ export class GameScene extends Phaser.Scene {
       ease: 'Sine.easeOut',
       onComplete: () => mote.destroy(),
     });
+  }
+
+  /**
+   * A CARGA MORRENDO (ver spinAttack): as mesmas faiscas douradas, agora apagadas e CAINDO — o
+   * inverso exato da subida que a carga desenhou. Subir e carregar; cair e o que sobrou dela.
+   */
+  private spawnChargeFizzle(): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const { x: worldX, y: worldY } = this.heroVisualTile();
+    for (let i = 0; i < 4; i++) {
+      const mote = w3
+        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true })
+        .setTint(0xbfa46a)
+        .setPosition(worldX + (Math.random() - 0.5) * 0.6, worldY + (Math.random() - 0.5) * 0.4)
+        .setElevation(0.45 + Math.random() * 0.25)
+        .setDisplaySize(0.1, 0.1)
+        .setAlpha(0.75);
+      this.tweens.add({
+        targets: mote,
+        elevation: 0.04,
+        x: mote.x + (Math.random() - 0.5) * 0.3,
+        alpha: 0,
+        scaleX: 0.4,
+        scaleY: 0.4,
+        duration: 260 + Math.random() * 120,
+        ease: 'Quad.easeIn', // acelera para baixo: gravidade, nao brasa subindo
+        onComplete: () => mote.destroy(),
+      });
+    }
   }
 
   /** O anel que sai do heroi quando a lamina gira: o alcance do golpe, desenhado uma vez. */
@@ -3284,6 +3346,9 @@ export class GameScene extends Phaser.Scene {
     const ready = this.chargeReady;
     this.chargeMs = 0;
     this.chargeReady = false;
+    // Soltar no meio da subida aborta a carga: o zumbido morre com ela (ver startSpinChargeHum).
+    // Com a lamina pronta o sino ja o substituiu e isto e um no-op.
+    getSoundManager().stopSpinChargeHum();
     if (ready && this.canAct()) this.spinAttack();
   }
 
@@ -3370,8 +3435,15 @@ export class GameScene extends Phaser.Scene {
     // parado") — sem esta linha, ele seria a unica coisa que sai do meio de um atordoamento.
     //
     // E e o risco que a peca sempre cobrou: meio segundo parado no meio da matilha. Perder a carga
-    // ao levar o golpe e a outra metade desse trato, nao um castigo a mais.
-    if (this.playerStaggerMs > 0) return;
+    // ao levar o golpe e a outra metade desse trato, nao um castigo a mais. Mas um preco cobrado
+    // em silencio nao e um trato: o jogador pagou meio segundo e a lamina simplesmente nao saia,
+    // sem nada dizer que a carga MORREU aqui. O fiasco — um descer curto e as faiscas de carga
+    // caindo apagadas — e o recibo.
+    if (this.playerStaggerMs > 0) {
+      getSoundManager().playSpinFizzle();
+      this.spawnChargeFizzle();
+      return;
+    }
     this.attackBufferMs = 0;
     this.attackCooldownMs = SPIN_COOLDOWN_MS;
     this.stopBreathing();
@@ -3477,7 +3549,9 @@ export class GameScene extends Phaser.Scene {
         this.spawnDeflect(tile.x, tile.y);
         if (!refusalSpoken) {
           getSoundManager().playBladeGlance();
-          this.world3d?.shake(40, 0.03);
+          // Inclinado na direcao do golpe, como toda recusa: um baque sem direcao era o unico
+          // tremor "sorteado" que restava no combate.
+          this.world3d?.shake(40, 0.03, tile.x - this.playerWorld.worldX, tile.y - this.playerWorld.worldY);
           this.triggerHitstop(GLANCE_HITSTOP_MS);
           refusalSpoken = true;
         }
@@ -3661,6 +3735,20 @@ export class GameScene extends Phaser.Scene {
         return true;
       }
       this.strikeEnemy(enemy, wx, wy, 'item');
+      return true;
+    }
+
+    // O ITEM QUE NÃO É ARMA CONTRA UM CORPO — o balde, a bomba, as botas, as sementes. Era o
+    // único gesto MUDO do botão B: o ramo armado acima exigia entrada na MELEE_DAMAGE, o resto da
+    // tabela não sabe de bicho, e `placeItemAt` recusava em silêncio porque o tile está ocupado.
+    // O jogador apertava B e nada no mundo se mexia — a leitura de botão quebrado. A lei é "toda
+    // recusa tem desenho próprio": o item balança (o gesto que ele pediu), o corpo ABSORVE o toque
+    // (o mesmo agachamento do recuo da torreta: encostou, não ganhou terreno) e um toc surdo diz
+    // que ali não havia mordida nenhuma. Sem raiz nos pés: cutucar não é atacar.
+    if (enemy) {
+      this.swingHeld(wx, wy);
+      if (!enemy.isSpawning) enemy.triggerKnockback(0, 0);
+      getSoundManager().playItemBonk();
       return true;
     }
 
@@ -4028,7 +4116,7 @@ export class GameScene extends Phaser.Scene {
     const enemy = this.enemyManager?.getEnemyAt(wx, wy);
     if (enemy && !enemy.isSpawning) {
       if (this.turnedTowardCreature(wx, wy, enemy)) return;
-      this.handleEnemyAttackPlayer({ enemy, ranged: false, fromX: enemy.worldX, fromY: enemy.worldY });
+      this.handleEnemyAttackPlayer({ enemy, ranged: false, bump: true, fromX: enemy.worldX, fromY: enemy.worldY });
       return;
     }
 
@@ -4156,6 +4244,10 @@ export class GameScene extends Phaser.Scene {
       this.spawnDeflect(wx, wy);
       if (!refusalSpoken) {
         getSoundManager().playBladeGlance();
+        // O mesmo baque leve do resvalo em corpo nascendo (ver sweepArc): eram a MESMA recusa com
+        // dois pesos — uma sacudia a câmera e a outra não —, e duas recusas iguais que respondem
+        // diferente ensinam que são coisas diferentes, que é mentira.
+        this.world3d?.shake(40, 0.03, wx - this.playerWorld.worldX, wy - this.playerWorld.worldY);
         this.triggerHitstop(GLANCE_HITSTOP_MS);
       }
       return 'refused';
@@ -4243,7 +4335,7 @@ export class GameScene extends Phaser.Scene {
     if (weapon === 'item' && this.heldOnFire) this.spawnFireHitEffect(wx, wy);
 
     if (!hitSpoken) {
-      getSoundManager().playEnemyHit();
+      getSoundManager().playEnemyHit(enemy.kind); // na altura da especie (ver ENEMY_VOICE)
       this.hero.tint = 0xffff00;
       this.time.delayedCall(120, () => { this.hero.tint = null; });
       // O QUADRO DE IMPACTO: o hitstop logo abaixo congela a lamina no meio do arco, e este
@@ -4262,7 +4354,7 @@ export class GameScene extends Phaser.Scene {
     this.world3d?.shake(lethal ? 150 : 90, lethal ? 0.15 : 0.09, dx, dy);
     this.triggerHitstop(lethal ? 110 : 60);
     if (lethal) {
-      if (!hitSpoken) getSoundManager().playEnemyDeath();
+      if (!hitSpoken) getSoundManager().playEnemyDeath(enemy.kind);
       this.rewardKill(wx, wy);
     }
     return 'landed';
@@ -5597,7 +5689,7 @@ export class GameScene extends Phaser.Scene {
       if (!enemy.isAlive) {
         // A VOZ DA EXPLOSAO SAI UMA VEZ, como a do arco (ver sweepArc): uma bomba no meio de uma
         // matilha disparava um som de morte por corpo, todos no mesmo frame.
-        if (!blastKilled) getSoundManager().playEnemyDeath();
+        if (!blastKilled) getSoundManager().playEnemyDeath(enemy.kind);
         blastKilled = true;
         enemy.deathFling(enemy.worldX - bomb.worldX, enemy.worldY - bomb.worldY);
       }
@@ -6751,7 +6843,28 @@ export class GameScene extends Phaser.Scene {
    * casos (o tile do bicho, ou o ponto onde a bala encostou).
    */
   private handleEnemyAttackPlayer(hit: EnemyHit): void {
-    if (this.playerInvincible || this.isDead) return;
+    if (this.isDead) return;
+    // A direcao do golpe (de quem bateu para o heroi) serve as tres respostas abaixo — o resvalo,
+    // o tranco do atacante e o baque de camera —, entao ela se resolve antes de qualquer porta.
+    const kdx = Math.sign(this.playerWorld.worldX - hit.fromX);
+    const kdy = Math.sign(this.playerWorld.worldY - hit.fromY);
+    if (this.playerInvincible) {
+      // O GOLPE NA JANELA DE INVENCIBILIDADE EVAPORAVA EM SILÊNCIO — a única recusa do jogo sem
+      // desenho nenhum. A clava conectava no herói piscando e nada acontecia: nem som, nem pixel,
+      // que é a leitura de bug ("o ataque me atravessou"). Agora ele RESVALA, com o mesmo pacote
+      // frio dos i-frames do bicho (anel + raspão): a mesma regra, a mesma resposta, dos dois
+      // lados do combate. Só o golpe de CORPO que o BICHO desferiu — o tiro já morre com o próprio
+      // estouro no EnemyProjectile, e o esbarrão do herói piscando não é um golpe de ninguém (ver
+      // EnemyHit.bump): um anel a cada encostão seria a recusa virando spam.
+      if (!hit.ranged && !hit.bump) {
+        const at = this.heroVisualTile();
+        this.spawnDeflect(at.x, at.y);
+        getSoundManager().playBladeGlance();
+        // O atacante ainda INVESTE: o gesto dele aconteceu — o que falhou foi só a mordida.
+        hit.enemy?.triggerKnockback(kdx, kdy);
+      }
+      return;
+    }
     // O ESCUDO — e ele só apara TIRO. Ver `blocksBlowFrom`.
     if (hit.ranged && this.blocksBlowFrom(hit.fromX, hit.fromY)) {
       this.playShieldBlock(hit.fromX, hit.fromY);
@@ -6786,12 +6899,18 @@ export class GameScene extends Phaser.Scene {
 
     // Taking a hit lands hard: heavy shake, a red screen flash, hitstop, the skull lunging
     // into the blow, and the hero physically shoved away from the attacker.
-    this.cameras.main.shake(200, 0.01);
+    //
+    // O BAQUE É DO MUNDO, NÃO DA UI. Aqui havia um `cameras.main.shake(200, 0.01)` — a câmera
+    // Phaser, que só segura FX e UI por cima do canvas 3D — e o mundo em si ficava PARADO: o único
+    // golpe do jogo que não sacudia o mundo era justamente o que o herói levava, enquanto todo
+    // golpe que ele DÁ sacode (90/0.09, 150/0.15 na morte). Nos combates de referência a régua é a
+    // inversa: apanhar é o momento mais pesado. Então o golpe recebido pesa MAIS que o desferido
+    // (170/0.14, entre o acerto e a morte) e inclina na direção do golpe, como todos os outros —
+    // e o mundo sacudindo em volta do herói empurrado meio tile é o corpo inteiro do impacto.
+    this.world3d?.shake(170, 0.14, kdx, kdy);
     this.cameras.main.flash(110, 160, 30, 30);
     this.triggerHitstop(90);
     if (this.camera) {
-      const kdx = Math.sign(this.playerWorld.worldX - hit.fromX);
-      const kdy = Math.sign(this.playerWorld.worldY - hit.fromY);
       // So o golpe de corpo lunga: uma bala nao arrasta quem a disparou atras dela.
       if (!hit.ranged) hit.enemy?.triggerKnockback(kdx, kdy); // lunge toward the hero
       // The hero is always pinned to screen centre; the shove displaces him and eases him

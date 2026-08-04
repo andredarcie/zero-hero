@@ -1,3 +1,5 @@
+import type { EnemyKind } from '@/game/world/ScreenContent';
+
 const MASTER_VOL = 0.32;
 const MUSIC_VOL = 0.6; // music-bus duck level (under the SFX)
 const AMBIENCE_VOL = 0.4; // the wind bed — always subtle
@@ -124,6 +126,35 @@ const SAMPLES = {
 const HIT_JITTER = 0.9; // semitons, o mesmo do enemyHit
 type SampleKey = keyof typeof SAMPLES;
 
+/**
+ * A VOZ POR ESPÉCIE — o bestiário tem oito corpos e tinha UMA voz.
+ *
+ * `enemy-hit.wav`, `enemy-death.wav`, `undead-windup.wav` e `creature-arrive.wav` tocavam iguais
+ * para todo mundo: osso, gosma, aranha e torreta morriam com o mesmo som (o próprio progress.md
+ * aponta isso como fraqueza a re-escutar). A resposta NÃO é oito pares de arquivos novos: é a
+ * mesma amostra em ALTURA de espécie — corpo pequeno agudo, corpo pesado grave — que é como o
+ * SNES sempre fez família de bicho com um sample só.
+ *
+ * A taxa é FIXA por espécie de propósito, e por isso ela pode existir até no telegrafo (que recusa
+ * o jitter ALEATÓRIO — ver HIT_JITTER): uma altura constante é aprendível, e a mudança de duração
+ * que ela causa é constante junto. No morcego ela até CONSERTA um desalinho: o aviso de ~300ms
+ * não cabia na janela de 280ms dele — a 1.28x passa a caber. O jitter aleatório continua por cima,
+ * multiplicativo, nos sons que já o tinham.
+ */
+const ENEMY_VOICE: Readonly<Record<EnemyKind, { hit: number; death: number; tell: number }>> = {
+  undead: { hit: 1.0, death: 1.0, tell: 1.0 }, // a régua: o corpo que ensinou o combate
+  bat: { hit: 1.3, death: 1.35, tell: 1.28 },
+  spider: { hit: 1.15, death: 1.2, tell: 1.12 },
+  slime: { hit: 0.88, death: 0.9, tell: 0.84 },
+  bigslime: { hit: 0.68, death: 0.62, tell: 0.72 },
+  zora: { hit: 0.95, death: 0.95, tell: 1.0 },
+  mage: { hit: 1.05, death: 1.05, tell: 1.0 },
+  turret: { hit: 0.6, death: 0.55, tell: 1.0 }, // pedra: o mesmo baque, uma oitava abaixo
+};
+
+const voiceRate = (kind: EnemyKind | undefined, part: 'hit' | 'death' | 'tell'): number =>
+  kind ? ENEMY_VOICE[kind][part] : 1;
+
 // Souls staging: the title screen is just dripping water, the wind bed is the world's
 // default "soundtrack", and only the combat track rises while undead are out of the ground.
 // ('title'/'overworld' still exist — the intro uses the title theme; overworld is currently
@@ -173,6 +204,10 @@ class SoundManager {
   private wantAmbience = false;
 
   private lastFootstep = -1;
+
+  // O zumbido da lamina juntando forca (ver startSpinChargeHum) — guardado para poder ser
+  // cortado no instante em que a carga morre (soltar cedo, apanhar segurando, pausar).
+  private chargeHum: { oscs: OscillatorNode[]; gain: GainNode } | null = null;
 
   private get audio(): AudioContext {
     if (!this.ctx) {
@@ -405,13 +440,16 @@ class SoundManager {
    * rate so frequent sounds (hits, steps, chops) never machine-gun the exact same file.
    * Returns false if the sample isn't loaded yet (caller falls back to the synth).
    */
-  private playSample(key: SampleKey, jitter = 0, volScale = 1): boolean {
+  private playSample(key: SampleKey, jitter = 0, volScale = 1, rate = 1): boolean {
     const buffer = this.buffers.get(key);
     if (!buffer) return false;
     const ctx = this.audio; // ensures this.master exists
     const src = ctx.createBufferSource();
     src.buffer = buffer;
-    if (jitter > 0) src.playbackRate.value = Math.pow(2, ((Math.random() * 2 - 1) * jitter) / 12);
+    // `rate` e a altura FIXA de quem fala (a voz por especie, ver ENEMY_VOICE); o jitter aleatorio
+    // multiplica por cima, entao a variacao continua existindo DENTRO da voz de cada corpo.
+    src.playbackRate.value = rate
+      * (jitter > 0 ? Math.pow(2, ((Math.random() * 2 - 1) * jitter) / 12) : 1);
     const g = ctx.createGain();
     g.gain.value = SAMPLES[key].vol * volScale;
     src.connect(g);
@@ -536,6 +574,77 @@ class SoundManager {
   }
 
   /**
+   * A CARGA EM CURSO — o meio segundo entre segurar o A e o sino de pronta era MUDO: nada na mão,
+   * nada no ouvido, e o gesto só existia para quem já sabia que ele existia. Um zumbido fino
+   * SUBINDO (toda carga desta casa sobe) preenche exatamente essa janela: ele nasce quase
+   * inaudível, cresce até o instante da carga completa e é substituído pelo sino.
+   *
+   * É um nó vivo e não um one-shot porque a carga pode MORRER no meio (soltar cedo, apanhar
+   * segurando, abrir o menu) — e um zumbido que continuasse subindo depois de a carga já era
+   * seria o som mentindo sobre o estado. `stopSpinChargeHum` corta em 50ms.
+   */
+  public startSpinChargeHum(durationMs: number): void {
+    this.stopSpinChargeHum();
+    const ctx = this.audio;
+    const t = ctx.currentTime;
+    const dur = Math.max(0.1, durationMs / 1000);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.085, t + dur);
+    g.connect(this.sfxUserBus);
+    const d = detune();
+    const oscs = [
+      { type: 'triangle' as OscillatorType, from: 220 * d, to: 560 * d },
+      { type: 'sine' as OscillatorType, from: 440 * d, to: 1120 * d }, // a oitava, mais fina
+    ].map(({ type, from, to }) => {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.setValueAtTime(from, t);
+      o.frequency.exponentialRampToValueAtTime(to, t + dur);
+      o.connect(g);
+      o.start(t);
+      o.stop(t + dur + 0.03); // acaba sozinho no instante em que o sino assume
+      return o;
+    });
+    this.chargeHum = { oscs, gain: g };
+  }
+
+  public stopSpinChargeHum(): void {
+    const hum = this.chargeHum;
+    if (!hum) return;
+    this.chargeHum = null;
+    const now = this.audio.currentTime;
+    hum.gain.gain.cancelScheduledValues(now);
+    hum.gain.gain.setValueAtTime(Math.max(hum.gain.gain.value, 0.0001), now);
+    hum.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+    for (const o of hum.oscs) {
+      try { o.stop(now + 0.06); } catch { /* already stopped */ }
+    }
+  }
+
+  /**
+   * A CARGA PERDIDA — soltar a lâmina pronta no meio do atordoamento a desperdiça (a outra metade
+   * do trato do giro), e o desperdício era mudo: o jogador pagou meio segundo parado e nem ficou
+   * sabendo que pagou à toa. Um DESCER curto e abafado — o inverso exato do sino de pronta.
+   */
+  public playSpinFizzle(): void {
+    const d = detune();
+    this.osc('triangle', 620 * d, 180 * d, 0.1, 0.16);
+    this.noise('lowpass', 900, 1.0, 0.07, 0.12, 0.02);
+  }
+
+  /**
+   * O ITEM QUE NÃO É ARMA batendo num corpo — o balde, a bomba, as botas cutucando uma caveira.
+   * Era a única resposta MUDA do botão B (nem swing, nem som, nem recusa), quebrando a lei de que
+   * toda recusa tem desenho próprio. Um "toc" surdo, sem metal e sem dano: encostou, não mordeu.
+   */
+  public playItemBonk(): void {
+    const d = detune();
+    this.noise('lowpass', 380 * d, 1.2, 0.16, 0.07);
+    this.osc('sine', 150 * d, 90 * d, 0.1, 0.09);
+  }
+
+  /**
    * A GUARDA APARANDO — o tim de metal contra metal, dos dois lados do combate: o escudo do herói
    * e a guarda que um bicho ergue enquanto arma o golpe.
    *
@@ -602,18 +711,22 @@ class SoundManager {
     this.osc('triangle', 880, 440, 0.1, 0.18, 0.02);
   }
 
-  public playEnemyHit(): void {
-    if (this.playSample('enemyHit', 0.9)) return;
-    this.noise('lowpass', 320, 1.2, 0.42, 0.09);
-    this.osc('sawtooth', 140, 55, 0.26, 0.12);
+  /** O golpe conectando num corpo — na ALTURA da espécie que apanhou (ver ENEMY_VOICE). */
+  public playEnemyHit(kind?: EnemyKind): void {
+    const r = voiceRate(kind, 'hit');
+    if (this.playSample('enemyHit', 0.9, 1, r)) return;
+    this.noise('lowpass', 320 * r, 1.2, 0.42, 0.09);
+    this.osc('sawtooth', 140 * r, 55 * r, 0.26, 0.12);
   }
 
-  public playEnemyDeath(): void {
-    if (this.playSample('enemyDeath', 0.5)) return;
+  /** A morte — a mesma amostra, mas o morcego morre agudo e a torreta desaba grave. */
+  public playEnemyDeath(kind?: EnemyKind): void {
+    const r = voiceRate(kind, 'death');
+    if (this.playSample('enemyDeath', 0.5, 1, r)) return;
     const notes = [150, 110, 73] as const;
     notes.forEach((freq, i) => {
-      this.osc('sawtooth', freq, freq * 0.6, 0.26, 0.16, i * 0.09);
-      this.noise('lowpass', 300, 1.0, 0.16, 0.10, i * 0.09);
+      this.osc('sawtooth', freq * r, freq * r * 0.6, 0.26, 0.16, i * 0.09);
+      this.noise('lowpass', 300 * r, 1.0, 0.16, 0.10, i * 0.09);
     });
   }
 
@@ -939,11 +1052,14 @@ class SoundManager {
    *
    * SEM JITTER: os 300ms deste arquivo cabem na janela de 500ms com folga, e esticar o tom
    * estica a duracao (ver HIT_JITTER) — este e o aviso que menos pode escorregar do gesto.
+   * A voz por especie (ver ENEMY_VOICE) e FIXA, entao pode entrar: a duracao muda junto, mas
+   * muda sempre igual — e no morcego (janela de 280ms) a taxa 1.28x faz o aviso finalmente caber.
    */
-  public playUndeadWindup(): void {
-    if (this.playSample('undeadWindup')) return;
-    this.osc('sawtooth', 70, 170, 0.10, 0.32);
-    this.noise('bandpass', 520, 2.2, 0.09, 0.28);
+  public playUndeadWindup(kind?: EnemyKind): void {
+    const r = voiceRate(kind, 'tell');
+    if (this.playSample('undeadWindup', 0, 1, r)) return;
+    this.osc('sawtooth', 70 * r, 170 * r, 0.10, 0.32);
+    this.noise('bandpass', 520 * r, 2.2, 0.09, 0.28);
   }
 
   /** The strike that met empty air: a thin whoosh, nothing landed. */
@@ -992,11 +1108,24 @@ class SoundManager {
   // tela — nenhum deles existe para "avisar" sozinho.
 
   /** A chegada de um corpo que nao vem de baixo: um roçado seco e um baque leve assentando. */
-  public playCreatureArrive(): void {
-    if (this.playSample('creatureArrive', HIT_JITTER)) return;
-    this.noise('highpass', 2200, 0.9, 0.07, 0.14);
-    this.noise('lowpass', 420, 1.0, 0.11, 0.18, 0.05);
-    this.osc('triangle', 150, 90, 0.06, 0.14, 0.04);
+  public playCreatureArrive(kind?: EnemyKind): void {
+    const r = voiceRate(kind, 'tell');
+    if (this.playSample('creatureArrive', HIT_JITTER, 1, r)) return;
+    this.noise('highpass', 2200 * r, 0.9, 0.07, 0.14);
+    this.noise('lowpass', 420 * r, 1.0, 0.11, 0.18, 0.05);
+    this.osc('triangle', 150 * r, 90 * r, 0.06, 0.14, 0.04);
+  }
+
+  /**
+   * O INSTANTE DE NOTAR — o corpo que vagava viu o herói e passou a caçá-lo (ver
+   * EnemyBase.startleNotice). Um sopro curto SUBINDO, porque atenção sobe (toda carga desta casa
+   * sobe), e baixo de propósito: é informação de leitura, não um susto — o susto é o bicho vindo.
+   * Sintetizado, sem sample: toca uma vez por avistamento, na altura da voz da espécie.
+   */
+  public playCreatureNotice(kind?: EnemyKind): void {
+    const r = voiceRate(kind, 'tell');
+    this.noise('bandpass', 1500 * r, 2.0, 0.055, 0.09);
+    this.osc('triangle', 300 * r, 540 * r, 0.05, 0.11);
   }
 
   /** O bote da aranha: o estalo da mola soltando, curto e seco. */
