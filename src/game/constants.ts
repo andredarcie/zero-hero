@@ -150,7 +150,28 @@ export const ASSET_KEYS = {
   // criatura quer. Por isso a arte e outra (bolhas soltas, nao rabicho de fala) e a chave e outra.
   thoughtPlate: 'thought-plate',
   coin: 'coin',
+  // A FAUNA que voltou a ter corpo (ver entities/enemies/). A arte sempre esteve em
+  // public/assets/characters/enemies/ — era o bestiario do modo Sobreviventes —, e ela so pode
+  // morar aqui porque agora tem quem a desenhe: cada def carregada e download e VRAM no boot.
+  bat: 'bat',
+  batHurt: 'bat-hurt',
+  spider: 'spider',
+  // Slime e Slime Grande sao SHEETS de 2 frames (16x32): pousado e esticado no pulo. O pulo e a
+  // unica animacao deles, e ela troca de frame no passo — gosma nao anda, salta.
+  slime: 'slime',
+  slimePool: 'slime-pool',
+  bigSlime: 'bigslime',
+  bigSlimePool: 'bigslime-pool',
+  turret: 'turret',
+  turretBullet: 'turret-bullet',
+  // O bicho do rio (Sprite Factory). Sheet de 5 ESTADOS em coluna — ver ZORA_FRAMES.
+  zora: 'zora',
+  // `mage` e a arte que o NPC "wizard" tambem usa (NPC_VISUALS). O mago INIMIGO nasce com um tom
+  // frio por cima justamente por isso — ver MageEnemy: dois personagens nao podem ler igual.
   mage: 'mage',
+  mageHurt: 'mage-hurt',
+  mageCast: 'mage-cast',
+  magicBall: 'magic-ball',
   swordOnFire: 'sword-on-fire',
   dryBush: 'dry-bush',
   dryTree: 'dry-tree',
@@ -238,6 +259,16 @@ export const MOONFLOWER_FRAMES = {
   /** O `t` em que a arte troca de banco: a ultima pose em que a petala da frente ainda esta no ar. */
   handoff: 0.52,
 } as const;
+/**
+ * A que distancia uma chama fecha uma flor da lua. UM numero pra toda chama — a fogueira acesa
+ * parada no mapa e a tocha que o heroi traz na mao —, pela razao de sempre: "o que a flor enxerga"
+ * tem de ser uma coisa so, ou o jogador aprende um alcance e e desmentido pelo outro.
+ *
+ * O que NAO conta e a lava, e nao por esquecimento: ela nunca apaga. Uma flor a beira do poco
+ * viraria uma trava sem chave, e ja ha uma no level-1 (a flor de (8,6) tem lava a 2 tiles). O fogo
+ * que fecha a flor e sempre um fogo que alguem pode apagar ou levar embora.
+ */
+export const MOONFLOWER_LIGHT_TILES = 2.6;
 // Sprite Factory electronic_gate.png: quatro alturas da grade em bancos sem/com energia.
 export const ELECTRONIC_GATE_FRAMES = { phases: 4, off: 0, powered: 4 } as const;
 // Sprite Factory toolbox.png: quatro poses do CORPO (fechada, entreaberta, aberta, forjando) mais
@@ -247,6 +278,20 @@ export const TOOLBOX_FRAMES = { closed: 0, ajar: 1, open: 2, forging: 3, slot: 4
 // do flood-fill e drena so ENQUANTO alimenta (na mao ela e estavel — a tensao mora em quanto
 // tempo a rede precisa ficar de pe, nao na viagem, que ja e o drama da tocha).
 export const BATTERY_FEED_MS = 20000;
+
+// A gosma nao anda: SALTA. Sao os dois unicos frames dela — pousada e esticada no ar —, e a troca
+// acontece no passo (ver SlimeEnemy), nao num relogio de animacao: um slime parado fica parado.
+export const SLIME_FRAMES = { rest: 0, hop: 1 } as const;
+
+// O ZORA (Sprite Factory, zora.mjs): o CICLO inteiro dele, na ordem em que acontece. `up` e a unica
+// janela em que a espada o alcanca; `breathing` e o mesmo `up` com micro-variacao, e os dois se
+// alternam parados para o bicho respirar. O `spit` mora no mesmo sheet porque a municao e do bicho
+// (o precedente e bomb.png, que guarda a bomba e a fagulha juntas).
+//
+// `submerged` e o unico frame desenhado DE CIMA: ele nao vai num billboard em pe como o resto do
+// jogo, vai num quad DEITADO na agua (ver ZoraEnemy). Marca na agua e chao — desenhada de lado, ela
+// flutuava meio tile no ar, que foi como a primeira versao chegou ao jogo.
+export const ZORA_FRAMES = { submerged: 0, rising: 1, up: 2, spitting: 3, spit: 4, breathing: 5 } as const;
 
 // The skull's rise-from-the-ground animation, in playback order (see UndeadEnemy).
 export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [
@@ -304,6 +349,12 @@ export const KEY_FRAMES = {
   pickup: 1,
 } as const;
 
+// ui/hearts.png (5 frames de 7x7) e OUTRA coisa: o coracao do HUD enchendo, do vazio (so o
+// contorno) ao cheio. Ele dormia no repositorio desde sempre, sem um unico uso — o jogo nao tem
+// HUD. A subtela e o primeiro lugar onde ele cabe, e cabe exatamente: "quantos coracoes faltam"
+// se desenha com o coracao VAZIO no lugar, nunca com o cheio apagado por opacidade.
+export const UI_HEART_FRAMES = { empty: 0, full: 4 } as const;
+
 // heart.png is a 16x32 sheet built on the same convention as key.png: the top heart is the plain
 // one (ink navy, for a lit UI slot), the bottom one carries a bone outline so it reads lying on
 // the dark ground — which is the only place the game shows a heart, so `pickup` is what it uses.
@@ -327,6 +378,66 @@ export const DRY_TREE_FRAME_COUNT = 6;
 // fuel for fire) and soft-lock. It only regrows once its tile is clear of the hero and enemies.
 export const TREE_REGROW_MS = 60000;
 
+// O PONTO DE SPAWN AUTORADO: quanto tempo a cova espera, depois de o corpo dela cair, antes de
+// fazer outro (EnemySpawnerManager). O relogio conta mesmo com o heroi longe — se contasse so
+// perto, voltar a uma sala limpa daria uma sala vazia e a cova viraria decoracao.
+//
+// O numero e o que separa esta peca de um cerco: menos que isto e a sala nunca fica limpa (o
+// jogador para de lutar e passa correndo), muito mais e a cova deixa de ser uma cova e vira um
+// inimigo que se mata uma vez. 25s e perto do dobro do que se leva pra cruzar um chunk 12x12
+// andando — atravessar de volta encontra a caveira de pe, ficar por perto nao.
+export const ENEMY_RESPAWN_MS = 25000;
+
+// A MONTANHA — a rocha em pe, e o primeiro bloqueio VERTICAL do jogo que nao e madeira.
+//
+// A ARTE E A PEDRA QUE O MUNDO JA TINHA, E ELA VIRA CUBO. A primeira versao destes tres frames era
+// uma parede de penhasco GERADA (spritefactory/sprites/cliff-wall.mjs, agora deletada): fiadas de
+// tijolo azul-acinzentado que, deitadas num quad em pe, saiam genericas — o adesivo de uma montanha.
+// O mundo ja tinha a pedra certa desenhada a mao no proprio tileset, servindo de CHAO (frames 23/24,
+// "Chao de Pedra": pedregulhos irregulares com argamassa escura, linha escura no topo e sombra de
+// contato no pe — uma arte de PAREDE que estava deitada). Entao a montanha passou a usar essa
+// pintura, e World3D a assa como CUBO de verdade (buildTileCubeGeometry): topo de rocha iluminado —
+// o planalto, que e a face que uma camera de cima mais ve — e as laterais sombreadas em cor de
+// vertice. Volume e o que separa uma montanha de um muro pintado.
+//
+// POR QUE E UMA COPIA DOS PIXELS, E NAO O FRAME 23 DIRETO. O que o mundo guarda por tile e um ID de
+// frame, e o editor mapeia um frame para UMA camada (TILE_DEFS): o mesmo id nao pode ser "chao" na
+// paleta de piso e "parede" na de montanha. Chao e parede tem de ser dois ids, entao a mesma
+// pintura mora duas vezes no atlas — de proposito, e este comentario e o aviso de que sao duas.
+//
+// Duas variantes e nao tres: a pedra lisa (39) e a pedra com MUSGO (40), as duas copiadas de 23/24.
+// A terceira existia pelo motivo do mar — um frame repetido milhares de vezes para de ler como
+// rocha e passa a ler como GRADE —, e o cubo resolve isso melhor do que qualquer variante: cada
+// bloco tem silhueta e sombreado proprios, tirados dos vizinhos. O frame 41 ficou MORTO no atlas
+// (pixels apagados): id de frame e posicional, e remover a linha re-apontaria em silencio todo tile
+// de dungeon autorado a partir do 42.
+//
+// Ela entra em SOLID_UPPER_FRAMES logo abaixo e fica deliberadamente FORA de
+// CHOPPABLE_UPPER_FRAMES: o machado de aco derruba qualquer ARVORE, e nada no jogo abre montanha.
+// Rocha cortavel devolveria a cada parede do mapa a condicao de porta destrancada — que e
+// exatamente o bug que fez a borda do mundo virar mar.
+export const CLIFF_WALL_FRAMES: readonly number[] = [39, 40];
+
+// OS TILES DE DUNGEON, instalados no atlas a partir do frame 42 (spritefactory/sprites/
+// dungeon-tiles.mjs, requantizacao 1:1 da `dungeon.png` que dormia no repositorio desde sempre).
+// A ORDEM E O CONTRATO: ela e a mesma da spec e a mesma que `scripts/gen-zelda-dungeons.mjs`
+// indexa. Inserir um frame no meio re-aponta em silencio todo tile ja autorado.
+//
+// As paredes entram em SOLID_UPPER_FRAMES abaixo — quad em pe, com sombra — e ficam fora de
+// CHOPPABLE_UPPER_FRAMES: masmorra nao se derruba a machado.
+export const DUNGEON_TILES = {
+  floors: [42, 43, 44] as readonly number[],
+  walls: [45, 46, 47] as readonly number[],
+  wallTorch: 48,
+  wallMoss: 49,
+  /** A parede RACHADA: a pista da parede bombardeavel — a legenda que o Zelda 1 nunca deu. */
+  wallCracked: 50,
+  floorCracked: 51,
+} as const;
+export const DUNGEON_WALL_FRAMES: readonly number[] = [
+  ...DUNGEON_TILES.walls, DUNGEON_TILES.wallTorch, DUNGEON_TILES.wallMoss, DUNGEON_TILES.wallCracked,
+];
+
 // Upper-layer tileset frames that stand UP off the ground. Being listed here means three
 // things at once, which is why it is the only switch a standing tile needs:
 //   1. ChunkManager.isCellBlocked treats the cell as collision even with none painted, so the
@@ -341,6 +452,8 @@ export const TREE_REGROW_MS = 60000;
 export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([
   3, 4, 14, 15, 16, 17, 18, 21, 22, 25,
   36, 37, // the tree-chop stages (see TREE_CHOP_STAGE_FRAMES): a half-felled tree still blocks
+  ...CLIFF_WALL_FRAMES, // the mountain: standing rock, and the only vertical blocker that is not wood
+  ...DUNGEON_WALL_FRAMES, // a alvenaria das dungeons
 ]);
 
 // Which of those standing tiles are TREES — the ones the steel axe (`greatAxe`) can fell.

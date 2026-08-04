@@ -52,6 +52,20 @@ export class ItemManager {
   }
 
   /**
+   * Toda chama pousada no chao — a lista, e nao o teste por tile.
+   *
+   * A caldeira pergunta "ha fogo NESTE vizinho?" e `hasLitItemAt` responde; a flor da lua pergunta
+   * "ha fogo por PERTO?", que por tile custaria um varrimento de 21 tiles por flor por frame. Um
+   * graveto aceso no chao e a mesma tocha que estava na mao (o deposito no braco, a troca num
+   * tile), entao ele e uma fonte pelos dois lados — e some sozinho quando o combustivel acaba.
+   */
+  public litItems(): Array<{ x: number; y: number }> {
+    return this.items
+      .filter((it) => !it.isCollected && it.fire !== undefined)
+      .map((it) => ({ x: it.tileX, y: it.tileY }));
+  }
+
+  /**
    * Lift an item off the ground without the hero touching it — the robotic arm's grab.
    * Returns the kind it took, or null if that tile was empty.
    *
@@ -111,38 +125,10 @@ export class ItemManager {
     this.items.push(new ItemPickup(this.scene, 'battery', x, y, true));
   }
 
-  /**
-   * Arm any dropped item the hero has stepped off, then collect an armed item under the hero.
-   * Returns the collected item (removed from the ground) or null.
-   */
-  public update(heroX: number, heroY: number): CollectedItem | null {
-    for (const it of this.items) {
-      if (!it.armed && (it.tileX !== heroX || it.tileY !== heroY)) it.armed = true;
-    }
-
-    let collected: CollectedItem | null = null;
-    for (const it of this.items) {
-      if (it.isCollectable && it.armed && !it.isCollected && it.tileX === heroX && it.tileY === heroY) {
-        collected = {
-          kind: it.kind,
-          worldX: it.tileX,
-          worldY: it.tileY,
-          fire: it.fire,
-          chargeMs: it.kind === 'batteryFull' ? it.charge : undefined,
-        };
-        it.collect();
-        break;
-      }
-    }
-
-    if (collected) {
-      this.items = this.items.filter((it) => {
-        if (it.isCollected) { it.destroy(); return false; }
-        return true;
-      });
-    }
-    return collected;
-  }
+  // (Havia um `update(heroX, heroY)` aqui que COLETAVA o item de baixo dos pes do heroi, todo
+  // frame. Ele saiu: nada mais entra na mochila sozinho — o B pega, e `takeAt` e a unica porta
+  // pra dentro. Com ele foi embora tambem o flag `armed` do ItemPickup, que so existia pra um
+  // item largado nao voltar pra mao no mesmo instante em que tocava o chao.)
 
   public render(tileSize: number, camera: WorldCamera): void {
     for (const it of this.items) it.render(tileSize, camera);

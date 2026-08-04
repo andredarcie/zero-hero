@@ -168,6 +168,28 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameWidth: 16,
     frameHeight: 16,
   },
+  {
+    // 16x32: gosma pousada (0) e esticada no pulo (1) — ver SLIME_FRAMES.
+    key: ASSET_KEYS.slime,
+    path: '/assets/characters/enemies/slime/Slime.png',
+    frameWidth: 16,
+    frameHeight: 16,
+  },
+  {
+    // O mesmo par, no corpo grande.
+    key: ASSET_KEYS.bigSlime,
+    path: '/assets/characters/enemies/slime/BigSlime.png',
+    frameWidth: 16,
+    frameHeight: 16,
+  },
+  {
+    // Sprite Factory (zora.mjs): 16x80 — submerso, emergindo, erguido, cuspindo e o cuspe.
+    // Ver ZORA_FRAMES; o ultimo frame e a municao dele, no mesmo sheet.
+    key: ASSET_KEYS.zora,
+    path: '/assets/characters/enemies/zora/zora.png',
+    frameWidth: 16,
+    frameHeight: 16,
+  },
 ] as const;
 
 const SHARED_IMAGES: readonly ImageAsset[] = [
@@ -264,11 +286,23 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.water3,         path: '/assets/environment/terrain/water_3.png' },
   { key: ASSET_KEYS.bridge,         path: '/assets/environment/terrain/bridge.png' },
   {
-    // Still loaded even though the mage enemy is gone: the "wizard" NPC uses this sprite
-    // (see NPC_VISUALS in constants.ts).
+    // Duas leituras dividem esta arte: o NPC "wizard" (NPC_VISUALS) e o mago INIMIGO, que por
+    // isso nasce com um tom frio por cima (ver MageEnemy).
     key: ASSET_KEYS.mage,
     path: '/assets/characters/enemies/mage/mage__1.png',
   },
+  // A FAUNA AUTORAVEL (aba Inimigos). O editor precisa destas texturas do lado PHASER — a
+  // paleta e o tabuleiro sao 2D —, e o jogo precisa das mesmas do lado 3D (textures3d DEFS).
+  { key: ASSET_KEYS.bat,          path: '/assets/characters/enemies/bat/bat.png' },
+  { key: ASSET_KEYS.batHurt,      path: '/assets/characters/enemies/bat/bat_hurt.png' },
+  { key: ASSET_KEYS.spider,       path: '/assets/characters/enemies/spider/spider.png' },
+  { key: ASSET_KEYS.slimePool,    path: '/assets/characters/enemies/slime/SlimePool.png' },
+  { key: ASSET_KEYS.bigSlimePool, path: '/assets/characters/enemies/slime/BigSlimePool.png' },
+  { key: ASSET_KEYS.turret,       path: '/assets/characters/enemies/turret/turret.png' },
+  { key: ASSET_KEYS.turretBullet, path: '/assets/characters/enemies/turret/turret_bullet.png' },
+  { key: ASSET_KEYS.mageHurt,     path: '/assets/characters/enemies/mage/mage_hurt.png' },
+  { key: ASSET_KEYS.mageCast,     path: '/assets/characters/enemies/mage/mage_magic.png' },
+  { key: ASSET_KEYS.magicBall,    path: '/assets/characters/enemies/mage/magic_ball.png' },
   { key: ASSET_KEYS.campfireFrame0, path: '/assets/effects/fire/sprite_fire0.png' },
   { key: ASSET_KEYS.campfireFrame1, path: '/assets/effects/fire/sprite_fire1.png' },
   { key: ASSET_KEYS.campfireFrame2, path: '/assets/effects/fire/sprite_fire2.png' },

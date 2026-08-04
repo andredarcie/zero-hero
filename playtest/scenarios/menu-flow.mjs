@@ -1,18 +1,20 @@
-// The menu flow, end to end: Language → the new Title (three doors, no reveal effect) → the
-// level list → play a level → the level-aware pause menu.
+// O menu inteiro, que hoje e uma tela so: Title → o mundo. Sem tela de idioma (o jogo e so em
+// ingles) e sem intro (a aventura comeca andando).
 //
-// The old title assembled itself one word per water drop and keying past it was flaky; the new
-// one shows the title and the credit straight away and offers three doors (aventura / levels /
-// explorador). This scenario drives the whole chain with real keypresses and asserts each screen
-// is what it should be — including that picking a level boots THAT level, and that pausing inside
-// a level offers "back to levels", "restart" and "quit to menu".
+// Este cenario existe pra guardar exatamente o que foi CORTADO, e nao so o que ficou: cada corte
+// aqui e uma cena que ainda esta no historico do repo e que um refactor distraido reintroduz.
+// Entao ele afirma que 'language' e 'intro' nao existem NEM COMO CENA REGISTRADA — checar so a
+// tela que aparece deixaria passar um `scene.start('intro')` esquecido em qualquer botao.
 //
-// NOTE: everything from the level LIST onward is red, and has been since the hand-authored levels
-// replaced the generated "A Espada na Pedra" — the same design change that left `espada` and
-// `itens` stale (see CLAUDE.md). The title assertions above that line are live and passing.
+// A segunda metade guarda o menu de pausa: um level ainda tem a porta de volta pra lista (que o
+// titulo nao tem mais), e a pausa NAO tem mais seletor de idioma.
 
 const activeScenes = (driver) => driver.page.evaluate(
   () => (window.__game?.scene?.getScenes(true) ?? []).map((s) => s.scene.key),
+);
+
+const registeredScenes = (driver) => driver.page.evaluate(
+  () => (window.__game?.scene?.scenes ?? []).map((s) => s.scene.key),
 );
 
 const sceneTexts = (driver, key) => driver.page.evaluate(
@@ -36,74 +38,64 @@ const pauseButtons = (driver) => driver.page.evaluate(() => {
 
 export default {
   name: 'menu-flow',
-  description: 'Language → new title (three doors) → level list → play a level → level-aware pause.',
+  description: 'Title (uma porta so) → o mundo na hora; sem idioma, sem intro, pausa sem idioma.',
   needsGame: false,
   route: '/',
   async run({ driver, shot, assert, log }) {
-    // ── Language comes first now (so the title's buttons are localized) ──────
-    await waitScene(driver, 'language');
-    await driver.settle(800); // fade-in + the input-arm delay
-    assert('Language is the first screen', (await activeScenes(driver)).includes('language'),
-      JSON.stringify(await activeScenes(driver)));
-    await shot('language', { state: {} });
-
-    log('Pick PT-BR (key 1) → the new title');
-    await driver.press('1', { count: 1, delay: 400, holdMs: 80 });
+    // ── O titulo e a PRIMEIRA tela ───────────────────────────────────────────
     await waitScene(driver, 'title');
-    await driver.settle(900); // title fade-in 500 + arm 300
+    await driver.settle(900); // fade-in 500 + o delay que arma o input
+
+    const registered = await registeredScenes(driver);
+    assert('A tela de idioma nao existe mais (nem registrada)',
+      !registered.includes('language'), JSON.stringify(registered));
+    assert('A intro nao existe mais (nem registrada)',
+      !registered.includes('intro'), JSON.stringify(registered));
 
     const titleTexts = await sceneTexts(driver, 'title');
-    assert('The title shows all three doors, no reveal effect',
-      titleTexts.includes('Jogar aventura')
-      && titleTexts.includes('Jogar levels')
-      && titleTexts.includes('Jogar explorador'),
+    assert('O titulo mostra UMA porta so, em ingles',
+      titleTexts.includes('Play adventure')
+      && !titleTexts.some((t) => t.includes('levels') || t.includes('explorer')),
       JSON.stringify(titleTexts));
-    assert('The title and credit are shown straight away',
+    assert('Titulo e credito aparecem de cara',
       titleTexts.some((t) => t.includes('ZERO')) && titleTexts.some((t) => t.includes('ANDRÉ')),
       JSON.stringify(titleTexts));
     await shot('title', { state: {} });
 
-    log('Press 2 → Jogar levels → the level list');
-    await driver.press('2', { count: 1, delay: 400, holdMs: 80 });
-    await waitScene(driver, 'levelselect');
-    await driver.settle(900);
-
-    const listTexts = await sceneTexts(driver, 'levelselect');
-    assert('The list shows the level from the manifest',
-      listTexts.some((t) => t.includes('A Espada na Pedra')),
-      JSON.stringify(listTexts));
-    await shot('level-list', { state: {} });
-
-    log('Enter → play the first level (level-1)');
+    log('Enter → o mundo, direto (a intro nao entra no meio)');
     await driver.press('Enter', { count: 1, delay: 400, holdMs: 80 });
     await driver.page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 14000 });
-    await driver.settle(1000);
-    const st = await driver.getState();
-    assert('Picking a level boots the GameScene into THAT level',
-      st.scene === 'game' && st.player.worldX === 6 && st.player.worldY === 7 && st.litFires === 2,
-      JSON.stringify({ scene: st.scene, player: st.player, litFires: st.litFires }));
-    await shot('level-playing', { note: 'Level 1 launched from the list' });
+    await driver.settle(600);
+    const scenes = await activeScenes(driver);
+    assert('A aventura cai na GameScene sem passar por outra tela',
+      scenes.includes('game') && !scenes.includes('title'), JSON.stringify(scenes));
+    await shot('adventure', { note: 'A aventura, um Enter depois do titulo' });
 
-    // ── The pause menu is level-aware ────────────────────────────────────────
-    log('ESC → the level-aware pause menu');
+    // ── A pausa nao tem mais idioma ──────────────────────────────────────────
+    log('ESC → a pausa da aventura');
     await driver.press('Escape', { count: 1, delay: 300, holdMs: 80 });
     await driver.settle(500);
     const pause = await pauseButtons(driver);
-    assert('Pause is open', pause !== null, 'no pause root in the DOM');
-    assert('Pause offers back-to-levels, restart and quit-to-menu',
-      pause.includes('Voltar aos levels') && pause.includes('Reiniciar') && pause.includes('Sair para o título'),
+    assert('A pausa abriu', pause !== null, 'nao ha zh-pause-root no DOM');
+    const langBtns = await driver.page.evaluate(
+      () => document.querySelectorAll('#zh-pause-root .zh-pause-lang').length,
+    );
+    assert('A pausa nao oferece idioma', langBtns === 0, `${langBtns} botoes de idioma`);
+    assert('A pausa esta em ingles', pause.includes('Resume') && pause.includes('Restart'),
       JSON.stringify(pause));
-    await shot('pause-level', { note: 'Level pause: voltar aos levels / reiniciar / sair', state: {} });
+    await shot('pause-adventure', { note: 'Pausa da aventura: sem seletor de idioma', state: {} });
 
-    log('“Voltar aos levels” returns to the list');
-    await driver.page.evaluate(() => {
-      const root = document.getElementById('zh-pause-root');
-      const btn = Array.from(root.querySelectorAll('.zh-pause-btn')).find((b) => b.textContent === 'Voltar aos levels');
-      btn?.click();
-    });
-    await waitScene(driver, 'levelselect');
-    assert('Back at the level list', (await activeScenes(driver)).includes('levelselect'),
-      JSON.stringify(await activeScenes(driver)));
-    await shot('back-to-list', { state: {} });
+    // ── Os levels perderam a porta do titulo, nao a existencia ───────────────
+    log('/?level=1 ainda boota um level, e a pausa dele volta pra lista');
+    await driver.open('/?level=1');
+    await driver.page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 14000 });
+    await driver.settle(800);
+    await driver.press('Escape', { count: 1, delay: 300, holdMs: 80 });
+    await driver.settle(500);
+    const levelPause = await pauseButtons(driver);
+    assert('A pausa de um level oferece a volta pra lista',
+      Array.isArray(levelPause) && levelPause.includes('Back to levels'),
+      JSON.stringify(levelPause));
+    await shot('pause-level', { note: 'Pausa de level: a lista ainda tem porta aqui', state: {} });
   },
 };

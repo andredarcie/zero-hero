@@ -110,8 +110,8 @@ export default {
 
     // ── 2. A TOCHA NO BRACO ────────────────────────────────────────────────
     // O heroi nao pode atravessar; o item pode. E exatamente para isso que o braco existe.
-    log('BRACO: o heroi larga o graveto ACESO na entrada do braco');
-    await teleport(ARM.x - 2, ARM.y);
+    log('BRACO: o heroi POE o graveto ACESO na entrada do braco');
+    await teleport(ARM.x - 3, ARM.y);
     await page.evaluate(() => {
       const s = window.__scene;
       s.heldItem = 'wood';
@@ -119,9 +119,12 @@ export default {
       s.torchFuelMs = 20000; // combustivel de sobra: o teste e sobre o portao, nao sobre a tocha
     });
     await driver.settle(200);
-    // Pisar na entrada do braco DEPOSITA o que estiver na mao (o jogo e so-andar: nao ha botao
-    // de largar, entao a casa do braco recebe carga pelo passo).
-    await driver.press('ArrowRight', { count: 1 });
+    // Andar ate UM TILE ANTES da entrada (o passo e quem decide para onde ele olha) e por a
+    // tocha ali com o B. Depositar era pisar enquanto o jogo nao tinha botao; hoje e o gesto do
+    // B contra o tile a frente — ver o cenario `combate`.
+    await driver.walk('right', 1);
+    await driver.settle(350);
+    await driver.useItem();
     await driver.settle(900);
     const handedOver = await driver.getState();
     assert('a tocha saiu da mao e ficou na entrada do braco',

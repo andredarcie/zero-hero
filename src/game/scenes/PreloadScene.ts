@@ -104,13 +104,6 @@ export class PreloadScene extends Phaser.Scene {
     // world; hold the scene hand-off until both loaders are done.
     void preloadTextures3D().then(() => {
       const params = new URLSearchParams(window.location.search);
-      // `?survivors` drops straight into the Vampire-Survivors-style mode (also
-      // reachable from the title screen with [S]). Works in any environment —
-      // it's a shareable entry point, not a dev-only shortcut.
-      if (params.has('survivors')) {
-        this.scene.start('survivors');
-        return;
-      }
       // `?explorer` cai direto numa expedicao ao mundo infinito (tambem a terceira porta do
       // titulo). `?explorerSeed=N` prende a semente: o playtest precisa do MESMO mato toda vez,
       // e um mundo sorteado nao pode ser afirmado sobre.
@@ -121,22 +114,21 @@ export class PreloadScene extends Phaser.Scene {
         this.scene.start('game');
         return;
       }
-      // `?level=N` is a direct link into a single puzzle level — skip title/language/intro
-      // and boot the level straight into gameplay (works in any environment: the title's
-      // "Jogar levels" list is the in-game path to the same worlds).
+      // `?level=N` is a direct link into a single puzzle level — skip the title and boot the
+      // level straight into gameplay. It is also the ONLY door to the levels now that the title
+      // has a single button (the level list itself still exists: see LevelSelectScene).
       if (levelNumberFromUrl() !== null) {
         this.scene.start('game');
         return;
       }
-      // Dev shortcut (localhost only): `?play` skips language/title/intro and
-      // drops straight into gameplay — e.g. http://localhost:5209/?play
+      // Dev shortcut (localhost only): `?play` skips the title and drops straight into
+      // gameplay — e.g. http://localhost:5209/?play
       if (import.meta.env.DEV && params.has('play')) {
         this.scene.start('game');
         return;
       }
-      // The menu flow: pick a language first (so the title's buttons are localized), then
-      // the title (Language → Title → aventura|levels).
-      this.scene.start('language');
+      // O menu inteiro: o titulo, e dele direto pro mundo.
+      this.scene.start('title');
     });
   }
 }

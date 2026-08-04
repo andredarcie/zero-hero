@@ -16,9 +16,10 @@
 //     bed) is clamped at the bank instead of floating in mid-air;
 //   · ELEVATION: a lifted caster's silhouette slides away from the light — the arm's
 //     projection generalized to every caster;
-//   · the BUDGET: the solid field stays under its pool cap, and the adventure runs with
-//     NO batched actor fields (batching is a Survivors opt-in; the adventure must keep
-//     its exact draw order).
+//   · the BUDGET: the solid field stays under its pool cap. (The "no batched actor fields"
+//     assert went away with the Survivors mode: the per-sheet instanced fields existed only
+//     for that horde, so the machinery — and its opt-in — left the renderer with it. Every
+//     actor is one individually-sorted mesh again, which is what the adventure always used.)
 export default {
   name: 'sombras',
   description: 'Shadow contract: handoff continuity, hysteresis, water clamp, elevation, budget.',
@@ -173,13 +174,12 @@ export default {
       out.starved = starved;
       out.worstStarved = worst;
 
-      // ── 7) the budget: pool not SATURATED, and NO batched fields in the adventure ──
+      // ── 7) the budget: the pool must not be SATURATED ──────────────────────
       // Saturation is the failure that matters: at the cap the pass stops emitting, and
       // whatever it had not reached yet — often the trees at the hero's feet, since
       // candidates arrive in fire order — silently loses its shadow.
       out.castPool = w3.solidCastField.mesh.count;
       out.poolCap = w3.solidCastField.mesh.instanceMatrix.count;
-      out.actorFields = w3.actorCastFields.size;
 
       // ── 8) EVERY standing tile can cast, not just the exposed ones ──────────
       // The exposed-only rule (<= 4 solid neighbours) belongs to the contact blobs and the
@@ -230,6 +230,5 @@ export default {
       r.tilesIndexed === r.solidTiles && r.solidTiles > r.castableExposed,
       `indexed=${r.tilesIndexed} solids=${r.solidTiles} exposed=${r.castableExposed}`,
     );
-    assert('The adventure runs with ZERO batched actor fields (Survivors opt-in only)', r.actorFields === 0, `fields=${r.actorFields}`);
   },
 };

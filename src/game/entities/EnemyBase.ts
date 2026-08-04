@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import { FLYING_ENEMY_KINDS, type EnemyKind } from '@/game/world/ScreenContent';
 
 export abstract class EnemyBase {
   public worldX: number;
@@ -21,6 +22,16 @@ export abstract class EnemyBase {
   // Footstep feel: alternate a small left/right tilt on every step.
   private stepFlip = false;
   private stepTween?: Phaser.Tweens.Tween;
+  /**
+   * O ATORDOAMENTO — quanto tempo este corpo ainda pertence ao golpe que levou.
+   *
+   * Sem ele um golpe nao muda NADA no bicho: ele continua andando no mesmo relogio, continua
+   * armando o mesmo ataque, e a unica diferenca entre acertar e errar e um numero invisivel
+   * descendo. A janela de recuperacao (o terceiro tempo de todo ataque: antecipacao → golpe →
+   * recuperacao) e o que transforma "acertei" numa VANTAGEM de posicao — e ela e do jogador,
+   * nao do bicho. Quem conta o relogio e cada especie, no topo do proprio update (tickHitstun).
+   */
+  private hitstunMs = 0;
 
   protected readonly scene: Phaser.Scene;
   protected readonly sprite: Billboard3D;
@@ -68,11 +79,142 @@ export abstract class EnemyBase {
     return false;
   }
 
+  /** Que especie e este corpo (o snapshot de debug e a cova autorada leem isto). */
+  public abstract get kind(): EnemyKind;
+
+  /**
+   * VOA. O morcego cruza rio, lava e buraco — o que o segura e parede (e o mar, que nada no jogo
+   * atravessa). Quem responde `true` aqui e consultado com hazardsPassable pelo EnemyManager, e e
+   * a unica diferenca entre "onde eu ando" de um bicho e de outro: o resto do mundo e igual pra
+   * todos, inclusive a luz de fogueira, que e parede pra qualquer monstro.
+   *
+   * A resposta vem da ESPECIE (FLYING_ENEMY_KINDS) e nao de um override por classe, porque a cova
+   * e o editor precisam da mesma informacao antes de existir corpo nenhum pra perguntar.
+   */
+  public get flies(): boolean {
+    return FLYING_ENEMY_KINDS.has(this.kind);
+  }
+
+  /**
+   * A tocha ACESA na mao do heroi afasta esta criatura, e o torna intocavel?
+   *
+   * Vale pro morto-vivo (a chama e o oposto dele) e pro bicho vivo, que teme fogo como todo
+   * animal. NAO vale pra gosma (nao ha o que assustar num saco de limo) nem pra maquina (a
+   * torreta nao ve chama, ve alvo) — e essa e a frase que essas duas dizem: a tocha protege do
+   * MORTO e do BICHO, nao de tudo. Quem ignora a tocha ainda respeita a luz de fogueira como
+   * parede; o que muda e o que ele faz com o heroi que carrega uma.
+   */
+  public get fearsTorch(): boolean {
+    return true;
+  }
+
+  /**
+   * O laco da PLACA DE PRESSAO. So a caveira o atende (ver UndeadEnemy): a placa quer um corpo, e
+   * o corpo que o escuro manda vai la sozinho. Bicho vivo, gosma e maquina tem vontade propria —
+   * e um bestiario inteiro marchando para placas transformaria toda placa em interruptor de bicho.
+   * Os tres membros vivem aqui para o EnemyManager poder distribuir placas sem saber de especies.
+   */
+  public get seeksPlates(): boolean {
+    return false;
+  }
+
+  public get plateTarget(): { x: number; y: number } | undefined {
+    return undefined;
+  }
+
+  /**
+   * O corpo pode ser ARREMESSADO um tile por um golpe?
+   *
+   * Nao e uma questao de peso: e de quem manda na posicao. A torreta e mobilia (um autor a
+   * planta num tile e conta com ela ali) e o zora escolhe sozinho onde a agua o devolve — os
+   * dois escrevem `worldX/worldY` por conta propria, e um empurrao os deixaria discordando de
+   * si mesmos. Quem responde `false` ainda leva o RECUO visual: o golpe sempre responde no
+   * corpo, so nao ganha terreno.
+   */
+  public get canBeShoved(): boolean {
+    return true;
+  }
+
+  /** True enquanto um golpe recebido ainda segura este corpo (ver hitstunMs). */
+  public get isStunned(): boolean {
+    return this.hitstunMs > 0;
+  }
+
+  /** Um golpe landou: este corpo nao anda nem bate pelos proximos `ms`. */
+  public applyHitstun(ms: number): void {
+    this.hitstunMs = Math.max(this.hitstunMs, ms);
+  }
+
+  /**
+   * Desconta o atordoamento do frame. Devolve `true` quando ele ainda esta correndo — e a
+   * especie que chama isto tem de sair do update NAQUELE instante, sem andar e sem armar nada.
+   */
+  protected tickHitstun(delta: number): boolean {
+    if (this.hitstunMs <= 0) return false;
+    this.hitstunMs = Math.max(0, this.hitstunMs - delta);
+    return true;
+  }
+
+  /**
+   * O EMPURRAO DE VERDADE: o golpe move o corpo um tile, e nao so o desenho dele.
+   *
+   * Era so um deslocamento de render que voltava sozinho, entao bater e nao bater davam o mesmo
+   * tabuleiro — e um jogo de grade em que o golpe nao abre espaco nao tem espacamento, que e a
+   * unica coisa que uma luta corpo a corpo tem pra ensinar. (No `A Link to the Past` a primeira
+   * sala e desenhada com um nicho do tamanho exato do arremesso, so pra ensinar isto.)
+   *
+   * `canEnter` vem de fora porque quem sabe o que e solido e o GameScene — inclusive a luz de
+   * fogueira, que continua sendo parede: arremessar um bicho pra dentro da luz nao pode ser a
+   * porta dos fundos da lei que diz que monstro nao existe nela. Bloqueado, ele bate na parede:
+   * o recuo elastico de sempre, e nenhum terreno ganho.
+   */
+  public shove(
+    dx: number,
+    dy: number,
+    canEnter: (wx: number, wy: number) => boolean,
+  ): boolean {
+    if (!this.alive) return false;
+    if (dx === 0 && dy === 0) return false;
+    if (!this.canBeShoved || !canEnter(this.worldX + dx, this.worldY + dy)) {
+      this.triggerKnockback(dx, dy);
+      return false;
+    }
+
+    this.worldX += dx;
+    this.worldY += dy;
+    // Ele SAI do tile antigo deslizando (a mesma gramatica do passo), so que esticado e rapido:
+    // teleportar um tile no frame do impacto leria como um bug, nao como um arremesso.
+    this.scene.tweens.killTweensOf(this);
+    this.stepTween?.stop();
+    this.sprite.setAngle(0);
+    this.knockbackOffsetX = -dx;
+    this.knockbackOffsetY = -dy;
+    this.knockbackSquash = 0.8;
+    this.scene.tweens.add({
+      targets: this,
+      knockbackOffsetX: 0,
+      knockbackOffsetY: 0,
+      knockbackSquash: 1.0,
+      duration: 200,
+      ease: 'Power3.easeOut',
+    });
+    return true;
+  }
+
+  public setPlateTarget(_target?: { x: number; y: number }): void {
+    // no-op: so quem busca placa implementa
+  }
+
   /** Apply damage (default 1). Weak weapons pass fractions — e.g. the wood club deals 0.5. */
   public takeDamage(amount = 1): boolean {
     if (!this.alive) return false;
     this.health -= amount;
 
+    // A PISCADA BRANCA FOI ARRANCADA. Um `setTintFill(0xffffff)` num billboard `emissive` nao e
+    // uma piscada: e uma silhueta chapada de branco puro que o bloom espalha pela tela, e o
+    // hitstop de 60-110ms a CONGELA acesa — bater num bicho cegava quem estava olhando pra ele.
+    // O golpe continua respondendo no corpo por tudo o que ja fazia e nao depende de luz: a
+    // faisca do impacto, o baque da tela, o arremesso de um tile e o atordoamento.
     if (this.hurtTexture) {
       this.sprite.setTexture(this.hurtTexture);
       this.scene.time.delayedCall(150, () => {
@@ -106,8 +248,17 @@ export abstract class EnemyBase {
     if (!this.alive) return;
     this.sprite.setTintFill(0xaec6ff);
     this.scene.time.delayedCall(90, () => {
-      if (this.alive && this.sprite.active) this.sprite.clearTint();
+      if (this.alive && this.sprite.active) this.restoreTint();
     });
+  }
+
+  /**
+   * Devolve a cor de base depois de uma piscada. E um metodo e nao um `clearTint` solto porque uma
+   * especie pode ter tom PERMANENTE (o mago frio, que divide a arte com o NPC mago): limpar o tint
+   * la o devolveria branco, e ele leria como o outro personagem por um instante.
+   */
+  protected restoreTint(): void {
+    this.sprite.clearTint();
   }
 
   /**
@@ -214,8 +365,9 @@ export abstract class EnemyBase {
     // The step tilt also tweens sprite.angle; stop it so it can't fight the crumble spin.
     this.stepTween?.stop();
     this.onDeath();
-    // Impact pop: flash white-hot (HDR → bloom) and swell for a beat, then crumble away spinning.
-    this.sprite.setTintFill(0xffffff);
+    // Impact pop: swell for a beat, then crumble away spinning. O clarao branco daqui saiu pelo
+    // mesmo motivo que o do dano (ver takeDamage) — e ele era o pior dos dois, porque o hitstop
+    // da morte e o mais longo do jogo e segurava a silhueta branca acesa na tela inteira.
     this.scene.tweens.add({
       targets: this.sprite,
       scaleX: this.sprite.scaleX * 1.35,
@@ -224,7 +376,7 @@ export abstract class EnemyBase {
       ease: 'Back.easeOut',
       onComplete: () => {
         if (!this.sprite.active) return;
-        this.sprite.clearTint();
+        this.restoreTint();
         this.scene.tweens.add({
           targets: this.sprite,
           alpha: 0,
@@ -320,17 +472,30 @@ export abstract class EnemyBase {
       : [Math.sign(dx), 0];
 
     for (const [ox, oy] of [primary, secondary]) {
-      const nx = this.worldX + ox;
-      const ny = this.worldY + oy;
       if (ox === 0 && oy === 0) continue;
-      if (!isBlocked(nx, ny)) {
-        this.worldX = nx;
-        this.worldY = ny;
-        this.sprite.setFlipX(ox < 0);
-        this.animateStep(ox, oy);
+      if (!isBlocked(this.worldX + ox, this.worldY + oy)) {
+        this.stepTo(ox, oy);
         return;
       }
     }
+  }
+
+  /**
+   * Da UM passo na direcao pedida, sem perguntar nada: quem chamou ja checou o bloqueio. E o
+   * unico lugar que mexe em worldX/worldY, e por isso o unico que sabe animar o passo — uma
+   * especie com movimento proprio (o rodeio do mago) precisa desta porta para nao reimplementar
+   * o deslize e o tombo lateral do passo.
+   */
+  protected stepTo(ox: number, oy: number): void {
+    this.worldX += ox;
+    this.worldY += oy;
+    // Andar NAO espelha o corpo. Havia um `setFlipX(ox < 0)` aqui, e ele nunca fez nada — o
+    // espelho morria no `apply()` do billboard no mesmo frame (ver Billboard3D.flipped). Consertada
+    // a plataforma, ele passaria a valer, e valeria errado: este bestiario e desenhado DE FRENTE
+    // (caveira, aranha, morcego, gosma, mago), entao espelhar nao vira ninguem — so inverte a luz,
+    // que nesta arte vem sempre da esquerda. Quem e vista de LADO pede o espelho por conta propria,
+    // e hoje ha uma so: o zora, que precisa encarar o lado pra onde cospe.
+    this.animateStep(ox, oy);
   }
 
   protected moveAway(
@@ -349,13 +514,8 @@ export abstract class EnemyBase {
       : [Math.sign(dx) || 1, 0];
 
     for (const [ox, oy] of [primary, secondary]) {
-      const nx = this.worldX + ox;
-      const ny = this.worldY + oy;
-      if (!isBlocked(nx, ny)) {
-        this.worldX = nx;
-        this.worldY = ny;
-        this.sprite.setFlipX(ox < 0);
-        this.animateStep(ox, oy);
+      if (!isBlocked(this.worldX + ox, this.worldY + oy)) {
+        this.stepTo(ox, oy);
         return;
       }
     }
@@ -364,13 +524,6 @@ export abstract class EnemyBase {
   protected wander(isBlocked: (wx: number, wy: number) => boolean): void {
     const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     const [ox, oy] = dirs[Phaser.Math.Between(0, 3)];
-    const nx = this.worldX + ox;
-    const ny = this.worldY + oy;
-    if (!isBlocked(nx, ny)) {
-      this.worldX = nx;
-      this.worldY = ny;
-      this.sprite.setFlipX(ox < 0);
-      this.animateStep(ox, oy);
-    }
+    if (!isBlocked(this.worldX + ox, this.worldY + oy)) this.stepTo(ox, oy);
   }
 }

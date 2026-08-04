@@ -6,6 +6,7 @@ import { EnemyBase } from '@/game/entities/EnemyBase';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_CRACK_TEXTURE, FX_PUFF_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import type { EnemyKind } from '@/game/world/ScreenContent';
 
 const MAX_HEALTH = 3;
 const MOVE_INTERVAL = 850;
@@ -83,13 +84,26 @@ export class UndeadEnemy extends EnemyBase {
   private thought?: Phaser.GameObjects.Container;
   private thoughtTween?: Phaser.Tweens.Tween;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  /**
+   * O que ELA deixa no chao ao cair — a ossada (ver CorpseDecals). Vem de fora pelo mesmo motivo
+   * que o `splitter` do slime grande: quem sabe quantas ossadas o mundo aguenta e o dono da lista,
+   * nao o corpo que acabou de morrer. Opcional porque um teste pode fazer uma caveira sozinha.
+   */
+  private readonly onCorpse?: (worldX: number, worldY: number) => void;
+
+  public constructor(
+    scene: Phaser.Scene,
+    worldX: number,
+    worldY: number,
+    onCorpse?: (worldX: number, worldY: number) => void,
+  ) {
     const sprite = world3d()
       .addBillboard(UNDEAD_BORN_FRAME_KEYS[0], 0, { groundShadow: { rx: 0.36, rz: 0.34, alpha: 0.32 } })
       .setPosition(worldX, worldY)
       .setDisplaySize(1, 1);
 
     super(scene, worldX, worldY, MAX_HEALTH, sprite);
+    this.onCorpse = onCorpse;
 
     // Through the telegraph the cracking ground is the only actor — the skull stays hidden.
     this.sprite.setVisible(false);
@@ -110,6 +124,10 @@ export class UndeadEnemy extends EnemyBase {
     return ASSET_KEYS.undead;
   }
 
+  public override get kind(): EnemyKind {
+    return 'undead';
+  }
+
   public override get isSpawning(): boolean {
     return this.spawning;
   }
@@ -119,16 +137,16 @@ export class UndeadEnemy extends EnemyBase {
    * WHICH plate (one body per plate, or a second skull would stand beside a taken one wanting
    * forever); the skull owns what it does about it.
    */
-  public get seeksPlates(): boolean {
+  public override get seeksPlates(): boolean {
     return this.isAlive && !this.spawning && this.plateBlindMs <= 0;
   }
 
   /** The plate this skull is marching to — the thing the balloon over its head is showing. */
-  public get plateTarget(): { x: number; y: number } | undefined {
+  public override get plateTarget(): { x: number; y: number } | undefined {
     return this.plate;
   }
 
-  public setPlateTarget(target?: { x: number; y: number }): void {
+  public override setPlateTarget(target?: { x: number; y: number }): void {
     if (!this.plate && !target) return;
     if (this.plate && target && this.plate.x === target.x && this.plate.y === target.y) return;
     this.plate = target ? { x: target.x, y: target.y } : undefined;
@@ -216,6 +234,11 @@ export class UndeadEnemy extends EnemyBase {
     }
 
     if (this.plateBlindMs > 0) this.plateBlindMs = Math.max(0, this.plateBlindMs - delta);
+
+    // ATORDOADA: o golpe que ela levou ainda e dono deste corpo — ver EnemyBase.applyHitstun.
+    // Fica depois do por-do-sol e da cegueira de placa de proposito: os dois sao relogios do
+    // MUNDO (o heroi achou uma fogueira, o golpe passou), e nao acoes que ela toma.
+    if (this.tickHitstun(delta)) return false;
 
     // Mid-wind-up: committed to the strike — no moving, no re-arming. When the countdown
     // ends the blow lands ONLY if the hero is still on the tile it locked onto: stepping
@@ -454,8 +477,14 @@ export class UndeadEnemy extends EnemyBase {
   }
 
   // A skull that dies mid-march must not leave its wish floating over the empty tile.
+  /**
+   * Ela cai e DEIXA a ossada. Vai no `onDeath` e nao no `despawn` de proposito: quando o heroi
+   * alcanca a seguranca de uma fogueira o escuro reclama os proprios de volta (o corpo derrete e
+   * some), e ali nao houve briga nenhuma pra registrar. Osso e o que sobra de quem foi MORTO.
+   */
   protected override onDeath(): void {
     this.hideThought();
+    this.onCorpse?.(this.worldX, this.worldY);
   }
 
   public override destroy(): void {

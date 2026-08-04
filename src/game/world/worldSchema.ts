@@ -17,13 +17,20 @@ export type WorldMeta = {
   tilesetKey: string;
   playerStart: { worldX: number; worldY: number };
   // A puzzle world (the /levels files) — the undead siege is suppressed for it, the way it
-  // already is in the lab. Absent/false on the real overworld.
+  // already is in the lab. Absent/false on the real overworld. NOTE: apenas o CERCO (ambiente,
+  // em volta do heroi) morre aqui; pontos de spawn autorados valem em todo mundo, e e num level
+  // que eles mais valem — ver GameScene.create.
   puzzle?: boolean;
   exportedAt: string;
 };
 
 // Entity placements use absolute tile coordinates — the exact shape the runtime managers
 // already consume (see EnemySpawn/PickupSpawn/NpcSpawn in ScreenContent.ts).
+//
+// Um inimigo autorado NAO e um corpo, e um PONTO DE SPAWN: aquele tile faz um corpo quando o heroi
+// chega perto e faz outro ENEMY_RESPAWN_MS depois que aquele cai (EnemySpawnerManager). Por isso
+// nao tem estado nenhum no arquivo — vida, direcao, o relogio do respawn: nada disso e autorado,
+// nasce com o corpo e morre com ele. Um campo aqui seria estado de partida gravado no mapa.
 export type WorldEnemySpawn = { type: EnemyKind; worldX: number; worldY: number };
 export type WorldPickupSpawn = { type: PickupKind; worldX: number; worldY: number };
 export type WorldNpcSpawn = { type: NpcKind; worldX: number; worldY: number };
@@ -94,6 +101,12 @@ export type WorldProp = {
   // it as optional power. The field lives on the prop because each mechanism can use a different
   // circuit. An unbound inserter keeps legacy self-powered behaviour.
   variable?: string;
+  /**
+   * So para `levelPortal`, e so no overworld: QUAL dungeon esta boca abre (1..9).
+   * Um portal sem `level` e a saida — no modo level ele encadeia para o proximo, e dentro de uma
+   * dungeon ele devolve o heroi ao tile do overworld por onde entrou (ver runtime/dungeonTrip).
+   */
+  level?: number;
 };
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };

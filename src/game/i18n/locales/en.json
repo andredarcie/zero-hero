@@ -13,30 +13,13 @@
     ],
     "by": "BY",
     "author": "ANDRÉ N. DARCIE",
-    "prompt": "press any key",
-    "survivors": "[S] SURVIVORS MODE",
-    "playAdventure": "Play adventure",
-    "playLevels": "Play levels",
-    "playExplorer": "Play explorer"
+    "playAdventure": "Play adventure"
   },
   "levelSelect": {
     "heading": "Choose a level",
     "back": "Back",
     "loading": "Loading levels...",
     "empty": "No levels available yet."
-  },
-  "language": {
-    "heading": "Choose your language",
-    "hint": "← →  Enter    ·    or tap",
-    "options": {
-      "pt-br": "Português",
-      "en": "English"
-    }
-  },
-  "intro": {
-    "line1": "Wake up [color=#868e96]Zero[/color]!",
-    "line2": "You have to become [color=#1f92ef]One[/color].",
-    "prompt": "[ press any key ]"
   },
   "endCard": {
     "title": "End of the Introduction",
@@ -79,7 +62,26 @@
       "bucketFull": "BUCKET FULL OF WATER!",
       "charcoal": "CHARCOAL! STEP ON IT WITH A LIT TORCH",
       "battery": "A BATTERY! CHARGE IT BY STEPPING ON A LIVE WIRE",
-      "batteryFull": "CHARGED BATTERY! STEP ON A DEAD WIRE TO DOCK IT"
+      "batteryFull": "CHARGED BATTERY! SET IT DOWN BESIDE A WIRE"
+    },
+    "name": {
+      "sword": "Sword",
+      "key": "Key",
+      "axe": "Axe",
+      "greatAxe": "Steel Axe",
+      "bomb": "Bomb",
+      "lavaBoots": "Lava Boots",
+      "pickaxe": "Pickaxe",
+      "scythe": "Scythe",
+      "wood": "Stick",
+      "stone": "Stone",
+      "iron": "Iron",
+      "seeds": "Seeds",
+      "bucket": "Bucket",
+      "bucketFull": "Full Bucket",
+      "charcoal": "Charcoal",
+      "battery": "Battery",
+      "batteryFull": "Charged Battery"
     }
   },
   "lockedLines": [
@@ -135,9 +137,9 @@
     "music": "Music",
     "sfx": "Sound effects",
     "dof": "Depth of field",
-    "language": "Language",
     "fullscreen": "Fullscreen",
     "fullscreenExit": "Exit fullscreen",
+    "levelList": "Back to levels",
     "restart": "Restart",
     "quit": "Quit to title",
     "confirm": "Are you sure?"
@@ -429,5 +431,14 @@
         }
       ]
     }
+  },
+  "controls": {
+    "hint": "Z strikes · X picks up, uses or drops · ESC opens the pack",
+    "attackTitle": "Strike (Z)",
+    "useTitle": "Pick up / use / drop (X)"
+  },
+  "subscreen": {
+    "title": "PACK",
+    "empty": "Nothing in the pack yet"
   }
 }

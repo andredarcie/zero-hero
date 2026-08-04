@@ -8,9 +8,30 @@ const SLASH_HANDLE_FACTOR = 0.26; // handle sits this fraction of tileSize from 
 const SLASH_BLADE_FACTOR  = 1.08; // blade length relative to tileSize
 const SLASH_FADE_DURATION = 65;
 
-// Motion-blur trail ghosts — index 0 is closest to the main sprite
-const TRAIL_COUNT  = 4;
-const TRAIL_ALPHAS = [0.50, 0.30, 0.16, 0.07] as const;
+/**
+ * O RAIO DO GOLPE: a que distância do herói o PUNHO orbita durante o giro da lâmina.
+ *
+ * É o único jeito honesto de cobrir mais chão — o braço estende, a espada continua sendo a espada.
+ * Aumentar o sprite (`SLASH_BLADE_FACTOR`) para alcançar mais longe foi tentado e desfeito: uma
+ * espada que cresce ao ser sacada não é uma espada, e o olho pega isso na hora. Mesma razão pela
+ * qual não há crescente desenhado atrás dela: qualquer forma que não seja a arte da arma lê como
+ * efeito colado por cima.
+ *
+ * Ele é o CONTRATO VISUAL do alcance (`SWING_ARC_NEAR` + `SWING_ARC_FAR`, na GameScene): punho a
+ * 0,62 tile + lâmina de 1,08 põe a ponta a ~1,7 tiles do herói, que é dentro da segunda fileira.
+ * Mexer no acerto sem mexer aqui reabre a queixa que a foice de 155° criou quando o acerto valia
+ * um tile só — ver o comentário do SWING_ARC.
+ */
+const SLASH_ORBIT_FACTOR = 0.62;
+
+// ── O RASTRO ─────────────────────────────────────────────────────────────────
+//
+// Cópias do PRÓPRIO sprite da espada, abertas atrás do gume ao longo do arco — motion blur de
+// desenho animado, e nada além da arte da arma. Eram quatro fantasmas juntinhos e sumiam contra o
+// mato; agora são oito espalhados pelo arco inteiro, e é essa fila que mostra por onde a lâmina
+// passou (e, portanto, o que ela pegou).
+const TRAIL_COUNT  = 8;
+const TRAIL_ALPHAS = [0.55, 0.44, 0.35, 0.27, 0.20, 0.14, 0.09, 0.05] as const;
 const TRAIL_DEPTH  = SCENE_DEPTHS.player; // behind main sprite
 
 // ── Standing in the world's light ────────────────────────────────────────────
@@ -23,7 +44,7 @@ const TRAIL_DEPTH  = SCENE_DEPTHS.player; // behind main sprite
 // moonlight at 0, the art's own colours at 1. It only has to sit in the hero's value range.
 const SWING_DARK = 0x5a5c78; // the multiply tint under moonlight alone — cool, like the night
 /** Blend the night tint toward white by `level` (0..1) and pack it back into a Phaser tint. */
-const swingTint = (level: number): number => {
+const swingLitTint = (level: number): number => {
   const t = Math.max(0, Math.min(1, level));
   const lerp = (dark: number): number => Math.round(dark + (255 - dark) * t);
   return (lerp((SWING_DARK >> 16) & 0xff) << 16)
@@ -73,6 +94,21 @@ const CHOP_HAND_LIFT   = 0.16;  // ...and up (screen-up is -y): the hands rise p
 const CHOP_HAND_STRIKE = 0.44;
 const CHOP_HAND_REST   = 0.30;
 
+// ── O GIRO ───────────────────────────────────────────────────────────────────
+//
+// A lamina rodopiante (`A Link to the Past`, 1991): segure o botao, o gume junta forca e, solto,
+// o heroi gira 360° cortando TUDO em volta. E a resposta a uma coisa que o golpe direcional nao
+// responde — estar cercado —, e por isso ela nao e "a espada, so que mais forte": e a decisao de
+// gastar meio segundo parado no meio de uma matilha para atingir os oito vizinhos de uma vez.
+//
+// O arco passa de uma volta inteira de proposito. Uma volta exata comeca e termina no mesmo
+// angulo, e o olho le "a espada tremeu"; a volta e meia le como rodopio.
+const SPIN_SWEEP_DEG = 540;
+const SPIN_MS = 330;
+const SPIN_FADE_MS = 90;
+/** Espacamento dos fantasmas ao longo do giro. Bem maior que o do golpe: aqui a lamina voa. */
+const SPIN_TRAIL_DEG = 26;
+
 /** When the head lands, counted from the swing starting: the blow belongs on this frame. */
 export const CHOP_IMPACT_MS = CHOP_REAR_MS + CHOP_HANG_MS + CHOP_DRIVE_MS;
 /** When the head starts falling — where the whoosh belongs, not at the sleepy wind-up. */
@@ -84,7 +120,6 @@ export class SwordSlash {
   private readonly scene: Phaser.Scene;
   private readonly sprite: Phaser.GameObjects.Sprite;
   private readonly trails: Phaser.GameObjects.Sprite[];
-
   private onFire = false;
   /** Light where the swing happens, 0..1 — see SWING_DARK. Set by the caller before each swing. */
   private lightLevel = 1;
@@ -150,14 +185,18 @@ export class SwordSlash {
     const startAngle     = attackAngleDeg - SLASH_SWEEP_DEG / 2;
     const endAngle       = attackAngleDeg + SLASH_SWEEP_DEG / 2;
 
-    const handleDist = tileSize * SLASH_HANDLE_FACTOR;
+    // O punho orbita LONGE do corpo (ver SLASH_ORBIT_FACTOR): é assim que o golpe cobre mais chão
+    // sem que a arte da espada mude de tamanho.
+    const handleDist = tileSize * SLASH_ORBIT_FACTOR;
     const size       = Math.max(12, Math.floor(tileSize * SLASH_BLADE_FACTOR));
 
     // handle stays fixed — only the angle changes
     this.slashHandleX = playerScreenX + dx * handleDist;
     this.slashHandleY = playerScreenY + dy * handleDist;
     this.slashSize    = size;
-    this.trailStep    = SLASH_SWEEP_DEG / (TRAIL_COUNT + 2);
+    // Os fantasmas se abrem pelo arco INTEIRO (e não amontoados atrás do gume): é a fila deles que
+    // diz por onde a lâmina passou.
+    this.trailStep    = SLASH_SWEEP_DEG / (TRAIL_COUNT + 1);
 
     // A custom item burns only when it says so (flaming wood); the bare sword uses the
     // slash animator's own onFire state.
@@ -171,7 +210,7 @@ export class SwordSlash {
 
     // A BURNING item keeps its own warm tint at full strength: it is a light source, not a lit
     // surface, so the night must not dim it. Everything else stands in the world's light.
-    const litTint = swingTint(this.lightLevel);
+    const litTint = swingLitTint(this.lightLevel);
     // hide trails until first onUpdate (they mirror the main sprite's texture/frame)
     const trailTint = onFire ? 0xff5500 : litTint;
     this.trails.forEach(t => t.setTexture(texture, frame).setFlipX(flipX).setAlpha(0).setVisible(false).setTint(trailTint));
@@ -223,6 +262,78 @@ export class SwordSlash {
   }
 
   /**
+   * A LAMINA RODOPIANTE (ver as notas em `SPIN_SWEEP_DEG`): uma volta e meia em torno do heroi,
+   * com o punho no centro dele e os fantasmas abertos atras do gume.
+   *
+   * O angulo e tweenado num objeto de rascunho, e nao no `angle` do sprite, pela mesma armadilha
+   * que o `chop` documenta: o getter do Phaser embrulha em [-180, 180], entao um tween que passa
+   * de 180 le um valor embrulhado no frame seguinte e volta girando pelo caminho longo.
+   */
+  public spin(playerScreenX: number, playerScreenY: number, tileSize: number): void {
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.scene.tweens.killTweensOf(this.chop$);
+    this.trails.forEach(t => this.scene.tweens.killTweensOf(t));
+
+    const size = Math.max(12, Math.floor(tileSize * SLASH_BLADE_FACTOR));
+    const s = this.chop$;
+    s.spin = 1;
+    s.angle = -90;                 // comeca apontando pro leste e roda no sentido horario
+    s.handX = playerScreenX;
+    s.handY = playerScreenY;
+    s.size = size;
+    s.trail = 1;                   // o rastro existe do primeiro frame: o giro nao tem wind-up
+
+    const litTint = swingLitTint(this.lightLevel);
+    const texture = this.onFire ? ASSET_KEYS.swordOnFire : ASSET_KEYS.swordItem;
+    this.sprite
+      .setTexture(texture, ITEM_FRAMES.swordIdle)
+      .setFlipX(false)
+      .setTint(this.onFire ? 0xffaa44 : litTint)
+      .setAlpha(1)
+      .setVisible(true);
+    this.trails.forEach(t => t
+      .setTexture(texture, ITEM_FRAMES.swordIdle)
+      .setFlipX(false)
+      .setTint(this.onFire ? 0xff5500 : litTint));
+    this.applySpin();
+
+    this.scene.tweens.add({
+      targets: s,
+      angle: s.angle + SPIN_SWEEP_DEG,
+      duration: SPIN_MS,
+      ease: 'Sine.easeOut', // sai estourado e assenta: a forca ja estava carregada, ela so escapa
+      onUpdate: () => this.applySpin(),
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: [this.sprite, ...this.trails],
+          alpha: 0,
+          duration: SPIN_FADE_MS,
+          onComplete: () => {
+            this.sprite.setVisible(false);
+            this.trails.forEach(t => t.setVisible(false));
+          },
+        });
+      },
+    });
+  }
+
+  /** Escreve a pose do giro na lamina e nos fantasmas abertos atras dela. */
+  private applySpin(): void {
+    const s = this.chop$;
+    this.sprite
+      .setPosition(s.handX, s.handY)
+      .setDisplaySize(s.size, s.size)
+      .setAngle(s.angle);
+    this.trails.forEach((t, i) => {
+      t.setPosition(s.handX, s.handY)
+        .setDisplaySize(s.size, s.size)
+        .setAngle(s.angle - SPIN_TRAIL_DEG * (i + 1))
+        .setAlpha(TRAIL_ALPHAS[i])
+        .setVisible(true);
+    });
+  }
+
+  /**
    * The overhead pickaxe strike (see the notes above `CHOP_REAR_MS`): rear back, hang, drive,
    * recoil. `dx/dy` is the cardinal direction of the blow; the head lands `CHOP_IMPACT_MS` later,
    * which is where the caller must put its hit, its debris and its sound.
@@ -265,7 +376,7 @@ export class SwordSlash {
     s.size  = size * 0.92;
     s.trail = 0;
 
-    const litTint = swingTint(this.lightLevel); // stand in the world's light — see SWING_DARK
+    const litTint = swingLitTint(this.lightLevel); // stand in the world's light — see SWING_DARK
     this.sprite
       .setTexture(item.texture, item.frame)
       .setFlipX(false)

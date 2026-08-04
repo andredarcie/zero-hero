@@ -110,13 +110,14 @@ export default {
     await shot('caldeira-seca-pedindo-agua');
 
     // ── 2b. O balde CHEIO entorna no tanque — agora sim a fabrica liga ──────
-    // O caminho real do jogador: bump com bucketFull. O arremesso ESVAZIA o balde (a mesma
+    // O caminho real do jogador: o botao B com o balde cheio na mao (andar contra a caldeira
+    // nao usa mais item nenhum — ver o cenario `combate`). O arremesso ESVAZIA o balde (a mesma
     // regra do douse) e a agua enche o visor quando pousa.
-    log('JOGO: bump com o balde cheio -> tanque cheio -> pressao sobe -> o braco transporta');
+    log('JOGO: B com o balde cheio -> tanque cheio -> pressao sobe -> o braco transporta');
     await driver.page.evaluate(() => {
       const s = window.__scene;
       s.heldItem = 'bucketFull';
-      s.handlePlayerBump(6, 6);
+      s.useItemAt(6, 6);
     });
     await sleep(700); // swing (120ms) + voo do arremesso (~220ms) + assentar
     const bucketAfter = await driver.page.evaluate(() => window.__scene.heldItem);
@@ -211,7 +212,7 @@ export default {
       const s = window.__scene;
       s.heldItem = 'none';
       s.heldOnFire = false;
-      s.handlePlayerBump(6, 6); // esbarra na fornalha de maos vazias
+      s.handlePlayerBump(6, 6); // esbarra na fornalha de maos vazias (o corpo, nao a mao)
     });
     await sleep(500);
     const bareBump = await boilerState();
@@ -223,7 +224,7 @@ export default {
       s.heldItem = 'wood';
       s.heldOnFire = true;
       s.torchFuelMs = 5000;
-      s.handlePlayerBump(6, 6); // a tocha acesa entra na boca da fornalha
+      s.useItemAt(6, 6); // o B enfia a tocha acesa na boca da fornalha
     });
     let stoked = null;
     const stokeDeadline = Date.now() + 4000;

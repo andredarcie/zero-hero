@@ -14,7 +14,6 @@ import visualRef from './visual-ref.mjs';
 import aaTruth from './aa-truth.mjs';
 import tour from './tour.mjs';
 import uiTour from './ui-tour.mjs';
-import survivorsTour from './survivors-tour.mjs';
 import agua from './agua.mjs';
 import cemetery from './cemetery.mjs';
 import espada from './espada.mjs';
@@ -38,6 +37,13 @@ import itens from './itens.mjs';
 import levelManagerPortal from './level-manager-portal.mjs';
 import levelIntro from './level-intro.mjs';
 import explorador from './explorador.mjs';
+import combate from './combate.mjs';
+import esgrima from './esgrima.mjs';
+import inimigos from './inimigos.mjs';
+import fauna from './fauna.mjs';
+import projeteis from './projeteis.mjs';
+import zora from './zora.mjs';
+import montanha from './montanha.mjs';
 
 export const scenarios = {
   smoke,
@@ -57,7 +63,6 @@ export const scenarios = {
   'aa-truth': aaTruth,
   tour,
   'ui-tour': uiTour,
-  'survivors-tour': survivorsTour,
   agua,
   cemetery,
   espada,
@@ -80,6 +85,13 @@ export const scenarios = {
   itens,
   'level-manager-portal': levelManagerPortal,
   'level-intro': levelIntro,
+  combate,
+  esgrima,
+  inimigos,
+  fauna,
+  projeteis,
+  zora,
+  montanha,
 };
 
 // What `npm run playtest` runs when no scenario is named.

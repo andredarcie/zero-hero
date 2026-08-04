@@ -222,19 +222,21 @@ export default {
     assert('apontado pro fundo, o cotovelo dobra DE LADO (nao vira poste)', sideBend.offX > 0.12, `offX ${sideBend.offX}`);
     assert('e a dobra lateral NAO estica o elo: ombro-cotovelo segue 0.70', Math.abs(sideBend.upperSpan - 0.7) < 0.02, `span ${sideBend.upperSpan}`);
 
-    // ── 5b. Pisar na origem entrega a carga ─────────────────────────────────
-    // O gesto que torna o braco alimentavel: o jogo nao tem botao de largar item, entao entrar
-    // no tile de origem com algo na mao TEM de depositar sozinho.
-    log('JOGO: o heroi pisa na origem segurando um item — a carga tem de ficar ali');
+    // ── 5b. O B entrega a carga na origem ───────────────────────────────────
+    // O gesto que torna o braco alimentavel. Ele era um PASSO (o jogo nao tinha botao de largar,
+    // entao entrar no tile de origem depositava sozinho) e virou o botao B contra o tile a
+    // frente — ver o cenario `combate`. A garra parada no ar sobre a origem continua sendo a
+    // afordancia: ela nunca disse "pise aqui", disse "ponha algo aqui".
+    log('JOGO: o heroi POE um item na origem com o B — a carga tem de ficar ali');
     const walkOn = await driver.page.evaluate(async () => {
       const scene = window.__scene;
       const arm = scene.inserters.find((a) => a.worldX === 6 && a.worldY === 6);
       const [ix, iy] = arm.inputTile;
       scene.heldItem = 'key'; // como se o heroi tivesse chegado com a chave na mao
-      scene.handleTileEntered(ix, iy);
+      scene.placeItemAt(ix, iy);
       return { held: scene.heldItem, onTile: scene.itemManager.snapshot().find((i) => i.worldX === ix && i.worldY === iy)?.kind ?? null };
     });
-    assert('pisar na origem largou a chave no tile', walkOn.onTile === 'key', JSON.stringify(walkOn));
+    assert('o B largou a chave no tile de origem', walkOn.onTile === 'key', JSON.stringify(walkOn));
     assert('e a mao do heroi ficou vazia', walkOn.held === 'none', JSON.stringify(walkOn));
 
     // deixa o terreno limpo pro teste de transporte que vem a seguir
@@ -434,7 +436,7 @@ export default {
       s.heldItem = 'wood';
       s.heldOnFire = true;
       s.torchFuelMs = 5000;
-      s.handleTileEntered(5, 6); // o heroi pisa na origem com a tocha acesa
+      s.placeItemAt(5, 6); // o heroi POE a tocha acesa na origem (botao B)
       const it = s.itemManager.snapshot().find((i) => i.worldX === 5 && i.worldY === 6);
       return { held: s.heldItem, onFire: s.heldOnFire, ground: it ? { kind: it.kind, lit: !!it.fire } : null };
     });
@@ -504,7 +506,7 @@ export default {
       s.heldItem = 'wood';
       s.heldOnFire = true;
       s.torchFuelMs = 700;
-      s.handleTileEntered(5, 6);
+      s.placeItemAt(5, 6);
     });
     let deadArrived = null;
     const deadDeadline = Date.now() + CYCLE_TIMEOUT_MS;

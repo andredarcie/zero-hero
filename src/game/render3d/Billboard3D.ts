@@ -143,6 +143,18 @@ export class Billboard3D {
   private depthBias: number;
   private w = 1;
   private h = 1;
+  /**
+   * O espelhamento e ESTADO, e nao um arranhao no `mesh.scale.x`.
+   *
+   * Ele morava direto na escala do mesh, e `apply()` — que reescreve a escala inteira a partir de
+   * `w`, que e sempre positivo — apagava o sinal. Como `apply()` roda em `setPosition`,
+   * `setDisplaySize`, `setElevation` e `setVisible`, e todo ator se reposiciona uma vez por frame,
+   * o `setFlipX` era desfeito no MESMO frame em que era pedido: o bestiario inteiro andava pra
+   * esquerda olhando pra direita, e o zora cuspia pro lado oposto ao que encarava. O heroi
+   * escapava por acidente — ele e o unico que chama `setFlipX` DEPOIS de se posicionar, todo
+   * frame. Guardado aqui, ele sobrevive a `apply()` e a ordem das chamadas para de importar.
+   */
+  private flipped = false;
   private baseColor = new THREE.Color(1, 1, 1);
   private tinted = false;
   private texKeyCur: string;
@@ -238,7 +250,11 @@ export class Billboard3D {
     // the actor plane so the two never tie in the depth test.
     const z = this.tileY - this.depthBias;
     this.mesh.position.set(this.tileX, (this.flat ? this.flatY : 0) + this.elev, z);
-    this.mesh.scale.set(this.w, this.flat ? 1 : this.h, this.flat ? this.h : 1);
+    this.mesh.scale.set(
+      this.flipped ? -this.w : this.w,
+      this.flat ? 1 : this.h,
+      this.flat ? this.h : 1,
+    );
     this.mesh.visible = this.visible;
     if (this.groundShadow) {
       // Stays pinned to the foot on the ground (ignores the sprite's elevation, so
@@ -335,13 +351,13 @@ export class Billboard3D {
   }
 
   public setFlipX(flip: boolean): this {
-    const sx = Math.abs(this.mesh.scale.x);
-    this.mesh.scale.x = flip ? -sx : sx;
+    this.flipped = flip;
+    this.apply();
     return this;
   }
 
   public get flipX(): boolean {
-    return this.mesh.scale.x < 0;
+    return this.flipped;
   }
 
   /** No-op: depth comes from the z-buffer in 3D. Kept for call-site parity. */

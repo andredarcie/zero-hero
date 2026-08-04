@@ -5,8 +5,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 import {
-  CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAME, SEA_TILE_FRAMES, SOLID_UPPER_FRAMES,
-  TILESET_FRAME_SIZE, TIMINGS,
+  CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_WALL_FRAMES, SEA_TILE_FRAME, SEA_TILE_FRAMES,
+  SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import {
   getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWaterWheels, getWorldBounds,
@@ -21,7 +21,7 @@ import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from 
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform,
-  lightWobbleUniform, patchPixelMaterial, SHADOW_MASK_GLSL, shadowMaskOnUniform,
+  lightWobbleUniform, patchPixelMaterial, seaFlowUniform, SHADOW_MASK_GLSL, shadowMaskOnUniform,
   shadowMaskRectUniform, shadowMaskUniform, syncTexelAaUniforms, texelAaUniform,
   type TexelAaUniforms,
 } from './pixelArtLight';
@@ -122,12 +122,6 @@ const CAST_POOL_MAX = 128;
  * whose caster is just off screen but whose silhouette reaches into it.
  */
 const CAST_CAMERA_REACH = 18;
-// Actor silhouettes batch per sprite sheet once this many casters share one this frame
-// (below it, the single-mesh path keeps the adventure's draw order bit-identical).
-const ACTOR_BATCH_MIN = 3;
-// Instance capacity of one per-sheet actor field (Survivors peaks near a hundred undead
-// but they spread across the animation's frames/sheets; 160 holds a worst case sheet).
-const ACTOR_FIELD_CAPACITY = 160;
 // The shadow mask's coverage, in tiles around the camera target: wider than the view so
 // a silhouette entering from off-screen is already in the data when its caster shows.
 const MASK_TILES_X = 48;
@@ -353,6 +347,13 @@ export interface World3DParams {
   lightWobble: number;
   /** How far direct light may push a surface past its art colour (fire pool brightness). */
   lightCap: number;
+  /**
+   * Quanta VIDA a agua do mar tem: 1 = o padrao, 0 = uma foto (a agua parada de antes), 2 = o
+   * dobro. Escala a corrente, a marola e a arrebentacao de uma vez — "mais/menos movimento" e uma
+   * decisao unica de olho, e ela precisa poder ser tomada com o jogo rodando (window.hd3d.seaFlow),
+   * nao por recompilacao. Ver as SEA_* GLSL em pixelArtLight.
+   */
+  seaFlow: number;
   ambient: number;
   fireIntensity: number;
   /** Campfire light reach (THREE distance, in tiles) and falloff exponent (decay).
@@ -490,8 +491,22 @@ interface GrassRustle {
 
 export class World3D {
   public readonly params: World3DParams = {
-    camHeight: 8.4,
-    camBack: 7.6,
+    // O enquadramento do jogo: a camera em (0, camHeight, camBack) olhando pro alvo. Estes dois
+    // numeros sao 72% do par original (8.4/7.6) — dois passos de slider: 80%, e depois 90% desse
+    // 80%. A camera desceu pela propria linha de visao, o tile ficou ~1.4x maior na tela e o
+    // enquadramento pegou menos mundo. Escolhidos a olho, com um slider temporario que existiu so
+    // pra isso e ja saiu do repo; achar o proximo valor e refaze-lo, e o que ele fazia esta dito
+    // na linha abaixo — multiplicar os DOIS por um fator so, e nada mais.
+    //
+    // ZOOM AQUI E DOLLY, NUNCA fov, e os dois numeros andam SEMPRE pelo mesmo fator: a RAZAO
+    // camHeight/camBack (1.1053) e a direcao de visao, e meio jogo tem essa razao assada dentro
+    // de si — e o DEPTH_UP com que a arte da flor da lua desenha os frames em pe
+    // (spritefactory/sprites/moonflower.mjs) e e o depthToScreen com que o braco robotico mede o
+    // comprimento de cada haste na tela. Mexer num dos dois sozinho gira a camera e faz esse
+    // material mentir em silencio, sem erro nenhum: a flor fica plantada torta e o braco deixa de
+    // encostar nas proprias juntas.
+    camHeight: 6.048,
+    camBack: 5.472,
     fov: 38,
     // The post chain (bloom at half res + the DoF/finish pass) roughly doubles the fill rate, and
     // fill is exactly what a phone GPU is short of. So a phone renders at half resolution and the
@@ -525,6 +540,7 @@ export class World3D {
     // the warm fire POOL comes from the additive glow disc below, not from
     // over-brightening the art. Below ~ACES(1.55) stays under the bloom threshold.
     lightCap: 1.55,
+    seaFlow: 1,
     // Lifted from 4.0 (user: "faça o jogo ser menos escuro de modo geral") — the unlit
     // forest is now readable everywhere and the night mood comes from the cool tint and
     // the warm-vs-cold contrast, not from crushing the dark to near-black. The fire pool
@@ -723,10 +739,16 @@ export class World3D {
    */
   private terrainMats?: {
     ground: THREE.MeshLambertMaterial;
+    /** O MAR: o mesmo atlas do chão, com a corrente e a arrebentação (worldFx 'seaFlow'). */
+    sea: THREE.MeshLambertMaterial;
     bank: THREE.MeshLambertMaterial;
     lavaBank: THREE.MeshLambertMaterial;
     decor: THREE.MeshLambertMaterial;
     solid: THREE.MeshLambertMaterial;
+    /** A MONTANHA em cubo: o mesmo atlas, com o volume nas cores de vértice (ROCK_CUBE_SHADE). */
+    rock: THREE.MeshLambertMaterial;
+    /** O topo do cubo de parede de dungeon: preto puro, sem luz. */
+    wallTop: THREE.MeshBasicMaterial;
     blob: THREE.Material;
   };
   /**
@@ -753,25 +775,14 @@ export class World3D {
   private readonly maskScene = new THREE.Scene();
   private maskCamera!: THREE.OrthographicCamera;
   private appliedMaskMode = false;
-  /**
-   * Batched actor silhouettes, one instanced field per SPRITE SHEET (P8): a hundred
-   * Survivors undead used to be a hundred shadow draws; sharing a sheet they are one.
-   * A sheet only batches once ≥ ACTOR_BATCH_MIN casters wear it this frame — below that
-   * the single-mesh path stays, which keeps the adventure's draw ORDER (and therefore
-   * its fog-tinted blending) byte-identical to the pre-batching renderer.
-   */
-  private readonly actorCastFields = new Map<string, SolidCastField>();
-  /** Per-frame caster count per sheet — reused, cleared each frame (no allocation). */
-  private readonly sheetCounts = new Map<string, number>();
-  /**
-   * Which sheets MAY batch — explicitly opted in (SurvivorsScene enables its horde
-   * sheets). Batching folds a sheet's silhouettes into one mesh at one place in the
-   * transparent queue, which is a different fog-blend order from N individually-sorted
-   * quads: on the Survivors horde nobody can tell, but in the adventure the tall grass
-   * batched itself and the reference shots caught the blend shift. Opt-in keeps the
-   * adventure byte-identical and gives the horde its 100-draws→1 win.
-   */
-  private readonly actorBatchSheets = new Set<string>();
+  // NOTA: aqui viviam os CAMPOS INSTANCIADOS de silhueta de ator (um por sprite sheet), com um
+  // opt-in publico (`enableActorCastBatching`) e um limiar de 3 casters. Eles existiam para UMA
+  // coisa: a horda do modo Sobreviventes, cujas ~100 caveiras eram ~100 draws de sombra. O modo
+  // saiu do jogo, e com ele o unico chamador do opt-in — o conjunto ficava vazio para sempre e
+  // todo o caminho era codigo morto atras de um `if`. A aventura NUNCA batchou de proposito:
+  // dobrar N quads ordenados individualmente num mesh so muda a ordem da fila transparente, e
+  // portanto a mistura com o fog (o mato alto batchou sozinho uma vez e as fotos de referencia
+  // pegaram a diferenca). Se um dia voltar a existir uma horda, o que volta e isto, com o opt-in.
   // ── the cast pass's reusable scratch (zero per-frame allocation — see plano.md P8) ──
   private readonly fireCastScratch: CastPose = { length: 0, rotY: 0, alpha: 0 };
   private readonly castScratch: CastPose = { length: 0, rotY: 0, alpha: 0 };
@@ -1115,6 +1126,10 @@ export class World3D {
     const seaSet = new Set<string>();
     const groundTiles: Array<{ x: number; z: number; frame: number }> = [];
     const bedTiles: Array<{ x: number; z: number; frame: number }> = [];
+    // The sea's own tiles, split OUT of the bed so they can wear the animated material (the
+    // current, the breaking shore — see the SEA_* GLSL in pixelArtLight). Everything else about
+    // them is unchanged: same sunken bed height, same earthen banks, same place in `sunkenTiles`.
+    const seaTiles: Array<{ x: number; z: number; frame: number }> = [];
     const lavaBedTiles: Array<{ x: number; z: number; frame: number }> = [];
     const decorTiles: Array<{ x: number; z: number; frame: number }> = [];
 
@@ -1134,7 +1149,7 @@ export class World3D {
               // identical on every boot — visual-ref diffs to 0 pixels, and three.js's shared
               // Math.random stream stays untouched (see the visual-ref trap in CLAUDE.md).
               tile.frame = SEA_TILE_FRAMES[seaVariant(wx, wy)];
-              bedTiles.push(tile);
+              seaTiles.push(tile);
             }
             else if (waterSet.has(tk)) bedTiles.push(tile);
             else if (lavaSet.has(tk)) lavaBedTiles.push(tile);
@@ -1167,6 +1182,12 @@ export class World3D {
       syncTexelAaUniforms(tileAa, tileset); // the sheet's pixel size; every base texture is loaded by now
       const ground = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
       patchPixelMaterial(ground, { quantize: true, texelAa: tileAa });
+      // O MAR, que é o mesmo chão com movimento (worldFx 'seaFlow'): a corrente escorrendo dentro
+      // do frame, a arrebentação na praia e o glint do rio. Material separado e NÃO um flag no do
+      // chão porque o efeito é um programa a mais — e todo tile de terra do mundo pagaria por ele.
+      const sea = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
+      patchPixelMaterial(sea, { quantize: true, texelAa: tileAa, worldFx: 'seaFlow' });
+      sea.name = 'terrain-sea'; // o playtest acha o material do mar por aqui, sem adivinhar índice
       const bank = new THREE.MeshLambertMaterial({ color: 0x2a2016, side: THREE.DoubleSide });
       patchPixelMaterial(bank, { quantize: true });
       const lavaBank = new THREE.MeshLambertMaterial({ color: 0x1a1008, side: THREE.DoubleSide });
@@ -1182,7 +1203,32 @@ export class World3D {
       patchPixelMaterial(decor, { quantize: true, texelAa: tileAa });
       const solid = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
       patchPixelMaterial(solid, { quantize: true, normalUp: true, texelAa: tileAa });
-      this.terrainMats = { ground, bank, lavaBank, decor, solid, blob: makeShadowBlobMaterial(0.34) };
+      // A MONTANHA. Dois motivos para ela não usar `solid`, e os dois são o cubo:
+      //   · vertexColors, porque `normalUp` acende TODA face como se ela olhasse para cima (é a lei
+      //     de iluminação deste jogo, e o cubo de dungeon a segue) — então o volume do bloco não
+      //     pode vir da normal, tem de vir pintado no vértice (ROCK_CUBE_SHADE);
+      //   · sem alphaTest, porque a arte de pedra é uma parede full-bleed cuja última linha é a
+      //     sombra de contato em alpha 0.1 — com corte em 0.5 ela desapareceria e cada bloco
+      //     ficaria com uma fresta de 1px no pé, vazando o chão de trás.
+      const rock = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
+      patchPixelMaterial(rock, { quantize: true, normalUp: true, texelAa: tileAa });
+      rock.name = 'terrain-rock';
+      // O TOPO DA PAREDE DE DUNGEON: PRETO PURO, e sem luz nenhuma.
+      //
+      // Foram tres tentativas antes desta, e todas erraram para o mesmo lado — claro demais. Um
+      // degrade de ambiente-ocluido nos cantos (a receita que jogo de bloco costuma usar), depois
+      // o mesmo degrade em Lambert para reagir a tocha, depois as duas cores mais escuras que
+      // existem na propria arte de dungeon. Nenhuma prestou: qualquer valor acima de zero, num
+      // ambiente com a ambiente forte que este jogo usa, faz o topo competir com o chao — e o
+      // topo nao e uma superficie que o jogador deva ler, e o vazio entre uma sala e a outra.
+      //
+      // Basic e nao Lambert porque com preto puro a luz e irrelevante (preto vezes o que for
+      // continua preto) e Basic e o caminho mais curto ate esse resultado.
+      const wallTop = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      this.terrainMats = {
+        ground, sea, bank, lavaBank, decor, solid, rock, wallTop,
+        blob: makeShadowBlobMaterial(0.34),
+      };
     }
     const mats = this.terrainMats;
 
@@ -1192,13 +1238,34 @@ export class World3D {
 
     // The sunken riverbed (the same dirt, dropped a level) + the dark earthen banks that
     // wall the channel where it meets the land — together they give the water its depth.
+    // The sea's surface is its own mesh (the animated material), the river's bed is not: a
+    // river tile's WATER is a prop quad above the bed, and the bed under it is plain dirt.
     if (bedTiles.length > 0) {
       this.addTerrainMesh(new THREE.Mesh(
         buildFlatTileGeometry(bedTiles, -WATER_DEPTH_TILES, solidSet), mats.ground,
       ));
+    }
+    if (seaTiles.length > 0) {
+      // Where the water's edge IS, per corner of every sea tile: the shore ramp the breaking
+      // wave rides. `wetKeys` counts river tiles as water too, so a river running into the sea
+      // does not grow a beach across its own mouth.
+      const wetKeys = new Set<number>();
+      for (const t of seaTiles) wetKeys.add(tileKey(t.x, t.z));
+      for (const t of bedTiles) wetKeys.add(tileKey(t.x, t.z));
+      this.addTerrainMesh(new THREE.Mesh(
+        buildFlatTileGeometry(
+          seaTiles, -WATER_DEPTH_TILES, solidSet, (x, z) => tileShoreCorners(x, z, wetKeys),
+        ),
+        mats.sea,
+      ));
+    }
+    // The banks close the channel wherever water meets land — one wall per exposed edge, for
+    // the river and the sea alike (they share the depth, so they share the coastline).
+    const wetTiles = seaTiles.length > 0 ? [...bedTiles, ...seaTiles] : bedTiles;
+    if (wetTiles.length > 0) {
       const sunken = seaSet.size > 0 ? new Set([...waterSet, ...seaSet]) : waterSet;
       this.addTerrainMesh(new THREE.Mesh(
-        buildBankGeometry(sunken, bedTiles, WATER_DEPTH_TILES), mats.bank,
+        buildBankGeometry(sunken, wetTiles, WATER_DEPTH_TILES), mats.bank,
       ));
     }
 
@@ -1219,11 +1286,43 @@ export class World3D {
       if (tile.frame === LOW_GRASS_TILE) this.grassQuads.set(`${tile.x},${tile.z}`, i * 4);
     });
 
+    // A alvenaria de dungeon e a MONTANHA saem da malha dos quads e viram CUBO (ver
+    // buildTileCubeGeometry). Elas sao separadas por dois motivos: um bloco macico precisa de
+    // espessura para ler como bloco macico, e `solidQuads` — o indice que o machado usa para
+    // derrubar uma arvore em pe — assume 4 vertices por tile. Um cubo tem entre 8 e 20, e
+    // misturar os dois numa malha so faria a aritmetica desse indice apontar para o vertice
+    // errado no primeiro golpe. (Nenhum dos dois e cortavel, entao nenhum dos dois entra nesse
+    // indice — e o quad continua sendo o que uma ARVORE e: uma silhueta, sem lado.)
+    const wallCubes = this.solidTiles.filter((t) => DUNGEON_WALL_SET.has(t.frame));
+    const rockCubes = this.solidTiles.filter((t) => CLIFF_WALL_SET.has(t.frame));
+    const quadTiles = wallCubes.length > 0 || rockCubes.length > 0
+      ? this.solidTiles.filter((t) => !DUNGEON_WALL_SET.has(t.frame) && !CLIFF_WALL_SET.has(t.frame))
+      : this.solidTiles;
+
     // All standing trees/walls merged into ONE upright mesh (one draw call, one shadow).
     // Lit like the ground at their feet — same treatment the dynamic billboards get.
-    this.solidGeo = buildUprightTileGeometry(this.solidTiles);
-    this.solidTiles.forEach((tile, i) => this.solidQuads.set(`${tile.x},${tile.z}`, i * 4));
+    this.solidGeo = buildUprightTileGeometry(quadTiles);
+    quadTiles.forEach((tile, i) => this.solidQuads.set(`${tile.x},${tile.z}`, i * 4));
     this.addTerrainMesh(new THREE.Mesh(this.solidGeo, mats.solid));
+
+    if (wallCubes.length > 0) {
+      const cubeSet = new Set(wallCubes.map((t) => tileKey(t.x, t.z)));
+      this.addTerrainMesh(new THREE.Mesh(
+        buildTileCubeGeometry(wallCubes, (x, z) => cubeSet.has(tileKey(x, z))),
+        [mats.wallTop, mats.solid], // grupo 0 = teto preto, grupo 1 = as faces de tijolo
+      ));
+    }
+
+    // A MONTANHA, pelo mesmo caminho e com duas diferencas: o teto e ROCHA iluminada (uma
+    // montanha vista de cima e um planalto, nao o vazio entre duas salas) e as faces vem
+    // sombreadas no vertice, que e de onde o volume vem quando a luz e sempre de cima.
+    if (rockCubes.length > 0) {
+      const rockSet = new Set(rockCubes.map((t) => tileKey(t.x, t.z)));
+      this.addTerrainMesh(new THREE.Mesh(
+        buildTileCubeGeometry(rockCubes, (x, z) => rockSet.has(tileKey(x, z)), ROCK_CUBE_SHADE),
+        mats.rock,
+      ));
+    }
 
     // Only EXPOSED solids (clearing edges, lone trees) get a grounding blob and cast a
     // shadow. A tile buried in the forest wall has ~all 8 neighbours solid; giving each
@@ -1258,7 +1357,7 @@ export class World3D {
       if (bucket) bucket.push(t);
       else this.solidBuckets.set(bk, [t]);
     }
-    for (const t of bedTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
+    for (const t of wetTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
     for (const t of lavaBedTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
 
     // The soft ambient ground blob each obstacle had in 2D ("anchors lifted obstacles so
@@ -1345,11 +1444,6 @@ export class World3D {
     this.solidCastField.mesh.removeFromParent();
     parent.add(this.solidCastField.mesh);
     this.solidCastField.setMaskMode(on);
-    for (const f of this.actorCastFields.values()) {
-      f.mesh.removeFromParent();
-      parent.add(f.mesh);
-      f.setMaskMode(on);
-    }
     // The MOON casts and the arm's ShadowStrips stay scene-side for now (they multiply
     // the final colour either way); migrating them into a second mask channel is the
     // documented follow-up (plano.md fase 3, passo v).
@@ -1769,7 +1863,10 @@ export class World3D {
       { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 },
       { centered: true, fog: false, depthWrite: false, additive: true },
       { flat: true, fog: false, depthWrite: false, additive: true },   // the ring, the ground crack
-      { flat: true, additive: true },                                  // survivors' ground rings
+      // Um quad deitado e aditivo, ainda LIDO pelo fog: o disco de calor da poca de fogo e os
+      // aneis no chao. Fica no prewarm mesmo que hoje nasca tarde — um `alphaTest`/flag novo
+      // vira outro programa, e compilar shader em runtime e o pior stall que este jogo tem.
+      { flat: true, additive: true },
       // The moonflower's two bodies. They are LIT sprites with a lowered alphaTest, because they
       // CROSS-DISSOLVE into each other (see MoonflowerObject) and the lit default of 0.5 would pop
       // a fading sprite out of existence instead of fading it. `alphaTest` reaches the program's
@@ -1789,6 +1886,35 @@ export class World3D {
     // test, is a program shape nothing else in this world has: the first river you approach used
     // to cost a frozen quarter of a second.
     this.warmups.push(this.addBox(0.001, 0.001, 0.001, getWoodTexture('plankA', false)));
+
+    // The terrain's two newest materials, which a STREAMING world can meet mid-run. Every other
+    // terrain material is in the scene already (the first bake ran in the constructor), but the
+    // sea's mesh only exists if the baked window HAS water and the mountain's only if it has rock —
+    // and the explorer re-bakes a moving window, so a lake can enter the world on frame 4000 and
+    // compile its program there: a 50-300ms freeze mid-expedition. (`explorador` asserts zero new
+    // programs across a traversal, so this would also fail the suite, correctly.)
+    const mats = this.terrainMats;
+    if (mats) {
+      const stand = [
+        new THREE.Mesh(
+          buildFlatTileGeometry(
+            [{ x: 0, z: 0, frame: SEA_TILE_FRAME }], -80, undefined, () => [0, 0, 0, 0],
+          ),
+          mats.sea,
+        ),
+        new THREE.Mesh(
+          buildTileCubeGeometry(
+            [{ x: 0, z: 0, frame: CLIFF_WALL_FRAMES[0] }], () => false, ROCK_CUBE_SHADE,
+          ),
+          mats.rock,
+        ),
+      ];
+      for (const mesh of stand) {
+        mesh.position.set(0, -80, 0); // out of the world, and hidden right after the compile
+        this.scene.add(mesh);
+        this.warmups.push({ setVisible: (v: boolean) => { mesh.visible = v; } });
+      }
+    }
 
     // Compile against the COMPOSER'S render target, not against the canvas.
     //
@@ -2133,21 +2259,7 @@ export class World3D {
       this.moonDimmed.length = 0;
     }
 
-    // ── dynamic casters ──
-    // Count sheets first: one worn by ACTOR_BATCH_MIN+ casters this frame batches into a
-    // single instanced draw (P8 — Survivors' hundred undead were a hundred shadow draws).
-    // Below the threshold the single-mesh path stays, which keeps the adventure's draw
-    // order — and therefore its fog-tinted transparent blending — identical to before.
-    this.sheetCounts.clear();
-    if (this.actorBatchSheets.size > 0) {
-      for (const c of this.castCasters) {
-        if (c.bb.active && c.bb.visible && this.actorBatchSheets.has(c.bb.texKey)) {
-          this.sheetCounts.set(c.bb.texKey, (this.sheetCounts.get(c.bb.texKey) ?? 0) + 1);
-        }
-      }
-    }
-    for (const f of this.actorCastFields.values()) f.begin();
-
+    // ── dynamic casters ── um mesh por ator, ordenado individualmente (ver a nota nos campos).
     for (let i = this.castCasters.length - 1; i >= 0; i--) {
       const c = this.castCasters[i];
       if (!c.bb.active) { // the billboard was destroyed — drop its shadow
@@ -2216,23 +2328,12 @@ export class World3D {
       }
 
       const width = Math.abs(c.bb.scaleX);
-      const batched = (this.sheetCounts.get(c.bb.texKey) ?? 0) >= ACTOR_BATCH_MIN;
-      if (batched) {
-        c.mesh.visible = false;
-        this.actorFieldFor(c.bb.texKey).add(
-          ax, az, frameUvWindow(c.bb.texKey, c.bb.frame),
-          (c.bb.flipX ? -1 : 1) * width * CAST_WIDTH_FACTOR, length, rotY, a,
-          frameFootPad(c.bb.texKey, c.bb.frame),
-        );
-      } else {
-        applyCast(
-          c.mesh, ax, az, getTexture3D(c.bb.texKey, c.bb.frame), c.bb.flipX,
-          width, length, rotY, a,
-          frameFootPad(c.bb.texKey, c.bb.frame),
-        );
-      }
+      applyCast(
+        c.mesh, ax, az, getTexture3D(c.bb.texKey, c.bb.frame), c.bb.flipX,
+        width, length, rotY, a,
+        frameFootPad(c.bb.texKey, c.bb.frame),
+      );
     }
-    for (const f of this.actorCastFields.values()) f.end(this.camTarget.x, this.camTarget.z);
 
     // ── static solid tiles (trees/walls) near a lit flame — one instanced draw ──
     // Candidates come from the per-fire lists plus the torch's spatial buckets (P8): the
@@ -2362,32 +2463,6 @@ export class World3D {
         this.moonDimmed.push(tile);
       }
     }
-  }
-
-  /**
-   * The per-sheet actor field, created on first demand. Meshes may come and go freely
-   * (only LIGHTS are frozen), and a new field never compiles a shader mid-run: its
-   * material shape matches solidCastField's cache key, whose program has been alive
-   * since buildTerrain.
-   */
-  private actorFieldFor(texKey: string): SolidCastField {
-    let field = this.actorCastFields.get(texKey);
-    if (!field) {
-      field = new SolidCastField(ACTOR_FIELD_CAPACITY, getBaseTexture3D(texKey));
-      field.begin(); // joins mid-cycle on its first frame
-      this.scene.add(field.mesh);
-      this.actorCastFields.set(texKey, field);
-    }
-    return field;
-  }
-
-  /**
-   * Opt a set of sprite sheets into batched cast shadows (see actorBatchSheets). Called by
-   * the scene that fields a HORDE (Survivors) with the sheets its mobs wear; sheets not
-   * opted in keep the individually-sorted single-mesh path.
-   */
-  public enableActorCastBatching(texKeys: readonly string[]): void {
-    for (const k of texKeys) this.actorBatchSheets.add(k);
   }
 
   // ── grass rustle (the 2D board's step-on-grass wobble, on the baked decor) ────
@@ -2551,6 +2626,40 @@ export class World3D {
     };
   }
 
+  /**
+   * O INVERSO do `projectTile`: pixel na tela → o tile do CHAO que esta debaixo dele.
+   *
+   * SEM CHAMADOR HOJE — nasceu para a mira do revolver, que saiu do jogo. Fica de pe porque a
+   * conta e a armadilha, e nao a peca: qualquer coisa que um dia traduza pixel em tile (mira,
+   * clique-para-andar, um cursor de editor) vai cair nela. O heroi fica no centro da tela, entao
+   * a tentacao e dizer "a direcao e (mouse - centro)" — mas a camera olha o mundo de cima e
+   * INCLINADA, e num plano em perspectiva um passo pra cima na tela vale muito mais mundo do que
+   * um passo pro lado. Resolver por delta de tela sai sempre "achatado", e o erro cresce com a
+   * distancia do centro. Aqui a leitura e feita onde ela acontece: no plano do chao, pelo raio
+   * que sai da camera e passa pelo pixel.
+   *
+   * `elevationTiles` e a altura do plano interceptado: mirar no plano do PEITO (e nao no chao) e
+   * o que faz o cursor cair em cima do corpo que o jogador ve, e nao nos pes dele.
+   */
+  public screenToGround(
+    pixelX: number,
+    pixelY: number,
+    elevationTiles = 0,
+  ): { worldX: number; worldY: number } {
+    const ndcX = (pixelX / Math.max(1, window.innerWidth)) * 2 - 1;
+    const ndcY = -((pixelY / Math.max(1, window.innerHeight)) * 2 - 1);
+    const dir = this.projectScratch.set(ndcX, ndcY, 0.5).unproject(this.camera).sub(this.camera.position);
+    // Camera olhando pra baixo: `dir.y` e sempre negativo na pratica. O guarda e pro caso
+    // degenerado (raio paralelo ao plano), em que nao ha intersecao nenhuma — devolver o alvo da
+    // camera e melhor que devolver Infinity e mandar uma bala pro infinito.
+    if (Math.abs(dir.y) < 1e-6) return { worldX: this.camTarget.x, worldY: this.camTarget.z };
+    const t = (elevationTiles - this.camera.position.y) / dir.y;
+    return {
+      worldX: this.camera.position.x + dir.x * t,
+      worldY: this.camera.position.z + dir.z * t,
+    };
+  }
+
   /** Projected pixel height of one tile at the camera target — the 2D code's "tileSize". */
   public tileScreenSize(): number {
     const a = this.projectTile(this.camTarget.x, this.camTarget.z);
@@ -2578,6 +2687,7 @@ export class World3D {
     lightResUniform.value = Math.max(0, this.params.lightRes);
     lightWobbleUniform.value = Math.max(0, this.params.lightWobble);
     lightCapUniform.value = this.params.lightCap;
+    seaFlowUniform.value = Math.max(0, this.params.seaFlow);
     // These five are CSS STRINGS, live-tunable through window.hd3d — and Color.set(string) parses
     // the CSS every time it is called. Re-reading them each frame meant five regex parses a frame
     // to arrive back at the colour that was already there. Only re-parse when the knob moves.
@@ -3374,16 +3484,37 @@ const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<number>): numb
     return 1 - AO_MAX * (occluders / 3);
   });
 
+/**
+ * A COSTA, por canto — o degrau que a arrebentação do mar sobe e desce (SEA_SHALLOW_GLSL).
+ *
+ * Mesma leitura de três vizinhos que a oclusão-ambiente do chão faz, e de propósito: as duas
+ * perguntam "o que encosta neste canto?", e se discordassem a espuma nasceria meio tile fora da
+ * praia que a sombra desenha. 0 = mar aberto, 1 = um canto cercado de terra (o fundo de uma
+ * enseada); a beira de uma costa reta chega a 2/3, que é a faixa em que os limiares do shader
+ * estão calibrados.
+ */
+const tileShoreCorners = (x: number, z: number, wet: ReadonlySet<number>): number[] =>
+  AO_CORNERS.map(([dx, dz]) => {
+    let land = 0;
+    if (!wet.has(tileKey(x + dx, z))) land++;
+    if (!wet.has(tileKey(x, z + dz))) land++;
+    if (!wet.has(tileKey(x + dx, z + dz))) land++;
+    return land / 3;
+  });
+
 const buildFlatTileGeometry = (
   tiles: Array<{ x: number; z: number; frame: number }>,
   y: number,
   solids?: ReadonlySet<number>,
+  /** Per-corner shore ramp, emitted as the `aShore` attribute the sea's material reads. */
+  shore?: (x: number, z: number) => number[],
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
   const bounds: number[] = [];
   const nrm: number[] = [];
   const col: number[] = [];
+  const shr: number[] = [];
   const idx: number[] = [];
   tiles.forEach(({ x, z, frame }, i) => {
     const f = tilesetFrameUv(frame);
@@ -3395,6 +3526,7 @@ const buildFlatTileGeometry = (
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
     for (const shade of tileAoCorners(x, z, solids)) col.push(shade, shade, shade);
+    if (shore) shr.push(...shore(x, z));
     const b = i * 4;
     idx.push(b, b + 3, b + 2, b, b + 2, b + 1);
   });
@@ -3404,6 +3536,7 @@ const buildFlatTileGeometry = (
   geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  if (shore) geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shr, 1));
   geo.setIndex(idx);
   return geo;
 };
@@ -3438,6 +3571,147 @@ const buildBankGeometry = (
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setIndex(idx);
+  return geo;
+};
+
+/**
+ * OS BLOCOS MACICOS, em CUBO — a alvenaria da dungeon e a MONTANHA do mundo aberto.
+ *
+ * Todo o resto que fica em pe aqui e um quad vertical: uma arvore, uma lapide. Isso funciona
+ * porque sao objetos com silhueta, vistos de frente por uma camera que nunca gira — um pinheiro
+ * nao tem "lado". Uma parede de masmorra tem: ela e um bloco macico, e o corredor que ela forma so
+ * le como corredor se a espessura aparecer. Com quad, uma sala de dungeon vira um desenho de sala;
+ * com cubo, vira uma sala. A montanha entrou aqui pela mesma frase: um penhasco desenhado como
+ * carta em pe e o adesivo de uma montanha — o mapa fica com paredes de papel, e o topo, que e a
+ * metade dela que a camera de cima realmente ve, nao existe.
+ *
+ * ── Faces escondidas nao entram ─────────────────────────────────────────────────────────────
+ * Um cubo cheio custaria 20 vertices por tile, e a dungeon 9 tem ~8 mil tiles de parede: 160 mil
+ * vertices para uma masmorra em que a esmagadora maioria dos blocos esta cercada de blocos e nao
+ * mostra lado nenhum. Entao cada face lateral so e emitida quando o vizinho daquele lado NAO e
+ * parede — a mesma poda que qualquer engine de voxel faz, e aqui ela derruba a conta para perto
+ * do que o quad ja custava. Medido na montanha do overworld: 6.147 tiles dao 9.321 faces, ou seja
+ * 1,52x os triangulos que os quads em pe custavam — e em troca a malha ficou opaca (o quad em pe
+ * era alphaTest, que descarta fragmento e estraga o early-Z).
+ *
+ * A face NORTE nunca e emitida: a camera esta em (0, camHeight, camBack) olhando o alvo e o mundo
+ * nao tem yaw, entao o lado -z de um bloco e sempre o lado de tras. Emiti-la seria pagar geometria
+ * para nunca ser vista.
+ *
+ * ── Uma malha nova, o MESMO material ────────────────────────────────────────────────────────
+ * A dungeon reaproveita `mats.solid` tal e qual, e a montanha usa `mats.rock`, que existe desde o
+ * primeiro bake e nunca e recriado (terrainMats): material novo em runtime recompilaria todo shader
+ * do mundo (a lei do projeto). O que muda a cada bake e so a geometria — e geometria pode nascer e
+ * morrer a vontade.
+ *
+ * ── O VOLUME e PINTADO, nao iluminado ───────────────────────────────────────────────────────
+ * `mats.solid`/`mats.rock` levam `normalUp`: toda face e acesa como se olhasse para cima. Isso e a
+ * lei de iluminacao deste jogo (uma tocha atras de um plano nunca pode apagar o plano), mas a conta
+ * de um cubo: com a mesma luz nas seis faces, teto e frente saem no MESMO tom e o cubo volta a ler
+ * como adesivo. Entao a diferenca entre as faces vem em cor de VERTICE (`shade`), com a luz do alto
+ * a esquerda que o resto do jogo usa: teto cheio, oeste quase cheio, sul um degrau abaixo, leste no
+ * escuro — e um degrade para o PE de cada face lateral, que e a sombra propria do bloco.
+ *
+ * A dungeon nao leva `shade` de proposito: o teto dela e preto puro (ver mats.wallTop — foram tres
+ * tentativas de sombrear aquele teto e todas competiram com o chao), e sombrear as laterais de uma
+ * massa que ja e quase preta nao acrescenta leitura nenhuma.
+ */
+/** Os frames que viram cubo. Set porque a consulta roda por tile no bake. */
+const DUNGEON_WALL_SET: ReadonlySet<number> = new Set(DUNGEON_WALL_FRAMES);
+const CLIFF_WALL_SET: ReadonlySet<number> = new Set(CLIFF_WALL_FRAMES);
+
+/** Quanto cada face de um cubo vale de luz, e quanto o PE de uma face lateral escurece. */
+type CubeShade = {
+  top: number; south: number; west: number; east: number; foot: number;
+};
+
+/**
+ * A MONTANHA iluminada do alto-a-esquerda. Numeros modestos de proposito: a arte de pedra ja e
+ * escura (37% dela e a argamassa em #3b3b3b) e a noite deste jogo escurece por cima disto — o
+ * bastante para as quinas se separarem, nunca o bastante para a face leste virar um buraco.
+ */
+const ROCK_CUBE_SHADE: CubeShade = {
+  top: 1, south: 0.84, west: 0.95, east: 0.72, foot: 0.78,
+};
+
+const buildTileCubeGeometry = (
+  tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
+  isWall: (x: number, z: number) => boolean,
+  shade?: CubeShade,
+): THREE.BufferGeometry => {
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const bounds: number[] = [];
+  const nrm: number[] = [];
+  const col: number[] = [];
+  const topIdx: number[] = [];
+  const sideIdx: number[] = [];
+  const face = (
+    f: ReturnType<typeof tilesetFrameUv>,
+    a: readonly [number, number, number], b: readonly [number, number, number],
+    c: readonly [number, number, number], d: readonly [number, number, number],
+    n: readonly [number, number, number],
+    into: number[],
+    /** Luz na dupla de cima e na dupla de baixo da face — o degrade que assenta o bloco no chao. */
+    lit?: readonly [number, number],
+  ): void => {
+    const base = pos.length / 3;
+    pos.push(...a, ...b, ...c, ...d);
+    // a=cima-esq, b=cima-dir, c=baixo-dir, d=baixo-esq — a mesma ordem do quad em pe, para a
+    // arte cair de pe em toda face e o `aUvBounds` continuar sendo a janela certa do texel-AA.
+    uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
+    for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
+    for (let k = 0; k < 4; k++) nrm.push(...n);
+    if (lit) {
+      for (const s of [lit[0], lit[0], lit[1], lit[1]]) col.push(s, s, s);
+    }
+    into.push(base, base + 2, base + 1, base, base + 3, base + 2);
+  };
+  for (const { x, z, frame } of tiles) {
+    const f = tilesetFrameUv(frame);
+    const [x0, x1] = [x - 0.5, x + 0.5];
+    const [z0, z1] = [z - 0.5, z + 0.5];
+    const side = (s: number): readonly [number, number] | undefined =>
+      (shade ? [s, s * shade.foot] : undefined);
+    // O TETO, sempre — sem ele o bloco fica oco por cima (a face de tras e descartada pelo
+    // backface culling, entao o buraco mostraria o nada). Na dungeon ele vai para o GRUPO PRETO:
+    // uma parede vista de cima nao e uma parede, e desenhar o tijolo ali punha um campo de
+    // alvenaria do tamanho da dungeon competindo com o chao pela atencao. Na MONTANHA e o
+    // contrario — o teto e o planalto, a face que a camera de cima mais ve, e a rocha ali e o que
+    // faz a massa ler como terreno e nao como muro.
+    face(
+      f, [x0, 1, z0], [x1, 1, z0], [x1, 1, z1], [x0, 1, z1], [0, 1, 0],
+      shade ? sideIdx : topIdx, shade ? [shade.top, shade.top] : undefined,
+    );
+    // A face SUL: a frente do bloco, e a unica lateral que a camera enxerga de cheio.
+    if (!isWall(x, z + 1)) {
+      face(f, [x0, 1, z1], [x1, 1, z1], [x1, 0, z1], [x0, 0, z1], [0, 0, 1], sideIdx,
+        side(shade?.south ?? 1));
+    }
+    if (!isWall(x - 1, z)) {
+      face(f, [x0, 1, z0], [x0, 1, z1], [x0, 0, z1], [x0, 0, z0], [-1, 0, 0], sideIdx,
+        side(shade?.west ?? 1));
+    }
+    if (!isWall(x + 1, z)) {
+      face(f, [x1, 1, z1], [x1, 1, z0], [x1, 0, z0], [x1, 0, z1], [1, 0, 0], sideIdx,
+        side(shade?.east ?? 1));
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setIndex([...topIdx, ...sideIdx]);
+  if (shade) {
+    // Um material so, um grupo so: o teto entrou na mesma lista das laterais.
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    return geo;
+  }
+  // Dois grupos, dois materiais, UMA malha: o teto preto e os lados texturizados. Continua sendo
+  // uma geometria so — o custo de um material a mais aqui e um bind, nao um draw call por bloco.
+  geo.addGroup(0, topIdx.length, 0);
+  geo.addGroup(topIdx.length, sideIdx.length, 1);
   return geo;
 };
 

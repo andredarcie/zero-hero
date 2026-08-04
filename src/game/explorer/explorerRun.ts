@@ -20,7 +20,7 @@ import type { UpgradeState } from '@/game/runtime/ShopOverlay';
  *
  * O que ATRAVESSA as expedicoes (o banco, as melhorias compradas na fogueira do acampamento e
  * as estatisticas) mora no localStorage, no padrao `zh.*` das outras preferencias — a mesma
- * ideia do meta do Survivors. O que pertence a UMA expedicao mora em memoria e morre com ela.
+ * ideia do meta de um roguelite. O que pertence a UMA expedicao mora em memoria e morre com ela.
  */
 
 const STORAGE_KEY = 'zh.explorer.v1';

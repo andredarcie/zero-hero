@@ -1,12 +1,13 @@
 ﻿import type Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES,
-  MOONFLOWER_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES, SEA_TILE_FRAME, SOLID_GROUND_FRAMES,
-  SOLID_UPPER_FRAMES, TOOLBOX_FRAMES, WATER_WHEEL_FRAMES,
+  ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, ENEMY_RESPAWN_MS,
+  KEY_FRAMES, MOONFLOWER_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES, SEA_TILE_FRAME,
+  SLIME_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, TOOLBOX_FRAMES, WATER_WHEEL_FRAMES,
+  ZORA_FRAMES,
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
-import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
+import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind, WorldDialog } from '@/game/world/worldSchema';
 import type { DeleteLabLevelResult, LabLevelSummary } from '@/game/worldApi';
 
@@ -19,11 +20,15 @@ export const PANEL_WIDTH = 320;
 
 export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'entity' | 'spawn';
 export type CollisionPaintMode = 'keep' | 'set' | 'clear';
-// No "enemies" tab: enemies are not authored anymore — skulls spawn dynamically at runtime
-// around the hero in the dark (see UndeadSpawnDirector).
-export type PaletteTab = 'tiles' | 'npcs' | 'pickups' | 'props';
+// A aba "Inimigos" voltou, e o que ela coloca e um PONTO DE SPAWN: o tile faz um corpo quando o
+// heroi chega perto e faz outro um tempo depois que aquele cai (EnemySpawnerManager). Ela existiu
+// e foi removida quando o unico inimigo do jogo passou a ser invocado dinamicamente no escuro
+// (UndeadSpawnDirector) — mas aquele sistema e um CERCO ambiente e fica desligado no lab e nos
+// levels, justamente onde um corredor precisa de guarda. Os dois convivem: ver GameScene.create.
+export type PaletteTab = 'tiles' | 'enemies' | 'npcs' | 'pickups' | 'props';
 
 export type EntitySelection =
+  | { list: 'enemies'; type: EnemyKind }
   | { list: 'npcs'; type: NpcKind }
   | { list: 'pickups'; type: PickupKind }
   | { list: 'props'; type: PropKind };
@@ -85,6 +90,37 @@ export type EditorUiCallbacks = {
     open: (level: number) => void;
   };
 };
+
+// O QUE A ABA INIMIGOS OFERECE — o bestiario inteiro, uma linha por EnemyKind.
+//
+// Todo item desta lista coloca um PONTO DE SPAWN, nunca um corpo: o tile faz um corpo quando o
+// heroi chega perto e faz outro ENEMY_RESPAWN_MS depois que aquele cai (EnemySpawnerManager).
+//
+// O rotulo carrega a FRASE da especie e nao os numeros dela, porque e o rotulo que o autor le
+// quando escolhe: "voa" muda onde a cova faz sentido; "nao teme tocha" muda se aquela sala tem
+// solucao com fogo na mao. A ordem e de leitura — a caveira primeiro (o inimigo que o jogo
+// inteiro ensinou), o que anda depois, e os dois que atiram no fim.
+//
+// Esta lista e um array e nao cobra nada do compilador; quem cobra e o ENEMY_VISUAL do tabuleiro
+// (Record exaustivo) e a fabrica do EnemyManager. Especie nova sem entrada aqui nasce invisivel
+// na paleta — nao ha teste que pegue isso, so o olho.
+const ENEMY_DEFS: ReadonlyArray<{ type: EnemyKind; label: string; key: string; frame?: number }> = [
+  { type: 'undead', label: 'Caveira — cava o chao, golpe avisado, marcha pra placa', key: ASSET_KEYS.undead },
+  { type: 'bat', label: 'Morcego — VOA (cruza rio e lava), rapido e frouxo', key: ASSET_KEYS.bat },
+  { type: 'spider', label: 'Aranha — rasteja, agacha e da o BOTE de 3 tiles', key: ASSET_KEYS.spider },
+  { type: 'slime', label: 'Slime — lento, casca dura, NAO teme a tocha', key: ASSET_KEYS.slime, frame: SLIME_FRAMES.rest },
+  { type: 'bigslime', label: 'Slime Grande — racha em dois ao morrer', key: ASSET_KEYS.bigSlime, frame: SLIME_FRAMES.rest },
+  { type: 'turret', label: 'Torreta — nao anda, leque de balas, ignora a tocha', key: ASSET_KEYS.turret },
+  { type: 'mage', label: 'Mago — mantem 5 tiles de distancia e conjura', key: ASSET_KEYS.mage },
+  // O zora e o unico que exige um tile de tipo especifico, e o rotulo tem de dizer isso: colocado
+  // em terra ele nao nasce, e o autor nao teria como adivinhar por que aquele tile ficou mudo.
+  {
+    type: 'zora',
+    label: 'Zora — SO na agua: emerge, cospe e some (ponte/vau o expulsam)',
+    key: ASSET_KEYS.zora,
+    frame: ZORA_FRAMES.up,
+  },
+];
 
 export const NPC_KINDS: readonly NpcKind[] = [
   'blackCat', 'mimic', 'astronaut', 'businessMan', 'radiationSuit', 'painter', 'salesman', 'poet', 'wizard', 'death',
@@ -221,6 +257,17 @@ const TILE_GROUPS: ReadonlyArray<{ title: string; tiles: readonly TileDef[] }> =
     ],
   },
   {
+    // A montanha (CLIFF_WALL_FRAMES). E a MESMA pintura do "Chao de Pedra" do cemiterio, so que
+    // em pe: no chao ela e patio, na camada de cima ela e montanha — e o World3D a assa em CUBO,
+    // com topo de planalto e lateral sombreada. Bloqueia sozinha (SOLID_UPPER_FRAMES), como o
+    // pinheiro. Nao precisa alternar as duas: o volume do cubo ja quebra a repeticao.
+    title: 'Montanha',
+    tiles: [
+      { frame: 39, label: 'Rocha', layer: 'upper' },
+      { frame: 40, label: 'Rocha com Musgo', layer: 'upper' },
+    ],
+  },
+  {
     // The cemetery. Ground first, then the things that stand on it, then the litter.
     title: 'Cemiterio',
     tiles: [
@@ -249,18 +296,25 @@ const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: s
   { id: 'fill', label: 'Balde', kbd: 'F', hint: 'Preenche a regiao contigua com o tile' },
   { id: 'picker', label: 'Conta-gotas', kbd: 'I', hint: 'Copia o tile sob o cursor' },
   { id: 'collision', label: 'Colisao', kbd: 'C', hint: 'Pinta colisao (botao direito limpa)' },
-  { id: 'entity', label: 'Entidade', kbd: '2-4', hint: 'Coloca a entidade escolhida na paleta' },
+  { id: 'entity', label: 'Entidade', kbd: '2-5', hint: 'Coloca a entidade escolhida na paleta' },
   { id: 'spawn', label: 'Ponto Inicial', kbd: 'S', hint: 'Obrigatorio: clique onde o jogador deve comecar' },
 ];
 
+// Inimigos entra como a QUINTA aba, no fim, e nao na segunda posicao que tinha antes de ser
+// removida: 1..4 sao musculo na mao de quem autora o mundo hoje, e renumerar tudo pra abrir espaco
+// custaria mais do que a aba nova vale.
 const TAB_DEFS: ReadonlyArray<{ id: PaletteTab; label: string; kbd: string }> = [
   { id: 'tiles', label: 'Tiles', kbd: '1' },
   { id: 'npcs', label: 'NPCs', kbd: '2' },
   { id: 'pickups', label: 'Itens', kbd: '3' },
   { id: 'props', label: 'Props', kbd: '4' },
+  { id: 'enemies', label: 'Inimigos', kbd: '5' },
 ];
 
+// O mesmo vermelho do chip no tabuleiro (CHIP_COLOR em EditorScene) e do ponto no minimapa: as
+// tres pinturas da mesma entidade nao podem discordar de cor.
 const ENTITY_DOT_COLOR: Record<EntitySelection['list'], string> = {
+  enemies: '#ff5566',
   npcs: '#4488ff',
   pickups: '#33cc77',
   props: '#ffaa33',
@@ -594,6 +648,7 @@ export class EditorDomUi {
   }
 
   private firstEntityOfTab(tab: PaletteTab): EntitySelection | null {
+    if (tab === 'enemies') return { list: 'enemies', type: ENEMY_DEFS[0].type };
     if (tab === 'npcs') return { list: 'npcs', type: NPC_KINDS[0] };
     if (tab === 'pickups') return { list: 'pickups', type: PICKUP_DEFS[0].type };
     if (tab === 'props') return { list: 'props', type: PROP_DEFS[0].type };
@@ -741,6 +796,19 @@ export class EditorDomUi {
       this.optionsEl.appendChild(brushSeg);
     }
 
+    // O que a cova faz nao se ve no tabuleiro (ela nao desenha nada no jogo: o nascimento e a
+    // arte dela), entao as tres regras que decidem se ela vai funcionar ficam escritas aqui —
+    // e o unico lugar do editor onde elas caberiam sem virar legenda dentro do jogo.
+    if (this.state.tool === 'entity' && this.state.entity.list === 'enemies') {
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size:10px;color:#ff8a9b;margin:4px 0 6px;line-height:1.55;';
+      hint.innerHTML = '<b>Ponto de spawn</b><br>'
+        + 'Nasce quando o heroi chega a 14 tiles, com o telegrafo de ~3s (o chao racha).<br>'
+        + `Um corpo por vez: morto, o proximo vem em ${Math.round(ENEMY_RESPAWN_MS / 1000)}s.<br>`
+        + 'Luz de fogueira ACESA cala a cova — o morto-vivo nao entra na luz.';
+      this.optionsEl.appendChild(hint);
+    }
+
     if (this.state.tool === 'entity' && this.state.entity.list === 'props' && isVariableProp(this.state.entity.type)) {
       const propType = this.state.entity.type;
       const names = Object.keys(this.store.globalVariables).sort((a, b) => a.localeCompare(b));
@@ -862,7 +930,9 @@ export class EditorDomUi {
       this.paletteEl.appendChild(cell);
     };
 
-    if (tab === 'npcs') {
+    if (tab === 'enemies') {
+      ENEMY_DEFS.forEach((def) => addEntityCell({ list: 'enemies', type: def.type }, def.label, def.key, def.frame));
+    } else if (tab === 'npcs') {
       NPC_KINDS.forEach((kind) => {
         const visual = NPC_VISUALS[kind];
         addEntityCell({ list: 'npcs', type: kind }, NPC_LABELS[kind], visual.key, visual.frame);
@@ -1134,7 +1204,7 @@ export class EditorDomUi {
       this.changed();
       return;
     }
-    const tabByKey: Record<string, PaletteTab> = { 1: 'tiles', 2: 'npcs', 3: 'pickups', 4: 'props' };
+    const tabByKey: Record<string, PaletteTab> = { 1: 'tiles', 2: 'npcs', 3: 'pickups', 4: 'props', 5: 'enemies' };
     if (tabByKey[key]) {
       this.selectTab(tabByKey[key]);
       return;
@@ -1446,7 +1516,8 @@ export class EditorDomUi {
     const stats = this.store.stats();
     const statsEl = document.createElement('p');
     statsEl.innerHTML = `Cada chunk tem ${CHUNK_COLUMNS}x${CHUNK_ROWS} tiles.<br>`
-      + `NPCs: <b>${stats.npcs}</b> — Itens: <b>${stats.pickups}</b> — Props: <b>${stats.props}</b>`;
+      + `NPCs: <b>${stats.npcs}</b> — Itens: <b>${stats.pickups}</b> — Props: <b>${stats.props}</b>`
+      + ` — Inimigos: <b>${stats.enemies}</b>`;
     body.appendChild(statsEl);
 
     const warnings = this.store.validate();
@@ -1704,7 +1775,7 @@ export class EditorDomUi {
       ['Botao do meio / Espaco + arrastar', 'Move a camera'],
       ['Roda do mouse', 'Zoom no cursor'],
       ['B / E / R / F / I / C / S', 'Pincel, Borracha, Retangulo, Balde, Conta-gotas, Colisao, Ponto Inicial'],
-      ['1..5', 'Abas: Tiles, Inimigos, NPCs, Itens, Props'],
+      ['1..5', 'Abas: Tiles, NPCs, Itens, Props, Inimigos'],
       ['Tab', 'Alterna camada chao/superior'],
       ['[ e ]', 'Tamanho do pincel'],
       ['M', 'Alterna visao mundo / chunk'],

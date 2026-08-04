@@ -250,7 +250,7 @@ export class LevelSelectScene extends Phaser.Scene {
     this.cameras.main.fadeOut(400, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       void window
-        .fetch(levelFilePath(entry.level))
+        .fetch(levelFilePath(entry.level, entry.file))
         .then((res) => res.json())
         .then((world) => {
           setWorldData(world);

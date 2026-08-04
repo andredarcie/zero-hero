@@ -236,7 +236,13 @@ export default {
       // O placar de mortes, e nao "sobrou caveira viva?": no fundo do escuro o cerco repoe a
       // horda em segundos, entao contar cabecas mediria a taxa de spawn e nao o golpe.
       const killsBefore = start?.explorer?.kills ?? 0;
-      await evaluate(([x, y]) => { window.__scene.enemyManager.spawnUndead(x, y); }, [spot.x, spot.y]);
+      // A espada na mochila: este cenario mede MOEDA por distancia, e nao combate. Com o botao
+      // A a espada mata de um golpe, entao a caveira cai antes que o dano de contato dela vire
+      // uma segunda variavel no meio da medicao.
+      await evaluate(([x, y]) => {
+        window.__scene.heldItem = 'sword';
+        window.__scene.enemyManager.spawnUndead(x, y);
+      }, [spot.x, spot.y]);
 
       // O nascimento tem telegrafo (o chao rachando) + a animacao de sair da terra; bater antes
       // disso acerta uma coisa que ainda nao esta la.
@@ -250,7 +256,10 @@ export default {
         : spot.dy === 1 ? 'ArrowDown' : 'ArrowUp';
       let killed = false;
       for (let i = 0; i < 8 && !killed; i += 1) {
+        // ENCARA (a seta contra a caveira so vira o heroi) e golpeia com o A: encostar nela
+        // deixou de bater e passou a custar vida — ver o cenario `combate`.
         await driver.press(key, { count: 1 });
+        await driver.attack();
         killed = ((await state())?.explorer?.kills ?? 0) > killsBefore;
         if (!killed) await teleport(hx, hy); // o golpe empurra; volta para o lugar de bater
       }

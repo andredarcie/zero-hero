@@ -31,22 +31,29 @@ const DEFS: Record<string, SheetDef> = {
   'npc-salesman': { url: `${A}/characters/npcs/salesman.png` },
   'npc-poet': { url: `${A}/characters/npcs/poet.png` },
   'npc-death': { url: `${A}/ui/states/death.png` },
+  // Esta arte tem DOIS donos: o NPC "wizard" (NPC_VISUALS.wizard) e o mago inimigo, que por isso
+  // nasce tingido de frio (MageEnemy) — sem isso, o feiticeiro que ataca leria como o velho amigo.
   mage: { url: `${A}/characters/enemies/mage/mage__1.png` },
-  // A fauna do modo Sobreviventes — arte que já vivia em enemies/ sem uso.
+  'mage-hurt': { url: `${A}/characters/enemies/mage/mage_hurt.png` },
+  'mage-cast': { url: `${A}/characters/enemies/mage/mage_magic.png` },
+  'magic-ball': { url: `${A}/characters/enemies/mage/magic_ball.png` },
+  // O resto do bestiario: era a fauna do modo Sobreviventes e hoje tem corpo na aventura, um por
+  // arquivo em entities/enemies/. Uma def aqui e download e VRAM no boot (preloadTextures3D
+  // carrega TODAS), entao nenhuma delas entra sem alguem desenhando — a arte que continua
+  // esperando (o arqueiro, arrow_undead.png) segue de fora de proposito.
   bat: { url: `${A}/characters/enemies/bat/bat.png` },
   'bat-hurt': { url: `${A}/characters/enemies/bat/bat_hurt.png` },
   spider: { url: `${A}/characters/enemies/spider/spider.png` },
-  // Os slimes são folhas 16×32 (corpo em cima, poça embaixo); frame 0 = o corpo.
+  // 16x32: pousado (0) e esticado no pulo (1) — ver SLIME_FRAMES.
   slime: { url: `${A}/characters/enemies/slime/Slime.png`, frameW: 16, frameH: 16 },
   bigslime: { url: `${A}/characters/enemies/slime/BigSlime.png`, frameW: 16, frameH: 16 },
   'slime-pool': { url: `${A}/characters/enemies/slime/SlimePool.png` },
   'bigslime-pool': { url: `${A}/characters/enemies/slime/BigSlimePool.png` },
-  'mage-hurt': { url: `${A}/characters/enemies/mage/mage_hurt.png` },
-  'mage-cast': { url: `${A}/characters/enemies/mage/mage_magic.png` },
-  'magic-ball': { url: `${A}/characters/enemies/mage/magic_ball.png` },
   turret: { url: `${A}/characters/enemies/turret/turret.png` },
   'turret-bullet': { url: `${A}/characters/enemies/turret/turret_bullet.png` },
-  'arrow-undead': { url: `${A}/characters/enemies/undead/arrow_undead.png` },
+  // O unico inimigo desenhado nesta casa (spritefactory/sprites/zora.mjs): 5 estados em coluna,
+  // o ultimo deles a propria municao — ver ZORA_FRAMES.
+  zora: { url: `${A}/characters/enemies/zora/zora.png`, frameW: 16, frameH: 16 },
   undead: { url: `${A}/characters/enemies/undead/undead.png` },
   'undead-hurt': { url: `${A}/characters/enemies/undead/undead_hurt.png` },
   'undead-born-0': { url: `${A}/characters/enemies/undead/undead_born0.png` },

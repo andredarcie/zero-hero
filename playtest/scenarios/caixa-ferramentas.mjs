@@ -165,16 +165,17 @@ export default {
     );
 
     // ── O GESTO: pisar na bandeja deposita ──────────────────────────────────
-    // O jogo nao tem botao de largar item, e as duas bandejas comecam vazias: sem esta regra a
-    // bancada nao teria como ser alimentada por maos humanas.
-    log('JOGO: o heroi pisa nas duas bandejas segurando os insumos da receita');
+    // As duas bandejas comecam vazias, e depositar virou o botao B contra o tile a frente (ver
+    // o cenario `combate`): era um PASSO enquanto o jogo nao tinha botao nenhum, e a bandeja
+    // desenhada no chao sempre disse "ponha algo aqui", nunca "pise aqui".
+    log('JOGO: o heroi POE os dois insumos nas bandejas com o B');
     const fed = await driver.page.evaluate(() => {
       const s = window.__scene;
       s.heldItem = 'wood';
-      s.handleTileEntered(4, 6); // a bandeja de tras
+      s.placeItemAt(4, 6); // a bandeja de tras
       const afterA = s.heldItem;
       s.heldItem = 'stone';
-      s.handleTileEntered(5, 6); // a bandeja colada na maquina
+      s.placeItemAt(5, 6); // a bandeja colada na maquina
       return {
         afterA,
         held: s.heldItem,
@@ -314,7 +315,7 @@ export default {
     assert('desenhada com a arte de minerio, nao com a da rocha comum',
       ore0?.texture === 'iron-rock', JSON.stringify(ore0));
 
-    // O heroi a oeste dela; bater e um bump, o jogo nao tem botao.
+    // O heroi a oeste dela: encara e usa o B (andar contra a pedra nao a arranha mais).
     await driver.page.evaluate(() => {
       const s = window.__scene;
       s.playerWorld.worldX = 7; s.playerWorld.worldY = 8;
@@ -332,14 +333,14 @@ export default {
 
     await driver.page.evaluate(() => { window.__scene.heldItem = 'pickaxe'; });
     await driver.settle(200);
-    await driver.press('ArrowRight', { count: 1 });
+    await driver.faceAndUse('right');
     await driver.settle(700);
     const cracked = await oreAt();
     assert('a primeira picaretada racha e ela AINDA bloqueia (sao duas, como toda rocha)',
       cracked?.blocking === true, JSON.stringify(cracked));
     await shot('caixa-pedra-de-ferro-rachada');
 
-    await driver.press('ArrowRight', { count: 1 });
+    await driver.useItem();
     await driver.settle(900);
     const brokenOre = await oreAt();
     assert('a segunda picaretada abre o tile', brokenOre?.blocking === false, JSON.stringify(brokenOre));

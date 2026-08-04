@@ -16,7 +16,10 @@ export interface GameDebugState {
   swordOnFire: boolean;
   /** True while the held item (sword or wood club) is ablaze. */
   heldOnFire: boolean;
+  /** O item do botao B — o que esta na mao agora (a selecao da mochila). */
   heldItem: 'none' | HeldItemKind;
+  /** A MOCHILA inteira, na ordem em que foi ganha: o que a subtela desenha. */
+  inventory: Array<{ kind: HeldItemKind; count: number }>;
   groundItems: Array<{ kind: HeldItemKind; worldX: number; worldY: number }>;
   crates: Array<{ worldX: number; worldY: number }>;
   pressurePlates: Array<{ worldX: number; worldY: number; variable?: string; pressed: boolean }>;
@@ -128,15 +131,40 @@ export interface GameDebugState {
    *  fills and undead spawn around the hero (see UndeadSpawnDirector). */
   safety: { safe: boolean; danger: number; undeadCount: number };
   /**
-   * Cada caveira viva: onde esta, se ainda esta saindo do chao, e a placa de pressao em que
-   * fixou (o balao de pensamento na cabeca dela). `plateTarget` nao-nulo = ela ignorou o heroi
-   * e esta marchando para aquele tile.
+   * Cada corpo vivo: a especie (`kind`), onde esta, se ainda esta CHEGANDO (invulneravel e inerte:
+   * a fissura da caveira, a silhueta crescendo dos outros) e a placa de pressao em que fixou — o
+   * balao de pensamento na cabeca dele. `plateTarget` nao-nulo = ignorou o heroi e marcha pra la;
+   * hoje so a caveira atende placa (ver EnemyBase.seeksPlates).
+   *
+   * O nome do campo e historico — foi `undead` enquanto a caveira era o unico inimigo do jogo — e
+   * ficou: renomear quebraria todo cenario de playtest sem contar nada novo.
    */
   undead: Array<{
+    kind: string;
     worldX: number;
     worldY: number;
     spawning: boolean;
     plateTarget: { x: number; y: number } | null;
+  }>;
+  /**
+   * Os tiros EM VOO (mago e torreta). Unica coisa do jogo em coordenada continua de tile: `x/y`
+   * vem com fracao de tile de proposito — e assim que se mede que uma bala morreu na parede em vez
+   * de ter atravessado. `vx/vy` em tiles por segundo.
+   */
+  shots: Array<{ kind: string; x: number; y: number; vx: number; vy: number }>;
+  /** Quantas ossadas de caveira morta estao no chao agora (CorpseDecals). */
+  corpses: number;
+  /**
+   * As covas AUTORADAS (aba Inimigos do editor). `occupied` = o corpo que ela fez esta de pe;
+   * `cooldownMs` = o que falta do relogio de respawn depois que ele caiu (ver
+   * EnemySpawnerManager). Vazio em todo mundo que nao autorou nenhuma.
+   */
+  enemySpawners: Array<{
+    worldX: number;
+    worldY: number;
+    type: string;
+    occupied: boolean;
+    cooldownMs: number;
   }>;
   activeScreen: { cx: number; cy: number };
 }

@@ -13,7 +13,7 @@
       "worldY": 10
     },
     "puzzle": true,
-    "exportedAt": "2026-07-21T23:15:36.731Z"
+    "exportedAt": "2026-07-28T21:00:45.108Z"
   },
   "chunks": [
     {
@@ -706,6 +706,11 @@
       "type": "dryTree",
       "worldX": 9,
       "worldY": 11
+    },
+    {
+      "type": "moonflower",
+      "worldX": 2,
+      "worldY": 10
     }
   ],
   "dialogs": {

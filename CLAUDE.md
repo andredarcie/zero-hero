@@ -1,1016 +1,305 @@
 # Zero the Hero
 
-Top-down pixel-art adventure. Phaser 3 drives the game logic, input and UI on a **transparent**
-canvas; the world underneath it is **real 3D** (Three.js). Three modes on the title screen — the
-adventure, the puzzle levels and the **explorer** (all three are `GameScene`) — plus a
-Vampire-Survivors mode (`SurvivorsScene`, still the hidden `[S]`).
+Aventura top-down em pixel art, **só em inglês** (não há mais locale nenhum). **Phaser 3** cuida da
+lógica, input e UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
+`src/game/render3d/`). O menu é **uma tela e um botão** — o título cai direto na aventura. Levels e
+**explorador** continuam vivos e sem porta no título (`/?level=N`, `?explorer`, ou o **[I]** do
+DevLauncher); os três modos são a mesma `GameScene`.
 
-## Workflow rules
+## Como este documento funciona
 
-- **All work happens on `main`. Never create a branch.** Commit straight to `main` and push there.
-- **Commit messages are always in English**, even though the code comments and the game are in
-  Portuguese.
-- **Use semantic commits** (`feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `test:`, `chore:`) and
-  write a real description, not a one-liner: say what changed, and *why* — especially the
-  non-obvious part a reader would otherwise have to rediscover.
+- **Aqui só entra LEI FUNDAMENTAL.** Uma lei é a regra que, quebrada, custa uma tarde e vale para
+  o jogo inteiro — não para a peça que você acabou de mexer. Detalhe **nunca** entra: nem número
+  medido, nem nome de campo, nem o que a sua mudança fez.
+- **A postura padrão é NÃO escrever aqui.** Terminou um trabalho? Escreva no
+  [`progress.md`](progress.md) e siga. Só volte aqui se a resposta for sim: *"quem nunca viu este
+  código vai quebrar alguma coisa amanhã por não saber disto?"* — e mesmo então, em **uma linha**.
+- **Este arquivo não cresce a cada mudança.** Um arquivo que ganha um parágrafo por tarefa vira o
+  changelog que ninguém lê, e aí ele para de proteger as leis que já estavam nele.
+- **O "porquê" mora no [`progress.md`](progress.md)** — a discussão de design de cada peça, os
+  números medidos, as armadilhas que cada sistema escondeu. Se uma explicação aqui passar de duas
+  linhas, ela pertence lá.
+- **Teto de 200 linhas. Passou, CORTE** — e o primeiro candidato ao corte é o que você acabou de
+  acrescentar.
 
-## Commands
+## Workflow
+
+- **Tudo acontece na `main`. Nunca crie branch.** Commit e push direto nela.
+- **Mensagem de commit sempre em inglês** (o código e o jogo são em português).
+- **Commits semânticos** (`feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `test:`, `chore:`) com
+  descrição de verdade: o que mudou e *por que* — sobretudo a parte não-óbvia.
+
+## Comandos
 
 ```bash
 npm run dev              # vite dev server
 npm run typecheck        # tsc --noEmit
-npm run lint             # eslint (scripts/worldgen has 3 pre-existing parser errors — ignore)
+npm run lint             # eslint (scripts/worldgen tem 3 erros de parser pré-existentes — ignore)
 npm run build            # typecheck + vite build
-npm run generate:world   # regenerate public/world.json
-#  NEVER run `npm run generate:levels` — it OVERWRITES the hand-authored levels. See the warning below.
-npm run playtest         # default scenarios
-npm run playtest -- all  # every scenario
+#  NUNCA rode `generate:levels` NEM `generate:world` — os dois SOBRESCREVEM o que foi feito à
+#  mão, sem merge e sem perguntar (ver abaixo). Para mexer no mundo: o /editor, ou um script que
+#  LÊ o world.json e acrescenta (`node scripts/enrich-world.mjs` é o modelo).
+npm run playtest         # cenários default
+npm run playtest -- all  # todos
 ```
 
-Port 5173 is often taken by another project. For playtests, start Vite on a free port and point the
-harness at it:
+A porta 5173 costuma estar ocupada por outro projeto. Para playtest, suba o Vite numa porta livre:
 
 ```bash
 npx vite --port 5180 --strictPort
 PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 ```
 
-## The puzzle levels (`/levels`) and the lab (`/lab`)
-
-Each puzzle is a **self-contained level** — a 12×12-chunk world in `public/levels/level-N.json`
-(WorldData format, `meta.puzzle: true`), listed for the player by `public/levels/index.json`. The
-title's **"Jogar levels"** reads that manifest and boots the chosen level (`LevelSelectScene` →
-`setWorldData` → `GameScene`). A shareable/dev deep link is `/?level=N` (skips the menu).
-
-## ⚠️ THE LEVELS ON DISK ARE HAND-AUTHORED. NEVER RUN `npm run generate:levels`.
-
-`scripts/gen-levels.mjs` writes `public/levels/level-1.json` and `index.json` **unconditionally**
-(no merge, no prompt). The levels shipping today were built BY HAND in `/lab` and are not what that
-script produces, so running it destroys them. It stays in the repo as scaffolding for a brand-new
-level, and only after its output path is pointed somewhere unoccupied.
-
-Today: `level-1` **"O fogo que ajuda atrapalha"** (fire + boiler + wire + robotic arm + swing gate
-→ portal; pickaxe, bucket and axe) and `level-2` **"Fogo"** (a work in progress). **Read the JSON,
-never this file, for what a level contains** — a hand-authored level changes whenever its author
-opens the lab, and any prose here describing its layout starts rotting the same day.
-
-That has a consequence for tests: **a playtest must AUTHOR the fixture it needs** (enter `/lab`,
-place props through `EditorStore`, press P) instead of relying on a level already containing one.
-`braco`, `caixa-ferramentas`, `portao-de-bater` and `fios` all do this and are immune. The two
-that still read level-1's old content — `espada` (it scripts the full solve of "A Espada na Pedra",
-a level that no longer exists) and `itens` (it needs a `plantSpot` level-1 no longer has) — are
-**stale by design change, not broken by a regression**. Do not "fix" them by editing the level.
-
-`/lab` is where a level gets built/validated without touching the real world — the same editor as
-`/editor`, pointed at a level file (`public/levels/level-N.json`) via `/api/world?file=level-N`.
-`?level=N` picks which (default 1). Build, press **P** to play the in-memory world, **ESC** to come
-back; nothing saves until Salvar, and Salvar only writes that one level file.
-
-- `/lab?play` boots the level straight into `GameScene`. Playtests enter levels via `/?play&level=N`
-  (the `espada` scenario) — a scenario overrides its entry route.
-- **Puzzles are authored in `/lab`, by hand, and saved with Salvar** — not in `gen-levels.mjs`
-  (see the warning above: that script would overwrite them).
-- **The game is walk-only — there are NO gameplay buttons at all** (only movement; overlays/menus
-  are UI). Everything activates by stepping or bumping. Placements have walk-on affordances: a
-  `bombSpot` (breathing purple ghost-bomb) plants the carried bomb on step; with the wrong item
-  in hand the step does nothing — the mark's own art is the invitation. Author a bombSpot where
-  the blast must happen — its 2.2-tile radius must cover everything that blast is for. The upgrade shop (adventure only)
-  is the Souls bonfire: bump a LIT campfire with anything that isn't a douse (bucketFull) or a
-  torch-light (wood) and it opens — the E key is gone.
-- **The farming loop (`plantSpot` + seeds).** The scythe's product is SEEDS (sprites from the
-  sprite factory). Step on a dug hole (`plantSpot`) carrying them to sow; the mound rises when
-  the hero steps OFF (a dome must never be born blocking under his feet — the dropped-item
-  arming rule); bump the mound with `bucketFull` to water; after ~3.5s REAL tall grass sprouts
-  (a `TallGrassObject` pushed into `tallGrasses` — blocks, conducts fire, falls to the scythe
-  for seeds again). Consume that grass and the hole reopens: renewable, placeable fuel — a burnt
-  fuse is never a dead end. Hay/haySpot are gone; seeds replaced them.
-- **A level is ALWAYS exactly one 12×12 chunk — the standard, original size. Never bigger.** No
-  multi-chunk levels (no 24×12, no 24×24). The camera frames ~one chunk, so the whole level sits on
-  a single screen and nothing needs a hike — walking is not a puzzle. `makeLevel` in
-  `scripts/gen-levels.mjs` is single-chunk on purpose (no size parameter) so this can't be
-  bypassed; if a puzzle doesn't fit in 12×12, cut it down, don't grow the map.
-- **Each level is independently solvable.** Its own `playerStart` and its own **home campfire**
-  (lit, nearest the spawn — that's how the runtime picks which fire is born lit); every other
-  campfire stays dead. Only the tools that level's puzzle needs.
-- **A puzzle is only a puzzle if the easy road is shut.** Assert the *lock* (bare-handed, the ring
-  must refuse the hero), not just the solution.
-- The undead siege (`UndeadSpawnDirector`) is **off** for a puzzle world (`appMode === 'lab'` OR
-  `meta.puzzle`, via `isPuzzleWorld()`): skulls mid-solve are noise and made the run flaky. So a
-  level cannot test anything that depends on darkness pressure — use the real world for that.
-- The ESC return-to-editor handler is gated on the editor scene actually existing, because a level
-  played from the title / `/?level=N` has no editor to wake (there ESC opens the pause menu, which
-  offers **back to levels / restart / quit to the title** when a level is active).
-- **A level run shows two floating square buttons top-right on every device** (`LevelButtons` in
-  `PauseMenu.ts`): restart (↻, two-tap arm like the pause menu's destructive entries) and pause.
-  A puzzle can be spent into a corner, so restarting must be advertised, not buried in ESC — a
-  hint pill ("Travou? ↻ recomeça o level") shows on boot and doubles as the arm-confirm prompt.
-  The adventure keeps only the discreet touch-only pause button.
-
-## O explorador (`src/game/explorer/`) — o mundo infinito, e a única aposta do jogo
-
-A terceira porta do título. Um mundo **gerado enquanto o herói anda**, sem borda em direção
-nenhuma, com um **acampamento seguro** no centro; a base é risco × recompensa, e ela cabe em três
-números:
-
-- **Longe paga mais.** `coinMultiplierAt`: a cada 24 tiles de distância do acampamento a caveira
-  larga um degrau a mais de moeda (teto x8). Em DEGRAUS e não contínuo — o jogador precisa poder
-  dizer "subi de nível" enquanto anda; um número que sobe um centésimo por passo é um gráfico, não
-  uma decisão.
-- **50% se você escolher parar.** Portais nascem no escuro (nunca a menos de 26 tiles de casa) e
-  pisar num deles PERGUNTA (`ExtractPrompt`). Sim = metade da bolsa vira banco e o herói volta
-  vivo. Caro de propósito: se voltar fosse de graça o modo seria "ande até cansar" em vez de
-  "ande até ter medo".
-- **5% se o escuro escolher por você.** Morrer não zera (zerar faz de cada expedição ruim tempo
-  jogado fora) mas 5% é perto o bastante de nada para doer. **Reiniciar pelo menu custa o mesmo
-  que morrer** — se fosse grátis, seria a saída ótima de toda expedição ruim e as duas
-  porcentagens viravam opcionais.
-
-O perigo também escala com a distância (`dangerScaleAt` → `UndeadSpawnQuery.pressure`), mas **mais
-devagar que a recompensa**: se os dois subissem no mesmo passo, ir fundo seria matematicamente
-neutro e não haveria decisão dentro do modo.
-
-- **O mundo entra pelo mesmo buraco de fechadura do `world.json`.** `WorldData.setInfiniteWorld`:
-  troque o que os acessadores respondem e ChunkManager, os managers e o World3D leem o mundo
-  gerado sem saber. Nada foi duplicado; o `getHeldItemPickups` do infinito devolve o **kit** do
-  acampamento (espada / machado / picareta — uma mão só, a primeira decisão do modo).
-- **O renderer segura uma JANELA, não o mundo** (`ExplorerDirector`, raio 2 = 5×5 chunks). A
-  floresta custa um draw call porque é *assada* num mesh só, e um buffer não cresce para sempre —
-  então ao cruzar a fronteira de um chunk a janela se recentraliza e `World3D.rebuildTerrain()`
-  reassa. Medido: **~15-25ms**, uma vez a cada 12 tiles. `terrainMats` guarda os materiais entre
-  reassados **porque um material novo em runtime recompilaria todo shader do mundo** (a lei do
-  projeto): o playtest afirma 0 programas e 0 luzes de diferença através de uma travessia.
-- **`solidKeys` virou `Set<number>`** (`tileKey`) por causa disto: a AO do chão consulta esse
-  conjunto 12× por tile, e com chave de string eram 12 alocações por tile — ~30% do custo do
-  bake (medido 93ms → 67ms no mundo autorado). O bake deixou de ser um evento único.
-- **Props entram e saem com a janela** — "tem prop neste tile?" é busca LINEAR e roda dentro do
-  flood-fill dos inimigos, então guardar tudo que a expedição já viu viraria o gargalo do modo no
-  quinto minuto. O que um prop **lembra** ao sair é o mínimo que muda o jogo: fogueira ACESA (o
-  jogador pagou aquela luz com uma tocha e uma caminhada) e prop CONSUMIDO. A árvore seca de
-  propósito **não** é lembrada: ela já volta sozinha (`TREE_REGROW_MS`).
-- **Geografia é TILE, prop é o que se mexe.** Árvore/lago são frames do tileset (o lago é tile de
-  MAR: bloqueio incondicional, que num mundo gerado é o certo — o gerador não pode garantir que um
-  rio tenha margem, ponte ou saída). Fogueira, pedra, árvore seca e portal são props, com a mão
-  fechada.
-- **⚠️ A ÁRVORE NUNCA PODE TRANCAR O CAMINHO, e isso é um NÚMERO e não um cuidado.** No explorador
-  o herói carrega o machado COMUM, que só morde madeira morta — pinheiro é permanente para ele —,
-  e nenhum item do jogo remove um lago. Então mata fechada não é "difícil": é o fim do mundo.
-  Como o herói anda em 4 direções, o chão aberto é um problema de **percolação por sítios** numa
-  grade quadrada, cujo limiar crítico é `p_c ≈ 0.5927`: acima disso o aberto é um único campo
-  infinito e todo bolsão é pequeno e finito; abaixo, quebra em ilhas. `FOREST_FILL_PERCENT` é a
-  chance de um tile virar pinheiro DENTRO de um bosque, então a fração aberta é `1 - fill` e o
-  caminho só é garantido com **fill abaixo de ~40%**. Ele nasceu em 62% (38% de aberto, do lado
-  errado do limiar) e o mundo saía QUEBRADO — flood-fill do acampamento: só 79–92% do chão aberto
-  alcançável, bolsões de até 4.523 tiles e **1 em cada 4 portais nascendo dentro de um**, que é a
-  única saída segura do modo trancada atrás de uma parede. Hoje é 34% → 99% alcançável, maior
-  bolsão 23 tiles. **Subir esse número é reabrir o bug**; a curva medida está no comentário da
-  constante. Percolação garante bolsão *pequeno*, não *zero*, então os props que importam ganham
-  uma segunda garantia, exata: `escapesPocket` só planta onde um flood-fill curto prova que a
-  região tem ≥ 400 tiles (o triplo do maior bolsão medido). O critério é TAMANHO e não distância —
-  a primeira versão perguntava "consegue se afastar 10 tiles?" e um bolsão comprido atravessava a
-  caixa sem sair da ilha. A aventura autorada, para comparar, tem 9,2% dos tiles bloqueados e
-  **99,99% do chão alcançável** (um único tile isolado): denso e fechado não são a mesma coisa.
-- **A armadilha do hash.** `hash()` termina em `(v >> 16) ^ v`, e `>>` em JS é int32 COM SINAL —
-  o bit 31 nunca acende, então o hash só devolve `[0, 2^31)`. Dividir por `0xffffffff` dava um
-  "ruído" que jamais passava de 0.5 e **todo limiar acima disso era terra que nunca acontecia**:
-  o mundo nasceu sem uma única floresta e sem um único lago. `rand01` divide por `0x7fffffff`.
-- **O HUD é a única exceção à lei "o mundo ensina, o HUD não"**, e a exceção é estreita: a lei foi
-  escrita contra LEGENDAS (o balão de item-que-falta, que entregava a resposta de uma fechadura).
-  Aqui a pergunta é "vale mais um chunk?", e os dois termos dela são números que o mundo não tem
-  como dizer. Esconder não ensinaria nada — só faria da aposta um chute.
-- **O prompt quebra o walk-only de propósito**, e só ele: a decisão é IRREVERSÍVEL e custa
-  dinheiro, e tudo o mais no jogo se desfaz andando de volta. Não há tecla para o SIM — Enter,
-  Escape e clique-fora **continuam a expedição**, porque as teclas de reflexo não podem custar
-  metade da bolsa. Recusar não gasta o portal (só a pergunta, até sair do tile).
-- **A volta é a viagem do portal dos levels, inteira** (sucção → vazio → túnel → queda). Não é
-  economia: é a mesma FRASE. O jogo já ensinou que atravessar um portal é assim; voltar por um
-  fade seria uma segunda gramática para a mesma coisa.
-- **O banco é permanente, a bolsa não.** A loja da fogueira (o bonfire de sempre) gasta o BANCO e
-  as melhorias atravessam expedições — gastar em campo o que ainda está em risco esvaziaria a
-  aposta pelo outro lado. Isso finalmente dá à moeda um motivo: `CoinManager.spawnCoins` existia
-  desde sempre e **nunca havia sido chamado uma única vez**.
-- **Cada expedição tem um mundo novo** (`rerollExplorerWorld`); decorar onde ficam os portais
-  mataria a aposta. `?explorer` entra direto, `?explorerSeed=N` prende **só a primeira** expedição
-  (o playtest precisa do mesmo mato, e um pino permanente faria o modo mentir onde é testado).
-- `npm run playtest -- explorador` guarda o modo inteiro: o acampamento (seguro, com fogo aceso,
-  kit no chão e os quatro portões abertos), o mundo que não acaba a 200 tiles em coordenada
-  negativa, o reassado abaixo de 30ms **sem compilar shader nem mexer numa luz**, **o chão aberto
-  sendo um campo só** (flood-fill no mundo vivo, pelo mesmo `isCellBlocked` que barra o herói) e
-  os quatro corredores de casa andáveis, a mesma caveira pagando mais longe do que perto, o portal
-  perguntando e a recusa não cobrando nada, os 50% e os 5%.
-
-## Fire spreads (the one system the player steers)
-
-Every other obstacle in this game is a **lock with exactly one key** — axe→tree, pickaxe→rock,
-key→door. That table is why puzzles here kept collapsing into "fetch item, use item, repeat":
-there is only ever one right answer.
-
-**The game no longer NAMES that answer.** There used to be a need-item balloon: bump a lock
-empty-handed and a speech bubble popped over the hero with the icon of the key you were missing.
-It is gone — table, art, every call site. A locked thing still answers a bump, but only
-physically: the rock shudders, the door rattles, the gate strains against what is behind it. The
-hero says "this did not work", never "fetch the pickaxe". Removing it is the same bet the swing
-gate makes: the world teaches, the HUD does not. **A new locked prop gets a shake, not a hint** —
-if the only way a player could know what to do is a caption, the prop's art is what needs
-fixing.
-
-Fire is the exception, and the only place a real puzzle can live. `GameScene.scheduleFireSpread` /
-`igniteFlammableAt`: a burning tile sets its 4-neighbours alight after `FIRE_SPREAD_MS`.
-
-- **Fuel:** tall grass, dry bushes, and **built bridges** (they are wood — `WaterObject.burn()`
-  collapses the deck into the river and the tile blocks again). Stone, water, lava and bare ground
-  are firebreaks — which is what finally gives the scythe and the axe a use beyond opening their
-  own tile.
-- **A DEAD campfire catches from an adjacent flame.** That is the whole point: a fire can be lit
-  without the hero ever standing next to it. Lay a path of fuel and let the fire walk there.
-- **A LIT campfire never spreads.** It is a sink, not a source — otherwise every hearth would set
-  its own meadow alight the moment it was lit, and the overworld would burn down on contact.
-- Chains terminate because each object's `ignite()` refuses if it is already burning or spent.
-- The light budget survives it: burning bushes *borrow* from the fire-light pool, so a cascade
-  cannot move the light count. `perf-burn` guards this.
-
-**Tall grass blocks the hero but conducts fire.** A grass corridor is a wall to you and a highway
-to a flame — that asymmetry is where the lab's "O Pavio" puzzle comes from.
-
-**Items should PRODUCE, not just DELETE.** This is the rule that keeps puzzles from collapsing into
-fetch-and-use. A tool whose only output is *passage* is a password, not a tool. Compare:
-`grass.cut()` and `door.unlock()` produce nothing, while `tree.chop()` yields a graveto — or a
-bridge, depending on where you stood — which is why the axe was the only interesting item in the
-game. (Felling a pine *tile* with the steel axe drops a graveto for exactly this reason.)
-So the pickaxe now drops a **stone** (`GameScene.dropStone`), and one stone **fords** a
-bridgeSpot (`WaterObject.placeStone`). Stone is wood's opposite: both span a river, but a plank
-deck is *fuel* and a ford never burns (`WaterObject.burn` refuses a ford). Every crossing is now a
-question — do you want a **floor**, or a **fuse**? Ask that of any new item: what does it *make*?
-
-## The two axes, and why the world's edge had to become the sea
-
-There are two axes, and the second one is the only item in the game that edits **terrain**.
-
-- **`axe` — "Machado".** Unchanged. It bites **dead wood only**: the `dryTree` prop (6 stages,
-  regrows, TIMBER log-bridge) and the `dryShrub`.
-- **`greatAxe` — "Machado de Aço".** Fells **any tree**, and is a strict **superset** of the plain
-  axe (both go through `GameScene.holdsAnAxe`). That matters: if the steel axe did not cut dead
-  wood, finding it could *soft-lock* a puzzle built around the plain one. A new tool must never
-  invalidate the tool the player already has.
-
-**Most trees in this world are not props — they are tiles.** `world.json` holds 846 pine tiles in
-the upper layer (frames 4/14/15/16/17) against 69 props *in total*, and `World3D` merges every
-standing tile into ONE static mesh. That is the whole reason a forest costs one draw call, and it
-is why "cut any tree" could not be solved by adding a `TreeObject`: 846 billboards with contact
-blobs and cast shadows would be a serious perf regression. So the steel axe removes the **tile**:
-
-- `CHOPPABLE_UPPER_FRAMES` (constants) says which standing frames are wood. Deliberately not all
-  of `SOLID_UPPER_FRAMES` — 22 (spiked head) and 25 (tomb) stand up the same way but are masonry.
-- `GameScene.fellTreeTile` clears **both** `chunk.upper` *and* `chunk.collisions` — the worldgen
-  paints an explicit collision under every obstacle frame, so clearing only the frame leaves an
-  invisible wall. Those chunk arrays are the same ones `WorldData` holds, so the edit persists for
-  the run.
-- `World3D.removeSolidTile` un-bakes the tile from the merged buffers in place rather than
-  rebuilding them: it collapses the quad's four vertices onto a point (a degenerate triangle draws
-  nothing) in the solids mesh and in the contact-blob mesh, re-bakes the **ambient occlusion** the
-  tree printed on its neighbours (or the new clearing keeps the shadow of a tree that is gone),
-  drops it from `castableSolids`, and re-fills the moon cast. Rebuilding a ~6000-quad buffer per
-  swing would hitch; this is the `grassQuads` rustle trick applied to three buffers at once.
-- **It comes down in STAGES, like the dryTree prop** — whole tree → crown gone → stump → open,
-  three swings, and it BLOCKS until the last one. The prop shrinks through its own 6-frame sheet
-  (woods.png); a tile cannot, because the merged mesh samples the tileset atlas, so the stages
-  have to be frames of that atlas too (`TREE_CHOP_STAGE_FRAMES` = 36, 37, drawn by the sprite
-  factory from the shipped pine's own palette). The two stages are **shared by all eight** tree
-  frames: at 16×16 a stump keeps no silhouette saying which pine it came from, and eight private
-  ladders would be sixteen frames saying one thing. `World3D.setSolidTileFrame` swaps the quad's
-  `uv` **and** `aUvBounds` in place (the bounds are not optional — they are the window the
-  texel-AA fetch may sample, and leaving them stale lets the filter slide into the next tile's
-  art), and re-bakes the moon cast so a stump stops throwing a whole tree's shadow.
-- Felling drops a graveto **only ~25% of the time** (`TREE_TILE_STICK_CHANCE`). A tile tree is
-  not the dry tree's equal: there are ~850 of them against 8 dryTree props, and if every one paid
-  out, the map would become an infinite fuel dispenser and flatten the fire economy that the
-  scythe, the planting loop and the dryTree's own regrow timer exist to meter. It still PRODUCES
-  (see the rule above) — just not on demand, so wood stays worth walking for.
-- Refusing a pine is **silent**, with the plain axe or bare-handed. It was the last place the
-  game said out loud that there are two axes; now the player learns it by swinging — the steel
-  axe fells what the plain one cannot. Same price every other lock pays.
-
-**The border is the sea, and that is a consequence of the steel axe, not a decoration.** The world
-edge used to be a wall of **pine tiles** (`WorldData`'s old `VOID_WALL_FRAME = 4`) — made of the
-exact thing the new item exists to destroy, so a player could chop a doorway and walk off the map.
-The fix is not to special-case the axe at the edge (a border you must remember to defend will be
-forgotten by the next feature) but to build the border out of something **no item answers**:
-
-- Out-of-bounds chunks are ground frame `SEA_TILE_FRAME` with no upper layer and collision
-  everywhere. Collision comes from `SOLID_GROUND_FRAMES` (the floor's mirror of
-  `SOLID_UPPER_FRAMES`), which is **unconditional** — so the sea blocks even the **lava boots**,
-  which wade every other hazard. Nothing in the game removes water: the bridge, the ford and the
-  boots all *cross* a river tile, and none of them apply to a ground frame.
-- "Mar" is also paintable in the editor's **Chao** group, and blocks there by the same implicit
-  rule (the editor draws it in the same amber as an implicitly-solid tree).
-- The sea borrows the river's **sunken bed and earthen banks**; those banks are the coastline.
-  Without that it reads as blue floor, not water.
-- It ships **three interchangeable frames** (33/34/35, the same grid cyclically shifted), picked
-  per tile by a hash of the coordinate in `World3D`. The river gets away with one tile because it
-  is ~30 of them; the sea covers thousands, and one frame repeated that far stops reading as water
-  and starts reading as a **grid**. Only `SEA_TILE_FRAME` is ever stored in world data — the
-  variants are art, chosen at build-mesh time, and cost nothing because the frame already travels
-  per vertex (`aUvBounds`).
-- `VOID_MARGIN_CHUNKS` stays at **1**, measured: a second ring of ocean cost ~9% more triangles
-  (53.1k vs 48.8k on main, frame p50 6.9ms vs 6.1ms). One ring lands at 40.2k — *under* main —
-  because the void used to carry an upright pine quad per tile plus its blob and its cast shadow,
-  and open water carries none. The border got cheaper by becoming flat.
-
-`npm run playtest -- machado` guards all of it: the sea blocks (boots included), the steel axe
-cannot open the border, the plain axe cannot fell a pine, the steel axe walks it down the stage
-ladder (blocking at every stage until the tile really opens, collision too), the graveto rate
-sits near 25%, and the steel axe still cuts dead wood. The stage asserts chop until the tile
-CHANGES rather than counting keypresses — the first key after a teleport is swallowed by the
-just-interrupted movement controller, so counting presses would measure the input, not the ladder.
-
-**A new terrain tile is a new FRAME in an existing atlas, not a new file.** Ground/upper index
-frames of `forest_tile_set.png` (3 columns, row-major) and the whole ground is one mesh sampling
-that one texture. `node spritefactory/install-tile.mjs <name> <tileset> <frame>` installs a built
-sprite into it, growing the sheet by appending rows — **only** appending, since frame ids are
-positional and inserting would silently re-point every tile already authored in `world.json`.
-
-## The robotic arm (`inserter`) — the one thing that moves an item without the hero
-
-`src/game/objects/RoboticArmObject.ts`. A Factorio-style inserter: it takes whatever item lies on
-the tile **behind** it and puts it on the tile **in front**, by itself, on a ~1.5s cycle (reach →
-grip → swing → release → return). Everything else in this game that moves cargo needs the hero's
-one hand; this doesn't — and its own body is **solid**, so what it really does is hand an item
-across a line the hero has to walk around. That is the whole reason it earns a place: *an item can
-reach where the hero cannot.*
-
-- **The arm is RIGID and ROTATES — it never stretches.** Like Factorio, where an inserter's speed
-  is literally an *angular* velocity: the hand rides a fixed-radius arc (`ARM_RADIUS` = 1 tile)
-  half a turn from origin to destination, passing beside the machine. The first version moved the
-  hand in a straight line between the two tiles, which could never look attached — at mid-travel
-  the hand sits exactly on the base, i.e. the arm has length **zero**. Rotation is what makes a
-  constant-length arm possible, so it is a precondition for the linkage, not a style choice. The
-  sweep always passes the side that reads *up* on screen; sweeping under would hide the hand and
-  its cargo behind the machine's own body at the very moment of the gesture.
-- **Anatomy: base → upper arm → forearm → claw**, two SOLID rectangles with a bending elbow, like
-  the real inserter. Each part is ONE stretched quad, not a row of small blocks — a machine part
-  is one part. This works because a billboard here is **not** camera-facing by `lookAt`: it is a
-  plane in the world's (X, elevation) axes and the camera never yaws, so `rotation.z` rotates
-  exactly in the screen plane. `layBar` places a quad at the midpoint of two joints, sizes it to
-  the on-screen distance and rotates it to point along them. Depth is folded in through
-  `depthToScreen` (derived from `camHeight`/`camBack`) — without it a north-pointing arm would
-  compute a length of zero and vanish. The sprite is full-bleed for the same reason: a
-  transparent margin would stretch too and the bar would fall short of its joints.
-- **The elbow must actually bend, so the arm FOLDS.** Rotating at a constant radius gives a
-  constant elbow angle — that is a rigid arm whose parts never move relative to each other. The
-  wrist retracts (`FOLD`) as it passes the machine and extends again to reach the tile, which is
-  what makes the two parts read as two parts. The elbow comes from 2-link inverse kinematics
-  (`poseArm`) solved in the vertical plane through shoulder and wrist; `UPPER_LEN + FORE_LEN`
-  must exceed the maximum reach or the solution clamps and the elbow locks straight.
-- **The bend plane LEANS SIDEWAYS as the arm points into screen depth** (`ELBOW_SIDE`). A bend in
-  the (radial, vertical) plane projects to ZERO when the radial direction is the view-depth axis:
-  a north/south arm — half of all placements — collapsed into one vertical line (a lamppost), and
-  mid-swing passes north, so the fold's most dramatic moment was exactly the invisible one. The
-  fix rotates the perpendicular the elbow displaces along toward the world-lateral axis by
-  `|sin(angle)|`; a normalized blend of two unit vectors perpendicular to the shoulder–wrist line
-  is still perpendicular, so both link lengths stay exact and the joints-meet playtest holds.
-- **Direction is a FRAME, never a rotation.** A billboard has no yaw — `Billboard3D.setAngle`
-  spins in the *camera* plane (`mesh.rotation.z`), which would tilt the art instead of turning it.
-  So the sheet holds 4 frames (0=N 1=L 2=S 3=O) and `dir` indexes the art directly. Any future
-  prop with a facing must do the same.
-- **Its own parts z-fight unless they are ordered.** A quad here is a plane at `z = tileY`, so two
-  parts of the arm sharing a tileY land in exactly the same plane and strobe where they overlap —
-  `DEPTH_LAYER` all over again, but *inside* one object (`ItemPickup` does the same for its 8 rim
-  copies). Each part gets a small push toward the camera in the order it must read: body, upper
-  arm, forearm, hand, cargo in front. Any future prop assembled from several billboards needs the
-  same internal ordering.
-- **Idle = arm HIGH breathing, refusing = LEANING and trembling, working = arm dipped.** It only
-  descends when there is cargo on the origin, and the rest pose is well off the ground so the
-  states read at a glance; a rest pose close to the floor made the dip a half-pixel twitch. The
-  parked claw bobs slowly (`IDLE_BOB` — the bombSpot ghost's grammar: an invitation is a living
-  thing, not a photograph), and when the input holds an item the arm cannot deliver (output
-  blocked/occupied) it eases down to `STRAIN_ELEV` and shivers over the waiting cargo — without
-  that posture, a blocked output and a broken machine were the same image. `playArmGrab`
-  (synthesised, no sample) fires when the claw closes on cargo — short and quiet on purpose,
-  since a row of arms repeats it forever.
-- **The refusal also has to say WHERE the problem is, so it LUNGES** (`LUNGE_*`). Leaning over the
-  cargo says "I want to and cannot", but it says it at the wrong end: the jam is on the OUTPUT, and
-  a machine writhing on top of the item the player just deposited reads as "my deposit failed" or
-  "this thing is broken" — and both send the player looking for the answer in their own hand, the
-  one place it isn't. So every ~2.2s the strain **starts the half-turn**, travels a fraction of the
-  arc toward the output and springs back, with `playArmStrain` (the working servo cut short by a
-  dull thud, exactly the swing gate's `playGateSwing`/`playGateStrain` pair). The eye follows the
-  lunge and the gesture dies pointing at the tile that is taken. This is the swing gate's answer to
-  the same question — "the player has to see the leaf MOVE to understand the problem is on the
-  other side" — and it is a fraction of the arc on purpose: a lunge that reached the destination
-  would stop reading as a failed attempt and start reading as a badly drawn delivery. Spaced, never
-  continuous, for the toolbox's reason: a machine that writhes without pause becomes background and
-  the player stops seeing it. `strained()` is the one arm sound gated on distance (the water
-  wheel's rule) because it is the only one that repeats for as long as the state lasts.
-  **Consequence for the piece as a whole: one delivery per arm until that output tile frees.** A
-  self-powered arm (no variable, no wire) never sees power drop, so it has no undo either — feed it
-  a second item and the item simply waits on the input, visible, swappable, while the machine
-  lunges at the far side. That is the intended, legible dead end, not a bug: authoring an arm whose
-  output the hero can never reach is authoring a one-shot machine.
-- **The hand parks in the air over the ORIGIN tile, with its contact shadow on the ground below.**
-  That shadow is the affordance — "put something here and something happens", the same grammar as
-  the bombSpot's breathing ghost — and stepping onto that tile carrying anything deposits it
-  (`handleTileEntered`). Without that, an arm would be *unfeedable*: see the walk-only note below.
-- **`dir` is the first per-placement field that is NOT droppable.** `lit`/`floodgate` are authored
-  in gen-levels and an editor save is allowed to lose them; a rotation is placed by hand and *is*
-  the behaviour. So `EditorStore` carries `dir` through place/erase/undo — including `sameEntity`,
-  which compared only type+position and therefore made "rotate in place" a silent no-op.
-  In the editor: **G girar** (not R — R is the rectangle tool). `UI_STATE_KEY` went to v4 with it.
-- **The claw is a separate billboard that TRAVELS, and it HANGS fingers-DOWN.** The arm must reach
-  the neighbouring tile, but no sprite may overflow its tile — so the base keeps its tile and a
-  second one-tile quad moves. What travels is the *position*, never the scale. It also hovers
-  (`HAND_HOVER`), which keeps it off the `ground` depth layer where it would strobe against the
-  very pickups it is reaching for. The claw art (v4) has its node on TOP and the pincers opening
-  downward — a claw that dives onto floor items, not the sky-facing V it used to be — and the quad
-  hangs `NODE_UP` below the IK wrist, so the forearm arrives from above and dies at the node:
-  no geometry can lay the bar across the pincer's mouth anymore (the defect that killed five
-  drawings and that `CLAW_AHEAD` merely dodged). Consequence: `HAND_GRAB` is a WRIST height —
-  the wrist stops a claw-length above the item and the fingers do the last stretch.
-- **The arm casts ONE shadow: its projected SKELETON.** All three shadow systems (contact blob,
-  fire-cast silhouette, baked moon-cast) assume a prop STANDING at its tile — and the arm's limbs
-  float between joints, so per-part shadows always shatter: blobs made a dotted line, plan-projected
-  strips drew a zenith sun that exists nowhere in the scene, and per-bar `castGroundShadow` sprouted
-  streaks where the bars aren't (the cast is elevation-blind). `World3D.groundCastAt(x, z)` exposes
-  the standing-sprite stylization (nearest lit flame + moon handoff, via castTransform/handoffCast)
-  as a projector — a point at elevation e shadows at `plan + dir · e · unitLen` — and the arm chains
-  one `ShadowStrip` per limb between its projected joints (shoulder→elbow→wrist→fingers). Connected
-  by construction, it GROWS OUT of the base sprite's own cast silhouette and breathes with the
-  flame. The claw keeps its pinned contact blob (the deposit-here mark, the hero's own grammar) but
-  opts out of the per-sprite cast with `castGroundShadow: false`.
-- **Cargo draws BEHIND the claw, and it HANGS — it is not welded.** `DEPTH_ITEM` sits between
-  forearm and hand: the shut claw is a band across the item, the open claw spreads its fingers
-  over it. The first version drew cargo in front of everything, and at the only moment the
-  machine exists to be seen the item covered the whole claw — a flying item with an arm behind
-  it. The carried item is also a pendulum (`CARGO_*`, underdamped spring driven by the wrist's
-  tangential velocity): it lags the swing, tilts on its invisible string and settles with a
-  wobble on arrival. Only the screen-X component is applied — a depth swing is invisible and
-  would corrupt the cargo-behind-claw draw order.
-- **It refuses rather than stacks.** If the output tile is blocked or already holds an item, the
-  arm idles: the ground keeps one item per tile, and two would be a silent disappearance.
-- **Cutting the power UNDOES the delivery — that is the anti-dead-end guarantee.** An unpowered
-  arm is still dead (it does not scan, dip or pick anything up), but if it *did* carry something
-  across while it was live and that item is still sitting on the output tile, losing power sends
-  it to fetch that item and put it back on the input tile, once, and only then does it stop —
-  parked over the input like always. This exists because the arm is the one piece that can place
-  an item where the hero cannot reach, so it is the only piece that can strand a puzzle for good;
-  with the undo, every delivery has a way back and the puzzle becomes *when* to switch the power
-  on and off instead of "careful, this is irreversible". Consequences: cutting power with the
-  cargo still IN the claw also undoes (it goes back to the tile it came from — freezing there
-  would trap the item in the hand forever), and a forward gesture already in flight is ABORTED,
-  never completed, when the power dies with nothing owed. The undo runs at `REVERSE_RATE` (0.62)
-  so grey-and-slow reads as "this is going backwards", not "this is working".
-- **The debt is ONE item and it forgives itself.** Not a history: the ground keeps one item per
-  tile, so what this arm left stranded is at most whatever is on its output tile right now. If
-  that tile empties by another hand, the debt is cleared at the next rest (`owed` in
-  `RoboticArmObject`) — the player already has the item, there is nothing to undo, and a machine
-  that kept owing would later kidnap an item it never delivered. An arm with no variable and no
-  wire is self-powered, never sees power drop, and is therefore the one variant with no undo.
-- **Why stepping on the origin has to deposit.** The game is walk-only: with no drop button, the
-  hero can otherwise only put an item down by *swapping* with an item already on that tile — so an
-  arm's empty origin could never receive cargo, and the machine would be unfeedable. Walking onto
-  the origin tile therefore hands over whatever the hero carries. (A tool's PRODUCT still works
-  too: `dropStone`, the axe's graveto and the scythe's seeds land on a tile by themselves.)
-- `npm run playtest -- braco` guards all of it. It enters `/lab`, places the four rotations through
-  the real `EditorStore`, presses P, and asserts the transfer — the authoring path, because that is
-  what the piece is for. It also authors a FIFTH arm bound to a variable with no producer (the four
-  others are self-powered and can never be switched off) and drives the undo end to end: dead and
-  owing nothing it ignores the cargo, live it delivers and takes on the debt, cut it fetches the
-  item home, and once square it goes inert again — a fresh item dropped on its output is NOT
-  dragged back, which is the assert that keeps the undo from degenerating into a reverse conveyor.
-  The refusal's lunge is checked by SAMPLING the claw for two lunge cycles and demanding both halves
-  of the gesture: that it leaves the tile over the input, and that it comes BACK. Without the second
-  half a claw frozen mid-arc would pass, and that is not an attempt — it is a jammed machine.
-
-## The toolbox (`toolbox`) — the one thing that makes an item OUT OF other items
-
-`src/game/objects/ToolboxObject.ts`. Four tiles in a line, derived from `dir`:
-
-    (item A) (item B) [CAIXA] (resultado)
-
-Drop an item on each of the two slot tiles behind it; if the pair is a **recipe**, the machine
-eats both and spits a third item onto the tile in front.
-
-**The rule is HAFT + HEAD, and it caps itself.** One head material makes one tool:
-
-| receita | de onde vêm os insumos |
-|---|---|
-| `graveto + pedra = machado` | árvore (axe) + pedra (pickaxe) |
-| `graveto + ferro  = foice`  | árvore (axe) + **pedra de ferro** (pickaxe) |
-
-Because the pair is unordered, `graveto + X` can only ever mean ONE tool — so the number of
-craftable tools is the number of **materials**, never the number of ideas. Growing the tree means
-adding raw matter, not adding lines to `TOOLBOX_RECIPES`.
-
-**Why the iron makes the SCYTHE and not the pickaxe.** Iron comes out of an ore rock, and rock is
-what the pickaxe breaks — so a recipe producing the pickaxe would need the pickaxe to reach its
-own ingredients. Circular, and therefore worthless in any level that doesn't hand you a bomb to
-open the first vein. `picareta → ferro → foice` is a staircase that always goes up, and the scythe
-PRODUCES (seeds), which is what the project asks of anything new.
-
-Recipes that are traps, and why: **key** (kills every locked door and the floodgate in one line),
-**sword** (level-1's entire moonflower chain exists to award it), **`pedra + pedra = fogo`**
-(sounds clever, guts the torch's timed round trip), **`graveto + graveto`** (two sticks already
-mean *bridge* in this game's vocabulary).
-
-- **Why it earns a place.** "Items should PRODUCE" has always been satisfied by props: the tree
-  gives a graveto, the rock gives a stone, the grass gives seeds — the world is the only factory.
-  The toolbox inverts the source: here the *items* are the input and the map contributes nothing.
-  It is the only place where the answer to "I don't have the axe" can be **"then make one"**, and
-  it gives gravetos and stones a destination beyond local consumption.
-- **`TOOLBOX_RECIPES` is order-independent.** Requiring "the stick in the back tray" would be an
-  invisible rule, and an invisible rule is the same sin as the deleted need-item balloon:
-  information that only exists outside the world.
-- **The slots deposit on step, exactly like the arm's origin tile, and for the same reason.** The
-  game has no drop button — the hero only puts something down by *swapping* with an item already
-  on that tile — and both trays start empty, so a toolbox would otherwise be unfeedable. The tray
-  drawn on the ground BREATHES while empty and goes still and gold when loaded (the bombSpot's
-  grammar): reading "one still missing" is just seeing which of the two is still pulsing.
-- **A robotic arm can feed it, for free.** An arm whose output tile is a toolbox slot runs the
-  factory unattended. No code was written for that — the two pieces just speak the same language
-  (items lying on the ground), which is the point of keeping everything on tiles.
-- **The refusal is PHYSICAL.** A pair that is not a recipe makes the lid jump and slam back with
-  a dull iron thud, every ~2.5s — not continuously, or it becomes background noise. The player
-  sees the machine TRY and give up; it never says what is missing. Same answer when the output
-  tile is occupied: "not now" is the honest word for both, and distinguishing them would be the
-  hint balloon back under another name.
-- **It refuses rather than stacks, and it revalidates at delivery.** The output check at the start
-  of the cycle can go stale over the ~2.3s it takes — so if the tile is taken mid-forge the
-  finished item stays VISIBLE inside the open, still-glowing box until the spot frees. You can see
-  the axe waiting in there.
-- **The inputs are taken at the FIRST frame of the craft**, not at the forge: leaving them on the
-  ground would open a window where the hero (or an arm) walks off with one while the machine is
-  already working, and the box would produce out of nothing.
-- Four beats, ~2.3s, and each one is a pixel-art pose swap, never a scale/fade: lid opens (240ms)
-  → both items arc in and shrink to nothing (460ms) → **the forge** (900ms: hot frame, gold glow,
-  three hammer blows with sparks, tremble that peaks mid-cycle) → the product arcs out and lands
-  (420ms) → lid closes. Sprite Factory owns `toolbox.png`: 4 body poses + 2 tray states, 0 FAIL /
-  0 WARN. The arched handle with a see-through gap is what separates its silhouette from the
-  wooden crate; the base never changes between frames so opening reads as movement, not as a
-  different object appearing.
-- **Its parts need internal depth ordering** (`DEPTH_GLOW`/`DEPTH_ITEM`) — the same trap as the
-  arm's. An east-facing box has its slots, body and output on the SAME `tileY`, so the flying
-  cargo and the forge glow land in the body's own plane and either strobe or vanish behind it.
-- The body is SOLID (bumping it rattles the tools inside), and `dir` travels through the editor's
-  place/erase/undo like the arm's. It is the second directional prop, so it took the **G** key for
-  free — but its frames are lid poses, not directions, so the board draws a **prow nub** on the
-  chip instead of a direction frame (`hasDirectionFrames` vs `isDirectionalProp`). The editor
-  warns when a slot or the output lands on collision, the world edge or another solid prop.
-- `npm run playtest -- caixa-ferramentas` guards all of it: the four rotations derive the right
-  three tiles, the body blocks, stepping on a tray deposits, the axe is manufactured and both
-  inputs are consumed, a wrong pair is refused without producing anything, a blocked output holds
-  the product until the tile frees, and the whole iron chain runs end to end.
-
-### The ore rock (`ironRock`) and the iron block (`iron`)
-
-The second raw material, and the prop that yields it. `ironRock` is **the same `RockObject`** with
-`ore: true` — same two pickaxe blows, same recoil, same collapse, same collision, and the bomb
-shatters it exactly like any boulder. What changes is the art and the drop.
-
-- **It must not take a third blow.** An ore rock that costs one more swing is the same decision
-  taken more slowly; the difference has to live in what comes OUT, never in the timing.
-- **One class, not a subclass.** The difference fits in a boolean, while two classes would mean
-  two copies of the recoil, the collapse and the collision contract — the reliable way for them to
-  disagree a month from now. Same reasoning as `isTileOccupied` being shared by the crate and the
-  swing gate.
-- **`GameScene.dropRockSpoil` exists because TWO paths shatter rock** — the pickaxe and the blast —
-  and they had already drifted once. With the rule written in two places, an ore rock opened by a
-  bomb would calmly drop an ordinary stone.
-- **The art is the plain rock's grid, pixel for pixel, with ore painted into it.** Both frames are
-  literal dumps of `rock.png` / `rock_cracked.png`: the player has to recognise the boulder to
-  think of the pickaxe. The ore is drywood BROWN against the lavender stone — a HUE contrast, which
-  survives the night (the dark eats luminance, not warm-vs-cool). The cracked frame runs the vein
-  along the fissure, so the crack promises the next blow instead of just recording the last one.
-  The chips it throws are rust-tinted (`ORE_CHIP_TINTS`), so the blow reads different before the
-  item even lands.
-- **The iron block is the first item with NO use of its own.** Stone fords a river and quenches
-  lava; a stick bridges and carries fire; iron only ever goes into a toolbox tray. That is
-  deliberate — the bench needed an input whose only reason to exist was the bench, or every recipe
-  would compete with its own ingredients' direct uses. It is also the only item whose ITEM GET
-  caption points at another machine, because "I picked up a lump of metal and it does nothing" is
-  otherwise the correct reading, and it is wrong.
-
-## The pressure plate (`pressurePlate`) and the undead that WANTS it
-
-A plate is the oldest circuit producer and the simplest: it needs a **body** on it. Three things
-count, and always have — the **hero**, a pushed **crate**, and **any enemy**
-(`GameScene.updateMechanismCircuits`). The first two are the problem the plate poses: the hero has
-one pair of feet and needs them somewhere else, and a crate only goes where there is room to shove
-it. The third used to be an accident of the occupancy test. Now it is the piece.
-
-**A skull is drawn to a pressure plate.** If one is inside its sight radius (the SAME
-`DETECTION_RANGE` it hunts the hero by — "what a skull can see" has to be one number), a **thought
-balloon with a lit plate in it** rises over its head and it marches there, **ignoring the hero
-completely**: it does not chase him, does not back away from his torch, does not strike even from
-an adjacent tile. It arrives, it **stands there**, and the circuit closes. So a plate near the dark
-is a switch the player throws by *leading a monster onto it* — the undead stop being only a threat
-and become the third body, the only one that walks to the plate by itself.
-
-- **The one lever the hero has is hitting it.** A blow snaps the fixation and keeps the skull
-  plate-blind for `PLATE_BLIND_AFTER_HIT_MS` (`UndeadEnemy.takeDamage`). Without that window the
-  manager would hand the plate straight back on the next frame and the counter-play would be
-  decorative. There is no other cancel: you cannot talk it out of it, and standing in the way only
-  makes it walk around you.
-- **The balloon is NOT the need-item hint balloon coming back.** That one talked to the *player*
-  ("go fetch the pickaxe") and handed him the answer to a lock; it is still gone, and `pedra` still
-  asserts its texture never even loads. This one belongs to the *creature* — the same sentence as
-  the attack wind-up's red flash, an intention shown before it is acted on — and without it a skull
-  walking past the hero reads as a broken chase. Different sentence, different art (Sprite Factory
-  `thought-plate.png`: thought bubbles trailing down, never a speech tail), different asset key.
-  **A new creature intent gets a bubble; a new LOCK still gets only a shake.**
-- **`EnemyManager.assignPlateLures` hands out ONE skull per plate**, honouring existing fixations
-  first (re-assigning would walk a skull off the plate it is holding and strobe the circuit) and
-  pairing the rest closest-first. It lives in the manager because it is the only place that can see
-  the other skulls; a plate claimed by two would leave one standing beside a taken tile forever,
-  which reads as broken rather than as hungry.
-- **`GameScene.lurablePlates` decides what is even offerable**, and refuses two: a plate in campfire
-  light (the undead never enter it, so that march could never end) and a plate under a crate
-  (blocked, and pressed already). A balloon is a promise, and a promise the creature cannot keep is
-  worse than no balloon. The hero standing on a plate is NOT a disqualifier — he walks off, and
-  dropping the fixation every time he crosses would leave the skull dithering mid-room.
-- **The march gives up on PROGRESS, not on a clock** (`PLATE_PATIENCE_MS`): `moveToward` is greedy
-  and there is no pathfinder, so a rock between skull and plate is a dead march. As long as it keeps
-  closing the gap it may take as long as it likes.
-- Nothing that ships today has a plate in it (`world.json` and both levels have zero), so this
-  changes no existing world — it is a tool for the next one. It only exists in the **adventure**:
-  the undead siege is off in a puzzle world (`isPuzzleWorld()`) and skulls are not authorable, so a
-  level cannot use it. A playtest reaches it with `__scene.enemyManager.spawnUndead(x, y)`.
-- `npm run playtest -- placa-undead` builds the whole thing: the skull is born BETWEEN the hero and
-  the plate (hero 3 tiles west, plate 4 east) so walking east is the only reading of "it ignored
-  the hero", then it presses the plate, holds the circuit without flicker, and a single blow drops
-  the balloon and sends it back after the hero. `caixa-placa` remains the hero/crate regression.
-
-## The water wheel (`waterWheel`) — a real in-river 3D generator
-
-`src/game/objects/WaterWheelObject.ts`. The wheel is a named boolean circuit producer with a real
-Three.js rotor: low-poly rim, connected spokes, volumetric paddles, hub, axle, submerged trestle
-and dynamo housing. The whole rotor is one hierarchy and turns continuously through
-`rotor.rotation.z`; the runtime sprite sheet is not faking its motion.
-
-- **The wheel occupies the river tile itself.** In the editor it may only replace an existing
-  `water`/`bridgeSpot` prop. At runtime that prop creates its own non-buildable `WaterObject`, and
-  `World3D.buildTerrain` includes wheel tiles in the sunken river set. Forgetting the latter leaves
-  the water quad below an ordinary ground tile, making a logically wet wheel look dry.
-- **Standing water is not enough.** `waterFlowAt` requires active, non-drained water under the
-  rotor and at least one active orthogonal river neighbour. Draining the wheel's own tile removes
-  its source even while an adjacent tile stays full.
-- **Power comes from angular speed, not directly from the water predicate.** The rotor accelerates
-  against inertia, closes its circuit above a threshold and coasts after flow stops. This keeps the
-  dínamo alive briefly during slowdown instead of snapping wheel, light and consumer off together.
-- **Circuit producers combine by OR.** Pressure plates and water wheels sharing a variable are
-  aggregated once per frame before consumers update. A robotic arm with a `variable` only moves
-  while that circuit is live; an old unbound arm remains self-powered for compatibility.
-- **Sprite Factory still owns the authored pixel asset.** `spritefactory/sprites/water-wheel.mjs`
-  builds 8 rotor phases in off/on banks with the official wood/stone/green palette (0 FAIL,
-  0 WARN). Phaser uses it for the editor palette and placement icon; gameplay uses the 3D model.
-- Juice is stateful: water spray follows the detected flow, paddles have a repeating splash SFX,
-  startup shakes, the dynamo emits a green pulse/sparks and its physical lamp changes colour.
-- `npm run playtest -- roda-agua` guards dry-placement rejection, in-river authoring, continuous
-  3D angle change, acceleration, power delivery to an arm, draining under the wheel, coast and
-  final shutdown. `caixa-placa` and `braco` are the circuit/consumer regressions.
-
-## The boiler (`boiler`) — fire becomes energy
-
-`src/game/objects/BoilerObject.ts`. The third circuit producer, beside the plate and the wheel —
-and the one that finally connects FIRE, the game's only steerable system, to the power grid. The
-wheel asks "is water flowing here?"; the boiler asks "is there flame touching me?"
-(`GameScene.fireHeatAt`, orthogonal neighbours): a LIT campfire (steady state — the bucket is its
-off switch), a burning bush/grass (the pulse of a planted fuse), lava (geothermal, permanent —
-the melt around a settled crown still burns), or a lit graveto lying on the ground (what the
-robotic arm delivers — flame crossing a wall into a firebox). Heat is not spread: nothing
-CATCHES fire because of the boiler. And the hero's own lit torch STOKES it directly — bump the
-furnace with the burning graveto (the house fire-bump grammar; the torch survives the transfer)
-and it burns internally for ~16s (`stoke`): a timed round trip, never a switch, so running a
-machine on torch alone means feeding the furnace — fixed sources are how a plant stays on.
-While alive (stoked, heated or coasting on steam) the chimney SMOKES — a running plant
-announces itself from afar.
-
-**Steam needs BOTH elements.** Fire under an EMPTY tank pressurizes nothing: bump with the
-full bucket to fill it (the throw empties the bucket, same as dousing), and boiling CONSUMES
-the water (~45s per bucket, draining only while heated — steam is the water leaving). The
-sprite carries both asks as its two dark voids: the cold firebox mouth wants fire, the empty
-sight glass (blue when wet) wants water. The ART carries both asks — there is no balloon
-translating them. Both are round trips: the plant demands the two elements, repeatedly.
-
-- **Power comes from steam PRESSURE, not from the heat test** — the exact mirror of the wheel's
-  angular speed. Pressure builds against thermal inertia (~1.4s) and drains slowly (~5.2s), with
-  hysteresis (on at 0.45, off at 0.18): one grass tuft burning 2.2s buys several seconds of live
-  circuit, so a pulsed fuse can FEED the furnace without the consumer flickering — stoking is
-  the gameplay, the farming loop become a power plant.
-- The body is a BILLBOARD like every other world prop (the game's style), boot-generated in
-  three looks swapped on state edges the way a campfire swaps frames: cold / stoked (the
-  firebox mouth ember lights — the readable thermometer) / generating (the dynamo's green
-  status lamp — the one "circuit closed" grammar shared with the wheel). Steam puffs pace with
-  pressure and a near-subliminal tremble marks full regime; effects/audio only exist near the
-  hero (the wheel's rule). No new THREE lights — the fire that heats it brings its own from
-  the pool.
-- Producers still combine by OR per variable; the editor authors it like the wheel ("Saida de
-  energia" + the variables modal), warns about unbound boilers, and its palette icon is
-  boot-generated (`boilerTexture.ts`) — the runtime never draws the sprite.
-- `npm run playtest -- caldeira` guards: cold boiler = dead grid = frozen arm; lit campfire →
-  pressure → circuit → the arm works; extinguish → coast holds, then opens; a lit ground torch
-  heats and its burnout cools. `caixa-placa` and `braco` remain the circuit regressions.
-
-## Power wires (`wire`) — current becomes geography
-
-`src/game/objects/WireObject.ts` + `render3d/wireTexture.ts`. Before wires, energy was a named
-variable — a bus with no body. The wire makes the grid PHYSICAL: the author lays cable props
-tile by tile from a producer to the consumer, and current is a per-frame flood-fill over
-orthogonally adjacent wires (`GameScene.updateWireEnergy`), seeded by every producer that is
-GENERATING right now (boiler with steam, turning wheel, pressed plate). A one-tile gap is an
-open circuit — which is exactly what makes the cable a puzzle piece and not decoration.
-
-- **The shape is never authored.** Seven forms (vertical, horizontal, four elbows, junction),
-  resolved from the neighbours — other wires and the grid's machines — at boot in game and live
-  on the editor board (`EditorScene.wireShapeAt`): painting the path IS the authoring, the same
-  rule that gives the arm its direction frame. Textures are boot-generated pairs per shape:
-  the dark cable base, plus a yellow energy core drawn additively on top only while the wire is
-  LIVE (a pulsing glow — current is a living thing, the bombSpot's grammar).
-- **A wire beside a machine converts it to wired mode.** An arm touching ANY wire is powered
-  only by a live wire (OR the wireless variable, if it also has one); with no wire nearby the
-  old behavior stands (variable-gated, or legacy self-powered when unbound). Wires don't need
-  variables at all — a boiler with no variable still energizes its adjacent cables.
-- Wires never block (a floor cable — the hero steps over it) and never burn (rubber is not in
-  the fuel graph). Current has no memory: the live set is derived from sources every frame;
-  what persists is the producers' physics (pressure, spin), never the wire.
-- `npm run playtest -- fios` guards: shapes born from neighbours (h/nw/v/se), a wired unbound
-  arm freezing on a dead grid, the path lighting yellow end to end while an isolated cable
-  stays dark, cargo moving on cable power alone, walkability, and full shutdown when the
-  source dies.
-
-**The battery (`battery`/`batteryFull`) — electricity's portable vessel.** The stick carries
-fire, the bucket carries water, the battery carries CURRENT — the item that lets energy cross
-where no cable can be laid (a river in the hero's hand, a wall in the arm's claw). Charge the
-empty one by STEPPING on a LIVE wire while holding it (a dead wire charges nothing); step on a
-DEAD wire holding the full one and it DOCKS onto that tile (the walk-only place gesture — a
-live wire never steals a charge it doesn't need). The grounded battery is a SEED for the
-flood-fill, draining ONLY while feeding (`BATTERY_FEED_MS`, ~20s of grid uptime) — in the hand
-it is stable, away from cables it waits intact. The charge TRAVELS with the item through every
-hand-off (ground → hand → ground → the arm's claw, `heldBatteryChargeMs`/`carriedCharge` — the
-electric twin of torch fuel), so pick-up-and-redock never refills it. Spent, it dies into the
-empty shell in place (nothing evaporates) and the island goes dark. Sprite Factory art
-(`battery.png`, empty/charged window in the wire's gold); the empty battery is authorable as a
-pickup. `npm run playtest -- bateria` guards the whole arc: dead wire refuses, live wire
-charges, the dock gesture empties the hand, an ISLANDED net lights from the grounded battery
-and its arm hauls cargo, partial charge survives the pickup cycle, and the spent charge leaves
-the shell.
-
-**The electronic gate (`electronicGate`) — power must stay on.** A gate is a physical wired
-consumer: at least one adjacent cable must be LIVE to raise it. It has no wireless/variable mode;
-an unwired gate is deliberately fail-closed. Losing the last live cable starts closing it in the
-same frame, so a pressure plate, generator coast or battery charge can hold a passage only for as
-long as that source really lasts. Collision follows the visible clearance: the tile stays solid
-through the lower poses and becomes walkable only at the fully raised pose.
-
-The body is one 16x16 `Billboard3D`, not a Three.js model. Sprite Factory owns eight frames in
-`electronic_gate.png`: four grille heights in unpowered/powered banks; the lamp changes from dark
-to the shared circuit green and the adjacent cable supplies the yellow live line. Animation swaps
-whole pixel-art poses (no smooth scaling/fading). The open billboard uses `depthLayer: 'ground'`
-because the hero can occupy its tile. `npm run playtest -- portao-eletronico` covers editor
-authoring, dead-grid collision, intermediate frames, live opening, automatic closing and re-open.
-
-## The swing gate (`swingGate`) — the lock with no key
-
-`src/game/objects/SwingGateObject.ts`. The locked door's twin, minus the lock: same ironwork
-(the art is `locked_door.png` with the keyhole plate replaced by the bars running behind it),
-no key, and it opens by itself when the hero bumps it. **Unless something is standing on the
-tile behind it** — a swing leaf needs room to swing, so a tuft of tall grass back there jams it.
-It shoves, catches and settles back, and stays shut.
-
-This is the one barrier in the game that breaks the rule stated at the top of the fire section:
-every other obstacle is a lock with exactly one key. Here there is no item to find — **what opens
-it is changing the far side**, and the far side is by definition where the hero cannot go. So it
-only has answers when paired with the things that act at a distance: fire, and the robotic arm
-that carries a lit graveto across a line the hero can't cross.
-
-- **The refusal must not be the locked door's shake.** That shake is the game's word for "this is
-  solid, forget it" — and this gate is not refusing, it is *trying*. So the leaf actually starts
-  to swing (the sprite narrows ~12%), hits what's behind it and springs back, twice. The player
-  has to see the leaf MOVE to understand the problem is on the other side and not in their hands.
-  The two SFX are the same hinge with different endings: `playGateSwing` opens into clear air,
-  `playGateStrain` is that same creak cut short by a dull thud.
-- **"The other side" is measured from the bump direction, not from an authored rotation.** The
-  gate opens away from whoever arrives, so it works from either side and the author never has to
-  get a facing right when placing it.
-- **`GameScene.isTileOccupied` is shared with the crate push, on purpose.** Both ask the same
-  question — "is there anything at all here?", which is wider than "is it solid": an item lying
-  on the ground is not solid (the hero walks over it) but it stops both a crate and a leaf. Two
-  copies of that list were the reliable way for the two to disagree a month from now.
-- `npm run playtest -- portao-de-bater` builds and solves the whole puzzle the piece exists for:
-  a wall with the gate at one gap and the arm at another, grass behind the gate, the hero hands
-  the arm a lit graveto, the fire walks the grass, and the same bump that only rattled now opens.
-
-## The moonflower (`moonflower`) — ONE plant drawn nine times
-
-`src/game/objects/MoonflowerObject.ts` + `spritefactory/sprites/moonflower.mjs`. A night-blooming
-flower over a chokepoint: a shut BUD (it blocks) while a lit campfire is within ~2.6 tiles, an open
-petal-BRIDGE (walkable, faintly bioluminescent) once the area goes dark. Reversible — light a fire
-and it folds shut again. It is the only barrier whose key is the *absence* of something.
-
-**The two states are one drawing, not two drawings that resemble each other.** They used to be two
-independent procedural sprites — a green side-on teardrop and a pale top-down rosette — sharing no
-palette, no petal count and no silhouette, so the pair read as two objects swapping places. Now a
-single parametric function (six petals on a receptacle on a stem) is evaluated at nine openness
-values and dumped into one sheet. "Closed" and "open" cannot drift apart, because there is nothing
-to keep in sync: they are the same drawing at `t = 0` and `t = 1`. **Ask this of any prop with
-states** — if two poses need a rule to stay related, they will stop being related.
-
-- **The sheet is split into two BANKS because the game draws the flower in two geometries**, and
-  that split is not cosmetic: the shut bud is an UPRIGHT billboard (volume + a cast shadow, so it
-  reads as an obstacle) and the open bloom is a FLAT quad on the `ground` depth layer (the hero
-  stands on it). Frames 0–4 are standing, with the camera's projection **baked into the art**
-  (`DEPTH_UP` = camHeight/camBack, the same conversion the robotic arm computes at runtime); frames
-  5–8 are plain plan views, which the lying quad's own geometry foreshortens. The cut sits at
-  `MOONFLOWER_FRAMES.handoff` — the last instant the near petal is still in the air.
-- **The banks CROSS-DISSOLVE, and that is why both bodies carry a lowered `alphaTest`.** At the lit
-  default (0.5) a fading sprite pops out of existence instead of fading. The seam does not show
-  because both sides draw the same flower at the same instant; the lying quad also fades in
-  slightly ELEVATED and settles (`LAND_ELEV`), which is what the petals are actually doing.
-  Both shapes need a stand-in in `prewarmShaders` — `alphaTest` reaches the program's cache key,
-  and the lying body is born hidden, so `compile()` (which walks only VISIBLE objects) never sees
-  it and the first bloom of the run would pay for the link.
-- **Openness travels at a RATE, never on a tween.** One number moves toward its target at a speed
-  that depends on where it already is, so a reversal is free: light a fire halfway through the
-  bloom and the petals fold back from exactly where they were. Two tweens would have to be killed
-  and re-aimed, and the flower would jump to a pose belonging to the other animation. The two
-  curves are the animation's whole feel — opening eases in and out (a flower does not snap, ~1.4s),
-  closing HESITATES at full bloom and then whips shut (~0.9s), which is what makes the directions
-  read as two events instead of one clip played backwards.
-- **Collision follows the ART, not the trigger** (`WALKABLE_AT` = 0.78): the tile is still a wall
-  when the flower is half open, and only opens once the petals are on the ground — the electronic
-  gate's rule. Closing crosses the same line immediately, so it blocks again the moment it starts
-  folding.
-- Juice, all of it mesh-and-tween (nothing may add a point light at runtime): pollen motes exhaled
-  at the moment the petals break apart, a halo that overshoots on arrival then breathes, a settle
-  spring at both ends, a tiny world shake as the petals land / slam shut, wind sway on the closed
-  bud, and two synthesised SFX built like the swing gate's pair — one gesture, two endings (air
-  rising into a bell; the same air descending into a dull slap).
-- **`shake()` sets a counter, not a tween.** `render()` owns the bud's angle every frame for the
-  wind, so a tween on the same property is overwritten and the bump is never seen.
-- The proximity test lives in `GameScene.updateMoonflowers`, called from `update()` and **not** from
-  `renderProps()` — which `reprojectStatic()` also calls, and a dialog pan must not advance a bloom.
-- `npm run playtest -- flor-da-lua` authors the fixture in `/lab` and asserts the claim the way it
-  has to be asserted: it asks the RENDERER which sheet each of the two bodies is drawing from. Plus
-  the lock (bare-handed, the bud refuses), real intermediate poses in both banks, a frame where both
-  bodies are on screen at partial alpha, collision still blocking past half-open, and the fold back.
-
-## The portal crossing — the one animation told by two scenes
-
-Stepping into a `levelPortal` used to be a 620ms fade to purple. Now it is four beats, and the
-thing that makes it structurally different from every other effect in the game is that **a
-`scene.restart()` happens in the middle of it**: the suck and the tunnel run in the OLD level's
-GameScene, the fall runs in the NEW one, and those are two different objects with a dead world
-between them.
-
-1. **A sucção** (`GameScene.playPortalSuck`, 900ms). The hero is already standing ON the portal
-   tile when `handleTileEntered` fires, so there is nowhere to drag him: he is pulled *in* where
-   he stands — rises, spins, shrinks to nothing. He vanishes by SIZE, never by alpha alone, which
-   would read as a ghost instead of as swallowed. The portal's particles reverse (`setSwallow`):
-   at rest they rise and it exhales, inverted they fall inward and it INHALES.
-2. **O vazio** (620ms). The portal spinning alone in the dark it just made. Without the pause the
-   trip starts on top of the hero disappearing and neither beat is seen.
-3. **O túnel** (`render3d/PortalTunnel.ts`). Owns its own canvas, renderer and rAF loop at
-   `z-index: 3` — it has to, because World3D and the Phaser scene are both destroyed underneath
-   it. Low-res backing store stretched with NEAREST, sized so one tunnel pixel matches one pixel
-   of the world's ART (`tileScreenSize() / 16`): the trip is the only non-16px frame in the game
-   and it must not read as another game's screen. Wall = an open cylinder seen from inside with a
-   generated column texture scrolling along its axis; streaks = instanced quads rotated so their
-   normal points at the tunnel axis (a quad that does not rotate goes edge-on exactly when it
-   passes the side of the screen). It starts BEFORE the restart so the second WebGL context is
-   paid for behind a screen that is already covered.
-4. **A queda** (`GameScene.playPortalArrival`). The world builds behind the overlay, then the
-   overlay leaves — never a frame of half-built world. The fall starts INSIDE the exit flash, not
-   after it, or the level would open on a hero hanging motionless in the air. `Quad.easeIn`,
-   because falling accelerates; the reflex `easeOut` makes him float down like a feather. The
-   level title card waits for his feet to touch.
-
-- **`setPendingPortalArrival` (`runtime/portalTransition.ts`) is the whole bridge across the
-  restart** — one boolean, consumed on read so a death/restart never drops the hero out of the sky.
-- **The suck eats the world's LIGHT, and only one knob does that.** `params.ambient`/`moon` kill
-  the sources, but in a lava level the emissive floor IS the light and the frame does not move
-  (measured: 45.6 → 45.2). `World3D.setWorldFade` (the death drain) finishes it in the post.
-  **`params.exposure` is inert here**: the world is drawn into an EffectComposer render target and
-  three only applies tone mapping when drawing straight to the canvas — the same bound-target trap
-  `prewarmShaders` documents. A test that watched the knob passed on an effect that did not exist.
-- **The hero's view state must be RESET on create** (`resetHeroView`). Phaser reuses the scene
-  instance across `restart()`, and `hero` is a `readonly` field — so the scale-0.001 the suck left
-  behind arrived in the next level and the hero was born invisible.
-- `npm run playtest -- portal-travessia` guards all four beats where each happens, including the
-  tunnel surviving the restart, and measures the darkening on the SCREENSHOT (see the comment on
-  `shotLuma` for the two easier measurements that lie).
-
-## Verifying a change
-
-The playtest harness (`playtest/`) is headed Playwright — it drives the real game and asserts on
-real state. Add a scenario in `playtest/scenarios/` and register it in `index.mjs`.
-
-- Always enter the game with **`?play`** (dev-only; skips the language pick, title and intro —
-  keying past them is flaky).
-- Do **not** drive the game through an MCP browser tab: a hidden tab freezes Phaser's rAF, so
-  nothing advances and every timing is meaningless.
-- Live handles in dev: `window.__scene` (the Phaser scene), `window.__game`, `window.hd3d` (every
-  3D render knob, live-tunable), `window.gameDebug`, `window.__prof`.
-
-**Test EXACTLY what you changed, and nothing else.** Write (or extend) the one scenario that
-covers the new thing and run that. Do **not** replay the whole game to check a pointed change:
-the full puzzle solves (`espada` above all) take minutes each, they are bump-timing sensitive and
-so they flake, and a flake in an unrelated scenario tells you nothing about your change while
-costing you the afternoon. Axe/tree/border → `machado`. Robotic arm → `braco`. Toolbox and its
-recipes → `caixa-ferramentas`. Rock and pickaxe →
-`pedra`. Pressure plate + hero/crate → `caixa-placa`; the undead that walks onto one →
-`placa-undead`. Portal crossing → `portal-travessia`. Swing gate → `portao-de-bater`. Moonflower →
-`flor-da-lua`. O modo explorador (mundo infinito, janela do terreno, 50%/5%) → `explorador`.
-Fire and the light
-budget → `perf-burn`. Frame cost → `perf-profile`. Item-state contracts (a bridge refusing a
-second burn, the mound waiting for a clear tile, production drops falling to a free neighbour,
-the bomb's fuse tween dying with the bomb) → `itens`. Same rule for re-runs: one failure in a
-scenario you did not touch is a flake to note, not a suite to run four times.
-
-**`espada`, `itens` and the second half of `menu-flow` are currently RED, and not because of
-anything you did.** All three assert the contents of the old generated `level-1` ("A Espada na
-Pedra"), which the hand-authored level replaced — see the warning at the top. Treat their failure
-as expected until they are rewritten to author their own fixture in `/lab`, and never "repair"
-them by editing a level file. (`menu-flow`'s title assertions, before the level list, are live.)
-
-**When measuring performance, always compare against `main` (`git stash`).** A number on its own
-proves nothing — a fix that removes a stall can quietly cost frame time, and you will not see it
-without the before.
-
-**Unlock vsync for any perf measurement**: `PLAYTEST_UNTHROTTLED=1 PLAYTEST_SLOWMO=0`. With vsync on
-a desktop GPU simply *downclocks* to meet the refresh — strip the whole post chain out of the frame
-and the reported GPU time does not budge, because the hardware just did the smaller job more slowly.
-Every variant then measures the same and every optimisation looks like it changed nothing.
-
-## Proving a render change is invisible
-
-`npm run playtest -- visual-ref` writes deterministic reference shots; `node playtest/compare-visual.mjs
-<dirA> <dirB>` diffs them pixel by pixel. Two runs of the same build differ by **0 pixels**, so
-anything the diff reports is real. Use it for every performance change that touches the renderer.
-
-    git stash && npm run playtest -- visual-ref
-    mv playtest/results/visual playtest/results/visual-main
-    git stash pop && npm run playtest -- visual-ref
-    node playtest/compare-visual.mjs playtest/results/visual-main playtest/results/visual
-
-`VISUAL_ISOLATE=shadows` strips the frame back to the ground and the cast shadows with no post chain
-— the bloom smears any local change across half the image, so it will tell you a shadow moved when
-what moved was a mote of dust.
-
-**The trap that will waste your afternoon:** three.js burns `Math.random()` draws on every object's
-UUID. So a change that merely allocates a *different number of objects* at boot shifts the shared
-generator — and every flame then gets a different seed and flickers to a different rhythm. A cast
-shadow's LENGTH is driven by its flame's brightness, so two byte-identical renderers will "fail" the
-pixel diff by 40% of the frame for a reason that has nothing to do with rendering. `visual-ref` pins
-the seeds themselves for exactly this reason. If a diff looks structural, check the fire state first.
-
-## Profiler
-
-`src/game/debug/Profiler.ts`. `?prof` boots with it running, **F3** toggles the HUD,
-`__prof.report()` / `.csv()` dump the data. Per frame it records the real frame interval, CPU by
-section, **real GPU time** (timer query), draw calls, live shader programs, lights, heap and
-gameplay counters — and its spike log **names the cause** rather than just showing a number.
-
-GPU time matters: fragment cost is invisible to a CPU clock (`composer.render()` only *submits*
-work), so "one more light" or extra overdraw shows up nowhere else.
-
-## The rendering rule that keeps biting
-
-`src/game/render3d/World3D.ts` holds a **fixed, small** number of point lights, and nothing may add
-or remove one at runtime. Two costs push the same way:
-
-1. three.js bakes the light **counts** into every compiled shader's cache key. One
-   `scene.add(pointLight)` mid-run invalidates *every lit material in the world* and recompiles them
-   all — a ~550ms frozen frame. (This was the "travada ao queimar o arbusto" bug.)
-2. Every light is evaluated by **every lit fragment**, and the patched shader does a world-space
-   snap + flame wobble per light: ~0.35ms of frame time each. So the count must also stay small.
-
-So a fire does **not own** a light — it **borrows** one. All lights are built in the `World3D`
-constructor (`FIRE_LIGHT_SLOTS`); each frame the pool is aimed at the lit fires nearest the camera.
-A fire that misses out keeps its glow quad, which is a *mesh* — meshes can come and go freely, only
-lights cannot. `npm run playtest -- perf-burn` guards this.
-
-## Other things that are easy to get wrong
-
-- **Phaser does not auto-call `shutdown()`** — wire it via `events.once(SHUTDOWN, ...)` or a
-  `scene.restart()` (death) leaks listeners across runs.
-- **Scene edits do not hot-reload.** Phaser scene changes need a hard reload; the editor's
-  `beforeunload` blocks the auto-reload, so you can sit there looking at stale code.
-- **No sprite may overflow its tile.** 3D depth comes from the shader, never from scaling art up.
-- **Anything the hero can STAND ON must declare `depthLayer: 'ground'`** (`DEPTH_LAYER` in
-  `Billboard3D.ts`). Two upright billboards on one tile are camera-facing quads at the same spot,
-  i.e. exactly coplanar: the depth test has no winner, so it flips per pixel per frame and the
-  pair strobes (the item blinking out under the hero's boots). It is not a bug in any one prop —
-  it is what coplanar geometry does — so patching it prop by prop with a hand-placed nudge only
-  moves it around. The layer pushes ground clutter a hair down the view axis, deterministically.
-  Already declared: every ItemPickup + its rim, coins, hearts, survivors pickups, the bombSpot
-  ghost, a planted bomb, grass mown to stubble (`setDepthLayer('ground')` the instant it stops
-  blocking). Flat quads (holes, blooms, water) are exempt — they separate by `flatY`.
-- **NPC dialogue lives in `public/world.json`**, not only in `NPC_DIALOGS` — a new NPC needs both.
-- Materials with `onBeforeCompile` **must** set `customProgramCacheKey`, or differently-patched
-  materials silently share whichever variant compiled first.
-- **`prewarmShaders()` must run with the composer's render target bound.** The world is never drawn
-  to the canvas — EffectComposer draws it into an offscreen target — and three bakes the target's
-  *colour space* into the program's cache key. A prewarm that leaves the canvas bound compiles a
-  complete, correct, useless set of programs the game never asks for, and the game then compiles its
-  real set lazily, one 50–300ms freeze at a time. `perf-profile` fails if a single program compiles
-  during play; a new billboard option shape must register a stand-in in `prewarmShaders`.
-- A cast shadow's `mat.needsUpdate = true` on a texture swap looks like waste and is not: three only
-  refreshes a material's uniforms when its version moves, so without it the hero's shadow freezes on
-  one frame of his walk cycle while he walks.
+## Os dois botões, a mochila e a subtela
+
+O jogo **não é mais só-andar**. Detalhes e consequências: `progress.md`.
+
+    A (Z / J / espaço)  →  a ESPADA, na área à frente do herói. Sem espada, o soco.
+    B (X / K)           →  PEGA o item do chão; senão usa o escolhido no tile à frente, ou o pousa.
+    ESC                 →  a subtela: mochila + corações, e quem escolhe o item do B.
+
+No toque são dois círculos no canto de baixo (`ActionButtons`, ordem do NES: B à esquerda), e eles
+aparecem em qualquer aparelho de dedo (`isTouchDevice`).
+
+- `GameScene.pressAttack` / `pressUse` são ligados **por evento de teclado**, nunca por `JustDown`
+  (o `update` tem meia dúzia de saídas antecipadas onde uma tecla lida por polling morre). O A tem
+  `keyup` também — segurá-lo carrega a **lâmina rodopiante** (corta os 8 vizinhos) —, e a repetição
+  de tecla se filtra pelo `event.repeat`, nunca por um booleano nosso: um `keyup` perdido mataria o
+  botão. Pedido feito na cadência **espera** (130ms), nunca some.
+- **A parede VIRA o herói** (`PlayerMovementController`): precondição dos dois botões, que agem no
+  tile à frente. Ele encara, não entra. E **virar-se para uma criatura é de graça** — a primeira
+  investida só vira o corpo (`turnedTowardCreature`), insistir cobra o dano de contato. Só criatura.
+- **O golpe varre a ÁREA à frente — o bloco 2×3** (`SWING_ARC_NEAR` + `SWING_ARC_FAR`), e quem
+  mostra isso é a **órbita do punho** (`SLASH_ORBIT_FACTOR`): a espada é sempre o sprite da espada,
+  no tamanho dela — o golpe alcança porque o braço estende, **nunca** porque a arte cresce ou porque
+  um efeito desenhado entra na frente dela. A fileira de trás precisa de **caminho**
+  (o tile do meio não pode ser parede — senão a lâmina cortaria através da rocha), e o **soco só
+  alcança a primeira**: alcance é da arma, não do braço.
+- **Golpe que não mata compra espaço e tempo**: arremessa um tile (`EnemyBase.shove`, consultando o
+  **mesmo mundo** em que o bicho anda — luz de fogueira inclusive) e atordoa (`applyHitstun`).
+  Espécie que escreve a própria posição (torreta, zora) **precisa** de `canBeShoved = false`.
+- **O esbarrão ficou só com os gestos de corpo**: empurrar caixote, portão de bater, falar com NPC,
+  sentar na fogueira acesa (a loja) — e tomar dano de contato.
+- `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…). Devolve
+  `false` só quando o item não tem nada a ver com o tile, e **só então** `placeItemAt` pousa ali.
+- **Depositar é o B** (bandejas, buraco de plantio, marca de bomba, entrada do braço…), e **pegar
+  também**: o herói **nunca** recolhe nada por pisar em cima (`pickUpItemAt` — o tile à frente
+  primeiro, o de baixo dos pés depois). No passo ficaram só **carregar** a bateria num cabo vivo e
+  comer carvão com a tocha acesa. Moeda e coração não são itens e continuam entrando andando.
+- A mochila (`runtime/Inventory.ts`) guarda em vez de trocar; `GameScene.heldItem` é um **getter**
+  sobre a seleção (uma fonte de verdade só). Trocar de item **apaga a tocha**.
+- **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica: a
+  lógica pula pro tile de destino quando o passo começa, e o corpo desenhado fica um tile atrás.
+- **Golpe não ACENDE o corpo que o levou:** tint branco em billboard `emissive` é silhueta chapada
+  que o bloom espalha, e o hitstop a congela acesa. Tint no bicho só pro que não é dano.
+- **Não há exceção aos dois botões.** Houve um revólver que se mirava com o mouse em 360°; ele foi
+  arrancado inteiro (arma, balas, cruz de mira). Nada neste jogo se aponta.
+- `npm run playtest -- combate` guarda o contrato dos botões; `esgrima`, a mão do combate.
+
+## O mundo, os levels (`/levels`) e o lab (`/lab`)
+
+- **⚠️ NUNCA rode `generate:levels` NEM `generate:world`.** `gen-levels.mjs` sobrescreve
+  `public/levels/level-1.json` e `index.json`; `generateWorld.ts` sobrescreve o `world.json`
+  inteiro por um mundo **8×8 sem portal, sem NPC autorado e com uma fogueira** — e o de hoje é
+  22×8, feito à mão no `/editor`. Os dois escrevem **sem merge e sem perguntar**. Ficam no repo
+  como scaffolding, e só depois de apontar a saída para um caminho desocupado.
+- **Mexer no mundo em massa é um script que LÊ o `world.json` e acrescenta** — nunca um que o
+  refaz. `scripts/enrich-world.mjs` e `scripts/place-enemies.mjs` são os modelos: idempotentes
+  (miram num TOTAL, não num delta), determinísticos (zero `Math.random()`) e proibidos de tocar em
+  `ground`, `collisions` e no que o autor já pôs — quando a regra nova conflita com o autorado, o
+  tile dele sobrevive e só a espécie cede. Faça um backup antes assim mesmo.
+- **Leia o JSON, nunca a documentação, para saber o que um level contém** — um level muda sempre
+  que seu autor abre o lab.
+- **Um level é SEMPRE exatamente um chunk 12×12. Nunca maior.** A câmera enquadra ~um chunk:
+  caminhar não é puzzle. Se não couber, corte o puzzle.
+- **Cada level se resolve sozinho:** `playerStart` próprio + uma **fogueira-lar acesa** (a mais
+  próxima do spawn — é assim que o runtime escolhe), toda outra apagada; só as ferramentas do
+  puzzle. **Um puzzle só é puzzle se o caminho fácil estiver fechado** — asserte a *trava*.
+- **Um playtest AUTORA a fixture que precisa** (entra no `/lab`, coloca props pelo `EditorStore`,
+  aperta P) em vez de depender do conteúdo de um level.
+- `/lab` edita um level (`?level=N`) via `/api/world?file=level-N`; **P** joga o mundo em memória,
+  **ESC** volta; nada salva até o Salvar. `/?level=N` e `/lab?play` bootam direto.
+- O **cerco de undead** (`UndeadSpawnDirector`) está desligado em mundo-puzzle (`isPuzzleWorld()`).
+  Isso vale só pro cerco: **inimigo autorado (aba Inimigos) funciona em level, nas 7 espécies**.
+- Um level mostra dois botões flutuantes (↻ recomeçar, com confirmação de 2 toques, e pausa) —
+  `LevelButtons` em `PauseMenu.ts`.
+
+## O explorador (`src/game/explorer/`) — a única aposta do jogo
+
+Mundo gerado enquanto o herói anda, acampamento seguro no centro, risco × recompensa em 3 números:
+**longe paga mais** (`coinMultiplierAt`, degraus, teto x8), **50% se você escolher parar** (portal
+pergunta, `ExtractPrompt`), **5% se o escuro escolher por você** (morrer; reiniciar custa o mesmo).
+O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo seria neutro.
+
+- O mundo entra pelo mesmo buraco de fechadura do `world.json` (`WorldData.setInfiniteWorld`).
+- O renderer segura uma **janela** de 5×5 chunks (`ExplorerDirector`) e reassa o terreno ao cruzar
+  a fronteira (~15-25ms); `terrainMats` guarda os materiais **porque material novo em runtime
+  recompila todo shader do mundo**.
+- **`FOREST_FILL_PERCENT` = 34% e subir isso reabre um bug fechado**: chão aberto é percolação por
+  sítios (`p_c ≈ 0.5927`), e acima de ~40% de mata o mundo quebra em bolsões — com portal dentro.
+- `npm run playtest -- explorador` guarda o modo inteiro.
+
+## Fogo, e a lei das travas
+
+- **Fogo é o único sistema que o jogador conduz** (`scheduleFireSpread`/`igniteFlammableAt`): um
+  tile em chamas acende os 4 vizinhos. Combustível: mato alto, arbustos secos e **pontes de
+  madeira**. Pedra, água, lava e chão pelado são corta-fogo.
+- **Fogueira APAGADA pega fogo de um vizinho** (é o ponto: acender sem o herói ir lá). **Fogueira
+  ACESA nunca espalha** (é sumidouro). **Mato alto barra o herói e conduz fogo.**
+- **Toda outra trava é uma fechadura com uma chave só, e ela responde com FÍSICA, nunca com
+  legenda.** O balão de item-que-falta foi arrancado. **Trava nova ganha um tremor, não um texto**
+  — se só uma legenda ensinaria o que fazer, o que precisa de conserto é a arte da peça.
+- **Itens devem PRODUZIR, não só apagar** (árvore→graveto/ponte, picareta→pedra, foice→sementes).
+  Pergunte de qualquer item novo: o que ele *faz*?
+- **Dois machados:** `axe` (só madeira morta) e `greatAxe` (qualquer árvore, superset do primeiro —
+  um item novo nunca invalida o que o jogador já tem). Árvore é **tile**, não prop (846 no
+  `world.json`, um draw call), então o machado de aço edita **terreno**.
+- **A borda do mundo é MAR** por causa disso: nada no jogo remove água (`SOLID_GROUND_FRAMES`
+  bloqueia até as botas de lava). Tile de terreno novo = **frame novo num atlas existente**
+  (`node spritefactory/install-tile.mjs`), só acrescentando linhas.
+
+## As peças (o contrato de cada uma está no `progress.md`)
+
+`inserter` braço robótico (leva item sozinho; `dir`; corta a energia e ele **desfaz** a entrega) ·
+`toolbox` caixa de ferramentas (haste+cabeça: graveto+pedra=machado, graveto+ferro=foice) ·
+`ironRock`/`iron` (mesma rocha, `ore: true`) · `pressurePlate` (herói, caixote **ou inimigo** —
+a caveira MARCHA até uma placa que enxerga) · `waterWheel` · `boiler` (fogo→energia) · `wire`
+(corrente é flood-fill por adjacência; forma nasce dos vizinhos) · `battery` (carrega pisando em
+cabo vivo; **encaixa** com B num cabo morto) · `electronicGate` (fail-closed) · `swingGate` (a
+trava sem chave: só abre com o tile de trás livre) · `moonflower` (abre no escuro; uma arte
+avaliada em 9 aberturas) · `enemies` (ponto de spawn: um corpo por cova, volta em
+`ENEMY_RESPAWN_MS`; luz de fogueira acesa cala a cova) · `levelPortal` (a travessia em 4 tempos,
+com um `scene.restart()` no meio).
+
+## O bestiário (`src/game/entities/enemies/`, um arquivo por espécie)
+
+- **Espécie nova nasce de uma FRASE, não de uma tabela de HP** — o que ela diz que nenhuma outra
+  diz. Números diferentes fazem inimigos diferentes no papel e o mesmo inimigo na mão.
+- **Luz de fogueira é parede pra TODO monstro** — é a alavanca central do jogo e não tem exceção.
+  A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
+- **Chegar é um evento e todo golpe é telegrafado** (`WalkerEnemy`). Corpo que aparece do nada, ou
+  que fere sem aviso, desmente a promessa que a caveira ensinou.
+- **Onde cada espécie PODE existir é uma lista só** (`FLYING_ENEMY_KINDS` / `AQUATIC_ENEMY_KINDS`,
+  em `ScreenContent`): o corpo, a cova e o aviso do editor leem dela. Três cópias já discordaram.
+- **Água tem DUAS procedências e quem pergunta por uma só quebra**: prop `water` (levels) e tile de
+  terreno (overworld). Uma resposta só, `GameScene.isOpenWaterAt`. Fora do mundo o chão também é
+  mar — o teste de chunk não é opcional.
+- **Projétil é a única coisa em coordenada CONTÍNUA de tile** (`EnemyProjectile`): parede mata bala,
+  luz e água não. Ele brilha por ser `emissive`, **nunca por trazer uma luz**.
+- **UMA ESPÉCIE POR TELA.** O chunk é a região (a câmera enquadra ~um), e duas espécies na mesma
+  tela não são variedade: são ruído, porque cada corpo pede uma resposta diferente e nenhuma dá pra
+  aprender. Quem impõe isso no `world.json` é `node scripts/place-enemies.mjs` — e o número que se
+  olha ao mexer nele **não** é covas por tela, é **covas dentro de 14 tiles** (a cova acorda na
+  distância de visão da caveira, que vale ~4 telas: 3 por tela viram 13 corpos em volta do herói).
+
+## A montanha em cubo, e a água que anda
+
+As duas coisas saem do mesmo assado (`World3D.buildTerrain`), e as duas nasceram do mesmo defeito:
+o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chapado.
+
+- **A montanha é CUBO** (`buildTileCubeGeometry`, o mesmo caminho da alvenaria de dungeon): teto de
+  planalto em `y=1` e faces laterais só onde o vizinho não é montanha (a poda de voxel). Um quad em
+  pe é o adesivo de uma montanha — e o topo, que é a metade que uma câmera de cima realmente vê,
+  não existia. Cubo e quad continuam em malhas separadas porque `solidQuads` (o índice que o
+  machado usa) assume 4 vértices por tile.
+- **O volume é PINTADO, não iluminado** (`ROCK_CUBE_SHADE`, cor de vértice). O material leva
+  `normalUp` — toda face acende como se olhasse para cima, que é a lei de luz deste jogo —, então
+  sem sombreado no vértice teto e frente saem no mesmo tom e o cubo volta a ler como adesivo.
+- **Custo medido:** 6.147 montanhas viram 9.321 faces (18,6k triângulos contra 12,3k dos quads,
+  ×1,52) — a poda interna é o que segura isso, porque a esmagadora maioria dos blocos está cercada
+  de blocos e não mostra lado nenhum. Em troca a malha ficou **opaca** (o quad em pé era
+  `alphaTest`, que descarta fragmento e atravanca o early-Z).
+- **A arte da montanha é a pedra que já estava no CHÃO** (frames 23/24, "Chão de Pedra": uma arte de
+  parede que estava deitada), copiada em pé para os frames 39/40. A parede gerada que estava lá
+  antes foi deletada (`spritefactory/sprites/cliff-wall.mjs`) e o frame **41 ficou vazio** de
+  propósito: id de frame é posicional, e apagar a linha re-apontaria todo tile de dungeon. É uma
+  cópia dos pixels e não uma referência porque o editor mapeia **um frame para uma camada** — chão
+  e parede têm de ser dois ids.
+- **A água do mundo é o frame do MAR, e ela era uma foto.** Rio-prop (`WaterObject`) tem um quad por
+  tile que já ciclava `water_0..3`; o mar são milhares de quads numa malha só, sem objeto nenhum —
+  e o gerador do overworld escreve **toda** água (rio, lago, oceano) como esse frame. Então o
+  movimento vem do shader (`worldFx: 'seaFlow'`, material `terrain-sea`): a janela amostrada
+  escorrega dentro do frame em **texel inteiro** (a arte do mar é cíclica no toro de 16×16, então o
+  `mod` costura sem emenda e pixel art não escorrega meio pixel), a **arrebentação** avança e recua
+  sobre a rampa de costa que a malha carrega por vértice (`aShore`, a mesma leitura de 3 vizinhos
+  que a oclusão-ambiente do chão faz) com borda serrilhada por texel, e o glint de lua é o mesmo do
+  rio. As cores da beira são a própria ramp de água: a costa lê como água **rasa**. Quanta vida ela
+  tem é um knob vivo — `hd3d.seaFlow` (1 = padrão, 0 = a foto de antes, 2 = o dobro): "mais/menos
+  movimento" é decisão de olho, e não pode custar uma recompilação.
+- `npm run playtest -- montanha` guarda as duas: compara os pixels do atlas (39 é 23, 41 vazio),
+  exige teto e face sul na malha de rocha com o tile fora do índice de quads e ainda bloqueando, e
+  mede a água por **A/B contra um controle de chão parado** — sem o controle, uma poeira passando
+  na frente aprovaria uma água completamente imóvel.
+
+## Renderização: as leis que doem
+
+- **Nada pode adicionar ou remover uma luz THREE em runtime.** O three assa a *contagem* de luzes
+  na chave de cache de todo shader: um `scene.add(pointLight)` no meio do jogo recompila o mundo
+  inteiro (~550ms travados). Fogo **empresta** de um pool fixo (`FIRE_LIGHT_SLOTS`); mesh pode
+  nascer e morrer, luz não. `perf-burn` guarda isso.
+- **`prewarmShaders()` roda com o render target do composer ligado** — o mundo nunca é desenhado
+  no canvas, e o three assa o color space do alvo na chave do programa.
+- **Nenhum sprite pode vazar do seu tile.** Profundidade vem do shader, nunca de escalar arte.
+- **Tudo em que o herói pisa declara `depthLayer: 'ground'`** (`Billboard3D`), senão dois quads
+  coplanares piscam. Quads deitados (buracos, água, flor aberta) são isentos.
+- Material com `onBeforeCompile` **precisa** de `customProgramCacheKey`.
+- Prop montado com vários billboards precisa de **ordem interna de profundidade** (o braço e a
+  caixa de ferramentas z-fightavam consigo mesmos).
+- Direção de prop é **frame**, nunca rotação (`setAngle` gira no plano da câmera).
+- **Tudo que o billboard desenha é ESTADO dele** — `apply()` reescreve posição e escala inteiras a
+  cada `setPosition`/`setDisplaySize`, então o que for arranhado direto no `mesh` some no frame
+  seguinte. Foi assim que o `setFlipX` ficou anos sem virar ninguém. **O bestiário é desenhado de
+  frente e não espelha ao andar**: espelhar só inverte a luz, que nesta arte vem sempre da esquerda.
+
+## Verificando uma mudança
+
+**Rodar o jogo para testar é SEMPRE mudo.** Nunca com efeito sonoro: a janela é visível (o WebGL
+exige) e uma suíte inteira grita na sala de quem está trabalhando. O `GameDriver` já garante isso
+por construção (`--mute-audio` + volumes zerados antes do boot) — não desligue.
+
+O harness (`playtest/`) é Playwright com cabeça: dirige o jogo real e asserta estado real. Novo
+cenário em `playtest/scenarios/` + registro no `index.mjs`. Entre **sempre com `?play`**. Não
+dirija o jogo por aba MCP (aba oculta congela o rAF do Phaser). Handles vivos: `window.__scene`,
+`__game`, `hd3d`, `gameDebug`, `__prof`.
+
+**Teste EXATAMENTE o que você mudou.** Não replay o jogo inteiro para checar algo pontual — os
+solves completos levam minutos, são sensíveis a timing e flakeiam.
+
+Dois botões / mochila / subtela → `combate`; **mira, arco de 3 tiles, arremesso, atordoamento e a
+lâmina rodopiante → `esgrima`**. Machado, árvore e borda → `machado`; rocha e picareta →
+`pedra`; contratos de estado de item → `itens`. Braço → `braco`; caixa de ferramentas →
+`caixa-ferramentas`; placa com herói/caixote → `caixa-placa`, e a caveira que marcha até uma →
+`placa-undead`. **Aba Inimigos e a cova que devolve o inimigo → `inimigos`; o bestiário que anda →
+`fauna`; torreta, mago e a lei do tiro → `projeteis`; o zora e a janela dele → `zora`.**
+Roda → `roda-agua`;
+caldeira → `caldeira`; fios → `fios`; bateria → `bateria`; portões → `portao-eletronico` e
+`portao-de-bater`. Flor da lua → `flor-da-lua`; travessia do portal → `portal-travessia`;
+explorador → `explorador`. **Montanha em cubo e a água que anda → `montanha`.** Fogo e o orçamento
+de luz → `perf-burn`; custo de frame → `perf-profile`.
+
+**`espada` e `itens` estão VERMELHOS por mudança de design** (eles assertam o level-1 gerado antigo,
+e o `espada` ainda resolve tudo esbarrando). Não "conserte" editando level. O menu (uma porta só,
+sem idioma e sem intro) → `menu-flow`; o herói **nascendo do tamanho certo** → `smoke`. Uma falha
+num cenário que você não tocou é um flake a anotar, não uma suíte a rodar quatro vezes.
+
+**Performance sempre contra a `main`** (`git stash`), e sempre com vsync livre
+(`PLAYTEST_UNTHROTTLED=1 PLAYTEST_SLOWMO=0`) — com vsync a GPU só *reduz o clock* e toda variante
+mede igual. Mudança de renderer: `npm run playtest -- visual-ref` + `node
+playtest/compare-visual.mjs <dirA> <dirB>` (duas rodadas do mesmo build diferem em **0 pixels**).
+Armadilha: o three gasta `Math.random()` em UUID, então alocar um número diferente de objetos no
+boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render ter mudado.
+
+## Outras coisas fáceis de errar
+
+- **O Phaser não chama `shutdown()` sozinho** — ligue via `events.once(SHUTDOWN, ...)`, ou um
+  `scene.restart()` (morte) vaza listeners entre runs.
+- **Mudança em cena não faz hot-reload**; o `beforeunload` do editor bloqueia o reload automático,
+  então você fica olhando código velho.
+- **Fala de NPC vive no `public/world.json`**, não só em `NPC_DIALOGS` — NPC novo precisa dos dois.
+- `mat.needsUpdate = true` na troca de textura de sombra parece desperdício e não é (senão a sombra
+  do herói congela num frame do passo).
+- Editor: **G gira** (não R, que é o retângulo); `UI_STATE_KEY` sobe de versão junto com a *forma*
+  do `UiState`; a forma do cabo nunca é autorada, nasce dos vizinhos; o Salvar avisa (bandeja
+  bloqueada, roda seca, portão sem cabo, cova em tile bloqueado ou na luz).
+- Profiler: `?prof` boota com ele, **F3** liga o HUD, `__prof.report()`/`.csv()` despejam. Ele
+  mede GPU de verdade (timer query) e **nomeia a causa** de cada pico.

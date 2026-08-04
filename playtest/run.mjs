@@ -57,13 +57,17 @@ const main = async () => {
       // Build the per-scenario context handed to run().
       let shotIndex = 0;
       const shot = async (shotName, opts = {}) => {
-        const { region, selector, note, state } = opts;
+        // `region` is one of the named crops (canvasRegion); `clip` is an explicit rect in CSS
+        // pixels, for a scenario that measures one PATCH of the frame — the water A/B in
+        // `montanha` compares a water-only crop against a ground-only one, and a full-frame shot
+        // would let a firefly drifting past decide the result.
+        const { region, clip: rawClip, selector, note, state } = opts;
         const file = path.join(
           shotsDir,
           `${name}__${String(shotIndex).padStart(2, '0')}_${shotName}.png`,
         );
         shotIndex += 1;
-        let clip;
+        let clip = rawClip;
         const sel = selector;
         if (region) clip = await driver.canvasRegion(region);
         // Default: the whole viewport. The game renders across TWO stacked canvases now

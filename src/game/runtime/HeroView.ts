@@ -99,7 +99,7 @@ export const createHeroView = (): HeroView => ({
  * inteiro na cena seguinte. O heroi do level novo nascia invisivel.
  *
  * `x`, `y` e `sizePx` ficam de fora porque nao sao estado do heroi: sao recalculados todo frame
- * a partir da camera e do tile (syncHeroBillboard / updateHeroSize).
+ * a partir da camera e do tile (GameScene.render3D escreve `sizePx`, syncHeroBillboard le).
  */
 export const resetHeroView = (hero: HeroView): void => {
   const born = createHeroView();

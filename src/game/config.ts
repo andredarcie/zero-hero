@@ -7,12 +7,9 @@ import {
 import { BootScene } from '@/game/scenes/BootScene';
 import { EditorScene } from '@/game/scenes/EditorScene';
 import { GameScene } from '@/game/scenes/GameScene';
-import { IntroScene } from '@/game/scenes/IntroScene';
-import { LanguageScene } from '@/game/scenes/LanguageScene';
 import { LevelSelectScene } from '@/game/scenes/LevelSelectScene';
 import { PreloadScene } from '@/game/scenes/PreloadScene';
 import { TitleScene } from '@/game/scenes/TitleScene';
-import { SurvivorsScene } from '@/game/survivors/SurvivorsScene';
 
 // 'lab' is the puzzle laboratory (/lab): the same editor + playtest pair as 'editor', but
 // loading/saving a puzzle level (public/levels/level-N.json, ?level=N) instead of the overworld.
@@ -46,7 +43,7 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   // The world itself renders on a Three.js canvas UNDERNEATH this one (see
   // render3d/World3D.ts): Phaser draws logic-side FX + canvas UI over it, so
   // its canvas must be transparent. Scenes that want a solid backdrop (title,
-  // intro, editor) set their own camera background color.
+  // editor) set their own camera background color.
   transparent: true,
   pixelArt: true,
   roundPixels: true,
@@ -58,5 +55,10 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   },
   // Editor mode also registers GameScene so the editor can live-playtest the world in
   // memory (EditorScene.startPlaytest) without saving or leaving the page.
-  scene: [BootScene, PreloadScene, ...(mode === 'editor' || mode === 'lab' ? [EditorScene, GameScene] : [LanguageScene, TitleScene, LevelSelectScene, IntroScene, GameScene, SurvivorsScene])],
+  //
+  // O caminho do jogador e Boot → Preload → Title → Game, e so. A tela de idioma morreu (o jogo
+  // e so em ingles) e a intro tambem: o titulo cai DIRETO no mundo. LevelSelect continua
+  // registrada porque o menu de pausa de um level volta pra ela — ela so nao tem mais porta no
+  // titulo (`/?level=N` e o [I] do DevLauncher chegam la).
+  scene: [BootScene, PreloadScene, ...(mode === 'editor' || mode === 'lab' ? [EditorScene, GameScene] : [TitleScene, LevelSelectScene, GameScene])],
 });

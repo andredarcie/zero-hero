@@ -1,0 +1,12 @@
+dungeon-tiles: 10 frame(s) — 0 fail, 1 warn
+  [warn] color-count: frame 6: 9 colours — above the 2-8 norm; merge the closest pairs
+  frame 0: #265160×172 #3f607e×83 #334c62×1
+  frame 1: #265160×191 #3f607e×64 #334c62×1
+  frame 2: #265160×210 #3f607e×46
+  frame 3: #1d3b45×150 #334c62×86 #405e7a×20
+  frame 4: #1d3b45×165 #334c62×71 #405e7a×20
+  frame 5: #1d3b45×178 #334c62×58 #405e7a×20
+  frame 6: #1d3b45×139 #334c62×76 #405e7a×18 #886644×6 #c83e3e×5 #091518×5 #a53030×3 #f1cc36×2 #6b4f34×2
+  frame 7: #1d3b45×155 #334c62×48 #39571c×39 #405e7a×14
+  frame 8: #1d3b45×138 #334c62×74 #111214×24 #405e7a×20
+  frame 9: #265160×158 #3f607e×72 #111214×25 #334c62×1

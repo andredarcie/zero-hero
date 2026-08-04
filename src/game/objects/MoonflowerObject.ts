@@ -7,9 +7,15 @@ import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldProp } from './WorldProp';
 
 // A giant night-blooming flower over a chokepoint. Real moonflowers open in the dark and close in
-// the light — so this one is a CLOSED BUD (it blocks) whenever a campfire burns near it, and BLOOMS
+// the light — so this one is a CLOSED BUD (it blocks) whenever a flame burns near it, and BLOOMS
 // OPEN into a walkable petal-bridge (faintly bioluminescent) once the area goes dark. Reversible:
-// light a fire nearby and it folds shut again.
+// bring fire back and it folds shut again.
+//
+// A chama que a fecha nao precisa estar plantada no mapa: a TOCHA na mao do heroi conta (ver
+// GameScene.updateMoonflowers), e e a unica fonte movel do jogo. Consequencia de projeto, e nao
+// efeito colateral: chegar na ponte de petalas com fogo na mao a fecha ANTES de pisar nela, entao
+// atravessar custa deixar a luz pra tras — a flor deixou de responder so ao mapa e passou a
+// responder ao jogador.
 //
 // ── ONE plant, one ladder of poses ───────────────────────────────────────────────────────────
 // The bud and the bloom used to be two unrelated drawings (a green side-on teardrop and a pale
@@ -33,7 +39,7 @@ import type { WorldProp } from './WorldProp';
 // exactly where they were. A tween per direction would have to be killed and re-aimed, and the
 // flower would visibly jump to a pose belonging to the other animation.
 //
-// GameScene decides open/closed each frame from the lit campfires (setNearFire) and ticks this
+// GameScene decides open/closed each frame from the flames near it (setNearFire) and ticks this
 // (update); the flower owns its look, its collision and its juice. The glow is an additive mesh,
 // NOT a real light (nothing may add a point light at runtime — see World3D).
 
@@ -196,8 +202,9 @@ export class MoonflowerObject implements WorldProp {
   }
 
   /**
-   * GameScene calls this each frame: `nearFire` is true while a lit campfire is close enough to
-   * keep the flower shut. Only the TARGET moves here; the travel happens in update().
+   * GameScene calls this each frame: `nearFire` is true while some flame — fogueira acesa, a tocha
+   * do heroi, um graveto aceso no chao — esta perto o bastante pra manter a flor fechada. Only the
+   * TARGET moves here; the travel happens in update().
    */
   public setNearFire(nearFire: boolean): void {
     this.target = nearFire ? 0 : 1;

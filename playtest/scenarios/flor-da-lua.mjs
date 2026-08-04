@@ -187,6 +187,68 @@ export default {
       JSON.stringify(crossing.player));
     await shot('heroi-em-cima-da-flor');
 
+    // ── 3b. A TOCHA: a luz que ANDA ────────────────────────────────────────
+    // A fogueira e um interruptor que o autor pregou no chao; a tocha e o mesmo interruptor na mao
+    // do jogador. O que este trecho cobra e que a regra e a DISTANCIA e nao o item: com fogo na mao
+    // longe, a ponte continua aberta; ao se aproximar, ela se fecha ANTES do heroi pisar nela, e a
+    // travessia passa a custar deixar a luz pra tras. Sem o primeiro assert, "tocha acesa = toda
+    // flor fechada" passaria — e ai a flor teria virado um item, nao um lugar.
+    log('TOCHA: o heroi vem andando com fogo na mao — a ponte tem de se fechar na frente dele');
+    await teleport(FLOWER.x - 4, FLOWER.y); // 4 tiles: fora do alcance
+    await driver.settle(300);
+    await page.evaluate(() => {
+      const s = window.__scene;
+      s.heldItem = 'wood';
+      s.heldOnFire = true;
+      s.torchFuelMs = 30000; // combustivel de sobra: o teste e sobre a flor, nao sobre a tocha
+    });
+    await driver.settle(600);
+    const farTorch = await driver.getState();
+    assert('com a tocha LONGE (4 tiles) a flor segue aberta',
+      farTorch.moonflowers[0].openness === 1 && farTorch.moonflowers[0].blocking === false,
+      JSON.stringify(farTorch.moonflowers[0]));
+
+    // Anda de verdade, tile a tile, ate o vizinho da flor: e o gesto do pedido. Espera pelo ESTADO
+    // e nao por um relogio — o fechamento comeca quando o heroi cruza os 2.6 tiles, e cronometrar
+    // isso mediria a velocidade da caminhada.
+    await driver.press('ArrowRight', { count: 3 });
+    await page.waitForFunction(
+      () => window.gameDebug?.getState()?.moonflowers?.[0]?.openness === 0,
+      null, { timeout: 10000 },
+    );
+    const walkedIn = await driver.getState();
+    assert('chegando perto com a tocha acesa, a flor FECHA',
+      walkedIn.moonflowers[0].openness === 0, JSON.stringify(walkedIn.moonflowers[0]));
+    assert('e a ponte volta a ser parede', walkedIn.moonflowers[0].blocking === true,
+      JSON.stringify(walkedIn.moonflowers[0]));
+    // O controle: a outra flor, a 3+ tiles do caminho, nao sentiu nada. A regra e um raio em volta
+    // da chama, nunca um estado global do heroi — sem este assert, "tocha acesa = toda flor
+    // fechada" passaria igual.
+    assert('a flor LONGE do caminho continuou aberta (e raio, nao um interruptor global)',
+      walkedIn.moonflowers[1].openness === 1, JSON.stringify(walkedIn.moonflowers[1]));
+    assert('o heroi chegou ate o vizinho da flor',
+      walkedIn.player.worldX === FLOWER.x - 1 && walkedIn.player.worldY === FLOWER.y,
+      JSON.stringify(walkedIn.player));
+    // E a consequencia que faz disto uma peca de puzzle: com fogo na mao a ponte nao existe.
+    await driver.press('ArrowRight', { count: 1 });
+    await driver.settle(600);
+    const refused = await driver.getState();
+    assert('e o botao fechado recusa a passagem — nao se atravessa carregando fogo',
+      refused.player.worldX === FLOWER.x - 1, JSON.stringify(refused.player));
+    await shot('flor-fecha-na-tocha');
+
+    log('TOCHA APAGADA: mesma posicao, sem chama — a flor reabre');
+    await page.evaluate(() => { window.__scene.heldOnFire = false; });
+    await page.waitForFunction(
+      () => window.gameDebug?.getState()?.moonflowers?.[0]?.openness === 1,
+      null, { timeout: 8000 },
+    );
+    const doused = await driver.getState();
+    assert('apagada a tocha, a flor reabre com o heroi parado onde estava',
+      doused.moonflowers[0].blocking === false, JSON.stringify(doused.moonflowers[0]));
+    await page.evaluate(() => { window.__scene.heldItem = 'none'; });
+    await driver.settle(300);
+
     // ── 4. A LUZ DE VOLTA: fecha pelo mesmo ladder ─────────────────────────
     log('LUZ: reacende a fogueira; a flor recolhe as petalas e volta a bloquear');
     await teleport(HERO.x, HERO.y);

@@ -41,8 +41,108 @@ export const lightStepsUniform: THREE.IUniform = { value: 0 };
  */
 export const lightResUniform: THREE.IUniform = { value: 16 };
 
-/** Shared elapsed-seconds clock for animated surface FX (lava flow, water glint). */
+/** Shared elapsed-seconds clock for animated surface FX (lava flow, water glint, sea flow). */
 export const flowTimeUniform: THREE.IUniform = { value: 0 };
+
+/**
+ * A ÁGUA QUE ANDA — o efeito de superfície do mar (o `worldFx: 'seaFlow'`, ver PatchOpts).
+ *
+ * A água deste mundo é de dois tipos, e só um deles se movia. O rio é um PROP: cada tile tem um
+ * WaterObject com um quad próprio que cicla water_0..3, então ele já ondulava. O mar é um FRAME
+ * DE CHÃO (SEA_TILE_FRAME) — não existe um objeto por tile, existem milhares de quads assados numa
+ * malha só — e desde que o mundo do overworld passou a escrever TODA água (rio, lago e oceano)
+ * como esse frame, a água do jogo virou uma foto: um tapete azul-escuro absolutamente imóvel.
+ * Animar isso com objetos era impossível (cinco mil timers), então o movimento tem de vir do
+ * SHADER, que é onde uma superfície inteira se move de graça.
+ *
+ * Três coisas, e cada uma resolve uma leitura diferente:
+ *
+ *   1. A CORRENTE (`zhSeaDrift`) — a janela amostrada do frame escorrega dentro do próprio tile.
+ *      A arte do mar (spritefactory/sprites/sea.mjs) é um speckle CÍCLICO no toro de 16×16: por
+ *      isso o `mod` aqui costura sem emenda e o dash reaparece do outro lado como se tivesse
+ *      atravessado. O deslocamento é em TEXEL INTEIRO (`floor`) e não contínuo — pixel art não
+ *      escorrega meio pixel; a água anda em passos, no ritmo em que a arte foi desenhada. Os dois
+ *      eixos andam a taxas primas entre si, senão a diagonal viraria uma escada visível.
+ *   2. A ARREBENTAÇÃO na praia (o bloco no map_fragment) — a única pista de que aquilo é ÁGUA e
+ *      não piso azul é a beira. `vShore` mede, por canto do tile, quanta terra encosta ali (o
+ *      mesmo trio de vizinhos que a oclusão-ambiente do chão lê, para as duas concordarem sobre
+ *      onde fica a costa), e a onda avança e recua sobre essa rampa. A borda é SERRILHADA por
+ *      texel (zhSeaHash) de propósito: um degradê macio seria a única aresta lisa do jogo, e
+ *      espuma real não tem borda reta. As duas cores são as da própria ramp de água — a ondulação
+ *      e o glint do mar, que é a cor BASE do rio: a beira lê como água RASA, que é o que ela é.
+ *   3. O BALANÇO de valor — um seno lento multiplicando o albedo, para o mar aberto (onde não há
+ *      praia nenhuma) também respirar.
+ *
+ * O glint (as faíscas de lua) é o mesmo do rio, compartilhado abaixo: uma água que cintila
+ * diferente da outra a dois tiles de distância denunciaria que são dois sistemas.
+ */
+const SEA_DRIFT_TEXELS_PER_S = [2.6, 1.1] as const;
+
+/**
+ * Quanta vida a agua tem, ao vivo: 1 = o padrao, 0 = a foto parada de antes, 2 = o dobro. Uma
+ * escala para os tres efeitos, porque "mais/menos movimento" e uma decisao unica de olho — e ela
+ * tem de poder ser tomada com o jogo rodando (window.hd3d.seaFlow), nunca recompilando.
+ */
+export const seaFlowUniform: THREE.IUniform = { value: 1 };
+
+/** As faíscas frias da lua sobre a ondulação — o mesmo brilho para o rio e para o mar. */
+const WATER_GLINT_GLSL = /* glsl */ `
+  {
+    vec2 wp = vWorldFxPos.xz;
+    vec2 cell = floor(wp * 4.0);
+    float rnd = fract(sin(dot(cell, vec2(41.3, 289.1))) * 43758.5453);
+    float ph = fract(rnd + uFlowTime * 0.20);
+    float flash = smoothstep(0.93, 1.0, sin(ph * 6.2831853) * 0.5 + 0.5);
+    // 0.38, not the original 0.95: this adds BEFORE tone mapping, so at 0.95 a
+    // glint pixel cleared the bloom threshold and the river read as neon sparks.
+    gl_FragColor.rgb += vec3(0.45, 0.58, 0.82) * flash * 0.38;
+  }
+`;
+
+/**
+ * As funções do mar. Declaradas junto do TEXEL_AA_GLSL (é de lá que vem `uMapSize`) e depois do
+ * bloco do worldFx (é de lá que vem `uFlowTime`) — a ordem de inserção é a ordem no arquivo.
+ */
+const SEA_FLOW_GLSL = /* glsl */ `
+  float zhSeaHash(vec2 p) { return fract(sin(dot(p, vec2(23.7, 91.3))) * 24634.6345); }
+  vec2 zhSeaDrift(vec2 uv, vec4 bounds) {
+    vec2 texel = 1.0 / uMapSize;
+    // bounds is the box of the frame's texel CENTRES (tilesetFrameUv), half a texel inside the
+    // frame; half a texel back at each end is the frame's exact window in the atlas.
+    vec2 lo = bounds.xy - 0.5 * texel;
+    vec2 span = (bounds.zw + 0.5 * texel) - lo;
+    vec2 rate = vec2(${SEA_DRIFT_TEXELS_PER_S[0]}, ${SEA_DRIFT_TEXELS_PER_S[1]}) * uSeaFlow;
+    vec2 drift = floor(uFlowTime * rate) * texel;
+    return lo + mod(uv - lo + drift, span);
+  }
+`;
+
+/** A arrebentação + o balanço, no albedo (antes da luz — é a cor da água, não um brilho). */
+const SEA_SHALLOW_GLSL = /* glsl */ `
+  {
+    float wave = 0.5 + 0.5 * sin(uFlowTime * 1.05 - (vWorldFxPos.x + vWorldFxPos.z) * 0.9);
+    // The edge is broken up per TEXEL, on the world grid: ragged foam, never a smooth line.
+    float edge = zhSeaHash(floor(vWorldFxPos.xz * 16.0)) * 0.16;
+    // vShore runs 0 (open water) to ~0.67 along a straight coast, and to 1 at the back of a
+    // cove. The thresholds are calibrated to that range: the shallow band covers the last
+    // third of the tile and the crest is a one-or-two-pixel lip — both riding the wave in and out.
+    float shallow = step(0.40 - 0.18 * wave + edge, vShore);
+    float crest = step(0.60 - 0.10 * wave + edge, vShore);
+    // The SWELL of open water: wide bands crossing the surface, and where a band passes the water
+    // steps one rung up the ramp. Stepped, with the same per-texel ragged edge as the foam, for the
+    // same reason: a smooth gradient is not pixel art. Without it only the coast moves — and the
+    // coast is the minority of this world's water.
+    float swell = 0.5 + 0.5 * sin(vWorldFxPos.x * 0.5 + vWorldFxPos.z * 0.75 + uFlowTime * 0.85);
+    // Linear, because the map is already decoded (the texture is SRGBColorSpace): #265160 (the
+    // ramp's ripple) and #0b8a8f (the sea's glint, which is the RIVER's base colour — shallows).
+    float life = clamp(uSeaFlow, 0.0, 2.0); // hd3d.seaFlow: 0 puts the water back to being a photo
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.019, 0.082, 0.117),
+      step(0.72 + edge * 0.7, swell) * 0.7 * min(life, 1.0));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.019, 0.082, 0.117), shallow * 0.85 * min(life, 1.0));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.003, 0.254, 0.275), crest * min(life, 1.0));
+    diffuseColor.rgb *= 1.0 - (0.03 - 0.03 * wave) * life;
+  }
+`;
 
 // ── THE SHADOW MASK (hd3d.shadowMask — plano.md fase 3) ──────────────────────
 //
@@ -288,10 +388,13 @@ type PatchOpts = {
    * Animated surface effect keyed off world position + the shared flow clock:
    *   · 'lavaFlow'   — a molten heat shimmer crossing the tile (brightness wave).
    *   · 'waterGlint' — sparse cool moonlight sparkles skittering over the ripples.
-   * Both are anchored in WORLD space, so a river/lava field shimmers as one sheet
+   *   · 'seaFlow'    — the glint PLUS a real current: the sampled window drifts inside the
+   *                    frame, and the shore breaks (see the SEA_* GLSL above). Needs a per-quad
+   *                    `aShore` attribute and `texelAa` — it is the merged sea mesh's material.
+   * All are anchored in WORLD space, so a river/lava field shimmers as one sheet
    * instead of repeating the same pattern per tile.
    */
-  worldFx?: 'lavaFlow' | 'waterGlint';
+  worldFx?: 'lavaFlow' | 'waterGlint' | 'seaFlow';
   /**
    * Anti-alias the art's texel grid (see TEXEL_AA_GLSL). With `bounds` the sampled frame comes from
    * a uniform — one frame per material, swapped as a whole (a billboard's walk cycle). Without it,
@@ -365,20 +468,26 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       } else {
         // Moonlight glint: sparse cells flash a cool highlight in turn — added to
         // the FINAL colour (post-lighting) so the ripples catch light in the dark.
+        // Shared by the river's quads and the merged sea: two waters that sparkled
+        // to different rhythms two tiles apart would announce that they are two systems.
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <opaque_fragment>',
-          `#include <opaque_fragment>
-           {
-             vec2 wp = vWorldFxPos.xz;
-             vec2 cell = floor(wp * 4.0);
-             float rnd = fract(sin(dot(cell, vec2(41.3, 289.1))) * 43758.5453);
-             float ph = fract(rnd + uFlowTime * 0.20);
-             float flash = smoothstep(0.93, 1.0, sin(ph * 6.2831853) * 0.5 + 0.5);
-             // 0.38, not the original 0.95: this adds BEFORE tone mapping, so at 0.95 a
-             // glint pixel cleared the bloom threshold and the river read as neon sparks.
-             gl_FragColor.rgb += vec3(0.45, 0.58, 0.82) * flash * 0.38;
-           }`,
+          `#include <opaque_fragment>\n${WATER_GLINT_GLSL}`,
         );
+      }
+      if (opts.worldFx === 'seaFlow') {
+        // The shore ramp travels per vertex: one mesh holds the whole ocean, and every quad in
+        // it has its own coastline (see buildFlatTileGeometry's `shore`).
+        shader.uniforms.uSeaFlow = seaFlowUniform;
+        shader.vertexShader = shader.vertexShader
+          .replace('void main() {', 'attribute float aShore;\nvarying float vShore;\nvoid main() {')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\n vShore = aShore;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', 'uniform float uSeaFlow;\nvarying float vShore;\nvoid main() {')
+          // Straight after the map fetch, because the breaking wave is the water's own COLOUR
+          // (shallow water), not a highlight laid over it: the light must fall on it like it
+          // falls on everything else. The token itself is left standing for the texelAa patch.
+          .replace('#include <map_fragment>', `#include <map_fragment>\n${SEA_SHALLOW_GLSL}`);
       }
     }
 
@@ -563,16 +672,22 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
         } else {
           shader.uniforms.uUvBounds = opts.texelAa.bounds as THREE.IUniform;
         }
+        // The sea's current is a UV drift, so it has to happen INSIDE the fetch — and it has to
+        // WRAP within the frame's own window, which is why it cannot be a uniform added in the
+        // vertex shader: `bounds` clamps, and a clamped drift smears the frame's edge texel
+        // instead of bringing the pattern round the other side.
+        const uvExpr = opts.worldFx === 'seaFlow' ? `zhSeaDrift( vMapUv, ${bounds} )` : 'vMapUv';
         shader.fragmentShader = shader.fragmentShader
           .replace(
             'void main() {',
             `${perQuad ? 'varying vec4 vUvBounds;' : 'uniform vec4 uUvBounds;'}
              ${TEXEL_AA_GLSL}
+             ${opts.worldFx === 'seaFlow' ? SEA_FLOW_GLSL : ''}
              void main() {`,
           )
           .replace(
             '#include <map_fragment>',
-            chunk.replace(fetch, `texture2D( map, zhTexelUv( vMapUv, ${bounds} ) )`),
+            chunk.replace(fetch, `texture2D( map, zhTexelUv( ${uvExpr}, ${bounds} ) )`),
           );
       }
     }

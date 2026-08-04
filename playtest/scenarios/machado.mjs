@@ -73,7 +73,9 @@ export default {
     await teleport(0, 5);
     await give('greatAxe');
     await driver.settle(200);
-    await driver.walk('left', 3); // bate na fronteira, repetidamente
+    // Encara a fronteira e USA o machado nela tres vezes (o jogo tem botao agora: andar contra
+    // uma coisa nao usa mais item nenhum — ver o cenario `combate`).
+    await driver.faceAndUse('left', 3);
     await driver.settle(600);
     const seaAfter = await tileAt(-1, 5);
     assert('depois de machadadas, a fronteira continua mar',
@@ -118,20 +120,21 @@ export default {
       await teleport(target.nx, target.ny);
       await driver.settle(250);
       for (let i = 0; i < times; i += 1) {
-        await driver.walk(treeKey, 1);
+        // Encara a arvore (a seta contra uma trava so VIRA o heroi) e golpeia com o B.
+        await driver.faceAndUse(treeKey);
         await driver.settle(700); // o corte cai em CHOP_IMPACT_MS depois do swing
       }
     };
 
     // Bate ate o tile MUDAR e devolve o frame novo. Contar teclas nao serve: a primeira tecla
     // depois de um teleporte se perde (o controlador acabou de ser interrompido), entao um teste
-    // que assumisse "1 tecla = 1 machadada" mediria o input, e nao a escada de estagios. O que
+    // que assumisse "1 X = 1 machadada" mediria o input, e nao a escada de estagios. O que
     // importa provar e a SEQUENCIA — copa, toco, tile aberto — e que ela nao pula degrau.
     const chopUntilStageChanges = async (from, maxSwings = 6) => {
       await teleport(target.nx, target.ny);
       await driver.settle(250);
       for (let i = 0; i < maxSwings; i += 1) {
-        await driver.walk(treeKey, 1);
+        await driver.faceAndUse(treeKey);
         await driver.settle(700);
         const now = await treeFrame();
         if (now !== from) return now;
@@ -161,13 +164,11 @@ export default {
       window.__scene.itemManager.drop('greatAxe', x, y);
     }, [target.nx, target.ny]);
     await driver.settle(400);
-    // O item largado nasce DESARMADO sob os pes do heroi (regra do drop): sai e volta.
-    const step = DIR_KEY[`${-target.dx},${-target.dy}`];
-    await driver.walk(step, 1);
-    await driver.settle(300);
-    await driver.walk(DIR_KEY[`${target.dx},${target.dy}`], 1);
+    // O B recolhe o item de baixo dos pes. (Isto era uma danca de sair do tile e voltar, de
+    // quando a mochila engolia sozinha o que estivesse embaixo do heroi — nao engole mais.)
+    await driver.pickUp();
     await driver.settle(500);
-    assert('machado de aco na mao (coletado do chao)', (await state()).heldItem === 'greatAxe',
+    assert('machado de aco na mao (coletado do chao com o B)', (await state()).heldItem === 'greatAxe',
       `held=${(await state()).heldItem}`);
 
     // ── 5b. A arvore cai por ESTAGIOS, como a arvore seca ───────────────────
@@ -234,8 +235,8 @@ export default {
       await give('greatAxe');
       await teleport(dry.nx, dry.ny);
       await driver.settle(250);
-      // A arvore seca cai por ESTAGIOS (6 frames): bate ate ela deixar de bloquear.
-      await driver.walk(DIR_KEY[`${dry.dx},${dry.dy}`], 8);
+      // A arvore seca cai por ESTAGIOS (6 frames): golpeia ate ela deixar de bloquear.
+      await driver.faceAndUse(DIR_KEY[`${dry.dx},${dry.dy}`], 8);
       await driver.settle(900);
       const stillBlocking = await evaluate(([x, y]) => {
         const t = window.__scene.dryTrees.find((d) => d.worldX === x && d.worldY === y);

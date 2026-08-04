@@ -1,8 +1,9 @@
 import type Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { getLocale, setLocale, t, type Locale } from '@/game/i18n/i18n';
+import { t } from '@/game/i18n/i18n';
 import { getDofIntensity, setDofIntensity } from '@/game/runtime/graphicsSettings';
+import { SubScreenPanel, type SubScreenView } from '@/game/runtime/SubScreen';
 
 // The pause screen is plain DOM layered over the Phaser canvas — the same approach as
 // DialogOverlay / EditorDomUi. That choice matters twice here: serif text and native range
@@ -64,16 +65,6 @@ const CSS = `
 #${ROOT_ID} .zh-pause-sep { border: 0; border-top: 1px solid #3d342a; margin: 1em 0 0.8em; }
 #${ROOT_ID} input[type=range] {
   width: 9.5em; accent-color: #d4c8a4; cursor: pointer;
-}
-#${ROOT_ID} .zh-pause-langs { display: flex; gap: 0.4em; }
-#${ROOT_ID} .zh-pause-lang {
-  padding: 0.3em 0.7em; cursor: pointer; user-select: none;
-  border: 1px solid #3d342a; color: #8b8474;
-  transition: background 90ms ease, color 90ms ease;
-}
-#${ROOT_ID} .zh-pause-lang:hover { color: #d8d1c0; }
-#${ROOT_ID} .zh-pause-lang.zh-active {
-  border-color: #d4c8a4; color: #e7dcc4; background: #241d12; cursor: default;
 }
 #${TOUCH_BTN_ID} {
   position: fixed;
@@ -141,6 +132,17 @@ export interface PauseMenuCallbacks {
   onQuit?: () => void;
   /** Present only while playing a level: jump back to the level list. */
   onLevelList?: () => void;
+  /**
+   * A SUBTELA (a mochila + os coracoes), desenhada no topo do painel. Ela mora aqui, e nao
+   * numa tela propria, porque as duas obedecem a mesma lei: so existem enquanto o jogador as
+   * pediu. Uma segunda tela significaria uma segunda tecla, um segundo congelamento do jogo e
+   * duas coisas que o ESC poderia querer dizer.
+   *
+   * `readSubScreen` e lido a cada desenho (nunca um retrato tirado ao abrir), entao escolher um
+   * item e um caminho so: a cena troca o item do B e o painel pergunta de novo como ficou.
+   */
+  readSubScreen?: () => SubScreenView;
+  onSelectItem?: (kind: string) => void;
 }
 
 export class PauseMenu {
@@ -150,8 +152,7 @@ export class PauseMenu {
   private readonly musicLabel: HTMLSpanElement;
   private readonly sfxLabel: HTMLSpanElement;
   private readonly dofLabel: HTMLSpanElement;
-  private readonly langLabel: HTMLSpanElement;
-  private readonly langBtns = new Map<Locale, HTMLSpanElement>();
+  private readonly subScreen?: SubScreenPanel;
   private readonly fullscreenBtn?: HTMLDivElement;
   private readonly levelListBtn?: HTMLDivElement;
   private readonly restartBtn: HTMLDivElement;
@@ -180,6 +181,14 @@ export class PauseMenu {
     this.title = document.createElement('h1');
     panel.appendChild(this.title);
 
+    // A mochila vem ANTES das opcoes: quem apertou ESC no meio de uma expedicao veio ver o que
+    // tem e escolher o item do B; volume e idioma sao a segunda razao, nunca a primeira.
+    if (this.cb.readSubScreen && this.cb.onSelectItem) {
+      const onSelectItem = this.cb.onSelectItem;
+      this.subScreen = new SubScreenPanel(this.cb.readSubScreen, (kind) => onSelectItem(kind));
+      panel.appendChild(this.subScreen.el);
+    }
+
     this.resumeBtn = this.button(panel, () => this.cb.onResume());
 
     panel.appendChild(this.separator());
@@ -197,28 +206,8 @@ export class PauseMenu {
     // The renderer reads it every frame, so it takes hold the moment the game resumes.
     this.dofLabel = this.sliderRow(panel, getDofIntensity(), (v) => setDofIntensity(v));
 
-    // Language: swaps the catalog immediately; the menu re-labels itself. World text that was
-    // already rendered (dialogs, overlays) picks the new locale up on its next build/scene restart.
-    const langRow = document.createElement('div');
-    langRow.className = 'zh-pause-row';
-    this.langLabel = document.createElement('span');
-    this.langLabel.className = 'zh-pause-label';
-    const langs = document.createElement('div');
-    langs.className = 'zh-pause-langs';
-    ([['pt-br', 'PT-BR'], ['en', 'EN']] as Array<[Locale, string]>).forEach(([locale, short]) => {
-      const btn = document.createElement('span');
-      btn.className = 'zh-pause-lang';
-      btn.textContent = short;
-      btn.addEventListener('click', () => {
-        if (getLocale() === locale) return;
-        setLocale(locale);
-        this.refreshTexts();
-      });
-      this.langBtns.set(locale, btn);
-      langs.appendChild(btn);
-    });
-    langRow.append(this.langLabel, langs);
-    panel.appendChild(langRow);
+    // (Havia um par de botoes de idioma aqui. O jogo e so em ingles agora — nao ha catalogo pra
+    // trocar, e um seletor de uma opcao so e mobilia.)
 
     // Fullscreen is page-level (documentElement), not Phaser's ScaleManager: the canvas
     // already fills the window, so fullscreening the page is the whole job. Hidden where the
@@ -326,8 +315,6 @@ export class PauseMenu {
     this.musicLabel.textContent = t('pause.music');
     this.sfxLabel.textContent = t('pause.sfx');
     this.dofLabel.textContent = t('pause.dof');
-    this.langLabel.textContent = t('pause.language');
-    this.langBtns.forEach((btn, locale) => btn.classList.toggle('zh-active', getLocale() === locale));
     if (this.fullscreenBtn) {
       this.fullscreenBtn.textContent = document.fullscreenElement
         ? t('pause.fullscreenExit')
@@ -347,14 +334,31 @@ export class PauseMenu {
     if (event.code === 'Escape') {
       event.preventDefault();
       this.cb.onResume();
+      return;
+    }
+    // As setas andam na mochila enquanto ela esta aberta. A cena esta com `scene.pause()`, entao
+    // nada disto chega ao heroi — a mesma tecla que anda no mundo escolhe o item aqui dentro.
+    if (this.subScreen && (event.code === 'ArrowLeft' || event.code === 'ArrowRight')) {
+      event.preventDefault();
+      this.subScreen.step(event.code === 'ArrowRight' ? 1 : -1);
     }
   };
 }
 
 // ── discreet touch pause button (mobile) ──────────────────────────────────────
 
-export const isTouchDevice = (): boolean =>
-  'ontouchstart' in window || navigator.maxTouchPoints > 0;
+// O terceiro teste nao e redundancia: ha aparelho que responde `maxTouchPoints = 0` e nao expoe
+// `ontouchstart` (alguns Android em modo desktop, e o emulador de dispositivo do Chrome), e
+// nesses o par de botoes sumia — deixando o jogo sem A e sem B num aparelho que so tem dedo.
+// Errar para o lado de MOSTRAR e barato: num desktop de verdade `pointer: coarse` e falso.
+export const isTouchDevice = (): boolean => {
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return true;
+  try {
+    return window.matchMedia('(pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * A small translucent ⏸ button pinned to the top-right of the screen on touch devices —
@@ -368,6 +372,8 @@ export class PauseTouchButton {
     this.el = document.createElement('button');
     this.el.id = TOUCH_BTN_ID;
     this.el.type = 'button';
+    // Ver ActionButtons: sem esta marca, o toque no botao tambem viraria um arrasto de andar.
+    this.el.setAttribute('data-zh-ui', '');
     this.el.append(document.createElement('span'), document.createElement('span'));
     this.el.addEventListener('click', onTap);
     document.body.appendChild(this.el);
@@ -410,6 +416,7 @@ export class LevelButtons {
     ensureStyle();
     this.root = document.createElement('div');
     this.root.id = LEVEL_BTNS_ID;
+    this.root.setAttribute('data-zh-ui', ''); // ver ActionButtons: UI nao arrasta o heroi
 
     // Restart: a stroked circular arrow (inline SVG — crisp at any DPI, inherits currentColor).
     this.restartBtn = document.createElement('button');

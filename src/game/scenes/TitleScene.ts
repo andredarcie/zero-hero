@@ -3,17 +3,20 @@ import Phaser from 'phaser';
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
-import { endExplorerMode, startExplorerRun } from '@/game/explorer/explorerRun';
+import { endExplorerMode } from '@/game/explorer/explorerRun';
 import { t, tWords } from '@/game/i18n/i18n';
 
-// The game's start screen. It used to be theatrical — the title assembling one word per water
-// drop — but it now shows the title and the credit STRAIGHT AWAY and offers a choice: play the
-// adventure, or play the standalone puzzle levels. The menu flow reaches it already localized
-// (Language → Title), so the buttons render in the chosen language.
+// The game's start screen, and now the ONLY screen between the loader and the world: the title,
+// the credit, and one button.
 //
-//   • Jogar aventura → the story intro, then the wizard's opening area (Intro → Game).
-//   • Jogar levels   → the level list (LevelSelectScene), then the chosen level.
-//   • [S]            → the Vampire-Survivors-style mode.
+//   • Play adventure → the overworld, immediately. No language pick (the game is English only)
+//     and no intro cut-scene — the door is the door.
+//
+// Os levels e o explorador continuam vivos e nao tem mais porta AQUI: `/?level=N` boota um level,
+// `?explorer` boota uma expedicao, e o menu de pausa de um level ainda volta pra LevelSelectScene.
+//
+// Being the first screen, it also owns audio bring-up: the AudioContext stays locked until a user
+// gesture, so the menu bed is queued here and blooms on the first key/tap.
 const ACCENT = 0xf5d97a;
 const BTN_FILL = 0x14141f;
 const BTN_FILL_SEL = 0x22222f;
@@ -31,7 +34,6 @@ export class TitleScene extends Phaser.Scene {
   private buttons: MenuButton[] = [];
   private selected = 0;
   private starting = false;
-  private survivorsHint?: Phaser.GameObjects.Text;
 
   public constructor() {
     super(TitleScene.key);
@@ -45,48 +47,38 @@ export class TitleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#08080d');
     this.cameras.main.fadeIn(500, 0, 0, 0);
 
-    // The menu bed is already playing (started on the language screen, which comes first and
-    // unlocks audio) — so the title just shows itself; nothing to wait for.
+    // Decode the SFX + loops and queue the menu ambience. It is silent until the first gesture
+    // lifts the autoplay lock (unlockAudio, below) — this screen is where that gesture lands.
+    getSoundManager().preload();
+    getSoundManager().startMusic('menu', 1600);
 
     const titleSize = Phaser.Math.Clamp(Math.floor(width / 18), 20, 56);
     const creditSize = Phaser.Math.Clamp(Math.floor(width / 46), 9, 18);
 
     this.add
-      .text(width / 2, Math.round(height * 0.28), tWords('title.words').join(' '), {
+      .text(width / 2, Math.round(height * 0.32), tWords('title.words').join(' '), {
         fontFamily: FONT_FAMILY, fontSize: `${titleSize}px`, color: '#e7dcc4', resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
       .setDepth(2);
 
     this.add
-      .text(width / 2, Math.round(height * 0.42), `${t('title.by')} ${t('title.author')}`, {
+      .text(width / 2, Math.round(height * 0.46), `${t('title.by')} ${t('title.author')}`, {
         fontFamily: FONT_FAMILY, fontSize: `${creditSize}px`, color: '#8a8594', resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
       .setDepth(2);
 
-    // The three doors of the game, stacked and centred.
+    // The one door.
     this.buttons = [
-      this.makeButton(t('title.playAdventure'), Math.round(height * 0.58), () => this.startAdventure()),
-      this.makeButton(t('title.playLevels'), Math.round(height * 0.69), () => this.startLevels()),
-      this.makeButton(t('title.playExplorer'), Math.round(height * 0.80), () => this.startExplorer()),
+      this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure()),
     ];
     this.applySelection();
 
-    this.survivorsHint = this.add
-      .text(width / 2, Math.round(height * 0.90), t('title.survivors'), {
-        fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(Math.floor(width / 72), 7, 11)}px`,
-        color: '#8a4a3a',
-        resolution: TEXT_RESOLUTION,
-      })
-      .setOrigin(0.5)
-      .setDepth(2)
-      .setAlpha(0.75);
-
-    // Arm input a beat later so the key/tap that left the language screen can't fire a button.
+    // Arm input a beat later so the key/tap that dismissed the loader can't fire the button.
     this.time.delayedCall(300, () => {
       this.input.keyboard?.on('keydown', this.handleKey, this);
+      this.input.on(Phaser.Input.Events.POINTER_DOWN, this.unlockAudio, this);
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
@@ -113,8 +105,13 @@ export class TitleScene extends Phaser.Scene {
 
     const index = this.buttons.length;
     bg.on(Phaser.Input.Events.POINTER_OVER, () => this.setSelected(index));
-    bg.on(Phaser.Input.Events.POINTER_DOWN, () => { this.setSelected(index); activate(); });
+    bg.on(Phaser.Input.Events.POINTER_DOWN, () => { this.unlockAudio(); this.setSelected(index); activate(); });
     return { bg, label, activate };
+  }
+
+  // First gesture on this (the first) screen lifts the autoplay lock so the menu bed sounds.
+  private unlockAudio(): void {
+    getSoundManager().unlock();
   }
 
   private setSelected(index: number): void {
@@ -122,12 +119,6 @@ export class TitleScene extends Phaser.Scene {
     this.selected = index;
     this.applySelection();
     getSoundManager().playWaterDrop();
-  }
-
-  private move(delta: number): void {
-    const n = this.buttons.length;
-    if (n === 0) return;
-    this.setSelected((this.selected + delta + n) % n);
   }
 
   private applySelection(): void {
@@ -140,32 +131,17 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private readonly handleKey = (event: KeyboardEvent): void => {
+    this.unlockAudio();
     if (this.starting) return;
+    // Uma porta so: Enter, espaco ou 1 abrem. Seta nao faz nada porque nao ha pra onde ir — e
+    // "qualquer tecla" tambem nao, ou um ESC de reflexo comecaria a aventura.
     switch (event.key) {
-      case 'ArrowUp':
-      case 'ArrowLeft':
-        this.move(-1);
-        break;
-      case 'ArrowDown':
-      case 'ArrowRight':
-        this.move(1);
-        break;
       case 'Enter':
       case ' ':
+      case '1':
         this.buttons[this.selected]?.activate();
         break;
-      case '1':
-        this.buttons[0]?.activate();
-        break;
-      case '2':
-        this.buttons[1]?.activate();
-        break;
-      case '3':
-        this.buttons[2]?.activate();
-        break;
       default:
-        // The second door is a keystroke, not a button: [S] drops into Survivors.
-        if (event.key.toLowerCase() === 's') this.startSurvivors();
         break;
     }
   };
@@ -178,36 +154,21 @@ export class TitleScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, go);
   }
 
-  private startAdventure(): void {
-    setActiveLevel(null); // the story runs the real overworld, not a level
-    endExplorerMode();
-    this.fadeThen(() => this.scene.start('intro'));
-  }
-
-  private startLevels(): void {
-    endExplorerMode();
-    this.fadeThen(() => this.scene.start('levelselect'));
-  }
-
   /**
-   * A terceira porta: uma expedicao ao mundo infinito.
+   * A aventura, e ela comeca ANDANDO.
    *
-   * Nao passa pela intro. A aventura comeca com uma historia porque ela TEM uma; o explorador
-   * comeca no acampamento porque a unica coisa que ele tem a dizer — quao longe voce se atreve
-   * a ir — so pode ser dita andando.
+   * Havia uma intro aqui — o herói crescendo de um ponto enquanto uma voz mandava acordar — e ela
+   * saiu inteira: sete segundos de tela preta entre "quero jogar" e jogar. O que a intro dizia, o
+   * mago diz na primeira conversa, e essa o jogador escolhe ter.
    */
-  private startExplorer(): void {
-    setActiveLevel(null);
-    startExplorerRun();
+  private startAdventure(): void {
+    setActiveLevel(null); // a aventura roda o overworld de verdade, nunca um level
+    endExplorerMode();
     this.fadeThen(() => this.scene.start('game'));
-  }
-
-  private startSurvivors(): void {
-    getSoundManager().playTitleImpact();
-    this.fadeThen(() => this.scene.start('survivors'));
   }
 
   private teardown(): void {
     this.input.keyboard?.off('keydown', this.handleKey, this);
+    this.input.off(Phaser.Input.Events.POINTER_DOWN, this.unlockAudio, this);
   }
 }

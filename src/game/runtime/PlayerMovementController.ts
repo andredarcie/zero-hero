@@ -162,9 +162,14 @@ export class PlayerMovementController {
           this.lastBumpTime = now;
           this.onBumpBlocked?.(nx, ny);
         }
-        // A wall does not turn the hero (it never did) — and it ends the walk on the tile he is
-        // standing on, rather than leaving him wedged part-way into it.
+        // A PAREDE VIRA O HEROI — e isso mudou com os dois botoes. Ela nunca virava: sem golpe
+        // direcional, para onde ele olhava era so cosmetica. Agora A e B agem no tile A FRENTE,
+        // entao encarar uma coisa sem poder andar ate ela e a unica maneira de mirar nela — e um
+        // heroi parado de costas para a rocha, apertando a seta contra ela, mirava no vazio.
+        // O passo em si continua nao acontecendo: ele encara, nao entra.
+        this.lastFacing = { dx: next.dx, dy: next.dy };
         if (this.stepDir) this.endWalk(wx, wy);
+        else this.setFacing(next.dx, next.dy, false);
         break;
       }
 
@@ -305,6 +310,10 @@ export class PlayerMovementController {
 
   private handleTouchStart(e: TouchEvent): void {
     if (this.touchAnchor !== null) return;
+    // O arrasto escuta a JANELA inteira (andar tem de funcionar em qualquer ponto do vidro),
+    // entao ele tem de recusar explicitamente o que e UI: sem isto, tocar no botao A tambem
+    // plantaria a ancora do arrasto e o heroi sairia andando junto com o golpe.
+    if ((e.target as HTMLElement | null)?.closest?.('[data-zh-ui]')) return;
     const t = e.changedTouches[0];
     this.touchAnchor = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
   }
@@ -325,13 +334,35 @@ export class PlayerMovementController {
     this.touchAnchor = null;
   }
 
+  /**
+   * O arrasto de MOUSE anda? (O de dedo sempre anda — ele entra por outros ouvintes.)
+   *
+   * O mouse deste jogo tinha um trabalho só: ser o dedo de quem não tem tela de toque. Com o
+   * revólver ele ganhou outro — MIRAR —, e os dois não cabem no mesmo botão: um clique pra atirar
+   * plantaria a âncora do arrasto e o herói sairia andando junto com o tiro. Então, com o revólver
+   * escolhido, o GameScene desliga isto e o mouse vira mira; qualquer outro item, e ele volta a
+   * ser o dedo. Teclado e toque não sabem que esta chave existe.
+   */
+  public setMouseWalkEnabled(enabled: boolean): void {
+    if (this.mouseWalkEnabled === enabled) return;
+    this.mouseWalkEnabled = enabled;
+    // Desligar com o botão apertado deixaria a direção do arrasto presa e o herói andando sozinho
+    // pra sempre — a mesma armadilha do `keyup` perdido no botão A.
+    if (!enabled) {
+      this.touchDir = null;
+      this.touchAnchor = null;
+    }
+  }
+
+  private mouseWalkEnabled = true;
+
   private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    if (pointer.wasTouch) return;
+    if (pointer.wasTouch || !this.mouseWalkEnabled) return;
     this.touchAnchor = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
-    if (pointer.wasTouch) return;
+    if (pointer.wasTouch || !this.mouseWalkEnabled) return;
     const anchor = this.touchAnchor;
     if (!pointer.isDown || !anchor || anchor.pointerId !== pointer.id) return;
     this.trackDrag(anchor, pointer.x, pointer.y);
@@ -382,6 +413,28 @@ export class PlayerMovementController {
   /** The direction the hero's sprite currently faces (set the instant a move begins). */
   public get facing(): Dir {
     return this.lastFacing;
+  }
+
+  /**
+   * Onde o heroi esta NA TELA, em tiles fracionarios — que durante um passo NAO e a posicao
+   * logica que o GameScene guarda.
+   *
+   * A posicao logica pula para o tile de destino no instante em que o passo comeca (ver
+   * `stepFrom`), de proposito: o wind-up da caveira trava naquele tile e a esquiva e decidida
+   * contra ele. Mas o corpo desenhado ainda esta atras, deslizando — o heroi fica preso no
+   * centro da tela e e o mundo que escorrega. Entao qualquer overlay 2D que se ancore no tile
+   * logico enquanto ele anda nasce ATE UM TILE A FRENTE do proprio heroi: foi assim que o arco
+   * da espada apareceu flutuando na frente de quem corria e batia ao mesmo tempo.
+   *
+   * Parado, os dois sao o mesmo ponto — e por isso o bug so aparecia em movimento.
+   */
+  public visualWorld(worldX: number, worldY: number): { x: number; y: number } {
+    if (!this.stepDir || !this.stepFrom) return { x: worldX, y: worldY };
+    const t = Math.min(1, this.stepProgress);
+    return {
+      x: this.stepFrom.x + this.stepDir.dx * t,
+      y: this.stepFrom.y + this.stepDir.dy * t,
+    };
   }
 
   private setFacing(dx: number, dy: number, moving: boolean): void {

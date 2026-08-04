@@ -79,6 +79,8 @@ export default {
 
     // ── 1. Carregar: cabo vivo enche, cabo morto nao ─────────────────────────
     log('JOGO: pisar no cabo MORTO nao carrega; pisar no cabo VIVO carrega');
+    // Carregar continua sendo um PASSO (ganhar carga nunca foi algo que se faca sem querer e
+    // perca); encaixar virou o botao B, como todo deposito — ver o cenario `combate`.
     const deadStep = await driver.page.evaluate(() => {
       const s = window.__scene;
       s.heldItem = 'battery';
@@ -99,7 +101,7 @@ export default {
     log('JOGO: pisar no cabo morto encaixa a bateria — a ilha acende e o braco trabalha');
     const docked = await driver.page.evaluate(() => {
       const s = window.__scene;
-      s.handleTileEntered(9, 4); // bateriaFull veio do passo anterior; este e o gesto walk-only
+      s.placeItemAt(9, 4); // o B pousa a bateria cheia no cabo morto — o gesto de encaixar
       s.itemManager.drop('stone', 11, 3); // e uma carga na ENTRADA do braco (11,3)
       return {
         held: s.heldItem,
@@ -148,9 +150,10 @@ export default {
       const it = s.itemManager.items
         .find((i) => i.kind === 'batteryFull' && i.tileX === 9 && i.tileY === 4);
       it.chargeMs = 6000; // meio tanque, para a diferenca ser legivel
-      s.playerWorld.worldX = 9; // o heroi pisa na bateria: coleta normal do update
+      s.playerWorld.worldX = 9; // o heroi vai ATE a bateria...
       s.playerWorld.worldY = 4;
       s.movementController.interruptMovement(9, 4);
+      s.pickUpItemAt(9, 4); // ...e a apanha com o B, que e o unico jeito de pegar algo hoje
     });
     await sleep(500);
     const held = await driver.page.evaluate(() => ({
@@ -162,7 +165,7 @@ export default {
 
     const redock = await driver.page.evaluate(() => {
       const s = window.__scene;
-      s.handleTileEntered(9, 4); // o cabo esta morto de novo (a bateria saiu da rede): encaixa
+      s.placeItemAt(9, 4); // o cabo esta morto de novo (a bateria saiu da rede): re-encaixa
       const it = s.itemManager.items
         .find((i) => i.kind === 'batteryFull' && i.tileX === 9 && i.tileY === 4);
       return { held: s.heldItem, charge: it?.chargeMs ?? null };

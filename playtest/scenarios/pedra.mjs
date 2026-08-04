@@ -112,7 +112,8 @@ export default {
     assert('e NAO existe mais balao de item-que-falta — nem a arte dele carrega',
       bare.balloonLoaded === false, JSON.stringify(bare));
 
-    // Fica a OESTE da pedra e bate para leste: a picaretada e um bump, o jogo nao tem botao.
+    // Fica a OESTE da pedra, ENCARA e usa a picareta com o B: andar contra a pedra nao a
+    // arranha mais (o jogo ganhou dois botoes — ver o cenario `combate`).
     await evaluate(() => { window.__scene.heldItem = 'pickaxe'; });
     await driver.settle(200);
     await shot('pedra-inteira');
@@ -123,7 +124,7 @@ export default {
     });
     const before = await texOf();
 
-    await driver.press('ArrowRight', { count: 1 });
+    await driver.faceAndUse('right');
     await driver.settle(700);
     const cracked = await texOf();
     assert('a primeira picaretada troca a arte da pedra',
@@ -131,7 +132,7 @@ export default {
     assert('e a pedra rachada AINDA bloqueia', cracked.blocking === true, JSON.stringify(cracked));
     await shot('pedra-rachada');
 
-    await driver.press('ArrowRight', { count: 1 });
+    await driver.useItem();
     await driver.settle(700);
     const broken = await texOf();
     assert('a segunda picaretada abre o tile', broken.blocking === false, JSON.stringify(broken));

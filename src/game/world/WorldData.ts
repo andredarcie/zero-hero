@@ -3,7 +3,9 @@ import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
 import type { NpcKind, PickupKind, ScreenContent } from './ScreenContent';
-import { WORLD_SCHEMA_VERSION, type WorldChunk, type WorldData, type WorldProp } from './worldSchema';
+import {
+  WORLD_SCHEMA_VERSION, type WorldChunk, type WorldData, type WorldEnemySpawn, type WorldProp,
+} from './worldSchema';
 
 // Single seam through which the whole runtime reads the finite, authored world. The data is
 // loaded once (from public/world.json in PreloadScene) and set here before any gameplay
@@ -240,6 +242,25 @@ export const getElectronicGates = (): WorldProp[] => allProps().filter((prop) =>
 export const getLevelPortals = (): WorldProp[] => allProps().filter((prop) => prop.type === 'levelPortal');
 
 export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });
+
+// Os PONTOS DE SPAWN de inimigo, autorados na aba Inimigos do editor. Lidos de uma vez, como os
+// itens de mao e nunca por chunk, porque uma cova nao e conteudo de tela: ela guarda um relogio
+// de respawn que precisa continuar contando com o heroi do outro lado do mapa (ver
+// EnemySpawnerManager). Streamar isto zeraria o relogio a cada ida e volta.
+//
+// Mundo infinito devolve NADA de proposito: o explorador nao autora nada, e o cerco dinamico
+// (UndeadSpawnDirector, com a pressao da distancia) e o sistema que faz o perigo daquele modo.
+export const getEnemySpawns = (): WorldEnemySpawn[] => {
+  if (infinite) return [];
+  const out: WorldEnemySpawn[] = [];
+  for (const chunk of requireWorld().chunks) {
+    // `?? []` porque um chunk escrito a mao pode nao ter a lista; o resto do runtime nunca a leu.
+    for (const enemy of chunk.enemies ?? []) {
+      out.push({ type: enemy.type, worldX: enemy.worldX, worldY: enemy.worldY });
+    }
+  }
+  return out;
+};
 
 // Held items (everything except streamed hearts) are loaded once, up front, because the
 // hero can drop and swap them anywhere, so they must persist off-screen.

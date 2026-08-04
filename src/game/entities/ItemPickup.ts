@@ -125,10 +125,10 @@ const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1],
 ];
 
-// A single held item sitting on the ground — either authored in world.json or dropped when
-// the hero swaps items. It bobs while waiting and is collected on step. A dropped item is
-// "unarmed" (not collectable) until the hero steps off its tile, so swapping doesn't instantly
-// re-collect the item that just landed under the hero's feet.
+// A single held item sitting on the ground — either authored in world.json or dropped by the
+// hero. It bobs while it waits, and it waits forever: NADA e coletado por pisada. O heroi pega
+// com o B (GameScene.pickUpItemAt), e por isso um item largado nao precisa mais nascer
+// "desarmado" — pousar e pegar de volta sao dois gestos, e nunca mais um acidente.
 export class ItemPickup {
   private readonly sprite: Billboard3D;
   private readonly outline: Billboard3D[];
@@ -139,8 +139,6 @@ export class ItemPickup {
   // A carga de uma batteryFull no chao: drena so enquanto ALIMENTA uma rede de cabos (a cena
   // chama drainCharge por frame de alimentacao). Na mao do heroi a carga e estavel.
   private chargeMs: number;
-
-  public armed: boolean;
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -173,13 +171,11 @@ export class ItemPickup {
       .setDisplaySize(GROUND_SIZE, GROUND_SIZE)
       .setAlpha(0));
 
-    // A dropped item lands under the hero, so it's "unarmed" until they step off (the manager
-    // arms it); an authored item is armed from the start. Fade in via alpha only — render
-    // owns the bob each frame, so a scale tween would just be clobbered.
-    // A carga VIAJA com o item (como o combustivel da tocha): uma bateria meio-drenada que
-    // sobe pra mao e volta pro chao continua meio-drenada — nunca "recarrega de graca".
+    // Fade in via alpha only — render owns the bob each frame, so a scale tween would just be
+    // clobbered. A carga VIAJA com o item (como o combustivel da tocha): uma bateria
+    // meio-drenada que sobe pra mao e volta pro chao continua meio-drenada — nunca "recarrega
+    // de graca".
     this.chargeMs = kind === 'batteryFull' ? (chargeMs ?? BATTERY_FEED_MS) : 0;
-    this.armed = !dropped;
     this.sprite.setAlpha(0);
     scene.tweens.add({
       targets: this.sprite,
@@ -242,7 +238,7 @@ export class ItemPickup {
 
   public render(_tileSize: number, _camera: WorldCamera): void {
     if (this.collected) return;
-    const bob = this.collectable && this.armed
+    const bob = this.collectable
       ? (Math.sin(this.scene.time.now * 0.0045) + 1) * 0.5 * BOB_TILES
       : 0;
     this.sprite.setElevation(bob);

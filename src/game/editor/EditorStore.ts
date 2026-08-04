@@ -1,6 +1,12 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
+import {
+  CHUNK_COLUMNS, CHUNK_ROWS, LIGHT_RADIUS_TILES, SEA_TILE_FRAMES, SOLID_GROUND_FRAMES,
+  SOLID_UPPER_FRAMES,
+} from '@/game/constants';
 import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
-import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
+import {
+  AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS,
+  type EnemyKind, type NpcKind, type PickupKind,
+} from '@/game/world/ScreenContent';
 import type { PropDir, PropKind, WorldChunk, WorldData, WorldDialog } from '@/game/world/worldSchema';
 
 // Ground frame used for cells that never received paint — the same frame the runtime uses
@@ -535,15 +541,94 @@ export class EditorStore {
     const warnings: string[] = [...this.startPointErrors()];
 
     let onCollision = 0;
-    let legacyEnemies = 0;
+    const enemySpawns: PlacedEntity[] = [];
     this.allEntities().forEach((entity) => {
       if (this.readCell('collision', entity.worldX, entity.worldY) === true) onCollision += 1;
-      if (entity.list === 'enemies') legacyEnemies += 1;
+      if (entity.list === 'enemies') enemySpawns.push(entity);
     });
     if (onCollision > 0) warnings.push(`${onCollision} entidade(s) em cima de colisao`);
-    // Enemies are no longer authored (skulls spawn dynamically in the dark); anything left
-    // in the file is legacy data the runtime ignores — flag it so the author can erase it.
-    if (legacyEnemies > 0) warnings.push(`${legacyEnemies} inimigo(s) legado(s) no arquivo — o jogo ignora inimigos colocados; use a borracha para remover`);
+
+    // Props que ocupam o proprio tile com um corpo solido. Sai daqui o que se pisa (cabo, placa,
+    // marcas, flor) — a lista e a mesma que a caixa de ferramentas usa mais abaixo, e uma segunda
+    // copia dela seria o jeito garantido de as duas discordarem daqui a um mes.
+    const solidProps = new Set(
+      this.world.props
+        .filter((p) => p.type !== 'wire' && p.type !== 'pressurePlate' && p.type !== 'bombSpot'
+          && p.type !== 'plantSpot' && p.type !== 'moonflower')
+        .map((p) => `${p.worldX},${p.worldY}`),
+    );
+
+    // AS COVAS. As duas unicas maneiras de uma cova nascer morta, e as duas sao silenciosas em
+    // jogo — nada na tela explica por que aquele tile nunca fez nada. Colisao pintada ja e contada
+    // acima; aqui entra o bloqueio IMPLICITO (pinheiro, montanha, alvenaria, mar) e o prop solido.
+    //
+    // Menos pra quem VOA. O morcego cruza rio e lava (ver BatEnemy), entao uma cova dele em cima de
+    // um hazard e uma escolha de autor e nao um defeito — avisar ali treinaria o autor a ignorar o
+    // aviso, que e o unico jeito de um aviso morrer. O mar continua contando pra ele: nada no jogo
+    // atravessa mar, e uma cova no oceano nunca faz nada, com asa ou sem.
+    const HAZARD_PROPS: ReadonlySet<string> = new Set(['lava', 'water']);
+    const hazardProps = new Set(
+      this.world.props.filter((p) => HAZARD_PROPS.has(p.type)).map((p) => `${p.worldX},${p.worldY}`),
+    );
+    // O AQUATICO inverte a pergunta inteira, e por isso sai antes do filtro comum: pra ele, tile bom
+    // e agua de rio, e TERRA e que e o defeito silencioso. Contar um zora no aviso de "tile
+    // bloqueado" seria denunciar exatamente a unica colocacao correta dele.
+    const waterProps = new Set(
+      this.world.props.filter((p) => p.type === 'water').map((p) => `${p.worldX},${p.worldY}`),
+    );
+    // A agua deste jogo tem DUAS procedencias e as duas valem: o prop `water` (como um level autora
+    // um rio) e o TILE de terreno (como o gerador do overworld escreve rio, lago e oceano — ver
+    // SEA_TILE_FRAMES). Perguntar so pelo prop foi o bug que fez cinco covas autoradas em cima de
+    // um lago do mundo grande ficarem mudas, com o editor jurando que estavam em terra.
+    const isWaterTile = (wx: number, wy: number): boolean => {
+      if (waterProps.has(`${wx},${wy}`)) return true;
+      const ground = this.readCell('ground', wx, wy) as number | null;
+      return ground !== null && SEA_TILE_FRAMES.includes(ground);
+    };
+    const drySpawns = enemySpawns.filter(
+      (spawn) => AQUATIC_ENEMY_KINDS.has(spawn.type as EnemyKind)
+        && !isWaterTile(spawn.worldX, spawn.worldY),
+    ).length;
+    if (drySpawns > 0) {
+      warnings.push(`${drySpawns} ponto(s) de spawn de zora fora da agua — ele so nasce em tile de rio`);
+    }
+
+    const blockedSpawns = enemySpawns.filter((spawn) => {
+      if (AQUATIC_ENEMY_KINDS.has(spawn.type as EnemyKind)) return false; // ja cobrado acima
+      const flies = FLYING_ENEMY_KINDS.has(spawn.type as EnemyKind);
+      const upper = this.readCell('upper', spawn.worldX, spawn.worldY) as number | null;
+      if (upper !== null && SOLID_UPPER_FRAMES.has(upper)) return true;
+      const ground = this.readCell('ground', spawn.worldX, spawn.worldY) as number | null;
+      if (ground !== null && SOLID_GROUND_FRAMES.has(ground)) return true;
+      const key = `${spawn.worldX},${spawn.worldY}`;
+      if (flies && hazardProps.has(key)) return false;
+      return solidProps.has(key);
+    }).length;
+    if (blockedSpawns > 0) {
+      warnings.push(`${blockedSpawns} ponto(s) de spawn de inimigo em tile bloqueado — nada vai nascer ali`);
+    }
+
+    // ...e a luz. NENHUM monstro entra em luz de fogueira — nem o que voa, nem a maquina —, entao
+    // uma cova dentro do brilho de um fogo ACESO fica calada para sempre, seja qual for a especie
+    // que ela iria fazer. So contam os fogos que ja nascem acesos: o de casa (o
+    // mais proximo do Ponto Inicial, que e como o runtime decide) e um `lit: true` explicito.
+    // Uma fogueira apagada por perto e o oposto de um erro — e a alavanca do corredor.
+    const start = this.world.meta.playerStart;
+    const campfires = this.world.props.filter((prop) => prop.type === 'campfire');
+    let homeIdx = -1;
+    let homeBest = Infinity;
+    campfires.forEach((fire, i) => {
+      const d = Math.hypot(fire.worldX - start.worldX, fire.worldY - start.worldY);
+      if (d < homeBest) { homeBest = d; homeIdx = i; }
+    });
+    const litFires = campfires.filter((fire, i) => i === homeIdx || fire.lit === true);
+    const drownedSpawns = enemySpawns.filter((spawn) => litFires.some(
+      (fire) => Math.hypot(fire.worldX - spawn.worldX, fire.worldY - spawn.worldY) <= LIGHT_RADIUS_TILES,
+    )).length;
+    if (drownedSpawns > 0) {
+      warnings.push(`${drownedSpawns} ponto(s) de spawn dentro da luz de uma fogueira acesa — monstro nao nasce na luz`);
+    }
+
     const variables = this.world.globalVariables ?? {};
     const unboundPlates = this.world.props.filter((prop) => prop.type === 'pressurePlate' && !prop.variable).length;
     const missingVariables = new Set(
@@ -582,12 +667,6 @@ export class EditorStore {
     // nunca poderia ser alimentada, sem nada na tela explicando por que. Colisao pintada, borda
     // do mundo e outro prop solido em qualquer um dos tres tiles derivados: tudo e o mesmo erro.
     const DIR_STEP: ReadonlyArray<readonly [number, number]> = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    const solidProps = new Set(
-      this.world.props
-        .filter((p) => p.type !== 'wire' && p.type !== 'pressurePlate' && p.type !== 'bombSpot'
-          && p.type !== 'plantSpot' && p.type !== 'moonflower')
-        .map((p) => `${p.worldX},${p.worldY}`),
-    );
     const badToolboxes = this.world.props.filter((prop) => {
       if (prop.type !== 'toolbox') return false;
       const [vx, vy] = DIR_STEP[prop.dir ?? 1];
@@ -621,9 +700,10 @@ export class EditorStore {
     return warnings;
   }
 
-  public stats(): { npcs: number; pickups: number; props: number } {
+  public stats(): { enemies: number; npcs: number; pickups: number; props: number } {
     const all = this.allEntities();
     return {
+      enemies: all.filter((e) => e.list === 'enemies').length,
       npcs: all.filter((e) => e.list === 'npcs').length,
       pickups: all.filter((e) => e.list === 'pickups').length,
       props: all.filter((e) => e.list === 'props').length,

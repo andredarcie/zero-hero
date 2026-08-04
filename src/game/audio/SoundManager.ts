@@ -66,13 +66,11 @@ type SampleKey = keyof typeof SAMPLES;
 // default "soundtrack", and only the combat track rises while undead are out of the ground.
 // ('title'/'overworld' still exist — the intro uses the title theme; overworld is currently
 // unused since exploration is wind-only, kept for easy revival.)
-export type MusicKey = 'title' | 'overworld' | 'danger' | 'survivors' | 'menu';
+export type MusicKey = 'title' | 'overworld' | 'danger' | 'menu';
 const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
   title: { file: 'music-title.wav', vol: 0.8 },
   overworld: { file: 'music-overworld.wav', vol: 0.9 },
   danger: { file: 'music-danger.wav', vol: 1.0 },
-  // The Vampire-Survivors mode runs on one relentless 176 BPM loop, wall to wall.
-  survivors: { file: 'music-survivors.wav', vol: 1.0 },
   menu: { file: 'menu-drips.wav', vol: 0.5 }, // soft water drops under the title screen
 };
 const AMBIENCE_FILE = 'ambience-wind.wav';
@@ -442,6 +440,23 @@ class SoundManager {
     this.osc('sawtooth', 150, 45, 0.16, 0.12);
   }
 
+  /**
+   * A lamina TERMINOU de carregar (ver GameScene.tickSpinCharge). Duas notas subindo, curtas e
+   * limpas — um sino, nunca um zumbido: o zumbido ja e a lingua da maquina (torreta, caldeira),
+   * e este som pertence ao heroi. Sinteticos os tres: sao gestos novos e ainda nao tem amostra.
+   */
+  public playSpinReady(): void {
+    this.osc('triangle', 660, 880, 0.14, 0.09);
+    this.osc('sine', 1320, 1760, 0.07, 0.11, 0.04);
+  }
+
+  /** O giro escapando: o vento do arco, grave e largo, com o metal por cima. */
+  public playSpinRelease(): void {
+    this.noise('bandpass', 1100, 0.9, 0.34, 0.26);
+    this.osc('sawtooth', 320, 90, 0.2, 0.22);
+    this.osc('triangle', 880, 440, 0.1, 0.18, 0.02);
+  }
+
   public playEnemyHit(): void {
     if (this.playSample('enemyHit', 0.9)) return;
     this.noise('lowpass', 320, 1.2, 0.42, 0.09);
@@ -495,7 +510,7 @@ class SoundManager {
     this.osc('triangle', 110, 110, 0.22, 1.6);
   }
 
-  /** Tibetan singing bowl — the intro's "wake up" swell as the hero grows into the world. */
+  /** Tibetan singing bowl — was the intro's "wake up" swell; kept for the next slow moment. */
   public playSingingBowl(): void {
     if (this.playSample('singingBowl')) return;
     // Fallback: a swelling A3 bowl-ish chord (root + fifth + low om), long and calm.
@@ -806,6 +821,68 @@ class SoundManager {
     this.noise('bandpass', 1300, 2.5, 0.10, 0.12, 0.12);
     this.osc('sawtooth', 55, 130, 0.16, 0.42);
     this.osc('triangle', 42, 84, 0.13, 0.5, 0.06);
+  }
+
+  // ── o bestiario que nao vem do chao ──────────────────────────────────────
+  // A caveira tem o chao rachando (playGroundCrack) porque ela nasce de baixo. Bicho, gosma e
+  // maquina chegam de outro jeito, e cada som abaixo e o par sonoro de um gesto que ja esta na
+  // tela — nenhum deles existe para "avisar" sozinho.
+
+  /** A chegada de um corpo que nao vem de baixo: um roçado seco e um baque leve assentando. */
+  public playCreatureArrive(): void {
+    this.noise('highpass', 2200, 0.9, 0.07, 0.14);
+    this.noise('lowpass', 420, 1.0, 0.11, 0.18, 0.05);
+    this.osc('triangle', 150, 90, 0.06, 0.14, 0.04);
+  }
+
+  /** O bote da aranha: o estalo da mola soltando, curto e seco. */
+  public playSpiderPounce(): void {
+    this.osc('square', 480, 180, 0.07, 0.09);
+    this.noise('bandpass', 1800, 2.6, 0.09, 0.1);
+  }
+
+  /** O salto da gosma: um plop molhado, gordo e sem ataque nenhum. */
+  public playSlimeHop(): void {
+    this.osc('sine', 190, 70, 0.09, 0.14);
+    this.noise('lowpass', 700, 0.9, 0.07, 0.1, 0.02);
+  }
+
+  /**
+   * A carga da torreta: um zumbido SUBINDO — o aviso de 350ms antes do leque. Sobe porque toda
+   * carga do jogo sobe (o vento da caveira, o sopro da flor): descer significa acabar.
+   */
+  public playTurretCharge(): void {
+    this.osc('sawtooth', 180, 620, 0.06, 0.34);
+    this.noise('bandpass', 1400, 4.0, 0.04, 0.3);
+  }
+
+  /** O vento da conjuracao do mago: o mesmo gesto de subir, em ar em vez de metal. */
+  public playSpellWindup(): void {
+    this.noise('bandpass', 900, 2.4, 0.07, 0.4);
+    this.osc('sine', 320, 760, 0.05, 0.38);
+  }
+
+  /**
+   * O zora rompendo a superficie (e voltando pra ela: o mesmo som serve aos dois, porque e o mesmo
+   * gesto). Agua deslocada — ruido passa-baixa curto com um "glup" grave por baixo. Deliberadamente
+   * DISCRETO: e o unico aviso de que o rio tem coisa dentro, e um som grande arruinaria o susto.
+   */
+  public playZoraSurface(): void {
+    this.noise('lowpass', 900, 0.9, 0.12, 0.2);
+    this.osc('sine', 220, 90, 0.07, 0.16);
+    this.noise('highpass', 3000, 0.7, 0.04, 0.12, 0.06); // as goticulas caindo depois
+  }
+
+  /** A boca abrindo com o cuspe carregando dentro: um sugar que SOBE, como toda carga desta casa. */
+  public playZoraSpit(): void {
+    this.noise('bandpass', 700, 3.0, 0.06, 0.34);
+    this.osc('sine', 180, 520, 0.05, 0.3);
+  }
+
+  /** O disparo — o instante em que a bala (ou a bola) sai. Curto: o voo ja e visivel. */
+  public playEnemyShot(): void {
+    this.osc('square', 700, 240, 0.08, 0.1);
+    this.noise('highpass', 2600, 0.8, 0.06, 0.08);
   }
 
   public playFireHit(): void {

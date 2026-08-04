@@ -21,6 +21,19 @@ const UNTHROTTLED_ARGS = [
   '--disable-backgrounding-occluded-windows',
 ];
 
+/**
+ * SILENCIO, SEMPRE. Teste roda com a janela visivel (o WebGL exige), e uma janela visivel toca som
+ * na cara de quem estiver na sala — uma suite inteira grita fogueira, espada e caveira por minutos.
+ * A lei e do CLAUDE.md ("nunca rodar o jogo com efeito sonoro pra testar") e ela e cumprida AQUI,
+ * por construcao, e nao pela lembranca de quem roda: um flag no navegador nao depende de ninguem.
+ *
+ * O `--mute-audio` cala a aba inteira; as duas chaves de volume (as mesmas do menu de pausa, ver
+ * SoundManager) calam o jogo por dentro, entao ele tambem nao gasta trabalho sintetizando o que
+ * ninguem vai ouvir. O cenario `audio` continua valendo: ele monta o proprio AudioContext e mede
+ * download e decode, que nao passam por nenhum dos dois.
+ */
+const MUTE_ARGS = ['--mute-audio'];
+
 import { config } from '../config.mjs';
 import { log } from './report.mjs';
 
@@ -53,11 +66,19 @@ export class GameDriver {
     const browser = await chromium.launch({
       headless: config.headless,
       slowMo: config.slowMoMs,
-      args: config.unthrottled ? UNTHROTTLED_ARGS : [],
+      args: [...MUTE_ARGS, ...(config.unthrottled ? UNTHROTTLED_ARGS : [])],
     });
     const context = await browser.newContext({
       viewport: config.viewport,
       deviceScaleFactor: config.deviceScaleFactor,
+    });
+    // Os volumes entram ANTES de qualquer script da pagina: o SoundManager le as duas chaves no
+    // construtor, entao setar depois do boot deixaria os primeiros segundos com som.
+    await context.addInitScript(() => {
+      try {
+        localStorage.setItem('zh.sfxVol', '0');
+        localStorage.setItem('zh.musicVol', '0');
+      } catch { /* storage indisponivel: o --mute-audio ainda garante o silencio */ }
     });
     const page = await context.newPage();
     return new GameDriver(browser, context, page);
@@ -77,23 +98,23 @@ export class GameDriver {
     });
   }
 
-  /** Live snapshot, or null when not in the GameScene (intro/preload). */
+  /** Live snapshot, or null when not in the GameScene (title/preload). */
   async getState() {
     return this.page.evaluate(() => window.gameDebug?.getState() ?? null);
   }
 
-  /** Skip the intro and wait until the GameScene is live and controllable. */
+  /** Key past the title and wait until the GameScene is live and controllable. */
   async startGame() {
     for (let i = 0; i < 8; i += 1) {
       const state = await this.getState();
       if (state?.scene === 'game') break;
       await this.press('Enter', { count: 1, delay: 550, holdMs: 80 });
     }
-    // Keying past the language pick / title / wizard intro is timing-dependent and has never
-    // been reliable. `?play` boots straight into the GameScene (dev only) — the sure road in.
+    // Keying past the title is timing-dependent (its input arms 300ms in) and has never been
+    // reliable. `?play` boots straight into the GameScene (dev only) — the sure road in.
     const inGame = await this.getState();
     if (inGame?.scene !== 'game') {
-      log('Intro did not skip on keypress; reloading into ?play.');
+      log('Title did not key through; reloading into ?play.');
       await this.open('/?play');
     }
     await this.page.waitForFunction(
@@ -128,6 +149,70 @@ export class GameDriver {
     if (!key) throw new Error(`Unknown direction: ${direction}`);
     log(`Walking ${direction} x${steps}`);
     await this.press(key, { count: steps });
+  }
+
+  // ── OS DOIS BOTOES ───────────────────────────────────────────────────────
+  // O jogo deixou de ser so-andar: A golpeia na direcao em que o heroi olha, B usa o item
+  // escolhido no tile a frente. Andar contra as coisas nao usa mais item nenhum — o esbarrao
+  // ficou com os gestos de corpo (empurrar caixote, abrir portao de bater, conversar) e com o
+  // dano de contato.
+
+  /** O botao A: a espada (ou o soco) no tile a frente. */
+  async attack(count = 1) {
+    await this.press('z', { count, delay: 320 });
+  }
+
+  /** O botao B: o item selecionado no tile a frente — usa, ou pousa ali. */
+  async useItem(count = 1) {
+    await this.press('x', { count, delay: 360 });
+  }
+
+  /**
+   * PEGAR o item do chao — que e o MESMO botao B, e por isso este helper e so um apelido com
+   * nome honesto.
+   *
+   * Ele existe porque o gesto mudou e o nome antigo do gesto era "andar por cima": nada mais
+   * entra na mochila por pisada (ver GameScene.pickUpItemAt). O B pega do tile a frente e, se la
+   * nao houver nada, do tile de baixo dos pes — entao um cenario que largou algo e quer de volta
+   * so aperta isto, sem sair do lugar.
+   */
+  async pickUp(count = 1) {
+    await this.useItem(count);
+  }
+
+  /**
+   * O A SEGURADO: a lamina rodopiante. Segura o botao ate a carga completar (SPIN_CHARGE_MS =
+   * 450ms no GameScene) e so entao solta — e o `keyup` que dispara o giro. `holdMs` existe pra um
+   * cenario poder soltar CEDO de proposito e provar que sem carga nao ha giro.
+   */
+  async spinAttack(holdMs = 700) {
+    await this.page.keyboard.down('z');
+    await sleep(holdMs);
+    await this.page.keyboard.up('z');
+    await sleep(120);
+  }
+
+  /**
+   * VIRAR sem andar: um toque curto numa seta que o heroi ainda nao encara gasta-se virando o
+   * corpo (ver PlayerMovementController). O toque tem de ser CURTO — segurar anda no frame
+   * seguinte, que e justamente a outra metade do contrato.
+   */
+  async face(direction) {
+    const key = ARROW[direction];
+    if (!key) throw new Error(`Unknown direction: ${direction}`);
+    await this.press(key, { count: 1, holdMs: 24, delay: 220 });
+  }
+
+  /**
+   * ENCARAR e usar: aperta a seta (contra uma trava ela so VIRA o heroi — ver
+   * PlayerMovementController) e so entao o B. E o gesto que substituiu o esbarrao com item na
+   * mao, e o unico jeito de mirar num tile bloqueado.
+   */
+  async faceAndUse(direction, count = 1) {
+    const key = ARROW[direction];
+    if (!key) throw new Error(`Unknown direction: ${direction}`);
+    await this.press(key, { count: 1 });
+    await this.useItem(count);
   }
 
   // ── Dialog / shop (deterministic via window.gameDebug) ───────────────────

@@ -10,5 +10,59 @@
     "file": "level-2.json",
     "name": "Fogo",
     "blurb": ""
+  },
+  {
+    "id": "dungeon-1",
+    "file": "dungeon-1.json",
+    "name": "Level 1: A Aguia",
+    "blurb": "17 salas, a forma exata do Zelda 1."
+  },
+  {
+    "id": "dungeon-2",
+    "file": "dungeon-2.json",
+    "name": "Level 2: A Lua",
+    "blurb": "18 salas, a forma exata do Zelda 1."
+  },
+  {
+    "id": "dungeon-3",
+    "file": "dungeon-3.json",
+    "name": "Level 3: O Manji",
+    "blurb": "18 salas, a forma exata do Zelda 1."
+  },
+  {
+    "id": "dungeon-4",
+    "file": "dungeon-4.json",
+    "name": "Level 4: A Serpente",
+    "blurb": "20 salas, a forma exata do Zelda 1."
+  },
+  {
+    "id": "dungeon-5",
+    "file": "dungeon-5.json",
+    "name": "Level 5: O Lagarto",
+    "blurb": "23 salas, a forma exata do Zelda 1."
+  },
+  {
+    "id": "dungeon-6",
+    "file": "dungeon-6.json",
+    "name": "Level 6: O Dragao",
+    "blurb": "25 salas, a forma exata do Zelda 1."
+  },
+  {
+    "id": "dungeon-7",
+    "file": "dungeon-7.json",
+    "name": "Level 7: O Demonio",
+    "blurb": "33 salas, a forma exata do Zelda 1."
+  },
+  {
+    "id": "dungeon-8",
+    "file": "dungeon-8.json",
+    "name": "Level 8: O Leao",
+    "blurb": "25 salas, a forma exata do Zelda 1."
+  },
+  {
+    "id": "dungeon-9",
+    "file": "dungeon-9.json",
+    "name": "Level 9: A Morte",
+    "blurb": "57 salas, a forma exata do Zelda 1."
   }
 ]

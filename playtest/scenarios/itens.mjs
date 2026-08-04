@@ -155,7 +155,7 @@ export default {
     const bombResult = await evaluate(([x, y, fuseMs]) => {
       const s = window.__scene;
       s.heldItem = 'bomb';
-      s.handleTileEntered(x, y); // pisar na marca planta a bomba (o caminho real)
+      s.useItemAt(x, y); // o B planta a bomba na marca (o caminho real — ver `combate`)
       const planted = s.activeBombs.length;
       if (planted !== 1) return { planted, exploded: false, ghostFuses: -1 };
       s.explodeBomb(s.activeBombs[0]); // o fogo chegou primeiro

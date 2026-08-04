@@ -1,6 +1,6 @@
 // Dev-only launcher: [I] pops a menu to jump between every entry point of the project —
-// the game (with and without the intro), the world editor, the puzzle lab (editor or play)
-// and Survivors. Localhost only; it never ships (the whole module no-ops unless DEV).
+// the game (with and without the intro), the world editor and the puzzle lab (editor or
+// play). Localhost only; it never ships (the whole module no-ops unless DEV).
 //
 // Plain DOM, like DialogOverlay / PauseMenu / EditorDomUi: it must keep working across scene
 // swaps and while a Phaser scene is paused, and every jump is a full page load anyway
@@ -21,9 +21,11 @@ type Entry = {
 };
 
 const ENTRIES: Entry[] = [
-  { group: 'Jogo', label: 'Jogar o jogo', hint: 'Do começo: idioma, título e intro', url: '/' },
-  { group: 'Jogo', label: 'Jogar pulando a intro', hint: 'Cai direto no mundo (?play)', url: '/?play' },
-  { group: 'Jogo', label: 'Survivors', hint: 'Modo Vampire-Survivors (?survivors)', url: '/?survivors' },
+  { group: 'Jogo', label: 'Jogar o jogo', hint: 'Do começo: o título, e dele o mundo', url: '/' },
+  { group: 'Jogo', label: 'Jogar pulando o título', hint: 'Cai direto no mundo (?play)', url: '/?play' },
+  // O explorador perdeu a porta do TÍTULO (que hoje tem só a aventura), não a existência —
+  // e sem uma entrada aqui ele ficaria a um parâmetro de URL decorado de distância.
+  { group: 'Jogo', label: 'Explorador', hint: 'Uma expedição ao mundo infinito (?explorer)', url: '/?explorer' },
   { group: 'Laboratório de puzzles', label: 'Jogar o level 1', hint: 'Joga levels/level-1.json direto', url: '/lab?play' },
   { group: 'Laboratório de puzzles', label: 'Editar o level 1', hint: 'Editor do lab — monte o puzzle e [P] testa', url: '/lab' },
   { group: 'Laboratório de puzzles', label: 'Editar o level 2', hint: 'Editor do lab apontado no level 2', url: '/lab?level=2' },

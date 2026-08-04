@@ -478,8 +478,7 @@ export const castTransform = (
  * otherwise — and a swing between the two at the edge of the pool.
  *
  * The moon is the fallback, not an addition: a second mesh per actor would double the
- * shadow draw calls (and Survivors fields a hundred actors), so each caster keeps its
- * single quad and this decides where it points. The handoff has to be a blend because
+ * shadow draw calls, so each caster keeps its single quad and this decides where it points. The handoff has to be a blend because
  * both shadows are visible at the crossover: the fire's fades to nothing at its pool's
  * edge, and snapping a 0.16-dark shadow to a new angle the frame the pool ends reads as
  * a glitch. Instead the angle/length swing from flame-cast to moon-cast as the fire's

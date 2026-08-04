@@ -1,0 +1,17 @@
+zora: 6 frame(s) — 0 fail, 4 warn
+  [info] bbox: frame 0: content 14x10 at (1,2), coverage 17%
+  [warn] orphan-pixel: frame 0: 8 isolated pixel(s) at (2,4) (13,4) (5,5) (10,5) (5,8) (10,8)… — intentional sparks? set allowOrphans: true; stray noise? erase
+  [info] bbox: frame 1: content 14x7 at (0,8), coverage 24%
+  [info] bbox: frame 2: content 13x14 at (1,1), coverage 43%
+  [warn] orphan-pixel: frame 2: 1 isolated pixel(s) at (13,4) — intentional sparks? set allowOrphans: true; stray noise? erase
+  [info] bbox: frame 3: content 13x14 at (1,1), coverage 45%
+  [warn] orphan-pixel: frame 3: 1 isolated pixel(s) at (13,4) — intentional sparks? set allowOrphans: true; stray noise? erase
+  [info] bbox: frame 4: content 10x8 at (3,3), coverage 22%
+  [info] bbox: frame 5: content 13x14 at (1,1), coverage 43%
+  [warn] orphan-pixel: frame 5: 1 isolated pixel(s) at (13,5) — intentional sparks? set allowOrphans: true; stray noise? erase
+  frame 0: #bbf2f4×24 #27a9af×20
+  frame 1: #bbf2f4×17 #27a9af×16 #3f607e×15 #334c62×12 #557998×2
+  frame 2: #3f607e×46 #334c62×27 #bbf2f4×20 #27a9af×8 #557998×7 #b5b5b5×2 #a53030×1
+  frame 3: #3f607e×47 #334c62×31 #bbf2f4×20 #27a9af×8 #557998×6 #b5b5b5×3 #a53030×1
+  frame 4: #bbf2f4×32 #27a9af×24
+  frame 5: #3f607e×46 #334c62×26 #bbf2f4×19 #27a9af×8 #557998×7 #b5b5b5×2 #a53030×1

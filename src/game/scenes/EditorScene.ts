@@ -2,8 +2,8 @@
 
 import {
   ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES,
-  MOONFLOWER_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
-  TOOLBOX_FRAMES, WATER_WHEEL_FRAMES,
+  MOONFLOWER_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES, SLIME_FRAMES, SOLID_GROUND_FRAMES,
+  SOLID_UPPER_FRAMES, TOOLBOX_FRAMES, WATER_WHEEL_FRAMES, ZORA_FRAMES,
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import {
@@ -43,14 +43,30 @@ const MAX_ZOOM = 8;
 // v4: UiState ganhou `propDir`. A chave sobe de versao junto com a FORMA do estado — um estado
 // v3 restaurado hoje viria sem propDir e o primeiro braco colocado nasceria com `dir: undefined`.
 // v5: UiState ganhou `propVariable`, o vinculo usado pelo proximo mecanismo de circuito.
-const UI_STATE_KEY = 'worldEditorUi.v5';
+// v6: a aba "Inimigos" VOLTOU (pontos de spawn). `EntitySelection` ganhou o braco `enemies`, e
+// restoreUi funde o estado salvo em cima do default sem validar nada — um v5 com a tecla 5
+// gravada de outra epoca entraria numa forma que agora significa outra coisa.
+const UI_STATE_KEY = 'worldEditorUi.v6';
 
 type CellCoord = { x: number; y: number };
 
-// Enemies can no longer be placed (skulls spawn dynamically at runtime), but legacy world
-// files may still carry them — render those with the undead sprite so they stay erasable.
+// O que o chip de um PONTO DE SPAWN mostra: o proprio inimigo que vai nascer dali. E a arte do
+// bicho e nao uma marca de cova porque o jogo nao desenha nada naquele tile (o nascimento e a
+// arte) — o tabuleiro e o unico lugar onde a cova e visivel, e ali ela tem de dizer O QUE nasce.
 const ENEMY_VISUAL: Record<EnemyKind, { key: string; frame?: number }> = {
   undead: { key: ASSET_KEYS.undead },
+  bat: { key: ASSET_KEYS.bat },
+  spider: { key: ASSET_KEYS.spider },
+  slime: { key: ASSET_KEYS.slime, frame: SLIME_FRAMES.rest },
+  bigslime: { key: ASSET_KEYS.bigSlime, frame: SLIME_FRAMES.rest },
+  turret: { key: ASSET_KEYS.turret },
+  // O mago inimigo e o NPC mago dividem a arte, e no tabuleiro isso NAO se resolve com tint (o
+  // chip e desenhado por um Image de paleta, sem o material tingido do jogo). O que separa os dois
+  // ali e a cor do ponto de lista — vermelho de inimigo contra o dos NPCs — e o proprio tooltip.
+  mage: { key: ASSET_KEYS.mage },
+  // O chip mostra ele ERGUIDO e nao submerso: o frame submerso nao tem corpo nenhum (so a esteira
+  // na agua), e um chip de tabuleiro que nao mostra o bicho nao diz o que nasce ali.
+  zora: { key: ASSET_KEYS.zora, frame: ZORA_FRAMES.up },
 };
 
 const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
@@ -818,7 +834,8 @@ export class EditorScene extends Phaser.Scene {
     const store = this.store;
     if (!store || !this.isEditable(x, y)) return;
     const sel = this.uiState.entity;
-    if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
+    if (sel.list === 'enemies') store.placeEntity({ list: 'enemies', type: sel.type, worldX: x, worldY: y });
+    else if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
     else if (sel.list === 'pickups') store.placeEntity({ list: 'pickups', type: sel.type, worldX: x, worldY: y });
     else {
       // A roda nao fica na margem: ela substitui um tile de rio ja desenhado. Assim o editor
