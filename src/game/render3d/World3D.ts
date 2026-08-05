@@ -43,6 +43,7 @@ import { getWoodTexture } from './woodTexture';
 export const FX_DOT_TEXTURE = 'fx-dot';
 export const FX_RING_TEXTURE = 'fx-ring';
 export const FX_PUFF_TEXTURE = 'fx-puff';
+export const FX_ICE_TEXTURE = 'fx-ice';
 export const FX_CRACK_TEXTURE = 'fx-crack';
 
 // ── The 3D world renderer (pixel-art lit) ─────────────────────────────────────
@@ -1058,6 +1059,7 @@ export class World3D {
     registerTexture3D(FX_DOT_TEXTURE, dot);
     registerTexture3D(FX_RING_TEXTURE, makeRingTexture());
     registerTexture3D(FX_PUFF_TEXTURE, makePuffTexture());
+    registerTexture3D(FX_ICE_TEXTURE, makeIceTexture());
     registerTexture3D(FX_CRACK_TEXTURE, makeCrackTexture());
     this.embers = makeParticleField(this.scene, EMBER_COUNT, 0.12, dot);
     for (let i = 0; i < EMBER_COUNT; i++) {
@@ -3272,6 +3274,67 @@ const makePuffTexture = (): THREE.DataTexture => {
     }
   }
   const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+};
+
+// O BLOCO DE GELO (o congelamento — ver FreezeManager): um cristal facetado, desenhado BRANCO
+// como todo FX desta casa para o tint do billboard decidir a cor. Low-res + NEAREST para quebrar
+// em degraus de pixel como o resto da arte. O corpo é translúcido de propósito — o que congela
+// continua VISÍVEL dentro do bloco (a informação é "aquilo ali, travado", nunca "um cubo novo") —
+// e a faceta clara fica no alto-esquerdo, de onde a luz desta arte sempre vem.
+const ICE_TEX_RES = 28;
+const makeIceTexture = (): THREE.CanvasTexture => {
+  const c = document.createElement('canvas');
+  c.width = c.height = ICE_TEX_RES;
+  const ctx = c.getContext('2d')!;
+  const s = ICE_TEX_RES;
+  const m = s / 2;
+
+  // O corpo do cristal: um hexágono irregular, mais estreito no topo (gelo empilha pra cima).
+  const body: Array<[number, number]> = [
+    [m, 1.5], [s - 3.5, m * 0.72], [s - 2.5, s - m * 0.5], [m, s - 1.5], [2.5, s - m * 0.5], [3.5, m * 0.72],
+  ];
+  ctx.beginPath();
+  ctx.moveTo(body[0][0], body[0][1]);
+  for (let i = 1; i < body.length; i++) ctx.lineTo(body[i][0], body[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.44)';
+  ctx.fill();
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.stroke();
+
+  // A faceta de luz do alto-esquerdo: um quarto do corpo, mais denso.
+  ctx.beginPath();
+  ctx.moveTo(m, 2.5);
+  ctx.lineTo(4.5, m * 0.78);
+  ctx.lineTo(m * 0.7, m);
+  ctx.lineTo(m, m * 0.62);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.34)';
+  ctx.fill();
+
+  // Duas arestas internas: o que separa "cristal" de "bolha".
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath();
+  ctx.moveTo(m, 2.5);
+  ctx.lineTo(m * 0.72, s - m * 0.55);
+  ctx.moveTo(m, 2.5);
+  ctx.lineTo(s - m * 0.6, s - m * 0.7);
+  ctx.stroke();
+
+  // Três brilhos de um pixel, o glint que a arte 16×16 desta casa usa para dizer "liso e frio".
+  ctx.fillStyle = 'rgba(255,255,255,1)';
+  ctx.fillRect(Math.round(m * 0.62), Math.round(m * 0.62), 1, 1);
+  ctx.fillRect(Math.round(s - m * 0.8), Math.round(m * 0.95), 1, 1);
+  ctx.fillRect(Math.round(m * 0.9), Math.round(s - m * 0.75), 1, 1);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;

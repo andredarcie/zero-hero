@@ -138,6 +138,7 @@ import { LevelButtons, PauseMenu, PauseTouchButton, isTouchDevice } from '@/game
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
 import { createHeroView, heroFootY, resetHeroView, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
+import { FREEZE_MS, FreezeManager } from '@/game/runtime/FreezeManager';
 import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl, type SubScreenView } from '@/game/runtime/SubScreen';
@@ -532,6 +533,12 @@ const TORCH_MIN_LIGHT_FRAC = 0.4;
 // The flame on the torch's tip: the same little fire that burns on a lit bush, cycling at a
 // deliberately coarse cadence — the frame flip IS the animation, there is no smooth sway.
 const TORCH_FLAME_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
+/**
+ * A janela pós-degelo em que o herói não recongela (ver freezeHero): tempo de UM passo e meio
+ * fora da linha de tiro — o suficiente para o congelamento nunca virar um laço sem saída, curto
+ * o bastante para dois zoras em fogo cruzado continuarem sendo um problema de verdade.
+ */
+const HERO_FREEZE_IMMUNE_MS = 1300;
 const TORCH_FLAME_FRAME_MS = 110;
 
 // Chest height, in tiles: where a blow lands and where the world's one-shot FX (flash, sparks,
@@ -621,6 +628,11 @@ export class GameScene extends Phaser.Scene {
   // combat track doesn't flap while skulls spawn and die in quick succession).
   private dangerCalmMs = 0;
   private npcManager?: NpcManager;
+  // O CONGELAMENTO (a bola do zora): quem trava qualquer coisa num tile — ver FreezeManager.
+  private freezeManager?: FreezeManager;
+  // A janela pós-degelo em que o herói NÃO recongela: sem ela, dois zoras alternando cuspes
+  // seriam um stun-lock sem contra-jogada — o jogador precisa de um instante para sair da linha.
+  private heroFreezeImmuneMs = 0;
   private coinManager?: CoinManager;
   private heartPickupManager?: HeartPickupManager;
   private itemManager?: ItemManager;
@@ -996,6 +1008,17 @@ export class GameScene extends Phaser.Scene {
     EnemyBase.setEmberTouch((wx, wy) => {
       this.igniteFlammableAt(wx, wy);
       for (const [dx, dy] of CARDINAL_DIRS) this.igniteFlammableAt(wx + dx, wy + dy);
+    });
+    // O CONGELAMENTO (ver FreezeManager): a bola do zora não fere — trava. Este é o consumidor
+    // dos pousos dela: bola rebatida que tocou um corpo congela o corpo; bola que morreu num
+    // tile congela o que estiver ali (árvore, NPC, caixote…). Só o cuspe gela — a bola do mago
+    // e a bala da torreta continuam morrendo como sempre.
+    this.freezeManager = new FreezeManager(this, (wx, wy) => this.isTileFramed(wx, wy));
+    this.heroFreezeImmuneMs = 0;
+    this.enemyManager.setShotLandedHandler((ev) => {
+      if (ev.kind !== 'spit') return;
+      if (ev.enemy) this.freezeEnemy(ev.enemy);
+      else this.freezeAtTile(Math.round(ev.x), Math.round(ev.y));
     });
     const siegeOff = this.registry.get('appMode') === 'lab' || isPuzzleWorld();
     this.spawnDirector = siegeOff ? undefined : new UndeadSpawnDirector();
@@ -2187,6 +2210,8 @@ export class GameScene extends Phaser.Scene {
         shopOpen: this.shopOpen,
         itemGetOpen: this.itemGetOpen,
         isDead: this.isDead,
+        // O herói virou estátua? (a bola do zora — ver FreezeManager; `zora` e `gelo` leem isto)
+        heroFrozen: this.isHeroFrozen,
         litFires: this.campfires.filter((cf) => cf.isLit).length,
         safety: {
           safe: this.playerSafe,
@@ -2326,6 +2351,10 @@ export class GameScene extends Phaser.Scene {
     this.coinManager?.destroy();
     this.heartPickupManager?.destroy();
     this.itemManager?.destroy();
+    // O gelo morre com a cena (blocos, relógios e ganchos): um degelo atravessando um restart
+    // chamaria onThaw numa cena morta.
+    this.freezeManager?.destroy();
+    this.freezeManager = undefined;
     this.swordSlash?.destroy();
     // Truncar in place (length = 0) esvazia também o array tipado — é o mesmo objeto — então
     // nenhum campo fica segurando props destruídos até o próximo create reatribuí-lo.
@@ -2524,6 +2553,13 @@ export class GameScene extends Phaser.Scene {
         this.lurablePlates(),
       );
       if (attacked) this.handleEnemyAttackPlayer(attacked);
+
+      // O CONGELAMENTO: relógios, degelos e o desenho de cada bloco (ver FreezeManager). O herói
+      // congelado ganha a raiz de novo a cada frame — cinto e suspensório: nenhum caminho de
+      // dano/interrupção pode devolver os pés antes do degelo.
+      this.freezeManager?.update(delta);
+      this.heroFreezeImmuneMs = Math.max(0, this.heroFreezeImmuneMs - delta);
+      if (this.isHeroFrozen) this.movementController?.root(80);
 
       this.enemyManager.render(this.tileSize, this.camera);
 
@@ -3559,7 +3595,25 @@ export class GameScene extends Phaser.Scene {
 
     // O soco alcança um braço; a espada, duas fileiras. O alcance é da ARMA, e o desenho de cada
     // um diz qual é o seu — o punho não tem fita, e por isso não pode ter a área dela.
-    this.sweepArc(this.arcTiles(armed ? 2 : 1), armed ? 'sword' : 'fist');
+    const arc = this.arcTiles(armed ? 2 : 1);
+    this.sweepArc(arc, armed ? 'sword' : 'fist');
+    this.reflectShotsIn(arc);
+  }
+
+  /**
+   * A REBATIDA: o MESMO arco do golpe tenta devolver a bola de gelo (ver
+   * EnemyProjectileManager.reflectAt — só o cuspe do zora aceita). "O momento certo" não é um
+   * relógio novo: é a bola estar DENTRO do arco durante o gesto — a janela que o jogador já
+   * aprendeu com todo corpo que a espada alcança. A resposta é o pacote do aparo (o tim da
+   * guarda + hitstop): o mesmo som de "não passou", agora dizendo "voltou".
+   */
+  private reflectShotsIn(tiles: Array<{ x: number; y: number }>): void {
+    const returned = this.enemyManager?.reflectShots(tiles) ?? 0;
+    if (returned <= 0) return;
+    getSoundManager().playGuardBlock();
+    this.triggerHitstop(70);
+    const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
+    this.world3d?.shake(70, 0.05, f.dx, f.dy);
   }
 
   /**
@@ -3641,6 +3695,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.sweepArc(ring, 'spin');
+    this.reflectShotsIn(ring); // a lâmina rodopiante devolve bola de qualquer lado — é o giro
     this.world3d?.shake(120, 0.08);
     this.spawnSpinRing();
   }
@@ -3812,6 +3867,12 @@ export class GameScene extends Phaser.Scene {
    */
   private talkToNpcAt(wx: number, wy: number): boolean {
     if (!this.npcManager?.hasNpcAt(wx, wy)) return false;
+    // NPC congelado não conversa: o gesto foi gasto na recusa (o bloco treme — a lei da trava).
+    // `true` de propósito: o B não pode escorrer para "pousar o item" na frente de alguém.
+    if (this.freezeManager?.frozenAt(wx, wy)) {
+      this.freezeManager.pulse(wx, wy);
+      return true;
+    }
     const kind = this.npcManager.getKindAt(wx, wy);
     if (!kind) return false;
     // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
@@ -3834,6 +3895,11 @@ export class GameScene extends Phaser.Scene {
    * usa-la.
    */
   private pickUpItemAt(wx: number, wy: number): boolean {
+    // Item preso no gelo não sobe pra mochila: a mão bate no bloco (pulse) e o gesto acabou.
+    if ((this.itemManager?.hasItemAt(wx, wy) ?? false) && this.freezeManager?.frozenAt(wx, wy)) {
+      this.freezeManager.pulse(wx, wy);
+      return true;
+    }
     const taken = this.itemManager?.takeAt(wx, wy);
     if (!taken) return false;
     this.onCollectItem({ kind: taken.kind, worldX: wx, worldY: wy, fire: taken.fire, chargeMs: taken.chargeMs });
@@ -3906,6 +3972,16 @@ export class GameScene extends Phaser.Scene {
         return true;
       }
       this.strikeEnemy(enemy, wx, wy, 'item');
+      return true;
+    }
+
+    // TILE CONGELADO RECUSA A TABELA INTEIRA: o machado não morde a árvore no gelo, a picareta
+    // não abre a rocha, a tocha não acende a fogueira morta — até o degelo. Um gate só, espacial
+    // (ver FreezeManager.frozenAt), em vez de um `if` por linha da tabela; a resposta é o tremor
+    // do bloco. `true` = o gesto foi gasto aqui — o item NÃO cai no chão como fallback.
+    // (O corpo congelado ficou de fora de propósito, no ramo acima: gelo trava, nunca protege.)
+    if (this.freezeManager?.frozenAt(wx, wy)) {
+      this.freezeManager.pulse(wx, wy);
       return true;
     }
 
@@ -4241,6 +4317,14 @@ export class GameScene extends Phaser.Scene {
     // must happen from the canonical centre origin — otherwise the hero visibly jumps up
     // half a tile. Bumps aren't steps, so nothing else stops breathing here.
     this.stopBreathing();
+
+    // GELO TRAVA TODO GESTO DE CORPO — o caixote não empurra, o portão não gira, a fogueira não
+    // senta, e o BICHO congelado não morde (uma estátua não cobra dano de contato: é exatamente
+    // o prêmio de congelá-la). A recusa é o tremor do bloco, nunca um texto (a lei da casa).
+    if (this.freezeManager?.frozenAt(wx, wy)) {
+      this.freezeManager.pulse(wx, wy);
+      return;
+    }
 
     // Empurrar: colidir com um caixote tenta exatamente um empurrao cardinal. O heroi fica no
     // tile em que esta; no passo seguinte ele entra no espaco que o caixote deixou.
@@ -6058,6 +6142,10 @@ export class GameScene extends Phaser.Scene {
    * Returns true if something caught here.
    */
   private igniteFlammableAt(wx: number, wy: number): boolean {
+    // FOGO DERRETE GELO ANTES DE ACENDER QUALQUER COISA: um tile congelado gasta o pulso de
+    // fogo no degelo (vapor, nada pega). Vale para mato, ponte E corpo congelado — uma pergunta
+    // só, espacial, como todo gate do gelo (ver FreezeManager.meltAt).
+    if (this.freezeManager?.meltAt(wx, wy)) return false;
     // FOGO QUE CHEGA NUM TILE COME QUEM ESTIVER PARADO NELE: o corpo é combustível como o mato
     // (a tocha viva — ver EnemyBase.igniteBody). Fora do retorno de propósito: o corpo NÃO faz
     // o tile arder (ele corre dali, e fogo não nasce de tile vazio — a lição do graveto que o
@@ -6130,6 +6218,113 @@ export class GameScene extends Phaser.Scene {
     if (this.getTallGrassAt(wx, wy)?.isBurning) return true;
     if (this.getLavaAt(wx, wy)) return true;
     return this.itemManager?.hasLitItemAt(wx, wy) ?? false;
+  }
+
+  // ── O congelamento (ver FreezeManager, onde mora a lei) ─────────────────────
+
+  /** O herói está congelado agora? — o gate que os botões e o update leem. */
+  private get isHeroFrozen(): boolean {
+    return this.freezeManager?.isFrozen('hero') ?? false;
+  }
+
+  /**
+   * A bola de gelo alcançou um CORPO. Fogo e gelo se anulam: num corpo em chamas ela APAGA o
+   * fogo (o corpo sobrevive à tocha viva — o zora salvando a matilha é jogada dele) em vez de
+   * congelar. A estátua continua ferível e empurrável — o gelo trava, nunca protege.
+   */
+  private freezeEnemy(enemy: EnemyBase): void {
+    if (!enemy.isAlive || enemy.isSpawning) return;
+    if (enemy.isBurning) {
+      if (enemy.extinguish() && this.isTileFramed(enemy.worldX, enemy.worldY)) {
+        getSoundManager().playFireHit(); // o chiado de vapor que este jogo já tem
+      }
+      return;
+    }
+    this.freezeManager?.freeze({
+      id: enemy,
+      x: enemy.visualX,
+      y: enemy.visualY,
+      size: 0.8,
+      elevation: 0.34,
+      follow: () => (enemy.isAlive ? { x: enemy.visualX, y: enemy.visualY } : null),
+      stillValid: () => enemy.isAlive,
+      onFreeze: () => enemy.enterFreeze(),
+      onThaw: () => enemy.exitFreeze(),
+    });
+  }
+
+  /**
+   * O frio fechou sobre o HERÓI: pés na raiz, botões na cadência (adiados, nunca descartados — a
+   * lei do buffer) e o corpo frio. Sem dano nenhum: a bola do zora trava, e o perigo é o resto
+   * da matilha chegar enquanto você é uma estátua.
+   */
+  private freezeHero(): void {
+    if (this.isDead || this.heroFreezeImmuneMs > 0) return;
+    this.freezeManager?.freeze({
+      id: 'hero',
+      x: this.playerWorld.worldX,
+      y: this.playerWorld.worldY,
+      size: 0.82,
+      elevation: 0.36,
+      follow: () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }),
+      stillValid: () => !this.isDead,
+      onFreeze: () => {
+        this.stopBreathing();
+        this.movementController?.root(FREEZE_MS);
+        this.playerStaggerMs = Math.max(this.playerStaggerMs, FREEZE_MS);
+        this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+        this.hero.tint = 0xaee0ff;
+      },
+      onThaw: () => {
+        // A imunidade pós-degelo é a contra-jogada do stun-lock (ver heroFreezeImmuneMs).
+        this.heroFreezeImmuneMs = HERO_FREEZE_IMMUNE_MS;
+        if (!this.isDead) this.hero.tint = null;
+      },
+    });
+  }
+
+  /**
+   * QUALQUER COISA PODE SER CONGELADA — e este método é a lista inteira do que "qualquer coisa"
+   * significa, em ordem de precedência: corpo, herói, NPC, e então o que estiver plantado no
+   * tile (caixote, fogueira morta, arbusto, mato, pedra, tronco, árvore — prop ou tile —, item
+   * no chão). Fogueira ACESA recusa com vapor: fogo derrete gelo antes de o gelo existir.
+   * O que "travado" significa não mora aqui: mora nos gates (`frozenAt`) de cada interação.
+   */
+  private freezeAtTile(wx: number, wy: number): boolean {
+    const enemy = this.enemyManager?.getEnemyAt(wx, wy);
+    if (enemy) {
+      this.freezeEnemy(enemy);
+      return true;
+    }
+    if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) {
+      this.freezeHero();
+      return true;
+    }
+    const campfire = this.getCampfireAt(wx, wy);
+    if (campfire?.isLit) {
+      // O fogo vence antes de o gelo nascer: só o vapor conta o que aconteceu.
+      this.freezeManager?.steamAt(wx, wy);
+      return false;
+    }
+    const tall = this.getDryTreeAt(wx, wy) !== undefined || this.treeTileFrameAt(wx, wy) !== null;
+    const freezable = tall
+      || campfire !== undefined
+      || this.getWoodenCrateAt(wx, wy) !== undefined
+      || this.getDryBushAt(wx, wy) !== undefined
+      || this.getDryShrubAt(wx, wy) !== undefined
+      || this.getTallGrassAt(wx, wy) !== undefined
+      || (this.getRockAt(wx, wy)?.blocking ?? false)
+      || this.npcManager?.hasNpcAt(wx, wy) === true
+      || (this.itemManager?.hasItemAt(wx, wy) ?? false);
+    if (!freezable) return false;
+    return this.freezeManager?.freeze({
+      id: `tile:${wx},${wy}`,
+      x: wx,
+      y: wy,
+      // Árvore e NPC são corpos altos: o bloco sobe com eles (sem nunca vazar do tile).
+      size: tall ? 1 : this.npcManager?.hasNpcAt(wx, wy) ? 0.85 : 0.72,
+      elevation: tall ? 0.52 : 0.3,
+    }) ?? false;
   }
 
   private spawnFireHitEffect(wx: number, wy: number): void {
@@ -7198,6 +7393,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // A BOLA DO ZORA NÃO FERE — TRAVA (ver FreezeManager). Dano zero, coração nenhum: o preço
+    // de ser acertado é virar estátua com a matilha em volta. Passa DEPOIS do escudo (encarar a
+    // bola ainda a apara — a lei do tiro vale para ela inteira) e nunca gasta a janela de
+    // invencibilidade: congelar não é apanhar.
+    if (hit.ranged && hit.shotKind === 'spit') {
+      this.freezeHero();
+      return;
+    }
+
     // Same reason as handlePlayerBump: reset the breathing pose before the hurt shake repins
     // the hero, so it doesn't jump up half a tile mid-hit.
     this.stopBreathing();
@@ -7219,7 +7423,9 @@ export class GameScene extends Phaser.Scene {
     // devolve ao centro — ver PLAYER_STAGGER_MS. São duas travas porque são duas coisas: a raiz
     // segura os PÉS (e ela sabe não congelar um passo no meio do tile), e `playerStaggerMs` segura
     // os BOTÕES — adiando o pedido como uma cadência, nunca descartando (ver `spendActionBuffers`).
-    this.playerStaggerMs = PLAYER_STAGGER_MS;
+    // `max` e não atribuição: um golpe de corpo no herói CONGELADO não pode devolver os botões
+    // antes do degelo (a raiz já é max por construção — ver PlayerMovementController.root).
+    this.playerStaggerMs = Math.max(this.playerStaggerMs, PLAYER_STAGGER_MS);
     this.movementController?.root(PLAYER_STAGGER_MS);
 
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);

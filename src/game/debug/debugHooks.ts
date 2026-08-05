@@ -125,6 +125,8 @@ export interface GameDebugState {
   shopOpen: boolean;
   itemGetOpen: boolean;
   isDead: boolean;
+  /** O heroi e uma estatua de gelo agora (a bola do zora — ver FreezeManager). */
+  heroFrozen: boolean;
   /** How many campfires in the loaded world are currently lit (puzzle progress). */
   litFires: number;
   /** The dark-siege loop: near a campfire = safe; in the dark the danger meter (0..1)
@@ -160,15 +162,18 @@ export interface GameDebugState {
     windingUp: boolean;
     /** O fogo esta comendo este corpo (a tocha viva — ver EnemyBase.igniteBody). */
     burning: boolean;
+    /** O corpo e uma estatua de gelo agora (a bola do zora — ver FreezeManager). */
+    frozen: boolean;
     /** O corpo aparece no quadro da camera? Fora dele ele nao fala nem comeca golpe. */
     framed: boolean;
   }>;
   /**
-   * Os tiros EM VOO (mago e torreta). Unica coisa do jogo em coordenada continua de tile: `x/y`
-   * vem com fracao de tile de proposito — e assim que se mede que uma bala morreu na parede em vez
-   * de ter atravessado. `vx/vy` em tiles por segundo.
+   * Os tiros EM VOO (mago, torreta e zora). Unica coisa do jogo em coordenada continua de tile:
+   * `x/y` vem com fracao de tile de proposito — e assim que se mede que uma bala morreu na parede
+   * em vez de ter atravessado. `vx/vy` em tiles por segundo. `reflected` = a espada devolveu esta
+   * bola (so o cuspe aceita) e ela agora congela BICHO em vez de travar o heroi.
    */
-  shots: Array<{ kind: string; x: number; y: number; vx: number; vy: number }>;
+  shots: Array<{ kind: string; x: number; y: number; vx: number; vy: number; reflected: boolean }>;
   /** Quantas ossadas de caveira morta estao no chao agora (CorpseDecals). */
   corpses: number;
   /**

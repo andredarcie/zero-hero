@@ -3253,3 +3253,74 @@ a segunda caveira, rastro acendendo mato autorado, morte com marca e a entrada d
 `canBeShoved = false` TAMBÉM por causa do pânico (a tocha viva usa o mesmo flag para decidir se
 corre); e um caminho novo de fogo que não passe por `igniteFlammableAt` não acende corpo nenhum —
 o corpo é combustível DAQUELE grafo, não de qualquer chama desenhada.
+
+---
+
+## O congelamento — a bola do zora não fere: TRAVA (2026-08-05)
+
+**A frase**: o cuspe do zora deixou de ser dano e virou CONTROLE — o que a bola toca congela num
+bloco de gelo por 2,4s: trava, não fere, e depois volta. E "o que a bola toca" é deliberadamente
+QUALQUER COISA: bicho, NPC, o próprio herói, item no chão, árvore (prop ou tile), arbusto, mato,
+caixote, pedra. A espada fecha o laço: balançada com a bola dentro do arco, ela a DEVOLVE — a bola
+volta pelo caminho que veio, fria e do herói, e congela o bicho que tocar (o zora que a cuspiu,
+se ainda estiver de pé — a janela da espécie vale também para a bola dela).
+
+**A arquitetura — um sistema, zero cópias** (`runtime/FreezeManager.ts`):
+- **O gerenciador conhece UMA coisa**: alvos congelados (posição, relógio, dois ganchos
+  onFreeze/onThaw, follow para estátua deslocada, stillValid para alvo que morre no meio). Quem
+  sabe o que existe num tile e o que "travar" significa para cada coisa é o
+  `GameScene.freezeAtTile` — a lista inteira de "qualquer coisa" mora num método só.
+- **Todo gate é ESPACIAL**: `frozenAt(tile)` — porque neste jogo tudo mora num tile. O machado
+  recusa a árvore no gelo, a picareta a rocha, a tocha a fogueira morta (um gate só no topo da
+  tabela do `useItemAt`, não um `if` por linha), o B não pega item preso nem conversa com NPC
+  congelado, o esbarrão não empurra caixote nem gira portão — e o BICHO congelado não cobra dano
+  de contato (uma estátua não morde: é exatamente o prêmio). Nenhum alvo carrega flag próprio além
+  do inimigo (`isFrozen`, que o EnemyManager lê para pular o update da espécie — o mesmo desenho
+  da tocha viva: **nenhuma das sete espécies sabe que gelo existe**).
+- **A recusa é FÍSICA** (a lei da casa): bater no gelo sacode o bloco (`pulse`), nunca abre texto.
+- **O degelo é telegrafado**: nos últimos 500ms o bloco treme e clareia — o relógio que fecha, a
+  mesma gramática do anel de windup. Estátua deslocada (o arremesso desliza) leva o gelo junto
+  (`follow` lê a posição VISUAL — `EnemyBase.visualX/Y`, a lei do overlay ancorado no desenho).
+
+**Fogo e gelo se anulam, nos dois sentidos**: fogo que chega num tile congelado DERRETE o gelo e
+se gasta nisso (`meltAt` na primeira linha do `igniteFlammableAt` — vapor, nada acende naquele
+pulso; o seguinte queima normal); a bola de gelo num corpo EM CHAMAS apaga o fogo em vez de
+congelar (`extinguish` — o zora salvando a matilha da tocha viva é jogada emergente dele). E
+fogueira ACESA nem congela: só vapor. Nenhum dos dois estados existe por cima do outro.
+
+**A bola** (`EnemyProjectile`): o cuspe continua um tiro comum — parede mata, luz não, escudo
+apara (encarar a bola ainda a bloqueia: a lei do tiro vale inteira). O que mudou é o IMPACTO:
+`ShotImpact` sempre carregou o `kind`, e agora `EnemyHit.shotKind` o leva até o
+`handleEnemyAttackPlayer`, que para `spit` congela em vez de ferir — sem gastar invencibilidade
+(congelar não é apanhar). Bola que morre num tile emite `ShotLanded` e o que estiver ali congela.
+A REBATIDA usa o MESMO arco do golpe (`reflectAt` recebe os tiles do `sweepArc` — nenhuma hitbox
+nova): só o cuspe aceita, a bola inverte a velocidade, ganha tint frio e passa a colidir com
+BICHO — a única bala do jogo que fere... congela... um inimigo, e só porque a espada a devolveu.
+O "momento certo" não é relógio novo: é a bola dentro do arco durante o gesto.
+
+**O herói congelado**: pés na raiz (`root(FREEZE_MS)`, re-aplicada por frame — cinto e
+suspensório contra qualquer caminho que devolva os pés cedo), botões na cadência
+(`playerStaggerMs` via `Math.max` — um golpe de corpo no herói-estátua não pode devolver os
+botões), corpo frio, e DANO ZERO. O perigo é a matilha chegar enquanto você é estátua. Contra o
+stun-lock: já-congelado não recongela (dedupe por id) e o degelo dá 1,3s de imunidade
+(`HERO_FREEZE_IMMUNE_MS`) — um passo e meio para sair da linha de tiro.
+
+**O gelo desenhado sem quebrar lei nenhuma**: textura procedural nova (`FX_ICE_TEXTURE`, cristal
+facetado BRANCO desenhado em canvas, NEAREST — o tint decide a cor, como todo FX da casa), bloco
+translúcido (o alvo continua legível DENTRO — a informação é "aquilo, travado", não "um cubo
+novo"), `emissive` sem luz THREE nenhuma, shimmer/captura/tremor todos DERIVADOS de relógio (zero
+tween por estado — a economia da piscada de i-frames), estilhaço que CAI no degelo (gelo tem
+peso) e vapor no derretimento. Sons reaproveitados (`playBladeGlance` frio para congelar/quebrar,
+`playGuardBlock` — o tim do aparo — para a rebatida), todos com o gate do quadro.
+
+**Cenários**: `gelo` (novo) — estátua que não anda e volta, herói travado sem perder vida, a
+rebatida com `reflected` e velocidade invertida congelando a caveira do caminho, e fogo×gelo
+(derrete-e-gasta, fogueira acesa recusa). `zora` foi ATUALIZADO à mão nas seções 3 e 6 (mudança
+de design: onde cobrava "o cuspe fere", cobra "o cuspe congela sem ferir" — inclusive sobre água
+pintada) — não é flake, é o contrato novo.
+
+**Armadilhas para o futuro**: coisa nova que interaja por tile (um gesto novo de B, uma mecânica
+de esbarrão) precisa perguntar `frozenAt` OU aceitar que gelo não a trava — a lista de gates é
+consciente, não automática; e um caminho novo de FOGO que não passe por `igniteFlammableAt` não
+derrete gelo (o guarda de `igniteBody` segura o corpo, mas prop congelado ficaria à prova de fogo
+em silêncio).

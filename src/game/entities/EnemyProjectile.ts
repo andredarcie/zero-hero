@@ -3,6 +3,7 @@ import type Phaser from 'phaser';
 import { ASSET_KEYS, ZORA_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_PUFF_TEXTURE, world3d } from '@/game/render3d/World3D';
+import type { EnemyBase } from './EnemyBase';
 
 /**
  * O PROJETIL — a primeira coisa neste jogo que fere o heroi sem estar do lado dele.
@@ -64,6 +65,9 @@ const HIT_RADIUS = 0.42;
  */
 const TTL_MS = 4200;
 
+/** O tint da bola REBATIDA: mais fria e mais clara — ela agora é do herói, e a cor diz isso. */
+const REFLECT_TINT = 0xa8e8ff;
+
 type Shot = {
   kind: EnemyShotKind;
   /** Posicao CONTINUA em tiles (nao a grade — ver o cabecalho). */
@@ -74,18 +78,61 @@ type Shot = {
   ttlMs: number;
   angle: number;
   sprite: Billboard3D;
+  /**
+   * A ESPADA DEVOLVEU esta bola (só o cuspe do zora aceita — ver reflectAt): ela voa de volta
+   * pelo caminho que veio, ignora o heroi, e passa a colidir com BICHO — o que ela tocar,
+   * congela (quem resolve é o GameScene, pelo evento de pouso).
+   */
+  reflected: boolean;
 };
 
 /** O que o gerenciador devolve quando um tiro encontra o heroi: onde ele estava ao acertar. */
 export type ShotImpact = { x: number; y: number; kind: EnemyShotKind };
 
+/**
+ * ONDE UMA BOLA TERMINOU — o evento que o GameScene consome para o congelamento (só o cuspe
+ * gela; o resto ignora). `enemy` preenchido = uma bola REBATIDA tocou um corpo; nulo = ela
+ * morreu num tile (parede, árvore, NPC — o que estiver ali congela) ou expirou no ar.
+ */
+export type ShotLanded = { kind: EnemyShotKind; x: number; y: number; enemy: EnemyBase | null };
+
 export class EnemyProjectileManager {
   private readonly shots: Shot[] = [];
+  /** Instalado pelo GameScene (via EnemyManager): o consumidor dos pousos — ver ShotLanded. */
+  private onLanded?: (ev: ShotLanded) => void;
 
   public constructor(private readonly scene: Phaser.Scene) {}
 
+  public setLandedHandler(handler: (ev: ShotLanded) => void): void {
+    this.onLanded = handler;
+  }
+
   public get count(): number {
     return this.shots.length;
+  }
+
+  /**
+   * A REBATIDA — a espada devolve a bola de gelo. `tiles` é o MESMO arco do golpe (sweepArc):
+   * nenhuma hitbox nova nasce aqui, o gesto que corta caveira é o gesto que rebate bola. Só o
+   * cuspe do zora aceita (a bala da torreta e a bola do mago morrem em parede como sempre —
+   * rebater TUDO transformaria o herói num escudo giratório). A bola volta pelo caminho que
+   * veio (o zora que a cuspiu está lá), fria e do herói. Devolve quantas rebateu.
+   */
+  public reflectAt(tiles: ReadonlyArray<{ x: number; y: number }>): number {
+    let reflected = 0;
+    for (const shot of this.shots) {
+      if (shot.kind !== 'spit' || shot.reflected) continue;
+      const sx = Math.round(shot.x);
+      const sy = Math.round(shot.y);
+      if (!tiles.some((t) => t.x === sx && t.y === sy)) continue;
+      shot.reflected = true;
+      shot.vx = -shot.vx;
+      shot.vy = -shot.vy;
+      shot.ttlMs = TTL_MS; // a viagem de volta é uma viagem inteira
+      shot.sprite.setTint(REFLECT_TINT);
+      reflected += 1;
+    }
+    return reflected;
   }
 
   /**
@@ -126,6 +173,7 @@ export class EnemyProjectileManager {
       ttlMs: TTL_MS,
       angle: 0,
       sprite,
+      reflected: false,
     });
   }
 
@@ -144,6 +192,7 @@ export class EnemyProjectileManager {
     playerWorldY: number,
     playerInvincible: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
+    enemyNear?: (x: number, y: number, radius: number) => EnemyBase | null,
   ): ShotImpact | null {
     let impact: ShotImpact | null = null;
 
@@ -151,6 +200,9 @@ export class EnemyProjectileManager {
       const shot = this.shots[i];
       shot.ttlMs -= delta;
       if (shot.ttlMs <= 0) {
+        // Expirou no AR: o pouso ainda e anunciado (uma bola de gelo que fizesse uma coisa
+        // morrendo em parede e outra morrendo de velha seriam duas regras) — so nao ha estouro.
+        this.onLanded?.({ kind: shot.kind, x: shot.x, y: shot.y, enemy: null });
         this.kill(i, false);
         continue;
       }
@@ -161,6 +213,7 @@ export class EnemyProjectileManager {
       const stepDt = dt / steps;
       let dead = false;
       let hitPlayer = false;
+      let struckEnemy: EnemyBase | null = null;
 
       for (let s = 0; s < steps && !dead; s++) {
         shot.x += shot.vx * stepDt;
@@ -172,6 +225,18 @@ export class EnemyProjectileManager {
         if (isBlocked(Math.round(shot.x), Math.round(shot.y))) {
           dead = true;
           break;
+        }
+
+        // A bola REBATIDA e do heroi: ignora o corpo dele e passa a colidir com BICHO — e a
+        // unica coisa do jogo que um projetil faz num inimigo, e so porque a espada a devolveu.
+        if (shot.reflected) {
+          const enemy = enemyNear?.(shot.x, shot.y, HIT_RADIUS) ?? null;
+          if (enemy) {
+            dead = true;
+            struckEnemy = enemy;
+            break;
+          }
+          continue;
         }
 
         // O heroi invencivel (a janela de 1,5s depois de um golpe) nao e atravessado em silencio:
@@ -190,20 +255,30 @@ export class EnemyProjectileManager {
       if (hitPlayer && !playerInvincible && !impact) {
         impact = { x: shot.x, y: shot.y, kind: shot.kind };
       }
-      if (dead) this.kill(i, true);
+      if (dead) {
+        // O pouso sai ANTES do estouro para o consumidor ver a bola ainda no ponto de morte.
+        // No heroi nao ha evento: o impacto dele ja e o retorno desta funcao.
+        if (!hitPlayer) {
+          this.onLanded?.({ kind: shot.kind, x: shot.x, y: shot.y, enemy: struckEnemy });
+        }
+        this.kill(i, true);
+      }
     }
 
     return impact;
   }
 
   /** Onde cada tiro esta agora — leitura de debug/playtest (o cenario `fauna` mede por aqui). */
-  public snapshot(): Array<{ kind: EnemyShotKind; x: number; y: number; vx: number; vy: number }> {
+  public snapshot(): Array<{
+    kind: EnemyShotKind; x: number; y: number; vx: number; vy: number; reflected: boolean;
+  }> {
     return this.shots.map((shot) => ({
       kind: shot.kind,
       x: Math.round(shot.x * 100) / 100,
       y: Math.round(shot.y * 100) / 100,
       vx: Math.round(shot.vx * 100) / 100,
       vy: Math.round(shot.vy * 100) / 100,
+      reflected: shot.reflected,
     }));
   }
 

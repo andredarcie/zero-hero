@@ -5,7 +5,7 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import type { EnemyKind } from '@/game/world/ScreenContent';
 import { CorpseDecals } from './CorpseDecals';
 import { EnemyBase } from './EnemyBase';
-import { EnemyProjectileManager, type EnemyShotKind } from './EnemyProjectile';
+import { EnemyProjectileManager, type EnemyShotKind, type ShotLanded } from './EnemyProjectile';
 import { BatEnemy } from './enemies/BatEnemy';
 import { MageEnemy } from './enemies/MageEnemy';
 import { SlimeEnemy } from './enemies/SlimeEnemy';
@@ -56,6 +56,11 @@ const AI_ACTIVE_TILES = 15;
 export type EnemyHit = {
   enemy?: EnemyBase;
   ranged: boolean;
+  /**
+   * Que tiro acertou (so em `ranged`). O GameScene precisa da especie da bala porque nem toda
+   * bala fere: o cuspe do zora CONGELA — dano zero, o corpo trava (ver FreezeManager).
+   */
+  shotKind?: EnemyShotKind;
   /**
    * O golpe veio de um ESBARRAO do heroi (dano de contato), e nao de um ataque do bicho. A
    * diferenca importa na janela de invencibilidade: o golpe armado que conecta ali RESVALA com
@@ -113,6 +118,19 @@ export class EnemyManager {
    * ocupante dela caiu, sem inventar um segundo canal de morte (EnemyBase.die() nao avisa ninguem
    * de fora, e os dois lugares que matam — o golpe e a bomba — nao sabem de covas).
    */
+  /** O consumidor dos pousos de bola (o congelamento do GameScene) — repassado ao ar. */
+  public setShotLandedHandler(handler: (ev: ShotLanded) => void): void {
+    this.shots.setLandedHandler(handler);
+  }
+
+  /**
+   * A REBATIDA da espada, no MESMO arco do golpe (ver EnemyProjectileManager.reflectAt): o
+   * gesto que corta caveira e o que devolve a bola de gelo. Devolve quantas voltaram.
+   */
+  public reflectShots(tiles: ReadonlyArray<{ x: number; y: number }>): number {
+    return this.shots.reflectAt(tiles);
+  }
+
   public spawnUndead(worldX: number, worldY: number): UndeadEnemy {
     // The warning rumble as the ground starts to crack — playUndeadSpawn fires later, from
     // inside UndeadEnemy, when the telegraph ends and the skull actually claws out. Uma cova
@@ -244,6 +262,7 @@ export class EnemyManager {
     invulnerable: boolean;
     windingUp: boolean;
     burning: boolean;
+    frozen: boolean;
     framed: boolean;
   }> {
     return this.enemies
@@ -262,13 +281,17 @@ export class EnemyManager {
         windingUp: e.isWindingUp,
         // A tocha viva (ver EnemyBase.igniteBody) — o playtest `tocha-viva` lê daqui.
         burning: e.isBurning,
+        // A estátua de gelo (ver FreezeManager) — o playtest `gelo` lê daqui.
+        frozen: e.isFrozen,
         // O corpo aparece no quadro? (a lei "fora da tela não fala nem atira" se asserta por isto)
         framed: this.frameGate(e.worldX, e.worldY),
       }));
   }
 
   /** Debug/playtest: os tiros em VOO (posicao continua em tiles — ver EnemyProjectile). */
-  public shotSnapshot(): Array<{ kind: EnemyShotKind; x: number; y: number; vx: number; vy: number }> {
+  public shotSnapshot(): Array<{
+    kind: EnemyShotKind; x: number; y: number; vx: number; vy: number; reflected: boolean;
+  }> {
     return this.shots.snapshot();
   }
 
@@ -420,6 +443,10 @@ export class EnemyManager {
       // por inteiro, e é por isso que nenhuma das sete precisou saber que fogo existe.
       if (enemy.isBurning) {
         enemy.updateBurning(delta, playerWorldX, playerWorldY, blockedForEnemy);
+      } else if (enemy.isFrozen) {
+        // A ESTÁTUA NÃO PENSA: congelado (a bola do zora — ver FreezeManager), o corpo não roda
+        // IA nenhuma. Continua sólido, ferível e empurrável — gelo trava, nunca protege. Pelo
+        // mesmo desenho da tocha viva, nenhuma espécie precisou saber que gelo existe.
       } else if (
         enemy.update(delta, playerWorldX, playerWorldY, playerSafe, playerHasTorch, blockedForEnemy)
       ) {
@@ -430,9 +457,14 @@ export class EnemyManager {
     // O ar, depois dos corpos: um tiro disparado NESTE frame nasce no tile de quem atirou e nao
     // deve andar antes do frame seguinte (senao ele comeca a viagem meio tile adiantado, e uma
     // torreta colada no heroi acertaria antes de a bala existir na tela).
-    const impact = this.shots.update(delta, playerWorldX, playerWorldY, playerInvincible, blocked.shot);
+    const impact = this.shots.update(
+      delta, playerWorldX, playerWorldY, playerInvincible, blocked.shot,
+      // So a bola REBATIDA consulta corpos (ver EnemyProjectile): a mais proxima do ponto, como
+      // toda bala — com dois corpos colados ela tem de morrer no da frente.
+      (x, y, r) => this.getEnemyNear(x, y, r),
+    );
     if (impact && !hit) {
-      hit = { ranged: true, fromX: impact.x, fromY: impact.y };
+      hit = { ranged: true, fromX: impact.x, fromY: impact.y, shotKind: impact.kind };
     }
 
     for (let i = this.enemies.length - 1; i >= 0; i--) {

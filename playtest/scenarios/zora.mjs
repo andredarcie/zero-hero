@@ -193,19 +193,31 @@ export default {
     RIVER_X, { timeout: 20000 });
     await shot('zora-erguido-no-rio');
 
-    // ── 3. O CUSPE FERE ───────────────────────────────────────────────────────
-    log('CUSPE: o tiro mirado sai e o heroi na margem perde vida');
+    // ── 3. O CUSPE CONGELA, E NUNCA FERE ──────────────────────────────────────
+    // Mudanca de design (ver FreezeManager): a bola do zora e CONTROLE, nao dano — o heroi
+    // atingido vira estatua por um tempo, com a vida intacta. O perigo e o que chega enquanto
+    // ele esta travado.
+    log('CUSPE: o tiro mirado sai e o heroi na margem CONGELA, sem perder uma gota de vida');
     const healthBefore = (await driver.getState()).health;
     let sawSpit = false;
-    for (let i = 0; i < 40; i += 1) {
+    let heroFroze = false;
+    for (let i = 0; i < 60; i += 1) {
       await sleep(200);
-      if (((await driver.getState()).shots ?? []).some((s) => s.kind === 'spit')) sawSpit = true;
-      if (sawSpit && (await driver.getState()).health < healthBefore) break;
+      const st = await driver.getState();
+      if ((st.shots ?? []).some((s) => s.kind === 'spit')) sawSpit = true;
+      if (st.heroFrozen === true) {
+        heroFroze = true;
+        break;
+      }
     }
     const healthAfter = (await driver.getState()).health;
-    assert('houve cuspe no ar', sawSpit === true, 'nenhum projetil "spit" amostrado em 8s');
-    assert('e ele feriu o heroi na margem', healthAfter < healthBefore,
+    assert('houve cuspe no ar', sawSpit === true, 'nenhum projetil "spit" amostrado em 12s');
+    assert('a bola CONGELOU o heroi na margem', heroFroze === true, 'heroFrozen nunca ligou');
+    assert('e nao tirou uma gota de vida', healthAfter === healthBefore,
       JSON.stringify({ healthBefore, healthAfter }));
+    // O degelo devolve o heroi: a trava e um TEMPO, nunca um estado permanente.
+    await page.waitForFunction(() => window.gameDebug?.getState()?.heroFrozen === false,
+      null, { timeout: 6000 });
 
     // ── 4. A JANELA, COBRADA NOS DOIS SENTIDOS ────────────────────────────────
     // O mesmo golpe, no mesmo corpo, em dois momentos. Sem a primeira metade, um zora sempre
@@ -287,16 +299,22 @@ export default {
 
     const lakeBefore = (await driver.getState()).health;
     let sawLakeSpit = false;
+    let lakeFroze = false;
     for (let i = 0; i < 60; i += 1) {
       await sleep(200);
-      if (((await driver.getState()).shots ?? []).some((s) => s.kind === 'spit')) sawLakeSpit = true;
-      if (sawLakeSpit && (await driver.getState()).health < lakeBefore) break;
+      const st = await driver.getState();
+      if ((st.shots ?? []).some((s) => s.kind === 'spit')) sawLakeSpit = true;
+      if (st.heroFrozen === true) {
+        lakeFroze = true;
+        break;
+      }
     }
     const lakeAfter = (await driver.getState()).health;
     assert('o zora do lago PINTADO cospe (a bala nao morre na agua de terreno)',
       sawLakeSpit === true, 'nenhum projetil "spit" saiu do lago em 12s');
-    assert('e o cuspe dele fere o heroi na margem', lakeAfter < lakeBefore,
-      JSON.stringify({ lakeBefore, lakeAfter }));
+    assert('e o cuspe dele CONGELA o heroi na margem (a bola de gelo funciona sobre agua pintada)',
+      lakeFroze === true, JSON.stringify({ lakeBefore, lakeAfter }));
+    assert('sem tirar vida', lakeAfter === lakeBefore, JSON.stringify({ lakeBefore, lakeAfter }));
     await shot('cuspe-sobre-agua-pintada');
   },
 };

@@ -363,6 +363,52 @@ export abstract class EnemyBase {
   }
 
   /**
+   * O CORPO ESTÁ CONGELADO (a bola do zora — ver FreezeManager, que é quem manda no relógio e no
+   * desenho do bloco; aqui mora só o flag que o EnemyManager lê para pular o update da espécie).
+   * Uma estátua não caça, não arma golpe, não atira — mas continua sólida, empurrável (desliza)
+   * e ferível: gelo trava, nunca protege.
+   */
+  private frozenFlag = false;
+
+  public get isFrozen(): boolean {
+    return this.alive && this.frozenFlag;
+  }
+
+  /** A posição DESENHADA (lógica + deslize do passo/arremesso) — o gelo cavalga isto. */
+  public get visualX(): number {
+    return this.worldX + this.knockbackOffsetX;
+  }
+
+  public get visualY(): number {
+    return this.worldY + this.knockbackOffsetY;
+  }
+
+  /** O frio fechou sobre o corpo. Mata o golpe armado como o fogo mata (a mesma não-corrida). */
+  public enterFreeze(): void {
+    this.frozenFlag = true;
+    this.windupLeftMs = 0;
+    this.recoverMs = 0;
+    this.clearWindup();
+    this.stunWobbleMs = 0;
+    this.sprite.setAngle(0); // rígido: nenhum tombo de passo pendurado numa estátua
+  }
+
+  public exitFreeze(): void {
+    this.frozenFlag = false;
+  }
+
+  /**
+   * A bola de gelo num corpo EM CHAMAS apaga o fogo em vez de congelar (fogo e gelo se anulam —
+   * ver FreezeManager). Devolve `true` se havia fogo para apagar. O carvão fica: a história do
+   * corpo não se lava com água fria.
+   */
+  public extinguish(): boolean {
+    if (this.burnLeftMs <= 0) return false;
+    this.clearBurn();
+    return true;
+  }
+
+  /**
    * Este corpo PEGA fogo? A resposta vem da espécie-lista, não de um override: quem vive na
    * água (o zora) é o único que o fogo não alcança — todo o resto arde, inclusive a máquina,
    * porque o graveto aceso já matava tudo em um golpe e a chama não escolhe alvo.
@@ -781,6 +827,9 @@ export abstract class EnemyBase {
    */
   public tickStunFx(delta: number): void {
     if (!this.alive) return;
+    // Congelado o corpo é RÍGIDO: o tremor de zonzo num bloco de gelo desmentiria a estátua
+    // (quem treme ali é o BLOCO, e só no telegrafo de degelo — ver FreezeManager.renderEntry).
+    if (this.frozenFlag) return;
     if (this.hitstunMs > 0 && !this.isSpawning) {
       this.stunWobbleMs += delta;
       const decay = Math.min(1, this.hitstunMs / 200);
@@ -816,6 +865,10 @@ export abstract class EnemyBase {
    * respeitasse i-frames nunca acenderia ninguém.
    */
   public igniteBody(): boolean {
+    // O corpo congelado não pega fogo por esta porta: quem chega antes é o degelo (o
+    // igniteFlammableAt derrete o gelo e o fogo se gasta nisso — ver FreezeManager.meltAt).
+    // Este guarda é a rede para um caminho novo de fogo que esqueça de perguntar.
+    if (this.frozenFlag) return false;
     if (!this.alive || this.burnLeftMs > 0 || this.isSpawning || !this.flammable) return false;
     this.burnLeftMs = BURN_TOTAL_MS;
     this.burnStepMs = 0;
