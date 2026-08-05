@@ -441,6 +441,7 @@
   },
   "subscreen": {
     "title": "PACK",
-    "empty": "Nothing in the pack yet"
+    "empty": "Nothing in the pack yet",
+    "mapTitle": "WORLD"
   }
 }

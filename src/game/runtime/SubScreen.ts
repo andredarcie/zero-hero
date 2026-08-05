@@ -70,6 +70,24 @@ const CSS = `
   margin: 0.7em 0 0; text-align: center; min-height: 1.2em;
   color: #cfc9ba; font-size: 0.88em;
 }
+.zh-sub-map-title {
+  margin: 1.0em 0 0.5em; text-align: center;
+  font-size: 0.72em; font-weight: 700; letter-spacing: 0.34em; text-indent: 0.34em;
+  color: #8d8672;
+}
+.zh-sub-map {
+  display: grid; gap: 1px; justify-content: center;
+  padding: 4px; background: #060504; border: 1px solid #2e2820;
+}
+.zh-sub-map-cell { position: relative; width: 13px; height: 13px; background: #0b0908; }
+.zh-sub-map-cell.zh-seen { background: #262019; }
+.zh-sub-map-cell .zh-dot {
+  position: absolute; inset: 3px; border-radius: 50%;
+}
+.zh-dot-hero { background: #e7dcc4; box-shadow: 0 0 4px #fff2c8; }
+.zh-dot-fireLit { background: #ffb454; box-shadow: 0 0 3px #ff8c1a; }
+.zh-dot-fireDead { background: #55432f; }
+.zh-dot-portal { background: #9d7bd8; }
 `;
 
 const ensureStyle = (): void => {
@@ -126,6 +144,27 @@ export interface SubScreenItem {
   label: string;
 }
 
+export interface SubScreenMapMark {
+  cx: number;
+  cy: number;
+  kind: 'hero' | 'fireLit' | 'fireDead' | 'portal';
+}
+
+/**
+ * O MAPA DO MUNDO, em telas: um quadrado por chunk (o chunk E a tela que o jogador experimenta).
+ * So mostra o que foi PISADO — fog of war vindo do save — e marca apenas o que o heroi ja viu:
+ * fogueiras (acesa quente, morta apagada), portais e ele mesmo. Sem legenda: as cores sao as do
+ * proprio mundo (a brasa, o fogo, o violeta do portal).
+ */
+export interface SubScreenMap {
+  title: string;
+  chunksX: number;
+  chunksY: number;
+  /** "cx,cy" de cada chunk ja visitado. */
+  visited: ReadonlyArray<string>;
+  marks: SubScreenMapMark[];
+}
+
 export interface SubScreenView {
   title: string;
   emptyLabel: string;
@@ -133,6 +172,8 @@ export interface SubScreenView {
   hearts: { max: number; filled: number; icon: string; emptyIcon: string };
   items: SubScreenItem[];
   selected: string;
+  /** So na aventura (overworld): a subtela de level/explorador/dungeon nao tem mapa. */
+  map?: SubScreenMap;
 }
 
 /**
@@ -146,6 +187,8 @@ export class SubScreenPanel {
   private readonly grid: HTMLDivElement;
   private readonly name: HTMLParagraphElement;
   private readonly title: HTMLHeadingElement;
+  private readonly mapTitle: HTMLHeadingElement;
+  private readonly map: HTMLDivElement;
 
   public constructor(
     private readonly read: () => SubScreenView,
@@ -162,8 +205,12 @@ export class SubScreenPanel {
     this.grid.className = 'zh-sub-grid';
     this.name = document.createElement('p');
     this.name.className = 'zh-sub-name';
+    this.mapTitle = document.createElement('h3');
+    this.mapTitle.className = 'zh-sub-map-title';
+    this.map = document.createElement('div');
+    this.map.className = 'zh-sub-map';
 
-    this.el.append(this.title, this.heartsRow, this.grid, this.name);
+    this.el.append(this.title, this.heartsRow, this.grid, this.name, this.mapTitle, this.map);
     this.render();
   }
 
@@ -225,5 +272,40 @@ export class SubScreenPanel {
 
     const chosen = view.items.find((it) => it.kind === view.selected);
     this.name.textContent = chosen ? chosen.label : '';
+
+    this.renderMap(view.map);
+  }
+
+  /** O mapa em telas (ver SubScreenMap). Fora da aventura o painel simplesmente nao existe. */
+  private renderMap(map: SubScreenMap | undefined): void {
+    this.mapTitle.replaceChildren();
+    this.map.replaceChildren();
+    const hide = !map;
+    this.mapTitle.style.display = hide ? 'none' : '';
+    this.map.style.display = hide ? 'none' : '';
+    if (!map) return;
+
+    this.mapTitle.textContent = map.title;
+    this.map.style.gridTemplateColumns = `repeat(${map.chunksX}, 13px)`;
+    const visited = new Set(map.visited);
+    const markAt = new Map<string, SubScreenMapMark['kind']>();
+    // O heroi por ultimo: numa tela com fogueira E heroi, e o heroi que o jogador procura.
+    for (const m of map.marks) markAt.set(`${m.cx},${m.cy}`, m.kind);
+    for (const m of map.marks) if (m.kind === 'hero') markAt.set(`${m.cx},${m.cy}`, 'hero');
+
+    for (let cy = 0; cy < map.chunksY; cy += 1) {
+      for (let cx = 0; cx < map.chunksX; cx += 1) {
+        const key = `${cx},${cy}`;
+        const cell = document.createElement('div');
+        cell.className = visited.has(key) ? 'zh-sub-map-cell zh-seen' : 'zh-sub-map-cell';
+        const mark = markAt.get(key);
+        if (mark) {
+          const dot = document.createElement('div');
+          dot.className = `zh-dot zh-dot-${mark}`;
+          cell.appendChild(dot);
+        }
+        this.map.appendChild(cell);
+      }
+    }
   }
 }

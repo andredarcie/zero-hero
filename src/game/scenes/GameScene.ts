@@ -1108,6 +1108,12 @@ export class GameScene extends Phaser.Scene {
     });
     // Fogueiras que o jogador acendeu ficam acesas — atraves de morte, dungeon e browser. E o
     // progresso central do jogo (litFireCount vem junto, hidratado acima).
+    // A tela em que se nasce ja conta como pisada — o mapa nunca abre 100% escuro.
+    if (this.adventure && !inDungeon) {
+      adventureState().visitedChunks.add(
+        `${Math.floor(startWorldX / CHUNK_COLUMNS)},${Math.floor(startWorldY / CHUNK_ROWS)}`,
+      );
+    }
     const savedLit = this.adventure && !inDungeon ? adventureState().litFires : undefined;
     this.campfires = campfireDefs.map(
       (c, i) => new CampfireObject(
@@ -1871,6 +1877,40 @@ export class GameScene extends Phaser.Scene {
         };
       }),
       selected: this.heldItem,
+      map: this.subScreenMap(),
+    };
+  }
+
+  /**
+   * O mapa da subtela: um quadrado por chunk, fog of war vindo dos chunks PISADOS (o save), e
+   * so as marcas que o heroi ja viu — fogueira acesa/morta e portal em tela visitada, mais ele
+   * mesmo. So a aventura de overworld tem mapa: level e uma tela unica, o explorador e infinito
+   * por desenho (o mapa dele mataria a aposta), e a dungeon se aprende andando, como no Zelda.
+   */
+  private subScreenMap(): SubScreenView['map'] {
+    if (!this.adventure || getDungeonTrip()) return undefined;
+    const bounds = getWorldBounds();
+    const st = adventureState();
+    const chunkOf = (wx: number, wy: number): { cx: number; cy: number } => (
+      { cx: Math.floor(wx / CHUNK_COLUMNS), cy: Math.floor(wy / CHUNK_ROWS) }
+    );
+    const visited = new Set(st.visitedChunks);
+    const marks: NonNullable<SubScreenView['map']>['marks'] = [];
+    for (const cf of this.campfires) {
+      const { cx, cy } = chunkOf(cf.worldX, cf.worldY);
+      if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: cf.isLit ? 'fireLit' : 'fireDead' });
+    }
+    for (const portal of getLevelPortals()) {
+      const { cx, cy } = chunkOf(portal.worldX, portal.worldY);
+      if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: 'portal' });
+    }
+    marks.push({ ...chunkOf(this.playerWorld.worldX, this.playerWorld.worldY), kind: 'hero' });
+    return {
+      title: t('subscreen.mapTitle'),
+      chunksX: bounds.maxCx - bounds.minCx + 1,
+      chunksY: bounds.maxCy - bounds.minCy + 1,
+      visited: [...visited],
+      marks,
     };
   }
 
