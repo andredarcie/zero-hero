@@ -208,7 +208,9 @@ export abstract class WalkerEnemy extends EnemyBase {
   private tickArrival(delta: number): void {
     if (!this.arriveVoiced) {
       this.arriveVoiced = true;
-      getSoundManager().playCreatureArrive(this.kind); // na voz da especie (ver ENEMY_VOICE)
+      // A voz pertence ao INSTANTE da chegada: se ela aconteceu fora do quadro (cova longe, anel
+      // do cerco), ninguém a viu e ninguém a ouve — o corpo entra em cena andando, em silêncio.
+      if (this.framed) getSoundManager().playCreatureArrive(this.kind); // na voz da especie (ver ENEMY_VOICE)
     }
     this.arriveMs = Math.max(0, this.arriveMs - delta);
     const t = 1 - this.arriveMs / ARRIVE_MS;

@@ -149,7 +149,11 @@ export class TurretEnemy extends EnemyBase {
       return false;
     }
 
-    if (dist > RANGE_TILES) return false;
+    // Longe demais OU fora do quadro, ela fica muda — o alcance (9) é maior que a tela (~4,5
+    // pros lados), então sem o teste do quadro ela zumbia e atirava de fora da vista, que é
+    // exatamente o "som e bala pra ninguém" que o RANGE_TILES já tentava evitar. O relógio para
+    // junto: enquadrá-la não pode receber o jogador com um leque instantâneo acumulado.
+    if (dist > RANGE_TILES || !this.framed) return false;
 
     this.fireTimer += delta;
     if (this.fireTimer >= FIRE_INTERVAL_MS) {

@@ -131,6 +131,12 @@ export interface GameDebugState {
    *  fills and undead spawn around the hero (see UndeadSpawnDirector). */
   safety: { safe: boolean; danger: number; undeadCount: number };
   /**
+   * A trilha que o jogo esta pedindo agora (null = vento/silencio). A trilha de perigo so pode
+   * ser pedida com corpo vivo NO QUADRO (ver EnemyManager.framedAliveCount) — e esta leitura e
+   * como um cenario cobra isso sem tentar "ouvir" WebAudio.
+   */
+  music: string | null;
+  /**
    * Cada corpo vivo: a especie (`kind`), onde esta, se ainda esta CHEGANDO (invulneravel e inerte:
    * a fissura da caveira, a silhueta crescendo dos outros) e a placa de pressao em que fixou — o
    * balao de pensamento na cabeca dele. `plateTarget` nao-nulo = ignorou o heroi e marcha pra la;
@@ -152,6 +158,8 @@ export interface GameDebugState {
     invulnerable: boolean;
     /** Armando o golpe telegrafado: e a janela em que ele GUARDA a frente. */
     windingUp: boolean;
+    /** O corpo aparece no quadro da camera? Fora dele ele nao fala nem comeca golpe. */
+    framed: boolean;
   }>;
   /**
    * Os tiros EM VOO (mago e torreta). Unica coisa do jogo em coordenada continua de tile: `x/y`

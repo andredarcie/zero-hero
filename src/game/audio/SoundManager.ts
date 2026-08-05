@@ -284,6 +284,14 @@ class SoundManager {
   // ── music ──────────────────────────────────────────────────────────────────
 
   /**
+   * A trilha que o jogo PEDIU por ultimo (null = silencio/vento). E leitura de playtest: o que
+   * toca de verdade depende de buffer decodificado, mas o contrato testavel e o pedido.
+   */
+  public get requestedTrack(): MusicKey | null {
+    return this.wantTrack;
+  }
+
+  /**
    * Play (or crossfade to) a named track. Idempotent for the already-playing track,
    * so scenes may call it every frame with the state they want.
    */

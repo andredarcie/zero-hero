@@ -216,6 +216,9 @@ com um `scene.restart()` no meio).
   A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
 - **Chegar é um evento e todo golpe é telegrafado** (`WalkerEnemy`). Corpo que aparece do nada, ou
   que fere sem aviso, desmente a promessa que a caveira ensinou.
+- **Fora do quadro o corpo anda, mas não FALA, não INICIA golpe e não liga a trilha de perigo**
+  (`EnemyBase.framed`; o quadro real é ~4,5 tiles pros lados e 2,5 pro sul — bem menor que os
+  alcances). Som ou ataque novo de bicho SEM esse gate reabre o "ouço o que não vejo".
 - **Onde cada espécie PODE existir é uma lista só** (`FLYING_ENEMY_KINDS` / `AQUATIC_ENEMY_KINDS`,
   em `ScreenContent`): o corpo, a cova e o aviso do editor leem dela. Três cópias já discordaram.
 - **Água tem DUAS procedências e quem pergunta por uma só quebra**: prop `water` (levels) e tile de

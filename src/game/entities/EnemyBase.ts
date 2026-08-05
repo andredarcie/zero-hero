@@ -333,6 +333,35 @@ export abstract class EnemyBase {
     this.corpseMarkPending = value;
   }
 
+  /**
+   * O QUADRO DA CÂMERA, e a lei que ele impõe: **o que a tela não mostra não fala nem começa
+   * golpe.** O jogador ouvia bicho que não via — a IA acorda a até 15 tiles e o quadro real
+   * mostra ~4,5 pros lados e 2,5 pro sul (a perspectiva engole o perto), então metade do
+   * bestiário vivia gritando e atirando de fora da tela. O corpo continua EXISTINDO e andando
+   * fora do quadro (o cerco persegue, a caveira marcha pra placa); o que ele não faz é iniciar
+   * ataque (windup, carga, conjuração, emersão) nem tocar a própria voz.
+   *
+   * É um static instalado pelo EnemyManager a cada update (fecha sobre a câmera da cena viva;
+   * reinstalado a cada frame, um restart de cena nunca deixa um gate velho valendo). O default
+   * `true` cobre o vão entre o boot e o primeiro update — na dúvida, o corpo age, que é o
+   * comportamento de sempre.
+   */
+  private static frameGate: (wx: number, wy: number) => boolean = () => true;
+
+  public static setFrameGate(gate: (wx: number, wy: number) => boolean): void {
+    EnemyBase.frameGate = gate;
+  }
+
+  /** Um tile qualquer aparece no quadro? (o zora pergunta pelo tile em que vai emergir) */
+  protected tileFramed(wx: number, wy: number): boolean {
+    return EnemyBase.frameGate(wx, wy);
+  }
+
+  /** ESTE corpo aparece no quadro agora? */
+  protected get framed(): boolean {
+    return EnemyBase.frameGate(this.worldX, this.worldY);
+  }
+
   /** Está armando o golpe telegrafado? (a leitura de debug e o playtest da guarda leem isto) */
   public get isWindingUp(): boolean {
     return this.windupLeftMs > 0;
@@ -395,6 +424,10 @@ export abstract class EnemyBase {
    * ele sempre prometeu: SAIR DO TILE MIRADO.
    */
   protected startWindup(targetX: number, targetY: number, durationMs: number): void {
+    // Fora do quadro não se arma golpe (ver frameGate): o telegrafo é uma promessa DESENHADA, e
+    // armar onde ninguém vê é cobrar uma promessa que nunca foi feita. O corpo tenta de novo na
+    // próxima janela de ataque.
+    if (!this.framed) return;
     // A marca do aviso anterior pode sobreviver um frame ao golpe que a criou (o tween dela fecha
     // logo depois de `tickWindup` resolver). Nenhum ritmo de ataque do jogo chega perto disso, mas
     // um aviso órfão pendurado num tile é caro demais para depender de um número de balanceamento.
@@ -717,7 +750,10 @@ export abstract class EnemyBase {
 
   /** O susto de notar: clarão âmbar no corpo, duas fagulhas subindo da cabeça, um sopro curto. */
   private startleNotice(): void {
-    if (!this.alive || this.isSpawning || this.isStunned || this.isWindingUp) return;
+    // Fora do quadro o susto inteiro se cala (clarão, fagulhas E sopro): a caveira enxerga a 14
+    // tiles, bem além da tela, e o sopro dela era voz de bicho invisível. O estado de "viu"
+    // (noticeSeen) segue normal — só a encenação é que precisa de plateia.
+    if (!this.alive || this.isSpawning || this.isStunned || this.isWindingUp || !this.framed) return;
     this.sprite.setTintFill(NOTICE_FLASH);
     this.scene.time.delayedCall(90, () => {
       if (this.alive && this.sprite.active) this.restoreTint();

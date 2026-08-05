@@ -158,8 +158,11 @@ export class MageEnemy extends WalkerEnemy {
       return;
     }
 
-    if (ctx.dist > CAST_RANGE) {
-      this.castTimer = 0; // longe demais: ele nem comeca a puxar o feitico
+    if (ctx.dist > CAST_RANGE || !this.framed) {
+      // Longe demais OU fora do quadro: ele nem comeca a puxar o feitico. O alcance (8) passa da
+      // tela, e uma conjuracao fora do quadro e um aviso que ninguem viu — a bola chegaria "do
+      // nada", que e exatamente o que o telegrafo de 420ms existe pra impedir.
+      this.castTimer = 0;
       return;
     }
 

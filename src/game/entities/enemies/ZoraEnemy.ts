@@ -254,6 +254,15 @@ export class ZoraEnemy extends EnemyBase {
 
     if (!this.surfaceSpot) {
       const spot = this.pickSurfaceSpot(playerWorldX, playerWorldY);
+      // O tile escolhido tem de estar NO QUADRO (tileFramed, nao `framed`: o corpo submerso pode
+      // estar longe — o que precisa de plateia e onde a esteira abre). Emergir fora da tela e a
+      // versao aquatica do mago conjurando de fora do quadro: esteira, subida e cuspe sem ninguem
+      // ver, e o som de agua vindo do nada.
+      if (spot && !this.tileFramed(spot.worldX, spot.worldY)) {
+        this.phaseMs = 0;
+        this.hideWake();
+        return;
+      }
       if (!spot) {
         // O rio dele acabou — taparam com ponte, encheram de pedra ou drenaram o canal. Ele nao tem
         // onde nascer, e simplesmente nao nasce: e assim que a contra-jogada do jogador aparece na
@@ -369,7 +378,8 @@ export class ZoraEnemy extends EnemyBase {
     this.sprite.setVisible(false); // embaixo d'agua nao ha corpo na tela, so a esteira (e ela vem depois)
     this.hideWake();
     this.surfaceSpot = undefined;
-    getSoundManager().playZoraSurface();
+    // O heroi pode ter saido de cena no meio da janela dele; mergulho sem plateia e mudo.
+    if (this.framed) getSoundManager().playZoraSurface();
     if (!this.water.isOpenWater(this.worldX, this.worldY)) this.despawn();
   }
 

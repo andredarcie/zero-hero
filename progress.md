@@ -3131,3 +3131,57 @@ restantes caíram em bolsões que JÁ eram inalcançáveis).
 - O cerco de undead voltou junto com a loja (a flag desligava os dois) — com 363 covas autoradas
   E o cerco, a noite pode ter ficado dura; o dial é o `UndeadSpawnDirector`, não as covas.
 - Os NPCs continuam com as meta-piadas de alpha — são a voz do jogo; só o mago mudou.
+
+## 2026-08-05 — A lei do quadro: o que a tela não mostra não fala, não atira e não liga música
+
+**A queixa**: "ainda ouço inimigos que não consigo ver." Três fontes, todas medidas no jogo real:
+
+1. **O quadro é muito menor do que os alcances assumiam.** Medido projetando tiles pela câmera de
+   verdade (1280×800, tileSize ~105px): o enquadramento vai a **~4,5 tiles pros lados, ~6,5 pro
+   NORTE e só ~2,5 pro SUL** — a câmera inclinada comprime o longe (cabem 6 fileiras acima do
+   herói) e engole o perto (2 abaixo). O retângulo plano do `getVisibleRange` (13×8 ÷ 2) mente nas
+   quatro bordas. Enquanto isso: IA ativa a 15 tiles, cova acorda a 14, torreta atira a 9, mago
+   conjura a 8, zora emerge a 8. Metade do bestiário vivia gritando (e atirando!) de fora da tela.
+2. **Sons sem posição.** Todo SFX de bicho tocava a volume cheio viesse de onde viesse — o plop da
+   gosma VAGANDO fora da tela era o pior ofensor de repetição; o estrondo da cova a 14 tiles, o
+   pior de susto.
+3. **A trilha de perigo contava corpo invisível.** `aliveCount > 0` ligava a música de combate com
+   uma caveira congelada (além dos 15 da IA) atrás do herói — tela vazia, música de luta, minutos.
+
+**A decisão de desenho — por que NÃO congelar o bicho fora do quadro** (que era a leitura literal
+do pedido): movimento fora da tela é mecânica sancionada pelas leis da casa — o cerco PERSEGUE, a
+caveira MARCHA até a placa (a marcha cruza o quadro; congelada na borda, o portão eletrônico nunca
+abriria), "chegar é um evento". Congelar quebraria `placa-undead`, o cerco do explorador e as
+fixtures de `fauna`/`inimigos` inteiras. O que fere a percepção não é o corpo andando invisível —
+é ele SOAR e FERIR de onde não se vê. Então a lei ficou: **fora do quadro o corpo existe e anda,
+mas não fala, não inicia golpe e não conta pra trilha.**
+
+**As peças** (o predicado é `GameScene.isTileFramed` — projeção real via `tileToScreen`, folga de
+meio tile pros lados e um tile abaixo da borda de baixo, nada acima porque o corpo desenha pra
+CIMA dos pés; instalado como static em `EnemyBase.setFrameGate` a cada update do EnemyManager):
+
+- **Início de ataque**: `startWindup` (base, todos os corpo-a-corpo), carga da torreta, conjuração
+  do mago, agachada da aranha, emersão do zora (o teste é no TILE de emersão, não no corpo
+  submerso). Relógios param junto (o padrão que a torreta já usava fora de alcance): enquadrar um
+  atirador não pode receber o jogador com um leque instantâneo acumulado.
+- **Voz**: plop da gosma, susto de notar (a caveira enxerga a 14 — o sopro dela era voz de bicho
+  invisível), chegada do walker (o flag consome mesmo sem plateia: a voz pertence ao instante),
+  garra e estrondo da cova, mergulho do zora. Windup/whiff não precisaram: windup agora só nasce
+  enquadrado.
+- **Trilha**: `EnemyManager.framedAliveCount` no lugar de `aliveCount` SÓ na decisão de música —
+  o teto do cerco e o snapshot continuam contando a população inteira.
+- **Leituras novas de playtest**: `state.music` (a trilha PEDIDA, `SoundManager.requestedTrack`) e
+  `framed` por corpo no snapshot.
+
+**Verificado no jogo real** (sonda Playwright muda): torreta a +7 do herói (alcance 9) → 9s sem um
+tiro, `framed:false`, trilha em `overworld`; a mesma a +3 → leque de 6. `projeteis` ganhou a seção
+4 ("a lei do quadro") cobrando exatamente isso — inclusive que a trilha não liga por corpo fora da
+tela. As fixtures existentes sobrevivem por geometria: os atiradores de `projeteis` ficam ao NORTE
+do herói (onde o quadro alcança −6), o rio do `zora` está a dx+3, e `inimigos`/`fauna` não
+assertam som. O risco residual anotado: `fauna` espera o bote da aranha vindo do SUL (dy+4 =
+desenquadrada); ela agora precisa andar até dy+3 antes de agachar — um passo a mais dentro de um
+waitForFunction folgado.
+
+**Armadilha para o futuro**: qualquer som ou ataque novo de bicho nasce DENTRO desta lei — o
+gate é de graça (`this.framed` / `this.tileFramed(x,y)`), e um evento novo sem ele reabre
+exatamente o bug que esta tarde fechou.

@@ -136,7 +136,9 @@ export class SlimeEnemy extends WalkerEnemy {
   protected override onStepped(): void {
     this.hopFrame = true;
     this.sprite.setTexture(this.normalTexture, SLIME_FRAMES.hop);
-    getSoundManager().playSlimeHop();
+    // O plop é o som mais repetido do bestiário, e uma gosma VAGUEIA — sem o teste do quadro ela
+    // fica plocando na orelha do jogador de fora da tela, a tarde inteira, sem nunca aparecer.
+    if (this.framed) getSoundManager().playSlimeHop();
     this.scene.time.delayedCall(180, () => {
       if (!this.isAlive || !this.sprite.active || !this.hopFrame) return;
       this.hopFrame = false;

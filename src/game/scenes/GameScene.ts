@@ -2184,6 +2184,9 @@ export class GameScene extends Phaser.Scene {
           danger: this.spawnDirector?.danger ?? 0,
           undeadCount: this.enemyManager?.aliveCount ?? 0,
         },
+        // A trilha que o jogo esta PEDINDO (null = vento/silencio). E como um cenario cobra que
+        // corpo fora do quadro nao liga musica de combate — ver framedAliveCount no update.
+        music: getSoundManager().requestedTrack,
         // `undead` guardou o nome antigo de proposito (todo cenario existente le por ele), mas hoje
         // ele lista o bestiario inteiro — cada entrada diz a propria especie em `kind`.
         undead: this.enemyManager?.snapshot() ?? [],
@@ -2507,6 +2510,8 @@ export class GameScene extends Phaser.Scene {
           shot: (wx, wy) => this.isShotBlockedAt(wx, wy),
         },
         this.playerInvincible,
+        // O QUADRO: fora dele bicho nao fala nem comeca golpe (ver EnemyBase.setFrameGate).
+        (wx, wy) => this.isTileFramed(wx, wy),
         this.lurablePlates(),
       );
       if (attacked) this.handleEnemyAttackPlayer(attacked);
@@ -2554,7 +2559,10 @@ export class GameScene extends Phaser.Scene {
       // update pass, and without it the danger check below would restart the combat track
       // right on top of the death screen.
       const uiOwnsMusic = this.cutsceneActive || this.dialogOpen || this.shopOpen || this.itemGetOpen || this.isDead;
-      if (this.enemyManager.aliveCount > 0 && !this.playerSafe) {
+      // framedAliveCount, e nao aliveCount: um corpo vivo FORA do quadro (a caveira que ficou
+      // pra tras, a gosma vagando a 12 tiles) segurava a trilha de combate numa tela vazia — o
+      // jogador ouvia perigo que nao tinha como ver. Musica de perigo e promessa de corpo NA tela.
+      if (this.enemyManager.framedAliveCount > 0 && !this.playerSafe) {
         this.dangerCalmMs = 0;
         if (!uiOwnsMusic) getSoundManager().startMusic('danger', 900);
       } else {
@@ -2660,6 +2668,25 @@ export class GameScene extends Phaser.Scene {
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.renderProps();
     // Cast shadows are real: the fire's shadow light in the 3D renderer throws them.
+  }
+
+  /**
+   * O corpo que pisa neste tile aparece na tela agora? Projetado pela camera 3D DE VERDADE
+   * (tileToScreen), nunca pelo retangulo plano do getVisibleRange: em perspectiva o quadro e
+   * assimetrico — ~4,5 tiles pros lados, ~6,5 pro norte e so ~2,5 pro sul (a camera inclinada
+   * engole o perto) — e um retangulo simetrico mente nas quatro bordas. A folga e de UM CORPO:
+   * meio tile pros lados e um tile alem da borda de baixo (os pes saem mas a cabeca ainda
+   * aparece); na borda de cima nao ha folga, porque o corpo desenha PRA CIMA dos proprios pes.
+   *
+   * E o predicado da lei "o que a tela nao mostra nao fala nem comeca golpe" (EnemyBase) e do
+   * que a trilha de perigo conta (EnemyManager.framedAliveCount).
+   */
+  public isTileFramed(worldX: number, worldY: number): boolean {
+    if (!this.camera) return true;
+    const p = this.camera.tileToScreen(worldX, worldY, this.tileSize);
+    const slack = this.tileSize / 2;
+    return p.x >= -slack && p.x <= this.scale.width + slack
+      && p.y >= 0 && p.y <= this.scale.height + this.tileSize;
   }
 
   private handleResize(gameSize: Phaser.Structs.Size | { width: number; height: number }): void {

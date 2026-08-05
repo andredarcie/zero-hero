@@ -272,8 +272,10 @@ export class UndeadEnemy extends EnemyBase {
         }
         if (this.telegraphTimer < TELEGRAPH_MS) return false;
         // Phase 2 — the ground gives way: the skull appears and starts clawing out.
+        // Fora do quadro a garra sai muda (o mesmo contrato do estrondo da cova): som de
+        // nascimento é aviso, e aviso sem plateia é só barulho de bicho invisível.
         this.sprite.setVisible(true);
-        getSoundManager().playUndeadSpawn();
+        if (this.framed) getSoundManager().playUndeadSpawn();
         this.fadeOutCrack();
       }
 

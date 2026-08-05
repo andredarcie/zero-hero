@@ -123,10 +123,13 @@ export class SpiderEnemy extends WalkerEnemy {
 
     // A decisao de pular: ela ve o heroi, esta na distancia certa, ja descansou — e ele nao esta
     // com chama na mao (o bote e um gesto de coragem, e ela tem medo de fogo como todo bicho).
+    // E ela esta NO QUADRO: a agachada e um aviso de 400ms com clarao e estalo, e aviso dado fora
+    // da tela e golpe sem telegrafo do ponto de vista de quem joga. Fora do quadro ela so anda.
     const wants = !ctx.playerHasTorch
       && ctx.dist > 1
       && ctx.dist <= POUNCE_RANGE
-      && this.cooldownMs === 0;
+      && this.cooldownMs === 0
+      && this.framed;
     if (!wants) return;
     this.crouchMs = CROUCH_MS;
     this.cooldownMs = POUNCE_COOLDOWN_MS + CROUCH_MS + POUNCE_STEPS * POUNCE_INTERVAL;

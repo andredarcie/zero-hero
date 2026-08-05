@@ -4,7 +4,7 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { EnemyKind } from '@/game/world/ScreenContent';
 import { CorpseDecals } from './CorpseDecals';
-import type { EnemyBase } from './EnemyBase';
+import { EnemyBase } from './EnemyBase';
 import { EnemyProjectileManager, type EnemyShotKind } from './EnemyProjectile';
 import { BatEnemy } from './enemies/BatEnemy';
 import { MageEnemy } from './enemies/MageEnemy';
@@ -82,6 +82,12 @@ export class EnemyManager {
   private readonly enemies: EnemyBase[] = [];
   private readonly shots: EnemyProjectileManager;
   /**
+   * O QUADRO — "este tile aparece na tela agora?", instalado pelo GameScene a cada update (ver
+   * EnemyBase.setFrameGate, onde mora a lei). O default `true` cobre só o vão até o primeiro
+   * update; depois disso ele é sempre o quadro do frame corrente.
+   */
+  private frameGate: (wx: number, wy: number) => boolean = () => true;
+  /**
    * As ossadas. Ficam AQUI e nao no corpo que as deixa porque elas sobrevivem a ele: a caveira e
    * destruida assim que acaba de se esfarelar, e o osso continua no chao. Quem vive mais que o
    * dono tem de pertencer a quem enterra os dois (ver `destroy`).
@@ -109,8 +115,10 @@ export class EnemyManager {
    */
   public spawnUndead(worldX: number, worldY: number): UndeadEnemy {
     // The warning rumble as the ground starts to crack — playUndeadSpawn fires later, from
-    // inside UndeadEnemy, when the telegraph ends and the skull actually claws out.
-    getSoundManager().playGroundCrack();
+    // inside UndeadEnemy, when the telegraph ends and the skull actually claws out. Uma cova
+    // acorda a até 14 tiles (bem fora do quadro), e o estrondo dela era o pior "ouvi o que não
+    // vejo" do jogo: o aviso só soa se a fissura tiver plateia (ver EnemyBase.setFrameGate).
+    if (this.frameGate(worldX, worldY)) getSoundManager().playGroundCrack();
     const enemy = new UndeadEnemy(this.scene, worldX, worldY);
     this.enemies.push(enemy);
     return enemy;
@@ -182,6 +190,18 @@ export class EnemyManager {
     return this.enemies.reduce((sum, e) => sum + (e.isAlive ? 1 : 0), 0);
   }
 
+  /**
+   * Corpos vivos QUE APARECEM NO QUADRO — o número que a trilha de perigo lê. O `aliveCount`
+   * continua sendo a população (o teto do cerco conta todo mundo): um corpo fora da tela existe
+   * e caça, mas não pode ser a razão de uma música de combate numa tela vazia.
+   */
+  public get framedAliveCount(): number {
+    return this.enemies.reduce(
+      (sum, e) => sum + (e.isAlive && this.frameGate(e.worldX, e.worldY) ? 1 : 0),
+      0,
+    );
+  }
+
   public getEnemyAt(worldX: number, worldY: number): EnemyBase | null {
     return this.enemies.find((e) => e.isAlive && e.worldX === worldX && e.worldY === worldY) ?? null;
   }
@@ -223,6 +243,7 @@ export class EnemyManager {
     maxHealth: number;
     invulnerable: boolean;
     windingUp: boolean;
+    framed: boolean;
   }> {
     return this.enemies
       .filter((e) => e.isAlive)
@@ -238,6 +259,8 @@ export class EnemyManager {
         maxHealth: e.healthMax,
         invulnerable: e.isHurtInvulnerable,
         windingUp: e.isWindingUp,
+        // O corpo aparece no quadro? (a lei "fora da tela não fala nem atira" se asserta por isto)
+        framed: this.frameGate(e.worldX, e.worldY),
       }));
   }
 
@@ -311,9 +334,15 @@ export class EnemyManager {
     playerHasTorch: boolean,
     blocked: BlockedQuery,
     playerInvincible: boolean,
+    framedAt: (wx: number, wy: number) => boolean,
     lurablePlates: ReadonlyArray<{ worldX: number; worldY: number }> = [],
   ): EnemyHit | null {
     let hit: EnemyHit | null = null;
+
+    // O quadro deste frame, para este manager (framedAliveCount, o estrondo da cova) e para todo
+    // corpo (a voz e o início de golpe — ver EnemyBase.setFrameGate, onde a lei está escrita).
+    this.frameGate = framedAt;
+    EnemyBase.setFrameGate(framedAt);
 
     // Before anybody moves: a skull's target for this tick has to be settled, or half the pack
     // would step using this frame's assignment and half using last frame's.

@@ -11,6 +11,9 @@
 //      balas, o fogo viraria escudo antibalas e todo level teria a mesma resposta.
 //   3. **O tiro avisa.** 350ms de carga na torreta, 420ms de conjuracao no mago. Um tiro sem aviso
 //      e um dano que o jogador nao tinha como evitar.
+//   4. **Fora do quadro, muda.** O alcance dos atiradores (8-9 tiles) passa da tela (~4,5 pros
+//      lados), entao sem a lei do quadro eles zumbiam e atiravam de fora da vista — som e bala
+//      de bicho invisivel. Em alcance mas fora da tela: nenhum tiro, e nenhuma trilha de perigo.
 //
 // A FIXTURE (12x12) e uma parede de pedra atravessada no meio:
 //
@@ -231,5 +234,50 @@ export default {
     assert('o mago se manteve fora do alcance de um golpe (3+ tiles)', dist >= 3,
       JSON.stringify({ mage, player: state.player, dist }));
     await shot('o-mago-recua-do-heroi');
+
+    // ── 4. A LEI DO QUADRO: EM ALCANCE, FORA DA TELA — MUDA ───────────────────
+    // O heroi terminou a secao 3 em (2,9). Uma torreta em (9,9) esta a 7 tiles (dentro do alcance
+    // de 9) mas fora do quadro (~4,5 tiles pro lado): ela nao pode carregar, nao pode atirar, e a
+    // trilha de perigo nao pode ligar por causa dela. Enquadra-la e o que a acorda.
+    log('QUADRO: torreta em alcance mas fora da tela — nem tiro, nem musica');
+    await clearField();
+    await spawnBody('turret', 9, 9);
+    await page.waitForFunction(
+      () => window.__scene.enemyManager.getAliveEnemies().some((e) => e.kind === 'turret' && !e.isSpawning),
+      null, { timeout: 15000 },
+    );
+    // A trilha da secao anterior demora ate 4s de calmaria pra soltar (dangerCalmMs); drena antes
+    // de comecar a medicao estrita, senao o resto do 'danger' antigo condenaria a torreta nova.
+    await sleep(4600);
+
+    let framedWhileFar = false;
+    let shotWhileFar = false;
+    let dangerWhileFar = false;
+    // 8s > dois ciclos de leque (3,6s): zero tiro aqui e lei funcionando, nao azar de amostragem.
+    for (let i = 0; i < 40; i += 1) {
+      await sleep(200);
+      state = await driver.getState();
+      if ((state.shots ?? []).length > 0) shotWhileFar = true;
+      if (state.music === 'danger') dangerWhileFar = true;
+      if (state.undead.some((u) => u.kind === 'turret' && u.framed)) framedWhileFar = true;
+    }
+    assert('a 7 tiles ela esta mesmo FORA do quadro (o predicado ve o que a tela ve)',
+      framedWhileFar === false, JSON.stringify(state.undead));
+    assert('fora do quadro, em alcance: NENHUM tiro em 8s', shotWhileFar === false, 'houve tiro');
+    assert('e nenhuma trilha de perigo por corpo que nao se ve', dangerWhileFar === false,
+      String(state.music));
+
+    log('QUADRO: quatro passos pro leste a enquadram — e ela acorda');
+    await driver.walk('right', 4);
+    await page.waitForFunction(
+      () => (window.gameDebug?.getState()?.shots ?? []).length > 0,
+      null, { timeout: 15000 },
+    );
+    state = await driver.getState();
+    assert('enquadrada, a mesma torreta volta a atirar',
+      state.undead.some((u) => u.kind === 'turret' && u.framed), JSON.stringify(state.undead));
+    assert('e a trilha de perigo liga com o corpo NA tela', state.music === 'danger',
+      String(state.music));
+    await shot('fora-do-quadro-muda-dentro-atira');
   },
 };
