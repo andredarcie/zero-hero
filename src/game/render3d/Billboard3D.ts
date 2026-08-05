@@ -121,6 +121,15 @@ export interface Billboard3DOptions {
    * threshold keeps them out of the bloom while these HDR emissives still glow.
    */
   emissiveBoost?: number;
+  /**
+   * Ordem de desenho no passe transparente (default 0). O `depthLayer` decide quem GANHA o
+   * teste de profundidade; isto decide quem desenha DEPOIS — e um sprite `depthWrite: false`
+   * precisa das duas coisas para cobrir um corpo: se ele sai primeiro, o corpo (que escreve
+   * profundidade) pinta por cima mesmo estando atrás. O bloco de gelo é o caso; o brilho da
+   * fogueira (World3D) já usava o mesmo truque à mão. O teste de profundidade continua ligado:
+   * uma parede mais perto ainda oclui normalmente.
+   */
+  renderOrder?: number;
 }
 
 export class Billboard3D {
@@ -229,6 +238,7 @@ export class Billboard3D {
     if (this.flat) geo.rotateX(-Math.PI / 2);
     else if (!opts.centered) geo.translate(0, 0.5, 0); // upright: origin at the feet
     this.mesh = new THREE.Mesh(geo, this.mat);
+    if (opts.renderOrder !== undefined) this.mesh.renderOrder = opts.renderOrder;
 
     // NO shadow-map plumbing here on purpose. Real shadow maps are off for the whole game
     // (billboards are slivers seen from a light — see World3D), and every billboard used to

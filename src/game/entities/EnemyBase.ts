@@ -164,6 +164,15 @@ const BURN_CHAR_B = 0x1d;
 /** Reescreve o tom de carvão no corpo a cada tanto — não a cada frame (apply() reescreve o mesh). */
 const BURN_CHAR_TINT_MS = 150;
 
+/**
+ * O TOM DE FRIO do corpo congelado (ver FreezeManager): multiplicativo, como o carvão da tocha
+ * viva e pela mesma lei — corpo responde ESCURECENDO, nunca acendendo (tint claro em billboard
+ * emissive é silhueta chapada que o bloom espalha). O vermelho cai forte, o verde um pouco e o
+ * azul fica inteiro: a carne esfria para o azul sem virar outra espécie — o mago frio continua
+ * mago frio, só que mais frio.
+ */
+const FROZEN_SHADE = 0x8cc8ff;
+
 export abstract class EnemyBase {
   public worldX: number;
   public worldY: number;
@@ -391,10 +400,12 @@ export abstract class EnemyBase {
     this.clearWindup();
     this.stunWobbleMs = 0;
     this.sprite.setAngle(0); // rígido: nenhum tombo de passo pendurado numa estátua
+    this.restoreTint(); // a carne esfria JÁ (ver FROZEN_SHADE — restoreTint passa pelo frio)
   }
 
   public exitFreeze(): void {
     this.frozenFlag = false;
+    if (this.alive && this.sprite.active) this.restoreTint(); // o degelo devolve o tom vivo
   }
 
   /**
@@ -1211,11 +1222,23 @@ export abstract class EnemyBase {
    * la o devolveria branco, e ele leria como o outro personagem por um instante.
    */
   protected restoreTint(): void {
-    // O carvão da tocha viva multiplica por cima do tom ferido: um corpo em chamas que pisca
-    // de ameaça ou troca a textura de dano volta QUEIMADO, nunca limpo.
-    const shade = this.burnCharShade(this.woundedShade());
+    // O carvão da tocha viva e o frio do gelo multiplicam por cima do tom ferido: um corpo em
+    // chamas que pisca de ameaça volta QUEIMADO, e um congelado que leva espadada volta AZUL —
+    // nunca limpo. Os dois estados não coexistem (fogo e gelo se anulam), então a ordem é livre.
+    const shade = this.frozenShade(this.burnCharShade(this.woundedShade()));
     if (shade === 0xffffff) this.sprite.clearTint();
     else this.sprite.setTint(shade);
+  }
+
+  /** O tom de frio (ver FROZEN_SHADE): multiplica canal a canal enquanto o corpo está no gelo. */
+  private frozenShade(base: number): number {
+    if (!this.frozenFlag) return base;
+    const mul = (shift: number): number => {
+      const from = (base >> shift) & 0xff;
+      const cold = (FROZEN_SHADE >> shift) & 0xff;
+      return Math.round((from * cold) / 255) << shift;
+    };
+    return mul(16) | mul(8) | mul(0);
   }
 
   /**
