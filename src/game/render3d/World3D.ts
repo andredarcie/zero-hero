@@ -3047,25 +3047,33 @@ export class World3D {
 
   public dispose(): void {
     window.removeEventListener('resize', this.handleResize);
+    // `material` pode ser ARRAY (a alvenaria de cubo das dungeons agrupa teto/lados): um
+    // `material?.dispose()` direto estoura "dispose is not a function" no meio do teardown e
+    // deixa a cena que vem depois (o editor acordando do ESC) sem o wake. Ninguém viu por anos
+    // porque só o /lab de dungeon percorre esse caminho com um mesh multi-material vivo.
+    const disposeMaterial = (mat?: THREE.Material | THREE.Material[]): void => {
+      if (Array.isArray(mat)) mat.forEach((entry) => entry.dispose());
+      else mat?.dispose();
+    };
     this.scene.traverse((obj) => {
       // Dispose meshes AND particle Points (both carry geometry + material).
       const withGeo = obj as THREE.Object3D & {
         isMesh?: boolean; isPoints?: boolean;
-        geometry?: THREE.BufferGeometry; material?: THREE.Material;
+        geometry?: THREE.BufferGeometry; material?: THREE.Material | THREE.Material[];
       };
       if (withGeo.isMesh || withGeo.isPoints) {
         withGeo.geometry?.dispose();
-        withGeo.material?.dispose();
+        disposeMaterial(withGeo.material);
       }
     });
     this.dotTexture?.dispose();
     this.maskScene.traverse((obj) => {
       const withGeo = obj as THREE.Object3D & {
-        isMesh?: boolean; geometry?: THREE.BufferGeometry; material?: THREE.Material;
+        isMesh?: boolean; geometry?: THREE.BufferGeometry; material?: THREE.Material | THREE.Material[];
       };
       if (withGeo.isMesh) {
         withGeo.geometry?.dispose();
-        withGeo.material?.dispose();
+        disposeMaterial(withGeo.material);
       }
     });
     this.maskTarget.dispose();

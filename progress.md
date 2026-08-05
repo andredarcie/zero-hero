@@ -3341,3 +3341,40 @@ limpo: falha idêntica em `414b4cb` (antes de qualquer mudança desta sessão), 
 As seções 1–5 passam, incluindo o contrato novo do cuspe-que-congela no zora do rio. Fica como
 investigação separada: o suspeito natural é o teleport direto (`playerWorld.worldX = x`) não
 acordar o que o SURFACE_RANGE do zora lê, ou uma regressão antiga na própria fixture.
+
+---
+
+## O lab abre dungeon — `/lab?dungeon=N` (2026-08-05)
+
+**O que faltava não era o editor, era a PORTA.** A grade do editor sempre foi guiada pelo meta do
+arquivo (é assim que o /editor edita o overworld 22×8), então as 17–57 salas de uma dungeon
+entram sem uma linha de mudança no desenho. O que barrava: o resolver do `/api/world` rejeitava
+`dungeon-N`, o tipo `WorldFileId` do client não o endereçava, e o /lab não tinha query para
+pedi-lo. Três remendos pequenos: o resolver aceita `(level|dungeon)-N`, o tipo ganhou o membro, e
+`?dungeon=N` vence `?level=N` na escolha do arquivo (um parâmetro por vez — `openLabFile` limpa o
+outro ao navegar). O P joga a dungeon EDITADA em memória com `activeLevel = N` (mesmo pause, mesmo
+reiniciar), o ESC volta, o Salvar grava no `dungeon-N.json`.
+
+**O bug latente que a mudança consertou por tabela**: `syncLabLevelIndex` reescreve o
+`index.json` a partir de `listLabLevels()`, e a lista só enxergava `level-N` — o primeiro salvar
+do lab APAGARIA as nove dungeons do manifesto que o título e a seleção de levels leem. Com as
+dungeons na lista (com `kind: 'level' | 'dungeon'` e a mesma ordem de sempre), a projeção
+preserva tudo. O `+ Criar` filtra por kind na numeração, senão o segundo level de puzzle nasceria
+como level-10 (as dungeons ocupam 1..9).
+
+**O gerenciador virou id-aware** (`level-3` e `dungeon-3` colidem no número): abrir funciona para
+as duas famílias (rótulo `D3` vs `#3`), renomear/apagar continuam SÓ de level — dungeon é
+conteúdo fixo, edita-se e nunca se apaga pelo lab — e o fallback pós-remoção filtra por kind
+(cair numa dungeon de 50 salas porque um puzzle 12×12 sumiu seria o susto errado).
+
+**O segundo bug destampado, este com anos**: `World3D.dispose()` fazia `material?.dispose()` — e
+a alvenaria de CUBO das dungeons usa material em ARRAY (teto/lados agrupados), onde
+`array.dispose` não existe. O ESC de volta ao editor estourava no meio do teardown e o wake nunca
+chegava (UI morta). Ninguém viu porque nenhum caminho anterior fazia teardown com um mesh
+multi-material vivo: os levels 12×12 não têm cubo, e da aventura não se sai por ESC. O dispose
+agora trata `Material | Material[]`.
+
+**Guarda**: `npm run playtest -- lab-dungeon` — a Águia inteira no editor (48 chunks), o API
+servindo `dungeon-N` e rejeitando id torto, as duas famílias na lista (a prova do manifesto),
+edição em memória viajando pelo P (arbusto plantado aparece no jogo), ESC devolvendo a UI viva e
+o arquivo em disco intocado (P nunca salva).

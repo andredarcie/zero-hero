@@ -15,6 +15,8 @@ type LabLevelSummary = {
   id: string;
   file: string;
   level: number;
+  /** `level` = fase de puzzle criavel/apagavel; `dungeon` = uma das nove mazes fixas. */
+  kind: 'level' | 'dungeon';
   name: string;
   blurb: string;
   updatedAt: string;
@@ -36,7 +38,14 @@ const readStoredLevelIndex = async (): Promise<StoredLevelIndexEntry[]> => {
   }
 };
 
-/** The actual level files are authoritative; index.json is their static/runtime projection. */
+/**
+ * The actual level files are authoritative; index.json is their static/runtime projection.
+ *
+ * As DUNGEONS entram na lista junto com os levels — e isso conserta um bug latente por tabela:
+ * este resultado e o que `syncLabLevelIndex` grava de volta no index.json, e enquanto so
+ * `level-N` era listado, o primeiro salvar do lab APAGAVA as nove dungeons do manifesto que o
+ * titulo e a selecao de levels leem.
+ */
 const listLabLevels = async (): Promise<LabLevelSummary[]> => {
   const [entries, storedIndex] = await Promise.all([
     fs.readdir(levelJsonDir, { withFileTypes: true }),
@@ -44,9 +53,10 @@ const listLabLevels = async (): Promise<LabLevelSummary[]> => {
   ]);
   const storedByFile = new Map(storedIndex.map((entry) => [entry.file, entry]));
   const summaries = await Promise.all(entries.flatMap((entry) => {
-    const match = entry.isFile() ? /^level-(\d+)\.json$/u.exec(entry.name) : null;
+    const match = entry.isFile() ? /^(level|dungeon)-(\d+)\.json$/u.exec(entry.name) : null;
     if (!match) return [];
-    const level = Number(match[1]);
+    const kind = match[1] as 'level' | 'dungeon';
+    const level = Number(match[2]);
     return [fs.readFile(path.join(levelJsonDir, entry.name), 'utf8').then((content) => {
       const parsed = JSON.parse(content) as {
         meta?: {
@@ -61,9 +71,10 @@ const listLabLevels = async (): Promise<LabLevelSummary[]> => {
         ? { worldX: Number(start.worldX), worldY: Number(start.worldY) }
         : null;
       return {
-        id: `level-${level}`,
+        id: `${kind}-${level}`,
         file: entry.name,
         level,
+        kind,
         name: parsed.meta?.name?.trim() || stored?.name?.trim() || `Level ${level}`,
         blurb: stored?.blurb?.trim() ?? '',
         updatedAt: parsed.meta?.exportedAt ?? '',
@@ -71,7 +82,10 @@ const listLabLevels = async (): Promise<LabLevelSummary[]> => {
       } satisfies LabLevelSummary;
     })];
   }));
-  return summaries.sort((a, b) => a.level - b.level);
+  // Levels primeiro, dungeons depois — a mesma ordem que o index.json sempre teve.
+  return summaries.sort((a, b) => (
+    a.kind === b.kind ? a.level - b.level : a.kind === 'level' ? -1 : 1
+  ));
 };
 
 const syncLabLevelIndex = async (): Promise<LabLevelSummary[]> => {
@@ -114,12 +128,12 @@ const makeBlankPuzzleLevel = (name: string): object => {
   };
 };
 
-// The world API serves the real overworld (`world`) and the puzzle levels (`level-N`, edited
-// via /lab). Everything else in ?file= is rejected — the resolver returns null.
+// The world API serves the real overworld (`world`), the puzzle levels (`level-N`) and the
+// nine dungeons (`dungeon-N`) — both edited via /lab. Everything else in ?file= is rejected.
 const resolveWorldFile = (fileId: string): string | null => {
   if (fileId === 'world') return worldJsonPath;
-  const level = /^level-(\d+)$/u.exec(fileId);
-  return level ? path.join(levelJsonDir, `level-${level[1]}.json`) : null;
+  const match = /^(level|dungeon)-(\d+)$/u.exec(fileId);
+  return match ? path.join(levelJsonDir, `${match[1]}-${match[2]}.json`) : null;
 };
 
 const sanitizeFileName = (fileName: string): string | null => {
@@ -241,7 +255,12 @@ const labLevelsApiPlugin = (): Plugin => ({
             return;
           }
           const existing = await listLabLevels();
-          const level = Math.max(0, ...existing.map((entry) => entry.level)) + 1;
+          // So os LEVELS contam para a numeracao: as dungeons (1..9) agora estao na lista, e sem
+          // o filtro o segundo level criado nasceria como level-10 num lab com dois levels.
+          const level = Math.max(
+            0,
+            ...existing.filter((entry) => entry.kind === 'level').map((entry) => entry.level),
+          ) + 1;
           const file = `level-${level}.json`;
           await fs.writeFile(
             path.join(levelJsonDir, file),

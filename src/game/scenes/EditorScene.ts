@@ -221,15 +221,27 @@ export class EditorScene extends Phaser.Scene {
   // ── Boot ────────────────────────────────────────────────────────────────
 
   // The /lab route runs this same scene over a puzzle LEVEL file (public/levels/level-N.json)
-  // instead of the real overworld — `?level=N` picks which (default 1). See main.ts / worldApi.ts.
+  // or one of the nine DUNGEONS (public/levels/dungeon-N.json) instead of the real overworld —
+  // `?level=N` / `?dungeon=N` picks which (default level 1). See main.ts / worldApi.ts. A grade
+  // do editor sempre foi guiada pelos meta do arquivo, então as 17-57 salas de uma dungeon
+  // (mundos multi-chunk, como o /editor já edita no overworld 22×8) entram sem mudança nenhuma
+  // de desenho — o que faltava era só a porta.
   private get worldFileId(): WorldFileId {
     if (this.registry.get('appMode') !== 'lab') return 'world';
+    const dungeon = new URLSearchParams(window.location.search).get('dungeon');
+    if (dungeon && /^\d+$/u.test(dungeon) && Number(dungeon) > 0) return `dungeon-${Number(dungeon)}`;
     return `level-${this.labLevelNumber}`;
   }
 
   private get labLevelNumber(): number {
     const raw = new URLSearchParams(window.location.search).get('level');
     return raw && /^\d+$/u.test(raw) && Number(raw) > 0 ? Number(raw) : 1;
+  }
+
+  /** O número dentro do worldFileId corrente (level OU dungeon) — o que o activeLevel recebe. */
+  private get labFileNumber(): number {
+    const match = /-(\d+)$/u.exec(this.worldFileId);
+    return match ? Number(match[1]) : 1;
   }
 
   // Editor and each lab level persist UI/camera separately: their worlds have different sizes,
@@ -274,12 +286,12 @@ export class EditorScene extends Phaser.Scene {
       onDialogApply: (kind, dialog) => { this.store?.setDialog(kind, dialog); },
       ...(this.registry.get('appMode') === 'lab' ? {
         levelManager: {
-          currentLevel: this.labLevelNumber,
+          currentId: this.worldFileId,
           list: listLabLevels,
           create: createLabLevel,
           rename: renameLabLevel,
           remove: deleteLabLevel,
-          open: (level: number) => this.openLabLevel(level),
+          open: (id: string) => this.openLabFile(id),
         },
       } : {}),
     });
@@ -1115,16 +1127,23 @@ export class EditorScene extends Phaser.Scene {
     if (!this.requireValidStartPoint()) return;
     this.persistUi();
     setWorldData(store.snapshotWorld());
-    if (this.registry.get('appMode') === 'lab') setActiveLevel(this.labLevelNumber);
+    // O número vem do ARQUIVO aberto (level ou dungeon): testar a dungeon-3 pelo P é jogar o
+    // level 3 ativo, com os mesmos botões flutuantes e o mesmo "reiniciar" do pause.
+    if (this.registry.get('appMode') === 'lab') setActiveLevel(this.labFileNumber);
     this.scene.run(GameScene.key);
     this.scene.sleep();
   }
 
   /** Full navigation is deliberate: public-file mutations trigger Vite reloads anyway. */
-  private openLabLevel(level: number): void {
+  private openLabFile(id: string): void {
+    const match = /^(level|dungeon)-(\d+)$/u.exec(id);
+    if (!match) return;
     this.persistUi();
     const url = new URL(window.location.href);
-    url.searchParams.set('level', String(level));
+    // Um parâmetro por vez: `?level` e `?dungeon` juntos seriam dois arquivos disputando a cena.
+    url.searchParams.delete('level');
+    url.searchParams.delete('dungeon');
+    url.searchParams.set(match[1], match[2]);
     url.searchParams.delete('play');
     window.location.assign(url.toString());
   }

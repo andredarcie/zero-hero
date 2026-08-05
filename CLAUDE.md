@@ -152,8 +152,9 @@ aparecem em qualquer aparelho de dedo (`isTouchDevice`).
   puzzle. **Um puzzle só é puzzle se o caminho fácil estiver fechado** — asserte a *trava*.
 - **Um playtest AUTORA a fixture que precisa** (entra no `/lab`, coloca props pelo `EditorStore`,
   aperta P) em vez de depender do conteúdo de um level.
-- `/lab` edita um level (`?level=N`) via `/api/world?file=level-N`; **P** joga o mundo em memória,
-  **ESC** volta; nada salva até o Salvar. `/?level=N` e `/lab?play` bootam direto.
+- `/lab` edita um level (`?level=N`) ou uma **dungeon** (`?dungeon=N`, arquivos `dungeon-N.json`)
+  via `/api/world`; **P** joga o mundo em memória, **ESC** volta; nada salva até o Salvar.
+  `/?level=N` e `/lab?play` bootam direto.
 - O **cerco de undead** (`UndeadSpawnDirector`) está desligado em mundo-puzzle (`isPuzzleWorld()`).
   Isso vale só pro cerco: **inimigo autorado (aba Inimigos) funciona em level, nas 7 espécies**.
 - Um level mostra dois botões flutuantes (↻ recomeçar, com confirmação de 2 toques, e pausa) —

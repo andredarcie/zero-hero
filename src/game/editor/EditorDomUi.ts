@@ -82,12 +82,14 @@ export type EditorUiCallbacks = {
   onWorldApply: (settings: { name: string; chunksX: number; chunksY: number }) => void;
   onDialogApply: (kind: NpcKind, dialog: WorldDialog) => void;
   levelManager?: {
-    currentLevel: number;
+    /** O arquivo aberto agora (`level-N` ou `dungeon-N`) — id, porque os números colidem. */
+    currentId: string;
     list: () => Promise<LabLevelSummary[]>;
     create: (name: string) => Promise<LabLevelSummary>;
+    /** Só levels: as nove dungeons são conteúdo fixo — renomear/apagar continuam por número. */
     rename: (level: number, name: string) => Promise<LabLevelSummary>;
     remove: (level: number) => Promise<DeleteLabLevelResult>;
-    open: (level: number) => void;
+    open: (id: string) => void;
   };
 };
 
@@ -1330,16 +1332,17 @@ export class EditorDomUi {
     foot.appendChild(this.button('Fechar', '', () => this.closeModal(), 'primary'));
 
     let levels: LabLevelSummary[] = [];
-    let editing: number | null = null;
-    let deleteArmed: number | null = null;
+    // Por ID e não por número: com as dungeons na lista, `level-3` e `dungeon-3` colidem no 3.
+    let editing: string | null = null;
+    let deleteArmed: string | null = null;
 
     const fail = (error: unknown, fallback: string): void => {
       this.toast(error instanceof Error ? error.message : fallback);
     };
 
-    const navigateAfterMutation = (level = manager.currentLevel): void => {
+    const navigateAfterMutation = (id = manager.currentId): void => {
       this.setLoading(true);
-      manager.open(level);
+      manager.open(id);
     };
 
     const createLevel = async (): Promise<void> => {
@@ -1357,7 +1360,7 @@ export class EditorDomUi {
       try {
         const created = await manager.create(name);
         this.toast(`Level ${created.level} criado`);
-        navigateAfterMutation(created.level);
+        navigateAfterMutation(created.id);
       } catch (error) {
         createButton.disabled = false;
         fail(error, 'Falha ao criar level');
@@ -1382,18 +1385,21 @@ export class EditorDomUi {
       }
 
       levels.forEach((entry) => {
+        const isCurrent = entry.id === manager.currentId;
+        const isDungeon = entry.kind === 'dungeon';
         const row = document.createElement('div');
-        row.className = `zh-level-row${entry.level === manager.currentLevel ? ' current' : ''}`;
-        row.dataset.level = String(entry.level);
+        row.className = `zh-level-row${isCurrent ? ' current' : ''}`;
+        row.dataset.level = entry.id;
 
         const number = document.createElement('span');
         number.className = 'zh-level-number';
-        number.textContent = `#${entry.level}`;
+        // D de dungeon: a lista agora mistura as duas famílias, e "#3" sozinho mentiria duas vezes.
+        number.textContent = isDungeon ? `D${entry.level}` : `#${entry.level}`;
 
         const nameCell = document.createElement('div');
-        if (editing === entry.level) {
+        if (editing === entry.id) {
           const input = document.createElement('input');
-          input.id = `zh-level-rename-${entry.level}`;
+          input.id = `zh-level-rename-${entry.id}`;
           input.type = 'text';
           input.maxLength = 80;
           input.value = entry.name;
@@ -1404,7 +1410,7 @@ export class EditorDomUi {
           const name = document.createElement('div');
           name.textContent = entry.name;
           nameCell.appendChild(name);
-          if (entry.level === manager.currentLevel) {
+          if (isCurrent) {
             const current = document.createElement('span');
             current.className = 'zh-level-current';
             current.textContent = 'ABERTO';
@@ -1419,21 +1425,23 @@ export class EditorDomUi {
         }
 
         const open = this.button(
-          entry.level === manager.currentLevel ? 'Aberto' : 'Abrir',
-          entry.level === manager.currentLevel ? 'Este level ja esta aberto' : `Abrir ${entry.name}`,
-          () => navigateAfterMutation(entry.level),
+          isCurrent ? 'Aberto' : 'Abrir',
+          isCurrent ? 'Este level ja esta aberto' : `Abrir ${entry.name}`,
+          () => navigateAfterMutation(entry.id),
         );
         open.dataset.action = 'open';
-        open.disabled = this.store.dirty || entry.level === manager.currentLevel || editing !== null;
+        open.disabled = this.store.dirty || isCurrent || editing !== null;
 
-        const rename = this.button(editing === entry.level ? 'Salvar nome' : 'Renomear', 'Alterar o nome exibido', () => {
-          if (editing !== entry.level) {
-            editing = entry.level;
+        const rename = this.button(editing === entry.id ? 'Salvar nome' : 'Renomear', isDungeon
+          ? 'Dungeon e conteudo fixo: o nome vive no meta.name do proprio arquivo'
+          : 'Alterar o nome exibido', () => {
+          if (editing !== entry.id) {
+            editing = entry.id;
             deleteArmed = null;
             renderRows();
             return;
           }
-          const input = document.getElementById(`zh-level-rename-${entry.level}`) as HTMLInputElement | null;
+          const input = document.getElementById(`zh-level-rename-${entry.id}`) as HTMLInputElement | null;
           const name = input?.value.trim() ?? '';
           if (!name) { this.toast('O nome nao pode ficar vazio'); return; }
           rename.disabled = true;
@@ -1442,18 +1450,20 @@ export class EditorDomUi {
             .catch((error) => { rename.disabled = false; fail(error, 'Falha ao renomear level'); });
         });
         rename.dataset.action = 'rename';
-        rename.disabled = this.store.dirty;
+        rename.disabled = this.store.dirty || isDungeon;
 
         const remove = this.button(
-          deleteArmed === entry.level ? 'Confirmar?' : 'Apagar',
-          entry.level === 1 ? 'O Level 1 base nao pode ser apagado' : 'Apagar este arquivo de level',
+          deleteArmed === entry.id ? 'Confirmar?' : 'Apagar',
+          isDungeon
+            ? 'As nove dungeons sao fixas — editam-se, nunca se apagam pelo lab'
+            : entry.level === 1 ? 'O Level 1 base nao pode ser apagado' : 'Apagar este arquivo de level',
           () => {
-            if (deleteArmed !== entry.level) {
-              deleteArmed = entry.level;
+            if (deleteArmed !== entry.id) {
+              deleteArmed = entry.id;
               editing = null;
               renderRows();
               window.setTimeout(() => {
-                if (deleteArmed === entry.level && list.isConnected) {
+                if (deleteArmed === entry.id && list.isConnected) {
                   deleteArmed = null;
                   renderRows();
                 }
@@ -1463,16 +1473,19 @@ export class EditorDomUi {
             remove.disabled = true;
             void manager.remove(entry.level)
               .then((result) => {
-                const fallback = result.levels.find((level) => level.level > entry.level)?.level
-                  ?? [...result.levels].reverse().find((level) => level.level < entry.level)?.level
-                  ?? 1;
-                navigateAfterMutation(entry.level === manager.currentLevel ? fallback : manager.currentLevel);
+                // O fallback pos-remocao fica ENTRE os levels: cair numa dungeon por vizinhanca
+                // de numero seria abrir um mundo de 50 salas porque um puzzle 12x12 sumiu.
+                const remaining = result.levels.filter((candidate) => candidate.kind === 'level');
+                const fallback = remaining.find((candidate) => candidate.level > entry.level)?.id
+                  ?? [...remaining].reverse().find((candidate) => candidate.level < entry.level)?.id
+                  ?? 'level-1';
+                navigateAfterMutation(entry.id === manager.currentId ? fallback : manager.currentId);
               })
               .catch((error) => { remove.disabled = false; fail(error, 'Falha ao apagar level'); });
           },
         );
         remove.dataset.action = 'delete';
-        remove.disabled = this.store.dirty || entry.level === 1 || editing !== null;
+        remove.disabled = this.store.dirty || isDungeon || entry.level === 1 || editing !== null;
 
         row.append(number, nameCell, open, rename, remove);
         list.appendChild(row);
