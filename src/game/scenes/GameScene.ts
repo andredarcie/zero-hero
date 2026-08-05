@@ -133,6 +133,7 @@ import {
 } from '@/game/explorer/explorerRun';
 import { getActiveLevel, levelFilePath, setActiveLevel } from '@/game/runtime/activeLevel';
 import { clearDungeonTrip, getDungeonTrip, setDungeonTrip } from '@/game/runtime/dungeonTrip';
+import { clearActiveDungeon, dungeonWorldFor, persistActiveDungeon } from '@/game/dungeon/dungeonWorld';
 import { LevelIntroOverlay } from '@/game/runtime/LevelIntroOverlay';
 import { LevelButtons, PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
@@ -1755,15 +1756,30 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * As nove dungeons sao GERADAS a partir da semente desta partida, e lembradas depois disso (ver
+   * `dungeon/dungeonWorld`). `?dungeons=static` volta a ler os nove arquivos do disco — as plantas
+   * exatas do Zelda 1, que continuam no repositorio: elas sao o controle do A/B, a rede de
+   * seguranca de um build ruim, e o que a lista de levels ainda joga.
+   */
+  private static useStaticDungeons(): boolean {
+    return new URLSearchParams(window.location.search).get('dungeons') === 'static';
+  }
+
   private async enterDungeon(portal: LevelPortalObject): Promise<void> {
     const level = portal.level;
     if (level === undefined) return;
     this.persistAdventure(); // a foto do overworld (mochila, chao) fecha antes da viagem
     let world: unknown;
-    const fetching = window
-      .fetch(`${import.meta.env.BASE_URL}levels/dungeon-${level}.json`, { cache: 'no-store' })
-      .then((res) => { if (!res.ok) throw new Error(`dungeon ${level} indisponivel`); return res.json(); })
-      .then((json: unknown) => { world = json; });
+    // A geracao roda DENTRO da travessia do portal — que ja e assincrona e ja dura ~1,5s (succao,
+    // vazio, tunel, queda). Ela ocupa o mesmo lugar que a rede ocupava; o jogador nao espera nada
+    // que ja nao esperasse.
+    const fetching = GameScene.useStaticDungeons()
+      ? window
+        .fetch(`${import.meta.env.BASE_URL}levels/dungeon-${level}.json`, { cache: 'no-store' })
+        .then((res) => { if (!res.ok) throw new Error(`dungeon ${level} indisponivel`); return res.json(); })
+        .then((json: unknown) => { world = json; })
+      : dungeonWorldFor(level, import.meta.env.BASE_URL).then((generated) => { world = generated; });
     await this.portalTrip(portal, fetching, () => {
       setWorldData(world as Parameters<typeof setWorldData>[0]);
       setActiveLevel(level);
@@ -1777,6 +1793,10 @@ export class GameScene extends Phaser.Scene {
     const trip = getDungeonTrip();
     if (!trip) return;
     this.persistAdventure(); // a foto da dungeon (tesouro tomado, itens largados) fecha aqui
+    // ...e o retrato da PLANTA fecha junto. O runtime edita os arrays de chunk no lugar, entao
+    // fotografar agora e fotografar o que a visita mudou — e o mundo la fora nunca volta a
+    // perguntar a semente por esta dungeon.
+    persistActiveDungeon();
     let world: { meta: { playerStart: { worldX: number; worldY: number } } } | undefined;
     const fetching = window
       .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
@@ -1790,6 +1810,7 @@ export class GameScene extends Phaser.Scene {
       setWorldData(world as unknown as Parameters<typeof setWorldData>[0]);
       setActiveLevel(null);
       clearDungeonTrip();
+      clearActiveDungeon();
     });
   }
 
@@ -7673,6 +7694,12 @@ export class GameScene extends Phaser.Scene {
         if (getDungeonTrip()) {
           // Morrer na dungeon acorda do lado de FORA, na fogueira: o overworld volta do disco
           // (o mesmo gesto de leaveDungeon) e a viagem se encerra aqui, sem escada.
+          //
+          // O retrato da planta fecha ANTES da volta, pelo mesmo motivo da saida pela escada: a
+          // dungeon em que o heroi acabou de morrer e a mesma que ele vai encontrar ao voltar —
+          // a morte custa a caminhada de volta, nunca um mundo novo.
+          persistActiveDungeon();
+          clearActiveDungeon();
           void window
             .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
             .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })

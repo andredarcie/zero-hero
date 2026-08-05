@@ -3378,3 +3378,112 @@ agora trata `Material | Material[]`.
 servindo `dungeon-N` e rejeitando id torto, as duas famílias na lista (a prova do manifesto),
 edição em memória viajando pelo P (arbusto plantado aparece no jogo), ESC devolvendo a UI viva e
 o arquivo em disco intocado (P nunca salva).
+
+## As nove dungeons passaram a ser GERADAS — e a lembrar-se de si (2026-08-05)
+
+Elas eram nove arquivos de 95–183 KB, extraídos pixel a pixel dos mapas do Zelda 1
+(`gen-zelda-dungeons.mjs`). Continuam no repositório — `?dungeons=static` ainda as joga, e a lista
+de levels nunca deixou de jogá-las —, mas a aventura agora **gera** as nove a partir da semente da
+partida, e uma vez geradas elas são **daquele save para sempre**. O plano inteiro, com as fontes
+que o sustentam, está em [`plano-dungeons.md`](plano-dungeons.md).
+
+**O diagnóstico que mandou no projeto:** a dungeon de ontem era *arquitetura sem verbo*. 57 salas e
+157 covas na nona, nenhuma tranca, nenhuma chave, nenhum atalho — o que ela pedia do jogador era
+andar até o fim. Copiar isso proceduralmente daria labirinto, e labirinto grande é a definição dos
+10.000 pratos de aveia. Então o gerador não gera *plantas*: ele gera **missões**, e só depois as
+embute num mapa.
+
+### As cinco camadas (`src/game/dungeon/`, TypeScript puro — nada de Phaser, nada de Three)
+
+1. **O brief** (`dungeonBriefs`) — o que o gerador NÃO tem permissão de sortear: o tesouro (a
+   escada picareta→balde→foice→machado de aço, de que o overworld depende), o pool de espécies, o
+   número de salas (10 a 20, contra as 57 de antes) e o marco daquela dungeon.
+2. **A missão** (`dungeonMission`) — um catálogo autorado de cinco **ciclos**, não uma árvore:
+   entrada → dois arcos independentes → antessala → *[fechadura]* → objetivo. É o achado do
+   Unexplored: num loop cabe level design (a chave num arco, a porta no outro, a volta por onde
+   não se veio); numa árvore, voltar é sempre desandar o mesmo corredor.
+3. **O espaço** (`dungeonLayout`) — busca com retrocesso que pendura o grafo numa grade de salas.
+   Aresta = parede compartilhada com porta; nada de corredor inventado no meio.
+4. **A sala** (`dungeonRooms`) — **a sala passou a ser UM CHUNK 12×12**, contra os 16×11
+   desalinhados que vinham do cartucho. Paga em quatro lugares: sala = tela (a câmera enquadra um
+   chunk), "uma espécie por tela" vira literal, a densidade de covas já se media por chunk e o
+   editor já autora chunk. Anel de 1 tile por sala = 2 tiles de alvenaria entre vizinhas.
+   As faixas de cada porta até o miolo são **reservadas antes** de qualquer forma ser pintada: a
+   conexão é anterior ao desenho, e o que sobra de ilha o flood-fill final alaga de parede.
+5. **O juiz** (`dungeonVerify`) — o único que pode dizer não. BFS **com estado** (⟨tile, fechaduras
+   abertas⟩), num ponto fixo monótono que só converge porque nada neste jogo se desfaz: a chave não
+   se gasta, o caixote fica na placa, o portão que subiu não desce. Reprovou → próxima semente (24
+   tentativas) → depois disso, um layout linear de emergência. Nunca chega ao jogador uma dungeon
+   sem prova.
+
+### As duas descobertas que custaram (e o que elas ensinam)
+
+**A paridade da grade.** Metade das missões era **impossível de embutir** e ninguém sabia: toda
+grade é um grafo bipartido, então todo ciclo dela tem comprimento par — e um anel de `2 + lenA +
+lenB` com arcos de paridades diferentes não existe em grade nenhuma. O layout gastava seis
+reinícios provando isso. Medido antes: 1.744 recusas em 1.800 sementes e uma cauda de **499 ms** na
+dungeon 9. Depois de forçar `lenB ≡ lenA (mod 2)`: 186 recusas e **19 ms** de pior caso.
+
+**O grau máximo é quatro.** Uma célula tem quatro lados, então um nó com cinco arestas trava toda
+semente. A antessala já nasce com três (arco A, arco B, objetivo) e por isso aceita **um** beco; um
+nó de arco aceita dois. Sem esse teto, a dungeon 9 caía na emergência em 1 de cada 4 sementes.
+
+### Duas fechaduras que o jogo tem e que ficaram de fora, com o motivo medido
+
+- **Portão de bater como atalho de mão única** — *não existe*. Quem decide "o lado de lá" é o
+  SENTIDO DO ESBARRÃO (`isTileOccupied(wx+dx, wy+dy)`), então bloquear o tile de trás para proibir
+  um lado bloqueia junto o tile onde o herói precisaria estar para abrir pelo outro. Ele é uma
+  fechadura de MUNDO (queime o mato do outro lado, mande o braço), não de direção.
+- **O fogo que abre** — dentro de uma dungeon não há fonte de fogo, e não pode haver: fogueira
+  acesa é parede para todo monstro. Sem fonte, a tocha depende do que o jogador trouxe — e uma
+  fechadura assim tranca a dungeon.
+
+Sobraram **a chave** (`lockedDoor` + `key`, que não se gasta) e **a placa** (caixote empurrado numa
+`pressurePlate` que energiza dois `electronicGate` por cabo). A placa é construída em coordenada de
+FAIXA, uma geometria só servindo aos quatro lados, com a coluna de passagem deliberadamente limpa —
+senão o próprio caixote que resolve o puzzle selaria o corredor.
+
+### O retrato: 2,9 KB onde o arquivo custava 95
+
+O save guarda a **classe** de cada tile (chão/parede/fosso/rachado/tocha) em RLE e recalcula a
+**arte** da semente. Medido nas dungeons antigas, que são o pior caso: 95 KB de JSON viram 31 KB se
+alguém gravar o frame e **4,0 KB** gravando o significado — os 31 KB do meio são a medida do erro
+que isso evita, porque a variante de piso é sorteada tile a tile e gravá-la é gravar ruído.
+
+E a ordem de leitura é a promessa: **retrato primeiro, semente só se não houver retrato**. O
+retrato é gravado JÁ NA ENTRADA (senão a primeira aba fechada apagaria a dungeon recém-nascida) e
+de novo na saída e na morte (o runtime edita os arrays de chunk no lugar, então fotografar é
+fotografar as edições). Assim um deploy novo do gerador não remonta o mundo de quem está no meio da
+descida — a semente só decide o que ainda não existe.
+
+### A folha de peças — `/lab?dungeon=0`
+
+Cada chunk de `public/levels/dungeon-0.json` é uma sala-template, e de que lados ela tem porta se
+**deduz da geometria** (nada de metadado a dessincronizar). Cada peça serve a até 8 assinaturas (4
+rotações × espelho). O zero não é decoração: os portais do overworld apontam para 1..9, então ela é
+inalcançável por dentro do jogo e editável por fora (o `EditorScene.worldFileId` passou a aceitar
+`>= 0`). `node scripts/seed-room-templates.mjs` semeou oito salas que as formas paramétricas não
+sabem fazer — espiral dupla, ponte em L sobre o poço, claustro — e **se recusa a sobrescrever** o
+arquivo depois disso: a folha é autorada.
+
+### Medido — `npx tsx scripts/audit-dungeons.ts --seeds 150` (1.350 sementes)
+
+| # | salas | caminho (tiles) | alcance | tentativas | ms (mediana/pior) | retrato |
+|---|---|---|---|---|---|---|
+| 1 A Águia | 10-11 | 47-69 | 100% | 1/3 | 3/14 | 1,9 KB |
+| 5 O Lagarto | 14 | 47-87 | 100% | 1/3 | 6/15 | 2,9 KB |
+| 9 A Morte | 20 | 49-101 | 100% | 1/1 | 9/16 | 4,1 KB |
+
+Zero reprovadas, zero emergências, ciclos distribuídos entre 12,9% e 25,9% (nenhum morto no
+catálogo), e o **retrato fecha o ciclo em todas**: gerar → fotografar → hidratar → fotografar de
+novo dá bit a bit a mesma coisa. Nove dungeons de um save ≈ **26 KB**. A geração roda dentro da
+travessia do portal, que já dura ~1,5 s — o orçamento era 150 ms e o pior caso medido é 19.
+
+O caminho crítico **cresce com a dungeon** (47-69 na primeira, 49-101 na nona) porque o comprimento
+dos arcos escala com o brief; sem isso a nona era larga (vinte salas) e rasa (o tesouro a cinco
+portas da escada), já que tudo o que o brief pedia a mais virava beco opcional.
+
+**Guarda**: `npm run playtest -- dungeon-gerada` — a dungeon nasce ao descer, volta idêntica depois
+da escada, atravessa o reload da aba, `?dungeons=static` ainda lê o Zelda 1 do disco, e "Start over"
+cunha outra semente. A qualidade da planta em massa é da auditoria, não do Playwright: o gerador é
+TS puro de propósito, e medir 1.350 sementes num `tsx` custa segundos onde o browser custaria horas.

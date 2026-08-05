@@ -1,5 +1,6 @@
 import type { UpgradeState } from '@/game/runtime/ShopOverlay';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
+import type { DungeonSnapshot } from '@/game/dungeon/dungeonSnapshot';
 
 /**
  * A MEMORIA DA AVENTURA — o save, e a razao de a morte ter deixado de apagar o mundo.
@@ -56,6 +57,18 @@ export interface AdventureSnapshot {
   groundItems: Map<string, AdventureGroundItem[]>;
   /** "cx,cy" dos chunks do overworld que o heroi ja pisou — o fog of war do mapa. */
   visitedChunks: Set<string>;
+  /**
+   * A SEMENTE DESTA PARTIDA. Cunhada uma vez (ver `adventureRunSeed`), ela decide as nove
+   * dungeons — que agora sao geradas, nao lidas do disco. Recomecar do zero cunha outra, e e ai
+   * que mora o replay: a mesma aventura, nove masmorras que ninguem viu.
+   */
+  runSeed: number;
+  /**
+   * O RETRATO de cada dungeon ja gerada, por escopo ('dungeon-N'). Ele e a promessa de que uma
+   * dungeon, uma vez vista, e daquele save para sempre — inclusive atraves de uma mudanca no
+   * gerador, porque hidratar o retrato nunca consulta a semente (ver dungeon/dungeonWorld).
+   */
+  dungeons: Map<string, DungeonSnapshot>;
 }
 
 const defaultSnapshot = (): AdventureSnapshot => ({
@@ -74,6 +87,8 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   felledTrees: new Set(),
   groundItems: new Map(),
   visitedChunks: new Set(),
+  runSeed: 0,
+  dungeons: new Map(),
 });
 
 type StoredSnapshot = {
@@ -92,6 +107,8 @@ type StoredSnapshot = {
   felledTrees?: string[];
   groundItems?: Record<string, AdventureGroundItem[]>;
   visitedChunks?: string[];
+  runSeed?: number;
+  dungeons?: Record<string, DungeonSnapshot>;
 };
 
 const num = (value: unknown, fallback: number): number =>
@@ -121,6 +138,8 @@ const load = (): AdventureSnapshot => {
       felledTrees: new Set(p.felledTrees ?? []),
       groundItems: new Map(Object.entries(p.groundItems ?? {})),
       visitedChunks: new Set(p.visitedChunks ?? []),
+      runSeed: num(p.runSeed, 0),
+      dungeons: new Map(Object.entries(p.dungeons ?? {})),
     };
   } catch {
     return base;
@@ -162,10 +181,34 @@ export const saveAdventure = (): void => {
     felledTrees: [...s.felledTrees],
     groundItems: Object.fromEntries(s.groundItems),
     visitedChunks: [...s.visitedChunks],
+    runSeed: s.runSeed,
+    dungeons: Object.fromEntries(s.dungeons),
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-  } catch { /* sem storage: a aventura continua, so nao atravessa a aba */ }
+  } catch {
+    // Sem storage (aba privada, cota estourada): a aventura CONTINUA, so nao atravessa a aba. As
+    // nove dungeons somam ~50 KB de retrato — folgado nos ~5 MB do localStorage —, mas a cota e
+    // do dominio inteiro e nao so deste jogo, entao estourar e um caminho real e nao teorico. O
+    // que ele nunca pode ser e fatal: uma excecao aqui derrubaria a viagem ate a dungeon.
+  }
+};
+
+/**
+ * A SEMENTE DA PARTIDA, cunhada na primeira vez que alguem pergunta.
+ *
+ * E o unico `Math.random()` de todo o sistema de dungeons: daqui para baixo tudo e consequencia
+ * dela (ver dungeon/dungeonRandom). Ela nasce preguicosa em vez de junto do save porque um save
+ * que ja existia antes desta versao tambem precisa de uma — e nascer na primeira descida e o
+ * momento exato em que ela passa a significar alguma coisa.
+ */
+export const adventureRunSeed = (): number => {
+  const s = adventureState();
+  if (!s.runSeed) {
+    s.runSeed = (Math.floor(Math.random() * 0xffffffff) >>> 0) || 1;
+    saveAdventure();
+  }
+  return s.runSeed;
 };
 
 /** Recomecar do zero (o "Start over" do titulo): apaga o modulo E o disco. */

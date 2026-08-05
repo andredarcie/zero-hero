@@ -229,7 +229,11 @@ export class EditorScene extends Phaser.Scene {
   private get worldFileId(): WorldFileId {
     if (this.registry.get('appMode') !== 'lab') return 'world';
     const dungeon = new URLSearchParams(window.location.search).get('dungeon');
-    if (dungeon && /^\d+$/u.test(dungeon) && Number(dungeon) > 0) return `dungeon-${Number(dungeon)}`;
+    // O ZERO ENTRA. `dungeon-0` não é uma dungeon: é a FOLHA DE PEÇAS que o gerador consulta —
+    // cada chunk dela é uma sala-template (ver dungeon/dungeonTemplates). Ela mora aqui porque o
+    // laboratório já sabe editar um arquivo de salas 12×12, e os portais do overworld apontam
+    // para 1..9, então o zero é inalcançável por dentro do jogo e editável por fora.
+    if (dungeon && /^\d+$/u.test(dungeon) && Number(dungeon) >= 0) return `dungeon-${Number(dungeon)}`;
     return `level-${this.labLevelNumber}`;
   }
 

@@ -16,6 +16,11 @@ ou o **[I]** do DevLauncher); os três modos são a mesma `GameScene`.
   volta. O explorador mantém os 5% dele. `playtest -- salvamento` guarda o contrato.
 - **O título recarrega o `world.json` do disco ao entrar na aventura**: o WorldData em memória
   pode estar sujo (dungeon aberta, árvores cortadas) e tudo que merece viver mora no save.
+- **As nove dungeons são GERADAS da semente da partida e LEMBRADAS depois** (`src/game/dungeon/`,
+  `runSeed` + retrato RLE no save): a ordem de leitura é **retrato primeiro, semente só se não
+  houver retrato** — senão um deploy novo do gerador remonta o mundo de quem está no meio da
+  descida. Grava-se na ENTRADA (a primeira aba fechada apagaria a dungeon recém-nascida), na saída
+  e na morte. `?dungeons=static` volta a ler os nove arquivos do Zelda 1, que continuam no repo.
 
 ## Como este documento funciona
 
@@ -52,6 +57,7 @@ npm run build            # typecheck + vite build
 #  LÊ o world.json e acrescenta (`node scripts/enrich-world.mjs` é o modelo).
 npm run playtest         # cenários default
 npm run playtest -- all  # todos
+npm run audit:dungeons   # gera N sementes das 9 dungeons e MEDE (salas, ciclo, juiz, retrato)
 ```
 
 A porta 5173 costuma estar ocupada por outro projeto. Para playtest, suba o Vite numa porta livre:
@@ -154,6 +160,8 @@ aparecem em qualquer aparelho de dedo (`isTouchDevice`).
   aperta P) em vez de depender do conteúdo de um level.
 - `/lab` edita um level (`?level=N`) ou uma **dungeon** (`?dungeon=N`, arquivos `dungeon-N.json`)
   via `/api/world`; **P** joga o mundo em memória, **ESC** volta; nada salva até o Salvar.
+  **`?dungeon=0` não é dungeon: é a folha de peças do gerador** — cada chunk é uma sala-template, e
+  de que lados ela tem porta se DEDUZ da geometria (metadado nenhum a dessincronizar).
   `/?level=N` e `/lab?play` bootam direto.
 - O **cerco de undead** (`UndeadSpawnDirector`) está desligado em mundo-puzzle (`isPuzzleWorld()`).
   Isso vale só pro cerco: **inimigo autorado (aba Inimigos) funciona em level, nas 7 espécies**.
@@ -322,7 +330,9 @@ de luz → `perf-burn`; custo de frame → `perf-profile`.
 
 **`espada` e `itens` estão VERMELHOS por mudança de design** (eles assertam o level-1 gerado antigo,
 e o `espada` ainda resolve tudo esbarrando). Não "conserte" editando level. O menu (sem idioma e
-sem intro) → `menu-flow`; **save, morte-sem-perda e o Continue do título → `salvamento`**; o herói
+sem intro) → `menu-flow`; **save, morte-sem-perda e o Continue do título → `salvamento`**;
+**dungeon gerada, e a MESMA dungeon na volta → `dungeon-gerada`** (a qualidade da planta em massa é
+do `npm run audit:dungeons`, nunca do Playwright); o herói
 **nascendo do tamanho certo** → `smoke`. Uma falha
 num cenário que você não tocou é um flake a anotar, não uma suíte a rodar quatro vezes.
 
