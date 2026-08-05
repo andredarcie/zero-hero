@@ -155,10 +155,11 @@ const ENEMY_VOICE: Readonly<Record<EnemyKind, { hit: number; death: number; tell
 const voiceRate = (kind: EnemyKind | undefined, part: 'hit' | 'death' | 'tell'): number =>
   kind ? ENEMY_VOICE[kind][part] : 1;
 
-// Souls staging: the title screen is just dripping water, the wind bed is the world's
-// default "soundtrack", and only the combat track rises while undead are out of the ground.
-// ('title'/'overworld' still exist — the intro uses the title theme; overworld is currently
-// unused since exploration is wind-only, kept for easy revival.)
+// Souls staging: the title screen is just dripping water, and the combat track rises while
+// undead are out of the ground. 'overworld' ("Ashen Fields") is the adventure's exploration
+// theme, revived after years shelved — it plays over the wind bed in the overworld only
+// (dungeons, levels and the explorer stay wind-only: their dark is design). 'title' remains
+// unused since the intro was cut.
 export type MusicKey = 'title' | 'overworld' | 'danger' | 'menu';
 const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
   title: { file: 'music-title.wav', vol: 0.8 },

@@ -175,6 +175,10 @@
       {
         "speaker": "npc",
         "text": "You still have to become one."
+      },
+      {
+        "speaker": "npc",
+        "text": "Speak to me again... there is something you must hear."
       }
     ],
     "protect": [
@@ -188,19 +192,27 @@
       },
       {
         "speaker": "npc",
-        "text": "Beyond this flame... there is only darkness."
+        "text": "Beyond its light there is only darkness... and the cold hearths of those who came before."
       },
       {
         "speaker": "npc",
-        "text": "A void where even hope has ceased to exist."
+        "text": "I can feel them out there. Dead fires, scattered across the land. Waiting."
       },
       {
         "speaker": "npc",
-        "text": "Protect this flame."
+        "text": "Cut dead wood, wake the branch in this flame... and carry the fire into the dark."
       },
       {
         "speaker": "npc",
-        "text": "As long as it stays lit... the world can still be reborn."
+        "text": "An axe lies abandoned on the north road. The dry trees still remember how to burn."
+      },
+      {
+        "speaker": "npc",
+        "text": "Light even one dead fire, and return to me."
+      },
+      {
+        "speaker": "npc",
+        "text": "As long as the flame travels... the world can still be reborn."
       }
     ],
     "prophecy": [
@@ -214,15 +226,15 @@
       },
       {
         "speaker": "npc",
-        "text": "You walk the path described by the ancients."
-      },
-      {
-        "speaker": "npc",
-        "text": "The primordial flame awakens once more."
+        "text": "You carried the flame, and a dead hearth breathes again."
       },
       {
         "speaker": "npc",
         "text": "What was only a spark now begins to light the world."
+      },
+      {
+        "speaker": "npc",
+        "text": "Other fires still sleep out there... and the deep places under the portals still hold what the ancients buried."
       },
       {
         "speaker": "npc",

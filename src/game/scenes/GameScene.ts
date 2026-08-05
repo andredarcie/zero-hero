@@ -952,11 +952,13 @@ export class GameScene extends Phaser.Scene {
     window.hd3d = this.world3d.params;
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
 
-    // Decode the SFX + music loops. The world's default "soundtrack" is just the wind bed —
-    // no melodic exploration track — so fade out whatever the intro left playing (the title
-    // theme) and let the wind carry the world. Only combat later raises the danger track.
+    // Decode the SFX + music loops. A AVENTURA de overworld tem trilha: "Ashen Fields", que
+    // ficou anos no repositorio "para revival facil" — revivida. O vento continua por baixo
+    // (ele e ambience, nao musica) e o combate segue soprepondo a danger track. Dungeon, level
+    // e explorador ficam so no vento: o escuro deles e desenho, nao falta de musica.
     getSoundManager().preload();
-    getSoundManager().stopMusic(1800);
+    if (this.adventure && !inDungeon) getSoundManager().startMusic('overworld', 2400);
+    else getSoundManager().stopMusic(1800);
     getSoundManager().startAmbience();
     this.dangerCalmMs = 0;
 
@@ -2557,7 +2559,11 @@ export class GameScene extends Phaser.Scene {
         if (!uiOwnsMusic) getSoundManager().startMusic('danger', 900);
       } else {
         this.dangerCalmMs += delta;
-        if (!uiOwnsMusic && this.dangerCalmMs > 4000) getSoundManager().stopMusic(2600);
+        // A calmaria devolve a trilha do mundo (aventura de overworld) ou o vento (o resto).
+        if (!uiOwnsMusic && this.dangerCalmMs > 4000) {
+          if (this.adventure && !getDungeonTrip()) getSoundManager().startMusic('overworld', 2600);
+          else getSoundManager().stopMusic(2600);
+        }
       }
     }
 
