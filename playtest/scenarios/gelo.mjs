@@ -156,12 +156,20 @@ export default {
       { hx: hero2.worldX }, { timeout: 6000 },
     );
     await driver.press('z', { count: 1 });
-    await driver.settle(200);
-    state = await driver.getState();
-    const returned = (state.shots ?? []).find((s) => s.kind === 'spit');
-    assert('a bola foi DEVOLVIDA: reflected e a velocidade apontando de volta (leste)',
-      returned !== undefined && returned.reflected === true && returned.vx > 0,
-      JSON.stringify(state.shots));
+    // A prova da rebatida NAO pode ser um snapshot depois de settle: a caveira vem ANDANDO na
+    // direcao da bola devolvida, e o voo de volta pode durar menos de 200ms — a primeira rodada
+    // deste cenario viu a bola ja consumida (e a caveira ja congelada) no frame da amostra.
+    // Entao a prova e "reflected em voo" OU o efeito dela ("ja congelou alguem"), o que vier.
+    const proofHandle = await page.waitForFunction(() => {
+      const st = window.gameDebug?.getState();
+      const s = (st?.shots ?? []).find((sh) => sh.kind === 'spit' && sh.reflected === true);
+      if (s) return { how: 'em-voo', vx: s.vx };
+      if ((st?.undead ?? []).some((u) => u.frozen === true)) return { how: 'ja-congelou' };
+      return false;
+    }, null, { timeout: 2500 });
+    const proof = await proofHandle.jsonValue();
+    assert('a bola foi DEVOLVIDA (reflected voando de volta, ou o bicho ja congelado por ela)',
+      proof.how === 'ja-congelou' || proof.vx > 0, JSON.stringify(proof));
     await page.waitForFunction(
       () => (window.gameDebug?.getState()?.undead ?? []).some((u) => u.frozen === true),
       null, { timeout: 6000 },

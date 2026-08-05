@@ -147,6 +147,13 @@ export default {
       () => (window.gameDebug?.getState()?.undead ?? []).length === 0,
       null, { timeout: 10000 },
     );
+    // A MARCA e uma consequencia AGENDADA, nao instantanea: a ossada so cai quando o desmanche
+    // termina (~310ms depois de a vida zerar) e o EnemyManager remove o corpo. Amostrar
+    // corpseCount no frame em que a lista esvazia mede a corrida, nao o contrato — espere.
+    await page.waitForFunction(
+      () => window.__scene.enemyManager.corpseCount === 2,
+      null, { timeout: 5000 },
+    );
     const wake = await page.evaluate(() => ({
       corpses: window.__scene.enemyManager.corpseCount,
       lights: window.__scene.world3d.stats().pointLights,

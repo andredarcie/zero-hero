@@ -3324,3 +3324,20 @@ de esbarrão) precisa perguntar `frozenAt` OU aceitar que gelo não a trava — 
 consciente, não automática; e um caminho novo de FOGO que não passe por `igniteFlammableAt` não
 derrete gelo (o guarda de `igniteBody` segura o corpo, mas prop congelado ficaria à prova de fogo
 em silêncio).
+
+### Rodada de verificação do gelo e da tocha viva (2026-08-05, à tarde)
+
+`gelo` e `tocha-viva` verdes de ponta a ponta, depois de consertar DUAS asserções minhas que mediam
+corrida em vez de contrato — o mesmo erro, duas vezes: **efeito agendado não se amostra, se
+espera**. (1) A prova da rebatida era um snapshot 200ms depois do golpe — mas a caveira vem
+ANDANDO na direção da bola devolvida e o voo de volta pode durar menos que isso; a prova virou
+"reflected em voo OU o bicho já congelado". (2) A ossada só cai quando o desmanche termina
+(~310ms depois de a vida zerar); `corpseCount` no frame em que a lista esvazia via 0 — virou
+waitForFunction.
+
+**Vermelho PRÉ-EXISTENTE anotado (não é do gelo nem da tocha viva)**: a seção 6 do `zora` ("água
+pintada") falha porque o zora do LAGO nunca emerge/cospe com o herói teleportado à margem — A/B
+limpo: falha idêntica em `414b4cb` (antes de qualquer mudança desta sessão), `1b63bec` e na main.
+As seções 1–5 passam, incluindo o contrato novo do cuspe-que-congela no zora do rio. Fica como
+investigação separada: o suspeito natural é o teleport direto (`playerWorld.worldX = x`) não
+acordar o que o SURFACE_RANGE do zora lê, ou uma regressão antiga na própria fixture.
