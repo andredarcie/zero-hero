@@ -44,6 +44,7 @@ import fauna from './fauna.mjs';
 import projeteis from './projeteis.mjs';
 import zora from './zora.mjs';
 import montanha from './montanha.mjs';
+import salvamento from './salvamento.mjs';
 
 export const scenarios = {
   smoke,
@@ -92,6 +93,7 @@ export const scenarios = {
   projeteis,
   zora,
   montanha,
+  salvamento,
 };
 
 // What `npm run playtest` runs when no scenario is named.

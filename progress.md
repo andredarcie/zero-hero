@@ -3030,3 +3030,104 @@ lights cannot. `npm run playtest -- perf-burn` guards this.
 - A cast shadow's `mat.needsUpdate = true` on a texture swap looks like waste and is not: three only
   refreshes a material's uniforms when its version moves, so without it the hero's shadow freezes on
   one frame of his walk cycle while he walks.
+
+---
+
+## 2026-08-04 — A auditoria do "isso é um jogo?": save, morte, economia, dungeons, mapa, história
+
+Uma varredura profunda (arquitetura, narrativa, conteúdo autorado, UI/UX e este arquivo inteiro)
+atrás do que um jogo de mundo aberto focado em narrativa e exploração não pode não ter. O
+diagnóstico completo e as fases estão em `PLANO.md`; aqui fica o porquê de cada decisão e as
+armadilhas que o trabalho revelou.
+
+### O que a auditoria encontrou (em ordem de gravidade)
+
+1. **O final era INALCANÇÁVEL.** Acender uma fogueira morta (a condição da prophecy) exige tocha;
+   tocha exige graveto; graveto exigia `dryTree` ou `greatAxe` — e o mundo 22×8 tinha ZERO de
+   ambos. A troca de mundo (8×8 → 22×8) perdeu 51 props e 26 itens no caminho: sobraram 18 props
+   (fogueiras+portais) e a espada. Todo o sistema de ferramentas era código morto na aventura.
+2. **Não havia save.** A aventura inteira morava numa instância de `GameScene`: morrer, entrar
+   numa dungeon (o `scene.restart()` da travessia) ou fechar o browser apagava mochila, moedas,
+   fogueiras, diálogos e a história do mago. Só a árvore derrubada sobrevivia — por acidente
+   (`WorldData` é module-level e mutável), e mesmo ela morria na volta de dungeon (o
+   `leaveDungeon` re-fetcha o `world.json` limpo).
+3. **`meta.puzzle: true` esquecido no overworld** — o gen-zelda-world a declarou TEMPORÁRIA ("sai
+   quando o bestiário entrar"); o bestiário entrou (363 covas) e a flag ficou, desligando a LOJA
+   e o CERCO no mundo inteiro.
+4. **A moeda era um sistema órfão**: `rewardKill` era explorer-only (matar as 363 covas pagava
+   zero) e a única saída (a loja) estava atrás da flag acima.
+5. **As 9 dungeons eram 506 chunks vazios** — zero inimigos, zero itens, zero recompensa.
+6. **Zero orientação** num mundo de 264×96 tiles, **objetivo nunca comunicado** (o "protect this
+   flame" do mago dizia o OPOSTO da ação que destrava o final) e **a música do overworld** (Ashen
+   Fields) engavetada "para revival fácil".
+
+### O que foi feito, e por quê assim
+
+- **`runtime/adventureState.ts`** — o padrão `dungeonTrip` (estado de módulo sobrevive ao
+  restart) com um andar a mais: o retrato dorme em `localStorage['zh.adventure.v1']`. O que entra:
+  respawn (o tile pisado no anel de um fogo aceso — o bonfire), mochila+seleção, moedas, upgrades,
+  fogueiras acesas, beats do mago, diálogos vistos, cerimônias de item, árvores-tile derrubadas
+  (diff reaplicado ANTES do World3D assar), fotos de itens-no-chão POR MUNDO ('world'/'dungeon-N')
+  e chunks visitados. O que NÃO entra, de propósito: vida atual (acordar acorda inteiro), props
+  consumidos (rocha, arbusto — são os renováveis do mundo) e QUALQUER coisa de explorador/level.
+- **"Aventura" = `!explorer && appMode game && (activeLevel null || dungeonTrip)`** — a armadilha
+  é que `enterDungeon` SETA `activeLevel`, então "estou num level?" não distingue dungeon de
+  puzzle; o `dungeonTrip` distingue. O mesmo raciocínio tirou o "Back to levels" da pausa de
+  dungeon.
+- **Morrer = acordar na fogueira com tudo.** O custo é a distância, não o progresso. Morrer
+  DENTRO de dungeon acorda do lado de fora (re-fetch do world.json, o gesto do leaveDungeon).
+  Restart da pausa = o mesmo contrato sem o funeral. Explorador intocado (os 5% são o modo).
+- **O título sempre re-fetcha o `world.json`** ao entrar na aventura: o WorldData em memória pode
+  estar segurando uma DUNGEON (quit de dentro dela) ou cicatrizes de sessão, e tudo que merece
+  viver já mora no save. Continue = mesmo boot + `requestAdventureRespawn()` (pedido consumido
+  UMA vez — a volta de dungeon também reinicia a cena e precisa nascer na boca da caverna, não no
+  fogo).
+- **Economia pela escada de vida**: um corpo paga `ENEMY_BLOWS - 1` moedas (morcego 1, torreta 8)
+  — a tabela que diz "de quem é mais difícil" agora diz "quanto vale", nenhum número novo.
+  Coração dropa a 20% SÓ com o herói ferido (coração no chão com vida cheia é lixo visual) — e é
+  a única cura de dungeon, onde fogueira não existe.
+- **`scripts/enrich-overworld-props.mjs`** devolveu 549 props (189 dryTree, 109 dryBush, 59 rock,
+  12 ironRock, 180 tallGrass) + UM machado autorado uma tela ao norte do spawn (a espada mora ao
+  lado do mago; o machado mora na estrada do primeiro portal — ele abre o loop do fogo inteiro).
+  **A armadilha medida**: a heurística "só coloca com ≥3 vizinhos cardeais abertos" parecia
+  suficiente e deixou **1.700 tiles presos em bolsões** (dois props de chunks diferentes fecham
+  juntos uma boca de baía que nenhum fecha sozinho). A regra final é um BFS do spawn por
+  colocação: o mundo alcançável só pode perder o próprio tile do prop. 5,8s de script; barato.
+- **`scripts/enrich-dungeons.mjs`**: covas subindo a escada com o número da dungeon (d1
+  morcego/gosma → d9 mago/torreta/gosma-grande/caveira), uma espécie por chunk, sem zora (não há
+  água), bigslime só em sala ≥25 tiles (as metades precisam de chão), nada perto da entrada nem
+  do portal. Corações na metade funda. **Tesouro no tile MAIS DISTANTE alcançável** (BFS):
+  d1 picareta, d2 balde, d3 foice, d6 greatAxe (o prêmio que edita o mapa), e kits de expedição
+  (graveto/pedra/coração) nos demais — distâncias de 94 a 269 tiles, descidas de verdade.
+  Carvão ficou de fora dos tesouros: `PickupKind` não o inclui (é drop de runtime).
+- **O mapa na subtela** (a exceção licenciada ao "o mundo ensina"): um quadrado por chunk, fog
+  dos chunks PISADOS, e só marcas que o herói viu — fogueira acesa/morta (a superfície de quest
+  do jogo), portal, ele mesmo. Sem legenda. Level (uma tela), explorador (infinito é a aposta) e
+  dungeon (se aprende andando) não têm mapa.
+- **O mago aponta**: o protect agora dá a quest na voz dele (as fogueiras mortas esperando, corte
+  madeira morta, acorde o graveto NESTA chama, o machado abandonado na estrada norte — e ele está
+  lá mesmo), a prophecy reconhece e aponta o resto (outras fogueiras, o que os portais enterram).
+  NPC é o canal narrativo sancionado; a lei do balão segue de pé.
+- **Ashen Fields religada** na aventura de overworld (a calmaria do danger volta pra ela em vez
+  do silêncio); dungeon/level/explorador continuam só no vento — o escuro deles é desenho.
+
+### Verificação
+
+`playtest -- salvamento` (novo): morre de propósito, afirma que a picareta sobreviveu, que o
+retrato dorme no localStorage, que o título vira Continue+Start over e que o Start over (tecla 2)
+o devolve a uma porta. `menu-flow` continua verde por construção (perfil novo não tem save).
+Enriquecimentos validados por script: espécie pura por chunk nas 9 dungeons, zero cova/tesouro
+inalcançável, segunda rodada de cada script acrescenta zero (idempotência), e o BFS de
+conectividade do overworld: 549 props novos, perda de exatamente 535 tiles alcançáveis (os 14
+restantes caíram em bolsões que JÁ eram inalcançáveis).
+
+### O que ficou aberto (e é decisão, não esquecimento)
+
+- O custo da morte na aventura é zero além da caminhada — se a mão disser que ficou barato
+  demais, o knob é largar uma fração das moedas no lugar da queda.
+- Os tesouros de d4/d5/d7/d8/d9 são kits (graveto/pedra/coração) porque metade dos itens do jogo
+  não tem uso no overworld de hoje (key sem porta, bomba sem bombSpot, botas sem lava, bateria
+  sem circuito). Quando o mundo ganhar essas fechaduras, os tesouros sobem de degrau.
+- O cerco de undead voltou junto com a loja (a flag desligava os dois) — com 363 covas autoradas
+  E o cerco, a noite pode ter ficado dura; o dial é o `UndeadSpawnDirector`, não as covas.
+- Os NPCs continuam com as meta-piadas de alpha — são a voz do jogo; só o mago mudou.

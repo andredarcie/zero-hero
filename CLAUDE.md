@@ -2,9 +2,20 @@
 
 Aventura top-down em pixel art, **só em inglês** (não há mais locale nenhum). **Phaser 3** cuida da
 lógica, input e UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
-`src/game/render3d/`). O menu é **uma tela e um botão** — o título cai direto na aventura. Levels e
-**explorador** continuam vivos e sem porta no título (`/?level=N`, `?explorer`, ou o **[I]** do
-DevLauncher); os três modos são a mesma `GameScene`.
+`src/game/render3d/`). O menu é **uma tela** — com save o botão vira Continue (+ Start over
+discreto). Levels e **explorador** continuam vivos e sem porta no título (`/?level=N`, `?explorer`,
+ou o **[I]** do DevLauncher); os três modos são a mesma `GameScene`.
+
+## O save da aventura
+
+- **A aventura LEMBRA e os outros modos NÃO** (`runtime/adventureState.ts`, padrão do
+  `dungeonTrip` + `localStorage`): `create()` hidrata, e todo evento que muda o mundo chama
+  `persistAdventure()` — um evento novo sem essa chamada é progresso que a morte apaga.
+  Explorador e level **nunca** hidratam daqui: lá, zerar é o desenho.
+- **Morrer devolve à fogueira com TUDO** (mochila, moedas, fogueiras, história) — o custo é a
+  volta. O explorador mantém os 5% dele. `playtest -- salvamento` guarda o contrato.
+- **O título recarrega o `world.json` do disco ao entrar na aventura**: o WorldData em memória
+  pode estar sujo (dungeon aberta, árvores cortadas) e tudo que merece viver mora no save.
 
 ## Como este documento funciona
 
@@ -127,10 +138,11 @@ aparecem em qualquer aparelho de dedo (`isTouchDevice`).
   22×8, feito à mão no `/editor`. Os dois escrevem **sem merge e sem perguntar**. Ficam no repo
   como scaffolding, e só depois de apontar a saída para um caminho desocupado.
 - **Mexer no mundo em massa é um script que LÊ o `world.json` e acrescenta** — nunca um que o
-  refaz. `scripts/enrich-world.mjs` e `scripts/place-enemies.mjs` são os modelos: idempotentes
-  (miram num TOTAL, não num delta), determinísticos (zero `Math.random()`) e proibidos de tocar em
-  `ground`, `collisions` e no que o autor já pôs — quando a regra nova conflita com o autorado, o
-  tile dele sobrevive e só a espécie cede. Faça um backup antes assim mesmo.
+  refaz. `scripts/enrich-world.mjs`, `place-enemies.mjs`, `enrich-overworld-props.mjs` e
+  `enrich-dungeons.mjs` são os modelos: idempotentes (miram num TOTAL, não num delta),
+  determinísticos (zero `Math.random()`) e proibidos de tocar em `ground`, `collisions` e no que
+  o autor já pôs. **Prop que bloqueia só entra com prova de BFS de que não selou caminho** — a
+  heurística local de vizinhos já prendeu 1.700 tiles em bolsões. Faça um backup antes.
 - **Leia o JSON, nunca a documentação, para saber o que um level contém** — um level muda sempre
   que seu autor abre o lab.
 - **Um level é SEMPRE exatamente um chunk 12×12. Nunca maior.** A câmera enquadra ~um chunk:
@@ -303,8 +315,9 @@ explorador → `explorador`. **Montanha em cubo e a água que anda → `montanha
 de luz → `perf-burn`; custo de frame → `perf-profile`.
 
 **`espada` e `itens` estão VERMELHOS por mudança de design** (eles assertam o level-1 gerado antigo,
-e o `espada` ainda resolve tudo esbarrando). Não "conserte" editando level. O menu (uma porta só,
-sem idioma e sem intro) → `menu-flow`; o herói **nascendo do tamanho certo** → `smoke`. Uma falha
+e o `espada` ainda resolve tudo esbarrando). Não "conserte" editando level. O menu (sem idioma e
+sem intro) → `menu-flow`; **save, morte-sem-perda e o Continue do título → `salvamento`**; o herói
+**nascendo do tamanho certo** → `smoke`. Uma falha
 num cenário que você não tocou é um flake a anotar, não uma suíte a rodar quatro vezes.
 
 **Performance sempre contra a `main`** (`git stash`), e sempre com vsync livre
