@@ -509,6 +509,11 @@ const BOMB_BLAST_RADIUS_TILES = 2.2;
 // held thought. See GameScene.scheduleFireSpread.
 const FIRE_SPREAD_MS = 850;
 
+// Chance de um corpo abatido soltar um coracao — SO com o heroi ferido (coracao no chao com
+// vida cheia e lixo visual). E a unica cura de campo da aventura: a fogueira cura em casa, o
+// drop cura na estrada e nas dungeons, onde fogueira nao existe.
+const HEART_DROP_CHANCE = 0.2;
+
 // Resting in a lit campfire's safe ring mends one heart every this many ms (leaving the ring
 // resets the timer, so healing is a "warm up by the fire" beat, not passive regen anywhere).
 const HEALTH_REGEN_MS = 1200;
@@ -2528,6 +2533,8 @@ export class GameScene extends Phaser.Scene {
           // No explorador a moeda entra na BOLSA da expedicao — que e o numero em risco, e
           // portanto o unico que o HUD mostra. So metade dela (ou 5%) vira banco no fim.
           if (this.explorer) addExplorerCoins(1);
+          // Na aventura a carteira e progresso: cada moeda absorvida ja dorme no save.
+          else this.persistAdventure();
         },
       );
       this.coinManager.render(this.tileSize, this.camera);
@@ -4437,7 +4444,7 @@ export class GameScene extends Phaser.Scene {
     this.triggerHitstop(lethal ? 110 : 60);
     if (lethal) {
       if (!hitSpoken) getSoundManager().playEnemyDeath(enemy.kind);
-      this.rewardKill(wx, wy);
+      this.rewardKill(wx, wy, enemy.kind);
     }
     return 'landed';
   }
@@ -4459,15 +4466,33 @@ export class GameScene extends Phaser.Scene {
   /**
    * A caveira caiu: no explorador ela LARGA MOEDA, e quanto mais longe do acampamento, mais.
    *
-   * `CoinManager.spawnCoins` existia desde sempre e nunca havia sido chamado uma unica vez — a
-   * aventura tem uma loja e nenhuma fonte de moeda. O explorador e o modo que finalmente da a
-   * moeda um motivo: ela e o placar da aposta, e o multiplicador de profundidade e o que
-   * transforma "andar mais" numa decisao em vez de um passeio.
+   * No explorador a moeda e o placar da aposta e o multiplicador de profundidade e quem
+   * transforma "andar mais" numa decisao. Na AVENTURA (que teve loja e nenhuma fonte de moeda
+   * por toda a vida do jogo) o preco vem da escada de vida: um corpo paga um degrau a menos do
+   * que custa em golpes (ENEMY_BLOWS - 1) — o morcego rende 1, a torreta 8. A mesma tabela que
+   * diz "de quem e mais dificil" diz "quanto vale", e nenhum numero novo entra no jogo.
+   *
+   * O CORACAO so cai de um corpo quando o heroi esta FERIDO — coracao no chao com vida cheia e
+   * lixo visual — e e a unica cura de campo: a fogueira cura em casa, o drop cura na estrada
+   * (e dentro das dungeons, onde fogueira nao existe).
    */
-  private rewardKill(wx: number, wy: number): void {
-    if (!this.explorer || !this.chunkManager) return;
-    noteExplorerKill();
-    this.coinManager?.spawnCoins(wx, wy, this.chunkManager, coinsForKill(distanceFromCamp(wx, wy)));
+  private rewardKill(wx: number, wy: number, kind: EnemyKind): void {
+    if (!this.chunkManager) return;
+    if (this.explorer) {
+      noteExplorerKill();
+      this.coinManager?.spawnCoins(wx, wy, this.chunkManager, coinsForKill(distanceFromCamp(wx, wy)));
+      return;
+    }
+    if (!this.adventure) return; // num level de puzzle a recompensa e a solucao
+    this.coinManager?.spawnCoins(wx, wy, this.chunkManager, Math.max(1, (ENEMY_BLOWS[kind] ?? 2) - 1));
+    if (
+      this.playerHealth < this.playerMaxHealth
+      && Math.random() < HEART_DROP_CHANCE
+      && !(this.heartPickupManager?.hasPickupAt(wx, wy) ?? true)
+      && !(this.itemManager?.hasItemAt(wx, wy) ?? true)
+    ) {
+      this.heartPickupManager?.spawnDropped(wx, wy);
+    }
   }
 
   /**

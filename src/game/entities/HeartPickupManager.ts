@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 
+import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { ScreenContent } from '@/game/world/ScreenContent';
 import { HeartPickup } from './HeartPickup';
@@ -36,6 +37,16 @@ export class HeartPickupManager {
 
   public hasPickupAt(x: number, y: number): boolean {
     return this.all().some((h) => !h.isCollected && h.tileX === x && h.tileY === y);
+  }
+
+  /**
+   * Um coracao DROPADO por um corpo que caiu (a cura de campo da aventura). Entra na lista do
+   * chunk e vive o que a tela viver: sair da janela o descarta junto com os autorados — um drop
+   * e um presente do momento, nunca um estoque.
+   */
+  public spawnDropped(x: number, y: number): void {
+    const key = `${Math.floor(x / CHUNK_COLUMNS)},${Math.floor(y / CHUNK_ROWS)}`;
+    this.byChunk.get(key)?.push(new HeartPickup(this.scene, x, y));
   }
 
   public update(
