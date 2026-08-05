@@ -48,6 +48,13 @@ export const DEPTH_LAYER = {
   actor: 0,
   /** Walkable clutter: ground items, spot marks, planted bombs, cut stubble. */
   ground: 0.06,
+  /**
+   * O que VESTE um ator no mesmo tile (o bloco de gelo do congelamento, os cacos dele): um fio
+   * À FRENTE do plano do ator, pelo mesmo desenho declarado das outras duas camadas — coplanar
+   * com o corpo o bloco perde o empate e desenha ATRÁS, que é o contrário do que um invólucro
+   * afirma. Pequeno de propósito: um corpo no tile ao sul continua ocluindo o gelo normalmente.
+   */
+  overlay: -0.06,
 } as const;
 export type DepthLayerName = keyof typeof DEPTH_LAYER;
 

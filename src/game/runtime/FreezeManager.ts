@@ -87,6 +87,9 @@ export class FreezeManager {
         fog: false,
         depthWrite: false,
         alphaTest: 0.02,
+        // O gelo VESTE o corpo: na camada à frente do plano do ator (ver DEPTH_LAYER.overlay),
+        // senão os dois quads coplanares empatam e o bloco desenha ATRÁS de quem ele envolve.
+        depthLayer: 'overlay',
       })
       .setTint(ICE_TINT)
       .setPosition(target.x, target.y)
@@ -234,6 +237,7 @@ export class FreezeManager {
       const mote = world3d()
         .addBillboard(FX_DOT_TEXTURE, 0, {
           centered: true, emissive: true, additive: true, fog: false, depthWrite: false,
+          depthLayer: 'overlay', // a geada salta DO corpo — na frente dele, como o bloco
         })
         .setTint(ICE_TINT)
         .setPosition(wx, wy)
@@ -279,6 +283,7 @@ export class FreezeManager {
       const shard = world3d()
         .addBillboard(FX_ICE_TEXTURE, 0, {
           centered: true, emissive: true, fog: false, depthWrite: false, alphaTest: 0.02,
+          depthLayer: 'overlay', // os cacos vêm DO bloco: mesma camada, senão somem atrás do corpo
         })
         .setTint(ICE_TINT)
         .setPosition(wx, wy)
@@ -305,6 +310,7 @@ export class FreezeManager {
       const puff = world3d()
         .addBillboard(FX_DOT_TEXTURE, 0, {
           centered: true, emissive: true, fog: false, depthWrite: false,
+          depthLayer: 'overlay', // o vapor sobe do gelo que estava na frente do corpo
         })
         .setTint(0xe8f4f4)
         .setPosition(wx + (Math.random() - 0.5) * 0.3, wy)
