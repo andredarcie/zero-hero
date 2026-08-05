@@ -5,6 +5,7 @@ import { preloadSharedAssets } from '@/game/assets/assetManifest';
 import type { AppMode } from '@/game/config';
 import { t } from '@/game/i18n/i18n';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
+import { hasAdventureSave, requestAdventureRespawn } from '@/game/runtime/adventureState';
 import { pinExplorerSeed, startExplorerRun } from '@/game/explorer/explorerRun';
 import { preloadTextures3D } from '@/game/render3d/textures3d';
 import { setWorldData } from '@/game/world/WorldData';
@@ -122,8 +123,10 @@ export class PreloadScene extends Phaser.Scene {
         return;
       }
       // Dev shortcut (localhost only): `?play` skips the title and drops straight into
-      // gameplay — e.g. http://localhost:5209/?play
+      // gameplay — e.g. http://localhost:5209/?play. Com um save de aventura, ele se comporta
+      // como o Continue do titulo (acorda na fogueira em que parou).
       if (import.meta.env.DEV && params.has('play')) {
+        if (hasAdventureSave()) requestAdventureRespawn();
         this.scene.start('game');
         return;
       }

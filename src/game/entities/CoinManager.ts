@@ -16,6 +16,11 @@ export class CoinManager {
 
   public get coinTotal(): number { return this.total; }
 
+  /** A carteira que volta do save da aventura: o TOTAL atravessa; moedas no chao, nunca. */
+  public restoreTotal(total: number): void {
+    this.total = Math.max(0, Math.floor(total));
+  }
+
   public getActiveWorldPositions(): Array<{ worldX: number; worldY: number }> {
     return this.coins
       .filter((c) => !c.isCollected)

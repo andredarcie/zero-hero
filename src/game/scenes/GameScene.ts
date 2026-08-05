@@ -190,6 +190,12 @@ import {
   isPuzzleWorld,
   setWorldData,
 } from '@/game/world/WorldData';
+import {
+  adventureState,
+  consumeAdventureRespawn,
+  requestAdventureRespawn,
+  saveAdventure,
+} from '@/game/runtime/adventureState';
 
 type LevelManifestEntry = { file: string; level: number };
 
@@ -798,6 +804,12 @@ export class GameScene extends Phaser.Scene {
   private itemGetOpen = false;
   // First-campfire cut-scene: plays once, when the player relights their first dead fire.
   private firstCampfireLit = false;
+  // True quando esta cena e a AVENTURA (overworld ou uma dungeon dela) — o unico modo com
+  // memoria persistente (adventureState). Explorador e levels nunca ligam isto.
+  private adventure = false;
+  // Qual arquivo de mundo esta aberto ('world' ou 'dungeon-N') — a chave da foto de itens no
+  // chao dentro do save.
+  private adventureScope = 'world';
   // Wizard story progression: how many dead fires the hero has relit, and whether the wizard's
   // intro beat has already played (so a second visit shows the "protect the flame" lines).
   private litFireCount = 0;
@@ -869,7 +881,26 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const { worldX: startWorldX, worldY: startWorldY } = getPlayerStart();
+    // A AVENTURA TEM MEMORIA. O modo aventura (o overworld e as dungeons dele) hidrata do
+    // retrato em adventureState — que sobrevive ao scene.restart() por ser estado de modulo e
+    // ao browser por viver no localStorage. Explorador e levels ficam de fora: la, zerar E o
+    // desenho (a aposta do explorador e perder; o level e um puzzle que recomeca limpo).
+    this.adventure = !isExplorerMode()
+      && this.registry.get('appMode') === 'game'
+      && (getActiveLevel() === null || getDungeonTrip() !== null);
+    const inDungeon = getDungeonTrip() !== null;
+    // Arvores derrubadas voltam ao chao ANTES do World3D assar o terreno (o construtor le os
+    // chunks): o corte e um diff por cima do world.json, que volta limpo do disco a cada boot
+    // e a cada saida de dungeon.
+    if (this.adventure && !inDungeon) this.applyFelledTreeDiff();
+
+    let start = getPlayerStart();
+    // "Acorde na fogueira" e um PEDIDO (morte, Continue do titulo), nunca o padrao: a volta de
+    // dungeon tambem reinicia a cena, e ela nasce na boca da caverna, nao teleportada pro fogo.
+    if (this.adventure && consumeAdventureRespawn() && !inDungeon && adventureState().respawn) {
+      start = { ...adventureState().respawn! };
+    }
+    const { worldX: startWorldX, worldY: startWorldY } = start;
 
     this.isDead = false;
     this.playerMaxHealth = PLAYER_HEALTH_MAX;
@@ -886,12 +917,14 @@ export class GameScene extends Phaser.Scene {
     this.shopOpen = false;
     this.levelIntroOpen = false;
     this.levelTransitioning = false;
-    // Na aventura as melhorias sao da RUN e morrem com ela. No explorador elas sao a
-    // progressao do modo: compradas com moedas do banco, na fogueira do acampamento, e
-    // atravessam expedicoes — e por isso que valer a pena trazer moeda para casa.
+    // No explorador as melhorias sao a progressao do modo (compradas com o banco, atravessam
+    // expedicoes). Na aventura elas agora atravessam TUDO — morte, dungeon, browser — porque
+    // moram no save. So um level de puzzle nasce sempre pelado.
     this.upgrades = isExplorerMode()
       ? { ...explorerMeta().upgrades }
-      : { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
+      : this.adventure
+        ? { ...adventureState().upgrades }
+        : { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
     // O heroi e um campo `readonly` e o Phaser REUSA esta instancia de cena no restart: sem
     // isto, o que a cena anterior escreveu nele (o alpha da morte, o encolhimento da succao do
     // portal) chega inteiro no level seguinte e o heroi nasce invisivel.
@@ -965,16 +998,42 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneFireLight = undefined;
     this.cutsceneHeroLight = 1;
     this.seenDialogKeys.clear();
+    if (this.adventure) {
+      // A historia do mago e os dialogos ouvidos voltam do save — antes disto, entrar numa
+      // dungeon (scene.restart) apagava a memoria do mundo inteiro.
+      const st = adventureState();
+      this.litFireCount = st.litFireCount;
+      this.firstCampfireLit = st.litFireCount > 0;
+      this.wizardIntroSeen = st.wizardIntroSeen;
+      st.seenDialogKeys.forEach((k) => this.seenDialogKeys.add(k));
+    }
     this.npcManager = new NpcManager(this, getContent, (kind, wx, wy) => {
       const key = this.dialogKeyFor(kind, wx, wy);
       return key !== null && !this.seenDialogKeys.has(key);
     });
     this.coinManager = new CoinManager(this);
+    if (this.adventure) this.coinManager.restoreTotal(adventureState().coins);
     this.heartPickupManager = new HeartPickupManager(this, getContent);
     this.itemManager = new ItemManager(this);
-    this.itemManager.loadAuthored(getHeldItemPickups());
-    this.inventory.clear(); // a mochila e da RUN: morrer/reiniciar comeca de maos vazias
+    // O chao tambem lembra: a foto salva dos itens DESTE mundo (overworld ou dungeon-N)
+    // substitui a lista autorada — um item largado fica onde ficou, um tesouro tomado nao
+    // renasce. Sem foto (mundo nunca visitado, ou fora da aventura), vale o autorado.
+    this.adventureScope = inDungeon ? `dungeon-${getDungeonTrip()!.level}` : 'world';
+    const savedGround = this.adventure ? adventureState().groundItems.get(this.adventureScope) : undefined;
+    this.itemManager.loadAuthored(
+      savedGround
+        ? savedGround.map((g) => ({ type: g.kind, worldX: g.worldX, worldY: g.worldY }))
+        : getHeldItemPickups(),
+    );
+    this.inventory.clear(); // fora da aventura a mochila e da RUN e comeca de maos vazias
     this.seenItems.clear();
+    if (this.adventure) {
+      const st = adventureState();
+      for (const it of st.inventory) this.inventory.add(it.kind, it.count);
+      this.inventory.select(st.selected);
+      st.seenItems.forEach((k) => this.seenItems.add(k as HeldItemKind));
+      this.updateBackItem(); // o item selecionado volta as costas do heroi ja no primeiro frame
+    }
     this.heldOnFire = false;
     this.heldBatteryChargeMs = 0;
     // One reusable swing animator, alive for the whole scene: the sword uses it to attack,
@@ -1042,8 +1101,14 @@ export class GameScene extends Phaser.Scene {
       const d = Math.hypot(c.worldX - startWorldX, c.worldY - startWorldY);
       if (d < homeBest) { homeBest = d; homeIdx = i; }
     });
+    // Fogueiras que o jogador acendeu ficam acesas — atraves de morte, dungeon e browser. E o
+    // progresso central do jogo (litFireCount vem junto, hidratado acima).
+    const savedLit = this.adventure && !inDungeon ? adventureState().litFires : undefined;
     this.campfires = campfireDefs.map(
-      (c, i) => new CampfireObject(this, c.worldX, c.worldY, i === homeIdx || c.lit === true),
+      (c, i) => new CampfireObject(
+        this, c.worldX, c.worldY,
+        i === homeIdx || c.lit === true || (savedLit?.has(`${c.worldX},${c.worldY}`) ?? false),
+      ),
     );
     this.dryBushes = getDryBushes().map((b) => {
       const bush = new DryBushObject(this, b.worldX, b.worldY);
@@ -1358,6 +1423,11 @@ export class GameScene extends Phaser.Scene {
     if (this.explorer) {
       loseRunToDeath();
       rerollExplorerWorld();
+    } else if (this.adventure) {
+      // Na aventura "reiniciar" nao e recomecar do zero (isso e o Start over do titulo): e
+      // voltar a fogueira com tudo — o mesmo contrato da morte, sem o funeral.
+      this.persistAdventure();
+      requestAdventureRespawn();
     }
     this.scene.restart(); // WorldData still holds this level, so it rebuilds the same one
   }
@@ -1643,6 +1713,7 @@ export class GameScene extends Phaser.Scene {
   private async enterDungeon(portal: LevelPortalObject): Promise<void> {
     const level = portal.level;
     if (level === undefined) return;
+    this.persistAdventure(); // a foto do overworld (mochila, chao) fecha antes da viagem
     let world: unknown;
     const fetching = window
       .fetch(`${import.meta.env.BASE_URL}levels/dungeon-${level}.json`, { cache: 'no-store' })
@@ -1660,6 +1731,7 @@ export class GameScene extends Phaser.Scene {
   private async leaveDungeon(portal: LevelPortalObject): Promise<void> {
     const trip = getDungeonTrip();
     if (!trip) return;
+    this.persistAdventure(); // a foto da dungeon (tesouro tomado, itens largados) fecha aqui
     let world: { meta: { playerStart: { worldX: number; worldY: number } } } | undefined;
     const fetching = window
       .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
@@ -1720,8 +1792,10 @@ export class GameScene extends Phaser.Scene {
     // have nowhere to go, so the entry is hidden (mirrors the intro-ending fallback).
     const canQuit = Boolean(this.scene.get('title'));
     // Playing a level (not the adventure): offer a jump back to the level list. Gated on the
-    // scene existing too — the lab/editor configs don't register it.
-    const inLevel = getActiveLevel() !== null && Boolean(this.scene.get('levelselect'));
+    // scene existing too — the lab/editor configs don't register it. Uma dungeon tambem tem
+    // activeLevel, mas ela e AVENTURA (a volta dela e a escada, nunca a lista de levels).
+    const inLevel = getActiveLevel() !== null && getDungeonTrip() === null
+      && Boolean(this.scene.get('levelselect'));
     this.pauseMenu = new PauseMenu(this, {
       onResume: () => this.closePauseMenu(),
       onRestart: () => {
@@ -1744,6 +1818,8 @@ export class GameScene extends Phaser.Scene {
           // Sair pelo menu ABANDONA a expedicao: a bolsa que estava em risco fica no escuro,
           // como em qualquer outra saida que nao seja o portal. O banco (e as melhorias que ele
           // comprou) ja esta no localStorage e sobrevive — e ele que o modo promete guardar.
+          // Na aventura, sair GUARDA: o retrato fecha aqui e o titulo passa a oferecer Continue.
+          this.persistAdventure();
           endExplorerMode();
           this.scene.start('title');
         }
@@ -2330,7 +2406,11 @@ export class GameScene extends Phaser.Scene {
     // Safety: near a campfire the hero is untouchable (undead never step into firelight and
     // nothing spawns); in the dark the spawn director ramps the siege up over time.
     const distToFire = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
+    const wasSafe = this.playerSafe;
     this.playerSafe = distToFire <= CAMPFIRE_SAFE_RADIUS_TILES;
+    // Pisar no anel de um fogo aceso e o "descanso" da aventura: este tile vira o lugar onde o
+    // heroi acorda (morte, Continue). So na transicao — ancorar por frame gravaria save a toa.
+    if (this.playerSafe && !wasSafe) this.anchorRespawnHere();
 
     // Warming up by the fire heals: while safe in the ring, mend a heart every HEALTH_REGEN_MS.
     if (this.playerSafe && this.playerHealth < this.playerMaxHealth) {
@@ -2482,6 +2562,7 @@ export class GameScene extends Phaser.Scene {
         getSoundManager().playIgnite();
         this.hero.tint = 0xff6600;
         this.time.delayedCall(250, () => { this.hero.tint = null; });
+        this.persistAdventure(); // o carvao comido saiu do chao
       }
       // (Aqui a mochila engolia sozinha o item de baixo dos pes. Nao engole mais: pegar e o B.)
       this.itemManager.render(this.tileSize, this.camera!);
@@ -3691,6 +3772,7 @@ export class GameScene extends Phaser.Scene {
     if (fire) this.scheduleGroundTorchSpread(wx, wy);
     if (kind === 'batteryFull' && onDeadWire) getSoundManager().playBatteryDock();
     else getSoundManager().playFootstep(); // o baque surdo de pousar algo no chao
+    this.persistAdventure();
     return true;
   }
 
@@ -4970,9 +5052,81 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Bring a dead campfire to life with fanfare, expanding the safe ring under the hero. */
+  /**
+   * Fotografa o que e volatil na cena (mochila, moedas, melhorias, itens no chao, dialogos) para
+   * dentro do adventureState e grava. Chamado nos eventos que mudam o mundo — acender fogueira,
+   * pegar/pousar item, comprar, falar, viajar, morrer — e barato o bastante para nao ser
+   * economizado: o retrato inteiro tem poucos KB.
+   */
+  private persistAdventure(): void {
+    if (!this.adventure) return;
+    const st = adventureState();
+    st.started = true;
+    st.coins = this.coinManager?.coinTotal ?? st.coins;
+    st.upgrades = { ...this.upgrades };
+    st.inventory = this.inventory.list();
+    st.selected = this.inventory.selected;
+    st.litFireCount = this.litFireCount;
+    st.wizardIntroSeen = this.wizardIntroSeen;
+    st.seenDialogKeys = new Set(this.seenDialogKeys);
+    st.seenItems = new Set(this.seenItems);
+    if (this.itemManager) {
+      st.groundItems.set(
+        this.adventureScope,
+        this.itemManager.snapshot().map((s) => ({ kind: s.kind, worldX: s.worldX, worldY: s.worldY })),
+      );
+    }
+    saveAdventure();
+  }
+
+  /**
+   * O tile em que o heroi esta AGORA vira o ponto onde ele acorda (morte, Continue). Chamado ao
+   * entrar no anel seguro de um fogo aceso — o unico chao do jogo que promete manha seguinte.
+   * So no overworld: dentro de dungeon o retorno e sempre a fogueira la de fora.
+   */
+  private anchorRespawnHere(): void {
+    if (!this.adventure || getDungeonTrip()) return;
+    const st = adventureState();
+    const { worldX, worldY } = this.playerWorld;
+    if (st.respawn && st.respawn.worldX === worldX && st.respawn.worldY === worldY) return;
+    st.respawn = { worldX, worldY };
+    this.persistAdventure();
+  }
+
+  /**
+   * Reaplica ao terreno recem-carregado as arvores-tile que o jogador ja derrubou. O corte e
+   * uma mutacao das arrays do WorldData (fellTreeTile) e o world.json volta LIMPO do disco a
+   * cada boot e a cada volta de dungeon — sem este diff, a floresta desderrubava sozinha.
+   * Roda ANTES do World3D existir: o construtor assa a malha lendo estes mesmos chunks.
+   */
+  private applyFelledTreeDiff(): void {
+    const bounds = getWorldBounds();
+    for (const key of adventureState().felledTrees) {
+      const [wx, wy] = key.split(',').map(Number);
+      if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+      const cx = Math.floor(wx / CHUNK_COLUMNS);
+      const cy = Math.floor(wy / CHUNK_ROWS);
+      // Fora do mundo autorado getChunkTerrain fabrica um chunk de mar descartavel — mutar ali
+      // seria gravar no vazio. So tiles dentro dos limites reais entram no diff.
+      if (cx < bounds.minCx || cx > bounds.maxCx || cy < bounds.minCy || cy > bounds.maxCy) continue;
+      const terrain = getChunkTerrain(cx, cy);
+      const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+      const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+      terrain.upper[ly][lx] = null;
+      terrain.collisions[ly][lx] = false;
+    }
+  }
+
   private lightCampfire(cf: CampfireObject, wx: number, wy: number): void {
     if (cf.isLit) return;
     this.litFireCount += 1; // drives the wizard's story progression
+    if (this.adventure && !getDungeonTrip()) {
+      // O fogo aceso entra no save na hora — e o heroi que o acendeu esta a um passo dele: este
+      // tile vira o ponto de acordar (anchorRespawnHere persiste).
+      adventureState().litFires.add(`${cf.worldX},${cf.worldY}`);
+      this.anchorRespawnHere();
+      this.persistAdventure();
+    }
     // The very first fire the player brings back to life plays the one-time cut-scene.
     if (!this.firstCampfireLit) {
       this.firstCampfireLit = true;
@@ -5180,6 +5334,15 @@ export class GameScene extends Phaser.Scene {
   // it with the right item in hand places it, exactly like stepping on a pickup collects it.
   // With anything else in hand the step does nothing: the mark's own art is the invitation.
   private handleTileEntered(wx: number, wy: number): void {
+    // O fog of war do mapa: o chunk pisado entra no save (176 chaves no maximo, um evento raro).
+    if (this.adventure && !getDungeonTrip()) {
+      const chunkKey = `${Math.floor(wx / CHUNK_COLUMNS)},${Math.floor(wy / CHUNK_ROWS)}`;
+      const st = adventureState();
+      if (!st.visitedChunks.has(chunkKey)) {
+        st.visitedChunks.add(chunkKey);
+        saveAdventure();
+      }
+    }
     const levelPortal = this.getLevelPortalAt(wx, wy);
     if (levelPortal) {
       // O MESMO portal, duas leituras. Num level ele e a saida para o proximo — nao ha o que
@@ -5852,7 +6015,10 @@ export class GameScene extends Phaser.Scene {
     if (!script) return;
     if (npcWorld) {
       const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY);
-      if (key) this.seenDialogKeys.add(key);
+      if (key) {
+        this.seenDialogKeys.add(key);
+        this.persistAdventure(); // o "!" apagado fica apagado
+      }
     }
     // An NPC beside a still-dead campfire is too scared to talk: swap in the locked lines.
     const shown = this.gateDialog(script, npcWorld);
@@ -5879,6 +6045,7 @@ export class GameScene extends Phaser.Scene {
     const state = this.wizardStoryState();
     this.seenDialogKeys.add(`wizard:${state}`);
     if (state === 'intro') this.wizardIntroSeen = true;
+    this.persistAdventure(); // o beat ouvido do mago e historia, e historia nao se repete
     const lines = tLines(`wizard.${state}`);
     this.openDialogScript(
       { ...base, lines },
@@ -6120,6 +6287,7 @@ export class GameScene extends Phaser.Scene {
     // O coracao comprado ja vem cheio: pagar por vida e continuar ferido seria comprar promessa.
     if (id === 'maxHealth') this.playerHealth = Math.min(this.playerHealth + 1, this.playerMaxHealth);
     this.shopOverlay?.refresh(this.walletCoins, this.upgrades);
+    this.persistAdventure(); // a compra (moedas + melhoria) atravessa morte e browser
 
     // Update the UPGRADES_CFG iteration for any upgrade that needs it
     void UPGRADES_CFG; // ensure import is used
@@ -6180,6 +6348,7 @@ export class GameScene extends Phaser.Scene {
       this.seenItems.add(item.kind);
       this.showItemGet(item.kind, () => {});
     }
+    this.persistAdventure(); // a mochila e o chao mudaram juntos
   }
 
   /**
@@ -6410,6 +6579,11 @@ export class GameScene extends Phaser.Scene {
     // only the upper frame would leave the tile blocked by an invisible wall.
     chunk.collisions[ly][lx] = false;
     this.world3d?.removeSolidTile(wx, wy);
+    if (this.adventure && !getDungeonTrip()) {
+      // Edicao de TERRENO entra no save como diff (applyFelledTreeDiff a reaplica em cada boot).
+      adventureState().felledTrees.add(`${wx},${wy}`);
+      this.persistAdventure();
+    }
     return true;
   }
 
@@ -6424,6 +6598,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.itemManager) return;
     if (!this.itemManager.hasItemAt(worldX, worldY)) {
       this.itemManager.drop(kind, worldX, worldY);
+      this.persistAdventure();
       return;
     }
     for (const [dx, dy] of CARDINAL_DIRS) {
@@ -6433,6 +6608,7 @@ export class GameScene extends Phaser.Scene {
       // corpo solido — um item so pousa onde o heroi pode pisar pra busca-lo.
       if (this.isSolidForEntities(nx, ny) || this.itemManager.hasItemAt(nx, ny)) continue;
       this.itemManager.drop(kind, nx, ny);
+      this.persistAdventure();
       return;
     }
   }
@@ -6947,6 +7123,12 @@ export class GameScene extends Phaser.Scene {
   // says the introduction is complete, and the game returns to the title screen.
   private playIntroEnding(): void {
     this.cutsceneActive = true; // freeze gameplay for the finale
+    if (this.adventure) {
+      // O final visto entra no save: quem continuar depois dele mantem o mundo aceso que
+      // construiu (e o titulo continua oferecendo Continue, nao um recomeco).
+      adventureState().endingSeen = true;
+      this.persistAdventure();
+    }
     this.hideLowHealthOutlines();
     getSoundManager().fadeMusicOut();
 
@@ -7125,6 +7307,27 @@ export class GameScene extends Phaser.Scene {
       if (this.explorer) {
         loseRunToDeath();
         rerollExplorerWorld();
+      } else if (this.adventure) {
+        // NA AVENTURA A MORTE NAO APAGA MAIS NADA. Mochila, moedas, melhorias, fogueiras e
+        // historia atravessam (persistAdventure + hidratacao do create); o custo de morrer e
+        // ACORDAR NA FOGUEIRA — a distancia de volta, nao o progresso. E o bonfire.
+        this.persistAdventure();
+        requestAdventureRespawn();
+        if (getDungeonTrip()) {
+          // Morrer na dungeon acorda do lado de FORA, na fogueira: o overworld volta do disco
+          // (o mesmo gesto de leaveDungeon) e a viagem se encerra aqui, sem escada.
+          void window
+            .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
+            .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })
+            .then((json: unknown) => {
+              setWorldData(json as Parameters<typeof setWorldData>[0]);
+              setActiveLevel(null);
+              clearDungeonTrip();
+            })
+            .catch(() => { /* sem rede: renasce dentro da propria dungeon */ })
+            .finally(() => { this.scene.restart(); });
+          return;
+        }
       }
       this.scene.restart();
     };

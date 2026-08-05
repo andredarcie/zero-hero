@@ -3,7 +3,10 @@ import Phaser from 'phaser';
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
+import { clearDungeonTrip } from '@/game/runtime/dungeonTrip';
 import { endExplorerMode } from '@/game/explorer/explorerRun';
+import { hasAdventureSave, requestAdventureRespawn, resetAdventure } from '@/game/runtime/adventureState';
+import { setWorldData } from '@/game/world/WorldData';
 import { t, tWords } from '@/game/i18n/i18n';
 
 // The game's start screen, and now the ONLY screen between the loader and the world: the title,
@@ -69,10 +72,19 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
-    // The one door.
-    this.buttons = [
-      this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure()),
-    ];
+    // The one door — que agora sabe LEMBRAR. Com um save de aventura o botao vira Continue
+    // (mesmo lugar, mesmo gesto: Enter continua de onde parou) e um segundo botao discreto
+    // oferece o recomeco. Sem save, tudo como sempre: uma porta so.
+    if (hasAdventureSave()) {
+      this.buttons = [
+        this.makeButton(t('title.continue'), Math.round(height * 0.62), () => this.continueAdventure()),
+        this.makeButton(t('title.startOver'), Math.round(height * 0.76), () => this.startOver()),
+      ];
+    } else {
+      this.buttons = [
+        this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure()),
+      ];
+    }
     this.applySelection();
 
     // Arm input a beat later so the key/tap that dismissed the loader can't fire the button.
@@ -133,13 +145,25 @@ export class TitleScene extends Phaser.Scene {
   private readonly handleKey = (event: KeyboardEvent): void => {
     this.unlockAudio();
     if (this.starting) return;
-    // Uma porta so: Enter, espaco ou 1 abrem. Seta nao faz nada porque nao ha pra onde ir — e
-    // "qualquer tecla" tambem nao, ou um ESC de reflexo comecaria a aventura.
+    // Enter/espaco ativam o selecionado; 1 e sempre a porta principal. Setas so existem quando
+    // ha um segundo botao (o Start over do save) — e "qualquer tecla" continua nao valendo, ou
+    // um ESC de reflexo comecaria a aventura.
     switch (event.key) {
       case 'Enter':
       case ' ':
-      case '1':
         this.buttons[this.selected]?.activate();
+        break;
+      case '1':
+        this.buttons[0]?.activate();
+        break;
+      case '2':
+        this.buttons[1]?.activate();
+        break;
+      case 'ArrowUp':
+      case 'ArrowDown':
+        if (this.buttons.length > 1) {
+          this.setSelected((this.selected + (event.key === 'ArrowDown' ? 1 : this.buttons.length - 1)) % this.buttons.length);
+        }
         break;
       default:
         break;
@@ -161,10 +185,36 @@ export class TitleScene extends Phaser.Scene {
    * saiu inteira: sete segundos de tela preta entre "quero jogar" e jogar. O que a intro dizia, o
    * mago diz na primeira conversa, e essa o jogador escolhe ter.
    */
+  /**
+   * A aventura SEMPRE parte do world.json limpo do disco. O WorldData em memoria pode estar
+   * carregando qualquer coisa que a sessao deixou para tras — uma dungeon (quit de dentro
+   * dela), arvores derrubadas mutadas nas arrays — e tudo que merece sobreviver ja mora no
+   * save (adventureState), que o GameScene.create() reaplica por cima do mundo fresco.
+   */
   private startAdventure(): void {
     setActiveLevel(null); // a aventura roda o overworld de verdade, nunca um level
+    clearDungeonTrip();
     endExplorerMode();
-    this.fadeThen(() => this.scene.start('game'));
+    this.fadeThen(() => {
+      void window
+        .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
+        .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })
+        .then((json: unknown) => { setWorldData(json as Parameters<typeof setWorldData>[0]); })
+        .catch(() => { /* sem rede: o mundo em memoria serve */ })
+        .finally(() => this.scene.start('game'));
+    });
+  }
+
+  /** Continuar e a mesma porta, com um pedido a mais: acordar na fogueira em que parou. */
+  private continueAdventure(): void {
+    requestAdventureRespawn();
+    this.startAdventure();
+  }
+
+  /** Recomecar de verdade: apaga o save e entra pela mesma porta (mundo limpo, sem retrato). */
+  private startOver(): void {
+    resetAdventure();
+    this.startAdventure();
   }
 
   private teardown(): void {

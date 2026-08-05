@@ -13,7 +13,9 @@
     ],
     "by": "BY",
     "author": "ANDRÉ N. DARCIE",
-    "playAdventure": "Play adventure"
+    "playAdventure": "Play adventure",
+    "continue": "Continue",
+    "startOver": "Start over"
   },
   "levelSelect": {
     "heading": "Choose a level",

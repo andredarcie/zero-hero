@@ -1,0 +1,186 @@
+import type { UpgradeState } from '@/game/runtime/ShopOverlay';
+import type { HeldItemKind } from '@/game/entities/ItemPickup';
+
+/**
+ * A MEMORIA DA AVENTURA — o save, e a razao de a morte ter deixado de apagar o mundo.
+ *
+ * A aventura rodava inteira numa unica instancia de GameScene: morrer, entrar numa dungeon ou
+ * fechar o browser jogava fora a mochila, as fogueiras acesas, os dialogos ouvidos e a historia
+ * do mago. Num mundo aberto isso nao e dificuldade — e descarte do jogador. Este modulo e o
+ * mesmo padrao de `dungeonTrip`/`explorerRun` (estado de modulo sobrevive ao `scene.restart()`)
+ * com um andar a mais: o retrato vai ao localStorage, entao ele sobrevive tambem a aba.
+ *
+ * O que NAO entra aqui, de proposito:
+ *   • explorador e levels — la, zerar E o desenho (a aposta do explorador e perder; o level e
+ *     um puzzle que recomeca limpo).
+ *   • a vida atual — acordar na fogueira acorda inteiro; fogueira cura de qualquer jeito.
+ *   • props consumidos (rocha quebrada, arbusto queimado) — sao os recursos renovaveis do
+ *     mundo, e voltar e o que os mantem colhiveis. A excecao e a ARVORE-TILE derrubada, que e
+ *     edicao de TERRENO (greatAxe) e ja sobrevivia ao restart por acidente; aqui o acidente
+ *     vira contrato.
+ *
+ * O ponto de renascimento e a FOGUEIRA: o tile em que o heroi estava da ultima vez que pisou no
+ * anel seguro de um fogo aceso. Morrer, continuar, reiniciar — tudo acorda ali. E o bonfire.
+ */
+
+const STORAGE_KEY = 'zh.adventure.v1';
+
+export interface AdventureGroundItem {
+  kind: HeldItemKind;
+  worldX: number;
+  worldY: number;
+}
+
+export interface AdventureSnapshot {
+  /** Vira true no primeiro persist de uma run de verdade — e o que o titulo le para o Continue. */
+  started: boolean;
+  /** Onde o heroi acorda (tile do overworld dentro do anel de um fogo aceso). */
+  respawn: { worldX: number; worldY: number } | null;
+  coins: number;
+  upgrades: UpgradeState;
+  inventory: Array<{ kind: HeldItemKind; count: number }>;
+  selected: HeldItemKind | 'none';
+  /** "x,y" de cada fogueira do overworld que o jogador acendeu. */
+  litFires: Set<string>;
+  litFireCount: number;
+  wizardIntroSeen: boolean;
+  endingSeen: boolean;
+  seenDialogKeys: Set<string>;
+  seenItems: Set<string>;
+  /** "x,y" de cada pinheiro-tile derrubado (diff de terreno sobre o world.json). */
+  felledTrees: Set<string>;
+  /**
+   * Itens no chao por MUNDO ('world' ou 'dungeon-N'): a foto substitui a lista autorada daquele
+   * arquivo — um item largado fica onde ficou, um tesouro tomado nao renasce.
+   */
+  groundItems: Map<string, AdventureGroundItem[]>;
+  /** "cx,cy" dos chunks do overworld que o heroi ja pisou — o fog of war do mapa. */
+  visitedChunks: Set<string>;
+}
+
+const defaultSnapshot = (): AdventureSnapshot => ({
+  started: false,
+  respawn: null,
+  coins: 0,
+  upgrades: { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 },
+  inventory: [],
+  selected: 'none',
+  litFires: new Set(),
+  litFireCount: 0,
+  wizardIntroSeen: false,
+  endingSeen: false,
+  seenDialogKeys: new Set(),
+  seenItems: new Set(),
+  felledTrees: new Set(),
+  groundItems: new Map(),
+  visitedChunks: new Set(),
+});
+
+type StoredSnapshot = {
+  started?: boolean;
+  respawn?: { worldX: number; worldY: number } | null;
+  coins?: number;
+  upgrades?: Partial<UpgradeState>;
+  inventory?: Array<{ kind: HeldItemKind; count: number }>;
+  selected?: HeldItemKind | 'none';
+  litFires?: string[];
+  litFireCount?: number;
+  wizardIntroSeen?: boolean;
+  endingSeen?: boolean;
+  seenDialogKeys?: string[];
+  seenItems?: string[];
+  felledTrees?: string[];
+  groundItems?: Record<string, AdventureGroundItem[]>;
+  visitedChunks?: string[];
+};
+
+const num = (value: unknown, fallback: number): number =>
+  (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback);
+
+const load = (): AdventureSnapshot => {
+  const base = defaultSnapshot();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return base;
+    const p = JSON.parse(raw) as StoredSnapshot;
+    return {
+      started: p.started === true,
+      respawn: p.respawn && typeof p.respawn.worldX === 'number' && typeof p.respawn.worldY === 'number'
+        ? { worldX: p.respawn.worldX, worldY: p.respawn.worldY }
+        : null,
+      coins: num(p.coins, 0),
+      upgrades: { ...base.upgrades, ...(p.upgrades ?? {}) },
+      inventory: Array.isArray(p.inventory) ? p.inventory.filter((i) => i && typeof i.kind === 'string') : [],
+      selected: p.selected ?? 'none',
+      litFires: new Set(p.litFires ?? []),
+      litFireCount: num(p.litFireCount, 0),
+      wizardIntroSeen: p.wizardIntroSeen === true,
+      endingSeen: p.endingSeen === true,
+      seenDialogKeys: new Set(p.seenDialogKeys ?? []),
+      seenItems: new Set(p.seenItems ?? []),
+      felledTrees: new Set(p.felledTrees ?? []),
+      groundItems: new Map(Object.entries(p.groundItems ?? {})),
+      visitedChunks: new Set(p.visitedChunks ?? []),
+    };
+  } catch {
+    return base;
+  }
+};
+
+// ── o estado vivo ─────────────────────────────────────────────────────────────
+
+let state: AdventureSnapshot | null = null;
+/**
+ * Pedido de "acorde na fogueira", consumido UMA vez pelo proximo create(). E um pedido em vez
+ * de comportamento padrao porque a volta de dungeon tambem reinicia a cena — e ela precisa
+ * nascer na boca da caverna (o playerStart reescrito), nunca teleportada para o fogo.
+ */
+let respawnRequested = false;
+
+export const adventureState = (): AdventureSnapshot => {
+  if (!state) state = load();
+  return state;
+};
+
+export const hasAdventureSave = (): boolean => adventureState().started;
+
+export const saveAdventure = (): void => {
+  const s = adventureState();
+  const stored: StoredSnapshot = {
+    started: s.started,
+    respawn: s.respawn,
+    coins: s.coins,
+    upgrades: s.upgrades,
+    inventory: s.inventory,
+    selected: s.selected,
+    litFires: [...s.litFires],
+    litFireCount: s.litFireCount,
+    wizardIntroSeen: s.wizardIntroSeen,
+    endingSeen: s.endingSeen,
+    seenDialogKeys: [...s.seenDialogKeys],
+    seenItems: [...s.seenItems],
+    felledTrees: [...s.felledTrees],
+    groundItems: Object.fromEntries(s.groundItems),
+    visitedChunks: [...s.visitedChunks],
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+  } catch { /* sem storage: a aventura continua, so nao atravessa a aba */ }
+};
+
+/** Recomecar do zero (o "Start over" do titulo): apaga o modulo E o disco. */
+export const resetAdventure = (): void => {
+  state = defaultSnapshot();
+  respawnRequested = false;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch { /* nada a apagar */ }
+};
+
+export const requestAdventureRespawn = (): void => { respawnRequested = true; };
+
+export const consumeAdventureRespawn = (): boolean => {
+  const requested = respawnRequested;
+  respawnRequested = false;
+  return requested;
+};
