@@ -261,6 +261,12 @@ export const world3d = (): World3D => {
 export interface FireLight3D {
   setLit(lit: boolean): void;
   setIntensityScale(s: number): void;
+  /**
+   * Fogo que ANDA (a tocha do heroi ja era um; o corpo em chamas e o segundo). Move a ENTRADA
+   * do pool — luz, halo no chao e sombra vao atras no proximo frame — sem criar nem destruir
+   * luz nenhuma, que e a lei mais cara da casa. `worldX/worldY` ficam sendo o tile de origem.
+   */
+  setPosition(x: number, y: number): void;
   readonly worldX: number;
   readonly worldY: number;
   destroy(): void;
@@ -2013,6 +2019,16 @@ export class World3D {
       worldY,
       setLit: (v) => { entry.lit = v; },
       setIntensityScale: (s) => { entry.scale = s; },
+      setPosition: (x, y) => {
+        // A cache de solidos da sombra e POR POSICAO (ver fireCastLists): invalida so na troca
+        // de TILE — invalidar a cada frame faria um fogo ambulante pagar uma varredura completa
+        // de solidTiles por quadro, para uma sombra que nao mudou de vizinhanca.
+        if (Math.round(x) !== Math.round(entry.worldX) || Math.round(y) !== Math.round(entry.worldY)) {
+          this.fireCastLists.delete(entry);
+        }
+        entry.worldX = x;
+        entry.worldY = y;
+      },
       destroy: () => {
         if (released) return;
         released = true;

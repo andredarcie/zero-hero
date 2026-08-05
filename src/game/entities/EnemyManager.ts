@@ -243,6 +243,7 @@ export class EnemyManager {
     maxHealth: number;
     invulnerable: boolean;
     windingUp: boolean;
+    burning: boolean;
     framed: boolean;
   }> {
     return this.enemies
@@ -259,6 +260,8 @@ export class EnemyManager {
         maxHealth: e.healthMax,
         invulnerable: e.isHurtInvulnerable,
         windingUp: e.isWindingUp,
+        // A tocha viva (ver EnemyBase.igniteBody) — o playtest `tocha-viva` lê daqui.
+        burning: e.isBurning,
         // O corpo aparece no quadro? (a lei "fora da tela não fala nem atira" se asserta por isto)
         framed: this.frameGate(e.worldX, e.worldY),
       }));
@@ -364,7 +367,17 @@ export class EnemyManager {
       if (terrainOf(wx, wy)) return true;
       if (wx === playerWorldX && wy === playerWorldY) return true;
       for (const other of this.enemies) {
-        if (other !== current && other.isAlive && other.worldX === wx && other.worldY === wy) {
+        if (other === current || !other.isAlive) continue;
+        if (other.worldX === wx && other.worldY === wy) return true;
+        // UM CORPO EM CHAMAS É LUZ DE FOGUEIRA ANDANDO: nenhum monstro pisa colado nele — a
+        // mesma lei da luz-parede, no raio de um corpo. É o que faz a matilha ABRIR para a
+        // tocha viva passar, e o que impede o fogo de pular de corpo em corpo de graça: só
+        // quem já estava colado quando ela acendeu é alcançado (ver EnemyBase.updateBurning).
+        if (
+          other.isBurning
+          && Math.abs(other.worldX - wx) <= 1
+          && Math.abs(other.worldY - wy) <= 1
+        ) {
           return true;
         }
       }
@@ -379,6 +392,11 @@ export class EnemyManager {
       // ...e o tremor do atordoamento pelo MESMO motivo: o estado que ele desenha é exatamente o
       // estado em que o update da espécie não roda (ver EnemyBase.tickStunFx).
       enemy.tickStunFx(delta);
+      // O RELÓGIO DO FOGO também é central (ver EnemyBase.tickBurn): o corpo em chamas não roda
+      // o update da espécie, e um fogo que congelasse fora do alcance da IA deixaria uma tocha
+      // viva eterna parada a 16 tiles. Ele pode MATAR o corpo aqui — daí o guarda logo abaixo.
+      enemy.tickBurn(delta);
+      if (!enemy.isAlive) continue;
 
       const farX = Math.abs(enemy.worldX - playerWorldX);
       const farY = Math.abs(enemy.worldY - playerWorldY);
@@ -397,7 +415,14 @@ export class EnemyManager {
       current = enemy;
       terrainOf = enemy.flies ? blocked.flying : blocked.onFoot;
 
-      if (enemy.update(delta, playerWorldX, playerWorldY, playerSafe, playerHasTorch, blockedForEnemy)) {
+      // A TOCHA VIVA NÃO É MAIS A ESPÉCIE: não caça, não arma golpe, não atira — corre do herói
+      // acendendo o que toca (ver EnemyBase.updateBurning). O update da espécie fica de fora
+      // por inteiro, e é por isso que nenhuma das sete precisou saber que fogo existe.
+      if (enemy.isBurning) {
+        enemy.updateBurning(delta, playerWorldX, playerWorldY, blockedForEnemy);
+      } else if (
+        enemy.update(delta, playerWorldX, playerWorldY, playerSafe, playerHasTorch, blockedForEnemy)
+      ) {
         hit ??= { enemy, ranged: false, fromX: enemy.worldX, fromY: enemy.worldY };
       }
     }

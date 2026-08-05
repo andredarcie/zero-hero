@@ -158,6 +158,8 @@ export interface GameDebugState {
     invulnerable: boolean;
     /** Armando o golpe telegrafado: e a janela em que ele GUARDA a frente. */
     windingUp: boolean;
+    /** O fogo esta comendo este corpo (a tocha viva — ver EnemyBase.igniteBody). */
+    burning: boolean;
     /** O corpo aparece no quadro da camera? Fora dele ele nao fala nem comeca golpe. */
     framed: boolean;
   }>;

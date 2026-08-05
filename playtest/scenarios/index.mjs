@@ -45,6 +45,7 @@ import projeteis from './projeteis.mjs';
 import zora from './zora.mjs';
 import montanha from './montanha.mjs';
 import salvamento from './salvamento.mjs';
+import tochaViva from './tocha-viva.mjs';
 
 export const scenarios = {
   smoke,
@@ -94,6 +95,7 @@ export const scenarios = {
   zora,
   montanha,
   salvamento,
+  'tocha-viva': tochaViva,
 };
 
 // What `npm run playtest` runs when no scenario is named.

@@ -310,7 +310,8 @@ lâmina rodopiante → `esgrima`**. Machado, árvore e borda → `machado`; roch
 `pedra`; contratos de estado de item → `itens`. Braço → `braco`; caixa de ferramentas →
 `caixa-ferramentas`; placa com herói/caixote → `caixa-placa`, e a caveira que marcha até uma →
 `placa-undead`. **Aba Inimigos e a cova que devolve o inimigo → `inimigos`; o bestiário que anda →
-`fauna`; torreta, mago e a lei do tiro → `projeteis`; o zora e a janela dele → `zora`.**
+`fauna`; torreta, mago e a lei do tiro → `projeteis`; o zora e a janela dele → `zora`; o corpo
+que o fogo acende (empurrão contra brasa, pânico, rastro) → `tocha-viva`.**
 Roda → `roda-agua`;
 caldeira → `caldeira`; fios → `fios`; bateria → `bateria`; portões → `portao-eletronico` e
 `portao-de-bater`. Flor da lua → `flor-da-lua`; travessia do portal → `portal-travessia`;

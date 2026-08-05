@@ -3185,3 +3185,71 @@ waitForFunction folgado.
 **Armadilha para o futuro**: qualquer som ou ataque novo de bicho nasce DENTRO desta lei — o
 gate é de graça (`this.framed` / `this.tileFramed(x,y)`), e um evento novo sem ele reabre
 exatamente o bug que esta tarde fechou.
+
+---
+
+## A tocha viva — fogo que alcança um corpo o acende (2026-08-05)
+
+**A frase**: empurrar um monstro contra o fogo o transforma numa fogueira em pânico que corre do
+herói acendendo o que toca — e os outros monstros a temem como temem a luz. Não é um sistema novo:
+é a soma de três leis que já existiam e nunca tinham se encontrado. (1) O encontrão (`shove` →
+`'slammed'`) já dizia que encurralar contra parede é a jogada boa, e a melhor parede do jogo sempre
+foi o fogo; (2) fogo já era o único sistema que o jogador CONDUZ (`igniteFlammableAt`), só faltava
+o corpo do monstro entrar no grafo de combustível; (3) luz de fogueira já era parede para todo
+monstro — a tocha viva é essa lei ganhando pernas.
+
+**Como acende** (todas as portas passam por `GameScene.igniteEnemy` → `EnemyBase.igniteBody`):
+- **fogo que chega no tile de um corpo** — `igniteFlammableAt` agora tenta acender o ocupante
+  antes dos objetos. Isso cobre o espalhamento (um pulso que alcança o tile de quem ficou parado
+  na frente do fogo), o pavio, a bomba acendendo o mato e o RASTRO de outra tocha viva — um buraco
+  de fechadura só, nenhuma segunda tabela;
+- **o encontrão contra fogo** — `'slammed'` com `fireOnTile` no tile da parede: fogueira ACESA,
+  arbusto/mato em chamas, lava, graveto aceso no chão. Só o tile que ARDE conta — bater na borda
+  da luz (a parede invisível de `isTileLitByCampfire`, ~4 tiles) não acende nada. Luz repele,
+  fogo queima: são duas respostas distintas de propósito, é assim que se ensina a diferença;
+- **o arremesso que POUSA em fogo** (`'moved'` + `fireOnTile` no tile de chegada) — o graveto
+  aceso largado no chão como armadilha, e a lava para quem voa por cima.
+
+**O que o corpo em chamas é** (`EnemyBase`, zero mudança em qualquer espécie): o `EnemyManager`
+troca o update da espécie por `updateBurning` — não caça, não arma golpe, não atira. Corre DO
+herói (`moveAway`, cadência 190ms vs 260 do passo de caça), e isso é alavanca, não detalhe: andar
+sobre a tocha viva a CONDUZ para onde se quer que o fogo vá, igual se conduz o fogo de chão. Cada
+passo, `emberTouch` (static instalado pelo GameScene, o desenho do `frameGate`) tenta acender o
+próprio tile + 4 vizinhos. Quem escreve a própria posição (torreta, zora — o mesmo `canBeShoved`)
+arde PARADO. O fogo come o corpo em 2,6s e o mata de verdade (`die()`, marca no chão) — morte por
+fogo não paga moeda (`rewardKill` é só do golpe): o fogo comeu o corpo, e uma AoE que pagasse
+viraria fazenda.
+
+**Por que não é dano por tique**: fogo MATA neste jogo (o graveto aceso é a única coisa que ainda
+mata de um golpe — a chama é o topo da escada). Uma espécie "meio queimada" sobrevivente ensinaria
+que fogo é arranhão. E a ignição NÃO passa por `takeDamage` de propósito: o caminho do dano tem
+i-frames, que estão SEMPRE correndo no instante do encontrão (o arremesso veio de um golpe) — fogo
+que respeitasse i-frames nunca acenderia ninguém.
+
+**O medo da matilha**: no `blockedForEnemy` do EnemyManager, tile a Chebyshev ≤1 de um corpo em
+chamas é parede para os outros — a lei da luz no raio de um corpo. Duas consequências desenhadas:
+a matilha ABRE para a tocha viva passar, e o fogo não pula de corpo em corpo de graça — só alcança
+quem já estava colado quando ela acendeu (ou quem ela alcança correndo, já que o halo não bloqueia
+a própria tocha).
+
+**A luz sem quebrar a lei mais cara**: `FireLight3D` ganhou `setPosition` — move a ENTRADA do pool
+(`fires[]`), nunca cria luz. A entrada anda com a posição VISUAL do corpo (knockback incluso — a
+lei do overlay ancorado em `visualWorld`), o slot THREE é emprestado por proximidade de câmera
+como sempre, e a cache de sombra (`fireCastLists`) invalida só na troca de TILE, senão um fogo
+ambulante pagaria uma varredura de `solidTiles` por frame. As chamas no corpo são a arte da tocha
+do herói (`tiny-fire-0..2`), o corpo embaixo CARBONIZA multiplicativo via `restoreTint` (a lei do
+escurecer — acender billboard emissive é silhueta chapada), e a voz da morte tem o gate do quadro
+(`framed`): o rastro costuma terminar longe de onde começou.
+
+**Quem não arde**: só quem vive na água (`AQUATIC_ENEMY_KINDS` — a lista de espécie, não um
+override por classe). A gosma arde e a máquina arde: o graveto aceso já matava as duas, a chama
+não escolhe alvo.
+
+**Guarda**: `npm run playtest -- tocha-viva` — ignição por fogo-no-tile, zero luz THREE nova
+(compara `stats().pointLights` antes/durante/depois), fuga para longe do herói, fogo pulando para
+a segunda caveira, rastro acendendo mato autorado, morte com marca e a entrada devolvida ao pool.
+
+**Armadilha para o futuro**: espécie nova que escreva a própria posição precisa de
+`canBeShoved = false` TAMBÉM por causa do pânico (a tocha viva usa o mesmo flag para decidir se
+corre); e um caminho novo de fogo que não passe por `igniteFlammableAt` não acende corpo nenhum —
+o corpo é combustível DAQUELE grafo, não de qualquer chama desenhada.

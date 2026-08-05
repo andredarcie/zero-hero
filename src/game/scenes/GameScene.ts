@@ -45,7 +45,7 @@ import {
 } from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
 import { CoinManager } from '@/game/entities/CoinManager';
-import type { EnemyBase } from '@/game/entities/EnemyBase';
+import { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager, type EnemyHit } from '@/game/entities/EnemyManager';
 import { EnemySpawnerManager } from '@/game/entities/EnemySpawnerManager';
 import { RING_MAX_TILES, UndeadSpawnDirector } from '@/game/entities/UndeadSpawnDirector';
@@ -987,6 +987,15 @@ export class GameScene extends Phaser.Scene {
         }
         return found;
       },
+    });
+    // O RASTRO DA TOCHA VIVA (ver EnemyBase.updateBurning): cada passo de um corpo em chamas
+    // tenta acender o próprio tile e os 4 vizinhos — o MESMO buraco de fechadura do
+    // espalhamento, então mato, ponte, fogueira morta e OUTRO CORPO respondem igual, sem uma
+    // segunda tabela de combustível. Reinstalado a cada create: o closure fecha sobre a cena
+    // viva, e um restart (morte) não pode deixar um rastro apontando pra cena morta.
+    EnemyBase.setEmberTouch((wx, wy) => {
+      this.igniteFlammableAt(wx, wy);
+      for (const [dx, dy] of CARDINAL_DIRS) this.igniteFlammableAt(wx + dx, wy + dy);
     });
     const siegeOff = this.registry.get('appMode') === 'lab' || isPuzzleWorld();
     this.spawnDirector = siegeOff ? undefined : new UndeadSpawnDirector();
@@ -4482,6 +4491,17 @@ export class GameScene extends Phaser.Scene {
           this.world3d?.shake(120, 0.12, dx, dy); // a camera vai junto com o corpo contra a parede
           getSoundManager().playBodySlam();
         }
+        // A PAREDE QUE É FOGO ACENDE O QUE BATE NELA (a tocha viva — ver EnemyBase.igniteBody):
+        // encurralar contra fogueira acesa, arbusto em chamas ou lava transforma o melhor golpe
+        // do jogo na ignição do único sistema que o jogador conduz. Só o TILE que arde conta
+        // (fireOnTile) — o encontrão contra a borda da luz continua sendo só um encontrão.
+        if (this.fireOnTile(enemy.worldX + Math.sign(dx), enemy.worldY + Math.sign(dy))) {
+          this.igniteEnemy(enemy);
+        }
+      } else if (shoved === 'moved' && this.fireOnTile(enemy.worldX, enemy.worldY)) {
+        // O corpo CAIU num tile que arde (um graveto aceso no chão; lava, para quem voa por
+        // cima dela): mesmo destino do encontrão — o arremesso pousou dentro do fogo.
+        this.igniteEnemy(enemy);
       }
     } else {
       // O CORPO MORTO TAMBEM VOA. Aqui havia um `triggerKnockback`, e ele nao fazia nada: aquele
@@ -6038,6 +6058,13 @@ export class GameScene extends Phaser.Scene {
    * Returns true if something caught here.
    */
   private igniteFlammableAt(wx: number, wy: number): boolean {
+    // FOGO QUE CHEGA NUM TILE COME QUEM ESTIVER PARADO NELE: o corpo é combustível como o mato
+    // (a tocha viva — ver EnemyBase.igniteBody). Fora do retorno de propósito: o corpo NÃO faz
+    // o tile arder (ele corre dali, e fogo não nasce de tile vazio — a lição do graveto que o
+    // braço carrega embora), então a cadeia de espalhamento segue como se ele não estivesse lá.
+    const victim = this.enemyManager?.getEnemyAt(wx, wy);
+    if (victim) this.igniteEnemy(victim);
+
     const bush = this.getDryBushAt(wx, wy);
     if (bush?.ignite()) {
       this.spawnFireHitEffect(wx, wy);
@@ -6077,6 +6104,32 @@ export class GameScene extends Phaser.Scene {
     }
 
     return false;
+  }
+
+  /**
+   * O FOGO ALCANÇOU UM CORPO (a tocha viva). O estado é do corpo (igniteBody recusa morto,
+   * nascendo, já ardendo e quem vive na água); daqui sai só a ENCENAÇÃO da pegada — e ela tem
+   * o gate do quadro, porque um corpo acendendo fora da tela não pode falar (a lei do framed).
+   */
+  private igniteEnemy(enemy: EnemyBase): void {
+    if (!enemy.igniteBody()) return;
+    if (this.isTileFramed(enemy.worldX, enemy.worldY)) {
+      this.spawnFireHitEffect(enemy.worldX, enemy.worldY);
+    }
+  }
+
+  /**
+   * Este tile É fogo agora? — a pergunta do encontrão (ver o `shove` no strike). Não confundir
+   * com a LUZ da fogueira (isTileLitByCampfire, ~4 tiles de raio): bater um corpo contra a
+   * borda da luz não acende nada — luz repele, FOGO queima. Aqui só o que visivelmente arde no
+   * próprio tile: fogueira acesa, arbusto/mato em chamas, lava e um graveto aceso no chão.
+   */
+  private fireOnTile(wx: number, wy: number): boolean {
+    if (this.getCampfireAt(wx, wy)?.isLit) return true;
+    if (this.getDryBushAt(wx, wy)?.isBurning) return true;
+    if (this.getTallGrassAt(wx, wy)?.isBurning) return true;
+    if (this.getLavaAt(wx, wy)) return true;
+    return this.itemManager?.hasLitItemAt(wx, wy) ?? false;
   }
 
   private spawnFireHitEffect(wx: number, wy: number): void {

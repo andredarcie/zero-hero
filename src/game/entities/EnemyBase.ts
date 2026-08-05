@@ -3,9 +3,11 @@ import Phaser from 'phaser';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import { FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE, world3d } from '@/game/render3d/World3D';
+import {
+  FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE, world3d, type FireLight3D,
+} from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import { FLYING_ENEMY_KINDS, type EnemyKind } from '@/game/world/ScreenContent';
+import { AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS, type EnemyKind } from '@/game/world/ScreenContent';
 
 /** Ver `hurtInvulnMs`. Os ~32 frames do Link to the Past, arredondados para baixo. */
 const HURT_INVULN_MS = 450;
@@ -123,6 +125,45 @@ const ATTACK_RECOVER_MS = 450;
 const NOTICE_FLASH = 0xffc46e;
 const NOTICE_REARM_MS = 2500;
 
+// ── A TOCHA VIVA ─────────────────────────────────────────────────────────────
+//
+// Fogo que ALCANÇA um corpo o acende — e um monstro em chamas deixa de ser a espécie dele e
+// vira uma peça do ÚNICO sistema que o jogador conduz: uma fogueira em pânico, que corre do
+// herói acendendo o que toca (mato, ponte, fogueira morta e OUTRO CORPO, tudo pelo mesmo
+// buraco de fechadura do espalhamento), que os outros monstros temem como temem a luz — e que
+// o fogo termina de comer sozinho. Nada disso é uma regra nova: é a lei "luz de fogueira é
+// parede para todo monstro" ganhando pernas, e a resposta à pergunta que a mecânica do
+// arremesso deixou aberta — o encontrão contra a parede tem peso próprio, e a melhor parede
+// do jogo sempre foi o fogo.
+
+/**
+ * Quanto tempo o fogo leva para comer um corpo. Não é dano por tique de propósito: fogo MATA
+ * neste jogo (só o graveto ACESO ainda mata de um golpe — a chama é o topo da escada), e uma
+ * espécie "meio queimada" sobrevivente ensinaria que fogo é um arranhão. O que a duração compra
+ * é a CENA: ~2,5s de corrida em pânico dá 2-3 telas de rastro, e o corpo morre longe de onde
+ * acendeu — que é exatamente o que uma tocha viva promete.
+ */
+const BURN_TOTAL_MS = 2600;
+/**
+ * A cadência do pânico, mais rápida que o passo de caça (260ms): correr EM CHAMAS tem de ler
+ * diferente de perseguir. Cada passo também é o tique do rastro (ver updateBurning).
+ */
+const BURN_PANIC_STEP_MS = 190;
+/** Os mesmos frames da chama da tocha do herói: um fogo, uma arte. */
+const BURN_FLAME_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
+const BURN_FLAME_FRAME_MS = 95;
+/**
+ * O tom de CARVÃO para onde o corpo escurece enquanto queima (multiplicado sobre woundedShade,
+ * nunca substituindo — a mesma lei do dano: corpo responde escurecendo, porque acender um
+ * billboard `emissive` é silhueta chapada que o bloom espalha). O brilho do fogo fica nas
+ * chamas e na luz emprestada do pool; o corpo embaixo delas vira cinza.
+ */
+const BURN_CHAR_R = 0x3a;
+const BURN_CHAR_G = 0x24;
+const BURN_CHAR_B = 0x1d;
+/** Reescreve o tom de carvão no corpo a cada tanto — não a cada frame (apply() reescreve o mesh). */
+const BURN_CHAR_TINT_MS = 150;
+
 export abstract class EnemyBase {
   public worldX: number;
   public worldY: number;
@@ -189,6 +230,30 @@ export abstract class EnemyBase {
   private noticeSeen = false;
   private noticeVirgin = true;
   private noticeRearmMs = NOTICE_REARM_MS;
+
+  // A TOCHA VIVA (ver o bloco de constantes): > 0 = o fogo está comendo este corpo. As chamas e
+  // a luz emprestada são guardadas porque morrem com o corpo (die/despawn/destroy), nunca soltas.
+  private burnLeftMs = 0;
+  private burnStepMs = 0;
+  private burnTintMs = 0;
+  // Quão carbonizado o corpo JÁ ficou (0..1) — separado do relógio de propósito: é história
+  // visual, não estado. clearBurn zera o relógio na morte, e sem este campo o desmanche
+  // devolveria o corpo queimado à cor limpa da espécie no meio do gesto.
+  private burnChar01 = 0;
+  private burnFlameFrame = -1;
+  private burnFlames: Billboard3D[] = [];
+  private burnFire?: FireLight3D;
+
+  /**
+   * ONDE O CORPO EM CHAMAS TOCA, O FOGO TENTA PEGAR — instalado pelo GameScene (o dono de
+   * igniteFlammableAt), o mesmo desenho do frameGate: um static porque a lei vale para todo
+   * corpo, e o rastro não pode depender de cada espécie lembrar de espalhar.
+   */
+  private static emberTouch: (wx: number, wy: number) => void = () => {};
+
+  public static setEmberTouch(touch: (wx: number, wy: number) => void): void {
+    EnemyBase.emberTouch = touch;
+  }
 
   protected readonly scene: Phaser.Scene;
   protected readonly sprite: Billboard3D;
@@ -290,6 +355,20 @@ export abstract class EnemyBase {
   /** True enquanto um golpe recebido ainda segura este corpo (ver hitstunMs). */
   public get isStunned(): boolean {
     return this.hitstunMs > 0;
+  }
+
+  /** O fogo está comendo este corpo? (a tocha viva — ver BURN_TOTAL_MS e o EnemyManager) */
+  public get isBurning(): boolean {
+    return this.alive && this.burnLeftMs > 0;
+  }
+
+  /**
+   * Este corpo PEGA fogo? A resposta vem da espécie-lista, não de um override: quem vive na
+   * água (o zora) é o único que o fogo não alcança — todo o resto arde, inclusive a máquina,
+   * porque o graveto aceso já matava tudo em um golpe e a chama não escolhe alvo.
+   */
+  protected get flammable(): boolean {
+    return !AQUATIC_ENEMY_KINDS.has(this.kind);
   }
 
   /** Um golpe landou: este corpo nao anda nem bate pelos proximos `ms`. */
@@ -725,6 +804,158 @@ export abstract class EnemyBase {
     this.sprite.setAlpha(on ? HURT_BLINK_ALPHA : 1);
   }
 
+  // ── A TOCHA VIVA (ver o bloco de constantes) ────────────────────────────────
+
+  /**
+   * O FOGO ALCANÇOU ESTE CORPO. Devolve `false` quando recusa: morto, já ardendo, nascendo
+   * (a invulnerabilidade do spawn vale para chama também) ou da água (ver `flammable`).
+   *
+   * NÃO passa por `takeDamage` de propósito, e isso importa duas vezes: a ignição não é dano
+   * (o corpo morre no fim do relógio, não aqui), e o caminho do dano tem i-frames — que estão
+   * SEMPRE correndo no instante do encontrão, porque o arremesso vem de um golpe. Fogo que
+   * respeitasse i-frames nunca acenderia ninguém.
+   */
+  public igniteBody(): boolean {
+    if (!this.alive || this.burnLeftMs > 0 || this.isSpawning || !this.flammable) return false;
+    this.burnLeftMs = BURN_TOTAL_MS;
+    this.burnStepMs = 0;
+    this.burnTintMs = 0;
+    // O golpe armado morre no fogo: um corpo em pânico não cumpre promessa nenhuma. Ao contrário
+    // do die(), aqui também não há corrida com o tween da marca — um corpo em chamas nunca mais
+    // roda tickWindup (o EnemyManager troca o update da espécie pelo pânico).
+    this.windupLeftMs = 0;
+    this.recoverMs = 0;
+    this.clearWindup();
+
+    // Duas chamas da MESMA arte da tocha do herói, cavalgando o corpo (ver renderBurnFlames):
+    // uma larga na base e uma menor na cabeça — a silhueta de coisa-pegando-fogo, não um efeito
+    // colado num ponto. `emissive` para arder no escuro, e NENHUMA luz própria: a luz de verdade
+    // vem emprestada do pool fixo logo abaixo.
+    for (let i = 0; i < 2; i++) {
+      this.burnFlames.push(
+        world3d()
+          .addBillboard(BURN_FLAME_KEYS[i], 0, {
+            centered: true, fog: false, depthWrite: false, emissive: true,
+            alphaTest: 0.05, emissiveBoost: 3,
+          })
+          .setPosition(this.worldX, this.worldY)
+          .setElevation(i === 0 ? 0.26 : 0.58)
+          .setDisplaySize(i === 0 ? 0.46 : 0.3, i === 0 ? 0.46 : 0.3)
+          .setAlpha(0.95),
+      );
+    }
+    // A luz É uma fogueira: a mesma entrada do pool fixo que arbusto e lava usam (nenhuma luz
+    // THREE nasce aqui — a lei do FIRE_LIGHT_SLOTS), só que andando (ver setPosition no render).
+    // É também o que faz os outros monstros abrirem caminho de verdade: a parede que eles
+    // respeitam no EnemyManager é a leitura LÓGICA desta mesma luz.
+    this.burnFire = world3d().addFireLight(this.worldX, this.worldY, true);
+    this.burnFire.setIntensityScale(0.55);
+    return true;
+  }
+
+  /**
+   * O relógio do fogo. Corre no EnemyManager para TODO corpo, todo frame — como os i-frames, e
+   * pelo mesmo motivo: o update da espécie não roda enquanto o corpo arde (vira pânico), e o
+   * fogo não pode congelar junto com a IA fora do alcance dela. No fim, o corpo cai sozinho:
+   * a morte é `die()` de verdade (marca no chão, desmanche) — o fogo matou, ninguém despejou.
+   */
+  public tickBurn(delta: number): void {
+    if (!this.alive || this.burnLeftMs <= 0) return;
+    this.burnLeftMs = Math.max(0, this.burnLeftMs - delta);
+    this.burnChar01 = Math.max(this.burnChar01, (1 - this.burnLeftMs / BURN_TOTAL_MS) * 0.85);
+
+    // O corpo CARBONIZA no caminho: o tom de carvão avança com o relógio (ver BURN_CHAR_R e
+    // burnCharShade — restoreTint passa por lá, então piscada de ameaça e troca de textura de
+    // dano devolvem o corpo queimado, nunca o corpo limpo).
+    this.burnTintMs += delta;
+    if (this.burnTintMs >= BURN_CHAR_TINT_MS) {
+      this.burnTintMs = 0;
+      this.restoreTint();
+    }
+
+    if (this.burnLeftMs <= 0) {
+      // A voz da morte com o gate do quadro (a lei: fora da tela o corpo não fala) — o rastro
+      // em chamas costuma terminar longe de onde começou.
+      if (this.framed) getSoundManager().playEnemyDeath(this.kind);
+      this.die();
+    }
+  }
+
+  /**
+   * O PÂNICO — o que roda NO LUGAR do update da espécie enquanto o corpo arde (EnemyManager).
+   *
+   * Corre DO HERÓI, e isso é uma alavanca e não um detalhe: fogo é o sistema que o jogador
+   * conduz, então a tocha viva também se conduz — andar sobre ela a empurra para onde se quer
+   * que o fogo vá. Cada passo tenta acender o próprio tile e os 4 vizinhos (emberTouch — o
+   * mesmo buraco de fechadura do espalhamento), e é assim que o fogo PULA de corpo em corpo:
+   * o vizinho do rastro pode ser mato, ponte, fogueira morta ou outro monstro.
+   *
+   * O atordoamento vale aqui também (um golpe ainda segura o corpo), e quem escreve a própria
+   * posição (torreta, zora — ver canBeShoved) arde PARADO: mover mobília seria o mesmo bug que
+   * o arremesso já recusa.
+   */
+  public updateBurning(
+    delta: number,
+    playerWorldX: number,
+    playerWorldY: number,
+    isBlocked: (wx: number, wy: number) => boolean,
+  ): void {
+    if (this.tickHitstun(delta)) return;
+    this.burnStepMs += delta;
+    if (this.burnStepMs < BURN_PANIC_STEP_MS) return;
+    this.burnStepMs = 0;
+    if (this.canBeShoved) this.moveAway(playerWorldX, playerWorldY, isBlocked);
+    EnemyBase.emberTouch(this.worldX, this.worldY);
+  }
+
+  /**
+   * As chamas e a luz seguem o corpo DESENHADO (posição visual, com o deslize do passo e do
+   * arremesso), nunca o tile lógico — a mesma lei do overlay 2D preso ao herói: a lógica pula
+   * pro destino quando o passo começa, e fogo parado esperando o corpo chegar lê como erro.
+   */
+  private renderBurnFlames(): void {
+    const t = this.scene.time.now;
+    const vx = this.worldX + this.knockbackOffsetX;
+    const vy = this.worldY + this.knockbackOffsetY;
+    this.burnFire?.setPosition(vx, vy);
+    const frame = Math.floor(t / BURN_FLAME_FRAME_MS);
+    const swap = frame !== this.burnFlameFrame;
+    this.burnFlameFrame = frame;
+    for (let i = 0; i < this.burnFlames.length; i++) {
+      const flame = this.burnFlames[i];
+      const sway = Math.sin(t * 0.011 + i * 2.4) * 0.06;
+      flame
+        .setPosition(vx + (i === 0 ? -0.08 : 0.1) + sway, vy)
+        .setElevation((i === 0 ? 0.26 : 0.58) + Math.sin(t * 0.017 + i * 1.7) * 0.04);
+      if (swap) flame.setTexture(BURN_FLAME_KEYS[(frame + i) % BURN_FLAME_KEYS.length]);
+    }
+  }
+
+  /** O tom atual do carvão: a base (já ferida) puxada para BURN_CHAR_* pelo quanto já queimou.
+   * Lê `burnChar01` (história) e não o relógio: um corpo que o fogo matou DESMANCHA queimado. */
+  private burnCharShade(base: number): number {
+    if (this.burnChar01 <= 0) return base;
+    const progress = this.burnChar01;
+    const mix = (shift: number, target: number): number => {
+      const from = (base >> shift) & 0xff;
+      return Math.round(from + (target - from) * progress) << shift;
+    };
+    return mix(16, BURN_CHAR_R) | mix(8, BURN_CHAR_G) | mix(0, BURN_CHAR_B);
+  }
+
+  /** Apaga o desenho do fogo (chamas + luz emprestada). O ESTADO morre com o corpo — quem chama
+   * é die/despawn/destroy, e um corpo que sobrevive a isto não existe. */
+  private clearBurn(): void {
+    this.burnLeftMs = 0;
+    for (const flame of this.burnFlames) {
+      if (this.scene.tweens) this.scene.tweens.killTweensOf(flame);
+      flame.destroy();
+    }
+    this.burnFlames.length = 0;
+    this.burnFire?.destroy();
+    this.burnFire = undefined;
+  }
+
   /**
    * O INSTANTE DE NOTAR (ver NOTICE_REARM_MS). A espécie diz, todo tick, se ela VÊ o herói — e
    * este método descobre a fronteira: a primeira transição vagar→caçar dispara o susto
@@ -927,7 +1158,9 @@ export abstract class EnemyBase {
    * la o devolveria branco, e ele leria como o outro personagem por um instante.
    */
   protected restoreTint(): void {
-    const shade = this.woundedShade();
+    // O carvão da tocha viva multiplica por cima do tom ferido: um corpo em chamas que pisca
+    // de ameaça ou troca a textura de dano volta QUEIMADO, nunca limpo.
+    const shade = this.burnCharShade(this.woundedShade());
     if (shade === 0xffffff) this.sprite.clearTint();
     else this.sprite.setTint(shade);
   }
@@ -1062,6 +1295,7 @@ export abstract class EnemyBase {
     this.lastScreen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
     this.lastTileSize = tileSize;
 
+    if (this.burnLeftMs > 0) this.renderBurnFlames();
     this.onRendered(camera, tileSize);
   }
 
@@ -1076,6 +1310,7 @@ export abstract class EnemyBase {
   }
 
   public destroy(): void {
+    this.clearBurn();
     this.clearWindup();
     if (this.scene.tweens) {
       this.scene.tweens.killTweensOf(this.sprite);
@@ -1086,6 +1321,9 @@ export abstract class EnemyBase {
 
   protected die(): void {
     this.alive = false;
+    // O fogo morre com o corpo (o desmanche já é cinza): chamas penduradas num corpo que está
+    // encolhendo leriam como um segundo incêndio, e a luz emprestada tem de voltar pro pool.
+    this.clearBurn();
     // O golpe armado morre com quem o armou. `clearWindup` sozinho apaga só o DESENHO do aviso, e
     // de propósito: ele também é chamado pelo fim do tween da marca, que fecha no mesmo instante em
     // que `tickWindup` resolve o golpe — zerar o relógio de lá engoliria o acerto uma vez a cada
@@ -1166,6 +1404,7 @@ export abstract class EnemyBase {
   public despawn(): void {
     if (!this.alive) return;
     this.alive = false;
+    this.clearBurn(); // um corpo em chamas despejado a 18 tiles não pode vazar chama nem luz
     this.windupLeftMs = 0; // ver `die()`: o relógio só se zera onde não há corrida com o tween
     this.clearWindup();
     this.scene.tweens.killTweensOf(this);
