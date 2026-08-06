@@ -95,7 +95,10 @@ export const DUNGEON_BRIEFS: readonly DungeonBrief[] = [
     species: ['undead', 'bat'],
     dens: 2,
     locks: ['key', 'plate'],
-    treasure: [['wood', 3]],
+    // A PÁ, um degrau depois da foice (d3): a foice dá a semente, a pá dá o buraco — é a ordem
+    // em que o loop da fazenda se completa na mão do jogador. Era um kit de gravetos, do tempo
+    // em que o buraco só existia autorado (ver "os tesouros sobem de degrau" no progress.md).
+    treasure: [['shovel', 1]],
     landmark: 'poco',
   },
   {
@@ -107,7 +110,9 @@ export const DUNGEON_BRIEFS: readonly DungeonBrief[] = [
     species: ['undead', 'spider', 'slime'],
     dens: 2,
     locks: ['key', 'plate'],
-    treasure: [['wood', 3], ['heart', 1]],
+    // O PACOTE DE SEMENTES CARNÍVORAS, um degrau depois da pá (d4): com o kit da fazenda
+    // completo, a d5 entrega a colheita que se defende sozinha. Era um kit de gravetos.
+    treasure: [['carnivoreSeeds', 1], ['heart', 1]],
     landmark: 'salao',
   },
   {

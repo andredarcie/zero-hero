@@ -105,9 +105,8 @@ export class PreloadScene extends Phaser.Scene {
     // world; hold the scene hand-off until both loaders are done.
     void preloadTextures3D().then(() => {
       const params = new URLSearchParams(window.location.search);
-      // `?explorer` cai direto numa expedicao ao mundo infinito (tambem a terceira porta do
-      // titulo). `?explorerSeed=N` prende a semente: o playtest precisa do MESMO mato toda vez,
-      // e um mundo sorteado nao pode ser afirmado sobre.
+      // `?explorer` cai direto no construtor de chunks. `?explorerSeed=N` prende a semente
+      // da run para testes deterministas; o terreno em si vem da biblioteca autorada.
       if (params.has('explorer')) {
         const seed = params.get('explorerSeed');
         if (seed !== null && /^\d+$/u.test(seed)) pinExplorerSeed(Number(seed));
@@ -122,11 +121,10 @@ export class PreloadScene extends Phaser.Scene {
         this.scene.start('game');
         return;
       }
-      // Dev shortcut (localhost only): `?play` skips the title and drops straight into
-      // gameplay — e.g. http://localhost:5209/?play. Com um save de aventura, ele se comporta
-      // como o Continue do titulo (acorda na fogueira em que parou).
+      // Dev shortcut: skip the title and start the same chunk-builder run as the main button.
       if (import.meta.env.DEV && params.has('play')) {
         if (hasAdventureSave()) requestAdventureRespawn();
+        startExplorerRun();
         this.scene.start('game');
         return;
       }

@@ -6,7 +6,10 @@
 //
 //   A (Z)  → a espada, na direcao em que o heroi olha. NAO precisa encostar.
 //   B (X)  → o item escolhido, no tile a frente: usa se o tile pedir, pousa ali se nao pedir.
-//   ESC    → a subtela (a mochila + os coracoes), que escolhe o item do B.
+//   ESC    → a subtela (a mochila + os coracoes + o mapa), com o jogo congelado.
+//
+// (Escolher o item do B tem HOJE dois caminhos: esta subtela, que congela tudo, e a BOLSA, que
+// nao congela nada — `npm run playtest -- bolsa`. O item 7 abaixo guarda a subtela.)
 //
 // O que este cenario guarda, na ordem em que uma coisa depende da outra:
 //

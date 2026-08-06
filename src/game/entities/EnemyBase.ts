@@ -1477,6 +1477,61 @@ export abstract class EnemyBase {
    * campfire's safety. The skull turns pitch-black silhouette and melts back into the
    * ground while wisps of shadow curl up from the spot. Distinct from die(), a combat kill.
    */
+  /**
+   * DEVORADO — a planta carnívora prendeu este corpo na mordida (ver CarnivorousPlantObject).
+   * Remoção terminal como a do despawn, mas SEM funeral e SEM recibo: nada de moeda (quem
+   * ficou com o corpo foi a planta — e uma cova vizinha viraria fábrica de moedas AFK), nada
+   * de ossada (a marca no chão mentiria: o corpo está DENTRO dela).
+   *
+   * O desenho é um ARRASTO de verdade: com `alive = false` a lógica solta o sprite (o mesmo
+   * canal em que o despawn derrete o corpo parado), então daqui ele é PUXADO da própria casa
+   * até a boca — acelerando (`Quad.easeIn`: quem puxa é a planta), subindo à altura da cabeça
+   * dela, encolhendo goela adentro e SE DEBATENDO no caminho (o ângulo balança num tween
+   * próprio). Ele fica visível o arrasto quase inteiro — só apaga no último trecho, já dentro
+   * do arco da bocarra, que fecha em cima dele (o gulp da planta é cronometrado neste mesmo
+   * `dragMs`: uma fonte só, a dela).
+   */
+  public consume(mouthX: number, mouthY: number, dragMs = 300): void {
+    if (!this.alive) return;
+    this.alive = false;
+    this.clearBurn(); // um corpo em chamas engolido não pode deixar chama nem luz penduradas
+    this.windupLeftMs = 0;
+    this.clearWindup();
+    this.scene.tweens.killTweensOf(this);
+    this.stepTween?.stop();
+    this.blinkDown = false;
+    this.sprite.setAlpha(1);
+    this.scene.tweens.add({
+      targets: this.sprite,
+      x: mouthX,
+      y: mouthY,
+      elevation: 0.4, // erguido até a boca — a cabeça da planta mora no alto do talo
+      scaleX: 0.12,
+      scaleY: 0.12,
+      duration: dragMs,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        this.sprite.setVisible(false);
+        this.pendingRemoval = true;
+      },
+    });
+    this.scene.tweens.add({
+      targets: this.sprite,
+      angle: { from: -14, to: 14 },
+      duration: Math.max(60, dragMs / 4),
+      yoyo: true,
+      repeat: 1,
+      ease: 'Sine.easeInOut',
+    });
+    this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: 0,
+      delay: dragMs * 0.65,
+      duration: dragMs * 0.35,
+      ease: 'Quad.easeIn',
+    });
+  }
+
   public despawn(): void {
     if (!this.alive) return;
     this.alive = false;

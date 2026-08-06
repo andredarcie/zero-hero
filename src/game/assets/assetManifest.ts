@@ -102,6 +102,23 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: o buraco de plantio pronto (0) + os tres tempos da cavada da pa
+    // (raspao 1, depressao 2, fundo 3). O frame final fica no TOPO da coluna para toda
+    // referencia `frame: 0` antiga continuar apontando pro buraco de sempre.
+    key: ASSET_KEYS.plantHole,
+    path: '/assets/environment/props/plant_hole.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: a planta carnivora em 6 tempos — fechada, bote, engolida, mastiga A/B
+    // e a murcha. Entra como SHEET porque o editor desenha um frame (a fechada).
+    key: ASSET_KEYS.carnivorousPlant,
+    path: '/assets/environment/props/carnivorous_plant.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: as 9 poses de UMA flor da lua abrindo (ver MOONFLOWER_FRAMES) — cinco em pe
     // e quatro deitadas. Entra como SHEET porque o editor precisa desenhar UM frame (o aberto).
     key: ASSET_KEYS.moonflower,
@@ -275,6 +292,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.lavaBootsIcon,  path: '/assets/ui/icons/lava_boots_icon.png' },
   { key: ASSET_KEYS.pickaxeIcon,    path: '/assets/ui/icons/pickaxe_icon.png' },
   { key: ASSET_KEYS.scytheIcon,     path: '/assets/ui/icons/scythe_icon.png' },
+  { key: ASSET_KEYS.shovelIcon,     path: '/assets/ui/icons/shovel_icon.png' },
   { key: ASSET_KEYS.woodIcon,       path: '/assets/ui/icons/wood_icon.png' },
   { key: ASSET_KEYS.woodOnFireIcon, path: '/assets/ui/icons/wood_on_fire_icon.png' },
   { key: ASSET_KEYS.woodItem,       path: '/assets/items/collectibles/wood.png' },
@@ -287,7 +305,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.cuttingGrass2,  path: '/assets/environment/props/cuting_grass2.png' },
   { key: ASSET_KEYS.cuttingGrass3,  path: '/assets/environment/props/cuting_grass3.png' },
   { key: ASSET_KEYS.seedsItem,      path: '/assets/items/collectibles/seeds.png' },
-  { key: ASSET_KEYS.plantHole,      path: '/assets/environment/props/plant_hole.png' },
+  { key: ASSET_KEYS.carnivoreSeedsItem, path: '/assets/items/collectibles/carnivore_seeds.png' },
   { key: ASSET_KEYS.plantMound,     path: '/assets/environment/props/plant_mound.png' },
   { key: ASSET_KEYS.cutGrass,       path: '/assets/environment/props/cut_grass.png' },
   { key: ASSET_KEYS.cutGrassWind0,  path: '/assets/environment/props/cut_grass_wind0.png' },

@@ -1,4 +1,4 @@
-// Dev-only launcher: [I] pops a menu to jump between every entry point of the project —
+// Dev-only launcher: Shift+I pops a menu to jump between every entry point of the project —
 // the game (with and without the intro), the world editor and the puzzle lab (editor or
 // play). Localhost only; it never ships (the whole module no-ops unless DEV).
 //
@@ -6,8 +6,10 @@
 // swaps and while a Phaser scene is paused, and every jump is a full page load anyway
 // (Phaser scene changes do not hot-reload — see CLAUDE.md).
 //
-// Key choice: [I] is free in the game, but inside the EDITOR it is already the eyedropper
-// ("conta-gotas"), so there the launcher answers to Shift+I instead of stealing the tool.
+// Key choice: SHIFT+I, EM TODA PARTE. Plain [I] used to work outside the editor, and it stopped
+// being free twice over: no editor ele já era o conta-gotas, e no JOGO ele passou a ser A BOLSA
+// (ver QuickBag). Uma tecla de ferramenta de dev não pode disputar a tecla de um gesto do jogo —
+// nem por um frame, nem "só no localhost", que é exatamente onde o jogo é testado.
 
 const STYLE_ID = 'zh-launcher-style';
 const ROOT_ID = 'zh-launcher-root';
@@ -23,9 +25,8 @@ type Entry = {
 const ENTRIES: Entry[] = [
   { group: 'Jogo', label: 'Jogar o jogo', hint: 'Do começo: o título, e dele o mundo', url: '/' },
   { group: 'Jogo', label: 'Jogar pulando o título', hint: 'Cai direto no mundo (?play)', url: '/?play' },
-  // O explorador perdeu a porta do TÍTULO (que hoje tem só a aventura), não a existência —
-  // e sem uma entrada aqui ele ficaria a um parâmetro de URL decorado de distância.
-  { group: 'Jogo', label: 'Explorador', hint: 'Uma expedição ao mundo infinito (?explorer)', url: '/?explorer' },
+  // Atalho direto para a mesma run de construção, útil para depurar sem atravessar o título.
+  { group: 'Jogo', label: 'Construtor direto', hint: 'Run de chunks sem o título (?explorer)', url: '/?explorer' },
   { group: 'Laboratório de puzzles', label: 'Jogar o level 1', hint: 'Joga levels/level-1.json direto', url: '/lab?play' },
   { group: 'Laboratório de puzzles', label: 'Editar o level 1', hint: 'Editor do lab — monte o puzzle e [P] testa', url: '/lab' },
   { group: 'Laboratório de puzzles', label: 'Editar o level 2', hint: 'Editor do lab apontado no level 2', url: '/lab?level=2' },
@@ -92,12 +93,9 @@ const CSS = `
 }
 `;
 
-// The lab and the editor share EditorDomUi, whose own [I] is the eyedropper — so there the
-// launcher listens for Shift+I. Detected from the live DOM, not from the app mode, because
-// this module boots before any scene does.
-const editorIsOpen = (): boolean => document.querySelector('.editor-panel, #editor-panel, .zh-editor') !== null
-  || window.location.pathname.endsWith('/editor')
-  || (window.location.pathname.endsWith('/lab') && !new URLSearchParams(window.location.search).has('play'));
+// (Havia aqui um `editorIsOpen()` que farejava o DOM para decidir se [I] era do conta-gotas ou
+// do launcher. Ele morreu junto com a regra que dependia dele: hoje o launcher é Shift+I em toda
+// parte, e não há mais nada a detectar.)
 
 const isTypingTarget = (el: EventTarget | null): boolean => {
   const node = el as HTMLElement | null;
@@ -164,8 +162,8 @@ class DevLauncher {
 
     if (event.key.toLowerCase() !== 'i' || event.ctrlKey || event.metaKey || event.altKey) return;
     if (isTypingTarget(event.target)) return;
-    // In the editor, plain [I] is the eyedropper — only Shift+I opens the launcher there.
-    if (editorIsOpen() && !event.shiftKey) return;
+    // Ver o cabeçalho: plain [I] é do conta-gotas no editor e DA BOLSA no jogo. Só Shift+I é do dev.
+    if (!event.shiftKey) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -238,7 +236,7 @@ class DevLauncher {
 
     const foot = document.createElement('div');
     foot.className = 'zh-lx-foot';
-    foot.textContent = `1-${ENTRIES.length} ou ↑↓ + Enter · ESC fecha · no editor abra com Shift+I`;
+    foot.textContent = `1-${ENTRIES.length} ou ↑↓ + Enter · ESC fecha · abre com Shift+I`;
     panel.appendChild(foot);
 
     root.appendChild(panel);

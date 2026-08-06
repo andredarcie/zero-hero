@@ -3487,3 +3487,693 @@ portas da escada), já que tudo o que o brief pedia a mais virava beco opcional.
 da escada, atravessa o reload da aba, `?dungeons=static` ainda lê o Zelda 1 do disco, e "Start over"
 cunha outra semente. A qualidade da planta em massa é da auditoria, não do Playwright: o gerador é
 TS puro de propósito, e medir 1.350 sementes num `tsx` custa segundos onde o browser custaria horas.
+
+## A bolsa — trocar de item com o jogo RODANDO (2026-08-05)
+
+A mochila tinha uma porta só, e ela congelava o mundo: `ESC` → a subtela do Zelda (corações,
+grade de itens, mapa), com `scene.pause()` por baixo. Isso responde bem à pergunta *"o que eu
+tenho?"* e responde errado à outra, que é a que aparece o tempo todo desde a reforma do combate:
+*"preciso da picareta AGORA, com a caveira em cima de mim"*. Com o mundo parado, essa troca custa
+zero — e escolher a ferramenta certa deixa de ser uma decisão para virar burocracia entre dois
+golpes.
+
+A **bolsa** (`src/game/runtime/QuickBag.ts`) é a segunda porta, e a diferença dela é uma só: **ela
+não pausa nada**. O fogo continua se espalhando, a caveira continua vindo, o relógio da cena
+continua andando. É o contrato de The Last of Us — a mochila é um lugar perigoso de se estar.
+
+- **`I` no teclado, um botão de bolsa no dedo** (círculo logo acima do par A/B, no alcance do mesmo
+  polegar). O `I` era do **DevLauncher**, que passou a atender só a **Shift+I** — ele já era Shift+I
+  dentro do editor (lá o `[I]` é o conta-gotas), então a regra ficou uma só em vez de depender de
+  onde você está. Uma tecla de ferramenta de dev não pode disputar a tecla de um gesto do jogo,
+  nem "só no localhost", que é exatamente onde o jogo é testado.
+- **Só para os lados, e a ação confirma.** O cursor anda com ← →; o **X** (o próprio botão B —
+  a bolsa decide o que o B carrega, então é o B que fecha o assunto) equipa e fecha. Apontar e
+  equipar são **dois gestos**: trocar de item sem querer, com um bicho em cima, seria pior do que
+  não trocar. No dedo, o primeiro toque num ícone aponta e o segundo equipa — mesma frase.
+- **O que está na mão AGORA tem marca própria** (um ponto de brasa sob o slot), separado do anel
+  do cursor. Sem isso "onde eu estou olhando" e "o que o B usa" viram a mesma leitura, e são
+  justamente as duas coisas que este desenho separou.
+- **Grande, e no MEIO DO QUADRO** (slots de 76px, nome em 23px, tudo centrado nos dois eixos): a
+  bolsa é a coisa que você está fazendo agora, e a primeira versão — uma fileirinha de 44px no
+  rodapé — lia como HUD, aquela tarja que se aprende a ignorar. O que ela **não** tem é moldura:
+  sem caixa, sem título, sem borda opaca, só os ícones sobre o mundo e uma **faixa** de sombra que
+  some para cima e para baixo. Escurecer a tela inteira diria "o jogo parou", que é a única coisa
+  que este modo não pode dizer; a faixa deixa ver o que se aproxima. A fileira **desliza sob o
+  cursor** (uma bobina, não uma grade que cresce): com quinze itens continua sendo uma fileira, e
+  as medidas moram num lugar só (`SLOT_PX`/`GAP_PX`/`PAD_X`) porque a CSS e a aritmética do deslize
+  são a mesma bobina vista de dois lados — um slot mais largo do que a conta supõe descentra o
+  cursor, e o erro se acumula slot a slot.
+  O preço de estar no centro é honesto e foi escolhido: a fileira passa por cima do herói, que fica
+  no centro da tela. É o mesmo trato do resto do modo — folhear custa alguma coisa.
+- **O preço de folhear**: os pés presos (`PlayerMovementController.hold` — é `root` sem relógio,
+  então o passo em curso TERMINA no tile em vez de congelar em cima de uma aresta) e os dois botões
+  calados (`canAct`). O escudo cai junto, porque `isRooted` passou a incluir a bolsa: quem está com
+  as duas mãos dentro da mochila não apara tiro nenhum.
+- **Apanhar FECHA a bolsa.** Ela é a única tela do jogo que fica aberta com o mundo correndo, então
+  é a única que o mundo pode fechar. Um herói apanhando enquanto folheia calmamente uma fileira de
+  ícones desmente, num quadro, a promessa inteira do modo. Virar estátua (o cuspe do zora) idem.
+  O **atordoamento atravessa** a abertura, ao contrário da pausa: apagar a pancada que o herói
+  acabou de levar seria comprar tempo de recuperação abrindo um menu.
+
+### A armadilha que isso desenterrou: o B repetia
+
+`GameScene.pressUse` nunca filtrou a repetição de tecla do navegador — o `pressAttack` filtra desde
+sempre (`event.repeat`), o B não. Com a bolsa atrás da mesma tecla isso virou um bug de verdade:
+segurar o X um instante a mais para equipar fazia o primeiro `keydown` **confirmar** o item e a
+repetição seguinte, já com a bolsa fechada, **usá-lo** no tile da frente. O conserto é a mesma
+linha que o A já tinha, e ela também deixa os dois botões coerentes: quem quer usar duas vezes
+aperta duas vezes, e a cadência (`USE_COOLDOWN_MS`) continua separando os apertos.
+
+Pela mesma razão, a bolsa **não escuta tecla nenhuma**: a cena está VIVA por baixo dela, então todo
+teclado continua chegando ao Phaser, e um segundo ouvinte faria cada tecla acontecer duas vezes
+(confirmar o item e, meio milissegundo depois, usá-lo). `I`, `←`, `→`, `X` e `ESC` são roteados num
+lugar só, na `GameScene`, antes de decidir o que o herói faz.
+
+A subtela do `ESC` **continua existindo** e não perdeu nada: ela é onde moram os corações, o mapa e
+a contagem — as perguntas que valem a pena congelar o mundo para responder. A bolsa é a pergunta
+que não vale.
+
+**Guarda**: `npm run playtest -- bolsa` — o relógio da cena andando com a bolsa aberta, os pés
+presos, o cursor que anda sem equipar, o X que equipa sem usar, e a pancada que fecha.
+
+## A pá — o buraco de plantio vira decisão do jogador (2026-08-06)
+
+O loop da fazenda tinha um lado autorado que ninguém notava: a foice produz a semente, o balde
+rega, o mato brota — mas o **buraco** (`plantSpot`) só existia onde o editor o tivesse posto.
+Mato novo em lugar novo era privilégio de quem edita o mundo, não de quem joga. A **pá**
+(`shovel`) fecha esse lado: B num tile de **terra nua** cava um canteiro de verdade — o mesmo
+`PlantSpotObject` dos autorados, então semente, balde, brotação e reabertura já o conhecem sem
+uma linha nova. Cavar É produzir (um tile que aceita semente), então ela passa no teste do "o
+que ele *faz*?" sem virar senha.
+
+- **A fechadura dela é o FRAME do chão, não "qualquer tile andável"** (`DIGGABLE_GROUND_FRAMES`
+  = os dois frames de "Terra", 5 e 6). Pátio de pedra, laje, alvenaria de dungeon e mar recusam
+  a lâmina — o que mantém a resposta física E resolve o conflito estrutural do item: `useItemAt`
+  devolvendo `false` é o que deixa o B **pousar** um item, e uma pá que cavasse todo chão andável
+  seria a primeira ferramenta impossível de largar. Onde não há terra, ela descansa.
+- **"Terra NUA" é a pergunta larga duas vezes** (`canDigAt`): `isTileOccupied` (parede, bicho,
+  item, coração, bomba, o próprio herói) **e** nenhum prop nem não-bloqueante em cima — um toco
+  de mato, uma marca de bomba, um cabo ou um canteiro já cavado são todos "este chão tem dono".
+  O alvo é **reconferido no impacto** (150ms depois do golpe, o compasso do arbusto): tempo de
+  sobra pra um corpo pisar no tile.
+- **O buraco cavado é ESTRUTURA do jogador e entra no save como diff** (`dugSpots`, o padrão
+  exato do `felledTrees`): a morte não pode apagar uma benfeitoria. Só a POSIÇÃO persiste — o
+  estado do canteiro (monte, mato) é dos renováveis, como nos autorados. Overworld apenas:
+  dungeon não tem terra (a lista de frames já diz isso), e level/explorador zeram por desenho.
+- **A arte saiu do loop do spritefactory** (`shovel-icon.mjs`): empunhadura em T + cabo idêntico
+  ao do machado (mesma empunhadura, cabeça diferente — a regra de família do great-axe) + lâmina
+  de ferro fosco com fio de aço na aresta iluminada. A v1 arredondava a lâmina nos dois extremos
+  e lia como concha de sopa; a v2 abre ombro largo direto do cabo e afunila 6-4-2 até a PONTA —
+  que é a parte que entra no chão.
+- **Ela é o tesouro da dungeon 4** (era um kit de 3 gravetos — o "sobe de degrau" prometido na
+  auditoria): um degrau depois da foice (d3), que é a ordem em que o loop se completa na mão.
+  Save antigo com a d4 já gerada mantém o kit (retrato primeiro, semente depois — o contrato).
+- No mais: `MELEE_DAMAGE` 1.5 como toda ferramenta, aba Itens do editor, cerimônia de item-get
+  ("DIG THE BARE EARTH" — instrução do próprio uso, o padrão das sementes e do balde), poster.
+
+**Guarda**: `npm run playtest -- pa` — a terra vazia que vira canteiro e aceita a semente, a pá
+que não se gasta, a pedra que recusa E recebe a pá pousada (as duas metades do `return false`),
+e o save da aventura que um level não toca.
+
+### O cavar mudou de botão no mesmo dia — o A usa o item segurado
+
+A primeira versão pôs o cavar na tabela do B, porque era lá que "usar item" morava. O autor
+corrigiu a gramática: **o botão de AÇÃO usa o item que está na mão** — a bolsa escolhe, o A
+executa. A espada corta; a pá **bate no chão à frente e cava**. É a frase que o combate já
+ensinava (o A é o golpe; bater na terra É um golpe), e ela desfez de graça o único atrito do
+desenho anterior:
+
+- **O B voltou a ser só pega/fala/pousa para a pá** — e com isso a pá pousa em QUALQUER chão
+  livre, como todo item. A troca "onde há terra não se pousa" (o preço do cavar-no-B) morreu:
+  o A nunca pousa, então cavar e pousar deixaram de disputar o mesmo botão.
+- **O golpe da pá divide tudo com os outros golpes do A** (`swingAttack`): cadência, raiz nos
+  pés, investida do corpo, o arco que sai mesmo no vazio. Num corpo à frente ele cobra a
+  escada de item (1.5, `strikeEnemy 'item'`); em terra nua, cava (o impacto reconfere o alvo
+  150ms depois); em pátio/laje/alvenaria, o arco sai vazio.
+- **Segurar o A com a pá não carrega a lâmina rodopiante** (`tickSpinCharge` +
+  `spinAttack`): o giro é da espada, e uma carga que nascesse de um corpo que o jogador viu
+  cavando sairia de uma arma que o gesto não empunhava.
+- A arte subiu para **v3** no mesmo passo: a lâmina de 2 tons lia como papelão (a lição do
+  barril), e ganhou a meia-luz `#5d6165` (o stone escuro do great-axe) — mancha de luz gorda
+  no ombro esquerdo afinando até a ponta, meia-luz em diagonal, massa na sombra. Cluster
+  shading, nunca listra.
+
+O princípio declarado ("a ação é sempre usar o item da mão") ganhou o segundo caso no mesmo
+dia: **a SEMENTE** — o A mirando um buraco aberto PLANTA (no impacto, o compasso da pá, e a
+semente só é gasta se entrou na terra); num corpo, o cutucão do item-não-arma; senão o arco
+sai no vazio. O plantio saiu da tabela do B, que agora pousa a semente como item — **até em
+cima do buraco aberto** (fica ali como item no chão, não plantada; o segundo B a pega de
+volta). A lista `A_USE_ITEMS` + o `actionUseHeld` são agora o lugar único da gramática:
+item novo que migrar pro A entra na lista (que os dois gates do giro leem) e ganha um ramo.
+Estender aos demais (machado, picareta, balde...) segue decisão em aberto.
+
+**Guarda (atualizada)**: `npm run playtest -- pa` — o A que cava a terra vazia e não gasta a
+pá, a pedra onde o arco sai no vazio, **o B que nunca cava e pousa a pá mesmo sobre terra
+cavável**, a semente que entra no canteiro cavado, e o save da aventura que um level não toca.
+
+### O buraco fica SOZINHO no tile — a cavada engole o que estava pintado nele
+
+Cavar num tile com grama baixa (o decor assado da camada upper) ou com uma ossada deixava
+**três pinturas disputando o mesmo chão**: folhagem, osso e o recorte do buraco, empilhados. A
+regra nova é física — revolver a terra engole a superfície:
+
+- **A grama baixa sai das DUAS casas dela**: do dado (`chunk.upper[ly][lx] = null`, que é de
+  onde qualquer reassado futuro lê) e da malha (`World3D.removeDecorTile`, novo — o mesmo
+  colapso de quad do machado de aço, agora no `decorGeo`; o índice `decorQuads` cobre TODO
+  decor, porque o `grassQuads` só rastreava o frame com rustle). O rustle ativo morre junto,
+  e TEM que morrer: `updateRustles` reescreve posições absolutas por frame e ressuscitaria o
+  quad colapsado no tick seguinte.
+- **A ossada/mancha sai do `CorpseDecals`** (`removeAt`, via `EnemyManager.removeCorpseAt`).
+  Ela é memória de sessão, nunca do save — por isso não entra no diff de boot.
+- **O decor sob um buraco salvo não renasce**: `applyDugSpotDiff`, o irmão do
+  `applyFelledTreeDiff` (mesmo compasso: ANTES do World3D assar), limpa a camada upper sob
+  cada `dugSpot`. Só decor NÃO-sólido sai — um mundo re-autorado que puser árvore ou parede
+  ali GANHA do save: o diff não derruba sólido, e a hidratação do buraco cede o tile
+  (`isCellBlocked` pula o spawn) em vez de nascer dentro de rocha.
+
+O `pa` agora pinta Folhagem no tile-alvo e deita uma ossada nele (pelo caminho real,
+`CorpseDecals.drop`) antes do golpe — e afirma que depois da cavada `chunk.upper` é null e a
+contagem de ossadas zerou: o buraco sozinho no tile.
+
+### A cavada acontece AOS POUCOS — quatro tempos, e a terra tem peso
+
+O buraco surgia num fade de 300ms: um desenho ligando, não uma cavada acontecendo. Agora:
+
+- **`plant_hole.png` virou SHEET em coluna (16×64)**: o buraco pronto (frame 0, pixel a pixel
+  o de sempre — no TOPO da coluna para toda referência `frame: 0` continuar valendo) + os três
+  tempos da cavada: **raspão** (1, a primeira mordida da lâmina), **depressão** (2, a bacia
+  rasa sem o poço), **fundo** (3, o buraco inteiro SEM os torrões externos). Cada estágio é um
+  subconjunto do desenho final — a lição da flor-da-lua — e os torrões chutados pra fora do
+  aro existem só no frame 0: eles aparecem na última pazada, no instante em que a última leva
+  de torrões voa de verdade.
+- **`PlantSpotObject.animateDigIn`**: um frame por batida (`DIG_STAGE_MS` = 110), e cada
+  batida MORDE — o recorte encolhe um fio e assenta com `Back.easeOut`, que é o que separa
+  "quatro desenhos trocando" de "uma cavada acontecendo". Os timers pendentes morrem no
+  `destroy` (um restart no meio da cavada não pode avançar frames numa cena morta).
+- **Torrões com física de terra** (`spawnDirtBurst`): o gesto das lascas da ponte com a física
+  invertida — lasca voa e some no ar; torrão SOBE rápido, para, e CAI de volta, apagando só
+  quando pousa (duas fases de tween, `easeOut` subindo e `easeIn` caindo, pousando um fio
+  além de onde subiu: em volta do buraco, nunca dentro). Três levas que minguam (7→5→4→3, a
+  primeira pazada tira o grosso), nas cores da própria arte do buraco.
+- **A última batida assenta**: o baque surdo de pousar algo (`playFootstep`) + um tremorzinho
+  do mundo na direção da pazada. Tudo no compasso de `DIG_STAGE_MS`, uma fonte só — mexer no
+  número não dessincroniza som, terra e desenho.
+
+O `pa` afirma o fim e não o meio (a lição do gelo): depois do settle, o recorte tem de ter
+assentado no frame 0 — o buraco dos autorados.
+
+### O balde estava furado pela lei das duas procedências — e a fazenda, trancada
+
+A auditoria do "plantar é útil?" achou o cano: `fillBucket` só disparava no ramo do rio-PROP
+(`getWaterAt`), e **a água do overworld inteira é TILE de terreno** (o gerador escreve rio,
+lago e oceano como o frame do mar — zero props `water` no `world.json`). Consequência em
+cadeia: o balde nunca enchia na aventura → o monte nunca era regado → **a fazenda era
+impossível no modo principal**, e o tesouro da dungeon 2 era peso morto. Pior: o gesto era
+MUDO — B mirando a água do mundo não fazia nada (o pousar recusa em silêncio porque o mar
+bloqueia), a leitura de botão quebrado que a lei da recusa proíbe.
+
+O conserto é a própria lei do zora: um ramo novo depois do rio-prop enche via
+**`isOpenWaterAt`**, a resposta única para as duas procedências — e de graça ela já responde
+certo sobre ponte, vau e canal drenado (deixam de ser água em cima dela). O `pa` agora fecha
+o ciclo inteiro numa tela: cavar (A) → plantar (A) → **encher o balde num tile de mar
+pintado, sem prop nenhum** → regar o monte (B) — com o balde voltando vazio pra mão.
+
+O que continua faltando para plantar ser ÚTIL (design, não conserto — decisões em aberto):
+nenhuma fechadura do overworld pede o pavio (a tocha resolve tudo; a trava natural é fogueira
+morta atrás de flor-da-lua, que a chama na mão não atravessa — e não há flor no overworld),
+o mato não tem demanda além do fogo (cerca viva contra o cerco já funciona e nada a pede; a
+caldeira já aceita mato como calor e não existe caldeira no overworld), e o braço não planta.
+
+## A REFORMA DOS DOIS BOTÕES: o A usa o item da mão — para TODOS os itens (2026-08-06)
+
+O que a pá inaugurou e a semente confirmou virou a gramática inteira, por decisão do autor:
+**"o item que o herói carrega no botão de ação é quando ele usa o item"**. Balde na mão + A
+mirando o rio = bate com o balde e enche. E assim para tudo:
+
+- **A TABELA DE ITENS INTEIRA mudou de botão** (`useItemAt`, agora chamada de `swingAttack`):
+  machado→árvore, picareta→rocha, balde→água/monte/fogueira acesa, tocha→fogueira
+  morta/arbusto/mato, chave→porta, pedra→vau/lava, graveto→ponte, bomba→marca, pá→terra,
+  semente→buraco. O golpe divide tudo com os outros golpes do A (cadência, raiz, investida,
+  pose), e quando a tabela devolve `false` o **arco sai no vazio** — o `false` deixou de ser
+  "então pousa".
+- **A ESPADA virou o que sempre deveria ser: um item empunhado.** O A corta com ela quando ela
+  está SELECIONADA (era `inventory.has('sword')` — a espada na mochila armava o braço para
+  sempre). Só ela tem o arco de duas fileiras, a rebatida e a carga do giro
+  (`tickSpinCharge`/`spinAttack` agora leem `heldItem === 'sword'`). Mão vazia = soco.
+  A_USE_ITEMS e actionUseHeld morreram: a lista era a migração pela metade.
+- **O B ficou com três verbos: PEGA, FALA, POUSA.** Pousar também é depositar (bandeja, dock
+  da bateria, o chão do braço) — e não precisa mais que a tabela inteira falhe primeiro. O
+  gate de gelo que morava na tabela ganhou cópia no pousar (item sob o vidro, nunca).
+- **Custo jogável honesto**: pegar item SELECIONA (a lei da mochila), então apanhar um graveto
+  no meio da briga tira a espada do A até re-selecionar na bolsa — a bolsa-que-não-pausa é
+  exatamente o preço desenhado para isso.
+- **Dívida de migração dos cenários**: `caldeira` e `itens` chamam `s.useItemAt` direto
+  (continuam válidos — só os comentários "o B" ficaram velhos); `esgrima`/`gelo` usam o Z com
+  a espada injetada (ok se selecionada); `combate` guarda o CONTRATO ANTIGO dos botões e
+  precisa de revisão de design, não de conserto. `espada`/`itens` seguem vermelhos por design.
+
+**Guarda**: `npm run playtest -- pa` — o ciclo da fazenda inteiro na gramática nova (A cava,
+A planta, A enche o balde no mar pintado, A rega; B pousa até sobre o buraco e nunca usa).
+
+## A semente anda em PACOTE de 5 — e o pacote viaja com o item (2026-08-06)
+
+Um corte de mato rendia UMA semente: plantar era trocar um mato por outro, um ciclo fechado
+que nunca crescia. Agora o punhado que a foice derruba vale **`SEEDS_PER_PACK` = 5** na
+mochila — plantar gasta uma por canteiro, então um corte rende uma FILEIRA, e a fazenda vira
+amplificador de combustível de verdade (cada semente plantada volta como mato que rende outro
+pacote). A bolsa e a subtela já mostravam contagem (`.zh-bag-count`), então "5" ficou visível
+de graça; plantar uma deixa as outras quatro NA MÃO, selecionadas (a lei do `Inventory.remove`).
+
+A regra que custou desenho: **o pacote VIAJA com o item no chão** (`ItemPickup.units`, o
+contrato exato da carga da bateria — "a carga viaja, nunca se re-enche"). Sem isso, pousar 1
+e pegar 5 era uma máquina de imprimir semente. Então: a foice derruba um pacote cheio (o
+default do `ItemManager.drop`), sementes autoradas num mundo são um pacote cheio, **pousar
+põe o punhado INTEIRO num item só** (e pegá-lo devolve a mesma contagem), a foto do save
+guarda `count` por item (`AdventureGroundItem` — save antigo sem o campo lê como 1), e o
+braço robótico carrega `carriedUnits` ao lado de `carriedFire`/`carriedCharge` — um punhado
+de 3 que atravessa o muro chega como um punhado de 3.
+
+**Guarda (atualizada)**: `npm run playtest -- pa` — o pacote pego do chão pelo caminho real
+(+5 de uma vez, selecionado), o badge "5" no slot da bolsa, o B pousando o punhado inteiro
+(um item, bolsa zerada) e pegando os 5 de volta, e o A plantando UMA com as QUATRO seguindo
+na mão.
+
+## A PLANTA CARNÍVORA — a colheita que se defende sozinha (2026-08-06)
+
+A fazenda ganhou a segunda cultura, e ela diz a frase que nenhuma outra peça diz: **o corpo do
+inimigo vira recurso do terreno**. A `carnivoreSeeds` (pacote de 5, como toda semente —
+`SEED_PACK_KINDS`) planta no MESMO ciclo (buraco → monte → água), e o canteiro **lembra o que
+recebeu** (`PlantSpotObject.sownKind`): semente comum brota mato (combustível), a carnívora
+brota a `CarnivorousPlantObject` (defesa). Tesouro da dungeon 5 (era kit), na escada d2
+balde → d3 foice → d4 pá → d5 a colheita que morde.
+
+- **Todo inimigo que ENCOSTA é comido** (`updateCarnivorousPlants`): a cada frame, cada planta
+  pronta olha os 4 vizinhos e dá o bote no primeiro corpo parado ali. As recusas são as leis
+  de sempre: quem NASCE é invulnerável, corpo CONGELADO é estátua. No pico do bote a
+  adjacência é RECONFERIDA — corpo que saiu do tile é bote no ar, e a planta mastiga o vazio
+  mesmo assim: **errar também custa a recarga**, e é isso que faz o bote esquivável.
+- **A animação é a folha de 6 tempos** (`carnivorous_plant.png`): fechada (serra de presas
+  bone entre lábios olive) → ABERTA (o bote — o ember só aparece aqui, e é a leitura do
+  perigo) → engolida (a cabeça incha 2px) → mastiga A/B (o MESMO bojo deslocado — a presa se
+  debate) → murcha (o estado morto). No runtime o gole é em TRÊS tempos: a bocarra abre e se
+  arma inclinada pro corpo (SNAP_MS), a mordida PRENDE e **o corpo é ARRASTADO pelo ar até a
+  goela** — a boca fica aberta o arrasto inteiro, endireitando o pescoço conforme recolhe —
+  e ela só fecha quando ele chega dentro, espremendo fino-e-alto e assentando gorda
+  (`Back.easeOut` — o peso chegando ao bucho). Depois mastiga ~2,6s alternando o bojo, e
+  volta à espreita respirando.
+- **O arrasto é de verdade, não um fade** (`EnemyBase.consume(mouthX, mouthY, dragMs)`): com
+  `alive = false` a lógica solta o sprite (o mesmo canal em que o despawn derrete o corpo
+  parado — e o mote de cura já provou que billboard aceita tween de x/y/elevation), então o
+  corpo é PUXADO da própria casa até a boca em `Quad.easeIn` (quem puxa é a planta), subindo
+  à altura da cabeça, **se debatendo** (um tween de ângulo próprio, ±14°) e encolhendo goela
+  adentro — visível o caminho quase inteiro, apagando só no último trecho, já dentro do arco.
+  O relógio do arrasto é UM (`CarnivorousPlantObject.DRAG_MS`, passado ao consume): o corpo
+  chegando e a bocarra fechando (`onGulp` — o baque e o tremor moram aí) nunca dessincronizam.
+- **O gole não paga moeda nem deixa ossada** (`EnemyBase.consume`, a remoção sem funeral:
+  encolhe goela adentro em 200ms, `Back.easeIn`): quem ficou com o corpo foi a planta — uma
+  cova vizinha pagando moeda seria uma fábrica AFK, e uma ossada no chão mentiria.
+- **O herói ela NÃO morde** — é a peça do jogador. Para ele, ela é um mato que retribui:
+  bloqueia o tile (barreira de verdade, `propRegistry`), **conduz fogo** (planta é
+  combustível — entrou no buraco de fechadura do `igniteFlammableAt`), cai pra **foice** (sem
+  colheita: predador não é lavoura) e treme pro resto. As três saídas de quem plantou errado.
+- **A mastigação é a recarga E a janela**: um corpo por vez. Uma horda passa pela cerca viva
+  pagando um corpo por planta por ciclo — barreira, não muralha.
+
+**Guarda**: `npm run playtest -- carnivora` — a caveira que nasce colada na planta (corredor
+murado, sem perseguição flaky) e é engolida no primeiro fôlego (zero corpos, zero ossadas,
+zero moedas), a semente carnívora brotando a armadilha pelo ciclo real da fazenda (sownKind),
+e o herói colado nela a cena inteira sem perder um coração.
+
+---
+
+Current redesign prompt (2026-08-06): archive the Zelda-like overworld and replace the main game with a coin-funded world-builder. Every run starts on one chunk with a campfire, wizard and sword; unfinished west/north/lower-east roads spawn small numbers of undead; interacting with affordable road squares pauses play and deals three animated cards for authored chunks; `/editor` must create chunks and edit card name, image and cost.
+
+- Archived the exact current 22x8 `public/world.json` at `backup/zelda-open-world/world.json` (SHA-256 ABCE03032B38AEB814DFC6C992D0CD2D43C4E190A9591079B3020BBC4B512E8C).
+- Replaced active `public/world.json` with a three-template chunk library generated by `npm run generate:chunks`: Moonlit Lake, Whispering Forest, Spider Hollow.
+- Main title now starts the chunk-builder run; old authored overworld has no runtime/editor entry.
+- Implemented fixed start clearing, closed frontier seams, road markers, frontier-only undead cadence, carried-coin spending, animated/blurred three-card chooser, dynamic chunk placement, and debug-state coverage.
+- Added `/editor` chunk catalogue modal for creating templates and editing ID/name/cost/image/description.
+- Fixed the lower-east seam so both the dark road mouth and every purchased template connect at y=8; the hero remains blocked at x=12 until that frontier is bought.
+- Browser verification: `npm run playtest -- world-builder` passed every assertion with no uncaught page errors. It covers the fixed camp layout, three frontiers, quiet road undead, the unaffordable/affordable seal states, three dealt cards, seven seconds of paused simulation, coin deduction, Spider Hollow placement, traversal into the purchased chunk, and the `/editor` chunk library modal.
+- Visual inspection completed for the camp, card chooser, purchased Spider Hollow, and editor library screenshots; the final clean run is `playtest/results/run-2026-08-06T16-57-50/` and also proves the title's sole main action is `Build a world`. The wizard was moved one tile closer after inspection so his full silhouette is visible above-left of the fire in the opening frame.
+- Final checks: `npm run typecheck`, `npm run build`, `git diff --check`, and targeted ESLint for every touched TypeScript/JavaScript implementation file all pass. The repository-wide lint command still reports the unrelated pre-existing script/spritefactory configuration failures documented earlier.
+
+## A mortalha: o escuro que esconde o chunk não-comprado (2026-08-06)
+
+Pedido: a área além da fronteira tem que ser escura a ponto de o jogador NÃO SABER o que existe
+lá — a curiosidade é a moeda do modo — e a compra ganha uma animação em que a névoa sai aos
+poucos e abre o lugar novo. Antes, o chunk escuro era floresta legível na luz da fogueira: uma
+tocha na costura mostrava de graça o que a carta deveria vender.
+
+**Como ficou** (`src/game/render3d/ChunkShroud3D.ts`):
+
+- Cada chunk não-comprado da janela do explorador (+1 anel de horizonte) ganha um caixão de
+  escuridão: **teto** a 1.22 tiles (acima do quad de árvore), **cortinas** só nas faces que
+  encostam em terra comprada (entre dois chunks cobertos os tetos se emendam — cortina dupla
+  na mesma costura seria z-fight) e **tendrils** de névoa rasteira invadindo 1.35 tiles do lado
+  comprado (quad deitado, `depthWrite:false`, renderOrder 1 — nunca oclui o herói).
+- O terreno escuro de verdade continua existindo por baixo (bocas de estrada por onde o undead
+  entra); a mortalha só o torna ilegível.
+- **Material**: `MeshBasicMaterial` patchado em duas variantes (caixa/tendril), um **bundle por
+  chunk** com uniforms próprios — poke por objeto num material compartilhado NÃO funciona em
+  built-in: o three só re-envia uniforms no primeiro draw de cada material por frame, e o
+  progresso de uma revelação vazaria para as mortalhas vizinhas. Todos os bundles têm o mesmo
+  `customProgramCacheKey` (dois programas no total), e o primeiro sync roda ANTES do
+  `prewarmShaders`, então os dois compilam no boot e nunca em jogo. Bundles voltam para um POOL
+  em vez de morrer: `dispose()` no último material de um programa zera o refcount do three e
+  DESTRÓI o programa — a recompilação voltaria exatamente na recentrada de janela. Ruído por
+  TEXEL (16/tile, preso ao mundo) em três tons chapados derivando com o `flowTimeUniform`; toda
+  transparência é `discard` (borda serrilhada, teto opaco escrevendo depth). Zero luz nova.
+- **A revelação**: `purchase()` → `chunkShroud.reveal(cx, cy, enemyX, enemyY)` — uma frente de
+  dissolução por distância varre da boca da estrada comprada para dentro (2.6s, smoothstep),
+  esfarrapada pelo mesmo campo de ruído e com um filete MORNO no limiar (a luz do mundo comendo
+  a névoa). Estado por chunk no próprio bundle, então N revelações concorrentes funcionam.
+- Sync da cobertura em três pontos: boot (GameScene, antes do prewarm), recentrada da janela
+  (`ExplorerDirector.update`) e compra (reveal ANTES do sync, para o chunk comprado sair do
+  registro sem perder a animação).
+
+**Guarda**: `npm run playtest -- world-builder` — a mortalha cobrindo os três alvos de estrada
+no boot (e o chunk inicial descoberto), a compra tirando o chunk da cobertura com a dissolução
+em curso (`builder.shroud.revealing`), os novos vizinhos já nascendo cobertos atrás dela, e a
+espera até a névoa morrer de vez antes da travessia.
+
+## Compra sem parede invisível, cartas na paleta da casa, bolsa de 100 (2026-08-06)
+
+Três pedidos do usuário depois de jogar o construtor:
+
+- **BUG — parede invisível no chunk comprado.** A compra regenera terreno na FONTE
+  (`ExplorerWorldSource.purchase` apaga o chunk alvo + 4 vizinhos), mas o `ChunkManager` tem um
+  cache próprio de `ChunkData` — e ele continuava servindo a floresta escura antiga: o visual
+  reassava (rebuildTerrain lê a fonte), a colisão não, e o chunk novo nascia cheio de árvore
+  fantasma. Fix: `ChunkManager.invalidate(cx, cy)` + `ExplorerPropHost.invalidateTerrain`,
+  chamado na compra para o MESMO conjunto que a fonte regenera (alvo + 4 vizinhos), antes de
+  spawnar props/inimigos. Lição: quem regenera terreno numa fonte tem de derrubar TODO cache
+  baixado dele — o de colisão não é o mesmo do renderer.
+- **Cartas na paleta do jogo, minimalistas** (`src/styles/chunk-cards.css` reescrito): fora o
+  papel pergaminho claro, texturas, glint varrendo, moldura dupla e marca-d'água; a carta agora
+  é painel NOITE (#0b0d13) com UMA moldura fina de ouro (#d7b86b), títulos #ffe4a0, texto
+  #f5ead1, sombras DURAS de deslocamento (0 4px 0, a linguagem do selo de estrada e da bolsa) e
+  a arte do chunk como única cor forte. A virada 3D saiu (a carta só sobe e assenta); toda a
+  máquina de estados (hover/focus/active/disabled/loading/error/success) e as classes ficaram —
+  o playtest cobra cada uma.
+- **Bolsa de partida = 100 moedas** (`START_COINS` em explorerRun.ts): capital inicial para
+  testar compras sem farmar caveira. O boot do GameScene agora hidrata o CoinManager do
+  `explorerRun().coins` (antes só a aventura restaurava — o HUD nasceria mentindo zero).
+
+**Guarda**: `npm run playtest -- world-builder` — os 100 no boot (bolsa E HUD), o selo dormente
+testado com a bolsa explicitamente zerada, e duas sondas de interior do chunk comprado (tiles
+que eram árvore na escuridão e que o openSeams garante abertos) contra a regressão do cache.
+
+**Correção pós-jogo (mesmo dia, em dois atos): o muro preto do sul.** Primeiro caiu a CORTINA
+da face norte (o chunk ao sul da terra comprada): a câmera olha sempre para o norte (pitch
+45.9° + FOV/2 19° = 64.9° < 90°, nenhum raio de visão viaja para o sul), então essa face nunca
+esconde nada e só mostrava as costas — um muro preto em primeiro plano mais alto que o herói.
+Não bastou: sobrou a LAJE do teto (1.22) da fileira sul inteira — o chunk direto e os diagonais
+do far-mesh — preenchendo o rodapé da tela como banda preta elevada com borda em paralaxe.
+A resposta virou regra de dois MODOS na mortalha: chunk ao sul de terra comprada (vizinho N,
+NE ou NW comprado) usa **TAPETE** — névoa rasteira colada no chão, altura zero — e os demais
+mantêm a CAIXA (teto + cortinas, que no norte/leste/oeste é o desenho desejado; a caixa também
+fecha a face sul quando o vizinho de baixo é tapete, senão fica fresta sob a borda do teto).
+O tapete exigiu o `darkChunk` ficar VAZIO (sem a floresta cheia + bocas de estrada): as árvores
+eram legado invisível sob a mortalha opaca, e qualquer coisa em pé vararia a névoa do chão.
+Bônus: o undead agora entra visível, vadeando a névoa rasteira da estrada sul.
+
+**Terceiro ato — a névoa ficou bonita** (pedido: "mais realista e bonita"), tudo dentro dos
+mesmos dois programas: (1) ruído com componente VERTICAL escorrendo para baixo nas faces em pé
+— antes o campo era só-XZ e a parede saía em colunas listradas, cor constante do topo ao chão;
+(2) `aShroudLift` por vértice: o TOPO do banco (teto, tapete, crista) apanha a lua — quarto tom
+frio `SHROUD_MOON`, gated no lift para o pé da muralha nunca acender; (3) o banco inteiro
+respira num período de ~50s (patches clareiam e afundam); (4) uma CRISTA de fiapos
+(`CREST_TILES`, o material dos tendrils em pé, densa embaixo e rala em cima) sobe das cortinas
+e desfaz a régua da silhueta contra a noite.
+
+## Cartas de NPC: compra única, oito lares-tutorial, naipe violeta (2026-08-06)
+
+Pedido: cada carta compra UMA vez; uma carta por NPC; o cenário do NPC tem fogueira acesa (a
+proteção), o NPC ao lado, um item-presente que combina, terreno com a cara dele, fala explicando
+o item, e matéria-prima para TESTÁ-LO ali (mini tutorial); cor de carta diferente.
+
+- **Compra única** (`ExplorerWorldSource`): `used` set — `catalog()` filtra, `purchase()` marca e
+  recusa repetida. A resolução de chunk JÁ CONSTRUÍDO continua no `templates` cheio (a carta sai
+  do baralho; o terreno fica). `debugNextOffers` no director (consumido no uso) dá determinismo
+  ao playtest agora que a mão é sorteada de 11 cartas.
+- **Os oito lares** (`scripts/add-npc-chunks.mjs`, modelo enrich: lê world.json, backup em
+  `backup/world-pre-npc-cards.json`, idempotente por id, zero random): gato→graveto/tocha
+  (fogueiras mortas p/ acender) · astronauta→picareta (rochas+ferro em chão de pedra) ·
+  empresário→machado (fileiras de árvore seca) · operário→botas de lava (poça d'água com ferro
+  afundado numa ilhota) · pintora→sementes (canteiros plantSpot prontos) · vendedor→balde
+  (lagoa) · poeta→machado de aço (pinheiros VIVOS) · Morte→foice (campo de mato alto). Fogueira
+  ACESA ao lado de cada NPC; nada essencial nas faixas de costura do openSeams.
+- **Falas**: en.json (que VENCE o world.json — getDialog prefere o locale) reescrito para os 8
+  com o presente + para que serve + o empurrão do tutorial; world.json dialogs ganhou as configs
+  (retrato/cor/voz) + as mesmas linhas de fallback.
+- **Encanamento que faltava**: pickups de template comprado não nasciam (ItemManager carrega uma
+  vez e não streama) e o NPC também não (NpcManager pula chunk já ativo — a lista VAZIA do chunk
+  escuro ficava em cache). `spawnBuiltChunkContent` no host dropa os itens + `refreshChunk` novo
+  no NpcManager. `plantSpot` entrou no spawnStreamedProps/despawn (canteiros da pintora).
+- **Visual**: naipe `hearth` (decidido por o template TER npc, não pelo id) com pictograma
+  fogueira+morador+presente na arte P&B, sigilo de chama, e moldura/nome/moeda/verso em VIOLETA
+  arcano (#8b5cf6/#e9d5ff — a paleta do portal/mago) via `data-npc`.
+
+**Guarda**: `world-builder` — baralho de 11 no boot com os 8 ids, mão de NPC forçada com naipe
+hearth + moldura não-ouro (shot `npc-cards`), compra única (spider-hollow some do catálogo, 10
+restam), editor listando 11.
+
+## As cartas viraram baralho de verdade: arte P&B procedural + juice pesquisado (2026-08-06)
+
+Pedido: arte pixel P&B minimalista e SIMBÓLICA do que se compra, e "juice de abrir baralho",
+com pesquisa de referências. Da pesquisa (Balatro/pack-opening UX) vieram os princípios
+aplicados: carta nunca estática, foil que segue o cursor, revelação coreografada com flip de
+arco, sutileza como régua, celebração clara da escolhida.
+
+- **Arte**: `chunkCardArt.ts` desenha em canvas 36×24 (esticado pixelated) um pictograma por
+  domínio — lua minguante sobre ondas (tide), três pinheiros em silhueta (thorn), teia no canto
+  + aranha pendurada (web), estrela de quatro pontas (wild) — duas cores (tinta-pergaminho
+  sobre noite), zero aleatório, síncrono (estado 'ready' imediato; loading/error ficam no CSS
+  para um dia o editor voltar a apontar imagem própria — hoje o campo do editor não é lido).
+  Naipe/label extraídos para `chunkCardSuits.ts`.
+- **Coreografia do baralho** (CSS + medidas em TS): as cartas nascem NUMA PILHA no centro do
+  leque, de costas e tortas (±4°); cada uma é distribuída em stagger — sobe em arco, VIRA no
+  ar com escala 1.07 no meio do giro (o flip "realista"), assenta com overshoot. Verso ganhou
+  treliça diagonal de ouro. Hover = tilt-3D seguindo o cursor (±9°/±12°, custom props via
+  mousemove) + halo de foil na posição do mouse; uma varredura ambiente de brilho cruza cada
+  carta a cada 6.5s, defasada. Escolher: a carta puxa ao centro com escala e o carimbo LAND
+  CLAIMED bate com overshoot; as recusadas caem girando no sentido do leque.
+  `prefers-reduced-motion` desliga tudo (o tilt nem instala).
+- A máquina de estados e as classes são as mesmas — o playtest `world-builder` continua
+  cobrindo: 3 cartas, opacidade pós-deal, proporção 5:7, verso/cantos/sigilos, foco visível,
+  hover que levanta, pressão que assenta, estados de arte, trava com texto, sucesso na carta.
+
+**O cinema da compra (pedido seguinte): a carta é a luz que apaga a névoa.** `choose()` agora
+tem quatro tempos: carimbo + recusadas caem → a carta puxa ao CENTRO da tela (os dois eixos,
+`--zh-card-claim-x/y`) e segura ~430ms (o beat de apreciação do pack-opening) → o pano de fundo
+se dissolve (`is-departing`: blur→0, mundo reaparece) e um FANTASMA da carta (`zh-build-flight`,
+clone em position:fixed no body — fora do painel que recorta; canvas re-desenhado porque
+cloneNode não copia conteúdo de canvas; classe própria para nenhum estado do leque disputar o
+transform) acende em ouro e voa ACELERANDO (`cubic-bezier(.55,-.12,.82,.42)`, scale 0.07 +
+brightness 2.4) até a projeção em tela da boca da estrada (`world3d.projectTile(enemyX,enemyY)`,
+novo 6º parâmetro do overlay) → o POUSO estoura (clarão + anel de ouro) e SÓ ENTÃO dispara o
+`zh-choice` — a compra e o reveal da mortalha começam exatamente onde a luz tocou. Fantasma e
+estouro se auto-limpam por timer (um cleanup no destroy() os mataria no nascimento: o dispatch
+destrói o overlay no mesmo tick). Reduced-motion ou sem projeção: corte seco de 700ms como era.
+O POST_UPDATE do GameScene continua rodando com o modal aberto, então o mundo renderiza sob o
+voo. Também: título com folga (a carta selecionada levantada não o atropela mais), fio de ouro
+interno nas sombras da carta, vinheta sobre a arte, letter-spacing no título.
+
+**Ajustes finos do cinema (pedido seguinte):** a dissolução da mortalha desacelerou
+(`REVEAL_MS` 2600→4400 — a névoa se retira, não evapora; as janelas do playtest seguem folgadas),
+o LAND CLAIMED virou uma FITA estreita no pé do quadro da arte em vez de tapá-la (o texto e o
+sigilo continuam no DOM — os asserts os leem; o sigilo só não entra na fita), e a compra ganhou
+som: `playCoinPickup` + `playSingingBowl` no clique (catálogo já gerado, nada novo no pipeline
+de áudio), com o `playShopClose` de sempre servindo de baque do pouso.
+
+**Passada de poda (pedido seguinte): a carta ficou só o essencial.** Fora os números dos
+cantos (o sigilo fica — o playtest conta `.zh-build-corner === 2`), o "WORLD CHUNK", o
+subtítulo de domínio, a descrição, a dica de tecla e o subtítulo do painel ("The X road is
+unfinished…"). Sobrou: sigilo nos cantos, arte, TÍTULO centrado e UMA moeda de ouro com o
+valor no rodapé. Cartas menores (teto 12.5rem no desktop, ~14rem no mobile — o piso de 220px
+do teste responsivo continua respeitado) e painel mais estreito. A SELEÇÃO ficou inconfundível
+sem apagar as vizinhas (o assert de opacidade > 0.9 proíbe): a carta selecionada (`is-selected`,
+segue o foco) ganha elevação persistente, moldura dupla de ouro vivo, glow quente e moeda acesa.
+
+## O baralho do mundo ganhou corpo de carta (2026-08-06)
+
+Pedido atual: fazer as cartas de compra parecerem cartas de baralho de verdade, com acabamento e
+"juice". A primeira passagem separou a arte em `src/styles/chunk-cards.css` e converteu o trio de
+retângulos em um leque físico 5:7: verso autorado, virada escalonada, papel texturizado, moldura
+dupla, canto espelhado, sigilo vetorial por domínio (maré/espinho/teia), quadro da arte, selo de
+moeda e tipografia hierárquica. O componente agora declara os oito estados: default, hover, foco,
+pressão, bloqueado, carregando arte, erro de arte e compra concluída. A confirmação é silenciosa e
+visível na própria carta antes de ela virar terreno; `prefers-reduced-motion` remove todo movimento
+espacial. `npm run typecheck` e o ESLint direcionado ao componente/cenário passaram na primeira
+checagem.
+
+Fechamento: `npm run build`, `git diff --check`, o cliente Playwright padrão do skill de jogo e
+`npm run playtest -- world-builder` passaram. O cenário agora exercita também proporção 5:7, versos,
+cantos/sigilos, foco, hover, pressão, arte carregando/com erro, bloqueio por preço, confirmação de
+compra e ausência de overflow em 320/375/414/768px. A última execução limpa, sem erro de página, é
+`playtest/results/run-2026-08-06T17-25-31/`; as capturas desktop, mobile e de sucesso foram
+inspecionadas visualmente. A auditoria Hallmark de escopo de componente passou sem gate universal
+aplicável em aberto.
+
+## Três cartas de terreno estreiam os tiles órfãos (2026-08-06)
+
+A biblioteca usava só 11 dos ~30 frames do atlas (chão 5/23/24/33, superior 0/4/6/7/8/10/11).
+`scripts/add-terrain-chunks.mjs` (modelo enrich: lê o world.json, acrescenta, backup em
+`backup/world-pre-terrain-cards.json`, idempotente por id, zero random) somou três cartas que
+estreiam as famílias restantes:
+
+- **Granite Pass (6)** — a montanha em cubo (39/40) em quatro maciços de canto, pátio/trilha de
+  pedra (23/24), pedras deitadas (12/13), rocha+ferro pra picareta, e DOIS MORCEGOS: no chunk
+  feito de parede, a espécie certa é a que voa por cima dela.
+- **Sunken Graveyard (8)** — o cemitério inteiro: xadrez de pedra com lajes 29/30/32, covas
+  abertas (31) ladeadas de túmulos (25), cabeças na estaca (22) na encruzilhada, ossos 27/28,
+  árvores mortas 3/21. Três spawns de undead SOBRE as covas desenhadas — a cova que pare é a
+  cova que se vê — e sem fogueira de propósito (luz calaria as covas).
+- **Blooming Grove (4)** — canteiros de terra lavrável (6, o chão que a PÁ aceita) com os
+  pinheiros de fruto (15), flor (16) e variantes 14/17/18, arbusto florido (1), folhagens 19/20
+  e gravetos 2/9. Zero inimigos: a carta barata e mansa do baralho.
+
+Nada essencial nas faixas que o `openSeams` limpa (N x5-7/y0-3 · S x5-7/y8-11 · W x0-3/y5-9 ·
+E x8-11/y5-9) — no cemitério a estrada corta o pátio de pedra em grama, de propósito. Cada carta
+respeita "uma espécie por tela" e nenhum bloqueio sela bolsão (conferido em render ASCII).
+
+Naipes novos com pictograma e sigilo próprios (ids fora das regex caíam no `wild` genérico):
+`peak`/`grave`/`bloom` em `chunkCardSuits.ts` + desenhos P&B em `chunkCardArt.ts` + SVGs em
+`ChunkPurchaseOverlay.ts` — os três `Record<CardSuit,…>` fazem o compilador cobrar naipe novo.
+CSS intocado (a moldura só distingue NPC/violeta de terreno/ouro).
+
+`world-builder` atualizado: baralho 11→14, pós-compra 10→13, editor 11→14, e três asserts novos
+cobrando que cada carta usa seus frames-assinatura (39/40, 31/25/22, 15/16/6) e a lei da espécie
+única. `npm run typecheck` limpo; lint sem erro novo (os 56 são pré-existentes de
+spritefactory/worldgen).
+
+## O veio de ferro, a pilha e o balcão do astronauta (2026-08-06)
+
+Pedido do usuário: a rocha de ferro NÃO se destrói mais — 3 picaretadas soltam um minério e
+dá pra bater pra sempre; o minério acumula como semente; e o astronauta, depois da primeira
+fala, oferece duas opções (continuar conversando / vender ferro), pergunta só a QUANTIDADE e
+paga em moedas. "Minerar é uma atividade lucrativa."
+
+**O veio (`RockObject`)**: `ore` deixou de ser só arte — a rocha comum segue fechadura (2
+batidas, tile abre), a de minério virou POÇO: ciclo de 3 batidas (1ª racha, 2ª recua, 3ª
+produz e REARMA com a arte inteira de volta — o placar é a própria textura), nunca quebra,
+nunca desbloqueia. `smash()` agora devolve `'none'|'struck'|'shattered'|'yielded'` e quem
+solta o item é a GameScene (`dropOreYield`): o bloco salta pro lado de quem bateu (os pés —
+o B pega do chão sob os pés) e, se já houver ferro ali, ENGROSSA o item (`units`). A bomba
+avança o ciclo (2 batidas) mas nunca abre o veio.
+
+**A pilha**: `UNIT_PACK_KINDS` = sementes + ferro — pousar põe a contagem inteira num item
+só, pegar devolve (o contrato `ItemPickup.units` de sempre). Lista SEPARADA de
+`SEED_PACK_KINDS` porque o buraco de plantio pergunta por semente (ferro não é semeável).
+Armadilha achada no caminho: a bandeja da caixa de ferramentas engolia o item INTEIRO
+(`take` devolvia só o kind) — 5 ferros teriam virado UMA foice; o port agora consome uma
+unidade e devolve o resto ao tile no mesmo frame. O braço robótico já preservava units.
+
+**O balcão (`DialogOverlay` + `trade` no world.json)**: o rodapé do painel Disco-Elysium
+deixou de ser uma opção única e virou MENU (dados, numerado, `data-opt` pro playtest).
+`WorldDialog.trade` = `{item, coinsPerUnit, offer, empty, thanks}` — autorado no
+`add-npc-chunks.mjs` (dialogs são reescritos a cada rodada; preço = editar o número e rodar).
+Fluxo: 1ª fala → [Keep talking / Sell iron]; vender com mochila vazia responde com FALA
+(nunca menu mudo); com estoque, o NPC pergunta e abre o caixa (− n +, começa em TUDO, setas
+ajustam, Enter confirma, Esc desiste); a venda entra como recibo do narrador (número exato)
++ agradecimento, e o balcão reabre. A transação mora na GameScene (`tradePortFor`): mochila
+e carteira mudam juntas pelo caminho da moeda real (`addExplorerCoins` + `CoinManager`),
+com `persistAdventure`. `gateDialog` DESPE o trade da variante travada (NPC com medo não
+vende), e ferro a 3 moedas: ~2s por minério contra 1 moeda da caveira — minerar é o ganho
+honesto que o diálogo promete. Falas novas do astronauta espelhadas em en.json E no script.
+
+**Guarda**: cenário novo `npm run playtest -- ferro` — o ciclo de 3 (frame 1 → frame 0,
+blocking sempre true), a pilha (units 2 no MESMO item), o pegar que devolve 2, o menu de
+duas opções após a 1ª fala, o caixa (2 → − → 1 → + → 2), a venda (6 moedas na carteira,
+recibo no log), a recusa sem estoque e o Esc. Nota: o comentário do GameDriver diz "B usa o
+item", mas a tabela `useItemAt` mora no A (`swingAttack`) — o cenário minera com
+`driver.attack`; `pedra` usa `faceAndUse` (B) pra picaretar e pode estar vermelho por isso
+(flake anotado, não tocado). `typecheck` e eslint dos arquivos tocados limpos.
+
+## A loja morreu; a moeda vive no mundo (2026-08-06)
+
+Seis pedidos do usuário numa passada, todos na mesma direção: economia e conversa acontecem no
+MUNDO, nunca em menu.
+
+**1. A LOJA foi removida por inteiro.** `ShopOverlay.ts` deletado, e o sistema de upgrades
+(maxHealth/swordSpeed/moveSpeed/magnet) junto — sem a loja ele era código morto. Saíram:
+gatilho de bump na fogueira acesa (o bump agora só faz a chama reagir), `openShop/closeShop`
+do gameDebug e do GameDriver, `shopOpen` do estado, o campo `upgrades` dos dois saves
+(parse tolerante ignora a chave velha), `buyExplorerUpgrade`, o cenário `shop` (e o
+DEFAULT_SEQUENCE), o passo de loja do `audio`. Cadência de ataque agora é fixa
+(`ATTACK_COOLDOWN_MS`); vida máxima é `PLAYER_HEALTH_MAX`. Os SAMPLES `shopOpen/Close` ficam —
+cartas de chunk, selo e porta os reusam.
+
+**2. O minério ESPALHA como moeda.** O yield do veio deixou de ser item de chão com pilha:
+`CoinManager.spawnLoot` (o `Coin` ganhou `CoinLook` — mesma física de espalhar/quicar/pegar
+de passagem, arte parametrizada) e o bloco entra na mochila POR PISADA via `Inventory.stash`
+— o par do `add` que NUNCA seleciona: a picareta não é roubada por cada bloco que cai. É a
+exceção deliberada ao "nada entra por pisada", documentada no CLAUDE.md: o que espalha como
+moeda se pega como moeda. Som: o chime de item (`playSwordPickup`), não o de moeda.
+
+**3. A venda DERRUBA moedas.** `tradePortFor` ganhou o `npcWorld`: vender não credita mais a
+carteira — o NPC derruba as moedas exatas em volta de si (`spawnCoins` com count), como um
+inimigo derrubaria, e o jogador anda até elas. A mochila esvazia na hora; cada moeda entra
+pelo caminho único de toda moeda (explorer `addExplorerCoins`, aventura persist).
+
+**4. Moeda pega VOA pro HUD.** `CoinManager.update` agora recebe DOIS âncoras: moeda voa pro
+CONTADOR (`ExplorerHud.coinAnchorRect`, DOM→canvas via `hudCoinAnchor`), que já pulsa ao
+crescer; loot voa pro HERÓI (o corpo é a mochila). Sem HUD (aventura/levels), moeda cai no
+herói como antes.
+
+**5. O keycap "Z" e a conversa pelo botão de ação.** `NpcManager` ganhou um segundo overlay
+por NPC: um keycap pixel-art (mesma técnica do "!", com a tecla Z — ou A no toque) mostrado
+quando o herói está adjacente E encarando (`isTalkTarget`, quarto callback). O keycap CALA o
+"!" enquanto visível (dois balões no mesmo pixel não ensinam nenhum). `swingAttack` checa
+`talkToNpcAt` ANTES da cadência/lâmina: Z de frente pra alguém conversa — sem investida, sem
+gasto de golpe; o B continua falando. `openDialogScript` chama `resetChargeAndBuffers` (o Z
+segurado que abriu o diálogo perderia o keyup — a rede da subtela).
+
+**6. Menu de diálogo navegável.** O overlay ganhou seleção destacada (`is-selected`, UM
+estado alimentado por ↑↓/WS, hover e toque), Enter/Espaço/Z confirmam A SELECIONADA (com
+guard de `event.repeat` — tecla segurada não metralha a conversa), dígitos continuam
+escolhendo direto, ←→/AD lapidam a quantidade no caixa, Esc volta/fecha.
+
+**Guarda**: `playtest -- ferro` reescrito de ponta a ponta — ciclo de 3 do veio, loot por
+pisada que não rouba a mão, keycap visível ao encarar, Z abrindo o diálogo real (com
+npcWorld: as moedas caem em volta do NPC), seta+Enter navegando até vender, caixa 2→1→2,
+venda que derruba 6 moedas SEM creditar carteira, recusa sem estoque, e a coleta andando
+tile a tile até a carteira fechar em +6. CLAUDE.md atualizado (dois botões, esbarrão sem
+loja, a exceção do minério); memórias idem. `typecheck` e eslint dos tocados limpos.
+
+## Auditoria mobile (2026-08-06)
+
+Varredura de toda superfície de toque, a pedido. O que JÁ estava certo: andar por arrasto
+(touchstart na janela + `data-zh-ui` marcando UI), os dois círculos A/B (golpe no touchstart
+sem o atraso do click sintético, release fora do círculo solta a carga do giro), a bolsa
+(slots/setas/confirmar por toque, teclas escondidas), pausa (pill touch-only) e subtela via
+pausa, LevelButtons (↻ com confirmação de 2 toques), título (POINTER_DOWN), ItemGet (tap
+skip + auto-close 3.2s), ExtractPrompt (botões DOM), morte (tap para continuar + auto-restart
+de graça longa), as cartas de compra (leque horizontal com snap, testadas em 320–768px), o
+diálogo inteiro (tap no log avança, opções/caixa clicáveis, seleção unificada com o hover), o
+keycap do NPC mostrando "A" no toque, e moedas/loot por pisada + voo pro HUD (independem de
+input). Safe-area insets presentes em HUD, pad e pausa.
+
+**Dois furos achados e fechados:**
+1. O selo de estrada dizia `[X / K] BUILD` — tecla que não existe num aparelho de dedo. No
+   toque agora diz `[B]`, o nome do círculo esquerdo (ChunkGatePrompt + isTouchDevice). O
+   assert do `world-builder` (`/BUILD/`) segue valendo — Playwright não é touch.
+2. Alvos de toque do diálogo: `.zh-dlg-opt` e os botões −/+ do caixa tinham ~24–26px em fonte
+   mínima. `@media (pointer: coarse)` sobe tudo ao mínimo confortável (44px) e os dois ganham
+   `touch-action: manipulation` + tap-highlight transparente.
+
+**Item de observação (não mexido):** o painel de diálogo em RETRATO estreito fica com ~50% de
+375px ≈ 187px — funcional (fonte piso 12px, alvos ok), mas apertado. Se um dia incomodar, a
+resposta é um layout de folha inferior para retrato — decisão de design, não bug.
+
+## A morte devolve rápido (2026-08-06)
+
+Pedido do usuário: morrer tem que voltar mais depressa pro jogo. A elegia INTEIRA continua —
+o baque, o mundo drenando de cor, o herói sumindo no vazio, o epitáfio subindo — mas
+comprimida: fade do mundo 1500→900ms, herói (e o item das costas) delay 900→500 + fade
+3200→1600ms, epitáfio 3000→1200ms (pleno a ~3.3s, era ~7.1s). O pulo por tap/tecla arma aos
+1.6s (era 4.8s) — tarde o bastante pra um botão apertado enquanto caía não engolir a elegia —
+e o retorno automático caiu de 12s pra 5s. O custo de morrer segue sendo a caminhada de volta
+(o contrato do save não mudou), nunca a espera. `salvamento` ajustado ao relógio novo (foto da
+elegia aos 3.4s, antes do auto-restart); comentário do `explorador` idem.

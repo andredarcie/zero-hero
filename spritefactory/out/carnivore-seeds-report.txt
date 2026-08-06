@@ -1,0 +1,4 @@
+carnivore-seeds: 1 frame(s) — 0 fail, 1 warn
+  [warn] near-duplicate: #452939 and #3e2533 differ by d=10.0 — invisible at 1x, merge them
+  [info] bbox: content 14x8 at (1,3), coverage 19%
+  frame 0: #3e2533×25 #452939×19 #cdcdcd×4

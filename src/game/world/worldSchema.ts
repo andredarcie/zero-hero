@@ -35,6 +35,19 @@ export type WorldEnemySpawn = { type: EnemyKind; worldX: number; worldY: number 
 export type WorldPickupSpawn = { type: PickupKind; worldX: number; worldY: number };
 export type WorldNpcSpawn = { type: NpcKind; worldX: number; worldY: number };
 
+/**
+ * Metadata that turns an authored editor chunk into a card the player can buy.
+ * Terrain and entities keep using the normal WorldChunk fields; this small record is the
+ * catalogue-facing identity used by the world-builder mode.
+ */
+export type ChunkCatalogEntry = {
+  id: string;
+  name: string;
+  cost: number;
+  cardImage: string;
+  description?: string;
+};
+
 // One screen = terrain grids + the entities that live on it. This is the unit the runtime
 // streams and the (future) editor will paint, so terrain and content are co-located.
 export type WorldChunk = {
@@ -46,6 +59,8 @@ export type WorldChunk = {
   enemies: WorldEnemySpawn[];
   pickups: WorldPickupSpawn[];
   npcs: WorldNpcSpawn[];
+  /** Present in public/world.json, which is now the editable chunk library. */
+  catalog?: ChunkCatalogEntry;
 };
 
 // World-level props (not tied to a chunk) so a campfire/dry bush/door can be free-placed
@@ -73,7 +88,10 @@ export type WorldChunk = {
 // (A B [caixa] resultado). Drop an item on each slot and a RECIPE turns the pair into a third
 // item — the only thing in the game that makes an item out of other items, instead of out of a
 // prop the hero hits with a tool.
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal';
+// `carnivorousPlant` is the farmed DEFENSE: grown from carnivore seeds in a plantSpot (or
+// authored), it blocks its tile and EATS any enemy that stops beside it — then chews, exposed.
+// It is a plant to everything else: fire burns it, the scythe fells it (no drop).
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.
@@ -111,6 +129,20 @@ export type WorldProp = {
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };
 
+/**
+ * O BALCÃO de um NPC: ele compra `item` a `coinsPerUnit` moedas a unidade, por QUANTIDADE,
+ * dentro do próprio diálogo (depois da primeira fala o painel oferece "vender" ao lado de
+ * "continuar conversando" — ver DialogOverlay). As três falas são o roteiro do caixa: a
+ * oferta (pergunta o quanto), a recusa de mochila vazia, e o fechamento da venda.
+ */
+export type WorldDialogTrade = {
+  item: string;
+  coinsPerUnit: number;
+  offer: string;
+  empty: string;
+  thanks: string;
+};
+
 // Folds NPC_DIALOGS + DIALOG_VOICES into one editable record per NPC.
 export type WorldDialog = {
   npcName: string;
@@ -119,6 +151,7 @@ export type WorldDialog = {
   npcFrame?: number;
   voice: { freq: number; wave: OscillatorType };
   lines: WorldDialogLine[];
+  trade?: WorldDialogTrade;
 };
 
 export type WorldData = {

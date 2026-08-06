@@ -15,6 +15,7 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { wireShapeFrame, wireShapeFromMask } from '@/game/world/wireShapes';
 import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import { GameScene } from '@/game/scenes/GameScene';
+import { startExplorerRun } from '@/game/explorer/explorerRun';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
@@ -79,10 +80,12 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   lavaBoots: { key: ASSET_KEYS.lavaBootsIcon },
   pickaxe: { key: ASSET_KEYS.pickaxeIcon },
   scythe: { key: ASSET_KEYS.scytheIcon },
+  shovel: { key: ASSET_KEYS.shovelIcon },
   wood: { key: ASSET_KEYS.woodIcon },
   stone: { key: ASSET_KEYS.rock },
   iron: { key: ASSET_KEYS.ironItem },
   seeds: { key: ASSET_KEYS.seedsItem },
+  carnivoreSeeds: { key: ASSET_KEYS.carnivoreSeedsItem },
   bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
   battery: { key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
 };
@@ -104,6 +107,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   moonflower: { key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
   bombSpot: { key: ASSET_KEYS.bombItem, frame: 0 },
   plantSpot: { key: ASSET_KEYS.plantHole, frame: 0 },
+  carnivorousPlant: { key: ASSET_KEYS.carnivorousPlant, frame: 0 },
   // O frame aqui e so o default da paleta: no tabuleiro, entityVisual troca pelo frame da
   // direcao gravada, pra o editor mostrar pra onde CADA braco esta virado.
   inserter: { key: ASSET_KEYS.inserter, frame: 1 },
@@ -1131,6 +1135,7 @@ export class EditorScene extends Phaser.Scene {
     if (!this.requireValidStartPoint()) return;
     this.persistUi();
     setWorldData(store.snapshotWorld());
+    if (this.registry.get('appMode') === 'editor') startExplorerRun();
     // O número vem do ARQUIVO aberto (level ou dungeon): testar a dungeon-3 pelo P é jogar o
     // level 3 ativo, com os mesmos botões flutuantes e o mesmo "reiniciar" do pause.
     if (this.registry.get('appMode') === 'lab') setActiveLevel(this.labFileNumber);
@@ -1217,6 +1222,11 @@ export class EditorScene extends Phaser.Scene {
       world: this.store
         ? { name: this.store.world.meta.name, chunksX: this.store.world.meta.worldChunksX, chunksY: this.store.world.meta.worldChunksY }
         : null,
+      chunkCatalog: this.store?.world.chunks.map((chunk) => ({
+        cx: chunk.cx,
+        cy: chunk.cy,
+        ...chunk.catalog,
+      })) ?? [],
       spawn: this.store?.spawn ?? null,
       zoom: this.cameras.main.zoom,
     });

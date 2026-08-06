@@ -3,12 +3,16 @@ import Phaser from 'phaser';
 
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { ChunkManager } from '@/game/world/ChunkManager';
-import { Coin } from './Coin';
+import { Coin, type CoinLook } from './Coin';
 
 const SCATTER_RADIUS = 2;
 
+/** Um drop que ANDA como moeda mas cujo destino é de quem o criou (o minério → a mochila). */
+type LootEntry = { coin: Coin; onCollect: () => void };
+
 export class CoinManager {
   private readonly coins: Coin[] = [];
+  private readonly loot: LootEntry[] = [];
   private total = 0;
   private magnetRadius = 0;
 
@@ -58,36 +62,70 @@ export class CoinManager {
     });
   }
 
+  /**
+   * O DROP-QUE-NÃO-É-MOEDA: mesma física de espalhar, pousar e pegar de passagem, mas cada
+   * unidade apanhada chama `onCollectOne` (o minério entra na mochila) em vez de somar na
+   * carteira. O voo de absorção vai pro HERÓI — o que se guarda voa pro corpo, o que se
+   * conta voa pro contador.
+   */
+  public spawnLoot(
+    worldX: number,
+    worldY: number,
+    chunkManager: ChunkManager,
+    count: number,
+    look: CoinLook,
+    onCollectOne: () => void,
+  ): void {
+    const targets = this.pickScatterTiles(worldX, worldY, count, chunkManager);
+    targets.forEach((target, i) => {
+      this.loot.push({
+        coin: new Coin(this.scene, worldX, worldY, target.x, target.y, i * 60, look),
+        onCollect: onCollectOne,
+      });
+    });
+  }
+
+  /** Os tiles com loot pousado (o par de getActiveWorldPositions, pro playtest andar até eles). */
+  public getActiveLootPositions(): Array<{ worldX: number; worldY: number }> {
+    return this.loot
+      .filter((entry) => !entry.coin.isCollected)
+      .map((entry) => ({ worldX: entry.coin.tileX, worldY: entry.coin.tileY }));
+  }
+
   public update(
     playerWorldX: number,
     playerWorldY: number,
-    absorbAnchor: { x: number; y: number },
+    // Dois destinos de voo: a moeda vai pro CONTADOR do HUD (o número que ela aumenta), o
+    // loot vai pro corpo do herói (a mochila não tem posição na tela; o corpo é a mochila).
+    anchors: { counter: { x: number; y: number }; hero: { x: number; y: number } },
     onCollect: (total: number) => void,
   ): void {
-    for (const coin of this.coins) {
-      if (!coin.isCollectable || coin.isCollected) continue;
+    const inReach = (coin: Coin): boolean => {
       const dx = Math.abs(coin.tileX - playerWorldX);
       const dy = Math.abs(coin.tileY - playerWorldY);
-      const inRange = dx === 0 && dy === 0;
-      const inMagnet = this.magnetRadius > 0 && Math.max(dx, dy) <= this.magnetRadius;
-      if (inRange || inMagnet) {
-        coin.collect(absorbAnchor, () => {
+      return (dx === 0 && dy === 0) || (this.magnetRadius > 0 && Math.max(dx, dy) <= this.magnetRadius);
+    };
+    for (const coin of this.coins) {
+      if (!coin.isCollectable || coin.isCollected) continue;
+      if (inReach(coin)) {
+        coin.collect(anchors.counter, () => {
           this.total += 1;
           onCollect(this.total);
         });
       }
     }
-
-    for (let i = this.coins.length - 1; i >= 0; i--) {
-      if (this.coins[i].isCollected) {
-        // keep until sprite animation completes (render handles visibility)
-      }
+    for (const entry of this.loot) {
+      if (!entry.coin.isCollectable || entry.coin.isCollected) continue;
+      if (inReach(entry.coin)) entry.coin.collect(anchors.hero, entry.onCollect);
     }
   }
 
   public render(tileSize: number, camera: WorldCamera): void {
     for (const coin of this.coins) {
       coin.render(tileSize, camera);
+    }
+    for (const entry of this.loot) {
+      entry.coin.render(tileSize, camera);
     }
   }
 
@@ -96,13 +134,14 @@ export class CoinManager {
       coin.destroy();
     }
     this.coins.length = 0;
+    for (const entry of this.loot) {
+      entry.coin.destroy();
+    }
+    this.loot.length = 0;
   }
 
   public destroy(): void {
-    for (const coin of this.coins) {
-      coin.destroy();
-    }
-    this.coins.length = 0;
+    this.resetForScreenChange();
   }
 
   private pickScatterTiles(

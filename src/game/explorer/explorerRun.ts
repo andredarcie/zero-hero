@@ -1,5 +1,3 @@
-import type { UpgradeState } from '@/game/runtime/ShopOverlay';
-
 /**
  * O MODO EXPLORADOR — o estado de uma expedicao, e o que sobra dela.
  *
@@ -25,6 +23,8 @@ import type { UpgradeState } from '@/game/runtime/ShopOverlay';
 
 const STORAGE_KEY = 'zh.explorer.v1';
 
+/** A bolsa de partida de toda expedicao: capital inicial para comprar as primeiras terras. */
+export const START_COINS = 100;
 /** Fracao da bolsa que sobrevive quando o heroi ESCOLHE voltar por um portal. */
 export const EXTRACT_KEEP = 0.5;
 /** Fracao da bolsa que sobrevive quando o escuro decide: morrer no mundo aleatorio. */
@@ -46,10 +46,8 @@ export interface ExplorerStats {
 }
 
 export interface ExplorerMeta {
-  /** Moedas guardadas no acampamento. Sao estas que a fogueira-loja gasta. */
+  /** Moedas guardadas no acampamento (a LOJA que as gastava foi removida; o banco fica). */
   banked: number;
-  /** Melhorias compradas — permanentes, ao contrario da aventura (la elas morrem com a run). */
-  upgrades: UpgradeState;
   stats: ExplorerStats;
 }
 
@@ -74,7 +72,6 @@ export type ExplorerArrival =
 
 const defaultMeta = (): ExplorerMeta => ({
   banked: 0,
-  upgrades: { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 },
   stats: { runs: 0, extractions: 0, deaths: 0, bestHaul: 0, bestDepth: 0, totalBanked: 0 },
 });
 
@@ -89,7 +86,6 @@ export const loadExplorerMeta = (): ExplorerMeta => {
     const parsed = JSON.parse(raw) as Partial<ExplorerMeta>;
     return {
       banked: num(parsed.banked, base.banked),
-      upgrades: { ...base.upgrades, ...(parsed.upgrades ?? {}) },
       stats: { ...base.stats, ...(parsed.stats ?? {}) },
     };
   } catch {
@@ -152,7 +148,7 @@ export const startExplorerRun = (seed?: number): ExplorerRunState => {
   saveExplorerMeta(meta);
   run = {
     seed: seed ?? rollSeed(),
-    coins: 0,
+    coins: START_COINS,
     depth: 0,
     maxDepth: 0,
     kills: 0,
@@ -208,6 +204,13 @@ export const addExplorerCoins = (amount: number): void => {
   run.coins += amount;
 };
 
+/** The world is bought with the coins still carried in this run, not the old meta bank. */
+export const spendExplorerCoins = (amount: number): boolean => {
+  if (!run || run.coins < amount) return false;
+  run.coins -= amount;
+  return true;
+};
+
 export const noteExplorerKill = (): void => {
   if (run) run.kills += 1;
 };
@@ -261,11 +264,3 @@ export const consumeExplorerArrival = (): ExplorerArrival | null => {
   return arrival;
 };
 
-/** As melhorias compradas atravessam expedicoes: a loja da fogueira e a progressao do modo. */
-export const buyExplorerUpgrade = (id: keyof UpgradeState, cost: number): boolean => {
-  if (meta.banked < cost) return false;
-  meta.banked -= cost;
-  meta.upgrades[id] += 1;
-  saveExplorerMeta(meta);
-  return true;
-};

@@ -481,6 +481,11 @@ export class EnemyManager {
     return hit;
   }
 
+  /** A pá revolveu este tile: a ossada/mancha que estava pintada nele some (ver CorpseDecals). */
+  public removeCorpseAt(worldX: number, worldY: number): void {
+    this.corpses.removeAt(worldX, worldY);
+  }
+
   /** Fade every enemy out (e.g. to clear the field during a cut-scene) — e limpa o ar com eles. */
   public despawnAll(): void {
     for (const enemy of this.enemies) enemy.despawn();

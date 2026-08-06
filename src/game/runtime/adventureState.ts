@@ -1,4 +1,3 @@
-import type { UpgradeState } from '@/game/runtime/ShopOverlay';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { DungeonSnapshot } from '@/game/dungeon/dungeonSnapshot';
 
@@ -30,6 +29,8 @@ export interface AdventureGroundItem {
   kind: HeldItemKind;
   worldX: number;
   worldY: number;
+  /** O pacote (sementes): quantas unidades este item vale. Ausente = 1 (saves antigos). */
+  count?: number;
 }
 
 export interface AdventureSnapshot {
@@ -38,7 +39,6 @@ export interface AdventureSnapshot {
   /** Onde o heroi acorda (tile do overworld dentro do anel de um fogo aceso). */
   respawn: { worldX: number; worldY: number } | null;
   coins: number;
-  upgrades: UpgradeState;
   inventory: Array<{ kind: HeldItemKind; count: number }>;
   selected: HeldItemKind | 'none';
   /** "x,y" de cada fogueira do overworld que o jogador acendeu. */
@@ -50,6 +50,13 @@ export interface AdventureSnapshot {
   seenItems: Set<string>;
   /** "x,y" de cada pinheiro-tile derrubado (diff de terreno sobre o world.json). */
   felledTrees: Set<string>;
+  /**
+   * "x,y" de cada buraco de plantio que a PÁ cavou no overworld. Diff sobre os plantSpots
+   * autorados, pelo mesmo motivo do felledTrees: o buraco é ESTRUTURA que o jogador fez, e a
+   * morte não pode apagá-la. Só a posição entra — o estado do canteiro (monte, mato) é dos
+   * renováveis, como o de qualquer canteiro autorado.
+   */
+  dugSpots: Set<string>;
   /**
    * Itens no chao por MUNDO ('world' ou 'dungeon-N'): a foto substitui a lista autorada daquele
    * arquivo — um item largado fica onde ficou, um tesouro tomado nao renasce.
@@ -75,7 +82,6 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   started: false,
   respawn: null,
   coins: 0,
-  upgrades: { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 },
   inventory: [],
   selected: 'none',
   litFires: new Set(),
@@ -85,6 +91,7 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   seenDialogKeys: new Set(),
   seenItems: new Set(),
   felledTrees: new Set(),
+  dugSpots: new Set(),
   groundItems: new Map(),
   visitedChunks: new Set(),
   runSeed: 0,
@@ -95,7 +102,6 @@ type StoredSnapshot = {
   started?: boolean;
   respawn?: { worldX: number; worldY: number } | null;
   coins?: number;
-  upgrades?: Partial<UpgradeState>;
   inventory?: Array<{ kind: HeldItemKind; count: number }>;
   selected?: HeldItemKind | 'none';
   litFires?: string[];
@@ -105,6 +111,7 @@ type StoredSnapshot = {
   seenDialogKeys?: string[];
   seenItems?: string[];
   felledTrees?: string[];
+  dugSpots?: string[];
   groundItems?: Record<string, AdventureGroundItem[]>;
   visitedChunks?: string[];
   runSeed?: number;
@@ -126,7 +133,6 @@ const load = (): AdventureSnapshot => {
         ? { worldX: p.respawn.worldX, worldY: p.respawn.worldY }
         : null,
       coins: num(p.coins, 0),
-      upgrades: { ...base.upgrades, ...(p.upgrades ?? {}) },
       inventory: Array.isArray(p.inventory) ? p.inventory.filter((i) => i && typeof i.kind === 'string') : [],
       selected: p.selected ?? 'none',
       litFires: new Set(p.litFires ?? []),
@@ -136,6 +142,7 @@ const load = (): AdventureSnapshot => {
       seenDialogKeys: new Set(p.seenDialogKeys ?? []),
       seenItems: new Set(p.seenItems ?? []),
       felledTrees: new Set(p.felledTrees ?? []),
+      dugSpots: new Set(p.dugSpots ?? []),
       groundItems: new Map(Object.entries(p.groundItems ?? {})),
       visitedChunks: new Set(p.visitedChunks ?? []),
       runSeed: num(p.runSeed, 0),
@@ -169,7 +176,6 @@ export const saveAdventure = (): void => {
     started: s.started,
     respawn: s.respawn,
     coins: s.coins,
-    upgrades: s.upgrades,
     inventory: s.inventory,
     selected: s.selected,
     litFires: [...s.litFires],
@@ -179,6 +185,7 @@ export const saveAdventure = (): void => {
     seenDialogKeys: [...s.seenDialogKeys],
     seenItems: [...s.seenItems],
     felledTrees: [...s.felledTrees],
+    dugSpots: [...s.dugSpots],
     groundItems: Object.fromEntries(s.groundItems),
     visitedChunks: [...s.visitedChunks],
     runSeed: s.runSeed,

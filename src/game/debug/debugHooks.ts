@@ -20,6 +20,8 @@ export interface GameDebugState {
   heldItem: 'none' | HeldItemKind;
   /** A MOCHILA inteira, na ordem em que foi ganha: o que a subtela desenha. */
   inventory: Array<{ kind: HeldItemKind; count: number }>;
+  /** A BOLSA aberta? (ver QuickBag — a mochila que nao pausa o jogo) */
+  bagOpen: boolean;
   groundItems: Array<{ kind: HeldItemKind; worldX: number; worldY: number }>;
   crates: Array<{ worldX: number; worldY: number }>;
   pressurePlates: Array<{ worldX: number; worldY: number; variable?: string; pressed: boolean }>;
@@ -122,7 +124,6 @@ export interface GameDebugState {
   globalVariables: Record<string, boolean>;
   coins: number;
   dialogOpen: boolean;
-  shopOpen: boolean;
   itemGetOpen: boolean;
   isDead: boolean;
   /** O heroi e uma estatua de gelo agora (a bola do zora — ver FreezeManager). */
@@ -201,8 +202,6 @@ export interface GameDebugApi {
   /** Open an NPC dialog by kind (defaults to a long-text NPC, good for legibility checks). */
   openDialog: (kind?: NpcKind) => boolean;
   closeDialog: () => void;
-  openShop: () => void;
-  closeShop: () => void;
   /** Fire the "you got the sword" presentation (for capturing the effect). */
   triggerSwordGet: () => void;
   listNpcKinds: () => NpcKind[];

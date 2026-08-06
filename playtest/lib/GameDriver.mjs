@@ -238,20 +238,6 @@ export class GameDriver {
     });
   }
 
-  async openShop() {
-    await this.page.evaluate(() => window.gameDebug?.openShop());
-    await this.page.waitForFunction(() => window.gameDebug?.getState()?.shopOpen === true, null, {
-      timeout: 5000,
-    });
-  }
-
-  async closeShop() {
-    await this.page.evaluate(() => window.gameDebug?.closeShop());
-    await this.page.waitForFunction(() => window.gameDebug?.getState()?.shopOpen === false, null, {
-      timeout: 5000,
-    });
-  }
-
   async listNpcKinds() {
     return this.page.evaluate(() => window.gameDebug?.listNpcKinds() ?? []);
   }

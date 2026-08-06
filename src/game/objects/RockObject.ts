@@ -13,17 +13,31 @@ import type { WorldProp } from './WorldProp';
 // chips are real objects in the 3D world (they arc, they land, they lie there), not a decoration
 // hanging off the rock's own sprite.
 //
-// ── A PEDRA DE FERRO e a mesma classe ────────────────────────────────────────────────────────
-// `ore` troca as duas texturas por um veio de minerio e nada mais. Deliberadamente NAO troca o
-// numero de pancadas, o recuo, o colapso nem a colisao: quem decide que aquilo ali e outra coisa
-// e o DROP (GameScene solta um bloco de ferro em vez de uma pedra) e a arte — nunca o tempo.
-// Uma pedra de minerio que exigisse tres golpes seria so a mesma decisao tomada mais devagar.
+// ── A PEDRA DE FERRO e a mesma classe, mas NAO e uma pedra: e um VEIO ────────────────────────
+// `ore` deixou de ser so arte. A rocha comum e uma FECHADURA (duas picaretadas e o tile abre);
+// a de minerio e um POCO — ela nunca quebra, nunca abre o tile, e a cada TRES picaretadas
+// cospe um bloco de ferro e volta ao comeco. E a primeira fonte RENOVAVEL de materia do jogo,
+// e e por isso que o astronauta paga por ferro: minerar e uma atividade, nao um destino.
+// O progresso do ciclo e a PROPRIA arte (a lei do estado que muda um pixel): 1a pancada racha,
+// 2a so recua (a rachadura segura o placar), 3a produz — e a pedra INTEIRA de novo e o desenho
+// de "recarregado". Quem solta o item e o GameScene (dropOreYield), nunca esta classe.
 //
 // E uma classe so, e nao uma subclasse: a diferenca cabe num booleano, enquanto duas classes
 // significariam duas copias do recuo, do colapso e do contrato de colisao — que e exatamente a
 // maneira confiavel de as duas discordarem daqui a um mes.
 
 type RockState = 'intact' | 'cracked' | 'broken';
+
+/**
+ * O que uma pancada de picareta fez: 'none' = nao havia pedra de pe; 'struck' = acertou e a
+ * pedra segue no lugar; 'shattered' = a pedra comum abriu o tile; 'yielded' = o veio de ferro
+ * completou o ciclo e PRODUZIU (a pedra continua de pe e bloqueando).
+ */
+export type RockSmashResult = 'none' | 'struck' | 'shattered' | 'yielded';
+
+/** Quantas picaretadas o veio pede por bloco de ferro. Mais que as duas da pedra comum de
+ *  proposito: a fonte infinita paga em tempo o que nunca paga em esgotamento. */
+const ORE_BLOWS_PER_YIELD = 3;
 
 /** As duas artes de cada tipo de pedra. A comum guarda o par em dois PNGs (e mais velha que o
  *  sprite factory); o minerio guarda os dois estados como frames 0 e 1 de um sheet so. */
@@ -42,8 +56,10 @@ export class RockObject implements WorldProp {
   private readonly scene: Phaser.Scene;
   private readonly sprite: Billboard3D;
   private state: RockState = 'intact';
+  /** O placar do veio: pancadas dadas dentro do ciclo atual (so a pedra de minerio conta). */
+  private oreBlows = 0;
 
-  /** Minerio: mesma pedra, mesma picareta, mas o que ela deixa no chao e ferro. */
+  /** Minerio: a rocha que nunca quebra — a cada 3 picaretadas ela PRODUZ um bloco de ferro. */
   public readonly ore: boolean;
 
   public constructor(scene: Phaser.Scene, worldX: number, worldY: number, ore = false) {
@@ -70,22 +86,38 @@ export class RockObject implements WorldProp {
 
   /**
    * One pickaxe blow, landing from direction (dirX, dirY) — the unit vector pointing from the
-   * hero INTO the rock. Returns true if it landed (i.e. the rock was still standing).
+   * hero INTO the rock. The result says what the blow DID (see RockSmashResult); dropping the
+   * spoil of 'shattered'/'yielded' is the caller's job.
    */
-  public smash(dirX: number, dirY: number): boolean {
-    if (!this.blocking) return false;
+  public smash(dirX: number, dirY: number): RockSmashResult {
+    if (!this.blocking) return 'none';
+
+    // O VEIO: um ciclo de 3 pancadas que nunca destroi a pedra. 1a racha (o placar visivel),
+    // 2a so recua, 3a produz e REARMA — a arte volta a inteira, que e o desenho de "cheio".
+    if (this.ore) {
+      this.oreBlows += 1;
+      if (this.oreBlows >= ORE_BLOWS_PER_YIELD) {
+        this.oreBlows = 0;
+        this.sprite.setTexture(LOOK.ore.intact[0], LOOK.ore.intact[1]);
+        this.yieldPulse();
+        return 'yielded';
+      }
+      if (this.oreBlows === 1) this.sprite.setTexture(LOOK.ore.cracked[0], LOOK.ore.cracked[1]);
+      this.recoil(dirX, dirY);
+      return 'struck';
+    }
 
     if (this.state === 'intact') {
       this.state = 'cracked';
-      const cracked = LOOK[this.ore ? 'ore' : 'plain'].cracked;
+      const cracked = LOOK.plain.cracked;
       this.sprite.setTexture(cracked[0], cracked[1]);
       this.recoil(dirX, dirY);
-      return true;
+      return 'struck';
     }
 
     this.state = 'broken';
     this.collapse();
-    return true;
+    return 'shattered';
   }
 
   /** Brief shake for a bump without the pickaxe, so it reads as solid. */
@@ -121,6 +153,21 @@ export class RockObject implements WorldProp {
       onComplete: () => {
         this.sprite.setPosition(this.worldX, this.worldY).setDisplaySize(SIZE, SIZE);
       },
+    });
+  }
+
+  /** A 3a pancada do veio: o mesmo inchaco do colapso, mas ele VOLTA — a pedra pariu, nao morreu. */
+  private yieldPulse(): void {
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.setPosition(this.worldX, this.worldY).setAngle(0);
+    this.scene.tweens.add({
+      targets: this.sprite,
+      scaleX: SIZE * 1.14,
+      scaleY: SIZE * 1.14,
+      duration: 45,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onComplete: () => this.sprite.setDisplaySize(SIZE, SIZE),
     });
   }
 

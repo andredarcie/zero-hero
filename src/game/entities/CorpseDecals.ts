@@ -132,6 +132,16 @@ export class CorpseDecals {
     });
   }
 
+  /**
+   * Apaga a marca DESTE tile, se houver — a pá que cava revolve a superfície, e o que estava
+   * pintado nela some sob a terra virada (ver GameScene.digPlantHole). Um tile só tem uma
+   * marca (o guard do drop), então achar a primeira é achar todas.
+   */
+  public removeAt(worldX: number, worldY: number): void {
+    const index = this.corpses.findIndex((c) => c.worldX === worldX && c.worldY === worldY);
+    if (index >= 0) this.kill(index);
+  }
+
   public clear(): void {
     while (this.corpses.length > 0) this.kill(0);
   }

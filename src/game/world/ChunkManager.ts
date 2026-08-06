@@ -22,6 +22,16 @@ export class ChunkManager {
     return chunk;
   }
 
+  /**
+   * Derruba o terreno baixado deste chunk: a próxima leitura volta na FONTE. Existe porque a
+   * compra de chunk do construtor de mundo REGENERA terreno na fonte (a floresta escura vira o
+   * template comprado, e os vizinhos ganham bocas de estrada) — sem isto, a colisão continuava
+   * lendo as árvores da escuridão antiga e o chunk novo nascia cheio de parede invisível.
+   */
+  public invalidate(cx: number, cy: number): void {
+    this.cache.delete(this.key(cx, cy));
+  }
+
   public getTile(worldX: number, worldY: number): { ground: number; upper: number | null; collision: boolean } {
     const cx = Math.floor(worldX / CHUNK_COLUMNS);
     const cy = Math.floor(worldY / CHUNK_ROWS);

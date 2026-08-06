@@ -118,10 +118,12 @@ export type PickupKind =
   | 'lavaBoots'
   | 'pickaxe'
   | 'scythe'
+  | 'shovel'
   | 'wood'
   | 'stone'
   | 'iron'
   | 'seeds'
+  | 'carnivoreSeeds'
   | 'bucket'
   | 'battery';
 export type NpcKind =

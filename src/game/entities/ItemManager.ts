@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 
+import { SEED_PACK_KINDS, SEEDS_PER_PACK } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import { ItemPickup, type HeldItemKind, type ItemFire } from './ItemPickup';
 
@@ -10,6 +11,8 @@ export type CollectedItem = {
   fire?: ItemFire;
   /** Carga restante de uma batteryFull — viaja com o item, nunca reseta numa troca de maos. */
   chargeMs?: number;
+  /** Quantas unidades este item vale (o pacote de sementes). Ausente = 1. */
+  units?: number;
 };
 
 // Owns every held item lying on the ground: the authored sword/key from world.json plus any
@@ -21,9 +24,14 @@ export class ItemManager {
 
   public constructor(private readonly scene: Phaser.Scene) {}
 
-  public loadAuthored(list: ReadonlyArray<{ type: HeldItemKind; worldX: number; worldY: number }>): void {
+  public loadAuthored(
+    list: ReadonlyArray<{ type: HeldItemKind; worldX: number; worldY: number; units?: number }>,
+  ): void {
     for (const p of list) {
-      this.items.push(new ItemPickup(this.scene, p.type, p.worldX, p.worldY, false));
+      // Sementes autoradas num mundo são um pacote CHEIO; a foto do save (que passa por aqui
+      // na hidratação) traz `units` explícito — um pacote meio gasto volta meio gasto.
+      const units = p.units ?? (SEED_PACK_KINDS.has(p.type) ? SEEDS_PER_PACK : 1);
+      this.items.push(new ItemPickup(this.scene, p.type, p.worldX, p.worldY, false, undefined, undefined, units));
     }
   }
 
@@ -32,8 +40,11 @@ export class ItemManager {
    * `fire` keeps a lit graveto BURNING where it lands (deposited into a robotic arm, or laid
    * down by the arm itself) — the flame rides the pickup and the fuel keeps counting down.
    */
-  public drop(kind: HeldItemKind, worldX: number, worldY: number, fire?: ItemFire, chargeMs?: number): void {
-    this.items.push(new ItemPickup(this.scene, kind, worldX, worldY, true, fire, chargeMs));
+  public drop(kind: HeldItemKind, worldX: number, worldY: number, fire?: ItemFire, chargeMs?: number, units?: number): void {
+    // `units` explícito vem do pousar do herói e do braço (o pacote que estava viajando);
+    // sem ele, sementes recém-produzidas (a foice) nascem como um pacote cheio.
+    const n = units ?? (SEED_PACK_KINDS.has(kind) ? SEEDS_PER_PACK : 1);
+    this.items.push(new ItemPickup(this.scene, kind, worldX, worldY, true, fire, chargeMs, n));
   }
 
   public hasItemAt(x: number, y: number): boolean {
@@ -79,7 +90,7 @@ export class ItemManager {
    * its 8 rim copies are positioned once at construction), so the arm re-creates the item at the
    * far side via the normal drop() path instead of teaching pickups to slide.
    */
-  public takeAt(x: number, y: number): { kind: HeldItemKind; fire?: ItemFire; chargeMs?: number } | null {
+  public takeAt(x: number, y: number): { kind: HeldItemKind; fire?: ItemFire; chargeMs?: number; units: number } | null {
     const idx = this.items.findIndex(
       (it) => it.isCollectable && !it.isCollected && it.tileX === x && it.tileY === y,
     );
@@ -89,6 +100,7 @@ export class ItemManager {
       kind: taken.kind,
       fire: taken.fire,
       chargeMs: taken.kind === 'batteryFull' ? taken.charge : undefined,
+      units: taken.units,
     };
     taken.destroy();
     return result;
@@ -98,7 +110,7 @@ export class ItemManager {
   public snapshot(): CollectedItem[] {
     return this.items
       .filter((it) => !it.isCollected)
-      .map((it) => ({ kind: it.kind, worldX: it.tileX, worldY: it.tileY, fire: it.fire }));
+      .map((it) => ({ kind: it.kind, worldX: it.tileX, worldY: it.tileY, fire: it.fire, units: it.units }));
   }
 
   /** Burn down every lit ground item's fuel (their flames die alone when it runs out). */

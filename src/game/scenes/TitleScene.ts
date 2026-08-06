@@ -4,19 +4,16 @@ import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
 import { clearDungeonTrip } from '@/game/runtime/dungeonTrip';
-import { endExplorerMode } from '@/game/explorer/explorerRun';
-import { hasAdventureSave, requestAdventureRespawn, resetAdventure } from '@/game/runtime/adventureState';
-import { setWorldData } from '@/game/world/WorldData';
+import { endExplorerMode, startExplorerRun } from '@/game/explorer/explorerRun';
 import { t, tWords } from '@/game/i18n/i18n';
 
 // The game's start screen, and now the ONLY screen between the loader and the world: the title,
 // the credit, and one button.
 //
-//   • Play adventure → the overworld, immediately. No language pick (the game is English only)
-//     and no intro cut-scene — the door is the door.
+//   • Build a world → the new chunk-builder run, immediately.
 //
-// Os levels e o explorador continuam vivos e nao tem mais porta AQUI: `/?level=N` boota um level,
-// `?explorer` boota uma expedicao, e o menu de pausa de um level ainda volta pra LevelSelectScene.
+// The former authored Zelda-like overworld is archived under backup/ and has no door here.
+// Puzzle levels remain directly addressable through `?level=N` for development.
 //
 // Being the first screen, it also owns audio bring-up: the AudioContext stays locked until a user
 // gesture, so the menu bed is queued here and blooms on the first key/tap.
@@ -49,6 +46,7 @@ export class TitleScene extends Phaser.Scene {
     this.selected = 0;
     this.cameras.main.setBackgroundColor('#08080d');
     this.cameras.main.fadeIn(500, 0, 0, 0);
+    endExplorerMode();
 
     // Decode the SFX + loops and queue the menu ambience. It is silent until the first gesture
     // lifts the autoplay lock (unlockAudio, below) — this screen is where that gesture lands.
@@ -72,19 +70,9 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
-    // The one door — que agora sabe LEMBRAR. Com um save de aventura o botao vira Continue
-    // (mesmo lugar, mesmo gesto: Enter continua de onde parou) e um segundo botao discreto
-    // oferece o recomeco. Sem save, tudo como sempre: uma porta so.
-    if (hasAdventureSave()) {
-      this.buttons = [
-        this.makeButton(t('title.continue'), Math.round(height * 0.62), () => this.continueAdventure()),
-        this.makeButton(t('title.startOver'), Math.round(height * 0.76), () => this.startOver()),
-      ];
-    } else {
-      this.buttons = [
-        this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure()),
-      ];
-    }
+    this.buttons = [
+      this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startBuilder()),
+    ];
     this.applySelection();
 
     // Arm input a beat later so the key/tap that dismissed the loader can't fire the button.
@@ -178,43 +166,11 @@ export class TitleScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, go);
   }
 
-  /**
-   * A aventura, e ela comeca ANDANDO.
-   *
-   * Havia uma intro aqui — o herói crescendo de um ponto enquanto uma voz mandava acordar — e ela
-   * saiu inteira: sete segundos de tela preta entre "quero jogar" e jogar. O que a intro dizia, o
-   * mago diz na primeira conversa, e essa o jogador escolhe ter.
-   */
-  /**
-   * A aventura SEMPRE parte do world.json limpo do disco. O WorldData em memoria pode estar
-   * carregando qualquer coisa que a sessao deixou para tras — uma dungeon (quit de dentro
-   * dela), arvores derrubadas mutadas nas arrays — e tudo que merece sobreviver ja mora no
-   * save (adventureState), que o GameScene.create() reaplica por cima do mundo fresco.
-   */
-  private startAdventure(): void {
-    setActiveLevel(null); // a aventura roda o overworld de verdade, nunca um level
+  private startBuilder(): void {
+    setActiveLevel(null);
     clearDungeonTrip();
-    endExplorerMode();
-    this.fadeThen(() => {
-      void window
-        .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
-        .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })
-        .then((json: unknown) => { setWorldData(json as Parameters<typeof setWorldData>[0]); })
-        .catch(() => { /* sem rede: o mundo em memoria serve */ })
-        .finally(() => this.scene.start('game'));
-    });
-  }
-
-  /** Continuar e a mesma porta, com um pedido a mais: acordar na fogueira em que parou. */
-  private continueAdventure(): void {
-    requestAdventureRespawn();
-    this.startAdventure();
-  }
-
-  /** Recomecar de verdade: apaga o save e entra pela mesma porta (mundo limpo, sem retrato). */
-  private startOver(): void {
-    resetAdventure();
-    this.startAdventure();
+    startExplorerRun();
+    this.fadeThen(() => this.scene.start('game'));
   }
 
   private teardown(): void {

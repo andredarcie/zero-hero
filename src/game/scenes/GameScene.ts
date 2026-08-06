@@ -7,6 +7,7 @@ import {
   CHOPPABLE_UPPER_FRAMES,
   CHUNK_COLUMNS,
   CHUNK_ROWS,
+  DIGGABLE_GROUND_FRAMES,
   DUNGEON_TILES,
   DIALOG_PANEL_FRACTION,
   DIALOG_PANEL_MAX_WIDTH,
@@ -24,7 +25,6 @@ import {
   NPC_GATE_RADIUS_TILES,
   SCENE_DEPTHS,
   TEXT_RESOLUTION,
-  TIMINGS,
   TORCH_BURN_MS,
   TREE_CHOP_STAGE_FRAMES,
   BATTERY_FEED_MS,
@@ -33,10 +33,12 @@ import {
   TREE_TILE_STICK_CHANCE,
   TILESET_FRAME_SIZE,
   SEA_TILE_FRAMES,
+  SEED_PACK_KINDS,
   SOLID_UPPER_FRAMES,
+  UNIT_PACK_KINDS,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
-import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
+import type { DialogScript, DialogTrade, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import {
   clearGameDebugApi,
   registerGameDebugApi,
@@ -65,7 +67,8 @@ import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { SwingGateObject } from '@/game/objects/SwingGateObject';
 import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
-import { PlantSpotObject } from '@/game/objects/PlantSpotObject';
+import { PlantSpotObject, type PlantableSeed } from '@/game/objects/PlantSpotObject';
+import { CarnivorousPlantObject } from '@/game/objects/CarnivorousPlantObject';
 import { RoboticArmObject, type ArmWorldPort } from '@/game/objects/RoboticArmObject';
 import { ToolboxObject, type ToolboxWorldPort } from '@/game/objects/ToolboxObject';
 import { MoonflowerObject } from '@/game/objects/MoonflowerObject';
@@ -108,15 +111,17 @@ import {
   consumePendingPortalArrival,
   setPendingPortalArrival,
 } from '@/game/runtime/portalTransition';
-import { DialogOverlay } from '@/game/runtime/DialogOverlay';
+import { DialogOverlay, type DialogTradePort } from '@/game/runtime/DialogOverlay';
 import { ExplorerDirector, type PropMemory } from '@/game/explorer/ExplorerDirector';
 import { ExplorerHud } from '@/game/explorer/ExplorerHud';
 import { ExtractPrompt } from '@/game/explorer/ExtractPrompt';
-import { distanceFromCamp } from '@/game/explorer/explorerWorld';
+import { ChunkGateMarker } from '@/game/explorer/ChunkGateMarker';
+import { ChunkGatePrompt, ChunkPurchaseOverlay } from '@/game/explorer/ChunkPurchaseOverlay';
+import { ChunkUndeadDirector } from '@/game/explorer/ChunkUndeadDirector';
+import { distanceFromCamp, type ChunkFrontier } from '@/game/explorer/explorerWorld';
 import {
   EXTRACT_KEEP,
   addExplorerCoins,
-  buyExplorerUpgrade,
   coinMultiplierAt,
   coinsForKill,
   consumeExplorerArrival,
@@ -130,6 +135,7 @@ import {
   noteExplorerKill,
   rerollExplorerWorld,
   setExplorerDepth,
+  spendExplorerCoins,
 } from '@/game/explorer/explorerRun';
 import { getActiveLevel, levelFilePath, setActiveLevel } from '@/game/runtime/activeLevel';
 import { clearDungeonTrip, getDungeonTrip, setDungeonTrip } from '@/game/runtime/dungeonTrip';
@@ -137,12 +143,12 @@ import { clearActiveDungeon, dungeonWorldFor, persistActiveDungeon } from '@/gam
 import { LevelIntroOverlay } from '@/game/runtime/LevelIntroOverlay';
 import { LevelButtons, PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
-import { ShopOverlay, type UpgradeState, getUpgradeCost, UPGRADES_CFG } from '@/game/runtime/ShopOverlay';
 import { createHeroView, heroFootY, resetHeroView, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
 import { FREEZE_MS, FreezeManager } from '@/game/runtime/FreezeManager';
 import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl, type SubScreenView } from '@/game/runtime/SubScreen';
+import { QuickBag, type QuickBagView } from '@/game/runtime/QuickBag';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { GlobalVariables } from '@/game/runtime/GlobalVariables';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -168,6 +174,7 @@ import {
   getBombSpots,
   getBridgeSpots,
   getPlantSpots,
+  getCarnivorousPlants,
   getInserters,
   getToolboxes,
   getIronRocks,
@@ -191,6 +198,7 @@ import {
   getWorldName,
   isPuzzleWorld,
   setWorldData,
+  type ChunkTemplate,
 } from '@/game/world/WorldData';
 import {
   adventureState,
@@ -229,10 +237,12 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
+  shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0 },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
   stone: { texture: ASSET_KEYS.rock, frame: 0 },
   iron: { texture: ASSET_KEYS.ironItem, frame: 0 },
   seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 },
+  carnivoreSeeds: { texture: ASSET_KEYS.carnivoreSeedsItem, frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
@@ -251,10 +261,12 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   lavaBoots: { texture: 'lava-boots-icon', frame: 0 },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
   scythe: { texture: 'scythe-icon', frame: 0 },
+  shovel: { texture: 'shovel-icon', frame: 0 },
   wood: { texture: 'wood-icon', frame: 0 },
   stone: { texture: 'rock', frame: 0 },
   iron: { texture: 'iron-item', frame: 0 },
   seeds: { texture: 'seeds-item', frame: 0 },
+  carnivoreSeeds: { texture: 'carnivore-seeds', frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
@@ -273,6 +285,7 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0, label: 'VOCE PEGOU AS BOTAS DE LAVA!' },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
+  shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0, label: 'VOCE PEGOU A PA! CAVE NA TERRA' },
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0, label: 'VOCE PEGOU UM GRAVETO!' },
   stone: { texture: ASSET_KEYS.rock, frame: 0, label: 'VOCE PEGOU UMA PEDRA!' },
   // A unica legenda do jogo que aponta pra OUTRA peca, e ela existe porque o ferro e o unico
@@ -280,6 +293,7 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   // "peguei um bloco de metal e ele nao faz nada" seria a leitura correta — e errada.
   iron: { texture: ASSET_KEYS.ironItem, frame: 0, label: 'UM BLOCO DE FERRO! SO SERVE NUMA BANCADA' },
   seeds: { texture: ASSET_KEYS.seedsItem, frame: 0, label: 'VOCE PEGOU SEMENTES! PLANTE NUM BURACO' },
+  carnivoreSeeds: { texture: ASSET_KEYS.carnivoreSeedsItem, frame: 0, label: 'SEMENTES CARNIVORAS! A PLANTA COME QUEM CHEGAR' },
   bucket: { texture: 'bucket-icon', frame: 0, label: 'VOCE PEGOU UM BALDE! ENCHA NO RIO' },
   bucketFull: { texture: 'bucket-full-icon', frame: 0, label: 'BALDE CHEIO DE AGUA!' },
   charcoal: { texture: 'charcoal-item', frame: 0, label: 'CARVAO! PISE NELE COM A TOCHA ACESA' },
@@ -314,6 +328,7 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   key: 1.5,
   pickaxe: 1.5,
   scythe: 1.5,
+  shovel: 1.5,
   stone: 1.5, // a rock in the fist is as good as any other blunt tool
   charcoal: 1.5, // a lump of coal, likewise
   iron: 1.5, // ...e um lingote de metal, que era o unico bloco desta lista que nao batia em nada
@@ -698,6 +713,9 @@ export class GameScene extends Phaser.Scene {
   private bombSpots: BombSpotObject[] = [];
   // Canteiros: dug holes where seeds plant on step, mounds water on bump, grass regrows.
   private plantSpots: PlantSpotObject[] = [];
+  // As plantas carnívoras — autoradas OU brotadas da semente carnívora em runtime (o push é
+  // sempre in place: o propRegistry referencia este array; ver o comentário dele).
+  private carnivorousPlants: CarnivorousPlantObject[] = [];
   private inserters: RoboticArmObject[] = [];
   // A bancada: duas bandejas atras, o corpo, a saida na frente. Ver ToolboxObject.
   private toolboxes: ToolboxObject[] = [];
@@ -716,6 +734,10 @@ export class GameScene extends Phaser.Scene {
    */
   private explorer?: ExplorerDirector;
   private explorerHud?: ExplorerHud;
+  private chunkUndead?: ChunkUndeadDirector;
+  private readonly chunkGateMarkers = new Map<string, ChunkGateMarker>();
+  private chunkGatePrompt?: ChunkGatePrompt;
+  private chunkPurchaseOverlay?: ChunkPurchaseOverlay;
   private extractPrompt?: ExtractPrompt;
   /** Portais ja recusados: perguntar de novo a cada passo dentro do mesmo tile seria assedio. */
   private declinedPortals = new Set<string>();
@@ -806,8 +828,6 @@ export class GameScene extends Phaser.Scene {
   private dangerPulsePhase = 0;
   private tileSize = MIN_BOARD_TILE_SIZE;
   private isDead = false;
-  private shopOpen = false;
-  private shopOverlay?: ShopOverlay;
   private dialogOpen = false;
   private dialogOverlay?: DialogOverlay;
   // Dialog variants the player already heard this run (kind:base / kind:locked / wizard:beat).
@@ -848,9 +868,11 @@ export class GameScene extends Phaser.Scene {
   // Os dois botoes de acao no toque, e a tarja que diz as teclas uma vez (ver ActionButtons).
   private actionButtons?: ActionButtons;
   private controlsHint?: ControlsHint;
+  // A BOLSA: a mochila aberta COM O JOGO RODANDO (ver QuickBag). Ela nao pausa nada — quem paga
+  // o preco de folhear e o heroi, de pes presos e sem os dois botoes enquanto ela estiver aberta.
+  private quickBag?: QuickBag;
   // Level runs only: the always-visible restart + pause squares top-right (see LevelButtons).
   private levelButtons?: LevelButtons;
-  private upgrades: UpgradeState = { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
   // Center chunk of the streamed window; NaN forces the first stream.
   private streamCenter = { cx: NaN, cy: NaN };
   private debugApi?: GameDebugApi;
@@ -890,12 +912,14 @@ export class GameScene extends Phaser.Scene {
     // o terreno dentro do proprio construtor lendo a janela que o diretor acabou de definir.
     // Ligar depois seria assar o mundo autorado e so entao trocar o chao debaixo dele.
     this.explorer = undefined;
+    this.chunkUndead = undefined;
     this.declinedPortals.clear();
     if (isExplorerMode()) {
       const run = explorerRun();
       if (run) {
         this.explorer = new ExplorerDirector(run.seed);
         this.explorer.install();
+        this.chunkUndead = new ChunkUndeadDirector();
       }
     }
 
@@ -910,7 +934,10 @@ export class GameScene extends Phaser.Scene {
     // Arvores derrubadas voltam ao chao ANTES do World3D assar o terreno (o construtor le os
     // chunks): o corte e um diff por cima do world.json, que volta limpo do disco a cada boot
     // e a cada saida de dungeon.
-    if (this.adventure && !inDungeon) this.applyFelledTreeDiff();
+    if (this.adventure && !inDungeon) {
+      this.applyFelledTreeDiff();
+      this.applyDugSpotDiff();
+    }
 
     let start = getPlayerStart();
     // "Acorde na fogueira" e um PEDIDO (morte, Continue do titulo), nunca o padrao: a volta de
@@ -932,17 +959,8 @@ export class GameScene extends Phaser.Scene {
     this.playerKnockTween = undefined;
     this.playerWorld = { worldX: startWorldX, worldY: startWorldY };
     this.streamCenter = { cx: NaN, cy: NaN };
-    this.shopOpen = false;
     this.levelIntroOpen = false;
     this.levelTransitioning = false;
-    // No explorador as melhorias sao a progressao do modo (compradas com o banco, atravessam
-    // expedicoes). Na aventura elas agora atravessam TUDO — morte, dungeon, browser — porque
-    // moram no save. So um level de puzzle nasce sempre pelado.
-    this.upgrades = isExplorerMode()
-      ? { ...explorerMeta().upgrades }
-      : this.adventure
-        ? { ...adventureState().upgrades }
-        : { maxHealth: 0, swordSpeed: 0, moveSpeed: 0, magnet: 0 };
     // O heroi e um campo `readonly` e o Phaser REUSA esta instancia de cena no restart: sem
     // isto, o que a cena anterior escreveu nele (o alpha da morte, o encolhimento da succao do
     // portal) chega inteiro no level seguinte e o heroi nasce invisivel.
@@ -1021,7 +1039,7 @@ export class GameScene extends Phaser.Scene {
       if (ev.enemy) this.freezeEnemy(ev.enemy);
       else this.freezeAtTile(Math.round(ev.x), Math.round(ev.y));
     });
-    const siegeOff = this.registry.get('appMode') === 'lab' || isPuzzleWorld();
+    const siegeOff = this.registry.get('appMode') === 'lab' || isPuzzleWorld() || Boolean(this.explorer);
     this.spawnDirector = siegeOff ? undefined : new UndeadSpawnDirector();
     // A segunda porta sao as COVAS AUTORADAS, e elas valem em TODO mundo — inclusive no lab e
     // nos levels, exatamente onde o cerco esta desligado. A razao e a diferenca entre as duas:
@@ -1050,9 +1068,18 @@ export class GameScene extends Phaser.Scene {
     this.npcManager = new NpcManager(this, getContent, (kind, wx, wy) => {
       const key = this.dialogKeyFor(kind, wx, wy);
       return key !== null && !this.seenDialogKeys.has(key);
+    }, (wx, wy) => {
+      // O keycap "Z" só existe quando falar é o que o botão FARIA agora: herói vivo, mundo
+      // correndo, e o NPC exatamente no tile encarado.
+      if (!this.canAct() || !this.movementController) return false;
+      const front = this.facingTile();
+      return front.x === wx && front.y === wy;
     });
     this.coinManager = new CoinManager(this);
     if (this.adventure) this.coinManager.restoreTotal(adventureState().coins);
+    // A bolsa do construtor de mundo começa cheia (START_COINS) e sobrevive ao restart da
+    // cena: o HUD tem de nascer mostrando o que o run já carrega, nunca um zero de mentira.
+    else if (this.explorer) this.coinManager.restoreTotal(explorerRun()?.coins ?? 0);
     this.heartPickupManager = new HeartPickupManager(this, getContent);
     this.itemManager = new ItemManager(this);
     // O chao tambem lembra: a foto salva dos itens DESTE mundo (overworld ou dungeon-N)
@@ -1062,7 +1089,7 @@ export class GameScene extends Phaser.Scene {
     const savedGround = this.adventure ? adventureState().groundItems.get(this.adventureScope) : undefined;
     this.itemManager.loadAuthored(
       savedGround
-        ? savedGround.map((g) => ({ type: g.kind, worldX: g.worldX, worldY: g.worldY }))
+        ? savedGround.map((g) => ({ type: g.kind, worldX: g.worldX, worldY: g.worldY, units: g.count }))
         : getHeldItemPickups(),
     );
     this.inventory.clear(); // fora da aventura a mochila e da RUN e comeca de maos vazias
@@ -1110,6 +1137,10 @@ export class GameScene extends Phaser.Scene {
         // shared with enemies via isSolidForEntities — except the hazards (lava AND water),
         // which the hero wades while holding the lava boots.
         if (this.enemyManager?.getEnemyAt(wx, wy)) return true;
+        // Unbought chunks remain behind the fog seam. Enemies deliberately do NOT consult this
+        // gate, which is how the dead can walk in from an unfinished road while the hero cannot
+        // walk out before buying a card.
+        if (this.explorer?.blocksPlayerAt(wx, wy)) return true;
         return this.isSolidForEntities(wx, wy, this.heldItem === 'lavaBoots');
       },
       // Fires once per tile ENTERED (never per frame): decor rustle + walk-on interactions.
@@ -1124,9 +1155,9 @@ export class GameScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
 
-    // Melhorias que atravessaram expedicoes (explorador) precisam VALER desde o primeiro passo:
-    // comprar vida maxima e nascer com a vida antiga seria pagar por nada.
-    this.applyUpgradeEffects();
+    // (A LOJA da fogueira foi removida, e as melhorias dela junto: a vida e a cadência são as
+    // base do jogo agora — quem quiser progressão de corpo cria uma peça nova, não um menu.)
+    this.playerMaxHealth = PLAYER_HEALTH_MAX;
     this.playerHealth = this.playerMaxHealth; // toda expedicao comeca inteira
 
     // All world props are authored in world.json; their collision is resolved at runtime.
@@ -1179,9 +1210,26 @@ export class GameScene extends Phaser.Scene {
     this.moonflowers = getMoonflowers().map((m) => new MoonflowerObject(this, m.worldX, m.worldY));
     this.bombSpots = getBombSpots().map((s) => new BombSpotObject(this, s.worldX, s.worldY));
     this.plantSpots = getPlantSpots().map((s) => new PlantSpotObject(this, s.worldX, s.worldY));
+    // Os buracos que a PÁ cavou voltam do save (diff sobre os autorados, o padrão felledTrees) —
+    // só na aventura de OVERWORLD: dungeon não tem terra, e level/explorador zeram por desenho.
+    if (this.adventure && !getDungeonTrip()) {
+      for (const key of adventureState().dugSpots) {
+        const [wx, wy] = key.split(',').map(Number);
+        if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+        if (this.plantSpots.some((s) => s.worldX === wx && s.worldY === wy)) continue;
+        // Um mundo re-autorado pode ter posto parede onde havia terra: um buraco não nasce
+        // dentro de rocha — o save cede ao mundo, nunca o contrário (o mesmo espírito do
+        // applyDugSpotDiff, que não derruba um sólido novo).
+        if (this.chunkManager?.isCellBlocked(wx, wy)) continue;
+        this.plantSpots.push(new PlantSpotObject(this, wx, wy));
+      }
+    }
     // `dir ?? 1`: um braco sem direcao gravada aponta pro leste. Ele nunca fica sem direcao de
     // verdade (o editor sempre grava uma), mas o default evita que um JSON antigo vire um prop
     // quebrado — e leste e o que o editor oferece primeiro.
+    this.carnivorousPlants = getCarnivorousPlants().map(
+      (p) => new CarnivorousPlantObject(this, p.worldX, p.worldY),
+    );
     this.inserters = getInserters().map(
       (a) => new RoboticArmObject(a.worldX, a.worldY, a.dir ?? 1, a.variable),
     );
@@ -1265,6 +1313,7 @@ export class GameScene extends Phaser.Scene {
       { list: this.moonflowers },
       { list: this.bombSpots },
       { list: this.plantSpots },
+      { list: this.carnivorousPlants },
       { list: this.inserters },
       { list: this.toolboxes },
       { list: this.woodenCrates },
@@ -1287,6 +1336,11 @@ export class GameScene extends Phaser.Scene {
     this.initLighting();
     this.streamChunks(true);
 
+    // A mortalha dos chunks não-comprados precisa existir ANTES do prewarm logo abaixo: é ele
+    // que compila os dois programas dela junto com todo o resto — deixá-la para depois seria
+    // um shader compilando no meio da primeira caminhada.
+    if (this.explorer && this.world3d) this.explorer.syncShroud(this.world3d);
+
     // The world is fully built, so compile every shader now rather than lazily, one hitch at
     // a time, on the frames each material is first drawn.
     this.world3d.prewarmShaders();
@@ -1306,7 +1360,13 @@ export class GameScene extends Phaser.Scene {
     if (launchedFromEditor) {
       this.enableEditorReturn();
     } else {
-      this.input.keyboard?.on('keydown-ESC', () => this.openPauseMenu());
+      // O ESC TEM UM DONO SÓ. Com a bolsa aberta ele a fecha e para por aí — abrir a pausa por
+      // cima dela seria a segunda coisa que uma tecla faz num aperto só, e é exatamente o bug que
+      // manter I / setas / X / ESC roteados daqui existe para impedir.
+      this.input.keyboard?.on('keydown-ESC', () => {
+        if (this.quickBag?.isOpen) { this.quickBag.close(); return; }
+        this.openPauseMenu();
+      });
       // A level run shows restart + pause squares top-right on EVERY device: a puzzle can be
       // spent into a corner (fuse burnt early, bomb wasted), and starting over is part of play —
       // that has to be said on screen, not buried inside ESC. The adventure keeps the discreet
@@ -1328,6 +1388,8 @@ export class GameScene extends Phaser.Scene {
     // primeira coisa que o jogador deve ler ao acordar no acampamento.
     if (this.explorer) {
       this.explorerHud = new ExplorerHud();
+      this.chunkGatePrompt = new ChunkGatePrompt();
+      this.syncChunkGates(this.explorer.frontiers(), (explorerRun()?.coins ?? 0) >= this.explorer.minCost());
       const arrival = consumeExplorerArrival();
       if (arrival) this.explorerHud.showArrival(arrival);
     }
@@ -1849,8 +1911,12 @@ export class GameScene extends Phaser.Scene {
   private openPauseMenu(): void {
     // Never pause over another modal state — their overlays own ESC/scrim already, and the
     // dialog camera pan must not be frozen midway.
-    if (this.pauseMenu || this.dialogOpen || this.camShifting || this.shopOpen
+    if (this.pauseMenu || this.dialogOpen || this.camShifting
       || this.itemGetOpen || this.levelIntroOpen || this.cutsceneActive || this.isDead) return;
+    // A bolsa e a pausa nunca convivem: uma congela o mundo e a outra existe justamente por nao
+    // congelar. Quem abre a pausa fecha a bolsa (sem equipar nada — fechar nao e confirmar).
+    this.quickBag?.close();
+    this.quickBag?.setButtonVisible(false);
     this.pauseTouchButton?.setVisible(false);
     this.levelButtons?.setVisible(false);
     this.actionButtons?.setVisible(false);
@@ -1973,6 +2039,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.pauseMenu) return;
     this.pauseMenu.destroy();
     this.pauseMenu = undefined;
+    this.quickBag?.setButtonVisible(true);
     this.pauseTouchButton?.setVisible(true);
     this.levelButtons?.setVisible(true);
     this.actionButtons?.setVisible(true);
@@ -2120,14 +2187,18 @@ export class GameScene extends Phaser.Scene {
         // MOCHILA e o campo novo, e e ela que o playtest da subtela precisa ver.
         heldItem: this.heldItem,
         inventory: this.inventory.list(),
+        // A BOLSA (ver QuickBag): aberta ou nao. O cenario le isto para provar as duas metades do
+        // modo — que o mundo continuou correndo com ela aberta, e que apanhar a fecha.
+        bagOpen: this.quickBag?.isOpen === true,
         // A ESGRIMA, do lado de fora: para onde o heroi olha, quais tiles o arco varre agora e se
         // a lamina esta carregada. O `arc` e a MESMA lista que o golpe usa (arcTiles), nao uma
         // copia — um cenario que assertasse uma segunda tabela estaria guardando a tabela, e nao
         // o golpe.
         facing: { ...(this.movementController?.facing ?? { dx: 0, dy: 1 }) },
-        // Com a espada na mochila são as duas fileiras; de mão vazia, só a do soco — a MESMA
-        // pergunta que o golpe faz, para o cenário nunca ler um alcance que o herói não tem.
-        arc: this.arcTiles(this.inventory.has('sword') ? 2 : 1),
+        // Com a espada NA MÃO são as duas fileiras; senão, só a de perto — a MESMA pergunta
+        // que o golpe faz (o A empunha o item da mão), para o cenário nunca ler um alcance
+        // que o herói não tem.
+        arc: this.arcTiles(this.heldItem === 'sword' ? 2 : 1),
         spinCharged: this.chargeReady,
         groundItems: this.itemManager?.snapshot() ?? [],
         crates: this.woodenCrates.map((crate) => ({ worldX: crate.worldX, worldY: crate.worldY })),
@@ -2228,7 +2299,6 @@ export class GameScene extends Phaser.Scene {
         globalVariables: this.globalVariables.snapshot(),
         coins: this.coinManager?.coinTotal ?? 0,
         dialogOpen: this.dialogOpen,
-        shopOpen: this.shopOpen,
         itemGetOpen: this.itemGetOpen,
         isDead: this.isDead,
         // O herói virou estátua? (a bola do zora — ver FreezeManager; `zora` e `gelo` leem isto)
@@ -2263,7 +2333,26 @@ export class GameScene extends Phaser.Scene {
             maxDepth: Number((explorerRun()?.maxDepth ?? 0).toFixed(2)),
             multiplier: coinMultiplierAt(distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY)),
             kills: explorerRun()?.kills ?? 0,
-            promptOpen: this.extractPrompt !== undefined,
+            promptOpen: this.chunkPurchaseOverlay !== undefined,
+            builder: {
+              cardsOpen: this.chunkPurchaseOverlay !== undefined,
+              gateUnderPlayer: this.explorer.gateAt(
+                this.playerWorld.worldX,
+                this.playerWorld.worldY,
+              )?.id ?? null,
+              gates: this.explorer.frontiers().map((gate) => ({
+                id: gate.id,
+                direction: gate.direction,
+                gateX: gate.gateX,
+                gateY: gate.gateY,
+                targetCx: gate.targetCx,
+                targetCy: gate.targetCy,
+              })),
+              built: this.explorer.source.builtChunks(),
+              catalog: this.explorer.source.catalog().map((entry) => ({ ...entry.catalog })),
+              // A mortalha de escuridão: quem está coberto e quem está dissolvendo (a compra).
+              shroud: this.world3d?.chunkShroud.stats() ?? { covered: [], revealing: [] },
+            },
             // A instrumentacao da janela: quantas vezes o terreno foi reassado e quanto custou
             // o ultimo. E o numero que decide se o modo pode existir — ver ExplorerDirector.
             rebuilds: this.explorer.rebuilds,
@@ -2279,7 +2368,7 @@ export class GameScene extends Phaser.Scene {
           : null,
       }),
       openDialog: (kind = 'blackCat') => {
-        if (this.dialogOpen || this.shopOpen || this.isDead) return false;
+        if (this.dialogOpen || this.isDead) return false;
         this.openNpcDialog(kind);
         return true;
       },
@@ -2289,8 +2378,6 @@ export class GameScene extends Phaser.Scene {
         this.dialogOpen = false;
         this.endDialogCameraShift();
       },
-      openShop: () => this.openShop(),
-      closeShop: () => this.closeShop(),
       triggerSwordGet: () => {
         if (!this.itemGetOpen) {
           this.onCollectItem({ kind: 'sword', worldX: this.playerWorld.worldX, worldY: this.playerWorld.worldY });
@@ -2360,10 +2447,19 @@ export class GameScene extends Phaser.Scene {
     this.levelButtons = undefined;
     this.actionButtons?.destroy();
     this.actionButtons = undefined;
+    this.quickBag?.destroy();
+    this.quickBag = undefined;
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
     this.explorerHud?.destroy();
     this.explorerHud = undefined;
+    this.chunkGatePrompt?.destroy();
+    this.chunkGatePrompt = undefined;
+    this.chunkPurchaseOverlay?.destroy();
+    this.chunkPurchaseOverlay = undefined;
+    for (const marker of this.chunkGateMarkers.values()) marker.destroy();
+    this.chunkGateMarkers.clear();
+    this.chunkUndead = undefined;
     this.extractPrompt?.destroy();
     this.extractPrompt = undefined;
     // O diretor morre com a cena: a janela e a memoria dos props sao da EXPEDICAO, e o create
@@ -2389,7 +2485,6 @@ export class GameScene extends Phaser.Scene {
     this.wireIndex.clear();
     this.liveWires.clear();
     this.activeBombs.forEach((b) => b.sprite.destroy());
-    this.shopOverlay?.destroy();
     this.backItemSwingTimer?.remove();
     this.backItemSwingTimer = undefined;
     this.backItem?.destroy();
@@ -2436,7 +2531,7 @@ export class GameScene extends Phaser.Scene {
     if (this.levelTransitioning || this.levelIntroOpen) return;
 
     // Hide the low-health outline up front; the active-play FX below re-shows it each frame if
-    // still low. So any frozen state (dialog, shop, item-get, death) leaves it hidden instead
+    // still low. So any frozen state (dialog, item-get, death) leaves it hidden instead
     // of stranding it, misaligned, where the hero last was. Same deal for the fire compass.
     this.hideLowHealthOutlines();
     this.hideFireCompass();
@@ -2449,9 +2544,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     // The item-get and first-campfire cut-scene both freeze gameplay; only their own tweens run.
-    if (this.itemGetOpen || this.cutsceneActive) return;
+    if (this.itemGetOpen || this.cutsceneActive || this.chunkPurchaseOverlay) return;
 
-    if (this.isDead || this.shopOpen || !this.movementController || !this.chunkManager || !this.camera) {
+    if (this.isDead || !this.movementController || !this.chunkManager || !this.camera) {
       return;
     }
 
@@ -2495,6 +2590,7 @@ export class GameScene extends Phaser.Scene {
     this.streamChunks();
     this.updateFootprints();
     this.updateExplorerHud();
+    this.updateChunkBuilderUi();
 
     // Burn the carried flame down; snuff it when the fuel runs out (leaving the hero exposed
     // in the dark). Re-igniting at a lit campfire or lava refills it.
@@ -2599,6 +2695,18 @@ export class GameScene extends Phaser.Scene {
           : 1,
       });
 
+      // World-builder pressure comes ONLY from roads whose next chunk has not been bought.
+      // There is no wave banner and no ring spawn around the hero: one corpse simply walks in
+      // from the dark, then another later, with a small global cap.
+      if (this.explorer && this.chunkUndead) {
+        this.chunkUndead.update(
+          delta,
+          this.explorer.frontiers(),
+          this.enemyManager.aliveCount,
+          (wx, wy) => { this.enemyManager?.spawnUndead(wx, wy); },
+        );
+      }
+
       // ...e as covas autoradas, que rodam mesmo onde o cerco nao existe (lab/levels). A ordem
       // importa pouco, mas vem depois de proposito: o cerco conta a populacao viva pro teto dele,
       // e uma caveira de cova nascida neste frame ja entra nessa conta no frame seguinte.
@@ -2624,7 +2732,7 @@ export class GameScene extends Phaser.Scene {
       // isDead matters here: triggerDeath (silence, total) can fire earlier in THIS same
       // update pass, and without it the danger check below would restart the combat track
       // right on top of the death screen.
-      const uiOwnsMusic = this.cutsceneActive || this.dialogOpen || this.shopOpen || this.itemGetOpen || this.isDead;
+      const uiOwnsMusic = this.cutsceneActive || this.dialogOpen || this.itemGetOpen || this.isDead;
       // framedAliveCount, e nao aliveCount: um corpo vivo FORA do quadro (a caveira que ficou
       // pra tras, a gosma vagando a 12 tiles) segurava a trilha de combate numa tela vazia — o
       // jogador ouvia perigo que nao tinha como ver. Musica de perigo e promessa de corpo NA tela.
@@ -2642,12 +2750,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.coinManager && this.camera) {
-      // No HUD coin counter anymore — coins are just absorbed into the hero (screen centre).
       const heroScreen = { x: this.camera.screenCenterX, y: this.camera.screenCenterY };
+      // A moeda apanhada VOA pro contador do HUD (que pulsa ao crescer) — pegar moeda tem de
+      // parecer sempre bom. Sem HUD na tela (aventura, levels), ela some no herói como antes.
       this.coinManager.update(
         this.playerWorld.worldX,
         this.playerWorld.worldY,
-        heroScreen,
+        { counter: this.hudCoinAnchor() ?? heroScreen, hero: heroScreen },
         () => {
           getSoundManager().playCoinPickup();
           // No explorador a moeda entra na BOLSA da expedicao — que e o numero em risco, e
@@ -2717,6 +2826,8 @@ export class GameScene extends Phaser.Scene {
     }
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.updatePlantSpots();
+    // A planta carnívora à espreita: todo inimigo parado num vizinho dela é comido.
+    this.updateCarnivorousPlants();
     // A flor da lua le a luz das fogueiras e abre/fecha por conta dela.
     this.updateMoonflowers(delta);
     // Produtores primeiro, a corrente nos cabos depois, consumidores por ultimo: placa/roda/
@@ -2833,11 +2944,17 @@ export class GameScene extends Phaser.Scene {
   // bolsa redonda catando moeda de caveira mediria o combate em vez da regra. Sao metodos
   // publicos e sem nada de esperto: quem chama e `playtest/scenarios/explorador.mjs`.
 
+  /** Força os ids da PRÓXIMA mão de cartas (consumida no uso) — determinismo do playtest. */
+  public explorerDebugSetNextOffers(ids: string[]): void {
+    if (this.explorer) this.explorer.debugNextOffers = [...ids];
+  }
+
   /** Poe uma bolsa exata na expedicao. */
   public explorerDebugSetCoins(amount: number): void {
     const run = explorerRun();
     if (!run) return;
     run.coins = Math.max(0, Math.floor(amount));
+    this.coinManager?.restoreTotal(run.coins);
   }
 
   /** Dispara a extracao pelo portal mais proximo, como se o jogador tivesse dito sim. */
@@ -2859,7 +2976,62 @@ export class GameScene extends Phaser.Scene {
     if (!this.explorerHud) return;
     const dist = distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY);
     setExplorerDepth(dist);
-    this.explorerHud.update(explorerRun()?.coins ?? 0, dist, coinMultiplierAt(dist));
+    this.explorerHud.update(explorerRun()?.coins ?? 0, this.explorer?.source.builtChunks().length ?? 1);
+  }
+
+  private updateChunkBuilderUi(): void {
+    const explorer = this.explorer;
+    if (!explorer || !this.chunkGatePrompt) return;
+    const coins = explorerRun()?.coins ?? 0;
+    const minCost = explorer.minCost();
+    this.syncChunkGates(explorer.frontiers(), coins >= minCost);
+    if (this.chunkPurchaseOverlay) { this.chunkGatePrompt.hide(); return; }
+    const gate = explorer.gateAt(this.playerWorld.worldX, this.playerWorld.worldY);
+    if (gate) this.chunkGatePrompt.show(minCost, coins);
+    else this.chunkGatePrompt.hide();
+  }
+
+  private openChunkCards(gate: ChunkFrontier): void {
+    const explorer = this.explorer;
+    if (!explorer || this.chunkPurchaseOverlay) return;
+    const coins = explorerRun()?.coins ?? 0;
+    const offers = explorer.offers();
+    if (offers.length === 0 || !offers.some((entry) => entry.catalog.cost <= coins)) return;
+    this.movementController?.hold(true);
+    this.actionButtons?.setVisible(false);
+    this.chunkGatePrompt?.hide();
+    getSoundManager().playShopOpen();
+
+    const finish = (): void => {
+      this.chunkPurchaseOverlay?.destroy();
+      this.chunkPurchaseOverlay = undefined;
+      this.movementController?.hold(false);
+      this.actionButtons?.setVisible(true);
+      this.updateChunkBuilderUi();
+    };
+    const overlay = new ChunkPurchaseOverlay(
+      gate,
+      offers,
+      coins,
+      (choice: ChunkTemplate) => {
+        if ((explorerRun()?.coins ?? 0) < choice.catalog.cost) { finish(); return; }
+        const built = explorer.purchase(gate, choice.catalog.id, this, this.world3d);
+        if (!built) { finish(); return; }
+        spendExplorerCoins(choice.catalog.cost);
+        this.coinManager?.spendCoins(choice.catalog.cost);
+        getSoundManager().playShopClose();
+        finish();
+      },
+      () => {
+        getSoundManager().playShopClose();
+        finish();
+      },
+      // O alvo do voo da carta-luz: a boca da estrada comprada, projetada na tela. É lá que a
+      // dissolução da mortalha começa — a carta pousa exatamente onde a névoa vai morrer.
+      () => this.world3d?.projectTile(gate.enemyX, gate.enemyY, 0.35) ?? null,
+    );
+    overlay.bindChoices(offers);
+    this.chunkPurchaseOverlay = overlay;
   }
 
   // ── o mundo infinito: props entrando e saindo da janela ──────────────────────
@@ -2894,6 +3066,10 @@ export class GameScene extends Phaser.Scene {
         case 'tallGrass':
           this.tallGrasses.push(new TallGrassObject(this, def.worldX, def.worldY));
           break;
+        case 'plantSpot':
+          // Os canteiros dos cenários de NPC (a carta do pintor): covas prontas para semente.
+          this.plantSpots.push(new PlantSpotObject(this, def.worldX, def.worldY));
+          break;
         case 'levelPortal':
           this.levelPortals.push(new LevelPortalObject(def.worldX, def.worldY));
           break;
@@ -2902,6 +3078,60 @@ export class GameScene extends Phaser.Scene {
           // prop que nao aparece do que um prop meio construido.
           break;
       }
+    }
+  }
+
+  /** Keeps the road squares in lockstep with the current frontier graph and purse. */
+  public syncChunkGates(gates: readonly ChunkFrontier[], enabled: boolean): void {
+    const wanted = new Map(gates.map((gate) => [gate.id, gate]));
+    for (const [id, marker] of this.chunkGateMarkers) {
+      if (wanted.has(id)) continue;
+      marker.destroy();
+      this.chunkGateMarkers.delete(id);
+    }
+    for (const gate of gates) {
+      const existing = this.chunkGateMarkers.get(gate.id);
+      if (existing) existing.setEnabled(enabled);
+      else this.chunkGateMarkers.set(gate.id, new ChunkGateMarker(gate, enabled));
+    }
+  }
+
+  /** A compra regenerou este chunk na fonte: derruba o cache de colisão baixado dele. */
+  public invalidateTerrain(cx: number, cy: number): void {
+    this.chunkManager?.invalidate(cx, cy);
+  }
+
+  /**
+   * Itens autorados E NPCs do template comprado nascem AGORA: o ItemManager carrega a lista
+   * autorada uma vez no boot e nunca streama, e o NpcManager pula chunks já ativos — sem esta
+   * mão, o presente e o morador do chunk recém-comprado só existiriam depois de sair da janela
+   * e voltar. Corações ficam de fora (eles streamam por chunk).
+   */
+  public spawnBuiltChunkContent(cx: number, cy: number): void {
+    const content = this.explorer?.source.chunkContent(cx, cy);
+    if (!content) return;
+    if (this.itemManager) {
+      for (const pickup of content.pickups) {
+        if (pickup.type === 'heart') continue;
+        if (this.itemManager.hasItemAt(pickup.worldX, pickup.worldY)) continue;
+        this.itemManager.drop(pickup.type, pickup.worldX, pickup.worldY);
+      }
+    }
+    this.npcManager?.refreshChunk(cx, cy);
+  }
+
+  /** A purchased combat template becomes alive immediately, without waiting for a chunk swap. */
+  public spawnBuiltChunkEnemies(cx: number, cy: number): void {
+    const content = this.explorer?.source.chunkContent(cx, cy);
+    if (!content || !this.enemyManager) return;
+    for (const enemy of content.enemies) {
+      if (this.enemyManager.getEnemyAt(enemy.worldX, enemy.worldY)) continue;
+      this.enemyManager.spawn(
+        enemy.type,
+        enemy.worldX,
+        enemy.worldY,
+        (wx, wy) => !this.isSolidForEntities(wx, wy),
+      );
     }
   }
 
@@ -2938,6 +3168,9 @@ export class GameScene extends Phaser.Scene {
     // Lembrar o toco transformaria o regrow, que existe para a lenha nunca acabar, em uma
     // cicatriz permanente no mundo.
     sweep(this.dryTrees, () => ({}));
+    // O canteiro volta pristino ao re-entrar na janela — no construtor a cova é cenário de
+    // tutorial, não estado de fazenda (a aventura, que lembra, tem o save para isso).
+    sweep(this.plantSpots, () => ({}));
     sweep(this.levelPortals, () => ({}));
     return out;
   }
@@ -3025,6 +3258,10 @@ export class GameScene extends Phaser.Scene {
 
   private getTallGrassAt(wx: number, wy: number): TallGrassObject | undefined {
     return this.propAt(this.tallGrasses, wx, wy);
+  }
+
+  private getCarnivorousPlantAt(wx: number, wy: number): CarnivorousPlantObject | undefined {
+    return this.propAt(this.carnivorousPlants, wx, wy);
   }
 
   private getMoonflowerAt(wx: number, wy: number): MoonflowerObject | undefined {
@@ -3305,19 +3542,41 @@ export class GameScene extends Phaser.Scene {
    * em todas elas — ou pior, fica guardada e dispara sozinha no frame em que o dialogo fecha.
    */
   private installActionInput(): void {
+    const touch = isTouchDevice();
+    // A BOLSA nasce antes das teclas porque as teclas perguntam por ela: com a bolsa aberta, o I,
+    // as setas e o X sao DELA, e so voltam a ser do heroi quando ela fecha (ver `routeBagKey`).
+    this.quickBag = new QuickBag({
+      read: () => this.quickBagView(),
+      onSet: (kind) => { this.selectItem(kind as HeldItemKind); },
+      onToggleRequest: () => this.toggleBag(),
+      onOpenChange: (open) => this.onBagOpenChanged(open),
+    }, touch);
+
     const kb = this.input.keyboard;
     if (kb) {
-      kb.addCapture(['Z', 'X', 'J', 'K', 'SPACE']);
+      kb.addCapture(['Z', 'X', 'J', 'K', 'SPACE', 'I']);
       // O A tem DOIS gestos agora — o toque (o golpe) e o segurar (a lamina rodopiante) —, entao
       // ele precisa do `keyup` tambem. O `keydown` de uma tecla segurada REPETE no navegador; o
       // `attackHeld` e o que separa "apertei de novo" de "ainda estou segurando".
       for (const key of ['keydown-Z', 'keydown-J', 'keydown-SPACE']) kb.on(key, this.pressAttack, this);
       for (const key of ['keyup-Z', 'keyup-J', 'keyup-SPACE']) kb.on(key, this.releaseAttack, this);
       for (const key of ['keydown-X', 'keydown-K']) kb.on(key, this.pressUse, this);
+      // I ABRE E FECHA A BOLSA. Ela e o unico gesto do jogo que nao e A, B nem seta — e nao e
+      // excecao a "os dois botoes": a bolsa nao age no mundo, ela so decide o que o B carrega.
+      kb.on('keydown-I', this.toggleBag, this);
+      // As setas so chegam aqui quando a bolsa esta aberta; fora dela quem as le e o andar, por
+      // polling, e este ouvinte devolve sem tocar em nada.
+      for (const key of ['keydown-LEFT', 'keydown-A']) {
+        kb.on(key, (e: KeyboardEvent) => this.routeBagStep(e, -1));
+      }
+      for (const key of ['keydown-RIGHT', 'keydown-D']) {
+        kb.on(key, (e: KeyboardEvent) => this.routeBagStep(e, 1));
+      }
+      kb.on('keydown-ENTER', () => { if (this.quickBag?.isOpen) this.quickBag.commit(); });
     }
     // No telefone os dois botoes precisam de corpo; no teclado basta dizer uma vez quais sao as
     // teclas — e a tarja some sozinha (ver ControlsHint).
-    if (isTouchDevice()) {
+    if (touch) {
       this.actionButtons = new ActionButtons({
         onAttack: () => this.pressAttack(),
         onAttackRelease: () => this.releaseAttack(),
@@ -3326,6 +3585,79 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.controlsHint = new ControlsHint(t('controls.hint'));
     }
+  }
+
+  /** A seta, com a bolsa aberta: ela anda com o CURSOR e nao com o herói (que está de pés presos). */
+  private routeBagStep(event: KeyboardEvent | undefined, delta: number): void {
+    if (!this.quickBag?.isOpen) return;
+    // Tecla segurada repete no navegador — e uma fileira de itens percorrida a 30 passos por
+    // segundo não é uma escolha. A mesma leitura do `pressAttack`: `event.repeat`, nunca um
+    // booleano nosso, que um `keyup` perdido deixaria preso.
+    if (event?.repeat) return;
+    this.quickBag.step(delta);
+  }
+
+  /**
+   * A BOLSA ABRE E FECHA — e nada mais no jogo faz isso.
+   *
+   * Ela recusa exatamente onde o menu de pausa recusa: nenhuma tela que já congelou o mundo pode
+   * ganhar uma segunda por cima (o diálogo, a loja, a cutscene, a morte, a própria pausa). Fora
+   * disso ela abre SEM pedir licença ao combate — é o ponto do modo.
+   */
+  private toggleBag(): void {
+    if (!this.quickBag) return;
+    if (this.quickBag.isOpen) { this.quickBag.close(); return; }
+    if (this.pauseMenu || this.dialogOpen || this.camShifting
+      || this.itemGetOpen || this.levelIntroOpen || this.cutsceneActive || this.isDead
+      || this.levelTransitioning) return;
+    this.quickBag.openBag();
+  }
+
+  /**
+   * O PREÇO DE FOLHEAR, num jogo que não pausa para você folhear: os pés presos (as setas são do
+   * cursor agora) e os dois botões calados (`canAct`) — o par A/B do toque sai da tela junto, para
+   * que só exista um conjunto de controles de cada vez.
+   *
+   * A carga do A morre ao abrir, pela mesma razão que morre na pausa: um A meio carregado que
+   * atravessasse a bolsa sairia sozinho, como lâmina rodopiante, no frame em que ela fechasse. O
+   * ATORDOAMENTO, ao contrário da pausa, ATRAVESSA — a bolsa não congela nada, e apagar a pancada
+   * que o herói acabou de levar seria comprar tempo de recuperação abrindo um menu.
+   */
+  private onBagOpenChanged(open: boolean): void {
+    this.movementController?.hold(open);
+    this.actionButtons?.setVisible(!open);
+    if (!open) return;
+    // A tarja das teclas mora no MESMO rodapé da tela que a bolsa, e ela já cumpriu o trabalho
+    // dela: quem abriu a bolsa aprendeu o que ela tinha a ensinar (ver ControlsHint).
+    this.controlsHint?.destroy();
+    this.controlsHint = undefined;
+    this.attackBufferMs = 0;
+    this.useBufferMs = 0;
+    this.attackHeld = false;
+    this.chargeMs = 0;
+    this.chargeReady = false;
+    this.chargeMoteMs = 0;
+    getSoundManager().stopSpinChargeHum();
+  }
+
+  /**
+   * O que a bolsa desenha: a mochila com a ARTE DO JOGO (os mesmos frames virados em data URL que
+   * a subtela usa) e o item que o B carrega AGORA — o cursor é da bolsa, o equipado é da cena.
+   */
+  private quickBagView(): QuickBagView {
+    return {
+      items: this.inventory.list().map(({ kind, count }) => {
+        const visual = ITEM_VISUAL_2D[kind];
+        return {
+          kind,
+          count,
+          icon: spriteDataUrl(this, visual.texture, visual.frame),
+          label: t(`items.name.${kind}`),
+        };
+      }),
+      equipped: this.heldItem,
+      emptyLabel: t('bag.empty'),
+    };
   }
 
   /**
@@ -3342,9 +3674,14 @@ export class GameScene extends Phaser.Scene {
     // ACTION_BUFFER_MS: "o jogador que encadeia dois golpes no ritmo certo era punido por acertar
     // o ritmo"). Então o atordoamento mora junto da cadência, em `swingAttack`/`pressUse`, onde o
     // pedido é ADIADO — e o herói continua perdendo os 240ms, só não perde o aperto.
-    return !this.isDead && !this.shopOpen && !this.dialogOpen && !this.camShifting
+    //
+    // A BOLSA entra aqui e NÃO é uma tela congelada como as outras: o mundo continua correndo
+    // atrás dela. O que ela fecha são os dois botões — as mãos estão dentro da mochila —, e é
+    // isso, com os pés presos, que faz folhear custar alguma coisa.
+    return !this.isDead && !this.dialogOpen && !this.camShifting
       && !this.itemGetOpen && !this.cutsceneActive && !this.levelIntroOpen
-      && !this.levelTransitioning && !this.pauseMenu && this.movementController !== undefined;
+      && !this.levelTransitioning && !this.pauseMenu && this.quickBag?.isOpen !== true
+      && !this.chunkPurchaseOverlay && this.movementController !== undefined;
   }
 
   /**
@@ -3354,6 +3691,9 @@ export class GameScene extends Phaser.Scene {
    * levaria um golpe que nao pediu. Ver ACTION_BUFFER_MS.
    */
   private spendActionBuffers(delta: number): void {
+    // Com a bolsa aberta ninguém gasta nada: o B ali dentro CONFIRMA um item (ver `pressUse`), e
+    // um pedido guardado saindo por este caminho equiparia o cursor sem o jogador ter pedido.
+    if (this.quickBag?.isOpen) return;
     // O atordoamento adia o GASTO, nunca a contagem — e a diferenca importa nos dois sentidos. Se
     // a janela congelasse junto, um aperto feito antes da pancada sairia 240ms depois, que e um
     // golpe que o jogador ja nao pediu (o buffer e curto justamente pra isso nao acontecer). E o
@@ -3379,7 +3719,10 @@ export class GameScene extends Phaser.Scene {
    */
   private tickSpinCharge(delta: number): void {
     if (!this.attackHeld) return;
-    if (!this.inventory.has('sword')) return; // sem espada nao ha o que carregar
+    // SÓ A ESPADA EMPUNHADA carrega o giro: o A usa o item da MÃO, então com qualquer outra
+    // coisa selecionada (ou nada) não há lâmina nenhuma acumulando meia-volta — segurar o
+    // botão não pode carregar uma arma que o gesto não está empunhando.
+    if (this.heldItem !== 'sword') return;
     const wasTelling = this.chargeMs >= SPIN_CHARGE_TELL_MS;
     this.chargeMs += delta;
     if (!this.chargeReady && this.chargeMs >= SPIN_CHARGE_MS) {
@@ -3589,6 +3932,14 @@ export class GameScene extends Phaser.Scene {
    */
   private swingAttack(): void {
     if (!this.canAct()) return;
+    // FALAR é o próprio botão de AÇÃO quando há alguém NA FRENTE — o aviso "Z" que flutua na
+    // cabeça do NPC anuncia exatamente esta tecla. Vem ANTES da cadência e do corpo: puxar
+    // assunto não saca lâmina, não dá investida e não gasta golpe. (O B continua falando —
+    // as duas mãos sabem cumprimentar.)
+    {
+      const front = this.facingTile();
+      if (this.talkToNpcAt(front.x, front.y)) return;
+    }
     // A cadencia nao DESCARTA o pedido, ela o adia — ver ACTION_BUFFER_MS. O ATORDOAMENTO entra
     // aqui pelo mesmo motivo e no mesmo lugar: ele e uma cadencia imposta por quem bateu, e o
     // aperto feito no fim dele tem de sair quando ele acaba (ver PLAYER_STAGGER_MS).
@@ -3597,28 +3948,37 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.attackBufferMs = 0;
-    // A melhoria da loja se chama "ataque mais rápido" e agora é isso mesmo: ela compra CADÊNCIA.
-    // (Ela multiplicava os golpes por gesto, o que com os i-frames do inimigo seria dano jogado
-    // fora — o segundo e o terceiro cairiam dentro da janela de invulnerabilidade do primeiro.)
-    this.attackCooldownMs = ATTACK_COOLDOWN_MS * (1 - 0.12 * this.upgrades.swordSpeed);
+    this.attackCooldownMs = ATTACK_COOLDOWN_MS;
     this.stopBreathing();
     this.movementController?.root(SWING_ROOT_MS);
     this.lungeIntoSwing();
     this.hero.attackMs = SWING_POSE_MS; // o CORPO entra no golpe, e nao so a lamina
 
     const { x, y } = this.facingTile();
-    const armed = this.inventory.has('sword');
-    if (armed) this.swingSword(x, y);
-    // O soco nao tem arco: so o vento — e agora o vento e DELE. Aqui saia um `playSwordSlash`, e
-    // com isso a arma que o heroi nao tem soava exatamente igual a que ele tem: de olhos fechados,
-    // estar armado e estar de maos vazias eram o mesmo gesto. Ver SoundManager.playFistSwing.
-    else getSoundManager().playFistSwing();
+    // O BOTÃO DE AÇÃO USA O ITEM SEGURADO — a gramática inteira, para TODOS os itens (a bolsa
+    // escolhe, o A executa). A ESPADA é o caso especial: selecionada, o corte de sempre — o
+    // arco de duas fileiras, a rebatida, e só ela carrega o giro (tickSpinCharge). Mão vazia
+    // é o soco. Qualquer OUTRO item age no tile à frente pela tabela de itens (useItemAt:
+    // machado→árvore, balde→água, chave→porta, tocha→fogueira, pá→terra, semente→buraco...) —
+    // e quando a tabela não tem nada a dizer, o arco sai NO VAZIO (a lei do A). POUSAR nunca
+    // acontece aqui: pousar é o B — é o que separa "usar" de "largar" agora que cada um tem
+    // o seu botão.
+    if (this.heldItem === 'sword' || this.heldItem === 'none') {
+      const armed = this.heldItem === 'sword';
+      if (armed) this.swingSword(x, y);
+      // O soco nao tem arco: so o vento — e agora o vento e DELE. Aqui saia um `playSwordSlash`,
+      // e com isso a arma que o heroi nao tem soava igual a que ele tem: de olhos fechados,
+      // estar armado e estar de maos vazias eram o mesmo gesto. Ver SoundManager.playFistSwing.
+      else getSoundManager().playFistSwing();
 
-    // O soco alcança um braço; a espada, duas fileiras. O alcance é da ARMA, e o desenho de cada
-    // um diz qual é o seu — o punho não tem fita, e por isso não pode ter a área dela.
-    const arc = this.arcTiles(armed ? 2 : 1);
-    this.sweepArc(arc, armed ? 'sword' : 'fist');
-    this.reflectShotsIn(arc);
+      // O soco alcança um braço; a espada, duas fileiras. O alcance é da ARMA, e o desenho de
+      // cada um diz qual é o seu — o punho não tem fita, e por isso não pode ter a área dela.
+      const arc = this.arcTiles(armed ? 2 : 1);
+      this.sweepArc(arc, armed ? 'sword' : 'fist');
+      this.reflectShotsIn(arc);
+      return;
+    }
+    if (!this.useItemAt(x, y)) this.swingHeld(x, y);
   }
 
   /**
@@ -3674,7 +4034,7 @@ export class GameScene extends Phaser.Scene {
    * DECISAO e nao um golpe melhor.
    */
   private spinAttack(): void {
-    if (!this.inventory.has('sword')) return; // e a espada que gira; um punho nao rodopia
+    if (this.heldItem !== 'sword') return; // e a espada EMPUNHADA que gira (ver tickSpinCharge)
     // O GIRO PERDE-SE SE VOCE APANHAR CARREGANDO, e ele precisa da trava EXPLICITA porque e o unico
     // gesto que ignora a cadencia de proposito ("o jogador ja pagou por ele segurando meio segundo
     // parado") — sem esta linha, ele seria a unica coisa que sai do meio de um atordoamento.
@@ -3829,20 +4189,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O BOTAO B — o item escolhido, no tile a frente. Duas leituras, nesta ordem:
+   * O BOTAO B — PEGA, FALA e POUSA. USAR o item saiu daqui: a tabela de itens inteira mora no
+   * botao A (swingAttack — "o botao de acao usa o item segurado"), entao o que resta ao B com
+   * a mao cheia e POUSAR o item no tile a frente.
    *
-   *   1. o tile PEDE aquele item (a arvore pede o machado, a rocha a picareta, a fogueira morta
-   *      a tocha, a bandeja qualquer coisa) → o item age;
-   *   2. nao pede → o item simplesmente FICA no chao ali.
-   *
-   * O gesto 2 e o que substitui o truque que sustentava metade das pecas do jogo: como nao
-   * havia botao, PISAR num tile depositava o que estava na mao. Isso alimentava o braco
-   * robotico, as duas bandejas da caixa, o buraco de plantio e a marca da bomba — e cobrava o
-   * preco de atravessar uma bandeja com a coisa errada ser um acidente silencioso. Agora
-   * depositar e uma decisao, e as afordancias continuam valendo inteiras: a bomba-fantasma que
-   * respira e a bandeja que pulsa nunca disseram "pise aqui", disseram "ponha algo aqui".
+   * Pousar tambem e o gesto de DEPOSITAR, e isso continua valendo inteiro: a bandeja da caixa,
+   * o dock da bateria e o chao que alimenta o braco robotico sao um item posto num tile — a
+   * bomba-fantasma que respira e a bandeja que pulsa nunca disseram "use aqui", disseram
+   * "ponha algo aqui". A separacao final dos dois botoes: A usa, B larga — e por isso pousar
+   * deixou de precisar que a tabela inteira falhe primeiro.
    */
-  private pressUse(): void {
+  private pressUse(event?: KeyboardEvent): void {
+    // O B NÃO REPETE MAIS, e a bolsa é quem cobrou isso. O A já ignorava a repetição do navegador
+    // pelo `event.repeat` (ver `pressAttack`); o B não, e com a bolsa atrás da mesma tecla isso
+    // virou uma armadilha real: segurar o X um instante a mais para equipar fazia o primeiro
+    // keydown CONFIRMAR o item e a repetição seguinte, já com a bolsa fechada, USÁ-LO no tile da
+    // frente. Quem quer usar duas vezes aperta duas vezes — a cadência (USE_COOLDOWN_MS) continua
+    // sendo o que separa os dois apertos.
+    if (event?.repeat) return;
+    // A BOLSA ABERTA SEQUESTRA O B — e este é o único lugar do código onde isso pode ser decidido.
+    // Se a bolsa tivesse o próprio ouvinte de X, o MESMO aperto faria as duas coisas em sequência:
+    // confirmaria o item e, meio milissegundo depois já com a bolsa fechada, USARIA o que acabou
+    // de ser equipado contra o tile da frente.
+    if (this.quickBag?.isOpen) { this.quickBag.commit(); return; }
     if (!this.canAct()) return;
     // A cadencia adia, nao descarta — a mesma lei do A (ver ACTION_BUFFER_MS). Vale mais aqui do
     // que parece: o B tambem e uma arma (o graveto aceso), e o hitstop de um acerto come 110ms
@@ -3855,6 +4224,13 @@ export class GameScene extends Phaser.Scene {
     this.useCooldownMs = USE_COOLDOWN_MS;
     this.stopBreathing();
     const { x, y } = this.facingTile();
+    // A road seal is activated from under the hero's feet. It outranks normal B actions because
+    // the prompt explicitly asks for this button while the hero is standing on the square.
+    const buildGate = this.explorer?.gateAt(this.playerWorld.worldX, this.playerWorld.worldY);
+    if (buildGate) {
+      if ((explorerRun()?.coins ?? 0) >= this.explorer!.minCost()) this.openChunkCards(buildGate);
+      return;
+    }
     // PEGAR vem antes de tudo, e nesta ordem: o tile a frente (o B age a frente, e essa e a lei
     // do botao) e depois o de baixo dos pes (o heroi ATRAVESSA item — sem esta segunda chance
     // ele teria de sair do tile e se virar pra pegar o que esta pisando).
@@ -3868,7 +4244,12 @@ export class GameScene extends Phaser.Scene {
     if (this.talkToNpcAt(x, y)) return;
     if (this.pickUpItemAt(this.playerWorld.worldX, this.playerWorld.worldY)) return;
     if (this.heldItem === 'none') return;
-    if (this.useItemAt(x, y)) return;
+    // O gelo ainda barra o pouso AQUI (a tabela, que tinha esse gate, mudou de botao): pousar
+    // dentro de um bloco seria esconder um item sob o vidro. A resposta e o tremor de sempre.
+    if (this.freezeManager?.frozenAt(x, y)) {
+      this.freezeManager.pulse(x, y);
+      return;
+    }
     this.placeItemAt(x, y);
   }
 
@@ -3897,7 +4278,7 @@ export class GameScene extends Phaser.Scene {
     const kind = this.npcManager.getKindAt(wx, wy);
     if (!kind) return false;
     // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
-    if (kind === 'wizard') this.openWizardDialog({ worldX: wx, worldY: wy });
+    if (kind === 'wizard' && !this.explorer) this.openWizardDialog({ worldX: wx, worldY: wy });
     else this.openNpcDialog(kind, { worldX: wx, worldY: wy });
     return true;
   }
@@ -3923,7 +4304,10 @@ export class GameScene extends Phaser.Scene {
     }
     const taken = this.itemManager?.takeAt(wx, wy);
     if (!taken) return false;
-    this.onCollectItem({ kind: taken.kind, worldX: wx, worldY: wy, fire: taken.fire, chargeMs: taken.chargeMs });
+    this.onCollectItem({
+      kind: taken.kind, worldX: wx, worldY: wy,
+      fire: taken.fire, chargeMs: taken.chargeMs, units: taken.units,
+    });
     return true;
   }
 
@@ -3943,8 +4327,17 @@ export class GameScene extends Phaser.Scene {
     const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
     const charge = kind === 'batteryFull' ? this.heldBatteryChargeMs : undefined;
     const onDeadWire = this.wireIndex.has(`${wx},${wy}`) && !this.liveWires.has(`${wx},${wy}`);
-    this.clearHeldItem();
-    this.itemManager.drop(kind, wx, wy, fire, charge);
+    // O PACOTE pousa inteiro (semente e minério — ver UNIT_PACK_KINDS): o punhado da mochila
+    // vira um item só no chão, e pegá-lo de volta devolve a mesma contagem (ItemPickup.units).
+    // Pousar uma e pegar cinco seria uma máquina de imprimir semente — o pacote viaja.
+    const units = UNIT_PACK_KINDS.has(kind) ? this.inventory.count(kind) : 1;
+    if (UNIT_PACK_KINDS.has(kind)) {
+      this.inventory.remove(kind, units);
+      this.updateBackItem();
+    } else {
+      this.clearHeldItem();
+    }
+    this.itemManager.drop(kind, wx, wy, fire, charge, units);
     if (fire) this.scheduleGroundTorchSpread(wx, wy);
     if (kind === 'batteryFull' && onDeadWire) getSoundManager().playBatteryDock();
     else getSoundManager().playFootstep(); // o baque surdo de pousar algo no chao
@@ -3954,12 +4347,15 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * A TABELA DE ITENS — o que cada coisa na mao faz contra o tile a frente. Ela era o corpo do
-   * esbarrao (o jogo inteiro se jogava andando contra as coisas); hoje e o botao B, e o
-   * esbarrao ficou so com os gestos de CORPO (ver handlePlayerBump).
+   * esbarrao, depois foi o botao B; hoje ela e o BOTAO A ("o botao de acao usa o item
+   * segurado" — ver swingAttack, que ja pagou cadencia, raiz, investida e pose antes de chamar
+   * aqui). O esbarrao ficou so com os gestos de CORPO (handlePlayerBump); o B ficou com pegar,
+   * falar e pousar.
    *
    * Devolve true quando o item fez alguma coisa — inclusive quando ele foi RECUSADO por uma
    * regra do proprio prop (uma agua que nao aceita ponte ali). Falso significa "este tile nao
-   * tem nada a ver com o que voce esta segurando", e so entao o item e pousado no chao.
+   * tem nada a ver com o que voce esta segurando" — e ai o swingAttack faz o arco sair no
+   * VAZIO (a lei do A). Pousar nao e mais o fallback disto: pousar mora no B.
    */
   private useItemAt(wx: number, wy: number): boolean {
     // Um bicho na frente leva o item na cara, na escada de dano de sempre (MELEE_DAMAGE): o
@@ -4127,6 +4523,18 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
+    // A OUTRA PROCEDÊNCIA da água: a pintada no TERRENO (SEA_TILE_FRAMES — é assim que o
+    // overworld escreve TODO rio, lago e oceano). O balde enchia só no rio-prop, e esse era o
+    // gesto MUDO da aventura: B mirando a água do mundo grande não fazia nada (o pousar recusa
+    // em silêncio porque o mar bloqueia) — e sem encher o balde, regar um canteiro era
+    // impossível fora dos levels: a fazenda inteira nascia trancada no modo principal.
+    // `isOpenWaterAt` é a resposta ÚNICA para as duas procedências (a lição do zora) — e uma
+    // ponte, um vau ou um canal drenado deixam de ser água em cima dela, como têm de deixar.
+    if (this.heldItem === 'bucket' && this.isOpenWaterAt(wx, wy)) {
+      this.fillBucket(wx, wy);
+      return true;
+    }
+
     // Dry bush — a flaming item sets it alight; it chars to ash and opens the tile.
     const bush = this.getDryBushAt(wx, wy);
     if (bush?.blocking) {
@@ -4205,13 +4613,14 @@ export class GameScene extends Phaser.Scene {
         const dirY = Math.sign(wy - this.playerWorld.worldY);
         this.swingPickaxe(wx, wy);
         this.time.delayedCall(CHOP_IMPACT_MS, () => {
-          if (!rock.smash(dirX, dirY)) return;
+          const blow = rock.smash(dirX, dirY);
+          if (blow === 'none') return;
           getSoundManager().playRockSmash();
-          const shattered = !rock.blocking;
-          this.spawnRockDebris(wx, wy, dirX, dirY, shattered, rock.ore);
-          // shattered, not just cracked. Ore leaves IRON — the same two blows, a different
-          // matter: the vein in the art is the promise, and this is it being kept.
-          if (shattered) this.dropRockSpoil(rock);
+          this.spawnRockDebris(wx, wy, dirX, dirY, blow !== 'struck', rock.ore);
+          // A pedra comum ABRE e deixa o espolio no tile; o VEIO de ferro nunca abre — a cada
+          // ciclo de 3 pancadas ele PRODUZ um bloco, que espalha como moeda em volta da pedra.
+          if (blow === 'shattered') this.dropRockSpoil(rock);
+          else if (blow === 'yielded') this.spawnOreLoot(rock);
         });
       } else {
         rock.shake();
@@ -4238,6 +4647,28 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(120, () => {
           this.throwBucketWater(wx, wy, () => this.waterPlantSpot(plantSpot, wx, wy));
         });
+      }
+      return true;
+    }
+
+    // A PLANTA CARNÍVORA responde como o mato (é planta): a foice a derruba (sem colheita —
+    // predador não é lavoura), o fogo a acende (e espalha — combustível como toda planta),
+    // qualquer outra coisa a faz retesar. Ela nunca morde o herói: é a peça DELE.
+    const carnivore = this.getCarnivorousPlantAt(wx, wy);
+    if (carnivore?.blocking) {
+      if (this.heldItem === 'scythe') {
+        this.swingHeld(wx, wy);
+        getSoundManager().playGrassCut();
+        this.time.delayedCall(110, () => carnivore.cut());
+      } else if (this.isFlammableHeld && this.heldOnFire) {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(150, () => {
+          if (!carnivore.ignite()) return;
+          this.spawnFireHitEffect(wx, wy);
+          this.scheduleFireSpread(wx, wy);
+        });
+      } else {
+        carnivore.shake();
       }
       return true;
     }
@@ -4314,10 +4745,28 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
+    // A SEMENTE no buraco aberto — o plantio, no compasso da casa: o golpe desenha, a terra
+    // recebe no impacto, e a semente só é GASTA se entrou (o buraco teve 150ms pra deixar de
+    // ser buraco). As DUAS sementes plantam pelo mesmo gesto — o canteiro lembra qual recebeu
+    // (sownKind) e é isso que decide o broto: mato, ou a planta carnívora. Pousar uma semente
+    // EM CIMA do buraco continua possível — pelo B, como item.
     const hole = this.getPlantSpotAt(wx, wy);
-    if (hole?.isHole && this.heldItem === 'seeds') {
-      this.clearHeldItem(); // as sementes vao para a terra
-      hole.plant();
+    if (hole?.isHole && SEED_PACK_KINDS.has(this.heldItem)) {
+      const sowing = this.heldItem as PlantableSeed;
+      this.swingHeld(wx, wy);
+      this.time.delayedCall(150, () => {
+        if (this.heldItem === sowing && hole.isHole && hole.plant(sowing)) this.clearHeldItem();
+      });
+      return true;
+    }
+
+    // A PÁ — a única ferramenta cuja fechadura é o CHÃO NU de terra (canDigAt): ela cava um
+    // canteiro (plantSpot). Por último de propósito, depois de todo prop e de toda marca:
+    // qualquer coisa EM CIMA da terra responde primeiro, e onde não há terra o `false` deixa
+    // o arco sair no vazio.
+    if (this.heldItem === 'shovel' && this.canDigAt(wx, wy)) {
+      this.swingHeld(wx, wy);
+      this.time.delayedCall(150, () => this.digPlantHole(wx, wy));
       return true;
     }
 
@@ -4396,14 +4845,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Fogueira ACESA: o esbarrao e SENTAR nela — a loja (o bonfire de Souls) abre. Acender,
-    // apagar e reabastecer a tocha viraram gestos de mao, e vivem no botao B.
+    // Fogueira: o esbarrao so faz a chama reagir (a LOJA que abria aqui foi removida por
+    // inteiro — moeda agora se ganha e se gasta no MUNDO: caveira, balcão de NPC, selo de
+    // estrada). Acender, apagar e reabastecer a tocha vivem no botao B.
     const campfire = this.getCampfireAt(wx, wy);
     if (campfire) {
       campfire.onHit();
-      if (campfire.isLit && this.registry.get('appMode') !== 'lab' && !isPuzzleWorld()) {
-        this.openShop();
-      }
       return;
     }
 
@@ -4471,6 +4918,7 @@ export class GameScene extends Phaser.Scene {
     this.getDryBushAt(wx, wy)?.shake();
     this.getMoonflowerAt(wx, wy)?.shake();
     this.getLockedDoorAt(wx, wy)?.shake();
+    this.getCarnivorousPlantAt(wx, wy)?.shake();
     const grass = this.getTallGrassAt(wx, wy);
     if (grass?.blocking && grass.isTall) grass.shake();
   }
@@ -5286,7 +5734,6 @@ export class GameScene extends Phaser.Scene {
     const st = adventureState();
     st.started = true;
     st.coins = this.coinManager?.coinTotal ?? st.coins;
-    st.upgrades = { ...this.upgrades };
     st.inventory = this.inventory.list();
     st.selected = this.inventory.selected;
     st.litFireCount = this.litFireCount;
@@ -5296,7 +5743,9 @@ export class GameScene extends Phaser.Scene {
     if (this.itemManager) {
       st.groundItems.set(
         this.adventureScope,
-        this.itemManager.snapshot().map((s) => ({ kind: s.kind, worldX: s.worldX, worldY: s.worldY })),
+        this.itemManager.snapshot().map((s) => ({
+          kind: s.kind, worldX: s.worldX, worldY: s.worldY, count: s.units,
+        })),
       );
     }
     saveAdventure();
@@ -5337,6 +5786,32 @@ export class GameScene extends Phaser.Scene {
       const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
       terrain.upper[ly][lx] = null;
       terrain.collisions[ly][lx] = false;
+    }
+  }
+
+  /**
+   * A superfície sob um buraco CAVADO também não volta: a pá limpou a grama baixa (decor da
+   * camada upper) na cavada, e o world.json volta limpo do disco — sem este diff, a folhagem
+   * renasceria POR BAIXO do buraco salvo. Mesmo compasso do applyFelledTreeDiff: roda ANTES do
+   * World3D assar. Só decor NÃO-sólido sai (um gerador futuro pondo árvore ali não é derrubado
+   * por um buraco); a ossada fica de fora porque ela é memória de SESSÃO (CorpseDecals), nunca
+   * do save.
+   */
+  private applyDugSpotDiff(): void {
+    const bounds = getWorldBounds();
+    for (const key of adventureState().dugSpots) {
+      const [wx, wy] = key.split(',').map(Number);
+      if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+      const cx = Math.floor(wx / CHUNK_COLUMNS);
+      const cy = Math.floor(wy / CHUNK_ROWS);
+      if (cx < bounds.minCx || cx > bounds.maxCx || cy < bounds.minCy || cy > bounds.maxCy) continue;
+      const terrain = getChunkTerrain(cx, cy);
+      const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+      const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+      const upper = terrain.upper[ly][lx];
+      if (upper !== null && !SOLID_UPPER_FRAMES.has(upper) && !terrain.collisions[ly][lx]) {
+        terrain.upper[ly][lx] = null;
+      }
     }
   }
 
@@ -5551,6 +6026,46 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // Torrões de terra chutados por uma pazada — o gesto das lascas da ponte com a física
+  // invertida: lasca de madeira voa e SOME no ar; torrão é PESO — sobe rápido, para, e CAI de
+  // volta, apagando só quando pousa. Cores da própria arte do buraco (aro recém-cavado, sombra
+  // e nightsoil), para que o que voa e o que fica no chão leiam como a mesma terra.
+  private spawnDirtBurst(wx: number, wy: number, count: number): void {
+    if (!this.camera) return;
+    const s = this.camera.tileToScreen(wx, wy, this.tileSize);
+    const colors = [0x63452c, 0x3e2533, 0x452939];
+    const size = Math.max(2, Math.floor(this.tileSize * 0.11));
+    for (let i = 0; i < count; i++) {
+      const clod = this.add
+        .rectangle(s.x + Phaser.Math.Between(-5, 5), s.y + Phaser.Math.Between(-2, 2), size, size, colors[i % colors.length])
+        .setDepth(SCENE_DEPTHS.player + 3)
+        .setAngle(Phaser.Math.Between(0, 360));
+      const driftX = Phaser.Math.Between(-8, 8) * (this.tileSize * 0.045);
+      const rise = this.tileSize * (0.28 + Math.random() * 0.34);
+      this.tweens.add({
+        targets: clod,
+        x: clod.x + driftX * 0.6,
+        y: clod.y - rise,
+        angle: clod.angle + Phaser.Math.Between(-160, 160),
+        duration: 150 + i * 12,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: clod,
+            x: clod.x + driftX * 0.4,
+            // Cai um fio ALÉM de onde subiu: o torrão pousa em volta do buraco, não dentro.
+            y: clod.y + rise * (0.8 + Math.random() * 0.35),
+            angle: clod.angle + Phaser.Math.Between(-120, 120),
+            alpha: 0,
+            duration: 190 + i * 14,
+            ease: 'Quad.easeIn',
+            onComplete: () => clod.destroy(),
+          });
+        },
+      });
+    }
+  }
+
   // ── Bomb / seeds ────────────────────────────────────────────────────────────
   // The game is walk-only — no "use item" button — so every placement has a walk-on affordance:
   // a spot mark (a breathing purple ghost of the thing that goes there). The hero stepping onto
@@ -5666,11 +6181,92 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(400, () => this.growPlantedGrass(spot));
       return;
     }
-    const grass = new TallGrassObject(this, spot.worldX, spot.worldY);
-    grass.sproutIn();
-    this.tallGrasses.push(grass);
-    spot.setGrown(grass);
+    // O canteiro brota O QUE recebeu (sownKind): a semente comum vira mato — combustível; a
+    // carnívora vira a planta-armadilha — defesa. O mesmo monte, a mesma água, dois destinos.
+    if (spot.sownKind === 'carnivoreSeeds') {
+      const plant = new CarnivorousPlantObject(this, spot.worldX, spot.worldY);
+      plant.sproutIn();
+      this.carnivorousPlants.push(plant);
+      spot.setGrown(plant);
+    } else {
+      const grass = new TallGrassObject(this, spot.worldX, spot.worldY);
+      grass.sproutIn();
+      this.tallGrasses.push(grass);
+      spot.setGrown(grass);
+    }
     getSoundManager().playGrassCut(); // the blades pushing out — the same dry rustle
+  }
+
+  /**
+   * A PÁ pode cavar aqui? A fechadura dela é o CHÃO NU DE TERRA (DIGGABLE_GROUND_FRAMES — o
+   * pátio de pedra, a laje, a alvenaria de dungeon e o mar recusam a lâmina), e "nu" é a
+   * pergunta LARGA duas vezes: nada ocupando o tile (isTileOccupied: parede, bicho, item,
+   * coração, bomba, o próprio herói) e nenhum prop NEM NÃO-BLOQUEANTE em cima — um toco de
+   * mato, uma marca de bomba, um cabo, uma placa ou um canteiro já cavado são todos "este
+   * chão já tem dono". Congelado também recusa: gelo primeiro, terra depois.
+   */
+  private canDigAt(wx: number, wy: number): boolean {
+    const chunkX = Math.floor(wx / CHUNK_COLUMNS);
+    const chunkY = Math.floor(wy / CHUNK_ROWS);
+    if (this.chunkManager?.hasChunkCoordinate(chunkX, chunkY) !== true) return false;
+    if (!DIGGABLE_GROUND_FRAMES.has(this.chunkManager.getTile(wx, wy).ground)) return false;
+    if (this.freezeManager?.frozenAt(wx, wy)) return false;
+    if (this.isTileOccupied(wx, wy)) return false;
+    for (const entry of this.propRegistry) {
+      if (this.propAt(entry.list, wx, wy)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * O impacto da pá: nasce um canteiro (plantSpot) DE VERDADE — o mesmo objeto dos autorados,
+   * então semente, balde, mato e reabertura já o conhecem sem uma linha nova. O push é in
+   * place de propósito (o propRegistry referencia este array; ver o comentário dele). Na
+   * aventura de overworld o buraco é ESTRUTURA do jogador e entra no save como diff (o padrão
+   * felledTrees) — dungeon não tem terra, e level/explorador zeram por desenho.
+   */
+  private digPlantHole(wx: number, wy: number): void {
+    if (!this.canDigAt(wx, wy)) return; // o mundo teve 150ms para mudar — reconfere no impacto
+    getSoundManager().playGrassCut(); // terra revirada — o mesmo farfalhar seco do plantio
+    // SÓ O BURACO FICA NO TILE: cavar revolve a superfície inteira. A grama baixa assada no
+    // terreno (decor da camada upper — não-sólido por construção: um frame sólido teria barrado
+    // o canDigAt) e a ossada/mancha de quem morreu ali SOMEM sob a terra virada. Sem isto o
+    // recorte do buraco desenha por cima de folhagem e osso — três pinturas no mesmo chão.
+    const chunks = this.chunkManager;
+    if (chunks) {
+      const chunk = chunks.getChunk(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS));
+      const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+      const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+      if (chunk.upper[ly][lx] !== null) {
+        chunk.upper[ly][lx] = null;
+        this.world3d?.removeDecorTile(wx, wy);
+      }
+    }
+    this.enemyManager?.removeCorpseAt(wx, wy);
+    const spot = new PlantSpotObject(this, wx, wy, { dug: true });
+    this.plantSpots.push(spot);
+    // A CAVADA AOS POUCOS: o canteiro aprofunda em quatro tempos (os frames do sheet — ver
+    // PlantSpotObject.animateDigIn), e cada tempo tem o seu peso aqui fora. A poeira seca sobe
+    // no impacto; os torrões voam em três levas que MINGUAM (a primeira pazada tira o grosso);
+    // e a última batida — a que chuta os torrões desenhados pra fora do aro — assenta com o
+    // baque surdo e um tremorzinho na direção da pazada. Tudo no compasso de DIG_STAGE_MS:
+    // uma fonte só, ou o som e a terra dessincronizam do desenho na primeira mexida no número.
+    this.spawnSmokePuff(wx, wy);
+    this.spawnDirtBurst(wx, wy, 7);
+    const beat = PlantSpotObject.DIG_STAGE_MS;
+    this.time.delayedCall(beat, () => this.spawnDirtBurst(wx, wy, 5));
+    this.time.delayedCall(beat * 2, () => this.spawnDirtBurst(wx, wy, 4));
+    this.time.delayedCall(beat * 3, () => {
+      this.spawnDirtBurst(wx, wy, 3);
+      getSoundManager().playFootstep(); // o assentar da terra — o mesmo baque de pousar algo
+      const dx = Math.sign(wx - this.playerWorld.worldX);
+      const dy = Math.sign(wy - this.playerWorld.worldY);
+      this.world3d?.shake(50, 0.025, dx, dy);
+    });
+    if (this.adventure && !getDungeonTrip()) {
+      adventureState().dugSpots.add(`${wx},${wy}`);
+      this.persistAdventure();
+    }
   }
 
   /**
@@ -5693,8 +6289,8 @@ export class GameScene extends Phaser.Scene {
     const port: ArmWorldPort = {
       hasItem: (x, y) => this.itemManager?.hasItemAt(x, y) ?? false,
       take: (x, y) => this.itemManager?.takeAt(x, y) ?? null,
-      put: (kind, x, y, fire, chargeMs) => {
-        this.itemManager?.drop(kind, x, y, fire, chargeMs);
+      put: (kind, x, y, fire, chargeMs, units) => {
+        this.itemManager?.drop(kind, x, y, fire, chargeMs, units);
         // A carga chegou ACESA: o graveto pousado e uma fonte de fogo — os vizinhos
         // inflamaveis pegam. E assim que a chama atravessa um muro sem combustivel nenhum.
         if (fire) this.scheduleGroundTorchSpread(x, y);
@@ -5743,7 +6339,17 @@ export class GameScene extends Phaser.Scene {
     if (!this.toolboxes.length) return;
     const port: ToolboxWorldPort = {
       kindAt: (x, y) => this.itemManager?.kindAt(x, y) ?? null,
-      take: (x, y) => this.itemManager?.takeAt(x, y)?.kind ?? null,
+      // A forja consome UMA unidade. O punhado (semente, minério — UNIT_PACK_KINDS) pousa
+      // inteiro num item só, e engoli-lo aqui fundiria 5 ferros numa foice: o resto volta
+      // ao tile no mesmo frame, e a bancada pega só o que a receita pede.
+      take: (x, y) => {
+        const taken = this.itemManager?.takeAt(x, y);
+        if (!taken) return null;
+        if (taken.units > 1) {
+          this.itemManager?.drop(taken.kind, x, y, taken.fire, taken.chargeMs, taken.units - 1);
+        }
+        return taken.kind;
+      },
       put: (kind, x, y) => this.itemManager?.drop(kind, x, y),
       occupied: (x, y) => this.isTileOccupied(x, y),
       opened: () => getSoundManager().playToolboxOpen(),
@@ -5967,6 +6573,46 @@ export class GameScene extends Phaser.Scene {
     return null;
   }
 
+  /**
+   * A PLANTA CARNÍVORA À ESPREITA — todo inimigo que ENCOSTA (para num dos 4 vizinhos de uma
+   * planta pronta) é COMIDO. As recusas são as do resto do jogo: quem ainda NASCE é
+   * invulnerável (a lei do nascimento) e um corpo CONGELADO é estátua (uma bocarra não morde
+   * através do bloco). No pico do bote a adjacência é RECONFERIDA — um corpo que saiu do tile
+   * durante a arma da mandíbula é um bote no ar, e a planta mastiga o vazio mesmo assim: errar
+   * também custa a recarga, e é isso que faz o bote ser esquivável. O gole não paga moeda nem
+   * deixa ossada (ver EnemyBase.consume); a encenação é gated por distância (a regra da roda
+   * d'água: a física roda sempre, o barulho só perto do herói).
+   */
+  private updateCarnivorousPlants(): void {
+    for (const plant of this.carnivorousPlants) {
+      if (!plant.readyToEat) continue;
+      for (const [dx, dy] of CARDINAL_DIRS) {
+        const enemy = this.enemyManager?.getEnemyAt(plant.worldX + dx, plant.worldY + dy);
+        if (!enemy || !enemy.isAlive || enemy.isSpawning || enemy.isFrozen) continue;
+        const near = Math.hypot(
+          plant.worldX - this.playerWorld.worldX, plant.worldY - this.playerWorld.worldY,
+        ) <= 10;
+        if (near) getSoundManager().playGrassCut(); // as folhas se armando no bote
+        let caught = false;
+        plant.eat(dx, () => {
+          const stillTouching = Math.abs(enemy.worldX - plant.worldX)
+            + Math.abs(enemy.worldY - plant.worldY) === 1;
+          if (!stillTouching || !enemy.isAlive || enemy.isSpawning || enemy.isFrozen) return;
+          caught = true;
+          // A mordida PRENDEU: o corpo é arrastado pelo ar até a boca — o mesmo relógio da
+          // planta (DRAG_MS), então ele chega no exato instante em que a bocarra fecha.
+          enemy.consume(plant.worldX, plant.worldY, CarnivorousPlantObject.DRAG_MS);
+          this.spawnSmokePuff(enemy.worldX, enemy.worldY); // as folhas do bote, no tile da presa
+        }, () => {
+          if (!caught || !near) return;
+          getSoundManager().playItemBonk(); // o baque surdo da bocarra fechando sobre o corpo
+          this.world3d?.shake(50, 0.03, dx, dy);
+        });
+        break; // um corpo por vez — a mastigação é a recarga (e a janela de passar por ela)
+      }
+    }
+  }
+
   // Watch the plots each frame: raise the mound of a sown hole the moment the hero steps off
   // it (a dome must never be born blocking under someone's feet — the dropped-item arming
   // rule), and reopen the hole of a plot whose grown grass was consumed (cut/burnt).
@@ -5986,10 +6632,16 @@ export class GameScene extends Phaser.Scene {
       if (!grass || grass.blocking || spot.reopenPending) continue;
       spot.reopenPending = true;
       this.time.delayedCall(GameScene.PLANT_REOPEN_MS, () => {
-        // Splice in place, never filter-and-reassign: o propRegistry referencia ESTE array.
-        const idx = this.tallGrasses.indexOf(grass);
-        if (idx >= 0) this.tallGrasses.splice(idx, 1);
-        grass.destroy(); // the stubble decays away and the dug hole shows again
+        // Splice in place, never filter-and-reassign: o propRegistry referencia ESTES arrays.
+        // A planta consumida pode ser mato OU a carnívora — cada uma mora na sua lista.
+        if (grass instanceof TallGrassObject) {
+          const idx = this.tallGrasses.indexOf(grass);
+          if (idx >= 0) this.tallGrasses.splice(idx, 1);
+        } else {
+          const idx = this.carnivorousPlants.indexOf(grass);
+          if (idx >= 0) this.carnivorousPlants.splice(idx, 1);
+        }
+        grass.destroy(); // the remains decay away and the dug hole shows again
         spot.reopen();
       });
     }
@@ -6101,15 +6753,20 @@ export class GameScene extends Phaser.Scene {
 
     // The blast shatters rock in range and throws the pieces as usable STONE: the bomb PRODUCES
     // matter, it does not only clear a path. One charge can open a wall AND hand you the fords
-    // to cross the river beyond it. (Two blows finish any rock: intact -> cracked -> broken.)
+    // to cross the river beyond it. (Two blows finish a plain rock: intact -> cracked -> broken.
+    // The iron VEIN survives any blast — the two blows only advance its 3-hit cycle, so a bomb
+    // can milk it, never open it.)
     let brokeRock = false;
     for (const rockObj of this.rocks) {
       if (!inBlast(rockObj.worldX, rockObj.worldY) || !rockObj.blocking) continue;
-      rockObj.smash(0, 0);
-      rockObj.smash(0, 0);
+      const blows = [rockObj.smash(0, 0), rockObj.smash(0, 0)];
       if (!rockObj.blocking) {
         this.spawnRockDebris(rockObj.worldX, rockObj.worldY, 0, -1, true, rockObj.ore);
         this.dropRockSpoil(rockObj);
+        brokeRock = true;
+      } else if (blows.includes('yielded')) {
+        this.spawnRockDebris(rockObj.worldX, rockObj.worldY, 0, -1, true, true);
+        this.spawnOreLoot(rockObj);
         brokeRock = true;
       }
     }
@@ -6183,6 +6840,15 @@ export class GameScene extends Phaser.Scene {
 
     const grass = this.getTallGrassAt(wx, wy);
     if (grass?.ignite()) {
+      this.spawnFireHitEffect(wx, wy);
+      this.scheduleFireSpread(wx, wy);
+      return true;
+    }
+
+    // A planta carnívora é PLANTA: combustível como o mato — o fogo é uma das três respostas
+    // do jogador a uma que ficou no lugar errado (as outras: a foice, e simplesmente contorná-la).
+    const carnivore = this.getCarnivorousPlantAt(wx, wy);
+    if (carnivore?.ignite()) {
       this.spawnFireHitEffect(wx, wy);
       this.scheduleFireSpread(wx, wy);
       return true;
@@ -6290,6 +6956,9 @@ export class GameScene extends Phaser.Scene {
       follow: () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }),
       stillValid: () => !this.isDead,
       onFreeze: () => {
+        // Virar estátua fecha a bolsa pela mesma razão que apanhar fecha (`handleEnemyAttackPlayer`):
+        // ela é a única tela que fica aberta com o mundo correndo, e o mundo acabou de responder.
+        this.quickBag?.close();
         this.stopBreathing();
         this.movementController?.root(FREEZE_MS);
         this.playerStaggerMs = Math.max(this.playerStaggerMs, FREEZE_MS);
@@ -6438,6 +7107,10 @@ export class GameScene extends Phaser.Scene {
   ): void {
     this.dialogOpen = true;
     this.stopBreathing();
+    // O Z que ABRIU a conversa pode estar sendo segurado: sem isto o keyup se perde com o
+    // painel aberto e a lâmina rodopiante termina de carregar sozinha — a mesma rede da
+    // subtela (ver resetChargeAndBuffers no openSubScreen).
+    this.resetChargeAndBuffers();
     // Pan so the hero + NPC sit centered in the left half; the panel fills the right half.
     this.dialogNpcWorld = npcWorld;
     this.startDialogCameraShift(npcWorld);
@@ -6450,7 +7123,37 @@ export class GameScene extends Phaser.Scene {
       this.endDialogCameraShift();
       getSoundManager().fadeMusicIn();
       onClosed?.();
-    }, voice);
+    }, voice, this.tradePortFor(script.trade, npcWorld));
+  }
+
+  /**
+   * A mão do BALCÃO no mundo: o overlay pergunta quanto o herói tem e executa a venda. O
+   * pagamento NÃO entra na carteira por decreto — o NPC DERRUBA as moedas em volta de si,
+   * como um inimigo derrubaria, e o jogador ainda tem que passar por elas (pedido do
+   * usuário: dinheiro ganho é dinheiro no MUNDO). A mochila esvazia na hora; a carteira só
+   * muda quando cada moeda é apanhada, pelo caminho único de toda moeda.
+   */
+  private tradePortFor(
+    trade: DialogTrade | undefined,
+    npcWorld?: { worldX: number; worldY: number },
+  ): DialogTradePort | undefined {
+    if (!trade) return undefined;
+    const kind = trade.item as HeldItemKind;
+    return {
+      count: () => this.inventory.count(kind),
+      sell: (units: number) => {
+        const n = Math.min(Math.max(0, Math.floor(units)), this.inventory.count(kind));
+        if (n <= 0) return 0;
+        this.inventory.remove(kind, n);
+        this.updateBackItem(); // o item vendido podia ser o da mão — as costas ficam honestas
+        const coins = n * trade.coinsPerUnit;
+        const at = npcWorld ?? { worldX: this.playerWorld.worldX, worldY: this.playerWorld.worldY };
+        if (this.chunkManager) this.coinManager?.spawnCoins(at.worldX, at.worldY, this.chunkManager, coins);
+        getSoundManager().playCoinPickup(); // o tilintar da mão fechando o negócio
+        this.persistAdventure(); // a mochila mudou já; as moedas entram uma a uma ao pegar
+        return coins;
+      },
+    };
   }
 
   // Gate an NPC's dialog behind their campfire: if a dead fire sits within range, show the
@@ -6458,7 +7161,8 @@ export class GameScene extends Phaser.Scene {
   private gateDialog(script: DialogScript, npcWorld?: { worldX: number; worldY: number }): DialogScript {
     if (!npcWorld) return script;
     const cf = this.nearestCampfireWithin(npcWorld.worldX, npcWorld.worldY, NPC_GATE_RADIUS_TILES);
-    if (cf && !cf.isLit) return { ...script, lines: tLines('lockedLines') };
+    // A variante travada perde o BALCÃO junto com as falas: um NPC com medo não vende nada.
+    if (cf && !cf.isLit) return { ...script, lines: tLines('lockedLines'), trade: undefined };
     return script;
   }
 
@@ -6564,7 +7268,7 @@ export class GameScene extends Phaser.Scene {
       // Show the "build a bridge here" indicator on any un-bridged river tile the hero stands
       // orthogonally next to — the exact tile a graveto would go into.
       const dist = Math.abs(w.worldX - this.playerWorld.worldX) + Math.abs(w.worldY - this.playerWorld.worldY);
-      w.setBuildHint(dist === 1 && !this.dialogOpen && !this.shopOpen && !this.isDead);
+      w.setBuildHint(dist === 1 && !this.dialogOpen && !this.isDead);
       w.render(this.tileSize, this.camera);
     }
     // Bombs are world-anchored billboards; nothing to reproject here.
@@ -6618,68 +7322,6 @@ export class GameScene extends Phaser.Scene {
    * outro lado (bastaria comprar tudo antes de morrer). A fogueira do acampamento so vende o
    * que ja foi trazido para casa.
    */
-  private get walletCoins(): number {
-    return this.explorer ? explorerMeta().banked : (this.coinManager?.coinTotal ?? 0);
-  }
-
-  private openShop(): void {
-    if (this.shopOpen) return;
-    getSoundManager().playShopOpen();
-    this.shopOpen = true;
-    this.shopOverlay = new ShopOverlay(
-      this,
-      this.walletCoins,
-      this.upgrades,
-      (id) => this.handleBuy(id),
-      () => this.closeShop(),
-    );
-  }
-
-  private closeShop(): void {
-    getSoundManager().playShopClose();
-    this.shopOpen = false;
-    this.shopOverlay?.destroy();
-    this.shopOverlay = undefined;
-  }
-
-  private handleBuy(id: keyof UpgradeState): void {
-    const cost = getUpgradeCost(id, this.upgrades[id]);
-    if (cost === null) return;
-    // A compra sai do banco (explorador, e permanente) ou da bolsa da run (aventura).
-    const paid = this.explorer ? buyExplorerUpgrade(id, cost) : (this.coinManager?.spendCoins(cost) ?? false);
-    if (!paid) return;
-
-    this.upgrades[id] += 1;
-    this.applyUpgradeEffects();
-    // O coracao comprado ja vem cheio: pagar por vida e continuar ferido seria comprar promessa.
-    if (id === 'maxHealth') this.playerHealth = Math.min(this.playerHealth + 1, this.playerMaxHealth);
-    this.shopOverlay?.refresh(this.walletCoins, this.upgrades);
-    this.persistAdventure(); // a compra (moedas + melhoria) atravessa morte e browser
-
-    // Update the UPGRADES_CFG iteration for any upgrade that needs it
-    void UPGRADES_CFG; // ensure import is used
-  }
-
-  /**
-   * Traduz os niveis de melhoria em efeito. Chamado na compra E no create, porque no explorador
-   * as melhorias atravessam expedicoes: a cena nasce com elas ja compradas e tem que nascer
-   * com elas ja valendo.
-   *
-   * Idempotente de proposito — ele SETA valores derivados do nivel, nunca incrementa —, ja que
-   * agora tem dois chamadores.
-   */
-  private applyUpgradeEffects(): void {
-    this.playerMaxHealth = PLAYER_HEALTH_MAX + this.upgrades.maxHealth;
-    this.playerHealth = Math.min(Math.max(this.playerHealth, 1), this.playerMaxHealth);
-    // ms per tile, now that the walk runs at one constant speed. Three levels take the base
-    // walk (150ms/tile, 6.7 tiles/s) up to 105ms — 9.5 tiles/s, about the pace the whole game
-    // used to move at. So the boots are what earn the old speed rather than starting there.
-    this.movementController?.setMoveDuration(
-      Math.max(90, TIMINGS.moveDurationMs - this.upgrades.moveSpeed * 15),
-    );
-    if (this.upgrades.magnet > 0) this.coinManager?.setMagnetRadius(2);
-  }
-
   /**
    * O heroi pisou num item do chao. Ele GUARDA — nao troca mais.
    *
@@ -6690,7 +7332,9 @@ export class GameScene extends Phaser.Scene {
    * Primeira vez de um tipo → a cerimonia do ItemGet; da segunda em diante, so o chime.
    */
   private onCollectItem(item: CollectedItem): void {
-    this.inventory.add(item.kind);
+    // O pacote entra inteiro (as sementes valem SEEDS_PER_PACK recém-colhidas; um punhado
+    // pousado volta com a contagem que tinha). A bolsa e a subtela já mostram o número.
+    this.inventory.add(item.kind, item.units ?? 1);
     this.heldBatteryChargeMs = item.kind === 'batteryFull'
       ? (item.chargeMs ?? BATTERY_FEED_MS)
       : 0;
@@ -7043,6 +7687,41 @@ export class GameScene extends Phaser.Scene {
    */
   private dropRockSpoil(rock: RockObject): void {
     this.dropProduct(rock.ore ? 'iron' : 'stone', rock.worldX, rock.worldY);
+  }
+
+  /**
+   * O bloco que o VEIO produz ESPALHA COMO MOEDA (pedido do usuário: minerar tem que fluir):
+   * salta da pedra, quica num tile vizinho e se pega ANDANDO por cima — a exceção deliberada
+   * ao "nada entra na mochila por pisada". A outra metade da exceção: `stash`, nunca `add` —
+   * o minério entra na mochila e a MÃO do herói fica exatamente com o que estava (a picareta,
+   * no meio da mineração, não pode ser roubada por cada bloco que cai).
+   */
+  /**
+   * O alvo do voo da moeda: o NÚMERO do HUD, convertido de coordenada de página para a do
+   * canvas do Phaser (o voo é um sprite Phaser; o HUD é DOM — dois espaços, uma régua).
+   */
+  private hudCoinAnchor(): { x: number; y: number } | null {
+    const rect = this.explorerHud?.coinAnchorRect();
+    if (!rect) return null;
+    const canvas = this.game.canvas.getBoundingClientRect();
+    if (canvas.width <= 0 || canvas.height <= 0) return null;
+    return {
+      x: (rect.left + rect.width / 2 - canvas.left) * (this.scale.width / canvas.width),
+      y: (rect.top + rect.height / 2 - canvas.top) * (this.scale.height / canvas.height),
+    };
+  }
+
+  private spawnOreLoot(rock: RockObject): void {
+    if (!this.coinManager || !this.chunkManager) return;
+    this.coinManager.spawnLoot(
+      rock.worldX, rock.worldY, this.chunkManager, 1,
+      { key: 'iron-item', size: 0.6 },
+      () => {
+        this.inventory.stash('iron', 1);
+        getSoundManager().playSwordPickup();
+        this.persistAdventure();
+      },
+    );
   }
 
   // A stone dropped into lava cools it into basalt: a permanent walkable firebreak (LavaObject
@@ -7423,6 +8102,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    // A PANCADA ARRANCA A MÃO DE DENTRO DA BOLSA. Ela é a única tela do jogo que fica aberta com o
+    // mundo correndo, então ela é também a única que algo do mundo pode FECHAR — e tem de fechar:
+    // um herói apanhando enquanto folheia calmamente uma fileira de ícones desmente, num quadro, a
+    // promessa inteira do modo (folhear custa; a mochila é um lugar perigoso de se estar).
+    this.quickBag?.close();
+
     // Same reason as handlePlayerBump: reset the breathing pose before the hurt shake repins
     // the hero, so it doesn't jump up half a tile mid-hit.
     this.stopBreathing();
@@ -7569,6 +8254,10 @@ export class GameScene extends Phaser.Scene {
     // Nem golpe guardado nem carga na lamina sobrevive a morte: o silencio da tela de morte nao
     // pode ser interrompido por um botao que o heroi apertou enquanto caia.
     this.resetChargeAndBuffers();
+    // E a bolsa some junto com o resto da UI: ela e a unica que fica aberta com o mundo correndo,
+    // e o mundo acabou de parar de vez (ver QuickBag). Os pes se soltam com ela.
+    this.quickBag?.close();
+    this.quickBag?.setButtonVisible(false);
     // One last heavy blow before the silence.
     this.world3d?.shake(300, 0.26);
     // Death cuts music and even the wind to nothing; out of that silence swells the low
@@ -7600,7 +8289,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({
       targets: fade,
       t: 1,
-      duration: 1500,
+      duration: 900,
       ease: 'Sine.easeIn',
       onUpdate: () => this.world3d?.setWorldFade(fade.t),
     });
@@ -7645,14 +8334,14 @@ export class GameScene extends Phaser.Scene {
         .setAlpha(1)
         .setDepth(D + 1)
         .setVisible(true);
-      this.tweens.add({ targets: this.backItem, alpha: 0, duration: 3200, delay: 900, ease: 'Sine.easeIn' });
+      this.tweens.add({ targets: this.backItem, alpha: 0, duration: 1600, delay: 500, ease: 'Sine.easeIn' });
     }
 
     this.tweens.add({
       targets: this.deathHero,
       alpha: 0,
-      duration: 3200,
-      delay: 900,
+      duration: 1600,
+      delay: 500,
       ease: 'Sine.easeIn',
       onComplete: () => {
         // 3. The epitaph rises out of the dark, in the middle of the screen.
@@ -7668,12 +8357,14 @@ export class GameScene extends Phaser.Scene {
           .setOrigin(0.5)
           .setAlpha(0)
           .setDepth(D + 2);
-        this.tweens.add({ targets: line, alpha: 1, duration: 3000, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: line, alpha: 1, duration: 1200, ease: 'Sine.easeInOut' });
       },
     });
 
-    // Restart is independent of the tweens so a stalled tween never traps the player. Let the
-    // words linger, then tap/any key to continue; auto-restart after a long, unhurried grace.
+    // Restart is independent of the tweens so a stalled tween never traps the player. A MORTE
+    // DEVOLVE RÁPIDO (pedido do usuário): a elegia inteira continua — mundo drenando, herói
+    // sumindo, epitáfio — mas comprimida (~3.3s até o texto pleno), o pulo arma cedo e o
+    // retorno automático vem em 5s. O custo de morrer é a caminhada de volta, nunca a espera.
     let restarting = false;
     const doRestart = (): void => {
       if (restarting) return;
@@ -7715,8 +8406,11 @@ export class GameScene extends Phaser.Scene {
       }
       this.scene.restart();
     };
-    const autoTimer = this.time.delayedCall(12000, doRestart);
-    this.time.delayedCall(4800, () => {
+    const autoTimer = this.time.delayedCall(5000, doRestart);
+    // O pulo arma depois do impacto inicial (o baque + o mundo drenando): cedo o bastante pra
+    // quem quer voltar JÁ, tarde o bastante pra um botão apertado enquanto caía não engolir a
+    // elegia sem ninguém ter visto que morreu.
+    this.time.delayedCall(1600, () => {
       const skip = (): void => { autoTimer.remove(); doRestart(); };
       this.input.once(Phaser.Input.Events.POINTER_DOWN, skip);
       this.input.keyboard?.once('keydown', skip);

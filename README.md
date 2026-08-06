@@ -1,82 +1,87 @@
 # Zero the Hero
 
-Zero the Hero is a 2D pixel-art action game built with Phaser 3, TypeScript, and Vite. The player explores an infinite procedurally-generated world, fights enemies, and collects coins.
+Zero the Hero is a pixel-art action game built with Phaser 3, TypeScript, Three.js, and Vite. The player earns coins from the undead and spends them to build the open world one chunk at a time.
 
 ## Stack
 
 - `Phaser 3`
+- `Three.js`
 - `TypeScript`
 - `Vite`
 - `ESLint`
 
-## Project Layout
+## Project layout
 
 ```text
 .
+|-- backup/
+|   `-- zelda-open-world/   # Archived former overworld (not used at runtime)
 |-- public/
-|   `-- assets/
+|   |-- assets/
+|   |-- levels/             # Standalone puzzle levels and dungeons
+|   `-- world.json          # Active editable library of purchasable chunks
 |-- src/
 |   |-- game/
 |   |   |-- assets/         # Asset manifest
-|   |   |-- debug/          # Debug hooks (window.render_game_to_text, window.advanceTime)
-|   |   |-- editor/         # Map editor board, palette, and UI helpers
-|   |   |-- entities/       # Coin, enemies (Bat, Slime, BigSlime, Undead, Mage, Spider)
-|   |   |-- items/          # Collectible items (Key, Sword)
-|   |   |-- maps/           # Level normalization and runtime helpers
-|   |   |-- objects/        # Interactive objects (LockedDoor)
-|   |   |-- runtime/        # GameBoardRenderer, PlayerMovementController, RuntimeEffects, WorldCamera, MinimapRenderer
-|   |   |-- scenes/         # BootScene, PreloadScene, GameScene, EditorScene
-|   |   |-- shared/         # Grid math and common utilities
-|   |   |-- world/          # Procedural world: Chunk, ChunkManager, WorldGenerator
-|   |   |-- config.ts
-|   |   |-- constants.ts
-|   |   `-- ZeroTheHeroGame.ts
+|   |   |-- debug/          # render_game_to_text, advanceTime, and debug API
+|   |   |-- editor/         # Chunk library editor, board, palette, and DOM UI
+|   |   |-- entities/       # Enemies, coins, pickups, and managers
+|   |   |-- explorer/       # Chunk construction, frontier gates, cards, and road spawns
+|   |   |-- objects/        # Interactive world objects
+|   |   |-- render3d/       # Three.js terrain and billboards
+|   |   |-- runtime/        # Movement, inventory, effects, camera, and menus
+|   |   |-- scenes/         # Boot, preload, title, game, editor, and level scenes
+|   |   `-- world/          # Chunk schema, catalogue access, and streamed terrain
 |   |-- styles/
 |   `-- main.ts
+|-- scripts/
+|   `-- gen-chunk-library.mjs
 |-- index.html
 |-- package.json
 `-- vite.config.ts
 ```
 
-## Architecture Notes
-
-- `scenes/` only orchestrate flow and lifecycle.
-- `runtime/` contains gameplay rendering, movement, effects, camera, and minimap.
-- `world/` generates infinite terrain procedurally using chunk-based hashing with a seed.
-- `entities/` contains enemy AI, coin pickups, and their managers.
-- `items/` and `objects/` contain collectibles and interactive world objects.
-- `editor/` retains the tile map editor (accessible at `/editor`).
-- `shared/` contains grid math and common utilities.
-- `debug/` centralizes `window.render_game_to_text` and `window.advanceTime`.
-
 ## Gameplay
 
-- Infinite world generated per-seed from tileset chunks (16×16 cells each).
-- Player starts at the world origin inside a guaranteed safe zone (no obstacles or enemies nearby).
-- Movement is grid-based with animated steps; swipe input is supported on touch devices.
-- **Enemies** spawn per chunk as the player explores. Difficulty scales with distance from origin:
-  - Close (≤2 chunks): Bat, Slime
-  - Mid (3–5 chunks): Undead, Spider
-  - Far (6+ chunks): Mage, BigSlime (splits into two Slimes on death)
-- **Bump combat**: walking into an enemy attacks it. Enemies patrol and attack on contact.
-- **Health**: 3 hearts. Taking damage grants brief invincibility frames. Reaching 0 triggers a "YOU DIED" screen and restarts with a new seed.
-- **Coins** drop from defeated enemies and are collected by walking over them; count shown in the HUD.
-- **Minimap** renders in the corner, showing terrain, obstacles, and enemy positions.
-- Items (Key, Sword) and objects (LockedDoor) are present but not yet wired into the open-world flow.
+- Every run starts on the same 12×12 clearing: a lit campfire in the middle, the wizard above-left, and a sword ready to collect.
+- Three unfinished roads leave the clearing: west, north, and lower-east. Forest and darkness conceal everything beyond their seams, and the hero cannot cross until a chunk is purchased.
+- Undead quietly enter at intervals from every unfinished frontier. There is no wave announcement and only a small number can be alive at once.
+- Defeated undead drop coins. When the player can afford at least one chunk, the square road seal becomes active.
+- Stand on a seal and press the B action (`X` or `K` on keyboard). Gameplay pauses, the background blurs, and three shuffled chunk cards are dealt face-up.
+- Choosing an affordable card spends its cost, builds that authored chunk at the selected frontier, opens the road, and creates new frontier choices around the expanded world.
+- The initial catalogue contains **Moonlit Lake** (3), **Whispering Forest** (5), and **Spider Hollow** (7). Spider Hollow's authored enemies are all spiders.
+
+Movement is grid-based with animated steps. Combat, inventory, touch controls, health, coin pickups, and the existing object systems remain available.
+
+## Chunk authoring
+
+Open `/editor`, then choose **Chunks…**. The modal can create a blank 12×12 chunk and edit the current card's unique ID, display name, coin cost, image path, and description. Close the modal and use the normal paint/entity tools to author the selected chunk; **Save** writes the active `public/world.json` library.
+
+Regenerate the three starter examples with:
+
+```bash
+npm run generate:chunks
+```
+
+## Archived map
+
+The previous 22×8 Zelda-like overworld was copied intact to [`backup/zelda-open-world/world.json`](backup/zelda-open-world/world.json). It is a backup only and is not loaded by the game or `/editor` for now. Do not reconnect or edit it unless the archived design is explicitly restored.
 
 ## Scripts
 
 ```bash
 npm install
 npm run dev
-npm run build
+npm run generate:chunks
 npm run typecheck
 npm run lint
+npm run build
+npm run playtest -- <scenario>
 ```
 
-## Current State
+## Current state
 
-- Open-world mode is the default game flow; the level-based mode is superseded.
-- Chunk generation, enemy spawning, coin drops, and the minimap are all functional.
-- The tile map editor (`/editor`) is still available for level authoring but not used at runtime.
-- `typecheck`, `lint`, and `build` pass locally.
+- Chunk-builder mode is the default game flow; the former authored overworld is archived.
+- Chunk cards, coin spending, dynamic terrain rebuilding, frontier-only undead spawns, and authored chunk enemies are wired into the runtime.
+- `/editor` is the authoring surface for runtime chunk templates; `/lab` remains the puzzle-level laboratory.
+- `window.render_game_to_text()` exposes the live player, enemies, frontier gates, catalogue, and built chunks for deterministic testing.

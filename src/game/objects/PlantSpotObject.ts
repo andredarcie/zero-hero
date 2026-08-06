@@ -4,17 +4,25 @@ import { ASSET_KEYS } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
+import type { CarnivorousPlantObject } from './CarnivorousPlantObject';
 import type { TallGrassObject } from './TallGrassObject';
 import type { WorldProp } from './WorldProp';
 
+/** As sementes que um canteiro aceita — cada uma brota a SUA planta (ver growPlantedGrass). */
+export type PlantableSeed = 'seeds' | 'carnivoreSeeds';
+/** O que um canteiro pode ter feito brotar. As duas expõem `blocking` e caem para a foice. */
+export type GrownPlant = TallGrassObject | CarnivorousPlantObject;
+
 // O canteiro: um pequeno buraco cavado no chao onde uma SEMENTE (o produto da foice) pode ser
-// plantada. O ciclo completo, todo operado andando (o jogo nao tem botao de usar item):
+// plantada. O ciclo completo, nos dois botoes de hoje:
 //
-//   buraco  — anda-se por cima; PISAR nele segurando sementes planta (handleTileEntered).
-//   semeado — a semente esta na terra, mas o monte so SE ERGUE quando o heroi sai do tile
+//   buraco  — nasce autorado ou da PA (o A cava — ver GameScene.digPlantHole). Com a SEMENTE
+//             na mao, o A mirando o buraco PLANTA (a tabela useItemAt — o botao de acao usa
+//             o item segurado); o B a pousa como item, sem plantar.
+//   semeado — a semente esta na terra, mas o monte so SE ERGUE quando o tile fica livre
 //             (a mesma regra do item dropado que arma ao sair de cima): um domo nunca pode
-//             nascer bloqueando por baixo dos pes de ninguem.
-//   monte   — a semente coberta: um domo de terra que BLOQUEIA e espera agua. BUMP com o balde
+//             nascer bloqueando por baixo dos pes — nem por cima — de ninguem.
+//   monte   — a semente coberta: um domo de terra que BLOQUEIA e espera agua. O B com o balde
 //             cheio rega (a linguagem do douse da fogueira); a terra escurece, molhada.
 //   regado  — germinando. Depois de GROW_MS (e com o tile livre), o MATO brota de verdade:
 //             um TallGrassObject real entra no mundo com a animacao de sproutIn — e dai em
@@ -37,17 +45,26 @@ export class PlantSpotObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  /** O mato que este canteiro fez brotar — GameScene o registra e o colhe de volta. */
-  public grownGrass?: TallGrassObject;
+  /** A planta que este canteiro fez brotar — GameScene a registra e a colhe de volta. */
+  public grownGrass?: GrownPlant;
+  /** QUAL semente está na terra (decide o que brota — mato ou a planta carnívora). */
+  public sownKind: PlantableSeed = 'seeds';
   /** GameScene marcou a reabertura (evita agendar duas vezes no loop de update). */
   public reopenPending = false;
+
+  /** Os quatro tempos da cavada, como frames do sheet: raspao → depressao → fundo → pronto. */
+  private static readonly DIG_FRAMES: readonly number[] = [1, 2, 3, 0];
+  /** O compasso de um tempo. Publico: a GameScene sincroniza os torroes e o baque final nele. */
+  public static readonly DIG_STAGE_MS = 110;
 
   private readonly scene: Phaser.Scene;
   private readonly hole: Billboard3D;
   private mound?: Billboard3D;
   private state: SpotState = 'hole';
+  /** Os tempos pendentes da cavada — removidos no destroy (um restart no meio nao pode avancar). */
+  private readonly digTimers: Phaser.Time.TimerEvent[] = [];
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, opts?: { dug?: boolean }) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
@@ -56,6 +73,33 @@ export class PlantSpotObject implements WorldProp {
       .addBillboard(ASSET_KEYS.plantHole, 0, { flat: true, flatY: 0.018 })
       .setPosition(worldX, worldY)
       .setDisplaySize(HOLE_SIZE, HOLE_SIZE);
+    // Cavado AGORA (a pa): o recorte nao surge pronto — ele APROFUNDA em quatro tempos, um
+    // frame do sheet por batida (raspao → depressao → fundo → o buraco com os torroes chutados).
+    // O frame final e o MESMO desenho dos canteiros autorados (frame 0): a licao da flor-da-lua
+    // — estados de uma peca sao a mesma arte em tempos diferentes, nunca desenhos irmaos.
+    if (opts?.dug) this.animateDigIn();
+  }
+
+  private animateDigIn(): void {
+    PlantSpotObject.DIG_FRAMES.forEach((frame, i) => {
+      if (i === 0) {
+        this.hole.setTexture(ASSET_KEYS.plantHole, frame); // a primeira mordida sai no impacto
+        return;
+      }
+      this.digTimers.push(this.scene.time.delayedCall(PlantSpotObject.DIG_STAGE_MS * i, () => {
+        this.hole.setTexture(ASSET_KEYS.plantHole, frame);
+        // Cada pazada MORDE: o recorte encolhe um fio e assenta de volta — e o que separa
+        // "quatro desenhos trocando" de "uma cavada acontecendo".
+        this.hole.setDisplaySize(HOLE_SIZE * 0.9, HOLE_SIZE * 0.9);
+        this.scene.tweens.add({
+          targets: this.hole,
+          displayWidth: HOLE_SIZE,
+          displayHeight: HOLE_SIZE,
+          duration: 90,
+          ease: 'Back.easeOut',
+        });
+      }));
+    });
   }
 
   public get isHole(): boolean {
@@ -84,9 +128,10 @@ export class PlantSpotObject implements WorldProp {
    * GameScene chama raiseMound() no frame em que ele sai (um domo nunca bloqueia por baixo
    * dos pes). Ate la o buraco segue visivel: a semente esta dentro dele.
    */
-  public plant(): boolean {
+  public plant(kind: PlantableSeed = 'seeds'): boolean {
     if (this.state !== 'hole') return false;
     this.state = 'sown';
+    this.sownKind = kind; // o canteiro lembra O QUE recebeu — é isso que decide o broto
     getSoundManager().playGrassCut(); // terra revirada — o farfalhar seco serve
     return true;
   }
@@ -129,8 +174,8 @@ export class PlantSpotObject implements WorldProp {
     return true;
   }
 
-  /** O mato brotou (GameScene o criou e registrou): o monte ja fez seu papel e some sob ele. */
-  public setGrown(grass: TallGrassObject): void {
+  /** A planta brotou (GameScene a criou e registrou): o monte ja fez seu papel e some sob ela. */
+  public setGrown(grass: GrownPlant): void {
     this.state = 'grown';
     this.grownGrass = grass;
     this.mound?.destroy();
@@ -147,6 +192,8 @@ export class PlantSpotObject implements WorldProp {
   }
 
   public destroy(): void {
+    for (const timer of this.digTimers) timer.remove();
+    this.digTimers.length = 0;
     this.scene.tweens.killTweensOf(this.hole);
     if (this.mound) this.scene.tweens.killTweensOf(this.mound);
     this.hole.destroy();

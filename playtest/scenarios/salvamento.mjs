@@ -32,7 +32,9 @@ export default {
       s.playerHealth = 1;
       s.triggerDeath();
     });
-    await driver.settle(5200); // fade (1500) + epitafio; >4800ms arma o skip por tecla
+    // A elegia comprimida: fade 900ms, heroi some a ~2.1s, epitafio pleno a ~3.3s; o skip
+    // arma aos 1.6s e o auto-restart vem aos 5s — a foto tem de sair ANTES dele.
+    await driver.settle(3400);
     await shot('morte', { note: 'A elegia da morte' });
     await driver.press('Enter', { count: 1, delay: 300, holdMs: 80 });
     await driver.page.waitForFunction(

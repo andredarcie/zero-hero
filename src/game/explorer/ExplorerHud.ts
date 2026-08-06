@@ -79,7 +79,6 @@ const ensureStyle = (): void => {
 export class ExplorerHud {
   private readonly root: HTMLDivElement;
   private readonly coinValue: HTMLElement;
-  private readonly multiplier: HTMLElement;
   private readonly depth: HTMLElement;
   private toast?: HTMLDivElement;
   private toastTimer?: number;
@@ -95,9 +94,9 @@ export class ExplorerHud {
     coins.className = 'zh-ex-coins';
     this.coinValue = document.createElement('b');
     this.coinValue.textContent = '0';
-    this.multiplier = document.createElement('span');
-    this.multiplier.className = 'zh-ex-mult';
-    coins.append(this.coinValue, this.multiplier);
+    const coinLabel = document.createElement('span');
+    coinLabel.textContent = 'coins';
+    coins.append(this.coinValue, coinLabel);
 
     this.depth = document.createElement('div');
     this.depth.className = 'zh-ex-depth';
@@ -106,7 +105,7 @@ export class ExplorerHud {
     document.body.appendChild(this.root);
   }
 
-  public update(coins: number, distTiles: number, multiplier: number): void {
+  public update(coins: number, builtChunks: number): void {
     if (this.destroyed) return;
     if (coins !== this.lastCoins) {
       this.coinValue.textContent = String(coins);
@@ -120,16 +119,22 @@ export class ExplorerHud {
       }
       this.lastCoins = coins;
     }
-    this.multiplier.textContent = `x${multiplier}`;
-    this.multiplier.style.display = multiplier > 1 ? '' : 'none';
-    const tiles = Math.round(distTiles);
-    this.depth.textContent = `${t('explorer.hud.depth')} ${tiles}`;
-    this.depth.classList.toggle('zh-deep', tiles >= 48 && tiles < 96);
-    this.depth.classList.toggle('zh-abyss', tiles >= 96);
+    this.depth.textContent = `${builtChunks} chunk${builtChunks === 1 ? '' : 's'} built`;
+    this.depth.classList.remove('zh-deep', 'zh-abyss');
   }
 
   public setVisible(visible: boolean): void {
     this.root.style.display = visible ? 'flex' : 'none';
+  }
+
+  /**
+   * Onde está o NÚMERO de moedas, em coordenadas de página — o alvo do voo da moeda apanhada.
+   * A moeda voando até o contador (e o pulso que já existe quando ele cresce) é o feedback de
+   * que pegar moeda é sempre bom. Null quando o HUD não está na tela: o voo cai no herói.
+   */
+  public coinAnchorRect(): DOMRect | null {
+    if (this.destroyed || this.root.style.display === 'none') return null;
+    return this.coinValue.getBoundingClientRect();
   }
 
   /**

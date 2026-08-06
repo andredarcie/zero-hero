@@ -4,7 +4,7 @@ Aventura top-down em pixel art, **só em inglês** (não há mais locale nenhum)
 lógica, input e UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
 `src/game/render3d/`). O menu é **uma tela** — com save o botão vira Continue (+ Start over
 discreto). Levels e **explorador** continuam vivos e sem porta no título (`/?level=N`, `?explorer`,
-ou o **[I]** do DevLauncher); os três modos são a mesma `GameScene`.
+ou o **Shift+I** do DevLauncher); os três modos são a mesma `GameScene`.
 
 ## O save da aventura
 
@@ -71,13 +71,24 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 
 O jogo **não é mais só-andar**. Detalhes e consequências: `progress.md`.
 
-    A (Z / J / espaço)  →  a ESPADA, na área à frente do herói. Sem espada, o soco.
-    B (X / K)           →  PEGA o item do chão; FALA com o NPC à frente; senão usa o escolhido
-                           no tile à frente, ou o pousa.
-    ESC                 →  a subtela: mochila + corações, e quem escolhe o item do B.
+    A (Z / J / espaço)  →  de frente pra um NPC, CONVERSA (o keycap "Z" na cabeça dele anuncia
+                           — e nas opções do diálogo ↑↓/WS movem, Enter/Z confirmam, toque
+                           toca). Senão USA o item da MÃO no tile à frente (a tabela useItemAt:
+                           espada corta, machado derruba, balde enche/rega, chave abre, tocha
+                           acende, pá cava…). Mão vazia = soco. Tabela sem resposta = o arco
+                           sai no VAZIO. Só a ESPADA empunhada carrega o giro.
+    B (X / K)           →  PEGA o item do chão; FALA com o NPC à frente; senão POUSA o item —
+                           que também é depositar (bandeja, dock da bateria, chão do braço).
+    I                   →  a BOLSA, que escolhe o item da mão — e NÃO pausa o jogo.
+    ESC                 →  a subtela: mochila + corações + mapa, com o mundo congelado.
 
-No toque são dois círculos no canto de baixo (`ActionButtons`, ordem do NES: B à esquerda), e eles
-aparecem em qualquer aparelho de dedo (`isTouchDevice`).
+No toque são dois círculos no canto de baixo (`ActionButtons`, ordem do NES: B à esquerda) mais o
+botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTouchDevice`).
+
+- **A BOLSA é a única tela que fica aberta com o mundo CORRENDO** (`QuickBag`): congelar o jogo
+  faria trocar de item custar zero. O preço é físico — pés presos (`hold`), os dois botões calados,
+  escudo baixo — e **apanhar a FECHA**. Ela **não escuta tecla nenhuma**: com a cena viva, `I`/`←→`/
+  `X`/`ESC` têm de ser roteados num lugar só (`GameScene`) ou cada tecla acontece duas vezes.
 
 - `GameScene.pressAttack` / `pressUse` são ligados **por evento de teclado**, nunca por `JustDown`
   (o `update` tem meia dúzia de saídas antecipadas onde uma tecla lida por polling morre). O A tem
@@ -117,15 +128,18 @@ aparecem em qualquer aparelho de dedo (`isTouchDevice`).
   custa nada. `PlayerMovementController.root` impede COMEÇAR um passo, nunca congela um em curso.
 - **O escudo do herói é a DIREÇÃO EM QUE ELE OLHA, e só apara TIRO** (`blocksBlowFrom`, cone de
   90°; guarda baixa enquanto ataca). Se aparasse golpe de corpo, encarar seria invencibilidade.
-- **O esbarrão ficou só com os gestos de corpo**: empurrar caixote, portão de bater, sentar na
-  fogueira acesa (a loja) — e tomar dano de contato. **Falar NÃO é esbarrão** (é o B): um gesto que
+- **O esbarrão ficou só com os gestos de corpo**: empurrar caixote, portão de bater — e tomar dano
+  de contato. **A LOJA da fogueira foi REMOVIDA** (e as melhorias dela): moeda se ganha e se gasta
+  no MUNDO — caveira, balcão de NPC, selo de estrada. **Falar NÃO é esbarrão**: um gesto que
   para o jogo inteiro não pode acontecer por a seta ter encostado em alguém de passagem.
 - `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…). Devolve
   `false` só quando o item não tem nada a ver com o tile, e **só então** `placeItemAt` pousa ali.
 - **Depositar é o B** (bandejas, buraco de plantio, marca de bomba, entrada do braço…), e **pegar
   também**: o herói **nunca** recolhe nada por pisar em cima (`pickUpItemAt` — o tile à frente
   primeiro, o de baixo dos pés depois). No passo ficaram só **carregar** a bateria num cabo vivo e
-  comer carvão com a tocha acesa. Moeda e coração não são itens e continuam entrando andando.
+  comer carvão com a tocha acesa. Moeda e coração não são itens e continuam entrando andando —
+  e o MINÉRIO do veio entra pelo canal DELES (`spawnLoot`, via `Inventory.stash`, que **nunca**
+  rouba a mão), não pelo dos itens: o que espalha como moeda se pega como moeda.
 - A mochila (`runtime/Inventory.ts`) guarda em vez de trocar; `GameScene.heldItem` é um **getter**
   sobre a seleção (uma fonte de verdade só). Trocar de item **apaga a tocha**.
 - **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica: a
@@ -314,8 +328,9 @@ dirija o jogo por aba MCP (aba oculta congela o rAF do Phaser). Handles vivos: `
 **Teste EXATAMENTE o que você mudou.** Não replay o jogo inteiro para checar algo pontual — os
 solves completos levam minutos, são sensíveis a timing e flakeiam.
 
-Dois botões / mochila / subtela → `combate`; **mira, arco de 3 tiles, arremesso, atordoamento e a
-lâmina rodopiante → `esgrima`**. Machado, árvore e borda → `machado`; rocha e picareta →
+Dois botões / mochila / subtela → `combate`; **a BOLSA que não pausa (relógio andando, pés presos,
+apontar ≠ equipar, pancada fechando) → `bolsa`**; **mira, arco de 3 tiles, arremesso, atordoamento e
+a lâmina rodopiante → `esgrima`**. Machado, árvore e borda → `machado`; rocha e picareta →
 `pedra`; contratos de estado de item → `itens`. Braço → `braco`; caixa de ferramentas →
 `caixa-ferramentas`; placa com herói/caixote → `caixa-placa`, e a caveira que marcha até uma →
 `placa-undead`. **Aba Inimigos e a cova que devolve o inimigo → `inimigos`; o bestiário que anda →

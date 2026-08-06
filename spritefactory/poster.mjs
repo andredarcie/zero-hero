@@ -69,6 +69,7 @@ const ITEMS = [
   { name: 'MACHADO', desc: 'ARVORE > GRAVETO', png: 'ui/icons/axe_icon.png' },
   { name: 'PICARETA', desc: 'ROCHA > PEDRA', png: 'ui/icons/pickaxe_icon.png' },
   { name: 'FOICE', desc: 'MATO > SEMENTES', png: 'ui/icons/scythe_icon.png' },
+  { name: 'PA', desc: 'TERRA > BURACO', png: 'ui/icons/shovel_icon.png' },
   // O que elas produzem.
   { name: 'GRAVETO', desc: 'ACENDE: VIRA TOCHA', png: 'ui/icons/wood_icon.png' },
   { name: 'PEDRA', desc: 'VAU NO RIO', png: 'environment/props/rock.png' },

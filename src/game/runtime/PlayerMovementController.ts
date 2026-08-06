@@ -66,6 +66,8 @@ export class PlayerMovementController {
   private stepMs: number = DEFAULT_STEP_MS;
   /** > 0 = os pés estão presos pelo golpe em curso (ver `root`). */
   private rootedMs = 0;
+  /** Presos SEM prazo: a bolsa aberta com o jogo rodando (ver `hold`). */
+  private heldStill = false;
 
   /**
    * The step in flight. `stepFrom` is the tile it left; the world position the GameScene owns is
@@ -139,9 +141,33 @@ export class PlayerMovementController {
     this.rootedMs = Math.max(this.rootedMs, ms);
   }
 
-  /** Os pés estão presos agora? (o escudo do herói lê isto: quem ataca abaixa a guarda) */
+  /**
+   * PRENDE OS PÉS SEM PRAZO — a bolsa aberta (`GameScene.setBagOpen`).
+   *
+   * É `root` sem relógio, e por isso passa pela mesma porta: o passo em curso TERMINA no tile
+   * (parar o herói em cima de uma aresta seria um soluço), só o próximo não começa. E é diferente
+   * de simplesmente não chamar `update`: o mundo continua correndo atrás da bolsa, e um herói
+   * congelado no meio do tile enquanto a caveira anda seria um bug com data marcada.
+   */
+  public hold(held: boolean): void {
+    this.heldStill = held;
+    if (held) {
+      // O pedido guardado morre junto: uma seta apertada para andar com o cursor não pode virar
+      // um passo no instante em que a bolsa fecha.
+      this.bufferedDir = null;
+      this.touchDir = null;
+    }
+  }
+
+  /**
+   * Os pés estão presos agora? (o escudo do herói lê isto: quem ataca abaixa a guarda)
+   *
+   * A bolsa aberta conta, e conta de propósito: quem está com as duas mãos dentro da mochila não
+   * está aparando tiro nenhum. É a mesma frase do golpe, e é o que faz folhear custar alguma coisa
+   * num jogo que não pausa para você folhear.
+   */
   public get isRooted(): boolean {
-    return this.rootedMs > 0;
+    return this.rootedMs > 0 || this.heldStill;
   }
 
   public update(worldX: number, worldY: number, deltaMs: number): { worldX: number; worldY: number } {
@@ -169,7 +195,7 @@ export class PlayerMovementController {
       // O GOLPE PRENDE OS PÉS (ver GameScene.swingRootMs). A raiz impede COMEÇAR um passo, nunca
       // congela um que já está no meio do tile: parar o herói em cima de uma aresta seria um
       // soluço no lugar de um peso. O pedido de direção fica no buffer e sai assim que solta.
-      if (this.rootedMs > 0) {
+      if (this.rootedMs > 0 || this.heldStill) {
         if (this.stepDir) this.endWalk(wx, wy);
         break;
       }
@@ -234,8 +260,11 @@ export class PlayerMovementController {
 
   /** Keep the newest fresh key press alive for INPUT_BUFFER_MS so a tile boundary can spend it. */
   private pollFreshPress(): void {
+    // `readJustPressed` roda MESMO com os pés presos: `JustDown` é leitura destrutiva, e uma seta
+    // gasta na bolsa que ficasse com a flag armada sairia como um passo minutos depois. Drena-se
+    // sempre; o que a trava faz é jogar fora em vez de guardar.
     const dir = this.readJustPressed();
-    if (!dir) return;
+    if (!dir || this.heldStill) return;
     this.bufferedDir = dir;
     this.bufferedAtMs = this.scene.time.now;
   }

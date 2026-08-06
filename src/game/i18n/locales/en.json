@@ -13,7 +13,7 @@
     ],
     "by": "BY",
     "author": "ANDRÉ N. DARCIE",
-    "playAdventure": "Play adventure",
+    "playAdventure": "Build a world",
     "continue": "Continue",
     "startOver": "Start over"
   },
@@ -57,9 +57,11 @@
       "lavaBoots": "YOU GOT THE LAVA BOOTS!",
       "pickaxe": "YOU GOT THE PICKAXE!",
       "scythe": "YOU GOT THE SCYTHE!",
+      "shovel": "YOU GOT THE SHOVEL! DIG THE BARE EARTH",
       "wood": "YOU GOT A STICK!",
       "stone": "YOU GOT A STONE!",
       "seeds": "YOU GOT SEEDS! PLANT THEM IN A HOLE",
+      "carnivoreSeeds": "CARNIVOROUS SEEDS! IT EATS WHAT COMES CLOSE",
       "bucket": "YOU GOT A BUCKET! FILL IT AT THE RIVER",
       "bucketFull": "BUCKET FULL OF WATER!",
       "charcoal": "CHARCOAL! STEP ON IT WITH A LIT TORCH",
@@ -75,10 +77,12 @@
       "lavaBoots": "Lava Boots",
       "pickaxe": "Pickaxe",
       "scythe": "Scythe",
+      "shovel": "Shovel",
       "wood": "Stick",
       "stone": "Stone",
       "iron": "Iron",
       "seeds": "Seeds",
+      "carnivoreSeeds": "Carnivorous Seeds",
       "bucket": "Bucket",
       "bucketFull": "Full Bucket",
       "charcoal": "Charcoal",
@@ -264,19 +268,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "You must be the hero who seeks to find the sword?"
+          "text": "A hero. How novel. I was napping."
         },
         {
           "speaker": "npc",
-          "text": "Yes. I am a talking cat."
+          "text": "That branch beside me? Take it. Hold it into my fire and it wakes as a TORCH."
         },
         {
           "speaker": "npc",
-          "text": "And you're a naked primate in an armor."
+          "text": "Two hearths in this clearing sit cold. Carry the flame to them."
         },
         {
           "speaker": "npc",
-          "text": "Well, the game is still in the Alpha version, so I think it's impossible for you to find the sword."
+          "text": "Light draws a line the dead will not cross. I sleep better behind lines."
         }
       ]
     },
@@ -310,11 +314,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "My ship crashed in this place, I'm trying to find its parts."
+          "text": "My ship broke into samples all over this crater."
         },
         {
           "speaker": "npc",
-          "text": "But I think they landed on a part of the map that isn't available in the alpha version."
+          "text": "Take the PICKAXE. It cracks rock — and rock is where the good things hide."
+        },
+        {
+          "speaker": "npc",
+          "text": "Plain stone breaks. The VEINED boulders never do: three good swings, one lump of IRON, forever."
+        },
+        {
+          "speaker": "npc",
+          "text": "The lab buys every lump you carry. Mining is honest pay out here."
         }
       ]
     },
@@ -323,7 +335,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Work hard and you'll find the sword you're looking for."
+          "text": "Timber. That is the market now."
+        },
+        {
+          "speaker": "npc",
+          "text": "This AXE is yours — consider it an advance. It fells DEAD wood in a chop or two."
+        },
+        {
+          "speaker": "npc",
+          "text": "My dry ranks stand in rows. Clear them, and the sticks are pure profit."
+        },
+        {
+          "speaker": "npc",
+          "text": "Sticks build bridges. Bridges open markets. Work hard."
         }
       ]
     },
@@ -332,7 +356,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "I used an axe to cut uranium, but you can cut other things with it."
+          "text": "Suit says the pool up north-east glows. Nothing my BOOTS cannot walk."
+        },
+        {
+          "speaker": "npc",
+          "text": "Take them. LAVA BOOTS — lava, embers, and yes, water: you just wade in."
+        },
+        {
+          "speaker": "npc",
+          "text": "Something metal sank by the little island. Boots on. Go fish it out."
+        },
+        {
+          "speaker": "npc",
+          "text": "Mind this: in deep water your hands stay busy — the boots carry YOU, not cargo."
         }
       ]
     },
@@ -341,15 +377,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "You must be the warrior Zero!"
+          "text": "Zero! Perfect timing. This field is a canvas, and it is BLANK."
         },
         {
           "speaker": "npc",
-          "text": "I was on a journey to find the perfect place to do a painting."
+          "text": "Take these SEEDS. My pigments. The beds along the south edge are already dug."
         },
         {
           "speaker": "npc",
-          "text": "But these bushes are getting in the way."
+          "text": "Stand before a bed and press A to plant. Water wakes them — rain, or a bucket."
+        },
+        {
+          "speaker": "npc",
+          "text": "Green is a colour you GROW. Paint me a meadow."
         }
       ]
     },
@@ -358,19 +398,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "You came at a good time. I've got offers that are irrelevant and insistent."
-        },
-        {
-          "speaker": "narrator",
-          "text": "He opens his backpack, but there are only crumpled receipts."
+          "text": "Friend! You look thirsty. Or dry. Either way — opportunity."
         },
         {
           "speaker": "npc",
-          "text": "Nothing in stock. But I can write down your interest."
+          "text": "Free sample: this BUCKET. Fill it in my pond, just west of the fire."
         },
         {
           "speaker": "npc",
-          "text": "Come back tomorrow. Or yesterday. My schedule is flexible."
+          "text": "A full bucket waters crops and drowns small fires. Endless uses. Zero coins. Today only."
+        },
+        {
+          "speaker": "npc",
+          "text": "Tell your friends. If you find any out there."
         }
       ]
     },
@@ -379,31 +419,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "You are not a hero."
+          "text": "The pines sing, but they crowd the verse."
         },
         {
           "speaker": "npc",
-          "text": "Sorry for my manners, it's just that I'm sad."
+          "text": "This GREAT AXE fells even LIVING trees — the small axe only knows dead wood."
         },
         {
           "speaker": "npc",
-          "text": "I lost my inspiration to write poems."
+          "text": "Open a clearing in my grove. Listen how the song changes where light falls."
         },
         {
           "speaker": "npc",
-          "text": "Imagine a poet who doesn't write poems, I totally lost my identity."
-        },
-        {
-          "speaker": "npc",
-          "text": "Maybe one day I can get back to writing poems."
-        },
-        {
-          "speaker": "npc",
-          "text": "You know that writing poems doesn't make any money."
-        },
-        {
-          "speaker": "npc",
-          "text": "Can you make money being a hero?"
+          "text": "Every good line needs its silence. Cut me one."
         }
       ]
     },
@@ -412,15 +440,15 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Ah, the chosen one. I felt your steps ripple through the weave of destiny."
+          "text": "The dark did not leave us a world. It left us choices."
         },
         {
           "speaker": "npc",
-          "text": "I could conjure the sword you seek... but my grimoire only compiles in the full version."
+          "text": "Take the sword. The dead on unfinished roads still carry coin."
         },
         {
           "speaker": "npc",
-          "text": "Go forth, hero. And beware the wizards who'd rather cast spells than talk."
+          "text": "Stand on a road seal and press B. Spend what you earn, and decide what exists next."
         }
       ]
     },
@@ -429,27 +457,33 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Nihilist knight! Do you accept a game of chess for your soul?"
+          "text": "Do not be alarmed. I am off duty."
         },
         {
           "speaker": "npc",
-          "text": "You died, but you haven't reached the end of your journey."
+          "text": "Take the SCYTHE. It reaps the tall grass in one clean sweep — press A before it."
         },
         {
           "speaker": "npc",
-          "text": "Thanks for playing the Alpha version of the game!"
+          "text": "Cut grass surrenders SEEDS. Life insists on returning. It always does."
         },
         {
           "speaker": "npc",
-          "text": "Submit your feedback."
+          "text": "The meadow here grew loud. Quiet it for me, and we are even."
         }
       ]
     }
   },
   "controls": {
-    "hint": "Z strikes · X picks up, uses or drops · ESC opens the pack",
-    "attackTitle": "Strike (Z)",
-    "useTitle": "Pick up / use / drop (X)"
+    "hint": "Z uses what you hold · X picks up, talks or drops · I opens the bag",
+    "attackTitle": "Use held item (Z)",
+    "useTitle": "Pick up / talk / drop (X)"
+  },
+  "bag": {
+    "open": "Bag (I)",
+    "empty": "Your bag is empty",
+    "keys": "← →   ·   X equips   ·   I closes",
+    "keysEmpty": "I closes"
   },
   "subscreen": {
     "title": "PACK",

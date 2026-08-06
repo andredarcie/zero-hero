@@ -6,7 +6,7 @@ import type Phaser from 'phaser';
  * Ela NAO e HUD, e a diferenca nao e semantica: HUD e o que fica na cara do jogador sem ele
  * pedir. A subtela so existe enquanto esta aberta, congela o jogo enquanto isso (ela mora
  * dentro do menu de pausa, que ja faz `scene.pause()`) e some. Foi essa licenca que o
- * ShopOverlay e o PauseMenu ja usavam; a lei "o mundo ensina, o HUD nao" continua de pe.
+ * PauseMenu ja usava; a lei "o mundo ensina, o HUD nao" continua de pe.
  *
  * Duas regras de desenho, e as duas vem do plano:
  *   - **Nada de numero onde um desenho serve.** Vida e uma fileira de coracoes desenhados, e

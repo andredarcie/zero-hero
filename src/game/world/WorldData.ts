@@ -4,7 +4,8 @@ import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
 import type { NpcKind, PickupKind, ScreenContent } from './ScreenContent';
 import {
-  WORLD_SCHEMA_VERSION, type WorldChunk, type WorldData, type WorldEnemySpawn, type WorldProp,
+  WORLD_SCHEMA_VERSION, type ChunkCatalogEntry, type WorldChunk, type WorldData,
+  type WorldEnemySpawn, type WorldProp,
 } from './worldSchema';
 
 // Single seam through which the whole runtime reads the finite, authored world. The data is
@@ -179,6 +180,49 @@ export const getPlayerStart = (): { worldX: number; worldY: number } => (
 // The authored display name used by level-select and the in-game level entrance card.
 export const getWorldName = (): string => (infinite ? infinite.name : requireWorld().meta.name);
 
+export type ChunkTemplate = {
+  catalog: ChunkCatalogEntry;
+  ground: number[][];
+  upper: Array<Array<number | null>>;
+  collisions: boolean[][];
+  enemies: ScreenContent['enemies'];
+  pickups: ScreenContent['pickups'];
+  npcs: ScreenContent['npcs'];
+  props: WorldProp[];
+};
+
+/**
+ * Reads public/world.json as a LIBRARY instead of a traversable overworld. Entity coordinates
+ * are normalised to the chunk's local 0..11 space so the same authored template can be placed
+ * at any coordinate during a run.
+ */
+export const getChunkTemplates = (): ChunkTemplate[] => {
+  const data = requireWorld();
+  return data.chunks.flatMap((chunk) => {
+    if (!chunk.catalog) return [];
+    const ox = chunk.cx * CHUNK_COLUMNS;
+    const oy = chunk.cy * CHUNK_ROWS;
+    const local = <T extends { worldX: number; worldY: number }>(entry: T): T => ({
+      ...entry,
+      worldX: entry.worldX - ox,
+      worldY: entry.worldY - oy,
+    });
+    return [{
+      catalog: { ...chunk.catalog },
+      ground: chunk.ground.map((row) => [...row]),
+      upper: chunk.upper.map((row) => [...row]),
+      collisions: chunk.collisions.map((row) => [...row]),
+      enemies: chunk.enemies.map(local),
+      pickups: chunk.pickups.map(local),
+      npcs: chunk.npcs.map(local),
+      props: data.props
+        .filter((prop) => Math.floor(prop.worldX / CHUNK_COLUMNS) === chunk.cx
+          && Math.floor(prop.worldY / CHUNK_ROWS) === chunk.cy)
+        .map(local),
+    }];
+  });
+};
+
 // A puzzle world (a /levels level): the runtime suppresses the undead siege for it, like the lab.
 export const isPuzzleWorld = (): boolean => requireWorld().meta.puzzle === true;
 
@@ -219,6 +263,8 @@ export const getBombSpots = (): WorldProp[] => allProps().filter((prop) => prop.
 
 // The dug hole where carried seeds plant themselves on step. See PlantSpotObject.
 export const getPlantSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'plantSpot');
+
+export const getCarnivorousPlants = (): WorldProp[] => allProps().filter((prop) => prop.type === 'carnivorousPlant');
 // The robotic arm. Carries `dir` (which way it faces), the only prop whose extra field is load
 // bearing — it decides which tile the arm takes from and which it puts to.
 export const getInserters = (): WorldProp[] => allProps().filter((prop) => prop.type === 'inserter');
@@ -293,6 +339,9 @@ export const getDialog = (kind: NpcKind): DialogScript | undefined => {
     npcAssetKey: dialog.npcAssetKey,
     npcFrame: dialog.npcFrame,
     lines: localized?.lines ?? dialog.lines,
+    // O balcão vem SEMPRE do world.json (não há versão localizada: o jogo é só inglês e as
+    // falas do caixa moram no próprio bloco `trade`).
+    trade: dialog.trade,
   };
 };
 

@@ -49,11 +49,9 @@ export default {
     assert('Background music is a real loop', Boolean(music?.ok) && music.duration > 10, `duration=${music?.duration.toFixed(1)}s`);
 
     // Exercise the play path (the run's global "no uncaught page errors" check covers this).
-    await driver.openShop();
-    await driver.settle(200);
-    await driver.closeShop();
+    // (A LOJA foi removida do jogo; o diálogo é a UI sonora que resta para exercitar.)
     const opened = await driver.openDialog('blackCat');
-    assert('Sound-triggering UI ran without errors', opened, 'opened a dialog after shop toggle');
+    assert('Sound-triggering UI ran without errors', opened, 'opened a dialog');
     await driver.closeDialog();
   },
 };

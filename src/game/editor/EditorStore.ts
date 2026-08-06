@@ -7,7 +7,9 @@ import {
   AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS,
   type EnemyKind, type NpcKind, type PickupKind,
 } from '@/game/world/ScreenContent';
-import type { PropDir, PropKind, WorldChunk, WorldData, WorldDialog } from '@/game/world/worldSchema';
+import type {
+  ChunkCatalogEntry, PropDir, PropKind, WorldChunk, WorldData, WorldDialog,
+} from '@/game/world/worldSchema';
 
 // Ground frame used for cells that never received paint — the same frame the runtime uses
 // for the void outside the world, so "empty" reads consistently in game and editor.
@@ -441,6 +443,31 @@ export class EditorStore {
     this.world.meta.name = trimmed;
     this.markDirty();
     this.emit({ meta: true });
+  }
+
+  /** Card identity for one reusable chunk in the world-builder catalogue. */
+  public setChunkCatalog(cx: number, cy: number, next: ChunkCatalogEntry): void {
+    const chunk = this.chunkIndex.get(chunkKey(cx, cy));
+    if (!chunk) return;
+    const normalised: ChunkCatalogEntry = {
+      id: next.id.trim(),
+      name: next.name.trim(),
+      cost: Math.max(0, Math.floor(next.cost)),
+      cardImage: next.cardImage.trim(),
+      description: next.description?.trim() || undefined,
+    };
+    if (!normalised.id || !normalised.name || !normalised.cardImage) return;
+    chunk.catalog = normalised;
+    this.markDirty();
+    this.emit({ meta: true });
+  }
+
+  /** Appends one blank 12x12 card template to the editable library. */
+  public addChunkTemplate(next: ChunkCatalogEntry): { cx: number; cy: number } {
+    const cx = this.world.meta.worldChunksX;
+    this.resizeWorld(cx + 1, this.world.meta.worldChunksY);
+    this.setChunkCatalog(cx, 0, next);
+    return { cx, cy: 0 };
   }
 
   /** Grows/shrinks the chunk grid. Destructive at the edges, so it clears the undo history. */

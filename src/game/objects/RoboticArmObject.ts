@@ -256,9 +256,9 @@ export type ArmWorldPort = {
   /** Ha um item colhivel neste tile? */
   hasItem(x: number, y: number): boolean;
   /** Tira o item do chao e devolve o que era — fogo e carga inclusos (null se nao havia). */
-  take(x: number, y: number): { kind: HeldItemKind; fire?: ItemFire; chargeMs?: number } | null;
+  take(x: number, y: number): { kind: HeldItemKind; fire?: ItemFire; chargeMs?: number; units?: number } | null;
   /** Devolve um item ao chao — com o fogo e a carga que ele ainda carrega, se algum. */
-  put(kind: HeldItemKind, x: number, y: number, fire?: ItemFire, chargeMs?: number): void;
+  put(kind: HeldItemKind, x: number, y: number, fire?: ItemFire, chargeMs?: number, units?: number): void;
   /** O tile impede que algo seja depositado ali? (parede, pedra, agua, lava…) */
   blocked(x: number, y: number): boolean;
   // Os tres momentos do ciclo que fazem som. O braco nao conhece o SoundManager: ele avisa, e
@@ -328,6 +328,9 @@ export class RoboticArmObject implements WorldProp {
   private flameMs = 0;
   // A carga de uma batteryFull pendurada na garra: viaja com o item, nunca reseta na entrega.
   private carriedCharge?: number;
+  // O pacote (sementes) pendurado na garra: a contagem viaja como a carga da bateria — um
+  // punhado de 3 que atravessa o muro chega do outro lado como um punhado de 3.
+  private carriedUnits?: number;
 
   private phase: ArmPhase = 'idle';
   private elapsed = 0;
@@ -653,6 +656,7 @@ export class RoboticArmObject implements WorldProp {
           this.carriedKind = taken?.kind ?? null;
           this.carriedFire = taken?.fire;
           this.carriedCharge = taken?.chargeMs;
+          this.carriedUnits = taken?.units;
           if (this.carriedKind) {
             this.spawnCarried(this.carriedKind);
             port.grabbed();
@@ -700,13 +704,16 @@ export class RoboticArmObject implements WorldProp {
         if (outTaken) break;
         if (this.pendingReleaseSfx) { this.pendingReleaseSfx = false; port.released(); }
         if (this.elapsed >= RELEASE_MS) {
-          if (this.carriedKind) port.put(this.carriedKind, dstX, dstY, this.carriedFire, this.carriedCharge);
+          if (this.carriedKind) {
+            port.put(this.carriedKind, dstX, dstY, this.carriedFire, this.carriedCharge, this.carriedUnits);
+          }
           // Entregar no destino ABRE a divida; devolver na origem a QUITA. As duas pontas do
           // mesmo movimento, escritas no mesmo lugar para nao poderem discordar.
           this.owed = this.reversed ? null : this.carriedKind;
           this.carriedKind = null;
           this.carriedFire = undefined;
           this.carriedCharge = undefined;
+          this.carriedUnits = undefined;
           this.despawnCarried();
           this.enter('rise');
         }

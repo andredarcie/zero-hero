@@ -1,7 +1,6 @@
 ﻿import smoke from './smoke.mjs';
 import explore from './explore.mjs';
 import dialog from './dialog.mjs';
-import shop from './shop.mjs';
 import audio from './audio.mjs';
 import swordGet from './sword-get.mjs';
 import textLegibility from './text-legibility.mjs';
@@ -22,6 +21,7 @@ import braco from './braco.mjs';
 import caixaFerramentas from './caixa-ferramentas.mjs';
 import machado from './machado.mjs';
 import pedra from './pedra.mjs';
+import ferro from './ferro.mjs';
 import portalTravessia from './portal-travessia.mjs';
 import portaoDeBater from './portao-de-bater.mjs';
 import florDaLua from './flor-da-lua.mjs';
@@ -38,6 +38,9 @@ import levelManagerPortal from './level-manager-portal.mjs';
 import levelIntro from './level-intro.mjs';
 import explorador from './explorador.mjs';
 import combate from './combate.mjs';
+import bolsa from './bolsa.mjs';
+import pa from './pa.mjs';
+import carnivora from './carnivora.mjs';
 import esgrima from './esgrima.mjs';
 import inimigos from './inimigos.mjs';
 import fauna from './fauna.mjs';
@@ -49,13 +52,13 @@ import tochaViva from './tocha-viva.mjs';
 import gelo from './gelo.mjs';
 import labDungeon from './lab-dungeon.mjs';
 import dungeonGerada from './dungeon-gerada.mjs';
+import worldBuilder from './world-builder.mjs';
 
 export const scenarios = {
   smoke,
   explore,
   explorador,
   dialog,
-  shop,
   audio,
   'sword-get': swordGet,
   'text-legibility': textLegibility,
@@ -76,6 +79,7 @@ export const scenarios = {
   'caixa-ferramentas': caixaFerramentas,
   machado,
   pedra,
+  ferro,
   'portal-travessia': portalTravessia,
   'portao-de-bater': portaoDeBater,
   'flor-da-lua': florDaLua,
@@ -91,6 +95,9 @@ export const scenarios = {
   'level-manager-portal': levelManagerPortal,
   'level-intro': levelIntro,
   combate,
+  bolsa,
+  pa,
+  carnivora,
   esgrima,
   inimigos,
   fauna,
@@ -102,7 +109,8 @@ export const scenarios = {
   gelo,
   'lab-dungeon': labDungeon,
   'dungeon-gerada': dungeonGerada,
+  'world-builder': worldBuilder,
 };
 
 // What `npm run playtest` runs when no scenario is named.
-export const DEFAULT_SEQUENCE = ['smoke', 'explore', 'dialog', 'shop'];
+export const DEFAULT_SEQUENCE = ['smoke', 'explore', 'dialog'];

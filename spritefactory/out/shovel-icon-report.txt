@@ -1,0 +1,3 @@
+shovel-icon: 1 frame(s) — 0 fail, 0 warn
+  [info] bbox: content 8x14 at (4,1), coverage 23%
+  frame 0: #3d3d3d×23 #886644×12 #b7916a×12 #989aa7×7 #5d6165×6

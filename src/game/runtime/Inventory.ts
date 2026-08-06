@@ -60,6 +60,18 @@ export class Inventory {
   }
 
   /**
+   * Guardar SEM EMPUNHAR — o par do `add` para o drop pego DE PASSAGEM (o minério do veio,
+   * que entra como moeda). `add` seleciona porque apanhar com o B e uma intencao de uso;
+   * pisar num drop nao e intencao nenhuma, entao a mao do jogador fica exatamente como esta.
+   */
+  public stash(kind: HeldItemKind, amount = 1): void {
+    if (!this.counts.has(kind) || this.counts.get(kind) === 0) {
+      if (!this.order.includes(kind)) this.order.push(kind);
+    }
+    this.counts.set(kind, (this.counts.get(kind) ?? 0) + amount);
+  }
+
+  /**
    * Gastar um item. Quando o ultimo sai, a selecao anda para o VIZINHO de slot (o que ocupa
    * agora aquela posicao da grade), e nao para o comeco da lista: o polegar do jogador estava
    * ali, e saltar para o primeiro item da mochila cada vez que uma bomba acaba e o jeito certo

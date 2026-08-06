@@ -6,12 +6,26 @@ export type DialogLine = {
   text: string;
 };
 
+/**
+ * O BALCÃO: o NPC compra `item` a `coinsPerUnit` moedas a unidade, por quantidade, dentro do
+ * próprio painel de conversa. Autorado no world.json (worldSchema.WorldDialogTrade); quem
+ * executa a transação é a GameScene (o port de venda), quem desenha o caixa é o DialogOverlay.
+ */
+export type DialogTrade = {
+  item: string;
+  coinsPerUnit: number;
+  offer: string;
+  empty: string;
+  thanks: string;
+};
+
 export type DialogScript = {
   npcName: string;
   npcColorHex: string;
   npcAssetKey: string;
   npcFrame?: number;
   lines: DialogLine[];
+  trade?: DialogTrade;
 };
 
 // Per-NPC "voice": a base frequency + waveform played as a blip on each typed letter, so

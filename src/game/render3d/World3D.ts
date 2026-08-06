@@ -13,6 +13,7 @@ import {
 } from '@/game/world/WorldData';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
+import { ChunkShroud3D } from './ChunkShroud3D';
 import {
   applyCast, CAST_MAX_ALPHA, type CastPose, castTransformInto, handoffCastInto,
   makeCastMaskMaterial, makeCastMesh, SolidCastField, WIDTH_FACTOR as CAST_WIDTH_FACTOR,
@@ -650,6 +651,8 @@ export class World3D {
   };
 
   public readonly scene = new THREE.Scene();
+  /** A mortalha dos chunks não-comprados do construtor de mundo (vazia fora dele). */
+  public readonly chunkShroud = new ChunkShroud3D(this.scene);
   private readonly renderer: THREE.WebGLRenderer;
   private readonly canvas: HTMLCanvasElement;
   private readonly camera: THREE.PerspectiveCamera;
@@ -723,6 +726,9 @@ export class World3D {
   private readonly castableSolids: SolidTileEntry[] = [];
   private decorGeo!: THREE.BufferGeometry;
   private readonly grassQuads = new Map<string, number>(); // "x,z" → vertex start
+  // The decor quad of EVERY flat decor tile (grassQuads is only the rustleable frame) — the
+  // shovel erases foliage/litter under a dug hole, whatever the frame (removeDecorTile).
+  private readonly decorQuads = new Map<string, number>(); // "x,z" → vertex start
   private readonly activeRustles = new Map<string, GrassRustle>();
   /** Standing tiles mid-shudder from an axe blow — see shakeSolidTile. "x,z" → pose. */
   private readonly activeTileShakes = new Map<string, { vertStart: number; x: number; t: number }>();
@@ -1124,6 +1130,7 @@ export class World3D {
     this.solidBlobQuads.clear();
     this.groundQuads.clear();
     this.grassQuads.clear();
+    this.decorQuads.clear();
     this.solidBuckets.clear();
     this.sunkenTiles.clear();
     this.activeRustles.clear();
@@ -1309,6 +1316,7 @@ export class World3D {
     this.decorGeo = buildFlatTileGeometry(decorTiles, 0.02, solidSet);
     this.addTerrainMesh(new THREE.Mesh(this.decorGeo, mats.decor));
     decorTiles.forEach((tile, i) => {
+      this.decorQuads.set(`${tile.x},${tile.z}`, i * 4);
       if (tile.frame === LOW_GRASS_TILE) this.grassQuads.set(`${tile.x},${tile.z}`, i * 4);
     });
 
@@ -1580,6 +1588,24 @@ export class World3D {
       cast.frame = frame;
       this.fillMoonCastField(); // baked once, so it has to be re-baked to see the new frame
     }
+  }
+
+  /**
+   * Erase one FLAT decor quad (low grass, foliage, litter) from the merged decor mesh — the
+   * shovel turning the soil under a dug hole. Same collapse trick as removeSolidTile: the four
+   * vertices fold onto a point, nothing reallocates. The active rustle (if any) dies with it,
+   * and it MUST: updateRustles rewrites absolute corner positions every frame, so a live
+   * rustle would resurrect the collapsed quad on its next tick. Caller also clears the tile in
+   * the chunk data — a later rebake reads from there, not from this mesh.
+   */
+  public removeDecorTile(worldX: number, worldY: number): void {
+    const key = `${worldX},${worldY}`;
+    const vertStart = this.decorQuads.get(key);
+    if (vertStart === undefined) return; // no decor here, or already dug away
+    this.decorQuads.delete(key);
+    this.grassQuads.delete(key);
+    this.activeRustles.delete(key);
+    collapseQuad(this.decorGeo, vertStart);
   }
 
   public removeSolidTile(worldX: number, worldY: number): void {
@@ -2740,6 +2766,7 @@ export class World3D {
     this.updateRustles(dt);
     this.updateTileShakes(dt); // same buffer-poking trick, same budget — see shakeSolidTile
     profiler.end('rustle');
+    this.chunkShroud.update(dtMs); // avança (e encerra) as dissoluções de compra de chunk
 
     // Live knobs (window.hd3d).
     texelAaUniform.value = Math.min(1, Math.max(0, this.params.texelAa));

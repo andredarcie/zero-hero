@@ -11,3 +11,6 @@ playtest/results/*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Hallmark design-audit tool state (local preflight notes) — never committed.
+.hallmark/

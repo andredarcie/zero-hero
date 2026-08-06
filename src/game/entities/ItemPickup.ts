@@ -19,6 +19,14 @@ export type HeldItemKind =
   | 'lavaBoots'
   | 'pickaxe'
   | 'scythe'
+  // A PÁ — a ferramenta que CAVA um buraco de plantio (plantSpot) no chão de TERRA vazio à
+  // frente (DIGGABLE_GROUND_FRAMES). Fecha o loop da fazenda pelo lado que faltava: a foice
+  // produz a semente, mas o buraco era autorado — só o editor plantava mato novo em lugar
+  // novo. Com ela o canteiro vira decisão do jogador: cavar É produzir (um tile que aceita
+  // semente), e por isso ela não é senha. Cavar é o botão A (o botão de ação USA o item
+  // segurado — ver GameScene.swingAttack); o B a pega e a pousa como a qualquer item. Terra
+  // apenas: pátio de pedra, laje, alvenaria de dungeon e mar recusam a lâmina.
+  | 'shovel'
   | 'wood'
   // A chunk of rock, left behind when the pickaxe shatters one. The pickaxe used to just
   // DELETE its obstacle — the only thing it produced was passage, which makes it a password
@@ -33,6 +41,11 @@ export type HeldItemKind =
   // toda receita competiria com o uso direto do proprio insumo. Sai de uma `ironRock`, que e a
   // mesma pedra da picareta com veio de minerio dentro.
   | 'iron'
+  // O PACOTE DE SEMENTES CARNÍVORAS — o punhado que brota a planta-armadilha
+  // (CarnivorousPlantObject): plantado num canteiro e regado, vira a barreira que COME todo
+  // inimigo que parar ao lado dela. O mesmo ciclo da semente comum (buraco, água, foice,
+  // fogo) com a colheita invertida: o mato produz combustível; a carnívora produz DEFESA.
+  | 'carnivoreSeeds'
   // A handful of SEEDS ("sementes"), cut from tall grass with the scythe. The grass made
   // renewable and PORTABLE: planted in a dug hole (plantSpot), watered with the bucket, it
   // sprouts REAL tall grass — the first fire conductor the player grows, not one baked into
@@ -76,12 +89,14 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   lavaBoots: { texture: 'lava-boots-icon', frame: 0 },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
   scythe: { texture: 'scythe-icon', frame: 0 },
+  shovel: { texture: 'shovel-icon', frame: 0 },
   // The "graveto": a single stick (the woodIcon art), NOT the 3-log woodItem pile.
   wood: { texture: 'wood-icon', frame: 0 },
   stone: { texture: 'rock', frame: 0 },
   iron: { texture: 'iron-item', frame: 0 },
   // The seeds sprite comes from the sprite factory (spritefactory/sprites/seeds.mjs).
   seeds: { texture: 'seeds-item', frame: 0 },
+  carnivoreSeeds: { texture: 'carnivore-seeds', frame: 0 },
   // The bucket art is generated at boot (bucketTexture.ts) into both pipelines.
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
@@ -140,6 +155,13 @@ export class ItemPickup {
   // chama drainCharge por frame de alimentacao). Na mao do heroi a carga e estavel.
   private chargeMs: number;
 
+  /**
+   * Quantas UNIDADES este item no chão vale ao ser apanhado (o pacote de sementes: 5 recém-
+   * colhido, ou o punhado exato que o herói pousou). Todo outro item vale 1. Viaja com o item
+   * como a carga da bateria — um pacote não muda de tamanho por trocar de mãos.
+   */
+  public readonly units: number;
+
   public constructor(
     private readonly scene: Phaser.Scene,
     public readonly kind: HeldItemKind,
@@ -148,7 +170,9 @@ export class ItemPickup {
     dropped = false,
     fire?: ItemFire,
     chargeMs?: number,
+    units = 1,
   ) {
+    this.units = Math.max(1, Math.floor(units));
     const visual = GROUND_VISUAL[kind];
     // Full-bright: pickups must read even in the dark (the 2D game punched a
     // small light hole over every collectible for the same reason).

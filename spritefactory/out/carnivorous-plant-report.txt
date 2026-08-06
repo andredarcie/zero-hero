@@ -1,0 +1,13 @@
+carnivorous-plant: 6 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 10x13 at (2,2), coverage 28%
+  [info] bbox: frame 1: content 10x14 at (2,1), coverage 29%
+  [info] bbox: frame 2: content 11x13 at (2,2), coverage 35%
+  [info] bbox: frame 3: content 11x13 at (1,2), coverage 32%
+  [info] bbox: frame 4: content 12x13 at (2,2), coverage 32%
+  [info] bbox: frame 5: content 11x9 at (1,6), coverage 17%
+  frame 0: #626439×35 #4d4f2c×17 #8a8d49×13 #cdcdcd×3 #1d2b53×3
+  frame 1: #626439×29 #4d4f2c×16 #8a8d49×13 #c83e3e×11 #cdcdcd×4 #a53030×2
+  frame 2: #626439×51 #4d4f2c×17 #8a8d49×13 #cdcdcd×4 #1d2b53×4
+  frame 3: #626439×46 #4d4f2c×17 #8a8d49×13 #cdcdcd×4 #1d2b53×3
+  frame 4: #626439×46 #4d4f2c×17 #8a8d49×13 #cdcdcd×4 #1d2b53×3
+  frame 5: #4d4f2c×25 #626439×9 #8a8d49×7 #1d2b53×3

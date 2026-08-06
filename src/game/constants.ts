@@ -143,6 +143,9 @@ export const ASSET_KEYS = {
   lavaBootsIcon: 'lava-boots-icon',
   pickaxeIcon: 'pickaxe-icon',
   scytheIcon: 'scythe-icon',
+  shovelIcon: 'shovel-icon',
+  carnivoreSeedsItem: 'carnivore-seeds',
+  carnivorousPlant: 'carnivorous-plant',
   woodItem: 'wood-item',
   woodIcon: 'wood-icon',
   woodOnFireIcon: 'wood-on-fire-icon',
@@ -538,9 +541,33 @@ export const SEA_TILE_FRAME = 33;
 export const SEA_TILE_FRAMES: readonly number[] = [SEA_TILE_FRAME, 34, 35];
 export const SOLID_GROUND_FRAMES: ReadonlySet<number> = new Set([SEA_TILE_FRAME]);
 
+// Ground-layer frames the SHOVEL (swung with the A button) can dig a plantSpot hole into: the
+// two "Terra" paintings — the overworld's bare earth. A frame list and not "anything walkable"
+// on purpose: stone patios (23/24), cracked slabs, dungeon masonry and the sea all refuse the
+// blade, which is what keeps the answer physical — a shovel bites EARTH, and where there is
+// no earth the swing comes out empty.
+export const DIGGABLE_GROUND_FRAMES: ReadonlySet<number> = new Set([5, 6]);
+
 // Two wood sticks ("gravetos") build one bridge tile over water (see WaterObject); the plank
 // art is a dedicated tile (ASSET_KEYS.bridge = bridge.png).
 export const BRIDGE_GRAVETOS_REQUIRED = 2;
+
+// A SEMENTE anda em PACOTE: o punhado que a foice derruba (e o que um mundo autora) vale
+// CINCO sementes na mochila — plantar gasta uma por canteiro, então um corte de mato rende
+// uma fileira, não um buraco. O pacote VIAJA com o item no chão (ItemPickup.units, o mesmo
+// contrato da carga da bateria): pousar põe o punhado inteiro num item só, e pegá-lo devolve
+// a mesma contagem — sem isso, pousar 1 e pegar 5 seria uma máquina de imprimir semente.
+export const SEEDS_PER_PACK = 5;
+// Que tipos de item são SEMENTE-EM-PACOTE (a regra acima vale para todas — uma regra, nunca
+// um `if` por espécie de semente): a comum brota mato; a carnívora brota a planta-armadilha.
+export const SEED_PACK_KINDS: ReadonlySet<string> = new Set(['seeds', 'carnivoreSeeds']);
+
+// O punhado que VIAJA JUNTO: pousar com B põe a contagem INTEIRA da mochila num item só no
+// chão, e pegá-lo devolve a mesma contagem (ItemPickup.units). As sementes inauguraram o
+// contrato; o MINÉRIO DE FERRO entra porque a rocha-veio o produz aos montes e vendê-lo ao
+// astronauta é por quantidade. Lista SEPARADA de SEED_PACK_KINDS de propósito: o buraco de
+// plantio pergunta por SEMENTE, e um punhado de ferro não pode ser semeado num canteiro.
+export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set([...SEED_PACK_KINDS, 'iron']);
 
 // River water is animated: these frames (water_0..3.png, a seamless-looping ripple cycle) are
 // cycled by WaterObject, exactly like the campfire's flame frames.

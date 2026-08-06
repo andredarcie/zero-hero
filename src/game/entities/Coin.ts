@@ -1,18 +1,26 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, SCENE_DEPTHS } from '@/game/constants';
+import { SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 const COIN_SIZE = 0.55; // tiles
 
+/**
+ * A CARA de um drop que se pega andando. A moeda é o padrão; o minério do veio (e qualquer
+ * drop futuro que queira este fluxo) passa a própria arte — o corpo, o arco, o pouso e o voo
+ * de absorção são os mesmos, porque a física do "pegar de passagem" é UMA só.
+ */
+export type CoinLook = { key: string; frame?: number; size?: number };
+
 export class Coin {
   private readonly sprite: Billboard3D;
   private readonly pos: { x: number; y: number; angle: number };
+  private readonly look: Required<CoinLook>;
   private collectable = false;
   private collected = false;
-  // Last projected screen spot — anchors the 2D absorb-into-the-hero visual on collect.
+  // Last projected screen spot — anchors the 2D absorb flight on collect.
   private lastScreen = { x: 0, y: 0 };
   private lastTileSize = 48;
 
@@ -23,23 +31,25 @@ export class Coin {
     targetWorldX: number,
     targetWorldY: number,
     spawnDelay: number,
+    look: CoinLook = { key: 'coin' },
   ) {
     this.pos = { x: startWorldX, y: startWorldY, angle: 0 };
+    this.look = { key: look.key, frame: look.frame ?? 0, size: look.size ?? COIN_SIZE };
 
     // Full-bright: a coin must glint even in the dark (the 2D game punched a
     // small light hole over every coin for the same reason). GROUND layer: a coin exists to be
     // walked over — it is the tile the hero is heading for — so without a declared layer the
     // two quads go coplanar and the coin strobes through his boots (see DEPTH_LAYER).
     this.sprite = world3d()
-      .addBillboard('coin', 0, { emissive: true, depthLayer: 'ground' })
+      .addBillboard(this.look.key, this.look.frame, { emissive: true, depthLayer: 'ground' })
       .setPosition(startWorldX, startWorldY)
       .setDisplaySize(0, 0)
       .setAlpha(0);
 
     this.scene.tweens.add({
       targets: this.sprite,
-      displayWidth: COIN_SIZE,
-      displayHeight: COIN_SIZE,
+      displayWidth: this.look.size,
+      displayHeight: this.look.size,
       alpha: 1,
       duration: 120,
       delay: spawnDelay,
@@ -60,20 +70,20 @@ export class Coin {
     this.scene.tweens.killTweensOf(this.pos);
     this.scene.tweens.killTweensOf(this.sprite);
 
-    // The world coin pops in place (3D), then a 2D twin carries the flight into the hero
-    // at screen centre — no coin counter, the pickup just reads as absorbed.
+    // The world coin pops in place (3D), then a 2D twin carries the flight to the absorb
+    // anchor — the HUD coin counter when one is on screen, the hero otherwise.
     this.scene.tweens.add({
       targets: this.sprite,
-      displayWidth: COIN_SIZE * 1.6,
-      displayHeight: COIN_SIZE * 1.6,
+      displayWidth: this.look.size * 1.6,
+      displayHeight: this.look.size * 1.6,
       duration: 80,
       ease: 'Power2.easeOut',
       yoyo: true,
       onComplete: () => {
         this.sprite.setVisible(false);
-        const size = Math.max(8, Math.floor(this.lastTileSize * COIN_SIZE));
+        const size = Math.max(8, Math.floor(this.lastTileSize * this.look.size));
         const fly = this.scene.add
-          .image(this.lastScreen.x, this.lastScreen.y, ASSET_KEYS.coin)
+          .image(this.lastScreen.x, this.lastScreen.y, this.look.key, this.look.frame)
           .setOrigin(0.5)
           .setDepth(SCENE_DEPTHS.uiOverlay)
           .setDisplaySize(size, size);
@@ -135,8 +145,8 @@ export class Coin {
         this.collectable = true;
         this.scene.tweens.add({
           targets: this.sprite,
-          displayWidth: COIN_SIZE * 1.3,
-          displayHeight: COIN_SIZE * 1.3,
+          displayWidth: this.look.size * 1.3,
+          displayHeight: this.look.size * 1.3,
           duration: 100,
           yoyo: true,
           ease: 'Power2.easeOut',

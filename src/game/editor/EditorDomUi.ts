@@ -8,7 +8,7 @@ import {
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
-import type { PropDir, PropKind, WorldDialog } from '@/game/world/worldSchema';
+import type { ChunkCatalogEntry, PropDir, PropKind, WorldDialog } from '@/game/world/worldSchema';
 import type { DeleteLabLevelResult, LabLevelSummary } from '@/game/worldApi';
 
 // The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
@@ -151,10 +151,12 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'lavaBoots', label: 'Botas de Lava', key: ASSET_KEYS.lavaBootsIcon },
   { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
   { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
+  { type: 'shovel', label: 'Pa — cava buraco de plantio na terra', key: ASSET_KEYS.shovelIcon },
   { type: 'wood', label: 'Graveto', key: ASSET_KEYS.woodIcon },
   { type: 'stone', label: 'Pedra', key: ASSET_KEYS.rock },
   { type: 'iron', label: 'Bloco de Ferro', key: ASSET_KEYS.ironItem },
   { type: 'seeds', label: 'Sementes', key: ASSET_KEYS.seedsItem },
+  { type: 'carnivoreSeeds', label: 'Sementes Carnivoras', key: ASSET_KEYS.carnivoreSeedsItem },
   { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
   { type: 'battery', label: 'Bateria', key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
 ];
@@ -177,6 +179,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'moonflower', label: 'Flor da Lua', key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
   { type: 'bombSpot', label: 'Marca de Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
   { type: 'plantSpot', label: 'Buraco de Plantio', key: ASSET_KEYS.plantHole, frame: 0 },
+  { type: 'carnivorousPlant', label: 'Planta Carnivora — come inimigo encostado', key: ASSET_KEYS.carnivorousPlant, frame: 0 },
   { type: 'inserter', label: 'Braco Robotico (G gira)', key: ASSET_KEYS.inserter, frame: 1 },
   { type: 'toolbox', label: 'Caixa de Ferramentas (G gira)', key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
   { type: 'woodenCrate', label: 'Caixote de Madeira', key: ASSET_KEYS.woodenCrate },
@@ -413,6 +416,10 @@ const CSS = `
 #zh-editor-root .zh-level-note { color: #6d949d; margin: 4px 0 10px; }
 #zh-editor-root .zh-level-note.warn { color: #ffb057; }
 #zh-editor-root .zh-level-empty { color: #6d949d; padding: 10px 0; }
+#zh-editor-root .zh-chunk-catalog-head { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px; margin-bottom: 12px; border: 1px solid #29414b; background: #101d23; }
+#zh-editor-root .zh-chunk-preview { width: 72px; height: 54px; object-fit: cover; image-rendering: pixelated; background: #05090b; border: 1px solid #2b4551; }
+#zh-editor-root .zh-chunk-description { min-height: 72px; resize: vertical; }
+#zh-editor-root .zh-chunk-create { margin-top: 16px; padding-top: 14px; border-top: 1px solid #1f3540; }
 #zh-editor-root .zh-help-table { width: 100%; border-collapse: collapse; }
 #zh-editor-root .zh-help-table td { padding: 3px 8px 3px 0; border-bottom: 1px solid #14232b; }
 #zh-editor-root .zh-help-table td:first-child { color: #f4a261; white-space: nowrap; font-family: monospace; }
@@ -503,6 +510,13 @@ export class EditorDomUi {
       });
       levels.id = 'zh-level-manager-open';
       actions.appendChild(levels);
+    }
+    if (!this.cb.levelManager) {
+      actions.appendChild(this.button(
+        'Chunks&#8230;',
+        'Cria cards e edita nome, custo e imagem de cada chunk compravel',
+        () => this.openChunkCatalogModal(),
+      ));
     }
     actions.append(
       this.button('Mundo&#8230;', 'Nome, tamanho e validacao do mundo', () => this.openWorldModal()),
@@ -1500,6 +1514,151 @@ export class EditorDomUi {
       list.textContent = 'Nao foi possivel carregar a lista.';
       fail(error, 'Falha ao listar levels');
     }
+  }
+
+  /** The authored world is now a strip of reusable cards, one editable chunk per entry. */
+  public openChunkCatalogModal(selectedCx = this.state.chunkX, selectedCy = this.state.chunkY): void {
+    const { body, foot } = this.modalShell('Biblioteca de chunks');
+    const chunks = this.store.world.chunks;
+    const current = chunks.find((chunk) => chunk.cx === selectedCx && chunk.cy === selectedCy) ?? chunks[0];
+    if (!current) return;
+
+    const intro = document.createElement('p');
+    intro.className = 'zh-level-note';
+    intro.textContent = 'Cada chunk desta biblioteca vira uma carta. O desenho do tabuleiro, inimigos e props continuam sendo editados pelas ferramentas normais.';
+    body.appendChild(intro);
+
+    const selector = document.createElement('select');
+    for (const chunk of chunks) {
+      const option = document.createElement('option');
+      option.value = `${chunk.cx},${chunk.cy}`;
+      option.textContent = `${chunk.catalog?.name ?? 'Sem card'} — (${chunk.cx}, ${chunk.cy})`;
+      option.selected = chunk === current;
+      selector.appendChild(option);
+    }
+    selector.addEventListener('change', () => {
+      const [cx, cy] = selector.value.split(',').map(Number);
+      this.openChunkCatalogModal(cx, cy);
+    });
+    body.appendChild(this.field('Chunk', selector));
+
+    const catalog: ChunkCatalogEntry = current.catalog ?? {
+      id: `chunk-${current.cx}-${current.cy}`,
+      name: `Chunk ${current.cx + 1}`,
+      cost: 1,
+      cardImage: 'assets/environment/tilesets/forest_tile_set.png',
+      description: '',
+    };
+    const idInput = document.createElement('input');
+    idInput.type = 'text';
+    idInput.value = catalog.id;
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = catalog.name;
+    const costInput = document.createElement('input');
+    costInput.type = 'number';
+    costInput.min = '0';
+    costInput.step = '1';
+    costInput.value = String(catalog.cost);
+    const imageInput = document.createElement('input');
+    imageInput.type = 'text';
+    imageInput.value = catalog.cardImage;
+    imageInput.placeholder = 'assets/.../imagem.png';
+    const descriptionInput = document.createElement('textarea');
+    descriptionInput.className = 'zh-chunk-description';
+    descriptionInput.value = catalog.description ?? '';
+
+    const header = document.createElement('div');
+    header.className = 'zh-chunk-catalog-head';
+    const preview = document.createElement('img');
+    preview.className = 'zh-chunk-preview';
+    preview.alt = '';
+    const refreshPreview = (): void => {
+      const path = imageInput.value.trim();
+      preview.src = /^(?:https?:|data:)/u.test(path)
+        ? path
+        : `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`;
+    };
+    refreshPreview();
+    imageInput.addEventListener('input', refreshPreview);
+    const summary = document.createElement('div');
+    summary.textContent = `Chunk (${current.cx}, ${current.cy}) · ${CHUNK_COLUMNS}x${CHUNK_ROWS} tiles`;
+    const open = this.button('Abrir no tabuleiro', 'Fecha este modal e enquadra o chunk para pintar', () => {
+      this.state.viewMode = 'chunk';
+      this.state.chunkX = current.cx;
+      this.state.chunkY = current.cy;
+      this.changed();
+      this.cb.onNavigate(
+        current.cx * CHUNK_COLUMNS + Math.floor(CHUNK_COLUMNS / 2),
+        current.cy * CHUNK_ROWS + Math.floor(CHUNK_ROWS / 2),
+      );
+      this.closeModal();
+    });
+    header.append(preview, summary, open);
+    body.append(
+      header,
+      this.field('ID unico', idInput),
+      this.field('Nome da carta', nameInput),
+      this.field('Custo em moedas', costInput),
+      this.field('Imagem da carta', imageInput),
+      this.field('Descricao', descriptionInput),
+    );
+
+    const createBox = document.createElement('div');
+    createBox.className = 'zh-chunk-create';
+    const createTitle = document.createElement('div');
+    createTitle.className = 'zh-label';
+    createTitle.textContent = 'Criar novo chunk';
+    const createName = document.createElement('input');
+    createName.type = 'text';
+    createName.placeholder = 'Ex.: Ruinas Afundadas';
+    const createButton = this.button('+ Criar e abrir', 'Acrescenta um chunk vazio ao fim da biblioteca', () => {
+      const name = createName.value.trim();
+      if (!name) { this.toast('Digite o nome do novo chunk'); createName.focus(); return; }
+      const base = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/gu, '')
+        .replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '') || 'chunk';
+      const ids = new Set(this.store.world.chunks.map((chunk) => chunk.catalog?.id).filter(Boolean));
+      let id = base;
+      let suffix = 2;
+      while (ids.has(id)) { id = `${base}-${suffix}`; suffix += 1; }
+      const at = this.store.addChunkTemplate({
+        id,
+        name,
+        cost: 1,
+        cardImage: 'assets/environment/tilesets/forest_tile_set.png',
+        description: 'Novo pedaco do mundo.',
+      });
+      this.state.chunkX = at.cx;
+      this.state.chunkY = at.cy;
+      this.state.viewMode = 'chunk';
+      this.cb.onStateChange();
+      this.openChunkCatalogModal(at.cx, at.cy);
+      this.toast(`Chunk ${name} criado`);
+    }, 'primary');
+    createBox.append(createTitle, createName, createButton);
+    body.appendChild(createBox);
+
+    foot.append(
+      this.button('Fechar', '', () => this.closeModal()),
+      this.button('Salvar metadados', 'Aplica ao estado do editor; use Salvar para gravar world.json', () => {
+        const id = idInput.value.trim();
+        const name = nameInput.value.trim();
+        const image = imageInput.value.trim();
+        const duplicate = chunks.some((chunk) => chunk !== current && chunk.catalog?.id === id);
+        if (!id || !name || !image) { this.toast('ID, nome e imagem sao obrigatorios'); return; }
+        if (duplicate) { this.toast('Ja existe um chunk com esse ID'); return; }
+        this.store.setChunkCatalog(current.cx, current.cy, {
+          id,
+          name,
+          cost: Number(costInput.value),
+          cardImage: image,
+          description: descriptionInput.value,
+        });
+        this.refreshHeader();
+        this.openChunkCatalogModal(current.cx, current.cy);
+        this.toast('Metadados do chunk atualizados');
+      }, 'primary'),
+    );
   }
 
   public openWorldModal(): void {

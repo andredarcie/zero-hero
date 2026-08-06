@@ -410,8 +410,8 @@ export default {
 
     await evaluate(() => { window.__scene.explorerDebugKill(); });
     await shot('death', { note: 'A elegia da morte — a expedicao acabou' });
-    // A cinematica de morte e longa de proposito (o mundo drenando, o epitafio); ela termina
-    // num restart, e e o restart que fecha a conta.
+    // A cinematica de morte (comprimida: ~5s ate o auto-restart) termina num restart, e e o
+    // restart que fecha a conta.
     await page.waitForFunction(
       (before) => (window.gameDebug?.getState()?.explorer?.banked ?? 0) > before,
       bankBeforeDeath,

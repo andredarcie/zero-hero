@@ -132,7 +132,8 @@ const DEFS: Record<string, SheetDef> = {
   'wooden-crate': { url: `${A}/environment/props/wooden_crate.png` },
   'pressure-plate': { url: `${A}/environment/props/pressure_plate.png`, frameW: 16, frameH: 16 },
   'water-wheel': { url: `${A}/environment/props/water_wheel.png`, frameW: 16, frameH: 16 },
-  'plant-hole': { url: `${A}/environment/props/plant_hole.png` },
+  // Sheet 16×64 em coluna: buraco pronto (0) + os três tempos da cavada da pá (1..3).
+  'plant-hole': { url: `${A}/environment/props/plant_hole.png`, frameW: 16, frameH: 16 },
   'plant-mound': { url: `${A}/environment/props/plant_mound.png` },
   'seeds-item': { url: `${A}/items/collectibles/seeds.png` },
   'cut-grass-wind-0': { url: `${A}/environment/props/cut_grass_wind0.png` },
@@ -165,6 +166,10 @@ const DEFS: Record<string, SheetDef> = {
   'lava-boots-icon': { url: `${A}/ui/icons/lava_boots_icon.png` },
   'pickaxe-icon': { url: `${A}/ui/icons/pickaxe_icon.png` },
   'scythe-icon': { url: `${A}/ui/icons/scythe_icon.png` },
+  'shovel-icon': { url: `${A}/ui/icons/shovel_icon.png` },
+  'carnivore-seeds': { url: `${A}/items/collectibles/carnivore_seeds.png` },
+  // Sheet 16×96 em coluna: fechada (0), bote (1), engolida (2), mastiga A/B (3/4), murcha (5).
+  'carnivorous-plant': { url: `${A}/environment/props/carnivorous_plant.png`, frameW: 16, frameH: 16 },
   'wood-icon': { url: `${A}/ui/icons/wood_icon.png` },
   'wood-on-fire-icon': { url: `${A}/ui/icons/wood_on_fire_icon.png` },
 };
