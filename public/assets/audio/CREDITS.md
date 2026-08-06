@@ -35,7 +35,7 @@ node tools/gen-music.mjs   # music + ambience loops (32 kHz stereo, seamless)
 | `sword-slash.wav` | sword swing — heavy air-cut + faint metal ring + sub thump |
 | `enemy-hit.wav` | hitting an enemy — meaty low knock |
 | `enemy-death.wav` | enemy defeated — sagging growls, bone rattle |
-| `coin.wav` | coin pickup — one small dark chime (E5) |
+| `coin.wav` | _retired_ (the game now plays `combat/coin-pickup.wav`, a real coin from the RPG pack) |
 | `water-drop.wav` | title-screen reveal — one rising "ploop" drop per word (ZERO·THE·HERO·POR) |
 | `title-impact.wav` | title finale — cinematic hit when the author's name lands (sub + boom + A2 bell toll) |
 | `heart.wav` | heart pickup — low minor third swell |
@@ -118,6 +118,7 @@ one line in `SAMPLES`.
 | `turret-charge.wav` | the turret winding up its fan | [f] `world/door` |
 | `zora-surface.wav` | the zora breaking the water | [f] `inventory/bubble` |
 | `zora-spit.wav` | the zora's mouth opening | [f] `inventory/bubble2` |
+| `coin-pickup.wav` | a coin collected (not combat — lives here for the same gen-sfx safety catch) | [f] `inventory/coin3` |
 | `enemy-hit.wav` | a blow landing on a body | [r] `Simple Damage Sounds/sfx_damage_hit3` |
 | `blade-glance.wav` | a blow glancing off a body still in i-frames | [r] `Impacts/sfx_sounds_impact3` |
 | `body-slam.wav` | a shoved body hitting a wall | [r] `Impacts/sfx_sounds_impact1` |

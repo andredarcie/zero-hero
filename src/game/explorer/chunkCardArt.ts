@@ -10,6 +10,7 @@
  */
 
 import type { CardSuit } from './chunkCardSuits';
+import type { NpcKind } from '@/game/world/ScreenContent';
 
 const ART_W = 36;
 const ART_H = 24;
@@ -182,6 +183,173 @@ const drawBloom = (p: Painter): void => {
   p.rect(2, 21, 32, 1); // o chão
 };
 
+// ── AS CARTAS DE NPC: um pictograma POR MORADOR ────────────────────────────────────────────
+// O naipe hearth continua assinando a moldura (violeta + sigilo de chama = "vem alguém junto"),
+// mas a ARTE diz QUEM: todas as oito cartas usavam o mesmo desenho de fogueira-e-morador, e
+// oito terras com a mesma capa não se distinguem na mão. Cada pictograma é o EMBLEMA do
+// morador — o gato, o capacete, a gravata sobre a lenha, o trevo, o pincel, o balde, a pena,
+// a foice — no mesmo P&B de duas cores do baralho.
+
+/** O gato: sentado de perfil, o rabo enrolado — e a lareira FRIA ao lado, só lenha e fumaça. */
+const drawCat = (p: Painter): void => {
+  // A lenha sem chama, e o fio de fumaça que sobe torto.
+  p.rect(5, 19, 7, 1);
+  p.rect(6, 18, 5, 1);
+  p.px(8, 15);
+  p.px(9, 13);
+  p.px(8, 11);
+  // O corpo sentado: peito reto, costas em curva, a cabeça de orelhas triangulares.
+  p.rect(24, 7, 5, 4); // cabeça
+  p.px(24, 6); p.px(24, 5); // orelha esquerda
+  p.px(28, 6); p.px(28, 5); // orelha direita
+  p.rect(23, 11, 7, 2); // pescoço/peito
+  p.rect(22, 13, 9, 6); // corpo
+  p.rect(23, 19, 8, 2); // as patas assentadas
+  // O rabo: desce do corpo e enrola na frente das patas.
+  p.px(21, 19); p.px(20, 18); p.px(19, 17); p.px(19, 16); p.px(20, 15);
+  p.rect(2, 21, 32, 1); // o chão
+};
+
+/** O astronauta: o capacete com o visor vazado, os ombros do traje, e o chão de cratera. */
+const drawAstronaut = (p: Painter): void => {
+  const cx = 13;
+  const cy = 10;
+  for (let y = -6; y <= 6; y += 1) {
+    for (let x = -6; x <= 6; x += 1) {
+      const inHelmet = x * x + y * y <= 36;
+      const inVisor = x >= -3 && x <= 3 && y >= -2 && y <= 2;
+      if (inHelmet && !inVisor) p.px(cx + x, cy + y);
+    }
+  }
+  p.rect(6, 17, 15, 3); // os ombros do traje
+  // As amostras da cratera: dois pedregulhos e as bocas de impacto.
+  p.rect(26, 18, 4, 3);
+  p.rect(31, 19, 3, 2);
+  p.px(24, 20); p.px(30, 17);
+  p.rect(2, 21, 32, 1); // o chão
+};
+
+/** O empresário: a GRAVATA pendurada sobre o estoque — os três toros de madeira em anel. */
+const drawBusinessman = (p: Painter): void => {
+  // A gravata: nó, lâmina, ponta.
+  p.rect(26, 4, 3, 2);
+  p.rect(25, 6, 5, 7);
+  p.px(26, 13); p.px(27, 13); p.px(28, 13);
+  p.px(27, 14);
+  // O estoque: toros vistos de topo — anéis com o miolo marcado — empilhados em pirâmide.
+  const ring = (cx: number, cy: number): void => {
+    for (const [dx, dy] of [
+      [-3, 0], [3, 0], [0, -3], [0, 3], [-2, -2], [2, -2], [-2, 2], [2, 2],
+      [-3, -1], [3, -1], [-3, 1], [3, 1], [-1, -3], [1, -3], [-1, 3], [1, 3],
+    ] as const) p.px(cx + dx, cy + dy);
+    p.px(cx, cy);
+  };
+  ring(8, 17);
+  ring(15, 17);
+  ring(11, 11);
+  p.rect(2, 21, 32, 1); // o chão
+};
+
+/** O operário: o TREVO de radiação sobre a água que brilha — o vau é dele. */
+const drawWorkman = (p: Painter): void => {
+  const cx = 18;
+  const cy = 10;
+  p.rect(cx - 1, cy - 1, 3, 3); // o miolo
+  for (let y = -8; y <= 8; y += 1) {
+    for (let x = -8; x <= 8; x += 1) {
+      const d2 = x * x + y * y;
+      if (d2 < 9 || d2 > 60) continue;
+      // Três pás a 90°, 210° e 330° — o ângulo de cada pixel decide se ele pertence a uma.
+      const ang = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+      for (const blade of [90, 210, 330]) {
+        const diff = Math.abs(((ang - blade + 540) % 360) - 180);
+        if (diff <= 26) p.px(cx + x, cy + y);
+      }
+    }
+  }
+  // A água em travessões — a mesma língua do mar do baralho.
+  p.rect(4, 20, 4, 1);
+  p.rect(12, 21, 5, 1);
+  p.rect(21, 20, 4, 1);
+  p.rect(29, 21, 4, 1);
+};
+
+/** A artista: o pincel em diagonal, a gota caindo, e os canteiros já cavados embaixo. */
+const drawPainter = (p: Painter): void => {
+  // O cabo, 2px de grossura, subindo da esquerda pra direita.
+  for (let t = 0; t <= 9; t += 1) {
+    p.px(8 + t, 17 - t);
+    p.px(9 + t, 17 - t);
+  }
+  p.rect(18, 6, 3, 2); // a virola
+  p.px(21, 5); p.px(22, 4); p.px(23, 3); // a ponta de pelo
+  p.px(25, 7); p.px(25, 8); // a gota de tinta caindo dela
+  // Os canteiros: três montes de terra esperando pigmento.
+  for (const bx of [5, 14, 23]) {
+    p.rect(bx, 20, 5, 1);
+    p.px(bx + 1, 19); p.px(bx + 2, 19); p.px(bx + 3, 19);
+  }
+  p.rect(2, 21, 32, 1); // o chão
+};
+
+/** O vendedor: o BALDE da amostra grátis, com a alça em arco, sobre a lagoa da beira. */
+const drawSalesman = (p: Painter): void => {
+  // A alça.
+  p.px(12, 9); p.px(13, 8); p.px(15, 7); p.px(17, 6); p.px(19, 7); p.px(21, 8); p.px(22, 9);
+  // A borda e o corpo afunilando.
+  p.rect(11, 10, 13, 2);
+  for (let y = 0; y < 6; y += 1) p.rect(12 + Math.floor(y / 2), 12 + y, 11 - Math.floor(y / 2) * 2, 1);
+  // A lagoa.
+  p.rect(5, 20, 5, 1);
+  p.rect(14, 21, 6, 1);
+  p.rect(25, 20, 5, 1);
+};
+
+/** O poeta: a PENA inclinada, a ponta no chão — e uma nota subindo dos pinheiros que cantam. */
+const drawPoet = (p: Painter): void => {
+  // A haste, do bico à ponta.
+  for (let t = 0; t <= 13; t += 1) p.px(9 + t, 19 - t);
+  // As barbas: o corpo da pluma preenche o lado esquerdo da metade de cima.
+  for (let t = 6; t <= 13; t += 1) p.rect(9 + t - 3, 19 - t, 3, 1);
+  p.px(8, 20); // o bico tocando o chão
+  // A nota musical.
+  p.rect(28, 14, 3, 2);
+  p.rect(30, 7, 1, 8);
+  p.px(31, 8); p.px(32, 9);
+  p.rect(2, 21, 32, 1); // o chão
+};
+
+/** A Morte, de folga: só a FOICE fincada — o cabo em diagonal, a lâmina em crescente — no mato alto. */
+const drawDeathCard = (p: Painter): void => {
+  // O cabo, 2px, fincado no chão.
+  for (let t = 0; t <= 15; t += 1) {
+    p.px(9 + Math.floor(t * 0.75), 20 - t);
+    p.px(10 + Math.floor(t * 0.75), 20 - t);
+  }
+  // A lâmina: um crescente que abre para baixo-direita a partir do topo do cabo.
+  p.rect(21, 4, 10, 1);
+  p.rect(24, 5, 8, 1);
+  p.rect(27, 6, 6, 1);
+  p.rect(29, 7, 4, 1);
+  p.rect(31, 8, 2, 1);
+  // O mato alto que ela veio calar: tufos de dois pixels.
+  for (const gx of [5, 15, 22, 28]) {
+    p.px(gx, 20); p.px(gx + 1, 19); p.px(gx + 2, 20);
+  }
+  p.rect(2, 21, 32, 1); // o chão
+};
+
+const NPC_ART: Partial<Record<NpcKind, (p: Painter) => void>> = {
+  blackCat: drawCat,
+  astronaut: drawAstronaut,
+  businessMan: drawBusinessman,
+  radiationSuit: drawWorkman,
+  painter: drawPainter,
+  salesman: drawSalesman,
+  poet: drawPoet,
+  death: drawDeathCard,
+};
+
 /** O curinga: a estrela de quatro pontas — terra que ainda não disse o que é. */
 const drawWild = (p: Painter): void => {
   const cx = 18;
@@ -207,8 +375,11 @@ const DRAWERS: Record<CardSuit, (p: Painter) => void> = {
   wild: drawWild,
 };
 
-/** Desenha o pictograma do domínio no canvas da carta. Síncrono: a arte nunca "carrega". */
-export const drawCardArt = (canvas: HTMLCanvasElement, suit: CardSuit): void => {
+/**
+ * Desenha o pictograma no canvas da carta. Síncrono: a arte nunca "carrega". Uma carta de NPC
+ * passa o MORADOR e ganha o emblema dele; sem morador (ou espécie sem emblema), vale o naipe.
+ */
+export const drawCardArt = (canvas: HTMLCanvasElement, suit: CardSuit, npc?: NpcKind): void => {
   canvas.width = ART_W;
   canvas.height = ART_H;
   const ctx = canvas.getContext('2d');
@@ -217,5 +388,5 @@ export const drawCardArt = (canvas: HTMLCanvasElement, suit: CardSuit): void => 
   ctx.fillRect(0, 0, ART_W, ART_H);
   const p = makePainter(ctx);
   for (const [sx, sy] of STARS) p.px(sx, sy);
-  DRAWERS[suit](p);
+  ((npc && NPC_ART[npc]) ?? DRAWERS[suit])(p);
 };

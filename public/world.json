@@ -2133,7 +2133,7 @@
       ],
       "catalog": {
         "id": "cat-cold-hearths",
-        "name": "Cold Hearths",
+        "name": "Cat's Hearths",
         "cost": 4,
         "cardImage": "generated:hearth",
         "description": "The cat, its fire, and two hearths gone cold. Wake a branch and carry flame."
@@ -2669,7 +2669,7 @@
       ],
       "catalog": {
         "id": "crater-quarry",
-        "name": "Crater Quarry",
+        "name": "Astronaut's Crater",
         "cost": 7,
         "cardImage": "generated:hearth",
         "description": "A stranded astronaut and a field of samples. The pickaxe cracks them open."
@@ -3205,7 +3205,7 @@
       ],
       "catalog": {
         "id": "timber-ranks",
-        "name": "Timber Ranks",
+        "name": "Businessman's Timber",
         "cost": 6,
         "cardImage": "generated:hearth",
         "description": "Dry timber in tidy rows, and a businessman who calls it inventory. Axe included."
@@ -3746,7 +3746,7 @@
       ],
       "catalog": {
         "id": "glowing-ford",
-        "name": "Glowing Ford",
+        "name": "Workman's Ford",
         "cost": 8,
         "cardImage": "generated:hearth",
         "description": "A workman, his hazard boots, and a glowing pool with something sunk in it."
@@ -4282,7 +4282,7 @@
       ],
       "catalog": {
         "id": "painted-beds",
-        "name": "Painted Beds",
+        "name": "Artist's Beds",
         "cost": 6,
         "cardImage": "generated:hearth",
         "description": "The artist dug her beds already. Seeds are pigment; the meadow is the canvas."
@@ -4818,7 +4818,7 @@
       ],
       "catalog": {
         "id": "roadside-pond",
-        "name": "Roadside Pond",
+        "name": "Salesman's Pond",
         "cost": 5,
         "cardImage": "generated:hearth",
         "description": "A salesman with one free sample: a bucket, and the pond to fill it in."
@@ -5354,7 +5354,7 @@
       ],
       "catalog": {
         "id": "singing-pines",
-        "name": "Singing Pines",
+        "name": "Poet's Pines",
         "cost": 5,
         "cardImage": "generated:hearth",
         "description": "Living pines crowd the poet's verse. The great axe fells even living wood."
@@ -5890,7 +5890,7 @@
       ],
       "catalog": {
         "id": "silent-meadow",
-        "name": "Silent Meadow",
+        "name": "Death's Meadow",
         "cost": 9,
         "cardImage": "generated:hearth",
         "description": "Death, off duty, lends the scythe. The tall grass grew too loud; reap it."

@@ -145,7 +145,9 @@ export class ChunkPurchaseOverlay {
       // carta nunca espera rede. Os estados loading/error ficam no CSS: o editor ainda pode
       // apontar uma imagem própria um dia, e o esqueleto de estados já está pago.
       const art = card.querySelector<HTMLCanvasElement>('.zh-build-art');
-      if (art) drawCardArt(art, suit);
+      // A carta de NPC desenha o EMBLEMA do morador (o gato, o capacete, a foice…): oito
+      // cartas com a mesma capa de fogueira não se distinguem na mão.
+      if (art) drawCardArt(art, suit, isNpcCard ? option.npcs[0]?.type : undefined);
       card.dataset.imageState = 'ready';
       card.querySelector('.zh-build-art-frame')?.setAttribute('aria-busy', 'false');
       card.addEventListener('focus', () => {

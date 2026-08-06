@@ -192,18 +192,29 @@ export default {
       name: node.querySelector('.zh-build-name')?.textContent,
       npc: node.dataset.npc,
       suit: node.dataset.suit,
+      art: node.querySelector('canvas.zh-build-art')?.toDataURL(),
       borderColor: getComputedStyle(node.querySelector('.zh-build-face')).borderColor,
     })));
     await shot('npc-cards', {
-      note: 'As cartas de NPC: naipe hearth (fogueira) e moldura violeta arcana, nao ouro.',
-      state: { npcCards },
+      note: 'As cartas de NPC: naipe hearth, moldura violeta, e o EMBLEMA de cada morador.',
+      state: { npcCards: npcCards.map(({ art, ...rest }) => rest) },
     });
     assert('As tres cartas de NPC usam o naipe hearth e a cor propria',
       npcCards.length === 3 && npcCards.every((card) => card.npc === 'true' && card.suit === 'hearth'),
-      JSON.stringify(npcCards));
+      JSON.stringify(npcCards.map(({ art, ...rest }) => rest)));
     assert('A moldura da carta de NPC nao e a de ouro',
       npcCards.every((card) => card.borderColor !== 'rgb(215, 184, 107)'),
       JSON.stringify(npcCards.map((card) => card.borderColor)));
+    // Oito cartas com a mesma capa nao se distinguem na mao: cada morador tem o proprio
+    // pictograma, e o NOME diz QUEM mora la (o pedido do usuario: lembrar o NPC pela carta).
+    assert('Cada carta de NPC desenha o EMBLEMA do proprio morador (tres artes distintas)',
+      npcCards.every((card) => typeof card.art === 'string' && card.art.length > 0)
+        && new Set(npcCards.map((card) => card.art)).size === 3,
+      JSON.stringify(npcCards.map((card) => (card.art ?? '').slice(0, 40))));
+    assert('O nome da carta diz QUEM mora nela',
+      ["Cat's Hearths", "Artist's Beds", "Death's Meadow"]
+        .every((name) => npcCards.some((card) => card.name === name)),
+      JSON.stringify(npcCards.map((card) => card.name)));
     await page.keyboard.press('Escape');
     await page.waitForSelector('.zh-build-backdrop', { state: 'detached', timeout: 5000 });
 

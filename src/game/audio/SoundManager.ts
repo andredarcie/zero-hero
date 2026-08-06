@@ -37,7 +37,9 @@ const SAMPLES = {
   swordSlash: { file: 'combat/sword-swing.wav', vol: 0.8 },
   enemyHit: { file: 'combat/enemy-hit.wav', vol: 0.85 },
   enemyDeath: { file: 'combat/enemy-death.wav', vol: 0.8 },
-  coinPickup: { file: 'coin.wav', vol: 0.55 },
+  // A moeda REAL do RPG Sound Pack (inventory/coin3, a mais curta das tres) — o coin.wav
+  // gerado da raiz ficou para tras a pedido do usuario: moeda tem de soar como moeda.
+  coinPickup: { file: 'combat/coin-pickup.wav', vol: 0.55 },
   heartPickup: { file: 'heart.wav', vol: 0.7 },
   swordPickup: { file: 'item-pickup.wav', vol: 0.6 }, // item get (Freesound #37089, see CREDITS.md)
   dropWater: { file: 'water-drop.wav', vol: 0.75 }, // single drop for the title-screen reveal

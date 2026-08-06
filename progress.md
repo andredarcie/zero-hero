@@ -4177,3 +4177,36 @@ comprimida: fade do mundo 1500→900ms, herói (e o item das costas) delay 900�
 e o retorno automático caiu de 12s pra 5s. O custo de morrer segue sendo a caminhada de volta
 (o contrato do save não mudou), nunca a espera. `salvamento` ajustado ao relógio novo (foto da
 elegia aos 3.4s, antes do auto-restart); comentário do `explorador` idem.
+
+## A moeda de verdade, e cada carta de NPC com a própria cara (2026-08-06)
+
+Três pedidos do usuário na mesma passada:
+
+**1. Som de moeda DE FATO.** O `playCoinPickup` tocava o `coin.wav` sintetizado do gen-sfx.
+O RPG Sound Pack (CC0, o pacote da casa) tem moedas reais em `inventory/` — os pacotes-fonte
+não estavam mais no disco, então o zip foi re-baixado do OpenGameArt e o `import-combat-sfx`
+ganhou a entrada `coin-pickup.wav` (inventory/coin3, a mais CURTA das três: 309ms contra 604
+e 1000 — moeda entra em rajada e cauda longa empilhando vira sino). O rerun do importador
+saiu determinístico (17 arquivos byte-idênticos, só o novo mudou; os 6 do pacote retro
+ausente reportaram FALTA e ficaram intactos). `SAMPLES.coinPickup` →
+`combat/coin-pickup.wav`; CREDITS.md atualizado (o coin.wav gerado ficou aposentado no
+disco — regenerável, nunca referenciado). O cenário `audio` trocou a lista (e de quebra o
+`music.wav` fantasma virou `music-title.wav` — estava vermelho desde a troca das trilhas).
+
+**2. Um pictograma POR MORADOR.** As oito cartas de NPC usavam o mesmo desenho de
+fogueira+morador (`drawHearth`). Agora `chunkCardArt` tem `NPC_ART` — o EMBLEMA de cada um,
+no mesmo P&B: o gato sentado de perfil com a lareira fria fumegando, o capacete de visor
+vazado sobre a cratera, a gravata pendurada sobre os toros em anel, o trevo de radiação
+sobre a água, o pincel com a gota e os canteiros, o balde de alça sobre a lagoa, a pena com
+a nota subindo, e a foice fincada no mato alto. `drawCardArt(canvas, suit, npc?)` — o naipe
+hearth continua assinando moldura e sigilo ("vem alguém junto"); a ARTE diz quem. Os oito
+foram REVISADOS em render ASCII antes de valer (a regra do preview do spritefactory).
+
+**3. O nome da carta diz QUEM.** Cold Hearths/Crater Quarry/etc viraram possessivos
+NPC-primeiro: Cat's Hearths, Astronaut's Crater, Businessman's Timber, Workman's Ford,
+Artist's Beds, Salesman's Pond, Poet's Pines, Death's Meadow. O `add-npc-chunks` aprendeu a
+ATUALIZAR o catálogo de cartas já existentes (antes só pulava ids — um rename nunca chegava
+ao world.json); terreno autorado nunca é tocado.
+
+Guarda: `world-builder` ganhou dois asserts — as três cartas de NPC oferecidas têm artes
+distintas (toDataURL) e os nomes NPC-primeiro. `typecheck` e eslint limpos.

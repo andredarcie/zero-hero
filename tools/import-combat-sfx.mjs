@@ -220,6 +220,18 @@ const MAP = [
       + 'vai subir, a outra que o cuspe vem.',
   },
 
+  // ── A MOEDA (inventory/) ─────────────────────────────────────────────────
+  {
+    pack: 'fantasy',
+    from: 'inventory/coin3.wav',
+    to: 'coin-pickup.wav',
+    why: 'A MOEDA APANHADA. O jogo tocava um coin.wav SINTETIZADO (gen-sfx) e o jogador pediu '
+      + 'moeda de verdade do pacote: das tres do inventory/, esta e a mais CURTA (309ms contra '
+      + '604 e 1000) — moeda entra em RAJADA (a venda derruba varias), e cauda longa empilhando '
+      + 'sobre cauda longa vira sino de igreja. Nao e som de combate, mas mora nesta pasta pela '
+      + 'mesma trava de sempre: o gen-sfx escreve na raiz e apagaria um importado que morasse la.',
+  },
+
   // ── OS IMPACTOS, E POR QUE ELES VEM DO OUTRO PACOTE ──────────────────────
   //
   // O pacote de fantasia tem golpe e tem criatura, mas nao tem PANCADA: nao ha nele lamina

@@ -2,13 +2,13 @@
 // sound events doesn't throw. Playback itself can't be "heard" here, but loading +
 // decoding + the play path are what break in practice.
 const FILES = [
-  'sword-slash.wav', 'enemy-hit.wav', 'enemy-death.wav', 'coin.wav', 'heart.wav',
+  'sword-slash.wav', 'enemy-hit.wav', 'enemy-death.wav', 'combat/coin-pickup.wav', 'heart.wav',
   'item-pickup.wav', 'hurt.wav', 'game-over.wav', 'shop-open.wav', 'shop-close.wav',
-  'ignite.wav', 'music.wav',
+  'ignite.wav', 'music-title.wav',
 ];
 // Frequent events shouldn't use long clips (they'd pile up). One-shot moments may be longer.
 const MAX_SECONDS = {
-  'coin.wav': 1.6, 'item-pickup.wav': 1.6, 'enemy-hit.wav': 1.5, 'sword-slash.wav': 1.5, 'hurt.wav': 1.8,
+  'combat/coin-pickup.wav': 1.6, 'item-pickup.wav': 1.6, 'enemy-hit.wav': 1.5, 'sword-slash.wav': 1.5, 'hurt.wav': 1.8,
 };
 
 export default {
@@ -45,7 +45,7 @@ export default {
       .map((r) => `${r.f} ${r.duration.toFixed(2)}s>${MAX_SECONDS[r.f]}s`);
     assert('Frequent SFX are short enough', tooLong.length === 0, tooLong.length ? tooLong.join(', ') : 'ok');
 
-    const music = probe.out.find((r) => r.f === 'music.wav');
+    const music = probe.out.find((r) => r.f === 'music-title.wav');
     assert('Background music is a real loop', Boolean(music?.ok) && music.duration > 10, `duration=${music?.duration.toFixed(1)}s`);
 
     // Exercise the play path (the run's global "no uncaught page errors" check covers this).

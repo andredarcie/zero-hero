@@ -45,7 +45,7 @@ const makeChunk = ({ catalog, npc, gift, extraPickups = [], props = [], paint })
 const NPC_CHUNKS = [
   makeChunk({
     catalog: {
-      id: 'cat-cold-hearths', name: 'Cold Hearths', cost: 4, cardImage: 'generated:hearth',
+      id: 'cat-cold-hearths', name: "Cat's Hearths", cost: 4, cardImage: 'generated:hearth',
       description: 'The cat, its fire, and two hearths gone cold. Wake a branch and carry flame.',
     },
     npc: 'blackCat',
@@ -63,7 +63,7 @@ const NPC_CHUNKS = [
   }),
   makeChunk({
     catalog: {
-      id: 'crater-quarry', name: 'Crater Quarry', cost: 7, cardImage: 'generated:hearth',
+      id: 'crater-quarry', name: "Astronaut's Crater", cost: 7, cardImage: 'generated:hearth',
       description: 'A stranded astronaut and a field of samples. The pickaxe cracks them open.',
     },
     npc: 'astronaut',
@@ -84,7 +84,7 @@ const NPC_CHUNKS = [
   }),
   makeChunk({
     catalog: {
-      id: 'timber-ranks', name: 'Timber Ranks', cost: 6, cardImage: 'generated:hearth',
+      id: 'timber-ranks', name: "Businessman's Timber", cost: 6, cardImage: 'generated:hearth',
       description: 'Dry timber in tidy rows, and a businessman who calls it inventory. Axe included.',
     },
     npc: 'businessMan',
@@ -105,7 +105,7 @@ const NPC_CHUNKS = [
   }),
   makeChunk({
     catalog: {
-      id: 'glowing-ford', name: 'Glowing Ford', cost: 8, cardImage: 'generated:hearth',
+      id: 'glowing-ford', name: "Workman's Ford", cost: 8, cardImage: 'generated:hearth',
       description: 'A workman, his hazard boots, and a glowing pool with something sunk in it.',
     },
     npc: 'radiationSuit',
@@ -119,7 +119,7 @@ const NPC_CHUNKS = [
   }),
   makeChunk({
     catalog: {
-      id: 'painted-beds', name: 'Painted Beds', cost: 6, cardImage: 'generated:hearth',
+      id: 'painted-beds', name: "Artist's Beds", cost: 6, cardImage: 'generated:hearth',
       description: 'The artist dug her beds already. Seeds are pigment; the meadow is the canvas.',
     },
     npc: 'painter',
@@ -138,7 +138,7 @@ const NPC_CHUNKS = [
   }),
   makeChunk({
     catalog: {
-      id: 'roadside-pond', name: 'Roadside Pond', cost: 5, cardImage: 'generated:hearth',
+      id: 'roadside-pond', name: "Salesman's Pond", cost: 5, cardImage: 'generated:hearth',
       description: 'A salesman with one free sample: a bucket, and the pond to fill it in.',
     },
     npc: 'salesman',
@@ -150,7 +150,7 @@ const NPC_CHUNKS = [
   }),
   makeChunk({
     catalog: {
-      id: 'singing-pines', name: 'Singing Pines', cost: 5, cardImage: 'generated:hearth',
+      id: 'singing-pines', name: "Poet's Pines", cost: 5, cardImage: 'generated:hearth',
       description: 'Living pines crowd the poet\'s verse. The great axe fells even living wood.',
     },
     npc: 'poet',
@@ -168,7 +168,7 @@ const NPC_CHUNKS = [
   }),
   makeChunk({
     catalog: {
-      id: 'silent-meadow', name: 'Silent Meadow', cost: 9, cardImage: 'generated:hearth',
+      id: 'silent-meadow', name: "Death's Meadow", cost: 9, cardImage: 'generated:hearth',
       description: 'Death, off duty, lends the scythe. The tall grass grew too loud; reap it.',
     },
     npc: 'death',
@@ -301,8 +301,18 @@ try {
   console.log(`Backup: ${backup}`);
 }
 
+let renamed = 0;
 for (const def of NPC_CHUNKS) {
-  if (existing.has(def.catalog.id)) continue;
+  if (existing.has(def.catalog.id)) {
+    // O template já mora no mundo: o TERRENO autorado fica, mas o CATÁLOGO (nome, custo,
+    // descrição) segue este arquivo — é assim que um rename chega às cartas já nascidas.
+    const chunk = world.chunks.find((c) => c.catalog?.id === def.catalog.id);
+    if (chunk && JSON.stringify(chunk.catalog) !== JSON.stringify(def.catalog)) {
+      chunk.catalog = def.catalog;
+      renamed += 1;
+    }
+    continue;
+  }
   const cx = nextCx;
   nextCx += 1;
   const ox = cx * COLS;
@@ -332,4 +342,7 @@ for (const [kind, dialog] of Object.entries(NPC_DIALOG_CONFIG)) {
 world.meta.worldChunksX = world.chunks.reduce((max, chunk) => Math.max(max, chunk.cx), 0) + 1;
 
 await fs.writeFile(target, `${JSON.stringify(world, null, 2)}\n`, 'utf8');
-console.log(`Added ${added} NPC chunk templates (library now ${world.chunks.length} chunks, dialogs for ${Object.keys(NPC_DIALOG_CONFIG).length} NPCs).`);
+console.log(
+  `Added ${added} NPC chunk templates, updated ${renamed} catalogs `
+  + `(library now ${world.chunks.length} chunks, dialogs for ${Object.keys(NPC_DIALOG_CONFIG).length} NPCs).`,
+);
