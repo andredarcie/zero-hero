@@ -12,7 +12,7 @@
       "worldX": 6,
       "worldY": 6
     },
-    "exportedAt": "2026-08-06T18:27:28.398Z"
+    "exportedAt": "2026-08-07T00:17:48.531Z"
   },
   "chunks": [
     {
@@ -3238,48 +3238,6 @@
           5,
           5,
           5,
-          33,
-          33,
-          33,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          33,
-          5,
-          33,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          33,
-          33,
-          33,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
           5,
           5,
           5,
@@ -3317,10 +3275,52 @@
           5,
           5,
           5,
+          6,
+          6,
+          6,
+          6,
+          6,
           5,
           5,
           5,
+          5
+        ],
+        [
           5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5,
+          5
+        ],
+        [
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
           5,
           5,
           5,
@@ -3331,9 +3331,9 @@
           5,
           5,
           5,
-          5,
-          5,
-          5,
+          6,
+          6,
+          6,
           5,
           5,
           5,
@@ -3388,7 +3388,7 @@
         [
           null,
           null,
-          null,
+          12,
           null,
           null,
           null,
@@ -3403,11 +3403,11 @@
           null,
           null,
           null,
+          13,
           null,
           null,
           null,
-          null,
-          null,
+          7,
           null,
           null,
           null,
@@ -3451,21 +3451,7 @@
           null,
           10,
           null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
+          7,
           null,
           null
         ],
@@ -3535,13 +3521,27 @@
           null,
           null,
           null,
-          null,
+          7,
           null,
           null
         ],
         [
           null,
           null,
+          null,
+          null,
+          7,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          7,
           null,
           null,
           null,
@@ -3762,9 +3762,37 @@
           5,
           5,
           5,
+          6,
+          6,
+          6,
           5,
           5,
           5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          5,
+          6,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          5,
+          6,
           5,
           5,
           5,
@@ -3775,24 +3803,10 @@
           5,
           5,
           5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
+          6,
+          6,
+          6,
+          6,
           5,
           5,
           5,
@@ -3803,10 +3817,52 @@
           5,
           5,
           5,
+          6,
+          6,
+          6,
           5,
           5,
           5,
           5,
+          5
+        ],
+        [
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
           5,
           5,
           5,
@@ -3816,67 +3872,11 @@
           5,
           5,
           5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
+          6,
+          6,
+          6,
+          6,
+          6,
           5,
           5,
           5,
@@ -3929,6 +3929,90 @@
         [
           null,
           null,
+          1,
+          11,
+          null,
+          null,
+          null,
+          1,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          16,
+          16,
+          null,
+          1,
+          10,
+          null,
+          16,
+          11,
+          16,
+          7,
+          null
+        ],
+        [
+          null,
+          16,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          16,
+          15,
+          11,
+          null
+        ],
+        [
+          11,
+          null,
+          15,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          16,
+          15,
+          null
+        ],
+        [
+          null,
+          11,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          10,
+          1,
+          15,
+          null
+        ],
+        [
+          null,
+          11,
+          10,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          7
+        ],
+        [
+          null,
+          null,
           null,
           null,
           null,
@@ -3942,156 +4026,72 @@
         ],
         [
           null,
+          null,
+          14,
+          null,
+          10,
+          null,
+          10,
+          null,
+          1,
+          11,
+          null,
+          null
+        ],
+        [
+          11,
+          15,
+          1,
+          null,
+          null,
+          null,
+          14,
+          null,
+          7,
+          16,
+          null,
+          11
+        ],
+        [
+          null,
+          16,
           7,
           null,
           null,
+          14,
           null,
           null,
+          16,
+          16,
           null,
+          11
+        ],
+        [
+          null,
+          16,
+          15,
+          10,
+          null,
+          10,
+          1,
+          16,
+          15,
+          15,
+          6,
+          null
+        ],
+        [
+          null,
+          null,
+          7,
+          11,
           null,
           null,
           null,
           7,
-          null
-        ],
-        [
+          13,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          6,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          6,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          6,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          6,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
+          1,
           null
         ]
       ],
@@ -4271,6 +4271,11 @@
           "type": "seeds",
           "worldX": 88,
           "worldY": 5
+        },
+        {
+          "type": "shovel",
+          "worldX": 86,
+          "worldY": 4
         }
       ],
       "npcs": [
@@ -7615,31 +7620,6 @@
       "worldY": 5
     },
     {
-      "type": "plantSpot",
-      "worldX": 86,
-      "worldY": 10
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 87,
-      "worldY": 10
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 88,
-      "worldY": 10
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 92,
-      "worldY": 10
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 93,
-      "worldY": 10
-    },
-    {
       "type": "campfire",
       "lit": true,
       "worldX": 102,
@@ -7726,6 +7706,346 @@
       "type": "rock",
       "worldX": 136,
       "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 76,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 77,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 78,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 79,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 80,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 80,
+      "worldY": 4
+    },
+    {
+      "type": "lava",
+      "worldX": 80,
+      "worldY": 5
+    },
+    {
+      "type": "lava",
+      "worldX": 82,
+      "worldY": 5
+    },
+    {
+      "type": "lava",
+      "worldX": 81,
+      "worldY": 5
+    },
+    {
+      "type": "lava",
+      "worldX": 82,
+      "worldY": 4
+    },
+    {
+      "type": "lava",
+      "worldX": 82,
+      "worldY": 1
+    },
+    {
+      "type": "lava",
+      "worldX": 82,
+      "worldY": 2
+    },
+    {
+      "type": "lava",
+      "worldX": 82,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 79,
+      "worldY": 1
+    },
+    {
+      "type": "lava",
+      "worldX": 79,
+      "worldY": 2
+    },
+    {
+      "type": "lava",
+      "worldX": 75,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 74,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 74,
+      "worldY": 4
+    },
+    {
+      "type": "lava",
+      "worldX": 74,
+      "worldY": 7
+    },
+    {
+      "type": "lava",
+      "worldX": 74,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 74,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 74,
+      "worldY": 9
+    },
+    {
+      "type": "lava",
+      "worldX": 75,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 76,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 77,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 75,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 76,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 77,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 78,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 78,
+      "worldY": 9
+    },
+    {
+      "type": "lava",
+      "worldX": 78,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 79,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 80,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 81,
+      "worldY": 8
+    },
+    {
+      "type": "lava",
+      "worldX": 81,
+      "worldY": 9
+    },
+    {
+      "type": "lava",
+      "worldX": 81,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 80,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 79,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 75,
+      "worldY": 2
+    },
+    {
+      "type": "lava",
+      "worldX": 73,
+      "worldY": 4
+    },
+    {
+      "type": "lava",
+      "worldX": 78,
+      "worldY": 1
+    },
+    {
+      "type": "lava",
+      "worldX": 80,
+      "worldY": 1
+    },
+    {
+      "type": "lava",
+      "worldX": 81,
+      "worldY": 1
+    },
+    {
+      "type": "dryTree",
+      "worldX": 78,
+      "worldY": 4
+    },
+    {
+      "type": "dryTree",
+      "worldX": 76,
+      "worldY": 2
+    },
+    {
+      "type": "dryTree",
+      "worldX": 76,
+      "worldY": 4
+    },
+    {
+      "type": "dryTree",
+      "worldX": 77,
+      "worldY": 7
+    },
+    {
+      "type": "dryTree",
+      "worldX": 75,
+      "worldY": 9
+    },
+    {
+      "type": "dryTree",
+      "worldX": 80,
+      "worldY": 7
+    },
+    {
+      "type": "dryTree",
+      "worldX": 74,
+      "worldY": 2
+    },
+    {
+      "type": "dryTree",
+      "worldX": 73,
+      "worldY": 1
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 74,
+      "worldY": 5
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 73,
+      "worldY": 10
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 87,
+      "worldY": 2
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 87,
+      "worldY": 3
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 87,
+      "worldY": 7
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 87,
+      "worldY": 8
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 89,
+      "worldY": 7
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 89,
+      "worldY": 8
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 91,
+      "worldY": 8
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 91,
+      "worldY": 7
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 89,
+      "worldY": 3
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 89,
+      "worldY": 2
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 91,
+      "worldY": 2
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 91,
+      "worldY": 3
+    },
+    {
+      "type": "carnivorousPlant",
+      "worldX": 90,
+      "worldY": 2
+    },
+    {
+      "type": "carnivorousPlant",
+      "worldX": 88,
+      "worldY": 9
+    },
+    {
+      "type": "carnivorousPlant",
+      "worldX": 92,
+      "worldY": 6
     }
   ],
   "dialogs": {

@@ -3073,9 +3073,49 @@ export class GameScene extends Phaser.Scene {
         case 'levelPortal':
           this.levelPortals.push(new LevelPortalObject(def.worldX, def.worldY));
           break;
+        // Os tipos abaixo entraram quando as CARTAS AUTORADAS chegaram: o gerador antigo só
+        // plantava os de cima, mas o /editor deixa pôr qualquer prop num chunk da biblioteca —
+        // e um prop que o editor aceita e este switch não conhece simplesmente NÃO NASCE (foi
+        // exatamente o chamado do usuário: "coloquei lava e não apareceu lava").
+        case 'lava':
+          // A luz vem do POOL (addFireLight) — nascer em runtime não recompila shader nenhum.
+          this.lavaTiles.push(new LavaObject(this, def.worldX, def.worldY));
+          break;
+        case 'water':
+          this.waterTiles.push(new WaterObject(this, def.worldX, def.worldY, false));
+          break;
+        case 'bridgeSpot': {
+          const w = new WaterObject(this, def.worldX, def.worldY, true);
+          w.onBuilt = () => this.cameras.main.flash(160, 210, 190, 150);
+          this.waterTiles.push(w);
+          break;
+        }
+        case 'dryShrub':
+          this.dryShrubs.push(new DryShrubObject(this, def.worldX, def.worldY));
+          break;
+        case 'moonflower':
+          this.moonflowers.push(new MoonflowerObject(this, def.worldX, def.worldY));
+          break;
+        case 'bombSpot':
+          this.bombSpots.push(new BombSpotObject(this, def.worldX, def.worldY));
+          break;
+        case 'lockedDoor':
+          this.lockedDoors.push(new LockedDoorObject(this, def.worldX, def.worldY, def.floodgate === true));
+          break;
+        case 'swingGate':
+          this.swingGates.push(new SwingGateObject(this, def.worldX, def.worldY));
+          break;
+        case 'woodenCrate':
+          this.woodenCrates.push(new WoodenCrateObject(this, def.worldX, def.worldY));
+          break;
+        case 'carnivorousPlant':
+          this.carnivorousPlants.push(new CarnivorousPlantObject(this, def.worldX, def.worldY));
+          break;
         default:
-          // O gerador so planta os tipos acima. Um tipo novo cai aqui de proposito: melhor um
-          // prop que nao aparece do que um prop meio construido.
+          // As MÁQUINAS (fio, roda, caldeira, placa, portão eletrônico, braço, bancada,
+          // bateria) caem aqui DE PROPÓSITO: elas não são um push numa lista — têm índice de
+          // cabo, circuito e rede pra recompor — e meio construídas seriam piores que ausentes.
+          // Carta com máquina é trabalho futuro; o resto do mundo autorável nasce inteiro.
           break;
       }
     }
@@ -3172,6 +3212,18 @@ export class GameScene extends Phaser.Scene {
     // tutorial, não estado de fazenda (a aventura, que lembra, tem o save para isso).
     sweep(this.plantSpots, () => ({}));
     sweep(this.levelPortals, () => ({}));
+    // Os tipos das cartas autoradas (o espelho do switch do spawnStreamedProps). Memorável:
+    // a PORTA aberta fica aberta (a chave foi consumida — voltar trancada seria soft-lock) e
+    // o arbusto cortado fica cortado. O resto é cenário que o template refaz idêntico.
+    sweep(this.lavaTiles, () => ({}));
+    sweep(this.waterTiles, () => ({}));
+    sweep(this.dryShrubs, (shrub) => ({ gone: !shrub.blocking }));
+    sweep(this.moonflowers, () => ({}));
+    sweep(this.bombSpots, () => ({}));
+    sweep(this.lockedDoors, (door) => ({ gone: !door.blocking }));
+    sweep(this.swingGates, () => ({}));
+    sweep(this.woodenCrates, () => ({}));
+    sweep(this.carnivorousPlants, () => ({}));
     return out;
   }
 

@@ -399,6 +399,31 @@ export default {
     assert('O heroi consegue atravessar para o terreno comprado', entered?.activeScreen?.cx === 1,
       JSON.stringify({ player: entered?.player, screen: entered?.activeScreen }));
 
+    log('PROPS AUTORADOS: o que o editor poe num card NASCE no chunk comprado (a lava sumia)');
+    // O switch do spawnStreamedProps so conhecia os tipos do gerador antigo: lava, agua,
+    // arbusto e afins pintados num card eram DESCARTADOS em silencio na compra. O guarda
+    // espawna pelo mesmo caminho da compra e cobra o corpo fisico de cada um.
+    const authored = await page.evaluate(() => {
+      const s = window.__scene;
+      const before = { lava: s.lavaTiles.length, water: s.waterTiles.length, shrub: s.dryShrubs.length };
+      s.spawnStreamedProps([
+        { type: 'lava', worldX: 20, worldY: 3 },
+        { type: 'water', worldX: 21, worldY: 3 },
+        { type: 'dryShrub', worldX: 22, worldY: 3 },
+      ]);
+      return {
+        lavaGrew: s.lavaTiles.length === before.lava + 1,
+        waterGrew: s.waterTiles.length === before.water + 1,
+        shrubGrew: s.dryShrubs.length === before.shrub + 1,
+        lavaBlocks: s.isSolidForEntities(20, 3),
+        waterBlocks: s.isSolidForEntities(21, 3),
+      };
+    });
+    assert('Lava, agua e arbusto autorados nascem no chunk comprado e BLOQUEIAM',
+      authored.lavaGrew && authored.waterGrew && authored.shrubGrew
+        && authored.lavaBlocks && authored.waterBlocks,
+      JSON.stringify(authored));
+
     log('EDITOR: cada card pode ser nomeado, precificado, ilustrado e aberto para pintura');
     await page.goto(new URL('/editor', page.url()).href, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#zh-editor-root .zh-btn', { state: 'visible', timeout: 30000 });

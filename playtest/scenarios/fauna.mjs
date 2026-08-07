@@ -30,7 +30,7 @@ const FIRE = { x: 0, y: 0 };
 const RIVER_X = 6;
 
 // As covas autoradas, uma por especie (mais as duas de dentro do rio). Nenhuma a menos de
-// LIGHT_RADIUS_TILES (4,5) da fogueira: monstro nao nasce na luz, e uma cova calada por engano
+// LIGHT_RADIUS_TILES (3,15) da fogueira: monstro nao nasce na luz, e uma cova calada por engano
 // mediria outra coisa.
 const DENS = [
   { type: 'undead', x: 1, y: 9 },

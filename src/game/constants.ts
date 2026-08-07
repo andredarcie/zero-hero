@@ -339,12 +339,14 @@ export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [
   ASSET_KEYS.undeadBorn6,
 ];
 
-// Light radii in tiles. The hero's ambient glow and each campfire punch holes of this size
-// in the darkness overlay; the same radius is what undead refuse to step into (they live
-// only in the dark). The safety ring is slightly wider than the light so danger begins
-// right at the visible light edge, never while the player still looks lit.
-export const LIGHT_RADIUS_TILES = 4.5;
-export const CAMPFIRE_SAFE_RADIUS_TILES = 5;
+// Light radii in tiles: the radius undead refuse to step into (they live only in the dark)
+// and the mute ring for enemy graves. The safety ring stays slightly wider (+0.5) so danger
+// begins right at the wall's edge, never while the player still reads as protected.
+// 2026-08-06, a pedido do usuário: o raio caiu 30% (4.5 → 3.15) — o inimigo chega mais perto
+// da fogueira, e o anel seguro encolheu junto para manter a margem. A luz VISÍVEL não lê
+// daqui (é a luz 3D real, com falloff suave), então a parede menor não contradiz borda nenhuma.
+export const LIGHT_RADIUS_TILES = 3.15;
+export const CAMPFIRE_SAFE_RADIUS_TILES = 3.65;
 
 // How long a carried flame (a lit sword or wood club) lasts before it burns out in the dark.
 // Re-igniting at any living fire — a lit campfire or a lava pool — resets it. Short enough

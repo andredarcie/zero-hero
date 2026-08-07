@@ -4210,3 +4210,37 @@ ao world.json); terreno autorado nunca é tocado.
 
 Guarda: `world-builder` ganhou dois asserts — as três cartas de NPC oferecidas têm artes
 distintas (toDataURL) e os nomes NPC-primeiro. `typecheck` e eslint limpos.
+
+## A lava que o editor punha e a compra descartava (2026-08-06)
+
+Chamado do usuário: "coloquei props de lava e não apareceu lava". Causa: o
+`spawnStreamedProps` — o caminho por onde a carta comprada vira props vivos (e por onde a
+janela do construtor re-entra em chunks) — só conhecia os 8 tipos que o GERADOR antigo
+plantava (campfire, dryTree, dryBush, rock, ironRock, tallGrass, plantSpot, levelPortal).
+Qualquer outro prop pintado num card pelo /editor caía no `default` e era descartado em
+silêncio na compra.
+
+O switch agora conhece todo o MUNDO autorável: lava (a luz vem do POOL — nascer em runtime
+não recompila shader), água, bridgeSpot (com o flash do onBuilt), dryShrub, moonflower,
+bombSpot, lockedDoor (com floodgate), swingGate, woodenCrate e carnivorousPlant. O
+`despawnPropsOutside` ganhou os sweeps espelho — com memória onde importa: porta ABERTA fica
+aberta (a chave foi consumida; voltar trancada seria soft-lock) e arbusto cortado fica
+cortado; o resto o template refaz idêntico. As MÁQUINAS (fio, roda, caldeira, placa, portão
+eletrônico, braço, bancada) continuam no `default` DE PROPÓSITO, agora com o comentário
+dizendo isso: elas têm índice de cabo e circuito a recompor, e meio construídas seriam
+piores que ausentes — carta com máquina é trabalho futuro.
+
+Guarda: `world-builder` espawna lava+água+arbusto pelo caminho da compra num chunk comprado
+e cobra corpo físico (listas crescem, tiles bloqueiam).
+
+## A luz protege 30% menos (2026-08-06)
+
+Pedido do usuário: o inimigo pode chegar mais perto da fogueira. `LIGHT_RADIUS_TILES`
+(a parede que o monstro não pisa + o silêncio das covas) caiu de 4.5 → **3.15**, e
+`CAMPFIRE_SAFE_RADIUS_TILES` (o anel em que o herói conta como "safe" pro cerco) encolheu
+junto, 5 → **3.65**, mantendo a margem documentada de +0.5 — o perigo continua começando na
+borda da parede, nunca com o jogador ainda se lendo protegido. A luz VISÍVEL não lê dessas
+constantes (é a luz 3D real com falloff suave), então nada na tela contradiz a parede menor.
+O aviso do editor (cova na luz) segue a mesma constante sozinho. Fixtures conferidas antes:
+a cova-na-luz do `inimigos` está a 1,4 tiles (segue calada) e o resto a 6+ (segue fora);
+comentários com os números velhos atualizados em `inimigos`, `fauna` e `placa-undead`.

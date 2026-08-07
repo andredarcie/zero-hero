@@ -65,8 +65,8 @@ export default {
 
       // UMA fogueira, no canto oposto. Ela precisa existir (o runtime acende a mais proxima do
       // spawn e o mundo sem fogo nenhum e um caso que nada mais no jogo exercita), mas precisa
-      // ficar longe: dentro de CAMPFIRE_SAFE_RADIUS (5) o heroi fica "safe" e a caveira se
-      // desfaz sozinha antes de chegar na placa, e dentro de LIGHT_RADIUS (4.5) ela nem entra.
+      // ficar longe: dentro de CAMPFIRE_SAFE_RADIUS (3.65) o heroi fica "safe" e a caveira se
+      // desfaz sozinha antes de chegar na placa, e dentro de LIGHT_RADIUS (3.15) ela nem entra.
       store.placeEntity({ list: 'props', type: 'campfire', worldX: fire.x, worldY: fire.y });
       store.setSpawn(hero.x, hero.y);
       store.placeEntity({ list: 'props', type: 'pressurePlate', worldX: plate.x, worldY: plate.y, variable: varName });

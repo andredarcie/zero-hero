@@ -13,8 +13,8 @@
 //     (8,10) COVA C debaixo de uma PEDRA — tile bloqueado, nada nasce nunca
 //
 // A fogueira vai pro canto (0,0) porque ela tem dois efeitos que atropelariam o teste de perto:
-// dentro de CAMPFIRE_SAFE_RADIUS (5) o heroi fica "safe" e a caveira se desfaz sozinha em 2-5s
-// (sunset), e dentro de LIGHT_RADIUS (4.5) ela nem entra. A 6,3 tiles do heroi, nenhum dos dois.
+// dentro de CAMPFIRE_SAFE_RADIUS (3.65) o heroi fica "safe" e a caveira se desfaz sozinha em
+// 2-5s (sunset), e dentro de LIGHT_RADIUS (3.15) ela nem entra. A 6,3 tiles, nenhum dos dois.
 //
 // O respawn de verdade e 25s (ENEMY_RESPAWN_MS). O cenario ENCURTA o relogio em campo, porque um
 // teste que espera 25s por assercao vira minutos — e cobra, antes de encurtar, que o valor de boot
