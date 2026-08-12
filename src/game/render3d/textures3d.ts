@@ -103,6 +103,8 @@ const DEFS: Record<string, SheetDef> = {
   extractor: { url: `${A}/environment/props/extractor.png`, frameW: 16, frameH: 16 },
   furnace: { url: `${A}/environment/props/furnace.png`, frameW: 16, frameH: 16 },
   'trip-hammer': { url: `${A}/environment/props/trip-hammer.png`, frameW: 16, frameH: 16 },
+  // O ALTAR: laje fria (0) e com o tampo em brasa (1) — o calor que a pancada deixa na pedra.
+  altar: { url: `${A}/environment/props/altar.png`, frameW: 16, frameH: 16 },
   // A viga do martinete: frames de DOIS tiles de largura, num quad que passa na frente dos dois.
   'trip-hammer-beam': { url: `${A}/environment/props/trip-hammer-beam.png`, frameW: 32, frameH: 16 },
   // O bau: frame 0 vazio, frame 1 com carga (o ferrolho em ouro) — sem numero na tela.

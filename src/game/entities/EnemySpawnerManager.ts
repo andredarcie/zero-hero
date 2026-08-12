@@ -105,12 +105,15 @@ export class EnemySpawnerManager {
         continue;
       }
 
-      // Com o heroi na seguranca de uma fogueira, nenhuma cova abre — e isso NAO e a regra do
-      // cerco copiada, e uma consequencia do proprio morto-vivo: alcancada a seguranca, a matilha
-      // se desfaz sozinha em 2-5s (o sunset do UndeadEnemy). Sem esta linha, uma cova fora da luz
-      // pariria um corpo pra ele virar po tres segundos depois, de novo a cada 25s — e o jogador
-      // sentado na fogueira ouviria o chao rachando pra sempre por nada. O relogio continua
-      // correndo acima: sair da luz encontra a cova pronta, nao esperando.
+      // Com o heroi na seguranca de uma fogueira, nenhuma cova abre: descansar no fogo e a unica
+      // pausa que este jogo oferece, e uma cova a 6 tiles pariria um corpo a cada 25s pra ele
+      // vir morrer na borda da luz — o jogador sentado na fogueira ouviria o chao rachando pra
+      // sempre, sem nada a fazer a respeito. O relogio continua correndo acima: sair da luz
+      // encontra a cova pronta, nao esperando.
+      //
+      // (Ate 2026-08-12 a justificativa era outra — a matilha se desfazia sozinha perto do fogo,
+      // entao a cova so encheria o mundo de po. Esse desmanche morreu; a linha fica, agora pelo
+      // que ela protege: o descanso.)
       if (query.playerSafe) continue;
 
       const far = Math.max(

@@ -39,14 +39,40 @@ export default {
       JSON.stringify((builder?.gates ?? []).map((gate) => gate.direction).sort()) === JSON.stringify(['east', 'north', 'west']),
       JSON.stringify(builder?.gates));
     assert('A fogueira central esta acesa', boot?.litFires === 1, `litFires=${boot?.litFires}`);
+
+    // O MAPA DO CANTO: um quadradinho por chunk comprado, e o do heroi ACESO em roxo. Ele nao e
+    // bussola — e o retrato do labirinto que o jogador desenhou sem querer —, entao o que este
+    // assert cobra e so a correspondencia: um quadrado por chunk, e o roxo na casa certa.
+    const miniMap = await driver.page.evaluate(() => {
+      const map = document.getElementById('zh-chunk-map');
+      if (!map) return null;
+      const cells = [...map.querySelectorAll('i')];
+      const here = cells.filter((c) => c.classList.contains('zh-here'));
+      const style = getComputedStyle(map);
+      return {
+        cells: cells.length,
+        here: here.length,
+        hereAt: here[0] ? `${here[0].style.gridColumn},${here[0].style.gridRow}` : null,
+        translucido: Number(style.opacity) < 1,
+      };
+    });
+    assert('o mapa do canto tem um quadradinho por chunk construido',
+      miniMap?.cells === (builder?.built?.length ?? 0), JSON.stringify(miniMap));
+    assert('...com a casa do heroi em roxo, e uma so',
+      miniMap?.here === 1 && miniMap?.hereAt === '1,1', JSON.stringify(miniMap));
+    assert('...e ele e translucido (o mapa nao pode puxar o olho para fora do mundo)',
+      miniMap?.translucido === true, JSON.stringify(miniMap));
     // A BOLSA COMECA VAZIA (ver explorerRun/START_COINS e o cenario `prologo`): a primeira moeda
     // do jogo sai de uma caveira, e a primeira carta e uma conquista em vez de um clique.
     assert('A expedicao nasce SEM moedas, na bolsa E no HUD',
       boot?.coins === 0 && boot?.explorer?.carried === 0,
       `wallet=${boot?.coins} run=${boot?.explorer?.carried}`);
-    assert('A espada nasce no chao ao lado da fogueira',
-      (boot?.groundItems ?? []).some((item) => item.kind === 'sword' && item.worldX === 7 && item.worldY === 8),
-      JSON.stringify(boot?.groundItems));
+    // A ESPADA NAO NASCE MAIS NO ACAMPAMENTO: ela deixou de ser item (o heroi tem a dele desde o
+    // primeiro frame — ver GameScene.swordEquipped), e o presente ao lado da fogueira virou uma
+    // reverencia a uma regra que nao existe. O `campKit` ficou VAZIO de proposito, e e isso que
+    // este assert guarda agora — nenhum item pousado esperando um gesto que morreu.
+    assert('O acampamento nao oferece item nenhum — a espada e do heroi',
+      (boot?.groundItems ?? []).length === 0, JSON.stringify(boot?.groundItems));
     const wizard = await page.evaluate(() => ({
       kinds: window.gameDebug?.listNpcKinds() ?? [],
       authored: window.__scene.explorer.source.chunkContent(0, 0).npcs
@@ -215,13 +241,17 @@ export default {
       art: node.querySelector('canvas.zh-build-art')?.toDataURL(),
       borderColor: getComputedStyle(node.querySelector('.zh-build-face')).borderColor,
     })));
+    // A ARTE FORA DO RELATORIO: cada carta carrega um data URL de canvas inteiro, e despejar isso
+    // no JSON do relatorio o deixa ilegivel (e enorme). O `delete` numa copia diz isso sem o
+    // descarte por desestruturacao, que o lint (com razao) le como variavel morta.
+    const semArte = (card) => { const copia = { ...card }; delete copia.art; return copia; };
     await shot('npc-cards', {
       note: 'As cartas de NPC: naipe hearth, moldura violeta, e o EMBLEMA de cada morador.',
-      state: { npcCards: npcCards.map(({ art, ...rest }) => rest) },
+      state: { npcCards: npcCards.map((card) => semArte(card)) },
     });
     assert('A carta do morador usa o naipe hearth',
       npcCards.length === 1 && npcCards.every((card) => card.npc === 'true' && card.suit === 'hearth'),
-      JSON.stringify(npcCards.map(({ art, ...rest }) => rest)));
+      JSON.stringify(npcCards.map((card) => semArte(card))));
     assert('A moldura da carta de NPC nao e a de ouro',
       npcCards.every((card) => card.borderColor !== 'rgb(215, 184, 107)'),
       JSON.stringify(npcCards.map((card) => card.borderColor)));
@@ -471,9 +501,20 @@ export default {
     });
     assert('O editor lista os 15 chunks da biblioteca (6 terrenos + 8 NPCs + o fim do prologo)',
       editorCard.count === 15, JSON.stringify(editorCard));
+    // O CUSTO E LIDO DO ARQUIVO, e nao escrito aqui: o Lago desceu para 3 quando a MAO DE ABERTURA
+    // passou a ser tres cartas pelo mesmo preco (ver scripts/add-prologue.mjs), e um numero
+    // repetido no cenario vira uma segunda tabela de precos que discorda da primeira no dia
+    // seguinte. O que o campo tem de provar e que ele MOSTRA o que o mundo diz.
+    const lakeCost = await page.evaluate(async () => {
+      // CAMINHO ABSOLUTO: esta parte roda na pagina do /editor, e `document.baseURI` ali aponta
+      // para dentro da rota — o fetch relativo cai no index.html do dev server e volta HTML.
+      const file = await (await fetch('/world.json')).json();
+      return String(file.chunks.find((c) => c.catalog?.id === 'moonlit-lake')?.catalog.cost ?? '');
+    });
     assert('Nome, custo e imagem da carta sao editaveis',
-      editorCard.name === 'Moonlit Lake' && editorCard.cost === '12' && editorCard.image.length > 0,
-      JSON.stringify(editorCard));
+      editorCard.name === 'Moonlit Lake' && editorCard.cost === lakeCost
+      && editorCard.image.length > 0,
+      JSON.stringify({ ...editorCard, lakeCost }));
     assert('O editor permite criar outro chunk', editorCard.createVisible === true, JSON.stringify(editorCard));
   },
 };

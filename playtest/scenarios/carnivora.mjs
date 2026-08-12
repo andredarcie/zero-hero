@@ -111,7 +111,7 @@ export default {
 
     await driver.press('ArrowRight', { count: 1 }); // (5,6) → (6,6), encarando o canteiro
     await driver.settle(500);
-    await driver.press('z', { count: 1 }); // o A planta a semente carnívora
+    await driver.press('x', { count: 1 }); // o X planta a semente carnívora (a tabela de itens mudou de botão)
     await driver.settle(600);
     const sown = await page.evaluate((at) => {
       const s = window.__scene;
@@ -130,11 +130,11 @@ export default {
     await page.evaluate(() => { window.__scene.inventory.select('bucket'); });
     await driver.press('ArrowLeft', { count: 1 }); // (6,6) → (5,6), encarando o mar
     await driver.settle(500);
-    await driver.press('z', { count: 1 }); // enche
+    await driver.press('x', { count: 1 }); // enche
     await driver.settle(500);
     await driver.press('ArrowRight', { count: 1 }); // de volta, encarando o monte
     await driver.settle(500);
-    await driver.press('z', { count: 1 }); // rega
+    await driver.press('x', { count: 1 }); // rega
     log('...e a armadilha brota (PLANT_GROW_MS + o brotar que espera o tile livre)');
     await page.waitForFunction((at) => {
       const s = window.__scene;

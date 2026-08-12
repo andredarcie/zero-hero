@@ -9,7 +9,6 @@ import {
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import { planGhosts } from './toolboxRecipes';
 import type { PropDir } from '@/game/world/worldSchema';
 import type { WorldProp } from './WorldProp';
 
@@ -62,25 +61,21 @@ const MOUTH_ELEV = 0.34;
 const EMBER = 0xe7462a;
 const EMBER_HOT = 0xf8e394;
 
-// ── O QUE ELE PRECISA, DESENHADO ──────────────────────────────────────────────────────────────
-// A bancada precisou de um catalogo porque ela sabe fazer onze coisas e o jogador tem de ESCOLHER.
-// O forno sabe fazer UMA. Nao ha o que escolher — entao o plano dele nao se prega: ele e
-// permanente, e a maquina simplesmente mostra o tempo todo o que falta em cada bandeja.
+// ── OS DOIS FANTASMAS DE PEDIDO FORAM ARRANCADOS (2026-08-12) ─────────────────────────────────
 //
-// E o mesmo vocabulario da encomenda (fantasma na bandeja em que a coisa vai, contorno vazio =
-// ainda nao esta aqui), e de proposito: o jogador aprendeu isso na bancada e reencontra aqui sem
-// nada novo para decorar.
-const GHOST_ELEV = 0.17;
-const GHOST_SIZE = 0.46;
-const GHOST_ALPHA_LO = 0.34;
-const GHOST_ALPHA_HI = 0.72;
-/** As opcoes do quad de fantasma — ver ToolboxObject: `alphaTest` baixo, ou o quad some inteiro. */
-const GHOST_OPTS = {
-  centered: true, emissive: true, fog: false, depthWrite: false, alphaTest: 0.02,
-  emissiveBoost: 1.35,
-} as const;
-/** A receita, e ela e a peca inteira: materia + REAGENTE. */
-const NEEDS: readonly [HeldItemKind, HeldItemKind] = ['ore', 'charcoal'];
+// O forno mostrava, permanentemente, dois itens translucidos flutuando nas bandejas: "minerio
+// aqui, carvao ali". Aquilo nasceu quando ele sabia fazer UMA coisa e nao tinha menu — o plano
+// nao se pregava porque era o mesmo para sempre. Hoje ele tem catalogo, sabe DUAS receitas
+// (carvoaria e esponja) e vai saber mais, e um pedido permanente de uma delas passou a MENTIR
+// sobre a maquina: quem chegasse com duas madeiras via o forno pedindo minerio.
+//
+// O pedido agora e o catalogo, que e onde ele pode crescer. As bandejas continuam desenhadas no
+// chao (a marca de onde uma esteira ou um braco entregam) e continuam alimentando o ciclo
+// automatico — o que elas nao fazem mais e conversar com o jogador.
+
+/** A altura de onde a carga parte: pousada na bandeja, e na altura do braco quando e a MAO. */
+const TRAY_ELEV = 0.14;
+const HAND_ELEV = 0.42;
 
 const SLOT_PULSE_MS = 1150;
 const SLOT_ALPHA_LO = 0.38;
@@ -91,8 +86,14 @@ const ITEM_SIZE = 0.5;
 export type FurnaceWorldPort = {
   kindAt(x: number, y: number): HeldItemKind | null;
   take(x: number, y: number): HeldItemKind | null;
-  put(kind: HeldItemKind, x: number, y: number): void;
+  put(kind: HeldItemKind, x: number, y: number, units?: number): void;
   occupied(x: number, y: number): boolean;
+  /**
+   * A SAIDA DE EMERGENCIA de uma fornada de MAO: um tile livre em volta da maquina (`x`,`y`),
+   * quando a boca da frente esta entupida. So o gesto do jogador a usa — a fornada de bandeja
+   * continua entregando SEMPRE no mesmo tile, porque e dali que a esteira tira.
+   */
+  landing(x: number, y: number): readonly [number, number] | null;
   /** A fornada pegou. */
   lit(): void;
   /** O sopro do fole, algumas vezes por fornada. */
@@ -105,8 +106,23 @@ type FurnacePhase = 'idle' | 'smelting' | 'deliver';
 
 const BREATHS = 3;
 const DELIVER_MS = 420;
-/** Quanto tempo a boca fica acesa numa fornada FEITA A MAO (pelo catalogo, sem bandeja). */
-const HAND_SMELT_MS = 520;
+
+/**
+ * A FORNADA PEDIDA NO CATALOGO — quanto ela dura.
+ *
+ * Ela era uma POSE de meio segundo enquanto a esponja ja tinha caido no chao no mesmo frame do
+ * aperto: o item aparecia ao lado de uma maquina que so depois acendia, e o gesto inteiro nao
+ * tinha meio. Agora e uma fornada de verdade — a mesma maquina de estado da bandeja, com o fole,
+ * as faiscas e a entrega pela BOCA da frente.
+ *
+ * 1,6s e menos da metade do ciclo automatico (4s) de proposito: a fornada de bandeja e o gargalo
+ * da linha e tem de doer, mas a do catalogo acontece com o jogador parado olhando, e tempo de
+ * espera com o jogador sem nada a fazer e a coisa mais cara que uma animacao pode cobrar. O que
+ * 1,6s compra sao os tres sopros do fole — o minimo para a boca subir, rugir e cair.
+ */
+const HAND_CYCLE_MS = 1600;
+/** O esguicho de brasa no instante em que a peca PULA da boca (as duas fornadas ganham). */
+const DELIVER_SPARKS = 5;
 
 const ease = (t: number): number => 0.5 - Math.cos(Math.PI * t) / 2;
 const arc = (t: number): number => Math.sin(Math.PI * t);
@@ -123,17 +139,29 @@ export class FurnaceObject implements WorldProp {
   private aliveMs = 0;
   private frame = FRAME_COLD;
   private breathsPlayed = 0;
-  /** Os fantasmas do que falta, um por bandeja. Preguicosos: nascem no primeiro frame visivel. */
-  private ghosts: [Billboard3D | null, Billboard3D | null] = [null, null];
-  /** O ultimo pedido calculado, por bandeja. Publicado em `needsGhosts`. */
-  private asking: [HeldItemKind | null, HeldItemKind | null] = [null, null];
   /** O keycap "Z" que anuncia que esta maquina responde ao A. */
   private hint?: Phaser.GameObjects.Image;
 
   /** Quantas fornadas ele fez. Publico: e o que o playtest observa da peca. */
   public smeltCount = 0;
-  /** O resto da pose de fornada-a-mao. Zero = boca fria. */
-  private handSmeltMs = 0;
+  /**
+   * A FORNADA DA MAO (o catalogo): o que esta sendo feito e quantas unidades. `null` = a fornada
+   * corrente e a das bandejas, que sempre devolve esponja. E um campo e nao um segundo estado
+   * porque as duas fornadas sao a MESMA maquina de estado: o que muda e a duracao, de onde a carga
+   * voa e o que sai — nunca o gesto.
+   */
+  private handProduct: HeldItemKind | null = null;
+  private handUnits = 1;
+  /** O tile escolhido para a entrega em curso (ver pickDeliverTile). Congelado durante o voo. */
+  private deliverTo: readonly [number, number] | null = null;
+  /** A fornada de mao pediu fogo e ainda nao teve voz: quem tem o port e o update, nao o gesto. */
+  private pendingLit = false;
+  /**
+   * De onde cada carga voando partiu — tile e ALTURA. A altura importa: da bandeja a carga sobe do
+   * chao, da mao do heroi ela sai na altura do braco, e uma esponja saindo dos pes dele leria como
+   * item caido em vez de item entregue.
+   */
+  private chargeFrom: Array<readonly [number, number, number]> = [];
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -176,14 +204,16 @@ export class FurnaceObject implements WorldProp {
   }
 
   public get isBusy(): boolean { return this.phase !== 'idle'; }
-  /** O que os fantasmas estao pedindo agora, por bandeja — o que o playtest observa do pedido. */
-  public get needsGhosts(): readonly [HeldItemKind | null, HeldItemKind | null] { return this.asking; }
   public get currentPhase(): FurnacePhase { return this.phase; }
   public get currentFrame(): number { return this.frame; }
 
   /**
-   * A EQUACAO: um minerio e um carvao, em qualquer ordem. Exigir "o carvao na bandeja de tras"
-   * seria uma regra invisivel — o mesmo pecado que a bancada ja recusa.
+   * A EQUACAO DA LINHA AUTOMATICA: um minerio e um carvao, em qualquer ordem. Exigir "o carvao na
+   * bandeja de tras" seria uma regra invisivel — o mesmo pecado que a bancada ja recusa.
+   *
+   * Ela vale so para o que chega pelas BANDEJAS (esteira, braco): a fornada que o jogador pede no
+   * catalogo gasta da mochila e nao passa por aqui. E por isso que as bandejas nao anunciam mais
+   * nada — elas sao a boca das MAQUINAS, e maquina nao le fantasma.
    */
   private static charge(
     a: HeldItemKind | null,
@@ -202,21 +232,9 @@ export class FurnaceObject implements WorldProp {
     const inA = port.kindAt(ax, ay);
     const inB = port.kindAt(bx, by);
     this.renderSlots(inA !== null, inB !== null);
-    // So com a boca fria: um forno rugindo nao esta pedindo nada, esta trabalhando.
-    this.renderNeeds(this.phase === 'idle' ? [inA, inB] : [inA, inB], effectsVisible);
 
     switch (this.phase) {
       case 'idle': {
-        // A FORNADA DA MAO: o A na frente dele gasta minerio e carvao da mochila e joga a esponja
-        // no chao, como a bancada faz. O que o jogador precisa VER disso e a boca acesa — sem esta
-        // pose o gesto seria um item aparecendo no chao ao lado de uma maquina apagada, que e a
-        // mesma queixa que derrubou a entrega direto na mochila ("a mesa martelava para ninguem").
-        if (this.handSmeltMs > 0) {
-          this.handSmeltMs = Math.max(0, this.handSmeltMs - deltaMs);
-          this.pose(FRAME_LIT);
-          this.pulseGlow(0.5 + 0.5 * arc(1 - this.handSmeltMs / HAND_SMELT_MS), effectsVisible);
-          break;
-        }
         this.pose(FRAME_COLD);
         this.fadeGlow(deltaMs);
         if (!FurnaceObject.charge(inA, inB)) break;
@@ -233,7 +251,7 @@ export class FurnaceObject implements WorldProp {
           if (takenB) port.put(takenB, bx, by);
           break;
         }
-        this.spawnCharge([takenA, takenB]);
+        this.spawnCharge([takenA, takenB], this.slotTiles);
         this.enter('smelting');
         this.breathsPlayed = 0;
         if (effectsVisible) port.lit();
@@ -241,7 +259,13 @@ export class FurnaceObject implements WorldProp {
       }
 
       case 'smelting': {
-        const t = Math.min(1, this.elapsed / FURNACE_CYCLE_MS);
+        // A BOCA PEGANDO FOGO TEM UMA VOZ SO, venha a fornada da bandeja ou do catalogo: e o mesmo
+        // evento na mesma maquina, e dois sons fariam o jogador achar que sao duas coisas.
+        if (this.pendingLit) {
+          this.pendingLit = false;
+          if (effectsVisible) port.lit();
+        }
+        const t = Math.min(1, this.elapsed / this.cycleMs);
         this.pose(FRAME_LIT);
         this.moveCharge(ease(Math.min(1, t * 2.6)));
         // O calor SOBE e desce: a fornada pega, ruge no meio e cai. Um brilho constante leria
@@ -253,32 +277,46 @@ export class FurnaceObject implements WorldProp {
           if (effectsVisible) {
             port.breath();
             this.spawnSparks(2);
+            // O FOLE SACODE A ALVENARIA. O sopro era so som e faisca; um forno que ruge e nao se
+            // mexe le como uma lampada com efeito sonoro. O tranco e o mesmo `bump` da entrega —
+            // dois graus, sem escala nenhuma (nada pode vazar do tile).
+            this.bump();
           }
         }
         if (t >= 1) {
           this.clearFlying();
           this.enter('deliver');
-          this.spawnBloom();
+          this.spawnProduct(this.handProduct ?? 'bloom');
+          // A BRASA ESGUICHA DA BOCA quando a peca nasce: e o instante que o jogador esta esperando
+          // desde que confirmou no catalogo, e ate aqui ele era o unico da fornada sem nada na tela.
+          if (effectsVisible) this.spawnSparks(DELIVER_SPARKS, MOUTH_ELEV);
         }
         break;
       }
 
       case 'deliver': {
-        // A pergunta se refaz aqui: quatro segundos se passaram desde a checagem do idle, e
+        // A pergunta se refaz aqui: a fornada inteira se passou desde a checagem do idle, e
         // qualquer coisa pode ter ocupado a saida nesse meio tempo.
-        if (port.occupied(ox, oy)) {
+        this.deliverTo ??= this.pickDeliverTile(port);
+        if (!this.deliverTo) {
+          // ENTUPIDO: a peca fica visivel na BOCA, quicando, ate haver onde pousar. E uma recusa
+          // fisica — o jogador ve o que a maquina esta segurando e por que ela nao larga.
           this.pose(FRAME_LIT);
           this.pulseGlow(0.3, effectsVisible);
-          this.holdBloom();
+          this.holdProduct();
           this.elapsed = 0;
           break;
         }
+        const [tx, ty] = this.deliverTo;
         const t = Math.min(1, this.elapsed / DELIVER_MS);
         this.pose(FRAME_LIT);
-        this.moveBloom(t);
+        this.moveProduct(t, tx, ty);
         this.fadeGlow(deltaMs);
         if (t >= 1) {
-          port.put('bloom', ox, oy);
+          port.put(this.handProduct ?? 'bloom', tx, ty, this.handUnits);
+          this.handProduct = null;
+          this.handUnits = 1;
+          this.deliverTo = null;
           this.smeltCount += 1;
           this.clearFlying();
           if (effectsVisible) {
@@ -300,38 +338,6 @@ export class FurnaceObject implements WorldProp {
    * o desenho do que ela quer. Com as duas servidas nao sobra fantasma nenhum — a maquina ja tem
    * tudo e o proximo frame acende a boca.
    */
-  private renderNeeds(trays: readonly [HeldItemKind | null, HeldItemKind | null], visible: boolean): void {
-    // Trabalhando, ela nao pede nada: quem esta com a boca acesa ja recebeu.
-    if (this.phase !== 'idle') {
-      for (const g of this.ghosts) g?.setVisible(false);
-      this.asking = [null, null];
-      return;
-    }
-    const wanted = planGhosts(NEEDS, trays);
-    this.asking = wanted;
-    const breath = 0.5 + 0.5 * Math.sin((this.aliveMs * 2 * Math.PI) / SLOT_PULSE_MS);
-    const alpha = GHOST_ALPHA_LO + (GHOST_ALPHA_HI - GHOST_ALPHA_LO) * breath;
-
-    for (let i = 0; i < 2; i += 1) {
-      const kind = wanted[i];
-      if (!kind) { this.ghosts[i]?.setVisible(false); continue; }
-      const [gx, gy] = this.slotTiles[i];
-      const visual = itemGroundVisual(kind);
-      const bb = this.ghosts[i] ?? this.growGhost(i, visual);
-      bb.setTexture(visual.texture, visual.frame)
-        .setPosition(gx, gy + DEPTH_ITEM)
-        .setElevation(GHOST_ELEV + breath * 0.05)
-        .setDisplaySize(GHOST_SIZE, GHOST_SIZE)
-        .setAlpha(visible ? Math.min(0.95, alpha) : 0)
-        .setVisible(true);
-    }
-  }
-
-  private growGhost(index: number, visual: { texture: string; frame: number }): Billboard3D {
-    this.ghosts[index] = world3d().addBillboard(visual.texture, visual.frame, GHOST_OPTS);
-    return this.ghosts[index]!;
-  }
-
   /**
    * O keycap "Z" sobre a alvenaria quando o heroi a encara. E o mesmo da bancada, e por isso ele
    * mora em `placementTexture`: as duas maquinas que RESPONDEM ao A usam o mesmo anuncio, e uma
@@ -351,15 +357,67 @@ export class FurnaceObject implements WorldProp {
   }
 
   /**
-   * A FORNADA PELO CATALOGO — a boca acende, o corpo balanca, e quem entrega a esponja e a cena
-   * (ela cai no chao ao lado, como tudo que sai de uma maquina de fabricar). O nome e `playCraft`
-   * e nao `playSmelt` de proposito: a `GameScene` chama isto na bancada e no forno pela MESMA
-   * linha, e um nome por peca faria o codigo de fabricar se bifurcar por causa de vocabulario.
+   * A FORNADA PEDIDA NO CATALOGO — o Z escolheu, a MAQUINA trabalha.
+   *
+   * Ela era instantanea: a cena tirava os insumos da mochila, jogava a esponja num tile vizinho e
+   * pedia ao forno uma pose de meio segundo. Ou seja, o produto existia ANTES de a boca acender, e
+   * o gesto tinha comeco e fim sem meio nenhum. Agora o forno entra no MESMO ciclo da bandeja e o
+   * jogador ve a fornada inteira: a carga voa da mao dele para a boca, o fole sopra tres vezes
+   * sacudindo a alvenaria, a brasa esguicha e so entao a peca PULA pela frente.
+   *
+   * Devolve `false` se ele ja esta trabalhando — e ai o catalogo recusa com o tranco de sempre, o
+   * que e honesto: a maquina esta ocupada e isso esta na tela, rugindo.
+   *
+   * `from` e o tile de quem pediu (o heroi): a carga tem de sair de ONDE ela estava, e ela estava
+   * na mochila dele. Sem isso, dois itens apareceriam do nada no ar em frente a boca.
    */
-  public playCraft(): void {
-    this.handSmeltMs = HAND_SMELT_MS;
-    this.smeltCount += 1;
+  public startHandSmelt(
+    product: HeldItemKind,
+    units: number,
+    inputs: readonly HeldItemKind[],
+    from: readonly [number, number],
+  ): boolean {
+    if (this.phase !== 'idle') return false;
+    this.handProduct = product;
+    this.handUnits = Math.max(1, units);
+    const charge = inputs.slice(0, 2) as HeldItemKind[];
+    if (charge.length > 0) {
+      // As duas cargas partem do MESMO tile (a mao do heroi) — o desencontro que impede uma de
+      // esconder a outra e o atraso que `moveCharge` ja da a segunda, mais meio passo lateral.
+      this.spawnCharge(
+        charge,
+        charge.map((_, i) => [from[0] + (i === 0 ? -0.16 : 0.16), from[1]] as const),
+        HAND_ELEV,
+      );
+    }
+    this.enter('smelting');
+    this.breathsPlayed = 0;
+    this.pendingLit = true;
     this.bump();
+    return true;
+  }
+
+  /** Quanto dura a fornada corrente: a da mao e mais curta que a da bandeja (ver HAND_CYCLE_MS). */
+  private get cycleMs(): number {
+    return this.handProduct ? HAND_CYCLE_MS : FURNACE_CYCLE_MS;
+  }
+
+  /**
+   * ONDE A PECA PRONTA POUSA. A boca da frente, sempre que ela estiver livre — e uma maquina que
+   * cospe SEMPRE no mesmo tile e o que permite uma esteira encostar ali e a linha rodar sozinha.
+   *
+   * A fornada de MAO tem uma segunda chance: com a frente entupida (um item que ja saiu e ninguem
+   * apanhou, o proprio heroi parado ali), ela pousa num vizinho livre em vez de esperar. Sem isso,
+   * fundir duas vezes seguidas deixaria a segunda peca presa dentro da maquina — que e a queixa
+   * "apertei Z e nada aconteceu" outra vez, so que com o item ja pago. A fornada de bandeja NAO
+   * ganha essa saida de proposito: espalhar a producao de uma fabrica pelos vizinhos e como se
+   * perde uma linha inteira de vista.
+   */
+  private pickDeliverTile(port: FurnaceWorldPort): readonly [number, number] | null {
+    const [ox, oy] = this.outputTile;
+    if (!port.occupied(ox, oy)) return [ox, oy];
+    if (!this.handProduct) return null;
+    return port.landing(this.worldX, this.worldY);
   }
 
   public bump(): void {
@@ -392,39 +450,49 @@ export class FurnaceObject implements WorldProp {
     this.slots[1].setTexture(ASSET_KEYS.toolbox, hasB ? 5 : 4).setAlpha(hasB ? 1 : pulse);
   }
 
-  private spawnCharge(kinds: readonly [HeldItemKind, HeldItemKind]): void {
+  /**
+   * A carga voando para a boca. As origens vem de fora (as bandejas, ou a mao do heroi numa
+   * fornada de catalogo) e a arte sai de `itemGroundVisual` — a mesma que os fantasmas usam.
+   * Duas tabelas de sprite para o mesmo item e como uma delas envelhece errada.
+   */
+  private spawnCharge(
+    kinds: readonly HeldItemKind[],
+    origins: readonly (readonly [number, number])[],
+    elev = TRAY_ELEV,
+  ): void {
     kinds.forEach((kind, i) => {
-      const [sx, sy] = this.slotTiles[i];
-      const visual = kind === 'charcoal'
-        ? { texture: 'charcoal-item', frame: 0 }
-        : { texture: 'ore-item', frame: 0 };
+      const [sx, sy] = origins[i] ?? origins[origins.length - 1];
+      this.chargeFrom.push([sx, sy, elev]);
+      const visual = itemGroundVisual(kind);
       this.flying.push(world3d()
         .addBillboard(visual.texture, visual.frame, { emissive: true, centered: true })
         .setPosition(sx, sy + DEPTH_ITEM)
-        .setElevation(0.14)
+        .setElevation(elev)
         .setDisplaySize(ITEM_SIZE, ITEM_SIZE));
     });
   }
 
   private moveCharge(k: number): void {
     this.flying.forEach((bb, i) => {
-      const [sx, sy] = this.slotTiles[i];
+      const [sx, sy, se] = this.chargeFrom[i] ?? [this.worldX, this.worldY, TRAY_ELEV];
       const t = Math.max(0, Math.min(1, (k - (i === 0 ? 0 : 0.16)) / (i === 0 ? 1 : 0.84)));
       bb.setPosition(sx + (this.worldX - sx) * t, sy + (this.worldY - sy) * t + DEPTH_ITEM)
-        .setElevation(0.14 + (MOUTH_ELEV - 0.14) * t + 0.2 * arc(t))
+        .setElevation(se + (MOUTH_ELEV - se) * t + 0.2 * arc(t))
         .setDisplaySize(ITEM_SIZE * (1 - t * 0.9), ITEM_SIZE * (1 - t * 0.9));
     });
   }
 
-  private spawnBloom(): void {
+  /** A peca nascendo na boca — esponja na fornada de bandeja, o que o catalogo pediu na da mao. */
+  private spawnProduct(kind: HeldItemKind): void {
+    const visual = itemGroundVisual(kind);
     this.flying.push(world3d()
-      .addBillboard('bloom-item', 0, { emissive: true, centered: true })
+      .addBillboard(visual.texture, visual.frame, { emissive: true, centered: true })
       .setPosition(this.worldX, this.worldY + DEPTH_ITEM)
       .setElevation(MOUTH_ELEV)
       .setDisplaySize(0.02, 0.02));
   }
 
-  private holdBloom(): void {
+  private holdProduct(): void {
     const bb = this.flying[0];
     if (!bb) return;
     bb.setPosition(this.worldX, this.worldY + DEPTH_ITEM)
@@ -432,10 +500,9 @@ export class FurnaceObject implements WorldProp {
       .setDisplaySize(ITEM_SIZE, ITEM_SIZE);
   }
 
-  private moveBloom(t: number): void {
+  private moveProduct(t: number, ox: number, oy: number): void {
     const bb = this.flying[0];
     if (!bb) return;
-    const [ox, oy] = this.outputTile;
     const born = Math.min(1, t / 0.25);
     const fly = Math.max(0, (t - 0.2) / 0.8);
     bb.setPosition(
@@ -449,6 +516,7 @@ export class FurnaceObject implements WorldProp {
   private clearFlying(): void {
     for (const bb of this.flying) bb.destroy();
     this.flying.length = 0;
+    this.chargeFrom.length = 0;
   }
 
   private pulseGlow(strength: number, effectsVisible: boolean): void {
@@ -475,7 +543,12 @@ export class FurnaceObject implements WorldProp {
     this.glow.setAlpha(next);
   }
 
-  private spawnSparks(count: number): void {
+  /**
+   * A brasa subindo. `from` e a altura de onde ela sai: o sopro do fole sobe pela CHAMINE (0,9,
+   * acima da alvenaria) e o esguicho da entrega sai pela BOCA (a mesma altura da peca), porque as
+   * duas coisas contam eventos diferentes — uma e a maquina respirando, a outra e a peca nascendo.
+   */
+  private spawnSparks(count: number, from = 0.9): void {
     for (let i = 0; i < count; i += 1) {
       const spark = world3d()
         .addBillboard(FX_DOT_TEXTURE, 0, {
@@ -483,12 +556,12 @@ export class FurnaceObject implements WorldProp {
         })
         .setTint(i % 2 === 0 ? EMBER_HOT : EMBER)
         .setPosition(this.worldX + (Math.random() - 0.5) * 0.25, this.worldY + DEPTH_ITEM)
-        .setElevation(0.9)
+        .setElevation(from)
         .setDisplaySize(0.05, 0.05);
       this.sparks.add(spark);
       this.scene.tweens.add({
         targets: spark,
-        elevation: 1.35 + Math.random() * 0.25,
+        elevation: from + 0.45 + Math.random() * 0.25,
         alpha: 0,
         duration: 620 + i * 90,
         ease: 'Quad.easeOut',
@@ -501,7 +574,6 @@ export class FurnaceObject implements WorldProp {
     this.scene.tweens.killTweensOf(this.body);
     this.body.destroy();
     for (const slot of this.slots) slot.destroy();
-    for (let i = 0; i < this.ghosts.length; i += 1) { this.ghosts[i]?.destroy(); this.ghosts[i] = null; }
     this.hint?.destroy();
     this.hint = undefined;
     this.clearFlying();

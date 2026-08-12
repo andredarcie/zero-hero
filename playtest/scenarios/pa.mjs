@@ -90,15 +90,31 @@ export default {
     await driver.settle(300);
 
     // ── 6. O PACOTE DE 5, E O NÚMERO VISÍVEL NA BOLSA ───────────────────────
-    log('PACOTE: o B pega o punhado debaixo dos pés — CINCO sementes entram de uma vez');
-    await driver.press('x', { count: 1 });
-    await driver.settle(300);
+    // PISAR APANHA: o punhado cai sob os pés do herói e sobe sozinho (`collectUnderfoot`) — o
+    // botão de pegar morreu quando o X virou "usar o item selecionado". O drop acontece no tile
+    // dele, então basta um passo para fora e outro de volta.
+    log('PACOTE: o punhado entra ANDANDO — CINCO sementes de uma vez');
+    // O que estava na mão ANTES: a lei não é "fica com a pá", é "a seleção não muda" — qualquer
+    // item que o cenário tenha deixado escolhido tem de continuar escolhido depois da pisada.
+    const handBefore = await page.evaluate(() => window.gameDebug.getState().heldItem);
+    await driver.press('ArrowUp', { count: 1 });
+    await driver.settle(400);
+    await driver.press('ArrowDown', { count: 1 });
+    await driver.settle(600);
+    // A cerimônia de item novo (o "ITEM GET") prende os pés até fechar: as teclas seguintes
+    // seriam gastas pulando ela em vez de andar.
+    await page.waitForFunction(() => window.gameDebug?.getState()?.itemGetOpen === false,
+      null, { timeout: 8000 });
+    await driver.settle(250);
     const pack = await page.evaluate(() => ({
       seeds: window.__scene.inventory.count('seeds'),
       heldItem: window.gameDebug.getState().heldItem,
     }));
-    assert('o pacote vale 5 sementes na mochila (SEEDS_PER_PACK), e ficou selecionado',
-      pack.seeds === 5 && pack.heldItem === 'seeds', JSON.stringify(pack));
+    // A CONTAGEM entra inteira; a SELEÇÃO não muda. Apanhar deixou de ser uma intenção de uso
+    // (ninguém escolhe pisar), então `Inventory.stash` guarda sem roubar a mão — quem estava com a
+    // pá continua com a pá, e é isso que faz a pisada automática não ser uma armadilha.
+    assert('o pacote vale 5 sementes na mochila (SEEDS_PER_PACK), sem roubar a mão',
+      pack.seeds === 5 && pack.heldItem === handBefore, JSON.stringify({ ...pack, handBefore }));
 
     log('BOLSA: o slot da semente carrega o número do pacote');
     await driver.press('i', { count: 1 });
@@ -135,7 +151,7 @@ export default {
       posed.player.worldX === HERO.x + 1 && posed.player.worldY === HERO.y,
       JSON.stringify(posed.player));
 
-    await driver.press('z', { count: 1 });
+    await driver.press('x', { count: 1 });
     await driver.settle(700); // o golpe desenha, o impacto (150ms) cava, o fade (300ms) assenta
     const dug = await page.evaluate((at) => {
       const s = window.__scene;
@@ -166,34 +182,15 @@ export default {
       dug.heldItem === 'shovel' && dug.groundItems === groundBase, JSON.stringify({ ...dug, groundBase }));
     await shot('pa-canteiro-cavado');
 
-    // ── 4/5. O B POUSA ATÉ SOBRE O BURACO; O A PLANTA ───────────────────────
-    log('SEMENTE: o B pousa a semente SOBRE o buraco — item no chão, plantio nenhum');
+    // ── 4/5. O X PLANTA, E NÃO EXISTE MAIS "POUSAR" ────────────────────────
+    // Este passo media duas coisas que a reforma dos botões apagou: o B pousava o pacote inteiro
+    // sobre o buraco (plantio nenhum) e o segundo B o pegava de volta. Largar deixou de existir —
+    // um botão que ora usa, ora larga desarma o jogador por engano —, então a semente escolhida
+    // contra um buraco só pode significar uma coisa: PLANTAR.
+    log('SEMENTE: com o punhado escolhido, o X planta UMA no buraco à frente');
     await page.evaluate(() => { window.__scene.inventory.select('seeds'); });
+    await driver.settle(200);
     await driver.press('x', { count: 1 });
-    await driver.settle(400);
-    const rested = await page.evaluate((at) => {
-      const s = window.__scene;
-      const spot = s.plantSpots.find((p) => p.worldX === at.x && p.worldY === at.y);
-      const ground = window.gameDebug.getState().groundItems.find(
-        (i) => i.kind === 'seeds' && i.worldX === at.x && i.worldY === at.y,
-      );
-      return {
-        stillHole: spot?.isHole ?? false,
-        seedOnGround: ground !== undefined,
-        // O punhado INTEIRO pousou como UM item — o pacote viaja com a contagem dele.
-        packUnits: ground?.units ?? 0,
-        bagLeft: s.inventory.count('seeds'),
-      };
-    }, DIG);
-    assert('o B com a semente NÃO plantou: pousou o item, e o buraco segue aberto por baixo',
-      rested.stillHole && rested.seedOnGround, JSON.stringify(rested));
-    assert('e pousou o PACOTE inteiro (5 num item só, a bolsa zerada) — nada se imprime no chão',
-      rested.packUnits === 5 && rested.bagLeft === 0, JSON.stringify(rested));
-
-    log('...o segundo B pega a semente de volta (o gesto reversível), e o A PLANTA');
-    await driver.press('x', { count: 1 }); // pickUpItemAt: o tile à frente primeiro
-    await driver.settle(300);
-    await driver.press('z', { count: 1 }); // o botão de ação usa o item segurado
     await driver.settle(500);
     const sown = await page.evaluate((at) => {
       const s = window.__scene;
@@ -204,10 +201,16 @@ export default {
         planted: (spot?.isSown ?? false) || (spot?.isMound ?? false),
         seedsLeft: s.inventory.count('seeds'),
         heldItem: window.gameDebug.getState().heldItem,
+        // E o chão continua limpo: nenhum pacote foi largado ali no caminho.
+        onGround: window.gameDebug.getState().groundItems.some(
+          (i) => i.kind === 'seeds' && i.worldX === at.x && i.worldY === at.y,
+        ),
       };
     }, DIG);
-    assert('o A plantou UMA semente do pacote — e as outras QUATRO seguem na mão, selecionadas',
+    assert('o X plantou UMA semente do pacote — e as outras QUATRO seguem na mão, selecionadas',
       sown.planted && sown.seedsLeft === 4 && sown.heldItem === 'seeds', JSON.stringify(sown));
+    assert('e nada foi POUSADO no caminho — o X não larga item nenhum',
+      sown.onGround === false, JSON.stringify(sown));
 
     // ── 7. O BALDE ENCHE NA ÁGUA DE TERRENO, E REGA — O CICLO FECHA ─────────
     // A água do overworld inteira é TILE (frame do mar), não prop — e o balde só enchia no
@@ -217,7 +220,7 @@ export default {
     await page.evaluate(() => { window.__scene.inventory.select('bucket'); });
     await driver.press('ArrowLeft', { count: 1 }); // (6,6) → (5,6), encarando o oeste: o mar
     await driver.settle(500);
-    await driver.press('z', { count: 1 }); // o A bate com o balde na água — usar é ação
+    await driver.press('x', { count: 1 }); // o A bate com o balde na água — usar é ação
     await driver.settle(500);
     const filled = await driver.getState();
     assert('o balde encheu na água de TERRENO — onde antes o gesto era mudo',
@@ -226,7 +229,7 @@ export default {
     log('REGAR: de volta ao canteiro, o A joga a água no monte');
     await driver.press('ArrowRight', { count: 1 }); // (5,6) → (6,6), encarando o leste: o monte
     await driver.settle(500);
-    await driver.press('z', { count: 1 });
+    await driver.press('x', { count: 1 });
     await driver.settle(900); // o arremesso viaja em arco; a terra bebe ao pousar
     const watered = await page.evaluate((at) => {
       const s = window.__scene;
@@ -244,7 +247,7 @@ export default {
     await page.evaluate(() => { window.__scene.inventory.select('shovel'); });
     await driver.press('ArrowDown', { count: 1 });
     await driver.settle(500);
-    await driver.press('z', { count: 1 });
+    await driver.press('x', { count: 1 });
     await driver.settle(600);
     const refused = await page.evaluate((stone) => {
       const s = window.__scene;
@@ -261,12 +264,15 @@ export default {
       refused.heldItem === 'shovel' && refused.groundItems === groundBase,
       JSON.stringify({ ...refused, groundBase }));
 
-    // ── 4. O B NUNCA CAVA: ELE POUSA — MESMO EM TERRA CAVÁVEL ───────────────
-    log('POUSAR: o B em cima de terra nua pousa a pá em vez de cavar');
+    // ── 4. O X CAVA SEMPRE QUE A PÁ ESTÁ NA MÃO ────────────────────────────
+    // Este passo provava o oposto: que o B pousava a pá em vez de cavar, porque cavar era o A.
+    // Com um botão só para usar item, a pergunta virou outra e é ela que importa agora — o gesto
+    // é o MESMO em qualquer terra caváveis, sem depender de qual botão o dedo escolheu.
+    log('CAVAR: o X sobre outra terra nua abre outro canteiro — e nada é pousado');
     await driver.press('ArrowLeft', { count: 1 });
     await driver.settle(500);
     await driver.press('x', { count: 1 });
-    await driver.settle(600);
+    await driver.settle(900);
     const placed = await page.evaluate((drop) => {
       const s = window.__scene;
       const state = window.gameDebug.getState();
@@ -278,11 +284,10 @@ export default {
         heldItem: state.heldItem,
       };
     }, DROP);
-    assert('o B não cavou a terra à frente — cavar é ação (A); o B pega, fala e pousa',
-      placed.spotOnDrop === false, JSON.stringify(placed));
-    assert('e a pá foi POUSADA na terra como qualquer item — o contrato dos dois botões',
-      placed.shovelOnGround && placed.heldItem !== 'shovel', JSON.stringify(placed));
-    await shot('pa-pousada-na-terra');
+    assert('o X cavou a terra à frente — cavar é o uso da pá, e o uso é um botão só',
+      placed.spotOnDrop === true, JSON.stringify(placed));
+    assert('e a pá NÃO foi largada: ferramenta não se pousa mais',
+      placed.shovelOnGround === false && placed.heldItem === 'shovel', JSON.stringify(placed))
 
     // ── 8. NADA VAZA PRO SAVE DA AVENTURA ───────────────────────────────────
     const saveAfter = await page.evaluate(() => localStorage.getItem('zh.adventure.v1'));

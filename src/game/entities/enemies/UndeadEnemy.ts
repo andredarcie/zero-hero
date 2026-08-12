@@ -49,10 +49,17 @@ const CRACK_TINT = 0x8fa8ff; // the cold pale blue of everything undead (deflect
 // como uma animação acelerada, não como um aviso mais curto.
 const DUST_INTERVAL_MS = 150;
 const DUST_TINT = 0x9a9284; // dry earth being pushed up from below
-// Once the hero steps into a campfire's safety the pack crumbles back into the ground,
-// staggered per skull so the horde doesn't vanish in a single frame.
-const SUNSET_MIN_MS = 1800;
-const SUNSET_MAX_MS = 4800;
+
+// O DESMANCHE POR SEGURANÇA FOI ARRANCADO — a caveira NÃO some mais sozinha.
+//
+// Ela se desfazia 2-5s depois de o herói pisar no anel de uma fogueira ("o escuro reclama os
+// seus"), e na tela isso era a matilha inteira evaporando sem causa: o jogador chegava no fogo,
+// olhava pra trás e não havia mais nada — nem um pixel dizendo por quê. Um corpo que desaparece
+// desmente tudo o que a chegada dele prometeu (a fissura de 1,4s é o telegrafo mais longo do jogo).
+//
+// O lugar dessa regra é o CALOR DA FOGUEIRA (ver EnemyBase.tickScorch): a matilha segue o herói
+// até a borda da luz, pega fogo lá e cai queimada, uma de cada vez, à vista. Quem fica de longe
+// fica — e continua sendo um problema quando o herói sair.
 
 // A blow from the hero SNAPS the skull out of a pressure-plate fixation and keeps it out for
 // this long: whatever it wanted, the thing hitting it is the problem now. Without the window it
@@ -102,8 +109,6 @@ export class UndeadEnemy extends EnemyBase {
   private dustTimer = 0;
   private bornFrame = 0;
   private bornTimer = 0;
-  private sunsetTimer = 0;
-  private readonly sunsetDelay: number;
   // The pressure-plate fixation. EnemyManager owns the assignment (one skull per plate); the
   // skull owns what it DOES about it: it stops hunting the hero entirely and marches there.
   private plate?: { x: number; y: number };
@@ -154,7 +159,6 @@ export class UndeadEnemy extends EnemyBase {
 
     this.moveTimer = Phaser.Math.Between(0, MOVE_INTERVAL);
     this.attackTimer = Phaser.Math.Between(0, ATTACK_INTERVAL);
-    this.sunsetDelay = Phaser.Math.Between(SUNSET_MIN_MS, SUNSET_MAX_MS);
   }
 
   protected override get normalTexture(): string {
@@ -251,7 +255,6 @@ export class UndeadEnemy extends EnemyBase {
     delta: number,
     playerWorldX: number,
     playerWorldY: number,
-    playerSafe: boolean,
     playerHasTorch: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean {
@@ -295,23 +298,11 @@ export class UndeadEnemy extends EnemyBase {
       return false;
     }
 
-    // The hero found a fire: this skull's time is up. It keeps fighting until its own
-    // staggered timer runs out, then crumbles (despawn — no loot).
-    if (playerSafe) {
-      this.sunsetTimer += delta;
-      if (this.sunsetTimer >= this.sunsetDelay) {
-        this.despawn();
-        return false;
-      }
-    } else {
-      this.sunsetTimer = 0;
-    }
-
     if (this.plateBlindMs > 0) this.plateBlindMs = Math.max(0, this.plateBlindMs - delta);
 
     // ATORDOADA: o golpe que ela levou ainda e dono deste corpo — ver EnemyBase.applyHitstun.
-    // Fica depois do por-do-sol e da cegueira de placa de proposito: os dois sao relogios do
-    // MUNDO (o heroi achou uma fogueira, o golpe passou), e nao acoes que ela toma.
+    // Fica depois da cegueira de placa de proposito: ela e relogio do MUNDO (o golpe passou), e
+    // nao uma acao que a caveira toma.
     if (this.tickHitstun(delta)) return false;
 
     // Mid-wind-up: committed to the strike — no moving, no re-arming. When the countdown ends the

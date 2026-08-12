@@ -102,7 +102,7 @@ export type WorldChunk = {
 // `carnivorousPlant` is the farmed DEFENSE: grown from carnivore seeds in a plantSpot (or
 // authored), it blocks its tile and EATS any enemy that stops beside it — then chews, exposed.
 // It is a plant to everything else: fire burns it, the scythe fells it (no drop).
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal' | 'furnace' | 'tripHammer'
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal' | 'furnace' | 'tripHammer' | 'altar'
   // A FABRICA. Os tres nomes abaixo sao os MESMOS de tres HeldItemKind (ver ItemPickup), e isso
   // e o que faz instalar uma maquina ser uma identidade em vez de uma tabela de-para. Esteira e
   // extrator carregam `dir` pela mesma razao do braco: ele decide de que tile a peca tira e em

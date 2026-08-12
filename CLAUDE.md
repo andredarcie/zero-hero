@@ -71,16 +71,31 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 
 O jogo **não é mais só-andar**. Detalhes e consequências: `progress.md`.
 
-    A (Z / J / espaço)  →  de frente pra um NPC, CONVERSA (o keycap "Z" na cabeça dele anuncia
-                           — e nas opções do diálogo ↑↓/WS movem, Enter/Z confirmam, toque
-                           toca). Senão USA o item da MÃO no tile à frente (a tabela useItemAt:
-                           espada corta, machado derruba, balde enche/rega, chave abre, tocha
-                           acende, pá cava…). Mão vazia = soco. Tabela sem resposta = o arco
-                           sai no VAZIO. Só a ESPADA empunhada carrega o giro.
-    B (X / K)           →  PEGA o item do chão; FALA com o NPC à frente; senão POUSA o item —
-                           que também é depositar (bandeja, dock da bateria, chão do braço).
-    I                   →  a BOLSA, que escolhe o item da mão — e NÃO pausa o jogo.
+    A (Z / J / espaço)  →  A ESPADA, sempre — ela é do HERÓI e não da mochila (não tem slot, não
+                           se perde, não se escolhe). Segurar carrega o giro. De frente pra um
+                           NPC, CONVERSA antes de sacar (o keycap "Z" na cabeça dele anuncia — e
+                           nas opções ↑↓/WS movem, Enter/Z confirmam); de frente pra bancada ou
+                           forno, abre o CATÁLOGO.
+    B (X / K)           →  USA o item selecionado na bolsa no tile à frente (a tabela useItemAt:
+                           machado derruba, picareta quebra, balde enche/rega, chave abre, tocha
+                           acende, pá cava, máquina INSTALA…). Sem resposta na tabela, ENTREGA o
+                           que a máquina à frente pede (bandeja do forno, bigorna, baú com cota —
+                           tirando do contador); depois disso, RECOLHE a máquina que o jogador
+                           construiu; e por fim o gesto sai no VAZIO.
+    pisar               →  APANHA. Tudo, sem botão (`collectUnderfoot`): usável vai pra bolsa sem
+                           roubar a seleção, matéria-prima vai pro contador.
+    I                   →  a BOLSA, que escolhe o item do X — e NÃO pausa o jogo.
     ESC                 →  a subtela: mochila + corações + mapa, com o mundo congelado.
+
+- **UM BOTÃO, UMA FRASE: o Z é a espada, o X é a ferramenta.** Enquanto o Z usava "o item da mão",
+  defender-se passava por abrir a bolsa com a caveira em cima, e o arco mudava de alcance sem o
+  jogador pedir. LARGAR morreu junto (um botão que ora usa ora larga desarma por engano) e APANHAR
+  virou pisada — sem largar, apanhar não pode custar nada.
+- **A MOCHILA SÓ GUARDA O QUE TEM GESTO** (`isBagItem`). Matéria-prima — minério, ferro, carvão,
+  engrenagem (`MATERIAL_ITEM_KINDS`) — é **contador** debaixo da bolsa: informativa, sem cursor,
+  sem seleção. Ela continua inteira no `Inventory` (receita gasta dela, braço a carrega, bandeja a
+  recebe); o que mudou é que não ocupa slot do X, porque selecioná-la só podia calar o botão. A
+  `bloom` é a fronteira e fica na BOLSA: ela tem gesto (o X a pousa pra ser martelada).
 
 No toque são dois círculos no canto de baixo (`ActionButtons`, ordem do NES: B à esquerda) mais o
 botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTouchDevice`).
@@ -102,8 +117,7 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   mostra isso é a **órbita do punho** (`SLASH_ORBIT_FACTOR`): a espada é sempre o sprite da espada,
   no tamanho dela — o golpe alcança porque o braço estende, **nunca** porque a arte cresce ou porque
   um efeito desenhado entra na frente dela. A fileira de trás precisa de **caminho**
-  (o tile do meio não pode ser parede — senão a lâmina cortaria através da rocha), e o **soco só
-  alcança a primeira**: alcance é da arma, não do braço.
+  (o tile do meio não pode ser parede — senão a lâmina cortaria através da rocha).
 - **Golpe que não mata compra espaço e tempo**: arremessa um tile (`EnemyBase.shove`, consultando o
   **mesmo mundo** em que o bicho anda — luz de fogueira inclusive) e atordoa (`applyHitstun`).
   Espécie que escreve a própria posição (torreta, zora) **precisa** de `canBeShoved = false`.
@@ -132,22 +146,25 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   de contato. **A LOJA da fogueira foi REMOVIDA** (e as melhorias dela): moeda se ganha e se gasta
   no MUNDO — caveira, balcão de NPC, selo de estrada. **Falar NÃO é esbarrão**: um gesto que
   para o jogo inteiro não pode acontecer por a seta ter encostado em alguém de passagem.
-- `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…). Devolve
-  `false` só quando o item não tem nada a ver com o tile, e **só então** `placeItemAt` pousa ali.
-- **Depositar é o B** (bandejas, buraco de plantio, marca de bomba, entrada do braço…), e **pegar
-  também** — mas **o que você PISA é o que você pega** (`pickUpItemAt` só no tile dos pés, e ele
-  vem antes do baú e do NPC). Eram dois tiles concorrendo pelo mesmo aperto e nenhum desenho podia
-  dizer qual venceria; agora o alvo é um só e ele é **nomeado**: `PickupPrompt` põe o keycap e o
-  nome da coisa sobre a cabeça do herói. Isso **não** é o balão de dica que foi arrancado — aquele
-  explicava uma RECUSA, este nomeia um gesto que vai funcionar (a mesma gramática do "Z" do NPC), e
-  ele lê `pickupUnderfoot()`, a **mesma pergunta** que o botão faz. Moeda e coração não são itens e
-  continuam entrando andando.
-- **A exceção da pisada é a MATÉRIA-PRIMA, e é uma lista só** (`WALK_PICKUP_KINDS`: minério, cabo e
-  carvão, via `Inventory.stash`, que **nunca** rouba a mão): o que se manuseia às dúzias. O minério
-  já entrava assim vindo do veio, e duas regras para o mesmo objeto é o que ninguém aprende.
-  **Ferramenta jamais entra aí** — apanhar sem querer é perder a mão. E a pisada com a **tocha
-  acesa** vem ANTES da lista: ela QUEIMA o carvão em vez de guardá-lo. Fora dela sobrou carregar a
-  bateria num cabo vivo.
+- `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…), e ela é
+  o **botão X**. Devolve `false` só quando o item não tem nada a ver com o tile — e aí o X segue
+  para a entrega, para recolher e, por fim, para o gesto no vazio.
+- **DEPOSITAR virou ENTREGAR** (`deliverToMachineAt`): a máquina já DIZ o que precisa (a bandeja
+  fantasma do forno, a bigorna, a cota do baú, o chão de entrada do braço), então o X dá o que ela
+  pede em vez de o jogador escolher a carga. É o que salva a alimentação na mão agora que minério e
+  ferro saíram da bolsa. A recusa continua física — o corpo da máquina treme, nunca uma legenda.
+- **O CHÃO DE MÁQUINA NÃO É BOLSO** (`machineFloorAt`): bandeja, esteira, cabo e as pontas do braço
+  não entregam o que está neles à pisada — senão atravessar a própria fábrica levava a carga junto,
+  e pisar na bateria encaixada ARRANCAVA a rede. Lá o X é que tira de volta, como no baú.
+- **Item que se POUSA é exceção de DUAS**: a esponja (para ser martelada) e a bateria sobre um cabo
+  (o encaixe). Os dois são linhas de `useItemAt` — não um gesto de largar que voltou pela janela.
+- **`PickupPrompt` ficou sendo o aviso da ENTREGA**, não do apanhar: pisar apanha sozinho, e
+  anunciar tecla para um gesto automático é legenda que mente. Ele existe porque a carga entra
+  DENTRO de um corpo sólido — é o único alvo do X que o chão não desenha.
+- **PISAR APANHA TUDO** (`collectUnderfoot`, via `Inventory.stash`, que **nunca** rouba a mão): a
+  lista de exceções morreu com o gesto de largar — sem largar não há mão a ser roubada. Só empunha
+  o que cai numa mão vazia (`selectFirstIfEmpty`, a primeira ferramenta da partida). A pisada com a
+  **tocha acesa** continua vindo ANTES: ela QUEIMA o carvão em vez de guardá-lo.
 - A mochila (`runtime/Inventory.ts`) guarda em vez de trocar; `GameScene.heldItem` é um **getter**
   sobre a seleção (uma fonte de verdade só). Trocar de item **apaga a tocha**.
 - **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica: a
@@ -172,7 +189,8 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   de chunks), e quem filtra é `getChunkTemplates` — **um lugar só**: carta desligada continua
   inteira no arquivo, e um segundo filtro rio abaixo seria uma segunda resposta.
 - **A bolsa começa em ZERO e todo preço é medido em BARRA DE FERRO** (o astronauta paga 9; a
-  caveira, 1) — a tabela inteira mora em `scripts/add-prologue.mjs`, e mexer num custo pelo editor
+  caveira larga 1, e **2 em uma morte a cada quatro**) — a tabela inteira mora em
+  `scripts/add-prologue.mjs`, e mexer num custo pelo editor
   sem mexer nela é perder a mudança na próxima rodada do script. A carta do astronauta é a mais
   barata de propósito: ela ENSINA o jogo e paga por todas as outras.
 - **Mexer no mundo em massa é um script que LÊ o `world.json` e acrescenta** — nunca um que o
@@ -237,23 +255,35 @@ O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo s
 
 ## As peças (o contrato de cada uma está no `progress.md`)
 
-- **MÁQUINA É ITEM: o A instala no tile à frente, o B de mão vazia recolhe — TUDO que se instala
-  se recolhe**, inclusive o autorado (a exceção é a arca com `quota`, que é fechadura e não
-  depósito). Instalar É usar, então mora na tabela `useItemAt`; a direção nasce de para onde o
-  herói olha, nunca de um menu. O B com a mão cheia continua pousando como CARGA.
+- **MÁQUINA É ITEM: o X instala no tile à frente, e o X recolhe — TUDO que se instala se recolhe**,
+  inclusive o autorado (a exceção é a arca com `quota`, que é fechadura e não depósito). Instalar É
+  usar, então mora na tabela `useItemAt`; a direção nasce de para onde o herói olha, nunca de um
+  menu. Recolher deixou de exigir mão vazia (esse estado sumiu com a bolsa sempre cheia): ele é o
+  degrau DEPOIS da tabela e da entrega, então ferramenta que tem o que fazer ali nunca desmonta.
 - **O alvo de uma instalação é DESENHADO** (`PlacementHints`): quadrado branco no tile em que o
   botão vai agir + o keycap da tecla; azul frio nos outros lugares válidos (só o extrator os
   pinta). A marca e o botão leem `canBuildMachineAt` — **uma pergunta só**, ou um quadrado branco
   promete um gesto que o botão recusa. Recusa = ausência de marca, nunca marca vermelha.
 - **MINÉRIO NÃO É FERRO.** O veio e o extrator dão `ore` — pedra com óxido. O **forno**
   (minério+carvão, e é a única máquina que NÃO consome energia: um bloomery é movido a fole)
-  devolve uma `bloom` esponjosa, e ela só vira `iron` depois de **3 marteladas** — a mão pelo A,
-  ou o **martinete** ligado na roda d'água — e nele a BIGORNA É A BASE: a peça entra dentro da
-  máquina (o B a põe, o B de mão vazia a devolve), o malho dá as três pancadas e o produto **SALTA**
+  devolve uma `bloom` esponjosa, e ela só vira `iron` depois de **3 marteladas** — a mão pelo X
+  (ela é o único item da bolsa que se POUSA, e se martela no chão onde caiu), ou o **martinete**
+  ligado na roda d'água — e nele a BIGORNA É A BASE: a peça entra dentro da
+  máquina (o X a põe, o X a devolve), o malho dá as três pancadas e o produto **SALTA**
   para um tile livre. Ela aceita qualquer carga e trabalha uma só, porque um braço robótico precisa
   poder largar sem saber o que ela quer — recusar perderia a carga em silêncio. O carvão não é combustível ali: é o **reagente** que
-  rouba o oxigênio, e é por isso que são duas bandejas e não uma. **O forno DIZ o que precisa** nas
-  bandejas: ele sabe uma receita só, então o plano dele não se prega — é permanente.
+  rouba o oxigênio, e é por isso que são duas bandejas e não uma. As bandejas dele **não pedem
+  nada**: quem pede é o catálogo (o forno sabe duas receitas e vai saber mais, então um pedido
+  pregado no chão mentiria sobre a máquina). Bandeja é a boca das MÁQUINAS, e máquina não lê
+  fantasma.
+- **O ALTAR é a bigorna que NÃO é máquina** (`AltarObject`; bancada: **pedra + minério**, o 2º
+  degrau da escada — cobrar uma esponja por ele era circular: é nele que a esponja vira barra): laje de
+  pedra, sem energia, sem direção e sem ciclo — o Z na laje vazia PÕE o item selecionado, e bater
+  no que está lá (o Z de espada, ou o X com o que estiver na mão) malha. Ele aceita QUALQUER coisa e deixa bater em tudo:
+  o que a pancada trabalha cospe brasa e vira outra peça em `BLOOM_BLOWS` golpes, o que não
+  trabalha solta lasca cinzenta e nunca vira nada, e o X devolve o que não é malhável — assim nada
+  fica preso na mesa. **O que uma pancada transforma mora em `objects/hammering.ts`**, um lugar
+  só: a mão, o martinete e o altar leem a mesma tabela.
 - **AS DUAS MÁQUINAS DE FABRICAR SÃO A MESMA TELA E O MESMO GESTO** (bancada e forno): o A abre o
   catálogo *daquela* máquina, e o que as separa é uma palavra na receita (`station`) — nunca uma
   interação própria. O forno tinha a dele (o A acendia fantasmas), e eram duas gramáticas para o
@@ -269,7 +299,16 @@ O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo s
   o tile dele** (o corpo esconde o que está sob os pés), e apanhar continua sendo o B. Sem material
   — ou sem chão livre em volta — a carta treme, o insumo que falta ACENDE e o painel FICA aberto.
   **As duas bandejas não morreram** (nem na mesa, nem no forno): elas são como as MÁQUINAS
-  alimentam (um braço robótico não abre menu); o que mudou é que ninguém é obrigado a usá-las.
+  alimentam (um braço robótico não abre menu). No forno elas são **só isso** — não pedem, não
+  anunciam e não recebem mais da mão: uma máquina anuncia UM gesto (o Z da alvenaria), ou o jogador
+  escolhe entre gramáticas antes de fazer nada. O X ainda TIRA de uma bandeja o que está nela
+  (chão de máquina não é bolso).
+- **NO FORNO, CONFIRMAR NÃO ENTREGA: ACENDE** (`startHandSmelt`). A mesa martela e a peça salta no
+  mesmo frame — uma martelada é um instante. Fundir é um PROCESSO, e o gesto tem os três tempos na
+  tela: a carga voa da mão para a boca, o fole sopra sacudindo a alvenaria, a brasa esguicha e só
+  então a peça pula pela SAÍDA da frente (a mesma de onde a esteira tira). O produto entra no mundo
+  no fim — ele é a única coisa deste jogo que existe depois do aperto, e o preço é o de sempre em
+  máquina com ciclo: morrer no meio perde a fornada, como já acontece com a de bandeja.
 - **ENERGIA TEM VAZÃO, e a conta é uma só por rede** (`world/powerGrid.ts`): fonte publica watts,
   máquina puxa watts, e `satisfaction = min(1, oferta/demanda)` vira **velocidade** (o consumidor
   multiplica o próprio delta) e **brilho** (as 3 faixas do cabo) — nunca legenda. Rede curta não
@@ -293,8 +332,10 @@ e ele **desfaz** a entrega) · `extractor` (a mesma geometria do braço, mordend
 sumidouro que deixa a linha render enquanto o herói está longe) · `gear` engrenagem (o bem
 INTERMEDIÁRIO) ·
 `toolbox` caixa de ferramentas (**ferramenta = haste+cabeça** — graveto+pedra=machado,
-graveto+ferro=foice; **máquina = engrenagem+corpo** — ferro+ferro=engrenagem, ferro+pedra=4 cabos,
-engrenagem+madeira/pedra/ferro/engrenagem = esteira/caldeira/braço/extrator, madeira+madeira=baú) ·
+graveto+ferro=foice; **máquina = engrenagem+corpo** — ferro+ferro=engrenagem, ferro+pedra=5 cabos,
+engrenagem+madeira/pedra/ferro/engrenagem = esteira/caldeira/braço/extrator, madeira+madeira=baú,
+pedra+minério=**altar** — o par de cada receita é ÚNICO, porque as bandejas ainda fabricam por
+combinação, `toolboxRecipeFor`) ·
 `ironRock`/`iron` (mesma rocha, `ore: true`) · `pressurePlate` (herói, caixote **ou inimigo** —
 a caveira MARCHA até uma placa que enxerga) · `waterWheel` · `boiler` (fogo→energia) · `wire`
 (corrente é por componente conexo; forma nasce dos vizinhos) · `battery` (carrega pisando em
@@ -312,6 +353,16 @@ com um `scene.restart()` no meio).
   repetir), e como não há degrau vago, entrar é dizer de quem ela é mais difícil.
 - **Luz de fogueira é parede pra TODO monstro** — é a alavanca central do jogo e não tem exceção.
   A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
+- **...e quem se encosta nessa parede ARDE** (`tickScorch`): na coroa logo fora da luz o corpo pega
+  fogo e perde uma espadada de vida por mordida, até cair queimado — vivo e à vista o tempo todo.
+  Isso está no lugar do desmanche silencioso da matilha (**corpo nenhum some sozinho**: um bicho
+  que evapora desmente a chegada dele). Não é a tocha viva: o corpo assado continua sendo a
+  espécie, não corre em pânico e **não espalha fogo** — se espalhasse, cada fogueira acenderia o
+  mato à volta e as fogueiras MORTAS, que são a fechadura do jogo.
+- **Quem paga é a MORTE, não o golpe** (`EnemyBase.setDeathToll`, tocado por `die()` e só por ele):
+  todo corpo que cai larga moeda, tenha-o matado a espada, a bomba, a tocha viva ou a brasa. Fonte
+  nova de dano não precisa saber que moeda existe — e `despawn()` não paga, porque ali ninguém
+  morreu.
 - **Chegar é um evento e todo golpe é telegrafado** (`WalkerEnemy`). Corpo que aparece do nada, ou
   que fere sem aviso, desmente a promessa que a caveira ensinou.
 - **Fora do quadro o corpo anda, mas não FALA, não INICIA golpe e não liga a trilha de perigo**
@@ -319,6 +370,9 @@ com um `scene.restart()` no meio).
   alcances). Som ou ataque novo de bicho SEM esse gate reabre o "ouço o que não vejo".
 - **Onde cada espécie PODE existir é uma lista só** (`FLYING_ENEMY_KINDS` / `AQUATIC_ENEMY_KINDS`,
   em `ScreenContent`): o corpo, a cova e o aviso do editor leem dela. Três cópias já discordaram.
+- **Corpo que morre na ÁGUA larga a moeda na PRAIA** (`shoreDropTile`): recompensa que o herói vê
+  e não alcança é pior que recompensa nenhuma. Aquático paga **3** (`AQUATIC_KILL_COINS`) — ele
+  cobra uma posição para ser morto.
 - **Água tem DUAS procedências e quem pergunta por uma só quebra**: prop `water` (levels) e tile de
   terreno (overworld). Uma resposta só, `GameScene.isOpenWaterAt`. Fora do mundo o chão também é
   mar — o teste de chunk não é opcional.
@@ -414,11 +468,13 @@ a lâmina rodopiante → `esgrima`**. Machado, árvore e borda → `machado`; ro
 `caixa-ferramentas`; placa com herói/caixote → `caixa-placa`, e a caveira que marcha até uma →
 `placa-undead`. **Aba Inimigos e a cova que devolve o inimigo → `inimigos`; o bestiário que anda →
 `fauna`; torreta, mago e a lei do tiro → `projeteis`; o zora e a janela dele → `zora`; o corpo
-que o fogo acende (empurrão contra brasa, pânico, rastro) → `tocha-viva`; a bola que CONGELA em
+que o fogo acende (empurrão contra brasa, pânico, rastro) → `tocha-viva`; o corpo que ASSA na beira
+da fogueira (e a matilha que não evapora mais) → `brasa`; a bola que CONGELA em
 vez de ferir, a rebatida da espada e fogo×gelo → `gelo`.**
 **A fábrica inteira — receita da engrenagem, instalar/recolher, esteira, baú, extrator e o
 GARGALO → `fabrica`; o catálogo da bancada, o plano nas bandejas e a descida do degrau →
-`encomenda`; a cadeia do ferro (minério→forno→esponja→martelada→ferro) → `forja`.** Roda → `roda-agua`;
+`encomenda`; a cadeia do ferro (minério→forno→esponja→martelada→ferro) → `forja`.** **a laje do altar (pôr com Z, malhar, o ferro em cima dela e o X que devolve) → `altar`.**
+Roda → `roda-agua`;
 caldeira → `caldeira`; fios → `fios`; bateria → `bateria`; portões → `portao-eletronico` e
 `portao-de-bater`. Flor da lua → `flor-da-lua`; travessia do portal → `portal-travessia`;
 explorador → `explorador`. **Montanha em cubo e a água que anda → `montanha`.** **Carta comprável

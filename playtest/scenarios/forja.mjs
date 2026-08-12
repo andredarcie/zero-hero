@@ -117,20 +117,24 @@ export default {
       && semCarvao.furnaces[0].busy === false, JSON.stringify(semCarvao.furnaces[0]));
     assert('e o minerio continua na bandeja', await kindAt(sA[0], sA[1]) === 'ore', 'o minerio sumiu');
 
-    // ── 2b. O FORNO DIZ O QUE FALTA ───────────────────────────────────────────
-    // Ele sabe fazer UMA coisa, então o plano dele não se prega: é permanente. Com uma bandeja
-    // servida, o fantasma tem de sobrar só na OUTRA — e é isso que transforma "a máquina não fez
-    // nada" em "está faltando carvão", sem uma linha de texto.
-    log('FORNO: ele mostra na bandeja vazia o que ainda falta');
-    const pedido = await driver.page.evaluate(
-      () => ({ needs: window.__scene.furnaces[0].needsGhosts }),
-    );
-    assert('com o minerio posto, o fantasma que sobra e o CARVAO',
-      JSON.stringify(pedido.needs) === JSON.stringify([null, 'charcoal'])
-      || JSON.stringify(pedido.needs) === JSON.stringify(['charcoal', null]),
-      JSON.stringify(pedido));
+    // ── 2b. AS BANDEJAS NAO PEDEM MAIS NADA ───────────────────────────────────
+    // O forno pregava dois itens translucidos nas bandejas ("minerio aqui, carvao ali"), de quando
+    // ele sabia UMA receita e nao tinha menu. Com o catalogo — que ja sabe duas e vai saber mais —
+    // um pedido permanente de uma delas MENTE sobre a maquina: quem chega com duas madeiras via o
+    // forno pedindo minerio. Quem pede agora e o catalogo (bloco 7); a bandeja e a boca das
+    // MAQUINAS, e maquina nao le fantasma.
+    log('FORNO: as bandejas nao anunciam mais receita nenhuma');
+    const pedido = await driver.page.evaluate(() => ({
+      fantasmas: window.__scene.furnaces[0].needsGhosts ?? null,
+      // O que sobrou desenhado no chao: a marca da bandeja, que e onde a esteira entrega.
+      bandejas: window.__scene.furnaces[0].slotTiles.length,
+    }));
+    assert('o pedido em fantasma foi ARRANCADO da maquina',
+      pedido.fantasmas === null, JSON.stringify(pedido));
+    assert('...e as duas bandejas continuam existindo (a boca das maquinas)',
+      pedido.bandejas === 2, JSON.stringify(pedido));
 
-    // A captura: o herói ao lado, uma bandeja servida e o fantasma do carvão respirando na outra.
+    // A captura: o herói ao lado, uma bandeja servida e a outra vazia, sem legenda nenhuma.
     await driver.page.evaluate((f) => {
       const s = window.__scene;
       s.playerWorld = { worldX: f[0], worldY: f[1] + 2 };
@@ -138,11 +142,6 @@ export default {
     }, [4, 3]);
     await sleep(500);
     await shot('forja-forno-pedindo');
-
-    // O A contra o forno NAO acende mais fantasma nenhum: ele abre o catalogo (bloco 7). O assert
-    // que morava aqui chamava `nudge()` na mao, entao continuou verde depois de o botao deixar de
-    // chamar aquele metodo — um teste que segura codigo morto e pior do que nenhum, porque da
-    // confianca. O fantasma da bandeja segue sendo assertado acima, que e o que ainda existe.
 
     log('FORNO: minerio + CARVAO viram ESPONJA');
     // O heroi vai para perto ANTES da fornada: a captura desta etapa e a unica prova visual de
@@ -185,12 +184,14 @@ export default {
     await sleep(300);
     await driver.press('ArrowLeft', { count: 1 }); // um passo: agora encara a esponja
     await sleep(300);
-    // A cadencia do A e real (ATTACK_COOLDOWN_MS + a raiz do golpe): apertar rapido demais faz
-    // o pedido cair no buffer e a contagem sair menor do que o numero de teclas apertadas.
-    for (let i = 0; i < 2; i += 1) { await driver.press('z', { count: 1 }); await sleep(750); }
+    // MARTELAR E O X: bater na esponja e uma linha da tabela de itens, e a tabela inteira mudou de
+    // botao (o Z ficou so com a espada — e ninguem malha ferro quente com o fio de uma lamina).
+    // A cadencia e real (USE_COOLDOWN_MS + a raiz do golpe): apertar rapido demais faz o pedido
+    // cair no buffer e a contagem sair menor do que o numero de teclas apertadas.
+    for (let i = 0; i < 2; i += 1) { await driver.press('x', { count: 1 }); await sleep(750); }
     assert('duas pancadas ainda NAO bastam', await kindAt(out[0], out[1]) === 'bloom',
       'virou ferro cedo demais');
-    await driver.press('z', { count: 1 });
+    await driver.press('x', { count: 1 });
     await sleep(750);
     assert('a TERCEIRA vira ferro, no mesmo tile', await kindAt(out[0], out[1]) === 'iron',
       `ficou ${await kindAt(out[0], out[1])}`);
@@ -213,21 +214,26 @@ export default {
       for (let dx = -1; dx <= 1; dx += 1) {
         for (let dy = -1; dy <= 1; dy += 1) s.itemManager.takeAt(h.worldX + dx, h.worldY + dy);
       }
-      return h.accept('bloom');
+      return { aceitou: h.accept('bloom'), ferrosAntes: s.itemManager.snapshot().filter((i) => i.kind === 'iron').length };
     });
-    assert('a esponja entrou na bigorna', carregou === true, `accept=${carregou}`);
+    assert('a esponja entrou na bigorna', carregou.aceitou === true, `accept=${carregou.aceitou}`);
     // A CALDEIRA E CONSUMIVEL: um balde banca 45s de fervura (WATER_BOIL_MS), e este cenario leva
     // bem mais que isso para chegar ate aqui (extrator, forno, tres marteladas a mao). Sem este
     // recarregamento o martinete fica parado por FALTA DE AGUA — um motivo que nada tem a ver com
     // a cadeia do ferro, e que faz o bloco inteiro falhar dizendo a coisa errada.
     await driver.page.evaluate(() => window.__scene.boilers.forEach((b) => b.fillWater()));
+    // ESPERAR PELO FERRO NOVO, e nao por "existe ferro": a martelada A MAO (passo 3) ja deixou um
+    // lingote no chao, entao a condicao antiga era verdadeira no primeiro frame — o cenario lia a
+    // bigorna antes de a maquina ter dado a primeira pancada e acusava um martinete parado que so
+    // estava comecando.
     const saltou = await waitFor(
       driver,
       () => window.__scene.itemManager.snapshot().filter((i) => i.kind === 'iron').length,
-      (n) => n > 0,
+      (n) => n > carregou.ferrosAntes,
       15000,
     );
-    assert('as tres pancadas viram FERRO', saltou > 0, `ferros=${saltou}`);
+    assert('as tres pancadas viram FERRO', saltou > carregou.ferrosAntes,
+      `ferros=${saltou} antes=${carregou.ferrosAntes}`);
     const ondeCaiu = await driver.page.evaluate(() => {
       const s = window.__scene;
       const h = s.tripHammers[0];
@@ -297,15 +303,13 @@ export default {
     assert('e MINERIO nao e insumo de bancada nenhuma', daBancada.oreNada === null,
       JSON.stringify(daBancada));
 
-    // ── 6. A MATERIA-PRIMA ENTRA ANDANDO, A FERRAMENTA NAO ────────────────────
-    // A lei da casa e "nada entra por pisada, pegar e o B", e minerio e cabo sao a excecao
-    // declarada: eles se manuseiam as duzias (o extrator cospe um a cada 2,4s, o cabo nasce em
-    // punhado de cinco) e cobrar um botao por unidade viraria tarefa. O minerio, alias, ja entrava
-    // assim quando vinha do VEIO — eram duas regras para o mesmo objeto.
-    //
-    // Os dois lados sao um assert so de propósito: a picareta no MESMO teste e o que impede alguem
-    // de "consertar" isto alargando a lista ate uma espada entrar na mochila por descuido.
-    log('PISADA: minerio e cabo entram andando; ferramenta nao');
+    // ── 6. PISAR APANHA — TUDO ────────────────────────────────────────────────
+    // A lei da casa era "nada entra por pisada, pegar e o B", com minerio e cabo de excecao. As
+    // duas cairam juntas: o X virou "usar o item selecionado" e o gesto de LARGAR deixou de
+    // existir, e sem largar nao ha mao a ser roubada — apanhar sem querer parou de poder custar
+    // alguma coisa. O que este passo guarda hoje e o que sobrou de perigoso: guardar NAO troca o
+    // item selecionado (`Inventory.stash`), e materia-prima nao ocupa slot da bolsa.
+    log('PISADA: tudo entra andando — minerio, cabo E ferramenta');
     const pisada = await driver.page.evaluate(async () => {
       const s = window.__scene;
       s.inventory.clear();
@@ -322,8 +326,16 @@ export default {
     });
     assert('a fixture da pisada esta posta', JSON.stringify(pisada) === '["ore","wire","pickaxe"]',
       JSON.stringify(pisada));
-    await driver.walk('right', 3);
-    await driver.settle(600);
+    // UM PASSO POR VEZ, esperando a cerimonia. Pisar num tipo INEDITO abre o "ITEM GET", que
+    // prende os pes ate fechar — e a tecla seguinte vira "pular a cerimonia" em vez de andar.
+    // Tres setas em rajada deixavam o heroi parado no segundo tile, e o assert media isso.
+    for (let i = 0; i < 3; i += 1) {
+      await driver.walk('right', 1);
+      await driver.settle(400);
+      await driver.page.waitForFunction(() => window.gameDebug?.getState()?.itemGetOpen === false,
+        null, { timeout: 8000 });
+      await driver.settle(200);
+    }
     const colhido = await driver.page.evaluate(() => ({
       mochila: window.__scene.inventory.list(),
       chao: [2, 3, 4].map((x) => window.__scene.itemManager.kindAt(x, 5)),
@@ -331,7 +343,11 @@ export default {
     const temMochila = (k) => colhido.mochila.some((i) => i.kind === k);
     assert('o MINERIO entrou so de passar por cima', temMochila('ore'), JSON.stringify(colhido));
     assert('o CABO entrou so de passar por cima', temMochila('wire'), JSON.stringify(colhido));
-    assert('e a PICARETA continuou no chao', !temMochila('pickaxe') && colhido.chao[2] === 'pickaxe',
+    // A PICARETA TAMBEM ENTRA ANDANDO, e isto e o oposto do que este assert cobrava: a lista de
+    // excecoes morreu junto com o gesto de LARGAR (sem largar, apanhar sem querer nao custa nada —
+    // ver GameScene.collectUnderfoot). O que continua valendo, e e o que importa, e que apanhar
+    // NAO troca o item da mao: a selecao e do jogador.
+    assert('a PICARETA tambem sobe — e sem roubar a mao', temMochila('pickaxe'),
       JSON.stringify(colhido));
 
     // O CARVAO tambem entra andando — e ele e a materia mais consumivel das tres, porque cada
@@ -418,7 +434,33 @@ export default {
       painel.familias.length === 0, JSON.stringify(painel));
     await shot('forja-forno-catalogo');
     await driver.press('z', { count: 1 });
-    await driver.settle(700);
+    await driver.settle(500);
+    // A FORNADA E UM PROCESSO. Confirmar fecha o painel e ACENDE a maquina: os insumos ja sairam da
+    // mochila, mas a peca ainda esta LA DENTRO — ela so pula pela boca quando a fornada termina
+    // (ver FurnaceObject.startHandSmelt). Antes disso o item aparecia no chao no mesmo frame do
+    // aperto, com a maquina ainda apagada.
+    const trabalhando = await driver.page.evaluate(() => {
+      const s = window.__scene;
+      return {
+        aberto: !!document.querySelector('.zh-order-card'),
+        fase: s.furnaces[0].currentPhase,
+        ore: s.inventory.count('ore'),
+        charcoal: s.inventory.count('charcoal'),
+        esponjas: s.itemManager.snapshot().filter((i) => i.kind === 'bloom').length,
+      };
+    });
+    assert('confirmar FECHA o painel e poe o forno pra trabalhar',
+      trabalhando.aberto === false && trabalhando.fase === 'smelting', JSON.stringify(trabalhando));
+    assert('...gastando os insumos JA, mas sem a esponja no chao ainda',
+      trabalhando.ore === 1 && trabalhando.charcoal === 1 && trabalhando.esponjas === 0,
+      JSON.stringify(trabalhando));
+    await shot('forja-forno-fundindo');
+    // ...e no fim ela SALTA da boca. O tempo aqui e o ciclo de mao (1,6s) mais o voo (0,42s).
+    await driver.page.waitForFunction(
+      () => window.__scene.itemManager.snapshot().some((i) => i.kind === 'bloom'),
+      null, { timeout: 8000 },
+    );
+    await driver.settle(200);
     const fundiu = await driver.page.evaluate(() => {
       const s = window.__scene;
       const f = s.furnaces[0];
@@ -428,17 +470,22 @@ export default {
         ore: s.inventory.count('ore'),
         charcoal: s.inventory.count('charcoal'),
         naMochila: s.inventory.count('bloom'),
-        vizinha: esponjas.some((i) => Math.abs(i.worldX - f.worldX) <= 1
-          && Math.abs(i.worldY - f.worldY) <= 1),
+        naBoca: esponjas.some((i) => i.worldX === f.outputTile[0] && i.worldY === f.outputTile[1]),
         sobOsPes: esponjas.some((i) => i.worldX === s.playerWorld.worldX
           && i.worldY === s.playerWorld.worldY),
+        fase: f.currentPhase,
+        fornadas: f.smeltCount,
       };
     });
     assert('a fornada gastou UM minerio e UM carvao da mochila',
       fundiu.ore === 1 && fundiu.charcoal === 1, JSON.stringify(fundiu));
-    assert('a esponja saiu no CHAO ao lado do forno, e nao na mochila',
-      fundiu.vizinha === true && fundiu.naMochila === 0, JSON.stringify(fundiu));
+    // A ESPONJA SAI PELA BOCA — o tile da frente, o mesmo de onde uma esteira a tiraria. Antes ela
+    // caia num vizinho qualquer escolhido pela distancia ate o heroi.
+    assert('a esponja saiu pela BOCA do forno, e nao na mochila',
+      fundiu.naBoca === true && fundiu.naMochila === 0, JSON.stringify(fundiu));
     assert('nem debaixo do heroi', fundiu.sobOsPes === false, JSON.stringify(fundiu));
+    assert('e o forno voltou a esfriar, com a fornada contada',
+      fundiu.fase === 'idle' && fundiu.fornadas >= 1, JSON.stringify(fundiu));
     assert('e o painel fechou', fundiu.aberto === false, JSON.stringify(fundiu));
   },
 };

@@ -30,8 +30,10 @@ export default {
     const authored = await driver.page.evaluate(() => {
       const store = window.__scene?.store;
       if (!store) return 'sem store no editor';
-      for (let x = 4; x <= 11; x += 1) {
-        for (let y = 3; y <= 7; y += 1) {
+      // BORDA A BORDA: a faixa limpa deixava de pe os cabos e props que o mundo do lab ja tinha
+      // fora dela, e a contagem da fixture media o mundo em vez do cenario.
+      for (let x = 0; x < 12; x += 1) {
+        for (let y = 0; y < 12; y += 1) {
           store.eraseEntitiesAt(x, y);
           store.setCell('upper', x, y, null);
           store.setCell('collision', x, y, false);
@@ -165,7 +167,14 @@ export default {
 
     const redock = await driver.page.evaluate(() => {
       const s = window.__scene;
-      s.placeItemAt(9, 4); // o cabo esta morto de novo (a bateria saiu da rede): re-encaixa
+      // ENCAIXAR E USAR: a bateria sobre um CABO e uma linha da tabela de itens (o X), e nao mais
+      // o gesto generico de largar — que morreu quando o X virou "usar o item selecionado". O
+      // heroi tem de estar de FORA do tile para o encaixe caber ali (`isTileOccupied` conta o
+      // corpo dele), que e exatamente como o gesto acontece no jogo: encarar o cabo e apertar.
+      s.playerWorld.worldX = 8; s.playerWorld.worldY = 4;
+      s.movementController.interruptMovement(8, 4);
+      s.movementController.lastFacing = { dx: 1, dy: 0 };
+      s.useItemAt(9, 4);
       const it = s.itemManager.items
         .find((i) => i.kind === 'batteryFull' && i.tileX === 9 && i.tileY === 4);
       return { held: s.heldItem, charge: it?.chargeMs ?? null };

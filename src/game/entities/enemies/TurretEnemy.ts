@@ -119,7 +119,6 @@ export class TurretEnemy extends EnemyBase {
     delta: number,
     playerWorldX: number,
     playerWorldY: number,
-    _playerSafe: boolean,
     _playerHasTorch: boolean,
     _isBlocked: (wx: number, wy: number) => boolean,
   ): boolean {

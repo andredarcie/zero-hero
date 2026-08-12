@@ -41,27 +41,45 @@ const grid = (value) => Array.from({ length: ROWS }, () => Array(COLS).fill(valu
 /**
  * A TABELA DE PREÇOS, em barras de ferro (o astronauta paga 9 por barra).
  *
- * A escada é o argumento: a cratera custa 3 (três caveiras — a única carta que o dinheiro de
- * espada compra, e o preço mais barato que o baralho tem), e a partir dali todo preço é ferro. Uma
- * carta comum custa de uma a três barras; a última custa DEZ, que é a quantidade que ninguém junta
- * na mão sem pôr o martinete para bater.
+ * A ABERTURA são TRÊS cartas a 3 moedas — três caveiras, o que a estrada escura rende em dois
+ * minutos de espada. As três custam o MESMO de propósito: a primeira decisão do jogo tem de ser
+ * uma decisão, e uma carta ao alcance ao lado de duas trancadas não é escolher entre três coisas,
+ * é escolher entre uma coisa e dois cadeados.
+ *
+ * DA QUARTA EM DIANTE A ESCADA SOBE DE UM EM UM (5, 6, 7, 8, 9, 10, 11, 13, 14), e o teto é a carta
+ * final a 36 — quatro barras. A tabela inteira caiu para perto de um TERÇO do que era (a escada ia
+ * de 16 a 36, com o fim a 90), e a razão não é generosidade: com a bolsa começando em zero e a
+ * caveira pagando 1, cada preço é um pedaço de TEMPO do jogador, e a escada velha cobrava uma
+ * fábrica montada antes da segunda decisão. O que se quer de um degrau é que ele custe mais uma
+ * caveira que o anterior — não cinco vezes o anterior, que é uma parede com uma tarefa atrás.
+ * O ferro continua sendo a moeda de verdade (o astronauta paga 9 por barra): uma carta comum é
+ * meia barra a uma barra e meia, e o fim do prólogo continua exigindo a linha de produção.
+ *
+ * Quem lê este trio é a mão de abertura (`ExplorerDirector.offers`), e ela o lê pelo PREÇO: são as
+ * três mais baratas do baralho, nunca uma lista de ids no código. Reprecificar uma carta aqui
+ * troca a abertura sem que o código fique sabendo de nada.
  */
 const COSTS = {
-  'crater-quarry': 3,     // a oficina: a primeira compra, e a que paga todas as outras
-  'moonlit-lake': 12,
-  'blooming-grove': 14,
-  'roadside-pond': 16,
-  'cat-cold-hearths': 16,
-  'whispering-forest': 18,
-  'timber-ranks': 20,
-  'singing-pines': 20,
-  'granite-pass': 22,
-  'painted-beds': 24,
-  'spider-hollow': 26,
-  'sunken-graveyard': 30,
-  'glowing-ford': 34,
-  'silent-meadow': 36,
-  'prologue-end': 90,     // dez barras: o fim do prólogo se COMPRA, e o preço é a fábrica
+  'crater-quarry': 3,     // a oficina: a carta que ENSINA o jogo e paga por todas as outras
+  'moonlit-lake': 3,      // as duas outras da abertura: uma água e um jardim, para que a escolha
+  'blooming-grove': 3,    // de estreia seja de GOSTO — nenhuma delas é a certa
+  // ...e daqui em diante a escada SOBE DE UM EM UM, do piso que a abertura estabeleceu. Ela ia de
+  // 3 para 16 — seis vezes mais caro de uma vez, e o próprio comentário desta tabela chamava isso
+  // de torto e pedia a reescrita a partir do novo piso. É esta. Um degrau que custa mais uma
+  // caveira que o anterior é uma decisão de cada vez; um que custa cinco vezes o anterior é uma
+  // parede com uma tarefa atrás.
+  'roadside-pond': 5,
+  'cat-cold-hearths': 5,
+  'whispering-forest': 6,
+  'timber-ranks': 7,
+  'singing-pines': 7,
+  'granite-pass': 8,
+  'painted-beds': 9,
+  'spider-hollow': 10,
+  'sunken-graveyard': 11,
+  'glowing-ford': 13,
+  'silent-meadow': 14,
+  'prologue-end': 36,     // quatro barras: o fim do prólogo se COMPRA, e o preço é a fábrica
 };
 
 /**
@@ -105,6 +123,52 @@ const CRATER_KIT = {
     { type: 'water', x: 0, y: 11 },
     { type: 'water', x: 1, y: 11 },
     { type: 'water', x: 2, y: 11 },
+  ],
+};
+
+/**
+ * O KIT DO LAGO — a carta que deixou de ser uma paisagem e virou uma OFICINA DE IDEIAS.
+ *
+ * O Lago é uma das três cartas de abertura (3 moedas), e até aqui ele era só bonito: água, três
+ * flores da lua e capim. Uma das primeiras decisões do jogo não pode ser entre uma oficina e um
+ * papel de parede — então ele ganhou as três coisas que fazem dele uma escolha de verdade:
+ *
+ *   1. **RENDA.** Três zoras vivendo na água. Eles pagam 3 moedas cada (AQUATIC_KILL_COINS, contra
+ *      1 da caveira) e voltam sozinhos a cada ENEMY_RESPAWN_MS — é a única fonte de moeda que o
+ *      jogador pode PROCURAR no mapa em vez de esperar na estrada. O preço é a posição: eles moram
+ *      onde a espada não alcança de graça, e quem chega junto da água leva cusparada de gelo.
+ *   2. **ENERGIA DE GRAÇA.** Uma roda d'água já montada e já girando, na borda oeste. Ela é a única
+ *      usina que o jogador NÃO consegue fabricar (não há receita de roda), então vê-la funcionando
+ *      é a diferença entre "existe eletricidade neste jogo" e "existe eletricidade e ela é minha".
+ *   3. **O CONVITE.** Um pacote de cinco CABOS na grama ao lado dela — o suficiente para uma linha
+ *      curta. Nada obriga a usá-los: é um "e se?" pousado no chão, que é a forma mais barata de um
+ *      jogo sugerir um plano sem escrever um objetivo na tela.
+ *
+ * A roda fica FORA das faixas de estrada (openSeams limpa x0-3/x8-11 nas linhas 5-9 e x5-7 nas
+ * colunas 0-3/8-11): uma peça sólida numa costura seria uma estrada fechada por decoração.
+ */
+const LAKE_KIT = {
+  /** `zora` só nasce em água ABERTA — todos estes tiles são do lago, e nenhum é costura. */
+  enemies: [
+    { type: 'zora', x: 5, y: 4 },
+    { type: 'zora', x: 8, y: 4 },
+    { type: 'zora', x: 6, y: 6 },
+  ],
+  /**
+   * O cabo nasce em PACOTE (spawnPackSize: 5) — um item no chão, cinco na mochila. São DOIS
+   * pacotes: cinco fios fazem uma linha curta e dez fazem uma linha que atravessa a carta, e a
+   * diferença entre as duas é a diferença entre "dá pra ligar a roda em alguma coisa" e "dá pra
+   * escolher em QUE coisa" — que é o pensamento que este monte de cabo existe para provocar.
+   */
+  pickups: [
+    { type: 'wire', x: 3, y: 2 },
+    { type: 'wire', x: 4, y: 2 },
+  ],
+  props: [
+    // A roda no tile de água (2,3): a leste, o sul e o norte dela são lago (é isso que a faz
+    // girar), e o vizinho de cima, (2,2), é grama limpa — a ponta de terra em que o primeiro cabo
+    // encosta. Sem esse vizinho a roda seria uma usina sem tomada.
+    { type: 'waterWheel', x: 2, y: 3 },
   ],
 };
 
@@ -306,7 +370,50 @@ if (orphanCount(crater, live) > 0) {
   process.exit(1);
 }
 
-// ── 3. a tabela de preços ───────────────────────────────────────────────────────────────────
+// ── 3. o kit do lago ────────────────────────────────────────────────────────────────────────
+const lake = world.chunks.find((chunk) => chunk.catalog?.id === 'moonlit-lake');
+if (!lake) throw new Error('moonlit-lake não está no world.json');
+const lakeOx = lake.cx * COLS;
+const lakeOy = lake.cy * ROWS;
+let lakeAdded = 0;
+const lakeTaken = new Set([
+  ...world.props
+    .filter((p) => Math.floor(p.worldX / COLS) === lake.cx && Math.floor(p.worldY / ROWS) === lake.cy)
+    .map((p) => `${p.worldX - lakeOx},${p.worldY - lakeOy}`),
+  ...lake.pickups.map((p) => `${p.worldX - lakeOx},${p.worldY - lakeOy}`),
+  ...lake.enemies.map((e) => `${e.worldX - lakeOx},${e.worldY - lakeOy}`),
+]);
+// A ÁGUA do lago é TERRENO (frame de chão), e não prop: quem valida um zora é o tile.
+const LAKE_WATER = new Set([9, 12, 13, 26, 27, 28, 29, 30, 32, 33, 34, 35]);
+const wet = (x, y) => LAKE_WATER.has(lake.ground[y][x]);
+for (const enemy of LAKE_KIT.enemies) {
+  if (lakeTaken.has(`${enemy.x},${enemy.y}`)) continue;
+  if (!wet(enemy.x, enemy.y)) {
+    console.warn(`  · lago: ${enemy.type} em ${enemy.x},${enemy.y} RECUSADO (não é água aberta)`);
+    continue;
+  }
+  lake.enemies.push({ type: enemy.type, worldX: lakeOx + enemy.x, worldY: lakeOy + enemy.y });
+  lakeTaken.add(`${enemy.x},${enemy.y}`);
+  lakeAdded += 1;
+}
+for (const pickup of LAKE_KIT.pickups) {
+  if (lakeTaken.has(`${pickup.x},${pickup.y}`)) continue;
+  lake.pickups.push({ type: pickup.type, worldX: lakeOx + pickup.x, worldY: lakeOy + pickup.y });
+  lakeTaken.add(`${pickup.x},${pickup.y}`);
+  lakeAdded += 1;
+}
+for (const prop of LAKE_KIT.props) {
+  if (lakeTaken.has(`${prop.x},${prop.y}`)) continue;
+  if (prop.type === 'waterWheel' && !wet(prop.x, prop.y)) {
+    console.warn(`  · lago: roda em ${prop.x},${prop.y} RECUSADA (o tile não é água)`);
+    continue;
+  }
+  world.props.push({ type: prop.type, worldX: lakeOx + prop.x, worldY: lakeOy + prop.y });
+  lakeTaken.add(`${prop.x},${prop.y}`);
+  lakeAdded += 1;
+}
+
+// ── 4. a tabela de preços ───────────────────────────────────────────────────────────────────
 let repriced = 0;
 for (const chunk of world.chunks) {
   const id = chunk.catalog?.id;
@@ -321,4 +428,4 @@ if (missing.length > 0) {
 }
 
 await fs.writeFile(target, `${JSON.stringify(world, null, 2)}\n`, 'utf8');
-console.log(`Kit da cratera: ${added} peça(s). Preços atualizados: ${repriced}.`);
+console.log(`Kit da cratera: ${added} peça(s). Kit do lago: ${lakeAdded}. Preços atualizados: ${repriced}.`);

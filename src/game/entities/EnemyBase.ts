@@ -7,7 +7,9 @@ import {
   FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE, world3d, type FireLight3D,
 } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import { AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS, type EnemyKind } from '@/game/world/ScreenContent';
+import {
+  AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS, SWORD_BLOW_DAMAGE, type EnemyKind,
+} from '@/game/world/ScreenContent';
 
 /** Ver `hurtInvulnMs`. Os ~32 frames do Link to the Past, arredondados para baixo. */
 const HURT_INVULN_MS = 450;
@@ -164,6 +166,38 @@ const BURN_CHAR_B = 0x1d;
 /** Reescreve o tom de carvão no corpo a cada tanto — não a cada frame (apply() reescreve o mesh). */
 const BURN_CHAR_TINT_MS = 150;
 
+// ── O CALOR DA FOGUEIRA ──────────────────────────────────────────────────────
+//
+// A SEGUNDA METADE DA LEI DA LUZ. "Luz de fogueira é parede pra todo monstro" sempre foi a
+// primeira; a segunda é o que acontece com quem se encosta nela: o corpo ARDE, e o fogo vai
+// comendo a vida dele enquanto ele ficar ali (ver CAMPFIRE_SCORCH_RADIUS_TILES).
+//
+// Isto entrou no lugar do DESMANCHE POR SEGURANÇA — a caveira sumia sozinha em 2-5s quando o
+// herói alcançava uma fogueira. Era a matilha inteira evaporando sem causa na tela: o jogador
+// chegava no fogo, olhava pra trás e não havia mais nada, sem um pixel dizendo por quê. Agora
+// a mesma cena acontece de verdade e diante dos olhos — a matilha alcança o herói na beira da
+// luz, começa a pegar fogo e cai queimada, uma de cada vez.
+//
+// NÃO é a tocha viva, e a diferença é a peça: o corpo aceso pela chama vira uma fogueira em
+// pânico que corre e espalha fogo (o sistema que o JOGADOR conduz). Aqui não há chama nenhuma
+// tocando o corpo — é o calor de perto —, então o bicho continua sendo ele mesmo: caça, arma
+// golpe, e some daquele lugar se conseguir. Sair do anel APAGA (a cicatriz fica). Se acendesse
+// de verdade, toda fogueira do mundo viraria um forno de incendiários automáticos: eles
+// acenderiam o mato à volta de cada acampamento e — o que mata o jogo — acenderiam as fogueiras
+// MORTAS por aí, que são a chave do enigma que o herói existe pra resolver com a tocha na mão.
+
+/**
+ * O calor morde de tanto em tanto, e a mordida vale UMA ESPADADA (`SWORD_BLOW_DAMAGE`): ele não
+ * inventa uma escala própria de dano: cada espécie aguenta na brasa exatamente os mesmos golpes
+ * que aguenta na espada (`ENEMY_BLOWS`), então a caveira de 3 degraus cai em ~2,4s — o mesmo
+ * tempo da tocha viva — e a torreta de 9 leva o triplo, sem nenhum número novo pra manter.
+ *
+ * A primeira mordida vem SÓ no fim do primeiro intervalo, nunca na entrada: as chamas aparecem
+ * no instante em que o corpo encosta, e esse tempo é o aviso — quem raspa no anel e sai leva o
+ * susto e a marca de carvão, não a vida.
+ */
+const SCORCH_BITE_MS = 800;
+
 /**
  * O TOM DE FRIO do corpo congelado (ver FreezeManager): multiplicativo, como o carvão da tocha
  * viva e pela mesma lei — corpo responde ESCURECENDO, nunca acendendo (tint claro em billboard
@@ -253,6 +287,13 @@ export abstract class EnemyBase {
   private burnFlames: Billboard3D[] = [];
   private burnFire?: FireLight3D;
 
+  // O CALOR DA FOGUEIRA (ver o bloco acima): o corpo está no anel AGORA, e quanto falta pra
+  // próxima mordida. Estado à parte do da tocha viva de propósito — os dois usam as mesmas
+  // chamas, mas um é um relógio até a morte e o outro é uma condição que acaba quando o corpo
+  // sai de perto.
+  private scorching = false;
+  private scorchBiteMs = 0;
+
   /**
    * ONDE O CORPO EM CHAMAS TOCA, O FOGO TENTA PEGAR — instalado pelo GameScene (o dono de
    * igniteFlammableAt), o mesmo desenho do frameGate: um static porque a lei vale para todo
@@ -262,6 +303,23 @@ export abstract class EnemyBase {
 
   public static setEmberTouch(touch: (wx: number, wy: number) => void): void {
     EnemyBase.emberTouch = touch;
+  }
+
+  /**
+   * O SINO DA MORTE — instalado pelo GameScene (o dono da recompensa), tocado por `die()` e por
+   * mais ninguém. Mesmo desenho do `emberTouch`, e pela mesma razão: a lei vale para todo corpo,
+   * de toda espécie, morto por qualquer causa.
+   *
+   * Ele existe porque a moeda caía do GOLPE e não da MORTE: quem pagava era o `strike` da espada,
+   * então um corpo que o fogo comeu, que a brasa da fogueira assou ou que a bomba levou morria de
+   * graça — e a caveira, que hoje morre queimada na beira da luz sem o herói encostar nela, era o
+   * caso mais comum de todos. `die()` é a porta única (`despawn()` NÃO toca o sino: ali o corpo
+   * não morreu, foi recolhido — o escuro reclamando de volta quem ficou a 18 tiles não é caçada).
+   */
+  private static deathToll: (enemy: EnemyBase) => void = () => {};
+
+  public static setDeathToll(toll: (enemy: EnemyBase) => void): void {
+    EnemyBase.deathToll = toll;
   }
 
   protected readonly scene: Phaser.Scene;
@@ -891,10 +949,28 @@ export abstract class EnemyBase {
     this.recoverMs = 0;
     this.clearWindup();
 
-    // Duas chamas da MESMA arte da tocha do herói, cavalgando o corpo (ver renderBurnFlames):
-    // uma larga na base e uma menor na cabeça — a silhueta de coisa-pegando-fogo, não um efeito
-    // colado num ponto. `emissive` para arder no escuro, e NENHUMA luz própria: a luz de verdade
-    // vem emprestada do pool fixo logo abaixo.
+    this.showFlames();
+    // A luz É uma fogueira: a mesma entrada do pool fixo que arbusto e lava usam (nenhuma luz
+    // THREE nasce aqui — a lei do FIRE_LIGHT_SLOTS), só que andando (ver setPosition no render).
+    // É também o que faz os outros monstros abrirem caminho de verdade: a parede que eles
+    // respeitam no EnemyManager é a leitura LÓGICA desta mesma luz.
+    this.burnFire = world3d().addFireLight(this.worldX, this.worldY, true);
+    this.burnFire.setIntensityScale(0.55);
+    return true;
+  }
+
+  /**
+   * Duas chamas da MESMA arte da tocha do herói, cavalgando o corpo (ver renderBurnFlames): uma
+   * larga na base e uma menor na cabeça — a silhueta de coisa-pegando-fogo, não um efeito colado
+   * num ponto. `emissive` para arder no escuro, e NENHUMA luz própria.
+   *
+   * A tocha viva pede uma luz emprestada do pool por cima disto; o calor da fogueira NÃO — ali
+   * quem ilumina a cena já é a fogueira ao lado, e uma entrada de fogo por corpo encostado na
+   * borda gastaria o pool inteiro (FIRE_LIGHT_SLOTS) numa matilha de quatro. É também o que
+   * separa as duas na tela: a tocha viva tem halo, o corpo assado só tem chama.
+   */
+  private showFlames(): void {
+    if (this.burnFlames.length > 0) return;
     for (let i = 0; i < 2; i++) {
       this.burnFlames.push(
         world3d()
@@ -908,13 +984,94 @@ export abstract class EnemyBase {
           .setAlpha(0.95),
       );
     }
-    // A luz É uma fogueira: a mesma entrada do pool fixo que arbusto e lava usam (nenhuma luz
-    // THREE nasce aqui — a lei do FIRE_LIGHT_SLOTS), só que andando (ver setPosition no render).
-    // É também o que faz os outros monstros abrirem caminho de verdade: a parede que eles
-    // respeitam no EnemyManager é a leitura LÓGICA desta mesma luz.
-    this.burnFire = world3d().addFireLight(this.worldX, this.worldY, true);
-    this.burnFire.setIntensityScale(0.55);
-    return true;
+  }
+
+  /** O corpo está assando na beira de uma fogueira? (ver o bloco "O CALOR DA FOGUEIRA") */
+  public get isScorching(): boolean {
+    return this.alive && this.scorching;
+  }
+
+  /**
+   * O RELÓGIO DO CALOR. Roda no EnemyManager para TODO corpo, todo frame — como os i-frames e o
+   * relógio do fogo, e pelo mesmo motivo: um corpo fora do alcance da IA continua encostado na
+   * fogueira, e um calor que congelasse junto com o pensamento dele deixaria uma matilha imortal
+   * dormindo na borda da luz.
+   *
+   * `inHeat` é a pergunta do MUNDO (GameScene.isTileScorchedByCampfire): só a lenha acesa aquece.
+   */
+  public tickScorch(delta: number, inHeat: boolean): void {
+    // A tocha viva manda: ali o fogo já é dono deste corpo, e as duas chamas na tela são as
+    // mesmas. Uma segunda contagem por cima roubaria a morte do relógio que a começou — então o
+    // calor larga o estado (sem apagar as chamas, que agora são dela) e sai. Se o gelo apagar a
+    // tocha depois, o corpo ainda encostado na fogueira recomeça a assar no frame seguinte.
+    if (this.burnLeftMs > 0) {
+      this.scorching = false;
+      this.scorchBiteMs = 0;
+      return;
+    }
+
+    const cooks = inHeat && this.alive && !this.isSpawning && !this.frozenFlag && this.flammable;
+    if (!cooks) {
+      if (this.scorching) this.endScorch();
+      return;
+    }
+
+    if (!this.scorching) {
+      this.scorching = true;
+      this.scorchBiteMs = 0;
+      this.showFlames();
+      // O chiado tem o gate do quadro, como toda voz de bicho: um corpo assando fora da tela não
+      // pode falar (ver framed).
+      if (this.framed) getSoundManager().playFireHit();
+    }
+
+    // O corpo CARBONIZA enquanto assa — o mesmo tom de carvão da tocha viva, avançando com o
+    // tempo de forno. Ele não volta: a cicatriz é a única coisa que sobra em quem escapa.
+    this.burnChar01 = Math.min(0.85, this.burnChar01 + delta / 4000);
+    this.burnTintMs += delta;
+    if (this.burnTintMs >= BURN_CHAR_TINT_MS) {
+      this.burnTintMs = 0;
+      this.restoreTint();
+    }
+
+    this.scorchBiteMs += delta;
+    if (this.scorchBiteMs < SCORCH_BITE_MS) return;
+    this.scorchBiteMs = 0;
+    this.scorchBite();
+  }
+
+  /**
+   * UMA MORDIDA DE CALOR — dano puro, por FORA do `takeDamage`, e as duas metades disso importam:
+   *
+   * - fogo não respeita i-frames (a mesma razão pela qual a ignição também não passa por lá: os
+   *   i-frames estão sempre correndo depois de um golpe, e um calor que os respeitasse nunca
+   *   cobraria nada de quem acabou de ser empurrado pra dentro da brasa);
+   * - e ele não pode ARMAR i-frames tampouco. `takeDamage` liga 450ms de invulnerabilidade a cada
+   *   dano, e com uma mordida a cada 800ms o herói levaria a espada num corpo que resvala mais da
+   *   metade do tempo — o calor teria virado um escudo.
+   *
+   * O que ele empresta do caminho normal é só a resposta do corpo (a troca de textura de dano), a
+   * mesma para quem apanha do fogo e de quem apanha da espada.
+   */
+  private scorchBite(): void {
+    this.health -= SWORD_BLOW_DAMAGE;
+    if (this.health > 0) {
+      this.flashHurtBody();
+      return;
+    }
+    this.blinkDown = false;
+    this.sprite.setAlpha(1);
+    // O fogo matou: `die()` de verdade (marca no chão, desmanche, moeda), nunca um despejo — e a
+    // voz da morte com o gate do quadro, como no fim do relógio da tocha viva.
+    if (this.framed) getSoundManager().playEnemyDeath(this.kind);
+    this.die();
+  }
+
+  /** Sair do anel apaga o fogo; o carvão fica (ver burnChar01) — e a vida perdida também. */
+  private endScorch(): void {
+    this.scorching = false;
+    this.scorchBiteMs = 0;
+    this.clearFlames();
   }
 
   /**
@@ -1007,10 +1164,18 @@ export abstract class EnemyBase {
     return mix(16, BURN_CHAR_R) | mix(8, BURN_CHAR_G) | mix(0, BURN_CHAR_B);
   }
 
-  /** Apaga o desenho do fogo (chamas + luz emprestada). O ESTADO morre com o corpo — quem chama
-   * é die/despawn/destroy, e um corpo que sobrevive a isto não existe. */
+  /** Apaga o desenho do fogo (chamas + luz emprestada) e os DOIS relógios que o acendem — a tocha
+   * viva e o calor da fogueira. O ESTADO morre com o corpo: quem chama é die/despawn/destroy, e um
+   * corpo que sobrevive a isto não existe. */
   private clearBurn(): void {
     this.burnLeftMs = 0;
+    this.scorching = false;
+    this.scorchBiteMs = 0;
+    this.clearFlames();
+  }
+
+  /** Só o desenho: as chamas e a luz emprestada, que voltam pro pool (ver FIRE_LIGHT_SLOTS). */
+  private clearFlames(): void {
     for (const flame of this.burnFlames) {
       if (this.scene.tweens) this.scene.tweens.killTweensOf(flame);
       flame.destroy();
@@ -1157,12 +1322,32 @@ export abstract class EnemyBase {
     if (this.hurtInvulnMs > 0) return false;
     this.hurtInvulnMs = HURT_INVULN_MS;
     this.health -= amount;
+    this.flashHurtBody();
 
-    // A PISCADA BRANCA FOI ARRANCADA. Um `setTintFill(0xffffff)` num billboard `emissive` nao e
-    // uma piscada: e uma silhueta chapada de branco puro que o bloom espalha pela tela, e o
-    // hitstop de 60-110ms a CONGELA acesa — bater num bicho cegava quem estava olhando pra ele.
-    // O golpe continua respondendo no corpo por tudo o que ja fazia e nao depende de luz: a
-    // faisca do impacto, o baque da tela, o arremesso de um tile e o atordoamento.
+    if (this.health <= 0) {
+      // A piscada não pode vazar para a morte: o desmanche tweena o alpha a partir de onde ele
+      // estiver, e começar de 0.35 faria o corpo sumir cedo demais.
+      this.blinkDown = false;
+      this.sprite.setAlpha(1);
+      this.die();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * A RESPOSTA DO CORPO A UM DANO — uma só, para todo caminho que tira vida (a espada, a bomba, a
+   * mordida do calor). Ela é separada do `takeDamage` porque nem todo dano passa por lá: o calor
+   * da fogueira fere por fora dos i-frames (ver scorchBite), e sem esta parte compartilhada ele
+   * seria o único dano do jogo que o corpo aceita sem dizer nada.
+   *
+   * A PISCADA BRANCA FOI ARRANCADA. Um `setTintFill(0xffffff)` num billboard `emissive` nao e
+   * uma piscada: e uma silhueta chapada de branco puro que o bloom espalha pela tela, e o
+   * hitstop de 60-110ms a CONGELA acesa — bater num bicho cegava quem estava olhando pra ele.
+   * O golpe continua respondendo no corpo por tudo o que ja fazia e nao depende de luz: a
+   * faisca do impacto, o baque da tela, o arremesso de um tile e o atordoamento.
+   */
+  private flashHurtBody(): void {
     if (this.hurtTexture) {
       this.sprite.setTexture(this.hurtTexture);
       this.scene.time.delayedCall(150, () => {
@@ -1183,23 +1368,18 @@ export abstract class EnemyBase {
         if (this.alive && this.sprite.active) this.restoreTint();
       });
     }
-
-    if (this.health <= 0) {
-      // A piscada não pode vazar para a morte: o desmanche tweena o alpha a partir de onde ele
-      // estiver, e começar de 0.35 faria o corpo sumir cedo demais.
-      this.blinkDown = false;
-      this.sprite.setAlpha(1);
-      this.die();
-      return true;
-    }
-    return false;
   }
 
+  /**
+   * O `playerSafe` SAIU DAQUI. Ele existia para uma coisa só — a caveira se desmanchava sozinha
+   * quando o herói alcançava uma fogueira —, e essa regra virou o calor da fogueira (ver o bloco
+   * "O CALOR DA FOGUEIRA"): agora a matilha não some, ela queima. Um parâmetro que todas as sete
+   * espécies recebiam com underscore é um convite a alguém reinventar o desmanche.
+   */
   public abstract update(
     delta: number,
     playerX: number,
     playerY: number,
-    playerSafe: boolean,
     playerHasTorch: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean;
@@ -1371,7 +1551,7 @@ export abstract class EnemyBase {
     this.lastScreen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
     this.lastTileSize = tileSize;
 
-    if (this.burnLeftMs > 0) this.renderBurnFlames();
+    if (this.burnLeftMs > 0 || this.scorching) this.renderBurnFlames();
     this.onRendered(camera, tileSize);
   }
 
@@ -1413,6 +1593,10 @@ export abstract class EnemyBase {
     // The step tilt also tweens sprite.angle; stop it so it can't fight the crumble spin.
     this.stepTween?.stop();
     this.onDeath();
+    // A RECOMPENSA SAI AQUI, no instante em que a vida chega a zero — não na remoção do corpo (que
+    // é ~310ms depois, o desmanche inteiro) e muito menos no golpe: a moeda tem de saltar junto com
+    // a pancada que matou, e tem de sair também quando não houve pancada nenhuma. Ver setDeathToll.
+    EnemyBase.deathToll(this);
     // Impact pop: swell for a beat, then crumble away spinning. O clarao branco daqui saiu pelo
     // mesmo motivo que o do dano (ver takeDamage) — e ele era o pior dos dois, porque o hitstop
     // da morte e o mais longo do jogo e segurava a silhueta branca acesa na tela inteira.

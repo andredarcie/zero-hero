@@ -19,6 +19,7 @@ import type { ExplorerArrival } from './explorerRun';
 
 const STYLE_ID = 'zh-explorer-style';
 const ROOT_ID = 'zh-explorer-hud';
+const MAP_ID = 'zh-chunk-map';
 const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 
 const CSS = `
@@ -66,6 +67,30 @@ const CSS = `
 #zh-explorer-toast .zh-ex-sub { font-size: clamp(11px, 1.9vh, 14px); color: #a49c8b; }
 #zh-explorer-toast.zh-loss .zh-ex-head { color: #d2695c; }
 #zh-explorer-toast.zh-gain .zh-ex-head { color: #f0d489; }
+
+/* O MAPA DO QUE FOI CONSTRUIDO — um quadradinho por chunk comprado, no canto de baixo.
+   Cinza e translucido de proposito: ele nao e informacao de decisao (a bolsa e a distancia sao),
+   e um mapa opaco puxaria o olho para fora do mundo. Ele e o RETRATO do labirinto que o jogador
+   desenhou sem querer, e so quem procurar por ele vai olha-lo. */
+#${MAP_ID} {
+  position: fixed;
+  right: calc(12px + env(safe-area-inset-right, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 44; pointer-events: none;
+  display: grid; gap: 2px;
+  opacity: 0.55;
+}
+#${MAP_ID} i {
+  display: block; width: 7px; height: 7px;
+  background: rgba(196, 202, 214, 0.22);
+  border-radius: 1px;
+}
+/* ONDE O HEROI ESTA. Roxo, e a unica cor do mapa: uma cor so num campo cinza e um PONTO, e um
+   ponto e a unica coisa que este desenho precisa dizer alem da forma. */
+#${MAP_ID} i.zh-here {
+  background: rgba(158, 110, 224, 0.72);
+  box-shadow: 0 0 4px rgba(158, 110, 224, 0.5);
+}
 `;
 
 const ensureStyle = (): void => {
@@ -80,6 +105,14 @@ export class ExplorerHud {
   private readonly root: HTMLDivElement;
   private readonly coinValue: HTMLElement;
   private readonly depth: HTMLElement;
+  /** O mapa dos chunks comprados — raiz própria porque ele mora no canto oposto da tela. */
+  private readonly map: HTMLDivElement;
+  /** Um quadradinho por chunk, indexado por `cx,cy`. Nasce quando o chunk é comprado. */
+  private readonly cells = new Map<string, HTMLElement>();
+  /** A assinatura do conjunto construído: só quando ela muda o mapa é redesenhado. */
+  private mapSig = '';
+  /** Onde o roxo está agora. Trocar de casa é mexer em DOIS elementos, nunca no mapa inteiro. */
+  private hereKey = '';
   private toast?: HTMLDivElement;
   private toastTimer?: number;
   private lastCoins = -1;
@@ -89,6 +122,9 @@ export class ExplorerHud {
     ensureStyle();
     this.root = document.createElement('div');
     this.root.id = ROOT_ID;
+    this.map = document.createElement('div');
+    this.map.id = MAP_ID;
+    document.body.appendChild(this.map);
 
     const coins = document.createElement('div');
     coins.className = 'zh-ex-coins';
@@ -123,8 +159,64 @@ export class ExplorerHud {
     this.depth.classList.remove('zh-deep', 'zh-abyss');
   }
 
+  /**
+   * O MAPA DO MUNDO QUE ELE ESTÁ DESENHANDO.
+   *
+   * Um quadradinho por chunk comprado, na posição relativa de cada um — visto de longe, o
+   * labirinto que o jogador escolheu construir. Ele não é bússola nem informação de decisão: é o
+   * RETRATO de uma escolha acumulada, e por isso é cinza, translúcido e fica no canto de baixo.
+   *
+   * O DOM só é refeito quando o conjunto muda (uma compra: acontece uma vez a cada minutos), e a
+   * casa do herói é uma troca de classe em dois elementos. Sem essas duas guardas isto seria
+   * reconstruir algumas dezenas de nós 60 vezes por segundo para desenhar o mesmo quadro.
+   *
+   * O layout é uma GRADE CSS com as coordenadas normalizadas (o canto superior-esquerdo do
+   * conjunto vira 1,1): o mundo cresce para qualquer lado, inclusive para negativo, e uma grade
+   * com origem no menor `cx/cy` é o que faz um chunk comprado a oeste empurrar o desenho em vez
+   * de sair da tela.
+   */
+  public updateMap(
+    built: ReadonlyArray<{ cx: number; cy: number }>,
+    hereCx: number,
+    hereCy: number,
+  ): void {
+    if (this.destroyed) return;
+    const sig = built.map((c) => `${c.cx},${c.cy}`).sort().join(';');
+    if (sig !== this.mapSig) {
+      this.mapSig = sig;
+      this.rebuildMap(built);
+      this.hereKey = ''; // as casas são outras: o roxo é reaplicado abaixo
+    }
+    const key = `${hereCx},${hereCy}`;
+    if (key === this.hereKey) return;
+    this.cells.get(this.hereKey)?.classList.remove('zh-here');
+    // O herói SEMPRE está num chunk comprado (o mundo não comprado é névoa sólida), mas a
+    // ausência é tratada mesmo assim: durante a travessia de um portão ele pisa antes de a compra
+    // registrar, e um `?.` a mais é mais barato que um quadrado roxo perdido.
+    this.cells.get(key)?.classList.add('zh-here');
+    this.hereKey = key;
+  }
+
+  private rebuildMap(built: ReadonlyArray<{ cx: number; cy: number }>): void {
+    this.map.replaceChildren();
+    this.cells.clear();
+    if (built.length === 0) return;
+    const minX = Math.min(...built.map((c) => c.cx));
+    const minY = Math.min(...built.map((c) => c.cy));
+    const cols = Math.max(...built.map((c) => c.cx)) - minX + 1;
+    this.map.style.gridTemplateColumns = `repeat(${cols}, 7px)`;
+    for (const chunk of built) {
+      const cell = document.createElement('i');
+      cell.style.gridColumn = String(chunk.cx - minX + 1);
+      cell.style.gridRow = String(chunk.cy - minY + 1);
+      this.map.appendChild(cell);
+      this.cells.set(`${chunk.cx},${chunk.cy}`, cell);
+    }
+  }
+
   public setVisible(visible: boolean): void {
     this.root.style.display = visible ? 'flex' : 'none';
+    this.map.style.display = visible ? 'grid' : 'none';
   }
 
   /**
@@ -177,5 +269,7 @@ export class ExplorerHud {
     if (this.toastTimer) window.clearTimeout(this.toastTimer);
     this.toast?.remove();
     this.root.remove();
+    this.map.remove();
+    this.cells.clear();
   }
 }

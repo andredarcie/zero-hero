@@ -5,13 +5,14 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_DOT_TEXTURE, FX_RING_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { PropDir } from '@/game/world/worldSchema';
+import { hammerResult, isHammerable } from './hammering';
 import type { WorldProp } from './WorldProp';
 
 /**
  * O MARTINETE — o momento em que este jogo encena a Revolucao Industrial.
  *
  * A esponja que sai do forno esta encharcada de escoria e so vira metal util depois de MARTELADA
- * quente, ate a escoria espirrar fora. O jogador faz isso com o botao A, esponja por esponja — e e
+ * quente, ate a escoria espirrar fora. O jogador faz isso com o botao X, esponja por esponja — e e
  * tedioso de proposito, porque foi tedioso de verdade por mil anos. O martinete e a resposta
  * historica exata: uma VIGA pesada pivotada num mancal, com o malho pendurado numa ponta; cames no
  * eixo da RODA D'AGUA erguem a outra ponta e soltam, e a viga desaba em arco sobre a bigorna. Foi
@@ -167,8 +168,8 @@ export type TripHammerWorldPort = {
   struck(finished: boolean): void;
 };
 
-/** O que ele sabe trabalhar, e no que aquilo vira. Uma tabela, para a proxima peca ser uma linha. */
-const HAMMERS: Partial<Record<HeldItemKind, HeldItemKind>> = { bloom: 'iron' };
+// O que ele sabe trabalhar e no que aquilo vira mora em `hammering.ts`, e nao aqui: a MESMA lei
+// vale para a martelada na mao e para o altar, e tres copias dela e como uma envelhece errada.
 
 export class TripHammerObject implements WorldProp {
   public readonly blocking = true;
@@ -261,7 +262,7 @@ export class TripHammerObject implements WorldProp {
    * O que ela nao faz e MARTELAR o que nao sabe trabalhar: com uma pedra dentro, a maquina fica
    * parada. Bater sem transformar seria barulho prometendo um resultado que nunca vem.
    */
-  public static works(kind: HeldItemKind): boolean { return kind in HAMMERS; }
+  public static works(kind: HeldItemKind): boolean { return isHammerable(kind); }
 
   /** Poe a peca na bigorna. Recusa so com a bigorna OCUPADA — um lugar, uma peca. */
   public accept(kind: HeldItemKind): boolean {
@@ -376,7 +377,7 @@ export class TripHammerObject implements WorldProp {
     port.struck(last);
 
     if (!last) return;
-    const made = HAMMERS[this.loaded ?? 'bloom'];
+    const made = hammerResult(this.loaded ?? 'bloom');
     if (!made) return;
     this.loaded = made;
     this.finished = true;

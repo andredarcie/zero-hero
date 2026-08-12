@@ -67,7 +67,7 @@ export class BeltObject implements WorldProp {
   public readonly worldY: number;
   public readonly dir: number;
   /**
-   * Construida pelo JOGADOR (e nao autorada no world.json). E o que decide se o B de mao vazia
+   * Construida pelo JOGADOR (e nao autorada no world.json). E o que decide se o X
    * pode recolher a peca de volta: desmontar a fabrica que voce mesmo montou e reversibilidade;
    * desmontar a que o autor do level montou e desmontar o puzzle.
    */

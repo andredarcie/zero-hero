@@ -1,6 +1,6 @@
 import { CHUNK_COLUMNS, CHUNK_ROWS, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES } from '@/game/constants';
 import type { ChunkData } from '@/game/world/Chunk';
-import type { ScreenContent } from '@/game/world/ScreenContent';
+import type { PickupKind, ScreenContent } from '@/game/world/ScreenContent';
 import { getChunkTemplates, type ChunkTemplate } from '@/game/world/WorldData';
 import type { WorldProp } from '@/game/world/worldSchema';
 
@@ -146,9 +146,15 @@ const darkChunk = (cx: number, cy: number): ChunkData => ({
 export const distanceFromCamp = (worldX: number, worldY: number): number =>
   Math.hypot(worldX - CAMP_X, worldY - CAMP_Y);
 
-export const campKit = (): Array<{ type: 'sword'; worldX: number; worldY: number }> => [
-  { type: 'sword', worldX: CAMP_X + 1, worldY: CAMP_Y + 2 },
-];
+/**
+ * O que o acampamento oferece de graça — HOJE, NADA.
+ *
+ * Era a espada, deitada ao lado da fogueira: a primeira coisa que o explorador fazia era apanhá-la,
+ * porque sem ela não havia como bater em nada. Ela deixou de ser item (o herói nasce com a dele —
+ * ver GameScene.swordEquipped), então o gesto virou uma reverência a uma regra que não existe mais.
+ * A lista fica: o dia em que o acampamento tiver um presente, ele entra aqui.
+ */
+export const campKit = (): Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> => [];
 
 const startProps = (): WorldProp[] => [
   { type: 'campfire', worldX: CAMP_X, worldY: CAMP_Y, lit: true },
@@ -209,6 +215,9 @@ export class ExplorerWorldSource {
   public catalog(): ChunkTemplate[] {
     return this.templates.filter((entry) => !this.used.has(entry.catalog.id));
   }
+
+  /** Se ALGUMA carta já foi comprada nesta run — quem pergunta é a mão de ABERTURA. */
+  public hasPurchased(): boolean { return this.used.size > 0; }
 
   public isBuilt(cx: number, cy: number): boolean { return this.built.has(keyOf(cx, cy)); }
 

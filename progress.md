@@ -5915,3 +5915,575 @@ d'água a cada 45s, que é mais trabalho do que ela economiza. Pior: o carvão n
 automatizado (a bandeja do forno só aceita minério + carvão, e a carvoaria é só de menu), então a
 linha "deixe as máquinas trabalharem enquanto você anda" que o astronauta promete não existe.
 Consertar isso é o forno aceitar lenha na bandeja — e ficou explicitamente de fora deste passe.
+
+## A mão de abertura: três cartas pelo mesmo preço
+
+A primeira mesa do jogo abria com uma carta ao alcance e duas trancadas — e escolher entre uma
+opção e dois cadeados não é escolher. A causa eram duas peças que, sozinhas, estavam certas: a
+tabela de preços dava 3 moedas à cratera do astronauta e 12+ a todo o resto (a escada do prólogo),
+e `ExplorerDirector.offers` sorteava a mão prometendo apenas que **uma** carta pagável estaria lá
+(o selo da estrada anuncia o custo mais barato do baralho, então uma mão só de cartas caras deixava
+o botão dizendo BUILD e a mesa não abrindo). Juntas, elas faziam da estreia uma formalidade: o
+jogador via três cartas e tinha um caminho.
+
+- **O trio de abertura custa 3** (`scripts/add-prologue.mjs`): a cratera continua onde estava, e
+  **Moonlit Lake** (12 → 3) e **Blooming Grove** (14 → 3) desceram para o mesmo degrau. São uma
+  oficina, uma água e um jardim — três respostas diferentes à mesma estrada, e nenhuma delas é a
+  certa. Três caveiras pagam qualquer uma.
+- **A mão de abertura não se sorteia** (`offers`): enquanto nada foi comprado nesta run, a mesa
+  mostra as **três mais baratas** do baralho. É o preço que escreve a abertura — nenhuma lista de
+  ids mora no código, então reprecificar uma carta no /editor (e na tabela do script) troca o trio
+  sozinha. A promessa antiga continua valendo da segunda compra em diante, intocada.
+- `ExplorerWorldSource.hasPurchased()` é a pergunta nova, e é a mesma que a run já respondia: o
+  conjunto `used` das cartas gastas.
+
+**A cratera deixou de ser obrigatória, e é isso que o passe compra.** Ela continua sendo a carta
+que ensina o jogo (a cadeia do ferro inteira mora nela), mas agora isso é um argumento e não uma
+trava — quem começar pelo lago ou pelo bosque chega nela na segunda ou terceira compra, com as
+mesmas 3 moedas.
+
+**O que ficou torto de propósito:** o degrau seguinte agora é 18 (Whispering Forest). Depois de
+três compras a 3, o mundo custa seis vezes mais de uma vez — a parede que a escada antiga
+distribuía entre 12, 14 e 18. Se a estreia agradar, o passe seguinte é reescrever a escada inteira
+a partir do novo piso, não empurrar o 18 para baixo.
+
+Guarda: `prologo` (a mão com 3 moedas e a oficina) e `world-builder` (o baralho de 8 cartas).
+
+## Um botão, uma frase: o Z é a espada, o X é a ferramenta
+
+O botão de ação usava "o item da mão", e a mochila escolhia esse item. No papel é elegante — um
+botão, uma tabela, tudo simétrico. Na mão é outra coisa: **para se defender era preciso abrir a
+bolsa e equipar a espada**, com a caveira já em cima; e o alcance do golpe mudava de duas fileiras
+para uma sem o jogador ter pedido nada, porque o punho alcança menos que a lâmina. O jogo tinha dois
+botões e nenhum deles tinha uma frase própria.
+
+Agora tem:
+
+- **Z = a espada, sempre.** Ela deixou de ser item: não tem slot, não se escolhe, não se perde e não
+  se larga (`swordEquipped` é uma constante; `ItemManager.loadAuthored` filtra as espadas autoradas
+  que ainda estão deitadas em mundos antigos). Falar com NPC e abrir o catálogo da bancada continuam
+  vindo antes do golpe — cumprimentar nunca sacou lâmina. O **soco morreu junto**: mão vazia deixou
+  de existir, e com ela `BARE_HAND_DAMAGE` e o ramo `'fist'`.
+- **X = usar o item selecionado** no tile à frente. É a tabela `useItemAt` inteira, que mudou de
+  botão: machado derruba, picareta quebra, chave abre, máquina instala. Bater com a espada e quebrar
+  a pedra deixaram de disputar o mesmo aperto.
+- **Pisar apanha.** Tudo (`collectUnderfoot`), e não mais só a lista de matéria-prima. A lei antiga
+  ("nada entra por pisada") existia para proteger a mão de ser roubada — e sem o gesto de largar não
+  há mão a roubar. `stash` nunca troca a seleção; só a primeira ferramenta da partida se equipa
+  sozinha (`selectFirstIfEmpty`).
+
+### O que sumiu, e por que não faz falta
+
+**LARGAR.** Um botão que ora usa, ora larga desarma o jogador por engano — e largar existia para
+trocar de mão, coisa que a mochila resolveu faz tempo. O que valia dele era DEPOSITAR, e isso virou
+**entrega**: `deliverToMachineAt`. A diferença é quem escolhe a carga. Era "largue o minério na
+bandeja"; é "o forno pede minério, o X dá" — e a carga sai da mochila INTEIRA, contador incluído.
+Sem essa inversão, tirar o minério da bolsa teria arrancado junto o único jeito de alimentar o forno
+na mão.
+
+**MÃO VAZIA.** Dois gestos dependiam dela (tirar do baú, recolher a máquina) e ela virou um estado
+inalcançável, porque a bolsa quase sempre tem algo selecionado. Os dois trocaram de critério: o baú
+**devolve o que não pode guardar** (ele é reversível por natureza), e recolher é o degrau DEPOIS da
+tabela e da entrega — uma ferramenta que tem o que fazer ali nunca desmonta a fábrica por acidente.
+
+### A mochila só guarda o que tem gesto
+
+Minério, ferro, carvão e engrenagem (`MATERIAL_ITEM_KINDS`) saíram da fileira e viraram **uma linha
+de contadores** debaixo da bolsa — e a mesma linha na subtela. Eles continuam inteiros no
+`Inventory`: a receita da bancada gasta deles, o braço os carrega, a bandeja os recebe. O que mudou
+é que não ocupam slot do X. O argumento é o botão: o polegar atravessava quatro coisas inertes para
+chegar na picareta, e cada uma delas, selecionada, fazia o X não responder. **Um item que só pode
+calar um botão não pertence ao botão.**
+
+A `bloom` é a fronteira que explica a regra e ficou na BOLSA: ela tem gesto — o X a pousa no chão
+para ser martelada, ou a entrega na bigorna. Minério é número; esponja é peça de trabalho.
+
+### As marcas seguiram os botões
+
+O keycap do quadrado branco de instalação virou **X** (`PlacementHints` lê `TAKE_KEY_TEXTURE`): a
+marca e o botão têm de ler a mesma coisa, e um "Z" sobre o tile prometeria a tecla errada. E o
+`PickupPrompt` deixou de anunciar o apanhar (que agora acontece sozinho) para anunciar a **entrega**
+— o único alvo do X que o chão não desenha, porque a carga entra dentro de um corpo sólido.
+
+### O que isto quebra, e não foi consertado
+
+**Alimentar a esteira na mão acabou** (minério não é selecionável, então quem abastece uma linha é
+o extrator). O BRAÇO não: a revisão mostrou que o portão-de-bater ficava insolúvel sem ele — a
+solução daquele level é o braço levar FOGO até o mato do outro lado, e o graveto aceso só chega lá
+pela mão do herói. O chão de entrada dele virou bandeja como a do forno.
+
+**A cerimônia de item novo agora dispara ANDANDO.** Ela para o jogo por até 3,2s (pulável com
+qualquer tecla) e antes só acontecia num aperto deliberado. É o Zelda — passar por cima do item e
+ganhar a fanfarra —, mas é a peça a vigiar se o prólogo começar a parecer entrecortado.
+
+### A revisão, e o que ela achou
+
+Os cenários foram reescritos para a gramática nova e RODADOS, um a um, contra a `main` — e a
+comparação é a parte que interessa: três defeitos que só o jogo real mostrou.
+
+- **A bateria não tinha mais como encaixar.** O dock vivia do "pousar" genérico, e ele morreu junto
+  com o largar. Virou linha da tabela (`useItemAt`): bateria + tile de cabo = encaixe.
+- **O braço robótico não tinha mais como ser alimentado**, o que deixava o level do portão-de-bater
+  insolúvel. Virou entrega (a mesma regra da bandeja do forno).
+- **A pisada roubava a própria fábrica.** Com "pisar apanha tudo", atravessar a linha levava a carga
+  da esteira, desfazia a entrega na bandeja e arrancava a bateria encaixada. `machineFloorAt` é a
+  resposta: chão de máquina não é bolso, e o X tira de volta o que está nele.
+
+Vinte e um cenários passam verdes: `combate` (11 falhas na `main`), `esgrima` (5), `fabrica` (9),
+`forja` (5), `caixa-ferramentas` (3), `bateria`, `pa`, `carnivora`, `bolsa`, `prologo`,
+`world-builder`, `menu-flow`, `braco`, `encomenda`, `jardim`, `smoke`, `gelo`, `tocha-viva`,
+`inimigos`, `fauna`, `portao-de-bater`. Vários deles estavam vermelhos ANTES desta mudança, por
+drift de fixture (a limpeza do quintal não ia até a borda), por número copiado (o cabo vem aos 5,
+não 4) e por teste que media o mundo em vez do gesto — tudo isso foi consertado no caminho.
+
+**O que segue vermelho, e é LEGADO desta mudança:** `itens`, `espada`, `pedra`, `machado`,
+`roda-agua`, `caldeira`, `fios`, `ferro`, `zora`, `portal-travessia`, `portao-eletronico`,
+`flor-da-lua`, `explorador`, `dungeon-gerada`, `level-intro`, `lab-dungeon`,
+`level-manager-portal` — todos falham IDÊNTICOS na `main`. E `salvamento`, que merece nota
+própria: ele testa o Continue do título e o save da aventura, e hoje `?play` e o botão do título
+abrem o CONSTRUTOR (`startExplorerRun`). A aventura com save não tem mais porta na interface — é
+uma decisão de produto pendente, não um teste quebrado.
+
+## A MATILHA NÃO EVAPORA MAIS — ela pega fogo na beira da fogueira (2026-08-12)
+
+"Às vezes os undeads desaparecem do nada." O relato estava certo, e o culpado tinha nome: o
+**sunset** do `UndeadEnemy`. Quando o herói pisava no anel seguro de uma fogueira, cada caveira
+sorteava um relógio de 1,8-4,8s e se **desmanchava** — despejo silencioso, sem marca, sem moeda,
+sem uma linha na tela dizendo por quê. A intenção era boa ("alcançou o fogo, o escuro reclama os
+seus"), mas o que o jogador via era a matilha inteira evaporando enquanto ele olhava para o outro
+lado. Um corpo que some sozinho desmente tudo o que a chegada dele prometeu: a fissura no chão é o
+telegrafo mais longo do jogo, e ela terminava em nada.
+
+**A regra nova é física, e é a segunda metade de uma lei que já existia.** "Luz de fogueira é
+parede pra todo monstro" sempre disse o que a luz IMPEDE; faltava dizer o que ela FAZ com quem
+insiste em ficar colado nela. Agora: o corpo pega fogo, perde vida a cada mordida e cai queimado —
+vivo o tempo todo, no lugar onde estava, à vista.
+
+- **O anel do calor é geometria, não gosto** (`CAMPFIRE_SCORCH_RADIUS_TILES` = 4,35). A parede
+  acende em 3,15, então o corpo mais próximo que consegue existir pisa a 3,16 (3,±1), 3,61,
+  4,0 e 4,24 da lenha — 4,35 pega exatamente essa primeira coroa de tiles pisáveis e nada além.
+  Um raio menor que a parede seria letra morta (lá ninguém pisa); um bem maior faria a fogueira
+  cozinhar a matilha de longe, sem que ela tivesse chegado perto de coisa nenhuma.
+- **A mordida vale UMA ESPADADA** (`SWORD_BLOW_DAMAGE`, a cada `SCORCH_BITE_MS` = 800ms), e isso é
+  o oposto de um número novo: cada espécie aguenta na brasa exatamente os golpes que aguenta na
+  espada (`ENEMY_BLOWS`). A caveira de 3 degraus cai em ~2,4s — o mesmo tempo da tocha viva — e a
+  torreta de 9 leva o triplo, sem nenhuma tabela para manter.
+- **A primeira mordida só vem no fim do primeiro intervalo.** As chamas aparecem no instante do
+  encosto, e esses 800ms são o aviso: quem raspa no anel e sai leva o susto e a marca de carvão,
+  não a vida. **Sair APAGA; a vida perdida NÃO volta** — a cicatriz é o preço de ter chegado perto.
+- **O calor NÃO é a tocha viva**, e essa distinção é a peça inteira. O corpo aceso pela chama vira
+  uma fogueira em pânico que corre e espalha fogo — o sistema que o JOGADOR conduz. Aqui não há
+  chama tocando ninguém, é o calor de perto: o bicho continua sendo ele mesmo (caça, arma golpe,
+  sai dali se conseguir). Se acendesse de verdade, toda fogueira do mundo viraria uma fábrica de
+  incendiários automáticos — eles queimariam o mato em volta de cada acampamento e, o que mata o
+  jogo, acenderiam as **fogueiras mortas** por aí, que são a fechadura que o herói existe para
+  abrir com a tocha na mão.
+- **A brasa não custa uma luz.** A tocha viva pede uma entrada emprestada do pool fixo
+  (`FIRE_LIGHT_SLOTS`); o calor não pede nenhuma — quem ilumina ali é a fogueira ao lado, e uma
+  entrada por corpo encostado na borda gastaria o pool inteiro numa matilha de quatro. Na tela é
+  também o que separa as duas: a tocha viva tem halo, o corpo assado só tem chama.
+- **A mordida fere por FORA do `takeDamage`** (`scorchBite`), e as duas metades importam: fogo não
+  respeita i-frames (senão nunca cobraria nada de quem acabou de ser empurrado para a brasa) e não
+  pode ARMÁ-LOS tampouco — 450ms de invulnerabilidade a cada 800ms de mordida transformariam o
+  calor num escudo, com a espada do herói resvalando mais da metade do tempo. O que ele empresta do
+  caminho normal é a resposta do corpo (`flashHurtBody`), que agora é uma só para todo dano.
+
+**O que a mudança dá de jogo:** a fogueira deixou de ser só um lugar seguro e virou uma ARMA de
+posição. Levar a matilha até a borda da luz e deixá-la assar é uma jogada — e é a mesma alavanca
+que o balde, a tocha e a cova calada já ensinavam, sem uma mecânica nova para aprender.
+
+**O que ficou de dívida:** com o sunset morto, a matilha que ficou de LONGE fica. Ela não some, não
+persegue (o herói está na luz) e espera — e quando ele sair, o cerco continua de onde parou. É o
+comportamento certo, mas é uma população que só o `DESPAWN_DISTANCE_TILES` (18 tiles, muito além do
+quadro de ~4,5) e o teto do `UndeadSpawnDirector` seguram. Se um dia a beira de uma fogueira virar
+um museu de caveiras paradas, o conserto é o teto, não um relógio de sumiço.
+
+**Limpeza que veio junto:** o `playerSafe` saiu do `update` de TODA espécie. Ele existia só para o
+sunset, e as sete o recebiam com underscore — um parâmetro morto assim é um convite a alguém
+reinventar o desmanche. Quem ainda lê `playerSafe` é o `EnemySpawnerManager` (com o herói no fogo
+nenhuma cova abre — agora pelo que isso protege, o descanso), e o `/editor` ganhou um aviso novo no
+Salvar: cova colada na luz de uma fogueira acesa é um moinho de corpos nascendo e queimando ali
+mesmo, a cada `ENEMY_RESPAWN_MS`, para sempre.
+
+Guarda: **`npm run playtest -- brasa`** — o corpo que arde encostado na luz sem ninguém acender
+nada, a vida caindo com ele VIVO, a morte com marca no chão (`die`, não despawn), a fogueira
+apagada esfriando o anel com a cicatriz intacta e, o principal, a caveira presa longe do fogo que
+continua de pé depois de 9s de herói sentado na fogueira — o dobro do sunset máximo que morreu.
+
+## A MOEDA PASSOU A SAIR DA MORTE, E A CAVEIRA PAGA 1 (2 em cada quatro) (2026-08-12)
+
+Consequência direta do calor da fogueira: a caveira agora morre queimada na beira da luz **sem o
+herói encostar nela** — e descobriu-se que essa morte não pagava nada. A moeda não saía da morte,
+saía do **golpe**: quem chamava `rewardKill` era o `strike` da espada, uma linha só, dentro do
+"acertou e matou". Tudo o mais matava de graça — a bomba, a tocha viva, a bola rebatida e, agora, a
+brasa.
+
+- **O sino da morte** (`EnemyBase.setDeathToll`): um static instalado pelo GameScene, no mesmo
+  desenho do `emberTouch` e pela mesma razão (a lei vale para todo corpo de toda espécie), tocado
+  **dentro do `die()`** e por mais ninguém. `despawn()` NÃO toca: ali o corpo não morreu, foi
+  recolhido — o escuro reclamando de volta quem ficou a 18 tiles não é caçada, e pagar por isso
+  seria pagar por nada.
+- **No instante da morte, não na remoção.** O corpo só some ~310ms depois (o desmanche inteiro), e
+  a moeda tem de saltar junto com a pancada que matou. Para o jogador que mata na espada, nada
+  mudou de lugar nem de tempo — o que mudou é que agora existe recompensa quando não houve pancada.
+- **Fonte nova de dano não precisa saber que moeda existe.** Era exatamente esse o defeito: cada
+  caminho novo de morte tinha de lembrar de pagar, e nenhum lembrava.
+
+**A caveira paga 1, e 2 em uma morte a cada quatro** (`undeadCoins`, `UNDEAD_DOUBLE_COIN_CHANCE`).
+Ela pagava 2 fixas pela escada `ENEMY_BLOWS - 1` (o resto do bestiário continua nela: morcego 1,
+torreta 8). Duas mudanças pediam o ajuste juntas — toda morte passou a pagar, e a caveira é o corpo
+que o cerco produz sem parar: com 2 garantidas por corpo a moeda deixaria de ser prêmio e viraria
+pingo constante. O sorteio é **por morte**, nunca por moeda: duas moedas saltando juntas é o evento.
+
+No explorador a base entra **multiplicada** pelo degrau de profundidade (`coinMultiplierAt`, a
+aposta do modo): perto do acampamento a caveira larga exatamente 1-2, e lá no fundo o mesmo sorteio
+vale até oito vezes isso. É uma inflação de ~25% na média do prólogo — as cartas de abertura custam
+3, então a estreia fica marginalmente mais rápida. Se isso apertar a escada, o conserto é o preço,
+não a moeda.
+
+Guarda: `prologo` — o passo **2c** é uma caveira que o herói nunca encostou, morta pelo fogo, e o
+assert cobra 1 ou 2 moedas no chão (com o multiplicador verificado em 1, porque o degrau tem 24
+tiles e aquilo é o quintal do acampamento). O passo 2, que já existia, continua guardando a metade
+antiga: a caveira que morre na espada paga.
+
+## O FORNO PASSOU A FUNDIR NA TELA (2026-08-12)
+
+Relato do usuário: *"no forno agora aparecem duas coisas — Z para abrir o menu dele e um X place
+iron ore"*. Duas verdades ao mesmo tempo, e as duas certas isoladamente: o Z abre o catálogo e funde
+da mochila; o X enche uma bandeja por aperto (é assim que uma esteira ou um braço alimentam a
+máquina). Juntas, elas obrigavam o jogador a escolher entre duas gramáticas antes de fazer qualquer
+coisa — de frente para o forno havia um keycap na alvenaria e uma legenda sobre a cabeça dele.
+
+**Ficou o Z.** A legenda do X saiu (`deliveryTargetAhead` agora responde só pelo martinete, que é o
+único lugar do jogo em que a carga entra DENTRO de um corpo sólido e não há nada desenhado no chão
+para ler). As bandejas continuam existindo e continuam aceitando o X: o que elas perderam foi o
+texto, e elas nunca precisaram dele — o que cada uma quer já está desenhado nela, em fantasma,
+respirando.
+
+### E confirmar deixou de ENTREGAR: agora ACENDE
+
+A fornada de catálogo era instantânea. A cena tirava os insumos da mochila, jogava a esponja num
+tile vizinho **no mesmo frame** e pedia ao forno uma pose de meio segundo — ou seja, o produto
+existia ANTES de a boca acender, e o gesto tinha começo e fim sem meio nenhum. Agora ela entra na
+MESMA máquina de estado da fornada de bandeja (`startHandSmelt`), e o jogador vê a coisa inteira:
+
+1. **a carga voa da mão dele para a boca** — dois insumos saindo na altura do braço, não dos pés
+   (`chargeFrom` passou a carregar a ALTURA de origem junto com o tile: da bandeja a carga sobe do
+   chão, da mão ela sai de 0,42);
+2. **o fole sopra três vezes**, e cada sopro agora SACODE a alvenaria (`bump`) além de soltar
+   faísca e som — um forno que ruge sem se mexer lê como lâmpada com efeito sonoro;
+3. **a brasa esguicha da boca** no instante em que a peça nasce (o único momento da fornada que não
+   tinha nada na tela);
+4. **a peça PULA pela saída da frente** — o mesmo tile de onde uma esteira a tiraria, e não mais um
+   vizinho escolhido pela distância até o herói.
+
+**1,6s**, menos da metade do ciclo automático (4s): a fornada de bandeja é o gargalo da linha e tem
+de doer, mas a do catálogo acontece com o jogador parado olhando, e espera com o jogador sem nada a
+fazer é a coisa mais cara que uma animação pode cobrar. O que 1,6s compra são os três sopros — o
+mínimo para a boca subir, rugir e cair.
+
+- **Uma voz só para a boca pegando fogo.** O gesto de mão tocava `playIgnite` e a fornada de bandeja
+  tocava `port.lit()`: dois sons para o mesmo evento na mesma máquina. Agora quem toca é o `update`
+  (`pendingLit`), pelos dois caminhos.
+- **A saída entupida tem duas respostas, e elas são diferentes de propósito.** A fornada de BANDEJA
+  segura a peça na boca até liberar (é o que faz uma linha enfileirar em vez de espalhar produção
+  pelo chão). A de MÃO tem uma segunda chance: com a frente ocupada — um item que ninguém apanhou,
+  o próprio herói parado ali — ela pousa num vizinho livre (`port.landing`). Sem isso, fundir duas
+  vezes seguidas deixaria a segunda peça presa dentro da máquina, que é a queixa "apertei Z e nada
+  aconteceu" de novo, agora com o item já pago.
+- **O forno ocupado RECUSA** uma segunda fornada (o tranco da carta no catálogo) — ele tem uma boca
+  só, e a recusa é honesta porque a máquina está rugindo na tela.
+- `FurnaceObject.playCraft` morreu com a pose de meio segundo, e com ela a bifurcação `bloom`
+  hard-coded: `spawnProduct`/`moveProduct` saem de `itemGroundVisual`, então a carvoaria
+  (madeira+madeira→carvão) sai pela mesma boca com a arte dela.
+
+**A dívida:** entre o aperto e a entrega existe ~2s em que os insumos já saíram da mochila e a peça
+ainda não existe. Morrer nessa janela perde a fornada. É exatamente o que a fornada de bandeja já
+fazia (com uma janela de 4s), e o conserto verdadeiro — persistir uma fornada em curso — só vale a
+pena se alguém reclamar.
+
+Guarda: `forja` (bloco 7 — confirmar fecha o painel, o forno entra em `smelting` com os insumos já
+gastos e a esponja AINDA não no chão; depois ela aparece na BOCA, com a fornada contada) e `prologo`
+(a carvoaria, agora esperando o item em vez de um relógio de 700ms).
+
+### ...e as bandejas pararam de pedir (mesmo dia)
+
+Segundo relato, na sequência do primeiro: *"o forno tem dois itens transparentes do lado dele
+flutuando indicando os itens necessários, isso é legado — tudo é feito pelo menu, que pode ter
+várias receitas"*. Certíssimo, e a data de validade daquele desenho tinha passado sem ninguém
+notar: os fantasmas nasceram quando o forno sabia fazer UMA coisa e não tinha catálogo — o plano
+não se pregava porque era o mesmo para sempre. Hoje ele tem duas receitas (carvoaria e esponja) e
+vai ter mais, e um pedido permanente de uma delas **mente sobre a máquina**: quem chegava com duas
+madeiras via o forno pedindo minério.
+
+- **Os fantasmas foram arrancados** (`renderNeeds`, `growGhost`, `needsGhosts`, `NEEDS`, os quatro
+  `GHOST_*`). Quem pede é o catálogo, que é onde o pedido pode crescer.
+- **A entrega pela mão foi junto.** O X numa bandeja tirava do contador o que o FANTASMA estivesse
+  pedindo — sem fantasma não havia mais o que perguntar, e reinventar a pergunta ("qual dos meus
+  itens esta máquina aceita?") seria devolver pela janela o segundo caminho que o Z já resolve
+  inteiro. As bandejas continuam sendo a boca das MÁQUINAS (esteira, braço) e o ciclo automático
+  continua comendo minério+carvão delas.
+- **O X ainda TIRA** o que estiver posto numa bandeja (`machineFloorAt`): chão de máquina não é
+  bolso, e o que entrou tem de poder sair.
+- `furnaceWithSlotAt` morreu com o último consumidor.
+
+O que sobrou desenhado nas bandejas é a marca do chão (as duas placas que pulsam quando vazias) —
+ela diz ONDE uma máquina entrega, que é a única coisa que uma bandeja ainda tem a dizer.
+
+Guarda: `forja` bloco 2b, que virou o contrário do que era — ele exigia o fantasma do carvão e
+agora exige que não haja fantasma nenhum, com as duas bandejas ainda existindo.
+
+## O arbusto sempre paga, e coisa deixou de soar como moeda (2026-08-12)
+
+Dois pedidos curtos, e os dois são a mesma espécie de dívida: uma regra que fazia sentido no dia em
+que foi escrita e parou de fazer quando o jogo cresceu em volta dela.
+
+**1. Todo arbusto seco queimado deixa carvão.** Era 1 em 4 (`CHARCOAL_DROP_CHANCE`, morto). A
+raridade metrificava o fogo enquanto o carvão era só comida de tocha e a única fonte dele era
+queimar mato. Depois disso ele virou o **reagente** da cadeia do ferro (nenhuma barra existe sem
+ele) e o forno ganhou a **carvoaria** (madeira+madeira, renovável e repetível a qualquer hora).
+Contra uma receita que se pode repetir, um sorteio no arbusto deixou de ser economia e virou
+imposto sobre quem escolheu o caminho do fogo: quatro arbustos queimados para ter o que uma árvore
+dá de graça. Arbustos continuam sendo a única fonte de chão (mato alto não larga nada — ele é o
+pavio, e item surpresa num pavio cai no caminho de quem está andando por cima dele).
+
+**2. Coisa não soa mais como moeda** (`SoundManager.playItemStash`). Pisar num graveto, numa pedra,
+num minério ou num carvão tocava `playCoinPickup` — o tilintar metálico do dinheiro, com escada de
+tom e tudo. Era o mesmo som para as duas únicas coisas que este jogo pede que o jogador conte
+separado (a carteira e a mochila), e numa mineração — cinco blocos saltando de uma rocha, cada um
+com a moeda subindo meio tom — o ouvido acreditava estar enriquecendo.
+
+A voz nova é o oposto da moeda em todos os eixos que o ouvido usa: **grave** em vez de aguda,
+**descendo** em vez de subindo, com um chiado surdo por baixo (o couro da mochila) em vez do
+sustain limpo de metal — e curta, porque a pisada apanha e segue andando. É sintetizada e sem
+amostra de propósito: toca dezenas de vezes por minuto numa mineração, então tem de ser barata de
+tocar e fácil de reafinar quando incomodar.
+
+Quem continua com o tilintar é **só o que é dinheiro**: a moeda apanhada do chão (com a escada de
+tom, que é o arpejo de um punhado), a venda no balcão de NPC e a compra de uma carta. O minério que
+salta da rocha voa como moeda mas agora **soa como coisa** — ele já tinha confundido pela arte uma
+vez (saía com cara de barra de metal), e soar como dinheiro era a mesma confusão pelo ouvido.
+
+Guarda: `itens` (bloco 5 — o encanamento arbusto→cinza→carvão, agora sem sorte a neutralizar).
+
+## O ALTAR — a bigorna que não é máquina (2026-08-12)
+
+A cadeia do ferro tinha dois lugares para malhar a esponja, e nenhum dos dois era um **lugar**: o
+martinete (que cobra roda d'água, engrenagem e uma rede elétrica inteira antes de existir) e o
+CHÃO, onde a peça cai e o jogador bate onde ela parou. O chão funciona e não ensina nada — nada no
+mundo diz "trabalhe aqui", e a esponja é malhada exatamente onde ela rolou. O altar é a mesa de
+trabalho que faltava entre os dois.
+
+    Z de frente (laje vazia)   →  põe o item SELECIONADO na bolsa (o "secundário", o do X)
+    Z de frente (laje cheia)   →  a espada desce nela: uma pancada
+    X (peça malhável)          →  a mesma pancada, com o que estiver na mão
+    X (o resto)                →  devolve o que está lá
+
+- **Ele não é máquina, e a arte diz isso antes de qualquer texto.** Sem energia, sem direção, sem
+  ciclo: a única coisa que acontece nele é o que a mão do jogador faz. Por isso a silhueta foge das
+  três famílias da fábrica (caixa de metal com aro de ink, alvenaria em cone do forno, armação de
+  madeira do martinete) e é pedra bruta cortada em bloco — base larga, pescoço estreito e um tampo
+  PROJETADO com o degrau de sombra embaixo. É essa projeção que faz a peça ler como "há uma
+  superfície aqui" a 1x, e é o que a separa das ~800 pedras do mundo. Dois frames: fria e com o
+  tampo em BRASA, que é o calor que a pancada deixa (~240ms, 460 na última) — o mesmo vocabulário
+  do `FRAME_HOT` do martinete.
+- **Ele aceita qualquer coisa, e deixa bater em tudo** (pedido explícito do usuário: "hoje dá pra
+  colocar outras coisas e bater, mas ainda sem efeito prático"). Uma mesa que só aceitasse esponja
+  seria uma fechadura com uma chave só, e o jogador nunca descobriria o gesto sem já saber a
+  resposta. A laje se defende de MENTIR por outro caminho: o que a pancada trabalha cospe brasa e
+  escória (9 faíscas por golpe, 18 na última, mais o anel e o tremor) e vira outra peça; o que não
+  trabalha solta quatro lascas cinzentas e um baque seco, sem contagem e sem promessa. Duas
+  recusas com o mesmo pixel não ensinam nenhuma.
+- **Três pancadas, as mesmas de sempre** (`BLOOM_BLOWS`): a mão no chão, o martinete e o altar
+  cobram o mesmo número de propósito — é essa igualdade que faz a automação ser sentida como
+  ALÍVIO (a máquina poupa o gesto, nunca o número) em vez de lida como upgrade de estatística.
+- **O ferro pronto fica EM CIMA da laje.** Uma mesa não move a peça (a mesma lei da bigorna), e
+  apanhar continua sendo um gesto à parte — o X, que é também a saída de emergência: como só o
+  malhável vira pancada, tudo o mais que estiver na laje sai por ele e nada fica preso.
+- **`objects/hammering.ts`**: o que uma pancada transforma passou a morar num lugar só. A tabela
+  existia em dois (`HAMMERS` dentro do martinete, e `bloom → iron` escrito na mão dentro do
+  `strikeBloomAt` da cena); com o altar seriam três, e a terceira nasceria discordando no dia em
+  que a segunda receita aparecesse. As pancadas necessárias continuam em `BLOOM_BLOWS`.
+
+**A arte** saiu da sprite factory (`spritefactory/sprites/altar.mjs` → `factory build altar`,
+0 fail / 0 warn, instalada em `environment/props/altar.png`) e entrou nas duas pipelines pelo
+caminho de sempre: `ASSET_KEYS` + `assetManifest` (o lado Phaser, que o ícone do editor e qualquer
+UI 2D leem) + `textures3d` (o billboard). O contorno usa TRÊS tons de ink — fio de cima claro,
+lateral navy, barriga escura —, que foi o conserto do primeiro build: com uma cor só o linter
+reprova por "chapado", e ele tem razão, um contorno de tom único lê como adesivo.
+
+**O que ficou de fora, de propósito:** o altar é autorado (aba de props do /editor), não é item de
+mochila e não se constrói. Ele é móvel de mapa — se virar receita da bancada um dia, é uma linha
+em `toolboxRecipes` e nada mais. E o que está em cima dele é estado de PARTIDA (não vai para o
+`world.json`, como o conteúdo do baú).
+
+Guarda: `npm run playtest -- altar` — o Z pondo a esponja (e ela saindo da mochila), as duas
+pancadas que não bastam, a terceira que vira ferro em cima da laje, o X que devolve, e a pedra que
+sobe na mesa e apanha sem virar nada.
+
+## O altar na bancada, e o mapa do labirinto no canto (2026-08-12)
+
+### A laje virou receita: **pedra + esponja**
+
+O altar nasceu prop autorado (só o /editor o punha). Agora ele é a quarta carta da escada da
+bancada, e o preço é a piada de desenho do martinete um degrau antes: **a laje é pedra bruta, e o
+que a transforma em superfície de TRABALHO é a face de ferro** — uma esponja inteira, aquela que o
+jogador foi obrigado a malhar no chão, do jeito tedioso. Para construir o lugar onde se malha é
+preciso ter malhado uma vez sem ele.
+
+- **O lugar na escada não é de gosto:** `furnace, axe, gear, ALTAR, tripHammer, …`. Um degrau só
+  pode ser oferecido quando já dá pra cumprir, e quem chegou na engrenagem já fundiu (o forno) e já
+  malhou uma esponja na mão (não há ferro sem isso). Oferecido antes, o altar travaria a escada
+  inteira atrás de um insumo que o jogador ainda não tem como fazer — `catalogSteps` para no
+  primeiro degrau não-cumprido, então uma carta impossível esconde todas as seguintes.
+- **E ele vem logo ANTES do martinete de propósito:** primeiro o lugar de malhar à mão, depois a
+  máquina que malha sozinha. A automação chegando como alívio de um trabalho já conhecido.
+- **O par de insumos continua ÚNICO** (`stone + bloom` não estava em uso). Não é preciosismo: as
+  bandejas da bancada ainda fabricam por combinação (`toolboxRecipeFor`), então dois pares iguais
+  seriam duas receitas disputando a mesma entrega de um braço robótico.
+- Ele entrou em `MACHINE_ITEM_KINDS` — instala com o X, recolhe com o X (com a laje VAZIA: com uma
+  peça em cima, o X é o gesto de tirar a peça, como no baú cheio) — e no save da aventura, sem
+  `dir` (não tem frente) e sem o que está em cima (isso é o meio de uma martelada, não um estado).
+
+### O mapa dos chunks — o retrato do labirinto
+
+No canto de baixo à direita, um quadradinho de 7px por chunk comprado, na posição relativa de cada
+um: visto de longe, é o mundo que o jogador escolheu construir. **Cinza translúcido** (55%) porque
+ele não é informação de decisão — a bolsa e a distância são, e um mapa opaco puxaria o olho para
+fora do mundo. **A casa do herói é a única cor: roxo.** Uma cor só num campo cinza é um PONTO, e um
+ponto é tudo que este desenho precisa dizer além da forma.
+
+- **Grade CSS com as coordenadas normalizadas** (o menor `cx/cy` do conjunto vira 1,1): o mundo
+  cresce para qualquer lado, inclusive negativo, e uma grade ancorada no mínimo é o que faz um
+  chunk comprado a oeste EMPURRAR o desenho em vez de sair da tela.
+- **Duas guardas de custo:** o DOM só é refeito quando o conjunto muda (uma compra, uma vez a cada
+  minutos) e a casa do herói é uma troca de classe em dois elementos. Sem elas isto seria
+  reconstruir dezenas de nós 60 vezes por segundo para desenhar o mesmo quadro.
+- Mora no `ExplorerHud` (raiz própria, canto oposto) porque a lifecycle é a mesma: aparece com o
+  modo, some com ele, morre com ele.
+
+Guarda: `world-builder` (um quadradinho por chunk, um roxo só, na casa certa, e o mapa translúcido)
+e `encomenda`, cujo bloco da escada passou a cobrar `furnace, axe, gear, ALTAR` — com os dois tipos
+de insumo que faltam na carta nova: a pedra (o mundo dá, sai apagada) e a esponja (o jogo sabe
+fazer, sai com a moldura em brasa).
+
+## A escada de preços caiu para um terço (2026-08-12)
+
+"Faça todas as cartas serem mais baratas no geral." O passe que o próprio `progress.md` já tinha
+registrado como pendente — *"se a estreia agradar, o passe seguinte é reescrever a escada inteira a
+partir do novo piso, não empurrar o 18 para baixo"* — e é o que foi feito.
+
+| carta | antes | agora |
+| --- | --- | --- |
+| a abertura (cratera, lago, bosque) | 3 · 3 · 3 | **3 · 3 · 3** (intocada) |
+| Salesman's Pond · Cat's Hearths | 16 · 16 | 5 · 5 |
+| Whispering Forest | 18 | 6 |
+| Businessman's Timber · Poet's Pines | 20 · 20 | 7 · 7 |
+| Granite Pass | 22 | 8 |
+| Artist's Beds | 24 | 9 |
+| Spider Hollow | 26 | 10 |
+| Sunken Graveyard | 30 | 11 |
+| Workman's Ford | 34 | 13 |
+| Death's Meadow | 36 | 14 |
+| **Death's Threshold** (o fim do prólogo) | 90 | **36** |
+
+**A escada agora sobe de UM em um.** O defeito não era o teto, era o DEGRAU: de 3 para 16 o mundo
+ficava seis vezes mais caro de uma vez, e o que estava atrás daquele salto não era uma decisão, era
+uma tarefa. Com a bolsa começando em zero e a caveira pagando 1, cada preço é um pedaço de tempo do
+jogador — e o que se quer de um degrau é que ele custe **mais uma caveira** que o anterior.
+
+- **A abertura não mudou**, e não podia: as três cartas a 3 são a primeira decisão do jogo, e quem
+  as escolhe é o próprio preço (`ExplorerDirector.offers` mostra as três mais baratas do baralho,
+  nunca uma lista de ids). Reprecificar mexe na mão de abertura sem o código saber de nada — e foi
+  o que aconteceu de bônus aqui: o Lago estava com **12** no `world.json` (drift de edição pelo
+  /editor) e voltou para os 3 que a tabela sempre disse.
+- **O ferro continua sendo a moeda de verdade** (o astronauta paga 9 por barra): uma carta comum
+  passou a ser meia barra a uma barra e meia, e o fim do prólogo, quatro barras — ainda a coisa que
+  ninguém junta sem pôr o martinete para bater, que é a única função daquele preço.
+- **`scripts/add-prologue.mjs` é a tabela**, e ele foi rodado: 12 cartas reprecificadas no
+  `world.json`, e o diff do arquivo tem exatamente 14 linhas, todas `"cost"`. Mexer num preço pelo
+  /editor sem mexer na tabela continua sendo perder a mudança na próxima rodada do script.
+
+**Um teste ficou melhor no caminho:** o `prologo` cobrava `finale.cost === 90` — um número fixo que
+só garante que alguém o atualize junto. Agora ele cobra a LEI: a carta da Morte é a **mais cara do
+baralho**, seja qual for a tabela do dia.
+
+## O altar virou o LUGAR do ferro, e o lago virou uma oficina de ideias (2026-08-12)
+
+### "Não tem como bater no chão" — e a causa era uma legenda
+
+O relato: *"o jogador não tem como jogar o item no chão e bater como era antes pra chegar na barra
+de ferro"*. O caminho não sumiu — ele nunca foi anunciado direito. A cerimônia de item novo da
+esponja dizia, em caixa alta, **"MARTELE COM O A"**, e o A virou a ESPADA na reforma dos dois
+botões: quem seguia a instrução do próprio jogo apertava Z em cima da esponja e via o herói dar uma
+espadada no ar. A legenda mentia havia semanas, e mentia no ponto mais caro da cadeia.
+
+Ela agora diz o que existe: **PONHA NO ALTAR (Z) E MALHE COM O X**. E o altar deixou de ser um
+luxo para virar o que o usuário decretou — a peça central do processo:
+
+- **A receita virou `pedra + minério`** (era `pedra + esponja`). A antiga era bonita no papel e
+  CIRCULAR na mão: o altar é onde a esponja vira barra, então cobrar uma esponja por ele é a mesma
+  armadilha que o livro de receitas recusa na picareta. Pior depois que a laje virou o lugar do
+  gesto — uma barra vale 9 moedas, e a primeira do jogador ia inteira para a mesa. Pedra e minério
+  saem os dois da mesma picareta, no primeiro minuto da cratera.
+- **A escada mudou de ordem: `forno, ALTAR, machado, engrenagem, martinete…`** Forno e laje coladas,
+  porque são as duas metades de um processo só — e o segundo degrau é sempre pagável no minuto em
+  que aparece.
+- **O astronauta ensina o altar.** A fala dele é o tutorial inteiro da cadeia, e mandava "martelar
+  a esponja três vezes" sem dizer ONDE. Agora nomeia a laje, o forno e o preço da barra.
+
+### O lago: renda, energia de graça e um convite
+
+Ele era uma das três cartas de abertura (3 moedas) e era só bonito: água, três flores da lua e
+capim. Uma primeira decisão entre uma oficina e um papel de parede não é uma decisão. Agora traz:
+
+1. **Três zoras**, e um corpo de água paga **3 moedas** (`AQUATIC_KILL_COINS`) contra 1 da caveira.
+   O número é o preço de um problema, não de uma vida: o zora mora onde a espada não alcança de
+   graça — ou se luta da margem, na janela em que ele emerge, ou não se luta. É também a única
+   fonte de moeda que o jogador pode **procurar** no mapa em vez de esperar na estrada.
+2. **Uma roda d'água já girando**, na borda oeste. É a única usina que o jogador NÃO consegue
+   fabricar (não há receita de roda), então vê-la funcionando é a diferença entre "existe
+   eletricidade neste jogo" e "existe eletricidade e ela é minha".
+3. **Um pacote de cinco cabos** na grama ao lado dela. Nada obriga a usá-los: é um "e se?" pousado
+   no chão, que é a forma mais barata de um jogo sugerir um plano sem escrever um objetivo na tela.
+
+### Dois defeitos que o lago desenterrou
+
+- **A roda lia só METADE da água.** `waterFlowAt` perguntava pelo `water` PROP — o rio que um level
+  autora — e ignorava o TILE de terreno, que é como todo lago e todo mar do overworld existem. Uma
+  roda plantada num lago ficaria parada para sempre: a peça mais cara de ler do jogo falhando em
+  silêncio. É exatamente a lei que `isOpenWaterAt` existe para cobrar ("água tem duas procedências
+  e quem pergunta por uma só quebra"), e agora é ela quem responde — ponte, vau e canal drenado
+  continuam secando a roda, porque a `blocking` do prop já dizia isso.
+- **Moeda no meio do lago é recompensa que se vê e não se pega.** Todo drop de corpo passou a
+  pousar na PRAIA mais próxima (`shoreDropTile`: anéis crescentes até o primeiro chão pisável). Não
+  há regra nova para o jogador aprender — o dinheiro chega na terra, como tudo o mais.
+
+Guarda: `prologo` ganhou o bloco **5b** — compra o lago num portão escolhido em tempo de execução
+(nunca o do norte, que é o do fim do prólogo), confere as três criaturas na carta, a roda GIRANDO e
+o pacote de cinco cabos, e mata um zora dentro d'água para cobrar as 3 moedas **e** que nenhuma
+delas fique na água. `encomenda` voltou à forma antiga com o altar no degrau novo.
+
+### A roda que não nascia (mesmo dia)
+
+"Faltou a roda d'água no lago." Faltou mesmo, e o motivo estava escrito no próprio código: a roda
+era **o único prop que o `spawnStreamedProps` ignorava de propósito**, e o comentário do `default`
+explicava por quê — ela não é só um prop, ela SUBSTITUI a água do tile (o rio corre sob as pás, e é
+dele que o dinamo vive), então nascer num chunk comprado significava manter dois arrays em par, e
+meia roda é pior que roda nenhuma: um rotor girando sobre chão seco.
+
+O motivo caducou no minuto em que uma CARTA passou a poder autorar uma. O resultado prático era o
+pior tipo de falha: a carta do Lago nascia sem a peça mais visível dela, sem um aviso em lugar
+nenhum.
+
+O par agora é uma linha, e é **condicional**: o quad de rio só nasce onde a água NÃO é terreno. Num
+level a roda substitui um prop de rio e precisa dele; num lago do overworld a água já está pintada
+no chão, e um segundo quad ali seria um rio desenhado por cima de um lago. Quem move a roda
+(`waterFlowAt`) já lê as duas procedências desde o conserto de ontem.
+
+E o lago ganhou o **segundo pacote de cabos** (dois × cinco): cinco fios fazem uma linha curta, dez
+fazem uma que atravessa a carta — a diferença entre "dá pra ligar a roda em alguma coisa" e "dá pra
+escolher em QUE coisa", que é o pensamento que aquele monte de cabo existe para provocar.
+
+Guarda: `prologo` bloco 5b passou a cobrar que a roda **nasceu** (não só que gira) e que são dois
+pacotes de cinco.

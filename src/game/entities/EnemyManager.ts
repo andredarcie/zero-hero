@@ -262,6 +262,7 @@ export class EnemyManager {
     invulnerable: boolean;
     windingUp: boolean;
     burning: boolean;
+    scorching: boolean;
     frozen: boolean;
     framed: boolean;
   }> {
@@ -281,6 +282,8 @@ export class EnemyManager {
         windingUp: e.isWindingUp,
         // A tocha viva (ver EnemyBase.igniteBody) — o playtest `tocha-viva` lê daqui.
         burning: e.isBurning,
+        // O corpo assando na beira da fogueira (ver EnemyBase.tickScorch) — o playtest `brasa`.
+        scorching: e.isScorching,
         // A estátua de gelo (ver FreezeManager) — o playtest `gelo` lê daqui.
         frozen: e.isFrozen,
         // O corpo aparece no quadro? (a lei "fora da tela não fala nem atira" se asserta por isto)
@@ -356,11 +359,12 @@ export class EnemyManager {
     delta: number,
     playerWorldX: number,
     playerWorldY: number,
-    playerSafe: boolean,
     playerHasTorch: boolean,
     blocked: BlockedQuery,
     playerInvincible: boolean,
     framedAt: (wx: number, wy: number) => boolean,
+    // O CALOR: este tile está colado numa fogueira acesa? (ver EnemyBase.tickScorch)
+    heatAt: (wx: number, wy: number) => boolean,
     lurablePlates: ReadonlyArray<{ worldX: number; worldY: number }> = [],
   ): EnemyHit | null {
     let hit: EnemyHit | null = null;
@@ -420,6 +424,11 @@ export class EnemyManager {
       // viva eterna parada a 16 tiles. Ele pode MATAR o corpo aqui — daí o guarda logo abaixo.
       enemy.tickBurn(delta);
       if (!enemy.isAlive) continue;
+      // ...e o CALOR DA FOGUEIRA, pelo mesmo motivo e no mesmo lugar (ver EnemyBase.tickScorch):
+      // um corpo encostado na luz continua assando mesmo com o herói do outro lado do mapa, e
+      // este relógio também pode matar — daí o segundo guarda.
+      enemy.tickScorch(delta, heatAt(enemy.worldX, enemy.worldY));
+      if (!enemy.isAlive) continue;
 
       const farX = Math.abs(enemy.worldX - playerWorldX);
       const farY = Math.abs(enemy.worldY - playerWorldY);
@@ -448,7 +457,7 @@ export class EnemyManager {
         // IA nenhuma. Continua sólido, ferível e empurrável — gelo trava, nunca protege. Pelo
         // mesmo desenho da tocha viva, nenhuma espécie precisou saber que gelo existe.
       } else if (
-        enemy.update(delta, playerWorldX, playerWorldY, playerSafe, playerHasTorch, blockedForEnemy)
+        enemy.update(delta, playerWorldX, playerWorldY, playerHasTorch, blockedForEnemy)
       ) {
         hit ??= { enemy, ranged: false, fromX: enemy.worldX, fromY: enemy.worldY };
       }

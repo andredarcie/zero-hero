@@ -66,6 +66,14 @@ const CSS = `
   pointer-events: none;
 }
 .zh-sub-empty { text-align: center; color: #7d7666; font-size: 0.88em; padding: 0.6em 0; }
+/* OS CONTADORES da materia-prima, logo abaixo da grade: icone + numero, sem slot e sem cursor.
+   A mesma leitura da bolsa (ver QuickBag) — quem nao tem gesto nao ganha moldura de item. */
+.zh-sub-mats {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px;
+  padding: 0.1em 0 0.2em; color: #a49c8b; font-size: 0.84em;
+}
+.zh-sub-mat { display: flex; align-items: center; gap: 4px; }
+.zh-sub-mat img { width: 20px; height: 20px; image-rendering: pixelated; object-fit: contain; }
 .zh-sub-name {
   margin: 0.7em 0 0; text-align: center; min-height: 1.2em;
   color: #cfc9ba; font-size: 0.88em;
@@ -219,6 +227,8 @@ export interface SubScreenView {
   /** `icon` e o coracao CHEIO, `emptyIcon` o vazio — dois desenhos, nunca um com opacidade. */
   hearts: { max: number; filled: number; icon: string; emptyIcon: string };
   items: SubScreenItem[];
+  /** A materia-prima: contadores, nunca slots (ver MATERIAL_ITEM_KINDS e QuickBagView.materials). */
+  materials: SubScreenItem[];
   selected: string;
   /** So na aventura (overworld): a subtela de level/explorador/dungeon nao tem mapa. */
   map?: SubScreenMap;
@@ -235,6 +245,7 @@ export class SubScreenPanel {
   public readonly el: HTMLDivElement;
   private readonly heartsRow: HTMLDivElement;
   private readonly grid: HTMLDivElement;
+  private readonly mats: HTMLDivElement;
   private readonly name: HTMLParagraphElement;
   private readonly title: HTMLHeadingElement;
   private readonly mapTitle: HTMLHeadingElement;
@@ -255,6 +266,8 @@ export class SubScreenPanel {
     this.heartsRow.className = 'zh-sub-hearts';
     this.grid = document.createElement('div');
     this.grid.className = 'zh-sub-grid';
+    this.mats = document.createElement('div');
+    this.mats.className = 'zh-sub-mats';
     this.name = document.createElement('p');
     this.name.className = 'zh-sub-name';
     this.mapTitle = document.createElement('h3');
@@ -269,7 +282,7 @@ export class SubScreenPanel {
     // Os PLANOS ficam entre a mochila e o mapa de proposito: eles falam do que esta na mochila
     // (o que falta para cada receita), e o mapa fala do mundo. A ordem e a de zoom crescente.
     this.el.append(
-      this.title, this.heartsRow, this.grid, this.name,
+      this.title, this.heartsRow, this.grid, this.mats, this.name,
       this.plansTitle, this.plans, this.mapTitle, this.map,
     );
     this.render();
@@ -303,6 +316,10 @@ export class SubScreenPanel {
     // Os PLANOS vem ANTES da porta de mochila vazia logo abaixo (que devolve cedo): saber o que
     // uma receita pede e util justamente para quem ainda nao tem nada.
     this.renderPlans(view.plans);
+
+    // Antes da porta de mochila vazia: uma bolsa sem ferramenta nenhuma e um bolso com minerio
+    // continua tendo o que mostrar.
+    this.renderMaterials(view.materials);
 
     this.grid.replaceChildren();
     if (view.items.length === 0) {
@@ -348,6 +365,24 @@ export class SubScreenPanel {
    * e um botao aqui prometeria uma acao que so faz sentido a meia tela de distancia. O que esta
    * pagina responde e a outra pergunta, a que se faz com a mochila na mao: "o que falta".
    */
+  /** Icone + numero por material. Leitura pura: nada aqui e clicavel, e nada aqui se equipa. */
+  private renderMaterials(materials: SubScreenItem[]): void {
+    this.mats.replaceChildren();
+    this.mats.style.display = materials.length ? 'flex' : 'none';
+    for (const mat of materials) {
+      const cell = document.createElement('div');
+      cell.className = 'zh-sub-mat';
+      cell.title = mat.label;
+      const img = document.createElement('img');
+      img.src = mat.icon;
+      img.alt = mat.label;
+      const num = document.createElement('span');
+      num.textContent = String(mat.count);
+      cell.append(img, num);
+      this.mats.appendChild(cell);
+    }
+  }
+
   private renderPlans(plans: SubScreenView['plans']): void {
     this.plansTitle.replaceChildren();
     this.plans.replaceChildren();

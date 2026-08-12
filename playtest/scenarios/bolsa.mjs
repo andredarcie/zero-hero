@@ -23,7 +23,11 @@
 // autorado por outra pessoa contem hoje).
 
 const HERO = { x: 5, y: 6 };
-const PACK = ['sword', 'pickaxe', 'axe', 'wood', 'bomb'];
+// A ESPADA SAIU DA MOCHILA (ela e do heroi agora — ver GameScene.swordEquipped), entao o pacote e
+// so de itens COM GESTO. O `iron` entra de proposito e NAO conta como slot: ele e materia-prima
+// (MATERIAL_ITEM_KINDS) e vive na fileira de contadores debaixo da bolsa, sem cursor.
+const PACK = ['pickaxe', 'axe', 'wood', 'bomb', 'key'];
+const MATERIAL = 'iron';
 
 export default {
   name: 'bolsa',
@@ -71,14 +75,15 @@ export default {
       null, { timeout: 15000 });
     await driver.settle(400);
 
-    log('MOCHILA: cinco itens, e o B carregando a espada');
+    log('MOCHILA: cinco itens com gesto, quatro barras de ferro no contador, e o X na picareta');
     await page.evaluate((pack) => {
       const s = window.__scene;
       s.inventory.clear();
-      for (const kind of pack) s.inventory.add(kind);
-      s.inventory.select('sword');
+      for (const kind of pack.slots) s.inventory.add(kind);
+      s.inventory.stash(pack.material, 4);
+      s.inventory.select(pack.slots[0]);
       s.playerHealth = s.playerMaxHealth;
-    }, PACK);
+    }, { slots: PACK, material: MATERIAL });
     await driver.settle(200);
 
     // ── 1. O JOGO CONTINUA ──────────────────────────────────────────────────
@@ -96,11 +101,16 @@ export default {
       // O ponto de brasa: o que o B carrega AGORA, que e uma pergunta diferente de onde o cursor esta.
       equipped: document.querySelector('#zh-bag-root .zh-bag-eq')?.parentElement
         ?.getAttribute('data-kind') ?? null,
+      // A MATERIA-PRIMA nao e slot: ela e uma linha de contadores, sem cursor e sem selecao.
+      mats: document.querySelectorAll('#zh-bag-root .zh-bag-mat').length,
+      matText: document.querySelector('#zh-bag-root .zh-bag-mat span')?.textContent ?? null,
     }));
-    assert('o I abre a bolsa com a mochila inteira desenhada',
+    assert('o I abre a bolsa com os itens de GESTO desenhados',
       opened.bagOpen === true && opened.slots === PACK.length, JSON.stringify(opened));
     assert('o cursor comeca no item que esta na mao — a bolsa nunca mente sobre o que ele carrega',
-      opened.cursor === 'sword' && opened.equipped === 'sword', JSON.stringify(opened));
+      opened.cursor === PACK[0] && opened.equipped === PACK[0], JSON.stringify(opened));
+    assert('e a materia-prima aparece EMBAIXO, como contador — nunca como slot',
+      opened.mats === 1 && opened.matText === '4', JSON.stringify(opened));
     await shot('bolsa-aberta');
 
     await driver.settle(700);
@@ -135,7 +145,7 @@ export default {
     assert('a seta andou com o CURSOR',
       browsing.cursor === PACK[2], JSON.stringify(browsing));
     assert('mas o item do B NAO mudou — apontar e equipar sao dois gestos',
-      browsing.heldItem === 'sword', JSON.stringify(browsing));
+      browsing.heldItem === PACK[0], JSON.stringify(browsing));
     await shot('bolsa-cursor-andou');
 
     // ── 3. O X EQUIPA, FECHA — E NAO USA ────────────────────────────────────

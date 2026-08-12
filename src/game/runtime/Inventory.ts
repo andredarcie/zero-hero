@@ -1,4 +1,4 @@
-import type { HeldItemKind } from '@/game/entities/ItemPickup';
+import { isBagItem, type HeldItemKind } from '@/game/entities/ItemPickup';
 
 /**
  * A MOCHILA — e a morte da lei "uma mao so".
@@ -12,7 +12,7 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
  * consumiveis (graveto, pedra, semente, bomba) sao contaveis por natureza — dois gravetos sao
  * uma ponte —, mas quem mostra a contagem e a subtela, que so existe quando pedida.
  *
- * `selected` e o item do botao B, e e ele que todo o resto da cena ainda le como "o item na
+ * `selected` e o item do botao X, e e ele que todo o resto da cena ainda le como "o item na
  * mao" (GameScene.heldItem). Isso e de proposito: as botas de lava, o balde, a tocha e cada
  * fechadura do mundo continuam perguntando "o que voce esta segurando AGORA", e a resposta
  * continua sendo uma so. A mochila mudou de onde vem a resposta, nao a pergunta.
@@ -41,16 +41,33 @@ export class Inventory {
     return this.order.length === 0;
   }
 
-  /** A mochila inteira, na ordem em que foi ganha (o que a subtela desenha). */
+  /** TUDO que o heroi carrega, na ordem em que foi ganho — o save, as receitas e o debug leem daqui. */
   public list(): Array<{ kind: HeldItemKind; count: number }> {
     return this.order.map((kind) => ({ kind, count: this.counts.get(kind) ?? 0 }));
   }
 
   /**
+   * A BOLSA: so o que tem gesto (ver isBagItem). E a fileira do botao X e a lista que o cursor
+   * percorre — a materia-prima segue guardada e contada, so nao ocupa slot.
+   */
+  public bag(): Array<{ kind: HeldItemKind; count: number }> {
+    return this.list().filter((entry) => isBagItem(entry.kind));
+  }
+
+  /** O CONTADOR: a materia-prima, na mesma ordem de aquisicao. Informativo — nada se seleciona aqui. */
+  public materials(): Array<{ kind: HeldItemKind; count: number }> {
+    return this.list().filter((entry) => !isBagItem(entry.kind));
+  }
+
+  /**
    * Guardar um item. Ele passa a ser o SELECIONADO — pegar uma coisa nova e sempre uma
    * intencao de usa-la, e trocar de item de volta custa uma tecla.
+   *
+   * MATERIA-PRIMA NUNCA EMPUNHA: ela nem aparece na fileira do X, entao seleciona-la seria
+   * escolher o nada. Ela cai no mesmo caminho do `stash` — entra na conta e a mao fica como esta.
    */
   public add(kind: HeldItemKind, amount = 1): void {
+    if (!isBagItem(kind)) { this.stash(kind, amount); return; }
     const next = (this.counts.get(kind) ?? 0) + amount;
     if (!this.counts.has(kind) || this.counts.get(kind) === 0) {
       if (!this.order.includes(kind)) this.order.push(kind);
@@ -65,6 +82,10 @@ export class Inventory {
    * pisar num drop nao e intencao nenhuma, entao a mao do jogador fica exatamente como esta.
    */
   public stash(kind: HeldItemKind, amount = 1): void {
+    // A ESPADA NAO ENTRA NA MOCHILA, por nenhuma das duas portas. Ela e do heroi (ver
+    // GameScene.swordEquipped) e nao existe como item; guardar uma seria criar um objeto que a
+    // fileira nao mostra, o contador conta e nenhum botao usa.
+    if (kind === 'sword') return;
     if (!this.counts.has(kind) || this.counts.get(kind) === 0) {
       if (!this.order.includes(kind)) this.order.push(kind);
     }
@@ -85,11 +106,16 @@ export class Inventory {
       this.counts.set(kind, left);
       return true;
     }
+    // A posicao NA BOLSA (nao na lista inteira): e o slot que o polegar estava ocupando, e a
+    // fileira que ele ve nao tem a materia-prima no meio. Medida ANTES da remocao, senao o
+    // vizinho seria calculado sobre uma fileira que ja encolheu.
+    const slot = this.bag().findIndex((entry) => entry.kind === kind);
     this.counts.delete(kind);
     const idx = this.order.indexOf(kind);
     if (idx >= 0) this.order.splice(idx, 1);
     if (this.sel === kind) {
-      this.sel = this.order[Math.min(idx, this.order.length - 1)] ?? 'none';
+      const bag = this.bag();
+      this.sel = bag[Math.min(Math.max(slot, 0), bag.length - 1)]?.kind ?? 'none';
     }
     return true;
   }
@@ -117,20 +143,34 @@ export class Inventory {
     return true;
   }
 
-  /** Escolher o item do B. Recusa o que nao esta na mochila (a subtela nunca oferece isso). */
+  /**
+   * Escolher o item do X. Recusa o que nao esta na mochila (a subtela nunca oferece isso) e o
+   * que nao tem gesto: um contador de minerio selecionado seria um botao mudo.
+   */
   public select(kind: HeldItemKind | 'none'): boolean {
     if (kind === 'none') { this.sel = 'none'; return true; }
-    if (!this.has(kind)) return false;
+    if (!this.has(kind) || !isBagItem(kind)) return false;
     this.sel = kind;
     return true;
   }
 
-  /** Andar na grade da subtela (setas): -1 para tras, +1 para frente, sem dar a volta. */
+  /**
+   * O item que o X usa quando a mao ainda nao escolheu nada — o primeiro da bolsa. Chamado ao
+   * apanhar: quem acabou de pegar a primeira picareta da partida nao pode precisar abrir a bolsa
+   * para que o botao passe a responder.
+   */
+  public selectFirstIfEmpty(): void {
+    if (this.sel !== 'none') return;
+    this.sel = this.bag()[0]?.kind ?? 'none';
+  }
+
+  /** Andar na fileira da bolsa (setas): -1 para tras, +1 para frente, sem dar a volta. */
   public step(delta: number): void {
-    if (this.order.length === 0) { this.sel = 'none'; return; }
-    const at = this.sel === 'none' ? -1 : this.order.indexOf(this.sel);
-    const next = Math.max(0, Math.min(this.order.length - 1, at + delta));
-    this.sel = this.order[next];
+    const bag = this.bag();
+    if (bag.length === 0) { this.sel = 'none'; return; }
+    const at = this.sel === 'none' ? -1 : bag.findIndex((entry) => entry.kind === this.sel);
+    const next = Math.max(0, Math.min(bag.length - 1, at + delta));
+    this.sel = bag[next].kind;
   }
 
   public clear(): void {

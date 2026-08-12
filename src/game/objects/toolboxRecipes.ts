@@ -126,6 +126,22 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // que produz ferro. Duas pedras e o que o jogador tem antes de ter qualquer outra coisa, e por
   // isso o forno e a primeira maquina construivel de toda a fabrica.
   { inputs: ['stone', 'stone'], output: 'furnace', family: 'machine' },
+  // O ALTAR: pedra e MINERIO — a laje bruta e o veio de ferro dentro dela.
+  //
+  // Ele custou uma ESPONJA por um dia, e a receita era bonita no papel (para construir o lugar onde
+  // se malha, e preciso ter malhado uma vez sem ele) e CIRCULAR na mao: o altar e onde a esponja
+  // vira barra, entao cobrar uma esponja por ele e a mesma armadilha que esta tabela recusa na
+  // picareta ("uma receita que fabricasse a picareta exigiria a picareta pra chegar nos insumos").
+  // Pior ainda depois que a laje virou o LUGAR do gesto: uma barra custa 9 moedas, e a primeira
+  // esponja do jogador ia inteira para a mesa em vez de para a bolsa dele.
+  //
+  // Pedra e minerio saem os dois da mesma picareta, no primeiro minuto da cratera, e os dois sao
+  // renovaveis (o veio nunca acaba). O altar passou a ser o que ele precisa ser: o SEGUNDO degrau,
+  // logo depois do forno, comprado com o que o jogador ja tem na mao quando o forno acende.
+  //
+  // Sem engrenagem e sem energia, como o bau: as duas pecas que nao sao maquina nenhuma, e a regra
+  // "engrenagem + corpo = maquina" tem de valer nos dois sentidos para ensinar alguma coisa.
+  { inputs: ['stone', 'ore'], output: 'altar', family: 'machine' },
   // O MARTINETE: engrenagem e ESPONJA. A cabeca de um malho e um tarugo de ferro bruto — nao se
   // gasta uma barra refinada num peso que so serve para bater. E a receita tem uma consequencia
   // de desenho deliciosa: para construir a maquina que martela, o jogador precisa martelar a mao
@@ -144,8 +160,8 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   { inputs: ['ore', 'charcoal'], output: 'bloom', family: 'material', station: 'furnace' },
   // ── A CARVOARIA, e ela existe porque a cadeia do ferro tinha um FUNDO ────────────────────────
   //
-  // O carvao so nascia de um jeito: queimar um arbusto seco, e com 25% de chance (ver
-  // CHARCOAL_DROP_CHANCE). Arbusto nao rebrota. Ou seja, todo mapa tinha um numero FINITO de
+  // O carvao so nascia de um jeito: queimar um arbusto seco, e com 25% de chance (o sorteio caiu
+  // depois desta receita — hoje todo arbusto paga). Arbusto nao rebrota. Ou seja, todo mapa tinha um numero FINITO de
   // barras de ferro dentro dele — quatro arbustos davam, em media, um carvao —, e a fabrica
   // inteira (que existe para produzir sem parar) morria de fome depois da primeira fornada. Isso
   // nao aparecia enquanto o dinheiro comecava em 100 e as cartas eram baratas; virou o teto da
@@ -319,7 +335,15 @@ export const catalogOrder = (station: CraftStation = 'bench'): readonly ToolboxR
  */
 const LADDER: Record<CraftStation, readonly HeldItemKind[]> = {
   bench: [
-    'furnace', 'axe', 'gear', 'tripHammer', 'boiler', 'wire',
+    // FORNO e depois ALTAR, nesta ordem e coladinhos: sao as duas metades de UM processo. O forno
+    // devolve uma esponja encharcada de escoria, e a esponja so vira barra apanhando — o altar e o
+    // lugar disso. Quem acabou de acender o primeiro forno tem exatamente o que a laje pede (uma
+    // pedra e um minerio, os dois da mesma picareta), entao o segundo degrau da escada e sempre
+    // pagavel no minuto em que aparece.
+    //
+    // O martinete continua sendo o degrau que AUTOMATIZA este mesmo gesto, la adiante: a maquina
+    // chega como alivio de um trabalho que o jogador ja conhece na mao.
+    'furnace', 'altar', 'axe', 'gear', 'tripHammer', 'boiler', 'wire',
     'belt', 'inserter', 'chest', 'extractor', 'scythe',
   ],
   // O forno tem dois degraus, e a ordem é a da própria química: primeiro se faz o carvão (que só

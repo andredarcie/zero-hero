@@ -141,9 +141,11 @@ const NPC_LABELS: Record<NpcKind, string> = {
   death: 'Morte',
 };
 
+// A ESPADA NAO ESTA AQUI, e a ausencia e a regra: ela deixou de ser item (o heroi nasce com a
+// dele — ver GameScene.swordEquipped) e nao nasce mais no chao nem se apanha. Oferece-la na
+// paleta seria autorar um objeto que o mundo carrega e nenhum botao usa.
 const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string; frame?: number }> = [
   { type: 'heart', label: 'Coracao', key: ASSET_KEYS.hearts, frame: 0 },
-  { type: 'sword', label: 'Espada', key: ASSET_KEYS.swordItem, frame: 0 },
   { type: 'key', label: 'Chave', key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   { type: 'axe', label: 'Machado', key: ASSET_KEYS.axeIcon },
   { type: 'greatAxe', label: 'Machado de Aco', key: ASSET_KEYS.greatAxeIcon },
@@ -198,6 +200,9 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'furnace', label: 'Forno (G gira) — MINERIO e CARVAO nas bandejas ATRAS, esponja na FRENTE', key: ASSET_KEYS.furnace, frame: 1 },
   { type: 'tripHammer', label: 'Martinete (G gira) — malha a ESPONJA do tile da FRENTE; precisa de energia', key: ASSET_KEYS.tripHammer, frame: 3 },
   { type: 'chest', label: 'Bau — o estoque que a linha enche sozinha', key: ASSET_KEYS.chest, frame: 0 },
+  // O ALTAR nao gira e nao tem energia: e um movel. Z poe o item selecionado na laje, e bater
+  // nele (Z de espada, ou o X com o que estiver na mao) malha a ESPONJA em ferro.
+  { type: 'altar', label: 'Altar — laje onde se POE uma peca e se MALHA (Z poe, bater transforma)', key: ASSET_KEYS.altar, frame: 0 },
 ];
 
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta

@@ -206,10 +206,12 @@ export default {
     log('ESCADA: o que ja foi feito, mais UM degrau novo — e os chips do que falta');
     await driver.page.evaluate(() => {
       const s = window.__scene;
-      // O jogador esta no degrau do MARTINETE: forno, machado e engrenagem ja passaram pelas maos
-      // dele; o proximo da escada e o martinete, e nada depois dele pode aparecer.
+      // O jogador esta no degrau do MARTINETE: forno, ALTAR, machado e engrenagem ja passaram
+      // pelas maos dele (a escada e `furnace, altar, axe, gear, tripHammer` — o forno e a laje
+      // coladinhos, porque sao as duas metades de um processo so); o proximo e o martinete, e
+      // nada depois dele pode aparecer.
       s.seenItems.clear();
-      ['wood', 'stone', 'furnace', 'axe', 'gear'].forEach((k) => s.seenItems.add(k));
+      ['wood', 'stone', 'furnace', 'altar', 'axe', 'gear'].forEach((k) => s.seenItems.add(k));
       s.inventory.clear();
       s.inventory.add('iron', 1);
     });
@@ -237,7 +239,7 @@ export default {
       };
     });
     assert('a mesa mostra so os degraus cumpridos e o proximo',
-      JSON.stringify(cards.kinds) === JSON.stringify(['furnace', 'axe', 'gear', 'tripHammer']),
+      JSON.stringify(cards.kinds) === JSON.stringify(['furnace', 'altar', 'axe', 'gear', 'tripHammer']),
       JSON.stringify(cards.kinds));
     assert('e o degrau NOVO e o ultimo, anunciado como novo',
       JSON.stringify(cards.next) === JSON.stringify(['tripHammer']), JSON.stringify(cards));

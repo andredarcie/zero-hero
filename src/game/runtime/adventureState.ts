@@ -47,7 +47,8 @@ export interface AdventureGroundItem {
  * em que ela nao produzia nada.
  */
 export interface AdventureMachine {
-  type: 'wire' | 'belt' | 'chest' | 'boiler' | 'inserter' | 'extractor' | 'furnace' | 'tripHammer';
+  type: 'wire' | 'belt' | 'chest' | 'boiler' | 'inserter' | 'extractor' | 'furnace' | 'tripHammer'
+  | 'altar';
   worldX: number;
   worldY: number;
   /** Esteira, braco e extrator: para onde a peca ENTREGA (0=N, 1=L, 2=S, 3=O). */

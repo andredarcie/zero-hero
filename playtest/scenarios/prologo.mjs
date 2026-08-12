@@ -16,7 +16,7 @@
 //   5. A CARVOARIA: madeira + madeira no FORNO vira carvão. É o elo que tirou o teto da economia —
 //      antes o carvão só saía de arbusto queimado (25%, sem rebrota), então cada mapa tinha um
 //      número FINITO de barras de ferro dentro dele.
-//   6. O FIM: a carta de 90 (dez barras) existe, está no baralho, e a Morte no meio dela diz que
+//   6. O FIM: a carta mais cara do baralho (36, quatro barras) existe, e a Morte no meio dela diz que
 //      o prólogo acabou.
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -126,19 +126,58 @@ export default {
       magnet.coins > before.coins && !before.tiles.includes(magnet.player),
       `${JSON.stringify(before)} -> ${JSON.stringify(magnet)}`);
 
-    // ── 3. a mao ────────────────────────────────────────────────────────────────────────────
-    log('MAO: com dinheiro no bolso, sempre ha uma carta que ele pode pagar');
-    const hands = await page.evaluate(() => {
-      const explorer = window.__scene.explorer;
-      const out = [];
-      for (let i = 0; i < 24; i += 1) {
-        const hand = explorer.offers(3).map((entry) => entry.catalog.cost);
-        out.push({ hand, ok: hand.some((cost) => cost <= 3) });
-      }
-      return out;
+    // ── 2c. QUEM PAGA E A MORTE, NAO O GOLPE ────────────────────────────────────────────────
+    // A moeda saia do `strike` da espada, entao um corpo comido pelo fogo (ou assado na beira de
+    // uma fogueira, que hoje e o fim mais comum de uma caveira) morria de graca. Agora quem toca o
+    // sino e o `die()` — e o teste e uma caveira que o heroi nunca encostou.
+    log('SEM O HEROI: uma caveira que o fogo come tambem paga');
+    const coinsOnGround = () => page.evaluate(
+      () => window.__scene.coinManager.getActiveWorldPositions().length,
+    );
+    // O ima ja puxou tudo o que alcancava; o que sobrou no chao esta fora do raio dele e nao se
+    // mexe mais. Sem esta pausa, uma moeda velha sendo apanhada no meio do incendio entraria na
+    // conta como se o corpo tivesse largado uma a menos.
+    await driver.settle(900);
+    const groundBefore = await coinsOnGround();
+    // Tres tiles ao norte: fora do ima (~2 tiles), e o panico corre PARA LONGE do heroi — entao
+    // as moedas deste corpo caem longe e ficam no chao, contaveis.
+    await page.evaluate(() => {
+      window.__scene.enemyManager.spawn('undead', 6, 6, () => true);
     });
-    assert('Toda mao sorteada com 3 moedas traz uma carta de ate 3',
-      hands.every((h) => h.ok), JSON.stringify(hands.filter((h) => !h.ok).slice(0, 3)));
+    await page.waitForFunction(
+      () => (window.gameDebug?.getState()?.undead ?? [])
+        .some((u) => u.worldX === 6 && u.worldY === 6 && u.spawning === false),
+      null, { timeout: 20000 },
+    );
+    await page.evaluate(() => window.__scene.igniteFlammableAt(6, 6));
+    // O fogo come o corpo em ~2,6s, correndo em panico — ele morre alguns tiles adiante.
+    await page.waitForFunction(
+      () => (window.gameDebug?.getState()?.undead ?? []).length === 0,
+      null, { timeout: 15000 },
+    );
+    await driver.settle(600);
+    const dropped = (await coinsOnGround()) - groundBefore;
+    const mult = (await state())?.explorer?.multiplier ?? 0;
+    assert('...e o multiplicador aqui e 1 (o degrau tem 24 tiles, e isto e o quintal do acampamento)',
+      mult === 1, `multiplier=${mult}`);
+    assert('A caveira que o fogo matou LARGOU moeda — 1, ou 2 em uma morte a cada quatro',
+      dropped === 1 || dropped === 2, `caiu ${dropped} moeda(s)`);
+
+    // ── 3. a mao ────────────────────────────────────────────────────────────────────────────
+    log('MAO: a estreia e AUTORADA (tres cartas a 3), e dali em diante sempre ha uma pagavel');
+    // A MAO DE ABERTURA: enquanto nada foi comprado ela nao se sorteia — sao as tres mais
+    // baratas do baralho, e as tres custam o mesmo. A primeira decisao do jogo tem de ser uma
+    // decisao, e uma carta ao alcance ao lado de dois cadeados nao e escolher entre tres coisas.
+    const opening = await page.evaluate(() => {
+      const explorer = window.__scene.explorer;
+      const draw = () => explorer.offers(3).map((entry) => entry.catalog.id);
+      const first = draw();
+      return { first, costs: explorer.offers(3).map((e) => e.catalog.cost), stable: draw().join() === first.join() };
+    });
+    assert('A mao de abertura traz TRES cartas a 3 moedas — a estreia e uma escolha, nao um caminho',
+      opening.costs.length === 3 && opening.costs.every((cost) => cost === 3), JSON.stringify(opening));
+    assert('E ela nao se sorteia: repetir a pergunta devolve o mesmo trio',
+      opening.stable, JSON.stringify(opening.first));
     const broke = await page.evaluate(() => window.__scene.explorer.offers(0).length);
     assert('E sem dinheiro nenhum a mesa ainda oferece (a recusa e do selo, nao um baralho vazio)',
       broke === 3, String(broke));
@@ -168,6 +207,21 @@ export default {
     assert('A bancada, o mato seco, os veios e as rochas estao la',
       kit.bench === 1 && kit.bushes >= 4 && kit.veins >= 2 && kit.rocks >= 2, JSON.stringify(kit));
     assert('E o astronauta mora nela', kit.npcs.includes('astronaut'), JSON.stringify(kit.npcs));
+
+    // Com a primeira carta gasta, a mao volta a ser SORTEADA — e e aqui que a promessa antiga
+    // vale: se existe carta que ele pode pagar, ela esta na mesa (senao o selo diz BUILD e a
+    // mesa nao abre). Este teste so pode viver DEPOIS de uma compra.
+    const hands = await page.evaluate(() => {
+      const explorer = window.__scene.explorer;
+      const out = [];
+      for (let i = 0; i < 24; i += 1) {
+        const hand = explorer.offers(3).map((entry) => entry.catalog.cost);
+        out.push({ hand, ok: hand.some((cost) => cost <= 3) });
+      }
+      return out;
+    });
+    assert('Toda mao sorteada com 3 moedas traz uma carta de ate 3',
+      hands.every((h) => h.ok), JSON.stringify(hands.filter((h) => !h.ok).slice(0, 3)));
 
     await shot('prologo-oficina', {
       note: 'A oficina do astronauta: bancada, veio, mato seco, lenha e poca — a cadeia do ferro num mapa so.',
@@ -202,15 +256,20 @@ export default {
       const card = document.querySelector('.zh-order-card[data-kind="charcoal"]');
       if (!card) return null;
       card.click();
-      await new Promise((r) => setTimeout(r, 700));
       const s = window.__scene;
-      return {
-        wood: s.inventory.count('wood'),
-        onGround: s.itemManager.snapshot().filter((i) => i.kind === 'charcoal').length,
-      };
+      // A FORNADA E UM PROCESSO (ver FurnaceObject.startHandSmelt): confirmar fecha o painel e
+      // acende a maquina; o carvao so pula pela boca ~2s depois. Esperar o item — e nao um relogio
+      // — deixa o teste imune ao tempo exato do ciclo.
+      const charcoals = () => s.itemManager.snapshot().filter((i) => i.kind === 'charcoal').length;
+      const trabalhando = s.furnaces.some((f) => f.isBusy);
+      for (let i = 0; i < 60 && charcoals() === 0; i += 1) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return { wood: s.inventory.count('wood'), onGround: charcoals(), trabalhando };
     });
-    assert('E fabricar gasta as duas madeiras e poe o carvao no chao',
-      built?.wood === 0 && (built?.onGround ?? 0) >= 1, JSON.stringify(built));
+    assert('E fabricar gasta as duas madeiras e o FORNO trabalha antes de entregar',
+      built?.wood === 0 && built?.trabalhando === true, JSON.stringify(built));
+    assert('...e no fim o carvao sai no chao', (built?.onGround ?? 0) >= 1, JSON.stringify(built));
     // E o degrau seguinte NASCE do primeiro: com o carvao conhecido, a esponja entra na mesa.
     await driver.settle(500);
     await driver.press('ArrowUp');
@@ -224,8 +283,81 @@ export default {
     await page.keyboard.press('Escape');
     await driver.settle(400);
 
+    // ── 5b. o LAGO: a carta que virou uma renda ─────────────────────────────────────────────
+    // Ele era paisagem — agua, tres flores e capim — e uma das TRES cartas de abertura. Uma
+    // primeira decisao entre uma oficina e um papel de parede nao e uma decisao. Agora ele traz
+    // tres zoras (3 moedas cada, contra 1 da caveira), uma roda d'agua JA GIRANDO e um pacote de
+    // cinco cabos na grama ao lado dela: renda, energia de graca e um "e se?" pousado no chao.
+    log('LAGO: tres bichos de agua, uma roda girando e cinco cabos');
+    // O portao e escolhido em tempo de execucao, e NUNCA o norte: aquele e o do fim do prologo,
+    // logo abaixo, e comprar duas cartas no mesmo lugar deixaria a segunda sem terra.
+    const lakeGate = await page.evaluate(() => {
+      const gate = window.__scene.explorer.frontiers().find((f) => f.direction !== 'north');
+      return gate ? { x: gate.gateX, y: gate.gateY, cx: gate.targetCx, cy: gate.targetCy } : null;
+    });
+    assert('ha um portao livre para o lago', lakeGate !== null, 'nenhuma fronteira fora do norte');
+    await buy('moonlit-lake', lakeGate.x, lakeGate.y, 3);
+    await driver.settle(900);
+    const lago = await page.evaluate(({ cx, cy }) => {
+      const s = window.__scene;
+      const inChunk = (p) => Math.floor(p.worldX / 12) === cx && Math.floor(p.worldY / 12) === cy;
+      // Os bichos vem da CARTA (o `buy` limpa o campo no fim, e o conteudo autorado e o contrato):
+      // o que se cobra aqui e o que a carta CARREGA, nao quantos corpos sobraram de pe.
+      const content = s.explorer.source.chunkContent(cx, cy);
+      const wheel = s.waterWheels.find(inChunk);
+      return {
+        zoras: content.enemies.filter((e) => e.type === 'zora').length,
+        wheel: wheel ? { x: wheel.worldX, y: wheel.worldY, turning: wheel.hasFlow } : null,
+        wires: s.itemManager.snapshot().filter((i) => inChunk(i) && i.kind === 'wire')
+          .map((i) => i.units ?? 1),
+      };
+    }, { cx: lakeGate.cx, cy: lakeGate.cy });
+    assert('O lago traz tres criaturas de agua', lago.zoras === 3, JSON.stringify(lago));
+    // A RODA NASCE NA CARTA COMPRADA. Ela era o unico prop que o `spawnStreamedProps` ignorava
+    // (ela precisa de um par: o quad de rio sob as pas), e por isso a carta do Lago vinha sem a
+    // peca mais visivel dela — em silencio.
+    assert('A roda dagua NASCEU no chunk comprado', lago.wheel !== null, JSON.stringify(lago));
+    assert('...e esta GIRANDO (agua de TERRENO tambem move roda)',
+      lago.wheel?.turning === true, JSON.stringify(lago));
+    // DOIS pacotes de cinco: cinco fios fazem uma linha curta, dez fazem uma que atravessa a
+    // carta — e a diferenca entre elas e a diferenca entre "da pra ligar" e "da pra ESCOLHER".
+    assert('E ha DOIS pacotes de cinco cabos no chao ao lado dela',
+      JSON.stringify(lago.wires) === '[5,5]', JSON.stringify(lago));
+    await shot('prologo-lago', { note: 'O lago: bichos de agua, roda girando e o pacote de cabos.', state: lago });
+
+    // O BICHO DE AGUA PAGA 3, E A MOEDA CAI EM TERRA. Um corpo que morre no meio do lago larga
+    // moeda onde o heroi nunca alcanca — a pior recompensa possivel, a que se ve e nao se pega.
+    // A morte aqui e por dano direto de proposito: o que se cobra e a REGRA do drop, e nao a
+    // habilidade de matar um zora da margem (isso e do cenario `zora`).
+    const pago = await page.evaluate(({ cx, cy }) => {
+      const s = window.__scene;
+      s.coinManager.getActiveWorldPositions().forEach(() => {});
+      const antes = s.coinManager.getActiveWorldPositions().length;
+      // Um tile de agua ABERTA no meio da carta comprada.
+      let spot = null;
+      for (let y = cy * 12; y < cy * 12 + 12 && !spot; y += 1) {
+        for (let x = cx * 12; x < cx * 12 + 12 && !spot; x += 1) {
+          if (s.isOpenWaterAt(x, y)) spot = { x, y };
+        }
+      }
+      if (!spot) return { erro: 'sem agua na carta' };
+      const zora = s.enemyManager.spawn('zora', spot.x, spot.y, () => true);
+      if (!zora) return { erro: 'zora nao nasceu' };
+      zora.takeDamage(999);
+      const moedas = s.coinManager.getActiveWorldPositions().map((c) => ({ x: c.worldX, y: c.worldY }));
+      return {
+        spot,
+        caiu: moedas.length - antes,
+        // "Em terra" e a mesma pergunta que os pes do heroi fazem: um tile que ele PODE pisar.
+        naAgua: moedas.filter((c) => s.isOpenWaterAt(c.x, c.y)).length,
+      };
+    }, { cx: lakeGate.cx, cy: lakeGate.cy });
+    assert('O bicho de agua paga TRES moedas', pago?.caiu === 3, JSON.stringify(pago));
+    assert('...e nenhuma delas fica na agua, onde o heroi nunca alcancaria',
+      pago?.naAgua === 0, JSON.stringify(pago));
+
     // ── 6. o fim do prologo ─────────────────────────────────────────────────────────────────
-    log('FIM: a carta de 90 moedas, e a Morte no meio dela');
+    log('FIM: a carta mais cara do baralho, e a Morte no meio dela');
     const finale = await page.evaluate(() => {
       const entry = window.__scene.explorer.source.catalog()
         .find((card) => card.catalog.id === 'prologue-end');
@@ -233,10 +365,18 @@ export default {
         ? { cost: entry.catalog.cost, name: entry.catalog.name, npc: entry.npcs[0]?.type }
         : null;
     });
-    assert('A ultima carta custa 90 (dez barras de ferro) e traz a Morte',
-      finale?.cost === 90 && finale?.npc === 'death', JSON.stringify(finale));
+    // O PRECO E LIDO DO BARALHO, nunca escrito aqui: a tabela inteira mora em
+    // `scripts/add-prologue.mjs` e ja foi reescrita duas vezes. O que este cenario tem a cobrar e
+    // que ela seja a MAIS CARA de todas (o fim do prologo se compra, e o preco e a fabrica) — um
+    // numero fixo no teste so garantiria que alguem o atualizasse junto, nunca a lei.
+    const priciest = await page.evaluate(() => Math.max(
+      ...window.__scene.explorer.source.catalog().map((card) => card.catalog.cost),
+    ));
+    assert('A ultima carta e a MAIS CARA do baralho e traz a Morte',
+      finale?.cost === priciest && finale?.npc === 'death',
+      JSON.stringify({ finale, priciest }));
 
-    await buy('prologue-end', 6, 1, 90);
+    await buy('prologue-end', 6, 1, finale.cost);
     const spent = await state();
     assert('Comprar o fim do prologo esvazia a bolsa', (spent?.coins ?? 99) === 0, `coins=${spent?.coins}`);
 
@@ -245,7 +385,10 @@ export default {
     await driver.settle(500);
     await driver.press('ArrowUp');
     await driver.settle(300);
-    await driver.press('x', { count: 1 });
+    // FALAR E O Z, e so ele: o X virou "usar o item selecionado" e nao cumprimenta mais ninguem.
+    // A tecla certa sempre esteve escrita na tela — o keycap que flutua sobre a cabeca do NPC diz
+    // "Z" desde que os dois botoes existem.
+    await driver.press('z', { count: 1 });
     await driver.settle(1400);
     const speech = await page.evaluate(() => document.querySelector('.zh-dlg-panel')?.innerText ?? '');
     assert('A Morte fala, e ela fala do PROLOGO (nao das linhas de medo da fogueira apagada)',

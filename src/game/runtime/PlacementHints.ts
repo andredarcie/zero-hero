@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
-  PLACEMENT_FAR_TEXTURE, PLACEMENT_KEY_TEXTURE, PLACEMENT_OK_TEXTURE, ensurePlacementKeyTexture,
+  PLACEMENT_FAR_TEXTURE, PLACEMENT_OK_TEXTURE, TAKE_KEY_TEXTURE, ensureTakeKeyTexture,
 } from '@/game/render3d/placementTexture';
 import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -43,8 +43,12 @@ export class PlacementHints {
   private primary: HintTile | null = null;
 
   public constructor(private readonly scene: Phaser.Scene) {
-    ensurePlacementKeyTexture(scene, isTouchDevice());
-    this.keycap = scene.add.image(0, 0, PLACEMENT_KEY_TEXTURE).setOrigin(0.5, 1).setVisible(false);
+    ensureTakeKeyTexture(scene, isTouchDevice());
+    // O KEYCAP É O DO BOTÃO X. Instalar mudou de botão junto com a tabela de itens inteira (o Z
+    // ficou só com a espada — ver GameScene.pressUse), e um quadrado branco com um "Z" em cima
+    // prometeria o gesto na tecla errada. A marca e o botão leem a mesma pergunta; o desenho da
+    // tecla tem de ler a mesma também.
+    this.keycap = scene.add.image(0, 0, TAKE_KEY_TEXTURE).setOrigin(0.5, 1).setVisible(false);
   }
 
   /**

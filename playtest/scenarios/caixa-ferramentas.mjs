@@ -205,9 +205,13 @@ export default {
       };
     });
 
-    // A FORJA tem de ser vista acontecendo: a caixa passa pelas fases, e o frame 3 (aberta e
-    // quente) e o unico instante em que o jogador entende que ali dentro esta se fazendo algo.
-    // Sem este assert, um teleporte de itens com 2s de espera passaria igual.
+    // A FORJA tem de ser vista acontecendo: a caixa passa pelas fases, e e na fase `forge` — com a
+    // TAMPA ABERTA (TOOLBOX_FRAMES.open) — que o jogador entende que ali dentro esta se fazendo
+    // algo. Sem este assert, um teleporte de itens com 2s de espera passaria igual.
+    //
+    // O teste procurava o `frame === 3`, que era o retrato quente de uma folha de arte anterior;
+    // hoje o 3 e o `slotFull` (a BANDEJA cheia) e a caixa nunca o veste. Um assert que espera um
+    // frame que a peca nao usa mais mede a folha de sprites, nao a maquina.
     let sawForging = false;
     const seenPhases = new Set();
     const forgeDeadline = Date.now() + CRAFT_TIMEOUT_MS;
@@ -216,12 +220,15 @@ export default {
       seenPhases.add(st.phase);
       // O retrato NO MEIO da forja — o unico instante em que da pra ver se a caixa realmente
       // fabrica alguma coisa ou se o item so teleportou de dois tiles pra um.
-      if (st.frame === 3 && !sawForging) { sawForging = true; await shot('caixa-forjando'); }
+      if (st.phase === 'forge' && st.frame === 1 && !sawForging) {
+        sawForging = true; await shot('caixa-forjando');
+      }
       if (st.phase === 'close' || (await itemAt(7, 6)) === 'axe') break;
       await sleep(70);
     }
     assert('a caixa passou por abrir/engolir/forjar/entregar', seenPhases.size >= 3, [...seenPhases].join(','));
-    assert('a caixa FORJOU a vista (frame quente com a tampa aberta)', sawForging, [...seenPhases].join(','));
+    assert('a caixa FORJOU a vista (fase de forja, com a tampa aberta)', sawForging,
+      [...seenPhases].join(','));
 
     let crafted = false;
     const craftDeadline = Date.now() + CRAFT_TIMEOUT_MS;
@@ -340,12 +347,30 @@ export default {
       cracked?.blocking === true, JSON.stringify(cracked));
     await shot('caixa-pedra-de-ferro-rachada');
 
+    // O VEIO NAO QUEBRA — ele PRODUZ. Este par de asserts vinha da versao em que a pedra de minerio
+    // era uma rocha comum com premio dentro: duas picaretadas e o tile abria, deixando um `iron` no
+    // chao. Hoje ela e um POCO (ver RockObject): nunca abre, e a cada TRES pancadas cospe MINERIO —
+    // que so vira ferro depois do forno e do martelo. Minerar virou atividade, e nao destino.
+    await driver.useItem();
+    await driver.settle(700);
     await driver.useItem();
     await driver.settle(900);
-    const brokenOre = await oreAt();
-    assert('a segunda picaretada abre o tile', brokenOre?.blocking === false, JSON.stringify(brokenOre));
-    assert('e o que ficou no chao e FERRO, nao pedra', (await itemAt(8, 8)) === 'iron',
-      `veio ${await itemAt(8, 8)}`);
+    const minedOre = await oreAt();
+    assert('o veio NAO abre o tile — ele continua parede', minedOre?.blocking === true,
+      JSON.stringify(minedOre));
+    // O MINERIO VEM VOANDO: ele nasce como LOOT (a mesma trajetoria da moeda — `spawnOreLoot`) e
+    // so entra na conta quando POUSA no heroi. Ler a mochila no frame seguinte a pancada mede o
+    // voo, nao a producao.
+    let yielded = 0;
+    const oreDeadline = Date.now() + 5000;
+    while (Date.now() < oreDeadline) {
+      yielded = await driver.page.evaluate(() => window.__scene.itemManager.snapshot()
+        .filter((i) => i.kind === 'ore').length
+        + window.__scene.inventory.count('ore'));
+      if (yielded > 0) break;
+      await sleep(150);
+    }
+    assert('e as tres picaretadas produziram MINERIO', yielded > 0, `minerios=${yielded}`);
     await shot('caixa-ferro-no-chao');
 
     // …e o ferro so vale alguma coisa na bancada: graveto + ferro = foice.
@@ -353,7 +378,9 @@ export default {
     await driver.page.evaluate(() => {
       const s = window.__scene;
       s.itemManager.takeAt(7, 6); // limpa a saida do machado anterior
-      s.itemManager.takeAt(8, 8); // recolhe o ferro do chao
+      // O FERRO NAO SAI MAIS DA PEDRA: o veio da minerio, e a cadeia do ferro (forno + martelo) e
+      // outro cenario (`forja`). Aqui o que importa e a bancada, entao o lingote e POSTO.
+      s.itemManager.takeAt(8, 8);
       s.itemManager.drop('wood', 4, 6);
       s.itemManager.drop('iron', 5, 6);
     });

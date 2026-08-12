@@ -528,13 +528,40 @@
           false
         ]
       ],
-      "enemies": [],
-      "pickups": [],
+      "enemies": [
+        {
+          "type": "zora",
+          "worldX": 5,
+          "worldY": 4
+        },
+        {
+          "type": "zora",
+          "worldX": 8,
+          "worldY": 4
+        },
+        {
+          "type": "zora",
+          "worldX": 6,
+          "worldY": 6
+        }
+      ],
+      "pickups": [
+        {
+          "type": "wire",
+          "worldX": 3,
+          "worldY": 2
+        },
+        {
+          "type": "wire",
+          "worldX": 4,
+          "worldY": 2
+        }
+      ],
       "npcs": [],
       "catalog": {
         "id": "moonlit-lake",
         "name": "Moonlit Lake",
-        "cost": 12,
+        "cost": 3,
         "cardImage": "assets/environment/terrain/water_0.png",
         "description": "Open banks around a cold lake. Easy to cross around, hard to own."
       }
@@ -1058,7 +1085,7 @@
       "catalog": {
         "id": "whispering-forest",
         "name": "Whispering Forest",
-        "cost": 18,
+        "cost": 6,
         "cardImage": "assets/environment/tilesets/forest_tile_set.png",
         "description": "Dense timber, narrow clearings, and room for the roads to branch again."
       }
@@ -1598,7 +1625,7 @@
       "catalog": {
         "id": "spider-hollow",
         "name": "Spider Hollow",
-        "cost": 26,
+        "cost": 10,
         "cardImage": "assets/environment/props/spider_web.png",
         "description": "A web-choked hollow. Every living enemy authored here is a spider."
       }
@@ -2134,7 +2161,7 @@
       "catalog": {
         "id": "cat-cold-hearths",
         "name": "Cat's Hearths",
-        "cost": 16,
+        "cost": 5,
         "cardImage": "generated:hearth",
         "description": "The cat, its fire, and two hearths gone cold. Wake a branch and carry flame.",
         "enabled": false
@@ -3217,7 +3244,7 @@
       "catalog": {
         "id": "timber-ranks",
         "name": "Businessman's Timber",
-        "cost": 20,
+        "cost": 7,
         "cardImage": "generated:hearth",
         "description": "Dry timber in tidy rows, and a businessman who calls it inventory. Axe included.",
         "enabled": false
@@ -3759,7 +3786,7 @@
       "catalog": {
         "id": "glowing-ford",
         "name": "Workman's Ford",
-        "cost": 34,
+        "cost": 13,
         "cardImage": "generated:hearth",
         "description": "A workman, his hazard boots, and a glowing pool with something sunk in it.",
         "enabled": false
@@ -4301,7 +4328,7 @@
       "catalog": {
         "id": "painted-beds",
         "name": "Artist's Beds",
-        "cost": 24,
+        "cost": 9,
         "cardImage": "generated:hearth",
         "description": "The artist dug her beds already. Seeds are pigment; the meadow is the canvas.",
         "enabled": false
@@ -4838,7 +4865,7 @@
       "catalog": {
         "id": "roadside-pond",
         "name": "Salesman's Pond",
-        "cost": 16,
+        "cost": 5,
         "cardImage": "generated:hearth",
         "description": "A salesman with one free sample: a bucket, and the pond to fill it in.",
         "enabled": false
@@ -5375,7 +5402,7 @@
       "catalog": {
         "id": "singing-pines",
         "name": "Poet's Pines",
-        "cost": 20,
+        "cost": 7,
         "cardImage": "generated:hearth",
         "description": "Living pines crowd the poet's verse. The great axe fells even living wood.",
         "enabled": false
@@ -5912,7 +5939,7 @@
       "catalog": {
         "id": "silent-meadow",
         "name": "Death's Meadow",
-        "cost": 36,
+        "cost": 14,
         "cardImage": "generated:hearth",
         "description": "Death, off duty, lends the scythe. The tall grass grew too loud; reap it.",
         "enabled": false
@@ -6448,7 +6475,7 @@
       "catalog": {
         "id": "granite-pass",
         "name": "Granite Pass",
-        "cost": 22,
+        "cost": 8,
         "cardImage": "assets/environment/tilesets/forest_tile_set.png",
         "description": "Standing granite no axe answers. Bats nest in the pass, and iron sleeps under the cliffs."
       }
@@ -6988,7 +7015,7 @@
       "catalog": {
         "id": "sunken-graveyard",
         "name": "Sunken Graveyard",
-        "cost": 30,
+        "cost": 11,
         "cardImage": "assets/environment/tilesets/forest_tile_set.png",
         "description": "A paved yard of tombs under dead trees. Three open graves have not finished being graves."
       }
@@ -7512,7 +7539,7 @@
       "catalog": {
         "id": "blooming-grove",
         "name": "Blooming Grove",
-        "cost": 14,
+        "cost": 3,
         "cardImage": "assets/environment/tilesets/forest_tile_set.png",
         "description": "Fruit pines and flowering ones over soft dug earth. Nothing here bites; everything grows."
       }
@@ -8042,7 +8069,7 @@
       "catalog": {
         "id": "prologue-end",
         "name": "Death's Threshold",
-        "cost": 90,
+        "cost": 36,
         "cardImage": "assets/environment/tilesets/forest_tile_set.png",
         "description": "A paved ring under old pines, and someone standing in the middle of it. The road ends here — for now."
       }
@@ -9014,6 +9041,11 @@
       "type": "dryTree",
       "worldX": 51,
       "worldY": 3
+    },
+    {
+      "type": "waterWheel",
+      "worldX": 2,
+      "worldY": 3
     }
   ],
   "dialogs": {
@@ -9088,15 +9120,15 @@
         },
         {
           "speaker": "npc",
-          "text": "Ore is not iron yet. Burn the dead scrub for CHARCOAL, smelt the two together, then hammer the sponge three times."
+          "text": "Ore is not iron yet. Two stones make a FURNACE on that bench, and stone plus ore makes an ALTAR — the slab you hammer on."
         },
         {
           "speaker": "npc",
-          "text": "That BENCH is mine — two stones make a furnace on it, and every machine in the chain starts there."
+          "text": "Burn dead wood into CHARCOAL in the furnace, smelt it with ore for a SPONGE, then lay the sponge on the altar and strike it three times."
         },
         {
           "speaker": "npc",
-          "text": "Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay for the bar."
+          "text": "Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay nine coins a bar."
         }
       ],
       "trade": {

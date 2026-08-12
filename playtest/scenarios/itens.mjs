@@ -173,10 +173,12 @@ export default {
       JSON.stringify(bombResult));
 
     // ── 5. CARVAO: o fogo produz, e a tocha come ─────────────────────────────
-    // Um arbusto seco que TERMINA de arder as vezes deixa carvao (CHARCOAL_DROP_CHANCE) — o
-    // Math.random e pinado em 0 pra provar o ENCANAMENTO (ignite → toAsh → onBurnedOut →
-    // dropProduct), nao a moeda. E pisar no carvao com a tocha ACESA o consome e enche o
-    // combustivel: e reabastecimento, nunca uma troca — a mao segue com o graveto em chamas.
+    // TODO arbusto seco que termina de arder deixa carvao — o sorteio de 1 em 4 caiu quando o
+    // carvao virou o reagente da cadeia do ferro e o forno ganhou a carvoaria (ver
+    // GameScene.dropCharcoalFromBush). O `Math.random` pinado ficou de quando havia sorte a
+    // neutralizar; hoje ele so garante que nada MAIS no frame sorteie o teste pra fora.
+    // E pisar no carvao com a tocha ACESA o consome e enche o combustivel: e reabastecimento,
+    // nunca uma troca — a mao segue com o graveto em chamas.
     log('CARVAO: arbusto queimado larga carvao; a tocha acesa o come ao pisar');
     const bushInfo = await evaluate(() => {
       const s = window.__scene;

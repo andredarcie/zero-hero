@@ -53,9 +53,14 @@ export default {
       !registered.includes('intro'), JSON.stringify(registered));
 
     const titleTexts = await sceneTexts(driver, 'title');
+    // UMA PORTA SO, e o que se conta e a QUANTIDADE de texto na tela: titulo, credito e o rotulo
+    // do unico botao. O assert antigo procurava a string "Play adventure", que morreu quando a
+    // porta passou a abrir o CONSTRUTOR DE MUNDO ("Build a world") — um teste que fixa o rotulo
+    // guarda a traducao, e a lei aqui e a arquitetura do menu: sem atalho para levels nem para o
+    // explorador, e nenhuma segunda porta.
     assert('O titulo mostra UMA porta so, em ingles',
-      titleTexts.includes('Play adventure')
-      && !titleTexts.some((t) => t.includes('levels') || t.includes('explorer')),
+      titleTexts.length === 3
+      && !titleTexts.some((t) => /levels|explorer|aventura/i.test(t)),
       JSON.stringify(titleTexts));
     assert('Titulo e credito aparecem de cara',
       titleTexts.some((t) => t.includes('ZERO')) && titleTexts.some((t) => t.includes('ANDRÉ')),
@@ -89,7 +94,13 @@ export default {
     log('/?level=1 ainda boota um level, e a pausa dele volta pra lista');
     await driver.open('/?level=1');
     await driver.page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 14000 });
-    await driver.settle(800);
+    // O CARTAO DE ABERTURA DO LEVEL segura a pausa: `openPauseMenu` recusa enquanto ele esta na
+    // tela (nenhuma tela modal pode nascer por cima de outra). Um `settle` fixo era uma aposta na
+    // duracao da animacao — a espera certa e pelo proprio estado.
+    await driver.page.waitForFunction(
+      () => window.gameDebug?.getState()?.levelIntroOpen === false, null, { timeout: 14000 },
+    );
+    await driver.settle(400);
     await driver.press('Escape', { count: 1, delay: 300, holdMs: 80 });
     await driver.settle(500);
     const levelPause = await pauseButtons(driver);

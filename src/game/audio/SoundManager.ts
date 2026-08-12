@@ -772,6 +772,27 @@ class SoundManager {
     this.osc('sine', 330 * rate, 300 * rate, 0.18, 0.14);
   }
 
+  /**
+   * APANHAR UMA COISA DO CHÃO — e coisa NÃO é moeda.
+   *
+   * Pisar num graveto, numa pedra, num minério ou num carvão tocava `playCoinPickup`: o tilintar
+   * metálico de dinheiro, com escada de tom e tudo. Era o mesmo som para as duas únicas coisas do
+   * jogo que o jogador conta separado — a carteira e a mochila —, e numa cadeia de minério (cinco
+   * blocos saltando de uma rocha) o ouvido acreditava estar enriquecendo.
+   *
+   * A voz daqui é o oposto da moeda em todos os eixos que o ouvido usa: grave em vez de agudo,
+   * DESCENDO em vez de subindo, com um chiado surdo por baixo (o couro da mochila) em vez do
+   * sustain limpo de metal. Continua curta, porque uma pisada apanha e segue andando.
+   *
+   * Sintetizada e sem amostra de propósito: ela toca dezenas de vezes por minuto numa mineração, e
+   * som que se repete tanto tem de ser barato de tocar e fácil de reafinar quando incomodar.
+   */
+  public playItemStash(): void {
+    this.noise('lowpass', 620, 1.0, 0.09, 0.055);   // o baque surdo da coisa entrando
+    this.osc('triangle', 300, 190, 0.10, 0.075);    // o peso dela assentando (desce, ao contrário da moeda)
+    this.osc('sine', 720, 640, 0.035, 0.05, 0.035); // e um toque claro no fim: "peguei" — sem metal
+  }
+
   /** A single water drop — the title screen fires one per word as it drops in. */
   public playWaterDrop(): void {
     if (this.playSample('dropWater', 0.5)) return; // slight pitch jitter so drops never repeat exactly

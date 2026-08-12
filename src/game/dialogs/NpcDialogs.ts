@@ -88,9 +88,10 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     lines: [
       n('My ship is a shell now. What she still needs is IRON — and this crater keeps it locked inside rock.'),
       n('Take the PICKAXE. The veined boulders never run dry: three good swings, one lump of ORE.'),
-      n('Ore is not iron yet. Burn the dead scrub for CHARCOAL, smelt the two together, then hammer the sponge three times.'),
-      n('That BENCH is mine — two stones make a furnace on it, and every machine in the chain starts there.'),
-      n('Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay for the bar.'),
+      n('That BENCH is mine — every machine in the chain starts there.'),
+      n('Ore is not iron yet. Two stones make a FURNACE on that bench, and stone plus ore makes an ALTAR — the slab you hammer on.'),
+      n('Burn dead wood into CHARCOAL in the furnace, smelt it with ore for a SPONGE, then lay the sponge on the altar and strike it three times.'),
+      n('Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay nine coins a bar.'),
     ],
   },
 

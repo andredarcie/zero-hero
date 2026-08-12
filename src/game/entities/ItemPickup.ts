@@ -6,8 +6,9 @@ import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import { wireShapeFrame } from '@/game/world/wireShapes';
 
-// Every carriable item. All share the sword/key behavior: one in hand at a time, swap drops
-// the previous one on the ground. Only the bomb is consumed on use.
+// Every carriable item — tudo que a MOCHILA guarda. A espada NAO esta aqui como coisa que se
+// carrega: ela e do heroi (ver GameScene.swordEquipped) e o tipo so a mantem porque mundos
+// antigos ainda a citam. Quem tem gesto vai pra bolsa; o resto e contador (MATERIAL_ITEM_KINDS).
 export type HeldItemKind =
   // ── A CADEIA DO FERRO, na ordem em que a quimica manda ────────────────────────────────────
   // `ore` -> (forno + carvao) -> `bloom` -> (martelo) -> `iron`. Os tres sao itens separados
@@ -31,9 +32,9 @@ export type HeldItemKind =
   // frente (DIGGABLE_GROUND_FRAMES). Fecha o loop da fazenda pelo lado que faltava: a foice
   // produz a semente, mas o buraco era autorado — só o editor plantava mato novo em lugar
   // novo. Com ela o canteiro vira decisão do jogador: cavar É produzir (um tile que aceita
-  // semente), e por isso ela não é senha. Cavar é o botão A (o botão de ação USA o item
-  // segurado — ver GameScene.swingAttack); o B a pega e a pousa como a qualquer item. Terra
-  // apenas: pátio de pedra, laje, alvenaria de dungeon e mar recusam a lâmina.
+  // semente), e por isso ela não é senha. Cavar é o botão X (o botão que USA o item selecionado
+  // — ver GameScene.pressUse); apanhá-la é pisar nela, como em qualquer item. Terra apenas:
+  // pátio de pedra, laje, alvenaria de dungeon e mar recusam a lâmina.
   | 'shovel'
   | 'wood'
   // A chunk of rock, left behind when the pickaxe shatters one. The pickaxe used to just
@@ -66,8 +67,8 @@ export type HeldItemKind =
   // pre-empts fuel). Empty vs full shows as the art the hero carries; there is no HUD.
   | 'bucket'
   | 'bucketFull'
-  // A lump of CHARCOAL — the fire itself finally PRODUCING: a burnt-out dry bush sometimes
-  // leaves one (CHARCOAL_DROP_CHANCE). It is torch food: stepping on it while holding the LIT
+  // A lump of CHARCOAL — the fire itself finally PRODUCING: every burnt-out dry bush leaves one
+  // (o sorteio morreu, ver GameScene.dropCharcoalFromBush). It is torch food: stepping on it while holding the LIT
   // graveto consumes it and refills the flame, which makes a long dark crossing plannable
   // instead of a prayer for lava. Runtime-only, like bucketFull — never authored in a world.
   | 'charcoal'
@@ -88,10 +89,10 @@ export type HeldItemKind =
   // Uma linha de producao projetada por outra pessoa nao tem gargalo pra resolver: tem senha.
   //
   // A gramatica nao muda por causa delas — sao itens como qualquer outro, com uma unica lei
-  // nova: o botao A com uma maquina na mao a INSTALA no tile a frente (a tabela `useItemAt`
-  // ja e "o que este item faz contra o tile de la"), e o B de mao vazia recolhe de volta a que
-  // o JOGADOR construiu. Autorada nao se recolhe, senao a primeira coisa que um jogador faria
-  // num level de puzzle seria desmontar o puzzle.
+  // nova: o botao X com uma maquina SELECIONADA a INSTALA no tile a frente (a tabela `useItemAt`
+  // ja e "o que este item faz contra o tile de la"), e o mesmo X recolhe de volta a que o JOGADOR
+  // construiu, depois que a tabela e a entrega calam. Autorada nao se recolhe, senao a primeira
+  // coisa que um jogador faria num level de puzzle seria desmontar o puzzle.
   // ---------------------------------------------------------------------------------------
   // A ENGRENAGEM — o primeiro bem INTERMEDIARIO: nao se usa contra tile nenhum, nao instala
   // nada, so entra na bancada. Ela existe porque uma cadeia de um elo (ferro -> maquina) nao e
@@ -111,7 +112,10 @@ export type HeldItemKind =
   | 'inserter'
   | 'extractor'
   | 'furnace'
-  | 'tripHammer';
+  | 'tripHammer'
+  // O ALTAR nao consome energia e nao trabalha sozinho — ele e MOVEL, e entra nesta lista pelo
+  // mesmo motivo que o bau: o que se instala com o X se recolhe com o X, venha da fabrica ou nao.
+  | 'altar';
 
 // The fire riding a wood item that is NOT in the hero's hand: on the ground, or hanging from
 // the robotic arm's claw. Only `fuelMs` travels — it keeps counting down wherever the item is,
@@ -163,10 +167,11 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   // O martinete se anuncia pelo RETRATO (frame 3: corpo + malho dentro). O frame 1 e so o malho,
   // um tijolo de 6x4 que nao diz nada, e o 0 e o corpo com a calha vazia — uma caixa oca.
   tripHammer: { texture: 'trip-hammer', frame: 3 },
+  altar: { texture: 'altar', frame: 0 },
 };
 
 /**
- * As MAQUINAS que se carregam. Uma lista so, lida pela instalacao (o botao A), pelo editor e
+ * As MAQUINAS que se carregam. Uma lista so, lida pela instalacao (o botao X), pelo editor e
  * pela subtela — porque a lei "uma lista, tres leitores" ja custou uma tarde neste jogo quando
  * `FLYING_ENEMY_KINDS` existia em tres copias que discordavam.
  *
@@ -176,7 +181,37 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
  */
 export const MACHINE_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>([
   'gear', 'wire', 'belt', 'chest', 'boiler', 'inserter', 'extractor', 'furnace', 'tripHammer',
+  'altar',
 ]);
+
+/**
+ * A MATERIA-PRIMA — o que NAO ocupa lugar na bolsa.
+ *
+ * A bolsa e a lista do botao X, e o X faz uma coisa so: usar o que esta selecionado contra o
+ * tile a frente. Entao o que entra nela precisa ter um GESTO — bater, cavar, encher, instalar,
+ * pousar. Minerio, ferro, carvao e engrenagem nao tem nenhum: eles sao numeros que entram numa
+ * receita e saem dela. Enquanto dividiam a fileira com as ferramentas, o polegar do jogador
+ * atravessava quatro coisas inertes para chegar na picareta — e cada uma delas, selecionada,
+ * fazia o botao X nao responder. Um item que so pode calar um botao nao pertence ao botao.
+ *
+ * Eles continuam INTEIROS na mochila (`Inventory`): as receitas da bancada e do forno gastam
+ * deles, o braco robotico os carrega, a bandeja os recebe. O que muda e onde sao MOSTRADOS —
+ * uma fileira de contadores debaixo da bolsa, informativa, sem cursor e sem seleção.
+ *
+ * A `bloom` ficou de fora desta lista de proposito, e ela e a fronteira que explica a regra: a
+ * esponja tem gesto (o X a POUSA para ser martelada, ou a entrega na bigorna). Ela e peca de
+ * trabalho, nao numero.
+ */
+export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>([
+  'ore', 'iron', 'charcoal', 'gear',
+]);
+
+/**
+ * O que pode ser SELECIONADO na bolsa. A espada saiu da mochila (ela e do heroi, e mora no
+ * botao Z), entao ela nunca e resposta desta pergunta — nem sequer chega a existir como item.
+ */
+export const isBagItem = (kind: HeldItemKind): boolean =>
+  kind !== 'sword' && !MATERIAL_ITEM_KINDS.has(kind);
 
 /**
  * Como um item se desenha quando esta no chao. Exposto porque o braco robotico precisa desenhar
@@ -217,10 +252,11 @@ const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1],
 ];
 
-// A single held item sitting on the ground — either authored in world.json or dropped by the
-// hero. It bobs while it waits, and it waits forever: NADA e coletado por pisada. O heroi pega
-// com o B (GameScene.pickUpItemAt), e por isso um item largado nao precisa mais nascer
-// "desarmado" — pousar e pegar de volta sao dois gestos, e nunca mais um acidente.
+// A single held item sitting on the ground — authored in world.json, or put there by the world
+// (a felled tree's stick, the bench's finished piece, the furnace's bloom). It bobs while it
+// waits, and PISAR NELE O APANHA: o gesto voltou a ser a pisada quando o botao X virou "usar o
+// item selecionado" e o largar deixou de existir (ver GameScene.collectUnderfoot). Sem largar,
+// apanhar sem querer nao custa nada — que e o defeito que o flag `armed` existia para remendar.
 export class ItemPickup {
   private readonly sprite: Billboard3D;
   private readonly outline: Billboard3D[];

@@ -149,7 +149,6 @@ export abstract class WalkerEnemy extends EnemyBase {
     delta: number,
     playerWorldX: number,
     playerWorldY: number,
-    _playerSafe: boolean,
     playerHasTorch: boolean,
     isBlocked: (wx: number, wy: number) => boolean,
   ): boolean {

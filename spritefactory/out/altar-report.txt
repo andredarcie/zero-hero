@@ -1,0 +1,5 @@
+altar: 2 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 12x12 at (2,3), coverage 45%
+  [info] bbox: frame 1: content 12x12 at (2,3), coverage 45%
+  frame 0: #141d38×37 #989aa7×17 #7c7e8b×16 #5d6165×16 #1d2b53×13 #324476×12 #a9abbe×3
+  frame 1: #141d38×37 #1d2b53×13 #e7462a×13 #324476×12 #989aa7×11 #5d6165×11 #7c7e8b×10 #a53030×7

@@ -16,7 +16,7 @@ export interface GameDebugState {
   swordOnFire: boolean;
   /** True while the held item (sword or wood club) is ablaze. */
   heldOnFire: boolean;
-  /** O item do botao B — o que esta na mao agora (a selecao da mochila). */
+  /** O item do botao X — o que esta selecionado na bolsa agora (a espada nao entra aqui). */
   heldItem: 'none' | HeldItemKind;
   /** A MOCHILA inteira, na ordem em que foi ganha: o que a subtela desenha. */
   inventory: Array<{ kind: HeldItemKind; count: number }>;
@@ -163,6 +163,12 @@ export interface GameDebugState {
     windingUp: boolean;
     /** O fogo esta comendo este corpo (a tocha viva — ver EnemyBase.igniteBody). */
     burning: boolean;
+    /**
+     * O corpo esta ASSANDO na beira de uma fogueira acesa (ver EnemyBase.tickScorch): pega fogo,
+     * perde vida a cada mordida e continua sendo ele mesmo — sair do anel apaga. E o que ficou no
+     * lugar do desmanche silencioso da matilha quando o heroi alcancava o fogo.
+     */
+    scorching: boolean;
     /** O corpo e uma estatua de gelo agora (a bola do zora — ver FreezeManager). */
     frozen: boolean;
     /** O corpo aparece no quadro da camera? Fora dele ele nao fala nem comeca golpe. */

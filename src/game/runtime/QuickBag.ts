@@ -143,6 +143,20 @@ const CSS = `
   color: rgba(216, 209, 192, 0.42); font-size: 13px; letter-spacing: 0.1em;
   white-space: nowrap;
 }
+/* OS CONTADORES: a materia-prima, EMBAIXO e sem moldura de slot. Eles tem de ler como outra
+   categoria de coisa a um relance — nao como uma segunda fileira de itens que o cursor esqueceu
+   de alcancar. Por isso sao menores, sem borda e sem o retangulo de fundo: um icone e um numero. */
+#${ROOT_ID} .zh-bag-mats {
+  display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; gap: 4px 16px; max-width: min(84vw, 760px);
+  color: rgba(216, 209, 192, 0.72); font-size: 15px;
+}
+#${ROOT_ID} .zh-bag-mat { display: flex; align-items: center; gap: 5px; }
+#${ROOT_ID} .zh-bag-mat img {
+  width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated;
+  opacity: 0.92;
+}
+#${ROOT_ID} .zh-bag-mat span { text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
 /* O CONFIRMA do dedo. So no toque: no teclado quem confirma e a tecla, e dois desenhos dizendo
    a mesma coisa e mobilia. Ele fecha a fileira pela direita — nunca solto num canto, onde numa
    tela estreita colidiria com os proprios itens. */
@@ -195,7 +209,14 @@ export interface QuickBagItem {
 
 export interface QuickBagView {
   items: QuickBagItem[];
-  /** O item que o B usa AGORA — o ponto de brasa, e nao o cursor. */
+  /**
+   * A MATERIA-PRIMA — minerio, ferro, carvao, engrenagem. Nao entra na fileira porque nao tem
+   * gesto nenhum (ver MATERIAL_ITEM_KINDS): e uma linha de contadores debaixo da bolsa, sem
+   * cursor e sem seleção. O jogador precisa SABER quanto ferro tem para ler o catalogo da
+   * bancada; ele nao precisa poder "empunhar" ferro, porque empunhar ferro nao faz nada.
+   */
+  materials: QuickBagItem[];
+  /** O item que o X usa AGORA — o ponto de brasa, e nao o cursor. */
   equipped: string;
   emptyLabel: string;
 }
@@ -231,6 +252,8 @@ export class QuickBag {
   private readonly viewport: HTMLDivElement;
   private readonly track: HTMLDivElement;
   private readonly keys: HTMLDivElement;
+  /** A fileira de contadores da materia-prima (ver QuickBagView.materials). */
+  private readonly mats: HTMLDivElement;
   private readonly setBtn: HTMLButtonElement;
   private readonly toggleBtn?: HTMLButtonElement;
 
@@ -289,7 +312,10 @@ export class QuickBag {
     this.keys.className = 'zh-bag-keys';
     if (touch) this.keys.style.display = 'none';
 
-    strip.append(this.name, row, this.keys);
+    this.mats = document.createElement('div');
+    this.mats.className = 'zh-bag-mats';
+
+    strip.append(this.name, row, this.mats, this.keys);
     this.root.append(veil, strip);
     document.body.appendChild(this.root);
 
@@ -389,6 +415,11 @@ export class QuickBag {
     const view = this.cb.read();
     const { items } = view;
 
+    // Os contadores sao desenhados nos DOIS caminhos: uma bolsa vazia com tres minerios no bolso
+    // continua tendo o que dizer, e some-los junto com a fileira faria o jogador achar que o
+    // minerio se perdeu.
+    this.renderMaterials(view.materials);
+
     if (items.length === 0) {
       this.cursor = '';
       this.cursorAt = 0;
@@ -443,6 +474,24 @@ export class QuickBag {
     this.setBtn.classList.remove('zh-off');
 
     this.slide(at, items.length);
+  }
+
+  /** Icone + numero por material. Sem cursor, sem clique: e leitura, nao escolha. */
+  private renderMaterials(materials: QuickBagItem[]): void {
+    this.mats.replaceChildren();
+    this.mats.style.display = materials.length ? 'flex' : 'none';
+    for (const mat of materials) {
+      const cell = document.createElement('div');
+      cell.className = 'zh-bag-mat';
+      cell.title = mat.label;
+      const img = document.createElement('img');
+      img.src = mat.icon;
+      img.alt = mat.label;
+      const num = document.createElement('span');
+      num.textContent = String(mat.count);
+      cell.append(img, num);
+      this.mats.appendChild(cell);
+    }
   }
 
   /**

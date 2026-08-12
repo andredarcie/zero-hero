@@ -49,6 +49,8 @@ import zora from './zora.mjs';
 import montanha from './montanha.mjs';
 import salvamento from './salvamento.mjs';
 import tochaViva from './tocha-viva.mjs';
+import brasa from './brasa.mjs';
+import altar from './altar.mjs';
 import gelo from './gelo.mjs';
 import labDungeon from './lab-dungeon.mjs';
 import dungeonGerada from './dungeon-gerada.mjs';
@@ -112,6 +114,8 @@ export const scenarios = {
   montanha,
   salvamento,
   'tocha-viva': tochaViva,
+  brasa,
+  altar,
   gelo,
   'lab-dungeon': labDungeon,
   'dungeon-gerada': dungeonGerada,

@@ -149,6 +149,15 @@ export class ExplorerDirector {
         .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
       if (picked.length > 0) return picked.slice(0, 3);
     }
+    // A MÃO DE ABERTURA NÃO SE SORTEIA: enquanto nada foi comprado, a mesa mostra as TRÊS MAIS
+    // BARATAS do baralho — e elas custam o mesmo (3 moedas, ver a tabela em add-prologue.mjs).
+    // A promessa de baixo garantia UMA carta pagável, e era pouco justamente na hora em que mais
+    // pesa: a primeira mesa abria com uma carta ao alcance e duas trancadas, e escolher entre uma
+    // opção e dois cadeados não é escolher. Aqui a estreia é uma decisão de GOSTO, e o preço é
+    // quem a escreve — nenhuma lista de ids mora neste arquivo.
+    if (!this.source.hasPurchased()) {
+      return [...catalog].sort((a, b) => a.catalog.cost - b.catalog.cost).slice(0, 3);
+    }
     const shuffled = [...catalog].sort(() => Math.random() - 0.5);
     const hand = shuffled.slice(0, 3);
     if (hand.some((entry) => entry.catalog.cost <= coins)) return hand;

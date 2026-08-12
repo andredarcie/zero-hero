@@ -1,6 +1,6 @@
 import {
-  CHUNK_COLUMNS, CHUNK_ROWS, LIGHT_RADIUS_TILES, SEA_TILE_FRAMES, SOLID_GROUND_FRAMES,
-  SOLID_UPPER_FRAMES,
+  CAMPFIRE_SCORCH_RADIUS_TILES, CHUNK_COLUMNS, CHUNK_ROWS, LIGHT_RADIUS_TILES, SEA_TILE_FRAMES,
+  SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
 } from '@/game/constants';
 import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
 import {
@@ -669,11 +669,26 @@ export class EditorStore {
       if (d < homeBest) { homeBest = d; homeIdx = i; }
     });
     const litFires = campfires.filter((fire, i) => i === homeIdx || fire.lit === true);
-    const drownedSpawns = enemySpawns.filter((spawn) => litFires.some(
-      (fire) => Math.hypot(fire.worldX - spawn.worldX, fire.worldY - spawn.worldY) <= LIGHT_RADIUS_TILES,
-    )).length;
+    const distToLitFire = (spawn: { worldX: number; worldY: number }): number => Math.min(
+      ...litFires.map((fire) => Math.hypot(fire.worldX - spawn.worldX, fire.worldY - spawn.worldY)),
+      Infinity,
+    );
+    const drownedSpawns = enemySpawns.filter(
+      (spawn) => distToLitFire(spawn) <= LIGHT_RADIUS_TILES,
+    ).length;
     if (drownedSpawns > 0) {
       warnings.push(`${drownedSpawns} ponto(s) de spawn dentro da luz de uma fogueira acesa — monstro nao nasce na luz`);
+    }
+    // ...e a COROA logo fora da luz e pior que calada: ali o corpo nasce e ASSA (ver
+    // EnemyBase.tickScorch), entao a cova vira um moinho de caveiras morrendo na beira do fogo,
+    // uma a cada ENEMY_RESPAWN_MS, para sempre. Aviso proprio porque o conserto e outro: a cova
+    // calada quer a fogueira apagada, esta quer distancia.
+    const roastedSpawns = enemySpawns.filter((spawn) => {
+      const d = distToLitFire(spawn);
+      return d > LIGHT_RADIUS_TILES && d <= CAMPFIRE_SCORCH_RADIUS_TILES;
+    }).length;
+    if (roastedSpawns > 0) {
+      warnings.push(`${roastedSpawns} ponto(s) de spawn colado(s) na luz de uma fogueira acesa — o corpo nasce e queima ali mesmo`);
     }
 
     const variables = this.world.globalVariables ?? {};

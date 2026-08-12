@@ -50,8 +50,10 @@ export default {
     const authored = await driver.page.evaluate(() => {
       const store = window.__scene?.store;
       if (!store) return 'sem store no editor';
-      for (let x = 1; x <= 11; x += 1) {
-        for (let y = 1; y <= 10; y += 1) {
+      // BORDA A BORDA: limpar so o miolo deixava props do mundo do lab nas beiradas, e a contagem
+      // da fixture (o assert logo abaixo) media o que ja estava la em vez do que o cenario pos.
+      for (let x = 0; x < 12; x += 1) {
+        for (let y = 0; y < 12; y += 1) {
           store.eraseEntitiesAt(x, y);
           store.setCell('upper', x, y, null);
           store.setCell('collision', x, y, false);
@@ -123,22 +125,31 @@ export default {
       out,
     );
     assert('a bancada forjou CABO', pack[0]?.kind === 'wire', JSON.stringify(pack));
-    assert('e ele vem em pacote de QUATRO', pack[0]?.units === 4, JSON.stringify(pack));
+    // CINCO, e nao quatro: a receita do cabo (toolboxRecipes) diz `units: 5`, e o punhado com que
+    // ele nasce no chao (SPAWN_PACK) diz o mesmo. O numero que este assert cobrava era o do texto
+    // antigo do CLAUDE.md — e teste que discorda da tabela mede a documentacao, nao o jogo.
+    assert('e ele vem em pacote de CINCO', pack[0]?.units === 5, JSON.stringify(pack));
     await driver.page.evaluate((o) => window.__scene.itemManager.takeAt(o[0], o[1]), out);
 
-    // ── 2. INSTALAR com o A, RECOLHER com o B ─────────────────────────────────
-    // A direcao nasce de para onde o heroi OLHA — nunca de um menu. Por isso o teste vira o
-    // heroi antes de instalar e depois confere o `dir` da peca.
-    log('INSTALAR: o A poe a esteira no tile a frente, virada pra onde o heroi olha');
+    // ── 2. INSTALAR E RECOLHER, os dois no X ──────────────────────────────────
+    // Instalar E USAR (a tabela `useItemAt` inteira e o botao X agora — o Z ficou so com a
+    // espada), e recolher e o MESMO X depois que a tabela e a entrega calam. A direcao nasce de
+    // para onde o heroi OLHA — nunca de um menu —, por isso o teste vira o heroi antes de instalar
+    // e depois confere o `dir` da peca.
+    log('INSTALAR: o X poe a esteira no tile a frente, virada pra onde o heroi olha');
     // Mao cheia de esteiras. O heroi fica ONDE nasceu — a faixa foi limpa em volta, e o teste
     // le a posicao dele em vez de assumir uma: `playerStart` e do mundo, nao deste cenario.
     await driver.page.evaluate(() => window.__scene.inventory.add('belt', 3));
-    const hero = await driver.page.evaluate(() => window.gameDebug.getState().player);
+    // A POSICAO E LIDA DEPOIS DE VIRAR, e essa ordem e o conserto de um erro silencioso: `face`
+    // aperta a seta, e uma seta contra um tile LIVRE faz o heroi ANDAR (ela so vira quando o tile
+    // esta bloqueado). Lendo antes, o teste comparava a peca com o tile onde o heroi ESTAVA.
     await driver.face('right');
-    await driver.attack(1);
+    await driver.settle(250);
+    const hero = await driver.page.evaluate(() => window.gameDebug.getState().player);
+    await driver.useItem(1);
     await driver.settle(400);
     const built = await driver.page.evaluate(() => window.gameDebug.getState().belts);
-    assert('o A INSTALOU uma esteira', built.length === 1, JSON.stringify(built));
+    assert('o X INSTALOU uma esteira', built.length === 1, JSON.stringify(built));
     assert('ela nasceu no tile A FRENTE do heroi',
       built[0]?.worldX === hero.worldX + 1 && built[0]?.worldY === hero.worldY,
       `${JSON.stringify(built[0])} vs heroi ${JSON.stringify(hero)}`);
@@ -159,7 +170,11 @@ export default {
     );
     assert('a esteira NAO bloqueia — ela e chao', walkable === false);
 
-    log('RECOLHER: o B de MAO VAZIA devolve a peca do jogador a mochila');
+    // RECOLHER deixou de exigir mao vazia (esse estado sumiu com a bolsa quase sempre cheia): ele
+    // e o degrau DEPOIS da tabela e da entrega. Aqui a mao continua vazia so para o passo ficar
+    // legivel — com a esteira selecionada o resultado seria o mesmo, porque instalar em cima de
+    // uma esteira ja instalada e recusado e o X escorrega para recolher.
+    log('RECOLHER: o X devolve a peca do jogador a mochila');
     await driver.page.evaluate(() => window.__scene.inventory.select('none'));
     await driver.useItem(1);
     await driver.settle(400);
@@ -167,7 +182,7 @@ export default {
       belts: window.gameDebug.getState().belts.length,
       held: window.gameDebug.getState().inventory.find((i) => i.kind === 'belt')?.count ?? 0,
     }));
-    assert('o B recolheu a esteira de volta', afterPick.belts === 0 && afterPick.held === 3,
+    assert('o X recolheu a esteira de volta', afterPick.belts === 0 && afterPick.held === 3,
       JSON.stringify(afterPick));
 
     // ── 3. A ESTEIRA que anda + o BAU que acumula ─────────────────────────────
@@ -328,7 +343,7 @@ export default {
       const s = window.__scene;
       const st = window.gameDebug.getState();
       return {
-        chest: st.chests[0] ?? null,
+        chest: st.chests.find((c) => c.quota) ?? st.chests[0] ?? null,
         gateSolid: s.isSolidForEntities(9, 9, false),
         // O portal tem de estar SELADO atras do portao: e isso que torna a trava real.
         portalReachableTiles: [[8, 9], [10, 8], [9, 8], [8, 10]]
@@ -365,17 +380,31 @@ export default {
     // A grade e a BARRA DE PROGRESSO, feita de fisica: sobe um degrau por punhado entregue, e o
     // ULTIMO punhado e o que abre (ver GameScene.gateCeiling — o percurso incompleto e comprimido
     // abaixo do limiar de passagem, senao a porta abriria com 18 de 20).
+    // A ARCA DA ENCOMENDA E A QUE TEM COTA, e nao `chests[0]`: o level-3 tem DUAS arcas (a do fim
+    // da esteira, sem cota, e a da porta, com `quota` + `variable`), e o indice zero e a primeira
+    // que o arquivo lista — a errada. Um teste que empurra minerio para a arca errada mede uma
+    // porta que nunca teve motivo para subir.
     const atCount = async (n) => {
       await driver.page.evaluate((k) => {
-        const c = window.__scene.chests[0];
+        const s = window.__scene;
+        const c = s.chests.find((ch) => ch.quota);
         while (!c.isEmpty) c.withdraw(9);
-        if (k > 0) c.store('ore', k);
+        // O QUE ELA PEDE, e nao um tipo escrito no cenario: a cota do level-3 e de FERRO (a arca
+        // esta no fim da cadeia forno+martelo, nao na saida do extrator).
+        if (k > 0) c.store(c.quota.kind, k);
+        // A CALDEIRA E CONSUMIVEL (WATER_BOIL_MS = 45s), e este bloco chega aqui depois de um
+        // extrator, uma bancada e uma rede inteira: sem o reabastecimento, a porta media falta de
+        // AGUA e nao falta de entrega — e o assert acusaria a trava errada.
+        s.boilers.forEach((b) => b.fillWater());
       }, n);
       await driver.settle(1700);
       return driver.page.evaluate(() => {
-        const g = window.__scene.electronicGates[0];
-        return { open: Number(g.openness.toFixed(2)),
-          solid: window.__scene.isSolidForEntities(9, 9, false) };
+        const s = window.__scene;
+        const g = s.electronicGates[0];
+        const c = s.chests.find((ch) => ch.quota);
+        return { open: Number(g.openness.toFixed(2)), pow: g.isPowered,
+          stored: { kind: c.storedKind, n: c.storedCount },
+          solid: s.isSolidForEntities(9, 9, false) };
       });
     };
     const meio = await atCount(10);
@@ -424,18 +453,29 @@ export default {
     assert('…e longe de qualquer veio ele devolve o olhar do heroi',
       mira.semVeio === null, JSON.stringify(mira));
 
-    // E a prova final: com a mira certa, ele entrega DENTRO da arca da encomenda.
+    // E a prova final: com a mira certa, ele entrega DENTRO de uma arca sozinho.
+    //
+    // A arca e uma NOVA, e nao a da encomenda: a cota do level-3 e de FERRO, e o extrator cospe
+    // MINERIO — a arca da porta recusa a carga dele com toda a razao (ela e o fim da cadeia
+    // forno+martelo, nao a saida da broca). O teste antigo pedia a uma trava de ferro que
+    // aceitasse pedra, e chamava de defeito do extrator o que era a economia do level funcionando.
     await driver.page.evaluate(() => {
       const s = window.__scene;
-      s.buildTestMachine('extractor', 7, 8, s.extractorAim(7, 8));
+      // (5,8) porque ali ha as duas coisas de que uma broca precisa: o VEIO atras (6,8) e ENERGIA
+      // — o tile encosta na esteira (5,7), e esteira conduz ao longo de si (a roda d'agua fica na
+      // ponta dessa mesma linha). Os veios do canto nordeste (9,1..3) nao tem rede nenhuma perto,
+      // e um extrator sem watts nao produz: o teste mediria a falta de cabo, nao a mira.
+      s.buildTestMachine('extractor', 5, 8, s.extractorAim(5, 8));
+      // O veio a LESTE faz a broca virar para OESTE, entao ela entrega em (4,8).
+      s.buildTestMachine('chest', 4, 8);
     });
     const produzindo = await waitFor(
       driver,
-      () => window.gameDebug.getState().chests.find((c) => c.worldX === 8 && c.worldY === 8),
+      () => window.gameDebug.getState().chests.find((c) => c.worldX === 4 && c.worldY === 8),
       (c) => (c?.count ?? 0) > 0,
       20000,
     );
-    assert('o extrator alimenta a encomenda sozinho',
+    assert('o extrator enche uma arca sozinho',
       produzindo?.kind === 'ore' && produzindo.count > 0, JSON.stringify(produzindo));
     await shot('fabrica-extrator-alimentando');
 
@@ -449,6 +489,17 @@ export default {
     const marca = await driver.page.evaluate(() => {
       const s = window.__scene;
       s.inventory.add('belt', 5);
+      // UM LUGAR ONDE A PECA CABE, procurado em vez de suposto: a fixture cresceu (bau, portao,
+      // extrator, esteiras) e o tile a leste de onde o heroi parou ja estava ocupado — a marca
+      // sumia com razao, e o assert acusava a marca de um defeito que era do cenario.
+      for (let y = 1; y < 11 && !s.canBuildMachineAt('belt', s.playerWorld.worldX + 1, s.playerWorld.worldY); y += 1) {
+        for (let x = 1; x < 11; x += 1) {
+          if (s.isTileOccupied(x, y) || !s.canBuildMachineAt('belt', x + 1, y)) continue;
+          s.playerWorld.worldX = x; s.playerWorld.worldY = y;
+          s.movementController.syncPlayerToWorld(x, y, s.tileSize);
+          break;
+        }
+      }
       s.movementController.facing.dx = 1; s.movementController.facing.dy = 0;
       s.syncPlacementHints();
       const h = s.placementHints;

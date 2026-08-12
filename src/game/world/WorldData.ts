@@ -299,6 +299,9 @@ export const getChests = (): WorldProp[] => allProps().filter((prop) => prop.typ
 export const getExtractors = (): WorldProp[] => allProps().filter((prop) => prop.type === 'extractor');
 export const getFurnaces = (): WorldProp[] => allProps().filter((prop) => prop.type === 'furnace');
 export const getTripHammers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'tripHammer');
+// O ALTAR nao guarda o que esta em cima dele aqui, pelo mesmo motivo do bau: o que ha sobre a
+// laje e estado de PARTIDA (o jogador pos), e nao conteudo do mapa.
+export const getAltars = (): WorldProp[] => allProps().filter((prop) => prop.type === 'altar');
 export const getLevelPortals = (): WorldProp[] => allProps().filter((prop) => prop.type === 'levelPortal');
 
 export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });

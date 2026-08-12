@@ -43,8 +43,8 @@ export default {
     const authored = await page.evaluate(({ hero }) => {
       const store = window.__scene?.store;
       if (!store) return { error: 'sem store no editor' };
-      for (let x = 1; x <= 11; x += 1) {
-        for (let y = 1; y <= 11; y += 1) {
+      for (let x = 0; x < 12; x += 1) {
+        for (let y = 0; y < 12; y += 1) {
           store.eraseEntitiesAt(x, y);
           store.setCell('upper', x, y, null);
           store.setCell('collision', x, y, false);
@@ -195,18 +195,22 @@ export default {
     assert('a ponta da lamina alcanca a segunda fileira',
       allHurt(reached), JSON.stringify(reached.undead));
 
-    // Mas so com CAMINHO: de mao vazia o soco para na primeira fileira.
-    await reset({ dx: 0, dy: -1 }, false); // sem espada: o punho
-    const fistArc = (await driver.getState()).arc;
-    assert('o soco declara tres tiles — alcance e da arma, nao do braco',
-      fistArc.length === 3, JSON.stringify(fistArc));
-    await spawnReady([[0, -2]], false);
+    // O SOCO MORREU, e com ele a metade "de mao vazia" deste passo. A espada deixou de ser um item
+    // da mochila (ela e do heroi — GameScene.swordEquipped), entao NAO EXISTE mais o estado de
+    // maos vazias: o Z saca a lamina venha o que vier selecionado no X. O que sobrou para provar e
+    // o outro lado da mesma lei — o arco de DUAS fileiras sai com uma ferramenta qualquer na
+    // bolsa, porque o alcance e da arma do heroi e nao do que ele escolheu carregar.
+    await reset({ dx: 0, dy: -1 });
+    await page.evaluate(() => { window.__scene.heldItem = 'pickaxe'; });
+    const toolArc = (await driver.getState()).arc;
+    assert('com a picareta na bolsa o arco continua sendo o da ESPADA — seis tiles',
+      toolArc.length === 6, JSON.stringify(toolArc));
+    await spawnReady([[0, -2]]);
     await driver.attack();
     await driver.settle(700);
-    const punched = await driver.getState();
-    assert('e o soco nao alcanca a segunda fileira',
-      punched.undead.length === 1 && punched.undead[0].health === punched.undead[0].maxHealth,
-      JSON.stringify(punched.undead));
+    const struckWithTool = await driver.getState();
+    assert('e ele alcanca a segunda fileira mesmo com ferramenta escolhida',
+      allHurt(struckWithTool), JSON.stringify(struckWithTool.undead));
     await reset({ dx: 0, dy: -1 });
 
     // ...e o que esta ATRAS continua fora: o arco e frontal, nao um circulo.
@@ -345,11 +349,16 @@ export default {
     // ── 7. OS i-FRAMES DO CORPO ─────────────────────────────────────────────
     // Duas espadadas dentro da janela de 450ms nao valem duas: a segunda RESVALA. Sem isto o
     // arco de seis tiles a cada 260ms mataria qualquer coisa antes de ela armar.
+    // OS DOIS GOLPES NO MESMO `evaluate`, sem um milissegundo entre eles: a janela de i-frames dura
+    // 450ms e o cenario gastava 600 esperando o `settle` do golpe anterior — o "golpe rapido" caia
+    // FORA da janela e o teste cobrava um resvalo que a lei nao promete. Aqui o primeiro acerto
+    // abre a janela e o segundo bate dentro dela, por construcao.
     const rapid = await page.evaluate(() => {
       const s = window.__scene;
       const e = s.enemyManager.getAliveEnemies()[0];
+      s.strikeEnemy(e, e.worldX, e.worldY, 'sword'); // este ACERTA e abre os i-frames
       const before = e.healthNow;
-      s.strikeEnemy(e, e.worldX, e.worldY, 'sword'); // dentro da janela do golpe anterior
+      s.strikeEnemy(e, e.worldX, e.worldY, 'sword'); // este tem de RESVALAR
       return { before, after: e.healthNow, invuln: e.isHurtInvulnerable };
     });
     assert('golpe dentro dos i-frames RESVALA — nao tira vida',
@@ -366,7 +375,9 @@ export default {
     // Vai pelo `strikeEnemy` e nao pelo botao A de proposito: cada acerto ARREMESSA o corpo um
     // tile (EnemyBase.shove), entao do terceiro golpe em diante a caveira ja saiu do alcance do
     // arco — pelo botao, este passo mediria a mira do cenario e nao a vida dela.
-    let landed = 1; // a espadada do passo 6
+    // DOIS acertos ja cairam: a espadada do botao (passo 6) e o primeiro golpe do teste de i-frames
+    // logo acima — o segundo daquele par resvalou de proposito e nao conta.
+    let landed = 2;
     for (let i = 0; i < 16; i += 1) {
       const blow = await page.evaluate(() => {
         const s = window.__scene;

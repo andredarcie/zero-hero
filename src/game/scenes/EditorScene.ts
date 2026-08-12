@@ -123,6 +123,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   toolbox: { key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
   furnace: { key: ASSET_KEYS.furnace, frame: 0 },
   tripHammer: { key: ASSET_KEYS.tripHammer, frame: 1 },
+  altar: { key: ASSET_KEYS.altar, frame: 0 },
   woodenCrate: { key: ASSET_KEYS.woodenCrate },
   pressurePlate: { key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },

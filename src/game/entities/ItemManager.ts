@@ -15,10 +15,10 @@ export type CollectedItem = {
   units?: number;
 };
 
-// Owns every held item lying on the ground: the authored sword/key from world.json plus any
-// item the hero drops when swapping. It never streams — items persist off-screen so a dropped
-// sword stays where you left it — and it never permanently despawns; an item only leaves the
-// ground when the hero collects it.
+// Owns every held item lying on the ground: the authored pickups from world.json plus everything
+// the world produces (a felled tree's stick, the bench's finished piece, the furnace's bloom). It
+// never streams — items persist off-screen, so what a machine spat out an hour ago is still there
+// — and it never permanently despawns; an item only leaves the ground when something collects it.
 export class ItemManager {
   private items: ItemPickup[] = [];
 
@@ -28,6 +28,12 @@ export class ItemManager {
     list: ReadonlyArray<{ type: HeldItemKind; worldX: number; worldY: number; units?: number }>,
   ): void {
     for (const p of list) {
+      // A ESPADA AUTORADA NÃO NASCE MAIS. Ela deixou de ser item (o herói tem a dele desde o
+      // primeiro frame — ver GameScene.swordEquipped), e um mundo antigo pode ter uma deitada no
+      // chão: apanhá-la não daria nada, e deixá-la ali seria um objeto que o jogo inteiro promete
+      // e o botão nunca entrega. Filtrar na entrada é o único lugar que pega os três caminhos
+      // (mundo autorado, level e a foto do save).
+      if (p.type === 'sword') continue;
       // Sementes autoradas num mundo são um pacote CHEIO; a foto do save (que passa por aqui
       // na hidratação) traz `units` explícito — um pacote meio gasto volta meio gasto.
       const units = p.units ?? spawnPackSize(p.type);
@@ -41,6 +47,10 @@ export class ItemManager {
    * down by the arm itself) — the flame rides the pickup and the fuel keeps counting down.
    */
   public drop(kind: HeldItemKind, worldX: number, worldY: number, fire?: ItemFire, chargeMs?: number, units?: number): void {
+    // A ESPADA NÃO CAI NO CHÃO — a mesma lei de `loadAuthored`, na outra porta. Um chunk comprado
+    // pode trazer uma espada autorada na lista de pickups (o `spawnBuiltChunkContent` chama aqui,
+    // não lá), e ela viraria um objeto que o jogo desenha e nenhum gesto recolhe.
+    if (kind === 'sword') return;
     // `units` explícito vem do pousar do herói e do braço (o pacote que estava viajando);
     // sem ele, sementes recém-produzidas (a foice) nascem como um pacote cheio.
     const n = units ?? spawnPackSize(kind);
@@ -137,10 +147,11 @@ export class ItemManager {
     this.items.push(new ItemPickup(this.scene, 'battery', x, y, true));
   }
 
-  // (Havia um `update(heroX, heroY)` aqui que COLETAVA o item de baixo dos pes do heroi, todo
-  // frame. Ele saiu: nada mais entra na mochila sozinho — o B pega, e `takeAt` e a unica porta
-  // pra dentro. Com ele foi embora tambem o flag `armed` do ItemPickup, que so existia pra um
-  // item largado nao voltar pra mao no mesmo instante em que tocava o chao.)
+  // (O `update(heroX, heroY)` que coletava o item sob os pes do heroi viveu aqui, foi REMOVIDO
+  // quando pegar virou um botao, e a pisada voltou a apanhar — mas do lado de fora: quem chama
+  // `takeAt` hoje e `GameScene.collectUnderfoot`, que decide o que vai pra bolsa, o que vai pro
+  // contador e o que acende cerimonia. A regra e a mesma de sempre: `takeAt` e a unica porta pra
+  // dentro, e ela nao sabe nada sobre mochila.)
 
   public render(tileSize: number, camera: WorldCamera): void {
     for (const it of this.items) it.render(tileSize, camera);

@@ -250,6 +250,8 @@ export const ASSET_KEYS = {
   toolbox: 'workbench',
   furnace: 'furnace',
   tripHammer: 'trip-hammer',
+  // O ALTAR: laje de pedra em 2 frames (fria / com o tampo em brasa). Ver AltarObject.
+  altar: 'altar',
   // A VIGA do martinete: sheet PROPRIO porque os frames dele tem 32px (dois tiles de largura).
   tripHammerBeam: 'trip-hammer-beam',
   oreItem: 'ore-item',
@@ -439,6 +441,19 @@ export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [
 export const LIGHT_RADIUS_TILES = 3.15;
 export const CAMPFIRE_SAFE_RADIUS_TILES = 3.65;
 
+/**
+ * O CALOR — o anel logo FORA da parede de luz, onde o corpo que se encosta na fogueira ARDE
+ * (ver EnemyBase.tickScorch). É a segunda metade da lei da luz: ela repele, e quem insiste em
+ * ficar colado nela pega fogo e perde vida enquanto ficar ali.
+ *
+ * O número é geometria, não gosto: a parede acende em 3,15, então o corpo mais próximo que
+ * consegue existir pisa em tiles a 3,16 (3,±1), 3,61 (3,±2), 4,0 (±4,0) e 4,24 (3,3) da lenha —
+ * 4,35 pega exatamente essa primeira coroa de tiles pisáveis, e nada além dela. Um raio menor
+ * que 3,15 seria letra morta (lá ninguém pisa) e um muito maior faria a fogueira cozinhar a
+ * matilha de longe, sem que ela tivesse chegado perto de nada.
+ */
+export const CAMPFIRE_SCORCH_RADIUS_TILES = 4.35;
+
 // How long a carried flame (a lit sword or wood club) lasts before it burns out in the dark.
 // Re-igniting at any living fire — a lit campfire or a lava pool — resets it. Short enough
 // that a long dark crossing is tense; tune against shrine spacing.
@@ -623,13 +638,11 @@ export const CHOPPABLE_UPPER_FRAMES: ReadonlySet<number> = new Set([
 // give nothing, and wood stays worth walking for.
 export const TREE_TILE_STICK_CHANCE = 0.25;
 
-// Chance that a dry bush, once it finishes BURNING, leaves a lump of charcoal behind — the fire
-// finally PRODUCING something instead of only consuming. Bushes only, never tall grass: grass
-// is the renewable fuse/farming loop and littering it with drops would let a burnt pavio drop a
-// surprise pickup in the hero's path (a step onto it mid-carry is a forced swap). Charcoal is
-// torch FOOD — stepping on it holding the LIT graveto eats it and refills TORCH_BURN_MS — so it
-// stays scarce on purpose: a bush burns once, and most leave only ash.
-export const CHARCOAL_DROP_CHANCE = 0.25;
+// O SORTEIO DO CARVAO MORREU (2026-08-12): todo arbusto seco queimado deixa carvao, sempre. Era
+// 1 em 4, e a raridade metrificava o fogo enquanto o carvao era so comida de tocha e a unica
+// fonte dele era queimar mato. Hoje ele e o REAGENTE da cadeia do ferro e o forno tem a CARVOARIA
+// (madeira+madeira, renovavel): contra uma receita repetivel, o sorteio no arbusto deixou de ser
+// economia e virou imposto sobre quem escolheu o caminho do fogo. Ver GameScene.dropCharcoalFromBush.
 
 // Ground-layer frames that BLOCK, the mirror of SOLID_UPPER_FRAMES for the floor. The sea is
 // the only one, and it exists because of the steel axe: the world's edge used to be a wall of

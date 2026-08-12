@@ -144,6 +144,14 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: o ALTAR — laje fria (0) e com o tampo em brasa (1). Precisa do lado Phaser
+    // como o forno e o martinete: o icone do editor e qualquer UI 2D leem o frame por aqui.
+    key: ASSET_KEYS.altar,
+    path: '/assets/environment/props/altar.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: a VIGA e o MALHO, em seis angulos. Os frames tem DOIS TILES de largura —
     // a viga atravessa o pilar e alcanca a mesa, e um madeiro de 16px nao e um madeiro.
     key: ASSET_KEYS.tripHammerBeam,
