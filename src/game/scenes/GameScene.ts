@@ -3659,6 +3659,51 @@ export class GameScene extends Phaser.Scene {
     return this.heldItem === 'axe' || this.heldItem === 'greatAxe';
   }
 
+  /**
+   * A FERRAMENTA QUE ESTE TILE PEDE — e que o herói já tem na mochila. `null` quando o tile não
+   * tem uma resposta única (a esmagadora maioria) ou quando a ferramenta dele não foi encontrada
+   * ainda: aí o X segue com o que estiver selecionado, e a recusa física de sempre acontece.
+   *
+   * A lista é curta de propósito e só entra aqui o que tem UMA resposta possível: madeira morta
+   * pede machado, pinheiro vivo pede o de aço, pedra pede picareta. Balde, chave, semente e tocha
+   * ficam de fora porque os alvos deles aceitam mais de uma coisa (a fogueira acesa reabastece a
+   * tocha E apaga com o balde), e adivinhar ali seria escolher pelo jogador em vez de poupá-lo.
+   */
+  private toolWantedAt(wx: number, wy: number): HeldItemKind | null {
+    // MADEIRA MORTA: os dois machados servem, e o COMUM vem primeiro — o de aço é um superset, e
+    // gastar o caro onde o barato resolve inverteria a escada de ferramentas do jogo.
+    if ((this.getDryTreeAt(wx, wy)?.blocking ?? false)
+      || (this.getDryShrubAt(wx, wy)?.blocking ?? false)) {
+      return this.firstOwned(['axe', 'greatAxe']);
+    }
+    // ÁRVORE VIVA é TILE, e só o machado de aço a derruba (ver tryChopTreeTile). Oferecer o comum
+    // aqui seria o jogo prometendo um gesto que ele mesmo recusa no frame seguinte.
+    if (this.treeTileFrameAt(wx, wy) !== null) return this.firstOwned(['greatAxe']);
+    // PEDRA e VEIO são a mesma rocha, e a picareta é a resposta dos dois.
+    if (this.getRockAt(wx, wy)?.blocking ?? false) return this.firstOwned(['pickaxe']);
+    return null;
+  }
+
+  /** O primeiro destes que está na mochila, na ordem em que foram pedidos. */
+  private firstOwned(kinds: readonly HeldItemKind[]): HeldItemKind | null {
+    return kinds.find((kind) => this.inventory.count(kind) > 0) ?? null;
+  }
+
+  /**
+   * Saca a ferramenta que o tile à frente pede, se o herói a tiver e ainda não estiver com ela.
+   *
+   * A TOCHA ACESA é intocável, e é a única exceção: o fogo mora no graveto que está na mão, e
+   * trocar de item o apaga (ver selectItem). Perder a chama por passar na frente de uma árvore
+   * seria o gesto automático cobrando a coisa mais cara do jogo — e quem carrega fogo está
+   * sempre a caminho de outro lugar.
+   */
+  private equipToolFor(wx: number, wy: number): void {
+    if (this.heldOnFire) return;
+    const wanted = this.toolWantedAt(wx, wy);
+    if (!wanted || wanted === this.heldItem) return;
+    this.selectItem(wanted);
+  }
+
   // A busca posicional dita UMA vez; os getters tipados abaixo são a superfície que o resto
   // da cena usa (cada um devolve o tipo concreto do seu sistema).
   /**
@@ -5055,6 +5100,20 @@ export class GameScene extends Phaser.Scene {
       if ((explorerRun()?.coins ?? 0) >= this.explorer!.minCost()) this.openChunkCards(buildGate);
       return;
     }
+    // 0. A FERRAMENTA CERTA SE APRESENTA SOZINHA. Bateu numa árvore com o machado na mochila? O
+    //    herói saca o machado. Numa rocha, com a picareta? Ele saca a picareta. Não é um atalho
+    //    de conveniência: é a diferença entre um jogo que pergunta "qual item você escolheu?" e um
+    //    que entende o que você está fazendo. O gesto que a bolsa cobrava antes (parar, abrir,
+    //    girar o cursor, fechar) não decidia NADA — diante de um tronco só existe uma resposta, e
+    //    fazer o jogador dizê-la em voz alta é cobrar burocracia por uma escolha que não existe.
+    //
+    //    Ele TROCA a seleção de verdade, e é o que o mantém honesto: o braço desenha o machado, as
+    //    costas do herói mostram o machado, e o próximo X continua com ele na mão. Um gesto que
+    //    usasse uma ferramenta invisível faria a animação mentir sobre o que está acontecendo.
+    //
+    //    E ele não rouba gesto nenhum: um tronco e uma rocha são sólidos, e não há UM item na
+    //    tabela que faça outra coisa contra eles. Ver `toolWantedAt`.
+    this.equipToolFor(x, y);
     // 1. O ITEM ESCOLHIDO AGE — a tabela inteira (machado→árvore, picareta→rocha, balde→água,
     //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, máquina→instala). É o primeiro
     //    degrau porque é o único que o jogador PEDIU explicitamente: ele abriu a bolsa e escolheu

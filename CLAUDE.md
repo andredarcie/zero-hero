@@ -146,6 +146,10 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   de contato. **A LOJA da fogueira foi REMOVIDA** (e as melhorias dela): moeda se ganha e se gasta
   no MUNDO — caveira, balcão de NPC, selo de estrada. **Falar NÃO é esbarrão**: um gesto que
   para o jogo inteiro não pode acontecer por a seta ter encostado em alguém de passagem.
+- **A FERRAMENTA CERTA SE APRESENTA SOZINHA** (`toolWantedAt`): o X contra madeira morta saca o
+  machado, contra pinheiro vivo o de aço, contra rocha a picareta — e TROCA a seleção de verdade
+  (o braço tem de desenhar o que trabalha). Só entra aí o alvo com UMA resposta possível, e a
+  tocha ACESA nunca é trocada (trocar de item apaga o fogo).
 - `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…), e ela é
   o **botão X**. Devolve `false` só quando o item não tem nada a ver com o tile — e aí o X segue
   para a entrega, para recolher e, por fim, para o gesto no vazio.

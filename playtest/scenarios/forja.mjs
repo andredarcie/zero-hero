@@ -61,6 +61,9 @@ export default {
       for (let x = 3; x <= 4; x += 1) store.placeEntity({ list: 'props', type: 'wire', worldX: x, worldY: 9 });
       store.placeEntity({ list: 'props', type: 'wire', worldX: 4, worldY: 8 });
       store.placeEntity({ list: 'props', type: 'ironRock', worldX: 9, worldY: 2 });
+      // Uma arvore seca para o outro lado da regra da ferramenta (bloco 1b): madeira morta pede
+      // machado, rocha pede picareta, e o X saca o certo dos dois sem o jogador abrir a bolsa.
+      store.placeEntity({ list: 'props', type: 'dryTree', worldX: 9, worldY: 5 });
       return store.allEntities().filter((e) => e.list === 'props' && (e.type === 'furnace' || e.type === 'tripHammer')).length;
     });
     assert('o store guarda forno e martinete', authored === 2, `veio ${authored}`);
@@ -100,6 +103,59 @@ export default {
     });
     assert('o mundo tem um veio', veio !== null, 'nenhum ironRock');
     assert('e o que sai dele e MINERIO', await kindAt(veio.x, veio.y) === 'ore', 'nao veio ore');
+
+    // ── 1b. A FERRAMENTA CERTA SE APRESENTA SOZINHA ───────────────────────────
+    // Diante de um tronco ou de uma rocha so existe UMA resposta, e fazer o jogador dize-la em voz
+    // alta (parar, abrir a bolsa, girar o cursor, fechar) e cobrar burocracia por uma escolha que
+    // nao existe. O X saca a ferramenta da mochila — e TROCA a selecao de verdade, senao o braco
+    // desenharia uma coisa enquanto outra trabalha.
+    log('FERRAMENTA: o X na rocha saca a picareta sozinho, mesmo com o machado na mao');
+    const auto = await driver.page.evaluate(async () => {
+      const s = window.__scene;
+      const rock = s.rocks.find((r) => r.ore);
+      s.inventory.clear();
+      s.inventory.add('pickaxe', 1);
+      s.inventory.add('axe', 1);
+      s.inventory.select('axe'); // a mao ERRADA de proposito
+      // Colado na rocha, encarando-a: a mesma posicao de onde um jogador bateria.
+      s.playerWorld.worldX = rock.worldX;
+      s.playerWorld.worldY = rock.worldY + 1;
+      s.movementController.syncPlayerToWorld(rock.worldX, rock.worldY + 1, s.tileSize);
+      return { rock: { x: rock.worldX, y: rock.worldY }, antes: s.heldItem };
+    });
+    await driver.settle(300);
+    await driver.press('ArrowUp'); // a rocha e solida: o passo so VIRA o heroi
+    await driver.settle(300);
+    await driver.press('x', { count: 1 });
+    await driver.settle(500);
+    const depoisDaPicareta = await driver.page.evaluate(() => window.__scene.heldItem);
+    assert('com o machado na mao, bater na ROCHA saca a picareta',
+      auto.antes === 'axe' && depoisDaPicareta === 'pickaxe',
+      JSON.stringify({ auto, depoisDaPicareta }));
+
+    // ...e a recíproca, na madeira morta: o machado COMUM primeiro (o de aço é superset, e gastar
+    // o caro onde o barato resolve inverteria a escada de ferramentas).
+    const auto2 = await driver.page.evaluate(() => {
+      const s = window.__scene;
+      const tree = s.dryTrees.find((t) => t.blocking);
+      if (!tree) return null;
+      s.inventory.select('pickaxe'); // de novo a mao errada
+      s.playerWorld.worldX = tree.worldX;
+      s.playerWorld.worldY = tree.worldY + 1;
+      s.movementController.syncPlayerToWorld(tree.worldX, tree.worldY + 1, s.tileSize);
+      return { antes: s.heldItem };
+    });
+    if (auto2) {
+      await driver.settle(300);
+      await driver.press('ArrowUp');
+      await driver.settle(300);
+      await driver.press('x', { count: 1 });
+      await driver.settle(500);
+      const depoisDoMachado = await driver.page.evaluate(() => window.__scene.heldItem);
+      assert('com a picareta na mao, bater na ARVORE SECA saca o machado',
+        auto2.antes === 'pickaxe' && depoisDoMachado === 'axe',
+        JSON.stringify({ auto2, depoisDoMachado }));
+    }
 
     // ── 2. O FORNO: minerio + carvao = ESPONJA ────────────────────────────────
     const furnace = (await st()).furnaces[0];

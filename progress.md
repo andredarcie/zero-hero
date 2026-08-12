@@ -6487,3 +6487,29 @@ escolher em QUE coisa", que é o pensamento que aquele monte de cabo existe para
 
 Guarda: `prologo` bloco 5b passou a cobrar que a roda **nasceu** (não só que gira) e que são dois
 pacotes de cinco.
+
+## O X saca a ferramenta certa (2026-08-12)
+
+Pedido do usuário: bateu numa árvore com o machado na mochila, use o machado; numa rocha com a
+picareta, use a picareta. Não é atalho de conveniência — é a diferença entre um jogo que pergunta
+"qual item você escolheu?" e um que entende o que você está fazendo. Diante de um tronco existe UMA
+resposta, e fazer o jogador dizê-la em voz alta (parar, abrir a bolsa, girar o cursor, fechar) é
+cobrar burocracia por uma escolha que não existe.
+
+- **Ele TROCA a seleção de verdade** (`equipToolFor` → `selectItem`), e é o que o mantém honesto: o
+  braço desenha o machado, as costas do herói mostram o machado, e o próximo X continua com ele na
+  mão. Um gesto que usasse uma ferramenta invisível faria a animação mentir.
+- **A lista é curta de propósito** (`toolWantedAt`): madeira morta → machado (o COMUM primeiro, o de
+  aço é superset e gastar o caro onde o barato resolve inverteria a escada), pinheiro vivo → só o de
+  aço (é o único que o derruba: oferecer o comum seria prometer um gesto que o jogo recusa no frame
+  seguinte), rocha e veio → picareta. Balde, chave, semente e tocha ficam de fora porque os alvos
+  deles aceitam mais de uma coisa — a fogueira acesa reabastece a tocha E apaga com o balde, e
+  adivinhar ali seria escolher pelo jogador em vez de poupá-lo.
+- **Não rouba gesto nenhum:** tronco e rocha são sólidos, e não há um item na tabela que faça outra
+  coisa contra eles. O passo roda ANTES da tabela e some quando não há resposta única.
+- **A tocha ACESA é a exceção** e é a única: o fogo mora no graveto que está na mão, e trocar de
+  item o apaga. Perder a chama por passar na frente de uma árvore seria o gesto automático cobrando
+  a coisa mais cara do jogo — e quem carrega fogo está sempre a caminho de outro lugar.
+
+Guarda: `forja` bloco **1b** — com o machado na mão o X na rocha saca a picareta, e com a picareta
+na mão o X na árvore seca saca o machado (a fixture ganhou uma árvore para o segundo lado).
