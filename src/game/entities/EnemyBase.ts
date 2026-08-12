@@ -168,15 +168,16 @@ const BURN_CHAR_TINT_MS = 150;
 
 // ── O CALOR DA FOGUEIRA ──────────────────────────────────────────────────────
 //
-// A SEGUNDA METADE DA LEI DA LUZ. "Luz de fogueira é parede pra todo monstro" sempre foi a
-// primeira; a segunda é o que acontece com quem se encosta nela: o corpo ARDE, e o fogo vai
-// comendo a vida dele enquanto ele ficar ali (ver CAMPFIRE_SCORCH_RADIUS_TILES).
+// A FOGUEIRA NÃO REPELE MAIS: ELA QUEIMA. A luz era uma parede — nenhum monstro pisava dentro
+// dela, sem que nada na tela dissesse por quê — e a parede caiu. O que ficou é uma regra só,
+// física: a DOIS TILES da lenha o corpo pega fogo e o fogo vai comendo a vida dele; a três, a
+// fogueira é uma luz bonita e mais nada (ver CAMPFIRE_SCORCH_RADIUS_TILES).
 //
 // Isto entrou no lugar do DESMANCHE POR SEGURANÇA — a caveira sumia sozinha em 2-5s quando o
 // herói alcançava uma fogueira. Era a matilha inteira evaporando sem causa na tela: o jogador
 // chegava no fogo, olhava pra trás e não havia mais nada, sem um pixel dizendo por quê. Agora
-// a mesma cena acontece de verdade e diante dos olhos — a matilha alcança o herói na beira da
-// luz, começa a pegar fogo e cai queimada, uma de cada vez.
+// a mesma cena acontece de verdade e diante dos olhos — quem quiser o herói tem de entrar na
+// brasa, e sai de lá em chamas.
 //
 // NÃO é a tocha viva, e a diferença é a peça: o corpo aceso pela chama vira uma fogueira em
 // pânico que corre e espalha fogo (o sistema que o JOGADOR conduz). Aqui não há chama nenhuma
@@ -189,14 +190,15 @@ const BURN_CHAR_TINT_MS = 150;
 /**
  * O calor morde de tanto em tanto, e a mordida vale UMA ESPADADA (`SWORD_BLOW_DAMAGE`): ele não
  * inventa uma escala própria de dano: cada espécie aguenta na brasa exatamente os mesmos golpes
- * que aguenta na espada (`ENEMY_BLOWS`), então a caveira de 3 degraus cai em ~2,4s — o mesmo
- * tempo da tocha viva — e a torreta de 9 leva o triplo, sem nenhum número novo pra manter.
+ * que aguenta na espada (`ENEMY_BLOWS`).
  *
- * A primeira mordida vem SÓ no fim do primeiro intervalo, nunca na entrada: as chamas aparecem
- * no instante em que o corpo encosta, e esse tempo é o aviso — quem raspa no anel e sai leva o
- * susto e a marca de carvão, não a vida.
+ * 1,6s por mordida — o DOBRO do que era. Com a mordida a 800ms a caveira caía em 2,4s, e o efeito
+ * na tela era um corpo que encostava na fogueira e desmanchava quase junto: o fogo lia como um
+ * gatilho, não como uma coisa que come. Agora ela leva ~4,8s para cair, tempo de sobra para o
+ * jogador VER o bicho ardendo, para o bicho ainda fazer o que veio fazer, e para a fuga dele (sair
+ * do anel apaga) ser uma jogada de verdade em vez de uma teoria.
  */
-const SCORCH_BITE_MS = 800;
+const SCORCH_BITE_MS = 1600;
 
 /**
  * O TOM DE FRIO do corpo congelado (ver FreezeManager): multiplicativo, como o carvão da tocha

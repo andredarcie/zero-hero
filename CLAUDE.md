@@ -359,14 +359,16 @@ com um `scene.restart()` no meio).
   diz. Números diferentes fazem inimigos diferentes no papel e o mesmo inimigo na mão. A vida ela
   **não escolhe**: é um DEGRAU na escada de `ENEMY_BLOWS` (2 a 9 espadadas, crescente e sem
   repetir), e como não há degrau vago, entrar é dizer de quem ela é mais difícil.
-- **Luz de fogueira é parede pra TODO monstro** — é a alavanca central do jogo e não tem exceção.
-  A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
-- **...e quem se encosta nessa parede ARDE** (`tickScorch`): na coroa logo fora da luz o corpo pega
-  fogo e perde uma espadada de vida por mordida, até cair queimado — vivo e à vista o tempo todo.
-  Isso está no lugar do desmanche silencioso da matilha (**corpo nenhum some sozinho**: um bicho
-  que evapora desmente a chegada dele). Não é a tocha viva: o corpo assado continua sendo a
-  espécie, não corre em pânico e **não espalha fogo** — se espalhasse, cada fogueira acenderia o
-  mato à volta e as fogueiras MORTAS, que são a fechadura do jogo.
+- **A FOGUEIRA NÃO REPELE: ELA QUEIMA** (`tickScorch`, `CAMPFIRE_SCORCH_RADIUS_TILES` = 2). A luz
+  era uma parede que nenhum monstro pisava — mágica, invisível e sem nada na tela dizendo por quê —
+  e ela caiu. Dentro de **2 tiles** o corpo pega fogo e perde uma espadada de vida por mordida
+  (1,6s) até cair; a 3 tiles a fogueira não é nada para ele. Corpo nenhum some sozinho — um bicho
+  que evapora desmente a chegada dele. Não é a tocha viva: o corpo assado continua sendo a espécie,
+  não corre em pânico e **não espalha fogo** (se espalhasse, cada fogueira acenderia o mato à volta
+  e as fogueiras MORTAS, que são a fechadura do jogo).
+- **O que a luz ainda faz é CALAR** (`LIGHT_RADIUS_TILES`): cova e cerco não abrem dentro dela, e a
+  caveira não marcha até uma placa acesa. Acender a fogueira do corredor continua calando a cova
+  dele. A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
 - **Quem paga é a MORTE, não o golpe** (`EnemyBase.setDeathToll`, tocado por `die()` e só por ele):
   todo corpo que cai larga moeda, tenha-o matado a espada, a bomba, a tocha viva ou a brasa. Fonte
   nova de dano não precisa saber que moeda existe — e `despawn()` não paga, porque ali ninguém

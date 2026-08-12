@@ -6542,3 +6542,41 @@ leriam como dois sistemas, e eles são o mesmo; só muda o glifo.
 
 Guarda: `forja` bloco **1c** — com o graveto apagado o balão da tocha aparece; com o aceso o
 arbusto pega fogo e o herói não pensa nada.
+
+## A fogueira deixou de ser parede e virou brasa (2026-08-12)
+
+Pedido do usuário, e ele fecha o arco dos últimos dias: *"o undead pega fogo apenas se chegar a 2
+tiles da fogueira; mais longe que isso ele está 100% seguro e não liga mais pra fogueira"* — e o
+fogo deve **demorar mais para matar**.
+
+O pedido só faz sentido com a PAREDE derrubada, e essa é a mudança de verdade. A luz repelia todo
+monstro num raio de 3,15, e o calor era a coroa logo fora dela (3,15→4,35). Com o calor a 2 tiles e
+a parede a 3,15, nenhum corpo jamais chegaria a queimar: a regra nova seria letra morta. Então a
+lei antiga caiu inteira, e o que ficou é **uma regra só, física e legível**:
+
+> Dentro de 2 tiles da lenha, o corpo pega fogo e o fogo come a vida dele. Fora disso, a fogueira é
+> uma luz bonita e mais nada.
+
+**Por que isso é melhor do que era.** "Monstro não existe na luz" nunca teve um pixel explicando-se:
+o jogador via a matilha parar numa linha invisível. Trocar a recusa mágica por uma brasa visível é a
+mesma direção de todas as outras decisões desta semana — o sumiço da matilha virou fogo, a moeda
+saiu do golpe e foi para a morte, a legenda da esponja virou um lugar. E o encontrão contra a luz,
+que era um muro, agora **cozinha**: arremessar um corpo para a beira do fogo é uma jogada.
+
+- **1,6s por mordida** (era 0,8). A caveira caía em 2,4s, e na tela isso lia como um gatilho, não
+  como uma coisa que come; agora ela leva ~4,8s. Tempo de ver o bicho arder, de ele ainda fazer o
+  que veio fazer, e de a fuga dele (sair do anel apaga) ser uma jogada em vez de uma teoria.
+- **O que a luz ainda faz é CALAR**: cova e cerco não abrem dentro dela e a caveira não marcha até
+  uma placa acesa. Acender a fogueira do corredor continua calando a cova dele — a alavanca do
+  balde e da tocha está intacta. O raio (3,15) ficou onde estava, só perdeu o poder de empurrar.
+- **A reachability do cerco parou de tratar luz como parede** (o flood-fill do
+  `undeadReachableTiles`): um caminho que passa raspando numa fogueira agora conta, como deve.
+
+**O que isto CUSTA, e é bom dizer em voz alta:** o acampamento deixou de ser fortaleza. Um corpo que
+queira o herói na fogueira consegue chegar — e paga com a vida, ardendo. Descansar no fogo continua
+curando e ancorando o respawn, mas não é mais um vidro à prova de bala. Se isso doer no jogo, o
+conserto NÃO é ressuscitar a parede: é o calor matar mais rápido perto da lenha do que na borda.
+
+Guarda: `brasa`, com a geometria refeita — a caveira agora NASCE a quatro tiles (100% segura ali),
+CAMINHA até o herói colado na fogueira e pega fogo ao chegar a dois. O teste deixou de empurrar
+alguém para o fogo e passou a deixar o bicho fazer o que ele sempre faz, medindo o preço.

@@ -435,27 +435,30 @@ export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [
   ASSET_KEYS.undeadBorn6,
 ];
 
-// Light radii in tiles: the radius undead refuse to step into (they live only in the dark)
-// and the mute ring for enemy graves. The safety ring stays slightly wider (+0.5) so danger
-// begins right at the wall's edge, never while the player still reads as protected.
-// 2026-08-06, a pedido do usuário: o raio caiu 30% (4.5 → 3.15) — o inimigo chega mais perto
-// da fogueira, e o anel seguro encolheu junto para manter a margem. A luz VISÍVEL não lê
-// daqui (é a luz 3D real, com falloff suave), então a parede menor não contradiz borda nenhuma.
+// ── O QUE UMA FOGUEIRA ACESA FAZ COM UM MONSTRO ─────────────────────────────────────────────
+//
+// Ela QUEIMA quem chega perto, e mais nada. A luz era uma PAREDE — monstro nenhum pisava dentro
+// dela, por nenhum motivo visível —, e essa parede caiu (2026-08-12, a pedido do usuário: "se for
+// mais longe que 2 tiles ele está 100% seguro e não liga mais pra fogueira"). O que ficou é uma
+// regra só, física e legível de longe: dentro do CALOR o corpo pega fogo e perde vida; fora dele a
+// fogueira é uma luz bonita e nada mais.
+//
+// Duas tiles é o anel inteiro à volta da lenha (os quatro cardeais a 1, as diagonais a 1,41 e os
+// cardeais a 2) — perto o bastante para ser uma decisão de quem chega, longe o bastante para não
+// ser um acidente de quem passa.
+export const CAMPFIRE_SCORCH_RADIUS_TILES = 2;
+
+// ONDE MONSTRO NÃO NASCE. Este raio já foi a parede de movimento e hoje é só isto: uma cova (ou o
+// cerco) não abre dentro da luz de um fogo aceso, e é por isso que acender a fogueira do corredor
+// CALA a cova dele. A caveira também não marcha até uma placa de pressão acesa por ele — ela não
+// caminha para dentro do fogo de propósito. Continua sendo a alavanca do balde e da tocha; o que
+// mudou é que ela não empurra mais ninguém, ela só impede que alguém apareça ali.
+//
+// A SEGURANÇA DO HERÓI é outro número (`CAMPFIRE_SAFE_RADIUS_TILES`): o anel em que ele descansa,
+// cura e acorda. Ele continua maior que os dois — mas atenção, ele deixou de ser intransponível
+// para monstro: quem quiser chegar até o herói na fogueira consegue, e paga com o corpo em chamas.
 export const LIGHT_RADIUS_TILES = 3.15;
 export const CAMPFIRE_SAFE_RADIUS_TILES = 3.65;
-
-/**
- * O CALOR — o anel logo FORA da parede de luz, onde o corpo que se encosta na fogueira ARDE
- * (ver EnemyBase.tickScorch). É a segunda metade da lei da luz: ela repele, e quem insiste em
- * ficar colado nela pega fogo e perde vida enquanto ficar ali.
- *
- * O número é geometria, não gosto: a parede acende em 3,15, então o corpo mais próximo que
- * consegue existir pisa em tiles a 3,16 (3,±1), 3,61 (3,±2), 4,0 (±4,0) e 4,24 (3,3) da lenha —
- * 4,35 pega exatamente essa primeira coroa de tiles pisáveis, e nada além dela. Um raio menor
- * que 3,15 seria letra morta (lá ninguém pisa) e um muito maior faria a fogueira cozinhar a
- * matilha de longe, sem que ela tivesse chegado perto de nada.
- */
-export const CAMPFIRE_SCORCH_RADIUS_TILES = 4.35;
 
 // How long a carried flame (a lit sword or wood club) lasts before it burns out in the dark.
 // Re-igniting at any living fire — a lit campfire or a lava pool — resets it. Short enough

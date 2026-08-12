@@ -18,7 +18,7 @@
 // andar para OESTE. Se ela anda para LESTE e para em cima da placa, nao ha outra leitura possivel.
 //
 // A fogueira do canto e o resto da fixture: o cerco de undead nao existe no lab, mas a SEGURANCA
-// existe — perto de fogo aceso a caveira se desfaz em ~2-5s (sunset) e a luz da fogueira e tile
+// existe — perto de fogo aceso a caveira PEGA FOGO (o calor, 2 tiles) e o anel seguro do heroi
 // intransponivel pra ela. Por isso a unica fogueira do mundo vai para (0,0), longe do corredor.
 //
 // O que este cenario NAO cobre de proposito: heroi e caixote pressionando a placa, que e o
@@ -65,8 +65,8 @@ export default {
 
       // UMA fogueira, no canto oposto. Ela precisa existir (o runtime acende a mais proxima do
       // spawn e o mundo sem fogo nenhum e um caso que nada mais no jogo exercita), mas precisa
-      // ficar longe: dentro de CAMPFIRE_SAFE_RADIUS (3.65) o heroi fica "safe" e a caveira se
-      // desfaz sozinha antes de chegar na placa, e dentro de LIGHT_RADIUS (3.15) ela nem entra.
+      // ficar longe: dentro de CAMPFIRE_SAFE_RADIUS (3.65) o heroi fica "safe", e a dois tiles
+      // da lenha a caveira arde antes de chegar na placa (ver tickScorch).
       store.placeEntity({ list: 'props', type: 'campfire', worldX: fire.x, worldY: fire.y });
       store.setSpawn(hero.x, hero.y);
       store.placeEntity({ list: 'props', type: 'pressurePlate', worldX: plate.x, worldY: plate.y, variable: varName });
@@ -93,7 +93,7 @@ export default {
     assert('a placa existe no runtime e nasce solta',
       state.pressurePlates.length === 1 && state.pressurePlates[0].pressed === false
       && state.globalVariables[VAR] === false, JSON.stringify(state.pressurePlates));
-    assert('o heroi nao esta no raio seguro da fogueira (senao a caveira se desfaz sozinha)',
+    assert('o heroi nao esta no raio seguro da fogueira (o calor dela cozinharia a caveira)',
       state.safety.safe === false, JSON.stringify(state.safety));
     // A geometria INTEIRA deste teste depende de o heroi estar a oeste da caveira: se ele nascer
     // em outro tile, "ela ignorou o heroi" mais adiante estaria medindo outra coisa. Cobra o

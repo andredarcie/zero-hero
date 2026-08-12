@@ -2922,20 +2922,16 @@ export class GameScene extends Phaser.Scene {
         this.playerWorld.worldY,
         this.isTorchLit,
         {
-          // Enemies respect the same solid tiles as the hero (terrain, trees, campfires,
-          // dry bushes, NPCs) — and they refuse to step into campfire light: monstro nao
-          // existe na luz. The hero's own glow is not a barrier (they hunt him).
-          onFoot: (wx, wy) => {
-            if (this.isSolidForEntities(wx, wy)) return true;
-            return this.isTileLitByCampfire(wx, wy);
-          },
+          // A LUZ DEIXOU DE SER PAREDE. Ela repelia todo monstro, e a regra caiu junto com o
+          // motivo dela: hoje a fogueira QUEIMA quem chega a dois tiles (ver tickScorch), e uma
+          // parede invisível por cima de uma brasa visível são duas respostas para a mesma
+          // pergunta — a pior delas mágica. Sobrou o sólido de sempre (terreno, árvore, lenha,
+          // arbusto, NPC), igual para o herói e para eles.
+          onFoot: (wx, wy) => this.isSolidForEntities(wx, wy),
           // QUEM VOA (o morcego) ve o mesmo mundo menos os hazards: rio e lava nao seguram asa.
           // O mar continua segurando — ele e bloqueio implicito de terreno, a moldura do mundo,
           // e nada no jogo o atravessa. A luz tambem continua: e regra de criatura, nao de chao.
-          flying: (wx, wy) => {
-            if (this.isSolidForEntities(wx, wy, true)) return true;
-            return this.isTileLitByCampfire(wx, wy);
-          },
+          flying: (wx, wy) => this.isSolidForEntities(wx, wy, true),
           // Uma BALA e outra coisa: parede a mata, luz e agua nao (ver isShotBlockedAt — e um teste
           // proprio porque tem de ignorar uma classe de TERRENO, nao so os props de hazard).
           shot: (wx, wy) => this.isShotBlockedAt(wx, wy),
@@ -4256,19 +4252,27 @@ export class GameScene extends Phaser.Scene {
     return best;
   }
 
-  // Firelight is undead-repellent: tiles inside a campfire's glow are walls to them.
+  /**
+   * Este tile está DENTRO da luz de uma fogueira acesa? Ele já foi a parede que repelia todo
+   * monstro; hoje responde por duas coisas só (ver LIGHT_RADIUS_TILES): onde uma cova ou o cerco
+   * NÃO abrem, e a placa de pressão que a caveira se recusa a caçar. Quem empurra corpo agora é o
+   * CALOR, e ele tem raio próprio — `isTileScorchedByCampfire`.
+   */
   private isTileLitByCampfire(wx: number, wy: number): boolean {
     return this.distToNearestCampfireTiles(wx, wy) <= LIGHT_RADIUS_TILES;
   }
 
   /**
-   * ...e a coroa de tiles logo FORA dessa parede é o CALOR: um corpo que fica ali pega fogo e
-   * perde vida enquanto ficar (ver EnemyBase.tickScorch e CAMPFIRE_SCORCH_RADIUS_TILES). É a
-   * outra metade da mesma lei — a luz repele, e quem se encosta nela assa.
+   * O CALOR: este tile está a dois tiles ou menos de uma fogueira ACESA? Ali o corpo pega fogo e
+   * perde vida enquanto ficar (ver EnemyBase.tickScorch e CAMPFIRE_SCORCH_RADIUS_TILES).
    *
-   * Lê da MESMA distância que a parede (só fogueira ACESA conta), porque as duas são a mesma
-   * pergunta feita a dois raios: com uma segunda fonte de verdade, apagar uma fogueira deixaria
-   * de esfriar o anel dela.
+   * Ele era uma coroa FORA da parede de luz — a parede caiu, e o calor virou a única coisa que a
+   * fogueira faz a um monstro. Duas tiles é o anel colado na lenha: perto o bastante para ser uma
+   * decisão de quem chega, longe o bastante para não pegar quem passa.
+   *
+   * Lê da MESMA distância que a luz (só fogueira ACESA conta), porque as duas são a mesma pergunta
+   * feita a dois raios: com uma segunda fonte de verdade, apagar uma fogueira deixaria de esfriar
+   * o anel dela.
    */
   private isTileScorchedByCampfire(wx: number, wy: number): boolean {
     return this.distToNearestCampfireTiles(wx, wy) <= CAMPFIRE_SCORCH_RADIUS_TILES;
@@ -4326,7 +4330,8 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Every tile an undead could walk to the hero from: a flood-fill out from the hero's tile
-   * over undead-passable ground (not solid, not firelit — the exact blockers they move by),
+   * over undead-passable ground (not solid — the exact blockers they move by; a luz deixou de ser
+   * um deles, entao um caminho que passa raspando numa fogueira agora conta),
    * bounded a few tiles past the spawn ring so a path may detour around a short wall. Other
    * undead are ignored: they move, so they never permanently seal a path. Memoised per frame
    * — the director probes up to 14 candidate tiles per spawn tick, and each probe must cost
@@ -4352,7 +4357,6 @@ export class GameScene extends Phaser.Scene {
         const key = `${nx},${ny}`;
         if (this.reachableTiles.has(key)) continue;
         if (this.isSolidForEntities(nx, ny)) continue;
-        if (this.isTileLitByCampfire(nx, ny)) continue;
         this.reachableTiles.add(key);
         queue.push([nx, ny]);
       }
@@ -6724,13 +6728,12 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Onde um corpo arremessado pode cair. E o mesmo mundo que o EnemyManager entrega ao bicho pra
-   * ele ANDAR — inclusive a luz de fogueira, que continua sendo parede: arremessar uma caveira
-   * para dentro da luz nao pode ser a porta dos fundos da lei que diz que monstro nao existe
-   * nela. Em compensacao a luz vira um muro em que da pra bater coisas, o que e melhor.
+   * ele ANDAR — e a luz da fogueira saiu dos dois juntos. Arremessar uma caveira para a beira do
+   * fogo deixou de bater num muro invisivel e passou a ser a jogada que parece: ela cai la e
+   * COMECA A ARDER (ver tickScorch). O golpe que empurra virou uma forma de cozinhar.
    */
   private canEnemyEnter(enemy: EnemyBase, wx: number, wy: number): boolean {
     if (this.isSolidForEntities(wx, wy, enemy.flies)) return false;
-    if (this.isTileLitByCampfire(wx, wy)) return false;
     if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) return false;
     const other = this.enemyManager?.getEnemyAt(wx, wy);
     return other === null || other === undefined || other === enemy;

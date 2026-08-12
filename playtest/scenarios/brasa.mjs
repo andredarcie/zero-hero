@@ -1,13 +1,13 @@
-// O CALOR DA FOGUEIRA — a segunda metade da lei da luz.
+// O CALOR DA FOGUEIRA — a UNICA coisa que uma fogueira faz a um monstro.
 //
-// A luz REPELE (monstro nao pisa nela) e quem se encosta nela ASSA: o corpo pega fogo, perde uma
-// espadada de vida a cada mordida (SCORCH_BITE_MS) e cai queimado — vivo o tempo todo, a vista,
-// no lugar onde estava. Isto entrou no lugar do DESMANCHE POR SEGURANCA: a caveira se desfazia
-// sozinha 2-5s depois de o heroi pisar no anel de uma fogueira, e a matilha inteira evaporava sem
-// causa na tela.
+// A luz ja foi uma PAREDE (monstro nenhum pisava nela, sem que nada na tela dissesse por que), e
+// essa parede caiu. Sobrou uma regra so, fisica: a DOIS TILES da lenha o corpo pega fogo e perde
+// uma espadada de vida a cada mordida (SCORCH_BITE_MS, 1,6s); a tres, a fogueira e uma luz bonita
+// e mais nada. Isto entrou no lugar do DESMANCHE POR SEGURANCA: a caveira se desfazia sozinha 2-5s
+// depois de o heroi pisar no anel de uma fogueira, e a matilha inteira evaporava sem causa.
 //
 // O que este cenario prova, na ordem:
-//   1. o corpo colado na parede de luz PEGA FOGO sozinho (scorching), sem ninguem acender nada;
+//   1. o corpo que CHEGA no heroi na fogueira pega fogo sozinho (scorching), sem ninguem acender;
 //   2. ...e NAO gasta o pool de fogo: zero luz THREE nova e zero entrada de fogo a mais (a tocha
 //      viva pede uma; o calor nao, porque a fogueira ao lado ja ilumina a cena);
 //   3. ele CONTINUA VIVO enquanto arde, perdendo vida por mordida (o pedido em uma frase);
@@ -17,18 +17,19 @@
 //   6. sair do calor APAGA e a cicatriz fica: apagada a fogueira, a aranha para de arder, segue
 //      viva e NAO recupera a vida que o fogo comeu.
 //
-// Geometria (fogueira em (2,6), heroi a 2 tiles dela — dentro do anel seguro):
+// Geometria (fogueira em (2,6), heroi COLADO nela — dentro do anel seguro):
 //
-//   (2,6) FOGUEIRA   (4,6) HEROI   (6,6) O CORPO QUE ASSA   (9,9) A CAVEIRA PRESA (cercada)
+//   (2,6) FOGUEIRA   (3,6) HEROI   (6,6) A CAVEIRA QUE VEM   (9,9) A CAVEIRA PRESA (cercada)
 //
-// (6,6) esta a 4,0 tiles da lenha: fora da parede de luz (3,15) e dentro do calor (4,35). O corpo
-// ali cacaria o heroi indo para oeste, mas (5,6) esta a 3,0 — luz, parede —, e como o heroi esta
-// na mesma linha nao ha eixo secundario: ele fica onde esta, encostado na luz, e assa. E o cerco
-// da matilha na beira da fogueira, reproduzido num tile so.
+// A caveira nasce a 4 tiles e CACA o heroi: ela anda para oeste ate ficar colada nele, em (4,6) —
+// que esta a DOIS tiles da lenha, dentro do calor. Ou seja, o teste nao empurra ninguem para o
+// fogo: ele deixa o bicho fazer o que ele sempre faz e mede o preco disso. E o que a queda da
+// parede mudou — antes ele parava a 3,16 e assava sem nunca chegar.
 
 const FIRE = { x: 2, y: 6 };
-const HERO = { x: 4, y: 6 };
-const OVEN = { x: 6, y: 6 }; // o tile do calor: fora da luz, dentro da brasa
+const HERO = { x: 3, y: 6 };
+const SPAWN = { x: 6, y: 6 }; // de onde ela vem: longe do fogo, e 100% segura ali
+const OVEN = { x: 4, y: 6 }; // onde ela para (colada no heroi) — dois tiles da lenha: o calor
 const CAGED = { x: 9, y: 9 }; // longe de tudo, e cercado de pedra: nao anda, nao assa, nao some
 
 export default {
@@ -79,13 +80,13 @@ export default {
       state.safety.safe === true, JSON.stringify(state.safety));
 
     // ── OS DOIS CORPOS ────────────────────────────────────────────────────────
-    log('CAVEIRAS: uma encostada na luz, outra presa na jaula longe dali');
+    log('CAVEIRAS: uma que VEM ate o heroi na fogueira, outra presa na jaula longe dali');
     const lightsBefore = await page.evaluate(() => window.__scene.world3d.stats().pointLights);
     const firesBefore = await page.evaluate(() => window.__scene.world3d.stats().fires);
-    await page.evaluate(({ oven, caged }) => {
-      window.__scene.enemyManager.spawnUndead(oven.x, oven.y);
+    await page.evaluate(({ spawn, caged }) => {
+      window.__scene.enemyManager.spawnUndead(spawn.x, spawn.y);
       window.__scene.enemyManager.spawnUndead(caged.x, caged.y);
-    }, { oven: OVEN, caged: CAGED });
+    }, { spawn: SPAWN, caged: CAGED });
     // Nascendo o corpo e invulneravel e inerte — e o calor respeita isso como o fogo respeita.
     await page.waitForFunction(
       () => {
@@ -97,7 +98,7 @@ export default {
     const bornAt = Date.now();
 
     // ── 1 e 2. ELA PEGA FOGO SOZINHA, E DE GRACA ──────────────────────────────
-    log('CALOR: o corpo colado na parede de luz comeca a arder sem ninguem acender nada');
+    log('CALOR: ela anda ate o heroi e, a dois tiles da lenha, comeca a arder sozinha');
     const scorched = await page.waitForFunction(
       ({ oven }) => {
         const e = (window.gameDebug?.getState()?.undead ?? [])
@@ -106,7 +107,7 @@ export default {
         const stats = window.__scene.world3d.stats();
         return { health: e.health, maxHealth: e.maxHealth, burning: e.burning, ...stats };
       },
-      { oven: OVEN }, { timeout: 8000 },
+      { oven: OVEN }, { timeout: 15000 },
     ).then((h) => h.jsonValue());
     assert('o corpo encostado na fogueira ARDE por conta do calor',
       scorched.health === scorched.maxHealth, JSON.stringify(scorched));
@@ -127,7 +128,7 @@ export default {
         if (!e || e.health >= e.maxHealth) return null;
         return { health: e.health, maxHealth: e.maxHealth, scorching: e.scorching };
       },
-      { oven: OVEN }, { timeout: 6000 },
+      { oven: OVEN }, { timeout: 9000 },
     ).then((h) => h.jsonValue());
     assert('o fogo tirou vida do corpo — que segue VIVO e ardendo',
       bitten.health > 0 && bitten.health < bitten.maxHealth && bitten.scorching === true,
@@ -138,7 +139,7 @@ export default {
     await page.waitForFunction(
       ({ oven }) => !(window.gameDebug?.getState()?.undead ?? [])
         .some((u) => u.worldX === oven.x && u.worldY === oven.y),
-      { oven: OVEN }, { timeout: 12000 },
+      { oven: OVEN }, { timeout: 20000 },
     );
     // A MARCA e agendada, nao instantanea: a ossada so cai quando o desmanche termina e o
     // EnemyManager remove o corpo (o mesmo cuidado do tocha-viva).
@@ -172,7 +173,7 @@ export default {
     await shot('a-matilha-nao-evapora-mais');
 
     // ── 6. APAGOU A FOGUEIRA, PAROU O CALOR — E A CICATRIZ FICA ───────────────
-    log('ESFRIOU: uma aranha assa no mesmo tile, a fogueira apaga e ela para de arder VIVA');
+    log('ESFRIOU: uma aranha assa no anel, a fogueira apaga e ela para de arder VIVA');
     // Aranha e nao caveira: 5 degraus de vida (10) contra 3 (6), entao ela aguenta o forno tempo
     // suficiente para a fogueira ser apagada no meio — e de quebra prova que o calor e lei do
     // MUNDO sobre qualquer corpo, nao uma regra da caveira.
