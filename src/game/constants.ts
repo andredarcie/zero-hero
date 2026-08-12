@@ -184,6 +184,9 @@ export const ASSET_KEYS = {
   // item-que-falta, que foi arrancado do jogo: aquele falava com o jogador, este mostra o que a
   // criatura quer. Por isso a arte e outra (bolhas soltas, nao rabicho de fala) e a chave e outra.
   thoughtPlate: 'thought-plate',
+  // O irmao dele: o balao com o GRAVETO ACESO, que o heroi pensa ao bater num arbusto seco com o
+  // graveto apagado na mao (ver HeroThought e GameScene.useItemAt).
+  thoughtTorch: 'thought-torch',
   coin: 'coin',
   // A FAUNA que voltou a ter corpo (ver entities/enemies/). A arte sempre esteve em
   // public/assets/characters/enemies/ — era o bestiario do modo Sobreviventes —, e ela so pode

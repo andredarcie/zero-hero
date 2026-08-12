@@ -245,6 +245,10 @@ O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo s
   madeira**. Pedra, água, lava e chão pelado são corta-fogo.
 - **Fogueira APAGADA pega fogo de um vizinho** (é o ponto: acender sem o herói ir lá). **Fogueira
   ACESA nunca espalha** (é sumidouro). **Mato alto barra o herói e conduz fogo.**
+- **O HERÓI PENSA ALTO em UM caso só** (`HeroThought`): bater num arbusto seco com o graveto
+  APAGADO acende um balão de ÍCONE (a tocha) sobre a cabeça dele. Não é o balão de
+  item-que-falta ressuscitado — aquele respondia a qualquer fechadura e entregava o enigma;
+  este só existe com o item JÁ na mão e o gesto JÁ feito, e mostra ícone, nunca palavra.
 - **Toda outra trava é uma fechadura com uma chave só, e ela responde com FÍSICA, nunca com
   legenda.** O balão de item-que-falta foi arrancado. **Trava nova ganha um tremor, não um texto**
   — se só uma legenda ensinaria o que fazer, o que precisa de conserto é a arte da peça.

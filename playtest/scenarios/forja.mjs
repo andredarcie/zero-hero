@@ -64,6 +64,9 @@ export default {
       // Uma arvore seca para o outro lado da regra da ferramenta (bloco 1b): madeira morta pede
       // machado, rocha pede picareta, e o X saca o certo dos dois sem o jogador abrir a bolsa.
       store.placeEntity({ list: 'props', type: 'dryTree', worldX: 9, worldY: 5 });
+      // Um arbusto seco para o balao de pensamento (bloco 1c): ele e a fonte de carvao do mapa,
+      // e o unico lugar do jogo em que o heroi PENSA ALTO.
+      store.placeEntity({ list: 'props', type: 'dryBush', worldX: 9, worldY: 8 });
       return store.allEntities().filter((e) => e.list === 'props' && (e.type === 'furnace' || e.type === 'tripHammer')).length;
     });
     assert('o store guarda forno e martinete', authored === 2, `veio ${authored}`);
@@ -156,6 +159,51 @@ export default {
         auto2.antes === 'pickaxe' && depoisDoMachado === 'axe',
         JSON.stringify({ auto2, depoisDoMachado }));
     }
+
+    // ── 1c. O HEROI PENSA ALTO (e so aqui) ────────────────────────────────────
+    // Bater num arbusto seco com o graveto APAGADO na mao: o gesto certo, o item certo, e nada
+    // acontece. Isso e diferente de bater numa parede, e o tremor sozinho dizia as duas coisas com
+    // o mesmo pixel. O balao NAO e o de item-que-falta que foi arrancado (aquele respondia a
+    // qualquer fechadura, entregando o enigma): este so aparece com o item JA NA MAO e o gesto JA
+    // FEITO — e o que ele mostra e um icone, nunca uma palavra.
+    log('PENSAMENTO: graveto apagado no arbusto pede FOGO, e o aceso nao pede nada');
+    const bush = await driver.page.evaluate(() => {
+      const s = window.__scene;
+      const b = s.dryBushes.find((x) => x.blocking);
+      if (!b) return null;
+      s.inventory.clear();
+      s.inventory.add('wood', 1);
+      s.inventory.select('wood');
+      s.heldOnFire = false;
+      s.playerWorld.worldX = b.worldX;
+      s.playerWorld.worldY = b.worldY + 1;
+      s.movementController.syncPlayerToWorld(b.worldX, b.worldY + 1, s.tileSize);
+      return { x: b.worldX, y: b.worldY };
+    });
+    assert('a fixture tem um arbusto seco', bush !== null, 'nenhum dryBush');
+    await driver.settle(300);
+    await driver.press('ArrowUp'); // o arbusto e solido: o passo so VIRA o heroi
+    await driver.settle(300);
+    await driver.press('x', { count: 1 });
+    await driver.settle(400);
+    const pensou = await st();
+    assert('o graveto apagado no arbusto acende um balao de TOCHA sobre o heroi',
+      pensou?.thought === 'thought-torch', JSON.stringify({ thought: pensou?.thought }));
+    // ...e com a chama na mao nao ha o que lembrar: o gesto FUNCIONA, e o arbusto pega.
+    await driver.page.evaluate(() => {
+      const s = window.__scene;
+      s.heroThought.clear();
+      s.heldOnFire = true;
+      s.torchFuelMs = 5000;
+    });
+    await driver.press('x', { count: 1 });
+    await driver.settle(600);
+    const acendeu = await driver.page.evaluate(() => ({
+      thought: window.gameDebug.getState().thought,
+      queimando: window.__scene.dryBushes.some((b) => b.isBurning || !b.blocking),
+    }));
+    assert('com o graveto ACESO o arbusto pega, e o heroi nao pensa nada',
+      acendeu.queimando === true && acendeu.thought === null, JSON.stringify(acendeu));
 
     // ── 2. O FORNO: minerio + carvao = ESPONJA ────────────────────────────────
     const furnace = (await st()).furnaces[0];

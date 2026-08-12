@@ -113,6 +113,7 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import { PickupPrompt } from '@/game/runtime/PickupPrompt';
+import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints, type HintTile } from '@/game/runtime/PlacementHints';
 import { wireShapeFromMask, wireShapeFrame } from '@/game/world/wireShapes';
 import { solvePowerGrid, tileKey, type PowerNode } from '@/game/world/powerGrid';
@@ -869,6 +870,8 @@ export class GameScene extends Phaser.Scene {
   private placementHints?: PlacementHints;
   /** O aviso "X — Take <coisa>" sobre a cabeca do heroi. Ver PickupPrompt. */
   private pickupPrompt?: PickupPrompt;
+  /** O balao de PENSAMENTO do heroi: um icone, um instante. Ver HeroThought. */
+  private heroThought?: HeroThought;
   // A FABRICA construida pelo jogador (e a autorada no /editor, que usa as mesmas classes).
   private belts: BeltObject[] = [];
   private chests: ChestObject[] = [];
@@ -1547,6 +1550,7 @@ export class GameScene extends Phaser.Scene {
 
     this.placementHints = new PlacementHints(this);
     this.pickupPrompt = new PickupPrompt(this);
+    this.heroThought = new HeroThought(this, ASSET_KEYS.thoughtTorch);
     this.installActionInput();
 
     // O HUD do explorador (a bolsa e a distancia) e o recibo da expedicao anterior. Depois do
@@ -2477,6 +2481,8 @@ export class GameScene extends Phaser.Scene {
           holding: box.heldProduct,
           refusals: box.refusalCount,
         })),
+        // O BALAO DE PENSAMENTO do heroi: qual icone esta na cabeca dele agora (null = nenhum).
+        thought: this.heroThought?.visibleIcon ?? null,
         // A CADEIA DO FERRO: o forno e o martinete, como o cenario os observa.
         furnaces: this.furnaces.map((f) => ({
           worldX: f.worldX,
@@ -2727,6 +2733,8 @@ export class GameScene extends Phaser.Scene {
     this.placementHints = undefined;
     this.pickupPrompt?.destroy();
     this.pickupPrompt = undefined;
+    this.heroThought?.destroy();
+    this.heroThought = undefined;
     this.swordSlash?.destroy();
     // Truncar in place (length = 0) esvazia também o array tipado — é o mesmo objeto — então
     // nenhum campo fica segurando props destruídos até o próximo create reatribuí-lo.
@@ -2799,6 +2807,7 @@ export class GameScene extends Phaser.Scene {
     // logo abaixo se o jogo estiver mesmo correndo.
     this.placementHints?.clear();
     this.pickupPrompt?.show(null);
+    this.heroThought?.clear();
 
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
     // world frozen here until it finishes — otherwise gameplay would fight the pan.
@@ -2857,6 +2866,7 @@ export class GameScene extends Phaser.Scene {
     this.streamChunks();
     this.updateFootprints();
     this.updateExplorerHud();
+    this.heroThought?.tick(delta);
     this.updateChunkBuilderUi();
 
     // Burn the carried flame down; snuff it when the fuel runs out (leaving the hero exposed
@@ -6146,6 +6156,14 @@ export class GameScene extends Phaser.Scene {
     const bush = this.getDryBushAt(wx, wy);
     if (bush?.blocking) {
       bush.shake();
+      // O GRAVETO APAGADO É O ÚNICO CASO EM QUE O HERÓI PENSA ALTO. Ele bateu no arbusto com a
+      // coisa certa na mão e não aconteceu nada — e a distância entre o que ele tem e o que ele
+      // precisa é UM gesto (acender numa fogueira, na lava, num arbusto já em chamas). Isto não é
+      // o balão de item-que-falta que foi arrancado: aquele respondia a qualquer fechadura e
+      // entregava a solução de um enigma; este só existe quando o item JÁ ESTÁ NA MÃO e o gesto
+      // JÁ FOI FEITO. Sem ele o jogo respondia com um tremor idêntico ao de "isto é uma parede",
+      // e as duas coisas não são a mesma — uma diz "não é aqui", a outra diz "falta uma faísca".
+      if (this.isFlammableHeld && !this.heldOnFire) this.heroThought?.show(ASSET_KEYS.thoughtTorch);
       if (this.isFlammableHeld && this.heldOnFire) {
         this.swingHeld(wx, wy);
         // Ignite when the flame reaches the bush (end of the main swing arc).
@@ -9395,6 +9413,9 @@ export class GameScene extends Phaser.Scene {
       const at = this.movementController?.visualWorld(this.playerWorld.worldX, this.playerWorld.worldY)
         ?? { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
       this.pickupPrompt?.render(this.tileSize, this.camera, this.time.now, at);
+      // O balao de pensamento monta no MESMO ponto do aviso de apanhar, e pelo mesmo motivo: a
+      // ancora e o corpo DESENHADO. O relogio dele corre no update (ver HeroThought.tick).
+      this.heroThought?.render(this.tileSize, this.camera, this.time.now, at);
     }
     // O MESMO keycap sobre a BANCADA que o herói está encarando: sem ele o catálogo da encomenda
     // seria um recurso invisível, que é justamente o defeito que ele veio consertar. A condição é

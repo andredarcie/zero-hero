@@ -6513,3 +6513,32 @@ cobrar burocracia por uma escolha que não existe.
 
 Guarda: `forja` bloco **1b** — com o machado na mão o X na rocha saca a picareta, e com a picareta
 na mão o X na árvore seca saca o machado (a fixture ganhou uma árvore para o segundo lado).
+
+## O herói pensa alto — e em um caso só (2026-08-12)
+
+Relato: bater no arbusto com um graveto na mão faz o gesto acontecer e nada mais. O tremor que
+respondia ali é o MESMO de bater numa parede — e as duas coisas não são a mesma: uma diz "não é
+aqui", a outra diz "falta uma faísca". Agora o segundo caso tem desenho próprio: um balão de
+pensamento com um **graveto aceso** dentro, sobre a cabeça do herói, por 1,5s.
+
+**Por que isto não é o balão de item-que-falta voltando** (arrancado em 2026-07-21, e a lei está
+no CLAUDE.md): aquele respondia a QUALQUER fechadura — "vá buscar a picareta" — e entregava de
+graça o enigma que o mundo tinha o dever de ensinar. Este só aparece quando **o jogador já tem a
+coisa certa na mão e já fez o gesto**. Não há enigma a entregar; há um passo óbvio a lembrar. E ele
+mostra um ÍCONE, nunca uma palavra: um balão com texto seria a legenda de novo, de roupa nova.
+
+A gramática é a que a caveira já usa (`thought-plate`): ninguém FALA com o jogador, mas alguém pode
+pensar alto. Por isso a arte nova (`thought-torch`, sprite factory, 0 fail/0 warn) copia moldura,
+pergaminho e o rabicho de duas bolhas soltas do balão dela — dois balões com molduras diferentes
+leriam como dois sistemas, e eles são o mesmo; só muda o glifo.
+
+- **A primeira versão do glifo era um COGUMELO.** Uma cúpula simétrica de duas fileiras sobre um
+  talo claro é exatamente isso. O conserto foi tirar a simetria (fogo não tem eixo), afinar o bico
+  para um pixel e baixar o tom da madeira — o cabo precisa contrastar com o pergaminho, não com a
+  chama.
+- **`HeroThought`** separa relógio de desenho de propósito: a projeção também roda fora do update
+  (o `reprojectStatic` de um diálogo redesenha a tela sem tempo passar), e um balão que contasse o
+  tempo ali sumiria com o mundo parado. Ancorado no corpo DESENHADO, como todo overlay do herói.
+
+Guarda: `forja` bloco **1c** — com o graveto apagado o balão da tocha aparece; com o aceso o
+arbusto pega fogo e o herói não pensa nada.

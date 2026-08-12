@@ -355,6 +355,11 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     path: '/assets/ui/icons/thought_plate.png',
   },
   {
+    // Sprite Factory: o mesmo balao com o GRAVETO ACESO dentro — o que falta para o arbusto pegar.
+    key: ASSET_KEYS.thoughtTorch,
+    path: '/assets/ui/icons/thought_torch.png',
+  },
+  {
     key: ASSET_KEYS.dryBush,
     path: '/assets/environment/props/bush.png',
   },
