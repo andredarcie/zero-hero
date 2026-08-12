@@ -88,6 +88,38 @@ const CSS = `
 .zh-dot-fireLit { background: #ffb454; box-shadow: 0 0 3px #ff8c1a; }
 .zh-dot-fireDead { background: #55432f; }
 .zh-dot-portal { background: #9d7bd8; }
+/* ── A PAGINA DE PLANOS ────────────────────────────────────────────────────────────────────────
+   O mesmo catalogo da bancada, aqui em versao de LEITURA: nada se prega daqui (nao ha bancada
+   por perto), e a razao de ele existir e poder PLANEJAR longe dela — o jogador olha o que falta
+   antes de andar meia tela ate o veio de ferro. Uma linha por receita, o produto a esquerda e os
+   insumos a direita, e a mesma silhueta do catalogo para o que ele ainda nao conhece. */
+.zh-sub-plans { display: grid; gap: 4px; }
+.zh-sub-plan {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 6px; border: 1px solid #241f19; background: #131009;
+}
+.zh-sub-plan.zh-ready { border-color: rgba(229, 181, 88, 0.5); }
+.zh-sub-plan img { image-rendering: pixelated; object-fit: contain; }
+.zh-sub-plan-out { width: 26px; height: 26px; }
+.zh-sub-plan.zh-unknown .zh-sub-plan-out { filter: brightness(0) invert(0.4); opacity: 0.72; }
+.zh-sub-plan-name { flex: 1; color: #cfc9ba; font-size: 0.8em; }
+.zh-sub-plan.zh-unknown .zh-sub-plan-name { color: #4f4a40; }
+.zh-sub-plan-needs { display: flex; align-items: center; gap: 5px; }
+.zh-sub-plan-need { position: relative; width: 20px; height: 20px; }
+.zh-sub-plan-need img { width: 100%; height: 100%; }
+/* Os mesmos dois eixos do catalogo (ver ToolboxOrderOverlay): a MOLDURA tracejada diz "ainda nao
+   tenho", a COR diz onde se consegue (cinza = no mundo, colorido = nesta bancada). */
+.zh-sub-plan-need.zh-lack { outline: 1px dashed rgba(216, 209, 192, 0.3); outline-offset: 1px; }
+.zh-sub-plan-need.zh-lack img { opacity: 0.34; }
+/* Moldura em BRASA = a bancada faz este insumo. Ver ToolboxOrderOverlay: o sinal nao pode morar
+   na cor da ARTE, senao um sprite redesenhado em cinza o apaga. */
+.zh-sub-plan-need.zh-lack.zh-makeable { outline-color: rgba(229, 181, 88, 0.8); }
+.zh-sub-plan-need.zh-lack.zh-makeable img { opacity: 0.6; }
+.zh-sub-plan-need span {
+  position: absolute; right: -3px; bottom: -4px;
+  font-size: 9px; line-height: 1; color: #e7dcc4;
+  text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
+}
 `;
 
 const ensureStyle = (): void => {
@@ -165,6 +197,22 @@ export interface SubScreenMap {
   marks: SubScreenMapMark[];
 }
 
+/**
+ * Uma linha da pagina de planos: o produto, e os insumos com quanto se tem de cada. E o MESMO
+ * modelo que o catalogo da bancada monta (`OrderCatalogEntry`), de proposito — duas telas que
+ * mostram a mesma receita nao podem ter duas ideias diferentes sobre o que ela pede.
+ */
+export interface SubScreenPlan {
+  kind: string;
+  icon: string;
+  label: string;
+  known: boolean;
+  ready: boolean;
+  needs: Array<{
+    kind: string; icon: string; label: string; need: number; have: number; craftable: boolean;
+  }>;
+}
+
 export interface SubScreenView {
   title: string;
   emptyLabel: string;
@@ -174,6 +222,8 @@ export interface SubScreenView {
   selected: string;
   /** So na aventura (overworld): a subtela de level/explorador/dungeon nao tem mapa. */
   map?: SubScreenMap;
+  /** A pagina de PLANOS (o catalogo da bancada, em leitura). Ausente = a secao nem existe. */
+  plans?: { title: string; rows: SubScreenPlan[] };
 }
 
 /**
@@ -189,6 +239,8 @@ export class SubScreenPanel {
   private readonly title: HTMLHeadingElement;
   private readonly mapTitle: HTMLHeadingElement;
   private readonly map: HTMLDivElement;
+  private readonly plansTitle: HTMLHeadingElement;
+  private readonly plans: HTMLDivElement;
 
   public constructor(
     private readonly read: () => SubScreenView,
@@ -209,8 +261,17 @@ export class SubScreenPanel {
     this.mapTitle.className = 'zh-sub-map-title';
     this.map = document.createElement('div');
     this.map.className = 'zh-sub-map';
+    this.plansTitle = document.createElement('h3');
+    this.plansTitle.className = 'zh-sub-map-title'; // o mesmo cabecalho do mapa: uma so voz
+    this.plans = document.createElement('div');
+    this.plans.className = 'zh-sub-plans';
 
-    this.el.append(this.title, this.heartsRow, this.grid, this.name, this.mapTitle, this.map);
+    // Os PLANOS ficam entre a mochila e o mapa de proposito: eles falam do que esta na mochila
+    // (o que falta para cada receita), e o mapa fala do mundo. A ordem e a de zoom crescente.
+    this.el.append(
+      this.title, this.heartsRow, this.grid, this.name,
+      this.plansTitle, this.plans, this.mapTitle, this.map,
+    );
     this.render();
   }
 
@@ -238,6 +299,10 @@ export class SubScreenPanel {
       heart.style.backgroundImage = `url(${i < view.hearts.filled ? view.hearts.icon : view.hearts.emptyIcon})`;
       this.heartsRow.appendChild(heart);
     }
+
+    // Os PLANOS vem ANTES da porta de mochila vazia logo abaixo (que devolve cedo): saber o que
+    // uma receita pede e util justamente para quem ainda nao tem nada.
+    this.renderPlans(view.plans);
 
     this.grid.replaceChildren();
     if (view.items.length === 0) {
@@ -274,6 +339,57 @@ export class SubScreenPanel {
     this.name.textContent = chosen ? chosen.label : '';
 
     this.renderMap(view.map);
+  }
+
+  /**
+   * A PAGINA DE PLANOS: o catalogo da bancada em versao de leitura, para planejar longe dela.
+   *
+   * Nao ha nada a clicar aqui de proposito — pregar um plano e um gesto que acontece NA bancada,
+   * e um botao aqui prometeria uma acao que so faz sentido a meia tela de distancia. O que esta
+   * pagina responde e a outra pergunta, a que se faz com a mochila na mao: "o que falta".
+   */
+  private renderPlans(plans: SubScreenView['plans']): void {
+    this.plansTitle.replaceChildren();
+    this.plans.replaceChildren();
+    const hide = !plans || plans.rows.length === 0;
+    this.plansTitle.style.display = hide ? 'none' : '';
+    this.plans.style.display = hide ? 'none' : '';
+    if (!plans || hide) return;
+
+    this.plansTitle.textContent = plans.title;
+    for (const row of plans.rows) {
+      const line = document.createElement('div');
+      line.className = 'zh-sub-plan';
+      if (!row.known) line.classList.add('zh-unknown');
+      if (row.ready && row.known) line.classList.add('zh-ready');
+
+      const out = document.createElement('img');
+      out.className = 'zh-sub-plan-out';
+      out.src = row.icon;
+      out.alt = row.label;
+      const name = document.createElement('span');
+      name.className = 'zh-sub-plan-name';
+      name.textContent = row.known ? row.label : '?';
+      const needs = document.createElement('span');
+      needs.className = 'zh-sub-plan-needs';
+      for (const need of row.needs) {
+        const short = need.have < need.need;
+        const slot = document.createElement('span');
+        slot.className = `zh-sub-plan-need${short ? ' zh-lack' : ''}${short && need.craftable ? ' zh-makeable' : ''}`;
+        const img = document.createElement('img');
+        img.src = need.icon;
+        img.alt = need.label;
+        slot.appendChild(img);
+        if (need.need > 1) {
+          const n = document.createElement('span');
+          n.textContent = `${Math.min(need.have, need.need)}/${need.need}`;
+          slot.appendChild(n);
+        }
+        needs.appendChild(slot);
+      }
+      line.append(out, name, needs);
+      this.plans.appendChild(line);
+    }
   }
 
   /** O mapa em telas (ver SubScreenMap). Fora da aventura o painel simplesmente nao existe. */

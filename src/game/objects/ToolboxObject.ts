@@ -4,7 +4,11 @@ import { ASSET_KEYS, TOOLBOX_FRAMES } from '@/game/constants';
 import { itemGroundVisual, type HeldItemKind } from '@/game/entities/ItemPickup';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
+import { PLACEMENT_KEY_TEXTURE, ensurePlacementKeyTexture } from '@/game/render3d/placementTexture';
+import { isTouchDevice } from '@/game/runtime/PauseMenu';
+import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { PropDir } from '@/game/world/worldSchema';
+import { toolboxRecipeFor } from './toolboxRecipes';
 import type { WorldProp } from './WorldProp';
 
 // A CAIXA DE FERRAMENTAS — a primeira coisa do jogo que faz um item A PARTIR DE OUTROS.
@@ -52,40 +56,15 @@ const DIR_VEC: ReadonlyArray<readonly [number, number]> = [[0, -1], [1, 0], [0, 
 const METAL_TINT = 0xd2d2d2;
 
 /**
- * O livro de receitas. Uma linha por receita, e a ORDEM DAS BANDEJAS NAO IMPORTA — exigir "o
- * graveto na de tras" seria uma regra invisivel, e regra invisivel neste jogo e o mesmo pecado
- * do balao de dica: informacao que so existe fora do mundo.
+ * O livro de receitas mora em `toolboxRecipes.ts` — ele tem TRES leitores agora (a maquina, o
+ * catalogo da encomenda e a pagina de planos da subtela), e a ORDEM DAS BANDEJAS continua nao
+ * importando: exigir "o graveto na de tras" seria uma regra invisivel, e regra invisivel neste
+ * jogo e o mesmo pecado do balao de dica.
  */
-export type ToolboxRecipe = { inputs: readonly [HeldItemKind, HeldItemKind]; output: HeldItemKind };
-
-export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
-  // A REGRA: cabo + cabeca. Uma cabeca de cada material da uma ferramenta, e o jogador aprende
-  // isso com UM exemplo — o que e a unica forma de haver receita num jogo sem livro de receitas.
-  //
-  // Note a consequencia dessa regra: `graveto + X` so pode significar UMA coisa, entao o numero
-  // de ferramentas fabricaveis e o numero de MATERIAIS, nunca o numero de ideias. Duas hoje.
-  //
-  // Um cabo e uma cabeca de pedra. E a receita mais velha que existe, e e a que ensina a peca:
-  // os dois insumos ja sao produtos de OUTRAS ferramentas (a arvore da o graveto, a picareta da
-  // a pedra), entao a caixa fecha a cadeia em vez de comecar uma nova.
-  { inputs: ['wood', 'stone'], output: 'axe' },
-  // Cabo e lamina de ferro. A FOICE, e nao a picareta, por um motivo que so aparece quando se
-  // desenha a cadeia inteira: o ferro sai de uma pedra de minerio, e pedra se quebra com
-  // picareta. Uma receita que fabricasse a picareta exigiria a picareta pra chegar nos insumos —
-  // circular, e portanto inutil em qualquer level que nao dependesse da bomba pra abrir a
-  // primeira rocha. A foice nao tem esse problema: picareta -> ferro -> foice e uma escada que
-  // sempre sobe. E a foice PRODUZ (sementes), que e o que se pede de qualquer coisa nova aqui.
-  { inputs: ['wood', 'iron'], output: 'scythe' },
-];
-
-/** O que estes dois itens viram juntos, em qualquer ordem — ou null se nao viram nada. */
-export const toolboxResult = (a: HeldItemKind | null, b: HeldItemKind | null): HeldItemKind | null => {
-  if (!a || !b) return null;
-  const found = TOOLBOX_RECIPES.find(
-    (r) => (r.inputs[0] === a && r.inputs[1] === b) || (r.inputs[0] === b && r.inputs[1] === a),
-  );
-  return found?.output ?? null;
-};
+export type { ToolboxRecipe, ToolboxFamily, OrderStep } from './toolboxRecipes';
+export {
+  TOOLBOX_RECIPES, toolboxRecipeFor, toolboxResult, recipeMaking, isCraftable, catalogOrder,
+} from './toolboxRecipes';
 
 /**
  * O que a caixa precisa do mundo. Um port pequeno, como o do braco robotico, pelo mesmo motivo:
@@ -97,8 +76,12 @@ export type ToolboxWorldPort = {
   kindAt(x: number, y: number): HeldItemKind | null;
   /** Tira o item do chao (a caixa nao devolve fogo nem carga: o insumo e CONSUMIDO). */
   take(x: number, y: number): HeldItemKind | null;
-  /** Poe o produto no chao. */
-  put(kind: HeldItemKind, x: number, y: number): void;
+  /**
+   * Poe o produto no chao. `units` so passa de 1 na receita do CABO, que sai em pacote — e o
+   * pacote viaja como item unico (a mesma lei de UNIT_PACK_KINDS que a semente e o ferro ja
+   * seguem), nunca como quatro itens que nao caberiam num tile so.
+   */
+  put(kind: HeldItemKind, x: number, y: number, units?: number): void;
   /** Ha algo neste tile? Parede, item, caixote, inimigo — a pergunta larga. */
   occupied(x: number, y: number): boolean;
   /** A tampa abriu. */
@@ -128,6 +111,8 @@ const HAMMER_COUNT = 3; // as marteladas dentro da forja, espacadas em FORGE_MS
 // um evento.
 const REFUSE_INTERVAL_MS = 2500;
 const REFUSE_MS = 260;
+// Quanto tempo a mesa fica na pose de trabalho depois de uma construcao pelo menu.
+const CRAFT_POSE_MS = 420;
 
 const SLOT_PULSE_MS = 1150;
 const SLOT_ALPHA_LO = 0.38;
@@ -154,6 +139,8 @@ const FORGE_SHAKE = 0.022; // tiles de tremor lateral em regime — meio pixel, 
 const GOLD = 0xf1cc36;
 const GOLD_HOT = 0xf8e394;
 
+
+
 const ease = (t: number): number => 0.5 - Math.cos(Math.PI * t) / 2;
 // Salto com peso: sobe rapido, desce acelerando. E o arco de uma coisa CUSPIDA, nao levitada.
 const arc = (t: number): number => Math.sin(Math.PI * t);
@@ -175,10 +162,19 @@ export class ToolboxObject implements WorldProp {
 
   /** O que a forja esta produzindo / ja produziu e ainda nao conseguiu entregar. */
   private product: HeldItemKind | null = null;
+  /** Quantas unidades o produto vale — so o pacote de cabo passa de 1 (ver TOOLBOX_RECIPES). */
+  private productUnits = 1;
   private swallowed: [HeldItemKind, HeldItemKind] | null = null;
   private hammersPlayed = 0;
   private refuseCooldown = 0;
   private refuseMs = 0;
+  /** Quanto falta da pose de TRABALHO disparada por uma construcao do menu. */
+  private craftMs = 0;
+
+  /** A ambicao esta desenhada agora? O keycap le isto para nao pousar em cima dela. */
+  private showsAmbition = false;
+  /** O keycap "Z" que anuncia o catalogo. Preguicoso: so nasce quando o heroi encara a bancada. */
+  private hint?: Phaser.GameObjects.Image;
   /** A peca esta pronta e a saida esta presa (distinto de "esta voando pra saida agora"). */
   private waiting = false;
 
@@ -243,6 +239,12 @@ export class ToolboxObject implements WorldProp {
     this.elapsed += deltaMs;
     if (this.refuseMs > 0) this.refuseMs = Math.max(0, this.refuseMs - deltaMs);
     if (this.refuseCooldown > 0) this.refuseCooldown = Math.max(0, this.refuseCooldown - deltaMs);
+    if (this.craftMs > 0) {
+      this.craftMs = Math.max(0, this.craftMs - deltaMs);
+      // A pose de trabalho manda enquanto dura, inclusive por cima do ciclo de bandeja: as duas
+      // coisas sao a mesma mesa trabalhando, e alternar frame entre elas seria estrobo.
+      this.pose(TOOLBOX_FRAMES.forging);
+    }
 
     const [ax, ay] = this.slotTiles[0];
     const [bx, by] = this.slotTiles[1];
@@ -256,7 +258,8 @@ export class ToolboxObject implements WorldProp {
       case 'idle': {
         this.pose(TOOLBOX_FRAMES.closed);
         if (!inA || !inB) break;
-        const result = toolboxResult(inA, inB);
+        const recipe = toolboxRecipeFor(inA, inB);
+        const result = recipe?.output ?? null;
         // Duas razoes pra nao comecar, e uma so resposta fisica: "agora nao". A caixa nunca
         // explica qual das duas e — explicar seria o balao de dica de volta, com outro nome.
         if (!result || port.occupied(ox, oy)) {
@@ -278,6 +281,7 @@ export class ToolboxObject implements WorldProp {
         }
         this.swallowed = [takenA, takenB];
         this.product = result;
+        this.productUnits = recipe?.units ?? 1;
         this.enter('open');
         if (effectsVisible) port.opened();
         break;
@@ -354,8 +358,14 @@ export class ToolboxObject implements WorldProp {
         this.moveProduct(t);
         this.fadeGlow(deltaMs);
         if (t >= 1) {
-          if (this.product) port.put(this.product, ox, oy);
+          if (this.product) port.put(this.product, ox, oy, this.productUnits);
+          // A ENCOMENDA CUMPRIDA se desprega sozinha. Um plano que sobrevivesse a propria entrega
+          // continuaria desenhando fantasmas de uma coisa que o jogador acabou de ganhar — e a
+          // bancada estaria pedindo material para uma peca que ja esta ali no chao, na frente
+          // dela. Um degrau INTERMEDIARIO (a engrenagem a caminho do extrator) nao despega nada:
+          // e o plano SUBINDO, que e o ponto do chain-craft.
           this.product = null;
+          this.productUnits = 1;
           this.clearFlying();
           if (effectsVisible) {
             port.delivered();
@@ -382,6 +392,55 @@ export class ToolboxObject implements WorldProp {
       this.pose(t < 0.45 ? TOOLBOX_FRAMES.ajar : TOOLBOX_FRAMES.closed);
       this.body.setPosition(this.worldX + Math.sin(t * Math.PI * 6) * 0.02 * (1 - t), this.worldY);
     }
+  }
+
+  /**
+   * O KEYCAP SOBRE A BANCADA — "esta maquina tem o que dizer".
+   *
+   * Sem ele a encomenda seria um recurso invisivel, que e exatamente o defeito que ela veio
+   * consertar: o catalogo so existe para quem descobre que ha um A a ser apertado ali. E o MESMO
+   * anuncio que flutua na cabeca de um NPC quando o heroi o encara, e de proposito — a bancada e
+   * a unica maquina do jogo que se CONVERSA, entao ela fala a lingua dos NPCs e nao a das outras
+   * pecas. Ele nasce preguicoso: uma bancada que ninguem encarou nunca aloca imagem nenhuma.
+   */
+  public renderHint(
+    tileSize: number,
+    camera: WorldCamera,
+    show: boolean,
+    timeMs: number,
+  ): void {
+    if (!show) { this.hint?.setVisible(false); return; }
+    if (!this.hint) {
+      ensurePlacementKeyTexture(this.scene, isTouchDevice());
+      this.hint = this.scene.add
+        .image(0, 0, PLACEMENT_KEY_TEXTURE)
+        .setOrigin(0.5, 1)
+        .setVisible(false);
+    }
+    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
+    const px = Math.max(1, Math.round(tileSize / 24));
+    const bob = Math.round(Math.sin(timeMs / 280) * px);
+    // A AMBICAO mora exatamente onde o keycap pousaria, e os dois juntos viram um borrao. Quem
+    // sobe e o keycap: ele e o aviso passageiro (so existe enquanto o heroi encara), e a ambicao
+    // e o estado — empurrar o estado para fora do lugar dele por causa de um aviso seria mover a
+    // informacao permanente para acomodar a temporaria.
+    const lift = this.showsAmbition ? tileSize * 0.95 : 0;
+    this.hint
+      .setVisible(true)
+      .setScale(px)
+      .setPosition(screen.x, screen.y - tileSize - px * 2 + bob - lift);
+  }
+
+  /**
+   * O JOGADOR CONSTRUIU pelo menu — a mesa martela por um instante. Ela nao passa pelo ciclo de
+   * bandeja (nao ha carga viajando; a materia saiu da mochila e o produto voltou pra ela), entao
+   * o que sobra e o gesto: a pose de trabalho e um chacoalho. Sem isso, construir seria um item
+   * aparecendo na mochila e mais nada — e um jogo em que a maquina nao se mexe quando trabalha
+   * ensina que ela nao trabalha.
+   */
+  public playCraft(): void {
+    this.craftMs = CRAFT_POSE_MS;
+    this.bump();
   }
 
   /** O heroi bateu no corpo: as ferramentas chacoalham la dentro. Fisico, nunca uma legenda. */
@@ -574,6 +633,8 @@ export class ToolboxObject implements WorldProp {
     this.scene.tweens.killTweensOf(this.body);
     this.body.destroy();
     for (const slot of this.slots) slot.destroy();
+    this.hint?.destroy();
+    this.hint = undefined;
     this.clearFlying();
     this.glow?.destroy();
     this.glow = undefined;

@@ -195,11 +195,16 @@ export type ChunkTemplate = {
  * Reads public/world.json as a LIBRARY instead of a traversable overworld. Entity coordinates
  * are normalised to the chunk's local 0..11 space so the same authored template can be placed
  * at any coordinate during a run.
+ *
+ * É AQUI que o baralho é filtrado (`catalog.enabled === false` fica de fora), e é de propósito
+ * que seja num lugar só: quem pergunta "que cartas existem?" — o portão, o baralho do overlay, o
+ * sorteio da mão — pergunta sempre por esta função. Um segundo filtro rio abaixo seria uma
+ * segunda resposta, livre para discordar da primeira.
  */
 export const getChunkTemplates = (): ChunkTemplate[] => {
   const data = requireWorld();
   return data.chunks.flatMap((chunk) => {
-    if (!chunk.catalog) return [];
+    if (!chunk.catalog || chunk.catalog.enabled === false) return [];
     const ox = chunk.cx * CHUNK_COLUMNS;
     const oy = chunk.cy * CHUNK_ROWS;
     const local = <T extends { worldX: number; worldY: number }>(entry: T): T => ({
@@ -285,6 +290,15 @@ export const getWaterWheels = (): WorldProp[] => allProps().filter((prop) => pro
 export const getBoilers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'boiler');
 export const getWires = (): WorldProp[] => allProps().filter((prop) => prop.type === 'wire');
 export const getElectronicGates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'electronicGate');
+
+// A FABRICA. Esteira e extrator carregam `dir` (para onde entregam — a mesma semantica do
+// braco); o bau nao carrega nada alem da posicao, porque o conteudo dele e estado de PARTIDA e
+// mora no save, nunca no mapa (a mesma regra que mantem vida e respawn fora do WorldEnemySpawn).
+export const getBelts = (): WorldProp[] => allProps().filter((prop) => prop.type === 'belt');
+export const getChests = (): WorldProp[] => allProps().filter((prop) => prop.type === 'chest');
+export const getExtractors = (): WorldProp[] => allProps().filter((prop) => prop.type === 'extractor');
+export const getFurnaces = (): WorldProp[] => allProps().filter((prop) => prop.type === 'furnace');
+export const getTripHammers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'tripHammer');
 export const getLevelPortals = (): WorldProp[] => allProps().filter((prop) => prop.type === 'levelPortal');
 
 export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });

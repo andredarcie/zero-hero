@@ -4244,3 +4244,1674 @@ constantes (é a luz 3D real com falloff suave), então nada na tela contradiz a
 O aviso do editor (cova na luz) segue a mesma constante sozinho. Fixtures conferidas antes:
 a cova-na-luz do `inimigos` está a 1,4 tiles (segue calada) e o resto a 6+ (segue fora);
 comentários com os números velhos atualizados em `inimigos`, `fauna` e `placa-undead`.
+
+## A FÁBRICA — a energia ganhou VAZÃO e a máquina virou item (2026-08-09)
+
+Pedido: "o que falta pra fazer esse jogo um mini factorio zelda like?" — e depois, implementar.
+
+O diagnóstico foi mais interessante que o pedido, porque o substrato já existia e era bom: três
+produtores de circuito, cabo com flood-fill, bateria portátil, dois consumidores, uma bancada de
+receitas, um veio infinito, um mercado (o astronauta) e um sumidouro de verdade (as cartas de
+chunk). A cadeia `rocha → ferro → moeda → mundo novo` já era o loop de ratchet do gênero. O que
+faltava eram **cinco peças, e nenhuma delas era arte**:
+
+1. **O jogador não construía máquina nenhuma.** Cabo, caldeira e braço só nasciam de props
+   autorados no `/editor`. Uma fábrica desenhada pelo level designer é um PUZZLE — o autor
+   desenha, o jogador percorre —, nunca uma fábrica.
+2. **Energia era BOOLEANO.** `updateWireEnergy` era um flood-fill ligado/desligado: sem
+   quantidade não existe gargalo, e gargalo é a única pergunta que uma linha de produção faz.
+   Ligar o décimo braço na mesma roda custava o mesmo que ligar o primeiro.
+3. **Não havia transporte nem estoque.** O braço leva 1 item 1 tile em ~2,5s: é uma junta, não
+   uma linha. E o "buffer" era o chão, um item por tile — uma produção rodando sozinha entupia
+   no segundo bloco.
+4. **Nada produzia sem as mãos do herói.** O veio exige três picaretadas; sem um extrator, a
+   automação nunca chega ao pagamento do gênero.
+5. **Duas receitas e zero bens intermediários.** O comentário do `TOOLBOX_RECIPES` já admitia o
+   teto: "o número de ferramentas fabricáveis é o número de MATERIAIS".
+
+### A rede com vazão (`src/game/world/powerGrid.ts`, TS puro)
+
+`solvePowerGrid` é um union-find sobre os tiles condutores e uma divisão. Cada fonte publica
+watts (placa 1, roda 4, caldeira 10, bateria 2), cada máquina puxa watts (esteira 1, braço 2,
+extrator 4, portão 1), e o que sai é `satisfaction = min(1, oferta/demanda)` **por componente**.
+
+- **A satisfação vira VELOCIDADE, nunca legenda**: o consumidor multiplica o próprio delta por
+  ela. Uma rede curta não para nada — faz a fábrica INTEIRA arrastar, e todos na MESMA proporção
+  (medido: 14 W pedidos contra 10 W ofertados = 0,714 em todas as catorze peças). Um gargalo que
+  parasse só a última peça da fila não se leria de relance; um número só na rede, sim.
+- **…e vira BRILHO**: `WireObject.setLoad` tem três FAIXAS (folgada respira em 620ms, apertada em
+  380ms, faminta treme em 240ms). Faixas e não gradiente por dois motivos: três estados são
+  distinguíveis num filete de 16px e um contínuo não é, e a rede reescreve isso todo frame — um
+  tween recriado por quadro seria uma alocação por cabo por frame.
+- **A bateria virou fonte de SEGUNDA CLASSE** e a lei dela ficou mais exata: ela só cobre o
+  buraco que os geradores deixaram, e drena na proporção do que entregou. Antes, encostada num
+  fio com geração de sobra, ela queimava vinte segundos de carga à toa.
+- **O braço legado não quebrou**: sem cabo encostado ele continua nos dois modos antigos
+  (variável sem fio, ou autoalimentado), e por isso nem entra na conta de watts. Cobrar dele
+  quebraria todo puzzle autorado que nunca teve um fio.
+
+**A armadilha que só apareceu montando a linha no jogo de verdade:** com o cabo como único
+condutor, uma linha de dez esteiras exigiria dez cabos deitados ao lado. Isso não é custo, é
+tarefa — ninguém construiria a segunda linha. A **esteira conduz ao longo de si mesma** (ela tem
+o próprio eixo de tração): energize a cabeça da linha e a linha inteira anda. O que NÃO mudou é
+que máquina encostada em máquina continua não conduzindo — é isso que mantém o cabo sendo peça de
+puzzle. `liveWires` ficou só com cabo de verdade, porque quem pergunta por ele é a bateria
+carregando por pisada ("carregue pisando num CABO vivo"), e pisar numa esteira não pode virar um
+segundo jeito de carregar bateria que nenhuma legenda menciona.
+
+### A máquina virou item, e a gramática não mudou
+
+Sete `HeldItemKind` novos — `gear`, `wire`, `belt`, `chest`, `boiler`, `inserter`, `extractor` —
+com os MESMOS nomes dos props que viram, para instalar ser uma identidade em vez de uma tabela
+de-para. Nenhum botão novo:
+
+- **O A INSTALA**, porque instalar É usar: a tabela `useItemAt` já é "o que este item faz contra
+  o tile à frente", e uma caldeira faz uma coisa muito clara contra um tile vazio. A **direção
+  nasce de para onde o herói olha** — girar uma esteira é virar-se e pôr de novo.
+- **O B de MÃO VAZIA recolhe**, e só o que o JOGADOR construiu (`playerBuilt`). Peça autorada não
+  se recolhe: a primeira coisa que qualquer jogador faria num level seria desmontar o puzzle.
+  Sem a volta, errar um tile custaria a peça — e aí o jogador para de experimentar, que é a única
+  coisa que uma fábrica pede.
+- **O B com a mão cheia continua pousando como CARGA**, e isso não é ambiguidade: é a distinção
+  que o jogo já fazia (A age no mundo, B mexe no que se carrega). Uma caldeira pousada é um
+  caixote que anda numa esteira; instalada, é uma máquina.
+- **A recusa é o gesto que o jogador pediu, falhando**: o item sai no arco contra o tile ocupado e
+  volta, com o ferro seco da bancada. Nunca uma legenda.
+- **`machineAt` existe porque duas peças da rede NÃO são sólidas** (cabo e esteira — o herói pisa
+  nelas de propósito), então `isTileOccupied` responde `false` sobre um tile que já tem máquina.
+  Sem essa pergunta dava pra deitar um cabo em cima de uma esteira, e o jogador só descobriria ao
+  tentar recolher uma e receber a outra.
+
+**O save ganhou `machines`** (`AdventureMachine`, por escopo de mundo). É a primeira coisa do save
+que não é item nem marca: é ESTRUTURA, e por isso entra como **DIFF** sobre o `world.json`, do
+mesmo jeito que `felledTrees` e `dugSpots` — o mundo sempre ganha. Se fosse foto, uma caldeira
+nova posta no `/editor` (ou uma carta de chunk comprada) perderia o que o autor pôs, ou pior,
+duplicaria a peça do jogador em cima dela. O baú é a única exceção ao `playerBuilt` na foto: um
+baú autorado também tem conteúdo, e conteúdo é estado de partida.
+
+**E o buraco do `spawnStreamedProps` fechou.** O `default` dele dizia "carta com máquina é
+trabalho futuro" porque as máquinas "têm índice de cabo, circuito e rede pra recompor". Isso
+deixou de ser verdade: a rede é resolvida por POSIÇÃO, todo frame, a partir das listas. Sobrou uma
+coisa só a recompor — a FORMA do cabo — e ela virou `refreshWireNetwork`, chamado em toda
+construção, toda remoção e uma vez no fim do spawn. A roda d'água continua de fora, e agora é a
+única: ela SUBSTITUI a água do tile dela, então são dois objetos em dois arrays que o switch teria
+de manter em par; meio construída ela é um rotor girando sobre chão seco.
+
+### As três peças novas
+
+- **`BeltObject`** — não bloqueia (uma linha longa sólida viraria um muro e o jogador passaria o
+  jogo contornando a própria fábrica) e não "engole" a carga: ela EMPURRA o item, que continua
+  sendo um `ItemPickup` que o B pega e que toda outra máquina enxerga pelo caminho de sempre. O
+  destino ocupado não é erro, é FILA — e o engarrafamento se propaga sozinho de trás pra frente,
+  sem ninguém programá-lo. `shift` preserva fogo, carga e contagem: um graveto aceso sai aceso do
+  outro lado (e acende o que houver no caminho, pelo `scheduleGroundTorchSpread` de sempre).
+- **`ChestObject`** — UM tipo por baú, e isso é desenho, não limitação: um baú que aceita tudo é
+  uma mochila que não anda, e a peça viraria interface com lista e rolagem — exatamente o que a
+  remoção da loja tirou daqui. Para guardar duas coisas, dois baús lado a lado, que é uma decisão
+  de espaço. Sem número na tela: o ferrolho acende em ouro (frame 1), a língua de "isto está vivo"
+  do filete do cabo. `store` devolve **quanto realmente entrou** — engolir o excedente em silêncio
+  seria um item sumindo do mundo.
+- **`ExtractorObject`** — `dir` é PARA ONDE ELE PÕE e ele MORDE o tile de trás, idêntico ao braço,
+  porque duas máquinas com `dir` significando coisas diferentes seria a armadilha mais cara que
+  este jogo poderia se dar. O sprite ensina a regra sozinho: broca clara atrás, bico de ouro na
+  frente, sempre opostos. Um ciclo custa **2,4s contra os ~2s da picareta na mão** — a máquina é
+  mais LENTA que o jogador de propósito: ela ganha por ser muita e por trabalhar enquanto ele está
+  numa dungeon. Um ciclo pronto que não coube fica PENDENTE e tenta a cada frame sem reiniciar o
+  relógio; sem isso, um baú cheio por um instante faria a máquina jogar fora o bloco. Perder
+  energia no meio do ciclo não zera o progresso: puniria duas vezes pela mesma coisa.
+
+### A segunda regra da bancada
+
+`ferramenta = cabo + cabeça` ganhou uma irmã: **`máquina = engrenagem + corpo`**. A simetria é o
+que torna as duas aprendíveis juntas — quem entendeu graveto+pedra=machado entende
+engrenagem+pedra=caldeira. E `iron + iron = gear` é a única receita do jogo cujos dois insumos são
+a MESMA coisa, o que anuncia a família nova sem uma linha de texto. O cabo é o único produto em
+PACOTE (4), e não por generosidade: uma rede se DESENHA tile a tile, e uma peça que se deita às
+dúzias a uma bancada por unidade viraria tarefa. Ele sai de `iron + stone` porque são as duas
+matérias-primas infinitas do jogo (o veio nunca acaba, a rocha sempre volta) — a rede nunca pode
+ficar sem material e travar o modo. O baú é `wood + wood`, a única peça sem engrenagem, porque é
+a única que não consome energia — e a regra tem de valer nos dois sentidos pra ensinar alguma
+coisa.
+
+### A arte (spritefactory)
+
+Quatro sprites no padrão medido, linter limpo: **engrenagem** (a mesma liga do bloco de ferro —
+ela tem de ler como "ferro trabalhado", não como material novo; o furo de eixo é o que impede de
+ler como moeda), **esteira** (8 frames = `dir + 4*fase`, FULL BLEED no eixo da viagem para duas
+seguidas lerem como uma linha — a lei do cabo, não a dos props em pé), **baú** (2 frames; se
+distingue do caixote por três coisas de FORMA e nenhuma de cor: corpo mais baixo, tampa abaulada
+com linha de ink, ferrolho central) e **extrator** (8 frames, carcaça idêntica nas quatro direções
+porque direção é frame e nunca rotação — o que se move são as duas marcas opostas). A esteira
+mantém um `warn` de `value-range` do linter, e é aceito: a rampa slate inteira só cobre 19 de
+luma, e "chapado" é a leitura CORRETA de um leito de esteira deitado no chão — a regra de volume
+é para prop em pé.
+
+### O level 3, "A Linha" (`public/levels/level-3.json`)
+
+Um chunk 12×12 com a cadeia inteira e uma trava de verdade: o portal mora numa alcova cujo único
+acesso é um `electronicGate` **fail-closed**. Sem rede, ele é parede. A caldeira nasce ENCOSTADA
+na fogueira-lar (já quente); o que falta é água (balde + o poço) e o cabo — que o jogador precisa
+FORJAR. A moldura é pinheiro-tile e o level não dá machado de aço, então a parede é intocável. O
+resto (veios, rochas, madeira morta, materiais de partida) é sandbox: dá pra construir as sete
+peças e testar todas. **Medido no jogo real**: caldeira acende, engrenagem sai da bancada, seis
+cabos de (3,9) a (8,9) acendem o portão (`powered: true`, `solid: false`), extrator entrega
+`ironx1` em (8,5) e as esteiras correm a 1,0.
+
+### Verificação
+
+`npm run playtest -- fabrica` — receita da engrenagem, o A instalando com a direção do olhar, o B
+recolhendo, esteira+baú acumulando, extrator mordendo o veio, e o GARGALO com a resposta (uma
+segunda caldeira devolve a rede a 1,0). O hook `buildTestMachine` passa pelo MESMO `installMachine`
+do botão A **e pela mesma recusa de tile**: sem isso ele conseguia empilhar cabo e esteira no mesmo
+tile — um estado que nenhum jogador alcança —, e foi exatamente o que custou meia hora de
+diagnóstico na primeira verificação desta reforma.
+
+**Correção medida em jogo (mesmo dia): a bancada entregava UM cabo, não quatro.** O `units` da
+receita atravessava o tipo do `ToolboxWorldPort` e o `ItemManager.drop` sabia recebê-lo — quem o
+descartava era a implementação do `put` no `GameScene` (`(kind, x, y) => drop(kind, x, y)`), ou
+seja, exatamente o ponto do MEIO, que é onde um argumento novo sempre se perde. O `fabrica` passou
+a assertar a contagem no chão (`wire` × 4, `gear` × 1): quem lê "4" na receita tem de encontrar
+"4" no tile de saída. Nota de leitura para o próximo relato parecido: um pacote no CHÃO é a
+contagem inteira da mochila (`UNIT_PACK_KINDS` — pousar com B põe tudo num item só), então um
+número diferente de 4 ali não é a receita falando, é o que o jogador estava carregando.
+## A trava deixou de ser uma CHAVE e virou uma QUANTIDADE (2026-08-09)
+
+O level-3 v1 falhou em jogo, e o relato do usuário foi exato: *"não precisei fazer nada de
+factorio. Eu apenas liguei o cabo na porta e abri ela, fim."* Ele estava certo, e o defeito não
+era do level — era da **forma da fechadura**. Uma porta que pede energia é uma CHAVE: um cabo, um
+giro, acabou. Toda a fábrica (extrator, esteira, baú, a cadeia de engrenagem) ficava sendo cenário
+opcional ao lado do caminho curto. O gênero inteiro nasce de outra coisa: **a meta é uma
+quantidade que a mão não escala**, e é o tédio de fazer à mão que faz alguém preferir a máquina.
+
+### A peça: `chest` com `quota`
+
+Um baú autorado pode cobrar uma ENCOMENDA (`quota: { kind, count }`). Com ela ele deixa de ser
+depósito e vira a única fechadura deste jogo que não é uma chave:
+
+- **Ele só aceita o que cobra**, desde o primeiro item — senão o jogador tranca a própria porta
+  enchendo-a de pedra, e a recusa (o tremor da lei das travas) só apareceria tarde demais.
+- **Ele publica o PROGRESSO** no circuito nomeado (`variable`), o mesmo barramento da placa, da
+  roda e da caldeira. O booleano "encomenda pronta" também vai ao `GlobalVariables`, para um braço
+  (ou uma porta futura) poder reagir sem conhecer o baú.
+
+### O portão virou a barra de progresso, e é feita de física
+
+`ElectronicGateObject.update` ganhou um `ceiling`: até onde a grade PODE subir. Sem vínculo é 1 —
+o portão de sempre. Ligado a um baú com quota, é o progresso da entrega, e **a grade sobe um
+degrau a cada punhado depositado**. Não há contador, não há legenda: a porta É o número. Medido:
+0/20 → fechada, 5 → 0,20, 10 → 0,41, 15 → 0,61, 19 → 0,78, 20 → abre.
+
+Dois detalhes que só apareceram medindo:
+
+1. **A porta abria com 18 de 20.** O limiar de passagem é 0,86 (`PASSABLE_AT`), e mapear o
+   progresso direto no teto fazia a fechadura cobrar um número e aceitar outro. O percurso
+   incompleto passou a ser comprimido em `[0, 0.82]`: a subida continua legível a cada entrega, e
+   **o último punhado é o que abre** — o pagamento acontece no gesto que o merece.
+2. **A grade tem de DESCER quando o teto baixa.** O passo de animação saía de "está energizada?";
+   agora sai do sentido em que ela está indo. Esvaziar o baú fecha a porta, com o peso de sempre.
+   A trava segue a entrega — não é um gatilho que dispara uma vez.
+
+### O level-3 refeito, e a prova de BFS
+
+A porta cobra **20 minérios**. Os dois caminhos são reais e a comparação é o ponto:
+
+- **À mão**: 3 picaretadas por minério = 60 golpes, mais a caminhada até a arca. Possível — a lei
+  da casa é que toda trava tem chave —, só tedioso. É o tédio que ensina.
+- **Com a linha**: o veio da porta fica a DOIS tiles da arca, e o tile do meio é exatamente onde
+  um extrator cabe (morde o veio atrás, entrega na arca à frente). Um extrator custa 2
+  engrenagens = 4 ferros, e a rede custa 2 forjas de cabo. Depois disso são ~48s sem tocar em
+  nada. Medido no jogo: 15s → 5 entregues, 31s → 12, 45s → a porta abre.
+
+A geometria não é decoração: **a linha mínima nasce do desenho do mapa**, sem uma linha de
+tutorial. E há mais três veios ao norte para quem quiser escalar com esteiras.
+
+**A prova de BFS entrou no script de autoria, e não era zelo — era conserto.** A primeira tentativa
+desta versão plantou o veio da porta em (8,9), o único corredor da alcova. Um `ironRock` **nunca
+quebra**: o portal ficou inalcançável para sempre e o level, insolúvel. O gerador agora roda um
+flood-fill **com o portão FECHADO** e falha (exit 1) se qualquer tile de uso — bandejas, saída da
+bancada, poço, caldeira, arca, tile do extrator, cada pickup — ficar fora, ou se o portal estiver
+alcançável sem passar pelo portão. É a mesma lei que os scripts de enriquecimento do mundo já
+seguiam ("prop que bloqueia só entra com prova de BFS"), aplicada a um level.
+
+### Guarda
+
+`npm run playtest -- fabrica` ganhou a sexta fase, e ela roda no LEVEL de verdade (`driver.open`):
+o portão nasce fechado; a rede sozinha o energiza **e ele continua parede**; metade entregue sobe a
+grade visivelmente sem liberar passagem; 19 de 20 não abre; a vigésima abre; esvaziar fecha de
+novo; e a arca recusa pedra.
+
+### O level virou VITRINE: as peças já estão no chão (2026-08-09)
+
+Pedido: *"já deixe as props no chão, todas elas, para que eu teste e entenda como funciona."* Duas
+consequências, e a segunda foi a que valeu mais:
+
+**1. Máquina virou `PickupKind`.** Um level (ou uma carta de chunk) não conseguia POR uma esteira
+no chão — a única forma de ter uma na mão era forjar a cadeia inteira. Um mapa que quer ENSINAR
+uma peça não pode cobrar a cadeia antes de mostrar a peça. `PickupKind` é um subconjunto de
+`HeldItemKind`, então os sete nomes entraram e o `ItemManager` não mudou uma linha.
+
+**2. A vitrine que RODA no boot.** Uma fileira de itens no chão explica o que existe; ela não
+explica o que a coisa FAZ. Então o level ganhou uma linha completa já montada e já energizada —
+roda d'água num rio (energia de graça, sem uma ação do jogador) → cabo → três esteiras → baú — com
+três minérios já deitados nas esteiras. O jogador entra e a primeira coisa que vê é carga andando
+sozinha e um baú acendendo o ferrolho ao receber. **Mostrar uma esteira é mais barato do que
+explicar uma**, e a roda d'água foi escolhida como fonte justamente por não exigir nada: a
+caldeira precisaria de água no balde, e aí a vitrine começaria parada.
+
+O mostruário são 15 itens: 2 engrenagens, **6 cabos** (exatamente o que vai da caldeira ao portão —
+dá pra ligar a rede antes de precisar da bancada), 2 esteiras, 1 baú, 1 braço, 1 extrator, 1
+caldeira. Tudo que o jogador põe é `playerBuilt`, então tudo volta pra mochila com o B: o
+mostruário é reversível por construção, que é a única forma de um sandbox convidar a experimentar.
+
+Medido no boot: roda gerando, as três esteiras a 1,0, os três minérios entregues no baú da
+vitrine em ~9s, o portão da encomenda ainda em 0, e a prova de BFS passando com 75 tiles
+alcançáveis e o portal selado.
+
+### O extrator era INAIMÁVEL, e só uma pergunta do usuário revelou isso (2026-08-09)
+
+*"Como usar o extrator?"* — e ao ir escrever a resposta, ela não existia.
+
+A regra geral de instalação é boa e vale para tudo: **a peça nasce no tile à frente, virada para
+onde o herói olha**. Só que ela não consegue aimar a única máquina cuja ENTRADA é sempre uma
+parede. O extrator tira do tile de TRÁS, e o tile de trás dele tem de ser um veio de minério.
+Componha as duas coisas: herói em `H` olhando para `D` põe a máquina em `H+D` com `dir = D`, logo a
+entrada dela é `H` — **o tile onde o herói está pisando**. Para aimar o extrator num veio, o
+jogador teria de estar de pé em cima do veio. Veio é rocha. Rocha não se pisa.
+
+No próprio level-3 isso era demonstrável: o tile do extrator é (7,8), o veio (6,8), a arca (8,8);
+para morder o veio ele precisa de `dir` = leste, e o único tile de onde se instala isso é (6,8) —
+o veio. A peça central da reforma não podia ser posta em lugar nenhum útil pela mão do jogador.
+
+**O conserto: a broca procura a pedra.** Em `buildMachineAt`, e só para o extrator, o `dir` sai de
+`extractorAim` — ele varre os quatro vizinhos, e se um deles for `ironRock`, nasce de COSTAS para
+ele (o veio vira a entrada). Entre dois veios, prefere aquele cuja SAÍDA está livre: uma máquina
+que nasce correta e entupida é indistinguível de uma que nasce quebrada para quem está aprendendo
+a peça. Sem veio nenhum por perto devolve `null`, e a regra geral volta a valer — um extrator posto
+no lugar errado ainda tem direção previsível, em vez de arbitrária.
+
+O sprite já ensinava a regra (broca clara atrás, bico de ouro à frente, sempre opostos); o que
+faltava era o gesto conseguir expressá-la. Medido: em (7,8) mira leste (morde (6,8), entrega na
+arca (8,8)); encostado no veio norte de (8,2) mira oeste; longe de tudo devolve `null`. Com a mira
+certa, ele alimenta a encomenda sozinho.
+
+**A lição que fica maior que a peça:** uma regra de posicionamento uniforme ("nasce à frente,
+virado pra onde você olha") é elegante e quase sempre certa — e falha exatamente onde um dos lados
+da máquina é intransitável. Toda peça nova que TIRE de um lado sólido precisa se orientar sozinha,
+ou é inaimável. `fabrica` guarda a mira, porque um `dir` que volte a sair do olhar do herói deixaria
+o extrator inutilizável sem quebrar nenhum outro teste.
+
+### As MARCAS de posicionamento, e o gesto que agia num alvo invisível (2026-08-09)
+
+Pedido do usuário, em quatro partes: um quadrado branco mostrando onde a peça vai cair, um keycap
+por cima dizendo qual botão, remoção com o botão de pegar para **tudo** que se instala, e o
+extrator só podendo ser posto ao lado de uma fonte — com os lugares válidos acendendo em volta de
+cada veio. Mais: cabo e esteira sempre em punhados de cinco.
+
+**O diagnóstico por trás do pedido é mais forte que o pedido.** Instalar era o único gesto do jogo
+cujo ALVO era invisível. Todo o resto mira em algo que já está lá — o machado bate na árvore que
+está ali, o balde molha a caldeira que está ali. Uma máquina nasce num chão vazio, e chão vazio é
+igual em todo lugar: "o tile à frente" era uma regra que só existia na cabeça de quem escreveu o
+código.
+
+**`PlacementHints` + `placementTexture`.** Um pool de quads deitados (nada de luz: a lei das luzes
+vale para `THREE.Light`, e uma marca não é uma) e um keycap overlay — a mesma técnica do "!" e do
+"Z" do NPC, e o mesmo alfabeto 5×7, para as duas teclas lerem como irmãs. A tecla mostrada é a de
+AÇÃO, porque instalar é USAR: é o botão A (Z no teclado), não o B.
+
+Duas cores, e a diferença é a única coisa que o jogador precisa entender: **branco** é onde o
+botão vai agir agora; **azul frio** são os outros lugares válidos. Só o extrator pinta os frios,
+porque ele é a única peça cujo lugar certo não é óbvio — pintar vizinhos para todas encheria a
+tela de ruído. E a recusa aparece como **ausência de marca branca**, nunca como uma marca
+vermelha: o jogo não tem vocabulário de erro colorido, tem vocabulário de física.
+
+**A forma da marca foi decidida por uma captura, não por gosto.** A primeira versão eram quatro
+cantos, como uma mira — e o jogo real desmentiu: as BANDEJAS da bancada já são cantos vazados no
+chão, e as duas marcas ficaram indistinguíveis a dois tiles. Uma linguagem visual só pode
+significar uma coisa. O quadrado fechado é o que sobrou de livre — e é também o que foi pedido.
+
+**`canBuildMachineAt` existe uma vez só, e essa é a regra que importa aqui.** A marca e o botão
+fazem a MESMA pergunta. Duas cópias divergindo seria o pior defeito possível desta peça: um
+quadrado branco prometendo um gesto que o botão recusa. É a lei "uma lista, três leitores"
+aplicada a um predicado.
+
+**O extrator ganhou a condição que a peça sempre teve implícita**: só nasce encostado num veio.
+Antes ele podia ser plantado no meio do campo — não é uma escolha ruim do jogador, é uma máquina
+que nunca vai fazer nada, e o jogo tem de dizer isso ANTES do aperto.
+
+**Tudo que se instala se recolhe, inclusive o autorado.** O `playerBuilt` protegia a peça do mapa,
+com o argumento de que desmontar o puzzle seria o primeiro gesto de todo level. O usuário derrubou
+o argumento e estava certo: uma linha de demonstração que não se pode DESMONTAR não ensina, só
+pode ser olhada — e tudo que sai dela volta para a mochila, então nada se perde. O campo continua
+existindo porque é ele que decide o que vai ao SAVE (o mundo autorado já mora no `world.json`;
+gravar tudo o duplicaria no próximo boot). A única coisa blindada é a arca com QUOTA: ela não é
+depósito, é a fechadura do level, e uma encomenda que o jogador carrega embora não é uma trava.
+
+**Punhados de cinco** (`spawnPackSize`): cabo e esteira são as duas peças que se deitam em LINHA,
+e uma linha não se faz de uma peça. A receita do cabo subiu de 4 para 5 junto — as duas contagens
+têm de ser a mesma, ou o jogador aprende duas coisas sobre um objeto só.
+
+`fabrica` ganhou a oitava fase: a marca no tile à frente, o keycap, a concordância entre marca e
+botão, os lugares frios do extrator, a recusa longe do veio, os punhados de cinco, o desmonte de
+uma peça autorada e a arca da encomenda recusando ser recolhida.
+
+## A ENCOMENDA — a bancada deixou de ser um cadeado de combinação secreta (2026-08-10)
+
+A caixa de ferramentas nasceu **experimento-primeiro**: junte dois itens e veja o que sai. É o
+modelo do Minecraft de 2009 — e ele só funcionou lá por causa de um pré-requisito que este jogo
+não tem: um milhão de jogadores contando um ao outro na internet. Sem esse boca-a-boca, a mesma
+caixa é um cadeado com combinação secreta, e a recusa física (a tampa pulando) responde *"agora
+não"* a uma pergunta que o jogador nem sabe formular.
+
+### O que a pesquisa disse
+
+A divisão real do gênero é **ingrediente-primeiro × objetivo-primeiro**, e todo mundo migrou para
+o segundo. O Terraria só lista o que dá pra fabricar agora — e a reclamação recorrente é
+exatamente essa ("tenho que carregar as coisas pra descobrir o que existe"); o conserto do próprio
+jogo não foi mexer no menu, foi um **NPC** (o Guia recebe um item e diz todas as receitas em que
+ele entra). O Minecraft era memorização pura até 1.12, quando entrou o **Recipe Book** — catálogo,
+ingredientes desenhados, e **desbloqueio progressivo** (a receita aparece quando você encosta pela
+primeira vez num ingrediente dela). O Stardew é o padrão-ouro do barato: **tudo sempre visível**,
+acinzentado o que falta material, e o ingrediente que você não tem em vermelho. O Factorio dá o
+passo da árvore: escolher o alvo **resolve a cadeia** sozinho. E o Autobuild do TotK mostra o outro
+eixo — a receita não é uma página, é um **fantasma no mundo**.
+
+Diagnóstico: a nossa caixa estava no pior quadrante — experimento-primeiro **sem wiki**.
+
+### O que foi feito
+
+**A encomenda inverte a direção.** O jogador escolhe *o que quer*; a máquina responde *do que ele
+precisa* — e responde **no chão**, não numa legenda.
+
+- **O catálogo** (`ToolboxOrderOverlay`) abre com o **A na frente da bancada**, no mesmo degrau do
+  NPC dentro do `swingAttack` — a bancada é a única máquina do jogo que se *conversa*. Ele mostra
+  **tudo, sempre** (o catálogo *é* a lista de ambições), agrupado nas duas famílias que já eram a
+  lei do livro de receitas: ferramenta = cabo+cabeça, máquina = engrenagem+corpo. O que o jogador
+  ainda não conhece sai em **silhueta preta**, não em cinza — cinza diria "desabilitado", vulto diz
+  "existe, e você ainda não sabe o que é". A divulgação progressiva lê o `seenItems` que o save já
+  guardava.
+- **Escolher PREGA, não fabrica.** O plano vira desenho na máquina: cada bandeja vazia ganha o
+  **fantasma** do insumo que falta, no lugar exato em que ele tem de ser posto. Ler o plano é olhar
+  para a bancada; não há segunda tela a consultar e não há nada a memorizar. Fantasma nunca cobre
+  carga — bandeja servida mostra o que está lá.
+- **O plano DESCE** (`resolveOrderStep`). Pedir o extrator sem engrenagem nenhuma não recusa: os
+  fantasmas viram ferro e a **ambição** sobe para cima do corpo da máquina, menor e mais apagada
+  (é a diferença entre *o que você quer* e *o que fazer agora*, desenhada). Entregando, o plano
+  **sobe** de volta. É o chain-craft do Factorio contado em física — o jogador aprende a árvore
+  **andando** nela.
+- **A recusa ganhou sujeito.** A tampa já batia; agora, com um plano pregado, o mesmo baque
+  **acende os fantasmas**. Continua sem uma linha de texto.
+- **A encomenda NÃO é trava**, e essa é a linha que mais importa: a bancada continua engolindo
+  qualquer par válido. Um plano que trancasse a máquina teria quebrado, num commit de UI, o único
+  sistema do jogo que roda sozinho enquanto o herói está longe — quem alimenta as bandejas pode ser
+  um braço robótico, e braço não sabe ler plano nenhum. A encomenda cumprida se **despega sozinha**.
+- **O keycap sobre a bancada.** Sem ele o catálogo seria invisível — que é exatamente o defeito que
+  ele veio consertar. É o **mesmo** "Z" que flutua na cabeça do NPC, e por isso ele mudou de casa:
+  o alfabeto e o desenho agora moram em `placementTexture`, lidos pelo `PlacementHints` e pela
+  bancada. Um desenho que diz a mesma frase em dois lugares tem de ser um desenho só.
+- **A página de PLANOS na subtela** (ESC) espelha o mesmo catálogo em leitura, para planejar longe
+  da bancada. Nada se prega dali de propósito: pregar é um gesto que acontece *na* máquina. Ela só
+  existe em mundo que **tem** bancada.
+
+### As armadilhas que apareceram no caminho
+
+- **`owns` pergunta pela MOCHILA, nunca pelo chão do mundo.** Um ferro perdido a vinte tiles não é
+  um insumo que você tem, e um plano que nunca descesse por causa dele seria pior do que nenhum.
+  Mas conta o que já está **nas bandejas desta bancada**: sem essa parcela, o plano desceria um
+  degrau no instante seguinte a receber o primeiro insumo, e os fantasmas trocariam debaixo da mão
+  do jogador enquanto ele vai buscar o segundo.
+- **`planGhosts` casa por multiconjunto**, então pousar o graveto na bandeja "errada" nunca faz a
+  caixa pedir um segundo graveto. A ordem das bandejas nunca importou para a receita e não pode
+  passar a importar para o desenho dela.
+- **O livro de receitas mudou de arquivo** (`toolboxRecipes.ts`). Ele tem três leitores agora — a
+  máquina, o catálogo e a página de planos —, e uma tabela com três leitores dentro do arquivo de
+  um deles vira dependência circular no dia em que o segundo precisar dela.
+- **`setOrder` alterna**, então a hidratação do save só chama quando há o que pregar: chamá-lo duas
+  vezes com o mesmo valor despregaria o plano.
+- Os quads de fantasma nascem **preguiçosos** e já com a arte certa (nunca um placeholder trocado
+  no frame seguinte), e usam `depthWrite: false` — é isso que os dispensa de declarar camada, já
+  que não têm como brigar com a bandeja deitada em que o herói pisa.
+
+`npm run playtest -- encomenda` guarda as sete: o catálogo abrindo pelo A e congelando o mundo,
+pregar, a descida, a subida, o fantasma só onde há vazio, a bancada continuando a forjar fora do
+plano, e a encomenda cumprida se despregando.
+
+### A passada de legibilidade (2026-08-10, depois de olhar as capturas)
+
+Sete asserts verdes sobre uma peça que **não desenhava um pixel**. O que o teste real corrigiu:
+
+- **O fantasma era descartado pelo `alphaTest`.** O padrão de um billboard emissivo é `0.35`, e o
+  three multiplica a opacidade pelo alfa da textura *antes* do teste — um fantasma respirando entre
+  0.20 e 0.50 some inteiro na metade do ciclo. Mesma armadilha da sombra fraca do herói. Agora
+  `alphaTest: 0.02` + `emissiveBoost: 1.35`, porque a arte de item deste jogo é escura por desenho.
+- **A ambição pousava na alça da caixa** (metal cinza sobre metal cinza): lia como peça do objeto.
+  O conserto é o **vão** — 1.58 tile —, e o keycap sobe junto quando ela existe, senão os dois
+  disputam o mesmo pixel.
+- **O canto dobrado aparecia em toda carta** (o elemento existia sempre, o CSS só o pintava), a
+  silhueta a 14% de brilho sumia no cartão, e a tarja de teclas do jogo ficava por cima do catálogo
+  mentindo "Z usa o que você segura".
+
+E o que a pergunta *"está o mais intuitivo possível?"* rendeu:
+
+- **O contador diz quanto FALTA, não quanto custa.** `×2` responde a pergunta errada; `1/2` responde
+  a única que o jogador faz. Só aparece onde há o que contar (receita que pede mais de um).
+- **DOIS EIXOS INDEPENDENTES no insumo, e é isto que faz os três estados se lerem sem decorar nada:**
+  a **moldura tracejada** responde *"eu tenho?"* (tracejado é a mesma língua do fantasma na bandeja:
+  contorno vazio = ainda não está aqui), e a **cor** responde *"onde se consegue?"* (cinza = procure
+  no mundo, colorido = esta bancada faz). A primeira versão separava os três só por opacidade, e aí
+  "tenho" e "a bancada faz" ficavam a um degrau de brilho um do outro — indistinguíveis num cartão
+  cujo insumo custa UM, onde não há contador para desempatar. É a separação vermelho/laranja do
+  Factorio numa paleta que reserva o vermelho para dano, e ela **ensina a descida antes de ela
+  acontecer**.
+- **Pregar é pregar:** o som era o da ENTREGA (anunciando uma peça pronta que não existia); virou
+  uma martelada (`playHammer`) — o papel na bancada.
+- **Pregar ACENDE os fantasmas.** O catálogo fecha no mesmo frame e a resposta ao aperto mora nas
+  bandejas, que ficam do outro lado da máquina — fora de onde o jogador estava olhando. O clarão
+  (a mesma maquinaria do flash de recusa) é o que leva o olho até lá.
+
+O cenário subiu para **27 asserts** e ganhou os três estados de insumo, a divulgação progressiva e a
+página de planos da subtela. Aviso de campo: `combate`, `caixa-ferramentas` e `salvamento` estão
+vermelhos **na `main`** (medido contra um worktree de HEAD, falha por falha) — não são desta
+reforma. O `waitFor` do `fabrica` não repassava o argumento ao `evaluate` e estourava num
+TypeError com cara de defeito do jogo; foi corrigido nos dois cenários.
+
+### A engrenagem redesenhada (2026-08-10)
+
+A v1 calculava os dentes com trigonometria — oito blocos `2×2` em `cos/sin` de um raio 6. A 16px
+isso não produz dentes: produz oito nubs de **tamanhos e distâncias diferentes**, porque cada
+ângulo arredonda para um lugar diferente da grade. Metade encostava no aro, metade flutuava, e o
+conjunto lia como serrilha acidental. Pior: o aro de ink saiu grosso e o furo do eixo largo, então
+a peça virava um **olho** — íris escura dentro de esclera clara.
+
+O conserto não foi ajustar números, foi **trocar de formato de autoria**: silhueta a 16px se
+desenha célula a célula, não se calcula (é a regra da casa, no README da fábrica). Três coisas
+saíram de olhar as versões lado a lado no chão de verdade:
+
+- **Dentes de 2px com vales de 2px.** É o único ritmo que sobrevive a 16px: dente de 1px vira
+  ruído, vale de 1px fecha visualmente e devolve o círculo. Uma variante com os dentes diagonais
+  separados por um vale de 1px foi desenhada e descartada — a silhueta lia **lascada**, como se a
+  peça estivesse quebrada.
+- **O ink saiu da silhueta.** Uma coroa de ink fechada engolia a peça a 1× — e no chão noturno,
+  ink na borda não lê como borda, lê como **ausência**: os dentes de baixo simplesmente sumiam.
+  Sobrou ink só no furo do eixo (4 pixels). O contorno de pickup que o `ItemPickup` já desenha em
+  runtime é quem resolve a leitura no escuro.
+- **O terminador é um ARCO, não uma reta de 45°.** As faixas de tom saem da distância até a luz,
+  então acompanham a curva do disco. Um disco partido por uma diagonal chapada não lê como
+  redondo, lê como chapa **dobrada** — e a dobra passava bem em cima do furo do eixo.
+
+**E o redesenho quebrou uma decisão de UI, o que é o achado mais útil daqui.** O eixo "a bancada
+faz este insumo" era desenhado guardando a **cor** do sprite enquanto matéria-prima ia a
+`grayscale()`. Funcionou enquanto a engrenagem era azulada; no instante em que ela virou metal
+cinza, os dois estados passaram a ser o mesmo pixel. **Um sinal que depende da paleta da arte
+quebra quando a arte muda.** O sinal mudou de lugar: agora é a **cor da moldura tracejada** —
+neutra para o mundo, brasa para "é aqui mesmo" —, que é a cor que o jogo já usa para "isto é seu".
+
+## A CADEIA DO FERRO — minério, forno, esponja, martelo (2026-08-10)
+
+O veio cuspia `iron` pronto, e isso era uma mentira barata. Minério de ferro é **óxido** preso em
+rocha (hematita, magnetita) — quimicamente, ferrugem. Não se forja, não se martela, não serve para
+nada. A investigação do "mini-Factorio" apontou a árvore de receitas rasa (profundidade 2) como uma
+das lacunas centrais; a química real resolve isso **de graça**, porque a etapa que faltava já
+existia no mundo há séculos.
+
+### O que entrou
+
+```
+veio → MINÉRIO ──(forno + CARVÃO)──→ ESPONJA ──(3 marteladas)──→ FERRO → engrenagem → máquinas
+```
+
+- **`ore` e `bloom`**, dois itens novos com sprite próprio. O minério é redondo e de pedra com uma
+  veia de ferrugem em risco **diagonal** (duas manchas pareadas leem como olhos — lição que o bloco
+  de ferro já tinha aprendido); a esponja tem silhueta **irregular** e o calor mora nos **vãos
+  internos**, nunca na superfície: brilho por fora leria como pedra pintada.
+- **O FORNO** (`stone + stone`, e é a única receita da família sem metal — por **cronologia**, não
+  economia: ele é a máquina que faz o primeiro ferro, e pedir ferro para construí-lo seria
+  circular). Duas bandejas, como a bancada, e a segunda não é combustível opcional: **o carvão é o
+  reagente**. Sem ele o forno nem acende — é a recusa mais honesta do jogo, porque é literalmente a
+  química (Fe₂O₃ + 3CO → 2Fe + 3CO₂).
+- **Ele não consome energia**, e isso é lei: um bloomery é movido a fole. Cobrar watts inverteria a
+  escada inteira — o jogador precisaria de rede para fazer o primeiro ferro e de ferro para fazer a
+  rede.
+- **A MARTELADA**, `BLOOM_BLOWS = 3`, no botão A com **qualquer item na mão**. Mão vazia e espada
+  não chegam lá (o A delas é combate), e isso está certo nas duas pontas: ninguém soca ferro quente
+  nem malha uma lupa com o fio de uma lâmina. A esponja vira barra **no mesmo tile** — uma bigorna
+  não carrega nada.
+- **A BIGORNA TEM DE SER CHÃO PELADO.** Uma primeira versão desta anotação dizia que "uma esteira
+  passa por ali sem junta nenhuma" — o jogo desmentiu na primeira medição: a esteira anda a cada
+  900 ms e o primeiro golpe só cai aos 1100 ms, então uma esteira **debaixo** da bigorna rouba a
+  esponja antes de ela apanhar uma única vez (zero pancadas, para sempre). A linha certa é
+  `esteira → [bigorna: chão pelado] → braço → baú`.
+- **O MARTINETE** (`gear + bloom`), 3 W. A roda d'água dá 4: **uma roda banca exatamente um
+  martinete e sobra 1 para a esteira** que leva o ferro embora. A primeira automação completa do
+  jogo cabe numa roda só, e o número foi escolhido para fazer essa promessa. A receita tem a
+  consequência mais bonita da reforma: **para construir a máquina que martela, é preciso ter
+  martelado à mão pelo menos uma vez.** Só se automatiza um trabalho que já se fez.
+
+### As decisões que custaram discussão
+
+- **Três itens, não um.** Um jogo que chama minério, esponja e barra de "ferro" perde a única etapa
+  que explica por que forno e carvão existem. Os três são coisas diferentes no mundo real.
+- **A mão e a máquina custam o MESMO** (`BLOOM_BLOWS` vale para as duas). Um número diferente para
+  o mesmo gesto faria o alívio de automatizar virar uma conta em vez de uma sensação.
+- **O carvão já existia** — cai de arbusto seco queimado. O fogo, que era um sistema à parte, virou
+  insumo industrial sem uma linha nova: queimar mato agora tem consequência de fábrica.
+- **O laboratório passou a comprar `ore`**, não `iron`. Um laboratório compra **amostra**, e isso
+  mantém o balcão do astronauta de pé. (A inversão econômica — minério bruto pagando melhor que
+  peça fabricada — segue de pé e é assunto da reforma da moeda, não desta.)
+
+### Armadilhas encontradas no caminho
+
+- **O herói não consegue encarar um item sem pisar nele** se andar contra ele de longe: item não
+  bloqueia. Na mão de um jogador isso se resolve sozinho (ele para ao lado e o tile à frente é o
+  item); numa fixture de teste, teleportar o herói para o tile vizinho **e** mandar um passo é o que
+  reproduz o gesto real.
+- **A caldeira pede DOIS elementos** — fogo *e* água. Um cenário que só acende a fogueira deixa o
+  martinete parado por um motivo que nada tem a ver com ferro.
+- **`lit` no schema é override de autoria**: quem o runtime acende sozinho é a fogueira mais próxima
+  do `playerStart`. Cenário que precisa de chama acende explicitamente.
+
+`npm run playtest -- forja` guarda os cinco elos: o veio entregando minério, o forno recusando
+minério sem carvão, a esponja saindo, as três marteladas da mão, o martinete fazendo o mesmo
+sozinho, e a escada continuando (ferro+ferro=engrenagem). Aviso de campo: `ferro` ficou vermelho —
+o mundo bootado tem **zero rochas** desde que ele virou biblioteca de chunks (commit anterior), e
+nada disso é desta reforma.
+
+### O forno passou a dizer o que precisa (2026-08-10)
+
+Ele era mudo: o A contra a alvenaria saía no vazio, e o jogador ficava sem saber por que a máquina
+não fazia nada. O conserto reusa o vocabulário da encomenda — **fantasma do insumo que falta, na
+bandeja em que ele vai** — com uma diferença que vale a distinção:
+
+> A bancada precisou de **catálogo** porque sabe fazer onze coisas e o jogador tem de **escolher**.
+> O forno sabe fazer **uma**. Não há o que escolher — então o plano dele **não se prega: é
+> permanente.**
+
+Consequências:
+
+- Os fantasmas de **minério** e **carvão** ficam nas bandejas vazias o tempo todo (com o corte de
+  distância de sempre). Fantasma nunca cobre carga: bandeja servida mostra a coisa de verdade, e
+  com as duas servidas não sobra fantasma nenhum — a boca acende no frame seguinte.
+- Trabalhando, ele **não pede nada**: quem está com a boca acesa já recebeu.
+- **O A contra a alvenaria ACENDE o pedido** (`nudge`) em vez de sair no vazio, e ele veste o
+  **mesmo keycap "Z"** da bancada — as duas máquinas que respondem ao A usam o mesmo anúncio, e
+  uma terceira que respondesse teria de usar o mesmo também.
+
+`forja` ganhou dois asserts: com o minério posto o fantasma que sobra é o **carvão**, e o A acende
+o pedido.
+
+### A esponja levou três versões descartadas (2026-08-10)
+
+Crítica recebida: *"limpa e simétrica demais para um iron bloom real — ele seria uma massa
+irregular, porosa, cheia de escória; reduziria o aspecto de pedra com núcleo de lava"*. Certeira.
+Cada versão morreu por um motivo com nome próprio:
+
+- **v1** — losango de brasa no centro. Lia como **"pedra com núcleo de lava"**: minério mágico de
+  RPG, não ferro recém-tirado do forno.
+- **v2** — escória boa, brasa espalhada pela massa toda. Virou **confete**: o calor perdeu direção,
+  e a silhueta continuou um **ovo** (buraco interno não conserta contorno liso — quem faz a leitura
+  de "massa" é a borda mudando de largura a cada linha).
+- **v3** — coluna vertical de brasa com um poro escuro no meio dela. Virou um **olho**, que é a
+  mesma armadilha que o bloco de ferro já tinha documentado: duas manchas escuras num campo claro
+  leem como face.
+
+**v4, a que ficou:** largura variando linha a linha (3, 7, 10, 12, 14, 12, 14, 14, 11, 9, 5, 3),
+beiradas serrilhadas, corcova à direita do centro e uma mordida aberta no flanco; **seis pontos de
+escória** em slate espalhados sem simetria dentro da massa; e o calor virou uma **rachadura
+diagonal** de 1–2px correndo do alto-direita ao baixo-esquerda — ela tem direção, não fecha
+contorno em volta de nada escuro, e cruza a peça em vez de morar no meio dela. Dois pixels vivos.
+
+Nota de campo: **no chão, o contorno roxo de pickup domina** (é o rim global de todo colecionável,
+para item ler no escuro). A esponja é o único item do jogo cuja identidade é o calor, então ela é
+a que mais sofre com isso — mas mexer no rim seria mudar um sistema global por causa de um sprite.
+Fica anotado, não consertado.
+
+### A fileira de teste do level-4 (2026-08-10)
+
+Pedido: *"deixe no mapa todos os itens que vou precisar pra já testar a máquina de martelo"*. O que
+faltava não era máquina — era **esponja**: sem ela, ver o martinete bater exigia minerar (3
+picaretadas), instalar o forno e esperar uma fornada de 4 s, três etapas entre a vontade de testar
+e o teste. Entraram **3 esponjas** ao lado do spawn (uma para martelar à mão e sentir o trabalho
+que a máquina tira de você, uma para pôr na bigorna, uma para gastar errando), **4 minérios** já
+quebrados, e **mais 2 cabos** — com dois pedaços só, onde o martinete podia morar já vinha
+decidido, e escolher o lugar é metade da peça.
+
+A prova de BFS pegou o erro na primeira rodada: a fileira caiu em **y=12**, e a grade vai de 0 a
+11. A mensagem dizia "inalcançável", o que mandava procurar parede — agora ela distingue **fora do
+mapa** de **bloqueado**, porque são dois defeitos diferentes com o mesmo sintoma.
+
+### "Não encontrei as esponjas" (2026-08-10)
+
+Elas estavam lá — a três tiles do spawn, e o servidor entregava as três. O defeito era de LEITURA,
+e tinha duas camadas:
+
+1. **O aro roxo de pickup vencia o sprite.** Todo colecionável ganha um contorno roxo para ler no
+   escuro; sobre uma massa cinza com uma fresta vermelha, esse aro domina e a peça vira um borrão.
+   A esponja é o único item do jogo cuja **identidade é estar quente**, e no chão ela não estava
+   quente coisa nenhuma. Ganhou um **brilho aditivo** que pulsa devagar (metal esfriando respira;
+   aura mágica não), atrás do item para o calor vazar por baixo e em volta em vez de pintar por
+   cima. É a mesma solução do graveto aceso, que já era o único outro item que brilha no chão —
+   e continua sendo quad, nunca luz THREE.
+2. **Elas estavam coladas embaixo da fileira de carvão**, e vistos de cima os dois leem igual:
+   calhau escuro com pontos quentes. Foram para o campo aberto de y=6, com espaço próprio — e
+   justamente onde o martinete vai morar, encostadas no cabo que sai da roda.
+
+A lição que fica: **um item novo precisa ser olhado NO CHÃO, ao lado dos vizinhos que terá**, e não
+só no preview da fábrica de sprites. O preview aprova a arte; o mapa aprova a leitura.
+
+### "Coloquei o martelo, coloquei a esponja, liguei na energia e nada acontece" (2026-08-10)
+
+A máquina estava certa. Reproduzi o caminho exato do jogador — pegar o martinete, andar, instalar
+com o A, largar a esponja — e com a bigorna limpa ele faz o serviço: `power 1`, golpe 1, golpe 2,
+**ferro**. O que faltava não era código: era a informação de **ONDE**.
+
+**A causa.** A peça nasce no tile à frente do herói **olhando para o mesmo lado que ele** — então a
+bigorna dela é o tile *depois* dela, **dois passos adiante de quem instala**. Quem põe a esponja
+"do lado do martelo", que é o gesto natural de todo mundo, põe no tile errado; a máquina fica
+parada, e nada no mundo explica por quê. As marcas de osso no sprite dizem qual lado ela bate, mas
+só depois de instalada e só para quem sabe procurá-las.
+
+**O conserto** é a linguagem que já existia: com o martinete na mão, o `PlacementHints` pinta o
+**quadrado branco** onde a máquina cai **e um quadrado FRIO no tile que ela vai bater**. É a mesma
+gramática dos vizinhos do extrator, e ela diz a coisa na única hora em que ainda é útil — antes do
+aperto.
+
+**Duas armadilhas encontradas medindo isto:**
+
+- **`itemManager.drop` EMPILHA sem checar o tile.** Dois `drop` no mesmo lugar deixam dois itens
+  lá, e `kindAt` devolve o primeiro. O jogador não consegue fazer isso (o `placeItemAt` dele checa
+  `isTileOccupied`, e toda máquina checa `occupied` antes de entregar), mas o meu primeiro teste
+  fez — e o resultado foi um martinete que parecia estar quebrado, batendo em ciclo numa bigorna
+  que "continuava sendo esponja". Era a segunda esponja empilhada.
+- **`page.keyboard.press` é curto demais para o andar do jogo**, que é lido por polling. Um passo
+  precisa de `down` + espera + `up`, senão o herói não sai do lugar e o teste "prova" que o A não
+  instala nada.
+
+## A BANCADA VIROU MESA, e escolher passou a CONSTRUIR (2026-08-10)
+
+Pedido: *"o prop que cria novos objetos, mude ele completamente — uma mesa de madeira com
+ferramentas em cima. Ao interagir, aparece a lista; se o jogador já tem os objetos, seleciona,
+confirma e ele cria. Não precisa colocar os itens nos slots, quero algo mais prático e rápido."*
+
+### A arte
+
+A caixa de metal virou **mesa**, e a silhueta é a decisão inteira: o jogo já tinha três caixas de
+madeira (baú, caixote, a antiga toolbox) competindo a 16px. A mesa ganha essa disputa por uma coisa
+que **nenhuma caixa tem — o VÃO embaixo**: tampo largo, duas pernas finas, ar entre elas, e uma
+travessa baixa que faz duas tábuas virarem mobília. Ninguém precisa reconhecer as ferramentas para
+saber que aquilo é uma mesa; a falta de corpo no meio já conta.
+
+Duas ferramentas, e só duas — um **serrote** deitado e um **martelo** —, escolhidas por silhueta
+**oposta** (barra longa horizontal × bloco compacto), porque a 16px três ferramentas viram sujeira
+e duas parecidas viram mancha. Elas são a única coisa clara do sprite, com sombra de ink por baixo:
+ferramenta colada é textura, ferramenta com sombra é objeto pousado ali.
+
+Uma versão intermediária foi descartada: a aresta do tampo em **ink navy cheio** lia como uma faixa
+azul atravessando a mesa. Virou madeira em sombra com ink só nos cantos.
+
+### O funcionamento
+
+**Escolher constrói.** O gesto é atômico: ou os insumos saem da mochila e o produto entra nela no
+mesmo frame, ou nada acontece. A versão de bandeja cobrava **três viagens** (largar A, largar B,
+buscar o produto) por uma decisão que o jogador já tinha tomado ao escolher no menu — e cobrava
+também o risco de largar um insumo e ser interrompido por um bicho no meio.
+
+- **Sem material:** a carta **treme** e o painel **fica aberto**. Fechar diria "pronto", e não
+  aconteceu nada; ficar aberto é o que deixa escolher outra coisa sem reabrir tudo.
+- O produto entra por `stash`, nunca `add`: **guardar nunca rouba a mão** — quem estava com a
+  picareta continua com a picareta.
+- A conta é feita **duas vezes** (uma para decidir, outra para gastar). Entre elas não há nada que
+  possa mexer na mochila, mas gastar sem reconferir é como se perde item numa refatoração futura.
+
+**O que morreu:** a encomenda pregada, os fantasmas de insumo na bandeja, a descida do degrau e a
+persistência do plano no save. Tudo aquilo ensinava a **pôr na bandeja**, que deixou de ser o
+caminho do jogador. Os chips do menu (moldura tracejada = não tenho, cor = onde consigo, contador
+`1/2`) sobreviveram inteiros — eles respondem à mesma pergunta e continuam certos.
+
+**O que NÃO morreu:** as duas bandejas. Um braço robótico não abre menu, então carga largada nos
+tiles de trás continua virando peça sozinha. Sem isso, uma reforma de UI teria matado em silêncio a
+única parte do jogo que produz enquanto o herói está longe — e é por isso que o cenário tem um
+bloco só para ela.
+
+### A armadilha que apareceu três vezes
+
+**O herói encarando a bancada pelo leste fica exatamente em cima do tile de saída**, e uma bancada
+com a saída ocupada RECUSA — comportamento certo dela, fixture errada minha. Aconteceu no `forja`,
+aconteceu de novo aqui, e nas duas vezes o sintoma foi "a máquina não produz". Vale como regra:
+**toda fixture que encara uma máquina de saída frontal precisa tirar o herói de lá antes de cobrar
+produção.**
+
+E uma segunda: **o painel só redesenha quando o cursor anda** (ele lê a view a cada desenho, não
+guarda foto). Mexer na mochila por fora não o avisa — um cenário que altera estado precisa empurrar
+uma seta para o redesenho acontecer.
+
+## Minério e cabo entram andando (2026-08-10)
+
+O jogador reportou o defeito na forma mais direta possível: *"tem um iron ore que você coloca como
+se fosse moeda e outro como se fosse um item"*. E era literalmente isso — duas coisas erradas ao
+mesmo tempo, uma de arte e uma de regra.
+
+**A de arte:** `spawnOreLoot` (o minério que salta da rocha de veio) ainda desenhava a loot com
+`iron-item`, o sprite do bloco de ferro **acabado**. Quando a cadeia do ferro entrou — minério →
+forno → esponja → martelo → ferro — o minério ganhou arte própria (`ore-item`, uma pedra com
+grãos), e este canal ficou para trás. Na tela: quebrar uma rocha cuspia um lingote, e o extrator ao
+lado cuspia uma pedra. Mesma coisa, dois desenhos, e nada no jogo explicando a diferença.
+
+**A de regra, que é a que importa:** o minério do veio entrava pelo canal das MOEDAS
+(`CoinManager.spawnLoot`) — voa, faz o arco, entra sozinho ao pisar. O minério caído no chão (o do
+extrator, o autorado num level) era um item comum e exigia o B, de frente, uma unidade por vez. O
+mesmo objeto com dois gestos. E o cabo tinha o mesmo defeito por outro caminho: ele nasce em
+**punhado de cinco** e se deita tile a tile, então desenhar uma rede de dez tiles custava dez
+apertos de botão para pegar de volta.
+
+A correção é uma lista, `WALK_PICKUP_KINDS`, lida uma vez por frame no mesmo bloco que já comia o
+carvão sob a tocha acesa. Ela guarda `ore` e `wire`, e a escolha do verbo é o detalhe que faz a
+coisa não virar armadilha: **`stash`, nunca `add`** — guardar não rouba a mão, então quem está com
+a picareta atravessa um monte de minério e continua com a picareta.
+
+**Por que uma lista e não "tudo entra andando":** porque apanhar uma espada sem querer é perder o
+controle do que se tem na mão. A lei da casa continua sendo *"nada entra por pisada, pegar é o B"*;
+o que existe agora é uma exceção **declarada e curta**, para o que se manuseia às dúzias. O assert
+do `forja` põe minério, cabo e uma **picareta** na mesma fileira e faz o herói andar por cima dos
+três: os dois primeiros somem, a picareta fica. Os dois lados no mesmo teste, de propósito — é o
+que impede alguém de "consertar" isto amanhã alargando a lista.
+
+O som também estava dobrado (`playSwordPickup` no canal da moeda, `playCoinPickup` no do chão) e
+agora é um só. Um objeto que soa de dois jeitos conforme a procedência é a mesma confusão da arte,
+só que pelo ouvido.
+
+**A pegadinha do teste:** a primeira medição disse que o cabo entrava e o minério não. Não era bug
+nenhum — `ItemManager.drop` **empilha** sem olhar o tile, e o tile onde eu larguei o minério já
+tinha uma picareta do level-4; `kindAt` devolve o de cima. A fixture é que estava mentindo. Já é a
+segunda vez que esse empilhamento faz uma peça sadia parecer quebrada (a primeira foi o martinete).
+
+## "Apertei Z pra construir a engrenagem e nada aconteceu" (2026-08-10)
+
+Um relato de uma frase que rendeu **quatro** defeitos, três deles invisíveis até alguém olhar a
+tela. O jogador chegou na bancada com "dois iron blocks", apertou Z na engrenagem e não aconteceu
+nada. Reproduzi cada camada no jogo rodando.
+
+### 1. Ele não tinha ferro — tinha minério com cara de ferro
+
+Level-4 espalha `ore` ×4 e tem três veios. Minerar um veio entregava a loot pelo canal das moedas
+desenhada com `iron-item`, **o sprite do bloco de ferro acabado** (o defeito que ele mesmo tinha
+reportado na mensagem anterior). Ele carregava dois minérios que na tela eram dois lingotes. A
+engrenagem pede `iron`, e a bancada recusou — corretamente. A correção da arte já estava feita.
+
+### 2. A recusa era muda
+
+E aqui está o verdadeiro "nada aconteceu": a carta tremia **3px por 240ms, sem som nenhum**, numa
+grade de onze cartas. Todo o resto do jogo recusa com `playToolboxRefuse`; a bancada era a única
+peça calada. Agora são três coisas ao mesmo tempo — o tranco maior, o som que o jogo já tem, e **o
+insumo que falta acende e incha** (`zh-point`). Tremer diz "não dá"; só o dedo apontado diz *o que*
+falta, e diz desenhando. A brasa ficou de fora de propósito: nesta tela ela quer dizer "isto você
+tem / a bancada faz", e um sinal que se contradiz em duas cartas não ensina nenhuma.
+
+### 3. A silhueta transformou o catálogo num muro de "?"
+
+Foi o que a screenshot mostrou e nenhum assert pegava: **onze cartas de vulto cinza idêntico**, com
+o nome em "?". Achar a engrenagem ali era adivinhar. A ideia era o Recipe Book do Minecraft, mas o
+Minecraft nunca esconde o **ícone** — ele esconde a receita. Numa grade, silhueta é ruído.
+
+A divulgação progressiva agora guarda o **nome**, nunca a **forma**: a arte fica só mais apagada
+(uma engrenagem continua lendo como engrenagem) e o que espera a primeira fabricação é o rótulo. O
+prêmio por construir é aprender como a coisa se chama, não poder enxergá-la.
+
+E o quadro-brasa de "**dá pra fazer agora**" deixou de depender de `known`. Ele era
+`ready && known`, então quem tinha os dois insumos na mochila via a carta sem moldura nenhuma só
+porque ainda não tinha visto o produto — o painel calava justamente o único fato sobre o qual o
+jogador podia agir.
+
+### 4. Dois ícones estavam QUEBRADOS, e o vulto preto escondia isso
+
+Tirado o `brightness(0)`, o forno e o martinete apareceram como `<img>` sem src — o placeholder de
+imagem quebrada do navegador. Eles entraram no `textures3d` (o lado 3D) e **não** no
+`assetManifest` (o lado Phaser), e toda arte que a UI 2D desenha pede um data URL do frame pelo
+Phaser. É a regra que já estava anotada — *textura nova = assetManifest E textures3d* — e ela custou
+duas peças invisíveis no catálogo.
+
+**A lição que vale além disto:** uma imagem quebrada chapada de preto é indistinguível de uma
+silhueta. Um efeito visual que uniformiza aparência também uniformiza *defeito*. O assert novo do
+`encomenda` pergunta `naturalWidth` de todas as onze cartas, que é a única pergunta que não mente.
+
+### O que o `fabrica` tem a ver com isso: nada
+
+Ele está vermelho com 9 falhas, e a tentação era achar que a colheita por pisada estava roubando a
+linha. Medi: desliguei o bloco da pisada e continuaram **9**. É fixture velha (o store guarda 10
+entidades e o assert cobra 4), e tudo depois disso é cascata. Um baseline por `git stash` não
+serve aqui — o HEAD é anterior à reforma da bancada inteira, e `git stash -u` ainda leva o próprio
+arquivo do cenário embora, o que faz o teste "passar" por não existir.
+
+### A mesa passou a ENTREGAR (2026-08-10)
+
+Pedido do jogador, e a razão dele é melhor que a implementação que estava lá: com o produto indo
+direto para a mochila, **a bancada martelava para ninguém**. A animação de forja existia, o som
+existia, e nada daquilo tinha consequência visível — o modal fechava e um número mudava numa tela
+que estava fechada. Agora o gesto tem as três partes que um jogador reconhece: a mesa trabalha, a
+peça SALTA dela num arco, e apanhar continua sendo o B.
+
+**O item entra no mundo no mesmo frame em que o material sai da mochila.** O arco é só o desenho
+por cima — um billboard descartável que voa e morre. Nem morrer no meio do voo apaga a peça, porque
+quem guarda o produto é o `ItemManager` e nunca um tween. O fantasma é necessário porque o
+`ItemPickup` é dono da própria posição (o `render` reescreve elevação todo frame, e o aro roxo com
+as cópias de contorno viaja junto): mexer nele por fora seria arranhar estado que o dono reescreve
+no frame seguinte — a armadilha do `apply()` que este projeto já pagou uma vez. A duração do voo
+(200ms) casa com o fade-in do item real, então a leitura é UMA coisa voando, nunca duas.
+
+**Onde ela cai foi a parte que só a tela ensinou.** A primeira regra era "o lado de quem pediu", que
+parecia óbvia e estava errada por construção: toda interação acontece de um tile colado na mesa,
+então "o lado do herói" é SEMPRE o tile do próprio herói — a peça pousava debaixo dele, escondida
+pelo corpo, e o voo inteiro terminava atrás do jogador. A regra final é uma linha: **os oito
+vizinhos ordenados pela distância até o herói, com o tile dele por último.** Isso cai onde a
+intuição cai — a peça flanqueia quem pediu, visível, a um passo. O tile do herói continua sendo
+destino válido em último caso (o B apanha o que está sob os pés, então nada se perde; o que se
+perderia é ver onde caiu).
+
+**E o destino é escolhido ANTES de gastar qualquer coisa.** Com todos os vizinhos ocupados a mesa
+recusa — treme e fica aberta — em vez de consumir o material e não ter onde pousar o produto.
+
+O `encomenda` guarda os quatro pedaços: não vai para a mochila, cai UMA no chão ao lado da mesa,
+não pousa sob os pés, e um passo + B a recolhe. Esse último bloco tem uma armadilha de fixture que
+custou duas rodadas: andar até a peça TIRA o herói da frente da mesa, e os blocos seguintes contam
+com ele encarando o móvel — voltar é dois passos, e o segundo é contra a bancada (sólida), que só
+vira o corpo.
+
+## O forno virou a bancada, e o carvão entra andando (2026-08-10)
+
+Duas peças de um pedido só: *"faça o forno funcionar igual a caixa de ferramentas. Faça o carvão ser
+pego como uma moeda tmb."*
+
+### As duas máquinas de fabricar agora são a MESMA tela e o MESMO gesto
+
+O forno tinha interação própria: o A nele acendia os fantasmas do que falta nas bandejas e balançava
+a alvenaria. Era bonito e era um erro de gramática — **duas respostas diferentes para o mesmo botão
+contra o mesmo tipo de peça.** Uma máquina pedia menu, a outra pedia que você adivinhasse a receita
+e trouxesse as coisas na mão, e a única forma de saber qual era qual era ter tentado.
+
+A unificação é uma palavra na tabela de receitas: `station: 'bench' | 'furnace'` (ausente = bancada,
+que é dona de dez das onze). `catalogOrder(station)` filtra, e `craftAtStation` **confere a estação
+antes de gastar material** — o painel de cada máquina só lista o que é dela, então isso nunca deveria
+disparar, e é exatamente por isso que fica lá: no dia em que uma carta aparecer no painel errado, a
+resposta é uma recusa, e não a mesa fundindo minério.
+
+O que muda entre as duas é o vocabulário, e ele vem de fora do overlay (a tela não sabe qual máquina
+a abriu): **título** ("WHAT DO YOU WANT TO SMELT?"), **cabeçalho de família** (`material` →
+"SMELTING", uma terceira família porque esponja não é ferramenta nem máquina: é insumo, e ainda por
+cima imprestável até levar três marteladas) e **rodapé** ("Z smelts it"). Um "Z builds it" numa tela
+de fundição seria a mesma mentira que o título fixo era.
+
+A pose também é de cada uma: a mesa martela, o forno **acende a boca** (`FRAME_LIT` + brilho por
+520ms). Um som e uma pose compartilhados fariam as duas parecerem a mesma coisa com skins
+diferentes — e a razão de existirem duas é que uma monta e a outra queima. O método nas duas se
+chama `playCraft()` de propósito: a cena chama pela MESMA linha, e um nome por peça faria o código
+de fabricar se bifurcar por causa de vocabulário.
+
+**As bandejas continuam vivas nas duas** — elas são o canal das MÁQUINAS (um braço robótico não abre
+menu), e o ciclo de 4s do forno com o carvão viajando para dentro segue intacto. O que morreu é a
+obrigação de passar por elas.
+
+### O código órfão, e o teste que o segurava
+
+`nudge()`, `isAsking` e `ghostFlashMs` ficaram sem leitor nenhum. E aqui está a parte que vale
+guardar: **o `forja` continuava verde sobre eles**, porque o assert chamava `furnaces[0].nudge()` na
+mão em vez de apertar o A. O botão deixou de chamar aquele método e o teste não notou — um teste que
+segura código morto é pior do que nenhum, porque dá confiança. Apagados os três, e o bloco do
+cenário agora asserta só o que sobrou de verdade: o fantasma na bandeja vazia.
+
+### O carvão
+
+Entrou no `WALK_PICKUP_KINDS`, e é a mais consumível das três matérias: cada fornada come um, e uma
+árvore queimada larga vários espalhados. **A regra antiga continua ganhando** — com a tocha ACESA,
+pisar nele o QUEIMA em vez de guardá-lo (o único jeito de reabastecer longe de fogo vivo), porque
+aquele bloco roda antes no mesmo frame e tira o item do chão. As duas convivem sem ambiguidade
+porque a pergunta é a mesma (passar por cima faz algo acontecer) e qual das duas depende de uma
+coisa que o jogador escolheu e está vendo na mão.
+
+Armadilha de teste anotada: `isTorchLit` é **derivado** (`mão === graveto && heldOnFire`), não há
+booleano para ligar. A primeira medição fez `s.isTorchLit = true`, não mudou nada, e o teste mediu o
+próprio engano — o carvão foi para a mochila e parecia que a precedência estava quebrada.
+
+## O que você PISA é o que você pega (2026-08-10)
+
+Pegar era "o tile da frente primeiro, o de baixo dos pés depois". A segunda chance existia por um
+motivo bom — o herói ATRAVESSA item, e sem ela ele teria de sair de cima e se virar para apanhar o
+que está pisando. O preço só aparece num chão com coisas encostadas, que é exatamente o chão de uma
+fábrica: com **dois tiles concorrendo pelo mesmo aperto**, o jogador não tinha como saber qual
+deles o botão ia escolher. Apertava esperando o graveto e vinha a picareta. E nenhum desenho
+conseguia consertar isso, porque a resposta dependia de qual dos dois tinha item primeiro.
+
+Agora é uma regra só, e ela é a que o jogador pediu: **pise no que você quer**. O tile da frente
+saiu do caminho de apanhar.
+
+### O aviso, e por que ele não é o balão que foi arrancado
+
+Sobre a cabeça do herói aparece o keycap do botão e o NOME do que está sob os pés — "X Take
+Charged Battery". A lei desta casa diz que uma TRAVA responde com física e nunca com texto (o balão
+de "falta um item" foi arrancado inteiro por isso), e vale a pena escrever por que este aviso não a
+fere: **ele não explica uma recusa, ele nomeia o alvo de um gesto que vai funcionar.** É a mesma
+coisa que o keycap "Z" sobre a cabeça de um NPC faz há muito tempo. A diferença entre as duas é a
+que separa uma placa de rua de um manual.
+
+Ele lê `pickupUnderfoot()` — **a mesma função que o botão chama**. Isso não é elegância: é a lei que
+o alvo de instalação já paga (marca e botão leem uma pergunta só), e aqui ela tem uma consequência
+extra. O gelo entra na conta porque item preso em bloco não sobe; anunciar o nome dele seria
+prometer exatamente o que o botão vai negar. A bolsa aberta também apaga o aviso, porque ela
+sequestra o B.
+
+### A ordem do B mudou, e isso foi decisão e não descuido
+
+Apanhar passou para ANTES do baú e do NPC. A ordem antiga era lei escrita ("o que está NA FRENTE
+ganha do que está embaixo"), e ela cai porque um aviso que pudesse ser roubado por um baú atrás do
+herói seria uma legenda mentirosa. O que se perde é conversar com um NPC enquanto se pisa num
+graveto — e não se perde de verdade, porque **falar é o A**, que é justamente a tecla que o keycap
+na cabeça do NPC sempre anunciou. O primeiro B apanha, o segundo conversa.
+
+### Duas medidas que saíram da tela, não da cabeça
+
+A primeira versão pousava o aviso a 0.92 tile e dimensionava o keycap pelo TILE. Na captura o texto
+cobria a cabeça do herói e o próprio item que ele nomeia, e a tecla saía com três vezes a altura da
+letra — a tecla gritava e o nome, que é a informação, virava legenda dela. Ficou em 1.5 tile de
+altura, com o keycap escalado pelo TEXTO (o glifo tem sete linhas, então `size / 7` iguala os
+corpos).
+
+### O que falta conferir
+
+A mudança de "frente" para "pés" toca todo cenário que apanha item, e eu não terminei essa
+varredura. O `encomenda` e o `forja` já falavam a língua nova (os blocos que escrevi hoje andam
+até a peça antes do B), mas os antigos — `itens`, `machado`, `pedra`, `braco`, `fabrica` — apanham
+de frente em vários pontos e provavelmente precisam de um passo a mais.
+
+## O martinete ganhou peso (2026-08-10)
+
+Pedido do jogador, e ele reescreve a peça inteira: a base passa a **caber um item**, o malho sobe
+alto e desce com tudo três vezes, e no fim a peça **salta para fora** num tile livre.
+
+### A bigorna virou a base, e isso conserta dois defeitos medidos
+
+Ela era o tile A FRENTE. O primeiro custo é de mira, e já tinha virado relato de jogador: a máquina
+nasce virada para onde o herói olha, então a bigorna caía **dois tiles adiante** de quem instalava —
+quem punha a esponja "do lado do martelo", que é o gesto natural, punha no lugar errado e a máquina
+ficava parada sem nada no mundo explicando por quê. O segundo é de gramática: era a única máquina do
+jogo cujo material ficava solto no chão, e uma esteira passando por baixo **roubava a esponja antes
+do primeiro golpe** (medido: esteira a cada 900ms, primeiro golpe aos 1100ms — zero pancadas, para
+sempre). Com a carga dentro, os dois somem: há UM lugar, ele é visível (o vão entre as guias) e
+ninguém passa por dentro de uma máquina. O `dir` deixou de significar coisa alguma aqui.
+
+### Peso não se desenha, se ENCENA
+
+O malho saiu do frame do corpo e virou **sprite próprio** — é essa a mudança que permite tudo o
+resto. Duas fases de frame nunca vão pesar; o que pesa é uma ordem de cinco tempos:
+
+    sobe devagar (330ms, ease-out) → PARA no alto (110ms) → despenca (85ms, quadrática)
+    → trava embaixo (75ms de hitstop) → recua num salto (150ms)
+
+A pausa no alto é a mais importante das cinco e a mais fácil de cortar por parecer tempo morto: é
+ela que promete a queda. E as curvas não são decoração — `1-(1-t)³` sai rápido e chega devagar (o
+peso vencendo o came), `t²` sai devagar e chega rápido (a gravidade). Trocá-las por retas apaga a
+peça: o mesmo movimento, com a mesma duração, deixa de pesar.
+
+No impacto, tudo junto e nada disso é estado: tremor de tela, escória radial (quente e vermelha),
+anel de choque no chão, a chapa da bigorna em **brasa** por 240ms, o malho **achatando** 16% e a
+peça na bigorna apanhando um soco de squash que volta com `Back.easeOut`. A **terceira** pancada é
+maior que as duas primeiras — sobe 22% mais alto, treme quase o dobro, solta o dobro de escória —
+porque ela é a que termina a peça, e um final idêntico aos passos anteriores não seria final.
+
+O impacto dispara na **borda de entrada** do hitstop, uma vez só. Amarrá-lo a um limiar testado por
+frame dispararia duas vezes num quadro longo, e um golpe duplo por lag é o tipo de defeito que só
+aparece na máquina de outra pessoa.
+
+### A bigorna aceita TUDO e trabalha uma coisa só
+
+A primeira versão recusava tudo que não fosse esponja. Duas coisas derrubaram isso. O aviso: ele diz
+"Place *o que você tem na mão*", e um aviso que só aparece para um item do jogo inteiro ensina menos
+que um lugar onde se pode pôr e ver o que acontece. E o braço robótico: se a bigorna recusasse
+cargas, ele precisaria saber o que ela aceita ANTES de largar — um braço que decide errado perde a
+carga em silêncio. Aceitando tudo, o pior caso é uma pedra pousada numa bigorna, visível, que o B
+devolve. O que ela **não** faz é martelar o que não sabe trabalhar: com uma pedra dentro fica
+parada, porque bater sem transformar seria barulho prometendo um resultado que nunca vem.
+
+Isso também mantém a linha de fábrica viva: `blocked` responde "livre" para um martinete de bigorna
+vazia (ele virou um destino de entrega, como uma bandeja) e "ocupado" quando há carga — e aí o braço
+espera, que é o que ele já faz diante de qualquer saída cheia.
+
+### A saída é a mesma da bancada
+
+O ferro salta por `deliveryTileAround` + `flingCraftedItem`, exatamente o cálculo que a mesa usa,
+porque "a máquina te entrega no chão" tem de ser uma coisa só no jogo inteiro. Sem chão livre, a
+peça **fica** na bigorna e ele tenta de novo todo frame: sumir com ela seria perder material em
+silêncio.
+
+## O martinete virou MÁQUINA — a arte, e o que a pancada move (2026-08-10)
+
+A peça já tinha peso de animação (acima), e mesmo assim lia errado: **um batente de porta**. Este
+trabalho é a arte e a encenação, e as duas se resolveram juntas porque no fim eram o mesmo problema.
+
+### O diagnóstico que o próprio linter dava
+
+`node spritefactory/factory.mjs check` acusava `value-range: dominant material (ink) spans only 14
+luma` nos dois frames de corpo. Traduzido: 78 dos 98 pixels opacos eram ink, em **dois tons quase
+iguais** — o objeto inteiro tinha UMA cor. Some a isso um retângulo simétrico com um buraco no meio
+e a leitura é inevitável: janela, cama de dossel, portal. Nenhuma quantidade de detalhe conserta um
+vão vazado, porque **dava para ver o mundo através da máquina**.
+
+### Três trocas, e a do meio é a que virou o jogo
+
+1. **Os montantes viraram TIMBER.** A rampa de madeira (`#b7916a`→`#63452c`) gasta 76 de luma no
+   mesmo lugar onde havia 14, e dá a esta peça uma matéria que nenhuma outra tem — o forno é pedra,
+   a caldeira é chapa, a bancada é mesa. Cada montante é um cilindro de 3px lido pela lei da casa:
+   meio-tom na quina que vira, brilho, sombra na face interna.
+2. **O vão virou MACIÇO.** É a troca que muda tudo. Uma calha escura da largura exata do malho, em
+   ink (não em slate: slate só tem 20 de luma de ponta a ponta, e o vão ocupa metade da peça — seria
+   a mesma doença com outra cor). O malho passou a correr DENTRO de alguma coisa em vez de flutuar
+   num buraco, e a silhueta virou um bloco sólido.
+3. **A bigorna ganhou bigorna.** Face de aço polido embutida num bloco de ferro, e o `#cdcdcd` é
+   exclusivo dela: é a única superfície da peça que PEDE um item.
+
+O ferro sobrou como **ferragem** — chapa no alto, cintas no meio dos montantes. Ferragem é
+repetição, e repetição é o que o olho lê como mecanismo.
+
+### O orçamento vertical, que é o verdadeiro autor do desenho
+
+O tile tem 16px e dentro deles precisam caber: travessa, curso do malho, malho, peça e bigorna. A
+soma ingênua dá 18, e cada linha dada a um é uma linha tirada do outro. Foi por isso que a travessa
+ficou com **uma** linha só, a bigorna com **duas** (face de aço + pé), e por isso o malho é
+**desenhado já pousado na bigorna**: com o fundo do curso em elevação zero, sobram 5,4px de subida
+(5,9 na última pancada) sem ele nunca precisar sair do tile. A v1 resolvia isso saindo: com
+`HEAD_TOP = 0.4` a haste subia **2,4px acima da borda** e o bloco tapava a travessa no alto do
+curso. Hoje o topo do malho no ponto mais alto fica na **linha 0,62** — medido rodando as curvas no
+papel, sem abrir o jogo.
+
+### A correção de campo: "não consigo ver o martelo batendo e subindo"
+
+A primeira tentativa desta reforma **acertou a matéria e errou o movimento**, e o relato foi exato.
+Três causas, e as três só aparecem com a peça rodando:
+
+1. **O malho tinha 4 linhas.** Massa pequena demais para se ler a distância — e eu a tinha
+   encolhido justamente para comprar curso.
+2. **A face dele era de ink**, a mesma cor do fundo da calha. A borda mais importante da peça — a
+   que encosta na bigorna — era **invisível exatamente onde a pancada acontece**. Trocar o vão por
+   uma calha escura tinha criado esse problema sem que nada apontasse para ele: o desenho passou no
+   linter, passou no preview do frame isolado, e só falhou montado e em movimento.
+3. **O curso ficou menor que o da v1**, e curso é o que conta o movimento.
+
+A saída não foi escolher entre massa e curso — foi parar de pagar os dois com a mesma moeda. O
+malho ganhou **seis** linhas de bloco e perdeu todo o ink (a face agora é o ferro mais fundo,
+`#5d6165`: 97 de luma contra os 29 do fundo). E a **haste virou parte do CORPO**: como ela é
+coberta pelo malho que sobe, ela **encurta** conforme ele se aproxima do alto — o curso fica contado
+duas vezes (o malho sobe *e* a haste some) sem gastar um único pixel do orçamento acima. A cinta de
+ferro desceu para a metade de baixo pelo mesmo motivo: é a metade que fica à mostra justamente
+quando o malho está em cima.
+
+A lição que fica: **o preview de um frame isolado não julga uma peça que se move.** Quem julgou foi
+uma tira montando corpo + malho + carga com a geometria real do billboard (`out/trip-hammer-cycle.png`),
+rodando as mesmas curvas de `drawHead` no papel.
+
+### O retrato (frame 3)
+
+O item no chão e a paleta do editor mostravam o **frame 1** — o malho sozinho, um tijolo de 6×4 que
+não é nada — e o frame 0 virou, com a calha maciça, uma caixa oca. O frame 3 é a composição dos dois
+(o malho já é desenhado na altura de repouso, então é literalmente uma sobreposição): a máquina como
+ela existe no mundo. Composição e não desenho novo, porque desenho novo dessincroniza.
+
+### O que a pancada move além do malho
+
+Com o curso menor que o da v1, o TAMANHO da pancada não pode mais vir da distância percorrida — tem
+de vir de **quanta coisa se mexe junto**. Cada golpe toca cinco coisas, e nenhuma delas é o malho:
+
+- **A peça ACHATA** — mais larga e mais baixa a cada golpe, porque é literalmente o que uma esponja
+  de ferro faz sob o malho enquanto a escória sai. E acende: o trabalho aquece o metal, e o calor
+  esfria sozinho até a próxima pancada.
+- **O malho para mais FUNDO a cada golpe** (`STOCK_ELEV`), até encostar no aço na última. É a mesma
+  fonte de verdade do tamanho da peça — ou o malho afundaria no vazio. Três pancadas idênticas eram
+  a mesma pancada três vezes; assim, **olhar a máquina já diz em que ponto da forja ela está**, sem
+  número, sem barra, sem legenda.
+- **A armação CEDE** um fio e volta com repique. É o único efeito que age sobre a máquina e não
+  sobre o ar em volta, e por isso é o que mais vende o golpe. Feito com escala e não com elevação:
+  baixar a elevação enfiaria a base do sprite por baixo do chão, onde ela briga em profundidade com
+  o tile.
+- **A escória voa em PARÁBOLA** e num leque baixo. Respingo que sobe e some lê como fumaça; um que
+  sobe, vira e DESCE lê como matéria. Tween não interpola trajetória, então o arco é uma conta por
+  quadro num objeto proxy.
+- **A poeira levanta no pé.** A escória conta o que houve na bigorna; a poeira conta que a pancada
+  chegou ao chão.
+
+E o malho ESTICA na queda antes de achatar no impacto. Squash sem stretch lê como um sprite que
+encolheu, e não como massa que chegou rápido.
+
+### Parar também é um desenho
+
+Vazia, a máquina FECHA: o malho desce e pousa na bigorna, e a peça inteira lê como uma coisa só, sem
+buraco preto no meio. Com carga e sem poder trabalhar (rede morta, ou uma pedra na bigorna), ele
+fica ERGUIDO — um malho tapando o que você acabou de pôr é a máquina escondendo a única informação
+que você foi ali buscar. E ele **caminha** até lá: teleporte de meia peça num quadro é o tipo de
+coisa que o olho registra como bug mesmo sem saber nomear.
+
+Para isso toda fase do ciclo passou a sair de **onde o malho está** (`phaseFrom`), e não de uma
+constante. É o que faz voltar a trabalhar depois de uma queda de energia — com o malho parado lá em
+cima — ser um movimento, e não um pulo.
+
+Guarda tudo: `npm run playtest -- forja`.
+
+
+## O martinete era outra máquina (2026-08-10)
+
+Três reformas seguidas melhoraram a matéria e não consertaram o defeito, e o relato do jogador foi
+ficando mais curto: primeiro *"não consigo ver o martelo batendo e subindo"*, depois *"ficou com um
+fundo preto e não consigo ver quase nada"*. A causa não era nenhum dos pixels que eu estava
+mexendo. **Eu estava desenhando a máquina errada.**
+
+### O que eu tinha desenhado, e o que um martinete é
+
+Guias verticais, uma massa correndo entre elas, um bloco de bigorna embaixo: isso existe e tem
+nome, mas é o **martelo de queda** (*drop hammer*, séc. XIX) e, no formato de arco, o **martelo a
+vapor** de Nasmyth (1839). O martinete — o que a ficção deste jogo sempre descreveu, movido a roda
+d'água — vem quatro séculos antes e é outra coisa: uma **viga pesada pivotada num mancal**, malho
+pendurado numa ponta, cames no eixo da roda erguendo a outra. A viga desaba **em arco**. Nada nele
+corre na vertical.
+
+Referência de domínio público, olhada de verdade antes de desenhar: o **Schwanzhammer de
+Trattenbach** (Baixa Áustria), o **belly helve hammer de Wortley Top Forge** e a xilogravura do
+**Nong Shu** de Wang Zhen (~1313) — a mesma máquina, setecentos anos antes, do outro lado do mundo.
+Nas três a identidade é a mesma coisa: a viga.
+
+### Por que a máquina errada tornava o problema insolúvel
+
+O martelo de queda esconde o movimento **dentro** de uma calha de 16px de altura, e nessa altura
+ainda têm de caber travessa, malho, peça e bigorna. Eu passei três versões negociando 3 ou 4 pixels
+de curso, e cada pixel que dava ao malho tirava da bigorna. Pior: para o malho se destacar dentro
+da calha, a calha tinha de ser escura — e escura, na iluminação real deste jogo, é **preta**. Foi
+exatamente o que o jogador viu.
+
+A viga desfaz o nó em vez de apertá-lo. Ela é **comprida**, então um giro pequeno no mancal vira um
+deslocamento grande na ponta: 6px de arco de graça, com a silhueta inteira mudando de ângulo. E ela
+atravessa o poste, o que dá uma **segunda coisa em movimento e em sentido oposto** — a cauda afunda
+quando o malho sobe, que é literalmente o came empurrando. Não sobrou nenhum fundo escuro para
+inventar: o espaço entre a bigorna e o poste é **ar**, como na foto.
+
+### Arco é FRAME, não rotação
+
+Prop neste jogo não gira (`setAngle` gira no plano da câmera, e o que precisa girar aqui está
+deitado no mundo). Então o ângulo é uma tira de frames — a mesma solução da roda d'água. São seis, um
+por pixel de altura da ponta, e **o pixel do mancal é idêntico nos seis**: é ele que ancora a viga
+no poste, e um frame com o mancal fora do lugar descola a viga da máquina.
+
+A animação continua sendo a mesma encenação de cinco tempos, com uma diferença: o índice do frame é
+calculado **fracionário** (as curvas de peso continuam valendo por inteiro) e só o último passo
+arredonda. Guardar o inteiro faria toda transição sair de um degrau. O squash saiu — viga de
+madeira não achata —, e o que dá tamanho à pancada continua sendo o que acontece em volta dela.
+
+### A lição, que é a única parte disto que vale para a próxima peça
+
+**Preview de sprite mente sobre luz.** O linter passou, o preview em grama clara convenceu, a tira
+de ciclo montada no papel convenceu — e no jogo, que é escuro e iluminado por fogueira, o vão navy
+virou um buraco preto. O que resolveu foi abrir o jogo de verdade: `/lab`, autorar a fixture
+(fogueira → caldeira → cabo → martinete), apertar P e **fotografar a máquina trabalhando**. Isso
+custa dois minutos e devia ter sido o primeiro passo, não o quarto.
+
+E antes dela, uma ainda mais barata: **conferir que máquina é essa.** Trinta segundos de referência
+teriam poupado três reformas.
+
+## As cartas ganharam MATO, e o vaga-lume mudou de dono (2026-08-11)
+
+Pedido: *"deixe os chunks compráveis do mundo aberto com mais tiles mais bonitos, mais flores,
+matos, árvores. Deixe com vagalumes voando. Adicione os props nos lugares que faça sentido."*
+
+As 14 cartas do baralho nasceram desenhando a IDEIA de cada uma — o lago, a pedreira, o cemitério —
+e nada mais. Fora dos poucos tiles que contam essa história, o chunk era um campo liso de terra
+roxa: `crater-quarry` tinha **zero** tiles de decoração, `timber-ranks` dois, `roadside-pond` três,
+`silent-meadow` quatro. Comprar uma carta por 9 moedas e receber um pátio pelado é a promessa
+principal do modo falhando na entrega.
+
+### O defeito que precisava cair PRIMEIRO: a costura raspava a carta
+
+O trabalho começou plantando, e a primeira foto mostrou um **sinal de mais de terra pelada** no meio
+de todo chunk comprado, com verde só nos cantos. A causa não era a plantação: era o assentamento.
+
+`openSeams` abre quatro faixas de estrada em toda carta colocada (N x5-7/y0-3 · S x5-7/y8-11 ·
+W x0-3/y5-9 · E x8-11/y5-9) para que **qualquer carta encaixe em qualquer outra** — e são
+**64 dos 144 tiles**, 44% do chunk, atravessando exatamente o miolo. Ela fazia isso com `clear`:
+chão de volta para terra, camada de cima a `null`, colisão a `false`. Tudo. Plantar ali era escrever
+na água.
+
+A garantia que a costura existe para dar é **uma só**: "esta faixa é passável". Grama, flor e
+cogumelo não bloqueiam nada, então não tinham por que morrer. `clear` virou `unblock`: só o que
+**bloqueia** é removido — frame sólido (`SOLID_UPPER_FRAMES`), chão sólido (o mar) e colisão
+pintada. De brinde, o pátio de pedra do `granite-pass` parou de ser raspado no cruzamento, que é
+onde ele mais aparece.
+
+### Como se planta: a moita, e não o salpico
+
+`node scripts/enrich-chunk-cards.mjs` (modelo enrich-*: LÊ o `world.json` e ACRESCENTA). Duas
+decisões desenham tudo:
+
+- **A decoração se AGRUPA.** Sorteio uniforme tile a tile faz textura de papel de parede — o olho lê
+  ruído, não lugar. O que entra é um campo de ruído de valor com lattice grosso interpolado:
+  moitas com miolo e franja. A **FLOR mora no miolo** (flor cresce onde o capim é fundo), o
+  **graveto na franja**. É a mesma regra nas 14 cartas, e é o que dá relevo a um chunk plano.
+- **Duas oitavas, e a segunda veio de um defeito medido.** Com um lattice só, uma fileira baixa
+  apagava uma **faixa inteira de 12 tiles** de ponta a ponta. Careca em faixa lê pior que chão
+  pelado: parece cortada. A oitava fina (célula 2, peso 0,36) quebra a faixa sem desmanchar a moita.
+
+Cada carta tem receita própria (paleta, `cover`, tamanho da moita, `bloom` — a altura a partir da
+qual a moita floresce), porque a densidade É caracterização: `silent-meadow` cobre 82% com 35 flores
+(a carta da foice precisa de mato para a foice significar algo), `glowing-ford` fica em 26 tiles e
+nenhum deles a menos de um tile da lava, `sunken-graveyard` só deixa o verde entrar pela rachadura
+da laje e só floresce em cogumelo. Total: **1.178 tiles de mato/flor, 55 árvores, 64 props**.
+
+### Nada que bloqueia entra sem prova de BFS
+
+Pinheiro é tile sólido; junco, pedra e flor-da-lua fechada são props sólidos. Um deles no corredor
+errado **sela a carta para sempre** — e uma carta é comprada uma vez, sem desfazer. Cada candidato é
+posto sozinho no mapa (já com as costuras abertas, que é como a carta assenta) e recusado se
+aumentar os tiles órfãos, desligar uma das quatro bocas de estrada ou isolar algo com que se
+interage. O teste é **não piorar**, nunca "zerar": `whispering-forest` e `glowing-ford` já nascem com
+bolsões de propósito (a amostra do outro lado da lava é o prêmio das botas). Dez candidatos foram
+recusados, e a contagem de órfãos das 14 cartas ficou idêntica à de antes.
+
+Prop bloqueante também não entra em costura — ali o BFS aprovaria (a faixa tem 3 de largura), mas é
+uma parede plantada na única passagem garantida.
+
+### A idempotência, que quase não aconteceu
+
+A primeira versão pedia "6 árvores nesta carta". Na segunda rodada as zonas já estavam cheias de
+MATO, então ela encontrava seis buracos novos e plantava seis árvores a mais — para sempre. A lei do
+enrich-* ("mire num TOTAL, não num delta") é exatamente sobre isso: `perZone` é quantos tiles
+sólidos a zona termina tendo, contando os que já estavam lá. `--check` falha se o disco não for o
+ponto fixo.
+
+### O vaga-lume mudou de dono: ele mora no MATO
+
+Ele já existia e **não aparecia**, por uma razão simples: acendia só dentro do halo de uma fogueira
+**acesa** (`near`, 7 tiles), e no construtor de mundo toda fogueira de carta nasce apagada. O único
+lugar do modo com vaga-lume era o acampamento.
+
+Agora quem o chama é a vegetação. `buildTerrain` indexa, na **mesma varredura** que monta a
+decoração, os frames que contam como verde (capim, folhagem, arbusto florido, cogumelo — e
+deliberadamente não a serrapilheira: piscar sobre cascalho não diz nada), e cada bicho sorteia uma
+moita real dentro do quadro e orbita ali. É uma regra que o mundo ensina sem legenda — **onde pisca,
+é verde** — e é o que faz plantar flor numa carta povoá-la de vaga-lume sem tocar em código. A
+fogueira não saiu da conta: perto dela o enxame **adensa**, o que sobrou da recompensa antiga sem
+ela ser a condição de existir. Onde não há verde, o bicho some inteiro (parquea abaixo do chão, como
+a brasa sem fogo) e volta a procurar a cada 0,45s — não todo quadro, ou um mundo de pedra pagaria a
+varredura de graça.
+
+O voo deixou de ser um seno: arrancada curta, atrito, mola fraca puxando para a moita e uma coleira
+de 1,9 tile. O que lê como bicho é a **mudança brusca de direção** entre trechos de deriva, não a
+oscilação suave. A altura acompanha a velocidade (quem corre, sobe), senão o enxame voa numa mesa de
+vidro. E cada um pisca no **próprio** ritmo (1,5–3,4 Hz): com um só, trinta bichos acendem no mesmo
+quadro e aquilo vira um estrobo.
+
+Duas coisas foram medidas em FOTO e não no papel: o expoente do pisca era 3, o que deixa o bicho
+~85% do ciclo escuro — com 44 deles numa caixa maior que a tela, sobravam dois pontos por quadro.
+Virou quadrado, mais um resto de brasa de 0,12. E o ponto tinha 0,16 tile de tamanho: invisível.
+Virou 0,34.
+
+Nenhuma luz THREE nasce disto — são Points aditivos. A contagem de luzes está selada para a run, e
+um vaga-lume que iluminasse o chão recompilaria o mundo inteiro na primeira vez que acendesse.
+
+### O acampamento veio junto, com um bug de brinde
+
+O chunk inicial gerava decoração de `DECOR_FRAMES = [0, 6, 7, 8, 10, 11]` — e o **6 é um frame de
+CHÃO** ("Terra 2"), opaco. Ele virava um quadrado de terra flutuando na camada de cima, tapando o
+chão de que devia fazer parte. Saiu da lista, e o acampamento ganhou a mesma gramática das cartas
+(moita com flor no miolo): um acampamento pelado no meio de vizinhos floridos leria como chão que
+não terminou.
+
+### O que guarda
+
+`npm run playtest -- jardim`: piso de decoração por carta, flor de verdade nas três cartas de
+jardim, a costura preservando mato e abrindo parede na MESMA compra (a caverna das aranhas exercita
+os dois ramos), a travessia de ponta a ponta de uma carta plantada, e o enxame — pousado em
+vegetação, no ar, voando, piscando fora de fase, sem uma única luz nova.
+
+## O baralho vira uma ESCOLHA do editor, e o astronauta pede ferro (2026-08-11)
+
+Quatro pedidos numa passada só: um lugar no editor para escolher quais cartas o jogador pode
+comprar; deixar só o astronauta entre os moradores; pôr uma mesa de ferramentas no mapa dele; e uma
+fala que explique o que ele quer.
+
+### O baralho: uma caixa por carta, no lugar onde as cartas já moravam
+
+`catalog.enabled` no `world.json` (ausente = está no baralho), lido num ponto só —
+`getChunkTemplates`. Isso é o essencial: quem pergunta "que cartas existem?" (o portão, a mão de
+três, o baralho do overlay) pergunta sempre pela mesma função, e um segundo filtro rio abaixo seria
+uma segunda resposta livre para discordar da primeira.
+
+A UI é uma lista de caixas no topo da **Biblioteca de chunks**, e não uma tela nova, porque "que
+cartas existem" e "esta carta está no jogo" são perguntas sobre o mesmo objeto: separá-las faria o
+autor editar a carta aqui e procurar o interruptor dela ali. Cada linha mostra o que se decide ao
+montar um baralho — o **morador** (a carta é uma cena de NPC) e as covas de inimigo —, e o default
+do campo é a AUSÊNCIA e não `true`, para que carta escrita antes deste campo continue valendo e o
+arquivo não encha de `enabled: true` que não diz nada.
+
+A lista **se recusa a esvaziar o baralho**. Sem carta nenhuma o portão não tem o que oferecer, e um
+mundo que parou de crescer é indistinguível de um bug.
+
+### O selo de estrada tinha um Infinity guardado
+
+`minCost()` é um `Math.min` do catálogo — de lista vazia ele devolve **Infinity**, e o selo
+anunciava `NEEDS Infinity COINS`. A estrada lia como cara em vez de acabada, e o botão não fazia
+nada. Isso já era verdade quando o baralho de 14 cartas se esgotava; com o baralho escolhido a mão
+(hoje 7), virou um estado normal. Agora ele diz `ROAD'S END — NO LAND LEFT TO CLAIM`.
+
+### Só o astronauta, e as outras sete cartas continuam inteiras
+
+Sete cartas de NPC saíram do baralho (gato, empresário, operário, pintora, vendedor, poeta, morte) e
+**não foram apagadas**: terreno, props e morador continuam no arquivo, prontos para voltar com um
+clique. É exatamente o que o campo `enabled` existe para permitir — uma região pronta no editor
+antes de o jogo poder comprá-la.
+
+### A mesa de ferramentas, e o defeito que ela quase trouxe junto
+
+A bancada entrou pelo `enrich-chunk-cards.mjs` (com `dir`, que é comportamento e não enfeite: ela
+olha para o SUL, bandejas acima, saída na estrada que vem do sul) — então ela passou pela mesma
+prova de BFS de todo prop que bloqueia.
+
+Só que autorar uma MÁQUINA numa carta destapou um buraco velho. `despawnPropsOutside` varre só o
+cenário: a fábrica inteira fica de fora **de propósito**, porque uma peça que o jogador construiu
+não está em template nenhum e sumiria para sempre se fosse varrida. O outro lado dessa moeda nunca
+tinha sido escrito — voltar a um chunk cuja carta autora uma dessas peças manda **construí-la outra
+vez**, e a cada ida e volta são duas máquinas empilhadas no mesmo tile. A guarda ficou do lado do
+NASCIMENTO, que é o único que sabe as duas coisas ao mesmo tempo, e é uma pergunta só: já tem prop
+neste tile? O `world-builder` passou a cobrar isso chamando `spawnStreamedProps` duas vezes com a
+mesma lista.
+
+### O pedido do astronauta
+
+Ele vendia MINÉRIO a 3 moedas e falava de amostras. Agora ele quer **ferro para o casco**, compra a
+barra a 9 (o preço mede o trabalho: minério + carvão + forno + três marteladas), e as cinco falas
+são a cadeia inteira — picareta, veio, carvão do mato queimado, forno, martelada — terminando na
+escolha que o pedido do usuário pede em uma frase: *"faça à mão, ou construa o extrator e o
+martinete e deixe que eles trabalhem enquanto você anda."*
+
+Cada substantivo em maiúsculo da fala é uma coisa que existe **na carta dele**, e é por isso que
+quatro **moitas secas** entraram junto com a bancada: o mato queimado é a ÚNICA fonte de carvão do
+jogo, e sem ele o forno não reduz óxido nenhum — a fala pediria uma coisa impossível com confiança.
+Fica um aviso de balanço para quem for jogar: o carvão cai em 25% dos arbustos e o arbusto queima
+uma vez só, então ferro em série ainda depende de religar uma carta com mato (o gato, a campina) no
+editor.
+
+A fala mora em TRÊS lugares e os três foram atualizados: `public/world.json` (a fonte do runtime, e
+a única que carrega o balcão), `locales/en.json` (que VENCE sobre o world.json para nome e falas) e
+`NpcDialogs.ts` (o que o editor de diálogos mostra).
+
+### O vaga-lume encolheu
+
+Relato do usuário na mesma sessão: "ficou muito grande". Ele nasceu em 0,16 tile (invisível), passou
+por 0,34 (uma bolha amarela maior que um cogumelo) e parou em **0,18** — o que o faz enxergar não é
+o tamanho, é o bloom em volta de um núcleo aceso.
+
+### O que guarda
+
+`npm run playtest -- world-builder` (o baralho de 7, a carta desligada que nunca é oferecida mas
+continua no arquivo com o morador, e a não-duplicação do prop autorado) e `-- jardim`, que passou a
+medir a BIBLIOTECA e não o baralho: plantar é propriedade das cartas autoradas, e um teste que
+encolhesse junto com o baralho pararia de guardar as sete que o autor pode religar amanhã.
+
+## O VENTO — a mata parou de ser uma fotografia (2026-08-11)
+
+Pedido aberto: *"adicione algo pra deixar o visual do jogo mais bonito."* A escolha foi o vento, e
+ela vem de um argumento que o próprio repositório já tinha feito uma vez. A água deste mundo era uma
+FOTO até o `seaFlow`; o mar mexeu e o mundo inteiro pareceu outro. O que sobrou parado depois disso
+foi a coisa de que o jogo mais tem: **a mata**. São 846 tiles de árvore no arquivo de origem, mais
+os pinheiros de toda carta, mais o capim que acabou de ser plantado — e nada disso se mexia um
+pixel.
+
+### Onde ele mora: no VÉRTICE, e em duas malhas que já existiam
+
+Zero draw calls novos, zero luzes, zero objetos: é um deslocamento no vertex shader das duas malhas
+fundidas do terreno, e ele desaparece do orçamento de frame. As duas geometrias pedem gestos
+diferentes, e cada um deles o jogo JÁ TINHA:
+
+- **Em pé (`wind: 'lean'`)** — só os dois vértices do topo saem do prumo, o pé fica plantado. É
+  literalmente o gesto de `shakeSolidTile`, o tranco que o machado dá numa árvore, em regime
+  permanente. O peso é a ALTURA AO QUADRADO: linear, a árvore inteira deslizava de lado em vez de
+  vergar.
+- **Deitado (`wind: 'stir'`)** — um quad no chão não tem altura para inclinar, então ele gira em
+  torno do próprio centro. É o gesto de `updateRustles`, o que o mato faz quando o herói pisa nele.
+
+E o vento COMPÕE com os dois: o atributo carrega o CENTRO ABSOLUTO do tile (e não um offset fixo),
+então o local que ele gira é o que estiver no buffer naquele instante — se o rustle já rodou os
+cantos, o vento roda o resultado. Foi essa escolha que evitou um vento que apagasse o pisão.
+
+### A onda ATRAVESSA o mundo
+
+Três termos, e cada um consertou o que o anterior denunciou: a onda base viaja na diagonal (a
+rajada corre pelo campo em vez de piscar tudo junto); uma segunda harmônica em 2,37× (incomensurável
+com a primeira) tira o metrônomo, senão a mata volta ao mesmo lugar a cada dois segundos e o olho
+pega o loop; e um INCHAÇO de comprimento enorme dá calmaria e rajada, que é o que separa "vento" de
+"vibração". A fase vem sempre do TILE, nunca do vértice — dois cantos do mesmo quad com fases
+diferentes não balançam a planta, **esticam** ela.
+
+Amplitude: `0,042` tile no topo, contra `0,123` (tan 7°) do tranco do machado — um terço. O que num
+golpe é impacto, num loop infinito vira enjoo.
+
+### O que NÃO balança, que é a parte que se erra em silêncio
+
+As malhas do terreno são fundidas por CAMADA, não por assunto: o mesmo mesh em pé carrega o
+pinheiro e o **TÚMULO**; o mesmo mesh deitado carrega o capim e o **SEIXO**. Um vento aplicado à
+malha inteira sacode a lápide do cemitério — e uma lápide balançando desmente, num quadro, a solidez
+de tudo o mais que está parado. Quem separa é uma máscara por vértice (`aWind`), alimentada por duas
+listas de frames. Medido no cemitério, que tem os dois na mesma malha: pinheiro 75/75 e árvore seca
+9/9 obedecem; cabeça na estaca 4/4 e túmulo 8/8 ficam de pedra. No chão: folhagem 80/80 estremece;
+cogumelo, graveto, seixo e osso, nenhum.
+
+### O que quase passou batido
+
+A primeira medição foi feita no CEMITÉRIO com o vento em 7× e pintou de rosa a tela inteira — chão
+de pedra incluso. Não era o vento: eram as tochas piscando (a luz é quantizada num grid, então um
+tremeluzir muda o tom de cada texel iluminado) mais a deriva de mão da câmera. **A/B sem controle
+mede o ambiente, não o efeito.** Refeita na floresta (nenhuma fogueira, nenhuma água) e com as
+partículas desligadas: parado 0,95%, brisa 2,09%, vendaval 5,36% — o vento é o triplo do chão
+parado, e escala com o knob. É a mesma lição que a água do `montanha` já tinha escrito.
+
+`hd3d.wind` é um knob VIVO (0 = mundo parado, 1 = padrão, 2 = o dobro), porque "quanto de vento" é
+decisão de olho — e mudá-lo é um uniform, nunca um shader novo: 38 programas antes, 38 depois.
+
+Guarda tudo: `npm run playtest -- vento`.
+
+## A ECONOMIA DO PRÓLOGO: zero moedas, ferro como dinheiro, e a Morte no fim (2026-08-11)
+
+Pedido: começar com zero moedas; equilibrar (não pode ser fácil ficar comprando carta); o
+astronauta paga, e o ideal é montar o martinete para acelerar; e uma carta cara que fecha o
+prólogo, com a Morte no meio dela agradecendo o teste.
+
+A bolsa começava em **100**, e 100 comprava o baralho inteiro sem o jogador fazer nada: as cartas
+eram um menu e o mundo, uma tela de escolha. Zerar isso não é um número — é a espinha que faltava.
+
+### A escada, medida em barras de ferro
+
+O astronauta compra a barra por **9**, e é essa a moeda em que todo preço foi escrito. A caveira que
+entra pela estrada escura paga **1**. Daí sai a curva inteira:
+
+- **A cratera do astronauta custa 3** — a carta mais barata do baralho, de propósito: é a única que
+  o dinheiro de espada compra, e é a que ENSINA o jogo. Três caveiras, pouco mais de um minuto.
+- **Carta comum: 12 a 30** (uma a três barras). **O fim do prólogo: 90** — dez barras, que ninguém
+  junta na mão sem pôr uma máquina para bater.
+
+A conta fechada do baralho de hoje (8 cartas): 3 · 12 · 14 · 18 · 22 · 26 · 30 · 90 = **215 moedas**
+para comprar o mundo inteiro, ≈ 24 barras. Mas o CAMINHO CURTO até o fim são **2 cartas e 93
+moedas**: a cratera (3 caveiras) e o limiar (10 barras). Tudo entre uma e outra é escolha, e é
+disso que o modo vive — as seis cartas do meio se pagam em terra, não em progresso obrigatório.
+
+### A oficina, e o fundo falso que ela tapou
+
+A carta do astronauta virou a fábrica-tutorial: veio, rocha, mato seco, bancada, **machado**,
+**balde**, duas **árvores secas** e uma **poça**. Cada peça está lá por uma trava que existia:
+
+- **Machado**, porque a madeira era inalcançável. O machado se fabrica com graveto + pedra, e
+  graveto só sai de árvore cortada A MACHADO: circular, e portanto zero madeira no mundo inteiro.
+- **Árvore seca**, porque ela **rebrota** — é a única fonte renovável de lenha.
+- **Poça + balde**, porque a caldeira ferve água, e ela é a única usina construível ali (a roda
+  d'água pede rio e não se fabrica). Sem isso o martinete que o pedido cita não tem de onde vir.
+
+E a **CARVOARIA**: madeira + madeira no FORNO vira carvão. O carvão só nascia de arbusto queimado,
+com 25% de chance e sem rebrota — ou seja, todo mapa tinha um número FINITO de barras dentro dele, e
+a fábrica morria de fome depois da primeira fornada. Uma carvoaria é exatamente isto (lenha cozida
+sem oxigênio), é a mesma máquina e a mesma química, e devolve ao ferro um gargalo de TEMPO em vez de
+um teto de estoque.
+
+Fica um limite consciente: a bandeja do forno continua conhecendo só minério + carvão, então o
+carvão se faz no MENU, à mão. O martinete acelera a marteladas — que é o que foi pedido —, e a
+linha 100% automática continua sendo um degrau para depois.
+
+### A mão sempre traz o que dá pra pagar
+
+O selo anuncia o preço da carta mais barata do BARALHO; a mão eram três cartas sorteadas. Com o
+dinheiro exato para a mais barata, o botão dizia "BUILD" e a mesa podia não abrir — porque aquela
+mão específica veio cara. Era azar raro com 100 moedas; com zero virou o caso comum. Agora
+`offers(coins)` troca a carta mais cara da mão pela mais barata que o jogador consegue pagar. A
+tensão do modo tem de vir do PREÇO, nunca de qual mão saiu.
+
+E o selo aprendeu a dizer que acabou: `minCost()` é um `Math.min` de lista vazia — **Infinity** —, e
+com o baralho esgotado ele anunciava `NEEDS Infinity COINS`. Hoje: `ROAD'S END — NO LAND LEFT`.
+
+### A carta final
+
+`prologue-end` ("Death's Threshold", 90): um adro de laje no meio do campo, roda de túmulos,
+pinheiros fechando o horizonte e a Morte parada no centro. As duas fogueiras ficam a 4,5 tiles dela
+— a distância é o motivo de serem essas casas: NPC com fogueira apagada a menos de 3,2 fala as
+linhas de MEDO (`gateDialog`), e o agradecimento do fim do prólogo atrás de um fogo que o jogador
+talvez não consiga acender seria a pior porta trancada do jogo.
+
+Guarda tudo: `npm run playtest -- prologo` — bolsa zerada, a caveira que paga, a mão que sempre tem
+carta, a oficina inteira, a carvoaria fabricando de verdade pelo menu do forno, e a Morte dizendo
+que o prólogo acabou.
+
+## A MOEDA: um giro, um ímã e um arpejo (2026-08-11)
+
+Pedido: melhorar o visual e o *juice* da moeda. Ela era um quadrado de UMA cor com um furo no meio,
+parada, apanhada por pisão.
+
+- **Ela GIRA** (`spritefactory/sprites/coin.mjs`): quatro poses — cara, três-quartos, fio,
+  três-quartos de volta. E o ciclo **não é uniforme**: um disco girando tem largura aparente
+  |cos θ|, então ele passa metade do tempo na cara e um sexto no fio. Amostrar os quatro frames em
+  tempos iguais (a primeira versão) deixa a moeda três quartos do tempo estreita, e um punhado no
+  chão vira um monte de PALITOS — foi exatamente o que a primeira foto mostrou.
+- **Ela vem sozinha.** Dentro de ~2 tiles a moeda acelera até o herói e é apanhada ao encostar. É a
+  diferença entre catar item e receber dinheiro, e é o que faz um punhado no chão ser um convite.
+- **O tom SOBE.** Moeda cai em punhado (uma venda de nove barras paga nove), e nove vezes o mesmo
+  blip é ruído: cada moeda seguida da anterior toca meio tom acima, teto de uma oitava, e a
+  sequência zera após 700ms sem nenhuma. É o truque mais velho do gênero, e transforma punhado em
+  arpejo.
+- **O instante da coleta tem pixel**: um anel que abre no chão e seis fagulhas douradas. Ela já
+  pulava e voava para o contador, mas o momento em que ela vira dinheiro não tinha desenho — e é
+  esse momento que o jogador está tentando repetir.
+
+Duas correções de campo vieram por foto: a fita de 4 frames aparecia inteira em cada moeda (faltava
+`frameW` em `textures3d` — o mesmo defeito que o coração documenta ali), e o disco maciço novo
+ocupava o dobro de tinta do aro vazado antigo, então o tamanho voltou de 0,62 para **0,44** tile.
+
+## O SELO DA ESTRADA vira um marco de RUNAS (2026-08-11)
+
+O tile em que se compra o próximo pedaço do mundo era a arte da PLACA DE PRESSÃO com um banho de
+cor: dourado quando dava para pagar, cinza quando não. Errado duas vezes — um botão de máquina
+largado no mato não diz "aqui acaba a estrada", e reusar a arte de uma peça de circuito ensina que
+o tile é uma máquina que alguém liga.
+
+A primeira reforma desenhou uma pedra de limite cinza com uma moeda gravada. Certa na leitura,
+errada no gênero: virou uma tampa de bueiro dourada — e o ouro, sob a fogueira e o bloom deste
+jogo, estourava num ovo amarelo chapado, apagando justamente o desenho que era a informação.
+
+O que ficou é **roxo e mágico**, que é o que o gesto merece: este tile faz um pedaço de mundo
+NASCER do escuro. Um disco de pedra violeta com uma **runa em cruz** gravada (as quatro estradas que
+saem de um chunk), uma quina polida em cinza-lavanda — a única cor clara da laje, e ela existe
+porque violeta sozinho não tem escada de valor e a pedra saía chapada — e dois estados que são a
+mesma pedra com luzes diferentes: dormente, o sulco escuro; desperta, a runa em orquídea com dois
+pixels de núcleo branco e um **halo violeta respirando** por baixo (quad aditivo, nunca uma luz
+THREE — a contagem de luzes está selada, e um marco que acendesse de verdade recompilaria o mundo
+na primeira moeda apanhada).
+
+## A BANCADA MOSTRA UM DEGRAU DE CADA VEZ (2026-08-11)
+
+Relato: *"hoje a caixa de ferramentas já tem tudo listado e pode ficar confuso com tanta
+informação. Se ele fez o forno é o começo, primeiro passo, então só aparece ele, e depois aparece
+outras coisas."*
+
+O catálogo era uma decisão consciente — está escrito no próprio arquivo: *"o catálogo mostra tudo,
+sempre — o catálogo É a lista de ambições"*, com a divulgação progressiva reduzida à silhueta do
+nome. A intenção era boa e o efeito, medido em quem jogou, foi o oposto: **onze cartas na primeira
+abertura não são ambição, são uma parede**. Quem acabou de fazer o primeiro forno não precisa saber
+que existe extrator — precisa saber qual é o próximo passo.
+
+### A escada
+
+`LADDER`, em `toolboxRecipes.ts`, e ela não é uma ordenação: é a cadeia do ferro contada na
+sequência em que ela acontece. Forno (a única máquina que não pede metal) → machado (abre a
+madeira, e o carvão com ela) → engrenagem → **martinete** (automatizar a martelada que ele acabou
+de dar à mão) → caldeira e cabo (a energia que o martinete pede) → esteira, braço, baú → extrator →
+foice. O forno tem a sua: carvão, depois esponja — a ordem da própria química.
+
+`catalogSteps(station, seen)` devolve **os degraus cumpridos mais o primeiro que falta**. "Cumprido"
+é o produto já ter passado pelas mãos do jogador (`seenItems`), e não um contador de fabricações,
+porque a pergunta que interessa é "isto ainda é novidade?" — assim o machado que o astronauta
+deixou no chão também abre o degrau seguinte. Descobrir pelo mundo e descobrir pela bancada ensinam
+a mesma coisa.
+
+### O que caiu junto, e por quê
+
+- **A silhueta.** Ela existia para uma lista de onze cartas em que a maioria era desconhecida. Numa
+  lista de duas ou três, em que a desconhecida é exatamente a que o jogador precisa ENXERGAR,
+  apagar a arte é o oposto do que se quer.
+- **Os cabeçalhos de família** ("FERRAMENTAS", "MÁQUINAS"). Eram o índice de um catálogo; num painel
+  de duas cartas o título é maior que o conteúdo que ele organiza. E a ordem passou a IMPORTAR: ler
+  de cima para baixo é ler a ordem em que as coisas foram aprendidas, terminando no próximo passo —
+  agrupar por família embaralha exatamente isso.
+- **O painel de largura fixa.** 760px em volta de uma carta só é uma tela com 80% de vazio, que
+  parece quebrada e não minimalista. Ele passou a encolher com o conteúdo (`fit-content`), e a
+  grade virou `auto-fit` — com `auto-fill` a carta única ficava espremida num canto de uma grade
+  fantasma.
+
+### Duas armadilhas que este trabalho pagou
+
+1. **O `render` casava carta e entrada por ÍNDICE.** Funcionava porque as duas listas saíam na mesma
+   ordem de família; no minuto em que a escada passou a ordenar por progresso, a carta 0 (a
+   primeira FERRAMENTA no DOM) recebeu o estado da entrada 0 (a primeira MÁQUINA da escada) e o
+   painel pintou a moldura de "novo" na carta errada, em silêncio. Agora casa por `kind`.
+2. **Crase dentro do CSS.** O CSS do overlay mora num template literal, e uma crase num comentário
+   fecha a string no meio do arquivo. Aconteceu duas vezes nesta sessão; o `tsc` passou nas duas, e
+   quem pegou foi o esbuild do Vite — com a página inteira em branco.
+
+Guarda: `npm run playtest -- encomenda` (a mesa mostrando só os degraus cumpridos e o próximo, o
+degrau novo anunciado, nada em silhueta, e a página de planos da subtela andando na mesma escada).
+
+## O GARGALO ERA A MADEIRA (2026-08-11)
+
+Pergunta do usuário: *"o jogo está justo e equilibrado? O jogador consegue jogar até o final de
+forma tranquila sem ser muito chato?"* A resposta, medida contra os números do arquivo, era **não —
+e por um motivo só**.
+
+A carta final custa 90 = **10 barras**. Cada barra pede 1 carvão, cada carvão pede 2 gravetos, e
+graveto só saía de derrubar uma árvore seca: **4 machadadas → 1 graveto → 60s de rebrota**. Com
+DUAS árvores na cratera, dez barras eram 20 derrubadas = **10 rodadas de rebrota = ~10 minutos
+parado olhando dois tocos**, mais ~80 machadadas. Numa partida de ~15 minutos, dois terços eram
+espera — e espera é a única coisa neste jogo que não tem gesto.
+
+Dois números consertaram isso, e os dois são honestos por si:
+
+- **A árvore derrubada solta DOIS gravetos** (`TREE_STICK_YIELD`). São quatro machadadas para pôr
+  uma árvore no chão; uma árvore inteira dando um graveto só sempre foi a parte da física em que
+  ninguém acreditou. Sai como PACOTE de dois (o cabo já sai de cinco), então apanhar continua sendo
+  um gesto.
+- **A cratera tem cinco árvores** em vez de duas, e as cartas de mata passaram a dar lenha de
+  verdade: três na Floresta Sussurrante e duas no Bosque Florido. Elas eram matas inteiras sem um
+  graveto para dar — os pinheiros delas são TILES, e tile só cai com o machado de aço, que ninguém
+  tem no prólogo.
+
+Refeita a conta: 1 barra = 1 derrubada. Dez barras = 10 derrubadas, e com cinco árvores isso é uma
+única rebrota de 60s no meio. **De ~10 minutos de espera para ~1.**
+
+### A prova que faltava neste script
+
+Plantar as árvores isolou cinco tiles no canto leste da cratera — e ninguém teria visto até comprar
+a carta no jogo, porque `add-prologue.mjs` era o único script de mundo SEM prova de BFS (a lei está
+escrita no CLAUDE.md desde sempre). Agora ele tem: a lista de árvores é de CANDIDATOS, cada um é
+posto sozinho e descartado se aumentar o número de tiles órfãos, e o script sai com erro se a carta
+terminar com um só. Três candidatos foram recusados na primeira rodada.
+
+### O que continua desequilibrado, e não foi mexido
+
+A **automação ainda é um mau negócio**: martinete + caldeira + cabo custam ~5 barras (45 moedas,
+metade da carta final) para poupar as 3 marteladas de cada barra — e a caldeira cobra um balde
+d'água a cada 45s, que é mais trabalho do que ela economiza. Pior: o carvão não pode ser
+automatizado (a bandeja do forno só aceita minério + carvão, e a carvoaria é só de menu), então a
+linha "deixe as máquinas trabalharem enquanto você anda" que o astronauta promete não existe.
+Consertar isso é o forno aceitar lenha na bandeja — e ficou explicitamente de fora deste passe.

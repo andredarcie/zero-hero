@@ -88,6 +88,15 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   carnivoreSeeds: { key: ASSET_KEYS.carnivoreSeedsItem },
   bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
   battery: { key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
+  // A FABRICA como item solto no mapa. Cada peca e a PROPRIA arte dela — a mesma escolha do
+  // GROUND_VISUAL: o autor tem de reconhecer no tabuleiro o que vai ficar plantado no chao.
+  gear: { key: ASSET_KEYS.gearItem },
+  wire: { key: ASSET_KEYS.wire, frame: wireShapeFrame('h', false) },
+  belt: { key: ASSET_KEYS.belt, frame: 1 },
+  chest: { key: ASSET_KEYS.chest, frame: 0 },
+  boiler: { key: ASSET_KEYS.boiler, frame: 0 },
+  inserter: { key: ASSET_KEYS.inserter, frame: 1 },
+  extractor: { key: ASSET_KEYS.extractor, frame: 1 },
 };
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
@@ -112,6 +121,8 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   // direcao gravada, pra o editor mostrar pra onde CADA braco esta virado.
   inserter: { key: ASSET_KEYS.inserter, frame: 1 },
   toolbox: { key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
+  furnace: { key: ASSET_KEYS.furnace, frame: 0 },
+  tripHammer: { key: ASSET_KEYS.tripHammer, frame: 1 },
   woodenCrate: { key: ASSET_KEYS.woodenCrate },
   pressurePlate: { key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
   waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
@@ -120,6 +131,13 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   levelPortal: { key: ASSET_KEYS.levelPortal },
   // Default da paleta; no tabuleiro, entityVisual troca pela forma resolvida dos vizinhos.
   wire: { key: ASSET_KEYS.wire, frame: wireShapeFrame('h', false) },
+  // A FABRICA. Esteira e extrator seguem a regra do braco: o frame aqui e so o default da
+  // paleta, e no tabuleiro o entityVisual troca pelo frame da direcao gravada — sem isso o
+  // editor mostraria todas as esteiras apontando pro leste, e a direcao e a autoria inteira.
+  belt: { key: ASSET_KEYS.belt, frame: 1 },
+  extractor: { key: ASSET_KEYS.extractor, frame: 1 },
+  // O bau na paleta e o VAZIO: o cheio e estado de partida (mora no save), nunca autoria.
+  chest: { key: ASSET_KEYS.chest, frame: 0 },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -453,8 +471,12 @@ export class EditorScene extends Phaser.Scene {
 
   private wireShapeAt(wx: number, wy: number): ReturnType<typeof wireShapeFromMask> {
     const connects = (x: number, y: number): boolean => (this.store?.entitiesAt(x, y) ?? []).some(
+      // A MESMA lista de maquinas do `resolveWireShapes` do jogo — o tabuleiro tem de mostrar a
+      // forma que o runtime vai resolver, e duas listas que discordam sao duas formas diferentes
+      // pro mesmo cabo (o defeito que a regra "uma lista, tres leitores" existe pra impedir).
       (e) => e.list === 'props' && (e.type === 'wire' || e.type === 'boiler'
         || e.type === 'waterWheel' || e.type === 'pressurePlate' || e.type === 'inserter'
+        || e.type === 'belt' || e.type === 'extractor'
         || e.type === 'electronicGate'),
     );
     return wireShapeFromMask(

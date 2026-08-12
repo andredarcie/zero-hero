@@ -96,8 +96,21 @@ const DEFS: Record<string, SheetDef> = {
   wire: { url: `${A}/environment/props/wire.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: portao 2D — quatro alturas em bancos apagado/energizado.
   'electronic-gate': { url: `${A}/environment/props/electronic_gate.png`, frameW: 16, frameH: 16 },
+  // A FABRICA. Esteira e extrator usam a MESMA convencao de frames do braco (`dir + 4*fase`,
+  // ordem N/L/S/O), porque direcao de prop e frame e nunca rotacao — e tres convencoes
+  // diferentes para a mesma ideia seria a proxima coisa a dessincronizar.
+  belt: { url: `${A}/environment/props/belt.png`, frameW: 16, frameH: 16 },
+  extractor: { url: `${A}/environment/props/extractor.png`, frameW: 16, frameH: 16 },
+  furnace: { url: `${A}/environment/props/furnace.png`, frameW: 16, frameH: 16 },
+  'trip-hammer': { url: `${A}/environment/props/trip-hammer.png`, frameW: 16, frameH: 16 },
+  // A viga do martinete: frames de DOIS tiles de largura, num quad que passa na frente dos dois.
+  'trip-hammer-beam': { url: `${A}/environment/props/trip-hammer-beam.png`, frameW: 32, frameH: 16 },
+  // O bau: frame 0 vazio, frame 1 com carga (o ferrolho em ouro) — sem numero na tela.
+  chest: { url: `${A}/environment/props/chest.png`, frameW: 16, frameH: 16 },
+  // A engrenagem: o bem INTERMEDIARIO, icone de item de um frame so.
+  'gear-item': { url: `${A}/items/collectibles/gear.png` },
   // Sprite Factory: a caixa de ferramentas — 4 poses do corpo + 2 da bandeja (TOOLBOX_FRAMES).
-  toolbox: { url: `${A}/environment/props/toolbox.png`, frameW: 16, frameH: 16 },
+  workbench: { url: `${A}/environment/props/workbench.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: a flor da lua — 9 poses de UMA flor abrindo, 5 em pe + 4 deitadas. Os frames
   // NAO sao uma animacao livre: cada um e um `t` de abertura (ver MOONFLOWER_FRAMES).
   moonflower: { url: `${A}/environment/props/moonflower.png`, frameW: 16, frameH: 16 },
@@ -111,6 +124,8 @@ const DEFS: Record<string, SheetDef> = {
   // esse par em dois arquivos; aqui e um sheet so).
   'iron-rock': { url: `${A}/environment/props/iron_rock.png`, frameW: 16, frameH: 16 },
   'iron-item': { url: `${A}/items/collectibles/iron.png` },
+  'ore-item': { url: `${A}/items/collectibles/ore.png` },
+  'bloom-item': { url: `${A}/items/collectibles/bloom.png` },
   'rock-cracked': { url: `${A}/environment/props/rock_cracked.png` },
   'locked-door-object': { url: `${A}/environment/structures/locked_door.png` },
   'swing-gate-object': { url: `${A}/environment/structures/swing_gate.png` },
@@ -131,6 +146,8 @@ const DEFS: Record<string, SheetDef> = {
   'inserter-hand': { url: `${A}/environment/props/inserter_hand.png`, frameW: 16, frameH: 16 },
   'wooden-crate': { url: `${A}/environment/props/wooden_crate.png` },
   'pressure-plate': { url: `${A}/environment/props/pressure_plate.png`, frameW: 16, frameH: 16 },
+  // O marco da estrada (spritefactory): laje dormente (0) e desperta (1).
+  'road-seal': { url: `${A}/environment/props/road_seal.png`, frameW: 16, frameH: 16 },
   'water-wheel': { url: `${A}/environment/props/water_wheel.png`, frameW: 16, frameH: 16 },
   // Sheet 16×64 em coluna: buraco pronto (0) + os três tempos da cavada da pá (1..3).
   'plant-hole': { url: `${A}/environment/props/plant_hole.png`, frameW: 16, frameH: 16 },
@@ -146,7 +163,10 @@ const DEFS: Record<string, SheetDef> = {
   'water-2': { url: `${A}/environment/terrain/water_2.png` },
   'water-3': { url: `${A}/environment/terrain/water_3.png` },
   bridge: { url: `${A}/environment/terrain/bridge.png` },
-  coin: { url: `${A}/items/collectibles/coin.png` },
+  // A moeda GIRA (spritefactory/sprites/coin.mjs): cara, três-quartos, fio, três-quartos de volta.
+  // Sem `frameW` aqui, getTexture3D devolve a FITA INTEIRA e cada moeda do chão vira quatro
+  // barrinhas espremidas num tile — o mesmo defeito que o coração documenta duas linhas abaixo.
+  coin: { url: `${A}/items/collectibles/coin.png`, frameW: 16, frameH: 16 },
   // heart.png e um SHEET 16x32, igual key.png: em cima o coracao liso (navy), embaixo o de mapa,
   // com contorno claro. Sem frameW aqui, getTexture3D devolvia a folha INTEIRA e o pickup
   // desenhava os dois coracoes espremidos num quadrado de 0.65 tile. Ver HEART_FRAMES.

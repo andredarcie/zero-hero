@@ -81,9 +81,16 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcColorHex: '#44ccff',
     npcAssetKey: NPC_VISUALS.astronaut.key,
     npcFrame: NPC_VISUALS.astronaut.frame,
+    // O PEDIDO DE FERRO. Ele é o único NPC do baralho hoje, então esta fala carrega sozinha o
+    // tutorial da cadeia inteira — e cada substantivo em maiúsculo é uma coisa que existe NA
+    // CARTA dele: a picareta no chão, os veios, o mato seco, a bancada. Uma fala que mandasse
+    // procurar algo que não está ali seria uma missão impossível contada com confiança.
     lines: [
-      n('My ship crashes in this place, I\'m trying to find its parts'),
-      n('But I think they landed on a part of the map that isn\'t available in the alpha version.'),
+      n('My ship is a shell now. What she still needs is IRON — and this crater keeps it locked inside rock.'),
+      n('Take the PICKAXE. The veined boulders never run dry: three good swings, one lump of ORE.'),
+      n('Ore is not iron yet. Burn the dead scrub for CHARCOAL, smelt the two together, then hammer the sponge three times.'),
+      n('That BENCH is mine — two stones make a furnace on it, and every machine in the chain starts there.'),
+      n('Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay for the bar.'),
     ],
   },
 
@@ -161,11 +168,14 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcName: 'DEATH',
     npcColorHex: '#f3f4f6',
     npcAssetKey: NPC_VISUALS.death.key,
+    // O FIM DO PRÓLOGO. Ele espera no meio do adro da última carta (`prologue-end`, 90 moedas —
+    // dez barras de ferro), e é o único NPC do jogo que fala do lado de fora da ficção: quem chega
+    // até aqui pagou o preço com uma fábrica, e merece ouvir que era esse o fim da estrada.
     lines: [
-      n('Nihilist knight! Do you accept a game of chess for your soul?'),
-      n('You died but you haven\'t reached the end of your journey'),
-      n('Thanks for playing the Alpha version of the game!'),
-      n('Submit your feedback'),
+      n('You bought your way here, field by field. I watched your furnace smoke cross three of them.'),
+      n('This is where the road stops. Everything past me is unbuilt — no cards, no coins, no dark to light.'),
+      n('So: the prologue is over, and you are the one who finished it. Thank you for testing my small world.'),
+      n('Go back and light something. I will wait. Waiting is the one thing I am good at.'),
     ],
   },
 };

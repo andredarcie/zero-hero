@@ -53,6 +53,12 @@ import gelo from './gelo.mjs';
 import labDungeon from './lab-dungeon.mjs';
 import dungeonGerada from './dungeon-gerada.mjs';
 import worldBuilder from './world-builder.mjs';
+import fabrica from './fabrica.mjs';
+import encomenda from './encomenda.mjs';
+import forja from './forja.mjs';
+import jardim from './jardim.mjs';
+import vento from './vento.mjs';
+import prologo from './prologo.mjs';
 
 export const scenarios = {
   smoke,
@@ -110,6 +116,12 @@ export const scenarios = {
   'lab-dungeon': labDungeon,
   'dungeon-gerada': dungeonGerada,
   'world-builder': worldBuilder,
+  fabrica,
+  encomenda,
+  forja,
+  jardim,
+  vento,
+  prologo,
 };
 
 // What `npm run playtest` runs when no scenario is named.

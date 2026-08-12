@@ -757,9 +757,19 @@ class SoundManager {
     this.noise('lowpass', 150, 0.8, 0.22, 0.6, notes.length * 0.16 + 0.05);
   }
 
-  public playCoinPickup(): void {
-    if (this.playSample('coinPickup', 0.4)) return;
-    this.osc('sine', 330, 300, 0.18, 0.14);
+  /**
+   * A moeda apanhada, e a ESCADA que ela sobe.
+   *
+   * Moeda cai em punhado — uma caveira paga 1, um balcão paga 9 —, e nove vezes o MESMO som é
+   * ruído, não recompensa. `step` é a posição na sequência: cada moeda seguida da anterior toca
+   * um pouco mais aguda (meio tom, teto de uma oitava), que é o truque mais velho do gênero (o
+   * anel do Sonic, a moeda do Mario) e o que transforma um punhado em ARPEJO. A sequência zera
+   * sozinha quando o jogador para de pegar — quem cuida disso é quem conta as moedas.
+   */
+  public playCoinPickup(step = 0): void {
+    const rate = Math.pow(2, Math.min(12, Math.max(0, step)) / 24); // meio tom por degrau
+    if (this.playSample('coinPickup', 0.25, 1, rate)) return;
+    this.osc('sine', 330 * rate, 300 * rate, 0.18, 0.14);
   }
 
   /** A single water drop — the title screen fires one per word as it drops in. */

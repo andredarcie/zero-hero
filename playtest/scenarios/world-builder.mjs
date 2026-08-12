@@ -39,8 +39,10 @@ export default {
       JSON.stringify((builder?.gates ?? []).map((gate) => gate.direction).sort()) === JSON.stringify(['east', 'north', 'west']),
       JSON.stringify(builder?.gates));
     assert('A fogueira central esta acesa', boot?.litFires === 1, `litFires=${boot?.litFires}`);
-    assert('A expedicao ja nasce com 100 moedas, na bolsa E no HUD',
-      boot?.coins === 100 && boot?.explorer?.carried === 100,
+    // A BOLSA COMECA VAZIA (ver explorerRun/START_COINS e o cenario `prologo`): a primeira moeda
+    // do jogo sai de uma caveira, e a primeira carta e uma conquista em vez de um clique.
+    assert('A expedicao nasce SEM moedas, na bolsa E no HUD',
+      boot?.coins === 0 && boot?.explorer?.carried === 0,
       `wallet=${boot?.coins} run=${boot?.explorer?.carried}`);
     assert('A espada nasce no chao ao lado da fogueira',
       (boot?.groundItems ?? []).some((item) => item.kind === 'sword' && item.worldX === 7 && item.worldY === 8),
@@ -57,13 +59,28 @@ export default {
       ['moonlit-lake', 'whispering-forest', 'spider-hollow'].every(
         (id) => (builder?.catalog ?? []).some((entry) => entry.id === id),
       ), JSON.stringify(builder?.catalog));
-    assert('O baralho tem as 8 cartas de NPC alem das 6 de terreno (14 no total)',
-      (builder?.catalog ?? []).length === 14
-        && ['cat-cold-hearths', 'crater-quarry', 'timber-ranks', 'glowing-ford',
-          'painted-beds', 'roadside-pond', 'singing-pines', 'silent-meadow',
-          'granite-pass', 'sunken-graveyard', 'blooming-grove']
+    // O BARALHO E ESCOLHIDO NO EDITOR (catalog.enabled). Hoje ele traz as 6 cartas de terreno e
+    // UM morador — o astronauta; os outros sete NPCs estao autorados, inteiros, e desligados.
+    // O assert olha os dois lados: quem entra, e principalmente quem NAO pode aparecer no portao.
+    const OFF_DECK = ['cat-cold-hearths', 'timber-ranks', 'glowing-ford', 'painted-beds',
+      'roadside-pond', 'singing-pines', 'silent-meadow'];
+    assert('O baralho tem as 6 cartas de terreno, o astronauta e o fim do prologo (8 no total)',
+      (builder?.catalog ?? []).length === 8
+        && ['moonlit-lake', 'whispering-forest', 'spider-hollow', 'crater-quarry',
+          'granite-pass', 'sunken-graveyard', 'blooming-grove', 'prologue-end']
           .every((id) => (builder?.catalog ?? []).some((entry) => entry.id === id)),
       JSON.stringify((builder?.catalog ?? []).map((entry) => entry.id)));
+    const offDeck = await page.evaluate(async (ids) => {
+      const file = await (await fetch(`${document.baseURI}world.json`)).json();
+      return ids.map((id) => {
+        const chunk = file.chunks.find((entry) => entry.catalog?.id === id);
+        return { id, inFile: Boolean(chunk), off: chunk?.catalog?.enabled === false, npc: chunk?.npcs?.[0]?.type };
+      });
+    }, OFF_DECK);
+    assert('Carta desligada NUNCA e oferecida — e continua inteira no arquivo, com o morador',
+      OFF_DECK.every((id) => !(builder?.catalog ?? []).some((entry) => entry.id === id))
+        && offDeck.every((entry) => entry.inFile && entry.off && entry.npc),
+      JSON.stringify(offDeck));
     const spiderRules = await page.evaluate(() => {
       const template = window.__scene.explorer.source.catalog()
         .find((entry) => entry.catalog.id === 'spider-hollow');
@@ -138,15 +155,15 @@ export default {
       JSON.stringify(refused?.player));
 
     await teleport(10, 8);
-    // A bolsa de partida (100) pagaria qualquer estrada: zera para testar o selo dormente.
     await page.evaluate(() => window.__scene.explorerDebugSetCoins(0));
     await driver.settle(220);
     const lockedPrompt = await page.locator('.zh-gate-prompt').textContent();
+    // 3 = a CRATERA do astronauta, a carta mais barata do baralho (ver scripts/add-prologue.mjs).
     assert('Sem moedas o selo explica que a estrada esta dormente',
       /DORMANT ROAD/u.test(lockedPrompt ?? '') && /NEEDS 3 COINS/u.test(lockedPrompt ?? ''),
       lockedPrompt ?? 'sem prompt');
 
-    await page.evaluate(() => window.__scene.explorerDebugSetCoins(4));
+    await page.evaluate(() => window.__scene.explorerDebugSetCoins(14));
     // Com o baralho grande (14 cartas), o sorteio da mao e forcado para o cenario ser
     // deterministico — a mao classica de terreno primeiro.
     await page.evaluate(() => window.__scene.explorerDebugSetNextOffers(
@@ -166,9 +183,10 @@ export default {
     })));
     await shot('card-lock-state', {
       note: 'O baralho explica visualmente quais terras o heroi ainda nao consegue comprar.',
-      state: { coins: 4, lockedCards },
+      state: { coins: 14, lockedCards },
     });
-    assert('Moedas insuficientes travam duas cartas e deixam a de custo 3 disponivel',
+    // Com 14 moedas o lago (12) esta ao alcance e a floresta (18) e a caverna (26) nao.
+    assert('Moedas insuficientes travam duas cartas e deixam a de custo 12 disponivel',
       lockedCards.filter((card) => card.disabled).length === 2
         && lockedCards.some((card) => card.name === 'Moonlit Lake' && !card.disabled),
       JSON.stringify(lockedCards));
@@ -179,11 +197,13 @@ export default {
     await page.keyboard.press('Escape');
     await page.waitForSelector('.zh-build-backdrop', { state: 'detached', timeout: 5000 });
 
-    log('CARTAS DE NPC: naipe hearth, moldura violeta, uma por morador');
-    await page.evaluate(() => window.__scene.explorerDebugSetCoins(20));
-    await page.evaluate(() => window.__scene.explorerDebugSetNextOffers(
-      ['cat-cold-hearths', 'painted-beds', 'silent-meadow'],
-    ));
+    // A CARTA DE MORADOR: naipe hearth, moldura propria, emblema de quem mora la. Ela era medida
+    // com uma mao de tres NPCs; hoje o baralho tem UM (o astronauta), e o assert olha esse — as
+    // outras sete continuam autoradas e desligadas, entao forcar a mao delas so devolveria uma
+    // mao aleatoria de terreno e o teste passaria a medir outra coisa.
+    log('CARTA DE NPC: naipe hearth, moldura propria, o emblema do morador');
+    await page.evaluate(() => window.__scene.explorerDebugSetCoins(40));
+    await page.evaluate(() => window.__scene.explorerDebugSetNextOffers(['crater-quarry']));
     await driver.settle(220);
     await driver.useItem();
     await page.waitForSelector('.zh-build-backdrop', { state: 'visible', timeout: 5000 });
@@ -199,21 +219,19 @@ export default {
       note: 'As cartas de NPC: naipe hearth, moldura violeta, e o EMBLEMA de cada morador.',
       state: { npcCards: npcCards.map(({ art, ...rest }) => rest) },
     });
-    assert('As tres cartas de NPC usam o naipe hearth e a cor propria',
-      npcCards.length === 3 && npcCards.every((card) => card.npc === 'true' && card.suit === 'hearth'),
+    assert('A carta do morador usa o naipe hearth',
+      npcCards.length === 1 && npcCards.every((card) => card.npc === 'true' && card.suit === 'hearth'),
       JSON.stringify(npcCards.map(({ art, ...rest }) => rest)));
     assert('A moldura da carta de NPC nao e a de ouro',
       npcCards.every((card) => card.borderColor !== 'rgb(215, 184, 107)'),
       JSON.stringify(npcCards.map((card) => card.borderColor)));
-    // Oito cartas com a mesma capa nao se distinguem na mao: cada morador tem o proprio
-    // pictograma, e o NOME diz QUEM mora la (o pedido do usuario: lembrar o NPC pela carta).
-    assert('Cada carta de NPC desenha o EMBLEMA do proprio morador (tres artes distintas)',
-      npcCards.every((card) => typeof card.art === 'string' && card.art.length > 0)
-        && new Set(npcCards.map((card) => card.art)).size === 3,
+    // Cada morador tem o proprio pictograma, e o NOME diz QUEM mora la (o pedido do usuario:
+    // lembrar o NPC pela carta).
+    assert('A carta desenha o EMBLEMA do morador',
+      npcCards.every((card) => typeof card.art === 'string' && card.art.length > 0),
       JSON.stringify(npcCards.map((card) => (card.art ?? '').slice(0, 40))));
     assert('O nome da carta diz QUEM mora nela',
-      ["Cat's Hearths", "Artist's Beds", "Death's Meadow"]
-        .every((name) => npcCards.some((card) => card.name === name)),
+      npcCards.some((card) => card.name === "Astronaut's Crater"),
       JSON.stringify(npcCards.map((card) => card.name)));
     await page.keyboard.press('Escape');
     await page.waitForSelector('.zh-build-backdrop', { state: 'detached', timeout: 5000 });
@@ -350,13 +368,13 @@ export default {
     const bought = await state();
     const east = bought?.explorer?.builder?.built?.find((chunk) => chunk.cx === 1 && chunk.cy === 0);
     assert('A carta escolhida virou um novo chunk a leste', east?.typeId === 'spider-hollow', JSON.stringify(east));
-    assert('O custo da caverna foi descontado', bought?.explorer?.carried === 13 && bought?.coins === 13,
+    assert('O custo da caverna (26) foi descontado', bought?.explorer?.carried === 14 && bought?.coins === 14,
       `run=${bought?.explorer?.carried} wallet=${bought?.coins}`);
     assert('A compra abre novas fronteiras ao redor do terreno', bought?.explorer?.builder?.gates?.length === 5,
       JSON.stringify(bought?.explorer?.builder?.gates));
     assert('Carta comprada sai do baralho: cada carta existe UMA vez',
       !(bought?.explorer?.builder?.catalog ?? []).some((entry) => entry.id === 'spider-hollow')
-        && (bought?.explorer?.builder?.catalog ?? []).length === 13,
+        && (bought?.explorer?.builder?.catalog ?? []).length === 7,
       JSON.stringify((bought?.explorer?.builder?.catalog ?? []).map((entry) => entry.id)));
     const crossing = await page.evaluate(() => ({
       blocked: window.__scene.explorer.blocksPlayerAt(12, 8),
@@ -403,26 +421,37 @@ export default {
     // O switch do spawnStreamedProps so conhecia os tipos do gerador antigo: lava, agua,
     // arbusto e afins pintados num card eram DESCARTADOS em silencio na compra. O guarda
     // espawna pelo mesmo caminho da compra e cobra o corpo fisico de cada um.
+    // Tiles VAZIOS de proposito (a caverna autora junco em 15,3 e 20,3): um prop so nasce onde
+    // nao ha outro — ver a guarda de ocupacao no spawnStreamedProps.
     const authored = await page.evaluate(() => {
       const s = window.__scene;
       const before = { lava: s.lavaTiles.length, water: s.waterTiles.length, shrub: s.dryShrubs.length };
-      s.spawnStreamedProps([
-        { type: 'lava', worldX: 20, worldY: 3 },
-        { type: 'water', worldX: 21, worldY: 3 },
-        { type: 'dryShrub', worldX: 22, worldY: 3 },
-      ]);
+      const defs = [
+        { type: 'lava', worldX: 14, worldY: 2 },
+        { type: 'water', worldX: 15, worldY: 2 },
+        { type: 'dryShrub', worldX: 16, worldY: 2 },
+      ];
+      s.spawnStreamedProps(defs);
+      const grown = { lava: s.lavaTiles.length, water: s.waterTiles.length, shrub: s.dryShrubs.length };
+      // A MESMA lista outra vez: e o que acontece ao sair da janela e voltar num chunk cuja carta
+      // autorou uma maquina. Sem guarda, nasciam duas empilhadas no mesmo tile.
+      s.spawnStreamedProps(defs);
       return {
-        lavaGrew: s.lavaTiles.length === before.lava + 1,
-        waterGrew: s.waterTiles.length === before.water + 1,
-        shrubGrew: s.dryShrubs.length === before.shrub + 1,
-        lavaBlocks: s.isSolidForEntities(20, 3),
-        waterBlocks: s.isSolidForEntities(21, 3),
+        lavaGrew: grown.lava === before.lava + 1,
+        waterGrew: grown.water === before.water + 1,
+        shrubGrew: grown.shrub === before.shrub + 1,
+        noDuplicates: s.lavaTiles.length === grown.lava && s.waterTiles.length === grown.water
+          && s.dryShrubs.length === grown.shrub,
+        lavaBlocks: s.isSolidForEntities(14, 2),
+        waterBlocks: s.isSolidForEntities(15, 2),
       };
     });
     assert('Lava, agua e arbusto autorados nascem no chunk comprado e BLOQUEIAM',
       authored.lavaGrew && authored.waterGrew && authored.shrubGrew
         && authored.lavaBlocks && authored.waterBlocks,
       JSON.stringify(authored));
+    assert('Reentrar na janela NAO duplica o prop autorado no mesmo tile',
+      authored.noDuplicates, JSON.stringify(authored));
 
     log('EDITOR: cada card pode ser nomeado, precificado, ilustrado e aberto para pintura');
     await page.goto(new URL('/editor', page.url()).href, { waitUntil: 'domcontentloaded' });
@@ -440,10 +469,10 @@ export default {
       note: 'A biblioteca de chunks do /editor, sem salvar nenhuma alteracao de teste.',
       state: { editorCard },
     });
-    assert('O editor lista os 14 chunks da biblioteca (6 terrenos + 8 NPCs)',
-      editorCard.count === 14, JSON.stringify(editorCard));
+    assert('O editor lista os 15 chunks da biblioteca (6 terrenos + 8 NPCs + o fim do prologo)',
+      editorCard.count === 15, JSON.stringify(editorCard));
     assert('Nome, custo e imagem da carta sao editaveis',
-      editorCard.name === 'Moonlit Lake' && editorCard.cost === '3' && editorCard.image.length > 0,
+      editorCard.name === 'Moonlit Lake' && editorCard.cost === '12' && editorCard.image.length > 0,
       JSON.stringify(editorCard));
     assert('O editor permite criar outro chunk', editorCard.createVisible === true, JSON.stringify(editorCard));
   },

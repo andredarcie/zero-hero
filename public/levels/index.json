@@ -12,6 +12,18 @@
     "blurb": ""
   },
   {
+    "id": "level-3",
+    "file": "level-3.json",
+    "name": "A Linha",
+    "blurb": "Uma linha ja roda sozinha na sua frente e cada peca esta no chao. A porta nao quer chave: quer VINTE minerios."
+  },
+  {
+    "id": "level-4",
+    "file": "level-4.json",
+    "name": "A Forja",
+    "blurb": "Minério não é ferro. Queime-o com carvão, malhe a esponja — e construa a máquina que malha por você."
+  },
+  {
     "id": "dungeon-1",
     "file": "dungeon-1.json",
     "name": "Level 1: A Aguia",

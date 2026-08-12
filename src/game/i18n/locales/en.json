@@ -49,6 +49,8 @@
   "editorReturn": "[ESC] back to editor",
   "items": {
     "get": {
+      "ore": "YOU GOT IRON ORE!",
+      "bloom": "YOU GOT AN IRON BLOOM!",
       "sword": "YOU GOT THE SWORD!",
       "key": "YOU GOT THE KEY!",
       "axe": "YOU GOT THE AXE!",
@@ -64,9 +66,19 @@
       "carnivoreSeeds": "CARNIVOROUS SEEDS! IT EATS WHAT COMES CLOSE",
       "bucket": "YOU GOT A BUCKET! FILL IT AT THE RIVER",
       "bucketFull": "BUCKET FULL OF WATER!",
-      "charcoal": "CHARCOAL! STEP ON IT WITH A LIT TORCH",
+      "charcoal": "CHARCOAL! A LIT TORCH EATS IT — A FURNACE SMELTS ORE WITH IT",
       "battery": "A BATTERY! CHARGE IT BY STEPPING ON A LIVE WIRE",
-      "batteryFull": "CHARGED BATTERY! SET IT DOWN BESIDE A WIRE"
+      "batteryFull": "CHARGED BATTERY! SET IT DOWN BESIDE A WIRE",
+      "iron": "AN IRON BLOCK! IT ONLY WORKS ON A BENCH",
+      "gear": "A GEAR! IT ONLY WORKS ON A BENCH",
+      "wire": "CABLE! PRESS A TO LAY ONE DOWN",
+      "belt": "A BELT! PRESS A TO INSTALL — IT CARRIES WHERE YOU FACE",
+      "chest": "A CHEST! A INSTALLS IT, B STORES AND TAKES",
+      "boiler": "A BOILER! A INSTALLS IT — IT NEEDS FIRE BESIDE IT",
+      "inserter": "AN ARM! A INSTALLS IT — TAKES FROM BEHIND, PUTS IN FRONT",
+      "extractor": "AN EXTRACTOR! INSTALL IT WITH ITS BACK TO AN IRON VEIN",
+      "furnace": "A FURNACE! FEED IT ORE AND CHARCOAL — THE COAL STEALS THE OXYGEN",
+      "tripHammer": "A TRIP HAMMER! POWER IT AND IT BEATS THE BLOOM FOR YOU"
     },
     "name": {
       "sword": "Sword",
@@ -81,13 +93,24 @@
       "wood": "Stick",
       "stone": "Stone",
       "iron": "Iron",
+      "ore": "Iron Ore",
+      "bloom": "Iron Bloom",
       "seeds": "Seeds",
       "carnivoreSeeds": "Carnivorous Seeds",
       "bucket": "Bucket",
       "bucketFull": "Full Bucket",
       "charcoal": "Charcoal",
       "battery": "Battery",
-      "batteryFull": "Charged Battery"
+      "batteryFull": "Charged Battery",
+      "gear": "Gear",
+      "wire": "Cable",
+      "belt": "Belt",
+      "chest": "Chest",
+      "boiler": "Boiler",
+      "inserter": "Robotic Arm",
+      "extractor": "Extractor",
+      "furnace": "Furnace",
+      "tripHammer": "Trip Hammer"
     }
   },
   "lockedLines": [
@@ -314,19 +337,23 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "My ship broke into samples all over this crater."
+          "text": "My ship is a shell now. What she still needs is IRON — and this crater keeps it locked inside rock."
         },
         {
           "speaker": "npc",
-          "text": "Take the PICKAXE. It cracks rock — and rock is where the good things hide."
+          "text": "Take the PICKAXE. The veined boulders never run dry: three good swings, one lump of ORE."
         },
         {
           "speaker": "npc",
-          "text": "Plain stone breaks. The VEINED boulders never do: three good swings, one lump of IRON, forever."
+          "text": "Ore is not iron yet. Burn the dead scrub for CHARCOAL, smelt the two together, then hammer the sponge three times."
         },
         {
           "speaker": "npc",
-          "text": "The lab buys every lump you carry. Mining is honest pay out here."
+          "text": "That BENCH is mine — two stones make a furnace on it, and every machine in the chain starts there."
+        },
+        {
+          "speaker": "npc",
+          "text": "Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay for the bar."
         }
       ]
     },
@@ -457,19 +484,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Do not be alarmed. I am off duty."
+          "text": "You bought your way here, field by field. I watched your furnace smoke cross three of them."
         },
         {
           "speaker": "npc",
-          "text": "Take the SCYTHE. It reaps the tall grass in one clean sweep — press A before it."
+          "text": "This is where the road stops. Everything past me is unbuilt — no cards, no coins, no dark to light."
         },
         {
           "speaker": "npc",
-          "text": "Cut grass surrenders SEEDS. Life insists on returning. It always does."
+          "text": "So: the prologue is over, and you are the one who finished it. Thank you for testing my small world."
         },
         {
           "speaker": "npc",
-          "text": "The meadow here grew loud. Quiet it for me, and we are even."
+          "text": "Go back and light something. I will wait. Waiting is the one thing I am good at."
         }
       ]
     }
@@ -488,6 +515,23 @@
   "subscreen": {
     "title": "PACK",
     "empty": "Nothing in the pack yet",
-    "mapTitle": "WORLD"
+    "mapTitle": "WORLD",
+    "plansTitle": "PLANS"
+  },
+  "toolbox": {
+    "title": "WHAT DO YOU WANT TO BUILD?",
+    "titleFurnace": "WHAT DO YOU WANT TO SMELT?",
+    "tools": "TOOLS",
+    "machines": "MACHINES",
+    "materials": "SMELTING",
+    "keys": "← ↑ ↓ →   ·   Z builds it   ·   X closes",
+    "keysTouch": "Tap to choose · tap again to build",
+    "keysFurnace": "← ↑ ↓ →   ·   Z smelts it   ·   X closes",
+    "keysTouchFurnace": "Tap to choose · tap again to smelt",
+    "unknown": "?"
+  },
+  "prompt": {
+    "take": "Take {item}",
+    "put": "Place {item}"
   }
 }

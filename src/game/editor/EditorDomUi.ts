@@ -8,7 +8,7 @@ import {
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
-import type { ChunkCatalogEntry, PropDir, PropKind, WorldDialog } from '@/game/world/worldSchema';
+import type { ChunkCatalogEntry, PropDir, PropKind, WorldChunk, WorldDialog } from '@/game/world/worldSchema';
 import type { DeleteLabLevelResult, LabLevelSummary } from '@/game/worldApi';
 
 // The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
@@ -190,22 +190,34 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'levelPortal', label: 'Portal de Saida', key: ASSET_KEYS.levelPortal },
   // A forma do cabo nunca se escolhe: ela nasce dos vizinhos, no tabuleiro e no jogo.
   { type: 'wire', label: 'Cabo de Energia', key: ASSET_KEYS.wire, frame: 1 }, // frame 1 = 'h'
+  // A FABRICA. As tres tambem sao ITENS que o jogador fabrica e instala — o que se autora aqui e
+  // a fabrica de PARTIDA de um level ou de uma carta de chunk, e ela nunca se recolhe em jogo
+  // (so o que o jogador construiu volta pra mochila; ver GameScene.pickUpMachineAt).
+  { type: 'belt', label: 'Esteira (G gira) — leva a carga pra onde aponta', key: ASSET_KEYS.belt, frame: 1 },
+  { type: 'extractor', label: 'Extrator (G gira) — morde o veio ATRAS, poe na FRENTE', key: ASSET_KEYS.extractor, frame: 1 },
+  { type: 'furnace', label: 'Forno (G gira) — MINERIO e CARVAO nas bandejas ATRAS, esponja na FRENTE', key: ASSET_KEYS.furnace, frame: 1 },
+  { type: 'tripHammer', label: 'Martinete (G gira) — malha a ESPONJA do tile da FRENTE; precisa de energia', key: ASSET_KEYS.tripHammer, frame: 3 },
+  { type: 'chest', label: 'Bau — o estoque que a linha enche sozinha', key: ASSET_KEYS.chest, frame: 0 },
 ];
 
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
 // que o editor faz e "esta peca gira?" — e quando existir a segunda peca giratoria, ela entra
 // aqui e ganha o G de graca. (Aconteceu: a caixa de ferramentas.)
-const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter', 'toolbox']);
+const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter', 'toolbox', 'belt', 'extractor', 'furnace', 'tripHammer']);
 
 // …e destes, quais tem a ARTE dividida em um frame por direcao. Sao duas perguntas diferentes e
 // junta-las quebrou a caixa de ferramentas na primeira tentativa: os frames dela sao as poses da
 // tampa, entao desenhar `frame = dir` no tabuleiro punha a caixa aberta e forjando num mapa
 // parado. Quem nao tem frames de direcao ganha uma marca de proa no chip (ver EditorScene).
-const DIR_FRAME_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter']);
+const DIR_FRAME_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter', 'belt', 'extractor']);
 
 // Producers and consumers share the same tiny named-circuit authoring surface. Keeping this a
 // set means the next electrical prop gets variable persistence and the dropdown in one place.
-const VARIABLE_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['pressurePlate', 'waterWheel', 'inserter', 'boiler']);
+// O BAU e o PORTAO entraram quando a trava de QUANTIDADE nasceu: o bau publica o progresso da
+// entrega no circuito nomeado, e o portao le ate onde subir. A `quota` em si (o que ele cobra)
+// NAO se autora aqui — ela é campo de arquivo, como `lit` e `floodgate`, e um save do editor a
+// derruba. Quem cobra uma encomenda escreve isso no JSON do level.
+const VARIABLE_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['pressurePlate', 'waterWheel', 'inserter', 'boiler', 'chest', 'electronicGate']);
 
 export const isDirectionalProp = (type: PropKind): boolean => DIRECTIONAL_PROPS.has(type);
 export const hasDirectionFrames = (type: PropKind): boolean => DIR_FRAME_PROPS.has(type);
@@ -420,6 +432,20 @@ const CSS = `
 #zh-editor-root .zh-chunk-preview { width: 72px; height: 54px; object-fit: cover; image-rendering: pixelated; background: #05090b; border: 1px solid #2b4551; }
 #zh-editor-root .zh-chunk-description { min-height: 72px; resize: vertical; }
 #zh-editor-root .zh-chunk-create { margin-top: 16px; padding-top: 14px; border-top: 1px solid #1f3540; }
+#zh-editor-root .zh-deck { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #1f3540; }
+#zh-editor-root .zh-deck-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+#zh-editor-root .zh-deck-count { flex: 1; color: #8ecae6; font-family: 'Press Start 2P', monospace; font-size: 9px; }
+#zh-editor-root .zh-deck-list { max-height: 218px; overflow-y: auto; border: 1px solid #29414b; background: #0c1519; }
+#zh-editor-root .zh-deck-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 8px; border-bottom: 1px solid #14232b; cursor: pointer; }
+#zh-editor-root .zh-deck-row:last-child { border-bottom: 0; }
+#zh-editor-root .zh-deck-row:hover { background: #12222a; }
+#zh-editor-root .zh-deck-row.is-editing { background: #16303a; }
+#zh-editor-root .zh-deck-row.is-off .zh-deck-name { color: #55707a; text-decoration: line-through; }
+#zh-editor-root .zh-deck-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #dfe9ec; }
+#zh-editor-root .zh-deck-tag { color: #6d949d; font-size: 9px; margin-left: 6px; }
+#zh-editor-root .zh-deck-tag.npc { color: #f4a261; }
+#zh-editor-root .zh-deck-cost { color: #ffd479; font-family: 'Press Start 2P', monospace; font-size: 9px; white-space: nowrap; }
+#zh-editor-root .zh-deck-row input { margin: 0; accent-color: #66d9ef; }
 #zh-editor-root .zh-help-table { width: 100%; border-collapse: collapse; }
 #zh-editor-root .zh-help-table td { padding: 3px 8px 3px 0; border-bottom: 1px solid #14232b; }
 #zh-editor-root .zh-help-table td:first-child { color: #f4a261; white-space: nowrap; font-family: monospace; }
@@ -1516,6 +1542,95 @@ export class EditorDomUi {
     }
   }
 
+  /**
+   * O BARALHO: quais cartas o jogador pode comprar.
+   *
+   * Ele mora no topo da biblioteca de chunks e não numa tela própria porque a pergunta "que
+   * cartas existem?" e a pergunta "esta carta está no jogo?" são sobre o mesmo objeto — separá-las
+   * em dois lugares faria o autor editar uma carta aqui e procurar o interruptor dela ali.
+   *
+   * A lista é a ÚNICA escrita de `enabled` (o formulário de metadados só carrega o valor adiante),
+   * e ela se recusa a esvaziar o baralho: sem carta nenhuma o portão não tem o que oferecer, e um
+   * mundo que não cresce mais é indistinguível de um bug.
+   */
+  private deckPanel(chunks: readonly WorldChunk[], current: WorldChunk): HTMLDivElement {
+    const panel = document.createElement('div');
+    panel.className = 'zh-deck';
+    const head = document.createElement('div');
+    head.className = 'zh-deck-head';
+    const count = document.createElement('span');
+    count.className = 'zh-deck-count';
+    const cards = chunks.filter((chunk) => chunk.catalog);
+    const enabledOf = (chunk: WorldChunk): boolean => chunk.catalog?.enabled !== false;
+    const refreshCount = (): void => {
+      count.textContent = `${cards.filter(enabledOf).length} de ${cards.length} cartas no baralho`;
+    };
+    refreshCount();
+
+    const list = document.createElement('div');
+    list.className = 'zh-deck-list';
+    const setAll = (on: boolean): void => {
+      for (const chunk of cards) this.store.setChunkEnabled(chunk.cx, chunk.cy, on);
+      this.openChunkCatalogModal(current.cx, current.cy);
+    };
+    head.append(
+      count,
+      this.button('Todas', 'Poe todas as cartas no baralho', () => setAll(true)),
+      this.button('Nenhuma', 'Tira todas menos a primeira — o baralho nunca fica vazio', () => {
+        setAll(false);
+        const first = cards[0];
+        if (first) this.store.setChunkEnabled(first.cx, first.cy, true);
+        this.openChunkCatalogModal(current.cx, current.cy);
+        this.toast('O baralho precisa de pelo menos uma carta');
+      }),
+    );
+    panel.append(head, list);
+
+    for (const chunk of cards) {
+      const row = document.createElement('label');
+      row.className = 'zh-deck-row';
+      if (chunk === current) row.classList.add('is-editing');
+      if (!enabledOf(chunk)) row.classList.add('is-off');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = enabledOf(chunk);
+      const name = document.createElement('span');
+      name.className = 'zh-deck-name';
+      name.textContent = chunk.catalog?.name ?? `Chunk ${chunk.cx}`;
+      // O que a carta TRAZ junto, porque é isso que se decide ao montar um baralho: um morador
+      // (a carta é uma cena de NPC) e/ou covas de inimigo.
+      const npc = chunk.npcs[0];
+      if (npc) {
+        const tag = document.createElement('span');
+        tag.className = 'zh-deck-tag npc';
+        tag.textContent = ` ${npc.type}`;
+        name.appendChild(tag);
+      }
+      if (chunk.enemies.length > 0) {
+        const tag = document.createElement('span');
+        tag.className = 'zh-deck-tag';
+        tag.textContent = ` ${chunk.enemies.length}x ${chunk.enemies[0].type}`;
+        name.appendChild(tag);
+      }
+      const cost = document.createElement('span');
+      cost.className = 'zh-deck-cost';
+      cost.textContent = `${chunk.catalog?.cost ?? 0}c`;
+      box.addEventListener('change', () => {
+        if (!box.checked && cards.filter(enabledOf).length <= 1) {
+          box.checked = true;
+          this.toast('O baralho precisa de pelo menos uma carta');
+          return;
+        }
+        this.store.setChunkEnabled(chunk.cx, chunk.cy, box.checked);
+        row.classList.toggle('is-off', !box.checked);
+        refreshCount();
+      });
+      row.append(box, name, cost);
+      list.appendChild(row);
+    }
+    return panel;
+  }
+
   /** The authored world is now a strip of reusable cards, one editable chunk per entry. */
   public openChunkCatalogModal(selectedCx = this.state.chunkX, selectedCy = this.state.chunkY): void {
     const { body, foot } = this.modalShell('Biblioteca de chunks');
@@ -1525,8 +1640,10 @@ export class EditorDomUi {
 
     const intro = document.createElement('p');
     intro.className = 'zh-level-note';
-    intro.textContent = 'Cada chunk desta biblioteca vira uma carta. O desenho do tabuleiro, inimigos e props continuam sendo editados pelas ferramentas normais.';
+    intro.textContent = 'Cada chunk desta biblioteca vira uma carta. A caixa liga a carta no BARALHO do jogador; desmarcada, ela continua inteira aqui e nao aparece no portao.';
     body.appendChild(intro);
+
+    body.appendChild(this.deckPanel(chunks, current));
 
     const selector = document.createElement('select');
     for (const chunk of chunks) {
@@ -1653,6 +1770,7 @@ export class EditorDomUi {
           cost: Number(costInput.value),
           cardImage: image,
           description: descriptionInput.value,
+          enabled: current.catalog?.enabled, // quem liga/desliga é a lista; aqui só se carrega
         });
         this.refreshHeader();
         this.openChunkCatalogModal(current.cx, current.cy);

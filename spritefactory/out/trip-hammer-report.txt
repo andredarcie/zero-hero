@@ -1,0 +1,11 @@
+trip-hammer: 4 frame(s) — 0 fail, 2 warn
+  [info] bbox: frame 0: content 12x4 at (2,11), coverage 17%
+  [info] bbox: frame 1: content 12x4 at (2,11), coverage 17%
+  [info] bbox: frame 2: content 10x14 at (3,1), coverage 41%
+  [warn] color-count: frame 3: 10 colours — above the 2-8 norm; merge the closest pairs
+  [info] bbox: frame 3: content 14x13 at (0,2), coverage 44%
+  [warn] edge-touch: frame 3: sparse prop touches the frame edge — will read as clipped; pull it inside the tile
+  frame 0: #b5b5b5×12 #3a3f3f×10 #989aa7×9 #7c7e8b×9 #a9abbe×2 #5d6165×2
+  frame 1: #e7462a×18 #3a3f3f×10 #7c7e8b×8 #f8e394×2 #a9abbe×2 #989aa7×2 #5d6165×2
+  frame 2: #b7916a×29 #815938×23 #63452c×23 #5d6165×20 #141d38×10
+  frame 3: #b7916a×25 #63452c×25 #815938×20 #989aa7×15 #5d6165×6 #b5b5b5×6 #141d38×6 #7c7e8b×4 #3a3f3f×4 #a9abbe×1

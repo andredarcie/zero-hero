@@ -1,6 +1,6 @@
-// O VEIO DE FERRO, O KEYCAP "Z" E O BALCÃO QUE DERRUBA MOEDAS — minerar é uma atividade.
+// O VEIO DE MINERIO, O KEYCAP "Z" E O BALCÃO QUE DERRUBA MOEDAS — minerar é uma atividade.
 //
-// A rocha de minério é um POÇO: nunca quebra, e a cada TRÊS picaretadas cospe um bloco que
+// A rocha de minério é um POÇO: nunca quebra, e a cada TRÊS picaretadas cospe um bloco de MINÉRIO (pedra com óxido — o ferro só nasce no forno) que
 // ESPALHA COMO MOEDA (a exceção deliberada ao "nada entra por pisada"): você passa por cima,
 // ele entra na mochila e a MÃO continua com o que estava — a picareta não é roubada por cada
 // bloco que cai. Falar com o NPC é o botão de AÇÃO (Z) de frente pra ele, anunciado por um
@@ -49,7 +49,7 @@ export default {
       const s = window.__scene;
       s.heldItem = 'pickaxe';
       // A cerimônia de primeiro-item é do jogo, não deste contrato.
-      s.seenItems.add('iron');
+      s.seenItems.add('ore');
     });
     await driver.settle(400);
     await driver.face(dir);
@@ -62,7 +62,7 @@ export default {
         blocking: r?.blocking ?? null,
         frame: r?.sprite?.frame ?? null,
         loot: s.coinManager.getActiveLootPositions(),
-        iron: s.inventory.count('iron'),
+        iron: s.inventory.count('ore'),
         held: s.heldItem,
       };
     }, [spot.rx, spot.ry]);
@@ -166,11 +166,11 @@ export default {
     await page.keyboard.press('Enter'); // confirmar é a opção selecionada do caixa
     await page.waitForSelector('[data-opt="sell"]', { timeout: 10000 }); // o balcão reabre após o recibo
     const sold = await evaluate(() => ({
-      iron: window.__scene.inventory.count('iron'),
+      iron: window.__scene.inventory.count('ore'),
       coins: window.gameDebug.getState().coins,
       ground: window.__scene.coinManager.getActiveWorldPositions().length,
       receipt: [...document.querySelectorAll('.zh-dlg-body')].some(
-        (node) => /Sold 2 iron for 6 coins/u.test(node.textContent ?? ''),
+        (node) => /Sold 2 ore for 6 coins/u.test(node.textContent ?? ''),
       ),
     }));
     assert('a mochila esvaziou na hora', sold.iron === 0, JSON.stringify(sold));
@@ -182,7 +182,7 @@ export default {
     // ── 7. Mochila vazia: a recusa é uma FALA, e o diálogo segue de pé ──────
     await page.locator('[data-opt="sell"]').click();
     await page.waitForFunction(() => [...document.querySelectorAll('.zh-dlg-body')].some(
-      (node) => /no iron/u.test(node.textContent ?? ''),
+      (node) => /no ore/u.test(node.textContent ?? ''),
     ), null, { timeout: 8000 });
     await page.waitForSelector('[data-opt="sell"]', { timeout: 8000 });
 

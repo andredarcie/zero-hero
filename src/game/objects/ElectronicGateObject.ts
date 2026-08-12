@@ -35,6 +35,12 @@ export class ElectronicGateObject implements WorldProp {
     private readonly scene: Phaser.Scene,
     public readonly worldX: number,
     public readonly worldY: number,
+    /**
+     * O circuito NOMEADO que decide ate onde esta grade sobe. Hoje quem publica nele e um bau com
+     * quota (ver ChestObject) — o portao le o PROGRESSO da entrega, nao um booleano. Sem vinculo,
+     * o portao e o de sempre: energia ergue tudo.
+     */
+    public readonly variable?: string,
   ) {
     this.sprite = world3d()
       .addBillboard(ASSET_KEYS.electronicGate, ELECTRONIC_GATE_FRAMES.off, {
@@ -57,13 +63,29 @@ export class ElectronicGateObject implements WorldProp {
     return (this.powered ? ELECTRONIC_GATE_FRAMES.powered : ELECTRONIC_GATE_FRAMES.off) + this.phase;
   }
 
-  public update(deltaMs: number, powered: boolean, effectsVisible: boolean): void {
+  /**
+   * @param ceiling Ate onde a grade PODE subir, de 0 a 1. Sem vinculo e 1 — o portao de sempre,
+   * que abre inteiro com energia. Ligado a um bau com quota (pelo `variable`), ele passa a ser o
+   * PROGRESSO da entrega, e a grade sobe um degrau a cada punhado depositado.
+   *
+   * E o que faz a fechadura de quantidade se explicar sozinha, sem contador e sem legenda: a
+   * porta É a barra de progresso, feita de física. O jogador vê o vão crescer e sabe que está no
+   * caminho certo — e a lei da casa se mantém, porque nada disso é texto.
+   */
+  public update(deltaMs: number, powered: boolean, effectsVisible: boolean, ceiling = 1): void {
     if (this.dead) return;
     if (powered !== this.powered) this.setPowered(powered, effectsVisible);
 
     const before = this.open01;
-    const rate = deltaMs / (this.powered ? OPEN_MS : CLOSE_MS);
-    this.open01 = Phaser.Math.Clamp(this.open01 + (this.powered ? rate : -rate), 0, 1);
+    const target = this.powered ? Phaser.Math.Clamp(ceiling, 0, 1) : 0;
+    // Subir e descer têm ritmos diferentes (o peso da grade), então o passo sai do sentido em que
+    // ela está indo AGORA — e não de estar energizada: uma grade energizada cujo teto BAIXOU
+    // (o baú foi esvaziado) desce, e desce com o peso, como qualquer grade que cai.
+    const rising = target > this.open01;
+    const rate = deltaMs / (rising ? OPEN_MS : CLOSE_MS);
+    this.open01 = rising
+      ? Math.min(target, this.open01 + rate)
+      : Math.max(target, this.open01 - rate);
     this.moving = Math.abs(this.open01 - before) > 0.00001;
 
     // Quatro poses deliberadas — nada de escala/fade subpixel. Os limites deixam a pose aberta

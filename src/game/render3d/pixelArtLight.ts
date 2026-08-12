@@ -45,6 +45,47 @@ export const lightResUniform: THREE.IUniform = { value: 16 };
 export const flowTimeUniform: THREE.IUniform = { value: 0 };
 
 /**
+ * O VENTO. Quanto ele sopra (0 = mundo parado, 1 = padrão), vivo em `hd3d.wind`.
+ *
+ * Ele mora aqui e não no World3D porque é um uniform COMPARTILHADO: a mata em pé e o mato do chão
+ * são duas malhas com dois materiais, e um vento que cada uma calculasse por conta ficaria fora de
+ * fase — duas brisas soprando no mesmo lugar é a coisa mais fácil de notar e a mais difícil de
+ * nomear. É a mesma razão de o glint do rio e o do mar dividirem `uFlowTime`.
+ */
+export const windUniform: THREE.IUniform = { value: 1 };
+
+/**
+ * A BRISA, em GLSL: uma onda que ATRAVESSA o mundo, e não um relógio que cada tile consulta.
+ *
+ * A fase vem da posição do TILE (nunca do vértice): dois cantos do mesmo quad com fases diferentes
+ * não balançam a planta, esticam ela. Três termos, e cada um resolve um defeito visto no anterior:
+ *   · a onda base viaja na diagonal, então a rajada corre pelo campo em vez de piscar tudo junto;
+ *   · a segunda harmônica (2,37x, incomensurável com a primeira) tira o metrônomo — sem ela a mata
+ *     inteira volta ao mesmo lugar a cada dois segundos e o olho pega o loop;
+ *   · o INCHAÇO lento (uma onda de comprimento enorme) faz o vento ter momentos de calmaria e de
+ *     rajada, que é o que separa "vento" de "vibração".
+ * Amplitude 1 em repouso: quem dá a escala é quem chama.
+ */
+const WIND_WAVE_GLSL = `
+  uniform float uWind;
+  attribute vec3 aWind; // x = quanto esta planta obedece ao vento, yz = o CENTRO do tile
+  float zhWindWave(vec2 centre) {
+    float phase = uFlowTime * 1.15 + centre.x * 0.55 + centre.y * 0.38;
+    float swell = 0.55 + 0.45 * sin(uFlowTime * 0.21 + centre.x * 0.05 + centre.y * 0.04);
+    return (sin(phase) * 0.78 + sin(phase * 2.37 + 1.7) * 0.22) * swell;
+  }
+`;
+
+// Quanto o topo de um tile em pé sai do prumo, em tiles. Comparar com TILE_SHAKE_LEAN (o tranco do
+// machado, tan(7°) = 0,123): a brisa é um terço disso, porque ela nunca para — o que num golpe é
+// impacto, num loop infinito vira enjoo.
+const WIND_LEAN = '0.042';
+// Quanto o mato deitado GIRA no plano do chão, em radianos (~2,4°). Ele não pode se inclinar (é um
+// quad deitado), então ele faz o gesto que o jogo já usa quando o herói pisa nele: rodar em torno
+// do próprio centro (ver updateRustles). Menor que o pisão de propósito: um é resposta, outro é ar.
+const WIND_TWIST = '0.042';
+
+/**
  * A ÁGUA QUE ANDA — o efeito de superfície do mar (o `worldFx: 'seaFlow'`, ver PatchOpts).
  *
  * A água deste mundo é de dois tipos, e só um deles se movia. O rio é um PROP: cada tile tem um
@@ -396,6 +437,16 @@ type PatchOpts = {
    */
   worldFx?: 'lavaFlow' | 'waterGlint' | 'seaFlow';
   /**
+   * O VENTO nas malhas de vegetação (ver WIND_WAVE_GLSL). Duas formas, porque são duas geometrias:
+   *   · 'lean' — o tile EM PÉ (a mata): só o topo sai do prumo, o pé fica plantado. É o mesmo
+   *              gesto do tranco do machado (shakeSolidTile), em regime permanente.
+   *   · 'stir' — o tile DEITADO (capim, folhagem, flor): ele não tem altura para inclinar, então
+   *              gira em torno do próprio centro — o mesmo gesto do pisão (updateRustles).
+   * Precisa do atributo por vértice `aWind` (máscara + centro do tile): é ele que deixa a pedra e
+   * o túmulo parados na MESMA malha em que a árvore balança.
+   */
+  wind?: 'lean' | 'stir';
+  /**
    * Anti-alias the art's texel grid (see TEXEL_AA_GLSL). With `bounds` the sampled frame comes from
    * a uniform — one frame per material, swapped as a whole (a billboard's walk cycle). Without it,
    * the frame comes from a per-vertex `aUvBounds` attribute, which is what the merged tile meshes
@@ -430,7 +481,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
   // Three caches compiled programs by this key; without it, materials patched
   // DIFFERENTLY would silently share whichever variant compiled first.
   mat.customProgramCacheKey = () =>
-    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}`;
+    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}v${opts.wind ?? '0'}`;
 
   const bornAt = import.meta.env.DEV ? new Error().stack ?? '' : '';
 
@@ -442,6 +493,40 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
         createdBy: bornAt.split('\n').slice(2, 6).map((l) => l.trim()).join(' ← '),
       });
     }
+    // ── O VENTO ──────────────────────────────────────────────────────────────
+    // Entra ANTES de todo mundo de propósito. As injeções seguintes procuram o mesmo
+    // `#include <begin_vertex>` e caem ENTRE ele e este bloco — o que deixa `vLightGridPos` (a
+    // posição que a luz baixa-resolução consulta) sendo lida da planta EM REPOUSO. É o que se
+    // quer: uma árvore balançando não pode piscar de célula de luz enquanto balança.
+    if (opts.wind) {
+      shader.uniforms.uFlowTime = flowTimeUniform;
+      shader.uniforms.uWind = windUniform;
+      shader.vertexShader = shader.vertexShader.replace(
+        'void main() {',
+        `uniform float uFlowTime;\n${WIND_WAVE_GLSL}\nvoid main() {`,
+      );
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        opts.wind === 'lean'
+          // O PÉ FICA PLANTADO: o peso é a altura ao quadrado, então o tronco quase não anda e a
+          // copa faz todo o movimento. Linear, a árvore inteira deslizava de lado.
+          ? `#include <begin_vertex>
+             float zhLeanW = clamp(transformed.y, 0.0, 1.0);
+             transformed.x += zhWindWave(aWind.yz) * aWind.x * uWind * ${WIND_LEAN}
+                            * zhLeanW * zhLeanW;`
+          // GIRA em torno do centro do tile. O local é medido do CENTRO ABSOLUTO que o atributo
+          // carrega (e não de um offset fixo), e é isso que faz o vento COMPOR com o pisão: o
+          // rustle já rodou os cantos no buffer, e o vento roda o que encontrar lá.
+          : `#include <begin_vertex>
+             vec2 zhLocal = transformed.xz - aWind.yz;
+             float zhTwist = zhWindWave(aWind.yz) * aWind.x * uWind * ${WIND_TWIST};
+             float zhC = cos(zhTwist);
+             float zhS = sin(zhTwist);
+             transformed.x = aWind.y + zhLocal.x * zhC - zhLocal.y * zhS;
+             transformed.z = aWind.z + zhLocal.x * zhS + zhLocal.y * zhC;`,
+      );
+    }
+
     if (opts.worldFx) {
       // A world-space position varying so the FX tiles seamlessly across a field.
       shader.uniforms.uFlowTime = flowTimeUniform;

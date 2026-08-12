@@ -135,11 +135,19 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
 - `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…). Devolve
   `false` só quando o item não tem nada a ver com o tile, e **só então** `placeItemAt` pousa ali.
 - **Depositar é o B** (bandejas, buraco de plantio, marca de bomba, entrada do braço…), e **pegar
-  também**: o herói **nunca** recolhe nada por pisar em cima (`pickUpItemAt` — o tile à frente
-  primeiro, o de baixo dos pés depois). No passo ficaram só **carregar** a bateria num cabo vivo e
-  comer carvão com a tocha acesa. Moeda e coração não são itens e continuam entrando andando —
-  e o MINÉRIO do veio entra pelo canal DELES (`spawnLoot`, via `Inventory.stash`, que **nunca**
-  rouba a mão), não pelo dos itens: o que espalha como moeda se pega como moeda.
+  também** — mas **o que você PISA é o que você pega** (`pickUpItemAt` só no tile dos pés, e ele
+  vem antes do baú e do NPC). Eram dois tiles concorrendo pelo mesmo aperto e nenhum desenho podia
+  dizer qual venceria; agora o alvo é um só e ele é **nomeado**: `PickupPrompt` põe o keycap e o
+  nome da coisa sobre a cabeça do herói. Isso **não** é o balão de dica que foi arrancado — aquele
+  explicava uma RECUSA, este nomeia um gesto que vai funcionar (a mesma gramática do "Z" do NPC), e
+  ele lê `pickupUnderfoot()`, a **mesma pergunta** que o botão faz. Moeda e coração não são itens e
+  continuam entrando andando.
+- **A exceção da pisada é a MATÉRIA-PRIMA, e é uma lista só** (`WALK_PICKUP_KINDS`: minério, cabo e
+  carvão, via `Inventory.stash`, que **nunca** rouba a mão): o que se manuseia às dúzias. O minério
+  já entrava assim vindo do veio, e duas regras para o mesmo objeto é o que ninguém aprende.
+  **Ferramenta jamais entra aí** — apanhar sem querer é perder a mão. E a pisada com a **tocha
+  acesa** vem ANTES da lista: ela QUEIMA o carvão em vez de guardá-lo. Fora dela sobrou carregar a
+  bateria num cabo vivo.
 - A mochila (`runtime/Inventory.ts`) guarda em vez de trocar; `GameScene.heldItem` é um **getter**
   sobre a seleção (uma fonte de verdade só). Trocar de item **apaga a tocha**.
 - **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica: a
@@ -157,9 +165,20 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   inteiro por um mundo **8×8 sem portal, sem NPC autorado e com uma fogueira** — e o de hoje é
   22×8, feito à mão no `/editor`. Os dois escrevem **sem merge e sem perguntar**. Ficam no repo
   como scaffolding, e só depois de apontar a saída para um caminho desocupado.
+- **Level com prop que bloqueia SÓ se escreve com prova de BFS** (o gerador do `level-3` falha com
+  exit 1 se um tile de uso ficar fora, ou se a saída for alcançável sem a trava): um `ironRock`
+  nunca quebra, e um deles no corredor errado torna o level insolúvel para sempre.
+- **O BARALHO comprável se escolhe no /editor** (`catalog.enabled`, a lista de caixas da Biblioteca
+  de chunks), e quem filtra é `getChunkTemplates` — **um lugar só**: carta desligada continua
+  inteira no arquivo, e um segundo filtro rio abaixo seria uma segunda resposta.
+- **A bolsa começa em ZERO e todo preço é medido em BARRA DE FERRO** (o astronauta paga 9; a
+  caveira, 1) — a tabela inteira mora em `scripts/add-prologue.mjs`, e mexer num custo pelo editor
+  sem mexer nela é perder a mudança na próxima rodada do script. A carta do astronauta é a mais
+  barata de propósito: ela ENSINA o jogo e paga por todas as outras.
 - **Mexer no mundo em massa é um script que LÊ o `world.json` e acrescenta** — nunca um que o
-  refaz. `scripts/enrich-world.mjs`, `place-enemies.mjs`, `enrich-overworld-props.mjs` e
-  `enrich-dungeons.mjs` são os modelos: idempotentes (miram num TOTAL, não num delta),
+  refaz. `scripts/enrich-world.mjs`, `place-enemies.mjs`, `enrich-overworld-props.mjs`,
+  `enrich-dungeons.mjs` e `enrich-chunk-cards.mjs` são os modelos: idempotentes (miram num TOTAL,
+  não num delta — e o `--check` do último falha se o disco não for o ponto fixo),
   determinísticos (zero `Math.random()`) e proibidos de tocar em `ground`, `collisions` e no que
   o autor já pôs. **Prop que bloqueia só entra com prova de BFS de que não selou caminho** — a
   heurística local de vizinhos já prendeu 1.700 tiles em bolsões. Faça um backup antes.
@@ -218,11 +237,67 @@ O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo s
 
 ## As peças (o contrato de cada uma está no `progress.md`)
 
-`inserter` braço robótico (leva item sozinho; `dir`; corta a energia e ele **desfaz** a entrega) ·
-`toolbox` caixa de ferramentas (haste+cabeça: graveto+pedra=machado, graveto+ferro=foice) ·
+- **MÁQUINA É ITEM: o A instala no tile à frente, o B de mão vazia recolhe — TUDO que se instala
+  se recolhe**, inclusive o autorado (a exceção é a arca com `quota`, que é fechadura e não
+  depósito). Instalar É usar, então mora na tabela `useItemAt`; a direção nasce de para onde o
+  herói olha, nunca de um menu. O B com a mão cheia continua pousando como CARGA.
+- **O alvo de uma instalação é DESENHADO** (`PlacementHints`): quadrado branco no tile em que o
+  botão vai agir + o keycap da tecla; azul frio nos outros lugares válidos (só o extrator os
+  pinta). A marca e o botão leem `canBuildMachineAt` — **uma pergunta só**, ou um quadrado branco
+  promete um gesto que o botão recusa. Recusa = ausência de marca, nunca marca vermelha.
+- **MINÉRIO NÃO É FERRO.** O veio e o extrator dão `ore` — pedra com óxido. O **forno**
+  (minério+carvão, e é a única máquina que NÃO consome energia: um bloomery é movido a fole)
+  devolve uma `bloom` esponjosa, e ela só vira `iron` depois de **3 marteladas** — a mão pelo A,
+  ou o **martinete** ligado na roda d'água — e nele a BIGORNA É A BASE: a peça entra dentro da
+  máquina (o B a põe, o B de mão vazia a devolve), o malho dá as três pancadas e o produto **SALTA**
+  para um tile livre. Ela aceita qualquer carga e trabalha uma só, porque um braço robótico precisa
+  poder largar sem saber o que ela quer — recusar perderia a carga em silêncio. O carvão não é combustível ali: é o **reagente** que
+  rouba o oxigênio, e é por isso que são duas bandejas e não uma. **O forno DIZ o que precisa** nas
+  bandejas: ele sabe uma receita só, então o plano dele não se prega — é permanente.
+- **AS DUAS MÁQUINAS DE FABRICAR SÃO A MESMA TELA E O MESMO GESTO** (bancada e forno): o A abre o
+  catálogo *daquela* máquina, e o que as separa é uma palavra na receita (`station`) — nunca uma
+  interação própria. O forno tinha a dele (o A acendia fantasmas), e eram duas gramáticas para o
+  mesmo botão contra o mesmo tipo de peça. Estação nova = uma linha na tabela, e nada de código.
+- **A BANCADA É UMA MESA, e o A nela CONSTRÓI** — e o menu mostra o **MÍNIMO PARA CONTINUAR**: os
+  degraus que o jogador já cumpriu, mais UM novo (`catalogSteps` + a `LADDER` de `toolboxRecipes`).
+  Ele listava as onze receitas de uma vez, e onze cartas na primeira abertura não são ambição, são
+  uma parede. Receita nova entra na escada, senão ela aparece no fim e fora de ordem. A mesma
+  escada vale para a página de PLANOS da subtela — duas listas discordando é uma segunda voz.
+  Confirmar **gasta da mochila e a mesa ATIRA a peça no chão ao
+  lado** — nunca direto na mochila: entregar por dentro fazia a mesa martelar para ninguém, e o
+  gesto ficava sem nenhuma parte visível. O destino é o vizinho mais perto do herói **que não seja
+  o tile dele** (o corpo esconde o que está sob os pés), e apanhar continua sendo o B. Sem material
+  — ou sem chão livre em volta — a carta treme, o insumo que falta ACENDE e o painel FICA aberto.
+  **As duas bandejas não morreram** (nem na mesa, nem no forno): elas são como as MÁQUINAS
+  alimentam (um braço robótico não abre menu); o que mudou é que ninguém é obrigado a usá-las.
+- **ENERGIA TEM VAZÃO, e a conta é uma só por rede** (`world/powerGrid.ts`): fonte publica watts,
+  máquina puxa watts, e `satisfaction = min(1, oferta/demanda)` vira **velocidade** (o consumidor
+  multiplica o próprio delta) e **brilho** (as 3 faixas do cabo) — nunca legenda. Rede curta não
+  para nada: faz a fábrica INTEIRA arrastar. **A esteira CONDUZ ao longo de si** (senão uma linha
+  de 10 pediria 10 cabos ao lado); máquina encostada em máquina continua **não** conduzindo.
+- **Peça nova que não é sólida** (cabo, esteira) **precisa entrar em `machineAt`**: `isTileOccupied`
+  responde `false` sobre o tile dela, e sem isso dá pra empilhar duas máquinas no mesmo lugar.
+- **Peça que TIRA de um lado sólido se orienta SOZINHA** — a regra "nasce à frente, virada pra
+  onde você olha" não consegue aimar o extrator (a entrada dele é sempre um veio, e o jogador
+  teria de pisar na rocha para escolher aquela direção); a broca procura a pedra (`extractorAim`).
+- **A trava de uma fábrica é uma QUANTIDADE, nunca uma chave** — `chest` com `quota` cobra uma
+  entrega e publica o progresso no `variable`; o `electronicGate` ligado ao mesmo nome SOBE na
+  proporção (a porta é a barra, feita de física) e só libera na ÚLTIMA entrega. Uma porta que pede
+  energia se abre com um cabo, e aí a fábrica inteira vira cenário opcional — foi o que aconteceu
+  na primeira versão do level-3.
+
+`inserter` braço robótico (leva item sozinho; `dir` = para onde PÕE, tira de trás; corta a energia
+e ele **desfaz** a entrega) · `extractor` (a mesma geometria do braço, mordendo um `ironRock`: a
+única peça que CRIA matéria, e de propósito mais lenta que a picareta na mão) · `belt` esteira
+(chão, empurra o item; destino ocupado é FILA, não erro) · `chest` baú (UM tipo por baú — o
+sumidouro que deixa a linha render enquanto o herói está longe) · `gear` engrenagem (o bem
+INTERMEDIÁRIO) ·
+`toolbox` caixa de ferramentas (**ferramenta = haste+cabeça** — graveto+pedra=machado,
+graveto+ferro=foice; **máquina = engrenagem+corpo** — ferro+ferro=engrenagem, ferro+pedra=4 cabos,
+engrenagem+madeira/pedra/ferro/engrenagem = esteira/caldeira/braço/extrator, madeira+madeira=baú) ·
 `ironRock`/`iron` (mesma rocha, `ore: true`) · `pressurePlate` (herói, caixote **ou inimigo** —
 a caveira MARCHA até uma placa que enxerga) · `waterWheel` · `boiler` (fogo→energia) · `wire`
-(corrente é flood-fill por adjacência; forma nasce dos vizinhos) · `battery` (carrega pisando em
+(corrente é por componente conexo; forma nasce dos vizinhos) · `battery` (carrega pisando em
 cabo vivo; **encaixa** com B num cabo morto) · `electronicGate` (fail-closed) · `swingGate` (a
 trava sem chave: só abre com o tile de trás livre) · `moonflower` (abre no escuro; uma arte
 avaliada em 9 aberturas) · `enemies` (ponto de spawn: um corpo por cova, volta em
@@ -306,6 +381,10 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
 - **Tudo em que o herói pisa declara `depthLayer: 'ground'`** (`Billboard3D`), senão dois quads
   coplanares piscam. Quads deitados (buracos, água, flor aberta) são isentos.
 - Material com `onBeforeCompile` **precisa** de `customProgramCacheKey`.
+- **O VENTO é vertex shader nas duas malhas de terreno, e o que NÃO balança é uma máscara por
+  vértice** (`aWind`): elas são fundidas por camada, então o túmulo mora na mesma malha do pinheiro
+  e o seixo na do capim. Frame novo de árvore/mato entra em `WIND_SWAY_FRAMES`/`WIND_STIR_FRAMES`;
+  frame novo de pedra ou osso fica **fora**, ou o cemitério passa a tremer.
 - Prop montado com vários billboards precisa de **ordem interna de profundidade** (o braço e a
   caixa de ferramentas z-fightavam consigo mesmos).
 - Direção de prop é **frame**, nunca rotação (`setAngle` gira no plano da câmera).
@@ -337,11 +416,16 @@ a lâmina rodopiante → `esgrima`**. Machado, árvore e borda → `machado`; ro
 `fauna`; torreta, mago e a lei do tiro → `projeteis`; o zora e a janela dele → `zora`; o corpo
 que o fogo acende (empurrão contra brasa, pânico, rastro) → `tocha-viva`; a bola que CONGELA em
 vez de ferir, a rebatida da espada e fogo×gelo → `gelo`.**
-Roda → `roda-agua`;
+**A fábrica inteira — receita da engrenagem, instalar/recolher, esteira, baú, extrator e o
+GARGALO → `fabrica`; o catálogo da bancada, o plano nas bandejas e a descida do degrau →
+`encomenda`; a cadeia do ferro (minério→forno→esponja→martelada→ferro) → `forja`.** Roda → `roda-agua`;
 caldeira → `caldeira`; fios → `fios`; bateria → `bateria`; portões → `portao-eletronico` e
 `portao-de-bater`. Flor da lua → `flor-da-lua`; travessia do portal → `portal-travessia`;
-explorador → `explorador`. **Montanha em cubo e a água que anda → `montanha`.** Fogo e o orçamento
-de luz → `perf-burn`; custo de frame → `perf-profile`.
+explorador → `explorador`. **Montanha em cubo e a água que anda → `montanha`.** **Carta comprável
+plantada, a costura que abre sem raspar e o enxame de vaga-lumes sobre o verde → `jardim`; o vento
+na vegetação (e a lápide que não balança) → `vento`; a economia do prólogo (bolsa zerada, a caveira
+que paga, o ímã da moeda, a oficina do ferro e a Morte do fim) → `prologo`.** Fogo e o orçamento de
+luz → `perf-burn`; custo de frame → `perf-profile`.
 
 **`espada` e `itens` estão VERMELHOS por mudança de design** (eles assertam o level-1 gerado antigo,
 e o `espada` ainda resolve tudo esbarrando). Não "conserte" editando level. O menu (sem idioma e

@@ -2,12 +2,20 @@
 
 import { BATTERY_FEED_MS, BATTERY_FRAMES, BOMB_FRAMES, ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import { world3d } from '@/game/render3d/World3D';
+import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import { wireShapeFrame } from '@/game/world/wireShapes';
 
 // Every carriable item. All share the sword/key behavior: one in hand at a time, swap drops
 // the previous one on the ground. Only the bomb is consumed on use.
 export type HeldItemKind =
+  // ── A CADEIA DO FERRO, na ordem em que a quimica manda ────────────────────────────────────
+  // `ore` -> (forno + carvao) -> `bloom` -> (martelo) -> `iron`. Os tres sao itens separados
+  // porque as tres coisas SAO separadas no mundo real: minerio e oxido preso em pedra, a esponja
+  // e ferro poroso encharcado de escoria, e so a barra e metal utilizavel. Um jogo que chama os
+  // tres de "ferro" perde a unica etapa que explica por que forno e carvao existem.
+  | 'ore'
+  | 'bloom'
   | 'sword'
   | 'key'
   | 'axe'
@@ -71,7 +79,39 @@ export type HeldItemKind =
   // CARGO: it crosses the river in the hero's hand and crosses walls in the robotic arm's
   // claw, the two places no cable can be laid. `batteryFull` is runtime-only, like bucketFull.
   | 'battery'
-  | 'batteryFull';
+  | 'batteryFull'
+  // ---------------------------------------------------------------------------------------
+  // A FABRICA. As sete entradas abaixo sao a resposta ao defeito que o jogo tinha desde que a
+  // primeira caldeira existiu: as maquinas eram props AUTORADOS. Cabo, caldeira e braco so
+  // nasciam de um `world.json` escrito no /editor, o que faz do circuito um PUZZLE (o autor
+  // desenha a fabrica, o jogador a percorre) e nunca uma fabrica (o jogador desenha a fabrica).
+  // Uma linha de producao projetada por outra pessoa nao tem gargalo pra resolver: tem senha.
+  //
+  // A gramatica nao muda por causa delas — sao itens como qualquer outro, com uma unica lei
+  // nova: o botao A com uma maquina na mao a INSTALA no tile a frente (a tabela `useItemAt`
+  // ja e "o que este item faz contra o tile de la"), e o B de mao vazia recolhe de volta a que
+  // o JOGADOR construiu. Autorada nao se recolhe, senao a primeira coisa que um jogador faria
+  // num level de puzzle seria desmontar o puzzle.
+  // ---------------------------------------------------------------------------------------
+  // A ENGRENAGEM — o primeiro bem INTERMEDIARIO: nao se usa contra tile nenhum, nao instala
+  // nada, so entra na bancada. Ela existe porque uma cadeia de um elo (ferro -> maquina) nao e
+  // cadeia; com ela o ferro vira engrenagem e a engrenagem vira as quatro maquinas, e o
+  // extrator (que produz ferro) fecha o ciclo em cima de si mesmo. Ver TOOLBOX_RECIPES.
+  | 'gear'
+  // O CABO em pacote: o unico item de maquina que vem aos quatro (UNIT_PACK_KINDS), porque e o
+  // unico que se deita as duzias. Uma rede se desenha, e desenhar exige material a rodo.
+  //
+  // Os nomes sao os MESMOS dos props que elas viram (ver PropKind). Sao dois tipos diferentes e
+  // o TypeScript nunca os confunde, e em troca a instalacao vira uma identidade em vez de uma
+  // tabela de-para — que e mais uma coisa a esquecer de atualizar quando entrar a oitava peca.
+  | 'wire'
+  | 'belt'
+  | 'chest'
+  | 'boiler'
+  | 'inserter'
+  | 'extractor'
+  | 'furnace'
+  | 'tripHammer';
 
 // The fire riding a wood item that is NOT in the hero's hand: on the ground, or hanging from
 // the robotic arm's claw. Only `fuelMs` travels — it keeps counting down wherever the item is,
@@ -94,6 +134,8 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   wood: { texture: 'wood-icon', frame: 0 },
   stone: { texture: 'rock', frame: 0 },
   iron: { texture: 'iron-item', frame: 0 },
+  ore: { texture: 'ore-item', frame: 0 },
+  bloom: { texture: 'bloom-item', frame: 0 },
   // The seeds sprite comes from the sprite factory (spritefactory/sprites/seeds.mjs).
   seeds: { texture: 'seeds-item', frame: 0 },
   carnivoreSeeds: { texture: 'carnivore-seeds', frame: 0 },
@@ -105,7 +147,36 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   // Sprite Factory sheet (battery.png): the gold window reads charged/empty at a glance.
   battery: { texture: 'battery', frame: BATTERY_FRAMES.empty },
   batteryFull: { texture: 'battery', frame: BATTERY_FRAMES.full },
+  // A FABRICA. Cada maquina no chao e a PROPRIA arte dela — nenhum icone de embalagem foi
+  // desenhado, e isso e uma escolha, nao economia: o jogador tem de reconhecer no chao a mesma
+  // coisa que vai ficar instalada ali um segundo depois. (`stone` ja fazia isso, reusando a
+  // textura da rocha.) As direcionais mostram a pose LESTE, que e a que o editor oferece
+  // primeiro e a que o `dir` padrao usa.
+  gear: { texture: 'gear-item', frame: 0 },
+  wire: { texture: 'wire', frame: wireShapeFrame('h', false) },
+  belt: { texture: 'belt', frame: 1 },
+  chest: { texture: 'chest', frame: 0 },
+  boiler: { texture: 'boiler', frame: 0 },
+  inserter: { texture: 'inserter', frame: 1 },
+  extractor: { texture: 'extractor', frame: 1 },
+  furnace: { texture: 'furnace', frame: 0 },
+  // O martinete se anuncia pelo RETRATO (frame 3: corpo + malho dentro). O frame 1 e so o malho,
+  // um tijolo de 6x4 que nao diz nada, e o 0 e o corpo com a calha vazia — uma caixa oca.
+  tripHammer: { texture: 'trip-hammer', frame: 3 },
 };
+
+/**
+ * As MAQUINAS que se carregam. Uma lista so, lida pela instalacao (o botao A), pelo editor e
+ * pela subtela — porque a lei "uma lista, tres leitores" ja custou uma tarde neste jogo quando
+ * `FLYING_ENEMY_KINDS` existia em tres copias que discordavam.
+ *
+ * A engrenagem ESTA aqui de proposito, mesmo nao instalando nada: ela e da familia (sai da mesma
+ * bancada, entra nas mesmas receitas), e quem pergunta "isto e peca de fabrica?" quer que ela
+ * conte. Quem pergunta "isto vira prop?" ja tem de tratar o caso dela — ver GameScene.buildMachineAt.
+ */
+export const MACHINE_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>([
+  'gear', 'wire', 'belt', 'chest', 'boiler', 'inserter', 'extractor', 'furnace', 'tripHammer',
+]);
 
 /**
  * Como um item se desenha quando esta no chao. Exposto porque o braco robotico precisa desenhar
@@ -124,6 +195,12 @@ const BOB_TILES = 0.09;
 // pelo prewarmShaders, entao a primeira chama no chao nao custa um hitch de compilacao.
 const FLAME_FRAME_MS = 110;
 const FLAME_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
+
+// O calor da ESPONJA no chao: laranja de brasa, o mesmo tom da rampa `ember` que o sprite dela ja
+// usa nas frestas. Ele PULSA devagar — um brilho parado leria como aura magica, e um que respira
+// le como metal esfriando.
+const BLOOM_HEAT = 0xe7462a;
+const BLOOM_PULSE_MS = 1450;
 const FLAME_ELEV = 0.5; // lambe a ponta do graveto em pe (arte de 0.7 tile)
 
 // Fixed purple outline around every ground pickup — the hero's own indigo cloak, brightened
@@ -150,6 +227,8 @@ export class ItemPickup {
   private collectable = false;
   private collected = false;
   private flame?: Billboard3D;
+  /** O calor da esponja vazando no chao (so `bloom` tem). */
+  private heatGlow?: Billboard3D;
   private fireState?: ItemFire;
   // A carga de uma batteryFull no chao: drena so enquanto ALIMENTA uma rede de cabos (a cena
   // chama drainCharge por frame de alimentacao). Na mao do heroi a carga e estavel.
@@ -219,6 +298,31 @@ export class ItemPickup {
         .setPosition(tileX, tileY - 0.02)
         .setDisplaySize(0.3, 0.42);
     }
+
+    // A ESPONJA BRILHA NO CHAO, e ela e o unico item alem do graveto aceso que faz isso.
+    //
+    // Nao e enfeite: e a unica coisa no jogo cuja IDENTIDADE e estar quente, e no chao ela
+    // desaparecia. Todo colecionavel ganha um aro roxo para ler no escuro (ver ITEM_RIM), e sobre
+    // um sprite cinza-com-fresta-vermelha esse aro vence — a peca virava um borrao roxo que
+    // ninguem reconhece. O jogador procurou as esponjas no mapa e nao as achou; estavam a tres
+    // tiles dele.
+    //
+    // A resposta e a mesma do resto do jogo: um quad ADDITIVE, nunca uma luz THREE (a contagem de
+    // luzes deste renderer nao muda em tempo de execucao). Ele fica ATRAS do item (tileY + 0.02,
+    // ao contrario da chama do graveto) para o calor vazar por baixo e em volta da massa em vez de
+    // pintar por cima dela — o que se ve e um bolo escuro com brasa escapando, que e o que sai de
+    // uma forja.
+    if (kind === 'bloom') {
+      this.heatGlow = world3d()
+        .addBillboard(FX_DOT_TEXTURE, 0, {
+          centered: true, additive: true, fog: false, depthWrite: false,
+        })
+        .setTint(BLOOM_HEAT)
+        .setPosition(tileX, tileY + 0.02)
+        .setElevation(0.24)
+        .setDisplaySize(0.62, 0.44)
+        .setAlpha(0.55);
+    }
   }
 
   public get isCollectable(): boolean { return this.collectable; }
@@ -247,6 +351,8 @@ export class ItemPickup {
     if (this.fireState.fuelMs <= 0) {
       this.fireState = undefined;
       this.flame?.destroy();
+    this.heatGlow?.destroy();
+      this.heatGlow?.destroy();
       this.flame = undefined;
     }
   }
@@ -257,6 +363,7 @@ export class ItemPickup {
     this.collectable = false;
     this.sprite.setVisible(false);
     this.flame?.setVisible(false);
+    this.heatGlow?.setVisible(false);
     for (const copy of this.outline) copy.setVisible(false);
   }
 
@@ -273,6 +380,14 @@ export class ItemPickup {
       this.outline[i]
         .setElevation(Math.max(0, bob + OUTLINE_DIRS[i][1] * OUTLINE_OFFSET_TILES))
         .setAlpha(alpha);
+    }
+    // O calor da esponja cavalga o bob e PULSA: metal esfriando respira, aura magica nao.
+    if (this.heatGlow) {
+      const pulse = 0.5 + 0.5 * Math.sin((this.scene.time.now * 2 * Math.PI) / BLOOM_PULSE_MS);
+      this.heatGlow
+        .setElevation(0.24 + bob)
+        .setAlpha(alpha * (0.4 + 0.28 * pulse))
+        .setDisplaySize(0.56 + 0.12 * pulse, 0.4 + 0.09 * pulse);
     }
     // A chama cavalga o bob e o fade-in junto com o item, ciclando os frames do tiny-fire.
     if (this.flame) {

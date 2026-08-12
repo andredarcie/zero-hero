@@ -6,6 +6,8 @@ import type { ChunkManager } from '@/game/world/ChunkManager';
 import { Coin, type CoinLook } from './Coin';
 
 const SCATTER_RADIUS = 2;
+/** Quantas poses a fita da moeda tem (coin.png: cara, três-quartos, fio, três-quartos). */
+const COIN_SPIN_FRAMES = 4;
 
 /** Um drop que ANDA como moeda mas cujo destino é de quem o criou (o minério → a mochila). */
 type LootEntry = { coin: Coin; onCollect: () => void };
@@ -58,6 +60,7 @@ export class CoinManager {
         target.x,
         target.y,
         i * 60,
+        { key: 'coin', spin: COIN_SPIN_FRAMES },
       ));
     });
   }
@@ -100,10 +103,19 @@ export class CoinManager {
     anchors: { counter: { x: number; y: number }; hero: { x: number; y: number } },
     onCollect: (total: number) => void,
   ): void {
+    // O ÍMÃ, e ele veio no lugar do "pisou, pegou". A moeda CORRE até o herói (Coin.lureToward) e
+    // é apanhada quando encosta — quem passa perto de um punhado vê o punhado inteiro vir junto,
+    // que é a diferença entre catar item e receber dinheiro. O tile exato continua valendo por
+    // baixo: uma moeda que nasceu sob os pés é apanhada no mesmo quadro, sem correr distância
+    // nenhuma. `magnetRadius` (o campo antigo, usado pelas melhorias que a loja vendia) segue
+    // valendo como um alcance EXTRA de coleta direta.
+    const delta = this.scene.game.loop.delta;
     const inReach = (coin: Coin): boolean => {
       const dx = Math.abs(coin.tileX - playerWorldX);
       const dy = Math.abs(coin.tileY - playerWorldY);
-      return (dx === 0 && dy === 0) || (this.magnetRadius > 0 && Math.max(dx, dy) <= this.magnetRadius);
+      if (dx === 0 && dy === 0) return true;
+      if (this.magnetRadius > 0 && Math.max(dx, dy) <= this.magnetRadius) return true;
+      return coin.lureToward(playerWorldX, playerWorldY, delta);
     };
     for (const coin of this.coins) {
       if (!coin.isCollectable || coin.isCollected) continue;

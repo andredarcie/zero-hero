@@ -125,7 +125,19 @@ export type PickupKind =
   | 'seeds'
   | 'carnivoreSeeds'
   | 'bucket'
-  | 'battery';
+  | 'battery'
+  // A FABRICA como item AUTORAVEL. Elas entram aqui porque um level (ou uma carta de chunk) tem
+  // de poder POR uma maquina no chao — sem isso, a unica forma de ter uma esteira na mao seria
+  // forjar, e um mapa que quer ENSINAR a peca nao pode cobrar a cadeia inteira primeiro.
+  // `PickupKind` e um subconjunto de `HeldItemKind` (o ItemManager solta um pelo outro), entao
+  // os nomes sao os mesmos de propósito.
+  | 'gear'
+  | 'wire'
+  | 'belt'
+  | 'chest'
+  | 'boiler'
+  | 'inserter'
+  | 'extractor';
 export type NpcKind =
   | 'blackCat'
   | 'mimic'

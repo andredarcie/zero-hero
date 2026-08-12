@@ -128,7 +128,18 @@ export class ExplorerDirector {
    */
   public debugNextOffers?: string[];
 
-  public offers(): ReturnType<ExplorerWorldSource['catalog']> {
+  /**
+   * A MÃO DE TRÊS, e ela deve ao jogador uma promessa: se existe carta que ele pode pagar, ela
+   * está na mesa.
+   *
+   * Sorteio puro parecia justo e não era. O selo da estrada anuncia o custo da carta mais barata
+   * do BARALHO, então com o dinheiro exato para ela o botão diz "BUILD" — e se a mão sorteada
+   * viesse só com cartas caras, a mesa simplesmente não abria. O jogador via a promessa e o botão
+   * calado, sem nada na tela explicando a diferença. Com a bolsa começando em ZERO isso deixou de
+   * ser azar raro e virou o caso comum: durante as primeiras compras quase toda carta é cara
+   * demais. A tensão do modo tem de vir do PREÇO, nunca de qual mão saiu.
+   */
+  public offers(coins = Infinity): ReturnType<ExplorerWorldSource['catalog']> {
     const catalog = this.source.catalog();
     const forced = this.debugNextOffers;
     if (forced) {
@@ -138,7 +149,18 @@ export class ExplorerDirector {
         .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
       if (picked.length > 0) return picked.slice(0, 3);
     }
-    return [...catalog].sort(() => Math.random() - 0.5).slice(0, 3);
+    const shuffled = [...catalog].sort(() => Math.random() - 0.5);
+    const hand = shuffled.slice(0, 3);
+    if (hand.some((entry) => entry.catalog.cost <= coins)) return hand;
+    // Nenhuma paga: troca a mais cara da mão pela mais BARATA que ele consegue comprar.
+    const affordable = shuffled
+      .filter((entry) => entry.catalog.cost <= coins)
+      .sort((a, b) => a.catalog.cost - b.catalog.cost)[0];
+    if (!affordable) return hand; // não há nada ao alcance: a estrada continua dormente, e é honesto
+    let worst = 0;
+    hand.forEach((entry, i) => { if (entry.catalog.cost > hand[worst].catalog.cost) worst = i; });
+    hand[worst] = affordable;
+    return hand;
   }
 
   public purchase(

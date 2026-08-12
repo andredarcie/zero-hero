@@ -33,6 +33,30 @@ export interface AdventureGroundItem {
   count?: number;
 }
 
+/**
+ * Uma MAQUINA que o jogador construiu. Ela e a primeira coisa neste save que nao e nem item nem
+ * marca: e ESTRUTURA — e por isso entra pela mesma porta do `felledTrees` e do `dugSpots`, como
+ * um DIFF sobre o que o `world.json` autora, e nunca como uma foto que substitui o mundo.
+ *
+ * A distincao vale uma tarde: se as maquinas fossem foto, um mundo re-autorado (uma caldeira nova
+ * posta no /editor, uma carta de chunk comprada) perderia o que o autor pos, ou pior, duplicaria
+ * a peca do jogador em cima dela. Como diff, o mundo sempre ganha e o save so acrescenta.
+ *
+ * `content` so existe no bau, e e a razao de ele ser a peca que faz a fabrica valer a pena: e o
+ * que o jogador encontra quando volta. Perder isso na morte seria devolver a automacao ao ponto
+ * em que ela nao produzia nada.
+ */
+export interface AdventureMachine {
+  type: 'wire' | 'belt' | 'chest' | 'boiler' | 'inserter' | 'extractor' | 'furnace' | 'tripHammer';
+  worldX: number;
+  worldY: number;
+  /** Esteira, braco e extrator: para onde a peca ENTREGA (0=N, 1=L, 2=S, 3=O). */
+  dir?: number;
+  /** So o bau: o que esta guardado la dentro. */
+  content?: { kind: HeldItemKind; count: number } | null;
+}
+
+
 export interface AdventureSnapshot {
   /** Vira true no primeiro persist de uma run de verdade — e o que o titulo le para o Continue. */
   started: boolean;
@@ -57,6 +81,12 @@ export interface AdventureSnapshot {
    * renováveis, como o de qualquer canteiro autorado.
    */
   dugSpots: Set<string>;
+  /**
+   * A FABRICA que o jogador construiu, por MUNDO ('world' ou 'dungeon-N') — a mesma chave dos
+   * groundItems, porque uma esteira deitada numa dungeon nao pode reaparecer no overworld. Diff,
+   * nunca foto: ver AdventureMachine.
+   */
+  machines: Map<string, AdventureMachine[]>;
   /**
    * Itens no chao por MUNDO ('world' ou 'dungeon-N'): a foto substitui a lista autorada daquele
    * arquivo — um item largado fica onde ficou, um tesouro tomado nao renasce.
@@ -92,6 +122,7 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   seenItems: new Set(),
   felledTrees: new Set(),
   dugSpots: new Set(),
+  machines: new Map(),
   groundItems: new Map(),
   visitedChunks: new Set(),
   runSeed: 0,
@@ -112,6 +143,7 @@ type StoredSnapshot = {
   seenItems?: string[];
   felledTrees?: string[];
   dugSpots?: string[];
+  machines?: Record<string, AdventureMachine[]>;
   groundItems?: Record<string, AdventureGroundItem[]>;
   visitedChunks?: string[];
   runSeed?: number;
@@ -143,6 +175,7 @@ const load = (): AdventureSnapshot => {
       seenItems: new Set(p.seenItems ?? []),
       felledTrees: new Set(p.felledTrees ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
+      machines: new Map(Object.entries(p.machines ?? {})),
       groundItems: new Map(Object.entries(p.groundItems ?? {})),
       visitedChunks: new Set(p.visitedChunks ?? []),
       runSeed: num(p.runSeed, 0),
@@ -186,6 +219,7 @@ export const saveAdventure = (): void => {
     seenItems: [...s.seenItems],
     felledTrees: [...s.felledTrees],
     dugSpots: [...s.dugSpots],
+    machines: Object.fromEntries(s.machines),
     groundItems: Object.fromEntries(s.groundItems),
     visitedChunks: [...s.visitedChunks],
     runSeed: s.runSeed,

@@ -1,4 +1,5 @@
 ﻿import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
+import type { HeldItemKind } from '@/game/entities/ItemPickup';
 
 // The world is now a finite, fully-authored 8x8-chunk map defined entirely by a single
 // `world.json`. These types are the schema shared by the runtime loader (WorldData.ts) and
@@ -46,6 +47,16 @@ export type ChunkCatalogEntry = {
   cost: number;
   cardImage: string;
   description?: string;
+  /**
+   * Esta carta está NO BARALHO do jogador? Ausente = sim.
+   *
+   * O default é a ausência, e não `true`, porque toda carta escrita antes deste campo existir
+   * continua valendo — e porque quem edita o world.json à mão nunca precisa lembrar de um campo
+   * para publicar um chunk novo. Quem lê é `getChunkTemplates`: uma carta desligada continua
+   * inteira no arquivo (terreno, props, morador) e simplesmente não é oferecida no portão. É
+   * assim que uma região fica pronta no editor antes de o jogo poder comprá-la.
+   */
+  enabled?: boolean;
 };
 
 // One screen = terrain grids + the entities that live on it. This is the unit the runtime
@@ -91,7 +102,12 @@ export type WorldChunk = {
 // `carnivorousPlant` is the farmed DEFENSE: grown from carnivore seeds in a plantSpot (or
 // authored), it blocks its tile and EATS any enemy that stops beside it — then chews, exposed.
 // It is a plant to everything else: fire burns it, the scythe fells it (no drop).
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal';
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal' | 'furnace' | 'tripHammer'
+  // A FABRICA. Os tres nomes abaixo sao os MESMOS de tres HeldItemKind (ver ItemPickup), e isso
+  // e o que faz instalar uma maquina ser uma identidade em vez de uma tabela de-para. Esteira e
+  // extrator carregam `dir` pela mesma razao do braco: ele decide de que tile a peca tira e em
+  // qual ela poe. O bau nao carrega direcao — deposito nao tem frente.
+  | 'belt' | 'chest' | 'extractor';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.
@@ -118,7 +134,20 @@ export type WorldProp = {
   // Pressure plates and water wheels publish into this named circuit; an inserter may consume
   // it as optional power. The field lives on the prop because each mechanism can use a different
   // circuit. An unbound inserter keeps legacy self-powered behaviour.
+  //
+  // O BAÚ também publica aqui, e é a peça que fez isto virar mais do que um interruptor: com
+  // `quota`, ele publica QUANTO já entregou (ver ChestObject), e o portão eletrônico ligado ao
+  // mesmo nome SOBE na proporção. É a única fechadura do jogo que não é uma chave: é uma
+  // QUANTIDADE — o que a mão faz devagar e uma linha de produção faz sozinha.
   variable?: string;
+  /**
+   * Só para `chest`: a ENTREGA que esta arca cobra. Ela deixa de ser depósito e vira fechadura —
+   * aceita só este tipo, e o que estiver ligado ao `variable` dela lê o progresso.
+   *
+   * Como `lit` e `floodgate`, um save do /editor DERRUBA este campo (o store re-emite só
+   * type/x/y/dir/variable): quota é autoria de arquivo, feita no JSON do level, não no tabuleiro.
+   */
+  quota?: { kind: HeldItemKind; count: number };
   /**
    * So para `levelPortal`, e so no overworld: QUAL dungeon esta boca abre (1..9).
    * Um portal sem `level` e a saida — no modo level ele encadeia para o proximo, e dentro de uma

@@ -1,0 +1,25 @@
+belt: 8 frame(s) — 0 fail, 8 warn
+  [info] bbox: frame 0: content 14x16 at (1,0), coverage 88%
+  [warn] value-range: frame 0: dominant material (slate) spans only 19 luma — reads flat ("chapado"); reach for the top of the slate ramp and shade in clusters (README: boas práticas de forma)
+  [info] bbox: frame 1: content 16x14 at (0,1), coverage 88%
+  [warn] value-range: frame 1: dominant material (slate) spans only 19 luma — reads flat ("chapado"); reach for the top of the slate ramp and shade in clusters (README: boas práticas de forma)
+  [info] bbox: frame 2: content 14x16 at (1,0), coverage 88%
+  [warn] value-range: frame 2: dominant material (slate) spans only 19 luma — reads flat ("chapado"); reach for the top of the slate ramp and shade in clusters (README: boas práticas de forma)
+  [info] bbox: frame 3: content 16x14 at (0,1), coverage 88%
+  [warn] value-range: frame 3: dominant material (slate) spans only 19 luma — reads flat ("chapado"); reach for the top of the slate ramp and shade in clusters (README: boas práticas de forma)
+  [info] bbox: frame 4: content 14x16 at (1,0), coverage 88%
+  [warn] value-range: frame 4: dominant material (slate) spans only 19 luma — reads flat ("chapado"); reach for the top of the slate ramp and shade in clusters (README: boas práticas de forma)
+  [info] bbox: frame 5: content 16x14 at (0,1), coverage 88%
+  [warn] value-range: frame 5: dominant material (slate) spans only 19 luma — reads flat ("chapado"); reach for the top of the slate ramp and shade in clusters (README: boas práticas de forma)
+  [info] bbox: frame 6: content 14x16 at (1,0), coverage 88%
+  [warn] value-range: frame 6: dominant material (slate) spans only 19 luma — reads flat ("chapado"); reach for the top of the slate ramp and shade in clusters (README: boas práticas de forma)
+  [info] bbox: frame 7: content 16x14 at (0,1), coverage 88%
+  [warn] value-range: frame 7: dominant material (slate) spans only 19 luma — reads flat ("chapado"); reach for the top of the slate ramp and shade in clusters (README: boas práticas de forma)
+  frame 0: #313638×112 #1d2b53×32 #324476×16 #3a3f3f×16 #272b2d×16 #141d38×16 #7c7e8b×16
+  frame 1: #313638×112 #1d2b53×32 #324476×16 #3a3f3f×16 #7c7e8b×16 #272b2d×16 #141d38×16
+  frame 2: #313638×112 #1d2b53×32 #141d38×16 #272b2d×16 #7c7e8b×16 #3a3f3f×16 #324476×16
+  frame 3: #313638×112 #1d2b53×32 #141d38×16 #272b2d×16 #7c7e8b×16 #3a3f3f×16 #324476×16
+  frame 4: #313638×112 #1d2b53×32 #324476×16 #3a3f3f×16 #7c7e8b×16 #272b2d×16 #141d38×16
+  frame 5: #313638×112 #1d2b53×32 #324476×16 #3a3f3f×16 #7c7e8b×16 #272b2d×16 #141d38×16
+  frame 6: #313638×112 #1d2b53×32 #141d38×16 #272b2d×16 #3a3f3f×16 #324476×16 #7c7e8b×16
+  frame 7: #313638×112 #1d2b53×32 #141d38×16 #272b2d×16 #7c7e8b×16 #3a3f3f×16 #324476×16

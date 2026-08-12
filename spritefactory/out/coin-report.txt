@@ -1,0 +1,9 @@
+coin: 4 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 10x9 at (3,3), coverage 30%
+  [info] bbox: frame 1: content 8x9 at (4,3), coverage 27%
+  [info] bbox: frame 2: content 2x9 at (7,3), coverage 7%
+  [info] bbox: frame 3: content 8x9 at (4,3), coverage 27%
+  frame 0: #1d2b53×26 #f1cc36×25 #c9c81b×18 #f8e394×8 #f4f4f4×1
+  frame 1: #1d2b53×26 #f1cc36×19 #c9c81b×14 #f8e394×8 #f4f4f4×1
+  frame 2: #f1cc36×6 #c9c81b×5 #1d2b53×4 #f8e394×3
+  frame 3: #1d2b53×26 #f1cc36×22 #c9c81b×14 #f8e394×5 #f4f4f4×1

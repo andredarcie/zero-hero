@@ -71,6 +71,8 @@ export class BoilerObject implements WorldProp {
     public readonly worldX: number,
     public readonly worldY: number,
     public readonly variable?: string,
+    /** Construida pelo JOGADOR — ver BeltObject.playerBuilt (decide se o B a recolhe). */
+    public readonly playerBuilt: boolean = false,
   ) {
     this.sprite = world3d()
       .addBillboard('boiler', BOILER_FRAMES.coldDry, { groundShadow: true })

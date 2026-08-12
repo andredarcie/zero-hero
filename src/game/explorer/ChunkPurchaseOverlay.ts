@@ -38,6 +38,16 @@ export class ChunkGatePrompt {
   }
 
   public show(cost: number, coins: number): void {
+    // BARALHO VAZIO — nenhuma carta sobrou (todas compradas, ou o editor deixou poucas ligadas).
+    // `minCost` é um `Math.min` de lista vazia, ou seja Infinity, e o selo anunciava "NEEDS
+    // Infinity COINS": a estrada parecia cara em vez de acabada, e apertar o botão não fazia
+    // nada. Deck que se escolhe no editor torna isto um estado NORMAL, não um caso de borda.
+    if (!Number.isFinite(cost)) {
+      this.root.classList.add('is-locked');
+      this.root.innerHTML = 'ROAD\'S END<br>NO LAND LEFT TO CLAIM';
+      this.root.style.display = 'block';
+      return;
+    }
     const enabled = coins >= cost;
     this.root.classList.toggle('is-locked', !enabled);
     // No dedo o botão se chama B (o círculo esquerdo do ActionButtons) — dizer "[X / K]" a

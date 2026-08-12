@@ -21,7 +21,7 @@ import {
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
 import {
-  FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform,
+  FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, windUniform,
   lightWobbleUniform, patchPixelMaterial, seaFlowUniform, SHADOW_MASK_GLSL, shadowMaskOnUniform,
   shadowMaskRectUniform, shadowMaskUniform, syncTexelAaUniforms, texelAaUniform,
   type TexelAaUniforms,
@@ -248,8 +248,34 @@ const GODRAY_LEAN = 1.05; // radians across the whole fan (the beams splay as th
 
 const EMBER_COUNT = 26;
 const DUST_COUNT = 140;
-const FIREFLY_COUNT = 20;
+const FIREFLY_COUNT = 44;
 const MIST_COUNT = 48;
+
+// O VAGA-LUME MORA NO MATO. Estes são os frames de decoração que contam como vegetação viva —
+// capim, folhagem, o arbusto florido e os cogumelos —, e deliberadamente NÃO a serrapilheira
+// (graveto, seixo, osso): um enxame precisa dizer "aqui é verde", e piscar sobre cascalho não diz
+// nada. É o mesmo atlas que o editor pinta, então plantar mato numa carta (ver
+// scripts/enrich-chunk-cards.mjs) povoa a carta de vaga-lume sem tocar em código.
+const FIREFLY_HOST_FRAMES: ReadonlySet<number> = new Set([0, 1, 7, 8, 10, 11, 19, 20]);
+
+// ── O QUE O VENTO MOVE ────────────────────────────────────────────────────────────────────────
+// Duas listas, e as duas existem para dizer o que NÃO se mexe. As malhas do terreno são fundidas
+// por camada, não por assunto: a mesma malha em pé carrega o pinheiro e o TÚMULO, e a mesma malha
+// deitada carrega o capim e os OSSOS. Sem estas listas, o vento sacudiria a pedra do cemitério —
+// e uma lápide balançando desmente, num quadro, a solidez de tudo o mais que está parado.
+//
+// A mata em pé: pinheiros (4/14-18), árvore seca (3/21) e os dois estágios de tombamento (36/37),
+// que continuam sendo madeira em pé. Fora ficam a cabeça na estaca (22) e o túmulo (25).
+const WIND_SWAY_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21, 36, 37]);
+// O mato deitado: capim, folhagem e o arbusto florido. Cogumelo, graveto, seixo, pedregulho e osso
+// ficam de fora — o que é rígido no mundo tem de ficar rígido na tela.
+const WIND_STIR_FRAMES: ReadonlySet<number> = new Set([0, 1, 7, 8, 19, 20]);
+// A caixa em que o enxame vive, em tiles a partir do alvo da câmera. Um pouco maior que a tela:
+// entrar no quadro voando é a metade do efeito, e um bicho que só existe dentro do enquadramento
+// aparece do nada na borda.
+const FIREFLY_BOX = 10;
+/** Quanto um vaga-lume se afasta da moita que escolheu, em tiles. */
+const FIREFLY_ROAM = 1.9;
 
 // Module-level handle so world object classes (props, NPCs, enemies, items)
 // can create their billboards without threading the renderer everywhere.
@@ -482,7 +508,13 @@ export interface World3DParams {
   /** Vignette darkening at the corners (0 = off) and film-grain amount. */
   vignette: number;
   grain: number;
-  /** Ambient particle brightness multipliers (0 = off): fireflies in lit clearings, low mist. */
+  /**
+   * O VENTO na vegetação (0 = mundo parado, 1 = padrão, 2 = o dobro). É um knob vivo porque
+   * "quanto de vento" é decisão de olho, e não pode custar uma recompilação de shader — a mesma
+   * regra do `seaFlow`.
+   */
+  wind: number;
+  /** Ambient particle brightness multipliers (0 = off): fireflies over the grass, low mist. */
   /** Fake god rays leaning out of the nearest lit fire (0 = off). */
   godRays: number;
   /** Idle handheld drift of the camera, in tiles (0 = a locked-off tripod). */
@@ -641,6 +673,7 @@ export class World3D {
     // just under "noticeable" so they never wash the dark or read as floating orbs.
     godRays: 0.55,
     camSway: 0.022,
+    wind: 1,
     fireflies: 3,
     mist: 2.2,
     // Gentle split-tone: enough for the warm/cold HD-2D feel, but low so it doesn't
@@ -689,6 +722,9 @@ export class World3D {
   private dustSeeded = false;
   private fireflies!: ParticleField;
   private fireflySeed!: Float32Array;
+  private readonly fireflyState: FireflyParticle[] = [];
+  /** Os tiles de vegetação da janela assada (x + z empacotados) — onde o enxame pousa. */
+  private readonly greenTiles: number[] = [];
   private mist!: ParticleField;
   private mistSeed!: Float32Array;
   private atmosphereSeeded = false;
@@ -1077,11 +1113,25 @@ export class World3D {
       this.dust.pos[i * 3 + 1] = 0.2 + Math.random() * 2.4;
       this.dustSeed[i] = Math.random() * Math.PI * 2;
     }
-    // Fireflies: bigger, brighter motes that hover knee-to-head high; they light up
-    // only in the glow of a lit fire (a reward for lighting the world).
-    this.fireflies = makeParticleField(this.scene, FIREFLY_COUNT, 0.16, dot);
+    // Fireflies: bigger, brighter motes that hover knee-to-head high over the vegetation.
+    // 0,18 tile: o bicho é um PONTO de luz, não uma bola. Ele nasceu em 0,16 (invisível), passou
+    // por 0,34 (uma bolha amarela maior que um cogumelo — o relato foi "muito grande") e parou
+    // aqui: o que o faz enxergar não é o tamanho, é o bloom em volta de um núcleo aceso.
+    this.fireflies = makeParticleField(this.scene, FIREFLY_COUNT, 0.18, dot);
     this.fireflySeed = new Float32Array(FIREFLY_COUNT);
-    for (let i = 0; i < FIREFLY_COUNT; i++) this.fireflySeed[i] = Math.random() * Math.PI * 2;
+    for (let i = 0; i < FIREFLY_COUNT; i++) {
+      this.fireflySeed[i] = Math.random() * Math.PI * 2;
+      this.fireflyState.push({
+        hx: 0, hz: 0, vx: 0, vz: 0,
+        dart: Math.random() * 2.5,
+        blink: Math.random() * Math.PI * 2,
+        // Cada um pisca no SEU ritmo: com um só, trinta bichos acendem no mesmo quadro e o
+        // enxame vira um estrobo. O espalhamento é o que faz parecer trinta bichos.
+        rate: 1.5 + Math.random() * 1.9,
+        settle: Math.random() * 0.5,
+        homed: false,
+      });
+    }
     // Mist: many large, dim, cool wisps clinging low to the ground in the dark.
     this.mist = makeParticleField(this.scene, MIST_COUNT, 1.6, dot);
     this.mistSeed = new Float32Array(MIST_COUNT);
@@ -1131,6 +1181,7 @@ export class World3D {
     this.groundQuads.clear();
     this.grassQuads.clear();
     this.decorQuads.clear();
+    this.greenTiles.length = 0; // as moitas da janela velha não existem mais
     this.solidBuckets.clear();
     this.sunkenTiles.clear();
     this.activeRustles.clear();
@@ -1233,9 +1284,9 @@ export class World3D {
       const decor = new THREE.MeshLambertMaterial({
         map: tileset, transparent: true, alphaTest: 0.35, depthWrite: false, vertexColors: true,
       });
-      patchPixelMaterial(decor, { quantize: true, texelAa: tileAa });
+      patchPixelMaterial(decor, { quantize: true, texelAa: tileAa, wind: 'stir' });
       const solid = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
-      patchPixelMaterial(solid, { quantize: true, normalUp: true, texelAa: tileAa });
+      patchPixelMaterial(solid, { quantize: true, normalUp: true, texelAa: tileAa, wind: 'lean' });
       // A MONTANHA. Dois motivos para ela não usar `solid`, e os dois são o cubo:
       //   · vertexColors, porque `normalUp` acende TODA face como se ela olhasse para cima (é a lei
       //     de iluminação deste jogo, e o cubo de dungeon a segue) — então o volume do bloco não
@@ -1313,11 +1364,17 @@ export class World3D {
       ));
     }
 
-    this.decorGeo = buildFlatTileGeometry(decorTiles, 0.02, solidSet);
+    this.decorGeo = buildFlatTileGeometry(
+      decorTiles, 0.02, solidSet, undefined, (frame) => (WIND_STIR_FRAMES.has(frame) ? 1 : 0),
+    );
     this.addTerrainMesh(new THREE.Mesh(this.decorGeo, mats.decor));
     decorTiles.forEach((tile, i) => {
       this.decorQuads.set(`${tile.x},${tile.z}`, i * 4);
       if (tile.frame === LOW_GRASS_TILE) this.grassQuads.set(`${tile.x},${tile.z}`, i * 4);
+      // Onde o enxame de vaga-lumes pode pousar. Sai da MESMA varredura da decoração porque é a
+      // mesma pergunta ("que tile é verde?"): um segundo passo sobre o mundo seria uma segunda
+      // resposta, livre para discordar.
+      if (FIREFLY_HOST_FRAMES.has(tile.frame)) this.greenTiles.push(tile.x, tile.z);
     });
 
     // A alvenaria de dungeon e a MONTANHA saem da malha dos quads e viram CUBO (ver
@@ -2783,6 +2840,7 @@ export class World3D {
     this.applyColor('fireRampRim', fireRampRimUniform.value, this.params.fireRampRim);
     fireGlowResUniform.value = Math.max(0, this.params.fireGlowRes);
     flowTimeUniform.value = this.elapsed;
+    windUniform.value = Math.max(0, this.params.wind);
     this.ambientLight.intensity = this.params.ambient;
     this.applyColor('ambient', this.ambientLight.color, this.params.ambientColor);
     this.moonLight.intensity = this.params.moon;
@@ -2959,9 +3017,7 @@ export class World3D {
     }
     if (!this.atmosphereSeeded) {
       for (let i = 0; i < FIREFLY_COUNT; i++) {
-        this.fireflies.pos[i * 3] = this.camTarget.x + (Math.random() - 0.5) * 18;
-        this.fireflies.pos[i * 3 + 1] = 0.3 + Math.random() * 1.3;
-        this.fireflies.pos[i * 3 + 2] = this.camTarget.z + (Math.random() - 0.5) * 18;
+        this.fireflies.pos[i * 3 + 1] = -10; // fora do chão até achar mato (ver rehomeFirefly)
       }
       for (let i = 0; i < MIST_COUNT; i++) {
         this.mist.pos[i * 3] = this.camTarget.x + (Math.random() - 0.5) * 30;
@@ -3024,26 +3080,7 @@ export class World3D {
     }
     this.dust.mark();
 
-    // Fireflies: bob up and down, drift within a box around the hero, and glow
-    // amber-green only inside a lit fire's clearing — twinkling on and off.
-    const ffAmt = Math.max(0, this.params.fireflies);
-    for (let i = 0; i < FIREFLY_COUNT; i++) {
-      const s = this.fireflySeed[i];
-      let x = this.fireflies.pos[i * 3] + Math.sin(t * 0.5 + s) * 0.006;
-      let z = this.fireflies.pos[i * 3 + 2] + Math.cos(t * 0.42 + s * 1.3) * 0.006;
-      if (x < cx - 11) x = cx + 11; else if (x > cx + 11) x = cx - 11;
-      if (z < cz - 11) z = cz + 11; else if (z > cz + 11) z = cz - 11;
-      this.fireflies.pos[i * 3] = x;
-      this.fireflies.pos[i * 3 + 1] = 0.35 + 0.9 * (0.5 + 0.5 * Math.sin(t * 0.6 + s * 1.7));
-      this.fireflies.pos[i * 3 + 2] = z;
-      const near = fire ? Math.max(0, 1 - Math.hypot(x - fire.worldX, z - fire.worldY) / 7) : 0;
-      const blink = Math.max(0, Math.sin(t * 2.3 + s * 4.0));
-      const a = ffAmt * near * blink;
-      this.fireflies.col[i * 3] = 0.7 * a;
-      this.fireflies.col[i * 3 + 1] = 1.0 * a;
-      this.fireflies.col[i * 3 + 2] = 0.35 * a;
-    }
-    this.fireflies.mark();
+    this.updateFireflies(dt, fire, cx, cz);
 
     // Mist: slow cool wisps hugging the ground; thins right at the fire (heat burns
     // it off) so the lit clearing stays clear while the dark stays veiled.
@@ -3064,6 +3101,120 @@ export class World3D {
       this.mist.col[i * 3 + 2] = 0.6 * a;
     }
     this.mist.mark();
+  }
+
+  /**
+   * O ENXAME. Ele mudou de dono: antes o vaga-lume só acendia dentro do halo de uma fogueira
+   * ACESA, e no construtor de mundo (onde toda fogueira de carta nasce apagada) isso queria dizer
+   * que ele não existia — a única luz do mundo era o acampamento. Agora quem o chama é o MATO:
+   * cada bicho escolhe uma moita real da janela assada (`greenTiles`) e orbita ali. É uma regra
+   * que o mundo ensina sem legenda — onde pisca, é verde — e é o que faz plantar flor numa carta
+   * povoá-la de vaga-lume sem tocar em código.
+   *
+   * A fogueira não sumiu da conta: perto dela o enxame ADENSA (o brilho sobe), que é o resquício
+   * da recompensa antiga sem ela ser a condição de existir.
+   *
+   * Nada aqui cria luz THREE: são Points aditivos. A lei do jogo é que a CONTAGEM de luzes está
+   * selada — um vaga-lume que iluminasse o chão recompilaria o mundo inteiro (~550ms) na primeira
+   * vez que acendesse.
+   */
+  private updateFireflies(dt: number, fire: FireEntry | null, cx: number, cz: number): void {
+    const amount = Math.max(0, this.params.fireflies);
+    for (let i = 0; i < FIREFLY_COUNT; i++) {
+      const p = this.fireflyState[i];
+      const px = this.fireflies.pos[i * 3];
+      const pz = this.fireflies.pos[i * 3 + 2];
+
+      // Longe demais do quadro (ou ainda sem casa): procura outra moita. O relógio existe para
+      // que um mundo de pedra — onde a busca sempre falha — não pague a varredura todo quadro.
+      const strayed = Math.abs(p.hx - cx) > FIREFLY_BOX || Math.abs(p.hz - cz) > FIREFLY_BOX;
+      p.settle -= dt;
+      if ((!p.homed || strayed) && p.settle <= 0) {
+        p.settle = 0.45;
+        this.rehomeFirefly(i, cx, cz);
+      }
+      if (!p.homed) {
+        this.fireflies.pos[i * 3 + 1] = -10; // sem mato por perto não há vaga-lume: some inteiro
+        this.fireflies.col[i * 3] = 0;
+        this.fireflies.col[i * 3 + 1] = 0;
+        this.fireflies.col[i * 3 + 2] = 0;
+        continue;
+      }
+
+      // O voo: uma arrancada curta de vez em quando, atrito no resto do tempo e uma mola fraca
+      // puxando de volta para a moita. Um seno puro (o que havia antes) lê como partícula; o que
+      // lê como bicho é a mudança BRUSCA de direção entre trechos de deriva.
+      p.dart -= dt;
+      if (p.dart <= 0) {
+        p.dart = 0.5 + Math.random() * 1.9;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.5 + Math.random() * 1.3;
+        p.vx += Math.cos(angle) * speed;
+        p.vz += Math.sin(angle) * speed;
+      }
+      const drag = Math.exp(-2.6 * dt);
+      p.vx = p.vx * drag + (p.hx - px) * 1.5 * dt;
+      p.vz = p.vz * drag + (p.hz - pz) * 1.5 * dt;
+      let x = px + p.vx * dt;
+      let z = pz + p.vz * dt;
+      // A coleira: nunca mais que FIREFLY_ROAM da moita, ou o enxame se dissolve na tela.
+      const dx = x - p.hx; const dz = z - p.hz;
+      const dist = Math.hypot(dx, dz);
+      if (dist > FIREFLY_ROAM) {
+        x = p.hx + (dx / dist) * FIREFLY_ROAM;
+        z = p.hz + (dz / dist) * FIREFLY_ROAM;
+        p.vx *= -0.35; p.vz *= -0.35;
+      }
+      this.fireflies.pos[i * 3] = x;
+      this.fireflies.pos[i * 3 + 2] = z;
+      // A altura acompanha a velocidade: quem corre, sobe. Sem isso o bicho voa numa mesa de
+      // vidro, e é a subida na arrancada que dá volume ao enxame.
+      const climb = Math.min(1, Math.hypot(p.vx, p.vz) * 0.55);
+      const s = this.fireflySeed[i];
+      this.fireflies.pos[i * 3 + 1] = 0.3 + 0.35 * climb
+        + 0.34 * (0.5 + 0.5 * Math.sin(this.elapsed * 0.7 + s * 1.7));
+
+      // O pisca: aceso curto, apagado longo — a assinatura do bicho. `blink` corre no ritmo dele,
+      // e o expoente é o que separa "acende e apaga" de "pulsa".
+      p.blink += dt * p.rate;
+      const pulse = Math.max(0, Math.sin(p.blink));
+      const near = fire ? Math.max(0, 1 - Math.hypot(x - fire.worldX, z - fire.worldY) / 8) : 0;
+      // O expoente 3 apagava o enxame: com ele o bicho passa ~85% do ciclo escuro, e com 44
+      // deles espalhados numa caixa maior que a tela sobravam dois pontos por quadro. Quadrado
+      // (mais um resto de brasa, que é o corpo dele visto de perto) mantém o pisca e devolve o
+      // enxame — foi medido em foto, não no papel.
+      const a = amount * (0.5 + 0.5 * near) * (0.12 + 0.88 * pulse * pulse);
+      this.fireflies.col[i * 3] = 0.75 * a;
+      this.fireflies.col[i * 3 + 1] = 1.0 * a;
+      this.fireflies.col[i * 3 + 2] = 0.3 * a;
+    }
+    this.fireflies.mark();
+  }
+
+  /**
+   * Sorteia uma moita dentro do quadro para este vaga-lume. Amostragem por REJEIÇÃO sobre o índice
+   * inteiro da janela (que tem milhares de tiles) em vez de um índice espacial: são 18 tentativas
+   * no pior caso, para no máximo 34 bichos, e só quando um deles perdeu a casa. Falhar é uma
+   * resposta legítima — quer dizer "não há verde aqui", e o bicho fica invisível.
+   */
+  private rehomeFirefly(index: number, cx: number, cz: number): void {
+    const p = this.fireflyState[index];
+    const count = this.greenTiles.length / 2;
+    p.homed = false;
+    if (count === 0) return;
+    for (let attempt = 0; attempt < 18; attempt++) {
+      const t = Math.floor(Math.random() * count) * 2;
+      const gx = this.greenTiles[t];
+      const gz = this.greenTiles[t + 1];
+      if (Math.abs(gx - cx) > FIREFLY_BOX || Math.abs(gz - cz) > FIREFLY_BOX) continue;
+      p.hx = gx + (Math.random() - 0.5) * 0.6;
+      p.hz = gz + (Math.random() - 0.5) * 0.6;
+      p.vx = 0; p.vz = 0;
+      p.homed = true;
+      this.fireflies.pos[index * 3] = p.hx;
+      this.fireflies.pos[index * 3 + 2] = p.hz;
+      return;
+    }
   }
 
   private readonly handleResize = (): void => {
@@ -3226,6 +3377,20 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
 // ── ambient particle fields (additive Points) ─────────────────────────────────
 
 interface EmberParticle { life: number; maxLife: number; vx: number; vy: number; vz: number }
+
+/**
+ * Um vaga-lume. `hx/hz` é a MOITA que ele escolheu (ele orbita ali, não a caixa da câmera), e o
+ * resto é o voo: velocidade própria, um relógio até a próxima arrancada, e a fase/ritmo do
+ * pisca. `settle` é o tempo até tentar achar mato de novo quando não há nenhum por perto.
+ */
+interface FireflyParticle {
+  hx: number; hz: number;
+  vx: number; vz: number;
+  dart: number;
+  blink: number; rate: number;
+  settle: number;
+  homed: boolean;
+}
 
 interface ParticleField {
   points: THREE.Points;
@@ -3664,6 +3829,12 @@ const buildFlatTileGeometry = (
   solids?: ReadonlySet<number>,
   /** Per-corner shore ramp, emitted as the `aShore` attribute the sea's material reads. */
   shore?: (x: number, z: number) => number[],
+  /**
+   * Emite o atributo `aWind` (ver WIND_WAVE_GLSL). Só a malha de DECORAÇÃO passa isto: o chão, o
+   * leito e o mar não têm vegetação nenhuma, e um atributo a mais em 11 mil quads de oceano seria
+   * meio megabyte para multiplicar por zero.
+   */
+  windMask?: (frame: number) => number,
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
@@ -3671,6 +3842,7 @@ const buildFlatTileGeometry = (
   const nrm: number[] = [];
   const col: number[] = [];
   const shr: number[] = [];
+  const wind: number[] = [];
   const idx: number[] = [];
   tiles.forEach(({ x, z, frame }, i) => {
     const f = tilesetFrameUv(frame);
@@ -3683,6 +3855,10 @@ const buildFlatTileGeometry = (
     nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
     for (const shade of tileAoCorners(x, z, solids)) col.push(shade, shade, shade);
     if (shore) shr.push(...shore(x, z));
+    if (windMask) {
+      const stir = windMask(frame);
+      for (let k = 0; k < 4; k++) wind.push(stir, x, z);
+    }
     const b = i * 4;
     idx.push(b, b + 3, b + 2, b, b + 2, b + 1);
   });
@@ -3693,6 +3869,7 @@ const buildFlatTileGeometry = (
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   if (shore) geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shr, 1));
+  if (windMask) geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
   geo.setIndex(idx);
   return geo;
 };
@@ -3878,6 +4055,7 @@ const buildUprightTileGeometry = (
   const uv: number[] = [];
   const bounds: number[] = [];
   const nrm: number[] = [];
+  const wind: number[] = [];
   const idx: number[] = [];
   tiles.forEach(({ x, z, frame }, i) => {
     const f = tilesetFrameUv(frame);
@@ -3886,6 +4064,10 @@ const buildUprightTileGeometry = (
     uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1);
+    // Quem obedece ao VENTO, e o centro do tile de onde a onda é lida (ver WIND_WAVE_GLSL). É
+    // por vértice porque é UMA malha: a árvore que balança e o túmulo que não estão nela juntos.
+    const sway = WIND_SWAY_FRAMES.has(frame) ? 1 : 0;
+    for (let k = 0; k < 4; k++) wind.push(sway, x, z);
     const b = i * 4;
     idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
   });
@@ -3894,6 +4076,7 @@ const buildUprightTileGeometry = (
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
   geo.setIndex(idx);
   return geo;
 };

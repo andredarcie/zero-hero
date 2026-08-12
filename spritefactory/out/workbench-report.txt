@@ -1,0 +1,11 @@
+workbench: 4 frame(s) — 0 fail, 2 warn
+  [info] bbox: frame 0: content 12x10 at (2,3), coverage 30%
+  [warn] color-count: frame 1: 10 colours — above the 2-8 norm; merge the closest pairs
+  [info] bbox: frame 1: content 12x11 at (2,2), coverage 31%
+  [info] bbox: frame 2: content 12x12 at (2,2), coverage 5%
+  [warn] contrast: frame 2: every colour sits within 8 luma of the night ground — the sprite will vanish there
+  [info] bbox: frame 3: content 12x12 at (2,2), coverage 5%
+  frame 0: #815938×21 #63452c×19 #b7916a×14 #886644×8 #1d2b53×6 #cdcdcd×4 #141d38×4 #989aa7×2
+  frame 1: #815938×21 #63452c×19 #b7916a×12 #886644×10 #1d2b53×6 #cdcdcd×4 #141d38×4 #989aa7×2 #f1cc36×1 #f8e394×1
+  frame 2: #1d2b53×12
+  frame 3: #f1cc36×12

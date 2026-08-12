@@ -18,6 +18,14 @@ const resolveAssetUrl = (path: string): string => `${import.meta.env.BASE_URL}${
 
 const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
   {
+    // A MOEDA GIRA: quatro poses numa fita (cara, três-quartos, fio, três-quartos de volta). Ela
+    // era um frame PARADO na lista de imagens — e é o objeto que este jogo mais mostra na tela.
+    key: ASSET_KEYS.coin,
+    path: '/assets/items/collectibles/coin.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     key: ASSET_KEYS.hero,
     path: '/assets/characters/player/hero.png',
     frameWidth: TILESET_FRAME_SIZE,
@@ -58,6 +66,13 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // Sprite Factory: o MARCO da estrada — laje dormente (0) e desperta (1).
+    key: ASSET_KEYS.roadSeal,
+    path: '/assets/environment/props/road_seal.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: placa solta (0) e pressionada (1), empilhadas na coluna.
     key: ASSET_KEYS.pressurePlate,
     path: '/assets/environment/props/pressure_plate.png',
@@ -82,6 +97,64 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     // Sprite Factory: cabo de energia — 7 formas apagadas + 7 filetes gold (ver wireShapes.ts).
     key: ASSET_KEYS.wire,
     path: '/assets/environment/props/wire.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: a esteira — `dir + 4*fase` (N, L, S, O), full bleed no eixo da viagem.
+    key: ASSET_KEYS.belt,
+    path: '/assets/environment/props/belt.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: o extrator, na mesma convencao de frames da esteira e do braco.
+    key: ASSET_KEYS.extractor,
+    path: '/assets/environment/props/extractor.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: o bau — vazio (0) e com carga (1, o ferrolho em ouro).
+    key: ASSET_KEYS.chest,
+    path: '/assets/environment/props/chest.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: o forno — a boca em quatro direcoes, e o mesmo par apagado/aceso.
+    //
+    // Ele nao esta aqui por causa do mundo 3D (aquele le `textures3d`), e sim porque TODA arte que
+    // a UI 2D desenha precisa passar pelo Phaser: o catalogo da bancada, a bolsa e a subtela pedem
+    // um data URL do frame (`spriteDataUrl`), e uma textura que so existe no lado 3D devolve
+    // imagem QUEBRADA. Foi o que aconteceu com estas duas — e a silhueta preta do catalogo
+    // escondeu o defeito por um bom tempo, porque uma imagem quebrada chapada de preto e
+    // indistinguivel de um vulto.
+    key: ASSET_KEYS.furnace,
+    path: '/assets/environment/props/furnace.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: o martinete PARADO — mesa de pedra (0), mesa em brasa (1), pilar (2) e o
+    // retrato que serve de icone (3).
+    key: ASSET_KEYS.tripHammer,
+    path: '/assets/environment/props/trip-hammer.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: a VIGA e o MALHO, em seis angulos. Os frames tem DOIS TILES de largura —
+    // a viga atravessa o pilar e alcanca a mesa, e um madeiro de 16px nao e um madeiro.
+    key: ASSET_KEYS.tripHammerBeam,
+    path: '/assets/environment/props/trip-hammer-beam.png',
+    frameWidth: TILESET_FRAME_SIZE * 2,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
+    // Sprite Factory: a engrenagem — o bem intermediario, icone de item de um frame so.
+    key: ASSET_KEYS.gearItem,
+    path: '/assets/items/collectibles/gear.png',
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },
@@ -129,7 +202,7 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
   {
     // Sprite Factory: 4 poses do corpo + 2 da bandeja de entrada (ver TOOLBOX_FRAMES).
     key: ASSET_KEYS.toolbox,
-    path: '/assets/environment/props/toolbox.png',
+    path: '/assets/environment/props/workbench.png',
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },
@@ -274,10 +347,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     path: '/assets/ui/icons/thought_plate.png',
   },
   {
-    key: ASSET_KEYS.coin,
-    path: '/assets/items/collectibles/coin.png',
-  },
-  {
     key: ASSET_KEYS.dryBush,
     path: '/assets/environment/props/bush.png',
   },
@@ -298,6 +367,8 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.woodItem,       path: '/assets/items/collectibles/wood.png' },
   { key: ASSET_KEYS.rock,           path: '/assets/environment/props/rock.png' },
   { key: ASSET_KEYS.ironItem,       path: '/assets/items/collectibles/iron.png' },
+  { key: ASSET_KEYS.oreItem,        path: '/assets/items/collectibles/ore.png' },
+  { key: ASSET_KEYS.bloomItem,      path: '/assets/items/collectibles/bloom.png' },
   { key: ASSET_KEYS.woodenCrate,    path: '/assets/environment/props/wooden_crate.png' },
   { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock_cracked.png' },
   { key: ASSET_KEYS.cuttingGrass0,  path: '/assets/environment/props/cuting_grass0.png' },

@@ -23,8 +23,16 @@
 
 const STORAGE_KEY = 'zh.explorer.v1';
 
-/** A bolsa de partida de toda expedicao: capital inicial para comprar as primeiras terras. */
-export const START_COINS = 100;
+/**
+ * A bolsa de partida: ZERO.
+ *
+ * Ela era 100, e 100 comprava o baralho inteiro sem o jogador fazer nada — as cartas viravam um
+ * menu, e o mundo, uma tela de escolha. Com zero, a primeira moeda vem da CAVEIRA que entra pela
+ * estrada escura (o cerco que o modo já tinha e que não servia para nada), e a primeira carta é
+ * uma conquista de dois minutos em vez de um clique. Todo o resto da economia se apoia nisto: se
+ * o capital inicial voltar, nada abaixo importa.
+ */
+export const START_COINS = 0;
 /** Fracao da bolsa que sobrevive quando o heroi ESCOLHE voltar por um portal. */
 export const EXTRACT_KEEP = 0.5;
 /** Fracao da bolsa que sobrevive quando o escuro decide: morrer no mundo aleatorio. */

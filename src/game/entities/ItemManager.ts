@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 
-import { SEED_PACK_KINDS, SEEDS_PER_PACK } from '@/game/constants';
+import { spawnPackSize } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import { ItemPickup, type HeldItemKind, type ItemFire } from './ItemPickup';
 
@@ -30,7 +30,7 @@ export class ItemManager {
     for (const p of list) {
       // Sementes autoradas num mundo são um pacote CHEIO; a foto do save (que passa por aqui
       // na hidratação) traz `units` explícito — um pacote meio gasto volta meio gasto.
-      const units = p.units ?? (SEED_PACK_KINDS.has(p.type) ? SEEDS_PER_PACK : 1);
+      const units = p.units ?? spawnPackSize(p.type);
       this.items.push(new ItemPickup(this.scene, p.type, p.worldX, p.worldY, false, undefined, undefined, units));
     }
   }
@@ -43,7 +43,7 @@ export class ItemManager {
   public drop(kind: HeldItemKind, worldX: number, worldY: number, fire?: ItemFire, chargeMs?: number, units?: number): void {
     // `units` explícito vem do pousar do herói e do braço (o pacote que estava viajando);
     // sem ele, sementes recém-produzidas (a foice) nascem como um pacote cheio.
-    const n = units ?? (SEED_PACK_KINDS.has(kind) ? SEEDS_PER_PACK : 1);
+    const n = units ?? spawnPackSize(kind);
     this.items.push(new ItemPickup(this.scene, kind, worldX, worldY, true, fire, chargeMs, n));
   }
 

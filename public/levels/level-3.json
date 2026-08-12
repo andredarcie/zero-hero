@@ -1,0 +1,790 @@
+{
+  "meta": {
+    "name": "A Linha",
+    "schemaVersion": 1,
+    "worldChunksX": 1,
+    "worldChunksY": 1,
+    "chunkColumns": 12,
+    "chunkRows": 12,
+    "tileSize": 8,
+    "tilesetKey": "forest-tileset",
+    "playerStart": {
+      "worldX": 5,
+      "worldY": 9
+    },
+    "puzzle": true,
+    "exportedAt": "2026-08-09T19:30:02.916Z"
+  },
+  "chunks": [
+    {
+      "cx": 0,
+      "cy": 0,
+      "ground": [
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      ],
+      "upper": [
+        [
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14,
+          14,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14,
+          14,
+          14,
+          14
+        ],
+        [
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14
+        ]
+      ],
+      "collisions": [
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      ],
+      "enemies": [],
+      "pickups": [
+        {
+          "type": "axe",
+          "worldX": 2,
+          "worldY": 8
+        },
+        {
+          "type": "pickaxe",
+          "worldX": 3,
+          "worldY": 8
+        },
+        {
+          "type": "bucket",
+          "worldX": 4,
+          "worldY": 8
+        },
+        {
+          "type": "gear",
+          "worldX": 7,
+          "worldY": 5
+        },
+        {
+          "type": "gear",
+          "worldX": 8,
+          "worldY": 5
+        },
+        {
+          "type": "chest",
+          "worldX": 9,
+          "worldY": 6
+        },
+        {
+          "type": "inserter",
+          "worldX": 10,
+          "worldY": 6
+        },
+        {
+          "type": "extractor",
+          "worldX": 7,
+          "worldY": 7
+        },
+        {
+          "type": "boiler",
+          "worldX": 8,
+          "worldY": 7
+        },
+        {
+          "type": "iron",
+          "worldX": 4,
+          "worldY": 2
+        },
+        {
+          "type": "iron",
+          "worldX": 5,
+          "worldY": 2
+        },
+        {
+          "type": "iron",
+          "worldX": 6,
+          "worldY": 2
+        },
+        {
+          "type": "stone",
+          "worldX": 4,
+          "worldY": 3
+        },
+        {
+          "type": "stone",
+          "worldX": 5,
+          "worldY": 3
+        },
+        {
+          "type": "wood",
+          "worldX": 6,
+          "worldY": 3
+        },
+        {
+          "type": "wood",
+          "worldX": 4,
+          "worldY": 4
+        },
+        {
+          "type": "iron",
+          "worldX": 3,
+          "worldY": 7
+        },
+        {
+          "type": "iron",
+          "worldX": 4,
+          "worldY": 7
+        },
+        {
+          "type": "iron",
+          "worldX": 5,
+          "worldY": 7
+        },
+        {
+          "type": "wire",
+          "worldX": 9,
+          "worldY": 5
+        },
+        {
+          "type": "wire",
+          "worldX": 10,
+          "worldY": 5
+        },
+        {
+          "type": "belt",
+          "worldX": 7,
+          "worldY": 6
+        }
+      ],
+      "npcs": []
+    }
+  ],
+  "props": [
+    {
+      "type": "campfire",
+      "worldX": 4,
+      "worldY": 10,
+      "lit": true
+    },
+    {
+      "type": "boiler",
+      "worldX": 3,
+      "worldY": 10
+    },
+    {
+      "type": "toolbox",
+      "worldX": 5,
+      "worldY": 5,
+      "dir": 1
+    },
+    {
+      "type": "water",
+      "worldX": 1,
+      "worldY": 6
+    },
+    {
+      "type": "waterWheel",
+      "worldX": 1,
+      "worldY": 7
+    },
+    {
+      "type": "wire",
+      "worldX": 2,
+      "worldY": 7
+    },
+    {
+      "type": "belt",
+      "worldX": 3,
+      "worldY": 7,
+      "dir": 1
+    },
+    {
+      "type": "belt",
+      "worldX": 4,
+      "worldY": 7,
+      "dir": 1
+    },
+    {
+      "type": "belt",
+      "worldX": 5,
+      "worldY": 7,
+      "dir": 1
+    },
+    {
+      "type": "chest",
+      "worldX": 6,
+      "worldY": 7
+    },
+    {
+      "type": "chest",
+      "worldX": 8,
+      "worldY": 8,
+      "variable": "encomenda",
+      "quota": {
+        "kind": "iron",
+        "count": 20
+      }
+    },
+    {
+      "type": "electronicGate",
+      "worldX": 9,
+      "worldY": 9,
+      "variable": "encomenda"
+    },
+    {
+      "type": "levelPortal",
+      "worldX": 10,
+      "worldY": 9
+    },
+    {
+      "type": "ironRock",
+      "worldX": 6,
+      "worldY": 8
+    },
+    {
+      "type": "ironRock",
+      "worldX": 9,
+      "worldY": 1
+    },
+    {
+      "type": "ironRock",
+      "worldX": 9,
+      "worldY": 2
+    },
+    {
+      "type": "ironRock",
+      "worldX": 9,
+      "worldY": 3
+    },
+    {
+      "type": "rock",
+      "worldX": 1,
+      "worldY": 1
+    },
+    {
+      "type": "rock",
+      "worldX": 2,
+      "worldY": 1
+    },
+    {
+      "type": "rock",
+      "worldX": 1,
+      "worldY": 2
+    },
+    {
+      "type": "rock",
+      "worldX": 2,
+      "worldY": 2
+    },
+    {
+      "type": "dryTree",
+      "worldX": 1,
+      "worldY": 3
+    },
+    {
+      "type": "dryTree",
+      "worldX": 1,
+      "worldY": 4
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 2,
+      "worldY": 3
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 2,
+      "worldY": 4
+    }
+  ],
+  "dialogs": {},
+  "globalVariables": {
+    "encomenda": false
+  }
+}

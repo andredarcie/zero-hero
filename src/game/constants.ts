@@ -235,10 +235,25 @@ export const ASSET_KEYS = {
   // A flor da lua (spritefactory): as 9 poses de UMA flor abrindo — ver MOONFLOWER_FRAMES.
   moonflower: 'moonflower',
   pressurePlate: 'pressure-plate',
+  // O MARCO da estrada do construtor de mundo (spritefactory/sprites/road-seal.mjs): a laje de
+  // pedra em que se compra o próximo chunk. Dois frames — dormente e desperta.
+  roadSeal: 'road-seal',
   waterWheel: 'water-wheel',
   boiler: 'boiler',
   wire: 'wire',
-  toolbox: 'toolbox',
+  // A FABRICA (spritefactory): a esteira em 8 frames (`dir + 4*fase`), o extrator na mesma
+  // convencao, o bau em 2 (vazio / com carga) e a engrenagem, que e um icone de item.
+  belt: 'belt',
+  extractor: 'extractor',
+  chest: 'chest',
+  gearItem: 'gear-item',
+  toolbox: 'workbench',
+  furnace: 'furnace',
+  tripHammer: 'trip-hammer',
+  // A VIGA do martinete: sheet PROPRIO porque os frames dele tem 32px (dois tiles de largura).
+  tripHammerBeam: 'trip-hammer-beam',
+  oreItem: 'ore-item',
+  bloomItem: 'bloom-item',
   electronicGate: 'electronic-gate',
   levelPortal: 'level-portal-icon',
   battery: 'battery',
@@ -306,13 +321,89 @@ export const MOONFLOWER_FRAMES = {
 export const MOONFLOWER_LIGHT_TILES = 2.6;
 // Sprite Factory electronic_gate.png: quatro alturas da grade em bancos sem/com energia.
 export const ELECTRONIC_GATE_FRAMES = { phases: 4, off: 0, powered: 4 } as const;
-// Sprite Factory toolbox.png: quatro poses do CORPO (fechada, entreaberta, aberta, forjando) mais
-// duas da BANDEJA (vazia, carregada) — um sheet so porque as duas metades da peca nascem juntas.
-export const TOOLBOX_FRAMES = { closed: 0, ajar: 1, open: 2, forging: 3, slot: 4, slotFull: 5 } as const;
+// Sprite Factory workbench.png: a MESA parada, a mesa TRABALHANDO (o martelo sobe um pixel e
+// saltam duas fagulhas — micro-variacao, nunca uma silhueta nova), e as duas poses da BANDEJA.
+//
+// A bandeja sobreviveu a reforma que tirou os slots do caminho do JOGADOR porque as MAQUINAS
+// continuam alimentando a bancada por ali: um braco robotico nao abre menu. O que mudou e que
+// ninguem mais e OBRIGADO a usa-la — o jogador constroi pelo A, direto da mochila.
+export const TOOLBOX_FRAMES = { closed: 0, ajar: 0, open: 1, forging: 1, slot: 2, slotFull: 3 } as const;
 // Quanto tempo de REDE VIVA uma carga banca: pousada junto a um cabo, a bateria e uma semente
 // do flood-fill e drena so ENQUANTO alimenta (na mao ela e estavel — a tensao mora em quanto
 // tempo a rede precisa ficar de pe, nao na viagem, que ja e o drama da tocha).
 export const BATTERY_FEED_MS = 20000;
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// A REDE COM VAZAO — os watts, que sao os unicos numeros do jogo que existem para NAO fechar.
+//
+// A regra que desenha a escada toda: uma RODA banca duas maquinas, uma CALDEIRA banca cinco. Foi
+// escolhido assim porque a roda e de graca (basta um rio) e a caldeira custa combustivel — se a
+// gratuita bancasse a fabrica inteira, a caldeira seria decoracao e a lenha nunca teria motivo.
+// A placa de pressao fica em 1 de proposito: ela e um SENSOR que por acaso gera, e uma fabrica
+// movida a caixote em cima de um botao seria a resposta errada para todo problema de energia.
+//
+// O que acontece quando a conta nao fecha nao e um aviso: e a fabrica inteira ARRASTANDO na
+// proporcao exata do que faltou (ver solvePowerGrid). Um sexto consumidor numa caldeira nao
+// para nada — deixa tudo 17% mais lento, e e o jogador que decide se isso e um problema.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+/** As duas caras do marco da estrada: pedra fria, e pedra com o vinco de moeda ACESO. */
+export const ROAD_SEAL_FRAMES = { dormant: 0, awake: 1 } as const;
+
+export const POWER_WATTS = {
+  // Fontes.
+  pressurePlate: 1,
+  waterWheel: 4,
+  boiler: 10,
+  /** A bateria pousada: meia roda. Ela e emergencia e ponte, nunca uma usina de bolso. */
+  battery: 2,
+  // Consumidores. O braco e a referencia (2): tudo se le como "quantos bracos isto vale".
+  inserter: 2,
+  /** A esteira e a peca que se compra as duzias, entao ela e a mais barata que existe. */
+  belt: 1,
+  /** O extrator custa dois bracos: ele e o unico que cria materia, e criar tem de doer. */
+  extractor: 4,
+  /** O portao so quer saber se ha corrente — ele nao tem velocidade para degradar. */
+  electronicGate: 1,
+  /**
+   * O MARTINETE: tres. Ele custa mais que um braco e menos que um extrator, e a razao e
+   * historica — o martinete e movido a RODA D'AGUA, que da 4. Uma roda banca exatamente um
+   * martinete e sobra 1, que e o custo de uma esteira levando o ferro embora. A primeira
+   * automacao completa do jogo cabe numa roda so, e essa e a promessa que o numero faz.
+   */
+  tripHammer: 3,
+} as const;
+
+// O FORNO: quanto dura uma fornada. 4s e quase o dobro da bancada (2,28s) de proposito — reduzir
+// minerio nao e montar uma peca, e uma reacao quimica que leva TEMPO, e o forno tem de ser o
+// gargalo natural da linha do ferro. E ele nao consome energia: um bloomery e movido a fole, nao
+// a eletricidade, e por isso e a unica maquina que se constroi antes de existir uma rede.
+export const FURNACE_CYCLE_MS = 4000;
+
+// O MARTINETE: uma pancada a cada 1,1s a plena carga, e TRES pancadas por esponja (a mesma conta
+// da mao do heroi). Sao ~3,3s por barra contra os ~2,4s que o jogador leva martelando — a mesma
+// lei do extrator: a maquina nao ganha por ser rapida, ganha por trabalhar sozinha.
+export const TRIP_HAMMER_BLOW_MS = 1100;
+
+// Quantas marteladas uma esponja aguenta antes de virar ferro. Vale para a mao do heroi E para o
+// martinete: uma so contagem, ou o jogador aprende dois numeros para o mesmo gesto.
+export const BLOOM_BLOWS = 3;
+
+// A ESTEIRA: quanto tempo um item leva para atravessar um tile a plena carga. 900ms deixa a
+// carga VISIVEL viajando (o olho acompanha um item saltando de tile em tile) e ainda assim
+// quase tres vezes mais rapida que o braco robotico, que e a comparacao que importa: a esteira
+// tem de ganhar do braco em linha reta, ou nao ha razao para existirem as duas.
+export const BELT_STEP_MS = 900;
+
+// O EXTRATOR: um bloco de minerio a cada 2.4s a plena carga. A picareta na mao faz o mesmo em
+// ~2s (tres batidas na cadencia do A), entao UM extrator e mais lento que o heroi — de
+// proposito. A maquina nao ganha por ser rapida; ela ganha por ser MUITA e por trabalhar
+// enquanto o jogador esta numa dungeon do outro lado do mapa.
+export const EXTRACTOR_CYCLE_MS = 2400;
+
+// O BAU: quantas unidades cabem. 99 e o teto que nunca se encosta numa sessao normal — o bau
+// existe para a producao NAO entupir, e um bau que enche viraria a mesma parede que ele veio
+// resolver. Nao ha numero na tela: cheio ou vazio se le pelo ferrolho (ver chest.mjs).
+export const CHEST_CAPACITY = 99;
 
 // A gosma nao anda: SALTA. Sao os dois unicos frames dela — pousada e esticada no ar —, e a troca
 // acontece no passo (ver SlimeEnemy), nao num relogio de animacao: um slime parado fica parado.
@@ -414,6 +505,18 @@ export const DRY_TREE_FRAME_COUNT = 6;
 // A felled tree grows back after this long, so the player can never run out of gravetos (the
 // fuel for fire) and soft-lock. It only regrows once its tile is clear of the hero and enemies.
 export const TREE_REGROW_MS = 60000;
+
+/**
+ * Quantos gravetos uma árvore derrubada solta. Era UM, e um é o que a transforma no gargalo do
+ * jogo inteiro: a carvoaria pede duas madeiras por carvão, cada carvão faz uma barra de ferro, e a
+ * carta final custa dez barras — vinte derrubadas, cada uma seguida de um minuto de espera pela
+ * rebrota. Medido, isso são ~10 minutos parado olhando um toco, que é a única coisa neste jogo que
+ * não tem gesto nenhum.
+ *
+ * DOIS também é o número honesto: são quatro machadadas para pôr uma árvore no chão, e uma árvore
+ * inteira dando um único graveto sempre foi a parte da física que ninguém acreditou.
+ */
+export const TREE_STICK_YIELD = 2;
 
 // O PONTO DE SPAWN AUTORADO: quanto tempo a cova espera, depois de o corpo dela cair, antes de
 // fazer outro (EnemySpawnerManager). O relogio conta mesmo com o heroi longe — se contasse so
@@ -569,7 +672,26 @@ export const SEED_PACK_KINDS: ReadonlySet<string> = new Set(['seeds', 'carnivore
 // contrato; o MINÉRIO DE FERRO entra porque a rocha-veio o produz aos montes e vendê-lo ao
 // astronauta é por quantidade. Lista SEPARADA de SEED_PACK_KINDS de propósito: o buraco de
 // plantio pergunta por SEMENTE, e um punhado de ferro não pode ser semeado num canteiro.
-export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set([...SEED_PACK_KINDS, 'iron']);
+// O CABO entra pela mesma porta e pelo mesmo motivo do ferro: a bancada o produz aos quatro e
+// uma rede se deita as duzias. Ele e a UNICA peca da fabrica que empilha — as maquinas nao, e
+// isso e desenho: carregar seis caldeiras num slot faria construir uma fabrica parecer digitar
+// uma lista, e nao percorrer o mundo atras de material.
+export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set([...SEED_PACK_KINDS, 'iron', 'wire', 'belt']);
+
+// O PUNHADO COM QUE UMA PECA NASCE NO CHAO. Semente ja nascia aos cinco; cabo e esteira entraram
+// pelo mesmo motivo e por um pedido direto: sao as duas pecas que se deitam em LINHA, e uma linha
+// nao se faz de uma peca. Pegar uma unidade de cada vez transformaria "desenhar um caminho" numa
+// tarefa de coleta — e o gesto que interessa e o de deitar, nao o de juntar.
+//
+// Isto vale so para o que NASCE no mundo (pickup autorado, drop sem contagem explicita). Um item
+// que ja viajava com `units` mantem os dele: o punhado viaja, e essa lei nao muda.
+const SPAWN_PACK: ReadonlyMap<string, number> = new Map([
+  ...[...SEED_PACK_KINDS].map((k) => [k, SEEDS_PER_PACK] as const),
+  ['wire', 5], ['belt', 5],
+]);
+
+/** Com quantas unidades este tipo nasce no chao quando ninguem diz a contagem. */
+export const spawnPackSize = (kind: string): number => SPAWN_PACK.get(kind) ?? 1;
 
 // River water is animated: these frames (water_0..3.png, a seamless-looping ripple cycle) are
 // cycled by WaterObject, exactly like the campfire's flame frames.

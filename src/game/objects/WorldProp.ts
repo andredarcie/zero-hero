@@ -14,5 +14,18 @@ export interface WorldProp {
    * responde só "há um corpo neste tile", nunca "quem pode atravessá-lo".
    */
   readonly blocking?: boolean;
+  /**
+   * Os OUTROS tiles que este prop ocupa, quando ele e maior que um.
+   *
+   * Existe por causa do martinete, que precisou de dois (mesa de pedra num, pilar com o malho no
+   * outro — num tile so a conta nao fecha, ver o spec da arte). E mora AQUI, no contrato, e nao
+   * dentro dele: quem responde "tem alguma coisa neste tile?" e `GameScene.propAt`, e todo o resto
+   * do jogo — colisao, tiro, ocupacao, instalar, recolher, o braco robotico — pergunta por ali. Um
+   * prop que soubesse do proprio tamanho sem que o `propAt` soubesse seria um prop com metade do
+   * corpo atravessavel, e o defeito apareceria num lugar diferente por semana.
+   *
+   * Ausente = ocupa so o proprio tile, que e o caso de todos os outros.
+   */
+  readonly covers?: ReadonlyArray<readonly [number, number]>;
   destroy(): void;
 }

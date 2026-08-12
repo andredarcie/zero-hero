@@ -455,9 +455,29 @@ export class EditorStore {
       cost: Math.max(0, Math.floor(next.cost)),
       cardImage: next.cardImage.trim(),
       description: next.description?.trim() || undefined,
+      // O formulário de metadados não tem esta caixa (quem liga e desliga é a LISTA do baralho,
+      // uma pergunta num lugar só) — então ela viaja pelo `next`, e salvar o nome de uma carta
+      // nunca pode ser o gesto que a devolve em silêncio para o baralho.
+      enabled: next.enabled,
     };
     if (!normalised.id || !normalised.name || !normalised.cardImage) return;
     chunk.catalog = normalised;
+    this.markDirty();
+    this.emit({ meta: true });
+  }
+
+  /**
+   * Põe/tira uma carta do baralho comprável. É a única escrita do campo `enabled` — o chunk fica
+   * inteiro no arquivo, só deixa de ser oferecido (ver getChunkTemplates).
+   */
+  public setChunkEnabled(cx: number, cy: number, enabled: boolean): void {
+    const chunk = this.chunkIndex.get(chunkKey(cx, cy));
+    if (!chunk?.catalog) return;
+    // `undefined` e não `true` no caso ligado: o default do schema é a AUSÊNCIA do campo, e
+    // gravar `enabled: true` em toda carta encheria o world.json de ruído que não diz nada.
+    const next = enabled ? undefined : false;
+    if (chunk.catalog.enabled === next) return;
+    chunk.catalog = { ...chunk.catalog, enabled: next };
     this.markDirty();
     this.emit({ meta: true });
   }

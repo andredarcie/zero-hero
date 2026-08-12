@@ -1,0 +1,13 @@
+trip-hammer-beam: 6 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 26x8 at (4,5), coverage 20%
+  [info] bbox: frame 1: content 26x7 at (4,5), coverage 20%
+  [info] bbox: frame 2: content 26x7 at (4,4), coverage 20%
+  [info] bbox: frame 3: content 26x7 at (4,3), coverage 20%
+  [info] bbox: frame 4: content 26x8 at (4,2), coverage 20%
+  [info] bbox: frame 5: content 26x9 at (4,1), coverage 20%
+  frame 0: #b7916a×22 #815938×22 #63452c×18 #5d6165×13 #7c7e8b×13 #989aa7×11 #a9abbe×3
+  frame 1: #b7916a×22 #815938×22 #63452c×18 #5d6165×13 #7c7e8b×13 #989aa7×11 #a9abbe×3
+  frame 2: #b7916a×22 #815938×22 #63452c×18 #5d6165×13 #7c7e8b×13 #989aa7×11 #a9abbe×3
+  frame 3: #b7916a×22 #815938×22 #63452c×18 #5d6165×13 #7c7e8b×13 #989aa7×11 #a9abbe×3
+  frame 4: #b7916a×22 #815938×21 #63452c×18 #5d6165×13 #7c7e8b×13 #989aa7×11 #a9abbe×3
+  frame 5: #b7916a×22 #815938×20 #63452c×18 #5d6165×13 #7c7e8b×13 #989aa7×11 #a9abbe×3

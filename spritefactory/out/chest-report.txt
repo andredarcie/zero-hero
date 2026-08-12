@@ -1,0 +1,5 @@
+chest: 2 frame(s) — 0 fail, 0 warn
+  [info] bbox: frame 0: content 12x11 at (2,3), coverage 49%
+  [info] bbox: frame 1: content 12x11 at (2,3), coverage 49%
+  frame 0: #815938×38 #1d2b53×30 #b7916a×23 #886644×14 #141d38×12 #63452c×9
+  frame 1: #815938×38 #1d2b53×26 #b7916a×23 #886644×14 #141d38×12 #63452c×9 #f1cc36×4

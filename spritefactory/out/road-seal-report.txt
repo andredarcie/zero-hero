@@ -1,0 +1,7 @@
+road-seal: 2 frame(s) — 0 fail, 2 warn
+  [info] bbox: frame 0: content 16x14 at (0,1), coverage 69%
+  [warn] value-range: frame 0: dominant material (ink) spans only 23 luma — reads flat ("chapado"); reach for the top of the ink ramp and shade in clusters (README: boas práticas de forma)
+  [info] bbox: frame 1: content 16x14 at (0,1), coverage 69%
+  [warn] value-range: frame 1: dominant material (ink) spans only 23 luma — reads flat ("chapado"); reach for the top of the ink ramp and shade in clusters (README: boas práticas de forma)
+  frame 0: #472ca9×78 #1d2b53×39 #39228b×35 #882c98×13 #a9abbe×11
+  frame 1: #472ca9×78 #1d2b53×39 #af3fc3×24 #882c98×13 #a9abbe×11 #39228b×7 #f4f4f4×4

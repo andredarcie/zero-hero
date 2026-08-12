@@ -403,6 +403,8 @@ export class RoboticArmObject implements WorldProp {
     public readonly dir: PropDir = 1,
     /** Sem variavel, preserva o comportamento legado autoalimentado. Com variavel, exige true. */
     public readonly variable?: string,
+    /** Construido pelo JOGADOR — ver BeltObject.playerBuilt (decide se o B o recolhe). */
+    public readonly playerBuilt: boolean = false,
   ) {
     // A direcao vira FRAME, nunca rotacao: Billboard3D.setAngle gira no plano da camera
     // (mesh.rotation.z), o que inclinaria o desenho em vez de vira-lo pro lado. A folha tem

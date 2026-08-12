@@ -1,0 +1,3 @@
+ore: 1 frame(s) — 0 fail, 0 warn
+  [info] bbox: content 12x10 at (2,3), coverage 39%
+  frame 0: #7c7e8b×27 #989aa7×21 #5d6165×20 #a9abbe×19 #141d38×8 #68380f×3 #733e11×2

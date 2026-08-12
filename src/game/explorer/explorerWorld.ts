@@ -1,4 +1,4 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES } from '@/game/constants';
 import type { ChunkData } from '@/game/world/Chunk';
 import type { ScreenContent } from '@/game/world/ScreenContent';
 import { getChunkTemplates, type ChunkTemplate } from '@/game/world/WorldData';
@@ -12,7 +12,18 @@ export const CAMP_SPAWN_Y = 9;
 
 const GROUND_FRAME = 5;
 const TREE_FRAME = 4;
-const DECOR_FRAMES = [0, 6, 7, 8, 10, 11] as const;
+// O capim e a folhagem do acampamento. O frame 6 estava nesta lista e é um frame de CHÃO ("Terra
+// 2"): opaco, ele virava um quadrado de terra flutuando na camada de cima, tapando o chão de que
+// deveria fazer parte. Aqui só entra arte vazada.
+const DECOR_FRAMES = [0, 7, 8, 19, 20] as const;
+const FLOWER_FRAMES = [1, 10, 11] as const;
+
+/** Hash 2D determinístico (0..1): o acampamento é o mesmo em toda partida, sem Math.random. */
+const tileNoise = (x: number, y: number, seed: number): number => {
+  let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(seed, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
 
 export type ChunkDirection = 'north' | 'east' | 'south' | 'west';
 
@@ -43,18 +54,36 @@ const clear = (chunk: ChunkData, lx: number, ly: number): void => {
   chunk.collisions[ly][lx] = false;
 };
 
+/**
+ * A costura ABRE O QUE BLOQUEIA — ela não raspa o tile até a terra.
+ *
+ * Ela raspava: `clear` zerava chão, camada de cima e colisão nos 64 tiles das quatro faixas de
+ * estrada, que são 44% da carta. O efeito era um SINAL DE MAIS de terra pelada no meio de todo
+ * chunk comprado, e nenhuma quantidade de mato plantado nas bordas consertava isso — o miolo era
+ * apagado no assentamento. A garantia que a costura existe para dar é uma só: "esta faixa é
+ * passável, então qualquer carta encaixa em qualquer outra". Grama, flor e cogumelo não bloqueiam
+ * nada, logo não têm por que morrer aqui — e o pátio de pedra do desfiladeiro também não.
+ */
+const unblock = (chunk: ChunkData, lx: number, ly: number): void => {
+  if (lx < 0 || ly < 0 || lx >= CHUNK_COLUMNS || ly >= CHUNK_ROWS) return;
+  if (SOLID_GROUND_FRAMES.has(chunk.ground[ly][lx])) chunk.ground[ly][lx] = GROUND_FRAME;
+  const upper = chunk.upper[ly][lx];
+  if (upper !== null && SOLID_UPPER_FRAMES.has(upper)) chunk.upper[ly][lx] = null;
+  chunk.collisions[ly][lx] = false;
+};
+
 /** Every authored template receives generous seams, so any card can fit beside any other. */
 const openSeams = (chunk: ChunkData): ChunkData => {
   for (let i = 0; i < 4; i += 1) {
     for (let n = -1; n <= 1; n += 1) {
-      clear(chunk, 6 + n, i);
-      clear(chunk, 6 + n, CHUNK_ROWS - 1 - i);
-      clear(chunk, i, 6 + n);
-      clear(chunk, CHUNK_COLUMNS - 1 - i, 6 + n);
+      unblock(chunk, 6 + n, i);
+      unblock(chunk, 6 + n, CHUNK_ROWS - 1 - i);
+      unblock(chunk, i, 6 + n);
+      unblock(chunk, CHUNK_COLUMNS - 1 - i, 6 + n);
       // The starter's east road deliberately sits lower. Keeping this second horizontal seam
       // lets any authored card connect to it without changing that recognizable home layout.
-      clear(chunk, i, 8 + n);
-      clear(chunk, CHUNK_COLUMNS - 1 - i, 8 + n);
+      unblock(chunk, i, 8 + n);
+      unblock(chunk, CHUNK_COLUMNS - 1 - i, 8 + n);
     }
   }
   return chunk;
@@ -69,11 +98,18 @@ const starterChunk = (): ChunkData => {
     collisions: Array.from({ length: CHUNK_ROWS }, () => Array(CHUNK_COLUMNS).fill(false)),
   };
 
+  // A clareira: cerca de pinheiros, e dentro dela um quintal de mato com flor nas moitas mais
+  // fundas — a mesma gramática das cartas compradas (ver scripts/enrich-chunk-cards.mjs), porque
+  // um acampamento pelado no meio de vizinhos floridos leria como chão que não terminou.
   for (let y = 0; y < CHUNK_ROWS; y += 1) {
     for (let x = 0; x < CHUNK_COLUMNS; x += 1) {
       const border = x === 0 || y === 0 || x === CHUNK_COLUMNS - 1 || y === CHUNK_ROWS - 1;
-      if (border) chunk.upper[y][x] = TREE_FRAME;
-      else if ((x * 17 + y * 31) % 19 === 0) chunk.upper[y][x] = DECOR_FRAMES[(x + y) % DECOR_FRAMES.length];
+      if (border) { chunk.upper[y][x] = TREE_FRAME; continue; }
+      const t = tileNoise(x, y, 7);
+      if (t < 0.42) continue;
+      chunk.upper[y][x] = t > 0.93
+        ? FLOWER_FRAMES[Math.floor(tileNoise(x, y, 13) * FLOWER_FRAMES.length) % FLOWER_FRAMES.length]
+        : DECOR_FRAMES[Math.floor(tileNoise(x, y, 29) * DECOR_FRAMES.length) % DECOR_FRAMES.length];
     }
   }
 

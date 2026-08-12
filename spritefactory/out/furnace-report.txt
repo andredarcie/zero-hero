@@ -1,0 +1,7 @@
+furnace: 2 frame(s) — 0 fail, 2 warn
+  [info] bbox: frame 0: content 13x14 at (1,1), coverage 50%
+  [warn] value-range: frame 0: dominant material (ink) spans only 14 luma — reads flat ("chapado"); reach for the top of the ink ramp and shade in clusters (README: boas práticas de forma)
+  [warn] color-count: frame 1: 9 colours — above the 2-8 norm; merge the closest pairs
+  [info] bbox: frame 1: content 13x15 at (1,0), coverage 51%
+  frame 0: #1d2b53×42 #141d38×28 #989aa7×18 #5d6165×17 #7c7e8b×12 #a9abbe×11
+  frame 1: #1d2b53×44 #989aa7×18 #5d6165×17 #7c7e8b×12 #141d38×12 #a9abbe×11 #e7462a×8 #a53030×6 #f8e394×2
