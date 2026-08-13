@@ -1,0 +1,643 @@
+{
+  "meta": {
+    "name": "A Forja",
+    "schemaVersion": 1,
+    "worldChunksX": 1,
+    "worldChunksY": 1,
+    "chunkColumns": 12,
+    "chunkRows": 12,
+    "tileSize": 8,
+    "tilesetKey": "forest-tileset",
+    "playerStart": {
+      "worldX": 6,
+      "worldY": 7
+    },
+    "puzzle": true,
+    "exportedAt": "2026-08-13T20:22:20.193Z"
+  },
+  "chunks": [
+    {
+      "cx": 0,
+      "cy": 0,
+      "ground": [
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      ],
+      "upper": [
+        [
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          0,
+          1,
+          19,
+          20,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          0,
+          null,
+          null,
+          null,
+          null,
+          1,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          19,
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          0,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          20,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0
+        ],
+        [
+          null,
+          null,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0,
+          null
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          20,
+          null,
+          1,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          1,
+          19,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0
+        ],
+        [
+          19,
+          null,
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          1
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          1,
+          null,
+          null,
+          0,
+          null,
+          null
+        ]
+      ],
+      "collisions": [
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          true,
+          true
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      ],
+      "enemies": [],
+      "pickups": [
+        {
+          "type": "ore",
+          "worldX": 6,
+          "worldY": 6
+        },
+        {
+          "type": "ore",
+          "worldX": 5,
+          "worldY": 7
+        },
+        {
+          "type": "charcoal",
+          "worldX": 4,
+          "worldY": 7
+        },
+        {
+          "type": "charcoal",
+          "worldX": 4,
+          "worldY": 6
+        },
+        {
+          "type": "iron",
+          "worldX": 10,
+          "worldY": 2
+        }
+      ],
+      "npcs": [
+        {
+          "type": "blackCat",
+          "worldX": 5,
+          "worldY": 6,
+          "dialog": "catForge"
+        }
+      ]
+    }
+  ],
+  "props": [
+    {
+      "type": "campfire",
+      "lit": true,
+      "worldX": 3,
+      "worldY": 6
+    },
+    {
+      "type": "electronicGate",
+      "variable": "forja",
+      "worldX": 8,
+      "worldY": 2
+    },
+    {
+      "type": "chest",
+      "variable": "forja",
+      "quota": {
+        "kind": "iron",
+        "count": 1
+      },
+      "worldX": 6,
+      "worldY": 2
+    },
+    {
+      "type": "furnace",
+      "dir": 1,
+      "worldX": 3,
+      "worldY": 2
+    },
+    {
+      "type": "altar",
+      "worldX": 5,
+      "worldY": 4
+    },
+    {
+      "type": "levelPortal",
+      "worldX": 11,
+      "worldY": 0
+    }
+  ],
+  "dialogs": {
+    "catForge": {
+      "npcName": "CAT",
+      "npcColorHex": "#cc99ff",
+      "npcAssetKey": "npcs",
+      "npcFrame": 0,
+      "voice": {
+        "freq": 540,
+        "wave": "triangle"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Mrrow. That door wants ONE BAR OF IRON. You have no iron. You have rust-stained rock."
+        },
+        {
+          "speaker": "npc",
+          "text": "Face the FURNACE and press Z: it knows two recipes, and one of them turns ore and charcoal into a bloom. Confirming does not hand it to you — it LIGHTS the furnace. Wait for it."
+        },
+        {
+          "speaker": "npc",
+          "text": "What jumps out is a sponge, not a bar. Carry it to the stone ALTAR, press Z to lay it down, then beat it. Three blows and the slag is gone."
+        },
+        {
+          "speaker": "npc",
+          "text": "Then feed the bar to the chest with X. Ore, fire, hammer, bar — there is no shortcut, and every forge in this world runs that order. Mrrow."
+        }
+      ]
+    }
+  },
+  "globalVariables": {
+    "forja": false
+  }
+}

@@ -1,0 +1,609 @@
+{
+  "meta": {
+    "name": "A Flor e o Balde",
+    "schemaVersion": 1,
+    "worldChunksX": 1,
+    "worldChunksY": 1,
+    "chunkColumns": 12,
+    "chunkRows": 12,
+    "tileSize": 8,
+    "tilesetKey": "forest-tileset",
+    "playerStart": {
+      "worldX": 6,
+      "worldY": 7
+    },
+    "puzzle": true,
+    "exportedAt": "2026-08-13T20:22:20.193Z"
+  },
+  "chunks": [
+    {
+      "cx": 0,
+      "cy": 0,
+      "ground": [
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      ],
+      "upper": [
+        [
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          0,
+          1,
+          19,
+          20,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          0,
+          null,
+          null,
+          null,
+          null,
+          1,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          19,
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          0,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          20,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0
+        ],
+        [
+          null,
+          null,
+          0,
+          1,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0,
+          null
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          20,
+          null,
+          1,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          1,
+          19,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0
+        ],
+        [
+          19,
+          null,
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          1
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          1,
+          null,
+          null,
+          0,
+          null,
+          null
+        ]
+      ],
+      "collisions": [
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          true,
+          true
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      ],
+      "enemies": [],
+      "pickups": [
+        {
+          "type": "bucket",
+          "worldX": 6,
+          "worldY": 6
+        },
+        {
+          "type": "iron",
+          "worldX": 10,
+          "worldY": 2
+        }
+      ],
+      "npcs": [
+        {
+          "type": "blackCat",
+          "worldX": 5,
+          "worldY": 6,
+          "dialog": "catFlower"
+        }
+      ]
+    }
+  ],
+  "props": [
+    {
+      "type": "campfire",
+      "lit": true,
+      "worldX": 7,
+      "worldY": 1
+    },
+    {
+      "type": "moonflower",
+      "worldX": 8,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 3,
+      "worldY": 2
+    },
+    {
+      "type": "levelPortal",
+      "worldX": 11,
+      "worldY": 0
+    }
+  ],
+  "dialogs": {
+    "catFlower": {
+      "npcName": "CAT",
+      "npcColorHex": "#cc99ff",
+      "npcAssetKey": "npcs",
+      "npcFrame": 0,
+      "voice": {
+        "freq": 540,
+        "wave": "triangle"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Mrrow. The way through is a FLOWER, and it is shut."
+        },
+        {
+          "speaker": "npc",
+          "text": "It is shut because of my fire. That bud opens in the dark and closes in the light — it has no opinion about you at all."
+        },
+        {
+          "speaker": "npc",
+          "text": "Take the BUCKET. Face the puddle and press X to fill it; face the fire and press X to throw it."
+        },
+        {
+          "speaker": "npc",
+          "text": "Water is the only thing in this world that puts fire OUT. Everything else you own only starts them. Mrrow."
+        }
+      ]
+    }
+  },
+  "globalVariables": {}
+}

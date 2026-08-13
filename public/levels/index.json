@@ -24,6 +24,78 @@
     "blurb": "Minério não é ferro. Queime-o com carvão, malhe a esponja — e construa a máquina que malha por você."
   },
   {
+    "id": "level-5",
+    "file": "level-5.json",
+    "name": "O Machado",
+    "blurb": "Uma parede de madeira morta, um machado ao pé do gato, e ferro do outro lado."
+  },
+  {
+    "id": "level-6",
+    "file": "level-6.json",
+    "name": "A Tocha",
+    "blurb": "Arbusto seco não se corta: queima. E o fogo anda sozinho de vizinho em vizinho."
+  },
+  {
+    "id": "level-7",
+    "file": "level-7.json",
+    "name": "A Picareta",
+    "blurb": "Pedra não queima e não se corta: quebra. E a pedra de veio nunca abre — ela PRODUZ."
+  },
+  {
+    "id": "level-8",
+    "file": "level-8.json",
+    "name": "A Espada",
+    "blurb": "Nada aqui morre de um golpe — e o bicho guarda o lado que está armando."
+  },
+  {
+    "id": "level-9",
+    "file": "level-9.json",
+    "name": "A Travessia",
+    "blurb": "Duas madeiras fazem um deck. Uma pedra faz um vau. Só um dos dois queima."
+  },
+  {
+    "id": "level-10",
+    "file": "level-10.json",
+    "name": "A Bomba",
+    "blurb": "A rocha não cede à picareta aqui. Uma marca no chão diz onde a bomba serve."
+  },
+  {
+    "id": "level-11",
+    "file": "level-11.json",
+    "name": "O Caixote",
+    "blurb": "A placa quer PESO, e o seu peso está do lado errado da porta."
+  },
+  {
+    "id": "level-12",
+    "file": "level-12.json",
+    "name": "O Portão de Bater",
+    "blurb": "Dois portões iguais. Um abre, o outro não — e a diferença está ATRÁS dele."
+  },
+  {
+    "id": "level-13",
+    "file": "level-13.json",
+    "name": "A Flor e o Balde",
+    "blurb": "A flor só abre no ESCURO. E a única coisa que apaga fogo neste jogo é água."
+  },
+  {
+    "id": "level-14",
+    "file": "level-14.json",
+    "name": "A Forja",
+    "blurb": "Minério não é ferro. Ele passa pelo fogo, sai esponja, e só a pancada faz a barra."
+  },
+  {
+    "id": "level-15",
+    "file": "level-15.json",
+    "name": "A Bateria",
+    "blurb": "O cabo do portão está morto. O outro está vivo — e a bateria atravessa a distância."
+  },
+  {
+    "id": "level-16",
+    "file": "level-16.json",
+    "name": "A Fazenda",
+    "blurb": "Foice, pá, semente e balde. A fazenda não multiplica nada — ela MUDA o mato de lugar."
+  },
+  {
     "id": "dungeon-1",
     "file": "dungeon-1.json",
     "name": "Level 1: A Aguia",

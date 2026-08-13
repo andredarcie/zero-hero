@@ -123,6 +123,13 @@ export type PickupKind =
   | 'stone'
   | 'iron'
   | 'seeds'
+  // A CADEIA DO FERRO tambem cai no chao: o forno cospe a esponja, a picareta cospe o minerio,
+  // e o arbusto queimado deixa carvao. Os tres ja eram autorados em level (o level-4 planta os
+  // tres) e ja nasciam em runtime — faltava so o TIPO reconhecer isso, e a falta derrubava o
+  // editor: `PICKUP_VISUAL` e um Record sobre este tipo, e o que nao esta aqui nao tem arte la.
+  | 'ore'
+  | 'bloom'
+  | 'charcoal'
   | 'carnivoreSeeds'
   | 'bucket'
   | 'battery'
@@ -166,6 +173,8 @@ export type NpcSpawn = {
   type: NpcKind;
   worldX: number;
   worldY: number;
+  /** O roteiro DESTA instância (uma chave de `dialogs`); sem ele, o do tipo. Ver WorldNpcSpawn. */
+  dialog?: string;
 };
 
 export type ScreenContent = {

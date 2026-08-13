@@ -1,0 +1,640 @@
+{
+  "meta": {
+    "name": "A Bateria",
+    "schemaVersion": 1,
+    "worldChunksX": 1,
+    "worldChunksY": 1,
+    "chunkColumns": 12,
+    "chunkRows": 12,
+    "tileSize": 8,
+    "tilesetKey": "forest-tileset",
+    "playerStart": {
+      "worldX": 6,
+      "worldY": 7
+    },
+    "puzzle": true,
+    "exportedAt": "2026-08-13T20:22:20.193Z"
+  },
+  "chunks": [
+    {
+      "cx": 0,
+      "cy": 0,
+      "ground": [
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      ],
+      "upper": [
+        [
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          0,
+          1,
+          19,
+          20,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          0,
+          1,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          0,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          20,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0
+        ],
+        [
+          null,
+          null,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0,
+          null
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          20,
+          null,
+          1,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          1,
+          19,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0
+        ],
+        [
+          19,
+          null,
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          1
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          1,
+          null,
+          null,
+          0,
+          null,
+          null
+        ]
+      ],
+      "collisions": [
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          true,
+          true
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      ],
+      "enemies": [],
+      "pickups": [
+        {
+          "type": "battery",
+          "worldX": 6,
+          "worldY": 6
+        },
+        {
+          "type": "iron",
+          "worldX": 10,
+          "worldY": 2
+        }
+      ],
+      "npcs": [
+        {
+          "type": "blackCat",
+          "worldX": 5,
+          "worldY": 6,
+          "dialog": "catBattery"
+        }
+      ]
+    }
+  ],
+  "props": [
+    {
+      "type": "campfire",
+      "lit": true,
+      "worldX": 3,
+      "worldY": 6
+    },
+    {
+      "type": "electronicGate",
+      "worldX": 8,
+      "worldY": 2
+    },
+    {
+      "type": "water",
+      "worldX": 1,
+      "worldY": 2
+    },
+    {
+      "type": "waterWheel",
+      "worldX": 1,
+      "worldY": 3
+    },
+    {
+      "type": "wire",
+      "worldX": 2,
+      "worldY": 3
+    },
+    {
+      "type": "wire",
+      "worldX": 3,
+      "worldY": 3
+    },
+    {
+      "type": "belt",
+      "dir": 1,
+      "worldX": 4,
+      "worldY": 3
+    },
+    {
+      "type": "wire",
+      "worldX": 7,
+      "worldY": 2
+    },
+    {
+      "type": "wire",
+      "worldX": 7,
+      "worldY": 3
+    },
+    {
+      "type": "levelPortal",
+      "worldX": 11,
+      "worldY": 0
+    }
+  ],
+  "dialogs": {
+    "catBattery": {
+      "npcName": "CAT",
+      "npcColorHex": "#cc99ff",
+      "npcAssetKey": "npcs",
+      "npcFrame": 0,
+      "voice": {
+        "freq": 540,
+        "wave": "triangle"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Mrrow. The gate needs current and the cable at its side is DEAD. Look at it: no glow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The wheel on the river makes plenty — the belt over there runs on it. But that cable stops three tiles short, and I am a cat, not an electrician."
+        },
+        {
+          "speaker": "npc",
+          "text": "Take the BATTERY. Stand on the live cable and it drinks; you will see it fill."
+        },
+        {
+          "speaker": "npc",
+          "text": "Then face the dead cable and press X to seat it there. A battery is a piece of wire you can carry. Mrrow."
+        }
+      ]
+    }
+  },
+  "globalVariables": {}
+}

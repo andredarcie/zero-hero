@@ -304,6 +304,11 @@ export const getTripHammers = (): WorldProp[] => allProps().filter((prop) => pro
 export const getAltars = (): WorldProp[] => allProps().filter((prop) => prop.type === 'altar');
 export const getLevelPortals = (): WorldProp[] => allProps().filter((prop) => prop.type === 'levelPortal');
 
+// A CAIXA DE VENDA. `sells` é obrigatório de fato, e não por tipo: uma caixa sem tipo e sem preço
+// não tem o que anunciar na placa, então ela é filtrada aqui em vez de nascer muda no mundo.
+export const getSellBoxes = (): WorldProp[] => allProps()
+  .filter((prop) => prop.type === 'sellBox' && prop.sells !== undefined);
+
 export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });
 
 // Os PONTOS DE SPAWN de inimigo, autorados na aba Inimigos do editor. Lidos de uma vez, como os
@@ -346,10 +351,19 @@ export const getHeldItemPickups = (): Array<{ type: Exclude<PickupKind, 'heart'>
 // The visual/audio config (portrait sprite, name colour, frame) stays in world.json; the display
 // NAME and spoken LINES come from the active locale catalog, keyed by NPC kind. If the catalog has
 // no entry for this kind, fall back to the world.json text so nothing goes blank.
-export const getDialog = (kind: NpcKind): DialogScript | undefined => {
-  const dialog = requireWorld().dialogs[kind];
+//
+// `scriptId` é o roteiro DA INSTÂNCIA (ver WorldNpcSpawn.dialog): o mesmo gato mora em três cartas
+// ensinando três coisas, e o roteiro por espécie fazia o gato do machado explicar a picareta.
+//
+// E o LOCALE só entra quando o roteiro É o do tipo. Esta é a parte que morde: `localizedNpc(kind)`
+// tem prioridade sobre o arquivo, então um roteiro autorado com o nome da espécie teria suas falas
+// substituídas pelas genéricas do en.json — que foi exatamente o que aconteceu com o gato do
+// level-1, cujas cinco falas são texto morto desde que o locale ganhou uma entrada `blackCat`.
+export const getDialog = (kind: NpcKind, scriptId?: string): DialogScript | undefined => {
+  const id = scriptId ?? kind;
+  const dialog = requireWorld().dialogs[id];
   if (!dialog) return undefined;
-  const localized = localizedNpc(kind);
+  const localized = id === kind ? localizedNpc(kind) : undefined;
   return {
     npcName: localized?.name ?? dialog.npcName,
     npcColorHex: dialog.npcColorHex,
@@ -362,6 +376,8 @@ export const getDialog = (kind: NpcKind): DialogScript | undefined => {
   };
 };
 
-export const getDialogVoice = (kind: NpcKind): DialogVoice | undefined => requireWorld().dialogs[kind]?.voice;
+export const getDialogVoice = (kind: NpcKind, scriptId?: string): DialogVoice | undefined => (
+  requireWorld().dialogs[scriptId ?? kind]?.voice
+);
 
 export const getDialogKinds = (): NpcKind[] => Object.keys(requireWorld().dialogs) as NpcKind[];

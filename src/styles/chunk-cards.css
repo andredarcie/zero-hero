@@ -512,48 +512,99 @@
   pointer-events: none;
 }
 
-/* ── a carta de NPC (naipe hearth) ───────────────────────────────────────────
- * Outro METAL: violeta arcano (a paleta do portal e do mago — #8b5cf6/#a97bff/#e9d5ff) no
- * lugar do ouro, em todos os pontos onde o ouro assina a carta comum. O layout é o mesmo:
- * a cor sozinha diz "este terreno vem com alguém morando nele". */
-.zh-build-card[data-npc='true'] .zh-build-face {
-  border-color: #8b5cf6;
-  box-shadow: 0 4px 0 #00000088, inset 0 0 0 1px rgba(169, 123, 255, 0.18);
+/* ── AS TRÊS CATEGORIAS ──────────────────────────────────────────────────────
+ * Cada categoria é um METAL: a cor assina a moldura, o nome, a moeda, o verso e os sigilos —
+ * todos os pontos onde o ouro assina uma carta sem categoria. Antes disto o eixo era `data-npc`,
+ * e ele só tinha DOIS estados (ouro ou violeta): dizia "vem alguém junto" e mais nada.
+ *
+ * As matizes ficam a ~120° uma da outra de propósito — violeta 260°, vermelho 4°, ciano 187°. É a
+ * distância máxima que três cores conseguem ter entre si, e é o que faz a categoria ser lida pela
+ * PERIFERIA da vista, antes de qualquer palavra. (A palavra está lá também, em `zh-build-category`:
+ * cor sozinha não serve a quem não distingue as três.)
+ *
+ * Quatro variáveis por categoria, e nenhuma cor escrita duas vezes: `--zh-cat` é o metal, `-bright`
+ * é o texto sobre a noite, `-dim` é o sigilo de canto e `-veil` é o véu translúcido do verso e do
+ * glow. Categoria nova = quatro linhas, e o resto do bloco não muda. */
+.zh-build-card[data-category='narrative'] {
+  --zh-cat: #8b5cf6;
+  --zh-cat-bright: #e9d5ff;
+  --zh-cat-dim: #6d4fc0;
+  --zh-cat-veil: rgba(169, 123, 255, 0.16);
 }
 
-.zh-build-card[data-npc='true'] .zh-build-corner {
-  color: #6d4fc0;
+.zh-build-card[data-category='combat'] {
+  --zh-cat: #e0483f;
+  --zh-cat-bright: #ffcec4;
+  --zh-cat-dim: #9c3129;
+  --zh-cat-veil: rgba(224, 72, 63, 0.16);
 }
 
-.zh-build-card[data-npc='true'] .zh-build-name {
-  color: #e9d5ff;
+.zh-build-card[data-category='puzzle'] {
+  --zh-cat: #2fb8c6;
+  --zh-cat-bright: #c6f4f8;
+  --zh-cat-dim: #1d7d88;
+  --zh-cat-veil: rgba(47, 184, 198, 0.16);
 }
 
-.zh-build-card[data-npc='true'] .zh-build-coin {
-  border-color: #8b5cf6;
-  color: #e9d5ff;
+.zh-build-card[data-category] .zh-build-face {
+  border-color: var(--zh-cat);
+  box-shadow: 0 4px 0 #00000088, inset 0 0 0 1px var(--zh-cat-veil);
 }
 
-.zh-build-card[data-npc='true'] .zh-build-back {
+.zh-build-card[data-category] .zh-build-corner {
+  color: var(--zh-cat-dim);
+}
+
+.zh-build-card[data-category] .zh-build-name {
+  color: var(--zh-cat-bright);
+}
+
+.zh-build-card[data-category] .zh-build-coin {
+  border-color: var(--zh-cat);
+  color: var(--zh-cat-bright);
+}
+
+.zh-build-card[data-category] .zh-build-back {
   background:
-    repeating-linear-gradient(45deg, transparent 0 6px, rgba(139, 92, 246, 0.12) 6px 7px),
-    repeating-linear-gradient(-45deg, transparent 0 6px, rgba(139, 92, 246, 0.12) 6px 7px),
+    repeating-linear-gradient(45deg, transparent 0 6px, var(--zh-cat-veil) 6px 7px),
+    repeating-linear-gradient(-45deg, transparent 0 6px, var(--zh-cat-veil) 6px 7px),
     var(--zh-card-night-deep);
-  color: #6d4fc0;
+  color: var(--zh-cat-dim);
 }
 
-.zh-build-card[data-npc='true'].is-selected .zh-build-face {
-  border-color: #e9d5ff;
+.zh-build-card[data-category].is-selected .zh-build-face {
+  border-color: var(--zh-cat-bright);
   box-shadow:
-    0 0 0 2px #8b5cf6,
+    0 0 0 2px var(--zh-cat),
     0 7px 0 #00000099,
-    0 0 26px rgba(169, 123, 255, 0.24);
+    0 0 26px var(--zh-cat-veil);
 }
 
-.zh-build-card[data-npc='true'].is-selected .zh-build-coin {
-  border-color: #e9d5ff;
-  background: rgba(169, 123, 255, 0.12);
+.zh-build-card[data-category].is-selected .zh-build-coin {
+  border-color: var(--zh-cat-bright);
+  background: var(--zh-cat-veil);
 }
+
+/* A PALAVRA na carta: uma tarja fina acima do nome, na cor da categoria. Ela é pequena e em caixa
+ * alta espaçada — a mesma voz dos rótulos do jogo —, e existe porque cor sozinha exclui quem não
+ * separa violeta de vermelho. */
+.zh-build-category {
+  align-self: stretch;
+  padding: 0.18rem 0;
+  border-top: 1px solid var(--zh-cat-veil);
+  border-bottom: 1px solid var(--zh-cat-veil);
+  color: var(--zh-cat-bright);
+  font-family: var(--zh-card-font-display);
+  font-size: clamp(0.34rem, 0.5vw, 0.44rem);
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  text-align: center;
+  text-shadow: 0 1px #000;
+}
+
+/* (A legenda do rodapé — três pastilhas explicando as cores — foi removida: a tarja da carta já
+ * diz a palavra, e repeti-la a três centímetros dali em letra menor só disputava atenção com o
+ * leque, que é o que a tela existe para mostrar.) */
 
 .zh-build-card:disabled {
   cursor: not-allowed;

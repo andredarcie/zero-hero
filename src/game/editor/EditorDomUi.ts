@@ -8,7 +8,10 @@ import {
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
-import type { ChunkCatalogEntry, PropDir, PropKind, WorldChunk, WorldDialog } from '@/game/world/worldSchema';
+import type { HeldItemKind } from '@/game/entities/ItemPickup';
+import type {
+  ChunkCatalogEntry, ChunkCategory, PropDir, PropKind, WorldChunk, WorldDialog,
+} from '@/game/world/worldSchema';
 import type { DeleteLabLevelResult, LabLevelSummary } from '@/game/worldApi';
 
 // The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
@@ -53,6 +56,9 @@ export type UiState = {
   // Global boolean selected for the next circuit-capable prop placed by this brush.
   // Plate/wheel publish into it; a configured inserter consumes it as electrical power.
   propVariable: string;
+  /** Só para a caixa de extração: o item que ela compra e por quanto (ver SellBoxObject). */
+  propSellKind: HeldItemKind;
+  propSellPrice: number;
   // Chunk view: camera locked and fitted to one chunk, edits confined to it.
   viewMode: ViewMode;
   chunkX: number;
@@ -75,6 +81,8 @@ export type EditorUiCallbacks = {
   onSave: () => void;
   onReload: () => void;
   onPlaytest: () => void;
+  /** Testa UMA carta: constrói-a ao lado do acampamento e entra nela. Só no editor de mundo. */
+  onCardPlaytest?: (cardId: string) => void;
   onUndo: () => void;
   onRedo: () => void;
   onFitView: () => void;
@@ -200,6 +208,9 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'furnace', label: 'Forno (G gira) — MINERIO e CARVAO nas bandejas ATRAS, esponja na FRENTE', key: ASSET_KEYS.furnace, frame: 1 },
   { type: 'tripHammer', label: 'Martinete (G gira) — malha a ESPONJA do tile da FRENTE; precisa de energia', key: ASSET_KEYS.tripHammer, frame: 3 },
   { type: 'chest', label: 'Bau — o estoque que a linha enche sozinha', key: ASSET_KEYS.chest, frame: 0 },
+  // A CAIXA DE EXTRACAO. Ela leva DOIS campos proprios (o item e o preco), que aparecem no
+  // painel de opcoes assim que ela e selecionada — ver isSellProp.
+  { type: 'sellBox', label: 'Caixa de Extracao — vende UM item por moedas', key: ASSET_KEYS.chest, frame: 0 },
   // O ALTAR nao gira e nao tem energia: e um movel. Z poe o item selecionado na laje, e bater
   // nele (Z de espada, ou o X com o que estiver na mao) malha a ESPONJA em ferro.
   { type: 'altar', label: 'Altar — laje onde se POE uma peca e se MALHA (Z poe, bater transforma)', key: ASSET_KEYS.altar, frame: 0 },
@@ -208,6 +219,18 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
 // que o editor faz e "esta peca gira?" — e quando existir a segunda peca giratoria, ela entra
 // aqui e ganha o G de graca. (Aconteceu: a caixa de ferramentas.)
+/** A caixa de extração é o único prop que autora um ITEM e um PREÇO — ver o painel abaixo. */
+export const isSellProp = (type: PropKind): boolean => type === 'sellBox';
+
+/**
+ * O QUE UMA CAIXA PODE COMPRAR. E a lista de itens que o jogo PRODUZ em quantidade — o que se
+ * junta, e portanto o que sobra. Ferramenta nao entra: vender o proprio machado seria um jeito de
+ * ficar sem ele.
+ */
+const SELLABLE_KINDS: readonly HeldItemKind[] = [
+  'ore', 'charcoal', 'bloom', 'iron', 'stone', 'wood', 'seeds', 'gear',
+];
+
 const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter', 'toolbox', 'belt', 'extractor', 'furnace', 'tripHammer']);
 
 // …e destes, quais tem a ARTE dividida em um frame por direcao. Sao duas perguntas diferentes e
@@ -854,6 +877,36 @@ export class EditorDomUi {
         + `Um corpo por vez: morto, o proximo vem em ${Math.round(ENEMY_RESPAWN_MS / 1000)}s.<br>`
         + 'Luz de fogueira ACESA cala a cova — o morto-vivo nao entra na luz.';
       this.optionsEl.appendChild(hint);
+    }
+
+    // A CAIXA DE EXTRACAO: o item que ela compra e o preco por unidade. Sem os dois ela nao tem o
+    // que anunciar na placa nem o que pagar — e o runtime nem a constroi (ver getSellBoxes), entao
+    // ela nasceria invisivel. Por isso os dois campos ficam AQUI, na hora de colocar.
+    if (this.state.tool === 'entity' && this.state.entity.list === 'props' && isSellProp(this.state.entity.type)) {
+      const kindSelect = document.createElement('select');
+      SELLABLE_KINDS.forEach((kind) => {
+        const option = document.createElement('option');
+        option.value = kind;
+        option.textContent = kind;
+        option.selected = kind === this.state.propSellKind;
+        kindSelect.appendChild(option);
+      });
+      kindSelect.addEventListener('change', () => {
+        this.state.propSellKind = kindSelect.value as HeldItemKind;
+        this.changed();
+      });
+      const priceInput = document.createElement('input');
+      priceInput.type = 'number';
+      priceInput.min = '1';
+      priceInput.step = '1';
+      priceInput.value = String(this.state.propSellPrice);
+      priceInput.addEventListener('change', () => {
+        this.state.propSellPrice = Math.max(1, Math.floor(Number(priceInput.value) || 1));
+        priceInput.value = String(this.state.propSellPrice);
+        this.changed();
+      });
+      this.optionsEl.appendChild(this.field('Item que a caixa compra', kindSelect));
+      this.optionsEl.appendChild(this.field('Moedas por unidade', priceInput));
     }
 
     if (this.state.tool === 'entity' && this.state.entity.list === 'props' && isVariableProp(this.state.entity.type)) {
@@ -1689,6 +1742,23 @@ export class EditorDomUi {
     const descriptionInput = document.createElement('textarea');
     descriptionInput.className = 'zh-chunk-description';
     descriptionInput.value = catalog.description ?? '';
+    // A CATEGORIA. "(deduzir)" é uma opção de verdade e é o padrão: quinze das dezoito cartas caem
+    // na categoria certa sozinhas (morador → narrativa, bicho → combate, resto → puzzle), e forçar
+    // uma escolha em todas seria pedir uma decisão onde não há nenhuma. Escolher aqui só é preciso
+    // quando a dedução erra — uma aula com professor E parede é o caso.
+    const categoryInput = document.createElement('select');
+    for (const [value, label] of [
+      ['', '(deduzir do conteudo)'],
+      ['narrative', 'Narrativa — alguem mora aqui'],
+      ['combat', 'Combate — o cerco entra por aqui'],
+      ['puzzle', 'Puzzle — uma trava para abrir'],
+    ] as const) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label;
+      categoryInput.appendChild(opt);
+    }
+    categoryInput.value = catalog.category ?? '';
 
     const header = document.createElement('div');
     header.className = 'zh-chunk-catalog-head';
@@ -1722,6 +1792,7 @@ export class EditorDomUi {
       this.field('ID unico', idInput),
       this.field('Nome da carta', nameInput),
       this.field('Custo em moedas', costInput),
+      this.field('Categoria', categoryInput),
       this.field('Imagem da carta', imageInput),
       this.field('Descricao', descriptionInput),
     );
@@ -1762,6 +1833,20 @@ export class EditorDomUi {
 
     foot.append(
       this.button('Fechar', '', () => this.closeModal()),
+      // TESTAR ESTA CARTA. O P joga o mundo em edição, mas no editor de mundo isso quer dizer
+      // "começa uma run no acampamento" — e a carta que se acabou de desenhar fica sendo só mais
+      // uma no baralho, atrás de moeda e de um portão. Este botão constrói ELA colada no
+      // acampamento e põe o herói dentro. Sem salvar: é o mesmo mundo em memória do P.
+      this.button('▶ Testar esta carta', 'Constroi esta carta ao lado do acampamento e entra nela (nao salva)', () => {
+        const id = idInput.value.trim();
+        if (!id) { this.toast('A carta precisa de um ID para ser testada'); return; }
+        if (current.catalog?.id !== id) {
+          this.toast('Salve os metadados antes de testar (o ID mudou)');
+          return;
+        }
+        this.closeModal();
+        this.cb.onCardPlaytest?.(id);
+      }),
       this.button('Salvar metadados', 'Aplica ao estado do editor; use Salvar para gravar world.json', () => {
         const id = idInput.value.trim();
         const name = nameInput.value.trim();
@@ -1775,6 +1860,9 @@ export class EditorDomUi {
           cost: Number(costInput.value),
           cardImage: image,
           description: descriptionInput.value,
+          // Vazio = sem campo, e sem campo a categoria volta a ser deduzida. Gravar `''` deixaria
+          // um valor que não é categoria nenhuma no arquivo.
+          category: (categoryInput.value || undefined) as ChunkCategory | undefined,
           enabled: current.catalog?.enabled, // quem liga/desliga é a lista; aqui só se carrega
         });
         this.refreshHeader();

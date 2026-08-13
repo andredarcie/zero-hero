@@ -1,0 +1,609 @@
+{
+  "meta": {
+    "name": "O Portão de Bater",
+    "schemaVersion": 1,
+    "worldChunksX": 1,
+    "worldChunksY": 1,
+    "chunkColumns": 12,
+    "chunkRows": 12,
+    "tileSize": 8,
+    "tilesetKey": "forest-tileset",
+    "playerStart": {
+      "worldX": 6,
+      "worldY": 7
+    },
+    "puzzle": true,
+    "exportedAt": "2026-08-13T20:22:20.192Z"
+  },
+  "chunks": [
+    {
+      "cx": 0,
+      "cy": 0,
+      "ground": [
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      ],
+      "upper": [
+        [
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          0,
+          1,
+          19,
+          20,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          0,
+          1,
+          null,
+          null,
+          null,
+          1,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          19,
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          0,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          20,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0
+        ],
+        [
+          null,
+          null,
+          0,
+          null,
+          null,
+          null,
+          0,
+          null,
+          null,
+          null,
+          0,
+          null
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          20,
+          null,
+          1,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          1,
+          19,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0
+        ],
+        [
+          19,
+          null,
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          1
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          1,
+          null,
+          null,
+          0,
+          null,
+          null
+        ]
+      ],
+      "collisions": [
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          true,
+          true
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      ],
+      "enemies": [],
+      "pickups": [
+        {
+          "type": "iron",
+          "worldX": 10,
+          "worldY": 2
+        }
+      ],
+      "npcs": [
+        {
+          "type": "blackCat",
+          "worldX": 5,
+          "worldY": 6,
+          "dialog": "catGate"
+        }
+      ]
+    }
+  ],
+  "props": [
+    {
+      "type": "campfire",
+      "lit": true,
+      "worldX": 3,
+      "worldY": 6
+    },
+    {
+      "type": "swingGate",
+      "worldX": 8,
+      "worldY": 1
+    },
+    {
+      "type": "rock",
+      "worldX": 9,
+      "worldY": 1
+    },
+    {
+      "type": "swingGate",
+      "worldX": 8,
+      "worldY": 2
+    },
+    {
+      "type": "levelPortal",
+      "worldX": 11,
+      "worldY": 0
+    }
+  ],
+  "dialogs": {
+    "catGate": {
+      "npcName": "CAT",
+      "npcColorHex": "#cc99ff",
+      "npcAssetKey": "npcs",
+      "npcFrame": 0,
+      "voice": {
+        "freq": 540,
+        "wave": "triangle"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Mrrow. Two gates, same wood, same hinge. Walk into the top one."
+        },
+        {
+          "speaker": "npc",
+          "text": "It shudders and stays shut. Nothing is locked — there is a BOULDER sitting against its back, and a gate that swings inward cannot swing through stone."
+        },
+        {
+          "speaker": "npc",
+          "text": "The lower one has nothing behind it. Walk into that one and it gives."
+        },
+        {
+          "speaker": "npc",
+          "text": "No key exists for either. A swing gate only ever asks one thing: is the tile behind me empty? Mrrow."
+        }
+      ]
+    }
+  },
+  "globalVariables": {}
+}

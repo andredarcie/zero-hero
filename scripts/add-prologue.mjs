@@ -68,6 +68,15 @@ const COSTS = {
   // de torto e pedia a reescrita a partir do novo piso. É esta. Um degrau que custa mais uma
   // caveira que o anterior é uma decisão de cada vez; um que custa cinco vezes o anterior é uma
   // parede com uma tarefa atrás.
+  //
+  // AS TRÊS AULAS DO GATO ocupam os três primeiros degraus depois da abertura, e nesta ordem
+  // (machado 4, tocha 5, picareta 6) porque é a ordem em que uma depende da anterior: o machado
+  // derruba a árvore que vira o graveto, o graveto vira a tocha, e a tocha é o que faz o carvão
+  // que a picareta vai precisar do outro lado. Elas são baratas de propósito — uma aula que custa
+  // uma fábrica é uma aula que ninguém assiste. Ver scripts/make-cat-lessons.mjs.
+  'cat-woodpile': 4,
+  'cat-kindling': 5,
+  'cat-quarry': 6,
   'roadside-pond': 5,
   'cat-cold-hearths': 5,
   'whispering-forest': 6,

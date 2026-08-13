@@ -2,7 +2,8 @@ import { CHUNK_COLUMNS, CHUNK_ROWS, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES } fr
 import type { ChunkData } from '@/game/world/Chunk';
 import type { PickupKind, ScreenContent } from '@/game/world/ScreenContent';
 import { getChunkTemplates, type ChunkTemplate } from '@/game/world/WorldData';
-import type { WorldProp } from '@/game/world/worldSchema';
+import type { ChunkCategory, WorldProp } from '@/game/world/worldSchema';
+import { chunkCategoryOf } from './chunkCategory';
 
 /** The fixed home chunk. Every new run starts around this fire. */
 export const CAMP_X = 6;
@@ -258,7 +259,15 @@ export class ExplorerWorldSource {
       worldY: cy * CHUNK_ROWS + entry.worldY,
     });
     return {
-      enemies: template.enemies.map(place),
+      // TERRA DE NARRATIVA E DE PUZZLE É 100% PACÍFICA, e a garantia é aqui — não na disciplina de
+      // quem autora. O filtro das estradas já cala o CERCO (ver GameScene/ChunkUndeadDirector),
+      // mas ele não diz nada sobre um corpo escrito dentro da própria carta: sem esta linha, uma
+      // carta de puzzle autorada amanhã com uma caveira no canto reabriria o buraco em silêncio, e
+      // ninguém ligaria a interrupção da aula ao campo `category` que ela nunca preencheu.
+      //
+      // O editor AVISA ao salvar (ver EditorStore.validate), então isto não é uma tesoura muda: o
+      // autor descobre no lugar em que ele autorou, e o jogo cumpre a lei mesmo se ele ignorar.
+      enemies: chunkCategoryOf(template) === 'combat' ? template.enemies.map(place) : [],
       pickups: template.pickups.map(place),
       npcs: template.npcs.map(place),
     };
@@ -326,5 +335,19 @@ export class ExplorerWorldSource {
       const template = this.templates.find((entry) => entry.catalog.id === typeId);
       return { cx, cy, typeId, name: template?.catalog.name ?? 'Campfire Clearing' };
     });
+  }
+
+  /**
+   * A categoria da terra construída aqui — quem decide se o cerco entra por esta estrada.
+   *
+   * O ACAMPAMENTO conta como combate, e isso é deliberado: é pela estrada não comprada dele que a
+   * primeira caveira do jogo entra, e é essa caveira que paga a primeira carta (ver o prólogo).
+   * Calar o cerco no chunk inicial deixaria a partida sem a moeda que a inicia.
+   */
+  public categoryAt(cx: number, cy: number): ChunkCategory {
+    const typeId = this.built.get(keyOf(cx, cy));
+    if (typeId === undefined || typeId === '__start__') return 'combat';
+    const template = this.templates.find((entry) => entry.catalog.id === typeId);
+    return template ? chunkCategoryOf(template) : 'combat';
   }
 }

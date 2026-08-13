@@ -3,10 +3,12 @@ import {
   SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
 } from '@/game/constants';
 import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
+import { chunkCategoryOf } from '@/game/explorer/chunkCategory';
 import {
   AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS,
   type EnemyKind, type NpcKind, type PickupKind,
 } from '@/game/world/ScreenContent';
+import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type {
   ChunkCatalogEntry, PropDir, PropKind, WorldChunk, WorldData, WorldDialog,
 } from '@/game/world/worldSchema';
@@ -31,7 +33,11 @@ export type PlacedEntity =
   // `dir` so o braco robotico usa. Ele viaja em TODO o caminho de place/erase/undo porque, ao
   // contrario de `lit` e `floodgate` (que a gente deixa cair de proposito num save do editor),
   // a direcao E o comportamento da peca: perde-la nao empobrece o prop, quebra ele.
-  | { list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir; variable?: string };
+  | {
+    list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir; variable?: string;
+    /** Só a caixa de extração: o item que ela compra e o preço. Ver o comentário em addEntityToWorld. */
+    sells?: { kind: HeldItemKind; coinsPerUnit: number };
+  };
 
 export type EntityListId = PlacedEntity['list'];
 
@@ -66,7 +72,9 @@ const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 // concluiria que nada mudou e o giro nao aconteceria.
 const sameEntity = (a: PlacedEntity, b: PlacedEntity): boolean =>
   a.list === b.list && a.type === b.type && a.worldX === b.worldX && a.worldY === b.worldY
-  && (a.list !== 'props' || b.list !== 'props' || (a.dir === b.dir && a.variable === b.variable));
+  && (a.list !== 'props' || b.list !== 'props'
+    || (a.dir === b.dir && a.variable === b.variable
+      && JSON.stringify(a.sells) === JSON.stringify(b.sells)));
 
 const buildEmptyChunk = (cx: number, cy: number): WorldChunk => ({
   cx,
@@ -286,7 +294,7 @@ export class EditorStore {
       chunk.pickups.forEach((p) => { if (p.worldX === wx && p.worldY === wy) found.push({ list: 'pickups', ...p }); });
     }
     this.world.props.forEach((p) => {
-      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir, variable: p.variable });
+      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir, variable: p.variable, sells: p.sells });
     });
     return found;
   }
@@ -298,7 +306,7 @@ export class EditorStore {
       chunk.npcs.forEach((n) => all.push({ list: 'npcs', ...n }));
       chunk.pickups.forEach((p) => all.push({ list: 'pickups', ...p }));
     });
-    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir, variable: p.variable }));
+    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir, variable: p.variable, sells: p.sells }));
     return all;
   }
 
@@ -332,6 +340,12 @@ export class EditorStore {
         worldY: entity.worldY,
         ...(entity.dir === undefined ? {} : { dir: entity.dir }),
         ...(entity.variable === undefined ? {} : { variable: entity.variable }),
+        // O `sells` PRECISA estar aqui. Este bloco re-emite o prop campo a campo, e o que não for
+        // nomeado nele é descartado em silêncio — foi o que aconteceu com a caixa de extração
+        // colocada pelo editor: ela ia para o arquivo sem item e sem preço, e o runtime a
+        // descartava (getSellBoxes exige `sells`). O prop aparecia no tabuleiro e não existia no
+        // jogo. É a mesma armadilha que o schema já documenta para `lit` e `quota`.
+        ...(entity.sells === undefined ? {} : { sells: entity.sells }),
       });
       return;
     }
@@ -594,6 +608,40 @@ export class EditorStore {
       if (entity.list === 'enemies') enemySpawns.push(entity);
     });
     if (onCollision > 0) warnings.push(`${onCollision} entidade(s) em cima de colisao`);
+
+    // A CAIXA DE EXTRACAO OCUPA DUAS TILES: o corpo e, um tile a ESQUERDA, a placa que anuncia o
+    // item. A placa nao e um prop separado (ela nasce dentro do SellBoxObject), entao nada no
+    // tabuleiro a desenha — e uma caixa colada na borda, ou com algo solido a esquerda, nasce com
+    // a placa dentro de outra coisa.
+    const crowdedBoxes = this.world.props.filter((prop) => {
+      if (prop.type !== 'sellBox') return false;
+      const sx = prop.worldX - 1;
+      if (!this.isInside(sx, prop.worldY)) return true;
+      return this.entitiesAt(sx, prop.worldY).some((e) => e.list === 'props')
+        || this.readCell('collision', sx, prop.worldY) === true;
+    });
+    for (const prop of crowdedBoxes) {
+      warnings.push(
+        `Caixa de extracao em ${prop.worldX},${prop.worldY}: o tile a ESQUERDA precisa estar livre`
+        + ' — e la que fica a placa do item (a peca ocupa duas tiles)',
+      );
+    }
+
+    // TERRA PACÍFICA COM BICHO DENTRO. Narrativa e puzzle são 100% seguras — o jogo IGNORA um
+    // corpo autorado nelas (ver ExplorerWorldSource.chunkContent), e sem este aviso o autor
+    // colocaria a caveira, salvaria, e passaria a tarde procurando por que ela não nasce.
+    const pacified = this.world.chunks
+      .filter((chunk) => chunk.catalog && chunk.enemies.length > 0)
+      .filter((chunk) => chunkCategoryOf({
+        catalog: chunk.catalog as ChunkCatalogEntry, npcs: chunk.npcs, enemies: chunk.enemies,
+      }) !== 'combat');
+    for (const chunk of pacified) {
+      const id = chunk.catalog?.id ?? `${chunk.cx},${chunk.cy}`;
+      warnings.push(
+        `${id}: carta de narrativa/puzzle com ${chunk.enemies.length} inimigo(s) — terra pacifica`
+        + ' ignora corpo autorado; mude a categoria para Combate ou apague os pontos de spawn',
+      );
+    }
 
     // Props que ocupam o proprio tile com um corpo solido. Sai daqui o que se pisa (cabo, placa,
     // marcas, flor) — a lista e a mesma que a caixa de ferramentas usa mais abaixo, e uma segunda

@@ -130,6 +130,27 @@ let pinnedSeed: number | null = null;
 
 export const pinExplorerSeed = (seed: number | null): void => { pinnedSeed = seed; };
 
+/**
+ * A CARTA A TESTAR — o "Testar esta carta" do editor, e nada mais.
+ *
+ * Ela existe porque o P do editor de mundo começa uma run no ACAMPAMENTO, com a carta editada
+ * apenas dentro do baralho: para vê-la era preciso juntar moeda e topar com ela num portão. Isto
+ * marca uma carta para ser CONSTRUÍDA ao lado do acampamento no instante em que o mundo nasce,
+ * com o herói já dentro dela.
+ *
+ * É de UMA VIAGEM só (quem lê, consome), pela mesma razão da semente presa: um `scene.restart()`
+ * — a morte — não pode reconstruir a carta de teste por cima da partida.
+ */
+let pinnedCard: string | null = null;
+
+export const pinExplorerCard = (id: string | null): void => { pinnedCard = id; };
+
+export const consumeExplorerCard = (): string | null => {
+  const card = pinnedCard;
+  pinnedCard = null;
+  return card;
+};
+
 const rollSeed = (): number => {
   if (pinnedSeed !== null) {
     const pinned = pinnedSeed;

@@ -4,6 +4,7 @@ import type { ChunkTemplate } from '@/game/world/WorldData';
 import type { ChunkFrontier } from './explorerWorld';
 import { drawCardArt } from './chunkCardArt';
 import { cardSuit, type CardSuit } from './chunkCardSuits';
+import { CATEGORY_LABEL, chunkCategoryOf } from './chunkCategory';
 import '@/styles/chunk-cards.css';
 
 const FAN = [
@@ -115,6 +116,11 @@ export class ChunkPurchaseOverlay {
       card.dataset.imageState = 'loading';
       card.dataset.suit = suit;
       card.dataset.npc = isNpcCard ? 'true' : 'false';
+      // A CATEGORIA manda na cor da carta (ver chunk-cards.css). Ela substituiu o `data-npc` nesse
+      // papel: o violeta já dizia "vem alguém junto", e agora ele diz "narrativa" — que é a mesma
+      // carta, com o nome certo e com duas irmãs de cores opostas.
+      const category = chunkCategoryOf(option);
+      card.dataset.category = category;
       card.style.setProperty('--zh-card-angle', fan.angle);
       card.style.setProperty('--zh-card-fan-y', fan.y);
       // A pilha: cada carta nasce no baralho central, levemente torta como um maço de verdade.
@@ -144,6 +150,7 @@ export class ChunkPurchaseOverlay {
             </span>
           </span>
           <span class="zh-build-copy">
+            <span class="zh-build-category">${CATEGORY_LABEL[category]}</span>
             <span class="zh-build-name">${this.escape(option.catalog.name)}</span>
             <span class="zh-build-price">
               <span class="zh-build-coin">${option.catalog.cost}</span>
@@ -185,6 +192,9 @@ export class ChunkPurchaseOverlay {
       }
     });
 
+    // (Houve aqui uma LEGENDA de três pastilhas explicando as cores. Ela saiu: a carta já traz a
+    // palavra da categoria escrita na tarja, e uma legenda que repete o que está a três centímetros
+    // dela em letra maior só rouba a atenção do leque.)
     const foot = document.createElement('div');
     foot.className = 'zh-build-foot';
     foot.textContent = 'Arrow keys choose · Enter builds · Esc returns';

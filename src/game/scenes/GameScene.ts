@@ -112,6 +112,9 @@ import {
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
+import { SellBoxObject } from '@/game/objects/SellBoxObject';
+import { SellOverlay } from '@/game/runtime/SellOverlay';
+import { registerFultonTextures } from '@/game/render3d/fultonTexture';
 import { PickupPrompt } from '@/game/runtime/PickupPrompt';
 import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints, type HintTile } from '@/game/runtime/PlacementHints';
@@ -147,6 +150,7 @@ import {
   coinMultiplierAt,
   coinsForKill,
   consumeExplorerArrival,
+  consumeExplorerCard,
   dangerScaleAt,
   endExplorerMode,
   explorerMeta,
@@ -213,6 +217,7 @@ import {
   getAltars,
   getElectronicGates,
   getLevelPortals,
+  getSellBoxes,
   getGlobalVariables,
   getMoonflowers,
   getLockedDoors,
@@ -828,6 +833,10 @@ export class GameScene extends Phaser.Scene {
   private boilers: BoilerObject[] = [];
   private electronicGates: ElectronicGateObject[] = [];
   private levelPortals: LevelPortalObject[] = [];
+  /** As caixas de venda: o único corpo que devolve moeda (ver SellBoxObject). */
+  private sellBoxes: SellBoxObject[] = [];
+  /** A mesa de despacho aberta (ver SellOverlay). */
+  private sellOverlay?: SellOverlay;
   /** As tochas de parede de uma dungeon — nascem de TILES, nao de props (ver WallTorchObject). */
   private wallTorches: WallTorchObject[] = [];
   /**
@@ -1110,6 +1119,7 @@ export class GameScene extends Phaser.Scene {
     registerCharcoalTexture(this);
     registerPlacementTextures(this);
     registerLevelPortalTextures(this);
+    registerFultonTextures();
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -1204,8 +1214,8 @@ export class GameScene extends Phaser.Scene {
       this.wizardIntroSeen = st.wizardIntroSeen;
       st.seenDialogKeys.forEach((k) => this.seenDialogKeys.add(k));
     }
-    this.npcManager = new NpcManager(this, getContent, (kind, wx, wy) => {
-      const key = this.dialogKeyFor(kind, wx, wy);
+    this.npcManager = new NpcManager(this, getContent, (kind, wx, wy, dialog) => {
+      const key = this.dialogKeyFor(kind, wx, wy, dialog);
       return key !== null && !this.seenDialogKeys.has(key);
     }, (wx, wy) => {
       // O keycap "Z" só existe quando falar é o que o botão FARIA agora: herói vivo, mundo
@@ -1394,6 +1404,7 @@ export class GameScene extends Phaser.Scene {
     this.levelPortals = getLevelPortals().map(
       (portal) => new LevelPortalObject(portal.worldX, portal.worldY, portal.level),
     );
+    this.sellBoxes = getSellBoxes().map((box) => this.makeSellBox(box));
 
     // AS TOCHAS DE PAREDE. Elas nao estao na lista de props: sao o frame `wallTorch` pintado na
     // alvenaria pelo gerador de dungeons, entao a unica forma de encontra-las e varrer o terreno.
@@ -1486,6 +1497,7 @@ export class GameScene extends Phaser.Scene {
       { list: this.boilers },
       { list: this.electronicGates },
       { list: this.levelPortals },
+      { list: this.sellBoxes },
       { list: this.wires },
       { list: this.belts },
       { list: this.chests },
@@ -1562,6 +1574,7 @@ export class GameScene extends Phaser.Scene {
       this.syncChunkGates(this.explorer.frontiers(), (explorerRun()?.coins ?? 0) >= this.explorer.minCost());
       const arrival = consumeExplorerArrival();
       if (arrival) this.explorerHud.showArrival(arrival);
+      this.buildPinnedCard();
     }
 
     const activeLevel = getActiveLevel();
@@ -2863,6 +2876,7 @@ export class GameScene extends Phaser.Scene {
       // `movementController.update()` logo acima, que e de onde esta rede veio.)
       this.startBreathing();
     }
+    for (const box of this.sellBoxes) box.update(delta);
     this.streamChunks();
     this.updateFootprints();
     this.updateExplorerHud();
@@ -2974,9 +2988,15 @@ export class GameScene extends Phaser.Scene {
       // There is no wave banner and no ring spawn around the hero: one corpse simply walks in
       // from the dark, then another later, with a small global cap.
       if (this.explorer && this.chunkUndead) {
+        // SÓ A TERRA DE COMBATE DEIXA O ESCURO ENTRAR. O cerco nasce nas estradas inacabadas, e
+        // ele entrava por todas — o mapa do poeta e a aula do gato incluídos. Uma conversa cortada
+        // por uma caveira não é tensão, é ruído. A estrada filtra pela categoria da terra que a
+        // possui (ver ChunkCategory); o acampamento conta como combate, senão a primeira caveira
+        // do jogo — a que paga a primeira carta — nunca chegaria.
+        const source = this.explorer.source;
         this.chunkUndead.update(
           delta,
-          this.explorer.frontiers(),
+          this.explorer.frontiers().filter((f) => source.categoryAt(f.sourceCx, f.sourceCy) === 'combat'),
           this.enemyManager.aliveCount,
           (wx, wy) => { this.enemyManager?.spawnUndead(wx, wy); },
         );
@@ -3259,6 +3279,48 @@ export class GameScene extends Phaser.Scene {
     if (this.explorer) this.explorer.debugNextOffers = [...ids];
   }
 
+  /**
+   * O "TESTAR ESTA CARTA" do editor: constrói a carta marcada colada no acampamento e põe o herói
+   * dentro dela, sem passar pelo portão.
+   *
+   * A compra em si NÃO é o que se está testando — ela é um Enter, e é a mesma para as dezoito
+   * cartas. O que se testa é o CONTEÚDO: o desenho, os props, quem mora ali e o que ele fala. Por
+   * isso o atalho pula o portão em vez de encher a bolsa de moeda e deixar o autor procurar a
+   * própria carta no baralho.
+   *
+   * O herói pousa no tile pisável mais perto do centro: um teleporte cego cairia dentro da própria
+   * parede que a carta autorou, e o autor abriria o teste preso numa pedra.
+   */
+  private buildPinnedCard(): void {
+    const id = consumeExplorerCard();
+    const explorer = this.explorer;
+    if (!id || !explorer) return;
+    const gate = explorer.frontiers()[0];
+    if (!gate) return;
+    if (!explorer.purchase(gate, id, this, this.world3d)) {
+      // Carta desligada no baralho (`catalog.enabled === false`) ou id que não existe mais: o
+      // teste não acontece, e o autor fica no acampamento em vez de num mundo meio construído.
+      return;
+    }
+    const cx = gate.targetCx * CHUNK_COLUMNS;
+    const cy = gate.targetCy * CHUNK_ROWS;
+    let best: [number, number] | null = null;
+    let bestD = Infinity;
+    for (let y = 0; y < CHUNK_ROWS; y += 1) {
+      for (let x = 0; x < CHUNK_COLUMNS; x += 1) {
+        const wx = cx + x;
+        const wy = cy + y;
+        if (this.isSolidForEntities(wx, wy)) continue;
+        const d = (x - CHUNK_COLUMNS / 2) ** 2 + (y - CHUNK_ROWS / 2) ** 2;
+        if (d < bestD) { bestD = d; best = [wx, wy]; }
+      }
+    }
+    if (!best) return;
+    this.playerWorld = { worldX: best[0], worldY: best[1] };
+    this.movementController?.syncPlayerToWorld(best[0], best[1], this.tileSize);
+    this.syncChunkGates(explorer.frontiers(), (explorerRun()?.coins ?? 0) >= explorer.minCost());
+  }
+
   /** Poe uma bolsa exata na expedicao. */
   public explorerDebugSetCoins(amount: number): void {
     const run = explorerRun();
@@ -3493,6 +3555,9 @@ export class GameScene extends Phaser.Scene {
           this.electronicGates.push(
             new ElectronicGateObject(this, def.worldX, def.worldY, def.variable),
           );
+          break;
+        case 'sellBox':
+          if (def.sells) this.sellBoxes.push(this.makeSellBox(def));
           break;
         case 'toolbox':
           this.toolboxes.push(new ToolboxObject(this, def.worldX, def.worldY, def.dir ?? 1));
@@ -4815,6 +4880,8 @@ export class GameScene extends Phaser.Scene {
       // e trouxesse as coisas na mão. Agora o A é uma coisa só — escolha e confirme —, e o que
       // muda entre elas é o que cada uma sabe fazer.
       if (this.openCraftMenuAt(front.x, front.y)) return;
+      // A CAIXA DE EXTRACAO responde ao mesmo botao e no mesmo degrau: maquina que abre TELA.
+      if (this.openSellBoxAt(front.x, front.y)) return;
       // O ALTAR VAZIO: o Z PÕE nele o item selecionado na bolsa. Fica no mesmo degrau da bancada
       // (antes da cadência e do corpo) e pela mesma razão — pôr uma coisa numa mesa não saca
       // lâmina. Com a laje já ocupada isto devolve `false` de propósito: dali em diante o Z volta
@@ -5163,6 +5230,75 @@ export class GameScene extends Phaser.Scene {
    *
    * Devolve `true` quando havia máquina ali e o gesto foi gasto — inclusive numa recusa desenhada.
    */
+  /**
+   * A CAIXA DE VENDA a partir do prop: a placa desenha a arte do PRÓPRIO item que ela compra, e é
+   * daqui que ela sai — a tabela de arte 3D mora nesta cena, não no objeto.
+   */
+  private makeSellBox(def: import('@/game/world/worldSchema').WorldProp): SellBoxObject {
+    const kind = def.sells?.kind as HeldItemKind;
+    const art = BACK_ITEM_VISUAL_3D[kind];
+    return new SellBoxObject(
+      this, def.worldX, def.worldY, kind, def.sells?.coinsPerUnit ?? 1, art.texture, art.frame,
+    );
+  }
+
+  /**
+   * VENDER: o X contra a caixa entrega o PUNHADO INTEIRO do tipo que ela compra, e ela derruba o
+   * pagamento no chão em volta de si.
+   *
+   * O punhado inteiro, e não uma unidade, pela mesma razão do baú: vender vinte minérios um aperto
+   * por vez seria uma tarefa, e a caixa existe para tirar tarefa do caminho. E o pagamento cai no
+   * MUNDO (a lei da casa — dinheiro ganho é dinheiro que se apanha), o que também dá ao gesto a
+   * parte visível que um número no canto da tela não tem.
+   */
+  /**
+   * O Z CONTRA A CAIXA ABRE A MESA DE DESPACHO. Ele mora no mesmo degrau da bancada e do forno —
+   * as tres sao maquinas que respondem ao A com uma TELA de escolha, e nao com um gesto imediato.
+   * Vender e uma decisao ("quanto disto?"), e decisao neste jogo abre painel.
+   */
+  private openSellBoxAt(wx: number, wy: number): boolean {
+    const box = this.propAt(this.sellBoxes, wx, wy);
+    if (!box) return false;
+    if (!box.isReady) return true;   // ja esta no ar: o gesto foi gasto, e o ceu e a resposta
+    if (this.sellOverlay) return true;
+    const have = this.inventory.count(box.kind);
+    if (have <= 0) { box.refuse(); return true; }
+    const art = ITEM_VISUAL_2D[box.kind];
+    this.movementController?.hold(true);
+    this.sellOverlay = new SellOverlay({
+      icon: spriteDataUrl(this, art.texture, art.frame),
+      itemLabel: t(`items.name.${box.kind}`),
+      coinsPerUnit: box.coinsPerUnit,
+      available: have,
+      onConfirm: (units) => {
+        this.closeSellOverlay();
+        const n = Math.min(units, this.inventory.count(box.kind));
+        if (n <= 0) return;
+        this.inventory.remove(box.kind, n);
+        this.updateBackItem(); // o vendido podia ser o item da mao — as costas ficam honestas
+        getSoundManager().playShopClose();
+        // A CARGA SOBE AGORA; a moeda so cai quando o aviao passar (ver SellBoxObject.extract).
+        box.extract(box.priceFor(n), (bx, by, coins) => {
+          if (this.chunkManager) {
+            this.coinManager?.spawnCoins(bx, by, this.chunkManager, coins);
+          }
+          getSoundManager().playCoinPickup();
+          this.persistAdventure();
+        });
+        this.persistAdventure();
+      },
+      onCancel: () => this.closeSellOverlay(),
+    });
+    getSoundManager().playShopOpen();
+    return true;
+  }
+
+  private closeSellOverlay(): void {
+    this.sellOverlay?.close();
+    this.sellOverlay = undefined;
+    this.movementController?.hold(false);
+  }
+
   private deliverToMachineAt(wx: number, wy: number): boolean {
     // O BAÚ é os dois sentidos num corpo só (depositar e tirar um punhado), e continua sendo o
     // primeiro: ele é o único que aceita QUALQUER coisa, então perguntar a ele é barato.
@@ -5338,7 +5474,7 @@ export class GameScene extends Phaser.Scene {
     if (!kind) return false;
     // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
     if (kind === 'wizard' && !this.explorer) this.openWizardDialog({ worldX: wx, worldY: wy });
-    else this.openNpcDialog(kind, { worldX: wx, worldY: wy });
+    else this.openNpcDialog(kind, { worldX: wx, worldY: wy }, this.npcManager.getDialogIdAt(wx, wy));
     return true;
   }
 
@@ -9182,12 +9318,13 @@ export class GameScene extends Phaser.Scene {
   private openNpcDialog(
     kind: import('@/game/world/ScreenContent').NpcKind,
     npcWorld?: { worldX: number; worldY: number },
+    scriptId?: string,
   ): void {
     if (this.dialogOpen) return;
-    const script = getDialog(kind);
+    const script = getDialog(kind, scriptId);
     if (!script) return;
     if (npcWorld) {
-      const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY);
+      const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY, scriptId);
       if (key) {
         this.seenDialogKeys.add(key);
         this.persistAdventure(); // o "!" apagado fica apagado
@@ -9195,17 +9332,25 @@ export class GameScene extends Phaser.Scene {
     }
     // An NPC beside a still-dead campfire is too scared to talk: swap in the locked lines.
     const shown = this.gateDialog(script, npcWorld);
-    this.openDialogScript(shown, npcWorld, getDialogVoice(kind));
+    this.openDialogScript(shown, npcWorld, getDialogVoice(kind, scriptId));
   }
 
   // Identity of the dialog an NPC would speak *right now*: the wizard's current story beat,
   // or (for everyone else) the base lines vs the campfire-gated "locked" lines. Used both to
   // mark a dialog as heard and to decide whether the "!" new-dialog marker shows.
-  private dialogKeyFor(kind: import('@/game/world/ScreenContent').NpcKind, wx: number, wy: number): string | null {
+  private dialogKeyFor(
+    kind: import('@/game/world/ScreenContent').NpcKind,
+    wx: number,
+    wy: number,
+    scriptId?: string,
+  ): string | null {
     if (kind === 'wizard') return `wizard:${this.wizardStoryState()}`;
-    if (!getDialog(kind)) return null;
+    if (!getDialog(kind, scriptId)) return null;
+    // A chave é do ROTEIRO, não da espécie: três gatos com três aulas são três "!" a apagar, e
+    // com a chave por espécie ouvir um deles apagaria a marca dos outros dois.
+    const id = scriptId ?? kind;
     const cf = this.nearestCampfireWithin(wx, wy, NPC_GATE_RADIUS_TILES);
-    return cf && !cf.isLit ? `${kind}:locked` : `${kind}:base`;
+    return cf && !cf.isLit ? `${id}:locked` : `${id}:base`;
   }
 
   // The wizard tells the story of Zero, always opening (on the very first talk) with the intro

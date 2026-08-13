@@ -34,19 +34,43 @@ export type WorldMeta = {
 // nasce com o corpo e morre com ele. Um campo aqui seria estado de partida gravado no mapa.
 export type WorldEnemySpawn = { type: EnemyKind; worldX: number; worldY: number };
 export type WorldPickupSpawn = { type: PickupKind; worldX: number; worldY: number };
-export type WorldNpcSpawn = { type: NpcKind; worldX: number; worldY: number };
+/**
+ * `dialog` é o ROTEIRO desta instância, e não do tipo dela.
+ *
+ * A fala nasceu indexada por espécie (`dialogs[kind]`), e isso bastava enquanto cada NPC morava num
+ * lugar só. Com o baralho de cartas o mesmo gato passou a viver em três mapas diferentes ensinando
+ * três coisas diferentes — e um roteiro por espécie faz o gato do machado explicar a picareta. Este
+ * campo aponta para uma chave qualquer de `dialogs`; sem ele, continua valendo o tipo.
+ */
+export type WorldNpcSpawn = { type: NpcKind; worldX: number; worldY: number; dialog?: string };
 
 /**
  * Metadata that turns an authored editor chunk into a card the player can buy.
  * Terrain and entities keep using the normal WorldChunk fields; this small record is the
  * catalogue-facing identity used by the world-builder mode.
  */
+/**
+ * O QUE ESTA TERRA É — e a categoria não é enfeite de carta: ela decide se o CERCO entra por ali.
+ *
+ * A invasão de undead nasce nas estradas inacabadas (ver ChunkUndeadDirector), e ela entrava por
+ * TODAS — inclusive pela do poeta e pela de um mapa cuja graça é resolver uma parede em paz. Uma
+ * conversa interrompida por uma caveira não é tensão, é ruído; um puzzle interrompido é a mesma
+ * coisa com um passo a mais de irritação. Só a carta de COMBATE recebe o cerco.
+ */
+export type ChunkCategory = 'narrative' | 'combat' | 'puzzle';
+
 export type ChunkCatalogEntry = {
   id: string;
   name: string;
   cost: number;
   cardImage: string;
   description?: string;
+  /**
+   * Ausente = deduzida (morador → narrativa, bicho autorado → combate, resto → puzzle). O campo
+   * existe para os casos em que a dedução erra, e ela erra sempre no mesmo lugar: uma aula tem um
+   * professor E uma parede, e sem isto ela seria narrativa por ter alguém dentro.
+   */
+  category?: ChunkCategory;
   /**
    * Esta carta está NO BARALHO do jogador? Ausente = sim.
    *
@@ -107,7 +131,10 @@ export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dr
   // e o que faz instalar uma maquina ser uma identidade em vez de uma tabela de-para. Esteira e
   // extrator carregam `dir` pela mesma razao do braco: ele decide de que tile a peca tira e em
   // qual ela poe. O bau nao carrega direcao — deposito nao tem frente.
-  | 'belt' | 'chest' | 'extractor';
+  | 'belt' | 'chest' | 'extractor'
+  // A CAIXA DE VENDA: o único corpo do jogo que devolve MOEDA. Ver SellBoxObject — ela aceita um
+  // tipo só (anunciado numa placa acima dela) e derruba o pagamento no chão.
+  | 'sellBox';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.
@@ -154,6 +181,12 @@ export type WorldProp = {
    * dungeon ele devolve o heroi ao tile do overworld por onde entrou (ver runtime/dungeonTrip).
    */
   level?: number;
+  /**
+   * Só para `sellBox`: o tipo que ela COMPRA e o preço por unidade. É o campo inteiro da peça —
+   * uma caixa de venda sem isto não tem o que anunciar na placa nem o que pagar, então o runtime
+   * simplesmente não a constrói.
+   */
+  sells?: { kind: HeldItemKind; coinsPerUnit: number };
 };
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };
@@ -187,7 +220,12 @@ export type WorldData = {
   meta: WorldMeta;
   chunks: WorldChunk[]; // exactly worldChunksX * worldChunksY entries
   props: WorldProp[];
-  dialogs: Partial<Record<NpcKind, WorldDialog>>;
+  /**
+   * Os roteiros. A chave é normalmente o NpcKind — e continua sendo o padrão —, mas uma INSTÂNCIA
+   * pode apontar para uma chave própria (ver WorldNpcSpawn.dialog), e por isso o índice é string:
+   * é o que deixa o mesmo gato ensinar o machado numa carta e a picareta na outra.
+   */
+  dialogs: Partial<Record<NpcKind, WorldDialog>> & Partial<Record<string, WorldDialog>>;
   // Named boolean puzzle state. Optional keeps every schema-v1 world written before global
   // variables valid; the editor normalises it to an empty record as soon as it opens one.
   globalVariables?: Record<string, boolean>;

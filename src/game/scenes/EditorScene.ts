@@ -7,7 +7,7 @@ import {
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import {
-  EditorDomUi, PANEL_WIDTH, hasDirectionFrames, isDirectionalProp, isVariableProp,
+  EditorDomUi, PANEL_WIDTH, hasDirectionFrames, isDirectionalProp, isSellProp, isVariableProp,
   type UiState, type ViewMode,
 } from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
@@ -15,7 +15,7 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { wireShapeFrame, wireShapeFromMask } from '@/game/world/wireShapes';
 import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import { GameScene } from '@/game/scenes/GameScene';
-import { startExplorerRun } from '@/game/explorer/explorerRun';
+import { pinExplorerCard, startExplorerRun } from '@/game/explorer/explorerRun';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
@@ -47,7 +47,10 @@ const MAX_ZOOM = 8;
 // v6: a aba "Inimigos" VOLTOU (pontos de spawn). `EntitySelection` ganhou o braco `enemies`, e
 // restoreUi funde o estado salvo em cima do default sem validar nada — um v5 com a tecla 5
 // gravada de outra epoca entraria numa forma que agora significa outra coisa.
-const UI_STATE_KEY = 'worldEditorUi.v6';
+// v7: UiState ganhou `propSellKind`/`propSellPrice` (a caixa de extracao). A chave sobe junto com
+// a FORMA do estado — um v6 restaurado hoje viria sem os dois, e a primeira caixa nasceria sem
+// item e sem preco, ou seja, invisivel no jogo.
+const UI_STATE_KEY = 'worldEditorUi.v7';
 
 type CellCoord = { x: number; y: number };
 
@@ -97,6 +100,13 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   boiler: { key: ASSET_KEYS.boiler, frame: 0 },
   inserter: { key: ASSET_KEYS.inserter, frame: 1 },
   extractor: { key: ASSET_KEYS.extractor, frame: 1 },
+  // A CADEIA DO FERRO como item de chao. Faltavam as tres, e a falta NAO era inofensiva: um
+  // level que autora minerio no chao (as aulas do gato) derrubava o editor inteiro no boot —
+  // `entityVisual` lia `.key` de undefined, `renderEntities` morria, e a paleta nunca chegava
+  // a ser construida. O sintoma era 'clico no mapa e nada acontece'.
+  ore: { key: ASSET_KEYS.oreItem },
+  bloom: { key: ASSET_KEYS.bloomItem },
+  charcoal: { key: 'charcoal-item' },
 };
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
@@ -129,6 +139,9 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
   boiler: { key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.coldDry },
   electronicGate: { key: ASSET_KEYS.electronicGate, frame: 0 },
+  // A CAIXA DE VENDA usa a arte do bau: as duas sao caixas de UM tipo, e o que as separa e a
+  // PLACA que so o mundo desenha (ver SellBoxObject) — no tabuleiro, o corpo basta.
+  sellBox: { key: ASSET_KEYS.chest, frame: 0 },
   levelPortal: { key: ASSET_KEYS.levelPortal },
   // Default da paleta; no tabuleiro, entityVisual troca pela forma resolvida dos vizinhos.
   wire: { key: ASSET_KEYS.wire, frame: wireShapeFrame('h', false) },
@@ -177,6 +190,8 @@ export class EditorScene extends Phaser.Scene {
     showEntities: true,
     propDir: 1, // leste
     propVariable: '',
+    propSellKind: 'ore',
+    propSellPrice: 3,
     viewMode: 'world',
     chunkX: 0,
     chunkY: 0,
@@ -305,6 +320,7 @@ export class EditorScene extends Phaser.Scene {
       onSave: () => void this.handleSave(),
       onReload: () => this.handleReload(),
       onPlaytest: () => this.startPlaytest(),
+      onCardPlaytest: (cardId) => { pinExplorerCard(cardId); this.startPlaytest(); },
       onUndo: () => { this.store?.undo(); },
       onRedo: () => { this.store?.redo(); },
       onFitView: () => this.fitView(),
@@ -454,7 +470,10 @@ export class EditorScene extends Phaser.Scene {
   private entityVisual(entity: PlacedEntity): { key: string; frame?: number } {
     if (entity.list === 'enemies') return ENEMY_VISUAL[entity.type] ?? { key: ASSET_KEYS.undead };
     if (entity.list === 'npcs') return NPC_VISUALS[entity.type];
-    if (entity.list === 'pickups') return PICKUP_VISUAL[entity.type];
+    // O `??` e uma REDE, nao preguica: um kind de item que o editor nao conhece nao pode
+    // derrubar o tabuleiro inteiro. Sem ele, um unico item desconhecido num canto do mundo
+    // apagava a paleta e o editor virava uma tela que nao responde a clique nenhum.
+    if (entity.list === 'pickups') return PICKUP_VISUAL[entity.type] ?? { key: ASSET_KEYS.rock };
     // Um prop com direcao desenha o frame da SUA direcao — e assim que se olha um mapa cheio de
     // bracos e se ve, sem clicar em nada, pra que lado cada um empurra. So vale para quem tem a
     // arte dividida por direcao: a caixa de ferramentas gira, mas seus frames sao poses da tampa
@@ -901,6 +920,11 @@ export class EditorScene extends Phaser.Scene {
         ...(isDirectionalProp(sel.type) ? { dir: this.uiState.propDir } : {}),
         ...(isVariableProp(sel.type) && this.uiState.propVariable
           ? { variable: this.uiState.propVariable }
+          : {}),
+        // A caixa de extracao carrega o negocio dela no proprio prop: sem `sells` o runtime a
+        // descarta, entao ela nunca e gravada pela metade.
+        ...(isSellProp(sel.type)
+          ? { sells: { kind: this.uiState.propSellKind, coinsPerUnit: this.uiState.propSellPrice } }
           : {}),
       });
     }

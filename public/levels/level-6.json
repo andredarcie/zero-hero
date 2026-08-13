@@ -1,0 +1,696 @@
+{
+  "meta": {
+    "name": "A Tocha",
+    "schemaVersion": 1,
+    "worldChunksX": 1,
+    "worldChunksY": 1,
+    "chunkColumns": 12,
+    "chunkRows": 12,
+    "tileSize": 8,
+    "tilesetKey": "forest-tileset",
+    "playerStart": {
+      "worldX": 6,
+      "worldY": 9
+    },
+    "puzzle": true,
+    "exportedAt": "2026-08-13T19:12:33.617Z"
+  },
+  "chunks": [
+    {
+      "cx": 0,
+      "cy": 0,
+      "ground": [
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      ],
+      "upper": [
+        [
+          null,
+          1,
+          null,
+          20,
+          null,
+          null,
+          19,
+          null,
+          null,
+          1,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          0,
+          1,
+          19,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          1,
+          19,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          19,
+          null,
+          0,
+          null,
+          19,
+          null,
+          0,
+          null,
+          null
+        ],
+        [
+          0,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          20,
+          null,
+          null,
+          null,
+          20
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null,
+          20,
+          null,
+          1,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          1,
+          19,
+          null
+        ],
+        [
+          1,
+          19,
+          null,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0
+        ],
+        [
+          19,
+          null,
+          null,
+          1,
+          null,
+          null,
+          null,
+          null,
+          19,
+          null,
+          null,
+          1
+        ],
+        [
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          1,
+          null,
+          null,
+          0,
+          null,
+          null
+        ]
+      ],
+      "collisions": [
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      ],
+      "enemies": [],
+      "pickups": [
+        {
+          "type": "wood",
+          "worldX": 6,
+          "worldY": 8
+        },
+        {
+          "type": "iron",
+          "worldX": 3,
+          "worldY": 2
+        },
+        {
+          "type": "wood",
+          "worldX": 5,
+          "worldY": 10
+        }
+      ],
+      "npcs": [
+        {
+          "type": "blackCat",
+          "worldX": 4,
+          "worldY": 9,
+          "dialog": "catTorch"
+        }
+      ]
+    }
+  ],
+  "props": [
+    {
+      "type": "campfire",
+      "lit": true,
+      "worldX": 2,
+      "worldY": 9
+    },
+    {
+      "type": "dryBush",
+      "worldX": 0,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 1,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 2,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 3,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 4,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 5,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 6,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 7,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 8,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 9,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 10,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 11,
+      "worldY": 6
+    },
+    {
+      "type": "dryBush",
+      "worldX": 1,
+      "worldY": 2
+    },
+    {
+      "type": "dryBush",
+      "worldX": 2,
+      "worldY": 2
+    },
+    {
+      "type": "dryBush",
+      "worldX": 10,
+      "worldY": 2
+    },
+    {
+      "type": "dryBush",
+      "worldX": 11,
+      "worldY": 2
+    },
+    {
+      "type": "dryBush",
+      "worldX": 1,
+      "worldY": 4
+    },
+    {
+      "type": "levelPortal",
+      "worldX": 6,
+      "worldY": 1
+    }
+  ],
+  "dialogs": {
+    "catTorch": {
+      "npcName": "CAT",
+      "npcColorHex": "#cc99ff",
+      "npcAssetKey": "npcs",
+      "npcFrame": 0,
+      "voice": {
+        "freq": 540,
+        "wave": "triangle"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Mrrow. My hearth is lit. Yours is a stick on the ground."
+        },
+        {
+          "speaker": "npc",
+          "text": "Take the STICK. Face my fire and press X: it wakes as a TORCH. It burns for a while and then it dies — come back and light it again."
+        },
+        {
+          "speaker": "npc",
+          "text": "Dry brush cannot be chopped. It BURNS. Touch one with the torch and the fire walks to its neighbours on its own."
+        },
+        {
+          "speaker": "npc",
+          "text": "Burnt brush leaves CHARCOAL on the ground. Bring it to me and I pay in coin — talk to me again when your hands are full."
+        }
+      ],
+      "trade": {
+        "item": "charcoal",
+        "coinsPerUnit": 2,
+        "offer": "Charcoal. I will take it off your hands — two coins the lump. How many?",
+        "empty": "Your hands are empty. Burn some brush and come back.",
+        "thanks": "Mrrow. Pleasure doing business."
+      }
+    }
+  },
+  "globalVariables": {}
+}

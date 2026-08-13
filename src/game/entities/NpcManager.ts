@@ -111,15 +111,24 @@ class NpcEntity {
   public readonly worldX: number;
   public readonly worldY: number;
   public readonly kind: NpcKind;
+  /** O roteiro DESTA instância, quando ela tem um só dela (ver WorldNpcSpawn.dialog). */
+  public readonly dialog?: string;
 
   private readonly sprite: Billboard3D;
   private readonly exclaim: Phaser.GameObjects.Image;
   private readonly talkKey: Phaser.GameObjects.Image;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, kind: NpcKind) {
+  public constructor(
+    scene: Phaser.Scene,
+    worldX: number,
+    worldY: number,
+    kind: NpcKind,
+    dialog?: string,
+  ) {
     this.worldX = worldX;
     this.worldY = worldY;
     this.kind = kind;
+    this.dialog = dialog;
     const visual = NPC_VISUALS[kind];
     // Death looms at twice the size; the billboard anchors at the feet either way.
     const size = kind === 'death' ? 2 : 1;
@@ -181,7 +190,14 @@ export class NpcManager {
     private readonly scene: Phaser.Scene,
     private readonly getContent: (cx: number, cy: number) => ScreenContent,
     // Whether this NPC's current dialog is still unheard — drives the "!" marker above it.
-    private readonly hasNewDialog: (kind: NpcKind, worldX: number, worldY: number) => boolean = () => false,
+    // `dialog` é o roteiro próprio da instância: sem ele aqui, o "!" perguntaria pela fala da
+    // ESPÉCIE enquanto conversar marcaria a do roteiro — e a marca nunca apagaria.
+    private readonly hasNewDialog: (
+      kind: NpcKind,
+      worldX: number,
+      worldY: number,
+      dialog?: string,
+    ) => boolean = () => false,
     // O herói está ADJACENTE e DE FRENTE para este NPC — mostra o keycap "Z" (a tecla de ação).
     private readonly isTalkTarget: (worldX: number, worldY: number) => boolean = () => false,
   ) {}
@@ -196,7 +212,7 @@ export class NpcManager {
       if (this.byChunk.has(key)) continue;
       const [cx, cy] = key.split(',').map(Number);
       const list = this.getContent(cx, cy).npcs.map(
-        (spawn) => new NpcEntity(this.scene, spawn.worldX, spawn.worldY, spawn.type),
+        (spawn) => new NpcEntity(this.scene, spawn.worldX, spawn.worldY, spawn.type, spawn.dialog),
       );
       this.byChunk.set(key, list);
     }
@@ -213,7 +229,7 @@ export class NpcManager {
     if (!current) return; // fora da janela ativa: o syncChunks normal cuida quando ela chegar lá
     for (const npc of current) npc.destroy();
     this.byChunk.set(key, this.getContent(cx, cy).npcs.map(
-      (spawn) => new NpcEntity(this.scene, spawn.worldX, spawn.worldY, spawn.type),
+      (spawn) => new NpcEntity(this.scene, spawn.worldX, spawn.worldY, spawn.type, spawn.dialog),
     ));
   }
 
@@ -231,6 +247,11 @@ export class NpcManager {
     return this.all().find((n) => n.worldX === worldX && n.worldY === worldY)?.kind ?? null;
   }
 
+  /** O roteiro próprio deste NPC, se ele tiver um (ver WorldNpcSpawn.dialog). */
+  public getDialogIdAt(worldX: number, worldY: number): string | undefined {
+    return this.all().find((n) => n.worldX === worldX && n.worldY === worldY)?.dialog;
+  }
+
   public getActiveWorldPositions(): ReadonlyArray<{ worldX: number; worldY: number }> {
     return this.all().map((n) => ({ worldX: n.worldX, worldY: n.worldY }));
   }
@@ -241,7 +262,7 @@ export class NpcManager {
       npc.render(
         tileSize,
         camera,
-        this.hasNewDialog(npc.kind, npc.worldX, npc.worldY),
+        this.hasNewDialog(npc.kind, npc.worldX, npc.worldY, npc.dialog),
         this.isTalkTarget(npc.worldX, npc.worldY),
         now,
       );
