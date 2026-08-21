@@ -130,8 +130,9 @@ const makeBlankPuzzleLevel = (name: string): object => {
 };
 
 // The world API serves the real overworld (`world`), the puzzle levels (`level-N`) and the
-// o SUBTERRANEO (`underworld`, public/underworld.json) — os dois editados via /lab.
-// Everything else in ?file= is rejected.
+// SUBTERRANEO (`underworld`, public/underworld.json). Os dois ANDARES do mundo de verdade se
+// escolhem no /editor (a chave Overworld/Underworld do painel, que é o `?under` da URL); o level
+// é do /lab. Everything else in ?file= is rejected.
 const resolveWorldFile = (fileId: string): string | null => {
   if (fileId === 'world') return worldJsonPath;
   if (fileId === 'underworld') return underworldJsonPath;

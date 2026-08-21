@@ -10,7 +10,10 @@ import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent'
 import type {
   PropDir, PropKind, WorldDialog,
 } from '@/game/world/worldSchema';
-import type { DeleteLabLevelResult, LabLevelSummary } from '@/game/worldApi';
+import {
+  worldFileForFloor, worldFilePath,
+  type DeleteLabLevelResult, type LabLevelSummary, type WorldFileId, type WorldFloor,
+} from '@/game/worldApi';
 
 // The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
 // world viewport, this module renders everything else (tools, palettes, minimap, modals).
@@ -78,6 +81,16 @@ export type EditorUiCallbacks = {
   onNavigate: (tileX: number, tileY: number) => void;
   onWorldApply: (settings: { name: string; chunksX: number; chunksY: number }) => void;
   onDialogApply: (kind: NpcKind, dialog: WorldDialog) => void;
+  /** O arquivo aberto agora. E o que o Salvar escreve, entao e o que os botoes prometem. */
+  worldFile: WorldFileId;
+  /**
+   * OS DOIS ANDARES do mundo de verdade (só no /editor — no /lab o arquivo é um level, que não é
+   * andar de nada). Ausente = o painel não desenha a chave, e não há andar nenhum a escolher.
+   */
+  floorSwitch?: {
+    current: WorldFloor;
+    open: (floor: WorldFloor) => void;
+  };
   levelManager?: {
     /** O arquivo aberto agora (`level-N` ou `underworld`) — id, e não número. */
     currentId: string;
@@ -220,7 +233,12 @@ export const PROP_DIR_LABEL: Record<PropDir, string> = { 0: 'Norte', 1: 'Leste',
 // square, while an opaque floor tile on the upper layer hides the ground it should be part of.
 type TileDef = { frame: number; label: string; layer: TileLayerId };
 
-const TILE_GROUPS: ReadonlyArray<{ title: string; tiles: readonly TileDef[] }> = [
+const TILE_GROUPS: ReadonlyArray<{
+  title: string;
+  tiles: readonly TileDef[];
+  /** Grupo do ANDAR DE BAIXO: no subterrâneo a paleta mostra só estes (ver renderPalette). */
+  dungeon?: boolean;
+}> = [
   {
     title: 'Chao',
     tiles: [
@@ -268,6 +286,35 @@ const TILE_GROUPS: ReadonlyArray<{ title: string; tiles: readonly TileDef[] }> =
     ],
   },
   {
+    // A ALVENARIA DE DUNGEON (DUNGEON_TILES). Ela existia no atlas desde sempre e NAO estava aqui:
+    // os dez frames caiam em "Outros", sem nome e — o que doi — sem CAMADA. Sem `TileDef` o clique
+    // nao troca a camada ativa, entao pintar um muro com o "Chao" ligado punha a parede no piso, e
+    // pintar um piso com "Superior" ligado tapava o chao. Sao exatamente as duas falhas que o
+    // comentario do topo desta tabela descreve, e o subterraneo ficou editavel a um clique
+    // (a chave Overworld/Underworld do painel) sem que houvesse onde desenhar as paredes dele.
+    //
+    // A divisao é a mesma da montanha e pelo mesmo motivo: PISO e chao, MURO fica em pe. O muro
+    // bloqueia sozinho (DUNGEON_WALL_FRAMES esta em SOLID_UPPER_FRAMES, e o editor mostra essa
+    // colisao implicita em ambar), e o World3D o assa em CUBO com o topo PRETO PURO — o escuro
+    // entre uma sala e a outra. Nada disso precisa de colisao pintada.
+    title: 'Dungeon',
+    dungeon: true,
+    tiles: [
+      { frame: 42, label: 'Piso', layer: 'ground' },
+      { frame: 43, label: 'Piso 2', layer: 'ground' },
+      { frame: 44, label: 'Piso 3', layer: 'ground' },
+      { frame: 51, label: 'Piso Rachado', layer: 'ground' },
+      { frame: 45, label: 'Muro', layer: 'upper' },
+      { frame: 46, label: 'Muro 2', layer: 'upper' },
+      { frame: 47, label: 'Muro 3', layer: 'upper' },
+      { frame: 49, label: 'Muro com Musgo', layer: 'upper' },
+      { frame: 48, label: 'Muro com Tocha', layer: 'upper' },
+      // A pista da parede bombardeavel — a legenda que o Zelda 1 nunca deu. Fica por ultimo
+      // porque ela nao e decoracao: ela PROMETE uma passagem.
+      { frame: 50, label: 'Muro Rachado', layer: 'upper' },
+    ],
+  },
+  {
     // The cemetery. Ground first, then the things that stand on it, then the litter.
     title: 'Cemiterio',
     tiles: [
@@ -287,6 +334,14 @@ const TILE_GROUPS: ReadonlyArray<{ title: string; tiles: readonly TileDef[] }> =
 
 const TILE_DEFS: ReadonlyMap<number, TileDef> = new Map(
   TILE_GROUPS.flatMap((group) => group.tiles).map((tile) => [tile.frame, tile]),
+);
+
+/** O piso que o pincel saca ao entrar no subterrâneo (o primeiro do grupo, na ordem da paleta). */
+const DUNGEON_FLOOR_FRAME = 42;
+
+/** Os frames que o subterrâneo aceita — derivados dos GRUPOS marcados, nunca de uma segunda lista. */
+const DUNGEON_TILE_FRAMES: ReadonlySet<number> = new Set(
+  TILE_GROUPS.filter((group) => group.dungeon).flatMap((group) => group.tiles).map((tile) => tile.frame),
 );
 
 const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: string }> = [
@@ -505,13 +560,18 @@ export class EditorDomUi {
     header.append(title, this.subtitleEl);
     this.panel.appendChild(header);
 
+    // OS DOIS ANDARES, e por que eles ficam ANTES do Salvar: o botão mais perigoso do painel
+    // escreve num arquivo, e o autor precisa ler de cima para baixo "estou no subterrâneo → salvo
+    // no subterrâneo". Embaixo, a chave viraria uma descoberta depois do estrago.
+    this.buildFloorSwitch();
+
     // Primary actions
     const actions = document.createElement('div');
     actions.className = 'zh-actions';
     actions.append(
-      this.button('Salvar', 'Salvar em public/world.json (Ctrl+S)', () => this.cb.onSave(), 'primary'),
+      this.button('Salvar', `Salvar em ${this.saveTargetPath()} (Ctrl+S)`, () => this.cb.onSave(), 'primary'),
       this.button('&#9654; Testar', 'Joga o mundo em edicao sem salvar (P) — ESC volta', () => this.cb.onPlaytest()),
-      this.button('Recarregar', 'Descarta e recarrega do world.json', () => this.cb.onReload()),
+      this.button('Recarregar', `Descarta e recarrega de ${this.saveTargetPath()}`, () => this.cb.onReload()),
     );
     if (this.cb.levelManager) {
       const levels = this.button('Levels&#8230;', 'Listar, criar, abrir, renomear e apagar levels do lab', () => {
@@ -601,6 +661,17 @@ export class EditorDomUi {
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('keyup', this.handleKeyUp);
     window.addEventListener('beforeunload', this.handleBeforeUnload);
+
+    // O PINCEL NÃO ATRAVESSA A ESCADA CARREGADO. Esconder a grama da paleta não impede nada se a
+    // seleção que veio do outro andar (ou o padrão de fábrica, que é Terra) continuar armada: o
+    // primeiro clique planta um tile de superfície no subterrâneo, e o autor nem vê de onde veio,
+    // porque a carta daquele tile não está mais na tela. Então a seleção se ajusta ao lugar.
+    if (this.cb.worldFile === 'underworld') {
+      if (this.state.tile === null || !DUNGEON_TILE_FRAMES.has(this.state.tile)) {
+        this.state.tile = DUNGEON_FLOOR_FRAME;
+        this.state.layer = 'ground';
+      }
+    }
 
     this.syncFromState();
     this.refreshHeader();
@@ -694,6 +765,40 @@ export class EditorDomUi {
     this.renderOptions();
     this.renderPalette();
     this.renderStatus();
+  }
+
+  /**
+   * A CHAVE DOS DOIS ANDARES — os nomes são os que o projeto já usa em todo lugar (`overworld` nos
+   * scripts, `underworld` no arquivo e no runtime), então o rótulo do painel e o nome do arquivo
+   * dizem a mesma palavra. "Surface"/"Cave" seriam um terceiro vocabulário para a mesma coisa.
+   *
+   * A dica de cada botão nomeia o ARQUIVO, porque é isso que o autor está prestes a mudar.
+   */
+  private buildFloorSwitch(): void {
+    const floors = this.cb.floorSwitch;
+    if (!floors) return;
+    const section = document.createElement('div');
+    section.className = 'zh-section';
+    section.appendChild(this.sectionLabel('Mundo'));
+    const seg = document.createElement('div');
+    seg.className = 'zh-seg';
+    const options: ReadonlyArray<{ id: WorldFloor; label: string }> = [
+      { id: 'overworld', label: 'Overworld' },
+      { id: 'underworld', label: 'Underworld' },
+    ];
+    options.forEach((option) => {
+      const file = worldFilePath(worldFileForFloor(option.id));
+      const btn = this.button(option.label, `Edita ${file}`, () => floors.open(option.id));
+      btn.classList.toggle('active', floors.current === option.id);
+      seg.appendChild(btn);
+    });
+    section.appendChild(seg);
+    this.panel.appendChild(section);
+  }
+
+  /** O arquivo que o Salvar vai escrever — o mesmo que o toast anuncia depois. */
+  private saveTargetPath(): string {
+    return worldFilePath(this.cb.worldFile);
   }
 
   public refreshHeader(): void {
@@ -859,8 +964,18 @@ export class EditorDomUi {
       const frameCount = Math.max(1, texture.frameTotal - 1);
       this.paletteEl.appendChild(this.tileCell(null));
 
+      // NO SUBTERRÂNEO A PALETA É SÓ ALVENARIA. Lá embaixo não existe grama, pinheiro, mar nem
+      // lápide — o andar de baixo é feito de piso e muro, e o arquivo prova: `underworld.json` usa
+      // exclusivamente frames de dungeon. Uma paleta que oferece o atlas inteiro num lugar onde
+      // quase nada dele pode existir não é liberdade, é ruído com um erro de digitação esperando
+      // acontecer (o mesmo arquivo tem 18 tiles de muro pintados na camada de CHÃO).
+      //
+      // O contrário NÃO é simétrico de propósito: em cima e nos levels a paleta continua inteira,
+      // porque um level é uma tela livre e pode querer uma sala de pedra.
+      const dungeonOnly = this.cb.worldFile === 'underworld';
       const shown = new Set<number>();
       for (const group of TILE_GROUPS) {
+        if (dungeonOnly && group.dungeon !== true) continue;
         const tiles = group.tiles.filter((tile) => tile.frame < frameCount);
         if (tiles.length === 0) continue;
         this.paletteEl.appendChild(this.groupHeader(group.title));
@@ -872,8 +987,12 @@ export class EditorDomUi {
 
       // Whatever the table doesn't name — a blank frame, or a row of art added after this was
       // written. The tileset is the source of truth; this list only orders and names it.
+      // …e nada disso no subterrâneo: "Outros" é o resto do atlas (mar, estágios de corte, frames
+      // vazios), que é exatamente o que a filtragem acima existe para tirar da frente lá embaixo.
       const rest: number[] = [];
-      for (let frame = 0; frame < frameCount; frame += 1) if (!shown.has(frame)) rest.push(frame);
+      if (!dungeonOnly) {
+        for (let frame = 0; frame < frameCount; frame += 1) if (!shown.has(frame)) rest.push(frame);
+      }
       if (rest.length > 0) {
         this.paletteEl.appendChild(this.groupHeader('Outros'));
         for (const frame of rest) this.paletteEl.appendChild(this.tileCell(frame));

@@ -9,6 +9,31 @@ import type { WorldData } from '@/game/world/worldSchema';
 
 export type WorldFileId = 'world' | 'underworld' | `level-${number}`;
 
+/**
+ * OS DOIS ANDARES DO MUNDO DE VERDADE, com os nomes que o resto do projeto já usa: `overworld` é
+ * a superfície (`world.json`, e `scripts/enrich-overworld-props.mjs`) e `underworld` é o espelho
+ * de baixo (`underworld.json`, `runtime/underworld.ts`). Um level do lab NÃO é um andar — ele é
+ * uma tela solta, e é por isso que este tipo não o inclui.
+ *
+ * O nome do arquivo da superfície continua sendo `world` por compatibilidade com tudo que já
+ * grava nele; a tradução mora em `worldFileForFloor`, num lugar só.
+ */
+export type WorldFloor = 'overworld' | 'underworld';
+
+export const worldFileForFloor = (floor: WorldFloor): WorldFileId =>
+  (floor === 'underworld' ? 'underworld' : 'world');
+
+/**
+ * ONDE cada arquivo mora, num lugar só. Os três estão em pastas diferentes e é fácil errar: o
+ * subterrâneo NÃO está em `levels/` (o toast do Salvar anunciou `public/levels/underworld.json`,
+ * que nunca existiu, até alguém abrir o subterrâneo pelo /editor e ler a mentira).
+ */
+export const worldFilePath = (file: WorldFileId): string => {
+  if (file === 'world') return 'public/world.json';
+  if (file === 'underworld') return 'public/underworld.json';
+  return `public/levels/${file}.json`;
+};
+
 export type LabLevelSummary = {
   id: string;
   file: string;

@@ -14,12 +14,13 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import { GameScene } from '@/game/scenes/GameScene';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
+import { setUnderground } from '@/game/runtime/underworld';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
 import { setWorldData } from '@/game/world/WorldData';
 import {
-  createLabLevel, deleteLabLevel, listLabLevels, loadWorld, renameLabLevel, saveWorld,
-  type WorldFileId,
+  createLabLevel, deleteLabLevel, listLabLevels, loadWorld, renameLabLevel, saveWorld, worldFilePath,
+  type WorldFileId, type WorldFloor,
 } from '@/game/worldApi';
 
 // World-editor scene: the Phaser side of the engine. It renders the whole authored world
@@ -218,16 +219,33 @@ export class EditorScene extends Phaser.Scene {
 
   // ── Boot ────────────────────────────────────────────────────────────────
 
-  // The /lab route runs this same scene over a puzzle LEVEL file (public/levels/level-N.json)
-  // or over the SUBTERRANEO (public/underworld.json) instead of the real overworld — `?level=N`
-  // / `?under` picks which (default level 2). See main.ts / worldApi.ts. A grade do editor
-  // sempre foi guiada pelos meta do arquivo, entao o espelho (25 telas, como o overworld) entra
-  // sem mudanca nenhuma de desenho.
+  // O QUE ESTA CENA ABRE, e quem escolhe: a URL, sempre.
+  //
+  // `/editor` edita o MUNDO DE VERDADE, e ele tem DOIS ANDARES: a superfície (`world.json`) e o
+  // espelho de baixo (`underworld.json`). `?under` escolhe, e os dois botões do painel são só uma
+  // porta para esse parâmetro (`openFloor`) — a URL continua sendo a única fonte da verdade, então
+  // recarregar, favoritar ou colar o endereço devolve exatamente o andar em que se estava.
+  //
+  // `/lab` roda a MESMA cena sobre um LEVEL de puzzle (`public/levels/level-N.json`, padrão o 2) —
+  // e sobre o subterrâneo também, porque `?under` vale nas duas rotas. Ver main.ts / worldApi.ts.
+  //
+  // A grade do editor sempre foi guiada pelos `meta` do arquivo, então o espelho (25 telas, como o
+  // overworld) entra sem mudança nenhuma de desenho.
   private get worldFileId(): WorldFileId {
+    if (this.isUnderworld) return 'underworld';
     if (this.registry.get('appMode') !== 'lab') return 'world';
-    if (new URLSearchParams(window.location.search).has('under')) return 'underworld';
     return `level-${this.labLevelNumber}`;
   }
+
+  private get isUnderworld(): boolean {
+    return new URLSearchParams(window.location.search).has('under');
+  }
+
+  /** O andar aberto — o que os dois botões do painel acendem. */
+  private get worldFloor(): WorldFloor {
+    return this.isUnderworld ? 'underworld' : 'overworld';
+  }
+
 
   private get labLevelNumber(): number {
     const raw = new URLSearchParams(window.location.search).get('level');
@@ -280,6 +298,15 @@ export class EditorScene extends Phaser.Scene {
       onNavigate: (tileX, tileY) => this.navigateTo(tileX, tileY),
       onWorldApply: (settings) => this.applyWorldSettings(settings),
       onDialogApply: (kind, dialog) => { this.store?.setDialog(kind, dialog); },
+      worldFile: this.worldFileId,
+      // Os dois andares só existem no /editor: no /lab o arquivo aberto é um LEVEL, que não é
+      // andar de nada — oferecer a troca lá seria uma porta que muda o assunto da tela.
+      ...(this.registry.get('appMode') === 'editor' ? {
+        floorSwitch: {
+          current: this.worldFloor,
+          open: (floor: WorldFloor) => this.openFloor(floor),
+        },
+      } : {}),
       ...(this.registry.get('appMode') === 'lab' ? {
         levelManager: {
           currentId: this.worldFileId,
@@ -1054,9 +1081,9 @@ export class EditorScene extends Phaser.Scene {
       this.ui?.toast(
         warnings.length > 0
           ? `Salvo com ${warnings.length} aviso(s) — veja em Mundo...`
-          : this.worldFileId === 'world'
-            ? 'Salvo em public/world.json'
-            : `Salvo em public/levels/${this.worldFileId}.json`,
+          // O caminho é a única prova de QUAL arquivo levou a edição, e o subterrâneo não mora em
+          // `levels/` — o toast dizia `public/levels/underworld.json`, que não existe.
+          : `Salvo em ${worldFilePath(this.worldFileId)}`,
       );
     } catch (error) {
       this.ui?.toast(error instanceof Error ? error.message : 'Falha ao salvar');
@@ -1090,11 +1117,33 @@ export class EditorScene extends Phaser.Scene {
     if (!this.requireValidStartPoint()) return;
     this.persistUi();
     setWorldData(store.snapshotWorld());
+    // EM QUE ANDAR O P ENTRA. Sem isto o jogo assume a superfície, e testar o subterrâneo dava
+    // duas coisas erradas de uma vez: a escada nascia virada para BAIXO (`isUnderground` escolhe a
+    // arte e o sentido), e pisar nela chamava o `enterDungeon` — que RECARREGA o underworld.json
+    // do disco, jogando fora a edição que ainda não foi salva. Com o andar certo, a escada sobe e
+    // a viagem devolve o overworld, que é o que ela faz no jogo.
+    setUnderground(this.isUnderworld);
     // O número vem do ARQUIVO aberto (level ou dungeon): testar a dungeon-3 pelo P é jogar o
     // level 3 ativo, com os mesmos botões flutuantes e o mesmo "reiniciar" do pause.
     if (this.registry.get('appMode') === 'lab') setActiveLevel(this.labFileNumber);
     this.scene.run(GameScene.key);
     this.scene.sleep();
+  }
+
+  /**
+   * Trocar de ANDAR: uma navegação de verdade, pelo mesmo motivo do `openLabFile` — a cena inteira
+   * (store, câmera, undo, objetos) nasce do arquivo, e trocar o arquivo por baixo dela seria
+   * reconstruir tudo à mão em troca de nada. Cada andar guarda a própria câmera (`uiStateKey`), e
+   * o `beforeunload` do painel é quem avisa se há edição não salva.
+   */
+  private openFloor(floor: WorldFloor): void {
+    if (floor === this.worldFloor) return;
+    this.persistUi();
+    const url = new URL(window.location.href);
+    if (floor === 'underworld') url.searchParams.set('under', '1');
+    else url.searchParams.delete('under');
+    url.searchParams.delete('play');
+    window.location.assign(url.toString());
   }
 
   /** Full navigation is deliberate: public-file mutations trigger Vite reloads anyway. */
