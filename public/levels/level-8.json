@@ -13,7 +13,7 @@
       "worldY": 7
     },
     "puzzle": true,
-    "exportedAt": "2026-08-13T20:22:20.187Z"
+    "exportedAt": "2026-08-19T12:14:30.404Z"
   },
   "chunks": [
     {
@@ -334,7 +334,7 @@
           19,
           null,
           null,
-          1,
+          null,
           null,
           20,
           null,
@@ -607,9 +607,12 @@
         {
           "speaker": "npc",
           "text": "Hold Z instead of tapping it and the blade spins: it cuts all eight neighbours at once. Mrrow. Go on."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     }
-  },
-  "globalVariables": {}
+  }
 }

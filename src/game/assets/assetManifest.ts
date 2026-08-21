@@ -51,73 +51,10 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameWidth: 7,
     frameHeight: 7,
   },
-  // O braco robotico entra como SHEET (e nao como imagem solta) porque o editor precisa poder
-  // desenhar uma orientacao especifica: a paleta e o tabuleiro mostram o frame da direcao.
-  {
-    key: ASSET_KEYS.inserter,
-    path: '/assets/environment/props/inserter.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    key: ASSET_KEYS.inserterHand,
-    path: '/assets/environment/props/inserter_hand.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
   {
     // Sprite Factory: o MARCO da estrada — laje dormente (0) e desperta (1).
     key: ASSET_KEYS.roadSeal,
     path: '/assets/environment/props/road_seal.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: placa solta (0) e pressionada (1), empilhadas na coluna.
-    key: ASSET_KEYS.pressurePlate,
-    path: '/assets/environment/props/pressure_plate.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: 8 fases do rotor desligadas + as mesmas 8 com o dinamo energizado.
-    key: ASSET_KEYS.waterWheel,
-    path: '/assets/environment/props/water_wheel.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: caldeira em 3 estados — fria, fornalha acesa, gerando (lampada verde).
-    key: ASSET_KEYS.boiler,
-    path: '/assets/environment/props/boiler.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: cabo de energia — 7 formas apagadas + 7 filetes gold (ver wireShapes.ts).
-    key: ASSET_KEYS.wire,
-    path: '/assets/environment/props/wire.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: a esteira — `dir + 4*fase` (N, L, S, O), full bleed no eixo da viagem.
-    key: ASSET_KEYS.belt,
-    path: '/assets/environment/props/belt.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: o extrator, na mesma convencao de frames da esteira e do braco.
-    key: ASSET_KEYS.extractor,
-    path: '/assets/environment/props/extractor.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: o bau — vazio (0) e com carga (1, o ferrolho em ouro).
-    key: ASSET_KEYS.chest,
-    path: '/assets/environment/props/chest.png',
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },
@@ -136,33 +73,10 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
-    // Sprite Factory: o martinete PARADO — mesa de pedra (0), mesa em brasa (1), pilar (2) e o
-    // retrato que serve de icone (3).
-    key: ASSET_KEYS.tripHammer,
-    path: '/assets/environment/props/trip-hammer.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
     // Sprite Factory: o ALTAR — laje fria (0) e com o tampo em brasa (1). Precisa do lado Phaser
-    // como o forno e o martinete: o icone do editor e qualquer UI 2D leem o frame por aqui.
+    // como o forno e o altar: o icone do editor e qualquer UI 2D leem o frame por aqui.
     key: ASSET_KEYS.altar,
     path: '/assets/environment/props/altar.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: a VIGA e o MALHO, em seis angulos. Os frames tem DOIS TILES de largura —
-    // a viga atravessa o pilar e alcanca a mesa, e um madeiro de 16px nao e um madeiro.
-    key: ASSET_KEYS.tripHammerBeam,
-    path: '/assets/environment/props/trip-hammer-beam.png',
-    frameWidth: TILESET_FRAME_SIZE * 2,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: a engrenagem — o bem intermediario, icone de item de um frame so.
-    key: ASSET_KEYS.gearItem,
-    path: '/assets/items/collectibles/gear.png',
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },
@@ -208,16 +122,9 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
-    // Sprite Factory: 4 poses do corpo + 2 da bandeja de entrada (ver TOOLBOX_FRAMES).
+    // Sprite Factory: as poses da bancada manual (ver TOOLBOX_FRAMES).
     key: ASSET_KEYS.toolbox,
     path: '/assets/environment/props/workbench.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: quatro alturas da grade em bancos sem/com energia; runtime e Billboard3D.
-    key: ASSET_KEYS.electronicGate,
-    path: '/assets/environment/props/electronic_gate.png',
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },
@@ -225,13 +132,6 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     // Sprite Factory: arco medieval fixo + quatro fases discretas do vortice roxo.
     key: ASSET_KEYS.levelPortal,
     path: '/assets/environment/props/level_portal.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: bateria vazia/carregada — o vaso portatil da corrente (BATTERY_FRAMES).
-    key: ASSET_KEYS.battery,
-    path: '/assets/items/collectibles/battery.png',
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },
@@ -350,11 +250,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.bones, path: '/assets/environment/props/bones.png' },
   { key: ASSET_KEYS.spiderWeb, path: '/assets/environment/props/spider_web.png' },
   {
-    // Sprite Factory: o balao de pensamento com a placa de pressao acesa dentro.
-    key: ASSET_KEYS.thoughtPlate,
-    path: '/assets/ui/icons/thought_plate.png',
-  },
-  {
     // Sprite Factory: o mesmo balao com o GRAVETO ACESO dentro — o que falta para o arbusto pegar.
     key: ASSET_KEYS.thoughtTorch,
     path: '/assets/ui/icons/thought_torch.png',
@@ -371,7 +266,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.axeIcon,        path: '/assets/ui/icons/axe_icon.png' },
   { key: ASSET_KEYS.greatAxeIcon,   path: '/assets/ui/icons/great_axe_icon.png' },
   { key: ASSET_KEYS.bombIcon,       path: '/assets/ui/icons/bomb_icon.png' },
-  { key: ASSET_KEYS.lavaBootsIcon,  path: '/assets/ui/icons/lava_boots_icon.png' },
   { key: ASSET_KEYS.pickaxeIcon,    path: '/assets/ui/icons/pickaxe_icon.png' },
   { key: ASSET_KEYS.scytheIcon,     path: '/assets/ui/icons/scythe_icon.png' },
   { key: ASSET_KEYS.shovelIcon,     path: '/assets/ui/icons/shovel_icon.png' },
@@ -382,7 +276,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.ironItem,       path: '/assets/items/collectibles/iron.png' },
   { key: ASSET_KEYS.oreItem,        path: '/assets/items/collectibles/ore.png' },
   { key: ASSET_KEYS.bloomItem,      path: '/assets/items/collectibles/bloom.png' },
-  { key: ASSET_KEYS.woodenCrate,    path: '/assets/environment/props/wooden_crate.png' },
   { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock_cracked.png' },
   { key: ASSET_KEYS.cuttingGrass0,  path: '/assets/environment/props/cuting_grass0.png' },
   { key: ASSET_KEYS.cuttingGrass1,  path: '/assets/environment/props/cuting_grass1.png' },

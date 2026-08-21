@@ -96,6 +96,10 @@ const CSS = `
 .zh-dot-fireLit { background: #ffb454; box-shadow: 0 0 3px #ff8c1a; }
 .zh-dot-fireDead { background: #55432f; }
 .zh-dot-portal { background: #9d7bd8; }
+/* A ESCADA e PEDRA, e por isso ela nao e violeta: violeta e do portal magico, que e outra porta
+   com outro proposito. Um quadrado, e nao um circulo, porque ela e a unica marca do mapa que e
+   alvenaria — e num mapa de pontos redondos a forma diferencia mais rapido que a cor. */
+.zh-dot-stairs { background: #989aa7; border-radius: 0; box-shadow: 0 0 0 1px #3a3f3f; }
 /* ── A PAGINA DE PLANOS ────────────────────────────────────────────────────────────────────────
    O mesmo catalogo da bancada, aqui em versao de LEITURA: nada se prega daqui (nao ha bancada
    por perto), e a razao de ele existir e poder PLANEJAR longe dela — o jogador olha o que falta
@@ -187,7 +191,7 @@ export interface SubScreenItem {
 export interface SubScreenMapMark {
   cx: number;
   cy: number;
-  kind: 'hero' | 'fireLit' | 'fireDead' | 'portal';
+  kind: 'hero' | 'fireLit' | 'fireDead' | 'portal' | 'stairs';
 }
 
 /**

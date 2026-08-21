@@ -147,7 +147,13 @@ export const resetHeroView = (hero: HeroView): void => {
 
 /** Tiles covered by one frame of the cycle. Two frames = one footfall, four = a full stride. */
 const TILES_PER_FRAME = TIMINGS.walkCycleTiles / 4;
-const TILES_PER_FOOTFALL = TILES_PER_FRAME * 2;
+/**
+ * Exportado porque existe um andar cuja CADÊNCIA não vem da distância: a escada. Lá o herói
+ * percorre 0,37 tile em 620ms — um terço de passada, se medido em tiles —, e o gesto precisa ter
+ * uma bota por pisada. Quem sabe quantas pisadas há é a peça, então ela alimenta `walkDist` em
+ * unidades de PASSADA em vez de deixar a distância decidir.
+ */
+export const TILES_PER_FOOTFALL = TILES_PER_FRAME * 2;
 /** Peak of the bounce, in tiles — about one pixel on a 16px sprite. Keep it small. */
 const BOB_LIFT_TILES = 0.055;
 /** Fraction of a footfall spent rising. Well under half: the hero pops up and sinks back. */

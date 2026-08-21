@@ -1,7 +1,6 @@
 ﻿import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
-import type { HeldItemKind } from '@/game/entities/ItemPickup';
 
-// The world is now a finite, fully-authored 8x8-chunk map defined entirely by a single
+// The world is a finite, fully-authored 5x5-chunk map defined entirely by a single
 // `world.json`. These types are the schema shared by the runtime loader (WorldData.ts) and
 // the offline seed generator (scripts/generateWorld.ts). Keep them close to the existing
 // runtime shapes (ScreenContent spawns, DialogScript) so nothing downstream has to change.
@@ -44,45 +43,6 @@ export type WorldPickupSpawn = { type: PickupKind; worldX: number; worldY: numbe
  */
 export type WorldNpcSpawn = { type: NpcKind; worldX: number; worldY: number; dialog?: string };
 
-/**
- * Metadata that turns an authored editor chunk into a card the player can buy.
- * Terrain and entities keep using the normal WorldChunk fields; this small record is the
- * catalogue-facing identity used by the world-builder mode.
- */
-/**
- * O QUE ESTA TERRA É — e a categoria não é enfeite de carta: ela decide se o CERCO entra por ali.
- *
- * A invasão de undead nasce nas estradas inacabadas (ver ChunkUndeadDirector), e ela entrava por
- * TODAS — inclusive pela do poeta e pela de um mapa cuja graça é resolver uma parede em paz. Uma
- * conversa interrompida por uma caveira não é tensão, é ruído; um puzzle interrompido é a mesma
- * coisa com um passo a mais de irritação. Só a carta de COMBATE recebe o cerco.
- */
-export type ChunkCategory = 'narrative' | 'combat' | 'puzzle';
-
-export type ChunkCatalogEntry = {
-  id: string;
-  name: string;
-  cost: number;
-  cardImage: string;
-  description?: string;
-  /**
-   * Ausente = deduzida (morador → narrativa, bicho autorado → combate, resto → puzzle). O campo
-   * existe para os casos em que a dedução erra, e ela erra sempre no mesmo lugar: uma aula tem um
-   * professor E uma parede, e sem isto ela seria narrativa por ter alguém dentro.
-   */
-  category?: ChunkCategory;
-  /**
-   * Esta carta está NO BARALHO do jogador? Ausente = sim.
-   *
-   * O default é a ausência, e não `true`, porque toda carta escrita antes deste campo existir
-   * continua valendo — e porque quem edita o world.json à mão nunca precisa lembrar de um campo
-   * para publicar um chunk novo. Quem lê é `getChunkTemplates`: uma carta desligada continua
-   * inteira no arquivo (terreno, props, morador) e simplesmente não é oferecida no portão. É
-   * assim que uma região fica pronta no editor antes de o jogo poder comprá-la.
-   */
-  enabled?: boolean;
-};
-
 // One screen = terrain grids + the entities that live on it. This is the unit the runtime
 // streams and the (future) editor will paint, so terrain and content are co-located.
 export type WorldChunk = {
@@ -94,16 +54,14 @@ export type WorldChunk = {
   enemies: WorldEnemySpawn[];
   pickups: WorldPickupSpawn[];
   npcs: WorldNpcSpawn[];
-  /** Present in public/world.json, which is now the editable chunk library. */
-  catalog?: ChunkCatalogEntry;
 };
 
 // World-level props (not tied to a chunk) so a campfire/dry bush/door can be free-placed
 // and repeated. Their collision is resolved at runtime, not baked into the grid:
 // `dryBush` blocks until fire burns it to ash; `lockedDoor` blocks until opened with a key;
 // `dryTree` blocks until chopped to a stump with the axe; `rock` blocks until broken with
-// the pickaxe; `tallGrass` blocks until cut with the scythe (or burned); `lava` blocks
-// unless the hero wears the lava boots; `water` (a river tile) blocks — a bridge can be built
+// the pickaxe; `tallGrass` blocks until cut with the scythe (or burned); `lava` blocks until a
+// stone cools into a basalt step; `water` (a river tile) blocks — a bridge can be built
 // over it ONLY where a `bridgeSpot` marker is placed (2 wood sticks / a felled tree); `dryShrub`
 // is a small dead bush the axe clears (no drop, no regrow) — a pure physical barrier; `bombSpot`
 // is the walkable mark where a carried bomb plants itself when the hero steps on it (the game is
@@ -111,14 +69,9 @@ export type WorldChunk = {
 // small dug hole: step on it carrying SEEDS (the scythe's product) to plant — a mound covers the
 // hole, a full bucket waters it, and real tall grass sprouts after a while; consume that grass
 // (scythe → new seeds, or fire) and the hole reopens. The game's renewable, placeable fuel.
-// `inserter`: the robotic arm. It takes whatever item is lying on the tile behind it and puts it
-// on the tile in front — the only thing in the game that moves an item without the hero carrying
-// it, which is why it can cross a barrier the hero cannot. `waterWheel` is its believable power
-// source: installed inside a continuous river, it publishes power into a named variable.
 // `swingGate` is the locked door's twin WITHOUT a lock: it opens by itself when the hero bumps
 // it, but only if the tile BEHIND it is clear — a swing leaf needs room to swing. It is the one
-// barrier in the game that no item opens; what opens it is changing the far side (burning the
-// grass standing there), which is why it pairs with fire and the robotic arm.
+// barrier in the game that no item opens; what opens it is changing the far side.
 // `toolbox` is the workbench: two slot tiles behind it, the machine, and the output tile in front
 // (A B [caixa] resultado). Drop an item on each slot and a RECIPE turns the pair into a third
 // item — the only thing in the game that makes an item out of other items, instead of out of a
@@ -126,15 +79,16 @@ export type WorldChunk = {
 // `carnivorousPlant` is the farmed DEFENSE: grown from carnivore seeds in a plantSpot (or
 // authored), it blocks its tile and EATS any enemy that stops beside it — then chews, exposed.
 // It is a plant to everything else: fire burns it, the scythe fells it (no drop).
-export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock' | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower' | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'inserter' | 'toolbox' | 'woodenCrate' | 'pressurePlate' | 'waterWheel' | 'boiler' | 'wire' | 'electronicGate' | 'levelPortal' | 'furnace' | 'tripHammer' | 'altar'
-  // A FABRICA. Os tres nomes abaixo sao os MESMOS de tres HeldItemKind (ver ItemPickup), e isso
-  // e o que faz instalar uma maquina ser uma identidade em vez de uma tabela de-para. Esteira e
-  // extrator carregam `dir` pela mesma razao do braco: ele decide de que tile a peca tira e em
-  // qual ela poe. O bau nao carrega direcao — deposito nao tem frente.
-  | 'belt' | 'chest' | 'extractor'
-  // A CAIXA DE VENDA: o único corpo do jogo que devolve MOEDA. Ver SellBoxObject — ela aceita um
-  // tipo só (anunciado numa placa acima dela) e derruba o pagamento no chão.
-  | 'sellBox';
+// `pyre` e a pira: nasce so com a base (laje + berco), sobe uma tora por graveto entregue com o
+// X e, fechada, aceita a tocha ACESA. Ela nao e combustivel do sistema de fogo — acender e um
+// gesto, nunca um incendio que chegou sozinho. Ver PyreObject.
+export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock'
+  | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower'
+  | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'toolbox' | 'levelPortal' | 'furnace'
+  | 'altar' | 'pyre'
+  // A ESCADA entre os dois andares do mundo — a porta FÍSICA (ver StairsObject). O
+  // `levelPortal` continua sendo outra coisa: a travessia mágica que encadeia LEVELS de puzzle.
+  | 'stairs';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.
@@ -145,9 +99,8 @@ export type PropDir = 0 | 1 | 2 | 3;
 // `floodgate` only applies to a `lockedDoor`: opening it (with a key) DRAINS the run of water it
 // holds back, opening a path AND laying a firebreak. Like `lit`, an editor save drops the flag,
 // so floodgate doors are authored in gen-levels, not built in the editor.
-// `dir` applies to an `inserter` and to a `toolbox`, and unlike `lit`/`floodgate` above it is NOT
-// droppable.
-// Those two are authored in gen-levels and the runtime can live without them; a rotation is
+// `dir` applies to workstations and unlike `lit`/`floodgate` above it is NOT droppable.
+// Their rotation is
 // placed by hand in the editor and IS the prop's behaviour — which tile it takes from and which
 // it puts to. So the editor store had to learn to carry `dir` through place/erase/undo, instead
 // of re-emitting bare type/x/y the way it does for every other prop.
@@ -158,35 +111,6 @@ export type WorldProp = {
   lit?: boolean;
   floodgate?: boolean;
   dir?: PropDir;
-  // Pressure plates and water wheels publish into this named circuit; an inserter may consume
-  // it as optional power. The field lives on the prop because each mechanism can use a different
-  // circuit. An unbound inserter keeps legacy self-powered behaviour.
-  //
-  // O BAÚ também publica aqui, e é a peça que fez isto virar mais do que um interruptor: com
-  // `quota`, ele publica QUANTO já entregou (ver ChestObject), e o portão eletrônico ligado ao
-  // mesmo nome SOBE na proporção. É a única fechadura do jogo que não é uma chave: é uma
-  // QUANTIDADE — o que a mão faz devagar e uma linha de produção faz sozinha.
-  variable?: string;
-  /**
-   * Só para `chest`: a ENTREGA que esta arca cobra. Ela deixa de ser depósito e vira fechadura —
-   * aceita só este tipo, e o que estiver ligado ao `variable` dela lê o progresso.
-   *
-   * Como `lit` e `floodgate`, um save do /editor DERRUBA este campo (o store re-emite só
-   * type/x/y/dir/variable): quota é autoria de arquivo, feita no JSON do level, não no tabuleiro.
-   */
-  quota?: { kind: HeldItemKind; count: number };
-  /**
-   * So para `levelPortal`, e so no overworld: QUAL dungeon esta boca abre (1..9).
-   * Um portal sem `level` e a saida — no modo level ele encadeia para o proximo, e dentro de uma
-   * dungeon ele devolve o heroi ao tile do overworld por onde entrou (ver runtime/dungeonTrip).
-   */
-  level?: number;
-  /**
-   * Só para `sellBox`: o tipo que ela COMPRA e o preço por unidade. É o campo inteiro da peça —
-   * uma caixa de venda sem isto não tem o que anunciar na placa nem o que pagar, então o runtime
-   * simplesmente não a constrói.
-   */
-  sells?: { kind: HeldItemKind; coinsPerUnit: number };
 };
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };
@@ -226,7 +150,4 @@ export type WorldData = {
    * é o que deixa o mesmo gato ensinar o machado numa carta e a picareta na outra.
    */
   dialogs: Partial<Record<NpcKind, WorldDialog>> & Partial<Record<string, WorldDialog>>;
-  // Named boolean puzzle state. Optional keeps every schema-v1 world written before global
-  // variables valid; the editor normalises it to an empty record as soon as it opens one.
-  globalVariables?: Record<string, boolean>;
 };

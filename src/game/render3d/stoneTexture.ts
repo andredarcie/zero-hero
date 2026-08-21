@@ -20,7 +20,7 @@ import * as THREE from 'three';
 // smoother on top (that is the face you actually see from up here); the boulders are rounder,
 // darker, and take a fleck of moss, so the group reads as river rock and not cut masonry.
 
-export type StoneKind = 'slab' | 'boulder';
+export type StoneKind = 'slab' | 'boulder' | 'stair';
 
 const PALETTE: Record<string, [number, number, number]> = {
   H: [0x79, 0x81, 0x8a], // damp crown — the lightest pixel on the whole ford
@@ -28,6 +28,20 @@ const PALETTE: Record<string, [number, number, number]> = {
   D: [0x45, 0x4b, 0x52], // shaded flank
   S: [0x31, 0x37, 0x40], // crevice / waterline
   G: [0x4c, 0x58, 0x42], // a fleck of river moss
+
+  // ── A PEDRA DO MUNDO, e nao a do rio ──────────────────────────────────────
+  // A rampa acima e granito MOLHADO: ela foi pitchada para dentro de um rio, escura de proposito
+  // para nao estourar o bloom na agua. A escada nao esta num rio — ela esta na grama, ao lado da
+  // montanha —, e a montanha tem uma pedra AUTORADA (spritefactory/sprites/rock.mjs, os frames
+  // 23/24 do tileset). Duas pedras diferentes na mesma tela leem como duas artes de dois jogos, e
+  // a errada era a que nao veio do atlas. Estes seis tons SAO a rampa da rocha do mundo, copiados
+  // de la — e sem o floco de musgo, que e coisa de beira d'agua e nao de escadaria.
+  q: [0xb5, 0xb5, 0xb5], // quartzo: o glint, a conta-gotas (e o unico tom perto do corte do bloom)
+  h: [0xa9, 0xab, 0xbe], // topo da rampa — o plano que a camera mais ve
+  m: [0x98, 0x9a, 0xa7], // base
+  s: [0x7c, 0x7e, 0x8b], // sombra
+  d: [0x5d, 0x61, 0x65], // fundo da rampa — rebordo
+  k: [0x3a, 0x3f, 0x3f], // slate: a linha de contato, e a junta entre blocos
 };
 
 // Authored TOP-DOWN, like the wood: first row is the far (north) edge of the box's top face.
@@ -43,6 +57,37 @@ const PATTERNS: Record<StoneKind, string[]> = {
     'DMMHHHHHHHHHHMGD',
     'DGMMHHHHHHHMMMGD',
     'SDDMMMMMMMMMDDSS',
+  ],
+  /**
+   * A ALVENARIA DA ESCADA — 16×16, que e EXATAMENTE um tile de arte do mundo.
+   *
+   * Ela e a unica pedra daqui feita para ser RECORTADA (ver `pixelTiled` em World3D.addBox): cada
+   * caixa da escada tira dela um pedaco do tamanho que ocupa, na densidade do mundo. Por isso ela
+   * e quadrada e ciclica nos dois eixos — a junta de baixo casa com a de cima, e a da direita com
+   * a da esquerda —, senao um meio-fio de um tile de comprimento mostraria a emenda.
+   *
+   * Blocos cortados em fiada alternada (as juntas verticais da banda de baixo caem no meio dos
+   * blocos da de cima), com a rampa da rocha do mundo descendo dentro de cada bloco: crown em
+   * cima, slate na junta. Cada bloco vira, sozinho, um degrau em miniatura — e e dai que sai a
+   * variacao entre uma pisada e a outra, so mudando o recorte.
+   */
+  stair: [
+    'kkkkkkkkkkkkkkkk',
+    'khhhhhhhkhhhqhhh',
+    'kmmmhmmmkmhmmmmm',
+    'kmmmmmmmkmmmmsmm',
+    'ksmsssmskssmsssm',
+    'kssssssskssssdss',
+    'kdsddddskddddddd',
+    'kddddddskdddsddd',
+    'kkkkkkkkkkkkkkkk',
+    'hhhhkhhhqhhhkhhh',
+    'mmmmkmmmmmmhkmmm',
+    'mmmmkmsmmmmmkmmm',
+    'ssmskssssmsskssm',
+    'sssskssdsssskdss',
+    'ddddkdddddddkddd',
+    'ddddkdsdddddkddd',
   ],
   // A rounder rock, mostly in shadow: lit only along its crown, soaked dark at the base.
   boulder: [

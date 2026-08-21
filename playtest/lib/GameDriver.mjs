@@ -154,7 +154,7 @@ export class GameDriver {
   // ── OS DOIS BOTOES ───────────────────────────────────────────────────────
   // O jogo deixou de ser so-andar: A golpeia na direcao em que o heroi olha, B usa o item
   // escolhido no tile a frente. Andar contra as coisas nao usa mais item nenhum — o esbarrao
-  // ficou com os gestos de corpo (empurrar caixote, abrir portao de bater, conversar) e com o
+  // ficou com os gestos de corpo (abrir portao de bater, conversar) e com o
   // dano de contato.
 
   /** O botao A: a espada (ou o soco) no tile a frente. */
@@ -253,7 +253,7 @@ export class GameDriver {
 
   /**
    * Region clip in CSS pixels for focused legibility shots.
-   * 'full' = whole canvas, 'hud' = top bar, 'dialog' = right-side conversation panel.
+   * 'full' = whole canvas, 'hud' = top bar, 'dialog' = the speech box along the bottom.
    */
   async canvasRegion(region) {
     const box = await this.canvasBox();
@@ -261,13 +261,14 @@ export class GameDriver {
       return { x: box.x, y: box.y, width: box.width, height: Math.round(box.height * 0.22) };
     }
     if (region === 'dialog') {
-      // Disco Elysium-style panel: full height, hugging the right edge (~46% of width).
-      const panelWidth = Math.round(box.width * 0.5);
+      // A caixa de fala tradicional: uma barra no rodapé. O recorte pega a faixa de baixo com
+      // folga para a JANELA DE ESCOLHA, que se pendura acima dela.
+      const bandHeight = Math.round(box.height * 0.55);
       return {
-        x: box.x + box.width - panelWidth,
-        y: box.y,
-        width: panelWidth,
-        height: box.height,
+        x: box.x,
+        y: box.y + box.height - bandHeight,
+        width: box.width,
+        height: bandHeight,
       };
     }
     if (region === 'hero') {

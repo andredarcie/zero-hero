@@ -100,7 +100,13 @@ export class PlayerMovementController {
     private readonly hero: HeroView,
     private readonly camera: WorldCamera,
     private readonly isBlockedCell: (worldX: number, worldY: number) => boolean,
-    private readonly onStep: (worldX: number, worldY: number) => void,
+    /**
+     * Um tile foi ENTRADO — e `dx`/`dy` dizem POR ONDE. A direção vem no evento porque ela não
+     * pode ser perguntada depois: `setFacing` só roda na linha seguinte a esta chamada, então
+     * quem escuta veria a direção do passo ANTERIOR. E há gesto que depende dela (a escada só
+     * aceita quem entra de frente).
+     */
+    private readonly onStep: (worldX: number, worldY: number, dx: number, dy: number) => void,
     private readonly onBumpBlocked?: (worldX: number, worldY: number) => void,
   ) {
     const keyboard = scene.input.keyboard;
@@ -230,7 +236,7 @@ export class PlayerMovementController {
       this.stepProgress = carry;
       wx = nx;
       wy = ny;
-      this.onStep(nx, ny);
+      this.onStep(nx, ny, next.dx, next.dy);
       this.setFacing(next.dx, next.dy, true);
     }
 

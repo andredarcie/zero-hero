@@ -126,7 +126,17 @@ const SEA_DRIFT_TEXELS_PER_S = [2.6, 1.1] as const;
  */
 export const seaFlowUniform: THREE.IUniform = { value: 1 };
 
-/** As faíscas frias da lua sobre a ondulação — o mesmo brilho para o rio e para o mar. */
+/**
+ * A ESTRELA que a água pisca — as faíscas da lua de noite, as do sol de dia. Uniform e não
+ * literal porque é a MESMA cintilação nos dois casos: só a cor da coisa refletida muda, e ela
+ * muda junto com o resto do céu (hd3d.glintColor / skyPreset). Compartilhada pelo rio e pelo mar
+ * pela razão de sempre: duas águas cintilando diferente a dois tiles denunciariam dois sistemas.
+ */
+export const waterGlintUniform: THREE.IUniform<THREE.Color> = {
+  value: new THREE.Color(0.45, 0.58, 0.82),
+};
+
+/** As faíscas do céu sobre a ondulação — o mesmo brilho para o rio e para o mar. */
 const WATER_GLINT_GLSL = /* glsl */ `
   {
     vec2 wp = vWorldFxPos.xz;
@@ -136,7 +146,7 @@ const WATER_GLINT_GLSL = /* glsl */ `
     float flash = smoothstep(0.93, 1.0, sin(ph * 6.2831853) * 0.5 + 0.5);
     // 0.38, not the original 0.95: this adds BEFORE tone mapping, so at 0.95 a
     // glint pixel cleared the bloom threshold and the river read as neon sparks.
-    gl_FragColor.rgb += vec3(0.45, 0.58, 0.82) * flash * 0.38;
+    gl_FragColor.rgb += uGlint * flash * 0.38;
   }
 `;
 
@@ -551,14 +561,14 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
            diffuseColor.rgb *= clamp(lavaWave, 0.55, 1.35);`,
         );
       } else {
-        // Moonlight glint: sparse cells flash a cool highlight in turn — added to
-        // the FINAL colour (post-lighting) so the ripples catch light in the dark.
-        // Shared by the river's quads and the merged sea: two waters that sparkled
-        // to different rhythms two tiles apart would announce that they are two systems.
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <opaque_fragment>',
-          `#include <opaque_fragment>\n${WATER_GLINT_GLSL}`,
-        );
+        // Sky glint: sparse cells flash a highlight in turn — added to the FINAL colour
+        // (post-lighting) so the ripples catch light in the dark. Shared by the river's
+        // quads and the merged sea: two waters that sparkled to different rhythms two
+        // tiles apart would announce that they are two systems.
+        shader.uniforms.uGlint = waterGlintUniform;
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', 'uniform vec3 uGlint;\nvoid main() {')
+          .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${WATER_GLINT_GLSL}`);
       }
       if (opts.worldFx === 'seaFlow') {
         // The shore ramp travels per vertex: one mesh holds the whole ocean, and every quad in

@@ -13,7 +13,7 @@
       "worldY": 9
     },
     "puzzle": true,
-    "exportedAt": "2026-08-13T19:12:33.617Z"
+    "exportedAt": "2026-08-19T12:15:08.325Z"
   },
   "chunks": [
     {
@@ -680,17 +680,9 @@
         },
         {
           "speaker": "npc",
-          "text": "Burnt brush leaves CHARCOAL on the ground. Bring it to me and I pay in coin — talk to me again when your hands are full."
+          "text": "Burnt brush leaves CHARCOAL on the ground. Put it in the marked box: the balloon calls the plane, and the plane drops your coins."
         }
-      ],
-      "trade": {
-        "item": "charcoal",
-        "coinsPerUnit": 2,
-        "offer": "Charcoal. I will take it off your hands — two coins the lump. How many?",
-        "empty": "Your hands are empty. Burn some brush and come back.",
-        "thanks": "Mrrow. Pleasure doing business."
-      }
+      ]
     }
-  },
-  "globalVariables": {}
+  }
 }

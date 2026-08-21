@@ -13,7 +13,7 @@ import { isBagItem, type HeldItemKind } from '@/game/entities/ItemPickup';
  * uma ponte —, mas quem mostra a contagem e a subtela, que so existe quando pedida.
  *
  * `selected` e o item do botao X, e e ele que todo o resto da cena ainda le como "o item na
- * mao" (GameScene.heldItem). Isso e de proposito: as botas de lava, o balde, a tocha e cada
+ * mao" (GameScene.heldItem). Isso e de proposito: o balde, a tocha e cada
  * fechadura do mundo continuam perguntando "o que voce esta segurando AGORA", e a resposta
  * continua sendo uma so. A mochila mudou de onde vem a resposta, nao a pergunta.
  */
@@ -121,7 +121,7 @@ export class Inventory {
   }
 
   /**
-   * A TRANSFORMACAO no lugar: balde vazio -> cheio, bateria vazia -> carregada. Nao e tirar um
+   * A TRANSFORMACAO no lugar: balde vazio -> cheio. Nao e tirar um
    * e por outro — o slot e o mesmo, a posicao na grade e a mesma, e a selecao segue junto. Se
    * fosse remove+add, o item transformado pularia para o fim da mochila toda vez que o heroi
    * enchesse o balde no rio.

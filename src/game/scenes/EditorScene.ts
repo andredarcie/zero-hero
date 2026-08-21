@@ -1,21 +1,18 @@
 ﻿import Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES,
-  MOONFLOWER_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES, SLIME_FRAMES, SOLID_GROUND_FRAMES,
-  SOLID_UPPER_FRAMES, TOOLBOX_FRAMES, WATER_WHEEL_FRAMES, ZORA_FRAMES,
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, HERO_FRAMES, KEY_FRAMES,
+  MOONFLOWER_FRAMES, NPC_VISUALS, SLIME_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+  TOOLBOX_FRAMES, ZORA_FRAMES,
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import {
-  EditorDomUi, PANEL_WIDTH, hasDirectionFrames, isDirectionalProp, isSellProp, isVariableProp,
-  type UiState, type ViewMode,
+  EditorDomUi, PANEL_WIDTH, hasDirectionFrames, isDirectionalProp, type UiState, type ViewMode,
 } from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
-import { wireShapeFrame, wireShapeFromMask } from '@/game/world/wireShapes';
 import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import { GameScene } from '@/game/scenes/GameScene';
-import { pinExplorerCard, startExplorerRun } from '@/game/explorer/explorerRun';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
@@ -40,17 +37,8 @@ const TREE_COLLISION_TEXTURE = 'editor-tree-collision-tile';
 const CAMERA_PAD = WORLD_TILE * 10;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 8;
-// v3: discards persisted state from before the "Inimigos" palette tab was removed.
-// v4: UiState ganhou `propDir`. A chave sobe de versao junto com a FORMA do estado — um estado
-// v3 restaurado hoje viria sem propDir e o primeiro braco colocado nasceria com `dir: undefined`.
-// v5: UiState ganhou `propVariable`, o vinculo usado pelo proximo mecanismo de circuito.
-// v6: a aba "Inimigos" VOLTOU (pontos de spawn). `EntitySelection` ganhou o braco `enemies`, e
-// restoreUi funde o estado salvo em cima do default sem validar nada — um v5 com a tecla 5
-// gravada de outra epoca entraria numa forma que agora significa outra coisa.
-// v7: UiState ganhou `propSellKind`/`propSellPrice` (a caixa de extracao). A chave sobe junto com
-// a FORMA do estado — um v6 restaurado hoje viria sem os dois, e a primeira caixa nasceria sem
-// item e sem preco, ou seja, invisivel no jogo.
-const UI_STATE_KEY = 'worldEditorUi.v7';
+// Bump whenever UiState changes so old brushes cannot restore retired entity configuration.
+const UI_STATE_KEY = 'worldEditorUi.v8';
 
 type CellCoord = { x: number; y: number };
 
@@ -80,7 +68,6 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   axe: { key: ASSET_KEYS.axeIcon },
   greatAxe: { key: ASSET_KEYS.greatAxeIcon },
   bomb: { key: ASSET_KEYS.bombItem, frame: 0 },
-  lavaBoots: { key: ASSET_KEYS.lavaBootsIcon },
   pickaxe: { key: ASSET_KEYS.pickaxeIcon },
   scythe: { key: ASSET_KEYS.scytheIcon },
   shovel: { key: ASSET_KEYS.shovelIcon },
@@ -90,16 +77,6 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   seeds: { key: ASSET_KEYS.seedsItem },
   carnivoreSeeds: { key: ASSET_KEYS.carnivoreSeedsItem },
   bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
-  battery: { key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
-  // A FABRICA como item solto no mapa. Cada peca e a PROPRIA arte dela — a mesma escolha do
-  // GROUND_VISUAL: o autor tem de reconhecer no tabuleiro o que vai ficar plantado no chao.
-  gear: { key: ASSET_KEYS.gearItem },
-  wire: { key: ASSET_KEYS.wire, frame: wireShapeFrame('h', false) },
-  belt: { key: ASSET_KEYS.belt, frame: 1 },
-  chest: { key: ASSET_KEYS.chest, frame: 0 },
-  boiler: { key: ASSET_KEYS.boiler, frame: 0 },
-  inserter: { key: ASSET_KEYS.inserter, frame: 1 },
-  extractor: { key: ASSET_KEYS.extractor, frame: 1 },
   // A CADEIA DO FERRO como item de chao. Faltavam as tres, e a falta NAO era inofensiva: um
   // level que autora minerio no chao (as aulas do gato) derrubava o editor inteiro no boot —
   // `entityVisual` lia `.key` de undefined, `renderEntities` morria, e a paleta nunca chegava
@@ -111,6 +88,12 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   campfire: { key: ASSET_KEYS.campfireFrame1 },
+  // A escada e geometria no jogo (StairsObject), entao ela nao tem sprite proprio — e o que ela
+  // pega emprestado tem de dizer PEDRA. Ela vestia o icone do portal, a peca que ela substituiu,
+  // e o resultado era um portal roxo marcando o lugar onde vai nascer um lance de alvenaria: a
+  // mesma confusao que o gerador ja cometeu uma vez, quando trocou os tipos e deixou os portais
+  // velhos no disco tapando os tiles. A rocha do atlas (a mesma da montanha) nao mente.
+  stairs: { key: ASSET_KEYS.forestTileset, frame: CLIFF_WALL_FRAMES[0] },
   dryBush: { key: ASSET_KEYS.dryBush },
   lockedDoor: { key: ASSET_KEYS.lookedDoorObject },
   swingGate: { key: ASSET_KEYS.swingGateObject },
@@ -122,36 +105,16 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   lava: { key: ASSET_KEYS.lavaFloor },
   water: { key: ASSET_KEYS.water },
   bridgeSpot: { key: ASSET_KEYS.bridge },
+  pyre: { key: ASSET_KEYS.woodItem },
   // A pose ABERTA: e a que diz o que a peca faz (uma ponte de petalas). Ver MOONFLOWER_FRAMES.
   moonflower: { key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
   bombSpot: { key: ASSET_KEYS.bombItem, frame: 0 },
   plantSpot: { key: ASSET_KEYS.plantHole, frame: 0 },
   carnivorousPlant: { key: ASSET_KEYS.carnivorousPlant, frame: 0 },
-  // O frame aqui e so o default da paleta: no tabuleiro, entityVisual troca pelo frame da
-  // direcao gravada, pra o editor mostrar pra onde CADA braco esta virado.
-  inserter: { key: ASSET_KEYS.inserter, frame: 1 },
   toolbox: { key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
   furnace: { key: ASSET_KEYS.furnace, frame: 0 },
-  tripHammer: { key: ASSET_KEYS.tripHammer, frame: 1 },
   altar: { key: ASSET_KEYS.altar, frame: 0 },
-  woodenCrate: { key: ASSET_KEYS.woodenCrate },
-  pressurePlate: { key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
-  waterWheel: { key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
-  boiler: { key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.coldDry },
-  electronicGate: { key: ASSET_KEYS.electronicGate, frame: 0 },
-  // A CAIXA DE VENDA usa a arte do bau: as duas sao caixas de UM tipo, e o que as separa e a
-  // PLACA que so o mundo desenha (ver SellBoxObject) — no tabuleiro, o corpo basta.
-  sellBox: { key: ASSET_KEYS.chest, frame: 0 },
   levelPortal: { key: ASSET_KEYS.levelPortal },
-  // Default da paleta; no tabuleiro, entityVisual troca pela forma resolvida dos vizinhos.
-  wire: { key: ASSET_KEYS.wire, frame: wireShapeFrame('h', false) },
-  // A FABRICA. Esteira e extrator seguem a regra do braco: o frame aqui e so o default da
-  // paleta, e no tabuleiro o entityVisual troca pelo frame da direcao gravada — sem isso o
-  // editor mostraria todas as esteiras apontando pro leste, e a direcao e a autoria inteira.
-  belt: { key: ASSET_KEYS.belt, frame: 1 },
-  extractor: { key: ASSET_KEYS.extractor, frame: 1 },
-  // O bau na paleta e o VAZIO: o cheio e estado de partida (mora no save), nunca autoria.
-  chest: { key: ASSET_KEYS.chest, frame: 0 },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -189,9 +152,6 @@ export class EditorScene extends Phaser.Scene {
     showCollisions: false,
     showEntities: true,
     propDir: 1, // leste
-    propVariable: '',
-    propSellKind: 'ore',
-    propSellPrice: 3,
     viewMode: 'world',
     chunkX: 0,
     chunkY: 0,
@@ -259,25 +219,19 @@ export class EditorScene extends Phaser.Scene {
   // ── Boot ────────────────────────────────────────────────────────────────
 
   // The /lab route runs this same scene over a puzzle LEVEL file (public/levels/level-N.json)
-  // or one of the nine DUNGEONS (public/levels/dungeon-N.json) instead of the real overworld —
-  // `?level=N` / `?dungeon=N` picks which (default level 1). See main.ts / worldApi.ts. A grade
-  // do editor sempre foi guiada pelos meta do arquivo, então as 17-57 salas de uma dungeon
-  // (mundos multi-chunk, como o /editor já edita no overworld 22×8) entram sem mudança nenhuma
-  // de desenho — o que faltava era só a porta.
+  // or over the SUBTERRANEO (public/underworld.json) instead of the real overworld — `?level=N`
+  // / `?under` picks which (default level 2). See main.ts / worldApi.ts. A grade do editor
+  // sempre foi guiada pelos meta do arquivo, entao o espelho (25 telas, como o overworld) entra
+  // sem mudanca nenhuma de desenho.
   private get worldFileId(): WorldFileId {
     if (this.registry.get('appMode') !== 'lab') return 'world';
-    const dungeon = new URLSearchParams(window.location.search).get('dungeon');
-    // O ZERO ENTRA. `dungeon-0` não é uma dungeon: é a FOLHA DE PEÇAS que o gerador consulta —
-    // cada chunk dela é uma sala-template (ver dungeon/dungeonTemplates). Ela mora aqui porque o
-    // laboratório já sabe editar um arquivo de salas 12×12, e os portais do overworld apontam
-    // para 1..9, então o zero é inalcançável por dentro do jogo e editável por fora.
-    if (dungeon && /^\d+$/u.test(dungeon) && Number(dungeon) >= 0) return `dungeon-${Number(dungeon)}`;
+    if (new URLSearchParams(window.location.search).has('under')) return 'underworld';
     return `level-${this.labLevelNumber}`;
   }
 
   private get labLevelNumber(): number {
     const raw = new URLSearchParams(window.location.search).get('level');
-    return raw && /^\d+$/u.test(raw) && Number(raw) > 0 ? Number(raw) : 1;
+    return raw && /^\d+$/u.test(raw) && Number(raw) > 0 ? Number(raw) : 2;
   }
 
   /** O número dentro do worldFileId corrente (level OU dungeon) — o que o activeLevel recebe. */
@@ -320,7 +274,6 @@ export class EditorScene extends Phaser.Scene {
       onSave: () => void this.handleSave(),
       onReload: () => this.handleReload(),
       onPlaytest: () => this.startPlaytest(),
-      onCardPlaytest: (cardId) => { pinExplorerCard(cardId); this.startPlaytest(); },
       onUndo: () => { this.store?.undo(); },
       onRedo: () => { this.store?.redo(); },
       onFitView: () => this.fitView(),
@@ -481,27 +434,7 @@ export class EditorScene extends Phaser.Scene {
     if (entity.dir !== undefined && hasDirectionFrames(entity.type)) {
       return { key: PROP_VISUAL[entity.type].key, frame: entity.dir };
     }
-    // Um cabo desenha a forma que os VIZINHOS lhe dao (cabos e maquinas da rede) — a mesma
-    // resolucao do runtime, entao o tabuleiro mostra a rede exatamente como ela vai correr.
-    if (entity.type === 'wire') {
-      return { key: ASSET_KEYS.wire, frame: wireShapeFrame(this.wireShapeAt(entity.worldX, entity.worldY), false) };
-    }
     return PROP_VISUAL[entity.type];
-  }
-
-  private wireShapeAt(wx: number, wy: number): ReturnType<typeof wireShapeFromMask> {
-    const connects = (x: number, y: number): boolean => (this.store?.entitiesAt(x, y) ?? []).some(
-      // A MESMA lista de maquinas do `resolveWireShapes` do jogo — o tabuleiro tem de mostrar a
-      // forma que o runtime vai resolver, e duas listas que discordam sao duas formas diferentes
-      // pro mesmo cabo (o defeito que a regra "uma lista, tres leitores" existe pra impedir).
-      (e) => e.list === 'props' && (e.type === 'wire' || e.type === 'boiler'
-        || e.type === 'waterWheel' || e.type === 'pressurePlate' || e.type === 'inserter'
-        || e.type === 'belt' || e.type === 'extractor'
-        || e.type === 'electronicGate'),
-    );
-    return wireShapeFromMask(
-      connects(wx, wy - 1), connects(wx + 1, wy), connects(wx, wy + 1), connects(wx - 1, wy),
-    );
   }
 
   private renderEntities(): void {
@@ -523,8 +456,7 @@ export class EditorScene extends Phaser.Scene {
       const sprite = this.add.sprite(cx, cy, visual.key, visual.frame ?? 0).setDisplaySize(WORLD_TILE * 0.74, WORLD_TILE * 0.74);
       container.add([chip, sprite]);
       // A marca de PROA: um pino colado na borda do chip do lado pra onde a peca aponta. Existe
-      // so pra quem gira sem ter arte por direcao — sem ela, um mapa com tres caixas de
-      // ferramentas nao diz de que lado ficam as bandejas, e o autor teria de clicar em cada uma.
+      // so pra quem gira sem ter arte por direcao — sem ela, o autor nao ve a frente da peca.
       if (dir === undefined) return;
       const [dx, dy] = DIR_STEP[dir];
       container.add(this.add.rectangle(
@@ -689,7 +621,6 @@ export class EditorScene extends Phaser.Scene {
       });
     }
     if (!change.structure && (change.entities || change.spawn)) this.renderEntities();
-    if (change.variables) this.ui?.syncFromState();
     if (change.cells || change.entities || change.spawn || change.structure) this.ui?.requestMinimapRedraw();
     this.ui?.refreshHeader();
     this.refreshHoverStatus();
@@ -900,32 +831,9 @@ export class EditorScene extends Phaser.Scene {
     else if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
     else if (sel.list === 'pickups') store.placeEntity({ list: 'pickups', type: sel.type, worldX: x, worldY: y });
     else {
-      // A roda nao fica na margem: ela substitui um tile de rio ja desenhado. Assim o editor
-      // impede uma maquina seca antes mesmo de salvar, sem criar uma segunda camada de props.
-      if (sel.type === 'waterWheel') {
-        const currentProp = store.entitiesAt(x, y).find((entity) => entity.list === 'props');
-        const isRiver = currentProp?.type === 'water'
-          || currentProp?.type === 'bridgeSpot'
-          || currentProp?.type === 'waterWheel';
-        if (!isRiver) {
-          this.ui?.toast("A roda d'agua so pode ser instalada em um tile de rio");
-          return;
-        }
-      }
-      // Direcao e circuito sao propriedades independentes: o braco usa as duas; placa usa a
-      // variavel; roda e caldeira aceitam a variavel como barramento logico opcional. O cabo
-      // fisico da roda e inferido pela adjacencia e nao precisa de campo extra no JSON.
       store.placeEntity({
         list: 'props', type: sel.type, worldX: x, worldY: y,
         ...(isDirectionalProp(sel.type) ? { dir: this.uiState.propDir } : {}),
-        ...(isVariableProp(sel.type) && this.uiState.propVariable
-          ? { variable: this.uiState.propVariable }
-          : {}),
-        // A caixa de extracao carrega o negocio dela no proprio prop: sem `sells` o runtime a
-        // descarta, entao ela nunca e gravada pela metade.
-        ...(isSellProp(sel.type)
-          ? { sells: { kind: this.uiState.propSellKind, coinsPerUnit: this.uiState.propSellPrice } }
-          : {}),
       });
     }
   }
@@ -1169,10 +1077,10 @@ export class EditorScene extends Phaser.Scene {
     const store = this.store;
     if (!store) return;
     store.renameWorld(settings.name);
-    const resized = settings.chunksX !== store.world.meta.worldChunksX || settings.chunksY !== store.world.meta.worldChunksY;
-    if (resized) store.resizeWorld(settings.chunksX, settings.chunksY);
+    const resized = store.world.meta.worldChunksX !== 5 || store.world.meta.worldChunksY !== 5;
+    if (resized) store.resizeWorld(5, 5);
     this.ui?.refreshHeader();
-    this.ui?.toast(resized ? 'Mundo redimensionado' : 'Mundo atualizado');
+    this.ui?.toast(resized ? 'Mundo fixado em 5x5 chunks' : 'Mundo atualizado');
   }
 
   /** Runs the real GameScene over the in-memory (possibly unsaved) world; ESC comes back. */
@@ -1182,7 +1090,6 @@ export class EditorScene extends Phaser.Scene {
     if (!this.requireValidStartPoint()) return;
     this.persistUi();
     setWorldData(store.snapshotWorld());
-    if (this.registry.get('appMode') === 'editor') startExplorerRun();
     // O número vem do ARQUIVO aberto (level ou dungeon): testar a dungeon-3 pelo P é jogar o
     // level 3 ativo, com os mesmos botões flutuantes e o mesmo "reiniciar" do pause.
     if (this.registry.get('appMode') === 'lab') setActiveLevel(this.labFileNumber);
@@ -1269,11 +1176,6 @@ export class EditorScene extends Phaser.Scene {
       world: this.store
         ? { name: this.store.world.meta.name, chunksX: this.store.world.meta.worldChunksX, chunksY: this.store.world.meta.worldChunksY }
         : null,
-      chunkCatalog: this.store?.world.chunks.map((chunk) => ({
-        cx: chunk.cx,
-        cy: chunk.cy,
-        ...chunk.catalog,
-      })) ?? [],
       spawn: this.store?.spawn ?? null,
       zoom: this.cameras.main.zoom,
     });

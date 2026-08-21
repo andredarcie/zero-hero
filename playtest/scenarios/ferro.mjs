@@ -164,20 +164,26 @@ export default {
     // ── 6. A venda DERRUBA moedas em volta do NPC — a carteira espera o passo ─
     const coinsBefore = (await driver.getState())?.coins ?? 0;
     await page.keyboard.press('Enter'); // confirmar é a opção selecionada do caixa
-    await page.waitForSelector('[data-opt="sell"]', { timeout: 10000 }); // o balcão reabre após o recibo
+    // A caixa de fala mostra UMA mensagem por vez, então o recibo é uma TELA — ele espera um
+    // aperto antes do "obrigado". Ler o log inteiro deixou de ser possível de propósito: o
+    // número que o jogador confere não pode passar voando por baixo da fala seguinte.
+    // O ▼ só aparece com a fala ASSENTADA: esperar por ele é esperar o fim do datilografado —
+    // esperar pelo texto pegaria a última letra ainda no ar, e o Enter viraria "pular", não
+    // "avançar".
+    await page.waitForSelector('.zh-dlg-next[data-opt="continue"]', { state: 'visible', timeout: 10000 });
     const sold = await evaluate(() => ({
       iron: window.__scene.inventory.count('ore'),
       coins: window.gameDebug.getState().coins,
       ground: window.__scene.coinManager.getActiveWorldPositions().length,
-      receipt: [...document.querySelectorAll('.zh-dlg-body')].some(
-        (node) => /Sold 2 ore for 6 coins/u.test(node.textContent ?? ''),
-      ),
+      receipt: /Sold 2 ore for 6 coins/u.test(document.querySelector('.zh-dlg-body')?.textContent ?? ''),
     }));
     assert('a mochila esvaziou na hora', sold.iron === 0, JSON.stringify(sold));
     assert('mas a carteira NÃO: o NPC derrubou 6 moedas no mundo',
       sold.coins === coinsBefore && sold.ground === 6, JSON.stringify(sold));
-    assert('o recibo com o número exato entra no LOG da conversa', sold.receipt === true, JSON.stringify(sold));
-    await shot('balcao-vendido');
+    assert('o recibo com o número exato é uma tela inteira da conversa', sold.receipt === true, JSON.stringify(sold));
+    await shot('balcao-vendido', { region: 'dialog' });
+    await page.keyboard.press('Enter'); // o recibo lido: vem o agradecimento, e o balcão reabre
+    await page.waitForSelector('[data-opt="sell"]', { timeout: 10000 });
 
     // ── 7. Mochila vazia: a recusa é uma FALA, e o diálogo segue de pé ──────
     await page.locator('[data-opt="sell"]').click();

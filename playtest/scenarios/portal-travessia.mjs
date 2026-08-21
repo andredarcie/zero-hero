@@ -13,7 +13,7 @@
 //                seria um corte para preto).
 //   4. QUEDA   — do outro lado o heroi comeca NO AR (lift > 0) e so depois toca o chao.
 //
-// A autoria e pelo /lab com o EditorStore, como braco/fios/caldeira, e NADA e salvo: o portal so
+// A autoria e pelo /lab com o EditorStore, e NADA e salvo: o portal so
 // existe na memoria desta run. O destino e o proximo level do manifesto de verdade — a travessia
 // nao teria o que provar contra um destino de mentira.
 

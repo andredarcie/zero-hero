@@ -67,7 +67,7 @@ export default {
 
     // ── 2. O monte nao engole o que estiver no tile ──────────────────────────
     // A regra sempre foi "um domo nunca nasce sob os pes do heroi" — mas so o heroi era
-    // checado. Um item largado no tile semeado (ex.: por um braco robotico) era enterrado
+    // checado. Um item largado no tile semeado era enterrado
     // pelo monte que bloqueia: producao irrecuperavel.
     log('MONTE: com um item no tile semeado, o domo espera');
     const spotInfo = await evaluate(() => {

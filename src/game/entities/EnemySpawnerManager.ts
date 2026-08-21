@@ -6,19 +6,22 @@ import type { WorldEnemySpawn } from '@/game/world/worldSchema';
 /**
  * O PONTO DE SPAWN AUTORADO — a cova que o autor cava no editor, e o inimigo que VOLTA.
  *
- * Ate aqui o jogo tinha uma fonte de inimigo so: o UndeadSpawnDirector, que invoca caveiras num
- * anel em volta do HEROI enquanto ele demora no escuro. Isso e um cerco — pressao ambiente, sem
- * lugar nenhum —, e por isso ele nao serve pra autorar nada: nao existe "a caveira daquele
- * corredor", e ele fica desligado justamente onde uma sala precisa de guarda (o lab e os levels,
- * `meta.puzzle`, onde caveira aparecendo no meio da solucao e ruido).
+ * Esta e a UNICA fonte de inimigo do jogo: um tile FIXO, escolhido a mao no editor, que tem um
+ * corpo em cima e faz outro depois que aquele cai.
  *
- * Este manager e a outra pergunta: um tile FIXO, escolhido a mao, que tem um corpo em cima e faz
- * outro depois que aquele cai. Ele nao substitui o cerco, e nao herda as regras dele:
+ * Houve uma segunda — o `UndeadSpawnDirector`, um cerco ambiente que fazia caveiras subirem num
+ * anel de 4 a 7 tiles em volta do HEROI enquanto ele demorava no escuro. Ele foi REMOVIDO em
+ * 2026-08-19: era a unica coisa no jogo capaz de por um corpo num lugar que ninguem autorou, e
+ * com o explorador fora do jogo nao sobrou modo nenhum que quisesse pressao sem lugar. O que este
+ * manager faz:
  *
  * - **Um corpo por cova, nunca uma fila.** Enquanto o ocupante estiver vivo o ponto nao faz nada;
  *   duas caveiras na mesma cova viram um cerco autorado, que e exatamente o que ja existe.
  * - **O relogio conta sempre**, mesmo com o heroi longe (ver ENEMY_RESPAWN_MS). Se contasse so
  *   por perto, voltar a uma sala limpa daria uma sala vazia — e a cova viraria decoracao.
+ * - **O corpo nasce NO TILE AUTORADO, nunca perto dele.** Nao ha busca por vizinho livre: se o
+ *   tile nao servir agora (solido, aceso por fogueira, ocupado, heroi em cima), a cova ESPERA o
+ *   proximo frame. Corpo que se muda sozinho e o que o cerco fazia, e e o que foi embora.
  * - **A cova ACORDA na distancia de visao da caveira** (DETECTION_RANGE, o mesmo numero pelo qual
  *   ela enxerga o heroi e enxerga uma placa). Nao e economia: nascer e um evento de 3,8s de aviso
  *   (a fissura fria do UndeadEnemy) e, se acontecesse a 40 tiles, o aviso seria dado pra ninguem
@@ -32,9 +35,9 @@ import type { WorldEnemySpawn } from '@/game/world/worldSchema';
  *   ensina, o HUD nao.)
  *
  * A elegibilidade do tile (solido, luz de fogueira, corpo em cima) mora no GameScene, que e quem
- * sabe disso — e de proposito NAO inclui o flood-fill de alcancabilidade que o cerco usa: aquele
- * teste e centrado no heroi (raio do anel + 3) e reprovaria toda cova autorada mais longe que
- * isso. A colocacao a mao E a intencao; o editor avisa sobre tile bloqueado no Salvar.
+ * sabe disso — e de proposito NAO inclui nenhum teste de alcancabilidade centrado no heroi: um
+ * teste desses reprovaria toda cova mais longe que o raio dele. A colocacao a mao E a intencao;
+ * o editor avisa sobre tile bloqueado no Salvar.
  */
 
 /** Onde o heroi esta e como o mundo responde — o mesmo formato de consulta do cerco. */

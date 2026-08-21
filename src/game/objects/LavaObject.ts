@@ -10,8 +10,7 @@ import type { WorldProp } from './WorldProp';
 // bloom pass) that ALSO carries a fire light, because in this world lava is fire — you can relight
 // a dead torch at it. The surface is thick, slow and molten: a long viscous heat-swell rather than
 // a quick flicker, breathing between bright and deep amber so it reads as moving rock, not a
-// glowing sticker. Whether it blocks is decided by GameScene (solid for enemies and for a hero
-// without lava boots).
+// glowing sticker. It blocks every walking body until a stone settles into a basalt step.
 
 // A slow, soft swell — molten rock is heavy and moves lazily, so the pulse is long and gentle
 // (a quick flicker read as electric, not hot).
@@ -62,7 +61,7 @@ export class LavaObject implements WorldProp {
   // ford. The molten tile stays molten AROUND it; the stone just caps the middle. Three phases:
   //   molten  — untouched lava (blocks; a stone can be dropped here)
   //   cooling — a stone is sinking in; still BLOCKS (you cannot cross a half-placed stone)
-  //   solid   — the stone has fully settled; now walkable, no boots. One-way. See GameScene.solidifyLava.
+  //   solid   — the stone has fully settled; now walkable. One-way. See GameScene.solidifyLava.
   private phase: 'molten' | 'cooling' | 'solid' = 'molten';
   private crownParts: Box3D[] = [];
   private pulseTween?: Phaser.Tweens.Tween;
@@ -119,10 +118,7 @@ export class LavaObject implements WorldProp {
     return this.phase === 'solid';
   }
 
-  /**
-   * Lava viva (ou esfriando) é um corpo; basalto assentado é chão de todo mundo. Quem pode
-   * VADEAR o que ainda queima (as botas) é decisão do registro de props — entrada `hazard`.
-   */
+  /** Lava viva (ou esfriando) é um corpo; basalto assentado é chão de todo mundo. */
   public get blocking(): boolean {
     return !this.solidified;
   }

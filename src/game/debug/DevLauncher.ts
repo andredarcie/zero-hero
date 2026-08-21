@@ -25,11 +25,13 @@ type Entry = {
 const ENTRIES: Entry[] = [
   { group: 'Jogo', label: 'Jogar o jogo', hint: 'Do começo: o título, e dele o mundo', url: '/' },
   { group: 'Jogo', label: 'Jogar pulando o título', hint: 'Cai direto no mundo (?play)', url: '/?play' },
-  // Atalho direto para a mesma run de construção, útil para depurar sem atravessar o título.
-  { group: 'Jogo', label: 'Construtor direto', hint: 'Run de chunks sem o título (?explorer)', url: '/?explorer' },
-  { group: 'Laboratório de puzzles', label: 'Jogar o level 1', hint: 'Joga levels/level-1.json direto', url: '/lab?play' },
-  { group: 'Laboratório de puzzles', label: 'Editar o level 1', hint: 'Editor do lab — monte o puzzle e [P] testa', url: '/lab' },
-  { group: 'Laboratório de puzzles', label: 'Editar o level 2', hint: 'Editor do lab apontado no level 2', url: '/lab?level=2' },
+  // As duas horas do dia (render3d/skyPreset.ts). Elas entram aqui e não só no menu de pausa
+  // porque a escolha do menu é GRAVADA: sem uma porta que force cada lado, testar o outro passa
+  // a depender de lembrar em qual deles o navegador ficou da última vez.
+  { group: 'Jogo', label: 'Jogar de dia', hint: 'O mundo ao sol (?play&day)', url: '/?play&day' },
+  { group: 'Jogo', label: 'Jogar de noite', hint: 'A noite autorada (?play&night)', url: '/?play&night' },
+  { group: 'Laboratório de puzzles', label: 'Jogar o level 2', hint: 'Joga levels/level-2.json direto', url: '/lab?play' },
+  { group: 'Laboratório de puzzles', label: 'Editar o level 2', hint: 'Editor do lab — monte o puzzle e [P] testa', url: '/lab' },
   { group: 'Editor', label: 'Abrir o editor do mundo', hint: 'Edita o mundo real (world.json)', url: '/editor' },
 ];
 

@@ -11,14 +11,15 @@ import { MageEnemy } from './enemies/MageEnemy';
 import { SlimeEnemy } from './enemies/SlimeEnemy';
 import { SpiderEnemy } from './enemies/SpiderEnemy';
 import { TurretEnemy } from './enemies/TurretEnemy';
-import { DETECTION_RANGE, UndeadEnemy } from './enemies/UndeadEnemy';
+import { UndeadEnemy } from './enemies/UndeadEnemy';
 import { ZoraEnemy, type WaterQuery } from './enemies/ZoraEnemy';
 
-// Two things summon bodies, and this manager serves both from ONE flat list instead of
-// streaming spawns per chunk: the UndeadSpawnDirector (the ambient siege, a ring around the
-// hero in the dark — always skulls) and an authored spawn point (EnemySpawnerManager, a fixed
-// tile that makes another body a while after its own falls — any species). Neither owns the
-// bodies — this does. E, desde que existem mago e torreta, ele tambem e dono do AR: os projeteis
+// One thing summons bodies — the authored den (EnemySpawnerManager: a fixed tile, chosen by
+// hand in the editor, that makes another body a while after its own falls, any species) — and
+// this manager serves it from ONE flat list instead of streaming spawns per chunk. The ambient
+// siege that used to be the second source (UndeadSpawnDirector, a ring of skulls around the hero
+// in the dark) was removed: nothing may put a body where nobody authored one. The den does not
+// own the bodies — this does. E, desde que existem mago e torreta, ele tambem e dono do AR: os projeteis
 // (EnemyProjectileManager) nascem de um corpo mas nao pertencem a ele — um tiro sobrevive a morte
 // de quem o disparou, e um mago que morresse engolindo a propria bola no ar seria um mago que
 // castigou o jogador por reagir rapido.
@@ -208,18 +209,6 @@ export class EnemyManager {
     return this.enemies.reduce((sum, e) => sum + (e.isAlive ? 1 : 0), 0);
   }
 
-  /**
-   * Corpos vivos QUE APARECEM NO QUADRO — o número que a trilha de perigo lê. O `aliveCount`
-   * continua sendo a população (o teto do cerco conta todo mundo): um corpo fora da tela existe
-   * e caça, mas não pode ser a razão de uma música de combate numa tela vazia.
-   */
-  public get framedAliveCount(): number {
-    return this.enemies.reduce(
-      (sum, e) => sum + (e.isAlive && this.frameGate(e.worldX, e.worldY) ? 1 : 0),
-      0,
-    );
-  }
-
   public getEnemyAt(worldX: number, worldY: number): EnemyBase | null {
     return this.enemies.find((e) => e.isAlive && e.worldX === worldX && e.worldY === worldY) ?? null;
   }
@@ -250,13 +239,12 @@ export class EnemyManager {
     return this.enemies.filter((e) => e.isAlive);
   }
 
-  /** Debug/playtest readout: where every living body is, WHAT it is, and which plate it walks to. */
+  /** Debug/playtest readout: where every living body is and WHAT it is. */
   public snapshot(): Array<{
     kind: EnemyKind;
     worldX: number;
     worldY: number;
     spawning: boolean;
-    plateTarget: { x: number; y: number } | null;
     health: number;
     maxHealth: number;
     invulnerable: boolean;
@@ -273,7 +261,6 @@ export class EnemyManager {
         worldX: e.worldX,
         worldY: e.worldY,
         spawning: e.isSpawning,
-        plateTarget: e.plateTarget ? { x: e.plateTarget.x, y: e.plateTarget.y } : null,
         // A vida deixou de ser detalhe interno no dia em que a espada parou de matar de um golpe:
         // sem ela, um cenario nao consegue distinguir "resvalou" de "acertou e ele aguentou".
         health: e.healthNow,
@@ -298,62 +285,6 @@ export class EnemyManager {
     return this.shots.snapshot();
   }
 
-  /**
-   * Hand out pressure-plate fixations: ONE body per plate. Without the claim, every skull in
-   * range would converge on the same plate and all but the winner would stand next to a taken
-   * tile with a balloon over its head forever — which reads as broken, not as hungry.
-   *
-   * The assignment lives here rather than in the creature because it is the only place that can
-   * see the others. Quem ATENDE o laco e decisao da especie (`seeksPlates`, hoje so a caveira);
-   * este metodo nao sabe de especie nenhuma. GameScene decides which plates are even offerable.
-   */
-  private assignPlateLures(plates: ReadonlyArray<{ worldX: number; worldY: number }>): void {
-    const claimed = new Set<string>();
-    const unclaimed: EnemyBase[] = [];
-
-    // Pass 1 — HONOUR the fixations that already exist. A skull standing on its plate has to
-    // keep it (re-assigning would walk it off and strobe the circuit), and a march already under
-    // way must not be re-routed just because a fresher skull clawed out closer to the plate.
-    for (const enemy of this.enemies) {
-      if (!enemy.seeksPlates) {
-        enemy.setPlateTarget(undefined);
-        continue;
-      }
-      const target = enemy.plateTarget;
-      const key = target ? `${target.x},${target.y}` : '';
-      const stillOffered = target !== undefined
-        && plates.some((p) => p.worldX === target.x && p.worldY === target.y);
-      if (stillOffered && !claimed.has(key)) {
-        claimed.add(key);
-      } else {
-        enemy.setPlateTarget(undefined);
-        unclaimed.push(enemy);
-      }
-    }
-
-    // Pass 2 — pair up what is left, closest pair first, so the nearest skull gets the nearest
-    // plate instead of whichever happened to be first in the list.
-    if (!unclaimed.length) return;
-    const pairs: Array<{ enemy: EnemyBase; x: number; y: number; dist: number }> = [];
-    for (const enemy of unclaimed) {
-      for (const plate of plates) {
-        if (claimed.has(`${plate.worldX},${plate.worldY}`)) continue;
-        const dist = Math.abs(plate.worldX - enemy.worldX) + Math.abs(plate.worldY - enemy.worldY);
-        if (dist > DETECTION_RANGE) continue; // out of sight is out of mind
-        pairs.push({ enemy, x: plate.worldX, y: plate.worldY, dist });
-      }
-    }
-    pairs.sort((a, b) => a.dist - b.dist);
-    const fixated = new Set<EnemyBase>();
-    for (const pair of pairs) {
-      const key = `${pair.x},${pair.y}`;
-      if (fixated.has(pair.enemy) || claimed.has(key)) continue;
-      fixated.add(pair.enemy);
-      claimed.add(key);
-      pair.enemy.setPlateTarget({ x: pair.x, y: pair.y });
-    }
-  }
-
   /** Returns the blow that landed on the player this tick (null if none) — corpo ou tiro. */
   public update(
     delta: number,
@@ -365,7 +296,6 @@ export class EnemyManager {
     framedAt: (wx: number, wy: number) => boolean,
     // O CALOR: este tile está colado numa fogueira acesa? (ver EnemyBase.tickScorch)
     heatAt: (wx: number, wy: number) => boolean,
-    lurablePlates: ReadonlyArray<{ worldX: number; worldY: number }> = [],
   ): EnemyHit | null {
     let hit: EnemyHit | null = null;
 
@@ -373,10 +303,6 @@ export class EnemyManager {
     // corpo (a voz e o início de golpe — ver EnemyBase.setFrameGate, onde a lei está escrita).
     this.frameGate = framedAt;
     EnemyBase.setFrameGate(framedAt);
-
-    // Before anybody moves: a skull's target for this tick has to be settled, or half the pack
-    // would step using this frame's assignment and half using last frame's.
-    this.assignPlateLures(lurablePlates);
 
     /**
      * Onde o corpo CORRENTE pode pisar. UM closure para o laco inteiro (o corpo da vez mora numa

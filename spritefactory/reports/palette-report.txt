@@ -258,13 +258,11 @@ Palette audit — 151 PNGs, 1167 distinct opaque colours, 237 canonical.
 == per-sprite stats (sorted by colour count) ==
   cols  WxH      opq%  semi%  file
    182  64x64     100%   0.0%  items/3d/scythe.png
-   162  64x64     100%   0.0%  items/3d/lavaBoots.png
    144  64x64     100%   0.0%  items/3d/pickaxe.png
    143  64x64     100%   0.0%  items/3d/heart.png
    107  64x64     100%   0.0%  items/3d/bomb.png
     95  64x64     100%   0.0%  items/3d/axe.png
     92  64x64     100%   0.0%  items/3d/sword.png
-    81  64x64     100%   0.0%  items/3d/lavaBoots_glow.png
     67  64x64     100%   0.0%  items/3d/wood.png
     43  32x144     77%   0.0%  environment/tilesets/dungeon.png
     41  32x48      29%   0.0%  characters/npcs/npcs.png
@@ -305,7 +303,6 @@ Palette audit — 151 PNGs, 1167 distinct opaque colours, 237 canonical.
      5  16x16      16%   0.0%  environment/props/mushroom_2.png
      5  96x96      16%   0.0%  environment/props/mushroom__2.png
      5  16x32      30%   0.0%  items/equipment/sword.png
-     5  16x16      28%   0.0%  ui/icons/lava_boots_icon.png
      5  16x16      20%   0.0%  ui/icons/pickaxe_icon.png
      5  16x16      20%   0.0%  ui/icons/pickaxe_icon__1.png
      5  16x16      29%   0.0%  ui/icons/sword_icon.png

@@ -1,15 +1,13 @@
 // O ALTAR — a bigorna que nao e maquina.
 //
-// A cadeia do ferro tinha dois lugares para malhar a esponja: o MARTINETE (que cobra roda d'agua,
-// engrenagem e uma rede eletrica antes de existir) e o CHAO, onde a peca cai e o jogador bate onde
-// ela parou. O chao funciona e nao ensina nada — nada no mundo diz "trabalhe aqui". O altar e a
-// mesa que faltava: uma laje de pedra em que se POE uma coisa e se bate nela.
+// O chão permite malhar a esponja onde ela caiu, mas não diz "trabalhe aqui". O altar é a mesa
+// que faltava: uma laje de pedra em que se põe uma coisa e se bate nela.
 //
 // O que este cenario prova, na ordem:
 //   1. o Z de frente para a laje VAZIA poe nela o item SELECIONADO (o "secundario", o do X), e o
 //      item sai da mochila no mesmo gesto;
 //   2. com a laje cheia o Z volta a ser a ESPADA — e a espada descendo nela e uma PANCADA;
-//   3. sao BLOOM_BLOWS (3) pancadas, as mesmas do martinete e as mesmas da martelada no chao;
+//   3. sao BLOOM_BLOWS (3) pancadas, as mesmas da martelada no chao;
 //   4. na ultima a esponja vira FERRO, e ele fica EM CIMA da laje (uma mesa nao move a peca);
 //   5. o X tira de volta o que a pancada nao trabalha (o ferro pronto, uma pedra) — nada fica
 //      preso na mesa;
@@ -26,7 +24,7 @@ export default {
   name: 'altar',
   description: 'A laje de pedra: o Z poe a peca, a pancada malha, tres golpes viram ferro e o X tira de volta.',
   needsGame: false, // entra pelo editor e nasce a GameScene no P (mesma razao do tocha-viva)
-  route: '/lab?level=1',
+  route: '/lab?level=2',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

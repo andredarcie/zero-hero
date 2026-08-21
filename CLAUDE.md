@@ -9,18 +9,22 @@ ou o **Shift+I** do DevLauncher); os três modos são a mesma `GameScene`.
 ## O save da aventura
 
 - **A aventura LEMBRA e os outros modos NÃO** (`runtime/adventureState.ts`, padrão do
-  `dungeonTrip` + `localStorage`): `create()` hidrata, e todo evento que muda o mundo chama
+  `underworld` + `localStorage`): `create()` hidrata, e todo evento que muda o mundo chama
   `persistAdventure()` — um evento novo sem essa chamada é progresso que a morte apaga.
   Explorador e level **nunca** hidratam daqui: lá, zerar é o desenho.
 - **Morrer devolve à fogueira com TUDO** (mochila, moedas, fogueiras, história) — o custo é a
   volta. O explorador mantém os 5% dele. `playtest -- salvamento` guarda o contrato.
 - **O título recarrega o `world.json` do disco ao entrar na aventura**: o WorldData em memória
   pode estar sujo (dungeon aberta, árvores cortadas) e tudo que merece viver mora no save.
-- **As nove dungeons são GERADAS da semente da partida e LEMBRADAS depois** (`src/game/dungeon/`,
-  `runSeed` + retrato RLE no save): a ordem de leitura é **retrato primeiro, semente só se não
-  houver retrato** — senão um deploy novo do gerador remonta o mundo de quem está no meio da
-  descida. Grava-se na ENTRADA (a primeira aba fechada apagaria a dungeon recém-nascida), na saída
-  e na morte. `?dungeons=static` volta a ler os nove arquivos do Zelda 1, que continuam no repo.
+- **HÁ UMA DUNGEON SÓ, e ela é o ESPELHO do mapa de cima** (`public/underworld.json`): mesmo
+  tamanho, mesmas coordenadas, mesmo esqueleto de colisão. Descer num portal em (x,y) põe o herói
+  em (x,y) lá embaixo, e subir devolve ao mesmo tile — a viagem não escolhe destino, só troca de
+  andar — **a porta é SIMÉTRICA e não tem endereço**: subir devolve ao tile do portal que você
+  pegou, nunca ao tile por onde desceu (`runtime/underworld` guarda só em que andar você está).
+  O espelho é DERIVADO
+  do overworld por `node scripts/gen-underworld.mjs` e depois autorado à mão em `/lab?under`; ele
+  copia o esqueleto e joga fora a mobília (nada de rocha, água, fogueira ou NPC lá embaixo). As
+  nove dungeons geradas, o gerador e a semente da partida foram REMOVIDOS.
 
 ## Como este documento funciona
 
@@ -57,7 +61,7 @@ npm run build            # typecheck + vite build
 #  LÊ o world.json e acrescenta (`node scripts/enrich-world.mjs` é o modelo).
 npm run playtest         # cenários default
 npm run playtest -- all  # todos
-npm run audit:dungeons   # gera N sementes das 9 dungeons e MEDE (salas, ciclo, juiz, retrato)
+npm run audit:endgame    # DÁ PARA ZERAR? mede a corrente até a pira acesa (portal, fogo, toras)
 ```
 
 A porta 5173 costuma estar ocupada por outro projeto. Para playtest, suba o Vite numa porta livre:
@@ -78,10 +82,8 @@ O jogo **não é mais só-andar**. Detalhes e consequências: `progress.md`.
                            forno, abre o CATÁLOGO.
     B (X / K)           →  USA o item selecionado na bolsa no tile à frente (a tabela useItemAt:
                            machado derruba, picareta quebra, balde enche/rega, chave abre, tocha
-                           acende, pá cava, máquina INSTALA…). Sem resposta na tabela, ENTREGA o
-                           que a máquina à frente pede (bandeja do forno, bigorna, baú com cota —
-                           tirando do contador); depois disso, RECOLHE a máquina que o jogador
-                           construiu; e por fim o gesto sai no VAZIO.
+                           acende, pá cava, estação INSTALA…). Sem resposta na tabela, devolve a
+                           peça do altar ou RECOLHE a estação; por fim o gesto sai no VAZIO.
     pisar               →  APANHA. Tudo, sem botão (`collectUnderfoot`): usável vai pra bolsa sem
                            roubar a seleção, matéria-prima vai pro contador.
     I                   →  a BOLSA, que escolhe o item do X — e NÃO pausa o jogo.
@@ -91,10 +93,10 @@ O jogo **não é mais só-andar**. Detalhes e consequências: `progress.md`.
   defender-se passava por abrir a bolsa com a caveira em cima, e o arco mudava de alcance sem o
   jogador pedir. LARGAR morreu junto (um botão que ora usa ora larga desarma por engano) e APANHAR
   virou pisada — sem largar, apanhar não pode custar nada.
-- **A MOCHILA SÓ GUARDA O QUE TEM GESTO** (`isBagItem`). Matéria-prima — minério, ferro, carvão,
-  engrenagem (`MATERIAL_ITEM_KINDS`) — é **contador** debaixo da bolsa: informativa, sem cursor,
-  sem seleção. Ela continua inteira no `Inventory` (receita gasta dela, braço a carrega, bandeja a
-  recebe); o que mudou é que não ocupa slot do X, porque selecioná-la só podia calar o botão. A
+- **A MOCHILA SÓ GUARDA O QUE TEM GESTO** (`isBagItem`). Matéria-prima — minério, ferro e carvão
+  (`MATERIAL_ITEM_KINDS`) — é **contador** debaixo da bolsa: informativa, sem cursor, sem seleção.
+  Ela continua inteira no `Inventory` e as receitas manuais gastam dela; não ocupa slot do X,
+  porque selecioná-la só podia calar o botão. A
   `bloom` é a fronteira e fica na BOLSA: ela tem gesto (o X a pousa pra ser martelada).
 
 No toque são dois círculos no canto de baixo (`ActionButtons`, ordem do NES: B à esquerda) mais o
@@ -153,18 +155,10 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
 - `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…), e ela é
   o **botão X**. Devolve `false` só quando o item não tem nada a ver com o tile — e aí o X segue
   para a entrega, para recolher e, por fim, para o gesto no vazio.
-- **DEPOSITAR virou ENTREGAR** (`deliverToMachineAt`): a máquina já DIZ o que precisa (a bandeja
-  fantasma do forno, a bigorna, a cota do baú, o chão de entrada do braço), então o X dá o que ela
-  pede em vez de o jogador escolher a carga. É o que salva a alimentação na mão agora que minério e
-  ferro saíram da bolsa. A recusa continua física — o corpo da máquina treme, nunca uma legenda.
-- **O CHÃO DE MÁQUINA NÃO É BOLSO** (`machineFloorAt`): bandeja, esteira, cabo e as pontas do braço
-  não entregam o que está neles à pisada — senão atravessar a própria fábrica levava a carga junto,
-  e pisar na bateria encaixada ARRANCAVA a rede. Lá o X é que tira de volta, como no baú.
-- **Item que se POUSA é exceção de DUAS**: a esponja (para ser martelada) e a bateria sobre um cabo
-  (o encaixe). Os dois são linhas de `useItemAt` — não um gesto de largar que voltou pela janela.
-- **`PickupPrompt` ficou sendo o aviso da ENTREGA**, não do apanhar: pisar apanha sozinho, e
-  anunciar tecla para um gesto automático é legenda que mente. Ele existe porque a carga entra
-  DENTRO de um corpo sólido — é o único alvo do X que o chão não desenha.
+- **As estações são exclusivamente MANUAIS.** Bancada e forno gastam os insumos da mochila pelo
+  catálogo; itens largados no chão nunca são recolhidos ou processados automaticamente.
+- **Item que se POUSA é a esponja**, para ser martelada no chão ou trabalhada no altar. É uma linha
+  de `useItemAt`, não um gesto geral de largar.
 - **PISAR APANHA TUDO** (`collectUnderfoot`, via `Inventory.stash`, que **nunca** rouba a mão): a
   lista de exceções morreu com o gesto de largar — sem largar não há mão a ser roubada. Só empunha
   o que cai numa mão vazia (`selectFirstIfEmpty`, a primeira ferramenta da partida). A pisada com a
@@ -213,13 +207,12 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   puzzle. **Um puzzle só é puzzle se o caminho fácil estiver fechado** — asserte a *trava*.
 - **Um playtest AUTORA a fixture que precisa** (entra no `/lab`, coloca props pelo `EditorStore`,
   aperta P) em vez de depender do conteúdo de um level.
-- `/lab` edita um level (`?level=N`) ou uma **dungeon** (`?dungeon=N`, arquivos `dungeon-N.json`)
+- `/lab` edita um level (`?level=N`) ou o **SUBTERRÂNEO** (`?under`, `public/underworld.json`)
   via `/api/world`; **P** joga o mundo em memória, **ESC** volta; nada salva até o Salvar.
-  **`?dungeon=0` não é dungeon: é a folha de peças do gerador** — cada chunk é uma sala-template, e
-  de que lados ela tem porta se DEDUZ da geometria (metadado nenhum a dessincronizar).
   `/?level=N` e `/lab?play` bootam direto.
-- O **cerco de undead** (`UndeadSpawnDirector`) está desligado em mundo-puzzle (`isPuzzleWorld()`).
-  Isso vale só pro cerco: **inimigo autorado (aba Inimigos) funciona em level, nas 7 espécies**.
+- **NÃO EXISTE spawn ambiente: todo inimigo do mundo nasce de uma COVA AUTORADA** (aba Inimigos
+  do editor), no tile exato que alguém escolheu — o cerco que invocava caveiras em volta do herói
+  no escuro foi arrancado. Cova funciona em level também, nas 7 espécies.
 - Um level mostra dois botões flutuantes (↻ recomeçar, com confirmação de 2 toques, e pausa) —
   `LevelButtons` em `PauseMenu.ts`.
 
@@ -258,32 +251,23 @@ O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo s
   um item novo nunca invalida o que o jogador já tem). Árvore é **tile**, não prop (846 no
   `world.json`, um draw call), então o machado de aço edita **terreno**.
 - **A borda do mundo é MAR** por causa disso: nada no jogo remove água (`SOLID_GROUND_FRAMES`
-  bloqueia até as botas de lava). Tile de terreno novo = **frame novo num atlas existente**
+  bloqueia incondicionalmente). Tile de terreno novo = **frame novo num atlas existente**
   (`node spritefactory/install-tile.mjs`), só acrescentando linhas.
 
 ## As peças (o contrato de cada uma está no `progress.md`)
 
-- **MÁQUINA É ITEM: o X instala no tile à frente, e o X recolhe — TUDO que se instala se recolhe**,
-  inclusive o autorado (a exceção é a arca com `quota`, que é fechadura e não depósito). Instalar É
+- **ESTAÇÃO É ITEM: o X instala no tile à frente, e o X recolhe — TUDO que se instala se recolhe**,
+  inclusive o autorado. Instalar É
   usar, então mora na tabela `useItemAt`; a direção nasce de para onde o herói olha, nunca de um
   menu. Recolher deixou de exigir mão vazia (esse estado sumiu com a bolsa sempre cheia): ele é o
   degrau DEPOIS da tabela e da entrega, então ferramenta que tem o que fazer ali nunca desmonta.
 - **O alvo de uma instalação é DESENHADO** (`PlacementHints`): quadrado branco no tile em que o
-  botão vai agir + o keycap da tecla; azul frio nos outros lugares válidos (só o extrator os
-  pinta). A marca e o botão leem `canBuildMachineAt` — **uma pergunta só**, ou um quadrado branco
+  botão vai agir + o keycap da tecla. A marca e o botão leem `canBuildMachineAt` — **uma pergunta
+  só**, ou um quadrado branco
   promete um gesto que o botão recusa. Recusa = ausência de marca, nunca marca vermelha.
-- **MINÉRIO NÃO É FERRO.** O veio e o extrator dão `ore` — pedra com óxido. O **forno**
-  (minério+carvão, e é a única máquina que NÃO consome energia: um bloomery é movido a fole)
-  devolve uma `bloom` esponjosa, e ela só vira `iron` depois de **3 marteladas** — a mão pelo X
-  (ela é o único item da bolsa que se POUSA, e se martela no chão onde caiu), ou o **martinete**
-  ligado na roda d'água — e nele a BIGORNA É A BASE: a peça entra dentro da
-  máquina (o X a põe, o X a devolve), o malho dá as três pancadas e o produto **SALTA**
-  para um tile livre. Ela aceita qualquer carga e trabalha uma só, porque um braço robótico precisa
-  poder largar sem saber o que ela quer — recusar perderia a carga em silêncio. O carvão não é combustível ali: é o **reagente** que
-  rouba o oxigênio, e é por isso que são duas bandejas e não uma. As bandejas dele **não pedem
-  nada**: quem pede é o catálogo (o forno sabe duas receitas e vai saber mais, então um pedido
-  pregado no chão mentiria sobre a máquina). Bandeja é a boca das MÁQUINAS, e máquina não lê
-  fantasma.
+- **MINÉRIO NÃO É FERRO.** O veio dá `ore` — pedra com óxido. O **forno manual** transforma
+  minério+carvão numa `bloom` esponjosa, e ela só vira `iron` depois de **3 marteladas** no chão
+  ou no altar. O carvão é o reagente que rouba o oxigênio, não uma fonte elétrica.
 - **O ALTAR é a bigorna que NÃO é máquina** (`AltarObject`; bancada: **pedra + minério**, o 2º
   degrau da escada — cobrar uma esponja por ele era circular: é nele que a esponja vira barra): laje de
   pedra, sem energia, sem direção e sem ciclo — o Z na laje vazia PÕE o item selecionado, e bater
@@ -291,7 +275,7 @@ O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo s
   o que a pancada trabalha cospe brasa e vira outra peça em `BLOOM_BLOWS` golpes, o que não
   trabalha solta lasca cinzenta e nunca vira nada, e o X devolve o que não é malhável — assim nada
   fica preso na mesa. **O que uma pancada transforma mora em `objects/hammering.ts`**, um lugar
-  só: a mão, o martinete e o altar leem a mesma tabela.
+  só: o chão e o altar leem a mesma tabela.
 - **AS DUAS MÁQUINAS DE FABRICAR SÃO A MESMA TELA E O MESMO GESTO** (bancada e forno): o A abre o
   catálogo *daquela* máquina, e o que as separa é uma palavra na receita (`station`) — nunca uma
   interação própria. O forno tinha a dele (o A acendia fantasmas), e eram duas gramáticas para o
@@ -306,50 +290,25 @@ O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo s
   gesto ficava sem nenhuma parte visível. O destino é o vizinho mais perto do herói **que não seja
   o tile dele** (o corpo esconde o que está sob os pés), e apanhar continua sendo o B. Sem material
   — ou sem chão livre em volta — a carta treme, o insumo que falta ACENDE e o painel FICA aberto.
-  **As duas bandejas não morreram** (nem na mesa, nem no forno): elas são como as MÁQUINAS
-  alimentam (um braço robótico não abre menu). No forno elas são **só isso** — não pedem, não
-  anunciam e não recebem mais da mão: uma máquina anuncia UM gesto (o Z da alvenaria), ou o jogador
-  escolhe entre gramáticas antes de fazer nada. O X ainda TIRA de uma bandeja o que está nela
-  (chão de máquina não é bolso).
+  Não existem bandejas funcionais: o catálogo e a mochila são o único caminho de fabricação.
 - **NO FORNO, CONFIRMAR NÃO ENTREGA: ACENDE** (`startHandSmelt`). A mesa martela e a peça salta no
   mesmo frame — uma martelada é um instante. Fundir é um PROCESSO, e o gesto tem os três tempos na
   tela: a carga voa da mão para a boca, o fole sopra sacudindo a alvenaria, a brasa esguicha e só
-  então a peça pula pela SAÍDA da frente (a mesma de onde a esteira tira). O produto entra no mundo
-  no fim — ele é a única coisa deste jogo que existe depois do aperto, e o preço é o de sempre em
-  máquina com ciclo: morrer no meio perde a fornada, como já acontece com a de bandeja.
-- **ENERGIA TEM VAZÃO, e a conta é uma só por rede** (`world/powerGrid.ts`): fonte publica watts,
-  máquina puxa watts, e `satisfaction = min(1, oferta/demanda)` vira **velocidade** (o consumidor
-  multiplica o próprio delta) e **brilho** (as 3 faixas do cabo) — nunca legenda. Rede curta não
-  para nada: faz a fábrica INTEIRA arrastar. **A esteira CONDUZ ao longo de si** (senão uma linha
-  de 10 pediria 10 cabos ao lado); máquina encostada em máquina continua **não** conduzindo.
-- **Peça nova que não é sólida** (cabo, esteira) **precisa entrar em `machineAt`**: `isTileOccupied`
-  responde `false` sobre o tile dela, e sem isso dá pra empilhar duas máquinas no mesmo lugar.
-- **Peça que TIRA de um lado sólido se orienta SOZINHA** — a regra "nasce à frente, virada pra
-  onde você olha" não consegue aimar o extrator (a entrada dele é sempre um veio, e o jogador
-  teria de pisar na rocha para escolher aquela direção); a broca procura a pedra (`extractorAim`).
-- **A trava de uma fábrica é uma QUANTIDADE, nunca uma chave** — `chest` com `quota` cobra uma
-  entrega e publica o progresso no `variable`; o `electronicGate` ligado ao mesmo nome SOBE na
-  proporção (a porta é a barra, feita de física) e só libera na ÚLTIMA entrega. Uma porta que pede
-  energia se abre com um cabo, e aí a fábrica inteira vira cenário opcional — foi o que aconteceu
-  na primeira versão do level-3.
+  então a peça pula pela SAÍDA da frente. O produto entra no mundo no fim; morrer no meio perde a
+  fornada.
+- **A automação industrial foi removida por completo.** Não existem energia, cabos, esteiras,
+  extratores, braços, baús de linha, martinete automático, bateria, caldeira, placas ou portões
+  eletrônicos. A caixa de correio/venda aérea também não existe. Saves antigos apenas descartam
+  esses tipos durante a migração.
 
-`inserter` braço robótico (leva item sozinho; `dir` = para onde PÕE, tira de trás; corta a energia
-e ele **desfaz** a entrega) · `extractor` (a mesma geometria do braço, mordendo um `ironRock`: a
-única peça que CRIA matéria, e de propósito mais lenta que a picareta na mão) · `belt` esteira
-(chão, empurra o item; destino ocupado é FILA, não erro) · `chest` baú (UM tipo por baú — o
-sumidouro que deixa a linha render enquanto o herói está longe) · `gear` engrenagem (o bem
-INTERMEDIÁRIO) ·
-`toolbox` caixa de ferramentas (**ferramenta = haste+cabeça** — graveto+pedra=machado,
-graveto+ferro=foice; **máquina = engrenagem+corpo** — ferro+ferro=engrenagem, ferro+pedra=5 cabos,
-engrenagem+madeira/pedra/ferro/engrenagem = esteira/caldeira/braço/extrator, madeira+madeira=baú,
-pedra+minério=**altar** — o par de cada receita é ÚNICO, porque as bandejas ainda fabricam por
-combinação, `toolboxRecipeFor`) ·
-`ironRock`/`iron` (mesma rocha, `ore: true`) · `pressurePlate` (herói, caixote **ou inimigo** —
-a caveira MARCHA até uma placa que enxerga) · `waterWheel` · `boiler` (fogo→energia) · `wire`
-(corrente é por componente conexo; forma nasce dos vizinhos) · `battery` (carrega pisando em
-cabo vivo; **encaixa** com B num cabo morto) · `electronicGate` (fail-closed) · `swingGate` (a
-trava sem chave: só abre com o tile de trás livre) · `moonflower` (abre no escuro; uma arte
-avaliada em 9 aberturas) · `enemies` (ponto de spawn: um corpo por cova, volta em
+`pyre` **a PIRA: nasce só com a base, sobe uma tora a cada graveto do X e, fechada, aceita a
+tocha ACESA** (o único prop cujo PROGRESSO o save guarda — ela custa viagens, não um gesto; e ela
+NÃO é combustível do sistema de fogo: acender é gesto, nunca incêndio que chegou sozinho) ·
+`toolbox` caixa de ferramentas manual (graveto+pedra=machado, graveto+ferro=foice,
+pedra+pedra=forno, pedra+minério=altar) · `furnace` forno manual (madeira+madeira=carvão,
+minério+carvão=bloom) · `altar` laje manual de martelar · `ironRock`/`iron` (mesma rocha,
+`ore: true`) · `swingGate` (a trava sem chave: só abre com o tile de trás livre) · `moonflower`
+(abre no escuro; uma arte avaliada em 9 aberturas) · `enemies` (ponto de spawn: um corpo por cova, volta em
 `ENEMY_RESPAWN_MS`; luz de fogueira acesa cala a cova) · `levelPortal` (a travessia em 4 tempos,
 com um `scene.restart()` no meio).
 
@@ -366,7 +325,7 @@ com um `scene.restart()` no meio).
   que evapora desmente a chegada dele. Não é a tocha viva: o corpo assado continua sendo a espécie,
   não corre em pânico e **não espalha fogo** (se espalhasse, cada fogueira acenderia o mato à volta
   e as fogueiras MORTAS, que são a fechadura do jogo).
-- **O que a luz ainda faz é CALAR** (`LIGHT_RADIUS_TILES`): cova e cerco não abrem dentro dela, e a
+- **O que a luz ainda faz é CALAR** (`LIGHT_RADIUS_TILES`): cova não abre dentro dela, e a
   caveira não marcha até uma placa acesa. Acender a fogueira do corredor continua calando a cova
   dele. A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
 - **Quem paga é a MORTE, não o golpe** (`EnemyBase.setDeathToll`, tocado por `die()` e só por ele):
@@ -375,9 +334,11 @@ com um `scene.restart()` no meio).
   morreu.
 - **Chegar é um evento e todo golpe é telegrafado** (`WalkerEnemy`). Corpo que aparece do nada, ou
   que fere sem aviso, desmente a promessa que a caveira ensinou.
-- **Fora do quadro o corpo anda, mas não FALA, não INICIA golpe e não liga a trilha de perigo**
-  (`EnemyBase.framed`; o quadro real é ~4,5 tiles pros lados e 2,5 pro sul — bem menor que os
-  alcances). Som ou ataque novo de bicho SEM esse gate reabre o "ouço o que não vejo".
+- **Fora do quadro o corpo anda, mas não FALA e não INICIA golpe** (`EnemyBase.framed`; o quadro
+  real é ~4,5 tiles pros lados e 2,5 pro sul — bem menor que os alcances). Som ou ataque novo de
+  bicho SEM esse gate reabre o "ouço o que não vejo".
+- **A MÚSICA NÃO RESPONDE A INIMIGO**: a trilha é escolhida ao entrar no mundo e é a mesma até
+  sair (a de combate foi removida). Quem anuncia um bicho é o bicho — telegrafo, voz, fissura.
 - **Onde cada espécie PODE existir é uma lista só** (`FLYING_ENEMY_KINDS` / `AQUATIC_ENEMY_KINDS`,
   em `ScreenContent`): o corpo, a cova e o aviso do editor leem dela. Três cópias já discordaram.
 - **Corpo que morre na ÁGUA larga a moeda na PRAIA** (`shoreDropTile`): recompensa que o herói vê
@@ -441,6 +402,13 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
   nascer e morrer, luz não. `perf-burn` guarda isso.
 - **`prewarmShaders()` roda com o render target do composer ligado** — o mundo nunca é desenhado
   no canvas, e o three assa o color space do alvo na chave do programa.
+- **NÃO HÁ TONE MAPPING.** O mundo é desenhado num render target, e o three só monta o ACES quando
+  o alvo é a tela — então o linear vai cru pro canvas e **`hd3d.exposure` não faz nada**. Sem ombro
+  segurando o alto, 1.0 é corte seco: subir luz estoura o branco antes de clarear a sombra (é para
+  isso que existe o `lightCap`). Quem levanta um quadro é a CURVA, `hd3d.lift` no `FinishShader`.
+- **O MUNDO TEM DUAS HORAS DO DIA, e o SOL é a mesma luz que a lua** (`skyPreset.ts`, o delta que
+  `hd3d.daylight` aplica sobre a noite): cor de luz, de céu ou de partícula que você cravar num
+  arquivo só existe numa das duas — e some, ou fica preta, na outra. Ela é knob ou é dois valores.
 - **Nenhum sprite pode vazar do seu tile.** Profundidade vem do shader, nunca de escalar arte.
 - **Tudo em que o herói pisa declara `depthLayer: 'ground'`** (`Billboard3D`), senão dois quads
   coplanares piscam. Quads deitados (buracos, água, flor aberta) são isentos.
@@ -459,6 +427,11 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
 
 ## Verificando uma mudança
 
+**QUEM RODA OS TESTES É O AUTOR, SEMPRE.** Não rode `npm run playtest` por conta própria e não
+escreva cenário sem ele pedir: implemente, rode `typecheck`/`lint`/`build`, diga **qual cenário
+guarda o que mudou** e pare. Uma suíte que ninguém pediu custa minutos de máquina dele e devolve
+flakes que ele vai ter de julgar de qualquer jeito.
+
 **Rodar o jogo para testar é SEMPRE mudo.** Nunca com efeito sonoro: a janela é visível (o WebGL
 exige) e uma suíte inteira grita na sala de quem está trabalhando. O `GameDriver` já garante isso
 por construção (`--mute-audio` + volumes zerados antes do boot) — não desligue.
@@ -474,19 +447,15 @@ solves completos levam minutos, são sensíveis a timing e flakeiam.
 Dois botões / mochila / subtela → `combate`; **a BOLSA que não pausa (relógio andando, pés presos,
 apontar ≠ equipar, pancada fechando) → `bolsa`**; **mira, arco de 3 tiles, arremesso, atordoamento e
 a lâmina rodopiante → `esgrima`**. Machado, árvore e borda → `machado`; rocha e picareta →
-`pedra`; contratos de estado de item → `itens`. Braço → `braco`; caixa de ferramentas →
-`caixa-ferramentas`; placa com herói/caixote → `caixa-placa`, e a caveira que marcha até uma →
-`placa-undead`. **Aba Inimigos e a cova que devolve o inimigo → `inimigos`; o bestiário que anda →
+`pedra`; contratos de estado de item → `itens`. **Aba Inimigos e a cova que devolve o inimigo →
+`inimigos`; o bestiário que anda →
 `fauna`; torreta, mago e a lei do tiro → `projeteis`; o zora e a janela dele → `zora`; o corpo
 que o fogo acende (empurrão contra brasa, pânico, rastro) → `tocha-viva`; o corpo que ASSA na beira
 da fogueira (e a matilha que não evapora mais) → `brasa`; a bola que CONGELA em
 vez de ferir, a rebatida da espada e fogo×gelo → `gelo`.**
-**A fábrica inteira — receita da engrenagem, instalar/recolher, esteira, baú, extrator e o
-GARGALO → `fabrica`; o catálogo da bancada, o plano nas bandejas e a descida do degrau →
-`encomenda`; a cadeia do ferro (minério→forno→esponja→martelada→ferro) → `forja`.** **a laje do altar (pôr com Z, malhar, o ferro em cima dela e o X que devolve) → `altar`.**
-Roda → `roda-agua`;
-caldeira → `caldeira`; fios → `fios`; bateria → `bateria`; portões → `portao-eletronico` e
-`portao-de-bater`. Flor da lua → `flor-da-lua`; travessia do portal → `portal-travessia`;
+**A ausência da automação e do correio → `sem-fabrica`; a cadeia manual do ferro e o prólogo →
+`prologo`; a laje do altar (pôr com Z, malhar, o ferro em cima dela e o X que devolve) → `altar`.**
+Flor da lua → `flor-da-lua`; travessia do portal → `portal-travessia`;
 explorador → `explorador`. **Montanha em cubo e a água que anda → `montanha`.** **Carta comprável
 plantada, a costura que abre sem raspar e o enxame de vaga-lumes sobre o verde → `jardim`; o vento
 na vegetação (e a lápide que não balança) → `vento`; a economia do prólogo (bolsa zerada, a caveira
@@ -496,9 +465,9 @@ luz → `perf-burn`; custo de frame → `perf-profile`.
 **`espada` e `itens` estão VERMELHOS por mudança de design** (eles assertam o level-1 gerado antigo,
 e o `espada` ainda resolve tudo esbarrando). Não "conserte" editando level. O menu (sem idioma e
 sem intro) → `menu-flow`; **save, morte-sem-perda e o Continue do título → `salvamento`**;
-**dungeon gerada, e a MESMA dungeon na volta → `dungeon-gerada`** (a qualidade da planta em massa é
-do `npm run audit:dungeons`, nunca do Playwright); o herói
-**nascendo do tamanho certo** → `smoke`. Uma falha
+o herói **nascendo do tamanho certo** → `smoke`. **Que o jogo ainda dá para ZERAR
+(portal, fogo até a pira, toras, missões) → `npm run audit:endgame`, que é estático e não é
+Playwright.** Uma falha
 num cenário que você não tocou é um flake a anotar, não uma suíte a rodar quatro vezes.
 
 **Performance sempre contra a `main`** (`git stash`), e sempre com vsync livre
@@ -518,7 +487,6 @@ boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render
 - `mat.needsUpdate = true` na troca de textura de sombra parece desperdício e não é (senão a sombra
   do herói congela num frame do passo).
 - Editor: **G gira** (não R, que é o retângulo); `UI_STATE_KEY` sobe de versão junto com a *forma*
-  do `UiState`; a forma do cabo nunca é autorada, nasce dos vizinhos; o Salvar avisa (bandeja
-  bloqueada, roda seca, portão sem cabo, cova em tile bloqueado ou na luz).
+  do `UiState`; o Salvar avisa sobre entidades e covas em tiles inválidos ou na luz.
 - Profiler: `?prof` boota com ele, **F3** liga o HUD, `__prof.report()`/`.csv()` despejam. Ele
   mede GPU de verdade (timer query) e **nomeia a causa** de cada pico.

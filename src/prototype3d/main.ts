@@ -130,7 +130,6 @@ const PICKUP_TEXTURES: Record<string, string> = {
   sword: `${A}/ui/icons/sword_icon.png`,
   key: `${A}/ui/icons/key_icon.png`,
   bomb: `${A}/ui/icons/bomb_icon.png`,
-  lavaBoots: `${A}/ui/icons/lava_boots_icon.png`,
   pickaxe: `${A}/ui/icons/pickaxe_icon.png`,
   scythe: `${A}/ui/icons/scythe_icon.png`,
   wood: `${A}/ui/icons/wood_icon.png`,

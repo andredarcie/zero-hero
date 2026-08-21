@@ -13,8 +13,7 @@ import type { WorldProp } from './WorldProp';
  * empurra, range e volta. Isso e o oposto de tudo o mais que fecha caminho neste jogo — as
  * outras travas tem UMA chave (CLAUDE.md: "todo obstaculo e uma fechadura com exatamente uma
  * chave"). Aqui nao ha item nenhum a procurar: o que resolve e mudar o MUNDO do outro lado, e o
- * unico jeito de mudar um lado onde voce nao pode entrar e mandar alguma coisa la — o fogo, o
- * braco robotico.
+ * unico jeito de mudar um lado onde voce nao pode entrar e mandar fogo para la.
  *
  * A recusa NAO pode ser o tremor da porta trancada. Aquele tremor e o vocabulario de "isto e
  * solido, esqueca" — e este portao nao esta recusando, esta TENTANDO. Entao ele comeca a abrir

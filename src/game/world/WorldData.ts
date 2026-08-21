@@ -4,7 +4,7 @@ import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
 import type { NpcKind, PickupKind, ScreenContent } from './ScreenContent';
 import {
-  WORLD_SCHEMA_VERSION, type ChunkCatalogEntry, type WorldChunk, type WorldData,
+  WORLD_SCHEMA_VERSION, type WorldChunk, type WorldData,
   type WorldEnemySpawn, type WorldProp,
 } from './worldSchema';
 
@@ -113,6 +113,27 @@ export const setWorldData = (raw: unknown): void => {
     );
   }
 
+  // UM NPC APARECE UMA VEZ SO NO MAPA — e esta e a porta por onde TODO mundo entra (jogo,
+  // editor, level, dungeon), entao a regra mora aqui e nao em cada consumidor. Fica o PRIMEIRO em
+  // ordem de leitura (cy, depois cx); os outros caem com um aviso no console, porque um
+  // personagem que some em silencio e pior do que um repetido.
+  const seenNpcKinds = new Set<string>();
+  const droppedNpcs: string[] = [];
+  for (const chunk of [...data.chunks].sort((a, b) => a.cy - b.cy || a.cx - b.cx)) {
+    if (!chunk.npcs?.length) continue;
+    chunk.npcs = chunk.npcs.filter((npc) => {
+      if (!seenNpcKinds.has(npc.type)) {
+        seenNpcKinds.add(npc.type);
+        return true;
+      }
+      droppedNpcs.push(`${npc.type}@${npc.worldX},${npc.worldY}`);
+      return false;
+    });
+  }
+  if (droppedNpcs.length > 0) {
+    console.warn(`world: NPC repetido descartado (um de cada por mapa): ${droppedNpcs.join(' ')}`);
+  }
+
   world = data;
   chunkByKey = new Map(data.chunks.map((chunk) => [chunkKey(chunk.cx, chunk.cy), chunk]));
   bounds = {
@@ -180,57 +201,6 @@ export const getPlayerStart = (): { worldX: number; worldY: number } => (
 // The authored display name used by level-select and the in-game level entrance card.
 export const getWorldName = (): string => (infinite ? infinite.name : requireWorld().meta.name);
 
-export type ChunkTemplate = {
-  catalog: ChunkCatalogEntry;
-  ground: number[][];
-  upper: Array<Array<number | null>>;
-  collisions: boolean[][];
-  enemies: ScreenContent['enemies'];
-  pickups: ScreenContent['pickups'];
-  npcs: ScreenContent['npcs'];
-  props: WorldProp[];
-};
-
-/**
- * Reads public/world.json as a LIBRARY instead of a traversable overworld. Entity coordinates
- * are normalised to the chunk's local 0..11 space so the same authored template can be placed
- * at any coordinate during a run.
- *
- * É AQUI que o baralho é filtrado (`catalog.enabled === false` fica de fora), e é de propósito
- * que seja num lugar só: quem pergunta "que cartas existem?" — o portão, o baralho do overlay, o
- * sorteio da mão — pergunta sempre por esta função. Um segundo filtro rio abaixo seria uma
- * segunda resposta, livre para discordar da primeira.
- */
-export const getChunkTemplates = (): ChunkTemplate[] => {
-  const data = requireWorld();
-  return data.chunks.flatMap((chunk) => {
-    if (!chunk.catalog || chunk.catalog.enabled === false) return [];
-    const ox = chunk.cx * CHUNK_COLUMNS;
-    const oy = chunk.cy * CHUNK_ROWS;
-    const local = <T extends { worldX: number; worldY: number }>(entry: T): T => ({
-      ...entry,
-      worldX: entry.worldX - ox,
-      worldY: entry.worldY - oy,
-    });
-    return [{
-      catalog: { ...chunk.catalog },
-      ground: chunk.ground.map((row) => [...row]),
-      upper: chunk.upper.map((row) => [...row]),
-      collisions: chunk.collisions.map((row) => [...row]),
-      enemies: chunk.enemies.map(local),
-      pickups: chunk.pickups.map(local),
-      npcs: chunk.npcs.map(local),
-      props: data.props
-        .filter((prop) => Math.floor(prop.worldX / CHUNK_COLUMNS) === chunk.cx
-          && Math.floor(prop.worldY / CHUNK_ROWS) === chunk.cy)
-        .map(local),
-    }];
-  });
-};
-
-// A puzzle world (a /levels level): the runtime suppresses the undead siege for it, like the lab.
-export const isPuzzleWorld = (): boolean => requireWorld().meta.puzzle === true;
-
 export const getCampfires = (): WorldProp[] => allProps().filter((prop) => prop.type === 'campfire');
 
 export const getDryBushes = (): WorldProp[] => allProps().filter((prop) => prop.type === 'dryBush');
@@ -259,6 +229,12 @@ export const getWaterTiles = (): WorldProp[] => allProps().filter((prop) => prop
 
 export const getBridgeSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'bridgeSpot');
 
+// A PIRA: a torre que o jogador monta graveto a graveto e acende no fim. Ver PyreObject.
+export const getPyres = (): WorldProp[] => allProps().filter((prop) => prop.type === 'pyre');
+
+// A ESCADA entre os dois andares do mundo — mesma peca, mesmo tile, nos dois. Ver StairsObject.
+export const getStairs = (): WorldProp[] => allProps().filter((prop) => prop.type === 'stairs');
+
 // A night-blooming flower: a closed bud (blocks) while a campfire burns near it, open petal-bridge
 // (walkable) in the dark. See MoonflowerObject.
 export const getMoonflowers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'moonflower');
@@ -270,54 +246,23 @@ export const getBombSpots = (): WorldProp[] => allProps().filter((prop) => prop.
 export const getPlantSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'plantSpot');
 
 export const getCarnivorousPlants = (): WorldProp[] => allProps().filter((prop) => prop.type === 'carnivorousPlant');
-// The robotic arm. Carries `dir` (which way it faces), the only prop whose extra field is load
-// bearing — it decides which tile the arm takes from and which it puts to.
-export const getInserters = (): WorldProp[] => allProps().filter((prop) => prop.type === 'inserter');
-
 // The workbench. Carries `dir` for the same load-bearing reason the arm does: it decides which two
 // tiles behind it are the slots and which tile in front receives the crafted item.
 export const getToolboxes = (): WorldProp[] => allProps().filter((prop) => prop.type === 'toolbox');
 
-// A solid box the hero moves by walking into it; it never occupies the hero's hand slot.
-export const getWoodenCrates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'woodenCrate');
-
-// Walkable floor switches. `variable` names the global boolean circuit they drive.
-export const getPressurePlates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'pressurePlate');
-
-// In-river generators. The prop owns water on its tile and requires that active water to
-// continue through a neighbour before publishing power into the prop's named variable.
-export const getWaterWheels = (): WorldProp[] => allProps().filter((prop) => prop.type === 'waterWheel');
-export const getBoilers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'boiler');
-export const getWires = (): WorldProp[] => allProps().filter((prop) => prop.type === 'wire');
-export const getElectronicGates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'electronicGate');
-
-// A FABRICA. Esteira e extrator carregam `dir` (para onde entregam — a mesma semantica do
-// braco); o bau nao carrega nada alem da posicao, porque o conteudo dele e estado de PARTIDA e
-// mora no save, nunca no mapa (a mesma regra que mantem vida e respawn fora do WorldEnemySpawn).
-export const getBelts = (): WorldProp[] => allProps().filter((prop) => prop.type === 'belt');
-export const getChests = (): WorldProp[] => allProps().filter((prop) => prop.type === 'chest');
-export const getExtractors = (): WorldProp[] => allProps().filter((prop) => prop.type === 'extractor');
 export const getFurnaces = (): WorldProp[] => allProps().filter((prop) => prop.type === 'furnace');
-export const getTripHammers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'tripHammer');
 // O ALTAR nao guarda o que esta em cima dele aqui, pelo mesmo motivo do bau: o que ha sobre a
 // laje e estado de PARTIDA (o jogador pos), e nao conteudo do mapa.
 export const getAltars = (): WorldProp[] => allProps().filter((prop) => prop.type === 'altar');
 export const getLevelPortals = (): WorldProp[] => allProps().filter((prop) => prop.type === 'levelPortal');
-
-// A CAIXA DE VENDA. `sells` é obrigatório de fato, e não por tipo: uma caixa sem tipo e sem preço
-// não tem o que anunciar na placa, então ela é filtrada aqui em vez de nascer muda no mundo.
-export const getSellBoxes = (): WorldProp[] => allProps()
-  .filter((prop) => prop.type === 'sellBox' && prop.sells !== undefined);
-
-export const getGlobalVariables = (): Record<string, boolean> => ({ ...(requireWorld().globalVariables ?? {}) });
 
 // Os PONTOS DE SPAWN de inimigo, autorados na aba Inimigos do editor. Lidos de uma vez, como os
 // itens de mao e nunca por chunk, porque uma cova nao e conteudo de tela: ela guarda um relogio
 // de respawn que precisa continuar contando com o heroi do outro lado do mapa (ver
 // EnemySpawnerManager). Streamar isto zeraria o relogio a cada ida e volta.
 //
-// Mundo infinito devolve NADA de proposito: o explorador nao autora nada, e o cerco dinamico
-// (UndeadSpawnDirector, com a pressao da distancia) e o sistema que faz o perigo daquele modo.
+// Mundo infinito devolve NADA: la nao ha autor, e com o cerco ambiente removido nao ha nenhuma
+// outra fonte de corpo — mundo sem cova e mundo sem inimigo, e isso e a verdade dele.
 export const getEnemySpawns = (): WorldEnemySpawn[] => {
   if (infinite) return [];
   const out: WorldEnemySpawn[] = [];
@@ -335,8 +280,8 @@ export const getEnemySpawns = (): WorldEnemySpawn[] => {
 export const getHeldItemPickups = (): Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> => {
   const out: Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> = [];
   // An infinite world has no authored chunks to walk — it lays out its own kit (the explorer's
-  // camp tools), and reading the overworld's chunks here would sprinkle the adventure's sword,
-  // key and lava boots across a camp that never placed them.
+  // camp tools), and reading the overworld's chunks here would sprinkle the adventure's tools
+  // across a camp that never placed them.
   if (infinite) return infinite.heldItems();
   for (const chunk of requireWorld().chunks) {
     for (const pickup of chunk.pickups) {

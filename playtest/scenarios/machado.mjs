@@ -8,7 +8,7 @@
 // para abrir uma porta a machadadas e sair do mapa. Por isso a borda agora e MAR.
 //
 // O que este cenario prova, e por que cada assert existe:
-//   1. A BORDA E MAR e ninguem passa — nem com as botas de lava, que vadeiam todo o resto.
+//   1. A BORDA E MAR e ninguem passa — nem voadores, que ignoram hazards autorados.
 //   2. E o mar NAO E MADEIRA: o machado de aco encostado na fronteira nao abre nada. Este e o
 //      assert que da sentido aos outros dois — e a trava, nao a solucao (regra do projeto:
 //      "a puzzle is only a puzzle if the easy road is shut").
@@ -46,8 +46,8 @@ export default {
 
     const give = (kind) => evaluate((k) => { window.__scene.heldItem = k; }, kind);
 
-    const solidAt = (x, y, boots = false) => evaluate(
-      ([px, py, b]) => window.__scene.isSolidForEntities(px, py, b), [x, y, boots],
+    const solidAt = (x, y, hazardsPassable = false) => evaluate(
+      ([px, py, pass]) => window.__scene.isSolidForEntities(px, py, pass), [x, y, hazardsPassable],
     );
 
     const tileAt = (x, y) => evaluate(([px, py]) => {
@@ -55,7 +55,7 @@ export default {
       return { ground: t.ground, upper: t.upper, collision: t.collision };
     }, [x, y]);
 
-    // ── 1. A fronteira e mar, e o mar bloqueia ate as botas ──────────────────
+    // ── 1. A fronteira e mar, e o mar bloqueia ate quem ignora hazards ───────
     log('MAR: a borda do mundo tem de ser agua intransponivel');
     // O mundo autorado comeca em (0,0), entao o tile logo fora dele e sempre (-1, y) —
     // vale para qualquer tamanho de mundo, sem depender de metadado nenhum.
@@ -64,9 +64,9 @@ export default {
     assert('e o mar nao tem camada upper (nada de muralha de pinheiro)', outside.upper === null,
       JSON.stringify(outside));
     assert('o mar bloqueia', (await solidAt(-1, 5)) === true);
-    // A trava que importa: as botas de lava atravessam lava E rio. Se atravessassem o mar,
-    // a fronteira teria uma chave — e o mundo, uma saida.
-    assert('o mar bloqueia MESMO com as botas de lava', (await solidAt(-1, 5, true)) === true);
+    // A trava que importa: voadores ignoram rio e lava autorados. Se ignorassem o mar de terreno,
+    // a fronteira teria uma saida.
+    assert('o mar bloqueia MESMO quem ignora hazards', (await solidAt(-1, 5, true)) === true);
 
     // ── 2. O mar nao e madeira: o machado de aco nao abre a fronteira ────────
     log('MAR: o machado de aco encostado na fronteira nao pode abrir nada');

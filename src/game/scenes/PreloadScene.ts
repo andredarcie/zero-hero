@@ -6,7 +6,6 @@ import type { AppMode } from '@/game/config';
 import { t } from '@/game/i18n/i18n';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
 import { hasAdventureSave, requestAdventureRespawn } from '@/game/runtime/adventureState';
-import { pinExplorerSeed, startExplorerRun } from '@/game/explorer/explorerRun';
 import { preloadTextures3D } from '@/game/render3d/textures3d';
 import { setWorldData } from '@/game/world/WorldData';
 
@@ -22,8 +21,8 @@ const levelFileFromUrl = (): string | null => {
   const n = levelNumberFromUrl();
   return n === null ? null : `levels/level-${n}.json`;
 };
-// The level the /lab editor edits / plays — `?level=N`, default 1.
-const labLevelNumber = (): number => levelNumberFromUrl() ?? 1;
+// The level the /lab editor edits / plays — `?level=N`, default 2 (the first active authored level).
+const labLevelNumber = (): number => levelNumberFromUrl() ?? 2;
 
 export class PreloadScene extends Phaser.Scene {
   public static readonly key = 'preload';
@@ -105,15 +104,6 @@ export class PreloadScene extends Phaser.Scene {
     // world; hold the scene hand-off until both loaders are done.
     void preloadTextures3D().then(() => {
       const params = new URLSearchParams(window.location.search);
-      // `?explorer` cai direto no construtor de chunks. `?explorerSeed=N` prende a semente
-      // da run para testes deterministas; o terreno em si vem da biblioteca autorada.
-      if (params.has('explorer')) {
-        const seed = params.get('explorerSeed');
-        if (seed !== null && /^\d+$/u.test(seed)) pinExplorerSeed(Number(seed));
-        startExplorerRun();
-        this.scene.start('game');
-        return;
-      }
       // `?level=N` is a direct link into a single puzzle level — skip the title and boot the
       // level straight into gameplay. It is also the ONLY door to the levels now that the title
       // has a single button (the level list itself still exists: see LevelSelectScene).
@@ -121,10 +111,9 @@ export class PreloadScene extends Phaser.Scene {
         this.scene.start('game');
         return;
       }
-      // Dev shortcut: skip the title and start the same chunk-builder run as the main button.
+      // Dev shortcut: skip the title and start the authored open world.
       if (import.meta.env.DEV && params.has('play')) {
         if (hasAdventureSave()) requestAdventureRespawn();
-        startExplorerRun();
         this.scene.start('game');
         return;
       }

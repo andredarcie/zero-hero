@@ -86,8 +86,28 @@ const SHROUD_RIM = '0.0085, 0.0105, 0.0270';
 const SHROUD_MOON = '0.0150, 0.0185, 0.0420';
 const REVEAL_EMBER = '0.0600, 0.0420, 0.0180';
 
+/**
+ * A MESMA mortalha ao MEIO-DIA (ver render3d/skyPreset.ts). Ela não pode ser a de cima com o
+ * brilho subido: de noite a névoa é mais FUNDA que o céu (por isso ela lê como matéria contra o
+ * escuro), e de dia ela tem de ser mais CLARA que ele pela mesma razão — um banco de neblina
+ * batido de sol. Deixar a paleta noturna acesa num mundo de dia devolvia o defeito que estes
+ * quatro tons existem para evitar: um buraco preto de framebuffer no meio do campo.
+ *
+ * Os degraus são chapados como os da noite (é a mesma arte, não um degradê), e o topo troca a lua
+ * fria por sol quente. Vivem em MIX contra a paleta noturna, no shader — um uniform não entra na
+ * chave de cache, então acender o dia aqui não recompila nada.
+ */
+const SHROUD_DAY_DEEP = '0.2000, 0.2600, 0.3400';
+const SHROUD_DAY_MID = '0.3400, 0.4200, 0.5000';
+const SHROUD_DAY_RIM = '0.5500, 0.6300, 0.7000';
+const SHROUD_DAY_SUN = '0.9500, 0.9000, 0.7800';
+
+/** 0 = a mortalha da noite, 1 = a do dia. World3D acerta isto todo frame. */
+export const shroudDayUniform: THREE.IUniform = { value: 0 };
+
 const SHROUD_GLSL_HEADER = /* glsl */ `
   uniform float uFlowTime;
+  uniform float uShroudDay;
   uniform float uShroudReveal;
   uniform vec2 uShroudOrigin;
   uniform float uShroudMax;
@@ -129,10 +149,12 @@ const shroudBody = (fringeTest: boolean): string => /* glsl */ `
     // os mesmos degraus chapados, só deslocados para cima onde a luz fria alcança. O tom
     // lunar em si é gated no lift: o pé da muralha nunca acende.
     float lit = m + vShroudLift * 0.16;
-    vec3 c = vec3(${SHROUD_DEEP});
-    if (lit > 0.54) c = vec3(${SHROUD_MID});
-    if (lit > 0.76) c = vec3(${SHROUD_RIM});
-    if (lit > 0.92 && vShroudLift > 0.6) c = vec3(${SHROUD_MOON});
+    vec3 c = mix(vec3(${SHROUD_DEEP}), vec3(${SHROUD_DAY_DEEP}), uShroudDay);
+    if (lit > 0.54) c = mix(vec3(${SHROUD_MID}), vec3(${SHROUD_DAY_MID}), uShroudDay);
+    if (lit > 0.76) c = mix(vec3(${SHROUD_RIM}), vec3(${SHROUD_DAY_RIM}), uShroudDay);
+    if (lit > 0.92 && vShroudLift > 0.6) {
+      c = mix(vec3(${SHROUD_MOON}), vec3(${SHROUD_DAY_SUN}), uShroudDay);
+    }
     if (uShroudReveal > 0.0 && d < sweep + 0.85) c = vec3(${REVEAL_EMBER});
     diffuseColor.rgb = c;
   }
@@ -427,6 +449,7 @@ const makeShroudMaterial = (
   mat.customProgramCacheKey = () => `chunkShroud|${fringe ? 'fringe' : 'box'}`;
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uFlowTime = flowTimeUniform;
+    shader.uniforms.uShroudDay = shroudDayUniform;
     shader.uniforms.uShroudReveal = uReveal;
     shader.uniforms.uShroudOrigin = uOrigin;
     shader.uniforms.uShroudMax = uMax;

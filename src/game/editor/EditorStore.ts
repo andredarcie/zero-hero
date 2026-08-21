@@ -3,14 +3,12 @@ import {
   SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
 } from '@/game/constants';
 import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
-import { chunkCategoryOf } from '@/game/explorer/chunkCategory';
 import {
   AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS,
   type EnemyKind, type NpcKind, type PickupKind,
 } from '@/game/world/ScreenContent';
-import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type {
-  ChunkCatalogEntry, PropDir, PropKind, WorldChunk, WorldData, WorldDialog,
+  PropDir, PropKind, WorldChunk, WorldData, WorldDialog,
 } from '@/game/world/worldSchema';
 
 // Ground frame used for cells that never received paint — the same frame the runtime uses
@@ -30,14 +28,7 @@ export type PlacedEntity =
   | { list: 'enemies'; type: EnemyKind; worldX: number; worldY: number }
   | { list: 'npcs'; type: NpcKind; worldX: number; worldY: number }
   | { list: 'pickups'; type: PickupKind; worldX: number; worldY: number }
-  // `dir` so o braco robotico usa. Ele viaja em TODO o caminho de place/erase/undo porque, ao
-  // contrario de `lit` e `floodgate` (que a gente deixa cair de proposito num save do editor),
-  // a direcao E o comportamento da peca: perde-la nao empobrece o prop, quebra ele.
-  | {
-    list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir; variable?: string;
-    /** Só a caixa de extração: o item que ela compra e o preço. Ver o comentário em addEntityToWorld. */
-    sells?: { kind: HeldItemKind; coinsPerUnit: number };
-  };
+  | { list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir };
 
 export type EntityListId = PlacedEntity['list'];
 
@@ -45,8 +36,7 @@ type Op =
   | { kind: 'cells'; changes: CellChange[] }
   | { kind: 'entities'; added: PlacedEntity[]; removed: PlacedEntity[] }
   | { kind: 'spawn'; prev: { worldX: number; worldY: number }; next: { worldX: number; worldY: number } }
-  | { kind: 'dialog'; npc: NpcKind; prev: WorldDialog | undefined; next: WorldDialog | undefined }
-  | { kind: 'variables'; prev: Record<string, boolean>; next: Record<string, boolean> };
+  | { kind: 'dialog'; npc: NpcKind; prev: WorldDialog | undefined; next: WorldDialog | undefined };
 
 // What changed in one notification — consumers refresh only the affected visuals. `cells`
 // carries coordinates; readers should re-read current values from the store (works for
@@ -56,7 +46,6 @@ export type StoreChange = {
   entities?: boolean;
   spawn?: boolean;
   dialogs?: boolean;
-  variables?: boolean;
   structure?: boolean;
   meta?: boolean;
 };
@@ -72,9 +61,7 @@ const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 // concluiria que nada mudou e o giro nao aconteceria.
 const sameEntity = (a: PlacedEntity, b: PlacedEntity): boolean =>
   a.list === b.list && a.type === b.type && a.worldX === b.worldX && a.worldY === b.worldY
-  && (a.list !== 'props' || b.list !== 'props'
-    || (a.dir === b.dir && a.variable === b.variable
-      && JSON.stringify(a.sells) === JSON.stringify(b.sells)));
+  && (a.list !== 'props' || b.list !== 'props' || a.dir === b.dir);
 
 const buildEmptyChunk = (cx: number, cy: number): WorldChunk => ({
   cx,
@@ -102,7 +89,6 @@ export class EditorStore {
 
   public constructor(world: WorldData) {
     this.world = world;
-    this.world.globalVariables ??= {};
     // Every authored level owns exactly one start point. Older or hand-edited files may be
     // missing it; repair those into a visible centre marker and leave the store dirty so the
     // author explicitly persists the repair on the next save.
@@ -294,7 +280,7 @@ export class EditorStore {
       chunk.pickups.forEach((p) => { if (p.worldX === wx && p.worldY === wy) found.push({ list: 'pickups', ...p }); });
     }
     this.world.props.forEach((p) => {
-      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir, variable: p.variable, sells: p.sells });
+      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir });
     });
     return found;
   }
@@ -306,7 +292,7 @@ export class EditorStore {
       chunk.npcs.forEach((n) => all.push({ list: 'npcs', ...n }));
       chunk.pickups.forEach((p) => all.push({ list: 'pickups', ...p }));
     });
-    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir, variable: p.variable, sells: p.sells }));
+    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir }));
     return all;
   }
 
@@ -314,6 +300,20 @@ export class EditorStore {
     if (!this.isInside(entity.worldX, entity.worldY)) return;
     const removed = this.entitiesAt(entity.worldX, entity.worldY).filter((e) => e.list === entity.list);
     if (removed.length === 1 && sameEntity(removed[0], entity)) return;
+
+    // UM NPC APARECE UMA VEZ SO NO MAPA. Por um personagem que ja existe em outro tile e MOVE-LO,
+    // nao clona-lo: o mesmo gato em dez telas deixa de ser um personagem e vira cenario, e a fala
+    // dele deixa de ser de alguem. Mover em vez de recusar porque um clique que nao faz nada nao
+    // ensina nada — e a mudanca inteira entra no MESMO op, entao Ctrl+Z devolve o personagem ao
+    // lugar de onde ele veio. Vale so pra NPC: cova, pickup e prop se repetem por desenho.
+    if (entity.list === 'npcs') {
+      for (const other of this.allEntities()) {
+        if (other.list !== 'npcs' || other.type !== entity.type) continue;
+        if (other.worldX === entity.worldX && other.worldY === entity.worldY) continue;
+        this.removeEntityFromWorld(other);
+        removed.push(other);
+      }
+    }
 
     removed.forEach((e) => this.removeEntityFromWorld(e));
     this.addEntityToWorld(entity);
@@ -339,13 +339,6 @@ export class EditorStore {
         worldX: entity.worldX,
         worldY: entity.worldY,
         ...(entity.dir === undefined ? {} : { dir: entity.dir }),
-        ...(entity.variable === undefined ? {} : { variable: entity.variable }),
-        // O `sells` PRECISA estar aqui. Este bloco re-emite o prop campo a campo, e o que não for
-        // nomeado nele é descartado em silêncio — foi o que aconteceu com a caixa de extração
-        // colocada pelo editor: ela ia para o arquivo sem item e sem preço, e o runtime a
-        // descartava (getSellBoxes exige `sells`). O prop aparecia no tabuleiro e não existia no
-        // jogo. É a mesma armadilha que o schema já documenta para `lit` e `quota`.
-        ...(entity.sells === undefined ? {} : { sells: entity.sells }),
       });
       return;
     }
@@ -425,30 +418,6 @@ export class EditorStore {
     this.emit({ dialogs: true });
   }
 
-  // ── Global puzzle variables ─────────────────────────────────────────────
-
-  public get globalVariables(): Record<string, boolean> {
-    return { ...(this.world.globalVariables ?? {}) };
-  }
-
-  public variableUsage(name: string): number {
-    return this.world.props.filter((prop) => prop.variable === name).length;
-  }
-
-  public replaceGlobalVariables(next: Record<string, boolean>): void {
-    const prev = this.globalVariables;
-    const normalised: Record<string, boolean> = {};
-    Object.entries(next).forEach(([rawName, value]) => {
-      const name = rawName.trim();
-      if (name.length > 0) normalised[name] = value === true;
-    });
-    if (JSON.stringify(prev) === JSON.stringify(normalised)) return;
-    this.world.globalVariables = normalised;
-    this.recordOp({ kind: 'variables', prev, next: { ...normalised } });
-    this.markDirty();
-    this.emit({ variables: true });
-  }
-
   // ── World meta ──────────────────────────────────────────────────────────
 
   public renameWorld(name: string): void {
@@ -457,51 +426,6 @@ export class EditorStore {
     this.world.meta.name = trimmed;
     this.markDirty();
     this.emit({ meta: true });
-  }
-
-  /** Card identity for one reusable chunk in the world-builder catalogue. */
-  public setChunkCatalog(cx: number, cy: number, next: ChunkCatalogEntry): void {
-    const chunk = this.chunkIndex.get(chunkKey(cx, cy));
-    if (!chunk) return;
-    const normalised: ChunkCatalogEntry = {
-      id: next.id.trim(),
-      name: next.name.trim(),
-      cost: Math.max(0, Math.floor(next.cost)),
-      cardImage: next.cardImage.trim(),
-      description: next.description?.trim() || undefined,
-      // O formulário de metadados não tem esta caixa (quem liga e desliga é a LISTA do baralho,
-      // uma pergunta num lugar só) — então ela viaja pelo `next`, e salvar o nome de uma carta
-      // nunca pode ser o gesto que a devolve em silêncio para o baralho.
-      enabled: next.enabled,
-    };
-    if (!normalised.id || !normalised.name || !normalised.cardImage) return;
-    chunk.catalog = normalised;
-    this.markDirty();
-    this.emit({ meta: true });
-  }
-
-  /**
-   * Põe/tira uma carta do baralho comprável. É a única escrita do campo `enabled` — o chunk fica
-   * inteiro no arquivo, só deixa de ser oferecido (ver getChunkTemplates).
-   */
-  public setChunkEnabled(cx: number, cy: number, enabled: boolean): void {
-    const chunk = this.chunkIndex.get(chunkKey(cx, cy));
-    if (!chunk?.catalog) return;
-    // `undefined` e não `true` no caso ligado: o default do schema é a AUSÊNCIA do campo, e
-    // gravar `enabled: true` em toda carta encheria o world.json de ruído que não diz nada.
-    const next = enabled ? undefined : false;
-    if (chunk.catalog.enabled === next) return;
-    chunk.catalog = { ...chunk.catalog, enabled: next };
-    this.markDirty();
-    this.emit({ meta: true });
-  }
-
-  /** Appends one blank 12x12 card template to the editable library. */
-  public addChunkTemplate(next: ChunkCatalogEntry): { cx: number; cy: number } {
-    const cx = this.world.meta.worldChunksX;
-    this.resizeWorld(cx + 1, this.world.meta.worldChunksY);
-    this.setChunkCatalog(cx, 0, next);
-    return { cx, cy: 0 };
   }
 
   /** Grows/shrinks the chunk grid. Destructive at the edges, so it clears the undo history. */
@@ -574,12 +498,10 @@ export class EditorStore {
       toAdd.forEach((e) => this.addEntityToWorld(e));
     } else if (op.kind === 'spawn') {
       this.world.meta.playerStart = { ...(forward ? op.next : op.prev) };
-    } else if (op.kind === 'dialog') {
+    } else {
       const dialog = forward ? op.next : op.prev;
       if (dialog) this.world.dialogs[op.npc] = clone(dialog);
       else delete this.world.dialogs[op.npc];
-    } else {
-      this.world.globalVariables = clone(forward ? op.next : op.prev);
     }
   }
 
@@ -590,8 +512,7 @@ export class EditorStore {
         change.cells = (change.cells ?? []).concat(op.changes.map((c) => ({ wx: c.wx, wy: c.wy })));
       } else if (op.kind === 'entities') change.entities = true;
       else if (op.kind === 'spawn') change.spawn = true;
-      else if (op.kind === 'dialog') change.dialogs = true;
-      else change.variables = true;
+      else change.dialogs = true;
     });
     return change;
   }
@@ -609,47 +530,26 @@ export class EditorStore {
     });
     if (onCollision > 0) warnings.push(`${onCollision} entidade(s) em cima de colisao`);
 
-    // A CAIXA DE EXTRACAO OCUPA DUAS TILES: o corpo e, um tile a ESQUERDA, a placa que anuncia o
-    // item. A placa nao e um prop separado (ela nasce dentro do SellBoxObject), entao nada no
-    // tabuleiro a desenha — e uma caixa colada na borda, ou com algo solido a esquerda, nasce com
-    // a placa dentro de outra coisa.
-    const crowdedBoxes = this.world.props.filter((prop) => {
-      if (prop.type !== 'sellBox') return false;
-      const sx = prop.worldX - 1;
-      if (!this.isInside(sx, prop.worldY)) return true;
-      return this.entitiesAt(sx, prop.worldY).some((e) => e.list === 'props')
-        || this.readCell('collision', sx, prop.worldY) === true;
+    // UM NPC, UM LUGAR. O editor ja impede isto ao colocar (ver placeEntity); este aviso e para o
+    // JSON escrito a mao ou por script, que e por onde a regra entrou quebrada da primeira vez.
+    const npcSeen = new Map<string, number>();
+    this.allEntities().forEach((entity) => {
+      if (entity.list !== 'npcs') return;
+      npcSeen.set(entity.type, (npcSeen.get(entity.type) ?? 0) + 1);
     });
-    for (const prop of crowdedBoxes) {
+    const repeated = [...npcSeen.entries()].filter(([, count]) => count > 1);
+    if (repeated.length > 0) {
       warnings.push(
-        `Caixa de extracao em ${prop.worldX},${prop.worldY}: o tile a ESQUERDA precisa estar livre`
-        + ' — e la que fica a placa do item (a peca ocupa duas tiles)',
+        `NPC repetido (so pode haver um de cada no mapa): ${repeated.map(([kind, count]) => `${kind} x${count}`).join(', ')}`,
       );
     }
 
-    // TERRA PACÍFICA COM BICHO DENTRO. Narrativa e puzzle são 100% seguras — o jogo IGNORA um
-    // corpo autorado nelas (ver ExplorerWorldSource.chunkContent), e sem este aviso o autor
-    // colocaria a caveira, salvaria, e passaria a tarde procurando por que ela não nasce.
-    const pacified = this.world.chunks
-      .filter((chunk) => chunk.catalog && chunk.enemies.length > 0)
-      .filter((chunk) => chunkCategoryOf({
-        catalog: chunk.catalog as ChunkCatalogEntry, npcs: chunk.npcs, enemies: chunk.enemies,
-      }) !== 'combat');
-    for (const chunk of pacified) {
-      const id = chunk.catalog?.id ?? `${chunk.cx},${chunk.cy}`;
-      warnings.push(
-        `${id}: carta de narrativa/puzzle com ${chunk.enemies.length} inimigo(s) — terra pacifica`
-        + ' ignora corpo autorado; mude a categoria para Combate ou apague os pontos de spawn',
-      );
-    }
-
-    // Props que ocupam o proprio tile com um corpo solido. Sai daqui o que se pisa (cabo, placa,
-    // marcas, flor) — a lista e a mesma que a caixa de ferramentas usa mais abaixo, e uma segunda
+    // Props que ocupam o proprio tile com um corpo solido. Saem daqui as marcas e a flor — a lista
+    // e a mesma que a caixa de ferramentas usa mais abaixo, e uma segunda
     // copia dela seria o jeito garantido de as duas discordarem daqui a um mes.
     const solidProps = new Set(
       this.world.props
-        .filter((p) => p.type !== 'wire' && p.type !== 'pressurePlate' && p.type !== 'bombSpot'
-          && p.type !== 'plantSpot' && p.type !== 'moonflower')
+        .filter((p) => p.type !== 'bombSpot' && p.type !== 'plantSpot' && p.type !== 'moonflower')
         .map((p) => `${p.worldX},${p.worldY}`),
     );
 
@@ -739,74 +639,6 @@ export class EditorStore {
       warnings.push(`${roastedSpawns} ponto(s) de spawn colado(s) na luz de uma fogueira acesa — o corpo nasce e queima ali mesmo`);
     }
 
-    const variables = this.world.globalVariables ?? {};
-    const unboundPlates = this.world.props.filter((prop) => prop.type === 'pressurePlate' && !prop.variable).length;
-    const missingVariables = new Set(
-      this.world.props
-        .filter((prop) => prop.variable && !(prop.variable in variables))
-        .map((prop) => prop.variable!),
-    );
-    if (unboundPlates > 0) warnings.push(`${unboundPlates} placa(s) de pressao sem variavel global vinculada`);
-    const unboundBoilers = this.world.props.filter((prop) => prop.type === 'boiler' && !prop.variable).length;
-    if (unboundBoilers > 0) warnings.push(`${unboundBoilers} caldeira(s) sem saida de energia vinculada`);
-    const wires = new Set(
-      this.world.props.filter((prop) => prop.type === 'wire').map((prop) => `${prop.worldX},${prop.worldY}`),
-    );
-    // Cabo e a saida principal da roda. A variavel continua aceita apenas para mundos/puzzles
-    // legados; uma roda sem variavel e perfeitamente valida quando ha um fio ortogonal ligado.
-    const disconnectedWheels = this.world.props.filter((prop) => prop.type === 'waterWheel'
-      && !prop.variable
-      && ![
-        `${prop.worldX - 1},${prop.worldY}`,
-        `${prop.worldX + 1},${prop.worldY}`,
-        `${prop.worldX},${prop.worldY - 1}`,
-        `${prop.worldX},${prop.worldY + 1}`,
-      ].some((key) => wires.has(key))).length;
-    if (disconnectedWheels > 0) warnings.push(`${disconnectedWheels} roda(s) d'agua sem cabo adjacente nem saida logica`);
-    const unwiredGates = this.world.props.filter((prop) => prop.type === 'electronicGate' && ![
-      `${prop.worldX - 1},${prop.worldY}`,
-      `${prop.worldX + 1},${prop.worldY}`,
-      `${prop.worldX},${prop.worldY - 1}`,
-      `${prop.worldX},${prop.worldY + 1}`,
-    ].some((key) => wires.has(key))).length;
-    if (unwiredGates > 0) warnings.push(`${unwiredGates} portao(oes) eletronico(s) sem cabo adjacente — permanecerao fechados`);
-    if (missingVariables.size > 0) warnings.push(`Mecanismo(s) usam variavel(is) inexistente(s): ${[...missingVariables].join(', ')}`);
-
-    // A caixa de ferramentas ocupa QUATRO tiles: as duas bandejas atras, o corpo e a saida. Como
-    // so o corpo e clicado, e facil colocar uma com a bandeja dentro de uma parede — e ai ela
-    // nunca poderia ser alimentada, sem nada na tela explicando por que. Colisao pintada, borda
-    // do mundo e outro prop solido em qualquer um dos tres tiles derivados: tudo e o mesmo erro.
-    const DIR_STEP: ReadonlyArray<readonly [number, number]> = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    const badToolboxes = this.world.props.filter((prop) => {
-      if (prop.type !== 'toolbox') return false;
-      const [vx, vy] = DIR_STEP[prop.dir ?? 1];
-      return [-2, -1, 1].some((step) => { // bandeja de tras, bandeja da frente, saida
-        const x = prop.worldX + vx * step;
-        const y = prop.worldY + vy * step;
-        return !this.isInside(x, y)
-          || this.readCell('collision', x, y) === true
-          || solidProps.has(`${x},${y}`);
-      });
-    }).length;
-    if (badToolboxes > 0) {
-      warnings.push(`${badToolboxes} caixa(s) de ferramentas com bandeja ou saida bloqueada`);
-    }
-
-    // A roda ja representa agua no proprio tile, mas precisa de continuidade ortogonal para que
-    // exista corrente. O pincel garante que ela so substitua um rio; esta validacao cobre mundos
-    // antigos/editados a mao e trechos isolados de um unico tile.
-    const wet = new Set(
-      this.world.props
-        .filter((prop) => prop.type === 'water' || prop.type === 'bridgeSpot' || prop.type === 'waterWheel')
-        .map((prop) => `${prop.worldX},${prop.worldY}`),
-    );
-    const dryWheels = this.world.props.filter((prop) => prop.type === 'waterWheel' && ![
-      `${prop.worldX - 1},${prop.worldY}`,
-      `${prop.worldX + 1},${prop.worldY}`,
-      `${prop.worldX},${prop.worldY - 1}`,
-      `${prop.worldX},${prop.worldY + 1}`,
-    ].some((key) => wet.has(key))).length;
-    if (dryWheels > 0) warnings.push(`${dryWheels} roda(s) d'agua sem continuidade de rio — nao vao gerar energia`);
     return warnings;
   }
 

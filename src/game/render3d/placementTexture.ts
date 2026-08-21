@@ -8,7 +8,7 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
  *
  * Ela existe porque a instalação era o único gesto do jogo que agia num tile que o jogador não
  * conseguia ver. Todo o resto tem alvo visível: o machado bate na árvore que está ali, o balde
- * molha a caldeira que está ali. Uma máquina, não — ela nasce num chão vazio, e chão vazio é
+ * coleta a água que está ali. Uma estação, não — ela nasce num chão vazio, e chão vazio é
  * igual em todo lugar. Sem a marca, "o tile à frente" é uma regra que só existe na cabeça de quem
  * escreveu o código.
  *
@@ -18,14 +18,10 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
  * de uma mira, e é a mesma linguagem do anel de telegrafo dos bichos: o jogo já ensina que "um
  * contorno no chão marca um tile que importa".
  *
- * Duas variantes, e a diferença entre elas é a única coisa que o jogador precisa entender:
- *   • `placement-ok`  — branco, cheio de luz: aperte e ela cai aqui.
- *   • `placement-far` — o mesmo quadro em tom frio e apagado: é um lugar VÁLIDO, mas não é este
- *     que o botão vai usar. É o que pinta os vizinhos de um veio quando o extrator está na mão.
+ * `placement-ok` e branco, cheio de luz: aperte e a estacao cai aqui.
  */
 
 const OK = '#ffffff';
-const FAR = '#8fb6d6';
 
 // 16×16 para casar com o tile: um QUADRADO fechado de 1px, engrossado nos cantos.
 //
@@ -79,7 +75,6 @@ const makeCanvas = (hex: string): HTMLCanvasElement => {
 };
 
 export const PLACEMENT_OK_TEXTURE = 'placement-ok';
-export const PLACEMENT_FAR_TEXTURE = 'placement-far';
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // O KEYCAP DA TECLA DE AÇÃO — "aperte ISTO aqui".
@@ -152,11 +147,10 @@ const ensureKeycapTexture = (
 // O registro THREE e um mapa de modulo que sobrevive ao restart da cena: registrar uma vez so.
 let threeRegistered = false;
 
-/** Publica as duas marcas nas duas pipelines. Idempotente, como o balde e o carvão. */
+/** Publica a marca nas duas pipelines. Idempotente, como o balde e o carvao. */
 export const registerPlacementTextures = (scene: Phaser.Scene): void => {
   const pairs: ReadonlyArray<readonly [string, string]> = [
     [PLACEMENT_OK_TEXTURE, OK],
-    [PLACEMENT_FAR_TEXTURE, FAR],
   ];
   for (const [key, hex] of pairs) {
     const needThree = !threeRegistered;

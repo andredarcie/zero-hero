@@ -83,7 +83,7 @@ longe do que o autor pôs, determinístico. É o que devolve o loop central do j
 `scripts/enrich-dungeons.mjs`: inimigos por sala (espécies sobem a escada com o número da
 dungeon, uma espécie por chunk, sem zora — não há água), corações esparsos, e **um tesouro na
 sala mais funda** (BFS a partir da entrada): uma ferramenta única por dungeon — axe, bucket,
-pickaxe, scythe, bomb, lavaBoots, battery, greatAxe, key — para explorar dungeon valer o desvio.
+pickaxe, scythe, bomb, battery, greatAxe, key — para explorar dungeon valer o desvio.
 Tesouro tomado persiste no save.
 
 ### Fase 6 — O mapa na mochila

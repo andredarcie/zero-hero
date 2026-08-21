@@ -13,7 +13,7 @@
       "worldY": 7
     },
     "puzzle": true,
-    "exportedAt": "2026-08-13T20:22:20.190Z"
+    "exportedAt": "2026-08-19T12:14:30.408Z"
   },
   "chunks": [
     {
@@ -334,7 +334,7 @@
           19,
           null,
           null,
-          1,
+          null,
           null,
           20,
           null,
@@ -641,9 +641,12 @@
         {
           "speaker": "npc",
           "text": "So the question is never \"how do I cross\". It is: do I want a floor here, or a fuse? Mrrow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     }
-  },
-  "globalVariables": {}
+  }
 }

@@ -41,10 +41,9 @@ const grid = (value) => Array.from({ length: ROWS }, () => Array(COLS).fill(valu
 /**
  * A TABELA DE PREÇOS, em barras de ferro (o astronauta paga 9 por barra).
  *
- * A ABERTURA são TRÊS cartas a 3 moedas — três caveiras, o que a estrada escura rende em dois
- * minutos de espada. As três custam o MESMO de propósito: a primeira decisão do jogo tem de ser
- * uma decisão, e uma carta ao alcance ao lado de duas trancadas não é escolher entre três coisas,
- * é escolher entre uma coisa e dois cadeados.
+ * A ABERTURA são TRÊS aulas do gato a 1 moeda. As treze cartas `cat-*` custam o MESMO de
+ * propósito: o primeiro arco ensina as peças do jogo sem transformar cada aula numa sessão de
+ * grind, e os puzzles comuns só entram no baralho depois que esse arco termina.
  *
  * DA QUARTA EM DIANTE A ESCADA SOBE DE UM EM UM (5, 6, 7, 8, 9, 10, 11, 13, 14), e o teto é a carta
  * final a 36 — quatro barras. A tabela inteira caiu para perto de um TERÇO do que era (a escada ia
@@ -55,30 +54,34 @@ const grid = (value) => Array.from({ length: ROWS }, () => Array(COLS).fill(valu
  * O ferro continua sendo a moeda de verdade (o astronauta paga 9 por barra): uma carta comum é
  * meia barra a uma barra e meia, e o fim do prólogo continua exigindo a linha de produção.
  *
- * Quem lê este trio é a mão de abertura (`ExplorerDirector.offers`), e ela o lê pelo PREÇO: são as
- * três mais baratas do baralho, nunca uma lista de ids no código. Reprecificar uma carta aqui
- * troca a abertura sem que o código fique sabendo de nada.
+ * Quem lê o primeiro trio é a mão de abertura (`ExplorerDirector.offers`), e ela o lê pelo PREÇO:
+ * são as três mais baratas do catálogo elegível, nunca uma lista paralela de ids no código.
  */
 const COSTS = {
-  'crater-quarry': 3,     // a oficina: a carta que ENSINA o jogo e paga por todas as outras
-  'moonlit-lake': 3,      // as duas outras da abertura: uma água e um jardim, para que a escolha
-  'blooming-grove': 3,    // de estreia seja de GOSTO — nenhuma delas é a certa
+  // A sequencia inteira do gato e a introducao jogavel: todas custam uma unica caveira.
+  'cat-cold-hearths': 1,
+  'cat-woodpile': 1,
+  'cat-kindling': 1,
+  'cat-quarry': 1,
+  'cat-blade': 1,
+  'cat-crossing': 1,
+  'cat-blast': 1,
+  'cat-weight': 1,
+  'cat-swing': 1,
+  'cat-nightbloom': 1,
+  'cat-bloomery': 1,
+  'cat-current': 1,
+  'cat-furrow': 1,
+  'crater-quarry': 3,     // a oficina: a carta que ENSINA a cadeia do ferro
+  'moonlit-lake': 3,
+  'blooming-grove': 3,
   // ...e daqui em diante a escada SOBE DE UM EM UM, do piso que a abertura estabeleceu. Ela ia de
   // 3 para 16 — seis vezes mais caro de uma vez, e o próprio comentário desta tabela chamava isso
   // de torto e pedia a reescrita a partir do novo piso. É esta. Um degrau que custa mais uma
   // caveira que o anterior é uma decisão de cada vez; um que custa cinco vezes o anterior é uma
   // parede com uma tarefa atrás.
   //
-  // AS TRÊS AULAS DO GATO ocupam os três primeiros degraus depois da abertura, e nesta ordem
-  // (machado 4, tocha 5, picareta 6) porque é a ordem em que uma depende da anterior: o machado
-  // derruba a árvore que vira o graveto, o graveto vira a tocha, e a tocha é o que faz o carvão
-  // que a picareta vai precisar do outro lado. Elas são baratas de propósito — uma aula que custa
-  // uma fábrica é uma aula que ninguém assiste. Ver scripts/make-cat-lessons.mjs.
-  'cat-woodpile': 4,
-  'cat-kindling': 5,
-  'cat-quarry': 6,
   'roadside-pond': 5,
-  'cat-cold-hearths': 5,
   'whispering-forest': 6,
   'timber-ranks': 7,
   'singing-pines': 7,
@@ -104,7 +107,7 @@ const CRATER_KIT = {
     // O machado ao lado da picareta: as duas ferramentas do módulo dele, uma para pedra e outra
     // para madeira. É o que abre a bancada inteira.
     { type: 'axe', x: 3, y: 5 },
-    // O balde: a caldeira ferve água, e sem ele a única energia do mapa seria impossível.
+    // O balde: leva agua para apagar fogo e regar canteiros.
     { type: 'bucket', x: 3, y: 6 },
   ],
   props: [
@@ -127,8 +130,7 @@ const CRATER_KIT = {
     { type: 'dryTree', x: 3, y: 3 },
     { type: 'dryTree', x: 9, y: 11 },
     { type: 'dryTree', x: 1, y: 3 },
-    // A poça da cratera: água de degelo no fundo da bacia. Ela existe para o BALDE — a caldeira é
-    // a única usina construível aqui (a roda d'água pede rio, e roda não se fabrica).
+    // A poça da cratera: agua de degelo para encher o balde.
     { type: 'water', x: 0, y: 11 },
     { type: 'water', x: 1, y: 11 },
     { type: 'water', x: 2, y: 11 },
@@ -140,21 +142,13 @@ const CRATER_KIT = {
  *
  * O Lago é uma das três cartas de abertura (3 moedas), e até aqui ele era só bonito: água, três
  * flores da lua e capim. Uma das primeiras decisões do jogo não pode ser entre uma oficina e um
- * papel de parede — então ele ganhou as três coisas que fazem dele uma escolha de verdade:
+ * papel de parede — então ele ganhou uma fonte de renda propria:
  *
  *   1. **RENDA.** Três zoras vivendo na água. Eles pagam 3 moedas cada (AQUATIC_KILL_COINS, contra
  *      1 da caveira) e voltam sozinhos a cada ENEMY_RESPAWN_MS — é a única fonte de moeda que o
  *      jogador pode PROCURAR no mapa em vez de esperar na estrada. O preço é a posição: eles moram
  *      onde a espada não alcança de graça, e quem chega junto da água leva cusparada de gelo.
- *   2. **ENERGIA DE GRAÇA.** Uma roda d'água já montada e já girando, na borda oeste. Ela é a única
- *      usina que o jogador NÃO consegue fabricar (não há receita de roda), então vê-la funcionando
- *      é a diferença entre "existe eletricidade neste jogo" e "existe eletricidade e ela é minha".
- *   3. **O CONVITE.** Um pacote de cinco CABOS na grama ao lado dela — o suficiente para uma linha
- *      curta. Nada obriga a usá-los: é um "e se?" pousado no chão, que é a forma mais barata de um
- *      jogo sugerir um plano sem escrever um objetivo na tela.
  *
- * A roda fica FORA das faixas de estrada (openSeams limpa x0-3/x8-11 nas linhas 5-9 e x5-7 nas
- * colunas 0-3/8-11): uma peça sólida numa costura seria uma estrada fechada por decoração.
  */
 const LAKE_KIT = {
   /** `zora` só nasce em água ABERTA — todos estes tiles são do lago, e nenhum é costura. */
@@ -163,22 +157,8 @@ const LAKE_KIT = {
     { type: 'zora', x: 8, y: 4 },
     { type: 'zora', x: 6, y: 6 },
   ],
-  /**
-   * O cabo nasce em PACOTE (spawnPackSize: 5) — um item no chão, cinco na mochila. São DOIS
-   * pacotes: cinco fios fazem uma linha curta e dez fazem uma linha que atravessa a carta, e a
-   * diferença entre as duas é a diferença entre "dá pra ligar a roda em alguma coisa" e "dá pra
-   * escolher em QUE coisa" — que é o pensamento que este monte de cabo existe para provocar.
-   */
-  pickups: [
-    { type: 'wire', x: 3, y: 2 },
-    { type: 'wire', x: 4, y: 2 },
-  ],
-  props: [
-    // A roda no tile de água (2,3): a leste, o sul e o norte dela são lago (é isso que a faz
-    // girar), e o vizinho de cima, (2,2), é grama limpa — a ponta de terra em que o primeiro cabo
-    // encosta. Sem esse vizinho a roda seria uma usina sem tomada.
-    { type: 'waterWheel', x: 2, y: 3 },
-  ],
+  pickups: [],
+  props: [],
 };
 
 /**
@@ -318,8 +298,7 @@ const SEAM = (() => {
 const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40]);
 const BLOCKING = new Set([
   'dryBush', 'dryTree', 'dryShrub', 'rock', 'ironRock', 'tallGrass', 'lava', 'water', 'moonflower',
-  'campfire', 'toolbox', 'furnace', 'tripHammer', 'chest', 'boiler', 'woodenCrate', 'lockedDoor',
-  'swingGate', 'carnivorousPlant', 'inserter', 'extractor', 'waterWheel', 'electronicGate',
+  'campfire', 'toolbox', 'furnace', 'altar', 'lockedDoor', 'swingGate', 'carnivorousPlant',
 ]);
 /** Tiles livres que NÃO se alcança a partir da boca norte, com as costuras já abertas. */
 const orphanCount = (chunk, props) => {
@@ -413,10 +392,6 @@ for (const pickup of LAKE_KIT.pickups) {
 }
 for (const prop of LAKE_KIT.props) {
   if (lakeTaken.has(`${prop.x},${prop.y}`)) continue;
-  if (prop.type === 'waterWheel' && !wet(prop.x, prop.y)) {
-    console.warn(`  · lago: roda em ${prop.x},${prop.y} RECUSADA (o tile não é água)`);
-    continue;
-  }
   world.props.push({ type: prop.type, worldX: lakeOx + prop.x, worldY: lakeOy + prop.y });
   lakeTaken.add(`${prop.x},${prop.y}`);
   lakeAdded += 1;

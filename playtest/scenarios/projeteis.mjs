@@ -246,26 +246,27 @@ export default {
       () => window.__scene.enemyManager.getAliveEnemies().some((e) => e.kind === 'turret' && !e.isSpawning),
       null, { timeout: 15000 },
     );
-    // A trilha da secao anterior demora ate 4s de calmaria pra soltar (dangerCalmMs); drena antes
-    // de comecar a medicao estrita, senao o resto do 'danger' antigo condenaria a torreta nova.
-    await sleep(4600);
+    // Um respiro para a torreta assentar depois de nascer. (Aqui havia uma espera de 4,6s para
+    // drenar a trilha de COMBATE da secao anterior; ela nao existe mais — a musica do jogo e uma
+    // so e nao responde a inimigo.)
+    await sleep(800);
 
     let framedWhileFar = false;
     let shotWhileFar = false;
-    let dangerWhileFar = false;
+    const musicSeen = new Set();
     // 8s > dois ciclos de leque (3,6s): zero tiro aqui e lei funcionando, nao azar de amostragem.
     for (let i = 0; i < 40; i += 1) {
       await sleep(200);
       state = await driver.getState();
       if ((state.shots ?? []).length > 0) shotWhileFar = true;
-      if (state.music === 'danger') dangerWhileFar = true;
+      musicSeen.add(state.music ?? null);
       if (state.undead.some((u) => u.kind === 'turret' && u.framed)) framedWhileFar = true;
     }
     assert('a 7 tiles ela esta mesmo FORA do quadro (o predicado ve o que a tela ve)',
       framedWhileFar === false, JSON.stringify(state.undead));
     assert('fora do quadro, em alcance: NENHUM tiro em 8s', shotWhileFar === false, 'houve tiro');
-    assert('e nenhuma trilha de perigo por corpo que nao se ve', dangerWhileFar === false,
-      String(state.music));
+    assert('e a trilha NAO muda por causa de corpo em campo (a musica e uma so)',
+      musicSeen.size === 1, [...musicSeen].join(','));
 
     log('QUADRO: quatro passos pro leste a enquadram — e ela acorda');
     await driver.walk('right', 4);
@@ -276,8 +277,8 @@ export default {
     state = await driver.getState();
     assert('enquadrada, a mesma torreta volta a atirar',
       state.undead.some((u) => u.kind === 'turret' && u.framed), JSON.stringify(state.undead));
-    assert('e a trilha de perigo liga com o corpo NA tela', state.music === 'danger',
-      String(state.music));
+    assert('e com o corpo NA tela a trilha continua exatamente a mesma',
+      musicSeen.has(state.music ?? null) && musicSeen.size === 1, String(state.music));
     await shot('fora-do-quadro-muda-dentro-atira');
   },
 };

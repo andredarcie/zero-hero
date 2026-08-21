@@ -13,7 +13,7 @@
       "worldY": 7
     },
     "puzzle": true,
-    "exportedAt": "2026-08-13T20:22:20.194Z"
+    "exportedAt": "2026-08-19T12:14:30.411Z"
   },
   "chunks": [
     {
@@ -334,7 +334,7 @@
           19,
           null,
           null,
-          1,
+          null,
           null,
           20,
           null,
@@ -595,15 +595,6 @@
       "worldY": 4
     },
     {
-      "type": "sellBox",
-      "sells": {
-        "kind": "seeds",
-        "coinsPerUnit": 1
-      },
-      "worldX": 7,
-      "worldY": 6
-    },
-    {
       "type": "levelPortal",
       "worldX": 11,
       "worldY": 0
@@ -643,9 +634,12 @@
         {
           "speaker": "npc",
           "text": "And the box beside me buys the spare. The sign on it shows what it takes; face it with X and it pays, coins on the ground. Mrrow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the SEEDS you earned here. Load it, and the plane drops your coins."
         }
       ]
     }
-  },
-  "globalVariables": {}
+  }
 }

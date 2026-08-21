@@ -8,6 +8,8 @@ import { defineConfig, type Plugin } from 'vite';
 
 const levelsDir = fileURLToPath(new URL('./levels', import.meta.url));
 const worldJsonPath = fileURLToPath(new URL('./public/world.json', import.meta.url));
+// O ESPELHO: o andar de baixo do mundo, mesmo tamanho e mesmas coordenadas.
+const underworldJsonPath = fileURLToPath(new URL('./public/underworld.json', import.meta.url));
 const levelJsonDir = fileURLToPath(new URL('./public/levels', import.meta.url));
 const levelIndexPath = path.join(levelJsonDir, 'index.json');
 
@@ -15,8 +17,8 @@ type LabLevelSummary = {
   id: string;
   file: string;
   level: number;
-  /** `level` = fase de puzzle criavel/apagavel; `dungeon` = uma das nove mazes fixas. */
-  kind: 'level' | 'dungeon';
+  /** `level` = fase de puzzle criavel/apagavel. */
+  kind: 'level';
   name: string;
   blurb: string;
   updatedAt: string;
@@ -53,9 +55,9 @@ const listLabLevels = async (): Promise<LabLevelSummary[]> => {
   ]);
   const storedByFile = new Map(storedIndex.map((entry) => [entry.file, entry]));
   const summaries = await Promise.all(entries.flatMap((entry) => {
-    const match = entry.isFile() ? /^(level|dungeon)-(\d+)\.json$/u.exec(entry.name) : null;
+    const match = entry.isFile() ? /^(level)-(\d+)\.json$/u.exec(entry.name) : null;
     if (!match) return [];
-    const kind = match[1] as 'level' | 'dungeon';
+    const kind = match[1] as 'level';
     const level = Number(match[2]);
     return [fs.readFile(path.join(levelJsonDir, entry.name), 'utf8').then((content) => {
       const parsed = JSON.parse(content) as {
@@ -124,15 +126,16 @@ const makeBlankPuzzleLevel = (name: string): object => {
     }],
     props: [],
     dialogs: {},
-    globalVariables: {},
   };
 };
 
 // The world API serves the real overworld (`world`), the puzzle levels (`level-N`) and the
-// nine dungeons (`dungeon-N`) — both edited via /lab. Everything else in ?file= is rejected.
+// o SUBTERRANEO (`underworld`, public/underworld.json) — os dois editados via /lab.
+// Everything else in ?file= is rejected.
 const resolveWorldFile = (fileId: string): string | null => {
   if (fileId === 'world') return worldJsonPath;
-  const match = /^(level|dungeon)-(\d+)$/u.exec(fileId);
+  if (fileId === 'underworld') return underworldJsonPath;
+  const match = /^(level)-(\d+)$/u.exec(fileId);
   return match ? path.join(levelJsonDir, `${match[1]}-${match[2]}.json`) : null;
 };
 

@@ -75,9 +75,8 @@ const DEAD_TREE_2 = 21;
 // — perto de fogueira acesa ela é parede). Quem entra na prova de BFS como muro.
 const BLOCKING_PROPS = new Set([
   'dryBush', 'dryTree', 'dryShrub', 'rock', 'ironRock', 'tallGrass', 'lava', 'water',
-  'bridgeSpot', 'lockedDoor', 'swingGate', 'woodenCrate', 'moonflower', 'campfire',
-  'carnivorousPlant', 'boiler', 'furnace', 'tripHammer', 'chest', 'toolbox', 'inserter',
-  'extractor', 'waterWheel', 'electronicGate',
+  'bridgeSpot', 'lockedDoor', 'swingGate', 'moonflower', 'campfire',
+  'carnivorousPlant', 'furnace', 'altar', 'toolbox',
 ]);
 
 // ── ruído determinístico ────────────────────────────────────────────────────────────────────
@@ -189,8 +188,7 @@ const RECIPES = [
     props: [
       { type: 'rock', x: 4, y: 3 }, { type: 'rock', x: 8, y: 11 },
       { type: 'ironRock', x: 1, y: 10 }, { type: 'ironRock', x: 10, y: 10 },
-      // A bancada olha para o SUL (dir 2): as duas bandejas ficam ACIMA dela, entre ela e a
-      // fogueira, e a saída cai na estrada que vem do sul — de frente para quem chega.
+      // A bancada olha para o SUL (dir 2), de frente para quem chega pela estrada.
       { type: 'toolbox', x: 7, y: 7, dir: 2 },
       { type: 'dryBush', x: 2, y: 4 }, { type: 'dryBush', x: 4, y: 4 },
       { type: 'dryBush', x: 8, y: 4 }, { type: 'dryBush', x: 10, y: 4 },
@@ -450,8 +448,7 @@ const main = async () => {
       }
       props.push({ type: spec.type, x: spec.x, y: spec.y });
       occupied.add(key);
-      // `dir` é o COMPORTAMENTO de uma máquina (de que tile ela tira, em qual ela põe), não um
-      // enfeite: uma bancada sem direção nasceria com as bandejas em cima de qualquer coisa.
+      // `dir` guarda a frente visual das estacoes direcionais.
       world.props.push(spec.dir === undefined
         ? { type: spec.type, worldX: ox + spec.x, worldY: oy + spec.y }
         : { type: spec.type, worldX: ox + spec.x, worldY: oy + spec.y, dir: spec.dir });

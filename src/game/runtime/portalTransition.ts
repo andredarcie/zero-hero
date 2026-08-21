@@ -30,3 +30,23 @@ export const consumePendingPortalArrival = (): boolean => {
 
 /** Descarta o bilhete sem usar — para quando a transicao falha no meio e volta ao level atual. */
 export const clearPendingPortalArrival = (): void => { pendingArrival = false; };
+
+/**
+ * O MESMO bilhete, para a ESCADA — a porta entre os dois andares do mundo.
+ *
+ * Ela e uma travessia separada porque e uma travessia diferente: o portal engole e cospe o heroi
+ * caindo do ceu, a escada o faz DESCER ANDANDO e sair andando do outro lado. Dois bilhetes, e
+ * nao um com um campo de tipo, porque a chegada de cada um e uma animacao inteira e distinta —
+ * e um booleano que decidisse entre elas seria a mesma coisa com um `if` no meio.
+ */
+let pendingStairs = false;
+
+export const setPendingStairsArrival = (): void => { pendingStairs = true; };
+
+export const consumePendingStairsArrival = (): boolean => {
+  const arrived = pendingStairs;
+  pendingStairs = false;
+  return arrived;
+};
+
+export const clearPendingStairsArrival = (): void => { pendingStairs = false; };

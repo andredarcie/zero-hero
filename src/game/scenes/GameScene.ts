@@ -1,4 +1,4 @@
-﻿import Phaser from 'phaser';
+import Phaser from 'phaser';
 
 import {
   ASSET_KEYS,
@@ -9,9 +9,9 @@ import {
   CHUNK_ROWS,
   DIGGABLE_GROUND_FRAMES,
   DUNGEON_TILES,
-  DIALOG_PANEL_FRACTION,
-  DIALOG_PANEL_MAX_WIDTH,
+  dialogBoxMetrics,
   FONT_FAMILY,
+  PYRE_LOGS_REQUIRED,
   GAMEPLAY_HERO_MAX_SIZE,
   GAMEPLAY_HERO_SCALE,
   UI_HEART_FRAMES,
@@ -28,8 +28,6 @@ import {
   TEXT_RESOLUTION,
   TORCH_BURN_MS,
   TREE_CHOP_STAGE_FRAMES,
-  BATTERY_FEED_MS,
-  BATTERY_FRAMES,
   TREE_STICK_YIELD,
   TREE_TILE_STICK_CHANCE,
   TILESET_FRAME_SIZE,
@@ -37,7 +35,6 @@ import {
   SEED_PACK_KINDS,
   SOLID_UPPER_FRAMES,
   UNIT_PACK_KINDS,
-  POWER_WATTS,
   BLOOM_BLOWS,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
@@ -53,7 +50,6 @@ import { CoinManager } from '@/game/entities/CoinManager';
 import { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager, type EnemyHit } from '@/game/entities/EnemyManager';
 import { EnemySpawnerManager } from '@/game/entities/EnemySpawnerManager';
-import { RING_MAX_TILES, UndeadSpawnDirector } from '@/game/entities/UndeadSpawnDirector';
 import { NpcManager } from '@/game/entities/NpcManager';
 import { HeartPickupManager } from '@/game/entities/HeartPickupManager';
 import { ItemManager } from '@/game/entities/ItemManager';
@@ -72,8 +68,7 @@ import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
 import { PlantSpotObject, type PlantableSeed } from '@/game/objects/PlantSpotObject';
 import { CarnivorousPlantObject } from '@/game/objects/CarnivorousPlantObject';
-import { RoboticArmObject, type ArmWorldPort } from '@/game/objects/RoboticArmObject';
-import { ToolboxObject, type ToolboxWorldPort } from '@/game/objects/ToolboxObject';
+import { ToolboxObject } from '@/game/objects/ToolboxObject';
 import {
   catalogSteps, isCraftable, nextStep, recipeCost, recipeMaking, recipeStation,
   type CraftStation,
@@ -83,26 +78,20 @@ import {
 } from '@/game/runtime/ToolboxOrderOverlay';
 import { MoonflowerObject } from '@/game/objects/MoonflowerObject';
 import { BombSpotObject } from '@/game/objects/BombSpotObject';
-import { WoodenCrateObject } from '@/game/objects/WoodenCrateObject';
-import { PressurePlateObject } from '@/game/objects/PressurePlateObject';
-import { WaterWheelObject, type WaterFlow } from '@/game/objects/WaterWheelObject';
-import { BoilerObject } from '@/game/objects/BoilerObject';
-import { WireObject } from '@/game/objects/WireObject';
-import { BeltObject, type BeltWorldPort } from '@/game/objects/BeltObject';
-import { ChestObject } from '@/game/objects/ChestObject';
-import { ExtractorObject, type ExtractorWorldPort } from '@/game/objects/ExtractorObject';
 import { FurnaceObject, type FurnaceWorldPort } from '@/game/objects/FurnaceObject';
-import { TripHammerObject, type TripHammerWorldPort } from '@/game/objects/TripHammerObject';
 import { AltarObject } from '@/game/objects/AltarObject';
+import { PyreObject } from '@/game/objects/PyreObject';
 import { hammerResult } from '@/game/objects/hammering';
-import { ElectronicGateObject } from '@/game/objects/ElectronicGateObject';
 import { LevelPortalObject } from '@/game/objects/LevelPortalObject';
+import {
+  StairsObject, stairsLiftAt, STAIRS_RUN_TILES, STAIRS_STEPS, STAIRS_WALK_MS,
+} from '@/game/objects/StairsObject';
 import { WallTorchObject } from '@/game/objects/WallTorchObject';
 import type { WorldProp } from '@/game/objects/WorldProp';
 // O DEF de um prop (o registro de dados: tipo + tile + flags) contra o OBJETO de prop (a coisa
 // viva com sprite e colisao) — dois tipos com o mesmo nome em modulos diferentes. Aqui os dois
 // se encontram, porque o mundo infinito converte um no outro enquanto o heroi anda.
-import type { PropDir, WorldProp as WorldPropDef } from '@/game/world/worldSchema';
+import type { PropDir } from '@/game/world/worldSchema';
 import { t, tLines } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
@@ -112,14 +101,8 @@ import {
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
-import { SellBoxObject } from '@/game/objects/SellBoxObject';
-import { SellOverlay } from '@/game/runtime/SellOverlay';
-import { registerFultonTextures } from '@/game/render3d/fultonTexture';
-import { PickupPrompt } from '@/game/runtime/PickupPrompt';
 import { HeroThought } from '@/game/runtime/HeroThought';
-import { PlacementHints, type HintTile } from '@/game/runtime/PlacementHints';
-import { wireShapeFromMask, wireShapeFrame } from '@/game/world/wireShapes';
-import { solvePowerGrid, tileKey, type PowerNode } from '@/game/world/powerGrid';
+import { PlacementHints } from '@/game/runtime/PlacementHints';
 import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import {
   PORTAL_TUNNEL_MIN_CRUISE_MS,
@@ -131,52 +114,33 @@ import {
   startPortalTunnel,
 } from '@/game/render3d/PortalTunnel';
 import {
+  closeStairsCurtain, destroyStairsCurtain, openStairsCurtain,
+} from '@/game/render3d/StairsCurtain';
+import {
   PORTAL_FALL_HEIGHT_TILES,
   clearPendingPortalArrival,
+  clearPendingStairsArrival,
   consumePendingPortalArrival,
+  consumePendingStairsArrival,
   setPendingPortalArrival,
+  setPendingStairsArrival,
 } from '@/game/runtime/portalTransition';
 import { DialogOverlay, type DialogTradePort } from '@/game/runtime/DialogOverlay';
-import { ExplorerDirector, type PropMemory } from '@/game/explorer/ExplorerDirector';
-import { ExplorerHud } from '@/game/explorer/ExplorerHud';
-import { ExtractPrompt } from '@/game/explorer/ExtractPrompt';
-import { ChunkGateMarker } from '@/game/explorer/ChunkGateMarker';
-import { ChunkGatePrompt, ChunkPurchaseOverlay } from '@/game/explorer/ChunkPurchaseOverlay';
-import { ChunkUndeadDirector } from '@/game/explorer/ChunkUndeadDirector';
-import { distanceFromCamp, type ChunkFrontier } from '@/game/explorer/explorerWorld';
-import {
-  EXTRACT_KEEP,
-  addExplorerCoins,
-  coinMultiplierAt,
-  coinsForKill,
-  consumeExplorerArrival,
-  consumeExplorerCard,
-  dangerScaleAt,
-  endExplorerMode,
-  explorerMeta,
-  explorerRun,
-  extractToCamp,
-  isExplorerMode,
-  loseRunToDeath,
-  noteExplorerKill,
-  rerollExplorerWorld,
-  setExplorerDepth,
-  spendExplorerCoins,
-} from '@/game/explorer/explorerRun';
 import { getActiveLevel, levelFilePath, setActiveLevel } from '@/game/runtime/activeLevel';
-import { clearDungeonTrip, getDungeonTrip, setDungeonTrip } from '@/game/runtime/dungeonTrip';
-import { clearActiveDungeon, dungeonWorldFor, persistActiveDungeon } from '@/game/dungeon/dungeonWorld';
+import { isUnderground, setUnderground } from '@/game/runtime/underworld';
 import { LevelIntroOverlay } from '@/game/runtime/LevelIntroOverlay';
 import { LevelButtons, PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
-import { createHeroView, heroFootY, resetHeroView, tickHeroView, type HeroView } from '@/game/runtime/HeroView';
+import {
+  createHeroView, heroFootY, resetHeroView, setHeroWalking, tickHeroView,
+  TILES_PER_FOOTFALL, WALK_CYCLE_FRAMES, WALK_CYCLE_FRAMES_UP, type HeroView,
+} from '@/game/runtime/HeroView';
 import { FREEZE_MS, FreezeManager } from '@/game/runtime/FreezeManager';
 import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl, type SubScreenView } from '@/game/runtime/SubScreen';
 import { QuickBag, type QuickBagView } from '@/game/runtime/QuickBag';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
-import { GlobalVariables } from '@/game/runtime/GlobalVariables';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { createBoardMetrics } from '@/game/shared/grid';
@@ -199,26 +163,15 @@ import {
   getWaterTiles,
   getBombSpots,
   getBridgeSpots,
+  getPyres,
   getPlantSpots,
   getCarnivorousPlants,
-  getInserters,
   getToolboxes,
   getIronRocks,
-  getWoodenCrates,
-  getPressurePlates,
-  getBoilers,
-  getWaterWheels,
-  getWires,
-  getBelts,
-  getChests,
-  getExtractors,
   getFurnaces,
-  getTripHammers,
   getAltars,
-  getElectronicGates,
   getLevelPortals,
-  getSellBoxes,
-  getGlobalVariables,
+  getStairs,
   getMoonflowers,
   getLockedDoors,
   getSwingGates,
@@ -229,9 +182,7 @@ import {
   getDialogVoice,
   getPlayerStart,
   getWorldName,
-  isPuzzleWorld,
   setWorldData,
-  type ChunkTemplate,
 } from '@/game/world/WorldData';
 import {
   adventureState,
@@ -240,6 +191,14 @@ import {
   saveAdventure,
   type AdventureMachine,
 } from '@/game/runtime/adventureState';
+import {
+  questDeliveriesDue,
+  questDialogFor,
+  questSnapshot,
+  recordQuestEvent,
+  type QuestEvent,
+} from '@/game/runtime/QuestLog';
+import { QUEST_PYRE_LOGS } from '@/game/dialogs/NpcQuests';
 
 type LevelManifestEntry = { file: string; level: number };
 
@@ -260,11 +219,15 @@ const PORTAL_TUNNEL_HANDOFF_MS = 260;
 /** A queda do outro lado: alto o bastante para ter peso, curto o bastante para nao cansar. */
 const PORTAL_FALL_MS = 620;
 
-// O frame do CABO carregado na mao: o trecho reto e horizontal, apagado. Vale um nome porque ele
-// aparece nas tres tabelas de arte de item e um `wireShapeFrame('h', false)` solto em cada uma
-// seria a mesma decisao escrita tres vezes.
-const WIRE_ITEM_FRAME = wireShapeFrame('h', false);
-
+/**
+ * Em que ponto do lance de escada a CORTINA entra (fração do percurso). Ela fecha exatamente
+ * quando o lance acaba, e do outro lado ela abre no mesmo ritmo — então a metade final da descida
+ * e a metade inicial da subida acontecem em penumbra, que é onde o corpo já está debaixo do chão.
+ * Cedo demais e o jogador não vê a escada; tarde demais e a troca de andar aparece.
+ */
+const STAIRS_CURTAIN_AT = 0.55;
+/** O respiro no escuro entre chegar e começar a andar: o mundo novo assenta antes de ser visto. */
+const STAIRS_SETTLE_MS = 120;
 
 // The per-item 2D art (Phaser texture atlas keys): the swing arc, the overhead chop and the
 // death elegy's back item all draw from here. The 3D twin is BACK_ITEM_VISUAL_3D below.
@@ -274,7 +237,6 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
   greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0 },
   bomb: { texture: ASSET_KEYS.bombIcon, frame: 0 },
-  lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0 },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0 },
@@ -288,19 +250,7 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
-  battery: { texture: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
-  batteryFull: { texture: ASSET_KEYS.battery, frame: BATTERY_FRAMES.full },
-  // A FABRICA carregada na mao: cada peca e a PROPRIA arte dela, como a pedra ja era. O jogador
-  // tem de reconhecer no braco do heroi a mesma coisa que vai ficar plantada no chao.
-  gear: { texture: ASSET_KEYS.gearItem, frame: 0 },
-  wire: { texture: ASSET_KEYS.wire, frame: WIRE_ITEM_FRAME },
-  belt: { texture: ASSET_KEYS.belt, frame: 1 },
-  chest: { texture: ASSET_KEYS.chest, frame: 0 },
-  boiler: { texture: ASSET_KEYS.boiler, frame: 0 },
-  inserter: { texture: ASSET_KEYS.inserter, frame: 1 },
-  extractor: { texture: ASSET_KEYS.extractor, frame: 1 },
   furnace: { texture: ASSET_KEYS.furnace, frame: 0 },
-  tripHammer: { texture: ASSET_KEYS.tripHammer, frame: 3 },
   altar: { texture: ASSET_KEYS.altar, frame: 0 },
 };
 
@@ -312,7 +262,6 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   axe: { texture: 'axe-icon', frame: 0 },
   greatAxe: { texture: 'great-axe-icon', frame: 0 },
   bomb: { texture: 'bomb-icon', frame: 0 },
-  lavaBoots: { texture: 'lava-boots-icon', frame: 0 },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
   scythe: { texture: 'scythe-icon', frame: 0 },
   shovel: { texture: 'shovel-icon', frame: 0 },
@@ -326,18 +275,7 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
-  battery: { texture: 'battery', frame: BATTERY_FRAMES.empty },
-  batteryFull: { texture: 'battery', frame: BATTERY_FRAMES.full },
-  // O par 3D da fabrica — as mesmas folhas, porque item e maquina sao o mesmo objeto.
-  gear: { texture: 'gear-item', frame: 0 },
-  wire: { texture: 'wire', frame: WIRE_ITEM_FRAME },
-  belt: { texture: 'belt', frame: 1 },
-  chest: { texture: 'chest', frame: 0 },
-  boiler: { texture: 'boiler', frame: 0 },
-  inserter: { texture: 'inserter', frame: 1 },
-  extractor: { texture: 'extractor', frame: 1 },
   furnace: { texture: 'furnace', frame: 0 },
-  tripHammer: { texture: 'trip-hammer', frame: 3 },
   altar: { texture: 'altar', frame: 0 },
 };
 
@@ -349,7 +287,6 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0, label: 'VOCE PEGOU O MACHADO!' },
   greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0, label: 'MACHADO DE ACO! DERRUBA QUALQUER ARVORE' },
   bomb: { texture: ASSET_KEYS.bombItem, frame: BOMB_FRAMES.item, label: 'VOCE PEGOU A BOMBA! LEVE-A ATE A MARCA' },
-  lavaBoots: { texture: ASSET_KEYS.lavaBootsIcon, frame: 0, label: 'VOCE PEGOU AS BOTAS DE LAVA!' },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
   shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0, label: 'VOCE PEGOU A PA! CAVE NA TERRA' },
@@ -364,8 +301,6 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   bucket: { texture: 'bucket-icon', frame: 0, label: 'VOCE PEGOU UM BALDE! ENCHA NO RIO' },
   bucketFull: { texture: 'bucket-full-icon', frame: 0, label: 'BALDE CHEIO DE AGUA!' },
   charcoal: { texture: 'charcoal-item', frame: 0, label: 'CARVAO! PISE NELE COM A TOCHA ACESA' },
-  battery: { texture: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty, label: 'UMA BATERIA! CARREGUE PISANDO NUM CABO VIVO' },
-  batteryFull: { texture: ASSET_KEYS.battery, frame: BATTERY_FRAMES.full, label: 'BATERIA CARREGADA! POUSE JUNTO A UM CABO' },
   // A CERIMONIA DA FABRICA. Cada legenda diz UMA coisa e ela e sempre a mesma: qual botao. Essa
   // e a unica informacao que o mundo nao consegue dar sozinho aqui — a peca no chao ja mostra o
   // que ela e, a broca ja mostra de que lado ela morde, o filete ja mostra se ha corrente; o que
@@ -380,15 +315,7 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   // chão"). Hoje a esponja se trabalha em dois lugares e os dois são o X: no ALTAR (o lugar, que é
   // o que a carta do astronauta ensina) ou no chão onde ela caiu.
   bloom: { texture: ASSET_KEYS.bloomItem, frame: 0, label: 'ESPONJA DE FERRO! PONHA NO ALTAR (Z) E MALHE COM O X' },
-  gear: { texture: ASSET_KEYS.gearItem, frame: 0, label: 'UMA ENGRENAGEM! ELA SO SERVE NA BANCADA' },
-  wire: { texture: ASSET_KEYS.wire, frame: WIRE_ITEM_FRAME, label: 'CABOS! O A DEITA UM NO CHAO' },
-  belt: { texture: ASSET_KEYS.belt, frame: 1, label: 'UMA ESTEIRA! O A INSTALA, E ELA LEVA PRA ONDE VOCE OLHA' },
-  chest: { texture: ASSET_KEYS.chest, frame: 0, label: 'UM BAU! O A INSTALA, O B GUARDA E TIRA' },
-  boiler: { texture: ASSET_KEYS.boiler, frame: 0, label: 'UMA CALDEIRA! O A INSTALA — ELA PRECISA DE FOGO AO LADO' },
-  inserter: { texture: ASSET_KEYS.inserter, frame: 1, label: 'UM BRACO! O A INSTALA — ELE TIRA DE TRAS E POE NA FRENTE' },
-  extractor: { texture: ASSET_KEYS.extractor, frame: 1, label: 'UM EXTRATOR! O A INSTALA DE COSTAS PRO VEIO DE FERRO' },
   furnace: { texture: ASSET_KEYS.furnace, frame: 0, label: 'UM FORNO! MINERIO NUMA BANDEJA, CARVAO NA OUTRA' },
-  tripHammer: { texture: ASSET_KEYS.tripHammer, frame: 3, label: 'UM MARTINETE! LIGADO, ELE MARTELA A ESPONJA POR VOCE' },
   altar: { texture: ASSET_KEYS.altar, frame: 0, label: 'UM ALTAR! O X INSTALA — Z POE A PECA, BATER MALHA' },
 };
 
@@ -423,8 +350,6 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
   stone: 1.5, // a rock in the fist is as good as any other blunt tool
   charcoal: 1.5, // a lump of coal, likewise
   iron: 1.5, // ...e um lingote de metal, que era o unico bloco desta lista que nao batia em nada
-  battery: 1.5, // an iron canister, likewise
-  batteryFull: 1.5,
 };
 
 // ── OS DOIS BOTOES ───────────────────────────────────────────────────────────
@@ -437,8 +362,8 @@ const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
 //   A  →  a espada, na direcao em que ele olha (nao precisa encostar). Sem espada, o soco.
 //   B  →  o item escolhido na subtela, no tile a frente: usa, ou pousa ali.
 //
-// Esbarrar continua existindo, e continua sendo um gesto de CORPO: empurra caixote, abre
-// portao de bater, conversa com NPC, senta na fogueira acesa — e leva dano de contato de quem
+// Esbarrar continua existindo, e continua sendo um gesto de CORPO: abre portao de bater,
+// conversa com NPC, senta na fogueira acesa — e leva dano de contato de quem
 // esta do outro lado. O que ele nao faz mais e machucar ninguem.
 /** Quanto tempo um golpe leva antes de o proximo poder sair (o arco dura ~220ms). */
 const ATTACK_COOLDOWN_MS = 260;
@@ -681,14 +606,6 @@ const ROCK_CHIP_TINTS = [0xb4bac1, 0x99a0a8, 0xc3c9cf, 0x848c95] as const;
 // so no drop.
 const ORE_CHIP_TINTS = [0x826841, 0x733e11, 0x99a0a8, 0x68380f] as const;
 
-// The undead danger meter (UndeadSpawnDirector, 0..1) creeps onto the screen as a cold
-// vignette: the deeper the dark wakes, the harder the edges close in — and near full danger
-// it warms from cold night-blue toward blood-red and breathes faster. Without it the siege
-// ramp was totally invisible (only the music changed).
-const DANGER_VIGNETTE_MAX_ALPHA = 0.5;
-const DANGER_VIGNETTE_COLD = 0x0a0d24;
-const DANGER_VIGNETTE_BLOOD = 0x3d0a12;
-
 // At or below this many hearts the hero shows the low-health "heartbeat" (a red pixel outline).
 const LOW_HEALTH_HEARTS = 2;
 // Low-health fire compass (Skyrim-style): a small flame marker orbits the hero at this radius,
@@ -698,7 +615,7 @@ const FIRE_COMPASS_ORBIT_TILES = 1.55;
 const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1],
 ];
-// The 4 grid moves a walking entity has — the undead reachability flood-fill steps by these.
+// The 4 grid moves a walking entity has (fire spread and the ember touch step by these).
 const CARDINAL_DIRS: ReadonlyArray<readonly [number, number]> = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
 ];
@@ -732,17 +649,10 @@ export class GameScene extends Phaser.Scene {
   private camera?: WorldCamera;
   private chunkManager?: ChunkManager;
   private enemyManager?: EnemyManager;
-  private spawnDirector?: UndeadSpawnDirector;
   // As covas AUTORADAS (aba Inimigos do editor): tile fixo, um corpo por vez, outro depois que
-  // ele cai. Vive ao lado do cerco e nao dentro dele — ver EnemySpawnerManager.
+  // ele cai. Sao a UNICA fonte de inimigo do jogo — ver EnemySpawnerManager.
   private enemySpawners?: EnemySpawnerManager;
-  // Per-frame memo for undeadReachableTiles (the spawn director probes many tiles per tick).
-  private reachableFrame = -1;
-  private readonly reachableTiles = new Set<string>();
   private playerSafe = true;
-  // Music staging: how long the field has been clear of undead (hysteresis so the
-  // combat track doesn't flap while skulls spawn and die in quick succession).
-  private dangerCalmMs = 0;
   private npcManager?: NpcManager;
   // O CONGELAMENTO (a bola do zora): quem trava qualquer coisa num tile — ver FreezeManager.
   private freezeManager?: FreezeManager;
@@ -793,9 +703,6 @@ export class GameScene extends Phaser.Scene {
   // Remaining life of the carried flame, in ms. Counts down while heldOnFire; re-igniting at
   // any living fire (lit campfire or lava) refills it. Zero snuffs the torch.
   private torchFuelMs = 0;
-  // A carga da batteryFull NA MAO — o par eletrico do torchFuelMs: viaja com o item em toda
-  // troca de maos (chao -> mao -> chao -> garra), entao pegar e re-encaixar nunca recarrega.
-  private heldBatteryChargeMs = 0;
   // Guttering flicker for a dying carried flame — a random-walk like lightFlicker, but its
   // amplitude grows as the fuel runs out, so the torchlight jitters harder near the end.
   private readonly torchGutter = { level: 1.0, velocity: 0 };
@@ -804,6 +711,9 @@ export class GameScene extends Phaser.Scene {
   // Pixel-flame billboard pinned on the torch's tip; its size tracks the remaining fuel.
   private torchFlameBb?: Billboard3D;
   private campfires: CampfireObject[] = [];
+  // A PIRA: base autorada no editor, torre construida em jogo (uma tora por graveto). Ver
+  // PyreObject — e o unico prop cujo PROGRESSO o save guarda.
+  private pyres: PyreObject[] = [];
   private dryBushes: DryBushObject[] = [];
   private lockedDoors: LockedDoorObject[] = [];
   private swingGates: SwingGateObject[] = [];
@@ -820,39 +730,17 @@ export class GameScene extends Phaser.Scene {
   // As plantas carnívoras — autoradas OU brotadas da semente carnívora em runtime (o push é
   // sempre in place: o propRegistry referencia este array; ver o comentário dele).
   private carnivorousPlants: CarnivorousPlantObject[] = [];
-  private inserters: RoboticArmObject[] = [];
-  // A bancada: duas bandejas atras, o corpo, a saida na frente. Ver ToolboxObject.
+  // A bancada manual: abre o catalogo e fabrica com os materiais da mochila.
   private toolboxes: ToolboxObject[] = [];
   // O CATALOGO DA ENCOMENDA, e a bancada em que ele foi aberto. Ele congela o mundo como as
   // cartas de chunk (a bolsa e a unica tela deste jogo que roda com o mundo vivo).
   private orderOverlay?: ToolboxOrderOverlay;
   private orderBox?: ToolboxObject;
-  private woodenCrates: WoodenCrateObject[] = [];
-  private pressurePlates: PressurePlateObject[] = [];
-  private waterWheels: WaterWheelObject[] = [];
-  private boilers: BoilerObject[] = [];
-  private electronicGates: ElectronicGateObject[] = [];
   private levelPortals: LevelPortalObject[] = [];
-  /** As caixas de venda: o único corpo que devolve moeda (ver SellBoxObject). */
-  private sellBoxes: SellBoxObject[] = [];
-  /** A mesa de despacho aberta (ver SellOverlay). */
-  private sellOverlay?: SellOverlay;
+  /** As ESCADAS entre os dois andares — a porta física, e a única que não é mágica. */
+  private stairs: StairsObject[] = [];
   /** As tochas de parede de uma dungeon — nascem de TILES, nao de props (ver WallTorchObject). */
   private wallTorches: WallTorchObject[] = [];
-  /**
-   * O MODO EXPLORADOR. Presente so quando a expedicao esta rodando; nos outros modos e
-   * undefined e nada disto existe. Ele e quem move a janela do mundo infinito (o terreno
-   * assado e os props vivos) enquanto o heroi anda — ver ExplorerDirector.
-   */
-  private explorer?: ExplorerDirector;
-  private explorerHud?: ExplorerHud;
-  private chunkUndead?: ChunkUndeadDirector;
-  private readonly chunkGateMarkers = new Map<string, ChunkGateMarker>();
-  private chunkGatePrompt?: ChunkGatePrompt;
-  private chunkPurchaseOverlay?: ChunkPurchaseOverlay;
-  private extractPrompt?: ExtractPrompt;
-  /** Portais ja recusados: perguntar de novo a cada passo dentro do mesmo tile seria assedio. */
-  private declinedPortals = new Set<string>();
   private levelIntroOpen = false;
   private levelIntroOverlay?: LevelIntroOverlay;
   private levelTransitioning = false;
@@ -864,48 +752,27 @@ export class GameScene extends Phaser.Scene {
    * e descartado no restart e o do level novo nasce com os padroes.
    */
   private litParams?: { ambient: number; moon: number; exposure: number };
-  // Os cabos de energia + o indice espacial deles e o conjunto dos que estao VIVOS neste frame
-  // (recalculado em updatePowerGrid — a corrente nao tem memoria, so a fonte).
-  private wires: WireObject[] = [];
-  private wireIndex = new Map<string, WireObject>();
-  private liveWires = new Set<string>();
-  /**
-   * Quanto da propria vazao cada CONSUMIDOR esta recebendo (0..1), por tile — a saida de
-   * `solvePowerGrid`, reescrita todo frame. Ela substituiu o booleano "ha corrente aqui": um
-   * booleano nao tem gargalo, e sem gargalo nao ha fabrica, so fiacao.
-   */
-  private powerSatisfaction: ReadonlyMap<string, number> = new Map();
   /** As marcas de "a peça cai aqui" — o quadrado no chão e o keycap (ver PlacementHints). */
   private placementHints?: PlacementHints;
-  /** O aviso "X — Take <coisa>" sobre a cabeca do heroi. Ver PickupPrompt. */
-  private pickupPrompt?: PickupPrompt;
   /** O balao de PENSAMENTO do heroi: um icone, um instante. Ver HeroThought. */
   private heroThought?: HeroThought;
-  // A FABRICA construida pelo jogador (e a autorada no /editor, que usa as mesmas classes).
-  private belts: BeltObject[] = [];
-  private chests: ChestObject[] = [];
-  private extractors: ExtractorObject[] = [];
-  // A CADEIA DO FERRO: o forno reduz minerio com carvao, o martinete malha a esponja.
+  // A CADEIA DO FERRO: o forno reduz minério com carvão; mão e altar malham a esponja.
   /**
    * Quantas marteladas a ESPONJA de cada tile ja levou. Ela e um item no chao, e itens no chao
    * nao tem estado proprio neste jogo — entao a contagem mora aqui, por tile, e some quando o
-   * tile deixa de ter uma esponja. E a mesma contagem que o martinete faz internamente
-   * (BLOOM_BLOWS), porque a mao e a maquina precisam custar o MESMO: um numero diferente para o
-   * mesmo gesto faria o alivio de automatizar virar uma conta em vez de uma sensacao.
+   * tile deixa de ter uma esponja. `BLOOM_BLOWS` é a fonte única para a mão e o altar.
    */
   private readonly bloomBlows = new Map<string, number>();
   private furnaces: FurnaceObject[] = [];
-  private tripHammers: TripHammerObject[] = [];
   private altars: AltarObject[] = [];
-  private globalVariables = new GlobalVariables();
   private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
   // O registro único de props: referencia os MESMOS arrays tipados acima, então destruição,
   // colisão (isSolidForEntities) e reset atravessam todos os props num loop só — um prop novo
   // é uma entrada aqui, não seis edições espalhadas. Consequência: fora do create/shutdown os
   // arrays só podem ser mutados IN PLACE (push/splice); reatribuir um deles órfão o registro.
-  // `hazard` marca os dois tiles que as botas de lava vadeiam (lava e água) — todo o resto
-  // bloqueia incondicionalmente pelo próprio `blocking` do prop.
+  // `hazard` marca água e lava para os poucos sistemas que ignoram chão perigoso, como inimigos
+  // voadores e projéteis. Para o herói, ambos bloqueiam até virarem chão por uma interação.
   private propRegistry: Array<{ list: WorldProp[]; hazard?: boolean }> = [];
   // Lit bombs on the ground — world-anchored billboards ticking until they blow.
   // `fuseTween` viaja no registro para a explosao poder MATA-LO: o fogo alcancando a bomba
@@ -966,9 +833,6 @@ export class GameScene extends Phaser.Scene {
   private healMoteTimer = 0;
   // Low-health fire compass: an arrow orbiting the hero, pointing toward the nearest lit fire.
   private fireCompassArrow?: Phaser.GameObjects.Polygon;
-  // Screen-edge vignette driven by the undead danger meter (see DANGER_VIGNETTE_* knobs).
-  // It lives in the 3D post chain (World3D.setDangerVignette) — this only paces its breath.
-  private dangerPulsePhase = 0;
   private tileSize = MIN_BOARD_TILE_SIZE;
   private isDead = false;
   private dialogOpen = false;
@@ -976,9 +840,9 @@ export class GameScene extends Phaser.Scene {
   // Dialog variants the player already heard this run (kind:base / kind:locked / wizard:beat).
   // An NPC whose *current* variant isn't here yet shows a "!" marker above its head.
   private readonly seenDialogKeys = new Set<string>();
-  // While a dialog is open the camera pans so the hero + NPC sit centered in the left half
-  // of the screen (the dialog panel covers the right half). camShifting keeps the world
-  // frozen-but-reprojected during the pan; dialogNpcWorld lets a resize re-apply the offset.
+  // While a dialog is open the camera pans so the hero + NPC sit centered on the stage ABOVE
+  // the speech box (a bar along the bottom). camShifting keeps the world frozen-but-reprojected
+  // during the pan; dialogNpcWorld lets a resize re-apply the offset.
   private camShifting = false;
   private camShiftTween?: Phaser.Tweens.Tween;
   private dialogNpcWorld?: { worldX: number; worldY: number };
@@ -988,7 +852,7 @@ export class GameScene extends Phaser.Scene {
   // True quando esta cena e a AVENTURA (overworld ou uma dungeon dela) — o unico modo com
   // memoria persistente (adventureState). Explorador e levels nunca ligam isto.
   private adventure = false;
-  // Qual arquivo de mundo esta aberto ('world' ou 'dungeon-N') — a chave da foto de itens no
+  // Qual arquivo de mundo esta aberto ('world' ou 'under') — a chave da foto de itens no
   // chao dentro do save.
   private adventureScope = 'world';
   // Wizard story progression: how many dead fires the hero has relit, and whether the wizard's
@@ -1050,30 +914,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   public create(): void {
-    // O MUNDO INFINITO tem que ser ligado antes de qualquer outra coisa: `getPlayerStart()` na
-    // linha seguinte ja pergunta a ele onde fica o acampamento, e o World3D (mais abaixo) assa
-    // o terreno dentro do proprio construtor lendo a janela que o diretor acabou de definir.
-    // Ligar depois seria assar o mundo autorado e so entao trocar o chao debaixo dele.
-    this.explorer = undefined;
-    this.chunkUndead = undefined;
-    this.declinedPortals.clear();
-    if (isExplorerMode()) {
-      const run = explorerRun();
-      if (run) {
-        this.explorer = new ExplorerDirector(run.seed);
-        this.explorer.install();
-        this.chunkUndead = new ChunkUndeadDirector();
-      }
-    }
 
     // A AVENTURA TEM MEMORIA. O modo aventura (o overworld e as dungeons dele) hidrata do
     // retrato em adventureState — que sobrevive ao scene.restart() por ser estado de modulo e
     // ao browser por viver no localStorage. Explorador e levels ficam de fora: la, zerar E o
     // desenho (a aposta do explorador e perder; o level e um puzzle que recomeca limpo).
-    this.adventure = !isExplorerMode()
-      && this.registry.get('appMode') === 'game'
-      && (getActiveLevel() === null || getDungeonTrip() !== null);
-    const inDungeon = getDungeonTrip() !== null;
+    this.adventure = this.registry.get('appMode') === 'game'
+      && (getActiveLevel() === null || isUnderground());
+    const inDungeon = isUnderground();
     // Arvores derrubadas voltam ao chao ANTES do World3D assar o terreno (o construtor le os
     // chunks): o corte e um diff por cima do world.json, que volta limpo do disco a cada boot
     // e a cada saida de dungeon.
@@ -1119,7 +967,6 @@ export class GameScene extends Phaser.Scene {
     registerCharcoalTexture(this);
     registerPlacementTextures(this);
     registerLevelPortalTextures(this);
-    registerFultonTextures();
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -1129,14 +976,18 @@ export class GameScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
 
     // Decode the SFX + music loops. A AVENTURA de overworld tem trilha: "Ashen Fields", que
-    // ficou anos no repositorio "para revival facil" — revivida. O vento continua por baixo
-    // (ele e ambience, nao musica) e o combate segue soprepondo a danger track. Dungeon, level
-    // e explorador ficam so no vento: o escuro deles e desenho, nao falta de musica.
+    // ficou anos no repositorio "para revival facil" — revivida. O vento continua por baixo (ele
+    // e ambience, nao musica). Dungeon, level e explorador ficam so no vento: o escuro deles e
+    // desenho, nao falta de musica.
+    //
+    // E ESTA E A UNICA VEZ EM QUE A TRILHA E ESCOLHIDA. Ela nao responde a inimigo: nao existe
+    // mais trilha de combate subindo quando um corpo entra na tela (ver MusicKey). Quem baixa a
+    // musica sao as telas que a tomam — dialogo, item-get, cutscene —, e cada uma a devolve com
+    // fadeMusicIn ao fechar; o barramento e delas, a trilha e daqui.
     getSoundManager().preload();
     if (this.adventure && !inDungeon) getSoundManager().startMusic('overworld', 2400);
     else getSoundManager().stopMusic(1800);
     getSoundManager().startAmbience();
-    this.dangerCalmMs = 0;
 
     // Phaser does not auto-call shutdown(); wire it so scene.restart() (death) cleans up
     // listeners/textures instead of leaking them across runs.
@@ -1188,13 +1039,12 @@ export class GameScene extends Phaser.Scene {
       if (ev.enemy) this.freezeEnemy(ev.enemy);
       else this.freezeAtTile(Math.round(ev.x), Math.round(ev.y));
     });
-    const siegeOff = this.registry.get('appMode') === 'lab' || isPuzzleWorld() || Boolean(this.explorer);
-    this.spawnDirector = siegeOff ? undefined : new UndeadSpawnDirector();
-    // A segunda porta sao as COVAS AUTORADAS, e elas valem em TODO mundo — inclusive no lab e
-    // nos levels, exatamente onde o cerco esta desligado. A razao e a diferenca entre as duas:
-    // o cerco e ambiente (ninguem pediu por ele, e nao se sabe onde vai bater), a cova e uma
-    // decisao de autor num tile escolhido a mao. Desligar aqui seria tirar do editor a unica
-    // maneira de por um guarda num corredor.
+    // A UNICA fonte de inimigo do jogo e a COVA AUTORADA (aba Inimigos do editor): um tile
+    // escolhido a mao, um corpo por vez, outro depois que ele cai. O CERCO ambiente
+    // (UndeadSpawnDirector) — que fazia caveiras subirem num anel de 4 a 7 tiles em volta do
+    // heroi enquanto ele demorava no escuro — foi REMOVIDO: era a unica coisa no jogo capaz de
+    // por um corpo num lugar que ninguem autorou, e com o explorador fora nao sobrou modo nenhum
+    // que o quisesse. Corpo que aparece agora saiu de um tile que alguem escolheu no editor.
     this.enemySpawners = new EnemySpawnerManager(getEnemySpawns());
     this.playerSafe = true;
     this.healthRegenTimer = 0;
@@ -1226,15 +1076,12 @@ export class GameScene extends Phaser.Scene {
     });
     this.coinManager = new CoinManager(this);
     if (this.adventure) this.coinManager.restoreTotal(adventureState().coins);
-    // A bolsa do construtor de mundo começa cheia (START_COINS) e sobrevive ao restart da
-    // cena: o HUD tem de nascer mostrando o que o run já carrega, nunca um zero de mentira.
-    else if (this.explorer) this.coinManager.restoreTotal(explorerRun()?.coins ?? 0);
     this.heartPickupManager = new HeartPickupManager(this, getContent);
     this.itemManager = new ItemManager(this);
-    // O chao tambem lembra: a foto salva dos itens DESTE mundo (overworld ou dungeon-N)
+    // O chao tambem lembra: a foto salva dos itens DESTE mundo (overworld ou subterraneo)
     // substitui a lista autorada — um item largado fica onde ficou, um tesouro tomado nao
     // renasce. Sem foto (mundo nunca visitado, ou fora da aventura), vale o autorado.
-    this.adventureScope = inDungeon ? `dungeon-${getDungeonTrip()!.level}` : 'world';
+    this.adventureScope = inDungeon ? 'under' : 'world';
     const savedGround = this.adventure ? adventureState().groundItems.get(this.adventureScope) : undefined;
     this.itemManager.loadAuthored(
       savedGround
@@ -1251,7 +1098,6 @@ export class GameScene extends Phaser.Scene {
       this.updateBackItem(); // o item selecionado volta as costas do heroi ja no primeiro frame
     }
     this.heldOnFire = false;
-    this.heldBatteryChargeMs = 0;
     // One reusable swing animator, alive for the whole scene: the sword uses it to attack,
     // the key uses it to strike a door (SwordSlash.slash accepts a custom item sprite).
     this.swordSlash = new SwordSlash(this);
@@ -1283,19 +1129,15 @@ export class GameScene extends Phaser.Scene {
       this.camera,
       (wx, wy) => {
         // The hero also stops on enemies (to attack them); everything else that blocks is
-        // shared with enemies via isSolidForEntities — except the hazards (lava AND water),
-        // which the hero wades while holding the lava boots.
+        // shared with enemies via isSolidForEntities. Lava and water remain solid until the
+        // player builds a crossing; no held item grants movement through the hazard itself.
         if (this.enemyManager?.getEnemyAt(wx, wy)) return true;
-        // Unbought chunks remain behind the fog seam. Enemies deliberately do NOT consult this
-        // gate, which is how the dead can walk in from an unfinished road while the hero cannot
-        // walk out before buying a card.
-        if (this.explorer?.blocksPlayerAt(wx, wy)) return true;
-        return this.isSolidForEntities(wx, wy, this.heldItem === 'lavaBoots');
+        return this.isSolidForEntities(wx, wy);
       },
       // Fires once per tile ENTERED (never per frame): decor rustle + walk-on interactions.
-      (wx, wy) => {
+      (wx, wy, dx, dy) => {
         this.world3d?.rustleDecor(wx, wy);
-        this.handleTileEntered(wx, wy);
+        this.handleTileEntered(wx, wy, dx, dy);
       },
       (wx, wy) => this.handlePlayerBump(wx, wy),
     );
@@ -1336,6 +1178,20 @@ export class GameScene extends Phaser.Scene {
         i === homeIdx || c.lit === true || (savedLit?.has(`${c.worldX},${c.worldY}`) ?? false),
       ),
     );
+    // A PIRA volta do save com as toras que ja recebeu (e acesa, se ja foi acesa). Fora da
+    // aventura ela sempre comeca da base: level e lab zeram por desenho.
+    const savedPyre = this.adventure && !inDungeon ? adventureState() : undefined;
+    this.pyres = getPyres().map((p) => new PyreObject(
+      this, p.worldX, p.worldY,
+      savedPyre?.pyreLogs.get(`${p.worldX},${p.worldY}`) ?? 0,
+      savedPyre?.litPyres.has(`${p.worldX},${p.worldY}`) ?? false,
+    ));
+    // A PIRA CENTRAL — o fim do jogo — se apresenta aqui, e o save guarda o tile dela: uma missão
+    // fechada dentro de uma dungeon não tem pira nenhuma na cena para receber as toras, e sem esta
+    // chave o crédito dela se perderia em silêncio (ver creditPyreForQuests).
+    if (savedPyre && this.pyres.length > 0) {
+      savedPyre.centralPyre = `${this.pyres[0].worldX},${this.pyres[0].worldY}`;
+    }
     this.dryBushes = getDryBushes().map((b) => {
       const bush = new DryBushObject(this, b.worldX, b.worldY);
       // O fogo PRODUZINDO: um arbusto que terminou de arder as vezes deixa carvao (comida da
@@ -1361,7 +1217,7 @@ export class GameScene extends Phaser.Scene {
     this.plantSpots = getPlantSpots().map((s) => new PlantSpotObject(this, s.worldX, s.worldY));
     // Os buracos que a PÁ cavou voltam do save (diff sobre os autorados, o padrão felledTrees) —
     // só na aventura de OVERWORLD: dungeon não tem terra, e level/explorador zeram por desenho.
-    if (this.adventure && !getDungeonTrip()) {
+    if (this.adventure && !isUnderground()) {
       for (const key of adventureState().dugSpots) {
         const [wx, wy] = key.split(',').map(Number);
         if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
@@ -1373,38 +1229,22 @@ export class GameScene extends Phaser.Scene {
         this.plantSpots.push(new PlantSpotObject(this, wx, wy));
       }
     }
-    // `dir ?? 1`: um braco sem direcao gravada aponta pro leste. Ele nunca fica sem direcao de
-    // verdade (o editor sempre grava uma), mas o default evita que um JSON antigo vire um prop
-    // quebrado — e leste e o que o editor oferece primeiro.
     this.carnivorousPlants = getCarnivorousPlants().map(
       (p) => new CarnivorousPlantObject(this, p.worldX, p.worldY),
-    );
-    this.inserters = getInserters().map(
-      (a) => new RoboticArmObject(a.worldX, a.worldY, a.dir ?? 1, a.variable),
     );
     // Mesma regra de default do braco (`dir ?? 1`): um JSON antigo nunca vira um prop quebrado,
     // e leste e a direcao que o editor oferece primeiro.
     this.toolboxes = getToolboxes().map(
       (t) => new ToolboxObject(this, t.worldX, t.worldY, t.dir ?? 1),
     );
-    this.globalVariables = new GlobalVariables(getGlobalVariables());
-    this.woodenCrates = getWoodenCrates().map((crate) => new WoodenCrateObject(this, crate.worldX, crate.worldY));
-    this.pressurePlates = getPressurePlates().map(
-      (plate) => new PressurePlateObject(this, plate.worldX, plate.worldY, plate.variable),
-    );
-    this.waterWheels = getWaterWheels().map(
-      (wheel) => new WaterWheelObject(this, wheel.worldX, wheel.worldY, wheel.variable),
-    );
-    this.boilers = getBoilers().map(
-      (b) => new BoilerObject(this, b.worldX, b.worldY, b.variable),
-    );
-    this.electronicGates = getElectronicGates().map(
-      (gate) => new ElectronicGateObject(this, gate.worldX, gate.worldY, gate.variable),
-    );
     this.levelPortals = getLevelPortals().map(
-      (portal) => new LevelPortalObject(portal.worldX, portal.worldY, portal.level),
+      (portal) => new LevelPortalObject(portal.worldX, portal.worldY),
     );
-    this.sellBoxes = getSellBoxes().map((box) => this.makeSellBox(box));
+    // A MESMA escada, no MESMO tile, nos dois andares: o que muda é para onde ela leva DAQUI.
+    // Em cima ela afunda no chão; embaixo ela sobe para fora dele.
+    this.stairs = getStairs().map(
+      (st) => new StairsObject(st.worldX, st.worldY, isUnderground() ? 'up' : 'down'),
+    );
 
     // AS TOCHAS DE PAREDE. Elas nao estao na lista de props: sao o frame `wallTorch` pintado na
     // alvenaria pelo gerador de dungeons, entao a unica forma de encontra-las e varrer o terreno.
@@ -1429,32 +1269,14 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
-    this.wires = getWires().map((w) => new WireObject(this, w.worldX, w.worldY));
-    // A FABRICA autorada. As mesmas classes que a construcao do jogador usa — o que muda e so o
-    // `playerBuilt`, que decide se o B de mao vazia pode recolher a peca de volta. Uma esteira
-    // autorada num level e parte do puzzle; a que o jogador deitou e propriedade dele.
-    this.belts = getBelts().map((b) => new BeltObject(this, b.worldX, b.worldY, b.dir ?? 1));
-    this.chests = getChests().map(
-      (c) => new ChestObject(this, c.worldX, c.worldY, false, c.quota, c.variable),
-    );
-    this.extractors = getExtractors().map(
-      (e) => new ExtractorObject(this, e.worldX, e.worldY, e.dir ?? 1),
-    );
     this.furnaces = getFurnaces().map(
       (f) => new FurnaceObject(this, f.worldX, f.worldY, f.dir ?? 1),
     );
     this.altars = getAltars().map((a) => new AltarObject(this, a.worldX, a.worldY));
-    this.tripHammers = getTripHammers().map(
-      (h) => new TripHammerObject(this, h.worldX, h.worldY, h.dir ?? 1),
-    );
-    // O que o jogador construiu e o que ele guardou nos baus voltam do save AQUI — depois dos
+    // O que o jogador construiu volta do save AQUI — depois dos
     // autorados, para que uma peca autorada num tile sempre ganhe do diff (o save cede ao mundo,
     // a mesma regra dos buracos da pa logo acima).
     this.restoreBuiltMachines();
-    this.wireIndex = new Map(this.wires.map((w) => [`${w.worldX},${w.worldY}`, w]));
-    this.liveWires = new Set();
-    this.powerSatisfaction = new Map();
-    this.resolveWireShapes();
     this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
     // Both `water` and `bridgeSpot` are river tiles (WaterObjects render animated water). A
     // plain `water` tile is an impassable river; a `bridgeSpot` is a river tile you CAN bridge
@@ -1462,10 +1284,6 @@ export class GameScene extends Phaser.Scene {
     // allowed. They're separate props (one per tile) so the editor's "one prop per cell" holds.
     this.waterTiles = [
       ...getWaterTiles().map((w) => new WaterObject(this, w.worldX, w.worldY, false)),
-      // A roda substitui o prop `water` no editor, mas continua sendo um tile de rio no
-      // runtime. Renderizar a agua no mesmo ponto deixa as pas realmente dentro do canal e,
-      // principalmente, permite drenar exatamente a agua que move o rotor.
-      ...getWaterWheels().map((w) => new WaterObject(this, w.worldX, w.worldY, false)),
       ...getBridgeSpots().map((b) => {
         const w = new WaterObject(this, b.worldX, b.worldY, true);
         // A scene-level burst of pale light the moment the last board is nailed home.
@@ -1475,6 +1293,7 @@ export class GameScene extends Phaser.Scene {
     ];
     this.propRegistry = [
       { list: this.campfires },
+      { list: this.pyres },
       { list: this.dryBushes },
       { list: this.lockedDoors },
       { list: this.swingGates },
@@ -1486,39 +1305,19 @@ export class GameScene extends Phaser.Scene {
       { list: this.bombSpots },
       { list: this.plantSpots },
       { list: this.carnivorousPlants },
-      { list: this.inserters },
       { list: this.toolboxes },
       { list: this.furnaces },
-      { list: this.tripHammers },
       { list: this.altars },
-      { list: this.woodenCrates },
-      { list: this.pressurePlates },
-      { list: this.waterWheels },
-      { list: this.boilers },
-      { list: this.electronicGates },
       { list: this.levelPortals },
-      { list: this.sellBoxes },
-      { list: this.wires },
-      { list: this.belts },
-      { list: this.chests },
-      { list: this.extractors },
-      // Lava e água são os dois hazards que as botas de lava deixam o herói vadear — inimigos
-      // sempre consultam com hazardsPassable=false, então um rio segue sendo parede para eles.
+      { list: this.stairs },
+      // Lava e água continuam no registro como hazards para voadores e projéteis. Corpos no chão,
+      // inclusive o herói, só passam depois que o tile deixou de bloquear.
       { list: this.lavaTiles, hazard: true },
       { list: this.waterTiles, hazard: true },
     ];
 
-    // Circuitos so podem ser calculados depois que a agua existe: a roda le os quatro tiles
-    // vizinhos, e um gerador sem corrente deve nascer apagado, nunca true por um frame.
-    this.updateMechanismCircuits(0);
-
     this.initLighting();
     this.streamChunks(true);
-
-    // A mortalha dos chunks não-comprados precisa existir ANTES do prewarm logo abaixo: é ele
-    // que compila os dois programas dela junto com todo o resto — deixá-la para depois seria
-    // um shader compilando no meio da primeira caminhada.
-    if (this.explorer && this.world3d) this.explorer.syncShroud(this.world3d);
 
     // The world is fully built, so compile every shader now rather than lazily, one hitch at
     // a time, on the frames each material is first drawn.
@@ -1561,32 +1360,24 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.placementHints = new PlacementHints(this);
-    this.pickupPrompt = new PickupPrompt(this);
     this.heroThought = new HeroThought(this, ASSET_KEYS.thoughtTorch);
     this.installActionInput();
-
-    // O HUD do explorador (a bolsa e a distancia) e o recibo da expedicao anterior. Depois do
-    // resto da UI de proposito: se a expedicao terminou, o cartao que conta o que sobrou e a
-    // primeira coisa que o jogador deve ler ao acordar no acampamento.
-    if (this.explorer) {
-      this.explorerHud = new ExplorerHud();
-      this.chunkGatePrompt = new ChunkGatePrompt();
-      this.syncChunkGates(this.explorer.frontiers(), (explorerRun()?.coins ?? 0) >= this.explorer.minCost());
-      const arrival = consumeExplorerArrival();
-      if (arrival) this.explorerHud.showArrival(arrival);
-      this.buildPinnedCard();
-    }
 
     const activeLevel = getActiveLevel();
     // Chegou pelo portal? Entao o level nao comeca: ele ATERRISSA. O cartao de titulo espera o
     // heroi tocar o chao (ver playPortalArrival), porque anunciar o nome de um lugar onde o
     // heroi ainda nao pisou e anunciar cedo demais.
-    if (consumePendingPortalArrival()) {
+    if (consumePendingStairsArrival()) {
+      void this.playStairsArrival();
+    } else if (consumePendingPortalArrival()) {
       void this.playPortalArrival(activeLevel);
     } else {
       // Nenhuma chegada pendente e um tunel aberto significa que a viagem foi abandonada no meio
       // (morte, voltar ao menu, um restart por outro motivo): o overlay nao pode ficar de pe.
+      // A cortina da escada segue a mesma lei, e com mais motivo — ela e opaca e nao anima
+      // sozinha, entao esquecida ela e uma tela preta permanente.
       if (portalTunnelActive()) destroyPortalTunnel();
+      destroyStairsCurtain();
       if (activeLevel !== null) this.showLevelIntro(activeLevel);
     }
   }
@@ -1708,13 +1499,7 @@ export class GameScene extends Phaser.Scene {
   private restartRun(): void {
     if (this.pauseMenu) return; // the floating buttons are hidden while the menu is up anyway
     getSoundManager().stopMusic();
-    // No explorador, recomecar CUSTA o mesmo que morrer. Se fosse de graca, seria a saida
-    // otima de toda expedicao ruim — e as duas porcentagens que sustentam o modo passariam a
-    // ser opcionais. Sair do mundo sem passar por um portal e sair perdendo, sempre.
-    if (this.explorer) {
-      loseRunToDeath();
-      rerollExplorerWorld();
-    } else if (this.adventure) {
+    if (this.adventure) {
       // Na aventura "reiniciar" nao e recomecar do zero (isso e o Start over do titulo): e
       // voltar a fogueira com tudo — o mesmo contrato da morte, sem o funeral.
       this.persistAdventure();
@@ -1791,67 +1576,6 @@ export class GameScene extends Phaser.Scene {
         },
       });
     });
-  }
-
-  // ── o explorador: a pergunta do portal, e as duas maneiras de a expedicao acabar ──────────
-
-  /**
-   * O heroi pisou num portal la fora. Congela a expedicao e pergunta.
-   *
-   * Recusar nao gasta o portal — ele fica ali, e o jogador pode voltar quando a bolsa pesar
-   * mais. O que a recusa gasta e a PERGUNTA: enquanto o heroi nao sair do tile, ninguem
-   * pergunta de novo, senao continuar andando por cima do portal viraria um interrogatorio.
-   */
-  private askExtraction(portal: LevelPortalObject): void {
-    if (this.extractPrompt || this.levelTransitioning || this.isDead) return;
-    const key = `${portal.worldX},${portal.worldY}`;
-    if (this.declinedPortals.has(key)) return;
-
-    const coins = explorerRun()?.coins ?? 0;
-    this.cutsceneActive = true; // congela o mundo enquanto a pergunta esta na tela
-    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-    getSoundManager().playShopOpen();
-    this.extractPrompt = new ExtractPrompt({
-      coins,
-      kept: Math.floor(coins * EXTRACT_KEEP),
-      onYes: () => {
-        this.extractPrompt = undefined;
-        void this.returnToCamp(portal);
-      },
-      onNo: () => {
-        this.extractPrompt = undefined;
-        this.declinedPortals.add(key);
-        this.cutsceneActive = false;
-      },
-    });
-  }
-
-  /**
-   * SIM: metade da bolsa vira banco e o heroi volta vivo.
-   *
-   * A viagem inteira e a do portal dos levels — succao, vazio, tunel, queda — e isso nao e
-   * reaproveitamento por economia: e a mesma FRASE. O jogo ja ensinou que atravessar um portal
-   * e assim, e uma expedicao que voltasse por um fade seria uma segunda gramatica para a mesma
-   * coisa. A diferenca esta so no outro lado do tunel: em vez do proximo level, o acampamento.
-   */
-  private async returnToCamp(portal: LevelPortalObject): Promise<void> {
-    if (this.levelTransitioning) return;
-    this.levelTransitioning = true;
-    this.cutsceneActive = true;
-    this.explorerHud?.setVisible(false);
-
-    await this.playPortalSuck(portal);
-    await this.wait(PORTAL_EMPTY_MS);
-    startPortalTunnel(this.world3d ? this.world3d.tileScreenSize() / TILESET_FRAME_SIZE : undefined);
-    getSoundManager().playPortalTravel();
-    await this.wait(PORTAL_TUNNEL_HANDOFF_MS);
-
-    // A ordem importa: liquidar ANTES do restart. A cena nova le a chegada (o recibo) no
-    // create, e ela so existe se a conta ja tiver sido fechada.
-    extractToCamp();
-    rerollExplorerWorld();
-    setPendingPortalArrival(); // do outro lado ele CAI no acampamento, como em qualquer viagem
-    this.scene.restart();
   }
 
   /** Purple threshold crossed: resolve the next entry from the same manifest as level select. */
@@ -2002,60 +1726,241 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * As nove dungeons sao GERADAS a partir da semente desta partida, e lembradas depois disso (ver
-   * `dungeon/dungeonWorld`). `?dungeons=static` volta a ler os nove arquivos do disco — as plantas
-   * exatas do Zelda 1, que continuam no repositorio: elas sao o controle do A/B, a rede de
-   * seguranca de um build ruim, e o que a lista de levels ainda joga.
+   * A TRAVESSIA PELA ESCADA — e ela é uma CAMINHADA, não um teletransporte.
+   *
+   * O portal engolia o herói girando, apagava o mundo, abria um túnel na tela e o cuspia caindo
+   * do céu. A escada faz o contrário em tudo: ele **entra andando** no poço, afunda com os
+   * degraus e some; o mundo troca atrás do preto; e do outro lado ele **sai andando** do poço,
+   * subindo, no mesmo tile. Nenhum efeito mágico, nenhuma queda — só a peça de pedra e os pés.
+   *
+   * O `scene.restart()` no meio continua sendo o mesmo de sempre (é o único jeito de trocar de
+   * mundo), e é por isso que o bilhete de chegada existe: a descida roda numa GameScene e a
+   * saída na seguinte, que é um objeto novo sem memória nenhuma.
    */
-  private static useStaticDungeons(): boolean {
-    return new URLSearchParams(window.location.search).get('dungeons') === 'static';
+  private async stairsTrip(fetching: Promise<void>, swap: () => void): Promise<void> {
+    if (this.levelTransitioning) return;
+    this.levelTransitioning = true;
+    this.cutsceneActive = true;
+    this.levelButtons?.setVisible(false);
+
+    // A CORTINA (ver StairsCurtain) fecha no exato instante em que o lance acaba, e a troca de
+    // andar inteira acontece atrás dela. É a mesma lei do túnel do portal — que nasce ANTES do
+    // `scene.restart()` de propósito —, e aqui ela vale ainda mais: o canvas 3D é removido do DOM
+    // no `dispose`, então sem cobertura a tela mostra o fundo da página no meio da viagem.
+    // Ela cobre TUDO, inclusive a HUD: `setWorldFade` só apaga o mundo 3D, e corações a brilho
+    // pleno sobre um mundo preto eram metade do defeito.
+    const curtain = this.wait(STAIRS_WALK_MS * STAIRS_CURTAIN_AT)
+      .then(() => closeStairsCurtain(STAIRS_WALK_MS * (1 - STAIRS_CURTAIN_AT)));
+    await this.walkStairs('in');
+    await curtain;
+
+    try {
+      await fetching;
+      swap();
+      setPendingStairsArrival();
+      if (this.scene.isSleeping('editor') || this.scene.isActive('editor')) this.scene.stop('editor');
+      this.scene.restart();
+    } catch {
+      // Sem o arquivo do outro andar a viagem volta atrás: o herói sobe de volta os degraus que
+      // desceu, e nada no mundo mudou. A alternativa seria deixá-lo enterrado e invisível — e,
+      // agora, atrás de uma cortina preta que ninguém mais baixaria.
+      clearPendingStairsArrival();
+      openStairsCurtain(220);
+      await this.walkStairs('out');
+      this.levelTransitioning = false;
+      this.cutsceneActive = false;
+      this.levelButtons?.setVisible(true);
+    }
   }
 
-  private async enterDungeon(portal: LevelPortalObject): Promise<void> {
-    const level = portal.level;
-    if (level === undefined) return;
-    this.persistAdventure(); // a foto do overworld (mochila, chao) fecha antes da viagem
-    let world: unknown;
-    // A geracao roda DENTRO da travessia do portal — que ja e assincrona e ja dura ~1,5s (succao,
-    // vazio, tunel, queda). Ela ocupa o mesmo lugar que a rede ocupava; o jogador nao espera nada
-    // que ja nao esperasse.
-    const fetching = GameScene.useStaticDungeons()
-      ? window
-        .fetch(`${import.meta.env.BASE_URL}levels/dungeon-${level}.json`, { cache: 'no-store' })
-        .then((res) => { if (!res.ok) throw new Error(`dungeon ${level} indisponivel`); return res.json(); })
-        .then((json: unknown) => { world = json; })
-      : dungeonWorldFor(level, import.meta.env.BASE_URL).then((generated) => { world = generated; });
-    await this.portalTrip(portal, fetching, () => {
-      setWorldData(world as Parameters<typeof setWorldData>[0]);
-      setActiveLevel(level);
-      // O bilhete de volta: o tile do overworld onde ele entrou. Sem isto o heroi reapareceria
-      // no ponto de nascimento do mundo, a meio mapa da caverna que acabou de visitar.
-      setDungeonTrip({ level, returnX: portal.worldX, returnY: portal.worldY });
+  /**
+   * OS PÉS NA ESCADA: um lance de degraus percorrido em `STAIRS_WALK_MS`.
+   *
+   * `in` = entrar no poço; `out` = sair dele, que é a chegada. Os DOIS lados usam o mesmo gesto
+   * de propósito: o poço é um buraco, e a leitura é sempre "ele entrou ali" / "ele saiu dali" —
+   * para baixo ou para cima, a pedra é a mesma.
+   *
+   * TODA medida vem da PEÇA (`STAIRS_RUN_TILES`, `stairsLiftAt` e `STAIRS_STEPS`, exportados do
+   * StairsObject): a caminhada tem de terminar onde a geometria acaba, subir na altura em que a
+   * pedra está e ter uma bota por pisada — senão ele some no ar, atravessa a rocha ou desliza.
+   */
+  private walkStairs(way: 'in' | 'out'): Promise<void> {
+    const h = this.hero;
+    const w3 = this.world3d;
+    const baseY = h.y;
+    const run = STAIRS_RUN_TILES * this.tileSize;
+    /**
+     * A BOCA DA ESCADA FICA AO NORTE NOS DOIS ANDARES — e é a única coisa que o deslocamento
+     * precisa saber.
+     *
+     * Em cima a boca é o buraco; embaixo é a passagem no teto, no alto do lance. Nos dois casos
+     * ENTRAR na escada é andar para o norte, e o `k` do tween mede o quanto o herói já está
+     * dentro dela: a posição é sempre o centro do tile mais `k` para o norte. Entrando o `k`
+     * sobe, saindo ele desce, e o mesmo sinal serve para os dois sentidos e para os dois andares.
+     *
+     * Isto já foi derivado de `northward`, que mistura duas perguntas (de que lado fica a boca E
+     * para onde ele anda): dava certo em `'in'` e ESPELHADO em `'out'`, e as duas chegadas
+     * botavam o herói do lado errado do poço andando de ré.
+     */
+    /**
+     * A ALTURA é da PEÇA, e as duas peças respondem diferente: em cima o corpo afunda numa rampa
+     * contínua (é uma queda dentro de um buraco), embaixo ele POUSA no degrau que está sob ele,
+     * porque lá os degraus existem. Ver `stairsLiftAt`.
+     */
+    const underground = isUnderground();
+    /**
+     * ENTRAR É ANDAR PARA O NORTE, SAIR É ANDAR PARA O SUL — nos dois andares.
+     *
+     * Em cima ele entra no buraco de costas para a câmera e volta de frente; embaixo ele sobe os
+     * degraus de costas e desce de frente. O rumo se INVERTE entre um andar e outro, e é o preço
+     * de a escada de baixo subir para longe da câmera (a única orientação em que os espelhos dos
+     * degraus aparecem — ver StairsObject). Ninguém vê a inversão: a tela está preta no meio.
+     */
+    const northward = way === 'in';
+    /**
+     * Para que lado a série de botas anda. Não é o mesmo que `northward`: andar para o norte é
+     * DESCER lá em cima (para dentro do buraco) e SUBIR lá embaixo (escada acima).
+     */
+    const descending = isUnderground() ? way === 'out' : way === 'in';
+    // Ele atravessa de costas para a câmera quando vai para o norte, e de frente quando volta.
+    h.frame = northward ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
+    h.walkFrames = northward ? WALK_CYCLE_FRAMES_UP : WALK_CYCLE_FRAMES;
+    // O ciclo de frente e o mesmo que os LADOS usam espelhado, e o espelho fica escrito no herói:
+    // quem chegou à escada vindo da esquerda desceria com o corpo virado do avesso.
+    h.flipX = false;
+    // OS PÉS SE MEXEM. Sem isto `tickHeroView` volta na primeira porta e o herói atravessa 620ms
+    // em pose de repouso, transladando — numa peça cuja tese inteira é "ele desce ANDANDO", os
+    // pés são a única coisa que prova a tese.
+    setHeroWalking(h, true);
+    const sound = getSoundManager();
+    let lastStep = -1;
+    return new Promise<void>((resolve) => {
+      this.tweens.addCounter({
+        from: way === 'in' ? 0 : 1,
+        to: way === 'in' ? 1 : 0,
+        duration: STAIRS_WALK_MS,
+        ease: 'Sine.easeInOut',
+        onUpdate: (tween) => {
+          const k = tween.getValue() ?? 0;
+          h.y = baseY - k * run; // a boca é ao norte nos dois andares; norte é para cima na tela
+          h.lift = stairsLiftAt(k, underground);
+          /**
+           * A CADÊNCIA vem da PEÇA, não da distância. O lance tem 0,37 tile e a passada do jogo
+           * mede um tile por bota (`TILES_PER_FOOTFALL`): deixar a distância comandar daria um
+           * terço de passo no lance inteiro. Aqui são quatro botas porque são quatro pisadas.
+           */
+          const gone = way === 'in' ? k : 1 - k;
+          h.walkDist = gone * STAIRS_STEPS * TILES_PER_FOOTFALL;
+          const step = Math.min(STAIRS_STEPS - 1, Math.floor(gone * STAIRS_STEPS));
+          if (step !== lastStep) {
+            lastStep = step;
+            sound.playStairsStep(step, descending);
+          }
+          // O corpo só apaga DEPOIS de já estar debaixo do chão — quem o engole é a pedra, e o
+          // alpha é só a garantia. Ele comia 45% do gesto; agora come 20%.
+          h.alpha = 1 - Math.max(0, (k - 0.8) / 0.2);
+          this.cutsceneHeroLight = h.alpha;
+          /**
+           * O mundo SEGURA e depois MERGULHA. Um fade linear apagava a escada junto com o
+           * primeiro passo, e o lance acontecia todo no escuro; assim a penumbra fica quase toda
+           * no fim, quando o herói já entrou no poço. Termina em 1 (preto de verdade) porque a
+           * cortina entra em cima: os dois chegam pretos no mesmo instante.
+           */
+          const late = Math.max(0, (k - 0.6) / 0.4);
+          w3?.setWorldFade(0.25 * k + 0.75 * late * late);
+        },
+        onComplete: () => {
+          h.y = baseY;
+          setHeroWalking(h, false);
+          resolve();
+        },
+      });
     });
   }
 
-  private async leaveDungeon(portal: LevelPortalObject): Promise<void> {
-    const trip = getDungeonTrip();
-    if (!trip) return;
-    this.persistAdventure(); // a foto da dungeon (tesouro tomado, itens largados) fecha aqui
-    // ...e o retrato da PLANTA fecha junto. O runtime edita os arrays de chunk no lugar, entao
-    // fotografar agora e fotografar o que a visita mudou — e o mundo la fora nunca volta a
-    // perguntar a semente por esta dungeon.
-    persistActiveDungeon();
+  /**
+   * A CHEGADA pela escada: ele sai do poço andando, no tile em que a escada está.
+   *
+   * Ela nasce PRETA, e isso não é estilo: a cena anterior morreu com a cortina fechada, e o
+   * World3D desta cena é um objeto NOVO com o fade zerado. Sem apagar as duas coisas aqui —
+   * antes do primeiro render — o andar novo aparecia inteiro, a brilho pleno, por uns 120ms, e
+   * só então estalava para o escuro de onde deveria ter vindo.
+   */
+  private async playStairsArrival(): Promise<void> {
+    this.cutsceneActive = true;
+    this.levelButtons?.setVisible(false);
+    void closeStairsCurtain(0);
+    this.world3d?.setWorldFade(1);
+    this.hero.alpha = 0;
+    this.hero.lift = stairsLiftAt(1, isUnderground());
+    await this.wait(STAIRS_SETTLE_MS); // um respiro no escuro: o mundo novo assenta antes de ser visto
+    // A cortina abre no mesmo ritmo em que fechou do outro lado, e por cima do primeiro trecho da
+    // caminhada — o mundo se revela enquanto ele sai, não antes de ele existir.
+    openStairsCurtain(STAIRS_WALK_MS * (1 - STAIRS_CURTAIN_AT));
+    await this.walkStairs('out');
+    this.hero.alpha = 1;
+    this.hero.lift = 0;
+    this.cutsceneHeroLight = 1;
+    this.world3d?.setWorldFade(0);
+    this.cutsceneActive = false;
+    this.levelButtons?.setVisible(true);
+  }
+
+  /**
+   * DESCER. O andar de baixo e o ESPELHO do mapa de cima — mesmo tamanho, mesmas coordenadas —,
+   * entao a viagem nao escolhe destino: ela troca o arquivo do mundo e mantem o tile. Descer em
+   * (x,y) e chegar em (x,y), e subir devolve ao mesmo lugar. O portal deixou de precisar saber
+   * QUAL dungeon abre porque ha uma so; o que separa descer de subir e de que lado o heroi esta
+   * (`isUnderground`), que e a mesma leitura de sempre.
+   */
+  private async enterDungeon(stairs: StairsObject): Promise<void> {
+    this.persistAdventure(); // a foto do overworld (mochila, chao) fecha antes da viagem
+    let world: { meta: { playerStart: { worldX: number; worldY: number } } } | undefined;
+    // A geracao roda DENTRO da travessia do portal — que ja e assincrona e ja dura ~1,5s (succao,
+    // vazio, tunel, queda). Ela ocupa o mesmo lugar que a rede ocupava; o jogador nao espera nada
+    // que ja nao esperasse.
+    const fetching = window
+      .fetch(`${import.meta.env.BASE_URL}underworld.json`, { cache: 'no-store' })
+      .then((res) => { if (!res.ok) throw new Error('subterraneo indisponivel'); return res.json(); })
+      .then((json: typeof world) => { world = json; });
+    await this.stairsTrip(fetching, () => {
+      // O ESPELHO: o herói nasce no MESMO tile, um andar abaixo. O arquivo tem um playerStart
+      // proprio (o editor exige um), e ele e reescrito aqui — como a volta ja fazia.
+      if (world) world.meta.playerStart = { worldX: stairs.worldX, worldY: stairs.worldY };
+      setWorldData(world as unknown as Parameters<typeof setWorldData>[0]);
+      setActiveLevel(null); // o andar de baixo nao e um level: e o outro lado do mesmo mundo
+      setUnderground(true);
+    });
+  }
+
+  /**
+   * SUBIR — no MESMO tile do portal que ele pegou.
+   *
+   * Nao existe bilhete de volta, e essa e a regra inteira: a porta e simetrica. Descer em (x,y)
+   * chega em (x,y), e subir em (x,y) chega em (x,y) — os cinco portais existem nos DOIS andares,
+   * no mesmo tile, entao atravessar um so troca o chao debaixo dos pes.
+   *
+   * Ate esta versao a subida usava o tile por ONDE O HEROI DESCEU, que era o certo enquanto a
+   * dungeon era um lugar separado. Com o espelho virou defeito: descer num canto, atravessar o
+   * andar de baixo e subir no canto oposto desfazia a viagem inteira e devolvia o heroi ao
+   * primeiro canto.
+   */
+  private async leaveDungeon(stairs: StairsObject): Promise<void> {
+    if (!isUnderground()) return;
+    this.persistAdventure(); // a foto do subterraneo (itens largados) fecha aqui
     let world: { meta: { playerStart: { worldX: number; worldY: number } } } | undefined;
     const fetching = window
       .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
       .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })
       .then((json: typeof world) => { world = json; });
-    await this.portalTrip(portal, fetching, () => {
+    await this.stairsTrip(fetching, () => {
       // O overworld volta do disco limpo, sem memoria da visita — entao o ponto de nascimento
-      // dele e reescrito aqui, uma vez, para a boca de caverna. E a unica coisa que a volta
+      // dele e reescrito aqui, uma vez, para o tile DESTE portal. E a unica coisa que a volta
       // precisa dizer ao mundo que acabou de carregar.
-      if (world) world.meta.playerStart = { worldX: trip.returnX, worldY: trip.returnY };
+      if (world) world.meta.playerStart = { worldX: stairs.worldX, worldY: stairs.worldY };
       setWorldData(world as unknown as Parameters<typeof setWorldData>[0]);
       setActiveLevel(null);
-      clearDungeonTrip();
-      clearActiveDungeon();
+      setUnderground(false);
     });
   }
 
@@ -2107,9 +2012,10 @@ export class GameScene extends Phaser.Scene {
     // have nowhere to go, so the entry is hidden (mirrors the intro-ending fallback).
     const canQuit = Boolean(this.scene.get('title'));
     // Playing a level (not the adventure): offer a jump back to the level list. Gated on the
-    // scene existing too — the lab/editor configs don't register it. Uma dungeon tambem tem
-    // activeLevel, mas ela e AVENTURA (a volta dela e a escada, nunca a lista de levels).
-    const inLevel = getActiveLevel() !== null && getDungeonTrip() === null
+    // scene existing too — the lab/editor configs don't register it. O SUBTERRANEO nao e level
+    // (a volta dele e o portal, nunca a lista) e nem sequer tem activeLevel desde o espelho —
+    // a leitura fica de pe de qualquer jeito, e a segunda guarda custa nada.
+    const inLevel = getActiveLevel() !== null && !isUnderground()
       && Boolean(this.scene.get('levelselect'));
     this.pauseMenu = new PauseMenu(this, {
       onResume: () => this.closePauseMenu(),
@@ -2135,7 +2041,6 @@ export class GameScene extends Phaser.Scene {
           // comprou) ja esta no localStorage e sobrevive — e ele que o modo promete guardar.
           // Na aventura, sair GUARDA: o retrato fecha aqui e o titulo passa a oferecer Continue.
           this.persistAdventure();
-          endExplorerMode();
           this.scene.start('title');
         }
         : undefined,
@@ -2213,7 +2118,7 @@ export class GameScene extends Phaser.Scene {
    * por desenho (o mapa dele mataria a aposta), e a dungeon se aprende andando, como no Zelda.
    */
   private subScreenMap(): SubScreenView['map'] {
-    if (!this.adventure || getDungeonTrip()) return undefined;
+    if (!this.adventure || isUnderground()) return undefined;
     const bounds = getWorldBounds();
     const st = adventureState();
     const chunkOf = (wx: number, wy: number): { cx: number; cy: number } => (
@@ -2228,6 +2133,14 @@ export class GameScene extends Phaser.Scene {
     for (const portal of getLevelPortals()) {
       const { cx, cy } = chunkOf(portal.worldX, portal.worldY);
       if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: 'portal' });
+    }
+    // AS ESCADAS. Elas faltavam, e a falta doía exatamente onde o espelho deveria ajudar: quem
+    // desce num canto e caminha o subterrâneo inteiro não tinha como saber por onde subir. Valem
+    // nos DOIS andares sem um `if` no meio porque a porta é simétrica — os cinco tiles são os
+    // mesmos em cima e embaixo, então o mapa do espelho é o mesmo mapa.
+    for (const stairs of this.stairs) {
+      const { cx, cy } = chunkOf(stairs.worldX, stairs.worldY);
+      if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: 'stairs' });
     }
     marks.push({ ...chunkOf(this.playerWorld.worldX, this.playerWorld.worldY), kind: 'hero' });
     return {
@@ -2408,100 +2321,21 @@ export class GameScene extends Phaser.Scene {
         arc: this.arcTiles(2),
         spinCharged: this.chargeReady,
         groundItems: this.itemManager?.snapshot() ?? [],
-        crates: this.woodenCrates.map((crate) => ({ worldX: crate.worldX, worldY: crate.worldY })),
-        pressurePlates: this.pressurePlates.map((plate) => ({
-          worldX: plate.worldX,
-          worldY: plate.worldY,
-          variable: plate.variable,
-          pressed: plate.pressed,
-        })),
-        waterWheels: this.waterWheels.map((wheel) => ({
-          worldX: wheel.worldX,
-          worldY: wheel.worldY,
-          variable: wheel.variable,
-          wired: this.wireTouching(wheel.worldX, wheel.worldY),
-          hasFlow: wheel.hasFlow,
-          speed: Number(wheel.speed.toFixed(3)),
-          generating: wheel.isGenerating,
-          frame: wheel.frame,
-          rotation: Number(wheel.rotation.toFixed(3)),
-        })),
-        wires: this.wires.map((wire) => ({
-          worldX: wire.worldX,
-          worldY: wire.worldY,
-          shape: wire.wireShape,
-          live: wire.isLive,
-          playerBuilt: wire.playerBuilt,
-        })),
-        // A FABRICA vista de fora. `power` e o campo que o cenario do gargalo le: e a MESMA
-        // satisfacao que move a maquina (nao uma segunda conta), entao um teste que a asserta
-        // esta guardando a rede, e nao um relatorio sobre ela.
-        belts: this.belts.map((belt) => ({
-          worldX: belt.worldX,
-          worldY: belt.worldY,
-          dir: belt.dir,
-          power: Number(this.powerAt(belt.worldX, belt.worldY).toFixed(3)),
-          playerBuilt: belt.playerBuilt,
-        })),
-        chests: this.chests.map((chest) => ({
-          worldX: chest.worldX,
-          worldY: chest.worldY,
-          kind: chest.storedKind,
-          count: chest.storedCount,
-          playerBuilt: chest.playerBuilt,
-        })),
-        extractors: this.extractors.map((ex) => ({
-          worldX: ex.worldX,
-          worldY: ex.worldY,
-          dir: ex.dir,
-          input: ex.inputTile,
-          output: ex.outputTile,
-          running: ex.isRunning,
-          power: Number(this.powerAt(ex.worldX, ex.worldY).toFixed(3)),
-          playerBuilt: ex.playerBuilt,
-        })),
-        boilers: this.boilers.map((boiler) => ({
-          worldX: boiler.worldX,
-          worldY: boiler.worldY,
-          variable: boiler.variable,
-          heated: boiler.isHeated,
-          water: Number(boiler.waterFrac.toFixed(3)),
-          pressure: Number(boiler.pressure.toFixed(3)),
-          generating: boiler.isGenerating,
-        })),
-        inserters: this.inserters.map((arm) => ({
-          worldX: arm.worldX,
-          worldY: arm.worldY,
-          variable: arm.variable,
-          playerBuilt: arm.playerBuilt,
-          power: Number(this.powerAt(arm.worldX, arm.worldY).toFixed(3)),
-          powered: arm.isPowered,
-          reversed: arm.isReversed,
-          owes: arm.owesReturn,
-          source: arm.sourceTile,
-          dest: arm.destTile,
-          busy: arm.isBusy,
-        })),
         toolboxes: this.toolboxes.map((box) => ({
           worldX: box.worldX,
           worldY: box.worldY,
           dir: box.dir,
-          slots: box.slotTiles,
-          output: box.outputTile,
           phase: box.currentPhase,
           frame: box.currentFrame,
           busy: box.isBusy,
-          holding: box.heldProduct,
-          refusals: box.refusalCount,
         })),
         // O BALAO DE PENSAMENTO do heroi: qual icone esta na cabeca dele agora (null = nenhum).
         thought: this.heroThought?.visibleIcon ?? null,
-        // A CADEIA DO FERRO: o forno e o martinete, como o cenario os observa.
+        // A CADEIA DO FERRO: o forno e o altar, como o cenario os observa.
         furnaces: this.furnaces.map((f) => ({
           worldX: f.worldX,
           worldY: f.worldY,
           dir: f.dir,
-          slots: f.slotTiles,
           output: f.outputTile,
           phase: f.currentPhase,
           busy: f.isBusy,
@@ -2514,25 +2348,6 @@ export class GameScene extends Phaser.Scene {
           holding: a.carrying,
           blows: a.blowsLanded,
           forged: a.forgeCount,
-        })),
-        tripHammers: this.tripHammers.map((h) => ({
-          worldX: h.worldX,
-          worldY: h.worldY,
-          dir: h.dir,
-          anvil: h.anvilTile,
-          running: h.isRunning,
-          blows: h.blowsLanded,
-          power: Number(this.powerAt(h.worldX, h.worldY).toFixed(3)),
-        })),
-        electronicGates: this.electronicGates.map((gate) => ({
-          worldX: gate.worldX,
-          worldY: gate.worldY,
-          powered: gate.isPowered,
-          open: gate.isOpen,
-          moving: gate.isMoving,
-          blocking: gate.blocking,
-          openness: Number(gate.openness.toFixed(3)),
-          frame: gate.frame,
         })),
         swingGates: this.swingGates.map((g) => ({
           worldX: g.worldX,
@@ -2563,21 +2378,30 @@ export class GameScene extends Phaser.Scene {
         levelName: getWorldName(),
         levelIntroOpen: this.levelIntroOpen,
         levelTransitioning: this.levelTransitioning,
-        globalVariables: this.globalVariables.snapshot(),
         coins: this.coinManager?.coinTotal ?? 0,
+        groundCoins: this.coinManager?.getActiveWorldPositions() ?? [],
         dialogOpen: this.dialogOpen,
         itemGetOpen: this.itemGetOpen,
         isDead: this.isDead,
         // O herói virou estátua? (a bola do zora — ver FreezeManager; `zora` e `gelo` leem isto)
         heroFrozen: this.isHeroFrozen,
         litFires: this.campfires.filter((cf) => cf.isLit).length,
+        // A PIRA, tora a tora: é assim que o cenário `pira` cobra a torre subindo, a recusa da
+        // torre crua e a persistência do progresso através da morte.
+        pyres: this.pyres.map((p) => ({
+          worldX: p.worldX,
+          worldY: p.worldY,
+          logs: p.logCount,
+          missing: p.logsMissing,
+          complete: p.isComplete,
+          lit: p.isLit,
+        })),
         safety: {
           safe: this.playerSafe,
-          danger: this.spawnDirector?.danger ?? 0,
           undeadCount: this.enemyManager?.aliveCount ?? 0,
         },
-        // A trilha que o jogo esta PEDINDO (null = vento/silencio). E como um cenario cobra que
-        // corpo fora do quadro nao liga musica de combate — ver framedAliveCount no update.
+        // A trilha que o jogo esta PEDINDO (null = vento/silencio). Ela e escolhida uma vez, no
+        // create, e NAO muda com inimigo em campo — e por aqui que um cenario cobra isso.
         music: getSoundManager().requestedTrack,
         // `undead` guardou o nome antigo de proposito (todo cenario existente le por ele), mas hoje
         // ele lista o bestiario inteiro — cada entrada diz a propria especie em `kind`.
@@ -2591,48 +2415,6 @@ export class GameScene extends Phaser.Scene {
           cx: Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS),
           cy: Math.floor(this.playerWorld.worldY / CHUNK_ROWS),
         },
-        explorer: this.explorer
-          ? {
-            seed: explorerRun()?.seed ?? 0,
-            carried: explorerRun()?.coins ?? 0,
-            banked: explorerMeta().banked,
-            depth: Number(distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY).toFixed(2)),
-            maxDepth: Number((explorerRun()?.maxDepth ?? 0).toFixed(2)),
-            multiplier: coinMultiplierAt(distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY)),
-            kills: explorerRun()?.kills ?? 0,
-            promptOpen: this.chunkPurchaseOverlay !== undefined,
-            builder: {
-              cardsOpen: this.chunkPurchaseOverlay !== undefined,
-              gateUnderPlayer: this.explorer.gateAt(
-                this.playerWorld.worldX,
-                this.playerWorld.worldY,
-              )?.id ?? null,
-              gates: this.explorer.frontiers().map((gate) => ({
-                id: gate.id,
-                direction: gate.direction,
-                gateX: gate.gateX,
-                gateY: gate.gateY,
-                targetCx: gate.targetCx,
-                targetCy: gate.targetCy,
-              })),
-              built: this.explorer.source.builtChunks(),
-              catalog: this.explorer.source.catalog().map((entry) => ({ ...entry.catalog })),
-              // A mortalha de escuridão: quem está coberto e quem está dissolvendo (a compra).
-              shroud: this.world3d?.chunkShroud.stats() ?? { covered: [], revealing: [] },
-            },
-            // A instrumentacao da janela: quantas vezes o terreno foi reassado e quanto custou
-            // o ultimo. E o numero que decide se o modo pode existir — ver ExplorerDirector.
-            rebuilds: this.explorer.rebuilds,
-            lastRebuildMs: Number(this.explorer.lastRebuildMs.toFixed(2)),
-            props: {
-              campfires: this.campfires.length,
-              portals: this.levelPortals.length,
-              dryTrees: this.dryTrees.length,
-              rocks: this.rocks.length,
-            },
-            stats: explorerMeta().stats,
-          }
-          : null,
       }),
       openDialog: (kind = 'blackCat') => {
         if (this.dialogOpen || this.isDead) return false;
@@ -2651,6 +2433,9 @@ export class GameScene extends Phaser.Scene {
         }
       },
       listNpcKinds: () => getDialogKinds(),
+      // AS MISSÕES NÃO TÊM TELA — então o caderno delas precisa ao menos ser LEGÍVEL daqui, ou
+      // seria um sistema que ninguém consegue provar que funciona (ver runtime/QuestLog).
+      quests: () => questSnapshot(),
       // A escada de vida do bestiario, pro playtest cobrar a LEI (crescente, sem repeticao) em vez
       // de repetir os numeros dela — uma copia no cenario e a copia que diverge no dia do balanco.
       enemyBlows: () => ENEMY_BLOWS,
@@ -2695,7 +2480,6 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneHeroLight = 1;
     this.dialogNpcWorld = undefined;
     this.enemyManager?.destroy();
-    this.spawnDirector = undefined;
     this.enemySpawners = undefined;
     this.npcManager?.destroy();
     this.dialogOverlay?.destroy();
@@ -2718,23 +2502,9 @@ export class GameScene extends Phaser.Scene {
     this.quickBag = undefined;
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
-    this.explorerHud?.destroy();
-    this.explorerHud = undefined;
-    this.chunkGatePrompt?.destroy();
-    this.chunkGatePrompt = undefined;
-    this.chunkPurchaseOverlay?.destroy();
-    this.chunkPurchaseOverlay = undefined;
     this.orderOverlay?.destroy();
     this.orderOverlay = undefined;
     this.orderBox = undefined;
-    for (const marker of this.chunkGateMarkers.values()) marker.destroy();
-    this.chunkGateMarkers.clear();
-    this.chunkUndead = undefined;
-    this.extractPrompt?.destroy();
-    this.extractPrompt = undefined;
-    // O diretor morre com a cena: a janela e a memoria dos props sao da EXPEDICAO, e o create
-    // seguinte instala um novo (com a semente que o explorerRun guardou — esse sim atravessa).
-    this.explorer = undefined;
     this.coinManager?.destroy();
     this.heartPickupManager?.destroy();
     this.itemManager?.destroy();
@@ -2744,8 +2514,6 @@ export class GameScene extends Phaser.Scene {
     this.freezeManager = undefined;
     this.placementHints?.destroy();
     this.placementHints = undefined;
-    this.pickupPrompt?.destroy();
-    this.pickupPrompt = undefined;
     this.heroThought?.destroy();
     this.heroThought = undefined;
     this.swordSlash?.destroy();
@@ -2756,14 +2524,6 @@ export class GameScene extends Phaser.Scene {
       list.length = 0;
     }
     this.propRegistry = [];
-    // O índice espacial e o conjunto vivo dos cabos seguem a mesma regra de reset do shutdown:
-    // nada segura wrapper destruído entre um shutdown e o próximo create.
-    this.wireIndex.clear();
-    this.liveWires.clear();
-    // A satisfacao e recalculada TODO frame, mas ela e um mapa que segura chaves de tiles do
-    // mundo antigo: um restart (morte, portal) que a levasse junto faria a primeira leitura de
-    // energia do mundo novo responder com a conta do anterior.
-    this.powerSatisfaction = new Map();
     this.activeBombs.forEach((b) => b.sprite.destroy());
     this.backItemSwingTimer?.remove();
     this.backItemSwingTimer = undefined;
@@ -2778,7 +2538,6 @@ export class GameScene extends Phaser.Scene {
     this.lowHealthOutlines.length = 0;
     this.fireCompassArrow?.destroy();
     this.fireCompassArrow = undefined;
-    this.dangerPulsePhase = 0;
     this.torchFlameBb?.destroy();
     this.torchFlameBb = undefined;
     this.torchGutter.level = 1.0;
@@ -2786,7 +2545,6 @@ export class GameScene extends Phaser.Scene {
     this.torchEmberTimer = 0;
     this.swordSlash = undefined;
     this.resetChargeAndBuffers();
-    this.globalVariables = new GlobalVariables();
     this.activeBombs = [];
     this.heartbeatPhase = 0;
     // Never leak a frozen tween clock into the next scene run.
@@ -2819,7 +2577,6 @@ export class GameScene extends Phaser.Scene {
     // heroi morto) e a mesma mentira que o balao de dica era. `syncPlacementHints` a reacende
     // logo abaixo se o jogo estiver mesmo correndo.
     this.placementHints?.clear();
-    this.pickupPrompt?.show(null);
     this.heroThought?.clear();
 
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
@@ -2830,8 +2587,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     // The item-get and first-campfire cut-scene both freeze gameplay; only their own tweens run.
-    if (this.itemGetOpen || this.cutsceneActive || this.chunkPurchaseOverlay) return;
-    // O CATALOGO da encomenda congela igual: escolher uma ambicao de fabrica na frente de uma
+    if (this.itemGetOpen || this.cutsceneActive) return;
+    // O CATALOGO de fabricacao congela igual: escolher uma receita na frente de uma
     // bancada nao e um gesto de combate, entao ele nao precisa do preco que a bolsa paga.
     if (this.orderOverlay) return;
 
@@ -2876,12 +2633,9 @@ export class GameScene extends Phaser.Scene {
       // `movementController.update()` logo acima, que e de onde esta rede veio.)
       this.startBreathing();
     }
-    for (const box of this.sellBoxes) box.update(delta);
     this.streamChunks();
     this.updateFootprints();
-    this.updateExplorerHud();
     this.heroThought?.tick(delta);
-    this.updateChunkBuilderUi();
 
     // Burn the carried flame down; snuff it when the fuel runs out (leaving the hero exposed
     // in the dark). Re-igniting at a lit campfire or lava refills it.
@@ -2956,7 +2710,6 @@ export class GameScene extends Phaser.Scene {
         // O CALOR: encostado na fogueira o corpo ARDE e vai perdendo vida (ver tickScorch). É o
         // que ficou no lugar do desmanche silencioso da matilha quando o herói alcançava o fogo.
         (wx, wy) => this.isTileScorchedByCampfire(wx, wy),
-        this.lurablePlates(),
       );
       if (attacked) this.handleEnemyAttackPlayer(attacked);
 
@@ -2969,42 +2722,8 @@ export class GameScene extends Phaser.Scene {
 
       this.enemyManager.render(this.tileSize, this.camera);
 
-      this.spawnDirector?.update(delta, {
-        playerWorldX: this.playerWorld.worldX,
-        playerWorldY: this.playerWorld.worldY,
-        distToFireTiles: distToFire,
-        aliveUndead: this.enemyManager.aliveCount,
-        canSpawnAt: (wx, wy) => this.canSpawnUndeadAt(wx, wy),
-        spawn: (wx, wy) => this.enemyManager?.spawnUndead(wx, wy),
-        // O cerco APERTA com a distancia do acampamento: e o outro lado da moeda que fica mais
-        // valiosa la fora. Sobe mais devagar que a recompensa de proposito (ver dangerScaleAt),
-        // senao ir fundo seria matematicamente neutro e nao haveria decisao nenhuma a tomar.
-        pressure: this.explorer
-          ? dangerScaleAt(distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY))
-          : 1,
-      });
-
-      // World-builder pressure comes ONLY from roads whose next chunk has not been bought.
-      // There is no wave banner and no ring spawn around the hero: one corpse simply walks in
-      // from the dark, then another later, with a small global cap.
-      if (this.explorer && this.chunkUndead) {
-        // SÓ A TERRA DE COMBATE DEIXA O ESCURO ENTRAR. O cerco nasce nas estradas inacabadas, e
-        // ele entrava por todas — o mapa do poeta e a aula do gato incluídos. Uma conversa cortada
-        // por uma caveira não é tensão, é ruído. A estrada filtra pela categoria da terra que a
-        // possui (ver ChunkCategory); o acampamento conta como combate, senão a primeira caveira
-        // do jogo — a que paga a primeira carta — nunca chegaria.
-        const source = this.explorer.source;
-        this.chunkUndead.update(
-          delta,
-          this.explorer.frontiers().filter((f) => source.categoryAt(f.sourceCx, f.sourceCy) === 'combat'),
-          this.enemyManager.aliveCount,
-          (wx, wy) => { this.enemyManager?.spawnUndead(wx, wy); },
-        );
-      }
-
-      // ...e as covas autoradas, que rodam mesmo onde o cerco nao existe (lab/levels). A ordem
-      // importa pouco, mas vem depois de proposito: o cerco conta a populacao viva pro teto dele,
-      // e uma caveira de cova nascida neste frame ja entra nessa conta no frame seguinte.
+      // As covas autoradas, que hoje sao a fonte INTEIRA do bestiario em campo. Cada uma nasce
+      // no SEU tile, nunca perto dele — ver EnemySpawnerManager.
       this.enemySpawners?.update(delta, {
         playerWorldX: this.playerWorld.worldX,
         playerWorldY: this.playerWorld.worldY,
@@ -3021,27 +2740,6 @@ export class GameScene extends Phaser.Scene {
         ),
       });
 
-      // Souls staging: the combat track rises only while undead are actually out and the
-      // hero is beyond the firelight; a few calm seconds after the last one falls it fades
-      // back to the wind-only default. Suppressed while any overlay/cutscene owns the music.
-      // isDead matters here: triggerDeath (silence, total) can fire earlier in THIS same
-      // update pass, and without it the danger check below would restart the combat track
-      // right on top of the death screen.
-      const uiOwnsMusic = this.cutsceneActive || this.dialogOpen || this.itemGetOpen || this.isDead;
-      // framedAliveCount, e nao aliveCount: um corpo vivo FORA do quadro (a caveira que ficou
-      // pra tras, a gosma vagando a 12 tiles) segurava a trilha de combate numa tela vazia — o
-      // jogador ouvia perigo que nao tinha como ver. Musica de perigo e promessa de corpo NA tela.
-      if (this.enemyManager.framedAliveCount > 0 && !this.playerSafe) {
-        this.dangerCalmMs = 0;
-        if (!uiOwnsMusic) getSoundManager().startMusic('danger', 900);
-      } else {
-        this.dangerCalmMs += delta;
-        // A calmaria devolve a trilha do mundo (aventura de overworld) ou o vento (o resto).
-        if (!uiOwnsMusic && this.dangerCalmMs > 4000) {
-          if (this.adventure && !getDungeonTrip()) getSoundManager().startMusic('overworld', 2600);
-          else getSoundManager().stopMusic(2600);
-        }
-      }
     }
 
     if (this.coinManager && this.camera) {
@@ -3061,11 +2759,7 @@ export class GameScene extends Phaser.Scene {
           this.coinChainStep = now - this.coinChainAt < 700 ? this.coinChainStep + 1 : 0;
           this.coinChainAt = now;
           getSoundManager().playCoinPickup(this.coinChainStep);
-          // No explorador a moeda entra na BOLSA da expedicao — que e o numero em risco, e
-          // portanto o unico que o HUD mostra. So metade dela (ou 5%) vira banco no fim.
-          if (this.explorer) addExplorerCoins(1);
-          // Na aventura a carteira e progresso: cada moeda absorvida ja dorme no save.
-          else this.persistAdventure();
+          if (this.adventure) this.persistAdventure();
         },
       );
       this.coinManager.render(this.tileSize, this.camera);
@@ -3128,7 +2822,6 @@ export class GameScene extends Phaser.Scene {
 
     this.updateLowHealthFx(delta);
     this.updateFireCompass();
-    this.updateDangerVignette(delta);
 
     // Felled trees grow back after a while (renewable gravetos = no soft-lock). The clock only
     // ticks while the tile is clear — crucially, a dropped item (the graveto) on the stump
@@ -3144,34 +2837,16 @@ export class GameScene extends Phaser.Scene {
     this.updateCarnivorousPlants();
     // A flor da lua le a luz das fogueiras e abre/fecha por conta dela.
     this.updateMoonflowers(delta);
-    // Produtores primeiro, a corrente nos cabos depois, consumidores por ultimo: placa/roda/
-    // caldeira atualizam a rede no MESMO frame em que o braco consulta energia, sem um pulso
-    // atrasado ao abrir ou fechar um circuito. Os cabos correm FORA do updateMechanismCircuits
-    // porque tem uma fonte que nao e maquina: a bateria carregada pousada no chao.
-    this.updateMechanismCircuits(delta);
-    this.updatePowerGrid(delta);
-    this.updateElectronicGates(delta);
-    this.updateInserters(delta);
-    // A LINHA, na ordem em que a materia corre: o extrator cria, a esteira leva, a bancada
-    // transforma. Cada peca le o chao DEPOIS de quem a alimenta ter escrito nele, entao a
-    // fabrica anda inteira num frame so em vez de um estagio por quadro — que e a diferenca
-    // entre uma linha que corre e uma que engasga visivelmente a cada junta.
-    this.updateExtractors(delta);
     this.updateFurnaces(delta);
-    this.updateTripHammers(delta);
     // O ALTAR não tem ciclo: o único relógio dele é o da brasa que a pancada deixou no tampo, e
     // ele corre aqui porque desenho de peça é trabalho de peça, nunca do botão que a acertou.
     for (const altar of this.altars) altar.update(delta);
-    this.updateBelts(delta);
-    // Depois dos bracos, de proposito: a saida de um braco pode ser a bandeja de uma caixa, e
-    // ler o chao no mesmo frame em que a carga assentou faz a fabrica andar sem um frame de atraso.
     this.updateToolboxes(delta);
 
     // As marcas de posicionamento seguem o corpo NO MESMO frame em que ele vira (elas leem
     // `facingTile`), entao elas moram aqui e nao no render: um frame de atraso faria o quadrado
     // branco apontar para o tile anterior a cada passo, que e pior do que nao ter marca.
     this.syncPlacementHints();
-    this.syncPickupPrompt();
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.renderProps();
     // Cast shadows are real: the fire's shadow light in the 3D renderer throws them.
@@ -3185,8 +2860,7 @@ export class GameScene extends Phaser.Scene {
    * meio tile pros lados e um tile alem da borda de baixo (os pes saem mas a cabeca ainda
    * aparece); na borda de cima nao ha folga, porque o corpo desenha PRA CIMA dos proprios pes.
    *
-   * E o predicado da lei "o que a tela nao mostra nao fala nem comeca golpe" (EnemyBase) e do
-   * que a trilha de perigo conta (EnemyManager.framedAliveCount).
+   * E o predicado da lei "o que a tela nao mostra nao fala nem comeca golpe" (EnemyBase).
    */
   public isTileFramed(worldX: number, worldY: number): boolean {
     if (!this.camera) return true;
@@ -3247,13 +2921,6 @@ export class GameScene extends Phaser.Scene {
     if (!force && pcx === this.streamCenter.cx && pcy === this.streamCenter.cy) return;
     this.streamCenter = { cx: pcx, cy: pcy };
 
-    // O mundo infinito se move junto: a janela de chunks assados no renderer se recentraliza e
-    // os props entram e saem com ela. So aqui, e nunca por frame — este e o unico ponto do
-    // jogo que ja sabe que o heroi trocou de chunk.
-    if (this.explorer && !force) {
-      this.explorer.update(this.playerWorld.worldX, this.playerWorld.worldY, this, this.world3d);
-    }
-
     const active = new Set<string>();
     const radius = 1;
     for (let dy = -radius; dy <= radius; dy++) {
@@ -3262,439 +2929,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Enemies are not streamed: the world has none — see UndeadSpawnDirector.
+    // Enemies are not streamed: their dens are a flat world-wide list whose respawn clock must
+    // keep ticking with the hero across the map — see EnemySpawnerManager.
     this.npcManager?.syncChunks(active);
     this.heartPickupManager?.syncChunks(active);
     // Held items (sword/key) are loaded once and never streamed — see ItemManager.
-  }
-
-  // ── ganchos de teste do explorador (dev/playtest) ────────────────────────────
-  //
-  // Os tres existem porque as asserções do modo sao sobre CONTAS — 50% e 5% —, e chegar a uma
-  // bolsa redonda catando moeda de caveira mediria o combate em vez da regra. Sao metodos
-  // publicos e sem nada de esperto: quem chama e `playtest/scenarios/explorador.mjs`.
-
-  /** Força os ids da PRÓXIMA mão de cartas (consumida no uso) — determinismo do playtest. */
-  public explorerDebugSetNextOffers(ids: string[]): void {
-    if (this.explorer) this.explorer.debugNextOffers = [...ids];
-  }
-
-  /**
-   * O "TESTAR ESTA CARTA" do editor: constrói a carta marcada colada no acampamento e põe o herói
-   * dentro dela, sem passar pelo portão.
-   *
-   * A compra em si NÃO é o que se está testando — ela é um Enter, e é a mesma para as dezoito
-   * cartas. O que se testa é o CONTEÚDO: o desenho, os props, quem mora ali e o que ele fala. Por
-   * isso o atalho pula o portão em vez de encher a bolsa de moeda e deixar o autor procurar a
-   * própria carta no baralho.
-   *
-   * O herói pousa no tile pisável mais perto do centro: um teleporte cego cairia dentro da própria
-   * parede que a carta autorou, e o autor abriria o teste preso numa pedra.
-   */
-  private buildPinnedCard(): void {
-    const id = consumeExplorerCard();
-    const explorer = this.explorer;
-    if (!id || !explorer) return;
-    const gate = explorer.frontiers()[0];
-    if (!gate) return;
-    if (!explorer.purchase(gate, id, this, this.world3d)) {
-      // Carta desligada no baralho (`catalog.enabled === false`) ou id que não existe mais: o
-      // teste não acontece, e o autor fica no acampamento em vez de num mundo meio construído.
-      return;
-    }
-    const cx = gate.targetCx * CHUNK_COLUMNS;
-    const cy = gate.targetCy * CHUNK_ROWS;
-    let best: [number, number] | null = null;
-    let bestD = Infinity;
-    for (let y = 0; y < CHUNK_ROWS; y += 1) {
-      for (let x = 0; x < CHUNK_COLUMNS; x += 1) {
-        const wx = cx + x;
-        const wy = cy + y;
-        if (this.isSolidForEntities(wx, wy)) continue;
-        const d = (x - CHUNK_COLUMNS / 2) ** 2 + (y - CHUNK_ROWS / 2) ** 2;
-        if (d < bestD) { bestD = d; best = [wx, wy]; }
-      }
-    }
-    if (!best) return;
-    this.playerWorld = { worldX: best[0], worldY: best[1] };
-    this.movementController?.syncPlayerToWorld(best[0], best[1], this.tileSize);
-    this.syncChunkGates(explorer.frontiers(), (explorerRun()?.coins ?? 0) >= explorer.minCost());
-  }
-
-  /** Poe uma bolsa exata na expedicao. */
-  public explorerDebugSetCoins(amount: number): void {
-    const run = explorerRun();
-    if (!run) return;
-    run.coins = Math.max(0, Math.floor(amount));
-    this.coinManager?.restoreTotal(run.coins);
-  }
-
-  /** Dispara a extracao pelo portal mais proximo, como se o jogador tivesse dito sim. */
-  public explorerDebugExtract(): void {
-    const portal = this.levelPortals[0] ?? new LevelPortalObject(
-      this.playerWorld.worldX, this.playerWorld.worldY,
-    );
-    void this.returnToCamp(portal);
-  }
-
-  /** Mata o heroi na hora (a cinematica roda inteira, e ela e que fecha a conta). */
-  public explorerDebugKill(): void {
-    this.playerHealth = 0;
-    this.triggerDeath();
-  }
-
-  /** A bolsa e a profundidade, os dois termos da aposta. Ver ExplorerHud. */
-  private updateExplorerHud(): void {
-    if (!this.explorerHud) return;
-    const dist = distanceFromCamp(this.playerWorld.worldX, this.playerWorld.worldY);
-    setExplorerDepth(dist);
-    this.explorerHud.update(explorerRun()?.coins ?? 0, this.explorer?.source.builtChunks().length ?? 1);
-    // ...e o MAPA do que já foi comprado, com a casa do herói acesa (ver ExplorerHud.updateMap).
-    // A conta de chunk é a mesma do resto do jogo: o piso da divisão pelo tamanho do chunk.
-    const built = this.explorer?.source.builtChunks() ?? [];
-    this.explorerHud.updateMap(
-      built,
-      Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS),
-      Math.floor(this.playerWorld.worldY / CHUNK_ROWS),
-    );
-  }
-
-  private updateChunkBuilderUi(): void {
-    const explorer = this.explorer;
-    if (!explorer || !this.chunkGatePrompt) return;
-    const coins = explorerRun()?.coins ?? 0;
-    const minCost = explorer.minCost();
-    this.syncChunkGates(explorer.frontiers(), coins >= minCost);
-    // O halo do marco desperto respira. Ele mora aqui e não num tween por marcador porque são
-    // até cinco na tela e a fase de cada um é própria — cinco tweens fariam o mesmo seno com
-    // cinco donos.
-    for (const marker of this.chunkGateMarkers.values()) marker.update(this.time.now);
-    if (this.chunkPurchaseOverlay) { this.chunkGatePrompt.hide(); return; }
-    const gate = explorer.gateAt(this.playerWorld.worldX, this.playerWorld.worldY);
-    if (gate) this.chunkGatePrompt.show(minCost, coins);
-    else this.chunkGatePrompt.hide();
-  }
-
-  private openChunkCards(gate: ChunkFrontier): void {
-    const explorer = this.explorer;
-    if (!explorer || this.chunkPurchaseOverlay) return;
-    const coins = explorerRun()?.coins ?? 0;
-    const offers = explorer.offers(coins);
-    if (offers.length === 0 || !offers.some((entry) => entry.catalog.cost <= coins)) return;
-    this.movementController?.hold(true);
-    this.actionButtons?.setVisible(false);
-    this.chunkGatePrompt?.hide();
-    getSoundManager().playShopOpen();
-
-    const finish = (): void => {
-      this.chunkPurchaseOverlay?.destroy();
-      this.chunkPurchaseOverlay = undefined;
-      this.movementController?.hold(false);
-      this.actionButtons?.setVisible(true);
-      this.updateChunkBuilderUi();
-    };
-    const overlay = new ChunkPurchaseOverlay(
-      gate,
-      offers,
-      coins,
-      (choice: ChunkTemplate) => {
-        if ((explorerRun()?.coins ?? 0) < choice.catalog.cost) { finish(); return; }
-        const built = explorer.purchase(gate, choice.catalog.id, this, this.world3d);
-        if (!built) { finish(); return; }
-        spendExplorerCoins(choice.catalog.cost);
-        this.coinManager?.spendCoins(choice.catalog.cost);
-        getSoundManager().playShopClose();
-        finish();
-      },
-      () => {
-        getSoundManager().playShopClose();
-        finish();
-      },
-      // O alvo do voo da carta-luz: a boca da estrada comprada, projetada na tela. É lá que a
-      // dissolução da mortalha começa — a carta pousa exatamente onde a névoa vai morrer.
-      () => this.world3d?.projectTile(gate.enemyX, gate.enemyY, 0.35) ?? null,
-    );
-    overlay.bindChoices(offers);
-    this.chunkPurchaseOverlay = overlay;
-  }
-
-  // ── o mundo infinito: props entrando e saindo da janela ──────────────────────
-  //
-  // A GameScene e o "host" do ExplorerDirector: ele decide QUAIS chunks estao vivos, ela sabe
-  // como construir e destruir um prop. Os dois metodos abaixo sao esse contrato, e sao a razao
-  // de o modo caber sem tocar em nenhuma das dezenas de leituras de prop espalhadas pela cena:
-  // as listas continuam sendo as mesmas listas, so que agora alguem mexe nelas durante a run.
-
-  /** Constroi os props destes defs e os empurra nas listas tipadas (in place — ver propRegistry). */
-  public spawnStreamedProps(defs: readonly WorldPropDef[]): void {
-    // NASCER DUAS VEZES no mesmo tile é o defeito que este conjunto fecha. Quem sai da janela é
-    // destruído por `despawnPropsOutside`, mas ela varre só o CENÁRIO: a fábrica (bancada, cabo,
-    // esteira, baú, forno, martinete, braço, extrator, placa, portão) fica de fora de propósito,
-    // porque uma peça que o JOGADOR construiu não está em template nenhum e some para sempre se
-    // for varrida. Só que o outro lado da moeda nunca foi escrito: voltar para um chunk cuja
-    // carta autorou uma dessas peças manda construí-la OUTRA VEZ, e aí são duas máquinas
-    // empilhadas no mesmo tile a cada ida e volta. A guarda é do lado do nascimento — é o único
-    // que sabe as duas coisas ao mesmo tempo — e é uma pergunta só: já tem prop aqui?
-    const taken = new Set<string>();
-    for (const entry of this.propRegistry) {
-      for (const prop of entry.list) taken.add(`${prop.worldX},${prop.worldY}`);
-    }
-    for (const def of defs) {
-      if (taken.has(`${def.worldX},${def.worldY}`)) continue;
-      taken.add(`${def.worldX},${def.worldY}`);
-      switch (def.type) {
-        case 'campfire':
-          this.campfires.push(new CampfireObject(this, def.worldX, def.worldY, def.lit === true));
-          break;
-        case 'dryTree':
-          this.dryTrees.push(new DryTreeObject(this, def.worldX, def.worldY));
-          break;
-        case 'dryBush': {
-          const bush = new DryBushObject(this, def.worldX, def.worldY);
-          bush.onBurnedOut = () => this.dropCharcoalFromBush(bush.worldX, bush.worldY);
-          this.dryBushes.push(bush);
-          break;
-        }
-        case 'rock':
-          this.rocks.push(new RockObject(this, def.worldX, def.worldY));
-          break;
-        case 'ironRock':
-          this.rocks.push(new RockObject(this, def.worldX, def.worldY, true));
-          break;
-        case 'tallGrass':
-          this.tallGrasses.push(new TallGrassObject(this, def.worldX, def.worldY));
-          break;
-        case 'plantSpot':
-          // Os canteiros dos cenários de NPC (a carta do pintor): covas prontas para semente.
-          this.plantSpots.push(new PlantSpotObject(this, def.worldX, def.worldY));
-          break;
-        case 'levelPortal':
-          this.levelPortals.push(new LevelPortalObject(def.worldX, def.worldY));
-          break;
-        // Os tipos abaixo entraram quando as CARTAS AUTORADAS chegaram: o gerador antigo só
-        // plantava os de cima, mas o /editor deixa pôr qualquer prop num chunk da biblioteca —
-        // e um prop que o editor aceita e este switch não conhece simplesmente NÃO NASCE (foi
-        // exatamente o chamado do usuário: "coloquei lava e não apareceu lava").
-        case 'lava':
-          // A luz vem do POOL (addFireLight) — nascer em runtime não recompila shader nenhum.
-          this.lavaTiles.push(new LavaObject(this, def.worldX, def.worldY));
-          break;
-        case 'water':
-          this.waterTiles.push(new WaterObject(this, def.worldX, def.worldY, false));
-          break;
-        case 'bridgeSpot': {
-          const w = new WaterObject(this, def.worldX, def.worldY, true);
-          w.onBuilt = () => this.cameras.main.flash(160, 210, 190, 150);
-          this.waterTiles.push(w);
-          break;
-        }
-        case 'dryShrub':
-          this.dryShrubs.push(new DryShrubObject(this, def.worldX, def.worldY));
-          break;
-        case 'moonflower':
-          this.moonflowers.push(new MoonflowerObject(this, def.worldX, def.worldY));
-          break;
-        case 'bombSpot':
-          this.bombSpots.push(new BombSpotObject(this, def.worldX, def.worldY));
-          break;
-        case 'lockedDoor':
-          this.lockedDoors.push(new LockedDoorObject(this, def.worldX, def.worldY, def.floodgate === true));
-          break;
-        case 'swingGate':
-          this.swingGates.push(new SwingGateObject(this, def.worldX, def.worldY));
-          break;
-        case 'woodenCrate':
-          this.woodenCrates.push(new WoodenCrateObject(this, def.worldX, def.worldY));
-          break;
-        case 'carnivorousPlant':
-          this.carnivorousPlants.push(new CarnivorousPlantObject(this, def.worldX, def.worldY));
-          break;
-        // A FÁBRICA nasce em chunk comprado como qualquer outro prop. Ela pôde entrar aqui
-        // porque a rede deixou de ter estado próprio pra recompor: `updatePowerGrid` resolve
-        // TUDO por posição, todo frame, a partir das listas — não há mais um índice vivo que
-        // uma peça nascendo no meio da run poderia dessincronizar. A única coisa que ainda
-        // precisa de uma mão é a FORMA do cabo, e é ela que o `refreshWireNetwork` reescreve
-        // no fim deste método.
-        case 'wire':
-          this.wires.push(new WireObject(this, def.worldX, def.worldY));
-          break;
-        case 'belt':
-          this.belts.push(new BeltObject(this, def.worldX, def.worldY, def.dir ?? 1));
-          break;
-        case 'chest':
-          this.chests.push(
-            new ChestObject(this, def.worldX, def.worldY, false, def.quota, def.variable),
-          );
-          break;
-        case 'boiler':
-          this.boilers.push(new BoilerObject(this, def.worldX, def.worldY, def.variable));
-          break;
-        case 'inserter':
-          this.inserters.push(
-            new RoboticArmObject(def.worldX, def.worldY, def.dir ?? 1, def.variable),
-          );
-          break;
-        case 'furnace':
-          this.furnaces.push(new FurnaceObject(this, def.worldX, def.worldY, def.dir ?? 1));
-          break;
-        case 'altar':
-          this.altars.push(new AltarObject(this, def.worldX, def.worldY));
-          break;
-        case 'tripHammer':
-          this.tripHammers.push(new TripHammerObject(this, def.worldX, def.worldY, def.dir ?? 1));
-          break;
-        case 'extractor':
-          this.extractors.push(new ExtractorObject(this, def.worldX, def.worldY, def.dir ?? 1));
-          break;
-        case 'pressurePlate':
-          this.pressurePlates.push(
-            new PressurePlateObject(this, def.worldX, def.worldY, def.variable),
-          );
-          break;
-        case 'electronicGate':
-          this.electronicGates.push(
-            new ElectronicGateObject(this, def.worldX, def.worldY, def.variable),
-          );
-          break;
-        case 'sellBox':
-          if (def.sells) this.sellBoxes.push(this.makeSellBox(def));
-          break;
-        case 'toolbox':
-          this.toolboxes.push(new ToolboxObject(this, def.worldX, def.worldY, def.dir ?? 1));
-          break;
-        // A RODA D'ÁGUA ficou de fora deste switch por um bom motivo, e o motivo caducou: ela não
-        // é só um prop — ela SUBSTITUI a água do tile dela (o rio corre sob as pás, e é dele que o
-        // dinamo vive), então nascer aqui significava manter DOIS arrays em par, e meio construída
-        // ela é pior que ausente (um rotor girando sobre chão seco). O resultado prático era pior
-        // ainda: uma carta de chunk com uma roda autorada nascia SEM ela, em silêncio — foi o que
-        // aconteceu com a roda do Lago.
-        //
-        // O par agora é uma linha, e é condicional: o quad de rio só nasce onde a água NÃO é
-        // terreno. Num level a roda substitui um prop de rio e precisa dele; num lago do overworld
-        // a água já está pintada no chão, e um segundo quad ali seria um rio desenhado por cima de
-        // um lago. Quem move a roda é `waterFlowAt`, e ele lê as duas procedências.
-        case 'waterWheel':
-          this.waterWheels.push(
-            new WaterWheelObject(this, def.worldX, def.worldY, def.variable),
-          );
-          if (!this.isOpenWaterAt(def.worldX, def.worldY)) {
-            this.waterTiles.push(new WaterObject(this, def.worldX, def.worldY, false));
-          }
-          break;
-        default:
-          break;
-      }
-    }
-    // A FORMA do cabo é a única coisa da rede que não se deduz por frame: ela é fixada quando o
-    // mundo muda de forma. Um chunk comprado pode ter trazido cabo e máquina de uma vez, então
-    // a reindexação acontece UMA vez no fim, e não dentro do laço.
-    this.refreshWireNetwork();
-  }
-
-  /** Keeps the road squares in lockstep with the current frontier graph and purse. */
-  public syncChunkGates(gates: readonly ChunkFrontier[], enabled: boolean): void {
-    const wanted = new Map(gates.map((gate) => [gate.id, gate]));
-    for (const [id, marker] of this.chunkGateMarkers) {
-      if (wanted.has(id)) continue;
-      marker.destroy();
-      this.chunkGateMarkers.delete(id);
-    }
-    for (const gate of gates) {
-      const existing = this.chunkGateMarkers.get(gate.id);
-      if (existing) existing.setEnabled(enabled);
-      else this.chunkGateMarkers.set(gate.id, new ChunkGateMarker(gate, enabled));
-    }
-  }
-
-  /** A compra regenerou este chunk na fonte: derruba o cache de colisão baixado dele. */
-  public invalidateTerrain(cx: number, cy: number): void {
-    this.chunkManager?.invalidate(cx, cy);
-  }
-
-  /**
-   * Itens autorados E NPCs do template comprado nascem AGORA: o ItemManager carrega a lista
-   * autorada uma vez no boot e nunca streama, e o NpcManager pula chunks já ativos — sem esta
-   * mão, o presente e o morador do chunk recém-comprado só existiriam depois de sair da janela
-   * e voltar. Corações ficam de fora (eles streamam por chunk).
-   */
-  public spawnBuiltChunkContent(cx: number, cy: number): void {
-    const content = this.explorer?.source.chunkContent(cx, cy);
-    if (!content) return;
-    if (this.itemManager) {
-      for (const pickup of content.pickups) {
-        if (pickup.type === 'heart') continue;
-        if (this.itemManager.hasItemAt(pickup.worldX, pickup.worldY)) continue;
-        this.itemManager.drop(pickup.type, pickup.worldX, pickup.worldY);
-      }
-    }
-    this.npcManager?.refreshChunk(cx, cy);
-  }
-
-  /** A purchased combat template becomes alive immediately, without waiting for a chunk swap. */
-  public spawnBuiltChunkEnemies(cx: number, cy: number): void {
-    const content = this.explorer?.source.chunkContent(cx, cy);
-    if (!content || !this.enemyManager) return;
-    for (const enemy of content.enemies) {
-      if (this.enemyManager.getEnemyAt(enemy.worldX, enemy.worldY)) continue;
-      this.enemyManager.spawn(
-        enemy.type,
-        enemy.worldX,
-        enemy.worldY,
-        (wx, wy) => !this.isSolidForEntities(wx, wy),
-      );
-    }
-  }
-
-  /**
-   * Destroi todo prop cujo chunk saiu da janela, devolvendo ao diretor o que cada um tinha de
-   * memoravel. So duas coisas sao: uma fogueira ACESA (o jogador pagou por aquela luz com uma
-   * tocha e uma caminhada) e um prop CONSUMIDO — pedra quebrada, arvore virada toco, portal ja
-   * usado. Todo o resto o gerador refaz identico a partir da semente.
-   */
-  public despawnPropsOutside(chunks: ReadonlySet<string>): Array<{ key: string; memory: PropMemory }> {
-    const out: Array<{ key: string; memory: PropMemory }> = [];
-    const outside = (p: { worldX: number; worldY: number }): boolean => !chunks.has(
-      `${Math.floor(p.worldX / CHUNK_COLUMNS)},${Math.floor(p.worldY / CHUNK_ROWS)}`,
-    );
-    const sweep = <T extends { worldX: number; worldY: number; destroy(): void }>(
-      list: T[],
-      memoryOf: (prop: T) => PropMemory,
-    ): void => {
-      for (let i = list.length - 1; i >= 0; i--) {
-        const prop = list[i];
-        if (!outside(prop)) continue;
-        out.push({ key: `${prop.worldX},${prop.worldY}`, memory: memoryOf(prop) });
-        prop.destroy();
-        list.splice(i, 1);
-      }
-    };
-
-    sweep(this.campfires, (cf) => ({ lit: cf.isLit }));
-    sweep(this.dryBushes, (bush) => ({ gone: !bush.blocking }));
-    sweep(this.rocks, (rock) => ({ gone: !rock.blocking }));
-    sweep(this.tallGrasses, (grass) => ({ gone: !grass.blocking }));
-    // A arvore seca NAO e lembrada de proposito: ela ja volta sozinha (TREE_REGROW_MS), e o
-    // gerador a devolve inteira — que e exatamente o estado que ela teria daqui a um minuto.
-    // Lembrar o toco transformaria o regrow, que existe para a lenha nunca acabar, em uma
-    // cicatriz permanente no mundo.
-    sweep(this.dryTrees, () => ({}));
-    // O canteiro volta pristino ao re-entrar na janela — no construtor a cova é cenário de
-    // tutorial, não estado de fazenda (a aventura, que lembra, tem o save para isso).
-    sweep(this.plantSpots, () => ({}));
-    sweep(this.levelPortals, () => ({}));
-    // Os tipos das cartas autoradas (o espelho do switch do spawnStreamedProps). Memorável:
-    // a PORTA aberta fica aberta (a chave foi consumida — voltar trancada seria soft-lock) e
-    // o arbusto cortado fica cortado. O resto é cenário que o template refaz idêntico.
-    sweep(this.lavaTiles, () => ({}));
-    sweep(this.waterTiles, () => ({}));
-    sweep(this.dryShrubs, (shrub) => ({ gone: !shrub.blocking }));
-    sweep(this.moonflowers, () => ({}));
-    sweep(this.bombSpots, () => ({}));
-    sweep(this.lockedDoors, (door) => ({ gone: !door.blocking }));
-    sweep(this.swingGates, () => ({}));
-    sweep(this.woodenCrates, () => ({}));
-    sweep(this.carnivorousPlants, () => ({}));
-    return out;
   }
 
   // Footprints are placed in world space and re-projected every frame so they stay glued to
@@ -3777,22 +3016,17 @@ export class GameScene extends Phaser.Scene {
 
   // A busca posicional dita UMA vez; os getters tipados abaixo são a superfície que o resto
   // da cena usa (cada um devolve o tipo concreto do seu sistema).
-  /**
-   * O prop que ocupa este tile — e "ocupa" inclui a PEGADA de quem e maior que um tile (`covers`).
-   *
-   * Este metodo e o funil por onde passam colisao, tiro, ocupacao, instalar, recolher e o braco
-   * robotico. Ensinar a pegada aqui — e so aqui — e o que faz o martinete de dois tiles bloquear,
-   * ser encontrado e ser recolhido pelas DUAS metades sem uma unica edicao nos quarenta lugares
-   * que chamam isto. A alternativa era cada sistema lembrar sozinho de perguntar duas vezes, que e
-   * a forma mais confiavel de metade de uma maquina virar chao atravessavel.
-   */
+  /** O funil por onde passam colisao, tiro, ocupacao, instalacao e recolhimento. */
   private propAt<T extends WorldProp>(list: T[], wx: number, wy: number): T | undefined {
-    return list.find((p) => (p.worldX === wx && p.worldY === wy)
-      || p.covers?.some(([cx, cy]) => cx === wx && cy === wy));
+    return list.find((p) => p.worldX === wx && p.worldY === wy);
   }
 
   private getCampfireAt(wx: number, wy: number): CampfireObject | undefined {
     return this.propAt(this.campfires, wx, wy);
+  }
+
+  private getPyreAt(wx: number, wy: number): PyreObject | undefined {
+    return this.propAt(this.pyres, wx, wy);
   }
 
   private getDryBushAt(wx: number, wy: number): DryBushObject | undefined {
@@ -3811,10 +3045,8 @@ export class GameScene extends Phaser.Scene {
    * Ha ALGUMA COISA neste tile? Nao "e solido" — solido e o que barra um corpo, e isto aqui e a
    * pergunta mais ampla: tem qualquer coisa ocupando o lugar.
    *
-   * Os dois usos precisam exatamente disso e por isso dividem a resposta: o caixote so pode ser
-   * empurrado para um tile vazio, e o portao de bater so pode girar para um tile vazio. Um item
-   * caido no chao nao e solido — o heroi anda por cima dele —, mas ele impede as duas coisas,
-   * e uma segunda copia desta lista era a maneira certa de as duas discordarem daqui a um mes.
+   * O portão de bater só pode girar para um tile vazio. Um item caído no chão não é sólido — o
+   * herói anda por cima dele —, mas ainda ocupa o lugar para esse gesto.
    */
   private isTileOccupied(wx: number, wy: number): boolean {
     return this.isSolidForEntities(wx, wy)
@@ -3853,17 +3085,8 @@ export class GameScene extends Phaser.Scene {
     return this.propAt(this.bombSpots, wx, wy);
   }
 
-  private getInserterAt(wx: number, wy: number): RoboticArmObject | undefined {
-    return this.propAt(this.inserters, wx, wy);
-  }
-
   private getToolboxAt(wx: number, wy: number): ToolboxObject | undefined {
     return this.propAt(this.toolboxes, wx, wy);
-  }
-
-  /** A caixa cujo tile de bandeja e este (a marca em que pisar DEPOSITA a carga). */
-  private getToolboxSlotAt(wx: number, wy: number): ToolboxObject | undefined {
-    return this.toolboxes.find((box) => box.slotTiles.some(([sx, sy]) => sx === wx && sy === wy));
   }
 
   /**
@@ -3871,9 +3094,7 @@ export class GameScene extends Phaser.Scene {
    * ali — é o contrato de `talkToNpcAt`, e é o que faz o gesto não escorrer para o golpe.
    *
    * Duas peças respondem: a bancada e o forno. Elas dividem a tela, o gesto e o código inteiro de
-   * fabricação; o que as separa é uma palavra na receita (`station`). Enquanto o forno tinha
-   * interação própria — fantasmas nas bandejas, receita para adivinhar — o jogador precisava
-   * aprender duas coisas para o mesmo botão contra o mesmo tipo de máquina.
+   * fabricação; o que as separa é uma palavra na receita (`station`).
    */
   private openCraftMenuAt(wx: number, wy: number): boolean {
     const box = this.getToolboxAt(wx, wy);
@@ -3909,15 +3130,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * CONSTRUIR NA BANCADA — o gesto que substituiu as duas bandejas.
+   * CONSTRUIR NA BANCADA — um gesto manual pelo catalogo.
    *
    * Ele é atômico de propósito: ou os insumos saem da mochila e o produto entra nela no MESMO
-   * frame, ou nada acontece. A versão de bandeja cobrava três viagens (largar A, largar B, buscar
-   * o produto) por uma decisão que o jogador já tinha tomado ao escolher no menu — e cobrava
-   * também o risco de largar um insumo e ser interrompido por um bicho no meio.
-   *
-   * A bandeja NÃO morreu: ela continua sendo como as MÁQUINAS alimentam a bancada (um braço
-   * robótico não abre menu). O que mudou é que ninguém mais é obrigado a usá-la.
+   * frame, ou nada acontece. A receita escolhida sempre usa os materiais da mochila.
    *
    * A conta é feita duas vezes de propósito — uma para decidir, outra para gastar. Entre as duas
    * não há nada que possa mexer na mochila, mas gastar sem reconferir é como se perde item numa
@@ -3942,9 +3158,8 @@ export class GameScene extends Phaser.Scene {
     // em volta isto nunca falha; com ela, a alternativa seria consumir o material e não ter onde
     // pousar o produto — e um item perdido em silêncio é o pior defeito que este jogo pode ter.
     //
-    // O FORNO não pergunta isso: ele tem uma SAÍDA (o tile da frente), e se ela estiver ocupada
-    // quando a fornada terminar ele SEGURA a peça na boca até liberar — a mesma espera que a
-    // fornada de bandeja já fazia. Perguntar aqui recusaria uma fornada que a máquina sabe adiar.
+    // O FORNO não pergunta isso: se a frente estiver ocupada quando a fornada terminar, ele
+    // procura outro vizinho livre. Perguntar aqui recusaria uma fornada que a máquina sabe adiar.
     const landing = station === 'bench'
       ? this.deliveryTileAround(prop.worldX, prop.worldY)
       : null;
@@ -3959,26 +3174,25 @@ export class GameScene extends Phaser.Scene {
       // A FORNADA É UM PROCESSO, e agora ela acontece na tela inteira: a carga voa da mão do herói
       // para a boca, o fole sopra três vezes sacudindo a alvenaria, a brasa esguicha e só então a
       // peça PULA pela frente da máquina (ver FurnaceObject.startHandSmelt). O item entra no mundo
-      // no fim desse ciclo — quem o entrega é o `port.put` do forno, o mesmo da fornada de bandeja.
+      // no fim desse ciclo, entregue pelo `port.put` do forno.
       const charge: HeldItemKind[] = [];
       for (const [ingredient, need] of cost) {
         for (let i = 0; i < need; i += 1) charge.push(ingredient);
       }
-      // Nenhum som sai daqui: a boca pegando fogo tem UMA voz (a do `port.lit`), e ela é a mesma
-      // que a fornada de bandeja toca. Dois sons para o mesmo evento na mesma máquina fariam o
-      // jogador achar que são duas coisas diferentes acontecendo.
+      // Nenhum som sai daqui: a boca pegando fogo tem uma voz, disparada pelo `port.lit`.
       prop.startHandSmelt(kind, units, charge, [this.playerWorld.worldX, this.playerWorld.worldY]);
     } else {
       // A BANCADA é o oposto e continua sendo: uma martelada é um instante, não um processo. A PEÇA
       // NASCE NO CHÃO, e não na mochila — a mochila era a entrega mais curta possível e por isso
       // mesmo não se via nada: a mesa martelava para ninguém. O item entra no mundo AGORA (o arco é
       // só o desenho por cima), então nem morrer no meio do voo o apaga.
-      this.itemManager?.drop(kind, landing![0], landing![1], undefined, undefined, units);
+      this.itemManager?.drop(kind, landing![0], landing![1], undefined, units);
       this.flingCraftedItem(kind, prop.worldX, prop.worldY, landing![0], landing![1]);
       prop.playCraft();
       getSoundManager().playHammer();
       this.time.delayedCall(140, () => getSoundManager().playToolboxDeliver());
     }
+    this.questEvent({ type: 'craft', item: kind, units });
     // O item novo se apresenta uma vez, como qualquer outro que o jogador vê pela primeira vez —
     // e ele foi VISTO saindo da máquina, mesmo que ainda não tenha sido apanhado.
     this.seenItems.add(kind);
@@ -4000,8 +3214,8 @@ export class GameScene extends Phaser.Scene {
    * inteiro terminava atrás do jogador. Ele continua sendo destino válido, mas em último caso: o B
    * apanha o que está sob os pés, então nada se perde; o que se perde é o de ver onde caiu.
    *
-   * Um tile serve quando o herói pode PISAR nele (nada de rio, lava ou corpo sólido — buscar a
-   * peça não pode exigir botas) e não tem item nenhum em cima: a lei de um item por tile é
+   * Um tile serve quando o herói pode PISAR nele (nada de rio, lava ou corpo sólido) e não tem
+   * item nenhum em cima: a lei de um item por tile é
    * absoluta, e empilhar é justamente o que faz uma peça sadia parecer quebrada (já aconteceu
    * duas vezes neste projeto).
    */
@@ -4073,7 +3287,7 @@ export class GameScene extends Phaser.Scene {
    * ambições, e esconder uma receita por falta de material é o erro do Terraria — quem não carrega
    * o material nunca descobre que a coisa existe". O efeito medido foi outro. Onze cartas de uma
    * vez não são ambição, são uma parede: o jogador que acabou de fazer o primeiro forno não
-   * precisa saber que existe extrator, precisa saber QUAL É O PRÓXIMO PASSO.
+   * precisa ver todas as ferramentas futuras; precisa saber qual e o proximo passo.
    *
    * Então a mesa passou a mostrar o mínimo para continuar (`catalogSteps`): os degraus que ele já
    * cumpriu, e o primeiro que falta. A promessa de que nada fica escondido continua de pé — só que
@@ -4123,90 +3337,23 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  private getWoodenCrateAt(wx: number, wy: number): WoodenCrateObject | undefined {
-    return this.propAt(this.woodenCrates, wx, wy);
-  }
-
-  private getWaterWheelAt(wx: number, wy: number): WaterWheelObject | undefined {
-    return this.propAt(this.waterWheels, wx, wy);
-  }
-
-  private getBoilerAt(wx: number, wy: number): BoilerObject | undefined {
-    return this.propAt(this.boilers, wx, wy);
-  }
-
-  private getElectronicGateAt(wx: number, wy: number): ElectronicGateObject | undefined {
-    return this.propAt(this.electronicGates, wx, wy);
-  }
-
-  private getBeltAt(wx: number, wy: number): BeltObject | undefined {
-    return this.propAt(this.belts, wx, wy);
-  }
-
-  private getChestAt(wx: number, wy: number): ChestObject | undefined {
-    return this.propAt(this.chests, wx, wy);
-  }
-
-  private getExtractorAt(wx: number, wy: number): ExtractorObject | undefined {
-    return this.propAt(this.extractors, wx, wy);
-  }
-
   private getFurnaceAt(wx: number, wy: number): FurnaceObject | undefined {
     return this.propAt(this.furnaces, wx, wy);
   }
 
-  private getTripHammerAt(wx: number, wy: number): TripHammerObject | undefined {
-    return this.propAt(this.tripHammers, wx, wy);
-  }
-
   /**
-   * Ha QUALQUER peca de rede neste tile? A pergunta existe porque duas delas — o cabo e a
-   * esteira — nao sao solidas (o heroi pisa nelas de proposito), entao `isTileOccupied` responde
-   * `false` sobre um tile que ja tem maquina. Uma pergunta so, para a construcao e para o
-   * restore do save nao poderem discordar sobre o que e "ocupado por uma maquina".
+   * Há uma estação manual neste tile? Uma pergunta só para construção e restauração do save.
    */
   private machineAt(wx: number, wy: number): boolean {
-    return this.getBoilerAt(wx, wy) !== undefined
-      || this.getWaterWheelAt(wx, wy) !== undefined
-      || this.getPressurePlateAt(wx, wy) !== undefined
-      || this.getInserterAt(wx, wy) !== undefined
-      || this.getElectronicGateAt(wx, wy) !== undefined
-      || this.getBeltAt(wx, wy) !== undefined
-      || this.getChestAt(wx, wy) !== undefined
-      || this.getExtractorAt(wx, wy) !== undefined
-      || this.getFurnaceAt(wx, wy) !== undefined
-      || this.getTripHammerAt(wx, wy) !== undefined
-      || this.wires.some((w) => w.worldX === wx && w.worldY === wy);
+    return this.getFurnaceAt(wx, wy) !== undefined || this.getAltarAt(wx, wy) !== undefined;
   }
 
   private getLevelPortalAt(wx: number, wy: number): LevelPortalObject | undefined {
     return this.propAt(this.levelPortals, wx, wy);
   }
 
-  private getPressurePlateAt(wx: number, wy: number): PressurePlateObject | undefined {
-    return this.propAt(this.pressurePlates, wx, wy);
-  }
-
-  /**
-   * The plates an undead may fixate on. A skull is DRAWN to a pressure plate — it wants to stand
-   * on it — so the plate becomes a switch the player throws by leading a monster onto it instead
-   * of spending his one hand on a crate. See UndeadEnemy.setPlateTarget.
-   *
-   * Two plates are not on offer, and both for the same reason — a balloon over a creature's head
-   * is a promise, and a promise it cannot keep is worse than no balloon at all:
-   *  - one standing in campfire light: the undead refuse to enter it (same rule that governs
-   *    every other step they take), so that march could never end;
-   *  - one already carrying a crate: the tile is blocked and the plate is pressed anyway.
-   * The HERO standing on a plate is NOT a disqualifier — he walks off, and dropping the fixation
-   * every time he crosses would make the skull dither in the middle of the room.
-   */
-  private lurablePlates(): Array<{ worldX: number; worldY: number }> {
-    if (!this.pressurePlates.length) return [];
-    return this.pressurePlates
-      .filter((plate) => !this.isTileLitByCampfire(plate.worldX, plate.worldY)
-        && !this.getWoodenCrateAt(plate.worldX, plate.worldY)
-        && !this.isSolidForEntities(plate.worldX, plate.worldY))
-      .map((plate) => ({ worldX: plate.worldX, worldY: plate.worldY }));
+  private getStairsAt(wx: number, wy: number): StairsObject | undefined {
+    return this.propAt(this.stairs, wx, wy);
   }
 
   private getPlantSpotAt(wx: number, wy: number): PlantSpotObject | undefined {
@@ -4281,8 +3428,8 @@ export class GameScene extends Phaser.Scene {
    * Everything a walking entity (hero or enemy) cannot step onto: authored terrain collision
    * and trees (via ChunkManager.isCellBlocked), every registered prop whose `blocking` says so
    * (see WorldProp/propRegistry), NPCs — and the two hazard tiles (lava, water), unless the
-   * caller can wade them (hero wearing the lava boots; enemies never can). The hero adds
-   * enemies on top (to attack them).
+   * caller is explicitly hazard-passable (flying enemies). The hero adds enemies on top
+   * (to attack them).
    */
   private isSolidForEntities(wx: number, wy: number, hazardsPassable = false): boolean {
     if (this.chunkManager?.isCellBlocked(wx, wy)) return true;
@@ -4320,8 +3467,7 @@ export class GameScene extends Phaser.Scene {
   /**
    * Este tile está DENTRO da luz de uma fogueira acesa? Ele já foi a parede que repelia todo
    * monstro; hoje responde por duas coisas só (ver LIGHT_RADIUS_TILES): onde uma cova ou o cerco
-   * NÃO abrem, e a placa de pressão que a caveira se recusa a caçar. Quem empurra corpo agora é o
-   * CALOR, e ele tem raio próprio — `isTileScorchedByCampfire`.
+   * NÃO abrem. Quem afeta o corpo agora é o CALOR, com raio próprio.
    */
   private isTileLitByCampfire(wx: number, wy: number): boolean {
     return this.distToNearestCampfireTiles(wx, wy) <= LIGHT_RADIUS_TILES;
@@ -4343,24 +3489,12 @@ export class GameScene extends Phaser.Scene {
     return this.distToNearestCampfireTiles(wx, wy) <= CAMPFIRE_SCORCH_RADIUS_TILES;
   }
 
-  // A skull can rise only on an open, dark tile that nothing occupies — and only where it
-  // could actually WALK to the hero (same 4-dir moves and blockers it hunts by). A skull
-  // born across a river or behind a rock wall would just pace its pocket, menacing nobody.
-  private canSpawnUndeadAt(wx: number, wy: number): boolean {
-    if (this.isSolidForEntities(wx, wy)) return false;
-    if (this.isTileLitByCampfire(wx, wy)) return false;
-    if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
-    if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) return false;
-    return this.undeadReachableTiles().has(`${wx},${wy}`);
-  }
-
   /**
-   * O mesmo teste para uma COVA AUTORADA, menos a alcancabilidade — e essa subtracao e a peca.
-   * `undeadReachableTiles` e um flood-fill a partir do HEROI, limitado ao anel do cerco + 3, e
-   * existe porque o cerco escolhe o tile na hora e nao pode escolher um bolsao. Uma cova nao
-   * escolhe nada: o autor ja escolheu, e cobrar dela um alcance medido em volta do heroi
-   * reprovaria toda cova a mais de 10 tiles — ou seja, quase todas. O editor avisa no Salvar
-   * quando o tile esta bloqueado; o resto e responsabilidade de quem autorou.
+   * O teste de tile de uma COVA AUTORADA — a unica porta por onde entra corpo neste jogo. Ele
+   * NAO pergunta por alcance ate o heroi: a cova nao escolhe nada, o autor ja escolheu, e cobrar
+   * dela um caminho medido em volta do heroi reprovaria toda cova a mais de 10 tiles — ou seja,
+   * quase todas. O editor avisa no Salvar quando o tile esta bloqueado; o resto e
+   * responsabilidade de quem autorou.
    *
    * O que FICA e o que tambem vale pro heroi ou pra qualquer corpo: tile solido, corpo em cima e
    * — a regra do mundo, nao deste sistema — LUZ DE FOGUEIRA. Monstro nao existe na luz, entao uma
@@ -4391,42 +3525,6 @@ export class GameScene extends Phaser.Scene {
     if (this.isTileLitByCampfire(wx, wy)) return false;
     if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
     return !(wx === this.playerWorld.worldX && wy === this.playerWorld.worldY);
-  }
-
-  /**
-   * Every tile an undead could walk to the hero from: a flood-fill out from the hero's tile
-   * over undead-passable ground (not solid — the exact blockers they move by; a luz deixou de ser
-   * um deles, entao um caminho que passa raspando numa fogueira agora conta),
-   * bounded a few tiles past the spawn ring so a path may detour around a short wall. Other
-   * undead are ignored: they move, so they never permanently seal a path. Memoised per frame
-   * — the director probes up to 14 candidate tiles per spawn tick, and each probe must cost
-   * a set lookup, not its own flood.
-   */
-  private undeadReachableTiles(): Set<string> {
-    const frame = this.game.loop.frame;
-    if (frame === this.reachableFrame) return this.reachableTiles;
-    this.reachableFrame = frame;
-    this.reachableTiles.clear();
-
-    const px = this.playerWorld.worldX;
-    const py = this.playerWorld.worldY;
-    const maxR = RING_MAX_TILES + 3;
-    const queue: Array<readonly [number, number]> = [[px, py]];
-    this.reachableTiles.add(`${px},${py}`);
-    for (let head = 0; head < queue.length; head++) {
-      const [cx, cy] = queue[head];
-      for (const [ox, oy] of CARDINAL_DIRS) {
-        const nx = cx + ox;
-        const ny = cy + oy;
-        if (Math.abs(nx - px) > maxR || Math.abs(ny - py) > maxR) continue;
-        const key = `${nx},${ny}`;
-        if (this.reachableTiles.has(key)) continue;
-        if (this.isSolidForEntities(nx, ny)) continue;
-        this.reachableTiles.add(key);
-        queue.push([nx, ny]);
-      }
-    }
-    return this.reachableTiles;
   }
 
   // ── OS DOIS BOTOES ─────────────────────────────────────────────────────────
@@ -4584,7 +3682,7 @@ export class GameScene extends Phaser.Scene {
     return !this.isDead && !this.dialogOpen && !this.camShifting
       && !this.itemGetOpen && !this.cutsceneActive && !this.levelIntroOpen
       && !this.levelTransitioning && !this.pauseMenu && this.quickBag?.isOpen !== true
-      && !this.chunkPurchaseOverlay && !this.orderOverlay
+      && !this.orderOverlay
       && this.movementController !== undefined;
   }
 
@@ -4785,8 +3883,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Para onde o heroi olha, no indice N/L/S/O que TODA maquina direcional deste jogo usa (o
-   * braco, a esteira, o extrator, a bancada). E o que faz a direcao de uma peca recem-construida
+   * Para onde o heroi olha, no indice N/L/S/O usado pela bancada e pelo forno. Faz a direção
    * nascer do corpo do jogador em vez de um menu: ele se vira e poe.
    */
   private facingDirIndex(): PropDir {
@@ -4864,24 +3961,19 @@ export class GameScene extends Phaser.Scene {
     {
       const front = this.facingTile();
       if (this.talkToNpcAt(front.x, front.y)) return;
-      // A BANCADA É A ÚNICA MÁQUINA QUE TEM O QUE DIZER, e por isso ela entra exatamente aqui —
+      // A BANCADA TEM O QUE DIZER, e por isso ela entra exatamente aqui —
       // no mesmo degrau do NPC, antes da cadência e antes do corpo. Encarar a caixa e apertar A
       // abre o CATÁLOGO: o jogador escolhe o que quer construir, e a resposta ("do que preciso")
-      // volta desenhada nas bandejas dela. É o Guia do Terraria — mostrar um objeto e receber a
-      // receita —, só que quem responde é a própria máquina, no lugar em que o gesto acontece.
+      // volta desenhada no catalogo. É o Guia do Terraria — mostrar um objeto e receber a receita
+      // —, só que quem responde é a própria estação, no lugar em que o gesto acontece.
       //
       // Vem antes de `useItemAt` de propósito: nenhum item do jogo tem o que fazer com o corpo da
-      // bancada (ela é sólida, e alimentar é o B nas bandejas), então conversar com ela nunca
-      // rouba um gesto de ferramenta — e com a mão cheia continua valendo, que é justamente
+      // bancada, então conversar com ela nunca rouba um gesto de ferramenta — e com a mão cheia
+      // continua valendo, que é justamente
       // quando o jogador está a meio caminho de um plano.
-      // AS DUAS MÁQUINAS DE FABRICAR ABREM A MESMA TELA. O forno respondia ao A de outro jeito
-      // (acendia os fantasmas nas bandejas e balançava), e eram duas gramáticas para o mesmo botão
-      // contra o mesmo tipo de peça: uma pedia menu, a outra pedia que você adivinhasse a receita
-      // e trouxesse as coisas na mão. Agora o A é uma coisa só — escolha e confirme —, e o que
-      // muda entre elas é o que cada uma sabe fazer.
+      // AS DUAS ESTACOES DE FABRICAR ABREM A MESMA TELA. O A e uma coisa so — escolha e confirme
+      // —, e o que muda entre elas e o que cada uma sabe fazer.
       if (this.openCraftMenuAt(front.x, front.y)) return;
-      // A CAIXA DE EXTRACAO responde ao mesmo botao e no mesmo degrau: maquina que abre TELA.
-      if (this.openSellBoxAt(front.x, front.y)) return;
       // O ALTAR VAZIO: o Z PÕE nele o item selecionado na bolsa. Fica no mesmo degrau da bancada
       // (antes da cadência e do corpo) e pela mesma razão — pôr uma coisa numa mesa não saca
       // lâmina. Com a laje já ocupada isto devolve `false` de propósito: dali em diante o Z volta
@@ -5136,18 +4228,10 @@ export class GameScene extends Phaser.Scene {
    * Bater com a espada e quebrar a rocha deixaram de ser o mesmo botão disputando a mesma bolsa —
    * o herói corta com o Z e pica a pedra com o X, sem passar por um menu entre os dois.
    *
-   * O QUE SAIU DAQUI:
-   *
-   *   - **LARGAR.** O X não joga mais nada no chão. Um botão que ora usa, ora larga é um botão que
-   *     desarma o jogador por engano — e largar existia para trocar de mão, que a mochila resolveu
-   *     faz tempo. O que era "pousar para depositar" virou ENTREGA (`deliverToMachineAt`): a
-   *     máquina já diz o que precisa, e o X entrega isso, venha da bolsa ou do contador.
-   *   - **APANHAR.** Pisar apanha (ver `collectUnderfoot`). Sem o gesto de largar, apanhar deixou
-   *     de ter custo — não há mão a ser roubada —, e o botão ficou livre para ter um sentido só.
-   *   - **FALAR.** Continua no Z, que é a tecla que o keycap sobre a cabeça do NPC sempre anunciou.
+   * O X usa o item escolhido, devolve uma peca colocada no altar ou recolhe uma estacao manual.
    *
    * A ordem abaixo é a única que não desmente as marcas desenhadas no chão: o que o jogador
-   * ESCOLHEU (o item) age primeiro, depois o que a máquina PEDE, e só então recolher.
+   * ESCOLHEU (o item) age primeiro e so entao vem recolher.
    */
   private pressUse(event?: KeyboardEvent): void {
     // O B NÃO REPETE MAIS, e a bolsa é quem cobrou isso. O A já ignorava a repetição do navegador
@@ -5174,13 +4258,6 @@ export class GameScene extends Phaser.Scene {
     this.useCooldownMs = USE_COOLDOWN_MS;
     this.stopBreathing();
     const { x, y } = this.facingTile();
-    // A road seal is activated from under the hero's feet. It outranks normal B actions because
-    // the prompt explicitly asks for this button while the hero is standing on the square.
-    const buildGate = this.explorer?.gateAt(this.playerWorld.worldX, this.playerWorld.worldY);
-    if (buildGate) {
-      if ((explorerRun()?.coins ?? 0) >= this.explorer!.minCost()) this.openChunkCards(buildGate);
-      return;
-    }
     // 0. A FERRAMENTA CERTA SE APRESENTA SOZINHA. Bateu numa árvore com o machado na mochila? O
     //    herói saca o machado. Numa rocha, com a picareta? Ele saca a picareta. Não é um atalho
     //    de conveniência: é a diferença entre um jogo que pergunta "qual item você escolheu?" e um
@@ -5196,7 +4273,7 @@ export class GameScene extends Phaser.Scene {
     //    tabela que faça outra coisa contra eles. Ver `toolWantedAt`.
     this.equipToolFor(x, y);
     // 1. O ITEM ESCOLHIDO AGE — a tabela inteira (machado→árvore, picareta→rocha, balde→água,
-    //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, máquina→instala). É o primeiro
+    //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, estação→instala). É o primeiro
     //    degrau porque é o único que o jogador PEDIU explicitamente: ele abriu a bolsa e escolheu
     //    aquilo. As marcas no chão (`PlacementHints`) desenham exatamente este passo.
     if (this.heldItem !== 'none' && this.useItemAt(x, y)) return;
@@ -5205,11 +4282,8 @@ export class GameScene extends Phaser.Scene {
     //     que pousou a esponja e ficou sem itens não teria como voltar a bater nela — um beco sem
     //     saída no meio da cadeia do ferro.
     if (this.heldItem === 'none' && this.strikeBloomAt(x, y)) return;
-    // 2. A MÁQUINA PEDE, O X ENTREGA. A bandeja do forno, a bigorna do martinete e o baú com cota
-    //    sabem o que querem e mostram isso; o herói entrega da mochila — inclusive do CONTADOR, que
-    //    é onde minério, carvão e ferro moram agora. Depois do item escolhido de propósito: com uma
-    //    esteira na mão de frente para o forno, o gesto é construir a esteira, não alimentar.
-    if (this.deliverToMachineAt(x, y)) return;
+    // 2. O ALTAR CHEIO devolve a peca para a mochila.
+    if (this.takeFromAltarAt(x, y)) return;
     // 3. RECOLHER a máquina que o JOGADOR construiu — a outra metade de "tudo que se instala se
     //    recolhe". Deixou de exigir mão vazia: a mão nunca mais está vazia (a bolsa quase sempre
     //    tem alguma coisa), e exigir isso tornaria a peça irremovível na prática. Vem por último
@@ -5221,90 +4295,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * A ENTREGA — o X contra uma máquina que está PEDINDO alguma coisa.
-   *
-   * Ela substitui o gesto de pousar: era "largue o minério na bandeja" e virou "o forno pede
-   * minério, o X dá". A diferença que importa é de onde sai a carga — da MOCHILA inteira, contador
-   * incluído. Sem isto, tirar o minério da bolsa (que é o que esta reforma faz) teria arrancado
-   * junto a única forma de alimentar o forno na mão.
-   *
-   * Devolve `true` quando havia máquina ali e o gesto foi gasto — inclusive numa recusa desenhada.
+   * O X contra um altar ocupado devolve a peca guardada nele para a mochila.
    */
-  /**
-   * A CAIXA DE VENDA a partir do prop: a placa desenha a arte do PRÓPRIO item que ela compra, e é
-   * daqui que ela sai — a tabela de arte 3D mora nesta cena, não no objeto.
-   */
-  private makeSellBox(def: import('@/game/world/worldSchema').WorldProp): SellBoxObject {
-    const kind = def.sells?.kind as HeldItemKind;
-    const art = BACK_ITEM_VISUAL_3D[kind];
-    return new SellBoxObject(
-      this, def.worldX, def.worldY, kind, def.sells?.coinsPerUnit ?? 1, art.texture, art.frame,
-    );
-  }
-
-  /**
-   * VENDER: o X contra a caixa entrega o PUNHADO INTEIRO do tipo que ela compra, e ela derruba o
-   * pagamento no chão em volta de si.
-   *
-   * O punhado inteiro, e não uma unidade, pela mesma razão do baú: vender vinte minérios um aperto
-   * por vez seria uma tarefa, e a caixa existe para tirar tarefa do caminho. E o pagamento cai no
-   * MUNDO (a lei da casa — dinheiro ganho é dinheiro que se apanha), o que também dá ao gesto a
-   * parte visível que um número no canto da tela não tem.
-   */
-  /**
-   * O Z CONTRA A CAIXA ABRE A MESA DE DESPACHO. Ele mora no mesmo degrau da bancada e do forno —
-   * as tres sao maquinas que respondem ao A com uma TELA de escolha, e nao com um gesto imediato.
-   * Vender e uma decisao ("quanto disto?"), e decisao neste jogo abre painel.
-   */
-  private openSellBoxAt(wx: number, wy: number): boolean {
-    const box = this.propAt(this.sellBoxes, wx, wy);
-    if (!box) return false;
-    if (!box.isReady) return true;   // ja esta no ar: o gesto foi gasto, e o ceu e a resposta
-    if (this.sellOverlay) return true;
-    const have = this.inventory.count(box.kind);
-    if (have <= 0) { box.refuse(); return true; }
-    const art = ITEM_VISUAL_2D[box.kind];
-    this.movementController?.hold(true);
-    this.sellOverlay = new SellOverlay({
-      icon: spriteDataUrl(this, art.texture, art.frame),
-      itemLabel: t(`items.name.${box.kind}`),
-      coinsPerUnit: box.coinsPerUnit,
-      available: have,
-      onConfirm: (units) => {
-        this.closeSellOverlay();
-        const n = Math.min(units, this.inventory.count(box.kind));
-        if (n <= 0) return;
-        this.inventory.remove(box.kind, n);
-        this.updateBackItem(); // o vendido podia ser o item da mao — as costas ficam honestas
-        getSoundManager().playShopClose();
-        // A CARGA SOBE AGORA; a moeda so cai quando o aviao passar (ver SellBoxObject.extract).
-        box.extract(box.priceFor(n), (bx, by, coins) => {
-          if (this.chunkManager) {
-            this.coinManager?.spawnCoins(bx, by, this.chunkManager, coins);
-          }
-          getSoundManager().playCoinPickup();
-          this.persistAdventure();
-        });
-        this.persistAdventure();
-      },
-      onCancel: () => this.closeSellOverlay(),
-    });
-    getSoundManager().playShopOpen();
-    return true;
-  }
-
-  private closeSellOverlay(): void {
-    this.sellOverlay?.close();
-    this.sellOverlay = undefined;
-    this.movementController?.hold(false);
-  }
-
-  private deliverToMachineAt(wx: number, wy: number): boolean {
-    // O BAÚ é os dois sentidos num corpo só (depositar e tirar um punhado), e continua sendo o
-    // primeiro: ele é o único que aceita QUALQUER coisa, então perguntar a ele é barato.
-    if (this.useChestAt(wx, wy)) return true;
-    // A BIGORNA: põe a peça dentro, ou devolve a que está lá.
-    if (this.useTripHammerAt(wx, wy)) return true;
+  private takeFromAltarAt(wx: number, wy: number): boolean {
     // O ALTAR devolve o que está em cima dele. Só chega aqui o que a pancada NÃO trabalha (a peça
     // malhável virou golpe lá atrás, na tabela): é a metade simétrica do Z que pôs, e o que
     // garante que nada fique preso na laje — a mesma lei do baú e da bigorna, um aperto põe, o
@@ -5320,35 +4313,6 @@ export class GameScene extends Phaser.Scene {
         return true;
       }
     }
-    // AS BANDEJAS DO FORNO SAÍRAM DAQUI (2026-08-12). Elas eram alimentadas por aperto, e o que
-    // decidia O QUE entregar era o fantasma que a máquina pregava no chão — uma receita só, fixa,
-    // de quando o forno não tinha menu. Com o catálogo (que já sabe duas receitas e vai saber
-    // mais), a fornada da MÃO acontece por inteiro no Z: escolher, gastar da mochila, ver a
-    // máquina trabalhar. Encher bandeja com a mão virou o caminho longo para o mesmo lugar, e o
-    // único que precisava de um segundo anúncio na tela.
-    //
-    // As bandejas continuam ali para as MÁQUINAS (esteira, braço), e o X continua TIRANDO delas o
-    // que estiver posto (`machineFloorAt`, logo abaixo) — chão de máquina não é bolso, e o que
-    // entrou tem de poder sair.
-    //
-    // O CHÃO DE ENTRADA DO BRAÇO é uma bandeja como as do forno, e ela precisa desta linha para
-    // continuar existindo: alimentar o braço robótico SEMPRE foi "pouse a carga no tile de onde
-    // ele tira", e pousar acabou. Sem isto, um level inteiro fica insolúvel — o portão de bater
-    // pede que o braço leve FOGO até o mato do outro lado, e o graveto aceso só chega lá pela mão
-    // do herói. A pergunta é a mesma da bandeja: a máquina quer algo NESTE tile.
-    const armInput = this.inserters.find((arm) => {
-      const [sx, sy] = arm.sourceTile;
-      return sx === wx && sy === wy;
-    });
-    if (armInput && this.heldItem !== 'none' && !(this.itemManager?.hasItemAt(wx, wy) ?? false)
-      && this.placeItemAt(wx, wy)) {
-      return true;
-    }
-    // TIRAR DE VOLTA O QUE ESTÁ NA MÁQUINA — a bandeja servida, a carga parada na esteira, a
-    // bateria encaixada no cabo. É a metade simétrica da entrega, e é a ÚNICA forma de reaver
-    // essas coisas agora que a pisada não as apanha (ver `collectUnderfoot`). O mesmo par de
-    // gestos que o baú e a bigorna já tinham: um aperto põe, o seguinte devolve.
-    if (this.machineFloorAt(wx, wy) && this.pickUpItemAt(wx, wy)) return true;
     return false;
   }
 
@@ -5370,9 +4334,7 @@ export class GameScene extends Phaser.Scene {
     const kind = this.heldItem;
     if (kind === 'none') return false;
     if (!altar.place(kind)) return false;
-    // `clearHeldItem` e não um `remove` solto: ele é quem sabe que uma tocha que sai da mão APAGA
-    // (o fogo mora no graveto que estava sendo carregado) e que a carga da bateria vai junto. Um
-    // remove cru deixaria a cena com chama acesa sobre uma mão que não segura mais nada.
+    // `clearHeldItem` e não um `remove` solto: ele é quem sabe que uma tocha que sai da mão apaga.
     this.clearHeldItem();
     getSoundManager().playToolboxDeliver();
     this.persistAdventure();
@@ -5383,8 +4345,7 @@ export class GameScene extends Phaser.Scene {
    * A PANCADA NA LAJE — a mesma para a espada (Z) e para a ferramenta (X).
    *
    * A esponja recém-saída do forno é ferro poroso encharcado de escória, e só vira metal depois de
-   * apanhar quente: são `BLOOM_BLOWS` pancadas, as MESMAS que o martinete leva e as mesmas da
-   * martelada no chão. É essa igualdade que faz a automação ser sentida como alívio.
+   * apanhar quente: são `BLOOM_BLOWS` pancadas, como na martelada no chão.
    *
    * Bater no que a pancada não trabalha continua sendo possível e não faz nada — pedido explícito
    * do usuário, e a laje se defende de mentir por outro caminho: o que trabalha cospe brasa, o que
@@ -5404,47 +4365,6 @@ export class GameScene extends Phaser.Scene {
       getSoundManager().playToolboxForge();
       this.persistAdventure();
     }
-    return true;
-  }
-
-  /**
-   * O B CONTRA O MARTINETE — por a peca na bigorna, ou tira-la de volta.
-   *
-   * Devolve `true` sempre que houve um martinete ali E o gesto fazia sentido; `false` deixa o B
-   * seguir para o pouso normal, que e o que tem de acontecer quando o jogador esta com um graveto
-   * na mao de frente pra maquina (ele quer largar o graveto, e nao alimentar a forja com ele).
-   *
-   * A pergunta "cabe?" e `TripHammerObject.accepts`, e e a MESMA que o aviso sobre a cabeca do
-   * heroi consulta — senao o texto promete um gesto que o botao recusa.
-   */
-  private useTripHammerAt(wx: number, wy: number): boolean {
-    const hammer = this.propAt(this.tripHammers, wx, wy);
-    if (!hammer) return false;
-    // BIGORNA OCUPADA DEVOLVE, sempre — e não mais só com a mão vazia. Um lugar guarda uma peça,
-    // então o único gesto que resta contra uma bigorna carregada é tirar o que está lá; perguntar
-    // primeiro o que está selecionado só serviria para recusar em silêncio.
-    if (hammer.carrying) {
-      const back = hammer.release();
-      if (!back) return false;
-      this.inventory.add(back);
-      this.updateBackItem();
-      getSoundManager().playSwordPickup();
-      this.persistAdventure();
-      return true;
-    }
-    // A MÁQUINA PEDE O QUE ELA SABE TRABALHAR. A bigorna aceita qualquer carga (é o que impede o
-    // braço robótico de perder uma entrega em silêncio — ver TripHammerObject.accept), mas quando
-    // é o HERÓI que entrega ela prefere a esponja: com o machado selecionado e uma esponja na
-    // mochila, "pôr na bigorna" só pode significar uma coisa. Sem esponja, vale o que está na mão.
-    const workable = this.inventory.list()
-      .find((entry) => TripHammerObject.works(entry.kind))?.kind;
-    const held = workable ?? (this.heldItem === 'none' ? undefined : this.heldItem);
-    if (held === undefined) return false;   // bigorna vazia e nada a pôr: o X segue e desmonta
-    if (!hammer.accept(held)) return false;
-    this.inventory.remove(held);
-    this.updateBackItem();
-    getSoundManager().playToolboxDeliver();
-    this.persistAdventure();
     return true;
   }
 
@@ -5473,82 +4393,20 @@ export class GameScene extends Phaser.Scene {
     const kind = this.npcManager.getKindAt(wx, wy);
     if (!kind) return false;
     // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
-    if (kind === 'wizard' && !this.explorer) this.openWizardDialog({ worldX: wx, worldY: wy });
+    if (kind === 'wizard') this.openWizardDialog({ worldX: wx, worldY: wy });
     else this.openNpcDialog(kind, { worldX: wx, worldY: wy }, this.npcManager.getDialogIdAt(wx, wy));
     return true;
   }
 
   /**
-   * O BAU pelo botao B: mao cheia DEPOSITA, mao vazia TIRA. Devolve `false` se nao ha bau ali.
+   * INSTALAR a estação que esta na mao no tile a frente. Devolve `false` quando o item não é uma
+   * estação — e ai a tabela do A segue para as outras linhas dela.
    *
-   * Depositar leva o PUNHADO INTEIRO do tipo selecionado, e nao uma unidade: guardar vinte
-   * minerios um aperto por vez seria uma tarefa, e o bau existe justamente para tirar tarefa do
-   * caminho. Tirar devolve UM de cada vez, porque o gesto oposto tem outro proposito — pescar o
-   * que se precisa agora — e porque a mochila ja e uma lista com contagem.
-   */
-  private useChestAt(wx: number, wy: number): boolean {
-    const chest = this.getChestAt(wx, wy);
-    if (!chest) return false;
-    if (this.freezeManager?.frozenAt(wx, wy)) {
-      this.freezeManager.pulse(wx, wy);
-      return true;
-    }
-    // O QUE ESTE BAÚ QUER, se ele quer algo em particular: a cota da fábrica (a trava que cobra uma
-    // entrega) ou o tipo que ele já guarda. Como minério e ferro saíram da bolsa e viraram
-    // contador, é por aqui que uma entrega de matéria-prima acontece — sem isto, um baú com cota de
-    // ferro seria uma porta que ninguém mais consegue abrir na mão.
-    const asked = chest.quota?.kind ?? chest.storedKind;
-    const held = asked && this.inventory.count(asked) > 0 && !chest.isFull
-      ? asked
-      : this.heldItem;
-    // GUARDAR só acontece quando o baú realmente aceita. O que ele não pode receber (outro tipo,
-    // ou ele cheio) NÃO é mais uma recusa: o gesto escorrega para tirar de volta, logo abaixo —
-    // um baú é reversível por natureza, e recusar aqui deixaria o jogador sem nenhum jeito de
-    // reaver o que guardou, agora que "mão vazia" virou um estado inalcançável.
-    if (held !== 'none' && chest.accepts(held) && !chest.isFull) {
-      const stored = chest.store(held, this.inventory.count(held));
-      if (stored <= 0) {
-        this.swingHeld(wx, wy);
-        getSoundManager().playToolboxRefuse();
-        return true;
-      }
-      this.inventory.remove(held, stored);
-      this.updateBackItem();
-      getSoundManager().playSwordPickup();
-      this.persistAdventure();
-      return true;
-    }
-    // TIRAR DE VOLTA deixou de exigir a mão vazia, e essa mudança é obrigatória: a bolsa quase
-    // sempre tem alguma coisa selecionada agora, então "mão vazia" virou um estado que o jogador
-    // não consegue alcançar de propósito. O critério passou a ser o baú: o que ele NÃO pode
-    // guardar (outro tipo, ou ele cheio), ele devolve.
-    const taken = chest.withdraw(1);
-    if (!taken) {
-      // Bau vazio: e a deixa para recolher a propria peca (o `pickUpMachineAt` roda depois deste
-      // na ordem do X). `false` deixa o gesto seguir.
-      return false;
-    }
-    this.onCollectItem({ kind: taken.kind, worldX: wx, worldY: wy, units: taken.units });
-    this.persistAdventure();
-    return true;
-  }
-
-  /**
-   * INSTALAR a maquina que esta na mao no tile a frente. Devolve `false` quando o item nao e uma
-   * maquina — e ai a tabela do A segue para as outras linhas dela.
-   *
-   * A DIRECAO nasce de para onde o heroi esta OLHANDO, e nunca de um menu: a peca entrega no
-   * sentido em que ele andaria. E a mesma decisao do `dir` do braco e da esteira ("para onde a
-   * maquina POE"), o que faz a regra ser uma so no jogo inteiro — e faz girar uma esteira ser
-   * "vire-se e ponha de novo", que e um gesto que o corpo do jogador ja sabe fazer.
+   * A DIREÇÃO nasce de para onde o herói está olhando, nunca de um menu.
    */
   private buildMachineAt(wx: number, wy: number): boolean {
     const kind = this.heldItem;
     if (kind === 'none' || !MACHINE_ITEM_KINDS.has(kind)) return false;
-    // A ENGRENAGEM NAO INSTALA NADA, e e a unica peca da familia que nao instala: ela e insumo
-    // de bancada. Devolver `false` aqui e o que faz o A dela sair no VAZIO (a lei do botao),
-    // que e a resposta correta — ela realmente nao tem nada a ver com nenhum tile.
-    if (kind === 'gear') return false;
     // A recusa e FISICA: o item sai no arco contra o tile e volta, nunca uma legenda dizendo
     // "aqui nao". `true` porque o gesto foi gasto — o A nao pode escorrer para o arco no vazio
     // depois de ja ter tentado uma coisa.
@@ -5561,25 +4419,11 @@ export class GameScene extends Phaser.Scene {
       getSoundManager().playToolboxRefuse();
       return true;
     }
-    // O EXTRATOR SE ORIENTA SOZINHO, e isso NAO e conveniencia: sem ele a peca era inaimavel.
-    //
-    // A regra geral de instalacao e "a peca nasce no tile a frente, virada pra onde voce olha",
-    // e ela funciona para tudo — menos para a unica maquina cuja ENTRADA e sempre uma parede. O
-    // extrator tira do tile de TRAS, e o tile de tras dele tem de ser um veio de minerio; para
-    // um jogador poder escolher essa direcao com o corpo, ele teria de estar PISANDO no veio. E
-    // impossivel: veio de ferro e rocha, e rocha nao se pisa.
-    //
-    // Entao a broca procura a pedra. Encostado num veio, ele vira de costas pra ela; longe de
-    // qualquer veio, cai na regra geral e obedece o olhar do heroi (que e o que faz um extrator
-    // posto no lugar errado ainda ter uma direcao previsivel, em vez de uma arbitraria).
-    const dir = kind === 'extractor'
-      ? this.extractorAim(wx, wy) ?? this.facingDirIndex()
-      : this.facingDirIndex();
+    const dir = this.facingDirIndex();
     if (!this.installMachine(kind, wx, wy, dir)) return false;
     this.inventory.remove(kind, 1);
     this.updateBackItem();
-    this.refreshWireNetwork();
-    // O mesmo martelo da bancada: montar uma maquina soa como montar uma maquina. Um som novo
+    // O mesmo martelo da bancada: montar uma estação soa como fabricação. Um som novo
     // aqui ensinaria que instalar e outra categoria de gesto, e nao e — e fabricacao.
     getSoundManager().playToolboxDeliver();
     this.world3d?.shake(70, 0.008);
@@ -5588,47 +4432,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O ATO de por a maquina no mundo, sem nada em volta: nem cobrar a mochila, nem tocar som, nem
+   * O ATO de pôr a estação no mundo, sem nada em volta: nem cobrar a mochila, nem tocar som, nem
    * gravar o save. E o corpo compartilhado entre o gesto do jogador (`buildMachineAt`), a volta
    * do save (`restoreBuiltMachines`) e o hook de teste — porque a alternativa e a construcao
-   * existir escrita tres vezes, e a terceira copia esquecer o `refreshWireNetwork`.
+   * existir escrita tres vezes.
    *
-   * Devolve `false` para um item que nao vira prop (a engrenagem), nunca para um tile ruim: quem
+   * Devolve `false` para um item que nao vira prop, nunca para um tile ruim: quem
    * checa o tile e quem chama, porque cada um deles recusa de um jeito diferente (o jogador ve
    * o gesto falhar, o save simplesmente descarta a peca).
    */
   private installMachine(kind: HeldItemKind, wx: number, wy: number, dir: PropDir): boolean {
     switch (kind) {
-      case 'wire': this.wires.push(new WireObject(this, wx, wy, true)); break;
-      case 'belt': this.belts.push(new BeltObject(this, wx, wy, dir, true)); break;
-      case 'chest': this.chests.push(new ChestObject(this, wx, wy, true)); break;
-      case 'boiler': this.boilers.push(new BoilerObject(this, wx, wy, undefined, true)); break;
-      case 'inserter': this.inserters.push(new RoboticArmObject(wx, wy, dir, undefined, true)); break;
-      case 'extractor': this.extractors.push(new ExtractorObject(this, wx, wy, dir, true)); break;
       case 'furnace': this.furnaces.push(new FurnaceObject(this, wx, wy, dir, true)); break;
-      case 'tripHammer': this.tripHammers.push(new TripHammerObject(this, wx, wy, dir, true)); break;
       // O ALTAR nao recebe `dir`: ele nao tem frente — e uma laje, e se trabalha nela de qualquer
       // lado. Uma peca que aceitasse direcao sem usa-la ensinaria que o G do editor faz algo aqui.
       case 'altar': this.altars.push(new AltarObject(this, wx, wy, true)); break;
       default: return false;
     }
-    this.refreshWireNetwork();
     return true;
   }
 
   /**
-   * O hook do PLAYTEST para montar uma fabrica de vinte pecas sem vinte viagens do heroi.
-   *
-   * Ele passa pelo MESMO `installMachine` que o botao A usa — e isso e o ponto. Um atalho de
-   * teste que construisse por fora seria um teste guardando um caminho que o jogador nunca
-   * percorre; o cenario `fabrica` prova o gesto de instalar UMA vez, com o A de verdade, e usa
-   * isto so para o cenario de rede, onde o que esta sob teste e a conta e nao o botao.
+   * Hook de playtest para instalar uma estação pelo mesmo caminho do botão A.
    */
   public buildTestMachine(kind: HeldItemKind, wx: number, wy: number, dir = 1): boolean {
-    // A MESMA recusa de tile do botao A. Sem ela o hook conseguiria empilhar um cabo em cima de
-    // uma esteira — um estado que nenhum jogador alcanca —, e um cenario montado assim estaria
-    // medindo uma fabrica impossivel. Foi exatamente o que aconteceu na primeira verificacao
-    // desta reforma: uma sonda empilhou as duas pecas e o diagnostico levou meia hora.
+    // A mesma recusa de tile do botão A impede fixtures impossíveis.
     if (this.machineAt(wx, wy)) return false;
     return this.installMachine(kind, wx, wy, GameScene.asPropDir(dir));
   }
@@ -5638,160 +4466,35 @@ export class GameScene extends Phaser.Scene {
    * uma vez so. Duas copias divergindo seria o pior defeito possivel desta reforma: um quadrado
    * branco no chao prometendo um gesto que o botao recusa.
    *
-   * `machineAt` entra na conta porque a esteira e o cabo NAO sao solidos (o heroi pisa neles),
-   * entao o `isTileOccupied` os deixa passar — e sem esta pergunta daria pra deitar um cabo em
-   * cima de uma esteira. E o EXTRATOR tem uma condicao a mais, que e a peca inteira dele: ele so
-   * mora encostado num veio, porque a entrada dele e o tile de tras e o tile de tras tem de ser
-   * minerio. Um extrator plantado no meio do campo nao e uma escolha ruim do jogador — e uma
-   * maquina que nunca vai fazer nada, e o jogo tem de dizer isso ANTES do aperto.
+   * `machineAt` entra na conta para a construção e a restauração concordarem sobre ocupação.
    */
   /**
-   * A PEGADA de uma maquina: todo tile que ela vai ocupar depois de instalada.
-   *
-   * So o martinete tem mais de um — a mesa de pedra no tile alvo e o pilar do malho a leste —, e
-   * uma direcao so (ver `PILLAR_DX`). A pegada e uma lista e nao um booleano porque `canBuild` e o
-   * desenho do aviso leem dela a MESMA resposta: sem isso, o quadrado branco prometeria um gesto
-   * cabivel num tile e o botao recusaria por causa do outro.
+   * A PEGADA de uma estação: todo tile que ela vai ocupar depois de instalada.
    */
   private machineFootprint(kind: HeldItemKind, wx: number, wy: number): Array<[number, number]> {
-    return kind === 'tripHammer' ? [[wx, wy], [wx + 1, wy]] : [[wx, wy]];
+    return [[wx, wy]];
   }
 
   private canBuildMachineAt(kind: HeldItemKind, wx: number, wy: number): boolean {
-    if (!MACHINE_ITEM_KINDS.has(kind) || kind === 'gear') return false;
+    if (!MACHINE_ITEM_KINDS.has(kind)) return false;
     for (const [tx, ty] of this.machineFootprint(kind, wx, wy)) {
       if (this.isTileOccupied(tx, ty) || this.machineAt(tx, ty)) return false;
       if (this.freezeManager?.frozenAt(tx, ty)) return false;
     }
-    if (kind === 'extractor' && this.extractorAim(wx, wy) === null) return false;
     return true;
-  }
-
-  /**
-   * Todo tile por perto onde um extrator TERIA veio para morder — os quadrados frios que
-   * aparecem em volta de cada veio enquanto ele esta na mao.
-   *
-   * O raio e o do quadro (ver `framed`): marcar um veio do outro lado do mapa nao ajuda ninguem
-   * a decidir onde pisar, e encheria o chao de quadrados que o jogador nao alcanca com os olhos.
-   */
-  private extractorSpots(): HintTile[] {
-    const out: HintTile[] = [];
-    const seen = new Set<string>();
-    for (const rock of this.rocks) {
-      if (!rock.ore) continue;
-      if (Math.abs(rock.worldX - this.playerWorld.worldX) > 7) continue;
-      if (Math.abs(rock.worldY - this.playerWorld.worldY) > 7) continue;
-      for (const [dx, dy] of CARDINAL_DIRS) {
-        const x = rock.worldX + dx; const y = rock.worldY + dy;
-        const key = tileKey(x, y);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        if (this.canBuildMachineAt('extractor', x, y)) out.push({ x, y });
-      }
-    }
-    return out;
-  }
-
-  /**
-   * O aviso deste frame — e a BOLSA aberta o cala, porque ela sequestra o X (ela confirma o
-   * item): um "X põe a esponja" por cima de uma bolsa aberta é uma legenda que mente.
-   */
-  private syncPickupPrompt(): void {
-    const prompt = this.pickupPrompt;
-    if (!prompt) return;
-    if (this.quickBag?.isOpen) { prompt.show(null); return; }
-    // APANHAR SAIU DO AVISO junto com o botão: pisar apanha, e um aviso que anuncia uma tecla para
-    // um gesto que acontece sozinho é uma legenda mentindo. Sobrou a ENTREGA — o único gesto do X
-    // cujo alvo não está desenhado no chão, porque a carga entra DENTRO de um corpo sólido.
-    const put = this.deliveryTargetAhead();
-    prompt.show(put === null ? null
-      : t('prompt.put').replace('{item}', t(`items.name.${put}`)));
-  }
-
-  /**
-   * O que o X vai ENTREGAR à máquina em frente, ou `null`.
-   *
-   * SÓ O MARTINETE RESPONDE, e agora é literal: a bigorna é o único lugar do jogo em que a carga
-   * entra DENTRO de um corpo sólido — não há item desenhado no chão para o jogador ler, então o
-   * que a máquina quer precisa ser dito de outro jeito.
-   *
-   * O FORNO SAIU DAQUI (2026-08-12, a pedido do usuário: "no forno aparecem duas coisas"). De
-   * frente para ele o jogador via um "Z" na alvenaria e um "X — Place iron ore" sobre a própria
-   * cabeça, e são dois caminhos para a mesma fornada: um abre o catálogo e funde da mochila, o
-   * outro enche uma bandeja de cada vez. Dois anúncios para uma máquina fazem o jogador escolher
-   * entre gramáticas antes de fazer qualquer coisa. Ficou o Z — o gesto que resolve tudo.
-   *
-   * As bandejas continuam ali e continuam aceitando o X (é assim que uma esteira ou um braço
-   * alimentam o forno, e a mão pode fazer o mesmo). O que elas perderam foi a LEGENDA: o que cada
-   * bandeja quer já está desenhado nela, em fantasma, respirando — e um desenho no chão nunca
-   * precisou de um texto para ser lido.
-   */
-  private deliveryTargetAhead(): HeldItemKind | null {
-    const { x, y } = this.facingTile();
-    // A BIGORNA: o que o X vai pôr lá dentro — a mesma escolha que `useTripHammerAt` faz (a
-    // esponja antes do que estiver na mão), ou nada quando ela já está carregada.
-    const hammer = this.propAt(this.tripHammers, x, y);
-    if (!hammer || hammer.carrying) return null;
-    const workable = this.inventory.list()
-      .find((entry) => TripHammerObject.works(entry.kind))?.kind;
-    const held = workable ?? (this.heldItem === 'none' ? null : this.heldItem);
-    return held ?? null;
   }
 
   private syncPlacementHints(): void {
     const hints = this.placementHints;
     if (!hints) return;
     const kind = this.heldItem;
-    if (kind === 'none' || !MACHINE_ITEM_KINDS.has(kind) || kind === 'gear') {
+    if (kind === 'none' || !MACHINE_ITEM_KINDS.has(kind)) {
       hints.clear();
       return;
     }
     const { x, y } = this.facingTile();
     const target = this.canBuildMachineAt(kind, x, y) ? { x, y } : null;
-    // O extrator pinta os OUTROS lugares possíveis, e é a única peça que o faz: o lugar certo dele
-    // não é óbvio (a broca tem de morder um veio), e o azul frio é o que ensina isso antes do
-    // aperto.
-    //
-    // O MARTINETE pintava aqui o tile que ele ia BATER — a bigorna, dois passos adiante de quem
-    // instalava —, e essa marca morreu com o motivo dela: a bigorna virou a BASE da máquina. O
-    // relato que a fez nascer ("coloquei o martelo, coloquei a esponja, liguei na energia e nada
-    // acontece") tinha uma causa mais funda que uma dica podia contornar mas não consertar, e o
-    // conserto de verdade foi tirar o alvo invisível da peça.
-    // A SEGUNDA CASA do martinete entra como marca fria: ele ocupa dois tiles, e uma máquina que
-    // nasce por cima de um vizinho que o jogador não viu ser reservado é a mesma promessa quebrada
-    // que o quadrado branco existe para evitar. Só aparece quando o gesto vai mesmo acontecer.
-    const others: HintTile[] = kind === 'extractor'
-      ? this.extractorSpots()
-      : (target && kind === 'tripHammer'
-        ? this.machineFootprint(kind, x, y).slice(1).map(([tx, ty]) => ({ x: tx, y: ty }))
-        : []);
-    hints.show(target, others);
-  }
-
-  /**
-   * De costas pra qual veio este extrator deve nascer? `null` quando nao ha nenhum encostado.
-   *
-   * Entre dois veios ele prefere aquele cuja SAIDA esta livre — porque a alternativa e uma
-   * maquina que nasce correta e entupida, e "nasceu entupida" e indistinguivel de "nasceu
-   * quebrada" para quem esta aprendendo a peca. So se nenhuma saida servir ele aceita a primeira
-   * pedra que achar: melhor uma maquina que precisa de um empurrao do que uma virada pro nada.
-   */
-  private extractorAim(wx: number, wy: number): PropDir | null {
-    let fallback: PropDir | null = null;
-    // N, L, S, O — a ordem canonica dos props direcionais, e nao a do CARDINAL_DIRS (que e a do
-    // flood-fill): `dir` indexa a folha de arte, entao ele so pode ser contado nesta ordem.
-    const DIRS: ReadonlyArray<readonly [PropDir, number, number]> = [
-      [0, 0, -1], [1, 1, 0], [2, 0, 1], [3, -1, 0],
-    ];
-    for (const [dir, vx, vy] of DIRS) {
-      // A entrada e o tile de TRAS (ver ExtractorObject.inputTile): P menos o vetor da direcao.
-      if (this.getRockAt(wx - vx, wy - vy)?.ore !== true) continue;
-      if (fallback === null) fallback = dir;
-      const chest = this.getChestAt(wx + vx, wy + vy);
-      const outputFree = chest ? chest.accepts('ore') : !this.isTileOccupied(wx + vx, wy + vy);
-      if (outputFree) return dir;
-    }
-    return fallback;
+    hints.show(target);
   }
 
   /**
@@ -5801,72 +4504,24 @@ export class GameScene extends Phaser.Scene {
    * Isto e o par exato do `buildMachineAt`, e a razao de a construcao ser segura: todo gesto
    * deste jogo que poe alguma coisa no mundo tem um gesto que a tira (pousar com B, pegar com
    * B). Sem a volta, errar um tile custaria a peca — e o jogador pararia de experimentar, que e
-   * a unica coisa que uma fabrica pede.
+   * o que mantém a experimentação segura.
    *
-   * O `playerBuilt` protegia a peca autorada, com o argumento de que desmontar o puzzle seria o
-   * primeiro gesto de todo level. O usuario derrubou o argumento, e ele estava certo: uma linha
-   * de demonstracao que nao se pode DESMONTAR nao ensina — ela so pode ser olhada. Desmontar a
-   * vitrine e a forma mais direta de descobrir do que ela e feita, e tudo que sai dela volta pra
-   * mochila, entao nada se perde. O campo continua existindo porque e ele que diz o que vai ao
+   * O campo `playerBuilt` continua existindo porque é ele que diz o que vai ao
    * SAVE (o mundo autorado ja mora no world.json; gravar tudo o duplicaria no proximo boot).
-   *
-   * A unica coisa blindada e o bau com QUOTA — ele nao e deposito, e a fechadura do level.
    */
   private pickUpMachineAt(wx: number, wy: number): boolean {
-    const chest = this.getChestAt(wx, wy);
-    // O BAU CHEIO NAO SOBE: ele se ESVAZIA primeiro, um punhado por aperto (`useChestAt` roda
-    // antes deste na ordem do B). Recolher um bau com carga dentro seria a carga sumindo ou a
-    // mochila enchendo de uma vez — as duas coisas caladas.
-    //
-    // E o bau com QUOTA nao sobe nunca: ele nao e um deposito, e a fechadura de um level. Esta e
-    // a UNICA excecao a regra de que tudo que se instala se recolhe, e ela e sobre autoria, nao
-    // sobre a peca: uma encomenda que o jogador pode carregar embora nao e uma trava.
-    if (chest && chest.isEmpty && !chest.quota) {
-      this.removeProp(this.chests, chest);
-      return this.collectMachine('chest', wx, wy);
-    }
-    const belt = this.getBeltAt(wx, wy);
-    if (belt) {
-      this.removeProp(this.belts, belt);
-      return this.collectMachine('belt', wx, wy);
-    }
-    const extractor = this.getExtractorAt(wx, wy);
-    if (extractor) {
-      this.removeProp(this.extractors, extractor);
-      return this.collectMachine('extractor', wx, wy);
-    }
     const furnace = this.getFurnaceAt(wx, wy);
     if (furnace) {
       this.removeProp(this.furnaces, furnace);
       return this.collectMachine('furnace', wx, wy);
     }
-    const hammer = this.getTripHammerAt(wx, wy);
-    if (hammer) {
-      this.removeProp(this.tripHammers, hammer);
-      return this.collectMachine('tripHammer', wx, wy);
-    }
     // A LAJE VAZIA sobe; com uma peça em cima, não — o X ali é o gesto de tirar a peça (ver
-    // `deliverToMachineAt`), e ele roda antes deste. É a mesma regra do baú cheio, e pela mesma
+    // `takeFromAltarAt`), e ele roda antes deste. É a mesma regra de um recipiente cheio, e pela mesma
     // razão: recolher um móvel com carga dentro é a carga sumindo em silêncio.
     const altar = this.getAltarAt(wx, wy);
     if (altar && altar.carrying === null) {
       this.removeProp(this.altars, altar);
       return this.collectMachine('altar', wx, wy);
-    }
-    const boiler = this.getBoilerAt(wx, wy);
-    if (boiler) {
-      this.removeProp(this.boilers, boiler);
-      return this.collectMachine('boiler', wx, wy);
-    }
-    const arm = this.getInserterAt(wx, wy);
-    if (arm) {
-      this.removeProp(this.inserters, arm);
-      return this.collectMachine('inserter', wx, wy);
-    }
-    const wire = this.wires.find((w) => w.worldX === wx && w.worldY === wy);
-    if (wire) {
-      this.removeProp(this.wires, wire);
-      return this.collectMachine('wire', wx, wy);
     }
     return false;
   }
@@ -5880,34 +4535,17 @@ export class GameScene extends Phaser.Scene {
 
   /** A peca recolhida volta para a mochila pelo caminho de qualquer item apanhado. */
   private collectMachine(kind: HeldItemKind, wx: number, wy: number): boolean {
-    this.refreshWireNetwork();
     this.onCollectItem({ kind, worldX: wx, worldY: wy });
     return true;
   }
 
   /**
-   * O mundo mudou de FORMA: um cabo nasceu, uma maquina saiu. Reindexa os cabos e reescreve os
-   * plugues, para o fio entrar visivelmente na peca nova no MESMO frame.
-   *
-   * Isto era um passo de boot ("cabos e maquinas nao andam"). A frase morreu no dia em que a
-   * maquina virou item — e esquecer de chamar isto num caminho novo de construcao nao quebra
-   * nada logicamente (a rede e resolvida por posicao, todo frame), mas deixa o cabo desenhado
-   * com a forma errada ate o proximo boot, que e o tipo de defeito que ninguem associa a causa.
-   */
-  private refreshWireNetwork(): void {
-    this.wireIndex = new Map(this.wires.map((w) => [tileKey(w.worldX, w.worldY), w]));
-    this.resolveWireShapes();
-  }
-
-  /**
-   * MARTELAR A ESPONJA — o gesto que o martinete existe para tirar das maos do jogador.
+   * MARTELAR A ESPONJA no chão.
    *
    * Uma lupa recem-saida do forno e ferro poroso encharcado de escoria: so vira metal util
-   * depois de apanhar quente, ate a escoria espirrar fora. Sao `BLOOM_BLOWS` pancadas, as mesmas
-   * que a maquina leva — e e essa igualdade que faz a automacao ser sentida como alivio, e nao
-   * lida como numero.
+   * depois de apanhar quente, ate a escoria espirrar fora. Sao `BLOOM_BLOWS` pancadas.
    *
-   * A contagem morre junto com a esponja: se o item sai do tile (o heroi pega, uma esteira leva),
+   * A contagem morre junto com a esponja: se o item sai do tile,
    * o proximo bolo que chegar ali comeca do zero. Guardar pancadas de uma peca que nao esta mais
    * la faria a esponja seguinte sair pronta pela metade sem nada no mundo explicando por que.
    */
@@ -5923,9 +4561,8 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
     // A ULTIMA pancada: a escoria sai e o que fica e barra. A troca acontece no MESMO tile —
-    // uma bigorna nao move a peca (a mesma lei do martinete). O QUE ela vira sai da tabela
-    // compartilhada (`hammering.ts`): a martelada na mao, o martinete e o altar transformam
-    // pelas mesmas linhas, ou a segunda receita nasce discordando de si mesma em tres lugares.
+    // uma bigorna não move a peça. O resultado sai da tabela compartilhada (`hammering.ts`),
+    // usada também pelo altar.
     this.bloomBlows.delete(key);
     const made = hammerResult('bloom') ?? 'iron';
     this.itemManager?.takeAt(wx, wy);
@@ -5951,22 +4588,15 @@ export class GameScene extends Phaser.Scene {
    * APANHAR PISANDO — o único jeito de pegar uma coisa do chão agora.
    *
    * Ele guarda com `stash` (nunca rouba a seleção) e só empunha o que cai numa mão que estava
-   * vazia: quem atravessa a fábrica com a picareta escolhida sai do outro lado com a picareta.
+   * vazia: quem atravessa o mapa com a picareta escolhida continua com a picareta.
    * A cerimônia de item novo continua acontecendo — mas só para o que tem gesto: um "ITEM GET"
    * de tela cheia para o terceiro minério do dia seria o jogo parando para nada.
    *
-   * O FOGO E A CARGA só sobem junto com a peça se ela for parar na mão. Uma tocha acesa dentro da
-   * mochila seria fogo que não está em lugar nenhum do mundo (a mesma lei do `selectItem`).
+   * O FOGO só sobe junto com a peça se ela for parar na mão. Uma tocha acesa dentro da mochila
+   * seria fogo que não está em lugar nenhum do mundo (a mesma lei do `selectItem`).
    */
   private collectUnderfoot(wx: number, wy: number): void {
     if (this.freezeManager?.frozenAt(wx, wy)) return; // item preso no gelo não sobe
-    // O CHÃO DA MÁQUINA NÃO É O SEU BOLSO. Sem esta linha o herói vira um aspirador da própria
-    // fábrica: atravessar a linha de esteiras leva a carga junto, passar pela bandeja do forno
-    // desfaz a entrega que ele acabou de fazer, e pisar na bateria encaixada num cabo morto
-    // ARRANCA a bateria — matando a rede que ela alimentava. Nenhum desses é um gesto; são
-    // acidentes de caminho. Para tirar de volta o que está numa máquina existe o X (ver
-    // `deliverToMachineAt`), que é o mesmo gesto do baú e da bigorna.
-    if (this.machineFloorAt(wx, wy)) return;
     const taken = this.itemManager?.takeAt(wx, wy);
     if (!taken) return;
     const handWasEmpty = this.heldItem === 'none';
@@ -5975,9 +4605,6 @@ export class GameScene extends Phaser.Scene {
     if (handWasEmpty && this.heldItem === taken.kind) {
       this.heldOnFire = taken.kind === 'wood' && taken.fire !== undefined;
       this.torchFuelMs = taken.fire?.fuelMs ?? 0;
-      this.heldBatteryChargeMs = taken.kind === 'batteryFull'
-        ? (taken.chargeMs ?? BATTERY_FEED_MS)
-        : 0;
     }
     this.updateBackItem();
     if (isBagItem(taken.kind) && !this.seenItems.has(taken.kind)) {
@@ -5993,25 +4620,6 @@ export class GameScene extends Phaser.Scene {
     this.persistAdventure();
   }
 
-  /**
-   * Este tile é CHÃO DE MÁQUINA? — a bandeja de uma estação, ou o corpo de uma peça que não é
-   * sólida (esteira, cabo, placa). São os lugares onde um item deitado PERTENCE à máquina, e não
-   * ao chão: a pisada não os apanha, e o X os devolve.
-   */
-  private machineFloorAt(wx: number, wy: number): boolean {
-    if (this.machineAt(wx, wy)) return true;
-    const slotOf = (prop: { slotTiles: readonly (readonly [number, number])[] }): boolean =>
-      prop.slotTiles.some(([sx, sy]) => sx === wx && sy === wy);
-    if (this.furnaces.some(slotOf) || this.toolboxes.some(slotOf)) return true;
-    // A ENTRADA E A SAÍDA DO BRAÇO contam como chão da máquina: atravessar a linha não pode
-    // roubar a carga que espera a garra, nem a que ela acabou de pousar do outro lado.
-    return this.inserters.some((arm) => {
-      const [sx, sy] = arm.sourceTile;
-      const [dx, dy] = arm.destTile;
-      return (sx === wx && sy === wy) || (dx === wx && dy === wy);
-    });
-  }
-
   private pickUpItemAt(wx: number, wy: number): boolean {
     // Item preso no gelo não sobe pra mochila: a mão bate no bloco (pulse) e o gesto acabou.
     if ((this.itemManager?.hasItemAt(wx, wy) ?? false) && this.freezeManager?.frozenAt(wx, wy)) {
@@ -6022,7 +4630,7 @@ export class GameScene extends Phaser.Scene {
     if (!taken) return false;
     this.onCollectItem({
       kind: taken.kind, worldX: wx, worldY: wy,
-      fire: taken.fire, chargeMs: taken.chargeMs, units: taken.units,
+      fire: taken.fire, units: taken.units,
     });
     return true;
   }
@@ -6031,9 +4639,8 @@ export class GameScene extends Phaser.Scene {
    * Pousar o item selecionado num tile livre. Um tile guarda UM item (dois seriam um
    * desaparecimento silencioso), e nada se pousa dentro de parede, prop ou bicho.
    *
-   * O fogo e a carga DESCEM junto: um graveto aceso deixado no chao continua queimando (e
-   * acende o que houver de inflamavel ao lado), e uma bateria cheia pousada ao lado de um cabo
-   * morto alimenta a rede. Os dois eram, ate aqui, consequencia de pisar; agora sao de por.
+   * O fogo desce junto: um graveto aceso deixado no chão continua queimando e acende o que houver
+   * de inflamável ao lado.
    */
   private placeItemAt(wx: number, wy: number): boolean {
     const kind = this.heldItem;
@@ -6041,8 +4648,6 @@ export class GameScene extends Phaser.Scene {
     if (this.itemManager.hasItemAt(wx, wy) || this.isTileOccupied(wx, wy)) return false;
 
     const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
-    const charge = kind === 'batteryFull' ? this.heldBatteryChargeMs : undefined;
-    const onDeadWire = this.wireIndex.has(`${wx},${wy}`) && !this.liveWires.has(`${wx},${wy}`);
     // O PACOTE pousa inteiro (semente e minério — ver UNIT_PACK_KINDS): o punhado da mochila
     // vira um item só no chão, e pegá-lo de volta devolve a mesma contagem (ItemPickup.units).
     // Pousar uma e pegar cinco seria uma máquina de imprimir semente — o pacote viaja.
@@ -6053,10 +4658,9 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.clearHeldItem();
     }
-    this.itemManager.drop(kind, wx, wy, fire, charge, units);
+    this.itemManager.drop(kind, wx, wy, fire, units);
     if (fire) this.scheduleGroundTorchSpread(wx, wy);
-    if (kind === 'batteryFull' && onDeadWire) getSoundManager().playBatteryDock();
-    else getSoundManager().playFootstep(); // o baque surdo de pousar algo no chao
+    getSoundManager().playFootstep(); // o baque surdo de pousar algo no chao
     this.persistAdventure();
     return true;
   }
@@ -6134,13 +4738,13 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    // INSTALAR UMA MAQUINA é usar — a tabela inteira já é "o que este item faz contra o tile à
-    // frente", e uma caldeira faz uma coisa muito clara contra um tile vazio: vira uma caldeira.
+    // INSTALAR UMA ESTAÇÃO é usar — a tabela inteira já é "o que este item faz contra o tile à
+    // frente", e forno/altar viram props no chão.
     // Não é um modo de construção, não é um menu, não é um botão novo — é a mesma linha da tabela
     // em que mora o machado contra a árvore. (Recolher é o mesmo X, depois que a tabela cala.)
     if (this.buildMachineAt(wx, wy)) return true;
 
-    // O ITEM QUE NÃO É ARMA CONTRA UM CORPO — o balde, a bomba, as botas, as sementes. Era o
+    // O ITEM QUE NÃO É ARMA CONTRA UM CORPO — o balde, a bomba, as sementes. Era o
     // único gesto MUDO do botão B: o ramo armado acima exigia entrada na MELEE_DAMAGE, o resto da
     // tabela não sabe de bicho, e `placeItemAt` recusava em silêncio porque o tile está ocupado.
     // O jogador apertava B e nada no mundo se mexia — a leitura de botão quebrado. A lei é "toda
@@ -6154,23 +4758,36 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    // AS DUAS PEÇAS QUE SE POUSAM, e são só estas duas — o resto da mochila age contra o tile.
-    //
-    //   - a ESPONJA, porque o uso dela é ser MARTELADA onde está (é o motivo de a `bloom` não ter
-    //     virado contador junto com o minério e o ferro: esses são números que entram numa receita,
-    //     e ela é um objeto que se trabalha);
-    //   - a BATERIA sobre um CABO, que é o ENCAIXE: pousada ao lado da rede morta ela é a semente
-    //     do flood-fill (updateWireEnergy) e a única forma de energia atravessar um vão. Ela vivia
-    //     do gesto de largar, e largar acabou — sem esta linha, a peça inteira ficaria sem porta de
-    //     entrada e o cabo isolado nunca mais acenderia.
+    // A ESPONJA se pousa para ser martelada; o resto da mochila age contra o tile.
     //
     // DEPOIS do corpo à frente, de propósito: contra um bicho o pouso falharia (o tile está
-    // ocupado) e o gesto sairia MUDO, sem nem o toc de cutucar. Contra a bigorna do martinete ele
-    // também falha — e aí é a entrega que assume, ver `deliverToMachineAt`.
+    // ocupado) e o gesto sairia MUDO, sem nem o toc de cutucar.
     const held = this.heldItem;
     if (held === 'bloom') return this.placeItemAt(wx, wy);
-    if ((held === 'batteryFull' || held === 'battery') && this.wireIndex.has(`${wx},${wy}`)) {
-      return this.placeItemAt(wx, wy);
+
+    // A PIRA, que é a fogueira que o jogador CONSTRÓI (ver PyreObject). Dois gestos, e um
+    // deles é o mesmo graveto do outro em estados diferentes:
+    //
+    //   graveto APAGADO  → assenta uma tora (a torre sobe uma camada a cada duas)
+    //   graveto ACESO    → acende, mas SÓ a torre fechada
+    //
+    // O graveto aceso nunca vira material: a chama é a ferramenta de acender, e queimar a própria
+    // carga seria o gesto se contradizendo. Torre crua com a tocha na mão RECUSA, e a recusa é
+    // física (tremor + serragem) — o que falta está escrito na altura da torre, não numa legenda.
+    const pyre = this.getPyreAt(wx, wy);
+    if (pyre && !pyre.isLit) {
+      if (held === 'wood' && !this.heldOnFire && !pyre.isComplete) {
+        this.swingHeld(wx, wy);
+        this.clearHeldItem(); // o graveto vira tora
+        pyre.deposit();
+        this.recordPyre(pyre);
+      } else if (pyre.isComplete && this.isFlammableHeld && this.heldOnFire) {
+        this.swingHeld(wx, wy);
+        this.time.delayedCall(150, () => { this.lightPyre(pyre, wx, wy); });
+      } else {
+        pyre.refuse();
+      }
+      return true;
     }
 
     // Campfire interaction. A LIT fire relights/refuels the carried torch; a DEAD fire is
@@ -6204,36 +4821,8 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    // The boiler asks for BOTH elements, each by its own bump: the lit torch STOKES the
-    // firebox (~16s of internal burn — a timed round trip, never a switch; the torch survives
-    // the transfer, like lighting a campfire), and the full bucket FILLS the tank (the throw
-    // empties the bucket, like dousing). Steam IS the water leaving: only fire over a WET tank
-    // pressurizes, and boiling drains the sight glass until the next bucket. The two dark
-    // voids in the art are the two visual asks (cold mouth = fire, empty glass = water) — e a
-    // ARTE e quem diz o que falta agora, sem balao nenhum traduzindo.
-    const boiler = this.getBoilerAt(wx, wy);
-    if (boiler) {
-      if (this.heldItem === 'bucketFull') {
-        this.swingHeld(wx, wy);
-        this.time.delayedCall(120, () => {
-          this.throwBucketWater(wx, wy, () => {
-            boiler.fillWater();
-            getSoundManager().playSplash();
-          });
-        });
-      } else if (this.isFlammableHeld && this.heldOnFire) {
-        this.swingHeld(wx, wy);
-        this.time.delayedCall(150, () => {
-          boiler.stoke();
-          this.spawnFireHitEffect(wx, wy);
-        });
-      }
-      return true;
-    }
-
     // Lava is molten fire: bumping it with a flammable item (no flame yet) lights the torch,
-    // exactly like a lit campfire. With the lava boots on, the hero walks onto it instead of
-    // bumping, so this only fires when lava is blocking.
+    // exactly like a lit campfire. It always blocks until a stone settles into a basalt step.
     const lava = this.getLavaAt(wx, wy);
     if (lava && !lava.solidified) {
       // While a stone is still SINKING in (`cooling`), the tile blocks and takes no interaction —
@@ -6242,8 +4831,7 @@ export class GameScene extends Phaser.Scene {
       if (!lava.cooling) {
         if (this.heldItem === 'stone') {
           // A stone dropped into the melt sinks to a stepping-stone crown — the lava twin of the
-          // stone ford. It costs the stone but frees the hand (no boots needed to cross here once
-          // it settles), and the tile is a firebreak forever after.
+          // stone ford. It costs the stone, frees the hand and leaves a permanent firebreak.
           this.swingHeld(wx, wy); // toss the stone into the lava
           this.clearHeldItem();
           this.time.delayedCall(150, () => { this.solidifyLava(lava, wx, wy); });
@@ -6539,7 +5127,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O ESBARRAO, agora so com gestos de CORPO: empurrar o caixote, abrir o portao de bater,
+   * O ESBARRAO, agora so com gestos de CORPO: abrir o portao de bater,
    * conversar, sentar na fogueira acesa — e apanhar de quem esta do outro lado.
    *
    * Bater deixou de acontecer aqui. Enquanto andar contra o inimigo resolvesse, o botao A nao
@@ -6553,25 +5141,11 @@ export class GameScene extends Phaser.Scene {
     // half a tile. Bumps aren't steps, so nothing else stops breathing here.
     this.stopBreathing();
 
-    // GELO TRAVA TODO GESTO DE CORPO — o caixote não empurra, o portão não gira, a fogueira não
-    // senta, e o BICHO congelado não morde (uma estátua não cobra dano de contato: é exatamente
+    // GELO TRAVA TODO GESTO DE CORPO — o portão não gira, a fogueira não senta, e o BICHO
+    // congelado não morde (uma estátua não cobra dano de contato: é exatamente
     // o prêmio de congelá-la). A recusa é o tremor do bloco, nunca um texto (a lei da casa).
     if (this.freezeManager?.frozenAt(wx, wy)) {
       this.freezeManager.pulse(wx, wy);
-      return;
-    }
-
-    // Empurrar: colidir com um caixote tenta exatamente um empurrao cardinal. O heroi fica no
-    // tile em que esta; no passo seguinte ele entra no espaco que o caixote deixou.
-    const crate = this.getWoodenCrateAt(wx, wy);
-    if (crate) {
-      const dx = Math.sign(wx - this.playerWorld.worldX);
-      const dy = Math.sign(wy - this.playerWorld.worldY);
-      if (dx !== 0 || dy !== 0) {
-        if (this.isTileOccupied(wx + dx, wy + dy)) crate.refusePush(dx, dy);
-        else crate.push(dx, dy);
-      }
-      this.updateMechanismCircuits(0);
       return;
     }
 
@@ -6671,9 +5245,6 @@ export class GameScene extends Phaser.Scene {
    * item-que-falta foi arrancado do jogo e nao volta por esta porta).
    */
   private bumpRefusal(wx: number, wy: number): void {
-    const gateElec = this.getElectronicGateAt(wx, wy);
-    if (gateElec?.blocking) { gateElec.bump(); return; }
-
     const toolbox = this.getToolboxAt(wx, wy);
     if (toolbox) { toolbox.bump(); getSoundManager().playToolboxRefuse(); return; }
 
@@ -6698,7 +5269,7 @@ export class GameScene extends Phaser.Scene {
    *   - `fist`:  o botao A sem espada — o soco, tres para matar;
    *   - `item`:  o botao B com o item selecionado — a escada MELEE_DAMAGE de sempre (o graveto
    *              ACESO mata de um golpe, uma ferramenta qualquer em dois). Um item que nao bate
-   *              (bomba, botas) nao faz nada.
+   *              (bomba, balde) nao faz nada.
    * So o golpe de `item` desenha o proprio arco aqui: A ja desenhou o dele antes de acertar,
    * porque ele sai mesmo no vazio.
    *
@@ -6895,22 +5466,15 @@ export class GameScene extends Phaser.Scene {
    * (e dentro das dungeons, onde fogueira nao existe).
    */
   private rewardKill(wx: number, wy: number, kind: EnemyKind): void {
+    // A MISSÃO conta antes da moeda, e pelo mesmo motivo de a moeda morar aqui: este é o sino
+    // que TODA morte toca, não importa o que matou (espada, bomba, tocha viva, brasa).
+    this.questEvent({ type: 'slay', enemy: kind });
     if (!this.chunkManager) return;
     // ONDE A MOEDA CAI NÃO É ONDE O CORPO CAIU, quando o corpo caiu na ÁGUA. Um zora morre no
     // meio do lago, e uma moeda espalhada ali é uma moeda que o herói vê e nunca alcança — o
     // pior tipo de recompensa, a que se mostra e não se pega. A praia mais próxima resolve isso
     // sem uma regra nova para o jogador aprender: o dinheiro chega na terra, como tudo o mais.
     const [dx, dy] = this.shoreDropTile(wx, wy);
-    if (this.explorer) {
-      noteExplorerKill();
-      // A aposta do explorador MULTIPLICA o que o corpo vale (longe paga mais, ver
-      // coinMultiplierAt): a base da caveira entra aqui inteira, entao perto do acampamento ela
-      // larga exatamente 1-2 moedas e la no fundo o mesmo sorteio vale ate oito vezes isso.
-      this.coinManager?.spawnCoins(
-        dx, dy, this.chunkManager, this.coinsForKind(kind) * coinsForKill(distanceFromCamp(wx, wy)),
-      );
-      return;
-    }
     if (!this.adventure) return; // num level de puzzle a recompensa e a solucao
     this.coinManager?.spawnCoins(dx, dy, this.chunkManager, this.coinsForKind(kind));
     if (
@@ -6936,14 +5500,14 @@ export class GameScene extends Phaser.Scene {
   private coinsForKind(kind: EnemyKind): number {
     if (kind === 'undead') return this.undeadCoins();
     if (AQUATIC_ENEMY_KINDS.has(kind)) return AQUATIC_KILL_COINS;
-    return this.explorer ? 1 : Math.max(1, (ENEMY_BLOWS[kind] ?? 2) - 1);
+    return Math.max(1, (ENEMY_BLOWS[kind] ?? 2) - 1);
   }
 
   /**
    * A PRAIA MAIS PRÓXIMA deste tile — onde um drop pousa quando o corpo morreu na água.
    *
    * Anéis crescentes a partir do tile da morte, até o primeiro chão em que o herói PODE pisar (a
-   * mesma pergunta que o passo dele faz, sem as botas de lava). Cinco tiles de raio é mais que a
+   * mesma pergunta que o passo dele faz). Cinco tiles de raio é mais que a
    * largura de qualquer lago autorado até hoje; se nada aparecer, a moeda cai onde caiu — perder
    * uma moeda num pântano gigante é melhor que perdê-la num `return` silencioso.
    */
@@ -7580,46 +6144,20 @@ export class GameScene extends Phaser.Scene {
         })),
       );
     }
-    // A FABRICA do jogador, e o que ha dentro dos baus dele. So o que ele CONSTRUIU (o
-    // `playerBuilt`): as pecas autoradas ja moram no world.json, e grava-las aqui as duplicaria
-    // no proximo boot — cada carga do save empilharia mais uma caldeira em cima da mesma.
+    // Estações construídas pelo jogador. As autoradas já moram no world.json.
     st.machines.set(this.adventureScope, this.snapshotBuiltMachines());
     saveAdventure();
   }
 
 
-  /** O diff de fabrica que vai ao save: so as pecas do jogador, com o conteudo dos baus. */
+  /** O diff de estações manuais que vai ao save: só as peças do jogador. */
   private snapshotBuiltMachines(): AdventureMachine[] {
     const out: AdventureMachine[] = [];
-    for (const wire of this.wires) {
-      if (!wire.playerBuilt) continue;
-      out.push({ type: 'wire', worldX: wire.worldX, worldY: wire.worldY });
-    }
-    for (const belt of this.belts) {
-      if (!belt.playerBuilt) continue;
-      out.push({ type: 'belt', worldX: belt.worldX, worldY: belt.worldY, dir: belt.dir });
-    }
     for (const furnace of this.furnaces) {
       if (!furnace.playerBuilt) continue;
       out.push({
         type: 'furnace', worldX: furnace.worldX, worldY: furnace.worldY, dir: furnace.dir,
       });
-    }
-    for (const hammer of this.tripHammers) {
-      if (!hammer.playerBuilt) continue;
-      out.push({
-        type: 'tripHammer', worldX: hammer.worldX, worldY: hammer.worldY, dir: hammer.dir,
-      });
-    }
-    for (const extractor of this.extractors) {
-      if (!extractor.playerBuilt) continue;
-      out.push({
-        type: 'extractor', worldX: extractor.worldX, worldY: extractor.worldY, dir: extractor.dir,
-      });
-    }
-    for (const boiler of this.boilers) {
-      if (!boiler.playerBuilt) continue;
-      out.push({ type: 'boiler', worldX: boiler.worldX, worldY: boiler.worldY });
     }
     // A LAJE nao guarda `dir` (nao tem frente) nem o que esta em cima: a peca sobre ela e estado
     // de partida como a carga do bau, mas ao contrario do bau ela nunca fica sozinha no mundo —
@@ -7628,28 +6166,11 @@ export class GameScene extends Phaser.Scene {
       if (!altar.playerBuilt) continue;
       out.push({ type: 'altar', worldX: altar.worldX, worldY: altar.worldY });
     }
-    for (const arm of this.inserters) {
-      if (!arm.playerBuilt) continue;
-      out.push({ type: 'inserter', worldX: arm.worldX, worldY: arm.worldY, dir: arm.dir });
-    }
-    for (const chest of this.chests) {
-      // O bau e a UNICA excecao ao `playerBuilt` nesta lista: um bau AUTORADO tambem tem
-      // conteudo, e conteudo e estado de partida. Ele entra sem `dir` e o restore o reconhece
-      // pela posicao — ver restoreBuiltMachines.
-      const kind = chest.storedKind;
-      if (!chest.playerBuilt && !kind) continue;
-      out.push({
-        type: 'chest',
-        worldX: chest.worldX,
-        worldY: chest.worldY,
-        content: kind ? { kind, count: chest.storedCount } : null,
-      });
-    }
     return out;
   }
 
   /**
-   * O caminho de volta: o diff de fabrica do save, aplicado por cima do mundo ja construido.
+   * O caminho de volta: o diff de estacoes manuais do save, aplicado sobre o mundo construido.
    *
    * O MUNDO SEMPRE GANHA, e essa e a unica regra aqui — a mesma dos buracos da pa. Se o autor
    * pos uma peca no tile onde o jogador tinha uma, a do autor fica e a do save e descartada; se
@@ -7668,21 +6189,8 @@ export class GameScene extends Phaser.Scene {
       const { worldX: x, worldY: y } = machine;
       const dir = GameScene.asPropDir(machine.dir);
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      // O bau AUTORADO nao renasce: ele ja existe. O que o save devolve nele e so a carga.
-      if (machine.type === 'chest') {
-        const existing = this.getChestAt(x, y);
-        if (existing) {
-          existing.restore(machine.content?.kind ?? null, machine.content?.count ?? 0);
-          continue;
-        }
-      }
       if (occupied(x, y)) continue;
       if (!this.installMachine(machine.type, x, y, dir)) continue;
-      // O bau NOVO tambem volta com o que tinha dentro — ele acabou de nascer no fim da lista.
-      if (machine.type === 'chest') {
-        this.chests[this.chests.length - 1]
-          .restore(machine.content?.kind ?? null, machine.content?.count ?? 0);
-      }
     }
   }
 
@@ -7692,7 +6200,7 @@ export class GameScene extends Phaser.Scene {
    * So no overworld: dentro de dungeon o retorno e sempre a fogueira la de fora.
    */
   private anchorRespawnHere(): void {
-    if (!this.adventure || getDungeonTrip()) return;
+    if (!this.adventure || isUnderground()) return;
     const st = adventureState();
     const { worldX, worldY } = this.playerWorld;
     if (st.respawn && st.respawn.worldX === worldX && st.respawn.worldY === worldY) return;
@@ -7750,10 +6258,50 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * O fogo sobe pela torre — e ACABA O JOGO.
+   *
+   * Diferente da fogueira, a pira não tem volta: o balde não a apaga e ela não se desmonta.
+   * Acender é a última coisa que se faz com ela, e agora é a última coisa que se faz, ponto: a
+   * torre acesa é o objetivo da partida inteira, e todo o resto do jogo (as missões, as viagens
+   * à mata, as fogueiras do caminho) é estrada até aqui. O card fecha depois de a chama subir,
+   * não antes — quem chegou até aqui merece VER a coisa pegar fogo.
+   */
+  private lightPyre(pyre: PyreObject, wx: number, wy: number): void {
+    if (!pyre.light()) return;
+    getSoundManager().playIgnite();
+    this.spawnFireHitEffect(wx, wy);
+    this.cameras.main.flash(320, 255, 210, 130);
+    this.world3d?.shake(200, 0.045);
+    this.recordPyre(pyre);
+    // Fora da aventura (lab, playtest de level) a torre é só um prop: acender não fecha nada.
+    if (!this.adventure) return;
+    // O MUNDO CONGELA JÁ, e não daqui a 1400ms. Sem isto, a janela entre a chama subir e o card
+    // entrar é jogo CORRENDO: uma caveira que matasse o herói nesse buraco dispararia a morte por
+    // cima do final — e como a pira acesa nunca reacende (`light()` recusa), o final não voltaria
+    // NUNCA. O jogo ficaria zerado sem nunca ter mostrado que zerou.
+    this.cutsceneActive = true;
+    this.time.delayedCall(1400, () => this.playEnding());
+  }
+
+  /**
+   * A torre entra no save a CADA tora. A ponte construída não persiste e ninguém sentiu (ela
+   * custa dois gravetos); a pira custa viagens, e uma morte que apagasse a torre transformaria o
+   * objetivo do jogo numa punição.
+   */
+  private recordPyre(pyre: PyreObject): void {
+    if (!this.adventure || isUnderground()) return;
+    const key = `${pyre.worldX},${pyre.worldY}`;
+    adventureState().pyreLogs.set(key, pyre.logCount);
+    if (pyre.isLit) adventureState().litPyres.add(key);
+    this.persistAdventure();
+  }
+
   private lightCampfire(cf: CampfireObject, wx: number, wy: number): void {
     if (cf.isLit) return;
     this.litFireCount += 1; // drives the wizard's story progression
-    if (this.adventure && !getDungeonTrip()) {
+    this.questEvent({ type: 'light' });
+    if (this.adventure && !isUnderground()) {
       // O fogo aceso entra no save na hora — e o heroi que o acendeu esta a um passo dele: este
       // tile vira o ponto de acordar (anchorRespawnHere persiste).
       adventureState().litFires.add(`${cf.worldX},${cf.worldY}`);
@@ -8006,56 +6554,46 @@ export class GameScene extends Phaser.Scene {
   // a spot mark (a breathing purple ghost of the thing that goes there). The hero stepping onto
   // it with the right item in hand places it, exactly like stepping on a pickup collects it.
   // With anything else in hand the step does nothing: the mark's own art is the invitation.
-  private handleTileEntered(wx: number, wy: number): void {
+  /**
+   * `_dx`/`dy` são a direção do passo que trouxe o herói até aqui — zero quando alguém chamou
+   * isto de fora do andar (o debug). A ESCADA é a única coisa que pergunta, e ela só olha o eixo
+   * NORTE-SUL: ela só engole quem entra de FRENTE, e a frente dela é sempre a boca. O `_dx` fica
+   * no lugar porque a direção é um par — uma peça futura que abra para o lado vai querer os dois.
+   */
+  private handleTileEntered(wx: number, wy: number, _dx = 0, dy = 0): void {
     // O fog of war do mapa: o chunk pisado entra no save (176 chaves no maximo, um evento raro).
-    if (this.adventure && !getDungeonTrip()) {
+    if (this.adventure && !isUnderground()) {
       const chunkKey = `${Math.floor(wx / CHUNK_COLUMNS)},${Math.floor(wy / CHUNK_ROWS)}`;
       const st = adventureState();
       if (!st.visitedChunks.has(chunkKey)) {
         st.visitedChunks.add(chunkKey);
+        this.questEvent({ type: 'explore' });
         saveAdventure();
       }
     }
+    // A ESCADA. Duas peças diferentes (um buraco em cima, uma escada de pedra embaixo — ver
+    // StairsObject), e uma regra só: **entrar é andar para o NORTE**, em qualquer andar. Em cima
+    // isso é cair no buraco; embaixo é subir os degraus até a boca no teto. A boca das duas fica
+    // ao norte, então a pergunta é uma e não tem `if` de andar dentro dela.
+    //
+    // SÓ DE FRENTE. Chegar pela lateral, ou vindo do norte, deixa o herói ao pé da escada, de pé,
+    // sem viagem nenhuma. Ninguém cai numa escadaria de lado: quem desce, encara a descida. É a
+    // mesma lei dos dois botões (a parede vira o herói, e o gesto age à frente), e é ela que faz
+    // a peça parecer um lugar em vez de um gatilho.
+    const stairs = this.getStairsAt(wx, wy);
+    if (stairs && dy < 0) {
+      if (isUnderground()) void this.leaveDungeon(stairs);
+      else void this.enterDungeon(stairs);
+      return;
+    }
+    // O PORTAL continua sendo outra coisa: a travessia mágica que encadeia LEVELS de puzzle.
     const levelPortal = this.getLevelPortalAt(wx, wy);
     if (levelPortal) {
-      // O MESMO portal, duas leituras. Num level ele e a saida para o proximo — nao ha o que
-      // decidir, so passar. No explorador ele e a unica pergunta do modo, e por isso ele
-      // PERGUNTA em vez de engolir: pisar sem querer no caminho de casa nao pode custar metade
-      // da bolsa (ver ExtractPrompt).
-      if (this.explorer) this.askExtraction(levelPortal);
-      // A BOCA DE CAVERNA do overworld: ela sabe qual dungeon abre, e por isso e a unica das tres
-      // leituras que carrega um numero. Sem ele nao daria para distinguir a entrada da saida —
-      // sao o mesmo prop, no mesmo tile, e o que muda e de que lado o heroi esta.
-      else if (levelPortal.level !== undefined) void this.enterDungeon(levelPortal);
-      // Dentro de uma dungeon, o mesmo portal e a escada de volta.
-      else if (getDungeonTrip()) void this.leaveDungeon(levelPortal);
-      else void this.completeLevel(levelPortal);
+      void this.completeLevel(levelPortal);
       return;
     }
 
-    // OS DEPOSITOS SAIRAM DAQUI, e essa e a maior consequencia dos dois botoes.
-    //
-    // Metade das pecas do jogo vivia em cima de um truque: como nao havia botao, PISAR num tile
-    // depositava o que estava na mao — era assim que se alimentava o braco robotico, as duas
-    // bandejas da caixa de ferramentas, o buraco de plantio, a marca da bomba e o cabo morto que
-    // recebe a bateria. O preco era um acidente silencioso: atravessar uma bandeja carregando a
-    // coisa errada entregava a coisa errada, sem gesto nenhum do jogador.
-    //
-    // Agora depositar e o botao B contra o tile a frente (ver pressUse/placeItemAt). As
-    // afordancias continuam valendo INTEIRAS: a bomba-fantasma que respira, a bandeja que pulsa
-    // enquanto esta vazia e a garra parada no ar nunca disseram "pise aqui" — disseram "ponha
-    // algo aqui", e continuam certas.
-    //
-    // O que fica: pisar num cabo VIVO com a bateria VAZIA a carrega. Nao e um deposito — e o
-    // espelho de encher o balde no rio, e ganhar carga nunca foi uma coisa que o jogador possa
-    // fazer sem querer e perder.
-    if (this.heldItem === 'battery' && this.liveWires.has(`${wx},${wy}`)) {
-      this.inventory.replace('battery', 'batteryFull');
-      this.heldBatteryChargeMs = BATTERY_FEED_MS; // a rede viva enche ate a boca
-      this.updateBackItem();
-      getSoundManager().playBatteryCharge();
-      this.spawnBatteryChargeFx(wx, wy);
-    }
+    // Depositar itens usa o botao B contra o tile a frente (ver pressUse/placeItemAt).
   }
 
   // The one consumable: planted on a bombSpot, it sits lit; after the fuse it explodes —
@@ -8198,165 +6736,32 @@ export class GameScene extends Phaser.Scene {
       const dy = Math.sign(wy - this.playerWorld.worldY);
       this.world3d?.shake(50, 0.025, dx, dy);
     });
-    if (this.adventure && !getDungeonTrip()) {
+    if (this.adventure && !isUnderground()) {
       adventureState().dugSpots.add(`${wx},${wy}`);
       this.persistAdventure();
     }
   }
 
-  /**
-   * Drive every robotic arm. The arms get a tiny port instead of the scene itself: an arm only
-   * ever needs to ask four things about the world, and handing it `this` would let it reach the
-   * other three thousand lines by accident.
-   *
-   * `blocked` deliberately passes hazardsPassable=false — the lava boots are the HERO's
-   * privilege, not the machine's. An arm will not lay an item down in a river or on lava, where
-   * it would be stranded on a tile the hero can only reach wearing the one item that cannot
-   * carry anything out.
-   */
-  private updateInserters(delta: number): void {
-    if (!this.inserters.length) return;
-    // A regra da roda d'agua, aplicada ao unico som do braco que REPETE enquanto o estado durar:
-    // uma maquina travada do outro lado do mapa nao pode ficar batendo no ouvido de ninguem. Uma
-    // variavel de laco em vez de um port por braco — o port e compartilhado de proposito, e
-    // construir um objeto novo por braco por quadro seria lixo por quadro.
-    let strainAudible = false;
-    const port: ArmWorldPort = {
-      hasItem: (x, y) => this.itemManager?.hasItemAt(x, y) ?? false,
-      take: (x, y) => this.itemManager?.takeAt(x, y) ?? null,
-      put: (kind, x, y, fire, chargeMs, units) => {
-        // A BIGORNA ENGOLE a carga: com o martelo virado para dentro de si, a linha
-        // esteira -> braco -> martinete -> (salta) -> bau continua inteira. `accept` so recusa
-        // com a bigorna cheia, e nesse caso a carga cai no chao como sempre — nunca some.
-        const anvil = this.propAt(this.tripHammers, x, y);
-        if (anvil?.accept(kind)) return;
-        this.itemManager?.drop(kind, x, y, fire, chargeMs, units);
-        // A carga chegou ACESA: o graveto pousado e uma fonte de fogo — os vizinhos
-        // inflamaveis pegam. E assim que a chama atravessa um muro sem combustivel nenhum.
-        if (fire) this.scheduleGroundTorchSpread(x, y);
-      },
-      // Inimigos tambem contam: isSolidForEntities nao os inclui, e sem isto o braco largava a
-      // carga debaixo de um undead parado na saida.
-      blocked: (x, y) => {
-        // Um martinete de bigorna VAZIA nao bloqueia o braco: ele e um destino de entrega, como
-        // uma bandeja. Cheio, volta a ser corpo solido — e o braco espera, que e o que ele ja
-        // faz diante de qualquer saida ocupada.
-        const anvil = this.propAt(this.tripHammers, x, y);
-        if (anvil) return anvil.carrying !== null;
-        return this.isSolidForEntities(x, y)
-          || (this.enemyManager?.getEnemyAt(x, y) ?? null) !== null;
-      },
-      grabbed: () => getSoundManager().playArmGrab(),
-      swinging: () => getSoundManager().playArmServo(),
-      released: () => getSoundManager().playArmRelease(),
-      strained: () => { if (strainAudible) getSoundManager().playArmStrain(); },
-    };
-    for (const arm of this.inserters) {
-      strainAudible = Math.hypot(
-        arm.worldX - this.playerWorld.worldX,
-        arm.worldY - this.playerWorld.worldY,
-      ) <= 10;
-      // Tres modos, do mais fisico ao legado: um braco ENCOSTADO em cabo e um consumidor
-      // cabeado — energia chega se um cabo vizinho esta VIVO (ou pela variavel sem fio, se
-      // tambem houver: as duas redes somam por OR, como os produtores entre si). Sem cabo
-      // nenhum: com vinculo, a variavel decide (falha segura); sem vinculo, autoalimentado
-      // (compatibilidade com os bracos de antes da rede existir).
-      //
-      // `false` deixa a maquina parada, como sempre — mas antes de morrer ela DESFAZ a entrega
-      // que fez (RoboticArmObject, no topo). Um braco autoalimentado, que nunca ve `false`, e a
-      // unica variante sem volta, porque e a unica sem chave para desligar.
-      const varPower = arm.variable ? this.globalVariables.get(arm.variable) === true : undefined;
-      // A VAZAO chegou ao braco, e ela e o que o faz arrastar em vez de parar. A variavel sem
-      // fio continua sendo tudo-ou-nada (ela nao e uma rede, e um interruptor), entao ela entra
-      // como 1 e o OR de antes virou um `max` — mesma semantica, agora com quantidade.
-      const satisfaction = this.wireTouching(arm.worldX, arm.worldY)
-        ? Math.max(this.powerAt(arm.worldX, arm.worldY), varPower === true ? 1 : 0)
-        : ((varPower ?? true) ? 1 : 0);
-      const powered = satisfaction > 0;
-      // Sem energia o delta vai INTEIRO: e com ele que o braco desfaz a entrega em curso (o
-      // `REVERSE_RATE` dele). Escalar o delta de uma maquina desligada por uma satisfacao de
-      // zero congelaria a garra no ar para sempre, com a carga pendurada.
-      arm.update(powered ? delta * satisfaction : delta, port, powered);
-    }
-  }
-
-  /**
-   * Toca cada caixa de ferramentas. Mesmo desenho do braco robotico — um port minusculo em vez da
-   * cena inteira —, e pelo mesmo motivo: a bancada precisa saber cinco coisas sobre o mundo, e
-   * entregar `this` a deixaria alcancar as outras tres mil linhas por acidente.
-   *
-   * `occupied` e a pergunta LARGA (isTileOccupied), nao "e solido": um item caido nao bloqueia o
-   * heroi, mas dois itens no mesmo tile seriam um sumico silencioso — e a mesma razao pela qual o
-   * caixote e o portao de bater ja dividem essa lista.
-   */
+  /** Atualiza somente a curta pose visual das bancadas manuais. */
   private updateToolboxes(delta: number): void {
-    if (!this.toolboxes.length) return;
-    const port: ToolboxWorldPort = {
-      kindAt: (x, y) => this.itemManager?.kindAt(x, y) ?? null,
-      // A forja consome UMA unidade. O punhado (semente, minério — UNIT_PACK_KINDS) pousa
-      // inteiro num item só, e engoli-lo aqui fundiria 5 ferros numa foice: o resto volta
-      // ao tile no mesmo frame, e a bancada pega só o que a receita pede.
-      take: (x, y) => {
-        const taken = this.itemManager?.takeAt(x, y);
-        if (!taken) return null;
-        if (taken.units > 1) {
-          this.itemManager?.drop(taken.kind, x, y, taken.fire, taken.chargeMs, taken.units - 1);
-        }
-        return taken.kind;
-      },
-      // `units` TEM de atravessar: a receita do cabo produz um PACOTE (ver TOOLBOX_RECIPES), e
-      // esta linha ignorava o argumento — a bancada entregava um cabo por forja em vez de
-      // quatro. O tipo do port pedia o parametro e o `drop` sabia recebe-lo; quem o perdia era
-      // exatamente o ponto no meio, que e onde um argumento novo sempre se perde.
-      put: (kind, x, y, units) => this.itemManager?.drop(kind, x, y, undefined, undefined, units),
-      occupied: (x, y) => this.isTileOccupied(x, y),
-      opened: () => getSoundManager().playToolboxOpen(),
-      hammered: () => getSoundManager().playToolboxForge(),
-      delivered: () => getSoundManager().playToolboxDeliver(),
-      refused: () => getSoundManager().playToolboxRefuse(),
-    };
-    for (const box of this.toolboxes) {
-      // A regra da roda d'agua: efeito e audio so existem perto do heroi. Uma bancada trabalhando
-      // do outro lado do mapa nao pode martelar no ouvido de ninguem.
-      const effectsVisible = Math.hypot(
-        box.worldX - this.playerWorld.worldX,
-        box.worldY - this.playerWorld.worldY,
-      ) <= 10;
-      box.update(delta, port, effectsVisible);
-    }
+    for (const box of this.toolboxes) box.update(delta);
   }
 
   /**
    * O FORNO — a reducao do minerio, que e a unica quimica de verdade deste jogo.
    *
-   * O port e o mesmo da bancada, e de proposito: as duas maquinas comem dois itens do chao e
-   * cospem um terceiro adiante. `occupied` continua sendo a pergunta LARGA (isTileOccupied), nao
-   * "e solido": dois itens no mesmo tile seriam um sumico silencioso.
+   * A receita vem exclusivamente do catalogo e da mochila. O port serve apenas para pousar o
+   * produto quando a animacao manual termina.
    */
   private updateFurnaces(delta: number): void {
     if (!this.furnaces.length) return;
     const port: FurnaceWorldPort = {
-      kindAt: (x, y) => this.itemManager?.kindAt(x, y) ?? null,
-      // Uma fornada come UMA unidade de cada. O punhado (o minerio sai do veio em pacote) pousa
-      // inteiro num item so, e engoli-lo aqui fundiria cinco minerios numa esponja: o resto volta
-      // ao tile no mesmo frame, exatamente como a bancada ja faz.
-      take: (x, y) => {
-        const taken = this.itemManager?.takeAt(x, y);
-        if (!taken) return null;
-        if (taken.units > 1) {
-          this.itemManager?.drop(taken.kind, x, y, taken.fire, taken.chargeMs, taken.units - 1);
-        }
-        return taken.kind;
-      },
-      // `units` vem da fornada de CATALOGO: uma receita pode render mais de uma peca, e a fornada
-      // de bandeja simplesmente nao passa o argumento (uma esponja por vez).
-      put: (kind, x, y, units) => this.itemManager?.drop(kind, x, y, undefined, undefined, units),
+      put: (kind, x, y, units) => this.itemManager?.drop(kind, x, y, undefined, units),
       occupied: (x, y) => this.isTileOccupied(x, y),
-      // A saida de emergencia da fornada de MAO (ver FurnaceObject.pickDeliverTile): o mesmo
-      // vizinho livre que a bancada usa, escolhido pela distancia ate o heroi.
+      // O mesmo vizinho livre que a bancada usa, escolhido pela distancia ate o heroi.
       landing: (x, y) => this.deliveryTileAround(x, y),
-      lit: () => getSoundManager().playBoilerIgnite(),
-      breath: () => getSoundManager().playBoilerPuff(),
+      lit: () => getSoundManager().playFurnaceIgnite(),
+      breath: () => getSoundManager().playFurnaceBreath(),
       delivered: () => getSoundManager().playToolboxDeliver(),
     };
     for (const furnace of this.furnaces) {
@@ -8366,480 +6771,6 @@ export class GameScene extends Phaser.Scene {
       ) <= 10;
       furnace.update(delta, port, effectsVisible);
     }
-  }
-
-  /**
-   * O MARTINETE — a martelada tirada das mãos do jogador.
-   *
-   * A cena entra com duas coisas que a máquina não pode saber: ONDE cabe a peça pronta (só quem
-   * conhece o chão, a água e o que já está caído responde isso) e se o herói está perto o bastante
-   * para OUVIR. O resto — o ciclo, o peso do malho, a escória — é todo dela.
-   */
-  private updateTripHammers(delta: number): void {
-    if (!this.tripHammers.length) return;
-    const port: TripHammerWorldPort = {
-      // A peça pronta SALTA para um tile livre: o mesmo gesto e o mesmo cálculo da bancada, porque
-      // "a máquina te entrega no chão" tem de ser uma coisa só no jogo inteiro.
-      eject: (kind, fromX, fromY) => {
-        const landing = this.deliveryTileAround(fromX, fromY);
-        if (!landing) return false;
-        this.itemManager?.drop(kind, landing[0], landing[1]);
-        this.flingCraftedItem(kind, fromX, fromY, landing[0], landing[1]);
-        this.seenItems.add(kind);
-        this.persistAdventure();
-        return true;
-      },
-      struck: (finished) => {
-        getSoundManager().playHammer();
-        if (finished) this.time.delayedCall(120, () => getSoundManager().playToolboxDeliver());
-      },
-    };
-    for (const hammer of this.tripHammers) {
-      // Fora do quadro a máquina anda, mas não FALA: o `struck` toca som e sacode a tela, e um
-      // martinete a dez tiles de distância gritando é o mesmo defeito de "ouço o que não vejo"
-      // que o bestiário já pagou. O gate mora aqui, e não no port, porque é a CENA que sabe onde
-      // o herói está.
-      const near = Math.hypot(
-        hammer.worldX - this.playerWorld.worldX,
-        hammer.worldY - this.playerWorld.worldY,
-      ) <= 10;
-      hammer.update(
-        delta,
-        near ? port : { ...port, struck: () => {} },
-        this.powerAt(hammer.worldX, hammer.worldY),
-      );
-    }
-  }
-
-  /**
-   * A ESTEIRA. Um port minusculo, como o do braco e o da bancada — e pelo mesmo motivo: a peca
-   * precisa saber quatro coisas sobre o mundo, e entregar `this` a deixaria alcancar as outras
-   * tres mil linhas por acidente.
-   *
-   * `shift` e o unico metodo interessante: ele MOVE o item preservando tudo que ele carrega —
-   * fogo, carga de bateria, contagem de pacote. Um graveto ACESO que entra numa esteira sai
-   * aceso do outro lado (e acende o que houver de inflamavel no caminho, porque quem espalha
-   * fogo continua sendo o sistema de fogo, nao a esteira), e cinco ferros continuam sendo cinco.
-   * Reconstruir o item pelo `kind` teria apagado os tres silenciosamente.
-   */
-  private updateBelts(delta: number): void {
-    if (!this.belts.length) return;
-    const port: BeltWorldPort = {
-      kindAt: (x, y) => this.itemManager?.kindAt(x, y) ?? null,
-      shift: (fromX, fromY, toX, toY) => {
-        const taken = this.itemManager?.takeAt(fromX, fromY);
-        if (!taken) return false;
-        // O BAU e o fim de linha: uma esteira que aponta pra ele DEPOSITA em vez de empilhar
-        // no chao. E o que faz uma producao rodando sozinha caber em algum lugar — sem isso a
-        // linha entope no segundo bloco e a automacao inteira vira enfeite.
-        const chest = this.getChestAt(toX, toY);
-        if (chest) {
-          const stored = chest.store(taken.kind, taken.units);
-          if (stored >= taken.units) { this.persistAdventure(); return true; }
-          // Coube parte: o resto VOLTA pro tile de origem. Nunca some — a mesma lei do
-          // `ChestObject.store`, que devolve o que realmente entrou.
-          this.itemManager?.drop(
-            taken.kind, fromX, fromY, taken.fire, taken.chargeMs, taken.units - stored,
-          );
-          if (stored > 0) this.persistAdventure();
-          return stored > 0;
-        }
-        this.itemManager?.drop(taken.kind, toX, toY, taken.fire, taken.chargeMs, taken.units);
-        // Fogo VIAJA: um graveto aceso que assentou num tile novo volta a ser um foco de
-        // incendio ali, pelo mesmo caminho de sempre (o `placeItemAt` ja faz isso ao pousar).
-        if (taken.fire) this.scheduleGroundTorchSpread(toX, toY);
-        return true;
-      },
-      // O BAU que ainda aceita NAO conta como bloqueado — senao a esteira pararia na frente do
-      // proprio deposito. Qualquer outra coisa (parede, prop, bicho, item) barra.
-      blocked: (x, y) => {
-        const chest = this.getChestAt(x, y);
-        if (chest) return chest.isFull;
-        return this.isTileOccupied(x, y);
-      },
-      stepped: () => { /* o passo e mudo: uma linha de dez esteiras seria um chocalho */ },
-    };
-    for (const belt of this.belts) {
-      belt.update(delta, port, this.powerAt(belt.worldX, belt.worldY));
-    }
-  }
-
-  /**
-   * O EXTRATOR. A unica maquina que cria materia, e por isso a unica cuja saida passa pelo canal
-   * do MINERIO e nao pelo dos itens: o bloco entra no mundo como qualquer bloco que o veio
-   * solta. `oreAt` pergunta pela `ironRock` — a rocha que nunca quebra —, e nao por uma rocha
-   * qualquer: um extrator que comesse pedra comum consumiria o proprio suporte dele.
-   */
-  private updateExtractors(delta: number): void {
-    if (!this.extractors.length) return;
-    const port: ExtractorWorldPort = {
-      oreAt: (x, y) => this.getRockAt(x, y)?.ore === true,
-      blocked: (x, y) => {
-        const chest = this.getChestAt(x, y);
-        if (chest) return !chest.accepts('ore');
-        // Um bloco de ferro ja caido na saida nao barra: ele ENGROSSA (o mesmo `units` do veio).
-        const there = this.itemManager?.kindAt(x, y);
-        if (there === 'ore') return false;
-        return this.isTileOccupied(x, y);
-      },
-      deliver: (kind, x, y) => {
-        const chest = this.getChestAt(x, y);
-        if (chest) {
-          const stored = chest.store(kind, 1);
-          if (stored > 0) this.persistAdventure();
-          return stored > 0;
-        }
-        // ENGROSSAR em vez de empilhar dois itens no mesmo tile: e o contrato que o veio ja
-        // usava (dropOreYield), e mante-lo aqui e o que deixa um extrator sem esteira acumular
-        // um monte legivel em vez de travar no primeiro bloco.
-        const existing = this.itemManager?.takeAt(x, y);
-        const units = existing && existing.kind === kind ? existing.units + 1 : 1;
-        if (existing && existing.kind !== kind) {
-          this.itemManager?.drop(
-            existing.kind, x, y, existing.fire, existing.chargeMs, existing.units,
-          );
-          return false;
-        }
-        this.itemManager?.drop(kind, x, y, undefined, undefined, units);
-        this.persistAdventure();
-        return true;
-      },
-      bit: (x, y) => {
-        // A regra da roda d'agua: fisica sempre, barulho so perto do heroi. Um extrator do outro
-        // lado do mapa nao pode martelar no ouvido de ninguem — e a lei do quadro, aplicada a
-        // uma maquina em vez de a um bicho.
-        const near = Math.hypot(
-          x - this.playerWorld.worldX, y - this.playerWorld.worldY,
-        ) <= 10;
-        if (!near) return;
-        // O MESMO som e os MESMOS estilhacos da picareta no veio. Nao e economia: a maquina tem
-        // de dizer "isto e minerar", e o jogador ja aprendeu o que minerar soa. Um efeito
-        // proprio ensinaria uma segunda coisa para o mesmo acontecimento.
-        getSoundManager().playRockSmash();
-        this.spawnRockDebris(x, y, 0, 0, false, true);
-      },
-    };
-    for (const extractor of this.extractors) {
-      extractor.update(delta, port, this.powerAt(extractor.worldX, extractor.worldY));
-    }
-  }
-
-  /**
-   * Consumidor fail-safe: qualquer corrente que chegue ergue; perder a ultima fecha. Ele e o
-   * unico consumidor que NAO degrada com a vazao — um portao nao tem velocidade, so altura —,
-   * entao ele le a satisfacao como booleano. Continua puxando 1 watt na conta, de proposito:
-   * uma grade aberta pesa na rede, e descobrir isso e parte do jogo.
-   */
-  private updateElectronicGates(delta: number): void {
-    for (const gate of this.electronicGates) {
-      const powered = this.powerAt(gate.worldX, gate.worldY) > 0;
-      const effectsVisible = Math.hypot(
-        gate.worldX - this.playerWorld.worldX,
-        gate.worldY - this.playerWorld.worldY,
-      ) <= 10;
-      gate.update(delta, powered, effectsVisible, this.gateCeiling(gate.variable));
-    }
-  }
-
-  /**
-   * Ate onde uma grade PODE subir: o progresso da entrega do bau ligado ao mesmo circuito, ou 1
-   * quando nao ha vinculo (o portao de sempre). Varios baus no mesmo nome contam pelo MENOR — a
-   * porta espera a entrega mais atrasada, que e a unica leitura possivel de "duas encomendas".
-   *
-   * E aqui que a fabrica deixou de ser opcional. Enquanto a trava era energia, o jogo inteiro de
-   * producao cabia em "ligue um cabo": uma chave, um giro, fim. Uma trava de QUANTIDADE nao tem
-   * atalho — ou a mao trabalha muito, ou a linha trabalha por ela.
-   */
-  private gateCeiling(variable: string | undefined): number {
-    if (!variable) return 1;
-    let progress: number | null = null;
-    for (const chest of this.chests) {
-      if (chest.variable !== variable) continue;
-      progress = progress === null ? chest.progress : Math.min(progress, chest.progress);
-    }
-    // Vinculo sem bau nenhum e um level mal autorado, e a resposta e a MAIS SEGURA: a porta fica
-    // fechada. Abrir seria um portao que se destranca por o autor ter esquecido a arca.
-    if (progress === null) return 0;
-    // A ENTREGA INCOMPLETA NUNCA CHEGA AO LIMIAR DE PASSAGEM. A grade so vira chao em 0.86
-    // (PASSABLE_AT), entao mapear o progresso direto abria a porta com 18 de 20 — a fechadura
-    // cobrava um numero e aceitava outro. Comprimindo o percurso incompleto em [0, 0.82], a
-    // subida continua legivel a cada punhado E o ultimo punhado e o que ABRE: o pagamento fica
-    // no gesto que o merece, em vez de acontecer dois minerios antes, sem ninguem perceber.
-    return progress >= 1 ? 1 : progress * 0.82;
-  }
-
-  /**
-   * Recalcula todos os PRODUTORES de circuito juntos. Placas e rodas que compartilham nome sao
-   * ligadas em paralelo (OR): qualquer fonte mantem a rede energizada. Fazer a agregacao aqui,
-   * em vez de cada objeto escrever direto, impede a ultima fonte do frame de apagar as demais.
-   */
-  private updateMechanismCircuits(delta: number): void {
-    if (!this.pressurePlates.length && !this.waterWheels.length && !this.boilers.length
-      && !this.chests.length) return;
-    const controlled = new Map<string, boolean>();
-
-    for (const plate of this.pressurePlates) {
-      const occupied = (plate.worldX === this.playerWorld.worldX && plate.worldY === this.playerWorld.worldY)
-        || this.getWoodenCrateAt(plate.worldX, plate.worldY) !== undefined
-        || (this.enemyManager?.getEnemyAt(plate.worldX, plate.worldY) ?? null) !== null;
-      plate.setPressed(occupied);
-      if (!plate.variable || !this.globalVariables.has(plate.variable)) continue;
-      controlled.set(plate.variable, (controlled.get(plate.variable) ?? false) || occupied);
-    }
-
-    for (const wheel of this.waterWheels) {
-      const flow = this.waterFlowAt(wheel.worldX, wheel.worldY);
-      const effectsVisible = Math.hypot(
-        wheel.worldX - this.playerWorld.worldX,
-        wheel.worldY - this.playerWorld.worldY,
-      ) <= 10;
-      wheel.update(delta, flow, effectsVisible);
-      if (!wheel.variable || !this.globalVariables.has(wheel.variable)) continue;
-      controlled.set(
-        wheel.variable,
-        (controlled.get(wheel.variable) ?? false) || wheel.isGenerating,
-      );
-    }
-
-    for (const boiler of this.boilers) {
-      const heated = this.fireHeatAt(boiler.worldX, boiler.worldY);
-      const effectsVisible = Math.hypot(
-        boiler.worldX - this.playerWorld.worldX,
-        boiler.worldY - this.playerWorld.worldY,
-      ) <= 10;
-      boiler.update(delta, heated, effectsVisible);
-      if (!boiler.variable || !this.globalVariables.has(boiler.variable)) continue;
-      controlled.set(
-        boiler.variable,
-        (controlled.get(boiler.variable) ?? false) || boiler.isGenerating,
-      );
-    }
-
-    // O BAU COM QUOTA publica no mesmo barramento nomeado que a placa, a roda e a caldeira. O
-    // portao le o progresso direto do bau (ele precisa da FRACAO, e uma variavel e booleana), mas
-    // publicar aqui mantem a promessa do circuito nomeado: qualquer consumidor de variavel — um
-    // braco, amanha uma porta — pode reagir a "a encomenda ficou pronta" sem conhecer o bau.
-    for (const chest of this.chests) {
-      if (!chest.variable || !chest.quota || !this.globalVariables.has(chest.variable)) continue;
-      controlled.set(
-        chest.variable,
-        (controlled.get(chest.variable) ?? false) || chest.isSatisfied,
-      );
-    }
-
-    controlled.forEach((value, name) => this.globalVariables.set(name, value));
-  }
-
-  /**
-   * A forma de cada cabo nasce dos vizinhos — outros cabos e as MAQUINAS da rede (produtores e
-   * consumidores), para o fio visivelmente entrar na caldeira e sair no braco. O autor nunca
-   * escolhe forma; pintar o caminho e a autoria inteira (a mesma regra que da ao braco o frame
-   * da direcao).
-   *
-   * Ela era fixada UMA vez no boot, com o comentario "cabos e maquinas nao andam". Isso deixou
-   * de ser verdade no dia em que a maquina virou item: agora todo `buildMachineAt` e todo
-   * `pickUpMachineAt` chamam isto de novo, porque uma caldeira nova ao lado de um cabo tem de
-   * ganhar o plugue dela no mesmo frame — senao o fio entra visivelmente em lugar nenhum.
-   * Custa uma varredura dos cabos, que e barata e so acontece quando o mundo muda de forma.
-   */
-  private resolveWireShapes(): void {
-    const machine = (x: number, y: number): boolean =>
-      this.getBoilerAt(x, y) !== undefined
-      || this.getWaterWheelAt(x, y) !== undefined
-      || this.getPressurePlateAt(x, y) !== undefined
-      || this.getInserterAt(x, y) !== undefined
-      || this.getBeltAt(x, y) !== undefined
-      || this.getExtractorAt(x, y) !== undefined
-      || this.getFurnaceAt(x, y) !== undefined
-      || this.getTripHammerAt(x, y) !== undefined
-      || this.getElectronicGateAt(x, y) !== undefined;
-    // A roda tem a tomada desenhada na BORDA direita do proprio sprite. O cabo vizinho ja chega
-    // ate a divisa do tile, portanto o plugue generico (divisa -> centro) atravessaria o rotor.
-    // As demais maquinas ainda precisam desse trecho interno para alcancar o pe central.
-    // A ESTEIRA fica de fora desta lista pela mesma razao da roda: ela e full bleed, entao o
-    // cabo vizinho ja encosta no leito dela — um plugue interno atravessaria as setas.
-    const needsCenterPlug = (x: number, y: number): boolean =>
-      this.getBoilerAt(x, y) !== undefined
-      || this.getPressurePlateAt(x, y) !== undefined
-      || this.getInserterAt(x, y) !== undefined
-      || this.getExtractorAt(x, y) !== undefined
-      || this.getElectronicGateAt(x, y) !== undefined;
-    const connects = (x: number, y: number): boolean =>
-      this.wireIndex.has(`${x},${y}`) || machine(x, y);
-    for (const wire of this.wires) {
-      wire.setShape(wireShapeFromMask(
-        connects(wire.worldX, wire.worldY - 1),
-        connects(wire.worldX + 1, wire.worldY),
-        connects(wire.worldX, wire.worldY + 1),
-        connects(wire.worldX - 1, wire.worldY),
-      ));
-      // Vizinho que e MAQUINA ganha um plugue no tile dela — o cabo entra ate o pe em vez de
-      // morrer na divisa (ver WireObject.setMachineSides).
-      wire.setMachineSides({
-        n: needsCenterPlug(wire.worldX, wire.worldY - 1),
-        e: needsCenterPlug(wire.worldX + 1, wire.worldY),
-        s: needsCenterPlug(wire.worldX, wire.worldY + 1),
-        w: needsCenterPlug(wire.worldX - 1, wire.worldY),
-      });
-    }
-  }
-
-  /**
-   * A REDE, resolvida inteira uma vez por frame. Roda depois dos produtores e antes dos
-   * consumidores no MESMO frame, entao ninguem le um pulso atrasado — a corrente nao tem
-   * memoria; o que persiste e o estado fisico das fontes (pressao, giro, carga), nunca o fio.
-   *
-   * Ela era um flood-fill BOOLEANO, e o que mudou aqui e a peca inteira: agora cada fonte
-   * publica watts, cada maquina puxa watts, e o que sai e uma satisfacao de 0 a 1 por
-   * consumidor (`solvePowerGrid`, TS puro). Com um booleano, ligar o decimo braco na mesma roda
-   * custava o mesmo que ligar o primeiro — nao havia o que projetar, so o que conectar.
-   *
-   * A geografia nao mudou nada: cabo conduz, maquina se liga ao cabo ortogonal, e um vao de um
-   * tile continua sendo um circuito aberto. E isso que mantem o cabo sendo peca de puzzle.
-   */
-  private updatePowerGrid(delta: number): void {
-    if (!this.wires.length && !this.belts.length) {
-      if (this.powerSatisfaction.size) this.powerSatisfaction = new Map();
-      return;
-    }
-    const sources: PowerNode[] = [];
-    for (const boiler of this.boilers) {
-      if (boiler.isGenerating) {
-        sources.push({ x: boiler.worldX, y: boiler.worldY, watts: POWER_WATTS.boiler });
-      }
-    }
-    // A roda injeta em QUALQUER cabo ortogonal quando o dinamo gira. Nao depende de `variable`:
-    // o fio e a conexao fisica, e a rede leva a energia ate cada consumidor.
-    for (const wheel of this.waterWheels) {
-      if (wheel.isGenerating) {
-        sources.push({ x: wheel.worldX, y: wheel.worldY, watts: POWER_WATTS.waterWheel });
-      }
-    }
-    for (const plate of this.pressurePlates) {
-      if (plate.pressed) {
-        sources.push({ x: plate.worldX, y: plate.worldY, watts: POWER_WATTS.pressurePlate });
-      }
-    }
-    // A bateria carregada pousada no chao e a FONTE PORTATIL: energia que atravessou o rio na
-    // mao do heroi (ou o muro na garra do braco) e agora alimenta a rede encostada nela. Ela
-    // entra como fonte de SEGUNDA CLASSE (ver PowerGridInput.batteries), e e isso que preserva
-    // a lei que ela sempre teve: drena SO enquanto alimenta. Agora a lei ficou ate mais exata —
-    // uma bateria numa rede com geracao de sobra nao gasta carga NENHUMA, em vez de queimar
-    // vinte segundos so por estar encostada num fio.
-    const batteries: PowerNode[] = (this.itemManager?.chargedBatteries() ?? []).map(
-      (b) => ({ x: b.x, y: b.y, watts: POWER_WATTS.battery }),
-    );
-
-    // Os consumidores. Um braco SEM cabo nenhum encostado nao entra na conta: ele e um dos dois
-    // modos legados (variavel sem fio, ou autoalimentado) que existiam antes da rede, e cobrar
-    // watts dele quebraria todo puzzle autorado que nunca teve um fio.
-    const sinks: PowerNode[] = [];
-    for (const arm of this.inserters) {
-      if (this.wireTouching(arm.worldX, arm.worldY)) {
-        sinks.push({ x: arm.worldX, y: arm.worldY, watts: POWER_WATTS.inserter });
-      }
-    }
-    for (const belt of this.belts) {
-      sinks.push({ x: belt.worldX, y: belt.worldY, watts: POWER_WATTS.belt });
-    }
-    for (const hammer of this.tripHammers) {
-      sinks.push({ x: hammer.worldX, y: hammer.worldY, watts: POWER_WATTS.tripHammer });
-    }
-    for (const extractor of this.extractors) {
-      sinks.push({ x: extractor.worldX, y: extractor.worldY, watts: POWER_WATTS.extractor });
-    }
-    for (const gate of this.electronicGates) {
-      sinks.push({ x: gate.worldX, y: gate.worldY, watts: POWER_WATTS.electronicGate });
-    }
-
-    // Os CONDUTORES sao os cabos MAIS as esteiras: uma esteira leva corrente ao longo da propria
-    // linha (ver PowerGridInput.conductors). Sem isso, dez esteiras pediriam dez cabos deitados
-    // ao lado — o defeito que so apareceu ao montar a primeira linha no jogo de verdade.
-    const conductors = new Set(this.wireIndex.keys());
-    for (const belt of this.belts) conductors.add(tileKey(belt.worldX, belt.worldY));
-
-    const solution = solvePowerGrid({ conductors, sources, batteries, sinks });
-    this.powerSatisfaction = solution.satisfactionAt;
-
-    // O cabo mostra a CARGA, nao o liga/desliga: folgado respira devagar e forte, apertado pulsa
-    // rapido, faminto treme (ver WireObject.setLoad). E o gargalo dito com pixel — o jogador ve a
-    // conta antes de sentir o resultado dela.
-    // `liveWires` fica so com CABO de verdade, mesmo agora que a esteira conduz: quem pergunta
-    // por ele e a bateria carregando por pisada ("carregue pisando num CABO vivo") e o baque de
-    // encaixe do dock. Pisar numa esteira viva nao pode virar um segundo jeito de carregar
-    // bateria que nenhuma legenda do jogo menciona.
-    this.liveWires.clear();
-    for (const wire of this.wires) {
-      const load = solution.wireLoad.get(tileKey(wire.worldX, wire.worldY)) ?? 0;
-      if (load > 0) this.liveWires.add(tileKey(wire.worldX, wire.worldY));
-      wire.setLoad(load);
-    }
-    // A carga so escoa na proporcao do que a bateria REALMENTE entregou neste frame.
-    for (const [key, draw] of solution.batteryDraw) {
-      if (draw <= 0) continue;
-      const comma = key.indexOf(',');
-      this.itemManager?.drainBatteryAt(
-        Number(key.slice(0, comma)), Number(key.slice(comma + 1)), delta * draw,
-      );
-    }
-  }
-
-  /** Quanto da vazao pedida a rede esta bancando neste tile (0..1). Sem cabo: 0. */
-  private powerAt(x: number, y: number): number {
-    return this.powerSatisfaction.get(tileKey(x, y)) ?? 0;
-  }
-
-  /** Ha QUALQUER cabo encostado (vivo ou morto)? — o que converte a maquina ao modo cabeado. */
-  private wireTouching(x: number, y: number): boolean {
-    for (const [dx, dy] of CARDINAL_DIRS) {
-      if (this.wireIndex.has(`${x + dx},${y + dy}`)) return true;
-    }
-    return false;
-  }
-
-  /**
-   * Ha CHAMA encostada neste tile? — o espelho de waterFlowAt para a caldeira. Conta tudo que
-   * visivelmente arde num vizinho ortogonal: fogueira ACESA (regime permanente — e o balde a
-   * desliga), arbusto/mato QUEIMANDO (o pulso de um pavio plantado), lava (geotermica: o poco
-   * segue derretido em volta da coroa mesmo com pedra assentada — so a coroa vira chao) e um
-   * graveto ACESO pousado no chao (a entrega do braco robotico — fogo cruzando o muro ate a
-   * fornalha). Calor nao e espalhamento: nada aqui PEGA fogo por causa da caldeira.
-   */
-  private fireHeatAt(worldX: number, worldY: number): boolean {
-    for (const [dx, dy] of CARDINAL_DIRS) {
-      const nx = worldX + dx;
-      const ny = worldY + dy;
-      if (this.getCampfireAt(nx, ny)?.isLit) return true;
-      if (this.getDryBushAt(nx, ny)?.isBurning) return true;
-      if (this.getTallGrassAt(nx, ny)?.isBurning) return true;
-      if (this.getLavaAt(nx, ny)) return true;
-      if (this.itemManager?.hasLitItemAt(nx, ny)) return true;
-    }
-    return false;
-  }
-
-  /** A roda ocupa o proprio canal. Ela so recebe corrente quando a agua sob as pas ainda existe
-   * e o rio continua por um vizinho ortogonal ativo; drenar o tile da maquina corta a fonte. */
-  private waterFlowAt(worldX: number, worldY: number): WaterFlow | null {
-    // A ÁGUA TEM DUAS PROCEDÊNCIAS, e esta função perguntava por UMA (a lei que o `isOpenWaterAt`
-    // existe para cobrar). Ela lia só o `water` PROP — o rio que um level autora —, então uma roda
-    // plantada num LAGO do overworld, que é tile de terreno, ficava parada para sempre: a peça mais
-    // cara de ler do jogo (uma roda d'água imóvel dentro d'água) falhando em silêncio.
-    //
-    // `isOpenWaterAt` responde pelas duas e já desconta o que deixou de ser água: ponte, vau de
-    // pedra e canal DRENADO devolvem `false` porque a `blocking` do prop devolve false neles — a
-    // comporta rio acima continua secando a roda, que é o circuito que o level do portão usa.
-    if (!this.isOpenWaterAt(worldX, worldY)) return null;
-    const dirs: readonly WaterFlow[] = [
-      { dx: 0, dy: -1 },
-      { dx: 1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: -1, dy: 0 },
-    ];
-    for (const dir of dirs) {
-      if (this.isOpenWaterAt(worldX + dir.dx, worldY + dir.dy)) return dir;
-    }
-    return null;
   }
 
   /**
@@ -9069,8 +7000,7 @@ export class GameScene extends Phaser.Scene {
   /**
    * A versao CONDICIONAL do scheduleFireSpread, para um graveto ACESO pousado no chao. Um
    * arbusto que agendou espalhamento ainda esta queimando quando o fusivel de FIRE_SPREAD_MS
-   * vence — mas um ITEM o braco robotico pode ter CARREGADO EMBORA nesse meio-tempo (o ciclo
-   * de pegar leva ~0.5s, menos que os 850ms do fusivel), e fogo nao nasce de um tile vazio.
+   * vence — mas um ITEM pode ter sido recolhido nesse meio-tempo, e fogo nao nasce de um tile vazio.
    * O teste no DISPARO (hasLitItemAt) tambem cobre o caso-borda do deposito com combustivel
    * exatamente zero: pousa como madeira apagada e nao arma espalhamento nenhum.
    */
@@ -9249,7 +7179,7 @@ export class GameScene extends Phaser.Scene {
   /**
    * QUALQUER COISA PODE SER CONGELADA — e este método é a lista inteira do que "qualquer coisa"
    * significa, em ordem de precedência: corpo, herói, NPC, e então o que estiver plantado no
-   * tile (caixote, fogueira morta, arbusto, mato, pedra, tronco, árvore — prop ou tile —, item
+   * tile (fogueira morta, arbusto, mato, pedra, tronco, árvore — prop ou tile —, item
    * no chão). Fogueira ACESA recusa com vapor: fogo derrete gelo antes de o gelo existir.
    * O que "travado" significa não mora aqui: mora nos gates (`frozenAt`) de cada interação.
    */
@@ -9272,7 +7202,6 @@ export class GameScene extends Phaser.Scene {
     const tall = this.getDryTreeAt(wx, wy) !== undefined || this.treeTileFrameAt(wx, wy) !== null;
     const freezable = tall
       || campfire !== undefined
-      || this.getWoodenCrateAt(wx, wy) !== undefined
       || this.getDryBushAt(wx, wy) !== undefined
       || this.getDryShrubAt(wx, wy) !== undefined
       || this.getTallGrassAt(wx, wy) !== undefined
@@ -9321,8 +7250,18 @@ export class GameScene extends Phaser.Scene {
     scriptId?: string,
   ): void {
     if (this.dialogOpen) return;
-    const script = getDialog(kind, scriptId);
-    if (!script) return;
+    const askId = scriptId ?? kind;
+    const base = getDialog(kind, askId);
+    if (!base) return;
+    // A ENTREGA VEM ANTES DA FALA, e o MEDO vem antes da entrega: um NPC ao lado de fogueira
+    // apagada só sabe gaguejar, e receber seis minérios enquanto gagueja seria uma entrega que
+    // o jogador não vê acontecer. Cumprida a missão, `spokenDialogId` devolve o outro roteiro —
+    // já nesta mesma conversa, que é o ponto: entregar e ouvir a resposta é um gesto só.
+    if (!this.isNpcScared(npcWorld)) this.settleQuestDelivery(askId);
+    const speakId = this.spokenDialogId(askId);
+    // Roteiro alternativo sem entrada no world.json cai no de sempre: uma missão sem fala nova
+    // não pode emudecer o NPC.
+    const script = speakId === askId ? base : (getDialog(kind, speakId) ?? base);
     if (npcWorld) {
       const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY, scriptId);
       if (key) {
@@ -9332,7 +7271,7 @@ export class GameScene extends Phaser.Scene {
     }
     // An NPC beside a still-dead campfire is too scared to talk: swap in the locked lines.
     const shown = this.gateDialog(script, npcWorld);
-    this.openDialogScript(shown, npcWorld, getDialogVoice(kind, scriptId));
+    this.openDialogScript(shown, npcWorld, getDialogVoice(kind, speakId) ?? getDialogVoice(kind, askId));
   }
 
   // Identity of the dialog an NPC would speak *right now*: the wizard's current story beat,
@@ -9344,33 +7283,61 @@ export class GameScene extends Phaser.Scene {
     wy: number,
     scriptId?: string,
   ): string | null {
-    if (kind === 'wizard') return `wizard:${this.wizardStoryState()}`;
+    if (kind === 'wizard') return `wizard:${this.wizardBeat()}`;
     if (!getDialog(kind, scriptId)) return null;
-    // A chave é do ROTEIRO, não da espécie: três gatos com três aulas são três "!" a apagar, e
-    // com a chave por espécie ouvir um deles apagaria a marca dos outros dois.
-    const id = scriptId ?? kind;
+    // A chave é do ROTEIRO FALADO, não da espécie: três gatos com três aulas são três "!" a
+    // apagar, e com a chave por espécie ouvir um deles apagaria a marca dos outros dois. Ela lê
+    // o roteiro que a MISSÃO escolheu, e é assim que fechar um pedido reacende o "!" do NPC —
+    // ele tem fala nova, que é exatamente o que a marca sempre quis dizer.
+    const id = this.spokenDialogId(scriptId ?? kind);
     const cf = this.nearestCampfireWithin(wx, wy, NPC_GATE_RADIUS_TILES);
     return cf && !cf.isLit ? `${id}:locked` : `${id}:base`;
   }
 
   // The wizard tells the story of Zero, always opening (on the very first talk) with the intro
   // beat — its narrator line MUST be the first thing he shows. Later visits give "protect the
-  // flame"; the second lit fire unlocks the closing prophecy, which ends the intro.
+  // flame"; the first lit fire unlocks the closing prophecy, which POINTS AT THE PYRE (it used
+  // to roll the credits; the ending moved to the tower — see playEnding).
   private openWizardDialog(npcWorld: { worldX: number; worldY: number }): void {
     if (this.dialogOpen) return;
     const base = getDialog('wizard');
     if (!base) return;
-    const state = this.wizardStoryState();
-    this.seenDialogKeys.add(`wizard:${state}`);
-    if (state === 'intro') this.wizardIntroSeen = true;
+    this.settleQuestDelivery('wizard');
+    const beat = this.wizardBeat();
+    this.seenDialogKeys.add(`wizard:${beat}`);
+    if (beat === 'intro') this.wizardIntroSeen = true;
     this.persistAdventure(); // o beat ouvido do mago e historia, e historia nao se repete
+    if (beat === 'quest') {
+      const doneId = this.spokenDialogId('wizard');
+      const done = getDialog('wizard', doneId);
+      // Sem a entrada no world.json ele volta ao beat de sempre: uma missão sem fala nova não
+      // pode emudecer o mago.
+      if (done) {
+        this.openDialogScript(done, npcWorld, getDialogVoice('wizard', doneId));
+        return;
+      }
+    }
+    const state = beat === 'quest' ? 'protect' : beat;
     const lines = tLines(`wizard.${state}`);
+    // A PROFECIA NÃO FECHA MAIS O JOGO: ela APONTA. Enquanto o fim da introdução era acender uma
+    // fogueira qualquer, o beat dele rolava os créditos — hoje o fim é a PIRA, e a última fala do
+    // mago é o dedo esticado para a torre. Duas coisas terminando o mesmo jogo seriam duas.
     this.openDialogScript(
       { ...base, lines },
       npcWorld,
       getDialogVoice('wizard'),
-      state === 'prophecy' ? () => this.playIntroEnding() : undefined,
     );
+  }
+
+  /**
+   * O QUE O MAGO DIRIA AGORA. Ele é o único NPC cuja fala alternativa disputa espaço com uma
+   * HISTÓRIA, e por isso a missão dele entra num beat só: o `protect`, que é o opcional. O
+   * `intro` é a primeira fala de todas e o `prophecy` dispara o fim da introdução — trocar
+   * qualquer um dos dois por uma fala de missão apagaria história que não volta.
+   */
+  private wizardBeat(): 'intro' | 'protect' | 'prophecy' | 'quest' {
+    const state = this.wizardStoryState();
+    return state === 'protect' && this.spokenDialogId('wizard') !== 'wizard' ? 'quest' : state;
   }
 
   private wizardStoryState(): 'intro' | 'protect' | 'prophecy' {
@@ -9393,7 +7360,12 @@ export class GameScene extends Phaser.Scene {
     // painel aberto e a lâmina rodopiante termina de carregar sozinha — a mesma rede da
     // subtela (ver resetChargeAndBuffers no openSubScreen).
     this.resetChargeAndBuffers();
-    // Pan so the hero + NPC sit centered in the left half; the panel fills the right half.
+    // A caixa de fala mora no MESMO rodapé que o par A/B e o botão da bolsa. Eles já estão
+    // calados (`canAct`), então o que sobra deles é o pedaço que espia ao lado da caixa: saem
+    // de cena junto, como saem quando a bolsa abre.
+    this.quickBag?.setButtonVisible(false);
+    this.actionButtons?.setVisible(false);
+    // Pan so the hero + NPC sit centered on the stage ABOVE the box.
     this.dialogNpcWorld = npcWorld;
     this.startDialogCameraShift(npcWorld);
     // Focus on the conversation: fade the music down while the NPC talks.
@@ -9402,6 +7374,8 @@ export class GameScene extends Phaser.Scene {
       this.dialogOverlay?.destroy();
       this.dialogOverlay = undefined;
       this.dialogOpen = false;
+      this.quickBag?.setButtonVisible(true);
+      this.actionButtons?.setVisible(true);
       this.endDialogCameraShift();
       getSoundManager().fadeMusicIn();
       onClosed?.();
@@ -9441,11 +7415,92 @@ export class GameScene extends Phaser.Scene {
   // Gate an NPC's dialog behind their campfire: if a dead fire sits within range, show the
   // scared "locked" lines (keeping the NPC's portrait/colour/voice) instead of the real ones.
   private gateDialog(script: DialogScript, npcWorld?: { worldX: number; worldY: number }): DialogScript {
-    if (!npcWorld) return script;
-    const cf = this.nearestCampfireWithin(npcWorld.worldX, npcWorld.worldY, NPC_GATE_RADIUS_TILES);
     // A variante travada perde o BALCÃO junto com as falas: um NPC com medo não vende nada.
-    if (cf && !cf.isLit) return { ...script, lines: tLines('lockedLines'), trade: undefined };
-    return script;
+    if (!this.isNpcScared(npcWorld)) return script;
+    return { ...script, lines: tLines('lockedLines'), trade: undefined };
+  }
+
+  /** O NPC está ao lado de uma fogueira APAGADA — e com medo ele não fala, não vende e não recebe. */
+  private isNpcScared(npcWorld?: { worldX: number; worldY: number }): boolean {
+    if (!npcWorld) return false;
+    const cf = this.nearestCampfireWithin(npcWorld.worldX, npcWorld.worldY, NPC_GATE_RADIUS_TILES);
+    return Boolean(cf && !cf.isLit);
+  }
+
+  // ── AS MISSÕES DOS NPCs ────────────────────────────────────────────────────
+  // O sistema inteiro (ver dialogs/NpcQuests + runtime/QuestLog) toca a cena em três lugares e
+  // em mais nenhum: o FUNIL abaixo, que conta o que aconteceu no mundo; a ENTREGA, que é o
+  // gesto de falar com quem pediu; e a ESCOLHA DE ROTEIRO, que é o único efeito visível de tudo
+  // isto — o NPC dizendo outra coisa. Não há tela de missão, de propósito.
+
+  /**
+   * O FUNIL. Fora da aventura ele não existe: o contador mora no save, e um level ou uma corrida
+   * do explorador escrevendo nele sujaria a aventura de quem só foi jogar um puzzle.
+   */
+  private questEvent(event: QuestEvent): void {
+    if (!this.adventure) return;
+    const { moved, closed } = recordQuestEvent(event);
+    if (!moved) return;
+    if (closed.length > 0) this.creditPyreForQuests(closed.length);
+    this.persistAdventure();
+  }
+
+  /**
+   * TODA MISSÃO SOBE A PIRA — e é assim que ajudar alguém vira progresso no fim do jogo.
+   *
+   * Cada missão cumprida manda `QUEST_PYRE_LOGS` toras para a torre central: gente ajudada
+   * carrega lenha, e o herói nunca precisa saber disso — ele volta e a torre está mais alta. É a
+   * segunda estrada até o mesmo lugar, e a que faz o jogo ter mais de um caminho: **metade do
+   * baralho fecha a torre sozinha** (ver a conta em NpcQuests), quinze gravetos na mão também, e
+   * qualquer mistura das duas serve.
+   *
+   * O crédito cai no SAVE, não no objeto: uma missão pode fechar dentro de uma dungeon, onde não
+   * existe pira nenhuma para receber a tora. Com a pira na tela, a torre sobe na hora também —
+   * uma tora de cada vez, para o gesto ser visto.
+   */
+  private creditPyreForQuests(quests: number): void {
+    const st = adventureState();
+    const key = st.centralPyre;
+    if (!key) return; // um mundo sem pira: não há fim de jogo a empurrar
+    const logs = quests * QUEST_PYRE_LOGS;
+    const live = this.pyres.find((p) => `${p.worldX},${p.worldY}` === key);
+    if (live) {
+      for (let i = 0; i < logs; i += 1) live.deposit();
+      st.pyreLogs.set(key, live.logCount);
+      return;
+    }
+    st.pyreLogs.set(key, Math.min(PYRE_LOGS_REQUIRED, (st.pyreLogs.get(key) ?? 0) + logs));
+  }
+
+  /** O roteiro que este NPC fala AGORA — o alternativo, se ele já recebeu o que pediu. */
+  private spokenDialogId(dialogId: string): string {
+    return this.adventure ? questDialogFor(dialogId) : dialogId;
+  }
+
+  /**
+   * ENTREGAR É FALAR — e é TUDO OU NADA. Não há botão de dar: quem pediu cobra na conversa. Mas
+   * ele só leva a carga INTEIRA de um pedido: com quatro dos seis minérios na mochila, o
+   * astronauta não encosta em nenhum.
+   *
+   * Isto não é rigor, é a única leitura honesta num sistema SEM interface. Entrega parcial seria
+   * confisco silencioso: o jogador veria a mochila esvaziar ao passar perto de quem pediu, sem
+   * nada na tela dizendo que aquilo virou progresso — e sem nada dizendo quanto ainda falta. Com
+   * tudo-ou-nada, o único momento em que a mochila muda é o mesmo momento em que o NPC passa a
+   * falar outra coisa: a resposta chega junto com o preço.
+   */
+  private settleQuestDelivery(dialogId: string): void {
+    if (!this.adventure) return;
+    let handed = false;
+    for (const due of questDeliveriesDue(dialogId)) {
+      if (this.inventory.count(due.item) < due.missing) continue;
+      this.inventory.remove(due.item, due.missing);
+      recordQuestEvent({ type: 'deliver', dialog: dialogId, item: due.item, units: due.missing });
+      handed = true;
+    }
+    if (!handed) return;
+    // A entrega pode ter esvaziado a mão: as costas do herói têm de acompanhar.
+    this.updateBackItem();
+    this.persistAdventure();
   }
 
   private nearestCampfireWithin(wx: number, wy: number, radius: number): CampfireObject | undefined {
@@ -9468,20 +7523,21 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
-  // Screen anchor while a dialog is open: put the hero↔NPC midpoint at the center of the
-  // left half (the dialog panel covers the right half). camX stays on the hero, so shifting
-  // only screenCenterX/Y keeps the hero's sprite pinned correctly to the ground it stands on.
+  // Screen anchor while a dialog is open: put the hero↔NPC midpoint at the center of the PALCO
+  // — a faixa que sobra ACIMA da caixa de fala, que é uma barra no rodapé. A altura dela sai de
+  // `dialogBoxMetrics`, a mesma conta que o DialogOverlay desenha: fosse outra, a fala taparia
+  // quem a diz. camX stays on the hero, so shifting only screenCenterX/Y keeps the hero's
+  // sprite pinned correctly to the ground it stands on.
   private dialogScreenCenter(npcWorld?: { worldX: number; worldY: number }): { x: number; y: number } {
     const base = this.baseScreenCenter();
-    // The panel covers the right side (capped width); centre the hero+NPC in the game area left of it.
-    const panelW = Math.min(this.scale.width * DIALOG_PANEL_FRACTION, DIALOG_PANEL_MAX_WIDTH);
-    const leftHalfCenterX = Math.floor((this.scale.width - panelW) / 2);
-    if (!npcWorld) return { x: leftHalfCenterX, y: base.y };
+    const { boxHeight, margin } = dialogBoxMetrics(this.scale.width, this.scale.height);
+    const stageCenterY = Math.floor((this.scale.height - boxHeight - margin) / 2);
+    if (!npcWorld) return { x: base.x, y: stageCenterY };
     const dx = npcWorld.worldX - this.playerWorld.worldX;
     const dy = npcWorld.worldY - this.playerWorld.worldY;
     return {
-      x: Math.round(leftHalfCenterX - (dx * this.tileSize) / 2),
-      y: Math.round(base.y - (dy * this.tileSize) / 2),
+      x: Math.round(base.x - (dx * this.tileSize) / 2),
+      y: Math.round(stageCenterY - (dy * this.tileSize) / 2),
     };
   }
 
@@ -9560,12 +7616,11 @@ export class GameScene extends Phaser.Scene {
     if (this.camera) {
       const at = this.movementController?.visualWorld(this.playerWorld.worldX, this.playerWorld.worldY)
         ?? { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
-      this.pickupPrompt?.render(this.tileSize, this.camera, this.time.now, at);
       // O balao de pensamento monta no MESMO ponto do aviso de apanhar, e pelo mesmo motivo: a
       // ancora e o corpo DESENHADO. O relogio dele corre no update (ver HeroThought.tick).
       this.heroThought?.render(this.tileSize, this.camera, this.time.now, at);
     }
-    // O MESMO keycap sobre a BANCADA que o herói está encarando: sem ele o catálogo da encomenda
+    // O MESMO keycap sobre a BANCADA que o herói está encarando: sem ele o catálogo de fabricacao
     // seria um recurso invisível, que é justamente o defeito que ele veio consertar. A condição é
     // a precondição dos dois botões — adjacente E de frente —, lida do mesmo `facingTile` que o A
     // vai usar, para o anúncio nunca prometer um gesto que o botão recusaria.
@@ -9626,7 +7681,7 @@ export class GameScene extends Phaser.Scene {
         || (torch !== null && near(torch.worldX, torch.worldY))
         || laid.some((f) => near(f.x, f.y));
       mf.setNearFire(nearFire);
-      // A regra da roda d'agua: efeito e audio so existem perto do heroi.
+      // Efeito e audio so existem perto do heroi.
       const effectsVisible = Math.hypot(
         mf.worldX - this.playerWorld.worldX,
         mf.worldY - this.playerWorld.worldY,
@@ -9656,9 +7711,7 @@ export class GameScene extends Phaser.Scene {
     // O pacote entra inteiro (as sementes valem SEEDS_PER_PACK recém-colhidas; um punhado
     // pousado volta com a contagem que tinha). A bolsa e a subtela já mostram o número.
     this.inventory.add(item.kind, item.units ?? 1);
-    this.heldBatteryChargeMs = item.kind === 'batteryFull'
-      ? (item.chargeMs ?? BATTERY_FEED_MS)
-      : 0;
+    this.questEvent({ type: 'gather', item: item.kind, units: item.units ?? 1 });
     // Um graveto ACESO apanhado do chao sobe aceso, com o combustivel que lhe resta — o par
     // do deposito no braco. O item LARGADO na troca ainda pousa apagado (a queda apaga);
     // fogo so desce ao chao pela entrega deliberada a uma maquina.
@@ -9694,7 +7747,6 @@ export class GameScene extends Phaser.Scene {
     if (kind !== 'none') this.inventory.remove(kind);
     this.heldOnFire = false;
     this.torchFuelMs = 0;
-    this.heldBatteryChargeMs = 0;
     this.updateBackItem();
   }
 
@@ -9913,9 +7965,10 @@ export class GameScene extends Phaser.Scene {
     // only the upper frame would leave the tile blocked by an invisible wall.
     chunk.collisions[ly][lx] = false;
     this.world3d?.removeSolidTile(wx, wy);
-    if (this.adventure && !getDungeonTrip()) {
+    if (this.adventure && !isUnderground()) {
       // Edicao de TERRENO entra no save como diff (applyFelledTreeDiff a reaplica em cada boot).
       adventureState().felledTrees.add(`${wx},${wy}`);
+      this.questEvent({ type: 'fell' }); // a clareira que o poeta pede se mede aqui
       this.persistAdventure();
     }
     return true;
@@ -9933,17 +7986,17 @@ export class GameScene extends Phaser.Scene {
   ): void {
     if (!this.itemManager) return;
     if (!this.itemManager.hasItemAt(worldX, worldY)) {
-      this.itemManager.drop(kind, worldX, worldY, undefined, undefined, units);
+      this.itemManager.drop(kind, worldX, worldY, undefined, units);
       this.persistAdventure();
       return;
     }
     for (const [dx, dy] of CARDINAL_DIRS) {
       const nx = worldX + dx;
       const ny = worldY + dy;
-      // isSolidForEntities sem botas: o produto nunca cai num rio, na lava ou dentro de um
-      // corpo solido — um item so pousa onde o heroi pode pisar pra busca-lo.
+      // O produto nunca cai num rio, na lava ou dentro de um corpo solido — um item so pousa
+      // onde o heroi pode pisar pra busca-lo.
       if (this.isSolidForEntities(nx, ny) || this.itemManager.hasItemAt(nx, ny)) continue;
-      this.itemManager.drop(kind, nx, ny, undefined, undefined, units);
+      this.itemManager.drop(kind, nx, ny, undefined, units);
       this.persistAdventure();
       return;
     }
@@ -9953,34 +8006,6 @@ export class GameScene extends Phaser.Scene {
     // Um PACOTE de dois (ver TREE_STICK_YIELD), e não dois itens no chão: apanhar é um gesto só,
     // e o pacote já existe no jogo (o cabo sai de cinco em cinco).
     this.dropProduct('wood', worldX, worldY, TREE_STICK_YIELD);
-  }
-
-  /** A carga saltando do cabo pra bateria: anel gold no chao + faiscas subindo da mao. */
-  private spawnBatteryChargeFx(wx: number, wy: number): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    const ring = w3
-      .addBillboard(FX_RING_TEXTURE, 0, { flat: true, flatY: 0.03, additive: true, fog: false, depthWrite: false })
-      .setTint(0xf1cc36)
-      .setPosition(wx, wy)
-      .setDisplaySize(0.2, 0.2)
-      .setAlpha(0.8);
-    this.tweens.add({
-      targets: ring, scaleX: 1.1, scaleY: 1.1, alpha: 0, duration: 420,
-      ease: 'Quad.easeOut', onComplete: () => ring.destroy(),
-    });
-    for (let i = 0; i < 4; i += 1) {
-      const spark = w3
-        .addBillboard(FX_DOT_TEXTURE, 0, { centered: true, fog: false, additive: true, depthWrite: false, emissive: true })
-        .setTint(i % 2 === 0 ? 0xf1cc36 : 0xf8e394)
-        .setPosition(wx + (Math.random() - 0.5) * 0.2, wy + 0.02)
-        .setElevation(0.2)
-        .setDisplaySize(0.055, 0.055);
-      this.tweens.add({
-        targets: spark, elevation: 0.55 + Math.random() * 0.2, alpha: 0,
-        duration: 300 + i * 50, ease: 'Quad.easeOut', onComplete: () => spark.destroy(),
-      });
-    }
   }
 
   /**
@@ -10040,14 +8065,7 @@ export class GameScene extends Phaser.Scene {
    * canvas do Phaser (o voo é um sprite Phaser; o HUD é DOM — dois espaços, uma régua).
    */
   private hudCoinAnchor(): { x: number; y: number } | null {
-    const rect = this.explorerHud?.coinAnchorRect();
-    if (!rect) return null;
-    const canvas = this.game.canvas.getBoundingClientRect();
-    if (canvas.width <= 0 || canvas.height <= 0) return null;
-    return {
-      x: (rect.left + rect.width / 2 - canvas.left) * (this.scale.width / canvas.width),
-      y: (rect.top + rect.height / 2 - canvas.top) * (this.scale.height / canvas.height),
-    };
+    return null;
   }
 
   private spawnOreLoot(rock: RockObject): void {
@@ -10242,9 +8260,6 @@ export class GameScene extends Phaser.Scene {
     if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) return false;
     if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
     if (this.itemManager?.hasItemAt(wx, wy)) return false;
-    // A pushable crate can be parked on any passable tile — a stump, an open hole — and a
-    // tree or mound growing back THROUGH it would weld two blocking bodies onto one tile.
-    if (this.getWoodenCrateAt(wx, wy)) return false;
     return true;
   }
 
@@ -10529,7 +8544,14 @@ export class GameScene extends Phaser.Scene {
 
   // The intro's finale: after the wizard's closing prophecy, the world fades to black, a card
   // says the introduction is complete, and the game returns to the title screen.
-  private playIntroEnding(): void {
+  /**
+   * O FIM DO JOGO — a torre pegando fogo, o preto, o card, o título.
+   *
+   * Ele já existiu como "fim da introdução", disparado pela profecia do mago (que custava UMA
+   * fogueira acesa). Virou o fim de verdade quando a pira virou o objetivo: um jogo com dois
+   * finais, um deles a dez minutos do começo, não tem final nenhum.
+   */
+  private playEnding(): void {
     this.cutsceneActive = true; // freeze gameplay for the finale
     if (this.adventure) {
       // O final visto entra no save: quem continuar depois dele mantem o mundo aceso que
@@ -10629,7 +8651,6 @@ export class GameScene extends Phaser.Scene {
     // 1. The whole world sinks into black, behind the hero — driven from INSIDE the post
     // (World3D.setWorldFade), so the diorama drains of colour and dims with its own bloom,
     // fire glow and grain, instead of a flat black rectangle being pasted over the top.
-    this.world3d?.setDangerVignette(0, DANGER_VIGNETTE_COLD);
     const fade = { t: 0 };
     this.tweens.add({
       targets: fade,
@@ -10714,35 +8735,24 @@ export class GameScene extends Phaser.Scene {
     const doRestart = (): void => {
       if (restarting) return;
       restarting = true;
-      // No explorador a morte nao e um restart: e o fim de uma EXPEDICAO. 5% da bolsa vira
-      // banco (perto o bastante de nada para doer, longe o bastante de zero para a expedicao
-      // ruim nao ter sido tempo jogado fora), o mundo la fora e resorteado, e o heroi acorda
-      // no acampamento — que e o unico lugar deste modo que nao muda.
-      if (this.explorer) {
-        loseRunToDeath();
-        rerollExplorerWorld();
-      } else if (this.adventure) {
+      if (this.adventure) {
         // NA AVENTURA A MORTE NAO APAGA MAIS NADA. Mochila, moedas, melhorias, fogueiras e
         // historia atravessam (persistAdventure + hidratacao do create); o custo de morrer e
         // ACORDAR NA FOGUEIRA — a distancia de volta, nao o progresso. E o bonfire.
         this.persistAdventure();
         requestAdventureRespawn();
-        if (getDungeonTrip()) {
-          // Morrer na dungeon acorda do lado de FORA, na fogueira: o overworld volta do disco
-          // (o mesmo gesto de leaveDungeon) e a viagem se encerra aqui, sem escada.
-          //
-          // O retrato da planta fecha ANTES da volta, pelo mesmo motivo da saida pela escada: a
-          // dungeon em que o heroi acabou de morrer e a mesma que ele vai encontrar ao voltar —
-          // a morte custa a caminhada de volta, nunca um mundo novo.
-          persistActiveDungeon();
-          clearActiveDungeon();
+        if (isUnderground()) {
+          // Morrer la embaixo acorda do lado de FORA, na fogueira: o overworld volta do disco
+          // (o mesmo gesto de leaveDungeon) e a viagem se encerra aqui, sem escada. O
+          // subterraneo e um arquivo autorado como o overworld, entao nao ha planta a fotografar
+          // — o que a visita mudou (itens no chao) ja entrou no save pelo `persistAdventure`.
           void window
             .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
             .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })
             .then((json: unknown) => {
               setWorldData(json as Parameters<typeof setWorldData>[0]);
               setActiveLevel(null);
-              clearDungeonTrip();
+              setUnderground(false);
             })
             .catch(() => { /* sem rede: renasce dentro da propria dungeon */ })
             .finally(() => { this.scene.restart(); });
@@ -10882,36 +8892,6 @@ export class GameScene extends Phaser.Scene {
 
   private hideFireCompass(): void {
     this.fireCompassArrow?.setVisible(false);
-  }
-
-  // The undead siege made visible: the spawn director's hidden danger meter (0..1) closes a
-  // vignette over the screen edges. It creeps in as the dark wakes, BREATHES faster the higher
-  // the danger, and past ~half meter its cold blue warms toward blood-red — so the player
-  // feels the spawn cadence ramping long before the horde itself shows it. Near a fire the
-  // meter drains (~2.5s) and the vignette melts away with it.
-  private updateDangerVignette(delta: number): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    const danger = this.spawnDirector?.danger ?? 0;
-    if (danger < 0.02 || this.isDead || this.cutsceneActive) {
-      w3.setDangerVignette(0, DANGER_VIGNETTE_COLD);
-      this.dangerPulsePhase = 0;
-      return;
-    }
-
-    this.dangerPulsePhase += delta * (0.0011 + danger * 0.0024);
-    // Same sharpened-sine "thump" as the low-health heartbeat, so both danger signals breathe
-    // with one visual language.
-    const breath = Math.pow((Math.sin(this.dangerPulsePhase) + 1) / 2, 2);
-    const alpha = Math.pow(danger, 1.35) * DANGER_VIGNETTE_MAX_ALPHA * (1 - 0.22 * (1 - breath));
-
-    // Cold for most of the ramp; the last stretch bleeds toward red as the frenzy peaks.
-    const heat = Phaser.Math.Clamp((danger - 0.55) / 0.45, 0, 1);
-    const cold = Phaser.Display.Color.ValueToColor(DANGER_VIGNETTE_COLD);
-    const blood = Phaser.Display.Color.ValueToColor(DANGER_VIGNETTE_BLOOD);
-    const mix = Phaser.Display.Color.Interpolate.ColorWithColor(cold, blood, 100, heat * 100);
-
-    w3.setDangerVignette(alpha, Phaser.Display.Color.GetColor(mix.r, mix.g, mix.b));
   }
 
   private startBreathing(): void {

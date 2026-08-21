@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
-  PLACEMENT_FAR_TEXTURE, PLACEMENT_OK_TEXTURE, TAKE_KEY_TEXTURE, ensureTakeKeyTexture,
+  PLACEMENT_OK_TEXTURE, TAKE_KEY_TEXTURE, ensureTakeKeyTexture,
 } from '@/game/render3d/placementTexture';
 import { world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -12,14 +12,9 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
  * AS MARCAS DE ONDE A PEÇA CAI — o quadrado no chão e o keycap por cima dele.
  *
  * Instalar era o único gesto do jogo cujo ALVO era invisível. Todo o resto mira em alguma coisa
- * que já está lá (a árvore, a rocha, a caldeira); uma máquina nasce num chão vazio, e chão vazio
+ * que já está lá (a árvore, a rocha, o altar); uma estação nasce num chão vazio, e chão vazio
  * é igual em todo lugar. Esta peça é o conserto: com uma máquina na mão, o tile que o botão vai
  * usar ganha um quadro branco, e sobre ele a TECLA que faz acontecer.
- *
- * Duas coisas ela mostra ao mesmo tempo, e é essa diferença que ensina o extrator sem uma linha
- * de texto: o alvo IMEDIATO em branco, e os outros lugares VÁLIDOS em azul frio. Segurando o
- * extrator, os vizinhos de cada veio acendem em frio — o jogador vê "é ali que essa peça mora"
- * antes de tentar e ser recusado.
  *
  * ── Por que os quads vêm de um POOL ─────────────────────────────────────────────────────────
  * Eles nascem e morrem a cada troca de item, e um `addBillboard` por frame seria alocação por
@@ -31,7 +26,7 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
 // O keycap da tecla de AÇÃO mora em `placementTexture` desde que a BANCADA passou a mostrar um
 // igual: um desenho que diz a mesma frase em dois lugares tem de ser um desenho só.
-/** Acima do cabo (0.022) e da esteira (0.016): a marca é a última coisa desenhada no chão. */
+/** A marca e a ultima coisa desenhada no chao. */
 const MARK_Y = 0.03;
 
 export type HintTile = { readonly x: number; readonly y: number };
@@ -57,24 +52,19 @@ export class PlacementHints {
    * @param primary O tile que o botão vai usar AGORA (branco + keycap), ou null se o gesto seria
    * recusado — e "recusado" tem de aparecer como ausência de marca branca, nunca como uma marca
    * vermelha: o jogo não tem vocabulário de erro colorido, tem vocabulário de física.
-   * @param others  Os demais lugares válidos (azul frio). É o que ensina o extrator.
    */
-  public show(primary: HintTile | null, others: readonly HintTile[] = []): void {
+  public show(primary: HintTile | null): void {
     this.primary = primary;
     let i = 0;
-    const paint = (tile: HintTile, ok: boolean): void => {
+    const paint = (tile: HintTile): void => {
       const mark = this.pool[i] ?? this.grow();
       mark
-        .setTexture(ok ? PLACEMENT_OK_TEXTURE : PLACEMENT_FAR_TEXTURE)
+        .setTexture(PLACEMENT_OK_TEXTURE)
         .setPosition(tile.x, tile.y)
         .setVisible(true);
       i += 1;
     };
-    if (primary) paint(primary, true);
-    for (const tile of others) {
-      if (primary && tile.x === primary.x && tile.y === primary.y) continue;
-      paint(tile, false);
-    }
+    if (primary) paint(primary);
     for (let k = i; k < this.used; k += 1) this.pool[k].setVisible(false);
     this.used = i;
     this.keycap.setVisible(primary !== null);

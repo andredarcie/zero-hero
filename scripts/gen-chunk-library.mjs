@@ -102,7 +102,6 @@ const world = {
       ],
     },
   },
-  globalVariables: {},
 };
 
 const target = fileURLToPath(new URL('../public/world.json', import.meta.url));

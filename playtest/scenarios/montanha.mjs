@@ -162,7 +162,7 @@ export default {
       ],
       [cliff.x, cliff.y],
     );
-    assert('a montanha bloqueia, e bloqueia tambem com as botas de lava',
+    assert('a montanha bloqueia, inclusive para quem ignora hazards',
       solid[0] === true && solid[1] === true, JSON.stringify(solid));
 
     await teleport(cliff.x, cliff.y + 3);

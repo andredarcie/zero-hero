@@ -15,12 +15,8 @@ import { hammerResult, isHammerable } from './hammering';
 /**
  * O ALTAR — a bigorna que não é máquina.
  *
- * A cadeia do ferro tinha dois lugares para transformar a esponja em barra, e nenhum dos dois era
- * um LUGAR: o martinete (que cobra roda d'água, engrenagem e uma rede elétrica inteira antes de
- * existir) e o CHÃO, onde a peça cai e o jogador martela onde ela parou. O chão funciona, mas não
- * ensina nada — nada no mundo diz "trabalhe aqui", e a esponja é malhada exatamente onde ela
- * rolou. O altar é a mesa de trabalho que faltava entre os dois: uma laje de pedra em que se PÕE
- * uma coisa e se bate nela.
+ * A esponja de ferro podia ser martelada no chão, exatamente onde rolou. O altar torna o gesto
+ * legível: uma laje de pedra em que se põe uma coisa e se bate nela.
  *
  *     Z de frente (laje vazia)   →  põe o item SELECIONADO na bolsa
  *     Z de frente (laje cheia)   →  a espada desce nela: uma pancada
@@ -30,7 +26,7 @@ import { hammerResult, isHammerable } from './hammering';
  * ── O que ele NÃO é ─────────────────────────────────────────────────────────────────────────
  * Não consome energia, não tem direção, não trabalha sozinho e não pede nada: ele é um MÓVEL, e a
  * única coisa que acontece nele é o que a mão do jogador faz. É por isso que ele pode existir
- * antes de qualquer fábrica — e é por isso que a arte dele foge das três famílias de máquina
+ * desde o começo — e é por isso que a arte dele foge das famílias de máquina
  * (caixa de metal, alvenaria em cone, armação de madeira) e é pedra bruta cortada em bloco.
  *
  * ── Bater no que não transforma ────────────────────────────────────────────────────────────
@@ -102,7 +98,7 @@ export class AltarObject implements WorldProp {
   /**
    * PÕE uma peça na laje. Recusa só com a laje OCUPADA — um lugar, uma peça.
    *
-   * Aceita QUALQUER coisa de propósito, como a bigorna do martinete: uma mesa que só aceitasse
+   * Aceita QUALQUER coisa de propósito: uma mesa que só aceitasse
    * esponja seria uma fechadura com uma chave só, e o jogador nunca descobriria o gesto sem já
    * saber a resposta. O pior caso é uma pedra pousada numa laje, visível, que o X devolve.
    */
@@ -250,8 +246,7 @@ export class AltarObject implements WorldProp {
 
   /**
    * O LEQUE RASANTE. Escória que escapa entre a ferramenta e a pedra é cuspida para os lados, e um
-   * leque baixo diz de onde ela saiu melhor que um círculo — o mesmo desenho do martinete, porque
-   * é a mesma coisa acontecendo (e uma segunda arte de faísca só criaria uma segunda gramática).
+   * leque baixo diz de onde ela saiu melhor que um círculo.
    */
   private spawnSparks(count: number, tint: number, last: boolean): void {
     for (let i = 0; i < count; i += 1) {

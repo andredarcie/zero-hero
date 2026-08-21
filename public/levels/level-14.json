@@ -13,7 +13,7 @@
       "worldY": 7
     },
     "puzzle": true,
-    "exportedAt": "2026-08-13T20:22:20.193Z"
+    "exportedAt": "2026-08-19T12:14:30.410Z"
   },
   "chunks": [
     {
@@ -334,7 +334,7 @@
           19,
           null,
           null,
-          1,
+          null,
           null,
           20,
           null,
@@ -575,22 +575,6 @@
       "worldY": 6
     },
     {
-      "type": "electronicGate",
-      "variable": "forja",
-      "worldX": 8,
-      "worldY": 2
-    },
-    {
-      "type": "chest",
-      "variable": "forja",
-      "quota": {
-        "kind": "iron",
-        "count": 1
-      },
-      "worldX": 6,
-      "worldY": 2
-    },
-    {
       "type": "furnace",
       "dir": 1,
       "worldX": 3,
@@ -632,12 +616,13 @@
         },
         {
           "speaker": "npc",
-          "text": "Then feed the bar to the chest with X. Ore, fire, hammer, bar — there is no shortcut, and every forge in this world runs that order. Mrrow."
+          "text": "Then take the bar with B. Ore, fire, hammer, bar — there is no shortcut, and every forge in this world runs that order. Mrrow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     }
-  },
-  "globalVariables": {
-    "forja": false
   }
 }

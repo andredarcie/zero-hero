@@ -139,6 +139,16 @@ export class Billboard3D {
   private readonly groundShadow?: THREE.Mesh;
   /** Forward (+z) nudge of the contact blob, in tiles — the hero's blob peeks past his boots. */
   private readonly groundShadowZBias: number = 0;
+  /**
+   * A ESCURIDÃO CHEIA do blob de contato — a que ele tem com o corpo inteiro na tela.
+   *
+   * Ela existe porque `setAlpha` tem de valer para os DOIS: um corpo que apaga (a escada, a
+   * morte, um sumiço qualquer) deixava a sombra inteira para trás, plantada no chão, sem dono.
+   * Sombra é consequência de corpo — quem some leva a sua.
+   */
+  private readonly groundShadowAlpha: number = 0;
+  /** Ver `alpha` / `setBlinkAlpha`: o quanto o CORPO existe, que nao e o alpha do frame. */
+  private bodyAlpha = 1;
   private readonly flat: boolean;
   private readonly flatY: number;
   // Phaser's setTintFill paints the sprite a SOLID colour (keeping only the
@@ -252,7 +262,8 @@ export class Billboard3D {
     // its base radii and scaled by the sprite's width in apply().
     if (opts.groundShadow && !this.flat) {
       const cfg = opts.groundShadow === true ? {} : opts.groundShadow;
-      this.groundShadow = makeShadowBlob(cfg.rx ?? 0.44, cfg.rz ?? 0.4, cfg.alpha ?? 0.34);
+      this.groundShadowAlpha = cfg.alpha ?? 0.34;
+      this.groundShadow = makeShadowBlob(cfg.rx ?? 0.44, cfg.rz ?? 0.4, this.groundShadowAlpha);
       this.groundShadowZBias = cfg.zBias ?? 0;
       parent.add(this.groundShadow);
     }
@@ -356,7 +367,29 @@ export class Billboard3D {
     return this.tinted;
   }
 
+  /**
+   * A opacidade do corpo — E A DA SOMBRA DELE JUNTO.
+   *
+   * O blob de contato tem material próprio, então ele não seguia o alpha do sprite: um corpo que
+   * apagava (o herói entrando na escada, um sumiço qualquer) deixava para trás uma sombra cheia,
+   * plantada no chão e sem dono. Ela escala pela escuridão CHEIA que o dono pediu no nascimento,
+   * nunca por uma soma sobre o valor atual — senão dois `setAlpha` seguidos a apagariam de vez.
+   */
   public setAlpha(a: number): this {
+    this.alpha = a;
+    return this;
+  }
+
+  /**
+   * A PISCADA, e so ela: mexe no sprite e deixa as sombras em paz.
+   *
+   * Piscar nao e sumir. O blob de contato e a ancora de POSICAO do corpo — e a mesma razao pela
+   * qual a piscada de dano nunca vai a zero ("um bicho invisivel nao se acerta") vale para a
+   * sombra dele: um blob que apaga cinco vezes em 450ms faz o bicho tremer de lugar bem no
+   * momento em que o jogador precisa saber onde ele esta. `setAlpha` e para o corpo que
+   * desaparece; isto e para o corpo que lampeja.
+   */
+  public setBlinkAlpha(a: number): this {
     this.mat.opacity = a;
     return this;
   }
@@ -398,8 +431,28 @@ export class Billboard3D {
   public get elevation(): number { return this.elev; }
   public set elevation(v: number) { this.elev = v; this.apply(); }
 
-  public get alpha(): number { return this.mat.opacity; }
-  public set alpha(v: number) { this.mat.opacity = v; }
+  /**
+   * A OPACIDADE DO CORPO — e a das sombras dele junto.
+   *
+   * A regra mora no SETTER e nao em `setAlpha` porque este par de propriedades e a porta de
+   * entrada de verdade: metade do jogo apaga um sprite com um tween do Phaser
+   * (`tweens.add({ targets: bb, alpha: 0 })`), que escreve aqui e nunca chama o metodo. Com a
+   * regra so no metodo, todo sumico tweenado continuaria deixando a sombra para tras — que era
+   * exatamente o defeito.
+   *
+   * O blob escala pela escuridao CHEIA que o dono pediu no nascimento, nunca sobre o valor
+   * atual: composto, dois `alpha` seguidos o apagariam de vez. A silhueta projetada le
+   * `bodyAlpha` la no World3D, pelo mesmo motivo.
+   */
+  public get alpha(): number { return this.bodyAlpha; }
+
+  public set alpha(v: number) {
+    this.bodyAlpha = v;
+    this.mat.opacity = v;
+    if (this.groundShadow) {
+      (this.groundShadow.material as THREE.Material).opacity = this.groundShadowAlpha * v;
+    }
+  }
 
   public get scaleX(): number { return this.w; }
   public set scaleX(v: number) { this.w = v; this.apply(); }

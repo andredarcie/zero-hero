@@ -6580,3 +6580,1441 @@ conserto NÃO é ressuscitar a parede: é o calor matar mais rápido perto da le
 Guarda: `brasa`, com a geometria refeita — a caveira agora NASCE a quatro tiles (100% segura ali),
 CAMINHA até o herói colado na fogueira e pega fogo ao chegar a dois. O teste deixou de empurrar
 alguém para o fogo e passou a deixar o bicho fazer o que ele sempre faz, medindo o preço.
+
+## Progressão das cartas do gato (2026-08-19)
+
+Pedido: ativar todas as cartas do gato, colocar todas por 1 moeda e só mostrar cartas de puzzle
+depois que todas as cartas do gato forem compradas.
+
+- As 13 cartas `cat-*` do `public/world.json` estão ativas e custam 1 moeda. Os três geradores que
+  podem reescrevê-las (`add-npc-chunks`, `make-cat-lessons` e `make-cat-tutorials`) e a tabela de
+  preço do prólogo receberam a mesma regra para uma regeneração futura não desfazer o ajuste.
+- `ExplorerWorldSource.catalog()` mantém cartas `cat-*` elegíveis independentemente da categoria;
+  puzzles que não são do gato ficam fora do catálogo até `catCardsRemaining()` chegar a zero.
+  Essa exceção evita o bloqueio circular, porque quase todas as próprias aulas do gato são puzzle.
+- `render_game_to_text` agora expõe `builder.progression.catCardsRemaining` e
+  `builder.progression.puzzleCardsUnlocked`.
+- Cenário dedicado `cat-cards` adicionado: valida dados autorados, mão inicial a 1 moeda, compra
+  única das 13 cartas, instante exato do desbloqueio e mão visual dos puzzles comuns.
+
+Validação concluída: `npm run typecheck`, ESLint direcionado e `npm run build` passaram. O cliente
+Playwright da skill confirmou `catCardsRemaining: 13`/`puzzleCardsUnlocked: false` no boot e
+renderização normal do acampamento. O cenário headed `npm run playtest -- cat-cards` passou todas
+as asserções, sem erro de página, no run `run-2026-08-19T11-55-49`. As duas capturas foram
+inspecionadas: a primeira mostra três cartas do gato (narrativa, combate e puzzle) por 1 moeda; a
+segunda mostra somente `Whispering Forest` e `Blooming Grove` depois da 13ª compra.
+
+TODO: nenhum para esta mudança.
+
+## Mundo aberto 5×5 (2026-08-19)
+
+Pedido: remover as cartas e a compra de terrenos; deixar um pequeno mundo aberto pronto e editável.
+
+- `public/world.json` agora é um mundo autorado contínuo de 5×5 chunks. Os 25 chunks existentes foram reposicionados na grade, com a clareira/fogueiras iniciais no chunk central.
+- O título, o atalho de desenvolvimento e o playtest do editor iniciam diretamente esse mundo; não há mais portões, oferta de cartas, custos ou compra no fluxo de jogo.
+- O editor continua editando `public/world.json`; a ação de mundo informa e preserva a grade fixa 5×5, e o painel de biblioteca de cartas foi removido da interface.
+- Os módulos de explorer/cartas e o stylesheet das cartas foram removidos; o schema do mundo não aceita mais metadados de catálogo.
+
+Validação: `npm run typecheck` e `npm run build` passaram. O lint de `src` foi corrigido; o lint global ainda encontra erros preexistentes de configuração/arquivos em `scripts/` e `spritefactory/`.
+
+TODO: rodar o playtest visual do mundo e do editor após a conversão.
+
+## Remoção da fábrica automática e da caixa de correio (2026-08-19)
+
+Pedido: remover completamente o bloco inspirado em Factorio (energia, esteiras e extração/
+movimentação automática de recursos) e a caixa de correio usada para vender itens.
+
+- Escopo auditado: bateria, engrenagem, cabos, caldeira, roda d'água, esteira, braço robótico,
+  extrator, baú de linha, martinete automático, portão elétrico, circuito de placa/caixote e
+  despacho aéreo/caixa de venda.
+- Fabricação manual permanece: bancada, forno, altar, minério, esponja, ferro e carvão ainda
+  sustentam ferramentas e a cadeia manual do ferro.
+- Removidos do runtime e do editor: bateria, engrenagem, cabos, caldeira, roda d'água, esteira,
+  braço robótico, extrator, baú de linha, martinete automático, portão elétrico, circuito de
+  placa/caixote e despacho aéreo/caixa de venda.
+- Bancada, forno e altar permanecem exclusivamente manuais. Itens deixados no chão junto deles
+  não são mais puxados nem processados automaticamente.
+- A biblioteca ativa, levels, dungeons, geradores, tipos, depuração, sons, imagens exclusivas e
+  cenários industriais foram limpos. As duas cartas de gato industriais foram removidas; restam
+  11 cartas ativas a 1 moeda, mantendo o bloqueio das cartas comuns até comprar todas elas.
+- Saves antigos descartam com segurança os tipos aposentados. Os arquivos apagados continuam
+  recuperáveis pelo histórico do Git. O overworld arquivado não foi alterado.
+- Regressão nova: `sem-fabrica` comprova ausência do bloco aposentado, ausência de consumo pelo
+  chão e funcionamento da fabricação manual. Passou em `run-2026-08-19T15-23-26`.
+- `cat-cards` passou em `run-2026-08-19T15-24-16`; `altar`, em
+  `run-2026-08-19T15-23-49`; e o prólogo completo, em `run-2026-08-19T15-31-38`.
+- Validação: auditoria de dungeons, typecheck, lint de `src` e build passaram. O lint global ainda
+  encontra 58 erros preexistentes de configuração nos scripts e no spritefactory.
+
+Este registro substitui, no estado ativo do jogo, as entradas históricas posteriores sobre
+despacho aéreo e caixa de correio.
+
+TODO: nenhum para esta mudança.
+
+## Despacho aéreo em todas as cartas do gato (2026-08-19)
+
+Pedido: 100% dos mapas do gato precisam ter o prop que chama o avião, e a caixa deve aceitar o
+produto que o jogador ganhou naquela aula — por exemplo, machado derruba a árvore, árvore gera
+graveto, graveto vai para a caixa.
+
+- As 13 cartas `cat-*` agora têm exatamente uma `sellBox`, sempre no tile local `(4,10)`, fora das
+  quatro costuras. A placa ocupa `(3,10)` e ambos os tiles ficam livres de entidades/decoração.
+- O vínculo de produto ficou autorado na própria caixa: Hearths/Kindling vendem carvão, Woodpile
+  vende graveto, Quarry vende minério, Furrow vende sementes e as oito aulas cujo prêmio final é
+  a barra vendem ferro. Preços seguem a economia existente: 1/2/3 moedas.
+- Os 12 levels correspondentes (`level-5` a `level-16`) receberam a mesma caixa. Os três geradores
+  foram atualizados para uma regeneração não apagar os vínculos; os antigos balcões de venda por
+  diálogo das aulas de tocha/picareta foram removidos em favor do despacho físico.
+- As falas agora apontam a caixa, o balão e o avião. `render_game_to_text` passou a expor
+  `sellBoxes`, `sellOverlayOpen` e `groundCoins`, incluindo produto, preço e fase do voo.
+- Cenário dedicado `cat-airlift`: audita as 13 cartas e os 12 levels, compra `Cat's Woodpile`,
+  despacha dois gravetos, observa a subida e cobra duas moedas físicas durante a passagem do avião.
+
+Validação concluída: `npm run typecheck`, ESLint direcionado e `npm run build` passaram. O lint
+global continua bloqueado por 58 erros preexistentes de configuração/arquivos em `scripts/` e
+`spritefactory/`; o único erro novo encontrado no primeiro passe foi corrigido. O cenário headed
+`npm run playtest -- cat-airlift` passou todas as asserções, sem erro de página, no run
+`run-2026-08-19T12-15-50`. As quatro capturas foram inspecionadas: caixa/placa do graveto, painel
+de duas unidades, carga subindo e sombra do avião com as moedas caindo. O cliente Playwright da
+skill também rodou duas iterações, produziu estado textual e capturas sem arquivo de erros.
+
+TODO: nenhum para esta mudança.
+
+## Remoção das botas de lava (2026-08-19)
+
+Pedido: remover completamente o item que permitia andar sobre lava, pois a travessia já pertence
+à pedra lançada no rio de lava.
+
+- `lavaBoots` saiu dos tipos de pickup/item, mochila, editor, manifestos 2D/3D, protótipo e textos.
+  Os três PNGs exclusivos foram removidos.
+- O herói sempre consulta água/lava como sólidos. A exceção genérica `hazardsPassable` continua
+  existindo apenas para voadores; uma pedra assentada transforma o tile de lava em chão.
+- A carta `Workman's Ford` agora entrega uma pedra e ensina `pedra → basalto`; o ferro na ilhota
+  continua alcançável pelo degrau permanente. O gerador da carta espelha essa versão.
+- Saves antigos são migrados ao carregar: botas são descartadas da mochila, seleção, chão, baús,
+  retratos de dungeon e lista de itens já vistos, evitando referências a uma arte aposentada.
+- O gerador do antigo level encadeado e seu roteiro de playtest trocaram a bota por uma segunda
+  pedra: a primeira abre o plug e a segunda abre a entrada do quarteirão de lava.
+- Cenário `lava-pedra` adicionado para provar a sequência completa: lava bloqueia, a pedra é
+  consumida, o basalto assenta, `render_game_to_text` acompanha o estado e o herói atravessa.
+
+Validação concluída: `npm run typecheck`, ESLint direcionado e `npm run build` passaram. O cenário
+headed `npm run playtest -- lava-pedra` passou todas as asserções, sem erro de página, no run
+`run-2026-08-19T12-42-52`. As três capturas foram inspecionadas: lava viva bloqueando, coroa de
+basalto assentada e herói em cima do novo chão. O cliente Playwright da skill rodou duas iterações,
+gerou estado textual coerente e duas capturas sem arquivo de erro; ambas também foram inspecionadas.
+
+TODO: nenhum para esta mudança.
+
+## Caixa de correio aceita qualquer item configurável (2026-08-19)
+
+Pedido: permitir que a caixa de correio/extração aceite qualquer item que possa ser configurado.
+
+- O seletor do editor deixou de usar a lista manual de oito materiais e agora deriva suas opções
+  dos 27 itens estáveis do inventário: ferramentas, recursos, sementes e máquinas podem ser o
+  produto pedido pela caixa.
+- Espada permanente, balde cheio e bateria carregada ficam fora porque não são produtos autoráveis
+  independentes. A lista nasce do `GROUND_VISUAL`, já exaustivo sobre `HeldItemKind`; portanto item
+  novo com arte entra automaticamente no seletor, sem uma segunda lista para esquecer.
+- Cenário `caixa-correio` adicionado: audita todas as 27 opções, configura uma picareta (proibida
+  pela lista antiga), joga o mapa em memória, abre o despacho, consome a ferramenta e cobra duas
+  moedas físicas do avião.
+
+Validação concluída: typecheck, ESLint direcionado e build passaram. O cenário headed
+`npm run playtest -- caixa-correio` passou todas as asserções, sem erro de página, no run
+`run-2026-08-19T13-11-04`. As três capturas foram inspecionadas: configuração da picareta no
+editor, painel oferecendo duas moedas e passagem do avião com o pagamento. O cliente Playwright
+da skill também rodou duas iterações; estado textual e capturas foram inspecionados e não houve
+arquivo de erros de console.
+
+TODO: nenhum para esta mudança.
+
+## O DIA (2026-08-19)
+
+Pedido: "hoje o jogo tem a noite, faça tmb uma versão de dia com sol."
+
+### O que ele é
+
+Uma CHAVE, não um ciclo: `hd3d.daylight` (0 = a noite autorada, 1 = o dia de sol). Três portas
+para ela — `?day` / `?night` na URL (mandam nesta carga, sem gravar), um botão no menu de pausa
+("Daylight" / "Nightfall", rotulado pela AÇÃO como o de fullscreen) e o próprio knob no console. A
+escolha é gravada em `zh.daylight` (`runtime/graphicsSettings.ts`, ao lado do DoF) porque o
+`World3D` nasce de novo a cada `scene.restart()` — se ela morasse no renderizador, MORRER devolvia
+o jogador à noite.
+
+Interpolar entre os dois (um amanhecer) foi descartado por custo, não por gosto: a alpha e o
+comprimento da sombra projetada re-ASSAM o campo instanciado dos sólidos, e um lerp por frame seria
+uma re-assadura por frame. Seco, a troca custa uma re-assadura e nada mais.
+
+### A noite não mora no preset
+
+`render3d/skyPreset.ts` guarda só o DELTA (`DAY_SKY`). A noite continua sendo o padrão do
+`World3DParams` — cada número dele foi escolhido a olho contra o escuro — e `applySky` CAPTURA
+esses valores de fábrica na primeira passagem para saber para onde voltar. Um preset "night"
+escrito à mão seria uma segunda cópia da noite, e as duas divergiriam no primeiro knob que alguém
+mexesse lá em cima.
+
+### O sol é a lua
+
+A lei mais cara da casa manda: nada pode criar nem destruir uma luz THREE em runtime (o three assa
+a CONTAGEM de luzes na chave de cache de todo shader). Então o sol **é** a mesma `DirectionalLight`
+que enche a noite, de roupa trocada — mesma posição, mesmo rumo, mesma classe. `moonCastRotY` não
+se mexe: o sol deste jogo nasce no quadrante em que a lua se põe. Nenhum shader recompila ao virar
+o dia; o que muda são vinte números e dois uniforms.
+
+### Por que a cor do sol quase não sobreviveu
+
+`lightCap` limita a luz DIRETA a `albedo × cap − ambiente`, e a ambiente já gasta a maior parte
+disso. A primeira tentativa (ambiente forte e azul, "o céu") estourava o teto sozinha, a direta era
+zerada e o mundo saía AZUL CHAPADO — dia nenhum. Por isso a ambiente do dia é quase neutra
+(`#c8ccd0` a 7.6) e o teto sobe junto (2.35): sobra espaço para o sol (`#ffdfa0` a 3.6) pintar, e o
+chão aberto sai em ~(2.33, 2.15, 1.85)× a cor da própria arte contra os ~1,55 quase neutros da
+noite. É o r > g > b que faz ler como "batido de sol"; só brilho seria a noite com o volume alto.
+
+O teto ficou um fio acima do total de propósito. Ele é por canal, então toda folga que sobrar é
+folga que a fogueira preenche — e como ela sobra mais no azul (o canal que o sol menos usou), muita
+folga acenderia um anel FRIO em volta do fogo ao meio-dia. `hd3d.lightCap` aperta ou alarga esse
+anel; junto com `hd3d.bloomThreshold` (0.92 no dia), é o par a mexer se o dia estourar.
+
+### A sombra fria vem do POST, não da luz
+
+Não há shadow map neste jogo: a sombra projetada é um decalque no chão. Então o contraste
+quente/frio de um dia de sol — luz dourada, sombra azul — não pode vir da iluminação; ele vem do
+split-tone do grade, que já era autorado frio nas baixas. O dia só pede mais dele (`grade` 0.36,
+`saturation` 1.24). E como a sombra é o ÚNICO desenho que aponta para o sol, ela endurece e
+encurta: alpha 0.22 → 0.40, comprimento 2.1 → 1.25. A lua insinuava; o sol crava.
+
+### O que foi subtraído, e o que trocou de cor
+
+A fogueira recua sem deixar de existir (ela é a fechadura do jogo e o sprite da chama continua
+aceso): intensidade, halo, silhueta e raios encolhem JUNTOS — se só um encolhesse, sobraria uma
+fogueira que não ilumina nada mas ainda risca o chão de sombras compridas. O vaga-lume é o caso
+limpo: ao meio-dia ele não fica mais fraco, ele não acontece. A vinheta abre.
+
+Três coisas que eram cravadas em arquivo e precisaram virar dois valores — e é este o padrão que
+qualquer luz nova tem de seguir:
+
+- **A faísca da água** (`pixelArtLight`) era o literal frio da lua. Virou `waterGlintUniform` /
+  `hd3d.glintColor`: a mesma cintilação, outra estrela (branco-quente de dia).
+- **A mortalha do explorador** (`ChunkShroud3D`) é mais FUNDA que o céu da noite, e é assim que ela
+  lê como matéria em vez de buraco de framebuffer. De dia ela tem de ser mais CLARA que o céu pela
+  mesma razão; a paleta noturna acesa num mundo de dia devolvia exatamente o buraco preto que os
+  quatro tons existem para evitar. Duas paletas em `mix` por uniform — sem recompilação.
+- **O piso do `lightLevelAt`** era 0. A conta só conhece a chama, o que está certo à noite, mas ao
+  meio-dia devolvia 0 no campo aberto e a espada (desenhada no canvas Phaser, ACIMA do 3D, sem luz
+  nenhuma) saía como um borrão escuro sobre um mundo batido de sol — o "branco estourado" ao
+  contrário. O sol não tem posição a consultar, então ele é um PISO (0.82, não 1: a fogueira
+  precisa continuar tendo para onde subir).
+
+### O que NÃO mudou, de propósito
+
+- A flor da lua fecha para o FOGO perto dela, nunca para a claridade do mundo. Ela continua a
+  mesma fechadura de dia — mudar isso seria mexer em puzzle, e o pedido era de luz.
+- `LIGHT_RADIUS_TILES` (cova calada, cerco, caveira × placa acesa) é distância de fogueira, não
+  luz de cena: a economia de inimigos é a mesma nas duas horas.
+- Os raios de deus continuam saindo da fogueira mais próxima, só que fracos (0.18). Raio de sol
+  atravessando a copa seria um sistema novo, não um knob.
+
+Validação: `npm run typecheck`, ESLint dos arquivos tocados e `npm run build` passaram. Nada foi
+jogado no navegador — o usuário testa.
+
+TODO: olhar o dia com os olhos e afinar. Os knobs, em ordem de impacto: `hd3d.lightCap`,
+`hd3d.exposure`, `hd3d.skyColor`/`fogDensity`, `hd3d.moonShadowAlpha`/`moonShadowLength`.
+
+### Revisão do dia: a premissa errada (2026-08-19)
+
+"O dia ainda não parece dia." A primeira versão subiu a luz ~25% e trocou as cores; na tela isso
+não moveu quase nada. A causa não estava em nenhum número:
+
+**ESTE JOGO NÃO TEM TONE MAPPING.** O `RenderPass` desenha o mundo num render target, e o three só
+monta o ACES quando o alvo é a TELA (`WebGLPrograms.getParameters`: com um alvo ligado, o
+`toneMapping` fica em `NoToneMapping`). O `EffectComposer` não tem `OutputPass` e o `FinishShader`
+é um ShaderMaterial cru. Logo o valor LINEAR do buffer vai direto para o canvas, que o mostra como
+se fosse sRGB — e **`params.exposure` não chega a shader nenhum**: ele é um knob morto desde que a
+cadeia de post existe. (Ele foi deixado como está: mexer ali mudaria a noite, e a noite não estava
+em discussão.)
+
+Isso explica tudo o que parecia estranho: por que a `ambient` precisou de 8,5 para o mundo ficar
+legível, por que a noite lê tão funda e contrastada, e por que o `lightCap` foi inventado — sem
+curva nenhuma, 1,0 é um corte seco, e a cabeça do machado de aço virava 4.000 pixels de branco.
+
+E explica por que subir a luz não vira dia: multiplicação clareia pouco a sombra (0,10 × 1,7 ainda
+é escuro) e estoura o branco depressa. **O lugar de levantar um quadro é a CURVA, não a lâmpada.**
+
+Então nasceu `params.lift` (`hd3d.lift`): um `pow` no quadro pronto, dentro do `FinishShader`.
+Monótono, leva 1 em 1, e abre justamente os graves — que é onde a diferença entre meio-dia e
+meia-noite mora. A noite fica em 1, que é a identidade literal: o `if` do shader nem roda, e ela
+não muda um bit. O dia usa 0.62, e com isso um tile de capim sai em ~#144E0A à noite e ~#5FA466 de
+dia, sem um único pixel novo estourado. Ele entra DEPOIS do split-tone de propósito — levantar
+antes faria o quadro inteiro ser classificado como "luz" pelo grade, e o dia perderia a sombra
+azul que é metade do que o faz parecer dia.
+
+Com a curva no lugar, o resto do preset foi refeito ao contrário do que a v1 dizia:
+
+- A **ambiente DESCEU** (8.5 → 6.0). Quem clareia agora é a curva; o trabalho da ambiente passou a
+  ser deixar folga no teto para o sol existir. Com o teto em 1.95 nenhum canal é cortado, e é isso
+  que faz o r > g > b do sol finalmente chegar à tela — a v1 tinha a soma encostada no teto e
+  entregava um cinza-claro chapado.
+- O **fog do dia ficou mais DENSO que o da noite** (0.045 contra 0.02), não menos. A câmera olha
+  48° para baixo e o horizonte nunca entra no quadro: o ponto mais fundo da tela está a ~12
+  unidades, e com a densidade da noite isso dá 6% de névoa — invisível. Os 0.045 põem ~27% de azul
+  pálido no topo do quadro, onde o tilt-shift já derrete tudo, e a distância deixa de ser "chão
+  escuro" e vira AR.
+- A **sombra projetada dobrou** (alpha 0.22 → 0.55, comprimento 2,1 → 1,0). Sem shadow map, o
+  decalque no chão é o único desenho que aponta para a luz do mundo: a lua insinuava, o sol crava.
+- O **grade ganhou par próprio** (`GRADE_DAY_SHADOW`/`GRADE_DAY_HIGH`): sombra azul-céu franca
+  contra luz dourada, com força quase dobrada — a curva comprime razões, então um tom de 1,18×
+  chega à tela como 1,10×.
+- **Vinheta, grão e bloom** foram tratados como o vaga-lume já tinha sido: são desenhos do ESCURO,
+  e ao meio-dia eles não se atenuam, eles somem.
+
+Validação: typecheck, ESLint e build passaram. Não foi jogado no navegador — o usuário testa.
+
+TODO: o knob a mexer primeiro agora é `hd3d.lift` (menor = mais dia; abaixo de ~0.5 lava o preto),
+depois `hd3d.fogDensity` e `hd3d.moonShadowAlpha`. `hd3d.exposure` continua não fazendo nada — se
+um dia alguém quiser ACES de verdade, o caminho é um `OutputPass` no fim do composer, e isso muda
+a noite inteira.
+
+### Revisão 2 do dia: o leite, e o ouro (2026-08-19)
+
+"Ficou bem melhor, mas parece uma neblina branca — faça algo como um dia de sol, mais amarelado."
+
+Duas fontes de leite, e as duas eram a mesma armadilha: clarear o quadro sem devolver nada.
+
+- **O fog.** A v2 subiu a densidade a 0.045 com um azul quase branco (`#bdd9ec`, linear
+  ~(0.51, 0.69, 0.84)) para comprar "ar". Misturado 27% no topo do quadro e 12% em volta do herói,
+  ele **mais que dobrava o azul de cada pixel** — era ele a neblina, literalmente. Agora é metade
+  da densidade (0.026) e a cor virou DOURADA (`#c7b389`): um dia de sol tem poeira no ar, não
+  vapor. O pouco de fog que resta passou a trabalhar A FAVOR do amarelo em vez de contra ele.
+- **O bloom.** Este eu não tinha visto. Com o mundo 1,26× mais claro e o limiar em 0.95, metade da
+  arte passou a ficar acima da linha, e o halo do `UnrealBloomPass` virou um véu leitoso sobre a
+  tela inteira. O limiar subiu para 1.05 — acima de qualquer superfície iluminada, já que o teto é
+  2.0 — e a força caiu para 0.10. Ao meio-dia não há halo.
+
+E o que faltava do outro lado: **a curva dessatura e lava o preto.** `pow` comprime razões entre
+canais (uma razão de 1,24× chega à tela como 1,15×) e levanta o pé do quadro. Ela precisa de dois
+pares fixos, e a v2 não tinha nenhum deles direito: `contrast` (1.14) devolve o preto — uma sombra
+funda caiu de 31 para 17 na tela — e `saturation` (1.32) devolve a cor. Sem os dois, "mais claro"
+é sempre "mais leite". O `lift` também recuou um pouco, de 0.62 para 0.66.
+
+**O amarelo vem de três lugares empurrando a mesma cor**, porque um só não sobrevive à curva:
+
+1. **A proporção da luz.** A ambiente desceu de novo (6.0 → 5.0) e o sol subiu (3.4 → 4.25, e mais
+   dourado: `#ffd486`). O total mal se mexe — a troca não é de brilho, é de PROPORÇÃO. A ambiente é
+   quase branca e o sol é o único ouro do mundo, então cada ponto que passa de uma para o outro é
+   amarelo que chega à tela. Uma ambiente gorda é a cor errada ocupando o orçamento. Chão aberto
+   agora em ~(1.96, 1.64, 1.33)× a arte: razão 1 : 0,84 : 0,68.
+2. **O split-tone**, com o par do dia puxado para o extremo (`GRADE_DAY_HIGH` 1.24/1.06/0.72) —
+   extremo porque a curva come tinta, não porque o dia seja estilizado.
+3. **O fog dourado** acima.
+
+Uma superfície neutra e iluminada chega à tela em ~1 : 0,83 : 0,62 — ouro de fim de tarde.
+
+A vinheta voltou a um sopro (0.06): sem nenhuma, o quadro deixa de ser uma fotografia. E a névoa
+rasteira caiu para 0.45 — ela é aditiva, e de dia soma em cima de um chão já claro.
+
+Validação: typecheck, ESLint e build passaram. Não foi jogado no navegador.
+
+TODO: se ainda faltar amarelo, o knob é `hd3d.moonColor` (o sol) e depois `hd3d.grade`. Se voltar a
+lavar, é `hd3d.contrast` para cima ou `hd3d.lift` para 0.72.
+
+## O CERCO ACABOU: inimigo só nasce onde o autor cavou (2026-08-19)
+
+Pedido: "o undead apareceu em um lugar que eu nunca coloquei". Não existe mais spawn automático de
+undead — longe do fogo ou perto dele. Onde a cova for colocada no editor, é onde o corpo nasce; se
+não colocar, não aparece nada.
+
+### A causa
+
+Havia DUAS fontes de corpo, e só uma era autorada:
+
+- a **cova** (`EnemySpawnerManager`, aba Inimigos): tile fixo, escolhido a mão;
+- o **cerco** (`UndeadSpawnDirector`): um medidor de perigo que enchia enquanto o herói demorava
+  fora da luz e fazia caveiras subirem num anel de **4 a 7 tiles em volta dele** — em qualquer
+  tile aberto, escuro e alcançável. Foi ele que pôs a caveira onde ninguém a pôs.
+
+O cerco ficava desligado só no lab e em mundo-puzzle (`meta.puzzle`) — ou seja, ligado exatamente
+no overworld autorado 5×5, que é onde se joga. E a justificativa dele morreu antes: a pressão que
+crescia com a distância era do **explorador**, que já foi removido do jogo. Não sobrou modo nenhum
+que quisesse pressão sem lugar.
+
+### O que saiu
+
+`UndeadSpawnDirector.ts` inteiro, e com ele tudo que só existia para servi-lo:
+
+- `GameScene.canSpawnUndeadAt` e o flood-fill `undeadReachableTiles` (alcançabilidade medida a
+  partir do herói — a cova nunca a usou, porque quem escolheu o tile foi o autor);
+- a **vinheta de perigo**: ela desenhava o medidor do cerco, e sem medidor não desenhava nada.
+  `World3D.setDangerVignette` continua lá (é o post, e é por onde qualquer vinheta futura entra) —
+  quem a exercita agora é o `hd2d-fx`, direto na API;
+- `isPuzzleWorld()`, que só existia para desligar o cerco. `meta.puzzle` continua no schema e nos
+  arquivos; ninguém mais o lê em runtime;
+- `safety.danger` do `render_game_to_text` (o campo media o medidor que não existe mais).
+
+### O contrato que ficou, em uma frase
+
+**O corpo nasce NO TILE AUTORADO, nunca perto dele.** Não há busca por vizinho livre: se o tile não
+servir agora (sólido, aceso por fogueira, ocupado, herói em cima), a cova **espera** o próximo
+frame. Ela acorda a 14 tiles do herói (`DETECTION_RANGE`), faz um corpo por vez e outro 25s
+(`ENEMY_RESPAWN_MS`) depois que aquele cai.
+
+Duas coisas continuam parecendo spawn fantasma e não são: o corpo **anda** depois de nascer (a
+caveira caça a 14 tiles), e um corpo que se afaste mais de 18 tiles do herói é despejado em
+silêncio (`DESPAWN_DISTANCE_TILES`) — a cova lê isso como "caiu" e entra nos 25s.
+
+**As dungeons GERADAS continuam pondo covas pela semente** (`dungeonBuild.ts`): lá a planta inteira
+é gerada, então as covas nascem com ela. Editar essas covas à mão é `?dungeons=static` + `/lab`.
+
+### O que guarda
+
+`inimigos` (a cova que nasce, a que a fogueira acesa cala e a que devolve o corpo), `fauna` (o
+bestiário andando), `hd2d-fx` (o uniforme da vinheta, agora dirigido pela API) e `visual-ref` (que
+zerava o cerco à mão para a foto não tremer — não precisa mais).
+
+Validação: `npm run typecheck`, ESLint nos arquivos tocados e `npm run build` passaram. Playtests
+por conta do autor (lei da casa).
+
+TODO: nenhum.
+
+## A PIRA — o prop que o jogador CONSTRÓI (2026-08-19)
+
+Pedido: um prop que é uma pira, que depende de gravetos para ser montada aos poucos, que começa só
+com a base e sobe formando uma torre, e que só aceita fogo quando termina de ser montada. Versão
+MVP, no meio do mapa.
+
+### O que ela é
+
+`pyre` (`src/game/objects/PyreObject.ts`), autorada no editor como qualquer prop. Nasce só com a
+BASE — laje de pedra e berço de vigas cruzadas — e bloqueia o tile desde sempre. Cada graveto
+entregue com o X assenta uma TORA; cada duas toras fecham uma camada, girada 90° em relação à de
+baixo (o empilhamento de cabana) e um pouco mais curta que ela, então a torre afina e **o quanto
+falta é uma leitura, não um número**. Fechada em `PYRE_LOGS_REQUIRED` (6, no MVP), ela aceita a
+TOCHA ACESA: o fogo sobe do berço ao topo em 900ms e a chama fica lá em cima.
+
+### Caixas 3D, não sprite
+
+A torre é geometria de verdade (`world3d.addBox` com as texturas de `woodTexture`/`stoneTexture`),
+a mesma carpintaria da ponte. Duas razões: a lei de que nenhum sprite pode vazar do seu tile — uma
+torre desenhada num quad é o adesivo que a montanha deixou de ser quando virou cubo — e o fato de
+que crescer em N passos, em flipbook, seriam N frames de arte que nunca alinham entre si. Em caixas,
+crescer é acrescentar caixas: **nenhuma arte nova entrou no repositório**. A chama é o flipbook da
+fogueira em escala de torre, e a luz sai do pool fixo (`addFireLight`), como a de qualquer fogueira.
+
+### As três regras que ela NÃO herda da fogueira
+
+- **Não é combustível.** Ela não entra em `igniteFlammableAt` e não espalha fogo. Se entrasse, um
+  incêndio no mato terminaria o jogo sozinho — e o campo de lava está a três chunks. Acender é um
+  gesto, nunca um acidente.
+- **Não tem volta.** O balde não a apaga e ela não se desmonta.
+- **O graveto ACESO nunca vira tora.** A chama é a ferramenta de acender; queimar a própria carga
+  seria o gesto se contradizendo. Torre crua com a tocha na mão RECUSA — e a recusa é física
+  (tremor + serragem), nunca legenda: o que falta está escrito na altura da torre.
+
+### O save, que é a diferença entre um prop e um objetivo
+
+A ponte construída **não** entra no save e ninguém sentiu, porque ela custa dois gravetos. A pira
+custa viagens: se a morte apagasse a torre, o objetivo do jogo seria uma punição. Por isso
+`adventureState` ganhou `pyreLogs` (Map "x,y" → toras) e `litPyres` (Set), e `recordPyre()`
+persiste a CADA tora entregue. Fora da aventura (level, lab) ela sempre começa da base — zerar lá é
+o desenho.
+
+### Onde ela está
+
+`node scripts/add-pyre.mjs` plantou uma em **(30,30)**, o centro geométrico do mundo 5×5 — o script
+LÊ o `world.json` e acrescenta (nunca reescreve), é idempotente, faz backup e recusa o tile se
+houver colisão, prop ou entidade ali. O `--check` falha se a pira sumir do disco.
+
+### O que ficou de fora deste MVP, de propósito
+
+- **O amanhecer.** Acender a pira ainda não vira o dia (`hd3d.daylight`). O final é outro trabalho,
+  e tem uma armadilha própria: se "dia" for tratado como luz, ele apaga o bestiário inteiro no
+  instante em que o jogador vence.
+- **A torre no horizonte.** Ela ainda não é visível de outras telas — que é, para o objetivo do
+  jogo, a peça mais importante que falta.
+- **Arte própria da base** (hoje ela é laje + vigas em caixas) e **cenário de playtest** (a partir
+  de agora cenário só quando o autor pedir — ver a lei nova no `CLAUDE.md`).
+
+### Como se vê funcionando
+
+Entrar pelo `?play`, ir ao centro do mapa, cortar madeira com o machado, e usar o X com o graveto
+apagado seis vezes de frente para a pira; depois acender o graveto numa fogueira e usar o X de novo.
+`gameDebug.getState().pyres` expõe `logs`/`missing`/`complete`/`lit` para conferir sem olhar.
+
+Validação: `npm run typecheck`, ESLint nos arquivos tocados e `npm run build` passaram. **O jogo não
+foi rodado** — os testes são do autor.
+
+TODO: o amanhecer e a torre visível do horizonte, quando ele quiser.
+
+## A MÚSICA PAROU DE ANUNCIAR O INIMIGO (2026-08-19)
+
+Pedido: a música não muda quando tem inimigo por perto — fica sempre no mesmo padrão.
+
+### O que existia
+
+Encenação à la Souls: `GameScene.update` trocava a trilha para `'danger'` (music-danger.wav) sempre
+que havia corpo vivo NO QUADRO e o herói estava fora da luz de fogueira, e voltava para a trilha do
+mundo (ou para o vento) depois de 4s de calmaria — a histerese existia para a trilha não piscar
+enquanto caveiras nasciam e caíam.
+
+### O que ficou
+
+A trilha é escolhida **uma vez**, no `create`: "Ashen Fields" na aventura de overworld, vento puro
+em dungeon, level e lab. Nada no `update` toca em música. Saíram junto `dangerCalmMs`, a chave
+`'danger'` do `MusicKey`/`TRACKS` e o `EnemyManager.framedAliveCount` — que existia só para
+alimentar essa decisão. O `music-danger.wav` continua no repositório, como o "Ashen Fields" ficou
+nos anos em que esteve desligado: revival fácil.
+
+**O gate de quadro continua inteiro** para o que importa (`EnemyBase.framed`): corpo fora da tela
+segue sem falar e sem iniciar golpe. O que caiu foi só o uso musical dele.
+
+### O que quase passou batido
+
+Diálogo, item-get e cutscene chamam `fadeMusicOut()`, que zera o BARRAMENTO de música — e
+`startMusic` é idempotente para a trilha já tocando, então ele **não** traria o som de volta. Se a
+volta dependesse do bloco que removi, o jogo ficaria mudo depois da primeira conversa. Não depende:
+cada uma dessas telas chama `fadeMusicIn()` ao fechar. O barramento é delas, a trilha é do `create`.
+
+### O que guarda
+
+`projeteis` — as duas asserções que cobravam a trilha de combate agora cobram o contrário: a
+trilha vista durante toda a seção é **uma só**, com a torreta fora e dentro do quadro.
+
+Validação: `npm run typecheck`, ESLint nos arquivos tocados e `npm run build` passaram. O jogo não
+foi rodado — os testes são do autor.
+
+TODO: nenhum.
+
+## A CAIXA DE FALA VOLTOU A SER TRADICIONAL (2026-08-20)
+
+Pedido: o diálogo no estilo tradicional — a mensagem no rodapé em vez de na lateral, **uma
+mensagem por vez**, e responsivo em PC e telefone.
+
+### O que existia
+
+Um painel à la Disco Elysium: uma coluna de altura inteira colada na borda DIREITA (50% da
+largura, teto de 640px) com o LOG da conversa rolando dentro dela, ancorado embaixo
+(`margin-top:auto`), e a câmera empurrando herói e NPC para o centro da METADE ESQUERDA para não
+ficarem debaixo do painel. Cada fala nova era um `<div>` a mais na pilha.
+
+### O que ficou
+
+Uma **barra no rodapé**, com moldura dupla (borda clara + anel escuro por `box-shadow: inset`), e
+UMA mensagem dentro dela: o retrato do NPC à esquerda, o nome em caps na cor dele, o texto ao
+lado. Narração continua sendo itálico apagado, agora com a caixa inteira para si (sem retrato,
+sem nome). O que estava escrito **some** quando a fala seguinte entra — não há mais log.
+
+A caixa é montada UMA vez e reescrita a cada fala. Recriar o quadro por linha faria a moldura
+piscar entre mensagens, e com uma mensagem por vez não há lista para crescer.
+
+**O menu do rodapé virou duas coisas.** O caso comum é uma saída só (continuar/fechar): ele não
+merece um menu de um item, então virou o **▼ que pisca** no canto da caixa, e o gesto é a caixa
+inteira (Z/Enter/Espaço, ou tocar nela). Quando há escolha DE VERDADE — o balcão do astronauta —
+abre uma **janela de escolha** com moldura própria, pousada sobre a caixa e alinhada à direita,
+que é onde ela sempre esteve nesse tipo de jogo. Com ela na tela, tocar a CAIXA não decide nada:
+escolher é apertar a escolha (a mesma lei que já valia para o caixa − n +).
+
+**O recibo da venda virou uma tela.** Ele e o "obrigado" eram duas linhas empilhadas no log e
+saíam encadeados, sem aperto no meio; com uma mensagem por vez isso faria o número que o jogador
+precisa conferir passar voando por baixo da fala seguinte. Agora o recibo espera um ▼.
+
+### O responsivo, e por que ele não é uma media query
+
+`dialogBoxMetrics(width, height)` em `constants.ts` devolve **altura, corpo da fonte e margem**, e
+é a mesma função que o DESENHO e a CÂMERA leem — a câmera enquadra herói e NPC no palco que sobra
+ACIMA da caixa, e duas contas diferentes fariam a fala tapar quem a diz.
+
+A altura sai da tipografia, não de uma fração da tela: é a placa do nome mais as linhas que a
+fala mais longa do jogo (177 caracteres, o gato explicando o forno) precisa NAQUELA largura.
+Medido no navegador, com a fala longa injetada na caixa:
+
+| tela | fonte | caixa | linhas usadas | sobra |
+|---|---|---|---|---|
+| 1280×800 | 20px | 132px | 2 | 0 |
+| 844×390 (deitado) | 18px | 137px | 3 | 0 |
+| 390×844 (em pé) | 13px | 135px | 4 | 0 |
+
+Uma altura única serviria mal aos dois extremos: barra vazia no monitor, texto cortado no
+telefone. `overflow-y: auto` no texto é a rede, não o plano.
+
+No dedo (`pointer: coarse`) a janela de escolha ocupa a largura inteira da caixa e os alvos
+crescem para ~44px; em tela estreita (≤560px) o retrato encolhe para o texto não virar uma coluna
+de duas palavras. A caixa se ancora pelo PÉ da tela com `env(safe-area-inset-bottom)`, senão a
+barra de gestos do telefone come o ▼.
+
+### O que quase passou batido
+
+O par A/B de toque e o botão da bolsa moram no MESMO rodapé que a caixa agora. Eles já estavam
+calados durante a conversa (`canAct`), mas continuavam desenhados espiando ao lado dela: saem de
+cena junto com a abertura do diálogo e voltam no fechamento, como já saíam quando a bolsa abre.
+
+### O que guarda
+
+`dialog` (a conversa que abre, datilografa e fecha) e `ferro` (o balcão inteiro: menu de duas
+opções, caixa − n +, recibo e recusa de mochila vazia). Os dois foram ajustados para a caixa
+nova: o recorte de foto `region: 'dialog'` do GameDriver virou a faixa de BAIXO, e o `ferro`
+espera pelo `▼` antes de avançar o recibo — esperar pelo texto pegaria a última letra ainda no
+ar, e o Enter viraria "pular", não "avançar". `prologo` lê `.zh-dlg-panel` e não precisou mudar.
+
+Validação: `npm run typecheck`, ESLint nos arquivos tocados e `npm run build` passaram, e a caixa
+foi FOTOGRAFADA nas três telas da tabela acima. A suíte é do autor.
+
+TODO: nenhum.
+
+## AS MISSÕES DOS NPCs — a estrutura, sem uma única tela (2026-08-20)
+
+Pedido: um NPC precisa que o herói faça uma tarefa específica para ativar um diálogo alternativo;
+cada NPC tem um conjunto de tarefas; o astronauta precisa de seis minérios. **E o sistema não
+aparece para o jogador** — é estrutura, não interface.
+
+### A forma
+
+Três peças, e a terceira é a única que o jogador encontra:
+
+* `src/game/dialogs/NpcQuests.ts` — **dado puro**: o vocabulário de tarefas e o baralho de
+  pedidos, um por ROTEIRO (`world.dialogs[id]`, não por espécie — o mesmo gato mora em três
+  cartas ensinando três coisas, e uma missão por espécie faria os três pedirem o mesmo).
+* `src/game/runtime/QuestLog.ts` — **os contadores**, e nada mais. Ele não conhece a mochila, o
+  inimigo nem a fogueira: quem viu a coisa acontecer chama `recordQuestEvent`, que é o único
+  caminho de entrada. "Cumprida" é DERIVADA da soma — não existe um segundo booleano de "fechou"
+  para discordar dela — e o contador só sobe.
+* `GameScene` — seis linhas, uma por evento, mais a escolha de roteiro.
+
+Sete tipos de tarefa, cada um com UM lugar no jogo que o alimenta: `deliver` (entregar ao NPC),
+`gather` (apanhar N), `craft` (fabricar N numa estação), `slay` (matar N de uma espécie), `light`
+(acender N fogueiras), `fell` (derrubar N pinheiros vivos) e `explore` (pisar em N telas). Tipo
+novo é uma linha no `type`, um `case` no `gain()` e uma chamada no lugar onde a coisa acontece.
+
+### Por que não tem tela
+
+Porque um diário de missões seria a legenda que este jogo passou anos arrancando (o balão de
+item-que-falta, a barra de vida do inimigo, a loja da fogueira). O único sinal de que a missão
+fechou é o NPC dizendo outra coisa — mais o "!" que ele já ganha por ter fala nova, que é a
+máquina de sempre e cai de graça: `dialogKeyFor` passou a chavear pelo roteiro FALADO, então
+cumprir um pedido reacende a marca. Isso obrigou o resto do desenho:
+
+**Todo pedido sai da boca do próprio NPC.** O gato diz "duas lareiras aqui estão frias" → acender
+2. O poeta diz "abra uma clareira no meu bosque" → derrubar 4 pinheiros vivos, que é o que o
+machado de aço (presente DELE) faz. A Morte termina com "volte e acenda alguma coisa" → 5
+fogueiras. O astronauta diz "a nave precisa de FERRO" → **6 minérios**. Um pedido que não
+estivesse na fala seria uma tarefa de planilha, e não haveria onde lê-la.
+
+**ENTREGAR É FALAR, e é TUDO OU NADA.** Não há botão de dar: quem pediu cobra na conversa, e a
+fala alternativa entra na MESMA conversa em que a carga é paga — a resposta chega junto com o
+preço. Mas ele só leva o pedido inteiro: com quatro dos seis minérios, o astronauta não encosta
+em nenhum. A primeira versão aceitava entrega parcial e estava errada pelo mesmo motivo que
+justifica não ter tela: sem diário, entrega parcial é **confisco silencioso** — a mochila
+esvaziaria ao passar perto de quem pediu, sem nada dizendo que aquilo virou progresso nem quanto
+falta. Isso também é o que mantém o cenário `ferro` de pé: ele leva 2 minérios até o astronauta,
+e 2 < 6, então nada acontece.
+
+### O que quase passou batido
+
+* **O contador mora no save da aventura** (`adventureState().questProgress`, chave
+  `<roteiro>/<tarefa>`, plana e derivada do CONTEÚDO — reordenar as tarefas de uma missão não
+  mexe no progresso de quem já está jogando). O funil `GameScene.questEvent` recusa fora da
+  aventura: `adventureState()` é um singleton de módulo, e um level ou uma corrida do explorador
+  somando contador escreveria na aventura de quem só foi jogar um puzzle.
+* **O MEDO vem antes da entrega.** NPC ao lado de fogueira apagada só sabe gaguejar (`lockedLines`)
+  — e receber seis minérios enquanto gagueja seria uma entrega que o jogador não vê acontecer.
+* **O mago é o único caso especial, e tinha de ser.** A fala alternativa dele disputa espaço com
+  uma HISTÓRIA (intro/protect/prophecy), então ela entra num beat só: o `protect`, que é o
+  opcional. O `intro` é a primeira fala de todas e o `prophecy` dispara o fim da introdução —
+  trocar qualquer um dos dois apagaria história que não volta.
+* **As falas de "depois" moram no `world.json`** (`<id>Done`, 9 roteiros), escritas por
+  `node scripts/add-npc-quests.mjs` — modelo enrich-*: lê, acrescenta, é ponto fixo (rodar duas
+  vezes é rodar uma) e tem `--check`. Cada roteiro alternativo NASCE do base (nome, cor, sprite,
+  voz e o BALCÃO): um NPC que trocasse de rosto ao cumprir a missão pareceria outro NPC, e o
+  balcão do astronauta não podia sumir porque a nave dele foi consertada. O script ainda CONFERE
+  o arquivo TS nos dois sentidos (toda fala é citada por um `doneDialog`, todo `doneDialog` tem
+  fala) e falha com exit 1 se as duas metades se separarem. Sem a entrada lá, o NPC apenas
+  continua no roteiro de sempre — missão sem fala nova não emudece ninguém.
+* **`gameDebug.quests()`** é a única janela para o estado. Um sistema sem interface que também
+  não pudesse ser LIDO seria um sistema que ninguém consegue provar que funciona.
+
+### O que guarda
+
+**Nada ainda** — não há cenário de missão, e escrever um é do autor. O que existe hoje que passa
+por aqui é o `ferro` (fala do astronauta e o balcão), e ele foi verificado por construção: 2
+minérios não fecham um pedido de 6, então a entrega não dispara.
+
+Verificado à mão no jogo real, com o `gameDebug.quests()` e o save cru:
+
+| passo | mochila | contador | roteiro falado |
+|---|---|---|---|
+| início | 0 minérios | 0/6 | `astronaut` |
+| falar com 4 | **4** (intactos) | 0/6 | `astronaut` |
+| falar com 6 | 0 | 6/6 | **`astronautDone`** |
+| depois do reload | 0 | 6/6 | `astronautDone` |
+
+E o outro lado do sistema (contador alimentado pelo MUNDO, não pela conversa): pisar numa tela
+nova gravou `wizard/explore: 1` no `zh.adventure.v1`.
+
+Validação: `npm run typecheck`, ESLint nos arquivos tocados e `npm run build` passaram.
+
+TODO: nenhum.
+
+## UMA MISSÃO POR NPC, E CADA UMA É UM CAPÍTULO DA LORE (2026-08-20)
+
+Pedido: uma quest por NPC, e algo que faça sentido com o jogo e a lore.
+
+### O que a lore diz, e onde ela estava
+
+Ela está inteira na boca do mago (`en.json`, `wizard.intro/protect/prophecy`) e é curta: o escuro
+tomou o mundo, a fogueira dele é a **última chama**, e espalhadas pela terra estão as lareiras
+frias **dos que vieram antes** — mortos que ainda andam pelas estradas. Zero é o último herdeiro
+de uma **cruzada esquecida** e ainda não é cavaleiro. *"Enquanto a chama viaja, o mundo pode
+renascer."*
+
+O baralho da primeira versão era fiel à FALA de cada NPC mas cego para isso: pedia gravetos e
+pedras porque o NPC citou gravetos e pedras. Agora cada pedido é a parte da história que aquele
+NPC enxerga do lugar onde está — o gato pede a LINHA de luz, não lenha; o poeta pede a clareira
+porque *"a canção muda onde a luz entra"*; o lenhador vende o combustível de um renascimento e
+não sabe. As **falas de depois** deixaram de agradecer e passaram a empurrar a lore um passo: um
+"obrigado, herói" é fala gasta num jogo em que o NPC falar diferente é o único sinal de que a
+missão existiu.
+
+| NPC | pedido | capítulo |
+|---|---|---|
+| gato | acender 3 | a linha de luz que os mortos não cruzam |
+| poeta | derrubar 4 pinheiros vivos | onde a árvore cai, a luz entra |
+| artista | colher 6 sementes | verde é teimosia num mundo que o escuro comeu |
+| lenhador | entregar 6 gravetos | o único mercado que sobrou é o combustível da chama |
+| vendedor | entregar 4 pedras + 4 gravetos | vende o que segura o fogo e o que o carrega, sem tomar partido |
+| operário | entregar 1 barra | o metal dos antigos, afundado onde o chão brilha |
+| astronauta | entregar **6 minérios** | o forasteiro cuja nave é uma casca |
+| Morte | acender 5 + fabricar 3 carvões | mandada FECHAR o mundo, fica contando as fogueiras que você acende |
+| mago | 8 caveiras + 6 telas | a cruzada anterior, e os campos que a moeda decide |
+
+Acender 5 fecha o pedido do gato junto com o da Morte, e isso é a leitura certa: o ato central do
+mundo paga todo mundo — *"enquanto a chama viaja..."*.
+
+### Três leituras do disco que mudaram o trabalho
+
+* **O mago NÃO está plantado no mapa.** O `world.json` tem 8 NPCs (astronauta, lenhador,
+  operário, artista, vendedor, poeta, Morte, gato) e nenhum mago — ele tem roteiro, caminho de
+  código e agora missão, mas não tem corpo. A missão dele fica de pé, latente.
+* **Os dez roteiros de carta do gato (`catAxe`…`catFarm`) são falas ÓRFÃS.** O
+  `scripts/unique-npcs.mjs` impõe "um NPC aparece uma vez só no mapa" tirando o corpo repetido e
+  deixando a fala. Dar missão a eles seria autorar para personagens que não existem.
+* **Não há um único `levelPortal` no mundo de hoje.** Isso matou o pedido mais bonito do lote: a
+  Morte mandando o herói descer até *"o que os antigos enterraram sob os portais"* (fala literal
+  do mago). Seria uma missão impossível contada com toda a confiança do mundo — e junto com ela
+  caiu o tipo de tarefa `descend`, que eu já ia acrescentar. **Pedido só entra depois de duas
+  perguntas: existe no mundo, e existe na mão?** (a segunda porque a ferramenta que cumpre cada
+  pedido é, em todos os nove, o presente do próprio NPC.)
+
+### O que guarda
+
+Continua sem cenário — é do autor. Verificado à mão no jogo real: o baralho zerado tem os nove
+pedidos em 0; os quatro NPCs que pedem item viram `done=true` e trocam de roteiro na mesma
+conversa em que a carga é paga (`astronautDone`, `businessManDone`, `radiationSuitDone`,
+`salesmanDone`), com o vendedor fechando só depois das DUAS cargas; e o contador que o mundo
+alimenta (`wizard/explore`) andou ao pisar numa tela nova. O `questProgress` no `zh.adventure.v1`
+saiu com as seis chaves esperadas.
+
+Validação: `npm run typecheck`, ESLint nos arquivos tocados e `npm run build` passaram;
+`node scripts/add-npc-quests.mjs --check` confirma que o `world.json` é o ponto fixo e que as
+tarefas (TS) e as falas (script) não se separaram.
+
+TODO: plantar o mago no mapa, e abrir bocas de dungeon — as duas coisas destravam missão já
+escrita.
+
+## O MAGO GANHOU UM CORPO (2026-08-20)
+
+Pedido: pôr o mago logo no começo do jogo.
+
+Ele tinha roteiro (`world.dialogs.wizard`), história em três beats (`en.json` `wizard.*`), caminho
+próprio no código (`openWizardDialog`) e, desde hoje, missão — e **não estava plantado no mapa**.
+O `world.json` tinha 8 NPCs e nenhum mago: a abertura da história inteira ("Finally... you've
+arrived. I have waited for this moment for ages.") não era dita por ninguém.
+
+`node scripts/add-wizard.mjs` (modelo enrich-*: lê, acrescenta, idempotente, `--check`, backup do
+TEXTO original antes de qualquer mutação) põe ele em **40,54**, a leste da fogueira acesa mais
+próxima do `playerStart` — 10,4 tiles do nascimento, chunk (3,4).
+
+**Por que ali, e não em cima do spawn.** As duas razões são a mesma. É o começo do jogo: num
+mundo escuro o único farol é um fogo aceso, e é para lá que o jogador anda primeiro. E é a lore:
+a fala dele chama aquela fogueira de *"the last flame of the world"* e manda acordar o graveto
+*"in THIS flame"* — apontando para a fogueira ao lado. Plantado no meio do campo, a instrução
+dele apontaria para o vazio. De quebra, é a fogueira-lar que o runtime já escolhe (a acesa mais
+próxima do spawn), então o mago fica exatamente onde o jogo já ancora o renascimento.
+
+### O que quase passou batido
+
+* **NPC BLOQUEIA o tile**, então o corpo dele entrou com prova de BFS: o alcançável a partir do
+  `playerStart` antes e depois, e a única diferença aceita é o tile do próprio mago.
+* **A primeira prova reprovou por estar errada**, não por o lugar ser ruim: ela contava TODO prop
+  e TODO decor como parede, e com isso o herói nem saía da tela do nascimento. Rocha, árvore
+  morta, mato alto, água e lava bloqueiam hoje e o jogo inteiro é sobre removê-los — contá-los
+  responde "o herói passa AGORA?" quando a pergunta é "existe caminho?". O modelo certo é
+  terreno (colisão, `SOLID_UPPER_FRAMES`, mar) mais os móveis fixos que nenhuma ferramenta abre
+  (fogueira, bancada, forno, altar, pira).
+* `node scripts/unique-npcs.mjs --check` confirma a lei de "um NPC aparece uma vez só": 9 NPCs, um
+  de cada tipo.
+
+Com ele de pé, a missão do mago (8 caveiras da estrada + 6 telas) deixa de ser latente, e a fala
+alternativa dela (`wizardDone`) tem quem a diga.
+
+Validação: `npm run build` e ESLint passaram; o diff do `world.json` é uma linha de NPC e nada
+mais (terreno, props e diálogos idênticos ao backup). Não rodei o jogo — o autor testa.
+
+TODO: abrir bocas de dungeon (`levelPortal`) — hoje são zero, e é a única coisa que ainda trava
+missão já escrita.
+
+## A PIRA VIROU O FIM DO JOGO, E TODA MISSÃO PAGA TORAS PARA ELA (2026-08-20)
+
+Pedido: toda quest ajuda a chegar mais perto da pira central; terminá-la é zerar o jogo; e
+**metade das quests já basta** para zerar. Liberdade total.
+
+### A forma
+
+Três mudanças que se sustentam mutuamente:
+
+1. **Acender a pira é ZERAR** (`lightPyre` → `playEnding`). O card de fim já existia como "fim da
+   introdução", disparado pela profecia do mago — que custava UMA fogueira acesa. Um jogo com dois
+   finais, um deles a dez minutos do começo, não tem final nenhum: a profecia deixou de rolar
+   créditos e virou o **dedo esticado para a torre** (as duas últimas falas dela, no `en.json`,
+   passaram de "obrigado por jogar a introdução" para "olhe ao norte: aquilo é uma PIRA... uma
+   fogueira desse tamanho não é calor, é um SINAL"). O card virou *The Signal Fire*.
+2. **A pira custa 15 toras** (era 6). Ela deixou de ser um recado e virou empreitada — ~seis idas
+   à mata —, porque agora ela é a partida inteira.
+3. **Cada missão cumprida manda 3 toras para a torre**, e esse número **não é escolhido**:
+   `QUEST_PYRE_LOGS = ⌈PYRE_LOGS_REQUIRED / ⌈nº de missões / 2⌉⌉`. Hoje 15 ÷ ⌈9/2⌉ = 3, e cinco
+   missões fecham a torre exatamente. Derivar em vez de cravar é o que mantém a promessa de pé: o
+   dia em que entrar o décimo NPC, "metade do baralho basta" continua verdade sozinha — um número
+   cravado mudaria em silêncio a dificuldade do fim do jogo.
+
+Daí sai a liberdade que o pedido queria: **cinco missões quaisquer** fecham a torre, ou quinze
+gravetos na mão, ou qualquer mistura das duas estradas. Nenhuma missão é obrigatória e nenhuma
+ordem é imposta, porque todas valem o mesmo.
+
+### O que quase passou batido
+
+* **A borda, não o estado.** `recordQuestEvent` passou a devolver `{ moved, closed }` — `closed`
+  são as missões que fecharam NAQUELE evento. Pagar por estado ("está cumprida") em vez de por
+  borda ("acabou de cumprir") mandaria três toras a cada evento pelo resto da partida.
+* **Uma missão pode fechar onde não existe pira.** Matar a oitava caveira do mago dentro de uma
+  dungeon fecha a missão dele, e ali não há torre nenhuma na cena para receber a tora. Por isso o
+  crédito cai no SAVE (`pyreLogs`) e não no objeto — e por isso o save ganhou `centralPyre`, o
+  tile da torre, lembrado toda vez que o overworld a carrega. Sem essa chave o crédito se
+  perderia em silêncio. Com a pira na tela, ela também sobe na hora, uma tora de cada vez.
+* **O jogador precisa APRENDER a regra, e não há tela para ensiná-la.** Sem diário e sem contador,
+  quem cumprisse uma missão voltaria à torre um dia e a encontraria mais alta sem saber por quê.
+  Então cada roteiro de missão cumprida ganhou uma quarta fala, na voz do NPC, dizendo que ele
+  mandou lenha — o gato "paga em gravetos", o lenhador chama de publicidade ("todo mundo vai ver
+  arder"), a Morte "prefere a estrada iluminada". **Ninguém diz o número**: o que se aprende é a
+  regra, não a planilha.
+* **A cirurgia de texto no script quase entrou torta.** A inserção da quarta fala deixou vírgula
+  dupla nos nove arrays (`),,`), o que em JS é um BURACO de array e virou `null` no `world.json` —
+  linha de diálogo nula, que quebra o overlay ao ler `.speaker`. Achado conferindo o arquivo
+  gerado, não o script. A conferência que pegou isso (varrer todo `dialogs[*].lines` procurando
+  linha sem `text`) vale como hábito para qualquer script que escreva fala.
+
+Validação: `npm run typecheck`, ESLint e `npm run build` passaram;
+`node scripts/add-npc-quests.mjs --check` confirma o ponto fixo e que nenhum roteiro-base foi
+tocado; a conta dos 50% foi conferida à parte (1→3, 2→6, 3→9, 4→12, **5→15 fecha**). Não rodei o
+jogo — o autor testa.
+
+TODO: a pira está em 30,30 (centro exato do mundo) e o herói nasce em 30,57, 27 tiles ao sul dela
+— vale medir se essa caminhada é a certa para o objetivo da partida.
+
+## REVISÃO: DÁ PARA ZERAR? (2026-08-20)
+
+Pedido: revisar se é possível zerar o jogo.
+
+### O veredito
+
+**Dá** — e agora existe um script que responde isso sozinho: `npm run audit:endgame`
+(`scripts/audit-endgame.mjs`). Ele não joga; lê o `world.json` e pergunta se cada elo da corrente
+até a pira acesa existe. Hoje passa inteiro, e o que mais importa dele:
+
+* a pira (30,30) está a **26 passos** do nascimento;
+* há uma **fogueira ACESA em 30,29, colada nela** — o gesto final é acender o graveto na fogueira,
+  dar um passo e encostar na torre. A tocha queima 5s (~33 tiles, 26 com folga), então a
+  logística de fogo, que era o risco óbvio, não é risco nenhum;
+* as 9 missões são viáveis e bastam 5;
+* a torre também fecha na mão: 40 árvores mortas + 5 gravetos no chão ≥ 15 toras;
+* **o bootstrap é aberto**: de mãos vazias, no primeiro degrau, o herói alcança TODAS as
+  ferramentas do mundo (machado, picareta, machado de aço, foice, pá, balde) e a espada. O
+  segundo degrau é só a tocha (graveto + fogueira). Não há travamento por ferramenta.
+
+O modelo que faz isso valer é a tabela `OPENED_BY`: cada prop diz **qual ferramenta o abre**, e a
+varredura roda com o conjunto que o herói tem NAQUELE degrau. Sem isso a auditoria seria otimista
+e não veria o defeito clássico — o machado atrás de uma árvore que só o machado derruba.
+
+### O bug que a revisão achou (e que a análise estática não veria)
+
+`lightPyre` agendava o final com `delayedCall(1400)` **sem congelar o mundo**. Aquele buraco de
+1,4s era jogo correndo: uma caveira que matasse o herói ali dispararia a morte por cima do final
+— e como a pira acesa **nunca reacende** (`light()` recusa `lit`), o final não voltaria nunca
+mais. O jogo ficaria zerado sem jamais ter mostrado que zerou. Corrigido: `cutsceneActive = true`
+na hora da chama, e não junto com o card.
+
+### O que a revisão deixa anotado, para o olho do autor
+
+* **A torre ficou 2,4× mais alta.** Com 6 toras ela tinha ~0,72 tile; com 15 tem ~1,72 (8 camadas
+  de 0,20). A geometria não quebra — o afinamento tem piso (`Math.max(0.3, …)`) e a camada mais
+  alta ainda mede 0,33 —, mas a silhueta foi afinada por olho a 6 e ninguém a olhou a 15.
+* **Save antigo com a pira ACESA volta apagada e incompleta**: `isComplete` agora pede 15, então
+  `if (lit && this.isComplete)` não reacende. A migração é benigna (a torre está lá, com as toras
+  que tinha), mas quem tinha acendido perde a chama e precisa completar os 9 que faltam.
+* **`endingSeen` é escrito e nunca lido** por ninguém no código de hoje. Não é regressão desta
+  mudança, mas agora que existe um fim de verdade, ele é o campo natural para o título dizer
+  alguma coisa a quem já zerou.
+* **`centralPyre` guarda o tile da torre**; se a pira for movida no /editor, o crédito de missão
+  banqueado sob a chave velha fica órfão (o boot seguinte já corrige a chave). Só importa a quem
+  mover a pira no meio de uma partida salva.
+
+Validação: `npm run audit:endgame` (exit 0), `typecheck`, ESLint e `build` passaram. Não rodei o
+jogo — o autor testa.
+
+TODO: nenhum bloqueante. A auditoria é estática por construção: um "ok" nela é "o mundo não torna
+impossível", nunca "eu zerei".
+
+## UMA DUNGEON SÓ: O ESPELHO DO MAPA DE CIMA (2026-08-20)
+
+Pedido: o jogo tem UMA dungeon, que é o espelho exato do mapa de cima — mesmo tamanho —, com
+portais que descem e sobem no MESMO ponto. Escolhas do usuário: espelho da **geografia** (não só
+do tamanho), e **apagar de vez** as nove dungeons geradas.
+
+### O espelho
+
+`node scripts/gen-underworld.mjs` lê o `world.json` e escreve `public/underworld.json` + os
+portais no mundo de cima. Ele **copia o esqueleto e joga fora a mobília**:
+
+* copia a COLISÃO, tile a tile (3.600/3.600 idênticas). Onde havia montanha ou pinheiro em cima
+  há alvenaria embaixo; onde havia campo, chão de caverna. É essa igualdade que faz o mapa que
+  você decorou lá em cima valer como mapa lá embaixo — a graça inteira do Dark World.
+* NÃO copia rocha, árvore, mato, água, lava, fogueira, bancada. Duas razões: são recursos do
+  mundo de cima, e duplicá-las dobraria a economia em silêncio; e são obstáculos que o herói
+  REMOVE, então copiá-las faria o subterrâneo ficar **mais aberto** que o espelho com o tempo,
+  em vez de igual a ele.
+* NÃO desce NPC nenhum: as missões são todas de cima.
+* o MAR continua sendo a moldura nos dois andares.
+
+O que ele acrescenta é o que faz do lugar uma dungeon: **25 covas das quatro espécies que o mundo
+de cima nunca usou** (gosma, gosma grande, torreta, mago), uma por tela. Uma, e não duas — o
+número que a lei manda olhar não é covas por tela, é covas dentro de 14 tiles, que valem umas
+quatro telas.
+
+Resultado medido: 5×5 telas nos dois andares, 406 paredes · 3.143 chão · 51 mar embaixo, e os
+5 portais nos MESMOS tiles (8,2 · 52,4 · 28,26 · 6,54 · 54,54 — cantos e centro, longe da pira).
+
+### A viagem, que ficou mais simples do que era
+
+O bilhete (`runtime/dungeonTrip`) perdeu o campo `level`: com um andar só, ele guarda apenas
+**onde** o herói desceu — que é a única coisa que os dois andares combinam. Descer reescreve o
+`playerStart` do arquivo para o tile do portal (a volta já fazia exatamente isso), então descer e
+subir são o mesmo gesto espelhado, e não duas rotinas parecidas.
+
+E o portal deixou de precisar de número. Antes, `level !== undefined` era o que distinguia entrar
+de sair — o mesmo prop, no mesmo tile, com um campo dizendo de que lado ele estava. Agora quem
+responde é **de que lado o herói está**, que já era uma leitura existente:
+
+```
+    if (getDungeonTrip())          → subir     (estou embaixo)
+    else if (getActiveLevel())     → encadear  (estou num level de puzzle)
+    else                           → descer    (estou no overworld)
+```
+
+### O que foi apagado
+
+`src/game/dungeon/` (10 arquivos: briefs, gerador, layout, missão, salas, templates, verificador,
+snapshot, random, world), `scripts/audit-dungeons.ts`, `scripts/gen-zelda-dungeons.mjs`, os dez
+`public/levels/dungeon-*.json` (as nove do Zelda 1 + a folha de peças), os cenários `dungeon-gerada`
+e `lab-dungeon`, o `npm run audit:dungeons`, o modo `?dungeons=static`, e do save o mapa
+`dungeons` (o retrato RLE) **e o `runSeed`** — a semente da partida existia só para gerar as nove,
+e sem elas ela não decide mais nada.
+
+O `/lab?dungeon=N` virou **`/lab?under`**, e o `WorldFileId` trocou a família `dungeon-N` por um
+`underworld` só; o resolver do `/api/world` e a lista do gerenciador de levels perderam a segunda
+família junto (o rótulo "D3", o bloqueio de renomear/apagar).
+
+### O que quase passou batido
+
+* **O script olhava o próprio trabalho.** A primeira rodada plantava os portais no `world.json`;
+  a segunda via aqueles portais como mobília, recusava aqueles tiles e escolhia outros — o script
+  não era idempotente porque a boca de caverna que ele acabou de abrir contava como parede. Agora
+  `levelPortal` é explicitamente pisável na escolha.
+* **A morte lá embaixo** perdeu o `persistActiveDungeon()`: não há planta gerada a fotografar, e o
+  que a visita mudou (itens no chão) já entra no save pelo `persistAdventure` de sempre.
+* **`audit:endgame` não sabia que portal é pisável** e contava os cinco tiles novos como parede.
+  Corrigido, e ele continua saindo 0.
+
+Validação: `npm run typecheck`, ESLint (os mesmos 58 pré-existentes) e `npm run build` passaram;
+`gen-underworld.mjs --check` confirma o ponto fixo; `audit:endgame` continua verde. Não rodei o
+jogo — o autor testa.
+
+TODO: o espelho tem 406 paredes em 3.600 tiles, ou seja, é uma caverna MUITO aberta — o esqueleto
+do overworld é campo, não labirinto. Ele nasceu para ser autorado à mão em `/lab?under`, e é lá
+que ele vira dungeon.
+
+### Correção: a porta é SIMÉTRICA (mesmo dia)
+
+O usuário apontou o defeito na hora: **o portal que você pega LÁ EMBAIXO tem de sair no mesmo
+ponto da superfície.** A primeira versão não fazia isso — ela usava o tile por ONDE O HERÓI
+DESCEU, que era o certo enquanto a dungeon era um lugar separado (sair dela não tinha destino
+óbvio, e a única resposta era a boca de entrada). Com o espelho virou defeito grave: descer num
+canto do mapa, atravessar o andar de baixo e subir no canto oposto **desfazia a viagem inteira** e
+cuspia o herói no primeiro canto. Um mundo que faz isso não é espelho de nada.
+
+A correção tornou o sistema menor, não maior. O bilhete de volta foi **deletado**: a porta é
+simétrica e por isso não precisa de endereço nenhum — o destino já está escrito no tile em que o
+herói pisou. `runtime/dungeonTrip.ts` (que guardava `level` + `returnX/returnY`) virou
+`runtime/underworld.ts`, e guarda **um booleano**: em que andar você está.
+
+### O que quase passou batido nessa correção
+
+Trocar `getDungeonTrip()` (que devolvia objeto ou `null`) por `isUnderground()` (booleano) deixou
+**três comparações com `null`** de pé — e elas compilam:
+
+```
+    isUnderground() !== null   → sempre VERDADEIRO
+    isUnderground() === null   → sempre FALSO
+```
+
+Uma delas decidia `this.adventure` e outra decidia `inDungeon` no `create()`. O typecheck passou
+sem uma palavra; quem pegou foi reler os 17 pontos de uso um a um depois do rename. **Rename que
+troca o TIPO de um retorno (objeto→booleano) precisa da leitura manual de cada chamada** — o
+compilador só reclama do nome, nunca da semântica.
+
+De quebra caiu o campo `level` do `levelPortal` no schema: ele existia para dizer QUAL das nove
+dungeons a boca abria, e com um andar só ninguém mais o lia.
+
+Validação: `typecheck`, ESLint (58 pré-existentes) e `build` passaram; `gen-underworld --check` é
+ponto fixo e `audit:endgame` continua verde.
+
+## A ESCADA: a porta entre os dois andares deixou de ser mágica (2026-08-20)
+
+Pedido: trocar o portal mágico por uma escada FÍSICA — que o herói desça e suba andando, e não
+teleportando. E na dungeon: muros em volta, não água; sem fogueiras.
+
+### A peça
+
+`StairsObject` é **geometria de verdade** — a mesma carpintaria da ponte e da pira, nunca um
+sprite. Um poço retangular aberto no tile (moldura de laje nos quatro lados, fundo escuro para o
+vão não mostrar o chão do mundo por dentro) e quatro degraus de pedra que recuam para o norte,
+cada um mais fundo que o anterior. Nenhum frame de arte novo: a sombra e a luz do mundo entram
+de graça, e crescer/afundar é caixa mudando de altura.
+
+A MESMA escada, no MESMO tile, existe nos dois andares — o que muda é para onde ela leva daqui
+(`way: 'down' | 'up'`, que inverte o sinal da elevação dos degraus). Em cima ela afunda no chão;
+embaixo ela sobe para fora dele. É o mesmo lance de pedra visto dos dois lados.
+
+**Ela é um prop NOVO (`stairs`), e não o `levelPortal` repintado.** O portal continua existindo e
+continua mágico: ele é a travessia que encadeia LEVELS de puzzle, e mexer nele quebraria a
+`portal-travessia` e a lei dos quatro tempos. Duas portas, dois propósitos, zero `if` no meio.
+
+### A travessia
+
+O portal engolia o herói girando, apagava a luz do mundo, abria um túnel na tela e o cuspia
+**caindo do céu**. A escada faz o contrário em tudo: ele entra andando no poço (anda meio tile
+para o norte, afunda `STAIRS_DROP_TILES`, apaga só depois de passar do nível do chão), o mundo
+troca atrás do preto, e do outro lado ele **sai andando** do poço, subindo, no mesmo tile.
+
+Os dois lados usam o MESMO gesto (`walkStairs('in' | 'out')`) de propósito: o poço é um buraco, e
+a leitura é sempre "ele entrou ali" / "ele saiu dali". Para baixo ou para cima, a pedra é a
+mesma — e uma animação só, espelhada, não pode divergir da outra.
+
+A medida da caminhada mora na PEÇA (`STAIRS_RUN_TILES`, `STAIRS_DROP_TILES`, exportados do
+`StairsObject`): a animação tem de terminar exatamente onde a geometria acaba, senão o herói some
+no ar ou atravessa a pedra. O `scene.restart()` no meio continua sendo o mesmo de sempre, com um
+bilhete de chegada próprio (`pendingStairsArrival`) — dois bilhetes e não um com campo de tipo,
+porque a chegada de cada porta é uma animação inteira e distinta.
+
+### O subterrâneo fechado
+
+* **O anel externo inteiro virou muro** (240 tiles). Em cima o mundo termina em arvoredo e no fim
+  dos chunks — funciona lá, porque o lado de fora não existe e o runtime bloqueia por isso. Mas
+  medido: a borda de cima **não tem uma gota de mar** e tem 91 tiles ABERTOS encostando no nada
+  (11 só na fileira norte). Embaixo isso seriam buracos. Uma caverna termina em rocha.
+* **Nenhum fogo lá embaixo.** Os archotes de parede (frame 48) que o gerador sorteava saíram: um
+  archote é uma fogueira presa na parede, e o andar de baixo não tem fogo. Fogueira `campfire`
+  nunca houve — o espelho não copia mobília.
+
+Números depois: 643 paredes · 2.957 chão · **0 mar · 0 archote · 0 fogueira**, e as 5 escadas nos
+mesmos tiles dos dois lados.
+
+### O que quase passou batido
+
+* **O gerador voltou a olhar o próprio trabalho.** Ao trocar `levelPortal` por `stairs` eu tirei
+  só `stairs` da lista de mobília — e os portais VELHOS, ainda no disco, passaram a tapar os
+  tiles que eles próprios ocupavam. Resultado: a segunda rodada escolhia outros lugares, para
+  sempre. Os dois tipos são pisáveis e os dois saíram da conta.
+* **Uma escada caiu no canto (0,0)**, encravada na borda. O buscador em espiral entregava o
+  primeiro tile livre que achasse, e em telas de miolo fechado isso é o canto. Agora o lance
+  exige **chão livre AO NORTE** (é para lá que os degraus correm — sem isso a descida acontece
+  dentro de uma parede) e pelo menos 3 vizinhos abertos.
+
+Validação: `typecheck`, ESLint (58 pré-existentes) e `build` passaram; `gen-underworld --check` é
+ponto fixo e `audit:endgame` continua verde. Não rodei o jogo — o autor testa.
+
+Sobre "retire todas as fogueiras": perguntado e respondido — era **só a dungeon**. As 21 do
+overworld ficam, e ainda bem: sem elas não há como acender a tocha, e sem tocha não há como
+acender a PIRA — o jogo ficaria impossível de zerar, além de derrubar duas missões, o
+renascimento e a trava de NPC.
+
+TODO: nenhum.
+
+### A sessão de fotos: o que a tela mostrou, e o que mudou por causa dela (mesmo dia)
+
+Pedido: tirar prints, ver como ficou e melhorar. Três defeitos apareceram na primeira leva, e os
+três eram invisíveis no código.
+
+**1. A escada não existia vista de cima.** Ela era um POÇO: boca com degraus afundando abaixo do
+chão — o desenho certo em 3D, e nada na tela. O chão do mundo é um quad OPACO em y=0 e a câmera
+olha de cima, então **tudo abaixo de zero some atrás do próprio chão**. Da superfície a peça era
+um aro pálido flutuando sobre a grama, com o miolo mostrando o gramado.
+
+Pior, e só o print revelou: na variante de SUBIDA a caixa escura do fundo do poço subia junto e
+virava uma **tampa preta pairando sobre os degraus, tapando o herói**.
+
+A v2 desenha como um jogo de cima desenha: **tudo ACIMA do chão**. A profundidade é sugerida pela
+altura dos degraus (0.26 → 0.05 descendo, o inverso subindo) e por uma boca escura no fim do
+lance. Ninguém precisa ver o buraco; precisa ler "degraus, e depois o escuro".
+
+**2. A boca deitada ficava escondida atrás dos próprios degraus.** O lance desce PARA LONGE da
+câmera, então o que estava mais fundo era também o que estava mais atrás — a boca virava um risco
+preto de um pixel. Ela virou uma PAREDE em pé (0.34 de altura): descendo é o fundo do poço,
+subindo é o vão acima do último degrau. Em pé ela aparece por cima dos degraus, e é ela que diz
+"isto continua" — a única coisa que a peça precisa dizer.
+
+**3. O chão da caverna gritava.** 2.957 tiles com os três frames de chão sorteados por igual
+viram um xadrez que pisca: a variação vira PADRÃO, e padrão lê como piso de banheiro. A primeira
+tentativa (um frame só) ficou PIOR — virou uma grade regular. Só ampliando os três frames lado a
+lado no navegador é que a resposta apareceu: **o 42, que eu tinha fixado, é o mais barulhento
+(blocos grandes); o 44 é quase liso**. Agora o 44 é o chão e os outros dois entram como sujeira
+(1 em 6 e 1 em 23). A caverna ficou escura e calma, e a pedra voltou a parecer pedra.
+
+Também confirmado nos prints: a direção da caminhada está certa (o herói vira de COSTAS e afunda
+andando para dentro da boca), o muro do anel externo lê como fim de caverna, e não há uma única
+chama lá embaixo.
+
+Validação: `typecheck`, ESLint (58 pré-existentes), `build`, `gen-underworld --check` (ponto
+fixo) e `audit:endgame` (verde).
+
+TODO: o subterrâneo é uma **caverna aberta demais** — 643 paredes em 3.600 tiles, porque o
+esqueleto do overworld é campo e não labirinto. Isso é trabalho de autoria em `/lab?under`, não
+de gerador.
+
+## A ESCADA v3: um buraco escuro, quatro pisadas, e UM LANCE SÓ (2026-08-20)
+
+Pedido: na superfície, um buraco escuro em que o jogador entra, com 3-4 degraus visíveis descendo
+para a escuridão, com qualidade visual alta; o herói só pode entrar de frente; e a escada de baixo
+tem de ser a **continuação** da de cima, no mesmo fluxo.
+
+### Um lance só, cortado pelo teto
+
+As duas peças não são duas escadas: são a MESMA, e ela desce sempre do **sul para o norte** nos
+dois mundos. Em cima a boca fica ao NORTE (ele entra andando para o norte e some); embaixo a boca
+fica ao SUL (é de lá que ele desce) e as pisadas sobem para o norte, onde ele sai no chão da
+caverna. **O rumo não muda no meio da viagem**: entra para o norte lá em cima, sai para o norte
+lá embaixo. Se a peça de baixo fosse um espelho da de cima, descer cuspiria o herói andando na
+direção oposta à que ele entrou — e o lance deixaria de ser um lance. Uma linha decide tudo isso
+(`toMouth`), e o resto da geometria é idêntico nas duas metades.
+
+**Só de frente.** A escada só engole quem entra pela boca: para o norte na superfície, para o sul
+no subterrâneo. Chegar de lado deixa o herói EM CIMA dos degraus, de pé, sem viagem — ninguém cai
+numa escadaria de lado. Isso exigiu que a direção do passo viajasse no próprio evento
+(`onStep(x, y, dx, dy)`): `setFacing` roda na linha SEGUINTE à do evento, então quem perguntasse
+depois leria a direção do passo anterior.
+
+### Quatro versões, e o que cada uma ensinou
+
+Foram três redesenhos, todos por causa de prints — e nenhum dos defeitos era visível no código:
+
+1. **Nada abaixo de y=0 existe.** A v1 era um poço com degraus afundando. Correto em 3D e
+   invisível na tela: o chão do mundo é um quad OPACO em y=0 e a câmera olha de cima. Da
+   superfície a escada era um aro pálido flutuando sobre a grama.
+2. **Perspectiva não cabe aqui.** A v2 pôs degraus altos descendo para longe da câmera — e o da
+   frente TAPA todos os outros. Quatro degraus viravam uma rampa cinza lisa, e frestas entre eles
+   não apareciam porque o degrau da frente as escondia. As pisadas viraram **listras baixas sobre
+   o escuro**, cada uma mais fina, mais curta e mais estreita que a anterior: o que desce é o
+   TAMANHO delas, e isso lê em qualquer ângulo.
+3. **Preto puro sai MARROM.** Pintei o vão de `0x000000` e ele saiu cor de lama: o material soma
+   o ambiente quente do mundo, e a cor não multiplica esse termo. Um cinza-escuro (`0x1c1712`)
+   sai quase preto. Descobri pintando o vão de MAGENTA para ver onde ele estava de fato — e o
+   mesmo print revelou o defeito seguinte.
+4. **A laje do vão enterrava as duas pisadas do fundo.** As últimas listras (0.028 de altura) são
+   mais baixas que a espessura da laje escura (0.05), então sumiam DENTRO dela. Todas assentam
+   agora no TOPO do vão, nunca no chão do mundo.
+
+O resultado: quatro pisadas de pedra clara recuando para um vão que escurece do marrom ao preto,
+meio-fio de alvenaria nos dois lados e dois marcos enquadrando a entrada.
+
+### O que guarda
+
+Nada automatizado — mas a regra foi conferida no jogo real, nos dois andares:
+
+| entrada | resultado |
+|---|---|
+| cima, pela lateral | fica em cima ✓ |
+| cima, andando para o sul | fica em cima (a boca é ao norte) ✓ |
+| cima, andando para o norte | **desce** ✓ |
+| baixo, andando para o norte | fica embaixo (a boca é ao sul) ✓ |
+| baixo, andando para o sul | **sobe** ✓ |
+
+Validação: `typecheck`, ESLint (58 pré-existentes) e `build` passaram; `gen-underworld --check` é
+ponto fixo e `audit:endgame` continua verde.
+
+TODO: nenhum na peça. O subterrâneo continua aberto demais — autoria de `/lab?under`.
+
+## A ESCADA v4: a auditoria dos 14 pontos, e a travessia que andava de ré (2026-08-20)
+
+Pedido: avaliar a fundo a qualidade visual da escada de entrar e sair da dungeon, e depois ajustar
+tudo o que a avaliação listasse. Saíram 14 achados; isto é o que cada um virou em código.
+
+### O achado que ninguém tinha visto: as duas CHEGADAS andavam de ré
+
+`walkStairs` tirava o deslocamento de `northward`, e essa variável responde duas perguntas ao mesmo
+tempo — **de que lado fica a boca** (que é o andar) e **para onde ele anda** (que é o sentido da
+viagem). Em `'in'` as duas respostas coincidem, e por isso a descida sempre esteve certa e foi
+confirmada em print. Em `'out'` elas divergem: o rosto saía certo e a posição saía espelhada.
+
+| trecho | encara | sai de (Δy) | chega a | anda para | |
+|---|---|---|---|---|---|
+| superfície · descer | norte | 0,000 | −0,580 | norte | ✓ |
+| superfície · chegar | sul | **+0,580** | 0,000 | **norte** | ✗ |
+| subterrâneo · subir | sul | 0,000 | +0,580 | sul | ✓ |
+| subterrâneo · chegar | norte | **−0,580** | 0,000 | **sul** | ✗ |
+
+Na prática: ao subir, o herói brotava do chão 0,08 tile FORA do tile, do lado de fora dos marcos, e
+caminhava de costas para dentro do poço; ao descer, aparecia do lado oposto e no ar. O trecho
+visível do erro era 0,32 tile — mais de meio corpo, com a tela já clara o bastante.
+
+**O conserto é uma pergunta só.** O `k` do tween mede o quanto o herói está DENTRO do poço, então a
+posição é sempre "o centro do tile mais `k` na direção da boca" — `toMouth`, que depende só do
+andar. Entrando o `k` sobe, saindo ele desce, e o mesmo sinal serve para os dois. O caso `'in'`
+continua idêntico ao que já estava certo.
+
+### A chegada não pode acontecer no ar
+
+`STAIRS_DROP_TILES` valia 0,55 nos dois andares, e a coisa mais alta da peça tinha 0,20. Em cima
+isso funciona por sorte: quem engole o herói é o **quad opaco do chão em y=0**, e ele afunda mesmo.
+Embaixo não há teto — nada, em lugar nenhum, esconde um corpo levantando do piso —, então ele
+materializava flutuando.
+
+A tentação era subir a parede do fundo até tapá-lo. Não dá: no andar de baixo a parede fica do lado
+da CÂMERA, e alta o bastante para esconder um corpo (medido: ≥1,18 tile) ela come as próprias
+pisadas que deveria emoldurar. A resposta é que **a queda é assunto de quem tem chão**: nasceu
+`STAIRS_RISE_TILES` (0,10) para o subterrâneo, e lá quem esconde a chegada é o VÃO PRETO — ele sai
+andando de dentro do escuro, no nível do chão, que é o que um buraco no teto de caverna oferece. A
+parede subiu de 0,20 para 0,30: o bastante para o vão ler como passagem, e longe do ponto (~0,45)
+em que ela começa a comer a listra do fundo.
+
+### A troca de andar acontecia a céu aberto
+
+O portal de level abre o `PortalTunnel` ANTES do `scene.restart()` de propósito, e o comentário dele
+já dizia por quê. A escada não tinha cobertura nenhuma, e o `World3D` **remove o próprio canvas do
+DOM** no `dispose`. A sequência real era: mundo velho a 10% (o fade parava em 0,9) → engasgo com o
+fundo da página → **andar novo a 100% por ~120ms** → estalo para 10% → fade de 620ms. O clarão do
+meio é o oposto de descer para o escuro.
+
+`StairsCurtain` é um `div` fixo, preto, `z-index: 4`, de módulo — ele sobrevive ao restart como o
+túnel sobrevive. Um DIV e não um segundo contexto WebGL porque **aqui não há nada a desenhar**: é
+preto. Ele cobre os dois canvas E a HUD, que era metade do defeito (`setWorldFade` só apaga o mundo
+3D, e os corações ficavam a brilho pleno sobre um mundo quase preto). Fecha nos últimos 45% do
+lance, e do outro lado a chegada **nasce preta** — cortina fechada e `setWorldFade(1)` escritos no
+`create()`, antes do primeiro render.
+
+### O resto da lista
+
+* **Os pés se mexem.** `walkStairs` escrevia um frame parado e nunca ligava `hero.walking`, então
+  `tickHeroView` voltava na primeira porta: 620ms de pose de repouso transladando. Agora
+  `setHeroWalking` liga o ciclo — e a CADÊNCIA vem da peça, não da distância: o lance tem 0,37 tile
+  e a passada do jogo mede um tile por bota, então deixar a distância comandar daria um terço de
+  passo no lance inteiro. São quatro botas porque são quatro pisadas (`STAIRS_STEPS`).
+* **A sombra apaga junto com o corpo.** `Billboard3D.setAlpha` mexia só na opacidade do sprite; o
+  blob de contato tem material próprio e ficava inteiro, plantado, sem dono. Ele agora escala pela
+  escuridão CHEIA que o dono pediu no nascimento — nunca sobre o valor atual, ou dois `setAlpha`
+  seguidos o apagariam de vez. Conserta a escada e todo sumiço futuro.
+* **O som virou pedra.** A travessia tocava `playPortalSuck` — um glissando de 110→880Hz subindo e
+  afinando, literalmente "o portal inspirando o herói". Toda a reforma v1→v3 tirou a mágica desta
+  porta e sobrou justamente a camada que o jogador OUVE. `playStairsStep(step, descending)`: corpo
+  grave + estalo de sola com passa-baixa fechando conforme afunda, e um eco de vão nos dois últimos
+  degraus da descida.
+* **A peça ganhou grade de pixel.** `BoxGeometry` estica a arte inteira em CADA face, e como as
+  faces têm tamanhos muito diferentes cada uma saía com um pixel de outro tamanho: medido no
+  meio-fio, **1,7 × 24 px — um texel 20:1**, granito virado listra. `BoxSkinOpts.pixelTiled` recorta
+  na densidade do mundo (16 texels por tile) mexendo na UV da GEOMETRIA, que já é única por caixa —
+  clonar a textura por peça seria uma subida de textura nova por meio-fio. Armadilha paga: trocar
+  `wrapS/wrapT` sem `needsUpdate` deixa a textura grampeada na GPU e o recorte estica o texel da
+  borda em vez de repetir.
+* **Uma pedra só, e é a do mundo.** A escada vestia o granito molhado do vau do rio (escuro,
+  azulado, com musgo de beira d'água) enquanto a montanha ao lado usa a rocha autorada do atlas — e
+  as pisadas ainda alternavam duas artes de resoluções diferentes (16×8 e 10×5). Agora é
+  `getStoneTexture('stair')`: 16×16, cíclica nos dois eixos, na rampa de `rock.mjs`. Cada caixa tira
+  dela um recorte diferente, e o das PISADAS desce a rampa de propósito — a de cima tira o crown
+  claro, a do fundo tira a base escura. O tamanho já dizia "isto recua"; agora a cor diz também, sem
+  uma segunda textura nem um segundo material.
+* **O vão deixou de ser tampa.** Era uma caixa iluminada: somava ambiente, luar, fogueira e tocha
+  até clarear, e clareava junto com `hd3d.daylight`. Um buraco que fica mais claro ao meio-dia deixa
+  de ser buraco. `BoxSkinOpts.unlit` existe para isto e só para isto — buraco não é superfície, e
+  superfície é o que recebe luz. (Aposenta a lição 3 do cabeçalho: o preto não vira mais marrom
+  porque não há mais nada a somar.)
+* **A peça toca o chão.** Caixa não entra no passe de sombra projetada — só billboard e terreno
+  assado entram —, então a alvenaria não tinha contato nenhum com a grama. Um `addGroundEllipse` sob
+  o tile resolve por uma malha. O anel de terra revirada em volta continua sendo **autoria de
+  `/editor`**: script de mundo não toca em `ground`.
+* **`STAIRS_RUN_TILES` deixou de mentir.** Era `RUN_LEN * 0.58`, um número escolhido à parte: o
+  herói terminava 0,08 tile fora do tile, tendo atravessado a pedra do fundo. Agora é
+  `RUN_LEN / 2 - BACK_LEN` — a distância real do centro à face da parede.
+* **O fade come 20% do gesto, não 45%.** O corpo só apaga a partir de `k = 0,8` (quem o engole é a
+  pedra; o alpha é a garantia), e o mundo SEGURA em penumbra e só MERGULHA depois de `k = 0,6`.
+* **As escadas existem no mapa** (`kind: 'stairs'`, um quadrado de pedra e não um círculo violeta —
+  violeta é do portal mágico). Valem nos dois andares sem um `if`: a porta é simétrica, então o mapa
+  do espelho é o mesmo mapa. Faltavam, e a falta doía onde o espelho deveria ajudar: quem descia num
+  canto e caminhava o subterrâneo inteiro não tinha como saber por onde subir.
+* **No editor a escada deixou de ser um portal**: ela empresta a rocha do atlas
+  (`CLIFF_WALL_FRAMES[0]`), a mesma pintura da montanha. Um portal roxo marcando onde vai nascer
+  alvenaria é a mesma confusão que já custou uma rodada do gerador.
+
+### O que foi recusado, e por quê
+
+O relatório também apontou que o terreno leva `normalUp` (toda face acende como se olhasse para
+cima) e as caixas não — duas leis de luz na mesma tela. **Ficou como está, de propósito.** Ligar
+`normalUp` sem cor de vértice achata a caixa (é exatamente o defeito que `ROCK_CUBE_SHADE` resolve
+na montanha), e ligá-lo COM cor de vértice faria da escada o único prop de geometria do jogo fora da
+regra — ponte, pira, vau e coroa de lava todos leem normal real. Seria trocar uma inconsistência por
+outra, maior. Com a arte unificada, o que sobra da diferença é que a escada REAGE à tocha e a
+montanha não, que é o comportamento melhor dos dois.
+
+Validação: `typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram. Não rodei o
+jogo nem playtest — o autor testa. **Nenhum cenário guarda a escada hoje** (`playtest/scenarios/`
+não menciona `stairs`); o que é numérico daria um cenário barato: posição × rumo concordando nos
+quatro trechos, `STAIRS_RUN_TILES` parando na face da parede, descer em (x,y) chegando em (x,y), e
+nenhum frame a brilho pleno entre os dois andares. Textura, luz e sombra continuam sendo trabalho de
+print — foi assim que as três versões anteriores acharam os defeitos delas.
+
+TODO: nenhum na peça.
+
+### A revisão da v4: três defeitos que o próprio conserto tinha (mesmo dia)
+
+Pedido: revisar se estava tudo certo. Estava quase — e o que faltava era tudo na mesma peça, a
+sombra.
+
+**1. O conserto do alpha estava no lugar errado, e cobria só metade dos casos.** Eu tinha posto a
+regra em `Billboard3D.setAlpha`. Mas existe um par `get/set alpha` ali do lado — a superfície que
+imita o sprite do Phaser —, e **é por ele que passa todo sumiço tweenado**:
+`tweens.add({ targets: this.sprite, alpha: 0 })` escreve na propriedade e nunca chama o método. O
+desmanche do bicho ao morrer (`EnemyBase`, 240ms de `alpha: 0` com encolhimento) é exatamente isso:
+o corpo virava nada e o blob de contato ficava inteiro no chão até o sprite ser destruído. A regra
+mudou de lugar para o SETTER, e `setAlpha` agora só delega. Conferido: 12 tweens no jogo miram em
+`this.sprite`, e os de alpha todos passavam por fora.
+
+**2. Fazer a sombra seguir o alpha quebrou a piscada de dano.** A piscada de i-frames é
+`sprite.setAlpha(0.35)` cinco vezes em 450ms — e com a regra nova o blob de contato piscava junto.
+O blob é a ÂNCORA DE POSIÇÃO do corpo: apagá-lo cinco vezes faz o bicho tremer de lugar bem no
+instante em que o jogador precisa saber onde ele está, que é a mesma razão pela qual a piscada
+nunca vai a zero ("um bicho invisível não se acerta"). Nasceu `setBlinkAlpha`, que mexe no sprite e
+deixa as sombras em paz — **piscar não é sumir**, e agora os dois têm nomes diferentes.
+
+**3. A silhueta projetada não seguia ninguém.** Consertado o blob, sobrou o outro: a sombra de
+fogueira/luar de cada ator é desenhada por `World3D` com o alpha do CAST (distância da chama,
+elevação), sem olhar para o dono. Um corpo que apagava deixava a própria silhueta estampada no
+chão — o mesmo defeito do blob, só que projetado. Ela agora multiplica por `bb.alpha`, que é o
+alpha do CORPO (e não o do frame, justamente por causa da piscada).
+
+**O resto da revisão, medido e não inspecionado.** A conta da UV foi conferida contra a
+`BoxGeometry` de verdade, num script à parte: as 6 faces de cada peça da escada recebem exatamente
+`tamanho × 16` texels e o recorte começa na linha autorada que se pediu. Dois achados de olhar a
+saída:
+
+* O meio-fio recorta **1,6 texel de largura por 16 de altura** — ou seja, é uma COLUNA da folha que
+  decide a cor do rail inteiro. Começando na coluna 0 (que é a junta vertical da fiada de cima) ele
+  saía com metade do comprimento escuro. Passou a começar na coluna 2 (e na 10 do outro lado).
+* O `setTimeout` da cortina e a transição de CSS não são o mesmo relógio: um frame perdido no fim
+  deixaria a cortina em 0,99 no instante do `scene.restart()`. Ela ganhou 60ms de cauda antes de
+  dizer que está preta.
+
+Conferido e mantido: `hero.walkFrames` volta sozinho no primeiro passo depois da escada
+(`PlayerMovementController` reescreve o ciclo a cada passo), então a subida não deixa o herói preso
+no ciclo de costas; e a marca de corpo (`corpseMark`/`CorpseDecals`) é um decal próprio, então o
+blob apagar junto com o bicho não tira do chão nada do que o jogo quer deixar lá.
+
+Validação: `typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram.
+
+## A ESCADA v5: o lance de baixo virou uma ESCADA (2026-08-20)
+
+Observação do autor, e ela estava certa: a peça de cima ficou excelente, mas a de baixo é a mesma
+coisa — e não deveria ser. *"Na superfície a entrada é basicamente um buraco. Na dungeon não é
+buraco e sim uma escada que sobe até o teto, ou seja, ela tem volume, ela sobe pra cima."*
+
+### Por que UM lance só era uma ideia errada
+
+A v3 fez as duas metades serem a MESMA geometria espelhada, e o cabeçalho defendia isso com
+orgulho. O defeito é que as duas metades **não mostram a mesma coisa**:
+
+* **Em cima a escada é um BURACO.** Tudo o que ela tem está abaixo de y=0, e nada abaixo de y=0
+  existe nesta câmera (a lição 1, que custou a v1 inteira). Então ela é DESENHADA, não construída:
+  listras baixas encolhendo sobre um vão preto. Só dá para sugerir.
+* **Embaixo a escada é uma MASSA.** Ela sai do chão da caverna e sobe até a boca no teto — degrau,
+  espelho, silhueta, volume. Não há nada a sugerir: ela está toda acima de y=0, que é exatamente
+  onde esta câmera enxerga. Espelhar o desenho de cima aqui é jogar fora a única metade da peça que
+  podia ser construída de verdade.
+
+### O lance sobe para o NORTE, e isso não é gosto
+
+Medido contra a projeção (a câmera olha de **45,9°**; um tile de altura vale 0,696 de tela e um de
+profundidade 0,718):
+
+| orientação | resultado |
+|---|---|
+| subindo **para longe** da câmera | os quatro espelhos aparecem por cima da pisada da frente — todos leem |
+| subindo **em direção** à câmera | a massa do topo tapa o lance inteiro: sobram **0,02 tile** de tela, uns 4 px |
+
+É a lição 2 de novo ("perspectiva não cabe aqui"), agora em três dimensões: o degrau da frente
+tapa os de trás. Só que desta vez existe uma orientação que resolve, e ela é subir para longe.
+
+**O preço:** o herói entra andando para o norte lá em cima e SAI andando para o sul lá embaixo —
+ele desce os degraus vindo na direção da tela. O rumo se inverte, e isso era lei aqui ("o rumo não
+muda no meio da viagem"). A lei caiu, e o argumento é curto: ela protegia uma continuidade que
+ninguém vê — a tela fica PRETA no meio da viagem — enquanto cobrava a única coisa que se vê, que é
+a escada. É também como o Zelda de cima sempre fez: some subindo, aparece descendo.
+
+**E ela comprou uma simplificação:** a boca das duas peças passou a ficar ao NORTE. Entrar na
+escada é andar para o norte em qualquer andar — em cima isso é cair no buraco, embaixo é subir os
+degraus. `handleTileEntered` perdeu o `if` de andar, e `walkStairs` perdeu o `toMouth`.
+
+### A peça
+
+Cada degrau é uma caixa que vai do **chão** até a altura dele — não é a pisada, é o degrau inteiro.
+É daí que vem o volume: uma massa escalonada, e não quatro lajes flutuando. Cada caixa esconde a de
+trás até a altura do espelho, então o que a câmera vê de cada degrau é exatamente uma pisada e um
+espelho, que é como uma escada se lê. Corrimão nos dois lados subindo junto (é a beira que diz
+"isto é uma escada e ela tem largura"), e no topo a **boca no teto**: uma caixa preta `unlit`, o
+espelho exato do vão lá de cima, e é contra ela que o corpo do herói apaga.
+
+Números: 4 degraus, espelho de 0,14, topo em **0,56**, boca de 0,52 acima disso (1,08 no total, à
+altura das paredes da caverna). Inclinação 57° — íngreme, e honesta: um lance que precisa vencer o
+pé-direito dentro de UM tile é íngreme mesmo.
+
+### A subida bate com a caminhada
+
+A profundidade da pisada **não é escolhida**: ela é `STAIRS_RUN_TILES / STAIRS_STEPS`. Com os dois
+números escolhidos à parte, o corpo subia em rampa por cima de degraus discretos e flutuava até
+meio espelho — o bastante para o pé descolar da pedra. Agora `stairsLiftAt` põe o corpo no degrau
+que está sob ele, e o degrau troca no mesmo `k` em que a bota toca o chão: **o pulo de altura e o
+som são o mesmo evento**, nos quatro degraus.
+
+Uma armadilha no caminho: a conta é `ceil` e não `floor`. Com `floor`, no pé da escada (`walked` =
+0) ele já nascia um espelho acima do piso — e na chegada terminava a descida flutuando 0,14 tile
+sobre a caverna, que é justamente o defeito que a v4 tinha ido consertar.
+
+### O que isso fez com o achado 02 da auditoria
+
+A v4 tinha resolvido "a chegada acontece no ar" com um paliativo: `STAIRS_RISE_TILES` valia 0,10, um
+resto de subida para o corpo não flutuar, e quem escondia a chegada era o vão preto. Agora não há
+nada a esconder — **ele chega no alto de uma escada que existe**, com pedra debaixo do pé, e desce
+os quatro degraus até o chão. O paliativo virou a altura real do lance.
+
+### Sabido e aceito
+
+O tile continua `blocking = false`, e o lance ocupa a metade norte dele. Quem chegar pelo norte
+andando para o sul atravessa a massa por um passo antes de parar ao pé da escada — o mesmo que já
+acontece com qualquer prop alto, e o estado final (de pé, na frente do lance) é visível e certo.
+Bloquear resolveria isso e quebraria o gesto, que é pisar.
+
+Validação: `typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram. A projeção
+e a quantização da subida foram conferidas em script à parte, não no olho. Não rodei o jogo — o
+autor testa, e esta é a peça que mais pede print: ela nasceu inteira nesta versão.

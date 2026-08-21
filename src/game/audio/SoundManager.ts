@@ -157,16 +157,21 @@ const ENEMY_VOICE: Readonly<Record<EnemyKind, { hit: number; death: number; tell
 const voiceRate = (kind: EnemyKind | undefined, part: 'hit' | 'death' | 'tell'): number =>
   kind ? ENEMY_VOICE[kind][part] : 1;
 
-// Souls staging: the title screen is just dripping water, and the combat track rises while
-// undead are out of the ground. 'overworld' ("Ashen Fields") is the adventure's exploration
-// theme, revived after years shelved — it plays over the wind bed in the overworld only
-// (dungeons, levels and the explorer stay wind-only: their dark is design). 'title' remains
-// unused since the intro was cut.
-export type MusicKey = 'title' | 'overworld' | 'danger' | 'menu';
+// A MUSICA NAO RESPONDE A INIMIGO. 'overworld' ("Ashen Fields") toca do inicio ao fim da
+// aventura, sobre o leito de vento; dungeon, level e o titulo tem a trilha deles, e e sempre a
+// mesma enquanto se esta la.
+//
+// Houve uma trilha de COMBATE ('danger', music-danger.wav), no estilo Souls: ela subia quando um
+// corpo vivo aparecia na tela com o heroi fora da luz e voltava ao normal alguns segundos depois
+// do ultimo cair. Ela foi REMOVIDA em 2026-08-19 a pedido do autor: a chegada de um inimigo ja e
+// um evento com aviso proprio (o telegrafo, a fissura, a voz do bicho), e uma trilha que muda
+// conta a mesma noticia antes — o jogador ouvia a tensao em vez de ver o corpo. O .wav continua
+// no repositorio, como o "Ashen Fields" ficou nos anos em que esteve desligado: revival facil.
+// 'title' segue sem uso desde que a intro caiu.
+export type MusicKey = 'title' | 'overworld' | 'menu';
 const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
   title: { file: 'music-title.wav', vol: 0.8 },
   overworld: { file: 'music-overworld.wav', vol: 0.9 },
-  danger: { file: 'music-danger.wav', vol: 1.0 },
   menu: { file: 'menu-drips.wav', vol: 0.5 }, // soft water drops under the title screen
 };
 const AMBIENCE_FILE = 'ambience-wind.wav';
@@ -306,8 +311,8 @@ class SoundManager {
   }
 
   /**
-   * Stop the current track. With `fadeMs > 0` the track rings out to silence (used when
-   * combat calms back down to the wind-only default); otherwise it stops instantly.
+   * Stop the current track. With `fadeMs > 0` the track rings out to silence (entrar numa
+   * dungeon, sair para o menu); otherwise it stops instantly.
    * `currentMusic` is cleared immediately either way, so per-frame callers are idempotent.
    */
   public stopMusic(fadeMs = 0): void {
@@ -574,7 +579,7 @@ class SoundManager {
 
   /**
    * A lamina TERMINOU de carregar (ver GameScene.tickSpinCharge). Duas notas subindo, curtas e
-   * limpas — um sino, nunca um zumbido: o zumbido ja e a lingua da maquina (torreta, caldeira),
+   * limpas — um sino, nunca um zumbido: o zumbido ja e a lingua das ameacas,
    * e este som pertence ao heroi.
    */
   public playSpinReady(): void {
@@ -857,144 +862,16 @@ class SoundManager {
     this.noise('highpass', 2600, 0.6, 0.06, 0.10, 0.02); // faint splash tail
   }
 
-  /**
-   * A garra do braco robotico fechando em cima de um item. Sintetizado direto, sem sample: e um
-   * som que toca sozinho e pode repetir muitas vezes seguidas numa esteira de bracos, entao ele
-   * precisa ser CURTO e discreto — um servo curtinho subindo e o "tac" seco da pinca travando em
-   * cima dele. Nada de peso metalico grande, que viraria martelada a cada tres segundos.
-   */
-  public playArmGrab(): void {
-    // Volumes na mesma faixa do playHammer (0.12-0.14). A primeira versao usava 0.045-0.07 e
-    // simplesmente nao se ouvia: "discreto" virou inaudivel debaixo da trilha e do vento. Leve
-    // ainda e — so que agora leve de verdade, e nao ausente.
-    this.osc('square', 190, 340, 0.11, 0.08); // o servo subindo
-    this.noise('bandpass', 2800, 4.0, 0.13, 0.05, 0.05); // a pinca travando
-    this.osc('triangle', 470, 350, 0.075, 0.07, 0.05);
-  }
-
-  /**
-   * O servo do braco robotico girando. Toca no comeco da meia-volta e dura o tanto que ela dura —
-   * e o unico som do conjunto que nao e um impacto, e e ele que da a sensacao de MAQUINA em vez
-   * de uma sequencia de estalos soltos. Grave e baixo: ele vai tocar a cada item, pra sempre.
-   */
-  public playArmServo(): void {
-    this.osc('triangle', 118, 132, 0.055, 0.42);
-    this.osc('square', 236, 264, 0.022, 0.42);
-  }
-
-  /** A pinca abrindo e a carga assentando no chao — mais leve que a mordida da pegada. */
-  public playArmRelease(): void {
-    this.osc('square', 300, 190, 0.06, 0.06);
-    this.noise('lowpass', 900, 1.2, 0.09, 0.07, 0.04); // a carga tocando o chao
-  }
-
-  /**
-   * O braco ARRANCOU pra entregar e nao pode: a saida esta presa. Mesma decisao do par do portao
-   * de bater — e o som de trabalho (playArmServo) com outro final. O servo comeca a girar e morre
-   * num baque surdo em vez de completar a meia-volta, entao "tentou e nao deu" e audivel sem que
-   * nada precise dizer o que falta. Grave e curto: repete a cada 2,2s enquanto o impasse durar.
-   */
-  public playArmStrain(): void {
-    this.osc('triangle', 118, 126, 0.05, 0.12); // o servo, cortado antes de pegar embalo
-    this.noise('lowpass', 260, 1.1, 0.11, 0.08, 0.1); // o baque de fim de curso
-    this.osc('sine', 96, 62, 0.06, 0.14, 0.1);
-  }
-
-  /** O toque seco do braco chegando ao fim do curso, ja de volta em repouso. */
-  public playArmPark(): void {
-    this.noise('bandpass', 1500, 3.0, 0.05, 0.035);
-    this.osc('triangle', 150, 110, 0.045, 0.05);
-  }
-
-  /** A corrente vence a inercia: madeira pesada, eixo metalico e a primeira pa pegando agua. */
-  public playWaterWheelStart(): void {
-    this.noise('lowpass', 520, 1.1, 0.16, 0.18);
-    this.osc('triangle', 72, 108, 0.12, 0.28);
-    this.noise('bandpass', 1350, 2.8, 0.08, 0.07, 0.06);
-  }
-
-  /** Batida recorrente de uma pa no rio; propositalmente curta e baixa para poder repetir. */
-  public playWaterWheelPaddle(speed01 = 1): void {
-    const strength = Math.max(0.35, Math.min(1, speed01));
-    this.noise('lowpass', 760, 0.85, 0.055 * strength, 0.09);
-    this.osc('triangle', 92, 70, 0.028 * strength, 0.1, 0.015);
-  }
-
-  /** O dinamo alcancou tensao: confirmacao curta, ascendente e harmonica, sem fanfarra. */
-  public playWaterWheelPower(): void {
-    this.osc('triangle', 196, 247, 0.08, 0.16);
-    this.osc('square', 392, 494, 0.035, 0.13, 0.045);
-    this.noise('bandpass', 2400, 3.5, 0.045, 0.055, 0.08);
-  }
-
-  /** A agua parou de empurrar; o tom cai, mas a animacao ainda conserva momento por um tempo. */
-  public playWaterWheelStop(): void {
-    this.osc('triangle', 108, 62, 0.065, 0.32);
-    this.noise('lowpass', 390, 1.2, 0.055, 0.16, 0.03);
-  }
-
-  /** A chama pegou sob a caldeira: um sopro grave de tiragem, ar sendo puxado pela fornalha. */
-  public playBoilerIgnite(): void {
+  /** A chama pegou no forno: um sopro grave de tiragem, ar entrando na fornalha. */
+  public playFurnaceIgnite(): void {
     this.noise('lowpass', 300, 1.1, 0.14, 0.24);
     this.osc('triangle', 58, 92, 0.09, 0.3, 0.03);
   }
 
-  /** A valvula solta vapor em regime; curto e baixo de proposito, porque repete para sempre. */
-  public playBoilerPuff(pressure01 = 1): void {
-    const strength = Math.max(0.35, Math.min(1, pressure01));
-    this.noise('bandpass', 3100, 1.6, 0.04 * strength, 0.08);
-    this.noise('highpass', 5200, 1.0, 0.02 * strength, 0.05, 0.01);
-  }
-
-  /** O vapor alcancou pressao de circuito: a confirmacao do dinamo, com um xiado por cima. */
-  public playBoilerPower(): void {
-    this.osc('triangle', 175, 220, 0.08, 0.16);
-    this.osc('square', 349, 440, 0.035, 0.13, 0.045);
-    this.noise('highpass', 4200, 1.4, 0.05, 0.1, 0.05);
-  }
-
-  /** A pressao se foi: o tom desce e o ultimo vapor escapa devagar. */
-  public playBoilerStop(): void {
-    this.osc('triangle', 120, 68, 0.06, 0.3);
-    this.noise('bandpass', 2200, 1.4, 0.045, 0.22, 0.04);
-  }
-
-  /** A carga salta do cabo pra bateria: um zap curto SUBINDO, com um tico de brilho no fim. */
-  public playBatteryCharge(): void {
-    this.osc('square', 240, 960, 0.05, 0.12);
-    this.osc('triangle', 480, 1400, 0.04, 0.1, 0.03);
-    this.noise('highpass', 6000, 1.2, 0.025, 0.05, 0.08);
-  }
-
-  /** O canister encaixa no cabo: trava metalica curta + corrente assumindo a rede. */
-  public playBatteryDock(): void {
-    this.noise('bandpass', 1700, 3.2, 0.09, 0.045);
-    this.osc('triangle', 150, 92, 0.07, 0.1, 0.02);
-    this.osc('square', 220, 260, 0.035, 0.08, 0.055);
-  }
-
-  /** Motor do portao assumindo carga (subindo) ou perdendo tensao (descendo por gravidade). */
-  public playElectronicGateMotor(opening: boolean): void {
-    if (opening) {
-      this.osc('triangle', 74, 118, 0.065, 0.48);
-      this.osc('square', 148, 236, 0.022, 0.44, 0.025);
-      this.noise('bandpass', 1300, 2.8, 0.045, 0.12, 0.04);
-    } else {
-      this.osc('triangle', 112, 58, 0.06, 0.38);
-      this.noise('lowpass', 430, 1.4, 0.075, 0.28, 0.03);
-    }
-  }
-
-  /** Fim de curso: leve no alto, pesado e travado quando a grade volta ao chao. */
-  public playElectronicGateStop(opened: boolean): void {
-    this.noise('bandpass', opened ? 1800 : 900, 3, opened ? 0.055 : 0.12, 0.055);
-    this.osc('triangle', opened ? 210 : 92, opened ? 160 : 48, opened ? 0.045 : 0.1, 0.09);
-  }
-
-  /** Grade fechada recebendo um bump: vibracao metalica curta, sem parecer dano/ataque. */
-  public playElectronicGateDenied(): void {
-    this.noise('bandpass', 1200, 4.2, 0.075, 0.045);
-    this.osc('triangle', 180, 145, 0.045, 0.08, 0.01);
+  /** Respiração curta do forno em regime, baixa porque se repete durante a fornada. */
+  public playFurnaceBreath(): void {
+    this.noise('bandpass', 3100, 1.6, 0.04, 0.08);
+    this.noise('highpass', 5200, 1.0, 0.02, 0.05, 0.01);
   }
 
   // ── a caixa de ferramentas ───────────────────────────────────────────────
@@ -1325,6 +1202,34 @@ class SoundManager {
     this.noise('lowpass', 380, 0.7, 0.09, 2.2, 0.08);
     // Um brilho subindo no fim: a luz do outro lado chegando antes do heroi.
     this.osc('sine', 330, 990, 0.05, 0.5, 1.85);
+  }
+
+  // ── a escada ────────────────────────────────────────────────────────────
+  // A porta entre os andares deixou de ser magica em tudo — a peca virou pedra de verdade, o
+  // heroi desce ANDANDO — menos numa camada: a que o jogador OUVE. Ela ainda tocava o
+  // `playPortalSuck`, que e literalmente um glissando de 110 para 880 Hz subindo e afinando com
+  // um ruido varrendo junto: "o portal inspirando o heroi". Um lance de escada nao inspira
+  // ninguem. O que ele faz e BATER: quatro botas em pedra, uma por pisada, cada uma um pouco
+  // mais grave e um pouco mais abafada que a anterior — e e a QUEDA de altura que diz para onde
+  // se vai, porque descer e subir usam a mesma pedra e o mesmo passo.
+
+  /**
+   * Uma bota na pedra. `step` e a pisada (0 a 3) e `descending` decide para que lado a serie
+   * anda: descendo ela AFUNDA (mais grave, mais abafada, mais eco a cada degrau), subindo ela
+   * ABRE. Sem sample: e um estalo curto de ruido filtrado com um corpo de onda embaixo, que e o
+   * mesmo material do `playPortalLand` em escala de um passo.
+   */
+  public playStairsStep(step: number, descending: boolean, delay = 0): void {
+    const k = descending ? step : 3 - step;
+    // O corpo do passo: quanto mais fundo, mais grave. A oitava inteira em quatro degraus seria
+    // um efeito; um terco dela e um lance de escada.
+    const body = 132 * (1 - k * 0.09);
+    this.osc('sine', body, body * 0.45, 0.1, 0.1, delay);
+    // O ESTALO da sola: passa-baixa fechando conforme desce — pedra abafa o agudo, e e por isso
+    // que um poco soa "mais escuro" que o degrau de cima.
+    this.noise('lowpass', 2400 - k * 420, 0.9, 0.16, 0.055, delay);
+    // O eco do vao, so descendo e so nos dois ultimos degraus: e o buraco respondendo.
+    if (descending && k >= 2) this.noise('bandpass', 520, 3.4, 0.05, 0.26, delay + 0.05);
   }
 
   /** As botas no chao do mundo novo: grave, seco, sem cauda. */

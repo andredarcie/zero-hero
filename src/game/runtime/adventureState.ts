@@ -1,5 +1,4 @@
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
-import type { DungeonSnapshot } from '@/game/dungeon/dungeonSnapshot';
 
 /**
  * A MEMORIA DA AVENTURA — o save, e a razao de a morte ter deixado de apagar o mundo.
@@ -7,7 +6,7 @@ import type { DungeonSnapshot } from '@/game/dungeon/dungeonSnapshot';
  * A aventura rodava inteira numa unica instancia de GameScene: morrer, entrar numa dungeon ou
  * fechar o browser jogava fora a mochila, as fogueiras acesas, os dialogos ouvidos e a historia
  * do mago. Num mundo aberto isso nao e dificuldade — e descarte do jogador. Este modulo e o
- * mesmo padrao de `dungeonTrip`/`explorerRun` (estado de modulo sobrevive ao `scene.restart()`)
+ * mesmo padrao de `underworld`/`explorerRun` (estado de modulo sobrevive ao `scene.restart()`)
  * com um andar a mais: o retrato vai ao localStorage, entao ele sobrevive tambem a aba.
  *
  * O que NAO entra aqui, de proposito:
@@ -33,28 +32,13 @@ export interface AdventureGroundItem {
   count?: number;
 }
 
-/**
- * Uma MAQUINA que o jogador construiu. Ela e a primeira coisa neste save que nao e nem item nem
- * marca: e ESTRUTURA — e por isso entra pela mesma porta do `felledTrees` e do `dugSpots`, como
- * um DIFF sobre o que o `world.json` autora, e nunca como uma foto que substitui o mundo.
- *
- * A distincao vale uma tarde: se as maquinas fossem foto, um mundo re-autorado (uma caldeira nova
- * posta no /editor, uma carta de chunk comprada) perderia o que o autor pos, ou pior, duplicaria
- * a peca do jogador em cima dela. Como diff, o mundo sempre ganha e o save so acrescenta.
- *
- * `content` so existe no bau, e e a razao de ele ser a peca que faz a fabrica valer a pena: e o
- * que o jogador encontra quando volta. Perder isso na morte seria devolver a automacao ao ponto
- * em que ela nao produzia nada.
- */
+/** Uma estação manual que o jogador construiu, persistida como diff sobre o mundo autorado. */
 export interface AdventureMachine {
-  type: 'wire' | 'belt' | 'chest' | 'boiler' | 'inserter' | 'extractor' | 'furnace' | 'tripHammer'
-  | 'altar';
+  type: 'furnace' | 'altar';
   worldX: number;
   worldY: number;
-  /** Esteira, braco e extrator: para onde a peca ENTREGA (0=N, 1=L, 2=S, 3=O). */
+  /** O forno usa a direção para definir sua saída visual. */
   dir?: number;
-  /** So o bau: o que esta guardado la dentro. */
-  content?: { kind: HeldItemKind; count: number } | null;
 }
 
 
@@ -68,6 +52,15 @@ export interface AdventureSnapshot {
   selected: HeldItemKind | 'none';
   /** "x,y" de cada fogueira do overworld que o jogador acendeu. */
   litFires: Set<string>;
+  /**
+   * "x,y" -> quantas toras a PIRA daquele tile ja recebeu, e "x,y" das que estao acesas.
+   *
+   * A ponte construida NAO entra no save e ninguem sentiu, porque ela custa dois gravetos. A pira
+   * custa viagens: se a morte apagasse a torre, o objetivo do jogo seria uma punicao. Por isso
+   * cada tora entregue persiste na hora.
+   */
+  pyreLogs: Map<string, number>;
+  litPyres: Set<string>;
   litFireCount: number;
   wizardIntroSeen: boolean;
   endingSeen: boolean;
@@ -83,30 +76,32 @@ export interface AdventureSnapshot {
    */
   dugSpots: Set<string>;
   /**
-   * A FABRICA que o jogador construiu, por MUNDO ('world' ou 'dungeon-N') — a mesma chave dos
-   * groundItems, porque uma esteira deitada numa dungeon nao pode reaparecer no overworld. Diff,
-   * nunca foto: ver AdventureMachine.
+   * Estações manuais construídas pelo jogador por mundo. Diff, nunca foto: ver AdventureMachine.
    */
   machines: Map<string, AdventureMachine[]>;
   /**
-   * Itens no chao por MUNDO ('world' ou 'dungeon-N'): a foto substitui a lista autorada daquele
+   * Itens no chao por MUNDO ('world' ou 'under'): a foto substitui a lista autorada daquele
    * arquivo — um item largado fica onde ficou, um tesouro tomado nao renasce.
    */
   groundItems: Map<string, AdventureGroundItem[]>;
   /** "cx,cy" dos chunks do overworld que o heroi ja pisou — o fog of war do mapa. */
   visitedChunks: Set<string>;
   /**
-   * A SEMENTE DESTA PARTIDA. Cunhada uma vez (ver `adventureRunSeed`), ela decide as nove
-   * dungeons — que agora sao geradas, nao lidas do disco. Recomecar do zero cunha outra, e e ai
-   * que mora o replay: a mesma aventura, nove masmorras que ninguem viu.
+   * O CADERNO DE MISSOES: um contador por tarefa, chaveado `<roteiro>/<tarefa>` (ver
+   * runtime/QuestLog). Ele mora aqui porque missao e da AVENTURA — level e explorador nunca
+   * hidratam este save, e deixa-los escrever contador sujaria a aventura de quem so foi jogar
+   * um puzzle. O numero so SOBE, e "cumprida" e lido dele: nao ha um segundo booleano de
+   * "fechou" para discordar da soma.
    */
-  runSeed: number;
+  questProgress: Map<string, number>;
   /**
-   * O RETRATO de cada dungeon ja gerada, por escopo ('dungeon-N'). Ele e a promessa de que uma
-   * dungeon, uma vez vista, e daquele save para sempre — inclusive atraves de uma mudanca no
-   * gerador, porque hidratar o retrato nunca consulta a semente (ver dungeon/dungeonWorld).
+   * O tile "x,y" da PIRA CENTRAL — o fim do jogo —, lembrado na primeira vez que o overworld a
+   * carrega. Ele existe porque uma missao pode FECHAR longe dela (matar caveira dentro de uma
+   * dungeon), e nesse instante nao ha objeto de pira nenhum na cena para receber as toras. Com
+   * a chave guardada, o credito cai no `pyreLogs` de qualquer lugar, e a torre esta mais alta
+   * quando o heroi volta.
    */
-  dungeons: Map<string, DungeonSnapshot>;
+  centralPyre: string | null;
 }
 
 const defaultSnapshot = (): AdventureSnapshot => ({
@@ -116,6 +111,8 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   inventory: [],
   selected: 'none',
   litFires: new Set(),
+  pyreLogs: new Map(),
+  litPyres: new Set(),
   litFireCount: 0,
   wizardIntroSeen: false,
   endingSeen: false,
@@ -126,8 +123,8 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   machines: new Map(),
   groundItems: new Map(),
   visitedChunks: new Set(),
-  runSeed: 0,
-  dungeons: new Map(),
+  questProgress: new Map(),
+  centralPyre: null,
 });
 
 type StoredSnapshot = {
@@ -137,6 +134,8 @@ type StoredSnapshot = {
   inventory?: Array<{ kind: HeldItemKind; count: number }>;
   selected?: HeldItemKind | 'none';
   litFires?: string[];
+  pyreLogs?: Record<string, number>;
+  litPyres?: string[];
   litFireCount?: number;
   wizardIntroSeen?: boolean;
   endingSeen?: boolean;
@@ -147,12 +146,41 @@ type StoredSnapshot = {
   machines?: Record<string, AdventureMachine[]>;
   groundItems?: Record<string, AdventureGroundItem[]>;
   visitedChunks?: string[];
-  runSeed?: number;
-  dungeons?: Record<string, DungeonSnapshot>;
+  questProgress?: Record<string, number>;
+  centralPyre?: string | null;
 };
 
 const num = (value: unknown, fallback: number): number =>
   (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback);
+
+// Itens aposentados somem durante a hidratação, inclusive de saves antigos. Sem esta migração,
+// uma bota selecionada sobreviveria no JSON e tentaria procurar uma arte que já não existe.
+const RETIRED_ITEM_KINDS: ReadonlySet<string> = new Set([
+  'lavaBoots', 'battery', 'batteryFull', 'gear', 'wire', 'belt', 'chest', 'boiler',
+  'inserter', 'extractor', 'tripHammer',
+]);
+const isRetiredItem = (kind: unknown): boolean =>
+  typeof kind === 'string' && RETIRED_ITEM_KINDS.has(kind);
+
+const cleanGroundItems = (
+  value: StoredSnapshot['groundItems'],
+): Map<string, AdventureGroundItem[]> => new Map(
+  Object.entries(value ?? {}).map(([scope, items]) => [
+    scope,
+    Array.isArray(items) ? items.filter((item) => item && !isRetiredItem(item.kind)) : [],
+  ]),
+);
+
+const cleanMachines = (
+  value: StoredSnapshot['machines'],
+): Map<string, AdventureMachine[]> => new Map(
+  Object.entries(value ?? {}).map(([scope, machines]) => [
+    scope,
+    Array.isArray(machines)
+      ? machines.filter((machine) => machine?.type === 'furnace' || machine?.type === 'altar')
+      : [],
+  ]),
+);
 
 const load = (): AdventureSnapshot => {
   const base = defaultSnapshot();
@@ -166,21 +194,29 @@ const load = (): AdventureSnapshot => {
         ? { worldX: p.respawn.worldX, worldY: p.respawn.worldY }
         : null,
       coins: num(p.coins, 0),
-      inventory: Array.isArray(p.inventory) ? p.inventory.filter((i) => i && typeof i.kind === 'string') : [],
-      selected: p.selected ?? 'none',
+      inventory: Array.isArray(p.inventory)
+        ? p.inventory.filter((i) => i && typeof i.kind === 'string' && !isRetiredItem(i.kind))
+        : [],
+      selected: isRetiredItem(p.selected) ? 'none' : (p.selected ?? 'none'),
       litFires: new Set(p.litFires ?? []),
+      pyreLogs: new Map(
+        Object.entries(p.pyreLogs ?? {}).map(([key, n]) => [key, num(n, 0)]),
+      ),
+      litPyres: new Set(p.litPyres ?? []),
       litFireCount: num(p.litFireCount, 0),
       wizardIntroSeen: p.wizardIntroSeen === true,
       endingSeen: p.endingSeen === true,
       seenDialogKeys: new Set(p.seenDialogKeys ?? []),
-      seenItems: new Set(p.seenItems ?? []),
+      seenItems: new Set((p.seenItems ?? []).filter((kind) => !isRetiredItem(kind))),
       felledTrees: new Set(p.felledTrees ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
-      machines: new Map(Object.entries(p.machines ?? {})),
-      groundItems: new Map(Object.entries(p.groundItems ?? {})),
+      machines: cleanMachines(p.machines),
+      groundItems: cleanGroundItems(p.groundItems),
       visitedChunks: new Set(p.visitedChunks ?? []),
-      runSeed: num(p.runSeed, 0),
-      dungeons: new Map(Object.entries(p.dungeons ?? {})),
+      questProgress: new Map(
+        Object.entries(p.questProgress ?? {}).map(([key, n]) => [key, num(n, 0)]),
+      ),
+      centralPyre: typeof p.centralPyre === 'string' ? p.centralPyre : null,
     };
   } catch {
     return base;
@@ -213,6 +249,8 @@ export const saveAdventure = (): void => {
     inventory: s.inventory,
     selected: s.selected,
     litFires: [...s.litFires],
+    pyreLogs: Object.fromEntries(s.pyreLogs),
+    litPyres: [...s.litPyres],
     litFireCount: s.litFireCount,
     wizardIntroSeen: s.wizardIntroSeen,
     endingSeen: s.endingSeen,
@@ -223,34 +261,16 @@ export const saveAdventure = (): void => {
     machines: Object.fromEntries(s.machines),
     groundItems: Object.fromEntries(s.groundItems),
     visitedChunks: [...s.visitedChunks],
-    runSeed: s.runSeed,
-    dungeons: Object.fromEntries(s.dungeons),
+    questProgress: Object.fromEntries(s.questProgress),
+    centralPyre: s.centralPyre,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   } catch {
-    // Sem storage (aba privada, cota estourada): a aventura CONTINUA, so nao atravessa a aba. As
-    // nove dungeons somam ~50 KB de retrato — folgado nos ~5 MB do localStorage —, mas a cota e
-    // do dominio inteiro e nao so deste jogo, entao estourar e um caminho real e nao teorico. O
-    // que ele nunca pode ser e fatal: uma excecao aqui derrubaria a viagem ate a dungeon.
+    // Sem storage (aba privada, cota estourada): a aventura CONTINUA, so nao atravessa a aba. A
+    // cota e do dominio inteiro e nao so deste jogo, entao estourar e um caminho real e nao
+    // teorico — e o que ele nunca pode ser e fatal: uma excecao aqui derrubaria a descida.
   }
-};
-
-/**
- * A SEMENTE DA PARTIDA, cunhada na primeira vez que alguem pergunta.
- *
- * E o unico `Math.random()` de todo o sistema de dungeons: daqui para baixo tudo e consequencia
- * dela (ver dungeon/dungeonRandom). Ela nasce preguicosa em vez de junto do save porque um save
- * que ja existia antes desta versao tambem precisa de uma — e nascer na primeira descida e o
- * momento exato em que ela passa a significar alguma coisa.
- */
-export const adventureRunSeed = (): number => {
-  const s = adventureState();
-  if (!s.runSeed) {
-    s.runSeed = (Math.floor(Math.random() * 0xffffffff) >>> 0) || 1;
-    saveAdventure();
-  }
-  return s.runSeed;
 };
 
 /** Recomecar do zero (o "Start over" do titulo): apaga o modulo E o disco. */

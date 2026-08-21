@@ -24,8 +24,8 @@
     "empty": "No levels available yet."
   },
   "endCard": {
-    "title": "End of the Introduction",
-    "subtitle": "You've completed the introduction of Zero The Hero."
+    "title": "The Signal Fire",
+    "subtitle": "The pyre burns, and the dark has an edge again.\nYou finished Zero The Hero. Thank you for carrying the flame."
   },
   "death": {
     "epitaph": "Nothing made sense,\nit was all for nothing."
@@ -56,7 +56,6 @@
       "axe": "YOU GOT THE AXE!",
       "greatAxe": "YOU GOT THE STEEL AXE! IT FELLS ANY TREE",
       "bomb": "YOU GOT THE BOMB! CARRY IT TO THE MARK",
-      "lavaBoots": "YOU GOT THE LAVA BOOTS!",
       "pickaxe": "YOU GOT THE PICKAXE!",
       "scythe": "YOU GOT THE SCYTHE!",
       "shovel": "YOU GOT THE SHOVEL! DIG THE BARE EARTH",
@@ -67,18 +66,8 @@
       "bucket": "YOU GOT A BUCKET! FILL IT AT THE RIVER",
       "bucketFull": "BUCKET FULL OF WATER!",
       "charcoal": "CHARCOAL! A LIT TORCH EATS IT — A FURNACE SMELTS ORE WITH IT",
-      "battery": "A BATTERY! CHARGE IT BY STEPPING ON A LIVE WIRE",
-      "batteryFull": "CHARGED BATTERY! SET IT DOWN BESIDE A WIRE",
       "iron": "AN IRON BLOCK! IT ONLY WORKS ON A BENCH",
-      "gear": "A GEAR! IT ONLY WORKS ON A BENCH",
-      "wire": "CABLE! PRESS A TO LAY ONE DOWN",
-      "belt": "A BELT! PRESS A TO INSTALL — IT CARRIES WHERE YOU FACE",
-      "chest": "A CHEST! A INSTALLS IT, B STORES AND TAKES",
-      "boiler": "A BOILER! A INSTALLS IT — IT NEEDS FIRE BESIDE IT",
-      "inserter": "AN ARM! A INSTALLS IT — TAKES FROM BEHIND, PUTS IN FRONT",
-      "extractor": "AN EXTRACTOR! INSTALL IT WITH ITS BACK TO AN IRON VEIN",
-      "furnace": "A FURNACE! FEED IT ORE AND CHARCOAL — THE COAL STEALS THE OXYGEN",
-      "tripHammer": "A TRIP HAMMER! POWER IT AND IT BEATS THE BLOOM FOR YOU"
+      "furnace": "A FURNACE! FEED IT ORE AND CHARCOAL — THE COAL STEALS THE OXYGEN"
     },
     "name": {
       "sword": "Sword",
@@ -86,7 +75,6 @@
       "axe": "Axe",
       "greatAxe": "Steel Axe",
       "bomb": "Bomb",
-      "lavaBoots": "Lava Boots",
       "pickaxe": "Pickaxe",
       "scythe": "Scythe",
       "shovel": "Shovel",
@@ -100,17 +88,7 @@
       "bucket": "Bucket",
       "bucketFull": "Full Bucket",
       "charcoal": "Charcoal",
-      "battery": "Battery",
-      "batteryFull": "Charged Battery",
-      "gear": "Gear",
-      "wire": "Cable",
-      "belt": "Belt",
-      "chest": "Chest",
-      "boiler": "Boiler",
-      "inserter": "Robotic Arm",
-      "extractor": "Extractor",
-      "furnace": "Furnace",
-      "tripHammer": "Trip Hammer"
+      "furnace": "Furnace"
     }
   },
   "lockedLines": [
@@ -166,6 +144,8 @@
     "music": "Music",
     "sfx": "Sound effects",
     "dof": "Depth of field",
+    "daylight": "Daylight",
+    "nightfall": "Nightfall",
     "fullscreen": "Fullscreen",
     "fullscreenExit": "Exit fullscreen",
     "levelList": "Back to levels",
@@ -277,11 +257,11 @@
       },
       {
         "speaker": "npc",
-        "text": "You've played the brief introduction of Zero The Hero!"
+        "text": "Now look north, to the stone cradle standing alone in the open. That is a PYRE, and it has waited longer than I have."
       },
       {
         "speaker": "npc",
-        "text": "Thank you so much for everything!"
+        "text": "Build it high with dead wood and set your torch to it. A fire that size is not warmth, Zero — it is a SIGNAL. Every hearth still sleeping out there will see it."
       }
     ]
   },
@@ -353,7 +333,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay nine coins a bar."
+          "text": "Finish it by hand on the altar. Bring me a bar and the ship gets one step closer to flying."
         }
       ]
     },
@@ -383,19 +363,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Suit says the pool up north-east glows. Nothing my BOOTS cannot walk."
+          "text": "Suit says the pool up north-east glows. Molten ground is no road."
         },
         {
           "speaker": "npc",
-          "text": "Take them. LAVA BOOTS — lava, embers, and yes, water: you just wade in."
+          "text": "Take this STONE. Throw it into lava and it cools into a basalt step."
         },
         {
           "speaker": "npc",
-          "text": "Something metal sank by the little island. Boots on. Go fish it out."
+          "text": "Something metal sank by the little island. One good step opens the route."
         },
         {
           "speaker": "npc",
-          "text": "Mind this: in deep water your hands stay busy — the boots carry YOU, not cargo."
+          "text": "The basalt stays behind. Cross back carrying whatever you find."
         }
       ]
     },
@@ -529,9 +509,5 @@
     "keysFurnace": "← ↑ ↓ →   ·   Z smelts it   ·   X closes",
     "keysTouchFurnace": "Tap to choose · tap again to smelt",
     "unknown": "?"
-  },
-  "prompt": {
-    "take": "Take {item}",
-    "put": "Place {item}"
   }
 }

@@ -1,10 +1,10 @@
 // O PONTO DE SPAWN AUTORADO — a aba Inimigos do editor, e o inimigo que VOLTA.
 //
-// O jogo tinha uma fonte de caveira so: o cerco (UndeadSpawnDirector), que invoca num anel em
-// volta do HEROI enquanto ele demora no escuro. Isso e pressao ambiente e nao serve pra autorar
-// nada — nao existe "a caveira daquele corredor" —, e ele fica DESLIGADO no lab e nos levels.
-// Que e exatamente a propriedade que faz este cenario valer: rodando em /lab, o cerco nao existe,
-// entao TODA caveira que aparecer aqui saiu de uma cova autorada. Nao ha outra leitura possivel.
+// A cova do editor e a UNICA fonte de inimigo do jogo. Houve um cerco ambiente
+// (UndeadSpawnDirector) que invocava caveiras num anel em volta do HEROI enquanto ele demorava no
+// escuro; ele foi removido, porque era a unica coisa capaz de por um corpo onde ninguem o autorou.
+// Entao TODA caveira que aparecer aqui saiu de uma cova autorada — e isso vale em qualquer mundo,
+// nao so no /lab onde este cenario roda.
 //
 // A fixture sao tres covas, e cada uma responde uma pergunta diferente:
 //

@@ -64,7 +64,6 @@ const ITEMS = [
   // Armas e chaves: os que abrem o caminho por VOCE.
   { name: 'ESPADA', desc: 'MATA COM UM GOLPE', png: 'items/equipment/sword.png', frame: 0 },
   { name: 'CHAVE', desc: 'ABRE PORTAS', png: 'items/collectibles/key.png', frame: 0 },
-  { name: 'BOTAS', desc: 'PISA LAVA E AGUA', png: 'ui/icons/lava_boots_icon.png' },
   // As ferramentas: cada uma FABRICA o insumo do passo seguinte.
   { name: 'MACHADO', desc: 'ARVORE > GRAVETO', png: 'ui/icons/axe_icon.png' },
   { name: 'PICARETA', desc: 'ROCHA > PEDRA', png: 'ui/icons/pickaxe_icon.png' },
@@ -72,7 +71,7 @@ const ITEMS = [
   { name: 'PA', desc: 'TERRA > BURACO', png: 'ui/icons/shovel_icon.png' },
   // O que elas produzem.
   { name: 'GRAVETO', desc: 'ACENDE: VIRA TOCHA', png: 'ui/icons/wood_icon.png' },
-  { name: 'PEDRA', desc: 'VAU NO RIO', png: 'environment/props/rock.png' },
+  { name: 'PEDRA', desc: 'VAU NO RIO E NA LAVA', png: 'environment/props/rock.png' },
   { name: 'SEMENTES', desc: 'PLANTE E REGUE', png: 'items/collectibles/seeds.png' },
   // A agua e o fogo.
   { name: 'BALDE', desc: 'ENCHA NO RIO', grid: BUCKET_EMPTY },

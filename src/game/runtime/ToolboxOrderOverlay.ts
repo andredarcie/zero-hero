@@ -1,7 +1,7 @@
 import { t } from '@/game/i18n/i18n';
 
 /**
- * O CATALOGO DA ENCOMENDA — a tela em que o jogador escolhe O QUE QUER, e a bancada passa a
+ * O CATALOGO DE FABRICACAO — a tela em que o jogador escolhe O QUE QUER, e a estacao passa a
  * responder DO QUE ELE PRECISA.
  *
  * ── Por que ela existe ────────────────────────────────────────────────────────────────────────
@@ -20,15 +20,14 @@ import { t } from '@/game/i18n/i18n';
  *   - **A divulgacao progressiva guarda o NOME, nunca a FORMA.** Um item que o jogador nunca viu
  *     aparece com a arte apagada e o nome em "?" — a ideia do Recipe Book do Minecraft, mas so
  *     ate onde ela ajuda. Chapar a arte em vulto preto foi tentado e MEDIDO numa tela: onze
- *     cartas de vulto identico, em que achar a engrenagem era adivinhar. Numa grade, silhueta e
+ *     cartas de vulto identico, em que achar um item era adivinhar. Numa grade, silhueta e
  *     ruido; o premio por construir e aprender o nome, nao poder enxergar a coisa.
- *   - **Escolher e CONSTRUIR.** Confirmar gasta da mochila e entrega na mochila, no mesmo frame.
- *     As bandejas continuam existindo como o canal das MAQUINAS (um braco robotico nao abre
- *     menu), mas o jogador nunca mais e obrigado a passar por elas.
+ *   - **Escolher e CONSTRUIR.** Confirmar gasta os insumos da mochila; a estacao manual faz o
+ *     produto e o entrega no chao.
  *
  * A tela CONGELA o mundo (a cena para de correr enquanto ela existe, como o dialogo e as cartas
  * de chunk). A bolsa e a unica tela deste jogo que roda com o mundo vivo, e ela e assim porque
- * trocar de item no meio de uma luta precisa custar alguma coisa. Escolher uma ambicao de fabrica
+ * trocar de item no meio de uma luta precisa custar alguma coisa. Escolher uma receita
  * na frente de uma bancada nao e um gesto de combate.
  */
 
@@ -124,8 +123,8 @@ const CSS = `
 .zh-order-art { width: 46px; height: 46px; object-fit: contain; image-rendering: pixelated; }
 /* A DIVULGACAO PROGRESSIVA guarda o NOME, nunca a FORMA. A versao anterior chapava a arte em preto
    (brightness zero) e o resultado media-se numa tela: onze cartas identicas de vulto cinza, em que
-   achar a engrenagem era adivinhar. Numa grade, silhueta e ruido. Agora a arte fica so mais apagada
-   — uma engrenagem continua lendo como engrenagem — e o que espera a primeira fabricacao e o nome.
+   achar um item era adivinhar. Numa grade, silhueta e ruido. Agora a arte fica so mais apagada
+   — o item continua reconhecivel — e o que espera a primeira fabricacao e o nome.
    O que o jogador ganha por construir e saber COMO SE CHAMA, e nao enxergar o objeto. */
 .zh-order-card.zh-unknown .zh-order-art { filter: saturate(0.35) brightness(0.72); opacity: 0.8; }
 /* O DEGRAU NOVO. A mesa mostra o que ja foi feito mais UMA coisa — e essa uma tem de se anunciar,
@@ -147,16 +146,14 @@ const CSS = `
   min-height: 1.6em;
 }
 .zh-order-card.zh-unknown .zh-order-name { color: #4f4a40; }
-/* OS INSUMOS, na propria carta: a resposta a "do que eu preciso" ja aparece aqui, e se repete
-   como fantasma na bandeja la fora. As duas leituras usam a MESMA arte de proposito. */
+/* OS INSUMOS, na propria carta: a resposta a "do que eu preciso" aparece aqui. */
 .zh-order-needs { display: flex; align-items: center; justify-content: center; gap: 5px; }
 .zh-order-need { position: relative; width: 22px; height: 22px; }
 .zh-order-need img {
   width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated;
 }
 /* DOIS EIXOS INDEPENDENTES, e e por isso que os tres estados se leem sem decorar nada:
-     · a MOLDURA tracejada responde "eu tenho?" — tracejado e a mesma lingua do fantasma que a
-       bandeja desenha la fora: contorno vazio = ainda nao esta aqui;
+     · a MOLDURA tracejada responde "eu tenho?" — contorno vazio = ainda nao esta aqui;
      · a COR DA MOLDURA responde "onde se consegue?" — neutra e materia-prima (procure no MUNDO),
        BRASA e coisa que a PROPRIA bancada faz (e aqui mesmo).
    Uma primeira versao separava os tres so por opacidade, e ai "tenho" e "a bancada faz" ficavam
@@ -166,8 +163,8 @@ const CSS = `
 .zh-order-need.zh-lack img { opacity: 0.34; }
 /* O SEGUNDO EIXO MORA NA MOLDURA, NAO NA ARTE — e isso foi aprendido derrubando a versao
    anterior. Ali, "a bancada faz" guardava a COR do sprite enquanto "procure no mundo" ia a cinza:
-   funcionou ate a engrenagem ser redesenhada em metal cinza, e nesse dia o grayscale sobre um
-   sprite ja cinza virou o mesmo pixel. Um sinal que depende da paleta da arte quebra quando a
+   pode falhar quando um item ja tem uma paleta cinza: o grayscale vira o mesmo pixel. Um sinal
+   que depende da paleta da arte quebra quando a
    arte muda. A BRASA na moldura nao depende de nada: e a cor que este jogo ja usa para "isto e
    seu, esta aqui" (o item na mao, o plano pregado). */
 .zh-order-need.zh-lack.zh-makeable { outline-color: rgba(229, 181, 88, 0.85); }
@@ -205,10 +202,7 @@ export interface OrderNeed {
   /** Quantas o heroi tem agora. */
   have: number;
   /**
-   * Este insumo sai da PROPRIA bancada? E a separacao vermelho/laranja do Factorio, e ela existe
-   * para ensinar a DESCIDA antes de ela acontecer: "voce nao tem engrenagem" e uma frase, "voce
-   * nao tem engrenagem MAS esta maquina faz engrenagem" e outra — e a segunda e a que explica por
-   * que o plano vai descer sozinho daqui a pouco.
+   * Este insumo tambem tem uma receita manual? A moldura o distingue do que so vem do mundo.
    */
   craftable: boolean;
 }
@@ -289,7 +283,7 @@ export class ToolboxOrderOverlay {
     // sentido para uma lista de onze cartas: os títulos eram o índice de um catálogo. Numa lista
     // de duas ou três — que é o que a mesa mostra desde que a escada existe — o cabeçalho é maior
     // que o conteúdo que ele organiza, e a família de cada peça já está escrita nos insumos dela
-    // (graveto + X é ferramenta; engrenagem + X é máquina).
+    // (graveto + pedra e ferramenta; pedra + pedra e estacao).
     //
     // E a ordem passou a IMPORTAR: ler de cima para baixo é ler a ordem em que as coisas foram
     // aprendidas, terminando no próximo passo. Agrupar por família embaralharia exatamente isso.
@@ -401,10 +395,7 @@ export class ToolboxOrderOverlay {
   /**
    * CONSTRUIR o item sob o cursor.
    *
-   * Nada de bandeja: se os insumos estao na mochila, a peca sai na hora e o painel fecha. Era esse
-   * o pedido — "basta selecionar e confirmar" —, e a razao de a bandeja ter saido do caminho e que
-   * ela cobrava do jogador tres viagens (largar A, largar B, buscar o produto) por uma decisao que
-   * ele ja tinha tomado ao escolher no menu.
+   * Se os insumos estao na mochila, a receita manual comeca e o painel fecha.
    *
    * Faltando material, a carta TREME e o painel fica aberto. A recusa e fisica, como toda recusa
    * deste jogo, e ficar aberto e o que permite escolher outra coisa sem reabrir tudo.

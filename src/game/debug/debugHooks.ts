@@ -23,57 +23,6 @@ export interface GameDebugState {
   /** A BOLSA aberta? (ver QuickBag — a mochila que nao pausa o jogo) */
   bagOpen: boolean;
   groundItems: Array<{ kind: HeldItemKind; worldX: number; worldY: number }>;
-  crates: Array<{ worldX: number; worldY: number }>;
-  pressurePlates: Array<{ worldX: number; worldY: number; variable?: string; pressed: boolean }>;
-  waterWheels: Array<{
-    worldX: number;
-    worldY: number;
-    variable?: string;
-    wired: boolean;
-    hasFlow: boolean;
-    speed: number;
-    generating: boolean;
-    frame: number;
-    rotation: number;
-  }>;
-  wires: Array<{
-    worldX: number;
-    worldY: number;
-    shape: string;
-    live: boolean;
-  }>;
-  boilers: Array<{
-    worldX: number;
-    worldY: number;
-    variable?: string;
-    heated: boolean;
-    water: number;
-    pressure: number;
-    generating: boolean;
-  }>;
-  inserters: Array<{
-    worldX: number;
-    worldY: number;
-    variable?: string;
-    powered: boolean;
-    /** Desfazendo a entrega (energia caiu com divida em aberto): `source`/`dest` trocam de ponta. */
-    reversed: boolean;
-    /** Entregou algo que ainda esta no destino — e o que um corte de energia manda desfazer. */
-    owes: boolean;
-    source: readonly [number, number];
-    dest: readonly [number, number];
-    busy: boolean;
-  }>;
-  electronicGates: Array<{
-    worldX: number;
-    worldY: number;
-    powered: boolean;
-    open: boolean;
-    moving: boolean;
-    blocking: boolean;
-    openness: number;
-    frame: number;
-  }>;
   /** Os portoes de bater: abertos ou nao, e quantas vezes cada um ja tentou e bateu. */
   swingGates: Array<{
     worldX: number;
@@ -121,8 +70,9 @@ export interface GameDebugState {
   levelName: string;
   levelIntroOpen: boolean;
   levelTransitioning: boolean;
-  globalVariables: Record<string, boolean>;
   coins: number;
+  /** Moedas físicas ainda no chão antes de entrarem na carteira. */
+  groundCoins: Array<{ worldX: number; worldY: number }>;
   dialogOpen: boolean;
   itemGetOpen: boolean;
   isDead: boolean;
@@ -130,30 +80,30 @@ export interface GameDebugState {
   heroFrozen: boolean;
   /** How many campfires in the loaded world are currently lit (puzzle progress). */
   litFires: number;
-  /** The dark-siege loop: near a campfire = safe; in the dark the danger meter (0..1)
-   *  fills and undead spawn around the hero (see UndeadSpawnDirector). */
-  safety: { safe: boolean; danger: number; undeadCount: number };
+  /** A PIRA (PyreObject): quantas toras já recebeu, se fechou e se está acesa. */
+  pyres: Array<{
+    worldX: number;
+    worldY: number;
+    logs: number;
+    missing: number;
+    complete: boolean;
+    lit: boolean;
+  }>;
+  /** Perto de uma fogueira acesa o heroi esta seguro — e nenhuma cova abre enquanto isso
+   *  (ver EnemySpawnerManager). `undeadCount` e o bestiario vivo em campo. */
+  safety: { safe: boolean; undeadCount: number };
   /**
-   * A trilha que o jogo esta pedindo agora (null = vento/silencio). A trilha de perigo so pode
-   * ser pedida com corpo vivo NO QUADRO (ver EnemyManager.framedAliveCount) — e esta leitura e
-   * como um cenario cobra isso sem tentar "ouvir" WebAudio.
+   * A trilha que o jogo esta pedindo agora (null = vento/silencio). Ela e escolhida uma vez, na
+   * entrada do mundo, e nao responde a inimigo: esta leitura e como um cenario cobra que ela NAO
+   * muda, sem tentar "ouvir" WebAudio.
    */
   music: string | null;
-  /**
-   * Cada corpo vivo: a especie (`kind`), onde esta, se ainda esta CHEGANDO (invulneravel e inerte:
-   * a fissura da caveira, a silhueta crescendo dos outros) e a placa de pressao em que fixou — o
-   * balao de pensamento na cabeca dele. `plateTarget` nao-nulo = ignorou o heroi e marcha pra la;
-   * hoje so a caveira atende placa (ver EnemyBase.seeksPlates).
-   *
-   * O nome do campo e historico — foi `undead` enquanto a caveira era o unico inimigo do jogo — e
-   * ficou: renomear quebraria todo cenario de playtest sem contar nada novo.
-   */
+  /** Cada corpo vivo. O nome ficou `undead` por compatibilidade com os cenarios antigos. */
   undead: Array<{
     kind: string;
     worldX: number;
     worldY: number;
     spawning: boolean;
-    plateTarget: { x: number; y: number } | null;
     /** Vida atual / total — a espada deixou de matar de um golpe, entao isto passou a importar. */
     health: number;
     maxHealth: number;
@@ -213,6 +163,17 @@ export interface GameDebugApi {
   listNpcKinds: () => NpcKind[];
   /** Quantas espadadas cada especie aguenta (ver ENEMY_BLOWS em world/ScreenContent). */
   enemyBlows: () => Readonly<Record<EnemyKind, number>>;
+  /**
+   * O CADERNO DE MISSOES (runtime/QuestLog). O sistema de missao NAO tem interface — o unico
+   * sinal dele no jogo e o NPC passando a falar outro roteiro —, entao esta e a unica janela
+   * para o estado dele. Sem ela, um sistema invisivel seria tambem um sistema improvavel.
+   */
+  quests: () => Array<{
+    dialog: string;
+    done: boolean;
+    speaks: string;
+    tasks: Array<{ task: string; have: number; need: number; done: boolean }>;
+  }>;
 }
 
 declare global {

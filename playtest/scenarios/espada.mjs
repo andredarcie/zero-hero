@@ -6,7 +6,7 @@
 //   2. A SOLUCAO INTEIRA, na ordem da corrente de producao: foice→SEMENTES, machado→TIMBER,
 //      semente+buraco+balde→o mato BROTA nos dois elos do pavio, graveto→tocha→arbusto,
 //      pavio (o fogo corre o mato plantado, cruza e COME a propria ponte, expoe a chave),
-//      pedra→basalto→botas, botas→bomba→cela→picareta, pedra→vau,
+//      pedra→basalto, segunda pedra→bomba→cela→picareta, pedra→vau,
 //      chave→comporta→drenagem, balde→guardia apagada→flores abrem→ESPADA.
 //
 // O roteiro anda por waypoints explicitos: cada perna fica em pistas comprovadamente abertas,
@@ -109,7 +109,7 @@ export default {
     assert('Rio (5,2) bloqueia', await solidAt(5, 2), 'river open?!');
     assert('Muro de lava (1,8) fecha o Quarteirao em Chamas', await solidAt(1, 8), 'lava wall open?!');
     assert('Arbusto seco (4,9) fecha o nicho da pedra', await solidAt(4, 9), 'bush open?!');
-    assert('Plug de lava (5,10) sela as botas', await solidAt(5, 10), 'plug open?!');
+    assert('Plug de lava (5,10) sela a segunda pedra', await solidAt(5, 10), 'plug open?!');
     assert('Fosso (9,9) cerca o santuario', await solidAt(9, 9), 'moat open?!');
     assert('Comporta (9,10) trancada', await solidAt(9, 10), 'door open?!');
     assert('Rocha da soleira (8,10) fecha o unico tile de alcancar a porta', await solidAt(8, 10), 'rock open?!');
@@ -236,19 +236,21 @@ export default {
       (await plantSpotAt(8, 4))?.hole === true && (await plantSpotAt(8, 3))?.hole === true, 30, 400);
     await shot('espada-pavio', { note: 'A ponte do fogo nao e a ponte do heroi: ela ardeu cruzando' });
 
-    // ═══ ATO 8: pedra → basalto → botas ═══════════════════════════════════════
-    log('ATO 8: a primeira pedra e dada; ela apaga o plug e abre as botas');
+    // ═══ ATO 8: pedra → basalto → segunda pedra ═══════════════════════════════
+    log('ATO 8: a primeira pedra apaga o plug e abre outra para continuar a estrada');
     await path([8, 7], [8, 8], [5, 8], [5, 9], [4, 9], [4, 10]); await dismissItemGet(); // pedra (larga a tocha)
     assert('Pedra na mao', (await state()).heldItem === 'stone', `held=${(await state()).heldItem}`);
     await bumpUntil('right', 'plug virou basalto', async () => !(await solidAt(5, 10))); // pedra na lava (5,10)
-    await path([5, 10], [5, 11]); await dismissItemGet(); // botas
-    assert('Botas de lava na mao', (await state()).heldItem === 'lavaBoots', `held=${(await state()).heldItem}`);
+    await path([5, 10], [5, 11]); await dismissItemGet(); // segunda pedra
+    assert('Segunda pedra na mao', (await state()).heldItem === 'stone', `held=${(await state()).heldItem}`);
 
     // ═══ ATO 9: o Quarteirao em Chamas — bomba, cela, e a saida minerada ══════
-    log('ATO 9: entra por cima da lava; a bomba abre a cela; a pedra da cela MINERA a saida');
-    await path([5, 10], [5, 9], [5, 8], [4, 8], [3, 8], [3, 9], [2, 9]); // vadeia (3,9)
-    await goTo(2, 10); await dismissItemGet(); // troca botas -> bomba
-    assert('Bomba na mao (botas ficaram no chao do quarteirao)', (await state()).heldItem === 'bomb', `held=${(await state()).heldItem}`);
+    log('ATO 9: a segunda pedra abre a lava; a bomba abre a cela; a pedra da cela reforca a saida');
+    await path([5, 10], [5, 9], [5, 8], [4, 8], [4, 9]);
+    await bumpUntil('left', 'entrada do quarteirao virou basalto', async () => !(await solidAt(3, 9)));
+    await path([3, 9], [2, 9]);
+    await goTo(2, 10); await dismissItemGet();
+    assert('Bomba na mao', (await state()).heldItem === 'bomb', `held=${(await state()).heldItem}`);
     // Sem botao: PISAR na marca (1,9) segurando a bomba a planta sozinha (o jogo e so andar).
     await path([2, 9]);
     await shot('espada-marca', { note: 'A marca: a bomba-fantasma respira em (1,9), a um passo — pise nela com a bomba' });

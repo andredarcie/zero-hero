@@ -1,23 +1,28 @@
 import type Phaser from 'phaser';
 
-import { DIALOG_PANEL_FRACTION, DIALOG_PANEL_MAX_WIDTH } from '@/game/constants';
+import { dialogBoxMetrics } from '@/game/constants';
 import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t } from '@/game/i18n/i18n';
 
-// Disco Elysium-style conversation skin. It is rendered as plain DOM layered over the
-// Phaser canvas — the same approach the level editor uses (see EditorDomUi). The game
-// canvas is a low-resolution pixel-art buffer scaled up with NEAREST sampling
-// (image-rendering: pixelated), so serif text drawn *inside* it can never be sharp: it
-// inherits the buffer's low resolution and blocky upscale. Rendering the text in DOM lets
-// the browser rasterize the font natively at full device resolution — razor-sharp,
-// antialiased, and free to use real scrolling for the running dialogue log.
+// A CAIXA DE FALA TRADICIONAL: uma barra no RODAPÉ, UMA mensagem por vez.
 //
-// O rodapé deixou de ser UMA opção: ele é um MENU. O caso comum continua sendo uma opção só
-// (Continue/Close), mas um NPC com BALCÃO (script.trade — o astronauta comprando ferro) ganha
-// a escolha do usuário: depois da PRIMEIRA fala, "continuar conversando" ou "vender"; vender
-// pergunta a QUANTIDADE (o caixa: − n +, confirmar, desistir) e paga em moedas na hora. Quem
-// executa a transação é a GameScene (DialogTradePort) — aqui só mora o desenho da conversa.
+// Ela é DOM por cima do canvas do Phaser (o mesmo caminho do editor, ver EditorDomUi): o canvas
+// é um buffer de pixel art escalado com NEAREST (image-rendering: pixelated), então texto
+// serifado desenhado DENTRO dele nunca pode ser nítido. No DOM o navegador rasteriza a fonte na
+// resolução do aparelho — afiada, antialiasada, e responsiva de graça.
+//
+// O painel LATERAL com o log rolando (estilo Disco Elysium) foi arrancado: ele comia metade da
+// tela, empurrava o mundo para o canto e pedia que se lesse a conversa inteira de uma vez. Aqui
+// a fala em curso é a ÚNICA na tela e o mundo continua enquadrado ACIMA da caixa — quem fala
+// aparece. A altura da caixa é `dialogBoxMetrics`, e a câmera lê a MESMA função (GameScene):
+// duas respostas diferentes e a fala taparia o NPC que a diz.
+//
+// O menu não sumiu, mudou de forma: o caso comum é UMA opção (continuar/fechar) e ela vira o ▼
+// que pisca no canto — o gesto é apertar Z/Enter ou tocar a caixa. Um NPC com BALCÃO
+// (script.trade — o astronauta comprando ferro) abre uma JANELA DE ESCOLHA sobre a caixa, e
+// vender pergunta a QUANTIDADE (o caixa: − n +, confirmar, desistir). Quem executa a transação é
+// a GameScene (DialogTradePort) — aqui só mora o desenho da conversa.
 
 const CHAR_DELAY_MS = 28;
 const STYLE_ID = 'zh-dialog-style';
@@ -39,56 +44,70 @@ type DialogOption = {
 
 const CSS = `
 #${ROOT_ID} { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+#${ROOT_ID} * { box-sizing: border-box; }
+/* Sem cortina por cima do mundo: a conversa acontece NELE. O escurecido é só o pé da tela, para
+   a caixa assentar sobre alguma coisa em vez de flutuar sobre grama clara. */
 #${ROOT_ID} .zh-dlg-scrim {
   position: absolute; pointer-events: auto;
-  background: rgba(0, 0, 0, 0.3);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.42) 100%);
   opacity: 0; transition: opacity 160ms ease;
 }
+/* O dock ocupa EXATAMENTE o retângulo da caixa; a janela de escolha se pendura acima dele. */
+#${ROOT_ID} .zh-dlg-dock { position: absolute; pointer-events: none; font-family: ${SERIF}; }
 #${ROOT_ID} .zh-dlg-panel {
-  position: absolute; pointer-events: auto;
-  display: flex; flex-direction: column;
-  background: #14100c; border-left: 1px solid #3d342a;
-  color: #d8d1c0; font-family: ${SERIF};
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.55);
-  opacity: 0; transition: opacity 160ms ease;
-  overflow: hidden;
+  position: absolute; inset: 0; pointer-events: auto;
+  display: flex; align-items: stretch; gap: 0.9em;
+  padding: 0.7em 0.9em;
+  background: #14100c; color: #d8d1c0;
+  border: 2px solid #6b5b45; border-radius: 2px;
+  box-shadow: inset 0 0 0 2px #2a2118, 0 8px 26px rgba(0, 0, 0, 0.55);
+  opacity: 0; transform: translateY(10px);
+  transition: opacity 160ms ease, transform 160ms ease;
 }
-#${ROOT_ID}.zh-in .zh-dlg-panel,
+#${ROOT_ID}.zh-in .zh-dlg-panel { opacity: 1; transform: none; }
 #${ROOT_ID}.zh-in .zh-dlg-scrim { opacity: 1; }
-#${ROOT_ID} .zh-dlg-log {
-  flex: 1 1 auto; min-height: 0;
-  display: flex; flex-direction: column;
-  overflow-y: auto; overflow-x: hidden;
-  padding: 1.4em 1.5em 0.9em;
-  scrollbar-width: thin; scrollbar-color: #3d342a transparent;
-}
-#${ROOT_ID} .zh-dlg-log::-webkit-scrollbar { width: 8px; }
-#${ROOT_ID} .zh-dlg-log::-webkit-scrollbar-thumb { background: #3d342a; border-radius: 4px; }
-/* Anchor the log to the bottom like Disco Elysium: the newest line sits just above the
-   options and the conversation grows upward. margin-top:auto pushes content down while it
-   is shorter than the viewport, then collapses so older lines scroll off the top. */
-#${ROOT_ID} .zh-dlg-log-inner { margin-top: auto; }
-#${ROOT_ID} .zh-dlg-entry { margin-bottom: 1.1em; }
-#${ROOT_ID} .zh-dlg-entry:last-child { margin-bottom: 0; }
-#${ROOT_ID} .zh-dlg-head { display: flex; align-items: center; gap: 0.55em; margin-bottom: 0.3em; }
 #${ROOT_ID} .zh-dlg-portrait {
-  flex: 0 0 auto; width: 2.6em; height: 2.6em;
+  flex: 0 0 auto; width: 3.4em; height: 3.4em;
   image-rendering: pixelated; border: 2px solid #fff; background: #0b0906;
 }
+#${ROOT_ID} .zh-dlg-col {
+  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column;
+}
 #${ROOT_ID} .zh-dlg-name {
+  flex: 0 0 auto;
   font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
-  font-size: 0.92em;
+  font-size: 0.86em; margin-bottom: 0.22em;
 }
-#${ROOT_ID} .zh-dlg-body { line-height: 1.5; }
+#${ROOT_ID} .zh-dlg-body {
+  flex: 1 1 auto; min-height: 0; line-height: 1.5;
+  padding-right: 1.6em; /* o ▼ mora no canto: o texto não passa por baixo dele */
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: thin; scrollbar-color: #3d342a transparent;
+}
+#${ROOT_ID} .zh-dlg-body::-webkit-scrollbar { width: 6px; }
+#${ROOT_ID} .zh-dlg-body::-webkit-scrollbar-thumb { background: #3d342a; border-radius: 3px; }
 #${ROOT_ID} .zh-dlg-body.zh-narr { font-style: italic; color: #8e99ad; }
-#${ROOT_ID} .zh-dlg-body::after {
-  content: '_'; opacity: 0; margin-left: 0.05em;
+/* O ▼ é o "e agora?" do caso comum: ele só aparece com a fala assentada. */
+#${ROOT_ID} .zh-dlg-next {
+  position: absolute; right: 0.6em; bottom: 0.3em;
+  pointer-events: auto; cursor: pointer;
+  color: #d4c8a4; font-size: 0.95em; line-height: 1;
+  animation: zh-dlg-bob 900ms ease-in-out infinite;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-#${ROOT_ID} .zh-dlg-body.zh-typing::after {
-  opacity: 1; animation: zh-dlg-caret 0.6s steps(1) infinite;
+@keyframes zh-dlg-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(0.25em); } }
+/* A JANELA DE ESCOLHA: um quadro próprio pousado sobre a caixa, à direita — o formato de
+   sempre. Ela não existe quando a fala tem uma saída só. */
+#${ROOT_ID} .zh-dlg-choices {
+  position: absolute; right: 0; bottom: calc(100% + 0.5em);
+  pointer-events: auto; display: none;
+  min-width: 14em; max-width: 100%;
+  padding: 0.4em 0.45em;
+  background: #14100c; color: #d8d1c0;
+  border: 2px solid #6b5b45; border-radius: 2px;
+  box-shadow: inset 0 0 0 2px #2a2118, 0 8px 26px rgba(0, 0, 0, 0.55);
 }
-@keyframes zh-dlg-caret { 50% { opacity: 0; } }
-#${ROOT_ID} .zh-dlg-options { flex: 0 0 auto; border-top: 1px solid #3d342a; padding: 0.5em 1.2em 1em; }
+#${ROOT_ID} .zh-dlg-choices.zh-on { display: block; }
 #${ROOT_ID} .zh-dlg-opt {
   padding: 0.4em 0.6em; border-radius: 2px;
   color: #cfc9ba; cursor: pointer;
@@ -108,27 +127,36 @@ const CSS = `
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 #${ROOT_ID} .zh-dlg-qty-btn:hover { background: #d4c8a4; color: #241d12; }
-#${ROOT_ID} .zh-dlg-qty { min-width: 7em; text-align: center; color: #e8dfc7; }
-/* No dedo, alvo tem tamanho de dedo: opções e botões do caixa crescem até o mínimo confortável
-   (~44px) — a mesma conversa, só com mais carne onde o toque acerta. */
+#${ROOT_ID} .zh-dlg-qty { flex: 1 1 auto; min-width: 6em; text-align: center; color: #e8dfc7; }
+/* No dedo, alvo tem tamanho de dedo: as escolhas ocupam a largura inteira da caixa e crescem
+   até o mínimo confortável (~44px) — a mesma conversa, só com mais carne onde o toque acerta. */
 @media (pointer: coarse) {
+  #${ROOT_ID} .zh-dlg-choices { left: 0; right: 0; min-width: 0; }
   #${ROOT_ID} .zh-dlg-opt { padding: 0.7em 0.6em; min-height: 44px; display: flex; align-items: center; }
   #${ROOT_ID} .zh-dlg-qty-btn { width: 2.6em; min-height: 44px; font-size: 1.1em; }
   #${ROOT_ID} .zh-dlg-trade { gap: 0.9em; }
+  #${ROOT_ID} .zh-dlg-next { font-size: 1.15em; right: 0.5em; bottom: 0.2em; }
+}
+/* Tela estreita (telefone em pé): o retrato encolhe para o texto não virar uma coluna de duas
+   palavras. Ele não some — é ele que diz QUEM fala. */
+@media (max-width: 560px) {
+  #${ROOT_ID} .zh-dlg-panel { gap: 0.6em; padding: 0.6em 0.7em; }
+  #${ROOT_ID} .zh-dlg-portrait { width: 2.7em; height: 2.7em; }
 }
 `;
 
 export class DialogOverlay {
   private readonly root: HTMLDivElement;
+  private readonly dock: HTMLDivElement;
   private readonly panel: HTMLDivElement;
   private readonly scrim: HTMLDivElement;
-  private readonly log: HTMLDivElement;
-  private readonly logInner: HTMLDivElement;
-  private readonly optionsEl: HTMLDivElement;
+  private readonly portraitEl: HTMLImageElement;
+  private readonly nameEl: HTMLDivElement;
+  private readonly bodyEl: HTMLDivElement;
+  private readonly nextEl: HTMLDivElement;
+  private readonly choicesEl: HTMLDivElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly portraitUrl: string;
-
-  private activeBody?: HTMLDivElement;
 
   private lineIndex = 0;
   private charIndex = 0;
@@ -143,7 +171,7 @@ export class DialogOverlay {
   private currentText = '';
   private currentOnDone?: () => void;
 
-  /** O menu do rodapé como dado, na ordem desenhada. */
+  /** O menu como dado, na ordem desenhada. Uma opção só = o ▼; duas ou mais = a janela. */
   private options: DialogOption[] = [];
   private optionEls: HTMLDivElement[] = [];
   /** Qual opção Enter/Espaço/Z escolhem — movida por ↑↓/WS, hover e toque. */
@@ -175,37 +203,56 @@ export class DialogOverlay {
     this.scrim.className = 'zh-dlg-scrim';
     this.root.appendChild(this.scrim);
 
+    this.dock = document.createElement('div');
+    this.dock.className = 'zh-dlg-dock';
+    this.root.appendChild(this.dock);
+
+    this.choicesEl = document.createElement('div');
+    this.choicesEl.className = 'zh-dlg-choices';
+    this.dock.appendChild(this.choicesEl);
+
+    // A caixa é montada UMA vez e reescrita a cada fala: com uma mensagem por vez não há lista
+    // para crescer, e recriar o quadro faria a moldura piscar entre linhas.
     this.panel = document.createElement('div');
     this.panel.className = 'zh-dlg-panel';
-    this.root.appendChild(this.panel);
-
-    this.log = document.createElement('div');
-    this.log.className = 'zh-dlg-log';
-    this.logInner = document.createElement('div');
-    this.logInner.className = 'zh-dlg-log-inner';
-    this.log.appendChild(this.logInner);
-    this.panel.appendChild(this.log);
-
-    this.optionsEl = document.createElement('div');
-    this.optionsEl.className = 'zh-dlg-options';
-    this.panel.appendChild(this.optionsEl);
+    this.portraitEl = document.createElement('img');
+    this.portraitEl.className = 'zh-dlg-portrait';
+    this.portraitEl.alt = '';
+    const col = document.createElement('div');
+    col.className = 'zh-dlg-col';
+    this.nameEl = document.createElement('div');
+    this.nameEl.className = 'zh-dlg-name';
+    this.bodyEl = document.createElement('div');
+    this.bodyEl.className = 'zh-dlg-body';
+    col.append(this.nameEl, this.bodyEl);
+    this.nextEl = document.createElement('div');
+    this.nextEl.className = 'zh-dlg-next';
+    this.nextEl.textContent = '▼';
+    this.nextEl.style.display = 'none';
+    this.panel.append(this.portraitEl, col, this.nextEl);
+    this.dock.appendChild(this.panel);
 
     document.body.appendChild(this.root);
 
     this.portraitUrl = this.buildPortraitUrl();
+    this.portraitEl.src = this.portraitUrl;
+    this.portraitEl.style.borderColor = this.script.npcColorHex;
+    this.nameEl.style.color = this.script.npcColorHex;
+    this.nameEl.textContent = this.script.npcName.toUpperCase();
+
     this.layout();
     window.addEventListener('resize', this.layout);
     window.addEventListener('keydown', this.handleKeyDown, true);
 
-    // Fade in, then reveal the first line. The pointer/scrim advance is armed a beat later
-    // so the keypress that opened the dialog can't instantly skip through it.
+    // Fade in, then reveal the first line. The pointer advance is armed a beat later so the
+    // keypress that opened the dialog can't instantly skip through it.
     requestAnimationFrame(() => { if (!this.destroyed) this.root.classList.add('zh-in'); });
     this.scene.time.delayedCall(180, () => { if (!this.destroyed) this.showLine(0); });
     this.scene.time.delayedCall(220, () => {
       if (this.destroyed) return;
       this.pointerArmed = true;
       this.scrim.addEventListener('click', this.handlePointer);
-      this.log.addEventListener('click', this.handlePointer);
+      this.panel.addEventListener('click', this.handlePointer);
     });
   }
 
@@ -220,29 +267,29 @@ export class DialogOverlay {
     window.removeEventListener('resize', this.layout);
     window.removeEventListener('keydown', this.handleKeyDown, true);
     this.scrim.removeEventListener('click', this.handlePointer);
-    this.log.removeEventListener('click', this.handlePointer);
+    this.panel.removeEventListener('click', this.handlePointer);
     this.root.remove();
   }
 
-  // ── Layout: hug the right PANEL_FRACTION of the canvas, in viewport pixels ──
+  // ── Layout: a barra do rodapé, em pixels de viewport ───────────────────────
   private readonly layout = (): void => {
     const rect = this.canvas.getBoundingClientRect();
-    // Hug the right fraction of the canvas, but cap the width so text never over-stretches.
-    const panelW = Math.round(Math.min(rect.width * DIALOG_PANEL_FRACTION, DIALOG_PANEL_MAX_WIDTH));
+    const { boxHeight, fontSize, margin } = dialogBoxMetrics(rect.width, rect.height);
 
-    this.panel.style.left = `${Math.round(rect.left + rect.width - panelW)}px`;
-    this.panel.style.top = `${Math.round(rect.top)}px`;
-    this.panel.style.width = `${panelW}px`;
-    this.panel.style.height = `${Math.round(rect.height)}px`;
+    // Ancorada pelo PÉ da tela (e não pelo topo da caixa) para o entalhe do telefone caber:
+    // `env(safe-area-inset-bottom)` empurra a caixa para cima onde existe barra de gestos.
+    const bottomGap = Math.round(window.innerHeight - (rect.top + rect.height) + margin);
+    this.dock.style.left = `${Math.round(rect.left + margin)}px`;
+    this.dock.style.width = `${Math.round(rect.width - margin * 2)}px`;
+    this.dock.style.bottom = `calc(${bottomGap}px + env(safe-area-inset-bottom, 0px))`;
+    this.dock.style.height = `${boxHeight}px`;
+    // A tipografia acompanha o canvas: a mesma conversa lida de um telefone e de um monitor.
+    this.dock.style.fontSize = `${fontSize}px`;
 
     this.scrim.style.left = `${Math.round(rect.left)}px`;
     this.scrim.style.top = `${Math.round(rect.top)}px`;
-    this.scrim.style.width = `${Math.round(rect.width - panelW)}px`;
+    this.scrim.style.width = `${Math.round(rect.width)}px`;
     this.scrim.style.height = `${Math.round(rect.height)}px`;
-
-    // Scale the whole panel's typography to the canvas so it reads as part of the game.
-    const base = Math.max(12, Math.min(18, Math.round(rect.height / 32)));
-    this.panel.style.fontSize = `${base}px`;
   };
 
   /** Rasterize the NPC's sprite frame to a data URL so DOM can show it crisply. */
@@ -270,15 +317,14 @@ export class DialogOverlay {
     this.currentIsNarrator = line.speaker === 'narrator';
     this.currentText = line.text;
     this.currentOnDone = onDone;
-    this.activeBody = this.appendEntry(line);
+    this.showLineFrame(line);
 
     this.typewriterEvent = this.scene.time.addEvent({
       delay: CHAR_DELAY_MS,
       loop: true,
       callback: () => {
         this.charIndex++;
-        if (this.activeBody) this.activeBody.textContent = this.currentText.slice(0, this.charIndex);
-        this.log.scrollTop = this.log.scrollHeight;
+        this.bodyEl.textContent = this.currentText.slice(0, this.charIndex);
         // Old-RPG "talking" blip: one per couple of letters, skipping spaces and narration.
         const ch = this.currentText[this.charIndex - 1];
         if (this.voice && !this.currentIsNarrator && ch && ch !== ' ' && this.charIndex % 2 === 0) {
@@ -299,51 +345,28 @@ export class DialogOverlay {
   }
 
   /**
-   * Append a log entry: NPC lines get a bordered portrait plus the caps name in the NPC's
-   * color; narration renders as dim italic with no attribution. Returns the body element
-   * the typewriter fills.
+   * Veste a caixa para a fala que vai entrar: o NPC traz retrato e nome em caps na cor dele; a
+   * narração é itálico apagado, sem atribuição e com a caixa inteira para si. UMA mensagem por
+   * vez — o que estava escrito some aqui.
    */
-  private appendEntry(line: DialogLine): HTMLDivElement {
+  private showLineFrame(line: DialogLine): void {
     const isNarrator = line.speaker === 'narrator';
-    const entry = document.createElement('div');
-    entry.className = 'zh-dlg-entry';
-
-    if (!isNarrator) {
-      const head = document.createElement('div');
-      head.className = 'zh-dlg-head';
-      const portrait = document.createElement('img');
-      portrait.className = 'zh-dlg-portrait';
-      portrait.src = this.portraitUrl;
-      portrait.alt = '';
-      portrait.style.borderColor = this.script.npcColorHex;
-      const name = document.createElement('div');
-      name.className = 'zh-dlg-name';
-      name.textContent = this.script.npcName.toUpperCase();
-      name.style.color = this.script.npcColorHex;
-      head.append(portrait, name);
-      entry.appendChild(head);
-    }
-
-    const body = document.createElement('div');
-    body.className = isNarrator ? 'zh-dlg-body zh-narr zh-typing' : 'zh-dlg-body zh-typing';
-    entry.appendChild(body);
-
-    this.logInner.appendChild(entry);
-    this.log.scrollTop = this.log.scrollHeight;
-    return body;
+    this.portraitEl.style.display = isNarrator ? 'none' : '';
+    this.nameEl.style.display = isNarrator ? 'none' : '';
+    this.bodyEl.className = isNarrator ? 'zh-dlg-body zh-narr' : 'zh-dlg-body';
+    this.bodyEl.textContent = '';
+    this.bodyEl.scrollTop = 0;
   }
 
   private finishLine(): void {
     this.isTyping = false;
-    this.activeBody?.classList.remove('zh-typing');
-    this.log.scrollTop = this.log.scrollHeight;
     this.currentOnDone?.();
   }
 
   /**
-   * Uma fala do ROTEIRO terminou: montar o menu. O caso sem balcão é o de sempre (Continue/
-   * Close numa opção só). Com balcão, a PRIMEIRA fala abre a escolha do usuário — continuar
-   * conversando ou vender — e a ÚLTIMA troca "continuar" por "fechar", com vender sempre à mão.
+   * Uma fala do ROTEIRO terminou: montar o menu. O caso sem balcão é o de sempre (continuar/
+   * fechar numa opção só, que vira o ▼). Com balcão, a PRIMEIRA fala abre a escolha do usuário —
+   * continuar conversando ou vender — e a ÚLTIMA troca "continuar" por "fechar".
    */
   private scriptLineDone(): void {
     const isLast = this.lineIndex >= this.script.lines.length - 1;
@@ -417,7 +440,8 @@ export class DialogOverlay {
     this.options = [];
     this.optionEls = [];
     this.selected = 0;
-    this.optionsEl.innerHTML = '';
+    this.choicesEl.innerHTML = '';
+    this.nextEl.style.display = 'none';
 
     const row = document.createElement('div');
     row.className = 'zh-dlg-trade';
@@ -436,7 +460,7 @@ export class DialogOverlay {
     plus.textContent = '+';
     plus.addEventListener('click', () => this.adjustQty(1));
     row.append(minus, qty, plus);
-    this.optionsEl.appendChild(row);
+    this.choicesEl.appendChild(row);
 
     this.appendOption({
       label: `Sell ${this.qty} for ${this.qty * trade.coinsPerUnit} coins.`,
@@ -448,7 +472,7 @@ export class DialogOverlay {
       testId: 'back',
       pick: () => { this.amountOpen = false; this.tradeMenu(); },
     }, 2);
-    this.log.scrollTop = this.log.scrollHeight;
+    this.choicesEl.classList.add('zh-on');
   }
 
   private confirmSale(): void {
@@ -462,26 +486,47 @@ export class DialogOverlay {
       this.typeLine({ speaker: 'npc', text: trade.empty }, () => this.tradeMenu());
       return;
     }
-    // O recibo é do NARRADOR (o número exato), o agradecimento é do NPC — e o balcão reabre.
+    // O recibo é do NARRADOR (o número exato) e o agradecimento é do NPC — e com UMA mensagem
+    // por vez elas são duas TELAS, não duas linhas empilhadas: sem o aperto no meio, o número
+    // que o jogador precisa conferir passaria voando por baixo do "obrigado".
     this.typeLine({ speaker: 'narrator', text: `Sold ${units} ${trade.item} for ${coins} coins.` }, () => {
-      this.typeLine({ speaker: 'npc', text: trade.thanks }, () => this.tradeMenu());
+      this.setOptions([{
+        label: t('dialog.continue'),
+        testId: 'continue',
+        pick: () => this.typeLine({ speaker: 'npc', text: trade.thanks }, () => this.tradeMenu()),
+      }]);
     });
   }
 
-  // ── O menu do rodapé ───────────────────────────────────────────────────────
+  // ── O menu: o ▼ do caso comum, a janela de escolha do resto ────────────────
 
   private clearOptions(): void {
     this.options = [];
     this.optionEls = [];
     this.selected = 0;
     this.amountOpen = false;
-    this.optionsEl.innerHTML = '';
+    this.choicesEl.innerHTML = '';
+    this.choicesEl.classList.remove('zh-on');
+    this.nextEl.style.display = 'none';
+  }
+
+  /** Uma escolha de verdade está na tela — e aí tocar a CAIXA não escolhe nada por engano. */
+  private get choicesOpen(): boolean {
+    return this.optionEls.length > 0 || this.amountOpen;
   }
 
   private setOptions(list: DialogOption[]): void {
     this.clearOptions();
+    // Saída única: nada de menu de um item só. O ▼ diz "tem mais" e o gesto é a caixa inteira.
+    if (list.length === 1) {
+      this.options = list;
+      this.nextEl.dataset.opt = list[0].testId;
+      this.nextEl.title = list[0].label;
+      this.nextEl.style.display = '';
+      return;
+    }
     list.forEach((option, index) => this.appendOption(option, index + 1));
-    this.log.scrollTop = this.log.scrollHeight;
+    this.choicesEl.classList.add('zh-on');
   }
 
   private appendOption(option: DialogOption, number: number): void {
@@ -500,7 +545,7 @@ export class DialogOverlay {
     // O mouse passeando move a MESMA seleção das setas — um destaque, três entradas.
     el.addEventListener('mouseenter', () => this.select(index));
     this.optionEls.push(el);
-    this.optionsEl.appendChild(el);
+    this.choicesEl.appendChild(el);
     this.select(this.selected);
   }
 
@@ -516,16 +561,16 @@ export class DialogOverlay {
       this.skipTypewriter();
       return;
     }
-    // Com o caixa aberto o clique no LOG não escolhe nada: vender é um botão, não um toque
-    // distraído — o mesmo motivo de o Enter confirmar só o que está escrito no rótulo.
-    if (this.amountOpen) return;
+    // Com uma escolha na tela, tocar a CAIXA não decide nada: escolher é apertar a escolha — o
+    // mesmo motivo de o Enter confirmar só o que está escrito no rótulo destacado.
+    if (this.choicesOpen) return;
     this.options[this.selected]?.pick();
   }
 
   private skipTypewriter(): void {
     this.typewriterEvent?.remove();
     this.typewriterEvent = undefined;
-    if (this.activeBody) this.activeBody.textContent = this.currentText;
+    this.bodyEl.textContent = this.currentText;
     this.finishLine();
   }
 

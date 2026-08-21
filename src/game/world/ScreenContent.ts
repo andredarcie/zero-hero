@@ -5,13 +5,11 @@
 // importing a value from it (ENEMY_BORDER_MARGIN) never pulls generation code into the
 // game bundle.
 
-// A FAUNA. Um inimigo chega por duas portas, e elas nao oferecem as mesmas especies:
-//
-//  - o CERCO (UndeadSpawnDirector) invoca no escuro, em volta do heroi, e so caveira — ele e
-//    pressao ambiente, e um bestiario sorteado ali seria ruido que ninguem autorou;
-//  - a COVA AUTORADA (`chunk.enemies`, a aba Inimigos do editor) faz UM corpo num tile escolhido
-//    a mao e outro ENEMY_RESPAWN_MS depois que aquele cai (EnemySpawnerManager) — e ela aceita
-//    qualquer especie desta lista, porque ali quem escolheu foi o autor.
+// A FAUNA. Um inimigo chega por UMA porta so: a COVA AUTORADA (`chunk.enemies`, a aba Inimigos
+// do editor), que faz UM corpo num tile escolhido a mao e outro ENEMY_RESPAWN_MS depois que
+// aquele cai (EnemySpawnerManager). Ela aceita qualquer especie desta lista, porque ali quem
+// escolheu foi o autor. O cerco ambiente que invocava caveiras em volta do heroi no escuro
+// (UndeadSpawnDirector) foi removido: nada mais poe corpo onde ninguem autorou.
 //
 // Cada especie e uma FRASE diferente, nao um numero diferente (ver os arquivos em
 // entities/enemies/): a caveira telegrafa o golpe, o morcego atravessa o rio, a aranha espreita
@@ -115,7 +113,6 @@ export type PickupKind =
   | 'axe'
   | 'greatAxe'
   | 'bomb'
-  | 'lavaBoots'
   | 'pickaxe'
   | 'scythe'
   | 'shovel'
@@ -131,20 +128,7 @@ export type PickupKind =
   | 'bloom'
   | 'charcoal'
   | 'carnivoreSeeds'
-  | 'bucket'
-  | 'battery'
-  // A FABRICA como item AUTORAVEL. Elas entram aqui porque um level (ou uma carta de chunk) tem
-  // de poder POR uma maquina no chao — sem isso, a unica forma de ter uma esteira na mao seria
-  // forjar, e um mapa que quer ENSINAR a peca nao pode cobrar a cadeia inteira primeiro.
-  // `PickupKind` e um subconjunto de `HeldItemKind` (o ItemManager solta um pelo outro), entao
-  // os nomes sao os mesmos de propósito.
-  | 'gear'
-  | 'wire'
-  | 'belt'
-  | 'chest'
-  | 'boiler'
-  | 'inserter'
-  | 'extractor';
+  | 'bucket';
 export type NpcKind =
   | 'blackCat'
   | 'mimic'

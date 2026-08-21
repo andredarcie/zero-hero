@@ -3,17 +3,18 @@ import type { WorldData } from '@/game/world/worldSchema';
 // Editor-side client for the dev-server world API (see vite.config.ts). Loads the current
 // world file and persists edits back to it. Dev-only, which is exactly where the
 // editor runs. `world` is the real overworld (public/world.json); `level-N` is a puzzle
-// level and `dungeon-N` uma das nove dungeons (public/levels/*.json), os dois editados
-// via /lab (the puzzle laboratory).
+// level (public/levels/*.json), editado via /lab (the puzzle laboratory), e `underworld` e o
+// ESPELHO do overworld — o andar de baixo, mesmo tamanho e mesmas coordenadas
+// (public/underworld.json), editado via /lab?under.
 
-export type WorldFileId = 'world' | `level-${number}` | `dungeon-${number}`;
+export type WorldFileId = 'world' | 'underworld' | `level-${number}`;
 
 export type LabLevelSummary = {
   id: string;
   file: string;
   level: number;
-  /** `level` = fase criável/apagável do lab; `dungeon` = uma das nove mazes fixas (1..9). */
-  kind: 'level' | 'dungeon';
+  /** `level` = fase criável/apagável do lab. */
+  kind: 'level';
   name: string;
   blurb: string;
   updatedAt: string;

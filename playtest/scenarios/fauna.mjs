@@ -5,9 +5,9 @@
 // aranha, as duas gosmas) e o caminho de dados dos sete; os dois que atiram tem cenario proprio
 // (`projeteis`), porque projetil e um sistema novo e nao um bicho.
 //
-// Roda em /lab de proposito, pelo mesmo motivo do `inimigos`: no lab o CERCO nao existe
-// (UndeadSpawnDirector fica desligado em mundo-puzzle), entao todo corpo que aparecer aqui saiu de
-// uma cova autorada ou de uma chamada explicita deste teste. Nao ha outra leitura possivel.
+// Roda em /lab de proposito, pelo mesmo motivo do `inimigos`: todo corpo que aparecer aqui saiu
+// de uma cova autorada ou de uma chamada explicita deste teste. Desde que o cerco ambiente foi
+// removido do jogo, essa e a unica leitura possivel em qualquer mundo.
 //
 // A FIXTURE (12x12, o rio partindo o mundo em dois):
 //

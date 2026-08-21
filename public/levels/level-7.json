@@ -13,7 +13,7 @@
       "worldY": 9
     },
     "puzzle": true,
-    "exportedAt": "2026-08-13T19:12:33.617Z"
+    "exportedAt": "2026-08-19T12:15:08.326Z"
   },
   "chunks": [
     {
@@ -665,17 +665,9 @@
         },
         {
           "speaker": "npc",
-          "text": "Ore is not iron. That is a lesson for a hotter day. Bring the ORE to me and I pay in coin."
+          "text": "Ore is not iron. That is a lesson for a hotter day. Put the ORE in the marked box and the plane pays in coin."
         }
-      ],
-      "trade": {
-        "item": "ore",
-        "coinsPerUnit": 3,
-        "offer": "Ore. Rust-stained rock. Three coins apiece — how many?",
-        "empty": "Nothing in your hands. Work a vein and come back.",
-        "thanks": "Mrrow. Pleasure doing business."
-      }
+      ]
     }
-  },
-  "globalVariables": {}
+  }
 }

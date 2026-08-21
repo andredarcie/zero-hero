@@ -1,27 +1,15 @@
 [
   {
-    "id": "level-1",
-    "file": "level-1.json",
-    "name": "O fogo que ajuda atrapalha",
-    "blurb": "Onze itens, uma mao so: forje o caminho ate a espada com as sobras de cada ferramenta."
-  },
-  {
     "id": "level-2",
     "file": "level-2.json",
     "name": "Fogo",
     "blurb": ""
   },
   {
-    "id": "level-3",
-    "file": "level-3.json",
-    "name": "A Linha",
-    "blurb": "Uma linha ja roda sozinha na sua frente e cada peca esta no chao. A porta nao quer chave: quer VINTE minerios."
-  },
-  {
     "id": "level-4",
     "file": "level-4.json",
     "name": "A Forja",
-    "blurb": "Minério não é ferro. Queime-o com carvão, malhe a esponja — e construa a máquina que malha por você."
+    "blurb": "Minério não é ferro. Queime-o com carvão e malhe a esponja no altar para obter a barra."
   },
   {
     "id": "level-5",
@@ -60,12 +48,6 @@
     "blurb": "A rocha não cede à picareta aqui. Uma marca no chão diz onde a bomba serve."
   },
   {
-    "id": "level-11",
-    "file": "level-11.json",
-    "name": "O Caixote",
-    "blurb": "A placa quer PESO, e o seu peso está do lado errado da porta."
-  },
-  {
     "id": "level-12",
     "file": "level-12.json",
     "name": "O Portão de Bater",
@@ -82,12 +64,6 @@
     "file": "level-14.json",
     "name": "A Forja",
     "blurb": "Minério não é ferro. Ele passa pelo fogo, sai esponja, e só a pancada faz a barra."
-  },
-  {
-    "id": "level-15",
-    "file": "level-15.json",
-    "name": "A Bateria",
-    "blurb": "O cabo do portão está morto. O outro está vivo — e a bateria atravessa a distância."
   },
   {
     "id": "level-16",

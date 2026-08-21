@@ -1,10 +1,9 @@
 ﻿import type Phaser from 'phaser';
 
-import { BATTERY_FEED_MS, BATTERY_FRAMES, BOMB_FRAMES, ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
+import { BOMB_FRAMES, ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
-import { wireShapeFrame } from '@/game/world/wireShapes';
 
 // Every carriable item — tudo que a MOCHILA guarda. A espada NAO esta aqui como coisa que se
 // carrega: ela e do heroi (ver GameScene.swordEquipped) e o tipo so a mantem porque mundos
@@ -25,7 +24,6 @@ export type HeldItemKind =
   // are terrain tiles, not props, so this is the only item that edits the map itself.
   | 'greatAxe'
   | 'bomb'
-  | 'lavaBoots'
   | 'pickaxe'
   | 'scythe'
   // A PÁ — a ferramenta que CAVA um buraco de plantio (plantSpot) no chão de TERRA vazio à
@@ -45,10 +43,8 @@ export type HeldItemKind =
   | 'stone'
   // O BLOCO DE FERRO — o segundo material bruto do jogo, e o primeiro que nao serve pra nada
   // sozinho. A pedra fica de pe num vau e apaga lava; o graveto vira ponte e carrega fogo; o
-  // ferro NAO tem uso proprio: ele so existe pra entrar numa bandeja da caixa de ferramentas.
-  // Isso e deliberado — a caixa precisava de um insumo cuja unica razao de ser fosse ela, ou
-  // toda receita competiria com o uso direto do proprio insumo. Sai de uma `ironRock`, que e a
-  // mesma pedra da picareta com veio de minerio dentro.
+  // ferro NAO tem uso proprio: ele e materia-prima das receitas manuais da bancada. Sai de uma
+  // `ironRock`, que e a mesma pedra da picareta com veio de minerio dentro.
   | 'iron'
   // O PACOTE DE SEMENTES CARNÍVORAS — o punhado que brota a planta-armadilha
   // (CarnivorousPlantObject): plantado num canteiro e regado, vira a barreira que COME todo
@@ -72,54 +68,12 @@ export type HeldItemKind =
   // graveto consumes it and refills the flame, which makes a long dark crossing plannable
   // instead of a prayer for lava. Runtime-only, like bucketFull — never authored in a world.
   | 'charcoal'
-  // The BATTERY: the portable vessel of electricity, closing the elemental triangle — the
-  // stick carries fire, the bucket carries water, the battery carries current. Charge the
-  // empty one by STEPPING on a LIVE wire while holding it; the charged one, lying on the
-  // ground beside a wire, is a SEED for the grid's flood-fill (GameScene.updateWireEnergy)
-  // and drains only while feeding — spent, it reverts to the empty shell. Energy becomes
-  // CARGO: it crosses the river in the hero's hand and crosses walls in the robotic arm's
-  // claw, the two places no cable can be laid. `batteryFull` is runtime-only, like bucketFull.
-  | 'battery'
-  | 'batteryFull'
-  // ---------------------------------------------------------------------------------------
-  // A FABRICA. As sete entradas abaixo sao a resposta ao defeito que o jogo tinha desde que a
-  // primeira caldeira existiu: as maquinas eram props AUTORADOS. Cabo, caldeira e braco so
-  // nasciam de um `world.json` escrito no /editor, o que faz do circuito um PUZZLE (o autor
-  // desenha a fabrica, o jogador a percorre) e nunca uma fabrica (o jogador desenha a fabrica).
-  // Uma linha de producao projetada por outra pessoa nao tem gargalo pra resolver: tem senha.
-  //
-  // A gramatica nao muda por causa delas — sao itens como qualquer outro, com uma unica lei
-  // nova: o botao X com uma maquina SELECIONADA a INSTALA no tile a frente (a tabela `useItemAt`
-  // ja e "o que este item faz contra o tile de la"), e o mesmo X recolhe de volta a que o JOGADOR
-  // construiu, depois que a tabela e a entrega calam. Autorada nao se recolhe, senao a primeira
-  // coisa que um jogador faria num level de puzzle seria desmontar o puzzle.
-  // ---------------------------------------------------------------------------------------
-  // A ENGRENAGEM — o primeiro bem INTERMEDIARIO: nao se usa contra tile nenhum, nao instala
-  // nada, so entra na bancada. Ela existe porque uma cadeia de um elo (ferro -> maquina) nao e
-  // cadeia; com ela o ferro vira engrenagem e a engrenagem vira as quatro maquinas, e o
-  // extrator (que produz ferro) fecha o ciclo em cima de si mesmo. Ver TOOLBOX_RECIPES.
-  | 'gear'
-  // O CABO em pacote: o unico item de maquina que vem aos quatro (UNIT_PACK_KINDS), porque e o
-  // unico que se deita as duzias. Uma rede se desenha, e desenhar exige material a rodo.
-  //
-  // Os nomes sao os MESMOS dos props que elas viram (ver PropKind). Sao dois tipos diferentes e
-  // o TypeScript nunca os confunde, e em troca a instalacao vira uma identidade em vez de uma
-  // tabela de-para — que e mais uma coisa a esquecer de atualizar quando entrar a oitava peca.
-  | 'wire'
-  | 'belt'
-  | 'chest'
-  | 'boiler'
-  | 'inserter'
-  | 'extractor'
+  // As duas estações manuais podem ser fabricadas, instaladas e recolhidas pelo jogador.
   | 'furnace'
-  | 'tripHammer'
-  // O ALTAR nao consome energia e nao trabalha sozinho — ele e MOVEL, e entra nesta lista pelo
-  // mesmo motivo que o bau: o que se instala com o X se recolhe com o X, venha da fabrica ou nao.
   | 'altar';
 
-// The fire riding a wood item that is NOT in the hero's hand: on the ground, or hanging from
-// the robotic arm's claw. Only `fuelMs` travels — it keeps counting down wherever the item is,
-// so a lit graveto handed to the machine can die mid-swing and arrive as plain wood.
+// The fire riding a wood item that is NOT in the hero's hand. Only `fuelMs` travels, so a lit
+// graveto on the ground keeps burning until it dies or is collected again.
 export type ItemFire = { fuelMs: number };
 
 // How each held item looks lying on the ground (textures3d keys). Tools without a dedicated
@@ -130,7 +84,6 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   axe: { texture: 'axe-icon', frame: 0 },
   greatAxe: { texture: 'great-axe-icon', frame: 0 },
   bomb: { texture: 'bomb-item', frame: BOMB_FRAMES.item },
-  lavaBoots: { texture: 'lava-boots-icon', frame: 0 },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
   scythe: { texture: 'scythe-icon', frame: 0 },
   shovel: { texture: 'shovel-icon', frame: 0 },
@@ -148,63 +101,36 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   // Generated at boot too (charcoalTexture.ts) — the same procedural-pixel-art path.
   charcoal: { texture: 'charcoal-item', frame: 0 },
-  // Sprite Factory sheet (battery.png): the gold window reads charged/empty at a glance.
-  battery: { texture: 'battery', frame: BATTERY_FRAMES.empty },
-  batteryFull: { texture: 'battery', frame: BATTERY_FRAMES.full },
-  // A FABRICA. Cada maquina no chao e a PROPRIA arte dela — nenhum icone de embalagem foi
-  // desenhado, e isso e uma escolha, nao economia: o jogador tem de reconhecer no chao a mesma
-  // coisa que vai ficar instalada ali um segundo depois. (`stone` ja fazia isso, reusando a
-  // textura da rocha.) As direcionais mostram a pose LESTE, que e a que o editor oferece
-  // primeiro e a que o `dir` padrao usa.
-  gear: { texture: 'gear-item', frame: 0 },
-  wire: { texture: 'wire', frame: wireShapeFrame('h', false) },
-  belt: { texture: 'belt', frame: 1 },
-  chest: { texture: 'chest', frame: 0 },
-  boiler: { texture: 'boiler', frame: 0 },
-  inserter: { texture: 'inserter', frame: 1 },
-  extractor: { texture: 'extractor', frame: 1 },
   furnace: { texture: 'furnace', frame: 0 },
-  // O martinete se anuncia pelo RETRATO (frame 3: corpo + malho dentro). O frame 1 e so o malho,
-  // um tijolo de 6x4 que nao diz nada, e o 0 e o corpo com a calha vazia — uma caixa oca.
-  tripHammer: { texture: 'trip-hammer', frame: 3 },
   altar: { texture: 'altar', frame: 0 },
 };
 
 /**
- * As MAQUINAS que se carregam. Uma lista so, lida pela instalacao (o botao X), pelo editor e
+ * As ESTACOES MANUAIS que se carregam. Uma lista so, lida pela instalacao (o botao X), pelo editor e
  * pela subtela — porque a lei "uma lista, tres leitores" ja custou uma tarde neste jogo quando
  * `FLYING_ENEMY_KINDS` existia em tres copias que discordavam.
- *
- * A engrenagem ESTA aqui de proposito, mesmo nao instalando nada: ela e da familia (sai da mesma
- * bancada, entra nas mesmas receitas), e quem pergunta "isto e peca de fabrica?" quer que ela
- * conte. Quem pergunta "isto vira prop?" ja tem de tratar o caso dela — ver GameScene.buildMachineAt.
  */
-export const MACHINE_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>([
-  'gear', 'wire', 'belt', 'chest', 'boiler', 'inserter', 'extractor', 'furnace', 'tripHammer',
-  'altar',
-]);
+export const MACHINE_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['furnace', 'altar']);
 
 /**
  * A MATERIA-PRIMA — o que NAO ocupa lugar na bolsa.
  *
  * A bolsa e a lista do botao X, e o X faz uma coisa so: usar o que esta selecionado contra o
  * tile a frente. Entao o que entra nela precisa ter um GESTO — bater, cavar, encher, instalar,
- * pousar. Minerio, ferro, carvao e engrenagem nao tem nenhum: eles sao numeros que entram numa
+ * pousar. Minerio, ferro e carvao nao tem nenhum: eles sao numeros que entram numa
  * receita e saem dela. Enquanto dividiam a fileira com as ferramentas, o polegar do jogador
  * atravessava quatro coisas inertes para chegar na picareta — e cada uma delas, selecionada,
  * fazia o botao X nao responder. Um item que so pode calar um botao nao pertence ao botao.
  *
  * Eles continuam INTEIROS na mochila (`Inventory`): as receitas da bancada e do forno gastam
- * deles, o braco robotico os carrega, a bandeja os recebe. O que muda e onde sao MOSTRADOS —
+ * deles. O que muda e onde sao MOSTRADOS —
  * uma fileira de contadores debaixo da bolsa, informativa, sem cursor e sem seleção.
  *
  * A `bloom` ficou de fora desta lista de proposito, e ela e a fronteira que explica a regra: a
  * esponja tem gesto (o X a POUSA para ser martelada, ou a entrega na bigorna). Ela e peca de
  * trabalho, nao numero.
  */
-export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>([
-  'ore', 'iron', 'charcoal', 'gear',
-]);
+export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['ore', 'iron', 'charcoal']);
 
 /**
  * O que pode ser SELECIONADO na bolsa. A espada saiu da mochila (ela e do heroi, e mora no
@@ -214,9 +140,7 @@ export const isBagItem = (kind: HeldItemKind): boolean =>
   kind !== 'sword' && !MATERIAL_ITEM_KINDS.has(kind);
 
 /**
- * Como um item se desenha quando esta no chao. Exposto porque o braco robotico precisa desenhar
- * a MESMA arte enquanto carrega a carga pelo ar — se ele escolhesse a arte por conta propria,
- * um item novo passaria a ter duas aparencias no chao e uma delas ficaria pra tras.
+ * Como um item se desenha quando esta no chao, compartilhado pelas interfaces que mostram itens.
  */
 export const itemGroundVisual = (kind: HeldItemKind): { texture: string; frame: number } =>
   GROUND_VISUAL[kind];
@@ -266,14 +190,10 @@ export class ItemPickup {
   /** O calor da esponja vazando no chao (so `bloom` tem). */
   private heatGlow?: Billboard3D;
   private fireState?: ItemFire;
-  // A carga de uma batteryFull no chao: drena so enquanto ALIMENTA uma rede de cabos (a cena
-  // chama drainCharge por frame de alimentacao). Na mao do heroi a carga e estavel.
-  private chargeMs: number;
-
   /**
    * Quantas UNIDADES este item no chão vale ao ser apanhado (o pacote de sementes: 5 recém-
    * colhido, ou o punhado exato que o herói pousou). Todo outro item vale 1. Viaja com o item
-   * como a carga da bateria — um pacote não muda de tamanho por trocar de mãos.
+   * sem mudar de tamanho quando troca de mãos.
    */
   public readonly units: number;
 
@@ -284,7 +204,6 @@ export class ItemPickup {
     public readonly tileY: number,
     dropped = false,
     fire?: ItemFire,
-    chargeMs?: number,
     units = 1,
   ) {
     this.units = Math.max(1, Math.floor(units));
@@ -311,10 +230,7 @@ export class ItemPickup {
       .setAlpha(0));
 
     // Fade in via alpha only — render owns the bob each frame, so a scale tween would just be
-    // clobbered. A carga VIAJA com o item (como o combustivel da tocha): uma bateria
-    // meio-drenada que sobe pra mao e volta pro chao continua meio-drenada — nunca "recarrega
-    // de graca".
-    this.chargeMs = kind === 'batteryFull' ? (chargeMs ?? BATTERY_FEED_MS) : 0;
+    // clobbered.
     this.sprite.setAlpha(0);
     scene.tweens.add({
       targets: this.sprite,
@@ -366,19 +282,6 @@ export class ItemPickup {
 
   /** O fogo montado neste item (so um graveto aceso tem), ou undefined. */
   public get fire(): ItemFire | undefined { return this.fireState; }
-
-  /** A carga restante desta bateria no chao (0 para qualquer outro item). */
-  public get charge(): number { return this.chargeMs; }
-
-  /**
-   * Gasta a carga da bateria enquanto ela alimenta uma rede (so a cena sabe quando). Devolve
-   * true no frame em que a carga ACABA — a cena entao troca o item pela casca vazia.
-   */
-  public drainCharge(deltaMs: number): boolean {
-    if (this.kind !== 'batteryFull' || this.chargeMs <= 0) return false;
-    this.chargeMs = Math.max(0, this.chargeMs - deltaMs);
-    return this.chargeMs === 0;
-  }
 
   /** O combustivel queima tambem no chao; a chama morre sozinha quando ele acaba. */
   public tickFire(deltaMs: number): void {

@@ -45,7 +45,7 @@ const makeChunk = ({ catalog, npc, gift, extraPickups = [], props = [], paint })
 const NPC_CHUNKS = [
   makeChunk({
     catalog: {
-      id: 'cat-cold-hearths', name: "Cat's Hearths", cost: 4, cardImage: 'generated:hearth',
+      id: 'cat-cold-hearths', name: "Cat's Hearths", cost: 1, cardImage: 'generated:hearth', enabled: true,
       description: 'The cat, its fire, and two hearths gone cold. Wake a branch and carry flame.',
     },
     npc: 'blackCat',
@@ -106,14 +106,17 @@ const NPC_CHUNKS = [
   makeChunk({
     catalog: {
       id: 'glowing-ford', name: "Workman's Ford", cost: 8, cardImage: 'generated:hearth',
-      description: 'A workman, his hazard boots, and a glowing pool with something sunk in it.',
+      description: 'A workman, a stone, and a glowing pool that cools into a permanent road.',
     },
     npc: 'radiationSuit',
-    gift: 'lavaBoots',
+    gift: 'stone',
     extraPickups: [{ type: 'iron', x: 9, y: 2 }],
-    paint: (ground, upper) => {
-      for (let y = 1; y <= 3; y += 1) for (let x = 8; x <= 10; x += 1) ground[y][x] = WATER;
-      ground[2][9] = GRASS; // a ilhota — o ferro afundado espera em cima dela
+    props: [
+      { type: 'lava', x: 8, y: 1 }, { type: 'lava', x: 9, y: 1 }, { type: 'lava', x: 10, y: 1 },
+      { type: 'lava', x: 8, y: 2 },                                 { type: 'lava', x: 10, y: 2 },
+      { type: 'lava', x: 8, y: 3 }, { type: 'lava', x: 9, y: 3 }, { type: 'lava', x: 10, y: 3 },
+    ],
+    paint: (_ground, upper) => {
       for (const [x, y] of [[7, 4], [1, 2]]) upper[y][x] = 10;
     },
   }),
@@ -202,7 +205,7 @@ const NPC_DIALOG_CONFIG = {
       line('A hero. How novel. I was napping.'),
       line('That branch beside me? Take it. Hold it into my fire and it wakes as a TORCH.'),
       line('Two hearths in this clearing sit cold. Carry the flame to them.'),
-      line('Light draws a line the dead will not cross. I sleep better behind lines.'),
+      line('Burnt brush leaves CHARCOAL. Put it in the marked box: the balloon calls the plane, and the plane drops your coins.'),
     ],
   },
   astronaut: {
@@ -238,10 +241,10 @@ const NPC_DIALOG_CONFIG = {
     npcName: 'WORKMAN', npcColorHex: '#66ff44', npcAssetKey: 'npcs', npcFrame: 4,
     voice: { freq: 340, wave: 'square' },
     lines: [
-      line('Suit says the pool up north-east glows. Nothing my BOOTS cannot walk.'),
-      line('Take them. LAVA BOOTS — lava, embers, and yes, water: you just wade in.'),
-      line('Something metal sank by the little island. Boots on. Go fish it out.'),
-      line('Mind this: in deep water your hands stay busy — the boots carry YOU, not cargo.'),
+      line('Suit says the pool up north-east glows. Molten ground is no road.'),
+      line('Take this STONE. Throw it into lava and it cools into a basalt step.'),
+      line('Something metal sank by the little island. One good step opens the route.'),
+      line('The basalt stays behind. Cross back carrying whatever you find.'),
     ],
   },
   painter: {
@@ -328,8 +331,8 @@ for (const def of NPC_CHUNKS) {
     catalog: def.catalog,
   });
   for (const prop of def.props) {
-    const placed = { type: prop.type, worldX: ox + prop.x, worldY: prop.y };
-    if (prop.lit !== undefined) placed.lit = prop.lit;
+    const { x, y, ...rest } = prop;
+    const placed = { ...rest, worldX: ox + x, worldY: y };
     world.props.push(placed);
   }
   added += 1;

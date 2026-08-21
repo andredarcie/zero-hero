@@ -90,36 +90,16 @@ const DEFS: Record<string, SheetDef> = {
   // woods.png: 16×96 vertical sheet — the dry tree shrinking per axe chop.
   'dry-tree': { url: `${A}/environment/props/woods.png`, frameW: 16, frameH: 16 },
   'dry-bush': { url: `${A}/environment/props/bush.png` },
-  // Sprite Factory: caldeira em 3 estados (fria / fornalha acesa / gerando) — ver BOILER_FRAMES.
-  boiler: { url: `${A}/environment/props/boiler.png`, frameW: 16, frameH: 16 },
-  // Sprite Factory: cabo de energia — 7 formas apagadas + 7 filetes gold (ver wireShapes.ts).
-  wire: { url: `${A}/environment/props/wire.png`, frameW: 16, frameH: 16 },
-  // Sprite Factory: portao 2D — quatro alturas em bancos apagado/energizado.
-  'electronic-gate': { url: `${A}/environment/props/electronic_gate.png`, frameW: 16, frameH: 16 },
-  // A FABRICA. Esteira e extrator usam a MESMA convencao de frames do braco (`dir + 4*fase`,
-  // ordem N/L/S/O), porque direcao de prop e frame e nunca rotacao — e tres convencoes
-  // diferentes para a mesma ideia seria a proxima coisa a dessincronizar.
-  belt: { url: `${A}/environment/props/belt.png`, frameW: 16, frameH: 16 },
-  extractor: { url: `${A}/environment/props/extractor.png`, frameW: 16, frameH: 16 },
   furnace: { url: `${A}/environment/props/furnace.png`, frameW: 16, frameH: 16 },
-  'trip-hammer': { url: `${A}/environment/props/trip-hammer.png`, frameW: 16, frameH: 16 },
   // O ALTAR: laje fria (0) e com o tampo em brasa (1) — o calor que a pancada deixa na pedra.
   altar: { url: `${A}/environment/props/altar.png`, frameW: 16, frameH: 16 },
-  // A viga do martinete: frames de DOIS tiles de largura, num quad que passa na frente dos dois.
-  'trip-hammer-beam': { url: `${A}/environment/props/trip-hammer-beam.png`, frameW: 32, frameH: 16 },
-  // O bau: frame 0 vazio, frame 1 com carga (o ferrolho em ouro) — sem numero na tela.
-  chest: { url: `${A}/environment/props/chest.png`, frameW: 16, frameH: 16 },
-  // A engrenagem: o bem INTERMEDIARIO, icone de item de um frame so.
-  'gear-item': { url: `${A}/items/collectibles/gear.png` },
-  // Sprite Factory: a caixa de ferramentas — 4 poses do corpo + 2 da bandeja (TOOLBOX_FRAMES).
+  // Sprite Factory: a caixa de ferramentas manual (TOOLBOX_FRAMES).
   workbench: { url: `${A}/environment/props/workbench.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: a flor da lua — 9 poses de UMA flor abrindo, 5 em pe + 4 deitadas. Os frames
   // NAO sao uma animacao livre: cada um e um `t` de abertura (ver MOONFLOWER_FRAMES).
   moonflower: { url: `${A}/environment/props/moonflower.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: portal medieval — arco de pedra com quatro fases do vortice roxo.
   'level-portal-icon': { url: `${A}/environment/props/level_portal.png`, frameW: 16, frameH: 16 },
-  // Sprite Factory: bateria vazia/carregada — ver BATTERY_FRAMES.
-  battery: { url: `${A}/items/collectibles/battery.png`, frameW: 16, frameH: 16 },
   'dry-shrub': { url: `${A}/environment/props/dry_shrub.png` },
   rock: { url: `${A}/environment/props/rock.png` },
   // Sprite Factory: a pedra de ferro — frame 0 inteira, frame 1 rachada (a rocha comum guarda
@@ -141,16 +121,8 @@ const DEFS: Record<string, SheetDef> = {
   // O mato alto EM PE (spritefactory): touceira lateral p/ billboard upright, 2 frames de vento.
   'tall-grass-up': { url: `${A}/environment/props/tall_grass_up.png`, frameW: 16, frameH: 16 },
   // O ciclo de plantio (spritefactory): buraco cavado, monte da semente coberta, e as sementes.
-  // O braco robotico (spritefactory). O sheet da base tem 4 frames e eles NAO sao animacao:
-  // sao as 4 orientacoes (0=N 1=L 2=S 3=O). Um billboard nao tem yaw — setAngle gira no plano
-  // da camera, nao no mundo — entao "girar o prop" so pode existir como escolha de frame.
-  inserter: { url: `${A}/environment/props/inserter.png`, frameW: 16, frameH: 16 },
-  'inserter-hand': { url: `${A}/environment/props/inserter_hand.png`, frameW: 16, frameH: 16 },
-  'wooden-crate': { url: `${A}/environment/props/wooden_crate.png` },
-  'pressure-plate': { url: `${A}/environment/props/pressure_plate.png`, frameW: 16, frameH: 16 },
   // O marco da estrada (spritefactory): laje dormente (0) e desperta (1).
   'road-seal': { url: `${A}/environment/props/road_seal.png`, frameW: 16, frameH: 16 },
-  'water-wheel': { url: `${A}/environment/props/water_wheel.png`, frameW: 16, frameH: 16 },
   // Sheet 16×64 em coluna: buraco pronto (0) + os três tempos da cavada da pá (1..3).
   'plant-hole': { url: `${A}/environment/props/plant_hole.png`, frameW: 16, frameH: 16 },
   'plant-mound': { url: `${A}/environment/props/plant_mound.png` },
@@ -185,7 +157,6 @@ const DEFS: Record<string, SheetDef> = {
   'sword-icon': { url: `${A}/ui/icons/sword_icon.png` },
   'key-item-icon': { url: `${A}/ui/icons/key_icon.png` },
   'bomb-icon': { url: `${A}/ui/icons/bomb_icon.png` },
-  'lava-boots-icon': { url: `${A}/ui/icons/lava_boots_icon.png` },
   'pickaxe-icon': { url: `${A}/ui/icons/pickaxe_icon.png` },
   'scythe-icon': { url: `${A}/ui/icons/scythe_icon.png` },
   'shovel-icon': { url: `${A}/ui/icons/shovel_icon.png` },

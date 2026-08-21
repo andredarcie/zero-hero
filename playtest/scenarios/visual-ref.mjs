@@ -50,12 +50,9 @@ const SETTLE = `async (tileX, tileY, steps) => {
   if (window.__hd3dOverrides) Object.assign(w3.params, window.__hd3dOverrides);
 
   s.enemyManager?.despawnAll();          // enemies wander; they are not what we are comparing
-  // The undead siege keeps SUMMONING during the stepped window (the hero idles in the
-  // dark), and a skull's birth telegraph is drawn with the boot-time crack texture — art
-  // that is GENERATED from Math.random at boot, so any build that shifts the boot draw
-  // count redraws the crack differently and the diff blames the renderer for a fissure
-  // shape. Same class of noise as the wandering enemies: out of the reference.
-  s.spawnDirector = undefined;
+  // (O cerco ambiente que summonava caveiras durante a janela parada foi removido do jogo — a
+  // fissura de nascimento, desenhada com a textura gerada no boot, era ruido de diff garantido.
+  // Corpo so nasce de cova autorada agora, e o despawnAll acima ja tira todos eles da foto.)
   s.playerWorld = { worldX: tileX, worldY: tileY };
   s.movementController.syncPlayerToWorld(tileX, tileY, s.tileSize);
 

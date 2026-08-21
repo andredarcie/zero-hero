@@ -50,7 +50,6 @@ export class LevelPortalObject implements WorldProp {
     public readonly worldX: number,
     public readonly worldY: number,
     /** A dungeon que esta boca abre, quando ela e uma entrada do overworld. */
-    public readonly level?: number,
   ) {
     const w3 = world3d();
     this.sigil = w3

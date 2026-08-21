@@ -1,16 +1,14 @@
-﻿import type Phaser from 'phaser';
+import type Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, BATTERY_FRAMES, BOILER_FRAMES, CHUNK_COLUMNS, CHUNK_ROWS, ENEMY_RESPAWN_MS,
-  KEY_FRAMES, MOONFLOWER_FRAMES, NPC_VISUALS, PRESSURE_PLATE_FRAMES, SEA_TILE_FRAME,
-  SLIME_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, TOOLBOX_FRAMES, WATER_WHEEL_FRAMES,
-  ZORA_FRAMES,
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, ENEMY_RESPAWN_MS, KEY_FRAMES,
+  MOONFLOWER_FRAMES, NPC_VISUALS, SEA_TILE_FRAME, SLIME_FRAMES, SOLID_GROUND_FRAMES,
+  SOLID_UPPER_FRAMES, TOOLBOX_FRAMES, ZORA_FRAMES,
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
 import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
-import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type {
-  ChunkCatalogEntry, ChunkCategory, PropDir, PropKind, WorldChunk, WorldDialog,
+  PropDir, PropKind, WorldDialog,
 } from '@/game/world/worldSchema';
 import type { DeleteLabLevelResult, LabLevelSummary } from '@/game/worldApi';
 
@@ -23,11 +21,10 @@ export const PANEL_WIDTH = 320;
 
 export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'entity' | 'spawn';
 export type CollisionPaintMode = 'keep' | 'set' | 'clear';
-// A aba "Inimigos" voltou, e o que ela coloca e um PONTO DE SPAWN: o tile faz um corpo quando o
-// heroi chega perto e faz outro um tempo depois que aquele cai (EnemySpawnerManager). Ela existiu
-// e foi removida quando o unico inimigo do jogo passou a ser invocado dinamicamente no escuro
-// (UndeadSpawnDirector) — mas aquele sistema e um CERCO ambiente e fica desligado no lab e nos
-// levels, justamente onde um corredor precisa de guarda. Os dois convivem: ver GameScene.create.
+// A aba "Inimigos" e o que ela coloca: um PONTO DE SPAWN. O tile faz um corpo quando o heroi
+// chega perto e faz outro um tempo depois que aquele cai (EnemySpawnerManager). Desde que o cerco
+// ambiente saiu do jogo (UndeadSpawnDirector, que invocava caveiras em volta do heroi no escuro),
+// esta aba e a UNICA maneira de por um inimigo no mundo — nada nasce sem passar por aqui.
 export type PaletteTab = 'tiles' | 'enemies' | 'npcs' | 'pickups' | 'props';
 
 export type EntitySelection =
@@ -49,16 +46,10 @@ export type UiState = {
   showGrid: boolean;
   showCollisions: boolean;
   showEntities: boolean;
-  // A direcao com que o proximo prop direcional sera colocado (hoje so o braco robotico).
+  // A direcao com que o proximo prop direcional sera colocado.
   // Vive no estado da UI, e nao na selecao da paleta, porque e uma preferencia do PINCEL —
   // igual ao tamanho do brush: escolhe-se uma vez e vale pras proximas colocadas.
   propDir: PropDir;
-  // Global boolean selected for the next circuit-capable prop placed by this brush.
-  // Plate/wheel publish into it; a configured inserter consumes it as electrical power.
-  propVariable: string;
-  /** Só para a caixa de extração: o item que ela compra e por quanto (ver SellBoxObject). */
-  propSellKind: HeldItemKind;
-  propSellPrice: number;
   // Chunk view: camera locked and fitted to one chunk, edits confined to it.
   viewMode: ViewMode;
   chunkX: number;
@@ -81,8 +72,6 @@ export type EditorUiCallbacks = {
   onSave: () => void;
   onReload: () => void;
   onPlaytest: () => void;
-  /** Testa UMA carta: constrói-a ao lado do acampamento e entra nela. Só no editor de mundo. */
-  onCardPlaytest?: (cardId: string) => void;
   onUndo: () => void;
   onRedo: () => void;
   onFitView: () => void;
@@ -90,11 +79,11 @@ export type EditorUiCallbacks = {
   onWorldApply: (settings: { name: string; chunksX: number; chunksY: number }) => void;
   onDialogApply: (kind: NpcKind, dialog: WorldDialog) => void;
   levelManager?: {
-    /** O arquivo aberto agora (`level-N` ou `dungeon-N`) — id, porque os números colidem. */
+    /** O arquivo aberto agora (`level-N` ou `underworld`) — id, e não número. */
     currentId: string;
     list: () => Promise<LabLevelSummary[]>;
     create: (name: string) => Promise<LabLevelSummary>;
-    /** Só levels: as nove dungeons são conteúdo fixo — renomear/apagar continuam por número. */
+    /** Só levels: renomear e apagar continuam por número. */
     rename: (level: number, name: string) => Promise<LabLevelSummary>;
     remove: (level: number) => Promise<DeleteLabLevelResult>;
     open: (id: string) => void;
@@ -158,7 +147,6 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'axe', label: 'Machado', key: ASSET_KEYS.axeIcon },
   { type: 'greatAxe', label: 'Machado de Aco', key: ASSET_KEYS.greatAxeIcon },
   { type: 'bomb', label: 'Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
-  { type: 'lavaBoots', label: 'Botas de Lava', key: ASSET_KEYS.lavaBootsIcon },
   { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
   { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
   { type: 'shovel', label: 'Pa — cava buraco de plantio na terra', key: ASSET_KEYS.shovelIcon },
@@ -168,7 +156,6 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'seeds', label: 'Sementes', key: ASSET_KEYS.seedsItem },
   { type: 'carnivoreSeeds', label: 'Sementes Carnivoras', key: ASSET_KEYS.carnivoreSeedsItem },
   { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
-  { type: 'battery', label: 'Bateria', key: ASSET_KEYS.battery, frame: BATTERY_FRAMES.empty },
 ];
 
 const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [
@@ -184,33 +171,22 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'lava', label: 'Lava', key: ASSET_KEYS.lavaFloor },
   { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },
   { type: 'bridgeSpot', label: 'Ponto de Ponte', key: ASSET_KEYS.bridge },
+  // A PIRA: base autorada, torre construida em jogo. O icone e o graveto porque e ele que a
+  // levanta — a pira propriamente dita nao tem sprite nenhum (ela e carpintaria 3D).
+  { type: 'pyre', label: 'Pira — X com graveto monta, X com tocha ACESA acende', key: ASSET_KEYS.woodItem },
   // A paleta mostra a flor ABERTA: e a pose que diz o que a peca faz (uma ponte de petalas), e o
   // botao fechado, sozinho num icone, so diria "tem uma planta aqui".
   { type: 'moonflower', label: 'Flor da Lua', key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
   { type: 'bombSpot', label: 'Marca de Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
   { type: 'plantSpot', label: 'Buraco de Plantio', key: ASSET_KEYS.plantHole, frame: 0 },
   { type: 'carnivorousPlant', label: 'Planta Carnivora — come inimigo encostado', key: ASSET_KEYS.carnivorousPlant, frame: 0 },
-  { type: 'inserter', label: 'Braco Robotico (G gira)', key: ASSET_KEYS.inserter, frame: 1 },
   { type: 'toolbox', label: 'Caixa de Ferramentas (G gira)', key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
-  { type: 'woodenCrate', label: 'Caixote de Madeira', key: ASSET_KEYS.woodenCrate },
-  { type: 'pressurePlate', label: 'Placa de Pressao', key: ASSET_KEYS.pressurePlate, frame: PRESSURE_PLATE_FRAMES.up },
-  { type: 'waterWheel', label: "Roda d'Agua Geradora", key: ASSET_KEYS.waterWheel, frame: WATER_WHEEL_FRAMES.off },
-  { type: 'boiler', label: 'Caldeira a Vapor', key: ASSET_KEYS.boiler, frame: BOILER_FRAMES.coldDry },
-  { type: 'electronicGate', label: 'Portao Eletronico', key: ASSET_KEYS.electronicGate, frame: 0 },
   { type: 'levelPortal', label: 'Portal de Saida', key: ASSET_KEYS.levelPortal },
-  // A forma do cabo nunca se escolhe: ela nasce dos vizinhos, no tabuleiro e no jogo.
-  { type: 'wire', label: 'Cabo de Energia', key: ASSET_KEYS.wire, frame: 1 }, // frame 1 = 'h'
-  // A FABRICA. As tres tambem sao ITENS que o jogador fabrica e instala — o que se autora aqui e
-  // a fabrica de PARTIDA de um level ou de uma carta de chunk, e ela nunca se recolhe em jogo
-  // (so o que o jogador construiu volta pra mochila; ver GameScene.pickUpMachineAt).
-  { type: 'belt', label: 'Esteira (G gira) — leva a carga pra onde aponta', key: ASSET_KEYS.belt, frame: 1 },
-  { type: 'extractor', label: 'Extrator (G gira) — morde o veio ATRAS, poe na FRENTE', key: ASSET_KEYS.extractor, frame: 1 },
-  { type: 'furnace', label: 'Forno (G gira) — MINERIO e CARVAO nas bandejas ATRAS, esponja na FRENTE', key: ASSET_KEYS.furnace, frame: 1 },
-  { type: 'tripHammer', label: 'Martinete (G gira) — malha a ESPONJA do tile da FRENTE; precisa de energia', key: ASSET_KEYS.tripHammer, frame: 3 },
-  { type: 'chest', label: 'Bau — o estoque que a linha enche sozinha', key: ASSET_KEYS.chest, frame: 0 },
-  // A CAIXA DE EXTRACAO. Ela leva DOIS campos proprios (o item e o preco), que aparecem no
-  // painel de opcoes assim que ela e selecionada — ver isSellProp.
-  { type: 'sellBox', label: 'Caixa de Extracao — vende UM item por moedas', key: ASSET_KEYS.chest, frame: 0 },
+  // A ESCADA nao tem arte propria (ela e geometria, ver StairsObject) — o editor empresta a
+  // ROCHA do atlas, a mesma pintura que a montanha usa. Emprestava o icone do PORTAL, e um
+  // portal roxo no lugar de um lance de pedra e uma legenda errada para quem autora.
+  { type: 'stairs', label: 'Escada (andar de baixo)', key: ASSET_KEYS.forestTileset, frame: CLIFF_WALL_FRAMES[0] },
+  { type: 'furnace', label: 'Forno manual (G gira) — abra o catalogo para fundir', key: ASSET_KEYS.furnace, frame: 1 },
   // O ALTAR nao gira e nao tem energia: e um movel. Z poe o item selecionado na laje, e bater
   // nele (Z de espada, ou o X com o que estiver na mao) malha a ESPONJA em ferro.
   { type: 'altar', label: 'Altar — laje onde se POE uma peca e se MALHA (Z poe, bater transforma)', key: ASSET_KEYS.altar, frame: 0 },
@@ -219,37 +195,16 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
 // que o editor faz e "esta peca gira?" — e quando existir a segunda peca giratoria, ela entra
 // aqui e ganha o G de graca. (Aconteceu: a caixa de ferramentas.)
-/** A caixa de extração é o único prop que autora um ITEM e um PREÇO — ver o painel abaixo. */
-export const isSellProp = (type: PropKind): boolean => type === 'sellBox';
-
-/**
- * O QUE UMA CAIXA PODE COMPRAR. E a lista de itens que o jogo PRODUZ em quantidade — o que se
- * junta, e portanto o que sobra. Ferramenta nao entra: vender o proprio machado seria um jeito de
- * ficar sem ele.
- */
-const SELLABLE_KINDS: readonly HeldItemKind[] = [
-  'ore', 'charcoal', 'bloom', 'iron', 'stone', 'wood', 'seeds', 'gear',
-];
-
-const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter', 'toolbox', 'belt', 'extractor', 'furnace', 'tripHammer']);
+const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['toolbox', 'furnace']);
 
 // …e destes, quais tem a ARTE dividida em um frame por direcao. Sao duas perguntas diferentes e
 // junta-las quebrou a caixa de ferramentas na primeira tentativa: os frames dela sao as poses da
 // tampa, entao desenhar `frame = dir` no tabuleiro punha a caixa aberta e forjando num mapa
 // parado. Quem nao tem frames de direcao ganha uma marca de proa no chip (ver EditorScene).
-const DIR_FRAME_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['inserter', 'belt', 'extractor']);
-
-// Producers and consumers share the same tiny named-circuit authoring surface. Keeping this a
-// set means the next electrical prop gets variable persistence and the dropdown in one place.
-// O BAU e o PORTAO entraram quando a trava de QUANTIDADE nasceu: o bau publica o progresso da
-// entrega no circuito nomeado, e o portao le ate onde subir. A `quota` em si (o que ele cobra)
-// NAO se autora aqui — ela é campo de arquivo, como `lit` e `floodgate`, e um save do editor a
-// derruba. Quem cobra uma encomenda escreve isso no JSON do level.
-const VARIABLE_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['pressurePlate', 'waterWheel', 'inserter', 'boiler', 'chest', 'electronicGate']);
+const DIR_FRAME_PROPS: ReadonlySet<PropKind> = new Set<PropKind>();
 
 export const isDirectionalProp = (type: PropKind): boolean => DIRECTIONAL_PROPS.has(type);
 export const hasDirectionFrames = (type: PropKind): boolean => DIR_FRAME_PROPS.has(type);
-export const isVariableProp = (type: PropKind): boolean => VARIABLE_PROPS.has(type);
 
 /** O nome da direcao, pro editor poder dizer pra onde a peca esta virada. */
 export const PROP_DIR_LABEL: Record<PropDir, string> = { 0: 'Norte', 1: 'Leste', 2: 'Sul', 3: 'Oeste' };
@@ -565,16 +520,8 @@ export class EditorDomUi {
       levels.id = 'zh-level-manager-open';
       actions.appendChild(levels);
     }
-    if (!this.cb.levelManager) {
-      actions.appendChild(this.button(
-        'Chunks&#8230;',
-        'Cria cards e edita nome, custo e imagem de cada chunk compravel',
-        () => this.openChunkCatalogModal(),
-      ));
-    }
     actions.append(
       this.button('Mundo&#8230;', 'Nome, tamanho e validacao do mundo', () => this.openWorldModal()),
-      this.button('Variaveis&#8230;', 'Cria estados booleanos globais para mecanismos do mundo', () => this.openVariablesModal()),
       this.button('Dialogos&#8230;', 'Editor de dialogos dos NPCs', () => this.openDialogModal()),
       this.button('Ajuda (?)', 'Atalhos e controles', () => this.openHelpModal()),
     );
@@ -877,80 +824,6 @@ export class EditorDomUi {
         + `Um corpo por vez: morto, o proximo vem em ${Math.round(ENEMY_RESPAWN_MS / 1000)}s.<br>`
         + 'Luz de fogueira ACESA cala a cova — o morto-vivo nao entra na luz.';
       this.optionsEl.appendChild(hint);
-    }
-
-    // A CAIXA DE EXTRACAO: o item que ela compra e o preco por unidade. Sem os dois ela nao tem o
-    // que anunciar na placa nem o que pagar — e o runtime nem a constroi (ver getSellBoxes), entao
-    // ela nasceria invisivel. Por isso os dois campos ficam AQUI, na hora de colocar.
-    if (this.state.tool === 'entity' && this.state.entity.list === 'props' && isSellProp(this.state.entity.type)) {
-      const kindSelect = document.createElement('select');
-      SELLABLE_KINDS.forEach((kind) => {
-        const option = document.createElement('option');
-        option.value = kind;
-        option.textContent = kind;
-        option.selected = kind === this.state.propSellKind;
-        kindSelect.appendChild(option);
-      });
-      kindSelect.addEventListener('change', () => {
-        this.state.propSellKind = kindSelect.value as HeldItemKind;
-        this.changed();
-      });
-      const priceInput = document.createElement('input');
-      priceInput.type = 'number';
-      priceInput.min = '1';
-      priceInput.step = '1';
-      priceInput.value = String(this.state.propSellPrice);
-      priceInput.addEventListener('change', () => {
-        this.state.propSellPrice = Math.max(1, Math.floor(Number(priceInput.value) || 1));
-        priceInput.value = String(this.state.propSellPrice);
-        this.changed();
-      });
-      this.optionsEl.appendChild(this.field('Item que a caixa compra', kindSelect));
-      this.optionsEl.appendChild(this.field('Moedas por unidade', priceInput));
-    }
-
-    if (this.state.tool === 'entity' && this.state.entity.list === 'props' && isVariableProp(this.state.entity.type)) {
-      const propType = this.state.entity.type;
-      const names = Object.keys(this.store.globalVariables).sort((a, b) => a.localeCompare(b));
-      if (this.state.propVariable && !names.includes(this.state.propVariable)) this.state.propVariable = '';
-
-      const select = document.createElement('select');
-      const empty = document.createElement('option');
-      empty.value = '';
-      empty.textContent = names.length === 0 ? 'Crie uma variavel primeiro' : 'Sem vinculo';
-      select.appendChild(empty);
-      names.forEach((name) => {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        option.selected = name === this.state.propVariable;
-        select.appendChild(option);
-      });
-      select.value = this.state.propVariable;
-      select.disabled = names.length === 0;
-      select.addEventListener('change', () => {
-        this.state.propVariable = select.value;
-        this.changed();
-      });
-
-      const fieldLabel = propType === 'waterWheel' ? 'Saida logica (opcional)'
-        : propType === 'boiler' ? 'Saida de energia'
-        : propType === 'inserter' ? 'Alimentacao' : 'Variavel global';
-      const row = this.field(fieldLabel, select);
-      row.style.marginTop = '7px';
-      this.optionsEl.appendChild(row);
-      if (propType === 'waterWheel') {
-        const hint = document.createElement('div');
-        hint.style.cssText = 'font-size:10px;color:#6d949d;margin:3px 0 5px;line-height:1.4;';
-        hint.textContent = 'Ligue um fio ao lado da roda para energiza-lo. A saida logica e opcional.';
-        this.optionsEl.appendChild(hint);
-      } else if (propType === 'inserter') {
-        const hint = document.createElement('div');
-        hint.style.cssText = 'font-size:10px;color:#6d949d;margin:3px 0 5px;line-height:1.4;';
-        hint.textContent = 'Sem vinculo: funciona como antes. Vinculado: so trabalha com energia.';
-        this.optionsEl.appendChild(hint);
-      }
-      this.optionsEl.appendChild(this.button('+ Gerenciar variaveis', 'Cria e remove variaveis booleanas do mundo', () => this.openVariablesModal()));
     }
 
     const checks = document.createElement('div');
@@ -1297,7 +1170,7 @@ export class EditorDomUi {
       this.changed();
       return;
     }
-    // G de GIRAR. Nao e R (o Factorio usaria R) porque aqui R ja e a ferramenta retangulo, e
+    // G de GIRAR. Nao e R porque aqui R ja e a ferramenta retangulo, e
     // roubar um atalho de ferramenta pra girar um unico prop seria um mau negocio.
     if (key === 'g' && this.state.entity.list === 'props' && isDirectionalProp(this.state.entity.type)) {
       this.state.propDir = (((this.state.propDir ?? 1) + 1) % 4) as PropDir;
@@ -1430,7 +1303,7 @@ export class EditorDomUi {
     foot.appendChild(this.button('Fechar', '', () => this.closeModal(), 'primary'));
 
     let levels: LabLevelSummary[] = [];
-    // Por ID e não por número: com as dungeons na lista, `level-3` e `dungeon-3` colidem no 3.
+    // Por ID e não por número — o id é a chave do arquivo, e o número é só o rótulo.
     let editing: string | null = null;
     let deleteArmed: string | null = null;
 
@@ -1484,15 +1357,13 @@ export class EditorDomUi {
 
       levels.forEach((entry) => {
         const isCurrent = entry.id === manager.currentId;
-        const isDungeon = entry.kind === 'dungeon';
         const row = document.createElement('div');
         row.className = `zh-level-row${isCurrent ? ' current' : ''}`;
         row.dataset.level = entry.id;
 
         const number = document.createElement('span');
         number.className = 'zh-level-number';
-        // D de dungeon: a lista agora mistura as duas famílias, e "#3" sozinho mentiria duas vezes.
-        number.textContent = isDungeon ? `D${entry.level}` : `#${entry.level}`;
+        number.textContent = `#${entry.level}`;
 
         const nameCell = document.createElement('div');
         if (editing === entry.id) {
@@ -1530,9 +1401,8 @@ export class EditorDomUi {
         open.dataset.action = 'open';
         open.disabled = this.store.dirty || isCurrent || editing !== null;
 
-        const rename = this.button(editing === entry.id ? 'Salvar nome' : 'Renomear', isDungeon
-          ? 'Dungeon e conteudo fixo: o nome vive no meta.name do proprio arquivo'
-          : 'Alterar o nome exibido', () => {
+        const rename = this.button(editing === entry.id ? 'Salvar nome' : 'Renomear',
+          'Alterar o nome exibido', () => {
           if (editing !== entry.id) {
             editing = entry.id;
             deleteArmed = null;
@@ -1548,13 +1418,11 @@ export class EditorDomUi {
             .catch((error) => { rename.disabled = false; fail(error, 'Falha ao renomear level'); });
         });
         rename.dataset.action = 'rename';
-        rename.disabled = this.store.dirty || isDungeon;
+        rename.disabled = this.store.dirty;
 
         const remove = this.button(
           deleteArmed === entry.id ? 'Confirmar?' : 'Apagar',
-          isDungeon
-            ? 'As nove dungeons sao fixas — editam-se, nunca se apagam pelo lab'
-            : entry.level === 1 ? 'O Level 1 base nao pode ser apagado' : 'Apagar este arquivo de level',
+          entry.level === 1 ? 'O Level 1 base nao pode ser apagado' : 'Apagar este arquivo de level',
           () => {
             if (deleteArmed !== entry.id) {
               deleteArmed = entry.id;
@@ -1583,7 +1451,7 @@ export class EditorDomUi {
           },
         );
         remove.dataset.action = 'delete';
-        remove.disabled = this.store.dirty || isDungeon || entry.level === 1 || editing !== null;
+        remove.disabled = this.store.dirty || entry.level === 1 || editing !== null;
 
         row.append(number, nameCell, open, rename, remove);
         list.appendChild(row);
@@ -1611,267 +1479,6 @@ export class EditorDomUi {
    * e ela se recusa a esvaziar o baralho: sem carta nenhuma o portão não tem o que oferecer, e um
    * mundo que não cresce mais é indistinguível de um bug.
    */
-  private deckPanel(chunks: readonly WorldChunk[], current: WorldChunk): HTMLDivElement {
-    const panel = document.createElement('div');
-    panel.className = 'zh-deck';
-    const head = document.createElement('div');
-    head.className = 'zh-deck-head';
-    const count = document.createElement('span');
-    count.className = 'zh-deck-count';
-    const cards = chunks.filter((chunk) => chunk.catalog);
-    const enabledOf = (chunk: WorldChunk): boolean => chunk.catalog?.enabled !== false;
-    const refreshCount = (): void => {
-      count.textContent = `${cards.filter(enabledOf).length} de ${cards.length} cartas no baralho`;
-    };
-    refreshCount();
-
-    const list = document.createElement('div');
-    list.className = 'zh-deck-list';
-    const setAll = (on: boolean): void => {
-      for (const chunk of cards) this.store.setChunkEnabled(chunk.cx, chunk.cy, on);
-      this.openChunkCatalogModal(current.cx, current.cy);
-    };
-    head.append(
-      count,
-      this.button('Todas', 'Poe todas as cartas no baralho', () => setAll(true)),
-      this.button('Nenhuma', 'Tira todas menos a primeira — o baralho nunca fica vazio', () => {
-        setAll(false);
-        const first = cards[0];
-        if (first) this.store.setChunkEnabled(first.cx, first.cy, true);
-        this.openChunkCatalogModal(current.cx, current.cy);
-        this.toast('O baralho precisa de pelo menos uma carta');
-      }),
-    );
-    panel.append(head, list);
-
-    for (const chunk of cards) {
-      const row = document.createElement('label');
-      row.className = 'zh-deck-row';
-      if (chunk === current) row.classList.add('is-editing');
-      if (!enabledOf(chunk)) row.classList.add('is-off');
-      const box = document.createElement('input');
-      box.type = 'checkbox';
-      box.checked = enabledOf(chunk);
-      const name = document.createElement('span');
-      name.className = 'zh-deck-name';
-      name.textContent = chunk.catalog?.name ?? `Chunk ${chunk.cx}`;
-      // O que a carta TRAZ junto, porque é isso que se decide ao montar um baralho: um morador
-      // (a carta é uma cena de NPC) e/ou covas de inimigo.
-      const npc = chunk.npcs[0];
-      if (npc) {
-        const tag = document.createElement('span');
-        tag.className = 'zh-deck-tag npc';
-        tag.textContent = ` ${npc.type}`;
-        name.appendChild(tag);
-      }
-      if (chunk.enemies.length > 0) {
-        const tag = document.createElement('span');
-        tag.className = 'zh-deck-tag';
-        tag.textContent = ` ${chunk.enemies.length}x ${chunk.enemies[0].type}`;
-        name.appendChild(tag);
-      }
-      const cost = document.createElement('span');
-      cost.className = 'zh-deck-cost';
-      cost.textContent = `${chunk.catalog?.cost ?? 0}c`;
-      box.addEventListener('change', () => {
-        if (!box.checked && cards.filter(enabledOf).length <= 1) {
-          box.checked = true;
-          this.toast('O baralho precisa de pelo menos uma carta');
-          return;
-        }
-        this.store.setChunkEnabled(chunk.cx, chunk.cy, box.checked);
-        row.classList.toggle('is-off', !box.checked);
-        refreshCount();
-      });
-      row.append(box, name, cost);
-      list.appendChild(row);
-    }
-    return panel;
-  }
-
-  /** The authored world is now a strip of reusable cards, one editable chunk per entry. */
-  public openChunkCatalogModal(selectedCx = this.state.chunkX, selectedCy = this.state.chunkY): void {
-    const { body, foot } = this.modalShell('Biblioteca de chunks');
-    const chunks = this.store.world.chunks;
-    const current = chunks.find((chunk) => chunk.cx === selectedCx && chunk.cy === selectedCy) ?? chunks[0];
-    if (!current) return;
-
-    const intro = document.createElement('p');
-    intro.className = 'zh-level-note';
-    intro.textContent = 'Cada chunk desta biblioteca vira uma carta. A caixa liga a carta no BARALHO do jogador; desmarcada, ela continua inteira aqui e nao aparece no portao.';
-    body.appendChild(intro);
-
-    body.appendChild(this.deckPanel(chunks, current));
-
-    const selector = document.createElement('select');
-    for (const chunk of chunks) {
-      const option = document.createElement('option');
-      option.value = `${chunk.cx},${chunk.cy}`;
-      option.textContent = `${chunk.catalog?.name ?? 'Sem card'} — (${chunk.cx}, ${chunk.cy})`;
-      option.selected = chunk === current;
-      selector.appendChild(option);
-    }
-    selector.addEventListener('change', () => {
-      const [cx, cy] = selector.value.split(',').map(Number);
-      this.openChunkCatalogModal(cx, cy);
-    });
-    body.appendChild(this.field('Chunk', selector));
-
-    const catalog: ChunkCatalogEntry = current.catalog ?? {
-      id: `chunk-${current.cx}-${current.cy}`,
-      name: `Chunk ${current.cx + 1}`,
-      cost: 1,
-      cardImage: 'assets/environment/tilesets/forest_tile_set.png',
-      description: '',
-    };
-    const idInput = document.createElement('input');
-    idInput.type = 'text';
-    idInput.value = catalog.id;
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.value = catalog.name;
-    const costInput = document.createElement('input');
-    costInput.type = 'number';
-    costInput.min = '0';
-    costInput.step = '1';
-    costInput.value = String(catalog.cost);
-    const imageInput = document.createElement('input');
-    imageInput.type = 'text';
-    imageInput.value = catalog.cardImage;
-    imageInput.placeholder = 'assets/.../imagem.png';
-    const descriptionInput = document.createElement('textarea');
-    descriptionInput.className = 'zh-chunk-description';
-    descriptionInput.value = catalog.description ?? '';
-    // A CATEGORIA. "(deduzir)" é uma opção de verdade e é o padrão: quinze das dezoito cartas caem
-    // na categoria certa sozinhas (morador → narrativa, bicho → combate, resto → puzzle), e forçar
-    // uma escolha em todas seria pedir uma decisão onde não há nenhuma. Escolher aqui só é preciso
-    // quando a dedução erra — uma aula com professor E parede é o caso.
-    const categoryInput = document.createElement('select');
-    for (const [value, label] of [
-      ['', '(deduzir do conteudo)'],
-      ['narrative', 'Narrativa — alguem mora aqui'],
-      ['combat', 'Combate — o cerco entra por aqui'],
-      ['puzzle', 'Puzzle — uma trava para abrir'],
-    ] as const) {
-      const opt = document.createElement('option');
-      opt.value = value;
-      opt.textContent = label;
-      categoryInput.appendChild(opt);
-    }
-    categoryInput.value = catalog.category ?? '';
-
-    const header = document.createElement('div');
-    header.className = 'zh-chunk-catalog-head';
-    const preview = document.createElement('img');
-    preview.className = 'zh-chunk-preview';
-    preview.alt = '';
-    const refreshPreview = (): void => {
-      const path = imageInput.value.trim();
-      preview.src = /^(?:https?:|data:)/u.test(path)
-        ? path
-        : `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`;
-    };
-    refreshPreview();
-    imageInput.addEventListener('input', refreshPreview);
-    const summary = document.createElement('div');
-    summary.textContent = `Chunk (${current.cx}, ${current.cy}) · ${CHUNK_COLUMNS}x${CHUNK_ROWS} tiles`;
-    const open = this.button('Abrir no tabuleiro', 'Fecha este modal e enquadra o chunk para pintar', () => {
-      this.state.viewMode = 'chunk';
-      this.state.chunkX = current.cx;
-      this.state.chunkY = current.cy;
-      this.changed();
-      this.cb.onNavigate(
-        current.cx * CHUNK_COLUMNS + Math.floor(CHUNK_COLUMNS / 2),
-        current.cy * CHUNK_ROWS + Math.floor(CHUNK_ROWS / 2),
-      );
-      this.closeModal();
-    });
-    header.append(preview, summary, open);
-    body.append(
-      header,
-      this.field('ID unico', idInput),
-      this.field('Nome da carta', nameInput),
-      this.field('Custo em moedas', costInput),
-      this.field('Categoria', categoryInput),
-      this.field('Imagem da carta', imageInput),
-      this.field('Descricao', descriptionInput),
-    );
-
-    const createBox = document.createElement('div');
-    createBox.className = 'zh-chunk-create';
-    const createTitle = document.createElement('div');
-    createTitle.className = 'zh-label';
-    createTitle.textContent = 'Criar novo chunk';
-    const createName = document.createElement('input');
-    createName.type = 'text';
-    createName.placeholder = 'Ex.: Ruinas Afundadas';
-    const createButton = this.button('+ Criar e abrir', 'Acrescenta um chunk vazio ao fim da biblioteca', () => {
-      const name = createName.value.trim();
-      if (!name) { this.toast('Digite o nome do novo chunk'); createName.focus(); return; }
-      const base = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/gu, '')
-        .replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '') || 'chunk';
-      const ids = new Set(this.store.world.chunks.map((chunk) => chunk.catalog?.id).filter(Boolean));
-      let id = base;
-      let suffix = 2;
-      while (ids.has(id)) { id = `${base}-${suffix}`; suffix += 1; }
-      const at = this.store.addChunkTemplate({
-        id,
-        name,
-        cost: 1,
-        cardImage: 'assets/environment/tilesets/forest_tile_set.png',
-        description: 'Novo pedaco do mundo.',
-      });
-      this.state.chunkX = at.cx;
-      this.state.chunkY = at.cy;
-      this.state.viewMode = 'chunk';
-      this.cb.onStateChange();
-      this.openChunkCatalogModal(at.cx, at.cy);
-      this.toast(`Chunk ${name} criado`);
-    }, 'primary');
-    createBox.append(createTitle, createName, createButton);
-    body.appendChild(createBox);
-
-    foot.append(
-      this.button('Fechar', '', () => this.closeModal()),
-      // TESTAR ESTA CARTA. O P joga o mundo em edição, mas no editor de mundo isso quer dizer
-      // "começa uma run no acampamento" — e a carta que se acabou de desenhar fica sendo só mais
-      // uma no baralho, atrás de moeda e de um portão. Este botão constrói ELA colada no
-      // acampamento e põe o herói dentro. Sem salvar: é o mesmo mundo em memória do P.
-      this.button('▶ Testar esta carta', 'Constroi esta carta ao lado do acampamento e entra nela (nao salva)', () => {
-        const id = idInput.value.trim();
-        if (!id) { this.toast('A carta precisa de um ID para ser testada'); return; }
-        if (current.catalog?.id !== id) {
-          this.toast('Salve os metadados antes de testar (o ID mudou)');
-          return;
-        }
-        this.closeModal();
-        this.cb.onCardPlaytest?.(id);
-      }),
-      this.button('Salvar metadados', 'Aplica ao estado do editor; use Salvar para gravar world.json', () => {
-        const id = idInput.value.trim();
-        const name = nameInput.value.trim();
-        const image = imageInput.value.trim();
-        const duplicate = chunks.some((chunk) => chunk !== current && chunk.catalog?.id === id);
-        if (!id || !name || !image) { this.toast('ID, nome e imagem sao obrigatorios'); return; }
-        if (duplicate) { this.toast('Ja existe um chunk com esse ID'); return; }
-        this.store.setChunkCatalog(current.cx, current.cy, {
-          id,
-          name,
-          cost: Number(costInput.value),
-          cardImage: image,
-          description: descriptionInput.value,
-          // Vazio = sem campo, e sem campo a categoria volta a ser deduzida. Gravar `''` deixaria
-          // um valor que não é categoria nenhuma no arquivo.
-          category: (categoryInput.value || undefined) as ChunkCategory | undefined,
-          enabled: current.catalog?.enabled, // quem liga/desliga é a lista; aqui só se carrega
-        });
-        this.refreshHeader();
-        this.openChunkCatalogModal(current.cx, current.cy);
-        this.toast('Metadados do chunk atualizados');
-      }, 'primary'),
-    );
-  }
-
   public openWorldModal(): void {
     const { body, foot } = this.modalShell('Mundo');
     const meta = this.store.world.meta;
@@ -1879,22 +1486,9 @@ export class EditorDomUi {
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = meta.name;
-    const chunksXInput = document.createElement('input');
-    chunksXInput.type = 'number';
-    chunksXInput.min = '1';
-    chunksXInput.max = '32';
-    chunksXInput.value = String(meta.worldChunksX);
-    const chunksYInput = document.createElement('input');
-    chunksYInput.type = 'number';
-    chunksYInput.min = '1';
-    chunksYInput.max = '32';
-    chunksYInput.value = String(meta.worldChunksY);
-
-    body.append(
-      this.field('Nome', nameInput),
-      this.field('Chunks (largura)', chunksXInput),
-      this.field('Chunks (altura)', chunksYInput),
-    );
+    const dimensions = document.createElement('p');
+    dimensions.textContent = 'Mundo aberto fixo: 5 x 5 chunks.';
+    body.append(this.field('Nome', nameInput), dimensions);
 
     const stats = this.store.stats();
     const statsEl = document.createElement('p');
@@ -1911,103 +1505,15 @@ export class EditorDomUi {
       body.appendChild(warnEl);
     }
 
-    const note = document.createElement('p');
-    note.style.color = '#6d949d';
-    note.textContent = 'Redimensionar corta chunks fora do novo tamanho e limpa o historico de desfazer.';
-    body.appendChild(note);
-
     foot.append(
       this.button('Cancelar', '', () => this.closeModal()),
       this.button('Aplicar', '', () => {
         this.cb.onWorldApply({
           name: nameInput.value,
-          chunksX: Number(chunksXInput.value),
-          chunksY: Number(chunksYInput.value),
+          chunksX: 5,
+          chunksY: 5,
         });
         this.closeModal();
-      }, 'primary'),
-    );
-  }
-
-  public openVariablesModal(): void {
-    const { body, foot } = this.modalShell('Variaveis globais');
-    const working: Record<string, boolean> = { ...this.store.globalVariables };
-
-    const intro = document.createElement('p');
-    intro.textContent = 'Estados booleanos do mundo. Placas e rodas geram sinal; mecanismos vinculados, como o braco robotico, podem consumi-lo.';
-    body.appendChild(intro);
-
-    const list = document.createElement('div');
-    body.appendChild(list);
-
-    const renderList = (): void => {
-      list.innerHTML = '';
-      const names = Object.keys(working).sort((a, b) => a.localeCompare(b));
-      if (names.length === 0) {
-        const empty = document.createElement('p');
-        empty.className = 'zh-var-empty';
-        empty.textContent = 'Nenhuma variavel criada.';
-        list.appendChild(empty);
-      }
-      names.forEach((name) => {
-        const row = document.createElement('div');
-        row.className = 'zh-var-row';
-        const code = document.createElement('code');
-        code.textContent = name;
-        const initial = document.createElement('input');
-        initial.type = 'checkbox';
-        initial.checked = working[name];
-        initial.addEventListener('change', () => { working[name] = initial.checked; });
-        const initialLabel = document.createElement('label');
-        initialLabel.append(initial, document.createTextNode(' Inicial true'));
-        const usage = this.store.variableUsage(name);
-        const usageText = document.createElement('span');
-        usageText.textContent = usage === 0 ? 'sem vinculos' : `${usage} mecanismo(s)`;
-        usageText.style.color = usage === 0 ? '#6d949d' : '#f4a261';
-        const del = this.button('Remover', usage > 0 ? 'Remova ou troque o vinculo dos mecanismos primeiro' : 'Remove a variavel', () => {
-          delete working[name];
-          renderList();
-        });
-        del.disabled = usage > 0;
-        row.append(code, initialLabel, usageText, del);
-        list.appendChild(row);
-      });
-    };
-
-    const addRow = document.createElement('div');
-    addRow.className = 'zh-line-row';
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.placeholder = 'ex.: porta_norte_aberta';
-    const add = this.button('+ Criar', 'Nomes aceitam letras, numeros, ponto, hifen e sublinhado', () => {
-      const name = nameInput.value.trim();
-      if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(name)) {
-        this.toast('Nome invalido: comece com letra ou _ e nao use espacos');
-        return;
-      }
-      if (name in working) {
-        this.toast('Essa variavel ja existe');
-        return;
-      }
-      working[name] = false;
-      nameInput.value = '';
-      renderList();
-    });
-    nameInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') { event.preventDefault(); add.click(); }
-    });
-    addRow.append(nameInput, add);
-    body.append(this.sectionLabel('Nova variavel'), addRow);
-    renderList();
-
-    foot.append(
-      this.button('Cancelar', '', () => this.closeModal()),
-      this.button('Aplicar', 'Grava as variaveis no mundo; Ctrl+Z desfaz', () => {
-        this.store.replaceGlobalVariables(working);
-        if (this.state.propVariable && !(this.state.propVariable in working)) this.state.propVariable = '';
-        this.closeModal();
-        this.syncFromState();
-        this.toast('Variaveis globais aplicadas');
       }, 'primary'),
     );
   }
@@ -2167,7 +1673,6 @@ export class EditorDomUi {
       ['Ctrl+Z / Ctrl+Y', 'Desfazer / refazer'],
       ['Ctrl+S', 'Salvar world.json'],
       ['P', 'Testar o mundo em edicao (ESC volta ao editor)'],
-      ['Variaveis...', 'Cria booleanos globais; selecione um ao pintar uma placa de pressao'],
       ['0', 'Enquadrar o mundo na tela'],
     ];
     const table = document.createElement('table');

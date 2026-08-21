@@ -13,7 +13,7 @@
       "worldY": 9
     },
     "puzzle": true,
-    "exportedAt": "2026-08-13T19:12:33.615Z"
+    "exportedAt": "2026-08-19T12:15:08.322Z"
   },
   "chunks": [
     {
@@ -651,7 +651,7 @@
         },
         {
           "speaker": "npc",
-          "text": "A felled tree leaves a STICK behind. Keep every one of them: a stick is a torch that has not met fire yet."
+          "text": "A felled tree leaves a STICK behind. Put those sticks in the marked box: the balloon calls the plane, and the plane drops your coins."
         },
         {
           "speaker": "npc",
@@ -659,6 +659,5 @@
         }
       ]
     }
-  },
-  "globalVariables": {}
+  }
 }

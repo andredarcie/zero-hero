@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "generate:world": "tsx scripts/generateWorld.ts",
     "generate:chunks": "node scripts/gen-chunk-library.mjs",
-    "audit:dungeons": "tsx scripts/audit-dungeons.ts",
+    "audit:endgame": "node scripts/audit-endgame.mjs",
     "generate:levels": "node scripts/gen-levels.mjs",
     "lint": "eslint . --ext .ts",
     "playtest": "node playtest/run.mjs",

@@ -9,23 +9,24 @@ import {
   SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import {
-  getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWaterWheels, getWorldBounds,
+  getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds,
 } from '@/game/world/WorldData';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
-import { ChunkShroud3D } from './ChunkShroud3D';
+import { ChunkShroud3D, shroudDayUniform } from './ChunkShroud3D';
 import {
   applyCast, CAST_MAX_ALPHA, type CastPose, castTransformInto, handoffCastInto,
   makeCastMaskMaterial, makeCastMesh, SolidCastField, WIDTH_FACTOR as CAST_WIDTH_FACTOR,
 } from './CastShadow3D';
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
-import { getDofIntensity } from '@/game/runtime/graphicsSettings';
+import { getDaylight, getDofIntensity, setDaylight } from '@/game/runtime/graphicsSettings';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, windUniform,
   lightWobbleUniform, patchPixelMaterial, seaFlowUniform, SHADOW_MASK_GLSL, shadowMaskOnUniform,
-  shadowMaskRectUniform, shadowMaskUniform, syncTexelAaUniforms, texelAaUniform,
+  shadowMaskRectUniform, shadowMaskUniform, syncTexelAaUniforms, texelAaUniform, waterGlintUniform,
   type TexelAaUniforms,
 } from './pixelArtLight';
+import { DAY_SKY } from './skyPreset';
 import {
   frameFootPad, frameUvWindow, getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv,
 } from './textures3d';
@@ -174,6 +175,12 @@ const bucketKey = (x: number, z: number): number => ((x + 4096) >> 2) * 16384 + 
 const FIRE_LIGHT_SLOTS = 8;
 // How far a full-strength flame still counts as "lighting" a point, for lightLevelAt. Tiles.
 const LIGHT_SAMPLE_REACH = 5.5;
+/**
+ * O quanto o SOL já acende qualquer lugar do mundo, para `lightLevelAt`. Não é 1: mesmo ao
+ * meio-dia a fogueira tem de ter para onde subir, senão chegar perto do fogo com a espada na mão
+ * deixa de mudar alguma coisa e o único desenho que o arco faz da luz do mundo morre.
+ */
+const DAYLIGHT_SWING_FLOOR = 0.82;
 
 // The axe-blow shudder of a standing TILE (see shakeSolidTile). Matched to DryTreeObject's chop
 // recoil so both trees answer an axe the same way: ±7° for ~220ms. The lean is tan(7°) — the
@@ -236,6 +243,18 @@ const BIOME_LAVA_RADIUS = 11; // tiles
 // darker — it's what makes the fire pool's warmth read as warmth.
 const GRADE_WOOD_SHADOW = new THREE.Vector3(0.88, 0.91, 1.14);
 const GRADE_WOOD_HIGH = new THREE.Vector3(1.12, 1.02, 0.86); // warm amber highlights
+/**
+ * O MESMO bosque ao meio-dia. Ele precisa de par próprio — e não do de cima com `grade` mais alto
+ * — porque a separação quente/frio do dia é MAIOR e tem outra cor: o que enche a sombra de um dia
+ * de sol é o CÉU (azul), e o que bate no alto é o SOL (ouro). Aqui é o único desenho de "quente
+ * contra frio" que sobra no dia, e é onde o amarelo dele é decidido.
+ *
+ * O alto puxa forte para o ouro porque a CURVA come tinta: `pow(0.66)` transforma uma razão de
+ * 1,24× em 1,15× na tela. Todo tom escolhido aqui chega mais fraco do que parece — e é por isso
+ * que este par é mais extremo que o noturno em vez de ser o noturno com o volume alto.
+ */
+const GRADE_DAY_SHADOW = new THREE.Vector3(0.84, 0.93, 1.2);
+const GRADE_DAY_HIGH = new THREE.Vector3(1.24, 1.06, 0.72);
 const GRADE_LAVA_SHADOW = new THREE.Vector3(1.06, 0.92, 0.86); // even the dark runs warm here
 const GRADE_LAVA_HIGH = new THREE.Vector3(1.20, 0.98, 0.72); // molten amber
 
@@ -322,6 +341,79 @@ export interface Box3D {
   destroy(): void;
 }
 
+/** Como uma caixa veste a pele dela. Ver `addBox` e `tileBoxUv`. */
+export interface BoxSkinOpts {
+  /**
+   * O TEXEL DA CAIXA PASSA A MEDIR O MESMO QUE O PIXEL DO MUNDO.
+   *
+   * Sem isto, a `BoxGeometry` estica a arte INTEIRA em cada face — e como as faces de uma peca
+   * tem tamanhos muito diferentes, cada uma sai com um pixel de outro tamanho e de outro formato.
+   * Medido no meio-fio da escada: 1,7 px de largura por 24 px de altura, um texel 20:1, que e
+   * granito virando listra esticada. Com `pixelTiled` a arte e RECORTADA na densidade do mundo
+   * (16 texels por tile), entao uma pedra de 0,1 tile mostra 1,6 texel de pedra — pouco, mas do
+   * tamanho certo. Num jogo cuja lei e "16 px por tile", a alvenaria tambem obedece.
+   */
+  pixelTiled?: boolean;
+  /**
+   * Onde o recorte comeca, em TEXELS a partir do canto superior esquerdo da arte (so com
+   * `pixelTiled`). E o que faz duas pisadas vizinhas nao serem o mesmo desenho — uma folha de
+   * pedra, recortes diferentes, que e como pixel art sempre fez variacao.
+   */
+  uvShift?: readonly [number, number];
+  /** Sem luz nenhuma: a cor sai crua. So para o que NAO e superficie — ver `addBox`. */
+  unlit?: boolean;
+}
+
+/**
+ * Recorta a arte de uma caixa na densidade de pixel do mundo, face a face.
+ *
+ * A `BoxGeometry` do three tem 6 faces de 4 vertices, nesta ordem: +X, −X, +Y, −Y, +Z, −Z; a UV
+ * de cada uma vai de 0 a 1. Multiplicar essa UV pelo tamanho da face em texels do mundo (e somar
+ * o deslocamento) e tudo o que e preciso — e fica na GEOMETRIA, que ja e unica por caixa, em vez
+ * de num clone da textura: a `DataTexture` de pedra e compartilhada em cache, e clona-la por
+ * caixa seria uma subida de textura nova por meio-fio.
+ */
+const tileBoxUv = (
+  geo: THREE.BoxGeometry,
+  sizeX: number,
+  sizeH: number,
+  sizeZ: number,
+  skin: THREE.Texture,
+  shift: readonly [number, number] = [0, 0],
+): void => {
+  const image = skin.image as { width?: number; height?: number } | undefined;
+  const texW = image?.width ?? TILESET_FRAME_SIZE;
+  const texH = image?.height ?? TILESET_FRAME_SIZE;
+  // O modo de repeticao e parametro de TEXTURA, e o three so o aplica na subida — trocar o campo
+  // sem `needsUpdate` deixa a textura grampeada na GPU e o recorte sai esticando o texel da borda
+  // em vez de repetir. So a primeira caixa paga: as seguintes acham a textura ja em Repeat.
+  if (skin.wrapS !== THREE.RepeatWrapping || skin.wrapT !== THREE.RepeatWrapping) {
+    skin.wrapS = THREE.RepeatWrapping;
+    skin.wrapT = THREE.RepeatWrapping;
+    skin.needsUpdate = true;
+  }
+  // Que dimensao do mundo corre em u e em v, por face.
+  const spans: ReadonlyArray<readonly [number, number]> = [
+    [sizeZ, sizeH], [sizeZ, sizeH], // ±X: a profundidade em u, a altura em v
+    [sizeX, sizeZ], [sizeX, sizeZ], // ±Y: topo e base — largura em u, profundidade em v
+    [sizeX, sizeH], [sizeX, sizeH], // ±Z: largura em u, altura em v
+  ];
+  const uv = geo.attributes.uv as THREE.BufferAttribute;
+  for (let face = 0; face < spans.length; face += 1) {
+    const [spanU, spanV] = spans[face];
+    const ru = (spanU * TILESET_FRAME_SIZE) / texW;
+    const rv = (spanV * TILESET_FRAME_SIZE) / texH;
+    // v cresce para CIMA na textura, e o deslocamento e contado a partir do TOPO da arte (que e
+    // como se le um sprite): por isso o recorte ancora em `1 - rv` e o shift desce dali.
+    const ou = shift[0] / texW;
+    const ov = 1 - rv - shift[1] / texH;
+    for (let i = face * 4; i < face * 4 + 4; i += 1) {
+      uv.setXY(i, uv.getX(i) * ru + ou, uv.getY(i) * rv + ov);
+    }
+  }
+  uv.needsUpdate = true;
+};
+
 /**
  * A standing solid tile (tree/wall), as the shadow pass sees it. The optional fields are
  * cast-pass bookkeeping, written in place so the per-frame loops allocate nothing:
@@ -403,6 +495,19 @@ export interface World3DParams {
    * nao por recompilacao. Ver as SEA_* GLSL em pixelArtLight.
    */
   seaFlow: number;
+  /**
+   * A HORA DO DIA: 0 = a noite autorada (o padrão do jogo), 1 = o dia de sol.
+   *
+   * Não é um número contínuo — é uma CHAVE. Virá-la troca ~vinte outros knobs de uma vez
+   * (`skyPreset.DAY_SKY`), e voltar a 0 devolve cada um ao valor de fábrica. Ela é o único knob
+   * deste objeto que escreve nos outros, então tunar à mão e depois virar a chave descarta o que
+   * foi tunado — é o preço de um preset, e ele é o certo: "dia" é uma decisão só.
+   *
+   * Interpolar entre os dois seria bonito (um amanhecer) e caro: a alpha/comprimento da sombra
+   * projetada re-ASSA o campo instanciado dos sólidos, e um lerp por frame seria uma re-assadura
+   * por frame. Por isso a troca é seca.
+   */
+  daylight: number;
   ambient: number;
   fireIntensity: number;
   /** Campfire light reach (THREE distance, in tiles) and falloff exponent (decay).
@@ -489,6 +594,14 @@ export interface World3DParams {
    */
   ambientColor: string;
   moonColor: string;
+  /**
+   * O AR: a cor do fundo E do fog, que são obrigatoriamente a mesma (um fog que não termina na cor
+   * do fundo desenha uma emenda no infinito). A câmera olha 48° para baixo e o horizonte nunca
+   * entra no quadro, então isto não é "o céu": é a cor em que a distância se dissolve.
+   */
+  skyColor: string;
+  /** A estrela que a água pisca: a lua fria de noite, o sol branco de dia (pixelArtLight). */
+  glintColor: string;
   // ── HD-2D post chain (all live-tunable) ──
   /** ACES tone-mapping exposure. */
   exposure: number;
@@ -507,6 +620,23 @@ export interface World3DParams {
   dofNear: number;
   /** Vignette darkening at the corners (0 = off) and film-grain amount. */
   vignette: number;
+  /**
+   * A CURVA DE TELA — o expoente com que o quadro pronto é levantado. 1 = a rampa reta que este
+   * jogo sempre teve (a noite, intocada); menores levantam sombra e meio-tom sem mexer no branco.
+   *
+   * Ela existe porque este jogo NÃO tem tone mapping. O `RenderPass` desenha o mundo num render
+   * target, e o three só monta o ACES quando o alvo é a tela (`WebGLPrograms`: `toneMapping` fica
+   * em `NoToneMapping` com um alvo ligado) — então `params.exposure` não chega a shader nenhum e
+   * o valor LINEAR do buffer vai cru para o canvas, que o mostra como se fosse sRGB. É daí que
+   * vem o escuro fundo e contrastado da noite, e é por isso que a `ambient` precisou de 8,5.
+   *
+   * Consequência para o DIA: não há curva nenhuma comprimindo o alto, então "mais luz" estoura o
+   * branco antes de clarear a sombra — 1,0 é um corte seco. `lift` é a ferramenta certa para
+   * levantar um quadro: `pow` é monótono, leva 1 em 1 e abre justamente os graves, que é onde a
+   * diferença entre meio-dia e meia-noite mora. Fica em 1 na noite, e em 1 ela é literalmente a
+   * identidade (o `if` no shader nem roda) — a noite não muda um bit por causa disto.
+   */
+  lift: number;
   grain: number;
   /**
    * O VENTO na vegetação (0 = mundo parado, 1 = padrão, 2 = o dobro). É um knob vivo porque
@@ -556,10 +686,8 @@ export class World3D {
     // ZOOM AQUI E DOLLY, NUNCA fov, e os dois numeros andam SEMPRE pelo mesmo fator: a RAZAO
     // camHeight/camBack (1.1053) e a direcao de visao, e meio jogo tem essa razao assada dentro
     // de si — e o DEPTH_UP com que a arte da flor da lua desenha os frames em pe
-    // (spritefactory/sprites/moonflower.mjs) e e o depthToScreen com que o braco robotico mede o
-    // comprimento de cada haste na tela. Mexer num dos dois sozinho gira a camera e faz esse
-    // material mentir em silencio, sem erro nenhum: a flor fica plantada torta e o braco deixa de
-    // encostar nas proprias juntas.
+    // (spritefactory/sprites/moonflower.mjs). Mexer num dos dois sozinho gira a camera e faz esse
+    // material mentir em silencio, sem erro nenhum: a flor fica plantada torta.
     camHeight: 6.048,
     camBack: 5.472,
     fov: 38,
@@ -596,6 +724,10 @@ export class World3D {
     // over-brightening the art. Below ~ACES(1.55) stays under the bloom threshold.
     lightCap: 1.55,
     seaFlow: 1,
+    // O jogo nasceu de noite, e todo número abaixo foi escolhido a olho contra o escuro: a noite
+    // É o padrão, e o dia é o delta (render3d/skyPreset.ts). O valor real vem do ajuste do jogador
+    // no construtor — este 0 é só o que o TypeScript precisa ver.
+    daylight: 0,
     // Lifted from 4.0 (user: "faça o jogo ser menos escuro de modo geral") — the unlit
     // forest is now readable everywhere and the night mood comes from the cool tint and
     // the warm-vs-cold contrast, not from crushing the dark to near-black. The fire pool
@@ -655,6 +787,10 @@ export class World3D {
     // colours instead of being tinted teal by a saturated blue night fill.
     ambientColor: '#b4b7c2',
     moonColor: '#97a0b4',
+    // Quase preto: a distância da noite não é azul, é ausência. O fog usa a MESMA cor.
+    skyColor: '#070811',
+    // Frio e apagado — é a lua na ondulação. (Em linear: os 0.45/0.58/0.82 de sempre.)
+    glintColor: '#b3c8ea',
     exposure: 2.05,
     // Gentle bloom: the fire/lava glow softly (like the 2D) instead of glaring.
     bloomStrength: 0.3,
@@ -668,6 +804,7 @@ export class World3D {
     dofBlur: 3.2,
     dofNear: 0.55,
     vignette: 0.16, // eased with the brighter night — 0.24 re-darkened the corners
+    lift: 1, // a noite é a rampa reta — ver o doc do campo
     grain: 0.02,
     // Occasional twinkles near lit fires + a faint low haze — tuned live to sit
     // just under "noticeable" so they never wash the dark or read as floating orbs.
@@ -842,6 +979,14 @@ export class World3D {
   private readonly maskScene = new THREE.Scene();
   private maskCamera!: THREE.OrthographicCamera;
   private appliedMaskMode = false;
+  // ── a hora do dia (hd3d.daylight — ver skyPreset.ts) ──
+  /**
+   * O que os knobs do DAY_SKY valiam de fábrica, capturado antes da primeira escrita: é esta a
+   * NOITE. Guardá-la em vez de escrever um preset "night" à mão é o que impede as duas de
+   * divergirem — mexer no padrão lá em cima já muda a noite para a qual o dia volta.
+   */
+  private readonly nightSky: Partial<World3DParams> = {};
+  private appliedDaylight = false;
   // NOTA: aqui viviam os CAMPOS INSTANCIADOS de silhueta de ator (um por sprite sheet), com um
   // opt-in publico (`enableActorCastBatching`) e um limiar de 3 casters. Eles existiam para UMA
   // coisa: a horda do modo Sobreviventes, cujas ~100 caveiras eram ~100 draws de sombra. O modo
@@ -881,6 +1026,12 @@ export class World3D {
   private readonly appliedMoonShadow = { alpha: -1, length: -1 };
 
   public constructor() {
+    // A HORA DO DIA vem ANTES de tudo. O renderizador nasce de novo a cada `scene.restart()` (a
+    // morte é um), então a escolha mora fora dele (graphicsSettings + `?day`/`?night`), e ela tem
+    // de estar aplicada antes que o fundo, o fog e as duas luzes sejam criados desta tabela — do
+    // contrário o primeiro frame de uma partida de dia nasceria à meia-noite e viraria no segundo.
+    this.applySky(getDaylight() >= 0.5);
+
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'world3d';
     // The canvas backing store is LOW resolution (see applyPixelScale); CSS stretches it
@@ -906,8 +1057,10 @@ export class World3D {
     this.renderer.info.autoReset = false;
     this.applyPixelScale();
 
-    this.scene.background = new THREE.Color('#070811');
-    this.scene.fog = new THREE.FogExp2('#070811', this.params.fogDensity);
+    // Fundo e fog são a MESMA cor por obrigação: um fog que não termina na cor do fundo desenha
+    // uma emenda no infinito. Vem de `params.skyColor`, que o `render` mantém vivo.
+    this.scene.background = new THREE.Color(this.params.skyColor);
+    this.scene.fog = new THREE.FogExp2(this.params.skyColor, this.params.fogDensity);
 
     this.camera = new THREE.PerspectiveCamera(
       this.params.fov, window.innerWidth / window.innerHeight, 0.1, 120,
@@ -1003,6 +1156,7 @@ export class World3D {
     u.uBlur.value = this.params.dofBlur * getDofIntensity();
     u.uNear.value = this.params.dofNear;
     u.uVignette.value = this.params.vignette;
+    u.uLift.value = Math.max(0.05, this.params.lift);
     u.uGrain.value = this.params.grain;
     u.uGrade.value = this.params.grade;
     u.uSaturation.value = this.params.saturation;
@@ -1055,11 +1209,15 @@ export class World3D {
     // Ease toward the region's grade (a few tenths of a second), never snap.
     this.biomeHeat += (nearLava - this.biomeHeat) * Math.min(1, dt * 1.6);
 
+    // O bosque tem duas horas do dia; a bacia de lava não — pedra derretida é a mesma fornalha ao
+    // meio-dia e à meia-noite, e é ela que o grade está descrevendo ali.
     const u = this.finishPass.uniforms;
     (u.uShadowTint.value as THREE.Vector3)
-      .copy(GRADE_WOOD_SHADOW).lerp(GRADE_LAVA_SHADOW, this.biomeHeat);
+      .copy(this.appliedDaylight ? GRADE_DAY_SHADOW : GRADE_WOOD_SHADOW)
+      .lerp(GRADE_LAVA_SHADOW, this.biomeHeat);
     (u.uHighTint.value as THREE.Vector3)
-      .copy(GRADE_WOOD_HIGH).lerp(GRADE_LAVA_HIGH, this.biomeHeat);
+      .copy(this.appliedDaylight ? GRADE_DAY_HIGH : GRADE_WOOD_HIGH)
+      .lerp(GRADE_LAVA_HIGH, this.biomeHeat);
   }
 
   private updateGodRays(fire: FireEntry | null): void {
@@ -1195,10 +1353,10 @@ export class World3D {
   private buildTerrain(): void {
     this.terrainBakes += 1;
     const b = getWorldBounds();
-    // River tiles (plain water + buildable bridge spots + in-river wheels) sink into a
+    // River tiles (plain water + buildable bridge spots) sink into a
     // channel below the ground: their ground quad drops to the bed and gets dark banks.
     const waterSet = new Set<string>(
-      [...getWaterTiles(), ...getBridgeSpots(), ...getWaterWheels()]
+      [...getWaterTiles(), ...getBridgeSpots()]
         .map((p) => `${p.worldX},${p.worldY}`),
     );
     // Lava tiles sink into their own (shallower) basin, the same way water tiles do.
@@ -1805,7 +1963,12 @@ export class World3D {
    * it — anything more faithful would be a second lighting model to keep in sync.
    */
   public lightLevelAt(x: number, y: number): number {
-    let best = 0;
+    // DE DIA O PISO NÃO É ZERO. A chama é a única luz que este cálculo conhece, e isso está certo
+    // à noite — longe do fogo o arco tem mesmo de escurecer. Ao meio-dia a mesma conta devolvia 0
+    // no campo aberto e a espada saía como um borrão escuro por cima de um mundo batido de sol: o
+    // "branco estourado" ao contrário, e pelo mesmo motivo (o traço não recebe a luz da cena).
+    // O sol não tem posição para consultar — ele bate em tudo —, então ele é um PISO.
+    let best = this.appliedDaylight ? DAYLIGHT_SWING_FLOOR : 0;
     const consider = (fx: number, fy: number, level: number): void => {
       const reach = LIGHT_SAMPLE_REACH * Math.max(0.2, level);
       const d = Math.hypot(fx - x, fy - y);
@@ -1839,14 +2002,31 @@ export class World3D {
 
   /** See Box3D. Size is in tiles (sizeH = height/thickness); skin is a flat colour or a
    *  pixel-art texture (the bridge's wood grain — see woodTexture.ts). */
-  public addBox(sizeX: number, sizeH: number, sizeZ: number, skin: number | THREE.Texture): Box3D {
+  public addBox(
+    sizeX: number,
+    sizeH: number,
+    sizeZ: number,
+    skin: number | THREE.Texture,
+    opts: BoxSkinOpts = {},
+  ): Box3D {
     const geo = new THREE.BoxGeometry(sizeX, sizeH, sizeZ);
+    if (opts.pixelTiled && typeof skin !== 'number') tileBoxUv(geo, sizeX, sizeH, sizeZ, skin, opts.uvShift);
     // transparent stays on even at alpha 1 so ghost previews and solid props share a material
     // shape (toggling `transparent` at runtime would force a shader recompile).
-    const mat = new THREE.MeshLambertMaterial(
-      typeof skin === 'number' ? { color: skin, transparent: true } : { map: skin, transparent: true },
-    );
-    patchPixelMaterial(mat, { quantize: true });
+    //
+    // `unlit` e a excecao, e ela existe para UMA coisa: o vao da escada. Buraco nao e superficie
+    // — ele nao tem nada para a luz bater —, e um Lambert escuro somava ambiente, luar, fogueira
+    // e tocha ate clarear. Um buraco que fica mais claro ao meio-dia deixa de ser buraco. Isto
+    // NAO e um atalho de performance nem um jeito de "pintar" pecas: quem se pinta e superficie,
+    // e superficie recebe luz.
+    const mat = opts.unlit
+      ? new THREE.MeshBasicMaterial(
+        typeof skin === 'number' ? { color: skin, transparent: true } : { map: skin, transparent: true },
+      )
+      : new THREE.MeshLambertMaterial(
+        typeof skin === 'number' ? { color: skin, transparent: true } : { map: skin, transparent: true },
+      );
+    if (!opts.unlit) patchPixelMaterial(mat, { quantize: true });
     const mesh = new THREE.Mesh(geo, mat);
     this.scene.add(mesh);
 
@@ -2423,7 +2603,10 @@ export class World3D {
       // now the rule for every caster. Sells the walk bob, the coin arc, the ITEM GET.
       let ax = c.bb.x;
       let az = c.bb.y;
-      let a = cast.alpha;
+      // A silhueta EXISTE tanto quanto o dono dela. Sem isto, um corpo que apaga (o heroi
+      // entrando na escada, um bicho sumindo) deixa a propria sombra de fogueira estampada no
+      // chao a plena forca — o mesmo defeito que o blob de contato tinha, so que projetado.
+      let a = cast.alpha * c.bb.alpha;
       const elev = c.bb.elevation * this.params.castElevation;
       if (elev > 0) {
         const unit = cast.length / Math.max(0.05, height);
@@ -2751,6 +2934,43 @@ export class World3D {
     target.set(css);
   }
 
+  // ── a hora do dia ────────────────────────────────────────────────────────────
+
+  /**
+   * Vira a chave do céu: a noite autorada ⇄ o dia de sol (`skyPreset.DAY_SKY`).
+   *
+   * Ela só escreve em `params` — nenhuma luz nasce, nenhuma morre, nenhum material é recompilado.
+   * O resto do frame já sabe reagir a knob que se mexe: o campo instanciado de sombra dos sólidos
+   * se re-assa sozinho quando alpha/comprimento mudam (`updateCastShadows`), e fundo, fog, cor da
+   * ambiente e cor do sol entram por `applyColor` no topo do `render`. É por isso que a troca
+   * custa uma re-assadura de sombras e nada mais.
+   */
+  private applySky(day: boolean): void {
+    if (Object.keys(this.nightSky).length === 0) {
+      // A NOITE, capturada dos valores de fábrica na primeira passagem — antes de qualquer
+      // escrita. Ver o campo: é isto que impede a noite de existir duas vezes.
+      const factory = this.nightSky as Record<string, number | string>;
+      const current = this.params as unknown as Record<string, number | string>;
+      for (const key of Object.keys(DAY_SKY)) factory[key] = current[key];
+    }
+    Object.assign(this.params, day ? DAY_SKY : this.nightSky);
+    this.params.daylight = day ? 1 : 0;
+    this.appliedDaylight = day;
+  }
+
+  /**
+   * Duas portas para a mesma verdade: o menu de pausa (que grava) e `hd3d.daylight` (o console).
+   * Quem MEXEU desde o último frame é quem quis dizer alguma coisa — e o que ficou decidido volta
+   * para as duas, para o rótulo do menu e o knob nunca contarem histórias diferentes.
+   */
+  private syncDaylight(): void {
+    const stored = getDaylight() >= 0.5;
+    const want = stored !== this.appliedDaylight ? stored : this.params.daylight >= 0.5;
+    if (want === this.appliedDaylight) return;
+    this.applySky(want);
+    setDaylight(want ? 1 : 0);
+  }
+
   /** Dialog pan: shift what sits at screen centre, in tile units. */
   public setViewOffset(dxTiles: number, dyTiles: number): void {
     this.viewOffsetX = dxTiles;
@@ -2825,7 +3045,8 @@ export class World3D {
     profiler.end('rustle');
     this.chunkShroud.update(dtMs); // avança (e encerra) as dissoluções de compra de chunk
 
-    // Live knobs (window.hd3d).
+    // Live knobs (window.hd3d). A hora do dia vem PRIMEIRO: ela reescreve os outros.
+    this.syncDaylight();
     texelAaUniform.value = Math.min(1, Math.max(0, this.params.texelAa));
     lightStepsUniform.value = Math.max(0, this.params.lightSteps);
     lightResUniform.value = Math.max(0, this.params.lightRes);
@@ -2841,11 +3062,23 @@ export class World3D {
     fireGlowResUniform.value = Math.max(0, this.params.fireGlowRes);
     flowTimeUniform.value = this.elapsed;
     windUniform.value = Math.max(0, this.params.wind);
+    // A mortalha do explorador tem duas paletas, e a escolha é a mesma do céu: de noite ela é mais
+    // funda que o escuro, de dia é um banco de neblina batido de sol (ver ChunkShroud3D).
+    shroudDayUniform.value = this.appliedDaylight ? 1 : 0;
     this.ambientLight.intensity = this.params.ambient;
     this.applyColor('ambient', this.ambientLight.color, this.params.ambientColor);
+    // A mesma DirectionalLight é a lua e o SOL — de roupa trocada, nunca substituída: criar uma
+    // luz em runtime recompilaria todo shader do mundo (ver FIRE_LIGHT_SLOTS).
     this.moonLight.intensity = this.params.moon;
     this.applyColor('moon', this.moonLight.color, this.params.moonColor);
-    if (this.scene.fog instanceof THREE.FogExp2) this.scene.fog.density = this.params.fogDensity;
+    this.applyColor('glint', waterGlintUniform.value, this.params.glintColor);
+    if (this.scene.background instanceof THREE.Color) {
+      this.applyColor('sky', this.scene.background, this.params.skyColor);
+    }
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.applyColor('fog', this.scene.fog.color, this.params.skyColor);
+      this.scene.fog.density = this.params.fogDensity;
+    }
     if (this.params.fov !== this.appliedFov) {
       this.camera.fov = this.params.fov;
       this.camera.updateProjectionMatrix();
@@ -3084,7 +3317,16 @@ export class World3D {
 
     // Mist: slow cool wisps hugging the ground; thins right at the fire (heat burns
     // it off) so the lit clearing stays clear while the dark stays veiled.
+    //
+    // De DIA a mesma névoa é POEIRA: motes dourados boiando no ar batido de sol. É o mesmo campo
+    // de partículas, com a mesma deriva e a mesma abertura junto do fogo — só a cor troca, porque
+    // o que se vê boiando ao meio-dia não é vapor frio, é pó pegando luz. (Um segundo campo só
+    // para isto seriam 48 Points a mais desenhados sempre, para metade deles estar sempre invisível.)
     const mistAmt = Math.max(0, this.params.mist);
+    const dayMix = this.appliedDaylight ? 1 : 0;
+    const mistR = 0.32 + (0.66 - 0.32) * dayMix;
+    const mistG = 0.4 + (0.56 - 0.4) * dayMix;
+    const mistB = 0.6 + (0.34 - 0.6) * dayMix;
     for (let i = 0; i < MIST_COUNT; i++) {
       const s = this.mistSeed[i];
       let x = this.mist.pos[i * 3] + Math.sin(t * 0.12 + s) * 0.004;
@@ -3096,9 +3338,9 @@ export class World3D {
       const clear = fire ? Math.min(1, Math.hypot(x - fire.worldX, z - fire.worldY) / 4) : 1;
       const tw = 0.6 + 0.4 * Math.sin(t * 0.5 + s * 3.0);
       const a = mistAmt * 0.045 * clear * tw;
-      this.mist.col[i * 3] = 0.32 * a;
-      this.mist.col[i * 3 + 1] = 0.4 * a;
-      this.mist.col[i * 3 + 2] = 0.6 * a;
+      this.mist.col[i * 3] = mistR * a;
+      this.mist.col[i * 3 + 1] = mistG * a;
+      this.mist.col[i * 3 + 2] = mistB * a;
     }
     this.mist.mark();
   }
@@ -3279,6 +3521,7 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
     uBlur: { value: 3.2 },
     uNear: { value: 0.55 },
     uVignette: { value: 0.24 },
+    uLift: { value: 1 },
     uGrain: { value: 0.02 },
     uGrade: { value: 0.5 },
     // The split-tone the grade lerps between, per region (see updateBiomeGrade): cool woodland by
@@ -3307,6 +3550,7 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
     uniform float uBlur;
     uniform float uNear;
     uniform float uVignette;
+    uniform float uLift;
     uniform float uGrain;
     uniform float uGrade;
     uniform vec3 uShadowTint;
@@ -3343,6 +3587,22 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
       float luma = dot(col, vec3(0.299, 0.587, 0.114));
       vec3 toned = col * mix(uShadowTint, uHighTint, smoothstep(0.0, 0.55, luma));
       col = mix(col, toned, uGrade);
+      // ── A CURVA DE TELA (uLift) — ver o doc de params.lift ───────────────────
+      // Este jogo nao tem tone mapping (o mundo e desenhado num render target, e o three so monta
+      // o ACES quando o alvo e a TELA), entao o linear vai cru para o canvas e nao ha ombro
+      // nenhum segurando o alto: subir luz estoura o branco antes de clarear a sombra. O pow e o
+      // ombro que falta — monotono, leva 1 em 1, abre os graves. O DIA vive dela.
+      //
+      // Ela entra DEPOIS do split-tone de proposito: o grade classifica sombra x luz por luma, e
+      // levantar antes faria o quadro inteiro passar por "luz" — o dia perderia justamente a
+      // sombra azul que o faz parecer dia. luma sobe junto, senao a saturacao abaixo giraria em
+      // torno de um cinza que nao existe mais.
+      //
+      // O if e o que garante que a NOITE nao muda um bit: em uLift = 1 nada disto roda.
+      if (uLift < 0.999) {
+        col = pow(max(col, vec3(0.0)), vec3(uLift));
+        luma = pow(max(luma, 0.0), uLift);
+      }
       col = mix(vec3(luma), col, uSaturation);       // saturation around luma
       col = (col - 0.5) * uContrast + 0.5;           // contrast around mid-grey
       col = max(col, 0.0);

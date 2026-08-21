@@ -88,10 +88,10 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     lines: [
       n('My ship is a shell now. What she still needs is IRON — and this crater keeps it locked inside rock.'),
       n('Take the PICKAXE. The veined boulders never run dry: three good swings, one lump of ORE.'),
-      n('That BENCH is mine — every machine in the chain starts there.'),
+      n('That BENCH is mine — every tool in the chain starts there.'),
       n('Ore is not iron yet. Two stones make a FURNACE on that bench, and stone plus ore makes an ALTAR — the slab you hammer on.'),
       n('Burn dead wood into CHARCOAL in the furnace, smelt it with ore for a SPONGE, then lay the sponge on the altar and strike it three times.'),
-      n('Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay nine coins a bar.'),
+      n('Finish it by hand on the altar. Bring me a bar and the ship gets one step closer to flying.'),
     ],
   },
 
@@ -171,7 +171,7 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcAssetKey: NPC_VISUALS.death.key,
     // O FIM DO PRÓLOGO. Ele espera no meio do adro da última carta (`prologue-end`, 90 moedas —
     // dez barras de ferro), e é o único NPC do jogo que fala do lado de fora da ficção: quem chega
-    // até aqui pagou o preço com uma fábrica, e merece ouvir que era esse o fim da estrada.
+    // até aqui percorreu toda a cadeia manual, e merece ouvir que era esse o fim da estrada.
     lines: [
       n('You bought your way here, field by field. I watched your furnace smoke cross three of them.'),
       n('This is where the road stops. Everything past me is unbuilt — no cards, no coins, no dark to light.'),

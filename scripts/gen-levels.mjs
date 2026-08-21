@@ -13,7 +13,7 @@
 //   foice → SEMENTES (o mato replantavel)     machado → TIMBER! (a arvore vira ponte de tronco)
 //   semente + buraco + balde d'agua → o mato BROTA onde o pavio precisa dele
 //   graveto + fogueira → tocha                tocha → queima o arbusto que esconde a 1a pedra
-//   pedra → apaga lava (basalto)              basalto → botas de lava
+//   pedra → apaga lava (basalto)              pedra → abre o Quarteirão em Chamas
 //   botas → entram no Quarteirao em Chamas    bomba (la dentro) → explode a cela da picareta
 //   pedras da cela → MINERAM A SAIDA          picareta → quebra a rocha da porta → mais pedra
 //   pedra → vau no rio (pedra atravessa carga; botas so atravessam VOCE)
@@ -169,13 +169,13 @@ const level = makeLevel({
     addPickup('bomb', 2, 10); // a bomba nasce DENTRO — a geometria a guarda p/ a cela
     addPickup('pickaxe', 0, 11); // o premio da cela
 
-    // ═══ SUL: o arbusto, a pedra-lote, as botas ═══════════════════════════════
+    // ═══ SUL: o arbusto e as duas pedras que ensinam o basalto ════════════════
     addProp('dryBush', 4, 9); // porta de fogo do nicho da pedra
     addPickup('stone', 4, 10); // a PRIMEIRA pedra e dada; as outras, você fabrica
     addProp('lava', 5, 10); // o plug: uma pedra o faz basalto — a licao antes do Quarteirao
-    addProp('water', 4, 11); // lagoas-parede do nicho das botas (e fonte de balde)
+    addProp('water', 4, 11); // lagoas-parede do nicho da segunda pedra (e fonte de balde)
     addProp('water', 6, 11);
-    addPickup('lavaBoots', 5, 11);
+    addPickup('stone', 5, 11); // abre um tile do muro leste do Quarteirão
 
     // ═══ SUDESTE: o santuario da espada ═══════════════════════════════════════
     for (const wx of [9, 10, 11]) addProp('water', wx, 8); // o fosso (agua PARADA: a comporta drena)
@@ -185,7 +185,7 @@ const level = makeLevel({
     addProp('lockedDoor', 9, 10, { floodgate: true }); // a COMPORTA: a chave drena o fosso
     addProp('campfire', 10, 9, { lit: true }); // a GUARDIA: mantem as flores fechadas
     addPickup('heart', 11, 9); // premio do leito drenado
-    addProp('moonflower', 10, 11); // as DUAS flores muram a espada (botas nao passam botao fechado)
+    addProp('moonflower', 10, 11); // as DUAS flores muram a espada
     addProp('moonflower', 11, 10);
     addPickup('sword', 11, 11); // A ESPADA NA PEDRA
 
@@ -200,8 +200,8 @@ const level = makeLevel({
       'Miau. A espada dorme atras das flores que so abrem no ESCURO — e do fosso que so a chave drena.',
       'Cada ferramenta FAZ alguma coisa, e o que ela faz e a chave da porta seguinte. A foice colhe SEMENTES: plante nos buracos, regue com o balde e o mato brota onde voce precisar dele. O machado derruba a arvore SOBRE o rio; a picareta faz pedra.',
       'Pedra apaga lava e vira vau. Mas repare: o fogo cruza a ponte de madeira e a COME — e nunca pisa num vau de pedra.',
-      'As botas atravessam VOCE, nada mais: por cima da lava e da agua vai so quem esta de maos vazias. Quer levar carga? Fabrique o chao.',
-      'La no quarteirao de lava, pise na MARCA segurando a bomba — ela se arma sozinha. Depois, a saida se MINERA: a pedra da cela esfria o muro. E nao corte o pavio que ainda vai acender. Miau.',
+      'Lava nao se atravessa: cada pedra vira um degrau de basalto permanente. A primeira ensina no plug; a segunda abre a entrada do quarteirao.',
+      'La no quarteirao de lava, pise na MARCA segurando a bomba — ela se arma sozinha. Depois, a pedra da cela reforca a mesma estrada de basalto. E nao corte o pavio que ainda vai acender. Miau.',
     ]);
   },
 });

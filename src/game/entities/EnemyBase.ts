@@ -395,20 +395,6 @@ export abstract class EnemyBase {
   }
 
   /**
-   * O laco da PLACA DE PRESSAO. So a caveira o atende (ver UndeadEnemy): a placa quer um corpo, e
-   * o corpo que o escuro manda vai la sozinho. Bicho vivo, gosma e maquina tem vontade propria —
-   * e um bestiario inteiro marchando para placas transformaria toda placa em interruptor de bicho.
-   * Os tres membros vivem aqui para o EnemyManager poder distribuir placas sem saber de especies.
-   */
-  public get seeksPlates(): boolean {
-    return false;
-  }
-
-  public get plateTarget(): { x: number; y: number } | undefined {
-    return undefined;
-  }
-
-  /**
    * O corpo pode ser ARREMESSADO um tile por um golpe?
    *
    * Nao e uma questao de peso: e de quem manda na posicao. A torreta e mobilia (um autor a
@@ -921,7 +907,9 @@ export abstract class EnemyBase {
     const on = this.hurtInvulnMs > 0 && Math.floor(this.hurtInvulnMs / HURT_BLINK_HALF_MS) % 2 === 1;
     if (on === this.blinkDown) return;
     this.blinkDown = on;
-    this.sprite.setAlpha(on ? HURT_BLINK_ALPHA : 1);
+    // `setBlinkAlpha` e nao `setAlpha`: a piscada e do SPRITE. O blob de contato e a ancora de
+    // posicao do bicho, e apagar a ancora cinco vezes em 450ms e o oposto do que a piscada quer.
+    this.sprite.setBlinkAlpha(on ? HURT_BLINK_ALPHA : 1);
   }
 
   // ── A TOCHA VIVA (ver o bloco de constantes) ────────────────────────────────
@@ -1308,10 +1296,6 @@ export abstract class EnemyBase {
       onComplete: () => this.reposeWindup(),
     });
     return 'moved';
-  }
-
-  public setPlateTarget(_target?: { x: number; y: number }): void {
-    // no-op: so quem busca placa implementa
   }
 
   /** Apply damage (default 1). Weak weapons pass fractions — e.g. the wood club deals 0.5. */

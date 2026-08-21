@@ -53,10 +53,13 @@ export default {
     await page.evaluate(() => window.__scene.scene.resume());
     assert('One-shot FX spawned into the 3D world', fx.after > fx.before, JSON.stringify(fx));
 
-    // ── Danger vignette (post uniform, driven by the spawn director's meter) ──
-    await page.evaluate(() => { window.__scene.spawnDirector.dangerLevel = 0.95; });
+    // ── Danger vignette (post uniform) ──
+    // O cerco ambiente que levantava este medidor saiu do jogo (so existem covas autoradas), entao
+    // quem prova o uniforme aqui e a propria API do post — que continua sendo a via de qualquer
+    // vinheta futura.
+    await page.evaluate(() => { window.__scene.world3d.setDangerVignette(0.95, 0x3d0a12); });
     await driver.settle(150);
-    await shot('danger-vignette', { note: 'Danger meter ~0.95 → red vignette inside the post' });
+    await shot('danger-vignette', { note: 'setDangerVignette(0.95) → red vignette inside the post' });
 
     const danger = await page.evaluate(
       () => window.__scene.world3d.finishPass.uniforms.uDanger.value,
@@ -79,6 +82,7 @@ export default {
     assert('Renders at 55+ fps with the full post chain', fps >= 55, `fps=${fps.toFixed(1)}`);
 
     // ── Death fade (post uniform, replacing the 2D black rectangle) ───────────
+    await page.evaluate(() => window.__scene.world3d.setDangerVignette(0, 0x0a0d24));
     await page.evaluate(() => window.__scene.triggerDeath());
     await driver.settle(1800);
     await shot('death-fade', { note: 'Death: the world drains and sinks to black in the post' });
@@ -88,6 +92,6 @@ export default {
       danger: window.__scene.world3d.finishPass.uniforms.uDanger.value,
     }));
     assert('World faded to black', after.fade > 0.98, `uFade=${after.fade}`);
-    assert('Danger vignette cleared on death', after.danger === 0, `uDanger=${after.danger}`);
+    assert('Danger vignette back to zero', after.danger === 0, `uDanger=${after.danger}`);
   },
 };

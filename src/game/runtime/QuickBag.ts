@@ -210,7 +210,7 @@ export interface QuickBagItem {
 export interface QuickBagView {
   items: QuickBagItem[];
   /**
-   * A MATERIA-PRIMA — minerio, ferro, carvao, engrenagem. Nao entra na fileira porque nao tem
+   * A MATERIA-PRIMA — minerio, ferro e carvao. Nao entra na fileira porque nao tem
    * gesto nenhum (ver MATERIAL_ITEM_KINDS): e uma linha de contadores debaixo da bolsa, sem
    * cursor e sem seleção. O jogador precisa SABER quanto ferro tem para ler o catalogo da
    * bancada; ele nao precisa poder "empunhar" ferro, porque empunhar ferro nao faz nada.

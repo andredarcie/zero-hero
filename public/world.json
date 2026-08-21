@@ -1,18 +1,18 @@
 {
   "meta": {
-    "name": "chunk-library",
+    "name": "Ashen Wilds",
     "schemaVersion": 1,
-    "worldChunksX": 27,
-    "worldChunksY": 1,
+    "worldChunksX": 5,
+    "worldChunksY": 5,
     "chunkColumns": 12,
     "chunkRows": 12,
     "tileSize": 8,
     "tilesetKey": "forest-tileset",
     "playerStart": {
-      "worldX": 6,
-      "worldY": 6
+      "worldX": 30,
+      "worldY": 57
     },
-    "exportedAt": "2026-08-13T22:06:54.795Z"
+    "exportedAt": "2026-08-20T21:08:27.126Z"
   },
   "chunks": [
     {
@@ -545,26 +545,8 @@
           "worldY": 6
         }
       ],
-      "pickups": [
-        {
-          "type": "wire",
-          "worldX": 3,
-          "worldY": 2
-        },
-        {
-          "type": "wire",
-          "worldX": 4,
-          "worldY": 2
-        }
-      ],
-      "npcs": [],
-      "catalog": {
-        "id": "moonlit-lake",
-        "name": "Moonlit Lake",
-        "cost": 3,
-        "cardImage": "assets/environment/terrain/water_0.png",
-        "description": "Open banks around a cold lake. Easy to cross around, hard to own."
-      }
+      "pickups": [],
+      "npcs": []
     },
     {
       "cx": 1,
@@ -1081,14 +1063,7 @@
       ],
       "enemies": [],
       "pickups": [],
-      "npcs": [],
-      "catalog": {
-        "id": "whispering-forest",
-        "name": "Whispering Forest",
-        "cost": 6,
-        "cardImage": "assets/environment/tilesets/forest_tile_set.png",
-        "description": "Dense timber, narrow clearings, and room for the roads to branch again."
-      }
+      "npcs": []
     },
     {
       "cx": 2,
@@ -1621,554 +1596,10 @@
         }
       ],
       "pickups": [],
-      "npcs": [],
-      "catalog": {
-        "id": "spider-hollow",
-        "name": "Spider Hollow",
-        "cost": 10,
-        "cardImage": "assets/environment/props/spider_web.png",
-        "description": "A web-choked hollow. Every living enemy authored here is a spider."
-      }
+      "npcs": []
     },
     {
       "cx": 3,
-      "cy": 0,
-      "ground": [
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ]
-      ],
-      "upper": [
-        [
-          4,
-          2,
-          19,
-          8,
-          2,
-          8,
-          0,
-          20,
-          7,
-          0,
-          0,
-          4
-        ],
-        [
-          2,
-          11,
-          0,
-          0,
-          null,
-          2,
-          20,
-          0,
-          20,
-          11,
-          7,
-          19
-        ],
-        [
-          0,
-          0,
-          null,
-          null,
-          null,
-          8,
-          20,
-          7,
-          20,
-          0,
-          11,
-          14
-        ],
-        [
-          0,
-          7,
-          7,
-          15,
-          19,
-          0,
-          7,
-          0,
-          19,
-          19,
-          20,
-          7
-        ],
-        [
-          7,
-          null,
-          20,
-          10,
-          10,
-          20,
-          0,
-          19,
-          0,
-          20,
-          null,
-          7
-        ],
-        [
-          20,
-          0,
-          20,
-          7,
-          null,
-          null,
-          null,
-          7,
-          7,
-          20,
-          20,
-          0
-        ],
-        [
-          20,
-          20,
-          10,
-          20,
-          8,
-          2,
-          2,
-          0,
-          19,
-          0,
-          0,
-          20
-        ],
-        [
-          10,
-          20,
-          7,
-          8,
-          null,
-          0,
-          0,
-          19,
-          7,
-          19,
-          20,
-          7
-        ],
-        [
-          10,
-          0,
-          20,
-          0,
-          null,
-          8,
-          0,
-          0,
-          0,
-          19,
-          0,
-          19
-        ],
-        [
-          10,
-          10,
-          20,
-          8,
-          2,
-          2,
-          0,
-          8,
-          20,
-          19,
-          19,
-          19
-        ],
-        [
-          1,
-          1,
-          11,
-          15,
-          7,
-          7,
-          8,
-          2,
-          null,
-          null,
-          11,
-          20
-        ],
-        [
-          4,
-          1,
-          19,
-          7,
-          null,
-          19,
-          2,
-          8,
-          0,
-          null,
-          15,
-          4
-        ]
-      ],
-      "collisions": [
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ]
-      ],
-      "enemies": [],
-      "pickups": [
-        {
-          "type": "wood",
-          "worldX": 40,
-          "worldY": 5
-        }
-      ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 41,
-          "worldY": 5
-        }
-      ],
-      "catalog": {
-        "id": "cat-cold-hearths",
-        "name": "Cat's Hearths",
-        "cost": 5,
-        "cardImage": "generated:hearth",
-        "description": "The cat, its fire, and two hearths gone cold. Wake a branch and carry flame.",
-        "enabled": false
-      }
-    },
-    {
-      "cx": 4,
       "cy": 0,
       "ground": [
         [
@@ -2684,37 +2115,30 @@
       "pickups": [
         {
           "type": "pickaxe",
-          "worldX": 52,
+          "worldX": 40,
           "worldY": 5
         },
         {
           "type": "axe",
-          "worldX": 51,
+          "worldX": 39,
           "worldY": 5
         },
         {
           "type": "bucket",
-          "worldX": 51,
+          "worldX": 39,
           "worldY": 6
         }
       ],
       "npcs": [
         {
           "type": "astronaut",
-          "worldX": 53,
+          "worldX": 41,
           "worldY": 5
         }
-      ],
-      "catalog": {
-        "id": "crater-quarry",
-        "name": "Astronaut's Crater",
-        "cost": 3,
-        "cardImage": "generated:hearth",
-        "description": "A stranded astronaut and a field of samples. The pickaxe cracks them open."
-      }
+      ]
     },
     {
-      "cx": 5,
+      "cx": 4,
       "cy": 0,
       "ground": [
         [
@@ -3230,29 +2654,21 @@
       "pickups": [
         {
           "type": "axe",
-          "worldX": 64,
+          "worldX": 52,
           "worldY": 5
         }
       ],
       "npcs": [
         {
           "type": "businessMan",
-          "worldX": 65,
+          "worldX": 53,
           "worldY": 5
         }
-      ],
-      "catalog": {
-        "id": "timber-ranks",
-        "name": "Businessman's Timber",
-        "cost": 7,
-        "cardImage": "generated:hearth",
-        "description": "Dry timber in tidy rows, and a businessman who calls it inventory. Axe included.",
-        "enabled": false
-      }
+      ]
     },
     {
-      "cx": 6,
-      "cy": 0,
+      "cx": 0,
+      "cy": 1,
       "ground": [
         [
           5,
@@ -3766,35 +3182,27 @@
       "enemies": [],
       "pickups": [
         {
-          "type": "lavaBoots",
-          "worldX": 76,
-          "worldY": 5
+          "type": "stone",
+          "worldX": 4,
+          "worldY": 17
         },
         {
           "type": "iron",
-          "worldX": 81,
-          "worldY": 2
+          "worldX": 9,
+          "worldY": 14
         }
       ],
       "npcs": [
         {
           "type": "radiationSuit",
-          "worldX": 77,
-          "worldY": 5
+          "worldX": 5,
+          "worldY": 17
         }
-      ],
-      "catalog": {
-        "id": "glowing-ford",
-        "name": "Workman's Ford",
-        "cost": 13,
-        "cardImage": "generated:hearth",
-        "description": "A workman, his hazard boots, and a glowing pool with something sunk in it.",
-        "enabled": false
-      }
+      ]
     },
     {
-      "cx": 7,
-      "cy": 0,
+      "cx": 1,
+      "cy": 1,
       "ground": [
         [
           5,
@@ -4309,34 +3717,26 @@
       "pickups": [
         {
           "type": "seeds",
-          "worldX": 88,
-          "worldY": 5
+          "worldX": 16,
+          "worldY": 17
         },
         {
           "type": "shovel",
-          "worldX": 86,
-          "worldY": 4
+          "worldX": 14,
+          "worldY": 16
         }
       ],
       "npcs": [
         {
           "type": "painter",
-          "worldX": 89,
-          "worldY": 5
+          "worldX": 17,
+          "worldY": 17
         }
-      ],
-      "catalog": {
-        "id": "painted-beds",
-        "name": "Artist's Beds",
-        "cost": 9,
-        "cardImage": "generated:hearth",
-        "description": "The artist dug her beds already. Seeds are pigment; the meadow is the canvas.",
-        "enabled": false
-      }
+      ]
     },
     {
-      "cx": 8,
-      "cy": 0,
+      "cx": 2,
+      "cy": 1,
       "ground": [
         [
           5,
@@ -4851,29 +4251,21 @@
       "pickups": [
         {
           "type": "bucket",
-          "worldX": 100,
-          "worldY": 5
+          "worldX": 28,
+          "worldY": 17
         }
       ],
       "npcs": [
         {
           "type": "salesman",
-          "worldX": 101,
-          "worldY": 5
+          "worldX": 29,
+          "worldY": 17
         }
-      ],
-      "catalog": {
-        "id": "roadside-pond",
-        "name": "Salesman's Pond",
-        "cost": 5,
-        "cardImage": "generated:hearth",
-        "description": "A salesman with one free sample: a bucket, and the pond to fill it in.",
-        "enabled": false
-      }
+      ]
     },
     {
-      "cx": 9,
-      "cy": 0,
+      "cx": 3,
+      "cy": 1,
       "ground": [
         [
           5,
@@ -5388,29 +4780,21 @@
       "pickups": [
         {
           "type": "greatAxe",
-          "worldX": 112,
-          "worldY": 5
+          "worldX": 40,
+          "worldY": 17
         }
       ],
       "npcs": [
         {
           "type": "poet",
-          "worldX": 113,
-          "worldY": 5
+          "worldX": 41,
+          "worldY": 17
         }
-      ],
-      "catalog": {
-        "id": "singing-pines",
-        "name": "Poet's Pines",
-        "cost": 7,
-        "cardImage": "generated:hearth",
-        "description": "Living pines crowd the poet's verse. The great axe fells even living wood.",
-        "enabled": false
-      }
+      ]
     },
     {
-      "cx": 10,
-      "cy": 0,
+      "cx": 4,
+      "cy": 1,
       "ground": [
         [
           5,
@@ -5925,29 +5309,21 @@
       "pickups": [
         {
           "type": "scythe",
-          "worldX": 124,
-          "worldY": 5
+          "worldX": 52,
+          "worldY": 17
         }
       ],
       "npcs": [
         {
           "type": "death",
-          "worldX": 125,
-          "worldY": 5
+          "worldX": 53,
+          "worldY": 17
         }
-      ],
-      "catalog": {
-        "id": "silent-meadow",
-        "name": "Death's Meadow",
-        "cost": 14,
-        "cardImage": "generated:hearth",
-        "description": "Death, off duty, lends the scythe. The tall grass grew too loud; reap it.",
-        "enabled": false
-      }
+      ]
     },
     {
-      "cx": 11,
-      "cy": 0,
+      "cx": 0,
+      "cy": 2,
       "ground": [
         [
           5,
@@ -6461,28 +5837,21 @@
       "enemies": [
         {
           "type": "bat",
-          "worldX": 136,
-          "worldY": 8
+          "worldX": 4,
+          "worldY": 32
         },
         {
           "type": "bat",
-          "worldX": 140,
-          "worldY": 4
+          "worldX": 8,
+          "worldY": 28
         }
       ],
       "pickups": [],
-      "npcs": [],
-      "catalog": {
-        "id": "granite-pass",
-        "name": "Granite Pass",
-        "cost": 8,
-        "cardImage": "assets/environment/tilesets/forest_tile_set.png",
-        "description": "Standing granite no axe answers. Bats nest in the pass, and iron sleeps under the cliffs."
-      }
+      "npcs": []
     },
     {
-      "cx": 12,
-      "cy": 0,
+      "cx": 1,
+      "cy": 2,
       "ground": [
         [
           29,
@@ -6996,33 +6365,543 @@
       "enemies": [
         {
           "type": "undead",
-          "worldX": 146,
-          "worldY": 2
+          "worldX": 14,
+          "worldY": 26
         },
         {
           "type": "undead",
-          "worldX": 153,
-          "worldY": 2
+          "worldX": 21,
+          "worldY": 26
         },
         {
           "type": "undead",
-          "worldX": 153,
-          "worldY": 10
+          "worldX": 21,
+          "worldY": 34
         }
       ],
       "pickups": [],
-      "npcs": [],
-      "catalog": {
-        "id": "sunken-graveyard",
-        "name": "Sunken Graveyard",
-        "cost": 11,
-        "cardImage": "assets/environment/tilesets/forest_tile_set.png",
-        "description": "A paved yard of tombs under dead trees. Three open graves have not finished being graves."
-      }
+      "npcs": []
     },
     {
-      "cx": 13,
-      "cy": 0,
+      "cx": 2,
+      "cy": 2,
+      "ground": [
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          6,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          5,
+          6,
+          6,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          5,
+          5,
+          5,
+          6,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      ],
+      "upper": [
+        [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          20,
+          0,
+          20,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          null,
+          null,
+          null,
+          8,
+          20,
+          7,
+          20,
+          0,
+          4,
+          4
+        ],
+        [
+          4,
+          7,
+          7,
+          15,
+          null,
+          null,
+          null,
+          null,
+          null,
+          19,
+          4,
+          4
+        ],
+        [
+          4,
+          null,
+          20,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          20,
+          null,
+          4
+        ],
+        [
+          4,
+          0,
+          20,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          20,
+          20,
+          4
+        ],
+        [
+          4,
+          20,
+          10,
+          null,
+          null,
+          null,
+          2,
+          null,
+          null,
+          null,
+          0,
+          4
+        ],
+        [
+          4,
+          4,
+          7,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14,
+          4
+        ],
+        [
+          4,
+          4,
+          20,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0,
+          4
+        ],
+        [
+          4,
+          4,
+          20,
+          8,
+          2,
+          2,
+          null,
+          null,
+          20,
+          19,
+          4,
+          4
+        ],
+        [
+          4,
+          1,
+          11,
+          15,
+          7,
+          4,
+          4,
+          2,
+          null,
+          14,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          14,
+          4,
+          4,
+          4,
+          4,
+          14,
+          4,
+          4
+        ]
+      ],
+      "collisions": [
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      ],
+      "enemies": [],
+      "pickups": [],
+      "npcs": []
+    },
+    {
+      "cx": 3,
+      "cy": 2,
       "ground": [
         [
           5,
@@ -7535,18 +7414,11 @@
       ],
       "enemies": [],
       "pickups": [],
-      "npcs": [],
-      "catalog": {
-        "id": "blooming-grove",
-        "name": "Blooming Grove",
-        "cost": 3,
-        "cardImage": "assets/environment/tilesets/forest_tile_set.png",
-        "description": "Fruit pines and flowering ones over soft dug earth. Nothing here bites; everything grows."
-      }
+      "npcs": []
     },
     {
-      "cx": 14,
-      "cy": 0,
+      "cx": 4,
+      "cy": 2,
       "ground": [
         [
           5,
@@ -8059,24 +7931,11 @@
       ],
       "enemies": [],
       "pickups": [],
-      "npcs": [
-        {
-          "type": "death",
-          "worldX": 174,
-          "worldY": 6
-        }
-      ],
-      "catalog": {
-        "id": "prologue-end",
-        "name": "Death's Threshold",
-        "cost": 36,
-        "cardImage": "assets/environment/tilesets/forest_tile_set.png",
-        "description": "A paved ring under old pines, and someone standing in the middle of it. The road ends here — for now."
-      }
+      "npcs": []
     },
     {
-      "cx": 15,
-      "cy": 0,
+      "cx": 0,
+      "cy": 3,
       "ground": [
         [
           5,
@@ -8263,8 +8122,8 @@
           null
         ],
         [
-          null,
-          null,
+          4,
+          4,
           null,
           0,
           1,
@@ -8277,8 +8136,8 @@
           null
         ],
         [
-          null,
-          null,
+          4,
+          4,
           0,
           1,
           null,
@@ -8291,8 +8150,8 @@
           null
         ],
         [
-          null,
-          null,
+          4,
+          4,
           null,
           null,
           null,
@@ -8305,7 +8164,7 @@
           null
         ],
         [
-          0,
+          4,
           null,
           null,
           20,
@@ -8354,14 +8213,14 @@
           null,
           null,
           null,
-          null,
+          4,
           20,
           null,
           1,
           null
         ],
         [
-          null,
+          4,
           null,
           null,
           20,
@@ -8371,26 +8230,26 @@
           null,
           null,
           1,
-          19,
-          null
+          4,
+          4
         ],
         [
           1,
-          19,
+          4,
           20,
           0,
           null,
           null,
           null,
+          4,
           null,
           null,
-          null,
-          null,
-          0
+          4,
+          4
         ],
         [
-          19,
-          null,
+          4,
+          4,
           null,
           1,
           null,
@@ -8398,23 +8257,23 @@
           null,
           null,
           19,
-          null,
-          null,
-          1
+          4,
+          4,
+          4
         ],
         [
-          null,
-          0,
+          4,
+          4,
           null,
           19,
           null,
           null,
           1,
-          null,
-          null,
-          0,
-          null,
-          null
+          4,
+          4,
+          4,
+          4,
+          4
         ]
       ],
       "collisions": [
@@ -8591,40 +8450,25 @@
       "pickups": [
         {
           "type": "axe",
-          "worldX": 184,
-          "worldY": 5
+          "worldX": 4,
+          "worldY": 41
         },
         {
           "type": "iron",
-          "worldX": 190,
-          "worldY": 0
+          "worldX": 10,
+          "worldY": 36
         },
         {
           "type": "iron",
-          "worldX": 190,
-          "worldY": 3
+          "worldX": 10,
+          "worldY": 39
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 184,
-          "worldY": 4,
-          "dialog": "catAxe"
-        }
-      ],
-      "catalog": {
-        "id": "cat-woodpile",
-        "name": "Cat's Woodpile",
-        "cost": 4,
-        "cardImage": "generated:hearth",
-        "description": "A cat, an axe, and a quiet wall of dead wood with iron behind it.",
-        "category": "puzzle"
-      }
+      "npcs": []
     },
     {
-      "cx": 16,
-      "cy": 0,
+      "cx": 1,
+      "cy": 3,
       "ground": [
         [
           5,
@@ -8909,7 +8753,7 @@
           null
         ],
         [
-          null,
+          4,
           null,
           null,
           20,
@@ -8923,7 +8767,7 @@
           null
         ],
         [
-          1,
+          4,
           19,
           20,
           0,
@@ -8937,9 +8781,9 @@
           0
         ],
         [
-          19,
-          null,
-          null,
+          4,
+          4,
+          4,
           1,
           null,
           20,
@@ -8951,10 +8795,10 @@
           1
         ],
         [
-          null,
-          0,
-          null,
-          19,
+          4,
+          4,
+          4,
+          4,
           null,
           null,
           1,
@@ -9139,40 +8983,25 @@
       "pickups": [
         {
           "type": "wood",
-          "worldX": 196,
-          "worldY": 5
+          "worldX": 16,
+          "worldY": 41
         },
         {
           "type": "iron",
-          "worldX": 202,
-          "worldY": 0
+          "worldX": 22,
+          "worldY": 36
         },
         {
           "type": "wood",
-          "worldX": 195,
-          "worldY": 5
+          "worldX": 15,
+          "worldY": 41
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 196,
-          "worldY": 4,
-          "dialog": "catTorch"
-        }
-      ],
-      "catalog": {
-        "id": "cat-kindling",
-        "name": "Cat's Kindling",
-        "cost": 5,
-        "cardImage": "generated:hearth",
-        "description": "A lit hearth, a stick, and dry brush that only fire will open.",
-        "category": "puzzle"
-      }
+      "npcs": []
     },
     {
-      "cx": 17,
-      "cy": 0,
+      "cx": 2,
+      "cy": 3,
       "ground": [
         [
           5,
@@ -9687,40 +9516,25 @@
       "pickups": [
         {
           "type": "pickaxe",
-          "worldX": 208,
-          "worldY": 5
+          "worldX": 28,
+          "worldY": 41
         },
         {
           "type": "iron",
-          "worldX": 214,
-          "worldY": 0
+          "worldX": 34,
+          "worldY": 36
         },
         {
           "type": "iron",
-          "worldX": 214,
-          "worldY": 3
+          "worldX": 34,
+          "worldY": 39
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 208,
-          "worldY": 4,
-          "dialog": "catPick"
-        }
-      ],
-      "catalog": {
-        "id": "cat-quarry",
-        "name": "Cat's Quarry",
-        "cost": 6,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a pickaxe, a wall of stone and two veins that never run dry.",
-        "category": "puzzle"
-      }
+      "npcs": []
     },
     {
-      "cx": 18,
-      "cy": 0,
+      "cx": 3,
+      "cy": 3,
       "ground": [
         [
           5,
@@ -10036,7 +9850,7 @@
           19,
           null,
           null,
-          1,
+          null,
           null,
           20,
           null,
@@ -10234,52 +10048,37 @@
       "enemies": [
         {
           "type": "undead",
-          "worldX": 225,
-          "worldY": 1
+          "worldX": 45,
+          "worldY": 37
         },
         {
           "type": "undead",
-          "worldX": 227,
-          "worldY": 2
+          "worldX": 47,
+          "worldY": 38
         },
         {
           "type": "undead",
-          "worldX": 226,
-          "worldY": 3
+          "worldX": 46,
+          "worldY": 39
         }
       ],
       "pickups": [
         {
           "type": "sword",
-          "worldX": 222,
-          "worldY": 6
+          "worldX": 42,
+          "worldY": 42
         },
         {
           "type": "iron",
-          "worldX": 226,
-          "worldY": 2
+          "worldX": 46,
+          "worldY": 38
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 221,
-          "worldY": 6,
-          "dialog": "catSword"
-        }
-      ],
-      "catalog": {
-        "id": "cat-blade",
-        "name": "Cat's Proving Ground",
-        "cost": 7,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a sword, and three things that do not die in one hit.",
-        "category": "combat"
-      }
+      "npcs": []
     },
     {
-      "cx": 19,
-      "cy": 0,
+      "cx": 4,
+      "cy": 3,
       "ground": [
         [
           5,
@@ -10587,22 +10386,22 @@
           null,
           null,
           null,
-          null,
-          null,
+          4,
+          4,
           0
         ],
         [
           19,
           null,
           null,
-          1,
+          null,
           null,
           20,
           null,
-          null,
-          19,
-          null,
-          null,
+          4,
+          4,
+          4,
+          4,
           1
         ],
         [
@@ -10611,13 +10410,13 @@
           null,
           19,
           null,
-          null,
-          1,
-          null,
-          null,
-          0,
-          null,
-          null
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
         ]
       ],
       "collisions": [
@@ -10794,45 +10593,30 @@
       "pickups": [
         {
           "type": "wood",
-          "worldX": 234,
-          "worldY": 6
+          "worldX": 54,
+          "worldY": 42
+        },
+        {
+          "type": "wood",
+          "worldX": 53,
+          "worldY": 43
         },
         {
           "type": "stone",
-          "worldX": 232,
-          "worldY": 7
+          "worldX": 52,
+          "worldY": 43
         },
         {
           "type": "iron",
-          "worldX": 238,
-          "worldY": 2
-        },
-        {
-          "type": "seeds",
-          "worldX": 235,
-          "worldY": 6
+          "worldX": 58,
+          "worldY": 38
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 233,
-          "worldY": 6,
-          "dialog": "catCrossing"
-        }
-      ],
-      "catalog": {
-        "id": "cat-crossing",
-        "name": "Cat's Crossing",
-        "cost": 8,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a river, and the oldest question: a floor, or a fuse?",
-        "category": "puzzle"
-      }
+      "npcs": []
     },
     {
-      "cx": 20,
-      "cy": 0,
+      "cx": 0,
+      "cy": 4,
       "ground": [
         [
           5,
@@ -11005,13 +10789,27 @@
       ],
       "upper": [
         [
-          null,
-          1,
-          null,
-          20,
+          4,
+          4,
+          4,
+          4,
           null,
           null,
           19,
+          null,
+          null,
+          4,
+          null,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          0,
+          1,
+          19,
+          20,
           null,
           null,
           null,
@@ -11019,21 +10817,7 @@
           null
         ],
         [
-          null,
-          null,
-          null,
-          0,
-          1,
-          19,
-          20,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
+          4,
           null,
           0,
           1,
@@ -11047,9 +10831,9 @@
           null
         ],
         [
+          4,
           null,
-          null,
-          null,
+          4,
           19,
           null,
           0,
@@ -11058,7 +10842,7 @@
           null,
           null,
           null,
-          null
+          4
         ],
         [
           0,
@@ -11068,9 +10852,9 @@
           0,
           null,
           null,
-          20,
           null,
-          null,
+          4,
+          4,
           null,
           null
         ],
@@ -11080,9 +10864,9 @@
           20,
           0,
           1,
-          19,
-          20,
-          0,
+          null,
+          null,
+          null,
           1,
           19,
           20,
@@ -11117,22 +10901,22 @@
           null
         ],
         [
-          null,
-          null,
+          4,
+          4,
           null,
           20,
           0,
           null,
           null,
-          null,
+          4,
           null,
           1,
           19,
           null
         ],
         [
-          1,
-          19,
+          4,
+          4,
           20,
           0,
           null,
@@ -11142,35 +10926,35 @@
           null,
           null,
           null,
-          0
+          4
         ],
         [
-          19,
-          null,
-          null,
-          1,
-          null,
-          20,
-          null,
-          null,
-          19,
-          null,
-          null,
-          1
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
         ],
         [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          1,
-          null,
-          null,
-          0,
-          null,
-          null
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
         ]
       ],
       "collisions": [
@@ -11347,45 +11131,30 @@
       "pickups": [
         {
           "type": "bomb",
-          "worldX": 246,
-          "worldY": 6
+          "worldX": 6,
+          "worldY": 54
         },
         {
           "type": "bomb",
-          "worldX": 245,
-          "worldY": 7
+          "worldX": 5,
+          "worldY": 55
         },
         {
           "type": "bomb",
-          "worldX": 244,
-          "worldY": 7
+          "worldX": 4,
+          "worldY": 55
         },
         {
           "type": "iron",
-          "worldX": 250,
-          "worldY": 2
+          "worldX": 10,
+          "worldY": 50
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 245,
-          "worldY": 6,
-          "dialog": "catBomb"
-        }
-      ],
-      "catalog": {
-        "id": "cat-blast",
-        "name": "Cat's Blasting Cut",
-        "cost": 9,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a bomb, and the one tile in the rock that will give.",
-        "category": "puzzle"
-      }
+      "npcs": []
     },
     {
-      "cx": 21,
-      "cy": 0,
+      "cx": 1,
+      "cy": 4,
       "ground": [
         [
           5,
@@ -11558,601 +11327,63 @@
       ],
       "upper": [
         [
+          4,
+          4,
+          4,
+          4,
           null,
-          1,
-          null,
-          20,
-          null,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null,
-          null
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
         ],
         [
-          null,
-          null,
-          null,
-          0,
-          1,
-          19,
-          20,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          0,
-          null,
-          null,
-          null,
-          null,
-          1,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          19,
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          0,
-          null,
-          null,
-          20,
-          0,
-          null,
-          null,
-          20,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          1,
-          19,
-          20,
-          0,
-          1,
-          19,
-          20,
-          0,
-          1,
-          19,
-          20,
-          0
-        ],
-        [
-          null,
-          null,
-          0,
-          null,
-          null,
-          null,
-          0,
-          null,
-          null,
-          null,
-          0,
-          null
-        ],
-        [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null,
-          20,
-          null,
-          1,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          20,
-          0,
-          null,
-          null,
-          null,
-          null,
-          1,
-          19,
-          null
-        ],
-        [
-          1,
-          19,
-          20,
-          0,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          0
-        ],
-        [
-          19,
-          null,
-          null,
-          1,
-          null,
-          20,
-          null,
-          null,
-          19,
-          null,
-          null,
-          1
-        ],
-        [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          1,
-          null,
-          null,
-          0,
-          null,
-          null
-        ]
-      ],
-      "collisions": [
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          true,
-          true,
-          true
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ]
-      ],
-      "enemies": [],
-      "pickups": [
-        {
-          "type": "iron",
-          "worldX": 262,
-          "worldY": 2
-        }
-      ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 257,
-          "worldY": 6,
-          "dialog": "catCrate"
-        }
-      ],
-      "catalog": {
-        "id": "cat-weight",
-        "name": "Cat's Weighing Stone",
-        "cost": 10,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a crate, and a plate that does not care whose weight it is.",
-        "category": "puzzle"
-      }
-    },
-    {
-      "cx": 22,
-      "cy": 0,
-      "ground": [
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ]
-      ],
-      "upper": [
-        [
-          null,
-          1,
-          null,
-          20,
-          null,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          0,
-          1,
-          19,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
           20,
           null,
           null,
           null,
           null,
-          null
+          4
         ],
         [
+          4,
+          4,
+          4,
+          1,
+          4,
+          4,
           null,
-          null,
-          0,
           1,
           null,
           null,
           null,
-          1,
-          null,
-          null,
-          null,
-          null
+          4
         ],
         [
-          null,
+          4,
           null,
           null,
           19,
           null,
           0,
           null,
-          19,
-          null,
-          null,
-          null,
-          null
+          4,
+          4,
+          4,
+          4,
+          4
         ],
         [
-          0,
+          4,
           null,
           null,
           20,
@@ -12191,7 +11422,7 @@
           null,
           null,
           0,
-          null
+          4
         ],
         [
           null,
@@ -12205,12 +11436,12 @@
           20,
           null,
           1,
-          null
+          4
         ],
         [
           null,
           null,
-          null,
+          4,
           20,
           0,
           null,
@@ -12219,49 +11450,49 @@
           null,
           1,
           19,
-          null
+          4
         ],
         [
-          1,
-          19,
+          4,
+          4,
           20,
           0,
           null,
           null,
+          4,
           null,
           null,
           null,
           null,
-          null,
-          0
+          4
         ],
         [
-          19,
-          null,
-          null,
-          1,
+          4,
+          4,
+          4,
+          4,
           null,
           20,
           null,
           null,
           19,
           null,
-          null,
-          1
+          4,
+          4
         ],
         [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          1,
-          null,
-          null,
-          0,
-          null,
-          null
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
         ]
       ],
       "collisions": [
@@ -12438,30 +11669,15 @@
       "pickups": [
         {
           "type": "iron",
-          "worldX": 274,
-          "worldY": 2
+          "worldX": 22,
+          "worldY": 50
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 269,
-          "worldY": 6,
-          "dialog": "catGate"
-        }
-      ],
-      "catalog": {
-        "id": "cat-swing",
-        "name": "Cat's Stubborn Gate",
-        "cost": 11,
-        "cardImage": "generated:hearth",
-        "description": "A cat and two identical gates, one of which will never open.",
-        "category": "puzzle"
-      }
+      "npcs": []
     },
     {
-      "cx": 23,
-      "cy": 0,
+      "cx": 2,
+      "cy": 4,
       "ground": [
         [
           5,
@@ -12634,35 +11850,552 @@
       ],
       "upper": [
         [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          15,
+          4,
+          4,
+          4,
+          4,
+          11,
+          null,
+          4,
+          4
+        ],
+        [
+          4,
+          null,
+          0,
+          null,
+          null,
+          null,
           null,
           1,
+          4,
+          null,
+          null,
+          4
+        ],
+        [
+          null,
+          null,
+          null,
+          19,
+          4,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          4
+        ],
+        [
+          0,
+          null,
+          null,
+          20,
+          0,
+          null,
           null,
           20,
           null,
+          null,
+          null,
+          null
+        ],
+        [
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0,
+          1,
+          19,
+          20,
+          0
+        ],
+        [
+          4,
+          null,
+          0,
+          1,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          0,
+          null
+        ],
+        [
+          4,
+          0,
           null,
           19,
           null,
           null,
           null,
           null,
-          null
+          20,
+          null,
+          1,
+          4
         ],
         [
+          4,
+          10,
+          4,
+          20,
+          0,
           null,
           null,
           null,
+          null,
+          1,
+          19,
+          4
+        ],
+        [
+          4,
+          19,
+          20,
+          0,
+          11,
+          null,
+          null,
+          null,
+          13,
+          4,
+          null,
+          4
+        ],
+        [
+          4,
+          4,
+          null,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          null,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          16,
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      ],
+      "collisions": [
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true,
+          true,
+          true
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ],
+        [
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      ],
+      "enemies": [],
+      "pickups": [],
+      "npcs": []
+    },
+    {
+      "cx": 3,
+      "cy": 4,
+      "ground": [
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5,
+          5
+        ]
+      ],
+      "upper": [
+        [
+          4,
+          4,
+          4,
+          4,
+          null,
+          null,
+          19,
+          null,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
           0,
           1,
           19,
           20,
           null,
-          null,
-          null,
-          null,
-          null
+          4,
+          4,
+          4,
+          4
         ],
         [
-          null,
+          4,
           null,
           0,
           null,
@@ -12673,10 +12406,10 @@
           null,
           null,
           null,
-          null
+          4
         ],
         [
-          null,
+          4,
           null,
           null,
           19,
@@ -12721,7 +12454,7 @@
           null,
           null,
           0,
-          1,
+          null,
           null,
           null,
           null,
@@ -12732,7 +12465,7 @@
           null
         ],
         [
-          null,
+          4,
           0,
           null,
           19,
@@ -12746,7 +12479,7 @@
           null
         ],
         [
-          null,
+          4,
           null,
           null,
           20,
@@ -12760,7 +12493,7 @@
           null
         ],
         [
-          1,
+          4,
           19,
           20,
           0,
@@ -12774,11 +12507,11 @@
           0
         ],
         [
-          19,
-          null,
-          null,
-          1,
-          null,
+          4,
+          4,
+          4,
+          4,
+          4,
           20,
           null,
           null,
@@ -12788,17 +12521,17 @@
           1
         ],
         [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          1,
-          null,
-          null,
-          0,
-          null,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
+          4,
           null
         ]
       ],
@@ -12973,38 +12706,12 @@
         ]
       ],
       "enemies": [],
-      "pickups": [
-        {
-          "type": "bucket",
-          "worldX": 282,
-          "worldY": 6
-        },
-        {
-          "type": "iron",
-          "worldX": 286,
-          "worldY": 2
-        }
-      ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 281,
-          "worldY": 6,
-          "dialog": "catFlower"
-        }
-      ],
-      "catalog": {
-        "id": "cat-nightbloom",
-        "name": "Cat's Nightbloom",
-        "cost": 12,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a bucket, and a flower that shuts because your fire is too bright.",
-        "category": "puzzle"
-      }
+      "pickups": [],
+      "npcs": []
     },
     {
-      "cx": 24,
-      "cy": 0,
+      "cx": 4,
+      "cy": 4,
       "ground": [
         [
           5,
@@ -13054,22 +12761,8 @@
           5,
           5,
           5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
+          6,
+          6,
           5,
           5,
           5,
@@ -13082,23 +12775,9 @@
           5,
           5,
           5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
+          6,
+          6,
+          6,
           5,
           5,
           5,
@@ -13109,9 +12788,51 @@
           5,
           5,
           5,
+          6,
+          6,
+          5,
+          6,
+          6,
+          6,
+          5,
+          5
+        ],
+        [
           5,
           5,
           5,
+          5,
+          6,
+          5,
+          5,
+          6,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
+          6,
+          5,
+          5,
+          5,
+          5
+        ],
+        [
+          5,
+          5,
+          6,
+          6,
+          6,
+          6,
+          6,
           5,
           5,
           5,
@@ -13122,581 +12843,9 @@
           5,
           5,
           5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ]
-      ],
-      "upper": [
-        [
-          null,
-          1,
-          null,
-          20,
-          null,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          0,
-          1,
-          19,
-          20,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          0,
-          null,
-          null,
-          null,
-          null,
-          1,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          19,
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          0,
-          null,
-          null,
-          20,
-          0,
-          null,
-          null,
-          20,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          1,
-          19,
-          20,
-          0,
-          1,
-          19,
-          20,
-          0,
-          1,
-          19,
-          20,
-          0
-        ],
-        [
-          null,
-          null,
-          0,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          0,
-          null
-        ],
-        [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null,
-          20,
-          null,
-          1,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          20,
-          0,
-          null,
-          null,
-          null,
-          null,
-          1,
-          19,
-          null
-        ],
-        [
-          1,
-          19,
-          20,
-          0,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          0
-        ],
-        [
-          19,
-          null,
-          null,
-          1,
-          null,
-          20,
-          null,
-          null,
-          19,
-          null,
-          null,
-          1
-        ],
-        [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          1,
-          null,
-          null,
-          0,
-          null,
-          null
-        ]
-      ],
-      "collisions": [
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          true,
-          true,
-          true
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ]
-      ],
-      "enemies": [],
-      "pickups": [
-        {
-          "type": "ore",
-          "worldX": 294,
-          "worldY": 6
-        },
-        {
-          "type": "ore",
-          "worldX": 293,
-          "worldY": 7
-        },
-        {
-          "type": "charcoal",
-          "worldX": 292,
-          "worldY": 7
-        },
-        {
-          "type": "charcoal",
-          "worldX": 292,
-          "worldY": 6
-        },
-        {
-          "type": "iron",
-          "worldX": 298,
-          "worldY": 2
-        }
-      ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 293,
-          "worldY": 6,
-          "dialog": "catForge"
-        }
-      ],
-      "catalog": {
-        "id": "cat-bloomery",
-        "name": "Cat's Bloomery",
-        "cost": 13,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a furnace, an altar, and a door that wants one bar of iron.",
-        "category": "puzzle"
-      }
-    },
-    {
-      "cx": 25,
-      "cy": 0,
-      "ground": [
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
+          6,
+          6,
+          6,
           5,
           5,
           5,
@@ -13735,7 +12884,7 @@
       ],
       "upper": [
         [
-          null,
+          4,
           1,
           null,
           20,
@@ -13749,8 +12898,8 @@
           null
         ],
         [
-          null,
-          null,
+          4,
+          4,
           null,
           0,
           1,
@@ -13758,556 +12907,13 @@
           20,
           null,
           null,
-          null,
+          4,
           null,
           null
         ],
         [
-          null,
-          null,
-          0,
-          1,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          null,
-          null,
-          0,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          0,
-          null,
-          null,
-          20,
-          0,
-          null,
-          null,
-          20,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          1,
-          19,
-          20,
-          0,
-          1,
-          19,
-          20,
-          0,
-          1,
-          19,
-          20,
-          0
-        ],
-        [
-          null,
-          null,
-          0,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          0,
-          null
-        ],
-        [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null,
-          20,
-          null,
-          1,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          20,
-          0,
-          null,
-          null,
-          null,
-          null,
-          1,
-          19,
-          null
-        ],
-        [
-          1,
-          19,
-          20,
-          0,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          0
-        ],
-        [
-          19,
-          null,
-          null,
-          1,
-          null,
-          20,
-          null,
-          null,
-          19,
-          null,
-          null,
-          1
-        ],
-        [
-          null,
-          0,
-          null,
-          19,
-          null,
-          null,
-          1,
-          null,
-          null,
-          0,
-          null,
-          null
-        ]
-      ],
-      "collisions": [
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          true,
-          true,
-          true,
-          true
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ]
-      ],
-      "enemies": [],
-      "pickups": [
-        {
-          "type": "battery",
-          "worldX": 306,
-          "worldY": 6
-        },
-        {
-          "type": "iron",
-          "worldX": 310,
-          "worldY": 2
-        }
-      ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 305,
-          "worldY": 6,
-          "dialog": "catBattery"
-        }
-      ],
-      "catalog": {
-        "id": "cat-current",
-        "name": "Cat's Broken Current",
-        "cost": 14,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a live wire, a dead one, and a battery to carry the difference.",
-        "category": "puzzle"
-      }
-    },
-    {
-      "cx": 26,
-      "cy": 0,
-      "ground": [
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ],
-        [
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5,
-          5
-        ]
-      ],
-      "upper": [
-        [
-          null,
-          1,
-          null,
-          20,
-          null,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          0,
-          1,
-          19,
-          20,
-          null,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
+          4,
+          4,
           0,
           1,
           null,
@@ -14339,7 +12945,7 @@
           null,
           20,
           0,
-          null,
+          4,
           null,
           20,
           null,
@@ -14370,7 +12976,7 @@
           null,
           null,
           null,
-          null,
+          4,
           null,
           0,
           null
@@ -14384,7 +12990,7 @@
           null,
           null,
           null,
-          20,
+          4,
           null,
           1,
           null
@@ -14409,7 +13015,7 @@
           20,
           0,
           null,
-          null,
+          4,
           null,
           null,
           null,
@@ -14421,29 +13027,29 @@
           19,
           null,
           null,
-          1,
+          null,
           null,
           20,
           null,
           null,
           19,
           null,
-          null,
+          4,
           1
         ],
         [
-          null,
-          0,
-          null,
+          4,
+          4,
+          4,
           19,
           null,
           null,
           1,
           null,
           null,
-          0,
-          null,
-          null
+          4,
+          4,
+          4
         ]
       ],
       "collisions": [
@@ -14620,41 +13226,26 @@
       "pickups": [
         {
           "type": "scythe",
-          "worldX": 318,
-          "worldY": 6
+          "worldX": 54,
+          "worldY": 54
         },
         {
           "type": "shovel",
-          "worldX": 317,
-          "worldY": 7
+          "worldX": 53,
+          "worldY": 55
         },
         {
           "type": "bucket",
-          "worldX": 316,
-          "worldY": 7
+          "worldX": 52,
+          "worldY": 55
         },
         {
           "type": "iron",
-          "worldX": 322,
-          "worldY": 2
+          "worldX": 58,
+          "worldY": 50
         }
       ],
-      "npcs": [
-        {
-          "type": "blackCat",
-          "worldX": 317,
-          "worldY": 6,
-          "dialog": "catFarm"
-        }
-      ],
-      "catalog": {
-        "id": "cat-furrow",
-        "name": "Cat's Furrow",
-        "cost": 15,
-        "cardImage": "generated:hearth",
-        "description": "A cat, a scythe, a shovel and a bucket: fuel you can put where you want it.",
-        "category": "puzzle"
-      }
+      "npcs": []
     }
   ],
   "props": [
@@ -14665,26 +13256,29 @@
       "worldY": 5
     },
     {
-      "type": "campfire",
-      "lit": false,
+      "type": "rock",
       "worldX": 38,
       "worldY": 2
     },
     {
-      "type": "campfire",
-      "lit": false,
-      "worldX": 45,
-      "worldY": 10
+      "type": "rock",
+      "worldX": 39,
+      "worldY": 1
     },
     {
-      "type": "dryBush",
-      "worldX": 39,
+      "type": "rock",
+      "worldX": 45,
+      "worldY": 1
+    },
+    {
+      "type": "ironRock",
+      "worldX": 44,
       "worldY": 2
     },
     {
-      "type": "dryBush",
-      "worldX": 44,
-      "worldY": 10
+      "type": "ironRock",
+      "worldX": 46,
+      "worldY": 3
     },
     {
       "type": "campfire",
@@ -14693,515 +13287,484 @@
       "worldY": 5
     },
     {
-      "type": "rock",
+      "type": "dryTree",
       "worldX": 50,
-      "worldY": 2
-    },
-    {
-      "type": "rock",
-      "worldX": 51,
       "worldY": 1
     },
     {
-      "type": "rock",
-      "worldX": 57,
+      "type": "dryTree",
+      "worldX": 52,
       "worldY": 1
     },
     {
-      "type": "ironRock",
+      "type": "dryTree",
       "worldX": 56,
-      "worldY": 2
+      "worldY": 1
     },
     {
-      "type": "ironRock",
+      "type": "dryTree",
+      "worldX": 58,
+      "worldY": 1
+    },
+    {
+      "type": "dryTree",
+      "worldX": 50,
+      "worldY": 3
+    },
+    {
+      "type": "dryTree",
+      "worldX": 52,
+      "worldY": 3
+    },
+    {
+      "type": "dryTree",
+      "worldX": 56,
+      "worldY": 3
+    },
+    {
+      "type": "dryTree",
       "worldX": 58,
       "worldY": 3
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 66,
-      "worldY": 5
-    },
-    {
-      "type": "dryTree",
-      "worldX": 62,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 64,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 68,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 70,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 62,
-      "worldY": 3
-    },
-    {
-      "type": "dryTree",
-      "worldX": 64,
-      "worldY": 3
-    },
-    {
-      "type": "dryTree",
-      "worldX": 68,
-      "worldY": 3
-    },
-    {
-      "type": "dryTree",
-      "worldX": 70,
-      "worldY": 3
+      "worldX": 6,
+      "worldY": 17
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 78,
-      "worldY": 5
+      "worldX": 18,
+      "worldY": 17
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 90,
-      "worldY": 5
+      "worldX": 30,
+      "worldY": 17
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 102,
-      "worldY": 5
+      "worldX": 42,
+      "worldY": 17
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 114,
-      "worldY": 5
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 126,
-      "worldY": 5
+      "worldX": 54,
+      "worldY": 17
     },
     {
       "type": "tallGrass",
-      "worldX": 122,
-      "worldY": 2
+      "worldX": 50,
+      "worldY": 14
     },
     {
       "type": "tallGrass",
-      "worldX": 123,
-      "worldY": 2
+      "worldX": 51,
+      "worldY": 14
     },
     {
       "type": "tallGrass",
-      "worldX": 122,
-      "worldY": 3
+      "worldX": 50,
+      "worldY": 15
     },
     {
       "type": "tallGrass",
-      "worldX": 124,
-      "worldY": 2
+      "worldX": 52,
+      "worldY": 14
     },
     {
       "type": "tallGrass",
-      "worldX": 128,
-      "worldY": 2
+      "worldX": 56,
+      "worldY": 14
     },
     {
       "type": "tallGrass",
-      "worldX": 129,
-      "worldY": 2
+      "worldX": 57,
+      "worldY": 14
     },
     {
       "type": "tallGrass",
-      "worldX": 129,
-      "worldY": 3
+      "worldX": 57,
+      "worldY": 15
     },
     {
       "type": "tallGrass",
-      "worldX": 122,
-      "worldY": 10
+      "worldX": 50,
+      "worldY": 22
     },
     {
       "type": "tallGrass",
-      "worldX": 123,
-      "worldY": 10
+      "worldX": 51,
+      "worldY": 22
     },
     {
       "type": "tallGrass",
-      "worldX": 128,
-      "worldY": 10
+      "worldX": 56,
+      "worldY": 22
     },
     {
       "type": "tallGrass",
-      "worldX": 129,
-      "worldY": 10
+      "worldX": 57,
+      "worldY": 22
     },
     {
       "type": "rock",
-      "worldX": 135,
-      "worldY": 3
+      "worldX": 3,
+      "worldY": 27
     },
     {
       "type": "ironRock",
-      "worldX": 142,
-      "worldY": 4
+      "worldX": 10,
+      "worldY": 28
     },
     {
       "type": "rock",
-      "worldX": 136,
-      "worldY": 10
+      "worldX": 4,
+      "worldY": 34
     },
     {
       "type": "lava",
-      "worldX": 76,
-      "worldY": 3
+      "worldX": 4,
+      "worldY": 15
     },
     {
       "type": "lava",
-      "worldX": 77,
-      "worldY": 3
+      "worldX": 5,
+      "worldY": 15
     },
     {
       "type": "lava",
-      "worldX": 78,
-      "worldY": 3
+      "worldX": 6,
+      "worldY": 15
     },
     {
       "type": "lava",
-      "worldX": 79,
-      "worldY": 3
+      "worldX": 7,
+      "worldY": 15
     },
     {
       "type": "lava",
-      "worldX": 80,
-      "worldY": 3
+      "worldX": 8,
+      "worldY": 15
     },
     {
       "type": "lava",
-      "worldX": 80,
-      "worldY": 4
+      "worldX": 8,
+      "worldY": 16
     },
     {
       "type": "lava",
-      "worldX": 80,
-      "worldY": 5
+      "worldX": 8,
+      "worldY": 17
     },
     {
       "type": "lava",
-      "worldX": 82,
-      "worldY": 5
+      "worldX": 10,
+      "worldY": 17
     },
     {
       "type": "lava",
-      "worldX": 81,
-      "worldY": 5
+      "worldX": 9,
+      "worldY": 17
     },
     {
       "type": "lava",
-      "worldX": 82,
-      "worldY": 4
+      "worldX": 10,
+      "worldY": 16
     },
     {
       "type": "lava",
-      "worldX": 82,
-      "worldY": 1
+      "worldX": 10,
+      "worldY": 13
     },
     {
       "type": "lava",
-      "worldX": 82,
-      "worldY": 2
+      "worldX": 10,
+      "worldY": 14
     },
     {
       "type": "lava",
-      "worldX": 82,
-      "worldY": 3
+      "worldX": 10,
+      "worldY": 15
     },
     {
       "type": "lava",
-      "worldX": 79,
-      "worldY": 1
+      "worldX": 7,
+      "worldY": 13
     },
     {
       "type": "lava",
-      "worldX": 79,
-      "worldY": 2
+      "worldX": 7,
+      "worldY": 14
     },
     {
       "type": "lava",
-      "worldX": 75,
-      "worldY": 3
+      "worldX": 3,
+      "worldY": 15
     },
     {
       "type": "lava",
-      "worldX": 74,
-      "worldY": 3
+      "worldX": 2,
+      "worldY": 15
     },
     {
       "type": "lava",
-      "worldX": 74,
-      "worldY": 4
+      "worldX": 2,
+      "worldY": 16
     },
     {
       "type": "lava",
-      "worldX": 74,
-      "worldY": 7
+      "worldX": 2,
+      "worldY": 19
     },
     {
       "type": "lava",
-      "worldX": 74,
-      "worldY": 8
+      "worldX": 2,
+      "worldY": 20
     },
     {
       "type": "lava",
-      "worldX": 74,
-      "worldY": 10
+      "worldX": 2,
+      "worldY": 22
     },
     {
       "type": "lava",
-      "worldX": 74,
-      "worldY": 9
+      "worldX": 2,
+      "worldY": 21
     },
     {
       "type": "lava",
-      "worldX": 75,
-      "worldY": 8
+      "worldX": 3,
+      "worldY": 20
     },
     {
       "type": "lava",
-      "worldX": 76,
-      "worldY": 8
+      "worldX": 4,
+      "worldY": 20
     },
     {
       "type": "lava",
-      "worldX": 77,
-      "worldY": 8
+      "worldX": 5,
+      "worldY": 20
     },
     {
       "type": "lava",
-      "worldX": 75,
-      "worldY": 10
+      "worldX": 3,
+      "worldY": 22
     },
     {
       "type": "lava",
-      "worldX": 76,
-      "worldY": 10
+      "worldX": 4,
+      "worldY": 22
     },
     {
       "type": "lava",
-      "worldX": 77,
-      "worldY": 10
+      "worldX": 5,
+      "worldY": 22
     },
     {
       "type": "lava",
-      "worldX": 78,
-      "worldY": 10
+      "worldX": 6,
+      "worldY": 22
     },
     {
       "type": "lava",
-      "worldX": 78,
-      "worldY": 9
+      "worldX": 6,
+      "worldY": 21
     },
     {
       "type": "lava",
-      "worldX": 78,
-      "worldY": 8
+      "worldX": 6,
+      "worldY": 20
     },
     {
       "type": "lava",
-      "worldX": 79,
-      "worldY": 8
+      "worldX": 7,
+      "worldY": 20
     },
     {
       "type": "lava",
-      "worldX": 80,
-      "worldY": 8
+      "worldX": 8,
+      "worldY": 20
     },
     {
       "type": "lava",
-      "worldX": 81,
-      "worldY": 8
+      "worldX": 9,
+      "worldY": 20
     },
     {
       "type": "lava",
-      "worldX": 81,
-      "worldY": 9
+      "worldX": 9,
+      "worldY": 21
     },
     {
       "type": "lava",
-      "worldX": 81,
-      "worldY": 10
+      "worldX": 9,
+      "worldY": 22
     },
     {
       "type": "lava",
-      "worldX": 80,
-      "worldY": 10
+      "worldX": 8,
+      "worldY": 22
     },
     {
       "type": "lava",
-      "worldX": 79,
-      "worldY": 10
+      "worldX": 7,
+      "worldY": 22
     },
     {
       "type": "lava",
-      "worldX": 75,
-      "worldY": 2
+      "worldX": 3,
+      "worldY": 14
     },
     {
       "type": "lava",
-      "worldX": 73,
-      "worldY": 4
+      "worldX": 1,
+      "worldY": 16
     },
     {
       "type": "lava",
-      "worldX": 78,
-      "worldY": 1
+      "worldX": 6,
+      "worldY": 13
     },
     {
       "type": "lava",
-      "worldX": 80,
-      "worldY": 1
+      "worldX": 8,
+      "worldY": 13
     },
     {
       "type": "lava",
-      "worldX": 81,
-      "worldY": 1
+      "worldX": 9,
+      "worldY": 13
     },
     {
       "type": "dryTree",
-      "worldX": 78,
-      "worldY": 4
+      "worldX": 6,
+      "worldY": 16
     },
     {
       "type": "dryTree",
-      "worldX": 76,
-      "worldY": 2
+      "worldX": 4,
+      "worldY": 14
     },
     {
       "type": "dryTree",
-      "worldX": 76,
-      "worldY": 4
+      "worldX": 4,
+      "worldY": 16
     },
     {
       "type": "dryTree",
-      "worldX": 77,
-      "worldY": 7
+      "worldX": 5,
+      "worldY": 19
     },
     {
       "type": "dryTree",
-      "worldX": 75,
-      "worldY": 9
+      "worldX": 3,
+      "worldY": 21
     },
     {
       "type": "dryTree",
-      "worldX": 80,
-      "worldY": 7
+      "worldX": 8,
+      "worldY": 19
     },
     {
       "type": "dryTree",
-      "worldX": 74,
-      "worldY": 2
+      "worldX": 2,
+      "worldY": 14
     },
     {
       "type": "dryTree",
-      "worldX": 73,
-      "worldY": 1
+      "worldX": 1,
+      "worldY": 13
     },
     {
       "type": "dryShrub",
-      "worldX": 74,
-      "worldY": 5
+      "worldX": 2,
+      "worldY": 17
     },
     {
       "type": "dryShrub",
-      "worldX": 73,
-      "worldY": 10
+      "worldX": 1,
+      "worldY": 22
     },
     {
       "type": "plantSpot",
-      "worldX": 87,
-      "worldY": 2
+      "worldX": 15,
+      "worldY": 14
     },
     {
       "type": "plantSpot",
-      "worldX": 87,
-      "worldY": 3
+      "worldX": 15,
+      "worldY": 15
     },
     {
       "type": "plantSpot",
-      "worldX": 87,
-      "worldY": 7
+      "worldX": 15,
+      "worldY": 19
     },
     {
       "type": "plantSpot",
-      "worldX": 87,
-      "worldY": 8
+      "worldX": 15,
+      "worldY": 20
     },
     {
       "type": "plantSpot",
-      "worldX": 89,
-      "worldY": 7
+      "worldX": 17,
+      "worldY": 19
     },
     {
       "type": "plantSpot",
-      "worldX": 89,
-      "worldY": 8
+      "worldX": 17,
+      "worldY": 20
     },
     {
       "type": "plantSpot",
-      "worldX": 91,
-      "worldY": 8
+      "worldX": 19,
+      "worldY": 20
     },
     {
       "type": "plantSpot",
-      "worldX": 91,
-      "worldY": 7
+      "worldX": 19,
+      "worldY": 19
     },
     {
       "type": "plantSpot",
-      "worldX": 89,
-      "worldY": 3
+      "worldX": 17,
+      "worldY": 15
     },
     {
       "type": "plantSpot",
-      "worldX": 89,
-      "worldY": 2
+      "worldX": 17,
+      "worldY": 14
     },
     {
       "type": "plantSpot",
-      "worldX": 91,
-      "worldY": 2
+      "worldX": 19,
+      "worldY": 14
     },
     {
       "type": "plantSpot",
-      "worldX": 91,
-      "worldY": 3
+      "worldX": 19,
+      "worldY": 15
     },
     {
       "type": "carnivorousPlant",
-      "worldX": 90,
-      "worldY": 2
+      "worldX": 18,
+      "worldY": 14
     },
     {
       "type": "carnivorousPlant",
-      "worldX": 88,
-      "worldY": 9
+      "worldX": 16,
+      "worldY": 21
     },
     {
       "type": "carnivorousPlant",
-      "worldX": 92,
-      "worldY": 6
+      "worldX": 20,
+      "worldY": 18
     },
     {
       "type": "moonflower",
@@ -15270,328 +13833,318 @@
     },
     {
       "type": "tallGrass",
-      "worldX": 37,
-      "worldY": 4
+      "worldX": 25,
+      "worldY": 28
     },
     {
       "type": "tallGrass",
-      "worldX": 46,
-      "worldY": 4
+      "worldX": 34,
+      "worldY": 28
     },
     {
-      "type": "moonflower",
+      "type": "rock",
       "worldX": 40,
-      "worldY": 11
-    },
-    {
-      "type": "rock",
-      "worldX": 45,
-      "worldY": 11
-    },
-    {
-      "type": "rock",
-      "worldX": 52,
       "worldY": 3
     },
     {
       "type": "rock",
-      "worldX": 56,
+      "worldX": 44,
       "worldY": 11
     },
     {
       "type": "ironRock",
-      "worldX": 49,
+      "worldX": 37,
       "worldY": 10
     },
     {
       "type": "ironRock",
+      "worldX": 46,
+      "worldY": 10
+    },
+    {
+      "type": "dryTree",
+      "worldX": 50,
+      "worldY": 10
+    },
+    {
+      "type": "dryTree",
+      "worldX": 52,
+      "worldY": 10
+    },
+    {
+      "type": "dryTree",
+      "worldX": 56,
+      "worldY": 10
+    },
+    {
+      "type": "dryTree",
       "worldX": 58,
       "worldY": 10
     },
     {
-      "type": "dryTree",
-      "worldX": 62,
-      "worldY": 10
-    },
-    {
-      "type": "dryTree",
-      "worldX": 64,
-      "worldY": 10
-    },
-    {
-      "type": "dryTree",
-      "worldX": 68,
-      "worldY": 10
-    },
-    {
-      "type": "dryTree",
-      "worldX": 70,
-      "worldY": 10
-    },
-    {
       "type": "dryShrub",
-      "worldX": 63,
+      "worldX": 51,
       "worldY": 4
     },
     {
       "type": "dryShrub",
-      "worldX": 69,
+      "worldX": 57,
       "worldY": 4
     },
     {
       "type": "dryShrub",
-      "worldX": 72,
-      "worldY": 3
+      "worldX": 0,
+      "worldY": 15
     },
     {
       "type": "dryShrub",
-      "worldX": 83,
-      "worldY": 10
+      "worldX": 11,
+      "worldY": 22
     },
     {
       "type": "rock",
-      "worldX": 72,
-      "worldY": 4
+      "worldX": 0,
+      "worldY": 16
     },
     {
       "type": "moonflower",
-      "worldX": 84,
-      "worldY": 4
+      "worldX": 12,
+      "worldY": 16
     },
     {
       "type": "moonflower",
-      "worldX": 95,
-      "worldY": 4
+      "worldX": 23,
+      "worldY": 16
     },
     {
       "type": "moonflower",
-      "worldX": 88,
-      "worldY": 11
+      "worldX": 16,
+      "worldY": 23
     },
     {
       "type": "moonflower",
-      "worldX": 96,
-      "worldY": 2
+      "worldX": 24,
+      "worldY": 14
     },
     {
       "type": "tallGrass",
-      "worldX": 100,
-      "worldY": 1
+      "worldX": 28,
+      "worldY": 13
     },
     {
       "type": "tallGrass",
-      "worldX": 98,
-      "worldY": 4
+      "worldX": 26,
+      "worldY": 16
     },
     {
       "type": "tallGrass",
-      "worldX": 104,
-      "worldY": 4
+      "worldX": 32,
+      "worldY": 16
     },
     {
       "type": "rock",
-      "worldX": 100,
-      "worldY": 3
+      "worldX": 28,
+      "worldY": 15
     },
     {
       "type": "tallGrass",
-      "worldX": 110,
-      "worldY": 4
+      "worldX": 38,
+      "worldY": 16
     },
     {
       "type": "tallGrass",
-      "worldX": 117,
-      "worldY": 4
+      "worldX": 45,
+      "worldY": 16
     },
     {
       "type": "dryShrub",
-      "worldX": 112,
-      "worldY": 9
+      "worldX": 40,
+      "worldY": 21
     },
     {
       "type": "rock",
-      "worldX": 114,
-      "worldY": 4
+      "worldX": 42,
+      "worldY": 16
     },
     {
       "type": "tallGrass",
-      "worldX": 121,
-      "worldY": 2
+      "worldX": 49,
+      "worldY": 14
     },
     {
       "type": "tallGrass",
-      "worldX": 130,
-      "worldY": 2
+      "worldX": 58,
+      "worldY": 14
     },
     {
       "type": "tallGrass",
-      "worldX": 121,
-      "worldY": 3
+      "worldX": 49,
+      "worldY": 15
     },
     {
       "type": "tallGrass",
-      "worldX": 130,
-      "worldY": 3
+      "worldX": 58,
+      "worldY": 15
     },
     {
       "type": "tallGrass",
-      "worldX": 124,
-      "worldY": 4
+      "worldX": 52,
+      "worldY": 16
     },
     {
       "type": "tallGrass",
-      "worldX": 127,
-      "worldY": 4
+      "worldX": 55,
+      "worldY": 16
     },
     {
       "type": "tallGrass",
-      "worldX": 124,
-      "worldY": 7
+      "worldX": 52,
+      "worldY": 19
     },
     {
       "type": "tallGrass",
-      "worldX": 127,
-      "worldY": 7
+      "worldX": 55,
+      "worldY": 19
     },
     {
       "type": "tallGrass",
-      "worldX": 121,
-      "worldY": 10
+      "worldX": 49,
+      "worldY": 22
     },
     {
       "type": "tallGrass",
-      "worldX": 130,
-      "worldY": 10
+      "worldX": 58,
+      "worldY": 22
     },
     {
       "type": "moonflower",
-      "worldX": 122,
-      "worldY": 11
+      "worldX": 50,
+      "worldY": 23
     },
     {
       "type": "rock",
-      "worldX": 140,
-      "worldY": 3
+      "worldX": 8,
+      "worldY": 27
     },
     {
       "type": "ironRock",
-      "worldX": 140,
-      "worldY": 10
+      "worldX": 8,
+      "worldY": 34
     },
     {
       "type": "dryShrub",
-      "worldX": 148,
-      "worldY": 3
+      "worldX": 16,
+      "worldY": 27
     },
     {
       "type": "dryShrub",
-      "worldX": 148,
-      "worldY": 10
+      "worldX": 16,
+      "worldY": 34
     },
     {
       "type": "dryTree",
-      "worldX": 146,
-      "worldY": 4
+      "worldX": 14,
+      "worldY": 28
     },
     {
       "type": "dryTree",
-      "worldX": 153,
-      "worldY": 4
+      "worldX": 21,
+      "worldY": 28
     },
     {
       "type": "moonflower",
-      "worldX": 158,
-      "worldY": 4
+      "worldX": 38,
+      "worldY": 28
     },
     {
       "type": "moonflower",
-      "worldX": 165,
-      "worldY": 4
+      "worldX": 45,
+      "worldY": 28
     },
     {
       "type": "moonflower",
-      "worldX": 161,
-      "worldY": 7
+      "worldX": 41,
+      "worldY": 31
     },
     {
       "type": "tallGrass",
-      "worldX": 156,
-      "worldY": 2
+      "worldX": 36,
+      "worldY": 26
     },
     {
       "type": "tallGrass",
-      "worldX": 167,
-      "worldY": 2
+      "worldX": 47,
+      "worldY": 26
     },
     {
       "type": "toolbox",
-      "worldX": 55,
+      "worldX": 43,
       "worldY": 7,
       "dir": 2
     },
     {
       "type": "dryBush",
-      "worldX": 50,
+      "worldX": 38,
       "worldY": 4
     },
     {
       "type": "dryBush",
-      "worldX": 52,
+      "worldX": 40,
       "worldY": 4
     },
     {
       "type": "dryBush",
+      "worldX": 44,
+      "worldY": 4
+    },
+    {
+      "type": "dryBush",
+      "worldX": 46,
+      "worldY": 4
+    },
+    {
+      "type": "dryTree",
+      "worldX": 37,
+      "worldY": 1
+    },
+    {
+      "type": "dryTree",
+      "worldX": 46,
+      "worldY": 1
+    },
+    {
+      "type": "water",
+      "worldX": 36,
+      "worldY": 11
+    },
+    {
+      "type": "water",
+      "worldX": 37,
+      "worldY": 11
+    },
+    {
+      "type": "water",
+      "worldX": 38,
+      "worldY": 11
+    },
+    {
+      "type": "campfire",
+      "worldX": 51,
+      "worldY": 26
+    },
+    {
+      "type": "campfire",
       "worldX": 56,
-      "worldY": 4
-    },
-    {
-      "type": "dryBush",
-      "worldX": 58,
-      "worldY": 4
+      "worldY": 26
     },
     {
       "type": "dryTree",
-      "worldX": 49,
+      "worldX": 38,
       "worldY": 1
     },
     {
       "type": "dryTree",
-      "worldX": 58,
-      "worldY": 1
-    },
-    {
-      "type": "water",
-      "worldX": 48,
-      "worldY": 11
-    },
-    {
-      "type": "water",
-      "worldX": 49,
-      "worldY": 11
-    },
-    {
-      "type": "water",
-      "worldX": 50,
-      "worldY": 11
-    },
-    {
-      "type": "campfire",
-      "worldX": 171,
-      "worldY": 2
-    },
-    {
-      "type": "campfire",
-      "worldX": 176,
-      "worldY": 2
-    },
-    {
-      "type": "dryTree",
-      "worldX": 50,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 57,
+      "worldX": 45,
       "worldY": 2
     },
     {
@@ -15611,473 +14164,606 @@
     },
     {
       "type": "dryTree",
-      "worldX": 160,
-      "worldY": 5
+      "worldX": 40,
+      "worldY": 29
     },
     {
       "type": "dryTree",
-      "worldX": 163,
-      "worldY": 6
+      "worldX": 43,
+      "worldY": 30
     },
     {
       "type": "dryTree",
+      "worldX": 39,
+      "worldY": 3
+    },
+    {
+      "type": "campfire",
+      "lit": true,
+      "worldX": 39,
+      "worldY": 42
+    },
+    {
+      "type": "campfire",
+      "lit": true,
       "worldX": 51,
-      "worldY": 3
-    },
-    {
-      "type": "waterWheel",
-      "worldX": 2,
-      "worldY": 3
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 183,
-      "worldY": 3
-    },
-    {
-      "type": "dryTree",
-      "worldX": 188,
-      "worldY": 0
-    },
-    {
-      "type": "dryTree",
-      "worldX": 188,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 188,
-      "worldY": 2
-    },
-    {
-      "type": "dryTree",
-      "worldX": 188,
-      "worldY": 3
-    },
-    {
-      "type": "dryTree",
-      "worldX": 188,
-      "worldY": 4
-    },
-    {
-      "type": "dryTree",
-      "worldX": 189,
-      "worldY": 4
-    },
-    {
-      "type": "dryTree",
-      "worldX": 190,
-      "worldY": 4
-    },
-    {
-      "type": "dryTree",
-      "worldX": 191,
-      "worldY": 4
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 195,
-      "worldY": 3
-    },
-    {
-      "type": "dryBush",
-      "worldX": 200,
-      "worldY": 0
-    },
-    {
-      "type": "dryBush",
-      "worldX": 200,
-      "worldY": 1
-    },
-    {
-      "type": "dryBush",
-      "worldX": 200,
-      "worldY": 2
-    },
-    {
-      "type": "dryBush",
-      "worldX": 200,
-      "worldY": 3
-    },
-    {
-      "type": "dryBush",
-      "worldX": 200,
-      "worldY": 4
-    },
-    {
-      "type": "dryBush",
-      "worldX": 201,
-      "worldY": 4
-    },
-    {
-      "type": "dryBush",
-      "worldX": 202,
-      "worldY": 4
-    },
-    {
-      "type": "dryBush",
-      "worldX": 203,
-      "worldY": 4
-    },
-    {
-      "type": "dryBush",
-      "worldX": 203,
-      "worldY": 1
-    },
-    {
-      "type": "dryBush",
-      "worldX": 201,
-      "worldY": 3
-    },
-    {
-      "type": "dryBush",
-      "worldX": 203,
-      "worldY": 3
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 207,
-      "worldY": 3
-    },
-    {
-      "type": "rock",
-      "worldX": 212,
-      "worldY": 0
-    },
-    {
-      "type": "rock",
-      "worldX": 212,
-      "worldY": 1
-    },
-    {
-      "type": "rock",
-      "worldX": 212,
-      "worldY": 2
-    },
-    {
-      "type": "rock",
-      "worldX": 212,
-      "worldY": 3
-    },
-    {
-      "type": "rock",
-      "worldX": 212,
-      "worldY": 4
-    },
-    {
-      "type": "rock",
-      "worldX": 213,
-      "worldY": 4
-    },
-    {
-      "type": "rock",
-      "worldX": 214,
-      "worldY": 4
-    },
-    {
-      "type": "rock",
-      "worldX": 215,
-      "worldY": 4
-    },
-    {
-      "type": "ironRock",
-      "worldX": 208,
-      "worldY": 2
-    },
-    {
-      "type": "ironRock",
-      "worldX": 208,
-      "worldY": 7
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 219,
-      "worldY": 6
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 231,
-      "worldY": 6
+      "worldY": 42
     },
     {
       "type": "water",
-      "worldX": 236,
-      "worldY": 0
+      "worldX": 56,
+      "worldY": 36
     },
     {
       "type": "water",
-      "worldX": 236,
-      "worldY": 1
+      "worldX": 56,
+      "worldY": 37
     },
     {
       "type": "water",
-      "worldX": 236,
-      "worldY": 3
+      "worldX": 56,
+      "worldY": 39
     },
     {
       "type": "water",
-      "worldX": 236,
-      "worldY": 4
+      "worldX": 56,
+      "worldY": 40
     },
     {
       "type": "water",
-      "worldX": 237,
-      "worldY": 4
+      "worldX": 57,
+      "worldY": 40
     },
     {
       "type": "water",
-      "worldX": 238,
-      "worldY": 4
+      "worldX": 58,
+      "worldY": 40
     },
     {
       "type": "water",
-      "worldX": 239,
-      "worldY": 4
+      "worldX": 59,
+      "worldY": 40
     },
     {
       "type": "bridgeSpot",
-      "worldX": 236,
-      "worldY": 2
+      "worldX": 56,
+      "worldY": 38
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 243,
-      "worldY": 6
+      "worldX": 3,
+      "worldY": 54
     },
     {
       "type": "rock",
-      "worldX": 248,
-      "worldY": 0
+      "worldX": 8,
+      "worldY": 48
     },
     {
       "type": "rock",
-      "worldX": 248,
-      "worldY": 1
+      "worldX": 8,
+      "worldY": 49
     },
     {
       "type": "rock",
-      "worldX": 248,
-      "worldY": 3
+      "worldX": 8,
+      "worldY": 51
     },
     {
       "type": "rock",
-      "worldX": 248,
-      "worldY": 4
+      "worldX": 10,
+      "worldY": 52
     },
     {
       "type": "rock",
-      "worldX": 249,
-      "worldY": 4
-    },
-    {
-      "type": "rock",
-      "worldX": 250,
-      "worldY": 4
-    },
-    {
-      "type": "rock",
-      "worldX": 251,
-      "worldY": 4
+      "worldX": 11,
+      "worldY": 52
     },
     {
       "type": "bombSpot",
-      "worldX": 248,
-      "worldY": 2
+      "worldX": 8,
+      "worldY": 50
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 255,
-      "worldY": 6
-    },
-    {
-      "type": "electronicGate",
-      "variable": "peso",
-      "worldX": 260,
-      "worldY": 2
-    },
-    {
-      "type": "pressurePlate",
-      "variable": "peso",
-      "worldX": 255,
-      "worldY": 2
-    },
-    {
-      "type": "woodenCrate",
-      "worldX": 257,
-      "worldY": 2
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 267,
-      "worldY": 6
+      "worldX": 15,
+      "worldY": 54
     },
     {
       "type": "swingGate",
-      "worldX": 272,
-      "worldY": 1
+      "worldX": 20,
+      "worldY": 49
     },
     {
       "type": "rock",
-      "worldX": 273,
-      "worldY": 1
+      "worldX": 21,
+      "worldY": 49
     },
     {
       "type": "swingGate",
-      "worldX": 272,
-      "worldY": 2
+      "worldX": 20,
+      "worldY": 50
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 283,
-      "worldY": 1
+      "worldX": 51,
+      "worldY": 54
     },
     {
-      "type": "moonflower",
-      "worldX": 284,
-      "worldY": 2
+      "type": "tallGrass",
+      "worldX": 52,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 53,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 54,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 52,
+      "worldY": 51
     },
     {
       "type": "water",
-      "worldX": 279,
-      "worldY": 2
+      "worldX": 50,
+      "worldY": 52
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 291,
-      "worldY": 6
+      "worldX": 3,
+      "worldY": 39
     },
     {
-      "type": "electronicGate",
-      "variable": "forja",
-      "worldX": 296,
-      "worldY": 2
+      "type": "dryTree",
+      "worldX": 8,
+      "worldY": 36
     },
     {
-      "type": "chest",
-      "variable": "forja",
-      "quota": {
-        "kind": "iron",
-        "count": 1
-      },
-      "worldX": 294,
-      "worldY": 2
+      "type": "dryTree",
+      "worldX": 8,
+      "worldY": 37
     },
     {
-      "type": "furnace",
-      "dir": 1,
-      "worldX": 291,
-      "worldY": 2
+      "type": "dryTree",
+      "worldX": 8,
+      "worldY": 38
     },
     {
-      "type": "altar",
-      "worldX": 293,
-      "worldY": 4
+      "type": "dryTree",
+      "worldX": 8,
+      "worldY": 39
+    },
+    {
+      "type": "dryTree",
+      "worldX": 8,
+      "worldY": 40
+    },
+    {
+      "type": "dryTree",
+      "worldX": 9,
+      "worldY": 40
+    },
+    {
+      "type": "dryTree",
+      "worldX": 10,
+      "worldY": 40
+    },
+    {
+      "type": "dryTree",
+      "worldX": 11,
+      "worldY": 40
     },
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 303,
-      "worldY": 6
+      "worldX": 15,
+      "worldY": 39
     },
     {
-      "type": "electronicGate",
-      "worldX": 308,
-      "worldY": 2
+      "type": "dryBush",
+      "worldX": 20,
+      "worldY": 36
+    },
+    {
+      "type": "dryBush",
+      "worldX": 20,
+      "worldY": 37
+    },
+    {
+      "type": "dryBush",
+      "worldX": 20,
+      "worldY": 38
+    },
+    {
+      "type": "dryBush",
+      "worldX": 20,
+      "worldY": 39
+    },
+    {
+      "type": "dryBush",
+      "worldX": 20,
+      "worldY": 40
+    },
+    {
+      "type": "dryBush",
+      "worldX": 21,
+      "worldY": 40
+    },
+    {
+      "type": "dryBush",
+      "worldX": 22,
+      "worldY": 40
+    },
+    {
+      "type": "dryBush",
+      "worldX": 23,
+      "worldY": 40
+    },
+    {
+      "type": "dryBush",
+      "worldX": 23,
+      "worldY": 37
+    },
+    {
+      "type": "dryBush",
+      "worldX": 21,
+      "worldY": 39
+    },
+    {
+      "type": "dryBush",
+      "worldX": 23,
+      "worldY": 39
+    },
+    {
+      "type": "campfire",
+      "lit": true,
+      "worldX": 27,
+      "worldY": 39
+    },
+    {
+      "type": "rock",
+      "worldX": 32,
+      "worldY": 36
+    },
+    {
+      "type": "rock",
+      "worldX": 32,
+      "worldY": 37
+    },
+    {
+      "type": "rock",
+      "worldX": 32,
+      "worldY": 38
+    },
+    {
+      "type": "rock",
+      "worldX": 32,
+      "worldY": 39
+    },
+    {
+      "type": "rock",
+      "worldX": 32,
+      "worldY": 40
+    },
+    {
+      "type": "rock",
+      "worldX": 33,
+      "worldY": 40
+    },
+    {
+      "type": "rock",
+      "worldX": 34,
+      "worldY": 40
+    },
+    {
+      "type": "rock",
+      "worldX": 35,
+      "worldY": 40
+    },
+    {
+      "type": "ironRock",
+      "worldX": 28,
+      "worldY": 38
+    },
+    {
+      "type": "ironRock",
+      "worldX": 28,
+      "worldY": 43
+    },
+    {
+      "type": "pyre",
+      "worldX": 30,
+      "worldY": 30
+    },
+    {
+      "type": "stairs",
+      "worldX": 5,
+      "worldY": 13
+    },
+    {
+      "type": "stairs",
+      "worldX": 50,
+      "worldY": 9
+    },
+    {
+      "type": "stairs",
+      "worldX": 24,
+      "worldY": 37
+    },
+    {
+      "type": "stairs",
+      "worldX": 5,
+      "worldY": 55
+    },
+    {
+      "type": "stairs",
+      "worldX": 53,
+      "worldY": 55
     },
     {
       "type": "water",
-      "worldX": 301,
-      "worldY": 2
-    },
-    {
-      "type": "waterWheel",
-      "worldX": 301,
-      "worldY": 3
-    },
-    {
-      "type": "wire",
-      "worldX": 302,
-      "worldY": 3
-    },
-    {
-      "type": "wire",
-      "worldX": 303,
-      "worldY": 3
-    },
-    {
-      "type": "belt",
-      "dir": 1,
-      "worldX": 304,
-      "worldY": 3
-    },
-    {
-      "type": "wire",
-      "worldX": 307,
-      "worldY": 2
-    },
-    {
-      "type": "wire",
-      "worldX": 307,
-      "worldY": 3
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 315,
-      "worldY": 6
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 316,
-      "worldY": 2
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 317,
-      "worldY": 2
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 318,
-      "worldY": 2
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 316,
-      "worldY": 3
+      "worldX": 40,
+      "worldY": 54
     },
     {
       "type": "water",
-      "worldX": 314,
-      "worldY": 4
+      "worldX": 40,
+      "worldY": 53
     },
     {
-      "type": "sellBox",
-      "sells": {
-        "kind": "seeds",
-        "coinsPerUnit": 1
-      },
-      "worldX": 319,
-      "worldY": 6
+      "type": "water",
+      "worldX": 40,
+      "worldY": 52
     },
     {
-      "type": "sellBox",
-      "worldX": 233,
-      "worldY": 4,
-      "sells": {
-        "kind": "ore",
-        "coinsPerUnit": 3
-      }
+      "type": "water",
+      "worldX": 41,
+      "worldY": 52
+    },
+    {
+      "type": "water",
+      "worldX": 42,
+      "worldY": 52
+    },
+    {
+      "type": "water",
+      "worldX": 42,
+      "worldY": 53
+    },
+    {
+      "type": "water",
+      "worldX": 41,
+      "worldY": 53
+    },
+    {
+      "type": "water",
+      "worldX": 41,
+      "worldY": 54
+    },
+    {
+      "type": "water",
+      "worldX": 41,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 40,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 42,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 43,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 54
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 53
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 52
+    },
+    {
+      "type": "water",
+      "worldX": 43,
+      "worldY": 52
+    },
+    {
+      "type": "water",
+      "worldX": 43,
+      "worldY": 53
+    },
+    {
+      "type": "water",
+      "worldX": 43,
+      "worldY": 54
+    },
+    {
+      "type": "water",
+      "worldX": 42,
+      "worldY": 54
+    },
+    {
+      "type": "water",
+      "worldX": 39,
+      "worldY": 53
+    },
+    {
+      "type": "water",
+      "worldX": 39,
+      "worldY": 54
+    },
+    {
+      "type": "water",
+      "worldX": 39,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 41,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 42,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 43,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 44,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 40,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 45,
+      "worldY": 53
+    },
+    {
+      "type": "water",
+      "worldX": 45,
+      "worldY": 54
+    },
+    {
+      "type": "water",
+      "worldX": 45,
+      "worldY": 55
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 37,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 42,
+      "worldY": 58
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 45,
+      "worldY": 52
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 42,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 44,
+      "worldY": 51
+    },
+    {
+      "type": "water",
+      "worldX": 59,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 58,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 57,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 56,
+      "worldY": 55
+    },
+    {
+      "type": "water",
+      "worldX": 56,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 56,
+      "worldY": 57
+    },
+    {
+      "type": "water",
+      "worldX": 55,
+      "worldY": 57
+    },
+    {
+      "type": "water",
+      "worldX": 54,
+      "worldY": 57
+    },
+    {
+      "type": "water",
+      "worldX": 59,
+      "worldY": 52
+    },
+    {
+      "type": "water",
+      "worldX": 58,
+      "worldY": 52
+    },
+    {
+      "type": "water",
+      "worldX": 57,
+      "worldY": 52
+    },
+    {
+      "type": "water",
+      "worldX": 57,
+      "worldY": 51
+    },
+    {
+      "type": "water",
+      "worldX": 56,
+      "worldY": 51
+    },
+    {
+      "type": "water",
+      "worldX": 57,
+      "worldY": 50
+    },
+    {
+      "type": "water",
+      "worldX": 58,
+      "worldY": 56
     }
   ],
   "dialogs": {
@@ -16128,7 +14814,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Light draws a line the dead will not cross. I sleep better behind lines."
+          "text": "Burnt brush leaves CHARCOAL. Put it in the marked box: the balloon calls the plane, and the plane drops your coins."
         }
       ]
     },
@@ -16144,31 +14830,27 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "My ship is a shell now. What she still needs is IRON — and this crater keeps it locked inside rock."
+          "text": "My ship broke into samples all over this crater."
         },
         {
           "speaker": "npc",
-          "text": "Take the PICKAXE. The veined boulders never run dry: three good swings, one lump of ORE."
+          "text": "Take the PICKAXE. It cracks rock — and rock is where the good things hide."
         },
         {
           "speaker": "npc",
-          "text": "Ore is not iron yet. Two stones make a FURNACE on that bench, and stone plus ore makes an ALTAR — the slab you hammer on."
+          "text": "Plain stone breaks. The VEINED boulders never do: three good swings, one lump of IRON, forever."
         },
         {
           "speaker": "npc",
-          "text": "Burn dead wood into CHARCOAL in the furnace, smelt it with ore for a SPONGE, then lay the sponge on the altar and strike it three times."
-        },
-        {
-          "speaker": "npc",
-          "text": "Do it by hand, or build the extractor and the trip hammer and let them work while you walk. Either way, I pay nine coins a bar."
+          "text": "The lab buys every lump you carry. Mining is honest pay out here."
         }
       ],
       "trade": {
         "item": "iron",
-        "coinsPerUnit": 9,
-        "offer": "Iron! Nine coins a bar — hull plating is worth every one. How many are you selling?",
-        "empty": "No iron in that pack. Ore from the veins, charcoal from the burnt scrub, and the furnace does the rest.",
-        "thanks": "Another plate on the hull. Keep them coming."
+        "coinsPerUnit": 3,
+        "offer": "Iron! The lab pays 3 coins a lump. How many are you selling?",
+        "empty": "Your pack has no iron. The veined boulders — three good swings each, they never run dry.",
+        "thanks": "Prime samples. Pleasure doing science with you."
       }
     },
     "businessMan": {
@@ -16211,19 +14893,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Suit says the pool up north-east glows. Nothing my BOOTS cannot walk."
+          "text": "Suit says the pool up north-east glows. Molten ground is no road."
         },
         {
           "speaker": "npc",
-          "text": "Take them. LAVA BOOTS — lava, embers, and yes, water: you just wade in."
+          "text": "Take this STONE. Throw it into lava and it cools into a basalt step."
         },
         {
           "speaker": "npc",
-          "text": "Something metal sank by the little island. Boots on. Go fish it out."
+          "text": "Something metal sank by the little island. One good step opens the route."
         },
         {
           "speaker": "npc",
-          "text": "Mind this: in deep water your hands stay busy — the boots carry YOU, not cargo."
+          "text": "The basalt stays behind. Cross back carrying whatever you find."
         }
       ]
     },
@@ -16320,19 +15002,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "You bought your way here, field by field. I watched your furnace smoke cross three of them."
+          "text": "Do not be alarmed. I am off duty."
         },
         {
           "speaker": "npc",
-          "text": "This is where the road stops. Everything past me is unbuilt — no cards, no coins, no dark to light."
+          "text": "Take the SCYTHE. It reaps the tall grass in one clean sweep — press A before it."
         },
         {
           "speaker": "npc",
-          "text": "So: the prologue is over, and you are the one who finished it. Thank you for testing my small world."
+          "text": "Cut grass surrenders SEEDS. Life insists on returning. It always does."
         },
         {
           "speaker": "npc",
-          "text": "Go back and light something. I will wait. Waiting is the one thing I am good at."
+          "text": "The meadow here grew loud. Quiet it for me, and we are even."
         }
       ]
     },
@@ -16356,7 +15038,7 @@
         },
         {
           "speaker": "npc",
-          "text": "A felled tree leaves a STICK behind. Keep every one of them: a stick is a torch that has not met fire yet."
+          "text": "A felled tree leaves a STICK behind. Put those sticks in the marked box: the balloon calls the plane, and the plane drops your coins."
         },
         {
           "speaker": "npc",
@@ -16388,16 +15070,9 @@
         },
         {
           "speaker": "npc",
-          "text": "Burnt brush leaves CHARCOAL on the ground. Bring it to me and I pay in coin — talk to me again when your hands are full."
+          "text": "Burnt brush leaves CHARCOAL on the ground. Put it in the marked box: the balloon calls the plane, and the plane drops your coins."
         }
-      ],
-      "trade": {
-        "item": "charcoal",
-        "coinsPerUnit": 2,
-        "offer": "Charcoal. I will take it off your hands — two coins the lump. How many?",
-        "empty": "Your hands are empty. Burn some brush and come back.",
-        "thanks": "Mrrow. Pleasure doing business."
-      }
+      ]
     },
     "catPick": {
       "npcName": "CAT",
@@ -16423,16 +15098,9 @@
         },
         {
           "speaker": "npc",
-          "text": "Ore is not iron. That is a lesson for a hotter day. Bring the ORE to me and I pay in coin."
+          "text": "Ore is not iron. That is a lesson for a hotter day. Put the ORE in the marked box and the plane pays in coin."
         }
-      ],
-      "trade": {
-        "item": "ore",
-        "coinsPerUnit": 3,
-        "offer": "Ore. Rust-stained rock. Three coins apiece — how many?",
-        "empty": "Nothing in your hands. Work a vein and come back.",
-        "thanks": "Mrrow. Pleasure doing business."
-      }
+      ]
     },
     "catSword": {
       "npcName": "CAT",
@@ -16459,6 +15127,10 @@
         {
           "speaker": "npc",
           "text": "Hold Z instead of tapping it and the blade spins: it cuts all eight neighbours at once. Mrrow. Go on."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -16487,6 +15159,10 @@
         {
           "speaker": "npc",
           "text": "So the question is never \"how do I cross\". It is: do I want a floor here, or a fuse? Mrrow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -16515,34 +15191,10 @@
         {
           "speaker": "npc",
           "text": "Everything you carry that burns, burns on its own clock. Mrrow."
-        }
-      ]
-    },
-    "catCrate": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. The plate over there opens the door. Stand on it and see."
         },
         {
           "speaker": "npc",
-          "text": "You saw. The door is open and you are on the plate, which is the whole joke: your weight cannot be in two places."
-        },
-        {
-          "speaker": "npc",
-          "text": "So send something else. Walk INTO the crate to push it — no button, just your body — and park it on the plate."
-        },
-        {
-          "speaker": "npc",
-          "text": "The plate never asked for you. It asks for weight. A crate does; so does a skull, if one ever wanders onto it. Mrrow."
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -16571,6 +15223,10 @@
         {
           "speaker": "npc",
           "text": "No key exists for either. A swing gate only ever asks one thing: is the tile behind me empty? Mrrow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -16599,6 +15255,10 @@
         {
           "speaker": "npc",
           "text": "Water is the only thing in this world that puts fire OUT. Everything else you own only starts them. Mrrow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -16626,35 +15286,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Then feed the bar to the chest with X. Ore, fire, hammer, bar — there is no shortcut, and every forge in this world runs that order. Mrrow."
-        }
-      ]
-    },
-    "catBattery": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. The gate needs current and the cable at its side is DEAD. Look at it: no glow."
+          "text": "Then take the bar with B. Ore, fire, hammer, bar — there is no shortcut, and every forge in this world runs that order. Mrrow."
         },
         {
           "speaker": "npc",
-          "text": "The wheel on the river makes plenty — the belt over there runs on it. But that cable stops three tiles short, and I am a cat, not an electrician."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the BATTERY. Stand on the live cable and it drinks; you will see it fill."
-        },
-        {
-          "speaker": "npc",
-          "text": "Then face the dead cable and press X to seat it there. A battery is a piece of wire you can carry. Mrrow."
+          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -16691,12 +15327,267 @@
         {
           "speaker": "npc",
           "text": "And the box beside me buys the spare. The sign on it shows what it takes; face it with X and it pays, coins on the ground. Mrrow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The marked box takes the SEEDS you earned here. Load it, and the plane drops your coins."
+        }
+      ]
+    },
+    "astronautDone": {
+      "npcName": "ASTRONAUT",
+      "npcColorHex": "#44ccff",
+      "npcAssetKey": "npcs",
+      "npcFrame": 2,
+      "voice": {
+        "freq": 470,
+        "wave": "square"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Six lumps of ore. That is a hull patch and a landing strut, and I am not being poetic."
+        },
+        {
+          "speaker": "npc",
+          "text": "Ore, fire, hammer, bar. Your ancients ran that same order — I keep digging their slag out of this crater."
+        },
+        {
+          "speaker": "npc",
+          "text": "She will not fly on six. But she stopped being scrap the moment you set them down. Bring bars if you find them; the counter stays open."
+        },
+        {
+          "speaker": "npc",
+          "text": "And the crating from the ship went to that tower of yours. It was never going to fly. Let it burn where people can see it."
+        }
+      ],
+      "trade": {
+        "item": "iron",
+        "coinsPerUnit": 3,
+        "offer": "Iron! The lab pays 3 coins a lump. How many are you selling?",
+        "empty": "Your pack has no iron. The veined boulders — three good swings each, they never run dry.",
+        "thanks": "Prime samples. Pleasure doing science with you."
+      }
+    },
+    "blackCatDone": {
+      "npcName": "CAT",
+      "npcColorHex": "#cc99ff",
+      "npcAssetKey": "npcs",
+      "npcFrame": 0,
+      "voice": {
+        "freq": 540,
+        "wave": "triangle"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Three hearths breathing where there were three cold stones. Mrrow."
+        },
+        {
+          "speaker": "npc",
+          "text": "You did not light fires. You moved a LINE — and everything on the far side of it noticed."
+        },
+        {
+          "speaker": "npc",
+          "text": "The ones who kept those hearths are still out there, walking. They remember warmth. That is the whole problem."
+        },
+        {
+          "speaker": "npc",
+          "text": "And I sent wood to that tower of yours in the open field. A cat pays in kindling. Mrrow."
+        }
+      ]
+    },
+    "businessManDone": {
+      "npcName": "BUSINESSMAN",
+      "npcColorHex": "#ffdd44",
+      "npcAssetKey": "npcs",
+      "npcFrame": 3,
+      "voice": {
+        "freq": 250,
+        "wave": "sawtooth"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Six sticks. Delivered. On schedule. Do you know how rare that is out here?"
+        },
+        {
+          "speaker": "npc",
+          "text": "And do you know what a stick is worth in a dark this size? Everything. A bridge, a fire, a night somebody survives."
+        },
+        {
+          "speaker": "npc",
+          "text": "So I will keep buying timber and you will keep carrying flame. Different trades. Same fuel."
+        },
+        {
+          "speaker": "npc",
+          "text": "And I wrote off a bundle to that pyre of yours. Call it advertising. Everyone will see it burn."
+        }
+      ]
+    },
+    "radiationSuitDone": {
+      "npcName": "WORKMAN",
+      "npcColorHex": "#66ff44",
+      "npcAssetKey": "npcs",
+      "npcFrame": 4,
+      "voice": {
+        "freq": 340,
+        "wave": "square"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "That is the metal. It went down with the ones who came before, and you walked it back over basalt."
+        },
+        {
+          "speaker": "narrator",
+          "text": "The suit ticks twice and goes quiet."
+        },
+        {
+          "speaker": "npc",
+          "text": "They worked this valley before the dark. Every bar out there was a day somebody spent. Carry it like that."
+        },
+        {
+          "speaker": "npc",
+          "text": "I sent my scrap timber to your pyre, too. Nothing here is worth keeping dry for long."
+        }
+      ]
+    },
+    "painterDone": {
+      "npcName": "ARTIST",
+      "npcColorHex": "#ff88aa",
+      "npcAssetKey": "npcs",
+      "npcFrame": 5,
+      "voice": {
+        "freq": 620,
+        "wave": "sine"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "You GREW it. All the way down to the south beds — that is a meadow, and I did not paint it."
+        },
+        {
+          "speaker": "npc",
+          "text": "In a world the dark ate, green is not decoration. Green is an argument."
+        },
+        {
+          "speaker": "npc",
+          "text": "Come back when the light is low. That is the hour a field is worth the canvas."
+        },
+        {
+          "speaker": "npc",
+          "text": "Oh, and the cuttings went to your tower in the field. A meadow can spare a few branches for a fire that big."
+        }
+      ]
+    },
+    "salesmanDone": {
+      "npcName": "SALESMAN",
+      "npcColorHex": "#6fe6c7",
+      "npcAssetKey": "npc-salesman",
+      "voice": {
+        "freq": 410,
+        "wave": "triangle"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Stock! Actual stock! Friend, you have made me a legitimate business."
+        },
+        {
+          "speaker": "npc",
+          "text": "Stone and sticks. One stops a fire dead, one carries it for miles. I sell both and take no side."
+        },
+        {
+          "speaker": "npc",
+          "text": "The bucket stays free, obviously. Water is the only thing out here that ENDS a flame — a man should give that away, not sell it."
+        },
+        {
+          "speaker": "npc",
+          "text": "I also had a load carried to your tower. Free. Do not tell anyone — it ruins the model."
+        }
+      ]
+    },
+    "poetDone": {
+      "npcName": "POET",
+      "npcColorHex": "#9bb7ff",
+      "npcAssetKey": "npc-poet",
+      "voice": {
+        "freq": 360,
+        "wave": "sine"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Four pines down. Listen — the grove has a rest in it now."
+        },
+        {
+          "speaker": "narrator",
+          "text": "He listens to the gap for a long time."
+        },
+        {
+          "speaker": "npc",
+          "text": "And the light came in with the silence. That is the whole trick of this world, is it not: you cut, and the dark gets smaller."
+        },
+        {
+          "speaker": "npc",
+          "text": "The trunks are too good to rot here. I had them hauled to your pyre — let the grove end as a signal."
+        }
+      ]
+    },
+    "wizardDone": {
+      "npcName": "WIZARD",
+      "npcColorHex": "#a97bff",
+      "npcAssetKey": "mage",
+      "voice": {
+        "freq": 220,
+        "wave": "sine"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Eight of the road-dead put down, and six fields decided into being. You have been busy, Zero."
+        },
+        {
+          "speaker": "npc",
+          "text": "They were the crusade before you. They kept the hearths you are relighting, and they lost. Do not hate them for still walking."
+        },
+        {
+          "speaker": "npc",
+          "text": "Keep spending the coin. A world that stops being decided stops being."
+        },
+        {
+          "speaker": "npc",
+          "text": "And the old crusade left cordwood in these ruins. It is at the pyre now, where it always meant to go."
+        }
+      ]
+    },
+    "deathDone": {
+      "npcName": "DEATH",
+      "npcColorHex": "#f3f4f6",
+      "npcAssetKey": "npc-death",
+      "voice": {
+        "freq": 150,
+        "wave": "square"
+      },
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Five hearths. And that furnace smoke again — I watched it cross three fields from right here."
+        },
+        {
+          "speaker": "npc",
+          "text": "I was sent to CLOSE this place, hero. Instead I stand at the end of the road counting fires you lit."
+        },
+        {
+          "speaker": "npc",
+          "text": "Go on, then. Light another. I will keep waiting — it is still the one thing I am good at."
+        },
+        {
+          "speaker": "npc",
+          "text": "I had wood taken to your pyre as well. Do not read anything into it. I simply prefer the road lit."
         }
       ]
     }
-  },
-  "globalVariables": {
-    "peso": false,
-    "forja": false
   }
 }

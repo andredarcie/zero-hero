@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { ASSET_KEYS, SCENE_DEPTHS, UNDEAD_BORN_FRAME_KEYS } from '@/game/constants';
+import { ASSET_KEYS, UNDEAD_BORN_FRAME_KEYS } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { EnemyBase } from '@/game/entities/EnemyBase';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -23,10 +23,9 @@ const ATTACK_INTERVAL = 1200;
  * enquanto morou so no `WalkerEnemy` a caveira era a unica especie sem nada disso.
  */
 const WINDUP_MS = 500;
-// Skulls are summoned by the dark to hunt the hero, so they chase from farther than the
-// old placed undead did (the spawn ring is 4-7 tiles out; see UndeadSpawnDirector).
-// Exported because the pressure-plate lure uses the SAME radius: "what a skull can see" has to
-// be one number, or the creature would notice a plate at a distance it cannot notice a hero.
+// How far a skull sees — and, by the same number, how close the hero must come for its den to
+// open at all (see EnemySpawnerManager). Long on purpose: being born is a 3.8s telegraph, and a
+// birth nobody is close enough to read is a birth wasted.
 export const DETECTION_RANGE = 14;
 const BORN_FRAME_MS = 80;
 /**
@@ -61,20 +60,6 @@ const DUST_TINT = 0x9a9284; // dry earth being pushed up from below
 // até a borda da luz, pega fogo lá e cai queimada, uma de cada vez, à vista. Quem fica de longe
 // fica — e continua sendo um problema quando o herói sair.
 
-// A blow from the hero SNAPS the skull out of a pressure-plate fixation and keeps it out for
-// this long: whatever it wanted, the thing hitting it is the problem now. Without the window it
-// would re-fixate on the very next frame and the player's only counter-play would do nothing.
-const PLATE_BLIND_AFTER_HIT_MS = 6000;
-// The march to a plate is greedy (moveToward has no pathfinder), so a wall between skull and
-// plate is a real possibility. If it goes this long without getting any closer it gives up and
-// goes plate-blind for the same window — a balloon over a creature grinding against a rock is
-// a promise the world isn't keeping.
-const PLATE_PATIENCE_MS = 5000;
-// The balloon over the head: size in tiles, and the elevation its CENTRE is projected at. The
-// skull's own billboard is 1 tile tall, so anything under ~1.3 buries the trailing bubbles in its
-// skull and anything over ~1.6 cuts the balloon loose from the creature it belongs to.
-const THOUGHT_SIZE_TILES = 1.05;
-const THOUGHT_ELEVATION_TILES = 1.45;
 
 /**
  * O DESMONTE — em quantas peças ela se parte, e como elas voam (ver `onCrumble`).
@@ -109,14 +94,6 @@ export class UndeadEnemy extends EnemyBase {
   private dustTimer = 0;
   private bornFrame = 0;
   private bornTimer = 0;
-  // The pressure-plate fixation. EnemyManager owns the assignment (one skull per plate); the
-  // skull owns what it DOES about it: it stops hunting the hero entirely and marches there.
-  private plate?: { x: number; y: number };
-  private plateBlindMs = 0;
-  private plateStallMs = 0;
-  private plateBestDist = Infinity;
-  private thought?: Phaser.GameObjects.Container;
-  private thoughtTween?: Phaser.Tweens.Tween;
   /**
    * O OSSO NA MÃO — a arma dela (ver BoneClub). Ela telegrafava o golpe com um clarão, uma pose
    * recuada e um anel no chão, e batia com NADA: o corpo que ensinou o combate deste jogo era o
@@ -208,32 +185,6 @@ export class UndeadEnemy extends EnemyBase {
     else this.bone?.setTint(shade);
   }
 
-  /**
-   * True while this skull is available to be pulled onto a pressure plate. EnemyManager owns
-   * WHICH plate (one body per plate, or a second skull would stand beside a taken one wanting
-   * forever); the skull owns what it does about it.
-   */
-  public override get seeksPlates(): boolean {
-    return this.isAlive && !this.spawning && this.plateBlindMs <= 0;
-  }
-
-  /** The plate this skull is marching to — the thing the balloon over its head is showing. */
-  public override get plateTarget(): { x: number; y: number } | undefined {
-    return this.plate;
-  }
-
-  public override setPlateTarget(target?: { x: number; y: number }): void {
-    if (!this.plate && !target) return;
-    if (this.plate && target && this.plate.x === target.x && this.plate.y === target.y) return;
-    this.plate = target ? { x: target.x, y: target.y } : undefined;
-    this.plateStallMs = 0;
-    this.plateBestDist = target
-      ? Math.abs(target.x - this.worldX) + Math.abs(target.y - this.worldY)
-      : Infinity;
-    if (target) this.showThought();
-    else this.hideThought();
-  }
-
   // Invulnerable while clawing out of the ground.
   public override takeDamage(amount = 1): boolean {
     if (this.spawning) return false;
@@ -241,13 +192,6 @@ export class UndeadEnemy extends EnemyBase {
     // junto com a mesma regra no andarilho e na conjuracao do mago: com dano real, trancar um
     // corpo em interrupcao vira a estrategia dominante do jogo — bata a cada 260ms e nada nunca
     // chega a bater em voce. A resposta ao telegrafo volta a ser SAIR DO TILE MIRADO.
-    //
-    // O que o golpe AINDA faz e arrancar a fixacao de placa: whatever the skull wanted, the thing
-    // hitting it is the problem now. The blind window is what makes this real counter-play —
-    // without it the manager would hand the plate straight back on the next frame and the blow
-    // would mean nothing. Note this is the hero's ONLY lever on the lure.
-    this.plateBlindMs = PLATE_BLIND_AFTER_HIT_MS;
-    this.setPlateTarget(undefined);
     return super.takeDamage(amount);
   }
 
@@ -298,8 +242,6 @@ export class UndeadEnemy extends EnemyBase {
       return false;
     }
 
-    if (this.plateBlindMs > 0) this.plateBlindMs = Math.max(0, this.plateBlindMs - delta);
-
     // ATORDOADA: o golpe que ela levou ainda e dono deste corpo — ver EnemyBase.applyHitstun.
     // Fica depois da cegueira de placa de proposito: ela e relogio do MUNDO (o golpe passou), e
     // nao uma acao que a caveira toma.
@@ -313,50 +255,11 @@ export class UndeadEnemy extends EnemyBase {
     const windup = this.tickWindup(delta, playerWorldX, playerWorldY, playerHasTorch);
     if (windup !== 'idle') return windup === 'strike';
 
-    // FIXATED ON A PLATE: for as long as this lasts the hero simply stops existing. The skull
-    // does not chase him, does not back away from his torch and does not strike even from an
-    // adjacent tile — it walks to the plate and stands on it. That is the whole trade the piece
-    // offers: the plate wants a BODY, and a skull is a body that walks to it on its own, so a
-    // plate near the dark is a switch the player throws by leading a monster to it. Only a blow
-    // buys the skull's attention back (see takeDamage).
-    if (this.plate) {
-      const reached = this.worldX === this.plate.x && this.worldY === this.plate.y;
-      if (reached) {
-        // Arrived: it stands there. Not a pause before something else — the standing IS the
-        // behaviour, and a skull that wandered off the plate would make the circuit strobe.
-        this.plateStallMs = 0;
-        return false;
-      }
-      this.moveTimer += delta;
-      if (this.moveTimer >= MOVE_INTERVAL) {
-        this.moveTimer = 0;
-        this.moveToward(this.plate.x, this.plate.y, isBlocked);
-      }
-      // moveToward is greedy (there is no pathfinder in this game), so a rock or a river between
-      // skull and plate is a dead march. Measure PROGRESS, not time: as long as it keeps getting
-      // closer it can take as long as it likes; the moment it stops closing the gap the patience
-      // clock runs, and when it expires the skull gives up and goes plate-blind for a while.
-      const gap = Math.abs(this.plate.x - this.worldX) + Math.abs(this.plate.y - this.worldY);
-      if (gap < this.plateBestDist) {
-        this.plateBestDist = gap;
-        this.plateStallMs = 0;
-      } else {
-        this.plateStallMs += delta;
-        if (this.plateStallMs >= PLATE_PATIENCE_MS) {
-          this.plateBlindMs = PLATE_BLIND_AFTER_HIT_MS;
-          this.setPlateTarget(undefined);
-        }
-      }
-      return false;
-    }
-
     const dx = playerWorldX - this.worldX;
     const dy = playerWorldY - this.worldY;
     const dist = Math.abs(dx) + Math.abs(dy);
 
-    // O INSTANTE DE NOTAR (ver EnemyBase.noteSeesHero). Fica DEPOIS da fixacao de placa de
-    // proposito: enquanto marcha, o heroi nao existe para ela — e o susto de reave-lo depois de
-    // um golpe quebrar a fixacao e honesto: a pancada comprou exatamente essa atencao.
+    // O INSTANTE DE NOTAR (ver EnemyBase.noteSeesHero).
     this.noteSeesHero(dist <= DETECTION_RANGE, delta);
 
     this.moveTimer += delta;
@@ -411,67 +314,7 @@ export class UndeadEnemy extends EnemyBase {
     this.bone?.strike(dirX, dirY);
   }
 
-  /**
-   * The thought balloon: a bubble with a lit pressure plate in it, floating over the skull.
-   *
-   * This is NOT the need-item hint balloon that was torn out of the game — that one talked to
-   * the PLAYER ("go fetch the pickaxe") and handed him the answer to a lock. This one belongs to
-   * the creature: it is the same sentence as the attack wind-up's red flash, an intention shown
-   * before it is acted on, so the player can read a skull walking past him and understand it is
-   * not a bug. Different sentence, different art (thought bubbles, no speech tail), different key.
-   */
-  private showThought(): void {
-    if (this.thought?.active) return;
-    const bubble = this.scene.add.image(0, 0, ASSET_KEYS.thoughtPlate);
-    // Off-screen until the first onRendered projects it — otherwise it pops at 0,0 for a frame.
-    this.thought = this.scene.add.container(-9999, -9999, [bubble])
-      .setDepth(SCENE_DEPTHS.player + 2)
-      .setScale(0);
-    this.scene.tweens.add({
-      targets: this.thought,
-      scale: 1,
-      duration: 220,
-      ease: 'Back.easeOut',
-    });
-    // A wish is a living thing (the bombSpot ghost's grammar): the bubble breathes on its own
-    // string. Bobbing the CHILD, never the container, leaves onRendered free to own the anchor.
-    this.thoughtTween = this.scene.tweens.add({
-      targets: bubble,
-      y: -3,
-      duration: 900,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-  }
-
-  private hideThought(): void {
-    const thought = this.thought;
-    if (!thought) return;
-    this.thought = undefined;
-    this.thoughtTween?.stop();
-    this.thoughtTween = undefined;
-    if (!thought.active || !this.scene.tweens) {
-      thought.destroy();
-      return;
-    }
-    this.scene.tweens.add({
-      targets: thought,
-      scale: 0,
-      alpha: 0,
-      duration: 160,
-      ease: 'Power2.easeIn',
-      onComplete: () => thought.destroy(),
-    });
-  }
-
-  /**
-   * Ride the head. Projected at its own ELEVATION rather than offset by a fixed number of
-   * pixels: the perspective camera shrinks a tile with depth, so a pixel offset that sits on the
-   * head up close floats away from it down the screen. The knockback/step offsets are left out
-   * on purpose — the balloon hanging still while the body slides under it reads as a balloon.
-   */
-  protected override onRendered(camera: WorldCamera, tileSize: number): void {
+  protected override onRendered(_camera: WorldCamera, _tileSize: number): void {
     // O OSSO SEGUE O CORPO DESENHADO, e não o tile lógico: `render` acabou de somar o recuo do
     // golpe e o deslize do passo na posição do billboard, e é dela que a arma tem de sair. Ancorada
     // no tile lógico, ela ficaria parada no ar toda vez que a caveira fosse arremessada, e um tile
@@ -479,12 +322,6 @@ export class UndeadEnemy extends EnemyBase {
     // herói. Aqui a fonte da verdade é o próprio sprite, que já tem tudo somado.
     this.bone?.follow(this.sprite.x, this.sprite.y);
 
-    const thought = this.thought;
-    if (!thought?.active) return;
-    const anchor = camera.tileToScreen(this.worldX, this.worldY, tileSize, THOUGHT_ELEVATION_TILES);
-    thought.setPosition(anchor.x, anchor.y);
-    const size = tileSize * THOUGHT_SIZE_TILES;
-    (thought.list[0] as Phaser.GameObjects.Image).setDisplaySize(size, size);
   }
 
   // Each widening step SNAPS the fissure to its next size/brightness — a discrete pop, so the
@@ -539,24 +376,10 @@ export class UndeadEnemy extends EnemyBase {
 
   public override despawn(): void {
     this.fadeOutCrack();
-    this.hideThought();
     // O escuro reclama os seus INTEIROS — sem desmonte e sem peças: aqui não houve briga nenhuma,
     // e o osso derrete junto com a mão que o segurava.
     this.destroyBone();
     super.despawn();
-  }
-
-  // A skull that dies mid-march must not leave its wish floating over the empty tile.
-  /**
-   * A OSSADA nao e mais responsabilidade dela: quem enterra e o EnemyManager, para TODO corpo
-   * morto (ver EnemyBase.corpseMark). A caveira tinha um caminho proprio — um callback recebido no
-   * construtor — de quando ela era a unica especie que deixava marca; dois caminhos para a mesma
-   * coisa e como um deles envelhece errado. A distincao que aquele comentario guardava continua
-   * valendo e agora vale para todos: `die()` marca, `despawn()` nao — quando o heroi alcanca uma
-   * fogueira o escuro reclama os proprios de volta, e ali nao houve briga nenhuma pra registrar.
-   */
-  protected override onDeath(): void {
-    this.hideThought();
   }
 
   /**
@@ -678,10 +501,6 @@ export class UndeadEnemy extends EnemyBase {
       this.crack.destroy();
       this.crack = undefined;
     }
-    this.thoughtTween?.stop();
-    this.thoughtTween = undefined;
-    this.thought?.destroy();
-    this.thought = undefined;
     super.destroy();
   }
 }

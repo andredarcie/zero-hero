@@ -3,14 +3,13 @@ import Phaser from 'phaser';
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { setActiveLevel } from '@/game/runtime/activeLevel';
-import { clearDungeonTrip } from '@/game/runtime/dungeonTrip';
-import { endExplorerMode, startExplorerRun } from '@/game/explorer/explorerRun';
+import { setUnderground } from '@/game/runtime/underworld';
 import { t, tWords } from '@/game/i18n/i18n';
 
 // The game's start screen, and now the ONLY screen between the loader and the world: the title,
 // the credit, and one button.
 //
-//   • Build a world → the new chunk-builder run, immediately.
+//   • Play the authored open world, immediately.
 //
 // The former authored Zelda-like overworld is archived under backup/ and has no door here.
 // Puzzle levels remain directly addressable through `?level=N` for development.
@@ -46,7 +45,6 @@ export class TitleScene extends Phaser.Scene {
     this.selected = 0;
     this.cameras.main.setBackgroundColor('#08080d');
     this.cameras.main.fadeIn(500, 0, 0, 0);
-    endExplorerMode();
 
     // Decode the SFX + loops and queue the menu ambience. It is silent until the first gesture
     // lifts the autoplay lock (unlockAudio, below) — this screen is where that gesture lands.
@@ -71,7 +69,7 @@ export class TitleScene extends Phaser.Scene {
       .setDepth(2);
 
     this.buttons = [
-      this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startBuilder()),
+      this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure()),
     ];
     this.applySelection();
 
@@ -166,10 +164,9 @@ export class TitleScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, go);
   }
 
-  private startBuilder(): void {
+  private startAdventure(): void {
     setActiveLevel(null);
-    clearDungeonTrip();
-    startExplorerRun();
+    setUnderground(false);
     this.fadeThen(() => this.scene.start('game'));
   }
 

@@ -2,7 +2,9 @@ import type Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t } from '@/game/i18n/i18n';
-import { getDofIntensity, setDofIntensity } from '@/game/runtime/graphicsSettings';
+import {
+  getDaylight, getDofIntensity, setDaylight, setDofIntensity,
+} from '@/game/runtime/graphicsSettings';
 import { SubScreenPanel, type SubScreenView } from '@/game/runtime/SubScreen';
 
 // The pause screen is plain DOM layered over the Phaser canvas — the same approach as
@@ -152,6 +154,7 @@ export class PauseMenu {
   private readonly musicLabel: HTMLSpanElement;
   private readonly sfxLabel: HTMLSpanElement;
   private readonly dofLabel: HTMLSpanElement;
+  private readonly daylightBtn: HTMLDivElement;
   private readonly subScreen?: SubScreenPanel;
   private readonly fullscreenBtn?: HTMLDivElement;
   private readonly levelListBtn?: HTMLDivElement;
@@ -205,6 +208,15 @@ export class PauseMenu {
     // edge gives some players eye strain — so it's an accessibility slider (0 = a crisp diorama).
     // The renderer reads it every frame, so it takes hold the moment the game resumes.
     this.dofLabel = this.sliderRow(panel, getDofIntensity(), (v) => setDofIntensity(v));
+
+    // A HORA DO DIA. Botão e não deslizador porque não há meio-termo: o céu é uma chave que troca
+    // vinte knobs de uma vez (render3d/skyPreset.ts). Como o fullscreen, o rótulo diz o que o toque
+    // FAZ, não onde se está. O renderizador lê o ajuste todo frame, então ele pega no instante em
+    // que o jogo volta a andar — a cena está pausada aqui dentro, e o mundo congelado com ela.
+    this.daylightBtn = this.button(panel, () => {
+      setDaylight(getDaylight() >= 0.5 ? 0 : 1);
+      this.refreshTexts();
+    });
 
     // (Havia um par de botoes de idioma aqui. O jogo e so em ingles agora — nao ha catalogo pra
     // trocar, e um seletor de uma opcao so e mobilia.)
@@ -315,6 +327,7 @@ export class PauseMenu {
     this.musicLabel.textContent = t('pause.music');
     this.sfxLabel.textContent = t('pause.sfx');
     this.dofLabel.textContent = t('pause.dof');
+    this.daylightBtn.textContent = getDaylight() >= 0.5 ? t('pause.nightfall') : t('pause.daylight');
     if (this.fullscreenBtn) {
       this.fullscreenBtn.textContent = document.fullscreenElement
         ? t('pause.fullscreenExit')
