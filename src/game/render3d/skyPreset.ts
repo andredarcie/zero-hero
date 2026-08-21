@@ -159,6 +159,11 @@ export const DAY_SKY: Partial<World3DParams> = {
   castShadowRadius: 4.5,
   godRays: 0.1,
   heroLight: 0,
+  // A VISTA some junto, e pelo mesmo motivo dos vaga-lumes: ela é um desenho do ESCURO. Ao
+  // meio-dia não há grave nenhum para ela abrir — o `lift` do dia já levantou o quadro inteiro —,
+  // e um segundo `pow` por cima só faria uma mancha lavada seguindo o herói.
+  heroSight: 0,
+  heroSightGlow: 0,
 
   // O vaga-lume é o caso limpo do parágrafo acima: ao meio-dia ele não fica mais fraco, ele não
   // acontece. A névoa fica, fraca — e vira POEIRA (a cor dela troca em updateParticles).

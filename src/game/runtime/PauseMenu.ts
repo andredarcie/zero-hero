@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t } from '@/game/i18n/i18n';
 import {
-  getDaylight, getDofIntensity, setDaylight, setDofIntensity,
+  getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
 } from '@/game/runtime/graphicsSettings';
 import { SubScreenPanel, type SubScreenView } from '@/game/runtime/SubScreen';
 
@@ -155,6 +155,7 @@ export class PauseMenu {
   private readonly sfxLabel: HTMLSpanElement;
   private readonly dofLabel: HTMLSpanElement;
   private readonly daylightBtn: HTMLDivElement;
+  private readonly sharpBtn: HTMLDivElement;
   private readonly subScreen?: SubScreenPanel;
   private readonly fullscreenBtn?: HTMLDivElement;
   private readonly levelListBtn?: HTMLDivElement;
@@ -215,6 +216,16 @@ export class PauseMenu {
     // que o jogo volta a andar — a cena está pausada aqui dentro, e o mundo congelado com ela.
     this.daylightBtn = this.button(panel, () => {
       setDaylight(getDaylight() >= 0.5 ? 0 : 1);
+      this.refreshTexts();
+    });
+
+    // A NITIDEZ. Chave e não deslizador pelo mesmo motivo da hora do dia: só há dois estados que
+    // valem a pena (a tela inteira, ou metade dela). Ela existe porque o jogo desenha em pixel de
+    // APARELHO desde que o serrilhado do celular foi consertado — e isso é caro exatamente onde o
+    // conserto mais importa. Quem decide se o aparelho aguenta é quem está segurando o aparelho:
+    // um detector de "é celular" já tentou decidir por todo mundo e foi ele que embaçou a tela.
+    this.sharpBtn = this.button(panel, () => {
+      setThriftyPixels(!isThriftyPixels());
       this.refreshTexts();
     });
 
@@ -328,6 +339,8 @@ export class PauseMenu {
     this.sfxLabel.textContent = t('pause.sfx');
     this.dofLabel.textContent = t('pause.dof');
     this.daylightBtn.textContent = getDaylight() >= 0.5 ? t('pause.nightfall') : t('pause.daylight');
+    // O rótulo diz o que o toque FAZ, como o do fullscreen e o do dia — nunca onde se está.
+    this.sharpBtn.textContent = isThriftyPixels() ? t('pause.sharpOn') : t('pause.sharpOff');
     if (this.fullscreenBtn) {
       this.fullscreenBtn.textContent = document.fullscreenElement
         ? t('pause.fullscreenExit')

@@ -9,7 +9,7 @@ import {
   SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import {
-  getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds,
+  getBridgeSpots, getChunkTerrain, getLavaTiles, getStairs, getWaterTiles, getWorldBounds, isInsideWorld,
 } from '@/game/world/WorldData';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
@@ -19,7 +19,10 @@ import {
   makeCastMaskMaterial, makeCastMesh, SolidCastField, WIDTH_FACTOR as CAST_WIDTH_FACTOR,
 } from './CastShadow3D';
 import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from './groundShadow';
-import { getDaylight, getDofIntensity, setDaylight } from '@/game/runtime/graphicsSettings';
+import {
+  getDaylight, getDofIntensity, getPixelScale, setDaylight,
+} from '@/game/runtime/graphicsSettings';
+import { isUnderground } from '@/game/runtime/underworld';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, windUniform,
   lightWobbleUniform, patchPixelMaterial, seaFlowUniform, SHADOW_MASK_GLSL, shadowMaskOnUniform,
@@ -98,6 +101,9 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 // upright pine quad per tile (plus its blob and its cast shadow) and open water carries none.
 // That is the whole trade: the border got cheaper by becoming flat.
 const VOID_MARGIN_CHUNKS = 1;
+// A altura da CORTINA de névoa. As árvores medem 1; 1.3 cobre a copa com folga, para nenhuma
+// ponta de pinheiro furar a névoa por cima.
+const VOID_MIST_HEIGHT = 1.3;
 
 /**
  * O BAQUE DIRECIONAL (ver `shake`): quanto do impacto é uma INCLINAÇÃO na direção do golpe e
@@ -196,6 +202,21 @@ export const WATER_DEPTH_TILES = 0.42;
 // in a low basin, not a deep channel. Same treatment (dropped bed + dark charred banks), less
 // deep. LavaObject sets its surface just above the bed at this depth.
 export const LAVA_DEPTH_TILES = 0.16;
+/**
+ * O POÇO DA ESCADA: um buraco DE VERDADE no chão da superfície, pelo mesmo caminho do rio — o
+ * quad de chão daquele tile desce, e paredes fecham o vão onde ele encontra a terra.
+ *
+ * Ele existe porque a lição nº 1 da `StairsObject` ("nada abaixo de y=0 existe") sempre teve uma
+ * exceção e ninguém a usou: o chão do mundo é opaco em y=0 **até alguém afundá-lo**, e o rio faz
+ * exatamente isso desde o primeiro dia. Enquanto a escada só DESENHAVA a profundidade (pisadas que
+ * encolhem sobre uma laje preta), o rio ao lado dela tinha um leito de verdade.
+ *
+ * Mais fundo que o rio (0.42) porque é outra coisa: um canal é raso e se atravessa, um poço de
+ * escada engole. E o piso NÃO é livre: ele tem de ficar abaixo de `STAIRS_DROP_TILES` (0,55), que
+ * é o quanto a caminhada afunda o corpo do herói. Com um poço mais raso que a queda, ele termina
+ * a descida ATRAVESSANDO o fundo — e o fundo é a única coisa que ainda o esconde.
+ */
+export const STAIRS_PIT_DEPTH = 0.62;
 // The rustleable ground decor (low grass) — same frame the 2D board renderer tracked.
 const LOW_GRASS_TILE = 0;
 // Golden-amber firelight (~the 2D warm pool's tint). Keeping the green channel high
@@ -214,6 +235,24 @@ const FIRE_HOT = new THREE.Color(1.0, 0.87, 0.62);
 const fireRampCoreUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#ffe6a2') };
 const fireRampMidUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#f9a04e') };
 const fireRampRimUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#a34e2e') };
+/**
+ * A rampa da VISTA DO HERÓI — a mesma pintura de bandas, na cor OPOSTA à do fogo.
+ *
+ * Fogo é ouro; a vista é o cinza-lunar da própria noite (a família do `moonColor`), e ela tem de
+ * ser assim por duas razões: uma poça quente em volta do herói leria como tocha acesa — ele
+ * pareceria carregar fogo que não tem — e roubaria da fogueira a única cor quente do mundo, que é
+ * o contraste em que este jogo inteiro se apoia. Fria, ela lê como o escuro CEDENDO, não como
+ * chama. Cravada no arquivo porque ela só existe de noite (`heroSightGlow` = 0 no DAY_SKY).
+ */
+const SIGHT_RAMP_CORE: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#cdd6e6') };
+const SIGHT_RAMP_MID: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#8f9cba') };
+const SIGHT_RAMP_RIM: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#4a5a7d') };
+/**
+ * A vista NÃO TREME. O `uLightWobble` é o campo de ruído que amassa os anéis de uma poça de fogo —
+ * é chama imperfeita, e é a assinatura do fogo. Emprestá-lo para a vista faria o herói parecer
+ * carregar uma tocha invisível; ela é firme porque é o olho dele, não uma chama.
+ */
+const zeroWobbleUniform: THREE.IUniform = { value: 0 };
 // The pool's own paint resolution, in texels per tile — COARSER than the art (8 = one
 // light block per 2×2 art pixels, cleanly aligned to the art grid). This is A Short
 // Hike's low-res trick applied to the light alone: the smooth authored gradient
@@ -223,14 +262,16 @@ const fireGlowResUniform: THREE.IUniform = { value: 8 };
 
 // Ambient particle counts (additive Points — brasas rising off the fire, dust in the air,
 // fireflies drifting in lit clearings, low mist wisps veiling the dark ground).
-/** A phone or tablet: a touch-first device, where fill rate is the scarce resource. */
-const isHandheld = (): boolean => {
-  try {
-    return window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 1100;
-  } catch {
-    return false;
-  }
-};
+/**
+ * O maior tamanho que um pixel desenhado pode ter, em pixels de aparelho, antes de o renderizador
+ * dobrar a divisão (ver `renderScale`).
+ *
+ * Ele não é um teto de `devicePixelRatio`: é o limite de QUALIDADE que decide o divisor inteiro.
+ * Num telefone de 3× ele manda desenhar a 1,5× a tela CSS — cada pixel vira um bloco de 2×2 no
+ * painel, uniforme. Baixá-lo para 1 pediria a resolução nativa do aparelho (2,25× o preenchimento);
+ * subi-lo para 3 devolveria blocos de 3×3, que já é o mundo quadriculado de antes.
+ */
+const MAX_DEVICE_PIXEL_RATIO = 2;
 
 // Baked AO: how dark a ground corner goes when all three tiles touching it are standing solids.
 const AO_MAX = 0.5;
@@ -583,7 +624,38 @@ export interface World3DParams {
   shadowMask: number;
   /** Mask texels per tile (the mask's own pixel-art grain). */
   shadowMaskRes: number;
+  /**
+   * A NÉVOA NEGRA do fora do mundo, em TILES: quantos ela leva para fechar em preto a partir da
+   * fronteira autorada (0 = sem névoa, e a mata de fora fica exposta como qualquer outra).
+   *
+   * É knob e não constante porque é a única coisa que decide quanto de "mundo lá fora" o jogador
+   * enxerga — subir esconde a mata e o mapa parece maior; baixar mostra a floresta e o mapa ganha
+   * horizonte. Decisão de olho, e olho não recompila.
+   */
+  voidMist: number;
   heroLight: number;
+  /**
+   * A VISTA DO HERÓI: quanto o quadro ABRE em volta dele (0 = nada, e a noite é a de antes).
+   *
+   * Não é uma lâmpada, é uma CURVA — e a razão está medida no doc de `setHeroSight`: à noite o
+   * `lightCap` já está gasto pela lua, então nenhuma luz THREE nova pode clarear o chão nem um
+   * por cento. Quem levanta um quadro neste jogo é o `pow` (a mesma lei do `lift`, ver
+   * skyPreset.ts), e aqui ele é aplicado só onde ele está.
+   */
+  heroSight: number;
+  /**
+   * O DISCO da vista: a poça fria desenhada no chão, na mesma opacidade em que a fogueira mede a
+   * dela (`fireGlowStrength`). É ele que dá SILHUETA à vista — a curva sozinha clareia uma região
+   * sem borda nem centro, e isso a olho é "a tela está mais clara", não "o herói tem luz".
+   */
+  heroSightGlow: number;
+  /** O raio da vista, em TILES de chão (o círculo vira elipse na tela, pela inclinação da câmera). */
+  heroSightTiles: number;
+  /**
+   * Quantos tiles a vista pende PARA ONDE ELE OLHA. É o que a faz ler como visão e não como
+   * auréola: virar-se varre o campo claro, então o herói enxerga à frente, não em volta.
+   */
+  heroSightLean: number;
   fogDensity: number;
   /** Cool directional moonlight that fills the night (0 = off). */
   moon: number;
@@ -691,12 +763,17 @@ export class World3D {
     camHeight: 6.048,
     camBack: 5.472,
     fov: 38,
-    // The post chain (bloom at half res + the DoF/finish pass) roughly doubles the fill rate, and
-    // fill is exactly what a phone GPU is short of. So a phone renders at half resolution and the
-    // browser scales the frame back up with NEAREST — which the pixel-art look wants anyway, and
-    // which costs a quarter of the fragments. Desktop keeps 1:1 — a half-res DESKTOP frame made
-    // the whole game read jagged (user feedback: the ASH treatment belongs to the firelight only).
-    pixelScale: isHandheld() ? 2 : 1,
+    // UM PARA TODOS. O celular desenhava na METADE (`isHandheld() ? 2 : 1`) para economizar
+    // preenchimento — e essa metade se somava ao `devicePixelRatio` que a conta do buffer ignorava,
+    // dando um quadro a 1/6 da tela: o serrilhado que o autor viu. O reescalonamento invisível foi
+    // consertado em `renderSize`, e este continuar em 2 seria manter METADE do defeito só no
+    // aparelho onde ele mais aparece.
+    //
+    // O preço é real e é do telefone: com o teto de DPR em 2, um aparelho de 3× passa a desenhar
+    // ~16× os fragmentos de antes. Se algum engasgar, o botão de NITIDEZ do menu de pausa devolve
+    // o modo econômico — e `hd3d.pixelScale` faz o mesmo pelo console, ao vivo. O valor de fábrica
+    // vem do ajuste do jogador (`getPixelScale`), não de um palpite sobre o aparelho.
+    pixelScale: getPixelScale(),
     // A tile floor in perspective cannot land its 16px art on whole screen pixels, and NEAREST
     // answers that by breaking every straight run of texels into a ragged staircase that crawls
     // as the camera moves. This anti-aliases the texel seams analytically — same single texture
@@ -777,9 +854,27 @@ export class World3D {
     // against the reference shots (plano.md fase 3's parity gate).
     shadowMask: 0,
     shadowMaskRes: 12,
+    // 4 tiles, medido no jogo e não no papel: da borda do mundo até o topo da tela cabem ~5 tiles
+    // de fora, então uma rampa de 6 mal começava (a mata saa como floresta normal) e uma de 1
+    // cortava a preto na primeira fileira. Em 4 aparecem duas ou três fileiras de mata e a névoa
+    // fecha antes da borda da tela — vê-se floresta, e vê-se ela ser engolida.
+    voidMist: 4,
     // The hero's neutral self-glow is dim so that near a fire he takes the fire's
     // warm colour, and his white pixels (horns/eyes) don't glare under a bright glow.
     heroLight: 28,
+    // A VISTA. 0.30 de força = expoente 0.70 no coração dela: o chão em volta do herói sobe ~50%
+    // nos graves e o longe fica exatamente onde estava. Ela PODE ser forte porque é LOCAL — o que
+    // se enxerga é a diferença entre o pé dele e o escuro em volta, nunca o número. (A v1 ficou em
+    // 0.14 porque a elipse cobria a tela inteira, e força global nenhuma se vê.)
+    heroSight: 0.3,
+    // O disco: 0.24 contra os 0.6 de uma fogueira. Menos da metade, e frio — é para se ver onde ele
+    // pisa, nunca para competir com a poça quente que é a recompensa de acender o mundo.
+    heroSightGlow: 0.24,
+    // 2,6 tiles: ~um quinto da largura da tela, contra os 15 do halo de uma fogueira — a vista
+    // mostra onde ele PISA, a fogueira é que abre a região. Subir isto é o caminho mais curto de
+    // volta ao defeito da v1: uma elipse que passa do quadro não é vista, é `lift`.
+    heroSightTiles: 2.6,
+    heroSightLean: 0.9,
     fogDensity: 0.02,
     // Raised with the ambient (see above) — a fuller moon for a brighter night.
     moon: 3.6,
@@ -838,6 +933,12 @@ export class World3D {
     x: 0, y: 0, strength: 0, level: 1,
     seed: Math.random() * Math.PI * 2, noise: 0, flare: 0, flareTarget: 0, flareTimer: 0,
   };
+  // A VISTA do herói: onde ele está, para onde olha, e quanto dela existe agora (a cut-scene a
+  // apaga). Escrita por setHeroSight; projetada na tela e entregue ao post em updateHeroSight —
+  // pela mesma razão do torch, a câmera deste frame só está pronta dentro do render.
+  private readonly sight = { x: 0, y: 0, fx: 0, fy: 1, strength: 0 };
+  /** O disco visível da vista: a poça fria no chão. Nasce no construtor, com as luzes. */
+  private sightGlow?: THREE.Mesh;
 
   // ── HD-2D post chain ──
   private composer!: EffectComposer;
@@ -891,6 +992,8 @@ export class World3D {
   private viewOffsetX = 0;
   private viewOffsetY = 0;
   private appliedPixelScale = 0;
+  /** A escala com que o buffer foi assado — o `uBlur` se mede nela (ver syncFinishUniforms). */
+  private appliedRenderScale = 1;
 
   private readonly solidTiles: SolidTileEntry[] = [];
   // Exposed solid tiles only (few solid neighbours — clearing edges / lone trees).
@@ -947,12 +1050,17 @@ export class World3D {
     sea: THREE.MeshLambertMaterial;
     bank: THREE.MeshLambertMaterial;
     lavaBank: THREE.MeshLambertMaterial;
+    /** As paredes do POÇO da escada, e o fundo dele: preto que não recebe luz (ver o bake). */
+    pit: THREE.MeshBasicMaterial;
+    pitFloor: THREE.MeshBasicMaterial;
     decor: THREE.MeshLambertMaterial;
     solid: THREE.MeshLambertMaterial;
     /** A MONTANHA em cubo: o mesmo atlas, com o volume nas cores de vértice (ROCK_CUBE_SHADE). */
     rock: THREE.MeshLambertMaterial;
     /** O topo do cubo de parede de dungeon: preto puro, sem luz. */
     wallTop: THREE.MeshBasicMaterial;
+    /** A NÉVOA NEGRA que engole a mata de fora do mapa (ver makeVoidMistMaterial). */
+    voidMist: THREE.MeshBasicMaterial;
     blob: THREE.Material;
   };
   /**
@@ -1099,6 +1207,9 @@ export class World3D {
     this.createFireLights();
     this.ensureHeroLight();
     this.ensureTorchLight();
+    // O disco da vista nasce aqui pelo mesmo motivo que a tocha: ele usa o programa do
+    // `fireGlow`, e um material novo no meio do jogo é um link de shader no frame errado.
+    this.ensureSightGlow();
 
     this.buildTerrain();
     this.initShadowMask();
@@ -1111,11 +1222,47 @@ export class World3D {
 
   // ── HD-2D post-processing chain ───────────────────────────────────────────────
 
-  private renderSize(): { w: number; h: number } {
+  /**
+   * O TAMANHO DO BUFFER, e a conta que estava errada no celular.
+   *
+   * Ela media a tela em pixels CSS (`innerWidth`) com `setPixelRatio(1)`, ou seja: fingia que um
+   * pixel CSS é um pixel de aparelho. Num monitor comum é — e por isso o desktop sempre saiu
+   * nítido. Num telefone um pixel CSS são TRÊS pixels de aparelho, então o quadro já saía esticado
+   * 3× antes de qualquer `pixelScale`; com o `pixelScale: 2` que o celular usava por cima disso, o
+   * jogo era desenhado a 1/6 da resolução da tela e ampliado de volta. É o serrilhado que o autor
+   * viu, e ele não era o pixel art: era um segundo reescalonamento, invisível no código.
+   *
+   * Agora `renderScale` é medido em PIXEL DE APARELHO — `pixelScale` finalmente quer dizer o que o
+   * nome diz (quantos pixels de tela um pixel desenhado ocupa) e a mesma imagem sai do mesmo jeito
+   * no monitor e no telefone.
+   *
+   * O TETO de 2 no `devicePixelRatio` é a mesma prudência do `prototype3d/main.ts` deste repositório
+   * e dos exemplos do three: acima de 2 a diferença é invisível a olho e a conta de preenchimento
+   * dobra de novo — e preenchimento é justamente o que falta numa GPU de telefone.
+   */
+  private renderScale(): number {
     const ps = Math.max(1, Math.round(this.params.pixelScale));
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    // `blocks` = quantos PIXELS DE APARELHO um pixel desenhado ocupa, e ele é INTEIRO. Essa é a
+    // outra metade do conserto, e ela é de graça: com um fator quebrado (1,5, que é o que um teto
+    // de 2 dá num telefone de 3×) o navegador amplia uns pixels para 1 e outros para 2, e o que se
+    // vê é uma grade de blocos de tamanhos diferentes — serrilhado irregular, justamente o que
+    // `image-rendering: pixelated` deveria evitar. Em fator inteiro todo bloco é igual.
+    //
+    // No telefone de 3× ele também sai MAIS BARATO que o teto de 2 (buffer 1,5× a tela CSS contra
+    // 2×), então a versão certa é a mais rápida das duas.
+    // O `- 1e-6` não é superstição: o navegador devolve `devicePixelRatio` = 2.0000000298 numa
+    // tela 2×, e um `ceil` cru sobre isso dá 2 em vez de 1 — a retina passava a desenhar na
+    // METADE por causa do último bit de um float.
+    const blocks = Math.max(1, Math.ceil(dpr / MAX_DEVICE_PIXEL_RATIO - 1e-6)) * ps;
+    return dpr / blocks;
+  }
+
+  private renderSize(): { w: number; h: number } {
+    const scale = this.renderScale();
     return {
-      w: Math.max(1, Math.floor(window.innerWidth / ps)),
-      h: Math.max(1, Math.floor(window.innerHeight / ps)),
+      w: Math.max(1, Math.round(window.innerWidth * scale)),
+      h: Math.max(1, Math.round(window.innerHeight * scale)),
     };
   }
 
@@ -1152,8 +1299,11 @@ export class World3D {
     const u = this.finishPass.uniforms;
     u.uFocusY.value = this.params.focusY;
     u.uBand.value = this.params.focusBand;
-    // The player's accessibility setting scales the authored blur (0 = a crisp diorama).
-    u.uBlur.value = this.params.dofBlur * getDofIntensity();
+    // O borrão é medido em PIXELS DO BUFFER, então ele tem de acompanhar a escala em que o buffer
+    // foi assado — senão a mesma cena, desenhada com o dobro da resolução, sai com metade do
+    // tilt-shift. O número autorado continua sendo "quantos pixels de TELA", que é como o olho o
+    // escolheu. (E a preferência de acessibilidade do jogador segue por cima: 0 = diorama nítido.)
+    u.uBlur.value = this.params.dofBlur * getDofIntensity() * this.appliedRenderScale;
     u.uNear.value = this.params.dofNear;
     u.uVignette.value = this.params.vignette;
     u.uLift.value = Math.max(0.05, this.params.lift);
@@ -1296,12 +1446,13 @@ export class World3D {
     for (let i = 0; i < MIST_COUNT; i++) this.mistSeed[i] = Math.random() * Math.PI * 2;
   }
 
-  /** Resize the low-res backing store to the current window / pixelScale. */
+  /** Resize the backing store to the current window × renderScale (ver renderSize). */
   private applyPixelScale(): void {
-    const ps = Math.max(1, Math.round(this.params.pixelScale));
-    this.appliedPixelScale = ps;
-    const w = Math.max(1, Math.floor(window.innerWidth / ps));
-    const h = Math.max(1, Math.floor(window.innerHeight / ps));
+    this.appliedPixelScale = Math.max(1, Math.round(this.params.pixelScale));
+    this.appliedRenderScale = this.renderScale();
+    // A MESMA conta do `renderSize`, e não uma segunda cópia dela: enquanto eram duas, mexer numa
+    // deixava a outra desenhando com o tamanho antigo até o primeiro resize.
+    const { w, h } = this.renderSize();
     this.renderer.setSize(w, h, false); // CSS size stays 100% — the browser does the NEAREST upscale
     // The post chain's offscreen targets must track the render resolution too.
     if (this.composer) {
@@ -1361,6 +1512,12 @@ export class World3D {
     );
     // Lava tiles sink into their own (shallower) basin, the same way water tiles do.
     const lavaSet = new Set<string>(getLavaTiles().map((p) => `${p.worldX},${p.worldY}`));
+    // O POÇO DA ESCADA — só na SUPERFÍCIE. Lá embaixo a escada é uma MASSA que sai do piso e sobe
+    // (ver StairsObject): furar o chão da caverna abriria um buraco debaixo da própria escadaria.
+    const pitSet = isUnderground()
+      ? new Set<string>()
+      : new Set<string>(getStairs().map((p) => `${p.worldX},${p.worldY}`));
+    const pitTiles: Array<{ x: number; z: number; frame: number }> = [];
     // The SEA (the world's border, and any ocean painted inside it) is a ground FRAME, not a
     // prop — there is no WaterObject for ~11k tiles. It still has to read as water rather than
     // as blue floor, so it borrows the river's whole treatment: the same sunken bed and the
@@ -1375,13 +1532,18 @@ export class World3D {
     const lavaBedTiles: Array<{ x: number; z: number; frame: number }> = [];
     const decorTiles: Array<{ x: number; z: number; frame: number }> = [];
 
+    // Os tiles FORA do mundo autorado, para a névoa negra saber onde deitar (ver buildVoidMist).
+    // Só o de cima tem névoa: embaixo o "escuro gigante" é o teto preto do próprio muro.
+    const voidTiles: Array<{ x: number; z: number }> = [];
     for (let cy = b.minCy - VOID_MARGIN_CHUNKS; cy <= b.maxCy + VOID_MARGIN_CHUNKS; cy++) {
       for (let cx = b.minCx - VOID_MARGIN_CHUNKS; cx <= b.maxCx + VOID_MARGIN_CHUNKS; cx++) {
         const chunk = getChunkTerrain(cx, cy); // void filler outside the authored world
+        const outside = !isInsideWorld(cx, cy);
         for (let row = 0; row < CHUNK_ROWS; row++) {
           for (let col = 0; col < CHUNK_COLUMNS; col++) {
             const wx = cx * CHUNK_COLUMNS + col;
             const wy = cy * CHUNK_ROWS + row;
+            if (outside) voidTiles.push({ x: wx, z: wy });
             const tile = { x: wx, z: wy, frame: chunk.ground[row][col] };
             const tk = `${wx},${wy}`;
             if (tile.frame === SEA_TILE_FRAME) {
@@ -1395,6 +1557,7 @@ export class World3D {
             }
             else if (waterSet.has(tk)) bedTiles.push(tile);
             else if (lavaSet.has(tk)) lavaBedTiles.push(tile);
+            else if (pitSet.has(tk)) pitTiles.push(tile);
             else groundTiles.push(tile);
             const upper = chunk.upper[row][col];
             if (upper === null) continue;
@@ -1434,6 +1597,18 @@ export class World3D {
       patchPixelMaterial(bank, { quantize: true });
       const lavaBank = new THREE.MeshLambertMaterial({ color: 0x1a1008, side: THREE.DoubleSide });
       patchPixelMaterial(lavaBank, { quantize: true });
+      // AS PAREDES E O FUNDO DO POÇO DA ESCADA. `MeshBasicMaterial` de propósito, e não Lambert:
+      // um buraco não é uma superfície, então ele não recebe luz nenhuma — nem a do dia, nem a da
+      // tocha na mão do herói (ver o doc de STAIRS_PIT_DEPTH). A parede é um fio mais clara que o
+      // fundo, só para a beira do poço ter uma aresta em vez de virar uma mancha só.
+      // PRETO PURO, e o zero e o argumento. Um quase-preto (0x040308) sobreviveria a luz — `Basic`
+      // nao recebe nenhuma — mas NAO sobrevive ao POST: a vista do heroi aplica um `pow` local nos
+      // graves, e 0.0006 elevado a 0.7 vira 0.0075, doze vezes mais claro. O buraco ficava MARROM
+      // quando o heroi chegava perto, que e a licao 3 da StairsObject acontecendo de novo por uma
+      // porta nova. Zero e ponto fixo de tudo o que a cadeia faz: `pow(0,k)=0`, `0*grade=0`. E o
+      // mesmo motivo pelo qual o teto do muro de dungeon e preto puro.
+      const pit = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+      const pitFloor = new THREE.MeshBasicMaterial({ color: 0x000000 });
       // depthWrite MUST stay false: this flat decor sits at y=0.02, just above the
       // ground-level cast shadows/blobs. If it wrote depth it would occlude those
       // shadows in tile-shaped patches wherever decor grows (dense around fires) —
@@ -1468,7 +1643,8 @@ export class World3D {
       // continua preto) e Basic e o caminho mais curto ate esse resultado.
       const wallTop = new THREE.MeshBasicMaterial({ color: 0x000000 });
       this.terrainMats = {
-        ground, sea, bank, lavaBank, decor, solid, rock, wallTop,
+        ground, sea, bank, lavaBank, pit, pitFloor, decor, solid, rock, wallTop,
+        voidMist: makeVoidMistMaterial(),
         blob: makeShadowBlobMaterial(0.34),
       };
     }
@@ -1522,6 +1698,23 @@ export class World3D {
       ));
     }
 
+    // O POÇO DA ESCADA: o mesmo leito afundado + paredes do rio, com UMA diferença que é a peça
+    // toda — ele não é iluminado. Um canal de rio é uma superfície ao ar livre e recebe a luz do
+    // mundo; um poço é a AUSÊNCIA de chão, e a lição nº 3 da StairsObject já tinha medido o que
+    // acontece quando se tenta pintar isso com um material iluminado: a caixa escura soma a
+    // ambiente quente, vira lama, e CLAREIA junto com o dia e com a tocha na mão — o oposto de um
+    // buraco. `pit` é `MeshBasicMaterial`, então o fundo e as paredes são o mesmo preto ao
+    // meio-dia, à meia-noite e sob a tocha. É esta a sombra escura que mora dentro do buraco.
+    if (pitTiles.length > 0) {
+      this.addTerrainMesh(new THREE.Mesh(
+        buildFlatTileGeometry(pitTiles, -STAIRS_PIT_DEPTH, solidSet), mats.pitFloor,
+      ));
+      this.addTerrainMesh(new THREE.Mesh(
+        buildBankGeometry(pitSet, pitTiles, STAIRS_PIT_DEPTH), mats.pit,
+      ));
+      for (const t of pitTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
+    }
+
     this.decorGeo = buildFlatTileGeometry(
       decorTiles, 0.02, solidSet, undefined, (frame) => (WIND_STIR_FRAMES.has(frame) ? 1 : 0),
     );
@@ -1550,6 +1743,13 @@ export class World3D {
 
     // All standing trees/walls merged into ONE upright mesh (one draw call, one shadow).
     // Lit like the ground at their feet — same treatment the dynamic billboards get.
+    // TODA árvore fica no centro exato do seu tile — a de dentro do mapa e a de fora igualmente.
+    //
+    // Houve aqui um desvio de profundidade por tile na mata de fora, para as fileiras não lerem
+    // como pomar. Foi erro de leitura: **o mundo é uma grade, e a grade é o desenho.** Uma árvore
+    // fora do centro do tile não lê como floresta natural, lê como peça solta — e desmente a única
+    // coisa que todo tile deste jogo promete: que ali cabe exatamente um. A variedade da mata vem
+    // dos SEIS frames de pinheiro, que é variação DENTRO do tile, e da névoa por cima.
     this.solidGeo = buildUprightTileGeometry(quadTiles);
     quadTiles.forEach((tile, i) => this.solidQuads.set(`${tile.x},${tile.z}`, i * 4));
     this.addTerrainMesh(new THREE.Mesh(this.solidGeo, mats.solid));
@@ -1606,6 +1806,21 @@ export class World3D {
       if (bucket) bucket.push(t);
       else this.solidBuckets.set(bk, [t]);
     }
+    // A NÉVOA NEGRA sobre a mata de fora (só na superfície — ver makeVoidMistMaterial): uma
+    // CORTINA em pé por tile, no mesmo plano das árvores, um pouco mais alta que a copa. Uma
+    // malha, um draw, e a rampa inteira mora no shader.
+    if (!isUnderground() && voidTiles.length > 0) {
+      const mist = new THREE.Mesh(buildMistCurtainGeometry(voidTiles, VOID_MIST_HEIGHT), mats.voidMist);
+      mist.renderOrder = 4; // depois da poça de fogo e do blob: a névoa cobre o que vier antes
+      const u = mats.voidMist.userData.mist as MistUniforms;
+      // O retângulo é a BORDA do mundo, não o centro do último tile: um tile em `x` ocupa
+      // [x-0.5, x+0.5], então meio tile de folga de cada lado é o que faz a rampa começar em
+      // zero exatamente onde o chão autorado acaba.
+      u.rect.value.set(b.minTileX - 0.5, b.minTileY - 0.5, b.maxTileX + 0.5, b.maxTileY + 0.5);
+      u.depth.value = this.params.voidMist;
+      this.addTerrainMesh(mist);
+    }
+
     for (const t of wetTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
     for (const t of lavaBedTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
 
@@ -2384,15 +2599,52 @@ export class World3D {
   }
 
   /**
-   * The hero's own faint ambient glow (the 2D game's neutral "you can always
-   * see around yourself" circle). NEUTRAL near-white — it must reveal the
-   * ground's own colours, not tint them (only real fire reads warm); fades
-   * to 0 during the first-campfire cut-scene.
+   * A LUZ PRÓPRIA DO HERÓI — a vista dele, e por que ela é uma CURVA e não uma lâmpada.
+   *
+   * A lâmpada existe (`heroLight`, neutra e fraca, logo abaixo) e à noite ela não pode mostrar
+   * nada. A conta é esta, e vale para QUALQUER luz nova que alguém queira pendurar no herói:
+   * `lightCap` (1.55) limita a soma da luz DIRETA a `albedo × cap − ambiente`, a ambiente de 8.5
+   * já gasta ~1.24 e a lua gasta o resto — sobra ~2% de vermelho no chão aberto. Uma PointLight a
+   * mais entrega irradiância de sobra e o teto joga tudo fora: o chão à volta do herói continua
+   * exatamente com a mesma cor. (É por isso que a fogueira precisa do disco aditivo para ler como
+   * luz: a PointLight dela também bate no teto.)
+   *
+   * Então a vista é o que skyPreset.ts já ensina: **quem levanta um quadro é a CURVA**. O post
+   * aplica um `pow` LOCAL, centrado nos pés dele e pendendo para onde ele olha — os graves em
+   * volta abrem, o 1 continua 1, e o longe fica no escuro em que estava. Três consequências que
+   * fazem dela uma VISÃO e não uma auréola:
+   *
+   *   · **Ninguém mais a vê.** Ela não é matéria na cena: não acende bicho, não derrete o escuro
+   *     de uma cova, não conta como fogo para `nearestLitFireInto` — não projeta sombra nenhuma.
+   *   · **Ela cede à luz de verdade.** O `pow` abre o grave e não mexe no alto, então dentro da
+   *     poça de uma fogueira ela não soma quase nada. A economia de acender o mundo fica de pé:
+   *     a vista mostra o tile em que ele pisa, a fogueira é que abre a região.
+   *   · **Ela não é banda.** Todo desenho de luz deste jogo é escadinha de pixel art (o disco da
+   *     fogueira, o `lightSteps`); esta não, porque não é luz caindo no chão — é o olho.
+   *
+   * `strength01` é a mesma da lâmpada: a cut-scene da primeira fogueira a apaga e a devolve.
    */
-  public setHeroLight(worldX: number, worldY: number, strength01: number): void {
+  public setHeroSight(
+    worldX: number, worldY: number, faceX: number, faceY: number, strength01: number,
+  ): void {
+    const s = Math.max(0, strength01);
+    this.sight.x = worldX;
+    this.sight.y = worldY;
+    // Normalizado aqui, uma vez: o `facing` do controlador é um passo de tile (±1, 0), mas um
+    // diagonal futuro entraria como (1,1) e esticaria o pêndulo em √2 sem ninguém pedir.
+    const len = Math.hypot(faceX, faceY) || 1;
+    this.sight.fx = faceX / len;
+    this.sight.fy = faceY / len;
+    this.sight.strength = s;
+
+    // A lâmpada segue a MESMA frente da vista (uma coisa só olhando para um lado só), ainda que o
+    // teto acima quase não a deixe aparecer — com o teto solto, ou fora do chão aberto, ela existe.
+    // Metade do pêndulo: ela mora no CORPO (y = 1.2) e a vista mora no chão à frente dos pés, então
+    // pendê-la o mesmo tanto tiraria a luz de dentro do herói que ela existe para banhar.
+    const lean = this.params.heroSightLean;
     const light = this.ensureHeroLight();
-    light.position.set(worldX, 1.2, worldY);
-    light.intensity = this.params.heroLight * Math.max(0, strength01);
+    light.position.set(worldX + this.sight.fx * lean * 0.5, 1.2, worldY + this.sight.fy * lean * 0.5);
+    light.intensity = this.params.heroLight * s;
   }
 
   private ensureHeroLight(): THREE.PointLight {
@@ -2401,6 +2653,98 @@ export class World3D {
       this.scene.add(this.heroLight);
     }
     return this.heroLight;
+  }
+
+  /**
+   * O disco da vista: o MESMO quad de poça que a fogueira e a tocha usam (mesmo programa, mesma
+   * escadinha de banda no grid da arte), com a rampa fria e sem tremor.
+   *
+   * Ele existe porque a curva sozinha não tem SILHUETA. Um `pow` local clareia uma região e nada
+   * mais — sem borda, sem centro, sem forma —, e a olho isso lê como "a tela está mais clara", não
+   * como "o herói tem luz". Neste renderizador quem dá forma a uma luz é sempre o disco aditivo;
+   * está escrito no doc do `acquireGlow` desde a primeira fogueira. A curva revela, o disco é o
+   * desenho — e as duas juntas são a vista.
+   */
+  private ensureSightGlow(): THREE.Mesh {
+    if (!this.sightGlow) {
+      const geo = new THREE.PlaneGeometry(1, 1);
+      geo.rotateX(-Math.PI / 2);
+      this.sightGlow = new THREE.Mesh(geo, makeFireGlowMaterial({
+        ramp: { core: SIGHT_RAMP_CORE, mid: SIGHT_RAMP_MID, rim: SIGHT_RAMP_RIM },
+        wobble: zeroWobbleUniform,
+      }));
+      this.sightGlow.renderOrder = 2;
+      this.scene.add(this.sightGlow);
+    }
+    return this.sightGlow;
+  }
+
+  /**
+   * Entrega a vista ao post: onde ela cai na TELA e que tamanho tem lá.
+   *
+   * Ela é medida por PROJEÇÃO, nunca por uma conta de tela. O herói mora ~no centro, então a
+   * tentação é cravar (0.5, 0.5) e um raio em pixels — e as duas partes quebram. O centro
+   * escorrega numa fala (`setViewOffset` desloca o herói para caber na caixa de diálogo), e o
+   * raio não é um círculo: a câmera olha 48° para baixo, então um disco de chão chega à tela como
+   * uma ELIPSE, mais larga que alta.
+   *
+   * **A ARMADILHA, e ela custou uma versão inteira: a medida tem de ser CENTRADA.** A primeira
+   * tirava o semi-eixo vertical projetando um ponto o raio inteiro AO SUL — e o sul é a direção da
+   * CÂMERA. A perspectiva não é simétrica nesse eixo: 4,5 tiles ao sul caem quase no colo da lente
+   * e projetaram 955px numa tela de 800. A elipse saía maior que o quadro, `length(sd)` dava ~0 em
+   * todo pixel e a "vista" virava um `lift` GLOBAL — o mundo inteiro clareava por igual, que é
+   * exatamente parecer que nada aconteceu.
+   *
+   * Então mede-se o tamanho de UM tile, com um par simétrico em volta do herói (±1 leste/oeste,
+   * ±1 norte/sul) e uma diferença centrada: o erro de primeira ordem da perspectiva se cancela, e
+   * o raio vira uma multiplicação. Continua seguindo `fov`, `camHeight` e inclinação de graça.
+   */
+  private updateHeroSight(): void {
+    const u = this.finishPass.uniforms;
+    const glow = this.ensureSightGlow();
+    const glowMat = glow.material as THREE.MeshBasicMaterial;
+    const amount = this.params.heroSight * this.sight.strength;
+    const glowAmount = this.params.heroSightGlow * this.sight.strength;
+    // Escondido de verdade, não só transparente: de dia os dois knobs são 0, e um quad aditivo de
+    // cinco tiles desenhado a cada frame para somar zero é overdraw pago à toa.
+    glow.visible = glowAmount > 0.002;
+    if (amount <= 0.0005 && glowAmount <= 0.0005) {
+      u.uSight.value = 0;
+      glowMat.opacity = 0;
+      return;
+    }
+    const r = Math.max(0.5, this.params.heroSightTiles);
+    const lean = this.params.heroSightLean;
+    // Os pés, não o peito: a vista é o chão que ele distingue. E ela pende para a frente dele.
+    const cx = this.sight.x + this.sight.fx * lean;
+    const cy = this.sight.y + this.sight.fy * lean;
+    const at = this.projectTile(cx, cy, 0);
+    // Um tile em pixels, nos dois eixos, por diferença CENTRADA (ver o doc acima).
+    const pxPerTileX = Math.abs(
+      this.projectTile(cx + 1, cy, 0).x - this.projectTile(cx - 1, cy, 0).x,
+    ) / 2;
+    const pxPerTileY = Math.abs(
+      this.projectTile(cx, cy + 1, 0).y - this.projectTile(cx, cy - 1, 0).y,
+    ) / 2;
+    const w = Math.max(1, window.innerWidth);
+    const h = Math.max(1, window.innerHeight);
+    u.uSight.value = amount;
+    (u.uSightAt.value as THREE.Vector2).set(at.x / w, 1 - at.y / h);
+    (u.uSightR.value as THREE.Vector2).set(
+      Math.max(0.02, (r * pxPerTileX) / w),
+      Math.max(0.02, (r * pxPerTileY) / h),
+    );
+
+    // O disco, no MUNDO (o quad é chão de verdade, então aqui não há projeção nenhuma). Ele pende
+    // METADE do que a curva pende: a poça tem de continuar contendo os pés dele — uma luz que sai
+    // de baixo do corpo deixa de parecer que é dele.
+    setFireGlow(
+      glow,
+      this.sight.x + this.sight.fx * lean * 0.5,
+      this.sight.y + this.sight.fy * lean * 0.5,
+      r * 2,
+      glowAmount,
+    );
   }
 
   // ── firelight cast shadows (2D ground silhouettes) ────────────────────────────
@@ -3061,6 +3405,11 @@ export class World3D {
     this.applyColor('fireRampRim', fireRampRimUniform.value, this.params.fireRampRim);
     fireGlowResUniform.value = Math.max(0, this.params.fireGlowRes);
     flowTimeUniform.value = this.elapsed;
+    // A névoa do fora do mundo é knob vivo (hd3d.voidMist): a malha já está assada, e o que
+    // muda é só a profundidade da rampa dentro do shader.
+    if (this.terrainMats) {
+      (this.terrainMats.voidMist.userData.mist as MistUniforms).depth.value = Math.max(0, this.params.voidMist);
+    }
     windUniform.value = Math.max(0, this.params.wind);
     // A mortalha do explorador tem duas paletas, e a escolha é a mesma do céu: de noite ela é mais
     // funda que o escuro, de dia é um banco de neblina batido de sol (ver ChunkShroud3D).
@@ -3093,6 +3442,13 @@ export class World3D {
     const heroScreen = this.projectTile(heroX, heroZ, 0.5);
     const trackedFocusY = 1 - heroScreen.y / Math.max(1, window.innerHeight);
     this.finishPass.uniforms.uFocusY.value = trackedFocusY + (this.params.focusY - 0.52);
+    // A NITIDEZ do menu de pausa entra por aqui, como a hora do dia: quem MEXEU desde o último
+    // frame manda. Assim o botão pega no instante em que o jogo volta a andar, e `hd3d.pixelScale`
+    // continua funcionando pelo console (ele vence enquanto o menu não é tocado).
+    const wanted = getPixelScale();
+    if (wanted !== this.appliedPixelScale && wanted !== Math.round(this.params.pixelScale)) {
+      this.params.pixelScale = wanted;
+    }
     if (Math.max(1, Math.round(this.params.pixelScale)) !== this.appliedPixelScale) {
       this.applyPixelScale();
     }
@@ -3202,6 +3558,7 @@ export class World3D {
 
     profiler.begin('torch');
     this.updateTorch(dt, t);
+    this.updateHeroSight(); // a vista dele: projetada com a câmera JÁ desta hora (ver o doc)
     profiler.end('torch');
     profiler.begin('castShadows');
     const maskOn = this.params.shadowMask > 0;
@@ -3522,6 +3879,12 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
     uNear: { value: 0.55 },
     uVignette: { value: 0.24 },
     uLift: { value: 1 },
+    // A VISTA DO HERÓI (ver setHeroSight): a curva local, onde ela cai na tela, e os dois
+    // semi-eixos da elipse que um disco de chão vira aos 48° da câmera. Escritos por
+    // updateHeroSight; em 0 o quadro é literalmente o de antes.
+    uSight: { value: 0 },
+    uSightAt: { value: new THREE.Vector2(0.5, 0.5) },
+    uSightR: { value: new THREE.Vector2(0.2, 0.2) },
     uGrain: { value: 0.02 },
     uGrade: { value: 0.5 },
     // The split-tone the grade lerps between, per region (see updateBiomeGrade): cool woodland by
@@ -3551,6 +3914,9 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
     uniform float uNear;
     uniform float uVignette;
     uniform float uLift;
+    uniform float uSight;
+    uniform vec2 uSightAt;
+    uniform vec2 uSightR;
     uniform float uGrain;
     uniform float uGrade;
     uniform vec3 uShadowTint;
@@ -3603,7 +3969,26 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
         col = pow(max(col, vec3(0.0)), vec3(uLift));
         luma = pow(max(luma, 0.0), uLift);
       }
-      col = mix(vec3(luma), col, uSaturation);       // saturation around luma
+      // ── A VISTA DO HEROI (uSight) — ver setHeroSight ─────────────────────────
+      // A MESMA curva de cima, so que LOCAL: um pow centrado nos pes dele e pendendo para onde ele
+      // olha. Ela abre os graves em volta e deixa o 1 onde esta, entao dentro da poca de uma
+      // fogueira ela quase nao soma — a vista mostra o tile em que ele pisa, o fogo e que abre a
+      // regiao. E ela e LISA de proposito: todo desenho de luz deste jogo e escadinha de pixel art
+      // (o disco da fogueira, uLightSteps), mas isto nao e luz caindo no chao, e o olho.
+      //
+      // O nucleo e chato ate 35% do raio e so entao cai: um pico no centro seguiria o heroi como
+      // uma mancha de lente. E a saturacao sobe AMARRADA a ela, nunca por um knob proprio: pow
+      // comprime razao entre canais, e um quadro local mais claro e menos colorido que a vizinhanca
+      // le como neblina (a licao inteira do skyPreset.ts).
+      float sight = 0.0;
+      if (uSight > 0.0) {
+        vec2 sd = (vUv - uSightAt) / max(uSightR, vec2(0.0001));
+        sight = uSight * (1.0 - smoothstep(0.35, 1.0, length(sd)));
+        float sexp = 1.0 - sight;
+        col = pow(max(col, vec3(0.0)), vec3(sexp));
+        luma = pow(max(luma, 0.0), sexp);
+      }
+      col = mix(vec3(luma), col, uSaturation + sight * 0.35); // saturation around luma
       col = (col - 0.5) * uContrast + 0.5;           // contrast around mid-grey
       col = max(col, 0.0);
 
@@ -3883,7 +4268,12 @@ type GlowUniforms = { center: THREE.IUniform<THREE.Vector2>; radius: THREE.IUnif
  * pixels it lights. The snap is in WORLD space, so the blocks stay pinned to the ground and
  * never swim as the camera pans or the flame jitters — only their brightness dances.
  */
-const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
+const makeFireGlowMaterial = (opts: {
+  /** A rampa de bandas desta poça. Omitida = a do FOGO (o padrão de sempre). */
+  ramp?: { core: THREE.IUniform<THREE.Color>; mid: THREE.IUniform<THREE.Color>; rim: THREE.IUniform<THREE.Color> };
+  /** O ruído que amassa os anéis. Omitido = o do fogo; a vista do herói passa o zero. */
+  wobble?: THREE.IUniform;
+} = {}): THREE.MeshBasicMaterial => {
   // Colour comes from the authored band ramp in the shader (fireRamp* uniforms), so the
   // material's own colour stays white.
   const mat = new THREE.MeshBasicMaterial({
@@ -3904,11 +4294,11 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
     shader.uniforms.uGlowRadius = glow.radius;
     shader.uniforms.uLightRes = fireGlowResUniform; // the pool paints COARSER than the art
     shader.uniforms.uLightSteps = lightStepsUniform;
-    shader.uniforms.uLightWobble = lightWobbleUniform;
+    shader.uniforms.uLightWobble = opts.wobble ?? lightWobbleUniform;
     shader.uniforms.uFlowTime = flowTimeUniform;
-    shader.uniforms.uRampCore = fireRampCoreUniform;
-    shader.uniforms.uRampMid = fireRampMidUniform;
-    shader.uniforms.uRampRim = fireRampRimUniform;
+    shader.uniforms.uRampCore = opts.ramp?.core ?? fireRampCoreUniform;
+    shader.uniforms.uRampMid = opts.ramp?.mid ?? fireRampMidUniform;
+    shader.uniforms.uRampRim = opts.ramp?.rim ?? fireRampRimUniform;
     // The mask shades the glow POOL too (hd3d.shadowMask): with the decal silhouettes
     // gone from the scene, the additive haze must dim itself where a cast falls — same
     // data, same place, instead of a black quad drawn over it.
@@ -3986,6 +4376,117 @@ const makeFireGlowMaterial = (): THREE.MeshBasicMaterial => {
       );
   };
   return mat;
+};
+
+/**
+ * A NÉVOA NEGRA que cobre a floresta de fora do mapa.
+ *
+ * O fora do mundo deixou de ser mar e virou floresta (ver `WorldData.buildVoidChunk`), e uma
+ * floresta iluminada como qualquer outra não diz "aqui acaba o mundo" — diz "tem mais mapa ali".
+ * Quem diz é a névoa: ela nasce em ZERO na fronteira autorada e fecha em preto alguns tiles
+ * adiante, então a mata desaparece dentro dela em vez de terminar numa régua.
+ *
+ * Três decisões que a fazem ler como névoa e não como uma tampa preta:
+ *
+ *   · **A alfa vem da distância ao RETÂNGULO do mundo**, medida no fragmento (`uMistRect`), e não
+ *     de uma máscara por vértice. É a fronteira do mundo, que é uma caixa — e uma conta de caixa
+ *     em quatro linhas dá a rampa exata em qualquer formato de mapa, sem re-assar nada.
+ *   · **A borda é ROÍDA por ruído** no mesmo campo de valor que o fogo usa (`fireWobble`), com o
+ *     tempo escorrendo devagar. Sem isso a rampa é um degradê de photoshop, e degradê nenhum é
+ *     névoa.
+ *   · **Ela é quantizada no grid da ARTE** (`uLightRes`), como todo desenho de luz deste jogo. Uma
+ *     rampa lisa num mundo de pixel art é o único objeto da tela com resolução infinita.
+ *
+ * Preto com mistura normal, e não `AdditiveBlending`: aditivo só clareia — o preto aditivo é
+ * literalmente nada. Aqui a névoa TAPA, então ela é alfa por cima.
+ */
+type MistUniforms = { rect: THREE.IUniform<THREE.Vector4>; depth: THREE.IUniform<number> };
+
+const makeVoidMistMaterial = (): THREE.MeshBasicMaterial => {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    depthWrite: false,
+    fog: false, // ela JÁ é a distância; um fog por cima a lavaria na cor do céu
+    opacity: 1,
+  });
+  const mist: MistUniforms = {
+    rect: { value: new THREE.Vector4(0, 0, 0, 0) },
+    depth: { value: 6 },
+  };
+  mat.userData.mist = mist;
+  mat.customProgramCacheKey = () => 'voidMist';
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uMistRect = mist.rect;
+    shader.uniforms.uMistDepth = mist.depth;
+    shader.uniforms.uLightRes = fireGlowResUniform;
+    shader.uniforms.uFlowTime = flowTimeUniform;
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'varying vec2 vMistPos;\nvoid main() {')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+         vMistPos = (modelMatrix * vec4(transformed, 1.0)).xz;`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        'void main() {',
+        `uniform vec4 uMistRect;
+         uniform float uMistDepth;
+         uniform float uLightRes;
+         uniform float uFlowTime;
+         ${FIRE_WOBBLE_GLSL}
+         varying vec2 vMistPos;
+         void main() {`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+         // Snap no grid da arte: a névoa engrossa em blocos de pixel, como a poça da fogueira.
+         vec2 mistTexel = floor(vMistPos * uLightRes);
+         vec2 mistPos = uLightRes > 0.0 ? (mistTexel + 0.5) / uLightRes : vMistPos;
+         // Distância ao retângulo do mundo: 0 lá dentro, crescendo para fora (a conta de caixa).
+         vec2 outside = max(uMistRect.xy - mistPos, mistPos - uMistRect.zw);
+         float d = length(max(outside, vec2(0.0)));
+         // A frente da névoa não é reta: o mesmo ruído das chamas, andando devagar, come a borda.
+         d += fireWobble(mistPos * 0.35, uFlowTime * 0.25) * uMistDepth * 0.5;
+         diffuseColor.a *= smoothstep(0.0, max(0.5, uMistDepth), d);`,
+      );
+  };
+  return mat;
+};
+
+/**
+ * A CORTINA da névoa: um quad EM PÉ por tile, no mesmo plano em que as árvores são desenhadas.
+ *
+ * A primeira versão era uma TAMPA — quads deitados acima da copa — e a geometria a derrubou: com
+ * a câmera a 48°, um plano horizontal sobre o tile (x,z) projeta ACIMA do lugar onde a árvore
+ * daquele mesmo tile desenha. Ou seja, a tampa velava o tile de TRÁS e deixava a árvore da frente
+ * exposta; o que aparecia na tela era um degradê deslocado, nunca a mata sumindo dentro da névoa.
+ * Em pé, no mesmo z e um pouco mais alta que a copa, ela cobre exatamente o que está atrás dela.
+ *
+ * Sem uv, sem atlas e sem normal: a cortina é uma cor só, e quem a desenha é o shader a partir da
+ * posição de mundo (ver makeVoidMistMaterial).
+ */
+const buildMistCurtainGeometry = (
+  tiles: ReadonlyArray<{ x: number; z: number }>, height: number,
+): THREE.BufferGeometry => {
+  const pos: number[] = [];
+  const idx: number[] = [];
+  tiles.forEach(({ x, z }, i) => {
+    // MEIO TILE À FRENTE (+z é a câmera). No próprio z a cortina fica na MESMA profundidade da
+    // árvore daquele tile, e o teste de profundidade padrão (`less`) reprova o empate: a névoa
+    // era descartada exatamente em cima do que ela existe para velar. Na borda da frente do
+    // tile ela fica meio tile à frente da sua árvore e meio atrás da próxima — sem empate nenhum.
+    const zf = z + 0.5;
+    pos.push(x - 0.5, height, zf, x + 0.5, height, zf, x + 0.5, 0, zf, x - 0.5, 0, zf);
+    const b = i * 4;
+    idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  return geo;
 };
 
 /** Place a fire's pool: the disc's rim sits at half the quad, centred on the dancing flame. */
@@ -4319,7 +4820,8 @@ const buildUprightTileGeometry = (
   const idx: number[] = [];
   tiles.forEach(({ x, z, frame }, i) => {
     const f = tilesetFrameUv(frame);
-    // Upright quad on the tile, facing the (fixed-yaw) camera direction (+z).
+    // Upright quad on the tile, facing the (fixed-yaw) camera direction (+z). NO CENTRO EXATO do
+    // tile, sempre: o mundo é uma grade e a grade é o desenho (ver o chamador em buildTerrain).
     pos.push(x - 0.5, 1, z, x + 0.5, 1, z, x + 0.5, 0, z, x - 0.5, 0, z);
     uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);

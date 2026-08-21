@@ -8,6 +8,7 @@
 
 const DOF_KEY = 'zh.dof';
 const DAYLIGHT_KEY = 'zh.daylight';
+const SHARPNESS_KEY = 'zh.sharp';
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
@@ -67,4 +68,35 @@ export const getDaylight = (): number => daylight;
 export const setDaylight = (value: number): void => {
   daylight = clamp01(value) >= 0.5 ? 1 : 0;
   write(DAYLIGHT_KEY, daylight);
+};
+
+/**
+ * A NITIDEZ: quantos pixels de tela um pixel desenhado ocupa (o `pixelScale` do renderizador).
+ *
+ * 1 = a tela inteira, que e o padrao desde que o buffer passou a ser medido em pixel de APARELHO
+ * (ver `World3D.renderSize` — antes o celular desenhava a 1/6 da tela e o jogo saia serrilhado).
+ * 2 = metade da resolucao, o modo economico: quatro vezes menos preenchimento, para o aparelho que
+ * nao der conta.
+ *
+ * **A escolha e do JOGADOR, e nao de um detector de dispositivo.** Havia um `isHandheld()` que
+ * cravava a metade em todo telefone — do mais fraco ao mais novo — e "e um celular" nao diz nada
+ * sobre a GPU dele. Era esse palpite que, somado ao reescalonamento invisivel, dava o serrilhado.
+ *
+ * E uma CHAVE de dois estados e nao um deslizador: entre 1 e 2 esta a unica diferenca que se ve, e
+ * 3 ja e um mundo de blocos. Guardada como 0/1 porque o `read` daqui trabalha em 0..1 — o numero
+ * que o renderizador quer sai da tabela, num lugar so.
+ */
+const SHARP_SCALE = [1, 2] as const;
+
+let thrifty = read(SHARPNESS_KEY, 0) >= 0.5 ? 1 : 0;
+
+/** O `pixelScale` que o renderizador deve usar (1 = nitido, 2 = economico). */
+export const getPixelScale = (): number => SHARP_SCALE[thrifty];
+
+/** Verdadeiro no modo economico — o rotulo do menu le daqui. */
+export const isThriftyPixels = (): boolean => thrifty === 1;
+
+export const setThriftyPixels = (value: boolean): void => {
+  thrifty = value ? 1 : 0;
+  write(SHARPNESS_KEY, thrifty);
 };

@@ -205,6 +205,9 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
 - **Cada level se resolve sozinho:** `playerStart` próprio + uma **fogueira-lar acesa** (a mais
   próxima do spawn — é assim que o runtime escolhe), toda outra apagada; só as ferramentas do
   puzzle. **Um puzzle só é puzzle se o caminho fácil estiver fechado** — asserte a *trava*.
+- **CHÃO + UMA COISA. Um tile tem o `ground` e, em cima dele, no máximo UMA — `upper`, prop, item,
+  NPC ou cova.** O editor cumpre (colocar limpa o tile, pintar `upper` pula o tile ocupado); quem
+  quebra é script e JSON à mão. `npm run audit:stacks` confere, `scripts/fix-tile-stacks.mjs` conserta.
 - **Um playtest AUTORA a fixture que precisa** (entra no `/lab`, coloca props pelo `EditorStore`,
   aperta P) em vez de depender do conteúdo de um level.
 - `/lab` edita um level (`?level=N`) ou o **SUBTERRÂNEO** (`?under`, `public/underworld.json`)
@@ -250,8 +253,11 @@ O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo s
 - **Dois machados:** `axe` (só madeira morta) e `greatAxe` (qualquer árvore, superset do primeiro —
   um item novo nunca invalida o que o jogador já tem). Árvore é **tile**, não prop (846 no
   `world.json`, um draw call), então o machado de aço edita **terreno**.
-- **A borda do mundo é MAR** por causa disso: nada no jogo remove água (`SOLID_GROUND_FRAMES`
-  bloqueia incondicionalmente). Tile de terreno novo = **frame novo num atlas existente**
+- **O FORA DO MUNDO trava por COORDENADA, não por material** (`buildVoidChunk`): todo tile de lá
+  nasce com `collisions: true`, e `treeTileFrameAt` recusa editar fora dos chunks autorados. São
+  as duas travas — tirar uma abre uma porta para fora do mapa. Por elas a arte de lá é livre: em
+  cima é floresta sob névoa negra, embaixo é a alvenaria de teto preto. (Já foi mar, quando a
+  única trava era o material.) Tile de terreno novo = **frame novo num atlas existente**
   (`node spritefactory/install-tile.mjs`), só acrescentando linhas.
 
 ## As peças (o contrato de cada uma está no `progress.md`)

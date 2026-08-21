@@ -151,7 +151,9 @@
     "levelList": "Back to levels",
     "restart": "Restart",
     "quit": "Quit to title",
-    "confirm": "Are you sure?"
+    "confirm": "Are you sure?",
+    "sharpOn": "Sharpness: full",
+    "sharpOff": "Sharpness: thrifty"
   },
   "wizard": {
     "intro": [

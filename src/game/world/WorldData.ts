@@ -1,4 +1,5 @@
-﻿import { CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAME } from '@/game/constants';
+﻿import { CHUNK_COLUMNS, CHUNK_ROWS, DUNGEON_TILES } from '@/game/constants';
+import { isUnderground } from '@/game/runtime/underworld';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
@@ -20,18 +21,40 @@ type WorldBounds = {
   minTileY: number; maxTileY: number;
 };
 
-// Everything outside the authored 0..N-1 grid is OPEN SEA, so the finite world has a visible,
-// solid border instead of an abrupt cut.
+// ── O FORA DO MUNDO ──────────────────────────────────────────────────────────
 //
-// It used to be dirt under a wall of pine tiles (frame 4), and that stopped working the day the
-// steel axe learned to fell any tree: the border was made of the exact thing the new item
-// exists to destroy, so a player could simply chop a doorway and walk off the map. The fix is
-// not to special-case the axe at the edge — a border you have to remember to defend will be
-// forgotten by the next feature. It is to build the border out of something no item answers.
-// Water is that thing: nothing in the game removes water. The bridge, the ford and the boots
-// all CROSS a river tile, and none of them apply here, because the sea's collision comes from
-// SOLID_GROUND_FRAMES (unconditional) rather than from a WaterObject (which the boots wade).
-const VOID_GROUND_FRAME = SEA_TILE_FRAME;
+// Tudo além da grade autorada 0..N-1 é preenchido aqui, para o mundo finito ter uma borda que se
+// VÊ em vez de um corte seco. E o que se vê depende do andar: em cima é uma FLORESTA que continua
+// para sempre (sob a névoa negra que o World3D deita por cima dela); embaixo é a ALVENARIA da
+// dungeon, cujo teto já é preto puro — o escuro entre uma sala e a outra, esticado até o fim.
+//
+// **POR QUE ISTO PODE SER ÁRVORE DE NOVO.** Já foi: terra sob uma parede de pinheiros (frame 4). E
+// caiu no dia em que o machado de aço aprendeu a derrubar qualquer árvore — a borda era feita
+// exatamente do que o item novo existe para destruir, e dava para abrir uma porta e sair do mapa.
+// A saída na época foi trocar o material por um que item nenhum responde: MAR (a colisão dele vem
+// de SOLID_GROUND_FRAMES, incondicional).
+//
+// Hoje a trava é outra, e é melhor: o corte é recusado por COORDENADA, não por material
+// (`GameScene.treeTileFrameAt` devolve null fora dos chunks autorados — "the border must not be
+// editable by any means"), e todo tile daqui nasce com `collisions: true`, que bloqueia sozinho
+// seja qual for o frame. São duas travas independentes, e nenhuma das duas olha para a arte —
+// então a arte voltou a ser livre. **Se um dia alguém tirar uma delas, isto aqui vira uma porta.**
+//
+// As duas listas são variadas por HASH das coordenadas, nunca por `Math.random`: o mundo tem de
+// nascer idêntico a cada boot (o visual-ref compara pixel a pixel, e o three gasta o mesmo fluxo
+// de random em UUID — ver a armadilha no CLAUDE.md).
+const VOID_FOREST_FRAMES: readonly number[] = [4, 14, 15, 16, 17, 18];
+const VOID_FLOOR_FRAMES: readonly number[] = [5, 6];
+const VOID_DUNGEON_WALL_FRAMES: readonly number[] = [
+  ...DUNGEON_TILES.walls, DUNGEON_TILES.wallMoss,
+];
+
+/** Hash inteiro estável de um tile — o mesmo espírito do `seaVariant` do World3D. */
+const voidVariant = (wx: number, wy: number, n: number): number => {
+  let h = (wx * 374761393 + wy * 668265263) | 0;
+  h = (h ^ (h >>> 13)) * 1274126177 | 0;
+  return Math.abs(h ^ (h >>> 16)) % n;
+};
 
 const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 
@@ -168,15 +191,40 @@ export const isInsideWorld = (cx: number, cy: number): boolean => {
   return cx >= b.minCx && cx <= b.maxCx && cy >= b.minCy && cy <= b.maxCy;
 };
 
-const buildVoidChunk = (cx: number, cy: number): ChunkData => ({
-  cx,
-  cy,
-  ground: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => VOID_GROUND_FRAME)),
-  // No upper layer: open water has nothing standing in it. (A pine wall here would also be
-  // choppable now — see the note on VOID_GROUND_FRAME.)
-  upper: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => null as number | null)),
-  collisions: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => true)),
-});
+const buildVoidChunk = (cx: number, cy: number): ChunkData => {
+  const dungeon = isUnderground();
+  const ground: number[][] = [];
+  const upper: Array<Array<number | null>> = [];
+  for (let row = 0; row < CHUNK_ROWS; row += 1) {
+    const groundRow: number[] = [];
+    const upperRow: Array<number | null> = [];
+    for (let col = 0; col < CHUNK_COLUMNS; col += 1) {
+      const wx = cx * CHUNK_COLUMNS + col;
+      const wy = cy * CHUNK_ROWS + row;
+      if (dungeon) {
+        // A alvenaria é MACIÇA: chão de dungeon debaixo, muro em cima. O muro vira CUBO no
+        // World3D e o teto dele já é preto puro (mats.wallTop) — o "escuro gigante" pedido não
+        // é um material novo, é o topo do muro que a dungeon sempre teve, sem fim.
+        groundRow.push(DUNGEON_TILES.floors[voidVariant(wx, wy, DUNGEON_TILES.floors.length)]);
+        upperRow.push(VOID_DUNGEON_WALL_FRAMES[voidVariant(wx + 7, wy, VOID_DUNGEON_WALL_FRAMES.length)]);
+      } else {
+        groundRow.push(VOID_FLOOR_FRAMES[voidVariant(wx, wy, VOID_FLOOR_FRAMES.length)]);
+        upperRow.push(VOID_FOREST_FRAMES[voidVariant(wx + 7, wy, VOID_FOREST_FRAMES.length)]);
+      }
+    }
+    ground.push(groundRow);
+    upper.push(upperRow);
+  }
+  return {
+    cx,
+    cy,
+    ground,
+    upper,
+    // A trava, e ela não depende de nada acima: fora do mundo TUDO bloqueia, qualquer que seja o
+    // frame. É esta linha que deixa a arte da borda ser livre.
+    collisions: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => true)),
+  };
+};
 
 // Out-of-bounds chunks are solid void, which is what makes the world edges hard: getTile
 // reports collision=true there and the existing movement/enemy blockers stop at it.

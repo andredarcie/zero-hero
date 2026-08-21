@@ -1,6 +1,6 @@
 import { MasonryBuilder, enableTiling } from '@/game/objects/stairsMasonry';
 import { getStoneTexture } from '@/game/render3d/stoneTexture';
-import { world3d, type Box3D, type GroundEllipse } from '@/game/render3d/World3D';
+import { STAIRS_PIT_DEPTH, world3d, type Box3D, type GroundEllipse } from '@/game/render3d/World3D';
 import type * as THREE from 'three';
 import type { WorldProp } from './WorldProp';
 
@@ -147,14 +147,22 @@ const CAP_H = 0.022;
 // ── O BURACO, na superfície ──────────────────────────────────────────────────
 
 /**
- * As PISADAS. Baixas de propósito — nenhuma pode tapar a seguinte nesta câmera — e o que desce é
- * o TAMANHO delas: cada uma mais fina, mais curta e mais estreita que a anterior à medida que se
- * afasta da luz. É assim que um desenho de cima diz "isto recua" sem ter perspectiva para gastar.
+ * Quanto o HERÓI afunda ao descer (ver `STAIRS_DROP_TILES`, que o exporta, e `walkStairs`).
+ * Ele mora aqui, antes de tudo, porque o espelho do degrau é DERIVADO dele — e uma constante
+ * usada acima da própria declaração é um `undefined` silencioso em tempo de módulo.
  */
-const TREAD_H_NEAR = 0.078;
-const TREAD_H_FAR = 0.030;
+const STAIRS_DROP_TILES_VALUE = 0.55;
+
+/**
+ * As PISADAS. O que desce é o TAMANHO delas — cada uma mais curta e mais estreita que a anterior à
+ * medida que se afasta da luz — e, desde que o poço é um buraco de verdade, também a ALTURA
+ * (`TREAD_RISE`). Enquanto tudo tinha de caber acima de y=0, o tamanho era o único recurso: elas
+ * também afinavam (`TREAD_H_NEAR`→`TREAD_H_FAR`, 0,078→0,030) para fingir a queda. Isso saiu com o
+ * vão falso — hoje o degrau é uma massa que vai do fundo do poço até o seu topo, e quem diz o
+ * quanto ele desceu é a queda real, não a espessura.
+ */
 const TREAD_LEN_NEAR = 0.112;
-const TREAD_LEN_FAR = 0.052;
+const TREAD_LEN_FAR = 0.074;
 /**
  * As pisadas não encostam nas paredes: 10% da largura do vão fica de escuro em cada lado, o lance
  * inteiro. Sem essa folga a pisada da frente vai de parede a parede e a peça lê como uma TAMPA de
@@ -162,8 +170,13 @@ const TREAD_LEN_FAR = 0.052;
  * dentro de um buraco em vez de em cima dele.
  */
 const TREAD_INSET = 0.20;
-/** Quanto a última pisada é mais estreita que a primeira, em fração da largura do lance. */
-const TREAD_NARROW = 0.36;
+/**
+ * Quanto a última pisada é mais estreita que a primeira, em fração da largura do lance.
+ *
+ * Encolheu junto com a rampa de tom, e pelo mesmo motivo: era 0,36 para fingir distância, e um
+ * degrau 36% mais estreito no fundo de um poço preto vira um risco. A queda real faz esse trabalho.
+ */
+const TREAD_NARROW = 0.20;
 /**
  * A fresta escura entre uma pisada e a outra: é ela que separa degrau de rampa.
  *
@@ -176,13 +189,17 @@ const TREAD_GAP = 0.060;
 /** Quanto o nariz da pisada avança sobre a fresta anterior. Um beiral, e é ele que faz sombra. */
 const TREAD_NOSE = 0.014;
 /**
- * De que fiada cada pisada tira a pedra dela.
+ * De que fiada cada pisada tira a pedra dela — e a rampa ABRIU quando o poço virou buraco de
+ * verdade.
  *
- * Não é decoração: é o segundo eixo do "isto recua". A pisada da frente tira COROA, a do fundo
- * tira CORPO — a mesma leitura que o tamanho já dá, agora também no tom, e sem uma segunda
- * textura nem um segundo material.
+ * Ela ia de coroa a SOMBRA (`[CROWN, BODY, SHADE, SHADE]`), e isso estava certo enquanto o "fundo"
+ * era uma laje preta pintada logo abaixo da pisada: escurecer era o segundo eixo do "isto recua",
+ * porque o primeiro (a queda) não existia. Agora existe — e uma pisada de sombra DENTRO de um poço
+ * preto simplesmente não aparece: das quatro, só a da entrada chegava à tela. Quem diz o quanto
+ * cada degrau desceu passou a ser a geometria, então o tom só precisa deixá-las todas legíveis
+ * contra o escuro. Continua caindo, de coroa a corpo — mas nenhuma se apaga.
  */
-const TREAD_CAP_ROW: readonly number[] = [CROWN[0], BODY[0], SHADE[0], SHADE[2]];
+const TREAD_CAP_ROW: readonly number[] = [CROWN[0], CROWN[1], BODY[0], BODY[2]];
 
 /** A PAREDE DO FUNDO: o outro lado do vão, vista de cima. Ela é o que dá profundidade. */
 const BACK_LEN = 0.13;
@@ -234,8 +251,25 @@ const NEWEL_H = 0.16;
 const NEWEL_W = 0.135;
 const NEWEL_CAP_W = 0.155;
 
-/** A espessura da laje escura do vão. As pisadas assentam no topo dela — ver a lição 4. */
-const HOLE_H = 0.05;
+/**
+ * QUANTO CADA DEGRAU DESCE — e a lição nº 1 do cabeçalho, finalmente desfeita.
+ *
+ * "Nada abaixo de y=0 existe" era verdade enquanto o chão do mundo era um quad opaco em y=0. Hoje
+ * o tile da escada é um POÇO de verdade: o `World3D` afunda o quad daquele tile em
+ * `STAIRS_PIT_DEPTH` e fecha as quatro beiras com parede, exatamente como faz com o leito do rio.
+ * Então os degraus deixaram de SUGERIR profundidade e passaram a ter: eles descem.
+ *
+ * **E ele é DERIVADO de `STAIRS_DROP_TILES`, nunca escolhido.** Quem já descia era o HERÓI: a
+ * caminhada afunda o corpo 0,55 tile, e esse número existia desde quando não havia degrau nenhum
+ * embaixo dele para pisar. Um passo escolhido a olho (o primeiro palpite foi 0,115) põe a pedra a
+ * descer na metade da velocidade do corpo — ele atravessa os degraus e sai por baixo. Aqui o
+ * espelho é a queda dividida pelos degraus, e as botas encontram pedra em cada um.
+ *
+ * O último degrau para em −0,41 e o corpo termina em −0,55: ele afunda 0,14 tile ALÉM da última
+ * pisada, para dentro do escuro. É de propósito — uma escada que acaba num degrau visível não
+ * leva a lugar nenhum.
+ */
+const TREAD_RISE = STAIRS_DROP_TILES_VALUE / STEPS;
 /**
  * O VÃO, EM TRÊS BANDAS — e não uma só, porque um buraco não tem um fundo, tem um FUNDO QUE SE
  * AFASTA.
@@ -245,7 +279,8 @@ const HOLE_H = 0.05;
  * fundo é a mais próxima do preto que a peça tem. Elas são `unlit` — ver a lição 3 —, então o
  * degradê não muda com a hora do dia nem com a tocha na mão, que é o ponto.
  */
-const VOID_NEAR = 0x151119;
+// (Havia um `VOID_NEAR`, o tom da boca do buraco da superfície. Ele morreu com o vão falso: o
+// escuro de lá agora é o próprio poço no terreno, e `mats.pit` é quem escolhe o tom.)
 const VOID_MID = 0x0b0910;
 const VOID_FAR = 0x040308;
 
@@ -312,7 +347,7 @@ export const STAIRS_RUN_TILES = RUN_LEN / 2 - BACK_LEN;
  * Quanto ele AFUNDA na superfície. Grande de propósito: aqui existe um chão opaco em y=0, e é ele
  * — não o alpha — que engole o corpo. Ver `GameScene.walkStairs`.
  */
-export const STAIRS_DROP_TILES = 0.55;
+export const STAIRS_DROP_TILES = STAIRS_DROP_TILES_VALUE;
 /**
  * A que altura o lance de baixo TERMINA — o topo do último degrau, onde fica a boca do teto.
  *
@@ -413,24 +448,16 @@ export class StairsObject implements WorldProp {
     /** Um deslocamento medido a partir da beira SUL (a da entrada), andando para o norte. */
     const at = (fromEntry: number): number => RUN_LEN / 2 - fromEntry;
 
-    // ── O VÃO, em três bandas ────────────────────────────────────────────────
-    // Ele começa DEPOIS da soleira: as duas peças seriam coplanares no chão e piscariam uma
-    // contra a outra, e nada disto vale um z-fight na beira por onde o jogador entra.
+    // ── O VÃO NÃO É MAIS DESENHADO ───────────────────────────────────────────
+    // Aqui viviam três caixas pretas encaixadas: uma laje `unlit` em três bandas que escureciam
+    // para o norte, fingindo um fundo que se afasta. Elas eram o buraco. Hoje o buraco é o próprio
+    // TERRENO — `World3D` afunda o quad deste tile e fecha as beiras com parede preta, como faz
+    // com o rio —, e uma laje falsa por cima de um poço de verdade seria uma tampa.
     //
-    // E ELE COMEÇA NA BEIRA, sem soleira nenhuma na frente. Houve uma: um lábio de pedra claro
+    // A beira por onde se entra continua ABERTA, sem soleira. Houve uma: um lábio de pedra claro
     // atravessado na entrada, para o chão do mundo "acabar em algum lugar". Na tela ele virou uma
-    // PAREDE — a peça passou a ler como um caixote fechado, e a entrada, que é a única coisa que
-    // o jogador precisa entender ali, era justamente o que ficava tapado. Quem diz que o chão
-    // acaba são as duas paredes laterais e o escuro entre elas; a beira do buraco é aberta, como
-    // toda escada de cima sempre foi.
-    const bands: ReadonlyArray<readonly [number, number, number]> = [
-      [0, 0.42, VOID_NEAR],
-      [0.42, 0.70, VOID_MID],
-      [0.70, RUN_LEN - BACK_LEN, VOID_FAR],
-    ];
-    for (const [from, to, colour] of bands) {
-      this.addVoid(RUN_W, HOLE_H, to - from, colour, HOLE_H / 2, at((from + to) / 2));
-    }
+    // PAREDE — a peça lia como um caixote fechado, e a entrada, que é a única coisa que o jogador
+    // precisa entender ali, era justamente o que ficava tapado.
 
     // A PAREDE DO FUNDO, em pé na beira da boca. Sem ela o escuro é um adesivo; com ela o olho
     // aceita que o chão continua, atrás daquela pedra. Ela é LARGA o bastante para encostar nas
@@ -467,24 +494,32 @@ export class StairsObject implements WorldProp {
     let fromEntry = 0.018;
     for (let i = 0; i < STEPS; i += 1) {
       const t = i / (STEPS - 1);
-      const h = TREAD_H_NEAR + t * (TREAD_H_FAR - TREAD_H_NEAR);
       const w = RUN_W * (1 - TREAD_INSET) * (1 - t * TREAD_NARROW);
       const len = treadLen(i);
       const mid = fromEntry + len / 2;
-      // A massa. NO TOPO da laje do vão, nunca no chão do mundo: a lição 4 do cabeçalho.
+      // O TOPO deste degrau, DENTRO do poço: o primeiro rente ao chão do mundo, cada um seguinte
+      // um `TREAD_RISE` mais fundo. A massa abaixo dele é UM ESPELHO — exatamente a queda até o
+      // degrau seguinte —, e não uma coluna até o fundo.
+      //
+      // Ela FOI uma coluna, na primeira tentativa de furar o chão: parecia mais correto ("um
+      // degrau é o que sobra de uma escada maciça depois de cortar o vão") e encheu o poço de
+      // granito. Vista de cima, a soma dos quatro blocos é uma TAMPA de pedra com o buraco
+      // debaixo — o preto que o poço abriu nunca chegava à tela. O escuro tem de passar ENTRE os
+      // degraus e por baixo do último: é ele que diz que aquilo continua descendo.
+      const top = -i * TREAD_RISE;
       stone.block({
         x: 0,
-        y: HOLE_H + (h - CAP_H) / 2,
+        y: top - CAP_H - TREAD_RISE / 2,
         z: at(mid),
         w,
-        h: h - CAP_H,
+        h: TREAD_RISE,
         d: len,
         uv: [1 + i * 3, SHADE[i]],
       });
       // A pisada clara, com o nariz avançando para a entrada.
       stone.block({
         x: 0,
-        y: HOLE_H + h - CAP_H / 2,
+        y: top - CAP_H / 2,
         z: at(mid - TREAD_NOSE / 2),
         w,
         h: CAP_H,
@@ -512,8 +547,17 @@ export class StairsObject implements WorldProp {
         // A MASSA da parede em SOMBRA e só o coping em coroa: quem tem de ser a coisa mais clara
         // da peça é a PISADA, porque é nela que o jogador precisa olhar. Com a parede inteira em
         // corpo, o frame de pedra ganhava do lance que ele existe para emoldurar.
+        // A massa desce ate o FUNDO do poco: ela e o forro da parede do buraco, nao um meio-fio
+        // pousado na grama. Sem isso o poco preto aparece POR TRAS do meio-fio assim que a camera
+        // pega a peca de lado, e a alvenaria volta a ler como adesivo em cima de um furo.
         stone.block({
-          x, y: (top - CAP_H) / 2, z, w: CURB_W, h: top - CAP_H, d: segLen, uv: [col, SHADE[k % 4]],
+          x,
+          y: (top - CAP_H - STAIRS_PIT_DEPTH) / 2,
+          z,
+          w: CURB_W,
+          h: top - CAP_H + STAIRS_PIT_DEPTH,
+          d: segLen,
+          uv: [col, SHADE[k % 4]],
         });
         // E o coping APAGA à medida que desce (coroa nos dois primeiros lances, corpo dos outros)
         // e ANDA para dentro do vão: é a mesma recessão que as pisadas têm, agora nas paredes. De

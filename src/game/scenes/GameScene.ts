@@ -2204,10 +2204,14 @@ export class GameScene extends Phaser.Scene {
     // ancoram na posicao projetada dele, e essa posicao so existe depois que a camera 3D deste
     // frame ja escreveu. Desenhar antes seria mirar com a camera do frame passado.
 
-    // Hero glow + carried torch as real lights riding the hero.
+    // A vista do heroi + a tocha na mao dele, as duas montadas no corpo DESENHADO.
     const hb = this.heroBillboard;
     if (hb) {
-      w3.setHeroLight(hb.x, hb.y, this.cutsceneHeroLight);
+      // A frente vem do controlador de movimento — a MESMA que os dois botoes usam (facingTile).
+      // Se a vista pendesse para outro lado que o gesto, o herói olharia para um tile e enxergaria
+      // outro.
+      const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
+      w3.setHeroSight(hb.x, hb.y, f.dx, f.dy, this.cutsceneHeroLight);
       const torchOn = this.isTorchLit && !this.cutsceneActive;
       const fuel = TORCH_MIN_LIGHT_FRAC + (1 - TORCH_MIN_LIGHT_FRAC) * this.torchFuelFrac;
       w3.setTorchLight(hb.x, hb.y, torchOn ? fuel * this.torchGutter.level : 0);

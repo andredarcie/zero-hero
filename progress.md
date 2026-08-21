@@ -8136,3 +8136,666 @@ capturado do jogo rodando, no mesmo tile (24,37), com o mesmo enquadramento e a 
 por um script de captura à parte — não é cenário de playtest e não entra na suíte. **Não rodei a
 suíte**: o autor roda. O cenário que guarda o que mudou aqui é o `visual-ref` (é render puro), e
 `montanha` continua valendo para a pedra do mundo, que não foi tocada.
+
+## A VISTA DO HERÓI: a luz dele é uma CURVA, não uma lâmpada (2026-08-21)
+
+Pedido: *"faça o herói ter uma luz própria como se fosse a visão dele mesmo"*.
+
+A lâmpada já existia — `params.heroLight` = 28, uma `PointLight` neutra montada nele desde sempre,
+com `setHeroLight` chamada todo frame no `POST_UPDATE`. E ela **não fazia nada**. Antes de mexer em
+qualquer número valia a pena descobrir por quê, porque a resposta é a lei desta tarefa inteira.
+
+### Por que nenhuma luz nova pode clarear o chão à noite
+
+`lightCap` (o teto do `pixelArtLight`) limita a luz **direta** a `albedo × cap − indireta`. Com os
+números da noite:
+
+| | vermelho | verde | azul |
+|---|---|---|---|
+| indireta (ambiente 8.5 × `#b4b7c2` ÷ π) | 1.235 | 1.272 | 1.460 |
+| teto (`lightCap` = 1.55) menos ela | **0.315** | **0.278** | **0.090** |
+| a lua sozinha (3.6 × `#97a0b4` × 0.81 ÷ π) | 0.288 | 0.324 | 0.424 |
+
+Ou seja: **no chão aberto a lua já gasta o orçamento inteiro de luz direta** — sobra 0.027 de
+vermelho e nada nos outros dois canais. Qualquer `PointLight` a mais entrega irradiância de sobra e
+o `min()` do teto joga tudo fora. A luz do herói a 28, a 280 ou a 2800 dá o mesmo pixel.
+
+Isto explica de quebra uma coisa que o código já dizia sem explicar: *"a `PointLight` sozinha só
+ilumina superfícies, então a fogueira parecia irrelevante — este disco aditivo é que a faz ler como
+luz"*. A fogueira também bate no teto. **Neste jogo o que se vê é sempre um aditivo ou uma curva,
+nunca uma luz THREE.**
+
+### Então a vista é a curva
+
+O `skyPreset.ts` já ensinava a saída em letras garrafais: *"o lugar de levantar um quadro é a CURVA,
+não a lâmpada"*. O dia inteiro é ganho assim (`lift`, um `pow` no quadro pronto). A vista do herói é
+o **mesmo `pow`, só que local**: centrado nos pés dele, no `FinishShader`, três uniforms novos
+(`uSight`, `uSightAt`, `uSightR`) e seis linhas de GLSL. Custo: zero passe novo, zero luz nova, zero
+draw call — a vinheta ao contrário, dentro de um passe que já rodava.
+
+`heroSight` = 0.14 (expoente 0.86) leva o verde de mato de `#144E0A` a ~`#1C5612`: os graves em
+volta dele sobem ~30% e o 1 continua 1. Passar de ~0.25 lava o preto e a noite deixa de ser noite —
+o mesmo abismo do `lift`, com o mesmo remédio (baixar, não subir).
+
+### As quatro decisões que fazem disto uma VISÃO e não uma auréola
+
+- **Ela pende para onde ele olha** (`heroSightLean` = 0.9 tile, lido do `movementController.facing`
+  — a MESMA frente dos dois botões). É o que separa visão de aura: virar-se varre o campo claro. Se
+  ela pendesse para outro lado que o gesto, ele olharia para um tile e enxergaria outro.
+- **Ninguém mais a vê.** Não é matéria na cena: não acende bicho, não cala cova, não conta como fogo
+  em `nearestLitFireInto`, não projeta sombra. É o olho dele, não uma tocha.
+- **Ela cede à luz de verdade, de graça.** `pow` abre o grave e não mexe no alto, então dentro da
+  poça de uma fogueira ela não soma quase nada — não precisou de um `if` para isso. A economia de
+  acender o mundo fica inteira: **a vista mostra o tile em que ele pisa, a fogueira é que abre a
+  região** (4,5 tiles contra os 15 do halo de uma fogueira).
+- **Ela é LISA.** Todo desenho de luz deste jogo é escadinha de pixel art (o disco da fogueira,
+  `lightSteps`). Esta não, porque não é luz caindo no chão.
+
+E ela **some ao meio-dia** (`heroSight: 0` no `DAY_SKY`), pelo mesmo motivo dos vaga-lumes: é um
+desenho do escuro. Ao meio-dia não há grave para abrir — o `lift` do dia já levantou o quadro
+inteiro — e um segundo `pow` por cima só faria uma mancha lavada seguindo o herói.
+
+### A elipse é medida por projeção, nunca por conta de tela
+
+O herói mora ~no centro da tela, então a tentação é cravar `(0.5, 0.5)` e um raio em pixels. As duas
+partes quebram: o centro escorrega numa fala (`setViewOffset` desloca o herói para caber acima da
+caixa de diálogo), e o raio não é um círculo — a câmera olha 48° para baixo, então um disco de chão
+chega à tela como uma **elipse**, mais larga que alta. `updateHeroSight` projeta três pontos (os
+pés, um raio a leste, um raio ao sul) e tira dali o centro e os dois semi-eixos exatos. Eles seguem
+sozinhos qualquer mexida em `fov`, em `camHeight` ou na inclinação.
+
+Ela é projetada dentro do `render()`, e não no `POST_UPDATE` que a alimenta, pela mesma razão do
+`updateTorch`: só ali a câmera deste frame já está escrita.
+
+### A lâmpada continua lá
+
+`heroLight` = 28 não foi tocada — só ganhou o mesmo pêndulo da vista, para as duas olharem para o
+mesmo lado. Ela não aparece à noite (a tabela acima), mas ela é o que existe se alguém soltar o
+`lightCap` ou levar o herói a um lugar onde a lua não gaste o orçamento, e apagá-la mudaria a
+contagem de luzes da cena — o que recompila todo shader do mundo por nada.
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram. **Não rodei a suíte**:
+o autor roda. **E não olhei o jogo — foi o erro desta primeira versão.** Ver a seção seguinte: ela
+não aparecia, e nenhum dos três comandos podia ter dito isso.
+
+## A VISTA v2: ela não aparecia, e o defeito era GEOMÉTRICO (2026-08-21)
+
+O autor rodou o jogo: *"continua sem luz própria o herói"*. Estava certo — e a v1 acima descreve
+com precisão uma coisa que na tela não acontecia. Duas causas, uma de conta e uma de premissa.
+
+### 1. A elipse cobria a tela inteira, então a "vista" era um `lift` global
+
+Um A/B pelo console (`hd3d.heroSight` em 0 / 0.14 / 0.45, com o jogo rodando) mostrou o uniform
+vivo e correto — e a elipse com **semi-eixo vertical de 1.19, em fração da ALTURA da tela**.
+
+A v1 tirava esse semi-eixo projetando um ponto o raio inteiro **ao sul**. O sul é a direção da
+CÂMERA, e nesse eixo a perspectiva não é simétrica: 4,5 tiles ao sul caem quase no colo da lente e
+projetaram 955px numa tela de 800. Com a elipse maior que o quadro, `length(sd)` dava ~0 em todo
+pixel: o `pow` valia igual na tela inteira. **Um lift global é indistinguível de nada** — e a 0.45
+o que se via era o mundo inteiro clareando e ficando roxo (a compensação de saturação, também
+global). Nenhum `typecheck`, `lint` ou `build` podia ter pego isto. Só o olho.
+
+A correção é medir **UM tile**, com par simétrico em volta do herói (±1 leste/oeste, ±1 norte/sul)
+e diferença centrada — o erro de primeira ordem da perspectiva se cancela, e o raio vira uma
+multiplicação. Medido em jogo: 154px por tile na horizontal, 125px na vertical (a elipse que a
+inclinação de 48° realmente desenha), contra os 105 do `tileScreenSize()` no centro da tela.
+
+E o raio caiu de 4,5 para **2,6 tiles**: um tile são ~154px numa tela de 1280, então 4,5 tiles já
+eram meia tela de semi-eixo. Com o raio certo, a força pôde subir de 0.14 para **0.30** — uma
+curva local pode ser forte, porque o que se enxerga é o contraste com o escuro em volta.
+
+### 2. A premissa: uma curva não tem SILHUETA
+
+Corrigida a geometria, dava para ver a diferença — mas ela lia como *"a tela está mais clara no
+meio"*, não como *"o herói tem luz"*. O motivo é a mesma lei que a v1 descobriu e não levou até o
+fim: **neste renderizador quem dá FORMA a uma luz é sempre o disco aditivo.** Está escrito no doc
+do `acquireGlow` desde a primeira fogueira — a `PointLight` dela bate no mesmo teto, e o que faz
+uma fogueira parecer uma fogueira é o quad no chão. Um `pow` clareia uma região e nada mais: sem
+borda, sem centro, sem forma.
+
+Então a vista ganhou o disco: **o mesmo quad de poça da fogueira e da tocha** — mesmo programa,
+mesma escadinha de banda no grid da arte — com duas coisas trocadas:
+
+- **A rampa é FRIA** (`#cdd6e6` / `#8f9cba` / `#4a5a7d`, a família do `moonColor`). Uma poça quente
+  em volta do herói leria como tocha acesa — ele pareceria carregar fogo que não tem — e roubaria
+  da fogueira a única cor quente do mundo, que é o contraste em que o jogo se apoia.
+- **Ela não treme** (`uLightWobble` = 0). O ruído que amassa os anéis é chama imperfeita, e é a
+  assinatura do fogo. A vista é firme porque é o olho dele.
+
+Força **0.24** contra os 0.6 de uma fogueira, num disco de 5,2 tiles contra os 15 dela. Nada disso
+custou programa novo: `customProgramCacheKey` continua `'fireGlow'` — o GLSL é o mesmo, só os
+uniformes mudam —, e o mesh nasce no construtor junto das luzes, pela razão de sempre.
+
+### O que o teste em jogo confirmou
+
+- **Vira com ele.** Olhando ao sul o centro da vista cai em `uSightAt.y` = 0.320; ao norte, 0.561
+  (o herói fica em ~0.44). São ~24% da altura da tela de varredura ao girar — visível, e é isso que
+  separa visão de auréola.
+- **De dia ela não existe**, e não só fica fraca: `heroSight` e `heroSightGlow` vão a 0 no `DAY_SKY`
+  e o quad sai da fila de desenho (`visible = false`), em vez de desenhar cinco tiles de aditivo
+  para somar zero.
+- 50 draw calls à noite com o disco ligado.
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram. Desta vez **o jogo foi
+aberto e olhado**, por um script de captura à parte (Playwright, mudo, `?play&night`) que não entra
+na suíte e foi apagado no fim. **Não rodei a suíte**: o autor roda. O cenário que guarda isto é o
+**`visual-ref`** (é render puro); `perf-burn` continua valendo — nenhuma luz nasceu nem morreu, o
+que entrou foi **um** quad aditivo. Knobs vivos: `hd3d.heroSight`, `hd3d.heroSightGlow`,
+`hd3d.heroSightTiles` e `hd3d.heroSightLean`.
+
+**A lição, e é a que vale para a próxima mudança de render:** três comandos verdes não dizem se uma
+imagem mudou. Mudança que se julga com o olho se abre e se olha — e o A/B pelo knob (0 × ligado, no
+mesmo frame) é o instrumento, porque ele isola a peça de todo o resto do quadro.
+
+## OS DOIS ANDARES VIRARAM UMA CHAVE NO EDITOR (2026-08-21)
+
+Pedido: as duas opções — mundo da superfície e mundo subterrâneo — dentro do editor.
+
+### O nome: Overworld / Underworld
+
+Não inventei vocabulário. O projeto já diz estas duas palavras em todo lugar: `underworld.json`,
+`runtime/underworld.ts`, `scripts/gen-underworld.mjs`, `scripts/enrich-overworld-props.mjs`. Um
+"Surface/Cave" no painel seria um terceiro jeito de chamar as mesmas duas coisas, e a primeira
+pessoa a se confundir seria quem lê o toast do Salvar logo abaixo do botão.
+
+### O que existia, e o que faltava
+
+O subterrâneo **já era editável** — mas só por `/lab?under`, um endereço que não estava escrito em
+lugar nenhum da tela. O `/editor` abria `world.json` e ponto final (`worldFileId` devolvia `'world'`
+antes de sequer olhar a URL).
+
+Agora o `?under` é lido primeiro e vale nas duas rotas, e a chave do painel é uma porta para esse
+parâmetro — **a URL continua sendo a única fonte da verdade**. Recarregar, favoritar ou colar o
+endereço devolve o andar em que se estava, e cada andar já guardava a própria câmera e o próprio
+estado de UI (`uiStateKey` deriva do arquivo desde sempre).
+
+Trocar de andar é uma navegação de verdade, como o `openLabFile`: store, câmera, undo e objetos
+todos nascem do arquivo, e trocar o arquivo por baixo da cena seria reconstruir tudo à mão em troca
+de nada. Quem avisa de edição não salva é o `beforeunload` que o painel já instala.
+
+A chave fica **acima do Salvar**, e isso é decisão e não acaso: o botão mais perigoso do painel
+escreve num arquivo, e a leitura de cima para baixo tem de ser *"estou no subterrâneo → salvo no
+subterrâneo"*. Embaixo, ela viraria uma descoberta depois do estrago.
+
+**No `/lab` a chave não aparece.** Lá o arquivo aberto é um LEVEL, que não é andar de nada —
+oferecer a troca seria uma porta que muda o assunto da tela.
+
+### Dois defeitos que a porta nova tornou alcançáveis, e por isso foram fechados
+
+- **O toast do Salvar mentia o caminho.** Ele tinha dois ramos (`world` ou `levels/...`), então o
+  subterrâneo era anunciado como `public/levels/underworld.json` — um arquivo que nunca existiu.
+  Ninguém tinha visto porque ninguém salvava o subterrâneo por uma tela que mostrasse o caminho. A
+  tabela agora mora em `worldApi.worldFilePath`, num lugar só, e as dicas dos botões Salvar e
+  Recarregar leem dela — o botão promete o mesmo arquivo que o toast confirma.
+- **O P testava o subterrâneo como se fosse a superfície.** `startPlaytest` nunca escrevia o andar,
+  e sem ele `isUnderground()` é falso: a escada nascia virada para BAIXO e pisar nela chamava o
+  `enterDungeon`, que **recarrega o `underworld.json` do disco** — jogando fora a edição que ainda
+  não foi salva. Com `setUnderground(this.isUnderworld)` a escada sobe e a viagem devolve o
+  overworld, que é o que ela faz no jogo. (O save da aventura não corre risco: `this.adventure` já
+  exige `appMode === 'game'`, e um playtest do editor nunca é.)
+
+### Verificado no editor de verdade
+
+Abri as três rotas e li o painel (script Playwright à parte, apagado no fim):
+
+| rota | chave | subtítulo | Salvar escreve em |
+|---|---|---|---|
+| `/editor` | Overworld aceso | Ashen Wilds — 5x5 chunks | `public/world.json` |
+| `/editor?under=1` | Underworld aceso | Under the Ashen Wilds — 5x5 chunks | `public/underworld.json` |
+| `/lab` | ausente | Fogo — 1x1 chunks | `public/levels/level-2.json` |
+
+O clique em Underworld navega e o espelho carrega inteiro (60×60 tiles, covas e props no lugar).
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram, e o editor foi aberto
+e olhado. **Não rodei a suíte**: o autor roda. Não há cenário de playtest cobrindo o editor (ele
+não é jogo); o que guarda o andar depois da troca é o `salvamento`, e o subterrâneo em si continua
+guardado pela travessia da escada.
+
+## CHÃO + UMA COISA: 45 pilhas no mapa, e a regra que impede a 46ª (2026-08-21)
+
+Pedido: *"revise no mapa objetos um em cima do outro. Só pode existir o chão e depois algo em cima
+do chão, seja tile ou prop ou item, mas nunca mais que isso."*
+
+### O censo
+
+Varri os 14 arquivos de mundo contando ocupantes por tile (`upper`, prop, item, NPC, cova — o
+`ground` não conta, ele é o chão). **Só o `world.json` tinha pilha: 45 tiles em 2.660 ocupados.**
+Subterrâneo e os treze levels do lab estão limpos.
+
+| pilha | tiles |
+|---|---|
+| prop + `upper` | 40 |
+| item + `upper` | 2 |
+| item + prop | 2 |
+| cova + `upper` | 1 |
+
+Duas medidas decidiram o conserto antes de eu escrever uma linha dele:
+
+- **Nenhum dos 45 tiles tem colisão PINTADA.** Isso libera a remoção do tile de cima: ela não pode
+  deixar para trás uma parede invisível (colisão sem nada desenhado).
+- **Dos 43 tiles de cenário, só 3 eram SÓLIDOS** (pinheiro), e em dois deles o prop embaixo já
+  bloqueia (uma árvore seca, um rio). Então a limpeza abre exatamente **um** tile: (31,7), que é
+  uma cova de aranha que estava dentro de um pinheiro — o bicho nascia dentro de uma parede.
+
+Isso importa porque a lei de mexer no mundo em massa é *"prop que bloqueia só entra com prova de
+BFS de que não selou caminho"*. Aqui não há BFS a fazer: o script **só remove** tiles de cima, e
+remover só abre. A prova é a direção da mudança, não uma busca.
+
+### Como cada pilha se resolveu
+
+- **`upper` + peça → o `upper` sai (43 tiles).** O prop, o item e a cova têm regra (a água bloqueia
+  e aceita ponte, a pira é o fim do jogo, o item se apanha); o tile de cima é cenário — e cenário
+  desenhado POR CIMA, ou seja, era ele que escondia a peça. Havia água com pedregulho e pinheiro
+  dentro dela, uma caixa de ferramentas debaixo de folhagem, o machado e o balde enterrados sob a
+  mesma moita.
+- **Item + escada → o item se muda (2 tiles).** Uma bomba em (5,55) e uma pá em (53,55), largadas
+  em cima da boca da escada. Nunca seriam apanhadas — pisar ali é descer. A escada é uma das cinco
+  portas entre os andares e não tem para onde ir, então quem anda é o item: um tile a leste, terra
+  aberta nos dois casos. **Nada foi apagado** — um item apagado pode ser a ferramenta que trava o
+  jogo.
+- **Qualquer outro caso → o script recusa e reclama.** Não houve nenhum, mas adivinhar em cima de
+  mundo autorado é pior que o aviso.
+
+`scripts/fix-tile-stacks.mjs`, modelo enrich-*: lê e conserta, mira num PONTO FIXO (zero pilhas) e
+não num delta, zero `Math.random`, não toca em `ground` nem em `collisions`. O diff no `world.json`
+é exatamente 43 células de `upper` viradas para `null` e 2 `worldX` somados de 1 — nada mais.
+`npm run audit:stacks` é o `--check`.
+
+### E a regra, que é o que o pedido realmente era
+
+Consertar 45 tiles sem mexer no editor seria varrer para debaixo do tapete: **o editor produzia as
+pilhas por construção.** `placeEntity` limpava só a MESMA lista, então largar um prop em cima de um
+item guardava os dois; e pintar `upper` nunca olhava para entidade nenhuma.
+
+Agora a lei se cumpre nos dois sentidos, e cada um escolheu o comportamento que não destrói
+trabalho:
+
+- **Colocar uma peça LIMPA o tile** — sai tudo o que estava lá (qualquer lista) e sai o `upper`.
+  Trocar em vez de recusar, pelo mesmo motivo que o NPC já fazia: um clique que não faz nada não
+  ensina nada. Tudo num op só, então **um Ctrl+Z devolve o tile inteiro** (a peça velha, o item que
+  estava lá e a folhagem por cima).
+- **Pintar `upper` PULA o tile ocupado** — `setCell` devolve `false` e o pincel segue. Aqui não dá
+  para "trocar": um pincel 3×3 apagaria props autorados aos montes sem ninguém pedir. Apagar
+  (`next === null`) nunca é recusado, porque tirar nunca empilha. O balde herda isso de graça e
+  ainda deixou de contar a célula recusada — ela entrava em `filled`, e o chamador pinta
+  `collisionMode` em cima dessa lista: o balde marcava colisão num tile que ele não pintou.
+- **O Salvar avisa** se ainda houver pilha, para o que entrar por script ou JSON à mão.
+
+### Verificado no editor de verdade
+
+Exercitei a regra no `/editor` rodando (script Playwright à parte, apagado no fim):
+
+```
+pinta upper em tile vazio    true    {upper:0,  ents:[]}
+poe prop sobre a folhagem    -       {upper:null, ents:[props:rock]}   ← a folhagem saiu
+pinta upper sobre o prop     false   {upper:null, ents:[props:rock]}   ← recusado
+poe item sobre o prop        -       {upper:null, ents:[pickups:axe]}  ← trocou, nao empilhou
+undo 1/2/3                   -       prop  →  folhagem  →  vazio       ← o tile inteiro volta
+balde 3x3 em volta da peca   8 de 9 tiles                              ← contornou, nao apagou
+```
+
+`validate()` no mundo já consertado não reporta pilha nenhuma.
+
+### Achado que NÃO consertei
+
+O `audit:endgame` acusa `blackCat` e `wizard` fora do mapa, e o editor acusa 3 entidades sobre
+colisão pintada (`water@44,52`, `tallGrass@45,52`, `tallGrass@44,51`). Conferi contra o arquivo de
+antes: **os dois são anteriores a esta mudança** — a contagem de NPCs, props e itens é idêntica
+byte a byte antes e depois (só os 43 `upper` mudaram). São outra conversa, e são conteúdo.
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/` nem no script novo), `build` e
+`npm run audit:stacks` passaram; `audit:endgame` roda com os mesmos 2 elos quebrados de antes. **Não
+rodei a suíte**: o autor roda. Os cenários que tocam este mundo são `prologo` (a economia e os itens
+autorados — vale conferir que a bomba e a pá continuam alcançáveis um tile ao lado) e `machado`
+(árvore e borda). Backup do `world.json` foi feito antes de gravar.
+
+## O FORA DO MUNDO DEIXOU DE SER MAR: floresta sob névoa negra, e o teto da dungeon (2026-08-21)
+
+Pedido: em vez do mar gigante em volta do mapa, uma floresta gigante com névoa negra por cima; e na
+dungeon, um escuro gigante do teto dos muros.
+
+### Três medidas antes de escrever uma linha
+
+1. **O mar gigante é 100% o VAZIO.** O `world.json` tem 51 tiles de mar autorados (1,4%) e **zero**
+   no anel de borda — são um lago interno. Então tudo o que o jogador vê como "mar" é
+   `WorldData.buildVoidChunk`, e o mapa autorado não precisou mudar um byte.
+2. **A trava da borda já não é o material.** A borda virou mar em 2026-07 porque ela ERA pinheiro e
+   o `greatAxe` passou a cortar qualquer árvore — dava para abrir uma porta a machadadas e sair do
+   mapa. Mas hoje `GameScene.treeTileFrameAt` recusa por **coordenada** (`hasChunkCoordinate`, com
+   um comentário que diz "the border must not be editable by any means"), e `buildVoidChunk` põe
+   `collisions: true` em todo tile. São duas travas independentes, e **nenhuma olha para a arte**.
+   Foi isso que devolveu a liberdade de pôr árvore lá fora.
+3. **O teto preto da dungeon já existe.** `mats.wallTop` é um `MeshBasicMaterial` preto puro, o topo
+   do cubo de alvenaria — "o vazio entre uma sala e a outra", nas palavras do próprio código. O
+   escuro gigante pedido não é material novo: é encher o vazio de muro.
+
+### O que ficou
+
+- **Superfície:** chão de terra + um pinheiro por tile (6 frames, escolhidos por hash das
+  coordenadas — nunca `Math.random`, que o visual-ref não perdoa), sob a névoa.
+- **Subterrâneo:** piso de dungeon + muro, que vira cubo e traz o teto preto de graça.
+- **A névoa negra** (`makeVoidMistMaterial`): a alfa sai da distância ao RETÂNGULO do mundo, medida
+  no fragmento — zero na fronteira, preta em `params.voidMist` tiles. A borda é roída pelo mesmo
+  campo de ruído do fogo (`fireWobble`) escorrendo devagar, e tudo é quantizado no grid da arte,
+  porque uma rampa lisa seria o único objeto da tela com resolução infinita.
+
+### Três erros que só a tela mostrou
+
+- **A névoa nasceu TAMPA e não velava nada.** Quads deitados acima da copa. A geometria derruba a
+  ideia: com a câmera a 48°, um plano horizontal sobre o tile (x,z) projeta ACIMA de onde a árvore
+  daquele tile desenha — a tampa velava o tile de trás e deixava a árvore da frente exposta. Virou
+  **cortina em pé**, no plano das árvores.
+- **A cortina no próprio `z` era descartada pelo teste de profundidade.** Mesma profundidade da
+  árvore, e `less` reprova empate: a névoa morria exatamente em cima do que existia para cobrir. Foi
+  para a borda da frente do tile (`z + 0.5`) — meio tile à frente da sua árvore, meio atrás da
+  próxima.
+- **A profundidade estava calibrada no papel.** 6 tiles pareciam razoáveis e não fechavam nada: da
+  borda do mundo até o topo da tela cabem ~5 tiles de fora, então a rampa mal começava. O A/B pelo
+  knob (`hd3d.voidMist` em 0/1/6/20) mostrou que **1** corta a preto na primeira fileira e **4** é o
+  ponto: duas ou três fileiras de mata, e a névoa fecha antes da borda da tela.
+
+E um quarto que eu **inventei e tive de desfazer**: achei que fileiras retas leem como POMAR e dei
+a cada árvore de fora um desvio de profundidade por hash. O autor recusou de imediato — *"a
+floresta tem que seguir à risca os blocos de tiles"* — e está certo: **o mundo é uma grade, e a
+grade é o desenho.** Uma árvore fora do centro do tile não lê como floresta natural, lê como peça
+solta, e desmente a única coisa que todo tile do jogo promete: que ali cabe exatamente um. O desvio
+saiu inteiro (parâmetro e chamador), e a prova de que ele não voltou é numérica: dos 4.074 quads em
+pé, **zero** vértices fora do centro do tile, desvio máximo 0. A variedade da mata vem dos seis
+frames de pinheiro — variação DENTRO do tile — e da névoa por cima.
+
+### O custo, medido no mesmo build e no mesmo enquadramento
+
+| | mar (antes) | floresta + névoa |
+|---|---|---|
+| triângulos | 29.190 | **34.734** (+19%) |
+| draw calls | 58 | **54** |
+| tiles sólidos | 666 | 4.122 |
+| sólidos que lançam sombra | 358 | **312** |
+
+Os draw calls CAÍRAM: a malha do mar e os barrancos de costa dela eram quase todos do vazio, e
+sumiram. E o número que a nota antiga do `VOID_MARGIN_CHUNKS` temia — "o void carregava um quad de
+pinheiro em pé **mais blob mais sombra** por tile" — **não aconteceu**: a mata de fora é COMPACTA,
+então a regra dos ≤4 vizinhos exclui quase tudo dela do blob e do campo de sombra lunar, e ainda
+tira as árvores da borda do mundo que antes faziam divisa com mar aberto. As camadas sempre-ligadas
+ficaram mais baratas; o que se paga são os +5,5k triângulos da malha em pé e da cortina.
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram, e os três casos foram
+abertos e olhados (script Playwright à parte, apagado): superfície de noite, superfície de dia e o
+subterrâneo pelo `▶ Testar` do `/editor?under=1`. **Não rodei a suíte**: o autor roda. O cenário que
+guarda a borda é o **`machado`** (árvore e borda — e ele vale mais do que nunca agora, porque a
+borda voltou a ser feita de árvore); render puro é o `visual-ref`, e ele VAI acusar diferença, que é
+o ponto. `CLAUDE.md` e a memória `world-border-is-sea` foram corrigidos: a lei "a borda do mundo é
+MAR" estava simplesmente errada depois desta mudança.
+
+## A PALETA GANHOU O GRUPO DUNGEON — os muros não tinham onde ser desenhados (2026-08-21)
+
+Pergunta do autor: *"usando o editor, como eu desenho os muros da dungeon? Não achei onde fazer
+isso."* Não achou porque não havia.
+
+### O que estava errado
+
+Os dez frames de alvenaria (`DUNGEON_TILES`: pisos 42/43/44 + 51, muros 45/46/47, tocha 48, musgo
+49, rachado 50) existem no atlas desde que a dungeon existe, e **nenhum deles estava no
+`TILE_GROUPS`**. A paleta enumera o atlas inteiro, então eles apareciam — no fim, num balaio
+chamado "Outros", sem nome, ao lado das variantes do mar e dos estágios de corte de árvore. Um
+cartão dizendo "tile 45".
+
+E o pior não era o nome, era a **camada**. `TILE_DEFS.get(frame)` devolve `undefined` para um frame
+que a tabela não nomeia, e é esse `def` que troca a camada ativa no clique. Sem ele:
+
+- pintar um MURO com "Chao" ligado punha a parede no piso — a malha de chão ignora alpha, e o
+  resultado é a arte de parede deitada onde deveria haver chão;
+- pintar um PISO com "Superior" ligado tapava o chão com um tile opaco na camada de cima.
+
+São, literalmente, as duas falhas que o comentário no topo da tabela descreve como o motivo de
+`TileDef` carregar `layer`. A alvenaria era o único conjunto do atlas que não tinha essa proteção.
+
+Isso passou despercebido enquanto o subterrâneo só se abria por um endereço não escrito
+(`/lab?under`). Com a chave Overworld/Underworld no painel, ele ficou a um clique — e a primeira
+coisa que se quer fazer lá é levantar parede.
+
+### O que ficou
+
+Um grupo **Dungeon** entre Montanha e Cemitério (perto da montanha de propósito: as duas são as
+únicas que o World3D assa em CUBO). Piso primeiro, muro depois, como o grupo do cemitério já fazia:
+
+| ground | upper |
+|---|---|
+| Piso, Piso 2, Piso 3, Piso Rachado | Muro, Muro 2, Muro 3, Muro com Musgo, Muro com Tocha, **Muro Rachado** |
+
+O Muro Rachado fica por último porque não é decoração: ele PROMETE uma passagem (a pista da parede
+bombardeável, a legenda que o Zelda 1 nunca deu).
+
+Nada disso precisa de colisão pintada — o muro está em `SOLID_UPPER_FRAMES` e bloqueia sozinho; o
+editor mostra essa colisão implícita em âmbar, e o 3D o assa em cubo com o topo preto puro.
+
+### Verificado no editor
+
+Grupos da paleta: `Chao | Floresta | Montanha | Dungeon | Cemiterio | Outros`. E o clique troca a
+camada, que era o defeito de verdade:
+
+```
+Muro com Tocha  -> tile 48, camada upper
+Piso Rachado    -> tile 51, camada ground
+Muro Rachado    -> tile 50, camada upper
+```
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram; o editor foi aberto em
+`/editor?under=1` e olhado (script à parte, apagado). **Não rodei a suíte**: o autor roda. Não há
+cenário cobrindo a paleta do editor — o que este grupo protege é o AUTOR, e o que guarda o resultado
+dele no jogo é a travessia da escada e o `visual-ref`.
+
+## NO SUBTERRÂNEO A PALETA É SÓ ALVENARIA (2026-08-21)
+
+Pedido: *"no editor, quando estiver na dungeon, só deve aparecer os tiles referente a dungeon."*
+
+### O arquivo já concordava; a paleta é que não
+
+Contei o que o `underworld.json` realmente usa antes de mexer: **piso e muro, e nada mais**
+(`Piso3` 2833, `Piso2` 584, `Piso` 152, e nos muros `Muro3` 213, `Muro2` 196, `Muro` 168,
+`MuroMusgo` 66). Não há um tile de grama, pinheiro, mar ou lápide no andar de baixo. A regra pedida
+não é uma restrição nova — é a paleta finalmente concordando com o lugar.
+
+E a contagem trouxe de brinde a prova de que o defeito da CAMADA (consertado na entrada anterior)
+já tinha mordido: **18 tiles de `Muro 3` pintados na camada de CHÃO** e 13 do frame 26, que é um dos
+anônimos do balaio "Outros". É exatamente o que acontece quando a paleta não carrega a camada do
+tile e o autor pinta com "Chao" ligado.
+
+### O que ficou
+
+`?under` → a paleta de Tiles mostra **só o grupo Dungeon** (11 células: os dez frames + o X de
+limpar), e o balaio "Outros" some junto — ele é o resto do atlas (mar, estágios de corte, frames
+vazios), que é precisamente o que a filtragem existe para tirar da frente lá embaixo.
+
+**O contrário NÃO é simétrico, de propósito.** Em cima e no `/lab` a paleta continua inteira, com o
+grupo Dungeon disponível: um level é uma tela livre e pode querer uma sala de pedra. Só o
+subterrâneo tem uma matéria-prima única, porque só ele É uma matéria-prima única.
+
+O conjunto de frames permitidos é DERIVADO dos grupos marcados (`dungeon: true`), nunca uma segunda
+lista — duas listas do mesmo assunto discordam no primeiro tile novo.
+
+### A ponta que quase ficou de fora
+
+Esconder a grama não impede nada se a SELEÇÃO atravessar a escada carregada: o estado de UI é
+guardado por arquivo, mas o padrão de fábrica é `tile: 5` (Terra), e uma seleção vinda de cima
+continua armada. O primeiro clique plantaria um tile de superfície no subterrâneo — e o autor não
+veria de onde veio, porque a carta daquele tile não está mais na tela.
+
+Então o pincel se ajusta ao lugar ao entrar: se o tile selecionado não é de dungeon, ele vira
+**Piso**, camada chão. Testado com o pincel armado em Pinheiro (frame 4, camada superior) antes de
+descer — desceu como Piso (42), chão.
+
+### Verificado no editor
+
+| rota | grupos | células | pincel ao entrar |
+|---|---|---|---|
+| `/editor` | Chao, Floresta, Montanha, Dungeon, Cemiterio, Outros | 55 | Terra |
+| `/editor?under=1` | **Dungeon** | **11** | **Piso (42), chão** |
+| `/lab` | (todos) | 55 | Terra |
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram; as três rotas foram
+abertas e lidas (script à parte, apagado). **Não rodei a suíte**: o autor roda. Nenhum cenário cobre
+a paleta — ela protege o AUTOR, não o jogo.
+
+**Fica em aberto, e é conteúdo:** os 18 muros na camada de chão e os 13 tiles do frame 26 continuam
+no `underworld.json`. Não toquei — repintar 31 tiles do mapa de alguém é decisão de autor, e agora
+a paleta oferece o Piso certo para fazê-lo.
+
+## A ESCADA v7: o buraco deixou de ser desenhado e virou um POÇO no terreno (2026-08-21)
+
+Pedido: *"faça de fato um buraco ali que fura o chão, uma caixa funda, tipo no caso da água. E nesse
+buraco os degraus vão descer nele. Além do buraco físico vai existir uma sombra escura."*
+
+### A lição nº 1 tinha uma exceção, e ela estava a três linhas de distância
+
+O cabeçalho desta peça abre com *"nada abaixo de y=0 existe"* — foi por isso que a v1 (um poço com
+degraus afundando) saiu invisível, e por isso as seis versões seguintes DESENHARAM a profundidade:
+pisadas encolhendo e escurecendo sobre uma laje preta `unlit`, tudo acima do chão.
+
+A frase estava certa e incompleta. O chão do mundo é um quad opaco em y=0 **até alguém afundá-lo**,
+e o rio faz exatamente isso desde o primeiro dia: `buildTerrain` manda o quad daquele tile para
+`-WATER_DEPTH_TILES` e fecha as beiras com parede (`buildBankGeometry`). Enquanto a escada fingia
+profundidade, o riacho ao lado dela tinha um leito de verdade.
+
+Agora o tile da escada passa pelo mesmo caminho: `pitSet` → leito em `-STAIRS_PIT_DEPTH` + paredes
+nas quatro beiras + entrada em `sunkenTiles` (para a silhueta de sombra parar na borda, como já
+para na margem do rio). **Só na superfície**: embaixo a escada é uma massa que sai do piso e sobe, e
+furar o chão da caverna abriria um buraco debaixo da própria escadaria.
+
+### PRETO PURO, e o zero é o argumento
+
+O fundo e as paredes do poço são `MeshBasicMaterial` — buraco não é superfície, não recebe luz — e
+a cor é `0x000000`, não um quase-preto. A diferença apareceu na tela: com `0x040308` o poço ficava
+**marrom** quando o herói chegava perto, e a culpa era da peça que eu tinha feito no dia anterior —
+a VISTA DO HERÓI aplica um `pow` local nos graves, e 0.0006 elevado a 0.7 vira 0.0075, doze vezes
+mais claro. Era a lição nº 3 desta mesma peça ("preto puro sai marrom") acontecendo de novo por uma
+porta nova. Zero é ponto fixo de tudo o que a cadeia faz: `pow(0,k)=0`, `0×grade=0`. É o mesmo
+motivo pelo qual o teto do muro de dungeon é preto puro. **Esta é a sombra escura do pedido**: ela
+não é um decalque por cima do buraco, é o buraco não tendo nada dentro.
+
+### Três erros meus, e o terceiro era o que importava
+
+- **Estendi cada degrau até o fundo do poço.** Parecia mais correto ("um degrau é o que sobra de uma
+  escada maciça depois de cortar o vão") e encheu o buraco de granito: vista de cima, a soma dos
+  quatro blocos é uma TAMPA de pedra com o furo debaixo. Hoje cada degrau é pisada + UM ESPELHO — a
+  queda até o degrau seguinte — e o escuro passa entre eles e por baixo do último.
+- **Deixei a rampa de TOM como estava** (`[CROWN, BODY, SHADE, SHADE]`). Escurecer era o segundo
+  eixo do "isto recua" enquanto o primeiro não existia; dentro de um poço preto, uma pisada de
+  sombra simplesmente não aparece. A rampa abriu (`[CROWN, CROWN, BODY, BODY]`), o estreitamento
+  caiu de 0,36 para 0,20 e a pisada do fundo alongou — quem diz o quanto cada degrau desceu passou a
+  ser a geometria.
+- **Escolhi o espelho a olho (0,115) e ele MENTIA.** Quem já descia era o herói: `STAIRS_DROP_TILES`
+  afunda o corpo 0,55 tile na caminhada, e esse número existe desde quando não havia degrau nenhum
+  embaixo dele. Com 0,115 a pedra desce na metade da velocidade do corpo — ele atravessa os degraus
+  e sai por baixo. Hoje `TREAD_RISE = STAIRS_DROP_TILES / STEPS`, derivado e não escolhido, e o poço
+  tem de ser mais fundo que a queda (0,62 > 0,55) ou o herói termina a descida atravessando o fundo.
+
+### O que ficou verificado, e o que não
+
+Verificado no jogo: o quad do tile sai de `groundTiles` (`groundQuads` não o tem mais), as malhas do
+poço existem (24 vértices de fundo e 96 de parede para as 6 escadas do mundo), e com a alvenaria
+escondida o tile é um retângulo quase preto — **o buraco é real e é escuro**. De pé em cima do tile
+a peça continua lendo: corpo, moldura de pedra, pisada da entrada acesa.
+
+**Não verificado, e é decisão de olho:** a que distância de jogo as pisadas 2, 3 e 4 ainda se leem.
+Elas descem para dentro do preto de propósito, e no enquadramento normal o que se vê é a pisada da
+entrada e o escuro. Pode ser exatamente o certo ou fundo demais — o número mora em
+`STAIRS_PIT_DEPTH` (World3D) e o passo sai dele por `STAIRS_DROP_TILES`.
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram; a peça foi aberta e
+olhada de noite e de dia (script à parte, apagado). **Não rodei a suíte**: o autor roda. O cenário
+que guarda a travessia é o da ESCADA (a viagem entre andares); render puro é o `visual-ref`, e ele
+VAI acusar diferença neste tile.
+
+## O SERRILHADO DO CELULAR: o jogo desenhava a 1/6 da tela (2026-08-21)
+
+Relato: *"por algum motivo no mobile o jogo fica super serrilhado, deixe mesmo no mobile 100%
+definido."*
+
+### Eram DOIS reescalonamentos, e só um deles estava escrito no código
+
+O visível: `pixelScale: isHandheld() ? 2 : 1` — o telefone desenhava na metade da resolução para
+economizar preenchimento, com um comentário explicando a troca.
+
+O invisível, e é ele que fazia o estrago: o tamanho do buffer era medido em **pixels CSS**
+(`window.innerWidth / pixelScale`) com `setPixelRatio(1)`. Num monitor comum um pixel CSS é um pixel
+de aparelho, e por isso o desktop sempre saiu nítido — a conta estava certa por coincidência. Num
+telefone um pixel CSS são TRÊS pixels de aparelho, então o quadro já era esticado 3× antes de
+qualquer `pixelScale`.
+
+Os dois juntos: **1/6 da resolução da tela**, ampliada de volta. Medido, num perfil de 390×844 com
+DPR 3: buffer de 195×422 esticado para 1170×2532, um fator de **6×**. O desktop, no mesmo commit,
+rodava a 1,0×. Não era o pixel art — era um segundo reescalonamento que ninguém tinha escrito.
+
+### O conserto, e a metade dele que é de graça
+
+**Medir o buffer em pixel de APARELHO.** `pixelScale` passa a querer dizer o que o nome diz —
+quantos pixels de tela um pixel desenhado ocupa — e a mesma imagem sai igual no monitor e no
+telefone.
+
+**E o fator tem de ser INTEIRO.** Esta é a parte que não custa nada e que quase me escapou: a
+primeira versão limitava o `devicePixelRatio` a 2, o que num aparelho de 3× dá um fator de 1,5 — e
+com fator quebrado o navegador amplia uns pixels para 1 e outros para 2. O resultado é uma grade de
+blocos de tamanhos diferentes, que é serrilhado irregular: exatamente o que `image-rendering:
+pixelated` existe para evitar. A regra certa divide por um inteiro (`dpr / ceil(dpr / MAX)`), e no
+telefone de 3× ela ainda sai **mais barata** que o teto de 2 (buffer 1,5× a tela CSS contra 2×).
+
+Uma armadilha de float no caminho: o navegador devolve `devicePixelRatio` = 2.0000000298 numa tela
+2×, e um `ceil` cru sobre isso dá 2 em vez de 1 — a retina passava a desenhar na METADE por causa do
+último bit. Daí o `- 1e-6`.
+
+E o `uBlur` do tilt-shift é medido em pixels do BUFFER: com o buffer maior, o mesmo número dá metade
+do borrão. Ele agora multiplica pela escala em que o buffer foi assado, então o número autorado
+continua querendo dizer "pixels de TELA", que é como o olho o escolheu.
+
+### Medido, nos três perfis
+
+| | antes (upscale) | depois |
+|---|---|---|
+| desktop DPR 1 | 1,0× | **1,0×** (buffer 1280×800) |
+| retina DPR 2 | 2,0× | **1,0×** (buffer 2560×1600) |
+| celular DPR 3 | **6,0×** | **2,0×** (buffer 585×1266, inteiro) |
+
+O celular ficou 3× mais definido e o fator virou inteiro; a retina passou a desenhar nativa, o que
+ninguém tinha pedido mas era o mesmo defeito.
+
+### O detector de dispositivo caiu, e um botão tomou o lugar dele
+
+`isHandheld()` decidia sozinho que todo telefone desenha na metade — do mais fraco ao mais novo — e
+"é um celular" não diz nada sobre a GPU dele. Quem escolhe agora é o jogador, no menu de pausa
+(**Sharpness**, ao lado do dia/noite e do DoF, guardado em `zh.sharp`): nítido ou econômico, e o
+econômico volta ao fator 4× com um quarto do preenchimento. `hd3d.pixelScale` continua fazendo o
+mesmo pelo console, ao vivo.
+
+Isso importa porque o preço é real e é do telefone: **~16× os fragmentos de antes** no modo nítido.
+Não tenho como medir o aparelho do autor daqui — o botão é a resposta honesta a isso, não um palpite
+meu sobre o que a GPU dele aguenta.
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram. Os três perfis foram
+abertos num Chromium com `deviceScaleFactor` de 1, 2 e 3, e os números da tabela acima são lidos do
+`canvas.width` real; o modo econômico foi verificado no mesmo perfil (buffer 293×633, fator 4).
+**Não rodei a suíte**: o autor roda. Os cenários que isto toca são `visual-ref` (render puro — ele
+VAI acusar diferença, porque a resolução mudou) e `perf-profile`/`perf-burn`, que valem mais do que
+nunca aqui.
+
+**Fica em aberto:** o `PortalTunnel` tem o mesmo `setPixelRatio(1)` e o mesmo buffer em pixel CSS.
+Não toquei — ele é um efeito de tela cheia deliberadamente grosso, com um `pixelSize` próprio, e
+mudá-lo é decisão de olho sobre aquela peça, não o defeito relatado.
