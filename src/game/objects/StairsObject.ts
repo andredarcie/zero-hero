@@ -1,5 +1,7 @@
+import { MasonryBuilder, enableTiling } from '@/game/objects/stairsMasonry';
 import { getStoneTexture } from '@/game/render3d/stoneTexture';
 import { world3d, type Box3D, type GroundEllipse } from '@/game/render3d/World3D';
+import type * as THREE from 'three';
 import type { WorldProp } from './WorldProp';
 
 /**
@@ -20,8 +22,8 @@ import type { WorldProp } from './WorldProp';
  * elegante no papel e errado na tela, porque as duas metades não mostram a mesma coisa.
  *
  *   EM CIMA a escada é um BURACO. Tudo o que ela tem está abaixo do chão, e nada abaixo de y=0
- *   existe nesta câmera (lição 1). Então ela é DESENHADA, não construída: listras baixas
- *   encolhendo sobre um vão preto. Só dá para sugerir.
+ *   existe nesta câmera (lição 1). Então ela é DESENHADA, não construída: pisadas encolhendo
+ *   sobre um vão preto, entre duas paredes que descem em degraus. Só dá para sugerir.
  *
  *   EMBAIXO a escada é uma MASSA. Ela sai do chão da caverna e SOBE até a boca no teto — ela tem
  *   volume, espelho, degrau, silhueta. Não há nada a sugerir: ela está toda acima de y=0, que é
@@ -42,10 +44,10 @@ import type { WorldProp } from './WorldProp';
  *
  *      SUPERFÍCIE (buraco)               SUBTERRÂNEO (massa)
  *      ┌──────────────┐                  ┌──────────────┐
- *      │ ▓▓ fundo ▓▓  │ norte            │ ███ boca ███ │ norte  ← ele CHEGA no alto
+ *      │ ▓▓ verga ▓▓  │ norte            │ ███ boca ███ │ norte  ← ele CHEGA no alto
  *      │ ███ vão ███  │                  │ ▄▄ degrau ▄▄ │
- *      │  ░ degrau ░  │                  │ ▄ degrau     │
- *      │ ░░ degrau ░░ │ sul              │ ▄ degrau     │ sul    ← e desce até o chão
+ *      │  ░ pisada ░  │                  │ ▄ degrau     │
+ *      │ ░░ pisada ░░ │ sul              │ ▄ degrau     │ sul    ← e desce até o chão
  *      └──────────────┘                  └──────────────┘
  *         ↑ ele ENTRA por aqui, andando para o norte
  *
@@ -70,15 +72,38 @@ import type { WorldProp } from './WorldProp';
  * 4. **A laje do vão enterrava as pisadas do fundo.** As últimas listras são mais baixas que a
  *    espessura da laje escura, então sumiam dentro dela. Todas assentam no TOPO do vão, nunca
  *    no chão do mundo.
- * 5. **A pedra é a do MUNDO, e o texel dela mede um pixel do mundo.** A peça vestia o granito
- *    molhado do vau do rio (escuro, azulado, com musgo de beira d'água) enquanto a montanha ao
- *    lado usa a rocha autorada do atlas — duas pedras na mesma tela. E, pior, a `BoxGeometry`
- *    estica a arte inteira em CADA face: o meio-fio saía com um texel de 20:1, granito virado
- *    listra. Hoje é uma folha só (`getStoneTexture('stair')`, 16×16 e cíclica) RECORTADA na
- *    densidade do mundo por `pixelTiled`, e cada peça tira dela um pedaço diferente.
+ * 5. **A pedra é a do MUNDO, e o texel dela mede um pixel do mundo.** Uma folha só
+ *    (`getStoneTexture('stair')`, 16×16 e cíclica) RECORTADA na densidade do mundo, e cada peça
+ *    tira dela um pedaço diferente. Sem isso a `BoxGeometry` estica a arte inteira em CADA face,
+ *    e o meio-fio sai com um texel de 20:1 — granito virado listra.
  * 6. **Nada ancorava a peça no chão.** Caixa não entra no passe de sombra projetada (só
  *    billboard e terreno assado entram), então a alvenaria não tinha contato nenhum com a grama
  *    e lia como adesivo. Um blob de contato (`addGroundEllipse`) resolve por uma malha.
+ *
+ * ── E O QUE A REFORMA DE HOJE ARRUMOU ────────────────────────────────────────
+ *
+ * A peça estava certa em geometria e ERRADA em duas coisas que a câmera vê antes de qualquer
+ * outra: o VALOR e a SILHUETA.
+ *
+ *   O VALOR. A pedra vestia a rampa da rocha do mundo copiada tal e qual — e na rocha os tons
+ *   claros são meia dúzia de pixels no teto de um seixo, enquanto aqui eles viravam a face
+ *   inteira de um meio-fio de meio tile. Medido na tela: a peça saía a #d8d8dc, atravessava o
+ *   corte do bloom e virava um borrão branco de porcelana na grama — de dia e de noite, porque
+ *   nada disso vinha da luz. A folha foi reautorada como um TECLADO DE VALORES (ver
+ *   `stoneTexture`): quatro fiadas de quatro linhas, coroa/corpo/sombra/junta, e escolher a linha
+ *   do recorte passou a ser escolher o tom. Pisada clara, espelho escuro, junta preta.
+ *
+ *   A SILHUETA. Um meio-fio de altura constante dos dois lados do vão desenha um RETÂNGULO, e um
+ *   retângulo com um buraco preto dentro é uma banheira, não uma escadaria. Hoje as duas paredes
+ *   DESCEM em degraus junto com as pisadas, cada lance com um coping claro por cima: a peça
+ *   ganhou uma silhueta serrilhada que diz "isto afunda" antes de o olho chegar nas pisadas. É a
+ *   mesma leitura que faz a escada de baixo funcionar, agora dos dois lados.
+ *
+ * Isso custaria quarenta draw calls no `addBox` (uma `Mesh` e um `Material` por caixa, e as cinco
+ * escadas do mundo nascem todas no `create()`). Por isso a alvenaria inteira virou UMA malha
+ * mergeada (`stairsMasonry` + `World3D.addLitMesh`): quatro vezes mais pedra por um TERÇO das
+ * malhas de antes. O que continua em `addBox` é só o VÃO, porque ele é `unlit` e `unlit` é outro
+ * material — e são três caixas, não quarenta.
  *
  * O TILE CONTINUA CAMINHÁVEL: pisar nele é o gesto, e quem decide é a GameScene
  * (`handleTileEntered`), que só aceita quem entra pela BOCA, de frente. Ninguém cai numa
@@ -97,64 +122,141 @@ const RUN_LEN = 1.0;
  */
 export const STAIRS_STEPS = 4;
 const STEPS = STAIRS_STEPS;
+
+/**
+ * AS LINHAS DA FOLHA DE PEDRA, por tom — o teclado que `stoneTexture` autorou.
+ *
+ * Quatro fiadas de quatro linhas: coroa, corpo, sombra, junta. Pedir `CROWN[i]` é pedir "claro na
+ * fiada i"; `SHADE[i]` é pedir "escuro". Um número solto no `uvShift` de uma peça seria uma
+ * adivinhação — e foi exatamente assim que a versão anterior acabou com quatro pisadas do mesmo
+ * branco.
+ */
+const CROWN = [0, 4, 8, 12] as const;
+const BODY = [1, 5, 9, 13] as const;
+const SHADE = [2, 6, 10, 14] as const;
+
+/**
+ * A espessura de todo COPING e de toda PISADA clara da peça.
+ *
+ * Ela é fina de propósito: o que ela precisa fazer é pôr uma LINHA clara em cima de uma massa
+ * escura, e uma linha grossa vira outra face. Um texel e meio do mundo, que é o mínimo que
+ * sobrevive ao filtro nearest desta câmera.
+ */
+const CAP_H = 0.022;
+
+// ── O BURACO, na superfície ──────────────────────────────────────────────────
+
 /**
  * As PISADAS. Baixas de propósito — nenhuma pode tapar a seguinte nesta câmera — e o que desce é
  * o TAMANHO delas: cada uma mais fina, mais curta e mais estreita que a anterior à medida que se
  * afasta da luz. É assim que um desenho de cima diz "isto recua" sem ter perspectiva para gastar.
  */
-const TREAD_H_NEAR = 0.075;
-const TREAD_H_FAR = 0.028;
-const TREAD_LEN_NEAR = 0.130;
-const TREAD_LEN_FAR = 0.070;
-/** Quanto a última pisada é mais estreita que a primeira, em fração da largura do lance. */
-const TREAD_NARROW = 0.24;
-/** A fresta escura entre uma pisada e a outra: é ela que separa degrau de rampa. */
-const TREAD_GAP = 0.046;
+const TREAD_H_NEAR = 0.078;
+const TREAD_H_FAR = 0.030;
+const TREAD_LEN_NEAR = 0.112;
+const TREAD_LEN_FAR = 0.052;
 /**
- * De que altura da folha de pedra cada pisada tira o recorte dela, em texels.
- *
- * Não é decoração: a arte desce de crown a slate dentro de cada bloco (ver `stoneTexture`), então
- * escolher a linha é escolher o TOM. A de cima tira o topo claro e a do fundo tira a base
- * escura — a mesma leitura de "isto recua" que o tamanho já dá, agora também na cor, e sem uma
- * segunda textura nem um segundo material. É pixel art fazendo variação do jeito de sempre: uma
- * folha só, recortes diferentes.
+ * As pisadas não encostam nas paredes: 10% da largura do vão fica de escuro em cada lado, o lance
+ * inteiro. Sem essa folga a pisada da frente vai de parede a parede e a peça lê como uma TAMPA de
+ * pedra com um risco preto no fundo — o escuro precisa CONTORNAR os degraus para eles estarem
+ * dentro de um buraco em vez de em cima dele.
  */
-const TREAD_UV_ROW: readonly number[] = [1, 3, 5, 6];
+const TREAD_INSET = 0.20;
+/** Quanto a última pisada é mais estreita que a primeira, em fração da largura do lance. */
+const TREAD_NARROW = 0.36;
+/**
+ * A fresta escura entre uma pisada e a outra: é ela que separa degrau de rampa.
+ *
+ * Ela subiu de 0,046 para 0,060 quando ficou medido quanto esta câmera ACHATA o eixo norte-sul:
+ * um tile mede ~142 px de largura na tela e ~80 px de profundidade, quase 2:1. Toda distância em
+ * `z` desta peça aparece com metade do tamanho que tem — e uma fresta de 0,046 tile virava três
+ * pixels, que é o mesmo que fresta nenhuma. As quatro pisadas liam como uma placa só.
+ */
+const TREAD_GAP = 0.060;
+/** Quanto o nariz da pisada avança sobre a fresta anterior. Um beiral, e é ele que faz sombra. */
+const TREAD_NOSE = 0.014;
+/**
+ * De que fiada cada pisada tira a pedra dela.
+ *
+ * Não é decoração: é o segundo eixo do "isto recua". A pisada da frente tira COROA, a do fundo
+ * tira CORPO — a mesma leitura que o tamanho já dá, agora também no tom, e sem uma segunda
+ * textura nem um segundo material.
+ */
+const TREAD_CAP_ROW: readonly number[] = [CROWN[0], BODY[0], SHADE[0], SHADE[2]];
 
 /** A PAREDE DO FUNDO: o outro lado do vão, vista de cima. Ela é o que dá profundidade. */
 const BACK_LEN = 0.13;
 /**
- * A altura da parede do fundo.
+ * A altura da parede do fundo — e ela BAIXOU, desfazendo um empréstimo.
  *
- * Ela subiu de 0,20 para cá porque no SUBTERRÂNEO ela é a única massa da peça: lá o vão é a boca
- * no teto de onde o herói desce, e uma soleira de 0,20 não é boca nenhuma. Não pode subir muito
- * mais que isto: a parede fica do lado da CÂMERA na metade de baixo, e alta demais ela tapa as
- * próprias pisadas que deveria emoldurar (medido: acima de ~0,45 ela come a listra do fundo).
+ * Ela tinha subido para 0,30 porque no SUBTERRÂNEO esta mesma medida era a única massa da peça:
+ * lá o vão é a boca no teto, e uma soleira de 0,20 não é boca nenhuma. Só que o lance de baixo
+ * ganhou uma PORTA de verdade (ombreiras, verga e fecho, ver `buildFlight`) e não depende mais
+ * disto — e enquanto dependeu, a superfície pagou a conta: uma parede alta atravessada no fundo,
+ * com verga e tudo, fecha o vão por cima e a peça inteira lê como uma LAREIRA. Aqui ela é o que
+ * sempre devia ter sido: um lábio baixo que diz "o chão continua atrás desta pedra", e nada mais.
  */
-const BACK_H = 0.30;
+const BACK_H = 0.185;
 
-/** A alvenaria em volta: meio-fio nos dois lados, e dois marcos na boca de entrada. */
+/** A alvenaria em volta: as duas paredes que descem, e dois marcos na boca de entrada. */
 const CURB_W = 0.10;
-const CURB_H = 0.15;
-const NEWEL_H = 0.24;
+/**
+ * A ESCADA DA PAREDE LATERAL — a altura do primeiro lance e quanto ela desce a cada um.
+ *
+ * Cinco lances, um por pisada mais o do fundo. É esta série que desenha a silhueta serrilhada:
+ * de fora, antes de qualquer pisada aparecer, já se lê que o chão afunda ali.
+ */
+const CHEEK_H_NEAR = 0.175;
+const CHEEK_DROP = 0.030;
+/** Quanto o coping passa da parede, para os dois lados. Um beiral, não um enfeite. */
+const CAP_OVERHANG = 0.010;
+/**
+ * O TOM DE CADA LANCE DE COPING, do mais perto da entrada ao mais fundo.
+ *
+ * Ele APAGA, e é essa a peça inteira do enigma que faltava: com os cinco lances em coroa as duas
+ * beiras chegavam ao fundo do buraco tão acesas quanto começaram, e um retângulo de pedra clara
+ * com um vão preto dentro é uma lareira. Aqui os dois últimos lances afundam para sombra e o
+ * enquadramento SE ABRE no escuro — a alvenaria some dentro do buraco, que é o que uma alvenaria
+ * faz quando o chão acaba.
+ */
+const COPING_ROW: readonly number[] = [CROWN[0], CROWN[1], BODY[2], SHADE[3], SHADE[0]];
+/**
+ * OS MARCOS DA ENTRADA — e eles são BAIXOS, o que não foi a primeira tentativa.
+ *
+ * Com 0,26 de altura eles eram a coisa mais alta da peça, plantados justamente nos dois cantos
+ * mais perto da câmera: dois postes brancos na frente de um buraco, e o conjunto voltava a ler
+ * como um OBJETO pousado na grama em vez de um vão aberto nela. Agora eles mal passam do primeiro
+ * lance da parede (0,175) — a diferença é 0,02 tile, o bastante para o canto existir e pouco o
+ * bastante para nada se levantar do chão. Eles engordaram o que emagreceram em altura: um marco
+ * é um bloco atarracado na beira, não uma torre.
+ */
+const NEWEL_H = 0.16;
+const NEWEL_W = 0.135;
+const NEWEL_CAP_W = 0.155;
 
 /** A espessura da laje escura do vão. As pisadas assentam no topo dela — ver a lição 4. */
 const HOLE_H = 0.05;
 /**
- * O vão. Preto de verdade, porque ele é `unlit` e nenhuma luz o alcança — ver a lição 3. Não é
- * `0x000000` cravado só para o caso de alguém tirar o `unlit`: um cinza-quase-preto degrada para
- * "escuro" em vez de degradar para "lama".
+ * O VÃO, EM TRÊS BANDAS — e não uma só, porque um buraco não tem um fundo, tem um FUNDO QUE SE
+ * AFASTA.
+ *
+ * Nenhuma é `0x000000` cravado: um cinza-quase-preto degrada para "escuro" em vez de degradar
+ * para "lama" se um dia alguém tirar o `unlit`. A da boca leva um resto de azul do céu; a do
+ * fundo é a mais próxima do preto que a peça tem. Elas são `unlit` — ver a lição 3 —, então o
+ * degradê não muda com a hora do dia nem com a tocha na mão, que é o ponto.
  */
-const HOLE_COLOR = 0x0a0806;
+const VOID_NEAR = 0x151119;
+const VOID_MID = 0x0b0910;
+const VOID_FAR = 0x040308;
 
 /** O blob de contato sob a peça: o que faz a alvenaria tocar a grama — ver a lição 6. */
-const CONTACT_R = 0.6;
-const CONTACT_ALPHA = 0.22;
+const CONTACT_R = 0.68;
+const CONTACT_ALPHA = 0.3;
 
 // ── O LANCE DE BAIXO: a escada de verdade ────────────────────────────────────
-// Ela e um objeto proprio, e nao a peca de cima espelhada. Cada degrau e uma caixa que vai do
-// CHAO ate a altura dele — e por isso que ela tem volume: nao ha pisada flutuando, ha uma massa
-// de pedra escalonada, com o espelho de cada degrau virado para a camera.
+// Ela e um objeto proprio, e nao a peca de cima espelhada. Cada degrau e uma massa que vai do
+// CHAO ate a altura dele, com uma PISADA clara por cima — e por isso ele lê como degrau: o que a
+// camera vê de cada um é uma linha clara sobre um espelho escuro, que é o desenho de uma escada.
 
 /**
  * O pé do lance é o CENTRO do tile — onde o herói para quando acaba de descer. Ao sul dele o tile
@@ -168,20 +270,32 @@ const FLIGHT_FOOT = 0;
  * os dois números escolhidos à parte o corpo flutuava até meio espelho acima da pedra.
  */
 const FLIGHT_RISER = 0.14;
-/** A largura do lance, e o corrimao que o acompanha degrau a degrau. */
+/** A largura do lance, e as paredes que o acompanham degrau a degrau. */
 const FLIGHT_W = 0.70;
-const RAIL_W = 0.09;
-/** Quanto o corrimao passa da pisada dele — e o que faz o lance ter beira. */
-const RAIL_RISE = 0.06;
+const WALL_W = 0.12;
+/**
+ * Quanto a parede lateral passa da pisada dela.
+ *
+ * Era 0,06 e a peça lia como quatro barras brancas: um corrimão dessa altura, visto de cima,
+ * não é beira nenhuma — é um risco ao lado da pisada. Com 0,115 a parede tem FACE, e a face é o
+ * que separa "uma escada entre dois muros" de "lajes empilhadas".
+ */
+const WALL_RISE = 0.115;
+
 /**
  * A BOCA NO TETO, em pe atras do ultimo degrau: o buraco por onde o lance continua para cima.
  *
  * Ela e o espelho exato do vao la de cima — `unlit`, preta, e no lado LONGE da camera nos dois
  * andares. E ela que faz a escada "acabar em algum lugar" em vez de parar no ar; e o corpo do
  * heroi apaga contra ela, que e o mesmo gesto de ser engolido pelo escuro.
+ *
+ * Hoje ela é EMOLDURADA: duas ombreiras e uma verga com fecho, porque um retângulo preto no ar
+ * sem nada em volta lê como um erro de desenho, e uma porta lê como uma porta.
  */
 const SHAFT_LEN = 0.08;
 const SHAFT_H = 0.52;
+const JAMB_W = 0.13;
+const LINTEL_H = 0.09;
 
 /**
  * Quanto o herói percorre ao atravessar, em tiles — e ele vem da PEÇA, não de um número escolhido
@@ -239,7 +353,11 @@ export type StairsWay = 'down' | 'up';
 export class StairsObject implements WorldProp {
   public readonly blocking = false;
 
-  private readonly parts: Box3D[] = [];
+  /** A ALVENARIA INTEIRA, numa malha só. Ver `stairsMasonry`. */
+  private readonly masonry: THREE.Mesh;
+
+  /** O VÃO. Fora da malha porque `unlit` é outro material — e são três caixas, não quarenta. */
+  private readonly voids: Box3D[] = [];
 
   private readonly contact: GroundEllipse;
 
@@ -249,13 +367,16 @@ export class StairsObject implements WorldProp {
     /**
      * QUAL DAS DUAS PEÇAS esta é — e elas não são a mesma geometria, ver o cabeçalho.
      *
-     * `down` é o BURACO da superfície: listras encolhendo sobre um vão preto, tudo rente ao chão.
-     * `up` é a ESCADA da caverna: uma massa de pedra que sai do piso e sobe, degrau a degrau, até
-     * a boca no teto. A boca das duas fica ao NORTE, então entrar é sempre andar para o norte.
+     * `down` é o BURACO da superfície: pisadas encolhendo sobre um vão preto, entre duas paredes
+     * que descem em degraus. `up` é a ESCADA da caverna: uma massa de pedra que sai do piso e
+     * sobe, degrau a degrau, até a boca emoldurada no teto. A boca das duas fica ao NORTE, então
+     * entrar é sempre andar para o norte.
      */
     public readonly way: StairsWay = 'down',
   ) {
     const w3 = world3d();
+    const sheet = getStoneTexture('stair');
+    enableTiling(sheet);
 
     // ── O CONTATO COM O CHÃO ──────────────────────────────────────────────────
     // Caixa não projeta sombra neste mundo (o passe de silhueta só conhece billboard e terreno
@@ -264,143 +385,343 @@ export class StairsObject implements WorldProp {
     this.contact = w3.addGroundEllipse(CONTACT_R, CONTACT_R, CONTACT_ALPHA);
     this.contact.setPosition(worldX, worldY);
 
-    if (this.way === 'down') this.buildHole();
-    else this.buildFlight();
+    const stone = new MasonryBuilder(sheet);
+    if (this.way === 'down') this.buildHole(stone);
+    else this.buildFlight(stone);
+
+    this.masonry = w3.addLitMesh(stone.build(), sheet);
+    this.masonry.position.set(worldX, 0, worldY);
+  }
+
+  /** Uma caixa de VÃO: escuridão que não é superfície, então não recebe luz nenhuma. */
+  private addVoid(w: number, h: number, d: number, colour: number, y: number, z: number): void {
+    this.voids.push(
+      world3d().addBox(w, h, d, colour, { unlit: true })
+        .setPosition(this.worldX, this.worldY + z)
+        .setElevation(y),
+    );
   }
 
   /**
-   * O BURACO, na superfície. Ele não mudou: é o desenho que três redesenhos custaram.
+   * O BURACO, na superfície.
    *
-   * Tudo acima de y=0, a profundidade sugerida pelo TAMANHO das listras, e um vão preto no lado
-   * longe da câmera. Ninguém precisa ver o buraco; precisa ler "degraus, e depois o escuro".
+   * Tudo acima de y=0, a profundidade sugerida pelo TAMANHO das pisadas e pelo DEGRAU das duas
+   * paredes, e um vão que escurece em três bandas no lado longe da câmera. Ninguém precisa ver o
+   * buraco; precisa ler "degraus, e depois o escuro".
    */
-  private buildHole(): void {
-    const w3 = world3d();
-    const stone = getStoneTexture('stair');
-    const { worldX, worldY } = this;
+  private buildHole(stone: MasonryBuilder): void {
     /** Um deslocamento medido a partir da beira SUL (a da entrada), andando para o norte. */
-    const at = (fromEntry: number): number => worldY + (RUN_LEN / 2 - fromEntry);
+    const at = (fromEntry: number): number => RUN_LEN / 2 - fromEntry;
 
-    // ── O VÃO ────────────────────────────────────────────────────────────────
-    // Uma laje escura cobrindo quase o tile inteiro: é sobre ela que as pisadas aparecem, e é
-    // ela que vira ESCURIDÃO no trecho que sobra do lado da boca. Ela não é o buraco — é a
-    // leitura do buraco, que é tudo o que uma câmera de cima consegue ver de um. `unlit` porque
-    // buraco não é superfície: ver a lição 3.
-    this.parts.push(
-      w3.addBox(RUN_W, HOLE_H, RUN_LEN - BACK_LEN, HOLE_COLOR, { unlit: true })
-        .setPosition(worldX, at((RUN_LEN - BACK_LEN) / 2))
-        .setElevation(HOLE_H / 2),
-    );
+    // ── O VÃO, em três bandas ────────────────────────────────────────────────
+    // Ele começa DEPOIS da soleira: as duas peças seriam coplanares no chão e piscariam uma
+    // contra a outra, e nada disto vale um z-fight na beira por onde o jogador entra.
+    //
+    // E ELE COMEÇA NA BEIRA, sem soleira nenhuma na frente. Houve uma: um lábio de pedra claro
+    // atravessado na entrada, para o chão do mundo "acabar em algum lugar". Na tela ele virou uma
+    // PAREDE — a peça passou a ler como um caixote fechado, e a entrada, que é a única coisa que
+    // o jogador precisa entender ali, era justamente o que ficava tapado. Quem diz que o chão
+    // acaba são as duas paredes laterais e o escuro entre elas; a beira do buraco é aberta, como
+    // toda escada de cima sempre foi.
+    const bands: ReadonlyArray<readonly [number, number, number]> = [
+      [0, 0.42, VOID_NEAR],
+      [0.42, 0.70, VOID_MID],
+      [0.70, RUN_LEN - BACK_LEN, VOID_FAR],
+    ];
+    for (const [from, to, colour] of bands) {
+      this.addVoid(RUN_W, HOLE_H, to - from, colour, HOLE_H / 2, at((from + to) / 2));
+    }
 
     // A PAREDE DO FUNDO, em pé na beira da boca. Sem ela o escuro é um adesivo; com ela o olho
-    // aceita que o chão continua, atrás daquela pedra.
-    this.parts.push(
-      w3.addBox(RUN_W, BACK_H, BACK_LEN, stone, { pixelTiled: true, uvShift: [2, 9] })
-        .setPosition(worldX, at(RUN_LEN - BACK_LEN / 2))
-        .setElevation(BACK_H / 2),
-    );
-
+    // aceita que o chão continua, atrás daquela pedra. Ela é LARGA o bastante para encostar nas
+    // duas paredes laterais: um vão de 0,1 tile entre elas deixava o norte da peça aberto.
+    stone.block({
+      x: 0,
+      y: BACK_H / 2,
+      z: at(RUN_LEN - BACK_LEN / 2),
+      w: RUN_W + 2 * CURB_W,
+      h: BACK_H,
+      d: BACK_LEN,
+      uv: [2, BODY[1]],
+    });
+    // O COPING sobre ela, avançando 0,03 para DENTRO do vão (nunca para fora: o tile acaba
+    // exatamente na face norte da parede, e um beiral ali vazaria para o tile do vizinho). Ele sai
+    // em CORPO, e não em coroa: é a beira mais funda da peça, e ela não pode ser a mais acesa.
+    stone.block({
+      x: 0,
+      y: BACK_H + CAP_H * 1.3 / 2,
+      z: at(RUN_LEN - 0.08),
+      w: RUN_W + 2 * CURB_W + 0.02,
+      h: CAP_H * 1.3,
+      d: BACK_LEN + 0.03,
+      uv: [1, BODY[1]],
+    });
     // ── AS PISADAS ───────────────────────────────────────────────────────────
     // Elas marcham da entrada em direção à boca, encolhendo — e param antes de chegar, deixando
-    // o último trecho de escuro puro: é para lá que a escada desce.
+    // o último trecho de escuro puro: é para lá que a escada desce. Cada uma é uma MASSA escura
+    // com uma PISADA clara por cima, e o nariz da pisada avança sobre a fresta: é o beiral que
+    // faz o degrau ter frente.
     const treadLen = (k: number): number => TREAD_LEN_NEAR
       + (k / (STEPS - 1)) * (TREAD_LEN_FAR - TREAD_LEN_NEAR);
 
+    let fromEntry = 0.018;
     for (let i = 0; i < STEPS; i += 1) {
       const t = i / (STEPS - 1);
       const h = TREAD_H_NEAR + t * (TREAD_H_FAR - TREAD_H_NEAR);
-      const w = RUN_W * (1 - t * TREAD_NARROW);
-      let fromEntry = 0;
-      for (let k = 0; k < i; k += 1) fromEntry += treadLen(k) + TREAD_GAP;
-      fromEntry += treadLen(i) / 2;
-      this.parts.push(
-        w3.addBox(w, h, treadLen(i), stone, { pixelTiled: true, uvShift: [1 + i * 3, TREAD_UV_ROW[i]] })
-          .setPosition(worldX, at(fromEntry))
-          // NO TOPO da laje do vão, nunca no chão do mundo: a lição 4 do cabeçalho.
-          .setElevation(HOLE_H + h / 2),
-      );
+      const w = RUN_W * (1 - TREAD_INSET) * (1 - t * TREAD_NARROW);
+      const len = treadLen(i);
+      const mid = fromEntry + len / 2;
+      // A massa. NO TOPO da laje do vão, nunca no chão do mundo: a lição 4 do cabeçalho.
+      stone.block({
+        x: 0,
+        y: HOLE_H + (h - CAP_H) / 2,
+        z: at(mid),
+        w,
+        h: h - CAP_H,
+        d: len,
+        uv: [1 + i * 3, SHADE[i]],
+      });
+      // A pisada clara, com o nariz avançando para a entrada.
+      stone.block({
+        x: 0,
+        y: HOLE_H + h - CAP_H / 2,
+        z: at(mid - TREAD_NOSE / 2),
+        w,
+        h: CAP_H,
+        d: len + TREAD_NOSE,
+        uv: [2 + i * 3, TREAD_CAP_ROW[i]],
+      });
+      fromEntry += len + TREAD_GAP;
     }
 
-    // ── A ALVENARIA ──────────────────────────────────────────────────────────
-    // Meio-fio nos dois lados: ele é o contorno da peça. Sem ele o lance se dissolve no chão
-    // quando o terreno tem a cor da pedra, e a escada vira uma mancha.
+    // ── AS PAREDES QUE DESCEM ────────────────────────────────────────────────
+    // O contorno da peça, e a coisa que mais mudou nela. Cinco lances por lado, cada um mais
+    // baixo que o anterior, cada um com um coping claro por cima: a silhueta serrilhada diz
+    // "isto afunda" de longe, antes de qualquer pisada aparecer. Um meio-fio de altura constante
+    // desenhava um retângulo, e um retângulo com um buraco preto dentro é uma banheira.
+    const segLen = (RUN_LEN - BACK_LEN) / (STEPS + 1);
     for (const side of [-1, 1]) {
-      this.parts.push(
+      const x = side * (RUN_W / 2 + CURB_W / 2);
+      for (let k = 0; k < STEPS + 1; k += 1) {
+        const top = CHEEK_H_NEAR - k * CHEEK_DROP;
+        const z = at(k * segLen + segLen / 2);
         // O recorte comeca na COLUNA 2 (e na 10 do outro lado), nunca na 0: a coluna 0 e a junta
-        // vertical da fiada de cima, e um meio-fio de 1,6 texel de largura que caisse em cima
-        // dela sairia com metade do comprimento escuro. Conferido contando os texels que cada
-        // face recebe — a face de topo do meio-fio mostra os 16 texels da folha na altura, entao
-        // e a COLUNA que decide a cor dele inteiro.
-        w3.addBox(CURB_W, CURB_H, RUN_LEN, stone, { pixelTiled: true, uvShift: [side < 0 ? 2 : 10, 0] })
-          .setPosition(worldX + side * (RUN_W / 2 + CURB_W / 2), worldY)
-          .setElevation(CURB_H / 2),
-      );
+        // vertical da fiada de cima, e um coping de 1,6 texel de largura que caisse em cima dela
+        // sairia com metade do comprimento escuro.
+        const col = (side < 0 ? 2 : 10) + k;
+        // A MASSA da parede em SOMBRA e só o coping em coroa: quem tem de ser a coisa mais clara
+        // da peça é a PISADA, porque é nela que o jogador precisa olhar. Com a parede inteira em
+        // corpo, o frame de pedra ganhava do lance que ele existe para emoldurar.
+        stone.block({
+          x, y: (top - CAP_H) / 2, z, w: CURB_W, h: top - CAP_H, d: segLen, uv: [col, SHADE[k % 4]],
+        });
+        // E o coping APAGA à medida que desce (coroa nos dois primeiros lances, corpo dos outros)
+        // e ANDA para dentro do vão: é a mesma recessão que as pisadas têm, agora nas paredes. De
+        // outro jeito as duas beiras chegam ao fundo do buraco tão acesas e tão largas quanto
+        // começaram, e o vão vira um desenho chapado com um retângulo preto no meio.
+        stone.block({
+          x: x - side * k * 0.011,
+          y: top - CAP_H / 2,
+          z,
+          w: CURB_W + 2 * CAP_OVERHANG,
+          h: CAP_H,
+          d: segLen,
+          uv: [col, COPING_ROW[k]],
+        });
+      }
       // OS MARCOS, nos dois cantos da beira por onde se ENTRA. Eles enquadram a entrada — e como
-      // só se entra de frente, eles são a única legenda de que a peça precisa.
-      this.parts.push(
-        w3.addBox(CURB_W * 1.25, NEWEL_H, CURB_W * 1.25, stone, {
-          pixelTiled: true,
-          uvShift: side < 0 ? [9, 1] : [1, 9],
-        })
-          .setPosition(worldX + side * (RUN_W / 2 + CURB_W / 2), at(CURB_W * 0.7))
-          .setElevation(NEWEL_H / 2),
-      );
+      // só se entra de frente, eles são a única legenda de que a peça precisa. Eles passam do
+      // primeiro lance da parede de propósito: um marco rente à parede não é um marco.
+      stone.block({
+        x, y: NEWEL_H / 2, z: at(0.085), w: NEWEL_W, h: NEWEL_H, d: NEWEL_W, uv: [3, SHADE[2]],
+      });
+      stone.block({
+        x,
+        y: NEWEL_H + 0.04 / 2,
+        z: at(0.085),
+        w: NEWEL_CAP_W,
+        h: 0.04,
+        d: NEWEL_CAP_W,
+        // O capitel do marco sai em CORPO. Em coroa, os dois cantos mais perto da câmera eram a
+        // coisa mais clara da tela e fechavam um U aceso em volta do vão — e um U aceso com preto
+        // dentro é uma banheira. Quem fica em coroa na beira da entrada é a PISADA, que é onde o
+        // pé vai.
+        uv: [side < 0 ? 2 : 8, BODY[1]],
+      });
     }
+
+    // DOIS BLOCOS CAÍDOS sobre os copings. Não é sujeira decorativa: eles quebram a régua perfeita
+    // das duas paredes, e uma escadaria velha que nunca perdeu uma pedra lê como uma peça de
+    // catálogo. Ficam EM CIMA da alvenaria, nunca no chão em volta — ali é por onde se anda.
+    stone.block({
+      x: -(RUN_W / 2 + CURB_W / 2),
+      y: CHEEK_H_NEAR - CHEEK_DROP + 0.025,
+      z: at(0.30),
+      w: 0.075,
+      h: 0.05,
+      d: 0.09,
+      uv: [5, BODY[2]],
+    });
+    stone.block({
+      x: RUN_W / 2 + CURB_W / 2,
+      y: CHEEK_H_NEAR - 3 * CHEEK_DROP + 0.02,
+      z: at(0.63),
+      w: 0.06,
+      h: 0.04,
+      d: 0.07,
+      uv: [11, SHADE[3]],
+    });
   }
 
   /**
    * O LANCE, no subterrâneo. Uma escada de pedra que sai do chão e SOBE até a boca no teto.
    *
-   * Cada degrau é uma caixa que vai do CHÃO até a altura dele — não é a pisada, é o degrau
-   * inteiro. É daí que vem o volume: uma massa escalonada, e não quatro lajes flutuando. Cada
-   * caixa esconde a de trás até a altura do espelho, então o que a câmera vê de cada degrau é
-   * exatamente uma pisada e um espelho, que é como uma escada se lê.
+   * Cada degrau é uma MASSA que vai do chão até a altura dele, com uma PISADA clara por cima —
+   * não é uma laje, é o degrau inteiro. É daí que vem o volume: uma massa escalonada, e não
+   * quatro lajes flutuando. Cada caixa esconde a de trás até a altura do espelho, então o que a
+   * câmera vê de cada degrau é exatamente uma linha clara sobre um espelho escuro, que é como uma
+   * escada se lê.
    *
    * Ela sobe para o NORTE, para LONGE da câmera — ver o cabeçalho: é a única orientação em que os
    * quatro espelhos aparecem. E ela ocupa só a metade norte do tile: ao sul do pé sobra chão
    * livre, que é onde o herói para quando termina de descer.
    */
-  private buildFlight(): void {
-    const w3 = world3d();
-    const stone = getStoneTexture('stair');
-    const { worldX, worldY } = this;
+  private buildFlight(stone: MasonryBuilder): void {
     const top = STEPS * FLIGHT_RISER;
 
     for (let i = 0; i < STEPS; i += 1) {
       const h = (i + 1) * FLIGHT_RISER;
       // A caixa ocupa a profundidade de UMA pisada e vai do chão até o topo dela.
-      const dy = FLIGHT_FOOT - (i + 0.5) * FLIGHT_TREAD;
-      this.parts.push(
-        w3.addBox(FLIGHT_W, h, FLIGHT_TREAD, stone, { pixelTiled: true, uvShift: [1 + i * 3, 1] })
-          .setPosition(worldX, worldY + dy)
-          .setElevation(h / 2),
-      );
-      // O CORRIMÃO sobe junto, degrau a degrau. Ele é a beira do lance: sem ele a massa lê como
-      // uma rampa de blocos, e é a beira que diz "isto é uma escada e ela tem largura".
+      const z = FLIGHT_FOOT - (i + 0.5) * FLIGHT_TREAD;
+      // A massa, em SOMBRA: o que a câmera vê dela é o espelho, e um espelho claro embaixo de uma
+      // pisada clara é uma rampa. A altura desconta a pisada para o topo continuar exatamente em
+      // `h` — é lá que `stairsLiftAt` põe o pé do herói, e meio texel de erro já descola a bota.
+      stone.block({
+        x: 0,
+        y: (h - CAP_H) / 2,
+        z,
+        w: FLIGHT_W,
+        h: h - CAP_H,
+        d: FLIGHT_TREAD,
+        uv: [1 + i * 3, SHADE[i]],
+      });
+      // A PISADA, avançando sobre o espelho de baixo. O beiral é o degrau.
+      stone.block({
+        x: 0,
+        y: h - CAP_H / 2,
+        z: z + TREAD_NOSE / 2,
+        w: FLIGHT_W,
+        h: CAP_H,
+        d: FLIGHT_TREAD + TREAD_NOSE,
+        uv: [2 + i * 3, CROWN[i]],
+      });
+      // AS PAREDES sobem junto, degrau a degrau, com um coping claro correndo por cima. Elas são
+      // a beira do lance: sem elas a massa lê como uma rampa de blocos, e é a beira que diz "isto
+      // é uma escada e ela tem largura".
       for (const side of [-1, 1]) {
-        this.parts.push(
-          w3.addBox(RAIL_W, h + RAIL_RISE, FLIGHT_TREAD, stone, {
-            pixelTiled: true,
-            uvShift: [side < 0 ? 2 : 10, 0],
-          })
-            .setPosition(worldX + side * (FLIGHT_W / 2 + RAIL_W / 2), worldY + dy)
-            .setElevation((h + RAIL_RISE) / 2),
-        );
+        const x = side * (FLIGHT_W / 2 + WALL_W / 2);
+        const wallTop = h + WALL_RISE;
+        const col = side < 0 ? 2 : 10;
+        stone.block({
+          x,
+          y: (wallTop - CAP_H) / 2,
+          z,
+          w: WALL_W,
+          h: wallTop - CAP_H,
+          d: FLIGHT_TREAD,
+          uv: [col, SHADE[i]],
+        });
+        // O coping da parede sai em CORPO, e não em coroa. Com ele em coroa as duas beiras viravam
+        // um zíper de luz subindo dos dois lados e disputavam a atenção com as pisadas — e quem
+        // tem de ser lido aqui são os degraus, que são o que o jogador vai SUBIR.
+        stone.block({
+          x,
+          y: wallTop - CAP_H / 2,
+          z,
+          w: WALL_W + 2 * CAP_OVERHANG,
+          h: CAP_H,
+          d: FLIGHT_TREAD,
+          uv: [col + 1, BODY[i]],
+        });
       }
     }
 
-    // A BOCA NO TETO, em pé atrás do último degrau. Mesmo material do vão lá de cima (`unlit`),
-    // pelo mesmo motivo: buraco não é superfície. É contra ela que o corpo do herói apaga.
-    this.parts.push(
-      w3.addBox(FLIGHT_W + 2 * RAIL_W, SHAFT_H, SHAFT_LEN, HOLE_COLOR, { unlit: true })
-        .setPosition(worldX, worldY + FLIGHT_FOOT - STEPS * FLIGHT_TREAD - SHAFT_LEN / 2)
-        .setElevation(top + SHAFT_H / 2),
-    );
+    // ── A BOCA NO TETO ───────────────────────────────────────────────────────
+    // O vão em pé atrás do último degrau, em DUAS bandas (a de baixo ainda pega um resto da luz
+    // da caverna, a de cima é o mais perto do preto que a peça tem) — mesmo material do vão lá em
+    // cima e pelo mesmo motivo: buraco não é superfície. É contra ela que o corpo do herói apaga.
+    const shaftZ = FLIGHT_FOOT - STEPS * FLIGHT_TREAD - SHAFT_LEN / 2;
+    const shaftW = FLIGHT_W + 0.02;
+    this.addVoid(shaftW, SHAFT_H / 2, SHAFT_LEN, VOID_MID, top + SHAFT_H / 4, shaftZ);
+    this.addVoid(shaftW, SHAFT_H / 2, SHAFT_LEN, VOID_FAR, top + (SHAFT_H * 3) / 4, shaftZ);
+
+    // E A PORTA em volta dela: duas ombreiras e uma verga com fecho. Um retângulo preto no ar sem
+    // nada em volta lê como um erro de desenho; uma porta lê como uma porta — e é ela que promete
+    // que o lance CONTINUA, em vez de acabar no escuro.
+    for (const side of [-1, 1]) {
+      stone.block({
+        x: side * (FLIGHT_W / 2 + JAMB_W / 2),
+        y: top + SHAFT_H / 2,
+        z: shaftZ,
+        w: JAMB_W,
+        h: SHAFT_H,
+        d: SHAFT_LEN + 0.04,
+        uv: [side < 0 ? 2 : 10, BODY[0]],
+      });
+    }
+    stone.block({
+      x: 0,
+      y: top + SHAFT_H + LINTEL_H / 2,
+      z: shaftZ,
+      w: FLIGHT_W + 2 * JAMB_W,
+      h: LINTEL_H,
+      d: SHAFT_LEN + 0.06,
+      uv: [1, CROWN[0]],
+    });
+    stone.block({
+      x: 0,
+      y: top + SHAFT_H + LINTEL_H + 0.03,
+      z: shaftZ,
+      w: 0.15,
+      h: 0.06,
+      d: SHAFT_LEN + 0.08,
+      uv: [6, CROWN[2]],
+    });
+    // OS CANTOS DA BOCA: dois blocos comendo os vértices de cima do vão. É o que sobra de um arco
+    // numa alvenaria que não sabe cortar aduela — e é o bastante: um retângulo perfeito lê como
+    // recorte, e dois cantos chanfrados leem como PEDRA ASSENTADA. É a mesma economia da
+    // montanha, que é cubo e mesmo assim lê como rocha.
+    for (const side of [-1, 1]) {
+      stone.block({
+        x: side * (FLIGHT_W / 2 - 0.055),
+        y: top + SHAFT_H - 0.055,
+        z: shaftZ,
+        w: 0.13,
+        h: 0.11,
+        d: SHAFT_LEN + 0.03,
+        uv: [side < 0 ? 4 : 12, SHADE[1]],
+      });
+    }
+
+    // UM BLOCO CAÍDO ao pé do lance, do lado de fora da parede — a mesma ideia da peça de cima, e
+    // aqui ele também dá escala ao primeiro degrau, que é o menor de todos.
+    stone.block({
+      x: -(FLIGHT_W / 2 + WALL_W / 2 - 0.01),
+      y: 0.028,
+      z: FLIGHT_FOOT + 0.11,
+      w: 0.075,
+      h: 0.055,
+      d: 0.09,
+      uv: [5, BODY[2]],
+    });
   }
 
   public destroy(): void {
-    for (const part of this.parts) part.destroy();
-    this.parts.length = 0;
+    this.masonry.removeFromParent();
+    this.masonry.geometry.dispose();
+    (this.masonry.material as THREE.Material).dispose();
+    for (const part of this.voids) part.destroy();
+    this.voids.length = 0;
     this.contact.destroy();
   }
 }

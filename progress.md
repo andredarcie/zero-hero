@@ -8018,3 +8018,121 @@ Bloquear resolveria isso e quebraria o gesto, que é pisar.
 Validação: `typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram. A projeção
 e a quantização da subida foram conferidas em script à parte, não no olho. Não rodei o jogo — o
 autor testa, e esta é a peça que mais pede print: ela nasceu inteira nesta versão.
+
+## A ESCADA v6: a peça branca de porcelana virou pedra (2026-08-21)
+
+Pedido do autor: *"melhore brutalmente a qualidade visual da escada para descer até a dungeon"*.
+A geometria da v5 estava certa — o que estava errado era o que a câmera vê ANTES de qualquer
+geometria: o **valor** e a **silhueta**. Nada aqui mudou de contrato: `STAIRS_RUN_TILES`,
+`STAIRS_RISE_TILES`, `FLIGHT_RISER`, `stairsLiftAt` e `STAIRS_WALK_MS` saíram intactos, então a
+caminhada, as botas e a cortina continuam batendo com a pedra.
+
+### O defeito 1: a pedra era branca, e isso foi medido
+
+A folha `stair` vestia a rampa da rocha do mundo (`spritefactory/sprites/rock.mjs`) **copiada tal e
+qual**. O erro é de leitura: na rocha os tons claros são meia dúzia de pixels no teto de um seixo;
+aqui eles viravam a **face inteira** de um meio-fio de meio tile. Amostrado no pixel, na mesma
+tela, no mesmo tile:
+
+| | pisada da frente | coping | vão |
+|---|---|---|---|
+| antes | `#feeae5` | `#e0cfc0` | `#190900` |
+| depois | `#8a8895` | `#484e68` | `#1b0a00` |
+
+`#feeae5` é 254 de vermelho — a peça **estourava**, atravessava o corte do bloom e ganhava halo.
+Era o mesmo defeito que a rampa molhada do vau tinha sido pitchada para evitar, só que na escada
+ninguém tinha refeito a conta. A luz deste mundo multiplica a arte por **~1,54**, e a alvenaria de
+montanha ao lado — que é a referência, porque as duas aparecem na mesma tela — pousa em `#b0b4b8`.
+Daí a coroa nova: `#6f7382`, que sai em `#acb0bd`. Mesma pedra, mesmo lugar da tela.
+
+### A folha virou um TECLADO DE VALORES
+
+Não bastava escurecer. O que faltava era **contraste interno com endereço**: numa peça cujas faces
+medem um ou dois texels de altura (um meio-fio de 0,1 tile mostra 1,6 texel), o recorte não mostra
+um bloco, mostra uma **linha**. Então a folha foi reautorada por linha, em quatro fiadas de quatro:
+
+```
+linha 4c+0  coroa   (h, com glint de quartzo)   ← claro
+linha 4c+1  corpo   (m)
+linha 4c+2  sombra  (s)
+linha 4c+3  junta   (k, com gretas j)           ← quase preto
+```
+
+Pedir `CROWN[i]` no `uvShift` passou a ser pedir "claro"; `SHADE[i]`, "escuro". A pisada tira
+coroa, o espelho tira sombra, e a diferença entre os dois é o que faz um degrau ser um degrau numa
+câmera que olha de cima. As juntas verticais andam de fiada em fiada (3/11, 7/15, 1/9, 5/13), então
+duas peças vizinhas com linhas diferentes também pegam juntas em lugares diferentes.
+
+### O defeito 2: um retângulo com um buraco preto dentro é uma BANHEIRA
+
+Meio-fio de altura constante nos dois lados = retângulo. Quatro coisas mudaram, e cada uma foi
+testada no olho contra um print:
+
+* **As paredes DESCEM em degraus** (cinco lances por lado) e o coping de cada lance **apaga** —
+  coroa nos dois primeiros, corpo, sombra, sombra. A silhueta ficou serrilhada e o enquadramento
+  **se abre** no escuro em vez de chegar ao fundo tão aceso quanto começou.
+* **As pisadas não encostam nas paredes**: 10% da largura do vão fica de escuro em cada lado, o
+  lance inteiro. Sem essa folga a pisada da frente ia de parede a parede e a peça lia como uma
+  TAMPA de pedra com um risco preto no fundo. O escuro precisa **contornar** os degraus.
+* **A parede do fundo baixou de 0,30 para 0,185** e perdeu a verga com fecho. Aqueles 0,30 eram um
+  empréstimo: existiam porque o lance de baixo usava a mesma medida como boca no teto. Ele agora
+  tem uma porta de verdade, e enquanto durou o empréstimo a superfície pagou a conta — uma parede
+  alta atravessada no fundo fecha o vão por cima, e a peça inteira lia como uma **lareira**.
+* **A soleira morreu e os marcos baixaram.** Houve um lábio de pedra claro atravessado na entrada,
+  para o chão "acabar em algum lugar": na tela virou uma PAREDE na frente da porta. E os marcos, com
+  0,26, eram a coisa mais alta da peça plantada nos dois cantos mais perto da câmera — dois postes
+  brancos que faziam o conjunto voltar a ler como objeto pousado na grama.
+
+### O lance de baixo ganhou o que ele não tinha: massa e uma PORTA
+
+Ele era quatro barras brancas com corrimãos de 0,06 — um risco ao lado da pisada, não uma beira.
+Agora: **paredes de 0,12 subindo 0,115 acima da pisada** (elas têm face, e a face é o que separa
+"uma escada entre dois muros" de "lajes empilhadas"), cada degrau é uma **massa em sombra com uma
+pisada clara por cima** e o nariz avançando sobre o espelho, e a boca no teto virou uma **porta**:
+duas ombreiras, uma verga, um fecho e dois blocos comendo os cantos de cima do vão — o que sobra de
+um arco numa alvenaria que não sabe cortar aduela, e o bastante para o vão ler como pedra assentada
+em vez de recorte.
+
+A altura do degrau desconta a espessura da pisada, então o topo continua exatamente em
+`(i+1) × FLIGHT_RISER` — é lá que `stairsLiftAt` põe o pé, e meio texel de erro já descola a bota.
+
+### E tudo isso ficou MAIS BARATO: a alvenaria virou uma malha só
+
+Cada `World3D.addBox` é uma `Mesh` com um `Material` só dela, e as cinco escadas do mundo nascem
+todas no `create()` (não há streaming de prop): o preço é fixo desde o boot. Trinta e seis blocos
+por peça seriam 36 draw calls. Então nasceu `objects/stairsMasonry.ts` — um `MasonryBuilder` que
+empilha caixas num único `BufferGeometry` e sai por `World3D.addLitMesh` (que existia desde a roda
+d'água e estava **sem chamador nenhum**).
+
+| | malhas por escada | blocos | triângulos |
+|---|---|---|---|
+| superfície antes | 11 | 10 | 120 |
+| superfície depois | **5** | 36 | 432 |
+| subterrâneo antes | 14 | 13 | 156 |
+| subterrâneo depois | **4** | 31 | 372 |
+
+Três vezes mais pedra por menos da metade das malhas. O que continua em `addBox` é só o **vão**,
+porque ele é `unlit` e `unlit` é outro material — e são duas ou três caixas, não quarenta.
+
+Uma decisão dentro do builder: cada bloco nasce como uma `BoxGeometry` do three, recebe a mesma
+transformação de UV de `World3D.tileBoxUv` e é despejado nos arrays comuns por `toNonIndexed()`.
+Escrever os vértices à mão seria a segunda cópia de uma conta de UV que já discordou de si mesma
+uma vez — a armadilha aqui é o recorte, não a caixa.
+
+### Conferido em script, não no olho
+
+O bounding box da malha mergeada, lido do `position` em runtime: superfície `x ∈ [-0.498, 0.498]`,
+`z ∈ [-0.5, 0.5]`; subterrâneo `x ∈ [-0.48, 0.48]`, `z ∈ [-0.49, 0.155]`. **Nada vaza do tile**,
+que é a lei. O vão continua `unlit` nos dois andares.
+
+O marrom que sobra dentro do buraco (`#1b0a00` em vez de preto) **não é da peça** e não mudou entre
+as duas versões: é o chão vermelho desta região sangrando para dentro de um vão de vinte pixels
+pelo blur do post, mais o lift do `FinishShader`. Escurecer a fonte não tira — já está em `#040308`.
+
+### Validação
+
+`typecheck`, ESLint (58 pré-existentes, nenhum em `src/`) e `build` passaram. O antes/depois foi
+capturado do jogo rodando, no mesmo tile (24,37), com o mesmo enquadramento e a mesma hora do dia,
+por um script de captura à parte — não é cenário de playtest e não entra na suíte. **Não rodei a
+suíte**: o autor roda. O cenário que guarda o que mudou aqui é o `visual-ref` (é render puro), e
+`montanha` continua valendo para a pedra do mundo, que não foi tocada.
