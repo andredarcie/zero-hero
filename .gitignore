@@ -1,8 +1,13 @@
 node_modules/
 dist/
 .playwright-mcp/
-.DS_Store
 coverage/
+
+# Lixo de shell grafico: o .DS_Store do mac e os dois equivalentes do Windows, que e onde
+# este projeto e desenvolvido.
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # Playtest harness output (screenshots + reports) — never committed.
 # Keep the folder itself (.gitkeep) but ignore every run inside it.
@@ -14,3 +19,18 @@ yarn-error.log*
 
 # Hallmark design-audit tool state (local preflight notes) — never committed.
 .hallmark/
+
+# O MATERIAL DE IMPRENSA: prints e GIFs em tamanho cheio, 65 MB de PNG que o jogo nao precisa
+# para rodar. Binario desse tamanho entra no historico do git e nao sai mais sem cirurgia — e
+# um press kit se reproduz rodando o jogo de novo, que e o oposto de um asset.
+press/
+
+# Sobra de script. Os scripts que reescrevem o mundo deixam um `.bak` ao lado do arquivo
+# (public/world.json.bak). O backup que se GUARDA e outro e tem nome proprio —
+# `backup/world-pre-<mudanca>.json` —, e esse continua versionado de proposito.
+*.bak
+
+# Ajuste de maquina do Claude Code. O `.claude/settings.json` compartilhado, se um dia existir,
+# continua entrando; o `.local` e por pessoa. Ja costuma estar no gitignore GLOBAL de quem
+# desenvolve, mas isso nao viaja com o repo — num clone limpo ele reapareceria.
+.claude/settings.local.json
