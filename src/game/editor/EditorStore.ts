@@ -177,10 +177,23 @@ export class EditorStore {
     else chunk.collisions[ly][lx] = value as boolean;
   }
 
-  public setCell(layer: CellLayerId, wx: number, wy: number, next: CellValue): void {
-    if (!this.isInside(wx, wy)) return;
+  /**
+   * Escreve uma célula. Devolve `false` quando a escrita foi RECUSADA — hoje só num caso, e ele é
+   * a lei do tabuleiro: **chão + uma coisa**.
+   *
+   * Pintar um tile de CIMA onde já mora uma peça (prop, item, NPC, cova) faria a pilha que este
+   * arquivo existe para não ter. As duas saídas seriam apagar a peça ou desenhar por cima dela; a
+   * primeira é destruir trabalho autorado com uma passada de pincel de 3×3, a segunda é o defeito.
+   * Então o pincel PULA a célula ocupada e segue — a peça continua visível no tabuleiro dizendo
+   * por quê. Apagar (`next === null`) nunca é recusado: tirar nunca empilha.
+   *
+   * O `ground` não entra nesta conta: ele é o chão, e o chão existe debaixo de tudo.
+   */
+  public setCell(layer: CellLayerId, wx: number, wy: number, next: CellValue): boolean {
+    if (!this.isInside(wx, wy)) return false;
+    if (layer === 'upper' && next !== null && this.entitiesAt(wx, wy).length > 0) return false;
     const prev = this.readCell(layer, wx, wy);
-    if (prev === next) return;
+    if (prev === next) return false;
     this.writeCell(layer, wx, wy, next);
 
     if (this.strokeCells) {
@@ -194,6 +207,7 @@ export class EditorStore {
 
     this.markDirty();
     this.emit({ cells: [{ wx, wy }] });
+    return true;
   }
 
   /**
@@ -220,8 +234,10 @@ export class EditorStore {
     while (queue.length > 0) {
       const cell = queue.pop()!;
       if (this.readCell(layer, cell.wx, cell.wy) !== target) continue;
-      this.setCell(layer, cell.wx, cell.wy, next);
-      filled.push(cell);
+      // A célula RECUSADA (uma peça mora ali — ver setCell) não entra em `filled`: o balde
+      // atravessa e contorna. Contá-la mentiria no toast e, pior, pintaria colisão num tile que
+      // o balde não pintou (o chamador aplica `collisionMode` sobre esta lista).
+      if (this.setCell(layer, cell.wx, cell.wy, next)) filled.push(cell);
       const neighbors = [
         { wx: cell.wx + 1, wy: cell.wy },
         { wx: cell.wx - 1, wy: cell.wy },
@@ -296,10 +312,32 @@ export class EditorStore {
     return all;
   }
 
+  /**
+   * Põe UMA coisa no tile — e o tile fica com uma coisa só.
+   *
+   * **CHÃO + UMA COISA** é a lei do tabuleiro, e é aqui que ela se cumpre na hora de colocar: sai
+   * tudo o que estava naquele tile (prop, item, NPC, cova — não só a lista da peça nova) e sai
+   * também o tile de CIMA, se houver. Antes daqui a limpeza era só da MESMA lista, então largar um
+   * prop em cima de um item guardava os dois e o mundo ganhava uma pilha por clique — foi assim
+   * que 45 delas apareceram no world.json (ver scripts/fix-tile-stacks.mjs).
+   *
+   * Trocar em vez de recusar pelo mesmo motivo do NPC logo abaixo: um clique que não faz nada não
+   * ensina nada. E tudo entra no MESMO op, então um Ctrl+Z devolve o tile inteiro — a peça velha,
+   * o item que estava lá e a folhagem por cima.
+   */
   public placeEntity(entity: PlacedEntity): void {
     if (!this.isInside(entity.worldX, entity.worldY)) return;
-    const removed = this.entitiesAt(entity.worldX, entity.worldY).filter((e) => e.list === entity.list);
-    if (removed.length === 1 && sameEntity(removed[0], entity)) return;
+    const removed = this.entitiesAt(entity.worldX, entity.worldY);
+    // Nada a fazer só quando o tile JÁ está do jeito que o clique quer — a peça certa e nada em
+    // cima dela. Com folhagem por cima (um arquivo antigo, um script), o clique ainda tem trabalho.
+    const stacked = this.readCell('upper', entity.worldX, entity.worldY) !== null;
+    if (removed.length === 1 && sameEntity(removed[0], entity) && !stacked) return;
+
+    // Um gesto, um desfazer: se o chamador já abriu um traço (arrastar o pincel de entidades),
+    // isto entra nele; se não, abre o seu e fecha no fim.
+    const ownStroke = !this.strokeOps;
+    if (ownStroke) this.beginStroke();
+    this.setCell('upper', entity.worldX, entity.worldY, null);
 
     // UM NPC APARECE UMA VEZ SO NO MAPA. Por um personagem que ja existe em outro tile e MOVE-LO,
     // nao clona-lo: o mesmo gato em dez telas deixa de ser um personagem e vira cenario, e a fala
@@ -318,6 +356,7 @@ export class EditorStore {
     removed.forEach((e) => this.removeEntityFromWorld(e));
     this.addEntityToWorld(entity);
     this.recordOp({ kind: 'entities', added: [entity], removed });
+    if (ownStroke) this.commitStroke();
     this.markDirty();
     this.emit({ entities: true });
   }
@@ -529,6 +568,23 @@ export class EditorStore {
       if (entity.list === 'enemies') enemySpawns.push(entity);
     });
     if (onCollision > 0) warnings.push(`${onCollision} entidade(s) em cima de colisao`);
+
+    // CHAO + UMA COISA. O editor ja impede isto ao colocar (placeEntity) e ao pintar (setCell);
+    // este aviso e para o JSON escrito a mao ou por script, que e por onde as 45 pilhas do
+    // world.json entraram. O conserto em massa e `node scripts/fix-tile-stacks.mjs`.
+    const occupied = new Map<string, number>();
+    this.allEntities().forEach((entity) => {
+      const key = `${entity.worldX},${entity.worldY}`;
+      occupied.set(key, (occupied.get(key) ?? 0) + 1);
+    });
+    let stacked = 0;
+    occupied.forEach((count, key) => {
+      const [wx, wy] = key.split(',').map(Number);
+      if (count > 1 || this.readCell('upper', wx, wy) !== null) stacked += 1;
+    });
+    if (stacked > 0) {
+      warnings.push(`${stacked} tile(s) com mais de uma coisa em cima do chao — rode scripts/fix-tile-stacks.mjs`);
+    }
 
     // UM NPC, UM LUGAR. O editor ja impede isto ao colocar (ver placeEntity); este aviso e para o
     // JSON escrito a mao ou por script, que e por onde a regra entrou quebrada da primeira vez.
