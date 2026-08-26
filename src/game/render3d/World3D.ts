@@ -5,7 +5,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 import {
-  CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_WALL_FRAMES, SEA_TILE_FRAME, SEA_TILE_FRAMES,
+  CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_WALL_FRAMES,
+  groundFrameAt, SEA_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant,
   SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import {
@@ -120,16 +121,6 @@ const VOID_MIST_HEIGHT = 1.3;
 const SHAKE_LEAN = 0.55;
 const SHAKE_RATTLE = 0.7;
 
-/**
- * Which of the three sea paintings a given ocean tile wears. A cheap integer hash of the
- * coordinate — deterministic, so the same tile is the same variant on every boot, which is what
- * keeps the reference screenshots byte-identical between runs.
- */
-const seaVariant = (x: number, z: number): number => {
-  let h = (x * 73856093) ^ (z * 19349663);
-  h = (h ^ (h >>> 13)) >>> 0;
-  return h % SEA_TILE_FRAMES.length;
-};
 // Cap on static-solid cast silhouettes drawn at once (trees near a lit flame). Raised from
 // 72 with the camera cull below: an instance is two triangles, and what used to make the
 // number scary — 36 separate DRAW CALLS — has been one instanced draw for a while now.
@@ -1132,6 +1123,19 @@ export class World3D {
   private moonCastRotY = 0;
   /** The knob values the moon field was last baked with; a live tune refills it. */
   private readonly appliedMoonShadow = { alpha: -1, length: -1 };
+  /**
+   * A sombra das MASSAS — alvenaria de dungeon e montanha, os dois que viram CUBO. Elas saem do
+   * campo instanciado da lua e do fogo e ganham esta malha só, assada sem sobreposição nenhuma:
+   * ver buildMassShadowGeometry, que é onde mora o porquê.
+   */
+  private massTiles: SolidTileEntry[] = [];
+  private readonly massSet = new Set<number>();
+  private massShadowMesh?: THREE.Mesh;
+  private readonly appliedMassShadow = { alpha: -1, length: -1 };
+  /** As duas massas, guardadas para o rebuildCubes (a bomba tira um bloco e a poda muda em volta). */
+  private wallCubes: SolidTileEntry[] = [];
+  private rockCubes: SolidTileEntry[] = [];
+  private cubeMeshes: THREE.Mesh[] = [];
 
   public constructor() {
     // A HORA DO DIA vem ANTES de tudo. O renderizador nasce de novo a cada `scene.restart()` (a
@@ -1484,6 +1488,8 @@ export class World3D {
     this.terrainMeshes.length = 0;
     this.solidTiles.length = 0;
     this.castableSolids.length = 0;
+    this.massTiles.length = 0;
+    this.massSet.clear();
     this.lavaSpots.length = 0;
     this.solidQuads.clear();
     this.solidBlobQuads.clear();
@@ -1549,16 +1555,22 @@ export class World3D {
             if (tile.frame === SEA_TILE_FRAME) {
               seaSet.add(tk);
               // Break the tiling: one frame repeated across ~11k tiles reads as a grid, not as
-              // water. The variant is chosen from the coordinate (never random) so the ocean is
-              // identical on every boot — visual-ref diffs to 0 pixels, and three.js's shared
-              // Math.random stream stays untouched (see the visual-ref trap in CLAUDE.md).
-              tile.frame = SEA_TILE_FRAMES[seaVariant(wx, wy)];
+              // water. The variant is chosen from the coordinate (never random) — see tileVariant.
+              tile.frame = SEA_TILE_FRAMES[terrainVariant(wx, wy, SEA_TILE_FRAMES.length)];
               seaTiles.push(tile);
             }
             else if (waterSet.has(tk)) bedTiles.push(tile);
             else if (lavaSet.has(tk)) lavaBedTiles.push(tile);
             else if (pitSet.has(tk)) pitTiles.push(tile);
-            else groundTiles.push(tile);
+            else {
+              // …and the same for the WORLD'S FLOOR, except there the swap is the MINORITY: most
+              // of the ground keeps the field it always was, and one patch in GROUND_DETAIL_IN
+              // opens into painted earth. The world data still says 5 either way (nothing in
+              // world.json moved, the editor still paints one "Terra", the shovel still keys off
+              // 5) — what the tile WEARS is decided here, from the coordinate.
+              tile.frame = groundFrameAt(tile.frame, wx, wy);
+              groundTiles.push(tile);
+            }
             const upper = chunk.upper[row][col];
             if (upper === null) continue;
             if (chunk.collisions[row][col] || SOLID_UPPER_FRAMES.has(upper)) {
@@ -1754,24 +1766,14 @@ export class World3D {
     quadTiles.forEach((tile, i) => this.solidQuads.set(`${tile.x},${tile.z}`, i * 4));
     this.addTerrainMesh(new THREE.Mesh(this.solidGeo, mats.solid));
 
-    if (wallCubes.length > 0) {
-      const cubeSet = new Set(wallCubes.map((t) => tileKey(t.x, t.z)));
-      this.addTerrainMesh(new THREE.Mesh(
-        buildTileCubeGeometry(wallCubes, (x, z) => cubeSet.has(tileKey(x, z))),
-        [mats.wallTop, mats.solid], // grupo 0 = teto preto, grupo 1 = as faces de tijolo
-      ));
-    }
-
-    // A MONTANHA, pelo mesmo caminho e com duas diferencas: o teto e ROCHA iluminada (uma
-    // montanha vista de cima e um planalto, nao o vazio entre duas salas) e as faces vem
-    // sombreadas no vertice, que e de onde o volume vem quando a luz e sempre de cima.
-    if (rockCubes.length > 0) {
-      const rockSet = new Set(rockCubes.map((t) => tileKey(t.x, t.z)));
-      this.addTerrainMesh(new THREE.Mesh(
-        buildTileCubeGeometry(rockCubes, (x, z) => rockSet.has(tileKey(x, z)), ROCK_CUBE_SHADE),
-        mats.rock,
-      ));
-    }
+    // Quem é CUBO é MASSA. As duas listas ficam guardadas porque a massa é a única geometria do
+    // mundo que se REFAZ inteira quando um tile some (a bomba na parede rachada): a poda de faces
+    // de um cubo depende dos VIZINHOS, então tirar um bloco no meio de um maciço reabre faces em
+    // volta dele — colapsar só o buraco deixaria o vão transparente por trás. Ver rebuildCubes.
+    this.wallCubes = wallCubes;
+    this.rockCubes = rockCubes;
+    // …e as malhas delas nascem no FIM do build (ver o fecho de buildTerrain): a barra de sombra
+    // sai junto, e ela precisa do `sunkenTiles` inteiro para não flutuar sobre o rio.
 
     // Only EXPOSED solids (clearing edges, lone trees) get a grounding blob and cast a
     // shadow. A tile buried in the forest wall has ~all 8 neighbours solid; giving each
@@ -1861,6 +1863,115 @@ export class World3D {
       this.scene.add(this.moonCastField.mesh);
     }
     this.fillMoonCastField();
+    this.rebuildCubes(mats);
+  }
+
+  /**
+   * As malhas de CUBO (alvenaria de dungeon, montanha) e a sombra que elas projetam.
+   *
+   * Ela refaz as duas INTEIRAS em vez de remendar um tile, e isso é de propósito: a geometria de um
+   * cubo é PODADA pelos vizinhos (uma face só nasce onde o vizinho não é bloco), então tirar um
+   * bloco do meio de um maciço reabre faces em três vizinhos ao mesmo tempo. Colapsar só o buraco
+   * — o que o `removeSolidTile` faz com uma árvore, que é um quad sem lados — deixaria um vão com o
+   * interior dos vizinhos virado para fora, e o backface culling o mostraria vazado.
+   *
+   * O custo é uma vez por bloco derrubado (a bomba na parede rachada), sobre ~1.200 cubos: alguns
+   * milissegundos, num frame que já parou para uma explosão.
+   */
+  private rebuildCubes(mats: NonNullable<World3D['terrainMats']>): void {
+    for (const mesh of this.cubeMeshes) {
+      const i = this.terrainMeshes.indexOf(mesh);
+      if (i >= 0) this.terrainMeshes.splice(i, 1);
+      mesh.removeFromParent();
+      mesh.geometry.dispose();
+    }
+    this.cubeMeshes.length = 0;
+
+    const push = (mesh: THREE.Mesh): void => {
+      this.cubeMeshes.push(mesh);
+      this.addTerrainMesh(mesh);
+    };
+    if (this.wallCubes.length > 0) {
+      const cubeSet = new Set(this.wallCubes.map((t) => tileKey(t.x, t.z)));
+      push(new THREE.Mesh(
+        buildTileCubeGeometry(this.wallCubes, (x, z) => cubeSet.has(tileKey(x, z))),
+        [mats.wallTop, mats.solid], // grupo 0 = teto preto, grupo 1 = as faces de tijolo
+      ));
+    }
+    // A MONTANHA, pelo mesmo caminho e com duas diferencas: o teto e ROCHA iluminada (uma
+    // montanha vista de cima e um planalto, nao o vazio entre duas salas) e as faces vem
+    // sombreadas no vertice, que e de onde o volume vem quando a luz e sempre de cima.
+    if (this.rockCubes.length > 0) {
+      const rockSet = new Set(this.rockCubes.map((t) => tileKey(t.x, t.z)));
+      push(new THREE.Mesh(
+        buildTileCubeGeometry(this.rockCubes, (x, z) => rockSet.has(tileKey(x, z)), ROCK_CUBE_SHADE),
+        mats.rock,
+      ));
+    }
+
+    // Os dois maciços entram na MESMA lista de sombra de propósito: um muro de dungeon e uma
+    // montanha são a mesma geometria, e dar a cada um a sua resposta seria a segunda voz de sempre.
+    this.massTiles = [...this.wallCubes, ...this.rockCubes];
+    this.massSet.clear();
+    for (const t of this.massTiles) this.massSet.add(tileKey(t.x, t.z));
+    this.rebuildMassShadow();
+  }
+
+  /**
+   * Assa (ou re-assa) a barra de sombra dos maciços. Uma malha, um draw, zero sobreposição — o
+   * porquê está em `buildMassShadowGeometry`. Roda no fim do build e sempre que um dos dois knobs
+   * da sombra direcional se mexe, que é o mesmo compasso do campo instanciado da lua.
+   *
+   * O material é PRETO SEM MAPA: a silhueta de um cubo opaco é o quadrado dele, então não há arte a
+   * recortar — e sem `map` não há `alphaTest`, que é o que deixaria a borda da barra serrilhar por
+   * texel de uma arte que não tem nada a ver com ela.
+   */
+  private rebuildMassShadow(): void {
+    const alpha = this.params.moonShadowAlpha;
+    const length = this.params.moonShadowLength;
+    this.appliedMassShadow.alpha = alpha;
+    this.appliedMassShadow.length = length;
+
+    const old = this.massShadowMesh;
+    if (old) {
+      old.removeFromParent();
+      old.geometry.dispose();
+      this.massShadowMesh = undefined;
+    }
+    if (this.massTiles.length === 0 || alpha <= 0.02) {
+      if (old) (old.material as THREE.Material).dispose();
+      return;
+    }
+
+    // O rumo da barra é o MESMO da silhueta esticada que ela substitui: o quad da lua aponta a
+    // cabeça em -Z antes de girar, então o rumo no chão é (-sen, -cos) do mesmo ângulo. Derivar
+    // daqui e não de um segundo número é o que impede a barra de apontar para um lado e a sombra
+    // de uma árvore ao lado dela para outro.
+    const geo = buildMassShadowGeometry(
+      this.massTiles,
+      (x, z) => this.massSet.has(tileKey(x, z)),
+      (x, z) => this.sunkenTiles.has(tileKey(x, z)),
+      -Math.sin(this.moonCastRotY),
+      -Math.cos(this.moonCastRotY),
+      length,
+    );
+    if (!geo) {
+      if (old) (old.material as THREE.Material).dispose();
+      return;
+    }
+    const mat = (old?.material as THREE.MeshBasicMaterial | undefined) ?? new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      depthWrite: false,
+      fog: true,
+    });
+    mat.opacity = alpha;
+    const mesh = new THREE.Mesh(geo, mat);
+    // A mesma ordem das outras sombras de chão: depois do brilho aditivo do fogo, senão a barra
+    // some exatamente onde o chão está mais claro (foi relato de jogador no caminho das outras).
+    mesh.renderOrder = 4;
+    this.massShadowMesh = mesh;
+    this.scene.add(mesh);
   }
 
   /** Every terrain mesh goes through here, so a re-bake can take them all back out again. */
@@ -1955,6 +2066,12 @@ export class World3D {
     if (alpha > 0.02) {
       for (const tile of this.castableSolids) {
         tile.moonSlot = undefined;
+        // O CUBO NÃO ENTRA AQUI. Alvenaria e montanha são MASSA, e a sombra delas é a barra
+        // assada em `rebuildMassShadow`: uma silhueta esticada por tile é o que fazia o muro da
+        // dungeon largar um losango por tile no chão (o relato do autor). Uma árvore continua
+        // vindo por aqui, que é para o que este campo foi feito — ela é um objeto solto, e a
+        // silhueta dela é o desenho da copa.
+        if (isMassFrame(tile.frame)) continue;
         field.add(
           tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
           CAST_WIDTH_FACTOR, length, this.moonCastRotY, alpha,
@@ -2041,6 +2158,25 @@ export class World3D {
   public removeSolidTile(worldX: number, worldY: number): void {
     const key = `${worldX},${worldY}`;
     const vertStart = this.solidQuads.get(key);
+    // O BLOCO. Ele não está no índice de quads — `solidQuads` guarda 4 vértices por tile e um cubo
+    // tem entre 8 e 20 —, e por isso esta função inteira passava direto por ele: a bomba abria a
+    // parede rachada na lógica e o cubo continuava desenhado. Um maciço se refaz inteiro (a poda de
+    // faces é dos vizinhos, ver rebuildCubes) e só então cai no caminho comum lá embaixo.
+    if (vertStart === undefined && this.massSet.has(tileKey(worldX, worldY))) {
+      const drop = (list: SolidTileEntry[]): void => {
+        const i = list.findIndex((t) => t.x === worldX && t.z === worldY);
+        if (i >= 0) list.splice(i, 1);
+      };
+      drop(this.wallCubes);
+      drop(this.rockCubes);
+      this.solidKeys.delete(tileKey(worldX, worldY));
+      if (this.terrainMats) this.rebuildCubes(this.terrainMats);
+      this.retireStandingTile(worldX, worldY);
+      // A oclusão dos vizinhos: o bloco escurecia os cantos deles, e cada canto é cor de vértice
+      // num quad DIFERENTE — a mesma re-assadura do 3×3 que a árvore derrubada faz logo abaixo.
+      this.rebakeGroundAoAround(worldX, worldY);
+      return;
+    }
     if (vertStart === undefined) return; // not a standing tile, or already felled
     this.solidQuads.delete(key);
     this.solidKeys.delete(tileKey(worldX, worldY));
@@ -2052,8 +2188,15 @@ export class World3D {
       collapseQuad(this.blobGeo, blobStart);
     }
 
-    // Re-bake the AO of the 3x3 around the stump: the felled tile darkened its neighbours'
-    // corners, and each of those corners is a vertex colour on a DIFFERENT quad.
+    this.rebakeGroundAoAround(worldX, worldY);
+    this.retireStandingTile(worldX, worldY);
+  }
+
+  /**
+   * Re-bake the AO of the 3x3 around the stump: the felled tile darkened its neighbours'
+   * corners, and each of those corners is a vertex colour on a DIFFERENT quad.
+   */
+  private rebakeGroundAoAround(worldX: number, worldY: number): void {
     const colour = this.groundGeo.attributes.color as THREE.BufferAttribute;
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
@@ -2067,11 +2210,18 @@ export class World3D {
       }
     }
     colour.needsUpdate = true;
+  }
 
-    // The fire cast pass indexes EVERY standing tile (see buildTerrain), so a felled tree
-    // has to leave that array too or its stump keeps throwing a whole tree's silhouette.
-    // Splicing cannot invalidate solidQuads/solidBlobQuads: those store vertex OFFSETS into
-    // geometry that never shrinks, not indices into these arrays.
+  /**
+   * Tira o tile em pé das listas que o passo de sombra varre. Vale para os dois que somem: a
+   * árvore que o machado derruba e o BLOCO que a bomba abre.
+   *
+   * The fire cast pass indexes EVERY standing tile (see buildTerrain), so a felled tree
+   * has to leave that array too or its stump keeps throwing a whole tree's silhouette.
+   * Splicing cannot invalidate solidQuads/solidBlobQuads: those store vertex OFFSETS into
+   * geometry that never shrinks, not indices into these arrays.
+   */
+  private retireStandingTile(worldX: number, worldY: number): void {
     const solidIndex = this.solidTiles.findIndex((t) => t.x === worldX && t.z === worldY);
     const felled = solidIndex >= 0 ? this.solidTiles[solidIndex] : undefined;
     if (solidIndex >= 0) this.solidTiles.splice(solidIndex, 1);
@@ -2477,6 +2627,9 @@ export class World3D {
       castCasters: this.castCasters.length,
       castPool: this.solidCastField.mesh.count,
       moonCastPool: this.moonCastField.mesh.count,
+      // Os retângulos da barra dos maciços (ver buildMassShadowGeometry): é o número que diz se o
+      // greedy mesh está fazendo o trabalho dele, e o que se olha se a barra um dia pesar.
+      massShadowQuads: (this.massShadowMesh?.geometry.getIndex()?.count ?? 0) / 6,
       glowsLive: this.fires.length,
       glowsPooled: this.freeGlows.length,
     };
@@ -2891,6 +3044,11 @@ export class World3D {
     if (moonAlpha !== this.appliedMoonShadow.alpha || moonLength !== this.appliedMoonShadow.length) {
       this.fillMoonCastField();
     }
+    // A barra dos maciços tem os MESMOS dois knobs, e re-assa junto: se ela ficasse para trás, o
+    // dia clarearia a sombra de uma árvore e deixaria a do muro ao lado na noite.
+    if (moonAlpha !== this.appliedMassShadow.alpha || moonLength !== this.appliedMassShadow.length) {
+      this.rebuildMassShadow();
+    }
 
     // Restore the moon instances the statics' handoff dimmed last frame (2d) — the pass
     // below re-dims whichever still sit inside a lit pool.
@@ -3035,6 +3193,11 @@ export class World3D {
     heightScale: number,
     moonAlpha: number,
   ): void {
+    // A MASSA também não tem silhueta de fogo, pela mesma razão e para não ter DUAS sombras: a
+    // barra assada já é a sombra dela, e um leque de dedos por tile saindo de cada tocha de parede
+    // seria o mesmo defeito de volta, só que radial. Um muro perto da chama continua reagindo — as
+    // faces dele acendem —, e o que ele projeta é a barra.
+    if (isMassFrame(tile.frame)) return;
     if (this.solidCastField.pendingCount >= CAST_POOL_MAX) return;
     // Spend the pool on what the player can SEE (see CAST_CAMERA_REACH): candidates arrive
     // in fire order, so without this a fire off screen is served before the hero's own.
@@ -4713,6 +4876,8 @@ const buildBankGeometry = (
 /** Os frames que viram cubo. Set porque a consulta roda por tile no bake. */
 const DUNGEON_WALL_SET: ReadonlySet<number> = new Set(DUNGEON_WALL_FRAMES);
 const CLIFF_WALL_SET: ReadonlySet<number> = new Set(CLIFF_WALL_FRAMES);
+/** Este frame e MASSA (vira cubo)? Uma pergunta so — a sombra e o bake leem dela. */
+const isMassFrame = (frame: number): boolean => DUNGEON_WALL_SET.has(frame) || CLIFF_WALL_SET.has(frame);
 
 /** Quanto cada face de um cubo vale de luz, e quanto o PE de uma face lateral escurece. */
 type CubeShade = {
@@ -4808,6 +4973,159 @@ const buildTileCubeGeometry = (
   geo.addGroup(topIdx.length, sideIdx.length, 1);
   return geo;
 };
+
+/**
+ * A SOMBRA DE UMA MASSA — a lei: **um bloco de alvenaria não é um monte de tiles, e a sombra dele
+ * não pode ser um monte de sombras.**
+ *
+ * O campo instanciado da lua (`fillMoonCastField`) desenha, por tile em pé, uma cópia esticada da
+ * arte daquele tile. Para uma ÁRVORE isso é a coisa certa e é o que ele existe para fazer: a
+ * silhueta é o desenho da copa, e uma árvore é um objeto solto. Para um MURO é o defeito que o
+ * autor viu na dungeon — cada tile de parede largando o seu losango, e o olho contando os tiles do
+ * muro pelo chão. Três coisas o produziam ao mesmo tempo, e nenhuma se conserta sozinha:
+ *
+ *   · **A regra do "só quem está exposto"** (≤ 4 vizinhos sólidos) existe para a mata fechada não
+ *     virar um bloco escuro. Numa massa de alvenaria ela faz o contrário do que promete: a fileira
+ *     de fora de um maciço tem 5 vizinhos e NÃO projeta, enquanto a quina convexa ao lado projeta —
+ *     então o que aparece no chão é um punhado de manchas soltas em vez de uma barra.
+ *   · **A largura é 0,92 tile** (`WIDTH_FACTOR`, para a silhueta de uma árvore ser um sopro mais
+ *     magra que ela). Entre dois tiles vizinhos isso é uma fresta de luz.
+ *   · **A luz é DIRECIONAL e diagonal.** Duas cópias esticadas de tiles vizinhos não ladrilham: na
+ *     perpendicular do rumo elas distam 0,55 tile e têm 1 de largura, então ou sobram frestas ou
+ *     sobrepõem — e sobrepor DOBRA o escuro (a lei do campo: N camadas pretas dão 1-(1-a)^N).
+ *
+ * Por isso a sombra de uma massa não sai de quad por tile: ela é **assada como UMA malha sem
+ * sobreposição nenhuma**. O desenho é literalmente o que a física manda — a pegada da massa varrida
+ * ao longo do rumo da luz (a soma de Minkowski da pegada com o segmento de luz) —, e a UNIÃO é
+ * calculada de verdade, num raster de sub-tiles, em vez de ser aproximada empilhando transparências.
+ * Sem sobreposição, o escuro é o mesmo em toda a barra: é isso que faz ela ler como UMA sombra.
+ *
+ * Ela é assada uma vez (a lua não anda) e sai num draw call. O passo do raster é 1/8 de tile — dois
+ * texels da arte —, então a borda é uma escadinha de dois pixels, que é o vocabulário desta casa
+ * (as sombras são "jagged, and that is fine") e não a curva lisa de um shadow map, que este jogo
+ * não tem por decisão.
+ */
+const MASS_SHADOW_SUB = 8;
+/** Acima do chão e da mancha de contato, abaixo da silhueta de fogo (que é `FOOT_Y` = 0.015). */
+const MASS_SHADOW_Y = 0.012;
+
+const buildMassShadowGeometry = (
+  tiles: ReadonlyArray<{ x: number; z: number }>,
+  isMass: (x: number, z: number) => boolean,
+  isSunken: (x: number, z: number) => boolean,
+  dirX: number,
+  dirZ: number,
+  length: number,
+): THREE.BufferGeometry | null => {
+  if (tiles.length === 0 || length <= 0.01) return null;
+  const S = MASS_SHADOW_SUB;
+  // A caixa do raster: a massa mais o alcance da varredura, com um tile de folga de cada lado.
+  let minX = Infinity; let maxX = -Infinity; let minZ = Infinity; let maxZ = -Infinity;
+  for (const t of tiles) {
+    if (t.x < minX) minX = t.x;
+    if (t.x > maxX) maxX = t.x;
+    if (t.z < minZ) minZ = t.z;
+    if (t.z > maxZ) maxZ = t.z;
+  }
+  const pad = Math.ceil(length) + 1;
+  minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
+  const w = (maxX - minX + 1) * S;
+  const h = (maxZ - minZ + 1) * S;
+  const grid = new Uint8Array(w * h);
+
+  // A VARREDURA. Cada tile da massa é um quadrado de S×S sub-células, empurrado ao longo do rumo
+  // em passos de meia sub-célula — meio passo porque um passo inteiro deixaria buraco na diagonal
+  // (o rumo é diagonal, e andar 1 em x e 1 em z de uma vez pula a célula do canto).
+  const steps = Math.ceil(length * S * 2);
+  // O MIOLO NÃO VARRE. Se tudo o que o primeiro passo da varredura alcança já é massa, a barra
+  // daquele tile cai inteira dentro do maciço — que é apagado logo abaixo —, então ele não
+  // acrescenta um pixel. Não é uma aproximação: é o mesmo desenho com menos trabalho, e é o que
+  // tira quatro quintos dos 4.500 blocos da dungeon da conta.
+  const sx = Math.sign(dirX);
+  const sz = Math.sign(dirZ);
+  const buried = (x: number, z: number): boolean => (
+    (sx === 0 || isMass(x + sx, z))
+    && (sz === 0 || isMass(x, z + sz))
+    && (sx === 0 || sz === 0 || isMass(x + sx, z + sz))
+  );
+  for (const t of tiles) {
+    if (buried(t.x, t.z)) continue;
+    const bx = (t.x - minX) * S;
+    const bz = (t.z - minZ) * S;
+    for (let s = 0; s <= steps; s += 1) {
+      const d = (s / steps) * length * S;
+      const ox = Math.round(bx + dirX * d);
+      const oz = Math.round(bz + dirZ * d);
+      for (let j = 0; j < S; j += 1) {
+        const gz = oz + j;
+        if (gz < 0 || gz >= h) continue;
+        const row = gz * w;
+        for (let i = 0; i < S; i += 1) {
+          const gx = ox + i;
+          if (gx < 0 || gx >= w) continue;
+          grid[row + gx] = 1;
+        }
+      }
+    }
+  }
+
+  // O que a barra NÃO cobre: o chão sob a própria massa (o cubo está em cima, ninguém vê) e o leito
+  // afundado do rio/lava — uma sombra flutuando sobre o canal é o mesmo defeito que o
+  // `clampCastAtSunken` conserta no outro caminho.
+  for (let tz = minZ; tz <= maxZ; tz += 1) {
+    for (let tx = minX; tx <= maxX; tx += 1) {
+      if (!isMass(tx, tz) && !isSunken(tx, tz)) continue;
+      const bx = (tx - minX) * S;
+      const bz = (tz - minZ) * S;
+      for (let j = 0; j < S; j += 1) {
+        const row = (bz + j) * w;
+        for (let i = 0; i < S; i += 1) grid[row + bx + i] = 0;
+      }
+    }
+  }
+
+  // GREEDY MESH: corridas horizontais esticadas para baixo enquanto a linha seguinte for igual.
+  // É o que troca ~90 mil quads de sub-célula por alguns milhares de retângulos — e é o passo que
+  // torna "uma malha só, sem sobreposição" barato o bastante para ser a resposta.
+  const pos: number[] = [];
+  const idx: number[] = [];
+  const cell = 1 / S;
+  for (let gz = 0; gz < h; gz += 1) {
+    let gx = 0;
+    while (gx < w) {
+      if (grid[gz * w + gx] !== 1) { gx += 1; continue; }
+      let runW = 1;
+      while (gx + runW < w && grid[gz * w + gx + runW] === 1) runW += 1;
+      let runH = 1;
+      grow: while (gz + runH < h) {
+        for (let i = 0; i < runW; i += 1) {
+          if (grid[(gz + runH) * w + gx + i] !== 1) break grow;
+        }
+        runH += 1;
+      }
+      for (let j = 0; j < runH; j += 1) {
+        for (let i = 0; i < runW; i += 1) grid[(gz + j) * w + gx + i] = 2;
+      }
+      // Sub-célula → mundo. O tile (x,z) ocupa [x-0.5, x+0.5], então a origem da caixa é
+      // minX - 0.5 (a borda esquerda do primeiro tile), nunca o centro dele.
+      const x0 = minX - 0.5 + gx * cell;
+      const x1 = x0 + runW * cell;
+      const z0 = minZ - 0.5 + gz * cell;
+      const z1 = z0 + runH * cell;
+      const b = pos.length / 3;
+      pos.push(x0, MASS_SHADOW_Y, z0, x1, MASS_SHADOW_Y, z0, x1, MASS_SHADOW_Y, z1, x0, MASS_SHADOW_Y, z1);
+      idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
+      gx += runW;
+    }
+  }
+  if (idx.length === 0) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  geo.computeBoundingSphere();
+  return geo;
+};
+
 
 const buildUprightTileGeometry = (
   tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,

@@ -8799,3 +8799,297 @@ nunca aqui.
 **Fica em aberto:** o `PortalTunnel` tem o mesmo `setPixelRatio(1)` e o mesmo buffer em pixel CSS.
 Não toquei — ele é um efeito de tela cheia deliberadamente grosso, com um `pixelSize` próprio, e
 mudá-lo é decisão de olho sobre aquela peça, não o defeito relatado.
+
+## O chão do mundo — a superfície que nunca foi desenhada (2026-08-23)
+
+Pergunta do autor: qual a coisa mais importante para melhorar a qualidade visual. A resposta saiu de
+medir, não de opinar — o registro completo (achado, medição, plano e execução) está em
+[`plano-chao.md`](plano-chao.md). Em uma linha: **87% do chão do `world.json` era a frame 5 do
+atlas, duas cores a 5 de luma uma da outra, vinda do commit inicial** — a única arte de terreno do
+jogo que nunca passou pela `spritefactory/`. Ela ocupa 68-76% de cada quadro, e por causa dela o
+jogo inteiro media desvio de luminância 15 onde o cobble do cemitério, sob as MESMAS luzes e a mesma
+noite, mede 48.
+
+O que a implementação ensinou e não estava no plano:
+
+- **O QUILT.** A primeira instalação deu uma grade visível no jogo (dava para contar os tiles). O
+  preview do sprite não mostra isso; só o mundo montado mostra. A causa é geométrica: um ruído
+  obrigado a ser periódico em 16px com 2×2 pontos de treliça tem os extremos no meio do tile. **Num
+  ladrilho de 16px o teto de escala de uma feição é ~4px** — o cobble do cemitério tem seis pedras
+  de ~5px, não uma de 16. A variedade grande vem das variantes espalhadas pelo hash, não da pintura.
+- **A fenda é linha, e de um lado só.** Miolo escuro = buraco (o campo vira cascalho); contorno
+  inteiro = anel fechado (o campo fica salpicado de "0"). A fenda é SOMBRA, e sombra cai de um lado
+  só — sobrevive o pixel encostado em algo mais alto na direção da luz.
+- **O linter já tinha a regra e ela estava desligada.** `value-range` mede exatamente "chapado" e
+  estava escopada para `prop | item`. Agora vale para `terrain`, e não dispara em nenhuma arte de
+  terreno existente.
+- A ligação copia o **precedente do mar**: a frame guardada no `world.json` continua sendo a 5 e o
+  hash da coordenada escolhe a pintura em tempo de montagem da malha. Zero migração de dado, zero
+  draw call, o editor segue com uma carta "Terra" só — e `World3D` e `EditorScene` consultam o mesmo
+  `groundFrameAt`, senão o editor pinta uma terra e o jogo desenha outra.
+
+Medido no mesmo quadro: noite 18,0/15,1 → 22,4/15,5; dia 40,0/21,0 → 48,3/22,2. O número que
+importa é o do TILE, que é onde a mudança mora: desvio 2,5 → ~15, seis vezes.
+
+Em aberto para o olho do autor: de dia o chão ficou ocupado e a crista puxa para o rosa (o `grade`
+do dia empurra o alto para o quente). Os dois botões são `BAND_SHARE` e o hex da crista, no spec.
+
+**A virada, no mesmo dia:** o autor pediu que **a maioria do chão continuasse com a arte antiga e só
+algumas partes usassem a nova**, e é a leitura certa — um chão desenhado de parede a parede é uma
+segunda textura competindo com todo sprite que pisa nele, e leva junto a calma do mundo. As frames 5
+e 6 voltaram ao original (o diff do atlas virou puramente aditivo: as cinco pinturas vivem só nas
+52–56) e `groundFrameAt` deixou de escolher entre variantes para decidir ABRIR ou não: um campo de
+ruído suave sobre o mapa marca onde há terra exposta (~19% hoje), e só dentro dela o hash por tile
+escolhe qual pintura. **A mancha não pode ser uma CAIXA** — decidi-la por célula grossa dá a toda
+mancha quatro lados retos, e o que se vê não é terra aparecendo, é um retângulo colado no chão; o
+campo suave é a mesma técnica da própria pintura, uma escala acima. O corte é o knob e não é uma
+porcentagem: ruído bilinear se acumula no meio, então a conversão corte→cobertura é MEDIDA sobre o
+`world.json` e está tabelada no `constants.ts`. Depois da virada: noite 19,8 · 15,8; dia 43,3 · 21,4.
+
+## O subterrâneo ganhou arquitetura — de "campo à noite com teto" a masmorra (2026-08-26)
+
+O espelho do overworld cumpria a lei que o criou (mesmo tamanho, mesmas coordenadas, mesmo
+esqueleto) e não cumpria mais nada. Medido no `public/underworld.json` de antes: **3.600 tiles,
+81,2% deles chão aberto, TRÊS das 25 telas sem UMA parede** — 12×12 de piso liso, no escuro, onde a
+câmera enquadra tudo de uma vez e não há nada para contornar. O inventário do lugar inteiro era 6
+escadas, 24 covas, **zero itens, zero props, zero luz**.
+
+E três frames de masmorra estavam INSTALADOS no atlas e nunca haviam sido usados uma única vez:
+`wallTorch` (48), `wallCracked` (50) e `floorCracked` (51). A classe `WallTorchObject` — que empresta
+luz do pool de fogo, está inteira e comentada — nunca havia sido acionada por um tile no mundo.
+
+`node scripts/enrich-underworld.mjs` é a resposta, e ele é o modelo da casa levado a sério: LÊ o
+disco e ACRESCENTA, é idempotente (`--check` falha se o disco não for o ponto fixo), determinístico
+(zero `Math.random()`), **nunca escreve `collisions`** (a alvenaria bloqueia por estar em
+`SOLID_UPPER_FRAMES`, que é como toda parede desta casa bloqueia — colisão pintada por cima seria uma
+segunda verdade) e **prova por BFS que nada selou um caminho** antes de aceitar cada estampa.
+
+### O que ele põe, em sete passos
+
+**Salas** (retângulo de alvenaria + miolo de LAJE + vãos de um tile) · **colunata** nos salões vazios
+· **ruínas soltas** na borda deles · **tochas de parede** · **entulho** (osso, seixo, cogumelo) ·
+**tesouro** · **flores da lua** · **os dois cofres**. Hoje: 15 salas (0 rejeitadas pelo BFS), 47
+colunas, 91 tiles de ruína, **75 tochas**, 261 de laje, 175 de entulho, 37 itens, 9 flores, 2 cofres
+— com **250 tiles do autor preservados**.
+
+### As cinco coisas que a implementação ensinou
+
+- **PERGUNTAR AO ESPELHO PURO É FICAR CEGO PARA O AUTOR.** A primeira versão decidia onde cabia uma
+  sala olhando o espelho derivado do `world.json`. O autor CAVOU telas inteiras no `/lab?under` — a
+  tela do meio tem 45% de alvenaria no espelho e 6% no disco —, então as salas nunca chegavam ao
+  lugar mais vazio do mapa, que é exatamente o que o script existe para curar. Toda pergunta passou a
+  ser feita num **mapa de decisão**: o disco depois de DESFEITA a rodada anterior. Ele é o espelho
+  mais o trabalho do autor e nada do próprio script — e é por isso que continua idempotente. A
+  armadilha simétrica (perguntar ao disco cru, e a segunda rodada ver as paredes da primeira) é o que
+  o desfazer resolve: `meta.enrich` guarda cada tile escrito, e um tile só volta ao espelho se o
+  disco AINDA tem o valor que a rodada passada deixou. Mexeu depois, é do autor.
+- **REGRA GLOBAL DEIXA BURACO.** O espaçamento mínimo entre tochas (5 tiles) é o que impede a
+  masmorra de virar dia — e deixou **duas telas inteiras sem UMA tocha**, que é o defeito original de
+  volta em miniatura. O conserto não é afrouxar a regra, é dar-lhe um PISO POR TELA: onde faltou, o
+  espaçamento cede até 3 até a tela ter as suas duas luzes. O tesouro precisou do mesmo piso — só as
+  salas pagando deixava oito telas sem nada para achar. **Hoje: 0 telas sem tocha, 0 telas sem item.**
+- **DETALHE QUE ACOMPANHA UMA PAREDE INTEIRA DEIXA DE SER DETALHE.** Com célula de 4 tiles e uma
+  chance em três, o cogumelo virou uma FAIXA CONTÍNUA de canto a canto no anel externo do mapa (236
+  tiles de chão colados na borda): vira acabamento, não achado. É a lei do `plano-chao.md` — uma
+  feição do tamanho da feição É a feição — aplicada ao COMPRIMENTO em vez de à escala. A célula
+  engrossou para 6 e passou a ser rara.
+- **O CORAÇÃO NÃO É TESOURO — ELE É UMA FONTE.** A primeira tabela de tesouro tinha `heart` com 37%
+  do peso, e ela contradizia a própria lei que a justificava. Item de mão é finito de verdade: a
+  foto do chão que a aventura salva por andar (`groundItems`, escopo `under`) SUBSTITUI a lista
+  autorada, então um tesouro tomado não renasce. O coração é o único pickup fora desse sistema — ele
+  se transmite por chunk (`HeartPickupManager`), e a janela é de **3×3 num mapa de 5×5**: duas telas
+  de distância e a volta o recria. Dez corações autorados eram dez fontes de cura infinita espalhadas
+  pela masmorra, o que apaga o perigo do lugar inteiro. O jogo já dizia isso e ninguém tinha lido: em
+  todo o `world.json` há **zero** corações autorados — cura se ganha de um corpo que caiu. O peso
+  deles foi para a matéria-prima e ferro e bomba ficaram exatamente onde estavam. Hoje o subterrâneo
+  paga 15 madeiras, 11 pedras, 7 ferros e 4 bombas.
+- **O ESPELHO JÁ TINHA FEITO DOIS COFRES SEM QUERER.** Um bolsão de 61 tiles e outro de 5, fechados
+  por todos os lados, inalcançáveis: são o miolo oco de uma montanha lá de cima. Ninguém tinha
+  reparado — e dentro do grande havia uma **cova de torreta órfã em (27,9)**, um inimigo que nenhum
+  jogador jamais podia encontrar.
+
+### A parede rachada: um tell que mentia
+
+O frame 50 estava no atlas desde a instalação da alvenaria, com o comentário que o chamava de "a
+pista da parede bombardeável" — e **nada no jogo o abria**. Era uma rachadura pintada que nenhum
+gesto resolvia. Agora ele é a única parede do jogo que a bomba derruba, e a gramática fecha com o que
+o jogo já tinha: a **marca de bomba** no chão em frente diz "aqui" (é o único jeito de plantar uma
+bomba neste jogo) e a rachadura diz "aquela parede". Pela mesma lei da rocha, ela PRODUZ — cai uma
+pedra —, então abrir um cofre nunca custa líquido uma bomba por nada.
+
+Dentro: piso rachado, ossos e as **barras de ferro**, a moeda cara desta economia. É a linha que
+separa os dois andares — em cima o recurso é RENOVÁVEL (o veio, a árvore que volta) e por isso o
+espelho não copia rocha nenhuma; aqui embaixo o tesouro é FINITO e autorado. É a diferença entre uma
+mina e um cofre, e é ela que dá peso a descer.
+
+A abertura entra no save como diff (`bombedWalls`, no molde do `felledTrees`): o arquivo de mundo
+volta limpo do disco a cada boot **e a cada troca de andar**, então sem o diff o cofre se refecharia
+sozinho. **A guarda é o próprio frame** — a chave não diz em que andar a bomba estourou e não
+precisa, porque só um tile que AINDA é `wallCracked` é limpo. A mesma coordenada aplicada no
+overworld encontra um pinheiro, uma montanha ou nada, e não faz coisa alguma: a precondição viaja
+junto com o diff em vez de morar num segundo campo que pode discordar dele.
+
+### Duas coisas que vieram de graça
+
+- **A flor da lua finalmente mora no lugar para o qual foi desenhada.** Ela abre no ESCURO e fecha
+  perto de chama, e o subterrâneo é o único lugar do jogo escuro o tempo todo — havia 11 em cima e
+  ZERO aqui. E com ela vem a melhor troca da masmorra: quem desce com a TOCHA ACESA **fecha os botões
+  à própria frente**, e botão fechado BLOQUEIA. A luz que você trouxe é a que fecha o caminho. Por
+  isso a flor só nasce onde há volta (3 vizinhos livres, longe de vão de porta e de tocha).
+- **75 tochas não custam 75 luzes.** `addFireLight` registra a chama no mesmo pool de oito lâmpadas
+  das fogueiras, que a cada quadro miram nas mais próximas da câmera — a contagem de luzes THREE
+  continua congelada, que é a lei. E a tocha de parede **não é fogueira**: `isLitAt` (a cova que se
+  cala) e o `nearFire` da flor contam `campfires` e a tocha NA MÃO, nunca o frame 48. Se contassem,
+  as 75 tochas calariam as 24 covas e fechariam todas as flores de uma vez.
+
+### Medido, antes e depois
+
+| | antes | depois |
+|---|---|---|
+| chão aberto | 81,2% | **69,9%** |
+| alvenaria por tela (min · mediana · max) | 0% · 13,2% · 57,6% | **16,0% · 26,4% · 57,6%** |
+| telas sem uma parede | 3 | **0** |
+| telas sem tocha · sem item | 25 · 25 | **0 · 0** |
+| chão alcançável do spawn | 2.848 | 2.443 |
+| itens · props | 0 · 6 escadas | **37 · 6 escadas + 9 flores + 2 marcas de bomba** |
+
+Os 405 tiles de chão que viraram parede são o preço, e é o ponto: eram tiles de salão vazio. Os
+únicos tiles alcançáveis que se perderam são os que viraram parede — o BFS de cada estampa não
+aceita outra coisa —, e as 6 escadas continuam alcançáveis (a prova final roda sobre o arquivo
+inteiro, e o script sai com código 1 se falhar).
+
+### Como verificar
+
+- `node scripts/enrich-underworld.mjs --check` — o disco é o ponto fixo (e a prova de BFS roda junto).
+- `npm run audit:stacks` — chão + UMA coisa, nos dois arquivos de mundo. Limpo.
+- `npm run playtest -- salvamento` guarda o contrato do save (é onde o `bombedWalls` mora);
+  `montanha` compara os pixels do atlas. **Não há cenário que guarde a bomba abrindo a parede
+  rachada** — se valer a pena, é um cenário novo, e é decisão sua.
+- `npm run build` (typecheck + vite) passa; `npx eslint src` limpo.
+
+### A bomba saiu da coleira (2026-08-26)
+
+Pedido do autor, em uma linha: **o herói põe a bomba onde quiser, quando quiser, no chão.**
+
+A bomba era o único item do jogo que só existia em cima de um tile AUTORADO. Ela não estava na
+tabela de itens por mérito próprio: estava numa linha que perguntava "há um `bombSpot` aqui?" antes
+de deixar o gesto acontecer. Isso não fazia dela uma ferramenta — fazia dela uma chave com a
+fechadura desenhada ao lado, e uma marca no mapa decidindo onde o jogador tinha licença de ter a
+ideia. Agora ela é como o resto da tabela: **age no tile à frente**.
+
+**Ela cai AOS PÉS quando a frente não a recebe**, e isso não é um segundo gesto — é a mão largando o
+que segura no único chão que sobrou. Sem essa metade, o gesto quebraria justamente no caso para o
+qual a bomba existe: você encara a rachadura, aperta o X, e nada acontece porque parede não é chão.
+O raio de 2,2 tiles alcança a parede de um tile de distância, então o aperto faz o que o jogador
+pediu.
+
+**O que ela NÃO pode é engolir a tabela.** Uma bomba cabe em todo tile, então uma linha dela no meio
+do `useItemAt` responderia sempre e calaria tudo que vem depois — com a bomba selecionada, o X nunca
+mais tiraria uma peça do altar nem recolheria uma estação. Por isso ela é o **último degrau** do
+aperto (`pressUse`), logo antes do gesto no vazio: ela só age quando ninguém mais quis o botão. E a
+queda aos pés recusa-se sozinha diante de uma estação ou de uma peça no altar, senão o X desmontaria
+o forno enquanto uma bomba acendia atrás do herói.
+
+**O alvo é DESENHADO**, e aqui ele importa mais que numa estação: a bomba pode cair no tile da frente
+ou no do próprio herói, e sem o quadrado branco a diferença entre os dois só apareceria depois que o
+pavio já estivesse aceso. Botão e marca leem a mesma função (`bombDropTile`) — duas cópias
+divergindo seriam uma marca prometendo um tile e a bomba nascendo noutro.
+
+Três coisas que vieram junto:
+
+- **`isTileOccupied` virou duas perguntas.** A bomba é a única peça que pode cair no tile em que o
+  herói está de pé, e o resto da lista (parede, prop, bicho, item caído, outra bomba armada) continua
+  valendo lá. Então `isTileTaken` é tudo isso **menos o herói**, e `isTileOccupied` é ela mais o
+  herói — uma lista só, duas leituras.
+- **Plantar agora SALVA** (`persistAdventure` no `placeBombAt`). Gastar uma bomba é um item que saiu
+  da mochila, e sem isso plantar e morrer devolvia a bomba: a única fonte finita do jogo com uma
+  máquina de imprimir do lado. A lei da casa já dizia — evento que muda o mundo persiste.
+- **A `bombSpot` deixou de ser a fechadura e virou a DICA.** Ela continua respirando onde o autor a
+  pôs, continua se gastando quando uma bomba cai em cima dela, e o que ela diz agora é o que o
+  desenho sempre disse: "uma bomba serve neste lugar". Uma marca que AFIRMA nunca impediu nada; era a
+  que PROIBIA que tinha virado uma legenda no chão. **As duas marcas do subterrâneo ficaram
+  redundantes com a parede rachada** (que é o tell de verdade, e é físico) — se elas saírem, é uma
+  linha a menos no `enrich-underworld.mjs`, e é decisão de olho.
+
+O cenário `itens` chamava `useItemAt` direto na marca para plantar. O assunto dele ali é o FUSÍVEL
+(explosão antecipada não pode deixar tween fantasma), não o caminho da planta, então ele passou a
+chamar `placeBombAt` — o tile virou só um chão livre conhecido. O `espada` já estava vermelho neste
+mesmo ponto desde que pisar deixou de plantar.
+
+### O muro parou de largar uma sombra por tile (2026-08-26)
+
+Relato do autor: **a sombra dos muros da dungeon ficou individual — uma por tile de parede, e não é
+o que se espera da sombra de um muro.** Fui olhar no jogo (`/lab?under`, P, uma foto do corredor de
+alvenaria de dia, onde a sombra direcional é mais forte) e é exatamente isso: por baixo de uma
+parede corrida não havia uma barra, havia um punhado de losangos escuros soltos, com luz entre eles.
+
+**A causa não é uma, são três, e nenhuma se conserta sozinha.** O campo instanciado da lua
+(`fillMoonCastField`) desenha, por tile em pé, uma cópia ESTICADA da arte daquele tile:
+
+- **A regra do "só quem está exposto"** (≤ 4 vizinhos sólidos) existe para a mata fechada não virar
+  um bloco escuro, e numa massa de alvenaria faz o oposto do que promete: a fileira de fora de um
+  maciço tem 5 vizinhos e **não projeta**, enquanto a quina convexa ao lado projeta. O que chega ao
+  chão é um salpico.
+- **A largura é 0,92 tile** (`WIDTH_FACTOR`, para a silhueta de uma árvore ser um sopro mais magra
+  que ela). Entre dois tiles vizinhos isso é uma fresta.
+- **A luz é DIRECIONAL e diagonal** (a lua sai de `moonLight.position`, e o rumo dela é ~56° do +z).
+  Duas cópias esticadas de tiles vizinhos **não ladrilham**: na perpendicular do rumo elas distam
+  0,55 tile e têm ~1 de largura. Ou sobra fresta, ou sobrepõe — e sobrepor DOBRA o escuro, porque a
+  lei do campo é que N camadas pretas dão `1-(1-a)^N`. Não existe largura que resolva.
+
+E há um agravante de arte: as frames de alvenaria (45–50) são **100% opacas** — medi no atlas. A
+silhueta de uma árvore é rala e perdoa; a de um muro é um retângulo preto cheio, e cada defeito
+acima aparece com todo o contraste.
+
+### A correção: massa não é tile
+
+**Um bloco de alvenaria não é um monte de tiles, e a sombra dele não pode ser um monte de sombras.**
+Quem é CUBO (alvenaria de dungeon e montanha — os dois saem do mesmo `buildTileCubeGeometry`) saiu do
+campo da lua e do fogo e ganhou `buildMassShadowGeometry`: **uma malha só, assada sem sobreposição
+nenhuma**.
+
+O desenho é literalmente o que a física manda — a pegada da massa varrida ao longo do rumo da luz —,
+e a diferença que importa é que a **UNIÃO é calculada de verdade**, num raster de sub-tiles, em vez
+de ser aproximada empilhando transparências. Sem sobreposição, o escuro é o mesmo em toda a barra: é
+isso que faz ela ler como UMA sombra. O passo é 1/8 de tile (dois texels da arte), então a borda é
+uma escadinha de dois pixels — o vocabulário desta casa, não a curva lisa de um shadow map, que este
+jogo não tem por decisão.
+
+Três coisas que o trabalho ensinou:
+
+- **O greedy mesh é o que torna isto barato.** Sem juntar as sub-células em retângulos seriam ~90 mil
+  quads; com ele são **97 no overworld e 2.972 na dungeon** — uma malha, um draw call.
+- **O miolo não varre, e isso é EXATO, não uma aproximação.** Se tudo o que o primeiro passo da
+  varredura alcança já é massa, a barra daquele tile cai inteira dentro do maciço — que é apagado de
+  qualquer jeito. Os 4.519 blocos da dungeon caem para a casca. O bake foi de ~25ms para **~10ms**, e
+  o número de retângulos saiu **idêntico** (2.972), que é a prova de que o desenho não mudou.
+- **O fogo também saiu.** Um leque de dedos por tile saindo de cada uma das 75 tochas de parede é o
+  mesmo defeito, só que radial — e deixar os dois daria DUAS sombras no mesmo muro, que é o que o
+  handoff `fogo→lua` existe para impedir nos outros casos. Um muro perto da chama continua reagindo
+  (as faces dele acendem); o que ele projeta é a barra.
+
+Uma árvore continua vindo pelo campo instanciado, que é para o que ele foi feito: ela é um objeto
+solto e a silhueta dela é o desenho da copa.
+
+### O defeito que apareceu no caminho: a bomba não abria a parede
+
+Achado ao ligar a re-assadura: **`removeSolidTile` passava direto por um cubo.** Ele começa em
+`solidQuads`, que guarda 4 vértices por tile — e um cubo tem entre 8 e 20, então nunca esteve nesse
+índice. A bomba abria a parede rachada na LÓGICA (colisão limpa, save gravado) e o bloco continuava
+desenhado. O cofre estava aberto e não dava para ver.
+
+O conserto não é remendar o buraco: a geometria de um cubo é **podada pelos vizinhos** (uma face só
+nasce onde o vizinho não é bloco), então tirar um bloco do meio reabre faces em três vizinhos ao
+mesmo tempo, e colapsar só o vão o deixaria vazado pelo backface culling. A massa se **refaz
+inteira** (`rebuildCubes`), com a barra de sombra junto. Custa alguns milissegundos, uma vez por
+bloco derrubado, num frame que já parou para uma explosão. Medido no jogo: `upper` 50 → null,
+`blocked` true → false, e a barra re-assada de 2.972 para 2.974 retângulos — o buraco mudou a sombra,
+que é o que tinha de acontecer.
+
+### Como verificar
+
+- `npm run playtest -- montanha` guarda o cubo (teto, face sul, o tile fora do índice de quads).
+- `npm run playtest -- visual-ref` + `node playtest/compare-visual.mjs` — **isto MUDA pixels de
+  propósito**; o que ele guarda é que duas rodadas do mesmo build continuam diferindo em 0.
+- `hd3d.stats().massShadowQuads` é o número que se olha se a barra um dia pesar.
+- `npm run build` e `npx eslint src playtest` passam.

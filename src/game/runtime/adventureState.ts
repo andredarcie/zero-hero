@@ -69,6 +69,16 @@ export interface AdventureSnapshot {
   /** "x,y" de cada pinheiro-tile derrubado (diff de terreno sobre o world.json). */
   felledTrees: Set<string>;
   /**
+   * "x,y" de cada PAREDE RACHADA que uma bomba abriu no subterraneo. Mesmo padrao do felledTrees
+   * — o arquivo de mundo volta limpo do disco a cada boot e a cada troca de andar, e sem o diff o
+   * cofre se refecharia sozinho.
+   *
+   * A chave NAO diz em que andar aconteceu, e nao precisa: quem reaplica so limpa um tile que
+   * AINDA e `DUNGEON_TILES.wallCracked`. A precondicao viaja junto com o diff, entao a mesma
+   * coordenada aplicada no overworld — onde ha um pinheiro, uma montanha ou nada — nao faz nada.
+   */
+  bombedWalls: Set<string>;
+  /**
    * "x,y" de cada buraco de plantio que a PÁ cavou no overworld. Diff sobre os plantSpots
    * autorados, pelo mesmo motivo do felledTrees: o buraco é ESTRUTURA que o jogador fez, e a
    * morte não pode apagá-la. Só a posição entra — o estado do canteiro (monte, mato) é dos
@@ -119,6 +129,7 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   seenDialogKeys: new Set(),
   seenItems: new Set(),
   felledTrees: new Set(),
+  bombedWalls: new Set(),
   dugSpots: new Set(),
   machines: new Map(),
   groundItems: new Map(),
@@ -142,6 +153,7 @@ type StoredSnapshot = {
   seenDialogKeys?: string[];
   seenItems?: string[];
   felledTrees?: string[];
+  bombedWalls?: string[];
   dugSpots?: string[];
   machines?: Record<string, AdventureMachine[]>;
   groundItems?: Record<string, AdventureGroundItem[]>;
@@ -209,6 +221,7 @@ const load = (): AdventureSnapshot => {
       seenDialogKeys: new Set(p.seenDialogKeys ?? []),
       seenItems: new Set((p.seenItems ?? []).filter((kind) => !isRetiredItem(kind))),
       felledTrees: new Set(p.felledTrees ?? []),
+      bombedWalls: new Set(p.bombedWalls ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
       machines: cleanMachines(p.machines),
       groundItems: cleanGroundItems(p.groundItems),
@@ -257,6 +270,7 @@ export const saveAdventure = (): void => {
     seenDialogKeys: [...s.seenDialogKeys],
     seenItems: [...s.seenItems],
     felledTrees: [...s.felledTrees],
+    bombedWalls: [...s.bombedWalls],
     dugSpots: [...s.dugSpots],
     machines: Object.fromEntries(s.machines),
     groundItems: Object.fromEntries(s.groundItems),

@@ -147,9 +147,15 @@ export const analyzeSprite = (image, opts = {}) => {
     // when its dominant material only uses the middle of its ramp. Measure it: group the frame's
     // colours by ramp family; if one family owns ≥50% of the pixels and its used colours span
     // less than 35 luma, the form is flat. Threshold calibrated on shipped art: vase.png's
-    // navy-on-navy spans 39 (passes), barrel v2's wood spanned 33 (fails). Props and items only —
-    // 16×16 characters are flat silhouettes by design (the hero is), effects glow, terrain tiles.
-    if ((kind === 'prop' || kind === 'item') && counts.size >= 3 && opaque >= 50) {
+    // navy-on-navy spans 39 (passes), barrel v2's wood spanned 33 (fails).
+    //
+    // TERRAIN IS IN, and it used to be out — which is the whole reason the world's floor got away
+    // with what it got away with. The overworld ground (frame 5 of forest_tile_set, 87% of every
+    // ground tile in world.json) was TWO colours 5 luma apart: the exact defect this rule names,
+    // on the single most-seen surface in the game, and the rule was scoped not to look at it.
+    // A tile is not exempt from having form — the cemetery cobble in the same atlas spans 88.
+    // (16×16 characters stay out: they are flat silhouettes by design, and effects glow.)
+    if ((kind === 'prop' || kind === 'item' || kind === 'terrain') && counts.size >= 3 && opaque >= 50) {
       const famPx = new Map(); const famColors = new Map();
       for (const [hex, n] of counts) {
         const fam = rampFamily(hex);

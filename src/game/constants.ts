@@ -585,6 +585,110 @@ export const SEA_TILE_FRAME = 33;
 export const SEA_TILE_FRAMES: readonly number[] = [SEA_TILE_FRAME, 34, 35];
 export const SOLID_GROUND_FRAMES: ReadonlySet<number> = new Set([SEA_TILE_FRAME]);
 
+// THE WORLD'S FLOOR, AND THE EARTH THAT SHOWS THROUGH IT.
+//
+// 87% of the 3.600 ground tiles in world.json are this one frame, and it covers 68-76% of every
+// frame the player looks at. Its art is two colours 5 luma apart — a flat plum field, straight
+// from the initial commit and the only terrain in the game that never went through the sprite
+// factory — which is why the whole picture measures a luminance sd of 15 against the cemetery
+// cobble's 48 under the SAME lights (see plano-chao.md for the measurement).
+//
+// The answer is NOT to replace it. A painted floor everywhere is a second texture competing with
+// every sprite standing on it, and it takes the world's calm with it. So the drawn earth comes in
+// PATCHES: most of the ground stays the field it always was, and here and there it opens into
+// bare, worked earth with real relief. That is what a floor does — it is mostly one thing, and
+// the interest is where it stops being that.
+//
+// The mechanism is the sea's (see SEA_TILE_FRAMES above): only GROUND_TILE_FRAME is ever stored
+// in world data, and a deterministic hash of the coordinate decides what a tile actually wears at
+// mesh-build time. Nothing in world.json changed, the editor still paints one "Terra", and
+// DIGGABLE_GROUND_FRAMES below still keys off the stored 5.
+export const GROUND_TILE_FRAME = 5;
+/** The painted-earth family, art only — never stored in world data. Appended at the end of the
+ *  atlas, because frame ids are positional and appending is the only safe way to grow it. */
+export const GROUND_DETAIL_FRAMES: readonly number[] = [52, 53, 54, 55, 56];
+/**
+ * How the patches fall — the two knobs for the eye. `GRAIN` is their size in tiles; `CUT` is how
+ * high the earthiness field (below) has to run before the ground opens, so LOWER means MORE earth.
+ *
+ * Measured on the real world.json, over its 3.129 tiles of frame 5:
+ *
+ *     cut 0.60 → 28%   0.64 → 22%   0.66 → 19%   0.70 → 14%   0.75 → 8%
+ *
+ * The cut is the knob and not a "share" percentage on purpose: bilinear value noise piles up
+ * around its middle instead of spreading evenly, so no honest formula turns one into the other —
+ * a `share` field would be a number that lies. The table above is the conversion, and it is
+ * re-measured, not derived.
+ *
+ * TWO THINGS THIS HAD TO GET RIGHT, and each one was a version:
+ *
+ *   · the detail has to CLUSTER. Decided per tile, it scatters lone painted squares across the
+ *     field, and a lone high-contrast tile in a calm field does not read as a patch of earth —
+ *     it reads as a broken tile.
+ *   · and the cluster cannot be a BOX. Deciding it per coarse cell clusters correctly and gives
+ *     every patch four straight sides: what you see is not earth showing through, it is a
+ *     rectangle of another texture pasted on the floor. Nothing in this world has square edges.
+ */
+export const GROUND_DETAIL_GRAIN = 3;
+export const GROUND_DETAIL_CUT = 0.66;
+
+/**
+ * Which of a terrain family's interchangeable paintings a given tile wears — the sea's three
+ * waters, the ground's four earths. A cheap integer hash of the coordinate, and DETERMINISTIC:
+ * the same tile is the same variant on every boot, which is what keeps the reference screenshots
+ * byte-identical between runs (and keeps three.js's shared Math.random stream untouched — see the
+ * visual-ref trap in CLAUDE.md).
+ *
+ * It lives HERE, next to the two families, because both the 3D renderer and the editor's tilemap
+ * ask the question and they have to give the same answer: an editor that paints one earth while
+ * the game draws another is an editor that lies about the world being built in it.
+ */
+export const terrainVariant = (x: number, y: number, count: number): number => {
+  let h = (x * 73856093) ^ (y * 19349663);
+  h = (h ^ (h >>> 13)) >>> 0;
+  return h % count;
+};
+
+/**
+ * "Quanta terra tem aqui" — a smooth field over the world, 0..1, from a lattice of hashes read
+ * bilinearly. It is the same value noise the ground art itself is painted with
+ * (spritefactory/sprites/ground-earth.mjs), one scale up: there it shapes clods inside a tile,
+ * here it shapes patches across the map. Deterministic, so the world is identical on every boot.
+ */
+const earthField = (x: number, y: number, grain: number, salt: number): number => {
+  const fx = x / grain; const fy = y / grain;
+  const cx = Math.floor(fx); const cy = Math.floor(fy);
+  const tx = fx - cx; const ty = fy - cy;
+  const at = (i: number, j: number): number => terrainVariant(i + salt, j - salt, 1024) / 1023;
+  const top = at(cx, cy) * (1 - tx) + at(cx + 1, cy) * tx;
+  const bottom = at(cx, cy + 1) * (1 - tx) + at(cx + 1, cy + 1) * tx;
+  return top * (1 - ty) + bottom * ty;
+};
+/**
+ * TWO OCTAVES, and the fine one is not decoration — it is what stops the patch from looking
+ * MACHINE-CUT. One octave alone thresholds into contours that hug the lattice it was built on:
+ * the edges come out as long straight runs and clean 45° corners, which at this scale reads as a
+ * shape someone laid out on graph paper. The fine octave (one lattice point per tile) jitters
+ * that boundary by about a tile, so the edge frays the way a worn patch of ground frays. Same
+ * lesson as the tile art itself: what kills a procedural surface is the grid showing through.
+ */
+const groundEarthiness = (x: number, y: number): number => (
+  0.76 * earthField(x, y, GROUND_DETAIL_GRAIN, 0) + 0.24 * earthField(x, y, 1, 977)
+);
+/**
+ * What a stored ground frame actually wears at (x, y) — identity for everything but the earth,
+ * which opens into a patch of painted ground over roughly a fifth of the map.
+ *
+ * Two reads at two scales: the SMOOTH one says whether this corner of the world is bare earth at
+ * all (and its edge is a curve, not a box), and a per-tile hash picks which of the paintings the
+ * tile wears — so a patch is never four copies of the same square.
+ */
+export const groundFrameAt = (frame: number, x: number, y: number): number => {
+  if (frame !== GROUND_TILE_FRAME) return frame;
+  if (groundEarthiness(x, y) < GROUND_DETAIL_CUT) return frame;
+  return GROUND_DETAIL_FRAMES[terrainVariant(x, y, GROUND_DETAIL_FRAMES.length)];
+};
+
 // Ground-layer frames the SHOVEL (swung with the A button) can dig a plantSpot hole into: the
 // two "Terra" paintings — the overworld's bare earth. A frame list and not "anything walkable"
 // on purpose: stone patios (23/24), cracked slabs, dungeon masonry and the sea all refuse the

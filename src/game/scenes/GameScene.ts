@@ -102,7 +102,7 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import { HeroThought } from '@/game/runtime/HeroThought';
-import { PlacementHints } from '@/game/runtime/PlacementHints';
+import { PlacementHints, type HintTile } from '@/game/runtime/PlacementHints';
 import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import {
   PORTAL_TUNNEL_MIN_CRUISE_MS,
@@ -929,6 +929,9 @@ export class GameScene extends Phaser.Scene {
       this.applyFelledTreeDiff();
       this.applyDugSpotDiff();
     }
+    // A parede rachada aberta a bomba e o diff do SUBTERRANEO, e roda aqui pelo mesmo motivo dos
+    // dois de cima: o World3D assa a malha lendo estes chunks logo adiante.
+    if (this.adventure) this.applyBombedWallDiff();
 
     let start = getPlayerStart();
     // "Acorde na fogueira" e um PEDIDO (morte, Continue do titulo), nunca o padrao: a volta de
@@ -3046,6 +3049,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Tudo o que ocupa este tile MENOS o próprio herói — parede, prop, bicho, item caído, bomba
+   * armada. Ela existe separada da `isTileOccupied` por causa de um gesto só: a BOMBA pode cair
+   * no tile em que o herói está de pé, e todo o resto desta lista continua valendo lá.
+   */
+  private isTileTaken(wx: number, wy: number): boolean {
+    return this.isSolidForEntities(wx, wy)
+      || (this.enemyManager?.getEnemyAt(wx, wy) ?? null) !== null
+      || (this.heartPickupManager?.hasPickupAt(wx, wy) ?? false)
+      || (this.itemManager?.hasItemAt(wx, wy) ?? false)
+      || this.activeBombs.some((bomb) => bomb.worldX === wx && bomb.worldY === wy);
+  }
+
+  /**
    * Ha ALGUMA COISA neste tile? Nao "e solido" — solido e o que barra um corpo, e isto aqui e a
    * pergunta mais ampla: tem qualquer coisa ocupando o lugar.
    *
@@ -3053,12 +3069,8 @@ export class GameScene extends Phaser.Scene {
    * herói anda por cima dele —, mas ainda ocupa o lugar para esse gesto.
    */
   private isTileOccupied(wx: number, wy: number): boolean {
-    return this.isSolidForEntities(wx, wy)
-      || (this.enemyManager?.getEnemyAt(wx, wy) ?? null) !== null
-      || (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY)
-      || (this.heartPickupManager?.hasPickupAt(wx, wy) ?? false)
-      || (this.itemManager?.hasItemAt(wx, wy) ?? false)
-      || this.activeBombs.some((bomb) => bomb.worldX === wx && bomb.worldY === wy);
+    return this.isTileTaken(wx, wy)
+      || (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY);
   }
 
   private getDryTreeAt(wx: number, wy: number): DryTreeObject | undefined {
@@ -4293,6 +4305,13 @@ export class GameScene extends Phaser.Scene {
     //    tem alguma coisa), e exigir isso tornaria a peça irremovível na prática. Vem por último
     //    entre os gestos, então uma ferramenta que TEM o que fazer ali nunca desmonta nada.
     if (this.pickUpMachineAt(x, y)) return;
+    // 3b. A BOMBA VAI PARA O CHÃO — em qualquer lugar e a qualquer momento. Ela é o último degrau
+    //     de propósito: por caber em todo tile, ela é o único item cujo gesto engoliria os de cima
+    //     se viesse antes (um herói com a bomba na mão nunca mais recolheria uma estação). Aqui
+    //     embaixo ela só age quando ninguém mais quis o aperto — ver `bombDropTile`, que é a mesma
+    //     pergunta que desenha o quadrado branco.
+    const bombDrop = this.bombDropTile();
+    if (bombDrop) { this.placeBombAt(bombDrop.x, bombDrop.y); return; }
     // 4. O gesto sai NO VAZIO — a mesma lei do golpe: um botão que só se mexe quando acerta esconde
     //    do jogador o que ele está segurando. Sem nada selecionado não há braço a balançar.
     if (this.heldItem !== 'none') this.swingHeld(x, y);
@@ -4488,10 +4507,54 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
+  /** Este tile aguenta uma bomba pousada? A mesma conta do `canBuildMachineAt`, sem o herói. */
+  private canRestBombAt(wx: number, wy: number): boolean {
+    return !this.isTileTaken(wx, wy)
+      && !this.machineAt(wx, wy)
+      && !(this.freezeManager?.frozenAt(wx, wy) ?? false);
+  }
+
+  /**
+   * ONDE A BOMBA CAI — uma pergunta só, feita pelo botão X e pelo quadrado branco do
+   * `PlacementHints`. Duas cópias divergindo é o pior defeito possível aqui: uma marca no chão
+   * prometendo um tile e a bomba nascendo noutro.
+   *
+   * A bomba era o único item do jogo que só existia em cima de um tile AUTORADO: uma marca no
+   * mapa decidia onde o jogador tinha permissão de pensar em explodir alguma coisa. Isso não a
+   * fazia uma ferramenta, fazia dela uma chave com a fechadura desenhada ao lado. Agora ela é como
+   * o resto da tabela: o item age no tile à FRENTE, em qualquer lugar e a qualquer momento.
+   *
+   * E ela cai AOS PÉS quando a frente não a recebe, porque a frente ser parede é justamente o caso
+   * para o qual a bomba existe — você encara a rachadura e aperta. O raio de {@link
+   * BOMB_BLAST_RADIUS_TILES} alcança a parede de um tile de distância, então o gesto continua
+   * fazendo o que o jogador pediu. Não é um segundo gesto: é a mesma mão largando o que segura no
+   * único chão que sobrou.
+   *
+   * O que a queda aos pés NÃO pode fazer é roubar o aperto de outro gesto. Diante de uma estação
+   * ou de uma peça no altar, o X é o de RECOLHER (ver `pressUse`), e uma bomba caindo atrás do
+   * herói enquanto ele achava que estava desmontando o forno seria a bomba comendo metade da
+   * tabela de itens só por estar selecionada.
+   */
+  private bombDropTile(): HintTile | null {
+    if (this.heldItem !== 'bomb') return null;
+    const { x, y } = this.facingTile();
+    if (this.canRestBombAt(x, y)) return { x, y };
+    if (this.machineAt(x, y) || this.getAltarAt(x, y)?.carrying) return null;
+    const { worldX, worldY } = this.playerWorld;
+    return this.canRestBombAt(worldX, worldY) ? { x: worldX, y: worldY } : null;
+  }
+
   private syncPlacementHints(): void {
     const hints = this.placementHints;
     if (!hints) return;
     const kind = this.heldItem;
+    // A BOMBA também tem alvo desenhado, e precisa mais dele que uma estação: ela pode cair no
+    // tile da frente OU no do próprio herói, e sem a marca a diferença entre os dois só apareceria
+    // depois que o pavio já estivesse aceso.
+    if (kind === 'bomb') {
+      hints.show(this.bombDropTile());
+      return;
+    }
     if (kind === 'none' || !MACHINE_ITEM_KINDS.has(kind)) {
       hints.clear();
       return;
@@ -5092,15 +5155,10 @@ export class GameScene extends Phaser.Scene {
     // ou uma porta na frente de um pinheiro respondem primeiro.
     if (this.tryChopTreeTile(wx, wy)) return true;
 
-    // As MARCAS que pedem um item especifico. Elas vem depois das travas porque uma marca e um
-    // chao com desenho: nunca disputam tile com uma rocha ou uma porta.
-    const bombSpot = this.getBombSpotAt(wx, wy);
-    if (bombSpot && !bombSpot.isSpent && this.heldItem === 'bomb') {
-      // A ordem importa: primeiro a bomba REALMENTE planta, so entao o fantasma se gasta. Ao
-      // contrario, um placeBombAt recusado consumiria a marca sem produzir bomba nenhuma.
-      if (this.placeBombAt(wx, wy)) bombSpot.use();
-      return true;
-    }
+    // A BOMBA saiu daqui. Ela tem resposta em TODO tile desde que pode ser posta em qualquer
+    // chão, e uma linha assim no meio da tabela engoliria a tabela inteira: com a bomba
+    // selecionada, o X nunca mais tiraria uma peça do altar nem recolheria uma estação. Ela é o
+    // ÚLTIMO degrau do aperto, logo antes do gesto no vazio — ver `pressUse` e `bombDropTile`.
 
     // A SEMENTE no buraco aberto — o plantio, no compasso da casa: o golpe desenha, a terra
     // recebe no impacto, e a semente só é GASTA se entrou (o buraco teve 150ms pra deixar de
@@ -6237,6 +6295,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Reabre as PAREDES RACHADAS que uma bomba ja derrubou. Mesmo compasso do applyFelledTreeDiff
+   * (antes do World3D), e a mesma razao: o arquivo de mundo volta limpo do disco a cada boot e a
+   * cada troca de andar, entao sem o diff o cofre se refecha sozinho.
+   *
+   * A GUARDA E O PROPRIO FRAME. A chave nao diz em que andar a bomba estourou, e nao precisa
+   * dizer: so um tile que AINDA e `wallCracked` e limpo. Aplicar "26,3" no overworld encontra um
+   * pinheiro ou nada e nao faz coisa alguma — a precondicao viaja junto com o diff, em vez de
+   * viver num segundo campo que pode discordar dele.
+   */
+  private applyBombedWallDiff(): void {
+    const bounds = getWorldBounds();
+    for (const key of adventureState().bombedWalls) {
+      const [wx, wy] = key.split(',').map(Number);
+      if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
+      const cx = Math.floor(wx / CHUNK_COLUMNS);
+      const cy = Math.floor(wy / CHUNK_ROWS);
+      if (cx < bounds.minCx || cx > bounds.maxCx || cy < bounds.minCy || cy > bounds.maxCy) continue;
+      const terrain = getChunkTerrain(cx, cy);
+      const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+      const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+      if (terrain.upper[ly][lx] !== DUNGEON_TILES.wallCracked) continue;
+      terrain.upper[ly][lx] = null;
+      terrain.collisions[ly][lx] = false;
+    }
+  }
+
+  /**
    * A superfície sob um buraco CAVADO também não volta: a pá limpou a grama baixa (decor da
    * camada upper) na cavada, e o world.json volta limpo do disco — sem este diff, a folhagem
    * renasceria POR BAIXO do buraco salvo. Mesmo compasso do applyFelledTreeDiff: roda ANTES do
@@ -6600,13 +6685,21 @@ export class GameScene extends Phaser.Scene {
     // Depositar itens usa o botao B contra o tile a frente (ver pressUse/placeItemAt).
   }
 
-  // The one consumable: planted on a bombSpot, it sits lit; after the fuse it explodes —
-  // killing every enemy in the blast and setting fire to everything flammable there.
-  // Returns true only if the bomb really was planted (the caller spends the spot on that).
+  // The one consumable: put down on any free ground (see bombDropTile), it sits lit; after the
+  // fuse it explodes — killing every enemy in the blast and setting fire to everything flammable
+  // there. Returns true only if the bomb really was planted.
   private placeBombAt(worldX: number, worldY: number): boolean {
     if (this.heldItem !== 'bomb' || !this.world3d) return false;
 
     this.clearHeldItem();
+    // A MARCA AUTORADA se gasta quando uma bomba cai EM CIMA dela, e não mais porque ela era o
+    // único jeito de plantar uma. Ela deixou de ser a fechadura e virou o que o desenho dela
+    // sempre disse: "uma bomba serve aqui" — e um fantasma que continuasse respirando embaixo da
+    // bomba de verdade estaria pedindo o que já foi feito.
+    this.getBombSpotAt(worldX, worldY)?.use();
+    // Gastar a bomba MUDA O MUNDO (é um item que saiu da mochila): sem isto, plantar e morrer
+    // devolvia a bomba — a única fonte finita do jogo com uma máquina de imprimir do lado.
+    this.persistAdventure();
     getSoundManager().playBombPlace();
 
     const sprite = this.world3d
@@ -6975,6 +7068,61 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (brokeRock) getSoundManager().playRockSmash();
+
+    // A PAREDE RACHADA. O frame 50 estava desenhado no atlas desde que a alvenaria de dungeon foi
+    // instalada, com o comentario que o chamava de "a pista da parede bombardeavel" — e ate aqui
+    // NADA no jogo o abria: era uma legenda mentirosa, uma rachadura pintada que nenhum gesto
+    // resolvia. Ele agora e a unica parede do jogo que a bomba derruba, e a marca de bomba no chao
+    // em frente e o "aqui" que a rachadura complementa com o "aquela".
+    //
+    // Pela mesma lei da rocha logo acima, ela PRODUZ: cai uma pedra, entao abrir o cofre nunca
+    // custa liquido uma bomba por nada.
+    if (this.chunkManager) {
+      const r = Math.ceil(BOMB_BLAST_RADIUS_TILES);
+      for (let dy = -r; dy <= r; dy += 1) {
+        for (let dx = -r; dx <= r; dx += 1) {
+          const wx = bomb.worldX + dx;
+          const wy = bomb.worldY + dy;
+          if (!inBlast(wx, wy)) continue;
+          if (this.breakCrackedWallAt(wx, wy)) {
+            this.spawnRockDebris(wx, wy, 0, -1, true, false);
+            this.dropProduct('stone', wx, wy);
+            getSoundManager().playRockSmash();
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Abre um tile de parede RACHADA. Devolve false para qualquer outro tile — inclusive para a
+   * alvenaria inteira ao lado, que e a diferenca entre um segredo e um mundo de papel.
+   *
+   * As arrays mexidas aqui sao as MESMAS que o WorldData segura (o padrao do fellTreeTile), entao
+   * a abertura sobrevive ao cache de chunk; o que nao sobrevive e o recarregamento do arquivo, e
+   * por isso ela tambem entra no save como diff (applyBombedWallDiff).
+   */
+  private breakCrackedWallAt(wx: number, wy: number): boolean {
+    const chunks = this.chunkManager;
+    if (!chunks) return false;
+    const cx = Math.floor(wx / CHUNK_COLUMNS);
+    const cy = Math.floor(wy / CHUNK_ROWS);
+    if (!chunks.hasChunkCoordinate(cx, cy)) return false;
+    if (chunks.getTile(wx, wy).upper !== DUNGEON_TILES.wallCracked) return false;
+
+    const chunk = chunks.getChunk(cx, cy);
+    const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+    const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+    chunk.upper[ly][lx] = null;
+    // O worldgen pinta colisao explicita sob todo frame de obstaculo: limpar so o `upper` deixaria
+    // uma parede invisivel no lugar do buraco.
+    chunk.collisions[ly][lx] = false;
+    this.world3d?.removeSolidTile(wx, wy);
+    if (this.adventure) {
+      adventureState().bombedWalls.add(`${wx},${wy}`);
+      this.persistAdventure();
+    }
+    return true;
   }
 
   // ── Fire spread ────────────────────────────────────────────────────────────

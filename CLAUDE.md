@@ -83,7 +83,8 @@ O jogo **não é mais só-andar**. Detalhes e consequências: `progress.md`.
     B (X / K)           →  USA o item selecionado na bolsa no tile à frente (a tabela useItemAt:
                            machado derruba, picareta quebra, balde enche/rega, chave abre, tocha
                            acende, pá cava, estação INSTALA…). Sem resposta na tabela, devolve a
-                           peça do altar ou RECOLHE a estação; por fim o gesto sai no VAZIO.
+                           peça do altar, RECOLHE a estação, PÕE A BOMBA no chão (à frente, ou aos
+                           pés se a frente for parede); por fim o gesto sai no VAZIO.
     pisar               →  APANHA. Tudo, sem botão (`collectUnderfoot`): usável vai pra bolsa sem
                            roubar a seleção, matéria-prima vai pro contador.
     I                   →  a BOLSA, que escolhe o item do X — e NÃO pausa o jogo.

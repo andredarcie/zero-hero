@@ -23,8 +23,16 @@ export const RAMPS = {
   slate:    ['#272b2d', '#313638', '#3a3f3f'],
   // Foliage that reads at night: dry olive, not lush green.
   olive:    ['#4d4f2c', '#626439', '#8a8d49'],
-  // The dark maroon the night ground is made of (tall grass, shadow ground).
-  nightsoil:['#3e2533', '#452939'],
+  // THE WORLD'S FLOOR. 87% of every ground tile in world.json is made of this ramp, so it is the
+  // single most-seen colour family in the game — and until now it was the only ramp with no
+  // ladder at all: two rungs, 5 luma apart, invisible at 1x. That pair IS the flat plum field
+  // the overworld reads as (see plano-chao.md for the measurement). The three new rungs are what
+  // a floor needs to have form: a crevice below the base, and two lit steps above it, so a clod
+  // of packed earth can be shaded with its own ramp the way every other material here is.
+  // Span 32 -> 86 luma; the hue stays exactly where the author put it. NOTE the historical pair
+  // #3e2533/#452939 sits only d=10 apart (the linter's own near-duplicate threshold is 12), so a
+  // NEW painting picks ONE of the two and reaches for the rungs around it instead.
+  nightsoil:['#2b1a24', '#3e2533', '#452939', '#563648', '#6b4a5c'],
   // Wood: handles, planks, logs.
   wood:     ['#63452c', '#815938', '#886644', '#b7916a'],
   // Drier, redder wood — dry bush twigs, cracked bark.

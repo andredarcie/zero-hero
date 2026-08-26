@@ -155,7 +155,10 @@ export default {
     const bombResult = await evaluate(([x, y, fuseMs]) => {
       const s = window.__scene;
       s.heldItem = 'bomb';
-      s.useItemAt(x, y); // o B planta a bomba na marca (o caminho real — ver `combate`)
+      // A bomba deixou de sair da TABELA de itens: ela vai para qualquer chao livre e por isso e o
+      // ultimo degrau do X (ver GameScene.bombDropTile). Este teste e sobre o FUSIVEL, entao ele
+      // planta pela porta que planta — o tile aqui e so um chao livre conhecido.
+      s.placeBombAt(x, y);
       const planted = s.activeBombs.length;
       if (planted !== 1) return { planted, exploded: false, ghostFuses: -1 };
       s.explodeBomb(s.activeBombs[0]); // o fogo chegou primeiro
@@ -166,7 +169,7 @@ export default {
       }).length;
       return { planted, exploded: s.activeBombs.length === 0, ghostFuses };
     }, [bombInfo.x, bombInfo.y, BOMB_FUSE_MS]);
-    assert('a bomba plantou ao pisar na marca', bombResult.planted === 1, JSON.stringify(bombResult));
+    assert('a bomba foi ao chao', bombResult.planted === 1, JSON.stringify(bombResult));
     assert('a explosao antecipada consumiu a bomba', bombResult.exploded === true,
       JSON.stringify(bombResult));
     assert('nenhum tween de fusivel sobreviveu a explosao', bombResult.ghostFuses === 0,

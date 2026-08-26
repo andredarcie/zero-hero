@@ -2,7 +2,7 @@
 
 import {
   ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, HERO_FRAMES, KEY_FRAMES,
-  MOONFLOWER_FRAMES, NPC_VISUALS, SLIME_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+  groundFrameAt, MOONFLOWER_FRAMES, NPC_VISUALS, SLIME_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
   TOOLBOX_FRAMES, ZORA_FRAMES,
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
@@ -389,7 +389,7 @@ export class EditorScene extends Phaser.Scene {
 
     for (let wy = 0; wy < tilesY; wy += 1) {
       for (let wx = 0; wx < tilesX; wx += 1) {
-        this.groundLayer.putTileAt(store.readCell('ground', wx, wy) as number, wx, wy, false);
+        this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false);
         const upper = store.readCell('upper', wx, wy) as number | null;
         if (upper !== null) this.upperLayer.putTileAt(upper, wx, wy, false);
         const collisionGid = this.collisionOverlayGid(wx, wy);
@@ -438,7 +438,7 @@ export class EditorScene extends Phaser.Scene {
     if (!store || !this.groundLayer || !this.upperLayer || !this.collisionLayer) return;
     if (!store.isInside(wx, wy)) return;
 
-    this.groundLayer.putTileAt(store.readCell('ground', wx, wy) as number, wx, wy, false);
+    this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false);
     const upper = store.readCell('upper', wx, wy) as number | null;
     if (upper === null) this.upperLayer.removeTileAt(wx, wy, true, false);
     else this.upperLayer.putTileAt(upper, wx, wy, false);

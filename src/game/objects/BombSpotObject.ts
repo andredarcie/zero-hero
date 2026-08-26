@@ -5,14 +5,19 @@ import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
 import type { WorldProp } from './WorldProp';
 
-// O "local de bomba": a marca visivel onde uma bomba pode ser plantada. O jogo inteiro se opera
-// ANDANDO — nao existe botao de usar item — entao plantar a bomba tambem e um passo: o heroi
-// pisa na marca segurando a bomba e ela se arma sozinha ali (GameScene.handleTileEntered).
+// O "local de bomba": a marca do autor onde uma bomba resolve alguma coisa.
+//
+// ELA JA FOI A FECHADURA E HOJE E SO A DICA. Enquanto a bomba so podia ser plantada em cima de
+// uma destas marcas, este fantasma era o mecanismo: sem ele, nao havia gesto. Agora a bomba vai
+// para qualquer chao livre (GameScene.bombDropTile), e o que sobra aqui e exatamente o que o
+// desenho sempre disse — "uma bomba serve neste lugar". Uma marca que AFIRMA nunca impediu nada;
+// e a que PROIBIA que tinha virado uma legenda no chao dizendo ao jogador onde ele tinha licenca
+// de ter uma ideia.
 //
 // A marca e uma BOMBA-FANTASMA respirando — a mesma linguagem do ghost da ponte no bridgeSpot
-// ("da pra construir aqui" = a estrutura translucida no lugar). Quando o heroi chega com a bomba,
-// o fantasma vira a bomba real no mesmo tile e no mesmo tamanho: a leitura e "o desenho se
-// materializou".
+// ("da pra construir aqui" = a estrutura translucida no lugar). Quando uma bomba de verdade cai
+// neste tile, o fantasma se gasta e some: a leitura e "o desenho se materializou", e um fantasma
+// que continuasse respirando embaixo da bomba estaria pedindo o que ja foi feito.
 //
 // O fantasma e uma SILHUETA ROXA (tintFill), nao a arte crua: a bomba e preta, e um sprite preto
 // translucido sobre chao escuro simplesmente nao existe na tela. O roxo e o mesmo indigo do
