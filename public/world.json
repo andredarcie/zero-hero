@@ -12,7 +12,7 @@
       "worldX": 30,
       "worldY": 57
     },
-    "exportedAt": "2026-08-21T20:27:49.983Z"
+    "exportedAt": "2026-08-26T22:56:41.206Z"
   },
   "chunks": [
     {
@@ -190,7 +190,7 @@
       ],
       "upper": [
         [
-          null,
+          14,
           14,
           0,
           19,
@@ -204,7 +204,7 @@
           19
         ],
         [
-          null,
+          14,
           2,
           7,
           7,
@@ -232,7 +232,7 @@
           10
         ],
         [
-          null,
+          14,
           null,
           null,
           null,
@@ -1783,8 +1783,8 @@
           null,
           13,
           12,
-          21,
-          12
+          14,
+          14
         ],
         [
           null,
@@ -1796,53 +1796,53 @@
           null,
           null,
           12,
+          null,
+          null,
+          14
+        ],
+        [
+          12,
+          12,
+          null,
+          null,
+          2,
+          13,
+          12,
+          13,
+          null,
+          null,
+          7,
+          14
+        ],
+        [
+          14,
+          8,
+          13,
+          null,
+          null,
+          2,
+          8,
+          0,
+          13,
+          null,
+          null,
+          14
+        ],
+        [
+          14,
+          14,
+          null,
+          null,
+          null,
+          12,
+          0,
+          8,
+          null,
           null,
           null,
           2
         ],
         [
-          12,
-          12,
-          null,
-          null,
-          2,
-          13,
-          12,
-          13,
-          null,
-          null,
-          7,
-          8
-        ],
-        [
-          7,
-          8,
-          13,
-          null,
-          null,
-          2,
-          8,
-          0,
-          13,
-          null,
-          null,
-          13
-        ],
-        [
-          8,
-          8,
-          null,
-          null,
-          null,
-          12,
-          0,
-          8,
-          null,
-          null,
-          null,
-          2
-        ],
-        [
           7,
           0,
           7,
@@ -1896,7 +1896,7 @@
           8,
           8,
           8,
-          0
+          14
         ],
         [
           null,
@@ -1910,35 +1910,35 @@
           7,
           12,
           null,
-          null
+          14
         ],
         [
           21,
           null,
           7,
           7,
-          7,
-          7,
-          0,
+          14,
+          14,
+          14,
           0,
           8,
           2,
           null,
-          21
+          14
         ],
         [
           null,
           null,
           null,
-          7,
-          13,
-          13,
-          12,
-          2,
+          14,
+          14,
+          14,
+          14,
+          14,
           null,
-          7,
-          0,
-          13
+          14,
+          14,
+          14
         ]
       ],
       "collisions": [
@@ -2117,16 +2117,6 @@
           "type": "pickaxe",
           "worldX": 40,
           "worldY": 5
-        },
-        {
-          "type": "axe",
-          "worldX": 39,
-          "worldY": 5
-        },
-        {
-          "type": "bucket",
-          "worldX": 39,
-          "worldY": 6
         }
       ],
       "npcs": [
@@ -2312,50 +2302,50 @@
       ],
       "upper": [
         [
-          0,
-          0,
-          19,
-          19,
-          19,
-          0,
-          19,
-          19,
-          19,
-          0,
-          19,
-          8
-        ],
-        [
-          2,
           14,
-          null,
-          7,
-          null,
-          0,
-          20,
-          0,
-          null,
-          20,
-          null,
-          0
-        ],
-        [
-          17,
-          2,
-          null,
-          null,
-          20,
-          8,
-          8,
-          7,
-          0,
-          20,
-          17,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
+          14,
           14
         ],
         [
+          14,
+          14,
+          null,
+          null,
+          null,
+          14,
+          14,
           0,
           null,
+          14,
+          14,
+          14
+        ],
+        [
+          17,
+          14,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          14,
+          14
+        ],
+        [
+          14,
+          14,
           null,
           null,
           null,
@@ -2365,10 +2355,10 @@
           null,
           19,
           null,
-          2
+          14
         ],
         [
-          7,
+          14,
           2,
           null,
           null,
@@ -2378,11 +2368,11 @@
           7,
           20,
           null,
-          7,
-          2
+          null,
+          null
         ],
         [
-          0,
+          null,
           7,
           20,
           7,
@@ -2392,12 +2382,12 @@
           0,
           0,
           8,
-          8,
-          8
+          null,
+          null
         ],
         [
-          20,
-          10,
+          null,
+          null,
           1,
           10,
           10,
@@ -2407,11 +2397,11 @@
           0,
           null,
           null,
-          8
+          14
         ],
         [
-          20,
-          7,
+          null,
+          null,
           20,
           20,
           19,
@@ -2420,64 +2410,64 @@
           20,
           0,
           null,
-          0,
-          0
+          14,
+          14
         ],
         [
-          8,
-          0,
+          14,
+          14,
           null,
           2,
           7,
           2,
           0,
-          2,
+          14,
           8,
           0,
           2,
-          19
+          14
         ],
         [
-          8,
+          14,
+          14,
           null,
-          null,
-          null,
-          8,
-          2,
           null,
           8,
           2,
+          null,
+          8,
+          2,
           2,
           null,
-          8
+          14
         ],
         [
-          8,
-          8,
+          14,
+          14,
           null,
           8,
           null,
-          2,
-          8,
-          20,
           null,
           null,
           null,
-          8
+          null,
+          14,
+          null,
+          14
         ],
         [
+          14,
+          14,
+          14,
+          14,
+          14,
           null,
-          8,
-          19,
-          20,
-          0,
-          20,
-          7,
-          7,
-          8,
-          8,
-          0,
-          8
+          null,
+          14,
+          14,
+          14,
+          14,
+          14
         ]
       ],
       "collisions": [
@@ -2841,21 +2831,21 @@
       ],
       "upper": [
         [
-          7,
-          8,
-          12,
-          2,
-          13,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39
         ],
         [
-          8,
+          39,
           null,
           null,
           13,
@@ -2866,7 +2856,7 @@
           null,
           null,
           null,
-          null
+          39
         ],
         [
           8,
@@ -2880,7 +2870,7 @@
           null,
           null,
           null,
-          null
+          39
         ],
         [
           null,
@@ -2939,7 +2929,7 @@
           null
         ],
         [
-          8,
+          39,
           null,
           null,
           null,
@@ -2953,7 +2943,7 @@
           7
         ],
         [
-          8,
+          39,
           null,
           null,
           null,
@@ -2967,7 +2957,7 @@
           7
         ],
         [
-          8,
+          39,
           null,
           null,
           null,
@@ -2981,7 +2971,7 @@
           7
         ],
         [
-          7,
+          39,
           null,
           null,
           null,
@@ -2995,18 +2985,18 @@
           null
         ],
         [
-          8,
-          7,
-          null,
-          21,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          3
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39,
+          39
         ]
       ],
       "collisions": [
@@ -3389,7 +3379,7 @@
           15
         ],
         [
-          20,
+          4,
           16,
           16,
           19,
@@ -3403,11 +3393,11 @@
           16
         ],
         [
-          20,
+          4,
           16,
           20,
           null,
-          20,
+          null,
           null,
           null,
           null,
@@ -3417,11 +3407,11 @@
           7
         ],
         [
-          11,
+          null,
           0,
           15,
           null,
-          0,
+          null,
           null,
           1,
           null,
@@ -3432,28 +3422,28 @@
         ],
         [
           null,
-          11,
           null,
-          20,
+          null,
+          null,
           7,
-          11,
-          10,
-          10,
-          10,
+          null,
+          null,
+          null,
+          null,
           1,
           15,
           null
         ],
         [
-          7,
-          11,
-          10,
-          0,
           null,
           null,
           null,
-          1,
-          11,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
           1,
           7,
           7
@@ -3461,12 +3451,12 @@
         [
           19,
           0,
-          7,
-          0,
-          19,
-          10,
-          1,
-          19,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
           null,
           0,
           7,
@@ -3475,56 +3465,56 @@
         [
           8,
           0,
-          14,
           null,
-          10,
           null,
-          10,
           null,
-          1,
+          null,
+          null,
+          null,
+          null,
           11,
           20,
-          19
+          null
         ],
         [
-          11,
+          null,
           15,
-          1,
           null,
-          11,
           null,
-          14,
           null,
-          7,
+          null,
+          null,
+          null,
+          null,
           16,
-          0,
-          11
+          null,
+          null
         ],
         [
           0,
           16,
           7,
-          7,
           null,
-          14,
-          0,
-          0,
-          16,
-          16,
-          7,
-          11
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
         ],
         [
           0,
           16,
           15,
           10,
-          0,
-          10,
+          null,
+          null,
           1,
           16,
           15,
-          15,
+          null,
           6,
           7
         ],
@@ -3715,11 +3705,6 @@
       ],
       "enemies": [],
       "pickups": [
-        {
-          "type": "seeds",
-          "worldX": 16,
-          "worldY": 17
-        },
         {
           "type": "shovel",
           "worldX": 14,
@@ -3986,9 +3971,9 @@
           null,
           null,
           null,
+          null,
           19,
-          19,
-          7,
+          null,
           7,
           0
         ],
@@ -4000,22 +3985,22 @@
           7,
           19,
           19,
-          0,
-          0,
-          7,
+          null,
+          null,
+          null,
           7,
           19
         ],
         [
           19,
           7,
+          null,
+          null,
+          null,
+          null,
           19,
-          19,
-          10,
-          0,
-          19,
-          7,
-          0,
+          null,
+          null,
           7,
           0,
           0
@@ -4024,12 +4009,12 @@
           7,
           7,
           19,
-          1,
-          10,
-          10,
-          19,
-          0,
-          1,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
           19,
           7,
           7
@@ -4038,12 +4023,12 @@
           19,
           7,
           7,
-          1,
-          10,
-          1,
-          0,
-          7,
-          1,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
           7,
           19,
           0
@@ -4052,13 +4037,13 @@
           15,
           8,
           10,
-          1,
+          null,
           10,
-          1,
+          null,
           7,
           0,
-          1,
-          10,
+          null,
+          null,
           8,
           7
         ],
@@ -4248,20 +4233,8 @@
         ]
       ],
       "enemies": [],
-      "pickups": [
-        {
-          "type": "bucket",
-          "worldX": 28,
-          "worldY": 17
-        }
-      ],
-      "npcs": [
-        {
-          "type": "salesman",
-          "worldX": 29,
-          "worldY": 17
-        }
-      ]
+      "pickups": [],
+      "npcs": []
     },
     {
       "cx": 3,
@@ -4777,20 +4750,8 @@
         ]
       ],
       "enemies": [],
-      "pickups": [
-        {
-          "type": "greatAxe",
-          "worldX": 40,
-          "worldY": 17
-        }
-      ],
-      "npcs": [
-        {
-          "type": "poet",
-          "worldX": 41,
-          "worldY": 17
-        }
-      ]
+      "pickups": [],
+      "npcs": []
     },
     {
       "cx": 4,
@@ -5568,8 +5529,8 @@
         [
           null,
           null,
-          null,
-          null,
+          14,
+          14,
           2,
           0,
           8,
@@ -5583,7 +5544,7 @@
           null,
           null,
           null,
-          null,
+          14,
           13,
           8,
           19,
@@ -5608,8 +5569,8 @@
           7
         ],
         [
-          null,
-          null,
+          14,
+          14,
           null,
           null,
           null,
@@ -5622,7 +5583,7 @@
           13
         ],
         [
-          7,
+          14,
           2,
           13,
           13,
@@ -7442,7 +7403,7 @@
           5,
           5,
           5,
-          5,
+          6,
           5,
           5,
           5,
@@ -7458,7 +7419,7 @@
           23,
           5,
           5,
-          5,
+          6,
           5,
           5
         ],
@@ -7609,10 +7570,10 @@
           null,
           null,
           null,
-          25,
+          null,
           1,
           null,
-          25,
+          null,
           null,
           null,
           null,
@@ -7621,14 +7582,14 @@
         [
           null,
           null,
-          25,
           null,
           null,
           null,
           null,
           null,
           null,
-          25,
+          null,
+          null,
           null,
           null
         ],
@@ -7657,8 +7618,8 @@
           null,
           null,
           null,
-          null,
-          null
+          14,
+          14
         ],
         [
           null,
@@ -7671,8 +7632,8 @@
           null,
           null,
           null,
-          null,
-          null
+          14,
+          14
         ],
         [
           0,
@@ -7700,7 +7661,7 @@
           null,
           null,
           null,
-          null
+          14
         ],
         [
           null,
@@ -7713,20 +7674,20 @@
           null,
           null,
           null,
-          null,
-          null
+          14,
+          14
         ],
         [
           0,
           0,
-          25,
           null,
           null,
           null,
           null,
           null,
           null,
-          25,
+          null,
+          null,
           0,
           0
         ],
@@ -7735,10 +7696,10 @@
           null,
           null,
           null,
-          25,
+          null,
           null,
           19,
-          25,
+          null,
           null,
           null,
           null,
@@ -8108,7 +8069,7 @@
       ],
       "upper": [
         [
-          null,
+          14,
           1,
           null,
           20,
@@ -8448,11 +8409,6 @@
       ],
       "enemies": [],
       "pickups": [
-        {
-          "type": "axe",
-          "worldX": 4,
-          "worldY": 41
-        },
         {
           "type": "iron",
           "worldX": 10,
@@ -9195,7 +9151,7 @@
           1,
           19,
           20,
-          null,
+          14,
           null,
           null,
           null,
@@ -9208,7 +9164,7 @@
           1,
           null,
           null,
-          null,
+          14,
           1,
           null,
           null,
@@ -9277,7 +9233,7 @@
           null,
           19,
           null,
-          null,
+          14,
           null,
           null,
           20,
@@ -9291,8 +9247,8 @@
           null,
           20,
           0,
-          null,
-          null,
+          14,
+          14,
           null,
           null,
           1,
@@ -9305,8 +9261,8 @@
           20,
           0,
           null,
-          null,
-          null,
+          14,
+          14,
           null,
           null,
           null,
@@ -9318,10 +9274,10 @@
           null,
           null,
           1,
-          null,
+          14,
           20,
-          null,
-          null,
+          14,
+          14,
           19,
           null,
           null,
@@ -9515,11 +9471,6 @@
       "enemies": [],
       "pickups": [
         {
-          "type": "pickaxe",
-          "worldX": 28,
-          "worldY": 41
-        },
-        {
           "type": "iron",
           "worldX": 34,
           "worldY": 36
@@ -9711,36 +9662,36 @@
           1,
           null,
           20,
-          null,
+          14,
           null,
           19,
-          null,
-          null,
-          null,
-          null,
-          null
+          14,
+          14,
+          14,
+          14,
+          14
         ],
         [
-          null,
-          null,
-          null,
+          14,
+          14,
+          14,
           0,
           1,
           19,
           20,
+          14,
+          14,
           null,
-          null,
-          null,
-          null,
-          null
+          14,
+          14
         ],
         [
           null,
           null,
           0,
           1,
-          null,
-          null,
+          14,
+          14,
           null,
           1,
           19,
@@ -9802,7 +9753,7 @@
           null,
           null,
           0,
-          null
+          14
         ],
         [
           null,
@@ -9816,7 +9767,7 @@
           20,
           null,
           1,
-          null
+          14
         ],
         [
           null,
@@ -9824,7 +9775,7 @@
           null,
           20,
           0,
-          null,
+          14,
           null,
           null,
           null,
@@ -9838,8 +9789,8 @@
           20,
           0,
           null,
-          null,
-          null,
+          14,
+          14,
           null,
           null,
           null,
@@ -9853,7 +9804,7 @@
           null,
           null,
           20,
-          null,
+          14,
           null,
           19,
           null,
@@ -10062,18 +10013,7 @@
           "worldY": 39
         }
       ],
-      "pickups": [
-        {
-          "type": "sword",
-          "worldX": 42,
-          "worldY": 42
-        },
-        {
-          "type": "iron",
-          "worldX": 46,
-          "worldY": 38
-        }
-      ],
+      "pickups": [],
       "npcs": []
     },
     {
@@ -10251,7 +10191,7 @@
       ],
       "upper": [
         [
-          null,
+          14,
           1,
           null,
           20,
@@ -10265,8 +10205,8 @@
           null
         ],
         [
-          null,
-          null,
+          14,
+          14,
           null,
           0,
           1,
@@ -10279,8 +10219,8 @@
           null
         ],
         [
-          null,
-          null,
+          14,
+          14,
           0,
           1,
           null,
@@ -10293,8 +10233,8 @@
           null
         ],
         [
-          null,
-          null,
+          14,
+          14,
           null,
           19,
           null,
@@ -10335,7 +10275,7 @@
           0
         ],
         [
-          null,
+          14,
           null,
           0,
           null,
@@ -10349,7 +10289,7 @@
           null
         ],
         [
-          null,
+          14,
           0,
           null,
           19,
@@ -10359,21 +10299,21 @@
           null,
           20,
           null,
-          1,
-          null
+          null,
+          14
         ],
         [
-          null,
-          null,
-          null,
+          14,
+          14,
+          14,
           20,
-          0,
+          14,
           null,
           null,
           null,
           null,
-          1,
-          19,
+          null,
+          null,
           null
         ],
         [
@@ -10387,8 +10327,8 @@
           null,
           null,
           4,
-          4,
-          0
+          null,
+          null
         ],
         [
           19,
@@ -10591,21 +10531,6 @@
       ],
       "enemies": [],
       "pickups": [
-        {
-          "type": "wood",
-          "worldX": 54,
-          "worldY": 42
-        },
-        {
-          "type": "wood",
-          "worldX": 53,
-          "worldY": 43
-        },
-        {
-          "type": "stone",
-          "worldX": 52,
-          "worldY": 43
-        },
         {
           "type": "iron",
           "worldX": 58,
@@ -11127,7 +11052,18 @@
           false
         ]
       ],
-      "enemies": [],
+      "enemies": [
+        {
+          "type": "undead",
+          "worldX": 8,
+          "worldY": 56
+        },
+        {
+          "type": "undead",
+          "worldX": 7,
+          "worldY": 57
+        }
+      ],
       "pickups": [
         {
           "type": "iron",
@@ -13207,23 +13143,24 @@
           false
         ]
       ],
-      "enemies": [],
-      "pickups": [
+      "enemies": [
         {
-          "type": "scythe",
-          "worldX": 54,
+          "type": "undead",
+          "worldX": 55,
           "worldY": 54
         },
         {
-          "type": "shovel",
-          "worldX": 54,
-          "worldY": 55
+          "type": "undead",
+          "worldX": 52,
+          "worldY": 57
         },
         {
-          "type": "bucket",
-          "worldX": 52,
-          "worldY": 55
-        },
+          "type": "undead",
+          "worldX": 49,
+          "worldY": 54
+        }
+      ],
+      "pickups": [
         {
           "type": "iron",
           "worldX": 58,
@@ -13288,11 +13225,6 @@
     },
     {
       "type": "dryTree",
-      "worldX": 58,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
       "worldX": 50,
       "worldY": 3
     },
@@ -13321,18 +13253,6 @@
       "type": "campfire",
       "lit": true,
       "worldX": 18,
-      "worldY": 17
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 30,
-      "worldY": 17
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 42,
       "worldY": 17
     },
     {
@@ -13679,32 +13599,12 @@
     {
       "type": "plantSpot",
       "worldX": 15,
-      "worldY": 14
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 15,
-      "worldY": 15
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 15,
-      "worldY": 19
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 15,
-      "worldY": 20
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 17,
       "worldY": 19
     },
     {
       "type": "plantSpot",
       "worldX": 17,
-      "worldY": 20
+      "worldY": 19
     },
     {
       "type": "plantSpot",
@@ -13715,41 +13615,6 @@
       "type": "plantSpot",
       "worldX": 19,
       "worldY": 19
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 17,
-      "worldY": 15
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 17,
-      "worldY": 14
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 19,
-      "worldY": 14
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 19,
-      "worldY": 15
-    },
-    {
-      "type": "carnivorousPlant",
-      "worldX": 18,
-      "worldY": 14
-    },
-    {
-      "type": "carnivorousPlant",
-      "worldX": 16,
-      "worldY": 21
-    },
-    {
-      "type": "carnivorousPlant",
-      "worldX": 20,
-      "worldY": 18
     },
     {
       "type": "moonflower",
@@ -13892,26 +13757,6 @@
       "worldY": 16
     },
     {
-      "type": "moonflower",
-      "worldX": 12,
-      "worldY": 16
-    },
-    {
-      "type": "moonflower",
-      "worldX": 23,
-      "worldY": 16
-    },
-    {
-      "type": "moonflower",
-      "worldX": 16,
-      "worldY": 23
-    },
-    {
-      "type": "moonflower",
-      "worldX": 24,
-      "worldY": 14
-    },
-    {
       "type": "tallGrass",
       "worldX": 28,
       "worldY": 13
@@ -13927,11 +13772,6 @@
       "worldY": 16
     },
     {
-      "type": "rock",
-      "worldX": 28,
-      "worldY": 15
-    },
-    {
       "type": "tallGrass",
       "worldX": 38,
       "worldY": 16
@@ -13945,11 +13785,6 @@
       "type": "dryShrub",
       "worldX": 40,
       "worldY": 21
-    },
-    {
-      "type": "rock",
-      "worldX": 42,
-      "worldY": 16
     },
     {
       "type": "tallGrass",
@@ -14163,18 +13998,6 @@
       "worldY": 3
     },
     {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 39,
-      "worldY": 42
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 51,
-      "worldY": 42
-    },
-    {
       "type": "water",
       "worldX": 56,
       "worldY": 36
@@ -14208,11 +14031,6 @@
       "type": "water",
       "worldX": 59,
       "worldY": 40
-    },
-    {
-      "type": "bridgeSpot",
-      "worldX": 56,
-      "worldY": 38
     },
     {
       "type": "campfire",
@@ -14291,12 +14109,6 @@
       "type": "water",
       "worldX": 50,
       "worldY": 52
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 3,
-      "worldY": 39
     },
     {
       "type": "dryTree",
@@ -14397,12 +14209,6 @@
     {
       "type": "dryBush",
       "worldX": 23,
-      "worldY": 39
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 27,
       "worldY": 39
     },
     {
@@ -14744,6 +14550,81 @@
       "type": "stairs",
       "worldX": 5,
       "worldY": 52
+    },
+    {
+      "type": "dryTree",
+      "worldX": 48,
+      "worldY": 7
+    },
+    {
+      "type": "dryTree",
+      "worldX": 48,
+      "worldY": 6
+    },
+    {
+      "type": "dryTree",
+      "worldX": 48,
+      "worldY": 5
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 15,
+      "worldY": 20
+    },
+    {
+      "type": "plantSpot",
+      "worldX": 17,
+      "worldY": 20
+    },
+    {
+      "type": "dryBush",
+      "worldX": 58,
+      "worldY": 49
+    },
+    {
+      "type": "dryBush",
+      "worldX": 59,
+      "worldY": 49
+    },
+    {
+      "type": "water",
+      "worldX": 57,
+      "worldY": 36
+    },
+    {
+      "type": "water",
+      "worldX": 58,
+      "worldY": 36
+    },
+    {
+      "type": "water",
+      "worldX": 59,
+      "worldY": 36
+    },
+    {
+      "type": "water",
+      "worldX": 56,
+      "worldY": 38
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 58,
+      "worldY": 43
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 57,
+      "worldY": 43
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 57,
+      "worldY": 44
+    },
+    {
+      "type": "bombSpot",
+      "worldX": 58,
+      "worldY": 45
     }
   ],
   "dialogs": {
@@ -14810,19 +14691,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "My ship broke into samples all over this crater."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the PICKAXE. It cracks rock — and rock is where the good things hide."
-        },
-        {
-          "speaker": "npc",
-          "text": "Plain stone breaks. The VEINED boulders never do: three good swings, one lump of IRON, forever."
-        },
-        {
-          "speaker": "npc",
-          "text": "The lab buys every lump you carry. Mining is honest pay out here."
+          "text": "Take the PICKAXE — the veined boulders never run dry, three swings a lump. Bring me six of that ORE and my ship stops being scrap."
         }
       ],
       "trade": {
@@ -14845,19 +14714,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Timber. That is the market now."
-        },
-        {
-          "speaker": "npc",
-          "text": "This AXE is yours — consider it an advance. It fells DEAD wood in a chop or two."
-        },
-        {
-          "speaker": "npc",
-          "text": "My dry ranks stand in rows. Clear them, and the sticks are pure profit."
-        },
-        {
-          "speaker": "npc",
-          "text": "Sticks build bridges. Bridges open markets. Work hard."
+          "text": "The AXE is yours, an advance — it fells DEAD wood in two chops. Clear my dry ranks and bring me six STICKS: timber is the only market left."
         }
       ]
     },
@@ -14873,19 +14730,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Suit says the pool up north-east glows. Molten ground is no road."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take this STONE. Throw it into lava and it cools into a basalt step."
-        },
-        {
-          "speaker": "npc",
-          "text": "Something metal sank by the little island. One good step opens the route."
-        },
-        {
-          "speaker": "npc",
-          "text": "The basalt stays behind. Cross back carrying whatever you find."
+          "text": "Take this STONE — thrown into lava it cools into a step. Something metal sank past the molten pool: walk one bar of IRON back to me."
         }
       ]
     },
@@ -14901,19 +14746,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Zero! Perfect timing. This field is a canvas, and it is BLANK."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take these SEEDS. My pigments. The beds along the south edge are already dug."
-        },
-        {
-          "speaker": "npc",
-          "text": "Stand before a bed and press A to plant. Water wakes them — rain, or a bucket."
-        },
-        {
-          "speaker": "npc",
-          "text": "Green is a colour you GROW. Paint me a meadow."
+          "text": "Take the SHOVEL and dig the beds south of me. Green is a colour you GROW, so bring me six SEEDS and paint this field."
         }
       ]
     },
@@ -14982,19 +14815,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Do not be alarmed. I am off duty."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the SCYTHE. It reaps the tall grass in one clean sweep — press A before it."
-        },
-        {
-          "speaker": "npc",
-          "text": "Cut grass surrenders SEEDS. Life insists on returning. It always does."
-        },
-        {
-          "speaker": "npc",
-          "text": "The meadow here grew loud. Quiet it for me, and we are even."
+          "text": "Take the SCYTHE — I am off duty. Light five cold hearths and burn me three loads of CHARCOAL, and you and I are even."
         }
       ]
     },
@@ -15326,19 +15147,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Six lumps of ore. That is a hull patch and a landing strut, and I am not being poetic."
-        },
-        {
-          "speaker": "npc",
-          "text": "Ore, fire, hammer, bar. Your ancients ran that same order — I keep digging their slag out of this crater."
-        },
-        {
-          "speaker": "npc",
-          "text": "She will not fly on six. But she stopped being scrap the moment you set them down. Bring bars if you find them; the counter stays open."
-        },
-        {
-          "speaker": "npc",
-          "text": "And the crating from the ship went to that tower of yours. It was never going to fly. Let it burn where people can see it."
+          "text": "Six lumps: a hull patch and a strut. Ore, fire, hammer, bar — your ancients ran that same order, and I sent the ship's crating to your pyre."
         }
       ],
       "trade": {
@@ -15389,19 +15198,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Six sticks. Delivered. On schedule. Do you know how rare that is out here?"
-        },
-        {
-          "speaker": "npc",
-          "text": "And do you know what a stick is worth in a dark this size? Everything. A bridge, a fire, a night somebody survives."
-        },
-        {
-          "speaker": "npc",
-          "text": "So I will keep buying timber and you will keep carrying flame. Different trades. Same fuel."
-        },
-        {
-          "speaker": "npc",
-          "text": "And I wrote off a bundle to that pyre of yours. Call it advertising. Everyone will see it burn."
+          "text": "Six sticks, on schedule. Out here a stick is a bridge, a fire, a night somebody survives — so I wrote a bundle off to your pyre."
         }
       ]
     },
@@ -15417,19 +15214,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "That is the metal. It went down with the ones who came before, and you walked it back over basalt."
-        },
-        {
-          "speaker": "narrator",
-          "text": "The suit ticks twice and goes quiet."
-        },
-        {
-          "speaker": "npc",
-          "text": "They worked this valley before the dark. Every bar out there was a day somebody spent. Carry it like that."
-        },
-        {
-          "speaker": "npc",
-          "text": "I sent my scrap timber to your pyre, too. Nothing here is worth keeping dry for long."
+          "text": "That bar went down with the ones who came before, and you walked it back over basalt. My scrap timber went to your pyre; nothing here stays dry."
         }
       ]
     },
@@ -15445,19 +15230,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "You GREW it. All the way down to the south beds — that is a meadow, and I did not paint it."
-        },
-        {
-          "speaker": "npc",
-          "text": "In a world the dark ate, green is not decoration. Green is an argument."
-        },
-        {
-          "speaker": "npc",
-          "text": "Come back when the light is low. That is the hour a field is worth the canvas."
-        },
-        {
-          "speaker": "npc",
-          "text": "Oh, and the cuttings went to your tower in the field. A meadow can spare a few branches for a fire that big."
+          "text": "You GREW it, all the way to the south beds. In a world the dark ate, green is not decoration — it is an argument, and the cuttings went to your pyre."
         }
       ]
     },
@@ -15553,19 +15326,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Five hearths. And that furnace smoke again — I watched it cross three fields from right here."
-        },
-        {
-          "speaker": "npc",
-          "text": "I was sent to CLOSE this place, hero. Instead I stand at the end of the road counting fires you lit."
-        },
-        {
-          "speaker": "npc",
-          "text": "Go on, then. Light another. I will keep waiting — it is still the one thing I am good at."
-        },
-        {
-          "speaker": "npc",
-          "text": "I had wood taken to your pyre as well. Do not read anything into it. I simply prefer the road lit."
+          "text": "Five hearths, and furnace smoke crossing three fields. I was sent to CLOSE this place; instead I had wood carried to your pyre. Light another."
         }
       ]
     }

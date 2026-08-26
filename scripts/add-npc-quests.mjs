@@ -38,6 +38,10 @@ const narr = (text) => ({ speaker: 'narrator', text });
  * volta lá um dia e encontra uma torre mais alta sem saber por quê. Cada um diz do jeito dele,
  * e ninguém diz o NÚMERO: o que se aprende é a regra, não a planilha.
  *
+ * OS CINCO NPCs PLANTADOS NO MAPA falam UMA linha só (astronauta, lenhador, operário, artista e
+ * a Morte), então nesses os três itens acima cabem na MESMA frase — reconhecer, empurrar a lore e
+ * dizer que a lenha foi para a pira. Quem ainda não tem corpo no mundo mantém o roteiro longo.
+ *
  * A lore que elas empurram é a do mago (locale `wizard.*`): o escuro tomou o mundo, a fogueira
  * dele é a última chama, as lareiras frias são DOS QUE VIERAM ANTES, e Zero é o último herdeiro
  * de uma cruzada esquecida. Cada NPC diz a parte disso que ele enxerga do lugar onde está — o
@@ -61,17 +65,11 @@ const DONE_LINES = {
   ],
   // O campo verde, e a foice que provou que ele cresceu.
   painterDone: [
-    line('You GREW it. All the way down to the south beds — that is a meadow, and I did not paint it.'),
-    line('In a world the dark ate, green is not decoration. Green is an argument.'),
-    line('Come back when the light is low. That is the hour a field is worth the canvas.'),
-    line('Oh, and the cuttings went to your tower in the field. A meadow can spare a few branches for a fire that big.'),
+    line('You GREW it, all the way to the south beds. In a world the dark ate, green is not decoration — it is an argument, and the cuttings went to your pyre.'),
   ],
   // Seis gravetos entregues — e ele não sabe o que está vendendo.
   businessManDone: [
-    line('Six sticks. Delivered. On schedule. Do you know how rare that is out here?'),
-    line('And do you know what a stick is worth in a dark this size? Everything. A bridge, a fire, a night somebody survives.'),
-    line('So I will keep buying timber and you will keep carrying flame. Different trades. Same fuel.'),
-    line('And I wrote off a bundle to that pyre of yours. Call it advertising. Everyone will see it burn.'),
+    line('Six sticks, on schedule. Out here a stick is a bridge, a fire, a night somebody survives — so I wrote a bundle off to your pyre.'),
   ],
   // Estoque: quatro pedras e quatro gravetos — o que segura o fogo e o que o carrega.
   salesmanDone: [
@@ -82,24 +80,15 @@ const DONE_LINES = {
   ],
   // A barra que afundou com quem trabalhou aqui antes do escuro.
   radiationSuitDone: [
-    line('That is the metal. It went down with the ones who came before, and you walked it back over basalt.'),
-    narr('The suit ticks twice and goes quiet.'),
-    line('They worked this valley before the dark. Every bar out there was a day somebody spent. Carry it like that.'),
-    line('I sent my scrap timber to your pyre, too. Nothing here is worth keeping dry for long.'),
+    line('That bar went down with the ones who came before, and you walked it back over basalt. My scrap timber went to your pyre; nothing here stays dry.'),
   ],
   // Seis minérios: o primeiro carregamento da nave.
   astronautDone: [
-    line('Six lumps of ore. That is a hull patch and a landing strut, and I am not being poetic.'),
-    line('Ore, fire, hammer, bar. Your ancients ran that same order — I keep digging their slag out of this crater.'),
-    line('She will not fly on six. But she stopped being scrap the moment you set them down. Bring bars if you find them; the counter stays open.'),
-    line('And the crating from the ship went to that tower of yours. It was never going to fly. Let it burn where people can see it.'),
+    line("Six lumps: a hull patch and a strut. Ore, fire, hammer, bar — your ancients ran that same order, and I sent the ship's crating to your pyre."),
   ],
   // Cinco fogueiras e três cargas de carvão: a fumaça que ela viu atravessar três campos.
   deathDone: [
-    line('Five hearths. And that furnace smoke again — I watched it cross three fields from right here.'),
-    line('I was sent to CLOSE this place, hero. Instead I stand at the end of the road counting fires you lit.'),
-    line('Go on, then. Light another. I will keep waiting — it is still the one thing I am good at.'),
-    line('I had wood taken to your pyre as well. Do not read anything into it. I simply prefer the road lit.'),
+    line('Five hearths, and furnace smoke crossing three fields. I was sent to CLOSE this place; instead I had wood carried to your pyre. Light another.'),
   ],
   // Oito mortos da estrada, e seis campos trazidos à existência.
   wizardDone: [

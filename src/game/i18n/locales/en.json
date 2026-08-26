@@ -319,23 +319,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "My ship is a shell now. What she still needs is IRON — and this crater keeps it locked inside rock."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the PICKAXE. The veined boulders never run dry: three good swings, one lump of ORE."
-        },
-        {
-          "speaker": "npc",
-          "text": "Ore is not iron yet. Two stones make a FURNACE on that bench, and stone plus ore makes an ALTAR — the slab you hammer on."
-        },
-        {
-          "speaker": "npc",
-          "text": "Burn dead wood into CHARCOAL in the furnace, smelt it with ore for a SPONGE, then lay the sponge on the altar and strike it three times."
-        },
-        {
-          "speaker": "npc",
-          "text": "Finish it by hand on the altar. Bring me a bar and the ship gets one step closer to flying."
+          "text": "Take the PICKAXE — the veined boulders never run dry, three swings a lump. Bring me six of that ORE and my ship stops being scrap."
         }
       ]
     },
@@ -344,19 +328,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Timber. That is the market now."
-        },
-        {
-          "speaker": "npc",
-          "text": "This AXE is yours — consider it an advance. It fells DEAD wood in a chop or two."
-        },
-        {
-          "speaker": "npc",
-          "text": "My dry ranks stand in rows. Clear them, and the sticks are pure profit."
-        },
-        {
-          "speaker": "npc",
-          "text": "Sticks build bridges. Bridges open markets. Work hard."
+          "text": "The AXE is yours, an advance — it fells DEAD wood in two chops. Clear my dry ranks and bring me six STICKS: timber is the only market left."
         }
       ]
     },
@@ -365,19 +337,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Suit says the pool up north-east glows. Molten ground is no road."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take this STONE. Throw it into lava and it cools into a basalt step."
-        },
-        {
-          "speaker": "npc",
-          "text": "Something metal sank by the little island. One good step opens the route."
-        },
-        {
-          "speaker": "npc",
-          "text": "The basalt stays behind. Cross back carrying whatever you find."
+          "text": "Take this STONE — thrown into lava it cools into a step. Something metal sank past the molten pool: walk one bar of IRON back to me."
         }
       ]
     },
@@ -386,19 +346,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Zero! Perfect timing. This field is a canvas, and it is BLANK."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take these SEEDS. My pigments. The beds along the south edge are already dug."
-        },
-        {
-          "speaker": "npc",
-          "text": "Stand before a bed and press A to plant. Water wakes them — rain, or a bucket."
-        },
-        {
-          "speaker": "npc",
-          "text": "Green is a colour you GROW. Paint me a meadow."
+          "text": "Take the SHOVEL and dig the beds south of me. Green is a colour you GROW, so bring me six SEEDS and paint this field."
         }
       ]
     },
@@ -466,19 +414,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "You bought your way here, field by field. I watched your furnace smoke cross three of them."
-        },
-        {
-          "speaker": "npc",
-          "text": "This is where the road stops. Everything past me is unbuilt — no cards, no coins, no dark to light."
-        },
-        {
-          "speaker": "npc",
-          "text": "So: the prologue is over, and you are the one who finished it. Thank you for testing my small world."
-        },
-        {
-          "speaker": "npc",
-          "text": "Go back and light something. I will wait. Waiting is the one thing I am good at."
+          "text": "Take the SCYTHE — I am off duty. Light five cold hearths and burn me three loads of CHARCOAL, and you and I are even."
         }
       ]
     }

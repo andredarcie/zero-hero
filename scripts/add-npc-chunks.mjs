@@ -212,10 +212,7 @@ const NPC_DIALOG_CONFIG = {
     npcName: 'ASTRONAUT', npcColorHex: '#44ccff', npcAssetKey: 'npcs', npcFrame: 2,
     voice: { freq: 470, wave: 'square' },
     lines: [
-      line('My ship broke into samples all over this crater.'),
-      line('Take the PICKAXE. It cracks rock — and rock is where the good things hide.'),
-      line('Plain stone breaks. The VEINED boulders never do: three good swings, one lump of IRON, forever.'),
-      line('The lab buys every lump you carry. Mining is honest pay out here.'),
+      line('Take the PICKAXE — the veined boulders never run dry, three swings a lump. Bring me six of that ORE and my ship stops being scrap.'),
     ],
     // O BALCÃO: o astronauta COMPRA ferro por quantidade dentro do diálogo (DialogOverlay).
     // O preço mora aqui — mudar a economia da mineração é editar este número e rodar o script.
@@ -231,30 +228,21 @@ const NPC_DIALOG_CONFIG = {
     npcName: 'BUSINESSMAN', npcColorHex: '#ffdd44', npcAssetKey: 'npcs', npcFrame: 3,
     voice: { freq: 250, wave: 'sawtooth' },
     lines: [
-      line('Timber. That is the market now.'),
-      line('This AXE is yours — consider it an advance. It fells DEAD wood in a chop or two.'),
-      line('My dry ranks stand in rows. Clear them, and the sticks are pure profit.'),
-      line('Sticks build bridges. Bridges open markets. Work hard.'),
+      line('The AXE is yours, an advance — it fells DEAD wood in two chops. Clear my dry ranks and bring me six STICKS: timber is the only market left.'),
     ],
   },
   radiationSuit: {
     npcName: 'WORKMAN', npcColorHex: '#66ff44', npcAssetKey: 'npcs', npcFrame: 4,
     voice: { freq: 340, wave: 'square' },
     lines: [
-      line('Suit says the pool up north-east glows. Molten ground is no road.'),
-      line('Take this STONE. Throw it into lava and it cools into a basalt step.'),
-      line('Something metal sank by the little island. One good step opens the route.'),
-      line('The basalt stays behind. Cross back carrying whatever you find.'),
+      line('Take this STONE — thrown into lava it cools into a step. Something metal sank past the molten pool: walk one bar of IRON back to me.'),
     ],
   },
   painter: {
     npcName: 'ARTIST', npcColorHex: '#ff88aa', npcAssetKey: 'npcs', npcFrame: 5,
     voice: { freq: 620, wave: 'sine' },
     lines: [
-      line('Zero! Perfect timing. This field is a canvas, and it is BLANK.'),
-      line('Take these SEEDS. My pigments. The beds along the south edge are already dug.'),
-      line('Stand before a bed and press A to plant. Water wakes them — rain, or a bucket.'),
-      line('Green is a colour you GROW. Paint me a meadow.'),
+      line('Take the SHOVEL and dig the beds south of me. Green is a colour you GROW, so bring me six SEEDS and paint this field.'),
     ],
   },
   salesman: {
@@ -281,10 +269,7 @@ const NPC_DIALOG_CONFIG = {
     npcName: 'DEATH', npcColorHex: '#f3f4f6', npcAssetKey: 'npc-death',
     voice: { freq: 150, wave: 'square' },
     lines: [
-      line('Do not be alarmed. I am off duty.'),
-      line('Take the SCYTHE. It reaps the tall grass in one clean sweep — press A before it.'),
-      line('Cut grass surrenders SEEDS. Life insists on returning. It always does.'),
-      line('The meadow here grew loud. Quiet it for me, and we are even.'),
+      line('Take the SCYTHE — I am off duty. Light five cold hearths and burn me three loads of CHARCOAL, and you and I are even.'),
     ],
   },
 };

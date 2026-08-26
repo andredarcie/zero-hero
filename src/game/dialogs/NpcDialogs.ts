@@ -81,17 +81,12 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcColorHex: '#44ccff',
     npcAssetKey: NPC_VISUALS.astronaut.key,
     npcFrame: NPC_VISUALS.astronaut.frame,
-    // O PEDIDO DE FERRO. Ele é o único NPC do baralho hoje, então esta fala carrega sozinha o
-    // tutorial da cadeia inteira — e cada substantivo em maiúsculo é uma coisa que existe NA
-    // CARTA dele: a picareta no chão, os veios, o mato seco, a bancada. Uma fala que mandasse
-    // procurar algo que não está ali seria uma missão impossível contada com confiança.
+    // UMA FALA SÓ, como todo NPC plantado no mapa: o presente que está no chão ao lado dele mais
+    // o pedido, na mesma frase. O que ele nomeia em maiúsculo existe NA CARTA dele (a picareta, os
+    // veios) — mandar procurar o que não está ali seria uma missão impossível contada com toda a
+    // confiança do mundo. O resto da cadeia do ferro se aprende na bancada, não em seis falas.
     lines: [
-      n('My ship is a shell now. What she still needs is IRON — and this crater keeps it locked inside rock.'),
-      n('Take the PICKAXE. The veined boulders never run dry: three good swings, one lump of ORE.'),
-      n('That BENCH is mine — every tool in the chain starts there.'),
-      n('Ore is not iron yet. Two stones make a FURNACE on that bench, and stone plus ore makes an ALTAR — the slab you hammer on.'),
-      n('Burn dead wood into CHARCOAL in the furnace, smelt it with ore for a SPONGE, then lay the sponge on the altar and strike it three times.'),
-      n('Finish it by hand on the altar. Bring me a bar and the ship gets one step closer to flying.'),
+      n('Take the PICKAXE — the veined boulders never run dry, three swings a lump. Bring me six of that ORE and my ship stops being scrap.'),
     ],
   },
 
@@ -101,7 +96,7 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcAssetKey: NPC_VISUALS.businessMan.key,
     npcFrame: NPC_VISUALS.businessMan.frame,
     lines: [
-      n('Work hard and you\'ll find the sword you\'re looking for'),
+      n('The AXE is yours, an advance — it fells DEAD wood in two chops. Clear my dry ranks and bring me six STICKS: timber is the only market left.'),
     ],
   },
 
@@ -111,7 +106,7 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcAssetKey: NPC_VISUALS.radiationSuit.key,
     npcFrame: NPC_VISUALS.radiationSuit.frame,
     lines: [
-      n('I used an ax to cut uranium, but you can cut other things with it'),
+      n('Take this STONE — thrown into lava it cools into a step. Something metal sank past the molten pool: walk one bar of IRON back to me.'),
     ],
   },
 
@@ -121,9 +116,7 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcAssetKey: NPC_VISUALS.painter.key,
     npcFrame: NPC_VISUALS.painter.frame,
     lines: [
-      n('You must be the warrior Zero!'),
-      n('I was on a journey to find the perfect place to do a painting.'),
-      n('But these bushes are getting in the way.'),
+      n('Take the SHOVEL and dig the beds south of me. Green is a colour you GROW, so bring me six SEEDS and paint this field.'),
     ],
   },
 
@@ -169,14 +162,11 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcName: 'DEATH',
     npcColorHex: '#f3f4f6',
     npcAssetKey: NPC_VISUALS.death.key,
-    // O FIM DO PRÓLOGO. Ele espera no meio do adro da última carta (`prologue-end`, 90 moedas —
-    // dez barras de ferro), e é o único NPC do jogo que fala do lado de fora da ficção: quem chega
-    // até aqui percorreu toda a cadeia manual, e merece ouvir que era esse o fim da estrada.
+    // Ela mora no descampado de mato alto do leste, com a foice no chão ao lado, e o que ela pede
+    // é a missão dela (`NPC_QUESTS.death`): cinco fogueiras e três cargas de carvão. A personagem
+    // mandada FECHAR este lugar cobrando fogo e fumaça é a melhor piada que a lore tem.
     lines: [
-      n('You bought your way here, field by field. I watched your furnace smoke cross three of them.'),
-      n('This is where the road stops. Everything past me is unbuilt — no cards, no coins, no dark to light.'),
-      n('So: the prologue is over, and you are the one who finished it. Thank you for testing my small world.'),
-      n('Go back and light something. I will wait. Waiting is the one thing I am good at.'),
+      n('Take the SCYTHE — I am off duty. Light five cold hearths and burn me three loads of CHARCOAL, and you and I are even.'),
     ],
   },
 };

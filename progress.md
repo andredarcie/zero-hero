@@ -9093,3 +9093,67 @@ que é o que tinha de acontecer.
   propósito**; o que ele guarda é que duas rodadas do mesmo build continuam diferindo em 0.
 - `hd3d.stats().massShadowQuads` é o número que se olha se a barra um dia pesar.
 - `npm run build` e `npx eslint src playtest` passam.
+
+## UMA FALA POR NPC — e a descoberta de que o `world.json` não era quem falava (2026-08-26)
+
+Os cinco NPCs plantados no mapa de hoje (astronauta, lenhador, operário, artista e a Morte) diziam
+quatro falas cada um, e o pedido foi cortar para **uma**. O corte é fácil; achar QUEM fala não foi.
+
+### O locale VENCE o `world.json` no roteiro-base
+
+`WorldData.getDialog` monta a fala assim: `lines: localized?.lines ?? dialog.lines`, e `localized`
+só existe quando o id do roteiro É o nome da espécie (`id === kind`). Ou seja:
+
+- **roteiro-base** (`astronaut`) → quem fala é `src/game/i18n/locales/en.json`, `npc.<kind>.lines`.
+  O bloco do `public/world.json` é texto morto ali.
+- **roteiro alternativo de missão** (`astronautDone`) → id ≠ espécie, então o locale não entra e
+  quem fala é o `world.json`.
+
+Editar só o `world.json` teria dado a sensação de ter feito o trabalho: o editor mostraria uma fala
+só, o jogo continuaria dizendo as quatro. É o mesmo tropeço que já matou as cinco falas do gato do
+level-1 (o comentário sobre isso já estava no `WorldData.ts`, escrito por quem tropeçou antes).
+
+### Onde a mesma frase mora hoje
+
+Uma fala de NPC tem QUATRO cópias, e três delas são fonte de alguma coisa:
+
+1. `src/game/i18n/locales/en.json` — **o que toca em jogo** (base).
+2. `public/world.json` — o autorado: o `<id>Done` toca de verdade; o base é o que o editor mostra.
+3. `scripts/add-npc-chunks.mjs` (base) e `scripts/add-npc-quests.mjs` (`<id>Done`) — os scripts que
+   ESCREVEM o `world.json`. Não mexer neles é perder a mudança na próxima rodada, exatamente como a
+   tabela de preços do `add-prologue.mjs`. E o `--check` do segundo falha se o disco divergir dele.
+4. `src/game/dialogs/NpcDialogs.ts` — o fallback que o **editor** lê (`EditorStore`).
+
+As quatro foram para a mesma frase única. Os NPCs sem corpo no mapa (gato, poeta, vendedor, mago)
+ficaram como estavam: o pedido era o mapa de hoje.
+
+### O que uma fala única tem de carregar
+
+O sistema de missões não tem tela — sem diário, sem marcador, sem contador —, então a lei de autoria
+do `NpcQuests.ts` diz que **o pedido tem de estar na fala**. Com quatro linhas isso era confortável;
+com uma, a frase tem de ser presente + pedido na mesma respiração: *"Take the PICKAXE — the veined
+boulders never run dry, three swings a lump. Bring me six of that ORE and my ship stops being
+scrap."* O mesmo vale para o roteiro de missão cumprida, onde os três itens obrigatórios
+(reconhecer o que recebeu, empurrar a lore, dizer que mandou lenha para a PIRA) agora cabem numa
+frase só — e o item da pira não é enfeite: é o único lugar do jogo onde se aprende que missão
+cumprida sobe a torre.
+
+Duas coisas mudaram de assunto no caminho, porque a fala antiga mentia sobre o mundo de hoje:
+
+- **A Morte** dizia o discurso de FIM DE PRÓLOGO ("you bought your way here, field by field... no
+  cards, no coins"), e o `world.json` de hoje não tem carta comprável nenhuma. Ela passou a dizer o
+  que a missão dela realmente cobra (cinco fogueiras, três cargas de carvão) — que era, aliás, o
+  pedido que ela nunca tinha dito em voz alta.
+- **O artista** ganhava SEMENTES na carta antiga; no mapa de hoje o item no chão ao lado dele é a
+  **pá**, com os seis canteiros já cavados ao sul. A fala nomeia o que está no chão.
+
+### Como verificar
+
+- `node scripts/add-npc-quests.mjs --check` passa (o `world.json` é o ponto fixo das falas de
+  missão cumprida).
+- `npm run typecheck`, `npm run lint` e `npm run build` passam (o lint continua com os 62 erros
+  pré-existentes de `spritefactory/` e `scripts/worldgen/`, nenhum nos arquivos tocados).
+- **`npm run playtest -- prologo` vai reclamar da Morte**: ele assere o discurso de fim de prólogo
+  ("road stops", "thank you for testing"). Aquele cenário já não roda no mundo de hoje — ele compra
+  a carta `prologue-end`, e não há mais baralho —, mas a fala dela foi trocada de propósito, e é
+  esse teste que guarda o que ela diz.
