@@ -24,7 +24,7 @@ export default {
   name: 'gelo',
   description: 'A bola do zora congela em vez de ferir: estatuas que voltam, heroi travado sem dano, a espada devolvendo a bola, e fogo derretendo gelo.',
   needsGame: false, // entra pelo editor e nasce a GameScene no P (mesma razao do placa-undead)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

@@ -3,11 +3,11 @@ import { ZeroTheHeroGame } from '@/game/ZeroTheHeroGame';
 import { installDevLauncher } from '@/game/debug/DevLauncher';
 import { applyHtmlLang } from '@/game/i18n/i18n';
 
-// `/editor` edits the active open world (public/world.json); `/lab` is the puzzle laboratory —
-// the same editor UI over a puzzle level (public/levels/level-N.json, ?level=N) for prototyping
-// puzzle ideas without touching the game world.
+// DUAS ROTAS, e só: `/` é o jogo e `/editor` é o editor do mundo aberto — os DOIS andares dele
+// (a superfície e o espelho subterrâneo, `?under`). O `/lab` foi removido junto com os levels
+// isolados: ele era o mesmo editor sobre uma tela solta de puzzle, e não há mais tela solta.
 const pathname = window.location.pathname;
-const appMode = pathname.endsWith('/editor') ? 'editor' : pathname.endsWith('/lab') ? 'lab' : 'game';
+const appMode = pathname.endsWith('/editor') ? 'editor' : 'game';
 
 // Reflect the detected/saved locale on <html lang> before the game boots (the language screen
 // updates it again once the player picks).
@@ -28,7 +28,7 @@ const startGame = (): void => {
   window.zeroTheHeroGame = game;
 };
 
-// [I] anywhere in dev pops the launcher (jogo / lab / editor). No-ops in a real build.
+// [I] anywhere in dev pops the launcher (jogo / editor). No-ops in a real build.
 installDevLauncher();
 
 const fonts = document.fonts;

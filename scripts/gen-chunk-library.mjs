@@ -97,8 +97,8 @@ const world = {
       voice: { freq: 220, wave: 'sine' },
       lines: [
         { speaker: 'npc', text: 'The dark did not leave us a world. It left us choices.' },
-        { speaker: 'npc', text: 'Take the sword. The dead on unfinished roads still carry coin.' },
-        { speaker: 'npc', text: 'Stand on a road seal and press B. Spend what you earn, and decide what exists next.' },
+        { speaker: 'npc', text: 'Take the sword. Eight of the dead still walk the unfinished roads. Put them down.' },
+        { speaker: 'npc', text: 'Then walk. Six fields you have never stood in: what no one visits, no one decides.' },
       ],
     },
   },

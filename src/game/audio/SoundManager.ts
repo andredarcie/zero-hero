@@ -37,9 +37,6 @@ const SAMPLES = {
   swordSlash: { file: 'combat/sword-swing.wav', vol: 0.8 },
   enemyHit: { file: 'combat/enemy-hit.wav', vol: 0.85 },
   enemyDeath: { file: 'combat/enemy-death.wav', vol: 0.8 },
-  // A moeda REAL do RPG Sound Pack (inventory/coin3, a mais curta das tres) — o coin.wav
-  // gerado da raiz ficou para tras a pedido do usuario: moeda tem de soar como moeda.
-  coinPickup: { file: 'combat/coin-pickup.wav', vol: 0.55 },
   heartPickup: { file: 'heart.wav', vol: 0.7 },
   swordPickup: { file: 'item-pickup.wav', vol: 0.6 }, // item get (Freesound #37089, see CREDITS.md)
   dropWater: { file: 'water-drop.wav', vol: 0.75 }, // single drop for the title-screen reveal
@@ -763,29 +760,12 @@ class SoundManager {
   }
 
   /**
-   * A moeda apanhada, e a ESCADA que ela sobe.
+   * APANHAR UMA COISA DO CHÃO — o som de GUARDAR.
    *
-   * Moeda cai em punhado — uma caveira paga 1, um balcão paga 9 —, e nove vezes o MESMO som é
-   * ruído, não recompensa. `step` é a posição na sequência: cada moeda seguida da anterior toca
-   * um pouco mais aguda (meio tom, teto de uma oitava), que é o truque mais velho do gênero (o
-   * anel do Sonic, a moeda do Mario) e o que transforma um punhado em ARPEJO. A sequência zera
-   * sozinha quando o jogador para de pegar — quem cuida disso é quem conta as moedas.
-   */
-  public playCoinPickup(step = 0): void {
-    const rate = Math.pow(2, Math.min(12, Math.max(0, step)) / 24); // meio tom por degrau
-    if (this.playSample('coinPickup', 0.25, 1, rate)) return;
-    this.osc('sine', 330 * rate, 300 * rate, 0.18, 0.14);
-  }
-
-  /**
-   * APANHAR UMA COISA DO CHÃO — e coisa NÃO é moeda.
-   *
-   * Pisar num graveto, numa pedra, num minério ou num carvão tocava `playCoinPickup`: o tilintar
-   * metálico de dinheiro, com escada de tom e tudo. Era o mesmo som para as duas únicas coisas do
-   * jogo que o jogador conta separado — a carteira e a mochila —, e numa cadeia de minério (cinco
-   * blocos saltando de uma rocha) o ouvido acreditava estar enriquecendo.
-   *
-   * A voz daqui é o oposto da moeda em todos os eixos que o ouvido usa: grave em vez de agudo,
+   * Pisar num graveto, numa pedra, num minério ou num carvão tocava o tilintar metálico da moeda,
+   * com escada de tom e tudo, e numa cadeia de minério (cinco blocos saltando de uma rocha) o
+   * ouvido acreditava estar enriquecendo. Removida a moeda do jogo, esta voz ficou sendo a única —
+   * e ela é o oposto da que estava aqui em todos os eixos que o ouvido usa: grave em vez de agudo,
    * DESCENDO em vez de subindo, com um chiado surdo por baixo (o couro da mochila) em vez do
    * sustain limpo de metal. Continua curta, porque uma pisada apanha e segue andando.
    *
@@ -794,7 +774,7 @@ class SoundManager {
    */
   public playItemStash(): void {
     this.noise('lowpass', 620, 1.0, 0.09, 0.055);   // o baque surdo da coisa entrando
-    this.osc('triangle', 300, 190, 0.10, 0.075);    // o peso dela assentando (desce, ao contrário da moeda)
+    this.osc('triangle', 300, 190, 0.10, 0.075);    // o peso dela assentando, descendo
     this.osc('sine', 720, 640, 0.035, 0.05, 0.035); // e um toque claro no fim: "peguei" — sem metal
   }
 

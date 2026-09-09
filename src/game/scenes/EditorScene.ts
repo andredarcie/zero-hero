@@ -11,15 +11,13 @@ import {
 } from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
-import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
 import { GameScene } from '@/game/scenes/GameScene';
-import { setActiveLevel } from '@/game/runtime/activeLevel';
 import { setUnderground } from '@/game/runtime/underworld';
 import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
 import { setWorldData } from '@/game/world/WorldData';
 import {
-  createLabLevel, deleteLabLevel, listLabLevels, loadWorld, renameLabLevel, saveWorld, worldFilePath,
+  loadWorld, saveWorld, worldFilePath,
   type WorldFileId, type WorldFloor,
 } from '@/game/worldApi';
 
@@ -115,7 +113,6 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   toolbox: { key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
   furnace: { key: ASSET_KEYS.furnace, frame: 0 },
   altar: { key: ASSET_KEYS.altar, frame: 0 },
-  levelPortal: { key: ASSET_KEYS.levelPortal },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -185,7 +182,6 @@ export class EditorScene extends Phaser.Scene {
     // The bucket's pixel art is generated at boot (into the Phaser texture manager here so the
     // palette can show it, and the 3D registry for the live playtest).
     registerBucketTextures(this);
-    registerLevelPortalTextures(this);
     // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
@@ -226,15 +222,14 @@ export class EditorScene extends Phaser.Scene {
   // porta para esse parâmetro (`openFloor`) — a URL continua sendo a única fonte da verdade, então
   // recarregar, favoritar ou colar o endereço devolve exatamente o andar em que se estava.
   //
-  // `/lab` roda a MESMA cena sobre um LEVEL de puzzle (`public/levels/level-N.json`, padrão o 2) —
-  // e sobre o subterrâneo também, porque `?under` vale nas duas rotas. Ver main.ts / worldApi.ts.
+  // Houve uma terceira rota, `/lab`, que rodava esta mesma cena sobre uma tela solta de puzzle
+  // (`public/levels/level-N.json`). Os levels isolados foram removidos do jogo e ela foi junto:
+  // o mundo é um só, com dois andares, e os dois abrem por aqui.
   //
   // A grade do editor sempre foi guiada pelos `meta` do arquivo, então o espelho (25 telas, como o
   // overworld) entra sem mudança nenhuma de desenho.
   private get worldFileId(): WorldFileId {
-    if (this.isUnderworld) return 'underworld';
-    if (this.registry.get('appMode') !== 'lab') return 'world';
-    return `level-${this.labLevelNumber}`;
+    return this.isUnderworld ? 'underworld' : 'world';
   }
 
   private get isUnderworld(): boolean {
@@ -247,16 +242,6 @@ export class EditorScene extends Phaser.Scene {
   }
 
 
-  private get labLevelNumber(): number {
-    const raw = new URLSearchParams(window.location.search).get('level');
-    return raw && /^\d+$/u.test(raw) && Number(raw) > 0 ? Number(raw) : 2;
-  }
-
-  /** O número dentro do worldFileId corrente (level OU dungeon) — o que o activeLevel recebe. */
-  private get labFileNumber(): number {
-    const match = /-(\d+)$/u.exec(this.worldFileId);
-    return match ? Number(match[1]) : 1;
-  }
 
   // Editor and each lab level persist UI/camera separately: their worlds have different sizes,
   // so a camera restored from another would strand the view off-map.
@@ -299,22 +284,12 @@ export class EditorScene extends Phaser.Scene {
       onWorldApply: (settings) => this.applyWorldSettings(settings),
       onDialogApply: (kind, dialog) => { this.store?.setDialog(kind, dialog); },
       worldFile: this.worldFileId,
-      // Os dois andares só existem no /editor: no /lab o arquivo aberto é um LEVEL, que não é
+      // Os dois andares do mundo: a chave que o painel desenha é só uma porta para o `?under`
       // andar de nada — oferecer a troca lá seria uma porta que muda o assunto da tela.
       ...(this.registry.get('appMode') === 'editor' ? {
         floorSwitch: {
           current: this.worldFloor,
           open: (floor: WorldFloor) => this.openFloor(floor),
-        },
-      } : {}),
-      ...(this.registry.get('appMode') === 'lab' ? {
-        levelManager: {
-          currentId: this.worldFileId,
-          list: listLabLevels,
-          create: createLabLevel,
-          rename: renameLabLevel,
-          remove: deleteLabLevel,
-          open: (id: string) => this.openLabFile(id),
         },
       } : {}),
     });
@@ -1123,16 +1098,13 @@ export class EditorScene extends Phaser.Scene {
     // do disco, jogando fora a edição que ainda não foi salva. Com o andar certo, a escada sobe e
     // a viagem devolve o overworld, que é o que ela faz no jogo.
     setUnderground(this.isUnderworld);
-    // O número vem do ARQUIVO aberto (level ou dungeon): testar a dungeon-3 pelo P é jogar o
-    // level 3 ativo, com os mesmos botões flutuantes e o mesmo "reiniciar" do pause.
-    if (this.registry.get('appMode') === 'lab') setActiveLevel(this.labFileNumber);
     this.scene.run(GameScene.key);
     this.scene.sleep();
   }
 
   /**
-   * Trocar de ANDAR: uma navegação de verdade, pelo mesmo motivo do `openLabFile` — a cena inteira
-   * (store, câmera, undo, objetos) nasce do arquivo, e trocar o arquivo por baixo dela seria
+   * Trocar de ANDAR: uma navegação de verdade, e não uma troca de arquivo por baixo da cena —
+   * ela inteira (store, câmera, undo, objetos) nasce do arquivo, e trocá-lo em memória seria
    * reconstruir tudo à mão em troca de nada. Cada andar guarda a própria câmera (`uiStateKey`), e
    * o `beforeunload` do painel é quem avisa se há edição não salva.
    */
@@ -1142,20 +1114,6 @@ export class EditorScene extends Phaser.Scene {
     const url = new URL(window.location.href);
     if (floor === 'underworld') url.searchParams.set('under', '1');
     else url.searchParams.delete('under');
-    url.searchParams.delete('play');
-    window.location.assign(url.toString());
-  }
-
-  /** Full navigation is deliberate: public-file mutations trigger Vite reloads anyway. */
-  private openLabFile(id: string): void {
-    const match = /^(level|dungeon)-(\d+)$/u.exec(id);
-    if (!match) return;
-    this.persistUi();
-    const url = new URL(window.location.href);
-    // Um parâmetro por vez: `?level` e `?dungeon` juntos seriam dois arquivos disputando a cena.
-    url.searchParams.delete('level');
-    url.searchParams.delete('dungeon');
-    url.searchParams.set(match[1], match[2]);
     url.searchParams.delete('play');
     window.location.assign(url.toString());
   }

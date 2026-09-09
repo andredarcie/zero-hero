@@ -40,7 +40,7 @@ import type { EnemyKind } from '@/game/world/ScreenContent';
  *             nenhum.
  *   gather  — APANHAR N unidades ao longo da partida. Não consome: contar é o pedido.
  *   craft   — FABRICAR N numa estação (bancada ou forno).
- *   slay    — MATAR N de uma espécie. Vale qualquer morte, como a moeda (ver setDeathToll).
+ *   slay    — MATAR N de uma espécie. Vale qualquer morte, seja qual for (ver setDeathToll).
  *   light   — ACENDER N fogueiras do overworld.
  *   fell    — DERRUBAR N pinheiros VIVOS (o tile, e portanto só com o machado de aço; a árvore
  *             morta é prop e cai no `gather` do graveto que ela larga).
@@ -101,7 +101,7 @@ export const taskKey = (task: QuestTask): string => {
  *   o operário    — o METAL DOS ANTIGOS, afundado onde o chão brilha (uma barra)
  *   o astronauta  — o forasteiro cuja nave é uma casca: o ferro preso na rocha da cratera
  *   a Morte       — ela foi mandada FECHAR este lugar e fica contando as fogueiras que você acende
- *   o mago        — a cruzada esquecida: os mortos da estrada, e os campos que a moeda decide
+ *   o mago        — a cruzada esquecida: os mortos da estrada, e os campos que o passo decide
  *
  * DUAS REGRAS DE AUTORIA, e as duas são consequência de o sistema não ter tela:
  *
@@ -111,8 +111,8 @@ export const taskKey = (task: QuestTask): string => {
  *    dá de presente** — 8 veios de minério que nunca secam, 40 árvores mortas, 846 pinheiros
  *    vivos, 30 rochas, 39 moitas, 21 fogueiras (uma acesa), 25 telas, 12 barras no chão e covas
  *    de caveira. Foi essa pergunta que matou o pedido mais bonito do lote: a Morte mandando o
- *    herói descer até "o que os antigos enterraram sob os portais" (fala literal do mago). O
- *    `world.json` de hoje tem ZERO `levelPortal` — a missão seria impossível, contada com toda
+ *    herói descer até "o que os antigos enterraram sob os portais" (fala literal do mago). Não
+ *    existia (nem existe) portal nenhum no mundo — a missão seria impossível, contada com toda
  *    a confiança do mundo.
  *
  * QUEM NÃO ESTÁ AQUI, e por quê: o `mimic` não tem roteiro no `world.json`; os dez roteiros de
@@ -185,8 +185,8 @@ export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
       { kind: 'craft', item: 'charcoal', count: 3 },
     ],
   },
-  // "The dead on unfinished roads still carry coin" + "Spend what you earn, and decide what
-  // exists next": os mortos da cruzada anterior, e os campos que a moeda traz à existência.
+  // "Eight of the dead still walk the unfinished roads" + "Six fields you have never stood in":
+  // os mortos da cruzada anterior, e os campos que só existem depois de alguém os pisar.
   //
   // Ele é o único NPC cuja fala alternativa DISPUTA espaço com uma história (intro/protect/
   // prophecy): ver `GameScene.openWizardDialog`, onde ela entra só no lugar do beat opcional.

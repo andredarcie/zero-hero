@@ -51,7 +51,7 @@ export default {
   name: 'projeteis',
   description: 'A torreta e o mago: o leque radial, a conjuracao avisada, e a lei do tiro — parede mata a bala, luz de fogueira nao.',
   needsGame: false,
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

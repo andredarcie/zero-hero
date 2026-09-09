@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { setActiveLevel } from '@/game/runtime/activeLevel';
 import { setUnderground } from '@/game/runtime/underworld';
 import { t, tWords } from '@/game/i18n/i18n';
 
@@ -12,7 +11,6 @@ import { t, tWords } from '@/game/i18n/i18n';
 //   • Play the authored open world, immediately.
 //
 // The former authored Zelda-like overworld is archived under backup/ and has no door here.
-// Puzzle levels remain directly addressable through `?level=N` for development.
 //
 // Being the first screen, it also owns audio bring-up: the AudioContext stays locked until a user
 // gesture, so the menu bed is queued here and blooms on the first key/tap.
@@ -165,7 +163,6 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private startAdventure(): void {
-    setActiveLevel(null);
     setUnderground(false);
     this.fadeThen(() => this.scene.start('game'));
   }

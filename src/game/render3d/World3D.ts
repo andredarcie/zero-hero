@@ -5,7 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 import {
-  CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_WALL_FRAMES,
+  CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_TILES, DUNGEON_WALL_FRAMES, MASS_TILE_FRAMES,
   groundFrameAt, SEA_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant,
   SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
@@ -84,7 +84,7 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 // pixelArtLight.ts) capped at the art's own colours. On top of the scene render
 // sits a post chain ported from the 3D
 // prototype: ACES filmic tone mapping, an UnrealBloom halo on every emissive
-// (flames, lava, glows, coins), and a single FinishShader that does the
+// (flames, lava, glows, loot), and a single FinishShader that does the
 // diorama tilt-shift depth-of-field, vignette and film grain. A cool moon
 // DirectionalLight fills the night against the warm fire pools, and additive
 // Points give the air brasas (embers) and drifting dust. Every stage is
@@ -341,6 +341,21 @@ export interface FireLight3D {
   setLit(lit: boolean): void;
   setIntensityScale(s: number): void;
   /**
+   * O tamanho da poça no chão, como fração do padrão (ver `FireEntry.sizeScale`). Uma fonte
+   * pequena — a tocha de parede — precisa disto: `setIntensityScale` só a deixa mais FRACA, e uma
+   * poça de 15 tiles fraca continua sendo uma poça de 15 tiles.
+   */
+  setSizeScale(s: number): void;
+  /**
+   * A DANÇA desta chama neste frame (~0,4 no fundo do vale … ~1,5 num estalo), 0 se apagada.
+   *
+   * Ela existe para que o DESENHO da chama possa ser a mesma chama que a LUZ. Sem isto, um sprite
+   * de fogo troca de frame num metrônomo próprio enquanto a luz executa cinco camadas de dança
+   * (swell + flicker + shimmer + jitter + flare) — e as duas não se conhecem, então o quad lê como
+   * decalque em loop e a luz como um efeito solto por cima dele. Quem desenha fogo lê daqui.
+   */
+  readonly level: number;
+  /**
    * Fogo que ANDA (a tocha do heroi ja era um; o corpo em chamas e o segundo). Move a ENTRADA
    * do pool — luz, halo no chao e sombra vao atras no proximo frame — sem criar nem destruir
    * luz nenhuma, que e a lei mais cara da casa. `worldX/worldY` ficam sendo o tile de origem.
@@ -475,6 +490,17 @@ interface FireEntry {
   worldY: number;
   lit: boolean;
   scale: number;
+  /**
+   * O TAMANHO da poça no chão, como fração de `params.fireGlowSize`.
+   *
+   * Ele existe porque `scale` não servia: `scale` multiplica INTENSIDADE (e só ela), então a
+   * única coisa que uma fonte pequena conseguia pedir era ser mais fraca — nunca ser menor. Com
+   * `fireGlowSize` em 15 tiles, as 75 tochas de parede da masmorra pintavam 75 poças de 15 tiles
+   * cada uma: o chão inteiro saía lavado de laranja e nenhuma tocha lia como MARCO, que é o único
+   * motivo de elas existirem. A tocha da MÃO já tinha esse número (o `TORCH_SCALE` de
+   * `updateTorch`, que escala o gSize dela na mão); isto é o mesmo número, disponível para o pool.
+   */
+  sizeScale: number;
   glow: THREE.Mesh; // the visible additive warm halo on the ground around the fire
   // Each fire computes its own flame every frame — brightness, colour and the dancing
   // source point — WITHOUT owning a THREE light. A pooled PointLight is then pointed at
@@ -1747,7 +1773,20 @@ export class World3D {
     // misturar os dois numa malha so faria a aritmetica desse indice apontar para o vertice
     // errado no primeiro golpe. (Nenhum dos dois e cortavel, entao nenhum dos dois entra nesse
     // indice — e o quad continua sendo o que uma ARVORE e: uma silhueta, sem lado.)
-    const wallCubes = this.solidTiles.filter((t) => DUNGEON_WALL_SET.has(t.frame));
+    // O FRAME DA TOCHA NÃO CHEGA AO CUBO: ele é um MARCADOR, e a peça é um objeto.
+    //
+    // O frame 48 traz uma tocha PINTADA na alvenaria, e um cubo veste o mesmo frame no teto e nas
+    // três laterais podadas. Isso dava duas coisas erradas de uma vez: uma tocha numa quina
+    // aparecia pintada em três faces com chama viva em UMA, e mesmo na parede reta ficavam duas
+    // chamas no mesmo tile — a do desenho e a do `WallTorchObject` por cima dela. Aqui o tile
+    // volta a ser muro liso (a variante é sorteada pela coordenada, para a fileira não repetir o
+    // mesmo tijolo), e a tocha inteira — copo, chama, halo — passa a ser desenhada pelo objeto,
+    // na face certa e uma vez só. O que o autor pinta no `/editor` continua sendo o 48.
+    const wallCubes = this.solidTiles.filter((t) => DUNGEON_WALL_SET.has(t.frame)).map(
+      (t) => (t.frame === DUNGEON_TILES.wallTorch
+        ? { ...t, frame: DUNGEON_TILES.walls[Math.abs(t.x * 7 + t.z * 13) % DUNGEON_TILES.walls.length] }
+        : t),
+    );
     const rockCubes = this.solidTiles.filter((t) => CLIFF_WALL_SET.has(t.frame));
     const quadTiles = wallCubes.length > 0 || rockCubes.length > 0
       ? this.solidTiles.filter((t) => !DUNGEON_WALL_SET.has(t.frame) && !CLIFF_WALL_SET.has(t.frame))
@@ -2495,7 +2534,7 @@ export class World3D {
    */
   public prewarmShaders(): void {
     // renderer.compile() only knows about materials that are IN the scene right now. Everything
-    // the game makes LATER — the first ember, the first puff, the first skeleton, the first coin —
+    // the game makes LATER — the first ember, the first puff, the first skeleton, the first drop —
     // is compiled and linked by the driver on the frame it is first drawn, and that costs 50–300ms
     // of frozen game. The profile caught two of them: a stall at +1s and another at +6s, each a
     // quarter of a second, each blamed on nothing in particular.
@@ -2504,12 +2543,12 @@ export class World3D {
     // puts the program in the cache before the real object ever asks for it — only the shape
     // reaches the program's cache key, never the texture or the position. Note the fogless FX:
     // USE_FOG is baked into the program, so a fogless puff is a different shader from a foggy
-    // coin, however alike the two look on screen.
+    // pickup, however alike the two look on screen.
     //
     // This list is guarded rather than trusted: perf-profile fails if ANY program compiles during
     // play, so a new billboard shape that forgets to register here cannot stay forgotten.
     const runtimeVariants: Billboard3DOptions[] = [
-      { emissive: true },                     // coin, heart, dropped item, campfire flame
+      { emissive: true },                     // heart, dropped item, campfire flame
       { additive: true },                     // fire glow, embers
       { groundShadow: true },                 // a skeleton, an NPC: lit, with a contact blob
       { castGroundShadow: true },             // the hero
@@ -2640,7 +2679,7 @@ export class World3D {
     glow.position.set(worldX, 0.07, worldY);
 
     const entry: FireEntry = {
-      worldX, worldY, lit, scale: 1, glow, flicker: 0, level: 1,
+      worldX, worldY, lit, scale: 1, sizeScale: 1, glow, flicker: 0, level: 1,
       seed: Math.random() * Math.PI * 2, noise: 0, flare: 0, flareTarget: 0,
       flareTimer: Math.random() * 1.5,
       intensity: 0, lx: worldX, lz: worldY, color: new THREE.Color(FIRE_COLOR), camDist: 0,
@@ -2650,8 +2689,10 @@ export class World3D {
     return {
       worldX,
       worldY,
+      get level() { return entry.lit ? entry.level : 0; },
       setLit: (v) => { entry.lit = v; },
       setIntensityScale: (s) => { entry.scale = s; },
+      setSizeScale: (s) => { entry.sizeScale = s; },
       setPosition: (x, y) => {
         // A cache de solidos da sombra e POR POSICAO (ver fireCastLists): invalida so na troca
         // de TILE — invalidar a cada frame faria um fogo ambulante pagar uma varredura completa
@@ -3102,7 +3143,7 @@ export class World3D {
 
       // Elevation (2a): a lifted caster's silhouette slides away from the light and
       // thins — the same projection the arm's skeleton shadow already used (groundCastAt),
-      // now the rule for every caster. Sells the walk bob, the coin arc, the ITEM GET.
+      // now the rule for every caster. Sells the walk bob, the loot arc, the ITEM GET.
       let ax = c.bb.x;
       let az = c.bb.y;
       // A silhueta EXISTE tanto quanto o dono dela. Sem isto, um corpo que apaga (o heroi
@@ -3661,8 +3702,9 @@ export class World3D {
       // Colour temperature tracks brightness: hotter flame reads paler/whiter-gold.
       const warm = Math.max(0, Math.min(1, (level - 0.75) / 0.7));
       f.color.copy(FIRE_COOL).lerp(FIRE_HOT, warm);
-      // The visible warm pool breathes with the flame; it vanishes when unlit.
-      const gSize = this.params.fireGlowSize * (0.95 + 0.08 * (level - 1));
+      // The visible warm pool breathes with the flame; it vanishes when unlit. `sizeScale` is
+      // what lets a SMALL source be small instead of merely dim — see FireEntry.sizeScale.
+      const gSize = this.params.fireGlowSize * f.sizeScale * (0.95 + 0.08 * (level - 1));
       setFireGlow(
         f.glow, f.lx, f.lz, gSize,
         on * f.scale * this.params.fireGlowStrength * (0.8 + 0.2 * level),
@@ -3990,7 +4032,7 @@ export class World3D {
     // `material` pode ser ARRAY (a alvenaria de cubo das dungeons agrupa teto/lados): um
     // `material?.dispose()` direto estoura "dispose is not a function" no meio do teardown e
     // deixa a cena que vem depois (o editor acordando do ESC) sem o wake. Ninguém viu por anos
-    // porque só o /lab de dungeon percorre esse caminho com um mesh multi-material vivo.
+    // porque só o editor do subterrâneo percorre esse caminho com um mesh multi-material vivo.
     const disposeMaterial = (mat?: THREE.Material | THREE.Material[]): void => {
       if (Array.isArray(mat)) mat.forEach((entry) => entry.dispose());
       else mat?.dispose();
@@ -4877,7 +4919,9 @@ const buildBankGeometry = (
 const DUNGEON_WALL_SET: ReadonlySet<number> = new Set(DUNGEON_WALL_FRAMES);
 const CLIFF_WALL_SET: ReadonlySet<number> = new Set(CLIFF_WALL_FRAMES);
 /** Este frame e MASSA (vira cubo)? Uma pergunta so — a sombra e o bake leem dela. */
-const isMassFrame = (frame: number): boolean => DUNGEON_WALL_SET.has(frame) || CLIFF_WALL_SET.has(frame);
+// A mesma lista que a precondicao da tocha de parede consulta (ver `wallTorchFaceIsClear`): duas
+// respostas para "este tile e um bloco macico?" ja seriam uma a mais.
+const isMassFrame = (frame: number): boolean => MASS_TILE_FRAMES.has(frame);
 
 /** Quanto cada face de um cubo vale de luz, e quanto o PE de uma face lateral escurece. */
 type CubeShade = {

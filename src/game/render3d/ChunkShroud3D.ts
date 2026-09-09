@@ -6,7 +6,7 @@ import { flowTimeUniform } from './pixelArtLight';
  * A MORTALHA — a escuridão que cobre cada chunk ainda não comprado do construtor de mundo.
  *
  * O chunk escuro continua sendo terreno de verdade por baixo (chão aberto: é por ali que o
- * undead entra), mas o jogador não pode LER nada dele — a curiosidade é a moeda do modo.
+ * undead entra), mas o jogador não pode LER nada dele — a curiosidade é o que move o modo.
  * A cobertura tem DOIS MODOS, e quem escolhe é a câmera (que olha sempre para o norte):
  *
  *   · CAIXA — teto a SHROUD_HEIGHT + cortinas — para chunks ao norte/leste/oeste da terra

@@ -40,7 +40,7 @@ deterministic control surface on `window.gameDebug` (defined in
 
 ```ts
 window.gameDebug = {
-  getState(),              // { scene, player, health, coins, dialogOpen, ... }
+  getState(),              // { scene, player, health, inventory, dialogOpen, ... }
   openDialog(kind?),       // pop an NPC dialog (default: long-text "blackCat")
   closeDialog(),
   listNpcKinds(),

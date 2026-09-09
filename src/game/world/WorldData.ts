@@ -302,7 +302,6 @@ export const getFurnaces = (): WorldProp[] => allProps().filter((prop) => prop.t
 // O ALTAR nao guarda o que esta em cima dele aqui, pelo mesmo motivo do bau: o que ha sobre a
 // laje e estado de PARTIDA (o jogador pos), e nao conteudo do mapa.
 export const getAltars = (): WorldProp[] => allProps().filter((prop) => prop.type === 'altar');
-export const getLevelPortals = (): WorldProp[] => allProps().filter((prop) => prop.type === 'levelPortal');
 
 // Os PONTOS DE SPAWN de inimigo, autorados na aba Inimigos do editor. Lidos de uma vez, como os
 // itens de mao e nunca por chunk, porque uma cova nao e conteudo de tela: ela guarda um relogio
@@ -363,9 +362,6 @@ export const getDialog = (kind: NpcKind, scriptId?: string): DialogScript | unde
     npcAssetKey: dialog.npcAssetKey,
     npcFrame: dialog.npcFrame,
     lines: localized?.lines ?? dialog.lines,
-    // O balcão vem SEMPRE do world.json (não há versão localizada: o jogo é só inglês e as
-    // falas do caixa moram no próprio bloco `trade`).
-    trade: dialog.trade,
   };
 };
 

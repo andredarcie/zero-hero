@@ -24,7 +24,7 @@ export default {
   name: 'altar',
   description: 'A laje de pedra: o Z poe a peca, a pancada malha, tres golpes viram ferro e o X tira de volta.',
   needsGame: false, // entra pelo editor e nasce a GameScene no P (mesma razao do tocha-viva)
-  route: '/lab?level=2',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

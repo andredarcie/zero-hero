@@ -84,7 +84,6 @@ const COLLECTIBLES = [
   // O frame do MAPA (o de baixo): o de cima e navy liso e sumiria na noite — o proprio jogo usa
   // este aqui no chao (HEART_FRAMES.pickup).
   { name: 'CORACAO', desc: 'RECUPERA VIDA', png: 'items/collectibles/heart.png', frame: 1 },
-  { name: 'MOEDA', desc: 'COMPRA MELHORIAS', png: 'items/collectibles/coin.png' },
 ];
 
 // ── Layout (px nativos; o poster inteiro sobe de escala no fim) ──────────────

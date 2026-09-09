@@ -1,5 +1,9 @@
 // Gera public/world.json a partir do MAPA DO OVERWORLD DO ZELDA 1, tile a tile.
 //
+// ⚠️ SUCATA: este script emite props `levelPortal`, um tipo que NAO EXISTE MAIS (os levels
+// isolados e a travessia magica deles foram removidos). Reviver isto exige trocar aqueles
+// props por `stairs`, que e a unica porta do mundo de hoje.
+//
 //   node scripts/gen-zelda-world.mjs --src <overworld.png> [--preview] [--out public/world.json]
 //
 // A fonte e a folha 1:1 do overworld (4096x1408 = 256x88 tiles de 16px). Ela NAO fica versionada

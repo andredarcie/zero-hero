@@ -1,6 +1,6 @@
 import {
-  CAMPFIRE_SCORCH_RADIUS_TILES, CHUNK_COLUMNS, CHUNK_ROWS, LIGHT_RADIUS_TILES, SEA_TILE_FRAMES,
-  SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+  CAMPFIRE_SCORCH_RADIUS_TILES, CHUNK_COLUMNS, CHUNK_ROWS, DUNGEON_TILES, LIGHT_RADIUS_TILES,
+  SEA_TILE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, wallTorchFaceIsClear,
 } from '@/game/constants';
 import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
 import {
@@ -693,6 +693,30 @@ export class EditorStore {
     }).length;
     if (roastedSpawns > 0) {
       warnings.push(`${roastedSpawns} ponto(s) de spawn colado(s) na luz de uma fogueira acesa — o corpo nasce e queima ali mesmo`);
+    }
+
+    // A TOCHA DE PAREDE COM ALVENARIA AO SUL — o mesmo defeito silencioso das covas, e por isso
+    // ele mora aqui: o autor pinta o frame 48, salva, entra no jogo e nao ha tocha nenhuma.
+    //
+    // O motivo e geometrico e nao ha conserto no desenho (ver `wallTorchFaceIsClear`): todo quad
+    // deste jogo olha para o sul, entao a chama so cabe na face sul do bloco — com alvenaria
+    // embaixo ela queimaria dentro da pedra, e o runtime prefere nao desenhar a mentir. O aviso e
+    // a MESMA pergunta que a cena faz, e e por isso que a resposta mora nas constantes.
+    let buriedTorches = 0;
+    for (const chunk of this.world.chunks) {
+      for (let row = 0; row < CHUNK_ROWS; row += 1) {
+        for (let col = 0; col < CHUNK_COLUMNS; col += 1) {
+          if (chunk.upper[row][col] !== DUNGEON_TILES.wallTorch) continue;
+          const wx = chunk.cx * CHUNK_COLUMNS + col;
+          const wy = chunk.cy * CHUNK_ROWS + row;
+          if (!wallTorchFaceIsClear(this.readCell('upper', wx, wy + 1) as number | null)) {
+            buriedTorches += 1;
+          }
+        }
+      }
+    }
+    if (buriedTorches > 0) {
+      warnings.push(`${buriedTorches} muro com tocha tem alvenaria logo ABAIXO — a chama nao tem face onde aparecer e nao vai acender`);
     }
 
     return warnings;

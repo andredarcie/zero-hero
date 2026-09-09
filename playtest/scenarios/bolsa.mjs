@@ -33,7 +33,7 @@ export default {
   name: 'bolsa',
   description: 'A bolsa que nao pausa o jogo: I abre, setas apontam, X equipa, apanhar fecha.',
   needsGame: false, // entra pelo editor; a GameScene nasce no P (mesma razao do combate)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

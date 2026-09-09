@@ -210,7 +210,6 @@ export const ASSET_KEYS = {
   // O irmao dele: o balao com o GRAVETO ACESO, que o heroi pensa ao bater num arbusto seco com o
   // graveto apagado na mao (ver HeroThought e GameScene.useItemAt).
   thoughtTorch: 'thought-torch',
-  coin: 'coin',
   // A FAUNA que voltou a ter corpo (ver entities/enemies/). A arte sempre esteve em
   // public/assets/characters/enemies/ — era o bestiario do modo Sobreviventes —, e ela so pode
   // morar aqui porque agora tem quem a desenhe: cada def carregada e download e VRAM no boot.
@@ -265,7 +264,6 @@ export const ASSET_KEYS = {
   altar: 'altar',
   oreItem: 'ore-item',
   bloomItem: 'bloom-item',
-  levelPortal: 'level-portal-icon',
   cutGrass: 'cut-grass',
   cutGrassWind0: 'cut-grass-wind0',
   cutGrassWind1: 'cut-grass-wind1',
@@ -320,7 +318,7 @@ export const MOONFLOWER_LIGHT_TILES = 2.6;
 // Sprite Factory workbench.png: a MESA parada, a mesa TRABALHANDO (o martelo sobe um pixel e
 // saltam duas fagulhas — micro-variacao, nunca uma silhueta nova), e as duas poses da BANDEJA.
 export const TOOLBOX_FRAMES = { closed: 0, forging: 1 } as const;
-/** As duas caras do marco da estrada: pedra fria, e pedra com o vinco de moeda ACESO. */
+/** As duas caras do marco da estrada: pedra fria, e pedra com o vinco ACESO. */
 export const ROAD_SEAL_FRAMES = { dormant: 0, awake: 1 } as const;
 
 // O FORNO: quanto dura uma fornada. 4s e quase o dobro da bancada (2,28s) de proposito — reduzir
@@ -518,6 +516,33 @@ export const DUNGEON_TILES = {
 export const DUNGEON_WALL_FRAMES: readonly number[] = [
   ...DUNGEON_TILES.walls, DUNGEON_TILES.wallTorch, DUNGEON_TILES.wallMoss, DUNGEON_TILES.wallCracked,
 ];
+
+/**
+ * O que o World3D assa como BLOCO MACICO (`buildTileCubeGeometry`) em vez de quad em pe: a
+ * alvenaria de dungeon e a montanha. E a unica lista que responde "este tile OCLUI de verdade, do
+ * chao ao topo" — uma arvore esta em `SOLID_UPPER_FRAMES` e bloqueia o passo, mas e uma silhueta
+ * e nao tapa nada por tras dela.
+ */
+export const MASS_TILE_FRAMES: ReadonlySet<number> = new Set([
+  ...DUNGEON_WALL_FRAMES, ...CLIFF_WALL_FRAMES,
+]);
+
+/**
+ * A PRECONDICAO DA TOCHA DE PAREDE: o tile ao SUL dela nao pode ser um bloco macico.
+ *
+ * Nao e gosto, e geometria. `Billboard3D` nao gira — todo quad deste jogo e vertical e olha para o
+ * sul, porque a camera esta em +z. Uma tocha desenhada na face oeste de um bloco cai DENTRO do
+ * intervalo em z do proprio bloco, e a face sul dele, mais perto da camera, a oclui inteira; com
+ * alvenaria ao sul acontece o mesmo, um tile adiante. Ou seja: quando o vizinho de baixo e macico
+ * nao existe lugar visivel para a chama, e a tocha nao pode desenhar nada.
+ *
+ * Ela mora aqui, e nao no `WallTorchObject`, para o `EditorStore` poder fazer a MESMA pergunta no
+ * Salvar sem arrastar o renderer 3D para dentro do editor — o aviso e o desenho discordarem seria
+ * uma segunda verdade, e a peca ficaria prometendo o que o jogo recusa.
+ */
+export const wallTorchFaceIsClear = (southUpperFrame: number | null | undefined): boolean => (
+  southUpperFrame === null || southUpperFrame === undefined || !MASS_TILE_FRAMES.has(southUpperFrame)
+);
 
 // Upper-layer tileset frames that stand UP off the ground. Being listed here means three
 // things at once, which is why it is the only switch a standing tile needs:

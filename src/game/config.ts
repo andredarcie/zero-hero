@@ -7,13 +7,10 @@ import {
 import { BootScene } from '@/game/scenes/BootScene';
 import { EditorScene } from '@/game/scenes/EditorScene';
 import { GameScene } from '@/game/scenes/GameScene';
-import { LevelSelectScene } from '@/game/scenes/LevelSelectScene';
 import { PreloadScene } from '@/game/scenes/PreloadScene';
 import { TitleScene } from '@/game/scenes/TitleScene';
 
-// 'lab' is the puzzle laboratory (/lab): the same editor + playtest pair as 'editor', but
-// loading/saving a puzzle level (public/levels/level-N.json, ?level=N) instead of the overworld.
-export type AppMode = 'game' | 'editor' | 'lab';
+export type AppMode = 'game' | 'editor';
 
 // The game canvas fills the whole window (100% of the screen). The tile size is derived from
 // this size at runtime (see GameScene.computeTileSize → min(width/12, height/12)), so the hero
@@ -56,9 +53,8 @@ export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Co
   // Editor mode also registers GameScene so the editor can live-playtest the world in
   // memory (EditorScene.startPlaytest) without saving or leaving the page.
   //
-  // O caminho do jogador e Boot → Preload → Title → Game, e so. A tela de idioma morreu (o jogo
-  // e so em ingles) e a intro tambem: o titulo cai DIRETO no mundo. LevelSelect continua
-  // registrada porque o menu de pausa de um level volta pra ela — ela so nao tem mais porta no
-  // titulo (`/?level=N` e o [I] do DevLauncher chegam la).
-  scene: [BootScene, PreloadScene, ...(mode === 'editor' || mode === 'lab' ? [EditorScene, GameScene] : [TitleScene, LevelSelectScene, GameScene])],
+  // O caminho do jogador e Boot → Preload → Title → Game, e so — quatro cenas. A tela de idioma
+  // morreu (o jogo e so em ingles), a intro tambem, e a LISTA DE LEVELS foi embora com os levels
+  // isolados: nao ha mais tela solta de puzzle, so o mundo aberto e o espelho dele.
+  scene: [BootScene, PreloadScene, ...(mode === 'editor' ? [EditorScene, GameScene] : [TitleScene, GameScene])],
 });

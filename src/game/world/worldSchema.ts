@@ -84,10 +84,11 @@ export type WorldChunk = {
 // gesto, nunca um incendio que chegou sozinho. Ver PyreObject.
 export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock'
   | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower'
-  | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'toolbox' | 'levelPortal' | 'furnace'
+  | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'toolbox' | 'furnace'
   | 'altar' | 'pyre'
-  // A ESCADA entre os dois andares do mundo — a porta FÍSICA (ver StairsObject). O
-  // `levelPortal` continua sendo outra coisa: a travessia mágica que encadeia LEVELS de puzzle.
+  // A ESCADA entre os dois andares do mundo — a porta FÍSICA (ver StairsObject), e a ÚNICA
+  // travessia que existe. Houve um `levelPortal`, a passagem mágica que encadeava levels
+  // isolados; ele saiu com eles.
   | 'stairs';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
@@ -115,20 +116,6 @@ export type WorldProp = {
 
 export type WorldDialogLine = { speaker: 'npc' | 'narrator'; text: string };
 
-/**
- * O BALCÃO de um NPC: ele compra `item` a `coinsPerUnit` moedas a unidade, por QUANTIDADE,
- * dentro do próprio diálogo (depois da primeira fala o painel oferece "vender" ao lado de
- * "continuar conversando" — ver DialogOverlay). As três falas são o roteiro do caixa: a
- * oferta (pergunta o quanto), a recusa de mochila vazia, e o fechamento da venda.
- */
-export type WorldDialogTrade = {
-  item: string;
-  coinsPerUnit: number;
-  offer: string;
-  empty: string;
-  thanks: string;
-};
-
 // Folds NPC_DIALOGS + DIALOG_VOICES into one editable record per NPC.
 export type WorldDialog = {
   npcName: string;
@@ -137,7 +124,6 @@ export type WorldDialog = {
   npcFrame?: number;
   voice: { freq: number; wave: OscillatorType };
   lines: WorldDialogLine[];
-  trade?: WorldDialogTrade;
 };
 
 export type WorldData = {

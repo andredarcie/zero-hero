@@ -32,7 +32,7 @@ export default {
   name: 'tocha-viva',
   description: 'Fogo que alcanca um corpo o acende: panico, rastro, medo da matilha, fogo pulando de corpo em corpo — e nenhuma luz THREE nova.',
   needsGame: false, // entra pelo editor e nasce a GameScene no P (mesma razao do placa-undead)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

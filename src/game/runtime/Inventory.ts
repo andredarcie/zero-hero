@@ -78,7 +78,7 @@ export class Inventory {
 
   /**
    * Guardar SEM EMPUNHAR — o par do `add` para o drop pego DE PASSAGEM (o minério do veio,
-   * que entra como moeda). `add` seleciona porque apanhar com o B e uma intencao de uso;
+   * que entra como contador). `add` seleciona porque apanhar com o B e uma intencao de uso;
    * pisar num drop nao e intencao nenhuma, entao a mao do jogador fica exatamente como esta.
    */
   public stash(kind: HeldItemKind, amount = 1): void {

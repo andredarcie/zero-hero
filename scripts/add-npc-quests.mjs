@@ -94,7 +94,7 @@ const DONE_LINES = {
   wizardDone: [
     line('Eight of the road-dead put down, and six fields decided into being. You have been busy, Zero.'),
     line('They were the crusade before you. They kept the hearths you are relighting, and they lost. Do not hate them for still walking.'),
-    line('Keep spending the coin. A world that stops being decided stops being.'),
+    line('Keep walking, then. A world that stops being decided stops being.'),
     line('And the old crusade left cordwood in these ruins. It is at the pyre now, where it always meant to go.'),
   ],
 };

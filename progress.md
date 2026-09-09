@@ -9157,3 +9157,211 @@ Duas coisas mudaram de assunto no caminho, porque a fala antiga mentia sobre o m
   ("road stops", "thank you for testing"). Aquele cenário já não roda no mundo de hoje — ele compra
   a carta `prologue-end`, e não há mais baralho —, mas a fala dela foi trocada de propósito, e é
   esse teste que guarda o que ela diz.
+
+## A MOEDA SAIU DO JOGO, e os LEVELS ISOLADOS foram junto (2026-08-27)
+
+Duas remoções no mesmo dia, pedidas nesta ordem e ligadas pelo mesmo motivo: cada uma era um
+sistema inteiro que existia sem levar a lugar nenhum.
+
+### 1. A moeda
+
+Ela caía de todo corpo que morria, espalhava pelos tiles vizinhos, voava para uma carteira que o
+save carregava — e **não havia o que comprar**. `CoinManager.spendCoins()` estava escrito e não era
+chamado de lugar nenhum do `src/`; a loja da fogueira, o único ralo que já existiu, tinha caído
+semanas antes. Um número que só sobe não é economia.
+
+O que saiu: o drop em `rewardKill`, `coinsForKind`/`undeadCoins`, `AQUATIC_KILL_COINS`, o campo
+`coins` do save e do `gameDebug`, o balcão de venda inteiro (`DialogTrade` no schema, o caixa
+`− n +` do `DialogOverlay`, o `trade` do `world.json`), o som, a arte e o sprite de origem.
+
+**O que NÃO saiu, e é a parte que importa:** o `CoinManager` era dono de DUAS coisas, e só uma era
+dinheiro. A outra é a física de saltar-quicar-imantar que o **bloco de minério** usa (`spawnOreLoot`
+— o veio cospe um bloco a cada três picaretadas). Ela nunca teve a ver com moeda, então em vez de
+deletar, renomeei: `Coin.ts` → `LootDrop.ts` e `CoinManager.ts` → `LootManager.ts`, com a metade da
+carteira arrancada (total, `spendCoins`, `restoreTotal`, `setMagnetRadius`, o giro de quatro poses
+da fita da moeda e o voo para o contador do HUD). Minerar continua idêntico.
+
+**Uma consequência que só apareceu na revisão:** o balcão era a ÚNICA coisa do jogo que abria um
+menu de várias opções numa conversa. Com ele fora, `setOptions` sempre recebe uma opção só e
+desvia para o ▼ — a janela de escolha (`appendOption`, `.zh-dlg-choices`, ↑↓/WS, atalhos 1-9)
+continua no código e ficou **inalcançável**. Deixei de pé: é a casa natural de qualquer escolha
+futura, e removê-la seria apagar a gramática junto com o único usuário dela.
+
+**As falas que prometiam moeda foram reescritas**, e essa foi a segunda descoberta da revisão. Eu
+tinha concluído que os roteiros `cat*` eram texto morto porque nenhum NPC do `world.json` aponta
+para eles — verdade lá, e **falso nos levels**: cada gato de level usava um `cat*`, e como
+`dialog !== kind` o locale não sobrescreve (ver a entrada de 2026-08-26). Dez levels jogáveis
+tinham o gato dizendo *"load the marked box and the plane drops your coins"*.
+
+### 2. Os levels isolados
+
+O pedido foi direto: o jogo é UM mundo aberto com superfície e subterrâneo; o que for level solto,
+apague. E o que a varredura mostrou é que o sistema já estava meio morto — **`level-1.json` foi
+apagado no commit `a0b4829`**, e desde então os 15 cenários de playtest que bootavam em
+`/lab?level=1` entravam num erro de carregamento.
+
+Saíram: `public/levels/` (12 levels + índice), `LevelSelectScene`, `LevelIntroOverlay`,
+`LevelButtons`, `LevelPortalObject` + `PortalTunnel` + a travessia de quatro tempos inteira
+(sucção, vazio, túnel, queda — e o `portalTrip` já não era chamado por ninguém), `activeLevel`,
+o prop `levelPortal`, o modo `lab`, os endpoints `/api/levels` e `/api/lab-levels` do dev server,
+o painel de levels do editor, `gen-levels.mjs`, e as quatro ilhas mortas que ninguém importava
+(`levelApi`, `levelEditor`, `levelRuntime`, `EditorBoard`).
+
+**O `/lab` não tinha mais razão de existir**, e isso não foi uma escolha: `/editor` já abre os DOIS
+andares pela chave `?under`, e o que sobrava de exclusivo no `/lab` era o CRUD de levels.
+
+**A decisão que exige o olho do autor:** os 16 cenários que AUTORAM a própria fixture (`combate`,
+`esgrima`, `bolsa`, `gelo`, `zora`, `fauna`, `inimigos`, `projeteis`, `brasa`, `tocha-viva`,
+`carnivora`, `flor-da-lua`, `pa`, `altar`…) apontavam para `/lab?level=1` e passaram a apontar para
+`/editor`. A lei da casa continua valendo (o cenário limpa um quintal pelo `EditorStore` e aperta
+P), mas **a fixture agora assenta sobre o mundo AUTORADO em vez de uma tela vazia** — um chunk com
+props e covas de verdade em volta. Eles já estavam vermelhos antes desta mudança, então nenhum
+deles regrediu por causa dela; o que muda é que agora têm uma rota que existe.
+
+Seis cenários foram apagados porque o assunto deles era o que saiu: `level-intro`,
+`level-manager-portal`, `portal-travessia`, `espada` (resolvia o level-1), `agua` e `itens` (os
+dois liam conteúdo do level-1). O `lava-pedra` só perdeu o `&level=1` da rota — ele já buscava o
+`world.json` direto.
+
+### Como verificar
+
+`npm run typecheck`, `npm run build`, `npm run audit:stacks`, `npm run audit:endgame` e
+`node scripts/add-npc-quests.mjs --check` passam. O lint continua nos mesmos **62** erros
+pré-existentes de `spritefactory/` e `scripts/worldgen/` (conferido contra a `main` com `git
+stash`) — nenhum em `src/` ou `playtest/`. Os 45 cenários restantes carregam sem `undefined`.
+
+O que guarda o que mudou: **`ferro`** (o veio e o loot que salta, mais a conversa que sai só pelo
+▼ agora que não há balcão), **`carnivora`** (o gole que não paga), **`audio`** (a lista de
+samples), **`salvamento`** (o save sem `coins`) e **`menu-flow`** (o título e a pausa sem porta
+para levels). Nenhum foi rodado — são do autor.
+
+## A tocha da dungeon era uma fogueirinha de acampamento pregada na pedra (2026-08-27)
+
+O subterrâneo tem 6 escadas, 9 flores da lua e 2 marcas de bomba. A atmosfera do andar inteiro
+repousa sobre **75 tochas de parede** — e nenhuma delas tinha sido desenhada para o que faz. Sete
+defeitos empilhados, medidos antes de mexer em qualquer coisa:
+
+| # | o que era | onde | por que doía |
+|---|---|---|---|
+| 1 | a chama era `campfire-0..2`, que são os PNGs `sprite_fire0..2` — e eles **têm as toras pintadas na base** | `WallTorchObject` | cada tocha era, ao pé da letra, uma fogueira de acampamento de 0,42 tile pendurada numa parede, lenha inclusa |
+| 2 | o frame 48 **já tem uma chama pintada** | o atlas | duas chamas no mesmo tile: a do desenho e a viva por cima dela |
+| 3 | o tile vira **CUBO**, e o cubo veste o mesmo frame nas três laterais podadas | `buildTileCubeGeometry` | tocha numa quina = tocha pintada em 3 faces, chama viva em 1 |
+| 4 | `FACE_OFFSET = 0.5` — e `Billboard3D` **não gira** (o `apply()` é um quad vertical fixo) | os dois | a chama ficava **exatamente coplanar** com a face sul da alvenaria, ganhando o teste de profundidade só pela ordem de desenho |
+| 5 | o sul era cravado na constante | `FACE_OFFSET` | o editor deixa pintar o 48 em qualquer parede, e na parede errada a chama queima **dentro da pedra** |
+| 6 | `fireGlowSize` vale **15 tiles**, e `setIntensityScale` não mexe no tamanho | o laço `fires` do `render` | 75 poças de 15 tiles: o chão saía lavado de laranja e **nenhuma tocha lia como marco** |
+| 7 | `fireIntensity: 265`, o mesmo de uma fogueira | `World3DParams` | a tocha era, em cada número que usava, uma fogueira |
+
+E 0,42 tile de uma arte de 16px é uma **redução de 2,4×**: mesmo o sprite errado chegava serrilhado.
+
+**A frase que a peça passou a dizer:** *uma tocha de parede é um ponto FIXO de fogo preso na pedra —
+ela marca o lugar, e é a única coisa lá embaixo de onde se leva fogo.*
+
+### O frame 48 virou MARCADOR, e a tocha virou objeto
+
+A decisão que destravou todas as outras. O autor continua pintando o 48 no `/editor`; o
+`buildTerrain` troca o tile por **muro liso** (variante sorteada pela coordenada) antes de assar o
+cubo, e a tocha inteira — copo, chama, halo — passa a ser desenhada pelo objeto, na face certa e uma
+vez só. Os defeitos 2 e 3 morrem juntos, sem tocar no atlas e sem re-apontar um tile já autorado.
+
+### Duas artes novas, e o que elas ensinaram
+
+`torch-sconce` (um copo de ferro: lábio, piche queimado no fundo, bojo, haste e placa) e
+`torch-flame` (4 frames). **Duas versões erradas de cada uma, e os dois erros têm nome:**
+
+- **A chama v1 tinha 7×8 e lia como BALÃO.** O que identifica fogo de tocha não é a cor, é a razão
+  altura/largura: a v2 tem 5×9 (~1,8:1) e afina para UM pixel no topo.
+- **A fuligem v1 e v2 eram uma PLUMA, e sobre a chama liam como CAPUZ.** Uma mancha escura com
+  silhueta própria por cima do fogo vira objeto, não sujeira — e não há espaço, porque a chama já
+  ocupa os dois terços de cima de uma parede de 16px. O que sobrou é o que de fato existiria: um
+  **risco horizontal rente ao teto**, onde a fumaça se espalha ao bater nele. Uma linha não tem
+  silhueta para ser confundida com nada.
+- **O copo v2 lia como AMPULHETA** (quase uma bigorna): lábio largo em cima, placa igualmente larga
+  embaixo, talo fino no meio. Copo só volta a ser copo quando a **placa é menor que o lábio** — uma
+  placa de parede vista de frente é pequena — e quando o DENTRO dele existe.
+
+As três peças são mostradas **a UM TILE, texel a texel**. Quem define o tamanho da chama é a margem
+dentro do frame de 16px, nunca um `setDisplaySize` menor que a arte — e é também por isso que ela
+não "respira" por escala: um quad de pixel art escalado por fator não-inteiro perde a grade.
+
+### A chama desenhada passou a ser a mesma chama que a luz
+
+O maior ganho por linha do trabalho inteiro. O sprite trocava de frame num metrônomo de 110 ms
+enquanto a luz executava cinco camadas de dança (swell + flicker + shimmer + jitter + estalo). As
+duas não se conheciam: o quad lia como decalque em loop e a luz como um efeito solto por cima.
+
+`FireLight3D` ganhou um `level` de leitura, e os quatro desenhos estão ordenados por **ALTURA** — a
+altura da chama na tela é o brilho que ela está lançando naquele instante. **A fase falsa morreu
+junto**: desencontrar as tochas exigia um `offsetPhase` derivado da coordenada, e agora o
+desencontro vem de graça, porque cada fogo do pool já tem a sua própria semente.
+
+### `setSizeScale`: o número que faltava no pool de fogo
+
+`scale` multiplica INTENSIDADE e só ela, então a única coisa que uma fonte pequena conseguia pedir
+era ser **mais fraca**, nunca **menor** — e uma poça de 15 tiles fraca continua sendo uma poça de 15
+tiles. A tocha da MÃO já tinha esse número (o `TORCH_SCALE` de `updateTorch`); agora o pool também
+tem. A tocha de parede pede 0,4 de poça e 0,5 de luz.
+
+### O anel de ativação, e por que ESCONDER não serviria
+
+Fora de 10 tiles (histerese de 1,5) a tocha é só dados. Medido sobre os 2.537 tiles de chão do
+subterrâneo: **6,0 tochas dentro do anel em média, 11 no pior tile** — de 75. Os ~225 draw calls
+viram ~24, e `litFires` cai de 75 para 6.
+
+Um `setVisible(false)` teria tirado o draw call **e mais nada**: a entrada continuaria em
+`World3D.fires`, e o laço de fogo calcula a dança de toda entrada por quadro (cada uma segurando um
+quad da poça). Sair da lista é o ponto — e sair dela é legal porque o que morre é uma **entrada**,
+nunca uma luz. O contrapeso é que `Billboard3D.destroy()` **descarta o material**: isso só é seguro
+porque as quatro variantes usadas aqui já estão no `runtimeVariants` do `prewarmShaders`, cujos
+billboards de aquecimento ficam vivos a partida inteira e seguram os programas. Sem isso, a última
+tocha a sair do anel poderia zerar a contagem de um programa e a próxima a entrar pagaria a
+recompilação — que é o pior stall que este jogo tem, e que o `perf-profile` reprova com razão.
+
+### A tocha de parede acende o graveto
+
+`TORCH_BURN_MS` são **cinco segundos**, e o comentário da constante promete que qualquer fogo vivo
+reabastece: uma fogueira acesa ou uma poça de lava. Só que o `underworld.json` tem **zero de cada** —
+a masmorra é o único lugar do jogo escuro o tempo todo, e a única chama dela não podia ser tocada.
+Uma linha em `useItemAt`, no mesmo degrau do `getCampfireAt`, e as 75 tochas viram o que já eram no
+desenho: os postos onde a viagem recomeça. É o **mesmo gesto** da fogueira acesa de propósito — uma
+gramática nova para o mesmo verbo contra o mesmo tipo de peça seria uma segunda voz.
+
+Ela é **FONTE e nunca ALVO**: o balde não aparece ali. Uma masmorra que o jogador consegue apagar
+para sempre é atmosfera com trava de segurança e sem recompensa nenhuma do outro lado.
+
+### A face sul é GEOMETRIA, e não se generaliza
+
+O plano previa derivar a face entre os quatro vizinhos. **Não dá, e o motivo é bom:** nenhum
+billboard deste jogo gira — todo quad é vertical e olha para o sul, porque a câmera está em +z. Uma
+tocha desenhada na face oeste de um bloco cai DENTRO do intervalo em z do próprio bloco, e a face
+sul dele, mais perto da câmera, a oclui inteira; com alvenaria ao sul acontece o mesmo, um tile
+adiante. Então a derivação colapsa numa **precondição**: sem chão ao sul não existe lugar visível
+para a chama, e o runtime prefere não desenhar a mentir.
+
+A regra virou `wallTorchFaceIsClear` nas constantes, e ela é **uma pergunta só**, feita em três
+lugares: a cena decide se desenha, o **Salvar do editor avisa o autor** (o defeito era silencioso —
+pinta, salva, entra no jogo e não há tocha nenhuma) e o comentário do passo 3 do
+`enrich-underworld.mjs` agora diz por que aquela regra não pode ser afrouxada. As **75 tochas
+autoradas passam todas** — o script já cumpria a regra sem saber que era uma lei de renderização.
+
+### O que ficou de fora, de propósito
+
+`isLitAt` (a cova que se cala) e o `nearFire` da flor da lua continuam contando fogueiras e a tocha
+NA MÃO, nunca o frame 48 — se contassem, as 75 tochas calariam as 24 covas e fechariam as 9 flores
+de uma vez. E ela **não tem `tickScorch`**: o anel de calor de 2 tiles é o que fica colado na lenha
+de uma fogueira, e um anel desses em volta de 75 tochas tornaria todo corredor da masmorra letal
+para o bestiário sem o jogador ter feito nada. Os três agora estão escritos no cabeçalho da classe,
+que é onde alguém vai procurar antes de "consertar" isso.
+
+### Como verificar
+
+`npm run typecheck` e `npm run build` passam. O lint continua nos mesmos **62** erros pré-existentes
+de `spritefactory/` e `scripts/worldgen/` (conferido contra a `main` com `git stash`) — nenhum em
+`src/`. Os dois sprites saem do linter da fábrica com **0 fail, 0 warn**.
+
+O que guarda o que mudou: **não existe cenário nenhum do subterrâneo**, e é o buraco a tapar. Um
+`tocha-parede` autoraria a fixture pelo `/editor?under` (limpa um quintal, pinta um corredor, põe
+uma tocha em cada uma das 4 faces, aperta P) e assertaria: a chama só na face aberta, a textura não
+sendo a da fogueira, a poça menor que a de uma fogueira, o graveto acendendo nela e as tochas fora
+do anel sem billboard. Enquanto ele não existe, **`perf-profile`** (que reprova shader compilado em
+jogo) e **`perf-burn`** (o orçamento de luz) são os que cobrem o risco maior. Nenhum foi rodado —
+são do autor.

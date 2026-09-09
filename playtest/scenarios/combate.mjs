@@ -36,7 +36,7 @@ export default {
   name: 'combate',
   description: 'Os dois botoes (A golpeia, B usa/pousa), a mochila e a subtela.',
   needsGame: false, // entra pelo editor; a GameScene nasce no P (mesma razao do braco/fios)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;
@@ -314,7 +314,7 @@ export default {
     // O ESC NAO SERVE AQUI, e a razao e a fixture: este cenario roda DENTRO do /lab (ele autora o
     // proprio quintal e aperta P), e no lab o ESC volta para o EDITOR — a cena de jogo morre junto,
     // que era exatamente o "Cannot read properties of null" com que este arquivo terminava. Quem
-    // abre a pausa em modo level e o botao flutuante (LevelButtons), que e o gesto de verdade num
+    // abre a pausa pela CENA (o botao flutuante de level, que fazia esse gesto, saiu com eles) num
     // telefone.
     log('SUBTELA: o botao de pausa abre a mochila, e clicar num slot troca o item do X');
     await page.evaluate(() => {

@@ -4,7 +4,7 @@ export default {
   name: 'lava-pedra',
   description: 'Lava bloqueia o herói; jogar uma pedra cria basalto permanente e permite cruzar.',
   needsGame: true,
-  route: '/?play&level=1',
+  route: '/?play',
   async run({ driver, shot, assert, log }) {
     await driver.settle(1400);
     const evaluate = (fn, arg) => driver.page.evaluate(fn, arg);

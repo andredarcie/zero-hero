@@ -84,7 +84,7 @@ for (const p of world.props ?? []) {
   // Escada e portal são PISÁVEIS: nenhum dos dois conta como mobília na hora de escolher onde
   // abrir uma escada. Sem esta exceção o script olha o próprio trabalho — a rodada seguinte vê
   // a escada que ele acabou de abrir, recusa aquele tile e escolhe outro, para sempre.
-  if (p.type !== 'stairs' && p.type !== 'levelPortal') propAt.set(key(p.worldX, p.worldY), p);
+  if (p.type !== 'stairs') propAt.set(key(p.worldX, p.worldY), p);
 }
 const npcAt = new Set();
 for (const c of world.chunks) for (const n of c.npcs ?? []) npcAt.add(key(n.worldX, n.worldY));
@@ -267,7 +267,7 @@ await fs.writeFile(backupPath, rawWorld, 'utf8');
 await fs.writeFile(underPath, underText, 'utf8');
 
 if (!portalsMatch) {
-  world.props = [...(world.props ?? []).filter((p) => p.type !== 'stairs' && p.type !== 'levelPortal')];
+  world.props = [...(world.props ?? []).filter((p) => p.type !== 'stairs')];
   for (const [x, y] of portals) world.props.push({ type: 'stairs', worldX: x, worldY: y });
   await fs.writeFile(worldPath, `${JSON.stringify(world, null, 2)}\n`, 'utf8');
 }

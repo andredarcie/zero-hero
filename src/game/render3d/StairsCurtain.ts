@@ -3,7 +3,7 @@
  * sobrevive ao `scene.restart()`.
  *
  * Ela existe pelo mesmo motivo que o `PortalTunnel` existe, e a comparação é o argumento inteiro:
- * o portal de level abre o túnel ANTES do restart de propósito, porque o mundo (World3D) e a cena
+ * ela fecha ANTES do restart de propósito, porque o mundo (World3D) e a cena
  * do Phaser são DESTRUÍDOS no meio da transição — o canvas 3D é literalmente removido do DOM
  * (`World3D.dispose`) e um novo nasce do outro lado. Nada que viva dentro da cena pode desenhar
  * durante essa janela.

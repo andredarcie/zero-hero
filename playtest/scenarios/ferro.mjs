@@ -1,16 +1,20 @@
-// O VEIO DE MINERIO, O KEYCAP "Z" E O BALCÃO QUE DERRUBA MOEDAS — minerar é uma atividade.
+// O VEIO DE MINERIO E O KEYCAP "Z" — minerar é uma atividade.
 //
-// A rocha de minério é um POÇO: nunca quebra, e a cada TRÊS picaretadas cospe um bloco de MINÉRIO (pedra com óxido — o ferro só nasce no forno) que
-// ESPALHA COMO MOEDA (a exceção deliberada ao "nada entra por pisada"): você passa por cima,
-// ele entra na mochila e a MÃO continua com o que estava — a picareta não é roubada por cada
-// bloco que cai. Falar com o NPC é o botão de AÇÃO (Z) de frente pra ele, anunciado por um
-// keycap pixel-art na cabeça de quem responde. O menu do diálogo navega por setas/WASD e
-// confirma com Enter/Espaço/Z. E a venda NÃO credita carteira: o astronauta DERRUBA as moedas
-// em volta de si, como um inimigo derrubaria — pegar continua sendo andar até elas.
+// A rocha de minério é um POÇO: nunca quebra, e a cada TRÊS picaretadas cospe um bloco de MINÉRIO
+// (pedra com óxido — o ferro só nasce no forno) que SALTA E ESPALHA (a exceção deliberada ao
+// "nada entra por pisada"): você passa por cima, ele entra na mochila e a MÃO continua com o que
+// estava — a picareta não é roubada por cada bloco que cai. Falar com o NPC é o botão de AÇÃO (Z)
+// de frente pra ele, anunciado por um keycap pixel-art na cabeça de quem responde.
+//
+// O BALCÃO SAIU DAQUI junto com a MOEDA: o astronauta comprava minério e derrubava moedas em
+// volta de si, e o jogo não tem mais dinheiro nenhum. As seções 5 a 8 (o caixa − n +, a venda, o
+// recibo e o pagamento recolhido do chão) foram removidas com ele — e com elas foi embora a
+// ÚNICA conversa do jogo que abria um menu de várias opções. Por isso a seção 5 de hoje cobra o
+// contrário do que a antiga cobrava: que a conversa saia pelo ▼ e por mais nada.
 
 export default {
   name: 'ferro',
-  description: 'Veio infinito com loot por pisada, Z para conversar, menu por setas e venda que derruba moedas.',
+  description: 'Veio infinito com loot por pisada, Z para conversar e a conversa que sai só pelo ▼.',
   needsGame: true,
   async run({ driver, shot, assert, log }) {
     await driver.settle(1500);
@@ -61,14 +65,14 @@ export default {
       return {
         blocking: r?.blocking ?? null,
         frame: r?.sprite?.frame ?? null,
-        loot: s.coinManager.getActiveLootPositions(),
+        loot: s.lootManager.getActiveLootPositions(),
         iron: s.inventory.count('ore'),
         held: s.heldItem,
       };
     }, [spot.rx, spot.ry]);
 
     // ── 2. O ciclo de três: racha, segura, PRODUZ — e a rocha continua lá ───
-    log('VEIO: 1ª picaretada racha (frame 1), 3ª solta o bloco que espalha como moeda');
+    log('VEIO: 1ª picaretada racha (frame 1), 3ª solta o bloco que salta e espalha');
     await driver.attack(1);
     await driver.settle(700);
     const afterOne = await vein();
@@ -85,7 +89,7 @@ export default {
     await driver.attack(1);
     await driver.settle(1100); // o bloco salta, quica e assenta num tile vizinho
     const afterThree = await vein();
-    assert('a 3ª picaretada solta UM bloco de ferro espalhado como moeda',
+    assert('a 3ª picaretada solta UM bloco de ferro que salta e pousa ao lado',
       afterThree.loot.length === 1, JSON.stringify(afterThree));
     assert('o veio NUNCA quebra: continua de pé e bloqueando', afterThree.blocking === true, JSON.stringify(afterThree));
     assert('e a arte volta a INTEIRA — o desenho de "recarregado"', afterThree.frame === 0, JSON.stringify(afterThree));
@@ -137,87 +141,23 @@ export default {
 
     await driver.attack(1); // o Z: de frente pra alguém, o botão de ação CONVERSA
     await page.waitForFunction(() => window.gameDebug?.getState()?.dialogOpen === true, null, { timeout: 5000 });
-    await page.waitForSelector('[data-opt="talk"]', { timeout: 8000 });
-    const firstMenu = await page.locator('.zh-dlg-opt').evaluateAll(
-      (nodes) => nodes.map((node) => node.dataset.opt),
-    );
-    assert('depois da PRIMEIRA fala o menu oferece exatamente conversar e vender',
-      JSON.stringify(firstMenu) === JSON.stringify(['talk', 'sell']), JSON.stringify(firstMenu));
+    await shot('conversa-aberta', { region: 'dialog' });
 
-    // ── 5. Setas navegam, Enter confirma — e o caixa pergunta a quantidade ──
-    await page.keyboard.press('ArrowDown'); // a seleção desce para "Sell iron"
-    const selectedOpt = await evaluate(() =>
-      document.querySelector('.zh-dlg-opt.is-selected')?.dataset.opt ?? null);
-    assert('a seta move a seleção destacada para vender', selectedOpt === 'sell', `selected=${selectedOpt}`);
-    await page.keyboard.press('Enter');
-    await page.waitForSelector('[data-opt="confirm"]', { timeout: 8000 });
-    const qtyFull = await page.locator('.zh-dlg-qty').getAttribute('data-qty');
-    assert('o caixa abre oferecendo TUDO que o herói carrega', qtyFull === '2', `qty=${qtyFull}`);
-    await page.locator('[data-opt="minus"]').click();
-    const qtyDown = await page.locator('.zh-dlg-qty').getAttribute('data-qty');
-    assert('o − lapida a quantidade', qtyDown === '1', `qty=${qtyDown}`);
-    await page.locator('[data-opt="plus"]').click();
-    const qtyUp = await page.locator('.zh-dlg-qty').getAttribute('data-qty');
-    assert('o + devolve até o teto da mochila', qtyUp === '2', `qty=${qtyUp}`);
-    await shot('balcao-caixa');
-
-    // ── 6. A venda DERRUBA moedas em volta do NPC — a carteira espera o passo ─
-    const coinsBefore = (await driver.getState())?.coins ?? 0;
-    await page.keyboard.press('Enter'); // confirmar é a opção selecionada do caixa
-    // A caixa de fala mostra UMA mensagem por vez, então o recibo é uma TELA — ele espera um
-    // aperto antes do "obrigado". Ler o log inteiro deixou de ser possível de propósito: o
-    // número que o jogador confere não pode passar voando por baixo da fala seguinte.
-    // O ▼ só aparece com a fala ASSENTADA: esperar por ele é esperar o fim do datilografado —
-    // esperar pelo texto pegaria a última letra ainda no ar, e o Enter viraria "pular", não
-    // "avançar".
-    await page.waitForSelector('.zh-dlg-next[data-opt="continue"]', { state: 'visible', timeout: 10000 });
-    const sold = await evaluate(() => ({
-      iron: window.__scene.inventory.count('ore'),
-      coins: window.gameDebug.getState().coins,
-      ground: window.__scene.coinManager.getActiveWorldPositions().length,
-      receipt: /Sold 2 ore for 6 coins/u.test(document.querySelector('.zh-dlg-body')?.textContent ?? ''),
+    // ── 5. A saída é o ▼, e NÃO um menu de opções ──────────────────────────
+    // Enquanto havia balcão, a fala do astronauta abria uma janela com "continuar" e "vender".
+    // Sem moeda não há o que vender, e a conversa voltou a ter uma saída só.
+    await page.waitForSelector('.zh-dlg-next', { state: 'visible', timeout: 10000 });
+    const exit = await evaluate(() => ({
+      next: document.querySelector('.zh-dlg-next')?.dataset.opt ?? null,
+      options: document.querySelectorAll('.zh-dlg-opt').length,
+      window: document.querySelector('.zh-dlg-choices')?.classList.contains('zh-on') ?? false,
     }));
-    assert('a mochila esvaziou na hora', sold.iron === 0, JSON.stringify(sold));
-    assert('mas a carteira NÃO: o NPC derrubou 6 moedas no mundo',
-      sold.coins === coinsBefore && sold.ground === 6, JSON.stringify(sold));
-    assert('o recibo com o número exato é uma tela inteira da conversa', sold.receipt === true, JSON.stringify(sold));
-    await shot('balcao-vendido', { region: 'dialog' });
-    await page.keyboard.press('Enter'); // o recibo lido: vem o agradecimento, e o balcão reabre
-    await page.waitForSelector('[data-opt="sell"]', { timeout: 10000 });
-
-    // ── 7. Mochila vazia: a recusa é uma FALA, e o diálogo segue de pé ──────
-    await page.locator('[data-opt="sell"]').click();
-    await page.waitForFunction(() => [...document.querySelectorAll('.zh-dlg-body')].some(
-      (node) => /no ore/u.test(node.textContent ?? ''),
-    ), null, { timeout: 8000 });
-    await page.waitForSelector('[data-opt="sell"]', { timeout: 8000 });
+    assert('a única fala do astronauta sai pelo ▼ de FECHAR',
+      exit.next === 'close', JSON.stringify(exit));
+    assert('e nenhuma janela de escolha abre — o balcão saiu com a moeda',
+      exit.options === 0 && exit.window === false, JSON.stringify(exit));
 
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => window.gameDebug?.getState()?.dialogOpen === false, null, { timeout: 5000 });
-
-    // ── 8. Pegar o pagamento é ANDAR até ele ────────────────────────────────
-    log('PAGAMENTO: as moedas do NPC se pegam passando por cima, como qualquer moeda');
-    const coinTiles = await evaluate(() => {
-      const seen = new Set();
-      return window.__scene.coinManager.getActiveWorldPositions().filter((p) => {
-        const key = `${p.worldX},${p.worldY}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-    });
-    for (const tile of coinTiles) {
-      await teleport(tile.worldX, tile.worldY);
-      await driver.settle(500);
-    }
-    await page.waitForFunction(
-      () => window.__scene.coinManager.getActiveWorldPositions().length === 0,
-      null, { timeout: 8000 },
-    );
-    await driver.settle(600); // o voo até o contador do HUD termina de creditar
-    const paid = (await driver.getState())?.coins ?? 0;
-    assert('as 6 moedas apanhadas entram na carteira de verdade', paid === coinsBefore + 6,
-      `antes=${coinsBefore} depois=${paid}`);
-    await shot('pagamento-recolhido');
   },
 };

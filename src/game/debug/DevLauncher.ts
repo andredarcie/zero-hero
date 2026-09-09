@@ -1,6 +1,6 @@
 // Dev-only launcher: Shift+I pops a menu to jump between every entry point of the project —
-// the game (with and without the intro), the world editor and the puzzle lab (editor or
-// play). Localhost only; it never ships (the whole module no-ops unless DEV).
+// o jogo (com e sem o título, de dia e de noite) e o editor do mundo. Localhost only; it never
+// ships (the whole module no-ops unless DEV).
 //
 // Plain DOM, like DialogOverlay / PauseMenu / EditorDomUi: it must keep working across scene
 // swaps and while a Phaser scene is paused, and every jump is a full page load anyway
@@ -30,8 +30,6 @@ const ENTRIES: Entry[] = [
   // a depender de lembrar em qual deles o navegador ficou da última vez.
   { group: 'Jogo', label: 'Jogar de dia', hint: 'O mundo ao sol (?play&day)', url: '/?play&day' },
   { group: 'Jogo', label: 'Jogar de noite', hint: 'A noite autorada (?play&night)', url: '/?play&night' },
-  { group: 'Laboratório de puzzles', label: 'Jogar o level 2', hint: 'Joga levels/level-2.json direto', url: '/lab?play' },
-  { group: 'Laboratório de puzzles', label: 'Editar o level 2', hint: 'Editor do lab — monte o puzzle e [P] testa', url: '/lab' },
   { group: 'Editor', label: 'Abrir o editor do mundo', hint: 'Edita o mundo real (world.json)', url: '/editor' },
 ];
 

@@ -30,15 +30,15 @@ import {
   TREE_CHOP_STAGE_FRAMES,
   TREE_STICK_YIELD,
   TREE_TILE_STICK_CHANCE,
-  TILESET_FRAME_SIZE,
   SEA_TILE_FRAMES,
   SEED_PACK_KINDS,
   SOLID_UPPER_FRAMES,
   UNIT_PACK_KINDS,
   BLOOM_BLOWS,
+  wallTorchFaceIsClear,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
-import type { DialogScript, DialogTrade, DialogVoice } from '@/game/dialogs/NpcDialogs';
+import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import {
   clearGameDebugApi,
   registerGameDebugApi,
@@ -46,7 +46,7 @@ import {
   type GameDebugApi,
 } from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
-import { CoinManager } from '@/game/entities/CoinManager';
+import { LootManager } from '@/game/entities/LootManager';
 import { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager, type EnemyHit } from '@/game/entities/EnemyManager';
 import { EnemySpawnerManager } from '@/game/entities/EnemySpawnerManager';
@@ -82,7 +82,6 @@ import { FurnaceObject, type FurnaceWorldPort } from '@/game/objects/FurnaceObje
 import { AltarObject } from '@/game/objects/AltarObject';
 import { PyreObject } from '@/game/objects/PyreObject';
 import { hammerResult } from '@/game/objects/hammering';
-import { LevelPortalObject } from '@/game/objects/LevelPortalObject';
 import {
   StairsObject, stairsLiftAt, STAIRS_RUN_TILES, STAIRS_STEPS, STAIRS_WALK_MS,
 } from '@/game/objects/StairsObject';
@@ -103,33 +102,17 @@ import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints, type HintTile } from '@/game/runtime/PlacementHints';
-import { registerLevelPortalTextures } from '@/game/render3d/levelPortalTexture';
-import {
-  PORTAL_TUNNEL_MIN_CRUISE_MS,
-  destroyPortalTunnel,
-  finishPortalTunnel,
-  portalTunnelActive,
-  PORTAL_TUNNEL_EXIT_MS,
-  portalTunnelElapsedMs,
-  startPortalTunnel,
-} from '@/game/render3d/PortalTunnel';
 import {
   closeStairsCurtain, destroyStairsCurtain, openStairsCurtain,
 } from '@/game/render3d/StairsCurtain';
 import {
-  PORTAL_FALL_HEIGHT_TILES,
-  clearPendingPortalArrival,
   clearPendingStairsArrival,
-  consumePendingPortalArrival,
   consumePendingStairsArrival,
-  setPendingPortalArrival,
   setPendingStairsArrival,
 } from '@/game/runtime/portalTransition';
-import { DialogOverlay, type DialogTradePort } from '@/game/runtime/DialogOverlay';
-import { getActiveLevel, levelFilePath, setActiveLevel } from '@/game/runtime/activeLevel';
+import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { isUnderground, setUnderground } from '@/game/runtime/underworld';
-import { LevelIntroOverlay } from '@/game/runtime/LevelIntroOverlay';
-import { LevelButtons, PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
+import { PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import {
   createHeroView, heroFootY, resetHeroView, setHeroWalking, tickHeroView,
@@ -170,7 +153,6 @@ import {
   getIronRocks,
   getFurnaces,
   getAltars,
-  getLevelPortals,
   getStairs,
   getMoonflowers,
   getLockedDoors,
@@ -200,24 +182,10 @@ import {
 } from '@/game/runtime/QuestLog';
 import { QUEST_PYRE_LOGS } from '@/game/dialogs/NpcQuests';
 
-type LevelManifestEntry = { file: string; level: number };
-
-// ── A TRAVESSIA DO PORTAL, batida por batida ────────────────────────────────
-// Quatro tempos, e a ordem deles e o efeito: o heroi some ANTES da viagem comecar, e a viagem
-// acaba ANTES de ele reaparecer. Se dois se sobrepusessem, nenhum dos dois seria visto.
-//
-//   1. succao   — o portal come o heroi e a luz do mundo   (GameScene, level velho)
-//   2. vazio    — o portal girando sozinho no escuro       (GameScene, level velho)
-//   3. tunel    — a viagem                                  (PortalTunnel, sobrevive ao restart)
-//   4. queda    — o heroi cai do ceu no mundo novo          (GameScene, level novo)
-/** Quanto tempo o portal leva para engolir o heroi. */
-const PORTAL_SUCK_MS = 900;
-/** O portal sozinho depois de engolir — a pausa que deixa o gesto ser visto. */
-const PORTAL_EMPTY_MS = 620;
-/** Tempo entre abrir o tunel e destruir a cena por baixo dele (o overlay tem de cobrir antes). */
-const PORTAL_TUNNEL_HANDOFF_MS = 260;
-/** A queda do outro lado: alto o bastante para ter peso, curto o bastante para nao cansar. */
-const PORTAL_FALL_MS = 620;
+// A TRAVESSIA DO PORTAL — sucção, vazio, túnel e queda — FOI REMOVIDA com os levels isolados.
+// Ela era a passagem mágica que encadeava uma tela de puzzle na seguinte, e o mundo de hoje tem
+// uma porta só: a ESCADA (StairsObject), que é uma caminhada e não um teletransporte. As batidas
+// dela estão logo abaixo.
 
 /**
  * Em que ponto do lance de escada a CORTINA entra (fração do percurso). Ela fecha exatamente
@@ -546,15 +514,6 @@ const FIRE_SPREAD_MS = 850;
 // drop cura na estrada e nas dungeons, onde fogueira nao existe.
 const HEART_DROP_CHANCE = 0.2;
 
-// Uma caveira paga SEMPRE, e uma em cada quatro paga dobrado (ver GameScene.undeadCoins).
-const UNDEAD_DOUBLE_COIN_CHANCE = 0.25;
-
-// O QUE UM CORPO DE ÁGUA PAGA. Três, contra a moeda da caveira — e o número é o preço de um
-// problema, não de uma vida: o zora mora onde a espada não alcança, e matá-lo exige escolher a
-// margem certa e esperar a janela em que ele emerge. Um corpo que cobra uma POSIÇÃO paga mais que
-// um que caminha até você. É também a única fonte de moeda que o jogador pode PROCURAR no mapa —
-// um lago comprado vira uma renda, e é isso que faz a carta de água ser uma decisão econômica.
-const AQUATIC_KILL_COINS = 3;
 
 // Resting in a lit campfire's safe ring mends one heart every this many ms (leaving the ring
 // resets the timer, so healing is a "warm up by the fire" beat, not passive regen anywhere).
@@ -659,7 +618,7 @@ export class GameScene extends Phaser.Scene {
   // A janela pós-degelo em que o herói NÃO recongela: sem ela, dois zoras alternando cuspes
   // seriam um stun-lock sem contra-jogada — o jogador precisa de um instante para sair da linha.
   private heroFreezeImmuneMs = 0;
-  private coinManager?: CoinManager;
+  private lootManager?: LootManager;
   private heartPickupManager?: HeartPickupManager;
   private itemManager?: ItemManager;
   private swordSlash?: SwordSlash;
@@ -736,13 +695,11 @@ export class GameScene extends Phaser.Scene {
   // cartas de chunk (a bolsa e a unica tela deste jogo que roda com o mundo vivo).
   private orderOverlay?: ToolboxOrderOverlay;
   private orderBox?: ToolboxObject;
-  private levelPortals: LevelPortalObject[] = [];
   /** As ESCADAS entre os dois andares — a porta física, e a única que não é mágica. */
   private stairs: StairsObject[] = [];
   /** As tochas de parede de uma dungeon — nascem de TILES, nao de props (ver WallTorchObject). */
   private wallTorches: WallTorchObject[] = [];
-  private levelIntroOpen = false;
-  private levelIntroOverlay?: LevelIntroOverlay;
+  /** Uma travessia de escada está em curso: o mundo está trocando de andar por trás da cortina. */
   private levelTransitioning = false;
   /**
    * A luz do mundo como ela era antes da succao comer (ambient / moon / exposure).
@@ -795,9 +752,6 @@ export class GameScene extends Phaser.Scene {
   private playerWorld = { worldX: 0, worldY: 0 };
   private playerMaxHealth = PLAYER_HEALTH_MAX;
   private playerHealth = PLAYER_HEALTH_MAX;
-  /** A escada de tom da moeda: quantas seguidas, e quando foi a última (ver o onCollect dela). */
-  private coinChainStep = 0;
-  private coinChainAt = -Infinity;
   private playerInvincible = false;
   private invincibleTimer = 0;
   /** > 0 = o herói ainda pertence ao golpe que levou (ver PLAYER_STAGGER_MS). */
@@ -878,8 +832,6 @@ export class GameScene extends Phaser.Scene {
   // A BOLSA: a mochila aberta COM O JOGO RODANDO (ver QuickBag). Ela nao pausa nada — quem paga
   // o preco de folhear e o heroi, de pes presos e sem os dois botoes enquanto ela estiver aberta.
   private quickBag?: QuickBag;
-  // Level runs only: the always-visible restart + pause squares top-right (see LevelButtons).
-  private levelButtons?: LevelButtons;
   // Center chunk of the streamed window; NaN forces the first stream.
   private streamCenter = { cx: NaN, cy: NaN };
   private debugApi?: GameDebugApi;
@@ -915,12 +867,14 @@ export class GameScene extends Phaser.Scene {
 
   public create(): void {
 
-    // A AVENTURA TEM MEMORIA. O modo aventura (o overworld e as dungeons dele) hidrata do
-    // retrato em adventureState — que sobrevive ao scene.restart() por ser estado de modulo e
-    // ao browser por viver no localStorage. Explorador e levels ficam de fora: la, zerar E o
-    // desenho (a aposta do explorador e perder; o level e um puzzle que recomeca limpo).
-    this.adventure = this.registry.get('appMode') === 'game'
-      && (getActiveLevel() === null || isUnderground());
+    // A AVENTURA TEM MEMORIA. O jogo é UM mundo aberto — a superfície e o espelho subterrâneo —
+    // e ele hidrata do retrato em adventureState, que sobrevive ao scene.restart() por ser estado
+    // de módulo e ao browser por viver no localStorage.
+    //
+    // Quem fica de fora é o PLAYTEST DO EDITOR (`appMode === 'editor'`): ali o mundo em memória
+    // pode estar sujo de edição não salva, e deixá-lo escrever no save contaminaria a partida de
+    // quem só foi testar um tile. Era aqui que os levels isolados também ficavam de fora.
+    this.adventure = this.registry.get('appMode') === 'game';
     const inDungeon = isUnderground();
     // Arvores derrubadas voltam ao chao ANTES do World3D assar o terreno (o construtor le os
     // chunks): o corte e um diff por cima do world.json, que volta limpo do disco a cada boot
@@ -953,7 +907,6 @@ export class GameScene extends Phaser.Scene {
     this.playerKnockTween = undefined;
     this.playerWorld = { worldX: startWorldX, worldY: startWorldY };
     this.streamCenter = { cx: NaN, cy: NaN };
-    this.levelIntroOpen = false;
     this.levelTransitioning = false;
     // O heroi e um campo `readonly` e o Phaser REUSA esta instancia de cena no restart: sem
     // isto, o que a cena anterior escreveu nele (o alpha da morte, o encolhimento da succao do
@@ -969,7 +922,6 @@ export class GameScene extends Phaser.Scene {
     registerBucketTextures(this);
     registerCharcoalTexture(this);
     registerPlacementTextures(this);
-    registerLevelPortalTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -998,11 +950,8 @@ export class GameScene extends Phaser.Scene {
 
     this.chunkManager = new ChunkManager();
     const getContent = (cx: number, cy: number): ScreenContent => getChunkContent(cx, cy);
-    // Duas portas por onde entra caveira, e elas nao se confundem. A primeira e o CERCO: o
-    // spawn director invoca em volta do heroi enquanto ele demora no escuro, longe de fogueira.
-    // O lab (/lab) e os levels (/levels, meta.puzzle) rodam SEM o cerco — caveira nascendo no
-    // meio de uma solucao e ruido puro quando o assunto e um puzzle; pressao de escuridao se
-    // testa no mundo de verdade.
+    // TODO inimigo do mundo nasce de uma COVA AUTORADA (ver EnemySpawnerManager): nada mais
+    // invoca corpo em volta do heroi. O cerco que fazia isso no escuro foi arrancado.
     this.enemyManager = new EnemyManager(this, {
       isOpenWater: (wx, wy) => this.isOpenWaterAt(wx, wy),
       // A vizinhanca e varrida em QUADRADO em vez de filtrar a lista de props, porque metade da
@@ -1077,8 +1026,7 @@ export class GameScene extends Phaser.Scene {
       const front = this.facingTile();
       return front.x === wx && front.y === wy;
     });
-    this.coinManager = new CoinManager(this);
-    if (this.adventure) this.coinManager.restoreTotal(adventureState().coins);
+    this.lootManager = new LootManager(this);
     this.heartPickupManager = new HeartPickupManager(this, getContent);
     this.itemManager = new ItemManager(this);
     // O chao tambem lembra: a foto salva dos itens DESTE mundo (overworld ou subterraneo)
@@ -1240,9 +1188,6 @@ export class GameScene extends Phaser.Scene {
     this.toolboxes = getToolboxes().map(
       (t) => new ToolboxObject(this, t.worldX, t.worldY, t.dir ?? 1),
     );
-    this.levelPortals = getLevelPortals().map(
-      (portal) => new LevelPortalObject(portal.worldX, portal.worldY),
-    );
     // A MESMA escada, no MESMO tile, nos dois andares: o que muda é para onde ela leva DAQUI.
     // Em cima ela afunda no chão; embaixo ela sobe para fora dele.
     this.stairs = getStairs().map(
@@ -1250,9 +1195,14 @@ export class GameScene extends Phaser.Scene {
     );
 
     // AS TOCHAS DE PAREDE. Elas nao estao na lista de props: sao o frame `wallTorch` pintado na
-    // alvenaria pelo gerador de dungeons, entao a unica forma de encontra-las e varrer o terreno.
-    // A varredura roda uma vez, no boot, e so onde ha chance de haver alguma — um mundo sem
-    // nenhum tile de tocha sai da conta no primeiro chunk.
+    // alvenaria (no editor, ou por scripts/enrich-underworld.mjs), entao a unica forma de
+    // encontra-las e varrer o terreno. A varredura roda uma vez, no boot, e so onde ha chance de
+    // haver alguma — um mundo sem nenhum tile de tocha sai da conta no primeiro chunk.
+    //
+    // A FASE FALSA MORREU AQUI. Cada tocha comecava a animacao num frame diferente, derivado da
+    // coordenada, para vinte chamas nao piscarem em unissono. Hoje o frame desenhado E a leitura da
+    // luz que a tocha lanca (ver WallTorchObject), e cada fogo do pool ja tem a sua propria
+    // semente: o desencontro vem de graca, e um numero magico a menos e um numero magico a menos.
     this.wallTorches = [];
     const bounds = getWorldBounds();
     for (let cy = bounds.minCy; cy <= bounds.maxCy; cy++) {
@@ -1262,12 +1212,11 @@ export class GameScene extends Phaser.Scene {
           for (let col = 0; col < CHUNK_COLUMNS; col++) {
             if (chunk.upper[row][col] !== DUNGEON_TILES.wallTorch) continue;
             const wx = cx * CHUNK_COLUMNS + col; const wy = cy * CHUNK_ROWS + row;
-            // Fase desencontrada por coordenada (nunca aleatoria): vinte chamas em unissono leem
-            // como um efeito ligando, e um valor derivado do tile mantem o mundo identico a cada
-            // boot — o que a `visual-ref` exige para um diff de pixel significar alguma coisa.
-            this.wallTorches.push(
-              new WallTorchObject(this, wx, wy).offsetPhase(((wx * 7 + wy * 13) % 9) * 37),
-            );
+            // …e a que tem alvenaria ao SUL nao nasce: nao ha face visivel para a chama, e desenhar
+            // assim mesmo a punha queimando dentro da pedra (ver wallTorchFaceIsClear — o Salvar do
+            // editor faz esta mesma pergunta ao autor, antes).
+            if (!wallTorchFaceIsClear(this.chunkManager?.getTile(wx, wy + 1).upper)) continue;
+            this.wallTorches.push(new WallTorchObject(this, wx, wy));
           }
         }
       }
@@ -1311,7 +1260,6 @@ export class GameScene extends Phaser.Scene {
       { list: this.toolboxes },
       { list: this.furnaces },
       { list: this.altars },
-      { list: this.levelPortals },
       { list: this.stairs },
       // Lava e água continuam no registro como hazards para voadores e projéteis. Corpos no chão,
       // inclusive o herói, só passam depois que o tile deixou de bloquear.
@@ -1333,12 +1281,7 @@ export class GameScene extends Phaser.Scene {
     // Live playtest launched from the world editor: ESC stops the run and wakes the
     // sleeping EditorScene, with the in-memory (possibly unsaved) world still loaded.
     // In the real game ESC pauses instead (plus a discreet touch button on mobile).
-    // The lab only gets the return handler when it actually came FROM the editor —
-    // `/lab?play` boots the GameScene directly, with no editor scene to wake.
-    const appMode = this.registry.get('appMode') as AppMode | undefined;
-    const launchedFromEditor = appMode === 'editor'
-      || (appMode === 'lab' && (this.scene.isActive('editor') || this.scene.isSleeping('editor')));
-    if (launchedFromEditor) {
+    if ((this.registry.get('appMode') as AppMode | undefined) === 'editor') {
       this.enableEditorReturn();
     } else {
       // O ESC TEM UM DONO SÓ. Com a bolsa aberta ele a fecha e para por aí — abrir a pausa por
@@ -1348,16 +1291,7 @@ export class GameScene extends Phaser.Scene {
         if (this.quickBag?.isOpen) { this.quickBag.close(); return; }
         this.openPauseMenu();
       });
-      // A level run shows restart + pause squares top-right on EVERY device: a puzzle can be
-      // spent into a corner (fuse burnt early, bomb wasted), and starting over is part of play —
-      // that has to be said on screen, not buried inside ESC. The adventure keeps the discreet
-      // touch-only pause button.
-      if (getActiveLevel() !== null) {
-        this.levelButtons = new LevelButtons({
-          onRestart: () => this.restartRun(),
-          onPause: () => this.openPauseMenu(),
-        });
-      } else if (isTouchDevice()) {
+      if (isTouchDevice()) {
         this.pauseTouchButton = new PauseTouchButton(() => this.openPauseMenu());
       }
     }
@@ -1366,136 +1300,15 @@ export class GameScene extends Phaser.Scene {
     this.heroThought = new HeroThought(this, ASSET_KEYS.thoughtTorch);
     this.installActionInput();
 
-    const activeLevel = getActiveLevel();
-    // Chegou pelo portal? Entao o level nao comeca: ele ATERRISSA. O cartao de titulo espera o
-    // heroi tocar o chao (ver playPortalArrival), porque anunciar o nome de um lugar onde o
-    // heroi ainda nao pisou e anunciar cedo demais.
+    // Chegou pela ESCADA? Então o herói não nasce parado: ele SOBE do poço, andando.
     if (consumePendingStairsArrival()) {
       void this.playStairsArrival();
-    } else if (consumePendingPortalArrival()) {
-      void this.playPortalArrival(activeLevel);
     } else {
-      // Nenhuma chegada pendente e um tunel aberto significa que a viagem foi abandonada no meio
-      // (morte, voltar ao menu, um restart por outro motivo): o overlay nao pode ficar de pe.
-      // A cortina da escada segue a mesma lei, e com mais motivo — ela e opaca e nao anima
-      // sozinha, entao esquecida ela e uma tela preta permanente.
-      if (portalTunnelActive()) destroyPortalTunnel();
+      // Sem chegada pendente, uma cortina aberta significa que a viagem foi abandonada no meio
+      // (morte, um restart por outro motivo): ela é opaca e não anima sozinha, então esquecida
+      // ela é uma tela preta permanente.
       destroyStairsCurtain();
-      if (activeLevel !== null) this.showLevelIntro(activeLevel);
     }
-  }
-
-  /**
-   * A CHEGADA — o heroi cai do ceu no mundo novo.
-   *
-   * A cena ja esta inteira montada quando isto roda: o mundo, as luzes e o heroi existem, so
-   * que ele esta a `PORTAL_FALL_HEIGHT_TILES` do chao e o tunel ainda cobre a tela. A ordem e
-   * o ponto — primeiro o mundo fica pronto por tras do overlay, DEPOIS o overlay sai. Nunca
-   * ha um frame de mundo meio-construido a vista.
-   *
-   * A queda usa `Quad.easeIn` porque queda tem gravidade: acelera ate o chao. Um easeOut aqui
-   * (o reflexo de sempre) faria o heroi FLUTUAR para baixo e pousar como uma pena.
-   */
-  private async playPortalArrival(activeLevel: number | null): Promise<void> {
-    const h = this.hero;
-    this.cutsceneActive = true;
-    this.levelButtons?.setVisible(false);
-    // Escala, alpha e giro ja voltaram ao normal no topo do create (resetHeroView) — a unica
-    // coisa que a chegada acrescenta e a altura. A sombra de contato fica no chao enquanto ele
-    // despenca (o billboard ignora elevacao na sombra, por design) e e ela que denuncia ONDE
-    // ele vai cair.
-    h.lift = PORTAL_FALL_HEIGHT_TILES;
-    h.frame = HERO_FRAMES.idleDown;
-
-    // O tunel so sai quando o mundo esta pronto — e nunca antes do cruzeiro minimo, senao um
-    // level que carrega instantaneamente transformaria a viagem num piscar.
-    const remaining = PORTAL_TUNNEL_MIN_CRUISE_MS - portalTunnelElapsedMs();
-    if (remaining > 0) await this.wait(remaining);
-
-    // A queda comeca DENTRO do clarao de saida, nao depois dele: esperar o overlay morrer
-    // entregaria o mundo novo com o heroi pendurado, parado, no ar — e a chegada perderia o
-    // unico frame que ela tem para vender. Assim a tela abre com ele ja despencando.
-    const clearing = finishPortalTunnel();
-    await this.wait(PORTAL_TUNNEL_EXIT_MS * 0.6);
-
-    await new Promise<void>((resolve) => {
-      this.tweens.addCounter({
-        from: PORTAL_FALL_HEIGHT_TILES,
-        to: 0,
-        duration: PORTAL_FALL_MS,
-        ease: 'Quad.easeIn',
-        onUpdate: (tween) => { h.lift = tween.getValue() ?? 0; },
-        onComplete: () => resolve(),
-      });
-    });
-
-    // O impacto: esmaga e volta. O heroi cresce em cima dos proprios pes plantados
-    // (syncHeroBillboard ancora no pe), entao o squash le como peso e nao como um pulo.
-    h.lift = 0;
-    await clearing; // o overlay ja deve ter morrido aqui; garante que ninguem fique para tras
-    getSoundManager().playPortalLand();
-    this.world3d?.shake(260, 0.05);
-    this.spawnLandingDust();
-    this.tweens.add({
-      targets: h,
-      scaleX: 1.28,
-      scaleY: 0.7,
-      duration: 70,
-      ease: 'Quad.easeOut',
-      yoyo: true,
-      onComplete: () => { h.scaleX = 1; h.scaleY = 1; },
-    });
-
-    this.cutsceneActive = false;
-    if (activeLevel !== null) this.showLevelIntro(activeLevel);
-    else this.levelButtons?.setVisible(true);
-  }
-
-  /** O anel de poeira que a aterrissagem levanta — os mesmos puffs do fogo apagado. */
-  private spawnLandingDust(): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    const { worldX, worldY } = this.playerWorld;
-    for (let i = 0; i < 7; i += 1) {
-      const angle = (i / 7) * Math.PI * 2 + Math.random() * 0.4;
-      // Poeira, nao fagulha: emissive e NAO aditivo, igual a fumaca do fogo apagado — poeira
-      // que brilha viraria explosao, e o heroi so chegou.
-      const puff = w3
-        .addBillboard(FX_PUFF_TEXTURE, 0, { ...FX_BILLBOARD, emissive: true, alphaTest: 0.02 })
-        .setTint(0xc9bfae)
-        .setPosition(worldX, worldY)
-        .setElevation(0.12)
-        .setDisplaySize(0.2, 0.2)
-        .setAlpha(0.5);
-      this.tweens.add({
-        targets: { t: 0 },
-        t: 1,
-        duration: 380 + Math.random() * 160,
-        ease: 'Quad.easeOut',
-        onUpdate: (tween) => {
-          const k = tween.getValue() ?? 0;
-          const reach = 0.15 + k * 0.62;
-          puff
-            .setPosition(worldX + Math.cos(angle) * reach, worldY + Math.sin(angle) * reach * 0.6)
-            .setElevation(0.12 + k * 0.2)
-            .setDisplaySize(0.2 + k * 0.26, 0.2 + k * 0.26)
-            .setAlpha(0.5 * (1 - k));
-        },
-        onComplete: () => puff.destroy(),
-      });
-    }
-  }
-
-  private showLevelIntro(levelNumber: number): void {
-    this.levelIntroOpen = true;
-    this.levelButtons?.setVisible(false);
-    const overlay = new LevelIntroOverlay(this, levelNumber, getWorldName(), () => {
-      if (this.levelIntroOverlay !== overlay) return;
-      this.levelIntroOverlay = undefined;
-      this.levelIntroOpen = false;
-      this.levelButtons?.revealAfterLevelIntro();
-    });
-    this.levelIntroOverlay = overlay;
   }
 
   /** Restart the current run — shared by the pause menu entry and the level restart button. */
@@ -1509,223 +1322,6 @@ export class GameScene extends Phaser.Scene {
       requestAdventureRespawn();
     }
     this.scene.restart(); // WorldData still holds this level, so it rebuilds the same one
-  }
-
-  /**
-   * A SUCCAO — o portal comendo o heroi, e depois a luz do mundo inteiro.
-   *
-   * O heroi ja esta EM CIMA do tile do portal quando isto roda (`handleTileEntered` dispara na
-   * chegada), entao nao ha para onde arrasta-lo: a succao e ele ser puxado para DENTRO, no
-   * lugar. Sobe um pouco (o vortice o descola do chao), gira, encolhe ate nada e so ai apaga —
-   * some por tamanho, nunca por alpha sozinho, que leria como fantasma e nao como sugado.
-   *
-   * O buraco negro come a LUZ junto: `params.ambient`, `moon` e `exposure` sao aplicados por
-   * frame (World3D.syncParams), entao um tween neles apaga o mundo de verdade, sem nenhuma
-   * maquinaria nova — e sem tocar na CONTAGEM de luzes, que e a unica coisa que este renderer
-   * nao perdoa (FIRE_LIGHT_SLOTS: mudar o numero recompila todo shader do mundo).
-   */
-  private playPortalSuck(portal: LevelPortalObject): Promise<void> {
-    const w3 = this.world3d;
-    const h = this.hero;
-    getSoundManager().playPortalSuck();
-    portal.activate();
-    this.world3d?.shake(PORTAL_SUCK_MS, 0.02);
-
-    const lit = w3
-      ? { ambient: w3.params.ambient, moon: w3.params.moon, exposure: w3.params.exposure }
-      : null;
-    this.litParams = lit ?? undefined;
-
-    return new Promise<void>((resolve) => {
-      this.tweens.addCounter({
-        from: 0,
-        to: 1,
-        duration: PORTAL_SUCK_MS,
-        ease: 'Cubic.easeIn', // devagar no comeco: o portal AGARRA antes de puxar
-        onUpdate: (tween) => {
-          const k = tween.getValue() ?? 0;
-          portal.setSwallow(k);
-          h.lift = k * 0.85;
-          h.spin = k * k * 540; // o giro so pega no fim, quando ele ja esta sem chao
-          h.scaleX = 1 - k;
-          h.scaleY = 1 - k;
-          // Ele apaga junto com o proprio brilho: a luz que o heroi carrega e comida tambem.
-          this.cutsceneHeroLight = 1 - k;
-          if (lit && w3) {
-            // A luz sai por DOIS caminhos, e os dois sao necessarios.
-            //
-            // `ambient`/`moon` matam as fontes — e a luz indo embora de verdade, com as
-            // sombras e o contraste que vem junto. Mas sozinhos eles nao esvaziam a tela:
-            // num level de lava quem ilumina e o emissive do chao, que nao depende de luz
-            // nenhuma. Media medida num frame do level 1: 45.6 antes, 45.2 no fim da succao.
-            //
-            // `setWorldFade` fecha a conta no POST (dessatura e escurece o frame inteiro, o
-            // mesmo dreno da morte). E o unico lugar onde isso funciona: `params.exposure`
-            // e inerte aqui, porque o mundo e desenhado num render target do EffectComposer
-            // e o three so aplica tone mapping ao desenhar direto no canvas — a mesma
-            // armadilha de alvo-vinculado que o prewarmShaders documenta.
-            w3.setWorldFade(k * 0.88);
-            w3.params.ambient = lit.ambient * (1 - k * 0.96);
-            w3.params.moon = lit.moon * (1 - k * 0.92);
-          }
-        },
-        onComplete: () => {
-          h.alpha = 0;
-          h.scaleX = 0.001;
-          h.scaleY = 0.001;
-          getSoundManager().playPortalSwallow();
-          this.world3d?.shake(240, 0.045);
-          resolve();
-        },
-      });
-    });
-  }
-
-  /** Purple threshold crossed: resolve the next entry from the same manifest as level select. */
-  private async completeLevel(portal: LevelPortalObject): Promise<void> {
-    const current = getActiveLevel();
-    if (this.levelTransitioning || current === null) return;
-    this.levelTransitioning = true;
-    // Congela o jogo ANTES da primeira animacao: a succao dura quase um segundo e o heroi nao
-    // pode aceitar mais um passo enquanto esta sendo engolido.
-    this.cutsceneActive = true;
-    this.levelButtons?.setVisible(false);
-
-    // O manifesto e buscado em PARALELO com a succao, e nao depois dela: a rede nao pode ser o
-    // que decide quanto tempo o portal leva para comer o heroi.
-    const nextEntry = this.resolveNextLevel(current);
-
-    await this.playPortalSuck(portal);
-    // O BEIJO DE VIUVA: o portal sozinho, girando no escuro que ele mesmo abriu. Sem esta
-    // pausa a viagem comeca em cima do proprio heroi sumindo e ninguem ve nenhuma das duas.
-    await this.wait(PORTAL_EMPTY_MS);
-
-    // O tunel nasce AQUI, com a cena velha ainda viva: ele precisa cobrir a tela antes do
-    // restart, e o custo de criar o segundo contexto WebGL fica escondido atras do portal que
-    // ainda esta na frente. `artPixel` faz o pixel do tunel ter a grossura do pixel do mundo.
-    startPortalTunnel(this.world3d ? this.world3d.tileScreenSize() / TILESET_FRAME_SIZE : undefined);
-    getSoundManager().playPortalTravel();
-    // Nada de mexer no BUS de musica aqui. A tentacao e abaixa-lo durante a viagem, mas este
-    // caminho tem duas saidas — o proximo level e o menu, quando nao ha proximo — e so uma
-    // delas voltaria para levanta-lo. O bus ficaria mudo no menu. A cena nova ja resolve a
-    // trilha sozinha (create chama stopMusic + startAmbience).
-    await this.wait(PORTAL_TUNNEL_HANDOFF_MS);
-
-    try {
-      const next = await nextEntry;
-      if (!next) {
-        // Fim da fila: nao ha mundo do outro lado para o heroi cair, entao o tunel nao leva a
-        // lugar nenhum — ele fecha aqui mesmo e o menu recebe a tela.
-        setActiveLevel(null);
-        await finishPortalTunnel();
-        if (this.scene.isSleeping('editor') || this.scene.isActive('editor')) {
-          this.scene.stop();
-          this.scene.wake('editor');
-        } else if (this.scene.get('levelselect')) {
-          this.scene.start('levelselect');
-        } else {
-          const url = new URL(window.location.href);
-          url.searchParams.set('level', String(current));
-          url.searchParams.delete('play');
-          window.location.assign(url.toString());
-        }
-        return;
-      }
-
-      const levelResponse = await window.fetch(levelFilePath(next.level), { cache: 'no-store' });
-      if (!levelResponse.ok) throw new Error(`Falha ao carregar ${next.file}`);
-      setWorldData(await levelResponse.json());
-      setActiveLevel(next.level);
-      // O bilhete que sobrevive ao restart: a proxima GameScene nasce com o heroi no ar.
-      setPendingPortalArrival();
-      // A live test that advances stops owning the old editor store; on the next scene create,
-      // ESC becomes the normal pause menu instead of waking a stale previous-level canvas.
-      if (this.scene.isSleeping('editor') || this.scene.isActive('editor')) this.scene.stop('editor');
-      this.scene.restart();
-    } catch (error) {
-      // A viagem nao pode terminar num tunel eterno: derruba o overlay antes de mostrar o erro,
-      // ou a mensagem fica atras dele.
-      clearPendingPortalArrival();
-      destroyPortalTunnel();
-      this.cameras.main.fadeIn(260, 68, 18, 96);
-      this.restoreWorldLight();
-      this.levelTransitioning = false;
-      this.cutsceneActive = false;
-      this.cutsceneHeroLight = 1;
-      this.levelButtons?.setVisible(true);
-      portal.setSwallow(0);
-      portal.deactivate();
-      // O heroi volta a existir: ele foi encolhido a zero pela succao, e um erro nao pode
-      // deixar o jogador olhando para um level sem personagem.
-      this.hero.alpha = 1;
-      this.hero.scaleX = 1;
-      this.hero.scaleY = 1;
-      this.hero.lift = 0;
-      this.hero.spin = 0;
-      const message = this.add.text(this.scale.width / 2, this.scale.height * 0.2,
-        error instanceof Error ? error.message : 'Falha ao abrir o proximo level', {
-          fontFamily: FONT_FAMILY,
-          fontSize: '10px',
-          color: '#e6b8ff',
-          stroke: '#170b20',
-          strokeThickness: 3,
-          resolution: TEXT_RESOLUTION,
-        }).setOrigin(0.5).setDepth(SCENE_DEPTHS.toast);
-      this.time.delayedCall(2600, () => message.destroy());
-    }
-  }
-
-  /** O manifesto de levels, resolvido em paralelo com a succao (a rede nao dita o ritmo). */
-  /**
-   * DESCER numa dungeon a partir do overworld, e SUBIR de volta. As duas usam a travessia de
-   * portal inteira — sucção, vazio, túnel, queda —, porque o jogo já ensinou que atravessar um
-   * portal é assim; um fade seria uma segunda gramática para a mesma coisa.
-   *
-   * `beats` é a coreografia compartilhada: ela roda os quatro tempos e, entre o túnel cobrir a
-   * tela e o restart, chama `swap` — que é onde cada direção troca o mundo por outro. A busca do
-   * arquivo começa ANTES da sucção de propósito: a rede não pode decidir quanto tempo o portal
-   * leva para engolir o herói.
-   */
-  private async portalTrip(
-    portal: LevelPortalObject,
-    fetching: Promise<void>,
-    swap: () => void,
-  ): Promise<void> {
-    if (this.levelTransitioning) return;
-    this.levelTransitioning = true;
-    this.cutsceneActive = true;
-    this.levelButtons?.setVisible(false);
-
-    await this.playPortalSuck(portal);
-    await this.wait(PORTAL_EMPTY_MS);
-    startPortalTunnel(this.world3d ? this.world3d.tileScreenSize() / TILESET_FRAME_SIZE : undefined);
-    getSoundManager().playPortalTravel();
-    await this.wait(PORTAL_TUNNEL_HANDOFF_MS);
-
-    try {
-      await fetching;
-      swap();
-      setPendingPortalArrival();
-      if (this.scene.isSleeping('editor') || this.scene.isActive('editor')) this.scene.stop('editor');
-      this.scene.restart();
-    } catch {
-      // Mesma recuperacao de completeLevel: a viagem nao pode terminar num tunel eterno, e o
-      // heroi nao pode ficar encolhido a zero num mundo que continua existindo.
-      clearPendingPortalArrival();
-      destroyPortalTunnel();
-      this.cameras.main.fadeIn(260, 68, 18, 96);
-      this.restoreWorldLight();
-      this.levelTransitioning = false;
-      this.cutsceneActive = false;
-      this.cutsceneHeroLight = 1;
-      this.levelButtons?.setVisible(true);
-      portal.setSwallow(0);
-      portal.deactivate();
-      this.hero.alpha = 1;
-      this.hero.scaleX = 1;
-      this.hero.scaleY = 1;
-      this.hero.lift = 0;
-    }
   }
 
   /**
@@ -1744,7 +1340,6 @@ export class GameScene extends Phaser.Scene {
     if (this.levelTransitioning) return;
     this.levelTransitioning = true;
     this.cutsceneActive = true;
-    this.levelButtons?.setVisible(false);
 
     // A CORTINA (ver StairsCurtain) fecha no exato instante em que o lance acaba, e a troca de
     // andar inteira acontece atrás dela. É a mesma lei do túnel do portal — que nasce ANTES do
@@ -1772,8 +1367,7 @@ export class GameScene extends Phaser.Scene {
       await this.walkStairs('out');
       this.levelTransitioning = false;
       this.cutsceneActive = false;
-      this.levelButtons?.setVisible(true);
-    }
+      }
   }
 
   /**
@@ -1891,7 +1485,6 @@ export class GameScene extends Phaser.Scene {
    */
   private async playStairsArrival(): Promise<void> {
     this.cutsceneActive = true;
-    this.levelButtons?.setVisible(false);
     void closeStairsCurtain(0);
     this.world3d?.setWorldFade(1);
     this.hero.alpha = 0;
@@ -1906,7 +1499,6 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneHeroLight = 1;
     this.world3d?.setWorldFade(0);
     this.cutsceneActive = false;
-    this.levelButtons?.setVisible(true);
   }
 
   /**
@@ -1931,7 +1523,6 @@ export class GameScene extends Phaser.Scene {
       // proprio (o editor exige um), e ele e reescrito aqui — como a volta ja fazia.
       if (world) world.meta.playerStart = { worldX: stairs.worldX, worldY: stairs.worldY };
       setWorldData(world as unknown as Parameters<typeof setWorldData>[0]);
-      setActiveLevel(null); // o andar de baixo nao e um level: e o outro lado do mesmo mundo
       setUnderground(true);
     });
   }
@@ -1962,27 +1553,10 @@ export class GameScene extends Phaser.Scene {
       // precisa dizer ao mundo que acabou de carregar.
       if (world) world.meta.playerStart = { worldX: stairs.worldX, worldY: stairs.worldY };
       setWorldData(world as unknown as Parameters<typeof setWorldData>[0]);
-      setActiveLevel(null);
       setUnderground(false);
     });
   }
 
-  private async resolveNextLevel(current: number): Promise<LevelManifestEntry | undefined> {
-    const indexResponse = await window.fetch(
-      `${import.meta.env.BASE_URL}levels/index.json`,
-      { cache: 'no-store' },
-    );
-    if (!indexResponse.ok) throw new Error('Manifesto de levels indisponivel');
-    const rawEntries = await indexResponse.json() as Array<{ file?: string }>;
-    const entries = rawEntries.flatMap((entry): LevelManifestEntry[] => {
-      const match = entry.file ? /^level-(\d+)\.json$/u.exec(entry.file) : null;
-      return match ? [{ file: entry.file!, level: Number(match[1]) }] : [];
-    }).sort((a, b) => a.level - b.level);
-    const currentIndex = entries.findIndex((entry) => entry.level === current);
-    return currentIndex >= 0
-      ? entries[currentIndex + 1]
-      : entries.find((entry) => entry.level > current);
-  }
 
   /** Devolve a luz que a succao comeu — so importa quando a transicao FALHA e a cena sobrevive. */
   private restoreWorldLight(): void {
@@ -2003,46 +1577,28 @@ export class GameScene extends Phaser.Scene {
     // Never pause over another modal state — their overlays own ESC/scrim already, and the
     // dialog camera pan must not be frozen midway.
     if (this.pauseMenu || this.dialogOpen || this.camShifting
-      || this.itemGetOpen || this.levelIntroOpen || this.cutsceneActive || this.isDead) return;
+      || this.itemGetOpen || this.cutsceneActive || this.isDead) return;
     // A bolsa e a pausa nunca convivem: uma congela o mundo e a outra existe justamente por nao
     // congelar. Quem abre a pausa fecha a bolsa (sem equipar nada — fechar nao e confirmar).
     this.quickBag?.close();
     this.quickBag?.setButtonVisible(false);
     this.pauseTouchButton?.setVisible(false);
-    this.levelButtons?.setVisible(false);
     this.actionButtons?.setVisible(false);
     // scene.get('title') is undefined in the editor playtest config; without it "quit" would
     // have nowhere to go, so the entry is hidden (mirrors the intro-ending fallback).
     const canQuit = Boolean(this.scene.get('title'));
-    // Playing a level (not the adventure): offer a jump back to the level list. Gated on the
-    // scene existing too — the lab/editor configs don't register it. O SUBTERRANEO nao e level
-    // (a volta dele e o portal, nunca a lista) e nem sequer tem activeLevel desde o espelho —
-    // a leitura fica de pe de qualquer jeito, e a segunda guarda custa nada.
-    const inLevel = getActiveLevel() !== null && !isUnderground()
-      && Boolean(this.scene.get('levelselect'));
     this.pauseMenu = new PauseMenu(this, {
       onResume: () => this.closePauseMenu(),
       onRestart: () => {
         this.closePauseMenu();
         this.restartRun();
       },
-      onLevelList: inLevel
-        ? () => {
-          this.closePauseMenu();
-          getSoundManager().stopMusic();
-          getSoundManager().stopAmbience();
-          this.scene.start('levelselect');
-        }
-        : undefined,
       onQuit: canQuit
         ? () => {
           this.closePauseMenu();
           getSoundManager().stopMusic();
           getSoundManager().stopAmbience();
-          // Sair pelo menu ABANDONA a expedicao: a bolsa que estava em risco fica no escuro,
-          // como em qualquer outra saida que nao seja o portal. O banco (e as melhorias que ele
-          // comprou) ja esta no localStorage e sobrevive — e ele que o modo promete guardar.
-          // Na aventura, sair GUARDA: o retrato fecha aqui e o titulo passa a oferecer Continue.
+          // Sair pelo menu GUARDA: o retrato fecha aqui e o titulo passa a oferecer Continue.
           this.persistAdventure();
           this.scene.start('title');
         }
@@ -2133,10 +1689,6 @@ export class GameScene extends Phaser.Scene {
       const { cx, cy } = chunkOf(cf.worldX, cf.worldY);
       if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: cf.isLit ? 'fireLit' : 'fireDead' });
     }
-    for (const portal of getLevelPortals()) {
-      const { cx, cy } = chunkOf(portal.worldX, portal.worldY);
-      if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: 'portal' });
-    }
     // AS ESCADAS. Elas faltavam, e a falta doía exatamente onde o espelho deveria ajudar: quem
     // desce num canto e caminha o subterrâneo inteiro não tinha como saber por onde subir. Valem
     // nos DOIS andares sem um `if` no meio porque a porta é simétrica — os cinco tiles são os
@@ -2161,7 +1713,6 @@ export class GameScene extends Phaser.Scene {
     this.pauseMenu = undefined;
     this.quickBag?.setButtonVisible(true);
     this.pauseTouchButton?.setVisible(true);
-    this.levelButtons?.setVisible(true);
     this.actionButtons?.setVisible(true);
     this.scene.resume();
   }
@@ -2370,23 +1921,10 @@ export class GameScene extends Phaser.Scene {
           openness: Number(mf.openAmount.toFixed(3)),
           ...mf.view,
         })),
-        levelPortals: this.levelPortals.map((portal) => ({
-          worldX: portal.worldX,
-          worldY: portal.worldY,
-          activated: portal.isActivated,
-          frame: portal.frame,
-          visibleParticles: portal.visibleParticleCount,
-          swallow: portal.swallowAmount,
-        })),
         heroLift: this.hero.lift,
         heroScale: this.hero.scaleX,
-        portalTunnel: portalTunnelActive(),
-        activeLevel: getActiveLevel(),
         levelName: getWorldName(),
-        levelIntroOpen: this.levelIntroOpen,
         levelTransitioning: this.levelTransitioning,
-        coins: this.coinManager?.coinTotal ?? 0,
-        groundCoins: this.coinManager?.getActiveWorldPositions() ?? [],
         dialogOpen: this.dialogOpen,
         itemGetOpen: this.itemGetOpen,
         isDead: this.isDead,
@@ -2494,15 +2032,10 @@ export class GameScene extends Phaser.Scene {
     this.itemGetOverlay?.destroy();
     this.itemGetOverlay = undefined;
     this.itemGetOpen = false;
-    this.levelIntroOverlay?.destroy();
-    this.levelIntroOverlay = undefined;
-    this.levelIntroOpen = false;
     this.pauseMenu?.destroy();
     this.pauseMenu = undefined;
     this.pauseTouchButton?.destroy();
     this.pauseTouchButton = undefined;
-    this.levelButtons?.destroy();
-    this.levelButtons = undefined;
     this.actionButtons?.destroy();
     this.actionButtons = undefined;
     this.quickBag?.destroy();
@@ -2512,7 +2045,7 @@ export class GameScene extends Phaser.Scene {
     this.orderOverlay?.destroy();
     this.orderOverlay = undefined;
     this.orderBox = undefined;
-    this.coinManager?.destroy();
+    this.lootManager?.destroy();
     this.heartPickupManager?.destroy();
     this.itemManager?.destroy();
     // O gelo morre com a cena (blocos, relógios e ganchos): um degelo atravessando um restart
@@ -2572,8 +2105,7 @@ export class GameScene extends Phaser.Scene {
       this.tweens.timeScale = 1;
     }
 
-    for (const portal of this.levelPortals) portal.update(delta);
-    if (this.levelTransitioning || this.levelIntroOpen) return;
+    if (this.levelTransitioning) return;
 
     // Hide the low-health outline up front; the active-play FX below re-shows it each frame if
     // still low. So any frozen state (dialog, item-get, death) leaves it hidden instead
@@ -2625,7 +2157,11 @@ export class GameScene extends Phaser.Scene {
     const stepDx = this.playerWorld.worldX - prevWorldX;
     const stepDy = this.playerWorld.worldY - prevWorldY;
 
-    for (const t of this.wallTorches) t.update(delta);
+    // As tochas de parede: o anel de ativacao vive AQUI dentro (ver WallTorchObject) — quem esta
+    // longe nao segura billboard nenhum, e a lista inteira custa uma distancia por tocha.
+    for (const t of this.wallTorches) {
+      t.update(delta, this.playerWorld.worldX, this.playerWorld.worldY);
+    }
 
     if (stepDx !== 0 || stepDy !== 0) {
       this.lastStepTime = this.time.now;
@@ -2749,27 +2285,15 @@ export class GameScene extends Phaser.Scene {
 
     }
 
-    if (this.coinManager && this.camera) {
-      const heroScreen = { x: this.camera.screenCenterX, y: this.camera.screenCenterY };
-      // A moeda apanhada VOA pro contador do HUD (que pulsa ao crescer) — pegar moeda tem de
-      // parecer sempre bom. Sem HUD na tela (aventura, levels), ela some no herói como antes.
-      this.coinManager.update(
+    if (this.lootManager && this.camera) {
+      // O drop apanhado some no HERÓI: o que se guarda voa pro corpo, porque a mochila não tem
+      // posição na tela. Quem soa é o `onCollectOne` de quem espalhou (ver spawnOreLoot).
+      this.lootManager.update(
         this.playerWorld.worldX,
         this.playerWorld.worldY,
-        { counter: this.hudCoinAnchor() ?? heroScreen, hero: heroScreen },
-        () => {
-          // A ESCADA DE TOM: moeda cai em punhado (uma venda de nove barras paga nove), e nove
-          // vezes o mesmo blip é ruído. Cada moeda apanhada logo depois da anterior sobe meio
-          // tom; a sequência zera sozinha depois de 700ms sem nenhuma, que é o intervalo em que
-          // o ouvido para de ligar uma na outra.
-          const now = this.time.now;
-          this.coinChainStep = now - this.coinChainAt < 700 ? this.coinChainStep + 1 : 0;
-          this.coinChainAt = now;
-          getSoundManager().playCoinPickup(this.coinChainStep);
-          if (this.adventure) this.persistAdventure();
-        },
+        { x: this.camera.screenCenterX, y: this.camera.screenCenterY },
       );
-      this.coinManager.render(this.tileSize, this.camera);
+      this.lootManager.render(this.tileSize, this.camera);
     }
 
     if (this.heartPickupManager && this.chunkManager) {
@@ -2789,7 +2313,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.itemManager) {
-      // O combustivel de um graveto aceso no chao queima na mesma moeda do da mao.
+      // O combustivel de um graveto aceso no chao queima no mesmo relogio do da mao.
       this.itemManager.tickFires(delta);
       // CARVAO sob a tocha ACESA: consome em vez de trocar — o passo COME o carvao e a chama
       // volta ao combustivel cheio. E o unico jeito walk-only de reabastecer longe de fogo
@@ -2906,7 +2430,6 @@ export class GameScene extends Phaser.Scene {
     this.cancelPlayerKnockback();
     this.hero.sizePx = this.tileSize; // o render3D reescreve isto todo frame; aqui e so pro primeiro
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
-    this.levelIntroOverlay?.resize(width, height);
   }
 
   private computeTileSize(width: number, height: number): number {
@@ -3030,6 +2553,17 @@ export class GameScene extends Phaser.Scene {
 
   private getCampfireAt(wx: number, wy: number): CampfireObject | undefined {
     return this.propAt(this.campfires, wx, wy);
+  }
+
+  /**
+   * A tocha de parede deste tile. Ela nao esta no `propRegistry` (nao e prop: e um tile — ver
+   * WallTorchObject), entao o `propAt` generico nao a alcanca e ela precisa da propria busca.
+   *
+   * Linear como todas as outras, e por dois motivos: sao 75 no mapa inteiro, e a pergunta so e
+   * feita quando o jogador aperta um botao contra um tile — nunca por frame.
+   */
+  private wallTorchAt(wx: number, wy: number): WallTorchObject | undefined {
+    return this.wallTorches.find((t) => t.worldX === wx && t.worldY === wy);
   }
 
   private getPyreAt(wx: number, wy: number): PyreObject | undefined {
@@ -3364,10 +2898,6 @@ export class GameScene extends Phaser.Scene {
     return this.getFurnaceAt(wx, wy) !== undefined || this.getAltarAt(wx, wy) !== undefined;
   }
 
-  private getLevelPortalAt(wx: number, wy: number): LevelPortalObject | undefined {
-    return this.propAt(this.levelPortals, wx, wy);
-  }
-
   private getStairsAt(wx: number, wy: number): StairsObject | undefined {
     return this.propAt(this.stairs, wx, wy);
   }
@@ -3621,7 +3151,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.quickBag) return;
     if (this.quickBag.isOpen) { this.quickBag.close(); return; }
     if (this.pauseMenu || this.dialogOpen || this.camShifting
-      || this.itemGetOpen || this.levelIntroOpen || this.cutsceneActive || this.isDead
+      || this.itemGetOpen || this.cutsceneActive || this.isDead
       || this.levelTransitioning || this.orderOverlay) return;
     this.quickBag.openBag();
   }
@@ -3696,7 +3226,7 @@ export class GameScene extends Phaser.Scene {
     // atrás dela. O que ela fecha são os dois botões — as mãos estão dentro da mochila —, e é
     // isso, com os pés presos, que faz folhear custar alguma coisa.
     return !this.isDead && !this.dialogOpen && !this.camShifting
-      && !this.itemGetOpen && !this.cutsceneActive && !this.levelIntroOpen
+      && !this.itemGetOpen && !this.cutsceneActive
       && !this.levelTransitioning && !this.pauseMenu && this.quickBag?.isOpen !== true
       && !this.orderOverlay
       && this.movementController !== undefined;
@@ -4679,9 +4209,9 @@ export class GameScene extends Phaser.Scene {
       this.showItemGet(taken.kind, () => {});
     } else {
       this.seenItems.add(taken.kind);
-      // COISA NÃO SOA COMO MOEDA (ver playItemStash). Aqui tocava o tilintar do dinheiro, e com
-      // ele um graveto, uma pedra e um minério entravam na mochila com o som da carteira — as
-      // duas únicas coisas que este jogo pede que o jogador conte separado.
+      // O som de GUARDAR (ver playItemStash): grave e descendo, o couro da mochila. Aqui tocava
+      // um tilintar metálico de moeda, herdado de quando o jogo tinha carteira — e um graveto
+      // entrando na mochila soava como dinheiro entrando no bolso.
       getSoundManager().playItemStash();
     }
     this.persistAdventure();
@@ -4888,6 +4418,28 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
+    // A TOCHA DE PAREDE ACENDE O GRAVETO — e este e o degrau que faltava na corrente do fogo.
+    //
+    // `TORCH_BURN_MS` sao CINCO SEGUNDOS, e o comentario da constante promete que qualquer fogo
+    // vivo reabastece: uma fogueira acesa ou uma poca de lava. So que la embaixo nao ha nem uma
+    // nem outra (o `underworld.json` tem zero de cada) — a masmorra e o unico lugar do jogo escuro
+    // o tempo todo, e a unica chama dela nao podia ser tocada. Com isto, as 75 tochas viram o que
+    // ja eram no desenho: os postos onde a viagem recomeca.
+    //
+    // E o MESMO gesto da fogueira acesa, de proposito: apontar o graveto para um fogo e leva-lo
+    // embora. Uma gramatica nova para o mesmo verbo contra o mesmo tipo de peca seria uma segunda
+    // voz — a lei que ja tinha separado o forno da bancada.
+    //
+    // Ela e FONTE e nunca ALVO: o balde nao aparece aqui. Uma masmorra que o jogador consegue
+    // apagar para sempre e atmosfera com trava de seguranca e sem recompensa nenhuma do outro lado.
+    const wallTorch = this.wallTorchAt(wx, wy);
+    if (wallTorch?.isLit && this.isFlammableHeld) {
+      this.swingHeld(wx, wy);
+      if (!this.heldOnFire) this.time.delayedCall(150, () => { this.igniteHeldItem(); });
+      else this.refuelTorch();
+      return true;
+    }
+
     // Lava is molten fire: bumping it with a flammable item (no flame yet) lights the torch,
     // exactly like a lit campfire. It always blocks until a stone settles into a basalt step.
     const lava = this.getLavaAt(wx, wy);
@@ -5038,7 +4590,7 @@ export class GameScene extends Phaser.Scene {
           getSoundManager().playRockSmash();
           this.spawnRockDebris(wx, wy, dirX, dirY, blow !== 'struck', rock.ore);
           // A pedra comum ABRE e deixa o espolio no tile; o VEIO de ferro nunca abre — a cada
-          // ciclo de 3 pancadas ele PRODUZ um bloco, que espalha como moeda em volta da pedra.
+          // ciclo de 3 pancadas ele PRODUZ um bloco, que SALTA e pousa em volta da pedra.
           if (blow === 'shattered') this.dropRockSpoil(rock);
           else if (blow === 'yielded') this.spawnOreLoot(rock);
         });
@@ -5246,9 +4798,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Fogueira: o esbarrao so faz a chama reagir (a LOJA que abria aqui foi removida por
-    // inteiro — moeda agora se ganha e se gasta no MUNDO: caveira, balcão de NPC, selo de
-    // estrada). Acender, apagar e reabastecer a tocha vivem no botao B.
+    // Fogueira: o esbarrao so faz a chama reagir. A LOJA que abria aqui foi removida por
+    // inteiro, e depois dela a MOEDA que a alimentava — o jogo nao tem dinheiro nenhum.
+    // Acender, apagar e reabastecer a tocha vivem no botao B.
     const campfire = this.getCampfireAt(wx, wy);
     if (campfire) {
       campfire.onHit();
@@ -5488,9 +5040,9 @@ export class GameScene extends Phaser.Scene {
     // A mesma direcao das faiscas: o baque sai PARA FORA do golpe, e nao para um lado sorteado.
     this.world3d?.shake(lethal ? 150 : 90, lethal ? 0.15 : 0.09, dx, dy);
     this.triggerHitstop(lethal ? 110 : 60);
-    // A moeda NÃO sai daqui: quem paga é a morte, não o golpe (ver EnemyBase.setDeathToll). Esta
-    // linha era a única fonte de recompensa do jogo, e por isso um corpo comido pelo fogo — hoje o
-    // fim mais comum de uma caveira — morria de graça.
+    // A recompensa NÃO sai daqui: quem a paga é a morte, não o golpe (ver EnemyBase.setDeathToll).
+    // Esta linha já foi a única fonte de recompensa do jogo, e por isso um corpo comido pelo fogo
+    // — hoje o fim mais comum de uma caveira — morria de graça.
     if (lethal && !hitSpoken) getSoundManager().playEnemyDeath(enemy.kind);
     return 'landed';
   }
@@ -5509,36 +5061,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * UM CORPO CAIU: ele LARGA MOEDA — sempre, e não importa quem o matou (a espada, a bomba, a
-   * tocha viva ou o calor da fogueira). Quem chama e o sino da morte, dentro do `die()`
-   * (EnemyBase.setDeathToll); ate 2026-08-12 quem chamava era o golpe da espada, e morte por
-   * fogo — hoje o fim mais comum de uma caveira, que assa na beira da luz — nao pagava nada.
+   * UM CORPO CAIU. Quem chama é o sino da morte, dentro do `die()` (EnemyBase.setDeathToll), e
+   * por isso vale para TODA morte — a espada, a bomba, a tocha viva ou o calor da fogueira, que
+   * é hoje o fim mais comum de uma caveira.
    *
-   * No explorador a moeda e o placar da aposta, e o multiplicador de profundidade e quem
-   * transforma "andar mais" numa decisao. Na AVENTURA (que teve loja e nenhuma fonte de moeda por
-   * toda a vida do jogo) o preco vem da escada de vida: um corpo paga um degrau a menos do que
-   * custa em golpes (ENEMY_BLOWS - 1) — o morcego rende 1, a torreta 8. A mesma tabela que diz
-   * "de quem e mais dificil" diz "quanto vale", e nenhum numero novo entra no jogo.
-   *
-   * A CAVEIRA e a excecao, e ela e a regra na pratica: `undeadCoins()`, 1 moeda com 25% de chance
-   * de duas (ver la). Ela e o corpo que o jogador mais mata, e o unico que o mundo produz sozinho.
+   * O corpo NÃO PAGA MAIS NADA. Houve uma moeda aqui: todo corpo largava um punhado que
+   * espalhava pelos tiles vizinhos e voava para uma carteira. A moeda foi removida do jogo por
+   * inteiro — ela nunca teve onde ser gasta desde que a loja da fogueira caiu, e um número que
+   * só sobe não é economia, é ruído. O que a morte ainda dá é o que a morte sempre deveria dar:
+   * o CORAÇÃO, e só quando ele serve para alguma coisa.
    *
    * O CORACAO so cai de um corpo quando o heroi esta FERIDO — coracao no chao com vida cheia e
    * lixo visual — e e a unica cura de campo: a fogueira cura em casa, o drop cura na estrada
    * (e dentro das dungeons, onde fogueira nao existe).
    */
   private rewardKill(wx: number, wy: number, kind: EnemyKind): void {
-    // A MISSÃO conta antes da moeda, e pelo mesmo motivo de a moeda morar aqui: este é o sino
-    // que TODA morte toca, não importa o que matou (espada, bomba, tocha viva, brasa).
+    // A MISSÃO conta primeiro, e por isso ela mora aqui: este é o sino que TODA morte toca, não
+    // importa o que matou (espada, bomba, tocha viva, brasa).
     this.questEvent({ type: 'slay', enemy: kind });
     if (!this.chunkManager) return;
-    // ONDE A MOEDA CAI NÃO É ONDE O CORPO CAIU, quando o corpo caiu na ÁGUA. Um zora morre no
-    // meio do lago, e uma moeda espalhada ali é uma moeda que o herói vê e nunca alcança — o
-    // pior tipo de recompensa, a que se mostra e não se pega. A praia mais próxima resolve isso
-    // sem uma regra nova para o jogador aprender: o dinheiro chega na terra, como tudo o mais.
+    // ONDE O DROP CAI NÃO É ONDE O CORPO CAIU, quando o corpo caiu na ÁGUA. Um zora morre no
+    // meio do lago, e um coração ali é um coração que o herói vê e nunca alcança — o pior tipo
+    // de recompensa, a que se mostra e não se pega. A praia mais próxima resolve isso sem uma
+    // regra nova para o jogador aprender: a cura chega na terra, como tudo o mais.
     const [dx, dy] = this.shoreDropTile(wx, wy);
     if (!this.adventure) return; // num level de puzzle a recompensa e a solucao
-    this.coinManager?.spawnCoins(dx, dy, this.chunkManager, this.coinsForKind(kind));
     if (
       this.playerHealth < this.playerMaxHealth
       && Math.random() < HEART_DROP_CHANCE
@@ -5550,28 +5097,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O QUE ESTE CORPO VALE, em moedas — a base, antes do multiplicador de profundidade.
-   *
-   *   • a CAVEIRA: 1, e 2 numa morte a cada quatro (ver undeadCoins) — o corpo mais comum do jogo;
-   *   • o AQUÁTICO: 3, e é o preço de um problema. Ele mora onde a espada do herói não alcança de
-   *     graça: ou se luta da margem, na janela em que ele emerge para cuspir, ou não se luta. Um
-   *     corpo que exige uma posição para ser morto paga mais que um que caminha até você;
-   *   • o resto: a escada de vida da aventura (`ENEMY_BLOWS - 1`), e 1 no explorador, onde quem
-   *     manda no número é a distância de casa.
-   */
-  private coinsForKind(kind: EnemyKind): number {
-    if (kind === 'undead') return this.undeadCoins();
-    if (AQUATIC_ENEMY_KINDS.has(kind)) return AQUATIC_KILL_COINS;
-    return Math.max(1, (ENEMY_BLOWS[kind] ?? 2) - 1);
-  }
-
-  /**
    * A PRAIA MAIS PRÓXIMA deste tile — onde um drop pousa quando o corpo morreu na água.
    *
    * Anéis crescentes a partir do tile da morte, até o primeiro chão em que o herói PODE pisar (a
    * mesma pergunta que o passo dele faz). Cinco tiles de raio é mais que a
-   * largura de qualquer lago autorado até hoje; se nada aparecer, a moeda cai onde caiu — perder
-   * uma moeda num pântano gigante é melhor que perdê-la num `return` silencioso.
+   * largura de qualquer lago autorado até hoje; se nada aparecer, o drop cai onde caiu — perder
+   * um coração num pântano gigante é melhor que perdê-lo num `return` silencioso.
    */
   private shoreDropTile(wx: number, wy: number): readonly [number, number] {
     if (!this.isSolidForEntities(wx, wy)) return [wx, wy];
@@ -5586,19 +5117,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
     return [wx, wy];
-  }
-
-  /**
-   * O QUE UMA CAVEIRA VALE: **1 moeda, e 2 em uma morte a cada quatro**.
-   *
-   * Ela pagava 2 fixas (a escada `ENEMY_BLOWS - 1`), e duas coisas mudaram junto: agora TODA morte
-   * paga — inclusive a que o mundo dá sozinho, quando a matilha assa na beira de uma fogueira — e a
-   * caveira é o corpo que o cerco produz sem parar. Com 2 garantidas por corpo, a moeda deixaria de
-   * ser um prêmio para virar um pingo constante; com 1 e um bônus raro, cada morte ainda pode
-   * surpreender. O sorteio é por MORTE (nunca por moeda): duas moedas saltando juntas é o evento.
-   */
-  private undeadCoins(): number {
-    return Math.random() < UNDEAD_DOUBLE_COIN_CHANCE ? 2 : 1;
   }
 
   /**
@@ -6182,16 +5700,15 @@ export class GameScene extends Phaser.Scene {
 
   /** Bring a dead campfire to life with fanfare, expanding the safe ring under the hero. */
   /**
-   * Fotografa o que e volatil na cena (mochila, moedas, melhorias, itens no chao, dialogos) para
-   * dentro do adventureState e grava. Chamado nos eventos que mudam o mundo — acender fogueira,
-   * pegar/pousar item, comprar, falar, viajar, morrer — e barato o bastante para nao ser
+   * Fotografa o que e volatil na cena (mochila, itens no chao, dialogos, missoes) para dentro do
+   * adventureState e grava. Chamado nos eventos que mudam o mundo — acender fogueira,
+   * pegar/pousar item, fabricar, falar, viajar, morrer — e barato o bastante para nao ser
    * economizado: o retrato inteiro tem poucos KB.
    */
   private persistAdventure(): void {
     if (!this.adventure) return;
     const st = adventureState();
     st.started = true;
-    st.coins = this.coinManager?.coinTotal ?? st.coins;
     st.inventory = this.inventory.list();
     st.selected = this.inventory.selected;
     st.litFireCount = this.litFireCount;
@@ -6675,13 +6192,6 @@ export class GameScene extends Phaser.Scene {
       else void this.enterDungeon(stairs);
       return;
     }
-    // O PORTAL continua sendo outra coisa: a travessia mágica que encadeia LEVELS de puzzle.
-    const levelPortal = this.getLevelPortalAt(wx, wy);
-    if (levelPortal) {
-      void this.completeLevel(levelPortal);
-      return;
-    }
-
     // Depositar itens usa o botao B contra o tile a frente (ver pressUse/placeItemAt).
   }
 
@@ -6876,8 +6386,8 @@ export class GameScene extends Phaser.Scene {
    * invulnerável (a lei do nascimento) e um corpo CONGELADO é estátua (uma bocarra não morde
    * através do bloco). No pico do bote a adjacência é RECONFERIDA — um corpo que saiu do tile
    * durante a arma da mandíbula é um bote no ar, e a planta mastiga o vazio mesmo assim: errar
-   * também custa a recarga, e é isso que faz o bote ser esquivável. O gole não paga moeda nem
-   * deixa ossada (ver EnemyBase.consume); a encenação é gated por distância (a regra da roda
+   * também custa a recarga, e é isso que faz o bote ser esquivável. O gole não deixa ossada
+   * (ver EnemyBase.consume); a encenação é gated por distância (a regra da roda
    * d'água: a física roda sempre, o barulho só perto do herói).
    */
   private updateCarnivorousPlants(): void {
@@ -7531,48 +7041,17 @@ export class GameScene extends Phaser.Scene {
       this.endDialogCameraShift();
       getSoundManager().fadeMusicIn();
       onClosed?.();
-    }, voice, this.tradePortFor(script.trade, npcWorld));
-  }
-
-  /**
-   * A mão do BALCÃO no mundo: o overlay pergunta quanto o herói tem e executa a venda. O
-   * pagamento NÃO entra na carteira por decreto — o NPC DERRUBA as moedas em volta de si,
-   * como um inimigo derrubaria, e o jogador ainda tem que passar por elas (pedido do
-   * usuário: dinheiro ganho é dinheiro no MUNDO). A mochila esvazia na hora; a carteira só
-   * muda quando cada moeda é apanhada, pelo caminho único de toda moeda.
-   */
-  private tradePortFor(
-    trade: DialogTrade | undefined,
-    npcWorld?: { worldX: number; worldY: number },
-  ): DialogTradePort | undefined {
-    if (!trade) return undefined;
-    const kind = trade.item as HeldItemKind;
-    return {
-      count: () => this.inventory.count(kind),
-      sell: (units: number) => {
-        const n = Math.min(Math.max(0, Math.floor(units)), this.inventory.count(kind));
-        if (n <= 0) return 0;
-        this.inventory.remove(kind, n);
-        this.updateBackItem(); // o item vendido podia ser o da mão — as costas ficam honestas
-        const coins = n * trade.coinsPerUnit;
-        const at = npcWorld ?? { worldX: this.playerWorld.worldX, worldY: this.playerWorld.worldY };
-        if (this.chunkManager) this.coinManager?.spawnCoins(at.worldX, at.worldY, this.chunkManager, coins);
-        getSoundManager().playCoinPickup(); // o tilintar da mão fechando o negócio
-        this.persistAdventure(); // a mochila mudou já; as moedas entram uma a uma ao pegar
-        return coins;
-      },
-    };
+    }, voice);
   }
 
   // Gate an NPC's dialog behind their campfire: if a dead fire sits within range, show the
   // scared "locked" lines (keeping the NPC's portrait/colour/voice) instead of the real ones.
   private gateDialog(script: DialogScript, npcWorld?: { worldX: number; worldY: number }): DialogScript {
-    // A variante travada perde o BALCÃO junto com as falas: um NPC com medo não vende nada.
     if (!this.isNpcScared(npcWorld)) return script;
-    return { ...script, lines: tLines('lockedLines'), trade: undefined };
+    return { ...script, lines: tLines('lockedLines') };
   }
 
-  /** O NPC está ao lado de uma fogueira APAGADA — e com medo ele não fala, não vende e não recebe. */
+  /** O NPC está ao lado de uma fogueira APAGADA — e com medo ele não fala e não recebe. */
   private isNpcScared(npcWorld?: { worldX: number; worldY: number }): boolean {
     if (!npcWorld) return false;
     const cf = this.nearestCampfireWithin(npcWorld.worldX, npcWorld.worldY, NPC_GATE_RADIUS_TILES);
@@ -7742,7 +7221,7 @@ export class GameScene extends Phaser.Scene {
     this.positionBackItem();
     this.updateFootprints();
     this.enemyManager?.render(this.tileSize, this.camera);
-    this.coinManager?.render(this.tileSize, this.camera);
+    this.lootManager?.render(this.tileSize, this.camera);
     this.heartPickupManager?.render(this.tileSize, this.camera);
     this.itemManager?.render(this.tileSize, this.camera);
     this.npcManager?.render(this.tileSize, this.camera);
@@ -7842,14 +7321,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * A carteira que a loja gasta.
-   *
-   * Na aventura e a bolsa da run — nao ha outra. No explorador sao as moedas do BANCO, e nunca
-   * as que o heroi carrega: gastar em campo o que ainda esta em risco esvaziaria a aposta pelo
-   * outro lado (bastaria comprar tudo antes de morrer). A fogueira do acampamento so vende o
-   * que ja foi trazido para casa.
-   */
   /**
    * O heroi pisou num item do chao. Ele GUARDA — nao troca mais.
    *
@@ -8206,23 +7677,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O bloco que o VEIO produz ESPALHA COMO MOEDA (pedido do usuário: minerar tem que fluir):
-   * salta da pedra, quica num tile vizinho e se pega ANDANDO por cima — a exceção deliberada
+   * O bloco que o VEIO produz SALTA E ESPALHA (pedido do usuário: minerar tem que fluir):
+   * pula da pedra, quica num tile vizinho e se pega ANDANDO por cima — a exceção deliberada
    * ao "nada entra na mochila por pisada". A outra metade da exceção: `stash`, nunca `add` —
    * o minério entra na mochila e a MÃO do herói fica exatamente com o que estava (a picareta,
    * no meio da mineração, não pode ser roubada por cada bloco que cai).
    */
-  /**
-   * O alvo do voo da moeda: o NÚMERO do HUD, convertido de coordenada de página para a do
-   * canvas do Phaser (o voo é um sprite Phaser; o HUD é DOM — dois espaços, uma régua).
-   */
-  private hudCoinAnchor(): { x: number; y: number } | null {
-    return null;
-  }
-
   private spawnOreLoot(rock: RockObject): void {
-    if (!this.coinManager || !this.chunkManager) return;
-    this.coinManager.spawnLoot(
+    if (!this.lootManager || !this.chunkManager) return;
+    this.lootManager.spawnLoot(
       rock.worldX, rock.worldY, this.chunkManager, 1,
       // A arte do MINERIO, e nao a do ferro: ela ficou para tras quando a cadeia do ferro entrou,
       // e o resultado eram dois "minerios" diferentes na tela — um com cara de bloco de metal
@@ -8232,7 +7695,7 @@ export class GameScene extends Phaser.Scene {
         this.inventory.stash('ore', 1);
         // O MESMO som do minerio apanhado no chao (ver playItemStash). Um objeto que soa de dois
         // jeitos conforme a procedencia e a mesma confusao que a arte errada fazia, so que pelo
-        // ouvido — e ele voa como moeda, entao soar como moeda era a confusao em dobro.
+        // ouvido.
         getSoundManager().playItemStash();
         this.persistAdventure();
       },
@@ -8888,7 +8351,7 @@ export class GameScene extends Phaser.Scene {
       if (restarting) return;
       restarting = true;
       if (this.adventure) {
-        // NA AVENTURA A MORTE NAO APAGA MAIS NADA. Mochila, moedas, melhorias, fogueiras e
+        // NA AVENTURA A MORTE NAO APAGA MAIS NADA. Mochila, fogueiras, missoes e
         // historia atravessam (persistAdventure + hidratacao do create); o custo de morrer e
         // ACORDAR NA FOGUEIRA — a distancia de volta, nao o progresso. E o bonfire.
         this.persistAdventure();
@@ -8903,7 +8366,6 @@ export class GameScene extends Phaser.Scene {
             .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })
             .then((json: unknown) => {
               setWorldData(json as Parameters<typeof setWorldData>[0]);
-              setActiveLevel(null);
               setUnderground(false);
             })
             .catch(() => { /* sem rede: renasce dentro da propria dungeon */ })

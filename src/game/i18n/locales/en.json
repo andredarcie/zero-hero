@@ -17,12 +17,6 @@
     "continue": "Continue",
     "startOver": "Start over"
   },
-  "levelSelect": {
-    "heading": "Choose a level",
-    "back": "Back",
-    "loading": "Loading levels...",
-    "empty": "No levels available yet."
-  },
   "endCard": {
     "title": "The Signal Fire",
     "subtitle": "The pyre burns, and the dark has an edge again.\nYou finished Zero The Hero. Thank you for carrying the flame."
@@ -36,14 +30,12 @@
     },
     "prompt": {
       "title": "BACK TO CAMP?",
-      "ledger": "You are carrying {coins} coins.\nGoing back keeps {kept} — and leaves {lost} here.",
       "yes": "Yes, take me back",
       "no": "No, I can go further"
     },
     "arrival": {
       "extract": "You made it back.",
-      "death": "You fell out there.",
-      "kept": "{kept} coins banked, {lost} lost to the dark. Distance: {depth} tiles."
+      "death": "You fell out there."
     }
   },
   "editorReturn": "[ESC] back to editor",
@@ -105,38 +97,9 @@
       "text": "Light the fire. When this place is safe, we can talk."
     }
   ],
-  "shop": {
-    "title": "SHOP",
-    "buy": "BUY",
-    "max": "MAX",
-    "upgrades": {
-      "maxHealth": {
-        "label": "MAX HP",
-        "desc": "+1 max heart"
-      },
-      "swordSpeed": {
-        "label": "SWORD +",
-        "desc": "Faster attack"
-      },
-      "moveSpeed": {
-        "label": "STEP +",
-        "desc": "Move faster"
-      },
-      "magnet": {
-        "label": "COIN MAGNET",
-        "desc": "Pulls nearby coins"
-      }
-    }
-  },
   "dialog": {
     "continue": "Continue.",
     "close": "[Close.]"
-  },
-  "levelButtons": {
-    "restart": "Restart the level",
-    "restartConfirm": "Are you sure? Tap again",
-    "pause": "Pause",
-    "stuckHint": "Stuck? ↻ restarts the level"
   },
   "pause": {
     "title": "PAUSED",
@@ -148,7 +111,6 @@
     "nightfall": "Nightfall",
     "fullscreen": "Fullscreen",
     "fullscreenExit": "Exit fullscreen",
-    "levelList": "Back to levels",
     "restart": "Restart",
     "quit": "Quit to title",
     "confirm": "Are you sure?",
@@ -363,7 +325,7 @@
         },
         {
           "speaker": "npc",
-          "text": "A full bucket waters crops and drowns small fires. Endless uses. Zero coins. Today only."
+          "text": "A full bucket waters crops and drowns small fires. Endless uses. Costs you nothing. Today only."
         },
         {
           "speaker": "npc",
@@ -401,11 +363,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Take the sword. The dead on unfinished roads still carry coin."
+          "text": "Take the sword. Eight of the dead still walk the unfinished roads. Put them down."
         },
         {
           "speaker": "npc",
-          "text": "Stand on a road seal and press B. Spend what you earn, and decide what exists next."
+          "text": "Then walk. Six fields you have never stood in: what no one visits, no one decides."
         }
       ]
     },

@@ -322,7 +322,7 @@ export class Billboard3D {
     return this;
   }
 
-  /** Height above the ground in TILE units (item bob, coin arcs, carried gear). */
+  /** Height above the ground in TILE units (item bob, loot arcs, carried gear). */
   public setElevation(tiles: number): this {
     this.elev = tiles;
     this.apply();

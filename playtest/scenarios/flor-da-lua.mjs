@@ -31,7 +31,7 @@ export default {
   name: 'flor-da-lua',
   description: 'Uma flor, nove poses: fecha na luz, abre no escuro pelo ladder, e o tile segue a arte.',
   needsGame: false, // entra pelo editor; a GameScene nasce no P (a regra do braco/fios/portao)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

@@ -19,21 +19,17 @@ import { t } from '@/game/i18n/i18n';
 // duas respostas diferentes e a fala taparia o NPC que a diz.
 //
 // O menu não sumiu, mudou de forma: o caso comum é UMA opção (continuar/fechar) e ela vira o ▼
-// que pisca no canto — o gesto é apertar Z/Enter ou tocar a caixa. Um NPC com BALCÃO
-// (script.trade — o astronauta comprando ferro) abre uma JANELA DE ESCOLHA sobre a caixa, e
-// vender pergunta a QUANTIDADE (o caixa: − n +, confirmar, desistir). Quem executa a transação é
-// a GameScene (DialogTradePort) — aqui só mora o desenho da conversa.
+// que pisca no canto — o gesto é apertar Z/Enter ou tocar a caixa. A janela de escolha (várias
+// opções empilhadas sobre a caixa) continua de pé para quem precisar dela.
+//
+// Houve aqui um BALCÃO: o astronauta comprava ferro, e vender abria um caixa (− n +, confirmar,
+// desistir) que pagava em MOEDA. A moeda foi removida do jogo por inteiro, e com ela o balcão —
+// um caixa que não paga nada não é uma escolha, é um menu que gasta o item do jogador.
 
 const CHAR_DELAY_MS = 28;
 const STYLE_ID = 'zh-dialog-style';
 const ROOT_ID = 'zh-dialog-root';
 const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
-
-/** A mão da cena no mundo: quantas unidades o herói tem, e a venda de fato (devolve moedas). */
-export type DialogTradePort = {
-  count: () => number;
-  sell: (units: number) => number;
-};
 
 type DialogOption = {
   label: string;
@@ -118,23 +114,11 @@ const CSS = `
    três entradas, um destaque, para o dedo e a seta nunca discordarem do Enter. */
 #${ROOT_ID} .zh-dlg-opt.is-selected { background: #d4c8a4; color: #241d12; }
 #${ROOT_ID} .zh-dlg-opt .zh-opt-num { opacity: 0.6; margin-right: 0.7em; }
-/* O caixa: − n + na linha de cima, confirmar/desistir como opções normais embaixo. */
-#${ROOT_ID} .zh-dlg-trade { display: flex; align-items: center; gap: 0.6em; padding: 0.35em 0.6em 0.55em; }
-#${ROOT_ID} .zh-dlg-qty-btn {
-  pointer-events: auto; width: 2em; padding: 0.15em 0;
-  background: #241d12; color: #d8d1c0; border: 1px solid #3d342a; border-radius: 2px;
-  font-family: inherit; font-size: 1em; cursor: pointer;
-  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-}
-#${ROOT_ID} .zh-dlg-qty-btn:hover { background: #d4c8a4; color: #241d12; }
-#${ROOT_ID} .zh-dlg-qty { flex: 1 1 auto; min-width: 6em; text-align: center; color: #e8dfc7; }
 /* No dedo, alvo tem tamanho de dedo: as escolhas ocupam a largura inteira da caixa e crescem
    até o mínimo confortável (~44px) — a mesma conversa, só com mais carne onde o toque acerta. */
 @media (pointer: coarse) {
   #${ROOT_ID} .zh-dlg-choices { left: 0; right: 0; min-width: 0; }
   #${ROOT_ID} .zh-dlg-opt { padding: 0.7em 0.6em; min-height: 44px; display: flex; align-items: center; }
-  #${ROOT_ID} .zh-dlg-qty-btn { width: 2.6em; min-height: 44px; font-size: 1.1em; }
-  #${ROOT_ID} .zh-dlg-trade { gap: 0.9em; }
   #${ROOT_ID} .zh-dlg-next { font-size: 1.15em; right: 0.5em; bottom: 0.2em; }
 }
 /* Tela estreita (telefone em pé): o retrato encolhe para o texto não virar uma coluna de duas
@@ -176,16 +160,12 @@ export class DialogOverlay {
   private optionEls: HTMLDivElement[] = [];
   /** Qual opção Enter/Espaço/Z escolhem — movida por ↑↓/WS, hover e toque. */
   private selected = 0;
-  /** O caixa está aberto (− n + visível): ←→/AD ajustam, Enter confirma, Esc desiste. */
-  private amountOpen = false;
-  private qty = 1;
 
   public constructor(
     private readonly scene: Phaser.Scene,
     private readonly script: DialogScript,
     private readonly onClose: () => void,
     private readonly voice?: DialogVoice,
-    private readonly trade?: DialogTradePort,
   ) {
     this.canvas = scene.game.canvas;
 
@@ -363,139 +343,15 @@ export class DialogOverlay {
     this.currentOnDone?.();
   }
 
-  /**
-   * Uma fala do ROTEIRO terminou: montar o menu. O caso sem balcão é o de sempre (continuar/
-   * fechar numa opção só, que vira o ▼). Com balcão, a PRIMEIRA fala abre a escolha do usuário —
-   * continuar conversando ou vender — e a ÚLTIMA troca "continuar" por "fechar".
-   */
+  /** Uma fala do ROTEIRO terminou: continuar, ou fechar se era a última. */
   private scriptLineDone(): void {
     const isLast = this.lineIndex >= this.script.lines.length - 1;
     const next = (): void => this.showLine(this.lineIndex + 1);
-    if (this.script.trade && this.trade) {
-      if (isLast) this.tradeMenu();
-      else if (this.lineIndex === 0) {
-        this.setOptions([
-          { label: 'Keep talking.', testId: 'talk', pick: next },
-          this.sellOption(),
-        ]);
-      } else {
-        this.setOptions([{ label: t('dialog.continue'), testId: 'continue', pick: next }]);
-      }
-      return;
-    }
     this.setOptions([{
       label: isLast ? t('dialog.close') : t('dialog.continue'),
       testId: isLast ? 'close' : 'continue',
       pick: isLast ? (): void => this.close() : next,
     }]);
-  }
-
-  // ── O balcão ───────────────────────────────────────────────────────────────
-
-  private sellOption(): DialogOption {
-    const trade = this.script.trade!;
-    return {
-      label: `Sell ${trade.item}. (${trade.coinsPerUnit} coins each)`,
-      testId: 'sell',
-      pick: () => this.openCounter(),
-    };
-  }
-
-  /** O menu de "balcão aberto": vender de novo, ou encerrar a conversa. */
-  private tradeMenu(): void {
-    this.setOptions([
-      this.sellOption(),
-      { label: t('dialog.close'), testId: 'close', pick: () => this.close() },
-    ]);
-  }
-
-  private openCounter(): void {
-    const trade = this.script.trade;
-    const port = this.trade;
-    if (!trade || !port) return;
-    // Mochila sem o item: a recusa é uma FALA do NPC, nunca um menu mudo.
-    if (port.count() <= 0) {
-      this.typeLine({ speaker: 'npc', text: trade.empty }, () => this.tradeMenu());
-      return;
-    }
-    this.typeLine({ speaker: 'npc', text: trade.offer }, () => this.showAmount());
-  }
-
-  /** O caixa: começa oferecendo TUDO (a intenção mais comum) e as setas lapidam. */
-  private showAmount(): void {
-    this.amountOpen = true;
-    this.qty = Math.max(1, this.trade?.count() ?? 1);
-    this.renderAmount();
-  }
-
-  private adjustQty(delta: number): void {
-    const max = Math.max(1, this.trade?.count() ?? 1);
-    this.qty = Math.min(max, Math.max(1, this.qty + delta));
-    this.renderAmount();
-  }
-
-  private renderAmount(): void {
-    const trade = this.script.trade;
-    if (!trade) return;
-    this.options = [];
-    this.optionEls = [];
-    this.selected = 0;
-    this.choicesEl.innerHTML = '';
-    this.nextEl.style.display = 'none';
-
-    const row = document.createElement('div');
-    row.className = 'zh-dlg-trade';
-    const minus = document.createElement('button');
-    minus.className = 'zh-dlg-qty-btn';
-    minus.dataset.opt = 'minus';
-    minus.textContent = '−';
-    minus.addEventListener('click', () => this.adjustQty(-1));
-    const qty = document.createElement('span');
-    qty.className = 'zh-dlg-qty';
-    qty.dataset.qty = String(this.qty);
-    qty.textContent = `${this.qty} ${trade.item} × ${trade.coinsPerUnit}`;
-    const plus = document.createElement('button');
-    plus.className = 'zh-dlg-qty-btn';
-    plus.dataset.opt = 'plus';
-    plus.textContent = '+';
-    plus.addEventListener('click', () => this.adjustQty(1));
-    row.append(minus, qty, plus);
-    this.choicesEl.appendChild(row);
-
-    this.appendOption({
-      label: `Sell ${this.qty} for ${this.qty * trade.coinsPerUnit} coins.`,
-      testId: 'confirm',
-      pick: () => this.confirmSale(),
-    }, 1);
-    this.appendOption({
-      label: 'Never mind.',
-      testId: 'back',
-      pick: () => { this.amountOpen = false; this.tradeMenu(); },
-    }, 2);
-    this.choicesEl.classList.add('zh-on');
-  }
-
-  private confirmSale(): void {
-    const trade = this.script.trade;
-    const port = this.trade;
-    if (!trade || !port || !this.amountOpen) return;
-    this.amountOpen = false;
-    const units = this.qty;
-    const coins = port.sell(units);
-    if (coins <= 0) {
-      this.typeLine({ speaker: 'npc', text: trade.empty }, () => this.tradeMenu());
-      return;
-    }
-    // O recibo é do NARRADOR (o número exato) e o agradecimento é do NPC — e com UMA mensagem
-    // por vez elas são duas TELAS, não duas linhas empilhadas: sem o aperto no meio, o número
-    // que o jogador precisa conferir passaria voando por baixo do "obrigado".
-    this.typeLine({ speaker: 'narrator', text: `Sold ${units} ${trade.item} for ${coins} coins.` }, () => {
-      this.setOptions([{
-        label: t('dialog.continue'),
-        testId: 'continue',
-        pick: () => this.typeLine({ speaker: 'npc', text: trade.thanks }, () => this.tradeMenu()),
-      }]);
-    });
   }
 
   // ── O menu: o ▼ do caso comum, a janela de escolha do resto ────────────────
@@ -504,7 +360,6 @@ export class DialogOverlay {
     this.options = [];
     this.optionEls = [];
     this.selected = 0;
-    this.amountOpen = false;
     this.choicesEl.innerHTML = '';
     this.choicesEl.classList.remove('zh-on');
     this.nextEl.style.display = 'none';
@@ -512,7 +367,7 @@ export class DialogOverlay {
 
   /** Uma escolha de verdade está na tela — e aí tocar a CAIXA não escolhe nada por engano. */
   private get choicesOpen(): boolean {
-    return this.optionEls.length > 0 || this.amountOpen;
+    return this.optionEls.length > 0;
   }
 
   private setOptions(list: DialogOption[]): void {
@@ -593,22 +448,15 @@ export class DialogOverlay {
       event.preventDefault();
       const delta = event.code === 'ArrowUp' || event.code === 'KeyW' ? -1 : 1;
       this.select(this.selected + delta);
-    } else if (/^Digit[1-9]$/u.test(event.code) && !this.isTyping && !this.amountOpen) {
+    } else if (/^Digit[1-9]$/u.test(event.code) && !this.isTyping) {
       const index = Number(event.code.slice(5)) - 1;
       if (this.options[index]) {
         event.preventDefault();
         this.options[index].pick();
       }
-    } else if ((event.code === 'ArrowLeft' || event.code === 'KeyA'
-      || event.code === 'ArrowRight' || event.code === 'KeyD') && this.amountOpen) {
-      event.preventDefault();
-      this.adjustQty(event.code === 'ArrowLeft' || event.code === 'KeyA' ? -1 : 1);
     } else if (event.code === 'Escape') {
       event.preventDefault();
-      if (this.amountOpen) {
-        this.amountOpen = false;
-        this.tradeMenu();
-      } else this.close();
+      this.close();
     }
   };
 

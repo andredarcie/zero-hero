@@ -40,7 +40,7 @@ export default {
   name: 'pa',
   description: 'O ciclo da fazenda numa tela: A cava e planta, o balde enche na água de terreno e rega.',
   needsGame: false, // entra pelo editor; a GameScene nasce no P (mesma razão do combate)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

@@ -40,7 +40,7 @@ const OPENED_BY = {
   lava: 'pickaxe', // pedra na lava vira degrau de basalto
   tallGrass: 'scythe', carnivorousPlant: 'scythe',
   dryBush: 'torch', // arbusto seco não se corta: queima
-  swingGate: '', moonflower: '', plantSpot: '', bombSpot: '', bridgeSpot: '', levelPortal: '', stairs: '',
+  swingGate: '', moonflower: '', plantSpot: '', bombSpot: '', bridgeSpot: '', stairs: '',
 };
 
 // Os números do jogo, copiados de src/game/constants.ts. Uma cópia num script de LEITURA é

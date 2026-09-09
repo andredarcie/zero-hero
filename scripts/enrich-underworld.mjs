@@ -19,7 +19,7 @@
 // ── A LEI QUE MANDA AQUI: TUDO SE DECIDE NO MAPA SEM O MEU TRABALHO ───────────────────────────
 // Toda escolha deste script (onde cabe uma sala, onde vai uma tocha, onde cai um osso) é feita num
 // MAPA DE DECISÃO: o disco depois de DESFEITA a rodada anterior — ou seja, o espelho mais tudo o
-// que o autor autorou à mão em `/lab?under`, e nada do que este script já escreveu. É isso que o
+// que o autor autorou à mão em `/editor?under`, e nada do que este script já escreveu. É isso que o
 // torna idempotente de verdade: se ele se perguntasse "cabe uma sala aqui?" olhando o disco cru, a
 // segunda rodada veria as paredes da primeira, responderia não, e escolheria outro lugar — para
 // sempre. E se perguntasse ao espelho PURO ele ficaria cego para o autor, que CAVOU telas inteiras
@@ -207,7 +207,7 @@ const wallAt = (x, y) => !inBounds(x, y)
 // ── O MAPA DE DECISÃO ─────────────────────────────────────────────────────────────────────────
 // É o disco DEPOIS de desfeita a rodada anterior: o espelho MAIS o que o autor autorou à mão.
 // Toda pergunta de colocação é feita aqui, e nunca no espelho puro — foi um erro medido: o autor
-// CAVOU telas inteiras em `/lab?under` (a tela do meio tem 45% de alvenaria no espelho e 6% no
+// CAVOU telas inteiras em `/editor?under` (a tela do meio tem 45% de alvenaria no espelho e 6% no
 // disco), e um script que só olha o espelho fica cego para o mundo que existe. Perguntar aqui
 // continua sendo idempotente pelo mesmo motivo de sempre: depois do desfazer, este mapa é o mesmo
 // na primeira rodada e na décima.
@@ -519,8 +519,13 @@ for (let y = 2; y < H - 2; y += 1) {
 // SOLID_UPPER. É a mudança de maior efeito e menor risco do arquivo inteiro.
 //
 // DUAS REGRAS DE COLOCAÇÃO, e as duas vêm do desenho da peça:
-//   · a chama nasce meio tile ao SUL da parede (`FACE_OFFSET`), então o vizinho de baixo tem de
-//     ser chão livre — na parede errada ela queima dentro da pedra;
+//   · o vizinho ao SUL tem de ser chão livre. **Isto não é preferência, é geometria, e não se
+//     generaliza para "alguma face livre"**: nenhum billboard deste jogo gira, então todo quad é
+//     vertical e olha para o sul (a câmera está em +z). Uma tocha desenhada na face oeste de um
+//     bloco cai dentro do intervalo em z do próprio bloco, e a face sul dele — mais perto da
+//     câmera — a oclui inteira. Com alvenaria ao sul acontece o mesmo, um tile adiante. A regra
+//     mora em `wallTorchFaceIsClear` (`src/game/constants.ts`), e é a mesma pergunta que a cena
+//     faz para decidir se desenha e que o Salvar do editor faz para avisar o autor;
 //   · espaçamento mínimo, senão a masmorra vira dia. Uma tocha é um MARCO: você navega por elas.
 const TORCH_MIN_GAP = 5;
 let relaxedGap = TORCH_MIN_GAP;

@@ -36,7 +36,7 @@ export default {
   name: 'brasa',
   description: 'O calor da fogueira: quem se encosta na luz pega fogo e perde vida ate cair — e ninguem mais se desmancha sozinho quando o heroi chega no fogo.',
   needsGame: false, // entra pelo editor e nasce a GameScene no P (mesma razao do tocha-viva)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

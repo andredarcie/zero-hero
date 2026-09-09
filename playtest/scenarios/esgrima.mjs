@@ -34,7 +34,7 @@ export default {
   name: 'esgrima',
   description: 'A mao do combate: mira de graca, a area 2x3 do golpe, arremesso, atordoamento e a lamina rodopiante.',
   needsGame: false, // entra pelo editor; a GameScene nasce no P (mesma razao do combate/braco)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

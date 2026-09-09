@@ -3,17 +3,20 @@
 Aventura top-down em pixel art, **só em inglês** (não há mais locale nenhum). **Phaser 3** cuida da
 lógica, input e UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
 `src/game/render3d/`). O menu é **uma tela** — com save o botão vira Continue (+ Start over
-discreto). Levels e **explorador** continuam vivos e sem porta no título (`/?level=N`, `?explorer`,
-ou o **Shift+I** do DevLauncher); os três modos são a mesma `GameScene`.
+discreto). **HÁ UM MUNDO SÓ**, com dois andares: a superfície e o espelho subterrâneo. Os levels
+isolados (`/levels`, `?level=N`, a lista do título, o `/lab`) e o **explorador** foram REMOVIDOS —
+`/` é o jogo e `/editor` é o editor, e não há terceira rota.
 
 ## O save da aventura
 
 - **A aventura LEMBRA e os outros modos NÃO** (`runtime/adventureState.ts`, padrão do
   `underworld` + `localStorage`): `create()` hidrata, e todo evento que muda o mundo chama
   `persistAdventure()` — um evento novo sem essa chamada é progresso que a morte apaga.
-  Explorador e level **nunca** hidratam daqui: lá, zerar é o desenho.
-- **Morrer devolve à fogueira com TUDO** (mochila, moedas, fogueiras, história) — o custo é a
-  volta. O explorador mantém os 5% dele. `playtest -- salvamento` guarda o contrato.
+  Quem fica de fora é o **playtest do editor** (`appMode === 'editor'`): ali o mundo em memória
+  pode estar sujo de edição não salva, e escrever no save contaminaria a partida de quem só foi
+  testar um tile.
+- **Morrer devolve à fogueira com TUDO** (mochila, fogueiras, missões, história) — o custo é a
+  volta. `playtest -- salvamento` guarda o contrato.
 - **O título recarrega o `world.json` do disco ao entrar na aventura**: o WorldData em memória
   pode estar sujo (dungeon aberta, árvores cortadas) e tudo que merece viver mora no save.
 - **HÁ UMA DUNGEON SÓ, e ela é o ESPELHO do mapa de cima** (`public/underworld.json`): mesmo
@@ -22,7 +25,7 @@ ou o **Shift+I** do DevLauncher); os três modos são a mesma `GameScene`.
   andar — **a porta é SIMÉTRICA e não tem endereço**: subir devolve ao tile do portal que você
   pegou, nunca ao tile por onde desceu (`runtime/underworld` guarda só em que andar você está).
   O espelho é DERIVADO
-  do overworld por `node scripts/gen-underworld.mjs` e depois autorado à mão em `/lab?under`; ele
+  do overworld por `node scripts/gen-underworld.mjs` e depois autorado à mão em `/editor?under`; ele
   copia o esqueleto e joga fora a mobília (nada de rocha, água, fogueira ou NPC lá embaixo). As
   nove dungeons geradas, o gerador e a semente da partida foram REMOVIDOS.
 
@@ -56,12 +59,12 @@ npm run dev              # vite dev server
 npm run typecheck        # tsc --noEmit
 npm run lint             # eslint (scripts/worldgen tem 3 erros de parser pré-existentes — ignore)
 npm run build            # typecheck + vite build
-#  NUNCA rode `generate:levels` NEM `generate:world` — os dois SOBRESCREVEM o que foi feito à
+#  NUNCA rode `generate:world` — ele SOBRESCREVE o que foi feito à
 #  mão, sem merge e sem perguntar (ver abaixo). Para mexer no mundo: o /editor, ou um script que
 #  LÊ o world.json e acrescenta (`node scripts/enrich-world.mjs` é o modelo).
 npm run playtest         # cenários default
 npm run playtest -- all  # todos
-npm run audit:endgame    # DÁ PARA ZERAR? mede a corrente até a pira acesa (portal, fogo, toras)
+npm run audit:endgame    # DÁ PARA ZERAR? mede a corrente até a pira acesa (fogo, toras, missões)
 ```
 
 A porta 5173 costuma estar ocupada por outro projeto. Para playtest, suba o Vite numa porta livre:
@@ -146,9 +149,10 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
 - **O escudo do herói é a DIREÇÃO EM QUE ELE OLHA, e só apara TIRO** (`blocksBlowFrom`, cone de
   90°; guarda baixa enquanto ataca). Se aparasse golpe de corpo, encarar seria invencibilidade.
 - **O esbarrão ficou só com os gestos de corpo**: empurrar caixote, portão de bater — e tomar dano
-  de contato. **A LOJA da fogueira foi REMOVIDA** (e as melhorias dela): moeda se ganha e se gasta
-  no MUNDO — caveira, balcão de NPC, selo de estrada. **Falar NÃO é esbarrão**: um gesto que
-  para o jogo inteiro não pode acontecer por a seta ter encostado em alguém de passagem.
+  de contato. **NÃO EXISTE DINHEIRO NESTE JOGO** — a loja da fogueira caiu primeiro, e depois dela
+  a MOEDA inteira (o drop de todo corpo, a carteira, o balcão de venda do NPC). Uma economia sem
+  onde gastar é um número que só sobe: recompensa é ITEM, ou é nada. **Falar NÃO é esbarrão**:
+  um gesto que para o jogo inteiro não pode acontecer por a seta ter encostado em alguém.
 - **A FERRAMENTA CERTA SE APRESENTA SOZINHA** (`toolWantedAt`): o X contra madeira morta saca o
   machado, contra pinheiro vivo o de aço, contra rocha a picareta — e TROCA a seleção de verdade
   (o braço tem de desenhar o que trabalha). Só entra aí o alvo com UMA resposta possível, e a
@@ -174,16 +178,15 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   arrancado inteiro (arma, balas, cruz de mira). Nada neste jogo se aponta.
 - `npm run playtest -- combate` guarda o contrato dos botões; `esgrima`, a mão do combate.
 
-## O mundo, os levels (`/levels`) e o lab (`/lab`)
+## O mundo (`world.json` + `underworld.json`) e o editor (`/editor`)
 
-- **⚠️ NUNCA rode `generate:levels` NEM `generate:world`.** `gen-levels.mjs` sobrescreve
-  `public/levels/level-1.json` e `index.json`; `generateWorld.ts` sobrescreve o `world.json`
-  inteiro por um mundo **8×8 sem portal, sem NPC autorado e com uma fogueira** — e o de hoje é
-  22×8, feito à mão no `/editor`. Os dois escrevem **sem merge e sem perguntar**. Ficam no repo
-  como scaffolding, e só depois de apontar a saída para um caminho desocupado.
-- **Level com prop que bloqueia SÓ se escreve com prova de BFS** (o gerador do `level-3` falha com
-  exit 1 se um tile de uso ficar fora, ou se a saída for alcançável sem a trava): um `ironRock`
-  nunca quebra, e um deles no corredor errado torna o level insolúvel para sempre.
+- **HÁ UM MUNDO SÓ, e ele tem DOIS ANDARES.** Não existem mais levels isolados: `public/levels/`,
+  a `LevelSelectScene`, o `levelPortal`, o cartão de abertura, os dois botões flutuantes e a rota
+  `/lab` foram todos removidos. A única travessia é a ESCADA, entre a superfície e o espelho.
+- **⚠️ NUNCA rode `generate:world`.** `generateWorld.ts` sobrescreve o `world.json` inteiro por um
+  mundo **8×8 sem NPC autorado e com uma fogueira** — e o de hoje é 5×5 chunks, feito à mão no
+  `/editor`. Ele escreve **sem merge e sem perguntar**. Fica no repo como scaffolding, e só depois
+  de apontar a saída para um caminho desocupado.
 - **O BARALHO comprável se escolhe no /editor** (`catalog.enabled`, a lista de caixas da Biblioteca
   de chunks), e quem filtra é `getChunkTemplates` — **um lugar só**: carta desligada continua
   inteira no arquivo, e um segundo filtro rio abaixo seria uma segunda resposta.
@@ -199,41 +202,21 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   determinísticos (zero `Math.random()`) e proibidos de tocar em `ground`, `collisions` e no que
   o autor já pôs. **Prop que bloqueia só entra com prova de BFS de que não selou caminho** — a
   heurística local de vizinhos já prendeu 1.700 tiles em bolsões. Faça um backup antes.
-- **Leia o JSON, nunca a documentação, para saber o que um level contém** — um level muda sempre
-  que seu autor abre o lab.
-- **Um level é SEMPRE exatamente um chunk 12×12. Nunca maior.** A câmera enquadra ~um chunk:
-  caminhar não é puzzle. Se não couber, corte o puzzle.
-- **Cada level se resolve sozinho:** `playerStart` próprio + uma **fogueira-lar acesa** (a mais
-  próxima do spawn — é assim que o runtime escolhe), toda outra apagada; só as ferramentas do
-  puzzle. **Um puzzle só é puzzle se o caminho fácil estiver fechado** — asserte a *trava*.
+- **Leia o JSON, nunca a documentação, para saber o que o mundo contém** — ele muda sempre que
+  alguém abre o editor.
+- **A FOGUEIRA-LAR é a mais próxima do `playerStart`** — é assim que o runtime escolhe qual nasce
+  acesa; toda outra começa apagada, e acendê-las é o jogo.
 - **CHÃO + UMA COISA. Um tile tem o `ground` e, em cima dele, no máximo UMA — `upper`, prop, item,
   NPC ou cova.** O editor cumpre (colocar limpa o tile, pintar `upper` pula o tile ocupado); quem
   quebra é script e JSON à mão. `npm run audit:stacks` confere, `scripts/fix-tile-stacks.mjs` conserta.
-- **Um playtest AUTORA a fixture que precisa** (entra no `/lab`, coloca props pelo `EditorStore`,
-  aperta P) em vez de depender do conteúdo de um level.
-- `/lab` edita um level (`?level=N`) ou o **SUBTERRÂNEO** (`?under`, `public/underworld.json`)
-  via `/api/world`; **P** joga o mundo em memória, **ESC** volta; nada salva até o Salvar.
-  `/?level=N` e `/lab?play` bootam direto.
+- **Um playtest AUTORA a fixture que precisa** (entra no `/editor`, limpa um quintal e coloca
+  props pelo `EditorStore`, aperta P) em vez de depender do que o mundo autorado contém hoje.
+- `/editor` edita a SUPERFÍCIE ou o **SUBTERRÂNEO** (`?under`, `public/underworld.json`) via
+  `/api/world` — os dois botões do painel são só uma porta para esse parâmetro. **P** joga o mundo
+  em memória, **ESC** volta; nada salva até o Salvar.
 - **NÃO EXISTE spawn ambiente: todo inimigo do mundo nasce de uma COVA AUTORADA** (aba Inimigos
   do editor), no tile exato que alguém escolheu — o cerco que invocava caveiras em volta do herói
-  no escuro foi arrancado. Cova funciona em level também, nas 7 espécies.
-- Um level mostra dois botões flutuantes (↻ recomeçar, com confirmação de 2 toques, e pausa) —
-  `LevelButtons` em `PauseMenu.ts`.
-
-## O explorador (`src/game/explorer/`) — a única aposta do jogo
-
-Mundo gerado enquanto o herói anda, acampamento seguro no centro, risco × recompensa em 3 números:
-**longe paga mais** (`coinMultiplierAt`, degraus, teto x8), **50% se você escolher parar** (portal
-pergunta, `ExtractPrompt`), **5% se o escuro escolher por você** (morrer; reiniciar custa o mesmo).
-O perigo sobe mais devagar que a recompensa (`dangerScaleAt`), senão ir fundo seria neutro.
-
-- O mundo entra pelo mesmo buraco de fechadura do `world.json` (`WorldData.setInfiniteWorld`).
-- O renderer segura uma **janela** de 5×5 chunks (`ExplorerDirector`) e reassa o terreno ao cruzar
-  a fronteira (~15-25ms); `terrainMats` guarda os materiais **porque material novo em runtime
-  recompila todo shader do mundo**.
-- **`FOREST_FILL_PERCENT` = 34% e subir isso reabre um bug fechado**: chão aberto é percolação por
-  sítios (`p_c ≈ 0.5927`), e acima de ~40% de mata o mundo quebra em bolsões — com portal dentro.
-- `npm run playtest -- explorador` guarda o modo inteiro.
+  no escuro foi arrancado.
 
 ## Fogo, e a lei das travas
 
@@ -316,8 +299,8 @@ pedra+pedra=forno, pedra+minério=altar) · `furnace` forno manual (madeira+made
 minério+carvão=bloom) · `altar` laje manual de martelar · `ironRock`/`iron` (mesma rocha,
 `ore: true`) · `swingGate` (a trava sem chave: só abre com o tile de trás livre) · `moonflower`
 (abre no escuro; uma arte avaliada em 9 aberturas) · `enemies` (ponto de spawn: um corpo por cova, volta em
-`ENEMY_RESPAWN_MS`; luz de fogueira acesa cala a cova) · `levelPortal` (a travessia em 4 tempos,
-com um `scene.restart()` no meio).
+`ENEMY_RESPAWN_MS`; luz de fogueira acesa cala a cova) · `stairs` (a ÚNICA travessia: uma caminhada
+até o outro andar, com um `scene.restart()` atrás da cortina).
 
 ## O bestiário (`src/game/entities/enemies/`, um arquivo por espécie)
 
@@ -336,9 +319,9 @@ com um `scene.restart()` no meio).
   caveira não marcha até uma placa acesa. Acender a fogueira do corredor continua calando a cova
   dele. A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
 - **Quem paga é a MORTE, não o golpe** (`EnemyBase.setDeathToll`, tocado por `die()` e só por ele):
-  todo corpo que cai larga moeda, tenha-o matado a espada, a bomba, a tocha viva ou a brasa. Fonte
-  nova de dano não precisa saber que moeda existe — e `despawn()` não paga, porque ali ninguém
-  morreu.
+  todo corpo que cai paga do mesmo jeito, tenha-o matado a espada, a bomba, a tocha viva ou a
+  brasa. Fonte nova de dano não precisa saber o que a morte dá — e `despawn()` não paga, porque
+  ali ninguém morreu. Hoje o que a morte dá é o CORAÇÃO, e só com o herói ferido.
 - **Chegar é um evento e todo golpe é telegrafado** (`WalkerEnemy`). Corpo que aparece do nada, ou
   que fere sem aviso, desmente a promessa que a caveira ensinou.
 - **Fora do quadro o corpo anda, mas não FALA e não INICIA golpe** (`EnemyBase.framed`; o quadro
@@ -348,10 +331,9 @@ com um `scene.restart()` no meio).
   sair (a de combate foi removida). Quem anuncia um bicho é o bicho — telegrafo, voz, fissura.
 - **Onde cada espécie PODE existir é uma lista só** (`FLYING_ENEMY_KINDS` / `AQUATIC_ENEMY_KINDS`,
   em `ScreenContent`): o corpo, a cova e o aviso do editor leem dela. Três cópias já discordaram.
-- **Corpo que morre na ÁGUA larga a moeda na PRAIA** (`shoreDropTile`): recompensa que o herói vê
-  e não alcança é pior que recompensa nenhuma. Aquático paga **3** (`AQUATIC_KILL_COINS`) — ele
-  cobra uma posição para ser morto.
-- **Água tem DUAS procedências e quem pergunta por uma só quebra**: prop `water` (levels) e tile de
+- **Corpo que morre na ÁGUA larga o drop na PRAIA** (`shoreDropTile`): recompensa que o herói vê
+  e não alcança é pior que recompensa nenhuma.
+- **Água tem DUAS procedências e quem pergunta por uma só quebra**: prop `water` e tile de
   terreno (overworld). Uma resposta só, `GameScene.isOpenWaterAt`. Fora do mundo o chão também é
   mar — o teste de chunk não é opcional.
 - **Projétil é a única coisa em coordenada CONTÍNUA de tile** (`EnemyProjectile`): parede mata bala,
@@ -462,18 +444,22 @@ da fogueira (e a matilha que não evapora mais) → `brasa`; a bola que CONGELA 
 vez de ferir, a rebatida da espada e fogo×gelo → `gelo`.**
 **A ausência da automação e do correio → `sem-fabrica`; a cadeia manual do ferro e o prólogo →
 `prologo`; a laje do altar (pôr com Z, malhar, o ferro em cima dela e o X que devolve) → `altar`.**
-Flor da lua → `flor-da-lua`; travessia do portal → `portal-travessia`;
-explorador → `explorador`. **Montanha em cubo e a água que anda → `montanha`.** **Carta comprável
-plantada, a costura que abre sem raspar e o enxame de vaga-lumes sobre o verde → `jardim`; o vento
-na vegetação (e a lápide que não balança) → `vento`; a economia do prólogo (bolsa zerada, a caveira
-que paga, o ímã da moeda, a oficina do ferro e a Morte do fim) → `prologo`.** Fogo e o orçamento de
+Flor da lua → `flor-da-lua`. **Montanha em cubo e a água que anda → `montanha`;** o vento
+na vegetação (e a lápide que não balança) → `vento`; o prólogo (a oficina do ferro e a Morte do
+fim) → `prologo`. Fogo e o orçamento de
 luz → `perf-burn`; custo de frame → `perf-profile`.
 
-**`espada` e `itens` estão VERMELHOS por mudança de design** (eles assertam o level-1 gerado antigo,
-e o `espada` ainda resolve tudo esbarrando). Não "conserte" editando level. O menu (sem idioma e
+**OS CENÁRIOS QUE AUTORAM FIXTURE ENTRAM PELO `/editor`** (era o `/lab`, que saiu com os levels):
+eles limpam um quintal do mundo real pelo `EditorStore`, põem o que precisam e apertam P. Repare
+que a fixture agora assenta sobre o mundo AUTORADO, e não sobre uma tela vazia — quem escrever um
+cenário novo tem de limpar o que atrapalha.
+
+**Cenários VERMELHOS que ninguém deve "consertar" editando conteúdo:** `explorador`,
+`world-builder`, `cat-cards`, `jardim` e `vento` assertam o explorador e o baralho de cartas, os
+dois removidos; `prologo` compra uma carta que não existe. O menu (sem idioma e
 sem intro) → `menu-flow`; **save, morte-sem-perda e o Continue do título → `salvamento`**;
 o herói **nascendo do tamanho certo** → `smoke`. **Que o jogo ainda dá para ZERAR
-(portal, fogo até a pira, toras, missões) → `npm run audit:endgame`, que é estático e não é
+(fogo até a pira, toras, missões) → `npm run audit:endgame`, que é estático e não é
 Playwright.** Uma falha
 num cenário que você não tocou é um flake a anotar, não uma suíte a rodar quatro vezes.
 

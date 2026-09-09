@@ -108,7 +108,7 @@ export const analyzeSprite = (image, opts = {}) => {
       if (coverage < 1) add('fail', 'terrain-bleed', `${tag}terrain tiles are full-bleed; ${(100 * (1 - coverage)).toFixed(0)}% of the tile is transparent`);
     } else {
       add('info', 'bbox', `${tag}content ${maxX - minX + 1}x${maxY - minY + 1} at (${minX},${minY}), coverage ${(100 * coverage).toFixed(0)}%`);
-      if (touchesEdge && kind === 'item') add('warn', 'edge-touch', `${tag}pickup touches the frame edge — items float centred with clear margin (see wood.png, coin.png)`);
+      if (touchesEdge && kind === 'item') add('warn', 'edge-touch', `${tag}pickup touches the frame edge — items float centred with clear margin (see wood.png, ore.png)`);
       if (touchesEdge && (kind === 'prop' || kind === 'effect') && coverage < 0.5) {
         add('warn', 'edge-touch', `${tag}sparse prop touches the frame edge — will read as clipped; pull it inside the tile`);
       }

@@ -11,8 +11,8 @@ import type { WorldProp } from './WorldProp';
 // ENCOSTA nela (para num dos 4 tiles vizinhos — quem decide e dispara é
 // GameScene.updateCarnivorousPlants) é COMIDO: a bocarra abre, o corpo some goela adentro e
 // a planta passa um tempo mastigando — a janela em que ela é só uma cerca. Ela não paga
-// moeda nem deixa ossada: quem ficou com o corpo foi ela, e uma cova vizinha viraria uma
-// fábrica de moedas AFK se o gole pagasse.
+// recompensa nem deixa ossada: quem ficou com o corpo foi ela, e uma cova vizinha viraria uma
+// fábrica de coração AFK se o gole pagasse.
 //
 // O herói ela NÃO morde: é uma peça do jogador (a defesa cultivada) — para ele, ela é
 // exatamente um mato alto que retribui: bloqueia o tile, conduz fogo (planta é combustível,

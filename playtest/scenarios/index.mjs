@@ -13,20 +13,14 @@ import visualRef from './visual-ref.mjs';
 import aaTruth from './aa-truth.mjs';
 import tour from './tour.mjs';
 import uiTour from './ui-tour.mjs';
-import agua from './agua.mjs';
 import cemetery from './cemetery.mjs';
-import espada from './espada.mjs';
 import menuFlow from './menu-flow.mjs';
 import machado from './machado.mjs';
 import pedra from './pedra.mjs';
 import lavaPedra from './lava-pedra.mjs';
 import ferro from './ferro.mjs';
-import portalTravessia from './portal-travessia.mjs';
 import florDaLua from './flor-da-lua.mjs';
 import sombras from './sombras.mjs';
-import itens from './itens.mjs';
-import levelManagerPortal from './level-manager-portal.mjs';
-import levelIntro from './level-intro.mjs';
 import explorador from './explorador.mjs';
 import combate from './combate.mjs';
 import bolsa from './bolsa.mjs';
@@ -67,20 +61,14 @@ export const scenarios = {
   'aa-truth': aaTruth,
   tour,
   'ui-tour': uiTour,
-  agua,
   cemetery,
-  espada,
   'menu-flow': menuFlow,
   machado,
   pedra,
   'lava-pedra': lavaPedra,
   ferro,
-  'portal-travessia': portalTravessia,
   'flor-da-lua': florDaLua,
   sombras,
-  itens,
-  'level-manager-portal': levelManagerPortal,
-  'level-intro': levelIntro,
   combate,
   bolsa,
   pa,

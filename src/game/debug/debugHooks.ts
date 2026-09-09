@@ -49,30 +49,12 @@ export interface GameDebugState {
     standingAlpha: number;
     lyingAlpha: number;
   }>;
-  levelPortals: Array<{
-    worldX: number;
-    worldY: number;
-    activated: boolean;
-    frame: number;
-    visibleParticles: number;
-    /** 0..1 — o quanto o portal esta engolindo o heroi (a succao da travessia). */
-    swallow: number;
-  }>;
-  /**
-   * A travessia do portal, vista de fora. Sao as tres coisas que a animacao promete e que um
-   * teste pode cobrar: o heroi encolhe ate sumir (`heroScale`), ele fica NO AR do outro lado
-   * (`heroLift`, em tiles) e o tunel cobre a tela no meio (`portalTunnel`).
-   */
   heroLift: number;
   heroScale: number;
-  portalTunnel: boolean;
-  activeLevel: number | null;
+  /** O nome do ANDAR aberto (`world.json` / `underworld.json` — ver WorldData.getWorldName). */
   levelName: string;
-  levelIntroOpen: boolean;
+  /** Uma travessia de escada está em curso: o mundo troca de andar por trás da cortina. */
   levelTransitioning: boolean;
-  coins: number;
-  /** Moedas físicas ainda no chão antes de entrarem na carteira. */
-  groundCoins: Array<{ worldX: number; worldY: number }>;
   dialogOpen: boolean;
   itemGetOpen: boolean;
   isDead: boolean;

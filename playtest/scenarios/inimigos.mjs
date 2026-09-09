@@ -37,7 +37,7 @@ export default {
   name: 'inimigos',
   description: 'A aba Inimigos autora pontos de spawn: a caveira nasce no tile escolhido, volta depois de morta, uma por cova — e a luz de fogueira cala a cova.',
   needsGame: false, // entra pelo editor e nasce a GameScene no P (mesma razao do braco/placa-undead)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

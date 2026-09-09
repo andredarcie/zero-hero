@@ -1,52 +1,33 @@
 /**
- * O bilhete que atravessa o `scene.restart()`.
+ * O BILHETE QUE ATRAVESSA O `scene.restart()`.
  *
- * A travessia do portal e uma so animacao, mas ela acontece dos DOIS lados de uma cena que
- * morre no meio: a succao e o tunel rodam na GameScene do level velho, e a queda roda na
- * GameScene do level novo — que e um objeto novo, com campos novos, sem memoria nenhuma do
- * que aconteceu antes. Um campo de instancia nao sobrevive a isso; este modulo sim.
+ * A travessia da escada é uma só animação, mas ela acontece dos DOIS lados de uma cena que morre
+ * no meio: a descida roda na GameScene do andar velho, e a subida roda na GameScene do andar
+ * novo — que é um objeto novo, com campos novos, sem memória nenhuma do que aconteceu antes. Um
+ * campo de instância não sobrevive a isso; este módulo sim (o mesmo padrão de `underworld`).
  *
- * E deliberadamente o menor bilhete possivel: "voce chegou por um portal". Tudo o mais que a
+ * É deliberadamente o menor bilhete possível: "você chegou por uma escada". Tudo o mais que a
  * chegada precisa saber ela pergunta ao mundo que acabou de carregar.
- */
-
-/** De onde o heroi caiu, em tiles acima do chao. Alto o bastante para a queda ter tempo. */
-export const PORTAL_FALL_HEIGHT_TILES = 7.5;
-
-let pendingArrival = false;
-
-/** Marcado logo antes do restart: a proxima GameScene deve nascer com o heroi no ar. */
-export const setPendingPortalArrival = (): void => { pendingArrival = true; };
-
-/**
- * Le E LIMPA o bilhete. Consumir e o ponto: um `scene.restart()` por outro motivo (morte,
- * botao de recomecar) nao pode fazer o heroi cair do ceu de novo.
- */
-export const consumePendingPortalArrival = (): boolean => {
-  const arrived = pendingArrival;
-  pendingArrival = false;
-  return arrived;
-};
-
-/** Descarta o bilhete sem usar — para quando a transicao falha no meio e volta ao level atual. */
-export const clearPendingPortalArrival = (): void => { pendingArrival = false; };
-
-/**
- * O MESMO bilhete, para a ESCADA — a porta entre os dois andares do mundo.
  *
- * Ela e uma travessia separada porque e uma travessia diferente: o portal engole e cospe o heroi
- * caindo do ceu, a escada o faz DESCER ANDANDO e sair andando do outro lado. Dois bilhetes, e
- * nao um com um campo de tipo, porque a chegada de cada um e uma animacao inteira e distinta —
- * e um booleano que decidisse entre elas seria a mesma coisa com um `if` no meio.
+ * Houve aqui um SEGUNDO bilhete, o do portal — a travessia mágica que engolia o herói num level
+ * de puzzle e o cuspia caindo do céu no seguinte. Os levels isolados foram removidos do jogo e
+ * ele foi junto: hoje existe uma porta só, e ela é uma caminhada.
  */
+
 let pendingStairs = false;
 
+/** Marcado logo antes do restart: a próxima GameScene deve nascer subindo do poço. */
 export const setPendingStairsArrival = (): void => { pendingStairs = true; };
 
+/**
+ * Lê E LIMPA o bilhete. Consumir é o ponto: um `scene.restart()` por outro motivo (morte, botão
+ * de recomeçar) não pode fazer o herói brotar de uma escada que ele não pegou.
+ */
 export const consumePendingStairsArrival = (): boolean => {
   const arrived = pendingStairs;
   pendingStairs = false;
   return arrived;
 };
 
+/** Descarta o bilhete sem usar — para quando a travessia falha no meio e volta ao andar atual. */
 export const clearPendingStairsArrival = (): void => { pendingStairs = false; };

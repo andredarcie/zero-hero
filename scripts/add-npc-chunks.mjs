@@ -205,7 +205,7 @@ const NPC_DIALOG_CONFIG = {
       line('A hero. How novel. I was napping.'),
       line('That branch beside me? Take it. Hold it into my fire and it wakes as a TORCH.'),
       line('Two hearths in this clearing sit cold. Carry the flame to them.'),
-      line('Burnt brush leaves CHARCOAL. Put it in the marked box: the balloon calls the plane, and the plane drops your coins.'),
+      line('Burnt brush leaves CHARCOAL. Fire feeding fire — pick it up.'),
     ],
   },
   astronaut: {
@@ -214,15 +214,6 @@ const NPC_DIALOG_CONFIG = {
     lines: [
       line('Take the PICKAXE — the veined boulders never run dry, three swings a lump. Bring me six of that ORE and my ship stops being scrap.'),
     ],
-    // O BALCÃO: o astronauta COMPRA ferro por quantidade dentro do diálogo (DialogOverlay).
-    // O preço mora aqui — mudar a economia da mineração é editar este número e rodar o script.
-    trade: {
-      item: 'iron',
-      coinsPerUnit: 3,
-      offer: 'Iron! The lab pays 3 coins a lump. How many are you selling?',
-      empty: 'Your pack has no iron. The veined boulders — three good swings each, they never run dry.',
-      thanks: 'Prime samples. Pleasure doing science with you.',
-    },
   },
   businessMan: {
     npcName: 'BUSINESSMAN', npcColorHex: '#ffdd44', npcAssetKey: 'npcs', npcFrame: 3,
@@ -251,7 +242,7 @@ const NPC_DIALOG_CONFIG = {
     lines: [
       line('Friend! You look thirsty. Or dry. Either way — opportunity.'),
       line('Free sample: this BUCKET. Fill it in my pond, just west of the fire.'),
-      line('A full bucket waters crops and drowns small fires. Endless uses. Zero coins. Today only.'),
+      line('A full bucket waters crops and drowns small fires. Endless uses. Costs you nothing. Today only.'),
       line('Tell your friends. If you find any out there.'),
     ],
   },

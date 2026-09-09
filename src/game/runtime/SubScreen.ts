@@ -95,9 +95,7 @@ const CSS = `
 .zh-dot-hero { background: #e7dcc4; box-shadow: 0 0 4px #fff2c8; }
 .zh-dot-fireLit { background: #ffb454; box-shadow: 0 0 3px #ff8c1a; }
 .zh-dot-fireDead { background: #55432f; }
-.zh-dot-portal { background: #9d7bd8; }
-/* A ESCADA e PEDRA, e por isso ela nao e violeta: violeta e do portal magico, que e outra porta
-   com outro proposito. Um quadrado, e nao um circulo, porque ela e a unica marca do mapa que e
+/* A ESCADA e PEDRA. Um quadrado, e nao um circulo, porque ela e a unica marca do mapa que e
    alvenaria — e num mapa de pontos redondos a forma diferencia mais rapido que a cor. */
 .zh-dot-stairs { background: #989aa7; border-radius: 0; box-shadow: 0 0 0 1px #3a3f3f; }
 /* ── A PAGINA DE PLANOS ────────────────────────────────────────────────────────────────────────
@@ -191,14 +189,14 @@ export interface SubScreenItem {
 export interface SubScreenMapMark {
   cx: number;
   cy: number;
-  kind: 'hero' | 'fireLit' | 'fireDead' | 'portal' | 'stairs';
+  kind: 'hero' | 'fireLit' | 'fireDead' | 'stairs';
 }
 
 /**
  * O MAPA DO MUNDO, em telas: um quadrado por chunk (o chunk E a tela que o jogador experimenta).
  * So mostra o que foi PISADO — fog of war vindo do save — e marca apenas o que o heroi ja viu:
- * fogueiras (acesa quente, morta apagada), portais e ele mesmo. Sem legenda: as cores sao as do
- * proprio mundo (a brasa, o fogo, o violeta do portal).
+ * fogueiras (acesa quente, morta apagada), as escadas entre os andares e ele mesmo. Sem legenda:
+ * as cores sao as do proprio mundo (a brasa, o fogo, a alvenaria da escada).
  */
 export interface SubScreenMap {
   title: string;

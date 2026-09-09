@@ -14643,11 +14643,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Take the sword. The dead on unfinished roads still carry coin."
+          "text": "Take the sword. Eight of the dead still walk the unfinished roads. Put them down."
         },
         {
           "speaker": "npc",
-          "text": "Stand on a road seal and press B. Spend what you earn, and decide what exists next."
+          "text": "Then walk. Six fields you have never stood in: what no one visits, no one decides."
         }
       ]
     },
@@ -14675,7 +14675,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Burnt brush leaves CHARCOAL. Put it in the marked box: the balloon calls the plane, and the plane drops your coins."
+          "text": "Burnt brush leaves CHARCOAL. Fire feeding fire — pick it up."
         }
       ]
     },
@@ -14693,14 +14693,7 @@
           "speaker": "npc",
           "text": "Take the PICKAXE — the veined boulders never run dry, three swings a lump. Bring me six of that ORE and my ship stops being scrap."
         }
-      ],
-      "trade": {
-        "item": "iron",
-        "coinsPerUnit": 3,
-        "offer": "Iron! The lab pays 3 coins a lump. How many are you selling?",
-        "empty": "Your pack has no iron. The veined boulders — three good swings each, they never run dry.",
-        "thanks": "Prime samples. Pleasure doing science with you."
-      }
+      ]
     },
     "businessMan": {
       "npcName": "BUSINESSMAN",
@@ -14769,7 +14762,7 @@
         },
         {
           "speaker": "npc",
-          "text": "A full bucket waters crops and drowns small fires. Endless uses. Zero coins. Today only."
+          "text": "A full bucket waters crops and drowns small fires. Endless uses. Costs you nothing. Today only."
         },
         {
           "speaker": "npc",
@@ -14839,7 +14832,7 @@
         },
         {
           "speaker": "npc",
-          "text": "A felled tree leaves a STICK behind. Put those sticks in the marked box: the balloon calls the plane, and the plane drops your coins."
+          "text": "A felled tree leaves a STICK behind. Wood is what carries fire in this world."
         },
         {
           "speaker": "npc",
@@ -14871,7 +14864,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Burnt brush leaves CHARCOAL on the ground. Put it in the marked box: the balloon calls the plane, and the plane drops your coins."
+          "text": "Burnt brush leaves CHARCOAL on the ground. Fire feeding fire — pick it up."
         }
       ]
     },
@@ -14899,7 +14892,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Ore is not iron. That is a lesson for a hotter day. Put the ORE in the marked box and the plane pays in coin."
+          "text": "Ore is not iron. That is a lesson for a hotter day, and a hotter machine."
         }
       ]
     },
@@ -14928,10 +14921,6 @@
         {
           "speaker": "npc",
           "text": "Hold Z instead of tapping it and the blade spins: it cuts all eight neighbours at once. Mrrow. Go on."
-        },
-        {
-          "speaker": "npc",
-          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -14960,10 +14949,6 @@
         {
           "speaker": "npc",
           "text": "So the question is never \"how do I cross\". It is: do I want a floor here, or a fuse? Mrrow."
-        },
-        {
-          "speaker": "npc",
-          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -14992,10 +14977,6 @@
         {
           "speaker": "npc",
           "text": "Everything you carry that burns, burns on its own clock. Mrrow."
-        },
-        {
-          "speaker": "npc",
-          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -15024,10 +15005,6 @@
         {
           "speaker": "npc",
           "text": "No key exists for either. A swing gate only ever asks one thing: is the tile behind me empty? Mrrow."
-        },
-        {
-          "speaker": "npc",
-          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -15056,10 +15033,6 @@
         {
           "speaker": "npc",
           "text": "Water is the only thing in this world that puts fire OUT. Everything else you own only starts them. Mrrow."
-        },
-        {
-          "speaker": "npc",
-          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -15088,10 +15061,6 @@
         {
           "speaker": "npc",
           "text": "Then take the bar with B. Ore, fire, hammer, bar — there is no shortcut, and every forge in this world runs that order. Mrrow."
-        },
-        {
-          "speaker": "npc",
-          "text": "The marked box takes the IRON you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -15124,14 +15093,6 @@
         {
           "speaker": "npc",
           "text": "It never MULTIPLIES — one seed, one clump, forever. What a farm gives you is grass WHERE YOU WANT IT: a fuse you can lay by hand."
-        },
-        {
-          "speaker": "npc",
-          "text": "And the box beside me buys the spare. The sign on it shows what it takes; face it with X and it pays, coins on the ground. Mrrow."
-        },
-        {
-          "speaker": "npc",
-          "text": "The marked box takes the SEEDS you earned here. Load it, and the plane drops your coins."
         }
       ]
     },
@@ -15149,14 +15110,7 @@
           "speaker": "npc",
           "text": "Six lumps: a hull patch and a strut. Ore, fire, hammer, bar — your ancients ran that same order, and I sent the ship's crating to your pyre."
         }
-      ],
-      "trade": {
-        "item": "iron",
-        "coinsPerUnit": 3,
-        "offer": "Iron! The lab pays 3 coins a lump. How many are you selling?",
-        "empty": "Your pack has no iron. The veined boulders — three good swings each, they never run dry.",
-        "thanks": "Prime samples. Pleasure doing science with you."
-      }
+      ]
     },
     "blackCatDone": {
       "npcName": "CAT",
@@ -15307,7 +15261,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Keep spending the coin. A world that stops being decided stops being."
+          "text": "Keep walking, then. A world that stops being decided stops being."
         },
         {
           "speaker": "npc",

@@ -57,8 +57,8 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // se malha, e preciso ter malhado uma vez sem ele) e CIRCULAR na mao: o altar e onde a esponja
   // vira barra, entao cobrar uma esponja por ele e a mesma armadilha que esta tabela recusa na
   // picareta ("uma receita que fabricasse a picareta exigiria a picareta pra chegar nos insumos").
-  // Pior ainda depois que a laje virou o LUGAR do gesto: uma barra custa 9 moedas, e a primeira
-  // esponja do jogador ia inteira para a mesa em vez de para a bolsa dele.
+  // Pior ainda depois que a laje virou o LUGAR do gesto: a primeira esponja do jogador ia
+  // inteira para a mesa em vez de para a bolsa dele.
   //
   // Pedra e minerio saem os dois da mesma picareta, no primeiro minuto da cratera, e os dois sao
   // renovaveis (o veio nunca acaba). O altar passou a ser o que ele precisa ser: o SEGUNDO degrau,

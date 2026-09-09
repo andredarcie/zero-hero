@@ -87,6 +87,13 @@ const DEFS: Record<string, SheetDef> = {
   'tiny-fire-0': { url: `${A}/effects/fire/sprite_tiny_fire0.png` },
   'tiny-fire-1': { url: `${A}/effects/fire/sprite_tiny_fire1.png` },
   'tiny-fire-2': { url: `${A}/effects/fire/sprite_tiny_fire2.png` },
+  // A TOCHA DE PAREDE da masmorra (Sprite Factory). Sao DUAS artes porque sao dois materiais: o
+  // copo e ferro e pedra e recebe a luz do mundo (Lambert), a chama e a propria fonte e passa
+  // direto pelo bloom (emissive). Elas nao entram no assetManifest — ao contrario do altar e do
+  // forno, esta peca nao tem icone no editor (o que se pinta la e o TILE, frame 48 do atlas), e
+  // uma def a mais no Phaser seria download e VRAM para ninguem.
+  'torch-sconce': { url: `${A}/environment/props/torch_sconce.png` },
+  'torch-flame': { url: `${A}/effects/fire/torch_flame.png`, frameW: 16, frameH: 16 },
   // woods.png: 16×96 vertical sheet — the dry tree shrinking per axe chop.
   'dry-tree': { url: `${A}/environment/props/woods.png`, frameW: 16, frameH: 16 },
   'dry-bush': { url: `${A}/environment/props/bush.png` },
@@ -98,8 +105,6 @@ const DEFS: Record<string, SheetDef> = {
   // Sprite Factory: a flor da lua — 9 poses de UMA flor abrindo, 5 em pe + 4 deitadas. Os frames
   // NAO sao uma animacao livre: cada um e um `t` de abertura (ver MOONFLOWER_FRAMES).
   moonflower: { url: `${A}/environment/props/moonflower.png`, frameW: 16, frameH: 16 },
-  // Sprite Factory: portal medieval — arco de pedra com quatro fases do vortice roxo.
-  'level-portal-icon': { url: `${A}/environment/props/level_portal.png`, frameW: 16, frameH: 16 },
   'dry-shrub': { url: `${A}/environment/props/dry_shrub.png` },
   rock: { url: `${A}/environment/props/rock.png` },
   // Sprite Factory: a pedra de ferro — frame 0 inteira, frame 1 rachada (a rocha comum guarda
@@ -137,10 +142,6 @@ const DEFS: Record<string, SheetDef> = {
   'water-2': { url: `${A}/environment/terrain/water_2.png` },
   'water-3': { url: `${A}/environment/terrain/water_3.png` },
   bridge: { url: `${A}/environment/terrain/bridge.png` },
-  // A moeda GIRA (spritefactory/sprites/coin.mjs): cara, três-quartos, fio, três-quartos de volta.
-  // Sem `frameW` aqui, getTexture3D devolve a FITA INTEIRA e cada moeda do chão vira quatro
-  // barrinhas espremidas num tile — o mesmo defeito que o coração documenta duas linhas abaixo.
-  coin: { url: `${A}/items/collectibles/coin.png`, frameW: 16, frameH: 16 },
   // heart.png e um SHEET 16x32, igual key.png: em cima o coracao liso (navy), embaixo o de mapa,
   // com contorno claro. Sem frameW aqui, getTexture3D devolvia a folha INTEIRA e o pickup
   // desenhava os dois coracoes espremidos num quadrado de 0.65 tile. Ver HEART_FRAMES.

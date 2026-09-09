@@ -18,14 +18,6 @@ const resolveAssetUrl = (path: string): string => `${import.meta.env.BASE_URL}${
 
 const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
   {
-    // A MOEDA GIRA: quatro poses numa fita (cara, três-quartos, fio, três-quartos de volta). Ela
-    // era um frame PARADO na lista de imagens — e é o objeto que este jogo mais mostra na tela.
-    key: ASSET_KEYS.coin,
-    path: '/assets/items/collectibles/coin.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
     key: ASSET_KEYS.hero,
     path: '/assets/characters/player/hero.png',
     frameWidth: TILESET_FRAME_SIZE,
@@ -125,13 +117,6 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     // Sprite Factory: as poses da bancada manual (ver TOOLBOX_FRAMES).
     key: ASSET_KEYS.toolbox,
     path: '/assets/environment/props/workbench.png',
-    frameWidth: TILESET_FRAME_SIZE,
-    frameHeight: TILESET_FRAME_SIZE,
-  },
-  {
-    // Sprite Factory: arco medieval fixo + quatro fases discretas do vortice roxo.
-    key: ASSET_KEYS.levelPortal,
-    path: '/assets/environment/props/level_portal.png',
     frameWidth: TILESET_FRAME_SIZE,
     frameHeight: TILESET_FRAME_SIZE,
   },

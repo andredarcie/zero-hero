@@ -6,8 +6,8 @@
 // Entao ele afirma que 'language' e 'intro' nao existem NEM COMO CENA REGISTRADA — checar so a
 // tela que aparece deixaria passar um `scene.start('intro')` esquecido em qualquer botao.
 //
-// A segunda metade guarda o menu de pausa: um level ainda tem a porta de volta pra lista (que o
-// titulo nao tem mais), e a pausa NAO tem mais seletor de idioma.
+// A segunda metade guarda o menu de pausa: ela NAO tem mais seletor de idioma, e nao tem mais a
+// volta para a lista de levels — os levels isolados foram removidos, e com eles a lista.
 
 const activeScenes = (driver) => driver.page.evaluate(
   () => (window.__game?.scene?.getScenes(true) ?? []).map((s) => s.scene.key),
@@ -89,24 +89,5 @@ export default {
     assert('A pausa esta em ingles', pause.includes('Resume') && pause.includes('Restart'),
       JSON.stringify(pause));
     await shot('pause-adventure', { note: 'Pausa da aventura: sem seletor de idioma', state: {} });
-
-    // ── Os levels perderam a porta do titulo, nao a existencia ───────────────
-    log('/?level=1 ainda boota um level, e a pausa dele volta pra lista');
-    await driver.open('/?level=1');
-    await driver.page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 14000 });
-    // O CARTAO DE ABERTURA DO LEVEL segura a pausa: `openPauseMenu` recusa enquanto ele esta na
-    // tela (nenhuma tela modal pode nascer por cima de outra). Um `settle` fixo era uma aposta na
-    // duracao da animacao — a espera certa e pelo proprio estado.
-    await driver.page.waitForFunction(
-      () => window.gameDebug?.getState()?.levelIntroOpen === false, null, { timeout: 14000 },
-    );
-    await driver.settle(400);
-    await driver.press('Escape', { count: 1, delay: 300, holdMs: 80 });
-    await driver.settle(500);
-    const levelPause = await pauseButtons(driver);
-    assert('A pausa de um level oferece a volta pra lista',
-      Array.isArray(levelPause) && levelPause.includes('Back to levels'),
-      JSON.stringify(levelPause));
-    await shot('pause-level', { note: 'Pausa de level: a lista ainda tem porta aqui', state: {} });
   },
 };

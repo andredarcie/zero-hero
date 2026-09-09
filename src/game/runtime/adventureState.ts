@@ -47,7 +47,6 @@ export interface AdventureSnapshot {
   started: boolean;
   /** Onde o heroi acorda (tile do overworld dentro do anel de um fogo aceso). */
   respawn: { worldX: number; worldY: number } | null;
-  coins: number;
   inventory: Array<{ kind: HeldItemKind; count: number }>;
   selected: HeldItemKind | 'none';
   /** "x,y" de cada fogueira do overworld que o jogador acendeu. */
@@ -117,7 +116,6 @@ export interface AdventureSnapshot {
 const defaultSnapshot = (): AdventureSnapshot => ({
   started: false,
   respawn: null,
-  coins: 0,
   inventory: [],
   selected: 'none',
   litFires: new Set(),
@@ -141,7 +139,6 @@ const defaultSnapshot = (): AdventureSnapshot => ({
 type StoredSnapshot = {
   started?: boolean;
   respawn?: { worldX: number; worldY: number } | null;
-  coins?: number;
   inventory?: Array<{ kind: HeldItemKind; count: number }>;
   selected?: HeldItemKind | 'none';
   litFires?: string[];
@@ -205,7 +202,6 @@ const load = (): AdventureSnapshot => {
       respawn: p.respawn && typeof p.respawn.worldX === 'number' && typeof p.respawn.worldY === 'number'
         ? { worldX: p.respawn.worldX, worldY: p.respawn.worldY }
         : null,
-      coins: num(p.coins, 0),
       inventory: Array.isArray(p.inventory)
         ? p.inventory.filter((i) => i && typeof i.kind === 'string' && !isRetiredItem(i.kind))
         : [],
@@ -258,7 +254,6 @@ export const saveAdventure = (): void => {
   const stored: StoredSnapshot = {
     started: s.started,
     respawn: s.respawn,
-    coins: s.coins,
     inventory: s.inventory,
     selected: s.selected,
     litFires: [...s.litFires],

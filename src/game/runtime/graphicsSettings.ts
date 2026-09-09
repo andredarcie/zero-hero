@@ -46,7 +46,7 @@ export const setDofIntensity = (value: number): void => {
  * O renderizador nasce de novo a cada `scene.restart()` (a morte é um), então a hora do dia tem de
  * viver FORA dele: se ela morasse só no World3D, morrer devolveria o jogador à noite. E a URL tem
  * de vencer o localStorage, senão `?day` num navegador que já escolheu a noite não faria nada — é
- * a mesma regra do `?level=N`: o endereço é uma ordem, não uma sugestão.
+ * a mesma regra do `?under` do editor: o endereço é uma ordem, não uma sugestão.
  */
 const seedDaylight = (): number => {
   let params: URLSearchParams;

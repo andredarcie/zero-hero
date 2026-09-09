@@ -7,8 +7,8 @@
 //
 // O que este cenário guarda:
 //
-//   1. o inimigo que ENCOSTA é COMIDO — sem moeda e sem ossada (quem ficou com o corpo foi a
-//      planta; uma cova vizinha pagando moeda seria uma fábrica AFK);
+//   1. o inimigo que ENCOSTA é COMIDO — sem recompensa e sem ossada (quem ficou com o corpo foi
+//      a planta; uma cova vizinha pagando drop seria uma fábrica AFK);
 //   2. a planta brota da SEMENTE CARNÍVORA pelo MESMO ciclo da fazenda (A planta no buraco,
 //      balde na água de terreno, rega) — o canteiro lembra o que recebeu (sownKind) e brota
 //      a armadilha em vez do mato;
@@ -28,7 +28,7 @@ export default {
   name: 'carnivora',
   description: 'A planta carnívora come o inimigo encostado; brota da semente; não morde o herói.',
   needsGame: false, // entra pelo editor; a GameScene nasce no P (mesma razão do combate)
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;
@@ -86,14 +86,13 @@ export default {
       return {
         bodies: state.undead.length,
         corpses: state.corpses,
-        coins: state.coins ?? 0,
         plantThere: s.carnivorousPlants.some((p) => p.worldX === at.x && p.worldY === at.y),
       };
     }, PLANT);
     assert('a caveira foi COMIDA: nenhum corpo vivo, nenhuma ossada (o gole não deixa marca)',
       eaten.bodies === 0 && eaten.corpses === 0, JSON.stringify(eaten));
-    assert('e o gole não pagou moeda — a planta ficou com o corpo, não com o recibo',
-      eaten.coins === 0 && eaten.plantThere, JSON.stringify(eaten));
+    assert('e a planta continua de pé no tile dela — quem ficou com o corpo foi ela',
+      eaten.plantThere, JSON.stringify(eaten));
     await shot('carnivora-comeu');
 
     // ── 2. A SEMENTE CARNÍVORA BROTA A ARMADILHA PELO CICLO DA FAZENDA ──────

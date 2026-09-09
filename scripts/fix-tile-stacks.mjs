@@ -45,13 +45,13 @@
 import fs from 'node:fs/promises';
 import { fileURLToPath, URL } from 'node:url';
 
+// OS DOIS ANDARES DO MUNDO, e são todos os arquivos que existem. Havia um terceiro conjunto — os
+// levels soltos de puzzle em `public/levels/`, varridos por um glob logo abaixo —, e ele saiu com
+// os levels isolados.
 const FILES = [
   'public/world.json',
   'public/underworld.json',
 ];
-
-// Os levels do lab entram sozinhos: um level é autorado no mesmo /lab, com o mesmo tabuleiro.
-const LEVELS_DIR = 'public/levels';
 
 // Para onde um item se muda, em ordem. Ortogonais antes das diagonais: mudar de tile é para ficar
 // ao LADO da escada, e um vizinho diagonal lê como "atrás dela".
@@ -192,14 +192,9 @@ const main = async () => {
   const dry = process.argv.includes('--dry') || check;
   const log = (line) => console.log(line);
 
-  const levels = await fs.readdir(resolvePath(LEVELS_DIR))
-    .then((names) => names.filter((n) => /^level-\d+\.json$/u.test(n)).sort()
-      .map((n) => `${LEVELS_DIR}/${n}`))
-    .catch(() => []);
-
   let stacks = 0;
   let refused = [];
-  for (const rel of [...FILES, ...levels]) {
+  for (const rel of FILES) {
     const world = await readJson(rel);
     // O MESMO formato dos dois lados da comparação, e o mesmo que o disco já usa (2 espaços +
     // \n final, como o editor grava). Comparar compacto com indentado marcaria TODO arquivo como

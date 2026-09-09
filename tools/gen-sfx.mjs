@@ -261,12 +261,6 @@ const sounds = {
     thump({ f: 52, dur: 0.09, vol: 0.42, at: 0.2 }),
   ]), { lpHz: 5000, echo: { delayMs: 128, feedback: 0.3, lpHz: 3800, mix: 0.16, tail: 0.5 }, reverb: { seconds: 1.4, wet: 0.2 } }),
 
-  // A soul-fragment tick — one small dark chime (E5), understated.
-  'coin': () => finalize(mixAt([
-    bell({ f: note('E5'), dur: 0.45, vol: 0.5, tau: 0.28 }),
-    noise({ type: 'bandpass', f0: 3200, q: 3, dur: 0.006, vol: 0.1 }),
-  ]), { lpHz: 6800, echo: { delayMs: 96, feedback: 0.3, lpHz: 4500, mix: 0.2, tail: 0.4 }, reverb: { seconds: 0.8, wet: 0.12 }, drive: 1.0, peakTo: 0.8 }),
-
   // A single water drop for the title screen's dramatic reveal. The signature of a real drip
   // is an UPWARD pitch snap — the air-bubble cavity resonance rising as it collapses — so a
   // sine sweeps up fast (700 -> 1700) with a quick decay, over a faint low "plunk" body and a
@@ -487,7 +481,7 @@ for (let v = 0; v < 4; v++) {
   ]), { lpHz: 3000, drive: 1.0, peakTo: 0.75 });
 }
 
-// Optional CLI filter: `node tools/gen-sfx.mjs coin heart` regenerates only the
+// Optional CLI filter: `node tools/gen-sfx.mjs heart ignite` regenerates only the
 // named sounds. Handy because every sound uses Math.random(), so a full run rewrites all
 // the .wav files (perceptually identical, but noisy in git) — pass names to touch just those.
 const only = process.argv.slice(2);

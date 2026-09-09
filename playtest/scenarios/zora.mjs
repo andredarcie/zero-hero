@@ -50,7 +50,7 @@ export default {
   name: 'zora',
   description: 'O zora do rio: so nasce em agua aberta, e intocavel submerso, cospe mirado com aviso — e tapar ou drenar o rio o expulsa.',
   needsGame: false,
-  route: '/lab?level=1',
+  route: '/editor',
   async run({ driver, shot, assert, log }) {
     await driver.settle(3000);
     const page = driver.page;

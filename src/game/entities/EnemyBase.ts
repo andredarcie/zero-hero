@@ -312,7 +312,7 @@ export abstract class EnemyBase {
    * mais ninguém. Mesmo desenho do `emberTouch`, e pela mesma razão: a lei vale para todo corpo,
    * de toda espécie, morto por qualquer causa.
    *
-   * Ele existe porque a moeda caía do GOLPE e não da MORTE: quem pagava era o `strike` da espada,
+   * Ele existe porque a recompensa caía do GOLPE e não da MORTE: quem pagava era o `strike` da espada,
    * então um corpo que o fogo comeu, que a brasa da fogueira assou ou que a bomba levou morria de
    * graça — e a caveira, que hoje morre queimada na beira da luz sem o herói encostar nela, era o
    * caso mais comum de todos. `die()` é a porta única (`despawn()` NÃO toca o sino: ali o corpo
@@ -1051,7 +1051,7 @@ export abstract class EnemyBase {
     }
     this.blinkDown = false;
     this.sprite.setAlpha(1);
-    // O fogo matou: `die()` de verdade (marca no chão, desmanche, moeda), nunca um despejo — e a
+    // O fogo matou: `die()` de verdade (marca no chão, desmanche, recompensa), nunca um despejo — e a
     // voz da morte com o gate do quadro, como no fim do relógio da tocha viva.
     if (this.framed) getSoundManager().playEnemyDeath(this.kind);
     this.die();
@@ -1580,7 +1580,7 @@ export abstract class EnemyBase {
     this.stepTween?.stop();
     this.onDeath();
     // A RECOMPENSA SAI AQUI, no instante em que a vida chega a zero — não na remoção do corpo (que
-    // é ~310ms depois, o desmanche inteiro) e muito menos no golpe: a moeda tem de saltar junto com
+    // é ~310ms depois, o desmanche inteiro) e muito menos no golpe: o drop tem de saltar junto com
     // a pancada que matou, e tem de sair também quando não houve pancada nenhuma. Ver setDeathToll.
     EnemyBase.deathToll(this);
     // Impact pop: swell for a beat, then crumble away spinning. O clarao branco daqui saiu pelo
@@ -1649,8 +1649,8 @@ export abstract class EnemyBase {
    */
   /**
    * DEVORADO — a planta carnívora prendeu este corpo na mordida (ver CarnivorousPlantObject).
-   * Remoção terminal como a do despawn, mas SEM funeral e SEM recibo: nada de moeda (quem
-   * ficou com o corpo foi a planta — e uma cova vizinha viraria fábrica de moedas AFK), nada
+   * Remoção terminal como a do despawn, mas SEM funeral e SEM recibo: nada de drop (quem
+   * ficou com o corpo foi a planta — e uma cova vizinha viraria fábrica de coração AFK), nada
    * de ossada (a marca no chão mentiria: o corpo está DENTRO dela).
    *
    * O desenho é um ARRASTO de verdade: com `alive = false` a lógica solta o sprite (o mesmo

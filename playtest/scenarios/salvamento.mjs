@@ -1,5 +1,5 @@
 // O SAVE DA AVENTURA, e o contrato novo da morte: morrer NAO apaga mais nada — a mochila, as
-// moedas e o mundo atravessam o restart, e o titulo passa a oferecer Continue.
+// mochila e mundo atravessam o restart, e o titulo passa a oferecer Continue.
 //
 // O cenario guarda os tres lados do contrato:
 //   1. a mochila sobrevive a morte (o antigo `inventory.clear()` do create era o bug);
