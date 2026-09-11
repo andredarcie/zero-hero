@@ -23,6 +23,7 @@ import { buildShadowBlobGeometry, makeShadowBlob, makeShadowBlobMaterial } from 
 import {
   getDaylight, getDofIntensity, getPixelScale, setDaylight,
 } from '@/game/runtime/graphicsSettings';
+import { advanceTimeOfDay, getTimeOfDay, initializeTimeOfDay, setTimeOfDay } from '@/game/runtime/timeOfDay';
 import { isUnderground } from '@/game/runtime/underworld';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, windUniform,
@@ -1111,7 +1112,10 @@ export class World3D {
    * divergirem — mexer no padrão lá em cima já muda a noite para a qual o dia volta.
    */
   private readonly nightSky: Partial<World3DParams> = {};
-  private appliedDaylight = false;
+  /** The last manual value written through window.hd3d.daylight. */
+  private appliedDaylightKnob = 0;
+  /** Shadows are re-baked only at small solar-angle steps, never every rendered frame. */
+  private appliedSolarShadowStep = -1;
   // NOTA: aqui viviam os CAMPOS INSTANCIADOS de silhueta de ator (um por sprite sheet), com um
   // opt-in publico (`enableActorCastBatching`) e um limiar de 3 casters. Eles existiam para UMA
   // coisa: a horda do modo Sobreviventes, cujas ~100 caveiras eram ~100 draws de sombra. O modo
@@ -1168,7 +1172,10 @@ export class World3D {
     // morte é um), então a escolha mora fora dele (graphicsSettings + `?day`/`?night`), e ela tem
     // de estar aplicada antes que o fundo, o fog e as duas luzes sejam criados desta tabela — do
     // contrário o primeiro frame de uma partida de dia nasceria à meia-noite e viraria no segundo.
-    this.applySky(getDaylight() >= 0.5);
+    // Old saved preferences and ?day/?night remain useful as a starting point, then the clock
+    // takes over. This preserves existing deep links without freezing the sky forever.
+    initializeTimeOfDay(getDaylight() >= 0.5 ? 0.5 : 0);
+    this.applySky(getTimeOfDay());
 
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'world3d';
@@ -1393,10 +1400,12 @@ export class World3D {
     // meio-dia e à meia-noite, e é ela que o grade está descrevendo ali.
     const u = this.finishPass.uniforms;
     (u.uShadowTint.value as THREE.Vector3)
-      .copy(this.appliedDaylight ? GRADE_DAY_SHADOW : GRADE_WOOD_SHADOW)
+      .copy(GRADE_WOOD_SHADOW)
+      .lerp(GRADE_DAY_SHADOW, this.params.daylight)
       .lerp(GRADE_LAVA_SHADOW, this.biomeHeat);
     (u.uHighTint.value as THREE.Vector3)
-      .copy(this.appliedDaylight ? GRADE_DAY_HIGH : GRADE_WOOD_HIGH)
+      .copy(GRADE_WOOD_HIGH)
+      .lerp(GRADE_DAY_HIGH, this.params.daylight)
       .lerp(GRADE_LAVA_HIGH, this.biomeHeat);
   }
 
@@ -2372,7 +2381,7 @@ export class World3D {
     // no campo aberto e a espada saía como um borrão escuro por cima de um mundo batido de sol: o
     // "branco estourado" ao contrário, e pelo mesmo motivo (o traço não recebe a luz da cena).
     // O sol não tem posição para consultar — ele bate em tudo —, então ele é um PISO.
-    let best = this.appliedDaylight ? DAYLIGHT_SWING_FLOOR : 0;
+    let best = DAYLIGHT_SWING_FLOOR * this.params.daylight;
     const consider = (fx: number, fy: number, level: number): void => {
       const reach = LIGHT_SAMPLE_REACH * Math.max(0.2, level);
       const d = Math.hypot(fx - x, fy - y);
@@ -3484,16 +3493,23 @@ export class World3D {
 
   // ── a hora do dia ────────────────────────────────────────────────────────────
 
+  /** Smoothstep keeps dawn and dusk soft instead of behaving like a dimmer switch. */
+  private static smoothstep(edge0: number, edge1: number, value: number): number {
+    const x = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+    return x * x * (3 - 2 * x);
+  }
+
+  private static mixColor(from: string, to: string, amount: number): string {
+    const a = new THREE.Color(from);
+    a.lerp(new THREE.Color(to), amount);
+    return `#${a.getHexString()}`;
+  }
+
   /**
-   * Vira a chave do céu: a noite autorada ⇄ o dia de sol (`skyPreset.DAY_SKY`).
-   *
-   * Ela só escreve em `params` — nenhuma luz nasce, nenhuma morre, nenhum material é recompilado.
-   * O resto do frame já sabe reagir a knob que se mexe: o campo instanciado de sombra dos sólidos
-   * se re-assa sozinho quando alpha/comprimento mudam (`updateCastShadows`), e fundo, fog, cor da
-   * ambiente e cor do sol entram por `applyColor` no topo do `render`. É por isso que a troca
-   * custa uma re-assadura de sombras e nada mais.
+   * Applies a solar position, rather than a binary lighting preset. Dawn and dusk interpolate
+   * every visual contribution; only the expensive baked ground shadows move in 16 gentle steps.
    */
-  private applySky(day: boolean): void {
+  private applySky(time: number): void {
     if (Object.keys(this.nightSky).length === 0) {
       // A NOITE, capturada dos valores de fábrica na primeira passagem — antes de qualquer
       // escrita. Ver o campo: é isto que impede a noite de existir duas vezes.
@@ -3501,9 +3517,30 @@ export class World3D {
       const current = this.params as unknown as Record<string, number | string>;
       for (const key of Object.keys(DAY_SKY)) factory[key] = current[key];
     }
-    Object.assign(this.params, day ? DAY_SKY : this.nightSky);
-    this.params.daylight = day ? 1 : 0;
-    this.appliedDaylight = day;
+    // Midnight → sunrise → noon → sunset → midnight. A little twilight remains after the sun is
+    // geometrically below the horizon, which avoids an abrupt black-blue cut.
+    const elevation = Math.sin((time - 0.25) * Math.PI * 2);
+    const daylight = World3D.smoothstep(-0.12, 0.22, elevation);
+    const night = this.nightSky as Record<string, number | string>;
+    const day = DAY_SKY as Record<string, number | string>;
+    const current = this.params as unknown as Record<string, number | string>;
+    for (const key of Object.keys(DAY_SKY)) {
+      const from = night[key];
+      const to = day[key];
+      if (typeof from === 'number' && typeof to === 'number') current[key] = from + (to - from) * daylight;
+      else if (typeof from === 'string' && typeof to === 'string') current[key] = World3D.mixColor(from, to, daylight);
+    }
+    // The shadow field is geometry, not a shader uniform. Quantising it prevents a full terrain
+    // re-bake each frame while making the sun's shadow direction visibly travel through the day.
+    const shadowStep = Math.round(time * 16) % 16;
+    if (this.moonLight && shadowStep !== this.appliedSolarShadowStep) {
+      this.appliedSolarShadowStep = shadowStep;
+      const angle = time * Math.PI * 2;
+      this.moonLight.position.set(-Math.cos(angle) * 8, Math.max(1.5, 3 + Math.max(0, elevation) * 9), -Math.sin(angle) * 8);
+      this.moonCastRotY = Math.atan2(this.moonLight.position.x, this.moonLight.position.z);
+    }
+    this.params.daylight = daylight;
+    this.appliedDaylightKnob = this.params.daylight;
   }
 
   /**
@@ -3511,12 +3548,17 @@ export class World3D {
    * Quem MEXEU desde o último frame é quem quis dizer alguma coisa — e o que ficou decidido volta
    * para as duas, para o rótulo do menu e o knob nunca contarem histórias diferentes.
    */
-  private syncDaylight(): void {
-    const stored = getDaylight() >= 0.5;
-    const want = stored !== this.appliedDaylight ? stored : this.params.daylight >= 0.5;
-    if (want === this.appliedDaylight) return;
-    this.applySky(want);
-    setDaylight(want ? 1 : 0);
+  private syncDaylight(dtMs: number): void {
+    // Keep the former live console knob as a useful deterministic override for visual QA.
+    // A deliberate 0/1 write jumps to midnight/noon; otherwise time advances normally.
+    if (this.params.daylight !== this.appliedDaylightKnob) {
+      const forced = this.params.daylight >= 0.5 ? 0.5 : 0;
+      setTimeOfDay(forced);
+      setDaylight(this.params.daylight >= 0.5 ? 1 : 0);
+    } else {
+      advanceTimeOfDay(dtMs);
+    }
+    this.applySky(getTimeOfDay());
   }
 
   /** Dialog pan: shift what sits at screen centre, in tile units. */
@@ -3594,7 +3636,7 @@ export class World3D {
     this.chunkShroud.update(dtMs); // avança (e encerra) as dissoluções de compra de chunk
 
     // Live knobs (window.hd3d). A hora do dia vem PRIMEIRO: ela reescreve os outros.
-    this.syncDaylight();
+    this.syncDaylight(dtMs);
     texelAaUniform.value = Math.min(1, Math.max(0, this.params.texelAa));
     lightStepsUniform.value = Math.max(0, this.params.lightSteps);
     lightResUniform.value = Math.max(0, this.params.lightRes);
@@ -3617,7 +3659,7 @@ export class World3D {
     windUniform.value = Math.max(0, this.params.wind);
     // A mortalha do explorador tem duas paletas, e a escolha é a mesma do céu: de noite ela é mais
     // funda que o escuro, de dia é um banco de neblina batido de sol (ver ChunkShroud3D).
-    shroudDayUniform.value = this.appliedDaylight ? 1 : 0;
+    shroudDayUniform.value = this.params.daylight;
     this.ambientLight.intensity = this.params.ambient;
     this.applyColor('ambient', this.ambientLight.color, this.params.ambientColor);
     // A mesma DirectionalLight é a lua e o SOL — de roupa trocada, nunca substituída: criar uma
@@ -3885,7 +3927,7 @@ export class World3D {
     // o que se vê boiando ao meio-dia não é vapor frio, é pó pegando luz. (Um segundo campo só
     // para isto seriam 48 Points a mais desenhados sempre, para metade deles estar sempre invisível.)
     const mistAmt = Math.max(0, this.params.mist);
-    const dayMix = this.appliedDaylight ? 1 : 0;
+    const dayMix = this.params.daylight;
     const mistR = 0.32 + (0.66 - 0.32) * dayMix;
     const mistG = 0.4 + (0.56 - 0.4) * dayMix;
     const mistB = 0.6 + (0.34 - 0.6) * dayMix;

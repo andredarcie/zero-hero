@@ -46,6 +46,7 @@ import {
   type GameDebugApi,
 } from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
+import { getTimeOfDay, isNightTime, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import { LootManager } from '@/game/entities/LootManager';
 import { EnemyBase } from '@/game/entities/EnemyBase';
 import { EnemyManager, type EnemyHit } from '@/game/entities/EnemyManager';
@@ -670,6 +671,8 @@ export class GameScene extends Phaser.Scene {
   // Pixel-flame billboard pinned on the torch's tip; its size tracks the remaining fuel.
   private torchFlameBb?: Billboard3D;
   private campfires: CampfireObject[] = [];
+  /** Last clock state applied to all ambient campfires; prevents per-frame effect restarts. */
+  private campfiresFollowNight = false;
   // A PIRA: base autorada no editor, torre construida em jogo (uma tora por graveto). Ver
   // PyreObject — e o unico prop cujo PROGRESSO o save guarda.
   private pyres: PyreObject[] = [];
@@ -1103,32 +1106,19 @@ export class GameScene extends Phaser.Scene {
     this.playerHealth = this.playerMaxHealth; // toda expedicao comeca inteira
 
     // All world props are authored in world.json; their collision is resolved at runtime.
-    // Only ONE fire starts lit — the "home" fire, derived as the campfire nearest the player
-    // start (so the premise holds even if an editor save drops an explicit `lit` flag). Every
-    // other campfire is dead until the hero carries a flame to it. An explicit `lit: true` in
-    // world.json can still force extra lit fires.
     const campfireDefs = getCampfires();
-    let homeIdx = -1;
-    let homeBest = Infinity;
-    campfireDefs.forEach((c, i) => {
-      const d = Math.hypot(c.worldX - startWorldX, c.worldY - startWorldY);
-      if (d < homeBest) { homeBest = d; homeIdx = i; }
-    });
-    // Fogueiras que o jogador acendeu ficam acesas — atraves de morte, dungeon e browser. E o
-    // progresso central do jogo (litFireCount vem junto, hidratado acima).
+    // Ambient campfires follow the day/night clock. Their visual light no longer represents
+    // permanent progression; `litFireCount` below remains the separate quest-progress counter.
     // A tela em que se nasce ja conta como pisada — o mapa nunca abre 100% escuro.
     if (this.adventure && !inDungeon) {
       adventureState().visitedChunks.add(
         `${Math.floor(startWorldX / CHUNK_COLUMNS)},${Math.floor(startWorldY / CHUNK_ROWS)}`,
       );
     }
-    const savedLit = this.adventure && !inDungeon ? adventureState().litFires : undefined;
-    this.campfires = campfireDefs.map(
-      (c, i) => new CampfireObject(
-        this, c.worldX, c.worldY,
-        i === homeIdx || c.lit === true || (savedLit?.has(`${c.worldX},${c.worldY}`) ?? false),
-      ),
-    );
+    this.campfiresFollowNight = isNightTime();
+    this.campfires = campfireDefs.map((c) => new CampfireObject(
+      this, c.worldX, c.worldY, this.campfiresFollowNight,
+    ));
     // A PIRA volta do save com as toras que ja recebeu (e acesa, se ja foi acesa). Fora da
     // aventura ela sempre comeca da base: level e lab zeram por desenho.
     const savedPyre = this.adventure && !inDungeon ? adventureState() : undefined;
@@ -1852,6 +1842,7 @@ export class GameScene extends Phaser.Scene {
     this.debugApi = {
       getState: () => ({
         scene: GameScene.key,
+        timeOfDay: { phase: getTimeOfDay(), clock: timeOfDayLabel() },
         player: { worldX: this.playerWorld.worldX, worldY: this.playerWorld.worldY },
         health: this.playerHealth,
         maxHealth: this.playerMaxHealth,
@@ -2162,6 +2153,7 @@ export class GameScene extends Phaser.Scene {
     for (const t of this.wallTorches) {
       t.update(delta, this.playerWorld.worldX, this.playerWorld.worldY);
     }
+    this.syncCampfiresToClock();
 
     if (stepDx !== 0 || stepDy !== 0) {
       this.lastStepTime = this.time.now;
@@ -7732,6 +7724,16 @@ export class GameScene extends Phaser.Scene {
     getSoundManager().playSplash();
     this.spawnSmokePuff(wx, wy); // steam off the dead logs...
     this.time.delayedCall(140, () => this.spawnSmokePuff(wx, wy)); // ...billowing in two breaths
+    const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
+  }
+
+  /** Apply sunrise/sunset to every ambient fire once per transition, never every frame. */
+  private syncCampfiresToClock(): void {
+    const night = isNightTime();
+    if (night === this.campfiresFollowNight) return;
+    this.campfiresFollowNight = night;
+    for (const campfire of this.campfires) campfire.setClockLit(night);
     const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
     this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
   }

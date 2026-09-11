@@ -199,7 +199,7 @@ export class CampfireObject implements WorldProp {
    * back to its stubborn ember. Returns true only on the transition, so the caller plays the hiss
    * once. The `litFires` game count reads `isLit` live, so it drops on its own.
    */
-  public extinguish(): boolean {
+  public extinguish(showEmber = true): boolean {
     if (!this.lit) return false;
     this.lit = false;
 
@@ -211,9 +211,16 @@ export class CampfireObject implements WorldProp {
     this.sprite.setTexture(FIRE_TEXTURES[0]).setTint(DEAD_TINT).setAlpha(DEAD_ALPHA);
     this.fireLight.setLit(false);
     this.fireLight.setIntensityScale(0);
-    this.startEmber(); // cold logs, with the dead pile's pulsing ember
+    if (showEmber) this.startEmber();
+    else this.glow.setVisible(false).setAlpha(0); // daylight: wood only, no residual flame
 
     return true;
+  }
+
+  /** The world clock owns ambient campfires: flame at night, bare logs during daylight. */
+  public setClockLit(lit: boolean): void {
+    if (lit) this.light();
+    else this.extinguish(false);
   }
 
   /** Called when the player hits the campfire — brief flare-up */

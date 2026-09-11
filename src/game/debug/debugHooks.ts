@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { World3DParams } from '@/game/render3d/World3D';
+import { getTimeOfDay, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import type { EnemyKind, NpcKind } from '@/game/world/ScreenContent';
 
 /**
@@ -9,6 +10,8 @@ import type { EnemyKind, NpcKind } from '@/game/world/ScreenContent';
  */
 export interface GameDebugState {
   scene: string;
+  /** The visible world clock: 0 = midnight, .5 = noon. */
+  timeOfDay?: { phase: number; clock: string };
   player: { worldX: number; worldY: number };
   health: number;
   maxHealth: number;
@@ -167,6 +170,8 @@ declare global {
     gameDebug?: GameDebugApi;
     /** Live 3D-renderer knobs, present only while the GameScene is active (see render3d/World3D.ts). */
     hd3d?: World3DParams;
+    /** Read or set the persistent game clock (0 = midnight, .5 = noon). */
+    gameTime?: { get: () => { phase: number; clock: string }; set: (phase: number) => void };
   }
 }
 
@@ -191,12 +196,17 @@ export const registerSceneDebugHooks = (
   if (import.meta.env.DEV) (window as unknown as { __scene?: Phaser.Scene }).__scene = scene;
   window.render_game_to_text = renderGameToText;
   window.advanceTime = advanceTime;
+  window.gameTime = {
+    get: () => ({ phase: getTimeOfDay(), clock: timeOfDayLabel() }),
+    set: (phase: number) => setTimeOfDay(phase),
+  };
 
   // GameScene temporarily replaces the sleeping editor's hooks during live play. Restore the
   // previous owner on shutdown, but only if nobody newer has taken the globals meanwhile.
   return () => {
     if (window.render_game_to_text === renderGameToText) window.render_game_to_text = previousRender;
     if (window.advanceTime === advanceTime) window.advanceTime = previousAdvance;
+    if (window.gameTime) window.gameTime = undefined;
   };
 };
 
