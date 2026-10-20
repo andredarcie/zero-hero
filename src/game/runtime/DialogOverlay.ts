@@ -53,17 +53,18 @@ const CSS = `
 #${ROOT_ID} .zh-dlg-panel {
   position: absolute; inset: 0; pointer-events: auto;
   display: flex; align-items: stretch; gap: 0.9em;
-  padding: 0.7em 0.9em;
-  background: #14100c; color: #d8d1c0;
-  border: 2px solid #6b5b45; border-radius: 2px;
-  box-shadow: inset 0 0 0 2px #2a2118, 0 8px 26px rgba(0, 0, 0, 0.55);
+  padding: 0.8em 1.1em;
+  background: rgba(16, 12, 9, 0.96); color: #f3ecdc;
+  border: 3px solid #8a7556; border-radius: 4px;
+  box-shadow: inset 0 0 0 2px #2a2118, 0 8px 26px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 0 #000;
   opacity: 0; transform: translateY(10px);
   transition: opacity 160ms ease, transform 160ms ease;
 }
 #${ROOT_ID}.zh-in .zh-dlg-panel { opacity: 1; transform: none; }
 #${ROOT_ID}.zh-in .zh-dlg-scrim { opacity: 1; }
 #${ROOT_ID} .zh-dlg-portrait {
-  flex: 0 0 auto; width: 3.4em; height: 3.4em;
+  flex: 0 0 auto; width: 3.6em; height: 3.6em;
   image-rendering: pixelated; border: 2px solid #fff; background: #0b0906;
 }
 #${ROOT_ID} .zh-dlg-col {
@@ -72,17 +73,17 @@ const CSS = `
 #${ROOT_ID} .zh-dlg-name {
   flex: 0 0 auto;
   font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
-  font-size: 0.86em; margin-bottom: 0.22em;
+  font-size: 0.9em; margin-bottom: 0.3em;
 }
 #${ROOT_ID} .zh-dlg-body {
-  flex: 1 1 auto; min-height: 0; line-height: 1.5;
+  flex: 1 1 auto; min-height: 0; line-height: 1.45; letter-spacing: 0.01em;
   padding-right: 1.6em; /* o ▼ mora no canto: o texto não passa por baixo dele */
   overflow-y: auto; overflow-x: hidden;
   scrollbar-width: thin; scrollbar-color: #3d342a transparent;
 }
 #${ROOT_ID} .zh-dlg-body::-webkit-scrollbar { width: 6px; }
 #${ROOT_ID} .zh-dlg-body::-webkit-scrollbar-thumb { background: #3d342a; border-radius: 3px; }
-#${ROOT_ID} .zh-dlg-body.zh-narr { font-style: italic; color: #8e99ad; }
+#${ROOT_ID} .zh-dlg-body.zh-narr { font-style: italic; color: #c9d2e3; }
 /* O ▼ é o "e agora?" do caso comum: ele só aparece com a fala assentada. */
 #${ROOT_ID} .zh-dlg-next {
   position: absolute; right: 0.6em; bottom: 0.3em;

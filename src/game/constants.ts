@@ -30,9 +30,9 @@ export const TEXT_RESOLUTION = 1;
 // única serviria mal aos dois: sobra de barra vazia no monitor, texto cortado no telefone.
 // Piso e teto seguram os extremos (uma barra fina demais não é uma caixa de fala; metade da
 // tela num telefone deitado é a tela inteira).
-export const DIALOG_BOX_MIN_FONT = 13;
-export const DIALOG_BOX_MAX_FONT = 20;
-export const DIALOG_BOX_MIN_FRACTION = 0.16;
+export const DIALOG_BOX_MIN_FONT = 17;
+export const DIALOG_BOX_MAX_FONT = 30;
+export const DIALOG_BOX_MIN_FRACTION = 0.2;
 export const DIALOG_BOX_MAX_FRACTION = 0.45;
 
 export type DialogBoxMetrics = { boxHeight: number; fontSize: number; margin: number };
@@ -43,7 +43,7 @@ export const dialogBoxMetrics = (width: number, height: number): DialogBoxMetric
   // A largura manda (a caixa é uma barra), mas a altura tem voto: num telefone deitado uma
   // fonte escolhida só pela largura empurraria a caixa por metade da tela.
   const fontSize = Math.max(DIALOG_BOX_MIN_FONT, Math.min(DIALOG_BOX_MAX_FONT,
-    Math.round(Math.min(width / 46, height / 22))));
+    Math.round(Math.min(width / 36, height / 18))));
   // Os degraus batem com os do CSS (o retrato e o respiro encolhem em 560px).
   const ems = width < 560 ? 9.4 : width < 900 ? 7.6 : 6.6;
   const boxHeight = Math.round(Math.min(
