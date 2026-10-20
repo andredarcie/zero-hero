@@ -1,9 +1,9 @@
-﻿import Phaser from 'phaser';
+import Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, HERO_FRAMES, KEY_FRAMES,
-  groundFrameAt, MOONFLOWER_FRAMES, NPC_VISUALS, SLIME_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
-  TOOLBOX_FRAMES, ZORA_FRAMES,
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES,
+  groundFrameAt, MOONFLOWER_FRAMES, NPC_VISUALS, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
+  TOOLBOX_FRAMES,
 } from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
 import {
@@ -12,13 +12,12 @@ import {
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { GameScene } from '@/game/scenes/GameScene';
-import { setUnderground } from '@/game/runtime/underworld';
-import type { EnemyKind, PickupKind } from '@/game/world/ScreenContent';
+import type { PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
 import { setWorldData } from '@/game/world/WorldData';
 import {
   loadWorld, saveWorld, worldFilePath,
-  type WorldFileId, type WorldFloor,
+  type WorldFileId,
 } from '@/game/worldApi';
 
 // World-editor scene: the Phaser side of the engine. It renders the whole authored world
@@ -41,32 +40,11 @@ const UI_STATE_KEY = 'worldEditorUi.v8';
 
 type CellCoord = { x: number; y: number };
 
-// O que o chip de um PONTO DE SPAWN mostra: o proprio inimigo que vai nascer dali. E a arte do
-// bicho e nao uma marca de cova porque o jogo nao desenha nada naquele tile (o nascimento e a
-// arte) — o tabuleiro e o unico lugar onde a cova e visivel, e ali ela tem de dizer O QUE nasce.
-const ENEMY_VISUAL: Record<EnemyKind, { key: string; frame?: number }> = {
-  undead: { key: ASSET_KEYS.undead },
-  bat: { key: ASSET_KEYS.bat },
-  spider: { key: ASSET_KEYS.spider },
-  slime: { key: ASSET_KEYS.slime, frame: SLIME_FRAMES.rest },
-  bigslime: { key: ASSET_KEYS.bigSlime, frame: SLIME_FRAMES.rest },
-  turret: { key: ASSET_KEYS.turret },
-  // O mago inimigo e o NPC mago dividem a arte, e no tabuleiro isso NAO se resolve com tint (o
-  // chip e desenhado por um Image de paleta, sem o material tingido do jogo). O que separa os dois
-  // ali e a cor do ponto de lista — vermelho de inimigo contra o dos NPCs — e o proprio tooltip.
-  mage: { key: ASSET_KEYS.mageCast },
-  // O chip mostra ele ERGUIDO e nao submerso: o frame submerso nao tem corpo nenhum (so a esteira
-  // na agua), e um chip de tabuleiro que nao mostra o bicho nao diz o que nasce ali.
-  zora: { key: ASSET_KEYS.zora, frame: ZORA_FRAMES.up },
-};
-
 const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
-  heart: { key: ASSET_KEYS.hearts, frame: 0 },
   sword: { key: ASSET_KEYS.swordItem, frame: 0 },
   key: { key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   axe: { key: ASSET_KEYS.axeIcon },
   greatAxe: { key: ASSET_KEYS.greatAxeIcon },
-  bomb: { key: ASSET_KEYS.bombItem, frame: 0 },
   pickaxe: { key: ASSET_KEYS.pickaxeIcon },
   scythe: { key: ASSET_KEYS.scytheIcon },
   shovel: { key: ASSET_KEYS.shovelIcon },
@@ -74,7 +52,6 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   stone: { key: ASSET_KEYS.rock },
   iron: { key: ASSET_KEYS.ironItem },
   seeds: { key: ASSET_KEYS.seedsItem },
-  carnivoreSeeds: { key: ASSET_KEYS.carnivoreSeedsItem },
   bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
   // A CADEIA DO FERRO como item de chao. Faltavam as tres, e a falta NAO era inofensiva: um
   // level que autora minerio no chao (as aulas do gato) derrubava o editor inteiro no boot —
@@ -83,16 +60,11 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   ore: { key: ASSET_KEYS.oreItem },
   bloom: { key: ASSET_KEYS.bloomItem },
   charcoal: { key: 'charcoal-item' },
+  mushroom: { key: ASSET_KEYS.mushroomItem },
 };
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   campfire: { key: ASSET_KEYS.campfireFrame1 },
-  // A escada e geometria no jogo (StairsObject), entao ela nao tem sprite proprio — e o que ela
-  // pega emprestado tem de dizer PEDRA. Ela vestia o icone do portal, a peca que ela substituiu,
-  // e o resultado era um portal roxo marcando o lugar onde vai nascer um lance de alvenaria: a
-  // mesma confusao que o gerador ja cometeu uma vez, quando trocou os tipos e deixou os portais
-  // velhos no disco tapando os tiles. A rocha do atlas (a mesma da montanha) nao mente.
-  stairs: { key: ASSET_KEYS.forestTileset, frame: CLIFF_WALL_FRAMES[0] },
   dryBush: { key: ASSET_KEYS.dryBush },
   lockedDoor: { key: ASSET_KEYS.lookedDoorObject },
   swingGate: { key: ASSET_KEYS.swingGateObject },
@@ -101,22 +73,19 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   rock: { key: ASSET_KEYS.rock },
   ironRock: { key: ASSET_KEYS.ironRock, frame: 0 },
   tallGrass: { key: ASSET_KEYS.tallGrassUp, frame: 0 },
-  lava: { key: ASSET_KEYS.lavaFloor },
   water: { key: ASSET_KEYS.water },
   bridgeSpot: { key: ASSET_KEYS.bridge },
-  pyre: { key: ASSET_KEYS.woodItem },
   // A pose ABERTA: e a que diz o que a peca faz (uma ponte de petalas). Ver MOONFLOWER_FRAMES.
   moonflower: { key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
-  bombSpot: { key: ASSET_KEYS.bombItem, frame: 0 },
   plantSpot: { key: ASSET_KEYS.plantHole, frame: 0 },
-  carnivorousPlant: { key: ASSET_KEYS.carnivorousPlant, frame: 0 },
   toolbox: { key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
   furnace: { key: ASSET_KEYS.furnace, frame: 0 },
   altar: { key: ASSET_KEYS.altar, frame: 0 },
+  hearth: { key: ASSET_KEYS.campfireFrame1 },
+  gardenGate: { key: ASSET_KEYS.lookedDoorObject },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
-  enemies: 0xff5566,
   npcs: 0x4488ff,
   pickups: 0x33cc77,
   props: 0xffaa33,
@@ -215,30 +184,10 @@ export class EditorScene extends Phaser.Scene {
 
   // ── Boot ────────────────────────────────────────────────────────────────
 
-  // O QUE ESTA CENA ABRE, e quem escolhe: a URL, sempre.
-  //
-  // `/editor` edita o MUNDO DE VERDADE, e ele tem DOIS ANDARES: a superfície (`world.json`) e o
-  // espelho de baixo (`underworld.json`). `?under` escolhe, e os dois botões do painel são só uma
-  // porta para esse parâmetro (`openFloor`) — a URL continua sendo a única fonte da verdade, então
-  // recarregar, favoritar ou colar o endereço devolve exatamente o andar em que se estava.
-  //
-  // Houve uma terceira rota, `/lab`, que rodava esta mesma cena sobre uma tela solta de puzzle
-  // (`public/levels/level-N.json`). Os levels isolados foram removidos do jogo e ela foi junto:
-  // o mundo é um só, com dois andares, e os dois abrem por aqui.
-  //
-  // A grade do editor sempre foi guiada pelos `meta` do arquivo, então o espelho (25 telas, como o
-  // overworld) entra sem mudança nenhuma de desenho.
+  // O QUE ESTA CENA ABRE: o mundo de verdade (`world.json`). É um arquivo só — o subterrâneo e os
+  // levels isolados foram removidos do jogo, e as rotas deles junto.
   private get worldFileId(): WorldFileId {
-    return this.isUnderworld ? 'underworld' : 'world';
-  }
-
-  private get isUnderworld(): boolean {
-    return new URLSearchParams(window.location.search).has('under');
-  }
-
-  /** O andar aberto — o que os dois botões do painel acendem. */
-  private get worldFloor(): WorldFloor {
-    return this.isUnderworld ? 'underworld' : 'overworld';
+    return 'world';
   }
 
 
@@ -284,14 +233,6 @@ export class EditorScene extends Phaser.Scene {
       onWorldApply: (settings) => this.applyWorldSettings(settings),
       onDialogApply: (kind, dialog) => { this.store?.setDialog(kind, dialog); },
       worldFile: this.worldFileId,
-      // Os dois andares do mundo: a chave que o painel desenha é só uma porta para o `?under`
-      // andar de nada — oferecer a troca lá seria uma porta que muda o assunto da tela.
-      ...(this.registry.get('appMode') === 'editor' ? {
-        floorSwitch: {
-          current: this.worldFloor,
-          open: (floor: WorldFloor) => this.openFloor(floor),
-        },
-      } : {}),
     });
     this.ui.setLoading(false);
 
@@ -423,7 +364,6 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private entityVisual(entity: PlacedEntity): { key: string; frame?: number } {
-    if (entity.list === 'enemies') return ENEMY_VISUAL[entity.type] ?? { key: ASSET_KEYS.undead };
     if (entity.list === 'npcs') return NPC_VISUALS[entity.type];
     // O `??` e uma REDE, nao preguica: um kind de item que o editor nao conhece nao pode
     // derrubar o tabuleiro inteiro. Sem ele, um unico item desconhecido num canto do mundo
@@ -829,8 +769,7 @@ export class EditorScene extends Phaser.Scene {
     const store = this.store;
     if (!store || !this.isEditable(x, y)) return;
     const sel = this.uiState.entity;
-    if (sel.list === 'enemies') store.placeEntity({ list: 'enemies', type: sel.type, worldX: x, worldY: y });
-    else if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
+    if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
     else if (sel.list === 'pickups') store.placeEntity({ list: 'pickups', type: sel.type, worldX: x, worldY: y });
     else {
       store.placeEntity({
@@ -1092,30 +1031,8 @@ export class EditorScene extends Phaser.Scene {
     if (!this.requireValidStartPoint()) return;
     this.persistUi();
     setWorldData(store.snapshotWorld());
-    // EM QUE ANDAR O P ENTRA. Sem isto o jogo assume a superfície, e testar o subterrâneo dava
-    // duas coisas erradas de uma vez: a escada nascia virada para BAIXO (`isUnderground` escolhe a
-    // arte e o sentido), e pisar nela chamava o `enterDungeon` — que RECARREGA o underworld.json
-    // do disco, jogando fora a edição que ainda não foi salva. Com o andar certo, a escada sobe e
-    // a viagem devolve o overworld, que é o que ela faz no jogo.
-    setUnderground(this.isUnderworld);
     this.scene.run(GameScene.key);
     this.scene.sleep();
-  }
-
-  /**
-   * Trocar de ANDAR: uma navegação de verdade, e não uma troca de arquivo por baixo da cena —
-   * ela inteira (store, câmera, undo, objetos) nasce do arquivo, e trocá-lo em memória seria
-   * reconstruir tudo à mão em troca de nada. Cada andar guarda a própria câmera (`uiStateKey`), e
-   * o `beforeunload` do painel é quem avisa se há edição não salva.
-   */
-  private openFloor(floor: WorldFloor): void {
-    if (floor === this.worldFloor) return;
-    this.persistUi();
-    const url = new URL(window.location.href);
-    if (floor === 'underworld') url.searchParams.set('under', '1');
-    else url.searchParams.delete('under');
-    url.searchParams.delete('play');
-    window.location.assign(url.toString());
   }
 
   private handleWake(): void {

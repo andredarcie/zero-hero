@@ -10,7 +10,7 @@ import {
   SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import {
-  getBridgeSpots, getChunkTerrain, getLavaTiles, getStairs, getWaterTiles, getWorldBounds, isInsideWorld,
+  getBridgeSpots, getChunkTerrain, getWaterTiles, getWorldBounds, isInsideWorld,
 } from '@/game/world/WorldData';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
@@ -24,7 +24,6 @@ import {
   getDaylight, getDofIntensity, getPixelScale, setDaylight,
 } from '@/game/runtime/graphicsSettings';
 import { advanceTimeOfDay, getTimeOfDay, initializeTimeOfDay, setTimeOfDay } from '@/game/runtime/timeOfDay';
-import { isUnderground } from '@/game/runtime/underworld';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, windUniform,
   lightWobbleUniform, patchPixelMaterial, seaFlowUniform, SHADOW_MASK_GLSL, shadowMaskOnUniform,
@@ -1551,13 +1550,11 @@ export class World3D {
       [...getWaterTiles(), ...getBridgeSpots()]
         .map((p) => `${p.worldX},${p.worldY}`),
     );
-    // Lava tiles sink into their own (shallower) basin, the same way water tiles do.
-    const lavaSet = new Set<string>(getLavaTiles().map((p) => `${p.worldX},${p.worldY}`));
-    // O POÇO DA ESCADA — só na SUPERFÍCIE. Lá embaixo a escada é uma MASSA que sai do piso e sobe
-    // (ver StairsObject): furar o chão da caverna abriria um buraco debaixo da própria escadaria.
-    const pitSet = isUnderground()
-      ? new Set<string>()
-      : new Set<string>(getStairs().map((p) => `${p.worldX},${p.worldY}`));
+    // A lava e o poço da escada sairam do mundo (o jogo é só a superfície, e nada nela queima).
+    // Os dois conjuntos ficam VAZIOS em vez de arrancar as bacias do assado: elas continuam sendo o
+    // caminho de um tile afundado, e um mundo autorado à mão pode voltar a pedir um.
+    const lavaSet = new Set<string>();
+    const pitSet = new Set<string>();
     const pitTiles: Array<{ x: number; z: number; frame: number }> = [];
     // The SEA (the world's border, and any ocean painted inside it) is a ground FRAME, not a
     // prop — there is no WaterObject for ~11k tiles. It still has to read as water rather than
@@ -1622,8 +1619,6 @@ export class World3D {
     // under them (see buildFlatTileGeometry).
     const solidSet = new Set(this.solidTiles.map((t) => tileKey(t.x, t.z)));
     this.solidKeys = solidSet; // kept live: felling a tree deletes from it, so re-baked AO agrees
-    // The lava field, for the per-region grade (updateBiomeGrade).
-    for (const l of getLavaTiles()) this.lavaSpots.push({ x: l.worldX, y: l.worldY });
 
     const tileset = getBaseTexture3D('forest-tileset');
     if (!this.terrainMats) {
@@ -1859,7 +1854,7 @@ export class World3D {
     // A NÉVOA NEGRA sobre a mata de fora (só na superfície — ver makeVoidMistMaterial): uma
     // CORTINA em pé por tile, no mesmo plano das árvores, um pouco mais alta que a copa. Uma
     // malha, um draw, e a rampa inteira mora no shader.
-    if (!isUnderground() && voidTiles.length > 0) {
+    if (voidTiles.length > 0) {
       const mist = new THREE.Mesh(buildMistCurtainGeometry(voidTiles, VOID_MIST_HEIGHT), mats.voidMist);
       mist.renderOrder = 4; // depois da poça de fogo e do blob: a névoa cobre o que vier antes
       const u = mats.voidMist.userData.mist as MistUniforms;

@@ -189,7 +189,7 @@ export interface SubScreenItem {
 export interface SubScreenMapMark {
   cx: number;
   cy: number;
-  kind: 'hero' | 'fireLit' | 'fireDead' | 'stairs';
+  kind: 'hero' | 'fireLit' | 'fireDead';
 }
 
 /**
@@ -226,8 +226,6 @@ export interface SubScreenPlan {
 export interface SubScreenView {
   title: string;
   emptyLabel: string;
-  /** `icon` e o coracao CHEIO, `emptyIcon` o vazio — dois desenhos, nunca um com opacidade. */
-  hearts: { max: number; filled: number; icon: string; emptyIcon: string };
   items: SubScreenItem[];
   /** A materia-prima: contadores, nunca slots (ver MATERIAL_ITEM_KINDS e QuickBagView.materials). */
   materials: SubScreenItem[];
@@ -245,7 +243,6 @@ export interface SubScreenView {
  */
 export class SubScreenPanel {
   public readonly el: HTMLDivElement;
-  private readonly heartsRow: HTMLDivElement;
   private readonly grid: HTMLDivElement;
   private readonly mats: HTMLDivElement;
   private readonly name: HTMLParagraphElement;
@@ -264,8 +261,6 @@ export class SubScreenPanel {
     this.el.className = 'zh-sub';
 
     this.title = document.createElement('h2');
-    this.heartsRow = document.createElement('div');
-    this.heartsRow.className = 'zh-sub-hearts';
     this.grid = document.createElement('div');
     this.grid.className = 'zh-sub-grid';
     this.mats = document.createElement('div');
@@ -284,7 +279,7 @@ export class SubScreenPanel {
     // Os PLANOS ficam entre a mochila e o mapa de proposito: eles falam do que esta na mochila
     // (o que falta para cada receita), e o mapa fala do mundo. A ordem e a de zoom crescente.
     this.el.append(
-      this.title, this.heartsRow, this.grid, this.mats, this.name,
+      this.title, this.grid, this.mats, this.name,
       this.plansTitle, this.plans, this.mapTitle, this.map,
     );
     this.render();
@@ -303,17 +298,6 @@ export class SubScreenPanel {
   public render(): void {
     const view = this.read();
     this.title.textContent = view.title;
-
-    // A vida em coracoes DESENHADOS: o gasto fica no lugar, VAZIO. Sao dois frames da mesma arte
-    // (ui/hearts.png), e nao o mesmo coracao com opacidade — o pixel art ja sabe dizer "vazio",
-    // e um coracao cheio a 30% de opacidade num painel escuro nao diz nada.
-    this.heartsRow.replaceChildren();
-    for (let i = 0; i < view.hearts.max; i += 1) {
-      const heart = document.createElement('div');
-      heart.className = 'zh-sub-heart';
-      heart.style.backgroundImage = `url(${i < view.hearts.filled ? view.hearts.icon : view.hearts.emptyIcon})`;
-      this.heartsRow.appendChild(heart);
-    }
 
     // Os PLANOS vem ANTES da porta de mochila vazia logo abaixo (que devolve cedo): saber o que
     // uma receita pede e util justamente para quem ainda nao tem nada.

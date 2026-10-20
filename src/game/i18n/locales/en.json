@@ -13,60 +13,37 @@
     ],
     "by": "BY",
     "author": "ANDRÉ N. DARCIE",
-    "playAdventure": "Build a world",
+    "playAdventure": "Begin",
     "continue": "Continue",
-    "startOver": "Start over"
-  },
-  "endCard": {
-    "title": "The Signal Fire",
-    "subtitle": "The pyre burns, and the dark has an edge again.\nYou finished Zero The Hero. Thank you for carrying the flame."
-  },
-  "death": {
-    "epitaph": "Nothing made sense,\nit was all for nothing."
-  },
-  "explorer": {
-    "hud": {
-      "depth": "distance"
-    },
-    "prompt": {
-      "title": "BACK TO CAMP?",
-      "yes": "Yes, take me back",
-      "no": "No, I can go further"
-    },
-    "arrival": {
-      "extract": "You made it back.",
-      "death": "You fell out there."
-    }
+    "startOver": "New journey"
   },
   "editorReturn": "[ESC] back to editor",
   "items": {
     "get": {
       "ore": "YOU GOT IRON ORE!",
       "bloom": "YOU GOT AN IRON BLOOM!",
-      "sword": "YOU GOT THE SWORD!",
+      "sword": "YOUR OLD SWORD.",
       "key": "YOU GOT THE KEY!",
-      "axe": "YOU GOT THE AXE!",
+      "axe": "AN AXE! IT FELLS THE DRY TREES",
       "greatAxe": "YOU GOT THE STEEL AXE! IT FELLS ANY TREE",
-      "bomb": "YOU GOT THE BOMB! CARRY IT TO THE MARK",
-      "pickaxe": "YOU GOT THE PICKAXE!",
+      "pickaxe": "A PICKAXE! IT BREAKS STONE FROM THE BOULDERS",
       "scythe": "YOU GOT THE SCYTHE!",
       "shovel": "YOU GOT THE SHOVEL! DIG THE BARE EARTH",
       "wood": "YOU GOT A STICK!",
       "stone": "YOU GOT A STONE!",
-      "seeds": "YOU GOT SEEDS! PLANT THEM IN A HOLE",
-      "carnivoreSeeds": "CARNIVOROUS SEEDS! IT EATS WHAT COMES CLOSE",
-      "bucket": "YOU GOT A BUCKET! FILL IT AT THE RIVER",
+      "seeds": "SEEDS! DROP THEM INTO A DUG HOLE",
+      "bucket": "A BUCKET! FILL IT AT THE WATER, POUR IT ON A MOUND",
       "bucketFull": "BUCKET FULL OF WATER!",
       "charcoal": "CHARCOAL! A LIT TORCH EATS IT — A FURNACE SMELTS ORE WITH IT",
       "iron": "AN IRON BLOCK! IT ONLY WORKS ON A BENCH",
-      "furnace": "A FURNACE! FEED IT ORE AND CHARCOAL — THE COAL STEALS THE OXYGEN"
+      "furnace": "A FURNACE! FEED IT ORE AND CHARCOAL — THE COAL STEALS THE OXYGEN",
+      "mushroom": "A MUSHROOM, COOL AND SOFT FROM THE SHADE"
     },
     "name": {
       "sword": "Sword",
       "key": "Key",
       "axe": "Axe",
       "greatAxe": "Steel Axe",
-      "bomb": "Bomb",
       "pickaxe": "Pickaxe",
       "scythe": "Scythe",
       "shovel": "Shovel",
@@ -76,27 +53,14 @@
       "ore": "Iron Ore",
       "bloom": "Iron Bloom",
       "seeds": "Seeds",
-      "carnivoreSeeds": "Carnivorous Seeds",
       "bucket": "Bucket",
       "bucketFull": "Full Bucket",
       "charcoal": "Charcoal",
-      "furnace": "Furnace"
+      "furnace": "Furnace",
+      "mushroom": "Mushroom",
+      "altar": "Altar"
     }
   },
-  "lockedLines": [
-    {
-      "speaker": "npc",
-      "text": "It's too dark... I can barely think."
-    },
-    {
-      "speaker": "narrator",
-      "text": "The person stares at the dead fire, shivering."
-    },
-    {
-      "speaker": "npc",
-      "text": "Light the fire. When this place is safe, we can talk."
-    }
-  ],
   "dialog": {
     "continue": "Continue.",
     "close": "[Close.]"
@@ -121,269 +85,246 @@
     "intro": [
       {
         "speaker": "narrator",
-        "text": "The old wizard adjusts his hat. For a moment, his eyes meet yours."
+        "text": "The road ends here. So does the war."
       },
       {
         "speaker": "npc",
-        "text": "Finally... you've arrived."
+        "text": "Leave it there. It has done enough, and so have you."
       },
       {
         "speaker": "npc",
-        "text": "I have waited for this moment for ages."
+        "text": "You were a knight. You walked into the dark, and you walked back out of it."
       },
       {
         "speaker": "npc",
-        "text": "You have come from lands far away."
+        "text": "The evil you were made to fight is gone. There is nothing left in this valley to defeat."
       },
       {
         "speaker": "npc",
-        "text": "You are Zero... the last heir of a forgotten crusade."
+        "text": "That is the strange part, isn't it? A sword always knows what it is for. A person has to find out."
       },
       {
         "speaker": "npc",
-        "text": "But you are not a knight yet."
+        "text": "Stay a while. The people here have small troubles, and small troubles are where a new life begins."
       },
       {
         "speaker": "npc",
-        "text": "You still have to become one."
+        "text": "Help them, one by one. When the last of them is at peace, the garden in the middle of the valley will open."
       },
-      {
-        "speaker": "npc",
-        "text": "Speak to me again... there is something you must hear."
-      }
-    ],
-    "protect": [
       {
         "speaker": "narrator",
-        "text": "The wind blows through the ruins."
-      },
-      {
-        "speaker": "npc",
-        "text": "This is the last flame of the world."
-      },
-      {
-        "speaker": "npc",
-        "text": "Beyond its light there is only darkness... and the cold hearths of those who came before."
-      },
-      {
-        "speaker": "npc",
-        "text": "I can feel them out there. Dead fires, scattered across the land. Waiting."
-      },
-      {
-        "speaker": "npc",
-        "text": "Cut dead wood, wake the branch in this flame... and carry the fire into the dark."
-      },
-      {
-        "speaker": "npc",
-        "text": "An axe lies abandoned on the north road. The dry trees still remember how to burn."
-      },
-      {
-        "speaker": "npc",
-        "text": "Light even one dead fire, and return to me."
-      },
-      {
-        "speaker": "npc",
-        "text": "As long as the flame travels... the world can still be reborn."
+        "text": "Z to talk. X to use what you carry. I to open your bag."
       }
     ],
-    "prophecy": [
+    "guide": [
       {
-        "speaker": "narrator",
-        "text": "The wizard's eyes shine."
+        "speaker": "npc",
+        "text": "No hurry. This valley has never once been in a hurry."
       },
       {
         "speaker": "npc",
-        "text": "So... the prophecy was true."
+        "text": "The forager in the western woods. The painter by the garden beds. The old woodsman and the stargazer, up north."
       },
       {
         "speaker": "npc",
-        "text": "You carried the flame, and a dead hearth breathes again."
+        "text": "Each of them is waiting for a small kindness. Small is the right size."
+      }
+    ],
+    "gate": [
+      {
+        "speaker": "npc",
+        "text": "Did you hear it? The garden gate has opened."
       },
       {
         "speaker": "npc",
-        "text": "What was only a spark now begins to light the world."
+        "text": "Go to the middle of the valley. There is a fire there that has been waiting for you a long time."
+      }
+    ],
+    "after": [
+      {
+        "speaker": "npc",
+        "text": "You found it, didn't you. Not a purpose, exactly."
       },
       {
         "speaker": "npc",
-        "text": "Other fires still sleep out there... and the deep places under the portals still hold what the ancients buried."
-      },
-      {
-        "speaker": "npc",
-        "text": "But remember..."
-      },
-      {
-        "speaker": "npc",
-        "text": "The flame that will save this world is the same one that burns within you."
-      },
-      {
-        "speaker": "npc",
-        "text": "Do not let it go out."
-      },
-      {
-        "speaker": "npc",
-        "text": "Now look north, to the stone cradle standing alone in the open. That is a PYRE, and it has waited longer than I have."
-      },
-      {
-        "speaker": "npc",
-        "text": "Build it high with dead wood and set your torch to it. A fire that size is not warmth, Zero — it is a SIGNAL. Every hearth still sleeping out there will see it."
+        "text": "Just a place to sit, and someone to be."
       }
     ]
   },
   "npc": {
-    "blackCat": {
-      "name": "CAT",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "A hero. How novel. I was napping."
-        },
-        {
-          "speaker": "npc",
-          "text": "That branch beside me? Take it. Hold it into my fire and it wakes as a TORCH."
-        },
-        {
-          "speaker": "npc",
-          "text": "Two hearths in this clearing sit cold. Carry the flame to them."
-        },
-        {
-          "speaker": "npc",
-          "text": "Light draws a line the dead will not cross. I sleep better behind lines."
-        }
-      ]
-    },
-    "mimic": {
-      "name": "MIMIC",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Hello! I'm a completely normal NPC."
-        },
-        {
-          "speaker": "narrator",
-          "text": "He smiles in a way that doesn't look natural."
-        },
-        {
-          "speaker": "npc",
-          "text": "I'm not a mimic. That would be absurd."
-        },
-        {
-          "speaker": "narrator",
-          "text": "His eyes don't blink. Not once."
-        },
-        {
-          "speaker": "npc",
-          "text": "Please, keep walking."
-        }
-      ]
-    },
-    "astronaut": {
-      "name": "ASTRONAUT",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Take the PICKAXE — the veined boulders never run dry, three swings a lump. Bring me six of that ORE and my ship stops being scrap."
-        }
-      ]
-    },
-    "businessMan": {
-      "name": "BUSINESSMAN",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "The AXE is yours, an advance — it fells DEAD wood in two chops. Clear my dry ranks and bring me six STICKS: timber is the only market left."
-        }
-      ]
-    },
-    "radiationSuit": {
-      "name": "WORKMAN",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Take this STONE — thrown into lava it cools into a step. Something metal sank past the molten pool: walk one bar of IRON back to me."
-        }
-      ]
-    },
-    "painter": {
-      "name": "ARTIST",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Take the SHOVEL and dig the beds south of me. Green is a colour you GROW, so bring me six SEEDS and paint this field."
-        }
-      ]
-    },
-    "salesman": {
-      "name": "SALESMAN",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Friend! You look thirsty. Or dry. Either way — opportunity."
-        },
-        {
-          "speaker": "npc",
-          "text": "Free sample: this BUCKET. Fill it in my pond, just west of the fire."
-        },
-        {
-          "speaker": "npc",
-          "text": "A full bucket waters crops and drowns small fires. Endless uses. Costs you nothing. Today only."
-        },
-        {
-          "speaker": "npc",
-          "text": "Tell your friends. If you find any out there."
-        }
-      ]
-    },
-    "poet": {
-      "name": "POET",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "The pines sing, but they crowd the verse."
-        },
-        {
-          "speaker": "npc",
-          "text": "This GREAT AXE fells even LIVING trees — the small axe only knows dead wood."
-        },
-        {
-          "speaker": "npc",
-          "text": "Open a clearing in my grove. Listen how the song changes where light falls."
-        },
-        {
-          "speaker": "npc",
-          "text": "Every good line needs its silence. Cut me one."
-        }
-      ]
-    },
     "wizard": {
       "name": "WIZARD",
       "lines": [
         {
           "speaker": "npc",
-          "text": "The dark did not leave us a world. It left us choices."
+          "text": "No hurry. This valley has never once been in a hurry."
         },
         {
           "speaker": "npc",
-          "text": "Take the sword. Eight of the dead still walk the unfinished roads. Put them down."
+          "text": "The forager in the western woods. The painter by the garden beds. The old woodsman and the stargazer, up north."
         },
         {
           "speaker": "npc",
-          "text": "Then walk. Six fields you have never stood in: what no one visits, no one decides."
+          "text": "Each of them is waiting for a small kindness. Small is the right size."
         }
       ]
     },
-    "death": {
-      "name": "DEATH",
+    "radiationSuit": {
+      "name": "HOLLIS",
       "lines": [
         {
           "speaker": "npc",
-          "text": "Take the SCYTHE — I am off duty. Light five cold hearths and burn me three loads of CHARCOAL, and you and I are even."
+          "text": "Oh — hello. Mind the moss, it's older than both of us."
+        },
+        {
+          "speaker": "npc",
+          "text": "I gather mushrooms. Not to sell. Just to know they are there, growing in the quiet places."
+        },
+        {
+          "speaker": "npc",
+          "text": "My knees are not what they were. Would you find five of them for me? Little blue caps, low in the shade."
+        },
+        {
+          "speaker": "npc",
+          "text": "Take your time. Mushrooms never rush, and they are never late."
+        }
+      ]
+    },
+    "radiationSuitDone": {
+      "name": "HOLLIS",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Five little caps... and every one of them perfect."
+        },
+        {
+          "speaker": "npc",
+          "text": "You walked very carefully to find these. I could tell."
+        },
+        {
+          "speaker": "npc",
+          "text": "Thank you, truly. Keep the next one you find. Some things are better shared over a fire."
+        }
+      ]
+    },
+    "painter": {
+      "name": "IRIS",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "I came to this valley to paint it, and I keep painting the same grey."
+        },
+        {
+          "speaker": "npc",
+          "text": "Maybe the colour isn't in my brushes. Maybe it has to be grown."
+        },
+        {
+          "speaker": "npc",
+          "text": "Here — seeds, and a bucket. Drop the seeds into the holes below my easel, then pour water from the pond on each little mound."
+        },
+        {
+          "speaker": "npc",
+          "text": "Two patches of green. That's all I need to remember what green is."
+        }
+      ]
+    },
+    "painterDone": {
+      "name": "IRIS",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Look at that. It came up from nothing but dirt and patience."
+        },
+        {
+          "speaker": "npc",
+          "text": "I think I was trying to paint something I had never watched grow."
+        },
+        {
+          "speaker": "npc",
+          "text": "Thank you. Next time you pass, there will be a little of you in my painting."
+        }
+      ]
+    },
+    "businessMan": {
+      "name": "BRAM",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Evening, traveller. The nights out here get long, and my woodpile gets short."
+        },
+        {
+          "speaker": "npc",
+          "text": "My hands shake too much for the axe now. Funny — they never used to."
+        },
+        {
+          "speaker": "npc",
+          "text": "Take it. The dry trees around my hut give good sticks. Four would see me through."
+        },
+        {
+          "speaker": "npc",
+          "text": "Chop slowly. A tree that stood for a hundred years deserves a little ceremony."
+        }
+      ]
+    },
+    "businessManDone": {
+      "name": "BRAM",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Four good sticks. That's warmth for a week of nights."
+        },
+        {
+          "speaker": "npc",
+          "text": "I'll sit by the fire and think of you. Not as a knight. As the fellow who brought the wood."
+        },
+        {
+          "speaker": "npc",
+          "text": "Thank you, friend. That is the better thing to be remembered for."
+        }
+      ]
+    },
+    "astronaut": {
+      "name": "VEGA",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Shh. I'm listening to the stars. They're very quiet tonight."
+        },
+        {
+          "speaker": "npc",
+          "text": "I want to build a little cairn, right here, where the sky is clearest. A place to come back to."
+        },
+        {
+          "speaker": "npc",
+          "text": "Here's a pickaxe. Would you break three stones from the boulders nearby and bring them to me?"
+        },
+        {
+          "speaker": "npc",
+          "text": "Stones are only stars that decided to stay."
+        }
+      ]
+    },
+    "astronautDone": {
+      "name": "VEGA",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Three stones. One for where I came from, one for where I am, one for where I'm going."
+        },
+        {
+          "speaker": "npc",
+          "text": "Funny. I crossed the whole sky looking for something, and it was a pile of rocks."
+        },
+        {
+          "speaker": "npc",
+          "text": "Thank you. Come sit here some night. There's room for two."
         }
       ]
     }
   },
   "controls": {
-    "hint": "Z swings your sword · X uses the item you picked · I opens the bag",
-    "attackTitle": "Swing your sword (Z)",
+    "hint": "Z talks and tends · X uses the item you picked · I opens the bag",
+    "attackTitle": "Talk (Z)",
     "useTitle": "Use selected item (X)"
   },
   "bag": {
@@ -409,5 +350,76 @@
     "keysFurnace": "← ↑ ↓ →   ·   Z smelts it   ·   X closes",
     "keysTouchFurnace": "Tap to choose · tap again to smelt",
     "unknown": "?"
+  },
+  "gate": {
+    "opened": [
+      {
+        "speaker": "narrator",
+        "text": "Somewhere in the middle of the valley, an old gate swings open on its own."
+      },
+      {
+        "speaker": "narrator",
+        "text": "The hedge around the garden lets out a long breath."
+      }
+    ]
+  },
+  "ending": {
+    "lines": [
+      {
+        "speaker": "narrator",
+        "text": "The mushroom turns golden. The fire talks to itself, softly."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Somewhere behind you, the sword stands in the road, and nobody needs it."
+      },
+      {
+        "speaker": "narrator",
+        "text": "For the first time in a very long time, you are not on your way anywhere."
+      }
+    ],
+    "theEnd": "The End",
+    "credits": [
+      {
+        "speaker": "npc",
+        "text": "ZERO THE HERO"
+      },
+      {
+        "speaker": "narrator",
+        "text": "a quiet game by"
+      },
+      {
+        "speaker": "npc",
+        "text": "André N. Darcie"
+      },
+      {
+        "speaker": "narrator",
+        "text": "with"
+      },
+      {
+        "speaker": "npc",
+        "text": "Hollis, who knows where the mushrooms grow"
+      },
+      {
+        "speaker": "npc",
+        "text": "Iris, who learned that green is grown"
+      },
+      {
+        "speaker": "npc",
+        "text": "Bram, who keeps the fire fed"
+      },
+      {
+        "speaker": "npc",
+        "text": "Vega, who stacks stones under the stars"
+      },
+      {
+        "speaker": "npc",
+        "text": "and the old wizard, who waited"
+      },
+      {
+        "speaker": "narrator",
+        "text": "thank you for staying a while"
+      }
+    ]
   }
 }

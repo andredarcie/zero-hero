@@ -92,11 +92,15 @@ const ensureStyle = (): void => {
 
 export interface PauseMenuCallbacks {
   onResume: () => void;
-  onRestart: () => void;
+  /**
+   * Ausente = sem botao de recomecar. A aventura nao tem: nada se perde neste jogo, entao nao ha
+   * de onde "recomecar" — o New game do titulo e a porta para uma partida limpa.
+   */
+  onRestart?: () => void;
   /** Absent (editor playtest — the title scene isn't registered) hides the quit entry. */
   onQuit?: () => void;
   /**
-   * A SUBTELA (a mochila + os coracoes), desenhada no topo do painel. Ela mora aqui, e nao
+   * A SUBTELA (a mochila e o mapa), desenhada no topo do painel. Ela mora aqui, e nao
    * numa tela propria, porque as duas obedecem a mesma lei: so existem enquanto o jogador as
    * pediu. Uma segunda tela significaria uma segunda tecla, um segundo congelamento do jogo e
    * duas coisas que o ESC poderia querer dizer.
@@ -119,7 +123,7 @@ export class PauseMenu {
   private readonly sharpBtn: HTMLDivElement;
   private readonly subScreen?: SubScreenPanel;
   private readonly fullscreenBtn?: HTMLDivElement;
-  private readonly restartBtn: HTMLDivElement;
+  private readonly restartBtn?: HTMLDivElement;
   private readonly quitBtn?: HTMLDivElement;
   private destroyed = false;
   private confirmTimer?: number;
@@ -205,8 +209,11 @@ export class PauseMenu {
 
     panel.appendChild(this.separator());
 
-    this.restartBtn = this.button(panel, () => this.confirmThen(this.restartBtn, this.cb.onRestart));
-    this.restartBtn.classList.add('zh-dim');
+    if (this.cb.onRestart) {
+      const onRestart = this.cb.onRestart;
+      this.restartBtn = this.button(panel, () => this.confirmThen(this.restartBtn as HTMLDivElement, onRestart));
+      this.restartBtn.classList.add('zh-dim');
+    }
     if (this.cb.onQuit) {
       const onQuit = this.cb.onQuit;
       this.quitBtn = this.button(panel, () => this.confirmThen(this.quitBtn as HTMLDivElement, onQuit));
@@ -298,7 +305,7 @@ export class PauseMenu {
         ? t('pause.fullscreenExit')
         : t('pause.fullscreen');
     }
-    this.restartBtn.textContent = t('pause.restart');
+    if (this.restartBtn) this.restartBtn.textContent = t('pause.restart');
     if (this.quitBtn) this.quitBtn.textContent = t('pause.quit');
   }
 

@@ -7,18 +7,9 @@ import { fileURLToPath, URL } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 
 const worldJsonPath = fileURLToPath(new URL('./public/world.json', import.meta.url));
-// O ESPELHO: o andar de baixo do mundo, mesmo tamanho e mesmas coordenadas.
-const underworldJsonPath = fileURLToPath(new URL('./public/underworld.json', import.meta.url));
-
-// The world API serves the two FLOORS of the one open world: `world` (a superfície,
-// public/world.json) e `underworld` (o espelho de baixo, public/underworld.json). Os dois se
-// escolhem no /editor — a chave Overworld/Underworld do painel, que é o `?under` da URL.
+// The world API serves the one open world (public/world.json) — the game is the surface only.
 // Everything else in ?file= is rejected.
-const resolveWorldFile = (fileId: string): string | null => {
-  if (fileId === 'world') return worldJsonPath;
-  if (fileId === 'underworld') return underworldJsonPath;
-  return null;
-};
+const resolveWorldFile = (fileId: string): string | null => (fileId === 'world' ? worldJsonPath : null);
 
 const readRequestBody = async (request: IncomingMessage): Promise<string> => new Promise((resolve, reject) => {
   let body = '';

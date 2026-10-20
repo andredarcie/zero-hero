@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { World3DParams } from '@/game/render3d/World3D';
 import { getTimeOfDay, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
-import type { EnemyKind, NpcKind } from '@/game/world/ScreenContent';
+import type { NpcKind } from '@/game/world/ScreenContent';
 
 /**
  * Snapshot of the live GameScene, consumed by the playtest harness (see /playtest)
@@ -13,10 +13,6 @@ export interface GameDebugState {
   /** The visible world clock: 0 = midnight, .5 = noon. */
   timeOfDay?: { phase: number; clock: string };
   player: { worldX: number; worldY: number };
-  health: number;
-  maxHealth: number;
-  swordEquipped: boolean;
-  swordOnFire: boolean;
   /** True while the held item (sword or wood club) is ablaze. */
   heldOnFire: boolean;
   /** O item do botao X — o que esta selecionado na bolsa agora (a espada nao entra aqui). */
@@ -54,82 +50,26 @@ export interface GameDebugState {
   }>;
   heroLift: number;
   heroScale: number;
-  /** O nome do ANDAR aberto (`world.json` / `underworld.json` — ver WorldData.getWorldName). */
   levelName: string;
-  /** Uma travessia de escada está em curso: o mundo troca de andar por trás da cortina. */
-  levelTransitioning: boolean;
   dialogOpen: boolean;
   itemGetOpen: boolean;
-  isDead: boolean;
-  /** O heroi e uma estatua de gelo agora (a bola do zora — ver FreezeManager). */
-  heroFrozen: boolean;
-  /** How many campfires in the loaded world are currently lit (puzzle progress). */
+  /** Uma cena sem controle (a abertura, o fim) esta tocando. */
+  cutsceneActive: boolean;
+  /** How many campfires in the loaded world are currently lit. */
   litFires: number;
-  /** A PIRA (PyreObject): quantas toras já recebeu, se fechou e se está acesa. */
-  pyres: Array<{
-    worldX: number;
-    worldY: number;
-    logs: number;
-    missing: number;
-    complete: boolean;
-    lit: boolean;
-  }>;
-  /** Perto de uma fogueira acesa o heroi esta seguro — e nenhuma cova abre enquanto isso
-   *  (ver EnemySpawnerManager). `undeadCount` e o bestiario vivo em campo. */
-  safety: { safe: boolean; undeadCount: number };
+  /**
+   * O FIM DO JOGO, peca a peca: o portao do jardim (aberto quando o ultimo pedido fecha), a
+   * fogueira que so o heroi acende, e se o cogumelo ja foi assado (os creditos rolam dali).
+   */
+  ending: { gateOpen: boolean; hearthLit: boolean; roasted: boolean };
+  /** A abertura (a espada fincada e o mago) ja tocou nesta partida? */
+  introDone: boolean;
   /**
    * A trilha que o jogo esta pedindo agora (null = vento/silencio). Ela e escolhida uma vez, na
-   * entrada do mundo, e nao responde a inimigo: esta leitura e como um cenario cobra que ela NAO
-   * muda, sem tentar "ouvir" WebAudio.
+   * entrada do mundo: esta leitura e como um cenario cobra que ela NAO muda, sem tentar "ouvir"
+   * WebAudio.
    */
   music: string | null;
-  /** Cada corpo vivo. O nome ficou `undead` por compatibilidade com os cenarios antigos. */
-  undead: Array<{
-    kind: string;
-    worldX: number;
-    worldY: number;
-    spawning: boolean;
-    /** Vida atual / total — a espada deixou de matar de um golpe, entao isto passou a importar. */
-    health: number;
-    maxHealth: number;
-    /** Piscando de invulneravel (os i-frames do corpo, ver EnemyBase.hurtInvulnMs). */
-    invulnerable: boolean;
-    /** Armando o golpe telegrafado: e a janela em que ele GUARDA a frente. */
-    windingUp: boolean;
-    /** O fogo esta comendo este corpo (a tocha viva — ver EnemyBase.igniteBody). */
-    burning: boolean;
-    /**
-     * O corpo esta ASSANDO na beira de uma fogueira acesa (ver EnemyBase.tickScorch): pega fogo,
-     * perde vida a cada mordida e continua sendo ele mesmo — sair do anel apaga. E o que ficou no
-     * lugar do desmanche silencioso da matilha quando o heroi alcancava o fogo.
-     */
-    scorching: boolean;
-    /** O corpo e uma estatua de gelo agora (a bola do zora — ver FreezeManager). */
-    frozen: boolean;
-    /** O corpo aparece no quadro da camera? Fora dele ele nao fala nem comeca golpe. */
-    framed: boolean;
-  }>;
-  /**
-   * Os tiros EM VOO (mago, torreta e zora). Unica coisa do jogo em coordenada continua de tile:
-   * `x/y` vem com fracao de tile de proposito — e assim que se mede que uma bala morreu na parede
-   * em vez de ter atravessado. `vx/vy` em tiles por segundo. `reflected` = a espada devolveu esta
-   * bola (so o cuspe aceita) e ela agora congela BICHO em vez de travar o heroi.
-   */
-  shots: Array<{ kind: string; x: number; y: number; vx: number; vy: number; reflected: boolean }>;
-  /** Quantas ossadas de caveira morta estao no chao agora (CorpseDecals). */
-  corpses: number;
-  /**
-   * As covas AUTORADAS (aba Inimigos do editor). `occupied` = o corpo que ela fez esta de pe;
-   * `cooldownMs` = o que falta do relogio de respawn depois que ele caiu (ver
-   * EnemySpawnerManager). Vazio em todo mundo que nao autorou nenhuma.
-   */
-  enemySpawners: Array<{
-    worldX: number;
-    worldY: number;
-    type: string;
-    occupied: boolean;
-    cooldownMs: number;
-  }>;
   activeScreen: { cx: number; cy: number };
 }
 
@@ -143,11 +83,7 @@ export interface GameDebugApi {
   /** Open an NPC dialog by kind (defaults to a long-text NPC, good for legibility checks). */
   openDialog: (kind?: NpcKind) => boolean;
   closeDialog: () => void;
-  /** Fire the "you got the sword" presentation (for capturing the effect). */
-  triggerSwordGet: () => void;
   listNpcKinds: () => NpcKind[];
-  /** Quantas espadadas cada especie aguenta (ver ENEMY_BLOWS em world/ScreenContent). */
-  enemyBlows: () => Readonly<Record<EnemyKind, number>>;
   /**
    * O CADERNO DE MISSOES (runtime/QuestLog). O sistema de missao NAO tem interface — o unico
    * sinal dele no jogo e o NPC passando a falar outro roteiro —, entao esta e a unica janela

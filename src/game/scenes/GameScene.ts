@@ -2,28 +2,20 @@ import Phaser from 'phaser';
 
 import {
   ASSET_KEYS,
-  BOMB_FRAMES,
-  CAMPFIRE_SAFE_RADIUS_TILES,
   CHOPPABLE_UPPER_FRAMES,
   CHUNK_COLUMNS,
   CHUNK_ROWS,
   DIGGABLE_GROUND_FRAMES,
-  DUNGEON_TILES,
   dialogBoxMetrics,
   FONT_FAMILY,
-  PYRE_LOGS_REQUIRED,
   GAMEPLAY_HERO_MAX_SIZE,
   GAMEPLAY_HERO_SCALE,
-  UI_HEART_FRAMES,
   HERO_FRAMES,
-  PLAYER_HEALTH_MAX,
   ITEM_FRAMES,
   KEY_FRAMES,
-  CAMPFIRE_SCORCH_RADIUS_TILES,
-  LIGHT_RADIUS_TILES,
   MIN_BOARD_TILE_SIZE,
   MOONFLOWER_LIGHT_TILES,
-  NPC_GATE_RADIUS_TILES,
+  NPC_VISUALS,
   SCENE_DEPTHS,
   TEXT_RESOLUTION,
   TORCH_BURN_MS,
@@ -35,7 +27,6 @@ import {
   SOLID_UPPER_FRAMES,
   UNIT_PACK_KINDS,
   BLOOM_BLOWS,
-  wallTorchFaceIsClear,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
@@ -46,13 +37,9 @@ import {
   type GameDebugApi,
 } from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
-import { getTimeOfDay, isNightTime, timeOfDayLabel } from '@/game/runtime/timeOfDay';
+import { getTimeOfDay, isNightTime, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import { LootManager } from '@/game/entities/LootManager';
-import { EnemyBase } from '@/game/entities/EnemyBase';
-import { EnemyManager, type EnemyHit } from '@/game/entities/EnemyManager';
-import { EnemySpawnerManager } from '@/game/entities/EnemySpawnerManager';
 import { NpcManager } from '@/game/entities/NpcManager';
-import { HeartPickupManager } from '@/game/entities/HeartPickupManager';
 import { ItemManager } from '@/game/entities/ItemManager';
 import type { CollectedItem } from '@/game/entities/ItemManager';
 import { MACHINE_ITEM_KINDS, isBagItem, type HeldItemKind } from '@/game/entities/ItemPickup';
@@ -61,14 +48,12 @@ import { CampfireObject } from '@/game/objects/CampfireObject';
 import { DryBushObject } from '@/game/objects/DryBushObject';
 import { DryTreeObject } from '@/game/objects/DryTreeObject';
 import { DryShrubObject } from '@/game/objects/DryShrubObject';
-import { LavaObject } from '@/game/objects/LavaObject';
 import { WaterObject } from '@/game/objects/WaterObject';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { SwingGateObject } from '@/game/objects/SwingGateObject';
 import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
 import { PlantSpotObject, type PlantableSeed } from '@/game/objects/PlantSpotObject';
-import { CarnivorousPlantObject } from '@/game/objects/CarnivorousPlantObject';
 import { ToolboxObject } from '@/game/objects/ToolboxObject';
 import {
   catalogSteps, isCraftable, nextStep, recipeCost, recipeMaking, recipeStation,
@@ -78,15 +63,9 @@ import {
   ToolboxOrderOverlay, type OrderCatalogView,
 } from '@/game/runtime/ToolboxOrderOverlay';
 import { MoonflowerObject } from '@/game/objects/MoonflowerObject';
-import { BombSpotObject } from '@/game/objects/BombSpotObject';
 import { FurnaceObject, type FurnaceWorldPort } from '@/game/objects/FurnaceObject';
 import { AltarObject } from '@/game/objects/AltarObject';
-import { PyreObject } from '@/game/objects/PyreObject';
 import { hammerResult } from '@/game/objects/hammering';
-import {
-  StairsObject, stairsLiftAt, STAIRS_RUN_TILES, STAIRS_STEPS, STAIRS_WALK_MS,
-} from '@/game/objects/StairsObject';
-import { WallTorchObject } from '@/game/objects/WallTorchObject';
 import type { WorldProp } from '@/game/objects/WorldProp';
 // O DEF de um prop (o registro de dados: tipo + tile + flags) contra o OBJETO de prop (a coisa
 // viva com sprite e colisao) — dois tipos com o mesmo nome em modulos diferentes. Aqui os dois
@@ -101,25 +80,17 @@ import {
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
+import {
+  PLANTED_SWORD_TEXTURE, ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
+} from '@/game/render3d/cozyTextures';
 import { HeroThought } from '@/game/runtime/HeroThought';
-import { PlacementHints, type HintTile } from '@/game/runtime/PlacementHints';
-import {
-  closeStairsCurtain, destroyStairsCurtain, openStairsCurtain,
-} from '@/game/render3d/StairsCurtain';
-import {
-  clearPendingStairsArrival,
-  consumePendingStairsArrival,
-  setPendingStairsArrival,
-} from '@/game/runtime/portalTransition';
+import { PlacementHints } from '@/game/runtime/PlacementHints';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
-import { isUnderground, setUnderground } from '@/game/runtime/underworld';
 import { PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import {
-  createHeroView, heroFootY, resetHeroView, setHeroWalking, tickHeroView,
-  TILES_PER_FOOTFALL, WALK_CYCLE_FRAMES, WALK_CYCLE_FRAMES_UP, type HeroView,
+  createHeroView, heroFootY, resetHeroView, tickHeroView, type HeroView,
 } from '@/game/runtime/HeroView';
-import { FREEZE_MS, FreezeManager } from '@/game/runtime/FreezeManager';
 import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl, type SubScreenView } from '@/game/runtime/SubScreen';
@@ -129,10 +100,7 @@ import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { createBoardMetrics } from '@/game/shared/grid';
 import { ChunkManager } from '@/game/world/ChunkManager';
-import {
-  AQUATIC_ENEMY_KINDS, ENEMY_BLOWS, FLYING_ENEMY_KINDS, SWORD_BLOW_DAMAGE,
-  type EnemyKind, type ScreenContent,
-} from '@/game/world/ScreenContent';
+import type { ScreenContent } from '@/game/world/ScreenContent';
 import {
   getCampfires,
   getChunkContent,
@@ -141,20 +109,14 @@ import {
   getDryBushes,
   getDryTrees,
   getDryShrubs,
-  getEnemySpawns,
   getHeldItemPickups,
-  getLavaTiles,
   getWaterTiles,
-  getBombSpots,
   getBridgeSpots,
-  getPyres,
   getPlantSpots,
-  getCarnivorousPlants,
   getToolboxes,
   getIronRocks,
   getFurnaces,
   getAltars,
-  getStairs,
   getMoonflowers,
   getLockedDoors,
   getSwingGates,
@@ -164,39 +126,25 @@ import {
   getDialogKinds,
   getDialogVoice,
   getPlayerStart,
+  getHearths,
+  getGardenGates,
   getWorldName,
-  setWorldData,
 } from '@/game/world/WorldData';
 import {
   adventureState,
   consumeAdventureRespawn,
-  requestAdventureRespawn,
   saveAdventure,
   type AdventureMachine,
 } from '@/game/runtime/adventureState';
 import {
+  allQuestsDone,
   questDeliveriesDue,
   questDialogFor,
   questSnapshot,
   recordQuestEvent,
   type QuestEvent,
 } from '@/game/runtime/QuestLog';
-import { QUEST_PYRE_LOGS } from '@/game/dialogs/NpcQuests';
-
-// A TRAVESSIA DO PORTAL — sucção, vazio, túnel e queda — FOI REMOVIDA com os levels isolados.
-// Ela era a passagem mágica que encadeava uma tela de puzzle na seguinte, e o mundo de hoje tem
-// uma porta só: a ESCADA (StairsObject), que é uma caminhada e não um teletransporte. As batidas
-// dela estão logo abaixo.
-
-/**
- * Em que ponto do lance de escada a CORTINA entra (fração do percurso). Ela fecha exatamente
- * quando o lance acaba, e do outro lado ela abre no mesmo ritmo — então a metade final da descida
- * e a metade inicial da subida acontecem em penumbra, que é onde o corpo já está debaixo do chão.
- * Cedo demais e o jogador não vê a escada; tarde demais e a troca de andar aparece.
- */
-const STAIRS_CURTAIN_AT = 0.55;
-/** O respiro no escuro entre chegar e começar a andar: o mundo novo assenta antes de ser visto. */
-const STAIRS_SETTLE_MS = 120;
+import { questFor } from '@/game/dialogs/NpcQuests';
 
 // The per-item 2D art (Phaser texture atlas keys): the swing arc, the overhead chop and the
 // death elegy's back item all draw from here. The 3D twin is BACK_ITEM_VISUAL_3D below.
@@ -205,7 +153,6 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
   greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0 },
-  bomb: { texture: ASSET_KEYS.bombIcon, frame: 0 },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0 },
@@ -215,12 +162,12 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   ore: { texture: ASSET_KEYS.oreItem, frame: 0 },
   bloom: { texture: ASSET_KEYS.bloomItem, frame: 0 },
   seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 },
-  carnivoreSeeds: { texture: ASSET_KEYS.carnivoreSeedsItem, frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
   furnace: { texture: ASSET_KEYS.furnace, frame: 0 },
   altar: { texture: ASSET_KEYS.altar, frame: 0 },
+  mushroom: { texture: ASSET_KEYS.mushroomItem, frame: 0 },
 };
 
 // The same per-item art resolved through the 3D texture registry (textures3d keys),
@@ -230,7 +177,6 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   key: { texture: 'key-item', frame: KEY_FRAMES.held },
   axe: { texture: 'axe-icon', frame: 0 },
   greatAxe: { texture: 'great-axe-icon', frame: 0 },
-  bomb: { texture: 'bomb-icon', frame: 0 },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
   scythe: { texture: 'scythe-icon', frame: 0 },
   shovel: { texture: 'shovel-icon', frame: 0 },
@@ -240,12 +186,12 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   ore: { texture: 'ore-item', frame: 0 },
   bloom: { texture: 'bloom-item', frame: 0 },
   seeds: { texture: 'seeds-item', frame: 0 },
-  carnivoreSeeds: { texture: 'carnivore-seeds', frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
   furnace: { texture: 'furnace', frame: 0 },
   altar: { texture: 'altar', frame: 0 },
+  mushroom: { texture: 'mushroom-item', frame: 0 },
 };
 
 
@@ -255,7 +201,6 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held, label: 'VOCE PEGOU A CHAVE!' },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0, label: 'VOCE PEGOU O MACHADO!' },
   greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0, label: 'MACHADO DE ACO! DERRUBA QUALQUER ARVORE' },
-  bomb: { texture: ASSET_KEYS.bombItem, frame: BOMB_FRAMES.item, label: 'VOCE PEGOU A BOMBA! LEVE-A ATE A MARCA' },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
   shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0, label: 'VOCE PEGOU A PA! CAVE NA TERRA' },
@@ -266,7 +211,6 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   // "peguei um bloco de metal e ele nao faz nada" seria a leitura correta — e errada.
   iron: { texture: ASSET_KEYS.ironItem, frame: 0, label: 'UM BLOCO DE FERRO! SO SERVE NUMA BANCADA' },
   seeds: { texture: ASSET_KEYS.seedsItem, frame: 0, label: 'VOCE PEGOU SEMENTES! PLANTE NUM BURACO' },
-  carnivoreSeeds: { texture: ASSET_KEYS.carnivoreSeedsItem, frame: 0, label: 'SEMENTES CARNIVORAS! A PLANTA COME QUEM CHEGAR' },
   bucket: { texture: 'bucket-icon', frame: 0, label: 'VOCE PEGOU UM BALDE! ENCHA NO RIO' },
   bucketFull: { texture: 'bucket-full-icon', frame: 0, label: 'BALDE CHEIO DE AGUA!' },
   charcoal: { texture: 'charcoal-item', frame: 0, label: 'CARVAO! PISE NELE COM A TOCHA ACESA' },
@@ -286,243 +230,31 @@ const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
   bloom: { texture: ASSET_KEYS.bloomItem, frame: 0, label: 'ESPONJA DE FERRO! PONHA NO ALTAR (Z) E MALHE COM O X' },
   furnace: { texture: ASSET_KEYS.furnace, frame: 0, label: 'UM FORNO! MINERIO NUMA BANDEJA, CARVAO NA OUTRA' },
   altar: { texture: ASSET_KEYS.altar, frame: 0, label: 'UM ALTAR! O X INSTALA — Z POE A PECA, BATER MALHA' },
-};
-
-// O que um golpe tira de uma caveira (vida maxima 3). Dois degraus, agora que o soco morreu junto
-// com a mao vazia (a espada nao se solta mais): a ESPADA, no botao Z, tira 2 — duas espadadas, e a
-// segunda e a que importa; e qualquer item comum no X (chave, graveto, machado, picareta, foice)
-// tira 1.5, tambem dois golpes. O UNICO golpe que ainda mata de uma vez e o graveto ACESO.
-const MELEE_DAMAGE: Partial<Record<HeldItemKind, number>> = {
-  // A ESPADA NAO MATA MAIS DE UM GOLPE, e esta linha e a mudanca de design mais cara deste
-  // arquivo. Ela valia 999: todo corpo do jogo morria no primeiro acerto, entao o telegrafo de
-  // 500ms que cada especie carrega NUNCA acontecia, o atordoamento nunca importava, o arremesso
-  // nunca comprava nada e o encontro inteiro era "chegue perto, aperte Z". Nao havia combate —
-  // havia execucao.
-  //
-  // O numero vem de ScreenContent e nao e escrito aqui porque a vida de TODA especie e derivada
-  // dele (ver ENEMY_BLOWS/enemyMaxHealth): a escada de 2 a 9 espadadas e uma tabela de degraus,
-  // nao de HP, entao mexer nesta linha reescala o bestiario inteiro de uma vez — que e o
-  // comportamento correto, e o oposto do que houve quando ela caiu de 999 pra 2 e so duas
-  // especies foram reconferidas (as outras seis ficaram morrendo de um golpe por meses).
-  //
-  // O `A Link to the Past` faz exatamente isso e nem disfarca: o soldado verde da primeira sala
-  // aguenta varias espadadas com a espada inicial, e e por isso que aquela sala consegue ENSINAR
-  // alguma coisa.
-  sword: SWORD_BLOW_DAMAGE,
-  wood: 1.5,
-  axe: 1.5,
-  greatAxe: 1.5,
-  key: 1.5,
-  pickaxe: 1.5,
-  scythe: 1.5,
-  shovel: 1.5,
-  stone: 1.5, // a rock in the fist is as good as any other blunt tool
-  charcoal: 1.5, // a lump of coal, likewise
-  iron: 1.5, // ...e um lingote de metal, que era o unico bloco desta lista que nao batia em nada
+  mushroom: { texture: ASSET_KEYS.mushroomItem, frame: 0, label: 'A MUSHROOM, SOFT AND COOL FROM THE SHADE' },
 };
 
 // ── OS DOIS BOTOES ───────────────────────────────────────────────────────────
 //
-// O jogo era walk-only: bater era andar contra o inimigo, e um heroi parado se defendia
-// sozinho (a "guarda"). As duas coisas morrem aqui, e pelo mesmo motivo — enquanto encostar
-// resolver, o botao A nao significa nada, e um golpe automatico e um golpe que o jogador nao
-// deu. Agora:
+// Este jogo nao tem combate: nao ha inimigo, nao ha dano e nao ha morte. Os dois botoes sao
+// gestos de MAO, nunca de briga:
 //
-//   A  →  a espada, na direcao em que ele olha (nao precisa encostar). Sem espada, o soco.
-//   B  →  o item escolhido na subtela, no tile a frente: usa, ou pousa ali.
-//
-// Esbarrar continua existindo, e continua sendo um gesto de CORPO: abre portao de bater,
-// conversa com NPC, senta na fogueira acesa — e leva dano de contato de quem
-// esta do outro lado. O que ele nao faz mais e machucar ninguem.
-/** Quanto tempo um golpe leva antes de o proximo poder sair (o arco dura ~220ms). */
-const ATTACK_COOLDOWN_MS = 260;
-/** O mesmo para o B. Um pouco mais lento: usar uma ferramenta e um gesto, nao uma metralhadora. */
+//   Z  →  FALAR com quem esta na frente, abrir o catalogo da bancada, pousar a peca no altar,
+//         acender e cuidar da fogueira do fim. Nada no Z saca lamina — a espada ficou fincada na
+//         entrada do vale (ver playIntro).
+//   X  →  o item escolhido na bolsa, no tile a frente: o machado na arvore seca, a picareta na
+//         pedra, o balde no rio, a semente no buraco.
+/** O X tem cadencia: usar uma ferramenta e um gesto, nao uma metralhadora. */
 const USE_COOLDOWN_MS = 300;
-
-// (Houve um REVOLVER aqui: a única peça que se mirava com o mouse em 360°, e a única exceção à
-// lei dos dois botões. Ele saiu inteiro — arma, balas, cruz de mira e o desligamento do arrasto
-// de mouse junto. O jogo voltou a ter uma gramática só: A é a espada na direção em que o herói
-// olha, B é o item no tile à frente, e nada se aponta.)
-
-// ── A ESGRIMA: o que faz um golpe ser fluido ─────────────────────────────────
-//
-// Tres coisas, e nenhuma delas e o dano.
-//
 /**
- * **O BOTAO NAO SE PERDE.** Um A apertado durante a cadencia do golpe anterior (ou durante o
- * hitstop, que congela o update inteiro por ate 110ms) era simplesmente DESCARTADO — e o jogador
- * que encadeia dois golpes no ritmo certo era punido por acertar o ritmo. Agora ele fica guardado
- * por esta janela e sai no instante em que a cadencia libera. E o `input buffering` que todo jogo
- * de acao tem: as referencias medem 80-120ms em plataforma e 6-8 frames em corpo a corpo, e 130ms
- * cai no meio disso. Curto o bastante pra nunca dar um golpe que voce nao pediu.
+ * **O BOTAO NAO SE PERDE.** Um X apertado durante a cadencia do anterior fica guardado por esta
+ * janela e sai no instante em que ela libera, em vez de ser descartado.
  */
 const ACTION_BUFFER_MS = 130;
-/**
- * O COMPROMISSO DO GOLPE: por quanto tempo os pés ficam presos ao apertar A.
- *
- * O herói golpeava em pleno passo, na velocidade máxima, e isso é o que fazia o espaçamento não
- * custar nada: dá para atacar e recuar no mesmo gesto, então nunca há um instante em que estar
- * perto é perigoso. Preso por um sexto de segundo, atacar vira uma DECISÃO — e é a mesma janela
- * que o `A Link to the Past` cobra do Link, que fica plantado enquanto a espada varre.
- *
- * Curto de propósito: mais que isto e o jogo passa a parecer travado, que é o defeito oposto e
- * pior. A raiz também não congela um passo em curso — ver PlayerMovementController.root.
- */
-const SWING_ROOT_MS = 160;
-/** O giro é o gesto caro: ele planta o herói por mais tempo, e é o que ele paga pelos oito tiles. */
-const SPIN_ROOT_MS = 260;
-/**
- * A INVESTIDA: quanto o corpo do herói avança na direção do golpe, em tiles (ver HeroView.lungeX).
- *
- * Pequena de propósito — um oitavo de tile é um pixel e meio na arte, e é o suficiente: o que
- * vende o peso é a CURVA (sai em 60ms, volta em 130ms, dentro da raiz de 160), não a distância.
- * Um avanço grande faria o herói parecer que anda ao golpear, e andar é justamente o que a raiz
- * acabou de proibir.
- */
-const SWING_LUNGE_TILES = 0.13;
-const SWING_LUNGE_OUT_MS = 60;
-const SWING_LUNGE_BACK_MS = 130;
-/**
- * Quanto tempo o herói fica na POSE DE ATAQUE (ver HERO_FRAMES.attack).
- *
- * Casado com a raiz (`SWING_ROOT_MS`), não com o arco: o arco dura 155ms mais 65 de sumiço, e
- * deixar a pose até o fim do sumiço mostraria o herói ainda golpeando depois de a lâmina já ter
- * ido. O que o corpo dele conta é o COMPROMISSO — enquanto os pés estão presos, ele está no golpe;
- * quando soltam, acabou. Uma coisa só de aprender, dois relógios que terminam juntos.
- */
-const SWING_POSE_MS = SWING_ROOT_MS;
-/**
- * **O GOLPE VARRE A ÁREA À FRENTE — o bloco 2×3.** O desenho sempre foi uma foice larga em volta
- * do herói e o acerto era UM tile; virou a fileira da frente (3 tiles), e agora são DUAS fileiras:
- * a colada no corpo e a da ponta da lâmina. Seis tiles, até seis corpos no mesmo gesto — que é a
- * sensação que uma espada larga promete e que um acerto de um tile desmentia.
- *
- * As duas fileiras não são a mesma coisa e por isso são duas listas:
- *   - **NEAR** é o que o CORPO alcança. O soco de mão vazia para aqui, e o arco desenhado da
- *     espada nasce aqui.
- *   - **FAR** é o que só a LÂMINA alcança, e ela precisa de caminho: um tile da fileira de trás
- *     só conta se o tile à frente dele não for parede (ver `arcTiles`). Sem isso a espada cortaria
- *     através de rocha, que é a primeira coisa que o jogador tenta e a primeira que ele não
- *     perdoa.
- *
- * Os lados puros (±90°) continuam de fora: quem quer cortar em volta paga o preço da lâmina
- * rodopiante. Cada par é `[à frente, para o lado]` em tiles, rodado para a direção olhada em
- * `arcTiles`. O PRIMEIRO par tem de continuar sendo o tile à frente: é o alvo canônico, o que todo
- * playtest de mira lê. O contrato VISUAL disto é a órbita do punho (`SLASH_ORBIT_FACTOR`, no
- * SwordOrbit): a espada é desenhada no tamanho que ela tem — nunca esticada, e sem nenhum efeito
- * na frente dela — e alcança porque o braço estende, pondo a ponta a ~1,7 tiles, dentro da segunda
- * fileira. Os dois números andam juntos, ou o acerto volta a mentir sobre o alcance.
- */
-const SWING_ARC_NEAR: ReadonlyArray<readonly [number, number]> = [[1, 0], [1, 1], [1, -1]];
-const SWING_ARC_FAR: ReadonlyArray<readonly [number, number]> = [[2, 0], [2, 1], [2, -1]];
-/**
- * **O ACERTO COMPRA TEMPO.** Quanto o corpo atingido fica atordoado — sem andar, sem armar
- * (`EnemyBase.applyHitstun`). E a "janela de oportunidade" que a anatomia de um ataque reserva
- * pra recuperacao, so que do lado de ca: um pouco maior que a cadencia do golpe, entao encadear
- * mantem o bicho preso e a iniciativa e de quem esta batendo.
- */
-const HITSTUN_MS = 300;
-const HITSTUN_SPIN_MS = 420;
-
-/**
- * **A RECUSA TAMBÉM É UM IMPACTO.** Quanto o mundo congela quando o golpe do herói NÃO passa.
- *
- * O acerto sempre teve hitstop (60ms, 110 quando mata) e as duas recusas não tinham nada — então a
- * lâmina atravessava uma guarda erguida com MENOS resistência do que atravessava o ar. Um golpe
- * aparado é um encontro de duas coisas duras, e o hitstop é a ferramenta mais barata e mais direta
- * que existe para dizer "isto não passou".
- *
- * O aparo trava mais que o resvalo porque são coisas diferentes: aparar é aço encontrando aço
- * (CONTORNE), resvalar é a lâmina escorregando de um corpo que ainda pisca (ESPERE). Os dois ficam
- * abaixo do hitstop de um acerto — recusar nunca pode pesar mais que conectar.
- */
-const GUARD_HITSTOP_MS = 55;
-const GLANCE_HITSTOP_MS = 28;
-
-// ── A LAMINA RODOPIANTE ──────────────────────────────────────────────────────
-//
-// Segure o A, o gume junta forca, solte e o heroi gira cortando os OITO vizinhos. E a unica
-// resposta do jogo a estar cercado — e o cerco de caveiras e metade da aventura —, e ela custa:
-// meio segundo parado no meio da matilha, e uma cadencia mais longa depois.
-/** Quanto tempo com o A segurado ate a lamina ficar carregada. */
-const SPIN_CHARGE_MS = 450;
-/**
- * A partir de quando o segurar COMEÇA A FALAR. Os 450ms entre o aperto e o sino eram mudos —
- * nenhum som, nenhum brilho, nada crescendo — e um gesto que só se comunica quando termina só
- * existe para quem já sabia dele. Deste ponto em diante sobem faíscas cada vez mais vivas e um
- * zumbido fino que cresce até o sino (ver tickSpinCharge). O limiar existe por causa do TOQUE:
- * todo golpe do A é um segurar de alguns frames, e uma carga que falasse no primeiro milissegundo
- * transformaria cada espadada num começo de giro falso.
- */
-const SPIN_CHARGE_TELL_MS = 120;
-/** A cadencia depois do giro. Longa de proposito: o gesto e um compromisso, nao uma alternativa. */
-const SPIN_COOLDOWN_MS = 460;
-/** Faisca de carga a cada tantos ms enquanto a lamina esta pronta — o aviso de que ela esta. */
-const SPIN_READY_MOTE_MS = 90;
-
-/**
- * Quanto tempo dura o perdao de virar-se para um monstro (ver `turnedTowardCreature`). Tem de
- * cobrir um toque humano inteiro — 3 a 6 frames — e nao pode chegar perto do intervalo de um
- * esbarrao segurado (220ms), ou segurar a seta contra um bicho deixaria de custar caro.
- */
-const CREATURE_TURN_GRACE_MS = 180;
-
-/**
- * A JANELA DE INVENCIBILIDADE do herói depois de levar um golpe, e a piscada que a mostra.
- *
- * Os dois números eram independentes e discordavam: a janela é de 1500ms e a piscada tocava
- * `repeat: 5` de 80ms com yoyo — 960ms. Nos últimos 540ms o herói parecia vulnerável e não era,
- * que é exatamente o defeito consertado do lado do inimigo (ver EnemyBase.hurtInvulnMs). Agora a
- * contagem SAI da janela: um número, e a piscada não pode mais mentir sobre ele.
- *
- * `floor` e não `ceil` de propósito — é melhor parar de piscar 60ms antes de a janela fechar do
- * que continuar piscando depois de já poder apanhar.
- */
-const PLAYER_INVULN_MS = 1500;
-/**
- * O ATORDOAMENTO DO HERÓI — quanto tempo um golpe recebido tira dele, e ele existe porque a lei
- * mais importante do combate só valia num sentido.
- *
- * "O acerto compra TEMPO": todo corpo que o herói atinge fica 300ms sem andar e sem armar
- * (`HITSTUN_MS`). O herói atingido não pagava nada — levava os i-frames, o arremesso e o hitstop, e
- * podia golpear no frame seguinte. Ou seja, trocar dano era LUCRO para quem tem a espada: apanhar
- * não custava iniciativa nenhuma, e a única coisa que o telegrafo de 500ms podia comprar do jogador
- * era um coração.
- *
- * 240ms, e o número não é escolhido no vácuo: é exatamente a duração do tween que devolve o herói
- * ao centro da tela depois do empurrão. Ele recupera o controle no instante em que o corpo assenta,
- * então o que se vê e o que se pode fazer terminam juntos — mais que isso viraria uma pausa
- * sentida, e menos deixaria o herói agindo enquanto ainda está sendo jogado para trás.
- *
- * Abaixo dos 300ms do inimigo de propósito: quem apanha já perdeu um coração, e o jogo nunca deve
- * cobrar duas vezes pela mesma falha. E toda a janela cabe dentro dos 1500ms de invencibilidade —
- * o herói está atordoado, mas nunca atordoado E vulnerável.
- */
-const PLAYER_STAGGER_MS = 240;
-const PLAYER_BLINK_HALF_MS = 80;
-const PLAYER_BLINK_REPEAT = Math.max(0, Math.floor(PLAYER_INVULN_MS / (PLAYER_BLINK_HALF_MS * 2)) - 1);
-
-const BOMB_FUSE_MS = 1600;
-const BOMB_BLAST_RADIUS_TILES = 2.2;
 
 // How long a burning tile takes to set its neighbours alight. Slow enough that the fire is a
-// thing you WATCH travel (and can still run from), fast enough that a fuse pays off inside one
-// held thought. See GameScene.scheduleFireSpread.
+// thing you WATCH travel, fast enough that a fuse pays off inside one held thought. See
+// GameScene.scheduleFireSpread.
 const FIRE_SPREAD_MS = 850;
-
-// Chance de um corpo abatido soltar um coracao — SO com o heroi ferido (coracao no chao com
-// vida cheia e lixo visual). E a unica cura de campo da aventura: a fogueira cura em casa, o
-// drop cura na estrada e nas dungeons, onde fogueira nao existe.
-const HEART_DROP_CHANCE = 0.2;
-
-
-// Resting in a lit campfire's safe ring mends one heart every this many ms (leaving the ring
-// resets the timer, so healing is a "warm up by the fire" beat, not passive regen anywhere).
-const HEALTH_REGEN_MS = 1200;
-// While the fire mends the hero, warm ember motes stream fire→hero on this cadence, so the
-// healing visibly COMES FROM the campfire instead of just silently happening.
-const HEAL_MOTE_INTERVAL_MS = 110;
-const HEAL_MOTE_TRAVEL_MS = 750;
 
 // Below this fuel fraction the carried flame starts GUTTERING: its light jitters and closes
 // in, the held torch flickers, and smoke wisps trail off the tip — the burnout announces
@@ -534,19 +266,11 @@ const TORCH_MIN_LIGHT_FRAC = 0.4;
 // The flame on the torch's tip: the same little fire that burns on a lit bush, cycling at a
 // deliberately coarse cadence — the frame flip IS the animation, there is no smooth sway.
 const TORCH_FLAME_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
-/**
- * A janela pós-degelo em que o herói não recongela (ver freezeHero): tempo de UM passo e meio
- * fora da linha de tiro — o suficiente para o congelamento nunca virar um laço sem saída, curto
- * o bastante para dois zoras em fogo cruzado continuarem sendo um problema de verdade.
- */
-const HERO_FREEZE_IMMUNE_MS = 1300;
 const TORCH_FLAME_FRAME_MS = 110;
 
-// Chest height, in tiles: where a blow lands and where the world's one-shot FX (flash, sparks,
-// motes) hang. The 2D game pinned them to the sprite's screen centre; in 3D they live at the
-// body's real height, so they are lit, occluded and blurred like anything else out there.
+// Chest height, in tiles: where the world's one-shot FX (flash, sparks, motes) hang. In 3D they
+// live at the body's real height, so they are lit, occluded and blurred like anything else.
 const FX_BODY_ELEV = 0.5;
-const FLASH_SIZE = 0.5; // tiles across, before the hit's growth tween
 
 // What every one-shot FX billboard shares: it hangs around its point (centred), the night fog
 // never touches it, and it never writes depth — see Billboard3D for why each of those matters
@@ -560,22 +284,10 @@ const ROCK_FACE_TILES = 0.34;
 // that fly. Pale enough to read against the night ground, and short of the near-white that sends an
 // unlit sprite over the bloom threshold and turns a stone chip into a spark.
 const ROCK_CHIP_TINTS = [0xb4bac1, 0x99a0a8, 0xc3c9cf, 0x848c95] as const;
-// Os cacos de uma pedra de FERRO. Mesma ideia, paleta quente: a rampa drywood do veio, com um
-// unico cinza sobrando pra lembrar que o minerio vem embrulhado em rocha. E o que faz a pancada
-// numa pedra de minerio parecer diferente ANTES do item cair — a diferenca chega no golpe, nao
-// so no drop.
+// Os cacos de uma pedra de FERRO: a rampa quente do veio, com um unico cinza sobrando.
 const ORE_CHIP_TINTS = [0x826841, 0x733e11, 0x99a0a8, 0x68380f] as const;
 
-// At or below this many hearts the hero shows the low-health "heartbeat" (a red pixel outline).
-const LOW_HEALTH_HEARTS = 2;
-// Low-health fire compass (Skyrim-style): a small flame marker orbits the hero at this radius,
-// pointing at the nearest lit campfire, so a dying player always knows where safety is.
-const FIRE_COMPASS_ORBIT_TILES = 1.55;
-// The 8 offset directions used to build the red outline around the hero (cardinals + diagonals).
-const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
-  [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1],
-];
-// The 4 grid moves a walking entity has (fire spread and the ember touch step by these).
+// The 4 grid moves a walking entity has (fire spread steps by these).
 const CARDINAL_DIRS: ReadonlyArray<readonly [number, number]> = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
 ];
@@ -584,43 +296,39 @@ const CARDINAL_DIRS: ReadonlyArray<readonly [number, number]> = [
 // river needs more than one tree.
 const TIMBER_MAX_SPAN = 3;
 
-// A planted bomb burning its fuse. The tween handle rides along so an early detonation
-// (fire reaching the payload) can kill the blink together with the sprite.
-type ActiveBomb = { worldX: number; worldY: number; sprite: Billboard3D; fuseTween: Phaser.Tweens.Tween };
+// ── A ABERTURA E O FIM ───────────────────────────────────────────────────────
+/** A hora em que a abertura e o fim acontecem: dez da noite, a hora dos vaga-lumes. */
+const INTRO_CLOCK = 0.92;
+/** Quantos tiles o cavaleiro anda pela estrada antes de parar. */
+const INTRO_WALK_TILES = 3;
+/** Um passo cansado: bem mais lento que o andar normal. */
+const INTRO_STEP_MS = 520;
+/** O quanto da lamina entra na terra (elevacao negativa do billboard, em tiles). */
+const SWORD_BURY_ELEV = -0.14;
+/** De quantos tiles a leste o mago chega andando. */
+const WIZARD_WALK_TILES = 5;
+/** Quantos vaga-lumes derivam em volta do heroi a noite. */
+const FIREFLY_COUNT = 18;
+/** Quanto tempo os creditos levam para atravessar a tela. */
+const CREDITS_SCROLL_MS = 26000;
 
 // How long to hide the back item during a swing (a touch longer than SwordSlash's arc + fade,
 // ~155 + 65ms) so the item never shows on the back and in the swing arc at the same time.
 const SWING_HIDE_MS = 240;
 
-// Where a swing PIVOTS on the hero, in tiles above the ground. Every arc used to be projected at
-// elevation 0 — the tile he STANDS on — so the sword, the axe and the pick all swung from his
-// ankles: the blade raked the ground and, facing north, the whole arc sat past his head instead
-// of in his hands. A swing comes from the HANDS, and the hero is about one tile tall.
+// Where a swing PIVOTS on the hero, in tiles above the ground: a swing comes from the HANDS, and
+// the hero is about one tile tall.
 const SWING_HAND_ELEVATION = 0.55;
 // Facing away (north), the pivot is also pulled a little TOWARD the camera, so the arc crosses
-// the hero's body and reads as happening in FRONT of him. Without it a northward swing projects
-// beyond his back — correct in world space, but on screen it reads as him hitting behind himself.
-// The same asymmetry positionBackItem already encodes for the item slung on his back.
+// the hero's body and reads as happening in FRONT of him.
 const SWING_BACK_TURNED_NEAR = 0.3;
-
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
 
   private camera?: WorldCamera;
   private chunkManager?: ChunkManager;
-  private enemyManager?: EnemyManager;
-  // As covas AUTORADAS (aba Inimigos do editor): tile fixo, um corpo por vez, outro depois que
-  // ele cai. Sao a UNICA fonte de inimigo do jogo — ver EnemySpawnerManager.
-  private enemySpawners?: EnemySpawnerManager;
-  private playerSafe = true;
   private npcManager?: NpcManager;
-  // O CONGELAMENTO (a bola do zora): quem trava qualquer coisa num tile — ver FreezeManager.
-  private freezeManager?: FreezeManager;
-  // A janela pós-degelo em que o herói NÃO recongela: sem ela, dois zoras alternando cuspes
-  // seriam um stun-lock sem contra-jogada — o jogador precisa de um instante para sair da linha.
-  private heroFreezeImmuneMs = 0;
   private lootManager?: LootManager;
-  private heartPickupManager?: HeartPickupManager;
   private itemManager?: ItemManager;
   private swordSlash?: SwordSlash;
   /**
@@ -673,9 +381,6 @@ export class GameScene extends Phaser.Scene {
   private campfires: CampfireObject[] = [];
   /** Last clock state applied to all ambient campfires; prevents per-frame effect restarts. */
   private campfiresFollowNight = false;
-  // A PIRA: base autorada no editor, torre construida em jogo (uma tora por graveto). Ver
-  // PyreObject — e o unico prop cujo PROGRESSO o save guarda.
-  private pyres: PyreObject[] = [];
   private dryBushes: DryBushObject[] = [];
   private lockedDoors: LockedDoorObject[] = [];
   private swingGates: SwingGateObject[] = [];
@@ -685,33 +390,14 @@ export class GameScene extends Phaser.Scene {
   private tallGrasses: TallGrassObject[] = [];
   // Night-blooming flowers: shut (blocking) near a lit campfire, open (walkable) in the dark.
   private moonflowers: MoonflowerObject[] = [];
-  // Walk-on marks where a carried bomb plants itself (the game has no "use item" button).
-  private bombSpots: BombSpotObject[] = [];
   // Canteiros: dug holes where seeds plant on step, mounds water on bump, grass regrows.
   private plantSpots: PlantSpotObject[] = [];
-  // As plantas carnívoras — autoradas OU brotadas da semente carnívora em runtime (o push é
-  // sempre in place: o propRegistry referencia este array; ver o comentário dele).
-  private carnivorousPlants: CarnivorousPlantObject[] = [];
   // A bancada manual: abre o catalogo e fabrica com os materiais da mochila.
   private toolboxes: ToolboxObject[] = [];
   // O CATALOGO DA ENCOMENDA, e a bancada em que ele foi aberto. Ele congela o mundo como as
   // cartas de chunk (a bolsa e a unica tela deste jogo que roda com o mundo vivo).
   private orderOverlay?: ToolboxOrderOverlay;
   private orderBox?: ToolboxObject;
-  /** As ESCADAS entre os dois andares — a porta física, e a única que não é mágica. */
-  private stairs: StairsObject[] = [];
-  /** As tochas de parede de uma dungeon — nascem de TILES, nao de props (ver WallTorchObject). */
-  private wallTorches: WallTorchObject[] = [];
-  /** Uma travessia de escada está em curso: o mundo está trocando de andar por trás da cortina. */
-  private levelTransitioning = false;
-  /**
-   * A luz do mundo como ela era antes da succao comer (ambient / moon / exposure).
-   *
-   * So existe para o caminho de ERRO: quando a transicao falha, a cena continua viva e nao pode
-   * ficar no escuro que o portal abriu. No caminho feliz nada e restaurado — o World3D inteiro
-   * e descartado no restart e o do level novo nasce com os padroes.
-   */
-  private litParams?: { ambient: number; moon: number; exposure: number };
   /** As marcas de "a peça cai aqui" — o quadrado no chão e o keycap (ver PlacementHints). */
   private placementHints?: PlacementHints;
   /** O balao de PENSAMENTO do heroi: um icone, um instante. Ver HeroThought. */
@@ -725,7 +411,6 @@ export class GameScene extends Phaser.Scene {
   private readonly bloomBlows = new Map<string, number>();
   private furnaces: FurnaceObject[] = [];
   private altars: AltarObject[] = [];
-  private lavaTiles: LavaObject[] = [];
   private waterTiles: WaterObject[] = [];
   // O registro único de props: referencia os MESMOS arrays tipados acima, então destruição,
   // colisão (isSolidForEntities) e reset atravessam todos os props num loop só — um prop novo
@@ -734,11 +419,6 @@ export class GameScene extends Phaser.Scene {
   // `hazard` marca água e lava para os poucos sistemas que ignoram chão perigoso, como inimigos
   // voadores e projéteis. Para o herói, ambos bloqueiam até virarem chão por uma interação.
   private propRegistry: Array<{ list: WorldProp[]; hazard?: boolean }> = [];
-  // Lit bombs on the ground — world-anchored billboards ticking until they blow.
-  // `fuseTween` viaja no registro para a explosao poder MATA-LO: o fogo alcancando a bomba
-  // explode antes do fim do fusivel, e sem parar o tween o pisca continuava rodando setTint
-  // num material ja disposed ate o fusivel "terminar".
-  private activeBombs: ActiveBomb[] = [];
   // The hero has no Phaser GameObject in the world: he is plain state (tweened like any
   // object) drawn by the 3D billboard alone. See HeroView.
   private readonly hero: HeroView = createHeroView();
@@ -746,52 +426,15 @@ export class GameScene extends Phaser.Scene {
   // In-world it's a 3D billboard riding the hero billboard (so the body occludes it
   // properly); the 2D image only returns for the screen-space death elegy.
   private backItem?: Phaser.GameObjects.Image;
-  // The hero's 2D stand-in, struck only for the screen-space death elegy.
-  private deathHero?: Phaser.GameObjects.Sprite;
   private backItemBb?: Billboard3D;
   // Hides the back item while the same item is mid-swing, so it isn't shown in two places.
   private backItemSwingTimer?: Phaser.Time.TimerEvent;
   private movementController?: PlayerMovementController;
   private playerWorld = { worldX: 0, worldY: 0 };
-  private playerMaxHealth = PLAYER_HEALTH_MAX;
-  private playerHealth = PLAYER_HEALTH_MAX;
-  private playerInvincible = false;
-  private invincibleTimer = 0;
-  /** > 0 = o herói ainda pertence ao golpe que levou (ver PLAYER_STAGGER_MS). */
-  private playerStaggerMs = 0;
-  // Combat juice: while > 0 the whole world (tweens included) is frozen on an impact frame.
-  private hitstopMs = 0;
-  // Os dois botoes, cada um com sua cadencia (ver ATTACK_COOLDOWN_MS / USE_COOLDOWN_MS).
-  private attackCooldownMs = 0;
+  // A cadencia do X e o pedido guardado dele (ver USE_COOLDOWN_MS / ACTION_BUFFER_MS).
   private useCooldownMs = 0;
-  // ...e cada um com seu buffer: um botao apertado durante a cadencia nao se perde, espera aqui
-  // e sai no instante em que ela libera (ver ACTION_BUFFER_MS).
-  private attackBufferMs = 0;
   private useBufferMs = 0;
-  // A LAMINA RODOPIANTE. `attackHeld` existe porque o navegador repete o `keydown` de uma tecla
-  // segurada — sem ele, segurar o A seria uma metralhadora em vez de uma carga.
-  private attackHeld = false;
-  private chargeMs = 0;
-  private chargeReady = false;
-  private chargeMoteMs = 0;
-  // Ate quando virar-se para um monstro sai de graca (ver turnedTowardCreature)...
-  private creatureTurnGraceUntilMs = 0;
-  // ...e EM QUEM ela foi gasta. A carencia e o perdao de UM esbarrao contra UM corpo, e sem este
-  // par ela era um relogio solto: virar-se para a caveira ao norte comprava 180ms de esbarrao de
-  // graca no slime a leste. Contra matilha — que e metade da aventura — isso e um golpe gratis.
-  private creatureTurnGraceOn?: EnemyBase;
-  // Returns the hero to screen centre after a hurt-knockback shove.
-  private playerKnockTween?: Phaser.Tweens.Tween;
-  /** A investida do golpe (ver SWING_LUNGE_TILES) — dona exclusiva de hero.lungeX/lungeY. */
-  private swingLungeTween?: Phaser.Tweens.Tween;
-  // Counts up while resting in a campfire's safe ring; mends a heart each HEALTH_REGEN_MS.
-  private healthRegenTimer = 0;
-  // Cadence for the ember motes streaming fire→hero while the campfire mends him.
-  private healMoteTimer = 0;
-  // Low-health fire compass: an arrow orbiting the hero, pointing toward the nearest lit fire.
-  private fireCompassArrow?: Phaser.GameObjects.Polygon;
   private tileSize = MIN_BOARD_TILE_SIZE;
-  private isDead = false;
   private dialogOpen = false;
   private dialogOverlay?: DialogOverlay;
   // Dialog variants the player already heard this run (kind:base / kind:locked / wizard:beat).
@@ -804,19 +447,30 @@ export class GameScene extends Phaser.Scene {
   private camShiftTween?: Phaser.Tweens.Tween;
   private dialogNpcWorld?: { worldX: number; worldY: number };
   private itemGetOpen = false;
-  // First-campfire cut-scene: plays once, when the player relights their first dead fire.
-  private firstCampfireLit = false;
   // True quando esta cena e a AVENTURA (overworld ou uma dungeon dela) — o unico modo com
   // memoria persistente (adventureState). Explorador e levels nunca ligam isto.
   private adventure = false;
   // Qual arquivo de mundo esta aberto ('world' ou 'under') — a chave da foto de itens no
   // chao dentro do save.
   private adventureScope = 'world';
-  // Wizard story progression: how many dead fires the hero has relit, and whether the wizard's
-  // intro beat has already played (so a second visit shows the "protect the flame" lines).
-  private litFireCount = 0;
-  private wizardIntroSeen = false;
   private cutsceneActive = false;
+  // A ABERTURA e o FIM: a espada fincada na entrada do vale, o mago, o portao do jardim e a
+  // fogueira que so o heroi acende (ver playIntro / openGardenGate / playRoastEnding).
+  private introDone = false;
+  private gateOpened = false;
+  private hearthLit = false;
+  private roasted = false;
+  private plantedSword?: Billboard3D;
+  private plantedSwordTile?: { x: number; y: number };
+  private wizardStandIn?: Billboard3D;
+  private roasting = false;
+  private roastStick?: Billboard3D;
+  private fireflyLevel = 0;
+  private creditsRoll?: HTMLDivElement;
+  private hearths: CampfireObject[] = [];
+  private gardenGates: LockedDoorObject[] = [];
+  // Os vaga-lumes da noite (ver updateFireflies): pontos sem luz que derivam em volta do heroi.
+  private readonly fireflies: Array<{ bb: Billboard3D; ox: number; oy: number; phase: number; speed: number }> = [];
   // While set, updateLighting erases a growing light hole at this campfire (0..1) — the
   // slow-motion glow blooming open before the fire fully ignites.
   private cutsceneFireLight?: { worldX: number; worldY: number; progress: number };
@@ -841,12 +495,6 @@ export class GameScene extends Phaser.Scene {
   private clearDebugHooks?: () => void;
 
 
-  // Low-health "heartbeat": a pulsing red PIXEL OUTLINE around the hero (never painting the
-  // sprite itself), ramping up as the last hearts drain. Built the classic pixel-art way —
-  // red-filled copies of the hero billboard offset in 8 directions, drawn just behind it, so
-  // only the border shows through.
-  private readonly lowHealthOutlines: Billboard3D[] = [];
-  private heartbeatPhase = 0;
 
   // Footprints (world-anchored so they scroll with the ground)
   private footprintStep = false;
@@ -870,50 +518,35 @@ export class GameScene extends Phaser.Scene {
 
   public create(): void {
 
-    // A AVENTURA TEM MEMORIA. O jogo é UM mundo aberto — a superfície e o espelho subterrâneo —
-    // e ele hidrata do retrato em adventureState, que sobrevive ao scene.restart() por ser estado
-    // de módulo e ao browser por viver no localStorage.
+    // A AVENTURA TEM MEMORIA. O jogo e UM mundo aberto, e ele hidrata do retrato em
+    // adventureState, que sobrevive ao scene.restart() por ser estado de modulo e ao browser por
+    // viver no localStorage.
     //
-    // Quem fica de fora é o PLAYTEST DO EDITOR (`appMode === 'editor'`): ali o mundo em memória
-    // pode estar sujo de edição não salva, e deixá-lo escrever no save contaminaria a partida de
-    // quem só foi testar um tile. Era aqui que os levels isolados também ficavam de fora.
+    // Quem fica de fora e o PLAYTEST DO EDITOR (`appMode === 'editor'`): ali o mundo em memoria
+    // pode estar sujo de edicao nao salva, e deixa-lo escrever no save contaminaria a partida de
+    // quem so foi testar um tile.
     this.adventure = this.registry.get('appMode') === 'game';
-    const inDungeon = isUnderground();
     // Arvores derrubadas voltam ao chao ANTES do World3D assar o terreno (o construtor le os
-    // chunks): o corte e um diff por cima do world.json, que volta limpo do disco a cada boot
-    // e a cada saida de dungeon.
-    if (this.adventure && !inDungeon) {
+    // chunks): o corte e um diff por cima do world.json, que volta limpo do disco a cada boot.
+    if (this.adventure) {
       this.applyFelledTreeDiff();
       this.applyDugSpotDiff();
     }
-    // A parede rachada aberta a bomba e o diff do SUBTERRANEO, e roda aqui pelo mesmo motivo dos
-    // dois de cima: o World3D assa a malha lendo estes chunks logo adiante.
-    if (this.adventure) this.applyBombedWallDiff();
 
     let start = getPlayerStart();
-    // "Acorde na fogueira" e um PEDIDO (morte, Continue do titulo), nunca o padrao: a volta de
-    // dungeon tambem reinicia a cena, e ela nasce na boca da caverna, nao teleportada pro fogo.
-    if (this.adventure && consumeAdventureRespawn() && !inDungeon && adventureState().respawn) {
+    // "Continue de onde parou" e um PEDIDO (o Continue do titulo), nunca o padrao.
+    if (this.adventure && consumeAdventureRespawn() && adventureState().respawn) {
       start = { ...adventureState().respawn! };
     }
     const { worldX: startWorldX, worldY: startWorldY } = start;
 
-    this.isDead = false;
-    this.playerMaxHealth = PLAYER_HEALTH_MAX;
-    this.playerHealth = PLAYER_HEALTH_MAX;
-    this.playerInvincible = false;
-    this.hitstopMs = 0;
-    this.attackCooldownMs = 0;
     this.useCooldownMs = 0;
-    this.resetChargeAndBuffers();
+    this.useBufferMs = 0;
     this.tweens.timeScale = 1;
-    this.playerKnockTween = undefined;
     this.playerWorld = { worldX: startWorldX, worldY: startWorldY };
     this.streamCenter = { cx: NaN, cy: NaN };
-    this.levelTransitioning = false;
     // O heroi e um campo `readonly` e o Phaser REUSA esta instancia de cena no restart: sem
-    // isto, o que a cena anterior escreveu nele (o alpha da morte, o encolhimento da succao do
-    // portal) chega inteiro no level seguinte e o heroi nasce invisivel.
+    // isto, o que a cena anterior escreveu nele chega inteiro na seguinte.
     resetHeroView(this.hero);
 
     // Phaser's canvas is transparent: the 3D world shows through from below.
@@ -925,6 +558,7 @@ export class GameScene extends Phaser.Scene {
     registerBucketTextures(this);
     registerCharcoalTexture(this);
     registerPlacementTextures(this);
+    registerCozyTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -933,109 +567,57 @@ export class GameScene extends Phaser.Scene {
     window.hd3d = this.world3d.params;
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
 
-    // Decode the SFX + music loops. A AVENTURA de overworld tem trilha: "Ashen Fields", que
-    // ficou anos no repositorio "para revival facil" — revivida. O vento continua por baixo (ele
-    // e ambience, nao musica). Dungeon, level e explorador ficam so no vento: o escuro deles e
-    // desenho, nao falta de musica.
-    //
-    // E ESTA E A UNICA VEZ EM QUE A TRILHA E ESCOLHIDA. Ela nao responde a inimigo: nao existe
-    // mais trilha de combate subindo quando um corpo entra na tela (ver MusicKey). Quem baixa a
-    // musica sao as telas que a tomam — dialogo, item-get, cutscene —, e cada uma a devolve com
-    // fadeMusicIn ao fechar; o barramento e delas, a trilha e daqui.
+    // Decode the SFX + music loops. A aventura tem trilha ("Ashen Fields") sobre o leito de vento,
+    // e ESTA E A UNICA VEZ EM QUE A TRILHA E ESCOLHIDA: quem baixa a musica sao as telas que a
+    // tomam — dialogo, item-get, cutscene —, e cada uma a devolve com fadeMusicIn ao fechar.
     getSoundManager().preload();
-    if (this.adventure && !inDungeon) getSoundManager().startMusic('overworld', 2400);
+    if (this.adventure) getSoundManager().startMusic('overworld', 2400);
     else getSoundManager().stopMusic(1800);
     getSoundManager().startAmbience();
 
-    // Phaser does not auto-call shutdown(); wire it so scene.restart() (death) cleans up
+    // Phaser does not auto-call shutdown(); wire it so scene.restart() cleans up
     // listeners/textures instead of leaking them across runs.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
 
     this.chunkManager = new ChunkManager();
     const getContent = (cx: number, cy: number): ScreenContent => getChunkContent(cx, cy);
-    // TODO inimigo do mundo nasce de uma COVA AUTORADA (ver EnemySpawnerManager): nada mais
-    // invoca corpo em volta do heroi. O cerco que fazia isso no escuro foi arrancado.
-    this.enemyManager = new EnemyManager(this, {
-      isOpenWater: (wx, wy) => this.isOpenWaterAt(wx, wy),
-      // A vizinhanca e varrida em QUADRADO em vez de filtrar a lista de props, porque metade da
-      // agua deste jogo nao e prop nenhum (ver isOpenWaterAt). Sao (2r+1)^2 consultas de tile — 81
-      // no raio de 4 — e so acontece quando um zora mergulha, a cada ~2,4s.
-      openWaterNear: (cx, cy, radius) => {
-        const found: Array<{ worldX: number; worldY: number }> = [];
-        for (let y = cy - radius; y <= cy + radius; y += 1) {
-          for (let x = cx - radius; x <= cx + radius; x += 1) {
-            if (this.isOpenWaterAt(x, y)) found.push({ worldX: x, worldY: y });
-          }
-        }
-        return found;
-      },
-    });
-    // O RASTRO DA TOCHA VIVA (ver EnemyBase.updateBurning): cada passo de um corpo em chamas
-    // tenta acender o próprio tile e os 4 vizinhos — o MESMO buraco de fechadura do
-    // espalhamento, então mato, ponte, fogueira morta e OUTRO CORPO respondem igual, sem uma
-    // segunda tabela de combustível. Reinstalado a cada create: o closure fecha sobre a cena
-    // viva, e um restart (morte) não pode deixar um rastro apontando pra cena morta.
-    EnemyBase.setEmberTouch((wx, wy) => {
-      this.igniteFlammableAt(wx, wy);
-      for (const [dx, dy] of CARDINAL_DIRS) this.igniteFlammableAt(wx + dx, wy + dy);
-    });
-    // O SINO DA MORTE (ver EnemyBase.setDeathToll): TODO corpo que morre paga, não importa o que o
-    // matou — a espada, a bomba, a tocha viva ou a brasa da fogueira. Reinstalado a cada create
-    // pelo mesmo motivo do rastro acima: o closure fecha sobre a cena viva.
-    EnemyBase.setDeathToll((enemy) => this.rewardKill(enemy.worldX, enemy.worldY, enemy.kind));
-    // O CONGELAMENTO (ver FreezeManager): a bola do zora não fere — trava. Este é o consumidor
-    // dos pousos dela: bola rebatida que tocou um corpo congela o corpo; bola que morreu num
-    // tile congela o que estiver ali (árvore, NPC, caixote…). Só o cuspe gela — a bola do mago
-    // e a bala da torreta continuam morrendo como sempre.
-    this.freezeManager = new FreezeManager(this, (wx, wy) => this.isTileFramed(wx, wy));
-    this.heroFreezeImmuneMs = 0;
-    this.enemyManager.setShotLandedHandler((ev) => {
-      if (ev.kind !== 'spit') return;
-      if (ev.enemy) this.freezeEnemy(ev.enemy);
-      else this.freezeAtTile(Math.round(ev.x), Math.round(ev.y));
-    });
-    // A UNICA fonte de inimigo do jogo e a COVA AUTORADA (aba Inimigos do editor): um tile
-    // escolhido a mao, um corpo por vez, outro depois que ele cai. O CERCO ambiente
-    // (UndeadSpawnDirector) — que fazia caveiras subirem num anel de 4 a 7 tiles em volta do
-    // heroi enquanto ele demorava no escuro — foi REMOVIDO: era a unica coisa no jogo capaz de
-    // por um corpo num lugar que ninguem autorou, e com o explorador fora nao sobrou modo nenhum
-    // que o quisesse. Corpo que aparece agora saiu de um tile que alguem escolheu no editor.
-    this.enemySpawners = new EnemySpawnerManager(getEnemySpawns());
-    this.playerSafe = true;
-    this.healthRegenTimer = 0;
-    this.firstCampfireLit = false;
-    this.litFireCount = 0;
-    this.wizardIntroSeen = false;
     this.cutsceneActive = false;
     this.cutsceneFireLight = undefined;
     this.cutsceneHeroLight = 1;
     this.seenDialogKeys.clear();
+    this.introDone = false;
+    this.gateOpened = false;
+    this.hearthLit = false;
+    this.roasted = false;
     if (this.adventure) {
-      // A historia do mago e os dialogos ouvidos voltam do save — antes disto, entrar numa
-      // dungeon (scene.restart) apagava a memoria do mundo inteiro.
+      // A historia e os dialogos ouvidos voltam do save.
       const st = adventureState();
-      this.litFireCount = st.litFireCount;
-      this.firstCampfireLit = st.litFireCount > 0;
-      this.wizardIntroSeen = st.wizardIntroSeen;
+      this.introDone = st.introSeen;
+      this.gateOpened = st.gateOpened;
+      this.hearthLit = st.hearthLit;
+      this.roasted = st.endingSeen;
       st.seenDialogKeys.forEach((k) => this.seenDialogKeys.add(k));
+    } else {
+      // O playtest do editor nao tem abertura: quem aperta P quer testar o tile, nao a historia.
+      this.introDone = true;
     }
     this.npcManager = new NpcManager(this, getContent, (kind, wx, wy, dialog) => {
       const key = this.dialogKeyFor(kind, wx, wy, dialog);
       return key !== null && !this.seenDialogKeys.has(key);
     }, (wx, wy) => {
-      // O keycap "Z" só existe quando falar é o que o botão FARIA agora: herói vivo, mundo
-      // correndo, e o NPC exatamente no tile encarado.
+      // O keycap "Z" só existe quando falar é o que o botão FARIA agora: mundo correndo e o NPC
+      // exatamente no tile encarado.
       if (!this.canAct() || !this.movementController) return false;
       const front = this.facingTile();
       return front.x === wx && front.y === wy;
     });
+    // O mago so entra em cena DURANTE a abertura: ate la o lugar dele na estrada fica vazio.
+    if (!this.introDone) this.npcManager.setKindHidden('wizard', true);
     this.lootManager = new LootManager(this);
-    this.heartPickupManager = new HeartPickupManager(this, getContent);
     this.itemManager = new ItemManager(this);
-    // O chao tambem lembra: a foto salva dos itens DESTE mundo (overworld ou subterraneo)
-    // substitui a lista autorada — um item largado fica onde ficou, um tesouro tomado nao
-    // renasce. Sem foto (mundo nunca visitado, ou fora da aventura), vale o autorado.
-    this.adventureScope = inDungeon ? 'under' : 'world';
+    // O chao tambem lembra: a foto salva dos itens substitui a lista autorada — um item largado
+    // fica onde ficou, um cogumelo colhido nao renasce. Sem foto, vale o autorado.
+    this.adventureScope = 'world';
     const savedGround = this.adventure ? adventureState().groundItems.get(this.adventureScope) : undefined;
     this.itemManager.loadAuthored(
       savedGround
@@ -1052,16 +634,15 @@ export class GameScene extends Phaser.Scene {
       this.updateBackItem(); // o item selecionado volta as costas do heroi ja no primeiro frame
     }
     this.heldOnFire = false;
-    // One reusable swing animator, alive for the whole scene: the sword uses it to attack,
-    // the key uses it to strike a door (SwordSlash.slash accepts a custom item sprite).
+    // One reusable swing animator, alive for the whole scene: the tools swing through it
+    // (SwordSlash.slash accepts a custom item sprite).
     this.swordSlash = new SwordSlash(this);
     this.camera = new WorldCamera(startWorldX, startWorldY, 0, 0);
     this.camera.world3d = this.world3d;
     this.world3d.follow(startWorldX, startWorldY, true);
 
-    // The hero's contact blob rides the billboard like every other actor's (the manual
-    // GroundEllipse this replaces was the last special case); zBias is the +0.1 forward
-    // nudge the old ellipse always had, peeking the shadow past his boots.
+    // The hero's contact blob rides the billboard like every other actor's; zBias peeks the
+    // shadow past his boots.
     this.heroBillboard = this.world3d.addBillboard('hero', HERO_FRAMES.idleDown, {
       castGroundShadow: true,
       groundShadow: { rx: 0.34, rz: 0.32, alpha: 0.34, zBias: 0.1 },
@@ -1069,8 +650,8 @@ export class GameScene extends Phaser.Scene {
       .setPosition(startWorldX, startWorldY)
       .setDisplaySize(1, 1);
 
-    // The 2D back-item image only appears in the screen-space death elegy (the in-world
-    // carried item is a billboard — see updateBackItem); it idles hidden until then.
+    // The 2D back-item image idles hidden (the in-world carried item is a billboard — see
+    // updateBackItem).
     this.backItem = this.add
       .image(0, 0, ASSET_KEYS.swordItemIcon)
       .setOrigin(0.5)
@@ -1081,13 +662,7 @@ export class GameScene extends Phaser.Scene {
       this,
       this.hero,
       this.camera,
-      (wx, wy) => {
-        // The hero also stops on enemies (to attack them); everything else that blocks is
-        // shared with enemies via isSolidForEntities. Lava and water remain solid until the
-        // player builds a crossing; no held item grants movement through the hazard itself.
-        if (this.enemyManager?.getEnemyAt(wx, wy)) return true;
-        return this.isSolidForEntities(wx, wy);
-      },
+      (wx, wy) => this.isSolidForEntities(wx, wy),
       // Fires once per tile ENTERED (never per frame): decor rustle + walk-on interactions.
       (wx, wy, dx, dy) => {
         this.world3d?.rustleDecor(wx, wy);
@@ -1096,21 +671,13 @@ export class GameScene extends Phaser.Scene {
       (wx, wy) => this.handlePlayerBump(wx, wy),
     );
 
-
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
 
-    // (A LOJA da fogueira foi removida, e as melhorias dela junto: a vida e a cadência são as
-    // base do jogo agora — quem quiser progressão de corpo cria uma peça nova, não um menu.)
-    this.playerMaxHealth = PLAYER_HEALTH_MAX;
-    this.playerHealth = this.playerMaxHealth; // toda expedicao comeca inteira
-
     // All world props are authored in world.json; their collision is resolved at runtime.
     const campfireDefs = getCampfires();
-    // Ambient campfires follow the day/night clock. Their visual light no longer represents
-    // permanent progression; `litFireCount` below remains the separate quest-progress counter.
     // A tela em que se nasce ja conta como pisada — o mapa nunca abre 100% escuro.
-    if (this.adventure && !inDungeon) {
+    if (this.adventure) {
       adventureState().visitedChunks.add(
         `${Math.floor(startWorldX / CHUNK_COLUMNS)},${Math.floor(startWorldY / CHUNK_ROWS)}`,
       );
@@ -1119,24 +686,19 @@ export class GameScene extends Phaser.Scene {
     this.campfires = campfireDefs.map((c) => new CampfireObject(
       this, c.worldX, c.worldY, this.campfiresFollowNight,
     ));
-    // A PIRA volta do save com as toras que ja recebeu (e acesa, se ja foi acesa). Fora da
-    // aventura ela sempre comeca da base: level e lab zeram por desenho.
-    const savedPyre = this.adventure && !inDungeon ? adventureState() : undefined;
-    this.pyres = getPyres().map((p) => new PyreObject(
-      this, p.worldX, p.worldY,
-      savedPyre?.pyreLogs.get(`${p.worldX},${p.worldY}`) ?? 0,
-      savedPyre?.litPyres.has(`${p.worldX},${p.worldY}`) ?? false,
-    ));
-    // A PIRA CENTRAL — o fim do jogo — se apresenta aqui, e o save guarda o tile dela: uma missão
-    // fechada dentro de uma dungeon não tem pira nenhuma na cena para receber as toras, e sem esta
-    // chave o crédito dela se perderia em silêncio (ver creditPyreForQuests).
-    if (savedPyre && this.pyres.length > 0) {
-      savedPyre.centralPyre = `${this.pyres[0].worldX},${this.pyres[0].worldY}`;
-    }
+    // A FOGUEIRA DO FIM nao segue o relogio: ela nasce apagada e so o heroi a acende, dentro do
+    // jardim. Ela mora na MESMA classe das outras fogueiras (arte, luz, fumaca), so que fora da
+    // lista que o dia acende e apaga sozinho.
+    this.hearths = getHearths().map((h) => new CampfireObject(this, h.worldX, h.worldY, this.hearthLit));
+    // O PORTAO DO JARDIM e a porta trancada sem chave: quem a abre e o ultimo pedido fechado.
+    this.gardenGates = getGardenGates().map((g) => {
+      const gate = new LockedDoorObject(this, g.worldX, g.worldY);
+      if (this.gateOpened) gate.unlock();
+      return gate;
+    });
     this.dryBushes = getDryBushes().map((b) => {
       const bush = new DryBushObject(this, b.worldX, b.worldY);
-      // O fogo PRODUZINDO: um arbusto que terminou de arder as vezes deixa carvao (comida da
-      // tocha). So arbustos — nunca o mato alto, que e o loop de pavio/plantio (ver constante).
+      // O fogo PRODUZINDO: um arbusto que terminou de arder deixa carvao (comida da tocha).
       bush.onBurnedOut = () => this.dropCharcoalFromBush(bush.worldX, bush.worldY);
       return bush;
     });
@@ -1144,86 +706,40 @@ export class GameScene extends Phaser.Scene {
     this.swingGates = getSwingGates().map((g) => new SwingGateObject(this, g.worldX, g.worldY));
     this.dryTrees = getDryTrees().map((t) => new DryTreeObject(this, t.worldX, t.worldY));
     this.dryShrubs = getDryShrubs().map((s) => new DryShrubObject(this, s.worldX, s.worldY));
-    // As duas pedras vivem no MESMO array de proposito: colisao, picareta, bomba e o registro
-    // de props ja atravessam `rocks`, e a unica coisa que a de minerio muda e a arte e o que
-    // ela deixa cair. Uma segunda lista significaria repetir todos esses caminhos pra ganhar
-    // um `if` — e esquecer um deles um dia (a bomba foi exatamente o que quase escapou).
+    // As duas pedras vivem no MESMO array de proposito: colisao, picareta e o registro de props ja
+    // atravessam `rocks`, e a unica coisa que a de minerio muda e a arte e o que ela deixa cair.
     this.rocks = [
       ...getRocks().map((r) => new RockObject(this, r.worldX, r.worldY)),
       ...getIronRocks().map((r) => new RockObject(this, r.worldX, r.worldY, true)),
     ];
     this.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this, g.worldX, g.worldY));
     this.moonflowers = getMoonflowers().map((m) => new MoonflowerObject(this, m.worldX, m.worldY));
-    this.bombSpots = getBombSpots().map((s) => new BombSpotObject(this, s.worldX, s.worldY));
     this.plantSpots = getPlantSpots().map((s) => new PlantSpotObject(this, s.worldX, s.worldY));
-    // Os buracos que a PÁ cavou voltam do save (diff sobre os autorados, o padrão felledTrees) —
-    // só na aventura de OVERWORLD: dungeon não tem terra, e level/explorador zeram por desenho.
-    if (this.adventure && !isUnderground()) {
+    // Os buracos que a PÁ cavou voltam do save (diff sobre os autorados, o padrão felledTrees).
+    if (this.adventure) {
       for (const key of adventureState().dugSpots) {
         const [wx, wy] = key.split(',').map(Number);
         if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
         if (this.plantSpots.some((s) => s.worldX === wx && s.worldY === wy)) continue;
-        // Um mundo re-autorado pode ter posto parede onde havia terra: um buraco não nasce
-        // dentro de rocha — o save cede ao mundo, nunca o contrário (o mesmo espírito do
-        // applyDugSpotDiff, que não derruba um sólido novo).
+        // Um mundo re-autorado pode ter posto parede onde havia terra: o save cede ao mundo.
         if (this.chunkManager?.isCellBlocked(wx, wy)) continue;
         this.plantSpots.push(new PlantSpotObject(this, wx, wy));
       }
     }
-    this.carnivorousPlants = getCarnivorousPlants().map(
-      (p) => new CarnivorousPlantObject(this, p.worldX, p.worldY),
-    );
-    // Mesma regra de default do braco (`dir ?? 1`): um JSON antigo nunca vira um prop quebrado,
-    // e leste e a direcao que o editor oferece primeiro.
+    // Mesma regra de default de toda peca direcional (`dir ?? 1`): um JSON antigo nunca vira um
+    // prop quebrado, e leste e a direcao que o editor oferece primeiro.
     this.toolboxes = getToolboxes().map(
       (t) => new ToolboxObject(this, t.worldX, t.worldY, t.dir ?? 1),
     );
-    // A MESMA escada, no MESMO tile, nos dois andares: o que muda é para onde ela leva DAQUI.
-    // Em cima ela afunda no chão; embaixo ela sobe para fora dele.
-    this.stairs = getStairs().map(
-      (st) => new StairsObject(st.worldX, st.worldY, isUnderground() ? 'up' : 'down'),
-    );
-
-    // AS TOCHAS DE PAREDE. Elas nao estao na lista de props: sao o frame `wallTorch` pintado na
-    // alvenaria (no editor, ou por scripts/enrich-underworld.mjs), entao a unica forma de
-    // encontra-las e varrer o terreno. A varredura roda uma vez, no boot, e so onde ha chance de
-    // haver alguma — um mundo sem nenhum tile de tocha sai da conta no primeiro chunk.
-    //
-    // A FASE FALSA MORREU AQUI. Cada tocha comecava a animacao num frame diferente, derivado da
-    // coordenada, para vinte chamas nao piscarem em unissono. Hoje o frame desenhado E a leitura da
-    // luz que a tocha lanca (ver WallTorchObject), e cada fogo do pool ja tem a sua propria
-    // semente: o desencontro vem de graca, e um numero magico a menos e um numero magico a menos.
-    this.wallTorches = [];
-    const bounds = getWorldBounds();
-    for (let cy = bounds.minCy; cy <= bounds.maxCy; cy++) {
-      for (let cx = bounds.minCx; cx <= bounds.maxCx; cx++) {
-        const chunk = getChunkTerrain(cx, cy);
-        for (let row = 0; row < CHUNK_ROWS; row++) {
-          for (let col = 0; col < CHUNK_COLUMNS; col++) {
-            if (chunk.upper[row][col] !== DUNGEON_TILES.wallTorch) continue;
-            const wx = cx * CHUNK_COLUMNS + col; const wy = cy * CHUNK_ROWS + row;
-            // …e a que tem alvenaria ao SUL nao nasce: nao ha face visivel para a chama, e desenhar
-            // assim mesmo a punha queimando dentro da pedra (ver wallTorchFaceIsClear — o Salvar do
-            // editor faz esta mesma pergunta ao autor, antes).
-            if (!wallTorchFaceIsClear(this.chunkManager?.getTile(wx, wy + 1).upper)) continue;
-            this.wallTorches.push(new WallTorchObject(this, wx, wy));
-          }
-        }
-      }
-    }
     this.furnaces = getFurnaces().map(
       (f) => new FurnaceObject(this, f.worldX, f.worldY, f.dir ?? 1),
     );
     this.altars = getAltars().map((a) => new AltarObject(this, a.worldX, a.worldY));
-    // O que o jogador construiu volta do save AQUI — depois dos
-    // autorados, para que uma peca autorada num tile sempre ganhe do diff (o save cede ao mundo,
-    // a mesma regra dos buracos da pa logo acima).
+    // O que o jogador construiu volta do save AQUI — depois dos autorados, para que uma peca
+    // autorada num tile sempre ganhe do diff (o save cede ao mundo).
     this.restoreBuiltMachines();
-    this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
     // Both `water` and `bridgeSpot` are river tiles (WaterObjects render animated water). A
-    // plain `water` tile is an impassable river; a `bridgeSpot` is a river tile you CAN bridge
-    // (buildable = true), marked so the level designer chooses exactly where crossings are
-    // allowed. They're separate props (one per tile) so the editor's "one prop per cell" holds.
+    // plain `water` tile is an impassable river; a `bridgeSpot` is a river tile you CAN bridge.
     this.waterTiles = [
       ...getWaterTiles().map((w) => new WaterObject(this, w.worldX, w.worldY, false)),
       ...getBridgeSpots().map((b) => {
@@ -1235,7 +751,8 @@ export class GameScene extends Phaser.Scene {
     ];
     this.propRegistry = [
       { list: this.campfires },
-      { list: this.pyres },
+      { list: this.hearths },
+      { list: this.gardenGates },
       { list: this.dryBushes },
       { list: this.lockedDoors },
       { list: this.swingGates },
@@ -1244,20 +761,22 @@ export class GameScene extends Phaser.Scene {
       { list: this.rocks },
       { list: this.tallGrasses },
       { list: this.moonflowers },
-      { list: this.bombSpots },
       { list: this.plantSpots },
-      { list: this.carnivorousPlants },
       { list: this.toolboxes },
       { list: this.furnaces },
       { list: this.altars },
-      { list: this.stairs },
-      // Lava e água continuam no registro como hazards para voadores e projéteis. Corpos no chão,
-      // inclusive o herói, só passam depois que o tile deixou de bloquear.
-      { list: this.lavaTiles, hazard: true },
+      // A agua continua no registro como hazard: o heroi so passa depois que o tile deixou de
+      // bloquear (uma ponte).
       { list: this.waterTiles, hazard: true },
     ];
+    // A ESPADA FINCADA. Ela e o primeiro gesto da historia e fica onde o heroi a deixou, para
+    // sempre: na abertura ela desce das costas para o chao (playIntro); quem continua uma partida
+    // a encontra ja de pe ali.
+    if (this.introDone && this.adventure) {
+      const ps = getPlayerStart();
+      this.plantSwordAt(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1);
+    }
 
-    this.initLighting();
     this.streamChunks(true);
 
     // The world is fully built, so compile every shader now rather than lazily, one hitch at
@@ -1274,9 +793,7 @@ export class GameScene extends Phaser.Scene {
     if ((this.registry.get('appMode') as AppMode | undefined) === 'editor') {
       this.enableEditorReturn();
     } else {
-      // O ESC TEM UM DONO SÓ. Com a bolsa aberta ele a fecha e para por aí — abrir a pausa por
-      // cima dela seria a segunda coisa que uma tecla faz num aperto só, e é exatamente o bug que
-      // manter I / setas / X / ESC roteados daqui existe para impedir.
+      // O ESC TEM UM DONO SÓ. Com a bolsa aberta ele a fecha e para por aí.
       this.input.keyboard?.on('keydown-ESC', () => {
         if (this.quickBag?.isOpen) { this.quickBag.close(); return; }
         this.openPauseMenu();
@@ -1290,272 +807,9 @@ export class GameScene extends Phaser.Scene {
     this.heroThought = new HeroThought(this, ASSET_KEYS.thoughtTorch);
     this.installActionInput();
 
-    // Chegou pela ESCADA? Então o herói não nasce parado: ele SOBE do poço, andando.
-    if (consumePendingStairsArrival()) {
-      void this.playStairsArrival();
-    } else {
-      // Sem chegada pendente, uma cortina aberta significa que a viagem foi abandonada no meio
-      // (morte, um restart por outro motivo): ela é opaca e não anima sozinha, então esquecida
-      // ela é uma tela preta permanente.
-      destroyStairsCurtain();
-    }
-  }
-
-  /** Restart the current run — shared by the pause menu entry and the level restart button. */
-  private restartRun(): void {
-    if (this.pauseMenu) return; // the floating buttons are hidden while the menu is up anyway
-    getSoundManager().stopMusic();
-    if (this.adventure) {
-      // Na aventura "reiniciar" nao e recomecar do zero (isso e o Start over do titulo): e
-      // voltar a fogueira com tudo — o mesmo contrato da morte, sem o funeral.
-      this.persistAdventure();
-      requestAdventureRespawn();
-    }
-    this.scene.restart(); // WorldData still holds this level, so it rebuilds the same one
-  }
-
-  /**
-   * A TRAVESSIA PELA ESCADA — e ela é uma CAMINHADA, não um teletransporte.
-   *
-   * O portal engolia o herói girando, apagava o mundo, abria um túnel na tela e o cuspia caindo
-   * do céu. A escada faz o contrário em tudo: ele **entra andando** no poço, afunda com os
-   * degraus e some; o mundo troca atrás do preto; e do outro lado ele **sai andando** do poço,
-   * subindo, no mesmo tile. Nenhum efeito mágico, nenhuma queda — só a peça de pedra e os pés.
-   *
-   * O `scene.restart()` no meio continua sendo o mesmo de sempre (é o único jeito de trocar de
-   * mundo), e é por isso que o bilhete de chegada existe: a descida roda numa GameScene e a
-   * saída na seguinte, que é um objeto novo sem memória nenhuma.
-   */
-  private async stairsTrip(fetching: Promise<void>, swap: () => void): Promise<void> {
-    if (this.levelTransitioning) return;
-    this.levelTransitioning = true;
-    this.cutsceneActive = true;
-
-    // A CORTINA (ver StairsCurtain) fecha no exato instante em que o lance acaba, e a troca de
-    // andar inteira acontece atrás dela. É a mesma lei do túnel do portal — que nasce ANTES do
-    // `scene.restart()` de propósito —, e aqui ela vale ainda mais: o canvas 3D é removido do DOM
-    // no `dispose`, então sem cobertura a tela mostra o fundo da página no meio da viagem.
-    // Ela cobre TUDO, inclusive a HUD: `setWorldFade` só apaga o mundo 3D, e corações a brilho
-    // pleno sobre um mundo preto eram metade do defeito.
-    const curtain = this.wait(STAIRS_WALK_MS * STAIRS_CURTAIN_AT)
-      .then(() => closeStairsCurtain(STAIRS_WALK_MS * (1 - STAIRS_CURTAIN_AT)));
-    await this.walkStairs('in');
-    await curtain;
-
-    try {
-      await fetching;
-      swap();
-      setPendingStairsArrival();
-      if (this.scene.isSleeping('editor') || this.scene.isActive('editor')) this.scene.stop('editor');
-      this.scene.restart();
-    } catch {
-      // Sem o arquivo do outro andar a viagem volta atrás: o herói sobe de volta os degraus que
-      // desceu, e nada no mundo mudou. A alternativa seria deixá-lo enterrado e invisível — e,
-      // agora, atrás de uma cortina preta que ninguém mais baixaria.
-      clearPendingStairsArrival();
-      openStairsCurtain(220);
-      await this.walkStairs('out');
-      this.levelTransitioning = false;
-      this.cutsceneActive = false;
-      }
-  }
-
-  /**
-   * OS PÉS NA ESCADA: um lance de degraus percorrido em `STAIRS_WALK_MS`.
-   *
-   * `in` = entrar no poço; `out` = sair dele, que é a chegada. Os DOIS lados usam o mesmo gesto
-   * de propósito: o poço é um buraco, e a leitura é sempre "ele entrou ali" / "ele saiu dali" —
-   * para baixo ou para cima, a pedra é a mesma.
-   *
-   * TODA medida vem da PEÇA (`STAIRS_RUN_TILES`, `stairsLiftAt` e `STAIRS_STEPS`, exportados do
-   * StairsObject): a caminhada tem de terminar onde a geometria acaba, subir na altura em que a
-   * pedra está e ter uma bota por pisada — senão ele some no ar, atravessa a rocha ou desliza.
-   */
-  private walkStairs(way: 'in' | 'out'): Promise<void> {
-    const h = this.hero;
-    const w3 = this.world3d;
-    const baseY = h.y;
-    const run = STAIRS_RUN_TILES * this.tileSize;
-    /**
-     * A BOCA DA ESCADA FICA AO NORTE NOS DOIS ANDARES — e é a única coisa que o deslocamento
-     * precisa saber.
-     *
-     * Em cima a boca é o buraco; embaixo é a passagem no teto, no alto do lance. Nos dois casos
-     * ENTRAR na escada é andar para o norte, e o `k` do tween mede o quanto o herói já está
-     * dentro dela: a posição é sempre o centro do tile mais `k` para o norte. Entrando o `k`
-     * sobe, saindo ele desce, e o mesmo sinal serve para os dois sentidos e para os dois andares.
-     *
-     * Isto já foi derivado de `northward`, que mistura duas perguntas (de que lado fica a boca E
-     * para onde ele anda): dava certo em `'in'` e ESPELHADO em `'out'`, e as duas chegadas
-     * botavam o herói do lado errado do poço andando de ré.
-     */
-    /**
-     * A ALTURA é da PEÇA, e as duas peças respondem diferente: em cima o corpo afunda numa rampa
-     * contínua (é uma queda dentro de um buraco), embaixo ele POUSA no degrau que está sob ele,
-     * porque lá os degraus existem. Ver `stairsLiftAt`.
-     */
-    const underground = isUnderground();
-    /**
-     * ENTRAR É ANDAR PARA O NORTE, SAIR É ANDAR PARA O SUL — nos dois andares.
-     *
-     * Em cima ele entra no buraco de costas para a câmera e volta de frente; embaixo ele sobe os
-     * degraus de costas e desce de frente. O rumo se INVERTE entre um andar e outro, e é o preço
-     * de a escada de baixo subir para longe da câmera (a única orientação em que os espelhos dos
-     * degraus aparecem — ver StairsObject). Ninguém vê a inversão: a tela está preta no meio.
-     */
-    const northward = way === 'in';
-    /**
-     * Para que lado a série de botas anda. Não é o mesmo que `northward`: andar para o norte é
-     * DESCER lá em cima (para dentro do buraco) e SUBIR lá embaixo (escada acima).
-     */
-    const descending = isUnderground() ? way === 'out' : way === 'in';
-    // Ele atravessa de costas para a câmera quando vai para o norte, e de frente quando volta.
-    h.frame = northward ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
-    h.walkFrames = northward ? WALK_CYCLE_FRAMES_UP : WALK_CYCLE_FRAMES;
-    // O ciclo de frente e o mesmo que os LADOS usam espelhado, e o espelho fica escrito no herói:
-    // quem chegou à escada vindo da esquerda desceria com o corpo virado do avesso.
-    h.flipX = false;
-    // OS PÉS SE MEXEM. Sem isto `tickHeroView` volta na primeira porta e o herói atravessa 620ms
-    // em pose de repouso, transladando — numa peça cuja tese inteira é "ele desce ANDANDO", os
-    // pés são a única coisa que prova a tese.
-    setHeroWalking(h, true);
-    const sound = getSoundManager();
-    let lastStep = -1;
-    return new Promise<void>((resolve) => {
-      this.tweens.addCounter({
-        from: way === 'in' ? 0 : 1,
-        to: way === 'in' ? 1 : 0,
-        duration: STAIRS_WALK_MS,
-        ease: 'Sine.easeInOut',
-        onUpdate: (tween) => {
-          const k = tween.getValue() ?? 0;
-          h.y = baseY - k * run; // a boca é ao norte nos dois andares; norte é para cima na tela
-          h.lift = stairsLiftAt(k, underground);
-          /**
-           * A CADÊNCIA vem da PEÇA, não da distância. O lance tem 0,37 tile e a passada do jogo
-           * mede um tile por bota (`TILES_PER_FOOTFALL`): deixar a distância comandar daria um
-           * terço de passo no lance inteiro. Aqui são quatro botas porque são quatro pisadas.
-           */
-          const gone = way === 'in' ? k : 1 - k;
-          h.walkDist = gone * STAIRS_STEPS * TILES_PER_FOOTFALL;
-          const step = Math.min(STAIRS_STEPS - 1, Math.floor(gone * STAIRS_STEPS));
-          if (step !== lastStep) {
-            lastStep = step;
-            sound.playStairsStep(step, descending);
-          }
-          // O corpo só apaga DEPOIS de já estar debaixo do chão — quem o engole é a pedra, e o
-          // alpha é só a garantia. Ele comia 45% do gesto; agora come 20%.
-          h.alpha = 1 - Math.max(0, (k - 0.8) / 0.2);
-          this.cutsceneHeroLight = h.alpha;
-          /**
-           * O mundo SEGURA e depois MERGULHA. Um fade linear apagava a escada junto com o
-           * primeiro passo, e o lance acontecia todo no escuro; assim a penumbra fica quase toda
-           * no fim, quando o herói já entrou no poço. Termina em 1 (preto de verdade) porque a
-           * cortina entra em cima: os dois chegam pretos no mesmo instante.
-           */
-          const late = Math.max(0, (k - 0.6) / 0.4);
-          w3?.setWorldFade(0.25 * k + 0.75 * late * late);
-        },
-        onComplete: () => {
-          h.y = baseY;
-          setHeroWalking(h, false);
-          resolve();
-        },
-      });
-    });
-  }
-
-  /**
-   * A CHEGADA pela escada: ele sai do poço andando, no tile em que a escada está.
-   *
-   * Ela nasce PRETA, e isso não é estilo: a cena anterior morreu com a cortina fechada, e o
-   * World3D desta cena é um objeto NOVO com o fade zerado. Sem apagar as duas coisas aqui —
-   * antes do primeiro render — o andar novo aparecia inteiro, a brilho pleno, por uns 120ms, e
-   * só então estalava para o escuro de onde deveria ter vindo.
-   */
-  private async playStairsArrival(): Promise<void> {
-    this.cutsceneActive = true;
-    void closeStairsCurtain(0);
-    this.world3d?.setWorldFade(1);
-    this.hero.alpha = 0;
-    this.hero.lift = stairsLiftAt(1, isUnderground());
-    await this.wait(STAIRS_SETTLE_MS); // um respiro no escuro: o mundo novo assenta antes de ser visto
-    // A cortina abre no mesmo ritmo em que fechou do outro lado, e por cima do primeiro trecho da
-    // caminhada — o mundo se revela enquanto ele sai, não antes de ele existir.
-    openStairsCurtain(STAIRS_WALK_MS * (1 - STAIRS_CURTAIN_AT));
-    await this.walkStairs('out');
-    this.hero.alpha = 1;
-    this.hero.lift = 0;
-    this.cutsceneHeroLight = 1;
-    this.world3d?.setWorldFade(0);
-    this.cutsceneActive = false;
-  }
-
-  /**
-   * DESCER. O andar de baixo e o ESPELHO do mapa de cima — mesmo tamanho, mesmas coordenadas —,
-   * entao a viagem nao escolhe destino: ela troca o arquivo do mundo e mantem o tile. Descer em
-   * (x,y) e chegar em (x,y), e subir devolve ao mesmo lugar. O portal deixou de precisar saber
-   * QUAL dungeon abre porque ha uma so; o que separa descer de subir e de que lado o heroi esta
-   * (`isUnderground`), que e a mesma leitura de sempre.
-   */
-  private async enterDungeon(stairs: StairsObject): Promise<void> {
-    this.persistAdventure(); // a foto do overworld (mochila, chao) fecha antes da viagem
-    let world: { meta: { playerStart: { worldX: number; worldY: number } } } | undefined;
-    // A geracao roda DENTRO da travessia do portal — que ja e assincrona e ja dura ~1,5s (succao,
-    // vazio, tunel, queda). Ela ocupa o mesmo lugar que a rede ocupava; o jogador nao espera nada
-    // que ja nao esperasse.
-    const fetching = window
-      .fetch(`${import.meta.env.BASE_URL}underworld.json`, { cache: 'no-store' })
-      .then((res) => { if (!res.ok) throw new Error('subterraneo indisponivel'); return res.json(); })
-      .then((json: typeof world) => { world = json; });
-    await this.stairsTrip(fetching, () => {
-      // O ESPELHO: o herói nasce no MESMO tile, um andar abaixo. O arquivo tem um playerStart
-      // proprio (o editor exige um), e ele e reescrito aqui — como a volta ja fazia.
-      if (world) world.meta.playerStart = { worldX: stairs.worldX, worldY: stairs.worldY };
-      setWorldData(world as unknown as Parameters<typeof setWorldData>[0]);
-      setUnderground(true);
-    });
-  }
-
-  /**
-   * SUBIR — no MESMO tile do portal que ele pegou.
-   *
-   * Nao existe bilhete de volta, e essa e a regra inteira: a porta e simetrica. Descer em (x,y)
-   * chega em (x,y), e subir em (x,y) chega em (x,y) — os cinco portais existem nos DOIS andares,
-   * no mesmo tile, entao atravessar um so troca o chao debaixo dos pes.
-   *
-   * Ate esta versao a subida usava o tile por ONDE O HEROI DESCEU, que era o certo enquanto a
-   * dungeon era um lugar separado. Com o espelho virou defeito: descer num canto, atravessar o
-   * andar de baixo e subir no canto oposto desfazia a viagem inteira e devolvia o heroi ao
-   * primeiro canto.
-   */
-  private async leaveDungeon(stairs: StairsObject): Promise<void> {
-    if (!isUnderground()) return;
-    this.persistAdventure(); // a foto do subterraneo (itens largados) fecha aqui
-    let world: { meta: { playerStart: { worldX: number; worldY: number } } } | undefined;
-    const fetching = window
-      .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
-      .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })
-      .then((json: typeof world) => { world = json; });
-    await this.stairsTrip(fetching, () => {
-      // O overworld volta do disco limpo, sem memoria da visita — entao o ponto de nascimento
-      // dele e reescrito aqui, uma vez, para o tile DESTE portal. E a unica coisa que a volta
-      // precisa dizer ao mundo que acabou de carregar.
-      if (world) world.meta.playerStart = { worldX: stairs.worldX, worldY: stairs.worldY };
-      setWorldData(world as unknown as Parameters<typeof setWorldData>[0]);
-      setUnderground(false);
-    });
-  }
-
-
-  /** Devolve a luz que a succao comeu — so importa quando a transicao FALHA e a cena sobrevive. */
-  private restoreWorldLight(): void {
-    const w3 = this.world3d;
-    if (!w3 || !this.litParams) return;
-    w3.setWorldFade(0);
-    w3.params.ambient = this.litParams.ambient;
-    w3.params.moon = this.litParams.moon;
-    w3.params.exposure = this.litParams.exposure;
+    // A ABERTURA: a primeira vez no vale e uma cena, nao um controle. Ela toca uma vez por partida
+    // (o save lembra), e continuar uma partida pula direto para o heroi parado na estrada.
+    if (!this.introDone) void this.playIntro();
   }
 
   /** Espera em ms presa ao relogio da CENA — pausar o jogo pausa a sequencia junto. */
@@ -1567,7 +821,7 @@ export class GameScene extends Phaser.Scene {
     // Never pause over another modal state — their overlays own ESC/scrim already, and the
     // dialog camera pan must not be frozen midway.
     if (this.pauseMenu || this.dialogOpen || this.camShifting
-      || this.itemGetOpen || this.cutsceneActive || this.isDead) return;
+      || this.itemGetOpen || this.cutsceneActive) return;
     // A bolsa e a pausa nunca convivem: uma congela o mundo e a outra existe justamente por nao
     // congelar. Quem abre a pausa fecha a bolsa (sem equipar nada — fechar nao e confirmar).
     this.quickBag?.close();
@@ -1575,14 +829,10 @@ export class GameScene extends Phaser.Scene {
     this.pauseTouchButton?.setVisible(false);
     this.actionButtons?.setVisible(false);
     // scene.get('title') is undefined in the editor playtest config; without it "quit" would
-    // have nowhere to go, so the entry is hidden (mirrors the intro-ending fallback).
+    // have nowhere to go, so the entry is hidden.
     const canQuit = Boolean(this.scene.get('title'));
     this.pauseMenu = new PauseMenu(this, {
       onResume: () => this.closePauseMenu(),
-      onRestart: () => {
-        this.closePauseMenu();
-        this.restartRun();
-      },
       onQuit: canQuit
         ? () => {
           this.closePauseMenu();
@@ -1594,66 +844,39 @@ export class GameScene extends Phaser.Scene {
         }
         : undefined,
       // A SUBTELA. Ela e lida de novo a cada desenho do painel (nunca um retrato tirado ao
-      // abrir), entao escolher um item tem um caminho so: a cena troca o item do B e o painel
-      // pergunta como ficou.
+      // abrir), entao escolher um item tem um caminho so.
       readSubScreen: () => this.subScreenView(),
       onSelectItem: (kind) => { this.selectItem(kind as HeldItemKind); },
     });
-    // NENHUM PEDIDO E NENHUMA CARGA ATRAVESSA A PAUSA, e isto e a outra metade do `keyup` perdido
-    // que o `pressAttack` ja documenta. `scene.pause()` adormece o plugin de teclado junto com a
-    // cena: o jogador solta o A com a subtela aberta e o `keyup-Z` nunca chega, entao `attackHeld`
-    // fica preso em `true`. Ao voltar, a lamina termina de carregar sozinha — o sino toca do nada
-    // e o heroi solta faiscas douradas indefinidamente, sem ninguem segurando botao nenhum.
-    this.resetChargeAndBuffers();
+    this.useBufferMs = 0;
     this.scene.pause();
   }
 
   /**
-   * O que a subtela mostra: os coracoes e a mochila, com a ARTE DO JOGO (os proprios frames do
-   * Phaser virados em data URL). Um inventario com desenho proprio seria uma segunda gramatica
-   * para os mesmos objetos — o jogador tem de reconhecer na mochila o que viu no chao.
+   * O que a subtela mostra: a mochila com a ARTE DO JOGO (os proprios frames do Phaser virados em
+   * data URL). Um inventario com desenho proprio seria uma segunda gramatica para os mesmos
+   * objetos — o jogador tem de reconhecer na mochila o que viu no chao.
    */
   private subScreenView(): SubScreenView {
+    const row = ({ kind, count }: { kind: HeldItemKind; count: number }) => {
+      const visual = ITEM_VISUAL_2D[kind];
+      return {
+        kind,
+        count,
+        icon: spriteDataUrl(this, visual.texture, visual.frame),
+        label: t(`items.name.${kind}`),
+      };
+    };
     return {
       title: t('subscreen.title'),
       emptyLabel: t('subscreen.empty'),
-      hearts: {
-        max: this.playerMaxHealth,
-        filled: this.playerHealth,
-        // ui/hearts.png: o coracao do HUD cheio e vazio — arte que estava no repositorio desde
-        // sempre e nunca havia sido desenhada uma vez, porque o jogo nao tem HUD.
-        icon: spriteDataUrl(this, ASSET_KEYS.hearts, UI_HEART_FRAMES.full),
-        emptyIcon: spriteDataUrl(this, ASSET_KEYS.hearts, UI_HEART_FRAMES.empty),
-      },
-      items: this.inventory.bag().map(({ kind, count }) => {
-        const visual = ITEM_VISUAL_2D[kind];
-        return {
-          kind,
-          count,
-          icon: spriteDataUrl(this, visual.texture, visual.frame),
-          label: t(`items.name.${kind}`),
-        };
-      }),
+      items: this.inventory.bag().map(row),
       // A mesma separação da bolsa (uma resposta só para "o que tem gesto?"): a grade escolhe, os
-      // contadores apenas informam. Duas telas discordando sobre onde mora o minério seria a
-      // segunda voz que este jogo não permite.
-      materials: this.inventory.materials().map(({ kind, count }) => {
-        const visual = ITEM_VISUAL_2D[kind];
-        return {
-          kind,
-          count,
-          icon: spriteDataUrl(this, visual.texture, visual.frame),
-          label: t(`items.name.${kind}`),
-        };
-      }),
+      // contadores apenas informam.
+      materials: this.inventory.materials().map(row),
       selected: this.heldItem,
       map: this.subScreenMap(),
-      // A PAGINA DE PLANOS e o MESMO catalogo da bancada (`orderCatalogView`), so que em leitura:
-      // duas telas que mostram a mesma receita nao podem ter duas ideias sobre o que ela pede.
-      //
-      // E ela so existe em mundo que TEM bancada. Uma pagina de receitas num level sem bancada
-      // seria a promessa de um gesto que nao tem onde acontecer — que e a mesma mentira do balao
-      // de item-que-falta, so que paginada.
+      // A PAGINA DE PLANOS e o MESMO catalogo da bancada (`orderCatalogView`), so que em leitura.
       plans: this.toolboxes.length
         ? { title: t('subscreen.plansTitle'), rows: this.orderCatalogView().entries }
         : undefined,
@@ -1662,12 +885,10 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * O mapa da subtela: um quadrado por chunk, fog of war vindo dos chunks PISADOS (o save), e
-   * so as marcas que o heroi ja viu — fogueira acesa/morta e portal em tela visitada, mais ele
-   * mesmo. So a aventura de overworld tem mapa: level e uma tela unica, o explorador e infinito
-   * por desenho (o mapa dele mataria a aposta), e a dungeon se aprende andando, como no Zelda.
+   * so as marcas que o heroi ja viu — fogueiras em tela visitada, mais ele mesmo.
    */
   private subScreenMap(): SubScreenView['map'] {
-    if (!this.adventure || isUnderground()) return undefined;
+    if (!this.adventure) return undefined;
     const bounds = getWorldBounds();
     const st = adventureState();
     const chunkOf = (wx: number, wy: number): { cx: number; cy: number } => (
@@ -1675,17 +896,9 @@ export class GameScene extends Phaser.Scene {
     );
     const visited = new Set(st.visitedChunks);
     const marks: NonNullable<SubScreenView['map']>['marks'] = [];
-    for (const cf of this.campfires) {
+    for (const cf of [...this.campfires, ...this.hearths]) {
       const { cx, cy } = chunkOf(cf.worldX, cf.worldY);
       if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: cf.isLit ? 'fireLit' : 'fireDead' });
-    }
-    // AS ESCADAS. Elas faltavam, e a falta doía exatamente onde o espelho deveria ajudar: quem
-    // desce num canto e caminha o subterrâneo inteiro não tinha como saber por onde subir. Valem
-    // nos DOIS andares sem um `if` no meio porque a porta é simétrica — os cinco tiles são os
-    // mesmos em cima e embaixo, então o mapa do espelho é o mesmo mapa.
-    for (const stairs of this.stairs) {
-      const { cx, cy } = chunkOf(stairs.worldX, stairs.worldY);
-      if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: 'stairs' });
     }
     marks.push({ ...chunkOf(this.playerWorld.worldX, this.playerWorld.worldY), kind: 'hero' });
     return {
@@ -1730,30 +943,18 @@ export class GameScene extends Phaser.Scene {
     // every remaining Phaser-side FX scales itself by.
     this.tileSize = w3.tileScreenSize();
     // E o heroi mede EXATAMENTE um tile — aqui, todo frame, junto do numero de que ele depende.
-    //
-    // Isto era escrito em dois lugares que nao eram este: o `handleResize` (com a formula 2D
-    // antiga, que da OUTRO numero) e o `stopBreathing` (com o numero certo). O heroi entao nascia
-    // com o tamanho da formula velha e PULAVA para o certo no primeiro passo — que e quando o
-    // passo chama `stopBreathing`. Pior que o tamanho: `heroFootY` soma meio `sizePx`, entao com
-    // os dois numeros discordando o corpo era plantado a ~0,1 tile ao norte do tile em que o
-    // heroi realmente estava. Uma fonte so, derivada da projecao, mata os dois defeitos.
     this.hero.sizePx = this.tileSize;
 
-    // The walk cycle: Phaser's animation component used to drive the sprite's frame from
-    // the display list, which kept ticking even when update() early-returned (dialog pan,
-    // cut-scene). POST_UPDATE runs on those frames too, so it ticks in the same places.
+    // The walk cycle ticks here (POST_UPDATE runs even when update() early-returns).
     tickHeroView(this.hero, delta);
     this.syncHeroBillboard();
-    // A arma e a cruz sao desenhadas no POST_UPDATE, junto do heroi, e nao no update: elas se
-    // ancoram na posicao projetada dele, e essa posicao so existe depois que a camera 3D deste
-    // frame ja escreveu. Desenhar antes seria mirar com a camera do frame passado.
+    // Os vaga-lumes vivem aqui e nao no update: eles sao a moldura das cutscenes (a abertura e o
+    // fim), e o update fica parado justamente nelas.
+    this.updateFireflies(delta);
 
     // A vista do heroi + a tocha na mao dele, as duas montadas no corpo DESENHADO.
     const hb = this.heroBillboard;
     if (hb) {
-      // A frente vem do controlador de movimento — a MESMA que os dois botoes usam (facingTile).
-      // Se a vista pendesse para outro lado que o gesto, o herói olharia para um tile e enxergaria
-      // outro.
       const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
       w3.setHeroSight(hb.x, hb.y, f.dx, f.dy, this.cutsceneHeroLight);
       const torchOn = this.isTorchLit && !this.cutsceneActive;
@@ -1763,17 +964,13 @@ export class GameScene extends Phaser.Scene {
 
     w3.render(delta);
     profiler.end('render3d');
-    // Gameplay gauges: what the game was DOING on a frame is usually the fastest way to
-    // explain what that frame cost.
-    profiler.gauge('enemies', this.enemyManager?.aliveCount ?? 0);
     profiler.gauge('tweens', this.tweens.getTweens().length);
     profiler.gauge('displayList', this.children.length);
-    profiler.gauge('litCampfires', this.litFireCount);
     profiler.frameEnd();
   }
 
   // Draw the hero's state onto its 3D billboard: position from the screen-centre pin
-  // + any knockback offset, size/frame/flip/tint verbatim.
+  // + any lunge offset, size/frame/flip/tint verbatim.
   private syncHeroBillboard(): void {
     const b = this.heroBillboard;
     const h = this.hero;
@@ -1788,11 +985,8 @@ export class GameScene extends Phaser.Scene {
       cam.camX + (h.x - cam.screenCenterX) / ts + h.lungeX,
       cam.camY + (heroFootY(h) - cam.screenCenterY) / ts - 0.5 + h.lungeY,
     );
-    // The walk bob. It has to be elevation and not a shift of y: y is the ground plane here, so
-    // nudging it would send the hero *backwards into the scene* instead of up into the air. The
-    // contact shadow deliberately ignores elevation, so it stays planted while he bounces.
-    // `lift` is what a cut-scene owns (the portal's suck, the arrival's fall); the bob rides on
-    // top of it so a hero who lands mid-stride still bounces.
+    // The walk bob is elevation, not a shift of y (y is the ground plane here). `lift` is what a
+    // cut-scene owns; the bob rides on top of it.
     b.setElevation(h.bobLift + h.lift);
     b.setDisplaySize(
       Math.max(0.05, (h.sizePx * h.scaleX) / ts),
@@ -1803,16 +997,8 @@ export class GameScene extends Phaser.Scene {
     b.setAlpha(h.alpha);
     b.setAngle(h.spin);
 
-    // The carried item rides the just-synced hero position (the contact blob is the
-    // billboard's own groundShadow now — it follows by itself, and hides with the body).
+    // The carried item rides the just-synced hero position.
     this.positionBackItem();
-
-    // Death plays its 2D screen-space elegy with a Phaser stand-in; hide the 3D body.
-    b.setVisible(!this.isDead);
-    if (this.isDead) {
-      this.backItemBb?.setVisible(false);
-      return;
-    }
 
     if (h.tint !== null) b.setTint(h.tint);
     else b.clearTint();
@@ -1837,38 +1023,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Deterministic control surface for the playtest harness (see /playtest). Lets the agent
-  // inspect live state and pop the exact UI it wants to validate (dialog / shop).
+  // inspect live state and pop the exact UI it wants to validate.
   private registerDebugApi(): void {
     this.debugApi = {
       getState: () => ({
         scene: GameScene.key,
         timeOfDay: { phase: getTimeOfDay(), clock: timeOfDayLabel() },
         player: { worldX: this.playerWorld.worldX, worldY: this.playerWorld.worldY },
-        health: this.playerHealth,
-        maxHealth: this.playerMaxHealth,
-        swordEquipped: this.swordEquipped,
-        swordOnFire: this.heldOnFire, // o fogo mora no graveto da mao; a espada nunca queima
         heldOnFire: this.heldOnFire,
-        // `heldItem` continua sendo "o que esta na mao" — hoje, o item selecionado no B. A
-        // MOCHILA e o campo novo, e e ela que o playtest da subtela precisa ver.
         heldItem: this.heldItem,
         inventory: this.inventory.list(),
-        // A BOLSA (ver QuickBag): aberta ou nao. O cenario le isto para provar as duas metades do
-        // modo — que o mundo continuou correndo com ela aberta, e que apanhar a fecha.
         bagOpen: this.quickBag?.isOpen === true,
-        // O CATALOGO DA ENCOMENDA (ver ToolboxOrderOverlay): aberto ou nao. Ao contrario da bolsa,
-        // ele CONGELA o mundo — e e isso que o cenario cobra dele.
         orderOpen: this.orderOverlay !== undefined,
-        // A ESGRIMA, do lado de fora: para onde o heroi olha, quais tiles o arco varre agora e se
-        // a lamina esta carregada. O `arc` e a MESMA lista que o golpe usa (arcTiles), nao uma
-        // copia — um cenario que assertasse uma segunda tabela estaria guardando a tabela, e nao
-        // o golpe.
         facing: { ...(this.movementController?.facing ?? { dx: 0, dy: 1 }) },
-        // Com a espada NA MÃO são as duas fileiras; senão, só a de perto — a MESMA pergunta
-        // que o golpe faz (o A empunha o item da mão), para o cenário nunca ler um alcance
-        // que o herói não tem.
-        arc: this.arcTiles(2),
-        spinCharged: this.chargeReady,
         groundItems: this.itemManager?.snapshot() ?? [],
         toolboxes: this.toolboxes.map((box) => ({
           worldX: box.worldX,
@@ -1878,9 +1045,7 @@ export class GameScene extends Phaser.Scene {
           frame: box.currentFrame,
           busy: box.isBusy,
         })),
-        // O BALAO DE PENSAMENTO do heroi: qual icone esta na cabeca dele agora (null = nenhum).
         thought: this.heroThought?.visibleIcon ?? null,
-        // A CADEIA DO FERRO: o forno e o altar, como o cenario os observa.
         furnaces: this.furnaces.map((f) => ({
           worldX: f.worldX,
           worldY: f.worldY,
@@ -1890,7 +1055,6 @@ export class GameScene extends Phaser.Scene {
           busy: f.isBusy,
           smelted: f.smeltCount,
         })),
-        // O ALTAR: onde ele esta, o que ha em cima e quantas pancadas aquilo ja levou.
         altars: this.altars.map((a) => ({
           worldX: a.worldX,
           worldY: a.worldY,
@@ -1912,48 +1076,30 @@ export class GameScene extends Phaser.Scene {
           openness: Number(mf.openAmount.toFixed(3)),
           ...mf.view,
         })),
+        plantSpots: this.plantSpots.map((spot) => ({
+          worldX: spot.worldX,
+          worldY: spot.worldY,
+          state: spot.currentState,
+        })),
         heroLift: this.hero.lift,
         heroScale: this.hero.scaleX,
         levelName: getWorldName(),
-        levelTransitioning: this.levelTransitioning,
         dialogOpen: this.dialogOpen,
         itemGetOpen: this.itemGetOpen,
-        isDead: this.isDead,
-        // O herói virou estátua? (a bola do zora — ver FreezeManager; `zora` e `gelo` leem isto)
-        heroFrozen: this.isHeroFrozen,
+        cutsceneActive: this.cutsceneActive,
         litFires: this.campfires.filter((cf) => cf.isLit).length,
-        // A PIRA, tora a tora: é assim que o cenário `pira` cobra a torre subindo, a recusa da
-        // torre crua e a persistência do progresso através da morte.
-        pyres: this.pyres.map((p) => ({
-          worldX: p.worldX,
-          worldY: p.worldY,
-          logs: p.logCount,
-          missing: p.logsMissing,
-          complete: p.isComplete,
-          lit: p.isLit,
-        })),
-        safety: {
-          safe: this.playerSafe,
-          undeadCount: this.enemyManager?.aliveCount ?? 0,
-        },
+        ending: { gateOpen: this.gateOpened, hearthLit: this.hearthLit, roasted: this.roasted },
+        introDone: this.introDone,
         // A trilha que o jogo esta PEDINDO (null = vento/silencio). Ela e escolhida uma vez, no
-        // create, e NAO muda com inimigo em campo — e por aqui que um cenario cobra isso.
+        // create — e por aqui que um cenario cobra isso.
         music: getSoundManager().requestedTrack,
-        // `undead` guardou o nome antigo de proposito (todo cenario existente le por ele), mas hoje
-        // ele lista o bestiario inteiro — cada entrada diz a propria especie em `kind`.
-        undead: this.enemyManager?.snapshot() ?? [],
-        shots: this.enemyManager?.shotSnapshot() ?? [],
-        // As ossadas que caveira morta deixou no chao (CorpseDecals): so a contagem — o que um
-        // cenario tem a cobrar e "matar deixa marca", nao onde cada osso caiu.
-        corpses: this.enemyManager?.corpseCount ?? 0,
-        enemySpawners: this.enemySpawners?.snapshot() ?? [],
         activeScreen: {
           cx: Math.floor(this.playerWorld.worldX / CHUNK_COLUMNS),
           cy: Math.floor(this.playerWorld.worldY / CHUNK_ROWS),
         },
       }),
       openDialog: (kind = 'blackCat') => {
-        if (this.dialogOpen || this.isDead) return false;
+        if (this.dialogOpen) return false;
         this.openNpcDialog(kind);
         return true;
       },
@@ -1963,18 +1109,10 @@ export class GameScene extends Phaser.Scene {
         this.dialogOpen = false;
         this.endDialogCameraShift();
       },
-      triggerSwordGet: () => {
-        if (!this.itemGetOpen) {
-          this.onCollectItem({ kind: 'sword', worldX: this.playerWorld.worldX, worldY: this.playerWorld.worldY });
-        }
-      },
       listNpcKinds: () => getDialogKinds(),
       // AS MISSÕES NÃO TÊM TELA — então o caderno delas precisa ao menos ser LEGÍVEL daqui, ou
       // seria um sistema que ninguém consegue provar que funciona (ver runtime/QuestLog).
       quests: () => questSnapshot(),
-      // A escada de vida do bestiario, pro playtest cobrar a LEI (crescente, sem repeticao) em vez
-      // de repetir os numeros dela — uma copia no cenario e a copia que diverge no dia do balanco.
-      enemyBlows: () => ENEMY_BLOWS,
     };
     registerGameDebugApi(this.debugApi, this);
     this.clearDebugHooks?.();
@@ -1996,13 +1134,21 @@ export class GameScene extends Phaser.Scene {
     this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
     this.events.off(Phaser.Scenes.Events.PRE_UPDATE, profiler.frameStart, profiler);
     profiler.detach();
-    for (const t of this.wallTorches) t.destroy();
-    this.wallTorches = [];
     this.heroBillboard?.destroy();
     this.heroBillboard = undefined;
-    // Phaser destroys the scene's own GameObjects on shutdown; drop the handle so a restart
-    // never finds a stale one.
-    this.deathHero = undefined;
+    this.plantedSword?.destroy();
+    this.plantedSword = undefined;
+    this.plantedSwordTile = undefined;
+    this.wizardStandIn?.destroy();
+    this.wizardStandIn = undefined;
+    this.roastStick?.destroy();
+    this.roastStick = undefined;
+    this.roasting = false;
+    this.fireflyLevel = 0;
+    for (const fly of this.fireflies) fly.bb.destroy();
+    this.fireflies.length = 0;
+    this.creditsRoll?.remove();
+    this.creditsRoll = undefined;
     if (window.hd3d === this.world3d?.params) window.hd3d = undefined;
     setCurrentWorld3D(undefined);
     this.world3d?.dispose();
@@ -2015,8 +1161,6 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneFireLight = undefined;
     this.cutsceneHeroLight = 1;
     this.dialogNpcWorld = undefined;
-    this.enemyManager?.destroy();
-    this.enemySpawners = undefined;
     this.npcManager?.destroy();
     this.dialogOverlay?.destroy();
     this.dialogOverlay = undefined;
@@ -2037,12 +1181,7 @@ export class GameScene extends Phaser.Scene {
     this.orderOverlay = undefined;
     this.orderBox = undefined;
     this.lootManager?.destroy();
-    this.heartPickupManager?.destroy();
     this.itemManager?.destroy();
-    // O gelo morre com a cena (blocos, relógios e ganchos): um degelo atravessando um restart
-    // chamaria onThaw numa cena morta.
-    this.freezeManager?.destroy();
-    this.freezeManager = undefined;
     this.placementHints?.destroy();
     this.placementHints = undefined;
     this.heroThought?.destroy();
@@ -2055,7 +1194,6 @@ export class GameScene extends Phaser.Scene {
       list.length = 0;
     }
     this.propRegistry = [];
-    this.activeBombs.forEach((b) => b.sprite.destroy());
     this.backItemSwingTimer?.remove();
     this.backItemSwingTimer = undefined;
     this.backItem?.destroy();
@@ -2065,47 +1203,20 @@ export class GameScene extends Phaser.Scene {
     this.breathingTween?.destroy();
     this.breathingTween = undefined;
     this.footprints.length = 0;
-    this.lowHealthOutlines.forEach((o) => o.destroy());
-    this.lowHealthOutlines.length = 0;
-    this.fireCompassArrow?.destroy();
-    this.fireCompassArrow = undefined;
     this.torchFlameBb?.destroy();
     this.torchFlameBb = undefined;
     this.torchGutter.level = 1.0;
     this.torchGutter.velocity = 0;
     this.torchEmberTimer = 0;
     this.swordSlash = undefined;
-    this.resetChargeAndBuffers();
-    this.activeBombs = [];
-    this.heartbeatPhase = 0;
-    // Never leak a frozen tween clock into the next scene run.
-    this.hitstopMs = 0;
+    this.useBufferMs = 0;
     if (this.tweens) this.tweens.timeScale = 1;
-    this.playerKnockTween = undefined;
   }
 
   public update(_time: number, delta: number): void {
-    // Hitstop: a melee impact freezes the whole world — tweens included, so knockbacks hold
-    // their pose at full stretch — for a few frames. This countdown MUST run before every
-    // other gate below: a dialog/item-get/cutscene can open on the very frame a hit lands,
-    // and those states return early — if they preceded this block, tweens.timeScale would
-    // stay 0 forever and their own (tween-driven) sequences could never finish.
-    if (this.hitstopMs > 0) {
-      this.hitstopMs -= delta;
-      if (this.hitstopMs > 0) return; // hold the impact frame, FX and all
-      this.tweens.timeScale = 1;
-    }
-
-    if (this.levelTransitioning) return;
-
-    // Hide the low-health outline up front; the active-play FX below re-shows it each frame if
-    // still low. So any frozen state (dialog, item-get, death) leaves it hidden instead
-    // of stranding it, misaligned, where the hero last was. Same deal for the fire compass.
-    this.hideLowHealthOutlines();
-    this.hideFireCompass();
-    // A marca some junto: um quadrado branco prometendo um gesto durante um dialogo (ou com o
-    // heroi morto) e a mesma mentira que o balao de dica era. `syncPlacementHints` a reacende
-    // logo abaixo se o jogo estiver mesmo correndo.
+    // A marca some junto: um quadrado branco prometendo um gesto durante um dialogo e a mesma
+    // mentira que o balao de dica era. `syncPlacementHints` a reacende logo abaixo se o jogo
+    // estiver mesmo correndo.
     this.placementHints?.clear();
     this.heroThought?.clear();
 
@@ -2116,28 +1227,20 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // The item-get and first-campfire cut-scene both freeze gameplay; only their own tweens run.
+    // The item-get and the cut-scenes freeze gameplay; only their own tweens run.
     if (this.itemGetOpen || this.cutsceneActive) return;
-    // O CATALOGO de fabricacao congela igual: escolher uma receita na frente de uma
-    // bancada nao e um gesto de combate, entao ele nao precisa do preco que a bolsa paga.
+    // O CATALOGO de fabricacao congela igual.
     if (this.orderOverlay) return;
 
-    if (this.isDead || !this.movementController || !this.chunkManager || !this.camera) {
+    if (!this.movementController || !this.chunkManager || !this.camera) {
       return;
     }
 
-    // A cadencia dos dois botoes. Eles NAO sao lidos aqui: chegam por evento de teclado (e pelo
-    // par de circulos no toque), porque um `JustDown` lido dentro do update morre em toda porta
-    // que este metodo tem para sair mais cedo — e uma tecla apertada durante um dialogo voltaria
-    // a valer, sozinha, no frame em que ele fechasse.
-    this.attackCooldownMs = Math.max(0, this.attackCooldownMs - delta);
+    // A cadencia do X. Ele NAO e lido aqui: chega por evento de teclado (e pelo circulo no
+    // toque), porque um `JustDown` lido dentro do update morre em toda porta que este metodo tem
+    // para sair mais cedo.
     this.useCooldownMs = Math.max(0, this.useCooldownMs - delta);
-    // O atordoamento corre AQUI e não num tween: este é o mesmo ponto onde as cadências correm, e
-    // ele fica depois de todas as portas de saída antecipada do update — um herói atordoado que
-    // abrisse a subtela não pode continuar se recuperando com o jogo parado.
-    this.playerStaggerMs = Math.max(0, this.playerStaggerMs - delta);
     this.spendActionBuffers(delta);
-    this.tickSpinCharge(delta);
     const prevWorldX = this.playerWorld.worldX;
     const prevWorldY = this.playerWorld.worldY;
     this.playerWorld = this.movementController.update(
@@ -2148,11 +1251,6 @@ export class GameScene extends Phaser.Scene {
     const stepDx = this.playerWorld.worldX - prevWorldX;
     const stepDy = this.playerWorld.worldY - prevWorldY;
 
-    // As tochas de parede: o anel de ativacao vive AQUI dentro (ver WallTorchObject) — quem esta
-    // longe nao segura billboard nenhum, e a lista inteira custa uma distancia por tocha.
-    for (const t of this.wallTorches) {
-      t.update(delta, this.playerWorld.worldX, this.playerWorld.worldY);
-    }
     this.syncCampfiresToClock();
 
     if (stepDx !== 0 || stepDy !== 0) {
@@ -2160,126 +1258,23 @@ export class GameScene extends Phaser.Scene {
       this.stopBreathing();
       this.spawnFootprint(prevWorldX, prevWorldY, stepDx, stepDy);
     } else if (!this.dialogOpen && !this.camShifting && this.time.now - this.lastStepTime > 180) {
-      // As duas portas acima (`dialogOpen`, `camShifting`) sao a rede de um diálogo que abriu neste
-      // mesmo frame: ele para a respiracao e reancora o heroi no centro, e re-comecar a respiracao
-      // por cima disso faria a pose de origem-no-pe desenhar o heroi meio tile alto — um "pulo"
-      // visivel durante a conversa inteira, porque a reprojecao fica congelada enquanto ela dura.
-      // (O dialogo hoje abre pelo botao B, ver `talkToNpcAt`; antes ele abria de dentro do
-      // `movementController.update()` logo acima, que e de onde esta rede veio.)
       this.startBreathing();
     }
     this.streamChunks();
     this.updateFootprints();
     this.heroThought?.tick(delta);
 
-    // Burn the carried flame down; snuff it when the fuel runs out (leaving the hero exposed
-    // in the dark). Re-igniting at a lit campfire or lava refills it.
+    // Burn the carried flame down; snuff it when the fuel runs out. Re-igniting at a lit
+    // campfire refills it.
     if (this.heldOnFire) {
       this.torchFuelMs -= delta;
       if (this.torchFuelMs <= 0) this.extinguishTorch();
     }
-    // After positionBackItem above, so the flame-tip glow rides this frame's torch position.
     this.updateTorchFx(delta);
-
-    const isPickupOccupied = (x: number, y: number): boolean =>
-      (this.heartPickupManager?.hasPickupAt(x, y) ?? false) ||
-      (this.itemManager?.hasItemAt(x, y) ?? false);
-
-    const isItemOccupied = (x: number, y: number): boolean =>
-      isPickupOccupied(x, y) || (this.enemyManager?.getEnemyAt(x, y) !== null);
-
-    // Safety: near a campfire the hero is untouchable (undead never step into firelight and
-    // nothing spawns); in the dark the spawn director ramps the siege up over time.
-    const distToFire = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
-    const wasSafe = this.playerSafe;
-    this.playerSafe = distToFire <= CAMPFIRE_SAFE_RADIUS_TILES;
-    // Pisar no anel de um fogo aceso e o "descanso" da aventura: este tile vira o lugar onde o
-    // heroi acorda (morte, Continue). So na transicao — ancorar por frame gravaria save a toa.
-    if (this.playerSafe && !wasSafe) this.anchorRespawnHere();
-
-    // Warming up by the fire heals: while safe in the ring, mend a heart every HEALTH_REGEN_MS.
-    if (this.playerSafe && this.playerHealth < this.playerMaxHealth) {
-      this.healthRegenTimer += delta;
-      // The whole time he mends, warm motes stream from the fire into the hero — the healing
-      // visibly comes FROM the campfire, building up gradually until the heart lands.
-      this.healMoteTimer += delta;
-      if (this.healMoteTimer >= HEAL_MOTE_INTERVAL_MS) {
-        this.healMoteTimer = 0;
-        this.spawnHealMote();
-      }
-      if (this.healthRegenTimer >= HEALTH_REGEN_MS) {
-        this.healthRegenTimer = 0;
-        this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
-        getSoundManager().playHeartPickup();
-        this.spawnHealBurst();
-      }
-    } else {
-      this.healthRegenTimer = 0;
-      this.healMoteTimer = 0;
-    }
-
-    if (this.enemyManager) {
-      const attacked = this.enemyManager.update(
-        delta,
-        this.playerWorld.worldX,
-        this.playerWorld.worldY,
-        this.isTorchLit,
-        {
-          // A LUZ DEIXOU DE SER PAREDE. Ela repelia todo monstro, e a regra caiu junto com o
-          // motivo dela: hoje a fogueira QUEIMA quem chega a dois tiles (ver tickScorch), e uma
-          // parede invisível por cima de uma brasa visível são duas respostas para a mesma
-          // pergunta — a pior delas mágica. Sobrou o sólido de sempre (terreno, árvore, lenha,
-          // arbusto, NPC), igual para o herói e para eles.
-          onFoot: (wx, wy) => this.isSolidForEntities(wx, wy),
-          // QUEM VOA (o morcego) ve o mesmo mundo menos os hazards: rio e lava nao seguram asa.
-          // O mar continua segurando — ele e bloqueio implicito de terreno, a moldura do mundo,
-          // e nada no jogo o atravessa. A luz tambem continua: e regra de criatura, nao de chao.
-          flying: (wx, wy) => this.isSolidForEntities(wx, wy, true),
-          // Uma BALA e outra coisa: parede a mata, luz e agua nao (ver isShotBlockedAt — e um teste
-          // proprio porque tem de ignorar uma classe de TERRENO, nao so os props de hazard).
-          shot: (wx, wy) => this.isShotBlockedAt(wx, wy),
-        },
-        this.playerInvincible,
-        // O QUADRO: fora dele bicho nao fala nem comeca golpe (ver EnemyBase.setFrameGate).
-        (wx, wy) => this.isTileFramed(wx, wy),
-        // O CALOR: encostado na fogueira o corpo ARDE e vai perdendo vida (ver tickScorch). É o
-        // que ficou no lugar do desmanche silencioso da matilha quando o herói alcançava o fogo.
-        (wx, wy) => this.isTileScorchedByCampfire(wx, wy),
-      );
-      if (attacked) this.handleEnemyAttackPlayer(attacked);
-
-      // O CONGELAMENTO: relógios, degelos e o desenho de cada bloco (ver FreezeManager). O herói
-      // congelado ganha a raiz de novo a cada frame — cinto e suspensório: nenhum caminho de
-      // dano/interrupção pode devolver os pés antes do degelo.
-      this.freezeManager?.update(delta);
-      this.heroFreezeImmuneMs = Math.max(0, this.heroFreezeImmuneMs - delta);
-      if (this.isHeroFrozen) this.movementController?.root(80);
-
-      this.enemyManager.render(this.tileSize, this.camera);
-
-      // As covas autoradas, que hoje sao a fonte INTEIRA do bestiario em campo. Cada uma nasce
-      // no SEU tile, nunca perto dele — ver EnemySpawnerManager.
-      this.enemySpawners?.update(delta, {
-        playerWorldX: this.playerWorld.worldX,
-        playerWorldY: this.playerWorld.worldY,
-        playerSafe: this.playerSafe,
-        canSpawnAt: (wx, wy, type) => this.canSpawnAuthoredEnemyAt(wx, wy, type),
-        // A cova autorada e a unica porta por onde entra especie que nao e caveira: o `type` vem
-        // do tile que o autor pintou na aba Inimigos. O mesmo teste de tile viaja com ela porque
-        // o slime GRANDE precisa refaze-lo ao morrer, pros filhotes nao nascerem dentro da pedra.
-        spawn: (wx, wy, type) => this.enemyManager?.spawn(
-          type,
-          wx,
-          wy,
-          (cx, cy) => this.canSpawnAuthoredEnemyAt(cx, cy),
-        ),
-      });
-
-    }
 
     if (this.lootManager && this.camera) {
       // O drop apanhado some no HERÓI: o que se guarda voa pro corpo, porque a mochila não tem
-      // posição na tela. Quem soa é o `onCollectOne` de quem espalhou (ver spawnOreLoot).
+      // posição na tela.
       this.lootManager.update(
         this.playerWorld.worldX,
         this.playerWorld.worldY,
@@ -2288,28 +1283,11 @@ export class GameScene extends Phaser.Scene {
       this.lootManager.render(this.tileSize, this.camera);
     }
 
-    if (this.heartPickupManager && this.chunkManager) {
-      this.heartPickupManager.update(
-        delta,
-        this.playerWorld.worldX,
-        this.playerWorld.worldY,
-        this.playerHealth,
-        this.chunkManager,
-        isItemOccupied,
-        () => {
-          getSoundManager().playHeartPickup();
-          this.playerHealth = Math.min(this.playerMaxHealth, this.playerHealth + 1);
-        },
-      );
-      this.heartPickupManager.render(this.tileSize, this.camera!);
-    }
-
     if (this.itemManager) {
       // O combustivel de um graveto aceso no chao queima no mesmo relogio do da mao.
       this.itemManager.tickFires(delta);
-      // CARVAO sob a tocha ACESA: consome em vez de trocar — o passo COME o carvao e a chama
-      // volta ao combustivel cheio. E o unico jeito walk-only de reabastecer longe de fogo
-      // vivo, e por isso o carvao existe (o fogo produzindo o proprio alimento).
+      // CARVAO sob a tocha ACESA: consome em vez de guardar — o passo COME o carvao e a chama
+      // volta ao combustivel cheio.
       if (this.isTorchLit
         && this.itemManager.kindAt(this.playerWorld.worldX, this.playerWorld.worldY) === 'charcoal') {
         this.itemManager.takeAt(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -2319,36 +1297,15 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(250, () => { this.hero.tint = null; });
         this.persistAdventure(); // o carvao comido saiu do chao
       }
-      // ── PISAR APANHA. TUDO. ───────────────────────────────────────────────────────────────
-      //
-      // Era uma lista de exceções (minério, cabo, carvão) sobre a lei "pegar é o botão B". A lei
-      // caiu junto com o gesto de LARGAR: o X vira "usar o item selecionado" (ver `pressUse`), e
-      // sem largar não existe mão a ser roubada — apanhar deixou de poder custar alguma coisa.
-      // O que restava da regra antiga era um botão gasto para dizer sim ao óbvio.
-      //
-      // `stash` e nunca `add`: guardar NÃO troca o item da mão. Quem está com a picareta escolhida
-      // atravessa um chão coberto de coisas e continua com a picareta — a seleção é do jogador, e
-      // só um `selectFirstIfEmpty` (a primeira ferramenta da partida) a preenche sozinho.
+      // PISAR APANHA. TUDO. `stash` e nunca `add`: guardar NÃO troca o item da mão.
       const { worldX: px, worldY: py } = this.playerWorld;
       const underfoot = this.itemManager.kindAt(px, py);
       if (underfoot) this.collectUnderfoot(px, py);
       this.itemManager.render(this.tileSize, this.camera!);
     }
 
-    if (this.playerInvincible) {
-      this.invincibleTimer -= delta;
-      if (this.invincibleTimer <= 0) {
-        this.playerInvincible = false;
-        this.hero.alpha = 1;
-      }
-    }
-
-    this.updateLowHealthFx(delta);
-    this.updateFireCompass();
-
     // Felled trees grow back after a while (renewable gravetos = no soft-lock). The clock only
-    // ticks while the tile is clear — crucially, a dropped item (the graveto) on the stump
-    // pauses it, so the timer truly starts only once that item is picked up.
+    // ticks while the tile is clear — a dropped item (the graveto) on the stump pauses it.
     for (const tree of this.dryTrees) {
       if (tree.updateRegrow(delta, this.isTileClearForRegrow(tree.worldX, tree.worldY))) {
         tree.regrow();
@@ -2356,34 +1313,23 @@ export class GameScene extends Phaser.Scene {
     }
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.updatePlantSpots();
-    // A planta carnívora à espreita: todo inimigo parado num vizinho dela é comido.
-    this.updateCarnivorousPlants();
     // A flor da lua le a luz das fogueiras e abre/fecha por conta dela.
     this.updateMoonflowers(delta);
     this.updateFurnaces(delta);
-    // O ALTAR não tem ciclo: o único relógio dele é o da brasa que a pancada deixou no tampo, e
-    // ele corre aqui porque desenho de peça é trabalho de peça, nunca do botão que a acertou.
+    // O ALTAR não tem ciclo: o único relógio dele é o da brasa que a pancada deixou no tampo.
     for (const altar of this.altars) altar.update(delta);
     this.updateToolboxes(delta);
 
-    // As marcas de posicionamento seguem o corpo NO MESMO frame em que ele vira (elas leem
-    // `facingTile`), entao elas moram aqui e nao no render: um frame de atraso faria o quadrado
-    // branco apontar para o tile anterior a cada passo, que e pior do que nao ter marca.
+    // As marcas de posicionamento seguem o corpo NO MESMO frame em que ele vira.
     this.syncPlacementHints();
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.renderProps();
-    // Cast shadows are real: the fire's shadow light in the 3D renderer throws them.
   }
 
   /**
    * O corpo que pisa neste tile aparece na tela agora? Projetado pela camera 3D DE VERDADE
    * (tileToScreen), nunca pelo retangulo plano do getVisibleRange: em perspectiva o quadro e
-   * assimetrico — ~4,5 tiles pros lados, ~6,5 pro norte e so ~2,5 pro sul (a camera inclinada
-   * engole o perto) — e um retangulo simetrico mente nas quatro bordas. A folga e de UM CORPO:
-   * meio tile pros lados e um tile alem da borda de baixo (os pes saem mas a cabeca ainda
-   * aparece); na borda de cima nao ha folga, porque o corpo desenha PRA CIMA dos proprios pes.
-   *
-   * E o predicado da lei "o que a tela nao mostra nao fala nem comeca golpe" (EnemyBase).
+   * assimetrico.
    */
   public isTileFramed(worldX: number, worldY: number): boolean {
     if (!this.camera) return true;
@@ -2417,9 +1363,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // The screen centre just moved; a live hurt-shove would keep easing toward the OLD
-    // centre and strand the hero off his tile, so finish it before re-pinning.
-    this.cancelPlayerKnockback();
     this.hero.sizePx = this.tileSize; // o render3D reescreve isto todo frame; aqui e so pro primeiro
     this.movementController?.syncPlayerToWorld(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
   }
@@ -2451,10 +1394,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Enemies are not streamed: their dens are a flat world-wide list whose respawn clock must
-    // keep ticking with the hero across the map — see EnemySpawnerManager.
     this.npcManager?.syncChunks(active);
-    this.heartPickupManager?.syncChunks(active);
     // Held items (sword/key) are loaded once and never streamed — see ItemManager.
   }
 
@@ -2466,19 +1406,6 @@ export class GameScene extends Phaser.Scene {
       const s = this.camera.tileToScreen(f.worldX, f.worldY, this.tileSize);
       f.obj.setPosition(s.x + f.offX, s.y + f.offY);
     }
-  }
-
-  /**
-   * A ESPADA E DO HEROI, e nao da mochila — por isso isto e uma constante.
-   *
-   * Ela era um item como qualquer outro: ocupava slot, competia com a picareta pela selecao, e o
-   * botao Z so cortava se ela estivesse EMPUNHADA. Na pratica isso fazia o jogador voltar na bolsa
-   * antes de toda briga, e transformava a unica defesa do jogo numa consulta de menu — com a
-   * caveira ja em cima. Agora o Z e a espada, sempre, venha o que vier selecionado no X; ela nao
-   * entra na mochila, nao aparece na fileira e nao se perde.
-   */
-  private get swordEquipped(): boolean {
-    return true;
   }
 
   /**
@@ -2547,21 +1474,6 @@ export class GameScene extends Phaser.Scene {
     return this.propAt(this.campfires, wx, wy);
   }
 
-  /**
-   * A tocha de parede deste tile. Ela nao esta no `propRegistry` (nao e prop: e um tile — ver
-   * WallTorchObject), entao o `propAt` generico nao a alcanca e ela precisa da propria busca.
-   *
-   * Linear como todas as outras, e por dois motivos: sao 75 no mapa inteiro, e a pergunta so e
-   * feita quando o jogador aperta um botao contra um tile — nunca por frame.
-   */
-  private wallTorchAt(wx: number, wy: number): WallTorchObject | undefined {
-    return this.wallTorches.find((t) => t.worldX === wx && t.worldY === wy);
-  }
-
-  private getPyreAt(wx: number, wy: number): PyreObject | undefined {
-    return this.propAt(this.pyres, wx, wy);
-  }
-
   private getDryBushAt(wx: number, wy: number): DryBushObject | undefined {
     return this.propAt(this.dryBushes, wx, wy);
   }
@@ -2574,17 +1486,10 @@ export class GameScene extends Phaser.Scene {
     return this.propAt(this.swingGates, wx, wy);
   }
 
-  /**
-   * Tudo o que ocupa este tile MENOS o próprio herói — parede, prop, bicho, item caído, bomba
-   * armada. Ela existe separada da `isTileOccupied` por causa de um gesto só: a BOMBA pode cair
-   * no tile em que o herói está de pé, e todo o resto desta lista continua valendo lá.
-   */
+  /** Tudo o que ocupa este tile MENOS o próprio herói — parede, prop, item caído. */
   private isTileTaken(wx: number, wy: number): boolean {
     return this.isSolidForEntities(wx, wy)
-      || (this.enemyManager?.getEnemyAt(wx, wy) ?? null) !== null
-      || (this.heartPickupManager?.hasPickupAt(wx, wy) ?? false)
-      || (this.itemManager?.hasItemAt(wx, wy) ?? false)
-      || this.activeBombs.some((bomb) => bomb.worldX === wx && bomb.worldY === wy);
+      || (this.itemManager?.hasItemAt(wx, wy) ?? false);
   }
 
   /**
@@ -2615,16 +1520,8 @@ export class GameScene extends Phaser.Scene {
     return this.propAt(this.tallGrasses, wx, wy);
   }
 
-  private getCarnivorousPlantAt(wx: number, wy: number): CarnivorousPlantObject | undefined {
-    return this.propAt(this.carnivorousPlants, wx, wy);
-  }
-
   private getMoonflowerAt(wx: number, wy: number): MoonflowerObject | undefined {
     return this.propAt(this.moonflowers, wx, wy);
-  }
-
-  private getBombSpotAt(wx: number, wy: number): BombSpotObject | undefined {
-    return this.propAt(this.bombSpots, wx, wy);
   }
 
   private getToolboxAt(wx: number, wy: number): ToolboxObject | undefined {
@@ -2645,9 +1542,7 @@ export class GameScene extends Phaser.Scene {
     if (!prop) return false;
     const station: CraftStation = box ? 'bench' : 'furnace';
     if (this.orderOverlay) return true;
-    // O Z que ABRIU o catálogo pode estar sendo segurado: sem isto o keyup se perde com o painel
-    // aberto e a lâmina rodopiante termina de carregar sozinha (a mesma rede do diálogo).
-    this.resetChargeAndBuffers();
+    this.useBufferMs = 0;
     this.stopBreathing();
     this.quickBag?.close();
     this.quickBag?.setButtonVisible(false);
@@ -2890,48 +1785,12 @@ export class GameScene extends Phaser.Scene {
     return this.getFurnaceAt(wx, wy) !== undefined || this.getAltarAt(wx, wy) !== undefined;
   }
 
-  private getStairsAt(wx: number, wy: number): StairsObject | undefined {
-    return this.propAt(this.stairs, wx, wy);
-  }
-
   private getPlantSpotAt(wx: number, wy: number): PlantSpotObject | undefined {
     return this.propAt(this.plantSpots, wx, wy);
   }
 
-  private getLavaAt(wx: number, wy: number): LavaObject | undefined {
-    return this.propAt(this.lavaTiles, wx, wy);
-  }
-
   private getWaterAt(wx: number, wy: number): WaterObject | undefined {
     return this.propAt(this.waterTiles, wx, wy);
-  }
-
-  /**
-   * O QUE PARA UMA BALA — e ela nao e "o que para um corpo menos os hazards", que foi o erro.
-   *
-   * `isSolidForEntities(.., hazardsPassable)` perdoa os PROPS de hazard (rio e lava autorados), e
-   * com isso a bala atravessava o rio de um level. Mas metade da agua deste jogo nao e prop nenhum:
-   * o overworld escreve rio, lago e oceano no TERRENO (SEA_TILE_FRAMES, que esta dentro de
-   * SOLID_GROUND_FRAMES). Resultado do bug: um zora nascido num lago pintado matava o proprio cuspe
-   * no tile em que estava — o tiro morria antes do primeiro passo, e o bicho "nao fazia nada".
-   *
-   * Entao a regra do tiro se escreve sozinha: **para o que atravanca um VOO** — colisao pintada,
-   * tile de pe (arvore, montanha, alvenaria), prop solido e corpo de NPC — e ignora o que so
-   * atravanca PE: agua, lava, buraco. Fora do mundo tambem para, senao a bala sai do mapa e viaja
-   * pelo vazio ate o TTL.
-   */
-  private isShotBlockedAt(wx: number, wy: number): boolean {
-    const chunkX = Math.floor(wx / CHUNK_COLUMNS);
-    const chunkY = Math.floor(wy / CHUNK_ROWS);
-    if (this.chunkManager?.hasChunkCoordinate(chunkX, chunkY) !== true) return true;
-    const tile = this.chunkManager.getTile(wx, wy);
-    if (tile.collision) return true;
-    if (tile.upper !== null && SOLID_UPPER_FRAMES.has(tile.upper)) return true;
-    for (const entry of this.propRegistry) {
-      if (entry.hazard) continue; // rio e lava nao param bala
-      if (this.propAt(entry.list, wx, wy)?.blocking) return true;
-    }
-    return this.npcManager?.hasNpcAt(wx, wy) === true;
   }
 
   /**
@@ -2976,6 +1835,7 @@ export class GameScene extends Phaser.Scene {
       if (this.propAt(entry.list, wx, wy)?.blocking) return true;
     }
     if (this.npcManager?.hasNpcAt(wx, wy)) return true;
+    if (this.plantedSwordTile?.x === wx && this.plantedSwordTile.y === wy) return true;
     return false;
   }
 
@@ -2990,96 +1850,20 @@ export class GameScene extends Phaser.Scene {
     return best;
   }
 
-  /** The nearest LIT campfire (no radius cap) — the fire that is healing/calling the hero. */
-  private nearestLitCampfire(wx: number, wy: number): CampfireObject | undefined {
-    let best: CampfireObject | undefined;
-    let bestD = Infinity;
-    for (const cf of this.campfires) {
-      if (!cf.isLit) continue;
-      const d = Math.hypot(cf.worldX - wx, cf.worldY - wy);
-      if (d < bestD) { bestD = d; best = cf; }
-    }
-    return best;
-  }
-
-  /**
-   * Este tile está DENTRO da luz de uma fogueira acesa? Ele já foi a parede que repelia todo
-   * monstro; hoje responde por duas coisas só (ver LIGHT_RADIUS_TILES): onde uma cova ou o cerco
-   * NÃO abrem. Quem afeta o corpo agora é o CALOR, com raio próprio.
-   */
-  private isTileLitByCampfire(wx: number, wy: number): boolean {
-    return this.distToNearestCampfireTiles(wx, wy) <= LIGHT_RADIUS_TILES;
-  }
-
-  /**
-   * O CALOR: este tile está a dois tiles ou menos de uma fogueira ACESA? Ali o corpo pega fogo e
-   * perde vida enquanto ficar (ver EnemyBase.tickScorch e CAMPFIRE_SCORCH_RADIUS_TILES).
-   *
-   * Ele era uma coroa FORA da parede de luz — a parede caiu, e o calor virou a única coisa que a
-   * fogueira faz a um monstro. Duas tiles é o anel colado na lenha: perto o bastante para ser uma
-   * decisão de quem chega, longe o bastante para não pegar quem passa.
-   *
-   * Lê da MESMA distância que a luz (só fogueira ACESA conta), porque as duas são a mesma pergunta
-   * feita a dois raios: com uma segunda fonte de verdade, apagar uma fogueira deixaria de esfriar
-   * o anel dela.
-   */
-  private isTileScorchedByCampfire(wx: number, wy: number): boolean {
-    return this.distToNearestCampfireTiles(wx, wy) <= CAMPFIRE_SCORCH_RADIUS_TILES;
-  }
-
-  /**
-   * O teste de tile de uma COVA AUTORADA — a unica porta por onde entra corpo neste jogo. Ele
-   * NAO pergunta por alcance ate o heroi: a cova nao escolhe nada, o autor ja escolheu, e cobrar
-   * dela um caminho medido em volta do heroi reprovaria toda cova a mais de 10 tiles — ou seja,
-   * quase todas. O editor avisa no Salvar quando o tile esta bloqueado; o resto e
-   * responsabilidade de quem autorou.
-   *
-   * O que FICA e o que tambem vale pro heroi ou pra qualquer corpo: tile solido, corpo em cima e
-   * — a regra do mundo, nao deste sistema — LUZ DE FOGUEIRA. Monstro nao existe na luz, entao uma
-   * cova acesa fica calada, e isso e jogo: acender a fogueira do corredor CALA a cova dele,
-   * enquanto ela estiver acesa. E a mesma alavanca do balde e da tocha, sem uma linha nova. Vale
-   * pra TODA especie, inclusive a maquina: a luz e a lei do mundo sobre onde monstro pode existir,
-   * e uma excecao aqui tiraria do jogador a unica alavanca que ele tem sobre uma cova.
-   *
-   * A unica coisa que a especie muda e o CHAO, e ela muda de tres maneiras:
-   *
-   *   - quem anda recusa rio e lava (o caso normal);
-   *   - quem VOA os aceita (FLYING_ENEMY_KINDS);
-   *   - quem e AQUATICO inverte a pergunta (AQUATIC_ENEMY_KINDS): o zora so nasce em agua ABERTA, e
-   *     terra seca e que e o tile impossivel pra ele. Agua com ponte, com vau ou drenada nao conta —
-   *     e por isso que tapar o rio tira o bicho de la, sem uma regra nova pra isso.
-   *
-   * `kind` e opcional porque o slime grande usa este mesmo teste pros filhotes dele, que sao sempre
-   * gosma de chao.
-   */
-  private canSpawnAuthoredEnemyAt(wx: number, wy: number, kind?: EnemyKind): boolean {
-    if (kind !== undefined && AQUATIC_ENEMY_KINDS.has(kind)) {
-      if (!this.isOpenWaterAt(wx, wy)) return false;
-      if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
-      return !this.isTileLitByCampfire(wx, wy);
-    }
-    const flies = kind !== undefined && FLYING_ENEMY_KINDS.has(kind);
-    if (this.isSolidForEntities(wx, wy, flies)) return false;
-    if (this.isTileLitByCampfire(wx, wy)) return false;
-    if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
-    return !(wx === this.playerWorld.worldX && wy === this.playerWorld.worldY);
-  }
-
   // ── OS DOIS BOTOES ─────────────────────────────────────────────────────────
 
   /**
-   * Liga A e B. No teclado sao Z/J/espaco (o golpe) e X/K (o item) — o par do NES nas teclas
-   * que a mao esquerda alcanca sem largar as setas. `addCapture` existe por causa do espaco:
-   * sem ele a pagina rola um pouco a cada golpe.
+   * Liga os dois botoes. No teclado sao Z/J/espaco (falar e cuidar) e X/K (o item) — o par do NES
+   * nas teclas que a mao esquerda alcanca sem largar as setas. `addCapture` existe por causa do
+   * espaco: sem ele a pagina rola um pouco a cada aperto.
    *
-   * Por EVENTO e nao por `JustDown` dentro do update: este update tem meia duzia de portas por
-   * onde sai mais cedo (dialogo, loja, cutscene, hitstop), e uma tecla lida por polling morre
-   * em todas elas — ou pior, fica guardada e dispara sozinha no frame em que o dialogo fecha.
+   * Por EVENTO e nao por `JustDown` dentro do update: este update tem varias portas por onde sai
+   * mais cedo (dialogo, catalogo, cutscene), e uma tecla lida por polling morre em todas elas.
    */
   private installActionInput(): void {
     const touch = isTouchDevice();
     // A BOLSA nasce antes das teclas porque as teclas perguntam por ela: com a bolsa aberta, o I,
-    // as setas e o X sao DELA, e so voltam a ser do heroi quando ela fecha (ver `routeBagKey`).
+    // as setas e o X sao DELA, e so voltam a ser do heroi quando ela fecha.
     this.quickBag = new QuickBag({
       read: () => this.quickBagView(),
       onSet: (kind) => { this.selectItem(kind as HeldItemKind); },
@@ -3090,17 +1874,11 @@ export class GameScene extends Phaser.Scene {
     const kb = this.input.keyboard;
     if (kb) {
       kb.addCapture(['Z', 'X', 'J', 'K', 'SPACE', 'I']);
-      // O A tem DOIS gestos agora — o toque (o golpe) e o segurar (a lamina rodopiante) —, entao
-      // ele precisa do `keyup` tambem. O `keydown` de uma tecla segurada REPETE no navegador; o
-      // `attackHeld` e o que separa "apertei de novo" de "ainda estou segurando".
       for (const key of ['keydown-Z', 'keydown-J', 'keydown-SPACE']) kb.on(key, this.pressAttack, this);
-      for (const key of ['keyup-Z', 'keyup-J', 'keyup-SPACE']) kb.on(key, this.releaseAttack, this);
       for (const key of ['keydown-X', 'keydown-K']) kb.on(key, this.pressUse, this);
-      // I ABRE E FECHA A BOLSA. Ela e o unico gesto do jogo que nao e A, B nem seta — e nao e
-      // excecao a "os dois botoes": a bolsa nao age no mundo, ela so decide o que o B carrega.
+      // I ABRE E FECHA A BOLSA. A bolsa nao age no mundo, ela so decide o que o X carrega.
       kb.on('keydown-I', this.toggleBag, this);
-      // As setas so chegam aqui quando a bolsa esta aberta; fora dela quem as le e o andar, por
-      // polling, e este ouvinte devolve sem tocar em nada.
+      // As setas so chegam aqui quando a bolsa esta aberta; fora dela quem as le e o andar.
       for (const key of ['keydown-LEFT', 'keydown-A']) {
         kb.on(key, (e: KeyboardEvent) => this.routeBagStep(e, -1));
       }
@@ -3114,10 +1892,10 @@ export class GameScene extends Phaser.Scene {
     if (touch) {
       this.actionButtons = new ActionButtons({
         onAttack: () => this.pressAttack(),
-        onAttackRelease: () => this.releaseAttack(),
+        onAttackRelease: () => undefined,
         onUse: () => this.pressUse(),
       });
-    } else {
+    } else if (this.introDone) {
       this.controlsHint = new ControlsHint(t('controls.hint'));
     }
   }
@@ -3126,58 +1904,40 @@ export class GameScene extends Phaser.Scene {
   private routeBagStep(event: KeyboardEvent | undefined, delta: number): void {
     if (!this.quickBag?.isOpen) return;
     // Tecla segurada repete no navegador — e uma fileira de itens percorrida a 30 passos por
-    // segundo não é uma escolha. A mesma leitura do `pressAttack`: `event.repeat`, nunca um
-    // booleano nosso, que um `keyup` perdido deixaria preso.
+    // segundo não é uma escolha.
     if (event?.repeat) return;
     this.quickBag.step(delta);
   }
 
   /**
-   * A BOLSA ABRE E FECHA — e nada mais no jogo faz isso.
-   *
-   * Ela recusa exatamente onde o menu de pausa recusa: nenhuma tela que já congelou o mundo pode
-   * ganhar uma segunda por cima (o diálogo, a loja, a cutscene, a morte, a própria pausa). Fora
-   * disso ela abre SEM pedir licença ao combate — é o ponto do modo.
+   * A BOLSA ABRE E FECHA — e nada mais no jogo faz isso. Ela recusa exatamente onde o menu de
+   * pausa recusa: nenhuma tela que já congelou o mundo pode ganhar uma segunda por cima.
    */
   private toggleBag(): void {
     if (!this.quickBag) return;
     if (this.quickBag.isOpen) { this.quickBag.close(); return; }
     if (this.pauseMenu || this.dialogOpen || this.camShifting
-      || this.itemGetOpen || this.cutsceneActive || this.isDead
-      || this.levelTransitioning || this.orderOverlay) return;
+      || this.itemGetOpen || this.cutsceneActive || this.orderOverlay) return;
     this.quickBag.openBag();
   }
 
   /**
-   * O PREÇO DE FOLHEAR, num jogo que não pausa para você folhear: os pés presos (as setas são do
-   * cursor agora) e os dois botões calados (`canAct`) — o par A/B do toque sai da tela junto, para
-   * que só exista um conjunto de controles de cada vez.
-   *
-   * A carga do A morre ao abrir, pela mesma razão que morre na pausa: um A meio carregado que
-   * atravessasse a bolsa sairia sozinho, como lâmina rodopiante, no frame em que ela fechasse. O
-   * ATORDOAMENTO, ao contrário da pausa, ATRAVESSA — a bolsa não congela nada, e apagar a pancada
-   * que o herói acabou de levar seria comprar tempo de recuperação abrindo um menu.
+   * Folhear a bolsa prende os pés (as setas são do cursor agora) e cala os dois botões (`canAct`)
+   * — o par do toque sai da tela junto, para que só exista um conjunto de controles de cada vez.
    */
   private onBagOpenChanged(open: boolean): void {
     this.movementController?.hold(open);
     this.actionButtons?.setVisible(!open);
     if (!open) return;
-    // A tarja das teclas mora no MESMO rodapé da tela que a bolsa, e ela já cumpriu o trabalho
-    // dela: quem abriu a bolsa aprendeu o que ela tinha a ensinar (ver ControlsHint).
+    // A tarja das teclas mora no MESMO rodapé da tela que a bolsa, e ela já cumpriu o trabalho.
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
-    this.attackBufferMs = 0;
     this.useBufferMs = 0;
-    this.attackHeld = false;
-    this.chargeMs = 0;
-    this.chargeReady = false;
-    this.chargeMoteMs = 0;
-    getSoundManager().stopSpinChargeHum();
   }
 
   /**
-   * O que a bolsa desenha: a mochila com a ARTE DO JOGO (os mesmos frames virados em data URL que
-   * a subtela usa) e o item que o B carrega AGORA — o cursor é da bolsa, o equipado é da cena.
+   * O que a bolsa desenha: a mochila com a ARTE DO JOGO e o item que o X carrega AGORA — o cursor
+   * é da bolsa, o equipado é da cena.
    */
   private quickBagView(): QuickBagView {
     const row = (entry: { kind: HeldItemKind; count: number }) => {
@@ -3192,7 +1952,6 @@ export class GameScene extends Phaser.Scene {
     return {
       items: this.inventory.bag().map(row),
       // A MATÉRIA-PRIMA não entra na fileira: ela é uma linha de contadores embaixo, sem cursor.
-      // Ver MATERIAL_ITEM_KINDS — o que não tem gesto não pode ocupar um slot do botão X.
       materials: this.inventory.materials().map(row),
       equipped: this.heldItem,
       emptyLabel: t('bag.empty'),
@@ -3201,127 +1960,35 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Toda tela que congela o jogo congela tambem os dois botoes. O teclado ja para sozinho com
-   * `scene.pause()` (o plugin do Phaser fica inativo junto com a cena), mas os botoes de toque
-   * sao DOM e continuam clicaveis — entao a porta tem de estar aqui, e nao so na tecla.
+   * `scene.pause()`, mas os botoes de toque sao DOM e continuam clicaveis — entao a porta tem de
+   * estar aqui, e nao so na tecla. A BOLSA entra aqui: o mundo continua correndo atrás dela, mas
+   * as mãos estão dentro da mochila.
    */
   private canAct(): boolean {
-    // O ATORDOAMENTO NÃO ENTRA AQUI, de propósito — ele é uma CADÊNCIA, não uma porta fechada.
-    //
-    // Esta função separa "o jogo não está jogando agora" (diálogo, loja, morte, menu) de tudo o
-    // mais, e o que ela recusa é DESCARTADO. Um botão apertado no fim de um atordoamento tem de
-    // sair no instante em que ele acaba, que é exatamente o que o buffer existe para fazer (ver
-    // ACTION_BUFFER_MS: "o jogador que encadeia dois golpes no ritmo certo era punido por acertar
-    // o ritmo"). Então o atordoamento mora junto da cadência, em `swingAttack`/`pressUse`, onde o
-    // pedido é ADIADO — e o herói continua perdendo os 240ms, só não perde o aperto.
-    //
-    // A BOLSA entra aqui e NÃO é uma tela congelada como as outras: o mundo continua correndo
-    // atrás dela. O que ela fecha são os dois botões — as mãos estão dentro da mochila —, e é
-    // isso, com os pés presos, que faz folhear custar alguma coisa.
-    return !this.isDead && !this.dialogOpen && !this.camShifting
+    return !this.dialogOpen && !this.camShifting
       && !this.itemGetOpen && !this.cutsceneActive
-      && !this.levelTransitioning && !this.pauseMenu && this.quickBag?.isOpen !== true
+      && !this.pauseMenu && this.quickBag?.isOpen !== true
       && !this.orderOverlay
       && this.movementController !== undefined;
   }
 
   /**
-   * Gasta os pedidos guardados. Um A ou um B apertado durante a cadencia (ou durante o hitstop,
-   * que congela o update inteiro) espera aqui e sai no instante em que a cadencia libera — e a
-   * espera tem prazo, senao um botao apertado ha meio segundo dispararia sozinho e o jogador
-   * levaria um golpe que nao pediu. Ver ACTION_BUFFER_MS.
+   * Gasta o pedido guardado. Um X apertado durante a cadencia espera aqui e sai no instante em
+   * que ela libera — e a espera tem prazo, senao um botao apertado ha meio segundo dispararia
+   * sozinho. Ver ACTION_BUFFER_MS.
    */
   private spendActionBuffers(delta: number): void {
-    // Com a bolsa aberta ninguém gasta nada: o B ali dentro CONFIRMA um item (ver `pressUse`), e
-    // um pedido guardado saindo por este caminho equiparia o cursor sem o jogador ter pedido.
     if (this.quickBag?.isOpen) return;
-    // O atordoamento adia o GASTO, nunca a contagem — e a diferenca importa nos dois sentidos. Se
-    // a janela congelasse junto, um aperto feito antes da pancada sairia 240ms depois, que e um
-    // golpe que o jogador ja nao pediu (o buffer e curto justamente pra isso nao acontecer). E o
-    // gasto PRECISA ser barrado aqui e nao so la dentro: `swingAttack` re-arma o buffer quando
-    // recusa, entao chama-lo todo frame durante o atordoamento manteria a janela viva pra sempre.
-    const busy = this.playerStaggerMs > 0;
-    if (this.attackBufferMs > 0) {
-      this.attackBufferMs = Math.max(0, this.attackBufferMs - delta);
-      if (this.attackBufferMs > 0 && this.attackCooldownMs <= 0 && !busy) this.swingAttack();
-    }
     if (this.useBufferMs > 0) {
       this.useBufferMs = Math.max(0, this.useBufferMs - delta);
-      if (this.useBufferMs > 0 && this.useCooldownMs <= 0 && !busy) this.pressUse();
+      if (this.useBufferMs > 0 && this.useCooldownMs <= 0) this.pressUse();
     }
-  }
-
-  /**
-   * A carga da lamina rodopiante, enquanto o A esta segurado. Quando ela FICA pronta o jogo tem
-   * de dizer — um gesto que so existe se voce adivinhar quando ele existe nao existe. O aviso e
-   * um sino curto no instante em que carrega, e depois faiscas subindo do heroi enquanto durar:
-   * a mesma gramatica das brasas que a fogueira manda quando cura, e nenhuma luz nova (a lei mais
-   * cara da casa — uma luz THREE em runtime recompila todo shader do mundo).
-   */
-  private tickSpinCharge(delta: number): void {
-    if (!this.attackHeld) return;
-    // A carga não pergunta mais o que está na bolsa: o Z é a espada em qualquer circunstância,
-    // então segurá-lo é sempre carregar a lâmina (ver swingAttack).
-    const wasTelling = this.chargeMs >= SPIN_CHARGE_TELL_MS;
-    this.chargeMs += delta;
-    if (!this.chargeReady && this.chargeMs >= SPIN_CHARGE_MS) {
-      this.chargeReady = true;
-      this.chargeMoteMs = SPIN_READY_MOTE_MS;
-      getSoundManager().stopSpinChargeHum(); // o sino assume; o zumbido nao pode sobrar por baixo
-      getSoundManager().playSpinReady();
-    }
-    if (!this.chargeReady) {
-      // A CARGA EM CURSO (ver SPIN_CHARGE_TELL_MS): passado o limiar de toque, faiscas ralas e
-      // fracas que engrossam ate o sino — a mesma gramatica das prontas, em intensidade crescente,
-      // para que "carregando" e "carregada" sejam a mesma frase em dois volumes. O zumbido nasce
-      // junto e ja sabe quando morrer (a duracao vai no start), entao um update congelado por
-      // hitstop nao o deixa subindo para sempre.
-      if (this.chargeMs >= SPIN_CHARGE_TELL_MS) {
-        if (!wasTelling) getSoundManager().startSpinChargeHum(SPIN_CHARGE_MS - SPIN_CHARGE_TELL_MS);
-        const t = Math.min(1, (this.chargeMs - SPIN_CHARGE_TELL_MS) / (SPIN_CHARGE_MS - SPIN_CHARGE_TELL_MS));
-        this.chargeMoteMs += delta;
-        if (this.chargeMoteMs >= 240 - 130 * t) {
-          this.chargeMoteMs = 0;
-          this.spawnChargeMote(0.35 + 0.55 * t);
-        }
-      }
-      return;
-    }
-    this.chargeMoteMs += delta;
-    if (this.chargeMoteMs >= SPIN_READY_MOTE_MS) {
-      this.chargeMoteMs = 0;
-      this.spawnChargeMote();
-    }
-  }
-
-  /** Nenhum pedido e nenhuma carga atravessa um restart, uma morte ou uma troca de level. */
-  private resetChargeAndBuffers(): void {
-    this.attackBufferMs = 0;
-    this.useBufferMs = 0;
-    this.attackHeld = false;
-    this.chargeMs = 0;
-    this.chargeReady = false;
-    this.chargeMoteMs = 0;
-    getSoundManager().stopSpinChargeHum(); // a carga morreu; o som dela nao pode sobreviver
-    // Nem o atordoamento atravessa uma morte ou um recomeço: o herói do run seguinte nasceria sem
-    // conseguir apertar nada, e a causa estaria num golpe que ele levou na partida anterior.
-    this.playerStaggerMs = 0;
-    this.creatureTurnGraceUntilMs = 0;
-    this.creatureTurnGraceOn = undefined;
-    this.swingLungeTween?.stop();
-    this.swingLungeTween = undefined;
-    this.hero.lungeX = 0;
-    this.hero.lungeY = 0;
-    this.hero.attackMs = 0; // nem a pose do golpe atravessa uma morte ou um recomeço
   }
 
   /**
    * ONDE O HEROI ESTA DESENHADO, em tiles fracionarios — que durante um passo NAO e o tile logico.
-   *
-   * A posicao logica pula para o tile de destino no instante em que o passo comeca (e tem de
-   * pular: o telegrafo do bicho trava naquele tile e a esquiva e decidida contra ele), mas o corpo
-   * na tela ainda esta atras, deslizando. Todo efeito preso ao HEROI tem de sair daqui — o
-   * `swingAnchor` ja fazia isso para o arco, e as faiscas de carga e o anel do giro nao faziam:
-   * carregar andando punha o brilho ate um tile a frente de quem estava brilhando.
+   * A posicao logica pula para o tile de destino no instante em que o passo comeca, mas o corpo
+   * na tela ainda esta atras, deslizando. Todo efeito preso ao HEROI tem de sair daqui.
    */
   private heroVisualTile(): { x: number; y: number } {
     return this.movementController?.visualWorld(this.playerWorld.worldX, this.playerWorld.worldY)
@@ -3329,90 +1996,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Uma faisca dourada subindo do heroi: a lamina esta carregada e o jogador tem de ver isso.
-   * `intensity` < 1 e a carga EM CURSO (ver tickSpinCharge): a mesma faisca, menor e mais palida,
-   * crescendo com o progresso — nunca uma segunda linguagem para o mesmo gesto.
-   */
-  private spawnChargeMote(intensity = 1): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    const { x: worldX, y: worldY } = this.heroVisualTile();
-    const mote = w3
-      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
-      .setTint(0xffe9a8)
-      .setPosition(worldX + (Math.random() - 0.5) * 0.7, worldY + (Math.random() - 0.5) * 0.5)
-      .setElevation(0.1)
-      .setDisplaySize(0.07 + 0.06 * intensity, 0.07 + 0.06 * intensity)
-      .setAlpha(0.35 + 0.55 * intensity);
-    this.tweens.add({
-      targets: mote,
-      elevation: 0.55 + Math.random() * 0.35,
-      alpha: 0,
-      scaleX: 0.4,
-      scaleY: 0.4,
-      duration: 280 + Math.random() * 160,
-      ease: 'Sine.easeOut',
-      onComplete: () => mote.destroy(),
-    });
-  }
-
-  /**
-   * A CARGA MORRENDO (ver spinAttack): as mesmas faiscas douradas, agora apagadas e CAINDO — o
-   * inverso exato da subida que a carga desenhou. Subir e carregar; cair e o que sobrou dela.
-   */
-  private spawnChargeFizzle(): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    const { x: worldX, y: worldY } = this.heroVisualTile();
-    for (let i = 0; i < 4; i++) {
-      const mote = w3
-        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true })
-        .setTint(0xbfa46a)
-        .setPosition(worldX + (Math.random() - 0.5) * 0.6, worldY + (Math.random() - 0.5) * 0.4)
-        .setElevation(0.45 + Math.random() * 0.25)
-        .setDisplaySize(0.1, 0.1)
-        .setAlpha(0.75);
-      this.tweens.add({
-        targets: mote,
-        elevation: 0.04,
-        x: mote.x + (Math.random() - 0.5) * 0.3,
-        alpha: 0,
-        scaleX: 0.4,
-        scaleY: 0.4,
-        duration: 260 + Math.random() * 120,
-        ease: 'Quad.easeIn', // acelera para baixo: gravidade, nao brasa subindo
-        onComplete: () => mote.destroy(),
-      });
-    }
-  }
-
-  /** O anel que sai do heroi quando a lamina gira: o alcance do golpe, desenhado uma vez. */
-  private spawnSpinRing(): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    // No corpo DESENHADO (ver heroVisualTile): a raiz do giro impede COMECAR um passo, nunca
-    // congela um em curso, entao o giro pode sair com o heroi ainda deslizando entre dois tiles.
-    const at = this.heroVisualTile();
-    const ring = w3
-      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
-      .setTint(0xfff0b8)
-      .setPosition(at.x, at.y)
-      .setElevation(FX_BODY_ELEV)
-      .setDisplaySize(0.5, 0.5);
-    this.tweens.add({
-      targets: ring,
-      scaleX: 3.4,
-      scaleY: 3.4,
-      alpha: 0,
-      duration: 260,
-      ease: 'Cubic.easeOut',
-      onComplete: () => ring.destroy(),
-    });
-  }
-
-  /**
    * O tile a frente: para onde ele OLHA, nao para onde ele anda. E a mesma direcao que o sprite
-   * esta mostrando (PlayerMovementController.facing), entao o alvo do golpe nunca pode divergir
+   * esta mostrando (PlayerMovementController.facing), entao o alvo do gesto nunca pode divergir
    * do corpo que o jogador ve.
    */
   private facingTile(): { x: number; y: number } {
@@ -3434,8 +2019,7 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * A direcao que veio do SAVE, domada. Um numero gravado por uma versao anterior (ou por uma
-   * mao humana no localStorage) nao pode virar um frame fora da folha: quatro direcoes e o
-   * contrato, e o leste e o default de todo prop direcional deste jogo.
+   * mao humana no localStorage) nao pode virar um frame fora da folha.
    */
   private static asPropDir(value: number | undefined): PropDir {
     const n = Math.trunc(value ?? 1);
@@ -3443,352 +2027,44 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O BOTAO A, apertado. Duas coisas saem daqui, nesta ordem:
+   * O BOTAO Z — a MÃO que cumprimenta e cuida, nunca uma lâmina. Na ordem:
    *
-   *   1. o GOLPE, imediato (ou guardado no buffer se a cadencia ainda nao liberou);
-   *   2. a CARGA da lamina rodopiante comeca a contar, e vive ate o `keyup`.
+   *   1. FALAR com quem está na frente (o keycap "Z" sobre a cabeça do NPC anuncia esta tecla);
+   *   2. a FOGUEIRA DO FIM: acender, e depois assar (ver tendHearthAt);
+   *   3. a BANCADA e o FORNO abrem o catálogo;
+   *   4. o ALTAR vazio recebe o item selecionado, e o ocupado leva a pancada.
    *
-   * Sao os dois gestos do mesmo botao, e o toque nunca paga pela existencia do segundo: o golpe
-   * sai no instante do aperto, como sempre saiu. Um botao que so respondesse quando solto seria
-   * um botao com 450ms de atraso, que e o oposto do que esta reforma quer.
+   * Sem nada disso na frente o Z não faz nada — não há golpe no vazio porque não há golpe.
    */
   private pressAttack(event?: KeyboardEvent): void {
-    // Uma tecla SEGURADA repete o `keydown` no navegador. O sinal certo pra ignorar a repeticao e
-    // o `repeat` do proprio evento, e nao um booleano nosso: um `keyup` perdido (o jogo pausa e o
-    // plugin de teclado dorme com a tecla apertada) deixaria esse booleano preso em `true` e o
-    // botao A morto ate a proxima recarga. Do toque nao vem evento nenhum, e touchstart nao
-    // repete — entao `undefined` e sempre um aperto de verdade.
+    // Uma tecla SEGURADA repete o `keydown` no navegador; o sinal certo pra ignorar a repeticao e
+    // o `repeat` do proprio evento, nunca um booleano nosso que um `keyup` perdido deixaria preso.
     if (event?.repeat) return;
     if (!this.canAct()) return;
-    this.attackHeld = true;
-    this.chargeMs = 0;
-    this.chargeReady = false;
-    this.swingAttack();
-  }
-
-  /**
-   * O A solto. Se a lamina chegou a carregar, ELA sai aqui — e o giro nao respeita o buffer nem
-   * a cadencia do toque: o jogador ja pagou por ele segurando meio segundo parado.
-   */
-  private releaseAttack(): void {
-    if (!this.attackHeld) return;
-    this.attackHeld = false;
-    const ready = this.chargeReady;
-    this.chargeMs = 0;
-    this.chargeReady = false;
-    // Soltar no meio da subida aborta a carga: o zumbido morre com ela (ver startSpinChargeHum).
-    // Com a lamina pronta o sino ja o substituiu e isto e um no-op.
-    getSoundManager().stopSpinChargeHum();
-    if (ready && this.canAct()) this.spinAttack();
-  }
-
-  /**
-   * O GOLPE — a espada, no arco da frente. Sem espada na mochila, o soco.
-   *
-   * O arco sai mesmo no vazio, de proposito: um golpe que so aparece quando acerta esconde do
-   * jogador qual e o alcance da arma, e o alcance e a unica coisa que ele precisa aprender para
-   * lutar sem encostar. E ele varre os TRES tiles do arco desenhado (ver SWING_ARC): a foice de
-   * 155° que a animacao sempre mostrou e o que o acerto passou a valer.
-   */
-  private swingAttack(): void {
-    if (!this.canAct()) return;
-    // FALAR é o próprio botão de AÇÃO quando há alguém NA FRENTE — o aviso "Z" que flutua na
-    // cabeça do NPC anuncia exatamente esta tecla. Vem ANTES da cadência e do corpo: puxar
-    // assunto não saca lâmina, não dá investida e não gasta golpe. (O B continua falando —
-    // as duas mãos sabem cumprimentar.)
-    {
-      const front = this.facingTile();
-      if (this.talkToNpcAt(front.x, front.y)) return;
-      // A BANCADA TEM O QUE DIZER, e por isso ela entra exatamente aqui —
-      // no mesmo degrau do NPC, antes da cadência e antes do corpo. Encarar a caixa e apertar A
-      // abre o CATÁLOGO: o jogador escolhe o que quer construir, e a resposta ("do que preciso")
-      // volta desenhada no catalogo. É o Guia do Terraria — mostrar um objeto e receber a receita
-      // —, só que quem responde é a própria estação, no lugar em que o gesto acontece.
-      //
-      // Vem antes de `useItemAt` de propósito: nenhum item do jogo tem o que fazer com o corpo da
-      // bancada, então conversar com ela nunca rouba um gesto de ferramenta — e com a mão cheia
-      // continua valendo, que é justamente
-      // quando o jogador está a meio caminho de um plano.
-      // AS DUAS ESTACOES DE FABRICAR ABREM A MESMA TELA. O A e uma coisa so — escolha e confirme
-      // —, e o que muda entre elas e o que cada uma sabe fazer.
-      if (this.openCraftMenuAt(front.x, front.y)) return;
-      // O ALTAR VAZIO: o Z PÕE nele o item selecionado na bolsa. Fica no mesmo degrau da bancada
-      // (antes da cadência e do corpo) e pela mesma razão — pôr uma coisa numa mesa não saca
-      // lâmina. Com a laje já ocupada isto devolve `false` de propósito: dali em diante o Z volta
-      // a ser a espada, e a espada descendo na peça é a PANCADA (ver strikeAltarAt logo abaixo).
-      if (this.placeOnAltarAt(front.x, front.y)) return;
-    }
-    // A cadencia nao DESCARTA o pedido, ela o adia — ver ACTION_BUFFER_MS. O ATORDOAMENTO entra
-    // aqui pelo mesmo motivo e no mesmo lugar: ele e uma cadencia imposta por quem bateu, e o
-    // aperto feito no fim dele tem de sair quando ele acaba (ver PLAYER_STAGGER_MS).
-    if (this.attackCooldownMs > 0 || this.playerStaggerMs > 0) {
-      this.attackBufferMs = ACTION_BUFFER_MS;
-      return;
-    }
-    this.attackBufferMs = 0;
-    this.attackCooldownMs = ATTACK_COOLDOWN_MS;
-    this.stopBreathing();
-    this.movementController?.root(SWING_ROOT_MS);
-    this.lungeIntoSwing();
-    this.hero.attackMs = SWING_POSE_MS; // o CORPO entra no golpe, e nao so a lamina
-
-    const { x, y } = this.facingTile();
-    // O Z É A ESPADA, E SÓ ELA. A tabela de itens inteira mudou de botão (ela é o X agora — ver
-    // `pressUse`), e com isso este gesto ficou com uma resposta só: o corte de sempre, o arco de
-    // duas fileiras, a rebatida e a carga do giro. Antes o mesmo botão era espada, soco, machado,
-    // balde e chave conforme o que estivesse na bolsa — o que fazia da defesa uma consulta de
-    // menu no meio da briga, e do arco um desenho que mudava de alcance sem o jogador pedir.
-    // O SOCO MORREU JUNTO: mão vazia deixou de existir, porque a espada não se solta.
-    this.swingSword(x, y);
-    const arc = this.arcTiles(2);
-    this.sweepArc(arc, 'sword');
-    this.reflectShotsIn(arc);
-    // A LÂMINA DESCE NA LAJE. Vem DEPOIS do arco inteiro, e não no lugar dele: o golpe acontece de
-    // qualquer jeito (a lei do arco que sai mesmo no vazio), e a pancada é o que ele encontrou pela
-    // frente. Só o tile encarado conta — bater de raspão no altar do lado enquanto se luta não
-    // pode martelar a peça de alguém.
-    this.strikeAltarAt(x, y);
-  }
-
-  /**
-   * A REBATIDA: o MESMO arco do golpe tenta devolver a bola de gelo (ver
-   * EnemyProjectileManager.reflectAt — só o cuspe do zora aceita). "O momento certo" não é um
-   * relógio novo: é a bola estar DENTRO do arco durante o gesto — a janela que o jogador já
-   * aprendeu com todo corpo que a espada alcança. A resposta é o pacote do aparo (o tim da
-   * guarda + hitstop): o mesmo som de "não passou", agora dizendo "voltou".
-   */
-  private reflectShotsIn(tiles: Array<{ x: number; y: number }>): void {
-    const returned = this.enemyManager?.reflectShots(tiles) ?? 0;
-    if (returned <= 0) return;
-    getSoundManager().playGuardBlock();
-    this.triggerHitstop(70);
-    const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
-    this.world3d?.shake(70, 0.05, f.dx, f.dy);
-  }
-
-  /**
-   * O corpo indo atrás da lâmina (ver SWING_LUNGE_TILES). Sai rápido e volta devagar, que é a
-   * curva de um golpe — o contrário (sair devagar) leria como o herói sendo empurrado.
-   */
-  private lungeIntoSwing(): void {
-    const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
-    // Só o tween da investida é morto — NUNCA um `killTweensOf(this.hero)`, que levaria junto o
-    // arremesso de dano e a respiração, que moram no mesmo objeto e têm donos próprios.
-    this.swingLungeTween?.stop();
-    this.swingLungeTween = this.tweens.add({
-      targets: this.hero,
-      lungeX: f.dx * SWING_LUNGE_TILES,
-      lungeY: f.dy * SWING_LUNGE_TILES,
-      duration: SWING_LUNGE_OUT_MS,
-      ease: 'Quad.easeOut',
-      onComplete: () => {
-        this.swingLungeTween = this.tweens.add({
-          targets: this.hero,
-          lungeX: 0,
-          lungeY: 0,
-          duration: SWING_LUNGE_BACK_MS,
-          ease: 'Sine.easeIn',
-          onComplete: () => { this.swingLungeTween = undefined; },
-        });
-      },
-    });
-  }
-
-  /**
-   * A LAMINA RODOPIANTE: o heroi gira e corta os OITO vizinhos de uma vez.
-   *
-   * E a unica resposta do jogo a estar cercado, e ela existe porque o cerco de caveiras existe:
-   * um golpe direcional contra quatro corpos e uma conta que nao fecha. Custa a carga (meio
-   * segundo parado, com a matilha andando) e uma cadencia longa depois — e por isso ela e uma
-   * DECISAO e nao um golpe melhor.
-   */
-  private spinAttack(): void {
-    // Sem porta de item: a espada e do heroi (ver swordEquipped), entao o giro so depende da carga.
-    // O GIRO PERDE-SE SE VOCE APANHAR CARREGANDO, e ele precisa da trava EXPLICITA porque e o unico
-    // gesto que ignora a cadencia de proposito ("o jogador ja pagou por ele segurando meio segundo
-    // parado") — sem esta linha, ele seria a unica coisa que sai do meio de um atordoamento.
-    //
-    // E e o risco que a peca sempre cobrou: meio segundo parado no meio da matilha. Perder a carga
-    // ao levar o golpe e a outra metade desse trato, nao um castigo a mais. Mas um preco cobrado
-    // em silencio nao e um trato: o jogador pagou meio segundo e a lamina simplesmente nao saia,
-    // sem nada dizer que a carga MORREU aqui. O fiasco — um descer curto e as faiscas de carga
-    // caindo apagadas — e o recibo.
-    if (this.playerStaggerMs > 0) {
-      getSoundManager().playSpinFizzle();
-      this.spawnChargeFizzle();
-      return;
-    }
-    this.attackBufferMs = 0;
-    this.attackCooldownMs = SPIN_COOLDOWN_MS;
-    this.stopBreathing();
-    this.movementController?.root(SPIN_ROOT_MS);
-    // O giro segura a pose por toda a raiz dele (260ms, mais longa que a do toque): o gesto e maior
-    // e o corpo tem de ficar nele o tempo todo, ou o heroi volta ao repouso com a lamina ainda no ar.
-    this.hero.attackMs = SPIN_ROOT_MS;
-    this.hideBackItemDuringSwing(SPIN_COOLDOWN_MS);
-
-    if (this.swordSlash && this.camera) {
-      // swingAnchor ja conta ao arco quanta luz ha onde o heroi esta (ver SWING_DARK): sem isso
-      // uma lamina clara rodopiaria como um lampiao numa noite fechada.
-      const screen = this.swingAnchor(0);
-      this.swordSlash.spin(screen.x, screen.y, this.tileSize);
-    }
-    getSoundManager().playSwordSlash();
-    getSoundManager().playSpinRelease();
-
-    const { worldX, worldY } = this.playerWorld;
-    const ring: Array<{ x: number; y: number }> = [];
-    for (let oy = -1; oy <= 1; oy++) {
-      for (let ox = -1; ox <= 1; ox++) {
-        if (ox === 0 && oy === 0) continue;
-        ring.push({ x: worldX + ox, y: worldY + oy });
-      }
-    }
-    this.sweepArc(ring, 'spin');
-    this.reflectShotsIn(ring); // a lâmina rodopiante devolve bola de qualquer lado — é o giro
-    this.world3d?.shake(120, 0.08);
-    this.spawnSpinRing();
-  }
-
-  /**
-   * Os tiles que o golpe varre. `reach` é 1 para o soco (só a fileira colada no corpo) e 2 para a
-   * espada (o bloco 2×3 inteiro — ver SWING_ARC_NEAR/FAR). O primeiro par é sempre o tile à
-   * frente, o alvo canônico que todo playtest de mira lê.
-   *
-   * A fileira de trás é FILTRADA por caminho: `[2, lat]` só entra se `[1, lat]` não for parede
-   * para um tiro. Reaproveita `isShotBlockedAt` de propósito — é a mesma pergunta que uma bala
-   * faz (o que interrompe uma trajetória: parede e prop sólido, nunca luz nem água) — e é o que
-   * impede a lâmina de atravessar rocha para acertar quem está atrás dela.
-   */
-  private arcTiles(reach: 1 | 2 = 2): Array<{ x: number; y: number }> {
-    const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
-    // Rotacao do gabarito para a direcao olhada: (dx,dy) e o "para frente" e (-dy,dx) o "para o
-    // lado". Uma conta so, para nao existirem quatro tabelas cardinais que podem discordar.
-    const toWorld = ([fwd, lat]: readonly [number, number]): { x: number; y: number } => ({
-      x: this.playerWorld.worldX + f.dx * fwd - f.dy * lat,
-      y: this.playerWorld.worldY + f.dy * fwd + f.dx * lat,
-    });
-    const tiles = SWING_ARC_NEAR.map(toWorld);
-    if (reach < 2) return tiles;
-    for (const [fwd, lat] of SWING_ARC_FAR) {
-      const gate = toWorld([fwd - 1, lat]); // o tile do meio, entre o herói e o alvo
-      if (this.isShotBlockedAt(gate.x, gate.y)) continue;
-      tiles.push(toWorld([fwd, lat]));
-    }
-    return tiles;
-  }
-
-  /**
-   * Resolve um golpe contra uma lista de tiles. Um corpo por tile, entao ninguem leva dois golpes
-   * do mesmo gesto; e o mesmo caminho de invulneravel-que-resvala do golpe de um tile so.
-   *
-   * O GESTO TEM DUAS VOZES, E ELAS TEM ORCAMENTOS SEPARADOS. O arco varre ate seis tiles e o giro
-   * oito, entao a voz do ACERTO (o baque, a piscada do heroi, o som da morte, o encontrao) e a voz
-   * da RECUSA (o tim da guarda, o tranco do resvalo) precisam sair uma vez cada por gesto — mas
-   * uma nunca pode calar a outra. Com um contador so havia defeito nos DOIS sentidos: um corpo que
-   * resvalou no primeiro tile roubava o som da morte do corpo do lado, e quando NADA landava (um
-   * giro no meio de uma matilha inteira guardando) oito recusas disparavam oito tins no mesmo
-   * frame.
-   *
-   * O que e do CORPO — o anel do resvalo, a faisca da guarda, o pacote de impacto — nao entra em
-   * orcamento nenhum: ele responde por AQUELE corpo, e calar o segundo corpo de um arco e mentir
-   * sobre o que aconteceu com ele. So a voz e uma so.
-   */
-  private sweepArc(tiles: Array<{ x: number; y: number }>, weapon: 'sword' | 'spin'): void {
-    let hitSpoken = false;
-    let refusalSpoken = false;
-    /**
-     * UM GOLPE POR CORPO, e este conjunto é o que finalmente torna essa frase verdadeira.
-     *
-     * O código garantia um corpo por TILE, que não é a mesma coisa — porque o acerto MOVE o corpo,
-     * e o arco é varrido em ordem. Um bicho no tile da frente (`[1,0]`) é arremessado para
-     * `[2,0]`, que é justamente o tile seguinte da lista: o laço o encontrava de novo, agora dentro
-     * dos próprios i-frames, e desenhava o anel de RECUSA em cima do corpo que a mesma espadada
-     * acabou de acertar. Uma espadada dizia "acertei" e "resvalou" sobre o mesmo bicho — e o anel
-     * frio é o sinal de "espere, ele está piscando", ou seja, ensinava exatamente o contrário do
-     * que tinha acabado de acontecer.
-     *
-     * Ficou invisível por muito tempo por acidente: o anel era gasto pelo orçamento de voz do
-     * gesto (`echo`), então o segundo encontro caía calado. Ao separar as duas vozes — para que uma
-     * recusa legítima nunca fosse silenciada por um acerto — o defeito apareceu.
-     */
-    const resolved = new Set<EnemyBase>();
-    for (const tile of tiles) {
-      const enemy = this.enemyManager?.getEnemyAt(tile.x, tile.y);
-      if (!enemy || resolved.has(enemy)) continue;
-      resolved.add(enemy);
-      // Ainda saindo do chao: a caveira e invulneravel e o golpe RESVALA — anel frio e clarao
-      // palido, nunca o pacote de impacto (que faria um golpe negado parecer um golpe certeiro).
-      if (enemy.isSpawning) {
-        enemy.flashImmune();
-        this.spawnDeflect(tile.x, tile.y);
-        if (!refusalSpoken) {
-          getSoundManager().playBladeGlance();
-          // Inclinado na direcao do golpe, como toda recusa: um baque sem direcao era o unico
-          // tremor "sorteado" que restava no combate.
-          this.world3d?.shake(40, 0.03, tile.x - this.playerWorld.worldX, tile.y - this.playerWorld.worldY);
-          this.triggerHitstop(GLANCE_HITSTOP_MS);
-          refusalSpoken = true;
-        }
-        continue;
-      }
-      if (this.strikeEnemy(enemy, tile.x, tile.y, weapon, hitSpoken, refusalSpoken) === 'landed') {
-        hitSpoken = true;
-      } else {
-        refusalSpoken = true;
-      }
-    }
-  }
-
-  /**
-   * O arco da ESPADA, que nao e o mesmo de `swingHeld` (aquele desenha o item das costas).
-   * O heroi pode estar com o balde escolhido no B e mesmo assim sacar a espada — e por isso o
-   * item das costas so some quando o que esta la e justamente a espada.
-   */
-  private swingSword(wx: number, wy: number): void {
-    if (!this.swordSlash || !this.camera) return;
-    getSoundManager().playSwordSlash();
-    // As costas mostram a espada quando nada esta selecionado (ver updateBackItem) — e ai ela tem
-    // de sumir durante o arco, ou a mesma lamina aparece em dois lugares.
-    if (this.heldItem === 'none') this.hideBackItemDuringSwing();
-    const screen = this.swingAnchor(wy - this.playerWorld.worldY);
-    this.swordSlash.slash(
-      screen.x, screen.y,
-      wx - this.playerWorld.worldX, wy - this.playerWorld.worldY,
-      this.tileSize,
-    );
+    const front = this.facingTile();
+    if (this.talkToNpcAt(front.x, front.y)) return;
+    if (this.tendHearthAt(front.x, front.y)) return;
+    if (this.openCraftMenuAt(front.x, front.y)) return;
+    if (this.placeOnAltarAt(front.x, front.y)) return;
+    this.strikeAltarAt(front.x, front.y);
   }
 
   /**
    * O BOTÃO X — USA O ITEM DA BOLSA no tile à frente, e é só isso que ele faz.
    *
-   * A gramática dos dois botões ficou uma frase por botão: **o Z é a espada, o X é a ferramenta.**
-   * Bater com a espada e quebrar a rocha deixaram de ser o mesmo botão disputando a mesma bolsa —
-   * o herói corta com o Z e pica a pedra com o X, sem passar por um menu entre os dois.
-   *
    * O X usa o item escolhido, devolve uma peca colocada no altar ou recolhe uma estacao manual.
-   *
    * A ordem abaixo é a única que não desmente as marcas desenhadas no chão: o que o jogador
    * ESCOLHEU (o item) age primeiro e so entao vem recolher.
    */
   private pressUse(event?: KeyboardEvent): void {
-    // O B NÃO REPETE MAIS, e a bolsa é quem cobrou isso. O A já ignorava a repetição do navegador
-    // pelo `event.repeat` (ver `pressAttack`); o B não, e com a bolsa atrás da mesma tecla isso
-    // virou uma armadilha real: segurar o X um instante a mais para equipar fazia o primeiro
-    // keydown CONFIRMAR o item e a repetição seguinte, já com a bolsa fechada, USÁ-LO no tile da
-    // frente. Quem quer usar duas vezes aperta duas vezes — a cadência (USE_COOLDOWN_MS) continua
-    // sendo o que separa os dois apertos.
+    // Segurar o X um instante a mais para equipar fazia o primeiro keydown CONFIRMAR o item e a
+    // repetição seguinte, já com a bolsa fechada, USÁ-LO. Quem quer usar duas vezes aperta duas.
     if (event?.repeat) return;
-    // A BOLSA ABERTA SEQUESTRA O B — e este é o único lugar do código onde isso pode ser decidido.
-    // Se a bolsa tivesse o próprio ouvinte de X, o MESMO aperto faria as duas coisas em sequência:
-    // confirmaria o item e, meio milissegundo depois já com a bolsa fechada, USARIA o que acabou
-    // de ser equipado contra o tile da frente.
+    // A BOLSA ABERTA SEQUESTRA O X — e este é o único lugar do código onde isso pode ser decidido.
     if (this.quickBag?.isOpen) { this.quickBag.commit(); return; }
     if (!this.canAct()) return;
-    // A cadencia adia, nao descarta — a mesma lei do A (ver ACTION_BUFFER_MS). Vale mais aqui do
-    // que parece: o B tambem e uma arma (o graveto aceso), e o hitstop de um acerto come 110ms
-    // de update inteiros — exatamente o intervalo em que a segunda golpada e apertada.
-    if (this.useCooldownMs > 0 || this.playerStaggerMs > 0) { // ...e o atordoamento, idem
+    // A cadencia adia, nao descarta (ver ACTION_BUFFER_MS).
+    if (this.useCooldownMs > 0) {
       this.useBufferMs = ACTION_BUFFER_MS;
       return;
     }
@@ -3796,46 +2072,21 @@ export class GameScene extends Phaser.Scene {
     this.useCooldownMs = USE_COOLDOWN_MS;
     this.stopBreathing();
     const { x, y } = this.facingTile();
-    // 0. A FERRAMENTA CERTA SE APRESENTA SOZINHA. Bateu numa árvore com o machado na mochila? O
-    //    herói saca o machado. Numa rocha, com a picareta? Ele saca a picareta. Não é um atalho
-    //    de conveniência: é a diferença entre um jogo que pergunta "qual item você escolheu?" e um
-    //    que entende o que você está fazendo. O gesto que a bolsa cobrava antes (parar, abrir,
-    //    girar o cursor, fechar) não decidia NADA — diante de um tronco só existe uma resposta, e
+    // 0. A FERRAMENTA CERTA SE APRESENTA SOZINHA: diante de um tronco só existe uma resposta, e
     //    fazer o jogador dizê-la em voz alta é cobrar burocracia por uma escolha que não existe.
-    //
-    //    Ele TROCA a seleção de verdade, e é o que o mantém honesto: o braço desenha o machado, as
-    //    costas do herói mostram o machado, e o próximo X continua com ele na mão. Um gesto que
-    //    usasse uma ferramenta invisível faria a animação mentir sobre o que está acontecendo.
-    //
-    //    E ele não rouba gesto nenhum: um tronco e uma rocha são sólidos, e não há UM item na
-    //    tabela que faça outra coisa contra eles. Ver `toolWantedAt`.
+    //    Ver `toolWantedAt`.
     this.equipToolFor(x, y);
     // 1. O ITEM ESCOLHIDO AGE — a tabela inteira (machado→árvore, picareta→rocha, balde→água,
-    //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, estação→instala). É o primeiro
-    //    degrau porque é o único que o jogador PEDIU explicitamente: ele abriu a bolsa e escolheu
-    //    aquilo. As marcas no chão (`PlacementHints`) desenham exatamente este passo.
+    //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, estação→instala).
     if (this.heldItem !== 'none' && this.useItemAt(x, y)) return;
-    // 1b. MARTELAR A ESPONJA continua valendo com a bolsa VAZIA. Ela é a única linha da tabela que
-    //     não olha o que está na mão (bater não é usar uma ferramenta), e sem esta porta um herói
-    //     que pousou a esponja e ficou sem itens não teria como voltar a bater nela — um beco sem
-    //     saída no meio da cadeia do ferro.
+    // 1b. MARTELAR A ESPONJA continua valendo com a bolsa VAZIA.
     if (this.heldItem === 'none' && this.strikeBloomAt(x, y)) return;
     // 2. O ALTAR CHEIO devolve a peca para a mochila.
     if (this.takeFromAltarAt(x, y)) return;
-    // 3. RECOLHER a máquina que o JOGADOR construiu — a outra metade de "tudo que se instala se
-    //    recolhe". Deixou de exigir mão vazia: a mão nunca mais está vazia (a bolsa quase sempre
-    //    tem alguma coisa), e exigir isso tornaria a peça irremovível na prática. Vem por último
-    //    entre os gestos, então uma ferramenta que TEM o que fazer ali nunca desmonta nada.
+    // 3. RECOLHER a máquina que o JOGADOR construiu.
     if (this.pickUpMachineAt(x, y)) return;
-    // 3b. A BOMBA VAI PARA O CHÃO — em qualquer lugar e a qualquer momento. Ela é o último degrau
-    //     de propósito: por caber em todo tile, ela é o único item cujo gesto engoliria os de cima
-    //     se viesse antes (um herói com a bomba na mão nunca mais recolheria uma estação). Aqui
-    //     embaixo ela só age quando ninguém mais quis o aperto — ver `bombDropTile`, que é a mesma
-    //     pergunta que desenha o quadrado branco.
-    const bombDrop = this.bombDropTile();
-    if (bombDrop) { this.placeBombAt(bombDrop.x, bombDrop.y); return; }
-    // 4. O gesto sai NO VAZIO — a mesma lei do golpe: um botão que só se mexe quando acerta esconde
-    //    do jogador o que ele está segurando. Sem nada selecionado não há braço a balançar.
+    // 4. O gesto sai NO VAZIO: um botão que só se mexe quando acerta esconde do jogador o que ele
+    //    está segurando. Sem nada selecionado não há braço a balançar.
     if (this.heldItem !== 'none') this.swingHeld(x, y);
   }
 
@@ -3929,12 +2180,6 @@ export class GameScene extends Phaser.Scene {
    */
   private talkToNpcAt(wx: number, wy: number): boolean {
     if (!this.npcManager?.hasNpcAt(wx, wy)) return false;
-    // NPC congelado não conversa: o gesto foi gasto na recusa (o bloco treme — a lei da trava).
-    // `true` de propósito: o B não pode escorrer para "pousar o item" na frente de alguém.
-    if (this.freezeManager?.frozenAt(wx, wy)) {
-      this.freezeManager.pulse(wx, wy);
-      return true;
-    }
     const kind = this.npcManager.getKindAt(wx, wy);
     if (!kind) return false;
     // The wizard runs the story dialogue (progress-driven); every other NPC uses its base line.
@@ -3952,13 +2197,6 @@ export class GameScene extends Phaser.Scene {
   private buildMachineAt(wx: number, wy: number): boolean {
     const kind = this.heldItem;
     if (kind === 'none' || !MACHINE_ITEM_KINDS.has(kind)) return false;
-    // A recusa e FISICA: o item sai no arco contra o tile e volta, nunca uma legenda dizendo
-    // "aqui nao". `true` porque o gesto foi gasto — o A nao pode escorrer para o arco no vazio
-    // depois de ja ter tentado uma coisa.
-    if (this.freezeManager?.frozenAt(wx, wy)) {
-      this.freezeManager.pulse(wx, wy);
-      return true;
-    }
     if (!this.canBuildMachineAt(kind, wx, wy)) {
       this.swingHeld(wx, wy);
       getSoundManager().playToolboxRefuse();
@@ -4024,59 +2262,14 @@ export class GameScene extends Phaser.Scene {
     if (!MACHINE_ITEM_KINDS.has(kind)) return false;
     for (const [tx, ty] of this.machineFootprint(kind, wx, wy)) {
       if (this.isTileOccupied(tx, ty) || this.machineAt(tx, ty)) return false;
-      if (this.freezeManager?.frozenAt(tx, ty)) return false;
     }
     return true;
-  }
-
-  /** Este tile aguenta uma bomba pousada? A mesma conta do `canBuildMachineAt`, sem o herói. */
-  private canRestBombAt(wx: number, wy: number): boolean {
-    return !this.isTileTaken(wx, wy)
-      && !this.machineAt(wx, wy)
-      && !(this.freezeManager?.frozenAt(wx, wy) ?? false);
-  }
-
-  /**
-   * ONDE A BOMBA CAI — uma pergunta só, feita pelo botão X e pelo quadrado branco do
-   * `PlacementHints`. Duas cópias divergindo é o pior defeito possível aqui: uma marca no chão
-   * prometendo um tile e a bomba nascendo noutro.
-   *
-   * A bomba era o único item do jogo que só existia em cima de um tile AUTORADO: uma marca no
-   * mapa decidia onde o jogador tinha permissão de pensar em explodir alguma coisa. Isso não a
-   * fazia uma ferramenta, fazia dela uma chave com a fechadura desenhada ao lado. Agora ela é como
-   * o resto da tabela: o item age no tile à FRENTE, em qualquer lugar e a qualquer momento.
-   *
-   * E ela cai AOS PÉS quando a frente não a recebe, porque a frente ser parede é justamente o caso
-   * para o qual a bomba existe — você encara a rachadura e aperta. O raio de {@link
-   * BOMB_BLAST_RADIUS_TILES} alcança a parede de um tile de distância, então o gesto continua
-   * fazendo o que o jogador pediu. Não é um segundo gesto: é a mesma mão largando o que segura no
-   * único chão que sobrou.
-   *
-   * O que a queda aos pés NÃO pode fazer é roubar o aperto de outro gesto. Diante de uma estação
-   * ou de uma peça no altar, o X é o de RECOLHER (ver `pressUse`), e uma bomba caindo atrás do
-   * herói enquanto ele achava que estava desmontando o forno seria a bomba comendo metade da
-   * tabela de itens só por estar selecionada.
-   */
-  private bombDropTile(): HintTile | null {
-    if (this.heldItem !== 'bomb') return null;
-    const { x, y } = this.facingTile();
-    if (this.canRestBombAt(x, y)) return { x, y };
-    if (this.machineAt(x, y) || this.getAltarAt(x, y)?.carrying) return null;
-    const { worldX, worldY } = this.playerWorld;
-    return this.canRestBombAt(worldX, worldY) ? { x: worldX, y: worldY } : null;
   }
 
   private syncPlacementHints(): void {
     const hints = this.placementHints;
     if (!hints) return;
     const kind = this.heldItem;
-    // A BOMBA também tem alvo desenhado, e precisa mais dele que uma estação: ela pode cair no
-    // tile da frente OU no do próprio herói, e sem a marca a diferença entre os dois só apareceria
-    // depois que o pavio já estivesse aceso.
-    if (kind === 'bomb') {
-      hints.show(this.bombDropTile());
-      return;
-    }
     if (kind === 'none' || !MACHINE_ITEM_KINDS.has(kind)) {
       hints.clear();
       return;
@@ -4185,7 +2378,6 @@ export class GameScene extends Phaser.Scene {
    * seria fogo que não está em lugar nenhum do mundo (a mesma lei do `selectItem`).
    */
   private collectUnderfoot(wx: number, wy: number): void {
-    if (this.freezeManager?.frozenAt(wx, wy)) return; // item preso no gelo não sobe
     const taken = this.itemManager?.takeAt(wx, wy);
     if (!taken) return;
     const handWasEmpty = this.heldItem === 'none';
@@ -4196,7 +2388,7 @@ export class GameScene extends Phaser.Scene {
       this.torchFuelMs = taken.fire?.fuelMs ?? 0;
     }
     this.updateBackItem();
-    if (isBagItem(taken.kind) && !this.seenItems.has(taken.kind)) {
+    if ((isBagItem(taken.kind) || taken.kind === 'mushroom') && !this.seenItems.has(taken.kind)) {
       this.seenItems.add(taken.kind);
       this.showItemGet(taken.kind, () => {});
     } else {
@@ -4210,11 +2402,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   private pickUpItemAt(wx: number, wy: number): boolean {
-    // Item preso no gelo não sobe pra mochila: a mão bate no bloco (pulse) e o gesto acabou.
-    if ((this.itemManager?.hasItemAt(wx, wy) ?? false) && this.freezeManager?.frozenAt(wx, wy)) {
-      this.freezeManager.pulse(wx, wy);
-      return true;
-    }
     const taken = this.itemManager?.takeAt(wx, wy);
     if (!taken) return false;
     this.onCollectItem({
@@ -4283,101 +2470,15 @@ export class GameScene extends Phaser.Scene {
       this.swingHeld(wx, wy);
       return this.strikeAltarAt(wx, wy);
     }
-    // Um bicho na frente leva o item na cara, na escada de dano de sempre (MELEE_DAMAGE): o
-    // graveto ACESO mata de um golpe, uma ferramenta qualquer em dois. E o que mantem a tocha
-    // sendo uma arma agora que o A e so a espada.
-    const enemy = this.enemyManager?.getEnemyAt(wx, wy);
-    if (enemy && MELEE_DAMAGE[this.heldItem as HeldItemKind] !== undefined) {
-      // ATACAR PRENDE OS PES — inclusive pelo B. A raiz e a investida moravam so no botao A, e a
-      // exceção caiu justo no golpe mais forte que o jogo tem: o graveto ACESO e a unica coisa que
-      // ainda mata de um golpe, e era tambem a unica que se dava em velocidade maxima de
-      // caminhada. Sem compromisso, espacamento nao custa nada (ver SWING_ROOT_MS).
-      //
-      // So neste ramo, nunca no resto da tabela do B: prender os pes para apanhar um graveto, usar
-      // o machado numa arvore ou pousar uma pedra seria o defeito oposto — o jogo travando no meio
-      // de um gesto que nao e uma briga.
-      this.movementController?.root(SWING_ROOT_MS);
-      this.lungeIntoSwing();
-      // O corpo entra no golpe do B tambem — mas SO neste ramo. As outras coisas que o B balanca
-      // (o machado na arvore, a picareta na rocha) tem gesto proprio, e por cima: um golpe de cima
-      // com a pose de um golpe horizontal seriam duas animacoes discordando no mesmo frame.
-      this.hero.attackMs = SWING_POSE_MS;
-      if (enemy.isSpawning) {
-        this.swingHeld(wx, wy);
-        enemy.flashImmune();
-        this.spawnDeflect(wx, wy);
-        // O mesmo pacote de recusa do botao A (ver sweepArc): anel frio, raspao e um tranco curto.
-        // O B tambem e uma arma, e uma recusa muda de um lado e sonora do outro seriam duas regras.
-        getSoundManager().playBladeGlance();
-        this.world3d?.shake(40, 0.03);
-        this.triggerHitstop(GLANCE_HITSTOP_MS);
-        return true;
-      }
-      this.strikeEnemy(enemy, wx, wy, 'item');
-      return true;
-    }
-
-    // TILE CONGELADO RECUSA A TABELA INTEIRA: o machado não morde a árvore no gelo, a picareta
-    // não abre a rocha, a tocha não acende a fogueira morta — até o degelo. Um gate só, espacial
-    // (ver FreezeManager.frozenAt), em vez de um `if` por linha da tabela; a resposta é o tremor
-    // do bloco. `true` = o gesto foi gasto aqui — o item NÃO cai no chão como fallback.
-    // (O corpo congelado ficou de fora de propósito, no ramo acima: gelo trava, nunca protege.)
-    if (this.freezeManager?.frozenAt(wx, wy)) {
-      this.freezeManager.pulse(wx, wy);
-      return true;
-    }
-
     // INSTALAR UMA ESTAÇÃO é usar — a tabela inteira já é "o que este item faz contra o tile à
     // frente", e forno/altar viram props no chão.
     // Não é um modo de construção, não é um menu, não é um botão novo — é a mesma linha da tabela
     // em que mora o machado contra a árvore. (Recolher é o mesmo X, depois que a tabela cala.)
     if (this.buildMachineAt(wx, wy)) return true;
 
-    // O ITEM QUE NÃO É ARMA CONTRA UM CORPO — o balde, a bomba, as sementes. Era o
-    // único gesto MUDO do botão B: o ramo armado acima exigia entrada na MELEE_DAMAGE, o resto da
-    // tabela não sabe de bicho, e `placeItemAt` recusava em silêncio porque o tile está ocupado.
-    // O jogador apertava B e nada no mundo se mexia — a leitura de botão quebrado. A lei é "toda
-    // recusa tem desenho próprio": o item balança (o gesto que ele pediu), o corpo ABSORVE o toque
-    // (o mesmo agachamento do recuo da torreta: encostou, não ganhou terreno) e um toc surdo diz
-    // que ali não havia mordida nenhuma. Sem raiz nos pés: cutucar não é atacar.
-    if (enemy) {
-      this.swingHeld(wx, wy);
-      if (!enemy.isSpawning) enemy.triggerKnockback(0, 0);
-      getSoundManager().playItemBonk();
-      return true;
-    }
-
     // A ESPONJA se pousa para ser martelada; o resto da mochila age contra o tile.
-    //
-    // DEPOIS do corpo à frente, de propósito: contra um bicho o pouso falharia (o tile está
-    // ocupado) e o gesto sairia MUDO, sem nem o toc de cutucar.
     const held = this.heldItem;
     if (held === 'bloom') return this.placeItemAt(wx, wy);
-
-    // A PIRA, que é a fogueira que o jogador CONSTRÓI (ver PyreObject). Dois gestos, e um
-    // deles é o mesmo graveto do outro em estados diferentes:
-    //
-    //   graveto APAGADO  → assenta uma tora (a torre sobe uma camada a cada duas)
-    //   graveto ACESO    → acende, mas SÓ a torre fechada
-    //
-    // O graveto aceso nunca vira material: a chama é a ferramenta de acender, e queimar a própria
-    // carga seria o gesto se contradizendo. Torre crua com a tocha na mão RECUSA, e a recusa é
-    // física (tremor + serragem) — o que falta está escrito na altura da torre, não numa legenda.
-    const pyre = this.getPyreAt(wx, wy);
-    if (pyre && !pyre.isLit) {
-      if (held === 'wood' && !this.heldOnFire && !pyre.isComplete) {
-        this.swingHeld(wx, wy);
-        this.clearHeldItem(); // o graveto vira tora
-        pyre.deposit();
-        this.recordPyre(pyre);
-      } else if (pyre.isComplete && this.isFlammableHeld && this.heldOnFire) {
-        this.swingHeld(wx, wy);
-        this.time.delayedCall(150, () => { this.lightPyre(pyre, wx, wy); });
-      } else {
-        pyre.refuse();
-      }
-      return true;
-    }
 
     // Campfire interaction. A LIT fire relights/refuels the carried torch; a DEAD fire is
     // brought back to life by carrying a flame into it (the heart of the game).
@@ -4406,50 +2507,6 @@ export class GameScene extends Phaser.Scene {
         // Carry the flame into a dead campfire to reignite the world.
         this.swingHeld(wx, wy);
         this.time.delayedCall(150, () => { this.lightCampfire(campfire, wx, wy); });
-      }
-      return true;
-    }
-
-    // A TOCHA DE PAREDE ACENDE O GRAVETO — e este e o degrau que faltava na corrente do fogo.
-    //
-    // `TORCH_BURN_MS` sao CINCO SEGUNDOS, e o comentario da constante promete que qualquer fogo
-    // vivo reabastece: uma fogueira acesa ou uma poca de lava. So que la embaixo nao ha nem uma
-    // nem outra (o `underworld.json` tem zero de cada) — a masmorra e o unico lugar do jogo escuro
-    // o tempo todo, e a unica chama dela nao podia ser tocada. Com isto, as 75 tochas viram o que
-    // ja eram no desenho: os postos onde a viagem recomeca.
-    //
-    // E o MESMO gesto da fogueira acesa, de proposito: apontar o graveto para um fogo e leva-lo
-    // embora. Uma gramatica nova para o mesmo verbo contra o mesmo tipo de peca seria uma segunda
-    // voz — a lei que ja tinha separado o forno da bancada.
-    //
-    // Ela e FONTE e nunca ALVO: o balde nao aparece aqui. Uma masmorra que o jogador consegue
-    // apagar para sempre e atmosfera com trava de seguranca e sem recompensa nenhuma do outro lado.
-    const wallTorch = this.wallTorchAt(wx, wy);
-    if (wallTorch?.isLit && this.isFlammableHeld) {
-      this.swingHeld(wx, wy);
-      if (!this.heldOnFire) this.time.delayedCall(150, () => { this.igniteHeldItem(); });
-      else this.refuelTorch();
-      return true;
-    }
-
-    // Lava is molten fire: bumping it with a flammable item (no flame yet) lights the torch,
-    // exactly like a lit campfire. It always blocks until a stone settles into a basalt step.
-    const lava = this.getLavaAt(wx, wy);
-    if (lava && !lava.solidified) {
-      // While a stone is still SINKING in (`cooling`), the tile blocks and takes no interaction —
-      // the hero cannot cross a half-placed stone, so he just waits for it to settle. Interactions
-      // apply only to still-molten lava.
-      if (!lava.cooling) {
-        if (this.heldItem === 'stone') {
-          // A stone dropped into the melt sinks to a stepping-stone crown — the lava twin of the
-          // stone ford. It costs the stone, frees the hand and leaves a permanent firebreak.
-          this.swingHeld(wx, wy); // toss the stone into the lava
-          this.clearHeldItem();
-          this.time.delayedCall(150, () => { this.solidifyLava(lava, wx, wy); });
-        } else if (this.isFlammableHeld && !this.heldOnFire) {
-          this.swingHeld(wx, wy);
-          this.time.delayedCall(150, () => { this.igniteHeldItem(); });
-        }
       }
       return true;
     }
@@ -4615,27 +2672,6 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    // A PLANTA CARNÍVORA responde como o mato (é planta): a foice a derruba (sem colheita —
-    // predador não é lavoura), o fogo a acende (e espalha — combustível como toda planta),
-    // qualquer outra coisa a faz retesar. Ela nunca morde o herói: é a peça DELE.
-    const carnivore = this.getCarnivorousPlantAt(wx, wy);
-    if (carnivore?.blocking) {
-      if (this.heldItem === 'scythe') {
-        this.swingHeld(wx, wy);
-        getSoundManager().playGrassCut();
-        this.time.delayedCall(110, () => carnivore.cut());
-      } else if (this.isFlammableHeld && this.heldOnFire) {
-        this.swingHeld(wx, wy);
-        this.time.delayedCall(150, () => {
-          if (!carnivore.ignite()) return;
-          this.spawnFireHitEffect(wx, wy);
-          this.scheduleFireSpread(wx, wy);
-        });
-      } else {
-        carnivore.shake();
-      }
-      return true;
-    }
 
     // Tall grass — the scythe mows it down to stubble; fire burns it to the same stubble.
     const grass = this.getTallGrassAt(wx, wy);
@@ -4747,13 +2783,6 @@ export class GameScene extends Phaser.Scene {
     // half a tile. Bumps aren't steps, so nothing else stops breathing here.
     this.stopBreathing();
 
-    // GELO TRAVA TODO GESTO DE CORPO — o portão não gira, a fogueira não senta, e o BICHO
-    // congelado não morde (uma estátua não cobra dano de contato: é exatamente
-    // o prêmio de congelá-la). A recusa é o tremor do bloco, nunca um texto (a lei da casa).
-    if (this.freezeManager?.frozenAt(wx, wy)) {
-      this.freezeManager.pulse(wx, wy);
-      return;
-    }
 
     // (FALAR SAIU DAQUI. O esbarrao abria o dialogo, e com isso conversar era a unica coisa do jogo
     // que acontecia sem ninguem ter pedido: bastava a seta encostar no NPC — atravessando um vao,
@@ -4780,16 +2809,6 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Encostar num bicho e DANO DE CONTATO: ele responde pelo caminho de sempre (i-frames,
-    // arremesso, tremor), entao andar contra a caveira continua sendo uma pessima ideia — so
-    // que agora e ela quem ganha a troca.
-    const enemy = this.enemyManager?.getEnemyAt(wx, wy);
-    if (enemy && !enemy.isSpawning) {
-      if (this.turnedTowardCreature(wx, wy, enemy)) return;
-      this.handleEnemyAttackPlayer({ enemy, ranged: false, bump: true, fromX: enemy.worldX, fromY: enemy.worldY });
-      return;
-    }
-
     // Fogueira: o esbarrao so faz a chama reagir. A LOJA que abria aqui foi removida por
     // inteiro, e depois dela a MOEDA que a alimentava — o jogo nao tem dinheiro nenhum.
     // Acender, apagar e reabastecer a tocha vivem no botao B.
@@ -4802,47 +2821,6 @@ export class GameScene extends Phaser.Scene {
     // Tudo o mais responde FISICAMENTE, e so: a rocha estremece, a porta chacoalha, a bancada
     // sacode as ferramentas la dentro. O corpo nunca diz o que falta.
     this.bumpRefusal(wx, wy);
-  }
-
-  /**
-   * MIRAR NUM MONSTRO E DE GRACA — e este metodo e a reforma inteira num paragrafo.
-   *
-   * A parede vira o heroi (`PlayerMovementController`), e e assim que se mira: os dois botoes
-   * agem no tile a frente, entao apertar a seta contra uma coisa e o unico jeito de encara-la. So
-   * que um MONSTRO tambem e uma coisa que bloqueia — e apertar a seta contra ele cobrava um
-   * coracao de dano de contato. Com uma caveira ao norte e o heroi olhando pro sul, a jogada
-   * correta do jogo era se machucar de proposito pra poder revidar. Nenhum Zelda cobra isso,
-   * porque em nenhum deles virar custa alguma coisa.
-   *
-   * Entao a primeira investida contra uma criatura que o heroi AINDA NAO ENCARA gasta-se virando
-   * o corpo, e nada mais. A carencia existe porque um toque humano dura de 3 a 6 frames: sem ela
-   * o segundo frame da mesma tecla ja leria "ja estou olhando pra ele" e cobraria o coracao que o
-   * primeiro perdoou — o perdao duraria 16ms e o jogador nunca o veria. Continue apertando e o
-   * dano de contato volta inteiro: encostar num monstro continua sendo uma pessima ideia, so
-   * deixou de ser o preco de olhar pra ele.
-   *
-   * Vale SO para criatura. Caixote, portao de bater, NPC e rocha continuam respondendo ao
-   * primeiro esbarrao, venha ele de onde vier: nenhum deles cobra nada por ser tocado, e adiar a
-   * resposta deles seria transformar um perdao em atraso.
-   *
-   * E vale so para AQUELA criatura. A carencia perdoa o toque humano que sobra do gesto de virar,
-   * e um toque humano acontece contra um corpo so — cercado, o perdao gasto numa caveira nao pode
-   * comprar meio esbarrao de graca na proxima.
-   */
-  private turnedTowardCreature(wx: number, wy: number, enemy: EnemyBase): boolean {
-    const now = this.time.now;
-    const f = this.movementController?.facing;
-    // O controlador chama o esbarrao ANTES de escrever a nova direcao, entao `facing` aqui ainda
-    // e para onde o heroi olhava — que e exatamente a pergunta que este metodo faz.
-    const turning = f !== undefined
-      && (Math.sign(wx - this.playerWorld.worldX) !== f.dx
-        || Math.sign(wy - this.playerWorld.worldY) !== f.dy);
-    if (turning) {
-      this.creatureTurnGraceUntilMs = now + CREATURE_TURN_GRACE_MS;
-      this.creatureTurnGraceOn = enemy;
-      return true;
-    }
-    return this.creatureTurnGraceOn === enemy && now < this.creatureTurnGraceUntilMs;
   }
 
   /**
@@ -4863,336 +2841,8 @@ export class GameScene extends Phaser.Scene {
     this.getDryBushAt(wx, wy)?.shake();
     this.getMoonflowerAt(wx, wy)?.shake();
     this.getLockedDoorAt(wx, wy)?.shake();
-    this.getCarnivorousPlantAt(wx, wy)?.shake();
     const grass = this.getTallGrassAt(wx, wy);
     if (grass?.blocking && grass.isTall) grass.shake();
-  }
-
-  /**
-   * Land a melee blow on an enemy at (wx, wy): damage, swing arc, knockback, and all the
-   * impact juice. Um golpe tem tres procedencias, e o `weapon` e quem as separa:
-   *   - `sword`: o botao A com a espada na mochila — 2 de dano, duas espadadas na caveira;
-   *   - `fist`:  o botao A sem espada — o soco, tres para matar;
-   *   - `item`:  o botao B com o item selecionado — a escada MELEE_DAMAGE de sempre (o graveto
-   *              ACESO mata de um golpe, uma ferramenta qualquer em dois). Um item que nao bate
-   *              (bomba, balde) nao faz nada.
-   * So o golpe de `item` desenha o proprio arco aqui: A ja desenhou o dele antes de acertar,
-   * porque ele sai mesmo no vazio.
-   *
-   * Devolve o QUE ACONTECEU com este corpo, porque quem varre um arco precisa saber qual das duas
-   * vozes do gesto foi gasta — ver `sweepArc`.
-   */
-  private strikeEnemy(
-    enemy: EnemyBase,
-    wx: number,
-    wy: number,
-    weapon: 'sword' | 'item' | 'spin',
-    // O que o GESTO ja disse. Este corpo pode ser o segundo (ou o oitavo) do mesmo golpe: o arco
-    // varre ate seis tiles e o giro oito. O que e do CORPO (dano, faisca, anel, arremesso)
-    // acontece uma vez por corpo; a VOZ — som e piscada do heroi — sai uma vez por gesto, e cada
-    // uma das duas tem o proprio orcamento, ou um resvalo cala a morte do corpo ao lado.
-    hitSpoken = false,
-    refusalSpoken = false,
-  ): 'landed' | 'refused' {
-    // O ARCO SAI ANTES DE SE SABER SE ACERTOU, e por isso ele vem antes das duas recusas abaixo.
-    // E a mesma lei do botao A ("o arco sai mesmo no vazio, de proposito"): um golpe que so
-    // aparece quando conecta esconde o alcance da arma — e, pior aqui, faz o jogador apertar B
-    // contra um corpo piscando e nao ver mao nenhuma se mexer. A faisca de recusa explica o que
-    // aconteceu; ela nao substitui o gesto de ter atacado.
-    if (weapon === 'item') this.swingHeld(wx, wy);
-
-    // O CORPO AINDA ESTA PISCANDO do golpe anterior: o gesto RESVALA. Ele nao pode ser silencioso
-    // (o jogador apertou o botao e viu a lamina passar por dentro do bicho) nem pode ser um
-    // acerto, entao usa o mesmo pacote de recusa do corpo que ainda esta nascendo — anel palido,
-    // sem dano, sem faisca de impacto. Ver EnemyBase.hurtInvulnMs.
-    //
-    // O anel sai SEMPRE, mesmo que outro corpo do mesmo arco ja tenha resvalado: ele e a resposta
-    // DAQUELE corpo. Um resvalo mudo no meio de um giro le como a lamina passando por dentro do
-    // bicho sem nada acontecer, que e a leitura de bug.
-    if (enemy.isHurtInvulnerable) {
-      this.spawnDeflect(wx, wy);
-      if (!refusalSpoken) {
-        getSoundManager().playBladeGlance();
-        // O mesmo baque leve do resvalo em corpo nascendo (ver sweepArc): eram a MESMA recusa com
-        // dois pesos — uma sacudia a câmera e a outra não —, e duas recusas iguais que respondem
-        // diferente ensinam que são coisas diferentes, que é mentira.
-        this.world3d?.shake(40, 0.03, wx - this.playerWorld.worldX, wy - this.playerWorld.worldY);
-        this.triggerHitstop(GLANCE_HITSTOP_MS);
-      }
-      return 'refused';
-    }
-
-    // A GUARDA: o bicho que esta armando um golpe encara o que vai bater, e o que vem de la bate
-    // na guarda dele. E a aula que o soldado da primeira sala do `A Link to the Past` da sem uma
-    // linha de texto — atacar de frente nao passa, contornar passa —, e ela so existe dentro da
-    // janela do telegrafo: fora dela, todo lado do corpo vale.
-    const guardX = Math.sign(this.playerWorld.worldX - wx);
-    const guardY = Math.sign(this.playerWorld.worldY - wy);
-    if (enemy.guardsAgainst(guardX, guardY)) {
-      // A faisca e do CORPO (ela diz "ESTE lado esta fechado", e a posicao dela e a informacao);
-      // o tim e o tranco sao a VOZ da recusa, e saem uma vez por gesto. Um giro no meio de uma
-      // matilha inteira guardando disparava oito tins no mesmo frame.
-      this.spawnGuardSpark(wx, wy, guardX, guardY);
-      if (!refusalSpoken) {
-        getSoundManager().playGuardBlock();
-        // O baque inclina na direcao do GOLPE (heroi -> corpo), que e o inverso de `guardX/guardY`:
-        // a camera acompanha a lamina indo, mesmo quando ela nao passa.
-        this.world3d?.shake(50, 0.035, -guardX, -guardY);
-        this.triggerHitstop(GUARD_HITSTOP_MS);
-      }
-      return 'refused';
-    }
-
-    let damage: number;
-    if (weapon === 'sword' || weapon === 'spin') {
-      damage = MELEE_DAMAGE.sword ?? 2;
-    } else {
-      const itemDamage = MELEE_DAMAGE[this.heldItem as HeldItemKind];
-      if (itemDamage === undefined) return 'refused';
-      // O graveto ACESO segue matando de um golpe, e agora ele e a unica coisa que faz isso: o
-      // fogo e um recurso que se gasta (o combustivel corre, a chama entrega sua posicao no
-      // escuro e a mao fica presa nele), entao ele pode comprar o que a espada deixou de dar.
-      damage = this.heldOnFire ? 999 : itemDamage;
-    }
-
-    enemy.takeDamage(damage);
-
-    // ── O ACERTO MUDA O TABULEIRO ──────────────────────────────────────────────
-    //
-    // Ate aqui um golpe recebido nao mexia em NADA do bicho: o recuo era um deslocamento de
-    // desenho que voltava sozinho, e os relogios de passo e de ataque dele seguiam correndo. Bater
-    // e nao bater davam a mesma posicao no frame seguinte — e sem posicao nao ha espacamento, que
-    // e a unica coisa que um combate de grade tem pra ensinar. Agora todo golpe compra as duas
-    // coisas que o jogador precisa: TEMPO (o atordoamento) e ESPACO (o tile de arremesso). Quem
-    // nao pode ser arremessado — a torreta, que e mobilia, e o zora, que escolhe onde a agua o
-    // devolve — leva o recuo elastico de sempre e nada mais (ver EnemyBase.canBeShoved).
-    const dx = wx - this.playerWorld.worldX;
-    const dy = wy - this.playerWorld.worldY;
-    if (enemy.isAlive) {
-      enemy.applyHitstun(weapon === 'spin' ? HITSTUN_SPIN_MS : HITSTUN_MS);
-      // A direcao do arremesso e a do heroi para o corpo — inclusive na diagonal, que so o giro
-      // produz: um corpo atingido pelo rodopio voa para FORA dele, e nao para um cardinal
-      // arredondado que o desenho do golpe nao mostrou.
-      const shoved = enemy.shove(Math.sign(dx), Math.sign(dy), (tx, ty) => this.canEnemyEnter(enemy, tx, ty));
-      // ENCURRALAR PAGA. O arremesso barrado por uma parede era a jogada boa mais silenciosa do
-      // jogo: dava exatamente o mesmo recuo de um empurrao no vazio. Agora o encontrao tem peso
-      // proprio — mais hitstop, tremor mais fundo e a poeira do impacto na PAREDE, no ponto em que
-      // o corpo bateu. E o jogo tem a melhor parede possivel pra isso, que e a luz da fogueira.
-      if (shoved === 'slammed') {
-        // A poeira e do CORPO: ela sai no ponto em que ELE bateu na parede. O baque, o tremor e o
-        // hitstop sao a voz do acerto — o encontrao e a melhor coisa que o gesto fez, entao ele
-        // fala junto com o primeiro golpe que landou e nao se repete a cada corpo encurralado.
-        this.spawnSlamDust(wx + Math.sign(dx) * 0.5, wy + Math.sign(dy) * 0.5);
-        if (!hitSpoken) {
-          this.triggerHitstop(90);
-          this.world3d?.shake(120, 0.12, dx, dy); // a camera vai junto com o corpo contra a parede
-          getSoundManager().playBodySlam();
-        }
-        // A PAREDE QUE É FOGO ACENDE O QUE BATE NELA (a tocha viva — ver EnemyBase.igniteBody):
-        // encurralar contra fogueira acesa, arbusto em chamas ou lava transforma o melhor golpe
-        // do jogo na ignição do único sistema que o jogador conduz. Só o TILE que arde conta
-        // (fireOnTile) — o encontrão contra a borda da luz continua sendo só um encontrão.
-        if (this.fireOnTile(enemy.worldX + Math.sign(dx), enemy.worldY + Math.sign(dy))) {
-          this.igniteEnemy(enemy);
-        }
-      } else if (shoved === 'moved' && this.fireOnTile(enemy.worldX, enemy.worldY)) {
-        // O corpo CAIU num tile que arde (um graveto aceso no chão; lava, para quem voa por
-        // cima dela): mesmo destino do encontrão — o arremesso pousou dentro do fogo.
-        this.igniteEnemy(enemy);
-      }
-    } else {
-      // O CORPO MORTO TAMBEM VOA. Aqui havia um `triggerKnockback`, e ele nao fazia nada: aquele
-      // metodo sai na primeira linha se o corpo ja morreu, e `render()` para de escrever a posicao
-      // do billboard depois da morte — entao o unico golpe do jogo que nao movia ninguem era
-      // justamente o que matava. Ver EnemyBase.deathFling.
-      enemy.deathFling(dx, dy);
-    }
-    // O GRAVETO ACESO SEMPRE DEIXA FOGO NO CORPO. Havia um `&& enemy.isAlive` aqui, e ele tornava
-    // esta linha INALCANCAVEL: a chama da 999 de dano (ela e a unica coisa que ainda mata de um
-    // golpe), entao o corpo nunca esta vivo quando se chega aqui — o unico golpe do jogo que
-    // deveria terminar em fogo era justamente o que nunca mostrava nenhum.
-    if (weapon === 'item' && this.heldOnFire) this.spawnFireHitEffect(wx, wy);
-
-    if (!hitSpoken) {
-      getSoundManager().playEnemyHit(enemy.kind); // na altura da especie (ver ENEMY_VOICE)
-      this.hero.tint = 0xffff00;
-      this.time.delayedCall(120, () => { this.hero.tint = null; });
-      // O QUADRO DE IMPACTO: o hitstop logo abaixo congela a lamina no meio do arco, e este
-      // lampejo e o que diz por que ela parou. Ver SwordSlash.flashHit.
-      this.swordSlash?.flashHit();
-    }
-
-    // Impact juice: sparks at the point of contact, a kick of screen shake, and a few
-    // frames of hitstop — all heavier when the blow kills. O tremor e o hitstop ficam FORA do
-    // orcamento da voz de proposito: os dois se resolvem por si (o hitstop e um `Math.max` e o
-    // tremor e o ultimo que manda), e gastar a vez neles faria uma morte no terceiro tile do arco
-    // herdar o baque leve do arranhao do primeiro.
-    const lethal = !enemy.isAlive;
-    this.spawnHitSpark(wx, wy, lethal, dx, dy);
-    // A mesma direcao das faiscas: o baque sai PARA FORA do golpe, e nao para um lado sorteado.
-    this.world3d?.shake(lethal ? 150 : 90, lethal ? 0.15 : 0.09, dx, dy);
-    this.triggerHitstop(lethal ? 110 : 60);
-    // A recompensa NÃO sai daqui: quem a paga é a morte, não o golpe (ver EnemyBase.setDeathToll).
-    // Esta linha já foi a única fonte de recompensa do jogo, e por isso um corpo comido pelo fogo
-    // — hoje o fim mais comum de uma caveira — morria de graça.
-    if (lethal && !hitSpoken) getSoundManager().playEnemyDeath(enemy.kind);
-    return 'landed';
-  }
-
-  /**
-   * Onde um corpo arremessado pode cair. E o mesmo mundo que o EnemyManager entrega ao bicho pra
-   * ele ANDAR — e a luz da fogueira saiu dos dois juntos. Arremessar uma caveira para a beira do
-   * fogo deixou de bater num muro invisivel e passou a ser a jogada que parece: ela cai la e
-   * COMECA A ARDER (ver tickScorch). O golpe que empurra virou uma forma de cozinhar.
-   */
-  private canEnemyEnter(enemy: EnemyBase, wx: number, wy: number): boolean {
-    if (this.isSolidForEntities(wx, wy, enemy.flies)) return false;
-    if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) return false;
-    const other = this.enemyManager?.getEnemyAt(wx, wy);
-    return other === null || other === undefined || other === enemy;
-  }
-
-  /**
-   * UM CORPO CAIU. Quem chama é o sino da morte, dentro do `die()` (EnemyBase.setDeathToll), e
-   * por isso vale para TODA morte — a espada, a bomba, a tocha viva ou o calor da fogueira, que
-   * é hoje o fim mais comum de uma caveira.
-   *
-   * O corpo NÃO PAGA MAIS NADA. Houve uma moeda aqui: todo corpo largava um punhado que
-   * espalhava pelos tiles vizinhos e voava para uma carteira. A moeda foi removida do jogo por
-   * inteiro — ela nunca teve onde ser gasta desde que a loja da fogueira caiu, e um número que
-   * só sobe não é economia, é ruído. O que a morte ainda dá é o que a morte sempre deveria dar:
-   * o CORAÇÃO, e só quando ele serve para alguma coisa.
-   *
-   * O CORACAO so cai de um corpo quando o heroi esta FERIDO — coracao no chao com vida cheia e
-   * lixo visual — e e a unica cura de campo: a fogueira cura em casa, o drop cura na estrada
-   * (e dentro das dungeons, onde fogueira nao existe).
-   */
-  private rewardKill(wx: number, wy: number, kind: EnemyKind): void {
-    // A MISSÃO conta primeiro, e por isso ela mora aqui: este é o sino que TODA morte toca, não
-    // importa o que matou (espada, bomba, tocha viva, brasa).
-    this.questEvent({ type: 'slay', enemy: kind });
-    if (!this.chunkManager) return;
-    // ONDE O DROP CAI NÃO É ONDE O CORPO CAIU, quando o corpo caiu na ÁGUA. Um zora morre no
-    // meio do lago, e um coração ali é um coração que o herói vê e nunca alcança — o pior tipo
-    // de recompensa, a que se mostra e não se pega. A praia mais próxima resolve isso sem uma
-    // regra nova para o jogador aprender: a cura chega na terra, como tudo o mais.
-    const [dx, dy] = this.shoreDropTile(wx, wy);
-    if (!this.adventure) return; // num level de puzzle a recompensa e a solucao
-    if (
-      this.playerHealth < this.playerMaxHealth
-      && Math.random() < HEART_DROP_CHANCE
-      && !(this.heartPickupManager?.hasPickupAt(dx, dy) ?? true)
-      && !(this.itemManager?.hasItemAt(dx, dy) ?? true)
-    ) {
-      this.heartPickupManager?.spawnDropped(dx, dy);
-    }
-  }
-
-  /**
-   * A PRAIA MAIS PRÓXIMA deste tile — onde um drop pousa quando o corpo morreu na água.
-   *
-   * Anéis crescentes a partir do tile da morte, até o primeiro chão em que o herói PODE pisar (a
-   * mesma pergunta que o passo dele faz). Cinco tiles de raio é mais que a
-   * largura de qualquer lago autorado até hoje; se nada aparecer, o drop cai onde caiu — perder
-   * um coração num pântano gigante é melhor que perdê-lo num `return` silencioso.
-   */
-  private shoreDropTile(wx: number, wy: number): readonly [number, number] {
-    if (!this.isSolidForEntities(wx, wy)) return [wx, wy];
-    for (let r = 1; r <= 5; r += 1) {
-      for (let oy = -r; oy <= r; oy += 1) {
-        for (let ox = -r; ox <= r; ox += 1) {
-          if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue; // só o anel novo
-          const x = wx + ox;
-          const y = wy + oy;
-          if (!this.isSolidForEntities(x, y) && !this.isTileOccupied(x, y)) return [x, y];
-        }
-      }
-    }
-    return [wx, wy];
-  }
-
-  /**
-   * Freeze the world on the current frame for a beat. tweens.timeScale goes to 0 so every
-   * in-flight tween (knockback stretch, death pop) holds its impact pose; update() counts
-   * the freeze down in real time and restores the timescale.
-   */
-  private triggerHitstop(ms: number): void {
-    this.hitstopMs = Math.max(this.hitstopMs, ms);
-    this.tweens.timeScale = 0;
-  }
-
-  /**
-   * Sparks + a white impact flash where a melee blow lands; heavier when the blow kills.
-   *
-   * AS FAÍSCAS TÊM DIREÇÃO, e é ela que diz de onde veio o golpe. Elas saíam em 360° uniformes
-   * (`ang = (i/count) * 2π`), então um golpe vindo do oeste e um vindo do leste desenhavam
-   * exatamente a mesma estrela — a única coisa que o impacto tinha a dizer sobre si mesmo era
-   * "aconteceu aqui", e nunca "veio dali". Agora elas saem num LEQUE para fora do golpe, que é a
-   * mesma regra que a faísca da guarda já respeitava (`spawnGuardSpark`: a posição é a informação).
-   *
-   * O golpe que MATA abre o leque quase até o círculo: ali não há mais direção a ensinar, e a
-   * explosão em volta é o vocabulário certo para uma coisa que se desfez.
-   */
-  private spawnHitSpark(wx: number, wy: number, lethal: boolean, dirX = 0, dirY = 0): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-
-    // A hot flash at the point of contact: an additive dot hanging at chest height, blooming
-    // outward. It lives in the world (it is lit, bloomed and blurred with everything else)
-    // rather than being a circle painted on the canvas.
-    const flash = w3
-      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
-      .setTint(0xffffff)
-      .setPosition(wx, wy)
-      .setElevation(FX_BODY_ELEV)
-      .setDisplaySize(FLASH_SIZE * (lethal ? 1.5 : 1), FLASH_SIZE * (lethal ? 1.5 : 1));
-    const flashTo = FLASH_SIZE * (lethal ? 3 : 1.9);
-    this.tweens.add({
-      targets: flash,
-      scaleX: flashTo,
-      scaleY: flashTo,
-      alpha: 0,
-      duration: lethal ? 210 : 150,
-      ease: 'Cubic.easeOut',
-      onComplete: () => flash.destroy(),
-    });
-
-    // Sparks thrown off the blow, flying out across the ground plane and arcing up a little.
-    const count = lethal ? 7 : 4;
-    // O eixo do leque: a direção do golpe (do herói para o corpo). Sem direção — a bomba, o fogo,
-    // um caminho de dano que não vem de um braço — ele volta a ser o círculo de antes.
-    const aimed = dirX !== 0 || dirY !== 0;
-    const axis = aimed ? Math.atan2(dirY, dirX) : 0;
-    // Meio leque, em radianos. O golpe que fere abre ~150° (um leque nítido para a frente); o que
-    // mata abre quase tudo, porque ali o corpo se desfez e não há mais lado nenhum a apontar.
-    const spread = lethal ? Math.PI * 0.82 : Math.PI * 0.42;
-    for (let i = 0; i < count; i++) {
-      // -1..1 ao longo do leque (`count` nunca é 1, então a divisão é segura), mais um tremor por
-      // faísca: sem ele as quatro saem em leque perfeito, que lê como um decalque e não como pó.
-      const fan = ((i / (count - 1)) * 2 - 1) * spread;
-      const ang = aimed
-        ? axis + fan + (Math.random() - 0.5) * 0.35
-        : (i / count) * Math.PI * 2 + Math.random() * 0.8;
-      const dist = 0.45 + Math.random() * (lethal ? 0.75 : 0.4);
-      const spark = w3
-        .addBillboard(ASSET_KEYS.bombItem, BOMB_FRAMES.spark, {
-          ...FX_BILLBOARD, emissive: true, alphaTest: 0.05, emissiveBoost: 2,
-        })
-        .setPosition(wx, wy)
-        .setElevation(FX_BODY_ELEV)
-        .setDisplaySize(0.22, 0.22);
-      this.tweens.add({
-        targets: spark,
-        x: wx + Math.cos(ang) * dist,
-        y: wy + Math.sin(ang) * dist * 0.7, // foreshortened: the ground plane is tilted away
-        elevation: FX_BODY_ELEV + 0.1 + Math.random() * 0.25,
-        alpha: 0,
-        angle: Phaser.Math.Between(-180, 180),
-        duration: 170 + Math.random() * 120,
-        ease: 'Cubic.easeOut',
-        onComplete: () => spark.destroy(),
-      });
-    }
   }
 
   /**
@@ -5321,117 +2971,9 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // The blow lands in the room, not just on the rock: the world takes a kick and a few frames
-    // of hitstop — the same juice a melee hit gets, because this IS one.
+    // The blow lands in the room, not just on the rock: the world takes a small kick.
     if (shattered) this.spawnShockwave(wx, wy, 0xb6bcc4, 0.3, 1.05, 260);
     w3.shake(shattered ? 150 : 70, shattered ? 0.11 : 0.045);
-    this.triggerHitstop(shattered ? 80 : 45);
-  }
-
-  // A blow glancing off an invulnerable target: a cold blue ring + a few pale shards
-  // skittering flat off the point of contact. Deliberately NOT spawnHitSpark's hot white
-  // flash — negated damage must never share the visual language of a landed hit.
-  private spawnDeflect(wx: number, wy: number): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-
-    // The cold shockwave washes out over the GROUND (a flat ring), where the 2D game could only
-    // draw a circle on the screen. Same rule as before: never spawnHitSpark's hot white flash.
-    this.spawnShockwave(wx, wy, 0xaec6ff, 0.32, 1.1, 230);
-
-    for (let i = 0; i < 3; i++) {
-      // Shards fly out of the upper half only (the blow bounced UP and away, not through).
-      const ang = -Math.PI * (0.15 + Math.random() * 0.7);
-      const dist = 0.35 + Math.random() * 0.3;
-      const shard = w3
-        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true })
-        .setTint(0xaec6ff)
-        .setPosition(wx, wy)
-        .setElevation(FX_BODY_ELEV)
-        .setDisplaySize(0.12, 0.12)
-        .setAlpha(0.85);
-      this.tweens.add({
-        targets: shard,
-        x: wx + Math.cos(ang) * dist,
-        elevation: FX_BODY_ELEV + Math.abs(Math.sin(ang)) * dist,
-        alpha: 0,
-        duration: 200 + Math.random() * 90,
-        ease: 'Cubic.easeOut',
-        onComplete: () => shard.destroy(),
-      });
-    }
-  }
-
-  /**
-   * A poeira do ENCONTRÃO: o corpo bateu na parede e ela devolve o pó, no ponto do impacto e
-   * espalhando para os lados dele — nunca para a frente, que é onde o corpo não pôde ir.
-   */
-  private spawnSlamDust(cx: number, cy: number): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    for (let i = 0; i < 5; i++) {
-      const ang = Math.PI * (0.15 + Math.random() * 0.7) * (i % 2 === 0 ? 1 : -1);
-      const puff = w3
-        .addBillboard(FX_PUFF_TEXTURE, 0, { ...FX_BILLBOARD })
-        .setTint(0x9a9284)
-        .setPosition(cx, cy)
-        .setElevation(FX_BODY_ELEV * 0.6)
-        .setDisplaySize(0.16, 0.16)
-        .setAlpha(0.7);
-      this.tweens.add({
-        targets: puff,
-        x: cx + Math.cos(ang) * 0.4,
-        y: cy + Math.sin(ang) * 0.25,
-        scaleX: 0.34,
-        scaleY: 0.34,
-        alpha: 0,
-        duration: 320,
-        ease: 'Cubic.easeOut',
-        onComplete: () => puff.destroy(),
-      });
-    }
-  }
-
-  /**
-   * A GUARDA APARANDO — e ela precisa dizer uma coisa que o resvalo NÃO diz.
-   *
-   * Os dois usavam o mesmo `spawnDeflect`, e são lições opostas: o resvalo dos i-frames significa
-   * ESPERE (o corpo está piscando, bata de novo daqui a pouco) e a guarda significa CONTORNE (este
-   * lado está fechado, o outro não). Ensinar as duas com o mesmo anel centrado é não ensinar
-   * nenhuma.
-   *
-   * Então a guarda não desenha um anel: desenha um LEQUE curto de faíscas na BORDA do corpo, no
-   * lado de onde o golpe veio — a posição é a informação. Cor de aço quente, não o azul frio do
-   * resvalo, pela mesma razão: duas recusas, duas paletas.
-   */
-  private spawnGuardSpark(wx: number, wy: number, fromDx: number, fromDy: number): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    // O ponto de contato: meio tile na direção de quem bateu — a borda do corpo, não o centro.
-    const cx = wx + fromDx * 0.45;
-    const cy = wy + fromDy * 0.45;
-    // As faíscas saem PARA TRÁS, na direção de quem bateu: o golpe foi devolvido, não absorvido.
-    for (let i = 0; i < 4; i++) {
-      const spread = (i - 1.5) * 0.36;
-      const dx = fromDx !== 0 ? fromDx : spread;
-      const dy = fromDy !== 0 ? fromDy : spread;
-      const shard = w3
-        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true })
-        .setTint(0xffe6b0)
-        .setPosition(cx, cy)
-        .setElevation(FX_BODY_ELEV)
-        .setDisplaySize(0.11, 0.11)
-        .setAlpha(0.95);
-      this.tweens.add({
-        targets: shard,
-        x: cx + dx * 0.34 + (fromDx !== 0 ? spread * 0.5 : 0),
-        y: cy + dy * 0.34 + (fromDy !== 0 ? spread * 0.5 : 0),
-        alpha: 0,
-        duration: 190,
-        ease: 'Cubic.easeOut',
-        onComplete: () => shard.destroy(),
-      });
-    }
   }
 
   /**
@@ -5703,8 +3245,13 @@ export class GameScene extends Phaser.Scene {
     st.started = true;
     st.inventory = this.inventory.list();
     st.selected = this.inventory.selected;
-    st.litFireCount = this.litFireCount;
-    st.wizardIntroSeen = this.wizardIntroSeen;
+    st.introSeen = this.introDone;
+    st.gateOpened = this.gateOpened;
+    st.hearthLit = this.hearthLit;
+    st.endingSeen = this.roasted;
+    // De onde ele CONTINUA: o tile em que esta agora. Durante a abertura ele ainda nao chegou a
+    // lugar nenhum, entao o retrato nao anda (o Continue o poria no meio da caminhada).
+    if (this.introDone) st.respawn = { worldX: this.playerWorld.worldX, worldY: this.playerWorld.worldY };
     st.seenDialogKeys = new Set(this.seenDialogKeys);
     st.seenItems = new Set(this.seenItems);
     if (this.itemManager) {
@@ -5766,20 +3313,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O tile em que o heroi esta AGORA vira o ponto onde ele acorda (morte, Continue). Chamado ao
-   * entrar no anel seguro de um fogo aceso — o unico chao do jogo que promete manha seguinte.
-   * So no overworld: dentro de dungeon o retorno e sempre a fogueira la de fora.
-   */
-  private anchorRespawnHere(): void {
-    if (!this.adventure || isUnderground()) return;
-    const st = adventureState();
-    const { worldX, worldY } = this.playerWorld;
-    if (st.respawn && st.respawn.worldX === worldX && st.respawn.worldY === worldY) return;
-    st.respawn = { worldX, worldY };
-    this.persistAdventure();
-  }
-
-  /**
    * Reaplica ao terreno recem-carregado as arvores-tile que o jogador ja derrubou. O corte e
    * uma mutacao das arrays do WorldData (fellTreeTile) e o world.json volta LIMPO do disco a
    * cada boot e a cada volta de dungeon — sem este diff, a floresta desderrubava sozinha.
@@ -5798,33 +3331,6 @@ export class GameScene extends Phaser.Scene {
       const terrain = getChunkTerrain(cx, cy);
       const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
       const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-      terrain.upper[ly][lx] = null;
-      terrain.collisions[ly][lx] = false;
-    }
-  }
-
-  /**
-   * Reabre as PAREDES RACHADAS que uma bomba ja derrubou. Mesmo compasso do applyFelledTreeDiff
-   * (antes do World3D), e a mesma razao: o arquivo de mundo volta limpo do disco a cada boot e a
-   * cada troca de andar, entao sem o diff o cofre se refecha sozinho.
-   *
-   * A GUARDA E O PROPRIO FRAME. A chave nao diz em que andar a bomba estourou, e nao precisa
-   * dizer: so um tile que AINDA e `wallCracked` e limpo. Aplicar "26,3" no overworld encontra um
-   * pinheiro ou nada e nao faz coisa alguma — a precondicao viaja junto com o diff, em vez de
-   * viver num segundo campo que pode discordar dele.
-   */
-  private applyBombedWallDiff(): void {
-    const bounds = getWorldBounds();
-    for (const key of adventureState().bombedWalls) {
-      const [wx, wy] = key.split(',').map(Number);
-      if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
-      const cx = Math.floor(wx / CHUNK_COLUMNS);
-      const cy = Math.floor(wy / CHUNK_ROWS);
-      if (cx < bounds.minCx || cx > bounds.maxCx || cy < bounds.minCy || cy > bounds.maxCy) continue;
-      const terrain = getChunkTerrain(cx, cy);
-      const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
-      const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-      if (terrain.upper[ly][lx] !== DUNGEON_TILES.wallCracked) continue;
       terrain.upper[ly][lx] = null;
       terrain.collisions[ly][lx] = false;
     }
@@ -5856,133 +3362,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * O fogo sobe pela torre — e ACABA O JOGO.
-   *
-   * Diferente da fogueira, a pira não tem volta: o balde não a apaga e ela não se desmonta.
-   * Acender é a última coisa que se faz com ela, e agora é a última coisa que se faz, ponto: a
-   * torre acesa é o objetivo da partida inteira, e todo o resto do jogo (as missões, as viagens
-   * à mata, as fogueiras do caminho) é estrada até aqui. O card fecha depois de a chama subir,
-   * não antes — quem chegou até aqui merece VER a coisa pegar fogo.
-   */
-  private lightPyre(pyre: PyreObject, wx: number, wy: number): void {
-    if (!pyre.light()) return;
-    getSoundManager().playIgnite();
-    this.spawnFireHitEffect(wx, wy);
-    this.cameras.main.flash(320, 255, 210, 130);
-    this.world3d?.shake(200, 0.045);
-    this.recordPyre(pyre);
-    // Fora da aventura (lab, playtest de level) a torre é só um prop: acender não fecha nada.
-    if (!this.adventure) return;
-    // O MUNDO CONGELA JÁ, e não daqui a 1400ms. Sem isto, a janela entre a chama subir e o card
-    // entrar é jogo CORRENDO: uma caveira que matasse o herói nesse buraco dispararia a morte por
-    // cima do final — e como a pira acesa nunca reacende (`light()` recusa), o final não voltaria
-    // NUNCA. O jogo ficaria zerado sem nunca ter mostrado que zerou.
-    this.cutsceneActive = true;
-    this.time.delayedCall(1400, () => this.playEnding());
-  }
-
-  /**
-   * A torre entra no save a CADA tora. A ponte construída não persiste e ninguém sentiu (ela
-   * custa dois gravetos); a pira custa viagens, e uma morte que apagasse a torre transformaria o
-   * objetivo do jogo numa punição.
-   */
-  private recordPyre(pyre: PyreObject): void {
-    if (!this.adventure || isUnderground()) return;
-    const key = `${pyre.worldX},${pyre.worldY}`;
-    adventureState().pyreLogs.set(key, pyre.logCount);
-    if (pyre.isLit) adventureState().litPyres.add(key);
-    this.persistAdventure();
-  }
-
   private lightCampfire(cf: CampfireObject, wx: number, wy: number): void {
     if (cf.isLit) return;
-    this.litFireCount += 1; // drives the wizard's story progression
     this.questEvent({ type: 'light' });
-    if (this.adventure && !isUnderground()) {
-      // O fogo aceso entra no save na hora — e o heroi que o acendeu esta a um passo dele: este
-      // tile vira o ponto de acordar (anchorRespawnHere persiste).
-      adventureState().litFires.add(`${cf.worldX},${cf.worldY}`);
-      this.anchorRespawnHere();
-      this.persistAdventure();
-    }
-    // The very first fire the player brings back to life plays the one-time cut-scene.
-    if (!this.firstCampfireLit) {
-      this.firstCampfireLit = true;
-      this.playFirstCampfireCutscene(cf, wx, wy);
-      return;
-    }
     if (!cf.light()) return;
     getSoundManager().playIgnite();
     this.spawnFireHitEffect(wx, wy);
     this.cameras.main.flash(220, 255, 200, 110);
-    // The new safe ring is born under the hero — clear PERIGO now instead of waiting a frame.
-    const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
-    this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
-  }
-
-  // The first cut-scene of the game: lighting the first dead fire. Freezes the world, clears all
-  // enemies, pans the camera onto the fire, ignites it in slow motion with its glow blooming open,
-  // hits a bright flash + fire roar at the peak, then pans back to the hero and resumes.
-  private playFirstCampfireCutscene(cf: CampfireObject, wx: number, wy: number): void {
-    if (!this.camera) { cf.light(); return; }
-    this.cutsceneActive = true;
-    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-    this.stopBreathing();
-    this.hideLowHealthOutlines();
-    this.enemyManager?.despawnAll(); // all enemies vanish to focus on the moment
-    getSoundManager().fadeMusicOut();
-
-    // The hero's own glow cuts out instantly — the campfire becomes the only light on screen.
-    this.cutsceneHeroLight = 0;
-
-    const { width, height } = this.scale;
-    // Screen-centre offset that puts the campfire tile at the true middle of the screen.
-    const fireCenter = {
-      x: Math.round(width / 2 - (cf.worldX - this.playerWorld.worldX) * this.tileSize),
-      y: Math.round(height / 2 - (cf.worldY - this.playerWorld.worldY) * this.tileSize),
-    };
-    const heroCenter = this.baseScreenCenter();
-    this.cutsceneFireLight = { worldX: cf.worldX, worldY: cf.worldY, progress: 0 };
-
-    // Phase 1 — pan the camera off the hero and onto the fire (slow).
-    this.cutscenePan(fireCenter.x, fireCenter.y, 1600, () => {
-      // Phase 2 — slow-motion ignition: the dead fire catches bit by bit and its light blooms.
-      const grow = { t: 0 };
-      this.tweens.add({
-        targets: grow,
-        t: 1,
-        duration: 3400,
-        ease: 'Sine.easeIn',
-        onUpdate: () => {
-          cf.igniteProgress(grow.t);
-          if (this.cutsceneFireLight) this.cutsceneFireLight.progress = grow.t * 0.7;
-          if (Math.random() < 0.08) this.spawnFireHitEffect(wx, wy); // building sparks
-          this.reprojectStatic();
-        },
-        onComplete: () => {
-          // Phase 3 — the peak: full ignition, blinding flash, fire roar.
-          cf.light();
-          this.cutsceneFireLight = undefined; // the real campfire light takes over now
-          this.cameras.main.flash(600, 255, 220, 150);
-          getSoundManager().playIgnite();
-          this.spawnFireHitEffect(wx, wy);
-          this.reprojectStatic();
-          // Hold on the blaze, then pan back to the hero and resume.
-          this.time.delayedCall(1400, () => {
-            // The hero's glow eases back in as the camera returns to him.
-            this.tweens.add({ targets: this, cutsceneHeroLight: 1, duration: 1400, ease: 'Sine.easeOut' });
-            this.cutscenePan(heroCenter.x, heroCenter.y, 1400, () => {
-              this.cutsceneActive = false;
-              this.cutsceneHeroLight = 1;
-              getSoundManager().fadeMusicIn();
-              const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
-              this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
-            });
-          });
-        },
-      });
-    });
   }
 
   // Tween the camera's screen-centre to (tx, ty) over `duration`, re-projecting the frozen world
@@ -6012,47 +3398,6 @@ export class GameScene extends Phaser.Scene {
         onDone();
       },
     });
-  }
-
-  // One warm ember mote drifting from the nearest lit campfire into the hero — the visible
-  // stream that says "the fire is healing you". Screen-anchored (the hero rests inside the
-  // ring, so both endpoints barely move over a mote's short life), like spawnSmokePuff.
-  private spawnHealMote(): void {
-    const w3 = this.world3d;
-    if (!w3) return;
-    const cf = this.nearestLitCampfire(this.playerWorld.worldX, this.playerWorld.worldY);
-    if (!cf) return;
-    const spread = 0.22;
-    const size = 0.07 + Math.random() * 0.06;
-    const mote = w3
-      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
-      .setTint(0xffc36b)
-      .setPosition(cf.worldX + (Math.random() - 0.5) * spread * 2, cf.worldY + (Math.random() - 0.5) * spread)
-      .setElevation(0.3 + Math.random() * spread)
-      .setDisplaySize(size, size)
-      .setAlpha(0.9);
-    // It drifts off the flame and sinks into the hero's chest, shrinking as it's absorbed —
-    // a real path through the world now, so it passes behind whatever stands between them.
-    this.tweens.add({
-      targets: mote,
-      x: this.playerWorld.worldX + (Math.random() - 0.5) * 0.12,
-      y: this.playerWorld.worldY,
-      elevation: FX_BODY_ELEV,
-      scaleX: size * 0.35,
-      scaleY: size * 0.35,
-      alpha: 0.55,
-      duration: HEAL_MOTE_TRAVEL_MS,
-      ease: 'Sine.easeInOut',
-      onComplete: () => mote.destroy(),
-    });
-  }
-
-  // The heal tick landed: a warm wave blooms out of the hero, the payoff of the mote stream.
-  private spawnHealBurst(): void {
-    this.spawnShockwave(this.playerWorld.worldX, this.playerWorld.worldY, 0xffc36b, 0.44, 1.7, 430);
-    // Brief warm glow on the hero himself as the heart mends.
-    this.hero.tint = 0xffd9a0;
-    this.time.delayedCall(220, () => { this.hero.tint = null; });
   }
 
   // A few grey puffs rising where a flame died.
@@ -6147,20 +3492,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  // ── Bomb / seeds ────────────────────────────────────────────────────────────
-  // The game is walk-only — no "use item" button — so every placement has a walk-on affordance:
-  // a spot mark (a breathing purple ghost of the thing that goes there). The hero stepping onto
-  // it with the right item in hand places it, exactly like stepping on a pickup collects it.
-  // With anything else in hand the step does nothing: the mark's own art is the invitation.
+  // ── Walk-on ─────────────────────────────────────────────────────────────────
   /**
-   * `_dx`/`dy` são a direção do passo que trouxe o herói até aqui — zero quando alguém chamou
-   * isto de fora do andar (o debug). A ESCADA é a única coisa que pergunta, e ela só olha o eixo
-   * NORTE-SUL: ela só engole quem entra de FRENTE, e a frente dela é sempre a boca. O `_dx` fica
-   * no lugar porque a direção é um par — uma peça futura que abra para o lado vai querer os dois.
+   * Um tile ENTRADO (uma vez por passo, nunca por frame). `_dx`/`_dy` são a direção do passo que
+   * trouxe o herói até aqui — zero quando alguém chamou isto de fora do andar (o debug).
    */
-  private handleTileEntered(wx: number, wy: number, _dx = 0, dy = 0): void {
+  private handleTileEntered(wx: number, wy: number, _dx = 0, _dy = 0): void {
     // O fog of war do mapa: o chunk pisado entra no save (176 chaves no maximo, um evento raro).
-    if (this.adventure && !isUnderground()) {
+    if (this.adventure) {
       const chunkKey = `${Math.floor(wx / CHUNK_COLUMNS)},${Math.floor(wy / CHUNK_ROWS)}`;
       const st = adventureState();
       if (!st.visitedChunks.has(chunkKey)) {
@@ -6169,64 +3508,7 @@ export class GameScene extends Phaser.Scene {
         saveAdventure();
       }
     }
-    // A ESCADA. Duas peças diferentes (um buraco em cima, uma escada de pedra embaixo — ver
-    // StairsObject), e uma regra só: **entrar é andar para o NORTE**, em qualquer andar. Em cima
-    // isso é cair no buraco; embaixo é subir os degraus até a boca no teto. A boca das duas fica
-    // ao norte, então a pergunta é uma e não tem `if` de andar dentro dela.
-    //
-    // SÓ DE FRENTE. Chegar pela lateral, ou vindo do norte, deixa o herói ao pé da escada, de pé,
-    // sem viagem nenhuma. Ninguém cai numa escadaria de lado: quem desce, encara a descida. É a
-    // mesma lei dos dois botões (a parede vira o herói, e o gesto age à frente), e é ela que faz
-    // a peça parecer um lugar em vez de um gatilho.
-    const stairs = this.getStairsAt(wx, wy);
-    if (stairs && dy < 0) {
-      if (isUnderground()) void this.leaveDungeon(stairs);
-      else void this.enterDungeon(stairs);
-      return;
-    }
     // Depositar itens usa o botao B contra o tile a frente (ver pressUse/placeItemAt).
-  }
-
-  // The one consumable: put down on any free ground (see bombDropTile), it sits lit; after the
-  // fuse it explodes — killing every enemy in the blast and setting fire to everything flammable
-  // there. Returns true only if the bomb really was planted.
-  private placeBombAt(worldX: number, worldY: number): boolean {
-    if (this.heldItem !== 'bomb' || !this.world3d) return false;
-
-    this.clearHeldItem();
-    // A MARCA AUTORADA se gasta quando uma bomba cai EM CIMA dela, e não mais porque ela era o
-    // único jeito de plantar uma. Ela deixou de ser a fechadura e virou o que o desenho dela
-    // sempre disse: "uma bomba serve aqui" — e um fantasma que continuasse respirando embaixo da
-    // bomba de verdade estaria pedindo o que já foi feito.
-    this.getBombSpotAt(worldX, worldY)?.use();
-    // Gastar a bomba MUDA O MUNDO (é um item que saiu da mochila): sem isto, plantar e morrer
-    // devolvia a bomba — a única fonte finita do jogo com uma máquina de imprimir do lado.
-    this.persistAdventure();
-    getSoundManager().playBombPlace();
-
-    const sprite = this.world3d
-      // The hero is STANDING on this tile as the bomb is planted, and walks off it while the
-      // fuse burns: ground layer, or the two upright quads are coplanar (see DEPTH_LAYER).
-      .addBillboard('bomb-item', BOMB_FRAMES.item, { depthLayer: 'ground' })
-      .setPosition(worldX, worldY)
-      .setDisplaySize(0.62, 0.62);
-
-    // Fuse: accelerating red blink until it blows. The handle lives on the bomb record so an
-    // EARLY explosion (fire reaching the payload) can kill the blink with the sprite.
-    const fuseTween = this.tweens.addCounter({
-      from: 0,
-      to: 1,
-      duration: BOMB_FUSE_MS,
-      onUpdate: (tween) => {
-        const t = tween.getValue() ?? 0;
-        const blink = Math.sin(t * t * 40) > 0;
-        sprite.setTint(blink ? 0xff4444 : 0xffffff);
-      },
-    });
-    const bomb = { worldX, worldY, sprite, fuseTween };
-    this.activeBombs.push(bomb);
-    this.time.delayedCall(BOMB_FUSE_MS, () => this.explodeBomb(bomb));
-    return true;
   }
 
   // ── The farming loop (plantSpot) ────────────────────────────────────────────
@@ -6253,20 +3535,14 @@ export class GameScene extends Phaser.Scene {
       this.time.delayedCall(400, () => this.growPlantedGrass(spot));
       return;
     }
-    // O canteiro brota O QUE recebeu (sownKind): a semente comum vira mato — combustível; a
-    // carnívora vira a planta-armadilha — defesa. O mesmo monte, a mesma água, dois destinos.
-    if (spot.sownKind === 'carnivoreSeeds') {
-      const plant = new CarnivorousPlantObject(this, spot.worldX, spot.worldY);
-      plant.sproutIn();
-      this.carnivorousPlants.push(plant);
-      spot.setGrown(plant);
-    } else {
-      const grass = new TallGrassObject(this, spot.worldX, spot.worldY);
-      grass.sproutIn();
-      this.tallGrasses.push(grass);
-      spot.setGrown(grass);
-    }
+    const grass = new TallGrassObject(this, spot.worldX, spot.worldY);
+    grass.sproutIn();
+    this.tallGrasses.push(grass);
+    spot.setGrown(grass);
     getSoundManager().playGrassCut(); // the blades pushing out — the same dry rustle
+    // BROTOU — e é isto que a pintora pediu: verde que alguém plantou (ver NpcQuests).
+    this.questEvent({ type: 'grow' });
+    this.spawnGrowSparkle(spot.worldX, spot.worldY);
   }
 
   /**
@@ -6282,7 +3558,6 @@ export class GameScene extends Phaser.Scene {
     const chunkY = Math.floor(wy / CHUNK_ROWS);
     if (this.chunkManager?.hasChunkCoordinate(chunkX, chunkY) !== true) return false;
     if (!DIGGABLE_GROUND_FRAMES.has(this.chunkManager.getTile(wx, wy).ground)) return false;
-    if (this.freezeManager?.frozenAt(wx, wy)) return false;
     if (this.isTileOccupied(wx, wy)) return false;
     for (const entry of this.propRegistry) {
       if (this.propAt(entry.list, wx, wy)) return false;
@@ -6314,7 +3589,6 @@ export class GameScene extends Phaser.Scene {
         this.world3d?.removeDecorTile(wx, wy);
       }
     }
-    this.enemyManager?.removeCorpseAt(wx, wy);
     const spot = new PlantSpotObject(this, wx, wy, { dug: true });
     this.plantSpots.push(spot);
     // A CAVADA AOS POUCOS: o canteiro aprofunda em quatro tempos (os frames do sheet — ver
@@ -6335,7 +3609,7 @@ export class GameScene extends Phaser.Scene {
       const dy = Math.sign(wy - this.playerWorld.worldY);
       this.world3d?.shake(50, 0.025, dx, dy);
     });
-    if (this.adventure && !isUnderground()) {
+    if (this.adventure) {
       adventureState().dugSpots.add(`${wx},${wy}`);
       this.persistAdventure();
     }
@@ -6372,46 +3646,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * A PLANTA CARNÍVORA À ESPREITA — todo inimigo que ENCOSTA (para num dos 4 vizinhos de uma
-   * planta pronta) é COMIDO. As recusas são as do resto do jogo: quem ainda NASCE é
-   * invulnerável (a lei do nascimento) e um corpo CONGELADO é estátua (uma bocarra não morde
-   * através do bloco). No pico do bote a adjacência é RECONFERIDA — um corpo que saiu do tile
-   * durante a arma da mandíbula é um bote no ar, e a planta mastiga o vazio mesmo assim: errar
-   * também custa a recarga, e é isso que faz o bote ser esquivável. O gole não deixa ossada
-   * (ver EnemyBase.consume); a encenação é gated por distância (a regra da roda
-   * d'água: a física roda sempre, o barulho só perto do herói).
-   */
-  private updateCarnivorousPlants(): void {
-    for (const plant of this.carnivorousPlants) {
-      if (!plant.readyToEat) continue;
-      for (const [dx, dy] of CARDINAL_DIRS) {
-        const enemy = this.enemyManager?.getEnemyAt(plant.worldX + dx, plant.worldY + dy);
-        if (!enemy || !enemy.isAlive || enemy.isSpawning || enemy.isFrozen) continue;
-        const near = Math.hypot(
-          plant.worldX - this.playerWorld.worldX, plant.worldY - this.playerWorld.worldY,
-        ) <= 10;
-        if (near) getSoundManager().playGrassCut(); // as folhas se armando no bote
-        let caught = false;
-        plant.eat(dx, () => {
-          const stillTouching = Math.abs(enemy.worldX - plant.worldX)
-            + Math.abs(enemy.worldY - plant.worldY) === 1;
-          if (!stillTouching || !enemy.isAlive || enemy.isSpawning || enemy.isFrozen) return;
-          caught = true;
-          // A mordida PRENDEU: o corpo é arrastado pelo ar até a boca — o mesmo relógio da
-          // planta (DRAG_MS), então ele chega no exato instante em que a bocarra fecha.
-          enemy.consume(plant.worldX, plant.worldY, CarnivorousPlantObject.DRAG_MS);
-          this.spawnSmokePuff(enemy.worldX, enemy.worldY); // as folhas do bote, no tile da presa
-        }, () => {
-          if (!caught || !near) return;
-          getSoundManager().playItemBonk(); // o baque surdo da bocarra fechando sobre o corpo
-          this.world3d?.shake(50, 0.03, dx, dy);
-        });
-        break; // um corpo por vez — a mastigação é a recarga (e a janela de passar por ela)
-      }
-    }
-  }
-
   // Watch the plots each frame: raise the mound of a sown hole the moment the hero steps off
   // it (a dome must never be born blocking under someone's feet — the dropped-item arming
   // rule), and reopen the hole of a plot whose grown grass was consumed (cut/burnt).
@@ -6432,199 +3666,12 @@ export class GameScene extends Phaser.Scene {
       spot.reopenPending = true;
       this.time.delayedCall(GameScene.PLANT_REOPEN_MS, () => {
         // Splice in place, never filter-and-reassign: o propRegistry referencia ESTES arrays.
-        // A planta consumida pode ser mato OU a carnívora — cada uma mora na sua lista.
-        if (grass instanceof TallGrassObject) {
-          const idx = this.tallGrasses.indexOf(grass);
-          if (idx >= 0) this.tallGrasses.splice(idx, 1);
-        } else {
-          const idx = this.carnivorousPlants.indexOf(grass);
-          if (idx >= 0) this.carnivorousPlants.splice(idx, 1);
-        }
+        const idx = this.tallGrasses.indexOf(grass);
+        if (idx >= 0) this.tallGrasses.splice(idx, 1);
         grass.destroy(); // the remains decay away and the dug hole shows again
         spot.reopen();
       });
     }
-  }
-
-  private explodeBomb(bomb: ActiveBomb): void {
-    const index = this.activeBombs.indexOf(bomb);
-    if (index < 0) return;
-    this.activeBombs.splice(index, 1);
-    // Fire can detonate the payload BEFORE the fuse runs out — kill the blink tween with the
-    // sprite, or it keeps calling setTint on a disposed material until the fuse "ends".
-    bomb.fuseTween.remove();
-    bomb.sprite.destroy();
-    if (!this.camera) return;
-
-    getSoundManager().playBombExplode();
-    this.cameras.main.shake(160, 0.008);
-
-    const center = this.camera.tileToScreen(bomb.worldX, bomb.worldY, this.tileSize);
-    const inBlast = (wx: number, wy: number): boolean =>
-      Math.hypot(wx - bomb.worldX, wy - bomb.worldY) <= BOMB_BLAST_RADIUS_TILES;
-
-    // White core flash + expanding ring.
-    const flash = this.add
-      .circle(center.x, center.y, this.tileSize * 0.8, 0xfff3d0, 0.95)
-      .setDepth(SCENE_DEPTHS.upper + 1);
-    this.tweens.add({
-      targets: flash,
-      radius: this.tileSize * BOMB_BLAST_RADIUS_TILES,
-      alpha: 0,
-      duration: 330,
-      ease: 'Cubic.easeOut',
-      onComplete: () => flash.destroy(),
-    });
-
-    // Sparks + little fires scattered over the blast area.
-    const fireKeys = [ASSET_KEYS.tinyFire0, ASSET_KEYS.tinyFire1, ASSET_KEYS.tinyFire2];
-    for (let i = 0; i < 10; i++) {
-      const ang = Math.random() * Math.PI * 2;
-      const dist = Math.random() * this.tileSize * BOMB_BLAST_RADIUS_TILES;
-      const isSpark = i % 2 === 0;
-      const size = Math.floor(this.tileSize * (isSpark ? 0.3 : 0.42));
-      const puff = this.add
-        .sprite(center.x + Math.cos(ang) * dist, center.y + Math.sin(ang) * dist,
-          isSpark ? ASSET_KEYS.bombItem : fireKeys[i % fireKeys.length],
-          isSpark ? BOMB_FRAMES.spark : 0)
-        .setDisplaySize(size, size)
-        .setDepth(SCENE_DEPTHS.upper + 1);
-      this.tweens.add({
-        targets: puff,
-        alpha: 0,
-        y: puff.y - this.tileSize * 0.5,
-        duration: 340 + i * 45,
-        ease: 'Power2.easeOut',
-        onComplete: () => puff.destroy(),
-      });
-    }
-
-    // Kill every enemy caught in the blast — e a explosao JOGA os corpos para fora dela. Uma bomba
-    // que deixasse tres caveiras se desmanchando em pe, cada uma no seu tile, seria a unica coisa
-    // do jogo com raio de acao e sem sopro. Ver EnemyBase.deathFling: o mesmo arremesso que o golpe
-    // que mata passou a dar, so que a direcao aqui e a do centro da explosao para o corpo.
-    //
-    // A EXPLOSAO PERGUNTA ANTES DE FERIR, como todo caminho de dano deste jogo deve. O
-    // `EnemyBase.takeDamage` ja escrevia a regra e a bomba era a unica que nao a seguia: "quem
-    // chama SEMPRE pergunta antes (`isHurtInvulnerable`) para poder responder na tela — este guarda
-    // e a rede, nao a porta". Sem a pergunta, um corpo que acabou de levar uma espadada ATRAVESSAVA
-    // a explosao inteira e nada aparecia: nem anel, nem som, nem dano. O jogador via a bomba
-    // estourar em cima da caveira e a caveira seguir andando, sem uma unica pista do porque.
-    //
-    // A recusa continua sendo recusa (os i-frames valem para TODA fonte de dano, ou o combate volta
-    // a ser uma serra) — o que muda e que agora ela tem desenho, que e o anel frio de sempre.
-    let blastKilled = false;
-    let blastRefused = false;
-    for (const enemy of this.enemyManager?.getAliveEnemies() ?? []) {
-      if (!inBlast(enemy.worldX, enemy.worldY)) continue;
-      if (enemy.isHurtInvulnerable) {
-        this.spawnDeflect(enemy.worldX, enemy.worldY);
-        blastRefused = true;
-        continue;
-      }
-      enemy.takeDamage(999);
-      if (!enemy.isAlive) {
-        // A VOZ DA EXPLOSAO SAI UMA VEZ, como a do arco (ver sweepArc): uma bomba no meio de uma
-        // matilha disparava um som de morte por corpo, todos no mesmo frame.
-        if (!blastKilled) getSoundManager().playEnemyDeath(enemy.kind);
-        blastKilled = true;
-        enemy.deathFling(enemy.worldX - bomb.worldX, enemy.worldY - bomb.worldY);
-      }
-    }
-    // So se NADA morreu: com um corpo caindo, o som da morte ja disse que a explosao encontrou
-    // gente, e o raspao por cima dele seria uma segunda voz para o mesmo estouro.
-    if (blastRefused && !blastKilled) getSoundManager().playBladeGlance();
-
-    // Set fire to everything flammable in the area — and each of those then spreads on its
-    // own, so the bomb is a way to start a fire somewhere the hero cannot stand.
-    for (const bushObj of this.dryBushes) {
-      if (inBlast(bushObj.worldX, bushObj.worldY) && bushObj.ignite()) {
-        this.spawnFireHitEffect(bushObj.worldX, bushObj.worldY);
-        this.scheduleFireSpread(bushObj.worldX, bushObj.worldY);
-      }
-    }
-    for (const grassObj of this.tallGrasses) {
-      if (inBlast(grassObj.worldX, grassObj.worldY) && grassObj.ignite()) {
-        this.spawnFireHitEffect(grassObj.worldX, grassObj.worldY);
-        this.scheduleFireSpread(grassObj.worldX, grassObj.worldY);
-      }
-    }
-
-    // The blast shatters rock in range and throws the pieces as usable STONE: the bomb PRODUCES
-    // matter, it does not only clear a path. One charge can open a wall AND hand you the fords
-    // to cross the river beyond it. (Two blows finish a plain rock: intact -> cracked -> broken.
-    // The iron VEIN survives any blast — the two blows only advance its 3-hit cycle, so a bomb
-    // can milk it, never open it.)
-    let brokeRock = false;
-    for (const rockObj of this.rocks) {
-      if (!inBlast(rockObj.worldX, rockObj.worldY) || !rockObj.blocking) continue;
-      const blows = [rockObj.smash(0, 0), rockObj.smash(0, 0)];
-      if (!rockObj.blocking) {
-        this.spawnRockDebris(rockObj.worldX, rockObj.worldY, 0, -1, true, rockObj.ore);
-        this.dropRockSpoil(rockObj);
-        brokeRock = true;
-      } else if (blows.includes('yielded')) {
-        this.spawnRockDebris(rockObj.worldX, rockObj.worldY, 0, -1, true, true);
-        this.spawnOreLoot(rockObj);
-        brokeRock = true;
-      }
-    }
-    if (brokeRock) getSoundManager().playRockSmash();
-
-    // A PAREDE RACHADA. O frame 50 estava desenhado no atlas desde que a alvenaria de dungeon foi
-    // instalada, com o comentario que o chamava de "a pista da parede bombardeavel" — e ate aqui
-    // NADA no jogo o abria: era uma legenda mentirosa, uma rachadura pintada que nenhum gesto
-    // resolvia. Ele agora e a unica parede do jogo que a bomba derruba, e a marca de bomba no chao
-    // em frente e o "aqui" que a rachadura complementa com o "aquela".
-    //
-    // Pela mesma lei da rocha logo acima, ela PRODUZ: cai uma pedra, entao abrir o cofre nunca
-    // custa liquido uma bomba por nada.
-    if (this.chunkManager) {
-      const r = Math.ceil(BOMB_BLAST_RADIUS_TILES);
-      for (let dy = -r; dy <= r; dy += 1) {
-        for (let dx = -r; dx <= r; dx += 1) {
-          const wx = bomb.worldX + dx;
-          const wy = bomb.worldY + dy;
-          if (!inBlast(wx, wy)) continue;
-          if (this.breakCrackedWallAt(wx, wy)) {
-            this.spawnRockDebris(wx, wy, 0, -1, true, false);
-            this.dropProduct('stone', wx, wy);
-            getSoundManager().playRockSmash();
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Abre um tile de parede RACHADA. Devolve false para qualquer outro tile — inclusive para a
-   * alvenaria inteira ao lado, que e a diferenca entre um segredo e um mundo de papel.
-   *
-   * As arrays mexidas aqui sao as MESMAS que o WorldData segura (o padrao do fellTreeTile), entao
-   * a abertura sobrevive ao cache de chunk; o que nao sobrevive e o recarregamento do arquivo, e
-   * por isso ela tambem entra no save como diff (applyBombedWallDiff).
-   */
-  private breakCrackedWallAt(wx: number, wy: number): boolean {
-    const chunks = this.chunkManager;
-    if (!chunks) return false;
-    const cx = Math.floor(wx / CHUNK_COLUMNS);
-    const cy = Math.floor(wy / CHUNK_ROWS);
-    if (!chunks.hasChunkCoordinate(cx, cy)) return false;
-    if (chunks.getTile(wx, wy).upper !== DUNGEON_TILES.wallCracked) return false;
-
-    const chunk = chunks.getChunk(cx, cy);
-    const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
-    const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-    chunk.upper[ly][lx] = null;
-    // O worldgen pinta colisao explicita sob todo frame de obstaculo: limpar so o `upper` deixaria
-    // uma parede invisivel no lugar do buraco.
-    chunk.collisions[ly][lx] = false;
-    this.world3d?.removeSolidTile(wx, wy);
-    if (this.adventure) {
-      adventureState().bombedWalls.add(`${wx},${wy}`);
-      this.persistAdventure();
-    }
-    return true;
   }
 
   // ── Fire spread ────────────────────────────────────────────────────────────
@@ -6673,17 +3720,6 @@ export class GameScene extends Phaser.Scene {
    * Returns true if something caught here.
    */
   private igniteFlammableAt(wx: number, wy: number): boolean {
-    // FOGO DERRETE GELO ANTES DE ACENDER QUALQUER COISA: um tile congelado gasta o pulso de
-    // fogo no degelo (vapor, nada pega). Vale para mato, ponte E corpo congelado — uma pergunta
-    // só, espacial, como todo gate do gelo (ver FreezeManager.meltAt).
-    if (this.freezeManager?.meltAt(wx, wy)) return false;
-    // FOGO QUE CHEGA NUM TILE COME QUEM ESTIVER PARADO NELE: o corpo é combustível como o mato
-    // (a tocha viva — ver EnemyBase.igniteBody). Fora do retorno de propósito: o corpo NÃO faz
-    // o tile arder (ele corre dali, e fogo não nasce de tile vazio — a lição do graveto que o
-    // braço carrega embora), então a cadeia de espalhamento segue como se ele não estivesse lá.
-    const victim = this.enemyManager?.getEnemyAt(wx, wy);
-    if (victim) this.igniteEnemy(victim);
-
     const bush = this.getDryBushAt(wx, wy);
     if (bush?.ignite()) {
       this.spawnFireHitEffect(wx, wy);
@@ -6695,24 +3731,6 @@ export class GameScene extends Phaser.Scene {
     if (grass?.ignite()) {
       this.spawnFireHitEffect(wx, wy);
       this.scheduleFireSpread(wx, wy);
-      return true;
-    }
-
-    // A planta carnívora é PLANTA: combustível como o mato — o fogo é uma das três respostas
-    // do jogador a uma que ficou no lugar errado (as outras: a foice, e simplesmente contorná-la).
-    const carnivore = this.getCarnivorousPlantAt(wx, wy);
-    if (carnivore?.ignite()) {
-      this.spawnFireHitEffect(wx, wy);
-      this.scheduleFireSpread(wx, wy);
-      return true;
-    }
-
-    // A placed bomb is a PAYLOAD on the fuse: fire reaching it sets it off. So you can blow up
-    // something you could never stand next to — lay a fuse to the bomb and let the fire arrive,
-    // the same idea as lighting a campfire the hero cannot reach.
-    const bomb = this.activeBombs.find((b) => b.worldX === wx && b.worldY === wy);
-    if (bomb) {
-      this.explodeBomb(bomb);
       return true;
     }
 
@@ -6735,18 +3753,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O FOGO ALCANÇOU UM CORPO (a tocha viva). O estado é do corpo (igniteBody recusa morto,
-   * nascendo, já ardendo e quem vive na água); daqui sai só a ENCENAÇÃO da pegada — e ela tem
-   * o gate do quadro, porque um corpo acendendo fora da tela não pode falar (a lei do framed).
-   */
-  private igniteEnemy(enemy: EnemyBase): void {
-    if (!enemy.igniteBody()) return;
-    if (this.isTileFramed(enemy.worldX, enemy.worldY)) {
-      this.spawnFireHitEffect(enemy.worldX, enemy.worldY);
-    }
-  }
-
-  /**
    * Este tile É fogo agora? — a pergunta do encontrão (ver o `shove` no strike). Aqui só o que
    * visivelmente arde no próprio tile: fogueira acesa, arbusto/mato em chamas, lava e um graveto
    * aceso no chão.
@@ -6760,118 +3766,10 @@ export class GameScene extends Phaser.Scene {
     if (this.getCampfireAt(wx, wy)?.isLit) return true;
     if (this.getDryBushAt(wx, wy)?.isBurning) return true;
     if (this.getTallGrassAt(wx, wy)?.isBurning) return true;
-    if (this.getLavaAt(wx, wy)) return true;
     return this.itemManager?.hasLitItemAt(wx, wy) ?? false;
   }
 
   // ── O congelamento (ver FreezeManager, onde mora a lei) ─────────────────────
-
-  /** O herói está congelado agora? — o gate que os botões e o update leem. */
-  private get isHeroFrozen(): boolean {
-    return this.freezeManager?.isFrozen('hero') ?? false;
-  }
-
-  /**
-   * A bola de gelo alcançou um CORPO. Fogo e gelo se anulam: num corpo em chamas ela APAGA o
-   * fogo (o corpo sobrevive à tocha viva — o zora salvando a matilha é jogada dele) em vez de
-   * congelar. A estátua continua ferível e empurrável — o gelo trava, nunca protege.
-   */
-  private freezeEnemy(enemy: EnemyBase): void {
-    if (!enemy.isAlive || enemy.isSpawning) return;
-    if (enemy.isBurning) {
-      if (enemy.extinguish() && this.isTileFramed(enemy.worldX, enemy.worldY)) {
-        getSoundManager().playFireHit(); // o chiado de vapor que este jogo já tem
-      }
-      return;
-    }
-    this.freezeManager?.freeze({
-      id: enemy,
-      x: enemy.visualX,
-      y: enemy.visualY,
-      size: 0.8,
-      elevation: 0.34,
-      follow: () => (enemy.isAlive ? { x: enemy.visualX, y: enemy.visualY } : null),
-      stillValid: () => enemy.isAlive,
-      onFreeze: () => enemy.enterFreeze(),
-      onThaw: () => enemy.exitFreeze(),
-    });
-  }
-
-  /**
-   * O frio fechou sobre o HERÓI: pés na raiz, botões na cadência (adiados, nunca descartados — a
-   * lei do buffer) e o corpo frio. Sem dano nenhum: a bola do zora trava, e o perigo é o resto
-   * da matilha chegar enquanto você é uma estátua.
-   */
-  private freezeHero(): void {
-    if (this.isDead || this.heroFreezeImmuneMs > 0) return;
-    this.freezeManager?.freeze({
-      id: 'hero',
-      x: this.playerWorld.worldX,
-      y: this.playerWorld.worldY,
-      size: 0.82,
-      elevation: 0.36,
-      follow: () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }),
-      stillValid: () => !this.isDead,
-      onFreeze: () => {
-        // Virar estátua fecha a bolsa pela mesma razão que apanhar fecha (`handleEnemyAttackPlayer`):
-        // ela é a única tela que fica aberta com o mundo correndo, e o mundo acabou de responder.
-        this.quickBag?.close();
-        this.stopBreathing();
-        this.movementController?.root(FREEZE_MS);
-        this.playerStaggerMs = Math.max(this.playerStaggerMs, FREEZE_MS);
-        this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-        this.hero.tint = 0xaee0ff;
-      },
-      onThaw: () => {
-        // A imunidade pós-degelo é a contra-jogada do stun-lock (ver heroFreezeImmuneMs).
-        this.heroFreezeImmuneMs = HERO_FREEZE_IMMUNE_MS;
-        if (!this.isDead) this.hero.tint = null;
-      },
-    });
-  }
-
-  /**
-   * QUALQUER COISA PODE SER CONGELADA — e este método é a lista inteira do que "qualquer coisa"
-   * significa, em ordem de precedência: corpo, herói, NPC, e então o que estiver plantado no
-   * tile (fogueira morta, arbusto, mato, pedra, tronco, árvore — prop ou tile —, item
-   * no chão). Fogueira ACESA recusa com vapor: fogo derrete gelo antes de o gelo existir.
-   * O que "travado" significa não mora aqui: mora nos gates (`frozenAt`) de cada interação.
-   */
-  private freezeAtTile(wx: number, wy: number): boolean {
-    const enemy = this.enemyManager?.getEnemyAt(wx, wy);
-    if (enemy) {
-      this.freezeEnemy(enemy);
-      return true;
-    }
-    if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) {
-      this.freezeHero();
-      return true;
-    }
-    const campfire = this.getCampfireAt(wx, wy);
-    if (campfire?.isLit) {
-      // O fogo vence antes de o gelo nascer: só o vapor conta o que aconteceu.
-      this.freezeManager?.steamAt(wx, wy);
-      return false;
-    }
-    const tall = this.getDryTreeAt(wx, wy) !== undefined || this.treeTileFrameAt(wx, wy) !== null;
-    const freezable = tall
-      || campfire !== undefined
-      || this.getDryBushAt(wx, wy) !== undefined
-      || this.getDryShrubAt(wx, wy) !== undefined
-      || this.getTallGrassAt(wx, wy) !== undefined
-      || (this.getRockAt(wx, wy)?.blocking ?? false)
-      || this.npcManager?.hasNpcAt(wx, wy) === true
-      || (this.itemManager?.hasItemAt(wx, wy) ?? false);
-    if (!freezable) return false;
-    return this.freezeManager?.freeze({
-      id: `tile:${wx},${wy}`,
-      x: wx,
-      y: wy,
-      // Árvore e NPC são corpos altos: o bloco sobe com eles (sem nunca vazar do tile).
-      size: tall ? 1 : this.npcManager?.hasNpcAt(wx, wy) ? 0.85 : 0.72,
-      elevation: tall ? 0.52 : 0.3,
-    }) ?? false;
-  }
 
   private spawnFireHitEffect(wx: number, wy: number): void {
     const w3 = this.world3d;
@@ -6898,6 +3796,565 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ── A HISTORIA: a chegada, os vizinhos, o jardim e a fogueira ─────────────────
+  //
+  // O jogo inteiro e um arco so, e ele mora aqui:
+  //
+  //   1. A ABERTURA (playIntro): o cavaleiro chega pela estrada do sul com a espada nas costas,
+  //      para e a finca no chao. Silencio, vaga-lumes. O mago se aproxima e diz o que ninguem
+  //      disse a ele ainda: acabou, e agora e preciso achar um sentido alem disso.
+  //   2. OS VIZINHOS (dialogs/NpcQuests): quatro pedidos pequenos, cada um com o presente que o
+  //      torna possivel. Nada se perde, nada tem prazo.
+  //   3. O PORTAO (openGardenGate): quando o ultimo pedido fecha, o jardim do centro do vale abre.
+  //   4. A FOGUEIRA (tendHearthAt / playRoastEnding): o heroi acende o fogo, espeta um cogumelo
+  //      num graveto e fica ali, assando, enquanto a brisa passa. Fim, e os creditos.
+
+  /**
+   * A ESPADA FINCADA: um billboard que fica de pe no tile onde o heroi a deixou, e bloqueia o
+   * tile como qualquer coisa cravada no chao. Ela e cenario — nenhum botao a tira dali.
+   */
+  private plantSwordAt(wx: number, wy: number, elevation = SWORD_BURY_ELEV): Billboard3D | undefined {
+    if (!this.world3d) return undefined;
+    this.plantedSword?.destroy();
+    this.plantedSword = this.world3d
+      .addBillboard(PLANTED_SWORD_TEXTURE, 0, { groundShadow: { rx: 0.18, rz: 0.12, alpha: 0.3 } })
+      .setPosition(wx, wy)
+      .setElevation(elevation)
+      .setDisplaySize(0.9, 0.9);
+    this.plantedSwordTile = { x: wx, y: wy };
+    return this.plantedSword;
+  }
+
+  /**
+   * Um passo ROTEIRIZADO: o heroi anda um tile sem o controle de movimento (que esta parado
+   * durante a cutscene). A camera desliza junto, as pernas giram com o chao — o mesmo desenho de
+   * um passo de verdade, so que quem aperta a seta e a cena.
+   */
+  private scriptStep(dx: number, dy: number, stepMs: number): Promise<void> {
+    const from = { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
+    const to = { x: from.x + dx, y: from.y + dy };
+    this.movementController?.faceTo(dx, dy, true);
+    this.playerWorld = { worldX: to.x, worldY: to.y };
+    this.handleTileEntered(to.x, to.y, dx, dy);
+    getSoundManager().playFootstep();
+    return new Promise<void>((resolve) => {
+      const k = { t: 0 };
+      let last = 0;
+      this.tweens.add({
+        targets: k,
+        t: 1,
+        duration: stepMs,
+        ease: 'Linear',
+        onUpdate: () => {
+          this.hero.walkDist += k.t - last;
+          last = k.t;
+          this.camera?.centerOn(from.x + dx * k.t, from.y + dy * k.t);
+          if (this.camera) { this.hero.x = this.camera.screenCenterX; this.hero.y = this.camera.screenCenterY; }
+        },
+        onComplete: () => {
+          this.streamChunks();
+          resolve();
+        },
+      });
+    });
+  }
+
+  /** Vira o heroi para uma direcao, parado (a cena olha em volta por ele). */
+  private scriptFace(dx: number, dy: number): void {
+    this.movementController?.faceTo(dx, dy, false);
+  }
+
+  /**
+   * A ABERTURA — a unica cena do jogo que acontece sem o jogador, e por isso ela e curta.
+   *
+   * Ela e NOITE de proposito (o relogio do mundo e posto as dez da noite): e a hora dos
+   * vaga-lumes, e a hora em que um cavaleiro cansado para de andar.
+   */
+  private async playIntro(): Promise<void> {
+    const w3 = this.world3d;
+    if (!w3 || !this.camera) return;
+    this.cutsceneActive = true;
+    setTimeOfDay(INTRO_CLOCK);
+    this.campfiresFollowNight = !isNightTime();
+    this.syncCampfiresToClock();
+    this.updateBackItem(); // a espada nas costas: ela ainda e dele
+    w3.setWorldFade(1);
+    this.cutsceneHeroLight = 0.6;
+    await this.wait(400);
+    this.tweens.addCounter({
+      from: 1, to: 0, duration: 2200, ease: 'Sine.easeOut',
+      onUpdate: (tw) => this.world3d?.setWorldFade(tw.getValue() ?? 0),
+    });
+
+    // 1. A ESTRADA: ele chega andando, devagar, do sul.
+    for (let i = 0; i < INTRO_WALK_TILES; i += 1) await this.scriptStep(0, -1, INTRO_STEP_MS);
+    this.scriptFace(0, -1);
+    await this.wait(900);
+
+    // 2. A ESPADA: ele se vira para a estrada que fez, tira a espada das costas e a crava no chao.
+    this.scriptFace(0, 1);
+    await this.wait(600);
+    await this.playSwordPlanting();
+
+    // 3. O SILENCIO: a musica ja tinha baixado; ele olha em volta, e o vale e so vaga-lume.
+    getSoundManager().fadeMusicOut();
+    await this.wait(1400);
+    this.scriptFace(-1, 0);
+    await this.wait(1100);
+    this.scriptFace(1, 0);
+    await this.wait(1100);
+    this.scriptFace(0, -1);
+    await this.wait(1300);
+
+    // 4. O MAGO: uma figura vem pelo leste, sem pressa nenhuma.
+    this.scriptFace(1, 0);
+    await this.walkWizardIn();
+
+    // 5. A CONVERSA.
+    const base = getDialog('wizard');
+    const wizardAt = { worldX: this.playerWorld.worldX + 1, worldY: this.playerWorld.worldY };
+    await new Promise<void>((resolve) => {
+      if (!base) { resolve(); return; }
+      this.openDialogScript({ ...base, lines: tLines('wizard.intro') }, wizardAt, getDialogVoice('wizard'), resolve);
+    });
+
+    // 6. O CONTROLE VOLTA: o mago fica ali, na beira da estrada, para quem quiser conversar.
+    this.npcManager?.setKindHidden('wizard', false);
+    this.wizardStandIn?.destroy();
+    this.wizardStandIn = undefined;
+    this.introDone = true;
+    this.seenDialogKeys.add(`wizard:${this.wizardLine()}`);
+    this.cutsceneHeroLight = 1;
+    this.cutsceneActive = false;
+    this.updateBackItem();
+    getSoundManager().fadeMusicIn();
+    if (!isTouchDevice()) this.controlsHint = new ControlsHint(t('controls.hint'));
+    this.persistAdventure();
+  }
+
+  /**
+   * A ESPADA DESCE DAS COSTAS PARA O CHAO, em tres tempos: ela sobe acima da cabeca (o peso dela,
+   * pela ultima vez), segura um instante, e desce de ponta no tile da frente. O baque e de
+   * terra, nao de aco — poeira, um tremor curto e um som grave. Depois, ela fica.
+   */
+  private async playSwordPlanting(): Promise<void> {
+    const hb = this.heroBillboard;
+    const front = this.facingTile();
+    if (!hb) return;
+    // Tira das costas: a espada e agora um objeto no mundo, nas maos dele.
+    this.backItemBb?.setVisible(false);
+    const sword = this.plantSwordAt(hb.x, hb.y + 0.05, 0.55);
+    if (!sword) return;
+    sword.setPosition(hb.x + 0.05, hb.y + 0.08);
+    getSoundManager().playSwordPickup();
+    // Sobe: acima da cabeca, devagar — o braco carregando o peso de uma vida inteira.
+    this.hero.frame = HERO_FRAMES.attack;
+    await new Promise<void>((resolve) => {
+      this.tweens.add({ targets: sword, elevation: 1.05, duration: 900, ease: 'Sine.easeOut', onComplete: () => resolve() });
+    });
+    await this.wait(650);
+    // Desce de ponta: rapido e reto, e o chao recebe.
+    await new Promise<void>((resolve) => {
+      this.tweens.add({
+        targets: sword,
+        elevation: SWORD_BURY_ELEV,
+        y: front.y,
+        x: front.x,
+        duration: 170,
+        ease: 'Quad.easeIn',
+        onComplete: () => resolve(),
+      });
+    });
+    this.plantedSwordTile = { x: front.x, y: front.y };
+    sword.setPosition(front.x, front.y).setElevation(SWORD_BURY_ELEV);
+    getSoundManager().playTitleImpact();
+    this.world3d?.shake(220, 0.07, 0, 1);
+    this.spawnDirtBurst(front.x, front.y, 14);
+    this.hero.frame = HERO_FRAMES.idleDown;
+    this.persistAdventure();
+    await this.wait(500);
+  }
+
+  /** O mago chega a pe pela direita da estrada e para ao lado do heroi. */
+  private walkWizardIn(): Promise<void> {
+    const w3 = this.world3d;
+    const visual = NPC_VISUALS.wizard;
+    const endX = this.playerWorld.worldX + 1;
+    const y = this.playerWorld.worldY;
+    if (!w3) return Promise.resolve();
+    this.wizardStandIn = w3.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true })
+      .setPosition(endX + WIZARD_WALK_TILES, y)
+      .setDisplaySize(1, 1)
+      .setFlipX(true);
+    const standIn = this.wizardStandIn;
+    return new Promise<void>((resolve) => {
+      const k = { t: 0 };
+      this.tweens.add({
+        targets: k,
+        t: 1,
+        duration: WIZARD_WALK_TILES * 820,
+        ease: 'Sine.easeOut',
+        onUpdate: () => {
+          standIn.setPosition(endX + WIZARD_WALK_TILES * (1 - k.t), y);
+          // O passo dele e lento e redondo: um quique pequeno por tile.
+          standIn.setElevation(Math.abs(Math.sin(k.t * WIZARD_WALK_TILES * Math.PI)) * 0.05);
+        },
+        onComplete: () => { standIn.setElevation(0); resolve(); },
+      });
+    });
+  }
+
+  /**
+   * OS VAGA-LUMES: pontos de luz SEM luz (a lei mais cara da casa — nenhuma PointLight nasce em
+   * runtime), aditivos, derivando em volta do heroi. Eles so existem de noite, e nas duas cenas
+   * que precisam deles (a abertura e o fim) a noite e garantida pela propria cena.
+   */
+  private updateFireflies(delta: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const want = isNightTime() || this.roasting ? 1 : 0;
+    this.fireflyLevel += (want - this.fireflyLevel) * Math.min(1, delta / 1500);
+    if (this.fireflyLevel < 0.01 && this.fireflies.length === 0) return;
+    const at = this.heroVisualTile();
+    if (this.fireflies.length === 0) {
+      for (let i = 0; i < FIREFLY_COUNT; i += 1) {
+        const bb = w3
+          .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2.4 })
+          .setTint(i % 3 === 0 ? 0xfff2a0 : 0xd6ff8a)
+          .setDisplaySize(0.085, 0.085);
+        this.fireflies.push({
+          bb,
+          ox: at.x + (Math.random() - 0.5) * 9,
+          oy: at.y + (Math.random() - 0.5) * 7,
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.0006 + Math.random() * 0.0007,
+        });
+      }
+    }
+    for (const fly of this.fireflies) {
+      fly.phase += delta * fly.speed;
+      // Longe demais do heroi, o vaga-lume reaparece do outro lado do quadro — o enxame nunca
+      // fica para tras, e nunca nasce colado na cara dele.
+      if (Math.abs(fly.ox - at.x) > 5.5 || Math.abs(fly.oy - at.y) > 4.5) {
+        fly.ox = at.x + (Math.random() - 0.5) * 9;
+        fly.oy = at.y + (Math.random() - 0.5) * 7;
+      }
+      fly.ox += Math.sin(fly.phase * 0.37) * delta * 0.00018;
+      fly.oy += Math.cos(fly.phase * 0.29) * delta * 0.00014;
+      const blink = Math.max(0, Math.sin(fly.phase * 2.3));
+      fly.bb
+        .setPosition(fly.ox + Math.sin(fly.phase) * 0.45, fly.oy + Math.cos(fly.phase * 0.8) * 0.3)
+        .setElevation(0.35 + 0.4 * (0.5 + 0.5 * Math.sin(fly.phase * 1.3)))
+        .setAlpha(this.fireflyLevel * (0.2 + 0.8 * blink));
+    }
+  }
+
+  /**
+   * O QUE O MAGO DIRIA AGORA. Ele nao tem missao: ele e quem aponta. Antes do portao ele lembra
+   * que ha gente esperando; com o portao aberto ele manda o heroi para o centro do vale; depois
+   * do fim ele so fica feliz.
+   */
+  private wizardLine(): 'guide' | 'gate' | 'after' {
+    if (this.roasted) return 'after';
+    if (this.gateOpened) return 'gate';
+    return 'guide';
+  }
+
+  private openWizardDialog(npcWorld: { worldX: number; worldY: number }): void {
+    if (this.dialogOpen) return;
+    const base = getDialog('wizard');
+    if (!base) return;
+    const line = this.wizardLine();
+    this.seenDialogKeys.add(`wizard:${line}`);
+    this.persistAdventure();
+    this.openDialogScript({ ...base, lines: tLines(`wizard.${line}`) }, npcWorld, getDialogVoice('wizard'));
+  }
+
+  /** O presente que este NPC ainda tem para dar (a ferramenta do pedido), se tiver. */
+  private pendingGift(dialogId: string): Array<{ item: HeldItemKind; count: number }> | undefined {
+    if (!this.adventure) return undefined;
+    const quest = questFor(dialogId);
+    if (!quest?.gift || adventureState().giftsGiven.has(dialogId)) return undefined;
+    return quest.gift;
+  }
+
+  /**
+   * POR O PRESENTE NA MAO: cada item entra na mochila, e o que o heroi nunca teve ganha a
+   * cerimonia de item-get, um de cada vez (a fila e o callback do anterior).
+   */
+  private handGift(dialogId: string, gift: Array<{ item: HeldItemKind; count: number }>): void {
+    adventureState().giftsGiven.add(dialogId);
+    for (const { item, count } of gift) this.inventory.add(item, count);
+    this.inventory.selectFirstIfEmpty();
+    // O presente vai para a mao: e a ferramenta do pedido que acabou de ser feito.
+    const first = gift.find(({ item }) => isBagItem(item));
+    if (first) this.selectItem(first.item);
+    this.updateBackItem();
+    this.persistAdventure();
+    const fresh = gift.map(({ item }) => item).filter((item) => !this.seenItems.has(item));
+    const next = (): void => {
+      const kind = fresh.shift();
+      if (!kind) return;
+      this.seenItems.add(kind);
+      this.showItemGet(kind, next);
+    };
+    if (fresh.length > 0) next();
+    else getSoundManager().playSwordPickup();
+  }
+
+  /**
+   * UM PEDIDO FECHOU. O vale agradece com pouco — um sino, um brilho no heroi — e, se era o
+   * ultimo, o portao do jardim se abre.
+   */
+  private celebrateQuestDone(_npcWorld: { worldX: number; worldY: number } | undefined): void {
+    getSoundManager().playSingingBowl();
+    this.spawnGrowSparkle(this.playerWorld.worldX, this.playerWorld.worldY);
+    if (!this.gateOpened && allQuestsDone()) this.time.delayedCall(700, () => this.openGardenGate());
+  }
+
+  /**
+   * O PORTAO DO JARDIM ABRE. Ele fica longe de onde o ultimo pedido fechou, entao ninguem o ve
+   * abrir: quem conta e o som que atravessa o vale e uma linha do narrador. O mago passa a falar
+   * disso tambem — ele e o mapa deste jogo.
+   */
+  private openGardenGate(): void {
+    if (this.gateOpened) return;
+    this.gateOpened = true;
+    for (const gate of this.gardenGates) gate.unlock();
+    this.persistAdventure();
+    getSoundManager().playGateSwing();
+    this.cameras.main.flash(500, 255, 236, 190);
+    const base = getDialog('wizard');
+    if (!base || this.dialogOpen) return;
+    this.openDialogScript({ ...base, npcName: '', lines: tLines('gate.opened') }, undefined, undefined);
+  }
+
+  /** As fogueiras do fim deste tile, se houver. */
+  private getHearthAt(wx: number, wy: number): CampfireObject | undefined {
+    return this.propAt(this.hearths, wx, wy);
+  }
+
+  /**
+   * O Z NA FOGUEIRA DO FIM. Apagada, ele a ACENDE (sem tocha: ele tem pederneira, e este fogo e
+   * dele). Acesa, ele senta e assa — se tiver um graveto e um cogumelo. Sem um dos dois, o
+   * pensamento dele mostra o que falta (o icone, nunca a palavra).
+   */
+  private tendHearthAt(wx: number, wy: number): boolean {
+    const hearth = this.getHearthAt(wx, wy);
+    if (!hearth) return false;
+    if (this.roasted || this.cutsceneActive) return true;
+    if (!hearth.isLit) {
+      void this.lightHearth(hearth, wx, wy);
+      return true;
+    }
+    if (this.inventory.count('wood') < 1) { this.heroThought?.show(ASSET_KEYS.woodIcon); return true; }
+    if (this.inventory.count('mushroom') < 1) { this.heroThought?.show(ASSET_KEYS.mushroomItem); return true; }
+    void this.playRoastEnding(hearth, wx, wy);
+    return true;
+  }
+
+  /** Acender a fogueira do fim: tres faiscas, a chama pegando aos poucos, e o calor. */
+  private async lightHearth(hearth: CampfireObject, wx: number, wy: number): Promise<void> {
+    this.cutsceneActive = true;
+    this.stopBreathing();
+    for (let i = 0; i < 3; i += 1) {
+      this.hero.frame = HERO_FRAMES.attack;
+      getSoundManager().playRockSmash();
+      this.spawnFireHitEffect(wx, wy);
+      await this.wait(180);
+      this.hero.frame = HERO_FRAMES.idleDown;
+      await this.wait(320);
+    }
+    await new Promise<void>((resolve) => {
+      const grow = { t: 0 };
+      this.tweens.add({
+        targets: grow, t: 1, duration: 1600, ease: 'Sine.easeIn',
+        onUpdate: () => hearth.igniteProgress(grow.t),
+        onComplete: () => resolve(),
+      });
+    });
+    hearth.light();
+    this.hearthLit = true;
+    getSoundManager().playIgnite();
+    this.spawnFireHitEffect(wx, wy);
+    this.cameras.main.flash(300, 255, 210, 140);
+    this.persistAdventure();
+    this.cutsceneActive = false;
+  }
+
+  /**
+   * O FIM. Ele senta na frente do fogo, espeta o cogumelo no graveto e o segura sobre a chama.
+   * O chapeu doura aos poucos, os vaga-lumes passam, a brisa mexe no mato. Ninguem diz nada por
+   * um tempo — e entao o quadro escurece e os creditos sobem.
+   */
+  private async playRoastEnding(hearth: CampfireObject, wx: number, wy: number): Promise<void> {
+    const w3 = this.world3d;
+    const hb = this.heroBillboard;
+    if (!w3 || !hb) return;
+    this.cutsceneActive = true;
+    this.roasting = true;
+    this.roasted = true;
+    this.inventory.remove('wood');
+    this.inventory.remove('mushroom');
+    this.extinguishTorch();
+    this.updateBackItem();
+    this.backItemBb?.setVisible(false);
+    this.quickBag?.setButtonVisible(false);
+    this.actionButtons?.setVisible(false);
+    this.controlsHint?.destroy();
+    this.controlsHint = undefined;
+    this.persistAdventure();
+    this.stopBreathing();
+    getSoundManager().fadeMusicOut();
+
+    // Mais tarde, naquela noite: o mundo apaga um instante e volta escuro, so o fogo e os
+    // vaga-lumes acesos.
+    await this.fadeWorld(0, 1, 900);
+    setTimeOfDay(INTRO_CLOCK);
+    this.campfiresFollowNight = !isNightTime();
+    this.syncCampfiresToClock();
+    if (!hearth.isLit) hearth.light();
+    // SENTADO: o corpo baixa e alarga um pouco (a pose de quem dobrou os joelhos na frente do
+    // fogo), de frente para a chama.
+    const toFire = { dx: Math.sign(wx - this.playerWorld.worldX), dy: Math.sign(wy - this.playerWorld.worldY) };
+    this.scriptFace(toFire.dx, toFire.dy);
+    this.hero.scaleY = 0.84;
+    this.hero.scaleX = 1.04;
+    const stick = w3.addBillboard(ROAST_STICK_TEXTURE, 0, { centered: true })
+      .setDisplaySize(0.62, 0.62);
+    const stickAt = (): void => {
+      stick.setPosition(hb.x + toFire.dx * 0.55 + 0.08, hb.y + toFire.dy * 0.42 + 0.06);
+    };
+    stickAt();
+    stick.setElevation(0.42);
+    this.roastStick = stick;
+    await this.fadeWorld(1, 0, 1800);
+
+    // O espeto balanca devagar sobre a chama — a mao de quem nao tem pressa nenhuma.
+    this.tweens.add({ targets: stick, elevation: 0.5, duration: 1400, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
+    for (let i = 0; i < 6; i += 1) {
+      await this.wait(900);
+      stickAt();
+      if (i % 2 === 0) this.spawnFireHitEffect(wx, wy);
+      this.world3d?.rustleDecor(this.playerWorld.worldX - 1, this.playerWorld.worldY);
+      this.world3d?.rustleDecor(this.playerWorld.worldX + 1, this.playerWorld.worldY + 1);
+    }
+    // Dourou.
+    stick.setTexture(ROAST_STICK_DONE_TEXTURE, 0);
+    getSoundManager().playSingingBowl();
+    this.spawnFireHitEffect(wx, wy);
+    await this.wait(2400);
+
+    // Uma frase, e o silencio.
+    await new Promise<void>((resolve) => {
+      const base = getDialog('wizard');
+      if (!base) { resolve(); return; }
+      this.openDialogScript({ ...base, npcName: '', lines: tLines('ending.lines') }, undefined, undefined, resolve);
+    });
+    await this.wait(2600);
+    this.rollCredits();
+  }
+
+  /** Um fade do mundo 3D entre dois niveis (0 = claro, 1 = preto). */
+  private fadeWorld(from: number, to: number, duration: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.tweens.addCounter({
+        from, to, duration, ease: 'Sine.easeInOut',
+        onUpdate: (tw) => this.world3d?.setWorldFade(tw.getValue() ?? to),
+        onComplete: () => resolve(),
+      });
+    });
+  }
+
+  /**
+   * OS CREDITOS. Uma tela DOM por cima de tudo (o texto em serifa nitida, como o dialogo): o
+   * quadro escurece, "The End" assenta, os nomes sobem devagar, e no fim o titulo volta. Uma
+   * tecla depois do primeiro instante pula para o titulo.
+   */
+  private rollCredits(): void {
+    this.creditsRoll?.remove();
+    const root = document.createElement('div');
+    root.className = 'zh-credits';
+    root.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:60', 'background:#000', 'opacity:0',
+      'transition:opacity 2.4s ease', 'display:flex', 'flex-direction:column', 'align-items:center',
+      'overflow:hidden', "font-family:Georgia,'Times New Roman',serif", 'color:#e7dcc4',
+    ].join(';');
+    const end = document.createElement('div');
+    end.textContent = t('ending.theEnd');
+    end.style.cssText = 'position:absolute;top:40%;width:100%;text-align:center;font-style:italic;'
+      + 'font-size:clamp(28px,6vw,64px);opacity:0;transition:opacity 2.2s ease;';
+    const roll = document.createElement('div');
+    roll.style.cssText = 'position:absolute;top:100%;width:100%;text-align:center;line-height:1.9;'
+      + 'font-size:clamp(14px,2.4vw,22px);';
+    for (const line of tLines('ending.credits')) {
+      const p = document.createElement('div');
+      p.textContent = line.text;
+      if (line.speaker === 'narrator') p.style.cssText = 'color:#8a8594;font-size:0.8em;margin-top:1.4em;';
+      else p.style.cssText = 'color:#e7dcc4;';
+      roll.appendChild(p);
+    }
+    root.append(end, roll);
+    document.body.appendChild(root);
+    this.creditsRoll = root;
+    requestAnimationFrame(() => { root.style.opacity = '1'; });
+
+    let went = false;
+    const goTitle = (): void => {
+      if (went) return;
+      went = true;
+      window.removeEventListener('keydown', onKey, true);
+      root.style.opacity = '0';
+      getSoundManager().stopMusic();
+      getSoundManager().stopAmbience();
+      window.setTimeout(() => {
+        root.remove();
+        if (this.creditsRoll === root) this.creditsRoll = undefined;
+        if (this.scene.get('title')) this.scene.start('title');
+        else this.scene.restart();
+      }, 1200);
+    };
+    let skippable = false;
+    const onKey = (event: KeyboardEvent): void => {
+      if (!skippable) return;
+      event.preventDefault();
+      goTitle();
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.setTimeout(() => { end.style.opacity = '1'; getSoundManager().startMusic('menu', 3000); }, 2600);
+    window.setTimeout(() => {
+      end.style.opacity = '0';
+      skippable = true;
+      roll.style.transition = `top ${CREDITS_SCROLL_MS}ms linear`;
+      roll.style.top = '-120%';
+    }, 7200);
+    window.setTimeout(goTitle, 7200 + CREDITS_SCROLL_MS + 1500);
+  }
+
+  /** Um brilho verde subindo de um tile: o canteiro brotou, ou alguem ficou contente. */
+  private spawnGrowSparkle(wx: number, wy: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    for (let i = 0; i < 8; i += 1) {
+      const mote = w3
+        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
+        .setTint(i % 2 === 0 ? 0xc8ff9a : 0xfff0b0)
+        .setPosition(wx + (Math.random() - 0.5) * 0.8, wy + (Math.random() - 0.5) * 0.5)
+        .setElevation(0.1 + Math.random() * 0.2)
+        .setDisplaySize(0.1, 0.1)
+        .setAlpha(0.9);
+      this.tweens.add({
+        targets: mote,
+        elevation: 0.9 + Math.random() * 0.5,
+        alpha: 0,
+        duration: 700 + Math.random() * 500,
+        delay: i * 60,
+        ease: 'Sine.easeOut',
+        onComplete: () => mote.destroy(),
+      });
+    }
+  }
+
   private openNpcDialog(
     kind: import('@/game/world/ScreenContent').NpcKind,
     npcWorld?: { worldX: number; worldY: number },
@@ -6907,11 +4364,9 @@ export class GameScene extends Phaser.Scene {
     const askId = scriptId ?? kind;
     const base = getDialog(kind, askId);
     if (!base) return;
-    // A ENTREGA VEM ANTES DA FALA, e o MEDO vem antes da entrega: um NPC ao lado de fogueira
-    // apagada só sabe gaguejar, e receber seis minérios enquanto gagueja seria uma entrega que
-    // o jogador não vê acontecer. Cumprida a missão, `spokenDialogId` devolve o outro roteiro —
-    // já nesta mesma conversa, que é o ponto: entregar e ouvir a resposta é um gesto só.
-    if (!this.isNpcScared(npcWorld)) this.settleQuestDelivery(askId);
+    // A ENTREGA VEM ANTES DA FALA. Cumprida a missão, `spokenDialogId` devolve o outro roteiro —
+    // já nesta mesma conversa, que é o ponto: entregar e ouvir o obrigado é um gesto só.
+    const closedNow = this.settleQuestDelivery(askId);
     const speakId = this.spokenDialogId(askId);
     // Roteiro alternativo sem entrada no world.json cai no de sempre: uma missão sem fala nova
     // não pode emudecer o NPC.
@@ -6923,9 +4378,15 @@ export class GameScene extends Phaser.Scene {
         this.persistAdventure(); // o "!" apagado fica apagado
       }
     }
-    // An NPC beside a still-dead campfire is too scared to talk: swap in the locked lines.
-    const shown = this.gateDialog(script, npcWorld);
-    this.openDialogScript(shown, npcWorld, getDialogVoice(kind, speakId) ?? getDialogVoice(kind, askId));
+    // O PRESENTE: a primeira conversa com quem pede põe na mão do herói a ferramenta do pedido
+    // (ver NpcQuest.gift). Ele chega DEPOIS da fala, quando a caixa fecha — primeiro o pedido,
+    // depois o machado, que é a ordem em que alguém pede um favor de verdade.
+    const gift = this.pendingGift(askId);
+    this.openDialogScript(script, npcWorld, getDialogVoice(kind, speakId) ?? getDialogVoice(kind, askId), () => {
+      if (gift) this.handGift(askId, gift);
+      // O último pedido do vale acabou de fechar nesta conversa: o portão do jardim responde.
+      if (closedNow) this.celebrateQuestDone(npcWorld);
+    });
   }
 
   // Identity of the dialog an NPC would speak *right now*: the wizard's current story beat,
@@ -6937,67 +4398,14 @@ export class GameScene extends Phaser.Scene {
     wy: number,
     scriptId?: string,
   ): string | null {
-    if (kind === 'wizard') return `wizard:${this.wizardBeat()}`;
+    if (kind === 'wizard') return `wizard:${this.wizardLine()}`;
     if (!getDialog(kind, scriptId)) return null;
     // A chave é do ROTEIRO FALADO, não da espécie: três gatos com três aulas são três "!" a
     // apagar, e com a chave por espécie ouvir um deles apagaria a marca dos outros dois. Ela lê
     // o roteiro que a MISSÃO escolheu, e é assim que fechar um pedido reacende o "!" do NPC —
     // ele tem fala nova, que é exatamente o que a marca sempre quis dizer.
-    const id = this.spokenDialogId(scriptId ?? kind);
-    const cf = this.nearestCampfireWithin(wx, wy, NPC_GATE_RADIUS_TILES);
-    return cf && !cf.isLit ? `${id}:locked` : `${id}:base`;
-  }
-
-  // The wizard tells the story of Zero, always opening (on the very first talk) with the intro
-  // beat — its narrator line MUST be the first thing he shows. Later visits give "protect the
-  // flame"; the first lit fire unlocks the closing prophecy, which POINTS AT THE PYRE (it used
-  // to roll the credits; the ending moved to the tower — see playEnding).
-  private openWizardDialog(npcWorld: { worldX: number; worldY: number }): void {
-    if (this.dialogOpen) return;
-    const base = getDialog('wizard');
-    if (!base) return;
-    this.settleQuestDelivery('wizard');
-    const beat = this.wizardBeat();
-    this.seenDialogKeys.add(`wizard:${beat}`);
-    if (beat === 'intro') this.wizardIntroSeen = true;
-    this.persistAdventure(); // o beat ouvido do mago e historia, e historia nao se repete
-    if (beat === 'quest') {
-      const doneId = this.spokenDialogId('wizard');
-      const done = getDialog('wizard', doneId);
-      // Sem a entrada no world.json ele volta ao beat de sempre: uma missão sem fala nova não
-      // pode emudecer o mago.
-      if (done) {
-        this.openDialogScript(done, npcWorld, getDialogVoice('wizard', doneId));
-        return;
-      }
-    }
-    const state = beat === 'quest' ? 'protect' : beat;
-    const lines = tLines(`wizard.${state}`);
-    // A PROFECIA NÃO FECHA MAIS O JOGO: ela APONTA. Enquanto o fim da introdução era acender uma
-    // fogueira qualquer, o beat dele rolava os créditos — hoje o fim é a PIRA, e a última fala do
-    // mago é o dedo esticado para a torre. Duas coisas terminando o mesmo jogo seriam duas.
-    this.openDialogScript(
-      { ...base, lines },
-      npcWorld,
-      getDialogVoice('wizard'),
-    );
-  }
-
-  /**
-   * O QUE O MAGO DIRIA AGORA. Ele é o único NPC cuja fala alternativa disputa espaço com uma
-   * HISTÓRIA, e por isso a missão dele entra num beat só: o `protect`, que é o opcional. O
-   * `intro` é a primeira fala de todas e o `prophecy` dispara o fim da introdução — trocar
-   * qualquer um dos dois por uma fala de missão apagaria história que não volta.
-   */
-  private wizardBeat(): 'intro' | 'protect' | 'prophecy' | 'quest' {
-    const state = this.wizardStoryState();
-    return state === 'protect' && this.spokenDialogId('wizard') !== 'wizard' ? 'quest' : state;
-  }
-
-  private wizardStoryState(): 'intro' | 'protect' | 'prophecy' {
-    if (!this.wizardIntroSeen) return 'intro';       // 1st talk: intro
-    if (this.litFireCount >= 1) return 'prophecy';   // once a fire is lit he jumps to the finale
-    return 'protect';                                // optional 2nd talk before any fire is lit
+    void wx; void wy;
+    return `${this.spokenDialogId(scriptId ?? kind)}:base`;
   }
 
   // Open the conversation panel for a ready-made script (pan the camera, dim the music), running
@@ -7010,10 +4418,7 @@ export class GameScene extends Phaser.Scene {
   ): void {
     this.dialogOpen = true;
     this.stopBreathing();
-    // O Z que ABRIU a conversa pode estar sendo segurado: sem isto o keyup se perde com o
-    // painel aberto e a lâmina rodopiante termina de carregar sozinha — a mesma rede da
-    // subtela (ver resetChargeAndBuffers no openSubScreen).
-    this.resetChargeAndBuffers();
+    this.useBufferMs = 0;
     // A caixa de fala mora no MESMO rodapé que o par A/B e o botão da bolsa. Eles já estão
     // calados (`canAct`), então o que sobra deles é o pedaço que espia ao lado da caixa: saem
     // de cena junto, como saem quando a bolsa abre.
@@ -7036,20 +4441,6 @@ export class GameScene extends Phaser.Scene {
     }, voice);
   }
 
-  // Gate an NPC's dialog behind their campfire: if a dead fire sits within range, show the
-  // scared "locked" lines (keeping the NPC's portrait/colour/voice) instead of the real ones.
-  private gateDialog(script: DialogScript, npcWorld?: { worldX: number; worldY: number }): DialogScript {
-    if (!this.isNpcScared(npcWorld)) return script;
-    return { ...script, lines: tLines('lockedLines') };
-  }
-
-  /** O NPC está ao lado de uma fogueira APAGADA — e com medo ele não fala e não recebe. */
-  private isNpcScared(npcWorld?: { worldX: number; worldY: number }): boolean {
-    if (!npcWorld) return false;
-    const cf = this.nearestCampfireWithin(npcWorld.worldX, npcWorld.worldY, NPC_GATE_RADIUS_TILES);
-    return Boolean(cf && !cf.isLit);
-  }
-
   // ── AS MISSÕES DOS NPCs ────────────────────────────────────────────────────
   // O sistema inteiro (ver dialogs/NpcQuests + runtime/QuestLog) toca a cena em três lugares e
   // em mais nenhum: o FUNIL abaixo, que conta o que aconteceu no mundo; a ENTREGA, que é o
@@ -7064,35 +4455,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.adventure) return;
     const { moved, closed } = recordQuestEvent(event);
     if (!moved) return;
-    if (closed.length > 0) this.creditPyreForQuests(closed.length);
     this.persistAdventure();
-  }
-
-  /**
-   * TODA MISSÃO SOBE A PIRA — e é assim que ajudar alguém vira progresso no fim do jogo.
-   *
-   * Cada missão cumprida manda `QUEST_PYRE_LOGS` toras para a torre central: gente ajudada
-   * carrega lenha, e o herói nunca precisa saber disso — ele volta e a torre está mais alta. É a
-   * segunda estrada até o mesmo lugar, e a que faz o jogo ter mais de um caminho: **metade do
-   * baralho fecha a torre sozinha** (ver a conta em NpcQuests), quinze gravetos na mão também, e
-   * qualquer mistura das duas serve.
-   *
-   * O crédito cai no SAVE, não no objeto: uma missão pode fechar dentro de uma dungeon, onde não
-   * existe pira nenhuma para receber a tora. Com a pira na tela, a torre sobe na hora também —
-   * uma tora de cada vez, para o gesto ser visto.
-   */
-  private creditPyreForQuests(quests: number): void {
-    const st = adventureState();
-    const key = st.centralPyre;
-    if (!key) return; // um mundo sem pira: não há fim de jogo a empurrar
-    const logs = quests * QUEST_PYRE_LOGS;
-    const live = this.pyres.find((p) => `${p.worldX},${p.worldY}` === key);
-    if (live) {
-      for (let i = 0; i < logs; i += 1) live.deposit();
-      st.pyreLogs.set(key, live.logCount);
-      return;
-    }
-    st.pyreLogs.set(key, Math.min(PYRE_LOGS_REQUIRED, (st.pyreLogs.get(key) ?? 0) + logs));
+    // Uma tarefa sem entrega (o canteiro brotando) pode fechar o pedido no meio do mundo, longe
+    // de quem pediu: o vale reage na hora, e o obrigado espera a próxima conversa.
+    if (closed.length > 0) this.celebrateQuestDone(undefined);
   }
 
   /** O roteiro que este NPC fala AGORA — o alternativo, se ele já recebeu o que pediu. */
@@ -7111,19 +4477,22 @@ export class GameScene extends Phaser.Scene {
    * tudo-ou-nada, o único momento em que a mochila muda é o mesmo momento em que o NPC passa a
    * falar outra coisa: a resposta chega junto com o preço.
    */
-  private settleQuestDelivery(dialogId: string): void {
-    if (!this.adventure) return;
+  private settleQuestDelivery(dialogId: string): boolean {
+    if (!this.adventure) return false;
     let handed = false;
+    let closed = false;
     for (const due of questDeliveriesDue(dialogId)) {
       if (this.inventory.count(due.item) < due.missing) continue;
       this.inventory.remove(due.item, due.missing);
-      recordQuestEvent({ type: 'deliver', dialog: dialogId, item: due.item, units: due.missing });
+      const result = recordQuestEvent({ type: 'deliver', dialog: dialogId, item: due.item, units: due.missing });
+      if (result.closed.length > 0) closed = true;
       handed = true;
     }
-    if (!handed) return;
+    if (!handed) return false;
     // A entrega pode ter esvaziado a mão: as costas do herói têm de acompanhar.
     this.updateBackItem();
     this.persistAdventure();
+    return closed;
   }
 
   private nearestCampfireWithin(wx: number, wy: number, radius: number): CampfireObject | undefined {
@@ -7212,9 +4581,7 @@ export class GameScene extends Phaser.Scene {
     this.hero.y = this.camera.screenCenterY;
     this.positionBackItem();
     this.updateFootprints();
-    this.enemyManager?.render(this.tileSize, this.camera);
     this.lootManager?.render(this.tileSize, this.camera);
-    this.heartPickupManager?.render(this.tileSize, this.camera);
     this.itemManager?.render(this.tileSize, this.camera);
     this.npcManager?.render(this.tileSize, this.camera);
     this.renderProps();
@@ -7229,7 +4596,7 @@ export class GameScene extends Phaser.Scene {
       // Show the "build a bridge here" indicator on any un-bridged river tile the hero stands
       // orthogonally next to — the exact tile a graveto would go into.
       const dist = Math.abs(w.worldX - this.playerWorld.worldX) + Math.abs(w.worldY - this.playerWorld.worldY);
-      w.setBuildHint(dist === 1 && !this.dialogOpen && !this.isDead);
+      w.setBuildHint(dist === 1 && !this.dialogOpen);
       w.render(this.tileSize, this.camera);
     }
     // O keycap da marca de posicionamento e overlay 2D projetado, como o "!" do NPC.
@@ -7249,7 +4616,7 @@ export class GameScene extends Phaser.Scene {
     // vai usar, para o anúncio nunca prometer um gesto que o botão recusaria.
     if (this.toolboxes.length || this.furnaces.length || this.altars.length) {
       const front = this.facingTile();
-      const canTalk = !this.dialogOpen && !this.isDead && !this.orderOverlay
+      const canTalk = !this.dialogOpen && !this.orderOverlay
         && this.quickBag?.isOpen !== true;
       for (const box of this.toolboxes) {
         const facing = canTalk && box.worldX === front.x && box.worldY === front.y;
@@ -7384,7 +4751,12 @@ export class GameScene extends Phaser.Scene {
     // herói que parece desarmado durante o prólogo inteiro, que é justamente quando a mochila
     // ainda está vazia. Com qualquer coisa selecionada, as costas mostram a SELEÇÃO: é ela que o
     // botão X vai usar, e é isso que o jogador precisa ler no corpo.
-    const carried: HeldItemKind = this.heldItem === 'none' ? 'sword' : this.heldItem;
+    // Ate a espada ficar fincada, as costas mostram ELA; depois disso, de maos vazias, nada.
+    const carried: HeldItemKind | null = this.heldItem === 'none' ? (this.introDone ? null : 'sword') : this.heldItem;
+    if (!carried) {
+      this.backItemBb?.setVisible(false);
+      return;
+    }
     // A lit graveto is held upright in the hand; the separate pixel-flame effect supplies
     // the fire, so the carried sprite itself always remains the plain stick.
     const torchLit = this.isTorchLit;
@@ -7471,7 +4843,11 @@ export class GameScene extends Phaser.Scene {
     const cx = Math.floor(wx / CHUNK_COLUMNS);
     const cy = Math.floor(wy / CHUNK_ROWS);
     if (!chunks.hasChunkCoordinate(cx, cy)) return null;
-    const { upper } = chunks.getTile(wx, wy);
+    const { upper, collision } = chunks.getTile(wx, wy);
+    // COLISAO PINTADA E UMA TRAVA: a sebe que cerca o jardim do centro e de pinheiro, e o machado
+    // de aco derruba pinheiro. Sem esta linha o portao do fim seria uma porta numa parede que se
+    // corta — a arvore com colisao autorada a mao e cenario, nunca lenha.
+    if (collision) return null;
     return upper !== null && CHOPPABLE_UPPER_FRAMES.has(upper) ? upper : null;
   }
 
@@ -7580,7 +4956,7 @@ export class GameScene extends Phaser.Scene {
     // only the upper frame would leave the tile blocked by an invisible wall.
     chunk.collisions[ly][lx] = false;
     this.world3d?.removeSolidTile(wx, wy);
-    if (this.adventure && !isUnderground()) {
+    if (this.adventure) {
       // Edicao de TERRENO entra no save como diff (applyFelledTreeDiff a reaplica em cada boot).
       adventureState().felledTrees.add(`${wx},${wy}`);
       this.questEvent({ type: 'fell' }); // a clareira que o poeta pede se mede aqui
@@ -7694,17 +5070,6 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  // A stone dropped into lava cools it into basalt: a permanent walkable firebreak (LavaObject
-  // owns the visual swap; its glow and heat-light deliberately KEEP burning — the melt around
-  // the crown is still molten, only the crown is a floor). Steam and a thump sell the quench.
-  // This is the lava counterpart of a stone ford — a floor over the hazard that never becomes
-  // a fuse.
-  private solidifyLava(lava: LavaObject, worldX: number, worldY: number): void {
-    if (!lava.solidify()) return;
-    this.spawnSmokePuff(worldX, worldY);
-    this.world3d?.shake(90, 0.02);
-  }
-
   // Dip the empty bucket in the river: it comes up full. Empty→full shows as the art the hero
   // carries (no HUD). A splash sells the dip.
   private fillBucket(wx: number, wy: number): void {
@@ -7724,8 +5089,6 @@ export class GameScene extends Phaser.Scene {
     getSoundManager().playSplash();
     this.spawnSmokePuff(wx, wy); // steam off the dead logs...
     this.time.delayedCall(140, () => this.spawnSmokePuff(wx, wy)); // ...billowing in two breaths
-    const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
-    this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
   }
 
   /** Apply sunrise/sunset to every ambient fire once per transition, never every frame. */
@@ -7734,8 +5097,6 @@ export class GameScene extends Phaser.Scene {
     if (night === this.campfiresFollowNight) return;
     this.campfiresFollowNight = night;
     for (const campfire of this.campfires) campfire.setClockLit(night);
-    const dist = this.distToNearestCampfireTiles(this.playerWorld.worldX, this.playerWorld.worldY);
-    this.playerSafe = dist <= CAMPFIRE_SAFE_RADIUS_TILES;
   }
 
   // The water leaves the bucket NOW — the hand empties with the throw, not with the landing —
@@ -7875,7 +5236,6 @@ export class GameScene extends Phaser.Scene {
   // stays paused while it sits there).
   private isTileClearForRegrow(wx: number, wy: number): boolean {
     if (wx === this.playerWorld.worldX && wy === this.playerWorld.worldY) return false;
-    if (this.enemyManager?.getEnemyAt(wx, wy)) return false;
     if (this.itemManager?.hasItemAt(wx, wy)) return false;
     return true;
   }
@@ -7979,542 +5339,8 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * O ESCUDO — e ele não é um item, é a DIREÇÃO EM QUE O HERÓI OLHA.
-   *
-   * O combate não tinha verbo defensivo nenhum: o único jeito de não apanhar era andar para trás,
-   * e como andar para trás sempre funciona, nunca havia decisão. No `A Link to the Past` metade
-   * da leitura de uma luta é o escudo, que apara sozinho o que vem da frente do Link.
-   *
-   * Aqui ele é intrínseco de propósito. O herói tem UMA mão (a mochila entrega um item por vez) e
-   * um escudo que ocupasse essa mão custaria a tocha, o machado e o balde para comprar uma defesa
-   * — e o jogo já ensinou que a parede VIRA o herói e que virar-se para uma criatura é de graça.
-   * Fazer da direção olhada a defesa não acrescenta botão nenhum: transforma o gesto que o jogador
-   * já faz (encarar) na resposta que faltava.
-   *
-   * **E ele só apara TIRO** (quem chama testa `hit.ranged`), que é a regra do original e a única
-   * que não desmonta o resto do combate. Se encarar aparasse também o golpe de corpo, encarar
-   * seria invencibilidade: todo bicho que anda bate de perto, e o jogador ficaria imune a metade
-   * do bestiário parado, sem se mover. Contra o corpo a resposta continua sendo a que o telegrafo
-   * de 500ms ensina — SAIR DO TILE —, e contra o tiro passa a ser encarar. Dois problemas, duas
-   * respostas, e nenhuma delas resolve a outra.
-   *
-   * Três recusas, e cada uma existe por um motivo:
-   *  - **cone frontal de 90°**: o eixo dominante do golpe tem de ser o eixo encarado, senão o
-   *    escudo viraria uma bolha e apanhar deixaria de ser possível de frente;
-   *  - **não apara durante o próprio golpe** (`SWING_ROOT_MS`): quem ataca abaixa a guarda — é o
-   *    preço que faz atacar ser uma decisão e não um reflexo grátis;
-   *  - **não apara o que nasce em cima dele** (a explosão, o fogo do chão): não há direção de onde
-   *    se defender de uma coisa que já está no seu tile.
-   */
-  private blocksBlowFrom(fromX: number, fromY: number): boolean {
-    if (this.movementController?.isRooted === true) return false;
-    const dx = fromX - this.playerWorld.worldX;
-    const dy = fromY - this.playerWorld.worldY;
-    if (dx === 0 && dy === 0) return false;
-    const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
-    return Math.abs(dx) >= Math.abs(dy)
-      ? Math.sign(dx) === f.dx && f.dx !== 0
-      : Math.sign(dy) === f.dy && f.dy !== 0;
-  }
-
-  /**
-   * O que o jogador VÊ quando o escudo apara: a faísca fria no ponto do impacto, o tim de metal e
-   * um baque curto de câmera. Nada de dano, nada de invencibilidade gasta — aparar não consome a
-   * janela de 1,5s que levar um golpe daria, ou defender seria uma forma cara de apanhar.
-   */
-  private playShieldBlock(fromX: number, fromY: number): void {
-    this.spawnDeflect(fromX, fromY);
-    getSoundManager().playGuardBlock();
-    // Na direcao do VOO da bala (de onde ela veio para o heroi): o escudo aparou, mas o empurrao
-    // que ela trazia continua sendo dela.
-    this.world3d?.shake(60, 0.04,
-      this.playerWorld.worldX - fromX, this.playerWorld.worldY - fromY);
-    this.hero.tint = 0xbcd4ff;
-    this.time.delayedCall(90, () => { this.hero.tint = null; });
-  }
-
-  /**
-   * O heroi levou um golpe. Ele chega por duas procedencias e a diferenca esta em `ranged`: um
-   * golpe de CORPO faz o bicho investir na direcao do heroi (o tombo pra frente, que e a metade
-   * animada do impacto); um TIRO nao tem ninguem pra investir — o empurrao vem da direcao do voo,
-   * e o mago cinco tiles atras fica exatamente onde estava. `fromX/fromY` e a origem nos dois
-   * casos (o tile do bicho, ou o ponto onde a bala encostou).
-   */
-  private handleEnemyAttackPlayer(hit: EnemyHit): void {
-    if (this.isDead) return;
-    // A direcao do golpe (de quem bateu para o heroi) serve as tres respostas abaixo — o resvalo,
-    // o tranco do atacante e o baque de camera —, entao ela se resolve antes de qualquer porta.
-    const kdx = Math.sign(this.playerWorld.worldX - hit.fromX);
-    const kdy = Math.sign(this.playerWorld.worldY - hit.fromY);
-    if (this.playerInvincible) {
-      // O GOLPE NA JANELA DE INVENCIBILIDADE EVAPORAVA EM SILÊNCIO — a única recusa do jogo sem
-      // desenho nenhum. A clava conectava no herói piscando e nada acontecia: nem som, nem pixel,
-      // que é a leitura de bug ("o ataque me atravessou"). Agora ele RESVALA, com o mesmo pacote
-      // frio dos i-frames do bicho (anel + raspão): a mesma regra, a mesma resposta, dos dois
-      // lados do combate. Só o golpe de CORPO que o BICHO desferiu — o tiro já morre com o próprio
-      // estouro no EnemyProjectile, e o esbarrão do herói piscando não é um golpe de ninguém (ver
-      // EnemyHit.bump): um anel a cada encostão seria a recusa virando spam.
-      if (!hit.ranged && !hit.bump) {
-        const at = this.heroVisualTile();
-        this.spawnDeflect(at.x, at.y);
-        getSoundManager().playBladeGlance();
-        // O atacante ainda INVESTE: o gesto dele aconteceu — o que falhou foi só a mordida.
-        hit.enemy?.triggerKnockback(kdx, kdy);
-      }
-      return;
-    }
-    // O ESCUDO — e ele só apara TIRO. Ver `blocksBlowFrom`.
-    if (hit.ranged && this.blocksBlowFrom(hit.fromX, hit.fromY)) {
-      this.playShieldBlock(hit.fromX, hit.fromY);
-      return;
-    }
-
-    // A BOLA DO ZORA NÃO FERE — TRAVA (ver FreezeManager). Dano zero, coração nenhum: o preço
-    // de ser acertado é virar estátua com a matilha em volta. Passa DEPOIS do escudo (encarar a
-    // bola ainda a apara — a lei do tiro vale para ela inteira) e nunca gasta a janela de
-    // invencibilidade: congelar não é apanhar.
-    if (hit.ranged && hit.shotKind === 'spit') {
-      this.freezeHero();
-      return;
-    }
-
-    // A PANCADA ARRANCA A MÃO DE DENTRO DA BOLSA. Ela é a única tela do jogo que fica aberta com o
-    // mundo correndo, então ela é também a única que algo do mundo pode FECHAR — e tem de fechar:
-    // um herói apanhando enquanto folheia calmamente uma fileira de ícones desmente, num quadro, a
-    // promessa inteira do modo (folhear custa; a mochila é um lugar perigoso de se estar).
-    this.quickBag?.close();
-
-    // Same reason as handlePlayerBump: reset the breathing pose before the hurt shake repins
-    // the hero, so it doesn't jump up half a tile mid-hit.
-    this.stopBreathing();
-
-    this.playerHealth = Math.max(0, this.playerHealth - 1);
-
-    // The killing blow is silent — the death screen is total silence, so don't play the hurt sfx.
-    if (this.playerHealth <= 0) {
-      this.triggerDeath();
-      return;
-    }
-
-    getSoundManager().playPlayerHurt();
-
-    this.playerInvincible = true;
-    this.invincibleTimer = PLAYER_INVULN_MS;
-
-    // O ACERTO COMPRA TEMPO DOS DOIS LADOS. O herói para de andar E de agir enquanto o empurrão o
-    // devolve ao centro — ver PLAYER_STAGGER_MS. São duas travas porque são duas coisas: a raiz
-    // segura os PÉS (e ela sabe não congelar um passo no meio do tile), e `playerStaggerMs` segura
-    // os BOTÕES — adiando o pedido como uma cadência, nunca descartando (ver `spendActionBuffers`).
-    // `max` e não atribuição: um golpe de corpo no herói CONGELADO não pode devolver os botões
-    // antes do degelo (a raiz já é max por construção — ver PlayerMovementController.root).
-    this.playerStaggerMs = Math.max(this.playerStaggerMs, PLAYER_STAGGER_MS);
-    this.movementController?.root(PLAYER_STAGGER_MS);
-
-    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-
-    // Taking a hit lands hard: heavy shake, a red screen flash, hitstop, the skull lunging
-    // into the blow, and the hero physically shoved away from the attacker.
-    //
-    // O BAQUE É DO MUNDO, NÃO DA UI. Aqui havia um `cameras.main.shake(200, 0.01)` — a câmera
-    // Phaser, que só segura FX e UI por cima do canvas 3D — e o mundo em si ficava PARADO: o único
-    // golpe do jogo que não sacudia o mundo era justamente o que o herói levava, enquanto todo
-    // golpe que ele DÁ sacode (90/0.09, 150/0.15 na morte). Nos combates de referência a régua é a
-    // inversa: apanhar é o momento mais pesado. Então o golpe recebido pesa MAIS que o desferido
-    // (170/0.14, entre o acerto e a morte) e inclina na direção do golpe, como todos os outros —
-    // e o mundo sacudindo em volta do herói empurrado meio tile é o corpo inteiro do impacto.
-    this.world3d?.shake(170, 0.14, kdx, kdy);
-    this.cameras.main.flash(110, 160, 30, 30);
-    this.triggerHitstop(90);
-    if (this.camera) {
-      // So o golpe de corpo lunga: uma bala nao arrasta quem a disparou atras dela.
-      if (!hit.ranged) hit.enemy?.triggerKnockback(kdx, kdy); // lunge toward the hero
-      // The hero is always pinned to screen centre; the shove displaces him and eases him
-      // back. startBreathing waits for this tween, so the return never gets cut.
-      const bx = this.camera.screenCenterX;
-      const by = this.camera.screenCenterY;
-      this.hero.x = bx + kdx * this.tileSize * 0.34;
-      this.hero.y = by + kdy * this.tileSize * 0.34;
-      this.playerKnockTween = this.tweens.add({
-        targets: this.hero,
-        x: bx,
-        y: by,
-        duration: 240,
-        ease: 'Power3.easeOut',
-        onComplete: () => { this.playerKnockTween = undefined; },
-      });
-    }
-
-    this.hero.tint = 0xff4444;
-    this.tweens.add({
-      targets: this.hero,
-      alpha: 0.3,
-      duration: PLAYER_BLINK_HALF_MS,
-      yoyo: true,
-      repeat: PLAYER_BLINK_REPEAT,
-      onComplete: () => {
-        this.hero.alpha = 1;
-        this.hero.tint = null;
-      },
-    });
-  }
-
-  // The intro's finale: after the wizard's closing prophecy, the world fades to black, a card
-  // says the introduction is complete, and the game returns to the title screen.
-  /**
-   * O FIM DO JOGO — a torre pegando fogo, o preto, o card, o título.
-   *
-   * Ele já existiu como "fim da introdução", disparado pela profecia do mago (que custava UMA
-   * fogueira acesa). Virou o fim de verdade quando a pira virou o objetivo: um jogo com dois
-   * finais, um deles a dez minutos do começo, não tem final nenhum.
-   */
-  private playEnding(): void {
-    this.cutsceneActive = true; // freeze gameplay for the finale
-    if (this.adventure) {
-      // O final visto entra no save: quem continuar depois dele mantem o mundo aceso que
-      // construiu (e o titulo continua oferecendo Continue, nao um recomeco).
-      adventureState().endingSeen = true;
-      this.persistAdventure();
-    }
-    this.hideLowHealthOutlines();
-    getSoundManager().fadeMusicOut();
-
-    const { width, height } = this.scale;
-    const D = SCENE_DEPTHS.toast + 5;
-
-    const black = this.add.rectangle(0, 0, width, height, 0x000000, 0).setOrigin(0).setDepth(D);
-    this.tweens.add({
-      targets: black,
-      fillAlpha: 1,
-      duration: 1900,
-      ease: 'Sine.easeIn',
-      onComplete: () => {
-        const title = this.add.text(width / 2, Math.round(height * 0.44), t('endCard.title'), {
-          fontFamily: "Georgia, 'Times New Roman', 'Book Antiqua', serif",
-          fontStyle: 'italic',
-          fontSize: `${Math.max(24, Math.min(52, Math.round(height * 0.05)))}px`,
-          color: '#e7dcc4',
-          align: 'center',
-          resolution: 2,
-        }).setOrigin(0.5).setAlpha(0).setDepth(D + 1);
-        const sub = this.add.text(width / 2, Math.round(height * 0.56), t('endCard.subtitle'), {
-          fontFamily: "Georgia, 'Times New Roman', serif",
-          fontSize: `${Math.max(13, Math.min(26, Math.round(height * 0.024)))}px`,
-          color: '#b7ad98',
-          align: 'center',
-          resolution: 2,
-        }).setOrigin(0.5).setAlpha(0).setDepth(D + 1);
-        this.tweens.add({ targets: [title, sub], alpha: 1, duration: 1700, delay: 500, ease: 'Sine.easeInOut' });
-
-        let went = false;
-        const goTitle = (): void => {
-          if (went) return;
-          went = true;
-          // Fully stop the (ducked) track so the next scene does a fresh start — a
-          // crossfade here would inherit the duck and come up silent.
-          getSoundManager().stopMusic();
-          getSoundManager().stopAmbience();
-          // In the editor playtest the title scene isn't registered — just restart instead.
-          if (this.scene.get('title')) this.scene.start('title');
-          else this.scene.restart();
-        };
-        const autoTimer = this.time.delayedCall(7000, goTitle);
-        this.time.delayedCall(3600, () => {
-          const skip = (): void => { autoTimer.remove(); goTitle(); };
-          this.input.once(Phaser.Input.Events.POINTER_DOWN, skip);
-          this.input.keyboard?.once('keydown', skip);
-        });
-      },
-    });
-  }
-
-  private triggerDeath(): void {
-    if (this.isDead) return;
-    this.isDead = true;
-    // A hitstop must never outlive the fight — the death sequence runs on tweens.
-    // (stopBreathing below cancels any in-flight hurt-knockback shove.)
-    this.hitstopMs = 0;
-    this.tweens.timeScale = 1;
-    // Nem golpe guardado nem carga na lamina sobrevive a morte: o silencio da tela de morte nao
-    // pode ser interrompido por um botao que o heroi apertou enquanto caia.
-    this.resetChargeAndBuffers();
-    // E a bolsa some junto com o resto da UI: ela e a unica que fica aberta com o mundo correndo,
-    // e o mundo acabou de parar de vez (ver QuickBag). Os pes se soltam com ela.
-    this.quickBag?.close();
-    this.quickBag?.setButtonVisible(false);
-    // One last heavy blow before the silence.
-    this.world3d?.shake(300, 0.26);
-    // Death cuts music and even the wind to nothing; out of that silence swells the low
-    // "you died" cluster, and the hall swallows it back into silence.
-    getSoundManager().stopMusic();
-    getSoundManager().stopAmbience();
-    getSoundManager().playPlayerDeath();
-    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-    // update() stops running FX once dead, so clean these up here. The Phaser overlays matter
-    // more than they used to: the fade happens INSIDE the 3D post now, so anything still drawn
-    // on the canvas above the world would hang over the black instead of sinking with it.
-    this.hideLowHealthOutlines();
-    this.stopBreathing();
-    this.hideFireCompass();
-    this.npcManager?.hideExclaims();
-    // The hero's 3D body leaves the world for the elegy; his torch flame goes with it.
-    this.torchFlameBb?.setVisible(false);
-
-    const { width, height } = this.scale;
-    const cx = Math.floor(width / 2);
-    const cy = Math.floor(height / 2);
-    const D = SCENE_DEPTHS.toast;
-
-    // 1. The whole world sinks into black, behind the hero — driven from INSIDE the post
-    // (World3D.setWorldFade), so the diorama drains of colour and dims with its own bloom,
-    // fire glow and grain, instead of a flat black rectangle being pasted over the top.
-    const fade = { t: 0 };
-    this.tweens.add({
-      targets: fade,
-      t: 1,
-      duration: 900,
-      ease: 'Sine.easeIn',
-      onUpdate: () => this.world3d?.setWorldFade(fade.t),
-    });
-
-    // 2. Only the hero remains, dead-centre on the void — then it fades away, slowly.
-    // The death elegy is a 2D screen-space scene, so it gets a Phaser stand-in struck from
-    // the hero's last pose; syncHeroBillboard hides the 3D body for as long as it holds.
-    this.tweens.killTweensOf(this.hero); // drop a leftover hurt-blink
-    this.hero.alpha = 1;
-    this.hero.tint = null;
-    this.deathHero?.destroy();
-    this.deathHero = this.add
-      .sprite(cx, cy, ASSET_KEYS.hero, this.hero.frame)
-      .setOrigin(0.5)
-      .setDisplaySize(this.tileSize, this.tileSize)
-      .setFlipX(this.hero.flipX)
-      .setDepth(D + 1);
-
-    // The item slung on the hero's back fades out together with him — it dies with the hero.
-    // The in-world billboard hides with the 3D body (syncHeroBillboard); its 2D twin dresses
-    // up in the same pose for the screen-space elegy.
-    this.backItemSwingTimer?.remove();
-    this.backItemSwingTimer = undefined;
-    if (this.backItemBb?.visible && this.backItem && this.heldItem !== 'none') {
-      this.backItemBb.setVisible(false);
-      const torchLit = this.isTorchLit;
-      const visual = ITEM_VISUAL_2D[this.heldItem];
-      const ts = this.tileSize;
-      this.tweens.killTweensOf(this.backItem);
-      this.backItem
-        .setTexture(visual.texture, visual.frame)
-        .setDisplaySize(ts, ts)
-        .setRotation(torchLit ? 0 : -0.62)
-        // Same pose as the living billboard, converted to screen space: the 2D hero is centred at
-        // cy with origin 0.5, i.e. elevation 0.5, so an elevation E sits at -(E - 0.5) tiles.
-        // positionBackItem's 0.55 is therefore -0.05 — and it no longer splits on facing, since
-        // the elegy is drawn ON TOP of the corpse either way and only the height ever showed.
-        .setPosition(
-          torchLit ? cx + ts * 0.32 : cx - ts * 0.10,
-          torchLit ? cy - ts * 0.18 : cy - ts * 0.05,
-        )
-        .setAlpha(1)
-        .setDepth(D + 1)
-        .setVisible(true);
-      this.tweens.add({ targets: this.backItem, alpha: 0, duration: 1600, delay: 500, ease: 'Sine.easeIn' });
-    }
-
-    this.tweens.add({
-      targets: this.deathHero,
-      alpha: 0,
-      duration: 1600,
-      delay: 500,
-      ease: 'Sine.easeIn',
-      onComplete: () => {
-        // 3. The epitaph rises out of the dark, in the middle of the screen.
-        const line = this.add.text(cx, cy, t('death.epitaph'), {
-          fontFamily: "Georgia, 'Times New Roman', 'Book Antiqua', serif",
-          fontStyle: 'italic',
-          fontSize: `${Math.max(22, Math.min(48, Math.round(height * 0.046)))}px`,
-          color: '#d0c9ba',
-          align: 'center',
-          lineSpacing: Math.round(height * 0.022),
-          resolution: 2,
-        })
-          .setOrigin(0.5)
-          .setAlpha(0)
-          .setDepth(D + 2);
-        this.tweens.add({ targets: line, alpha: 1, duration: 1200, ease: 'Sine.easeInOut' });
-      },
-    });
-
-    // Restart is independent of the tweens so a stalled tween never traps the player. A MORTE
-    // DEVOLVE RÁPIDO (pedido do usuário): a elegia inteira continua — mundo drenando, herói
-    // sumindo, epitáfio — mas comprimida (~3.3s até o texto pleno), o pulo arma cedo e o
-    // retorno automático vem em 5s. O custo de morrer é a caminhada de volta, nunca a espera.
-    let restarting = false;
-    const doRestart = (): void => {
-      if (restarting) return;
-      restarting = true;
-      if (this.adventure) {
-        // NA AVENTURA A MORTE NAO APAGA MAIS NADA. Mochila, fogueiras, missoes e
-        // historia atravessam (persistAdventure + hidratacao do create); o custo de morrer e
-        // ACORDAR NA FOGUEIRA — a distancia de volta, nao o progresso. E o bonfire.
-        this.persistAdventure();
-        requestAdventureRespawn();
-        if (isUnderground()) {
-          // Morrer la embaixo acorda do lado de FORA, na fogueira: o overworld volta do disco
-          // (o mesmo gesto de leaveDungeon) e a viagem se encerra aqui, sem escada. O
-          // subterraneo e um arquivo autorado como o overworld, entao nao ha planta a fotografar
-          // — o que a visita mudou (itens no chao) ja entrou no save pelo `persistAdventure`.
-          void window
-            .fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
-            .then((res) => { if (!res.ok) throw new Error('overworld indisponivel'); return res.json(); })
-            .then((json: unknown) => {
-              setWorldData(json as Parameters<typeof setWorldData>[0]);
-              setUnderground(false);
-            })
-            .catch(() => { /* sem rede: renasce dentro da propria dungeon */ })
-            .finally(() => { this.scene.restart(); });
-          return;
-        }
-      }
-      this.scene.restart();
-    };
-    const autoTimer = this.time.delayedCall(5000, doRestart);
-    // O pulo arma depois do impacto inicial (o baque + o mundo drenando): cedo o bastante pra
-    // quem quer voltar JÁ, tarde o bastante pra um botão apertado enquanto caía não engolir a
-    // elegia sem ninguém ter visto que morreu.
-    this.time.delayedCall(1600, () => {
-      const skip = (): void => { autoTimer.remove(); doRestart(); };
-      this.input.once(Phaser.Input.Events.POINTER_DOWN, skip);
-      this.input.keyboard?.once('keydown', skip);
-    });
-  }
-
-  private initLighting(): void {
-    // Real lighting lives in the 3D renderer (cold ambient night, warm fire point lights
-    // with true breathing cast shadows, hero glow — all quantized into pixel-art bands;
-    // see render3d/World3D.ts + pixelArtLight.ts), and so do the world FX that used to be
-    // painted flat over the canvas: the torch flame is a billboard, the danger vignette and
-    // the death fade are post uniforms. What's left here are the hero-anchored 3D helpers.
-
-    // Red low-health outline — one red-filled copy of the hero per offset direction, drawn just
-    // behind the hero billboard so only the border shows. Synced to the hero's pose each tick.
-    // Emissive: the outline is a flat UI-ish colour, never shaded by the world's lights.
-    this.lowHealthOutlines.forEach((o) => o.destroy());
-    this.lowHealthOutlines.length = 0;
-    if (this.world3d) {
-      for (let i = 0; i < OUTLINE_DIRS.length; i++) {
-        this.lowHealthOutlines.push(
-          this.world3d.addBillboard('hero', HERO_FRAMES.idleDown, { emissive: true }).setVisible(false),
-        );
-      }
-    }
-
-  }
-
-  // Damage heartbeat: ANY missing health draws a pulsing PIXEL OUTLINE around the hero — never
-  // tinting the sprite itself, just a border that throbs. Merely scratched (even one heart off
-  // full) reads as a calm yellow glow; on the last hearts it turns red, beating faster and
-  // harder the closer to death.
-  private updateLowHealthFx(delta: number): void {
-    const hurt = !this.isDead && this.playerHealth > 0 && this.playerHealth < this.playerMaxHealth;
-    const hb = this.heroBillboard;
-    if (!hurt || !hb) {
-      this.hideLowHealthOutlines();
-      if (!hurt) this.heartbeatPhase = 0;
-      return;
-    }
-
-    // Three tiers: yellow warning above the red threshold, red on the last hearts, and one
-    // heart left beats fastest/hardest of all.
-    const low = this.playerHealth <= LOW_HEALTH_HEARTS;
-    const critical = this.playerHealth <= 1;
-    const rate = critical ? 0.010 : low ? 0.006 : 0.0035; // radians per ms
-    const intensity = critical ? 0.95 : low ? 0.62 : 0.38;
-    this.heartbeatPhase += delta * rate;
-    // Sharpen the sine into a "thump": calm baseline with a quick spike.
-    const beat = Math.pow((Math.sin(this.heartbeatPhase) + 1) / 2, 3) * intensity;
-
-    const w = 0.08; // outline thickness in tiles (was tileSize * 0.08 screen px)
-    const alpha = Math.min(1, (low ? 0.2 : 0.14) + beat); // always faintly present, spiking on the beat
-    const color = low ? 0xff2a2a : 0xffd23f; // red = danger, yellow = "you've taken damage"
-    for (let i = 0; i < this.lowHealthOutlines.length; i++) {
-      const [dx, dy] = OUTLINE_DIRS[i];
-      this.lowHealthOutlines[i]
-        .setTexture(hb.texKey, hb.frame)
-        .setFlipX(hb.flipX)
-        .setDisplaySize(Math.abs(hb.displayWidth), hb.displayHeight)
-        // Screen-up offsets become elevation (screen +y is down → negative elevation);
-        // z sits a hair behind the hero so only the border shows through (the z-buffer
-        // plays the old "depth - 0.01" role).
-        .setPosition(hb.x + dx * w, hb.y - 0.01)
-        .setElevation(hb.elevation - dy * w)
-        .setTintFill(color)
-        .setAlpha(alpha)
-        .setVisible(true);
-    }
-  }
-
-  private hideLowHealthOutlines(): void {
-    for (const o of this.lowHealthOutlines) o.setVisible(false);
-  }
-
-  // Skyrim-compass-style pointer: while the low-health heartbeat is on (and the hero is not
-  // already inside a fire's safe ring), a faint amber arrow orbits him, pointing at the
-  // nearest lit campfire — a dying player always knows which way safety lies. It throbs
-  // in time with the heartbeat outline so both read as one "you are dying, go THERE" signal.
-  private updateFireCompass(): void {
-    const low = !this.isDead && this.playerHealth > 0 && this.playerHealth <= LOW_HEALTH_HEARTS;
-    const cf = low && !this.playerSafe && this.camera
-      ? this.nearestLitCampfire(this.playerWorld.worldX, this.playerWorld.worldY)
-      : undefined;
-    if (!cf || !this.camera) {
-      this.hideFireCompass();
-      return;
-    }
-
-    if (!this.fireCompassArrow) {
-      // A proper arrow (shaft + head), pointing +x at rotation 0; rotated toward the fire.
-      const len = this.tileSize * 0.36;   // total length
-      const sh = this.tileSize * 0.05;    // shaft half-thickness
-      const hh = this.tileSize * 0.14;    // head half-width
-      const neck = len * 0.08;            // where the shaft ends and the head begins
-      this.fireCompassArrow = this.add
-        .polygon(0, 0, [
-          -len * 0.5, -sh,
-          neck, -sh,
-          neck, -hh,
-          len * 0.5, 0,
-          neck, hh,
-          neck, sh,
-          -len * 0.5, sh,
-        ], 0xffc36b, 0.95)
-        .setDepth(SCENE_DEPTHS.ui);
-    }
-
-    const s = this.camera.tileToScreen(cf.worldX, cf.worldY, this.tileSize);
-    const cx = this.camera.screenCenterX;
-    const cy = this.camera.screenCenterY;
-    const ang = Math.atan2(s.y - cy, s.x - cx);
-    const orbit = this.tileSize * FIRE_COMPASS_ORBIT_TILES;
-    // Throb with the same heartbeat as the red outline (updateLowHealthFx advances the phase).
-    const beat = Math.pow((Math.sin(this.heartbeatPhase) + 1) / 2, 3);
-    const alpha = 0.25 + beat * 0.3; // ghostly — a hint at the edge of vision, not a HUD element
-
-    this.fireCompassArrow
-      .setPosition(cx + Math.cos(ang) * orbit, cy + Math.sin(ang) * orbit)
-      .setRotation(ang)
-      .setAlpha(alpha)
-      .setVisible(true);
-  }
-
-  private hideFireCompass(): void {
-    this.fireCompassArrow?.setVisible(false);
-  }
-
   private startBreathing(): void {
     if (this.breathingTween?.isPlaying()) return;
-    // A hurt-knockback shove is still easing the hero back to centre — let it finish;
-    // breathing starts on a later frame, once the tween completes and clears itself.
-    if (this.playerKnockTween) return;
     this.breathingTween?.destroy();
     // The billboard stands on its feet, so stretching it only grows it upward — no origin
     // pivot needed (the old Phaser sprite had to flip its origin and offset y to fake this).
@@ -8529,25 +5355,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Kill an in-flight hurt-knockback shove and re-pin the hero to screen centre. Called
-   * from stopBreathing (every gameplay repin goes through it: dialog pan, death, bumps)
-   * and from handleResize, both of which are about to reposition the hero anyway.
-   */
-  private cancelPlayerKnockback(): void {
-    if (!this.playerKnockTween) return;
-    this.playerKnockTween.stop();
-    this.playerKnockTween = undefined;
-    if (this.camera) {
-      this.hero.x = this.camera.screenCenterX;
-      this.hero.y = this.camera.screenCenterY;
-    }
-  }
-
   private stopBreathing(): void {
-    // Runs before the early return: callers repin the hero, so a live shove must not
-    // keep writing stale coordinates underneath them (e.g. during the dialog camera pan).
-    this.cancelPlayerKnockback();
     if (!this.breathingTween) return;
     this.breathingTween.stop();
     this.breathingTween.destroy();

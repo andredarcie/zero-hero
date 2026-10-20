@@ -1,6 +1,6 @@
-﻿import type Phaser from 'phaser';
+import type Phaser from 'phaser';
 
-import { BOMB_FRAMES, ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
+import { ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -23,7 +23,6 @@ export type HeldItemKind =
   // tree in the game, including the living pines that make up most of the forest — and those
   // are terrain tiles, not props, so this is the only item that edits the map itself.
   | 'greatAxe'
-  | 'bomb'
   | 'pickaxe'
   | 'scythe'
   // A PÁ — a ferramenta que CAVA um buraco de plantio (plantSpot) no chão de TERRA vazio à
@@ -46,11 +45,6 @@ export type HeldItemKind =
   // ferro NAO tem uso proprio: ele e materia-prima das receitas manuais da bancada. Sai de uma
   // `ironRock`, que e a mesma pedra da picareta com veio de minerio dentro.
   | 'iron'
-  // O PACOTE DE SEMENTES CARNÍVORAS — o punhado que brota a planta-armadilha
-  // (CarnivorousPlantObject): plantado num canteiro e regado, vira a barreira que COME todo
-  // inimigo que parar ao lado dela. O mesmo ciclo da semente comum (buraco, água, foice,
-  // fogo) com a colheita invertida: o mato produz combustível; a carnívora produz DEFESA.
-  | 'carnivoreSeeds'
   // A handful of SEEDS ("sementes"), cut from tall grass with the scythe. The grass made
   // renewable and PORTABLE: planted in a dug hole (plantSpot), watered with the bucket, it
   // sprouts REAL tall grass — the first fire conductor the player grows, not one baked into
@@ -70,7 +64,10 @@ export type HeldItemKind =
   | 'charcoal'
   // As duas estações manuais podem ser fabricadas, instaladas e recolhidas pelo jogador.
   | 'furnace'
-  | 'altar';
+  | 'altar'
+  // O COGUMELO do bosque: o micologo pede um cesto deles, e o ultimo vai no espeto, na fogueira
+  // do fim. Nao tem gesto (nada no mundo responde a ele), entao e contador — ver MATERIAL_ITEM_KINDS.
+  | 'mushroom';
 
 // The fire riding a wood item that is NOT in the hero's hand. Only `fuelMs` travels, so a lit
 // graveto on the ground keeps burning until it dies or is collected again.
@@ -83,7 +80,6 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   key: { texture: 'key-item', frame: KEY_FRAMES.pickup },
   axe: { texture: 'axe-icon', frame: 0 },
   greatAxe: { texture: 'great-axe-icon', frame: 0 },
-  bomb: { texture: 'bomb-item', frame: BOMB_FRAMES.item },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
   scythe: { texture: 'scythe-icon', frame: 0 },
   shovel: { texture: 'shovel-icon', frame: 0 },
@@ -95,7 +91,6 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   bloom: { texture: 'bloom-item', frame: 0 },
   // The seeds sprite comes from the sprite factory (spritefactory/sprites/seeds.mjs).
   seeds: { texture: 'seeds-item', frame: 0 },
-  carnivoreSeeds: { texture: 'carnivore-seeds', frame: 0 },
   // The bucket art is generated at boot (bucketTexture.ts) into both pipelines.
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
@@ -103,6 +98,7 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   charcoal: { texture: 'charcoal-item', frame: 0 },
   furnace: { texture: 'furnace', frame: 0 },
   altar: { texture: 'altar', frame: 0 },
+  mushroom: { texture: 'mushroom-item', frame: 0 },
 };
 
 /**
@@ -130,7 +126,7 @@ export const MACHINE_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKin
  * esponja tem gesto (o X a POUSA para ser martelada, ou a entrega na bigorna). Ela e peca de
  * trabalho, nao numero.
  */
-export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['ore', 'iron', 'charcoal']);
+export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['ore', 'iron', 'charcoal', 'mushroom']);
 
 /**
  * O que pode ser SELECIONADO na bolsa. A espada saiu da mochila (ela e do heroi, e mora no

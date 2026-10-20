@@ -1,4 +1,3 @@
-import type { EnemyKind } from '@/game/world/ScreenContent';
 
 const MASTER_VOL = 0.32;
 const MUSIC_VOL = 0.6; // music-bus duck level (under the SFX)
@@ -112,47 +111,8 @@ const SAMPLES = {
   zoraSurface: { file: 'combat/zora-surface.wav', vol: 0.4 },
 } as const;
 
-/**
- * O JITTER DE ALTURA MUDA A DURACAO, e isso decide quais sons podem levar jitter.
- *
- * `playSample` varia o tom mexendo em `playbackRate` — que e a mesma coisa que esticar ou encolher
- * o arquivo no tempo. Para um baque de 90ms isso e invisivel e resolve a repeticao. Para um som
- * cuja duracao FOI ESCOLHIDA pra casar com uma janela do jogo — a carga da torreta acaba no frame
- * em que o leque sai, a boca do zora fecha quando o cuspe sai — esticar o arquivo desalinha o
- * aviso do gesto que ele anuncia. Esses tocam sem jitter, e a repeticao deles nao incomoda porque
- * sao raros e longos.
- */
-const HIT_JITTER = 0.9; // semitons, o mesmo do enemyHit
 type SampleKey = keyof typeof SAMPLES;
 
-/**
- * A VOZ POR ESPÉCIE — o bestiário tem oito corpos e tinha UMA voz.
- *
- * `enemy-hit.wav`, `enemy-death.wav`, `undead-windup.wav` e `creature-arrive.wav` tocavam iguais
- * para todo mundo: osso, gosma, aranha e torreta morriam com o mesmo som (o próprio progress.md
- * aponta isso como fraqueza a re-escutar). A resposta NÃO é oito pares de arquivos novos: é a
- * mesma amostra em ALTURA de espécie — corpo pequeno agudo, corpo pesado grave — que é como o
- * SNES sempre fez família de bicho com um sample só.
- *
- * A taxa é FIXA por espécie de propósito, e por isso ela pode existir até no telegrafo (que recusa
- * o jitter ALEATÓRIO — ver HIT_JITTER): uma altura constante é aprendível, e a mudança de duração
- * que ela causa é constante junto. No morcego ela até CONSERTA um desalinho: o aviso de ~300ms
- * não cabia na janela de 280ms dele — a 1.28x passa a caber. O jitter aleatório continua por cima,
- * multiplicativo, nos sons que já o tinham.
- */
-const ENEMY_VOICE: Readonly<Record<EnemyKind, { hit: number; death: number; tell: number }>> = {
-  undead: { hit: 1.0, death: 1.0, tell: 1.0 }, // a régua: o corpo que ensinou o combate
-  bat: { hit: 1.3, death: 1.35, tell: 1.28 },
-  spider: { hit: 1.15, death: 1.2, tell: 1.12 },
-  slime: { hit: 0.88, death: 0.9, tell: 0.84 },
-  bigslime: { hit: 0.68, death: 0.62, tell: 0.72 },
-  zora: { hit: 0.95, death: 0.95, tell: 1.0 },
-  mage: { hit: 1.05, death: 1.05, tell: 1.0 },
-  turret: { hit: 0.6, death: 0.55, tell: 1.0 }, // pedra: o mesmo baque, uma oitava abaixo
-};
-
-const voiceRate = (kind: EnemyKind | undefined, part: 'hit' | 'death' | 'tell'): number =>
-  kind ? ENEMY_VOICE[kind][part] : 1;
 
 // A MUSICA NAO RESPONDE A INIMIGO. 'overworld' ("Ashen Fields") toca do inicio ao fim da
 // aventura, sobre o leito de vento; dungeon, level e o titulo tem a trilha deles, e e sempre a
@@ -561,92 +521,6 @@ class SoundManager {
   }
 
   /**
-   * O SOCO — o botao A sem espada na mochila.
-   *
-   * Ele tocava `playSwordSlash`, e por isso a arma que o heroi NAO tem soava exatamente igual a que
-   * ele tem: a unica diferenca audivel entre estar armado e nao estar era o silencio de nao acertar
-   * a segunda fileira do arco. O golpe de punho tem alcance menor, dano menor e nenhuma lamina — e
-   * agora tem som proprio, seco e sem metal.
-   */
-  public playFistSwing(): void {
-    if (this.playSample('fistSwing', HIT_JITTER)) return;
-    this.noise('lowpass', 700, 0.8, 0.18, 0.09);
-    this.osc('sawtooth', 120, 40, 0.10, 0.09);
-  }
-
-  /**
-   * A lamina TERMINOU de carregar (ver GameScene.tickSpinCharge). Duas notas subindo, curtas e
-   * limpas — um sino, nunca um zumbido: o zumbido ja e a lingua das ameacas,
-   * e este som pertence ao heroi.
-   */
-  public playSpinReady(): void {
-    if (this.playSample('spinReady', 0.5)) return;
-    const d = detune();
-    this.osc('triangle', 660 * d, 880 * d, 0.14, 0.09);
-    this.osc('sine', 1320 * d, 1760 * d, 0.07, 0.11, 0.04);
-  }
-
-  /**
-   * A CARGA EM CURSO — o meio segundo entre segurar o A e o sino de pronta era MUDO: nada na mão,
-   * nada no ouvido, e o gesto só existia para quem já sabia que ele existia. Um zumbido fino
-   * SUBINDO (toda carga desta casa sobe) preenche exatamente essa janela: ele nasce quase
-   * inaudível, cresce até o instante da carga completa e é substituído pelo sino.
-   *
-   * É um nó vivo e não um one-shot porque a carga pode MORRER no meio (soltar cedo, apanhar
-   * segurando, abrir o menu) — e um zumbido que continuasse subindo depois de a carga já era
-   * seria o som mentindo sobre o estado. `stopSpinChargeHum` corta em 50ms.
-   */
-  public startSpinChargeHum(durationMs: number): void {
-    this.stopSpinChargeHum();
-    const ctx = this.audio;
-    const t = ctx.currentTime;
-    const dur = Math.max(0.1, durationMs / 1000);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.085, t + dur);
-    g.connect(this.sfxUserBus);
-    const d = detune();
-    const oscs = [
-      { type: 'triangle' as OscillatorType, from: 220 * d, to: 560 * d },
-      { type: 'sine' as OscillatorType, from: 440 * d, to: 1120 * d }, // a oitava, mais fina
-    ].map(({ type, from, to }) => {
-      const o = ctx.createOscillator();
-      o.type = type;
-      o.frequency.setValueAtTime(from, t);
-      o.frequency.exponentialRampToValueAtTime(to, t + dur);
-      o.connect(g);
-      o.start(t);
-      o.stop(t + dur + 0.03); // acaba sozinho no instante em que o sino assume
-      return o;
-    });
-    this.chargeHum = { oscs, gain: g };
-  }
-
-  public stopSpinChargeHum(): void {
-    const hum = this.chargeHum;
-    if (!hum) return;
-    this.chargeHum = null;
-    const now = this.audio.currentTime;
-    hum.gain.gain.cancelScheduledValues(now);
-    hum.gain.gain.setValueAtTime(Math.max(hum.gain.gain.value, 0.0001), now);
-    hum.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
-    for (const o of hum.oscs) {
-      try { o.stop(now + 0.06); } catch { /* already stopped */ }
-    }
-  }
-
-  /**
-   * A CARGA PERDIDA — soltar a lâmina pronta no meio do atordoamento a desperdiça (a outra metade
-   * do trato do giro), e o desperdício era mudo: o jogador pagou meio segundo parado e nem ficou
-   * sabendo que pagou à toa. Um DESCER curto e abafado — o inverso exato do sino de pronta.
-   */
-  public playSpinFizzle(): void {
-    const d = detune();
-    this.osc('triangle', 620 * d, 180 * d, 0.1, 0.16);
-    this.noise('lowpass', 900, 1.0, 0.07, 0.12, 0.02);
-  }
-
-  /**
    * O ITEM QUE NÃO É ARMA batendo num corpo — o balde, a bomba, as botas cutucando uma caveira.
    * Era a única resposta MUDA do botão B (nem swing, nem som, nem recusa), quebrando a lei de que
    * toda recusa tem desenho próprio. Um "toc" surdo, sem metal e sem dano: encostou, não mordeu.
@@ -655,108 +529,6 @@ class SoundManager {
     const d = detune();
     this.noise('lowpass', 380 * d, 1.2, 0.16, 0.07);
     this.osc('sine', 150 * d, 90 * d, 0.1, 0.09);
-  }
-
-  /**
-   * A GUARDA APARANDO — o tim de metal contra metal, dos dois lados do combate: o escudo do herói
-   * e a guarda que um bicho ergue enquanto arma o golpe.
-   *
-   * Tem de ser o OPOSTO do acerto (`playEnemyHit`, que é grave e sujo): agudo, curtíssimo e
-   * limpo. Um golpe aparado que soasse parecido com um golpe certeiro ensinaria a coisa errada
-   * no único instante em que o jogo está tentando ensinar posicionamento.
-   */
-  public playGuardBlock(): void {
-    if (this.playSample('guardBlock', HIT_JITTER)) return;
-    // A VARIAÇÃO não é enfeite: toda amostra deste jogo que se repete já sai com jitter de altura
-    // (o passo roda quatro variantes com ±1,2 semitom, o acerto sai com ±0,9), justamente porque
-    // repetição idêntica denuncia a amostra. Os sons SINTETIZADOS não tinham nada disso — e o
-    // aparo e o encontrão são, por definição, sons que acontecem muitas vezes seguidas na mesma
-    // briga. Uma oitava de ±4% na frequência resolve, e sai de graça: não há amostra para variar,
-    // só um número.
-    const d = detune();
-    this.osc('square', 1760 * d, 1320 * d, 0.1, 0.05);
-    this.osc('triangle', 2640 * d, 1980 * d, 0.06, 0.07, 0.01);
-    this.noise('highpass', 4200 * d, 0.6, 0.12, 0.06);
-  }
-
-  /**
-   * O RESVALO — a lâmina escorregando de um corpo que ainda está piscando de invulnerável.
-   *
-   * Ele era **mudo**, e mudo é a pior resposta que um botão pode dar: o jogador apertou, viu a
-   * lâmina passar por dentro do bicho e não ouviu nada, o que lê como input perdido e não como
-   * recusa. Duas das três recusas do combate estavam assim (esta e o golpe num corpo que ainda
-   * está saindo do chão) — e a lei da casa, "toda recusa tem desenho PRÓPRIO", vale para o ouvido
-   * também: o anel azul frio já dizia ESPERE, e faltava alguém dizer isso em voz alta.
-   *
-   * É o oposto do aparo (`playGuardBlock`, agudo e limpo, metal contra metal): ali houve encontro,
-   * aqui houve ESCORREGÃO. Um raspão curto e abafado, sem cauda e sem brilho — grave o bastante
-   * para nunca ser confundido com um acerto, seco o bastante para não pesar quando sai três vezes
-   * no mesmo giro.
-   */
-  public playBladeGlance(): void {
-    if (this.playSample('bladeGlance', HIT_JITTER)) return;
-    const d = detune();
-    this.noise('bandpass', 820 * d, 2.2, 0.16, 0.055);
-    this.osc('triangle', 400 * d, 260 * d, 0.07, 0.05, 0.01);
-  }
-
-  /**
-   * O ENCONTRÃO — o corpo batendo na parede depois do arremesso.
-   *
-   * Não podia ser o `playRockSmash`, que era o candidato óbvio por ser o impacto pesado que já
-   * existe: aquela amostra diz **pedra QUEBRANDO**, e ela tocaria por cima do baque do acerto toda
-   * vez que o jogador encurralasse uma caveira contra uma árvore. Um som que descreve outra coisa
-   * ensina outra coisa. Este é o oposto de quebrar: um baque surdo e curto, sem cauda e sem
-   * estilhaço — massa encontrando massa.
-   */
-  public playBodySlam(): void {
-    if (this.playSample('bodySlam', HIT_JITTER)) return;
-    const d = detune();
-    this.noise('lowpass', 260 * d, 1.4, 0.5, 0.1);
-    this.osc('sine', 120 * d, 46 * d, 0.34, 0.13);
-  }
-
-  /** O giro escapando: o vento do arco, grave e largo, com o metal por cima. */
-  public playSpinRelease(): void {
-    if (this.playSample('spinRelease', HIT_JITTER)) return;
-    this.noise('bandpass', 1100, 0.9, 0.34, 0.26);
-    this.osc('sawtooth', 320, 90, 0.2, 0.22);
-    this.osc('triangle', 880, 440, 0.1, 0.18, 0.02);
-  }
-
-  /** O golpe conectando num corpo — na ALTURA da espécie que apanhou (ver ENEMY_VOICE). */
-  public playEnemyHit(kind?: EnemyKind): void {
-    const r = voiceRate(kind, 'hit');
-    if (this.playSample('enemyHit', 0.9, 1, r)) return;
-    this.noise('lowpass', 320 * r, 1.2, 0.42, 0.09);
-    this.osc('sawtooth', 140 * r, 55 * r, 0.26, 0.12);
-  }
-
-  /** A morte — a mesma amostra, mas o morcego morre agudo e a torreta desaba grave. */
-  public playEnemyDeath(kind?: EnemyKind): void {
-    const r = voiceRate(kind, 'death');
-    if (this.playSample('enemyDeath', 0.5, 1, r)) return;
-    const notes = [150, 110, 73] as const;
-    notes.forEach((freq, i) => {
-      this.osc('sawtooth', freq * r, freq * r * 0.6, 0.26, 0.16, i * 0.09);
-      this.noise('lowpass', 300 * r, 1.0, 0.16, 0.10, i * 0.09);
-    });
-  }
-
-  public playPlayerHurt(): void {
-    if (this.playSample('playerHurt', 0.6)) return;
-    this.osc('sawtooth', 150, 90, 0.30, 0.24);
-    this.osc('sawtooth', 160, 96, 0.16, 0.22);
-    this.noise('lowpass', 400, 1.0, 0.20, 0.12);
-  }
-
-  public playPlayerDeath(): void {
-    if (this.playSample('playerDeath')) return;
-    const notes = [220, 165, 131, 110, 82, 55] as const;
-    notes.forEach((freq, i) => {
-      this.osc('triangle', freq, freq * 0.9, 0.26, 0.20, i * 0.16);
-    });
-    this.noise('lowpass', 150, 0.8, 0.22, 0.6, notes.length * 0.16 + 0.05);
   }
 
   /**
@@ -931,162 +703,10 @@ class SoundManager {
     this.noise('bandpass', 900, 1.2, 0.10, 0.10, 0.04);
   }
 
-  public playBombPlace(): void {
-    if (this.playSample('bombPlace')) return;
-    this.noise('lowpass', 300, 1.0, 0.22, 0.08);
-    this.noise('highpass', 3200, 0.8, 0.05, 0.30, 0.06);
-  }
-
-  public playBombExplode(): void {
-    if (this.playSample('bombExplode')) return;
-    this.osc('sine', 110, 28, 0.6, 0.5);
-    this.noise('lowpass', 900, 0.8, 0.55, 0.20);
-    this.noise('lowpass', 240, 1.0, 0.35, 0.7, 0.10);
-    this.noise('highpass', 1500, 1.0, 0.12, 0.08);
-  }
-
-  /**
-   * The undead attack wind-up: the audio half of the "dodge now" telegraph (the visual half is the
-   * ground ring closing + the rear-back pose + the bone going up over the head).
-   *
-   * SEM JITTER: os 300ms deste arquivo cabem na janela de 500ms com folga, e esticar o tom
-   * estica a duracao (ver HIT_JITTER) — este e o aviso que menos pode escorregar do gesto.
-   * A voz por especie (ver ENEMY_VOICE) e FIXA, entao pode entrar: a duracao muda junto, mas
-   * muda sempre igual — e no morcego (janela de 280ms) a taxa 1.28x faz o aviso finalmente caber.
-   */
-  public playUndeadWindup(kind?: EnemyKind): void {
-    const r = voiceRate(kind, 'tell');
-    if (this.playSample('undeadWindup', 0, 1, r)) return;
-    this.osc('sawtooth', 70 * r, 170 * r, 0.10, 0.32);
-    this.noise('bandpass', 520 * r, 2.2, 0.09, 0.28);
-  }
-
-  /** The strike that met empty air: a thin whoosh, nothing landed. */
-  public playUndeadWhiff(): void {
-    if (this.playSample('undeadWhiff', HIT_JITTER)) return;
-    this.noise('highpass', 1600, 1.0, 0.10, 0.09);
-    this.osc('triangle', 220, 90, 0.05, 0.08);
-  }
-
-  /**
-   * The undead spawn telegraph: a low ground-rumble with a gravelly crunch on top, warning
-   * that something is about to claw out of the tile (playUndeadSpawn fires when it does).
-   * Procedural only — no authored sample yet.
-   */
-  /**
-   * O CHÃO RACHANDO antes de a caveira sair — e este é o único evento de combate que ficou na
-   * SÍNTESE, de propósito.
-   *
-   * Ele já foi 8-bit por um dia, com uma explosão longa do pacote: 2,1 SEGUNDOS de bomba (4,5×
-   * mais longa que qualquer outro som do combate) disparando a cada 3,2s de cerco, na abertura de
-   * toda partida. O som tinha sido escolhido por medida — grave, longo, contínuo — passando por
-   * cima do nome da pasta, que dizia *Explosions*.
-   *
-   * O pacote não tem TERRA, e esta é a diferença entre o telegrafo funcionar e não funcionar: ele
-   * é um aviso de TRÊS SEGUNDOS cujo trabalho inteiro é dar tempo de sair do tile. Precisa ser
-   * baixo, contínuo e quase discreto — um evento sonoro grande no lugar de um aviso faz o jogador
-   * reagir ao susto em vez de ao chão. Estas três camadas foram desenhadas exatamente para isso.
-   */
-  public playGroundCrack(): void {
-    this.noise('lowpass', 170, 0.8, 0.30, 0.55);
-    this.noise('bandpass', 950, 3.0, 0.10, 0.20, 0.06);
-    this.osc('triangle', 38, 30, 0.20, 0.6);
-  }
-
-  public playUndeadSpawn(): void {
-    if (this.playSample('undeadSpawn', 0.8)) return;
-    this.noise('bandpass', 700, 2.0, 0.16, 0.16);
-    this.noise('bandpass', 1300, 2.5, 0.10, 0.12, 0.12);
-    this.osc('sawtooth', 55, 130, 0.16, 0.42);
-    this.osc('triangle', 42, 84, 0.13, 0.5, 0.06);
-  }
-
   // ── o bestiario que nao vem do chao ──────────────────────────────────────
   // A caveira tem o chao rachando (playGroundCrack) porque ela nasce de baixo. Bicho, gosma e
   // maquina chegam de outro jeito, e cada som abaixo e o par sonoro de um gesto que ja esta na
   // tela — nenhum deles existe para "avisar" sozinho.
-
-  /** A chegada de um corpo que nao vem de baixo: um roçado seco e um baque leve assentando. */
-  public playCreatureArrive(kind?: EnemyKind): void {
-    const r = voiceRate(kind, 'tell');
-    if (this.playSample('creatureArrive', HIT_JITTER, 1, r)) return;
-    this.noise('highpass', 2200 * r, 0.9, 0.07, 0.14);
-    this.noise('lowpass', 420 * r, 1.0, 0.11, 0.18, 0.05);
-    this.osc('triangle', 150 * r, 90 * r, 0.06, 0.14, 0.04);
-  }
-
-  /**
-   * O INSTANTE DE NOTAR — o corpo que vagava viu o herói e passou a caçá-lo (ver
-   * EnemyBase.startleNotice). Um sopro curto SUBINDO, porque atenção sobe (toda carga desta casa
-   * sobe), e baixo de propósito: é informação de leitura, não um susto — o susto é o bicho vindo.
-   * Sintetizado, sem sample: toca uma vez por avistamento, na altura da voz da espécie.
-   */
-  public playCreatureNotice(kind?: EnemyKind): void {
-    const r = voiceRate(kind, 'tell');
-    this.noise('bandpass', 1500 * r, 2.0, 0.055, 0.09);
-    this.osc('triangle', 300 * r, 540 * r, 0.05, 0.11);
-  }
-
-  /** O bote da aranha: o estalo da mola soltando, curto e seco. */
-  public playSpiderPounce(): void {
-    if (this.playSample('spiderPounce', HIT_JITTER)) return;
-    this.osc('square', 480, 180, 0.07, 0.09);
-    this.noise('bandpass', 1800, 2.6, 0.09, 0.1);
-  }
-
-  /** O salto da gosma: um plop molhado, gordo e sem ataque nenhum. */
-  public playSlimeHop(): void {
-    // Jitter LARGO (1,4 semitom): a gosma salta sem parar e o plop dela e o som mais repetido do
-    // bestiario — 40ms nao tem duracao nenhuma a perder esticando.
-    if (this.playSample('slimeHop', 1.4)) return;
-    this.osc('sine', 190, 70, 0.09, 0.14);
-    this.noise('lowpass', 700, 0.9, 0.07, 0.1, 0.02);
-  }
-
-  /**
-   * A carga da torreta: um zumbido SUBINDO — o aviso de 350ms antes do leque. Sobe porque toda
-   * carga do jogo sobe (o vento da caveira, o sopro da flor): descer significa acabar.
-   */
-  public playTurretCharge(): void {
-    // SEM JITTER: os 348ms deste arquivo foram escolhidos contra os 350ms da janela de carga, e
-    // jitter e `playbackRate` — esticar o tom estica a duracao e desalinha o aviso do leque.
-    if (this.playSample('turretCharge')) return;
-    this.osc('sawtooth', 180, 620, 0.06, 0.34);
-    this.noise('bandpass', 1400, 4.0, 0.04, 0.3);
-  }
-
-  /** O vento da conjuracao do mago: o mesmo gesto de subir, em ar em vez de metal. */
-  public playSpellWindup(): void {
-    if (this.playSample('spellWindup')) return; // sem jitter: telegrafo de 420ms, ver playTurretCharge
-    this.noise('bandpass', 900, 2.4, 0.07, 0.4);
-    this.osc('sine', 320, 760, 0.05, 0.38);
-  }
-
-  /**
-   * O zora rompendo a superficie (e voltando pra ela: o mesmo som serve aos dois, porque e o mesmo
-   * gesto). Agua deslocada — ruido passa-baixa curto com um "glup" grave por baixo. Deliberadamente
-   * DISCRETO: e o unico aviso de que o rio tem coisa dentro, e um som grande arruinaria o susto.
-   */
-  public playZoraSurface(): void {
-    if (this.playSample('zoraSurface', HIT_JITTER)) return;
-    this.noise('lowpass', 900, 0.9, 0.12, 0.2);
-    this.osc('sine', 220, 90, 0.07, 0.16);
-    this.noise('highpass', 3000, 0.7, 0.04, 0.12, 0.06); // as goticulas caindo depois
-  }
-
-  /** A boca abrindo com o cuspe carregando dentro: um sugar que SOBE, como toda carga desta casa. */
-  public playZoraSpit(): void {
-    if (this.playSample('zoraSpit')) return; // sem jitter: ver playTurretCharge (telegrafo de 400ms)
-    this.noise('bandpass', 700, 3.0, 0.06, 0.34);
-    this.osc('sine', 180, 520, 0.05, 0.3);
-  }
-
-  /** O disparo — o instante em que a bala (ou a bola) sai. Curto: o voo ja e visivel. */
-  public playEnemyShot(): void {
-    if (this.playSample('enemyShot', HIT_JITTER)) return;
-    this.osc('square', 700, 240, 0.08, 0.1);
-    this.noise('highpass', 2600, 0.8, 0.06, 0.08);
-  }
 
   public playFireHit(): void {
     if (this.playSample('fireHit', 0.9)) return;
@@ -1158,32 +778,6 @@ class SoundManager {
   // DESCE e para seco. Nenhum deles usa sample: tocam uma vez por level, e um sample so para
   // isso seria peso de download por um som que quase ninguem ouve duas vezes seguidas.
 
-  /** O portal inspirando o heroi: um glissando que sobe e afina ate sumir na propria altura. */
-  public playPortalSuck(): void {
-    this.osc('sine', 110, 880, 0.16, 0.85);
-    this.osc('triangle', 220, 1760, 0.07, 0.8, 0.04);
-    // O ar indo junto — passa-banda subindo mantem a impressao de succao, nao de assobio.
-    this.noise('bandpass', 900, 2.2, 0.1, 0.7, 0.06);
-  }
-
-  /** O estalo do heroi atravessando: o unico impacto do conjunto, e o mais curto. */
-  public playPortalSwallow(): void {
-    this.noise('lowpass', 420, 0.9, 0.22, 0.16);
-    this.osc('sine', 320, 60, 0.14, 0.28);
-  }
-
-  /**
-   * O tunel. Longo de proposito (~2.4s): e uma CAMA, nao um efeito — a viagem inteira acontece
-   * em cima dele, e um som curto aqui deixaria a metade da travessia em silencio.
-   */
-  public playPortalTravel(): void {
-    this.osc('sine', 58, 44, 0.12, 2.4);
-    this.osc('triangle', 87, 66, 0.05, 2.4);
-    this.noise('lowpass', 380, 0.7, 0.09, 2.2, 0.08);
-    // Um brilho subindo no fim: a luz do outro lado chegando antes do heroi.
-    this.osc('sine', 330, 990, 0.05, 0.5, 1.85);
-  }
-
   // ── a escada ────────────────────────────────────────────────────────────
   // A porta entre os andares deixou de ser magica em tudo — a peca virou pedra de verdade, o
   // heroi desce ANDANDO — menos numa camada: a que o jogador OUVE. Ela ainda tocava o
@@ -1193,31 +787,6 @@ class SoundManager {
   // mais grave e um pouco mais abafada que a anterior — e e a QUEDA de altura que diz para onde
   // se vai, porque descer e subir usam a mesma pedra e o mesmo passo.
 
-  /**
-   * Uma bota na pedra. `step` e a pisada (0 a 3) e `descending` decide para que lado a serie
-   * anda: descendo ela AFUNDA (mais grave, mais abafada, mais eco a cada degrau), subindo ela
-   * ABRE. Sem sample: e um estalo curto de ruido filtrado com um corpo de onda embaixo, que e o
-   * mesmo material do `playPortalLand` em escala de um passo.
-   */
-  public playStairsStep(step: number, descending: boolean, delay = 0): void {
-    const k = descending ? step : 3 - step;
-    // O corpo do passo: quanto mais fundo, mais grave. A oitava inteira em quatro degraus seria
-    // um efeito; um terco dela e um lance de escada.
-    const body = 132 * (1 - k * 0.09);
-    this.osc('sine', body, body * 0.45, 0.1, 0.1, delay);
-    // O ESTALO da sola: passa-baixa fechando conforme desce — pedra abafa o agudo, e e por isso
-    // que um poco soa "mais escuro" que o degrau de cima.
-    this.noise('lowpass', 2400 - k * 420, 0.9, 0.16, 0.055, delay);
-    // O eco do vao, so descendo e so nos dois ultimos degraus: e o buraco respondendo.
-    if (descending && k >= 2) this.noise('bandpass', 520, 3.4, 0.05, 0.26, delay + 0.05);
-  }
-
-  /** As botas no chao do mundo novo: grave, seco, sem cauda. */
-  public playPortalLand(): void {
-    this.noise('lowpass', 260, 1.1, 0.26, 0.14);
-    this.osc('sine', 140, 55, 0.16, 0.2);
-    this.noise('bandpass', 1600, 2.5, 0.06, 0.05, 0.02); // a poeira
-  }
 }
 
 // Singleton — persists across scene restarts, shares one AudioContext

@@ -251,6 +251,7 @@ export const ASSET_KEYS = {
   cuttingGrass2: 'cutting-grass2',
   cuttingGrass3: 'cutting-grass3',
   seedsItem: 'seeds-item',
+  mushroomItem: 'mushroom-item',
   plantHole: 'plant-hole',
   plantMound: 'plant-mound',
   // A flor da lua (spritefactory): as 9 poses de UMA flor abrindo — ver MOONFLOWER_FRAMES.
@@ -740,7 +741,7 @@ export const PYRE_LOGS_REQUIRED = 15;
 export const SEEDS_PER_PACK = 5;
 // Que tipos de item são SEMENTE-EM-PACOTE (a regra acima vale para todas — uma regra, nunca
 // um `if` por espécie de semente): a comum brota mato; a carnívora brota a planta-armadilha.
-export const SEED_PACK_KINDS: ReadonlySet<string> = new Set(['seeds', 'carnivoreSeeds']);
+export const SEED_PACK_KINDS: ReadonlySet<string> = new Set(['seeds']);
 
 // O punhado que VIAJA JUNTO: pousar com B põe a contagem INTEIRA da mochila num item só no
 // chão, e pegá-lo devolve a mesma contagem (ItemPickup.units). As sementes inauguraram o

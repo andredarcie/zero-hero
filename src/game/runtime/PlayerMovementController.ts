@@ -453,6 +453,14 @@ export class PlayerMovementController {
       : { dx: 0, dy: dy >= 0 ? 1 : -1 };
   }
 
+  /**
+   * VIRAR por roteiro (uma cutscene): encara a direcao e, com `walking`, liga as pernas — a cena
+   * e quem anda, e o desenho do passo tem de ser o mesmo de um passo de verdade.
+   */
+  public faceTo(dx: number, dy: number, walking = false): void {
+    this.setFacing(dx, dy, walking);
+  }
+
   /** The direction the hero's sprite currently faces (set the instant a move begins). */
   public get facing(): Dir {
     return this.lastFacing;

@@ -2,13 +2,17 @@ import Phaser from 'phaser';
 
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { setUnderground } from '@/game/runtime/underworld';
 import { t, tWords } from '@/game/i18n/i18n';
+import {
+  adventureState, hasAdventureSave, requestAdventureRespawn, resetAdventure,
+} from '@/game/runtime/adventureState';
+import { setWorldData } from '@/game/world/WorldData';
 
 // The game's start screen, and now the ONLY screen between the loader and the world: the title,
-// the credit, and one button.
+// the credit, and the door in.
 //
-//   • Play the authored open world, immediately.
+//   • Sem save (ou com a jornada ja terminada): um botao, Begin.
+//   • Com uma jornada em curso: Continue (de onde parou) e, discreto, New journey.
 //
 // The former authored Zelda-like overworld is archived under backup/ and has no door here.
 //
@@ -66,9 +70,15 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
-    this.buttons = [
-      this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure()),
-    ];
+    // Uma jornada que ja viu os creditos nao tem de onde "continuar": o vale inteiro ja foi
+    // ajudado, e a porta certa e comecar de novo.
+    const resumable = hasAdventureSave() && !adventureState().endingSeen;
+    this.buttons = resumable
+      ? [
+        this.makeButton(t('title.continue'), Math.round(height * 0.62), () => this.startAdventure(false)),
+        this.makeButton(t('title.startOver'), Math.round(height * 0.75), () => this.startAdventure(true)),
+      ]
+      : [this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure(true))];
     this.applySelection();
 
     // Arm input a beat later so the key/tap that dismissed the loader can't fire the button.
@@ -162,9 +172,21 @@ export class TitleScene extends Phaser.Scene {
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, go);
   }
 
-  private startAdventure(): void {
-    setUnderground(false);
-    this.fadeThen(() => this.scene.start('game'));
+  /**
+   * ENTRAR NO VALE. O `world.json` volta do disco antes de toda entrada: o mundo em memoria pode
+   * estar mexido (arvores derrubadas, canteiros cavados), e tudo o que merece viver mora no save,
+   * que reaplica os proprios diffs no create.
+   */
+  private startAdventure(fresh: boolean): void {
+    this.fadeThen(() => {
+      if (fresh) resetAdventure();
+      else requestAdventureRespawn();
+      void window.fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
+        .then((res) => (res.ok ? res.json() : undefined))
+        .then((json) => { if (json) setWorldData(json); })
+        .catch(() => undefined)
+        .finally(() => this.scene.start('game'));
+    });
   }
 
   private teardown(): void {

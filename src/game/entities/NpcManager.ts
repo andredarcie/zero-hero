@@ -175,6 +175,12 @@ class NpcEntity {
     this.talkKey.setVisible(false);
   }
 
+  /** Some de cena (o corpo e as marcas) sem sair da lista — ver NpcManager.setKindHidden. */
+  public setVisible(visible: boolean): void {
+    this.sprite.setVisible(visible);
+    if (!visible) this.hideExclaim();
+  }
+
   public destroy(): void {
     this.sprite.destroy();
     this.exclaim.destroy();
@@ -185,6 +191,11 @@ class NpcEntity {
 export class NpcManager {
   // NPCs grouped by chunk, streamed in/out as the player roams the open world.
   private readonly byChunk = new Map<string, NpcEntity[]>();
+  /**
+   * Especies FORA DE CENA: o mago, antes de a abertura o trazer andando. Um NPC escondido nao
+   * desenha, nao bloqueia e nao conversa — para o mundo ele ainda nao chegou.
+   */
+  private readonly hiddenKinds = new Set<NpcKind>();
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -214,6 +225,7 @@ export class NpcManager {
       const list = this.getContent(cx, cy).npcs.map(
         (spawn) => new NpcEntity(this.scene, spawn.worldX, spawn.worldY, spawn.type, spawn.dialog),
       );
+      for (const npc of list) if (this.hiddenKinds.has(npc.kind)) npc.setVisible(false);
       this.byChunk.set(key, list);
     }
   }
@@ -233,9 +245,20 @@ export class NpcManager {
     ));
   }
 
+  /** Tira uma especie de cena (ou a devolve). Vale tambem para os chunks que ainda vao chegar. */
+  public setKindHidden(kind: NpcKind, hidden: boolean): void {
+    if (hidden) this.hiddenKinds.add(kind);
+    else this.hiddenKinds.delete(kind);
+    for (const list of this.byChunk.values()) {
+      for (const npc of list) if (npc.kind === kind) npc.setVisible(!hidden);
+    }
+  }
+
   private all(): NpcEntity[] {
     const out: NpcEntity[] = [];
-    for (const list of this.byChunk.values()) out.push(...list);
+    for (const list of this.byChunk.values()) {
+      for (const npc of list) if (!this.hiddenKinds.has(npc.kind)) out.push(npc);
+    }
     return out;
   }
 

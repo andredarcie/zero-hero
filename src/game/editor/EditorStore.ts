@@ -1,12 +1,6 @@
-import {
-  CAMPFIRE_SCORCH_RADIUS_TILES, CHUNK_COLUMNS, CHUNK_ROWS, DUNGEON_TILES, LIGHT_RADIUS_TILES,
-  SEA_TILE_FRAMES, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, wallTorchFaceIsClear,
-} from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
-import {
-  AQUATIC_ENEMY_KINDS, FLYING_ENEMY_KINDS,
-  type EnemyKind, type NpcKind, type PickupKind,
-} from '@/game/world/ScreenContent';
+import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
 import type {
   PropDir, PropKind, WorldChunk, WorldData, WorldDialog,
 } from '@/game/world/worldSchema';
@@ -25,7 +19,6 @@ export type CellValue = number | boolean | null;
 export type CellChange = { wx: number; wy: number; layer: CellLayerId; prev: CellValue; next: CellValue };
 
 export type PlacedEntity =
-  | { list: 'enemies'; type: EnemyKind; worldX: number; worldY: number }
   | { list: 'npcs'; type: NpcKind; worldX: number; worldY: number }
   | { list: 'pickups'; type: PickupKind; worldX: number; worldY: number }
   | { list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir };
@@ -69,7 +62,6 @@ const buildEmptyChunk = (cx: number, cy: number): WorldChunk => ({
   ground: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => DEFAULT_GROUND_TILE)),
   upper: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => null as number | null)),
   collisions: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => false)),
-  enemies: [],
   pickups: [],
   npcs: [],
 });
@@ -291,7 +283,6 @@ export class EditorStore {
     const found: PlacedEntity[] = [];
     const chunk = this.chunkAt(wx, wy);
     if (chunk) {
-      chunk.enemies.forEach((e) => { if (e.worldX === wx && e.worldY === wy) found.push({ list: 'enemies', ...e }); });
       chunk.npcs.forEach((n) => { if (n.worldX === wx && n.worldY === wy) found.push({ list: 'npcs', ...n }); });
       chunk.pickups.forEach((p) => { if (p.worldX === wx && p.worldY === wy) found.push({ list: 'pickups', ...p }); });
     }
@@ -304,7 +295,6 @@ export class EditorStore {
   public allEntities(): PlacedEntity[] {
     const all: PlacedEntity[] = [];
     this.world.chunks.forEach((chunk) => {
-      chunk.enemies.forEach((e) => all.push({ list: 'enemies', ...e }));
       chunk.npcs.forEach((n) => all.push({ list: 'npcs', ...n }));
       chunk.pickups.forEach((p) => all.push({ list: 'pickups', ...p }));
     });
@@ -383,8 +373,7 @@ export class EditorStore {
     }
     const chunk = this.chunkAt(entity.worldX, entity.worldY);
     if (!chunk) return;
-    if (entity.list === 'enemies') chunk.enemies.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY });
-    else if (entity.list === 'npcs') chunk.npcs.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY });
+    if (entity.list === 'npcs') chunk.npcs.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY });
     else chunk.pickups.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY });
   }
 
@@ -562,10 +551,8 @@ export class EditorStore {
     const warnings: string[] = [...this.startPointErrors()];
 
     let onCollision = 0;
-    const enemySpawns: PlacedEntity[] = [];
     this.allEntities().forEach((entity) => {
       if (this.readCell('collision', entity.worldX, entity.worldY) === true) onCollision += 1;
-      if (entity.list === 'enemies') enemySpawns.push(entity);
     });
     if (onCollision > 0) warnings.push(`${onCollision} entidade(s) em cima de colisao`);
 
@@ -600,132 +587,12 @@ export class EditorStore {
       );
     }
 
-    // Props que ocupam o proprio tile com um corpo solido. Saem daqui as marcas e a flor — a lista
-    // e a mesma que a caixa de ferramentas usa mais abaixo, e uma segunda
-    // copia dela seria o jeito garantido de as duas discordarem daqui a um mes.
-    const solidProps = new Set(
-      this.world.props
-        .filter((p) => p.type !== 'bombSpot' && p.type !== 'plantSpot' && p.type !== 'moonflower')
-        .map((p) => `${p.worldX},${p.worldY}`),
-    );
-
-    // AS COVAS. As duas unicas maneiras de uma cova nascer morta, e as duas sao silenciosas em
-    // jogo — nada na tela explica por que aquele tile nunca fez nada. Colisao pintada ja e contada
-    // acima; aqui entra o bloqueio IMPLICITO (pinheiro, montanha, alvenaria, mar) e o prop solido.
-    //
-    // Menos pra quem VOA. O morcego cruza rio e lava (ver BatEnemy), entao uma cova dele em cima de
-    // um hazard e uma escolha de autor e nao um defeito — avisar ali treinaria o autor a ignorar o
-    // aviso, que e o unico jeito de um aviso morrer. O mar continua contando pra ele: nada no jogo
-    // atravessa mar, e uma cova no oceano nunca faz nada, com asa ou sem.
-    const HAZARD_PROPS: ReadonlySet<string> = new Set(['lava', 'water']);
-    const hazardProps = new Set(
-      this.world.props.filter((p) => HAZARD_PROPS.has(p.type)).map((p) => `${p.worldX},${p.worldY}`),
-    );
-    // O AQUATICO inverte a pergunta inteira, e por isso sai antes do filtro comum: pra ele, tile bom
-    // e agua de rio, e TERRA e que e o defeito silencioso. Contar um zora no aviso de "tile
-    // bloqueado" seria denunciar exatamente a unica colocacao correta dele.
-    const waterProps = new Set(
-      this.world.props.filter((p) => p.type === 'water').map((p) => `${p.worldX},${p.worldY}`),
-    );
-    // A agua deste jogo tem DUAS procedencias e as duas valem: o prop `water` (como um level autora
-    // um rio) e o TILE de terreno (como o gerador do overworld escreve rio, lago e oceano — ver
-    // SEA_TILE_FRAMES). Perguntar so pelo prop foi o bug que fez cinco covas autoradas em cima de
-    // um lago do mundo grande ficarem mudas, com o editor jurando que estavam em terra.
-    const isWaterTile = (wx: number, wy: number): boolean => {
-      if (waterProps.has(`${wx},${wy}`)) return true;
-      const ground = this.readCell('ground', wx, wy) as number | null;
-      return ground !== null && SEA_TILE_FRAMES.includes(ground);
-    };
-    const drySpawns = enemySpawns.filter(
-      (spawn) => AQUATIC_ENEMY_KINDS.has(spawn.type as EnemyKind)
-        && !isWaterTile(spawn.worldX, spawn.worldY),
-    ).length;
-    if (drySpawns > 0) {
-      warnings.push(`${drySpawns} ponto(s) de spawn de zora fora da agua — ele so nasce em tile de rio`);
-    }
-
-    const blockedSpawns = enemySpawns.filter((spawn) => {
-      if (AQUATIC_ENEMY_KINDS.has(spawn.type as EnemyKind)) return false; // ja cobrado acima
-      const flies = FLYING_ENEMY_KINDS.has(spawn.type as EnemyKind);
-      const upper = this.readCell('upper', spawn.worldX, spawn.worldY) as number | null;
-      if (upper !== null && SOLID_UPPER_FRAMES.has(upper)) return true;
-      const ground = this.readCell('ground', spawn.worldX, spawn.worldY) as number | null;
-      if (ground !== null && SOLID_GROUND_FRAMES.has(ground)) return true;
-      const key = `${spawn.worldX},${spawn.worldY}`;
-      if (flies && hazardProps.has(key)) return false;
-      return solidProps.has(key);
-    }).length;
-    if (blockedSpawns > 0) {
-      warnings.push(`${blockedSpawns} ponto(s) de spawn de inimigo em tile bloqueado — nada vai nascer ali`);
-    }
-
-    // ...e a luz. NENHUM monstro entra em luz de fogueira — nem o que voa, nem a maquina —, entao
-    // uma cova dentro do brilho de um fogo ACESO fica calada para sempre, seja qual for a especie
-    // que ela iria fazer. So contam os fogos que ja nascem acesos: o de casa (o
-    // mais proximo do Ponto Inicial, que e como o runtime decide) e um `lit: true` explicito.
-    // Uma fogueira apagada por perto e o oposto de um erro — e a alavanca do corredor.
-    const start = this.world.meta.playerStart;
-    const campfires = this.world.props.filter((prop) => prop.type === 'campfire');
-    let homeIdx = -1;
-    let homeBest = Infinity;
-    campfires.forEach((fire, i) => {
-      const d = Math.hypot(fire.worldX - start.worldX, fire.worldY - start.worldY);
-      if (d < homeBest) { homeBest = d; homeIdx = i; }
-    });
-    const litFires = campfires.filter((fire, i) => i === homeIdx || fire.lit === true);
-    const distToLitFire = (spawn: { worldX: number; worldY: number }): number => Math.min(
-      ...litFires.map((fire) => Math.hypot(fire.worldX - spawn.worldX, fire.worldY - spawn.worldY)),
-      Infinity,
-    );
-    const drownedSpawns = enemySpawns.filter(
-      (spawn) => distToLitFire(spawn) <= LIGHT_RADIUS_TILES,
-    ).length;
-    if (drownedSpawns > 0) {
-      warnings.push(`${drownedSpawns} ponto(s) de spawn dentro da luz de uma fogueira acesa — monstro nao nasce na luz`);
-    }
-    // ...e a COROA logo fora da luz e pior que calada: ali o corpo nasce e ASSA (ver
-    // EnemyBase.tickScorch), entao a cova vira um moinho de caveiras morrendo na beira do fogo,
-    // uma a cada ENEMY_RESPAWN_MS, para sempre. Aviso proprio porque o conserto e outro: a cova
-    // calada quer a fogueira apagada, esta quer distancia.
-    const roastedSpawns = enemySpawns.filter((spawn) => {
-      const d = distToLitFire(spawn);
-      return d > LIGHT_RADIUS_TILES && d <= CAMPFIRE_SCORCH_RADIUS_TILES;
-    }).length;
-    if (roastedSpawns > 0) {
-      warnings.push(`${roastedSpawns} ponto(s) de spawn colado(s) na luz de uma fogueira acesa — o corpo nasce e queima ali mesmo`);
-    }
-
-    // A TOCHA DE PAREDE COM ALVENARIA AO SUL — o mesmo defeito silencioso das covas, e por isso
-    // ele mora aqui: o autor pinta o frame 48, salva, entra no jogo e nao ha tocha nenhuma.
-    //
-    // O motivo e geometrico e nao ha conserto no desenho (ver `wallTorchFaceIsClear`): todo quad
-    // deste jogo olha para o sul, entao a chama so cabe na face sul do bloco — com alvenaria
-    // embaixo ela queimaria dentro da pedra, e o runtime prefere nao desenhar a mentir. O aviso e
-    // a MESMA pergunta que a cena faz, e e por isso que a resposta mora nas constantes.
-    let buriedTorches = 0;
-    for (const chunk of this.world.chunks) {
-      for (let row = 0; row < CHUNK_ROWS; row += 1) {
-        for (let col = 0; col < CHUNK_COLUMNS; col += 1) {
-          if (chunk.upper[row][col] !== DUNGEON_TILES.wallTorch) continue;
-          const wx = chunk.cx * CHUNK_COLUMNS + col;
-          const wy = chunk.cy * CHUNK_ROWS + row;
-          if (!wallTorchFaceIsClear(this.readCell('upper', wx, wy + 1) as number | null)) {
-            buriedTorches += 1;
-          }
-        }
-      }
-    }
-    if (buriedTorches > 0) {
-      warnings.push(`${buriedTorches} muro com tocha tem alvenaria logo ABAIXO — a chama nao tem face onde aparecer e nao vai acender`);
-    }
-
     return warnings;
   }
 
-  public stats(): { enemies: number; npcs: number; pickups: number; props: number } {
+  public stats(): { npcs: number; pickups: number; props: number } {
     const all = this.allEntities();
     return {
-      enemies: all.filter((e) => e.list === 'enemies').length,
       npcs: all.filter((e) => e.list === 'npcs').length,
       pickups: all.filter((e) => e.list === 'pickups').length,
       props: all.filter((e) => e.list === 'props').length,

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "generate:world": "tsx scripts/generateWorld.ts",
     "generate:chunks": "node scripts/gen-chunk-library.mjs",
-    "audit:endgame": "node scripts/audit-endgame.mjs",
+    "audit:world": "node scripts/cozy-world.mjs --check",
     "audit:stacks": "node scripts/fix-tile-stacks.mjs --check",
     "lint": "eslint . --ext .ts",
     "playtest": "node playtest/run.mjs",

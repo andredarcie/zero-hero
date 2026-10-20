@@ -205,7 +205,7 @@
         ],
         [
           14,
-          2,
+          null,
           7,
           7,
           7,
@@ -229,7 +229,7 @@
           null,
           8,
           19,
-          10
+          null
         ],
         [
           14,
@@ -341,7 +341,7 @@
           7,
           17,
           10,
-          0
+          null
         ],
         [
           7,
@@ -528,24 +528,23 @@
           false
         ]
       ],
-      "enemies": [
+      "pickups": [
         {
-          "type": "zora",
-          "worldX": 5,
-          "worldY": 4
+          "type": "mushroom",
+          "worldX": 1,
+          "worldY": 1
         },
         {
-          "type": "zora",
-          "worldX": 8,
-          "worldY": 4
+          "type": "mushroom",
+          "worldX": 11,
+          "worldY": 2
         },
         {
-          "type": "zora",
-          "worldX": 6,
-          "worldY": 6
+          "type": "mushroom",
+          "worldX": 11,
+          "worldY": 10
         }
       ],
-      "pickups": [],
       "npcs": []
     },
     {
@@ -1061,7 +1060,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [],
       "npcs": []
     },
@@ -1577,23 +1575,6 @@
           false,
           false
         ]
-      ],
-      "enemies": [
-        {
-          "type": "spider",
-          "worldX": 28,
-          "worldY": 5
-        },
-        {
-          "type": "spider",
-          "worldX": 31,
-          "worldY": 7
-        },
-        {
-          "type": "spider",
-          "worldX": 33,
-          "worldY": 4
-        }
       ],
       "pickups": [],
       "npcs": []
@@ -2111,7 +2092,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "pickaxe",
@@ -2640,7 +2620,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "axe",
@@ -3169,7 +3148,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "stone",
@@ -3491,7 +3469,7 @@
           null
         ],
         [
-          0,
+          null,
           16,
           7,
           null,
@@ -3703,12 +3681,16 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "shovel",
           "worldX": 14,
           "worldY": 16
+        },
+        {
+          "type": "mushroom",
+          "worldX": 12,
+          "worldY": 21
         }
       ],
       "npcs": [
@@ -4232,7 +4214,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [],
       "npcs": []
     },
@@ -4749,7 +4730,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [],
       "npcs": []
     },
@@ -5266,7 +5246,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "scythe",
@@ -5274,13 +5253,7 @@
           "worldY": 17
         }
       ],
-      "npcs": [
-        {
-          "type": "death",
-          "worldX": 53,
-          "worldY": 17
-        }
-      ]
+      "npcs": []
     },
     {
       "cx": 0,
@@ -5795,19 +5768,13 @@
           false
         ]
       ],
-      "enemies": [
+      "pickups": [
         {
-          "type": "bat",
-          "worldX": 4,
-          "worldY": 32
-        },
-        {
-          "type": "bat",
-          "worldX": 8,
-          "worldY": 28
+          "type": "mushroom",
+          "worldX": 2,
+          "worldY": 30
         }
       ],
-      "pickups": [],
       "npcs": []
     },
     {
@@ -6323,23 +6290,6 @@
           false
         ]
       ],
-      "enemies": [
-        {
-          "type": "undead",
-          "worldX": 14,
-          "worldY": 26
-        },
-        {
-          "type": "undead",
-          "worldX": 21,
-          "worldY": 26
-        },
-        {
-          "type": "undead",
-          "worldX": 21,
-          "worldY": 34
-        }
-      ],
       "pickups": [],
       "npcs": []
     },
@@ -6664,7 +6614,7 @@
           15,
           7,
           4,
-          4,
+          null,
           2,
           null,
           14,
@@ -6678,7 +6628,7 @@
           4,
           14,
           4,
-          4,
+          null,
           4,
           4,
           14,
@@ -6693,43 +6643,31 @@
           false,
           false,
           false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
+          true,
+          true,
+          true,
+          true,
+          true,
           false,
           false
         ],
         [
           false,
+          true,
+          true,
+          true,
+          true,
+          true,
           false,
           false,
           false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
+          true,
+          true,
           false
         ],
         [
+          true,
+          true,
           false,
           false,
           false,
@@ -6738,26 +6676,25 @@
           false,
           false,
           false,
-          false,
-          false,
-          false,
+          true,
           false
         ],
         [
+          true,
+          false,
+          false,
+          true,
           false,
           false,
           false,
           false,
           false,
           false,
-          false,
-          false,
-          false,
-          false,
-          false,
+          true,
           false
         ],
         [
+          true,
           false,
           false,
           false,
@@ -6768,11 +6705,53 @@
           false,
           false,
           false,
+          true
+        ],
+        [
+          true,
           false,
-          false
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true
+        ],
+        [
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true
+        ],
+        [
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true
         ],
         [
           false,
+          true,
           false,
           false,
           false,
@@ -6782,82 +6761,63 @@
           false,
           false,
           false,
+          true
+        ],
+        [
+          true,
+          true,
           false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          true,
+          true
+        ],
+        [
+          true,
+          false,
+          false,
+          true,
+          false,
+          true,
+          false,
+          false,
+          false,
+          true,
+          true,
           false
         ],
         [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
           false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false
-        ],
-        [
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
-          false,
+          true,
+          true,
+          true,
           false,
           false
         ]
       ],
-      "enemies": [],
-      "pickups": [],
+      "pickups": [
+        {
+          "type": "wood",
+          "worldX": 29,
+          "worldY": 29
+        },
+        {
+          "type": "mushroom",
+          "worldX": 31,
+          "worldY": 29
+        }
+      ],
       "npcs": []
     },
     {
@@ -7373,7 +7333,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [],
       "npcs": []
     },
@@ -7890,7 +7849,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [],
       "npcs": []
     },
@@ -8070,7 +8028,7 @@
       "upper": [
         [
           14,
-          1,
+          null,
           null,
           20,
           null,
@@ -8407,7 +8365,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "iron",
@@ -8418,6 +8375,16 @@
           "type": "iron",
           "worldX": 10,
           "worldY": 39
+        },
+        {
+          "type": "mushroom",
+          "worldX": 1,
+          "worldY": 36
+        },
+        {
+          "type": "mushroom",
+          "worldX": 2,
+          "worldY": 46
         }
       ],
       "npcs": []
@@ -8935,7 +8902,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "wood",
@@ -9468,7 +9434,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "iron",
@@ -9996,23 +9961,6 @@
           false
         ]
       ],
-      "enemies": [
-        {
-          "type": "undead",
-          "worldX": 45,
-          "worldY": 37
-        },
-        {
-          "type": "undead",
-          "worldX": 47,
-          "worldY": 38
-        },
-        {
-          "type": "undead",
-          "worldX": 46,
-          "worldY": 39
-        }
-      ],
       "pickups": [],
       "npcs": []
     },
@@ -10529,7 +10477,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "iron",
@@ -11051,18 +10998,6 @@
           false,
           false
         ]
-      ],
-      "enemies": [
-        {
-          "type": "undead",
-          "worldX": 8,
-          "worldY": 56
-        },
-        {
-          "type": "undead",
-          "worldX": 7,
-          "worldY": 57
-        }
       ],
       "pickups": [
         {
@@ -11586,7 +11521,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [
         {
           "type": "iron",
@@ -12109,9 +12043,14 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [],
-      "npcs": []
+      "npcs": [
+        {
+          "type": "wizard",
+          "worldX": 31,
+          "worldY": 54
+        }
+      ]
     },
     {
       "cx": 3,
@@ -12626,7 +12565,6 @@
           false
         ]
       ],
-      "enemies": [],
       "pickups": [],
       "npcs": []
     },
@@ -13143,23 +13081,6 @@
           false
         ]
       ],
-      "enemies": [
-        {
-          "type": "undead",
-          "worldX": 55,
-          "worldY": 54
-        },
-        {
-          "type": "undead",
-          "worldX": 52,
-          "worldY": 57
-        },
-        {
-          "type": "undead",
-          "worldX": 49,
-          "worldY": 54
-        }
-      ],
       "pickups": [
         {
           "type": "iron",
@@ -13332,217 +13253,217 @@
       "worldY": 34
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 4,
       "worldY": 15
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 5,
       "worldY": 15
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 6,
       "worldY": 15
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 7,
       "worldY": 15
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 8,
       "worldY": 15
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 8,
       "worldY": 16
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 8,
       "worldY": 17
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 10,
       "worldY": 17
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 9,
       "worldY": 17
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 10,
       "worldY": 16
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 10,
       "worldY": 13
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 10,
       "worldY": 14
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 10,
       "worldY": 15
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 7,
       "worldY": 13
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 7,
       "worldY": 14
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 3,
       "worldY": 15
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 2,
       "worldY": 15
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 2,
       "worldY": 16
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 2,
       "worldY": 19
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 2,
       "worldY": 20
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 2,
       "worldY": 22
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 2,
       "worldY": 21
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 3,
       "worldY": 20
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 4,
       "worldY": 20
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 5,
       "worldY": 20
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 3,
       "worldY": 22
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 4,
       "worldY": 22
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 5,
       "worldY": 22
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 6,
       "worldY": 22
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 6,
       "worldY": 21
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 6,
       "worldY": 20
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 7,
       "worldY": 20
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 8,
       "worldY": 20
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 9,
       "worldY": 20
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 9,
       "worldY": 21
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 9,
       "worldY": 22
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 8,
       "worldY": 22
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 7,
       "worldY": 22
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 3,
       "worldY": 14
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 1,
       "worldY": 16
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 6,
       "worldY": 13
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 8,
       "worldY": 13
     },
     {
-      "type": "lava",
+      "type": "water",
       "worldX": 9,
       "worldY": 13
     },
@@ -14054,11 +13975,6 @@
       "worldY": 51
     },
     {
-      "type": "bombSpot",
-      "worldX": 8,
-      "worldY": 50
-    },
-    {
       "type": "campfire",
       "lit": true,
       "worldX": 15,
@@ -14260,31 +14176,6 @@
       "type": "ironRock",
       "worldX": 28,
       "worldY": 43
-    },
-    {
-      "type": "pyre",
-      "worldX": 30,
-      "worldY": 30
-    },
-    {
-      "type": "stairs",
-      "worldX": 5,
-      "worldY": 13
-    },
-    {
-      "type": "stairs",
-      "worldX": 50,
-      "worldY": 9
-    },
-    {
-      "type": "stairs",
-      "worldX": 24,
-      "worldY": 37
-    },
-    {
-      "type": "stairs",
-      "worldX": 53,
-      "worldY": 55
     },
     {
       "type": "water",
@@ -14542,16 +14433,6 @@
       "worldY": 56
     },
     {
-      "type": "stairs",
-      "worldX": 5,
-      "worldY": 55
-    },
-    {
-      "type": "stairs",
-      "worldX": 5,
-      "worldY": 52
-    },
-    {
       "type": "dryTree",
       "worldX": 48,
       "worldY": 7
@@ -14622,9 +14503,14 @@
       "worldY": 44
     },
     {
-      "type": "bombSpot",
-      "worldX": 58,
-      "worldY": 45
+      "type": "hearth",
+      "worldX": 30,
+      "worldY": 30
+    },
+    {
+      "type": "gardenGate",
+      "worldX": 30,
+      "worldY": 35
     }
   ],
   "dialogs": {
@@ -14797,305 +14683,6 @@
         }
       ]
     },
-    "death": {
-      "npcName": "DEATH",
-      "npcColorHex": "#f3f4f6",
-      "npcAssetKey": "npc-death",
-      "voice": {
-        "freq": 150,
-        "wave": "square"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Take the SCYTHE — I am off duty. Light five cold hearths and burn me three loads of CHARCOAL, and you and I are even."
-        }
-      ]
-    },
-    "catAxe": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. Dead wood. Your sword will not move it — a blade cuts what bleeds."
-        },
-        {
-          "speaker": "npc",
-          "text": "The AXE is at my feet. Take it, face a dead tree, and press X. Four swings and it comes down."
-        },
-        {
-          "speaker": "npc",
-          "text": "A felled tree leaves a STICK behind. Wood is what carries fire in this world."
-        },
-        {
-          "speaker": "npc",
-          "text": "Behind that wall there is iron, and nothing guarding it. Nothing walks in here. Take your time. Mrrow."
-        }
-      ]
-    },
-    "catTorch": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. My hearth is lit. Yours is a stick on the ground."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the STICK. Face my fire and press X: it wakes as a TORCH. It burns for a while and then it dies — come back and light it again."
-        },
-        {
-          "speaker": "npc",
-          "text": "Dry brush cannot be chopped. It BURNS. Touch one with the torch and the fire walks to its neighbours on its own."
-        },
-        {
-          "speaker": "npc",
-          "text": "Burnt brush leaves CHARCOAL on the ground. Fire feeding fire — pick it up."
-        }
-      ]
-    },
-    "catPick": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. Stone does not burn and it does not chop. It BREAKS."
-        },
-        {
-          "speaker": "npc",
-          "text": "The PICKAXE is at my feet. Face a rock, press X, and press it again. The rock opens and leaves a STONE where it stood."
-        },
-        {
-          "speaker": "npc",
-          "text": "The boulders with red veins never open. Every three blows they spit out ORE instead — and they never run dry."
-        },
-        {
-          "speaker": "npc",
-          "text": "Ore is not iron. That is a lesson for a hotter day, and a hotter machine."
-        }
-      ]
-    },
-    "catSword": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. Take the SWORD. Press Z — and press it again, and again."
-        },
-        {
-          "speaker": "npc",
-          "text": "Nothing here falls to one blow. Strike a body that is still flashing and your blade slides off it: that flash is a body that cannot be hurt yet. Wait a beat."
-        },
-        {
-          "speaker": "npc",
-          "text": "And watch their feet. When one plants itself and winds up, it is GUARDING the side it faces. Hitting that side gives you sparks and nothing else — walk around it."
-        },
-        {
-          "speaker": "npc",
-          "text": "Hold Z instead of tapping it and the blade spins: it cuts all eight neighbours at once. Mrrow. Go on."
-        }
-      ]
-    },
-    "catCrossing": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. Water. You cannot swim and you cannot chop it."
-        },
-        {
-          "speaker": "npc",
-          "text": "One tile of that bank will take a crossing. Face it and press X holding TWO STICKS and you nail a plank deck. Or hold ONE STONE and you drop a ford."
-        },
-        {
-          "speaker": "npc",
-          "text": "They carry you the same. They do not carry FIRE the same: flame runs across planks and eats them. It stops dead at stone, every time."
-        },
-        {
-          "speaker": "npc",
-          "text": "So the question is never \"how do I cross\". It is: do I want a floor here, or a fuse? Mrrow."
-        }
-      ]
-    },
-    "catBomb": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. That rock is not going anywhere. No pick in the world opens it."
-        },
-        {
-          "speaker": "npc",
-          "text": "But look at the ground — one tile is MARKED. That is where the stone is thin."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take a BOMB and stand on the mark: it arms itself the moment you get there, and it counts. Then leave. Three of them on the floor, so you may waste two learning."
-        },
-        {
-          "speaker": "npc",
-          "text": "Everything you carry that burns, burns on its own clock. Mrrow."
-        }
-      ]
-    },
-    "catGate": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. Two gates, same wood, same hinge. Walk into the top one."
-        },
-        {
-          "speaker": "npc",
-          "text": "It shudders and stays shut. Nothing is locked — there is a BOULDER sitting against its back, and a gate that swings inward cannot swing through stone."
-        },
-        {
-          "speaker": "npc",
-          "text": "The lower one has nothing behind it. Walk into that one and it gives."
-        },
-        {
-          "speaker": "npc",
-          "text": "No key exists for either. A swing gate only ever asks one thing: is the tile behind me empty? Mrrow."
-        }
-      ]
-    },
-    "catFlower": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. The way through is a FLOWER, and it is shut."
-        },
-        {
-          "speaker": "npc",
-          "text": "It is shut because of my fire. That bud opens in the dark and closes in the light — it has no opinion about you at all."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the BUCKET. Face the puddle and press X to fill it; face the fire and press X to throw it."
-        },
-        {
-          "speaker": "npc",
-          "text": "Water is the only thing in this world that puts fire OUT. Everything else you own only starts them. Mrrow."
-        }
-      ]
-    },
-    "catForge": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. That door wants ONE BAR OF IRON. You have no iron. You have rust-stained rock."
-        },
-        {
-          "speaker": "npc",
-          "text": "Face the FURNACE and press Z: it knows two recipes, and one of them turns ore and charcoal into a bloom. Confirming does not hand it to you — it LIGHTS the furnace. Wait for it."
-        },
-        {
-          "speaker": "npc",
-          "text": "What jumps out is a sponge, not a bar. Carry it to the stone ALTAR, press Z to lay it down, then beat it. Three blows and the slag is gone."
-        },
-        {
-          "speaker": "npc",
-          "text": "Then take the bar with B. Ore, fire, hammer, bar — there is no shortcut, and every forge in this world runs that order. Mrrow."
-        }
-      ]
-    },
-    "catFarm": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Mrrow. Take the SCYTHE and cut that tall grass. What it leaves behind is SEEDS."
-        },
-        {
-          "speaker": "npc",
-          "text": "Now the SHOVEL. Face bare earth — plain dirt, not stone — and press X. It opens a hole."
-        },
-        {
-          "speaker": "npc",
-          "text": "Walk over the hole while you carry seeds and they sow themselves. Then fill the BUCKET at the puddle with X, face the mound, and throw it."
-        },
-        {
-          "speaker": "npc",
-          "text": "Wait a moment and it comes up as real grass: it blocks, it burns, and the scythe takes it again. The hole reopens under it."
-        },
-        {
-          "speaker": "npc",
-          "text": "It never MULTIPLIES — one seed, one clump, forever. What a farm gives you is grass WHERE YOU WANT IT: a fuse you can lay by hand."
-        }
-      ]
-    },
     "astronautDone": {
       "npcName": "ASTRONAUT",
       "npcColorHex": "#44ccff",
@@ -15109,34 +14696,6 @@
         {
           "speaker": "npc",
           "text": "Six lumps: a hull patch and a strut. Ore, fire, hammer, bar — your ancients ran that same order, and I sent the ship's crating to your pyre."
-        }
-      ]
-    },
-    "blackCatDone": {
-      "npcName": "CAT",
-      "npcColorHex": "#cc99ff",
-      "npcAssetKey": "npcs",
-      "npcFrame": 0,
-      "voice": {
-        "freq": 540,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Three hearths breathing where there were three cold stones. Mrrow."
-        },
-        {
-          "speaker": "npc",
-          "text": "You did not light fires. You moved a LINE — and everything on the far side of it noticed."
-        },
-        {
-          "speaker": "npc",
-          "text": "The ones who kept those hearths are still out there, walking. They remember warmth. That is the whole problem."
-        },
-        {
-          "speaker": "npc",
-          "text": "And I sent wood to that tower of yours in the open field. A cat pays in kindling. Mrrow."
         }
       ]
     },
@@ -15185,102 +14744,6 @@
         {
           "speaker": "npc",
           "text": "You GREW it, all the way to the south beds. In a world the dark ate, green is not decoration — it is an argument, and the cuttings went to your pyre."
-        }
-      ]
-    },
-    "salesmanDone": {
-      "npcName": "SALESMAN",
-      "npcColorHex": "#6fe6c7",
-      "npcAssetKey": "npc-salesman",
-      "voice": {
-        "freq": 410,
-        "wave": "triangle"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Stock! Actual stock! Friend, you have made me a legitimate business."
-        },
-        {
-          "speaker": "npc",
-          "text": "Stone and sticks. One stops a fire dead, one carries it for miles. I sell both and take no side."
-        },
-        {
-          "speaker": "npc",
-          "text": "The bucket stays free, obviously. Water is the only thing out here that ENDS a flame — a man should give that away, not sell it."
-        },
-        {
-          "speaker": "npc",
-          "text": "I also had a load carried to your tower. Free. Do not tell anyone — it ruins the model."
-        }
-      ]
-    },
-    "poetDone": {
-      "npcName": "POET",
-      "npcColorHex": "#9bb7ff",
-      "npcAssetKey": "npc-poet",
-      "voice": {
-        "freq": 360,
-        "wave": "sine"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Four pines down. Listen — the grove has a rest in it now."
-        },
-        {
-          "speaker": "narrator",
-          "text": "He listens to the gap for a long time."
-        },
-        {
-          "speaker": "npc",
-          "text": "And the light came in with the silence. That is the whole trick of this world, is it not: you cut, and the dark gets smaller."
-        },
-        {
-          "speaker": "npc",
-          "text": "The trunks are too good to rot here. I had them hauled to your pyre — let the grove end as a signal."
-        }
-      ]
-    },
-    "wizardDone": {
-      "npcName": "WIZARD",
-      "npcColorHex": "#a97bff",
-      "npcAssetKey": "mage",
-      "voice": {
-        "freq": 220,
-        "wave": "sine"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Eight of the road-dead put down, and six fields decided into being. You have been busy, Zero."
-        },
-        {
-          "speaker": "npc",
-          "text": "They were the crusade before you. They kept the hearths you are relighting, and they lost. Do not hate them for still walking."
-        },
-        {
-          "speaker": "npc",
-          "text": "Keep walking, then. A world that stops being decided stops being."
-        },
-        {
-          "speaker": "npc",
-          "text": "And the old crusade left cordwood in these ruins. It is at the pyre now, where it always meant to go."
-        }
-      ]
-    },
-    "deathDone": {
-      "npcName": "DEATH",
-      "npcColorHex": "#f3f4f6",
-      "npcAssetKey": "npc-death",
-      "voice": {
-        "freq": 150,
-        "wave": "square"
-      },
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Five hearths, and furnace smoke crossing three fields. I was sent to CLOSE this place; instead I had wood carried to your pyre. Light another."
         }
       ]
     }

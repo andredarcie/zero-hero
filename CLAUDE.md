@@ -1,33 +1,34 @@
 # Zero the Hero
 
-Aventura top-down em pixel art, **só em inglês** (não há mais locale nenhum). **Phaser 3** cuida da
-lógica, input e UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
-`src/game/render3d/`). O menu é **uma tela** — com save o botão vira Continue (+ Start over
-discreto). **HÁ UM MUNDO SÓ**, com dois andares: a superfície e o espelho subterrâneo. Os levels
-isolados (`/levels`, `?level=N`, a lista do título, o `/lab`) e o **explorador** foram REMOVIDOS —
-`/` é o jogo e `/editor` é o editor, e não há terceira rota.
+Aventura **cozy** top-down em pixel art, **só em inglês**. **Phaser 3** cuida da lógica, input e
+UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
+`src/game/render3d/`). **O JOGO É 100% PACÍFICO: não existe combate, inimigo, dano, vida, morte
+nem game over** — e nada se perde. Combate, bestiário, subterrâneo, escadas, bombas, lava, pira e
+planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `/` é o jogo e
+`/editor` é o editor; não há terceira rota.
+
+## O arco do jogo (um só, e ele mora em `GameScene`, seção "A HISTORIA")
+
+1. **A abertura** (`playIntro`): à noite, o cavaleiro chega pela estrada do sul com a espada nas
+   costas, a finca no chão (ela fica ali para sempre e bloqueia o tile), olha em volta entre
+   vaga-lumes, e o mago chega andando e fala. Toca uma vez por partida (`introSeen` no save).
+2. **Os vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
+   que o torna possível (`gift`). Pedido novo = uma entrada lá + falas `npc.<id>`/`npc.<id>Done`
+   no locale.
+3. **O portão** (`openGardenGate`): quando `allQuestsDone()`, o `gardenGate` do centro abre.
+4. **A fogueira do fim** (`hearth`, `tendHearthAt` → `playRoastEnding` → `rollCredits`): Z acende,
+   Z de novo com graveto + cogumelo assa, e os créditos voltam ao título.
+
+`npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
+mora no locale (`en.json`)**, inclusive o roteiro `<id>Done`; o `world.json` guarda retrato,
+cor e voz.
 
 ## O save da aventura
 
-- **A aventura LEMBRA e os outros modos NÃO** (`runtime/adventureState.ts`, padrão do
-  `underworld` + `localStorage`): `create()` hidrata, e todo evento que muda o mundo chama
-  `persistAdventure()` — um evento novo sem essa chamada é progresso que a morte apaga.
-  Quem fica de fora é o **playtest do editor** (`appMode === 'editor'`): ali o mundo em memória
-  pode estar sujo de edição não salva, e escrever no save contaminaria a partida de quem só foi
-  testar um tile.
-- **Morrer devolve à fogueira com TUDO** (mochila, fogueiras, missões, história) — o custo é a
-  volta. `playtest -- salvamento` guarda o contrato.
-- **O título recarrega o `world.json` do disco ao entrar na aventura**: o WorldData em memória
-  pode estar sujo (dungeon aberta, árvores cortadas) e tudo que merece viver mora no save.
-- **HÁ UMA DUNGEON SÓ, e ela é o ESPELHO do mapa de cima** (`public/underworld.json`): mesmo
-  tamanho, mesmas coordenadas, mesmo esqueleto de colisão. Descer num portal em (x,y) põe o herói
-  em (x,y) lá embaixo, e subir devolve ao mesmo tile — a viagem não escolhe destino, só troca de
-  andar — **a porta é SIMÉTRICA e não tem endereço**: subir devolve ao tile do portal que você
-  pegou, nunca ao tile por onde desceu (`runtime/underworld` guarda só em que andar você está).
-  O espelho é DERIVADO
-  do overworld por `node scripts/gen-underworld.mjs` e depois autorado à mão em `/editor?under`; ele
-  copia o esqueleto e joga fora a mobília (nada de rocha, água, fogueira ou NPC lá embaixo). As
-  nove dungeons geradas, o gerador e a semente da partida foram REMOVIDOS.
+- **A aventura LEMBRA** (`runtime/adventureState.ts`, chave `zh.cozy.v1`): `create()` hidrata, e
+  todo evento que muda o mundo chama `persistAdventure()`. O **playtest do editor** fica de fora.
+- **O título recarrega o `world.json` do disco ao entrar** (Continue / New journey): o mundo em
+  memória pode estar mexido, e o que merece viver mora no save como diff.
 
 ## Como este documento funciona
 
@@ -64,7 +65,7 @@ npm run build            # typecheck + vite build
 #  LÊ o world.json e acrescenta (`node scripts/enrich-world.mjs` é o modelo).
 npm run playtest         # cenários default
 npm run playtest -- all  # todos
-npm run audit:endgame    # DÁ PARA ZERAR? mede a corrente até a pira acesa (fogo, toras, missões)
+node scripts/cozy-world.mjs --check   # o world.json é o ponto fixo do mundo pacífico?
 ```
 
 A porta 5173 costuma estar ocupada por outro projeto. Para playtest, suba o Vite numa porta livre:
@@ -76,113 +77,30 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 
 ## Os dois botões, a mochila e a subtela
 
-O jogo **não é mais só-andar**. Detalhes e consequências: `progress.md`.
+    Z (J / espaço)  →  a MÃO: fala com o NPC à frente, acende/assa na fogueira do fim, abre o
+                       catálogo da bancada/forno, põe e malha no altar. Nada no Z é golpe.
+    X (K)           →  USA o item selecionado no tile à frente (a tabela `useItemAt`).
+    pisar           →  APANHA (`collectUnderfoot`).
+    I               →  a BOLSA (não pausa o jogo).   ESC → a subtela (mochila + mapa).
 
-    A (Z / J / espaço)  →  A ESPADA, sempre — ela é do HERÓI e não da mochila (não tem slot, não
-                           se perde, não se escolhe). Segurar carrega o giro. De frente pra um
-                           NPC, CONVERSA antes de sacar (o keycap "Z" na cabeça dele anuncia — e
-                           nas opções ↑↓/WS movem, Enter/Z confirmam); de frente pra bancada ou
-                           forno, abre o CATÁLOGO.
-    B (X / K)           →  USA o item selecionado na bolsa no tile à frente (a tabela useItemAt:
-                           machado derruba, picareta quebra, balde enche/rega, chave abre, tocha
-                           acende, pá cava, estação INSTALA…). Sem resposta na tabela, devolve a
-                           peça do altar, RECOLHE a estação, PÕE A BOMBA no chão (à frente, ou aos
-                           pés se a frente for parede); por fim o gesto sai no VAZIO.
-    pisar               →  APANHA. Tudo, sem botão (`collectUnderfoot`): usável vai pra bolsa sem
-                           roubar a seleção, matéria-prima vai pro contador.
-    I                   →  a BOLSA, que escolhe o item do X — e NÃO pausa o jogo.
-    ESC                 →  a subtela: mochila + corações + mapa, com o mundo congelado.
+- `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
+  repetição se filtra por `event.repeat`.
+- **A parede VIRA o herói** (`PlayerMovementController`): é assim que se mira. Contra tile LIVRE a
+  seta anda — não há virar-no-lugar.
+- **A FERRAMENTA CERTA SE APRESENTA SOZINHA** (`toolWantedAt`) e a **MOCHILA SÓ GUARDA O QUE TEM
+  GESTO** (`isBagItem`; matéria-prima e cogumelo são contadores).
+- **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica.
+- **Cutscene é `cutsceneActive`**: o `update` para, o `render3D` (POST_UPDATE) continua — por isso
+  vaga-lumes e herói moram lá. Passo roteirizado = `scriptStep`, nunca o controlador.
+- **As estações são exclusivamente MANUAIS** e **não existe dinheiro**: recompensa é item ou nada.
 
-- **UM BOTÃO, UMA FRASE: o Z é a espada, o X é a ferramenta.** Enquanto o Z usava "o item da mão",
-  defender-se passava por abrir a bolsa com a caveira em cima, e o arco mudava de alcance sem o
-  jogador pedir. LARGAR morreu junto (um botão que ora usa ora larga desarma por engano) e APANHAR
-  virou pisada — sem largar, apanhar não pode custar nada.
-- **A MOCHILA SÓ GUARDA O QUE TEM GESTO** (`isBagItem`). Matéria-prima — minério, ferro e carvão
-  (`MATERIAL_ITEM_KINDS`) — é **contador** debaixo da bolsa: informativa, sem cursor, sem seleção.
-  Ela continua inteira no `Inventory` e as receitas manuais gastam dela; não ocupa slot do X,
-  porque selecioná-la só podia calar o botão. A
-  `bloom` é a fronteira e fica na BOLSA: ela tem gesto (o X a pousa pra ser martelada).
+## O mundo (`world.json`) e o editor (`/editor`)
 
-No toque são dois círculos no canto de baixo (`ActionButtons`, ordem do NES: B à esquerda) mais o
-botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTouchDevice`).
-
-- **A BOLSA é a única tela que fica aberta com o mundo CORRENDO** (`QuickBag`): congelar o jogo
-  faria trocar de item custar zero. O preço é físico — pés presos (`hold`), os dois botões calados,
-  escudo baixo — e **apanhar a FECHA**. Ela **não escuta tecla nenhuma**: com a cena viva, `I`/`←→`/
-  `X`/`ESC` têm de ser roteados num lugar só (`GameScene`) ou cada tecla acontece duas vezes.
-
-- `GameScene.pressAttack` / `pressUse` são ligados **por evento de teclado**, nunca por `JustDown`
-  (o `update` tem meia dúzia de saídas antecipadas onde uma tecla lida por polling morre). O A tem
-  `keyup` também — segurá-lo carrega a **lâmina rodopiante** (corta os 8 vizinhos) —, e a repetição
-  de tecla se filtra pelo `event.repeat`, nunca por um booleano nosso: um `keyup` perdido mataria o
-  botão. Pedido feito na cadência **espera** (130ms), nunca some.
-- **A parede VIRA o herói** (`PlayerMovementController`): precondição dos dois botões, que agem no
-  tile à frente. Ele encara, não entra. E **virar-se para uma criatura é de graça** — a primeira
-  investida só vira o corpo (`turnedTowardCreature`), insistir cobra o dano de contato. Só criatura.
-- **O golpe varre a ÁREA à frente — o bloco 2×3** (`SWING_ARC_NEAR` + `SWING_ARC_FAR`), e quem
-  mostra isso é a **órbita do punho** (`SLASH_ORBIT_FACTOR`): a espada é sempre o sprite da espada,
-  no tamanho dela — o golpe alcança porque o braço estende, **nunca** porque a arte cresce ou porque
-  um efeito desenhado entra na frente dela. A fileira de trás precisa de **caminho**
-  (o tile do meio não pode ser parede — senão a lâmina cortaria através da rocha).
-- **Golpe que não mata compra espaço e tempo**: arremessa um tile (`EnemyBase.shove`, consultando o
-  **mesmo mundo** em que o bicho anda — luz de fogueira inclusive) e atordoa (`applyHitstun`).
-  Espécie que escreve a própria posição (torreta, zora) **precisa** de `canBeShoved = false`.
-- **NADA morre de um golpe** (`MELEE_DAMAGE.sword` = 2; só o graveto ACESO ainda mata em um). Era
-  999, e com isso o telegrafo de 500ms de cada espécie nunca acontecia: o encontro inteiro era
-  chegar perto e apertar Z. Toda lei abaixo depende desta.
-- **O corpo tem i-FRAMES** (`EnemyBase.hurtInvulnMs`, 450ms) e o golpe que cai neles **resvala**
-  (anel pálido, sem dano). Sem isso um arco de 6 tiles a cada 260ms é uma serra.
-- **O golpe armado do bicho NÃO se cancela batendo nele, e ele GUARDA a frente enquanto arma**
-  (`guardsAgainst`): a resposta ao telegrafo é sair do tile e contornar. Espécie sem frente
-  (gosma, morcego) devolve `guardsWhileWindingUp = false`. **O telegrafo marca o TILE mirado** (um
-  anel que fecha no chão): a resposta é sair de lá, então o lugar tem de estar na tela.
-- **Toda recusa tem desenho PRÓPRIO**: resvalo de i-frames = anel azul frio (espere) · guarda =
-  faíscas quentes NO LADO guardado (contorne), anunciadas por um brilho no mesmo lado durante o
-  telegrafo · encontrão contra parede = poeira + hitstop extra (`shove` devolve
-  `'moved' | 'slammed' | 'immovable'`). Duas recusas com o mesmo pixel não ensinam nenhuma.
-- **NÃO existe barra de vida** (o esqueleto dela foi deletado). Quem conta é o CORPO: ele escurece
-  conforme perde vida (`woundedShade`, que multiplica o tom permanente da espécie em vez de
-  substituí-lo) e deixa MARCA ao morrer — `die()` liga `corpseMark`, `despawn()` não, e quem tem
-  arte própria de morte (a poça da gosma) devolve `leavesCorpseMark = false`.
-- **Atacar PRENDE os pés** (`SWING_ROOT_MS` = 160, o giro 260): sem compromisso, espaçamento não
-  custa nada. `PlayerMovementController.root` impede COMEÇAR um passo, nunca congela um em curso.
-- **O escudo do herói é a DIREÇÃO EM QUE ELE OLHA, e só apara TIRO** (`blocksBlowFrom`, cone de
-  90°; guarda baixa enquanto ataca). Se aparasse golpe de corpo, encarar seria invencibilidade.
-- **O esbarrão ficou só com os gestos de corpo**: empurrar caixote, portão de bater — e tomar dano
-  de contato. **NÃO EXISTE DINHEIRO NESTE JOGO** — a loja da fogueira caiu primeiro, e depois dela
-  a MOEDA inteira (o drop de todo corpo, a carteira, o balcão de venda do NPC). Uma economia sem
-  onde gastar é um número que só sobe: recompensa é ITEM, ou é nada. **Falar NÃO é esbarrão**:
-  um gesto que para o jogo inteiro não pode acontecer por a seta ter encostado em alguém.
-- **A FERRAMENTA CERTA SE APRESENTA SOZINHA** (`toolWantedAt`): o X contra madeira morta saca o
-  machado, contra pinheiro vivo o de aço, contra rocha a picareta — e TROCA a seleção de verdade
-  (o braço tem de desenhar o que trabalha). Só entra aí o alvo com UMA resposta possível, e a
-  tocha ACESA nunca é trocada (trocar de item apaga o fogo).
-- `useItemAt` é a tabela de itens (machado→árvore, picareta→rocha, tocha→fogueira morta…), e ela é
-  o **botão X**. Devolve `false` só quando o item não tem nada a ver com o tile — e aí o X segue
-  para a entrega, para recolher e, por fim, para o gesto no vazio.
-- **As estações são exclusivamente MANUAIS.** Bancada e forno gastam os insumos da mochila pelo
-  catálogo; itens largados no chão nunca são recolhidos ou processados automaticamente.
-- **Item que se POUSA é a esponja**, para ser martelada no chão ou trabalhada no altar. É uma linha
-  de `useItemAt`, não um gesto geral de largar.
-- **PISAR APANHA TUDO** (`collectUnderfoot`, via `Inventory.stash`, que **nunca** rouba a mão): a
-  lista de exceções morreu com o gesto de largar — sem largar não há mão a ser roubada. Só empunha
-  o que cai numa mão vazia (`selectFirstIfEmpty`, a primeira ferramenta da partida). A pisada com a
-  **tocha acesa** continua vindo ANTES: ela QUEIMA o carvão em vez de guardá-lo.
-- A mochila (`runtime/Inventory.ts`) guarda em vez de trocar; `GameScene.heldItem` é um **getter**
-  sobre a seleção (uma fonte de verdade só). Trocar de item **apaga a tocha**.
-- **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica: a
-  lógica pula pro tile de destino quando o passo começa, e o corpo desenhado fica um tile atrás.
-- **Golpe não ACENDE o corpo que o levou:** tint branco em billboard `emissive` é silhueta chapada
-  que o bloom espalha, e o hitstop a congela acesa. Tint no bicho só pro que não é dano.
-- **Não há exceção aos dois botões.** Houve um revólver que se mirava com o mouse em 360°; ele foi
-  arrancado inteiro (arma, balas, cruz de mira). Nada neste jogo se aponta.
-- `npm run playtest -- combate` guarda o contrato dos botões; `esgrima`, a mão do combate.
-
-## O mundo (`world.json` + `underworld.json`) e o editor (`/editor`)
-
-- **HÁ UM MUNDO SÓ, e ele tem DOIS ANDARES.** Não existem mais levels isolados: `public/levels/`,
-  a `LevelSelectScene`, o `levelPortal`, o cartão de abertura, os dois botões flutuantes e a rota
-  `/lab` foram todos removidos. A única travessia é a ESCADA, entre a superfície e o espelho.
+- **HÁ UM MUNDO SÓ, e só a superfície.** Levels, `/lab`, explorador e o subterrâneo
+  (`underworld.json`, escadas) foram removidos. **`scripts/cozy-world.mjs`** é o passo que tirou o
+  combate do mundo e montou o jardim (rode com `--check`: o disco tem de ser o ponto fixo).
+- **O jardim do centro é fechado por PROVA DE BFS**, e a sebe tem colisão PINTADA: árvore com
+  colisão pintada não é cortável (`treeTileFrameAt`) — senão o machado de aço abre o portão.
 - **⚠️ NUNCA rode `generate:world`.** `generateWorld.ts` sobrescreve o `world.json` inteiro por um
   mundo **8×8 sem NPC autorado e com uma fogueira** — e o de hoje é 5×5 chunks, feito à mão no
   `/editor`. Ele escreve **sem merge e sem perguntar**. Fica no repo como scaffolding, e só depois
@@ -190,33 +108,22 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
 - **O BARALHO comprável se escolhe no /editor** (`catalog.enabled`, a lista de caixas da Biblioteca
   de chunks), e quem filtra é `getChunkTemplates` — **um lugar só**: carta desligada continua
   inteira no arquivo, e um segundo filtro rio abaixo seria uma segunda resposta.
-- **A bolsa começa em ZERO e todo preço é medido em BARRA DE FERRO** (o astronauta paga 9; a
-  caveira larga 1, e **2 em uma morte a cada quatro**) — a tabela inteira mora em
-  `scripts/add-prologue.mjs`, e mexer num custo pelo editor
-  sem mexer nela é perder a mudança na próxima rodada do script. A carta do astronauta é a mais
-  barata de propósito: ela ENSINA o jogo e paga por todas as outras.
 - **Mexer no mundo em massa é um script que LÊ o `world.json` e acrescenta** — nunca um que o
-  refaz. `scripts/enrich-world.mjs`, `place-enemies.mjs`, `enrich-overworld-props.mjs`,
-  `enrich-dungeons.mjs` e `enrich-chunk-cards.mjs` são os modelos: idempotentes (miram num TOTAL,
+  refaz. `scripts/cozy-world.mjs`, `enrich-world.mjs` e `enrich-chunk-cards.mjs` são os modelos: idempotentes (miram num TOTAL,
   não num delta — e o `--check` do último falha se o disco não for o ponto fixo),
   determinísticos (zero `Math.random()`) e proibidos de tocar em `ground`, `collisions` e no que
   o autor já pôs. **Prop que bloqueia só entra com prova de BFS de que não selou caminho** — a
   heurística local de vizinhos já prendeu 1.700 tiles em bolsões. Faça um backup antes.
 - **Leia o JSON, nunca a documentação, para saber o que o mundo contém** — ele muda sempre que
   alguém abre o editor.
-- **A FOGUEIRA-LAR é a mais próxima do `playerStart`** — é assim que o runtime escolhe qual nasce
-  acesa; toda outra começa apagada, e acendê-las é o jogo.
+- **As fogueiras comuns seguem o relógio** (acesas à noite); só a `hearth` é do herói.
 - **CHÃO + UMA COISA. Um tile tem o `ground` e, em cima dele, no máximo UMA — `upper`, prop, item,
-  NPC ou cova.** O editor cumpre (colocar limpa o tile, pintar `upper` pula o tile ocupado); quem
+  ou NPC.** O editor cumpre (colocar limpa o tile, pintar `upper` pula o tile ocupado); quem
   quebra é script e JSON à mão. `npm run audit:stacks` confere, `scripts/fix-tile-stacks.mjs` conserta.
 - **Um playtest AUTORA a fixture que precisa** (entra no `/editor`, limpa um quintal e coloca
   props pelo `EditorStore`, aperta P) em vez de depender do que o mundo autorado contém hoje.
-- `/editor` edita a SUPERFÍCIE ou o **SUBTERRÂNEO** (`?under`, `public/underworld.json`) via
-  `/api/world` — os dois botões do painel são só uma porta para esse parâmetro. **P** joga o mundo
-  em memória, **ESC** volta; nada salva até o Salvar.
-- **NÃO EXISTE spawn ambiente: todo inimigo do mundo nasce de uma COVA AUTORADA** (aba Inimigos
-  do editor), no tile exato que alguém escolheu — o cerco que invocava caveiras em volta do herói
-  no escuro foi arrancado.
+- `/editor` edita o `world.json` via `/api/world`. **P** joga o mundo em memória (sem abertura e
+  sem save), **ESC** volta; nada salva até o Salvar.
 
 ## Fogo, e a lei das travas
 
@@ -291,58 +198,13 @@ botão de bolsa acima deles, e eles aparecem em qualquer aparelho de dedo (`isTo
   eletrônicos. A caixa de correio/venda aérea também não existe. Saves antigos apenas descartam
   esses tipos durante a migração.
 
-`pyre` **a PIRA: nasce só com a base, sobe uma tora a cada graveto do X e, fechada, aceita a
-tocha ACESA** (o único prop cujo PROGRESSO o save guarda — ela custa viagens, não um gesto; e ela
-NÃO é combustível do sistema de fogo: acender é gesto, nunca incêndio que chegou sozinho) ·
-`toolbox` caixa de ferramentas manual (graveto+pedra=machado, graveto+ferro=foice,
+`hearth` **a FOGUEIRA DO FIM: não segue o relógio, só o herói a acende (Z), e Z com graveto +
+cogumelo assa e fecha o jogo** · `gardenGate` (a porta sem chave: abre quando o último pedido
+fecha) · `toolbox` caixa de ferramentas manual (graveto+pedra=machado, graveto+ferro=foice,
 pedra+pedra=forno, pedra+minério=altar) · `furnace` forno manual (madeira+madeira=carvão,
 minério+carvão=bloom) · `altar` laje manual de martelar · `ironRock`/`iron` (mesma rocha,
 `ore: true`) · `swingGate` (a trava sem chave: só abre com o tile de trás livre) · `moonflower`
-(abre no escuro; uma arte avaliada em 9 aberturas) · `enemies` (ponto de spawn: um corpo por cova, volta em
-`ENEMY_RESPAWN_MS`; luz de fogueira acesa cala a cova) · `stairs` (a ÚNICA travessia: uma caminhada
-até o outro andar, com um `scene.restart()` atrás da cortina).
-
-## O bestiário (`src/game/entities/enemies/`, um arquivo por espécie)
-
-- **Espécie nova nasce de uma FRASE, não de uma tabela de HP** — o que ela diz que nenhuma outra
-  diz. Números diferentes fazem inimigos diferentes no papel e o mesmo inimigo na mão. A vida ela
-  **não escolhe**: é um DEGRAU na escada de `ENEMY_BLOWS` (2 a 9 espadadas, crescente e sem
-  repetir), e como não há degrau vago, entrar é dizer de quem ela é mais difícil.
-- **A FOGUEIRA NÃO REPELE: ELA QUEIMA** (`tickScorch`, `CAMPFIRE_SCORCH_RADIUS_TILES` = 2). A luz
-  era uma parede que nenhum monstro pisava — mágica, invisível e sem nada na tela dizendo por quê —
-  e ela caiu. Dentro de **2 tiles** o corpo pega fogo e perde uma espadada de vida por mordida
-  (1,6s) até cair; a 3 tiles a fogueira não é nada para ele. Corpo nenhum some sozinho — um bicho
-  que evapora desmente a chegada dele. Não é a tocha viva: o corpo assado continua sendo a espécie,
-  não corre em pânico e **não espalha fogo** (se espalhasse, cada fogueira acenderia o mato à volta
-  e as fogueiras MORTAS, que são a fechadura do jogo).
-- **O que a luz ainda faz é CALAR** (`LIGHT_RADIUS_TILES`): cova não abre dentro dela, e a
-  caveira não marcha até uma placa acesa. Acender a fogueira do corredor continua calando a cova
-  dele. A **tocha** é outra coisa: uma *lista* (`fearsTorch`), e há quem a ignore.
-- **Quem paga é a MORTE, não o golpe** (`EnemyBase.setDeathToll`, tocado por `die()` e só por ele):
-  todo corpo que cai paga do mesmo jeito, tenha-o matado a espada, a bomba, a tocha viva ou a
-  brasa. Fonte nova de dano não precisa saber o que a morte dá — e `despawn()` não paga, porque
-  ali ninguém morreu. Hoje o que a morte dá é o CORAÇÃO, e só com o herói ferido.
-- **Chegar é um evento e todo golpe é telegrafado** (`WalkerEnemy`). Corpo que aparece do nada, ou
-  que fere sem aviso, desmente a promessa que a caveira ensinou.
-- **Fora do quadro o corpo anda, mas não FALA e não INICIA golpe** (`EnemyBase.framed`; o quadro
-  real é ~4,5 tiles pros lados e 2,5 pro sul — bem menor que os alcances). Som ou ataque novo de
-  bicho SEM esse gate reabre o "ouço o que não vejo".
-- **A MÚSICA NÃO RESPONDE A INIMIGO**: a trilha é escolhida ao entrar no mundo e é a mesma até
-  sair (a de combate foi removida). Quem anuncia um bicho é o bicho — telegrafo, voz, fissura.
-- **Onde cada espécie PODE existir é uma lista só** (`FLYING_ENEMY_KINDS` / `AQUATIC_ENEMY_KINDS`,
-  em `ScreenContent`): o corpo, a cova e o aviso do editor leem dela. Três cópias já discordaram.
-- **Corpo que morre na ÁGUA larga o drop na PRAIA** (`shoreDropTile`): recompensa que o herói vê
-  e não alcança é pior que recompensa nenhuma.
-- **Água tem DUAS procedências e quem pergunta por uma só quebra**: prop `water` e tile de
-  terreno (overworld). Uma resposta só, `GameScene.isOpenWaterAt`. Fora do mundo o chão também é
-  mar — o teste de chunk não é opcional.
-- **Projétil é a única coisa em coordenada CONTÍNUA de tile** (`EnemyProjectile`): parede mata bala,
-  luz e água não. Ele brilha por ser `emissive`, **nunca por trazer uma luz**.
-- **UMA ESPÉCIE POR TELA.** O chunk é a região (a câmera enquadra ~um), e duas espécies na mesma
-  tela não são variedade: são ruído, porque cada corpo pede uma resposta diferente e nenhuma dá pra
-  aprender. Quem impõe isso no `world.json` é `node scripts/place-enemies.mjs` — e o número que se
-  olha ao mexer nele **não** é covas por tela, é **covas dentro de 14 tiles** (a cova acorda na
-  distância de visão da caveira, que vale ~4 telas: 3 por tela viram 13 corpos em volta do herói).
+(abre no escuro).
 
 ## A montanha em cubo, e a água que anda
 
@@ -418,50 +280,18 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
 
 **QUEM RODA OS TESTES É O AUTOR, SEMPRE.** Não rode `npm run playtest` por conta própria e não
 escreva cenário sem ele pedir: implemente, rode `typecheck`/`lint`/`build`, diga **qual cenário
-guarda o que mudou** e pare. Uma suíte que ninguém pediu custa minutos de máquina dele e devolve
-flakes que ele vai ter de julgar de qualquer jeito.
+guarda o que mudou** e pare.
 
-**Rodar o jogo para testar é SEMPRE mudo.** Nunca com efeito sonoro: a janela é visível (o WebGL
-exige) e uma suíte inteira grita na sala de quem está trabalhando. O `GameDriver` já garante isso
-por construção (`--mute-audio` + volumes zerados antes do boot) — não desligue.
+**Rodar o jogo para testar é SEMPRE mudo** (o `GameDriver` garante: `--mute-audio` + volumes
+zerados). O harness (`playtest/`) é Playwright com cabeça; entre com `?play`; não dirija o jogo
+por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd3d`, `gameDebug`,
+`__prof`. **Teste EXATAMENTE o que você mudou** — o `zerar` leva ~5 minutos.
 
-O harness (`playtest/`) é Playwright com cabeça: dirige o jogo real e asserta estado real. Novo
-cenário em `playtest/scenarios/` + registro no `index.mjs`. Entre **sempre com `?play`**. Não
-dirija o jogo por aba MCP (aba oculta congela o rAF do Phaser). Handles vivos: `window.__scene`,
-`__game`, `hd3d`, `gameDebug`, `__prof`.
-
-**Teste EXATAMENTE o que você mudou.** Não replay o jogo inteiro para checar algo pontual — os
-solves completos levam minutos, são sensíveis a timing e flakeiam.
-
-Dois botões / mochila / subtela → `combate`; **a BOLSA que não pausa (relógio andando, pés presos,
-apontar ≠ equipar, pancada fechando) → `bolsa`**; **mira, arco de 3 tiles, arremesso, atordoamento e
-a lâmina rodopiante → `esgrima`**. Machado, árvore e borda → `machado`; rocha e picareta →
-`pedra`; contratos de estado de item → `itens`. **Aba Inimigos e a cova que devolve o inimigo →
-`inimigos`; o bestiário que anda →
-`fauna`; torreta, mago e a lei do tiro → `projeteis`; o zora e a janela dele → `zora`; o corpo
-que o fogo acende (empurrão contra brasa, pânico, rastro) → `tocha-viva`; o corpo que ASSA na beira
-da fogueira (e a matilha que não evapora mais) → `brasa`; a bola que CONGELA em
-vez de ferir, a rebatida da espada e fogo×gelo → `gelo`.**
-**A ausência da automação e do correio → `sem-fabrica`; a cadeia manual do ferro e o prólogo →
-`prologo`; a laje do altar (pôr com Z, malhar, o ferro em cima dela e o X que devolve) → `altar`.**
-Flor da lua → `flor-da-lua`. **Montanha em cubo e a água que anda → `montanha`;** o vento
-na vegetação (e a lápide que não balança) → `vento`; o prólogo (a oficina do ferro e a Morte do
-fim) → `prologo`. Fogo e o orçamento de
-luz → `perf-burn`; custo de frame → `perf-profile`.
-
-**OS CENÁRIOS QUE AUTORAM FIXTURE ENTRAM PELO `/editor`** (era o `/lab`, que saiu com os levels):
-eles limpam um quintal do mundo real pelo `EditorStore`, põem o que precisam e apertam P. Repare
-que a fixture agora assenta sobre o mundo AUTORADO, e não sobre uma tela vazia — quem escrever um
-cenário novo tem de limpar o que atrapalha.
-
-**Cenários VERMELHOS que ninguém deve "consertar" editando conteúdo:** `explorador`,
-`world-builder`, `cat-cards`, `jardim` e `vento` assertam o explorador e o baralho de cartas, os
-dois removidos; `prologo` compra uma carta que não existe. O menu (sem idioma e
-sem intro) → `menu-flow`; **save, morte-sem-perda e o Continue do título → `salvamento`**;
-o herói **nascendo do tamanho certo** → `smoke`. **Que o jogo ainda dá para ZERAR
-(fogo até a pira, toras, missões) → `npm run audit:endgame`, que é estático e não é
-Playwright.** Uma falha
-num cenário que você não tocou é um flake a anotar, não uma suíte a rodar quatro vezes.
+O jogo inteiro, título → créditos → `zerar`; bolsa → `bolsa`; machado → `machado`; pedra →
+`pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;
+menu → `menu-flow`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
+Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`)
+podem estar vermelhos: não "conserte" editando conteúdo.
 
 **Performance sempre contra a `main`** (`git stash`), e sempre com vsync livre
 (`PLAYTEST_UNTHROTTLED=1 PLAYTEST_SLOWMO=0`) — com vsync a GPU só *reduz o clock* e toda variante
@@ -473,13 +303,13 @@ boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render
 ## Outras coisas fáceis de errar
 
 - **O Phaser não chama `shutdown()` sozinho** — ligue via `events.once(SHUTDOWN, ...)`, ou um
-  `scene.restart()` (morte) vaza listeners entre runs.
+  `scene.restart()` vaza listeners entre runs.
 - **Mudança em cena não faz hot-reload**; o `beforeunload` do editor bloqueia o reload automático,
   então você fica olhando código velho.
 - **Fala de NPC vive no `public/world.json`**, não só em `NPC_DIALOGS` — NPC novo precisa dos dois.
 - `mat.needsUpdate = true` na troca de textura de sombra parece desperdício e não é (senão a sombra
   do herói congela num frame do passo).
 - Editor: **G gira** (não R, que é o retângulo); `UI_STATE_KEY` sobe de versão junto com a *forma*
-  do `UiState`; o Salvar avisa sobre entidades e covas em tiles inválidos ou na luz.
+  do `UiState`; o Salvar avisa sobre entidades em tiles inválidos.
 - Profiler: `?prof` boota com ele, **F3** liga o HUD, `__prof.report()`/`.csv()` despejam. Ele
   mede GPU de verdade (timer query) e **nomeia a causa** de cada pico.

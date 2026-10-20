@@ -1,12 +1,10 @@
-﻿import { CHUNK_COLUMNS, CHUNK_ROWS, DUNGEON_TILES } from '@/game/constants';
-import { isUnderground } from '@/game/runtime/underworld';
+import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
 import type { NpcKind, PickupKind, ScreenContent } from './ScreenContent';
 import {
-  WORLD_SCHEMA_VERSION, type WorldChunk, type WorldData,
-  type WorldEnemySpawn, type WorldProp,
+  WORLD_SCHEMA_VERSION, type WorldChunk, type WorldData, type WorldProp,
 } from './worldSchema';
 
 // Single seam through which the whole runtime reads the finite, authored world. The data is
@@ -45,9 +43,6 @@ type WorldBounds = {
 // de random em UUID — ver a armadilha no CLAUDE.md).
 const VOID_FOREST_FRAMES: readonly number[] = [4, 14, 15, 16, 17, 18];
 const VOID_FLOOR_FRAMES: readonly number[] = [5, 6];
-const VOID_DUNGEON_WALL_FRAMES: readonly number[] = [
-  ...DUNGEON_TILES.walls, DUNGEON_TILES.wallMoss,
-];
 
 /** Hash inteiro estável de um tile — o mesmo espírito do `seaVariant` do World3D. */
 const voidVariant = (wx: number, wy: number, n: number): number => {
@@ -62,7 +57,7 @@ let world: WorldData | null = null;
 let chunkByKey = new Map<string, WorldChunk>();
 let bounds: WorldBounds | null = null;
 
-const EMPTY_CONTENT: ScreenContent = { enemies: [], pickups: [], npcs: [] };
+const EMPTY_CONTENT: ScreenContent = { pickups: [], npcs: [] };
 
 // ── the infinite world (explorer mode) ────────────────────────────────────────
 //
@@ -89,7 +84,7 @@ export type InfiniteWorld = {
   /** Streamed spawns (hearts, NPCs) for a chunk. */
   content: (cx: number, cy: number) => ScreenContent;
   /** Carriable items laid out at boot — the explorer's camp kit. */
-  heldItems: () => Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }>;
+  heldItems: () => Array<{ type: PickupKind; worldX: number; worldY: number }>;
 };
 
 let infinite: InfiniteWorld | null = null;
@@ -192,7 +187,6 @@ export const isInsideWorld = (cx: number, cy: number): boolean => {
 };
 
 const buildVoidChunk = (cx: number, cy: number): ChunkData => {
-  const dungeon = isUnderground();
   const ground: number[][] = [];
   const upper: Array<Array<number | null>> = [];
   for (let row = 0; row < CHUNK_ROWS; row += 1) {
@@ -201,16 +195,8 @@ const buildVoidChunk = (cx: number, cy: number): ChunkData => {
     for (let col = 0; col < CHUNK_COLUMNS; col += 1) {
       const wx = cx * CHUNK_COLUMNS + col;
       const wy = cy * CHUNK_ROWS + row;
-      if (dungeon) {
-        // A alvenaria é MACIÇA: chão de dungeon debaixo, muro em cima. O muro vira CUBO no
-        // World3D e o teto dele já é preto puro (mats.wallTop) — o "escuro gigante" pedido não
-        // é um material novo, é o topo do muro que a dungeon sempre teve, sem fim.
-        groundRow.push(DUNGEON_TILES.floors[voidVariant(wx, wy, DUNGEON_TILES.floors.length)]);
-        upperRow.push(VOID_DUNGEON_WALL_FRAMES[voidVariant(wx + 7, wy, VOID_DUNGEON_WALL_FRAMES.length)]);
-      } else {
-        groundRow.push(VOID_FLOOR_FRAMES[voidVariant(wx, wy, VOID_FLOOR_FRAMES.length)]);
-        upperRow.push(VOID_FOREST_FRAMES[voidVariant(wx + 7, wy, VOID_FOREST_FRAMES.length)]);
-      }
+      groundRow.push(VOID_FLOOR_FRAMES[voidVariant(wx, wy, VOID_FLOOR_FRAMES.length)]);
+      upperRow.push(VOID_FOREST_FRAMES[voidVariant(wx + 7, wy, VOID_FOREST_FRAMES.length)]);
     }
     ground.push(groundRow);
     upper.push(upperRow);
@@ -239,7 +225,7 @@ export const getChunkContent = (cx: number, cy: number): ScreenContent => {
   if (infinite) return infinite.content(cx, cy);
   const chunk = chunkByKey.get(chunkKey(cx, cy));
   if (!chunk) return EMPTY_CONTENT;
-  return { enemies: chunk.enemies, pickups: chunk.pickups, npcs: chunk.npcs };
+  return { pickups: chunk.pickups, npcs: chunk.npcs };
 };
 
 export const getPlayerStart = (): { worldX: number; worldY: number } => (
@@ -271,29 +257,21 @@ export const getRocks = (): WorldProp[] => allProps().filter((prop) => prop.type
 
 export const getTallGrass = (): WorldProp[] => allProps().filter((prop) => prop.type === 'tallGrass');
 
-export const getLavaTiles = (): WorldProp[] => allProps().filter((prop) => prop.type === 'lava');
 
 export const getWaterTiles = (): WorldProp[] => allProps().filter((prop) => prop.type === 'water');
 
 export const getBridgeSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'bridgeSpot');
 
-// A PIRA: a torre que o jogador monta graveto a graveto e acende no fim. Ver PyreObject.
-export const getPyres = (): WorldProp[] => allProps().filter((prop) => prop.type === 'pyre');
 
-// A ESCADA entre os dois andares do mundo — mesma peca, mesmo tile, nos dois. Ver StairsObject.
-export const getStairs = (): WorldProp[] => allProps().filter((prop) => prop.type === 'stairs');
 
 // A night-blooming flower: a closed bud (blocks) while a campfire burns near it, open petal-bridge
 // (walkable) in the dark. See MoonflowerObject.
 export const getMoonflowers = (): WorldProp[] => allProps().filter((prop) => prop.type === 'moonflower');
 
-// The walkable mark where a carried bomb plants itself on step. See BombSpotObject.
-export const getBombSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'bombSpot');
 
 // The dug hole where carried seeds plant themselves on step. See PlantSpotObject.
 export const getPlantSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'plantSpot');
 
-export const getCarnivorousPlants = (): WorldProp[] => allProps().filter((prop) => prop.type === 'carnivorousPlant');
 // The workbench. Carries `dir` for the same load-bearing reason the arm does: it decides which two
 // tiles behind it are the slots and which tile in front receives the crafted item.
 export const getToolboxes = (): WorldProp[] => allProps().filter((prop) => prop.type === 'toolbox');
@@ -303,38 +281,23 @@ export const getFurnaces = (): WorldProp[] => allProps().filter((prop) => prop.t
 // laje e estado de PARTIDA (o jogador pos), e nao conteudo do mapa.
 export const getAltars = (): WorldProp[] => allProps().filter((prop) => prop.type === 'altar');
 
-// Os PONTOS DE SPAWN de inimigo, autorados na aba Inimigos do editor. Lidos de uma vez, como os
-// itens de mao e nunca por chunk, porque uma cova nao e conteudo de tela: ela guarda um relogio
-// de respawn que precisa continuar contando com o heroi do outro lado do mapa (ver
-// EnemySpawnerManager). Streamar isto zeraria o relogio a cada ida e volta.
-//
-// Mundo infinito devolve NADA: la nao ha autor, e com o cerco ambiente removido nao ha nenhuma
-// outra fonte de corpo — mundo sem cova e mundo sem inimigo, e isso e a verdade dele.
-export const getEnemySpawns = (): WorldEnemySpawn[] => {
-  if (infinite) return [];
-  const out: WorldEnemySpawn[] = [];
-  for (const chunk of requireWorld().chunks) {
-    // `?? []` porque um chunk escrito a mao pode nao ter a lista; o resto do runtime nunca a leu.
-    for (const enemy of chunk.enemies ?? []) {
-      out.push({ type: enemy.type, worldX: enemy.worldX, worldY: enemy.worldY });
-    }
-  }
-  return out;
-};
+// A FOGUEIRA DO FIM e o PORTAO do jardim que a guarda — os dois existem uma vez so, no centro do
+// mapa. Ver GameScene.openGardenGate / GameScene.playRoastEnding.
+export const getHearths = (): WorldProp[] => allProps().filter((prop) => prop.type === 'hearth');
+
+export const getGardenGates = (): WorldProp[] => allProps().filter((prop) => prop.type === 'gardenGate');
 
 // Held items (everything except streamed hearts) are loaded once, up front, because the
 // hero can drop and swap them anywhere, so they must persist off-screen.
-export const getHeldItemPickups = (): Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> => {
-  const out: Array<{ type: Exclude<PickupKind, 'heart'>; worldX: number; worldY: number }> = [];
+export const getHeldItemPickups = (): Array<{ type: PickupKind; worldX: number; worldY: number }> => {
+  const out: Array<{ type: PickupKind; worldX: number; worldY: number }> = [];
   // An infinite world has no authored chunks to walk — it lays out its own kit (the explorer's
   // camp tools), and reading the overworld's chunks here would sprinkle the adventure's tools
   // across a camp that never placed them.
   if (infinite) return infinite.heldItems();
   for (const chunk of requireWorld().chunks) {
     for (const pickup of chunk.pickups) {
-      if (pickup.type !== 'heart') {
-        out.push({ type: pickup.type, worldX: pickup.worldX, worldY: pickup.worldY });
-      }
+      out.push({ type: pickup.type, worldX: pickup.worldX, worldY: pickup.worldY });
     }
   }
   return out;
@@ -347,15 +310,15 @@ export const getHeldItemPickups = (): Array<{ type: Exclude<PickupKind, 'heart'>
 // `scriptId` é o roteiro DA INSTÂNCIA (ver WorldNpcSpawn.dialog): o mesmo gato mora em três cartas
 // ensinando três coisas, e o roteiro por espécie fazia o gato do machado explicar a picareta.
 //
-// E o LOCALE só entra quando o roteiro É o do tipo. Esta é a parte que morde: `localizedNpc(kind)`
-// tem prioridade sobre o arquivo, então um roteiro autorado com o nome da espécie teria suas falas
-// substituídas pelas genéricas do en.json — que foi exatamente o que aconteceu com o gato do
-// level-1, cujas cinco falas são texto morto desde que o locale ganhou uma entrada `blackCat`.
+// O LOCALE tem prioridade sobre o arquivo para QUALQUER roteiro que ele conheça (`npc.<id>`):
+// o texto do jogo mora num lugar só, e o world.json guarda o retrato, a cor e a voz.
 export const getDialog = (kind: NpcKind, scriptId?: string): DialogScript | undefined => {
   const id = scriptId ?? kind;
   const dialog = requireWorld().dialogs[id];
   if (!dialog) return undefined;
-  const localized = id === kind ? localizedNpc(kind) : undefined;
+  // O locale fala por QUALQUER roteiro que ele conheca — o pedido (`painter`) e o obrigado
+  // (`painterDone`) moram la juntos, e o world.json fica so com retrato, cor e voz.
+  const localized = localizedNpc(id);
   return {
     npcName: localized?.name ?? dialog.npcName,
     npcColorHex: dialog.npcColorHex,

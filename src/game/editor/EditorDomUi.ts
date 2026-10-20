@@ -1,18 +1,18 @@
 import type Phaser from 'phaser';
 
 import {
-  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, ENEMY_RESPAWN_MS, KEY_FRAMES,
-  MOONFLOWER_FRAMES, NPC_VISUALS, SEA_TILE_FRAME, SLIME_FRAMES, SOLID_GROUND_FRAMES,
-  SOLID_UPPER_FRAMES, TOOLBOX_FRAMES, ZORA_FRAMES,
+  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES,
+  MOONFLOWER_FRAMES, NPC_VISUALS, SEA_TILE_FRAME, SOLID_GROUND_FRAMES,
+  SOLID_UPPER_FRAMES, TOOLBOX_FRAMES,
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
-import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
+import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
 import type {
   PropDir, PropKind, WorldDialog,
 } from '@/game/world/worldSchema';
 import {
-  worldFileForFloor, worldFilePath,
-  type WorldFileId, type WorldFloor,
+  worldFilePath,
+  type WorldFileId,
 } from '@/game/worldApi';
 
 // The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
@@ -24,14 +24,9 @@ export const PANEL_WIDTH = 320;
 
 export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'entity' | 'spawn';
 export type CollisionPaintMode = 'keep' | 'set' | 'clear';
-// A aba "Inimigos" e o que ela coloca: um PONTO DE SPAWN. O tile faz um corpo quando o heroi
-// chega perto e faz outro um tempo depois que aquele cai (EnemySpawnerManager). Desde que o cerco
-// ambiente saiu do jogo (UndeadSpawnDirector, que invocava caveiras em volta do heroi no escuro),
-// esta aba e a UNICA maneira de por um inimigo no mundo — nada nasce sem passar por aqui.
-export type PaletteTab = 'tiles' | 'enemies' | 'npcs' | 'pickups' | 'props';
+export type PaletteTab = 'tiles' | 'npcs' | 'pickups' | 'props';
 
 export type EntitySelection =
-  | { list: 'enemies'; type: EnemyKind }
   | { list: 'npcs'; type: NpcKind }
   | { list: 'pickups'; type: PickupKind }
   | { list: 'props'; type: PropKind };
@@ -83,43 +78,7 @@ export type EditorUiCallbacks = {
   onDialogApply: (kind: NpcKind, dialog: WorldDialog) => void;
   /** O arquivo aberto agora. E o que o Salvar escreve, entao e o que os botoes prometem. */
   worldFile: WorldFileId;
-  /** OS DOIS ANDARES do mundo — a superfície e o espelho de baixo. É a chave `?under` da URL. */
-  floorSwitch?: {
-    current: WorldFloor;
-    open: (floor: WorldFloor) => void;
-  };
 };
-
-// O QUE A ABA INIMIGOS OFERECE — o bestiario inteiro, uma linha por EnemyKind.
-//
-// Todo item desta lista coloca um PONTO DE SPAWN, nunca um corpo: o tile faz um corpo quando o
-// heroi chega perto e faz outro ENEMY_RESPAWN_MS depois que aquele cai (EnemySpawnerManager).
-//
-// O rotulo carrega a FRASE da especie e nao os numeros dela, porque e o rotulo que o autor le
-// quando escolhe: "voa" muda onde a cova faz sentido; "nao teme tocha" muda se aquela sala tem
-// solucao com fogo na mao. A ordem e de leitura — a caveira primeiro (o inimigo que o jogo
-// inteiro ensinou), o que anda depois, e os dois que atiram no fim.
-//
-// Esta lista e um array e nao cobra nada do compilador; quem cobra e o ENEMY_VISUAL do tabuleiro
-// (Record exaustivo) e a fabrica do EnemyManager. Especie nova sem entrada aqui nasce invisivel
-// na paleta — nao ha teste que pegue isso, so o olho.
-const ENEMY_DEFS: ReadonlyArray<{ type: EnemyKind; label: string; key: string; frame?: number }> = [
-  { type: 'undead', label: 'Caveira — cava o chao, golpe avisado, marcha pra placa', key: ASSET_KEYS.undead },
-  { type: 'bat', label: 'Morcego — VOA (cruza rio e lava), rapido e frouxo', key: ASSET_KEYS.bat },
-  { type: 'spider', label: 'Aranha — rasteja, agacha e da o BOTE de 3 tiles', key: ASSET_KEYS.spider },
-  { type: 'slime', label: 'Slime — lento, casca dura, NAO teme a tocha', key: ASSET_KEYS.slime, frame: SLIME_FRAMES.rest },
-  { type: 'bigslime', label: 'Slime Grande — racha em dois ao morrer', key: ASSET_KEYS.bigSlime, frame: SLIME_FRAMES.rest },
-  { type: 'turret', label: 'Torreta — nao anda, leque de balas, ignora a tocha', key: ASSET_KEYS.turret },
-  { type: 'mage', label: 'Mago — mantem 5 tiles de distancia e conjura', key: ASSET_KEYS.mageCast },
-  // O zora e o unico que exige um tile de tipo especifico, e o rotulo tem de dizer isso: colocado
-  // em terra ele nao nasce, e o autor nao teria como adivinhar por que aquele tile ficou mudo.
-  {
-    type: 'zora',
-    label: 'Zora — SO na agua: emerge, cospe e some (ponte/vau o expulsam)',
-    key: ASSET_KEYS.zora,
-    frame: ZORA_FRAMES.up,
-  },
-];
 
 export const NPC_KINDS: readonly NpcKind[] = [
   'blackCat', 'mimic', 'astronaut', 'businessMan', 'radiationSuit', 'painter', 'salesman', 'poet', 'wizard', 'death',
@@ -142,11 +101,9 @@ const NPC_LABELS: Record<NpcKind, string> = {
 // dele — ver GameScene.swordEquipped) e nao nasce mais no chao nem se apanha. Oferece-la na
 // paleta seria autorar um objeto que o mundo carrega e nenhum botao usa.
 const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string; frame?: number }> = [
-  { type: 'heart', label: 'Coracao', key: ASSET_KEYS.hearts, frame: 0 },
   { type: 'key', label: 'Chave', key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   { type: 'axe', label: 'Machado', key: ASSET_KEYS.axeIcon },
   { type: 'greatAxe', label: 'Machado de Aco', key: ASSET_KEYS.greatAxeIcon },
-  { type: 'bomb', label: 'Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
   { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
   { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
   { type: 'shovel', label: 'Pa — cava buraco de plantio na terra', key: ASSET_KEYS.shovelIcon },
@@ -154,8 +111,8 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'stone', label: 'Pedra', key: ASSET_KEYS.rock },
   { type: 'iron', label: 'Bloco de Ferro', key: ASSET_KEYS.ironItem },
   { type: 'seeds', label: 'Sementes', key: ASSET_KEYS.seedsItem },
-  { type: 'carnivoreSeeds', label: 'Sementes Carnivoras', key: ASSET_KEYS.carnivoreSeedsItem },
   { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
+  { type: 'mushroom', label: 'Cogumelo', key: ASSET_KEYS.mushroomItem },
 ];
 
 const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [
@@ -168,27 +125,21 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'rock', label: 'Pedra', key: ASSET_KEYS.rock },
   { type: 'ironRock', label: 'Pedra de Ferro', key: ASSET_KEYS.ironRock, frame: 0 },
   { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassUp, frame: 0 },
-  { type: 'lava', label: 'Lava', key: ASSET_KEYS.lavaFloor },
   { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },
   { type: 'bridgeSpot', label: 'Ponto de Ponte', key: ASSET_KEYS.bridge },
-  // A PIRA: base autorada, torre construida em jogo. O icone e o graveto porque e ele que a
-  // levanta — a pira propriamente dita nao tem sprite nenhum (ela e carpintaria 3D).
-  { type: 'pyre', label: 'Pira — X com graveto monta, X com tocha ACESA acende', key: ASSET_KEYS.woodItem },
   // A paleta mostra a flor ABERTA: e a pose que diz o que a peca faz (uma ponte de petalas), e o
   // botao fechado, sozinho num icone, so diria "tem uma planta aqui".
   { type: 'moonflower', label: 'Flor da Lua', key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
-  { type: 'bombSpot', label: 'Marca de Bomba', key: ASSET_KEYS.bombItem, frame: 0 },
   { type: 'plantSpot', label: 'Buraco de Plantio', key: ASSET_KEYS.plantHole, frame: 0 },
-  { type: 'carnivorousPlant', label: 'Planta Carnivora — come inimigo encostado', key: ASSET_KEYS.carnivorousPlant, frame: 0 },
   { type: 'toolbox', label: 'Caixa de Ferramentas (G gira)', key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
-  // A ESCADA nao tem arte propria (ela e geometria, ver StairsObject) — o editor empresta a
-  // ROCHA do atlas, a mesma pintura que a montanha usa. Emprestava o icone do PORTAL, e um
-  // portal roxo no lugar de um lance de pedra e uma legenda errada para quem autora.
-  { type: 'stairs', label: 'Escada (andar de baixo)', key: ASSET_KEYS.forestTileset, frame: CLIFF_WALL_FRAMES[0] },
   { type: 'furnace', label: 'Forno manual (G gira) — abra o catalogo para fundir', key: ASSET_KEYS.furnace, frame: 1 },
   // O ALTAR nao gira e nao tem energia: e um movel. Z poe o item selecionado na laje, e bater
   // nele (Z de espada, ou o X com o que estiver na mao) malha a ESPONJA em ferro.
   { type: 'altar', label: 'Altar — laje onde se POE uma peca e se MALHA (Z poe, bater transforma)', key: ASSET_KEYS.altar, frame: 0 },
+  // O FIM DO JOGO: a fogueira que so o heroi acende, e o portao que so abre quando o ultimo
+  // pedido dos vizinhos fecha. Um de cada, no centro do vale.
+  { type: 'hearth', label: 'Fogueira do Fim — o heroi acende e assa o cogumelo', key: ASSET_KEYS.campfireFrame1 },
+  { type: 'gardenGate', label: 'Portao do Jardim — abre quando todos os pedidos fecham', key: ASSET_KEYS.lookedDoorObject },
 ];
 
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
@@ -322,14 +273,6 @@ const TILE_DEFS: ReadonlyMap<number, TileDef> = new Map(
   TILE_GROUPS.flatMap((group) => group.tiles).map((tile) => [tile.frame, tile]),
 );
 
-/** O piso que o pincel saca ao entrar no subterrâneo (o primeiro do grupo, na ordem da paleta). */
-const DUNGEON_FLOOR_FRAME = 42;
-
-/** Os frames que o subterrâneo aceita — derivados dos GRUPOS marcados, nunca de uma segunda lista. */
-const DUNGEON_TILE_FRAMES: ReadonlySet<number> = new Set(
-  TILE_GROUPS.filter((group) => group.dungeon).flatMap((group) => group.tiles).map((tile) => tile.frame),
-);
-
 const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: string }> = [
   { id: 'brush', label: 'Pincel', kbd: 'B', hint: 'Pinta tiles na camada ativa' },
   { id: 'eraser', label: 'Borracha', kbd: 'E', hint: 'Limpa camada superior, colisao e entidades' },
@@ -341,21 +284,16 @@ const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: s
   { id: 'spawn', label: 'Ponto Inicial', kbd: 'S', hint: 'Obrigatorio: clique onde o jogador deve comecar' },
 ];
 
-// Inimigos entra como a QUINTA aba, no fim, e nao na segunda posicao que tinha antes de ser
-// removida: 1..4 sao musculo na mao de quem autora o mundo hoje, e renumerar tudo pra abrir espaco
-// custaria mais do que a aba nova vale.
 const TAB_DEFS: ReadonlyArray<{ id: PaletteTab; label: string; kbd: string }> = [
   { id: 'tiles', label: 'Tiles', kbd: '1' },
   { id: 'npcs', label: 'NPCs', kbd: '2' },
   { id: 'pickups', label: 'Itens', kbd: '3' },
   { id: 'props', label: 'Props', kbd: '4' },
-  { id: 'enemies', label: 'Inimigos', kbd: '5' },
 ];
 
 // O mesmo vermelho do chip no tabuleiro (CHIP_COLOR em EditorScene) e do ponto no minimapa: as
 // tres pinturas da mesma entidade nao podem discordar de cor.
 const ENTITY_DOT_COLOR: Record<EntitySelection['list'], string> = {
-  enemies: '#ff5566',
   npcs: '#4488ff',
   pickups: '#33cc77',
   props: '#ffaa33',
@@ -538,7 +476,6 @@ export class EditorDomUi {
     // OS DOIS ANDARES, e por que eles ficam ANTES do Salvar: o botão mais perigoso do painel
     // escreve num arquivo, e o autor precisa ler de cima para baixo "estou no subterrâneo → salvo
     // no subterrâneo". Embaixo, a chave viraria uma descoberta depois do estrago.
-    this.buildFloorSwitch();
 
     // Primary actions
     const actions = document.createElement('div');
@@ -630,17 +567,6 @@ export class EditorDomUi {
     window.addEventListener('keyup', this.handleKeyUp);
     window.addEventListener('beforeunload', this.handleBeforeUnload);
 
-    // O PINCEL NÃO ATRAVESSA A ESCADA CARREGADO. Esconder a grama da paleta não impede nada se a
-    // seleção que veio do outro andar (ou o padrão de fábrica, que é Terra) continuar armada: o
-    // primeiro clique planta um tile de superfície no subterrâneo, e o autor nem vê de onde veio,
-    // porque a carta daquele tile não está mais na tela. Então a seleção se ajusta ao lugar.
-    if (this.cb.worldFile === 'underworld') {
-      if (this.state.tile === null || !DUNGEON_TILE_FRAMES.has(this.state.tile)) {
-        this.state.tile = DUNGEON_FLOOR_FRAME;
-        this.state.layer = 'ground';
-      }
-    }
-
     this.syncFromState();
     this.refreshHeader();
     this.requestMinimapRedraw();
@@ -704,7 +630,6 @@ export class EditorDomUi {
   }
 
   private firstEntityOfTab(tab: PaletteTab): EntitySelection | null {
-    if (tab === 'enemies') return { list: 'enemies', type: ENEMY_DEFS[0].type };
     if (tab === 'npcs') return { list: 'npcs', type: NPC_KINDS[0] };
     if (tab === 'pickups') return { list: 'pickups', type: PICKUP_DEFS[0].type };
     if (tab === 'props') return { list: 'props', type: PROP_DEFS[0].type };
@@ -733,35 +658,6 @@ export class EditorDomUi {
     this.renderOptions();
     this.renderPalette();
     this.renderStatus();
-  }
-
-  /**
-   * A CHAVE DOS DOIS ANDARES — os nomes são os que o projeto já usa em todo lugar (`overworld` nos
-   * scripts, `underworld` no arquivo e no runtime), então o rótulo do painel e o nome do arquivo
-   * dizem a mesma palavra. "Surface"/"Cave" seriam um terceiro vocabulário para a mesma coisa.
-   *
-   * A dica de cada botão nomeia o ARQUIVO, porque é isso que o autor está prestes a mudar.
-   */
-  private buildFloorSwitch(): void {
-    const floors = this.cb.floorSwitch;
-    if (!floors) return;
-    const section = document.createElement('div');
-    section.className = 'zh-section';
-    section.appendChild(this.sectionLabel('Mundo'));
-    const seg = document.createElement('div');
-    seg.className = 'zh-seg';
-    const options: ReadonlyArray<{ id: WorldFloor; label: string }> = [
-      { id: 'overworld', label: 'Overworld' },
-      { id: 'underworld', label: 'Underworld' },
-    ];
-    options.forEach((option) => {
-      const file = worldFilePath(worldFileForFloor(option.id));
-      const btn = this.button(option.label, `Edita ${file}`, () => floors.open(option.id));
-      btn.classList.toggle('active', floors.current === option.id);
-      seg.appendChild(btn);
-    });
-    section.appendChild(seg);
-    this.panel.appendChild(section);
   }
 
   /** O arquivo que o Salvar vai escrever — o mesmo que o toast anuncia depois. */
@@ -886,19 +782,6 @@ export class EditorDomUi {
       this.optionsEl.appendChild(brushSeg);
     }
 
-    // O que a cova faz nao se ve no tabuleiro (ela nao desenha nada no jogo: o nascimento e a
-    // arte dela), entao as tres regras que decidem se ela vai funcionar ficam escritas aqui —
-    // e o unico lugar do editor onde elas caberiam sem virar legenda dentro do jogo.
-    if (this.state.tool === 'entity' && this.state.entity.list === 'enemies') {
-      const hint = document.createElement('div');
-      hint.style.cssText = 'font-size:10px;color:#ff8a9b;margin:4px 0 6px;line-height:1.55;';
-      hint.innerHTML = '<b>Ponto de spawn</b><br>'
-        + 'Nasce quando o heroi chega a 14 tiles, com o telegrafo de ~3s (o chao racha).<br>'
-        + `Um corpo por vez: morto, o proximo vem em ${Math.round(ENEMY_RESPAWN_MS / 1000)}s.<br>`
-        + 'Luz de fogueira ACESA cala a cova — o morto-vivo nao entra na luz.';
-      this.optionsEl.appendChild(hint);
-    }
-
     const checks = document.createElement('div');
     checks.className = 'zh-checks';
     checks.style.marginTop = '6px';
@@ -932,18 +815,9 @@ export class EditorDomUi {
       const frameCount = Math.max(1, texture.frameTotal - 1);
       this.paletteEl.appendChild(this.tileCell(null));
 
-      // NO SUBTERRÂNEO A PALETA É SÓ ALVENARIA. Lá embaixo não existe grama, pinheiro, mar nem
-      // lápide — o andar de baixo é feito de piso e muro, e o arquivo prova: `underworld.json` usa
-      // exclusivamente frames de dungeon. Uma paleta que oferece o atlas inteiro num lugar onde
-      // quase nada dele pode existir não é liberdade, é ruído com um erro de digitação esperando
-      // acontecer (o mesmo arquivo tem 18 tiles de muro pintados na camada de CHÃO).
-      //
-      // O contrário NÃO é simétrico de propósito: em cima e nos levels a paleta continua inteira,
-      // porque um level é uma tela livre e pode querer uma sala de pedra.
-      const dungeonOnly = this.cb.worldFile === 'underworld';
       const shown = new Set<number>();
       for (const group of TILE_GROUPS) {
-        if (dungeonOnly && group.dungeon !== true) continue;
+        if (group.dungeon === true) continue; // a alvenaria de dungeon nao tem mais onde existir
         const tiles = group.tiles.filter((tile) => tile.frame < frameCount);
         if (tiles.length === 0) continue;
         this.paletteEl.appendChild(this.groupHeader(group.title));
@@ -958,9 +832,7 @@ export class EditorDomUi {
       // …e nada disso no subterrâneo: "Outros" é o resto do atlas (mar, estágios de corte, frames
       // vazios), que é exatamente o que a filtragem acima existe para tirar da frente lá embaixo.
       const rest: number[] = [];
-      if (!dungeonOnly) {
-        for (let frame = 0; frame < frameCount; frame += 1) if (!shown.has(frame)) rest.push(frame);
-      }
+      for (let frame = 0; frame < frameCount; frame += 1) if (!shown.has(frame)) rest.push(frame);
       if (rest.length > 0) {
         this.paletteEl.appendChild(this.groupHeader('Outros'));
         for (const frame of rest) this.paletteEl.appendChild(this.tileCell(frame));
@@ -990,9 +862,7 @@ export class EditorDomUi {
       this.paletteEl.appendChild(cell);
     };
 
-    if (tab === 'enemies') {
-      ENEMY_DEFS.forEach((def) => addEntityCell({ list: 'enemies', type: def.type }, def.label, def.key, def.frame));
-    } else if (tab === 'npcs') {
+    if (tab === 'npcs') {
       NPC_KINDS.forEach((kind) => {
         const visual = NPC_VISUALS[kind];
         addEntityCell({ list: 'npcs', type: kind }, NPC_LABELS[kind], visual.key, visual.frame);
@@ -1156,9 +1026,7 @@ export class EditorDomUi {
 
     const dot = Math.max(2, scale);
     this.store.allEntities().forEach((entity) => {
-      // Legacy authored enemies (no palette tab anymore) still show as red dots so the
-      // author can find and erase them.
-      ctx.fillStyle = entity.list === 'enemies' ? '#ff5566' : ENTITY_DOT_COLOR[entity.list];
+      ctx.fillStyle = ENTITY_DOT_COLOR[entity.list];
       ctx.fillRect(entity.worldX * scale, entity.worldY * scale, dot, dot);
     });
     const spawn = this.store.spawn;
@@ -1264,7 +1132,7 @@ export class EditorDomUi {
       this.changed();
       return;
     }
-    const tabByKey: Record<string, PaletteTab> = { 1: 'tiles', 2: 'npcs', 3: 'pickups', 4: 'props', 5: 'enemies' };
+    const tabByKey: Record<string, PaletteTab> = { 1: 'tiles', 2: 'npcs', 3: 'pickups', 4: 'props' };
     if (tabByKey[key]) {
       this.selectTab(tabByKey[key]);
       return;
@@ -1374,8 +1242,7 @@ export class EditorDomUi {
     const stats = this.store.stats();
     const statsEl = document.createElement('p');
     statsEl.innerHTML = `Cada chunk tem ${CHUNK_COLUMNS}x${CHUNK_ROWS} tiles.<br>`
-      + `NPCs: <b>${stats.npcs}</b> — Itens: <b>${stats.pickups}</b> — Props: <b>${stats.props}</b>`
-      + ` — Inimigos: <b>${stats.enemies}</b>`;
+      + `NPCs: <b>${stats.npcs}</b> — Itens: <b>${stats.pickups}</b> — Props: <b>${stats.props}</b>`;
     body.appendChild(statsEl);
 
     const warnings = this.store.validate();

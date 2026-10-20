@@ -1,28 +1,22 @@
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 
 /**
- * A MEMORIA DA AVENTURA — o save, e a razao de a morte ter deixado de apagar o mundo.
+ * A MEMORIA DA AVENTURA — o save.
  *
- * A aventura rodava inteira numa unica instancia de GameScene: morrer, entrar numa dungeon ou
- * fechar o browser jogava fora a mochila, as fogueiras acesas, os dialogos ouvidos e a historia
- * do mago. Num mundo aberto isso nao e dificuldade — e descarte do jogador. Este modulo e o
- * mesmo padrao de `underworld`/`explorerRun` (estado de modulo sobrevive ao `scene.restart()`)
- * com um andar a mais: o retrato vai ao localStorage, entao ele sobrevive tambem a aba.
+ * Estado de modulo (sobrevive ao `scene.restart()`) com um andar a mais: o retrato vai ao
+ * localStorage, entao ele sobrevive tambem a aba. Neste jogo nada se perde — nao ha morte, nao ha
+ * game over —, entao o save so tem um trabalho: lembrar o que o jogador FEZ (os pedidos ajudados,
+ * a mochila, o canteiro cavado, a abertura ja vista) e de onde ele continua.
  *
- * O que NAO entra aqui, de proposito:
- *   • explorador e levels — la, zerar E o desenho (a aposta do explorador e perder; o level e
- *     um puzzle que recomeca limpo).
- *   • a vida atual — acordar na fogueira acorda inteiro; fogueira cura de qualquer jeito.
- *   • props consumidos (rocha quebrada, arbusto queimado) — sao os recursos renovaveis do
- *     mundo, e voltar e o que os mantem colhiveis. A excecao e a ARVORE-TILE derrubada, que e
- *     edicao de TERRENO (greatAxe) e ja sobrevivia ao restart por acidente; aqui o acidente
- *     vira contrato.
- *
- * O ponto de renascimento e a FOGUEIRA: o tile em que o heroi estava da ultima vez que pisou no
- * anel seguro de um fogo aceso. Morrer, continuar, reiniciar — tudo acorda ali. E o bonfire.
+ * O que NAO entra aqui, de proposito: props consumidos (rocha quebrada, arbusto queimado) — sao
+ * os recursos renovaveis do mundo, e voltar e o que os mantem colhiveis. A excecao e a
+ * ARVORE-TILE derrubada, que e edicao de TERRENO e precisa sobreviver ao boot.
  */
 
-const STORAGE_KEY = 'zh.adventure.v1';
+// A chave mudou junto com o jogo: um save da aventura de combate (dungeon, pira, paredes
+// bombardeadas) descreve um mundo que nao existe mais, e hidratar dele daria ao jogador uma
+// partida no meio de uma historia que ele nunca jogou.
+const STORAGE_KEY = 'zh.cozy.v1';
 
 export interface AdventureGroundItem {
   kind: HeldItemKind;
@@ -41,76 +35,47 @@ export interface AdventureMachine {
   dir?: number;
 }
 
-
 export interface AdventureSnapshot {
   /** Vira true no primeiro persist de uma run de verdade — e o que o titulo le para o Continue. */
   started: boolean;
-  /** Onde o heroi acorda (tile do overworld dentro do anel de um fogo aceso). */
+  /** De onde o heroi CONTINUA: o tile em que ele estava no ultimo retrato. */
   respawn: { worldX: number; worldY: number } | null;
   inventory: Array<{ kind: HeldItemKind; count: number }>;
   selected: HeldItemKind | 'none';
-  /** "x,y" de cada fogueira do overworld que o jogador acendeu. */
-  litFires: Set<string>;
-  /**
-   * "x,y" -> quantas toras a PIRA daquele tile ja recebeu, e "x,y" das que estao acesas.
-   *
-   * A ponte construida NAO entra no save e ninguem sentiu, porque ela custa dois gravetos. A pira
-   * custa viagens: se a morte apagasse a torre, o objetivo do jogo seria uma punicao. Por isso
-   * cada tora entregue persiste na hora.
-   */
-  pyreLogs: Map<string, number>;
-  litPyres: Set<string>;
-  litFireCount: number;
-  wizardIntroSeen: boolean;
+  /** A abertura (a chegada, a espada fincada, o mago) ja tocou: ela acontece uma vez por partida. */
+  introSeen: boolean;
+  /** O portao do jardim ja abriu (o ultimo pedido fechou e a cena dele tocou). */
+  gateOpened: boolean;
+  /** A fogueira do fim ja foi acesa pelo heroi. */
+  hearthLit: boolean;
+  /** O cogumelo foi assado e os creditos rolaram. */
   endingSeen: boolean;
   seenDialogKeys: Set<string>;
   seenItems: Set<string>;
+  /** As conversas que ja deram o presente do NPC (a ferramenta do pedido) — um presente, uma vez. */
+  giftsGiven: Set<string>;
   /** "x,y" de cada pinheiro-tile derrubado (diff de terreno sobre o world.json). */
   felledTrees: Set<string>;
   /**
-   * "x,y" de cada PAREDE RACHADA que uma bomba abriu no subterraneo. Mesmo padrao do felledTrees
-   * — o arquivo de mundo volta limpo do disco a cada boot e a cada troca de andar, e sem o diff o
-   * cofre se refecharia sozinho.
-   *
-   * A chave NAO diz em que andar aconteceu, e nao precisa: quem reaplica so limpa um tile que
-   * AINDA e `DUNGEON_TILES.wallCracked`. A precondicao viaja junto com o diff, entao a mesma
-   * coordenada aplicada no overworld — onde ha um pinheiro, uma montanha ou nada — nao faz nada.
-   */
-  bombedWalls: Set<string>;
-  /**
    * "x,y" de cada buraco de plantio que a PÁ cavou no overworld. Diff sobre os plantSpots
-   * autorados, pelo mesmo motivo do felledTrees: o buraco é ESTRUTURA que o jogador fez, e a
-   * morte não pode apagá-la. Só a posição entra — o estado do canteiro (monte, mato) é dos
-   * renováveis, como o de qualquer canteiro autorado.
+   * autorados, pelo mesmo motivo do felledTrees: o buraco é ESTRUTURA que o jogador fez.
    */
   dugSpots: Set<string>;
-  /**
-   * Estações manuais construídas pelo jogador por mundo. Diff, nunca foto: ver AdventureMachine.
-   */
+  /** Estações manuais construídas pelo jogador por mundo. Diff, nunca foto: ver AdventureMachine. */
   machines: Map<string, AdventureMachine[]>;
   /**
-   * Itens no chao por MUNDO ('world' ou 'under'): a foto substitui a lista autorada daquele
-   * arquivo — um item largado fica onde ficou, um tesouro tomado nao renasce.
+   * Itens no chao por MUNDO: a foto substitui a lista autorada daquele arquivo — um item largado
+   * fica onde ficou, um cogumelo colhido nao renasce.
    */
   groundItems: Map<string, AdventureGroundItem[]>;
-  /** "cx,cy" dos chunks do overworld que o heroi ja pisou — o fog of war do mapa. */
+  /** "cx,cy" dos chunks que o heroi ja pisou — o fog of war do mapa. */
   visitedChunks: Set<string>;
   /**
    * O CADERNO DE MISSOES: um contador por tarefa, chaveado `<roteiro>/<tarefa>` (ver
-   * runtime/QuestLog). Ele mora aqui porque missao e da AVENTURA — level e explorador nunca
-   * hidratam este save, e deixa-los escrever contador sujaria a aventura de quem so foi jogar
-   * um puzzle. O numero so SOBE, e "cumprida" e lido dele: nao ha um segundo booleano de
+   * runtime/QuestLog). O numero so SOBE, e "cumprida" e lido dele: nao ha um segundo booleano de
    * "fechou" para discordar da soma.
    */
   questProgress: Map<string, number>;
-  /**
-   * O tile "x,y" da PIRA CENTRAL — o fim do jogo —, lembrado na primeira vez que o overworld a
-   * carrega. Ele existe porque uma missao pode FECHAR longe dela (matar caveira dentro de uma
-   * dungeon), e nesse instante nao ha objeto de pira nenhum na cena para receber as toras. Com
-   * a chave guardada, o credito cai no `pyreLogs` de qualquer lugar, e a torre esta mais alta
-   * quando o heroi volta.
-   */
-  centralPyre: string | null;
 }
 
 const defaultSnapshot = (): AdventureSnapshot => ({
@@ -118,22 +83,19 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   respawn: null,
   inventory: [],
   selected: 'none',
-  litFires: new Set(),
-  pyreLogs: new Map(),
-  litPyres: new Set(),
-  litFireCount: 0,
-  wizardIntroSeen: false,
+  introSeen: false,
+  gateOpened: false,
+  hearthLit: false,
   endingSeen: false,
   seenDialogKeys: new Set(),
   seenItems: new Set(),
+  giftsGiven: new Set(),
   felledTrees: new Set(),
-  bombedWalls: new Set(),
   dugSpots: new Set(),
   machines: new Map(),
   groundItems: new Map(),
   visitedChunks: new Set(),
   questProgress: new Map(),
-  centralPyre: null,
 });
 
 type StoredSnapshot = {
@@ -141,44 +103,23 @@ type StoredSnapshot = {
   respawn?: { worldX: number; worldY: number } | null;
   inventory?: Array<{ kind: HeldItemKind; count: number }>;
   selected?: HeldItemKind | 'none';
-  litFires?: string[];
-  pyreLogs?: Record<string, number>;
-  litPyres?: string[];
-  litFireCount?: number;
-  wizardIntroSeen?: boolean;
+  introSeen?: boolean;
+  gateOpened?: boolean;
+  hearthLit?: boolean;
   endingSeen?: boolean;
   seenDialogKeys?: string[];
   seenItems?: string[];
+  giftsGiven?: string[];
   felledTrees?: string[];
-  bombedWalls?: string[];
   dugSpots?: string[];
   machines?: Record<string, AdventureMachine[]>;
   groundItems?: Record<string, AdventureGroundItem[]>;
   visitedChunks?: string[];
   questProgress?: Record<string, number>;
-  centralPyre?: string | null;
 };
 
 const num = (value: unknown, fallback: number): number =>
   (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback);
-
-// Itens aposentados somem durante a hidratação, inclusive de saves antigos. Sem esta migração,
-// uma bota selecionada sobreviveria no JSON e tentaria procurar uma arte que já não existe.
-const RETIRED_ITEM_KINDS: ReadonlySet<string> = new Set([
-  'lavaBoots', 'battery', 'batteryFull', 'gear', 'wire', 'belt', 'chest', 'boiler',
-  'inserter', 'extractor', 'tripHammer',
-]);
-const isRetiredItem = (kind: unknown): boolean =>
-  typeof kind === 'string' && RETIRED_ITEM_KINDS.has(kind);
-
-const cleanGroundItems = (
-  value: StoredSnapshot['groundItems'],
-): Map<string, AdventureGroundItem[]> => new Map(
-  Object.entries(value ?? {}).map(([scope, items]) => [
-    scope,
-    Array.isArray(items) ? items.filter((item) => item && !isRetiredItem(item.kind)) : [],
-  ]),
-);
 
 const cleanMachines = (
   value: StoredSnapshot['machines'],
@@ -202,43 +143,33 @@ const load = (): AdventureSnapshot => {
       respawn: p.respawn && typeof p.respawn.worldX === 'number' && typeof p.respawn.worldY === 'number'
         ? { worldX: p.respawn.worldX, worldY: p.respawn.worldY }
         : null,
-      inventory: Array.isArray(p.inventory)
-        ? p.inventory.filter((i) => i && typeof i.kind === 'string' && !isRetiredItem(i.kind))
-        : [],
-      selected: isRetiredItem(p.selected) ? 'none' : (p.selected ?? 'none'),
-      litFires: new Set(p.litFires ?? []),
-      pyreLogs: new Map(
-        Object.entries(p.pyreLogs ?? {}).map(([key, n]) => [key, num(n, 0)]),
-      ),
-      litPyres: new Set(p.litPyres ?? []),
-      litFireCount: num(p.litFireCount, 0),
-      wizardIntroSeen: p.wizardIntroSeen === true,
+      inventory: Array.isArray(p.inventory) ? p.inventory.filter((i) => i && typeof i.kind === 'string') : [],
+      selected: p.selected ?? 'none',
+      introSeen: p.introSeen === true,
+      gateOpened: p.gateOpened === true,
+      hearthLit: p.hearthLit === true,
       endingSeen: p.endingSeen === true,
       seenDialogKeys: new Set(p.seenDialogKeys ?? []),
-      seenItems: new Set((p.seenItems ?? []).filter((kind) => !isRetiredItem(kind))),
+      seenItems: new Set(p.seenItems ?? []),
+      giftsGiven: new Set(p.giftsGiven ?? []),
       felledTrees: new Set(p.felledTrees ?? []),
-      bombedWalls: new Set(p.bombedWalls ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
       machines: cleanMachines(p.machines),
-      groundItems: cleanGroundItems(p.groundItems),
+      groundItems: new Map(Object.entries(p.groundItems ?? {})),
       visitedChunks: new Set(p.visitedChunks ?? []),
       questProgress: new Map(
         Object.entries(p.questProgress ?? {}).map(([key, n]) => [key, num(n, 0)]),
       ),
-      centralPyre: typeof p.centralPyre === 'string' ? p.centralPyre : null,
     };
   } catch {
     return base;
   }
 };
 
-// ── o estado vivo ─────────────────────────────────────────────────────────────
-
 let state: AdventureSnapshot | null = null;
 /**
- * Pedido de "acorde na fogueira", consumido UMA vez pelo proximo create(). E um pedido em vez
- * de comportamento padrao porque a volta de dungeon tambem reinicia a cena — e ela precisa
- * nascer na boca da caverna (o playerStart reescrito), nunca teleportada para o fogo.
+ * Pedido de "continue de onde parou", consumido UMA vez pelo proximo create() (o Continue do
+ * titulo). E um pedido em vez de padrao porque o playtest do editor tambem cria a cena.
  */
 let respawnRequested = false;
 
@@ -256,33 +187,28 @@ export const saveAdventure = (): void => {
     respawn: s.respawn,
     inventory: s.inventory,
     selected: s.selected,
-    litFires: [...s.litFires],
-    pyreLogs: Object.fromEntries(s.pyreLogs),
-    litPyres: [...s.litPyres],
-    litFireCount: s.litFireCount,
-    wizardIntroSeen: s.wizardIntroSeen,
+    introSeen: s.introSeen,
+    gateOpened: s.gateOpened,
+    hearthLit: s.hearthLit,
     endingSeen: s.endingSeen,
     seenDialogKeys: [...s.seenDialogKeys],
     seenItems: [...s.seenItems],
+    giftsGiven: [...s.giftsGiven],
     felledTrees: [...s.felledTrees],
-    bombedWalls: [...s.bombedWalls],
     dugSpots: [...s.dugSpots],
     machines: Object.fromEntries(s.machines),
     groundItems: Object.fromEntries(s.groundItems),
     visitedChunks: [...s.visitedChunks],
     questProgress: Object.fromEntries(s.questProgress),
-    centralPyre: s.centralPyre,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   } catch {
-    // Sem storage (aba privada, cota estourada): a aventura CONTINUA, so nao atravessa a aba. A
-    // cota e do dominio inteiro e nao so deste jogo, entao estourar e um caminho real e nao
-    // teorico — e o que ele nunca pode ser e fatal: uma excecao aqui derrubaria a descida.
+    // Storage cheio/bloqueado: o modulo continua valendo nesta aba, so nao sobrevive a ela.
   }
 };
 
-/** Recomecar do zero (o "Start over" do titulo): apaga o modulo E o disco. */
+/** Recomecar do zero (o "New game" do titulo): apaga o modulo E o disco. */
 export const resetAdventure = (): void => {
   state = defaultSnapshot();
   respawnRequested = false;

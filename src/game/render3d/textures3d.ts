@@ -132,6 +132,7 @@ const DEFS: Record<string, SheetDef> = {
   'plant-hole': { url: `${A}/environment/props/plant_hole.png`, frameW: 16, frameH: 16 },
   'plant-mound': { url: `${A}/environment/props/plant_mound.png` },
   'seeds-item': { url: `${A}/items/collectibles/seeds.png` },
+  'mushroom-item': { url: `${A}/items/collectibles/mushroom.png` },
   'cut-grass-wind-0': { url: `${A}/environment/props/cut_grass_wind0.png` },
   'cut-grass-wind-1': { url: `${A}/environment/props/cut_grass_wind1.png` },
   'grass-fire-0': { url: `${A}/environment/props/grass_fre_0.png` },

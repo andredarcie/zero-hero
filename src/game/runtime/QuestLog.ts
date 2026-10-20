@@ -1,5 +1,4 @@
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
-import type { EnemyKind } from '@/game/world/ScreenContent';
 import {
   NPC_QUESTS, questFor, taskKey, type NpcQuest, type QuestTask,
 } from '@/game/dialogs/NpcQuests';
@@ -27,14 +26,14 @@ import { adventureState } from '@/game/runtime/adventureState';
  *
  * `deliver` traz o ROTEIRO junto porque entregar é para ALGUÉM: dois NPCs pedindo minério são
  * dois pedidos, e um saco de minério entregue a um não pode fechar o do outro. Todo o resto é
- * do mundo e vale para quem quer que esteja pedindo — matar uma caveira conta para os dois
- * NPCs que pediram caveira, e isso é a leitura certa: o herói matou a caveira.
+ * do mundo e vale para quem quer que esteja pedindo — brotar um canteiro conta para quem
+ * quer que tenha pedido verde, e essa é a leitura certa: o canteiro brotou.
  */
 export type QuestEvent =
   | { type: 'deliver'; dialog: string; item: HeldItemKind; units: number }
   | { type: 'gather'; item: HeldItemKind; units: number }
   | { type: 'craft'; item: HeldItemKind; units: number }
-  | { type: 'slay'; enemy: EnemyKind }
+  | { type: 'grow' }
   | { type: 'light' }
   | { type: 'fell' }
   | { type: 'explore' };
@@ -93,8 +92,8 @@ const gain = (task: QuestTask, event: QuestEvent, dialogId: string): number => {
       return task.kind === 'gather' && task.item === event.item ? event.units : 0;
     case 'craft':
       return task.kind === 'craft' && task.item === event.item ? event.units : 0;
-    case 'slay':
-      return task.kind === 'slay' && task.enemy === event.enemy ? 1 : 0;
+    case 'grow':
+      return task.kind === 'grow' ? 1 : 0;
     case 'light':
       return task.kind === 'light' ? 1 : 0;
     case 'fell':
@@ -118,8 +117,8 @@ export type QuestEventResult = {
  *
  * Devolve o que MUDOU: `moved` diz a quem chamou que vale a pena gravar o save, e `closed` é a
  * lista de missões que fecharam agora — a borda de subida, e a única vez em que cada uma pode
- * pagar as toras dela para a pira (`GameScene.questEvent`). Pagar por estado ("está cumprida")
- * em vez de por borda ("acabou de cumprir") mandaria toras a cada evento pelo resto da partida.
+ * agradecer e conferir o portão do jardim (`GameScene.questEvent`). Agir por estado ("está
+ * cumprida") em vez de por borda ("acabou de cumprir") repetiria o gesto a cada evento.
  *
  * Missão já cumprida não conta mais nada: o contador dela está no teto e ficar somando seria
  * trabalho para ninguém — e é o que garante que a borda aconteça uma vez só.
@@ -151,6 +150,9 @@ export const recordQuestEvent = (event: QuestEvent): QuestEventResult => {
  * sistema tem. Um sistema sem interface que também não pudesse ser LIDO seria um sistema que
  * ninguém consegue provar que funciona.
  */
+/** Todos os pedidos do vale fecharam? É a chave do portão do jardim. */
+export const allQuestsDone = (): boolean => Object.values(NPC_QUESTS).every(isQuestDone);
+
 export const questSnapshot = (): Array<{
   dialog: string;
   done: boolean;

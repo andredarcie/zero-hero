@@ -267,6 +267,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.cuttingGrass2,  path: '/assets/environment/props/cuting_grass2.png' },
   { key: ASSET_KEYS.cuttingGrass3,  path: '/assets/environment/props/cuting_grass3.png' },
   { key: ASSET_KEYS.seedsItem,      path: '/assets/items/collectibles/seeds.png' },
+  { key: ASSET_KEYS.mushroomItem,   path: '/assets/items/collectibles/mushroom.png' },
   { key: ASSET_KEYS.carnivoreSeedsItem, path: '/assets/items/collectibles/carnivore_seeds.png' },
   { key: ASSET_KEYS.plantMound,     path: '/assets/environment/props/plant_mound.png' },
   { key: ASSET_KEYS.cutGrass,       path: '/assets/environment/props/cut_grass.png' },

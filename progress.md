@@ -9365,3 +9365,21 @@ sendo a da fogueira, a poça menor que a de uma fogueira, o graveto acendendo ne
 do anel sem billboard. Enquanto ele não existe, **`perf-profile`** (que reprova shader compilado em
 jogo) e **`perf-burn`** (o orçamento de luz) são os que cobrem o risco maior. Nenhum foi rodado —
 são do autor.
+
+## 2026-10-20 — O jogo virou COZY: sem combate, sem subterrâneo, um arco só
+
+- **Removido por inteiro:** inimigos (entities/enemies, EnemyBase/Manager/Projectile/Spawner,
+  CorpseDecals, HeartPickup, FreezeManager), espada de combate (golpe, giro, guarda, hitstop,
+  i-frames), vida/morte/respawn, bomba, planta carnívora, lava (os tiles viraram água), pira,
+  subterrâneo (`underworld.json`, escadas, cortina, tochas de parede, `?under` no editor, a aba
+  Inimigos). O save mudou de chave (`zh.cozy.v1`).
+- **O arco novo:** abertura roteirizada (`playIntro` — a espada fincada em `PLANTED_SWORD_TEXTURE`,
+  vaga-lumes sem luz THREE, o mago entrando por um stand-in enquanto o NPC real fica escondido por
+  `NpcManager.setKindHidden`), quatro pedidos com presente (cogumelos, canteiros, lenha, pedras),
+  portão do jardim, fogueira do fim, espeto (`ROAST_STICK_TEXTURE`) e créditos DOM.
+- **Armadilhas medidas no `zerar`:** a área da astrônoma é fechada por árvores secas que REBROTAM
+  — o machado do lenhador é a chave, e o piloto corta quando o caminho fecha; o buraco do
+  canteiro é tile LIVRE (a seta anda em vez de virar), então mira-se chegando andando na direção
+  dele; NPC fora da janela de streaming não aparece em `isSolidForEntities`.
+- Pendente: o asset manifest ainda carrega a arte dos bichos removidos (inofensivo, só peso);
+  cenários antigos (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`) não foram revisados.

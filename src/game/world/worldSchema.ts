@@ -1,4 +1,4 @@
-﻿import type { EnemyKind, NpcKind, PickupKind } from '@/game/world/ScreenContent';
+import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
 
 // The world is a finite, fully-authored 5x5-chunk map defined entirely by a single
 // `world.json`. These types are the schema shared by the runtime loader (WorldData.ts) and
@@ -25,13 +25,7 @@ export type WorldMeta = {
 };
 
 // Entity placements use absolute tile coordinates — the exact shape the runtime managers
-// already consume (see EnemySpawn/PickupSpawn/NpcSpawn in ScreenContent.ts).
-//
-// Um inimigo autorado NAO e um corpo, e um PONTO DE SPAWN: aquele tile faz um corpo quando o heroi
-// chega perto e faz outro ENEMY_RESPAWN_MS depois que aquele cai (EnemySpawnerManager). Por isso
-// nao tem estado nenhum no arquivo — vida, direcao, o relogio do respawn: nada disso e autorado,
-// nasce com o corpo e morre com ele. Um campo aqui seria estado de partida gravado no mapa.
-export type WorldEnemySpawn = { type: EnemyKind; worldX: number; worldY: number };
+// already consume (see PickupSpawn/NpcSpawn in ScreenContent.ts).
 export type WorldPickupSpawn = { type: PickupKind; worldX: number; worldY: number };
 /**
  * `dialog` é o ROTEIRO desta instância, e não do tipo dela.
@@ -51,7 +45,6 @@ export type WorldChunk = {
   ground: number[][]; // [row][col], chunkRows x chunkColumns
   upper: Array<Array<number | null>>;
   collisions: boolean[][];
-  enemies: WorldEnemySpawn[];
   pickups: WorldPickupSpawn[];
   npcs: WorldNpcSpawn[];
 };
@@ -60,12 +53,10 @@ export type WorldChunk = {
 // and repeated. Their collision is resolved at runtime, not baked into the grid:
 // `dryBush` blocks until fire burns it to ash; `lockedDoor` blocks until opened with a key;
 // `dryTree` blocks until chopped to a stump with the axe; `rock` blocks until broken with
-// the pickaxe; `tallGrass` blocks until cut with the scythe (or burned); `lava` blocks until a
-// stone cools into a basalt step; `water` (a river tile) blocks — a bridge can be built
-// over it ONLY where a `bridgeSpot` marker is placed (2 wood sticks / a felled tree); `dryShrub`
-// is a small dead bush the axe clears (no drop, no regrow) — a pure physical barrier; `bombSpot`
-// is the walkable mark where a carried bomb plants itself when the hero steps on it (the game is
-// walk-only — no "use item" button — so placing is a step like collecting is); `plantSpot` is a
+// the pickaxe; `tallGrass` blocks until cut with the scythe (or burned); `water` (a river tile)
+// blocks — a bridge can be built over it ONLY where a `bridgeSpot` marker is placed (2 wood
+// sticks / a felled tree); `dryShrub` is a small dead bush the axe clears (no drop, no regrow) —
+// a pure physical barrier; `plantSpot` is a
 // small dug hole: step on it carrying SEEDS (the scythe's product) to plant — a mound covers the
 // hole, a full bucket waters it, and real tall grass sprouts after a while; consume that grass
 // (scythe → new seeds, or fire) and the hole reopens. The game's renewable, placeable fuel.
@@ -76,20 +67,13 @@ export type WorldChunk = {
 // (A B [caixa] resultado). Drop an item on each slot and a RECIPE turns the pair into a third
 // item — the only thing in the game that makes an item out of other items, instead of out of a
 // prop the hero hits with a tool.
-// `carnivorousPlant` is the farmed DEFENSE: grown from carnivore seeds in a plantSpot (or
-// authored), it blocks its tile and EATS any enemy that stops beside it — then chews, exposed.
-// It is a plant to everything else: fire burns it, the scythe fells it (no drop).
-// `pyre` e a pira: nasce so com a base (laje + berco), sobe uma tora por graveto entregue com o
-// X e, fechada, aceita a tocha ACESA. Ela nao e combustivel do sistema de fogo — acender e um
-// gesto, nunca um incendio que chegou sozinho. Ver PyreObject.
+// `hearth` e a FOGUEIRA DO FIM: uma fogueira que nao segue o relogio do dia e que so o heroi
+// acende, dentro do jardim que o portao fecha. `gardenGate` e esse portao: ele nao tem chave, ele
+// abre quando o ultimo pedido dos vizinhos fecha. Ver GameScene.openGardenGate.
 export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock'
-  | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower'
-  | 'bombSpot' | 'plantSpot' | 'carnivorousPlant' | 'toolbox' | 'furnace'
-  | 'altar' | 'pyre'
-  // A ESCADA entre os dois andares do mundo — a porta FÍSICA (ver StairsObject), e a ÚNICA
-  // travessia que existe. Houve um `levelPortal`, a passagem mágica que encadeava levels
-  // isolados; ele saiu com eles.
-  | 'stairs';
+  | 'ironRock' | 'tallGrass' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower'
+  | 'plantSpot' | 'toolbox' | 'furnace'
+  | 'altar' | 'hearth' | 'gardenGate';
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.

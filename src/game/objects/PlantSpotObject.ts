@@ -4,14 +4,13 @@ import { ASSET_KEYS } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import type { CarnivorousPlantObject } from './CarnivorousPlantObject';
 import type { TallGrassObject } from './TallGrassObject';
 import type { WorldProp } from './WorldProp';
 
-/** As sementes que um canteiro aceita — cada uma brota a SUA planta (ver growPlantedGrass). */
-export type PlantableSeed = 'seeds' | 'carnivoreSeeds';
-/** O que um canteiro pode ter feito brotar. As duas expõem `blocking` e caem para a foice. */
-export type GrownPlant = TallGrassObject | CarnivorousPlantObject;
+/** A semente que um canteiro aceita (ver growPlantedGrass). */
+export type PlantableSeed = 'seeds';
+/** O que um canteiro faz brotar: mato de verdade, que bloqueia e cai para a foice. */
+export type GrownPlant = TallGrassObject;
 
 // O canteiro: um pequeno buraco cavado no chao onde uma SEMENTE (o produto da foice) pode ser
 // plantada. O ciclo completo, nos dois botoes de hoje:
@@ -47,7 +46,7 @@ export class PlantSpotObject implements WorldProp {
 
   /** A planta que este canteiro fez brotar — GameScene a registra e a colhe de volta. */
   public grownGrass?: GrownPlant;
-  /** QUAL semente está na terra (decide o que brota — mato ou a planta carnívora). */
+  /** QUAL semente está na terra. */
   public sownKind: PlantableSeed = 'seeds';
   /** GameScene marcou a reabertura (evita agendar duas vezes no loop de update). */
   public reopenPending = false;
@@ -100,6 +99,11 @@ export class PlantSpotObject implements WorldProp {
         });
       }));
     });
+  }
+
+  /** Em que tempo do ciclo o canteiro esta (o playtest le isto). */
+  public get currentState(): SpotState {
+    return this.state;
   }
 
   public get isHole(): boolean {
