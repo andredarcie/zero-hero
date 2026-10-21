@@ -24,6 +24,12 @@ export const getTimeOfDay = (): number => time;
 /** Night runs from sunset (18:00) through sunrise (06:00). */
 export const isNightTime = (): boolean => time < 0.25 || time >= 0.75;
 
+/**
+ * A hora em que os vizinhos dormem: das 21h as 5h, o miolo da noite. A noite inteira (18h-6h)
+ * seria tempo demais de vale parado; com a margem, o anoitecer e o amanhecer ainda tem gente.
+ */
+export const isSleepTime = (): boolean => time < 5 / 24 || time >= 21 / 24;
+
 export const setTimeOfDay = (value: number): void => {
   time = ((value % 1) + 1) % 1;
 };

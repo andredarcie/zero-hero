@@ -4,6 +4,7 @@ import { NPC_VISUALS } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
+import { isSleepTime } from '@/game/runtime/timeOfDay';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { NpcKind, ScreenContent } from '@/game/world/ScreenContent';
 
@@ -47,6 +48,47 @@ function ensureExclaimTexture(scene: Phaser.Scene): void {
   canvas.refresh();
   canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
 }
+
+// O SONO: um "z" pequeno que sobe e some sobre quem dorme. Mesma técnica do "!" (glifo + contorno
+// escuro), e o mesmo lugar acima da cabeça — por isso os dois nunca aparecem juntos.
+const SLEEP_TEXTURE_KEY = 'npc-sleep-z';
+const SLEEP_GLYPH = [
+  '####',
+  '..#.',
+  '.#..',
+  '####',
+];
+const SLEEP_FILL = '#cfd8ff';
+
+function ensureSleepTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(SLEEP_TEXTURE_KEY)) return;
+  const rows = SLEEP_GLYPH.length;
+  const cols = SLEEP_GLYPH[0].length;
+  const canvas = scene.textures.createCanvas(SLEEP_TEXTURE_KEY, cols + 2, rows + 2);
+  if (!canvas) return;
+  const ctx = canvas.getContext();
+  const filled = (x: number, y: number): boolean =>
+    y >= 0 && y < rows && x >= 0 && x < cols && SLEEP_GLYPH[y][x] === '#';
+  for (let y = -1; y <= rows; y++) {
+    for (let x = -1; x <= cols; x++) {
+      if (filled(x, y)) ctx.fillStyle = SLEEP_FILL;
+      else if (filled(x - 1, y) || filled(x + 1, y) || filled(x, y - 1) || filled(x, y + 1)) ctx.fillStyle = EXCLAIM_OUTLINE;
+      else continue;
+      ctx.fillRect(x + 1, y + 1, 1, 1);
+    }
+  }
+  canvas.refresh();
+  canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+}
+
+/**
+ * QUEM NAO DORME: o mago. Ele e o guia do vale e a abertura acontece de noite — ele fala com o
+ * heroi e, um instante depois, roncaria na beira da estrada.
+ */
+const SLEEPLESS: ReadonlySet<NpcKind> = new Set<NpcKind>(['wizard']);
+
+/** Este vizinho esta dormindo agora? Fica aqui para a cena perguntar o mesmo que o desenho mostra. */
+export const isNpcAsleep = (kind: NpcKind): boolean => isSleepTime() && !SLEEPLESS.has(kind);
 
 // O AVISO DE CONVERSA: um keycap pixel-art com a tecla de AÇÃO (Z no teclado, A nos círculos
 // de toque), mostrado sobre o NPC que o herói está ENCARANDO de perto. É a resposta física ao
@@ -120,6 +162,7 @@ class NpcEntity {
   private readonly breathPhase: number;
   private readonly exclaim: Phaser.GameObjects.Image;
   private readonly talkKey: Phaser.GameObjects.Image;
+  private readonly sleepZ: Phaser.GameObjects.Image;
 
   public constructor(
     scene: Phaser.Scene,
@@ -151,6 +194,11 @@ class NpcEntity {
       .image(0, 0, TALK_KEY_TEXTURE)
       .setOrigin(0.5, 1)
       .setVisible(false);
+    ensureSleepTexture(scene);
+    this.sleepZ = scene.add
+      .image(0, 0, SLEEP_TEXTURE_KEY)
+      .setOrigin(0.5, 1)
+      .setVisible(false);
   }
 
   public render(
@@ -159,22 +207,37 @@ class NpcEntity {
     showExclaim: boolean,
     showTalkKey: boolean,
     timeMs: number,
+    asleep = false,
   ): void {
     // A RESPIRACAO: o corpo cresce um fio para cima e afina um fio, devagar — a mesma do heroi
     // parado. Pela base: o billboard pisa no chao e cresce para cima, entao os pes nao saem do lugar.
-    const b = Math.sin(timeMs / 900 + this.breathPhase);
-    this.sprite.setDisplaySize(this.size * (1 - 0.012 * b), this.size * (1 + 0.028 * b));
+    // Dormindo ela fica mais lenta e mais funda, e o corpo um tico mais baixo.
+    const b = Math.sin(timeMs / (asleep ? 1700 : 900) + this.breathPhase);
+    const depth = asleep ? 1.8 : 1;
+    const slump = asleep ? 0.94 : 1;
+    this.sprite.setDisplaySize(this.size * (1 - 0.012 * b * depth), this.size * slump * (1 + 0.028 * b * depth));
     // O keycap manda: encarado de perto, o "como falo?" vale mais que o "tem assunto novo" —
-    // os dois juntos seriam dois balões brigando pelo mesmo pixel.
+    // os dois juntos seriam dois balões brigando pelo mesmo pixel. O "z" e o mais fraco dos três:
+    // dormir não impede ninguém de conversar (falar acorda), então ele nunca esconde um aviso.
+    const showSleep = asleep && !showExclaim && !showTalkKey;
     this.exclaim.setVisible(showExclaim && !showTalkKey);
     this.talkKey.setVisible(showTalkKey);
-    if (!showExclaim && !showTalkKey) return;
+    this.sleepZ.setVisible(showSleep);
+    if (!showExclaim && !showTalkKey && !showSleep) return;
     const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
     // Chunky pixel scaling (integer multiple of the source texels) + a gentle bob.
     const px = Math.max(1, Math.round(tileSize / 24));
     const bob = Math.round(Math.sin(timeMs / 280) * px);
     const height = this.kind === 'death' ? 2 : 1;
     const anchorY = screen.y - tileSize * height - px * 2 + bob;
+    if (showSleep) {
+      // O "z" sobe de lado e some, e volta: um ciclo de 2,4s por vizinho, cada um no seu tempo.
+      const cycle = ((timeMs / 2400) + this.breathPhase / (Math.PI * 2)) % 1;
+      this.sleepZ.setScale(px)
+        .setPosition(Math.round(screen.x + px * (2 + cycle * 4)), Math.round(anchorY + px * 3 - cycle * tileSize * 0.35))
+        .setAlpha(Math.sin(cycle * Math.PI));
+      return;
+    }
     if (showTalkKey) this.talkKey.setScale(px).setPosition(screen.x, anchorY);
     else this.exclaim.setScale(px).setPosition(screen.x, anchorY);
   }
@@ -182,6 +245,7 @@ class NpcEntity {
   public hideExclaim(): void {
     this.exclaim.setVisible(false);
     this.talkKey.setVisible(false);
+    this.sleepZ.setVisible(false);
   }
 
   /** Um pulinho: oi, obrigado, toma aqui. A altura volta a zero sozinha. */
@@ -201,6 +265,7 @@ class NpcEntity {
     this.sprite.destroy();
     this.exclaim.destroy();
     this.talkKey.destroy();
+    this.sleepZ.destroy();
   }
 }
 
@@ -212,6 +277,12 @@ export class NpcManager {
    * desenha, nao bloqueia e nao conversa — para o mundo ele ainda nao chegou.
    */
   private readonly hiddenKinds = new Set<NpcKind>();
+  /**
+   * Especies FORA DE CASA: o vizinho que foi sentar na fogueira (ver FireVisitor). Diferente do
+   * escondido, ele CONTINUA ocupando o tile dele — senao o heroi pisaria la, e a volta poria
+   * os dois no mesmo lugar —, mas nao desenha e nao conversa: quem esta la e so a casa vazia.
+   */
+  private readonly awayKinds = new Set<NpcKind>();
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -241,7 +312,7 @@ export class NpcManager {
       const list = this.getContent(cx, cy).npcs.map(
         (spawn) => new NpcEntity(this.scene, spawn.worldX, spawn.worldY, spawn.type, spawn.dialog),
       );
-      for (const npc of list) if (this.hiddenKinds.has(npc.kind)) npc.setVisible(false);
+      for (const npc of list) if (this.hiddenKinds.has(npc.kind) || this.awayKinds.has(npc.kind)) npc.setVisible(false);
       this.byChunk.set(key, list);
     }
   }
@@ -270,6 +341,16 @@ export class NpcManager {
     }
   }
 
+  /** Vizinho saiu para a fogueira (ou voltou). Vale tambem para os chunks que ainda vao chegar. */
+  public setKindAway(kind: NpcKind, away: boolean): void {
+    if (away) this.awayKinds.add(kind);
+    else this.awayKinds.delete(kind);
+    for (const list of this.byChunk.values()) {
+      for (const npc of list) if (npc.kind === kind) npc.setVisible(!away && !this.hiddenKinds.has(kind));
+    }
+  }
+
+  /** Todos os que ocupam um tile agora — inclusive a casa vazia de quem saiu. */
   private all(): NpcEntity[] {
     const out: NpcEntity[] = [];
     for (const list of this.byChunk.values()) {
@@ -278,39 +359,45 @@ export class NpcManager {
     return out;
   }
 
+  /** Os que estao EM CASA: os unicos que conversam, pulam e desenham marcas. */
+  private present(): NpcEntity[] {
+    return this.all().filter((n) => !this.awayKinds.has(n.kind));
+  }
+
   public hasNpcAt(worldX: number, worldY: number): boolean {
     return this.all().some((n) => n.worldX === worldX && n.worldY === worldY);
   }
 
   public getKindAt(worldX: number, worldY: number): NpcKind | null {
-    return this.all().find((n) => n.worldX === worldX && n.worldY === worldY)?.kind ?? null;
+    return this.present().find((n) => n.worldX === worldX && n.worldY === worldY)?.kind ?? null;
   }
 
   /** O roteiro próprio deste NPC, se ele tiver um (ver WorldNpcSpawn.dialog). */
   public getDialogIdAt(worldX: number, worldY: number): string | undefined {
-    return this.all().find((n) => n.worldX === worldX && n.worldY === worldY)?.dialog;
+    return this.present().find((n) => n.worldX === worldX && n.worldY === worldY)?.dialog;
   }
 
   /** O NPC deste tile da um pulinho (ver NpcEntity.hop). */
   public hop(worldX: number, worldY: number, height?: number): boolean {
-    const npc = this.all().find((n) => n.worldX === worldX && n.worldY === worldY);
+    const npc = this.present().find((n) => n.worldX === worldX && n.worldY === worldY);
     npc?.hop(this.scene, height);
     return npc !== undefined;
   }
 
-  public getActiveWorldPositions(): ReadonlyArray<{ worldX: number; worldY: number }> {
-    return this.all().map((n) => ({ worldX: n.worldX, worldY: n.worldY }));
+  public getActiveWorldPositions(): ReadonlyArray<{ worldX: number; worldY: number; kind: NpcKind }> {
+    return this.present().map((n) => ({ worldX: n.worldX, worldY: n.worldY, kind: n.kind }));
   }
 
   public render(tileSize: number, camera: WorldCamera): void {
     const now = this.scene.time.now;
-    for (const npc of this.all()) {
+    for (const npc of this.present()) {
       npc.render(
         tileSize,
         camera,
         this.hasNewDialog(npc.kind, npc.worldX, npc.worldY, npc.dialog),
         this.isTalkTarget(npc.worldX, npc.worldY),
         now,
+        isNpcAsleep(npc.kind),
       );
     }
   }
@@ -329,5 +416,6 @@ export class NpcManager {
       for (const npc of list) npc.destroy();
     }
     this.byChunk.clear();
+    this.awayKinds.clear();
   }
 }

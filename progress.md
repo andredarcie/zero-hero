@@ -9434,3 +9434,10 @@ são do autor.
 - **Portão trancado para sempre**: o último pedido grava na ENTREGA, e o portão só abria quando o obrigado fechava (+700ms). O `create` agora abre se `allQuestsDone()`, venha o save como vier.
 - **O fim gravado cedo demais**: `playRoastEnding` gravava `endingSeen` (e o graveto e o cogumelo gastos) no primeiro quadro; fechar no meio voltava sem final para ver. Grava quando os créditos sobem.
 - **ESC sentado na fogueira** levantava E abria a pausa (dois listeners). Agora só levanta.
+
+## 2026-10-21 — A companhia: o gato, o sono e quem vem sentar no fogo
+
+- **O gato** (`entities/CatCompanion`): chega com o PRIMEIRO favor (1,2s depois do sino) e volta com a partida se algum pedido estiver feito — lido dos pedidos, nada no save. Anda EM FILA pelo rastro do herói (pontos a cada 1/4 de tile, até 64), parando quando o caminho até ele cabe em 1,25 tile: nunca corta canto, nem na meia-volta. Mais de 6 tiles longe (Continue) ele renasce no herói. Sentado na fogueira, ele vem para o lado e se enrola. **Z no vazio com ele a até 1,7 tile = carinho** (pulinho, corações, miado de duas notas na voz do `blackCat`). Não ocupa tile e não bloqueia.
+- **O sono** (`isSleepTime`, 21h–5h; `isNpcAsleep` em `NpcManager`): respiração lenta e funda, corpo 6% mais baixo e um "z" que sobe e some. O "z" é o mais fraco dos três avisos (keycap > "!" > z): dormir não impede conversa, falar acorda. Quem dorme não gasta o "oi". O mago nunca dorme (a abertura é de noite).
+- **Quem vem sentar** (`entities/FireVisitor`): sentar numa fogueira acesa chama o vizinho mais perto (até 12 tiles, tenta os 3 mais perto) por BFS em 4 direções, preso a uma caixa em volta do fogo, até o lugar livre em volta dela — o do lado OPOSTO ao herói primeiro. É um stand-in como o mago da abertura; o de verdade fica "fora" (`setKindAway`): sem corpo e sem conversa, mas o tile continua ocupado. Levantar o manda de volta pelo mesmo caminho, e só então ele reaparece. Vem de noite também: em volta do fogo ninguém dorme.
+- `gameDebug.getState().companions` expõe o gato e a visita para um cenário futuro.

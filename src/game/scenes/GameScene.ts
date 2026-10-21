@@ -39,7 +39,7 @@ import {
 import { initProfiler, profiler } from '@/game/debug/Profiler';
 import { getTimeOfDay, isNightTime, setTimeOfDay, setTimeScale, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import { LootManager } from '@/game/entities/LootManager';
-import { NpcManager } from '@/game/entities/NpcManager';
+import { isNpcAsleep, NpcManager } from '@/game/entities/NpcManager';
 import { ItemManager } from '@/game/entities/ItemManager';
 import type { CollectedItem } from '@/game/entities/ItemManager';
 import { MACHINE_ITEM_KINDS, isBagItem, type HeldItemKind } from '@/game/entities/ItemPickup';
@@ -148,7 +148,9 @@ import {
   recordQuestEvent,
   type QuestEvent,
 } from '@/game/runtime/QuestLog';
-import { questFor } from '@/game/dialogs/NpcQuests';
+import { NPC_QUESTS, questFor } from '@/game/dialogs/NpcQuests';
+import { CatCompanion } from '@/game/entities/CatCompanion';
+import { FireVisitor } from '@/game/entities/FireVisitor';
 
 // The per-item 2D art (Phaser texture atlas keys): the swing arc, the overhead chop and the
 // death elegy's back item all draw from here. The 3D twin is BACK_ITEM_VISUAL_3D below.
@@ -305,6 +307,8 @@ const WIZARD_WALK_TILES = 5;
  * vinte segundos — rapido o bastante para VER o ceu andar, devagar o bastante para nao piscar.
  */
 const REST_TIME_SCALE = 24;
+/** De quantos tiles um vizinho atravessa o vale para sentar na fogueira com o heroi. */
+const VISIT_RADIUS = 12;
 /** Quantos vaga-lumes derivam em volta do heroi a noite. */
 const FIREFLY_COUNT = 18;
 /** Quantas borboletas passeiam em volta do heroi de dia (o turno dos vaga-lumes). */
@@ -490,6 +494,11 @@ export class GameScene extends Phaser.Scene {
   // Sentado numa fogueira (ver restAtFireAt): o tempo corre e o heroi descansa.
   private resting = false;
   private restKeyListener?: (event: KeyboardEvent) => void;
+  /** A fogueira em que ele esta sentado (o gato se enrola do lado dele, de frente para ela). */
+  private restFireTile?: { x: number; y: number };
+  // A COMPANHIA: o gato que chega com o primeiro favor, e o vizinho que vem sentar na fogueira.
+  private cat?: CatCompanion;
+  private fireVisitor?: FireVisitor;
   // As fogueiras que um pedido deixou acesas para sempre (a do Bram): o relogio nao as apaga.
   private readonly keptLitFires = new Set<CampfireObject>();
   // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
@@ -861,6 +870,9 @@ export class GameScene extends Phaser.Scene {
     this.heroThought = new HeroThought(this, ASSET_KEYS.thoughtTorch);
     this.installActionInput();
 
+    // O GATO de quem ja fez algum favor volta junto com a partida.
+    if (Object.values(NPC_QUESTS).some(isQuestDone)) this.ensureCat(false);
+
     // A ABERTURA: a primeira vez no vale e uma cena, nao um controle. Ela toca uma vez por partida
     // (o save lembra), e continuar uma partida pula direto para o heroi parado na estrada.
     if (!this.introDone) void this.playIntro();
@@ -1144,6 +1156,10 @@ export class GameScene extends Phaser.Scene {
         itemGetOpen: this.itemGetOpen,
         cutsceneActive: this.cutsceneActive,
         resting: this.resting,
+        companions: {
+          cat: this.cat ? { ...this.cat.position } : null,
+          visitor: this.fireVisitor ? { kind: this.fireVisitor.kind, seated: this.fireVisitor.isSeated } : null,
+        },
         litFires: this.campfires.filter((cf) => cf.isLit).length,
         ending: { gateOpen: this.gateOpened, hearthLit: this.hearthLit, roasted: this.roasted },
         introDone: this.introDone,
@@ -1202,7 +1218,12 @@ export class GameScene extends Phaser.Scene {
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
     this.resting = false;
+    this.restFireTile = undefined;
     setTimeScale(1);
+    this.cat?.destroy();
+    this.cat = undefined;
+    this.fireVisitor?.destroy();
+    this.fireVisitor = undefined;
     this.keptLitFires.clear();
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
@@ -1314,6 +1335,7 @@ export class GameScene extends Phaser.Scene {
     if (this.resting) {
       this.syncCampfiresToClock();
       if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
+      this.updateCat(delta);
       this.renderProps();
       return;
     }
@@ -1412,6 +1434,7 @@ export class GameScene extends Phaser.Scene {
     this.syncPlacementHints();
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.greetNearbyNpcs();
+    this.updateCat(delta);
     this.renderProps();
   }
 
@@ -1421,6 +1444,8 @@ export class GameScene extends Phaser.Scene {
     for (const n of npcs) {
       const key = `${n.worldX},${n.worldY}`;
       if (this.greetedNpcs.has(key)) continue;
+      // Quem dorme nao cumprimenta — e nem gasta o "oi": ele acontece quando o vizinho acordar.
+      if (isNpcAsleep(n.kind)) continue;
       if (Math.hypot(n.worldX - this.playerWorld.worldX, n.worldY - this.playerWorld.worldY) > 2.3) continue;
       this.greetedNpcs.add(key);
       this.npcManager?.hop(n.worldX, n.worldY, 0.16);
@@ -1448,6 +1473,8 @@ export class GameScene extends Phaser.Scene {
     this.setVignette(0.35, 1600);
     getSoundManager().playCozyChime();
     setTimeScale(REST_TIME_SCALE);
+    this.restFireTile = { x: wx, y: wy };
+    this.inviteFireVisitor(wx, wy);
     // Seta ou qualquer tecla levanta — as setas nao passam por pressAttack/pressUse.
     this.restKeyListener = (event: KeyboardEvent): void => {
       if (event.repeat || !this.resting) return;
@@ -1465,9 +1492,19 @@ export class GameScene extends Phaser.Scene {
   private standUp(): void {
     if (!this.resting) return;
     this.resting = false;
+    this.restFireTile = undefined;
     setTimeScale(1);
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
+    // O vizinho que veio sentar levanta junto e volta para casa pelo mesmo caminho; a casa so
+    // volta a ter gente quando ele chega.
+    const visitor = this.fireVisitor;
+    if (visitor) {
+      visitor.leave(() => {
+        if (this.fireVisitor === visitor) this.fireVisitor = undefined;
+        this.npcManager?.setKindAway(visitor.kind, false);
+      });
+    }
     // A seta que levantou nao pode virar passo: os pes so soltam depois de o corpo se esticar, e o
     // pedido de direcao guardado no controle cai fora.
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -1481,6 +1518,128 @@ export class GameScene extends Phaser.Scene {
     this.setVignette(0, 900);
     this.useBufferMs = 0;
     this.useCooldownMs = USE_COOLDOWN_MS;
+  }
+
+  // ── A COMPANHIA ─────────────────────────────────────────────────────────────
+
+  /**
+   * O GATO CHEGA com o primeiro favor feito (e quem continua uma partida ja o encontra junto).
+   * Nao vai ao save: ele e lido dos pedidos, e um booleano a mais so poderia discordar deles.
+   */
+  private ensureCat(arriving: boolean): void {
+    if (this.cat || !this.adventure || !this.world3d) return;
+    const { dx, dy } = this.movementController?.facing ?? { dx: 0, dy: 1 };
+    const px = this.playerWorld.worldX;
+    const py = this.playerWorld.worldY;
+    // Ele aparece ATRAS do heroi (do lado que ele nao olha), ou em cima dele se ali for parede.
+    const behindFree = !this.isSolidForEntities(px - dx, py - dy);
+    this.cat = new CatCompanion(this, behindFree ? px - dx : px, behindFree ? py - dy : py, arriving);
+  }
+
+  private updateCat(delta: number): void {
+    if (!this.cat) return;
+    let beside: { x: number; y: number } | null = null;
+    const fire = this.restFireTile;
+    if (this.resting && fire) {
+      // ENROLADO DO LADO: meio tile para o lado do heroi, de frente para a mesma fogueira.
+      const hero = this.heroVisualTile();
+      const fx = Math.sign(fire.x - this.playerWorld.worldX);
+      const fy = Math.sign(fire.y - this.playerWorld.worldY);
+      beside = { x: hero.x - fy * 0.55 + fx * 0.1, y: hero.y + fx * 0.55 + fy * 0.1 };
+    }
+    this.cat.update(delta, this.heroVisualTile(), beside);
+  }
+
+  /** O carinho: so com o gato perto. Devolve se havia gato para afagar. */
+  private petCat(): boolean {
+    const cat = this.cat;
+    if (!cat) return false;
+    const hero = this.heroVisualTile();
+    if (Math.hypot(cat.position.x - hero.x, cat.position.y - hero.y) > 1.7) return false;
+    cat.pet();
+    this.spawnHearts(cat.position.x, cat.position.y);
+    // A voz do gato e a mesma do roteiro dele (NpcDialogs): aguda e redonda, um miado de duas notas.
+    const voice = getDialogVoice('blackCat');
+    getSoundManager().playDialogBlip(voice?.freq ?? 540, voice?.wave ?? 'triangle');
+    this.time.delayedCall(120, () => getSoundManager().playDialogBlip((voice?.freq ?? 540) * 0.8, voice?.wave ?? 'triangle'));
+    return true;
+  }
+
+  /**
+   * O VIZINHO MAIS PERTO VEM SENTAR na fogueira em que o heroi acabou de sentar — se houver um a
+   * ate VISIT_RADIUS tiles, com caminho de verdade ate um lugar livre em volta do fogo.
+   */
+  private inviteFireVisitor(fx: number, fy: number): void {
+    if (this.fireVisitor || !this.npcManager || !this.adventure) return;
+    const hx = this.playerWorld.worldX;
+    const hy = this.playerWorld.worldY;
+    // Os lugares em volta do fogo, o do lado OPOSTO ao heroi primeiro: e ali que alguem senta para
+    // conversar sem dizer nada.
+    const seats: Array<[number, number]> = [];
+    for (let oy = -1; oy <= 1; oy += 1) {
+      for (let ox = -1; ox <= 1; ox += 1) {
+        const x = fx + ox;
+        const y = fy + oy;
+        if ((ox === 0 && oy === 0) || (x === hx && y === hy)) continue;
+        if (this.isSolidForEntities(x, y) || this.itemManager?.hasItemAt(x, y)) continue;
+        seats.push([x, y]);
+      }
+    }
+    if (seats.length === 0) return;
+    seats.sort((a, b) => Math.hypot(b[0] - hx, b[1] - hy) - Math.hypot(a[0] - hx, a[1] - hy));
+    const neighbours = this.npcManager.getActiveWorldPositions()
+      .filter((n) => Math.hypot(n.worldX - fx, n.worldY - fy) <= VISIT_RADIUS)
+      .sort((a, b) => Math.hypot(a.worldX - fx, a.worldY - fy) - Math.hypot(b.worldX - fx, b.worldY - fy));
+    for (const n of neighbours.slice(0, 3)) {
+      const path = this.findVisitPath([n.worldX, n.worldY], seats, [hx, hy], [fx, fy]);
+      if (!path) continue;
+      this.npcManager.setKindAway(n.kind, true);
+      this.fireVisitor = new FireVisitor(this, n.kind, path);
+      this.fireVisitor.arrive();
+      return;
+    }
+  }
+
+  /**
+   * O caminho do vizinho ate o lugar livre mais desejado que ele alcanca: BFS em 4 direcoes pelo
+   * chao livre, preso a uma caixa em volta do fogo (nunca o mapa inteiro). A casa dele conta como
+   * livre (e ele mesmo que a ocupa), o tile do heroi nunca.
+   */
+  private findVisitPath(
+    home: readonly [number, number],
+    seats: ReadonlyArray<readonly [number, number]>,
+    hero: readonly [number, number],
+    fire: readonly [number, number],
+  ): Array<[number, number]> | null {
+    const box = VISIT_RADIUS + 3;
+    const keyOf = (x: number, y: number): string => `${x},${y}`;
+    const seatRank = new Map(seats.map(([x, y], i) => [keyOf(x, y), i]));
+    const cameFrom = new Map<string, string | null>([[keyOf(home[0], home[1]), null]]);
+    const queue: Array<[number, number]> = [[home[0], home[1]]];
+    let best: string | null = null;
+    let bestRank = Infinity;
+    for (let head = 0; head < queue.length; head += 1) {
+      const [x, y] = queue[head];
+      const rank = seatRank.get(keyOf(x, y));
+      if (rank !== undefined && rank < bestRank) { best = keyOf(x, y); bestRank = rank; if (rank === 0) break; }
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const k = keyOf(nx, ny);
+        if (cameFrom.has(k)) continue;
+        if (Math.abs(nx - fire[0]) > box || Math.abs(ny - fire[1]) > box) continue;
+        if ((nx === hero[0] && ny === hero[1]) || this.isSolidForEntities(nx, ny)) continue;
+        cameFrom.set(k, keyOf(x, y));
+        queue.push([nx, ny]);
+      }
+    }
+    if (!best) return null;
+    const path: Array<[number, number]> = [];
+    for (let k: string | null = best; k; k = cameFrom.get(k) ?? null) {
+      const [x, y] = k.split(',').map(Number);
+      path.unshift([x, y]);
+    }
+    return path;
   }
 
   /**
@@ -2241,7 +2400,10 @@ export class GameScene extends Phaser.Scene {
     if (this.restAtFireAt(front.x, front.y)) return;
     if (this.openCraftMenuAt(front.x, front.y)) return;
     if (this.placeOnAltarAt(front.x, front.y)) return;
-    this.strikeAltarAt(front.x, front.y);
+    if (this.strikeAltarAt(front.x, front.y)) return;
+    // Z NO VAZIO com o gato do lado e carinho. Ele anda atras e nao num tile, entao mira-lo
+    // seria impossivel: basta estar perto e o Z nao ter mais nada a fazer.
+    this.petCat();
   }
 
   /**
@@ -4849,6 +5011,8 @@ export class GameScene extends Phaser.Scene {
     this.refreshQuestMarks();
     getSoundManager().playSingingBowl();
     this.spawnGrowSparkle(this.playerWorld.worldX, this.playerWorld.worldY);
+    // O primeiro favor traz o gato: o vale decidiu que o cavaleiro fica.
+    this.time.delayedCall(1200, () => this.ensureCat(true));
     if (!this.gateOpened && allQuestsDone()) this.time.delayedCall(700, () => this.openGardenGate());
   }
 
