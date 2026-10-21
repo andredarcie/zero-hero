@@ -1,7 +1,7 @@
 
 const MASTER_VOL = 0.32;
 const MUSIC_VOL = 0.6; // music-bus duck level (under the SFX)
-const AMBIENCE_VOL = 0.4; // the wind bed — always subtle
+const AMBIENCE_VOL = 0.42; // os leitos do vale (passaros, grilos, agua) — sempre por baixo
 
 // Player-facing volume settings (pause menu sliders), persisted like zh.locale. They sit on
 // dedicated user gain stages so they never fight the internal mix: the dialog duck still
@@ -30,108 +30,60 @@ const loadVol = (storageKey: string): number => {
 // sample finishes decoding (or if one fails to load).
 
 const SAMPLES = {
-  // A ESPINHA DO COMBATE. Tudo em `combat/` vem dos pacotes de fantasia importados (ver o bloco
-  // no fim desta tabela, `tools/import-combat-sfx.mjs` e CREDITS.md); os `sword-slash.wav`,
-  // `enemy-hit.wav` e `enemy-death.wav` GERADOS continuam na raiz de `audio/`, intactos.
-  swordSlash: { file: 'combat/sword-swing.wav', vol: 0.8 },
-  enemyHit: { file: 'combat/enemy-hit.wav', vol: 0.85 },
-  enemyDeath: { file: 'combat/enemy-death.wav', vol: 0.8 },
-  heartPickup: { file: 'heart.wav', vol: 0.7 },
-  swordPickup: { file: 'item-pickup.wav', vol: 0.6 }, // item get (Freesound #37089, see CREDITS.md)
-  dropWater: { file: 'water-drop.wav', vol: 0.75 }, // single drop for the title-screen reveal
-  titleImpact: { file: 'title-impact.wav', vol: 0.95 }, // epic hit when the author's name lands
-  singingBowl: { file: 'singing-bowl.wav', vol: 0.8 }, // Tibetan bowl for the intro "wake up"
-  playerHurt: { file: 'combat/player-hurt.wav', vol: 0.85 },
-  playerDeath: { file: 'combat/player-death.wav', vol: 0.85 },
-  shopOpen: { file: 'shop-open.wav', vol: 0.5 },
-  shopClose: { file: 'shop-close.wav', vol: 0.6 },
-  ignite: { file: 'ignite.wav', vol: 0.75 },
-  woodChop: { file: 'wood-chop.wav', vol: 0.8 },
-  treeFall: { file: 'tree-fall.wav', vol: 0.8 },
-  splash: { file: 'splash.wav', vol: 0.7 },
-  rockSmash: { file: 'rock-smash.wav', vol: 0.8 },
-  grassCut: { file: 'grass-cut.wav', vol: 0.6 },
-  bombPlace: { file: 'bomb-place.wav', vol: 0.6 },
-  bombExplode: { file: 'bomb-explode.wav', vol: 1.0 },
-  undeadSpawn: { file: 'combat/undead-spawn.wav', vol: 0.7 },
-  fireHit: { file: 'combat/fire-hit.wav', vol: 0.7 },
-  bridgePlank: { file: 'bridge-plank.wav', vol: 0.7 },
-  bridgeBuilt: { file: 'bridge-built.wav', vol: 0.75 },
-  hammer: { file: 'hammer.wav', vol: 0.7 }, // nailing a plank home during a bridge build
-  footstep0: { file: 'footstep-0.wav', vol: 0.5 },
-  footstep1: { file: 'footstep-1.wav', vol: 0.5 },
-  footstep2: { file: 'footstep-2.wav', vol: 0.5 },
-  footstep3: { file: 'footstep-3.wav', vol: 0.5 },
-
-  // ── O COMBATE (ver tools/import-combat-sfx.mjs e CREDITS.md) ─────────────────────────────
-  //
-  // Catorze destes eventos NAO tinham amostra nenhuma: cada um tocava a sintese de emergencia do
-  // proprio SoundManager — a rede que existe pra cobrir um sample que ainda nao decodificou — e
-  // ela tinha virado o som definitivo de metade da briga.
-  //
-  // A FONTE E UM PACOTE DE RPG DE FANTASIA (o "RPG Sound Pack", CC0), e isso importa: houve uma
-  // versao com um pacote retro de fliperama, e o combate acabou com LASER no feitico do mago,
-  // ALARME no telegrafo da caveira e GRITO DE ALIENIGENA na morte. Hoje o mago tem `battle/spell`,
-  // a caveira tem `NPC/shade` (o espectro — que e o que ela e), a gosma tem `NPC/slime` e a aranha
-  // tem `NPC/beetle`. Sobraram SEIS sons do pacote retro, e so nos IMPACTOS: o pacote de fantasia
-  // tem golpe e criatura, mas nao tem nenhuma pancada — e as seis que ficaram sao percussivas e
-  // neutras, sem nada de espacial.
-  //
-  // O volume de cada um e DAQUI, nao do arquivo: o importador normaliza tudo no mesmo pico (-1
-  // dBFS) exatamente pra que a mixagem seja uma decisao de jogo, tomada nesta coluna, e nao um
-  // acidente de quao alto o pacote gravou. E por isso a gosma (0.32) e um sopro e o encontrao
-  // (0.8) e um evento, com o mesmo arquivo de origem tendo a mesma escala.
-  fistSwing: { file: 'combat/fist-swing.wav', vol: 0.62 },
-  spinRelease: { file: 'combat/spin-release.wav', vol: 0.85 },
-  undeadWhiff: { file: 'combat/undead-whiff.wav', vol: 0.45 },
-  spinReady: { file: 'combat/spin-ready.wav', vol: 0.55 },
-  guardBlock: { file: 'combat/guard-block.wav', vol: 0.7 },
-  bladeGlance: { file: 'combat/blade-glance.wav', vol: 0.5 },
-  bodySlam: { file: 'combat/body-slam.wav', vol: 0.8 },
-  enemyShot: { file: 'combat/enemy-shot.wav', vol: 0.55 },
-  // OS TELEGRAFOS SUBIRAM. Estes três (mais o `spellWindup` abaixo) são sons SUSTENTADOS — uma
-  // carga que dura, não um baque —, e por isso o RMS é régua válida para eles: mediam de 8 a 10 dB
-  // abaixo do resto do combate, ou seja, os avisos eram a coisa mais silenciosa da briga. Ficam
-  // ainda abaixo dos golpes de propósito (um aviso não compete com o impacto), mas agora dentro da
-  // mesma conversa.
-  //
-  // Os curtos NÃO foram mexidos pelo mesmo número, e isso importa: todo arquivo aqui sai com o
-  // mesmo pico (-1 dBFS), então num tique de 46ms o RMS baixo só quer dizer "é um tique", não "é
-  // baixo". Corrigir o aparo por RMS seria distorcer o único som que já estava certo.
-  turretCharge: { file: 'combat/turret-charge.wav', vol: 0.55 },
-  zoraSpit: { file: 'combat/zora-spit.wav', vol: 0.66 },
-  spiderPounce: { file: 'combat/spider-pounce.wav', vol: 0.55 },
-  slimeHop: { file: 'combat/slime-hop.wav', vol: 0.32 },
-  creatureArrive: { file: 'combat/creature-arrive.wav', vol: 0.38 },
-  // Os telegrafos que ainda eram sintetizados. O da caveira e um SIBILO DE ESPECTRO e o do mago e
-  // um FEITICO carregando — os dois do bestiario de fantasia, e os dois cortados para caber
-  // exatamente na janela que anunciam.
-  undeadWindup: { file: 'combat/undead-windup.wav', vol: 0.62 },
-  spellWindup: { file: 'combat/spell-windup.wav', vol: 0.7 },
-  zoraSurface: { file: 'combat/zora-surface.wav', vol: 0.4 },
+  // O JOGO NAO TEM COMBATE, e a tabela tambem nao: os sons de briga (golpe, dano, morte, os
+  // telegrafos do bestiario, a bomba) sairam daqui junto com o que os tocava. O que ficou foi
+  // remixado para baixo onde batia forte demais para um vale tranquilo — a rocha estourando, o
+  // machado, a arvore caindo —, porque o volume desta coluna e uma decisao de jogo.
+  swordSlash: { file: 'combat/sword-swing.wav', vol: 0.55 }, // o assobio da espada descendo (abertura)
+  heartPickup: { file: 'heart.wav', vol: 0.6 },
+  swordPickup: { file: 'item-pickup.wav', vol: 0.55 }, // item get (Freesound #37089, see CREDITS.md)
+  dropWater: { file: 'water-drop.wav', vol: 0.65 }, // a gota do titulo
+  titleImpact: { file: 'title-impact.wav', vol: 0.9 }, // a espada entrando na terra (abertura)
+  singingBowl: { file: 'singing-bowl.wav', vol: 0.75 }, // o sino dos momentos bons
+  shopOpen: { file: 'shop-open.wav', vol: 0.45 },
+  shopClose: { file: 'shop-close.wav', vol: 0.5 },
+  ignite: { file: 'ignite.wav', vol: 0.6 },
+  woodChop: { file: 'wood-chop.wav', vol: 0.5 },
+  treeFall: { file: 'tree-fall.wav', vol: 0.45 },
+  splash: { file: 'splash.wav', vol: 0.55 },
+  rockSmash: { file: 'rock-smash.wav', vol: 0.42 },
+  grassCut: { file: 'grass-cut.wav', vol: 0.5 },
+  fireHit: { file: 'combat/fire-hit.wav', vol: 0.45 },
+  bridgePlank: { file: 'bridge-plank.wav', vol: 0.55 },
+  bridgeBuilt: { file: 'bridge-built.wav', vol: 0.6 },
+  hammer: { file: 'hammer.wav', vol: 0.5 }, // nailing a plank home during a bridge build
+  footstep0: { file: 'footstep-0.wav', vol: 0.4 },
+  footstep1: { file: 'footstep-1.wav', vol: 0.4 },
+  footstep2: { file: 'footstep-2.wav', vol: 0.4 },
+  footstep3: { file: 'footstep-3.wav', vol: 0.4 },
 } as const;
 
 type SampleKey = keyof typeof SAMPLES;
 
 
-// A MUSICA NAO RESPONDE A INIMIGO. 'overworld' ("Ashen Fields") toca do inicio ao fim da
-// aventura, sobre o leito de vento; dungeon, level e o titulo tem a trilha deles, e e sempre a
-// mesma enquanto se esta la.
-//
-// Houve uma trilha de COMBATE ('danger', music-danger.wav), no estilo Souls: ela subia quando um
-// corpo vivo aparecia na tela com o heroi fora da luz e voltava ao normal alguns segundos depois
-// do ultimo cair. Ela foi REMOVIDA em 2026-08-19 a pedido do autor: a chegada de um inimigo ja e
-// um evento com aviso proprio (o telegrafo, a fissura, a voz do bicho), e uma trilha que muda
-// conta a mesma noticia antes — o jogador ouvia a tensao em vez de ver o corpo. O .wav continua
-// no repositorio, como o "Ashen Fields" ficou nos anos em que esteve desligado: revival facil.
-// 'title' segue sem uso desde que a intro caiu.
+// A MUSICA E DO VALE, E SO DELE. 'overworld' e "Little Hearth" (music-valley, F maior, a
+// caixinha de musica sobre a harpa) do inicio ao fim da aventura; 'menu' e a cancao de ninar do
+// titulo e dos creditos (music-lullaby). As duas saem de tools/gen-music.mjs. A trilha antiga
+// (o "Ashen Fields" de Souls) continua no repositorio, mas nada a toca.
 export type MusicKey = 'title' | 'overworld' | 'menu';
 const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
-  title: { file: 'music-title.wav', vol: 0.8 },
-  overworld: { file: 'music-overworld.wav', vol: 0.9 },
-  menu: { file: 'menu-drips.wav', vol: 0.5 }, // soft water drops under the title screen
+  title: { file: 'music-lullaby.wav', vol: 0.7 },
+  overworld: { file: 'music-valley.wav', vol: 0.8 },
+  menu: { file: 'music-lullaby.wav', vol: 0.7 },
 };
-const AMBIENCE_FILE = 'ambience-wind.wav';
+
+/**
+ * OS LEITOS DE AMBIENTE. Eram um vento so; agora sao tres, tocando juntos o tempo todo, e o jogo
+ * so mexe no VOLUME de cada um (`setAmbienceMix`): passaros e brisa de dia, grilos e um sapo de
+ * noite, e o marulho que cresce perto da agua. Misturar em vez de trocar e o que deixa o
+ * amanhecer ACONTECER aos poucos, em vez de cortar de um arquivo para o outro.
+ */
+type AmbienceBed = 'day' | 'night' | 'water';
+const AMBIENCE_FILES: Record<AmbienceBed, string> = {
+  day: 'ambience-day.wav',
+  night: 'ambience-night.wav',
+  water: 'ambience-water.wav',
+};
 
 const FOOTSTEP_KEYS: readonly SampleKey[] = ['footstep0', 'footstep1', 'footstep2', 'footstep3'];
 
@@ -162,10 +114,11 @@ class SoundManager {
   private wantTrack: MusicKey | null = null;
   private wantFadeMs = 1600;
 
-  // The wind bed — plain loop with its own gain, NOT on the music bus, so it keeps
-  // blowing while music ducks for dialogs (Souls: voices over wind, not over silence).
-  private ambienceBuffer: AudioBuffer | null = null;
-  private ambienceSource: AudioBufferSourceNode | null = null;
+  // Os leitos de ambiente — loops com ganho proprio, FORA do barramento da musica, entao o vale
+  // continua soando quando a musica baixa para um dialogo.
+  private readonly ambienceBuffers = new Map<AmbienceBed, AudioBuffer>();
+  private readonly ambienceBeds = new Map<AmbienceBed, { source: AudioBufferSourceNode; gain: GainNode }>();
+  private ambienceMix: Record<AmbienceBed, number> = { day: 1, night: 0, water: 0 };
   private wantAmbience = false;
 
   private lastFootstep = -1;
@@ -240,9 +193,11 @@ class SoundManager {
         .catch((err) => { console.warn(`[audio] could not load ${TRACKS[key].file}:`, err); });
     });
 
-    fetchBuffer(AMBIENCE_FILE)
-      .then((buffer) => { this.ambienceBuffer = buffer; if (this.wantAmbience) this.startAmbienceNow(); })
-      .catch((err) => { console.warn(`[audio] could not load ${AMBIENCE_FILE}:`, err); });
+    (Object.keys(AMBIENCE_FILES) as AmbienceBed[]).forEach((bed) => {
+      fetchBuffer(AMBIENCE_FILES[bed])
+        .then((buffer) => { this.ambienceBuffers.set(bed, buffer); if (this.wantAmbience) this.startAmbienceNow(); })
+        .catch((err) => { console.warn(`[audio] could not load ${AMBIENCE_FILES[bed]}:`, err); });
+    });
   }
 
   // ── music ──────────────────────────────────────────────────────────────────
@@ -380,30 +335,48 @@ class SoundManager {
 
   public startAmbience(): void {
     this.wantAmbience = true;
-    if (this.ambienceSource) return;
-    if (this.ambienceBuffer) this.startAmbienceNow();
+    this.startAmbienceNow();
   }
 
   public stopAmbience(): void {
     this.wantAmbience = false;
-    if (this.ambienceSource) {
-      try { this.ambienceSource.stop(); } catch { /* already stopped */ }
-      this.ambienceSource = null;
+    for (const { source } of this.ambienceBeds.values()) {
+      try { source.stop(); } catch { /* already stopped */ }
+    }
+    this.ambienceBeds.clear();
+  }
+
+  /**
+   * Quanto de cada leito o mundo pede agora (0..1): `night` cruza dia e noite, `water` e a
+   * proximidade da agua. Os ganhos deslizam (setTargetAtTime), entao chamar a cada frame e barato
+   * e nunca estala.
+   */
+  public setAmbienceMix(night: number, water: number): void {
+    this.ambienceMix = { day: 1 - clamp01(night), night: clamp01(night), water: clamp01(water) };
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    for (const [bed, { gain }] of this.ambienceBeds) {
+      gain.gain.setTargetAtTime(AMBIENCE_VOL * this.ambienceMix[bed], now, 0.8);
     }
   }
 
   private startAmbienceNow(): void {
-    if (this.ambienceSource || !this.ambienceBuffer) return;
+    if (!this.wantAmbience) return;
     const ctx = this.audio;
-    const gain = ctx.createGain();
-    gain.gain.value = AMBIENCE_VOL;
-    gain.connect(this.musicUserBus);
-    const src = ctx.createBufferSource();
-    src.buffer = this.ambienceBuffer;
-    src.loop = true;
-    src.connect(gain);
-    src.start();
-    this.ambienceSource = src;
+    for (const [bed, buffer] of this.ambienceBuffers) {
+      if (this.ambienceBeds.has(bed)) continue;
+      const gain = ctx.createGain();
+      gain.gain.value = AMBIENCE_VOL * this.ambienceMix[bed];
+      gain.connect(this.musicUserBus);
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      // Os tres leitos tem comprimentos diferentes e comecam em pontos diferentes: nunca se
+      // alinham, e o vale nao "repete" a cada trinta segundos.
+      src.connect(gain);
+      src.start(0, Math.random() * buffer.duration);
+      this.ambienceBeds.set(bed, { source: src, gain });
+    }
   }
 
   // ── sample playback ────────────────────────────────────────────────────────
@@ -436,9 +409,15 @@ class SoundManager {
    * frequency + waveform so voices sound distinct (a tiny random jitter keeps it lively).
    * Deliberately dry and procedural — close, intimate, no room around it.
    */
-  public playDialogBlip(freq: number, wave: OscillatorType = 'square'): void {
-    const jitter = 1 + (Math.random() - 0.5) * 0.06;
-    this.osc(wave, freq * jitter, freq * jitter * 0.86, 0.14, 0.05);
+  /**
+   * O "falar" de cada letra. As vozes autoradas pedem onda quadrada ou serra (o chiptune da
+   * aventura antiga), e aqui elas sao AMACIADAS: quadrada vira triangulo, serra vira seno, e o
+   * blip ficou mais baixo e mais redondo. A altura de cada personagem continua a dele.
+   */
+  public playDialogBlip(freq: number, wave: OscillatorType = 'triangle'): void {
+    const jitter = 1 + (Math.random() - 0.5) * 0.05;
+    const soft: OscillatorType = wave === 'square' ? 'triangle' : wave === 'sawtooth' ? 'sine' : wave;
+    this.osc(soft, freq * jitter, freq * jitter * 0.92, 0.075, 0.07);
   }
 
   // ── low-level procedural helpers (fallbacks) ──────────────────────────────
@@ -792,6 +771,10 @@ class SoundManager {
 // Singleton — persists across scene restarts, shares one AudioContext
 let _instance: SoundManager | null = null;
 export const getSoundManager = (): SoundManager => {
-  _instance ??= new SoundManager();
+  if (!_instance) {
+    _instance = new SoundManager();
+    // Dev-only handle for the playtest (the same instance the game plays through).
+    if (import.meta.env.DEV) (window as unknown as { __sound?: SoundManager }).__sound = _instance;
+  }
   return _instance;
 };

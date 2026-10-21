@@ -476,6 +476,7 @@ export class GameScene extends Phaser.Scene {
   private roasting = false;
   private roastStick?: Billboard3D;
   private fireflyLevel = 0;
+  private ambienceClockMs = 0;
   private creditsRoll?: HTMLDivElement;
   private hearths: CampfireObject[] = [];
   private gardenGates: LockedDoorObject[] = [];
@@ -962,6 +963,7 @@ export class GameScene extends Phaser.Scene {
     // Os vaga-lumes vivem aqui e nao no update: eles sao a moldura das cutscenes (a abertura e o
     // fim), e o update fica parado justamente nelas.
     this.updateFireflies(delta);
+    this.updateAmbienceMix(delta);
 
     // A vista do heroi + a tocha na mao dele, as duas montadas no corpo DESENHADO.
     const hb = this.heroBillboard;
@@ -2992,9 +2994,9 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // The blow lands in the room, not just on the rock: the world takes a small kick.
+    // A pedra se abre, e o mundo so sente de leve — num vale tranquilo nada sacode a tela.
     if (shattered) this.spawnShockwave(wx, wy, 0xb6bcc4, 0.3, 1.05, 260);
-    w3.shake(shattered ? 150 : 70, shattered ? 0.11 : 0.045);
+    w3.shake(shattered ? 90 : 50, shattered ? 0.03 : 0.012);
   }
 
   /**
@@ -4241,6 +4243,7 @@ export class GameScene extends Phaser.Scene {
     if (!w3 || !this.camera) return;
     this.cutsceneActive = true;
     setTimeOfDay(INTRO_CLOCK);
+    this.ambienceClockMs = 0;
     this.campfiresFollowNight = !isNightTime();
     this.syncCampfiresToClock();
     this.updateBackItem(); // a espada nas costas: ela ainda e dele
@@ -4376,6 +4379,31 @@ export class GameScene extends Phaser.Scene {
         .setElevation(0.35 + 0.4 * (0.5 + 0.5 * Math.sin(fly.phase * 1.3)))
         .setAlpha(this.fireflyLevel * (0.2 + 0.8 * blink));
     }
+  }
+
+  /**
+   * O SOM DO LUGAR: quanto de dia, de noite e de agua os leitos de ambiente tocam agora. A noite
+   * entra e sai em rampa em volta do nascer e do por do sol (nada de corte), e o marulho cresce
+   * nos ultimos seis tiles ate a beira de qualquer agua — prop de rio ou lago pintado no terreno
+   * (`isOpenWaterAt`, a resposta unica para as duas). Medido de 400 em 400ms: o ganho desliza
+   * sozinho no SoundManager.
+   */
+  private updateAmbienceMix(delta: number): void {
+    this.ambienceClockMs -= delta;
+    if (this.ambienceClockMs > 0) return;
+    this.ambienceClockMs = 400;
+    const phase = getTimeOfDay();
+    const night = Math.min(1, Math.max(0, 0.5 + 1.6 * Math.cos(2 * Math.PI * phase)));
+    const { worldX: hx, worldY: hy } = this.playerWorld;
+    let nearest = Infinity;
+    for (let dy = -6; dy <= 6; dy += 1) {
+      for (let dx = -6; dx <= 6; dx += 1) {
+        const d = Math.hypot(dx, dy);
+        if (d < nearest && this.isOpenWaterAt(hx + dx, hy + dy)) nearest = d;
+      }
+    }
+    const water = Number.isFinite(nearest) ? Math.min(1, Math.max(0, 1 - (nearest - 1) / 5)) : 0;
+    getSoundManager().setAmbienceMix(night, water);
   }
 
   /**
@@ -4540,6 +4568,7 @@ export class GameScene extends Phaser.Scene {
     // vaga-lumes acesos.
     await this.fadeWorld(0, 1, 900);
     setTimeOfDay(INTRO_CLOCK);
+    this.ambienceClockMs = 0;
     this.campfiresFollowNight = !isNightTime();
     this.syncCampfiresToClock();
     if (!hearth.isLit) hearth.light();

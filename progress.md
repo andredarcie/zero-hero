@@ -9383,3 +9383,16 @@ são do autor.
   dele; NPC fora da janela de streaming não aparece em `isSolidForEntities`.
 - Pendente: o asset manifest ainda carrega a arte dos bichos removidos (inofensivo, só peso);
   cenários antigos (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`) não foram revisados.
+
+## 2026-10-21 — O som virou cozy
+
+- Trilha nova gerada por `tools/gen-music.mjs`: `music-valley` ("Little Hearth", F maior, 72 BPM,
+  harpa + pad + caixinha de música) na aventura e `music-lullaby` no título e nos créditos.
+- O vento único virou TRÊS leitos tocando juntos (`ambience-day` pássaros, `ambience-night` grilos e
+  sapo, `ambience-water` marulho); `GameScene.updateAmbienceMix` só mexe nos ganhos (noite em rampa
+  em volta do nascer/pôr do sol, água nos 6 tiles até a margem, via `isOpenWaterAt`).
+- SFX remixados para baixo (rocha, machado, árvore caindo, passos), tremor da picareta reduzido, e o
+  blip de diálogo amaciado (quadrada→triângulo, serra→seno, mais baixo).
+- Os sons de combate e a trilha Souls foram APAGADOS de `public/assets/audio` (iam no build);
+  `window.__sound` (dev) é a instância que o jogo usa — o `audio` lê o mix por ela. Armadilha: um
+  `import()` do módulo pelo navegador devolve OUTRA instância no Vite.

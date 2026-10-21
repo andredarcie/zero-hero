@@ -1,5 +1,7 @@
-// Generates the game's ORIGINAL dark-fantasy soundtrack — "Dark Souls mood on SNES
-// hardware". Four stereo loops rendered offline to public/assets/audio/:
+// Generates the game's ORIGINAL soundtrack. The cozy set (music-valley, music-lullaby and the
+// day/night/water ambience beds) is what the game plays today; the dark-fantasy loops below
+// are the older set ("Dark Souls mood on SNES hardware"), kept for reference. Every loop is
+// rendered offline to public/assets/audio/:
 //
 //   music-title.wav      Firelink-like: sparse harp, pp choir, church bell. A minor, 52 BPM.
 //   music-overworld.wav  exploration dirge: E-aeolian w/ phrygian borrowings, 64 BPM,
@@ -820,6 +822,321 @@ function renderDrips() {
   writeWav('menu-drips.wav', out.L, out.R);
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// O VALE — a trilha cozy. "Little Hearth" · F maior, 72 BPM, 24 compassos (~80 s).
+//
+// O oposto da trilha antiga em tudo o que a fazia pesar: modo MAIOR, nenhum bordao de
+// semitom, nenhum tímpano, nenhum sino de igreja. Harpa em arpejos abertos, um pad quente de
+// triangulo, um baixo de seno que so marca o tempo forte, e uma caixinha de musica (sino agudo
+// de cauda curta) cantando uma melodia pentatonica que respira — ela some por quatro compassos
+// no meio para o vale ficar so com a harpa. O drive e baixo: nada aqui pode soar apertado.
+// ═══════════════════════════════════════════════════════════════════════════
+function renderValley() {
+  const BPM = 72, SPB = 60 / BPM, BPB = 4, BARS = 24;
+  const loopLen = Math.round(BARS * BPB * SPB * SR);
+  const total = Math.ceil((BARS * BPB * SPB + 5) * SR);
+
+  // I – vi – IV – V e um respiro em iii–IV, duas vezes, e um desvio para o ii no meio.
+  const PROG = [
+    'F', 'F', 'Dm', 'Dm', 'Bb', 'Bb', 'C', 'C',
+    'F', 'Am', 'Bb', 'C', 'Gm', 'Gm', 'Bb', 'C',
+    'F', 'F', 'Dm', 'Dm', 'Bb', 'C', 'F', 'F',
+  ];
+  const CH = {
+    F: ['F3', 'A3', 'C4', 'E4'], Dm: ['D3', 'F3', 'A3', 'C4'], Bb: ['Bb2', 'D3', 'F3', 'A3'],
+    C: ['C3', 'E3', 'G3', 'D4'], Am: ['A2', 'C3', 'E3', 'G3'], Gm: ['G2', 'Bb2', 'D3', 'F3'],
+  };
+  const ROOT = { F: 'F2', Dm: 'D2', Bb: 'Bb1', C: 'C2', Am: 'A1', Gm: 'G1' };
+  const ARP = {
+    F: ['F3', 'C4', 'A4', 'C5', 'F4', 'A4'], Dm: ['D3', 'A3', 'F4', 'A4', 'D4', 'F4'],
+    Bb: ['Bb2', 'F3', 'D4', 'F4', 'Bb3', 'D4'], C: ['C3', 'G3', 'E4', 'G4', 'C4', 'E4'],
+    Am: ['A2', 'E3', 'C4', 'E4', 'A3', 'C4'], Gm: ['G2', 'D3', 'Bb3', 'D4', 'G3', 'Bb3'],
+  };
+
+  const pad = [];
+  PROG.forEach((ch, bar) => {
+    for (const n of CH[ch]) pad.push({ t: bar * BPB * SPB, dur: BPB * SPB * 1.02, freq: freq(n), vel: 0.8 });
+  });
+  const bass = [];
+  PROG.forEach((ch, bar) => {
+    bass.push({ t: bar * BPB * SPB, dur: 1.8 * SPB, freq: freq(ROOT[ch]) });
+    bass.push({ t: (bar * BPB + 2.5) * SPB, dur: 1.2 * SPB, freq: freq(ROOT[ch]) * 1.5, vel: 0.55 });
+  });
+  const harp = [];
+  PROG.forEach((ch, bar) => {
+    ARP[ch].forEach((n, k) => {
+      // tercinas lentas: seis notas em quatro tempos, a primeira um pouco mais forte
+      harp.push({ t: (bar * BPB + k * (4 / 6)) * SPB, dur: 1.4 * SPB, freq: freq(n), vel: k === 0 ? 0.9 : 0.6 + 0.08 * (k % 2) });
+    });
+  });
+
+  // A caixinha de musica: F maior pentatonico (F G A C D), frases de dois compassos.
+  const box = [];
+  const phrase = (bar, notes) => barMelody(box, bar, notes, SPB, BPB);
+  phrase(0, [['A5', 1.5], ['C6', 0.5], ['D6', 1], ['C6', 1]]);
+  phrase(1, [['A5', 2], [null, 2]]);
+  phrase(2, [['F5', 1], ['G5', 1], ['A5', 1.5], ['F5', 0.5]]);
+  phrase(3, [['D5', 3], [null, 1]]);
+  phrase(4, [['D5', 1], ['F5', 1], ['A5', 2]]);
+  phrase(5, [['G5', 1.5], ['F5', 0.5], ['D5', 2]]);
+  phrase(6, [['C5', 1], ['D5', 1], ['G5', 1], ['A5', 1]]);
+  phrase(7, [['G5', 3], [null, 1]]);
+  // compassos 8-11: so harpa e pad (o vale respira)
+  phrase(12, [['D6', 1.5], ['C6', 0.5], ['A5', 2]]);
+  phrase(13, [['G5', 1], ['A5', 1], ['C6', 2]]);
+  phrase(14, [['A5', 1], ['G5', 1], ['F5', 1], ['D5', 1]]);
+  phrase(15, [['G5', 2], ['A5', 1], ['G5', 1]]);
+  phrase(16, [['A5', 1.5], ['C6', 0.5], ['D6', 1], ['C6', 1]]);
+  phrase(17, [['A5', 2], ['G5', 1], ['F5', 1]]);
+  phrase(18, [['F5', 1], ['G5', 1], ['A5', 1.5], ['F5', 0.5]]);
+  phrase(19, [['D5', 3], [null, 1]]);
+  phrase(20, [['D5', 1], ['F5', 1], ['G5', 2]]);
+  phrase(21, [['E5', 1.5], ['G5', 0.5], ['C6', 2]]);
+  phrase(22, [['A5', 4]]);
+
+  // Uma flauta de seno so na segunda metade, uma oitava abaixo da caixinha, como um eco calmo.
+  const flute = [];
+  barMelody(flute, 12, [['D5', 2], ['C5', 2]], SPB, BPB);
+  barMelody(flute, 13, [['Bb4', 4]], SPB, BPB);
+  barMelody(flute, 14, [['D5', 2], ['F5', 2]], SPB, BPB);
+  barMelody(flute, 15, [['E5', 4]], SPB, BPB);
+
+  const tracks = [
+    { buf: renderInstrument(pad, total, {
+        wave: 'triangle', unison: 4, detune: 7, spread: 0.6, vol: 0.13,
+        attack: 1.1, decay: 0.6, sustain: 0.9, release: 1.8,
+        cutoff: 1900, resonance: 0.6, lfoRate: 0.06, lfoDepth: 0.25,
+      }), echoSend: 0.2, revSend: 0.45 },
+    { buf: renderInstrument(bass, total, { wave: 'sine', vol: 0.3, attack: 0.04, decay: 0.3, sustain: 0.7, release: 0.6 }), echoSend: 0.05, revSend: 0.1 },
+    { buf: renderPluck(harp, total, { vol: 0.26, decay: 0.9978, bright: 0.42 }), echoSend: 0.55, revSend: 0.3 },
+    { buf: renderBell(box, total, { vol: 0.11, tau: 1.1, pan: 0.15 }), echoSend: 0.6, revSend: 0.4 },
+    { buf: renderInstrument(flute, total, {
+        wave: 'sine', vol: 0.12, attack: 0.25, decay: 0.2, sustain: 0.85, release: 0.9,
+        vibRate: 4.8, vibDepth: 0.006, vibDelay: 0.5,
+      }), echoSend: 0.5, revSend: 0.5 },
+  ];
+  const out = mixdown(tracks, {
+    total, loopLen,
+    echo: { delayMs: 240, feedback: 0.32, lpHz: 3800, spreadMs: 12, gain: 0.65 },
+    reverb: { room: 0.86, damp: 0.55, gain: 0.9 },
+    lpHz: 7000, drive: 1.02,
+  });
+  writeWav('music-valley.wav', out.L, out.R);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A CANCAO DE NINAR — o titulo e os creditos. F maior, 56 BPM, 12 compassos: so harpa, pad e
+// a caixinha, mais devagar e mais longe. E o "era uma vez" do jogo.
+// ═══════════════════════════════════════════════════════════════════════════
+function renderLullaby() {
+  const BPM = 56, SPB = 60 / BPM, BPB = 4, BARS = 12;
+  const loopLen = Math.round(BARS * BPB * SPB * SR);
+  const total = Math.ceil((BARS * BPB * SPB + 6) * SR);
+  const PROG = ['F', 'Dm', 'Bb', 'C', 'F', 'Am', 'Bb', 'C', 'Dm', 'Bb', 'C', 'F'];
+  const CH = {
+    F: ['F3', 'A3', 'C4'], Dm: ['D3', 'F3', 'A3'], Bb: ['Bb2', 'D3', 'F3'], C: ['C3', 'E3', 'G3'], Am: ['A2', 'C3', 'E3'],
+  };
+  const pad = [];
+  const harp = [];
+  PROG.forEach((ch, bar) => {
+    for (const n of CH[ch]) pad.push({ t: bar * BPB * SPB, dur: BPB * SPB * 1.02, freq: freq(n), vel: 0.7 });
+    const [a, b, c] = CH[ch];
+    [a, b, c, b].forEach((n, k) => harp.push({ t: (bar * BPB + k) * SPB, dur: 2 * SPB, freq: freq(n) * 2, vel: k === 0 ? 0.85 : 0.55 }));
+  });
+  const box = [];
+  barMelody(box, 0, [['C6', 2], ['A5', 2]], SPB, BPB);
+  barMelody(box, 1, [['F5', 4]], SPB, BPB);
+  barMelody(box, 2, [['D6', 2], ['C6', 1], ['A5', 1]], SPB, BPB);
+  barMelody(box, 3, [['G5', 4]], SPB, BPB);
+  barMelody(box, 8, [['A5', 2], ['F5', 2]], SPB, BPB);
+  barMelody(box, 9, [['D5', 2], ['F5', 2]], SPB, BPB);
+  barMelody(box, 10, [['E5', 2], ['G5', 2]], SPB, BPB);
+  barMelody(box, 11, [['F5', 4]], SPB, BPB);
+  const tracks = [
+    { buf: renderInstrument(pad, total, {
+        wave: 'triangle', unison: 4, detune: 8, spread: 0.7, vol: 0.12,
+        attack: 1.6, decay: 0.6, sustain: 0.9, release: 2.2, cutoff: 1500, resonance: 0.6,
+      }), echoSend: 0.2, revSend: 0.55 },
+    { buf: renderPluck(harp, total, { vol: 0.24, decay: 0.998, bright: 0.38 }), echoSend: 0.5, revSend: 0.4 },
+    { buf: renderBell(box, total, { vol: 0.1, tau: 1.6, pan: -0.1 }), echoSend: 0.6, revSend: 0.5 },
+  ];
+  const out = mixdown(tracks, {
+    total, loopLen,
+    echo: { delayMs: 300, feedback: 0.3, lpHz: 3400, spreadMs: 14, gain: 0.6 },
+    reverb: { room: 0.9, damp: 0.5, gain: 1.1 },
+    lpHz: 6800, drive: 1.0,
+  });
+  writeWav('music-lullaby.wav', out.L, out.R);
+}
+
+// ── os leitos de ambiente ──────────────────────────────────────────────────
+// Os tres sao loops sem emenda (o mesmo dobrar-cauda-sobre-a-cabeca do mixdown) e moram por
+// baixo da musica; o jogo mistura os tres pela hora do dia e pela distancia da agua.
+
+/** Brisa: o mesmo ruido escuro do vento antigo, mais aberto e bem mais baixo. */
+function breeze(total, LOOP_S, seed) {
+  const out = new Float32Array(total);
+  const svf = makeSVF();
+  let pink = 0;
+  for (let i = 0; i < total; i++) {
+    const t = i / SR;
+    const gust = 0.5 + 0.3 * Math.sin(2 * Math.PI * (1 / LOOP_S) * t + seed) + 0.15 * Math.sin(2 * Math.PI * (3 / LOOP_S) * t + seed * 2);
+    pink += 0.06 * ((Math.random() * 2 - 1) - pink);
+    out[i] = svf(pink * 5, 500 + 900 * gust, 0.7) * (0.35 + 0.45 * gust);
+  }
+  return out;
+}
+
+// Ruido nao tem cauda que se dobre: a emenda e um CRUZAMENTO de potencia constante entre o
+// inicio e o que veio depois do ponto de loop (o mesmo do vento antigo), senao a costura estala.
+function foldLoop(L, R, loopLen, peakTo) {
+  const fade = Math.min(L.length - loopLen, Math.floor(SR * 1.0));
+  const oL = new Float32Array(loopLen), oR = new Float32Array(loopLen);
+  for (let i = 0; i < loopLen; i++) {
+    if (i < fade) {
+      const a = Math.sin((i / fade) * Math.PI / 2), b = Math.cos((i / fade) * Math.PI / 2);
+      oL[i] = L[i] * a + L[i + loopLen] * b;
+      oR[i] = R[i] * a + R[i + loopLen] * b;
+    } else { oL[i] = L[i]; oR[i] = R[i]; }
+  }
+  let p = 0;
+  for (let i = 0; i < loopLen; i++) p = Math.max(p, Math.abs(oL[i]), Math.abs(oR[i]));
+  const g = peakTo / (p || 1);
+  for (let i = 0; i < loopLen; i++) { oL[i] *= g; oR[i] *= g; }
+  return { L: oL, R: oR };
+}
+
+/** Um passaro: dois a cinco piados de seno subindo e descendo, com um trinado no fim. */
+function addBird(L, R, t0, pan, base) {
+  const notes = 2 + Math.floor(Math.random() * 4);
+  let t = t0;
+  const pa = (pan + 1) * 0.25 * Math.PI;
+  const gL = Math.cos(pa), gR = Math.sin(pa);
+  for (let n = 0; n < notes; n++) {
+    const dur = 0.06 + Math.random() * 0.09;
+    const f0 = base * (0.9 + Math.random() * 0.35);
+    const f1 = f0 * (Math.random() < 0.5 ? 1.35 : 0.75);
+    const len = Math.floor(dur * SR);
+    const start = Math.floor(t * SR);
+    let ph = 0;
+    for (let i = 0; i < len && start + i < L.length; i++) {
+      const k = i / len;
+      const f = f0 + (f1 - f0) * k + Math.sin(i / SR * 2 * Math.PI * 38) * f0 * 0.04;
+      ph += f / SR;
+      const env = Math.sin(Math.PI * k) ** 1.5;
+      const s = Math.sin(2 * Math.PI * ph) * env * 0.5;
+      L[start + i] += s * gL;
+      R[start + i] += s * gR;
+    }
+    t += dur + 0.03 + Math.random() * 0.08;
+  }
+}
+
+function renderDayAmbience() {
+  const LOOP_S = 30;
+  const total = Math.ceil((LOOP_S + 3) * SR);
+  const loopLen = LOOP_S * SR;
+  const L = breeze(total, LOOP_S, 0.4), R = breeze(total, LOOP_S, 2.1);
+  for (let i = 0; i < total; i++) { L[i] *= 0.5; R[i] *= 0.5; }
+  const birds = stereo(total);
+  let t = 0.8;
+  while (t < LOOP_S - 1) {
+    addBird(birds.L, birds.R, t, Math.random() * 1.6 - 0.8, 2400 + Math.random() * 1800);
+    t += 1.4 + Math.random() * 3.2;
+  }
+  const wet = makeFreeverb(0.6, 0.6)(birds.L, birds.R);
+  for (let i = 0; i < total; i++) {
+    L[i] += birds.L[i] * 0.5 + wet.L[i] * 0.25;
+    R[i] += birds.R[i] * 0.5 + wet.R[i] * 0.25;
+  }
+  biquadLP(L, 7200, 0.6); biquadLP(R, 7200, 0.6);
+  const out = foldLoop(L, R, loopLen, 0.5);
+  writeWav('ambience-day.wav', out.L, out.R);
+}
+
+function renderNightAmbience() {
+  const LOOP_S = 24;
+  const total = Math.ceil((LOOP_S + 3) * SR);
+  const loopLen = LOOP_S * SR;
+  const L = breeze(total, LOOP_S, 1.2), R = breeze(total, LOOP_S, 3.3);
+  for (let i = 0; i < total; i++) { L[i] *= 0.45; R[i] *= 0.45; }
+  // Grilos: tres individuos, cada um com sua altura e seu ritmo, em trens de pulsos de ~4,4 kHz.
+  const crickets = [
+    { f: 4300, pan: -0.6, period: 0.9, train: 3, vol: 0.12 },
+    { f: 4700, pan: 0.5, period: 1.3, train: 4, vol: 0.09 },
+    { f: 3900, pan: 0.05, period: 2.1, train: 2, vol: 0.07 },
+  ];
+  for (const c of crickets) {
+    const pa = (c.pan + 1) * 0.25 * Math.PI;
+    const gL = Math.cos(pa) * c.vol, gR = Math.sin(pa) * c.vol;
+    for (let t = Math.random(); t < LOOP_S; t += c.period * (0.9 + Math.random() * 0.2)) {
+      for (let p = 0; p < c.train; p++) {
+        const start = Math.floor((t + p * 0.045) * SR);
+        const len = Math.floor(0.028 * SR);
+        for (let i = 0; i < len && start + i < total; i++) {
+          const env = Math.sin(Math.PI * i / len);
+          const s = Math.sin(2 * Math.PI * c.f * i / SR) * env;
+          L[start + i] += s * gL; R[start + i] += s * gR;
+        }
+      }
+    }
+  }
+  // um sapo bem longe, de vez em quando
+  for (const t of [5.2, 13.7, 19.4]) {
+    const start = Math.floor(t * SR);
+    const len = Math.floor(0.22 * SR);
+    for (let i = 0; i < len; i++) {
+      const k = i / len;
+      const f = 180 * (1 - 0.25 * k);
+      const s = Math.sin(2 * Math.PI * f * i / SR) * Math.sin(Math.PI * k) * 0.06 * (1 + 0.6 * Math.sin(2 * Math.PI * 26 * i / SR));
+      L[start + i] += s * 0.8; R[start + i] += s * 0.5;
+    }
+  }
+  biquadLP(L, 7000, 0.6); biquadLP(R, 7000, 0.6);
+  const out = foldLoop(L, R, loopLen, 0.5);
+  writeWav('ambience-night.wav', out.L, out.R);
+}
+
+function renderWaterAmbience() {
+  const LOOP_S = 16;
+  const total = Math.ceil((LOOP_S + 2) * SR);
+  const loopLen = LOOP_S * SR;
+  const L = new Float32Array(total), R = new Float32Array(total);
+  // O marulho: ruido filtrado com um vai-e-vem lento, como agua batendo na margem.
+  for (const [buf, seed] of [[L, 0.3], [R, 1.9]]) {
+    const svf = makeSVF();
+    let n = 0;
+    for (let i = 0; i < total; i++) {
+      const t = i / SR;
+      const lap = 0.5 + 0.5 * Math.sin(2 * Math.PI * (4 / LOOP_S) * t + seed) * Math.sin(2 * Math.PI * (1 / LOOP_S) * t + seed);
+      n += 0.25 * ((Math.random() * 2 - 1) - n);
+      buf[i] = svf(n * 2.2, 700 + 1400 * lap, 0.9) * (0.25 + 0.6 * lap);
+    }
+  }
+  // gotinhas e bolhas
+  const plips = stereo(total);
+  for (let t = 0.4; t < LOOP_S - 0.5; t += 0.4 + Math.random() * 0.9) {
+    const start = Math.floor(t * SR);
+    const len = Math.floor(0.08 * SR);
+    const f0 = 600 + Math.random() * 700;
+    const pan = Math.random() * 1.4 - 0.7;
+    const pa = (pan + 1) * 0.25 * Math.PI;
+    let ph = 0;
+    for (let i = 0; i < len; i++) {
+      const k = i / len;
+      ph += f0 * (1 + 1.2 * k) / SR;
+      const s = Math.sin(2 * Math.PI * ph) * Math.exp(-k * 5) * 0.18;
+      plips.L[start + i] += s * Math.cos(pa); plips.R[start + i] += s * Math.sin(pa);
+    }
+  }
+  const wet = makeFreeverb(0.5, 0.6)(plips.L, plips.R);
+  for (let i = 0; i < total; i++) { L[i] += plips.L[i] + wet.L[i] * 0.3; R[i] += plips.R[i] + wet.R[i] * 0.3; }
+  biquadLP(L, 6000, 0.6); biquadLP(R, 6000, 0.6);
+  const out = foldLoop(L, R, loopLen, 0.5);
+  writeWav('ambience-water.wav', out.L, out.R);
+}
+
 // Optional CLI filter: `node tools/gen-music.mjs menu-drips` regenerates only the named
 // loops. Handy because every renderer uses Math.random(), so a full run rewrites all the
 // .wav files (perceptually identical, but noisy in git) — pass names to touch just those.
@@ -829,6 +1146,11 @@ const RENDERERS = {
   'music-danger': renderDanger,
   'ambience-wind': renderAmbience,
   'menu-drips': renderDrips,
+  'music-valley': renderValley,
+  'music-lullaby': renderLullaby,
+  'ambience-day': renderDayAmbience,
+  'ambience-night': renderNightAmbience,
+  'ambience-water': renderWaterAmbience,
 };
 const only = process.argv.slice(2);
 const selected = only.length ? Object.entries(RENDERERS).filter(([n]) => only.includes(n)) : Object.entries(RENDERERS);
