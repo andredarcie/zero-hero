@@ -4,7 +4,7 @@
     "htmlLang": "en",
     "name": "English"
   },
-  "loading": "Loading Zero the Hero",
+  "loading": "Loading…",
   "title": {
     "words": [
       "ZERO",
@@ -15,30 +15,30 @@
     "author": "ANDRÉ N. DARCIE",
     "playAdventure": "Begin",
     "continue": "Continue",
-    "startOver": "New journey"
+    "startOver": "New game"
   },
-  "editorReturn": "[ESC] back to editor",
+  "editorReturn": "[ESC] editor",
   "items": {
     "get": {
-      "sword": "Your old sword. It has carried you a long way.",
-      "key": "A little key, warm from someone’s pocket.",
-      "axe": "An axe. Bram’s hands wore the handle smooth.",
-      "greatAxe": "A steel axe, heavy and patient. It can fell any tree.",
-      "pickaxe": "A pickaxe. Good for coaxing stones out of the boulders.",
-      "scythe": "A scythe, for tall grass and new seeds.",
-      "shovel": "A shovel. The bare earth is waiting for a hole.",
-      "wood": "A dry stick. It would make a fine little fire.",
-      "stone": "A smooth stone, cool in the hand.",
-      "seeds": "A few seeds. Tuck them into a dug hole.",
-      "bucket": "A bucket. Fill it at the water, then pour it on a mound.",
-      "bucketFull": "A bucket full of water, sloshing gently.",
-      "charcoal": "A lump of charcoal. A lit torch eats it gladly.",
-      "iron": "A bar of iron. The workbench will know what to do.",
-      "ore": "Iron ore — stone with metal sleeping inside.",
-      "bloom": "An iron bloom, still warm. Hammer it on the altar.",
-      "furnace": "A little furnace. Feed it ore and charcoal.",
-      "altar": "A stone altar, for patient hammering.",
-      "mushroom": "A mushroom, cool and soft from the shade."
+      "sword": "Your old sword.",
+      "key": "A key.",
+      "axe": "An axe.",
+      "greatAxe": "A steel axe. Fells any tree.",
+      "pickaxe": "A pickaxe. Breaks stone.",
+      "scythe": "A scythe. Cuts grass.",
+      "shovel": "A shovel. Digs holes.",
+      "wood": "A stick.",
+      "stone": "A stone.",
+      "seeds": "Seeds. Plant them in a hole.",
+      "bucket": "A bucket. Fill it at the water.",
+      "bucketFull": "Water.",
+      "charcoal": "Charcoal. Feeds a torch.",
+      "iron": "Iron.",
+      "ore": "Iron ore. Smelt it.",
+      "bloom": "Hot iron. Hammer it.",
+      "furnace": "A furnace.",
+      "altar": "An altar.",
+      "mushroom": "A mushroom."
     },
     "name": {
       "sword": "Sword",
@@ -63,8 +63,8 @@
     }
   },
   "dialog": {
-    "continue": "Continue.",
-    "close": "[Close.]"
+    "continue": "Next",
+    "close": "Close"
   },
   "pause": {
     "title": "PAUSED",
@@ -77,8 +77,8 @@
     "fullscreen": "Fullscreen",
     "fullscreenExit": "Exit fullscreen",
     "restart": "Restart",
-    "quit": "Quit to title",
-    "confirm": "Are you sure?",
+    "quit": "Quit",
+    "confirm": "Sure?",
     "sharpOn": "Sharpness: full",
     "sharpOff": "Sharpness: thrifty"
   },
@@ -86,69 +86,53 @@
     "intro": [
       {
         "speaker": "narrator",
-        "text": "The road ends here. So does the war."
+        "text": "The war is over."
       },
       {
         "speaker": "npc",
-        "text": "Leave it there. It has done enough, and so have you."
+        "text": "Leave the sword. You won’t need it."
       },
       {
         "speaker": "npc",
-        "text": "You were a knight. You walked into the dark, and you walked back out of it."
+        "text": "You fought the dark. You won."
       },
       {
         "speaker": "npc",
-        "text": "The evil you were made to fight is gone. There is nothing left in this valley to defeat."
+        "text": "Now find what comes after."
       },
       {
         "speaker": "npc",
-        "text": "That is the strange part, isn't it? A sword always knows what it is for. A person has to find out."
-      },
-      {
-        "speaker": "npc",
-        "text": "Stay a while. The people here have small troubles, and small troubles are where a new life begins."
-      },
-      {
-        "speaker": "npc",
-        "text": "Help them, one by one. When the last of them is at peace, the garden in the middle of the valley will open."
+        "text": "Help the people here. Then the garden opens."
       },
       {
         "speaker": "narrator",
-        "text": "Z to talk. X to use what you carry. I to open your bag."
+        "text": "Z talk · X use · I bag"
       }
     ],
     "guide": [
       {
         "speaker": "npc",
-        "text": "No hurry. This valley has never once been in a hurry."
+        "text": "Four neighbours need a hand."
       },
       {
         "speaker": "npc",
-        "text": "The forager in the western woods. The painter by the garden beds. The old woodsman and the stargazer, up north."
-      },
-      {
-        "speaker": "npc",
-        "text": "Each of them is waiting for a small kindness. Small is the right size."
+        "text": "Hollis, west. Iris, by the beds. Bram and Vega, north."
       }
     ],
     "gate": [
       {
         "speaker": "npc",
-        "text": "Did you hear it? The garden gate has opened."
+        "text": "The garden is open."
       },
       {
         "speaker": "npc",
-        "text": "Go to the middle of the valley. There is a fire there that has been waiting for you a long time."
+        "text": "Go to the fire in the middle."
       }
     ],
     "after": [
       {
         "speaker": "npc",
-        "text": "You found it, didn't you. Not a purpose, exactly."
-      },
-      {
-        "speaker": "npc",
-        "text": "Just a place to sit, and someone to be."
+        "text": "You found it. A place to sit."
       }
     ]
   },
@@ -158,15 +142,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "No hurry. This valley has never once been in a hurry."
+          "text": "Four neighbours need a hand."
         },
         {
           "speaker": "npc",
-          "text": "The forager in the western woods. The painter by the garden beds. The old woodsman and the stargazer, up north."
-        },
-        {
-          "speaker": "npc",
-          "text": "Each of them is waiting for a small kindness. Small is the right size."
+          "text": "Hollis, west. Iris, by the beds. Bram and Vega, north."
         }
       ]
     },
@@ -175,19 +155,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Oh — hello. Mind the moss, it's older than both of us."
+          "text": "I gather mushrooms."
         },
         {
           "speaker": "npc",
-          "text": "I gather mushrooms. Not to sell. Just to know they are there, growing in the quiet places."
-        },
-        {
-          "speaker": "npc",
-          "text": "My knees are not what they were. Would you find five of them for me? Little blue caps, low in the shade."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take your time. Mushrooms never rush, and they are never late."
+          "text": "Bring me five? Blue caps, in the shade."
         }
       ]
     },
@@ -196,15 +168,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Five little caps... and every one of them perfect."
+          "text": "Five. Perfect."
         },
         {
           "speaker": "npc",
-          "text": "You walked very carefully to find these. I could tell."
-        },
-        {
-          "speaker": "npc",
-          "text": "Thank you, truly. Keep the next one you find. Some things are better shared over a fire."
+          "text": "Thank you. Keep the next one."
         }
       ]
     },
@@ -213,19 +181,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "I came to this valley to paint it, and I keep painting the same grey."
+          "text": "Everything I paint is grey."
         },
         {
           "speaker": "npc",
-          "text": "Maybe the colour isn't in my brushes. Maybe it has to be grown."
-        },
-        {
-          "speaker": "npc",
-          "text": "Here — seeds, and a bucket. Drop the seeds into the holes below my easel, then pour water from the pond on each little mound."
-        },
-        {
-          "speaker": "npc",
-          "text": "Two patches of green. That's all I need to remember what green is."
+          "text": "Here: seeds and a bucket. Plant them below me, water from the pond."
         }
       ]
     },
@@ -234,15 +194,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Look at that. It came up from nothing but dirt and patience."
+          "text": "Green. Real green."
         },
         {
           "speaker": "npc",
-          "text": "I think I was trying to paint something I had never watched grow."
-        },
-        {
-          "speaker": "npc",
-          "text": "Thank you. Next time you pass, there will be a little of you in my painting."
+          "text": "Thank you."
         }
       ]
     },
@@ -251,19 +207,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Evening, traveller. The nights out here get long, and my woodpile gets short."
+          "text": "My woodpile’s empty. My hands shake."
         },
         {
           "speaker": "npc",
-          "text": "My hands shake too much for the axe now. Funny — they never used to."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take it. The dry trees around my hut give good sticks. Four would see me through."
-        },
-        {
-          "speaker": "npc",
-          "text": "Chop slowly. A tree that stood for a hundred years deserves a little ceremony."
+          "text": "Take my axe. Four sticks from the dry trees?"
         }
       ]
     },
@@ -272,15 +220,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Four good sticks. That's warmth for a week of nights."
+          "text": "Warm nights ahead."
         },
         {
           "speaker": "npc",
-          "text": "I'll sit by the fire and think of you. Not as a knight. As the fellow who brought the wood."
-        },
-        {
-          "speaker": "npc",
-          "text": "Thank you, friend. That is the better thing to be remembered for."
+          "text": "Thank you, friend."
         }
       ]
     },
@@ -289,19 +233,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Shh. I'm listening to the stars. They're very quiet tonight."
+          "text": "I want a cairn here, under the clearest sky."
         },
         {
           "speaker": "npc",
-          "text": "I want to build a little cairn, right here, where the sky is clearest. A place to come back to."
-        },
-        {
-          "speaker": "npc",
-          "text": "Here's a pickaxe. Would you break three stones from the boulders nearby and bring them to me?"
-        },
-        {
-          "speaker": "npc",
-          "text": "Stones are only stars that decided to stay."
+          "text": "Take this pickaxe. Three stones from the boulders?"
         }
       ]
     },
@@ -310,57 +246,49 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Three stones. One for where I came from, one for where I am, one for where I'm going."
+          "text": "Three stones. A place to come back to."
         },
         {
           "speaker": "npc",
-          "text": "Funny. I crossed the whole sky looking for something, and it was a pile of rocks."
-        },
-        {
-          "speaker": "npc",
-          "text": "Thank you. Come sit here some night. There's room for two."
+          "text": "Thank you."
         }
       ]
     }
   },
   "controls": {
-    "hint": "Z talks and tends · X uses the item you picked · I opens the bag",
+    "hint": "Z talk · X use · I bag",
     "attackTitle": "Talk (Z)",
-    "useTitle": "Use selected item (X)"
+    "useTitle": "Use (X)"
   },
   "bag": {
     "open": "Bag (I)",
-    "empty": "Your bag is empty",
-    "keys": "← →   ·   X equips   ·   I closes",
-    "keysEmpty": "I closes"
+    "empty": "Empty",
+    "keys": "← →  ·  X equip  ·  I close",
+    "keysEmpty": "I close"
   },
   "subscreen": {
     "title": "PACK",
-    "empty": "Nothing in the pack yet",
+    "empty": "Empty",
     "mapTitle": "WORLD",
     "plansTitle": "PLANS"
   },
   "toolbox": {
-    "title": "WHAT DO YOU WANT TO BUILD?",
-    "titleFurnace": "WHAT DO YOU WANT TO SMELT?",
+    "title": "BUILD",
+    "titleFurnace": "SMELT",
     "tools": "TOOLS",
     "machines": "MACHINES",
     "materials": "SMELTING",
-    "keys": "← ↑ ↓ →   ·   Z builds it   ·   X closes",
-    "keysTouch": "Tap to choose · tap again to build",
-    "keysFurnace": "← ↑ ↓ →   ·   Z smelts it   ·   X closes",
-    "keysTouchFurnace": "Tap to choose · tap again to smelt",
+    "keys": "Arrows  ·  Z build  ·  X close",
+    "keysTouch": "Tap to pick · tap to build",
+    "keysFurnace": "Arrows  ·  Z smelt  ·  X close",
+    "keysTouchFurnace": "Tap to pick · tap to smelt",
     "unknown": "?"
   },
   "gate": {
     "opened": [
       {
         "speaker": "narrator",
-        "text": "Somewhere in the middle of the valley, an old gate swings open on its own."
-      },
-      {
-        "speaker": "narrator",
-        "text": "The hedge around the garden lets out a long breath."
+        "text": "A gate opens in the middle of the valley."
       }
     ]
   },
@@ -368,15 +296,15 @@
     "lines": [
       {
         "speaker": "narrator",
-        "text": "The mushroom turns golden. The fire talks to itself, softly."
+        "text": "The mushroom turns golden."
       },
       {
         "speaker": "narrator",
-        "text": "Somewhere behind you, the sword stands in the road, and nobody needs it."
+        "text": "The sword stays in the road."
       },
       {
         "speaker": "narrator",
-        "text": "For the first time in a very long time, you are not on your way anywhere."
+        "text": "Nowhere to be. At last."
       }
     ],
     "theEnd": "The End",
@@ -387,7 +315,7 @@
       },
       {
         "speaker": "narrator",
-        "text": "a quiet game by"
+        "text": "by"
       },
       {
         "speaker": "npc",
@@ -399,27 +327,15 @@
       },
       {
         "speaker": "npc",
-        "text": "Hollis, who knows where the mushrooms grow"
+        "text": "Hollis · Iris · Bram · Vega"
       },
       {
         "speaker": "npc",
-        "text": "Iris, who learned that green is grown"
-      },
-      {
-        "speaker": "npc",
-        "text": "Bram, who keeps the fire fed"
-      },
-      {
-        "speaker": "npc",
-        "text": "Vega, who stacks stones under the stars"
-      },
-      {
-        "speaker": "npc",
-        "text": "and the old wizard, who waited"
+        "text": "and the wizard"
       },
       {
         "speaker": "narrator",
-        "text": "thank you for staying a while"
+        "text": "thank you for playing"
       }
     ]
   }

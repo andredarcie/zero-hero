@@ -21,7 +21,7 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
 
 `npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
 mora no locale (`en.json`)**, inclusive o roteiro `<id>Done`; o `world.json` guarda retrato,
-cor e voz.
+cor e voz. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
 
 ## O save da aventura
 

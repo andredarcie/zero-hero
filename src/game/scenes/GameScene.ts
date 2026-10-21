@@ -195,42 +195,28 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
 };
 
 
-// The raised sprite + caption for each item's first-time "item get" ceremony.
-const ITEM_GET_CFG: Record<HeldItemKind, ItemGetConfig> = {
-  sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle, label: 'VOCE PEGOU A ESPADA!' },
-  key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held, label: 'VOCE PEGOU A CHAVE!' },
-  axe: { texture: ASSET_KEYS.axeIcon, frame: 0, label: 'VOCE PEGOU O MACHADO!' },
-  greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0, label: 'MACHADO DE ACO! DERRUBA QUALQUER ARVORE' },
-  pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0, label: 'VOCE PEGOU A PICARETA!' },
-  scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0, label: 'VOCE PEGOU A FOICE!' },
-  shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0, label: 'VOCE PEGOU A PA! CAVE NA TERRA' },
-  wood: { texture: ASSET_KEYS.woodIcon, frame: 0, label: 'VOCE PEGOU UM GRAVETO!' },
-  stone: { texture: ASSET_KEYS.rock, frame: 0, label: 'VOCE PEGOU UMA PEDRA!' },
-  // A unica legenda do jogo que aponta pra OUTRA peca, e ela existe porque o ferro e o unico
-  // item sem uso proprio: sozinho ele nao abre, nao queima, nao atravessa nada. Sem essa linha,
-  // "peguei um bloco de metal e ele nao faz nada" seria a leitura correta — e errada.
-  iron: { texture: ASSET_KEYS.ironItem, frame: 0, label: 'UM BLOCO DE FERRO! SO SERVE NUMA BANCADA' },
-  seeds: { texture: ASSET_KEYS.seedsItem, frame: 0, label: 'VOCE PEGOU SEMENTES! PLANTE NUM BURACO' },
-  bucket: { texture: 'bucket-icon', frame: 0, label: 'VOCE PEGOU UM BALDE! ENCHA NO RIO' },
-  bucketFull: { texture: 'bucket-full-icon', frame: 0, label: 'BALDE CHEIO DE AGUA!' },
-  charcoal: { texture: 'charcoal-item', frame: 0, label: 'CARVAO! PISE NELE COM A TOCHA ACESA' },
-  // A CERIMONIA DA FABRICA. Cada legenda diz UMA coisa e ela e sempre a mesma: qual botao. Essa
-  // e a unica informacao que o mundo nao consegue dar sozinho aqui — a peca no chao ja mostra o
-  // que ela e, a broca ja mostra de que lado ela morde, o filete ja mostra se ha corrente; o que
-  // nenhum pixel diz e que INSTALAR mora no botao de acao. Dito uma vez, na primeira vez.
-  // A CADEIA DO FERRO se apresenta na primeira vez que cada elo aparece, e so ai — as tres frases
-  // juntas sao a aula inteira: minerio NAO e ferro, o forno precisa de carvao, e a esponja
-  // precisa apanhar. Nenhum pixel consegue dizer isso sozinho.
-  ore: { texture: ASSET_KEYS.oreItem, frame: 0, label: 'MINERIO! E PEDRA COM FERRO PRESO DENTRO — O FORNO TIRA' },
-  // A LEGENDA MENTIA, e mentiu por semanas: ela mandava martelar com o A, e o A virou a ESPADA na
-  // reforma dos dois botões — quem seguia a instrução do próprio jogo apertava Z na esponja no chão
-  // e via o herói dar uma espadada no ar. O relato foi exatamente esse ("não tem como bater no
-  // chão"). Hoje a esponja se trabalha em dois lugares e os dois são o X: no ALTAR (o lugar, que é
-  // o que a carta do astronauta ensina) ou no chão onde ela caiu.
-  bloom: { texture: ASSET_KEYS.bloomItem, frame: 0, label: 'ESPONJA DE FERRO! PONHA NO ALTAR (Z) E MALHE COM O X' },
-  furnace: { texture: ASSET_KEYS.furnace, frame: 0, label: 'UM FORNO! MINERIO NUMA BANDEJA, CARVAO NA OUTRA' },
-  altar: { texture: ASSET_KEYS.altar, frame: 0, label: 'UM ALTAR! O X INSTALA — Z POE A PECA, BATER MALHA' },
-  mushroom: { texture: ASSET_KEYS.mushroomItem, frame: 0, label: 'A MUSHROOM, SOFT AND COOL FROM THE SHADE' },
+// The raised sprite for each item's first-time "item get" ceremony. The caption is NOT here: it
+// comes from the locale (`items.get.<kind>`), the one place the game's text lives.
+const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
+  sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle },
+  key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
+  axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
+  greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0 },
+  pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
+  scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
+  shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0 },
+  wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
+  stone: { texture: ASSET_KEYS.rock, frame: 0 },
+  iron: { texture: ASSET_KEYS.ironItem, frame: 0 },
+  seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 },
+  bucket: { texture: 'bucket-icon', frame: 0 },
+  bucketFull: { texture: 'bucket-full-icon', frame: 0 },
+  charcoal: { texture: 'charcoal-item', frame: 0 },
+  ore: { texture: ASSET_KEYS.oreItem, frame: 0 },
+  bloom: { texture: ASSET_KEYS.bloomItem, frame: 0 },
+  furnace: { texture: ASSET_KEYS.furnace, frame: 0 },
+  altar: { texture: ASSET_KEYS.altar, frame: 0 },
+  mushroom: { texture: ASSET_KEYS.mushroomItem, frame: 0 },
 };
 
 // ── OS DOIS BOTOES ───────────────────────────────────────────────────────────
