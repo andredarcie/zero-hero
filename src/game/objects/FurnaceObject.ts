@@ -115,6 +115,16 @@ export class FurnaceObject implements WorldProp {
   }
 
   public get isBusy(): boolean { return this.phase !== 'idle'; }
+
+  /**
+   * A fornada que ainda nao saiu da boca, e onde ela vai pousar. Os insumos ja sairam da mochila
+   * quando ela comecou, entao o save a guarda como se ja estivesse no chao: fechar o jogo no meio
+   * de uma fornada nao pode sumir com o minerio.
+   */
+  public get pendingProduct(): { kind: HeldItemKind; units: number; tile: readonly [number, number] } | null {
+    if (this.phase === 'idle' || !this.handProduct) return null;
+    return { kind: this.handProduct, units: this.handUnits, tile: this.deliverTo ?? this.outputTile };
+  }
   public get currentPhase(): FurnacePhase { return this.phase; }
   public get currentFrame(): number { return this.frame; }
 

@@ -9426,3 +9426,11 @@ são do autor.
 - **Scripts já aplicados e sem referência:** `add-npc-chunks`, `add-terrain-chunks`, `add-wizard`, `cozy-tiles`.
 - **Sprite Factory:** as specs de arte que não chega mais ao jogo (16, de `barrel` a `zora`), e `spritefactory/out/` saiu do git (142 artefatos, 15 MB): é saída do `build`, agora no `.gitignore`.
 - Como foi medido: grafo de imports a partir de `src/main.ts`; cada arquivo de `public/` procurado por caminho, nome e radical em `src/`, `index.html` e nos JSON; cada chave de `ASSET_KEYS`/`textures3d` procurada fora das tabelas que só a declaram. Nenhum caminho de asset é montado por template.
+
+## 2026-10-21 — Caça a bugs: o que se perdia entre o gesto e o save
+
+- **Recolher o forno no meio da fornada sumia com a carga** (minério+carvão já fora da mochila). O X num forno ocupado agora treme e recusa (`pickUpMachineAt`).
+- **Fechar o jogo nos ~4s do fole também sumia com ela**: `FurnaceObject.pendingProduct` vai ao save como item no chão, na boca (ou no tile já escolhido). Cuidado: o `port.put` roda ANTES de `handProduct` zerar — um `persistAdventure` dentro dele gravaria a peça duas vezes.
+- **Portão trancado para sempre**: o último pedido grava na ENTREGA, e o portão só abria quando o obrigado fechava (+700ms). O `create` agora abre se `allQuestsDone()`, venha o save como vier.
+- **O fim gravado cedo demais**: `playRoastEnding` gravava `endingSeen` (e o graveto e o cogumelo gastos) no primeiro quadro; fechar no meio voltava sem final para ver. Grava quando os créditos sobem.
+- **ESC sentado na fogueira** levantava E abria a pausa (dois listeners). Agora só levanta.

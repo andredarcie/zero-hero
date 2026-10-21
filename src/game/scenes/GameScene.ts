@@ -136,6 +136,7 @@ import {
   adventureState,
   consumeAdventureRespawn,
   saveAdventure,
+  type AdventureGroundItem,
   type AdventureMachine,
 } from '@/game/runtime/adventureState';
 import {
@@ -639,7 +640,9 @@ export class GameScene extends Phaser.Scene {
       // A historia e os dialogos ouvidos voltam do save.
       const st = adventureState();
       this.introDone = st.introSeen;
-      this.gateOpened = st.gateOpened;
+      // O ultimo pedido grava ao ser ENTREGUE, mas o portao so abre quando o obrigado fecha. Um
+      // jogo fechado nesse meio voltava com tudo cumprido e o jardim trancado para sempre.
+      this.gateOpened = st.gateOpened || allQuestsDone();
       this.hearthLit = st.hearthLit;
       this.roasted = st.endingSeen;
       st.seenDialogKeys.forEach((k) => this.seenDialogKeys.add(k));
@@ -845,6 +848,8 @@ export class GameScene extends Phaser.Scene {
       // O ESC TEM UM DONO SÓ. Com a bolsa aberta ele a fecha e para por aí.
       this.input.keyboard?.on('keydown-ESC', () => {
         if (this.quickBag?.isOpen) { this.quickBag.close(); return; }
+        // Sentado na fogueira, o ESC so levanta: ele levantava E abria a pausa no mesmo toque.
+        if (this.resting) { this.standUp(); return; }
         this.openPauseMenu();
       });
       if (isTouchDevice()) {
@@ -1446,7 +1451,8 @@ export class GameScene extends Phaser.Scene {
     // Seta ou qualquer tecla levanta — as setas nao passam por pressAttack/pressUse.
     this.restKeyListener = (event: KeyboardEvent): void => {
       if (event.repeat || !this.resting) return;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Escape'].includes(event.code)) {
+      // O ESC nao esta aqui: quem o escuta e o handler da pausa (ver create), que levanta e para.
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) {
         this.standUp();
       }
     };
@@ -2483,6 +2489,13 @@ export class GameScene extends Phaser.Scene {
   private pickUpMachineAt(wx: number, wy: number): boolean {
     const furnace = this.getFurnaceAt(wx, wy);
     if (furnace) {
+      // O FORNO TRABALHANDO nao sobe: a carga ja saiu da mochila e esta dentro dele, e recolher
+      // a maquina agora sumia com ela. A recusa e o tranco da alvenaria, como em toda trava.
+      if (furnace.isBusy) {
+        furnace.bump();
+        getSoundManager().playToolboxRefuse();
+        return true;
+      }
       this.removeProp(this.furnaces, furnace);
       return this.collectMachine('furnace', wx, wy);
     }
@@ -3421,7 +3434,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Bring a dead campfire to life with fanfare, expanding the safe ring under the hero. */
   /**
    * Fotografa o que e volatil na cena (mochila, itens no chao, dialogos, missoes) para dentro do
    * adventureState e grava. Chamado nos eventos que mudam o mundo — acender fogueira,
@@ -3444,12 +3456,16 @@ export class GameScene extends Phaser.Scene {
     st.seenDialogKeys = new Set(this.seenDialogKeys);
     st.seenItems = new Set(this.seenItems);
     if (this.itemManager) {
-      st.groundItems.set(
-        this.adventureScope,
-        this.itemManager.snapshot().map((s) => ({
-          kind: s.kind, worldX: s.worldX, worldY: s.worldY, count: s.units,
-        })),
-      );
+      const ground: AdventureGroundItem[] = this.itemManager.snapshot().map((s) => ({
+        kind: s.kind, worldX: s.worldX, worldY: s.worldY, count: s.units,
+      }));
+      // A FORNADA EM CURSO vai ao save como a peca que ela vai virar, na boca do forno: os insumos
+      // ja sairam da mochila, e sem isto fechar o jogo nos ~4s do fole sumia com eles.
+      for (const furnace of this.furnaces) {
+        const pending = furnace.pendingProduct;
+        if (pending) ground.push({ kind: pending.kind, worldX: pending.tile[0], worldY: pending.tile[1], count: pending.units });
+      }
+      st.groundItems.set(this.adventureScope, ground);
     }
     // Estações construídas pelo jogador. As autoradas já moram no world.json.
     st.machines.set(this.adventureScope, this.snapshotBuiltMachines());
@@ -4927,7 +4943,8 @@ export class GameScene extends Phaser.Scene {
     this.actionButtons?.setVisible(false);
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
-    this.persistAdventure();
+    // O SAVE SO APRENDE O FIM QUANDO OS CREDITOS SOBEM (la embaixo). Gravado aqui, um jogo
+    // fechado no meio da cena voltava "zerado", sem graveto, sem cogumelo e sem final para ver.
     this.stopBreathing();
     getSoundManager().fadeMusicOut();
 
@@ -4977,6 +4994,7 @@ export class GameScene extends Phaser.Scene {
       this.openDialogScript({ ...base, npcName: '', lines: tLines('ending.lines') }, undefined, undefined, resolve);
     });
     await this.wait(2600);
+    this.persistAdventure();
     this.rollCredits();
   }
 
