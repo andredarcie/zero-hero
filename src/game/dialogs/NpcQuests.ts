@@ -65,6 +65,13 @@ export type NpcQuest = {
    * pedido que exige um machado que o jogador não sabe onde achar não é um pedido, é um enigma.
    */
   gift?: Array<{ item: HeldItemKind; count: number }>;
+  /**
+   * OS DEGRAUS DE UM PEDIDO LONGO, em ordem. Quem pede uma coisa que leva cinco passos para
+   * fazer diz o PRÓXIMO passo a cada conversa: o primeiro item da lista que o herói ainda não
+   * teve nas mãos (`seenItems`) escolhe a fala `npc.<dialog>Hint.<item>`. É a pessoa ensinando, e
+   * não uma tela — e cada degrau cumprido reacende o "!" dela, porque ela tem fala nova.
+   */
+  hints?: readonly HeldItemKind[];
 };
 
 /**
@@ -133,6 +140,7 @@ export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
     doneDialog: 'astronautDone',
     tasks: [{ kind: 'deliver', item: 'iron', count: 1 }],
     gift: [{ item: 'pickaxe', count: 1 }],
+    hints: ['ore', 'furnace', 'charcoal', 'bloom', 'iron'],
   },
 };
 

@@ -32,7 +32,7 @@
       "seeds": "Seeds. Plant them in a hole.",
       "bucket": "A bucket. Fill it at the water.",
       "bucketFull": "Water.",
-      "charcoal": "Charcoal. Feeds a torch.",
+      "charcoal": "Charcoal. Smelts ore.",
       "iron": "Iron.",
       "ore": "Iron ore. Smelt it.",
       "bloom": "Hot iron. Hammer it.",
@@ -252,6 +252,23 @@
           "speaker": "npc",
           "text": "Thank you."
         }
+      ]
+    },
+    "astronautHint": {
+      "ore": [
+        { "speaker": "npc", "text": "Some rocks east of here hold ore. Break one." }
+      ],
+      "furnace": [
+        { "speaker": "npc", "text": "Ore needs a furnace. Build one at the bench." }
+      ],
+      "charcoal": [
+        { "speaker": "npc", "text": "Set the furnace down. Two sticks make charcoal." }
+      ],
+      "bloom": [
+        { "speaker": "npc", "text": "Now ore and charcoal, together." }
+      ],
+      "iron": [
+        { "speaker": "npc", "text": "Hammer the hot lump. Three blows." }
       ]
     }
   },

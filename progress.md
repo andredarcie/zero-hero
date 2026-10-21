@@ -9411,3 +9411,10 @@ são do autor.
 - O pedido da astrônoma virou 1 barra de ferro e só (`NpcQuests`; as 3 pedras saíram, para o pedido ser o processo inteiro e nada mais), e os 10 ferros do chão saíram do `world.json` (backup em `backup/world-pre-iron-quest.json`). Antes, o minério, o forno, o carvão, a esponja e o altar só produziam algo que já estava no chão.
 - O ferro agora só existe FABRICADO: picareta no veio (minério), bancada (forno = pedra+pedra), forno (carvão = lenha+lenha, esponja = minério+carvão), 3 marteladas (barra). A bancada (43,7) e dois veios (44,2)/(46,3) ficam ao lado da Vega (41,5).
 - `marcas` sabe da tarefa nova. O piloto do `zerar` ainda não sabe fundir ferro e trava na entrega da Vega.
+
+## 2026-10-21 — A Vega ensina o caminho do ferro, um passo por conversa
+
+- `NpcQuest.hints`: a lista ordenada de degraus de um pedido longo. A fala é `npc.<id>Hint.<item>` do PRIMEIRO item da lista que o herói ainda não teve nas mãos (`seenItems`); todos vistos = o último. Na 1ª conversa a dica vem depois do pedido; nas seguintes ela é a conversa toda. Pedido cumprido não dá dica.
+- O "!" reacende a cada degrau: `dialogKeyFor` devolve `<id>:hint:<item>`, e fala nova é exatamente o que a marca diz.
+- Vega: ore → furnace → charcoal → bloom → iron. O texto do carvão na cerimônia virou "Smelts ore." (era "Feeds a torch.", que mandava para o lugar errado).
+- Não é a legenda de trava ressuscitada: é uma pessoa falando, só quando o herói vai até ela, e só sobre o pedido dela.

@@ -5095,7 +5095,16 @@ export class GameScene extends Phaser.Scene {
     const speakId = this.spokenDialogId(askId);
     // Roteiro alternativo sem entrada no world.json cai no de sempre: uma missão sem fala nova
     // não pode emudecer o NPC.
-    const script = speakId === askId ? base : (getDialog(kind, speakId) ?? base);
+    let script = speakId === askId ? base : (getDialog(kind, speakId) ?? base);
+    // O PRESENTE: a primeira conversa com quem pede põe na mão do herói a ferramenta do pedido
+    // (ver NpcQuest.gift). Ele chega DEPOIS da fala, quando a caixa fecha — primeiro o pedido,
+    // depois o machado, que é a ordem em que alguém pede um favor de verdade.
+    const gift = this.pendingGift(askId);
+    // O PRÓXIMO PASSO de um pedido longo (NpcQuest.hints): na primeira conversa ele vem depois do
+    // pedido; nas seguintes ele É a conversa — repetir o pedido inteiro não ensina nada novo.
+    const hint = this.questHint(askId);
+    const hintLines = hint ? tLines(`npc.${askId}Hint.${hint}`) : [];
+    if (hintLines.length > 0) script = { ...script, lines: gift ? [...script.lines, ...hintLines] : hintLines };
     if (npcWorld) {
       const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY, scriptId);
       if (key) {
@@ -5103,10 +5112,6 @@ export class GameScene extends Phaser.Scene {
         this.persistAdventure(); // o "!" apagado fica apagado
       }
     }
-    // O PRESENTE: a primeira conversa com quem pede põe na mão do herói a ferramenta do pedido
-    // (ver NpcQuest.gift). Ele chega DEPOIS da fala, quando a caixa fecha — primeiro o pedido,
-    // depois o machado, que é a ordem em que alguém pede um favor de verdade.
-    const gift = this.pendingGift(askId);
     this.openDialogScript(script, npcWorld, getDialogVoice(kind, speakId) ?? getDialogVoice(kind, askId), () => {
       if (gift) {
         if (npcWorld) this.npcManager?.hop(npcWorld.worldX, npcWorld.worldY);
@@ -5139,7 +5144,20 @@ export class GameScene extends Phaser.Scene {
     // o roteiro que a MISSÃO escolheu, e é assim que fechar um pedido reacende o "!" do NPC —
     // ele tem fala nova, que é exatamente o que a marca sempre quis dizer.
     void wx; void wy;
-    return `${this.spokenDialogId(scriptId ?? kind)}:base`;
+    const hint = this.questHint(scriptId ?? kind);
+    return `${this.spokenDialogId(scriptId ?? kind)}:${hint ? `hint:${hint}` : 'base'}`;
+  }
+
+  /**
+   * O degrau em que o herói está num pedido longo: o primeiro item de `hints` que ele ainda não
+   * teve nas mãos. Com todos vistos (a barra foi parar numa receita, digamos) fica o último — o
+   * que falta é sempre refazer o fim. Pedido cumprido não ensina mais nada.
+   */
+  private questHint(dialogId: string): HeldItemKind | null {
+    if (!this.adventure || this.spokenDialogId(dialogId) !== dialogId) return null;
+    const steps = questFor(dialogId)?.hints;
+    if (!steps || steps.length === 0) return null;
+    return steps.find((item) => !this.seenItems.has(item)) ?? steps[steps.length - 1];
   }
 
   // Open the conversation panel for a ready-made script (pan the camera, dim the music), running
