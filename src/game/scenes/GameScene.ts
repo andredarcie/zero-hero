@@ -81,7 +81,7 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import {
-  PLANTED_SWORD_TEXTURE, ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
+  ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
 import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
@@ -303,8 +303,11 @@ const INTRO_CLOCK = 0.92;
 const INTRO_WALK_TILES = 3;
 /** Um passo cansado: bem mais lento que o andar normal. */
 const INTRO_STEP_MS = 520;
-/** O quanto da lamina entra na terra (elevacao negativa do billboard, em tiles). */
-const SWORD_BURY_ELEV = -0.14;
+/**
+ * A altura do CENTRO da espada fincada (o billboard e centrado e mede um tile): 0,22 deixa um
+ * pouco de ponta dentro da terra, que o chao esconde.
+ */
+const SWORD_PLANTED_ELEV = 0.36;
 /** De quantos tiles a leste o mago chega andando. */
 const WIZARD_WALK_TILES = 5;
 /** Quantos vaga-lumes derivam em volta do heroi a noite. */
@@ -462,6 +465,10 @@ export class GameScene extends Phaser.Scene {
   private roasted = false;
   private plantedSword?: Billboard3D;
   private plantedSwordTile?: { x: number; y: number };
+  // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
+  private swordInHands = false;
+  private letterbox?: [HTMLDivElement, HTMLDivElement];
+  private dollyBase?: { h: number; b: number };
   private wizardStandIn?: Billboard3D;
   private roasting = false;
   private roastStick?: Billboard3D;
@@ -1143,6 +1150,10 @@ export class GameScene extends Phaser.Scene {
     this.wizardStandIn = undefined;
     this.roastStick?.destroy();
     this.roastStick = undefined;
+    this.letterbox?.forEach((bar) => bar.remove());
+    this.letterbox = undefined;
+    this.dollyBase = undefined;
+    this.swordInHands = false;
     this.roasting = false;
     this.fireflyLevel = 0;
     for (const fly of this.fireflies) fly.bb.destroy();
@@ -3810,19 +3821,213 @@ export class GameScene extends Phaser.Scene {
   //      num graveto e fica ali, assando, enquanto a brisa passa. Fim, e os creditos.
 
   /**
-   * A ESPADA FINCADA: um billboard que fica de pe no tile onde o heroi a deixou, e bloqueia o
-   * tile como qualquer coisa cravada no chao. Ela e cenario — nenhum botao a tira dali.
+   * A ESPADA FINCADA: a MESMA arte que o heroi carrega nas costas (`BACK_ITEM_VISUAL_3D.sword`),
+   * de ponta para baixo, com um terco da lamina enterrado. Ela fica de pe no tile onde ele a
+   * deixou e bloqueia o tile como qualquer coisa cravada no chao. Cenario — nenhum botao a tira.
    */
-  private plantSwordAt(wx: number, wy: number, elevation = SWORD_BURY_ELEV): Billboard3D | undefined {
+  private plantSwordAt(wx: number, wy: number): Billboard3D | undefined {
     if (!this.world3d) return undefined;
+    const visual = BACK_ITEM_VISUAL_3D.sword;
     this.plantedSword?.destroy();
     this.plantedSword = this.world3d
-      .addBillboard(PLANTED_SWORD_TEXTURE, 0, { groundShadow: { rx: 0.18, rz: 0.12, alpha: 0.3 } })
+      .addBillboard(visual.texture, visual.frame, { centered: true })
       .setPosition(wx, wy)
-      .setElevation(elevation)
-      .setDisplaySize(0.9, 0.9);
+      .setElevation(SWORD_PLANTED_ELEV)
+      .setDisplaySize(1, 1)
+      .setAngle(180);
     this.plantedSwordTile = { x: wx, y: wy };
     return this.plantedSword;
+  }
+
+  /** As FAIXAS DE CINEMA: duas barras pretas que entram pelas bordas e dizem "agora e cena". */
+  private setLetterbox(on: boolean, ms = 900): void {
+    if (!this.letterbox) {
+      const make = (edge: 'top' | 'bottom'): HTMLDivElement => {
+        const bar = document.createElement('div');
+        bar.style.cssText = `position:fixed;left:0;right:0;${edge}:0;height:11vh;background:#000;`
+          + `z-index:40;pointer-events:none;transform:translateY(${edge === 'top' ? '-100%' : '100%'});`
+          + `transition:transform ${ms}ms cubic-bezier(.22,.8,.3,1);`;
+        document.body.appendChild(bar);
+        return bar;
+      };
+      this.letterbox = [make('top'), make('bottom')];
+    }
+    const [top, bottom] = this.letterbox;
+    requestAnimationFrame(() => {
+      top.style.transform = on ? 'translateY(0)' : 'translateY(-100%)';
+      bottom.style.transform = on ? 'translateY(0)' : 'translateY(100%)';
+    });
+  }
+
+  /**
+   * O DOLLY: a camera anda pela propria linha de visao (camHeight e camBack pelo MESMO fator — a
+   * lei do World3D; mexer num so giraria a camera). `factor` < 1 aproxima.
+   */
+  private dollyTo(factor: number, duration: number, ease = 'Sine.easeInOut'): Promise<void> {
+    const w3 = this.world3d;
+    if (!w3) return Promise.resolve();
+    if (!this.dollyBase) this.dollyBase = { h: w3.params.camHeight, b: w3.params.camBack };
+    const base = this.dollyBase;
+    const from = w3.params.camHeight / base.h;
+    return new Promise<void>((resolve) => {
+      this.tweens.addCounter({
+        from, to: factor, duration, ease,
+        onUpdate: (tw) => {
+          const f = tw.getValue() ?? factor;
+          w3.params.camHeight = base.h * f;
+          w3.params.camBack = base.b * f;
+        },
+        onComplete: () => resolve(),
+      });
+    });
+  }
+
+  /** Um brilho de estrela que acende e some num ponto — o fio da lamina pegando a luz. */
+  private spawnGlint(wx: number, wy: number, elevation: number, size = 0.5): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const star = w3
+      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 3 })
+      .setTint(0xfff6d8)
+      .setPosition(wx, wy)
+      .setElevation(elevation)
+      .setDisplaySize(0.05, 0.05);
+    this.tweens.add({
+      targets: star, displayWidth: size, displayHeight: size * 0.35, duration: 140, yoyo: true,
+      ease: 'Quad.easeOut', onComplete: () => star.destroy(),
+    });
+    const ray = w3
+      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 3 })
+      .setTint(0xfff6d8)
+      .setPosition(wx, wy)
+      .setElevation(elevation)
+      .setDisplaySize(0.05, 0.05);
+    this.tweens.add({
+      targets: ray, displayWidth: size * 0.25, displayHeight: size * 1.1, duration: 140, yoyo: true,
+      ease: 'Quad.easeOut', onComplete: () => ray.destroy(),
+    });
+  }
+
+  /** Uma faisca dourada subindo em volta de um ponto (a lamina juntando o ultimo peso). */
+  private spawnRiseMote(wx: number, wy: number, elevation: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const mote = w3
+      .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2 })
+      .setTint(Math.random() < 0.5 ? 0xffe9a8 : 0xfff6d8)
+      .setPosition(wx + (Math.random() - 0.5) * 0.9, wy + (Math.random() - 0.5) * 0.4)
+      .setElevation(elevation - 0.4 + Math.random() * 0.3)
+      .setDisplaySize(0.08, 0.08)
+      .setAlpha(0.9);
+    this.tweens.add({
+      targets: mote, elevation: elevation + 0.3 + Math.random() * 0.3, alpha: 0,
+      duration: 500 + Math.random() * 300, ease: 'Sine.easeOut', onComplete: () => mote.destroy(),
+    });
+  }
+
+  /** Um tween como promessa — a abertura e uma sequencia, e cada tempo espera o anterior. */
+  private tweenTo(config: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.tweens.add({ ...config, onComplete: () => resolve() });
+    });
+  }
+
+  /**
+   * A ESPADA DESCE DAS COSTAS PARA O CHAO — o gesto que fecha uma vida, filmado como tal.
+   *
+   *   1. DESEMBAINHAR: a espada sai das costas (a mesma arte, o mesmo billboard) para as maos,
+   *      na frente do peito, com um brilho correndo pelo fio.
+   *   2. ERGUER: ela sobe acima da cabeca girando para ficar de PONTA PARA BAIXO; no alto o tempo
+   *      quase para (camera lenta), faiscas sobem, o fio cintila uma ultima vez.
+   *   3. CRAVAR: um mergulho seco; no impacto o mundo CONGELA um instante (hitstop), a tela pisca,
+   *      o chao treme na direcao do golpe, duas ondas de poeira correm e torroes voam.
+   *   4. ASSENTAR: a lamina vibra e para, a poeira baixa, o heroi se ergue devagar.
+   */
+  private async playSwordPlanting(): Promise<void> {
+    const hb = this.heroBillboard;
+    const sword = this.backItemBb;
+    const front = this.facingTile();
+    if (!hb || !sword) return;
+    const sound = getSoundManager();
+    this.swordInHands = true; // positionBackItem para de prender a espada nas costas
+    const handX = hb.x + 0.04;
+    const handY = hb.y + 0.32; // na frente do corpo (o heroi olha para a camera)
+
+    // 1. DESEMBAINHAR.
+    this.hero.frame = HERO_FRAMES.attack;
+    sound.playSwordPickup();
+    await this.tweenTo({
+      targets: sword, x: handX, y: handY, elevation: 0.62, angle: 0, duration: 420, ease: 'Back.easeOut',
+    });
+    this.spawnGlint(handX, handY, 1.02, 0.55);
+    await this.wait(520);
+
+    // 2. ERGUER, girando meia volta e mais um pouco: ponta para baixo, acima da cabeca.
+    void this.dollyTo(0.74, 1500, 'Sine.easeInOut');
+    const rise = this.tweenTo({
+      targets: sword, elevation: 1.28, angle: 540, y: hb.y + 0.12, duration: 1100, ease: 'Cubic.easeInOut',
+    });
+    const motes = this.time.addEvent({
+      delay: 70, repeat: 24, callback: () => this.spawnRiseMote(sword.x, sword.y, sword.elevation),
+    });
+    this.hero.scaleY = 1.05;
+    await rise;
+    // CAMERA LENTA no alto: o mundo quase para, so a lamina respira.
+    this.tweens.timeScale = 0.25;
+    sound.playSingingBowl();
+    this.spawnGlint(sword.x, sword.y, sword.elevation - 0.45, 0.9);
+    this.world3d?.shake(500, 0.012);
+    await this.tweenTo({ targets: sword, elevation: 1.38, duration: 220, ease: 'Sine.easeOut' });
+    this.tweens.timeScale = 1;
+    motes.remove();
+    await this.wait(380);
+
+    // 3. CRAVAR: um mergulho seco ate o tile da frente.
+    this.hero.scaleY = 0.86;
+    this.hero.scaleX = 1.06;
+    await this.tweenTo({
+      targets: sword, x: front.x, y: front.y, elevation: SWORD_PLANTED_ELEV - 0.06,
+      duration: 120, ease: 'Expo.easeIn',
+    });
+    // O IMPACTO.
+    this.tweens.timeScale = 0; // hitstop: o mundo segura o quadro do golpe
+    sound.playTitleImpact();
+    sound.playRockSmash();
+    this.cameras.main.flash(130, 255, 246, 220);
+    this.world3d?.shake(380, 0.16, 0, 1);
+    await new Promise<void>((resolve) => { window.setTimeout(resolve, 110); });
+    this.tweens.timeScale = 1;
+    void this.dollyTo(0.68, 140, 'Quad.easeOut').then(() => this.dollyTo(0.76, 600, 'Sine.easeOut'));
+    this.spawnShockwave(front.x, front.y, 0xd8c3a0, 0.3, 2.6, 520);
+    this.spawnShockwave(front.x, front.y, 0xfff0c8, 0.2, 1.4, 300);
+    this.spawnDirtBurst(front.x, front.y, 26);
+    this.spawnSmokePuff(front.x - 0.3, front.y + 0.1);
+    this.spawnSmokePuff(front.x + 0.3, front.y + 0.1);
+    this.time.delayedCall(160, () => this.spawnSmokePuff(front.x, front.y + 0.25));
+    this.world3d?.rustleDecor(front.x - 1, front.y);
+    this.world3d?.rustleDecor(front.x + 1, front.y);
+    this.world3d?.rustleDecor(front.x, front.y + 1);
+
+    // 4. ASSENTAR: a lamina vibra e para; ela agora e a espada fincada.
+    sword.setPosition(front.x, front.y);
+    const wobble = { t: 0 };
+    await this.tweenTo({
+      targets: wobble, t: 1, duration: 900, ease: 'Linear',
+      onUpdate: () => {
+        const decay = 1 - wobble.t;
+        sword.setAngle(180 + Math.sin(wobble.t * Math.PI * 9) * 7 * decay * decay);
+        sword.setElevation(SWORD_PLANTED_ELEV - 0.06 * decay);
+      },
+    });
+    this.swordInHands = false;
+    this.backItemBb = undefined; // o billboard das costas virou a espada do chao
+    this.plantedSword?.destroy();
+    this.plantedSword = sword.setAngle(180).setElevation(SWORD_PLANTED_ELEV);
+    this.plantedSwordTile = { x: front.x, y: front.y };
+    await this.tweenTo({ targets: this.hero, scaleX: 1, scaleY: 1, duration: 700, ease: 'Sine.easeOut' });
+    this.hero.frame = HERO_FRAMES.idleDown;
+    this.persistAdventure();
+    await this.wait(400);
   }
 
   /**
@@ -3878,6 +4083,7 @@ export class GameScene extends Phaser.Scene {
     this.campfiresFollowNight = !isNightTime();
     this.syncCampfiresToClock();
     this.updateBackItem(); // a espada nas costas: ela ainda e dele
+    this.setLetterbox(true, 1400);
     w3.setWorldFade(1);
     this.cutsceneHeroLight = 0.6;
     await this.wait(400);
@@ -3910,7 +4116,8 @@ export class GameScene extends Phaser.Scene {
     this.scriptFace(1, 0);
     await this.walkWizardIn();
 
-    // 5. A CONVERSA.
+    // 5. A CONVERSA. As faixas saem: a fala precisa do rodape inteiro.
+    this.setLetterbox(false, 700);
     const base = getDialog('wizard');
     const wizardAt = { worldX: this.playerWorld.worldX + 1, worldY: this.playerWorld.worldY };
     await new Promise<void>((resolve) => {
@@ -3923,6 +4130,7 @@ export class GameScene extends Phaser.Scene {
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
     this.introDone = true;
+    void this.dollyTo(1, 1800);
     this.seenDialogKeys.add(`wizard:${this.wizardLine()}`);
     this.cutsceneHeroLight = 1;
     this.cutsceneActive = false;
@@ -3930,49 +4138,6 @@ export class GameScene extends Phaser.Scene {
     getSoundManager().fadeMusicIn();
     if (!isTouchDevice()) this.controlsHint = new ControlsHint(t('controls.hint'));
     this.persistAdventure();
-  }
-
-  /**
-   * A ESPADA DESCE DAS COSTAS PARA O CHAO, em tres tempos: ela sobe acima da cabeca (o peso dela,
-   * pela ultima vez), segura um instante, e desce de ponta no tile da frente. O baque e de
-   * terra, nao de aco — poeira, um tremor curto e um som grave. Depois, ela fica.
-   */
-  private async playSwordPlanting(): Promise<void> {
-    const hb = this.heroBillboard;
-    const front = this.facingTile();
-    if (!hb) return;
-    // Tira das costas: a espada e agora um objeto no mundo, nas maos dele.
-    this.backItemBb?.setVisible(false);
-    const sword = this.plantSwordAt(hb.x, hb.y + 0.05, 0.55);
-    if (!sword) return;
-    sword.setPosition(hb.x + 0.05, hb.y + 0.08);
-    getSoundManager().playSwordPickup();
-    // Sobe: acima da cabeca, devagar — o braco carregando o peso de uma vida inteira.
-    this.hero.frame = HERO_FRAMES.attack;
-    await new Promise<void>((resolve) => {
-      this.tweens.add({ targets: sword, elevation: 1.05, duration: 900, ease: 'Sine.easeOut', onComplete: () => resolve() });
-    });
-    await this.wait(650);
-    // Desce de ponta: rapido e reto, e o chao recebe.
-    await new Promise<void>((resolve) => {
-      this.tweens.add({
-        targets: sword,
-        elevation: SWORD_BURY_ELEV,
-        y: front.y,
-        x: front.x,
-        duration: 170,
-        ease: 'Quad.easeIn',
-        onComplete: () => resolve(),
-      });
-    });
-    this.plantedSwordTile = { x: front.x, y: front.y };
-    sword.setPosition(front.x, front.y).setElevation(SWORD_BURY_ELEV);
-    getSoundManager().playTitleImpact();
-    this.world3d?.shake(220, 0.07, 0, 1);
-    this.spawnDirtBurst(front.x, front.y, 14);
-    this.hero.frame = HERO_FRAMES.idleDown;
-    this.persistAdventure();
-    await this.wait(500);
   }
 
   /** O mago chega a pe pela direita da estrada e para ao lado do heroi. */
@@ -4796,7 +4961,7 @@ export class GameScene extends Phaser.Scene {
   private positionBackItem(): void {
     const bb = this.backItemBb;
     const hb = this.heroBillboard;
-    if (!bb?.visible || !hb) return;
+    if (!bb?.visible || !hb || this.swordInHands) return;
     // Lit torch: gripped upright in the hand at the hero's side, raised so the flame clears
     // the shoulder — always in front of the body (it's held out, never hidden behind him).
     // The billboard is centred (see updateBackItem), so its elevation is the height of the

@@ -3,15 +3,9 @@ import type Phaser from 'phaser';
 
 import { registerTexture3D } from '@/game/render3d/textures3d';
 
-// AS DUAS PECAS DA HISTORIA que nao tinham arte: a ESPADA FINCADA (o primeiro gesto do jogo) e o
-// ESPETO com o cogumelo (o ultimo). Desenhadas uma vez e publicadas nas DUAS pipelines de textura,
+// A PECA DO FIM que nao tinha arte: o ESPETO com o cogumelo, cru e assado. Desenhadas uma vez e publicadas nas DUAS pipelines de textura,
 // o mesmo esquema do bucketTexture/charcoalTexture: THREE (billboard no mundo) e Phaser.
 //
-// A espada nao e a arte de item virada de cabeca para baixo: aquela e um toco largo de 16px
-// pensado para ser lido no inventario, e cravada no chao ela leria como uma pa. Fincada, o que
-// conta e a SILHUETA — lamina fina e longa descendo para a terra, a guarda atravessada e o punho
-// de couro em cima, que e o que se ve de uma espada que alguem largou de proposito.
-
 type Rgba = readonly [number, number, number, number];
 
 const PALETTE: Record<string, Rgba> = {
@@ -34,26 +28,6 @@ const PALETTE: Record<string, Rgba> = {
   n: [0xe8, 0xdc, 0xc0, 255], // pe do cogumelo
   r: [0xb5, 0x6a, 0x2e, 255], // chapeu ja tostado
 };
-
-// 16×16: a espada cravada. O pomo no alto, o punho, a guarda e a lamina que entra na terra.
-const PLANTED_SWORD = [
-  '.......kk.......',
-  '......kyyk......',
-  '.......kk.......',
-  '.......kmk......',
-  '.......klk......',
-  '.......kmk......',
-  '....kkkkkkkk....',
-  '....kygggggk....',
-  '....kkkkkkkk....',
-  '......kwsdk.....',
-  '......kwsdk.....',
-  '......kwsdk.....',
-  '......kwsdk.....',
-  '......kwsdk.....',
-  '....ebkwsdkbe...',
-  '...eebbkkkbbee..',
-] as const;
 
 // 16×16: o graveto com o cogumelo espetado na ponta, inclinado sobre o fogo.
 const ROAST_STICK = [
@@ -78,7 +52,6 @@ const ROAST_STICK = [
 // O mesmo espeto depois de assado: o chapeu dourou.
 const ROAST_STICK_DONE = ROAST_STICK.map((row) => row.replace(/c/g, 'r').replace(/v/g, 'y'));
 
-export const PLANTED_SWORD_TEXTURE = 'planted-sword';
 export const ROAST_STICK_TEXTURE = 'roast-stick';
 export const ROAST_STICK_DONE_TEXTURE = 'roast-stick-done';
 
@@ -111,7 +84,6 @@ let threeRegistered = false;
 /** Publica as tres texturas nas duas pipelines. Chamar no boot da cena (GameScene.create). */
 export const registerCozyTextures = (scene: Phaser.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, readonly string[]]> = [
-    [PLANTED_SWORD_TEXTURE, PLANTED_SWORD],
     [ROAST_STICK_TEXTURE, ROAST_STICK],
     [ROAST_STICK_DONE_TEXTURE, ROAST_STICK_DONE],
   ];

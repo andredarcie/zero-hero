@@ -9373,7 +9373,7 @@ são do autor.
   i-frames), vida/morte/respawn, bomba, planta carnívora, lava (os tiles viraram água), pira,
   subterrâneo (`underworld.json`, escadas, cortina, tochas de parede, `?under` no editor, a aba
   Inimigos). O save mudou de chave (`zh.cozy.v1`).
-- **O arco novo:** abertura roteirizada (`playIntro` — a espada fincada em `PLANTED_SWORD_TEXTURE`,
+- **O arco novo:** abertura roteirizada (`playIntro` — a espada fincada e a MESMA arte das costas (`sword-icon`, ponta para baixo) com letterbox, dolly, camera lenta, hitstop e onda de poeira,
   vaga-lumes sem luz THREE, o mago entrando por um stand-in enquanto o NPC real fica escondido por
   `NpcManager.setKindHidden`), quatro pedidos com presente (cogumelos, canteiros, lenha, pedras),
   portão do jardim, fogueira do fim, espeto (`ROAST_STICK_TEXTURE`) e créditos DOM.
