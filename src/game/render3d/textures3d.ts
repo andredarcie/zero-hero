@@ -25,8 +25,6 @@ const A = `${import.meta.env.BASE_URL.replace(/\/$/u, '')}/assets`;
 // Keys deliberately mirror the game's ASSET_KEYS names where one exists.
 const DEFS: Record<string, SheetDef> = {
   hero: { url: `${A}/characters/player/hero.png`, frameW: 16, frameH: 16 },
-  'hero-bare': { url: `${A}/characters/player/hero-bare.png`, frameW: 16, frameH: 16 },
-  helmet: { url: `${A}/characters/player/helmet.png` },
   'forest-tileset': { url: `${A}/environment/tilesets/forest_tile_set.png`, frameW: 16, frameH: 16 },
   npcs: { url: `${A}/characters/npcs/npcs.png`, frameW: 16, frameH: 16 },
   'npc-salesman': { url: `${A}/characters/npcs/salesman.png` },

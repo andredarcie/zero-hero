@@ -9399,7 +9399,7 @@ são do autor.
 
 ## 2026-10-20 — o resto da lista cozy
 
-- **O elmo** (`scripts/cozy-hero.mjs`): `hero-bare.png` e `helmet.png` saem do próprio `hero.png` (só as linhas 0-7 de cada frame trocam). Fim da abertura: ele vira para a espada e pendura o elmo no punho; `heroTexture` decide a folha, e o Continue repõe o elmo. Cenário `abertura`.
+- **O elmo nunca sai** (2026-10-21, pedido do autor): o cavaleiro tirava o elmo no fim da abertura e o pendurava na espada (`hero-bare.png`/`helmet.png`, `scripts/cozy-hero.mjs`). Tudo isso foi apagado; a folha do herói é sempre `hero`. Cenário `abertura`.
 - **As marcas dos pedidos** (`QUEST_MARKS`): marco da Vega, cesto da Hollis, lenha do Bram (+ fogueira acesa de dia, `keptLitFires`), cavalete cinza→verde da Iris. Vêm do estado do pedido, nada novo no save. Tile = o mais perto do NPC (até 3) que não é ponto de corte (os livres do anel de 8 formam uma corrida só). Cenário `marcas` (e `sem-parede` sabe delas).
 - **NPCs vivos**: respiração pela base com fase própria, pulinho de "oi" a 2 passos, pulinho + 3 corações no obrigado. `marcas`.
 - **Descanso**: Z numa fogueira acesa senta; `setTimeScale(24)`; qualquer tecla levanta, e a seta que levanta não vira passo. `descanso`.
