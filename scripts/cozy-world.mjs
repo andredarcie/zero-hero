@@ -56,6 +56,22 @@ world.props = world.props
   .filter((p) => p.type !== 'stairs' && p.type !== 'bombSpot' && p.type !== 'carnivorousPlant')
   .map((p) => (p.type === 'lava' ? { type: 'water', worldX: p.worldX, worldY: p.worldY } : p));
 
+// ── 1b. sem parede invisivel ─────────────────────────────────────────────────────────────
+// Colisao PINTADA so vale onde ha algo de pe para justifica-la (um pinheiro, uma rocha). Os
+// cercados das pecas que sairam (escadas, paredes de bomba) deixaram colisao em chao vazio: um
+// tile que barra o heroi sem nada desenhado nele e a pior recusa que um jogo pode dar.
+let invisibleWalls = 0;
+for (const chunk of world.chunks) {
+  for (let r = 0; r < CH; r += 1) {
+    for (let col = 0; col < CW; col += 1) {
+      if (!chunk.collisions[r][col]) continue;
+      if (SOLID_UPPER.has(chunk.upper[r][col] ?? -1)) continue;
+      chunk.collisions[r][col] = false;
+      invisibleWalls += 1;
+    }
+  }
+}
+
 // ── 2. os vizinhos ─────────────────────────────────────────────────────────────────────────
 const start = world.meta.playerStart;
 // O mago para ao lado de onde o heroi termina a abertura: tres passos pela estrada e um para tras.
@@ -210,5 +226,5 @@ if (check) {
 } else {
   fs.writeFileSync(worldPath, out);
   console.log(`world.json: fogueira ${HEARTH.x},${HEARTH.y} · portao ${GATE.x},${GATE.y} · sebe +${hedge} · `
-    + `cogumelos ${wild.length} · interior ${inside.size} tiles`);
+    + `cogumelos ${wild.length} · interior ${inside.size} tiles · paredes invisiveis -${invisibleWalls}`);
 }
