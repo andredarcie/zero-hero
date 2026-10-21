@@ -93,13 +93,12 @@ export const taskKey = (task: QuestTask): string => {
  *   a coletora (radiationSuit) — um cesto de cogumelos do bosque
  *   a pintora  (painter)       — um canteiro que brote, para ela ter verde para pintar
  *   o lenhador (businessMan)   — lenha para a noite, cortada das árvores secas
- *   a astrônoma (astronaut)    — pedras para um marco onde o céu é mais limpo, e uma barra de
- *                                ferro para o topo dele
+ *   a astrônoma (astronaut)    — uma barra de ferro para o marco onde o céu é mais limpo
  *
- * A BARRA DE FERRO É O ÚNICO PEDIDO QUE ATRAVESSA A CADEIA INTEIRA: o mundo não tem ferro no
+ * A BARRA DE FERRO É O PEDIDO INTEIRO DA VEGA, e o único que atravessa a cadeia toda: o mundo não tem ferro no
  * chão, então ela só existe fabricada — minério da picareta, forno (pedra+pedra) na bancada,
  * carvão (lenha+lenha) e esponja (minério+carvão) no forno, e as marteladas que fazem dela barra.
- * A picareta que a Vega dá é a chave das duas metades do pedido: a pedra e o minério saem dela.
+ * A picareta que a Vega dá é a chave: a pedra do forno e o minério saem dela.
  *
  * Quando o último pedido fecha, o portão do jardim no centro do vale ABRE (ver
  * GameScene.openGardenGate) — e lá dentro está a fogueira do fim.
@@ -132,7 +131,7 @@ export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
   astronaut: {
     dialog: 'astronaut',
     doneDialog: 'astronautDone',
-    tasks: [{ kind: 'deliver', item: 'stone', count: 3 }, { kind: 'deliver', item: 'iron', count: 1 }],
+    tasks: [{ kind: 'deliver', item: 'iron', count: 1 }],
     gift: [{ item: 'pickaxe', count: 1 }],
   },
 };
