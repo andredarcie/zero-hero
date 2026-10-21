@@ -43,7 +43,8 @@ const ensureTextures = (scene: Phaser.Scene): void => {
 
 const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 
-export type ItemGetConfig = { texture: string; frame: number; label: string };
+/** `heroTexture`: qual folha do heroi desenhar (de elmo, ou ja de cabeca descoberta). */
+export type ItemGetConfig = { texture: string; frame: number; label: string; heroTexture?: string };
 
 /**
  * GANHAR UMA COISA — mostrado na primeira vez que o heroi apanha cada item.
@@ -86,7 +87,7 @@ export class ItemGetOverlay {
     scene.tweens.add({ targets: halo, scale: halo.scale * 1.06, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     // ── o cavaleiro, de frente, com um pulinho de contente ─────────────────────────
-    const hero = reg(scene.add.sprite(cx, heroY, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
+    const hero = reg(scene.add.sprite(cx, heroY, this.item.heroTexture ?? ASSET_KEYS.hero, HERO_FRAMES.idleDown)
       .setOrigin(0.5).setDepth(D + 2).setDisplaySize(heroSize, heroSize).setAlpha(0)) as Phaser.GameObjects.Sprite;
     scene.tweens.add({ targets: hero, alpha: 1, duration: 260, ease: 'Sine.easeOut' });
     this.after(300, () => {

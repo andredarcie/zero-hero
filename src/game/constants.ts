@@ -154,6 +154,8 @@ export const NPC_FRAMES = {
 
 export const ASSET_KEYS = {
   hero: 'hero',
+  heroBare: 'hero-bare',
+  helmet: 'helmet',
   npcs: 'npcs',
   npcSalesman: 'npc-salesman',
   npcPoet: 'npc-poet',

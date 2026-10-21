@@ -8,7 +8,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default {
   name: 'abertura',
-  description: 'A abertura: espada real fincada, passo para tras, mago chega, fala e fica.',
+  description: 'A abertura: espada real fincada, passo para tras, mago fala, o elmo vai para a espada.',
   needsGame: false,
   async run({ driver, shot, assert }) {
     const { page } = driver;
@@ -49,6 +49,9 @@ export default {
     for (let i = 0; i < 40 && (await state()).dialogOpen; i += 1) {
       await page.keyboard.down('z'); await sleep(50); await page.keyboard.up('z'); await sleep(400);
     }
+    // O elmo sai da cabeca e vai para o punho da espada.
+    await sleep(1300);
+    await shot('elmo', { note: 'O elmo a caminho da espada' });
     await page.waitForFunction(() => {
       const s = window.gameDebug.getState();
       return s.introDone && !s.cutsceneActive && !s.dialogOpen;
@@ -63,11 +66,15 @@ export default {
         wizard: s.npcManager.getKindAt(s.playerWorld.worldX + 1, s.playerWorld.worldY),
         dolly: s.world3d.params.camHeight / (s.dollyBase?.h ?? s.world3d.params.camHeight),
         bars: document.querySelectorAll('div[style*="11vh"]').length,
+        heroTexture: s.heroTexture,
+        helmet: s.helmetBb ? { x: Math.round(s.helmetBb.x), y: Math.round(s.helmetBb.y) } : null,
       };
     });
     await shot('controle', { note: 'O controle volta: espada, cavaleiro e mago' });
     assert('O cavaleiro termina dois tiles ao norte da espada',
       end.hero.worldX === end.sword.x && end.hero.worldY === end.sword.y - 2, JSON.stringify(end));
+    assert('O cavaleiro termina de cabeca descoberta', end.heroTexture === 'hero-bare', `texture=${end.heroTexture}`);
+    assert('O elmo fica pendurado na espada', end.helmet?.x === end.sword.x && end.helmet?.y === end.sword.y, JSON.stringify(end.helmet));
     assert('O mago fica de pe ao lado do cavaleiro', end.wizard === 'wizard', JSON.stringify(end));
     assert('A camera volta ao enquadramento do jogo', Math.abs(end.dolly - 1) < 0.01, `dolly=${end.dolly}`);
     assert('Nao ha vida nem morte no estado', st0.health === undefined && st0.isDead === undefined, '');

@@ -24,6 +24,13 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // O cavaleiro de cabeca descoberta (scripts/cozy-hero.mjs): a mesma folha, sem o elmo.
+    key: ASSET_KEYS.heroBare,
+    path: '/assets/characters/player/hero-bare.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: os pedacos em que a caveira se parte ao morrer ([0] cabeca, [1] osso
     // quebrado). Sheet de duas frames em linha — por isso aqui, e nao na lista de imagens.
     key: ASSET_KEYS.undeadBits,

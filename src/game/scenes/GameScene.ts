@@ -294,6 +294,8 @@ const INTRO_STEP_MS = 520;
  * pouco de ponta dentro da terra, que o chao esconde.
  */
 const SWORD_PLANTED_ELEV = 0.36;
+/** A altura do CENTRO do elmo pendurado: logo acima do punho da espada fincada. */
+const HELMET_ON_SWORD_ELEV = 0.98;
 /** De quantos tiles a leste o mago chega andando. */
 const WIZARD_WALK_TILES = 5;
 /** Quantos vaga-lumes derivam em volta do heroi a noite. */
@@ -451,6 +453,9 @@ export class GameScene extends Phaser.Scene {
   private roasted = false;
   private plantedSword?: Billboard3D;
   private plantedSwordTile?: { x: number; y: number };
+  // O cavaleiro de elmo ('hero') ate o fim da abertura; de cabeca descoberta ('hero-bare') depois.
+  private heroTexture = 'hero';
+  private helmetBb?: Billboard3D;
   // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
   private swordInHands = false;
   private letterbox?: [HTMLDivElement, HTMLDivElement];
@@ -608,6 +613,7 @@ export class GameScene extends Phaser.Scene {
       const front = this.facingTile();
       return front.x === wx && front.y === wy;
     });
+    this.heroTexture = this.introDone ? ASSET_KEYS.heroBare : ASSET_KEYS.hero;
     // O mago so entra em cena DURANTE a abertura: ate la o lugar dele na estrada fica vazio.
     if (!this.introDone) this.npcManager.setKindHidden('wizard', true);
     this.lootManager = new LootManager(this);
@@ -773,6 +779,7 @@ export class GameScene extends Phaser.Scene {
       const ps = getPlayerStart();
       this.plantSwordAt(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1);
       this.crackGroundAt(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1, false);
+      this.hangHelmetOn(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1);
     }
 
     this.streamChunks(true);
@@ -991,7 +998,7 @@ export class GameScene extends Phaser.Scene {
       Math.max(0.05, (h.sizePx * h.scaleX) / ts),
       Math.max(0.05, (h.sizePx * h.scaleY) / ts),
     );
-    b.setTexture('hero', h.frame);
+    b.setTexture(this.heroTexture, h.frame);
     b.setFlipX(h.flipX);
     b.setAlpha(h.alpha);
     b.setAngle(h.spin);
@@ -1138,6 +1145,8 @@ export class GameScene extends Phaser.Scene {
     this.plantedSword?.destroy();
     this.plantedSword = undefined;
     this.plantedSwordTile = undefined;
+    this.helmetBb?.destroy();
+    this.helmetBb = undefined;
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
     this.roastStick?.destroy();
@@ -3837,6 +3846,53 @@ export class GameScene extends Phaser.Scene {
     return this.plantedSword;
   }
 
+  /** O elmo pendurado no punho da espada fincada (ele so existe depois da abertura). */
+  private hangHelmetOn(wx: number, wy: number): Billboard3D | undefined {
+    if (!this.world3d) return undefined;
+    this.helmetBb?.destroy();
+    this.helmetBb = this.world3d
+      .addBillboard(ASSET_KEYS.helmet, 0, { centered: true })
+      .setPosition(wx, wy + 0.03)
+      .setElevation(HELMET_ON_SWORD_ELEV)
+      .setDisplaySize(1, 0.5);
+    return this.helmetBb;
+  }
+
+  /**
+   * TIRAR O ELMO. Ele se vira para a espada, o elmo sai da cabeca (a textura do heroi troca no
+   * MESMO quadro em que o elmo aparece solto, entao e um objeto so mudando de lugar), sobe um
+   * pouco, faz um arco ate o punho da espada e assenta ali com um tilintar baixo. Depois, um
+   * suspiro: o corpo baixa e sobe devagar.
+   */
+  private async playHelmetOff(): Promise<void> {
+    const hb = this.heroBillboard;
+    const sword = this.plantedSwordTile;
+    if (!hb || !sword) return;
+    this.scriptFace(0, 1);
+    await this.wait(500);
+    const helmet = this.hangHelmetOn(hb.x, hb.y + 0.04);
+    if (!helmet) return;
+    helmet.setPosition(hb.x, hb.y + 0.04).setElevation(0.76);
+    this.heroTexture = ASSET_KEYS.heroBare;
+    getSoundManager().playSwordPickup();
+    await this.tweenTo({ targets: helmet, elevation: 1.02, duration: 420, ease: 'Sine.easeOut' });
+    await this.wait(250);
+    const from = { x: helmet.x, y: helmet.y, e: helmet.elevation };
+    const k = { t: 0 };
+    await this.tweenTo({
+      targets: k, t: 1, duration: 950, ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        helmet.setPosition(from.x + (sword.x - from.x) * k.t, from.y + (sword.y + 0.03 - from.y) * k.t);
+        helmet.setElevation(from.e + (HELMET_ON_SWORD_ELEV - from.e) * k.t + Math.sin(Math.PI * k.t) * 0.35);
+      },
+    });
+    helmet.setPosition(sword.x, sword.y + 0.03).setElevation(HELMET_ON_SWORD_ELEV);
+    getSoundManager().playCozyChime();
+    this.spawnGlint(sword.x, sword.y, HELMET_ON_SWORD_ELEV, 0.45);
+    await this.tweenTo({ targets: this.hero, scaleY: 0.93, scaleX: 1.03, duration: 700, yoyo: true, ease: 'Sine.easeInOut' });
+    await this.wait(500);
+  }
+
   /** As FAIXAS DE CINEMA: duas barras pretas que entram pelas bordas e dizem "agora e cena". */
   private setLetterbox(on: boolean, ms = 900): void {
     if (!this.letterbox) {
@@ -4275,7 +4331,11 @@ export class GameScene extends Phaser.Scene {
       this.openDialogScript({ ...base, lines: tLines('wizard.intro') }, wizardAt, getDialogVoice('wizard'), resolve);
     });
 
-    // 6. O CONTROLE VOLTA: o mago fica ali, na beira da estrada, para quem quiser conversar.
+    // 6. O ELMO: ele vira para a espada, tira o elmo e o pendura no punho dela. E o rosto dele,
+    // pela primeira vez — o resto do jogo e com esse rosto.
+    await this.playHelmetOff();
+
+    // 7. O CONTROLE VOLTA: o mago fica ali, na beira da estrada, para quem quiser conversar.
     this.npcManager?.setKindHidden('wizard', false);
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
@@ -5674,7 +5734,9 @@ export class GameScene extends Phaser.Scene {
     // once so everything realigns to the final camera before the ceremony freezes it (otherwise
     // props/items look shifted a tile until the overlay closes).
     this.reprojectStatic();
-    this.itemGetOverlay = new ItemGetOverlay(this, { ...ITEM_GET_CFG[kind], label: t(`items.get.${kind}`) }, () => {
+    this.itemGetOverlay = new ItemGetOverlay(this, {
+      ...ITEM_GET_CFG[kind], label: t(`items.get.${kind}`), heroTexture: this.heroTexture,
+    }, () => {
       this.itemGetOverlay?.destroy();
       this.itemGetOverlay = undefined;
       this.itemGetOpen = false;
