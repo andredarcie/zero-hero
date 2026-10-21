@@ -9396,3 +9396,12 @@ são do autor.
 - Os sons de combate e a trilha Souls foram APAGADOS de `public/assets/audio` (iam no build);
   `window.__sound` (dev) é a instância que o jogo usa — o `audio` lê o mix por ela. Armadilha: um
   `import()` do módulo pelo navegador devolve OUTRA instância no Vite.
+
+## 2026-10-20 — o resto da lista cozy
+
+- **O elmo** (`scripts/cozy-hero.mjs`): `hero-bare.png` e `helmet.png` saem do próprio `hero.png` (só as linhas 0-7 de cada frame trocam). Fim da abertura: ele vira para a espada e pendura o elmo no punho; `heroTexture` decide a folha, e o Continue repõe o elmo. Cenário `abertura`.
+- **As marcas dos pedidos** (`QUEST_MARKS`): marco da Vega, cesto da Hollis, lenha do Bram (+ fogueira acesa de dia, `keptLitFires`), cavalete cinza→verde da Iris. Vêm do estado do pedido, nada novo no save. Tile = o mais perto do NPC (até 3) que não é ponto de corte (os livres do anel de 8 formam uma corrida só). Cenário `marcas` (e `sem-parede` sabe delas).
+- **NPCs vivos**: respiração pela base com fase própria, pulinho de "oi" a 2 passos, pulinho + 3 corações no obrigado. `marcas`.
+- **Descanso**: Z numa fogueira acesa senta; `setTimeScale(24)`; qualquer tecla levanta, e a seta que levanta não vira passo. `descanso`.
+- **Sem sustos**: `camera.flash` fora da abertura virou `softWash` (aditivo, sobe em 1/3, assenta em 2/3); shakes do dia a dia viraram sussurro ou sumiram; nomes em small caps, menus em Title Case.
+- **O turno do dia** (`updateDaytimeLife`): 5 borboletas (asa = largura respirando) e folhas só de tiles de árvore de verdade, que pousam, descansam 2,6s e somem. Sem luz nenhuma. `dia`.

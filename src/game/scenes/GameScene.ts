@@ -82,6 +82,7 @@ import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import {
   BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
+  BUTTERFLY_TEXTURE, LEAF_TEXTURE,
   ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
 import { HeroThought } from '@/game/runtime/HeroThought';
@@ -307,6 +308,15 @@ const WIZARD_WALK_TILES = 5;
 const REST_TIME_SCALE = 24;
 /** Quantos vaga-lumes derivam em volta do heroi a noite. */
 const FIREFLY_COUNT = 18;
+/** Quantas borboletas passeiam em volta do heroi de dia (o turno dos vaga-lumes). */
+const BUTTERFLY_COUNT = 5;
+const BUTTERFLY_TINTS = [0xfff6dc, 0xffe27a, 0xbfe0ff, 0xffc9a8, 0xf3f0ff] as const;
+/** As folhas que se soltam das arvores perto do heroi, de dia: no maximo tantas ao mesmo tempo. */
+const LEAF_MAX = 6;
+const LEAF_TINTS = [0x9cc46a, 0xd8c25a, 0xd08a44, 0xb7cf72] as const;
+/** Quanto tempo a folha descansa no chao antes de sumir (e quanto leva sumindo). */
+const LEAF_REST_MS = 2600;
+const LEAF_FADE_MS = 900;
 /** Quanto tempo os creditos levam para atravessar a tela. */
 const CREDITS_SCROLL_MS = 26000;
 
@@ -503,6 +513,15 @@ export class GameScene extends Phaser.Scene {
   private gardenGates: LockedDoorObject[] = [];
   // Os vaga-lumes da noite (ver updateFireflies): pontos sem luz que derivam em volta do heroi.
   private readonly fireflies: Array<{ bb: Billboard3D; ox: number; oy: number; phase: number; speed: number }> = [];
+  // O turno do dia (ver updateDaytimeLife): borboletas e folhas caindo.
+  private daylifeLevel = 0;
+  private readonly butterflies: Array<{
+    bb: Billboard3D; x: number; y: number; tx: number; ty: number; phase: number; size: number;
+  }> = [];
+  private readonly leaves: Array<{
+    bb: Billboard3D; x: number; y: number; elev: number; t: number; sway: number; spin: number; landedMs: number;
+  }> = [];
+  private leafClockMs = 0;
   // While set, updateLighting erases a growing light hole at this campfire (0..1) — the
   // slow-motion glow blooming open before the fire fully ignites.
   private cutsceneFireLight?: { worldX: number; worldY: number; progress: number };
@@ -988,6 +1007,7 @@ export class GameScene extends Phaser.Scene {
     // Os vaga-lumes vivem aqui e nao no update: eles sao a moldura das cutscenes (a abertura e o
     // fim), e o update fica parado justamente nelas.
     this.updateFireflies(delta);
+    this.updateDaytimeLife(delta);
     this.updateAmbienceMix(delta);
 
     // A vista do heroi + a tocha na mao dele, as duas montadas no corpo DESENHADO.
@@ -1206,6 +1226,11 @@ export class GameScene extends Phaser.Scene {
     this.fireflyLevel = 0;
     for (const fly of this.fireflies) fly.bb.destroy();
     this.fireflies.length = 0;
+    this.daylifeLevel = 0;
+    for (const b of this.butterflies) b.bb.destroy();
+    this.butterflies.length = 0;
+    for (const l of this.leaves) l.bb.destroy();
+    this.leaves.length = 0;
     this.creditsRoll?.remove();
     this.creditsRoll = undefined;
     if (window.hd3d === this.world3d?.params) window.hd3d = undefined;
@@ -4679,6 +4704,106 @@ export class GameScene extends Phaser.Scene {
         .setPosition(fly.ox + Math.sin(fly.phase) * 0.45, fly.oy + Math.cos(fly.phase * 0.8) * 0.3)
         .setElevation(0.35 + 0.4 * (0.5 + 0.5 * Math.sin(fly.phase * 1.3)))
         .setAlpha(this.fireflyLevel * (0.2 + 0.8 * blink));
+    }
+  }
+
+  /**
+   * O TURNO DO DIA, o que os vaga-lumes sao para a noite. BORBOLETAS que vagueiam em volta do
+   * heroi, de alvo em alvo, batendo asa (a largura respira: uma arte so), e FOLHAS que se soltam
+   * das arvores DE VERDADE perto dele e descem balancando ate o chao, onde descansam e somem.
+   * Nada disso traz luz (a lei do pool fixo), e tudo entra e sai em rampa com o nascer e o por do sol.
+   */
+  private updateDaytimeLife(delta: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const want = !isNightTime() && !this.roasting && !this.cutsceneActive ? 1 : 0;
+    this.daylifeLevel += (want - this.daylifeLevel) * Math.min(1, delta / 1500);
+    if (this.daylifeLevel < 0.01 && this.butterflies.length === 0 && this.leaves.length === 0) return;
+    const at = this.heroVisualTile();
+    const pickTarget = (): [number, number] => [at.x + (Math.random() - 0.5) * 8, at.y + (Math.random() - 0.5) * 6];
+
+    if (this.butterflies.length === 0 && this.daylifeLevel > 0.01) {
+      for (let i = 0; i < BUTTERFLY_COUNT; i += 1) {
+        const [x, y] = pickTarget();
+        const [tx, ty] = pickTarget();
+        const size = 0.25 + Math.random() * 0.07;
+        const bb = w3.addBillboard(BUTTERFLY_TEXTURE, 0, { centered: true, depthWrite: false })
+          .setTint(BUTTERFLY_TINTS[i % BUTTERFLY_TINTS.length])
+          .setDisplaySize(size, size * 0.86);
+        this.butterflies.push({ bb, x, y, tx, ty, phase: Math.random() * 10, size });
+      }
+    }
+    for (const b of this.butterflies) {
+      b.phase += delta * 0.001;
+      // Longe do quadro ela volta por outro lado; perto do alvo, escolhe outro.
+      if (Math.abs(b.x - at.x) > 6 || Math.abs(b.y - at.y) > 5) [b.x, b.y] = pickTarget();
+      if (Math.hypot(b.tx - b.x, b.ty - b.y) < 0.3) [b.tx, b.ty] = pickTarget();
+      const dx = b.tx - b.x;
+      const dy = b.ty - b.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const step = delta * 0.0011;
+      // O voo de borboleta nunca e reto: um zigue-zague por cima da reta ate o alvo.
+      const wob = Math.sin(b.phase * 5.3) * 0.7;
+      b.x += (dx / d - (dy / d) * wob) * step;
+      b.y += (dy / d + (dx / d) * wob) * step;
+      const flap = Math.abs(Math.sin(b.phase * 22));
+      b.bb
+        .setPosition(b.x, b.y)
+        .setElevation(0.45 + 0.25 * Math.sin(b.phase * 1.7) + 0.06 * flap)
+        .setDisplaySize(b.size * (0.25 + 0.75 * flap), b.size * 0.86)
+        .setAlpha(this.daylifeLevel);
+    }
+    if (want === 0 && this.daylifeLevel < 0.02) {
+      for (const b of this.butterflies) b.bb.destroy();
+      this.butterflies.length = 0;
+    }
+
+    // As folhas: de tempos em tempos, uma arvore perto do heroi solta uma.
+    this.leafClockMs -= delta;
+    const chunks = this.chunkManager;
+    if (chunks && this.leafClockMs <= 0 && this.leaves.length < LEAF_MAX && this.daylifeLevel > 0.5) {
+      this.leafClockMs = 700 + Math.random() * 1300;
+      for (let tries = 0; tries < 8; tries += 1) {
+        const wx = Math.round(at.x + (Math.random() - 0.5) * 9);
+        const wy = Math.round(at.y + (Math.random() - 0.5) * 6);
+        if (!chunks.hasChunkCoordinate(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS))) continue;
+        const { upper } = chunks.getTile(wx, wy);
+        if (upper === null || !CHOPPABLE_UPPER_FRAMES.has(upper)) continue;
+        const bb = w3.addBillboard(LEAF_TEXTURE, 0, { centered: true, depthWrite: false })
+          .setTint(LEAF_TINTS[Math.floor(Math.random() * LEAF_TINTS.length)])
+          .setDisplaySize(0.17, 0.13);
+        this.leaves.push({
+          bb, x: wx + (Math.random() - 0.5) * 0.6, y: wy + 0.15, elev: 0.95 + Math.random() * 0.3,
+          t: 0, sway: Math.random() * 6, spin: Math.random() < 0.5 ? -1 : 1, landedMs: -1,
+        });
+        break;
+      }
+    }
+    for (let i = this.leaves.length - 1; i >= 0; i -= 1) {
+      const leaf = this.leaves[i];
+      leaf.t += delta;
+      let alpha = 1;
+      if (leaf.landedMs < 0) {
+        // Cai como folha: devagar, balancando para os lados, e o balanco e o que a faz girar.
+        leaf.elev -= delta * 0.00022;
+        const sway = Math.sin(leaf.t * 0.0032 + leaf.sway);
+        leaf.x += sway * delta * 0.00035;
+        leaf.bb.setAngle(sway * 40 * leaf.spin);
+        if (leaf.elev <= 0.02) {
+          leaf.elev = 0.02;
+          leaf.landedMs = 0;
+        }
+      } else {
+        // No chao: descansa um pouco e some.
+        leaf.landedMs += delta;
+        alpha = 1 - Math.min(1, Math.max(0, leaf.landedMs - LEAF_REST_MS) / LEAF_FADE_MS);
+        if (alpha <= 0) {
+          leaf.bb.destroy();
+          this.leaves.splice(i, 1);
+          continue;
+        }
+      }
+      leaf.bb.setPosition(leaf.x, leaf.y).setElevation(leaf.elev).setAlpha(alpha * this.daylifeLevel);
     }
   }
 

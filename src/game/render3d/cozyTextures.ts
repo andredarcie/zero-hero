@@ -174,6 +174,25 @@ const HEART = [
   '....k....',
 ] as const;
 
+// A BORBOLETA: asas de tela crua (o tint escolhe a cor) e o corpo de tinta no meio. O bater das
+// asas e a largura do billboard respirando: uma arte so.
+const BUTTERFLY = [
+  '.kk.kk.',
+  'kaakaak',
+  'kaakaak',
+  '.kakak.',
+  'kaakaak',
+  '.kk.kk.',
+] as const;
+
+// A FOLHA que cai: clara, para o tint fazer dela verde, amarela ou ferrugem.
+const LEAF = [
+  '..kk.',
+  '.kaak',
+  'kaak.',
+  '.kk..',
+] as const;
+
 // O mesmo espeto depois de assado: o chapeu dourou.
 const ROAST_STICK_DONE = ROAST_STICK.map((row) => row.replace(/c/g, 'r').replace(/v/g, 'y'));
 
@@ -181,6 +200,8 @@ export const ROAST_STICK_TEXTURE = 'roast-stick';
 export const GROUND_CRACK_TEXTURE = 'ground-crack';
 export const CAIRN_TEXTURE = 'quest-cairn';
 export const HEART_TEXTURE = 'cozy-heart';
+export const BUTTERFLY_TEXTURE = 'cozy-butterfly';
+export const LEAF_TEXTURE = 'cozy-leaf';
 export const BASKET_TEXTURE = 'quest-basket';
 export const EASEL_GREY_TEXTURE = 'quest-easel-grey';
 export const EASEL_GREEN_TEXTURE = 'quest-easel-green';
@@ -219,6 +240,8 @@ export const registerCozyTextures = (scene: Phaser.Scene): void => {
     [GROUND_CRACK_TEXTURE, GROUND_CRACK],
     [CAIRN_TEXTURE, CAIRN],
     [HEART_TEXTURE, HEART],
+    [BUTTERFLY_TEXTURE, BUTTERFLY],
+    [LEAF_TEXTURE, LEAF],
     [BASKET_TEXTURE, BASKET],
     [EASEL_GREY_TEXTURE, EASEL_GREY],
     [EASEL_GREEN_TEXTURE, EASEL_GREEN],
