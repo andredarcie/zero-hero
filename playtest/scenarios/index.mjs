@@ -26,6 +26,7 @@ import vento from './vento.mjs';
 import prologo from './prologo.mjs';
 import semFabrica from './sem-fabrica.mjs';
 import zerar from './zerar.mjs';
+import abertura from './abertura.mjs';
 
 export const scenarios = {
   smoke,
@@ -56,6 +57,7 @@ export const scenarios = {
   prologo,
   'sem-fabrica': semFabrica,
   zerar,
+  abertura,
 };
 
 // What `npm run playtest` runs when no scenario is named.

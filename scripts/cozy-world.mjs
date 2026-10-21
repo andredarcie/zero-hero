@@ -58,7 +58,8 @@ world.props = world.props
 
 // ── 2. os vizinhos ─────────────────────────────────────────────────────────────────────────
 const start = world.meta.playerStart;
-const WIZARD = { type: 'wizard', worldX: start.worldX + 1, worldY: start.worldY - 3 };
+// O mago para ao lado de onde o heroi termina a abertura: tres passos pela estrada e um para tras.
+const WIZARD = { type: 'wizard', worldX: start.worldX + 1, worldY: start.worldY - 4 };
 for (const chunk of world.chunks) {
   chunk.npcs = chunk.npcs.filter((n) => n.type !== 'death' && n.type !== 'wizard');
 }

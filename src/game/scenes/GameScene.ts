@@ -81,7 +81,7 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import {
-  ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
+  GROUND_CRACK_TEXTURE, ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
 import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
@@ -468,6 +468,9 @@ export class GameScene extends Phaser.Scene {
   // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
   private swordInHands = false;
   private letterbox?: [HTMLDivElement, HTMLDivElement];
+  private vignette?: HTMLDivElement;
+  private moonShaft?: Billboard3D;
+  private groundCrack?: Billboard3D;
   private dollyBase?: { h: number; b: number };
   private wizardStandIn?: Billboard3D;
   private roasting = false;
@@ -782,6 +785,7 @@ export class GameScene extends Phaser.Scene {
     if (this.introDone && this.adventure) {
       const ps = getPlayerStart();
       this.plantSwordAt(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1);
+      this.crackGroundAt(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1, false);
     }
 
     this.streamChunks(true);
@@ -1152,6 +1156,12 @@ export class GameScene extends Phaser.Scene {
     this.roastStick = undefined;
     this.letterbox?.forEach((bar) => bar.remove());
     this.letterbox = undefined;
+    this.vignette?.remove();
+    this.vignette = undefined;
+    this.moonShaft?.destroy();
+    this.moonShaft = undefined;
+    this.groundCrack?.destroy();
+    this.groundCrack = undefined;
     this.dollyBase = undefined;
     this.swordInHands = false;
     this.roasting = false;
@@ -3932,91 +3942,228 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** A VINHETA: as bordas da tela escurecem quando o tempo desacelera — o olho vai ao centro. */
+  private setVignette(level: number, ms: number): void {
+    if (!this.vignette) {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:fixed;inset:0;z-index:39;pointer-events:none;opacity:0;'
+        + 'background:radial-gradient(ellipse at 50% 46%, rgba(0,0,0,0) 34%, rgba(0,0,0,0.78) 100%);';
+      document.body.appendChild(el);
+      this.vignette = el;
+    }
+    const el = this.vignette;
+    el.style.transition = `opacity ${ms}ms ease`;
+    requestAnimationFrame(() => { el.style.opacity = String(level); });
+  }
+
+  /**
+   * A RAMPA DE TEMPO: o `timeScale` dos tweens anda suave ate `to`, em tempo REAL (o relogio da
+   * cena nao desacelera junto, entao a rampa e medida por ele). Camera lenta que liga num estalo
+   * le como travamento; a que entra em rampa le como intencao.
+   */
+  private rampTimeScale(to: number, ms: number): Promise<void> {
+    const from = this.tweens.timeScale;
+    const start = this.time.now;
+    return new Promise<void>((resolve) => {
+      const ev = this.time.addEvent({
+        delay: 16, loop: true, callback: () => {
+          const k = Math.min(1, (this.time.now - start) / ms);
+          this.tweens.timeScale = from + (to - from) * (k * k * (3 - 2 * k));
+          if (k >= 1) { ev.remove(); resolve(); }
+        },
+      });
+    });
+  }
+
+  /** Um FANTASMA da lamina no rastro do mergulho: a mesma arte, palida, apagando. */
+  private spawnSwordGhost(from: Billboard3D): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const visual = BACK_ITEM_VISUAL_3D.sword;
+    const ghost = w3
+      .addBillboard(visual.texture, visual.frame, { centered: true, additive: true, fog: false, depthWrite: false })
+      .setTint(0x9fc4ff)
+      .setPosition(from.x, from.y)
+      .setElevation(from.elevation)
+      .setDisplaySize(1, 1)
+      .setAngle(from.angle)
+      .setAlpha(0.55);
+    this.tweens.add({ targets: ghost, alpha: 0, duration: 260, ease: 'Quad.easeOut', onComplete: () => ghost.destroy() });
+  }
+
+  /** FAISCAS QUENTES: aco batendo em pedra enterrada — voam em arco e caem. */
+  private spawnImpactSparks(wx: number, wy: number, count: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    for (let i = 0; i < count; i += 1) {
+      const a = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+      const reach = 0.7 + Math.random() * 1.1;
+      const spark = w3
+        .addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 3 })
+        .setTint(Math.random() < 0.5 ? 0xffc46b : 0xfff0c0)
+        .setPosition(wx, wy)
+        .setElevation(0.12)
+        .setDisplaySize(0.07, 0.07);
+      const peak = 0.4 + Math.random() * 0.6;
+      const dur = 380 + Math.random() * 260;
+      this.tweens.add({ targets: spark, x: wx + Math.cos(a) * reach, y: wy + Math.sin(a) * reach * 0.6, duration: dur, ease: 'Quad.easeOut' });
+      this.tweens.add({
+        targets: spark, elevation: peak, duration: dur * 0.4, ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.tweens.add({
+            targets: spark, elevation: 0.02, alpha: 0, duration: dur * 0.6, ease: 'Quad.easeIn',
+            onComplete: () => spark.destroy(),
+          });
+        },
+      });
+    }
+  }
+
+  /** A onda do impacto ESPANTA os vaga-lumes: cada um e empurrado para longe do ponto. */
+  private scatterFireflies(wx: number, wy: number): void {
+    for (const fly of this.fireflies) {
+      const dx = fly.ox - wx;
+      const dy = fly.oy - wy;
+      const d = Math.max(0.6, Math.hypot(dx, dy));
+      const push = 2.4 / d;
+      this.tweens.add({ targets: fly, ox: fly.ox + (dx / d) * push, oy: fly.oy + (dy / d) * push, duration: 900, ease: 'Expo.easeOut' });
+    }
+  }
+
+  /** A LUZ DA LUA sobre a espada: uma coluna palida e macia, sem luz THREE (a lei da casa). */
+  private spawnMoonShaft(wx: number, wy: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const shaft = w3
+      .addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, additive: true, fog: false, depthWrite: false })
+      .setTint(0xb8c8ff)
+      .setPosition(wx, wy + 0.18)
+      .setElevation(1.05)
+      .setDisplaySize(0.62, 2.3)
+      .setAlpha(0);
+    this.moonShaft = shaft;
+    this.tweens.add({ targets: shaft, alpha: 0.16, duration: 1800, ease: 'Sine.easeOut' });
+    this.tweens.add({ targets: shaft, displayWidth: 0.74, duration: 2600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** A FENDA no chao onde a espada entrou: deitada, do tamanho do tile, para sempre. */
+  private crackGroundAt(wx: number, wy: number, animate: boolean): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    this.groundCrack?.destroy();
+    const crack = w3.addBillboard(GROUND_CRACK_TEXTURE, 0, { flat: true, flatY: 0.02, depthWrite: false })
+      .setPosition(wx, wy)
+      .setDisplaySize(1, 1);
+    this.groundCrack = crack;
+    if (!animate) return;
+    crack.setDisplaySize(0.2, 0.2).setAlpha(0);
+    this.tweens.add({ targets: crack, displayWidth: 1, displayHeight: 1, alpha: 1, duration: 180, ease: 'Expo.easeOut' });
+  }
+
   /**
    * A ESPADA DESCE DAS COSTAS PARA O CHAO — o gesto que fecha uma vida, filmado como tal.
    *
-   *   1. DESEMBAINHAR: a espada sai das costas (a mesma arte, o mesmo billboard) para as maos,
-   *      na frente do peito, com um brilho correndo pelo fio.
-   *   2. ERGUER: ela sobe acima da cabeca girando para ficar de PONTA PARA BAIXO; no alto o tempo
-   *      quase para (camera lenta), faiscas sobem, o fio cintila uma ultima vez.
-   *   3. CRAVAR: um mergulho seco; no impacto o mundo CONGELA um instante (hitstop), a tela pisca,
-   *      o chao treme na direcao do golpe, duas ondas de poeira correm e torroes voam.
-   *   4. ASSENTAR: a lamina vibra e para, a poeira baixa, o heroi se ergue devagar.
+   *   1. ENQUADRAR: o quadro desce meio tile para caber o heroi E o chao onde a espada vai.
+   *   2. DESEMBAINHAR: a espada sai das costas (a mesma arte, o mesmo billboard) para as maos.
+   *   3. ERGUER: ela sobe girando para ficar de PONTA PARA BAIXO; a camera avanca, faiscas sobem,
+   *      e no alto o tempo desacelera em rampa enquanto as bordas escurecem.
+   *   4. CRAVAR: um mergulho seco com rastro e assobio; no impacto o mundo CONGELA um instante,
+   *      a tela pisca, o chao racha, faiscas quentes e torroes voam, duas ondas de poeira correm e
+   *      os vaga-lumes se espantam.
+   *   5. ASSENTAR: a lamina vibra e para; a lua desce sobre ela; o cavaleiro baixa a cabeca, fica
+   *      um instante assim — e da um passo para tras sem tirar os olhos dela.
    */
   private async playSwordPlanting(): Promise<void> {
     const hb = this.heroBillboard;
     const sword = this.backItemBb;
     const front = this.facingTile();
-    if (!hb || !sword) return;
+    if (!hb || !sword || !this.camera) return;
     const sound = getSoundManager();
     this.swordInHands = true; // positionBackItem para de prender a espada nas costas
+
+    // 1. ENQUADRAR.
+    const base = this.baseScreenCenter();
+    await new Promise<void>((resolve) => {
+      this.cutscenePan(base.x, base.y - Math.round(this.tileSize * 0.45), 900, resolve);
+    });
     const handX = hb.x + 0.04;
     const handY = hb.y + 0.32; // na frente do corpo (o heroi olha para a camera)
 
-    // 1. DESEMBAINHAR.
+    // 2. DESEMBAINHAR.
     this.hero.frame = HERO_FRAMES.attack;
     sound.playSwordPickup();
     await this.tweenTo({
       targets: sword, x: handX, y: handY, elevation: 0.62, angle: 0, duration: 420, ease: 'Back.easeOut',
     });
     this.spawnGlint(handX, handY, 1.02, 0.55);
-    await this.wait(520);
+    await this.wait(560);
 
-    // 2. ERGUER, girando meia volta e mais um pouco: ponta para baixo, acima da cabeca.
-    void this.dollyTo(0.74, 1500, 'Sine.easeInOut');
+    // 3. ERGUER, girando: ponta para baixo, acima da cabeca.
+    void this.dollyTo(0.72, 1700, 'Sine.easeInOut');
+    this.setVignette(0.55, 1400);
     const rise = this.tweenTo({
-      targets: sword, elevation: 1.28, angle: 540, y: hb.y + 0.12, duration: 1100, ease: 'Cubic.easeInOut',
+      targets: sword, elevation: 1.28, angle: 540, y: hb.y + 0.12, duration: 1150, ease: 'Cubic.easeInOut',
     });
     const motes = this.time.addEvent({
-      delay: 70, repeat: 24, callback: () => this.spawnRiseMote(sword.x, sword.y, sword.elevation),
+      delay: 60, repeat: 40, callback: () => this.spawnRiseMote(sword.x, sword.y, sword.elevation),
     });
     this.hero.scaleY = 1.05;
     await rise;
-    // CAMERA LENTA no alto: o mundo quase para, so a lamina respira.
-    this.tweens.timeScale = 0.25;
+    // CAMERA LENTA no alto, em rampa: o mundo quase para, so a lamina respira.
+    await this.rampTimeScale(0.2, 260);
     sound.playSingingBowl();
-    this.spawnGlint(sword.x, sword.y, sword.elevation - 0.45, 0.9);
-    this.world3d?.shake(500, 0.012);
-    await this.tweenTo({ targets: sword, elevation: 1.38, duration: 220, ease: 'Sine.easeOut' });
-    this.tweens.timeScale = 1;
+    this.spawnGlint(sword.x, sword.y, sword.elevation - 0.45, 1);
+    this.world3d?.shake(700, 0.01);
+    this.setVignette(0.85, 500);
+    await this.tweenTo({ targets: sword, elevation: 1.4, duration: 200, ease: 'Sine.easeOut' });
     motes.remove();
-    await this.wait(380);
+    await this.rampTimeScale(1, 160);
+    await this.wait(220);
 
-    // 3. CRAVAR: um mergulho seco ate o tile da frente.
-    this.hero.scaleY = 0.86;
-    this.hero.scaleX = 1.06;
+    // 4. CRAVAR: o assobio, o rastro, o mergulho seco ate o tile da frente.
+    sound.playSwordSlash();
+    this.hero.scaleY = 0.84;
+    this.hero.scaleX = 1.07;
     await this.tweenTo({
-      targets: sword, x: front.x, y: front.y, elevation: SWORD_PLANTED_ELEV - 0.06,
-      duration: 120, ease: 'Expo.easeIn',
+      targets: sword, x: front.x, y: front.y, elevation: SWORD_PLANTED_ELEV - 0.08,
+      duration: 130, ease: 'Expo.easeIn',
+      onUpdate: () => this.spawnSwordGhost(sword),
     });
     // O IMPACTO.
     this.tweens.timeScale = 0; // hitstop: o mundo segura o quadro do golpe
     sound.playTitleImpact();
     sound.playRockSmash();
-    this.cameras.main.flash(130, 255, 246, 220);
-    this.world3d?.shake(380, 0.16, 0, 1);
-    await new Promise<void>((resolve) => { window.setTimeout(resolve, 110); });
+    this.cameras.main.flash(150, 255, 246, 220);
+    this.world3d?.shake(420, 0.17, 0, 1);
+    this.crackGroundAt(front.x, front.y, false);
+    await new Promise<void>((resolve) => { window.setTimeout(resolve, 120); });
     this.tweens.timeScale = 1;
-    void this.dollyTo(0.68, 140, 'Quad.easeOut').then(() => this.dollyTo(0.76, 600, 'Sine.easeOut'));
-    this.spawnShockwave(front.x, front.y, 0xd8c3a0, 0.3, 2.6, 520);
-    this.spawnShockwave(front.x, front.y, 0xfff0c8, 0.2, 1.4, 300);
-    this.spawnDirtBurst(front.x, front.y, 26);
+    this.crackGroundAt(front.x, front.y, true);
+    void this.dollyTo(0.66, 130, 'Quad.easeOut').then(() => this.dollyTo(0.76, 700, 'Sine.easeOut'));
+    this.spawnShockwave(front.x, front.y, 0xd8c3a0, 0.3, 2.8, 560);
+    this.spawnShockwave(front.x, front.y, 0xfff0c8, 0.2, 1.5, 320);
+    this.time.delayedCall(90, () => this.spawnShockwave(front.x, front.y, 0x8f7a60, 0.4, 3.6, 800));
+    this.spawnImpactSparks(front.x, front.y, 16);
+    this.spawnDirtBurst(front.x, front.y, 28);
     this.spawnSmokePuff(front.x - 0.3, front.y + 0.1);
     this.spawnSmokePuff(front.x + 0.3, front.y + 0.1);
     this.time.delayedCall(160, () => this.spawnSmokePuff(front.x, front.y + 0.25));
-    this.world3d?.rustleDecor(front.x - 1, front.y);
-    this.world3d?.rustleDecor(front.x + 1, front.y);
-    this.world3d?.rustleDecor(front.x, front.y + 1);
+    this.time.delayedCall(320, () => this.spawnSmokePuff(front.x + 0.15, front.y - 0.1));
+    this.scatterFireflies(front.x, front.y);
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, 1], [-1, 1], [1, 1], [-2, 0], [2, 0]]) {
+      this.world3d?.rustleDecor(front.x + dx, front.y + dy);
+    }
+    this.setVignette(0.5, 900);
 
-    // 4. ASSENTAR: a lamina vibra e para; ela agora e a espada fincada.
+    // 5. ASSENTAR: a lamina vibra e para; ela agora e a espada fincada.
     sword.setPosition(front.x, front.y);
     const wobble = { t: 0 };
     await this.tweenTo({
-      targets: wobble, t: 1, duration: 900, ease: 'Linear',
+      targets: wobble, t: 1, duration: 1000, ease: 'Linear',
       onUpdate: () => {
         const decay = 1 - wobble.t;
-        sword.setAngle(180 + Math.sin(wobble.t * Math.PI * 9) * 7 * decay * decay);
-        sword.setElevation(SWORD_PLANTED_ELEV - 0.06 * decay);
+        sword.setAngle(180 + Math.sin(wobble.t * Math.PI * 10) * 8 * decay * decay);
+        sword.setElevation(SWORD_PLANTED_ELEV - 0.08 * decay);
       },
     });
     this.swordInHands = false;
@@ -4024,10 +4171,22 @@ export class GameScene extends Phaser.Scene {
     this.plantedSword?.destroy();
     this.plantedSword = sword.setAngle(180).setElevation(SWORD_PLANTED_ELEV);
     this.plantedSwordTile = { x: front.x, y: front.y };
-    await this.tweenTo({ targets: this.hero, scaleX: 1, scaleY: 1, duration: 700, ease: 'Sine.easeOut' });
-    this.hero.frame = HERO_FRAMES.idleDown;
+    this.spawnMoonShaft(front.x, front.y);
+    this.time.delayedCall(500, () => this.spawnGlint(front.x, front.y, SWORD_PLANTED_ELEV + 0.42, 0.6));
     this.persistAdventure();
-    await this.wait(400);
+    // A CABECA BAIXA: ele continua curvado sobre ela um instante, em silencio.
+    this.hero.frame = HERO_FRAMES.idleDown;
+    await this.tweenTo({ targets: this.hero, scaleY: 0.9, scaleX: 1.03, duration: 600, ease: 'Sine.easeOut' });
+    await this.wait(1500);
+    await this.tweenTo({ targets: this.hero, scaleX: 1, scaleY: 1, duration: 900, ease: 'Sine.easeInOut' });
+    await this.wait(300);
+    // Um passo para tras, sem tirar os olhos dela.
+    await this.scriptStep(0, -1, 760, true);
+    this.setVignette(0, 2000);
+    // O quadro acompanha o passo: o heroi e a espada, agora a dois tiles, continuam juntos nele.
+    await new Promise<void>((resolve) => {
+      this.cutscenePan(base.x, base.y - Math.round(this.tileSize * 0.95), 1200, resolve);
+    });
   }
 
   /**
@@ -4035,10 +4194,12 @@ export class GameScene extends Phaser.Scene {
    * durante a cutscene). A camera desliza junto, as pernas giram com o chao — o mesmo desenho de
    * um passo de verdade, so que quem aperta a seta e a cena.
    */
-  private scriptStep(dx: number, dy: number, stepMs: number): Promise<void> {
+  private scriptStep(dx: number, dy: number, stepMs: number, keepFacing = false): Promise<void> {
     const from = { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
     const to = { x: from.x + dx, y: from.y + dy };
-    this.movementController?.faceTo(dx, dy, true);
+    // `keepFacing`: o passo para TRAS, de olho no que fica — as pernas andam, o corpo nao vira.
+    const look = keepFacing ? { ...(this.movementController?.facing ?? { dx, dy }) } : { dx, dy };
+    this.movementController?.faceTo(look.dx, look.dy, true);
     this.playerWorld = { worldX: to.x, worldY: to.y };
     this.handleTileEntered(to.x, to.y, dx, dy);
     getSoundManager().playFootstep();
@@ -4131,6 +4292,9 @@ export class GameScene extends Phaser.Scene {
     this.wizardStandIn = undefined;
     this.introDone = true;
     void this.dollyTo(1, 1800);
+    const shaft = this.moonShaft;
+    this.moonShaft = undefined;
+    if (shaft) this.tweens.add({ targets: shaft, alpha: 0, duration: 2400, onComplete: () => shaft.destroy() });
     this.seenDialogKeys.add(`wizard:${this.wizardLine()}`);
     this.cutsceneHeroLight = 1;
     this.cutsceneActive = false;

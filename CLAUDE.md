@@ -287,7 +287,7 @@ zerados). O harness (`playtest/`) é Playwright com cabeça; entre com `?play`; 
 por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd3d`, `gameDebug`,
 `__prof`. **Teste EXATAMENTE o que você mudou** — o `zerar` leva ~5 minutos.
 
-O jogo inteiro, título → créditos → `zerar`; bolsa → `bolsa`; machado → `machado`; pedra →
+A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); bolsa → `bolsa`; machado → `machado`; pedra →
 `pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;
 menu → `menu-flow`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
 Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`)

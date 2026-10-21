@@ -27,6 +27,9 @@ const PALETTE: Record<string, Rgba> = {
   v: [0x7b, 0xa7, 0xe0, 255], // brilho do chapeu
   n: [0xe8, 0xdc, 0xc0, 255], // pe do cogumelo
   r: [0xb5, 0x6a, 0x2e, 255], // chapeu ja tostado
+  // a rachadura que a espada abriu no chao
+  q: [0x16, 0x0f, 0x0d, 230], // o fundo da fenda
+  p: [0x3a, 0x2a, 0x22, 170], // a borda revolvida
 };
 
 // 16×16: o graveto com o cogumelo espetado na ponta, inclinado sobre o fogo.
@@ -49,10 +52,32 @@ const ROAST_STICK = [
   '................',
 ] as const;
 
+// 16×16, deitada no chao: a TERRA RACHADA onde a espada entrou — fendas finas que saem do centro
+// e se ramificam, sem nunca sair do tile.
+const GROUND_CRACK = [
+  '................',
+  '.......p........',
+  '.......q.....p..',
+  '..p....q....q...',
+  '...q...qp..q....',
+  '....q...q.q.....',
+  '.....qq.qq......',
+  'pqq...qqqq..qqp.',
+  '......qqqqqq...q',
+  '.....q..qq.q....',
+  '....q...q...q...',
+  '...p...q.....q..',
+  '..q....q......p.',
+  '.p.....p........',
+  '................',
+  '................',
+] as const;
+
 // O mesmo espeto depois de assado: o chapeu dourou.
 const ROAST_STICK_DONE = ROAST_STICK.map((row) => row.replace(/c/g, 'r').replace(/v/g, 'y'));
 
 export const ROAST_STICK_TEXTURE = 'roast-stick';
+export const GROUND_CRACK_TEXTURE = 'ground-crack';
 export const ROAST_STICK_DONE_TEXTURE = 'roast-stick-done';
 
 const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
@@ -85,6 +110,7 @@ let threeRegistered = false;
 export const registerCozyTextures = (scene: Phaser.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, readonly string[]]> = [
     [ROAST_STICK_TEXTURE, ROAST_STICK],
+    [GROUND_CRACK_TEXTURE, GROUND_CRACK],
     [ROAST_STICK_DONE_TEXTURE, ROAST_STICK_DONE],
   ];
   for (const [key, rows] of sheets) {
