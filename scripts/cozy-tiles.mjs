@@ -29,10 +29,21 @@ const GROUND = {
 };
 const FLOWERS = { '#cd4b4b': '#f2d36b', '#ba4141': '#d9b453' };
 const FRUIT = { '#cd4b4b': '#e8964a', '#ba4141': '#cf7f3c' };
+// O CALCAMENTO (23/24) e a MONTANHA (39/40, copias dele em pe): argamassa quase preta entre
+// pedras claras com manchas escuras dava, de perto, uma parede de caveiras. A argamassa clareia e
+// esquenta, as manchas chegam perto da pedra, e a beirada ameixa vira o verde do chao novo.
+const STONE = {
+  '#3b3b3b': '#5d5a52',
+  '#6f6f6f': '#88837a',
+  '#8a8a8a': '#9a958a',
+  '#939393': '#a39e91',
+  '#3e2533': '#43563a',
+};
 const PLAN = new Map([
   ...[5, 6, 52, 53, 54, 55, 56].map((f) => [f, GROUND]),
   [10, FLOWERS],
   [15, FRUIT],
+  ...[23, 24, 39, 40].map((f) => [f, STONE]),
 ]);
 
 const img = readPng(ATLAS);
@@ -53,3 +64,29 @@ for (const [frame, table] of PLAN) {
 }
 writePng(ATLAS, img);
 console.log(`forest_tile_set.png: ${changed} pixels recoloured`);
+
+// A ARVORE SECA (woods.png, as seis poses do corte), o ARBUSTO SECO (dry_shrub.png) e o MATO
+// SECO (bush.png): o
+// laranja-avermelhado da casca, que acesa pelo sol lia como coral morto, vira um marrom de madeira
+// calmo.
+const BARK = new Map([
+  ['129,89,56', hex('#7a5e44')],
+  ['99,69,44', hex('#5a4634')],
+  ['150,107,72', hex('#8b7055')],
+  // o MATO SECO (bush.png): ferrugem viva vira palha
+  ['104,56,15', hex('#5f4b2d')],
+  ['115,62,17', hex('#6f5935')],
+]);
+for (const file of ['woods.png', 'dry_shrub.png', 'bush.png']) {
+  const full = path.resolve(here, '../public/assets/environment/props', file);
+  const png = readPng(full);
+  let bark = 0;
+  for (let i = 0; i < png.data.length; i += 4) {
+    const to = BARK.get(`${png.data[i]},${png.data[i + 1]},${png.data[i + 2]}`);
+    if (!to || png.data[i + 3] === 0) continue;
+    [png.data[i], png.data[i + 1], png.data[i + 2]] = to;
+    bark += 1;
+  }
+  writePng(full, png);
+  console.log(`${file}: ${bark} pixels recoloured`);
+}

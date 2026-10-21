@@ -72,6 +72,39 @@ for (const chunk of world.chunks) {
   }
 }
 
+// ── 1c. o cemiterio vira bosque ──────────────────────────────────────────────────────────
+// A cabeca na estaca (22) e a lapide (25) viram PINHEIRO (4): os tres sao de pe e bloqueiam, entao
+// nenhum caminho abre ou fecha. A ossada (27) e a teia (28) viram flores (11 e 10). E o nome do
+// mundo deixa de ser cinza.
+const REPLACE_UPPER = new Map([[22, 4], [25, 4], [27, 11], [28, 10]]);
+let graves = 0;
+for (const chunk of world.chunks) {
+  for (const row of chunk.upper) {
+    for (let col = 0; col < row.length; col += 1) {
+      if (!REPLACE_UPPER.has(row[col])) continue;
+      row[col] = REPLACE_UPPER.get(row[col]);
+      graves += 1;
+    }
+  }
+}
+// O CHAO do cemiterio (o chunk 1,2) era laje de cripta rachada; ele vira prado, e as arvores
+// mortas dele viram pinheiros. Fora dali a laje RACHADA (29-32) vira calcamento liso (23): as
+// pracinhas de pedra continuam, so que inteiras.
+const STONE = new Set([23, 24, 29, 30, 31, 32]);
+const CRACKED = new Set([29, 30, 31, 32]);
+for (const chunk of world.chunks) {
+  const grove = chunk.cx === 1 && chunk.cy === 2;
+  for (let r = 0; r < CH; r += 1) {
+    for (let col = 0; col < CW; col += 1) {
+      const g = chunk.ground[r][col];
+      if (grove && STONE.has(g)) chunk.ground[r][col] = 5;
+      else if (CRACKED.has(g)) chunk.ground[r][col] = 23;
+      if (grove && (chunk.upper[r][col] === 3 || chunk.upper[r][col] === 21)) chunk.upper[r][col] = 14;
+    }
+  }
+}
+world.meta.name = 'Hearth Valley';
+
 // ── 2. os vizinhos ─────────────────────────────────────────────────────────────────────────
 const start = world.meta.playerStart;
 // O mago para ao lado de onde o heroi termina a abertura: tres passos pela estrada e um para tras.
@@ -226,5 +259,5 @@ if (check) {
 } else {
   fs.writeFileSync(worldPath, out);
   console.log(`world.json: fogueira ${HEARTH.x},${HEARTH.y} · portao ${GATE.x},${GATE.y} · sebe +${hedge} · `
-    + `cogumelos ${wild.length} · interior ${inside.size} tiles · paredes invisiveis -${invisibleWalls}`);
+    + `cogumelos ${wild.length} · interior ${inside.size} tiles · paredes invisiveis -${invisibleWalls} · cemiterio ${graves}`);
 }

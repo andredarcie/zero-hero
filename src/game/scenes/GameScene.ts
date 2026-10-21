@@ -564,7 +564,7 @@ export class GameScene extends Phaser.Scene {
     window.hd3d = this.world3d.params;
     this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
 
-    // Decode the SFX + music loops. A aventura tem trilha ("Ashen Fields") sobre o leito de vento,
+    // Decode the SFX + music loops. A aventura tem trilha ("Little Hearth") sobre os leitos do vale,
     // e ESTA E A UNICA VEZ EM QUE A TRILHA E ESCOLHIDA: quem baixa a musica sao as telas que a
     // tomam — dialogo, item-get, cutscene —, e cada uma a devolve com fadeMusicIn ao fechar.
     getSoundManager().preload();

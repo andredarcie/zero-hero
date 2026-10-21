@@ -63,8 +63,8 @@ type SampleKey = keyof typeof SAMPLES;
 
 // A MUSICA E DO VALE, E SO DELE. 'overworld' e "Little Hearth" (music-valley, F maior, a
 // caixinha de musica sobre a harpa) do inicio ao fim da aventura; 'menu' e a cancao de ninar do
-// titulo e dos creditos (music-lullaby). As duas saem de tools/gen-music.mjs. A trilha antiga
-// (o "Ashen Fields" de Souls) continua no repositorio, mas nada a toca.
+// titulo e dos creditos (music-lullaby). As duas saem de tools/gen-music.mjs (que ainda sabe
+// renderizar a trilha sombria antiga, mas os arquivos dela sairam do jogo).
 export type MusicKey = 'title' | 'overworld' | 'menu';
 const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
   title: { file: 'music-lullaby.wav', vol: 0.7 },
