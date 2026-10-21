@@ -79,6 +79,8 @@ export default {
     await page.keyboard.down('ArrowUp'); await sleep(40); await page.keyboard.up('ArrowUp'); await sleep(300);
     await page.keyboard.down('z'); await sleep(50); await page.keyboard.up('z');
     await page.waitForFunction(() => window.gameDebug.getState().dialogOpen, null, { timeout: 5000 });
+    await sleep(700);
+    await shot('fala', { note: 'A placa do nome, sem gritar' });
     for (let i = 0; i < 20 && (await driver.getState()).dialogOpen; i += 1) {
       await page.keyboard.down('z'); await sleep(50); await page.keyboard.up('z'); await sleep(450);
     }

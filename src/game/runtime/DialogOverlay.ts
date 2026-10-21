@@ -72,7 +72,7 @@ const CSS = `
 }
 #${ROOT_ID} .zh-dlg-name {
   flex: 0 0 auto;
-  font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  font-weight: 700; letter-spacing: 0.04em; font-variant: small-caps;
   font-size: 0.9em; margin-bottom: 0.3em;
 }
 #${ROOT_ID} .zh-dlg-body {
@@ -219,7 +219,7 @@ export class DialogOverlay {
     this.portraitEl.src = this.portraitUrl;
     this.portraitEl.style.borderColor = this.script.npcColorHex;
     this.nameEl.style.color = this.script.npcColorHex;
-    this.nameEl.textContent = this.script.npcName.toUpperCase();
+    this.nameEl.textContent = this.script.npcName;
 
     this.layout();
     window.addEventListener('resize', this.layout);

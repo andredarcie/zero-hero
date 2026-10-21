@@ -158,7 +158,7 @@ export class AltarObject implements WorldProp {
     if (last) this.spawnShock();
     this.punchLoad();
     this.bump();
-    world3d().shake(last ? 140 : 80, last ? 0.014 : 0.008);
+    world3d().shake(last ? 140 : 80, last ? 0.004 : 0.002);
     if (!last) return 'blow';
 
     // A ÚLTIMA: a escória saiu e o que fica é barra. A troca acontece EM CIMA DA LAJE — uma mesa

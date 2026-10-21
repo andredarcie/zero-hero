@@ -304,10 +304,7 @@ export class WaterObject implements WorldProp {
         onComplete: () => {
           getSoundManager().playSplash();
           this.spawnFordSpray(this.worldX + part.ox, this.worldY + part.oy, i === 0);
-          if (i === 0) {
-            getSoundManager().playRockSmash();
-            this.scene.cameras.main.shake(110, 0.004);
-          }
+          if (i === 0) getSoundManager().playRockSmash();
         },
       });
     });
@@ -578,7 +575,7 @@ export class WaterObject implements WorldProp {
   private finishBridge(): void {
     if (this.dead) return;
     // The last hammer blow lands with a physical thump; GameScene adds its flash via onBuilt.
-    world3d().shake(90, 0.03);
+    world3d().shake(90, 0.006);
     getSoundManager().playBridgeBuilt();
     this.pips.setVisible(false);
     this.onBuilt?.();

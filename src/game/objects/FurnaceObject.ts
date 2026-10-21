@@ -190,7 +190,7 @@ export class FurnaceObject implements WorldProp {
           this.clearFlying();
           if (effectsVisible) {
             port.delivered();
-            world3d().shake(70, 0.005);
+            world3d().shake(70, 0.002);
           }
           this.enter('idle');
         }

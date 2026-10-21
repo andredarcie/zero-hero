@@ -778,7 +778,7 @@ export class GameScene extends Phaser.Scene {
       ...getBridgeSpots().map((b) => {
         const w = new WaterObject(this, b.worldX, b.worldY, true);
         // A scene-level burst of pale light the moment the last board is nailed home.
-        w.onBuilt = () => this.cameras.main.flash(160, 210, 190, 150);
+        w.onBuilt = () => this.softWash(0xd2be96, 0.16, 700);
         return w;
       }),
     ];
@@ -1459,6 +1459,24 @@ export class GameScene extends Phaser.Scene {
     this.setVignette(0, 900);
     this.useBufferMs = 0;
     this.useCooldownMs = USE_COOLDOWN_MS;
+  }
+
+  /**
+   * O CLARAO MANSO: no lugar do `camera.flash` (um estalo de tela inteira, de luta), uma luz que
+   * SOBE e ASSENTA — um terco do tempo para chegar, o resto para ir embora, sempre em seno.
+   */
+  private softWash(color: number, peak: number, durationMs: number): void {
+    const { width, height } = this.scale;
+    const wash = this.add.rectangle(0, 0, width, height, color, 0)
+      .setOrigin(0).setScrollFactor(0).setDepth(SCENE_DEPTHS.toast - 1)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({
+      targets: wash, fillAlpha: peak, duration: durationMs / 3, ease: 'Sine.easeOut',
+      onComplete: () => this.tweens.add({
+        targets: wash, fillAlpha: 0, duration: (durationMs * 2) / 3, ease: 'Sine.easeInOut',
+        onComplete: () => wash.destroy(),
+      }),
+    });
   }
 
   /** Coracoes subindo de um tile — o obrigado de quem foi ajudado. */
@@ -2365,7 +2383,6 @@ export class GameScene extends Phaser.Scene {
     // O mesmo martelo da bancada: montar uma estação soa como fabricação. Um som novo
     // aqui ensinaria que instalar e outra categoria de gesto, e nao e — e fabricacao.
     getSoundManager().playToolboxDeliver();
-    this.world3d?.shake(70, 0.008);
     this.persistAdventure();
     return true;
   }
@@ -2493,7 +2510,7 @@ export class GameScene extends Phaser.Scene {
     const blows = (this.bloomBlows.get(key) ?? 0) + 1;
     this.swingHeld(wx, wy);
     getSoundManager().playHammer();
-    this.world3d?.shake(60, 0.004);
+    this.world3d?.shake(60, 0.002);
     if (blows < BLOOM_BLOWS) {
       this.bloomBlows.set(key, blows);
       return true;
@@ -2505,7 +2522,7 @@ export class GameScene extends Phaser.Scene {
     const made = hammerResult('bloom') ?? 'iron';
     this.itemManager?.takeAt(wx, wy);
     this.itemManager?.drop(made, wx, wy);
-    this.world3d?.shake(90, 0.007);
+    this.world3d?.shake(90, 0.003);
     return true;
   }
 
@@ -3129,7 +3146,7 @@ export class GameScene extends Phaser.Scene {
 
     // A pedra se abre, e o mundo so sente de leve — num vale tranquilo nada sacode a tela.
     if (shattered) this.spawnShockwave(wx, wy, 0xb6bcc4, 0.3, 1.05, 260);
-    w3.shake(shattered ? 90 : 50, shattered ? 0.03 : 0.012);
+    w3.shake(shattered ? 90 : 50, shattered ? 0.008 : 0.003);
   }
 
   /**
@@ -3524,7 +3541,7 @@ export class GameScene extends Phaser.Scene {
     if (!cf.light()) return;
     getSoundManager().playIgnite();
     this.spawnFireHitEffect(wx, wy);
-    this.cameras.main.flash(220, 255, 200, 110);
+    this.softWash(0xffc86e, 0.12, 900);
   }
 
   // Tween the camera's screen-centre to (tx, ty) over `duration`, re-projecting the frozen world
@@ -3763,7 +3780,7 @@ export class GameScene extends Phaser.Scene {
       getSoundManager().playFootstep(); // o assentar da terra — o mesmo baque de pousar algo
       const dx = Math.sign(wx - this.playerWorld.worldX);
       const dy = Math.sign(wy - this.playerWorld.worldY);
-      this.world3d?.shake(50, 0.025, dx, dy);
+      this.world3d?.shake(50, 0.007, dx, dy);
     });
     if (this.adventure) {
       adventureState().dugSpots.add(`${wx},${wy}`);
@@ -4765,7 +4782,7 @@ export class GameScene extends Phaser.Scene {
     for (const gate of this.gardenGates) gate.unlock();
     this.persistAdventure();
     getSoundManager().playGateSwing();
-    this.cameras.main.flash(500, 255, 236, 190);
+    this.softWash(0xffecbe, 0.2, 1600);
     const base = getDialog('wizard');
     if (!base || this.dialogOpen) return;
     this.openDialogScript({ ...base, npcName: '', lines: tLines('gate.opened') }, undefined, undefined);
@@ -4819,7 +4836,7 @@ export class GameScene extends Phaser.Scene {
     this.hearthLit = true;
     getSoundManager().playIgnite();
     this.spawnFireHitEffect(wx, wy);
-    this.cameras.main.flash(300, 255, 210, 140);
+    this.softWash(0xffd28c, 0.22, 1400);
     this.persistAdventure();
     this.cutsceneActive = false;
   }
@@ -5880,8 +5897,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (drainedAny) {
-      this.cameras.main.flash(220, 150, 180, 205);
-      this.world3d?.shake(130, 0.02);
+      this.softWash(0x96b4cd, 0.12, 900);
     }
   }
 
@@ -5928,7 +5944,6 @@ export class GameScene extends Phaser.Scene {
 
     const dir = dx !== 0 ? Math.sign(dx) : Math.sign(dy);
     getSoundManager().playTreeFall();
-    this.cameras.main.shake(120, 0.0015);
 
     this.tweens.add({
       targets: faller,
@@ -5947,7 +5962,7 @@ export class GameScene extends Phaser.Scene {
           });
         });
         getSoundManager().playBridgeBuilt();
-        this.cameras.main.shake(200, 0.004);
+        this.world3d?.shake(160, 0.003);
         this.tweens.add({ targets: faller, alpha: 0, duration: 220, onComplete: () => faller.destroy() });
       },
     });

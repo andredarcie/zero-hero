@@ -67,7 +67,7 @@
     "close": "Close"
   },
   "pause": {
-    "title": "PAUSED",
+    "title": "Paused",
     "resume": "Resume",
     "music": "Music",
     "sfx": "Sound effects",
@@ -138,7 +138,7 @@
   },
   "npc": {
     "wizard": {
-      "name": "WIZARD",
+      "name": "Wizard",
       "lines": [
         {
           "speaker": "npc",
@@ -151,7 +151,7 @@
       ]
     },
     "radiationSuit": {
-      "name": "HOLLIS",
+      "name": "Hollis",
       "lines": [
         {
           "speaker": "npc",
@@ -164,7 +164,7 @@
       ]
     },
     "radiationSuitDone": {
-      "name": "HOLLIS",
+      "name": "Hollis",
       "lines": [
         {
           "speaker": "npc",
@@ -177,7 +177,7 @@
       ]
     },
     "painter": {
-      "name": "IRIS",
+      "name": "Iris",
       "lines": [
         {
           "speaker": "npc",
@@ -190,7 +190,7 @@
       ]
     },
     "painterDone": {
-      "name": "IRIS",
+      "name": "Iris",
       "lines": [
         {
           "speaker": "npc",
@@ -203,7 +203,7 @@
       ]
     },
     "businessMan": {
-      "name": "BRAM",
+      "name": "Bram",
       "lines": [
         {
           "speaker": "npc",
@@ -216,7 +216,7 @@
       ]
     },
     "businessManDone": {
-      "name": "BRAM",
+      "name": "Bram",
       "lines": [
         {
           "speaker": "npc",
@@ -229,7 +229,7 @@
       ]
     },
     "astronaut": {
-      "name": "VEGA",
+      "name": "Vega",
       "lines": [
         {
           "speaker": "npc",
@@ -242,7 +242,7 @@
       ]
     },
     "astronautDone": {
-      "name": "VEGA",
+      "name": "Vega",
       "lines": [
         {
           "speaker": "npc",
@@ -267,17 +267,17 @@
     "keysEmpty": "I close"
   },
   "subscreen": {
-    "title": "PACK",
+    "title": "Pack",
     "empty": "Empty",
-    "mapTitle": "WORLD",
-    "plansTitle": "PLANS"
+    "mapTitle": "World",
+    "plansTitle": "Plans"
   },
   "toolbox": {
-    "title": "BUILD",
-    "titleFurnace": "SMELT",
-    "tools": "TOOLS",
-    "machines": "MACHINES",
-    "materials": "SMELTING",
+    "title": "Build",
+    "titleFurnace": "Smelt",
+    "tools": "Tools",
+    "machines": "Machines",
+    "materials": "Smelting",
     "keys": "Arrows  ·  Z build  ·  X close",
     "keysTouch": "Tap to pick · tap to build",
     "keysFurnace": "Arrows  ·  Z smelt  ·  X close",
@@ -311,7 +311,7 @@
     "credits": [
       {
         "speaker": "npc",
-        "text": "ZERO THE HERO"
+        "text": "Zero the Hero"
       },
       {
         "speaker": "narrator",
