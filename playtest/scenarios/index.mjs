@@ -28,6 +28,7 @@ import semFabrica from './sem-fabrica.mjs';
 import zerar from './zerar.mjs';
 import abertura from './abertura.mjs';
 import semParede from './sem-parede.mjs';
+import itemGet from './item-get.mjs';
 
 export const scenarios = {
   smoke,
@@ -60,6 +61,7 @@ export const scenarios = {
   zerar,
   abertura,
   'sem-parede': semParede,
+  'item-get': itemGet,
 };
 
 // What `npm run playtest` runs when no scenario is named.

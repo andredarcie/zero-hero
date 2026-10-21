@@ -410,6 +410,18 @@ class SoundManager {
    * Deliberately dry and procedural — close, intimate, no room around it.
    */
   /**
+   * O CARRILHAO de ganhar uma coisa: tres notas de seno subindo em F maior (do, fa, la), cada uma
+   * com um harmonico de oitava bem baixinho — uma caixinha de musica, nunca uma fanfarra.
+   */
+  public playCozyChime(): void {
+    const notes = [1046.5, 1396.9, 1760];
+    notes.forEach((f, i) => {
+      this.osc('sine', f, f, 0.09, 1.1, i * 0.14);
+      this.osc('sine', f * 2, f * 2, 0.018, 0.6, i * 0.14);
+    });
+  }
+
+  /**
    * O "falar" de cada letra. As vozes autoradas pedem onda quadrada ou serra (o chiptune da
    * aventura antiga), e aqui elas sao AMACIADAS: quadrada vira triangulo, serra vira seno, e o
    * blip ficou mais baixo e mais redondo. A altura de cada personagem continua a dele.
