@@ -19,7 +19,7 @@ const boot = async (driver, save) => {
 
 export default {
   name: 'marcas',
-  description: 'O vale responde aos pedidos: marco, cesto, lenha + fogo, cavalete verde.',
+  description: 'O vale responde aos pedidos (marco, cesto, lenha + fogo, cavalete) e os NPCs tem vida.',
   needsGame: false,
   async run({ driver, shot, assert }) {
     const { page } = driver;
@@ -56,16 +56,35 @@ export default {
       for (const c of w.chunks) for (const n of c.npcs) if (n.type === 'astronaut') return { x: n.worldX, y: n.worldY };
       return null;
     });
+    await page.evaluate(() => {
+      const s = window.__scene;
+      window.__hearts = 0;
+      const orig = s.spawnHearts.bind(s);
+      s.spawnHearts = (x, y) => { window.__hearts += 1; orig(x, y); };
+    });
     await page.evaluate(([x, y]) => { const s = window.__scene; s.playerWorld.worldX = x; s.playerWorld.worldY = y + 1; s.movementController.interruptMovement(x, y + 1); s.streamChunks(true); }, [vega.x, vega.y]);
     await sleep(500);
+    const greeted = await page.evaluate(([x, y]) => window.__scene.greetedNpcs.has(`${x},${y}`), [vega.x, vega.y]);
+    assert('Chegar perto faz a Vega dar oi (pulinho)', greeted, '');
+    const breath = await page.evaluate(async () => {
+      const sizes = [];
+      for (let i = 0; i < 6; i += 1) {
+        const npc = [...window.__scene.npcManager.byChunk.values()].flat().find((n) => n.kind === 'astronaut');
+        sizes.push(npc.sprite.displayHeight);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      return sizes;
+    });
+    assert('Os NPCs respiram', Math.max(...breath) - Math.min(...breath) > 0.01, JSON.stringify(breath.map((v) => v.toFixed(3))));
     await page.keyboard.down('ArrowUp'); await sleep(40); await page.keyboard.up('ArrowUp'); await sleep(300);
     await page.keyboard.down('z'); await sleep(50); await page.keyboard.up('z');
     await page.waitForFunction(() => window.gameDebug.getState().dialogOpen, null, { timeout: 5000 });
     for (let i = 0; i < 20 && (await driver.getState()).dialogOpen; i += 1) {
       await page.keyboard.down('z'); await sleep(50); await page.keyboard.up('z'); await sleep(450);
     }
-    await sleep(900);
-    await shot('marco-surgindo', { note: 'O marco da Vega surge' });
+    await sleep(450);
+    await shot('marco-surgindo', { note: 'O marco da Vega surge, e ela agradece' });
+    assert('O obrigado vem com coracoes', (await page.evaluate(() => window.__hearts)) === 1, '');
     const after = await page.evaluate(() => window.__scene.questMarks.find((m) => m.def.dialog === 'astronaut'));
     assert('Entregar as pedras faz o marco surgir', after?.done === true && Boolean(after.bb), JSON.stringify({ done: after?.done }));
     void live;

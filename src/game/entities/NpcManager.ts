@@ -115,6 +115,9 @@ class NpcEntity {
   public readonly dialog?: string;
 
   private readonly sprite: Billboard3D;
+  private readonly size: number;
+  /** A fase da respiracao: cada um respira no seu ritmo, ninguem em coro. */
+  private readonly breathPhase: number;
   private readonly exclaim: Phaser.GameObjects.Image;
   private readonly talkKey: Phaser.GameObjects.Image;
 
@@ -132,6 +135,8 @@ class NpcEntity {
     const visual = NPC_VISUALS[kind];
     // Death looms at twice the size; the billboard anchors at the feet either way.
     const size = kind === 'death' ? 2 : 1;
+    this.size = size;
+    this.breathPhase = ((worldX * 7 + worldY * 13) % 17) / 17 * Math.PI * 2;
     this.sprite = world3d()
       .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true })
       .setPosition(worldX, worldY)
@@ -155,6 +160,10 @@ class NpcEntity {
     showTalkKey: boolean,
     timeMs: number,
   ): void {
+    // A RESPIRACAO: o corpo cresce um fio para cima e afina um fio, devagar — a mesma do heroi
+    // parado. Pela base: o billboard pisa no chao e cresce para cima, entao os pes nao saem do lugar.
+    const b = Math.sin(timeMs / 900 + this.breathPhase);
+    this.sprite.setDisplaySize(this.size * (1 - 0.012 * b), this.size * (1 + 0.028 * b));
     // O keycap manda: encarado de perto, o "como falo?" vale mais que o "tem assunto novo" —
     // os dois juntos seriam dois balões brigando pelo mesmo pixel.
     this.exclaim.setVisible(showExclaim && !showTalkKey);
@@ -173,6 +182,13 @@ class NpcEntity {
   public hideExclaim(): void {
     this.exclaim.setVisible(false);
     this.talkKey.setVisible(false);
+  }
+
+  /** Um pulinho: oi, obrigado, toma aqui. A altura volta a zero sozinha. */
+  public hop(scene: Phaser.Scene, height = 0.22): void {
+    scene.tweens.killTweensOf(this.sprite);
+    this.sprite.setElevation(0);
+    scene.tweens.add({ targets: this.sprite, elevation: height, duration: 160, yoyo: true, ease: 'Sine.easeOut', repeat: 1, repeatDelay: 40 });
   }
 
   /** Some de cena (o corpo e as marcas) sem sair da lista — ver NpcManager.setKindHidden. */
@@ -273,6 +289,13 @@ export class NpcManager {
   /** O roteiro próprio deste NPC, se ele tiver um (ver WorldNpcSpawn.dialog). */
   public getDialogIdAt(worldX: number, worldY: number): string | undefined {
     return this.all().find((n) => n.worldX === worldX && n.worldY === worldY)?.dialog;
+  }
+
+  /** O NPC deste tile da um pulinho (ver NpcEntity.hop). */
+  public hop(worldX: number, worldY: number, height?: number): boolean {
+    const npc = this.all().find((n) => n.worldX === worldX && n.worldY === worldY);
+    npc?.hop(this.scene, height);
+    return npc !== undefined;
   }
 
   public getActiveWorldPositions(): ReadonlyArray<{ worldX: number; worldY: number }> {

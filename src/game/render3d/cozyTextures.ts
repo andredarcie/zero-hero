@@ -35,6 +35,9 @@ const PALETTE: Record<string, Rgba> = {
   e: [0x7f, 0xb0, 0x54, 255], // morro verde pintado
   E: [0x5c, 0x8f, 0x3c, 255], // morro verde escuro
   f: [0xf2, 0xd3, 0x6b, 255], // sol / flor pintada
+  // o coracaozinho do obrigado
+  h: [0xf0, 0x7a, 0x8c, 255], // rosa
+  H: [0xff, 0xc4, 0xcc, 255], // brilho
   // a rachadura que a espada abriu no chao
   q: [0x16, 0x0f, 0x0d, 230], // o fundo da fenda
   p: [0x3a, 0x2a, 0x22, 170], // a borda revolvida
@@ -159,12 +162,25 @@ const EASEL_GREEN = [
   '................',
 ];
 
+// O CORACAO do obrigado: 9x8, rosa, com um brilho no canto.
+const HEART = [
+  '.kkk.kkk.',
+  'khHhkhhhk',
+  'kHhhhhhhk',
+  'khhhhhhhk',
+  '.khhhhhk.',
+  '..khhhk..',
+  '...khk...',
+  '....k....',
+] as const;
+
 // O mesmo espeto depois de assado: o chapeu dourou.
 const ROAST_STICK_DONE = ROAST_STICK.map((row) => row.replace(/c/g, 'r').replace(/v/g, 'y'));
 
 export const ROAST_STICK_TEXTURE = 'roast-stick';
 export const GROUND_CRACK_TEXTURE = 'ground-crack';
 export const CAIRN_TEXTURE = 'quest-cairn';
+export const HEART_TEXTURE = 'cozy-heart';
 export const BASKET_TEXTURE = 'quest-basket';
 export const EASEL_GREY_TEXTURE = 'quest-easel-grey';
 export const EASEL_GREEN_TEXTURE = 'quest-easel-green';
@@ -202,6 +218,7 @@ export const registerCozyTextures = (scene: Phaser.Scene): void => {
     [ROAST_STICK_TEXTURE, ROAST_STICK],
     [GROUND_CRACK_TEXTURE, GROUND_CRACK],
     [CAIRN_TEXTURE, CAIRN],
+    [HEART_TEXTURE, HEART],
     [BASKET_TEXTURE, BASKET],
     [EASEL_GREY_TEXTURE, EASEL_GREY],
     [EASEL_GREEN_TEXTURE, EASEL_GREEN],

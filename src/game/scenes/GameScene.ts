@@ -81,7 +81,7 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import {
-  BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE,
+  BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
   ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
 import { HeroThought } from '@/game/runtime/HeroThought';
@@ -474,6 +474,8 @@ export class GameScene extends Phaser.Scene {
   private heroTexture = 'hero';
   private helmetBb?: Billboard3D;
   private readonly questMarks: QuestMarkState[] = [];
+  // Quem ja deu o "oi" (o pulinho quando o heroi chega perto) nesta sessao.
+  private readonly greetedNpcs = new Set<string>();
   // As fogueiras que um pedido deixou acesas para sempre (a do Bram): o relogio nao as apaga.
   private readonly keptLitFires = new Set<CampfireObject>();
   // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
@@ -1171,6 +1173,7 @@ export class GameScene extends Phaser.Scene {
     this.helmetBb = undefined;
     for (const mark of this.questMarks) mark.bb?.destroy();
     this.questMarks.length = 0;
+    this.greetedNpcs.clear();
     this.keptLitFires.clear();
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
@@ -1366,7 +1369,37 @@ export class GameScene extends Phaser.Scene {
     // As marcas de posicionamento seguem o corpo NO MESMO frame em que ele vira.
     this.syncPlacementHints();
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
+    this.greetNearbyNpcs();
     this.renderProps();
+  }
+
+  /** O "OI": o NPC da um pulinho na primeira vez que o heroi chega a dois passos dele. */
+  private greetNearbyNpcs(): void {
+    const npcs = this.npcManager?.getActiveWorldPositions() ?? [];
+    for (const n of npcs) {
+      const key = `${n.worldX},${n.worldY}`;
+      if (this.greetedNpcs.has(key)) continue;
+      if (Math.hypot(n.worldX - this.playerWorld.worldX, n.worldY - this.playerWorld.worldY) > 2.3) continue;
+      this.greetedNpcs.add(key);
+      this.npcManager?.hop(n.worldX, n.worldY, 0.16);
+    }
+  }
+
+  /** Coracoes subindo de um tile — o obrigado de quem foi ajudado. */
+  private spawnHearts(wx: number, wy: number): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    for (let i = 0; i < 3; i += 1) {
+      this.time.delayedCall(i * 220, () => {
+        const heart = w3.addBillboard(HEART_TEXTURE, 0, { centered: true, fog: false, emissive: true })
+          .setPosition(wx + (i - 1) * 0.22, wy + 0.05)
+          .setElevation(1.05)
+          .setDisplaySize(0.36, 0.32);
+        this.tweens.add({ targets: heart, elevation: 1.75 + i * 0.1, duration: 1500, ease: 'Sine.easeOut' });
+        this.tweens.add({ targets: heart, x: heart.x + (i - 1) * 0.12, duration: 1500, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: heart, alpha: 0, delay: 900, duration: 600, onComplete: () => heart.destroy() });
+      });
+    }
   }
 
   /**
@@ -4914,9 +4947,18 @@ export class GameScene extends Phaser.Scene {
     // depois o machado, que é a ordem em que alguém pede um favor de verdade.
     const gift = this.pendingGift(askId);
     this.openDialogScript(script, npcWorld, getDialogVoice(kind, speakId) ?? getDialogVoice(kind, askId), () => {
-      if (gift) this.handGift(askId, gift);
-      // O último pedido do vale acabou de fechar nesta conversa: o portão do jardim responde.
-      if (closedNow) this.celebrateQuestDone(npcWorld);
+      if (gift) {
+        if (npcWorld) this.npcManager?.hop(npcWorld.worldX, npcWorld.worldY);
+        this.handGift(askId, gift);
+      }
+      // O pedido fechou nesta conversa: um pulinho de alegria, coracoes, e o vale responde.
+      if (closedNow) {
+        if (npcWorld) {
+          this.npcManager?.hop(npcWorld.worldX, npcWorld.worldY, 0.3);
+          this.spawnHearts(npcWorld.worldX, npcWorld.worldY);
+        }
+        this.celebrateQuestDone(npcWorld);
+      }
     });
   }
 
