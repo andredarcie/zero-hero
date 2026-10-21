@@ -3153,11 +3153,6 @@
           "type": "stone",
           "worldX": 4,
           "worldY": 17
-        },
-        {
-          "type": "iron",
-          "worldX": 9,
-          "worldY": 14
         }
       ],
       "npcs": [
@@ -8367,16 +8362,6 @@
       ],
       "pickups": [
         {
-          "type": "iron",
-          "worldX": 10,
-          "worldY": 36
-        },
-        {
-          "type": "iron",
-          "worldX": 10,
-          "worldY": 39
-        },
-        {
           "type": "mushroom",
           "worldX": 1,
           "worldY": 36
@@ -8909,11 +8894,6 @@
           "worldY": 41
         },
         {
-          "type": "iron",
-          "worldX": 22,
-          "worldY": 36
-        },
-        {
           "type": "wood",
           "worldX": 15,
           "worldY": 41
@@ -9434,18 +9414,7 @@
           false
         ]
       ],
-      "pickups": [
-        {
-          "type": "iron",
-          "worldX": 34,
-          "worldY": 36
-        },
-        {
-          "type": "iron",
-          "worldX": 34,
-          "worldY": 39
-        }
-      ],
+      "pickups": [],
       "npcs": []
     },
     {
@@ -10477,13 +10446,7 @@
           false
         ]
       ],
-      "pickups": [
-        {
-          "type": "iron",
-          "worldX": 58,
-          "worldY": 38
-        }
-      ],
+      "pickups": [],
       "npcs": []
     },
     {
@@ -10999,13 +10962,7 @@
           false
         ]
       ],
-      "pickups": [
-        {
-          "type": "iron",
-          "worldX": 10,
-          "worldY": 50
-        }
-      ],
+      "pickups": [],
       "npcs": []
     },
     {
@@ -11521,13 +11478,7 @@
           false
         ]
       ],
-      "pickups": [
-        {
-          "type": "iron",
-          "worldX": 22,
-          "worldY": 50
-        }
-      ],
+      "pickups": [],
       "npcs": []
     },
     {
@@ -13081,13 +13032,7 @@
           false
         ]
       ],
-      "pickups": [
-        {
-          "type": "iron",
-          "worldX": 58,
-          "worldY": 50
-        }
-      ],
+      "pickups": [],
       "npcs": []
     }
   ],

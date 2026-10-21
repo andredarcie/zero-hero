@@ -4,6 +4,7 @@
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ALL_DONE = {
   'radiationSuit/deliver:mushroom': 5, 'painter/grow': 2, 'businessMan/deliver:wood': 4, 'astronaut/deliver:stone': 3,
+  'astronaut/deliver:iron': 1,
 };
 
 const boot = async (driver, save) => {

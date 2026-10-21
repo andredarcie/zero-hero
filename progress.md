@@ -9405,3 +9405,9 @@ são do autor.
 - **Descanso**: Z numa fogueira acesa senta; `setTimeScale(24)`; qualquer tecla levanta, e a seta que levanta não vira passo. `descanso`.
 - **Sem sustos**: `camera.flash` fora da abertura virou `softWash` (aditivo, sobe em 1/3, assenta em 2/3); shakes do dia a dia viraram sussurro ou sumiram; nomes em small caps, menus em Title Case.
 - **O turno do dia** (`updateDaytimeLife`): 5 borboletas (asa = largura respirando) e folhas só de tiles de árvore de verdade, que pousam, descansam 2,6s e somem. Sem luz nenhuma. `dia`.
+
+## 2026-10-21 — A Vega pede ferro: a cadeia do ferro deixou de ser decorativa
+
+- O pedido da astrônoma virou 3 pedras + 1 ferro (`NpcQuests`), e os 10 ferros do chão saíram do `world.json` (backup em `backup/world-pre-iron-quest.json`). Antes, o minério, o forno, o carvão, a esponja e o altar só produziam algo que já estava no chão.
+- O ferro agora só existe FABRICADO: picareta no veio (minério), bancada (forno = pedra+pedra), forno (carvão = lenha+lenha, esponja = minério+carvão), 3 marteladas (barra). A bancada (43,7) e dois veios (44,2)/(46,3) ficam ao lado da Vega (41,5).
+- `marcas` sabe da tarefa nova. O piloto do `zerar` ainda não sabe fundir ferro e trava na entrega da Vega.

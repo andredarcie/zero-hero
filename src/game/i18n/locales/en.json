@@ -237,7 +237,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Take this pickaxe. Three stones from the boulders?"
+          "text": "Take this pickaxe. Three stones, and one iron bar for the top."
         }
       ]
     },
@@ -246,7 +246,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Three stones. A place to come back to."
+          "text": "Stone and iron. A place to come back to."
         },
         {
           "speaker": "npc",
