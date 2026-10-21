@@ -81,7 +81,8 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import {
-  GROUND_CRACK_TEXTURE, ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
+  BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE,
+  ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
 import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
@@ -100,7 +101,7 @@ import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { createBoardMetrics } from '@/game/shared/grid';
 import { ChunkManager } from '@/game/world/ChunkManager';
-import type { ScreenContent } from '@/game/world/ScreenContent';
+import type { NpcKind, ScreenContent } from '@/game/world/ScreenContent';
 import {
   getCampfires,
   getChunkContent,
@@ -138,6 +139,7 @@ import {
 } from '@/game/runtime/adventureState';
 import {
   allQuestsDone,
+  isQuestDone,
   questDeliveriesDue,
   questDialogFor,
   questSnapshot,
@@ -303,6 +305,21 @@ const FIREFLY_COUNT = 18;
 /** Quanto tempo os creditos levam para atravessar a tela. */
 const CREDITS_SCROLL_MS = 26000;
 
+// ── AS MARCAS DO VALE AJUDADO ─────────────────────────────────────────────────
+// Uma por pedido: o que aparece (ou muda) ao lado do NPC quando ele fecha. `before` e a pose de
+// antes, se a marca ja existe desde o comeco (o cavalete da Iris, com a tela cinza).
+type QuestMarkDef = { dialog: string; npc: NpcKind; before?: string; after: string; keepFireLit?: boolean };
+type QuestMarkState = {
+  def: QuestMarkDef; tile: { x: number; y: number }; npcAt: { x: number; y: number }; done: boolean; bb?: Billboard3D;
+};
+const QUEST_MARKS: readonly QuestMarkDef[] = [
+  { dialog: 'astronaut', npc: 'astronaut', after: CAIRN_TEXTURE },
+  { dialog: 'radiationSuit', npc: 'radiationSuit', after: BASKET_TEXTURE },
+  { dialog: 'painter', npc: 'painter', before: EASEL_GREY_TEXTURE, after: EASEL_GREEN_TEXTURE },
+  // a lenha do Bram e a fogueira dele, que passa a ficar acesa dia e noite
+  { dialog: 'businessMan', npc: 'businessMan', after: 'wood-item', keepFireLit: true },
+];
+
 // How long to hide the back item during a swing (a touch longer than SwordSlash's arc + fade,
 // ~155 + 65ms) so the item never shows on the back and in the swing arc at the same time.
 const SWING_HIDE_MS = 240;
@@ -456,6 +473,9 @@ export class GameScene extends Phaser.Scene {
   // O cavaleiro de elmo ('hero') ate o fim da abertura; de cabeca descoberta ('hero-bare') depois.
   private heroTexture = 'hero';
   private helmetBb?: Billboard3D;
+  private readonly questMarks: QuestMarkState[] = [];
+  // As fogueiras que um pedido deixou acesas para sempre (a do Bram): o relogio nao as apaga.
+  private readonly keptLitFires = new Set<CampfireObject>();
   // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
   private swordInHands = false;
   private letterbox?: [HTMLDivElement, HTMLDivElement];
@@ -782,6 +802,8 @@ export class GameScene extends Phaser.Scene {
       this.hangHelmetOn(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1);
     }
 
+    this.keptLitFires.clear();
+    this.buildQuestMarks();
     this.streamChunks(true);
 
     // The world is fully built, so compile every shader now rather than lazily, one hitch at
@@ -1147,6 +1169,9 @@ export class GameScene extends Phaser.Scene {
     this.plantedSwordTile = undefined;
     this.helmetBb?.destroy();
     this.helmetBb = undefined;
+    for (const mark of this.questMarks) mark.bb?.destroy();
+    this.questMarks.length = 0;
+    this.keptLitFires.clear();
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
     this.roastStick?.destroy();
@@ -1854,6 +1879,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.npcManager?.hasNpcAt(wx, wy)) return true;
     if (this.plantedSwordTile?.x === wx && this.plantedSwordTile.y === wy) return true;
+    if (this.isQuestMarkAt(wx, wy)) return true;
     return false;
   }
 
@@ -3846,6 +3872,106 @@ export class GameScene extends Phaser.Scene {
     return this.plantedSword;
   }
 
+  /**
+   * AS MARCAS DO VALE AJUDADO — o que muda no mundo quando um pedido fecha (ver QUEST_MARKS).
+   *
+   * O "obrigado" era so uma fala, e uma fala some. A marca fica: o marco de pedras da Vega, o cesto
+   * da Hollis, a lenha do Bram (e a fogueira dele, acesa para sempre) e o cavalete da Iris, cuja
+   * tela cinza vira paisagem. Ela nasce do ESTADO do pedido (nenhum campo novo no save) e mora num
+   * tile escolhido uma vez, no boot: o mais perto do NPC (ate tres) que nao e ponto de corte (os
+   * livres do anel de oito em volta dele sao uma corrida so) — um bloco assim nunca fecha caminho.
+   */
+  private buildQuestMarks(): void {
+    const npcs = new Map<string, { x: number; y: number }>();
+    const bounds = getWorldBounds();
+    for (let cy = bounds.minCy; cy <= bounds.maxCy; cy += 1) {
+      for (let cx = bounds.minCx; cx <= bounds.maxCx; cx += 1) {
+        for (const n of getChunkContent(cx, cy).npcs) npcs.set(n.type, { x: n.worldX, y: n.worldY });
+      }
+    }
+    const npcTiles = new Set([...npcs.values()].map((p) => `${p.x},${p.y}`));
+    const taken = new Set<string>();
+    const free = (x: number, y: number): boolean => !npcTiles.has(`${x},${y}`) && !taken.has(`${x},${y}`)
+      && !this.isSolidForEntities(x, y) && !(this.itemManager?.hasItemAt(x, y) ?? false)
+      && !this.getPlantSpotAt(x, y) && !this.isOpenWaterAt(x, y);
+    // Do mais perto para o mais longe, ate tres tiles; no empate, o lado (a marca ao lado do NPC le
+    // melhor que em cima ou embaixo dele) e depois uma ordem fixa.
+    const OFFSETS: Array<[number, number]> = [];
+    for (let dy = -3; dy <= 3; dy += 1) for (let dx = -3; dx <= 3; dx += 1) if (dx || dy) OFFSETS.push([dx, dy]);
+    OFFSETS.sort((a, b) => (Math.hypot(...a) - Math.hypot(...b)) || (Math.abs(a[1]) - Math.abs(b[1])) || (b[0] - a[0]) || (a[1] - b[1]));
+    this.questMarks.length = 0;
+    for (const def of QUEST_MARKS) {
+      const at = npcs.get(def.npc);
+      if (!at) continue;
+      let tile: { x: number; y: number } | undefined;
+      for (const [dx, dy] of OFFSETS) {
+        const x = at.x + dx; const y = at.y + dy;
+        if (!free(x, y)) continue;
+        // NAO E PONTO DE CORTE: os tiles livres do anel de oito vizinhos formam UMA corrida so
+        // (vizinhos consecutivos no anel sao vizinhos de passo), entao quem passava por aqui
+        // continua passando em volta. Pelo menos tres livres, para a peca nao entupir um canto.
+        const ring: Array<[number, number]> = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]];
+        const open = ring.map(([ox, oy]) => !this.isSolidForEntities(x + ox, y + oy) || npcTiles.has(`${x + ox},${y + oy}`));
+        let runs = 0;
+        for (let k = 0; k < 8; k += 1) if (open[k] && !open[(k + 7) % 8]) runs += 1;
+        const openCount = open.filter(Boolean).length;
+        const roomy = openCount === 8 || (openCount >= 3 && runs <= 1);
+        if (roomy) { tile = { x, y }; break; }
+      }
+      if (!tile) continue;
+      taken.add(`${tile.x},${tile.y}`);
+      const quest = questFor(def.dialog);
+      const done = this.adventure && quest !== undefined && isQuestDone(quest);
+      const mark: QuestMarkState = { def, tile, done, npcAt: at };
+      this.questMarks.push(mark);
+      this.drawQuestMark(mark, false);
+    }
+  }
+
+  /** Desenha (ou troca) a marca: antes do pedido, a pose `before` se houver; depois, a `after`. */
+  private drawQuestMark(mark: QuestMarkState, animate: boolean): void {
+    const w3 = this.world3d;
+    if (!w3) return;
+    const texture = mark.done ? mark.def.after : mark.def.before;
+    if (!texture) return;
+    if (!mark.bb) {
+      mark.bb = w3.addBillboard(texture, 0, { groundShadow: { rx: 0.3, rz: 0.2, alpha: 0.28 } })
+        .setPosition(mark.tile.x, mark.tile.y)
+        .setDisplaySize(0.9, 0.9);
+    } else {
+      mark.bb.setTexture(texture, 0);
+    }
+    if (mark.done && mark.def.keepFireLit) {
+      const fire = this.nearestCampfireWithin(mark.npcAt.x, mark.npcAt.y, 2.5);
+      if (fire) {
+        this.keptLitFires.add(fire);
+        fire.light();
+      }
+    }
+    if (!animate) return;
+    // O SURGIMENTO: a peca brota do chao com um pulinho, um brilho e um sino.
+    const bb = mark.bb;
+    bb.setDisplaySize(0.2, 0.2);
+    this.tweens.add({ targets: bb, displayWidth: 0.9, displayHeight: 0.9, duration: 520, ease: 'Back.easeOut' });
+    this.spawnGrowSparkle(mark.tile.x, mark.tile.y);
+    this.spawnGlint(mark.tile.x, mark.tile.y, 0.7, 0.5);
+  }
+
+  /** Um pedido fechou: as marcas que ainda nao sabiam disso mudam agora, com festa. */
+  private refreshQuestMarks(): void {
+    for (const mark of this.questMarks) {
+      if (mark.done) continue;
+      const quest = questFor(mark.def.dialog);
+      if (!quest || !isQuestDone(quest)) continue;
+      mark.done = true;
+      this.drawQuestMark(mark, true);
+    }
+  }
+
+  private isQuestMarkAt(wx: number, wy: number): boolean {
+    return this.questMarks.some((m) => m.bb !== undefined && m.tile.x === wx && m.tile.y === wy);
+  }
+
   /** O elmo pendurado no punho da espada fincada (ele so existe depois da abertura). */
   private hangHelmetOn(wx: number, wy: number): Billboard3D | undefined {
     if (!this.world3d) return undefined;
@@ -4510,6 +4636,7 @@ export class GameScene extends Phaser.Scene {
    * ultimo, o portao do jardim se abre.
    */
   private celebrateQuestDone(_npcWorld: { worldX: number; worldY: number } | undefined): void {
+    this.refreshQuestMarks();
     getSoundManager().playSingingBowl();
     this.spawnGrowSparkle(this.playerWorld.worldX, this.playerWorld.worldY);
     if (!this.gateOpened && allQuestsDone()) this.time.delayedCall(700, () => this.openGardenGate());
@@ -5500,7 +5627,10 @@ export class GameScene extends Phaser.Scene {
     const night = isNightTime();
     if (night === this.campfiresFollowNight) return;
     this.campfiresFollowNight = night;
-    for (const campfire of this.campfires) campfire.setClockLit(night);
+    for (const campfire of this.campfires) {
+      if (this.keptLitFires.has(campfire)) continue; // aceso por um pedido: o dia nao o apaga
+      campfire.setClockLit(night);
+    }
   }
 
   // The water leaves the bucket NOW — the hand empties with the throw, not with the landing —

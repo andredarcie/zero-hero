@@ -1,6 +1,6 @@
 // SEM PAREDE INVISIVEL — todo tile que barra o heroi tem de ter um MOTIVO DESENHADO: arvore ou
-// rocha de pe, mar, uma peca que bloqueia (arbusto, rocha, agua, fogueira, portao...), um NPC ou
-// a espada fincada. Colisao pintada em chao vazio e a recusa que o jogador nao consegue ler.
+// rocha de pe, mar, uma peca que bloqueia (arbusto, rocha, agua, fogueira, portao...), um NPC, a
+// espada fincada ou a marca de um pedido. Colisao pintada em chao vazio e a recusa que o jogador nao consegue ler.
 const SOLID_UPPER = [3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40];
 const PROP_LISTS = ['campfires', 'hearths', 'gardenGates', 'dryBushes', 'lockedDoors', 'swingGates',
   'dryTrees', 'dryShrubs', 'rocks', 'tallGrasses', 'moonflowers', 'plantSpots', 'toolboxes', 'furnaces',
@@ -29,6 +29,7 @@ export default {
           if (t.ground === 33) continue;
           if (s.plantedSwordTile?.x === x && s.plantedSwordTile?.y === y) continue;
           if (s.npcManager.hasNpcAt(x, y)) continue;
+          if (s.isQuestMarkAt(x, y)) continue; // a marca de um pedido (o cavalete, o marco...)
           if (lists.some((n) => s[n].some((o) => o.worldX === x && o.worldY === y && o.blocking))) continue;
           out.push(`${x},${y}${t.collision ? ' (colisao pintada)' : ''}`);
         }

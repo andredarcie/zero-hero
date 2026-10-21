@@ -11,15 +11,7 @@ type Rgba = readonly [number, number, number, number];
 const PALETTE: Record<string, Rgba> = {
   '.': [0, 0, 0, 0],
   k: [0x1b, 0x1d, 0x33, 255], // contorno: o navy de tinta do jogo
-  s: [0x8e, 0x97, 0xa8, 255], // aco
-  w: [0xd4, 0xda, 0xe3, 255], // fio que pega a luz
-  d: [0x5c, 0x63, 0x75, 255], // aco na sombra
-  g: [0xb0, 0x8a, 0x3e, 255], // guarda de latao
-  y: [0xe2, 0xbf, 0x6a, 255], // brilho do latao
-  l: [0x6b, 0x40, 0x22, 255], // couro do punho
-  m: [0x8f, 0x5a, 0x31, 255], // couro claro
-  e: [0x4a, 0x3a, 0x2a, 255], // terra revolvida no pe
-  b: [0x6f, 0x5a, 0x3e, 255], // terra clara
+  y: [0xe2, 0xbf, 0x6a, 255], // dourado (o chapeu assado)
   // o espeto e o cogumelo
   t: [0x7a, 0x52, 0x2c, 255], // graveto
   u: [0xa8, 0x77, 0x44, 255], // graveto claro
@@ -27,6 +19,22 @@ const PALETTE: Record<string, Rgba> = {
   v: [0x7b, 0xa7, 0xe0, 255], // brilho do chapeu
   n: [0xe8, 0xdc, 0xc0, 255], // pe do cogumelo
   r: [0xb5, 0x6a, 0x2e, 255], // chapeu ja tostado
+  // as marcas do vale ajudado
+  g: [0x8d, 0x8a, 0x84, 255], // pedra
+  G: [0xb3, 0xaf, 0xa6, 255], // pedra, brilho
+  o: [0x5e, 0x5b, 0x56, 255], // pedra, sombra
+  M: [0x5f, 0x7a, 0x3e, 255], // musgo
+  w: [0x8a, 0x62, 0x38, 255], // vime
+  W: [0xb0, 0x84, 0x4e, 255], // vime claro
+  z: [0x5a, 0x3c, 0x22, 255], // madeira do cavalete
+  Z: [0x7d, 0x56, 0x33, 255], // madeira clara
+  a: [0xe9, 0xe1, 0xd0, 255], // tela crua
+  A: [0x9b, 0x97, 0x8f, 255], // tela cinza (o que ela pintava)
+  x: [0x6f, 0x6c, 0x66, 255], // tela cinza escura
+  B: [0x8f, 0xc6, 0xe8, 255], // ceu pintado
+  e: [0x7f, 0xb0, 0x54, 255], // morro verde pintado
+  E: [0x5c, 0x8f, 0x3c, 255], // morro verde escuro
+  f: [0xf2, 0xd3, 0x6b, 255], // sol / flor pintada
   // a rachadura que a espada abriu no chao
   q: [0x16, 0x0f, 0x0d, 230], // o fundo da fenda
   p: [0x3a, 0x2a, 0x22, 170], // a borda revolvida
@@ -73,11 +81,93 @@ const GROUND_CRACK = [
   '................',
 ] as const;
 
+// O MARCO da Vega: tres pedras empilhadas, a de baixo com musgo.
+const CAIRN = [
+  '................',
+  '................',
+  '.......kk.......',
+  '......kGgk......',
+  '......kggk......',
+  '.....kkookk.....',
+  '....kGGgggok....',
+  '....kggggggk....',
+  '.....kooook.....',
+  '...kkkkkkkkkk...',
+  '..kGGggggggggk..',
+  '..kgggggggMMgk..',
+  '..kMgggggggggk..',
+  '..koooooooooMk..',
+  '...kkkkkkkkkk...',
+  '................',
+];
+
+// O CESTO da Hollis, cheio de chapeuzinhos azuis.
+const BASKET = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '....kkk.kkk.....',
+  '...kcvckcvck....',
+  '..kkcccckcckkk..',
+  '..kcvck.kkcvck..',
+  '..kWkkkkkkkkWk..',
+  '..kwWwWwWwWwwk..',
+  '..kWwWwWwWwWWk..',
+  '...kwWwWwWwWk...',
+  '...kWwWwWwWwk...',
+  '....kkkkkkkk....',
+  '................',
+  '................',
+];
+
+// O CAVALETE da Iris: a tela que ela pinta, cinza antes e verde depois.
+const EASEL_GREY = [
+  '................',
+  '..kkkkkkkkkkkk..',
+  '..kAAAAAAAAAAk..',
+  '..kAxAAAAAAAAk..',
+  '..kAAAAAxxAAAk..',
+  '..kAAAxxAAAAAk..',
+  '..kxxxAAAAxxxk..',
+  '..kAAAAAAAAAAk..',
+  '..kkkkkkkkkkkk..',
+  '....kzZkkZzk....',
+  '...kzZk..kZzk...',
+  '...kzk....kzk...',
+  '..kzZk....kZzk..',
+  '..kzk......kzk..',
+  '..kk........kk..',
+  '................',
+];
+const EASEL_GREEN = [
+  '................',
+  '..kkkkkkkkkkkk..',
+  '..kBBBBBBBffBk..',
+  '..kBBBBBBBffBk..',
+  '..kBBBBBeeBBBk..',
+  '..kBBeeeeEeBBk..',
+  '..keeEEeeeeeek..',
+  '..kEeefeEEeefk..',
+  '..kkkkkkkkkkkk..',
+  '....kzZkkZzk....',
+  '...kzZk..kZzk...',
+  '...kzk....kzk...',
+  '..kzZk....kZzk..',
+  '..kzk......kzk..',
+  '..kk........kk..',
+  '................',
+];
+
 // O mesmo espeto depois de assado: o chapeu dourou.
 const ROAST_STICK_DONE = ROAST_STICK.map((row) => row.replace(/c/g, 'r').replace(/v/g, 'y'));
 
 export const ROAST_STICK_TEXTURE = 'roast-stick';
 export const GROUND_CRACK_TEXTURE = 'ground-crack';
+export const CAIRN_TEXTURE = 'quest-cairn';
+export const BASKET_TEXTURE = 'quest-basket';
+export const EASEL_GREY_TEXTURE = 'quest-easel-grey';
+export const EASEL_GREEN_TEXTURE = 'quest-easel-green';
 export const ROAST_STICK_DONE_TEXTURE = 'roast-stick-done';
 
 const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
@@ -111,6 +201,10 @@ export const registerCozyTextures = (scene: Phaser.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, readonly string[]]> = [
     [ROAST_STICK_TEXTURE, ROAST_STICK],
     [GROUND_CRACK_TEXTURE, GROUND_CRACK],
+    [CAIRN_TEXTURE, CAIRN],
+    [BASKET_TEXTURE, BASKET],
+    [EASEL_GREY_TEXTURE, EASEL_GREY],
+    [EASEL_GREEN_TEXTURE, EASEL_GREEN],
     [ROAST_STICK_DONE_TEXTURE, ROAST_STICK_DONE],
   ];
   for (const [key, rows] of sheets) {
