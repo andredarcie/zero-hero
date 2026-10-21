@@ -55,6 +55,8 @@ export interface GameDebugState {
   itemGetOpen: boolean;
   /** Uma cena sem controle (a abertura, o fim) esta tocando. */
   cutsceneActive: boolean;
+  /** Sentado numa fogueira, vendo o tempo passar (ver GameScene.restAtFireAt). */
+  resting: boolean;
   /** How many campfires in the loaded world are currently lit. */
   litFires: number;
   /**

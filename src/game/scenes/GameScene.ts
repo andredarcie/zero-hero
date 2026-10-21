@@ -37,7 +37,7 @@ import {
   type GameDebugApi,
 } from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
-import { getTimeOfDay, isNightTime, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
+import { getTimeOfDay, isNightTime, setTimeOfDay, setTimeScale, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import { LootManager } from '@/game/entities/LootManager';
 import { NpcManager } from '@/game/entities/NpcManager';
 import { ItemManager } from '@/game/entities/ItemManager';
@@ -300,6 +300,11 @@ const SWORD_PLANTED_ELEV = 0.36;
 const HELMET_ON_SWORD_ELEV = 0.98;
 /** De quantos tiles a leste o mago chega andando. */
 const WIZARD_WALK_TILES = 5;
+/**
+ * Quanto o relogio acelera com o heroi sentado numa fogueira: 24x faz o dia (8 min) passar em uns
+ * vinte segundos — rapido o bastante para VER o ceu andar, devagar o bastante para nao piscar.
+ */
+const REST_TIME_SCALE = 24;
 /** Quantos vaga-lumes derivam em volta do heroi a noite. */
 const FIREFLY_COUNT = 18;
 /** Quanto tempo os creditos levam para atravessar a tela. */
@@ -476,6 +481,9 @@ export class GameScene extends Phaser.Scene {
   private readonly questMarks: QuestMarkState[] = [];
   // Quem ja deu o "oi" (o pulinho quando o heroi chega perto) nesta sessao.
   private readonly greetedNpcs = new Set<string>();
+  // Sentado numa fogueira (ver restAtFireAt): o tempo corre e o heroi descansa.
+  private resting = false;
+  private restKeyListener?: (event: KeyboardEvent) => void;
   // As fogueiras que um pedido deixou acesas para sempre (a do Bram): o relogio nao as apaga.
   private readonly keptLitFires = new Set<CampfireObject>();
   // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
@@ -1117,6 +1125,7 @@ export class GameScene extends Phaser.Scene {
         dialogOpen: this.dialogOpen,
         itemGetOpen: this.itemGetOpen,
         cutsceneActive: this.cutsceneActive,
+        resting: this.resting,
         litFires: this.campfires.filter((cf) => cf.isLit).length,
         ending: { gateOpen: this.gateOpened, hearthLit: this.hearthLit, roasted: this.roasted },
         introDone: this.introDone,
@@ -1174,6 +1183,10 @@ export class GameScene extends Phaser.Scene {
     for (const mark of this.questMarks) mark.bb?.destroy();
     this.questMarks.length = 0;
     this.greetedNpcs.clear();
+    if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
+    this.restKeyListener = undefined;
+    this.resting = false;
+    setTimeScale(1);
     this.keptLitFires.clear();
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
@@ -1275,6 +1288,14 @@ export class GameScene extends Phaser.Scene {
 
     // The item-get and the cut-scenes freeze gameplay; only their own tweens run.
     if (this.itemGetOpen || this.cutsceneActive) return;
+    // SENTADO NA FOGUEIRA: o mundo anda (o relogio acelerado, as fogueiras seguindo o ceu), o
+    // heroi nao. Qualquer tecla o levanta (ver restAtFireAt).
+    if (this.resting) {
+      this.syncCampfiresToClock();
+      if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
+      this.renderProps();
+      return;
+    }
     // O CATALOGO de fabricacao congela igual.
     if (this.orderOverlay) return;
 
@@ -1383,6 +1404,61 @@ export class GameScene extends Phaser.Scene {
       this.greetedNpcs.add(key);
       this.npcManager?.hop(n.worldX, n.worldY, 0.16);
     }
+  }
+
+  /**
+   * DESCANSAR. O Z numa fogueira ACESA (uma qualquer do vale; a do fim tem o gesto proprio) senta o
+   * cavaleiro de frente para ela, e o tempo passa depressa: o ceu anda, a luz muda, os grilos e os
+   * passaros trocam de turno. Nada a fazer, nada a ganhar — e esse e o ponto. Qualquer tecla (ou
+   * seta) levanta.
+   */
+  private restAtFireAt(wx: number, wy: number): boolean {
+    const fire = this.getCampfireAt(wx, wy);
+    if (!fire?.isLit || this.resting) return false;
+    this.resting = true;
+    this.stopBreathing();
+    this.movementController?.hold(true);
+    this.quickBag?.close();
+    this.controlsHint?.destroy();
+    this.controlsHint = undefined;
+    this.hero.frame = HERO_FRAMES.idleDown;
+    this.tweens.add({ targets: this.hero, scaleY: 0.84, scaleX: 1.05, duration: 380, ease: 'Sine.easeOut' });
+    void this.dollyTo(0.82, 1600);
+    this.setVignette(0.35, 1600);
+    getSoundManager().playCozyChime();
+    setTimeScale(REST_TIME_SCALE);
+    // Seta ou qualquer tecla levanta — as setas nao passam por pressAttack/pressUse.
+    this.restKeyListener = (event: KeyboardEvent): void => {
+      if (event.repeat || !this.resting) return;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Escape'].includes(event.code)) {
+        this.standUp();
+      }
+    };
+    window.addEventListener('keydown', this.restKeyListener);
+    this.persistAdventure();
+    return true;
+  }
+
+  /** Levantar da fogueira: o relogio volta ao normal e o corpo se estica. */
+  private standUp(): void {
+    if (!this.resting) return;
+    this.resting = false;
+    setTimeScale(1);
+    if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
+    this.restKeyListener = undefined;
+    // A seta que levantou nao pode virar passo: os pes so soltam depois de o corpo se esticar, e o
+    // pedido de direcao guardado no controle cai fora.
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.time.delayedCall(340, () => {
+      if (this.resting) return;
+      this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+      this.movementController?.hold(false);
+    });
+    this.tweens.add({ targets: this.hero, scaleY: 1, scaleX: 1, duration: 320, ease: 'Back.easeOut' });
+    void this.dollyTo(1, 1100);
+    this.setVignette(0, 900);
+    this.useBufferMs = 0;
+    this.useCooldownMs = USE_COOLDOWN_MS;
   }
 
   /** Coracoes subindo de um tile — o obrigado de quem foi ajudado. */
@@ -2117,10 +2193,12 @@ export class GameScene extends Phaser.Scene {
     // Uma tecla SEGURADA repete o `keydown` no navegador; o sinal certo pra ignorar a repeticao e
     // o `repeat` do proprio evento, nunca um booleano nosso que um `keyup` perdido deixaria preso.
     if (event?.repeat) return;
+    if (this.resting) { this.standUp(); return; }
     if (!this.canAct()) return;
     const front = this.facingTile();
     if (this.talkToNpcAt(front.x, front.y)) return;
     if (this.tendHearthAt(front.x, front.y)) return;
+    if (this.restAtFireAt(front.x, front.y)) return;
     if (this.openCraftMenuAt(front.x, front.y)) return;
     if (this.placeOnAltarAt(front.x, front.y)) return;
     this.strikeAltarAt(front.x, front.y);
@@ -2137,6 +2215,7 @@ export class GameScene extends Phaser.Scene {
     // Segurar o X um instante a mais para equipar fazia o primeiro keydown CONFIRMAR o item e a
     // repetição seguinte, já com a bolsa fechada, USÁ-LO. Quem quer usar duas vezes aperta duas.
     if (event?.repeat) return;
+    if (this.resting) { this.standUp(); return; }
     // A BOLSA ABERTA SEQUESTRA O X — e este é o único lugar do código onde isso pode ser decidido.
     if (this.quickBag?.isOpen) { this.quickBag.commit(); return; }
     if (!this.canAct()) return;
