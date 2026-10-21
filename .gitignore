@@ -34,3 +34,7 @@ press/
 # continua entrando; o `.local` e por pessoa. Ja costuma estar no gitignore GLOBAL de quem
 # desenvolve, mas isso nao viaja com o repo — num clone limpo ele reapareceria.
 .claude/settings.local.json
+
+# Artefatos da Sprite Factory (out/): se reconstroem com `node spritefactory/factory.mjs build`.
+# O que vale e o que o install copia para public/.
+spritefactory/out/

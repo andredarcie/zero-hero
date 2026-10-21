@@ -34,39 +34,6 @@ const DEFS: Record<string, SheetDef> = {
   // nascia tingido de frio, um remendo para nao ler como o velho amigo; hoje o corpo dele e o
   // `mage-cast` (silhueta propria, e a mesma de que o `mage-hurt` sempre foi a variante).
   mage: { url: `${A}/characters/enemies/mage/mage__1.png` },
-  'mage-hurt': { url: `${A}/characters/enemies/mage/mage_hurt.png` },
-  'mage-cast': { url: `${A}/characters/enemies/mage/mage_magic.png` },
-  'magic-ball': { url: `${A}/characters/enemies/mage/magic_ball.png` },
-  // O resto do bestiario: era a fauna do modo Sobreviventes e hoje tem corpo na aventura, um por
-  // arquivo em entities/enemies/. Uma def aqui e download e VRAM no boot (preloadTextures3D
-  // carrega TODAS), entao nenhuma delas entra sem alguem desenhando — a arte que continua
-  // esperando (o arqueiro, arrow_undead.png) segue de fora de proposito.
-  bat: { url: `${A}/characters/enemies/bat/bat.png` },
-  'bat-hurt': { url: `${A}/characters/enemies/bat/bat_hurt.png` },
-  spider: { url: `${A}/characters/enemies/spider/spider.png` },
-  // 16x32: pousado (0) e esticado no pulo (1) — ver SLIME_FRAMES.
-  slime: { url: `${A}/characters/enemies/slime/Slime.png`, frameW: 16, frameH: 16 },
-  bigslime: { url: `${A}/characters/enemies/slime/BigSlime.png`, frameW: 16, frameH: 16 },
-  'slime-pool': { url: `${A}/characters/enemies/slime/SlimePool.png` },
-  'bigslime-pool': { url: `${A}/characters/enemies/slime/BigSlimePool.png` },
-  turret: { url: `${A}/characters/enemies/turret/turret.png` },
-  'turret-bullet': { url: `${A}/characters/enemies/turret/turret_bullet.png` },
-  // O unico inimigo desenhado nesta casa (spritefactory/sprites/zora.mjs): 5 estados em coluna,
-  // o ultimo deles a propria municao — ver ZORA_FRAMES.
-  zora: { url: `${A}/characters/enemies/zora/zora.png`, frameW: 16, frameH: 16 },
-  undead: { url: `${A}/characters/enemies/undead/undead.png` },
-  'undead-hurt': { url: `${A}/characters/enemies/undead/undead_hurt.png` },
-  'undead-born-0': { url: `${A}/characters/enemies/undead/undead_born0.png` },
-  'undead-born-1': { url: `${A}/characters/enemies/undead/undead_born1.png` },
-  'undead-born-2': { url: `${A}/characters/enemies/undead/undead_born2.png` },
-  'undead-born-3': { url: `${A}/characters/enemies/undead/undead_born3.png` },
-  'undead-born-4': { url: `${A}/characters/enemies/undead/undead_born4.png` },
-  'undead-born-5': { url: `${A}/characters/enemies/undead/undead_born5.png` },
-  'undead-born-6': { url: `${A}/characters/enemies/undead/undead_born6.png` },
-  // A arma da caveira, a ossada que ela deixa e os pedacos em que ela se parte (Sprite Factory).
-  // Os pedacos sao um sheet de duas frames em linha, entao pedem `frameW/frameH`.
-  'undead-bone': { url: `${A}/characters/enemies/undead/undead_bone.png` },
-  'undead-bits': { url: `${A}/characters/enemies/undead/undead_bits.png`, frameW: 16, frameH: 16 },
   /**
    * A OSSADA — a frame 27 do `forest-tileset` recortada pixel a pixel para uma textura PROPRIA, e o
    * recorte existe SO por causa da linha do filtro logo abaixo.
@@ -78,21 +45,12 @@ const DEFS: Record<string, SheetDef> = {
    * tileset, era tambem o unico desenhado BORRADO. Aqui ela e NEAREST como todo o resto do jogo, com
    * exatamente os mesmos pixels.
    */
-  bones: { url: `${A}/environment/props/bones.png` },
-  'spider-web': { url: `${A}/environment/props/spider_web.png` },
   'campfire-0': { url: `${A}/effects/fire/sprite_fire0.png` },
   'campfire-1': { url: `${A}/effects/fire/sprite_fire1.png` },
   'campfire-2': { url: `${A}/effects/fire/sprite_fire2.png` },
   'tiny-fire-0': { url: `${A}/effects/fire/sprite_tiny_fire0.png` },
   'tiny-fire-1': { url: `${A}/effects/fire/sprite_tiny_fire1.png` },
   'tiny-fire-2': { url: `${A}/effects/fire/sprite_tiny_fire2.png` },
-  // A TOCHA DE PAREDE da masmorra (Sprite Factory). Sao DUAS artes porque sao dois materiais: o
-  // copo e ferro e pedra e recebe a luz do mundo (Lambert), a chama e a propria fonte e passa
-  // direto pelo bloom (emissive). Elas nao entram no assetManifest — ao contrario do altar e do
-  // forno, esta peca nao tem icone no editor (o que se pinta la e o TILE, frame 48 do atlas), e
-  // uma def a mais no Phaser seria download e VRAM para ninguem.
-  'torch-sconce': { url: `${A}/environment/props/torch_sconce.png` },
-  'torch-flame': { url: `${A}/effects/fire/torch_flame.png`, frameW: 16, frameH: 16 },
   // woods.png: 16×96 vertical sheet — the dry tree shrinking per axe chop.
   'dry-tree': { url: `${A}/environment/props/woods.png`, frameW: 16, frameH: 16 },
   'dry-bush': { url: `${A}/environment/props/bush.png` },
@@ -115,57 +73,31 @@ const DEFS: Record<string, SheetDef> = {
   'rock-cracked': { url: `${A}/environment/props/rock_cracked.png` },
   'locked-door-object': { url: `${A}/environment/structures/locked_door.png` },
   'swing-gate-object': { url: `${A}/environment/structures/swing_gate.png` },
-  'tall-grass-wind-0': { url: `${A}/environment/props/grass_wind0.png` },
-  'tall-grass-wind-1': { url: `${A}/environment/props/grass_wind1.png` },
-  'cutting-grass-0': { url: `${A}/environment/props/cuting_grass0.png` },
-  'cutting-grass-1': { url: `${A}/environment/props/cuting_grass1.png` },
-  'cutting-grass-2': { url: `${A}/environment/props/cuting_grass2.png` },
-  'cutting-grass-3': { url: `${A}/environment/props/cuting_grass3.png` },
-  'cut-grass': { url: `${A}/environment/props/cut_grass.png` },
   // O mato alto EM PE (spritefactory): touceira lateral p/ billboard upright, 2 frames de vento.
   'tall-grass-up': { url: `${A}/environment/props/tall_grass_up.png`, frameW: 16, frameH: 16 },
   // O ciclo de plantio (spritefactory): buraco cavado, monte da semente coberta, e as sementes.
-  // O marco da estrada (spritefactory): laje dormente (0) e desperta (1).
-  'road-seal': { url: `${A}/environment/props/road_seal.png`, frameW: 16, frameH: 16 },
   // Sheet 16×64 em coluna: buraco pronto (0) + os três tempos da cavada da pá (1..3).
   'plant-hole': { url: `${A}/environment/props/plant_hole.png`, frameW: 16, frameH: 16 },
   'plant-mound': { url: `${A}/environment/props/plant_mound.png` },
   'seeds-item': { url: `${A}/items/collectibles/seeds.png` },
   'mushroom-item': { url: `${A}/items/collectibles/mushroom.png` },
-  'cut-grass-wind-0': { url: `${A}/environment/props/cut_grass_wind0.png` },
-  'cut-grass-wind-1': { url: `${A}/environment/props/cut_grass_wind1.png` },
-  'grass-fire-0': { url: `${A}/environment/props/grass_fre_0.png` },
-  'grass-fire-1': { url: `${A}/environment/props/grass_fre_1.png` },
-  'lava-floor': { url: `${A}/environment/terrain/lava_floor.png` },
   'water-0': { url: `${A}/environment/terrain/water_0.png` },
   'water-1': { url: `${A}/environment/terrain/water_1.png` },
   'water-2': { url: `${A}/environment/terrain/water_2.png` },
   'water-3': { url: `${A}/environment/terrain/water_3.png` },
   bridge: { url: `${A}/environment/terrain/bridge.png` },
-  // heart.png e um SHEET 16x32, igual key.png: em cima o coracao liso (navy), embaixo o de mapa,
-  // com contorno claro. Sem frameW aqui, getTexture3D devolvia a folha INTEIRA e o pickup
-  // desenhava os dois coracoes espremidos num quadrado de 0.65 tile. Ver HEART_FRAMES.
-  heart: { url: `${A}/items/collectibles/heart.png`, frameW: 16, frameH: 16 },
   'wood-item': { url: `${A}/items/collectibles/wood.png` },
   // key.png: 16×32 — top frame is the held key, bottom the map pickup.
   'key-item': { url: `${A}/items/collectibles/key.png`, frameW: 16, frameH: 16 },
-  // bomb.png: 16×32 — bomb on top, spark puff below.
-  'bomb-item': { url: `${A}/items/equipment/bomb.png`, frameW: 16, frameH: 16 },
   'sword-item': { url: `${A}/items/equipment/sword.png`, frameW: 16, frameH: 16 },
   'sword-on-fire': { url: `${A}/items/equipment/sword_on_fire.png`, frameW: 16, frameH: 16 },
   'axe-icon': { url: `${A}/ui/icons/axe_icon.png` },
   'great-axe-icon': { url: `${A}/ui/icons/great_axe_icon.png` },
   'sword-icon': { url: `${A}/ui/icons/sword_icon.png` },
-  'key-item-icon': { url: `${A}/ui/icons/key_icon.png` },
-  'bomb-icon': { url: `${A}/ui/icons/bomb_icon.png` },
   'pickaxe-icon': { url: `${A}/ui/icons/pickaxe_icon.png` },
   'scythe-icon': { url: `${A}/ui/icons/scythe_icon.png` },
   'shovel-icon': { url: `${A}/ui/icons/shovel_icon.png` },
-  'carnivore-seeds': { url: `${A}/items/collectibles/carnivore_seeds.png` },
-  // Sheet 16×96 em coluna: fechada (0), bote (1), engolida (2), mastiga A/B (3/4), murcha (5).
-  'carnivorous-plant': { url: `${A}/environment/props/carnivorous_plant.png`, frameW: 16, frameH: 16 },
   'wood-icon': { url: `${A}/ui/icons/wood_icon.png` },
-  'wood-on-fire-icon': { url: `${A}/ui/icons/wood_on_fire_icon.png` },
 };
 
 const baseTextures = new Map<string, THREE.Texture>();

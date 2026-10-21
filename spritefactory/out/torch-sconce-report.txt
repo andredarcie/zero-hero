@@ -1,3 +1,0 @@
-torch-sconce: 1 frame(s) — 0 fail, 0 warn
-  [info] bbox: content 7x14 at (4,1), coverage 13%
-  frame 0: #7c7e8b×12 #1d2b53×10 #989aa7×5 #5d6165×5

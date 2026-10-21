@@ -1272,7 +1272,7 @@ export class World3D {
    * nome diz (quantos pixels de tela um pixel desenhado ocupa) e a mesma imagem sai do mesmo jeito
    * no monitor e no telefone.
    *
-   * O TETO de 2 no `devicePixelRatio` é a mesma prudência do `prototype3d/main.ts` deste repositório
+   * O TETO de 2 no `devicePixelRatio` é a mesma prudência do antigo protótipo 3D (`src/prototype3d`, já removido)
    * e dos exemplos do three: acima de 2 a diferença é invisível a olho e a conta de preenchimento
    * dobra de novo — e preenchimento é justamente o que falta numa GPU de telefone.
    */
@@ -1303,7 +1303,7 @@ export class World3D {
   }
 
   /**
-   * Build the post chain (ported from src/prototype3d/main.ts):
+   * Build the post chain (ported from the old 3D prototype, since removed):
    *   scene → bloom (emissive halo) → FinishShader (tilt-shift DoF + vignette + grain).
    * Everything runs at the low render resolution, so the NEAREST upscale still
    * gives the chunky pixel-art frame.
@@ -4104,7 +4104,7 @@ export class World3D {
 
 // ── HD-2D post: the finish shader (tilt-shift DoF + vignette + grain) ─────────
 //
-// Ported from src/prototype3d/main.ts. A screen-space fake depth-of-field: a
+// Ported from the old 3D prototype. A screen-space fake depth-of-field: a
 // sharp horizontal band at uFocusY (the hero's line) stays crisp while the top
 // (distant background) and bottom (foreground) blur out — the "miniature
 // diorama" tilt-shift. Then a soft vignette and a touch of film grain.

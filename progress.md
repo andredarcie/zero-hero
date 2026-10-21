@@ -9418,3 +9418,11 @@ são do autor.
 - O "!" reacende a cada degrau: `dialogKeyFor` devolve `<id>:hint:<item>`, e fala nova é exatamente o que a marca diz.
 - Vega: ore → furnace → charcoal → bloom → iron. O texto do carvão na cerimônia virou "Smelts ore." (era "Feeds a torch.", que mandava para o lugar errado).
 - Não é a legenda de trava ressuscitada: é uma pessoa falando, só quando o herói vai até ela, e só sobre o pedido dela.
+
+## 2026-10-21 — Limpa geral: 277 arquivos que nada mais usava
+
+- **Assets:** 104 arquivos de `public/assets` sem nenhuma referência (bestiário, bomba, lava, corações, marco da estrada, planta carnívora, mato cortado, portais, vasos, tilesets de deserto/neve…). Antes saíram do `assetManifest`, do `textures3d` e do `ASSET_KEYS` as 50 chaves que eram carregadas no boot e nunca usadas, e de `constants.ts` os exports que ninguém lia (frames de zora/slime/bomba/coração, `PLAYER_HEALTH_MAX`, `PYRE_LOGS_REQUIRED`, constantes do editor antigo…).
+- **Código e raiz:** o protótipo 3D (`prototype3d.html` + `src/prototype3d/`, a terceira rota que não devia existir), `game.zip` (22 MB de build versionado), os planos de sistemas removidos (`plano-combate`, `plano-dungeons`, `plano-tocha`, `plan-hd2d`), `sombra-do-muro-antes-depois.png`, `backup/underworld-pre-enrich.json`, `playtest/_check.*`.
+- **Scripts já aplicados e sem referência:** `add-npc-chunks`, `add-terrain-chunks`, `add-wizard`, `cozy-tiles`.
+- **Sprite Factory:** as specs de arte que não chega mais ao jogo (16, de `barrel` a `zora`), e `spritefactory/out/` saiu do git (142 artefatos, 15 MB): é saída do `build`, agora no `.gitignore`.
+- Como foi medido: grafo de imports a partir de `src/main.ts`; cada arquivo de `public/` procurado por caminho, nome e radical em `src/`, `index.html` e nos JSON; cada chave de `ASSET_KEYS`/`textures3d` procurada fora das tabelas que só a declaram. Nenhum caminho de asset é montado por template.

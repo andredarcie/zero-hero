@@ -1,9 +1,0 @@
-torch-flame: 4 frame(s) — 0 fail, 0 warn
-  [info] bbox: frame 0: content 5x9 at (6,2), coverage 13%
-  [info] bbox: frame 1: content 5x7 at (6,4), coverage 11%
-  [info] bbox: frame 2: content 5x10 at (6,1), coverage 14%
-  [info] bbox: frame 3: content 5x7 at (6,4), coverage 12%
-  frame 0: #a53030×14 #e7462a×9 #f1cc36×5 #c83e3e×4 #f8e394×2
-  frame 1: #a53030×11 #e7462a×9 #f1cc36×4 #c83e3e×4 #f8e394×1
-  frame 2: #a53030×15 #e7462a×8 #f1cc36×5 #c83e3e×4 #f8e394×3
-  frame 3: #a53030×12 #e7462a×8 #f1cc36×4 #c83e3e×4 #f8e394×2

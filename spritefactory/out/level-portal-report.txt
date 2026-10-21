@@ -1,9 +1,0 @@
-level-portal: 4 frame(s) — 0 fail, 0 warn
-  [info] bbox: frame 0: content 14x14 at (1,1), coverage 63%
-  [info] bbox: frame 1: content 14x14 at (1,1), coverage 63%
-  [info] bbox: frame 2: content 14x14 at (1,1), coverage 63%
-  [info] bbox: frame 3: content 14x14 at (1,1), coverage 63%
-  frame 0: #1d2b53×30 #882c98×29 #141d38×25 #39228b×22 #a9abbe×17 #af3fc3×16 #324476×11 #5d6165×11
-  frame 1: #882c98×31 #1d2b53×30 #141d38×25 #39228b×23 #a9abbe×17 #af3fc3×13 #324476×11 #5d6165×11
-  frame 2: #1d2b53×30 #882c98×27 #141d38×25 #39228b×24 #a9abbe×17 #af3fc3×16 #5d6165×11 #324476×10
-  frame 3: #882c98×31 #1d2b53×29 #141d38×25 #39228b×24 #a9abbe×17 #af3fc3×12 #324476×11 #5d6165×11

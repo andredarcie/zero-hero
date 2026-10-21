@@ -1,4 +1,0 @@
-sea: 3 frame(s) — 0 fail, 0 warn
-  frame 0: #1f424f×217 #265160×34 #0b8a8f×5
-  frame 1: #1f424f×217 #265160×34 #0b8a8f×5
-  frame 2: #1f424f×217 #265160×34 #0b8a8f×5

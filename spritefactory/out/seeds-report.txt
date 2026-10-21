@@ -1,3 +1,0 @@
-seeds: 1 frame(s) — 0 fail, 0 warn
-  [info] bbox: content 12x10 at (2,3), coverage 20%
-  frame 0: #f1cc36×27 #c9c81b×15 #f8e394×6 #63452c×3

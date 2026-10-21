@@ -5,11 +5,8 @@ export const DEFAULT_GAME_HEIGHT = 240;
 export const GRID_COLUMNS = 8;
 export const GRID_ROWS = 8;
 export const TILESET_FRAME_SIZE = 16;
-export const ITEM_FRAME_SIZE = 16;
 export const MIN_BOARD_TILE_SIZE = 24;
 export const MAX_CHARACTER_SIZE = 52;
-export const BOARD_PANEL_PADDING = 16;
-export const TILE_GAP = 6;
 export const FONT_FAMILY = "'Press Start 2P', monospace";
 
 // Resolution for every Text object. The game canvas renders at 1x (Scale.NONE, no
@@ -52,27 +49,11 @@ export const dialogBoxMetrics = (width: number, height: number): DialogBoxMetric
   ));
   return { boxHeight, fontSize, margin };
 };
-// Starting/maximum hearts.
-export const PLAYER_HEALTH_MAX = 4;
-export const ITEM_FLOAT_AMPLITUDE = 3;
-export const ITEM_FLOAT_SPEED = 0.0034;
-export const ITEM_SCALE_PULSE = 0.04;
-export const EDITOR_PANEL_WIDTH = 320;
-export const EDITOR_BUTTON_HEIGHT = 30;
-export const EDITOR_BUTTON_WIDTH = 90;
-export const EDITOR_PALETTE_COLUMNS = 5;
-export const EDITOR_EMPTY_TILE_LABEL = 'Limpar';
-export const EDITOR_LEVEL_BUTTON_HEIGHT = 24;
-export const EDITOR_LEVEL_LIST_MAX = 5;
-export const EDITOR_NEW_LEVEL_FILE_NAME = 'level_new.json';
-export const EDITOR_PALETTE_TILE_SIZE = 32;
 export const GAMEPLAY_HERO_SCALE = 1;
 export const GAMEPLAY_HERO_MAX_SIZE = Number.MAX_SAFE_INTEGER;
 
 export const CHUNK_COLUMNS = 12;
 export const CHUNK_ROWS = 12;
-export const WORLD_VIEWPORT_COLS = 10;
-export const WORLD_VIEWPORT_ROWS = 12;
 
 export const SCENE_DEPTHS = {
   ground: 0,
@@ -92,14 +73,6 @@ export const SCENE_DEPTHS = {
   paletteSelection: 35,
   toast: 40,
 } as const;
-
-// 2.5D depth sorting: entities lower on screen (greater worldY) are closer to the
-// camera, so they draw in front. The band stays above pickups (item=8) and well below
-// the lighting overlay (25). worldY spans roughly [-24, 23], giving depths ~9.6..14.3.
-const Y_SORT_BASE = 12;
-const Y_SORT_STEP = 0.1;
-export const ySortDepth = (worldY: number, bias = 0): number =>
-  Y_SORT_BASE + (worldY * Y_SORT_STEP) + bias;
 
 export const HERO_FRAMES = {
   idleDown: 3,
@@ -159,37 +132,18 @@ export const ASSET_KEYS = {
   npcPoet: 'npc-poet',
   npcDeath: 'npc-death',
   forestTileset: 'forest-tileset',
-  hearts: 'hearts',
   keyItem: 'key-item',
-  keyItemIcon: 'key-item-icon',
   swordItem: 'sword-item',
   swordItemIcon: 'sword-item-icon',
   axeIcon: 'axe-icon',
   greatAxeIcon: 'great-axe-icon',
-  bombItem: 'bomb-item',
-  bombIcon: 'bomb-icon',
   pickaxeIcon: 'pickaxe-icon',
   scytheIcon: 'scythe-icon',
   shovelIcon: 'shovel-icon',
-  carnivoreSeedsItem: 'carnivore-seeds',
-  carnivorousPlant: 'carnivorous-plant',
   woodItem: 'wood-item',
   woodIcon: 'wood-icon',
-  woodOnFireIcon: 'wood-on-fire-icon',
   lookedDoorObject: 'looked-door-object',
   swingGateObject: 'swing-gate-object',
-  undead: 'undead',
-  undeadHurt: 'undead-hurt',
-  undeadBorn0: 'undead-born-0',
-  undeadBorn1: 'undead-born-1',
-  undeadBorn2: 'undead-born-2',
-  undeadBorn3: 'undead-born-3',
-  undeadBorn4: 'undead-born-4',
-  undeadBorn5: 'undead-born-5',
-  undeadBorn6: 'undead-born-6',
-  // A ARMA DELA (Sprite Factory). Um femur simetrico: o billboard gira em torno do proprio centro
-  // durante o golpe, e um osso com no de um lado so leria de ponta-cabeca em metade do arco.
-  undeadBone: 'undead-bone',
   /**
    * A OSSADA do chao — a MESMA arte da frame 27 do `forest_tile_set` ("Caveira e Ossos"), recortada
    * pixel a pixel para um PNG proprio.
@@ -200,38 +154,12 @@ export const ASSET_KEYS = {
    * essa conta: ele amostra o atlas direto, entao a ossada era o unico sprite do jogo desenhado
    * borrado. Textura propria = NEAREST como todo o resto, sem nenhum pixel diferente.
    */
-  bones: 'bones',
-  // A TEIA que a aranha larga ao andar (Sprite Factory). Marca de chao como a ossada: nao bloqueia,
-  // nao prende, nao fere — diz que ha aranha naquele corredor antes de uma pular nele.
-  spiderWeb: 'spider-web',
-  // Os PEDACOS do desmonte: [0] a cabeca, [1] um osso quebrado. O femur inteiro que voa junto e o
-  // proprio `undeadBone` — o esqueleto se parte nos mesmos ossos com que batia.
-  undeadBits: 'undead-bits',
   // O irmao dele: o balao com o GRAVETO ACESO, que o heroi pensa ao bater num arbusto seco com o
   // graveto apagado na mao (ver HeroThought e GameScene.useItemAt).
   thoughtTorch: 'thought-torch',
-  // A FAUNA que voltou a ter corpo (ver entities/enemies/). A arte sempre esteve em
-  // public/assets/characters/enemies/ — era o bestiario do modo Sobreviventes —, e ela so pode
-  // morar aqui porque agora tem quem a desenhe: cada def carregada e download e VRAM no boot.
-  bat: 'bat',
-  batHurt: 'bat-hurt',
-  spider: 'spider',
-  // Slime e Slime Grande sao SHEETS de 2 frames (16x32): pousado e esticado no pulo. O pulo e a
-  // unica animacao deles, e ela troca de frame no passo — gosma nao anda, salta.
-  slime: 'slime',
-  slimePool: 'slime-pool',
-  bigSlime: 'bigslime',
-  bigSlimePool: 'bigslime-pool',
-  turret: 'turret',
-  turretBullet: 'turret-bullet',
-  // O bicho do rio (Sprite Factory). Sheet de 5 ESTADOS em coluna — ver ZORA_FRAMES.
-  zora: 'zora',
   // `mage` e a arte que o NPC "wizard" tambem usa (NPC_VISUALS). O mago INIMIGO nasce com um tom
   // frio por cima justamente por isso — ver MageEnemy: dois personagens nao podem ler igual.
   mage: 'mage',
-  mageHurt: 'mage-hurt',
-  mageCast: 'mage-cast',
-  magicBall: 'magic-ball',
   swordOnFire: 'sword-on-fire',
   dryBush: 'dry-bush',
   dryTree: 'dry-tree',
@@ -246,42 +174,24 @@ export const ASSET_KEYS = {
   // JOGO desenha, entao e a que o editor tem de mostrar — a antiga grass_wind0 era o tile
   // top-down de fundo opaco, e um icone que nao e o objeto e uma mentira na paleta.
   tallGrassUp: 'tall-grass-up',
-  cuttingGrass0: 'cutting-grass0',
-  cuttingGrass1: 'cutting-grass1',
-  cuttingGrass2: 'cutting-grass2',
-  cuttingGrass3: 'cutting-grass3',
   seedsItem: 'seeds-item',
   mushroomItem: 'mushroom-item',
   plantHole: 'plant-hole',
   plantMound: 'plant-mound',
   // A flor da lua (spritefactory): as 9 poses de UMA flor abrindo — ver MOONFLOWER_FRAMES.
   moonflower: 'moonflower',
-  // O MARCO da estrada do construtor de mundo (spritefactory/sprites/road-seal.mjs): a laje de
-  // pedra em que se compra o próximo chunk. Dois frames — dormente e desperta.
-  roadSeal: 'road-seal',
   toolbox: 'workbench',
   furnace: 'furnace',
   // O ALTAR: laje de pedra em 2 frames (fria / com o tampo em brasa). Ver AltarObject.
   altar: 'altar',
   oreItem: 'ore-item',
   bloomItem: 'bloom-item',
-  cutGrass: 'cut-grass',
-  cutGrassWind0: 'cut-grass-wind0',
-  cutGrassWind1: 'cut-grass-wind1',
-  grassFire0: 'grass-fire0',
-  grassFire1: 'grass-fire1',
-  lavaFloor: 'lava-floor',
   water: 'water',
   water1: 'water-1',
   water2: 'water-2',
   water3: 'water-3',
   bridge: 'bridge',
-  campfireFrame0: 'campfire-f0',
   campfireFrame1: 'campfire-f1',
-  campfireFrame2: 'campfire-f2',
-  tinyFire0: 'tiny-fire0',
-  tinyFire1: 'tiny-fire1',
-  tinyFire2: 'tiny-fire2',
 } as const;
 
 /**
@@ -319,8 +229,6 @@ export const MOONFLOWER_LIGHT_TILES = 2.6;
 // Sprite Factory workbench.png: a MESA parada, a mesa TRABALHANDO (o martelo sobe um pixel e
 // saltam duas fagulhas — micro-variacao, nunca uma silhueta nova), e as duas poses da BANDEJA.
 export const TOOLBOX_FRAMES = { closed: 0, forging: 1 } as const;
-/** As duas caras do marco da estrada: pedra fria, e pedra com o vinco ACESO. */
-export const ROAD_SEAL_FRAMES = { dormant: 0, awake: 1 } as const;
 
 // O FORNO: quanto dura uma fornada. 4s e quase o dobro da bancada (2,28s) de proposito — reduzir
 // minerio nao e montar uma peca, e uma reacao quimica que leva TEMPO, e o forno tem de ser o
@@ -328,44 +236,6 @@ export const ROAD_SEAL_FRAMES = { dormant: 0, awake: 1 } as const;
 
 // Quantas marteladas uma esponja aguenta antes de virar ferro, na mão ou sobre o altar.
 export const BLOOM_BLOWS = 3;
-
-// A gosma nao anda: SALTA. Sao os dois unicos frames dela — pousada e esticada no ar —, e a troca
-// acontece no passo (ver SlimeEnemy), nao num relogio de animacao: um slime parado fica parado.
-export const SLIME_FRAMES = { rest: 0, hop: 1 } as const;
-
-// O ZORA (Sprite Factory, zora.mjs): o CICLO inteiro dele, na ordem em que acontece. `up` e a unica
-// janela em que a espada o alcanca; `breathing` e o mesmo `up` com micro-variacao, e os dois se
-// alternam parados para o bicho respirar. O `spit` mora no mesmo sheet porque a municao e do bicho
-// (o precedente e bomb.png, que guarda a bomba e a fagulha juntas).
-//
-// `submerged` e o unico frame desenhado DE CIMA: ele nao vai num billboard em pe como o resto do
-// jogo, vai num quad DEITADO na agua (ver ZoraEnemy). Marca na agua e chao — desenhada de lado, ela
-// flutuava meio tile no ar, que foi como a primeira versao chegou ao jogo.
-export const ZORA_FRAMES = { submerged: 0, rising: 1, up: 2, spitting: 3, spit: 4, breathing: 5 } as const;
-
-// The skull's rise-from-the-ground animation, in playback order (see UndeadEnemy).
-export const UNDEAD_BORN_FRAME_KEYS: readonly string[] = [
-  ASSET_KEYS.undeadBorn0,
-  ASSET_KEYS.undeadBorn1,
-  ASSET_KEYS.undeadBorn2,
-  ASSET_KEYS.undeadBorn3,
-  ASSET_KEYS.undeadBorn4,
-  ASSET_KEYS.undeadBorn5,
-  ASSET_KEYS.undeadBorn6,
-];
-
-// ── O QUE UMA FOGUEIRA ACESA FAZ COM UM MONSTRO ─────────────────────────────────────────────
-//
-// Ela QUEIMA quem chega perto, e mais nada. A luz era uma PAREDE — monstro nenhum pisava dentro
-// dela, por nenhum motivo visível —, e essa parede caiu (2026-08-12, a pedido do usuário: "se for
-// mais longe que 2 tiles ele está 100% seguro e não liga mais pra fogueira"). O que ficou é uma
-// regra só, física e legível de longe: dentro do CALOR o corpo pega fogo e perde vida; fora dele a
-// fogueira é uma luz bonita e nada mais.
-//
-// Duas tiles é o anel inteiro à volta da lenha (os quatro cardeais a 1, as diagonais a 1,41 e os
-// cardeais a 2) — perto o bastante para ser uma decisão de quem chega, longe o bastante para não
-// ser um acidente de quem passa.
-export const CAMPFIRE_SCORCH_RADIUS_TILES = 2;
 
 // ONDE MONSTRO NÃO NASCE. Este raio já foi a parede de movimento e hoje é só isto: uma cova (ou o
 // cerco) não abre dentro da luz de um fogo aceso, e é por isso que acender a fogueira do corredor
@@ -417,25 +287,12 @@ export const KEY_FRAMES = {
   pickup: 1,
 } as const;
 
-// ui/hearts.png (5 frames de 7x7) e OUTRA coisa: o coracao do HUD enchendo, do vazio (so o
-// contorno) ao cheio. Ele dormia no repositorio desde sempre, sem um unico uso — o jogo nao tem
-// HUD. A subtela e o primeiro lugar onde ele cabe, e cabe exatamente: "quantos coracoes faltam"
-// se desenha com o coracao VAZIO no lugar, nunca com o cheio apagado por opacidade.
-export const UI_HEART_FRAMES = { empty: 0, full: 4 } as const;
-
 // heart.png is a 16x32 sheet built on the same convention as key.png: the top heart is the plain
 // one (ink navy, for a lit UI slot), the bottom one carries a bone outline so it reads lying on
 // the dark ground — which is the only place the game shows a heart, so `pickup` is what it uses.
 export const HEART_FRAMES = {
   plain: 0,
   pickup: 1,
-} as const;
-
-// bomb.png is a 16x32 sheet: top = the bomb itself, bottom = a small spark puff (used as
-// explosion debris).
-export const BOMB_FRAMES = {
-  item: 0,
-  spark: 1,
 } as const;
 
 // woods.png is a 16x96 sheet: the dry tree shrinking one stage per axe chop, frame 0 (full
@@ -726,13 +583,6 @@ export const DIGGABLE_GROUND_FRAMES: ReadonlySet<number> = new Set([5, 6]);
 // art is a dedicated tile (ASSET_KEYS.bridge = bridge.png).
 export const BRIDGE_GRAVETOS_REQUIRED = 2;
 
-// Quantos gravetos FECHAM a pira (ver PyreObject). Ela e a irma grande da ponte: a ponte custa
-// dois gravetos porque e um gesto, a pira custa VIAGENS — e desde que ela virou O FIM DO JOGO
-// (acende-la e zerar), esse preco tem de ser uma EMPREITADA, nao um recado. Quinze toras sao
-// umas seis idas a mata; o atalho e ajudar os NPCs, e cada missao cumprida manda toras para ca
-// (ver QUEST_PYRE_LOGS em dialogs/NpcQuests) — metade do baralho fecha a torre sozinha.
-export const PYRE_LOGS_REQUIRED = 15;
-
 // A SEMENTE anda em PACOTE: o punhado que a foice derruba (e o que um mundo autora) vale
 // CINCO sementes na mochila — plantar gasta uma por canteiro, então um corte de mato rende
 // uma fileira, não um buraco. O pacote VIAJA com o item no chão (ItemPickup.units): pousar põe o
@@ -759,12 +609,3 @@ const SPAWN_PACK: ReadonlyMap<string, number> = new Map([
 
 /** Com quantas unidades este tipo nasce no chao quando ninguem diz a contagem. */
 export const spawnPackSize = (kind: string): number => SPAWN_PACK.get(kind) ?? 1;
-
-// River water is animated: these frames (water_0..3.png, a seamless-looping ripple cycle) are
-// cycled by WaterObject, exactly like the campfire's flame frames.
-export const WATER_FRAME_KEYS: readonly string[] = [
-  ASSET_KEYS.water,
-  ASSET_KEYS.water1,
-  ASSET_KEYS.water2,
-  ASSET_KEYS.water3,
-];

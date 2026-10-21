@@ -1,3 +1,0 @@
-thought-plate: 1 frame(s) — 0 fail, 0 warn
-  [info] bbox: content 14x16 at (1,0), coverage 57%
-  frame 0: #d0c7b9×98 #1d2b53×24 #7c7e8b×16 #7dde99×8

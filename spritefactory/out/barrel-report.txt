@@ -1,3 +1,0 @@
-barrel: 1 frame(s) — 0 fail, 0 warn
-  [info] bbox: content 14x12 at (1,2), coverage 52%
-  frame 0: #63452c×46 #815938×32 #886644×21 #b7916a×15 #1d2b53×13 #141d38×4 #324476×3
