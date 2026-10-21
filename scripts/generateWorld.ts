@@ -127,7 +127,6 @@ const enemyCount = chunks.reduce((sum, c) => sum + c.enemies.length, 0);
 const npcCount = chunks.reduce((sum, c) => sum + c.npcs.length, 0);
 const pickupCount = chunks.reduce((sum, c) => sum + c.pickups.length, 0);
 const namedNpcs = new Set(chunks.flatMap((c) => c.npcs.map((n) => n.type)));
-// eslint-disable-next-line no-console
 console.log(
   `world.json written: ${chunks.length} chunks, start (${world.meta.playerStart.worldX},${world.meta.playerStart.worldY}), ` +
   `${enemyCount} enemies, ${npcCount} npcs (${namedNpcs.size} kinds), ${pickupCount} pickups -> ${outPath}`,

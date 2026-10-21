@@ -58,7 +58,7 @@ cor e voz. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de
 ```bash
 npm run dev              # vite dev server
 npm run typecheck        # tsc --noEmit
-npm run lint             # eslint (scripts/worldgen tem 3 erros de parser pré-existentes — ignore)
+npm run lint             # eslint — o repo inteiro passa limpo; erro novo é seu
 npm run build            # typecheck + vite build
 #  NUNCA rode `generate:world` — ele SOBRESCREVE o que foi feito à
 #  mão, sem merge e sem perguntar (ver abaixo). Para mexer no mundo: o /editor, ou um script que

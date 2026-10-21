@@ -20,7 +20,7 @@ import { readPng, writePng } from './lib/png.mjs';
 import { Pix, seededRng, speckle, gridToImage, framesToSheet } from './lib/pixel.mjs';
 import { analyzeSprite, formatReport } from './lib/analyze.mjs';
 import { makePreview } from './lib/preview.mjs';
-import { RAMPS, GAME_PALETTE, hexToRgb, rgbToHex, nearestGameColor } from './lib/palette.mjs';
+import { RAMPS, GAME_PALETTE, hexToRgb, rgbToHex } from './lib/palette.mjs';
 
 const HERE = import.meta.dirname;
 const OUT = path.join(HERE, 'out');

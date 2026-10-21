@@ -45,12 +45,10 @@
 import fs from 'node:fs/promises';
 import { fileURLToPath, URL } from 'node:url';
 
-// OS DOIS ANDARES DO MUNDO, e são todos os arquivos que existem. Havia um terceiro conjunto — os
-// levels soltos de puzzle em `public/levels/`, varridos por um glob logo abaixo —, e ele saiu com
-// os levels isolados.
+// O MUNDO, e é o único arquivo que existe. Já foram mais: os levels soltos de `public/levels/`
+// saíram com os levels isolados, e o `underworld.json` saiu com o subterrâneo.
 const FILES = [
   'public/world.json',
-  'public/underworld.json',
 ];
 
 // Para onde um item se muda, em ordem. Ortogonais antes das diagonais: mudar de tile é para ficar
