@@ -97,6 +97,7 @@ import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl, type SubScreenView } from '@/game/runtime/SubScreen';
 import { QuickBag, type QuickBagView } from '@/game/runtime/QuickBag';
+import { FpsCounter } from '@/game/runtime/FpsCounter';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
@@ -348,6 +349,9 @@ const SWING_HAND_ELEVATION = 0.55;
 // Facing away (north), the pivot is also pulled a little TOWARD the camera, so the arc crosses
 // the hero's body and reads as happening in FRONT of him.
 const SWING_BACK_TURNED_NEAR = 0.3;
+/** Quanto uma pegada leva para sumir (era a duração do tween dela). */
+const FOOTPRINT_FADE_MS = 700;
+
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
 
@@ -456,6 +460,8 @@ export class GameScene extends Phaser.Scene {
   // Hides the back item while the same item is mid-swing, so it isn't shown in two places.
   private backItemSwingTimer?: Phaser.Time.TimerEvent;
   private movementController?: PlayerMovementController;
+  /** O FPS fixo no canto da tela (ver FpsCounter). */
+  private fpsCounter?: FpsCounter;
   private playerWorld = { worldX: 0, worldY: 0 };
   // A cadencia do X e o pedido guardado dele (ver USE_COOLDOWN_MS / ACTION_BUFFER_MS).
   private useCooldownMs = 0;
@@ -554,7 +560,12 @@ export class GameScene extends Phaser.Scene {
 
   // Footprints (world-anchored so they scroll with the ground)
   private footprintStep = false;
-  private readonly footprints: Array<{ obj: Phaser.GameObjects.Ellipse; worldX: number; worldY: number; offX: number; offY: number }> = [];
+  private readonly footprints: Array<{ obj: Phaser.GameObjects.Ellipse; worldX: number; worldY: number; offX: number; offY: number; bornAt: number }> = [];
+  /**
+   * Pegadas apagadas, prontas para a próxima. Criar uma elipse do Phaser (e um tween) a cada tile e
+   * destruir 700ms depois custava 0,4ms por passo — 2,5ms no celular fraco, um tranco a cada tile.
+   */
+  private readonly footprintPool: Phaser.GameObjects.Ellipse[] = [];
 
   // Breathing idle
   private breathingTween?: Phaser.Tweens.Tween;
@@ -845,6 +856,12 @@ export class GameScene extends Phaser.Scene {
     this.world3d.prewarmShaders();
     initProfiler(this.world3d);
     this.events.on(Phaser.Scenes.Events.PRE_UPDATE, profiler.frameStart, profiler);
+    // O quadro so termina depois do desenho do Phaser (a UI 2D por cima do 3D): fechado no
+    // render3D, o profiler deixava a camada 2D inteira fora da conta.
+    this.game.events.on(Phaser.Core.Events.PRE_RENDER, this.handlePreRender, this);
+    this.game.events.on(Phaser.Core.Events.POST_RENDER, this.handlePostRender, this);
+    this.game.events.on(Phaser.Core.Events.VISIBLE, this.handleVisible, this);
+    this.fpsCounter = new FpsCounter();
 
     this.registerDebugApi();
 
@@ -1014,6 +1031,7 @@ export class GameScene extends Phaser.Scene {
     // The walk cycle ticks here (POST_UPDATE runs even when update() early-returns).
     tickHeroView(this.hero, delta);
     this.syncHeroBillboard();
+    this.fadeFootprints();
     // Os vaga-lumes vivem aqui e nao no update: eles sao a moldura das cutscenes (a abertura e o
     // fim), e o update fica parado justamente nelas.
     this.updateFireflies(delta);
@@ -1034,7 +1052,20 @@ export class GameScene extends Phaser.Scene {
     profiler.end('render3d');
     profiler.gauge('tweens', this.tweens.getTweens().length);
     profiler.gauge('displayList', this.children.length);
+  }
+
+  private handlePreRender(): void {
+    profiler.begin('ui2d');
+  }
+
+  private handlePostRender(): void {
+    profiler.end('ui2d');
     profiler.frameEnd();
+    this.fpsCounter?.tick(performance.now());
+  }
+
+  private handleVisible(): void {
+    this.fpsCounter?.resync();
   }
 
   // Draw the hero's state onto its 3D billboard: position from the screen-centre pin
@@ -1206,7 +1237,12 @@ export class GameScene extends Phaser.Scene {
     // 3D teardown: stop the frame hook, drop the billboards, dispose the renderer.
     this.events.off(Phaser.Scenes.Events.POST_UPDATE, this.render3D, this);
     this.events.off(Phaser.Scenes.Events.PRE_UPDATE, profiler.frameStart, profiler);
+    this.game.events.off(Phaser.Core.Events.PRE_RENDER, this.handlePreRender, this);
+    this.game.events.off(Phaser.Core.Events.POST_RENDER, this.handlePostRender, this);
+    this.game.events.off(Phaser.Core.Events.VISIBLE, this.handleVisible, this);
     profiler.detach();
+    this.fpsCounter?.destroy();
+    this.fpsCounter = undefined;
     this.heroBillboard?.destroy();
     this.heroBillboard = undefined;
     this.plantedSword?.destroy();
@@ -1304,6 +1340,7 @@ export class GameScene extends Phaser.Scene {
     this.breathingTween?.destroy();
     this.breathingTween = undefined;
     this.footprints.length = 0;
+    this.footprintPool.length = 0;
     this.torchFlameBb?.destroy();
     this.torchFlameBb = undefined;
     this.torchGutter.level = 1.0;
@@ -1314,7 +1351,13 @@ export class GameScene extends Phaser.Scene {
     if (this.tweens) this.tweens.timeScale = 1;
   }
 
-  public update(_time: number, delta: number): void {
+  public update(time: number, delta: number): void {
+    profiler.begin('update');
+    this.tick(time, delta);
+    profiler.end('update');
+  }
+
+  private tick(_time: number, delta: number): void {
     // A marca some junto: um quadrado branco prometendo um gesto durante um dialogo e a mesma
     // mentira que o balao de dica era. `syncPlacementHints` a reacende logo abaixo se o jogo
     // estiver mesmo correndo.
@@ -1353,11 +1396,13 @@ export class GameScene extends Phaser.Scene {
     this.spendActionBuffers(delta);
     const prevWorldX = this.playerWorld.worldX;
     const prevWorldY = this.playerWorld.worldY;
+    profiler.begin('update.move');
     this.playerWorld = this.movementController.update(
       this.playerWorld.worldX,
       this.playerWorld.worldY,
       delta,
     );
+    profiler.end('update.move');
     const stepDx = this.playerWorld.worldX - prevWorldX;
     const stepDy = this.playerWorld.worldY - prevWorldY;
 
@@ -1370,7 +1415,9 @@ export class GameScene extends Phaser.Scene {
     } else if (!this.dialogOpen && !this.camShifting && this.time.now - this.lastStepTime > 180) {
       this.startBreathing();
     }
+    profiler.begin('update.chunks');
     this.streamChunks();
+    profiler.end('update.chunks');
     this.updateFootprints();
     this.heroThought?.tick(delta);
 
@@ -1382,6 +1429,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.updateTorchFx(delta);
 
+    profiler.begin('update.items');
     if (this.lootManager && this.camera) {
       // O drop apanhado some no HERÓI: o que se guarda voa pro corpo, porque a mochila não tem
       // posição na tela.
@@ -1414,6 +1462,9 @@ export class GameScene extends Phaser.Scene {
       this.itemManager.render(this.tileSize, this.camera!);
     }
 
+    profiler.end('update.items');
+
+    profiler.begin('update.world');
     // Felled trees grow back after a while (renewable gravetos = no soft-lock). The clock only
     // ticks while the tile is clear — a dropped item (the graveto) on the stump pauses it.
     for (const tree of this.dryTrees) {
@@ -1429,13 +1480,18 @@ export class GameScene extends Phaser.Scene {
     // O ALTAR não tem ciclo: o único relógio dele é o da brasa que a pancada deixou no tampo.
     for (const altar of this.altars) altar.update(delta);
     this.updateToolboxes(delta);
+    profiler.end('update.world');
 
     // As marcas de posicionamento seguem o corpo NO MESMO frame em que ele vira.
     this.syncPlacementHints();
+    profiler.begin('update.npcs');
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.greetNearbyNpcs();
     this.updateCat(delta);
+    profiler.end('update.npcs');
+    profiler.begin('update.props');
     this.renderProps();
+    profiler.end('update.props');
   }
 
   /** O "OI": o NPC da um pulinho na primeira vez que o heroi chega a dois passos dele. */
@@ -1756,6 +1812,26 @@ export class GameScene extends Phaser.Scene {
     for (const f of this.footprints) {
       const s = this.camera.tileToScreen(f.worldX, f.worldY, this.tileSize);
       f.obj.setPosition(s.x + f.offX, s.y + f.offY);
+    }
+  }
+
+  /**
+   * O esmaecimento que era um tween de 700ms 'Power1.easeIn' (alfa 1 → 0, curva v²). Roda no
+   * render3D, que corre todo quadro como o gerenciador de tweens corria — inclusive com o update
+   * parado num diálogo — e devolve ao pool a pegada que sumiu.
+   */
+  private fadeFootprints(): void {
+    const now = this.time.now;
+    for (let i = this.footprints.length - 1; i >= 0; i--) {
+      const f = this.footprints[i];
+      const t = (now - f.bornAt) / FOOTPRINT_FADE_MS;
+      if (t >= 1) {
+        f.obj.setVisible(false);
+        this.footprintPool.push(f.obj);
+        this.footprints.splice(i, 1);
+      } else {
+        f.obj.setAlpha(1 - t * t);
+      }
     }
   }
 
@@ -6323,24 +6399,16 @@ export class GameScene extends Phaser.Scene {
     const w = Math.max(3, Math.floor(this.tileSize * (dy !== 0 ? 0.30 : 0.16)));
     const h = Math.max(3, Math.floor(this.tileSize * (dx !== 0 ? 0.30 : 0.16)));
 
-    const print = this.add
-      .ellipse(s.x + offX, s.y + offY, w, h, 0x1a0e06, 0.75)
-      .setDepth(SCENE_DEPTHS.decorBelowPlayer - 1);
+    const reused = this.footprintPool.pop();
+    const print = reused
+      ? reused.setPosition(s.x + offX, s.y + offY).setAlpha(1).setVisible(true)
+      : this.add
+        .ellipse(s.x + offX, s.y + offY, w, h, 0x1a0e06, 0.75)
+        .setDepth(SCENE_DEPTHS.decorBelowPlayer - 1);
+    // A forma muda com a direção do passo; refazer o contorno só quando ela muda de fato.
+    if (reused && (reused.width !== w || reused.height !== h)) reused.setSize(w, h);
 
-    const entry = { obj: print, worldX: fromWorldX, worldY: fromWorldY, offX, offY };
-    this.footprints.push(entry);
-
-    this.tweens.add({
-      targets: print,
-      alpha: 0,
-      duration: 700,
-      ease: 'Power1.easeIn',
-      onComplete: () => {
-        print.destroy();
-        const i = this.footprints.indexOf(entry);
-        if (i >= 0) this.footprints.splice(i, 1);
-      },
-    });
+    this.footprints.push({ obj: print, worldX: fromWorldX, worldY: fromWorldY, offX, offY, bornAt: this.time.now });
   }
 
 }

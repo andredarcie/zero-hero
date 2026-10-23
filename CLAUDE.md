@@ -85,6 +85,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
   repetição se filtra por `event.repeat`.
+- **O herói anda LIVRE do grid** (posição contínua, 8 direções, colisão por caixa): o tile lógico
+  é o do CENTRO dele, e tudo que pensa em tile lê esse. Playtest anda um tile com `stepTile`.
 - **A parede VIRA o herói** (`PlayerMovementController`): é assim que se mira. Contra tile LIVRE a
   seta anda — não há virar-no-lugar.
 - **A FERRAMENTA CERTA SE APRESENTA SOZINHA** (`toolWantedAt`) e a **MOCHILA SÓ GUARDA O QUE TEM
@@ -252,7 +254,10 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
   inteiro (~550ms travados). Fogo **empresta** de um pool fixo (`FIRE_LIGHT_SLOTS`); mesh pode
   nascer e morrer, luz não. `perf-burn` guarda isso.
 - **`prewarmShaders()` roda com o render target do composer ligado** — o mundo nunca é desenhado
-  no canvas, e o three assa o color space do alvo na chave do programa.
+  no canvas, e o three assa o color space do alvo na chave do programa. E ele **DESENHA**, não só
+  compila: no ANGLE (Chrome/Windows) o shader só termina no primeiro draw (o rio travava 312ms).
+- **A luz pontual do CHÃO sai do `GroundLightMap`** (uma conta por célula, não por pixel): mexer na
+  conta de luz do `pixelArtLight` exige mexer nele também. E **nada de `THREE.Points`** (`ParticleBatch`).
 - **NÃO HÁ TONE MAPPING.** O mundo é desenhado num render target, e o three só monta o ACES quando
   o alvo é a tela — então o linear vai cru pro canvas e **`hd3d.exposure` não faz nada**. Sem ombro
   segurando o alto, 1.0 é corte seco: subir luz estoura o branco antes de clarear a sombra (é para
@@ -311,5 +316,5 @@ boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render
   do herói congela num frame do passo).
 - Editor: **G gira** (não R, que é o retângulo); `UI_STATE_KEY` sobe de versão junto com a *forma*
   do `UiState`; o Salvar avisa sobre entidades em tiles inválidos.
-- Profiler: `?prof` boota com ele, **F3** liga o HUD, `__prof.report()`/`.csv()` despejam. Ele
-  mede GPU de verdade (timer query) e **nomeia a causa** de cada pico.
+- Profiler: `?prof` boota com ele, **F3** alterna compacto → top, `__prof.report()`/`.csv()`
+  despejam. Ele mede GPU de verdade (timer query) e **nomeia a causa** de cada pico.

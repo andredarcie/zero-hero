@@ -354,6 +354,58 @@ export const FIRE_WOBBLE_GLSL = /* glsl */ `
 export const lightCapUniform: THREE.IUniform = { value: 1.25 };
 
 /**
+ * O mapa de luz do chão (ver GroundLightMap): a soma das luzes pontuais calculada uma vez por
+ * célula de luz, e não uma vez por pixel. `Rect` = (célula x0, célula z0, largura, altura) em
+ * células; `Size` = o tamanho real da textura (ela só cresce, e a área usada é um canto dela).
+ */
+export const groundLightMapUniform: THREE.IUniform<THREE.Texture | null> = { value: null };
+export const groundLightRectUniform: THREE.IUniform<THREE.Vector4> = { value: new THREE.Vector4(0, 0, 1, 1) };
+export const groundLightSizeUniform: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
+export const groundLightMapOnUniform: THREE.IUniform = { value: 0 };
+export const groundLightTexelYUniform: THREE.IUniform = { value: 0 };
+
+/**
+ * Troca o laço das luzes pontuais por UMA leitura do mapa do chão — só no pixel em que a conta da
+ * célula vale para ele: normal para cima, na camada de células do chão, dentro da área do mapa.
+ * Fora disso, o laço de sempre. A soma do mapa é a do laço antes da máscara de sombra, então a
+ * máscara (por pixel) multiplica a leitura exatamente como multiplicava cada luz.
+ *
+ * Cirurgia no mesmo bloco que `skipDarkPointLights` recorta, e pelo mesmo motivo: o
+ * `#pragma unroll_loop_start` aparece em todo laço de luz, e só o das pontuais é nosso.
+ */
+const GROUND_LIGHT_MAP_GLSL = /* glsl */ `
+  bool zhGround = false;
+  vec2 zhGroundUv = vec2(0.0);
+  if (uGroundMapOn > 0.5 && uLightRes > 0.0) {
+    vec3 zhCell = floor(vLightGridPos * uLightRes);
+    vec2 zhRel = zhCell.xz - uGroundRect.xy;
+    vec3 zhUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    if (zhCell.y == uGroundTexelY && dot(geometryNormal, zhUp) > 0.9999
+        && zhRel.x >= 0.0 && zhRel.y >= 0.0 && zhRel.x < uGroundRect.z && zhRel.y < uGroundRect.w) {
+      zhGround = true;
+      zhGroundUv = (zhRel + 0.5) / uGroundSize;
+    }
+  }
+`;
+
+const useGroundLightMap = (chunk: string, masked: boolean): string => {
+  const blockStart = chunk.indexOf('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )');
+  if (blockStart < 0) return chunk;
+  const loopStart = chunk.indexOf('#pragma unroll_loop_start', blockStart);
+  const loopEnd = chunk.indexOf('#pragma unroll_loop_end', blockStart);
+  if (loopStart < 0 || loopEnd < 0 || loopEnd < loopStart) return chunk;
+  const endLen = '#pragma unroll_loop_end'.length;
+  const read = `vec3 zhGroundIrr = texture2D( uGroundMap, zhGroundUv ).rgb${masked ? ' * zhMaskLit' : ''};
+    reflectedLight.directDiffuse += zhGroundIrr * BRDF_Lambert( material.diffuseColor );`;
+  return `${chunk.slice(0, blockStart)}${GROUND_LIGHT_MAP_GLSL}
+${chunk.slice(blockStart, loopStart)}if ( zhGround ) {
+    ${read}
+  } else {
+${chunk.slice(loopStart, loopEnd + endLen)}
+  }${chunk.slice(loopEnd + endLen)}`;
+};
+
+/**
  * Skip the point lights that are switched OFF.
  *
  * The scene's point-light COUNT is frozen on purpose (World3D: FIRE_LIGHT_SLOTS) — three.js bakes
@@ -608,6 +660,11 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       shader.uniforms.uLightRes = lightResUniform;
       shader.uniforms.uLightWobble = lightWobbleUniform;
       shader.uniforms.uFlowTime = flowTimeUniform;
+      shader.uniforms.uGroundMap = groundLightMapUniform;
+      shader.uniforms.uGroundRect = groundLightRectUniform;
+      shader.uniforms.uGroundSize = groundLightSizeUniform;
+      shader.uniforms.uGroundMapOn = groundLightMapOnUniform;
+      shader.uniforms.uGroundTexelY = groundLightTexelYUniform;
       shader.vertexShader = shader.vertexShader
         .replace('void main() {', 'varying vec3 vLightGridPos;\nvoid main() {')
         .replace(
@@ -620,6 +677,11 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
         // worldFx materials already declared uFlowTime above.
         `uniform float uLightRes;
          uniform float uLightWobble;
+         uniform sampler2D uGroundMap;
+         uniform vec4 uGroundRect;
+         uniform vec2 uGroundSize;
+         uniform float uGroundMapOn;
+         uniform float uGroundTexelY;
          ${opts.worldFx ? '' : 'uniform float uFlowTime;'}
          ${FIRE_WOBBLE_GLSL}
          varying vec3 vLightGridPos;
@@ -680,6 +742,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       );
     }
     lightsChunk = skipDarkPointLights(lightsChunk, Boolean(opts.quantize));
+    if (wantsSnap) lightsChunk = useGroundLightMap(lightsChunk, Boolean(opts.quantize));
     // A MeshBasicMaterial has no light loop at all, so this is a no-op there.
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', lightsChunk);
     if (opts.normalUp) {

@@ -8,6 +8,8 @@
 //   abertura → coletora (5 cogumelos) → pintora (2 canteiros regados) → lenhador (4 gravetos)
 //   → astronoma (3 pedras) → o portao abre → graveto e cogumelo do jardim → acender → assar
 //   → creditos → titulo
+import { stepTile } from '../lib/GameDriver.mjs';
+
 const ARROW = { '1,0': 'ArrowRight', '-1,0': 'ArrowLeft', '0,1': 'ArrowDown', '0,-1': 'ArrowUp' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -19,6 +21,7 @@ export default {
     const { page } = driver;
     const state = () => page.evaluate(() => window.gameDebug?.getState() ?? null);
     const press = async (key, hold = 70, after = 140) => {
+      if (key.startsWith('Arrow')) { await stepTile(page, key); await sleep(after); return; }
       await page.keyboard.down(key);
       await sleep(hold);
       await page.keyboard.up(key);

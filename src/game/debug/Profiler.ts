@@ -1,5 +1,7 @@
 import type * as THREE from 'three';
 
+import { ProfilerPanel, type PanelMode } from './ProfilerPanel';
+
 /**
  * Frame profiler for the 3D game loop.
  *
@@ -22,8 +24,8 @@ import type * as THREE from 'three';
  * Off by default and cheap when off: begin/end return immediately, so the calls can
  * live permanently in the hot path.
  *
- *   ?prof             — boot with the profiler running and the HUD up
- *   F3                — toggle the HUD (starts the profiler if idle)
+ *   ?prof             — boot with the profiler running and the full panel up
+ *   F3                — cycle the panel: off → compact → top (starts the profiler if idle)
  *   __prof.report()   — summary: fps, percentiles, every spike with its cause
  *   __prof.spikes()   — just the spikes
  *   __prof.record(ms) — profile a window, then auto-report (used by the playtest)
@@ -208,8 +210,7 @@ class Profiler {
   /** Shader programs compiled since the recording started — the count that must stay 0. */
   private programsCompiled = 0;
 
-  private hud?: HTMLDivElement;
-  private hudAcc = 0;
+  private readonly panel = new ProfilerPanel();
 
   /** Bind to the live renderer. Safe to call again when a scene restarts. */
   public attach(source: ProfilerSource): void {
@@ -358,7 +359,7 @@ class Profiler {
     this.frameNo += 1;
     this.pendingMarks = [];
     this.pendingGauges = {};
-    this.updateHud(now, sample);
+    this.updateHud(now);
   }
 
   private describeSpike(s: FrameSample, programsAdded: number, lightsDelta: number): Spike {
@@ -559,59 +560,31 @@ class Profiler {
     return this.report();
   }
 
-  // ── HUD ─────────────────────────────────────────────────────────────────────
+  // ── HUD (o painel mora em ProfilerPanel.ts) ─────────────────────────────────
 
+  /** F3: desligado → compacto → top → desligado. */
   public toggleHud(): void {
-    if (this.hud) this.hideHud();
-    else this.showHud();
+    const next = { off: 'compact', compact: 'top', top: 'off' } as const;
+    this.setHudMode(next[this.panel.current]);
   }
 
-  public showHud(): void {
-    if (this.hud) return;
-    if (!this.enabled) this.start();
-    const el = document.createElement('div');
-    el.id = 'zh-prof-hud';
-    el.style.cssText =
-      'position:fixed;top:8px;left:8px;z-index:9999;pointer-events:none;' +
-      'font:11px/1.45 ui-monospace,Consolas,monospace;color:#d7e2ff;' +
-      'background:rgba(8,10,20,.82);border:1px solid rgba(255,200,115,.35);' +
-      'border-radius:4px;padding:6px 9px;white-space:pre;text-shadow:0 1px 0 #000;';
-    document.body.appendChild(el);
-    this.hud = el;
+  public showHud(mode: 'compact' | 'top' = 'top'): void {
+    this.setHudMode(mode);
   }
 
   public hideHud(): void {
-    this.hud?.remove();
-    this.hud = undefined;
+    this.setHudMode('off');
   }
 
-  private updateHud(now: number, s: FrameSample): void {
-    const hud = this.hud;
-    if (!hud) return;
-    // Refresh at 5Hz — a HUD that repaints every frame is itself a cost, and a number
-    // that changes 60 times a second is unreadable anyway.
-    if (now - this.hudAcc < 200) return;
-    this.hudAcc = now;
+  private setHudMode(mode: PanelMode): void {
+    // Abrir o painel liga a gravação, e só se ela estava parada: um F3 no meio de um `record`
+    // não pode zerar a janela que o playtest está medindo.
+    if (mode !== 'off' && !this.enabled) this.start();
+    this.panel.setMode(mode);
+  }
 
-    const recent = this.frames.slice(-60).filter((f) => f.dt > 0);
-    const dts = recent.map((f) => f.dt).sort((a, b) => a - b);
-    const avg = dts.reduce((a, b) => a + b, 0) / Math.max(1, dts.length);
-    const worst = Object.entries(s.sections).sort((a, b) => b[1] - a[1])[0];
-    // The most recent frame whose GPU query has come back (the last few are always pending).
-    const gpuMs = recent.filter((f) => f.gpu >= 0).pop()?.gpu ?? -1;
-    const used = s.gauges.fireLightsUsed;
-
-    hud.textContent = [
-      `fps  ${(1000 / Math.max(0.01, avg)).toFixed(0).padStart(3)}   ${avg.toFixed(1)}ms  p99 ${pct(dts, 99).toFixed(1)}ms`,
-      // CPU vs GPU side by side: a change that only costs fragments (an extra light, more
-      // overdraw) moves the GPU number and nothing else. Reading CPU alone hides it.
-      `cpu  ${s.cpu.toFixed(1)}ms    gpu ${gpuMs >= 0 ? `${gpuMs.toFixed(1)}ms` : ' n/a'}`,
-      `hot  ${worst ? `${worst[0]} ${worst[1].toFixed(1)}ms` : '—'}`,
-      `gl   ${s.calls} calls  ${(s.tris / 1000).toFixed(1)}k tris  ${s.programs} shaders`,
-      `fire ${s.gauges.litFires ?? 0} lit / ${s.gauges.fires ?? 0}   lights ${s.lights}${used === undefined ? '' : ` (${used} on fires)`}`,
-      `heap ${s.heapMb}MB   spikes ${this.spikeLog.length}`,
-      this.spikeLog.length ? `last: ${this.spikeLog[this.spikeLog.length - 1].cause.slice(0, 44)}` : '',
-    ].filter(Boolean).join('\n');
+  private updateHud(now: number): void {
+    this.panel.update(now, this.frames, this.spikeLog, this.spikeMs);
   }
 }
 
@@ -619,7 +592,8 @@ export const profiler = new Profiler();
 
 /** Wire the profiler to a scene's renderer and expose it on window (dev only). */
 export const initProfiler = (source: ProfilerSource): void => {
-  if (!import.meta.env.DEV) return;
+  // Vale no build publicado também: desligado, cada begin/end volta na primeira linha, e um
+  // jogador com o jogo engasgando só consegue mostrar o PORQUÊ se o F3 existir na máquina dele.
   profiler.attach(source);
 
   const w = window as unknown as { __prof?: Profiler };

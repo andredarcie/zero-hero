@@ -1,8 +1,12 @@
 ﻿import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+import { FusedBloomPass } from './FusedBloomPass';
+import { GroundLightMap } from './GroundLightMap';
+import { installLazyMatrices } from './lazyMatrices';
+import { ParticleBatch, type ParticleField } from './ParticleBatch';
 
 import {
   CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_TILES, DUNGEON_WALL_FRAMES, MASS_TILE_FRAMES,
@@ -147,6 +151,43 @@ const maskClearScratch = { color: new THREE.Color() };
 // caster's own feet that reads as a MISSING shadow rather than a short one — so the water
 // clamp drops the cast instead of leaving a stub (see emitSolidCast).
 const MIN_CAST_LEN = 0.9;
+/**
+ * Até onde uma sombra projetada alcança a partir do pé de quem a projeta, em tiles: altura (até
+ * ~1,5) × FAR_STRETCH (3,2) × o esticão da chama baixa (1,5) ≈ 7,2. Um projetor mais longe que
+ * isto da área visível não tem como pôr sombra na tela, e não é calculado (ver updateCastShadows).
+ */
+const CAST_REACH_TILES = 8;
+/** Só objetos com raio menor que isto (tiles) saem da lista de render quando longe (cullFarChildren). */
+const CULL_SMALL_TILES = 4;
+/**
+ * Folga além da área de chão visível, em tiles. A área já vem com 2 de folga; isto cobre a altura
+ * de um sprite em pé (o pé fora da tela, a cabeça dentro) e a sombra de chão mais comprida.
+ */
+const CULL_PAD_TILES = CAST_REACH_TILES;
+
+/** O que cullFarChildren guarda em cada filho da cena (calculado uma vez por geometria). */
+type CullTagged = THREE.Object3D & {
+  zhCullGeo?: THREE.BufferGeometry | null;
+  /** Raio da esfera da geometria; 0 = nunca sai da lista (luz, grande, instanciada, sem culling). */
+  zhCullR: number;
+  zhCullCx: number;
+  zhCullCz: number;
+};
+
+const classifyForCull = (o: CullTagged): void => {
+  const mesh = o as unknown as THREE.Mesh;
+  const geo = mesh.geometry as THREE.BufferGeometry | undefined;
+  o.zhCullGeo = geo ?? null;
+  o.zhCullR = 0;
+  o.zhCullCx = 0;
+  o.zhCullCz = 0;
+  if (!mesh.isMesh || !geo || !mesh.frustumCulled || (mesh as THREE.InstancedMesh).isInstancedMesh) return;
+  if (!geo.boundingSphere) geo.computeBoundingSphere();
+  const sphere = geo.boundingSphere!;
+  o.zhCullR = sphere.radius;
+  o.zhCullCx = sphere.center.x;
+  o.zhCullCz = sphere.center.z;
+};
 // NUMERIC tile/bucket keys for the shadow pass's lookups. A `${x},${z}` string key would
 // allocate on every probe of the hottest loops; these fold the coordinate into one number.
 // The +4096 offset keeps negatives (the void ring runs past the world bounds) positive.
@@ -170,6 +211,16 @@ const bucketKey = (x: number, z: number): number => ((x + 4096) >> 2) * 16384 + 
  * distance where a range-limited point light was contributing almost nothing anyway.
  */
 const FIRE_LIGHT_SLOTS = 8;
+/**
+ * Distancia no chao. `Math.hypot` daria o mesmo numero, mas aloca um array de argumentos por
+ * chamada — e as particulas pedem isto centenas de vezes por quadro (era o 5º maior gerador de
+ * lixo do jogo).
+ */
+const planarDist = (ax: number, az: number, bx: number, bz: number): number => {
+  const dx = ax - bx;
+  const dz = az - bz;
+  return Math.sqrt(dx * dx + dz * dz);
+};
 // How far a full-strength flame still counts as "lighting" a point, for lightLevelAt. Tiles.
 const LIGHT_SAMPLE_REACH = 5.5;
 /**
@@ -959,7 +1010,7 @@ export class World3D {
 
   // ── HD-2D post chain ──
   private composer!: EffectComposer;
-  private bloomPass!: UnrealBloomPass;
+  private bloomPass!: FusedBloomPass;
   private finishPass!: ShaderPass;
   private appliedFov = 0;
   private elapsed = 0;
@@ -970,6 +1021,7 @@ export class World3D {
   private biomeHeat = 0;
   private readonly godRays: THREE.Mesh[] = [];
   private readonly godRaySeed: number[] = [];
+  private particleBatch!: ParticleBatch;
   private embers!: ParticleField;
   private readonly emberState: EmberParticle[] = [];
   private dust!: ParticleField;
@@ -989,6 +1041,11 @@ export class World3D {
   // The scene's fire PointLights: a fixed, small pool, aimed each frame at the lit fires
   // nearest the camera. Built once at construction — see FIRE_LIGHT_SLOTS.
   private readonly fireLights: THREE.PointLight[] = [];
+  /** A soma das luzes pontuais por célula de luz do chão (ver GroundLightMap). */
+  private groundLight!: GroundLightMap;
+  private readonly pointLightList: THREE.PointLight[] = [];
+  /** A lista de filhos que o render percorre neste quadro (ver cullFarChildren). */
+  private readonly renderChildren: THREE.Object3D[] = [];
   private activeFireLights = 0;
   // Glow quads are meshes, not lights: they can come and go freely (no recompile), so they
   // are pooled only to avoid churning geometry/materials as bushes burn.
@@ -1186,6 +1243,7 @@ export class World3D {
 
     // NEAREST pixel art wants no MSAA (it would soften the tile edges), and the
     // post chain renders through offscreen targets where MSAA would be lost anyway.
+    installLazyMatrices();
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false });
     this.renderer.setPixelRatio(1);
     // Real shadow-maps are OFF: billboards face the camera, so a mapped shadow of
@@ -1241,6 +1299,7 @@ export class World3D {
     // the hero/torch lights used to be created lazily — two more hidden recompiles, one of
     // them landing exactly when the player lit the torch.
     this.createFireLights();
+    this.groundLight = new GroundLightMap(this.renderer, () => this.livePointLights());
     this.ensureHeroLight();
     this.ensureTorchLight();
     // O disco da vista nasce aqui pelo mesmo motivo que a tocha: ele usa o programa do
@@ -1304,7 +1363,7 @@ export class World3D {
 
   /**
    * Build the post chain (ported from the old 3D prototype, since removed):
-   *   scene → bloom (emissive halo) → FinishShader (tilt-shift DoF + vignette + grain).
+   *   scene → bloom (emissive halo) → FinishShader (bloom sum + tilt-shift DoF + vignette + grain).
    * Everything runs at the low render resolution, so the NEAREST upscale still
    * gives the chunky pixel-art frame.
    */
@@ -1313,7 +1372,7 @@ export class World3D {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
-    this.bloomPass = new UnrealBloomPass(
+    this.bloomPass = new FusedBloomPass(
       new THREE.Vector2(w, h),
       this.params.bloomStrength,
       this.params.bloomRadius,
@@ -1322,6 +1381,8 @@ export class World3D {
     this.composer.addPass(this.bloomPass);
 
     this.finishPass = new ShaderPass(makeFinishShader(w, h));
+    // O bloom nao se soma sozinho ao quadro: o acabamento soma (ver FusedBloomPass).
+    this.finishPass.uniforms.tBloom.value = this.bloomPass.texture;
     this.composer.addPass(this.finishPass);
     this.syncFinishUniforms();
   }
@@ -1449,11 +1510,15 @@ export class World3D {
     registerTexture3D(FX_PUFF_TEXTURE, makePuffTexture());
     registerTexture3D(FX_ICE_TEXTURE, makeIceTexture());
     registerTexture3D(FX_CRACK_TEXTURE, makeCrackTexture());
-    this.embers = makeParticleField(this.scene, EMBER_COUNT, 0.12, dot);
+    // Os quatro campos ambientes saem num draw só, como quads (ver ParticleBatch).
+    this.particleBatch = new ParticleBatch(
+      this.scene, EMBER_COUNT + DUST_COUNT + FIREFLY_COUNT + MIST_COUNT, dot,
+    );
+    this.embers = this.particleBatch.field(EMBER_COUNT, 0.12);
     for (let i = 0; i < EMBER_COUNT; i++) {
       this.emberState.push({ life: Math.random(), maxLife: 0.9 + Math.random() * 0.9, vx: 0, vy: 0, vz: 0 });
     }
-    this.dust = makeParticleField(this.scene, DUST_COUNT, 0.06, dot);
+    this.dust = this.particleBatch.field(DUST_COUNT, 0.06);
     this.dustSeed = new Float32Array(DUST_COUNT);
     for (let i = 0; i < DUST_COUNT; i++) {
       this.dust.pos[i * 3 + 1] = 0.2 + Math.random() * 2.4;
@@ -1463,7 +1528,7 @@ export class World3D {
     // 0,18 tile: o bicho é um PONTO de luz, não uma bola. Ele nasceu em 0,16 (invisível), passou
     // por 0,34 (uma bolha amarela maior que um cogumelo — o relato foi "muito grande") e parou
     // aqui: o que o faz enxergar não é o tamanho, é o bloom em volta de um núcleo aceso.
-    this.fireflies = makeParticleField(this.scene, FIREFLY_COUNT, 0.18, dot);
+    this.fireflies = this.particleBatch.field(FIREFLY_COUNT, 0.18);
     this.fireflySeed = new Float32Array(FIREFLY_COUNT);
     for (let i = 0; i < FIREFLY_COUNT; i++) {
       this.fireflySeed[i] = Math.random() * Math.PI * 2;
@@ -1479,7 +1544,7 @@ export class World3D {
       });
     }
     // Mist: many large, dim, cool wisps clinging low to the ground in the dark.
-    this.mist = makeParticleField(this.scene, MIST_COUNT, 1.6, dot);
+    this.mist = this.particleBatch.field(MIST_COUNT, 1.6);
     this.mistSeed = new Float32Array(MIST_COUNT);
     for (let i = 0; i < MIST_COUNT; i++) this.mistSeed[i] = Math.random() * Math.PI * 2;
   }
@@ -2625,6 +2690,11 @@ export class World3D {
     const prevTarget = this.renderer.getRenderTarget();
     this.renderer.setRenderTarget(this.composer.renderTarget1);
     this.renderer.compile(this.scene, this.camera);
+    // O mapa de luz do chão é um shader próprio, fora da cena: desenhá-lo aqui o compila (e o
+    // ANGLE termina o executável) no carregamento, não no primeiro quadro de jogo (845ms).
+    this.groundLight.update(this.renderer, this.camera);
+    this.renderer.setRenderTarget(this.composer.renderTarget1);
+    this.drawEverythingOnce();
 
     // The shadow mask's material variants too (castMask / solidCastFieldMask): flip the
     // silhouettes into mask mode for one compile pass so toggling hd3d.shadowMask later
@@ -2642,6 +2712,97 @@ export class World3D {
     // outright — so tearing the stand-ins down would undo the very compile they were built for.
     // They cost nine invisible quads for the run; the alternative costs a quarter-second freeze.
     for (const w of this.warmups) w.setVisible(false);
+  }
+
+  /**
+   * COMPILAR NÃO BASTA: é preciso DESENHAR. No Chrome do Windows o WebGL roda sobre o ANGLE, e o
+   * ANGLE só gera o executável final de um programa (o HLSL compilado para o Direct3D) no
+   * primeiro DRAW — ele depende do formato dos atributos da geometria e do alvo de saída, que o
+   * `renderer.compile` não informa. O `compile` deixa o programa linkado e a conta pendurada: o
+   * perfil pegou o shader do rio travando 312ms no `getProgramInfoLog` no quadro em que a água
+   * entrou na tela pela primeira vez, seis segundos depois de "compilada".
+   *
+   * Então tudo é desenhado uma vez aqui, no carregamento, com o recorte de câmera desligado — o rio
+   * fora da tela, os stand-ins escondidos debaixo do mundo. O carregamento paga uma vez o que o
+   * jogador pagaria aos trancos no meio da partida. O quadro sai no alvo do compositor, que o
+   * `RenderPass` limpa antes do primeiro quadro de verdade: nada disto chega à tela.
+   */
+  private drawEverythingOnce(): void {
+    const unculled: THREE.Object3D[] = [];
+    this.scene.traverse((o) => {
+      if (o.frustumCulled) {
+        o.frustumCulled = false;
+        unculled.push(o);
+      }
+    });
+    this.renderer.render(this.scene, this.camera);
+    for (const o of unculled) o.frustumCulled = true;
+  }
+
+  /**
+   * O tile (x, y) está perto do que a câmera mostra? (A área de chão visível do último quadro, mais
+   * 2 tiles de folga — um sprite de 1 tile em pé com o pé fora da tela ainda aparece, e a câmera anda
+   * no máximo um terço de tile por quadro.) Para animar só o que alguém pode ver: o que fica fora
+   * volta a ser animado no quadro em que entra, e a animação é função do relógio, não do histórico.
+   */
+  public isNearView(x: number, y: number, extra = 0): boolean {
+    const v = this.groundLight.view;
+    return x >= v.minX - extra && x <= v.maxX + extra && y >= v.minZ - extra && y <= v.maxZ + extra;
+  }
+
+  /**
+   * O RENDER SÓ PERCORRE O QUE PODE APARECER.
+   *
+   * O three percorre a cena inteira duas vezes por quadro — matrizes (`updateMatrixWorld`) e a
+   * lista de desenho (`projectObject`, com um teste de frustum por objeto) — e ela tem ~860 filhos:
+   * o sprite, o blob e a sombra de cada prop do MAPA INTEIRO, invisíveis incluídos. Num quadro de
+   * celular são desenhados ~30. No celular simulado (CPU 6× mais lenta) as duas voltas eram 16%.
+   *
+   * Durante o render (e só nele), a lista de filhos da cena vira a dos que podem aparecer: saem os
+   * invisíveis (o three não os desenharia) e os objetos PEQUENOS longe da área visível (fora até do
+   * alcance de uma sombra projetada). O `parent` de ninguém muda e a lista original volta logo depois
+   * — para o resto do jogo nada aconteceu. Ficam sempre: luzes (mexer na contagem recompila o mundo),
+   * malhas grandes ou instanciadas (terreno, mar, campos de sombra e de partículas) e quem desligou
+   * o frustum culling. Quem volta à tela tem a matriz recalculada no quadro em que volta.
+   */
+  private cullFarChildren(): THREE.Object3D[] {
+    const all = this.scene.children;
+    const kept = this.renderChildren;
+    kept.length = 0;
+    for (let i = 0; i < all.length; i++) {
+      const o = all[i] as CullTagged;
+      if (!o.visible && !(o as unknown as THREE.Light).isLight) continue;
+      // A classificação (pequeno e com culling, ou não) é da GEOMETRIA: refeita só quando ela troca.
+      const geo = (o as unknown as THREE.Mesh).geometry;
+      if (o.zhCullGeo !== geo || geo === undefined) classifyForCull(o);
+      if (o.zhCullR > 0 && o.children.length === 0) {
+        const sc = o.scale;
+        const ax = sc.x < 0 ? -sc.x : sc.x;
+        const ay = sc.y < 0 ? -sc.y : sc.y;
+        const az = sc.z < 0 ? -sc.z : sc.z;
+        const scale = ax > ay ? (ax > az ? ax : az) : (ay > az ? ay : az);
+        const reach = o.zhCullR * scale;
+        if (reach < CULL_SMALL_TILES
+          && !this.isNearView(o.position.x + o.zhCullCx * scale, o.position.z + o.zhCullCz * scale,
+            reach + CULL_PAD_TILES)) {
+          continue;
+        }
+      }
+      kept.push(o);
+    }
+    this.scene.children = kept;
+    return all;
+  }
+
+  /** As luzes pontuais que existem agora (a tocha e a do herói nascem no primeiro uso). */
+  private livePointLights(): readonly THREE.PointLight[] {
+    const list = this.pointLightList;
+    list.length = 0;
+    for (const l of this.fireLights) list.push(l);
+    list.push(this.shadowLight);
+    if (this.torchLight) list.push(this.torchLight);
+    if (this.heroLight) list.push(this.heroLight);
+    return list;
   }
 
   /** Point lights in the scene. Constant for the whole run — see FIRE_LIGHT_SLOTS. */
@@ -3117,6 +3278,9 @@ export class World3D {
         continue;
       }
       if (!c.bb.visible) { c.mesh.visible = false; continue; }
+      // Longe da tela, a sombra não alcança a tela: nem calcula. No quadro em que ele chega perto,
+      // ela é recalculada do estado de agora — nada nela depende do quadro anterior.
+      if (!this.isNearView(c.bb.x, c.bb.y, CAST_REACH_TILES)) { c.mesh.visible = false; continue; }
       const height = Math.abs(c.bb.scaleY);
       // Standing ON a lit fire tile gives no stable heading (the flame is underfoot, and a ring of
       // equal fires flips which is "nearest" with every bob) — so drop the directional cast there
@@ -3198,9 +3362,13 @@ export class World3D {
       this.castFrameId += 1;
       const id = this.castFrameId;
       for (const f of this.litFires) {
+        // Uma fogueira só projeta sombra até `radius` dela; somado ao alcance da sombra, é o
+        // máximo que ela pode desenhar longe de si. Mais longe que isso da tela, nada dela aparece.
+        if (!this.isNearView(f.worldX, f.worldY, radius + CAST_REACH_TILES)) continue;
         const list = this.listForFire(f, radius);
         for (const tile of list) {
           if (tile.mark === id) continue;
+          if (!this.isNearView(tile.x, tile.z, CAST_REACH_TILES)) continue;
           tile.mark = id;
           this.emitSolidCast(tile, radius, alpha, heightScale, moonAlpha);
         }
@@ -3826,9 +3994,15 @@ export class World3D {
     // The CPU time of this section is only the SUBMISSION cost; the GPU timer query is what
     // tells you how long the frame actually took to draw (per-pixel cost — lights, overdraw,
     // the post chain — is invisible to any CPU clock).
+    // A luz do chão, uma vez por célula (ver GroundLightMap): depois de luzes e câmera andarem.
+    profiler.begin('groundLight');
+    this.groundLight.update(this.renderer, this.camera);
+    profiler.end('groundLight');
     profiler.begin('compose');
     profiler.gpuBegin();
+    const allChildren = this.cullFarChildren();
     this.composer.render();
+    this.scene.children = allChildren;
     profiler.gpuEnd();
     profiler.end('compose');
   }
@@ -3903,7 +4077,7 @@ export class World3D {
       this.dust.pos[i * 3 + 1] += Math.cos(t * 0.22 + s * 2.0) * 0.0011;
       this.dust.pos[i * 3 + 2] = z;
       const glow = fire
-        ? Math.max(0.06, 1 - Math.hypot(x - fire.worldX, z - fire.worldY) / 9)
+        ? Math.max(0.06, 1 - planarDist(x, z, fire.worldX, fire.worldY) / 9)
         : 0.1;
       const tw = 0.55 + 0.45 * Math.sin(t * 1.7 + s * 5.0);
       this.dust.col[i * 3] = 0.5 * glow * tw;
@@ -3934,7 +4108,7 @@ export class World3D {
       if (z < cz - 16) z = cz + 16; else if (z > cz + 16) z = cz - 16;
       this.mist.pos[i * 3] = x;
       this.mist.pos[i * 3 + 2] = z;
-      const clear = fire ? Math.min(1, Math.hypot(x - fire.worldX, z - fire.worldY) / 4) : 1;
+      const clear = fire ? Math.min(1, planarDist(x, z, fire.worldX, fire.worldY) / 4) : 1;
       const tw = 0.6 + 0.4 * Math.sin(t * 0.5 + s * 3.0);
       const a = mistAmt * 0.045 * clear * tw;
       this.mist.col[i * 3] = mistR * a;
@@ -4000,7 +4174,7 @@ export class World3D {
       let z = pz + p.vz * dt;
       // A coleira: nunca mais que FIREFLY_ROAM da moita, ou o enxame se dissolve na tela.
       const dx = x - p.hx; const dz = z - p.hz;
-      const dist = Math.hypot(dx, dz);
+      const dist = Math.sqrt(dx * dx + dz * dz);
       if (dist > FIREFLY_ROAM) {
         x = p.hx + (dx / dist) * FIREFLY_ROAM;
         z = p.hz + (dz / dist) * FIREFLY_ROAM;
@@ -4010,7 +4184,7 @@ export class World3D {
       this.fireflies.pos[i * 3 + 2] = z;
       // A altura acompanha a velocidade: quem corre, sobe. Sem isso o bicho voa numa mesa de
       // vidro, e é a subida na arrancada que dá volume ao enxame.
-      const climb = Math.min(1, Math.hypot(p.vx, p.vz) * 0.55);
+      const climb = Math.min(1, Math.sqrt(p.vx * p.vx + p.vz * p.vz) * 0.55);
       const s = this.fireflySeed[i];
       this.fireflies.pos[i * 3 + 1] = 0.3 + 0.35 * climb
         + 0.34 * (0.5 + 0.5 * Math.sin(this.elapsed * 0.7 + s * 1.7));
@@ -4019,7 +4193,7 @@ export class World3D {
       // e o expoente é o que separa "acende e apaga" de "pulsa".
       p.blink += dt * p.rate;
       const pulse = Math.max(0, Math.sin(p.blink));
-      const near = fire ? Math.max(0, 1 - Math.hypot(x - fire.worldX, z - fire.worldY) / 8) : 0;
+      const near = fire ? Math.max(0, 1 - planarDist(x, z, fire.worldX, fire.worldY) / 8) : 0;
       // O expoente 3 apagava o enxame: com ele o bicho passa ~85% do ciclo escuro, e com 44
       // deles espalhados numa caixa maior que a tela sobravam dois pontos por quadro. Quadrado
       // (mais um resto de brasa, que é o corpo dele visto de perto) mantém o pisca e devolve o
@@ -4097,6 +4271,7 @@ export class World3D {
     });
     this.maskTarget.dispose();
     this.composer.dispose();
+    this.groundLight.dispose();
     this.renderer.dispose();
     this.canvas.remove();
   }
@@ -4113,6 +4288,7 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
 } => ({
   uniforms: {
     tDiffuse: { value: null },
+    tBloom: { value: null },
     uResolution: { value: new THREE.Vector2(w, h) },
     uTime: { value: 0 },
     uFocusY: { value: 0.52 },
@@ -4148,6 +4324,7 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
   `,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
+    uniform sampler2D tBloom;
     uniform vec2 uResolution;
     uniform float uTime;
     uniform float uFocusY;
@@ -4169,6 +4346,12 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
     uniform vec3 uDangerColor;
     uniform float uFade;
     varying vec2 vUv;
+    // O quadro com o bloom ja somado — a soma aditiva que o UnrealBloomPass fazia numa passada
+    // de tela cheia, agora aqui, amostra por amostra (ver FusedBloomPass). O blend dele e
+    // pre-multiplicado (ONE, ONE): cena + bloom, SEM pesar pelo alfa.
+    vec3 frameAt(vec2 uv) {
+      return texture2D(tDiffuse, uv).rgb + texture2D(tBloom, uv).rgb;
+    }
     void main() {
       // Tilt-shift, asymmetric on purpose: the DISTANCE behind the hero (up the screen) melts
       // away hard, while the foreground under him only softens — Octopath blurs the background
@@ -4181,14 +4364,21 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
       // Quantise the radius to half a pixel: a continuously-varying blur makes the pixel art
       // "boil" as the hero walks, because every frame resamples the same texels differently.
       float radius = floor(uBlur * t * 2.0 + 0.5) * 0.5;
-      vec2 px = radius / uResolution;
-      vec3 col = texture2D(tDiffuse, vUv).rgb * 0.30;
-      col += texture2D(tDiffuse, vUv + vec2( 1.0,  0.6) * px).rgb * 0.12;
-      col += texture2D(tDiffuse, vUv + vec2(-1.0,  0.6) * px).rgb * 0.12;
-      col += texture2D(tDiffuse, vUv + vec2( 1.0, -0.6) * px).rgb * 0.12;
-      col += texture2D(tDiffuse, vUv + vec2(-1.0, -0.6) * px).rgb * 0.12;
-      col += texture2D(tDiffuse, vUv + vec2( 0.0,  1.4) * px).rgb * 0.11;
-      col += texture2D(tDiffuse, vUv + vec2( 0.0, -1.4) * px).rgb * 0.11;
+      // Na faixa nitida o raio e ZERO e as sete amostras caem no mesmo texel (os pesos somam 1):
+      // uma leitura so da o mesmo pixel. E a faixa e a maior parte da tela — o chao do heroi.
+      vec3 col;
+      if (radius == 0.0) {
+        col = frameAt(vUv);
+      } else {
+        vec2 px = radius / uResolution;
+        col = frameAt(vUv) * 0.30;
+        col += frameAt(vUv + vec2( 1.0,  0.6) * px) * 0.12;
+        col += frameAt(vUv + vec2(-1.0,  0.6) * px) * 0.12;
+        col += frameAt(vUv + vec2( 1.0, -0.6) * px) * 0.12;
+        col += frameAt(vUv + vec2(-1.0, -0.6) * px) * 0.12;
+        col += frameAt(vUv + vec2( 0.0,  1.4) * px) * 0.11;
+        col += frameAt(vUv + vec2( 0.0, -1.4) * px) * 0.11;
+      }
 
       // ── cinematic grade: split-tone (cool shadows / warm highlights), then
       //    saturation and contrast — the HD-2D "diorama photograph" look.
@@ -4226,9 +4416,13 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
       if (uSight > 0.0) {
         vec2 sd = (vUv - uSightAt) / max(uSightR, vec2(0.0001));
         sight = uSight * (1.0 - smoothstep(0.35, 1.0, length(sd)));
-        float sexp = 1.0 - sight;
-        col = pow(max(col, vec3(0.0)), vec3(sexp));
-        luma = pow(max(luma, 0.0), sexp);
+        // Fora da elipse a vista vale 0 e o pow vira pow(x, 1) = x: a maior parte da tela pagava
+        // dois pow por pixel para nao mudar nada.
+        if (sight > 0.0) {
+          float sexp = 1.0 - sight;
+          col = pow(max(col, vec3(0.0)), vec3(sexp));
+          luma = pow(max(luma, 0.0), sexp);
+        }
       }
       col = mix(vec3(luma), col, uSaturation + sight * 0.35); // saturation around luma
       col = (col - 0.5) * uContrast + 0.5;           // contrast around mid-grey
@@ -4241,20 +4435,24 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
       // cold blue while the meter fills and bleeding to red as it peaks (setDangerVignette
       // owns colour and amount). It lives inside the post — graded and grained with the
       // rest of the frame — instead of the flat 2D image it used to be.
-      float dr = length((vUv - 0.5) * 2.0);
-      float dmask = dr < 0.78
-        ? mix(0.0, 0.45, clamp((dr - 0.52) / 0.26, 0.0, 1.0))
-        : mix(0.45, 1.0, clamp((dr - 0.78) / 0.22, 0.0, 1.0));
-      col = mix(col, uDangerColor, dmask * uDanger);
+      if (uDanger > 0.0) {
+        float dr = length((vUv - 0.5) * 2.0);
+        float dmask = dr < 0.78
+          ? mix(0.0, 0.45, clamp((dr - 0.52) / 0.26, 0.0, 1.0))
+          : mix(0.45, 1.0, clamp((dr - 0.78) / 0.22, 0.0, 1.0));
+        col = mix(col, uDangerColor, dmask * uDanger);
+      }
 
       float n = fract(sin(dot(vUv * uResolution + uTime, vec2(12.9898, 78.233))) * 43758.5453);
       col += (n - 0.5) * uGrain;
 
       // Death: the whole diorama drains of colour and sinks to black from inside the post,
       // so the fade takes the world, its grain and its glow with it (setWorldFade).
-      float fadeLuma = dot(col, vec3(0.299, 0.587, 0.114));
-      col = mix(col, vec3(fadeLuma), uFade * 0.85);
-      col *= 1.0 - uFade;
+      if (uFade > 0.0) {
+        float fadeLuma = dot(col, vec3(0.299, 0.587, 0.114));
+        col = mix(col, vec3(fadeLuma), uFade * 0.85);
+        col *= 1.0 - uFade;
+      }
 
       gl_FragColor = vec4(col, 1.0);
     }
@@ -4277,13 +4475,6 @@ interface FireflyParticle {
   blink: number; rate: number;
   settle: number;
   homed: boolean;
-}
-
-interface ParticleField {
-  points: THREE.Points;
-  pos: Float32Array;
-  col: Float32Array;
-  mark(): void;
 }
 
 // A soft round glow (white opaque centre → transparent rim) so additive Points
@@ -4742,30 +4933,6 @@ const setFireGlow = (
   glow.radius.value = size / 2;
   mesh.scale.set(size, 1, size);
   mesh.position.set(x, 0.07, z);
-};
-
-const makeParticleField = (
-  parent: THREE.Object3D, count: number, size: number, map?: THREE.Texture,
-): ParticleField => {
-  const pos = new Float32Array(count * 3);
-  const col = new Float32Array(count * 3);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const mat = new THREE.PointsMaterial({
-    size, map, vertexColors: true, blending: THREE.AdditiveBlending,
-    depthWrite: false, transparent: true, fog: false,
-  });
-  const points = new THREE.Points(geo, mat);
-  points.frustumCulled = false; // positions move on the CPU; skip the stale-bounds cull
-  parent.add(points);
-  return {
-    points, pos, col,
-    mark: () => {
-      geo.attributes.position.needsUpdate = true;
-      geo.attributes.color.needsUpdate = true;
-    },
-  };
 };
 
 // ── merged tile geometry builders ─────────────────────────────────────────────

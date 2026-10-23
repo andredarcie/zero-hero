@@ -9441,3 +9441,58 @@ são do autor.
 - **O sono** (`isSleepTime`, 21h–5h; `isNpcAsleep` em `NpcManager`): respiração lenta e funda, corpo 6% mais baixo e um "z" que sobe e some. O "z" é o mais fraco dos três avisos (keycap > "!" > z): dormir não impede conversa, falar acorda. Quem dorme não gasta o "oi". O mago nunca dorme (a abertura é de noite).
 - **Quem vem sentar** (`entities/FireVisitor`): sentar numa fogueira acesa chama o vizinho mais perto (até 12 tiles, tenta os 3 mais perto) por BFS em 4 direções, preso a uma caixa em volta do fogo, até o lugar livre em volta dela — o do lado OPOSTO ao herói primeiro. É um stand-in como o mago da abertura; o de verdade fica "fora" (`setKindAway`): sem corpo e sem conversa, mas o tile continua ocupado. Levantar o manda de volta pelo mesmo caminho, e só então ele reaparece. Vem de noite também: em volta do fogo ninguém dorme.
 - `gameDebug.getState().companions` expõe o gato e a visita para um cenário futuro.
+
+## 2026-10-23 — O herói anda livre do grid
+
+- `PlayerMovementController` guarda a posição CONTÍNUA (tiles fracionários), anda em 8 direções na mesma velocidade de antes (`TIMINGS.moveDurationMs` por tile, diagonal normalizada) e colide como uma caixa de 0,6 tile contra os tiles sólidos, eixo por eixo (diagonal na parede desliza nela).
+- O tile LÓGICO devolvido à cena é o tile sob o centro do corpo; `onStep` dispara quando o centro cruza a borda. Tudo que pensa em tile (tile à frente, apanhar, falar, pegadas) continua igual.
+- **Deslize de quina**: empurrando reto contra uma parede com o corpo meio fora de um corredor, o herói é empurrado de lado para a faixa livre (até 0,42 tile do centro dela). Sem isso, entrar num vão de 1 tile vira caça ao pixel.
+- A parede continua virando o herói: o esbarrão vale para o tile que ele ENCARA, e só se esse tile for sólido.
+- Quem move o herói por fora (cutscene, load, teleporte) muda o tile lógico; o controlador percebe que o tile não contém mais a posição e se recoloca no centro dele. `interruptMovement` não puxa mais o corpo para o centro do tile.
+- Playtest: `stepTile` (GameDriver) segura a seta até o CENTRO do próximo tile e solta, dentro da página (do Node a latência do keyup variava o passo). `driver.press` de seta e o `zerar` usam ele.
+- O `movement-feel` já falhava antes desta mudança (roda com a abertura por cima); não é régua.
+
+## 2026-10-23 — Medidor de desempenho, FPS fixo na tela, e as quedas que ele achou
+
+- **FPS fixo** (`runtime/FpsCounter`): canto superior esquerdo, 10px, meio transparente. Mostra o pior quadro da janela (`▼48ms`) quando passa de 25ms — a média esconde o tranco. Fica âmbar abaixo de 55fps ou com tranco, vermelho abaixo de 30.
+- **Painel do profiler** (`debug/ProfilerPanel`, F3 alterna compacto → top → fechado): o modo top tem o gráfico de 240 quadros (com a GPU por cima e as linhas de 60/30), fps, 1% low, p50/p99/max, CPU x GPU, a tabela de seções ANINHADAS (avg/p99/max/fatia do quadro, mais o que ficou fora: browser/GC/vsync), GL, heap com tendência, todos os gauges e os últimos picos com a causa. Vale no build publicado. Seções novas: `update` (`.move .chunks .items .world .npcs .props`) e `ui2d`; o quadro agora fecha no POST_RENDER do Phaser, então a UI 2D entra na conta.
+- **A queda de 312ms ao ver água**: o shader do rio estava "compilado" no prewarm, mas o ANGLE só gera o executável no primeiro DRAW (depende do layout dos atributos e do alvo). `prewarmShaders` agora desenha a cena inteira uma vez sem frustum culling (`drawEverythingOnce`). Medido: nenhuma chamada GL acima de 1ms andando pelo mundo.
+- **O maior lixo era do three**: sombra = quad transparente + `DoubleSide` → o three desenha duas vezes e liga `needsUpdate` antes de cada uma, remontando a chave do programa (`getParameters`) ~900 vezes por segundo. `forceSinglePass` nos três materiais de sombra (num quad plano só um lado encara a câmera; a outra passada não produzia pixel). Pixel a pixel: 0 diferenças.
+- **Bloom fundido** (`render3d/FusedBloomPass`): a soma aditiva do bloom deixou de ser uma passada de tela cheia e virou uma amostra a mais no shader de acabamento. ATENÇÃO à conta: o `blendMaterial` do three é pré-multiplicado (`ONE, ONE`) — é cena + bloom, NÃO bloom × alfa (a primeira versão errou isso e o teste de pixel pegou). Conferido contra o caminho antigo no mesmo quadro: diferença máxima 1/255 em 0,6% dos pixels (o arredondamento do meio-float).
+- **Faixa nítida do tilt-shift com 1 leitura**: raio 0 = as 7 amostras no mesmo texel (pesos somam 1).
+- **Lixo menor**: `getTexture3D`/`frameFootPad` com cache em dois níveis (sem string `chave#quadro` por consulta), `planarDist` no lugar de `Math.hypot` nas partículas. Alocação andando: 327MB → 147MB a cada 10s.
+- Números (herói parado, sem vsync, 1920×1080 DPR1): 116–122 → 120–123 fps; draw calls ~72 → ~64. Em retina (2560×1600) a GPU é o limite desta máquina (~14ms: cena ~7, bloom ~4, acabamento ~2); o ganho de média é ~5%, e o que não dá para tirar sem mudar a imagem são as 11 luzes por fragmento (escondê-las dá +40fps — é custo de visual, não desperdício).
+- **Meça sem vsync** (`PLAYTEST_UNTHROTTLED=1`): com ele a GPU desce o clock para caber no intervalo da tela e todo número encosta nele; foi assim que a primeira medição do bloom fundido "não mudou nada".
+- O `perf-profile` agora entra num save que já viu a abertura (com ela, o "andar" media um herói parado). O assert de p99 ≤ 24ms segue falhando em retina — já falhava antes; ali o quadro oscila entre 3 e 4 intervalos de vsync de um monitor de 165Hz.
+
+## 2026-10-23 — FPS: +37% em Full HD, +30% em retina, com o mesmo quadro
+
+Medido sem vsync, herói parado, máquina do autor (Chrome/Windows, ANGLE sobre D3D11):
+
+| | Full HD (1920×1080) | Retina (2560×1600) |
+|---|---|---|
+| antes | ~121 fps · GPU 6,3ms | ~62 fps · GPU 13,7ms |
+| depois | ~166 fps · GPU 4,5ms | ~82 fps · GPU 10,6ms |
+
+O `perf-profile` (retina, com vsync) foi de 58 para 68 fps na mediana. Como cada peça foi achada: desligar um sistema por vez sem vsync, e depois *timer query* em volta de CADA passada (cena / bloom / acabamento) e de cada grupo de objetos da cena.
+
+- **`ParticleBatch`: nada de `GL_POINTS`.** Esconder os 4 campos de partículas JUNTOS dava +20% (um a um, nada) — com a GPU parada e a CPU caindo: o preço fixo de existir um draw de ponto no ANGLE, que emula `gl_PointSize` no D3D11. Agora é um quad instanciado, num draw só (mesma textura, blend aditivo = comutativo). Recorte: o ANGLE recorta o quad emulado como triângulo; a regra do GL "centro fora, ponto some" DOBRAVA a diferença. Contra os Points no mesmo quadro: 0,09% dos pixels, máx. 30/255, na borda dos sprites.
+- **`GroundLightMap`: a luz do chão uma vez por CÉLULA.** O chão era 1,5ms dos 3,9ms da cena: 11 luzes por pixel, mas a luz deste jogo é calculada na célula (`lightRes` 16/tile) e todo pixel da célula recebe o mesmo — em Full HD ~22 pixels fazendo a mesma conta. Uma textura float32 do tamanho da área visível (uma célula = um texel) recebe a soma (a matemática do three, em espaço de mundo) e o chão lê um texel no lugar do laço, quando: normal para cima, camada de células y=0, dentro da área. O resto cai no laço. Pixel a pixel contra o laço: **0 diferenças**; envenenando o mapa, 87% da tela muda (o caminho é usado). Chão: 1,5 → 0,62ms. Float32 e não meio-float: a soma passa pelo `floor` das faixas. O shader do mapa é desenhado no `prewarmShaders` — sem isso, 845ms no primeiro quadro.
+- **Bloom sem as 12 limpezas**: cada passada interna é um quad opaco de tela cheia; o `clear()` antes dela era uma escrita inteira jogada fora. 1,37 → 0,95ms.
+- **Acabamento**: o `pow` da vista do herói só onde ela vale (fora da elipse era pow(x,1)), e o perigo/fade só quando ligados. Medido o piso: preencher a tela com uma cor constante já custa 0,46ms nesta GPU, passar o quadro sem efeito 0,82ms — o acabamento inteiro custa 1,14ms, não há mais muito ali.
+- O que sobrou e não sai sem mudar a imagem: as luzes por pixel nas árvores e paredes (~0,3ms cada grupo), a CPU do three percorrendo ~860 objetos por quadro (`updateMatrixWorld` 9%, culling 4%; desligar o auto-update inteiro deu só +2%), e o tamanho do buffer em retina — o maior botão que resta é renderizar em retina na resolução CSS (o modo "econômico" do menu já faz isso).
+
+## 2026-10-23 — Celular fraco: o trabalho por quadro para caber em 60 fps
+
+Perfil simulado: 360×800 @ DPR 3 (buffer 540×1200), toque, CPU 6× mais lenta (o "low-tier mobile" do DevTools).
+
+**Como medir (e como NÃO medir).** O `Emulation.setCPUThrottlingRate` do Chrome NÃO serve para a cauda: uma carga JS perfeitamente constante de 7ms sai com p99 21ms e máx. 34ms — o throttler pausa a thread em rajadas. Sem vsync, a fila da GPU do desktop também contamina (`WaitForAvailableEntries`, quadros de 350ms). O método que sobrou: vsync ligado, sem throttling, medir o trabalho de JS de cada quadro (prestep → postrender, profiler DESLIGADO — o timer de GPU dele sincroniza com o driver) e multiplicar por 6. A GPU não é simulável no Chrome; aqui ela gasta ~2,5ms na tela do celular.
+
+Original → agora (30s andando por toque, trabalho × 6): p50 7,2 → 6,0ms · p99 10,8 → 9,0 · p99,9 18,6 → 13,8 · pior quadro 114 → 21ms · quadros acima de 16,7ms: 5 em 3.382 → 3 em 4.646.
+
+- **`cullFarChildren`**: durante o render (só nele), a lista de filhos da cena vira a dos que podem aparecer — saem os invisíveis e os objetos pequenos longe da área visível. 862 → ~100 objetos percorridos por quadro no celular. `parent` de ninguém muda; luzes, malhas grandes/instanciadas e sem frustum culling ficam sempre. Pixel a pixel contra a cena inteira: 0 diferenças.
+- **`lazyMatrices`**: `Object3D.updateMatrix` só recompõe quando posição/rotação/escala mudaram (863 → ~300 composições por quadro); `add` esquece a pose. Conferido: as 862 matrizes de mundo batem com o recálculo do zero depois de andar.
+- **`isNearView`** (área de chão visível do último quadro + folga): itens do chão só flutuam perto da tela (eram ~145 animados pelo mapa inteiro); sombras projetadas só para projetores e fogueiras que podem alcançar a tela (`CAST_REACH_TILES` = 8, o comprimento máximo de uma sombra). Sombras: 1,54 → 0,52ms (CPU 6×).
+- **Pegadas em pool**: criar uma `Ellipse` + tween a cada tile custava 2,5ms no celular a cada passo; agora reaproveitadas, e o esmaecimento (o mesmo `Power1.easeIn`, 1 − t²) roda no render3D — que corre todo quadro, como o gerenciador de tweens corria.
+- **Mapa de luz** com duas texturas alternadas e arrays de luz em `Float32Array`.
+- O que resta na cauda: soluços de ~1–2ms reais espalhados (GC menor, variação do driver no `compose`, texto 2D redesenhado), um terço deles nos primeiros segundos (JIT). E 151 `uniform3f` por quadro: as 11 luzes reenviadas a cada programa iluminado, porque o tremor das chamas muda a cor delas todo quadro — custo do visual.

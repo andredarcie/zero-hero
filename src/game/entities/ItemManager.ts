@@ -121,7 +121,13 @@ export class ItemManager {
   // dentro, e ela nao sabe nada sobre mochila.)
 
   public render(tileSize: number, camera: WorldCamera): void {
-    for (const it of this.items) it.render(tileSize, camera);
+    // Só o que a câmera pode ver flutua: o bob é função do relógio, então um item que entra na tela
+    // já chega na fase certa. Eram ~145 itens animados pelo mapa inteiro a cada quadro.
+    const w3 = camera.world3d;
+    for (const it of this.items) {
+      if (w3 && !w3.isNearView(it.tileX, it.tileY)) continue;
+      it.render(tileSize, camera);
+    }
   }
 
   public destroy(): void {

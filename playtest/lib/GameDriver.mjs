@@ -46,6 +46,55 @@ const ARROW = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const STEP_KEYS = {
+  ArrowUp: [0, -1, 38],
+  ArrowDown: [0, 1, 40],
+  ArrowLeft: [-1, 0, 37],
+  ArrowRight: [1, 0, 39],
+};
+
+/**
+ * UM TILE POR SETA, num heroi que anda livre do grid. O passo deixou de ser um tile por toque: a
+ * seta segurada move o corpo continuamente, entao "andar um tile" e segurar ate o CENTRO do
+ * proximo tile e soltar. Quem segura e solta e a propria pagina, no requestAnimationFrame: do
+ * Node, a latencia de cada keyup passaria do alvo por uma fracao diferente a cada passo.
+ *
+ * Contra parede o corpo nao anda e a seta solta em ~120ms: e o mesmo "encarar sem entrar" de
+ * antes. Devolve a posicao desenhada onde o heroi parou.
+ */
+export const stepTile = (page, key, timeoutMs = 1500) => {
+  const [dx, dy, keyCode] = STEP_KEYS[key];
+  return page.evaluate(([name, sx, sy, code, timeout]) => new Promise((resolve) => {
+    const s = window.__scene;
+    const fire = (type) => {
+      const e = new KeyboardEvent(type, { key: name, code: name, bubbles: true });
+      Object.defineProperty(e, 'keyCode', { get: () => code });
+      window.dispatchEvent(e);
+    };
+    const at = () => s.heroVisualTile();
+    const from = at();
+    const target = { x: Math.round(from.x) + sx, y: Math.round(from.y) + sy };
+    const t0 = performance.now();
+    let last = from;
+    let stillSince = t0;
+    fire('keydown');
+    const tick = () => {
+      const p = at();
+      const now = performance.now();
+      if (p.x !== last.x || p.y !== last.y) stillSince = now;
+      last = p;
+      const along = sx !== 0 ? (p.x - target.x) * sx : (p.y - target.y) * sy;
+      if (along >= -0.02 || now - stillSince > 120 || now - t0 > timeout) {
+        fire('keyup');
+        resolve(p);
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }), [key, dx, dy, keyCode, timeoutMs]);
+};
+
 export class GameDriver {
   constructor(browser, context, page) {
     this.browser = browser;
@@ -135,6 +184,13 @@ export class GameDriver {
   // game, which polls Phaser's JustDown() inside update(). We must HOLD the key for a few
   // frames so the scene observes the press, then wait for the move tween to settle.
   async press(key, { count = 1, delay = config.stepIntervalMs, holdMs = 70 } = {}) {
+    if (STEP_KEYS[key] && (await this.getState())?.scene === 'game') {
+      for (let i = 0; i < count; i += 1) {
+        await stepTile(this.page, key);
+        await sleep(Math.max(0, delay - holdMs));
+      }
+      return;
+    }
     for (let i = 0; i < count; i += 1) {
       await this.page.keyboard.down(key);
       await sleep(holdMs);

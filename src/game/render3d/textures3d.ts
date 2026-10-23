@@ -101,9 +101,12 @@ const DEFS: Record<string, SheetDef> = {
 };
 
 const baseTextures = new Map<string, THREE.Texture>();
-const frameTextures = new Map<string, THREE.Texture>();
+// Caches por (chave, quadro) em DOIS NIVEIS — mapa por chave, array por quadro — e nunca por uma
+// string `chave#quadro`: os dois sao lidos por sombra e por sprite A CADA QUADRO, e montar a string
+// era uma alocacao por consulta (o lixo que os caches existem para tirar; ver frameUvWindow).
+const frameTextures = new Map<string, Array<THREE.Texture | undefined>>();
 const framePixels = new Map<string, ImageData | null>();
-const footPads = new Map<string, number>();
+const footPads = new Map<string, Array<number | undefined>>();
 let loaded: Promise<void> | null = null;
 
 /** Kick (or reuse) the one-time load of every registered image. */
@@ -240,8 +243,12 @@ const sheetPixels = (key: string): ImageData | null => {
  * the pad counts precisely the rows the shadow will not draw.
  */
 export const frameFootPad = (key: string, frame = 0): number => {
-  const cacheKey = `${key}#${frame}`;
-  const hit = footPads.get(cacheKey);
+  let perFrame = footPads.get(key);
+  if (!perFrame) {
+    perFrame = [];
+    footPads.set(key, perFrame);
+  }
+  const hit = perFrame[frame];
   if (hit !== undefined) return hit;
 
   let pad = 0;
@@ -261,7 +268,7 @@ export const frameFootPad = (key: string, frame = 0): number => {
       if (opaque) { pad = (fh - 1 - y) / fh; break; }
     }
   }
-  footPads.set(cacheKey, pad);
+  perFrame[frame] = pad;
   return pad;
 };
 
@@ -275,8 +282,12 @@ export const getTexture3D = (key: string, frame = 0): THREE.Texture => {
   if (!def || !base) throw new Error(`textures3d: chave desconhecida '${key}'`);
   if (def.frameW === undefined) return base;
 
-  const cacheKey = `${key}#${frame}`;
-  const hit = frameTextures.get(cacheKey);
+  let perFrame = frameTextures.get(key);
+  if (!perFrame) {
+    perFrame = [];
+    frameTextures.set(key, perFrame);
+  }
+  const hit = perFrame[frame];
   if (hit) return hit;
 
   const w = frameUvWindow(key, frame);
@@ -284,7 +295,7 @@ export const getTexture3D = (key: string, frame = 0): THREE.Texture => {
   t.repeat.set(w.repeatX, w.repeatY);
   t.offset.set(w.offsetX, w.offsetY);
   t.needsUpdate = true;
-  frameTextures.set(cacheKey, t);
+  perFrame[frame] = t;
   return t;
 };
 

@@ -97,6 +97,11 @@ export default {
     const { page } = driver;
     const profile = (ms, walk) => page.evaluate(`(${PROFILE})(${ms}, ${walk})`);
 
+    // ?play roda a ABERTURA (uma cutscene: o controle fica parado e o "andar" mediria um heroi
+    // imovel). Um save que ja viu a abertura entra direto no mundo jogavel.
+    await page.evaluate(() => localStorage.setItem('zh.cozy.v1', JSON.stringify({ introSeen: true })));
+    await driver.open('/?play');
+    await page.waitForFunction(() => window.__scene?.playerWorld && !window.__scene.cutsceneActive, null, { timeout: 30000 });
     await driver.settle(1200); // let the world stream in and the fires settle
 
     const idle = await profile(3000, false);

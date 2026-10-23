@@ -98,6 +98,8 @@ export const makeCastMaskMaterial = (): THREE.MeshBasicMaterial => {
     depthTest: false,
     alphaTest: 0.4,
     side: THREE.DoubleSide,
+    // Uma passada so (ver makeCastMesh).
+    forceSinglePass: true,
     fog: false,
   });
   applyMaxBlending(mat);
@@ -124,6 +126,13 @@ export const makeCastMesh = (): THREE.Mesh => {
     depthWrite: false,
     alphaTest: 0.4, // keep only the sprite silhouette
     side: THREE.DoubleSide, // a flipped (mirrored) scale must not backface-cull
+    // UMA PASSADA. Transparente + DoubleSide, o three desenha o objeto DUAS vezes (o verso, depois
+    // a frente) e liga `needsUpdate` antes de cada uma — o que o obriga a remontar a chave do
+    // programa (getParameters) duas vezes por sombra por quadro: era o maior gerador de lixo do
+    // jogo, ~90MB a cada 10s, e o dobro de draw calls. As duas passadas existem para objetos
+    // FECHADOS, onde a ordem verso-frente decide o blend. Uma sombra é um quad deitado: em cada
+    // quadro só um dos lados encara a câmera, e a outra passada não produzia um pixel.
+    forceSinglePass: true,
   });
   const mesh = new THREE.Mesh(geo, mat);
   // Draw AFTER the additive fire glow (renderOrder 2) so the silhouette darkens the lit
@@ -230,6 +239,9 @@ export class SolidCastField {
         depthTest: !mask,
         alphaTest: 0.4,
         side: THREE.DoubleSide,
+        // Uma passada so (ver makeCastMesh). Aqui a ordem entre instancias tambem nao muda nada:
+        // a cena pinta preto por cima (a mesma cor em toda sombra) e a mascara usa MAX.
+        forceSinglePass: true,
         fog: !mask,
       });
       if (mask) applyMaxBlending(mat);
