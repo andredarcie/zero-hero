@@ -181,14 +181,18 @@ const CSS = `
   width: 48px; height: 48px; padding: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%; cursor: pointer;
-  background: rgba(10, 8, 6, 0.34); border: 1px solid rgba(216, 209, 192, 0.32);
-  color: rgba(216, 209, 192, 0.72);
+  background: rgba(10, 8, 6, 0.52); border: 2px solid rgba(231, 220, 196, 0.6);
+  color: #e7dcc4;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   transition: background 90ms ease, color 90ms ease, border-color 90ms ease;
 }
 #${BTN_ID}.zh-on {
   color: #e5b558; border-color: rgba(229, 181, 88, 0.8); background: rgba(56, 38, 10, 0.6);
 }
+/* As preferencias de toque (touchSettings): o mesmo canto do par A/B, o mesmo tamanho a mais. */
+body.zh-left-hand #${BTN_ID} { right: auto; left: calc(14px + env(safe-area-inset-left, 0px)); }
+body.zh-big-btns #${BTN_ID} { width: 58px; height: 58px; bottom: calc(122px + env(safe-area-inset-bottom, 0px)); }
+body.zh-solid-btns #${BTN_ID}:not(.zh-on) { background: rgba(24, 19, 12, 0.9); border-color: #e7dcc4; }
 `;
 
 const ensureStyle = (): void => {
@@ -325,6 +329,7 @@ export class QuickBag {
       this.toggleBtn.type = 'button';
       this.toggleBtn.setAttribute('data-zh-ui', '');
       this.toggleBtn.title = t('bag.open');
+      this.toggleBtn.setAttribute('aria-label', t('bag.open'));
       this.toggleBtn.innerHTML =
         '<svg viewBox="0 0 24 24" width="23" height="23" aria-hidden="true">'
         + '<path d="M9 5.6V5a3 3 0 0 1 6 0v.6" fill="none" stroke="currentColor" stroke-width="1.7"'

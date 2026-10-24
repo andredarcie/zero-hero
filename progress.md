@@ -9548,3 +9548,15 @@ Medido (A/B no mesmo aparelho, ponto fixo do chão 3 tiles à frente do herói; 
 | celular 3× | 1,26 → 0,87 px | 0,29 → 0,12 / 0,21 → 0,04 |
 
 A sobra de fase vem da perspectiva: a grade é exata na profundidade do herói, e uma linha mais perto ou mais longe ainda recebe uma fração.
+
+## 2026-10-23 — Controles de toque: revisão e ajustes
+
+Revisados contra Apple HIG / Material / Game Accessibility Guidelines, com prints num celular simulado (390×844, 3×, toque). O que já estava certo e ficou: A/B de 62px no polegar, safe-area, `touchstart` imediato, multitoque (andar + A), arrasto de 8 direções com zona morta e coleira, jogo sem pressão de tempo.
+
+- **Retrato via ~3 tiles de largura** (herói = 1/3 da tela). O FOV autorado é VERTICAL; `World3D.effectiveFov` dá à largura um piso (`PORTRAIT_MIN_HALF_TAN_X` 0,34 ≈ 5,5 tiles na profundidade do herói) subindo o FOV vertical até 74° no máximo. Medido: retrato 38° → 72,6°, tile 111 → 52 px (2× a vista); paisagem e desktop inalterados (38°).
+- **O gesto de andar não era ensinado no toque** (a tarja só existia no teclado): `ControlsHint` mostra "Drag anywhere to walk · A talk · B use", no ALTO da tela (embaixo estão os botões que ela explica).
+- **O joystick era invisível**: `TouchStick` — um anel nasce onde o polegar encosta e o pomo segue o dedo; o anel anda com a âncora da coleira, e some com os pés presos (bolsa, diálogo, golpe).
+- **A/B eram só letras**: o A desenha a MÃO, o B desenha o ITEM na mão (`textures.getBase64` do mesmo frame da mochila, uma vez por tipo, trocado em `updateBackItem`); a letra fica pequena no canto, porque é ela que o balão do NPC mostra. `aria-label` nos botões, na bolsa e na pausa.
+- **Pausa com 42px** → 48px. **Contraste**: fundo 52%, borda 2px a 60%, ícone opaco (era 34% / 1px a 32% / texto 72%).
+- **FPS na tela do jogador**: só no build de dev ou com `?fps` / `?prof` (`FpsCounter.wanted`).
+- **Opções novas na pausa, só no toque** (`runtime/touchSettings`, classes no `<body>`): botões para canhoto (par e bolsa à esquerda, A na beirada), botões grandes (80px), botões sólidos, e vibração curta no A/B (só onde `navigator.vibrate` existe — no iPhone a opção nem aparece).

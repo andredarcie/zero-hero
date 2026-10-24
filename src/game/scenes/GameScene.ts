@@ -542,6 +542,8 @@ export class GameScene extends Phaser.Scene {
   private pauseTouchButton?: PauseTouchButton;
   // Os dois botoes de acao no toque, e a tarja que diz as teclas uma vez (ver ActionButtons).
   private actionButtons?: ActionButtons;
+  /** O icone de cada item para o B do toque, tirado da textura uma vez (ver syncUseButtonIcon). */
+  private readonly useIconCache = new Map<HeldItemKind, string>();
   private controlsHint?: ControlsHint;
   // A BOLSA: a mochila aberta COM O JOGO RODANDO (ver QuickBag). Ela nao pausa nada — quem paga
   // o preco de folhear e o heroi, de pes presos e sem os dois botoes enquanto ela estiver aberta.
@@ -854,7 +856,7 @@ export class GameScene extends Phaser.Scene {
     this.game.events.on(Phaser.Core.Events.PRE_RENDER, this.handlePreRender, this);
     this.game.events.on(Phaser.Core.Events.POST_RENDER, this.handlePostRender, this);
     this.game.events.on(Phaser.Core.Events.VISIBLE, this.handleVisible, this);
-    this.fpsCounter = new FpsCounter();
+    if (FpsCounter.wanted()) this.fpsCounter = new FpsCounter();
 
     this.registerDebugApi();
 
@@ -2295,16 +2297,52 @@ export class GameScene extends Phaser.Scene {
       kb.on('keydown-ENTER', () => { if (this.quickBag?.isOpen) this.quickBag.commit(); });
     }
     // No telefone os dois botoes precisam de corpo; no teclado basta dizer uma vez quais sao as
-    // teclas — e a tarja some sozinha (ver ControlsHint).
+    // teclas — e a tarja some sozinha (ver ControlsHint). No toque ela ensina o GESTO de andar,
+    // que nenhum botao anuncia.
     if (touch) {
       this.actionButtons = new ActionButtons({
         onAttack: () => this.pressAttack(),
         onAttackRelease: () => undefined,
         onUse: () => this.pressUse(),
       });
-    } else if (this.introDone) {
-      this.controlsHint = new ControlsHint(t('controls.hint'));
+      this.syncUseButtonIcon();
     }
+    if (this.introDone) this.showControlsHint();
+  }
+
+  /** A tarja dos controles: as teclas no teclado, o gesto e os botoes no toque (no alto da tela). */
+  private showControlsHint(): void {
+    this.controlsHint?.destroy();
+    const touch = isTouchDevice();
+    this.controlsHint = new ControlsHint(
+      t(touch ? 'controls.touchHint' : 'controls.hint'), touch ? 8000 : 6500, touch,
+    );
+  }
+
+  /**
+   * O DESENHO DO B no toque: o item que esta na mao — o mesmo icone da mochila, tirado da textura
+   * do Phaser uma vez por tipo —, ou o losango vazio de mao vazia. Chamado onde o item das costas
+   * se atualiza (updateBackItem), que e o lugar por onde toda troca de selecao ja passa.
+   */
+  private syncUseButtonIcon(): void {
+    const buttons = this.actionButtons;
+    if (!buttons) return;
+    const kind = this.heldItem;
+    if (kind === 'none') {
+      buttons.setUseIcon(null);
+      return;
+    }
+    let src = this.useIconCache.get(kind);
+    if (src === undefined) {
+      const v = ITEM_VISUAL_2D[kind];
+      try {
+        src = this.textures.getBase64(v.texture, v.frame);
+      } catch {
+        src = '';
+      }
+      this.useIconCache.set(kind, src);
+    }
+    buttons.setUseIcon(src || null, t(`items.name.${kind}`));
   }
 
   /** A seta, com a bolsa aberta: ela anda com o CURSOR e nao com o herói (que está de pés presos). */
@@ -4777,7 +4815,7 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneActive = false;
     this.updateBackItem();
     getSoundManager().fadeMusicIn();
-    if (!isTouchDevice()) this.controlsHint = new ControlsHint(t('controls.hint'));
+    this.showControlsHint();
     this.persistAdventure();
   }
 
@@ -5716,6 +5754,7 @@ export class GameScene extends Phaser.Scene {
     // ainda está vazia. Com qualquer coisa selecionada, as costas mostram a SELEÇÃO: é ela que o
     // botão X vai usar, e é isso que o jogador precisa ler no corpo.
     // Ate a espada ficar fincada, as costas mostram ELA; depois disso, de maos vazias, nada.
+    this.syncUseButtonIcon(); // o B do toque desenha o mesmo item que as costas
     const carried: HeldItemKind | null = this.heldItem === 'none' ? (this.introDone ? null : 'sword') : this.heldItem;
     if (!carried) {
       this.backItemBb?.setVisible(false);

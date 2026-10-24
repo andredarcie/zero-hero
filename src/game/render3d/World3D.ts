@@ -248,6 +248,11 @@ const RIVER_SURFACE_LIFT = 0.02;
 // O PLANO DO ESPELHO: entre a superfície do mar e a do rio (RIVER_SURFACE_LIFT acima dela), as
 // duas águas espelham no mesmo plano — a diferença entre elas é menos de meio pixel de arte.
 const REFLECT_PLANE_Y = -WATER_DEPTH_TILES + RIVER_SURFACE_LIFT / 2;
+// O PISO DA LARGURA da vista (ver effectiveFov): a tangente do meio-ângulo horizontal. 0,34 são
+// ~5,5 tiles de largura na profundidade do herói (o desktop 16:10 vê ~9); e o teto do FOV vertical
+// que a tela em pé pode pedir para alcançá-lo.
+const PORTRAIT_MIN_HALF_TAN_X = 0.34;
+const PORTRAIT_FOV_CAP = 74;
 // Lava tiles sink into a well too, but a SHALLOWER one than the river — molten rock pools
 // in a low basin, not a deep channel. Same treatment (dropped bed + dark charred banks), less
 // deep. LavaObject sets its surface just above the bed at this depth.
@@ -1292,8 +1297,8 @@ export class World3D {
 
     // A razão é a do BUFFER, que pode levar a margem da câmera de pixel suave (ver applyPixelScale).
     const bufSize = this.renderer.getSize(new THREE.Vector2());
-    this.camera = new THREE.PerspectiveCamera(this.params.fov, bufSize.x / bufSize.y, 0.1, 120);
-    this.appliedFov = this.params.fov;
+    this.appliedFov = this.effectiveFov(bufSize.x / bufSize.y);
+    this.camera = new THREE.PerspectiveCamera(this.appliedFov, bufSize.x / bufSize.y, 0.1, 120);
 
     // The night floor: everything stays readable but sunk in dark. Near-neutral tint
     // (params.ambientColor) so sprites keep their own art colours.
@@ -1386,6 +1391,19 @@ export class World3D {
       w: Math.max(1, Math.round(window.innerWidth * scale)) + 2 * pad,
       h: Math.max(1, Math.round(window.innerHeight * scale)) + 2 * pad,
     };
+  }
+
+  /**
+   * O FOV VERTICAL de verdade, para esta proporção de tela. O autorado (`params.fov`) é vertical, e
+   * numa tela em pé ele corta os LADOS: um telefone em retrato via ~3 tiles de largura — o herói
+   * ocupava um terço da tela e um vizinho a dois passos já ficava fora dela. Então a largura tem um
+   * piso (PORTRAIT_MIN_HALF_TAN_X, a tangente do meio-ângulo horizontal) e, abaixo dele, o FOV
+   * vertical sobe até cobri-lo, com teto (PORTRAIT_FOV_CAP) para a perspectiva não virar olho de
+   * peixe. Numa tela deitada o piso já está atendido e nada muda.
+   */
+  private effectiveFov(aspect: number): number {
+    const need = THREE.MathUtils.radToDeg(2 * Math.atan(PORTRAIT_MIN_HALF_TAN_X / Math.max(0.1, aspect)));
+    return Math.min(Math.max(this.params.fov, PORTRAIT_FOV_CAP), Math.max(this.params.fov, need));
   }
 
   /**
@@ -3976,10 +3994,11 @@ export class World3D {
       this.applyColor('fog', this.scene.fog.color, this.params.skyColor);
       this.scene.fog.density = this.params.fogDensity;
     }
-    if (this.params.fov !== this.appliedFov) {
-      this.camera.fov = this.params.fov;
+    const fov = this.effectiveFov(this.camera.aspect);
+    if (fov !== this.appliedFov) {
+      this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
-      this.appliedFov = this.params.fov;
+      this.appliedFov = fov;
     }
     this.syncFinishUniforms();
     // Tilt-shift focus follows the hero: normally he sits at screen centre, but a

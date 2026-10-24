@@ -78,7 +78,15 @@
     "quit": "Quit",
     "confirm": "Sure?",
     "sharpOn": "Sharpness: full",
-    "sharpOff": "Sharpness: thrifty"
+    "sharpOff": "Sharpness: thrifty",
+    "leftHand": "Buttons: left hand",
+    "rightHand": "Buttons: right hand",
+    "bigButtons": "Buttons: large",
+    "smallButtons": "Buttons: normal size",
+    "solidButtons": "Buttons: solid",
+    "softButtons": "Buttons: see-through",
+    "hapticsOn": "Vibration: on",
+    "hapticsOff": "Vibration: off"
   },
   "wizard": {
     "intro": [
@@ -272,6 +280,7 @@
   },
   "controls": {
     "hint": "Z talk · X use · I bag",
+    "touchHint": "Drag anywhere to walk · A talk · B use",
     "attackTitle": "Talk (Z)",
     "useTitle": "Use (X)"
   },

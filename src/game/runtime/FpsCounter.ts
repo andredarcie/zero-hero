@@ -37,6 +37,21 @@ export class FpsCounter {
   private worstMs = 0;
   private shown = '';
 
+  /**
+   * Quem vê o contador: o build de desenvolvimento sempre; o publicado só com `?fps` (ou `?prof`,
+   * o profiler) na URL. Para o jogador ele era um número de depuração no canto da tela — e quem
+   * precisa medir a máquina dele ainda tem o caminho, sem que todo mundo carregue o número.
+   */
+  public static wanted(): boolean {
+    if (import.meta.env.DEV) return true;
+    try {
+      const q = new URLSearchParams(window.location.search);
+      return q.has('fps') || q.has('prof');
+    } catch {
+      return false;
+    }
+  }
+
   public constructor() {
     this.style = document.createElement('style');
     this.style.textContent = STYLE;

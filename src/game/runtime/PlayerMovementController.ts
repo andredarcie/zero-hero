@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { HERO_FRAMES, TIMINGS } from '@/game/constants';
+import { TouchStick } from './ActionButtons';
 import { setHeroWalking, WALK_CYCLE_FRAMES, WALK_CYCLE_FRAMES_UP, type HeroView } from './HeroView';
 import type { WorldCamera } from './WorldCamera';
 
@@ -88,6 +89,14 @@ export class PlayerMovementController {
   /** The direction the drag is holding — read every frame, exactly like a key. */
   private touchDir: Dir | null = null;
   private touchAnchor: { pointerId: number; x: number; y: number } | null = null;
+  /**
+   * O anel que mostra o arrasto (ver TouchStick) — nasce no primeiro toque, só existe no toque.
+   * Ele some enquanto os pés estão presos (bolsa, diálogo, golpe): um joystick na tela promete um
+   * andar que naquele instante não acontece.
+   */
+  private stick?: TouchStick;
+  private stickShown = false;
+  private lastFinger = { x: 0, y: 0 };
 
   // The way the hero is currently facing, mirroring the sprite frame set by setFacing. Starts
   // facing down (the idle frame).
@@ -175,6 +184,7 @@ export class PlayerMovementController {
     const pos = this.adopt(worldX, worldY);
     const dt = Math.min(deltaMs, MAX_FRAME_MS);
     if (this.rootedMs > 0) this.rootedMs = Math.max(0, this.rootedMs - dt);
+    if (this.stick) this.syncStick(); // os pés podem ter se soltado (ou preso) sem o dedo mexer
 
     const input = this.isRooted ? null : (this.readHeld() ?? this.tapDir);
     if (!input) {
@@ -408,6 +418,21 @@ export class PlayerMovementController {
     window.removeEventListener('touchmove', this.boundTouchMove);
     window.removeEventListener('touchend', this.boundTouchEnd);
     window.removeEventListener('touchcancel', this.boundTouchEnd);
+    this.stick?.destroy();
+    this.stick = undefined;
+  }
+
+  /** O anel acompanha o dedo; aparece só enquanto há dedo E os pés estão livres. */
+  private syncStick(): void {
+    const anchor = this.touchAnchor;
+    const want = anchor !== null && !this.isRooted && this.stick !== undefined;
+    if (want && anchor && this.stick) {
+      if (!this.stickShown) this.stick.show(anchor.x, anchor.y);
+      this.stick.update(anchor.x, anchor.y, this.lastFinger.x, this.lastFinger.y);
+    } else if (this.stickShown) {
+      this.stick?.hide();
+    }
+    this.stickShown = want;
   }
 
   private handleTouchStart(e: TouchEvent): void {
@@ -418,6 +443,9 @@ export class PlayerMovementController {
     if ((e.target as HTMLElement | null)?.closest?.('[data-zh-ui]')) return;
     const t = e.changedTouches[0];
     this.touchAnchor = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
+    this.lastFinger = { x: t.clientX, y: t.clientY };
+    this.stick ??= new TouchStick(SWIPE_ANCHOR_LEASH_PX);
+    this.syncStick();
   }
 
   private handleTouchMove(e: TouchEvent): void {
@@ -426,6 +454,8 @@ export class PlayerMovementController {
     const t = Array.from(e.changedTouches).find((c) => c.identifier === anchor.pointerId);
     if (!t) return;
     this.trackDrag(anchor, t.clientX, t.clientY);
+    this.lastFinger = { x: t.clientX, y: t.clientY };
+    this.syncStick();
   }
 
   private handleTouchEnd(e: TouchEvent): void {
@@ -434,6 +464,7 @@ export class PlayerMovementController {
     if (!Array.from(e.changedTouches).some((c) => c.identifier === anchor.pointerId)) return;
     this.touchDir = null;
     this.touchAnchor = null;
+    this.syncStick();
   }
 
   // (Houve aqui um `setMouseWalkEnabled`: o mouse deixava de andar e virava MIRA enquanto o

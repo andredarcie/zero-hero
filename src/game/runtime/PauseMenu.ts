@@ -6,6 +6,10 @@ import {
   getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
 } from '@/game/runtime/graphicsSettings';
 import { SubScreenPanel, type SubScreenView } from '@/game/runtime/SubScreen';
+import {
+  canVibrate, haptic, hasBigButtons, hasHaptics, hasSolidButtons, isLeftHanded,
+  setBigButtons, setHaptics, setLeftHanded, setSolidButtons,
+} from '@/game/runtime/touchSettings';
 
 // The pause screen is plain DOM layered over the Phaser canvas — the same approach as
 // DialogOverlay / EditorDomUi. That choice matters twice here: serif text and native range
@@ -71,15 +75,17 @@ const CSS = `
   top: calc(10px + env(safe-area-inset-top, 0px));
   right: calc(10px + env(safe-area-inset-right, 0px));
   z-index: 45;
-  width: 42px; height: 42px; padding: 0;
+  /* 48px: o alvo mínimo de toque (48dp no Android, 44pt no iOS). Eram 42. */
+  width: 48px; height: 48px; padding: 0;
   display: flex; align-items: center; justify-content: center; gap: 5px;
-  background: rgba(10, 8, 6, 0.3); border: 1px solid rgba(216, 209, 192, 0.3);
-  border-radius: 8px; cursor: pointer;
+  background: rgba(10, 8, 6, 0.52); border: 2px solid rgba(231, 220, 196, 0.6);
+  border-radius: 9px; cursor: pointer;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 #${TOUCH_BTN_ID} span {
-  width: 4px; height: 14px; background: rgba(216, 209, 192, 0.65); border-radius: 1px;
+  width: 4px; height: 16px; background: #e7dcc4; border-radius: 1px;
 }
+body.zh-solid-btns #${TOUCH_BTN_ID} { background: rgba(24, 19, 12, 0.9); border-color: #e7dcc4; }
 `;
 
 const ensureStyle = (): void => {
@@ -121,6 +127,10 @@ export class PauseMenu {
   private readonly dofLabel: HTMLSpanElement;
   private readonly daylightBtn: HTMLDivElement;
   private readonly sharpBtn: HTMLDivElement;
+  /** As opções de toque (ver touchSettings) — só existem num aparelho de toque. */
+  private readonly touchBtns?: {
+    hand: HTMLDivElement; size: HTMLDivElement; look: HTMLDivElement; haptics?: HTMLDivElement;
+  };
   private readonly subScreen?: SubScreenPanel;
   private readonly fullscreenBtn?: HTMLDivElement;
   private readonly restartBtn?: HTMLDivElement;
@@ -192,6 +202,20 @@ export class PauseMenu {
       setThriftyPixels(!isThriftyPixels());
       this.refreshTexts();
     });
+
+    // OS CONTROLES DE TOQUE: mão, tamanho, visibilidade e vibração (ver touchSettings). Só no
+    // toque — no teclado não há botão na tela a mover —, e a vibração só onde o navegador vibra.
+    if (isTouchDevice()) {
+      const flip = (toggle: () => void) => () => { toggle(); this.refreshTexts(); };
+      this.touchBtns = {
+        hand: this.button(panel, flip(() => setLeftHanded(!isLeftHanded()))),
+        size: this.button(panel, flip(() => setBigButtons(!hasBigButtons()))),
+        look: this.button(panel, flip(() => setSolidButtons(!hasSolidButtons()))),
+        haptics: canVibrate()
+          ? this.button(panel, flip(() => { setHaptics(!hasHaptics()); haptic(20); }))
+          : undefined,
+      };
+    }
 
     // (Havia um par de botoes de idioma aqui. O jogo e so em ingles agora — nao ha catalogo pra
     // trocar, e um seletor de uma opcao so e mobilia.)
@@ -300,6 +324,15 @@ export class PauseMenu {
     this.daylightBtn.textContent = getDaylight() >= 0.5 ? t('pause.nightfall') : t('pause.daylight');
     // O rótulo diz o que o toque FAZ, como o do fullscreen e o do dia — nunca onde se está.
     this.sharpBtn.textContent = isThriftyPixels() ? t('pause.sharpOn') : t('pause.sharpOff');
+    if (this.touchBtns) {
+      // O mesmo contrato: o rótulo diz o que o toque FAZ.
+      this.touchBtns.hand.textContent = isLeftHanded() ? t('pause.rightHand') : t('pause.leftHand');
+      this.touchBtns.size.textContent = hasBigButtons() ? t('pause.smallButtons') : t('pause.bigButtons');
+      this.touchBtns.look.textContent = hasSolidButtons() ? t('pause.softButtons') : t('pause.solidButtons');
+      if (this.touchBtns.haptics) {
+        this.touchBtns.haptics.textContent = hasHaptics() ? t('pause.hapticsOff') : t('pause.hapticsOn');
+      }
+    }
     if (this.fullscreenBtn) {
       this.fullscreenBtn.textContent = document.fullscreenElement
         ? t('pause.fullscreenExit')
@@ -358,6 +391,7 @@ export class PauseTouchButton {
     this.el.type = 'button';
     // Ver ActionButtons: sem esta marca, o toque no botao tambem viraria um arrasto de andar.
     this.el.setAttribute('data-zh-ui', '');
+    this.el.setAttribute('aria-label', t('pause.title'));
     this.el.append(document.createElement('span'), document.createElement('span'));
     this.el.addEventListener('click', onTap);
     document.body.appendChild(this.el);
