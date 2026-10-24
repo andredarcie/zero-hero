@@ -103,7 +103,6 @@ const NPC_LABELS: Record<NpcKind, string> = {
 const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string; frame?: number }> = [
   { type: 'key', label: 'Chave', key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   { type: 'axe', label: 'Machado', key: ASSET_KEYS.axeIcon },
-  { type: 'greatAxe', label: 'Machado de Aco', key: ASSET_KEYS.greatAxeIcon },
   { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
   { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
   { type: 'shovel', label: 'Pa — cava buraco de plantio na terra', key: ASSET_KEYS.shovelIcon },

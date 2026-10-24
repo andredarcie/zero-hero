@@ -54,11 +54,9 @@ export interface AdventureSnapshot {
   seenItems: Set<string>;
   /** As conversas que ja deram o presente do NPC (a ferramenta do pedido) — um presente, uma vez. */
   giftsGiven: Set<string>;
-  /** "x,y" de cada pinheiro-tile derrubado (diff de terreno sobre o world.json). */
-  felledTrees: Set<string>;
   /**
    * "x,y" de cada buraco de plantio que a PÁ cavou no overworld. Diff sobre os plantSpots
-   * autorados, pelo mesmo motivo do felledTrees: o buraco é ESTRUTURA que o jogador fez.
+   * autorados: o buraco é ESTRUTURA que o jogador fez.
    */
   dugSpots: Set<string>;
   /** Estações manuais construídas pelo jogador por mundo. Diff, nunca foto: ver AdventureMachine. */
@@ -90,7 +88,6 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   seenDialogKeys: new Set(),
   seenItems: new Set(),
   giftsGiven: new Set(),
-  felledTrees: new Set(),
   dugSpots: new Set(),
   machines: new Map(),
   groundItems: new Map(),
@@ -110,7 +107,6 @@ type StoredSnapshot = {
   seenDialogKeys?: string[];
   seenItems?: string[];
   giftsGiven?: string[];
-  felledTrees?: string[];
   dugSpots?: string[];
   machines?: Record<string, AdventureMachine[]>;
   groundItems?: Record<string, AdventureGroundItem[]>;
@@ -132,6 +128,9 @@ const cleanMachines = (
   ]),
 );
 
+/** Itens que sairam do jogo: um save antigo que os guarde simplesmente os esquece. */
+const REMOVED_KINDS: ReadonlySet<string> = new Set(['greatAxe']);
+
 const load = (): AdventureSnapshot => {
   const base = defaultSnapshot();
   try {
@@ -143,8 +142,10 @@ const load = (): AdventureSnapshot => {
       respawn: p.respawn && typeof p.respawn.worldX === 'number' && typeof p.respawn.worldY === 'number'
         ? { worldX: p.respawn.worldX, worldY: p.respawn.worldY }
         : null,
-      inventory: Array.isArray(p.inventory) ? p.inventory.filter((i) => i && typeof i.kind === 'string') : [],
-      selected: p.selected ?? 'none',
+      inventory: Array.isArray(p.inventory)
+        ? p.inventory.filter((i) => i && typeof i.kind === 'string' && !REMOVED_KINDS.has(i.kind))
+        : [],
+      selected: p.selected && !REMOVED_KINDS.has(p.selected) ? p.selected : 'none',
       introSeen: p.introSeen === true,
       gateOpened: p.gateOpened === true,
       hearthLit: p.hearthLit === true,
@@ -152,7 +153,6 @@ const load = (): AdventureSnapshot => {
       seenDialogKeys: new Set(p.seenDialogKeys ?? []),
       seenItems: new Set(p.seenItems ?? []),
       giftsGiven: new Set(p.giftsGiven ?? []),
-      felledTrees: new Set(p.felledTrees ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
       machines: cleanMachines(p.machines),
       groundItems: new Map(Object.entries(p.groundItems ?? {})),
@@ -194,7 +194,6 @@ export const saveAdventure = (): void => {
     seenDialogKeys: [...s.seenDialogKeys],
     seenItems: [...s.seenItems],
     giftsGiven: [...s.giftsGiven],
-    felledTrees: [...s.felledTrees],
     dugSpots: [...s.dugSpots],
     machines: Object.fromEntries(s.machines),
     groundItems: Object.fromEntries(s.groundItems),

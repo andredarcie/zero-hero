@@ -44,7 +44,6 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   sword: { key: ASSET_KEYS.swordItem, frame: 0 },
   key: { key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
   axe: { key: ASSET_KEYS.axeIcon },
-  greatAxe: { key: ASSET_KEYS.greatAxeIcon },
   pickaxe: { key: ASSET_KEYS.pickaxeIcon },
   scythe: { key: ASSET_KEYS.scytheIcon },
   shovel: { key: ASSET_KEYS.shovelIcon },

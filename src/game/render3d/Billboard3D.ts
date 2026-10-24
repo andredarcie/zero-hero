@@ -115,6 +115,13 @@ export interface Billboard3DOptions {
   castGroundShadow?: boolean;
   /** Animated surface shader (see pixelArtLight.ts): lava heat shimmer / water moon-glint. */
   worldFx?: 'lavaFlow' | 'waterGlint';
+  /** Água que ESPELHA os personagens (o quad do rio) — ver pixelArtLight.mirrorSurface. */
+  mirrorSurface?: boolean;
+  /**
+   * Este sprite APARECE no espelho d'água (herói, NPCs, gato). Quem lê é o World3D, que desenha
+   * os marcados na passada do reflexo; o Billboard3D em si não muda nada.
+   */
+  reflected?: boolean;
   /**
    * Emissive/additive only: multiply the colour ABOVE 1 so the sprite is HDR and
    * blooms (a real flame/lava glows). Lit sprites stay ≤ lightCap, so a high bloom
@@ -215,6 +222,7 @@ export class Billboard3D {
       patchPixelMaterial(this.mat, {
         fill: { color: this.uFillColor, mix: this.uFillMix },
         worldFx: opts.worldFx,
+        mirrorSurface: opts.mirrorSurface,
       });
     } else {
       this.mat = new THREE.MeshLambertMaterial({
@@ -231,6 +239,7 @@ export class Billboard3D {
         footAnchorY: opts.centered ? -0.5 : 0,
         fill: { color: this.uFillColor, mix: this.uFillMix },
         worldFx: opts.worldFx,
+        mirrorSurface: opts.mirrorSurface,
         maskProbe: this.maskProbe,
       });
     }

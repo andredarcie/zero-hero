@@ -34,7 +34,7 @@ export class FireVisitor {
   ) {
     const visual = NPC_VISUALS[kind];
     this.body = world3d()
-      .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true })
+      .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
       .setDisplaySize(1, 1);
     this.place();
   }

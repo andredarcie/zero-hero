@@ -101,8 +101,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **HÁ UM MUNDO SÓ, e só a superfície.** Levels, `/lab`, explorador e o subterrâneo
   (`underworld.json`, escadas) foram removidos. **`scripts/cozy-world.mjs`** é o passo que tirou o
   combate do mundo e montou o jardim (rode com `--check`: o disco tem de ser o ponto fixo).
-- **O jardim do centro é fechado por PROVA DE BFS**, e a sebe tem colisão PINTADA: árvore com
-  colisão pintada não é cortável (`treeTileFrameAt`) — senão o machado de aço abre o portão.
+- **O jardim do centro é fechado por PROVA DE BFS**, e a sebe é de pinheiro com colisão PINTADA.
 - **⚠️ NUNCA rode `generate:world`.** `generateWorld.ts` sobrescreve o `world.json` inteiro por um
   mundo **8×8 sem NPC autorado e com uma fogueira** — e o de hoje é 5×5 chunks, feito à mão no
   `/editor`. Ele escreve **sem merge e sem perguntar**. Fica no repo como scaffolding, e só depois
@@ -143,11 +142,11 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   — se só uma legenda ensinaria o que fazer, o que precisa de conserto é a arte da peça.
 - **Itens devem PRODUZIR, não só apagar** (árvore→graveto/ponte, picareta→pedra, foice→sementes).
   Pergunte de qualquer item novo: o que ele *faz*?
-- **Dois machados:** `axe` (só madeira morta) e `greatAxe` (qualquer árvore, superset do primeiro —
-  um item novo nunca invalida o que o jogador já tem). Árvore é **tile**, não prop (846 no
-  `world.json`, um draw call), então o machado de aço edita **terreno**.
+- **ÁRVORE VERDE NUNCA SAI DO LUGAR.** O `axe` só corta madeira MORTA (props `dryTree`/`dryShrub`);
+  a árvore verde é **tile** assado na malha estática do terreno, escrita UMA vez na GPU, sem índice
+  nem remendo. **Nenhum item edita terreno em pé** — o machado de aço que fazia isso foi removido.
 - **O FORA DO MUNDO trava por COORDENADA, não por material** (`buildVoidChunk`): todo tile de lá
-  nasce com `collisions: true`, e `treeTileFrameAt` recusa editar fora dos chunks autorados. São
+  nasce com `collisions: true`, e nada no jogo edita terreno em pé. São
   as duas travas — tirar uma abre uma porta para fora do mapa. Por elas a arte de lá é livre: em
   cima é floresta sob névoa negra, embaixo é a alvenaria de teto preto. (Já foi mar, quando a
   única trava era o material.) Tile de terreno novo = **frame novo num atlas existente**
@@ -242,6 +241,8 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
   rio. As cores da beira são a própria ramp de água: a costa lê como água **rasa**. Quanta vida ela
   tem é um knob vivo — `hd3d.seaFlow` (1 = padrão, 0 = a foto de antes, 2 = o dobro): "mais/menos
   movimento" é decisão de olho, e não pode custar uma recompilação.
+- **A ÁGUA NA TELA É UMA SÓ.** O rio é prop no dado (`WaterObject`: colisão, ponte, vau, comporta),
+  mas a superfície dele o `World3D` assa com o material do lago — prop de água não desenha quad.
 - `npm run playtest -- montanha` guarda as duas: compara os pixels do atlas (39 é 23, 41 vazio),
   exige teto e face sul na malha de rocha com o tile fora do índice de quads e ainda bloqueando, e
   mede a água por **A/B contra um controle de chão parado** — sem o controle, uma poeira passando
@@ -269,6 +270,8 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
 - **Tudo em que o herói pisa declara `depthLayer: 'ground'`** (`Billboard3D`), senão dois quads
   coplanares piscam. Quads deitados (buracos, água, flor aberta) são isentos.
 - Material com `onBeforeCompile` **precisa** de `customProgramCacheKey`.
+- **O canvas do mundo pode ser MAIOR que a tela e DESLOCADO** (câmera de pixel suave, quando um pixel
+  desenhado ocupa mais de um do aparelho): tela ↔ mundo só por `projectTile`/`screenToGround`, nunca por `innerWidth`.
 - **O VENTO é vertex shader nas duas malhas de terreno, e o que NÃO balança é uma máscara por
   vértice** (`aWind`): elas são fundidas por camada, então o túmulo mora na mesma malha do pinheiro
   e o seixo na do capim. Frame novo de árvore/mato entra em `WIND_SWAY_FRAMES`/`WIND_STIR_FRAMES`;

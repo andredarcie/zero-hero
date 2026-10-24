@@ -136,7 +136,6 @@ export const ASSET_KEYS = {
   swordItem: 'sword-item',
   swordItemIcon: 'sword-item-icon',
   axeIcon: 'axe-icon',
-  greatAxeIcon: 'great-axe-icon',
   pickaxeIcon: 'pickaxe-icon',
   scytheIcon: 'scythe-icon',
   shovelIcon: 'shovel-icon',
@@ -349,10 +348,7 @@ export const ENEMY_RESPAWN_MS = 25000;
 // (pixels apagados): id de frame e posicional, e remover a linha re-apontaria em silencio todo tile
 // de dungeon autorado a partir do 42.
 //
-// Ela entra em SOLID_UPPER_FRAMES logo abaixo e fica deliberadamente FORA de
-// CHOPPABLE_UPPER_FRAMES: o machado de aco derruba qualquer ARVORE, e nada no jogo abre montanha.
-// Rocha cortavel devolveria a cada parede do mapa a condicao de porta destrancada — que e
-// exatamente o bug que fez a borda do mundo virar mar.
+// Ela entra em SOLID_UPPER_FRAMES logo abaixo: nada no jogo abre montanha.
 export const CLIFF_WALL_FRAMES: readonly number[] = [39, 40];
 
 // OS TILES DE DUNGEON, instalados no atlas a partir do frame 42 (spritefactory/sprites/
@@ -360,8 +356,7 @@ export const CLIFF_WALL_FRAMES: readonly number[] = [39, 40];
 // A ORDEM E O CONTRATO: ela e a mesma da spec e a mesma que `scripts/gen-zelda-dungeons.mjs`
 // indexa. Inserir um frame no meio re-aponta em silencio todo tile ja autorado.
 //
-// As paredes entram em SOLID_UPPER_FRAMES abaixo — quad em pe, com sombra — e ficam fora de
-// CHOPPABLE_UPPER_FRAMES: masmorra nao se derruba a machado.
+// As paredes entram em SOLID_UPPER_FRAMES abaixo — quad em pe, com sombra.
 export const DUNGEON_TILES = {
   floors: [42, 43, 44] as readonly number[],
   walls: [45, 46, 47] as readonly number[],
@@ -415,37 +410,21 @@ export const wallTorchFaceIsClear = (southUpperFrame: number | null | undefined)
 // pines, and 22 & 25 are the cemetery's spiked head and tomb.
 export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([
   3, 4, 14, 15, 16, 17, 18, 21, 22, 25,
-  36, 37, // the tree-chop stages (see TREE_CHOP_STAGE_FRAMES): a half-felled tree still blocks
+  36, 37, // the old tree-chop stages (crown gone, stump): nothing makes them now, but they still block
   ...CLIFF_WALL_FRAMES, // the mountain: standing rock, and the only vertical blocker that is not wood
   ...DUNGEON_WALL_FRAMES, // a alvenaria das dungeons
 ]);
 
-// Which of those standing tiles are TREES — the ones the steel axe (`greatAxe`) can fell.
-// The plain axe only ever bites dead wood (the dryTree/dryShrub props); the steel axe is
-// defined by cutting ANY tree, and most trees in the world are not props at all: they are
-// upper-layer tiles baked into one static mesh (846 of them in world.json). So "any tree"
-// has to mean the tile too, or the item's whole promise is a lie the moment you meet a pine.
-// Deliberately NOT the whole of SOLID_UPPER_FRAMES: 22 (spiked head) and 25 (tomb) stand up
-// the same way but are masonry and bone — an axe that chopped down a gravestone would say
-// the frame set means "scenery", when what it means here is "wood".
-// A tree TILE comes down the way the dryTree prop does — one stage per swing, not in one blow.
-// The prop shrinks through its own 6-frame sheet (woods.png); a tile cannot, because World3D
-// merges every standing tile into ONE mesh sampling the tileset atlas, so a tile's stages have
-// to be frames of that same atlas. These two are SHARED by all eight tree frames: at 16x16 a
-// severed stump keeps no silhouette that says which pine it came from, and eight private
-// ladders would be sixteen frames saying the same thing.
-export const TREE_CHOP_STAGE_FRAMES: readonly number[] = [36, 37]; // wounded (crown gone), stump
-export const CHOPPABLE_UPPER_FRAMES: ReadonlySet<number> = new Set([
-  3, 4, 14, 15, 16, 17, 18, 21, // the standing trees themselves
-  ...TREE_CHOP_STAGE_FRAMES, // …and what a half-felled one becomes, so the next swing continues
+// Which of those standing tiles are TREES (the falling leaves come from them). 22 (spiked head)
+// and 25 (tomb) stand up the same way but are masonry and bone.
+//
+// A TREE TILE NEVER MOVES. Nothing in the game fells one — the plain axe only bites dead wood
+// (the dryTree/dryShrub props), and the steel axe that felled any tree was removed. That
+// guarantee is what lets World3D bake the whole forest into one mesh written to the GPU once,
+// with no index, no in-place edit and no re-bake behind it.
+export const TREE_UPPER_FRAMES: ReadonlySet<number> = new Set([
+  3, 4, 14, 15, 16, 17, 18, 21, 36, 37,
 ]);
-
-// Chance that felling a common tree yields a graveto. A tile tree is NOT the dry tree's equal:
-// there are ~850 of them against 8 dryTree props, and every one of them dropping a stick would
-// turn the whole map into an infinite fuel dispenser and flatten the fire economy that the
-// scythe, the plant loop and the dryTree's own regrow timer exist to meter. So most of them
-// give nothing, and wood stays worth walking for.
-export const TREE_TILE_STICK_CHANCE = 0.25;
 
 // O SORTEIO DO CARVAO MORREU (2026-08-12): todo arbusto seco queimado deixa carvao, sempre. Era
 // 1 em 4, e a raridade metrificava o fogo enquanto o carvao era so comida de tocha e a unica
@@ -454,10 +433,8 @@ export const TREE_TILE_STICK_CHANCE = 0.25;
 // economia e virou imposto sobre quem escolheu o caminho do fogo. Ver GameScene.dropCharcoalFromBush.
 
 // Ground-layer frames that BLOCK, the mirror of SOLID_UPPER_FRAMES for the floor. The sea is
-// the only one, and it exists because of the steel axe: the world's edge used to be a wall of
-// pine tiles (WorldData's VOID_WALL_FRAME), which an axe that fells any tree turns into a door
-// out of the map. The sea is the border that no item in the game answers — collision here is
-// implicit and unconditional.
+// the only one: the border that no item in the game answers — collision here is implicit and
+// unconditional.
 export const SEA_TILE_FRAME = 33;
 // Three interchangeable paintings of the same water, picked per tile at render time (World3D).
 // The river gets away with ONE tile because it is ~30 of them; the sea covers ~11k, and a single

@@ -19,7 +19,7 @@ export default {
       const trees = (x, y) => {
         let n = 0;
         for (let dy = -3; dy <= 3; dy += 1) for (let dx = -4; dx <= 4; dx += 1) {
-          if (s.treeTileFrameAt(x + dx, y + dy) !== null) n += 1;
+          if (s.isTreeTileAt(x + dx, y + dy)) n += 1;
         }
         return n;
       };

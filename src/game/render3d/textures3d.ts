@@ -92,7 +92,6 @@ const DEFS: Record<string, SheetDef> = {
   'sword-item': { url: `${A}/items/equipment/sword.png`, frameW: 16, frameH: 16 },
   'sword-on-fire': { url: `${A}/items/equipment/sword_on_fire.png`, frameW: 16, frameH: 16 },
   'axe-icon': { url: `${A}/ui/icons/axe_icon.png` },
-  'great-axe-icon': { url: `${A}/ui/icons/great_axe_icon.png` },
   'sword-icon': { url: `${A}/ui/icons/sword_icon.png` },
   'pickaxe-icon': { url: `${A}/ui/icons/pickaxe_icon.png` },
   'scythe-icon': { url: `${A}/ui/icons/scythe_icon.png` },

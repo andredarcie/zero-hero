@@ -7,8 +7,8 @@
 //   • a MORTE sai do mapa (o resto dos vizinhos fica — eles ganharam pedidos novos);
 //   • o MAGO entra na beira da estrada do sul, ao lado de onde a espada e fincada;
 //   • o JARDIM DO CENTRO: a pira vira a FOGUEIRA DO FIM (`hearth`), a sebe de pinheiros que ja
-//     cercava a clareira ganha colisao PINTADA (o machado de aco nao a corta — ver
-//     GameScene.treeTileFrameAt), e o pinheiro do sul vira o PORTAO (`gardenGate`). Dentro, um
+//     cercava a clareira ganha colisao PINTADA (hoje nada derruba arvore verde, e a
+//     colisao pintada fica como segunda trava), e o pinheiro do sul vira o PORTAO (`gardenGate`). Dentro, um
 //     graveto e um cogumelo esperam o heroi;
 //   • os COGUMELOS do bosque: sete, espalhados na sombra das arvores, longe uns dos outros.
 //

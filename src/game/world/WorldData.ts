@@ -32,11 +32,10 @@ type WorldBounds = {
 // A saída na época foi trocar o material por um que item nenhum responde: MAR (a colisão dele vem
 // de SOLID_GROUND_FRAMES, incondicional).
 //
-// Hoje a trava é outra, e é melhor: o corte é recusado por COORDENADA, não por material
-// (`GameScene.treeTileFrameAt` devolve null fora dos chunks autorados — "the border must not be
-// editable by any means"), e todo tile daqui nasce com `collisions: true`, que bloqueia sozinho
-// seja qual for o frame. São duas travas independentes, e nenhuma das duas olha para a arte —
-// então a arte voltou a ser livre. **Se um dia alguém tirar uma delas, isto aqui vira uma porta.**
+// Hoje a trava é outra, e é melhor: o machado de aço saiu do jogo e NADA derruba árvore verde
+// (a árvore-tile nunca sai do lugar), e todo tile daqui nasce com `collisions: true`, que bloqueia
+// sozinho seja qual for o frame. Nenhuma das duas olha para a arte — então a arte voltou a ser
+// livre. **Se um dia algo voltar a editar terreno em pé, isto aqui vira uma porta.**
 //
 // As duas listas são variadas por HASH das coordenadas, nunca por `Math.random`: o mundo tem de
 // nascer idêntico a cada boot (o visual-ref compara pixel a pixel, e o three gasta o mesmo fluxo

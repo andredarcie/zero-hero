@@ -136,11 +136,11 @@
           5,
           33,
           33,
-          5,
           33,
           33,
           33,
-          5,
+          33,
+          33,
           33,
           5,
           5
@@ -306,11 +306,11 @@
           1,
           null,
           null,
-          0,
+          null,
           null,
           7,
           null,
-          7,
+          null,
           null,
           10,
           0
@@ -13799,21 +13799,6 @@
       "worldY": 1
     },
     {
-      "type": "water",
-      "worldX": 36,
-      "worldY": 11
-    },
-    {
-      "type": "water",
-      "worldX": 37,
-      "worldY": 11
-    },
-    {
-      "type": "water",
-      "worldX": 38,
-      "worldY": 11
-    },
-    {
       "type": "campfire",
       "worldX": 51,
       "worldY": 26
@@ -13965,11 +13950,6 @@
       "type": "tallGrass",
       "worldX": 52,
       "worldY": 51
-    },
-    {
-      "type": "water",
-      "worldX": 50,
-      "worldY": 52
     },
     {
       "type": "dryTree",

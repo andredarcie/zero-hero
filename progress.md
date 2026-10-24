@@ -9496,3 +9496,55 @@ Original → agora (30s andando por toque, trabalho × 6): p50 7,2 → 6,0ms · 
 - **Pegadas em pool**: criar uma `Ellipse` + tween a cada tile custava 2,5ms no celular a cada passo; agora reaproveitadas, e o esmaecimento (o mesmo `Power1.easeIn`, 1 − t²) roda no render3D — que corre todo quadro, como o gerenciador de tweens corria.
 - **Mapa de luz** com duas texturas alternadas e arrays de luz em `Float32Array`.
 - O que resta na cauda: soluços de ~1–2ms reais espalhados (GC menor, variação do driver no `compose`, texto 2D redesenhado), um terço deles nos primeiros segundos (JIT). E 151 `uniform3f` por quadro: as 11 luzes reenviadas a cada programa iluminado, porque o tremor das chamas muda a cor delas todo quadro — custo do visual.
+
+## 2026-10-23 — A árvore verde nunca sai do lugar (o machado de aço saiu do jogo)
+
+- **`greatAxe` removido por inteiro**: tipo, ícone (`great_axe_icon.png` + `spritefactory/sprites/great-axe-icon.mjs`), editor, locale, missão `fell` (nenhum NPC a usava) e o diff `felledTrees` do save. Save antigo com o item o esquece (`REMOVED_KINDS` no `adventureState`). Ele não era obtível em lugar nenhum do mundo cozy.
+- **O que isso libera**: a árvore verde é tile, assada na malha estática do terreno, e agora é ESCRITA UMA VEZ. Saiu todo o maquinário de editar essa malha no lugar: os índices `solidQuads`/`solidBlobQuads`/`groundQuads` (três `Map<string>` com uma chave por tile — ~6 mil árvores, mais o chão inteiro), `removeSolidTile`/`setSolidTileFrame`/`shakeSolidTile`, a re-assadura de AO em volta do toco, o `solidKeys` vivo, e o tremor por quadro (`updateTileShakes` e o teste de tremor dentro do laço de sombra de CADA árvore iluminada). As geometrias deixaram de ser campos e viraram locais do bake.
+- O X contra uma árvore verde continua mudo (`isTreeTileAt`), como era com o machado comum.
+- Os 4 tiles de árvore MORTA pintados como terreno (frames 3 e 21) também ficaram fixos — o que o machado corta são os 42 props `dryTree`.
+- Cenários: `machado` agora prova mar + "machado não derruba pinheiro" + "machado derruba árvore seca"; `montanha` perdeu o assert do índice de quads; `dia` usa `isTreeTileAt`.
+
+## 2026-10-23 — O espelho d'água: rio e lago refletem os personagens
+
+- **Reflexo planar de verdade**, a técnica do `Reflector` do three (`examples/jsm/objects/Reflector.js`) com o recorte oblíquo do Lengyel: `World3D.renderReflection` espelha a câmera do jogo no plano `REFLECT_PLANE_Y` (entre a superfície do mar, −0,42, e a do rio, −0,39), desenha só os corpos marcados `reflected` num alvo do tamanho do quadro, e a água amostra esse alvo pela projeção da câmera virtual (`uReflMatrix`). Quem amostra é a superfície, então o reflexo só existe onde há água à vista, e sai como a física manda: o herói ao NORTE da água aparece de cabeça para baixo na água ao sul dele; com a água atrás dele não aparece nada. Com a câmera a ~48°, o reflexo dos pés cai ~0,38 tile ao sul do herói — encostado na margem, ele inteiro está na água.
+- **O que reflete**: herói, item nas costas, chama da tocha, NPCs, gato, o visitante da fogueira e o mago da abertura (`Billboard3DOptions.reflected`). **O que espelha**: o mar/lago (`terrain-sea`) e o quad do rio (`WaterObject`) — `PatchOpts.mirrorSurface`.
+- **O estilo, sobre a imagem exata** (`WATER_REFLECT_GLSL`), tudo em pixel INTEIRO e preso à grade da arte (16 linhas por tile, no mundo): o tremor horizontal por linha (duas ondas de passo primo), linhas que somem por instantes (a marola abrindo o espelho) e a cor da água (mais escuro, puxado para o azul), misturado por `hd3d.reflection` (0,62; 0 desliga) ANTES do glint e da névoa, que continuam por cima.
+- **As leis respeitadas**: a passada leva TODAS as luzes da cena (a contagem entra na chave do programa); o alvo é clone do alvo do compositor (mesmo formato = mesmo programa no ANGLE) e o `prewarmShaders` desenha a cena nele uma vez, com o sampler do espelho desligado nesse desenho (amostrar o alvo em que se desenha é laço de realimentação).
+- **Custo**: a passada só roda com água num balde 8×8 da área visível e um corpo marcado perto da tela; desenha só esses corpos. Fica na seção `reflection` do profiler.
+
+## 2026-10-23 — Os lagos e rios, revisados e consertados
+
+Revisão de todos os 11 corpos d'água do mapa (4 lagos de frame do mar, 7 rios de prop `water`), com print de cada um de noite e de dia. O que estava errado, e o que mudou:
+
+- **Duas águas na tela.** O rio era um quad por tile com arte própria (`water_0..3`, tingido de azul-ardósia, sem espuma, um timer de 220ms por tile — 104 timers), o lago era o material do mar. Agora o `World3D` assa a superfície do rio com o MESMO material do lago (`mats.sea`), um fio acima do leito (`RIVER_SURFACE_LIFT`): mesmas três variantes de arte por coordenada (some a grade de riscos que a arte do rio repetia em toda coluna), mesma arrebentação na margem (o `wetKeys` já contava rio como água), mesmo glint, mesmo espelho. O `WaterObject` ficou dono só do TILE; a comporta pede `drainRiverSurface`, que dobra os 4 vértices do quad (o leito aparece embaixo).
+- **Os "quadrados claros".** O glint acendia células de ¼ de tile (blocos de 4×4 pixels de arte), que liam como ladrilho colado na água, bege de dia. Agora é um traço de 2×1 pixel de arte, e só ~4% das células podem piscar. (A primeira versão escreveu `wp.z` num `vec2` — o shader do mar não compilava e toda a água sumiu; a print de verificação pegou.)
+- **A margem-parede.** `WATER_DEPTH_TILES` 0,42 → 0,28: a 0,42 todo lago lia como piscina, e o reflexo dos pés caía atrás do barranco. A margem deixou de ser uma cor quase preta: três faixas chapadas por vértice (`BANK_BANDS`: friso de capim, terra, terra molhada).
+- **O mapa** (`scripts/fix-water.mjs`, idempotente, `--check`, prova de BFS; backup em `backup/world-pre-water.json`): os dois dentes de terra da margem sul do lago grande viraram água, e com eles a poça de quina em (9,8) virou o canto do lago; a poça de rio solta em (50,52) e a vala de 3×1 ao pé da rocha de ferro (36..38,11) viraram chão. O píer de terra da margem norte do lago grande ficou (o caminho termina nele). Alcançável a pé do início: 2.135 → 2.228 tiles.
+- **Ficou como está, de propósito:** os traçados dos rios do oeste (escada/anel) e os rios que correm até a borda leste. São desenho do autor; com a água unificada e a margem rasa eles deixaram de ler como canal de concreto. Mudar traçado é decisão de /editor.
+
+## 2026-10-23 — A margem orgânica: lagos e rios sem a linha reta do tile
+
+- **O problema**: a margem era a borda do tile — paredes retas, quinas de 90°, o chão acabando num corte reto. Mesmo com a água unificada, todo lago lia como recorte.
+- **`buildShoreGeometry`** (World3D) substitui o `buildBankGeometry` para a água (lava e poço continuam no antigo). Em cada tile de água encostado na terra (vizinhança 8), o chão AVANÇA sobre a água por um beiço decidido por pixel de arte (16 células por tile): a distância de cada célula até a terra é a UNIÃO SUAVE (smooth-min, raio 0,45) das distâncias euclidianas até cada tile de terra vizinho — arredonda a quina côncava; a distância euclidiana fora do tile arredonda a ponta convexa (o píer) —, e a largura anda num ruído de valor determinístico (0,05 + 0,2·ruído tiles). O beiço veste a arte do tile de chão mais perto (mesmo material do chão: luz, mapa de luz do chão e AA de texel iguais), e o barranco desce pelo CONTORNO, com as faixas de `BANK_BANDS`. Faces viradas para o norte não nascem (o beiço as esconde da câmera).
+- **A colisão não mudou** (é por tile): o beiço ocupa no máximo ~0,25 tile da água, então o herói para um pouco antes da borda desenhada em alguns pontos. Rio de 1 tile continua com pelo menos meio tile de água visível.
+- **Custo**: zero por quadro — geometria estática nos materiais que já existiam (nenhum programa novo). Medido no mapa: beiço 4.272 triângulos, barranco 7.302 (o barranco reto tinha ~1.800); +1 draw call. Para comparar: o chão tem 13.806 e a floresta 8.400.
+
+## 2026-10-23 — Fluidez do movimento: verificada, e a câmera de pixel suave
+
+**A verificação** (Chrome com vsync, monitor de 165 Hz, desktop, buffer 1:1): cada quadro de uma reta, uma diagonal e 12 s andando pelo mundo (80 tiles, 1.986 quadros). Zero quadros acima de 1,5× o intervalo (pior: 6,7 ms); velocidade 6,67 tiles/s, exata, também na diagonal; desvio da trajetória ideal 0,03 px típico e 0,2 px no pior quadro (1 tile = 105 px); herói parado no centro (0 px de variação). ARMADILHA DE MEDIÇÃO: com `performance.now()` no fim do render o desvio parecia 2 px — é o relógio variando com o trabalho do quadro. Meça com o timestamp do quadro (`game.loop.now`).
+
+**O que estava errado**
+- `tileScreenSize` era a diferença de duas projeções ARREDONDADAS: pulava entre 104 e 105 px com o herói andando (o balanço de mão muda a fração), e tudo que é 2D e se mede por ele variava 1% num quadro. Agora sai de `projectRaw`, sem arredondar.
+- Quando um pixel desenhado ocupa mais de um pixel do aparelho (modo econômico; celular de 3×, que desenha a 1,5×), a câmera contínua para a cada quadro numa fase fracionária do buffer: o chão é rasterizado de novo em outra fase e FERVE, e a rolagem anda em degraus de pixel do buffer com erro de até meio pixel dele.
+
+**A câmera de pixel suave** (`snapCameraToPixel`, `hd3d.pixelSnap`): nesses aparelhos a câmera anda numa grade PRESA AO MUNDO (múltiplos de um pixel do buffer a partir da origem — uma âncora no tile do herói pulava uma fração a cada troca de tile, porque um tile não mede pixels inteiros), com a escala medida em REPOUSO (`snapGridScale`: medida na câmera do quadro, ela oscila ~0,1% com o balanço, e 0,1% de mil e tantos pixels é mais de um pixel). Na vertical entram o z e a altura (o balanço sobe e desce a câmera); só o z corrige. A sobra vai para um `translate` CSS do canvas, arredondado ao pixel do APARELHO, e o canvas ganhou um pixel de buffer de margem de cada lado para o deslocamento nunca mostrar o fundo. `projectRaw`, a vista do herói e `screenToGround` contam margem e deslocamento. No desktop 1:1 nada disso roda (não há sobra a esconder).
+
+Medido (A/B no mesmo aparelho, ponto fixo do chão 3 tiles à frente do herói; fase com desvio CIRCULAR — o desvio comum lê 0,98 e 0,01 como espalhados):
+
+| | desvio do movimento ideal p99 | fase do chão no buffer (x / y) |
+|---|---|---|
+| desktop econômico | 1,14 → 0,62 px do aparelho | 0,29 → 0,07 / 0,07 → 0 |
+| celular 3× | 1,26 → 0,87 px | 0,29 → 0,12 / 0,21 → 0,04 |
+
+A sobra de fase vem da perspectiva: a grade é exata na profundidade do herói, e uma linha mais perto ou mais longe ainda recebe uma fração.

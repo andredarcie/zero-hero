@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 
 import {
   ASSET_KEYS,
-  CHOPPABLE_UPPER_FRAMES,
   CHUNK_COLUMNS,
   CHUNK_ROWS,
   DIGGABLE_GROUND_FRAMES,
@@ -19,9 +18,8 @@ import {
   SCENE_DEPTHS,
   TEXT_RESOLUTION,
   TORCH_BURN_MS,
-  TREE_CHOP_STAGE_FRAMES,
   TREE_STICK_YIELD,
-  TREE_TILE_STICK_CHANCE,
+  TREE_UPPER_FRAMES,
   SEA_TILE_FRAMES,
   SEED_PACK_KINDS,
   SOLID_UPPER_FRAMES,
@@ -159,7 +157,6 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   sword: { texture: ASSET_KEYS.swordItemIcon, frame: 0 },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
-  greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0 },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0 },
@@ -183,7 +180,6 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   sword: { texture: 'sword-icon', frame: 0 },
   key: { texture: 'key-item', frame: KEY_FRAMES.held },
   axe: { texture: 'axe-icon', frame: 0 },
-  greatAxe: { texture: 'great-axe-icon', frame: 0 },
   pickaxe: { texture: 'pickaxe-icon', frame: 0 },
   scythe: { texture: 'scythe-icon', frame: 0 },
   shovel: { texture: 'shovel-icon', frame: 0 },
@@ -208,7 +204,6 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
   sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
-  greatAxe: { texture: ASSET_KEYS.greatAxeIcon, frame: 0 },
   pickaxe: { texture: ASSET_KEYS.pickaxeIcon, frame: 0 },
   scythe: { texture: ASSET_KEYS.scytheIcon, frame: 0 },
   shovel: { texture: ASSET_KEYS.shovelIcon, frame: 0 },
@@ -593,12 +588,9 @@ export class GameScene extends Phaser.Scene {
     // pode estar sujo de edicao nao salva, e deixa-lo escrever no save contaminaria a partida de
     // quem so foi testar um tile.
     this.adventure = this.registry.get('appMode') === 'game';
-    // Arvores derrubadas voltam ao chao ANTES do World3D assar o terreno (o construtor le os
-    // chunks): o corte e um diff por cima do world.json, que volta limpo do disco a cada boot.
-    if (this.adventure) {
-      this.applyFelledTreeDiff();
-      this.applyDugSpotDiff();
-    }
+    // Os buracos cavados voltam ao chao ANTES do World3D assar o terreno (o construtor le os
+    // chunks): a cavada e um diff por cima do world.json, que volta limpo do disco a cada boot.
+    if (this.adventure) this.applyDugSpotDiff();
 
     let start = getPlayerStart();
     // "Continue de onde parou" e um PEDIDO (o Continue do titulo), nunca o padrao.
@@ -714,6 +706,7 @@ export class GameScene extends Phaser.Scene {
     // shadow past his boots.
     this.heroBillboard = this.world3d.addBillboard('hero', HERO_FRAMES.idleDown, {
       castGroundShadow: true,
+      reflected: true, // o espelho d'água (World3D.renderReflection)
       groundShadow: { rx: 0.34, rz: 0.32, alpha: 0.34, zBias: 0.1 },
     })
       .setPosition(startWorldX, startWorldY)
@@ -784,7 +777,7 @@ export class GameScene extends Phaser.Scene {
     this.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this, g.worldX, g.worldY));
     this.moonflowers = getMoonflowers().map((m) => new MoonflowerObject(this, m.worldX, m.worldY));
     this.plantSpots = getPlantSpots().map((s) => new PlantSpotObject(this, s.worldX, s.worldY));
-    // Os buracos que a PÁ cavou voltam do save (diff sobre os autorados, o padrão felledTrees).
+    // Os buracos que a PÁ cavou voltam do save (diff sobre os autorados).
     if (this.adventure) {
       for (const key of adventureState().dugSpots) {
         const [wx, wy] = key.split(',').map(Number);
@@ -1835,14 +1828,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Either axe cuts DEAD wood (dryTree, dryShrub) — the steel axe is strictly the plain axe
-   * plus living trees, never a replacement that invalidates the one the player already has.
-   * Anything gated on this stays gated on the cheap tool, so no puzzle built around the plain
-   * axe can be skipped (or broken) by finding the steel one.
-   */
+  /** The axe cuts DEAD wood (dryTree, dryShrub) — and only that: a green tree never moves. */
   private get holdsAnAxe(): boolean {
-    return this.heldItem === 'axe' || this.heldItem === 'greatAxe';
+    return this.heldItem === 'axe';
   }
 
   /**
@@ -1851,20 +1839,16 @@ export class GameScene extends Phaser.Scene {
    * ainda: aí o X segue com o que estiver selecionado, e a recusa física de sempre acontece.
    *
    * A lista é curta de propósito e só entra aqui o que tem UMA resposta possível: madeira morta
-   * pede machado, pinheiro vivo pede o de aço, pedra pede picareta. Balde, chave, semente e tocha
+   * pede machado, pedra pede picareta. Balde, chave, semente e tocha
    * ficam de fora porque os alvos deles aceitam mais de uma coisa (a fogueira acesa reabastece a
    * tocha E apaga com o balde), e adivinhar ali seria escolher pelo jogador em vez de poupá-lo.
    */
   private toolWantedAt(wx: number, wy: number): HeldItemKind | null {
-    // MADEIRA MORTA: os dois machados servem, e o COMUM vem primeiro — o de aço é um superset, e
-    // gastar o caro onde o barato resolve inverteria a escada de ferramentas do jogo.
+    // MADEIRA MORTA pede o machado. A árvore VERDE não pede nada: nada no jogo a derruba.
     if ((this.getDryTreeAt(wx, wy)?.blocking ?? false)
       || (this.getDryShrubAt(wx, wy)?.blocking ?? false)) {
-      return this.firstOwned(['axe', 'greatAxe']);
+      return this.firstOwned(['axe']);
     }
-    // ÁRVORE VIVA é TILE, e só o machado de aço a derruba (ver tryChopTreeTile). Oferecer o comum
-    // aqui seria o jogo prometendo um gesto que ele mesmo recusa no frame seguinte.
-    if (this.treeTileFrameAt(wx, wy) !== null) return this.firstOwned(['greatAxe']);
     // PEDRA e VEIO são a mesma rocha, e a picareta é a resposta dos dois.
     if (this.getRockAt(wx, wy)?.blocking ?? false) return this.firstOwned(['pickaxe']);
     return null;
@@ -2221,26 +2205,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * AGUA ABERTA — a agua que ainda e agua, e a unica coisa que o zora chama de casa.
+   * AGUA ABERTA — a agua que ainda e agua: onde o balde enche e de onde vem o som do lago.
    *
-   * Ela tem DUAS procedencias neste jogo, e essa e a pegadinha: o `water` PROP (WaterObject), que e
-   * como um level autora um rio, e o TILE DE TERRENO (SEA_TILE_FRAMES), que e como o gerador do
-   * overworld escreve toda agua que existe — rio, lago e oceano saem do mesmo frame. Um zora que so
-   * enxergasse prop ficaria mudo em cima de qualquer lago do mundo grande, que foi exatamente o
-   * defeito que este metodo conserta.
+   * Ela tem DUAS procedencias neste jogo, e essa e a pegadinha: o `water` PROP (WaterObject), o
+   * rio, e o TILE DE TERRENO (SEA_TILE_FRAMES), o lago. Na tela as duas sao a mesma agua (World3D
+   * assa o rio com o material do lago), mas no dado continuam duas, e quem so olhasse uma ficaria
+   * cego para a outra.
    *
    * A ordem importa: se ha prop, e ELE quem responde — uma ponte, um vau de pedra ou um canal
-   * drenado deixam de ser casa mesmo com agua pintada por baixo. E dessa assimetria sai uma
-   * consequencia de design que vale dizer em voz alta: **num rio-prop o jogador tem resposta**
-   * (tapar, vadear, drenar), **na agua pintada e no mar, nao** — e ali o zora e tao inegociavel
-   * quanto o Zola do Zelda, o que e justo, porque aquilo e a moldura do mundo e nao uma sala.
+   * drenado deixam de ser agua aberta mesmo com agua pintada por baixo.
    */
   private isOpenWaterAt(wx: number, wy: number): boolean {
     const prop = this.getWaterAt(wx, wy);
     if (prop) return prop.blocking;
-    // FORA DO MUNDO tambem e o frame do mar (WorldData.VOID_GROUND_FRAME = SEA_TILE_FRAME: e assim
-    // que o mapa finito ganha borda dura). Sem este teste, um zora autorado perto da beirada
-    // emergiria em coordenada inexistente — vivo, atirando, num lugar onde a camera nunca vai.
+    // So dentro dos chunks autorados: fora deles o WorldData fabrica terreno descartavel a cada
+    // consulta, e o balde nao pode encher nem a trilha do lago tocar numa coordenada que nao existe.
     const chunkX = Math.floor(wx / CHUNK_COLUMNS);
     const chunkY = Math.floor(wy / CHUNK_ROWS);
     if (this.chunkManager?.hasChunkCoordinate(chunkX, chunkY) !== true) return false;
@@ -3170,10 +3149,10 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    // A ARVORE que e TILE — a floresta em si, e a unica coisa que o machado de aco faz e o
-    // comum nao. Por ultimo, depois de todo prop: props ficam EM CIMA de tiles, entao uma rocha
-    // ou uma porta na frente de um pinheiro respondem primeiro.
-    if (this.tryChopTreeTile(wx, wy)) return true;
+    // A ARVORE VERDE e TILE e NUNCA sai do lugar: o X contra ela nao faz nada, em silencio. Por
+    // ultimo, depois de todo prop: props ficam EM CIMA de tiles, entao uma rocha ou uma porta na
+    // frente de um pinheiro respondem primeiro.
+    if (this.isTreeTileAt(wx, wy)) return true;
 
     // A BOMBA saiu daqui. Ela tem resposta em TODO tile desde que pode ser posta em qualquer
     // chão, e uma linha assim no meio da tabela engoliria a tabela inteira: com a bomba
@@ -3501,12 +3480,12 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * The overhead MINING swing (SwordSlash.chop), not the sword's arc: raised over the head, held
-   * there, and driven down into one spot. It belongs to the two tools heavy enough to earn it —
-   * the pickaxe into stone, and the steel axe into a tree. Combat keeps the flat slash (nobody
+   * there, and driven down into one spot. It belongs to the tool heavy enough to earn it — the
+   * pickaxe into stone. Combat keeps the flat slash (nobody
    * hauls a pick over their head at a skeleton standing on top of them), and this is the only
    * swing that lands late, at CHOP_IMPACT_MS.
    */
-  private swingChop(item: 'pickaxe' | 'greatAxe', wx: number, wy: number): void {
+  private swingChop(item: 'pickaxe', wx: number, wy: number): void {
     if (!this.swordSlash || !this.camera) return;
     // The whoosh belongs to the DRIVE, not to the wind-up: a pick hauled slowly overhead makes no
     // sound at all, and the noise is what tells the player the blow is now unstoppable.
@@ -3609,7 +3588,7 @@ export class GameScene extends Phaser.Scene {
     const bb = this.backItemBb!;
     if (!this.torchFlameBb) {
       this.torchFlameBb = this.world3d?.addBillboard(
-        TORCH_FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 4 },
+        TORCH_FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 4, reflected: true },
       );
       if (!this.torchFlameBb) return;
     }
@@ -3756,33 +3735,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Reaplica ao terreno recem-carregado as arvores-tile que o jogador ja derrubou. O corte e
-   * uma mutacao das arrays do WorldData (fellTreeTile) e o world.json volta LIMPO do disco a
-   * cada boot e a cada volta de dungeon — sem este diff, a floresta desderrubava sozinha.
-   * Roda ANTES do World3D existir: o construtor assa a malha lendo estes mesmos chunks.
-   */
-  private applyFelledTreeDiff(): void {
-    const bounds = getWorldBounds();
-    for (const key of adventureState().felledTrees) {
-      const [wx, wy] = key.split(',').map(Number);
-      if (!Number.isFinite(wx) || !Number.isFinite(wy)) continue;
-      const cx = Math.floor(wx / CHUNK_COLUMNS);
-      const cy = Math.floor(wy / CHUNK_ROWS);
-      // Fora do mundo autorado getChunkTerrain fabrica um chunk de mar descartavel — mutar ali
-      // seria gravar no vazio. So tiles dentro dos limites reais entram no diff.
-      if (cx < bounds.minCx || cx > bounds.maxCx || cy < bounds.minCy || cy > bounds.maxCy) continue;
-      const terrain = getChunkTerrain(cx, cy);
-      const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
-      const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-      terrain.upper[ly][lx] = null;
-      terrain.collisions[ly][lx] = false;
-    }
-  }
-
-  /**
    * A superfície sob um buraco CAVADO também não volta: a pá limpou a grama baixa (decor da
    * camada upper) na cavada, e o world.json volta limpo do disco — sem este diff, a folhagem
-   * renasceria POR BAIXO do buraco salvo. Mesmo compasso do applyFelledTreeDiff: roda ANTES do
+   * renasceria POR BAIXO do buraco salvo. Roda ANTES do
    * World3D assar. Só decor NÃO-sólido sai (um gerador futuro pondo árvore ali não é derrubado
    * por um buraco); a ossada fica de fora porque ela é memória de SESSÃO (CorpseDecals), nunca
    * do save.
@@ -4012,8 +3967,7 @@ export class GameScene extends Phaser.Scene {
    * O impacto da pá: nasce um canteiro (plantSpot) DE VERDADE — o mesmo objeto dos autorados,
    * então semente, balde, mato e reabertura já o conhecem sem uma linha nova. O push é in
    * place de propósito (o propRegistry referencia este array; ver o comentário dele). Na
-   * aventura de overworld o buraco é ESTRUTURA do jogador e entra no save como diff (o padrão
-   * felledTrees) — dungeon não tem terra, e level/explorador zeram por desenho.
+   * aventura de overworld o buraco é ESTRUTURA do jogador e entra no save como diff — dungeon não tem terra, e level/explorador zeram por desenho.
    */
   private digPlantHole(wx: number, wy: number): void {
     if (!this.canDigAt(wx, wy)) return; // o mundo teve 150ms para mudar — reconfere no impacto
@@ -4834,7 +4788,7 @@ export class GameScene extends Phaser.Scene {
     const endX = this.playerWorld.worldX + 1;
     const y = this.playerWorld.worldY;
     if (!w3) return Promise.resolve();
-    this.wizardStandIn = w3.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true })
+    this.wizardStandIn = w3.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
       .setPosition(endX + WIZARD_WALK_TILES, y)
       .setDisplaySize(1, 1)
       .setFlipX(true);
@@ -4962,7 +4916,7 @@ export class GameScene extends Phaser.Scene {
         const wy = Math.round(at.y + (Math.random() - 0.5) * 6);
         if (!chunks.hasChunkCoordinate(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS))) continue;
         const { upper } = chunks.getTile(wx, wy);
-        if (upper === null || !CHOPPABLE_UPPER_FRAMES.has(upper)) continue;
+        if (upper === null || !TREE_UPPER_FRAMES.has(upper)) continue;
         const bb = w3.addBillboard(LEAF_TEXTURE, 0, { centered: true, depthWrite: false })
           .setTint(LEAF_TINTS[Math.floor(Math.random() * LEAF_TINTS.length)])
           .setDisplaySize(0.17, 0.13);
@@ -5777,7 +5731,7 @@ export class GameScene extends Phaser.Scene {
       // a carried item hangs in the air, and pivoting it about its bottom edge swings the whole
       // blade out of the hero's silhouette instead of tilting it in place. The 2D sprite this
       // replaced rotated about its centre (setOrigin(0.5)); this restores that.
-      this.backItemBb = this.world3d?.addBillboard(visual.texture, visual.frame, { centered: true });
+      this.backItemBb = this.world3d?.addBillboard(visual.texture, visual.frame, { centered: true, reflected: true });
       if (!this.backItemBb) return;
     }
     // Real size: draw the item at one full tile, the same pixel scale as the hero and the
@@ -5840,139 +5794,12 @@ export class GameScene extends Phaser.Scene {
   // A felled tree leaves a stick behind: drop a `wood` pickup on the (now passable) stump tile.
   // `wood` is the flammable item, so the stick is exactly "an item you can use to make fire".
   /**
-   * The frame of the choppable TREE tile at (wx, wy), or null if that tile is not one.
-   *
-   * Bounded to the authored world on purpose. Outside it there is only open sea, whose terrain
-   * WorldData synthesises fresh on every call — a "chop" out there would edit a throwaway object
-   * and leave the mesh and the collision disagreeing forever. The sea has no upper layer anyway,
-   * so this is belt and braces: the border must not be editable by any means.
+   * A ARVORE VERDE em (wx, wy)? Ela e TILE, assada na malha estatica do terreno, e nada no jogo a
+   * derruba — e essa garantia que deixa a floresta inteira ser escrita uma vez so na GPU.
    */
-  private treeTileFrameAt(wx: number, wy: number): number | null {
-    const chunks = this.chunkManager;
-    if (!chunks) return null;
-    const cx = Math.floor(wx / CHUNK_COLUMNS);
-    const cy = Math.floor(wy / CHUNK_ROWS);
-    if (!chunks.hasChunkCoordinate(cx, cy)) return null;
-    const { upper, collision } = chunks.getTile(wx, wy);
-    // COLISAO PINTADA E UMA TRAVA: a sebe que cerca o jardim do centro e de pinheiro, e o machado
-    // de aco derruba pinheiro. Sem esta linha o portao do fim seria uma porta numa parede que se
-    // corta — a arvore com colisao autorada a mao e cenario, nunca lenha.
-    if (collision) return null;
-    return upper !== null && CHOPPABLE_UPPER_FRAMES.has(upper) ? upper : null;
-  }
-
-  /**
-   * Fell a tree that is a TILE rather than a prop — the steel axe's whole reason to exist.
-   * Returns true if the bump was about a tree tile at all (whether or not it fell), so the
-   * caller stops there.
-   *
-   * One swing takes it down: a tile has no stages to shrink through (that is the dryTree prop's
-   * job, and its 6-frame sheet), and it leaves no stump — the tile simply opens. What it DOES
-   * leave is a graveto, because an item whose only output is passage is a password and not a
-   * tool: felling a pine has to feed the fire economy exactly like felling a dead tree does.
-   */
-  private tryChopTreeTile(wx: number, wy: number): boolean {
-    if (this.treeTileFrameAt(wx, wy) === null) return false;
-
-    if (this.heldItem !== 'greatAxe') {
-      // Silencio, com machado na mao ou sem nada. O pinheiro que recusa o machado comum era o
-      // unico lugar onde o jogo dizia em voz alta que existem DOIS machados; sem os baloes,
-      // quem descobre isso e o jogador, batendo e reparando que o machado de aco derruba o que
-      // o comum nao derruba. E o mesmo preco que todas as outras travas pagaram.
-      return true;
-    }
-
-    // The OVERHEAD chop, not the sword's flat sweep. Felling a pine is the pickaxe's motion, not
-    // a duelist's: hauled up, hung on its own weight, driven into one spot. The timing here always
-    // assumed it — the blow is scheduled at CHOP_IMPACT_MS, the chop's impact frame — but the call
-    // played a slash, which is over (arc + fade, ~220ms) BEFORE the hit lands at 245ms, with the
-    // axe already back on the hero's back at SWING_HIDE_MS. So the sound, the chips and the tree
-    // dropping a stage all fired at nothing. Swinging the motion the timings belong to fixes the
-    // look and the sync in one move.
-    this.swingChop('greatAxe', wx, wy);
-    this.time.delayedCall(CHOP_IMPACT_MS, () => {
-      const felled = this.chopTreeTile(wx, wy);
-      if (felled === null) return; // gone already (a second swing landing late)
-      getSoundManager().playWoodChop();
-      this.spawnBridgeChips(wx, wy, felled ? 6 : 4);
-      // Only the LAST chop can pay out, and only sometimes — see TREE_TILE_STICK_CHANCE.
-      if (felled && this.rollTreeTileStick()) this.dropTreeStick(wx, wy);
-    });
-    return true;
-  }
-
-  /**
-   * Whether this felled tile pays out a graveto. Its own method purely so the playtest can
-   * sample the rate without swinging an axe ~200 times through the real input path.
-   */
-  private rollTreeTileStick(): boolean {
-    return Math.random() < TREE_TILE_STICK_CHANCE;
-  }
-
-  /**
-   * One swing against a tree tile. Returns true if this was the FELLING chop, false if the tree
-   * merely dropped to its next stage, null if there was no tree left to hit.
-   *
-   * A tile comes down in stages like the dryTree prop does — full tree, crown gone, stump, gone —
-   * but where the prop shrinks through its own sheet, a tile has to swap to another frame of the
-   * tileset ATLAS, because World3D bakes every standing tile into one mesh sampling that atlas.
-   */
-  private chopTreeTile(wx: number, wy: number): boolean | null {
-    const frame = this.treeTileFrameAt(wx, wy);
-    if (frame === null) return null;
-    const stage = TREE_CHOP_STAGE_FRAMES.indexOf(frame);
-    const next = TREE_CHOP_STAGE_FRAMES[stage + 1]; // stage -1 (a whole tree) → the first stage
-    if (next === undefined) {
-      this.fellTreeTile(wx, wy);
-      return true;
-    }
-    this.setTreeTileFrame(wx, wy, next);
-    // The blow landed on a tree that is STILL STANDING, so rock it — the same answer the dry tree
-    // gives the plain axe (DryTreeObject's chop recoil). A tile cannot tween like a prop, so the
-    // lean is written into the merged mesh; see World3D.shakeSolidTile. The felling blow above
-    // gets none: there is no tree left to shudder, it comes down instead.
-    this.world3d?.shakeSolidTile(wx, wy);
-    return false;
-  }
-
-  /** Move a tree tile to another frame in BOTH places it exists: the chunk data and the mesh. */
-  private setTreeTileFrame(wx: number, wy: number, frame: number): void {
-    const chunks = this.chunkManager;
-    if (!chunks) return;
-    const chunk = chunks.getChunk(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS));
-    const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
-    const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-    chunk.upper[ly][lx] = frame;
-    this.world3d?.setSolidTileFrame(wx, wy, frame);
-  }
-
-  /**
-   * Take the tree out of the terrain: the chunk data (which is where collision lives, via
-   * SOLID_UPPER_FRAMES) and the merged static mesh (which is where the art lives). Both, or the
-   * world desyncs into an invisible wall / a walk-through tree.
-   *
-   * The chunk arrays here are the SAME arrays WorldData holds, so this edit outlives the chunk
-   * cache — which is what we want (a felled tree stays felled for the run) and is also why it
-   * must never run outside the authored bounds; see treeTileFrameAt.
-   */
-  private fellTreeTile(wx: number, wy: number): boolean {
-    const chunks = this.chunkManager;
-    if (!chunks || this.treeTileFrameAt(wx, wy) === null) return false;
-    const chunk = chunks.getChunk(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS));
-    const lx = ((wx % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
-    const ly = ((wy % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
-    chunk.upper[ly][lx] = null;
-    // The worldgen paints an explicit collision under every obstacle frame as well, so clearing
-    // only the upper frame would leave the tile blocked by an invisible wall.
-    chunk.collisions[ly][lx] = false;
-    this.world3d?.removeSolidTile(wx, wy);
-    if (this.adventure) {
-      // Edicao de TERRENO entra no save como diff (applyFelledTreeDiff a reaplica em cada boot).
-      adventureState().felledTrees.add(`${wx},${wy}`);
-      this.questEvent({ type: 'fell' }); // a clareira que o poeta pede se mede aqui
-      this.persistAdventure();
-    }
-    return true;
+  private isTreeTileAt(wx: number, wy: number): boolean {
+    const upper = this.chunkManager?.getTile(wx, wy).upper ?? null;
+    return upper !== null && TREE_UPPER_FRAMES.has(upper);
   }
 
   /**

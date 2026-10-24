@@ -30,7 +30,8 @@ import {
 import { advanceTimeOfDay, getTimeOfDay, initializeTimeOfDay, setTimeOfDay } from '@/game/runtime/timeOfDay';
 import {
   FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, windUniform,
-  lightWobbleUniform, patchPixelMaterial, seaFlowUniform, SHADOW_MASK_GLSL, shadowMaskOnUniform,
+  lightWobbleUniform, patchPixelMaterial, reflectionMapUniform, reflectionMatrixUniform,
+  reflectionOnUniform, reflectionStrengthUniform, reflectionTexelUniform, seaFlowUniform, SHADOW_MASK_GLSL, shadowMaskOnUniform,
   shadowMaskRectUniform, shadowMaskUniform, syncTexelAaUniforms, texelAaUniform, waterGlintUniform,
   type TexelAaUniforms,
 } from './pixelArtLight';
@@ -193,6 +194,9 @@ const classifyForCull = (o: CullTagged): void => {
 // The +4096 offset keeps negatives (the void ring runs past the world bounds) positive.
 const tileKey = (x: number, z: number): number => (x + 4096) * 16384 + (z + 4096);
 const bucketKey = (x: number, z: number): number => ((x + 4096) >> 2) * 16384 + ((z + 4096) >> 2);
+/** Os baldes de água têm 8×8 tiles (x >> 3); a chave recebe as coordenadas JÁ divididas. */
+const WATER_BUCKET_SHIFT = 3;
+const waterBucketKey = (bx: number, bz: number): number => (bx + 1024) * 4096 + (bz + 1024);
 /**
  * How many real PointLights the scene keeps for fires. FIXED for the whole run, and
  * deliberately SMALL — a fire does not own a light, it BORROWS one.
@@ -230,16 +234,20 @@ const LIGHT_SAMPLE_REACH = 5.5;
  */
 const DAYLIGHT_SWING_FLOOR = 0.82;
 
-// The axe-blow shudder of a standing TILE (see shakeSolidTile). Matched to DryTreeObject's chop
-// recoil so both trees answer an axe the same way: ±7° for ~220ms. The lean is tan(7°) — the
-// horizontal offset that tilting a one-tile-tall quad about its foot puts on its top corners.
-const TILE_SHAKE_SECONDS = 0.22;
-const TILE_SHAKE_CYCLES = 2;
-const TILE_SHAKE_LEAN = 0.123;
 // River tiles sit this far BELOW the ground plane — a sunken channel (dirt bed +
-// dark banks) so the water reads as recessed, with depth. The bridge still spans it
-// at ground level. WaterObject sets its surface just above the bed at this depth.
-export const WATER_DEPTH_TILES = 0.42;
+// earthen banks) so the water reads as recessed, with depth. The bridge still spans it
+// at ground level.
+//
+// Era 0,42, e a 0,42 todo lago lia como PISCINA: uma parede de terra de quase meio tile, reta, em
+// volta de uma água lá embaixo. Raso, ele lê como margem — e o reflexo dos pés, que cai a
+// profundidade/tan(48°) da borda, encosta nela em vez de sumir atrás do barranco.
+export const WATER_DEPTH_TILES = 0.28;
+// O rio é a MESMA água do lago (o material do mar), assada um fio acima do leito dele: o leito
+// continua lá embaixo para quando a comporta esvazia o canal.
+const RIVER_SURFACE_LIFT = 0.02;
+// O PLANO DO ESPELHO: entre a superfície do mar e a do rio (RIVER_SURFACE_LIFT acima dela), as
+// duas águas espelham no mesmo plano — a diferença entre elas é menos de meio pixel de arte.
+const REFLECT_PLANE_Y = -WATER_DEPTH_TILES + RIVER_SURFACE_LIFT / 2;
 // Lava tiles sink into a well too, but a SHALLOWER one than the river — molten rock pools
 // in a low basin, not a deep channel. Same treatment (dropped bed + dark charred banks), less
 // deep. LavaObject sets its surface just above the bed at this depth.
@@ -605,6 +613,11 @@ export interface World3DParams {
    */
   seaFlow: number;
   /**
+   * O ESPELHO D'ÁGUA: quanto do reflexo dos personagens cobre o rio e o lago (0 = desligado, e a
+   * passada nem roda). Ver renderReflection.
+   */
+  reflection: number;
+  /**
    * A HORA DO DIA: 0 = a noite autorada (o padrão do jogo), 1 = o dia de sol.
    *
    * Não é um número contínuo — é uma CHAVE. Virá-la troca ~vinte outros knobs de uma vez
@@ -789,6 +802,11 @@ export interface World3DParams {
   godRays: number;
   /** Idle handheld drift of the camera, in tiles (0 = a locked-off tripod). */
   camSway: number;
+  /**
+   * A CÂMERA DE PIXEL SUAVE (1 = ligada, 0 = a câmera contínua de antes). Só age quando um pixel
+   * desenhado ocupa mais de um pixel do aparelho (modo econômico, celular): ver snapCameraToPixel.
+   */
+  pixelSnap: number;
   fireflies: number;
   mist: number;
   /**
@@ -869,6 +887,7 @@ export class World3D {
     // over-brightening the art. Below ~ACES(1.55) stays under the bloom threshold.
     lightCap: 1.55,
     seaFlow: 1,
+    reflection: 0.62,
     // O jogo nasceu de noite, e todo número abaixo foi escolhido a olho contra o escuro: a noite
     // É o padrão, e o dia é o delta (render3d/skyPreset.ts). O valor real vem do ajuste do jogador
     // no construtor — este 0 é só o que o TypeScript precisa ver.
@@ -973,6 +992,7 @@ export class World3D {
     // just under "noticeable" so they never wash the dark or read as floating orbs.
     godRays: 0.55,
     camSway: 0.022,
+    pixelSnap: 1,
     wind: 1,
     fireflies: 3,
     mist: 2.2,
@@ -1068,6 +1088,22 @@ export class World3D {
   private appliedPixelScale = 0;
   /** A escala com que o buffer foi assado — o `uBlur` se mede nela (ver syncFinishUniforms). */
   private appliedRenderScale = 1;
+  /** Quantos pixels de APARELHO um pixel desenhado ocupa (1 no desktop; 2 no econômico e no celular). */
+  private appliedBlocks = 1;
+  /**
+   * A margem do canvas, em px CSS: um pixel do buffer de cada lado quando `appliedBlocks` > 1, para
+   * o deslocamento fracionário da câmera de pixel suave nunca descobrir a borda da tela.
+   */
+  private snapMarginCss = 0;
+  /** O deslocamento CSS que o canvas carrega neste quadro (a sobra da câmera de pixel suave). */
+  private snapShiftX = 0;
+  private snapShiftY = 0;
+  private readonly snapScratch = {
+    a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(), size: new THREE.Vector2(),
+  };
+  /** A escala da grade da câmera de pixel suave, medida em repouso (ver snapGridScale). */
+  private readonly snapScale = { key: '', ppx: 0, ppz: 0, ppy: 0 };
+  private readonly snapCamera = new THREE.PerspectiveCamera();
 
   private readonly solidTiles: SolidTileEntry[] = [];
   // Exposed solid tiles only (few solid neighbours — clearing edges / lone trees).
@@ -1080,33 +1116,7 @@ export class World3D {
   // shovel erases foliage/litter under a dug hole, whatever the frame (removeDecorTile).
   private readonly decorQuads = new Map<string, number>(); // "x,z" → vertex start
   private readonly activeRustles = new Map<string, GrassRustle>();
-  /** Standing tiles mid-shudder from an axe blow — see shakeSolidTile. "x,z" → pose. */
-  private readonly activeTileShakes = new Map<string, { vertStart: number; x: number; t: number }>();
 
-  // ── felling a tree TILE (the steel axe) ──
-  // The forest is terrain, not props: every standing tile is merged into ONE static mesh, and
-  // that is the only reason 846 trees cost one draw call. So an axe that removes a tree cannot
-  // remove an object — there is no object. It edits the merged buffers in place, collapsing the
-  // four vertices of that one quad onto a point (a degenerate triangle rasterizes nothing). The
-  // grass rustle already addressed a single baked quad this way (`grassQuads`); these are the
-  // same trick applied to the three buffers a standing tile writes into: its upright quad, its
-  // contact blob, and the ambient occlusion it casts on the ground around its feet.
-  private solidGeo!: THREE.BufferGeometry;
-  private groundGeo!: THREE.BufferGeometry;
-  private blobGeo!: THREE.BufferGeometry;
-  private readonly solidQuads = new Map<string, number>();     // "x,z" → vertex start
-  private readonly solidBlobQuads = new Map<string, number>(); // "x,z" → vertex start
-  private readonly groundQuads = new Map<string, number>();    // "x,z" → vertex start
-  /**
-   * Live set of standing tiles — shrinks as trees fall, so re-baked AO sees the clearing.
-   *
-   * Keyed by the NUMERIC tileKey rather than by "x,z". It reads worse and it is not a
-   * micro-optimisation: baking the ground's ambient occlusion asks this set three times per
-   * corner, i.e. TWELVE lookups per ground tile, and with string keys that was twelve string
-   * allocations per tile — ~60% of the whole terrain bake. The explorer mode re-bakes a window
-   * of the world every time the hero crosses a chunk, so that bake had to stop being a hitch.
-   */
-  private solidKeys = new Set<number>();
   /**
    * The terrain's own meshes, kept so an infinite world can throw the window away and bake the
    * next one (see rebuildTerrain). The authored worlds never call it — they bake once at boot.
@@ -1195,6 +1205,22 @@ export class World3D {
   private castFrameId = 0;
   /** Sunken ground tiles (river/lava/sea beds) — where a cast silhouette must stop (2b). */
   private readonly sunkenTiles = new Set<number>();
+  /** Os baldes de 8×8 tiles que têm ÁGUA (rio ou mar) — a passada do espelho só roda com um à vista. */
+  private readonly waterBuckets = new Set<number>();
+  /** A superfície assada dos rios (o material do mar) e o quad de cada tile nela — ver drainRiverSurface. */
+  private riverSurfaceGeo?: THREE.BufferGeometry;
+  private readonly riverQuads = new Map<number, number>(); // tileKey → vertex start
+  /** ── O espelho d'água (ver renderReflection e pixelArtLight.WATER_REFLECT_GLSL) ── */
+  private reflectTarget!: THREE.WebGLRenderTarget;
+  private readonly mirrorCamera = new THREE.PerspectiveCamera();
+  /** Os corpos que aparecem na água (Billboard3DOptions.reflected). Saem sozinhos ao morrer. */
+  private readonly reflectedMeshes = new Set<THREE.Object3D>();
+  /** A lista de filhos da passada do espelho: as luzes (todas, ver renderReflection) + os corpos. */
+  private readonly reflectChildren: THREE.Object3D[] = [];
+  private readonly reflectScratch = {
+    pos: new THREE.Vector3(), dir: new THREE.Vector3(), up: new THREE.Vector3(),
+    plane: new THREE.Plane(), clip: new THREE.Vector4(), q: new THREE.Vector4(), clear: new THREE.Color(),
+  };
   /** Moon-field instances dimmed by the statics' handoff, to restore next frame. */
   private readonly moonDimmed: SolidTileEntry[] = [];
   /** Invisible stand-ins that hold the runtime shaders' programs alive. See prewarmShaders. */
@@ -1264,9 +1290,9 @@ export class World3D {
     this.scene.background = new THREE.Color(this.params.skyColor);
     this.scene.fog = new THREE.FogExp2(this.params.skyColor, this.params.fogDensity);
 
-    this.camera = new THREE.PerspectiveCamera(
-      this.params.fov, window.innerWidth / window.innerHeight, 0.1, 120,
-    );
+    // A razão é a do BUFFER, que pode levar a margem da câmera de pixel suave (ver applyPixelScale).
+    const bufSize = this.renderer.getSize(new THREE.Vector2());
+    this.camera = new THREE.PerspectiveCamera(this.params.fov, bufSize.x / bufSize.y, 0.1, 120);
     this.appliedFov = this.params.fov;
 
     // The night floor: everything stays readable but sunk in dark. Near-neutral tint
@@ -1355,10 +1381,20 @@ export class World3D {
 
   private renderSize(): { w: number; h: number } {
     const scale = this.renderScale();
+    const pad = this.snapPadPx();
     return {
-      w: Math.max(1, Math.round(window.innerWidth * scale)),
-      h: Math.max(1, Math.round(window.innerHeight * scale)),
+      w: Math.max(1, Math.round(window.innerWidth * scale)) + 2 * pad,
+      h: Math.max(1, Math.round(window.innerHeight * scale)) + 2 * pad,
     };
+  }
+
+  /**
+   * A margem da câmera de pixel suave, em pixels do BUFFER, de cada lado: 1 quando um pixel
+   * desenhado ocupa mais de um pixel do aparelho, 0 no desktop (onde não há sobra a esconder).
+   */
+  private snapPadPx(): number {
+    const blocks = Math.round((window.devicePixelRatio || 1) / this.renderScale());
+    return blocks > 1 ? 1 : 0;
   }
 
   /**
@@ -1385,6 +1421,18 @@ export class World3D {
     this.finishPass.uniforms.tBloom.value = this.bloomPass.texture;
     this.composer.addPass(this.finishPass);
     this.syncFinishUniforms();
+
+    // O alvo do ESPELHO é um clone do alvo do compositor, e não um alvo "qualquer": o three assa o
+    // color space do alvo na chave do programa, e o ANGLE só termina o executável no primeiro draw
+    // num FORMATO de saída — mesmo formato, mesmo programa, nenhuma compilação no meio do jogo.
+    // NEAREST e do tamanho do quadro: um pixel do reflexo é um pixel do mundo.
+    this.reflectTarget = this.composer.renderTarget1.clone();
+    this.reflectTarget.texture.minFilter = THREE.NearestFilter;
+    this.reflectTarget.texture.magFilter = THREE.NearestFilter;
+    this.reflectTarget.texture.generateMipmaps = false;
+    this.reflectTarget.setSize(w, h);
+    reflectionMapUniform.value = this.reflectTarget.texture;
+    reflectionTexelUniform.value.set(1 / w, 1 / h);
   }
 
   /** Push the live post knobs into the shader/pass uniforms. */
@@ -1553,13 +1601,30 @@ export class World3D {
   private applyPixelScale(): void {
     this.appliedPixelScale = Math.max(1, Math.round(this.params.pixelScale));
     this.appliedRenderScale = this.renderScale();
+    this.appliedBlocks = Math.max(1, Math.round((window.devicePixelRatio || 1) / this.appliedRenderScale));
     // A MESMA conta do `renderSize`, e não uma segunda cópia dela: enquanto eram duas, mexer numa
     // deixava a outra desenhando com o tamanho antigo até o primeiro resize.
     const { w, h } = this.renderSize();
-    this.renderer.setSize(w, h, false); // CSS size stays 100% — the browser does the NEAREST upscale
+    this.renderer.setSize(w, h, false); // CSS size is set below — the browser does the NEAREST upscale
+    // O canvas cobre a tela MAIS a margem da câmera de pixel suave (um pixel do buffer de cada
+    // lado, que o `renderSize` já somou ao buffer): a mesma razão buffer/CSS, então os blocos
+    // continuam inteiros, e o deslocamento de até meio pixel nunca mostra o fundo na borda.
+    const m = this.snapPadPx() / this.appliedRenderScale;
+    this.snapMarginCss = m;
+    const style = this.canvas.style;
+    style.left = `${-m}px`;
+    style.top = `${-m}px`;
+    style.width = `calc(100% + ${2 * m}px)`;
+    style.height = `calc(100% + ${2 * m}px)`;
+    if (this.camera) {
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+    }
     // The post chain's offscreen targets must track the render resolution too.
     if (this.composer) {
       this.composer.setSize(w, h);
+      this.reflectTarget.setSize(w, h);
+      reflectionTexelUniform.value.set(1 / w, 1 / h);
       this.bloomPass.setSize(w, h);
       (this.finishPass.uniforms.uResolution.value as THREE.Vector2).set(w, h);
     }
@@ -1590,16 +1655,15 @@ export class World3D {
     this.massTiles.length = 0;
     this.massSet.clear();
     this.lavaSpots.length = 0;
-    this.solidQuads.clear();
-    this.solidBlobQuads.clear();
-    this.groundQuads.clear();
     this.grassQuads.clear();
     this.decorQuads.clear();
     this.greenTiles.length = 0; // as moitas da janela velha não existem mais
     this.solidBuckets.clear();
     this.sunkenTiles.clear();
+    this.waterBuckets.clear();
+    this.riverQuads.clear();
+    this.riverSurfaceGeo = undefined;
     this.activeRustles.clear();
-    this.activeTileShakes.clear();
     // Both caches are keyed on tiles that no longer exist.
     this.fireCastLists.clear();
     this.fireListRadius = -1;
@@ -1683,7 +1747,6 @@ export class World3D {
     // Where the standing tiles are, so the ground can bake an ambient-occlusion corner shade
     // under them (see buildFlatTileGeometry).
     const solidSet = new Set(this.solidTiles.map((t) => tileKey(t.x, t.z)));
-    this.solidKeys = solidSet; // kept live: felling a tree deletes from it, so re-baked AO agrees
 
     const tileset = getBaseTexture3D('forest-tileset');
     if (!this.terrainMats) {
@@ -1698,9 +1761,11 @@ export class World3D {
       // do frame, a arrebentação na praia e o glint do rio. Material separado e NÃO um flag no do
       // chão porque o efeito é um programa a mais — e todo tile de terra do mundo pagaria por ele.
       const sea = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
-      patchPixelMaterial(sea, { quantize: true, texelAa: tileAa, worldFx: 'seaFlow' });
+      patchPixelMaterial(sea, { quantize: true, texelAa: tileAa, worldFx: 'seaFlow', mirrorSurface: true });
       sea.name = 'terrain-sea'; // o playtest acha o material do mar por aqui, sem adivinhar índice
-      const bank = new THREE.MeshLambertMaterial({ color: 0x2a2016, side: THREE.DoubleSide });
+      // A margem é PINTADA por vértice (as faixas de buildBankGeometry): friso de capim, terra,
+      // terra molhada. Era uma cor só, quase preta — o lago lia como um buraco de parede reta.
+      const bank = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
       patchPixelMaterial(bank, { quantize: true });
       const lavaBank = new THREE.MeshLambertMaterial({ color: 0x1a1008, side: THREE.DoubleSide });
       patchPixelMaterial(lavaBank, { quantize: true });
@@ -1757,26 +1822,39 @@ export class World3D {
     }
     const mats = this.terrainMats;
 
-    this.groundGeo = buildFlatTileGeometry(groundTiles, 0, solidSet);
-    this.addTerrainMesh(new THREE.Mesh(this.groundGeo, mats.ground));
-    groundTiles.forEach((tile, i) => this.groundQuads.set(`${tile.x},${tile.z}`, i * 4));
+    this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet), mats.ground));
 
-    // The sunken riverbed (the same dirt, dropped a level) + the dark earthen banks that
+    // The sunken riverbed (the same dirt, dropped a level) + the earthen banks that
     // wall the channel where it meets the land — together they give the water its depth.
-    // The sea's surface is its own mesh (the animated material), the river's bed is not: a
-    // river tile's WATER is a prop quad above the bed, and the bed under it is plain dirt.
     if (bedTiles.length > 0) {
       this.addTerrainMesh(new THREE.Mesh(
         buildFlatTileGeometry(bedTiles, -WATER_DEPTH_TILES, solidSet), mats.ground,
       ));
     }
+    // Where the water's edge IS, per corner of every water tile: the shore ramp the breaking
+    // wave rides. `wetKeys` counts river and sea alike, so a river running into a lake does not
+    // grow a beach across its own mouth.
+    const wetKeys = new Set<number>();
+    for (const t of seaTiles) wetKeys.add(tileKey(t.x, t.z));
+    for (const t of bedTiles) wetKeys.add(tileKey(t.x, t.z));
+    // O RIO É A MESMA ÁGUA DO LAGO. Ele era um quad por tile com a arte própria (water_0..3,
+    // azul-ardósia, sem espuma) — duas águas a três tiles uma da outra, e uma lagoa redonda feita
+    // de rio parecia represa. Agora a superfície dele sai aqui, com o material do mar: as mesmas
+    // três variantes por coordenada (sem a grade de riscos que a arte do rio repetia), a mesma
+    // arrebentação nas margens, o mesmo glint e o mesmo espelho. O WaterObject continua dono do
+    // TILE (colisão, ponte, vau, balde); quando uma comporta o esvazia, ele pede drainRiverSurface.
+    if (bedTiles.length > 0) {
+      const riverTiles = bedTiles.map((t) => ({
+        x: t.x, z: t.z, frame: SEA_TILE_FRAMES[terrainVariant(t.x, t.z, SEA_TILE_FRAMES.length)],
+      }));
+      this.riverSurfaceGeo = buildFlatTileGeometry(
+        riverTiles, -WATER_DEPTH_TILES + RIVER_SURFACE_LIFT, solidSet,
+        (x, z) => tileShoreCorners(x, z, wetKeys),
+      );
+      riverTiles.forEach((t, i) => this.riverQuads.set(tileKey(t.x, t.z), i * 4));
+      this.addTerrainMesh(new THREE.Mesh(this.riverSurfaceGeo, mats.sea));
+    }
     if (seaTiles.length > 0) {
-      // Where the water's edge IS, per corner of every sea tile: the shore ramp the breaking
-      // wave rides. `wetKeys` counts river tiles as water too, so a river running into the sea
-      // does not grow a beach across its own mouth.
-      const wetKeys = new Set<number>();
-      for (const t of seaTiles) wetKeys.add(tileKey(t.x, t.z));
-      for (const t of bedTiles) wetKeys.add(tileKey(t.x, t.z));
       this.addTerrainMesh(new THREE.Mesh(
         buildFlatTileGeometry(
           seaTiles, -WATER_DEPTH_TILES, solidSet, (x, z) => tileShoreCorners(x, z, wetKeys),
@@ -1784,14 +1862,17 @@ export class World3D {
         mats.sea,
       ));
     }
-    // The banks close the channel wherever water meets land — one wall per exposed edge, for
-    // the river and the sea alike (they share the depth, so they share the coastline).
+    // A MARGEM, para o rio e o lago iguais (ver buildShoreGeometry): o chão avança sobre a água
+    // num contorno orgânico, e o barranco desce por esse contorno — não pela linha reta do tile.
     const wetTiles = seaTiles.length > 0 ? [...bedTiles, ...seaTiles] : bedTiles;
     if (wetTiles.length > 0) {
-      const sunken = seaSet.size > 0 ? new Set([...waterSet, ...seaSet]) : waterSet;
-      this.addTerrainMesh(new THREE.Mesh(
-        buildBankGeometry(sunken, wetTiles, WATER_DEPTH_TILES), mats.bank,
-      ));
+      const groundFrame = new Map<number, number>();
+      for (const t of groundTiles) groundFrame.set(tileKey(t.x, t.z), t.frame);
+      const shore = buildShoreGeometry(
+        wetKeys, wetTiles, (x, z) => groundFrame.get(tileKey(x, z)) ?? null, WATER_DEPTH_TILES,
+      );
+      this.addTerrainMesh(new THREE.Mesh(shore.lip, mats.ground));
+      this.addTerrainMesh(new THREE.Mesh(shore.walls, mats.bank));
     }
 
     // The lava basin: the same recipe, shallower — a dropped bed to close the well's bottom and
@@ -1837,11 +1918,8 @@ export class World3D {
 
     // A alvenaria de dungeon e a MONTANHA saem da malha dos quads e viram CUBO (ver
     // buildTileCubeGeometry). Elas sao separadas por dois motivos: um bloco macico precisa de
-    // espessura para ler como bloco macico, e `solidQuads` — o indice que o machado usa para
-    // derrubar uma arvore em pe — assume 4 vertices por tile. Um cubo tem entre 8 e 20, e
-    // misturar os dois numa malha so faria a aritmetica desse indice apontar para o vertice
-    // errado no primeiro golpe. (Nenhum dos dois e cortavel, entao nenhum dos dois entra nesse
-    // indice — e o quad continua sendo o que uma ARVORE e: uma silhueta, sem lado.)
+    // espessura para ler como bloco macico, e o quad continua sendo o que uma ARVORE
+    // e: uma silhueta, sem lado.
     // O FRAME DA TOCHA NÃO CHEGA AO CUBO: ele é um MARCADOR, e a peça é um objeto.
     //
     // O frame 48 traz uma tocha PINTADA na alvenaria, e um cubo veste o mesmo frame no teto e nas
@@ -1870,9 +1948,7 @@ export class World3D {
     // fora do centro do tile não lê como floresta natural, lê como peça solta — e desmente a única
     // coisa que todo tile deste jogo promete: que ali cabe exatamente um. A variedade da mata vem
     // dos SEIS frames de pinheiro, que é variação DENTRO do tile, e da névoa por cima.
-    this.solidGeo = buildUprightTileGeometry(quadTiles);
-    quadTiles.forEach((tile, i) => this.solidQuads.set(`${tile.x},${tile.z}`, i * 4));
-    this.addTerrainMesh(new THREE.Mesh(this.solidGeo, mats.solid));
+    this.addTerrainMesh(new THREE.Mesh(buildUprightTileGeometry(quadTiles), mats.solid));
 
     // Quem é CUBO é MASSA. As duas listas ficam guardadas porque a massa é a única geometria do
     // mundo que se REFAZ inteira quando um tile some (a bomba na parede rachada): a poda de faces
@@ -1931,17 +2007,19 @@ export class World3D {
       this.addTerrainMesh(mist);
     }
 
-    for (const t of wetTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
+    for (const t of wetTiles) {
+      this.sunkenTiles.add(tileKey(t.x, t.z));
+      this.waterBuckets.add(waterBucketKey(t.x >> WATER_BUCKET_SHIFT, t.z >> WATER_BUCKET_SHIFT));
+    }
     for (const t of lavaBedTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
 
     // The soft ambient ground blob each obstacle had in 2D ("anchors lifted obstacles so
     // they read as standing up") — merged into one mesh, all sharing the soft blob texture.
     // A touch of forward (+z, toward camera) bias peeks the blob out at the tree's foot.
-    this.blobGeo = buildShadowBlobGeometry(
+    const blobGeo = buildShadowBlobGeometry(
       this.castableSolids.map((t) => ({ x: t.x, z: t.z + 0.06 })), 0.46, 0.42,
     );
-    this.castableSolids.forEach((tile, i) => this.solidBlobQuads.set(`${tile.x},${tile.z}`, i * 4));
-    const ellipses = new THREE.Mesh(this.blobGeo, mats.blob);
+    const ellipses = new THREE.Mesh(blobGeo, mats.blob);
     ellipses.renderOrder = 3; // after the additive fire glow, so the blob isn't washed out
     this.addTerrainMesh(ellipses);
 
@@ -1979,9 +2057,9 @@ export class World3D {
    *
    * Ela refaz as duas INTEIRAS em vez de remendar um tile, e isso é de propósito: a geometria de um
    * cubo é PODADA pelos vizinhos (uma face só nasce onde o vizinho não é bloco), então tirar um
-   * bloco do meio de um maciço reabre faces em três vizinhos ao mesmo tempo. Colapsar só o buraco
-   * — o que o `removeSolidTile` faz com uma árvore, que é um quad sem lados — deixaria um vão com o
-   * interior dos vizinhos virado para fora, e o backface culling o mostraria vazado.
+   * bloco do meio de um maciço reabre faces em três vizinhos ao mesmo tempo. Remendar só o buraco
+   * deixaria um vão com o interior dos vizinhos virado para fora, e o backface culling o mostraria
+   * vazado.
    *
    * O custo é uma vez por bloco derrubado (a bomba na parede rachada), sobre ~1.200 cubos: alguns
    * milissegundos, num frame que já parou para uma explosão.
@@ -2158,6 +2236,133 @@ export class World3D {
   }
 
   /**
+   * O ESPELHO D'ÁGUA: os personagens desenhados por uma câmera espelhada no plano da água, num alvo
+   * que o mar e o rio amostram (pixelArtLight.WATER_REFLECT_GLSL). A técnica é a do `Reflector` do
+   * three, com o recorte oblíquo do Lengyel ("Oblique View Frustum Depth Projection and Clipping"):
+   *
+   *   1. a câmera virtual é a do jogo refletida no plano y = REFLECT_PLANE_Y — posição, direção de
+   *      visão e "para cima" espelhados — e olha o mundo de baixo da água;
+   *   2. `uReflMatrix` leva um ponto do mundo ao UV desse alvo (bias · projeção · vista virtual):
+   *      cada fragmento de água pergunta "o que a câmera virtual vê através de mim", que é
+   *      exatamente o que a água de verdade devolve ao olho;
+   *   3. o plano próximo da projeção virtual é inclinado até o plano da água, para que nada ABAIXO
+   *      dela entre no reflexo (com a câmera embaixo, o chão ficaria entre ela e o herói).
+   *
+   * Barato porque desenha quase nada: só os corpos marcados `reflected` perto da tela, e só quando
+   * há água à vista. As luzes vão TODAS para a lista, sempre — o three assa a contagem de luzes na
+   * chave do programa, e uma passada com menos luzes compilaria o herói de novo (a lei do pool).
+   */
+  private renderReflection(): void {
+    const kept = this.reflectChildren;
+    kept.length = 0;
+    let bodies = 0;
+    if (this.params.reflection > 0.001 && this.waterInView()) {
+      for (const o of this.scene.children) {
+        if ((o as THREE.Light).isLight) kept.push(o);
+      }
+      for (const m of this.reflectedMeshes) {
+        if (!m.parent) { this.reflectedMeshes.delete(m); continue; } // o corpo morreu
+        if (!m.visible || !this.isNearView(m.position.x, m.position.z, 2)) continue;
+        kept.push(m);
+        bodies++;
+      }
+    }
+    reflectionOnUniform.value = bodies > 0 ? 1 : 0;
+    if (bodies === 0) return;
+
+    // ── 1. a câmera virtual ──
+    const s = this.reflectScratch;
+    const cam = this.camera;
+    const mirror = this.mirrorCamera;
+    const h = REFLECT_PLANE_Y;
+    cam.updateMatrixWorld();
+    s.pos.setFromMatrixPosition(cam.matrixWorld);
+    s.dir.set(0, 0, -1).transformDirection(cam.matrixWorld);
+    s.up.set(0, 1, 0).transformDirection(cam.matrixWorld);
+    mirror.position.set(s.pos.x, 2 * h - s.pos.y, s.pos.z);
+    mirror.up.set(s.up.x, -s.up.y, s.up.z);
+    mirror.lookAt(s.pos.x + s.dir.x, 2 * h - (s.pos.y + s.dir.y), s.pos.z + s.dir.z);
+    mirror.far = cam.far;
+    mirror.updateMatrixWorld();
+    mirror.projectionMatrix.copy(cam.projectionMatrix);
+    mirror.projectionMatrixInverse.copy(cam.projectionMatrixInverse);
+
+    // ── 2. mundo → UV do alvo (antes do recorte: ele só mexe na linha do z) ──
+    reflectionMatrixUniform.value
+      .set(
+        0.5, 0.0, 0.0, 0.5,
+        0.0, 0.5, 0.0, 0.5,
+        0.0, 0.0, 0.5, 0.5,
+        0.0, 0.0, 0.0, 1.0,
+      )
+      .multiply(mirror.projectionMatrix)
+      .multiply(mirror.matrixWorldInverse);
+
+    // ── 3. o plano próximo deitado na água (Lengyel; o mesmo código do Reflector) ──
+    s.plane.set(s.up.set(0, 1, 0), -h).applyMatrix4(mirror.matrixWorldInverse);
+    s.clip.set(s.plane.normal.x, s.plane.normal.y, s.plane.normal.z, s.plane.constant);
+    const e = mirror.projectionMatrix.elements;
+    s.q.set(
+      (Math.sign(s.clip.x) + e[8]) / e[0],
+      (Math.sign(s.clip.y) + e[9]) / e[5],
+      -1.0,
+      (1.0 + e[10]) / e[14],
+    );
+    s.clip.multiplyScalar(2.0 / s.clip.dot(s.q));
+    e[2] = s.clip.x;
+    e[6] = s.clip.y;
+    e[10] = s.clip.z + 1.0;
+    e[14] = s.clip.w;
+
+    // ── o desenho: só a lista, sem o céu, sobre transparente ──
+    const r = this.renderer;
+    const prevTarget = r.getRenderTarget();
+    r.getClearColor(s.clear);
+    const prevAlpha = r.getClearAlpha();
+    const all = this.scene.children;
+    const background = this.scene.background;
+    this.scene.children = kept;
+    this.scene.background = null;
+    r.setRenderTarget(this.reflectTarget);
+    r.setClearColor(0x000000, 0);
+    r.clear(true, true, false);
+    r.render(this.scene, mirror);
+    this.scene.children = all;
+    this.scene.background = background;
+    r.setRenderTarget(prevTarget);
+    r.setClearColor(s.clear, prevAlpha);
+  }
+
+  /**
+   * O tile de rio ESVAZIOU (a comporta abriu): a superfície dele some da malha assada e o leito
+   * aparece embaixo. Os quatro vértices dobram num ponto — o mesmo truque do capim cavado
+   * (removeDecorTile): nada realoca, e o tile some no quadro em que a onda do esvaziamento chega.
+   */
+  public drainRiverSurface(worldX: number, worldY: number): void {
+    const key = tileKey(worldX, worldY);
+    const start = this.riverQuads.get(key);
+    if (start === undefined || !this.riverSurfaceGeo) return;
+    this.riverQuads.delete(key);
+    collapseQuad(this.riverSurfaceGeo, start);
+  }
+
+  /** Há água (rio ou mar) na área de chão visível do último quadro? Uma consulta por balde 8×8. */
+  private waterInView(): boolean {
+    const v = this.groundLight.view;
+    if (!Number.isFinite(v.minX) || this.waterBuckets.size === 0) return false;
+    const bx0 = Math.floor(v.minX) >> WATER_BUCKET_SHIFT;
+    const bx1 = Math.floor(v.maxX) >> WATER_BUCKET_SHIFT;
+    const bz0 = Math.floor(v.minZ) >> WATER_BUCKET_SHIFT;
+    const bz1 = Math.floor(v.maxZ) >> WATER_BUCKET_SHIFT;
+    for (let bx = bx0; bx <= bx1; bx++) {
+      for (let bz = bz0; bz <= bz1; bz++) {
+        if (this.waterBuckets.has(waterBucketKey(bx, bz))) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Bake every exposed solid's moonlight shadow into its instanced field — once, and again
    * only when the hd3d knobs move. Unlike the fire casts these transforms are constant.
    *
@@ -2196,59 +2401,9 @@ export class World3D {
   }
 
   /**
-   * Take one standing tile out of the world — the steel axe felling a tree that is terrain
-   * rather than a prop. Everything a solid tile contributes is baked into a merged buffer at
-   * boot, so this un-bakes it in place instead of rebuilding anything:
-   *
-   *   1. its upright quad in the one solids mesh  → collapsed to a point (draws nothing);
-   *   2. its contact blob in the one blob mesh    → same;
-   *   3. the ambient occlusion it printed on the ground around its feet → re-baked from the
-   *      live solid set, or the clearing keeps the shadow of a tree that is no longer there;
-   *   4. its firelight cast (refilled per frame from castableSolids) → drop it from that list;
-   *   5. its moon cast (baked once) → re-bake, which is why this is not free.
-   *
-   * Collapsing rather than rebuilding matters: the solids mesh holds ~6000 quads (the forest
-   * plus the void ring), and reallocating that buffer per swing would hitch. Caller must also
-   * clear the tile in the chunk data — collision lives there, not here.
-   */
-  /**
-   * Repaint one standing tile with a different atlas frame, in place — a tree dropping to the
-   * next chop stage. Same reasoning as removeSolidTile: the tile is four vertices inside a
-   * merged buffer, so this rewrites their `uv` and `aUvBounds` rather than rebuilding anything.
-   * (`aUvBounds` is not optional. It is the window the texel-AA fetch may sample from; leaving
-   * it on the old frame lets the filter slide into the neighbouring tile's art.)
-   *
-   * The cast-shadow fields sample the atlas too, so the silhouette this tile throws has to
-   * follow it down — otherwise a stump keeps casting the shadow of a whole tree.
-   */
-  public setSolidTileFrame(worldX: number, worldY: number, frame: number): void {
-    const key = `${worldX},${worldY}`;
-    const vertStart = this.solidQuads.get(key);
-    if (vertStart === undefined) return;
-
-    const f = tilesetFrameUv(frame);
-    const uv = this.solidGeo.attributes.uv as THREE.BufferAttribute;
-    const bounds = this.solidGeo.attributes.aUvBounds as THREE.BufferAttribute;
-    // Corner order must match buildUprightTileGeometry exactly.
-    uv.setXY(vertStart, f.u0, f.v1);
-    uv.setXY(vertStart + 1, f.u1, f.v1);
-    uv.setXY(vertStart + 2, f.u1, f.v0);
-    uv.setXY(vertStart + 3, f.u0, f.v0);
-    uv.needsUpdate = true;
-    for (let i = 0; i < 4; i++) bounds.setXYZW(vertStart + i, f.cu0, f.cv0, f.cu1, f.cv1);
-    bounds.needsUpdate = true;
-
-    const cast = this.castableSolids.find((t) => t.x === worldX && t.z === worldY);
-    if (cast) {
-      cast.frame = frame;
-      this.fillMoonCastField(); // baked once, so it has to be re-baked to see the new frame
-    }
-  }
-
-  /**
    * Erase one FLAT decor quad (low grass, foliage, litter) from the merged decor mesh — the
-   * shovel turning the soil under a dug hole. Same collapse trick as removeSolidTile: the four
-   * vertices fold onto a point, nothing reallocates. The active rustle (if any) dies with it,
+   * shovel turning the soil under a dug hole. The four vertices fold onto a point (a degenerate
+   * triangle rasterizes nothing), nothing reallocates. The active rustle (if any) dies with it,
    * and it MUST: updateRustles rewrites absolute corner positions every frame, so a live
    * rustle would resurrect the collapsed quad on its next tick. Caller also clears the tile in
    * the chunk data — a later rebake reads from there, not from this mesh.
@@ -2261,93 +2416,6 @@ export class World3D {
     this.grassQuads.delete(key);
     this.activeRustles.delete(key);
     collapseQuad(this.decorGeo, vertStart);
-  }
-
-  public removeSolidTile(worldX: number, worldY: number): void {
-    const key = `${worldX},${worldY}`;
-    const vertStart = this.solidQuads.get(key);
-    // O BLOCO. Ele não está no índice de quads — `solidQuads` guarda 4 vértices por tile e um cubo
-    // tem entre 8 e 20 —, e por isso esta função inteira passava direto por ele: a bomba abria a
-    // parede rachada na lógica e o cubo continuava desenhado. Um maciço se refaz inteiro (a poda de
-    // faces é dos vizinhos, ver rebuildCubes) e só então cai no caminho comum lá embaixo.
-    if (vertStart === undefined && this.massSet.has(tileKey(worldX, worldY))) {
-      const drop = (list: SolidTileEntry[]): void => {
-        const i = list.findIndex((t) => t.x === worldX && t.z === worldY);
-        if (i >= 0) list.splice(i, 1);
-      };
-      drop(this.wallCubes);
-      drop(this.rockCubes);
-      this.solidKeys.delete(tileKey(worldX, worldY));
-      if (this.terrainMats) this.rebuildCubes(this.terrainMats);
-      this.retireStandingTile(worldX, worldY);
-      // A oclusão dos vizinhos: o bloco escurecia os cantos deles, e cada canto é cor de vértice
-      // num quad DIFERENTE — a mesma re-assadura do 3×3 que a árvore derrubada faz logo abaixo.
-      this.rebakeGroundAoAround(worldX, worldY);
-      return;
-    }
-    if (vertStart === undefined) return; // not a standing tile, or already felled
-    this.solidQuads.delete(key);
-    this.solidKeys.delete(tileKey(worldX, worldY));
-    collapseQuad(this.solidGeo, vertStart);
-
-    const blobStart = this.solidBlobQuads.get(key);
-    if (blobStart !== undefined) {
-      this.solidBlobQuads.delete(key);
-      collapseQuad(this.blobGeo, blobStart);
-    }
-
-    this.rebakeGroundAoAround(worldX, worldY);
-    this.retireStandingTile(worldX, worldY);
-  }
-
-  /**
-   * Re-bake the AO of the 3x3 around the stump: the felled tile darkened its neighbours'
-   * corners, and each of those corners is a vertex colour on a DIFFERENT quad.
-   */
-  private rebakeGroundAoAround(worldX: number, worldY: number): void {
-    const colour = this.groundGeo.attributes.color as THREE.BufferAttribute;
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = worldX + dx;
-        const nz = worldY + dz;
-        const start = this.groundQuads.get(`${nx},${nz}`);
-        if (start === undefined) continue; // a riverbed/lava quad — its own mesh, no AO to fix
-        tileAoCorners(nx, nz, this.solidKeys).forEach((shade, c) => {
-          colour.setXYZ(start + c, shade, shade, shade);
-        });
-      }
-    }
-    colour.needsUpdate = true;
-  }
-
-  /**
-   * Tira o tile em pé das listas que o passo de sombra varre. Vale para os dois que somem: a
-   * árvore que o machado derruba e o BLOCO que a bomba abre.
-   *
-   * The fire cast pass indexes EVERY standing tile (see buildTerrain), so a felled tree
-   * has to leave that array too or its stump keeps throwing a whole tree's silhouette.
-   * Splicing cannot invalidate solidQuads/solidBlobQuads: those store vertex OFFSETS into
-   * geometry that never shrinks, not indices into these arrays.
-   */
-  private retireStandingTile(worldX: number, worldY: number): void {
-    const solidIndex = this.solidTiles.findIndex((t) => t.x === worldX && t.z === worldY);
-    const felled = solidIndex >= 0 ? this.solidTiles[solidIndex] : undefined;
-    if (solidIndex >= 0) this.solidTiles.splice(solidIndex, 1);
-    if (felled) {
-      this.fireCastLists.clear();
-      const bucket = this.solidBuckets.get(bucketKey(worldX, worldY));
-      if (bucket) {
-        const bi = bucket.indexOf(felled);
-        if (bi >= 0) bucket.splice(bi, 1);
-      }
-    }
-
-    // …and the exposed set, which is what the contact blobs and the baked MOON field read.
-    const castIndex = this.castableSolids.findIndex((t) => t.x === worldX && t.z === worldY);
-    if (castIndex >= 0) {
-      this.castableSolids.splice(castIndex, 1);
-      this.fillMoonCastField(); // baked once, so a vanished caster means a re-bake
-    }
   }
 
   // ── dynamic actors ───────────────────────────────────────────────────────────
@@ -2375,6 +2443,7 @@ export class World3D {
       }
       this.castCasters.push({ bb, mesh, sceneMat, maskMat, lastFire: null });
     }
+    if (opts.reflected) this.reflectedMeshes.add(bb.mesh);
     return bb;
   }
 
@@ -2695,6 +2764,14 @@ export class World3D {
     this.groundLight.update(this.renderer, this.camera);
     this.renderer.setRenderTarget(this.composer.renderTarget1);
     this.drawEverythingOnce();
+    // E de novo no alvo do ESPELHO, pela mesma razão: é outro alvo, e o primeiro reflexo do jogo
+    // não pode ser o quadro em que o ANGLE termina o programa do herói.
+    // (A água sai deste desenho sem o espelho: amostrar o alvo em que se desenha é um laço de
+    // realimentação, e o WebGL recusa o draw.)
+    reflectionMapUniform.value = null;
+    this.renderer.setRenderTarget(this.reflectTarget);
+    this.drawEverythingOnce();
+    reflectionMapUniform.value = this.reflectTarget.texture;
 
     // The shadow mask's material variants too (castMask / solidCastFieldMask): flip the
     // silhouettes into mask mode for one compile pass so toggling hd3d.shadowMask later
@@ -3085,10 +3162,14 @@ export class World3D {
     const pxPerTileY = Math.abs(
       this.projectTile(cx, cy + 1, 0).y - this.projectTile(cx, cy - 1, 0).y,
     ) / 2;
-    const w = Math.max(1, window.innerWidth);
-    const h = Math.max(1, window.innerHeight);
+    // Em UV do CANVAS, que pode ter a margem e o deslocamento da câmera de pixel suave.
+    const m = this.snapMarginCss;
+    const w = Math.max(1, window.innerWidth + 2 * m);
+    const h = Math.max(1, window.innerHeight + 2 * m);
     u.uSight.value = amount;
-    (u.uSightAt.value as THREE.Vector2).set(at.x / w, 1 - at.y / h);
+    (u.uSightAt.value as THREE.Vector2).set(
+      (at.x + m - this.snapShiftX) / w, 1 - (at.y + m - this.snapShiftY) / h,
+    );
     (u.uSightR.value as THREE.Vector2).set(
       Math.max(0.02, (r * pxPerTileX) / w),
       Math.max(0.02, (r * pxPerTileY) / h),
@@ -3427,16 +3508,7 @@ export class World3D {
     )) return;
     const p = this.fireCastScratch;
 
-    // An axe blow mid-shudder shakes the silhouette with the tile (2e) — same damped
-    // sine as updateTileShakes. (String key only while a shake is live; the map is
-    // almost always empty, so the hot path never composes one.)
-    let rotY = p.rotY;
-    if (this.activeTileShakes.size > 0) {
-      const sh = this.activeTileShakes.get(`${tile.x},${tile.z}`);
-      if (sh && sh.t < 1) {
-        rotY += Math.sin(sh.t * Math.PI * 2 * TILE_SHAKE_CYCLES) * TILE_SHAKE_LEAN * (1 - sh.t);
-      }
-    }
+    const rotY = p.rotY;
 
     // The silhouette stops at the water's edge (2b) — but the clamp may never REMOVE a
     // shadow, only shorten one.
@@ -3495,45 +3567,6 @@ export class World3D {
     const vertStart = this.grassQuads.get(key);
     if (vertStart === undefined) return;
     this.activeRustles.set(key, { vertStart, x: worldX, z: worldY, t: 0 });
-  }
-
-  /**
-   * Shudder a standing solid tile, the way DryTreeObject rocks its billboard when the axe bites
-   * (±7° for ~220ms). A prop can do that with a tween on `angle` because it OWNS a mesh; a tile
-   * is four vertices inside the one merged buffer every standing tile shares, so there is nothing
-   * to rotate — the shake has to be written into `position` directly, the grass rustle's trick.
-   *
-   * Only the TOP two corners move. Shifting all four would slide the whole tree sideways, foot
-   * and all; leaning the top over a planted base is what rotation about the foot looks like, and
-   * it is what makes the blow read as landing on a tree that is rooted. `TILE_SHAKE_LEAN` is
-   * tan(7°) on a one-tile-tall quad, so a tile leans exactly as far as the dry tree rocks.
-   */
-  public shakeSolidTile(worldX: number, worldY: number): void {
-    const key = `${worldX},${worldY}`;
-    const vertStart = this.solidQuads.get(key);
-    if (vertStart === undefined) return;
-    // Re-seeded, never accumulated: a second blow landing mid-shudder restarts it from the rest
-    // pose instead of stacking a second offset onto an already-leaning tile.
-    this.activeTileShakes.set(key, { vertStart, x: worldX, t: 0 });
-  }
-
-  private updateTileShakes(dt: number): void {
-    if (this.activeTileShakes.size === 0) return;
-    const pos = this.solidGeo.attributes.position as THREE.BufferAttribute;
-    for (const [key, s] of this.activeTileShakes) {
-      s.t += dt / TILE_SHAKE_SECONDS;
-      const done = s.t >= 1;
-      // A DAMPED shudder: it oscillates and dies into the rest pose, so the tile always lands
-      // back where the merged mesh says it stands. Absolute positions recomputed from the tile's
-      // own x (like updateRustles) — offsets accumulated frame to frame would drift the forest.
-      const lean = done
-        ? 0
-        : Math.sin(s.t * Math.PI * 2 * TILE_SHAKE_CYCLES) * TILE_SHAKE_LEAN * (1 - s.t);
-      pos.setX(s.vertStart, s.x - 0.5 + lean);
-      pos.setX(s.vertStart + 1, s.x + 0.5 + lean);
-      if (done) this.activeTileShakes.delete(key);
-    }
-    pos.needsUpdate = true;
   }
 
   private updateRustles(dt: number): void {
@@ -3604,6 +3637,97 @@ export class World3D {
     );
     this.camera.lookAt(this.camTarget.x + ox, this.camTarget.y + 0.4 + oy, this.camTarget.z);
     this.camera.updateMatrixWorld();
+    this.snapCameraToPixel();
+  }
+
+  /**
+   * A CÂMERA DE PIXEL SUAVE — o mundo parado no grão do buffer, o movimento liso no do aparelho.
+   *
+   * Quando um pixel desenhado ocupa mais de um pixel do aparelho (modo econômico, celular), uma
+   * câmera contínua para a cada quadro num ponto FRACIONÁRIO do buffer: o chão é rasterizado de
+   * novo em outra fase e a textura "ferve" (cada texel muda de cor conforme a câmera anda), e a
+   * rolagem anda em degraus de pixel inteiro do buffer — 2, 2, 3, 2… — com erro de até meio pixel
+   * do buffer, que no celular são dois pixels de tela.
+   *
+   * A saída é a das câmeras de pixel art em 2D, adaptada à perspectiva: a câmera ANDA em pixels
+   * inteiros do buffer (medidos no chão sob o herói, onde está a atenção) e a sobra fracionária vai
+   * para um deslocamento CSS do canvas, arredondado ao pixel do APARELHO. O chão perto do foco é
+   * rasterizado sempre na mesma fase (para de ferver), e a rolagem que se vê é contínua na
+   * resolução da tela. O herói continua contínuo no mundo e, somado ao deslocamento, fica parado no
+   * centro da tela. No desktop (um pixel desenhado = um pixel de tela) não há sobra a esconder e
+   * nada disto roda.
+   *
+   * A perspectiva cobra uma margem: a câmera anda em pixel inteiro só na profundidade do foco;
+   * linhas muito mais perto ou mais longe ainda recebem uma fração. Por isso o ponto medido é o chão
+   * sob o herói, e não o centro da tela.
+   */
+  private snapCameraToPixel(): void {
+    let shiftX = 0;
+    let shiftY = 0;
+    if (this.snapMarginCss > 0 && this.params.pixelSnap > 0) {
+      const { ppx, ppz, ppy } = this.snapGridScale();
+      if (Math.abs(ppx) > 1e-3 && Math.abs(ppz) > 1e-3) {
+        // A câmera anda numa grade PRESA AO MUNDO (múltiplos de um pixel do buffer, a partir da
+        // origem), nunca presa ao herói: uma âncora no tile dele pularia uma fração de pixel cada
+        // vez que ele troca de tile, porque um tile não mede um número inteiro de pixels.
+        // Na vertical da tela entram DOIS eixos — o z e a altura, que o balanço de mão sobe e
+        // desce —, então a posição vertical em pixels é a soma dos dois, e só o z a corrige.
+        const p = this.camera.position;
+        const h = p.x * ppx;
+        const v = p.z * ppz + p.y * ppy;
+        const dx = (Math.round(h) - h) / ppx;
+        const dz = (Math.round(v) - v) / ppz;
+        p.x += dx;
+        p.z += dz;
+        this.camera.updateMatrixWorld();
+        // …e o canvas devolve a sobra (a câmera andou dx: o mundo foi -dx na tela), no grão do aparelho.
+        const dpr = window.devicePixelRatio || 1;
+        const k = this.appliedBlocks;
+        shiftX = Math.round(dx * ppx * k) / dpr;
+        shiftY = Math.round(dz * ppz * k) / dpr;
+      }
+    }
+    this.setSnapShift(shiftX, shiftY);
+  }
+
+  /**
+   * A ESCALA DA GRADE da câmera de pixel suave: quantos pixels do buffer um tile de chão anda na
+   * tela, nos dois eixos, na profundidade do foco — medida com a câmera EM REPOUSO (altura, recuo e
+   * FOV autorados, sem o balanço de mão nem o baque). Constante de propósito: medida na câmera do
+   * quadro, ela oscilava ~0,1% com o balanço, e numa grade presa à origem do mundo 0,1% de mil e
+   * tantos pixels é mais de um pixel — a grade inteira escorregava e o chão voltava a ferver.
+   */
+  private snapGridScale(): { ppx: number; ppz: number; ppy: number } {
+    const s = this.snapScratch;
+    const size = this.renderer.getSize(s.size);
+    const p = this.params;
+    const key = `${p.camHeight}|${p.camBack}|${this.camera.fov}|${size.x}x${size.y}`;
+    if (key !== this.snapScale.key) {
+      const cam = this.snapCamera;
+      cam.copy(this.camera);
+      cam.position.set(0, p.camHeight, p.camBack);
+      cam.lookAt(0, 0.4, 0);
+      cam.updateMatrixWorld();
+      const toBuffer = (v: THREE.Vector3): THREE.Vector3 => {
+        v.project(cam);
+        return v.set((v.x * 0.5 + 0.5) * size.x, (-v.y * 0.5 + 0.5) * size.y, 0);
+      };
+      const a = toBuffer(s.a.set(0, 0, 0));
+      this.snapScale.ppx = toBuffer(s.b.set(1, 0, 0)).x - a.x;
+      this.snapScale.ppz = toBuffer(s.c.set(0, 0, 1)).y - a.y;
+      // Subir a câmera é o chão descer: o quanto um ponto 1 tile mais ALTO anda na tela (negativo).
+      this.snapScale.ppy = toBuffer(s.b.set(0, 1, 0)).y - a.y;
+      this.snapScale.key = key;
+    }
+    return this.snapScale;
+  }
+
+  private setSnapShift(shiftX: number, shiftY: number): void {
+    if (shiftX !== this.snapShiftX || shiftY !== this.snapShiftY) {
+      this.snapShiftX = shiftX;
+      this.snapShiftY = shiftY;
+      this.canvas.style.transform = shiftX || shiftY ? `translate(${shiftX}px, ${shiftY}px)` : '';
+    }
   }
 
   /**
@@ -3735,10 +3859,21 @@ export class World3D {
     // Scratch, not a fresh Vector3: every 2D overlay in the game (footprints, pips, balloons, the
     // fire compass) projects through here several times a frame, and the garbage adds up into the
     // collector's next pause.
+    const p = this.projectRaw(worldX, worldY, elevationTiles);
+    return { x: Math.round(p.x), y: Math.round(p.y) };
+  }
+
+  /**
+   * O `projectTile` sem arredondar. O canvas do mundo pode estar maior que a tela (a margem da
+   * câmera de pixel suave) e deslocado (a sobra dela): as duas coisas entram aqui, senão todo
+   * overlay 2D ficaria até meio pixel do buffer fora do lugar que o mundo desenhou.
+   */
+  private projectRaw(worldX: number, worldY: number, elevationTiles = 0): { x: number; y: number } {
     const v = this.projectScratch.set(worldX, elevationTiles, worldY).project(this.camera);
+    const m = this.snapMarginCss;
     return {
-      x: Math.round((v.x * 0.5 + 0.5) * window.innerWidth),
-      y: Math.round((-v.y * 0.5 + 0.5) * window.innerHeight),
+      x: (v.x * 0.5 + 0.5) * (window.innerWidth + 2 * m) - m + this.snapShiftX,
+      y: (-v.y * 0.5 + 0.5) * (window.innerHeight + 2 * m) - m + this.snapShiftY,
     };
   }
 
@@ -3762,8 +3897,9 @@ export class World3D {
     pixelY: number,
     elevationTiles = 0,
   ): { worldX: number; worldY: number } {
-    const ndcX = (pixelX / Math.max(1, window.innerWidth)) * 2 - 1;
-    const ndcY = -((pixelY / Math.max(1, window.innerHeight)) * 2 - 1);
+    const m = this.snapMarginCss;
+    const ndcX = ((pixelX + m - this.snapShiftX) / Math.max(1, window.innerWidth + 2 * m)) * 2 - 1;
+    const ndcY = -(((pixelY + m - this.snapShiftY) / Math.max(1, window.innerHeight + 2 * m)) * 2 - 1);
     const dir = this.projectScratch.set(ndcX, ndcY, 0.5).unproject(this.camera).sub(this.camera.position);
     // Camera olhando pra baixo: `dir.y` e sempre negativo na pratica. O guarda e pro caso
     // degenerado (raio paralelo ao plano), em que nao ha intersecao nenhuma — devolver o alvo da
@@ -3778,8 +3914,11 @@ export class World3D {
 
   /** Projected pixel height of one tile at the camera target — the 2D code's "tileSize". */
   public tileScreenSize(): number {
-    const a = this.projectTile(this.camTarget.x, this.camTarget.z);
-    const c = this.projectTile(this.camTarget.x, this.camTarget.z, 1);
+    // SEM arredondar: a diferença de duas projeções arredondadas pulava entre 104 e 105 px com o
+    // herói andando (o balanço da câmera muda a fração), e tudo que é 2D e se mede por este número
+    // — pegadas, golpes, balões — encolhia e crescia 1% num quadro.
+    const a = this.projectRaw(this.camTarget.x, this.camTarget.z);
+    const c = this.projectRaw(this.camTarget.x, this.camTarget.z, 1);
     return Math.max(24, Math.abs(a.y - c.y));
   }
 
@@ -3794,7 +3933,6 @@ export class World3D {
     this.renderer.info.reset();
     profiler.begin('rustle');
     this.updateRustles(dt);
-    this.updateTileShakes(dt); // same buffer-poking trick, same budget — see shakeSolidTile
     profiler.end('rustle');
     this.chunkShroud.update(dtMs); // avança (e encerra) as dissoluções de compra de chunk
 
@@ -3806,6 +3944,7 @@ export class World3D {
     lightWobbleUniform.value = Math.max(0, this.params.lightWobble);
     lightCapUniform.value = this.params.lightCap;
     seaFlowUniform.value = Math.max(0, this.params.seaFlow);
+    reflectionStrengthUniform.value = Math.min(1, Math.max(0, this.params.reflection));
     // These five are CSS STRINGS, live-tunable through window.hd3d — and Color.set(string) parses
     // the CSS every time it is called. Re-reading them each frame meant five regex parses a frame
     // to arrive back at the colour that was already there. Only re-parse when the knob moves.
@@ -3998,6 +4137,9 @@ export class World3D {
     profiler.begin('groundLight');
     this.groundLight.update(this.renderer, this.camera);
     profiler.end('groundLight');
+    profiler.begin('reflection');
+    this.renderReflection();
+    profiler.end('reflection');
     profiler.begin('compose');
     profiler.gpuBegin();
     const allChildren = this.cullFarChildren();
@@ -4233,9 +4375,7 @@ export class World3D {
   }
 
   private readonly handleResize = (): void => {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.applyPixelScale();
+    this.applyPixelScale(); // ela também acerta a razão da câmera (a do buffer)
   };
 
   public dispose(): void {
@@ -5044,7 +5184,20 @@ const buildFlatTileGeometry = (
   return geo;
 };
 
-// Vertical walls closing the sunken river channel: one quad on every edge where a
+/**
+ * As FAIXAS da margem, de cima para baixo: [onde começa, onde acaba] em fração da profundidade, e
+ * a cor. Faixas CHAPADAS e não um degradê — um degradê seria a única aresta lisa do jogo, a mesma
+ * razão da espuma serrilhada do mar. O friso de capim de cima é o chão dobrando a borda (sem ele a
+ * grama acaba num corte de faca); a terra do meio é a cor do leito; a de baixo é a terra MOLHADA,
+ * que é o que diz onde a água bate.
+ */
+const BANK_BANDS: ReadonlyArray<readonly [number, number, number]> = [
+  [0, 0.22, 0x2e4720],
+  [0.22, 0.68, 0x4a3520],
+  [0.68, 1, 0x21180e],
+];
+
+// Vertical walls closing the sunken river channel: one strip per band on every edge where a
 // water tile meets a non-water tile, from the land (y=0) down to the bed (y=-depth).
 const buildBankGeometry = (
   water: ReadonlySet<string>,
@@ -5053,8 +5206,10 @@ const buildBankGeometry = (
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const nrm: number[] = [];
+  const col: number[] = [];
   const idx: number[] = [];
   const sides: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const bandColors = BANK_BANDS.map(([, , hex]) => new THREE.Color(hex)); // sRGB → linear
   let v = 0;
   for (const { x, z } of bedTiles) {
     for (const [dx, dz] of sides) {
@@ -5063,18 +5218,242 @@ const buildBankGeometry = (
       let ax: number; let az: number; let bx: number; let bz: number;
       if (dx !== 0) { ax = bx = x + dx * 0.5; az = z - 0.5; bz = z + 0.5; }
       else { az = bz = z + dz * 0.5; ax = x - 0.5; bx = x + 0.5; }
-      // Quad: land edge (a,b at y=0) down to bed edge (b,a at y=-depth).
-      pos.push(ax, 0, az, bx, 0, bz, bx, -depth, bz, ax, -depth, az);
-      for (let k = 0; k < 4; k++) nrm.push(dx, 0, dz); // horizontal; DoubleSide lights both faces
-      idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
-      v += 4;
+      BANK_BANDS.forEach(([from, to], band) => {
+        const top = -depth * from;
+        const bottom = -depth * to;
+        // Strip: (a,b at its top) down to (b,a at its bottom).
+        pos.push(ax, top, az, bx, top, bz, bx, bottom, bz, ax, bottom, az);
+        const c = bandColors[band];
+        for (let k = 0; k < 4; k++) {
+          nrm.push(dx, 0, dz); // horizontal; DoubleSide lights both faces
+          col.push(c.r, c.g, c.b);
+        }
+        idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
+        v += 4;
+      });
     }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
   return geo;
+};
+
+/**
+ * A MARGEM ORGÂNICA — onde a terra encontra a água, sem a linha reta do tile.
+ *
+ * O lago e o rio são tiles, e a margem era a borda do tile: paredes retas, quinas de 90°, o chão
+ * acabando num corte de faca. Nada disso muda no DADO (a colisão continua por tile); muda o que se
+ * vê. Em cada tile de água encostado na terra, o chão AVANÇA sobre a água por um "beiço" cujo
+ * contorno é um campo de distância, decidido pixel de arte a pixel de arte (SHORE_CELLS por tile):
+ *
+ *   · a distância de cada pixel até a terra vizinha é uma UNIÃO SUAVE (smooth-min) das distâncias
+ *     até cada tile de terra — é ela que arredonda a quina CÔNCAVA (a água fazendo um canto);
+ *   · a distância até um tile de terra é euclidiana fora dele, então a ponta de terra que entra na
+ *     água (o píer, uma quina convexa) sai arredondada sozinha;
+ *   · a largura do beiço anda num ruído de valor por coordenada (SHORE_MIN..+SHORE_VAR): a margem
+ *     ondula, e é sempre a mesma em todo boot.
+ *
+ * O beiço é pixel de arte inteiro, em degraus — a margem é serrilhada por texel como a espuma do
+ * mar, nunca uma curva lisa que seria a única aresta suave do jogo. Ele veste a arte do tile de
+ * chão de onde vem (o mesmo material do chão, então a luz e o AA de texel são os do chão), e o
+ * barranco desce pelo CONTORNO dele com as faixas de BANK_BANDS. Faces viradas para o norte não
+ * nascem: o próprio beiço as esconde da câmera, que nunca gira.
+ *
+ * Custo: zero por quadro. É geometria estática nos dois materiais que já existiam (sem programa
+ * novo), assada no boot: as células viram faixas por linha (um quad por corrida), e o rio e o lago
+ * do mundo inteiro somam poucos milhares de quads — menos que um canto da floresta.
+ */
+const SHORE_CELLS = 16; // um pixel de arte
+const SHORE_MIN = 0.05; // em tiles: a largura mínima do beiço (cobre a borda do tile em todo lugar)
+const SHORE_VAR = 0.2; // quanto o ruído soma a ela
+const SHORE_ROUND = 0.45; // o raio da união suave: o tamanho da curva na quina côncava
+
+const shoreHash = (x: number, z: number): number => {
+  const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+/** Ruído de valor suave em (x, z), 0..1 — determinístico: a mesma margem em todo boot. */
+const shoreNoise = (x: number, z: number): number => {
+  const ix = Math.floor(x);
+  const iz = Math.floor(z);
+  const fx = x - ix;
+  const fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uz = fz * fz * (3 - 2 * fz);
+  const a = shoreHash(ix, iz);
+  const b = shoreHash(ix + 1, iz);
+  const c = shoreHash(ix, iz + 1);
+  const d = shoreHash(ix + 1, iz + 1);
+  return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
+};
+const smoothMin = (a: number, b: number, k: number): number => {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - h * h * k * 0.25;
+};
+
+const buildShoreGeometry = (
+  wet: ReadonlySet<number>,
+  tiles: ReadonlyArray<{ x: number; z: number }>,
+  landFrame: (x: number, z: number) => number | null,
+  depth: number,
+): { lip: THREE.BufferGeometry; walls: THREE.BufferGeometry } => {
+  const N = SHORE_CELLS;
+  const step = 1 / N;
+  const memo = new Map<number, number>();
+  /** −1 = terra (fora da água), 0 = água aberta, >0 = beiço: o tileKey do chão de onde ele vem, +1. */
+  const cellAt = (gx: number, gz: number): number => {
+    const key = (gx + 262144) * 524288 + (gz + 262144);
+    const hit = memo.get(key);
+    if (hit !== undefined) return hit;
+    const tx = Math.floor(gx / N);
+    const tz = Math.floor(gz / N);
+    let out = 0;
+    if (!wet.has(tileKey(tx, tz))) {
+      out = -1;
+    } else {
+      const px = (gx + 0.5) / N - 0.5;
+      const pz = (gz + 0.5) / N - 0.5;
+      let d = Infinity;
+      let best = Infinity;
+      let src = -1;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const lx = tx + dx;
+          const lz = tz + dz;
+          if ((dx === 0 && dz === 0) || wet.has(tileKey(lx, lz))) continue;
+          const ex = Math.max(Math.abs(px - lx) - 0.5, 0);
+          const ez = Math.max(Math.abs(pz - lz) - 0.5, 0);
+          const di = Math.sqrt(ex * ex + ez * ez);
+          d = d === Infinity ? di : smoothMin(d, di, SHORE_ROUND);
+          if (di < best && landFrame(lx, lz) !== null) {
+            best = di;
+            src = tileKey(lx, lz);
+          }
+        }
+      }
+      if (src >= 0 && d < SHORE_MIN + SHORE_VAR * shoreNoise(px * 1.3, pz * 1.3)) out = src + 1;
+    }
+    memo.set(key, out);
+    return out;
+  };
+
+  const lp: number[] = [];
+  const luv: number[] = [];
+  const lb: number[] = [];
+  const ln: number[] = [];
+  const lc: number[] = [];
+  const li: number[] = [];
+  let lv = 0;
+  const wp: number[] = [];
+  const wn: number[] = [];
+  const wc: number[] = [];
+  const wi: number[] = [];
+  let wv = 0;
+  const bandColors = BANK_BANDS.map(([, , hex]) => new THREE.Color(hex)); // sRGB → linear
+  const wall = (ax: number, az: number, bx: number, bz: number, nx: number, nz: number): void => {
+    BANK_BANDS.forEach(([from, to], band) => {
+      const top = -depth * from;
+      const bottom = -depth * to;
+      wp.push(ax, top, az, bx, top, bz, bx, bottom, bz, ax, bottom, az);
+      const c = bandColors[band];
+      for (let k = 0; k < 4; k++) {
+        wn.push(nx, 0, nz);
+        wc.push(c.r, c.g, c.b);
+      }
+      wi.push(wv, wv + 1, wv + 2, wv, wv + 2, wv + 3);
+      wv += 4;
+    });
+  };
+
+  for (const { x: tx, z: tz } of tiles) {
+    let nearLand = false;
+    for (let dz = -1; dz <= 1 && !nearLand; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!wet.has(tileKey(tx + dx, tz + dz))) { nearLand = true; break; }
+      }
+    }
+    if (!nearLand) continue;
+    const gx0 = tx * N;
+    const gz0 = tz * N;
+    const x0 = tx - 0.5;
+    const z0 = tz - 0.5;
+
+    // O beiço: uma faixa por corrida de células da mesma origem, em cada linha.
+    for (let j = 0; j < N; j++) {
+      let i = 0;
+      while (i < N) {
+        const code = cellAt(gx0 + i, gz0 + j);
+        if (code <= 0) { i++; continue; }
+        let e = i;
+        while (e + 1 < N && cellAt(gx0 + e + 1, gz0 + j) === code) e++;
+        const src = code - 1;
+        const f = tilesetFrameUv(landFrame(Math.floor(src / 16384) - 4096, (src % 16384) - 4096) as number);
+        const ax = x0 + i * step;
+        const bx = x0 + (e + 1) * step;
+        const az = z0 + j * step;
+        const bz = az + step;
+        // A arte do chão de origem, pousada sobre o tile de água como se continuasse nele.
+        const u = (px: number): number => f.u0 + (px - x0) * (f.u1 - f.u0);
+        const v = (pz: number): number => f.v1 - (pz - z0) * (f.v1 - f.v0);
+        lp.push(ax, 0, az, bx, 0, az, bx, 0, bz, ax, 0, bz);
+        luv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
+        for (let k = 0; k < 4; k++) {
+          lb.push(f.cu0, f.cv0, f.cu1, f.cv1);
+          ln.push(0, 1, 0);
+          lc.push(1, 1, 1);
+        }
+        li.push(lv, lv + 3, lv + 2, lv, lv + 2, lv + 1);
+        lv += 4;
+        i = e + 1;
+      }
+    }
+
+    // O barranco pelo contorno: a face SUL de cada corrida que dá para água aberta...
+    for (let j = 0; j < N; j++) {
+      let i = 0;
+      while (i < N) {
+        const open = (c: number): boolean => cellAt(gx0 + c, gz0 + j) > 0 && cellAt(gx0 + c, gz0 + j + 1) === 0;
+        if (!open(i)) { i++; continue; }
+        let e = i;
+        while (e + 1 < N && open(e + 1)) e++;
+        const z = z0 + (j + 1) * step;
+        wall(x0 + i * step, z, x0 + (e + 1) * step, z, 0, 1);
+        i = e + 1;
+      }
+    }
+    // ...e as faces LESTE e OESTE, por coluna.
+    for (const side of [1, -1]) {
+      for (let i = 0; i < N; i++) {
+        let j = 0;
+        while (j < N) {
+          const open = (r: number): boolean => cellAt(gx0 + i, gz0 + r) > 0 && cellAt(gx0 + i + side, gz0 + r) === 0;
+          if (!open(j)) { j++; continue; }
+          let e = j;
+          while (e + 1 < N && open(e + 1)) e++;
+          const x = x0 + (side > 0 ? i + 1 : i) * step;
+          wall(x, z0 + j * step, x, z0 + (e + 1) * step, side, 0);
+          j = e + 1;
+        }
+      }
+    }
+  }
+
+  const lip = new THREE.BufferGeometry();
+  lip.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+  lip.setAttribute('uv', new THREE.Float32BufferAttribute(luv, 2));
+  lip.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(lb, 4));
+  lip.setAttribute('normal', new THREE.Float32BufferAttribute(ln, 3));
+  lip.setAttribute('color', new THREE.Float32BufferAttribute(lc, 3));
+  lip.setIndex(li);
+  const walls = new THREE.BufferGeometry();
+  walls.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+  walls.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
+  walls.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
+  walls.setIndex(wi);
+  return { lip, walls };
 };
 
 /**

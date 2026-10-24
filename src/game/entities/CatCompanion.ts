@@ -44,7 +44,7 @@ export class CatCompanion {
     this.y = y;
     const visual = NPC_VISUALS.blackCat;
     this.body = world3d()
-      .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true })
+      .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
       .setPosition(x, y)
       .setDisplaySize(SIZE, SIZE);
     if (arriving) {

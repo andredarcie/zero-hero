@@ -9,8 +9,7 @@
 //      e posicional, entao a linha nao pode ser removida, so apagada.
 //   2. ELA E CUBO, E NAO UMA CARTA EM PE. Um quad em pe vive todo no z do proprio tile; um cubo
 //      tem face em z+0.5 e teto em y=1. Entao o assert nao olha "parece 3D", olha a GEOMETRIA:
-//      o tile saiu do indice de quads (`solidQuads`, o que o machado usa) e existe, na malha de
-//      rocha, vertice no teto e vertice na face sul. E continua bloqueando — o cubo e cosmetico
+//      existe, na malha de rocha, vertice no teto e vertice na face sul. E continua bloqueando — o cubo e cosmetico
 //      para a fisica, e essa e a parte que nao pode ter mudado.
 //   3. O VOLUME E PINTADO. Com `normalUp` toda face recebe a mesma luz, entao sem cor de vertice
 //      um cubo le como adesivo. A malha tem de ter `color`, com o teto no topo da faixa e alguma
@@ -140,7 +139,6 @@ export default {
         shadeMin,
         shadeMax,
         topShade,
-        inQuadIndex: w3.solidQuads.has(`${x},${y}`),
         verts: pos.count,
       };
     }, cliff);
@@ -149,8 +147,6 @@ export default {
       JSON.stringify(cube));
     assert('e tem a face da FRENTE (vertice em z+0.5 no chao) — nao e uma carta no centro do tile',
       cube.southFace === true, JSON.stringify(cube));
-    assert('e ela saiu do indice de quads em pe (o que o machado indexa)',
-      cube.inQuadIndex === false, JSON.stringify(cube));
     assert('o volume esta PINTADO: o teto e o mais claro e alguma face esta bem abaixo dele',
       cube.topShade >= cube.shadeMax - 1e-3 && cube.shadeMin < 0.8, JSON.stringify(cube));
 

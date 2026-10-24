@@ -88,8 +88,8 @@ const WIND_TWIST = '0.042';
 /**
  * A ÁGUA QUE ANDA — o efeito de superfície do mar (o `worldFx: 'seaFlow'`, ver PatchOpts).
  *
- * A água deste mundo é de dois tipos, e só um deles se movia. O rio é um PROP: cada tile tem um
- * WaterObject com um quad próprio que cicla water_0..3, então ele já ondulava. O mar é um FRAME
+ * A água deste mundo é de dois tipos no dado, e uma só na tela. O rio é um PROP (WaterObject),
+ * mas a superfície dele o World3D assa com ESTE material desde 2026-10-23. O mar é um FRAME
  * DE CHÃO (SEA_TILE_FRAME) — não existe um objeto por tile, existem milhares de quads assados numa
  * malha só — e desde que o mundo do overworld passou a escrever TODA água (rio, lago e oceano)
  * como esse frame, a água do jogo virou uma foto: um tapete azul-escuro absolutamente imóvel.
@@ -136,17 +136,68 @@ export const waterGlintUniform: THREE.IUniform<THREE.Color> = {
   value: new THREE.Color(0.45, 0.58, 0.82),
 };
 
-/** As faíscas do céu sobre a ondulação — o mesmo brilho para o rio e para o mar. */
+/**
+ * O ESPELHO D'ÁGUA — o reflexo dos personagens no rio e no lago (PatchOpts.mirrorSurface).
+ *
+ * É reflexo PLANAR de verdade, a técnica do `Reflector` do three (examples/jsm/objects/
+ * Reflector.js): o World3D desenha os personagens com uma câmera espelhada no plano da água num
+ * alvo do mesmo tamanho do quadro, e a água amostra esse alvo pela projeção daquela câmera
+ * (`uReflMatrix` = bias · projeção · vista espelhada). Como quem amostra é a própria SUPERFÍCIE, o
+ * reflexo só existe onde há água à vista e já sai certo como a física manda: o herói ao norte do
+ * lago aparece de cabeça para baixo na água ao sul dele, e a água atrás dele não mostra nada.
+ *
+ * Por cima da imagem exata entram só três coisas, todas em pixel INTEIRO (pixel art não desliza
+ * meio pixel), presas à grade da arte (16 linhas por tile, no mundo, nunca na tela):
+ *   1. o TREMOR: cada linha da água desloca o reflexo de lado por um número inteiro de pixels,
+ *      com duas ondas de passo primo entre si — a ondulação quebrando a imagem em faixas;
+ *   2. as FALHAS: de tempos em tempos uma linha some quase inteira — a marola abrindo o espelho;
+ *   3. a COR da água: o que ela reflete sai mais escuro e puxado para o azul (a água absorve o
+ *      vermelho), misturado por `uReflStrength` sobre a cor que a superfície já tinha — então a
+ *      arrebentação, o glint e a névoa continuam por cima, como a água de verdade.
+ */
+export const reflectionMapUniform: THREE.IUniform<THREE.Texture | null> = { value: null };
+export const reflectionMatrixUniform: THREE.IUniform<THREE.Matrix4> = { value: new THREE.Matrix4() };
+/** 1 / tamanho do alvo do reflexo, em texels — o passo de UM pixel do tremor. */
+export const reflectionTexelUniform: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
+/** 0 quando nenhum personagem está perto de água à vista: a passada nem roda, e a água não amostra. */
+export const reflectionOnUniform: THREE.IUniform = { value: 0 };
+/** Quanto do reflexo cobre a água (window.hd3d.reflection; 0 = sem espelho). */
+export const reflectionStrengthUniform: THREE.IUniform = { value: 0.62 };
+
+const WATER_REFLECT_GLSL = /* glsl */ `
+  if (uReflOn > 0.5) {
+    float zhRow = floor(vWorldFxPos.z * 16.0);
+    float zhWob = sin(zhRow * 0.73 + uFlowTime * 2.3) * 0.65 + sin(zhRow * 1.91 - uFlowTime * 3.7) * 0.35;
+    vec4 zhRp = uReflMatrix * vec4(vWorldFxPos, 1.0);
+    vec2 zhRuv = zhRp.xy / zhRp.w;
+    zhRuv.x += floor(zhWob * 1.6 + 0.5) * uReflTexel.x;
+    vec4 zhRefl = texture2D(uReflMap, zhRuv);
+    if (zhRuv.x < 0.0 || zhRuv.x > 1.0 || zhRuv.y < 0.0 || zhRuv.y > 1.0) zhRefl = vec4(0.0);
+    float zhGap = step(0.88, fract(fract(sin(zhRow * 12.9898) * 43758.5453) + uFlowTime * 0.32));
+    float zhA = zhRefl.a * uReflStrength * (1.0 - 0.8 * zhGap);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, zhRefl.rgb * vec3(0.58, 0.74, 0.9), zhA);
+  }
+`;
+
+/**
+ * As faíscas do céu sobre a ondulação — o mesmo brilho para o rio e para o mar.
+ *
+ * Cada faísca é um TRAÇO de 2×1 pixels de arte (16 linhas por tile, no mundo), e só ~4% deles
+ * podem piscar. Era uma célula de ¼ de tile — um bloco de 4×4 pixels de arte acendendo inteiro —,
+ * e na tela aquilo lia como ladrilho claro colado na água, bege de dia: luz na água é risco fino
+ * na crista da onda, nunca quadrado.
+ */
 const WATER_GLINT_GLSL = /* glsl */ `
   {
     vec2 wp = vWorldFxPos.xz;
-    vec2 cell = floor(wp * 4.0);
+    vec2 cell = floor(vec2(wp.x * 8.0, wp.y * 16.0)); // wp = mundo.xz: o .y dele é o z
     float rnd = fract(sin(dot(cell, vec2(41.3, 289.1))) * 43758.5453);
+    float live = step(0.96, fract(rnd * 7.31));
     float ph = fract(rnd + uFlowTime * 0.20);
     float flash = smoothstep(0.93, 1.0, sin(ph * 6.2831853) * 0.5 + 0.5);
-    // 0.38, not the original 0.95: this adds BEFORE tone mapping, so at 0.95 a
-    // glint pixel cleared the bloom threshold and the river read as neon sparks.
-    gl_FragColor.rgb += uGlint * flash * 0.38;
+    // Adds BEFORE tone mapping: past ~0.6 a glint pixel clears the bloom threshold and the
+    // water reads as neon sparks. A thin dash can afford more than the old block did.
+    gl_FragColor.rgb += uGlint * flash * live * 0.55;
   }
 `;
 
@@ -499,9 +550,13 @@ type PatchOpts = {
    */
   worldFx?: 'lavaFlow' | 'waterGlint' | 'seaFlow';
   /**
+   * A superfície é um ESPELHO D'ÁGUA: mostra o reflexo dos personagens (ver WATER_REFLECT_GLSL).
+   * Só vale junto de um `worldFx` de água — é dele que vêm a posição de mundo e o relógio.
+   */
+  mirrorSurface?: boolean;
+  /**
    * O VENTO nas malhas de vegetação (ver WIND_WAVE_GLSL). Duas formas, porque são duas geometrias:
-   *   · 'lean' — o tile EM PÉ (a mata): só o topo sai do prumo, o pé fica plantado. É o mesmo
-   *              gesto do tranco do machado (shakeSolidTile), em regime permanente.
+   *   · 'lean' — o tile EM PÉ (a mata): só o topo sai do prumo, o pé fica plantado.
    *   · 'stir' — o tile DEITADO (capim, folhagem, flor): ele não tem altura para inclinar, então
    *              gira em torno do próprio centro — o mesmo gesto do pisão (updateRustles).
    * Precisa do atributo por vértice `aWind` (máscara + centro do tile): é ele que deixa a pedra e
@@ -543,7 +598,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
   // Three caches compiled programs by this key; without it, materials patched
   // DIFFERENTLY would silently share whichever variant compiled first.
   mat.customProgramCacheKey = () =>
-    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}v${opts.wind ?? '0'}`;
+    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}v${opts.wind ?? '0'}r${opts.mirrorSurface ? 1 : 0}`;
 
   const bornAt = import.meta.env.DEV ? new Error().stack ?? '' : '';
 
@@ -635,6 +690,26 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
           // (shallow water), not a highlight laid over it: the light must fall on it like it
           // falls on everything else. The token itself is left standing for the texelAa patch.
           .replace('#include <map_fragment>', `#include <map_fragment>\n${SEA_SHALLOW_GLSL}`);
+      }
+      if (opts.mirrorSurface && opts.worldFx !== 'lavaFlow') {
+        // Logo depois do opaque_fragment e ANTES do glint (que já está pendurado no mesmo token):
+        // a faísca do céu brilha por cima do reflexo, e a névoa cobre os dois.
+        shader.uniforms.uReflMap = reflectionMapUniform;
+        shader.uniforms.uReflMatrix = reflectionMatrixUniform;
+        shader.uniforms.uReflTexel = reflectionTexelUniform;
+        shader.uniforms.uReflOn = reflectionOnUniform;
+        shader.uniforms.uReflStrength = reflectionStrengthUniform;
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            'void main() {',
+            `uniform sampler2D uReflMap;
+             uniform mat4 uReflMatrix;
+             uniform vec2 uReflTexel;
+             uniform float uReflOn;
+             uniform float uReflStrength;
+             void main() {`,
+          )
+          .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${WATER_REFLECT_GLSL}`);
       }
     }
 

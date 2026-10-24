@@ -40,8 +40,6 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
  *   craft   — FABRICAR N numa estação (bancada ou forno).
  *   grow    — fazer BROTAR N canteiros: semente na terra, água no monte, e esperar.
  *   light   — ACENDER N fogueiras do overworld.
- *   fell    — DERRUBAR N pinheiros VIVOS (o tile, e portanto só com o machado de aço; a árvore
- *             morta é prop e cai no `gather` do graveto que ela larga).
  *   explore — PISAR em N telas diferentes (o mesmo fog of war do mapa).
  */
 export type QuestTask =
@@ -50,7 +48,6 @@ export type QuestTask =
   | { kind: 'craft'; item: HeldItemKind; count: number }
   | { kind: 'grow'; count: number }
   | { kind: 'light'; count: number }
-  | { kind: 'fell'; count: number }
   | { kind: 'explore'; count: number };
 
 export type NpcQuest = {

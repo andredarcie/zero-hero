@@ -10,9 +10,6 @@ import { getBridgeSpots, getWaterTiles } from '@/game/world/WorldData';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { WorldProp } from './WorldProp';
 
-// 3D water ripple frames (flat quads on the ground plane).
-const WATER_3D_FRAMES = ['water-0', 'water-1', 'water-2', 'water-3'] as const;
-
 // A river tile. It blocks like lava until the hero builds a bridge over it by depositing two
 // wood sticks ("gravetos"). The river runs in a sunken channel (see WATER_DEPTH_TILES), and
 // the bridge is REAL 3D carpentry spanning it: plank boxes with actual thickness riding on
@@ -20,8 +17,10 @@ const WATER_3D_FRAMES = ['water-0', 'water-1', 'water-2', 'water-3'] as const;
 // the finished deck. A buildable spot previews the whole structure as a ghost; each deposited
 // graveto slams its share of the parts down from above (hammer beats, sawdust, a splash for
 // the legs). Collision is resolved at runtime by GameScene (via `blocking`), like LavaObject.
-
-const RIPPLE_MS = 220; // ms per water animation frame
+//
+// A ÁGUA em si não é deste objeto: World3D assa a superfície do rio com o material do lago (a
+// mesma água, a mesma espuma, o mesmo espelho). Este objeto é o dono do TILE — colisão, ponte,
+// vau, balde — e, quando a comporta o esvazia, pede ao World3D que tire a superfície dele.
 
 // The deck is milled into this many boards laid ACROSS the walking direction. The gravetos
 // share them evenly — two gravetos, four boards, two boards per graveto.
@@ -94,7 +93,6 @@ export class WaterObject implements WorldProp {
   public onBuilt?: () => void;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Billboard3D; // the water — a flat 3D quad; keeps flowing under the deck
   private readonly pips: Phaser.GameObjects.Container;
   private readonly pipDots: Phaser.GameObjects.Arc[] = [];
   private planks: DeckPart[] = [];
@@ -111,8 +109,6 @@ export class WaterObject implements WorldProp {
   private fordParts: Array<{ box: Box3D; ox: number; oy: number; rest: number }> = [];
   private fordFoam: Billboard3D[] = []; // the current tearing white around them
   private hintOn = false;
-  private frameIndex = 0;
-  private animTimer?: Phaser.Time.TimerEvent;
   private dead = false;
   // Only tiles marked with a `bridgeSpot` prop can be bridged; plain river tiles just block.
   private readonly buildable: boolean;
@@ -122,29 +118,6 @@ export class WaterObject implements WorldProp {
     this.worldX = worldX;
     this.worldY = worldY;
     this.buildable = buildable;
-
-    // Animated water: cycle the ripple frames (water_0..3). Desynced per tile — a random start
-    // frame and a jittered frame time — so a river shimmers unevenly instead of pulsing as one.
-    this.frameIndex = Phaser.Math.Between(0, WATER_3D_FRAMES.length - 1);
-    this.sprite = world3d()
-      // The river runs in a channel BELOW the ground (World3D sinks its bed and walls it
-      // with banks): the surface sits just above that bed, so the water reads as recessed.
-      .addBillboard(WATER_3D_FRAMES[this.frameIndex], 0, {
-        flat: true, flatY: -WATER_DEPTH_TILES + 0.03, worldFx: 'waterGlint',
-      })
-      .setPosition(worldX, worldY)
-      .setDisplaySize(1, 1)
-      // Night water is DARK with moonlit glints, not a bright ribbon: the art's daylight
-      // blue at the old #9fb4dd read as neon cutting through the night (and its sparkle
-      // pixels fed the bloom). Slate-navy keeps the river legible as water while sitting
-      // in the same value range as the rest of the nocturnal palette.
-      .setTint(0x66779e);
-    this.animTimer = scene.time.addEvent({
-      delay: RIPPLE_MS + Phaser.Math.Between(-40, 40),
-      callback: this.nextFrame,
-      callbackScope: this,
-      loop: true,
-    });
 
     // A buildable spot shows its ghost preview from the start.
     if (buildable) this.ensureDeck();
@@ -156,11 +129,6 @@ export class WaterObject implements WorldProp {
       this.pipDots.push(dot);
       this.pips.add(dot);
     }
-  }
-
-  private nextFrame(): void {
-    this.frameIndex = (this.frameIndex + 1) % WATER_3D_FRAMES.length;
-    this.sprite.setTexture(WATER_3D_FRAMES[this.frameIndex]);
   }
 
   public get isBridge(): boolean {
@@ -382,12 +350,10 @@ export class WaterObject implements WorldProp {
     return true;
   }
 
-  // The tile visibly EMPTIES: the surface sinks under the bed while it fades (draining, not
-  // vanishing), a ring of foam gasps out with it, and each tile gurgles as its turn comes.
+  // The tile visibly EMPTIES: the surface leaves the baked river mesh on this tile's beat of the
+  // wave, a ring of foam gasps out with it, and each tile gurgles as its turn comes.
   private playDrainFx(): void {
     if (this.dead) return;
-    this.animTimer?.destroy();
-    this.animTimer = undefined;
     // The ghost deck preview is gone for good — destroy it so render() stops re-showing it.
     for (const part of [...this.frame, ...this.planks]) {
       this.scene.tweens.killTweensOf(part.box);
@@ -396,15 +362,7 @@ export class WaterObject implements WorldProp {
     this.planks = [];
     this.frame = [];
     getSoundManager().playSplash();
-    this.scene.tweens.killTweensOf(this.sprite);
-    this.scene.tweens.add({
-      targets: this.sprite,
-      alpha: 0,
-      elevation: -0.1, // additive on the flat quad: dips the surface below the bed plane
-      duration: 700,
-      ease: 'Quad.easeIn',
-      onComplete: () => this.sprite.setVisible(false),
-    });
+    world3d().drainRiverSurface(this.worldX, this.worldY);
     // The last of the current tearing white as the tile empties — the ford's foam language.
     for (let i = 0; i < 4; i++) {
       const ang = (i / 4) * Math.PI * 2 + 0.7;
@@ -650,8 +608,6 @@ export class WaterObject implements WorldProp {
 
   public destroy(): void {
     this.dead = true;
-    this.animTimer?.destroy();
-    this.animTimer = undefined;
     for (const part of [...this.planks, ...this.frame]) {
       this.scene.tweens.killTweensOf(part.box);
       part.box.destroy();
@@ -668,7 +624,6 @@ export class WaterObject implements WorldProp {
       foam.destroy();
     }
     this.fordFoam = [];
-    this.sprite.destroy();
     this.pips.destroy();
   }
 }
