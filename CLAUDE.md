@@ -85,8 +85,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
   repetição se filtra por `event.repeat`.
-- **O herói anda LIVRE do grid** (posição contínua, 8 direções, colisão por caixa): o tile lógico
-  é o do CENTRO dele, e tudo que pensa em tile lê esse. Playtest anda um tile com `stepTile`.
+- **O herói anda PRESO ao grid** (um tile por passo, 4 direções): o livre foi tentado e desfeito —
+  no celular o grid controla melhor. A posição lógica já é o tile de DESTINO durante o passo.
 - **A parede VIRA o herói** (`PlayerMovementController`): é assim que se mira. Contra tile LIVRE a
   seta anda — não há virar-no-lugar.
 - **A FERRAMENTA CERTA SE APRESENTA SOZINHA** (`toolWantedAt`) e a **MOCHILA SÓ GUARDA O QUE TEM

@@ -6,44 +6,45 @@ import { setHeroWalking, WALK_CYCLE_FRAMES, WALK_CYCLE_FRAMES_UP, type HeroView 
 import type { WorldCamera } from './WorldCamera';
 
 /**
- * The hero walks FREE of the grid: his position is continuous (fractional tiles), he moves in
- * eight directions at a constant speed, and he collides as a small box against the solid tiles —
- * the way Stardew Valley or Zelda: A Link to the Past move, not the way a tile-stepper does.
+ * The hero walks locked to the grid — one tile at a time, always aligned — but the walk itself
+ * is CONTINUOUS: the render position advances at a constant speed and whatever is left of the
+ * frame that crosses a tile boundary is carried straight into the next step.
  *
- * The rest of the game still thinks in tiles, and it keeps doing so: the LOGICAL tile handed back
- * to the GameScene is the tile under the hero's centre. "The tile in front", picking up what is
- * underfoot, NPC talk and footprints all read that tile, and `onStep` fires the instant the centre
- * crosses into a new one — so every tile-shaped rule keeps working untouched.
+ * It used to be a chain of tweens, one per tile, eased `Sine.Out`. That cost two things. The
+ * ease drops the speed to *zero* at the end of every tile, so walking in a straight line was a
+ * lurch — go, stop, go, stop, ten times a second. And because the next tween was only born in
+ * the following update(), a whole frame was spent standing still on each tile on top of that.
  *
- * Two things keep a free walk from feeling worse than the grid it replaced on a tile map:
+ * Zelda: Link's Awakening walks at a flat 16 subpixels per frame with no acceleration at all
+ * (measured in RAM: zeldaspeedruns.com/ladx/general/movement-speeds). The smoothness comes from
+ * never braking; the life comes from the animation — the bob — not from a velocity curve. That
+ * is the model here.
  *
- *   * CORNER SLIP. Walking into the edge of a wall while half a body off a corridor would stop
- *     dead. Instead, when the lane ahead is open, he is nudged sideways into it (A Link to the
- *     Past does the same) — so 1-tile gaps are as easy to enter as they were on the grid.
- *   * THE WALL STILL TURNS THE HERO. A and B act on the tile in front, so pressing into a rock is
- *     how you aim at it; that bump still fires `onBumpBlocked` for the tile he faces.
- *
- * Speed stays tied to `TIMINGS.moveDurationMs` (ms per tile), so the hero covers ground exactly
- * as fast as he did when he walked tile by tile.
+ * Touch feeds the SAME held direction the keyboard does, read every frame. It used to run its
+ * own key-repeat engine instead: a 280ms wait, then a step queued every 140ms against a step
+ * that took 87ms — so the hero stood frozen ~53ms on every tile, and the phone walked 40%
+ * slower than the keyboard and juddered while doing it. Both now enter through one path.
  */
 
-/** Milliseconds per tile of travel. */
+/** Milliseconds per tile. Constant: tapping covers ground at the same rate as holding. */
 const DEFAULT_STEP_MS = TIMINGS.moveDurationMs;
-/** Half the side of the hero's collision box, in tiles. Under 0.5 so he fits a 1-tile corridor. */
-const BODY_HALF = 0.3;
-/** How far off a lane's centre the hero can be and still be slipped into it, in tiles. */
-const CORNER_SLIP = 0.42;
-/** Keeps an edge that lands exactly on a tile border from counting as inside the next tile. */
-const EDGE_EPS = 1e-4;
+/**
+ * Slack on top of a step: a press made ANYWHERE inside a step must still be alive when that step
+ * reaches its tile boundary and can spend it. Tie it to the step or the two drift apart — a fixed
+ * 120ms buffer silently ate a tap made early in a 150ms step. Braid holds a button 230ms; this
+ * lands in the same country.
+ */
+const INPUT_BUFFER_SLACK_MS = 30;
 /** Drag needed before the gesture commits to a direction. */
 const SWIPE_THRESHOLD_PX = 11;
 /** The drag anchor trails the finger on a leash this long, so turning around stays cheap. */
 const SWIPE_ANCHOR_LEASH_PX = 18;
-/** Throttle repeated bumps (holding into a wall) so they don't fire every frame. */
+/** Throttle repeated bumps (holding into a wall or an enemy) so they don't fire every frame. */
 const HELD_BUMP_COOLDOWN_MS = 220;
 /**
- * A stall (a shader compile, a backgrounded tab) must not fling the hero across the map. The
- * sweep below never tunnels, but a 500ms frame would still teleport him.
+ * A stall (a shader compile, a backgrounded tab) must not fling the hero across the map. It can
+ * never tunnel through a wall — every tile the loop below enters is tested first — but a 500ms
+ * frame would still teleport him five tiles.
  */
 const MAX_FRAME_MS = 50;
 
@@ -51,11 +52,6 @@ interface Dir {
   dx: number;
   dy: number;
 }
-
-type Axis = 'x' | 'y';
-
-/** The tile whose cell contains this coordinate: tile N spans [N - 0.5, N + 0.5). */
-const cellOf = (v: number): number => Math.floor(v + 0.5);
 
 export class PlayerMovementController {
   private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
@@ -74,17 +70,16 @@ export class PlayerMovementController {
   /** Presos SEM prazo: a bolsa aberta com o jogo rodando (ver `hold`). */
   private heldStill = false;
 
-  /** The hero's continuous position in world tiles. `null` until the first sync. */
-  private pos: { x: number; y: number } | null = null;
-  /** Did the hero actually move on the last update? Drives the leg cycle and `moving`. */
-  private walking = false;
-  /** Was he pressing into something solid last frame? A fresh bump skips the cooldown. */
-  private wasBlocked = false;
   /**
-   * A tap shorter than a frame (down and up between two updates) never shows as `isDown`, so the
-   * key's JustDown is read too and such a press still turns the hero and nudges him once.
+   * The step in flight. `stepFrom` is the tile it left; the world position the GameScene owns is
+   * already the DESTINATION — it commits the instant a step begins, exactly as the tween version
+   * did. The skeleton's wind-up locks onto that tile and a dodge is decided against it, so the
+   * logical position must keep leading the visible one by a step.
    */
-  private tapDir: Dir | null = null;
+  private stepFrom: { x: number; y: number } | null = null;
+  private stepDir: Dir | null = null;
+  /** 0..1 along the step in flight. Overflow past 1 is carried into the next tile, never dropped. */
+  private stepProgress = 0;
 
   /** The direction the drag is holding — read every frame, exactly like a key. */
   private touchDir: Dir | null = null;
@@ -98,8 +93,11 @@ export class PlayerMovementController {
   private stickShown = false;
   private lastFinger = { x: 0, y: 0 };
 
+  private bufferedDir: Dir | null = null;
+  private bufferedAtMs = 0;
+
   // The way the hero is currently facing, mirroring the sprite frame set by setFacing. Starts
-  // facing down (the idle frame).
+  // facing down (the idle frame). A bump does NOT turn the hero, so it never changes this.
   private lastFacing: Dir = { dx: 0, dy: 1 };
 
   private readonly boundTouchStart: (e: TouchEvent) => void;
@@ -112,9 +110,10 @@ export class PlayerMovementController {
     private readonly camera: WorldCamera,
     private readonly isBlockedCell: (worldX: number, worldY: number) => boolean,
     /**
-     * Um tile foi ENTRADO (o centro do herói cruzou a borda dele) — e `dx`/`dy` dizem POR ONDE.
-     * A direção vem no evento porque ela não pode ser perguntada depois: `setFacing` só roda
-     * depois desta chamada, então quem escuta veria a direção anterior.
+     * Um tile foi ENTRADO — e `dx`/`dy` dizem POR ONDE. A direção vem no evento porque ela não
+     * pode ser perguntada depois: `setFacing` só roda na linha seguinte a esta chamada, então
+     * quem escuta veria a direção do passo ANTERIOR. E há gesto que depende dela (a escada só
+     * aceita quem entra de frente).
      */
     private readonly onStep: (worldX: number, worldY: number, dx: number, dy: number) => void,
     private readonly onBumpBlocked?: (worldX: number, worldY: number) => void,
@@ -158,175 +157,147 @@ export class PlayerMovementController {
   }
 
   /**
-   * PRENDE OS PÉS SEM PRAZO — a bolsa aberta (`GameScene.setBagOpen`). O mundo continua correndo
-   * atrás da bolsa; só o herói fica parado onde está.
+   * PRENDE OS PÉS SEM PRAZO — a bolsa aberta (`GameScene.setBagOpen`).
+   *
+   * É `root` sem relógio, e por isso passa pela mesma porta: o passo em curso TERMINA no tile
+   * (parar o herói em cima de uma aresta seria um soluço), só o próximo não começa. E é diferente
+   * de simplesmente não chamar `update`: o mundo continua correndo atrás da bolsa, e um herói
+   * congelado no meio do tile enquanto a caveira anda seria um bug com data marcada.
    */
   public hold(held: boolean): void {
     this.heldStill = held;
     if (held) {
-      // Uma seta apertada para andar com o cursor não pode virar um passo quando a bolsa fecha.
-      this.tapDir = null;
+      // O pedido guardado morre junto: uma seta apertada para andar com o cursor não pode virar
+      // um passo no instante em que a bolsa fecha.
+      this.bufferedDir = null;
       this.touchDir = null;
     }
   }
 
-  /** Os pés estão presos agora? */
+  /**
+   * Os pés estão presos agora? (o escudo do herói lê isto: quem ataca abaixa a guarda)
+   *
+   * A bolsa aberta conta, e conta de propósito: quem está com as duas mãos dentro da mochila não
+   * está aparando tiro nenhum. É a mesma frase do golpe, e é o que faz folhear custar alguma coisa
+   * num jogo que não pausa para você folhear.
+   */
   public get isRooted(): boolean {
     return this.rootedMs > 0 || this.heldStill;
   }
 
   public update(worldX: number, worldY: number, deltaMs: number): { worldX: number; worldY: number } {
-    // JustDown is a destructive read: drain it every frame (even rooted) or a press sits on the
-    // key and fires minutes later.
-    const tap = this.readJustPressed();
-    this.tapDir = this.isRooted ? null : tap;
+    // JustDown is a destructive read: drain it every frame or a press sits on the key and fires
+    // minutes later. Draining it INTO the buffer is what stops a quick tap mid-step from vanishing.
+    this.pollFreshPress();
 
-    const pos = this.adopt(worldX, worldY);
     const dt = Math.min(deltaMs, MAX_FRAME_MS);
     if (this.rootedMs > 0) this.rootedMs = Math.max(0, this.rootedMs - dt);
     if (this.stick) this.syncStick(); // os pés podem ter se soltado (ou preso) sem o dedo mexer
+    let wx = worldX;
+    let wy = worldY;
 
-    const input = this.isRooted ? null : (this.readHeld() ?? this.tapDir);
-    if (!input) {
-      this.wasBlocked = false;
-      if (this.walking) this.stopWalking();
-      return { worldX, worldY };
+    if (this.stepDir) {
+      const advance = dt / this.stepMs;
+      this.stepProgress += advance;
+      this.hero.walkDist += advance; // the leg cycle turns with the ground, not with a clock
     }
 
-    const facing = this.pickFacing(input);
-    const len = Math.hypot(input.dx, input.dy);
-    const dist = dt / this.stepMs;
-    const fromX = pos.x;
-    const fromY = pos.y;
+    // Each turn of this loop spends one tile boundary crossed on this frame. On a normal frame it
+    // runs at most once — the loop only exists so a long frame can't swallow a step whole.
+    for (;;) {
+      if (this.stepDir && this.stepProgress < 1) break; // mid-tile: nothing to decide yet
+      const carry = this.stepDir ? this.stepProgress - 1 : 0;
 
-    // Axis by axis, so a diagonal into a wall keeps sliding along it.
-    const blockedX = this.sweep('x', (input.dx / len) * dist);
-    const blockedY = this.sweep('y', (input.dy / len) * dist);
-    // Straight into a wall: slip toward the open lane instead of stopping on its corner.
-    if (blockedX && input.dy === 0) this.slipAround('x', input.dx, dist);
-    if (blockedY && input.dx === 0) this.slipAround('y', input.dy, dist);
-
-    const moved = Math.hypot(pos.x - fromX, pos.y - fromY);
-    this.hero.walkDist += moved; // the leg cycle turns with the ground, not with a clock
-
-    let lx = worldX;
-    let ly = worldY;
-    const cx = cellOf(pos.x);
-    const cy = cellOf(pos.y);
-    if (cx !== lx || cy !== ly) {
-      const dx = Math.sign(cx - lx);
-      const dy = Math.sign(cy - ly);
-      lx = cx;
-      ly = cy;
-      this.onStep(lx, ly, dx, dy);
-    }
-
-    const blocked = moved < dist * 0.05;
-    if (blocked) this.bump(lx, ly, facing);
-    else this.wasBlocked = false;
-
-    this.setFacing(facing.dx, facing.dy, !blocked);
-    this.walking = !blocked;
-    this.followCamera();
-    return { worldX: lx, worldY: ly };
-  }
-
-  /**
-   * The continuous position for the logical tile the scene holds. When the scene moved the hero
-   * itself (a cutscene step, a load, a teleport), that tile no longer contains `pos` and he is
-   * placed on its centre; otherwise his place inside the tile is kept.
-   */
-  private adopt(worldX: number, worldY: number): { x: number; y: number } {
-    const p = this.pos;
-    if (p && cellOf(p.x) === worldX && cellOf(p.y) === worldY) return p;
-    this.pos = { x: worldX, y: worldY };
-    return this.pos;
-  }
-
-  /**
-   * Move along one axis by `delta`, stopping flush against the first solid tile the leading
-   * edge would enter. Only tiles NEW to the box are tested: whatever it already overlaps (an NPC
-   * that walked into him, a gate that closed on him) never traps him. Returns true if it hit.
-   */
-  private sweep(axis: Axis, delta: number): boolean {
-    const p = this.pos;
-    if (!p || delta === 0) return false;
-    const other: Axis = axis === 'x' ? 'y' : 'x';
-    const sign = Math.sign(delta);
-    const edge = p[axis] + sign * BODY_HALF;
-    const fromCell = cellOf(edge - sign * EDGE_EPS);
-    const toCell = cellOf(edge + delta - sign * EDGE_EPS);
-    const lo = cellOf(p[other] - BODY_HALF + EDGE_EPS);
-    const hi = cellOf(p[other] + BODY_HALF - EDGE_EPS);
-
-    for (let c = fromCell + sign; sign > 0 ? c <= toCell : c >= toCell; c += sign) {
-      for (let o = lo; o <= hi; o += 1) {
-        if (this.solidAt(axis, c, o)) {
-          p[axis] = c - sign * (0.5 + BODY_HALF + EDGE_EPS);
-          return true;
-        }
+      // O GOLPE PRENDE OS PÉS (ver GameScene.swingRootMs). A raiz impede COMEÇAR um passo, nunca
+      // congela um que já está no meio do tile: parar o herói em cima de uma aresta seria um
+      // soluço no lugar de um peso. O pedido de direção fica no buffer e sai assim que solta.
+      if (this.rootedMs > 0 || this.heldStill) {
+        if (this.stepDir) this.endWalk(wx, wy);
+        break;
       }
+
+      const next = this.takeDirection();
+      if (!next) {
+        if (this.stepDir) this.endWalk(wx, wy);
+        break;
+      }
+
+      const nx = wx + next.dx;
+      const ny = wy + next.dy;
+      if (this.isBlockedCell(nx, ny)) {
+        const now = this.scene.time.now;
+        if (next.fresh || now - this.lastBumpTime >= HELD_BUMP_COOLDOWN_MS) {
+          this.lastBumpTime = now;
+          this.onBumpBlocked?.(nx, ny);
+        }
+        // A PAREDE VIRA O HEROI — e isso mudou com os dois botoes. Ela nunca virava: sem golpe
+        // direcional, para onde ele olhava era so cosmetica. Agora A e B agem no tile A FRENTE,
+        // entao encarar uma coisa sem poder andar ate ela e a unica maneira de mirar nela — e um
+        // heroi parado de costas para a rocha, apertando a seta contra ela, mirava no vazio.
+        // O passo em si continua nao acontecendo: ele encara, nao entra.
+        this.lastFacing = { dx: next.dx, dy: next.dy };
+        if (this.stepDir) this.endWalk(wx, wy);
+        else this.setFacing(next.dx, next.dy, false);
+        break;
+      }
+
+      this.stepFrom = { x: wx, y: wy };
+      this.stepDir = next;
+      this.stepProgress = carry;
+      wx = nx;
+      wy = ny;
+      this.onStep(nx, ny, next.dx, next.dy);
+      this.setFacing(next.dx, next.dy, true);
     }
-    p[axis] += delta;
-    return false;
+
+    if (this.stepDir && this.stepFrom) {
+      // The hero stays pinned at screen centre; the camera (and therefore the world) scrolls
+      // smoothly from the tile he left to the one he is entering.
+      const t = Math.min(1, this.stepProgress);
+      this.camera.centerOn(
+        this.stepFrom.x + this.stepDir.dx * t,
+        this.stepFrom.y + this.stepDir.dy * t,
+      );
+      this.pinToCentre();
+    }
+
+    return { worldX: wx, worldY: wy };
+  }
+
+  /** Land the walk squarely on a tile and drop the legs. */
+  private endWalk(worldX: number, worldY: number): void {
+    this.stepDir = null;
+    this.stepFrom = null;
+    this.stepProgress = 0;
+    this.camera.centerOn(worldX, worldY);
+    this.pinToCentre();
+    this.setFacing(this.lastFacing.dx, this.lastFacing.dy, false);
+  }
+
+  /** Keep the newest fresh key press alive for INPUT_BUFFER_MS so a tile boundary can spend it. */
+  private pollFreshPress(): void {
+    // `readJustPressed` roda MESMO com os pés presos: `JustDown` é leitura destrutiva, e uma seta
+    // gasta na bolsa que ficasse com a flag armada sairia como um passo minutos depois. Drena-se
+    // sempre; o que a trava faz é jogar fora em vez de guardar.
+    const dir = this.readJustPressed();
+    if (!dir || this.heldStill) return;
+    this.bufferedDir = dir;
+    this.bufferedAtMs = this.scene.time.now;
   }
 
   /**
-   * Pressing straight into a wall while partly beside an opening: nudge sideways toward the
-   * lane whose tile ahead is free — the hero's own lane first, then the one his body leans into.
+   * The direction to spend on this tile boundary. A recent tap outranks a held key — that is what
+   * makes a quick turn register instead of being eaten by the step already in flight.
    */
-  private slipAround(axis: Axis, sign: number, dist: number): void {
-    const p = this.pos;
-    if (!p) return;
-    const other: Axis = axis === 'x' ? 'y' : 'x';
-    const ahead = cellOf(p[axis] + sign * (BODY_HALF + 2 * EDGE_EPS));
-    const own = cellOf(p[other]);
-    const off = p[other] - own;
-    let lane: number | null = null;
-    if (Math.abs(off) > EDGE_EPS && !this.solidAt(axis, ahead, own)) lane = own;
-    else if (Math.abs(off) > EDGE_EPS && 1 - Math.abs(off) <= CORNER_SLIP) {
-      const lean = own + Math.sign(off);
-      if (!this.solidAt(axis, ahead, lean)) lane = lean;
+  private takeDirection(): (Dir & { fresh: boolean }) | null {
+    const buffered = this.bufferedDir;
+    this.bufferedDir = null;
+    if (buffered && this.scene.time.now - this.bufferedAtMs <= this.stepMs + INPUT_BUFFER_SLACK_MS) {
+      return { ...buffered, fresh: true };
     }
-    if (lane === null) return;
-    const gap = lane - p[other];
-    this.sweep(other, Math.sign(gap) * Math.min(Math.abs(gap), dist));
-  }
 
-  private solidAt(axis: Axis, along: number, across: number): boolean {
-    return axis === 'x' ? this.isBlockedCell(along, across) : this.isBlockedCell(across, along);
-  }
-
-  /**
-   * A PAREDE VIRA O HEROI: A e B agem no tile à frente, então encarar uma coisa sem poder andar
-   * até ela é a maneira de mirar nela. O esbarrão vale para o tile que ele encara, e só se ele
-   * for sólido — o corpo pode ter parado na quina de outro.
-   */
-  private bump(lx: number, ly: number, facing: Dir): void {
-    const fx = lx + facing.dx;
-    const fy = ly + facing.dy;
-    if (!this.isBlockedCell(fx, fy)) return;
-    const now = this.scene.time.now;
-    if (!this.wasBlocked || now - this.lastBumpTime >= HELD_BUMP_COOLDOWN_MS) {
-      this.lastBumpTime = now;
-      this.onBumpBlocked?.(fx, fy);
-    }
-    this.wasBlocked = true;
-  }
-
-  /**
-   * The four-way facing for an eight-way input. On a diagonal the hero keeps looking the way he
-   * already was if that is one of its two arrows (so sliding along a wall never flickers the
-   * sprite); otherwise the horizontal one wins.
-   */
-  private pickFacing(input: Dir): Dir {
-    if (input.dx !== 0 && input.dy !== 0) {
-      const f = this.lastFacing;
-      if (f.dx === input.dx && f.dy === 0) return f;
-      if (f.dy === input.dy && f.dx === 0) return f;
-      return { dx: input.dx, dy: 0 };
-    }
-    return { dx: input.dx, dy: input.dy };
+    const held = this.readHeld();
+    return held ? { ...held, fresh: false } : null;
   }
 
   private readJustPressed(): Dir | null {
@@ -352,41 +323,29 @@ export class PlayerMovementController {
     return null;
   }
 
-  /** Held keys (opposite arrows cancel), or the drag — a key like any other to the walk. */
+  /** A held key, or the drag — which is a key like any other as far as the walk is concerned. */
   private readHeld(): Dir | null {
     const c = this.cursors;
     const w = this.wasd;
-    const held = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): number =>
-      (a?.isDown || b?.isDown ? 1 : 0);
+    const held = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean =>
+      Boolean(a?.isDown) || Boolean(b?.isDown);
 
-    const dx = held(c?.right, w.right) - held(c?.left, w.left);
-    const dy = held(c?.down, w.down) - held(c?.up, w.up);
-    if (dx !== 0 || dy !== 0) return { dx, dy };
+    if (held(c?.left, w.left)) return { dx: -1, dy: 0 };
+    if (held(c?.right, w.right)) return { dx: 1, dy: 0 };
+    if (held(c?.up, w.up)) return { dx: 0, dy: -1 };
+    if (held(c?.down, w.down)) return { dx: 0, dy: 1 };
     return this.touchDir;
-  }
-
-  private stopWalking(): void {
-    this.walking = false;
-    this.setFacing(this.lastFacing.dx, this.lastFacing.dy, false);
-  }
-
-  /** The hero stays pinned at screen centre; the camera (and so the world) slides under him. */
-  private followCamera(): void {
-    const p = this.pos;
-    if (!p) return;
-    this.camera.centerOn(p.x, p.y);
-    this.pinToCentre();
   }
 
   public setMoveDuration(ms: number): void {
     this.stepMs = Math.max(40, ms);
   }
 
-  /** Centre the camera on the hero, keeping his place inside the tile if he is still on it. */
+  /** Snap the camera onto a world tile with the hero pinned at screen centre. */
   public syncPlayerToWorld(worldX: number, worldY: number, tileSize: number): void {
     this.tileSize = tileSize;
-    this.adopt(worldX, worldY);
-    this.followCamera();
+    this.camera.centerOn(worldX, worldY);
+    this.pinToCentre();
   }
 
   private pinToCentre(): void {
@@ -395,17 +354,17 @@ export class PlayerMovementController {
   }
 
   public get moving(): boolean {
-    return this.walking;
+    return this.stepDir !== null;
   }
 
-  /** Stop the legs and drop pending input. The hero stays where he is — no snap to a tile. */
   public interruptMovement(worldX: number, worldY: number): void {
+    this.stepDir = null;
+    this.stepFrom = null;
+    this.stepProgress = 0;
+    this.bufferedDir = null;
     // Drop the drag's held direction, but keep its anchor: the finger is still on the glass, and
-    // the next touchmove re-arms it.
+    // the next touchmove re-arms it. (The old code did the same via stopHold + a live touchStart.)
     this.touchDir = null;
-    this.tapDir = null;
-    this.wasBlocked = false;
-    this.walking = false;
     if (this.hero.walking) {
       setHeroWalking(this.hero, false);
       this.hero.frame = this.lastFacing.dy < 0 ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
@@ -517,15 +476,12 @@ export class PlayerMovementController {
     const absX = Math.abs(dx);
     const absY = Math.abs(dy);
     // Inside the dead zone the last direction stands: a thumb wobbling on the glass must not
-    // stutter the hero.
+    // stutter the hero between two tiles.
     if (absX < SWIPE_THRESHOLD_PX && absY < SWIPE_THRESHOLD_PX) return;
 
-    // Eight ways, like the keyboard: an axis counts once the drag leans into it past ~22.5°.
-    const lean = Math.tan(Math.PI / 8);
-    this.touchDir = {
-      dx: absX >= absY * lean ? Math.sign(dx) : 0,
-      dy: absY >= absX * lean ? Math.sign(dy) : 0,
-    };
+    this.touchDir = absX >= absY
+      ? { dx: dx >= 0 ? 1 : -1, dy: 0 }
+      : { dx: 0, dy: dy >= 0 ? 1 : -1 };
   }
 
   /**
@@ -542,14 +498,25 @@ export class PlayerMovementController {
   }
 
   /**
-   * Onde o heroi esta NA TELA, em tiles fracionarios — que NAO e o tile logico que o GameScene
-   * guarda: o logico e so o tile sob o centro dele, e o corpo pode estar em qualquer ponto dentro
-   * dele. Todo overlay 2D preso ao heroi se ancora aqui, ou nasce ate meio tile fora do corpo.
+   * Onde o heroi esta NA TELA, em tiles fracionarios — que durante um passo NAO e a posicao
+   * logica que o GameScene guarda.
+   *
+   * A posicao logica pula para o tile de destino no instante em que o passo comeca (ver
+   * `stepFrom`), de proposito: o wind-up da caveira trava naquele tile e a esquiva e decidida
+   * contra ele. Mas o corpo desenhado ainda esta atras, deslizando — o heroi fica preso no
+   * centro da tela e e o mundo que escorrega. Entao qualquer overlay 2D que se ancore no tile
+   * logico enquanto ele anda nasce ATE UM TILE A FRENTE do proprio heroi: foi assim que o arco
+   * da espada apareceu flutuando na frente de quem corria e batia ao mesmo tempo.
+   *
+   * Parado, os dois sao o mesmo ponto — e por isso o bug so aparecia em movimento.
    */
   public visualWorld(worldX: number, worldY: number): { x: number; y: number } {
-    const p = this.pos;
-    if (!p || cellOf(p.x) !== worldX || cellOf(p.y) !== worldY) return { x: worldX, y: worldY };
-    return { x: p.x, y: p.y };
+    if (!this.stepDir || !this.stepFrom) return { x: worldX, y: worldY };
+    const t = Math.min(1, this.stepProgress);
+    return {
+      x: this.stepFrom.x + this.stepDir.dx * t,
+      y: this.stepFrom.y + this.stepDir.dy * t,
+    };
   }
 
   private setFacing(dx: number, dy: number, moving: boolean): void {
