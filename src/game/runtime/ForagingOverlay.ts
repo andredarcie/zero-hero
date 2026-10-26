@@ -8,21 +8,23 @@ import { t, tWords } from '@/game/i18n/i18n';
  * A COLHEITA DE UM COGUMELO — três gestos e uma ficha, numa tela que congela o mundo (como o
  * catálogo da bancada: colher não é um gesto de pressa).
  *
- *   1. MIRAR. A lâmina sobe e desce rente ao talo; o jogador corta quando ela passa na faixa
- *      certa. Alto demais desperdiça o pé (e, na amanita, perde a volva, que é como ela se
+ *   1. MIRAR. A lâmina sobe e desce rente ao talo; o jogador corta quando ela passa entre as
+ *      marcas. Alto demais desperdiça o pé (e, na amanita, perde a volva, que é como ela se
  *      identifica); fundo demais rasga o micélio. Errar não custa nada: a lâmina segue andando.
  *   2. SERRAR. Vai-e-vem — setas alternadas, ou o dedo de um lado para o outro — até o talo soltar.
  *      O cogumelo sobe, o toco fica, e a terra mostra os fios brancos do micélio: o fungo de
  *      verdade, que continua ali e frutifica de novo.
- *   3. ESCOVAR. A escova do cabo da faca tira terra, agulha e folha. Escova, não água: cogumelo
- *      encharca como esponja.
+ *   3. ESCOVAR, em cima da cesta. A escova do cabo da faca tira terra, agulha e folha. Escova, não
+ *      água: cogumelo encharca como esponja.
  *   4. A FICHA. Nome popular, nome científico, se se come, e o que aquele fungo ensina.
  *
  * NADA SE PERDE AQUI (a lei do jogo): não há falha, não há tempo, e sair antes do corte deixa o
  * cogumelo no chão. Depois do corte não há saída — o cogumelo já está na mão.
  *
- * A cena é uma grade de 64×64 pixels lógicos desenhada num canvas desse tamanho e ampliada pelo CSS
- * com `pixelated`: o close é a MESMA arte do chão (fungi.ts), só que na receita de 48px.
+ * O CLOSE É O PRÓPRIO MUNDO, ampliado: o chão e a decoração em volta do cogumelo saem do tileset do
+ * jogo (`ForagingScenery`, montado pela cena a partir do tile dele), e o cogumelo tem o mesmo
+ * tamanho de pixel dos tiles. A moldura é a da caixa de diálogo. Uma tela com arte e moldura
+ * próprias leria como um minigame colado de outro jogo.
  */
 
 const STYLE_ID = 'zh-forage-style';
@@ -32,72 +34,87 @@ const CSS = `
 .zh-forage {
   position: fixed; inset: 0; z-index: 60;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(6, 5, 4, 0.84); font-family: ${SERIF};
-  opacity: 0; transition: opacity 140ms ease;
+  /* Sem cortina preta: o vale continua visivel em volta, como no dialogo. */
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.22) 75%);
+  font-family: ${SERIF};
+  opacity: 0; transition: opacity 160ms ease;
   overflow-y: auto; padding: 1rem;
   touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .zh-forage.zh-in { opacity: 1; }
+.zh-forage * { box-sizing: border-box; }
+/* A MOLDURA DO DIALOGO: madeira escura, filete dourado e o fio escuro por dentro. */
 .zh-forage-panel {
   position: relative; width: min(400px, 94vw);
-  border: 1px solid #3d342a; background: #0f0c09;
-  padding: 0.9rem 0.9rem 0.85rem;
-  display: flex; flex-direction: column; align-items: center; gap: 0.55rem;
+  padding: 0.8em 0.9em 0.85em;
+  background: rgba(16, 12, 9, 0.96); color: #f3ecdc;
+  border: 3px solid #8a7556; border-radius: 4px;
+  box-shadow: inset 0 0 0 2px #2a2118, 0 8px 26px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 0 #000;
+  display: flex; flex-direction: column; align-items: center; gap: 0.5em;
+  transform: translateY(10px); transition: transform 160ms ease;
 }
+.zh-forage.zh-in .zh-forage-panel { transform: none; }
 .zh-forage-title {
-  margin: 0; text-align: center;
-  font-size: 0.82rem; font-weight: 700; letter-spacing: 0.3em; text-indent: 0.3em;
-  color: #b9ae94;
+  margin: 0; align-self: flex-start;
+  font-weight: 700; letter-spacing: 0.04em; font-variant: small-caps; font-size: 1em;
+  color: #f3ecdc;
+}
+/* O quadro do close: o mesmo filete do retrato do dialogo, em volta do pedaco do mundo. */
+.zh-forage-frame {
+  border: 2px solid #d4c8a4; box-shadow: 0 0 0 2px #2a2118; line-height: 0;
 }
 .zh-forage-canvas {
-  width: min(340px, 84vw, 52vh); aspect-ratio: 1; height: auto;
+  width: min(320px, 82vw, 50vh); aspect-ratio: 1; height: auto; display: block;
   image-rendering: pixelated; image-rendering: crisp-edges;
-  border: 1px solid #2e2820; background: #11160f; cursor: crosshair;
-  touch-action: none;
+  background: #2f3b22; cursor: crosshair; touch-action: none;
 }
-.zh-forage-hint { margin: 0; color: #e7dcc4; font-size: 1rem; text-align: center; min-height: 1.3em; }
+.zh-forage-hint { margin: 0; color: #f3ecdc; font-size: 1em; text-align: center; min-height: 1.3em; }
 .zh-forage-msg {
-  margin: 0; color: #e5b558; font-size: 0.92rem; text-align: center; min-height: 1.25em;
+  margin: 0; color: #e5b558; font-size: 0.92em; text-align: center; min-height: 1.25em;
   transition: opacity 200ms ease;
 }
 .zh-forage-tip {
-  margin: 0; color: #9d9581; font-size: 0.86rem; line-height: 1.4; text-align: center;
+  margin: 0; color: #c9d2e3; font-size: 0.88em; line-height: 1.4; text-align: center;
   font-style: italic; max-width: 34em;
 }
 .zh-forage-leave {
-  position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; padding: 0;
-  border: 0; background: none; color: rgba(216, 209, 192, 0.6);
+  position: absolute; top: 4px; right: 6px; width: 32px; height: 32px; padding: 0;
+  border: 0; background: none; color: #d4c8a4;
   font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.zh-forage-leave:hover { color: #e7dcc4; }
-/* A FICHA da especie: a coisa que o jogador leva, alem do cogumelo. */
-.zh-forage-card { display: none; flex-direction: column; align-items: center; gap: 0.5rem; width: 100%; }
+.zh-forage-leave:hover { color: #f3ecdc; }
+.zh-forage-card { display: none; flex-direction: column; align-items: center; gap: 0.45em; width: 100%; }
 .zh-forage-card.zh-on { display: flex; }
+.zh-forage-card .zh-forage-frame { background: #2f3b22; }
 .zh-forage-card img {
-  width: 132px; height: 132px; image-rendering: pixelated; image-rendering: crisp-edges;
+  width: 112px; height: 112px; display: block;
+  image-rendering: pixelated; image-rendering: crisp-edges;
 }
-.zh-forage-name { margin: 0; color: #e7dcc4; font-size: 1.35rem; text-align: center; }
-.zh-forage-latin { margin: -0.35rem 0 0; color: #b9ae94; font-style: italic; font-size: 0.98rem; }
+.zh-forage-name { margin: 0.2em 0 0; color: #f3ecdc; font-size: 1.3em; text-align: center; font-variant: small-caps; }
+.zh-forage-latin { margin: -0.3em 0 0; color: #d4c8a4; font-style: italic; font-size: 0.98em; }
 .zh-forage-edible {
-  padding: 2px 10px; border: 1px solid; font-size: 0.78rem; letter-spacing: 0.12em;
-  text-transform: uppercase;
+  padding: 1px 9px; border: 2px solid; border-radius: 2px;
+  font-size: 0.76em; letter-spacing: 0.1em; text-transform: uppercase;
 }
-.zh-forage-edible.zh-edible { color: #a9cf86; border-color: rgba(169, 207, 134, 0.5); }
-.zh-forage-edible.zh-cooked { color: #e5b558; border-color: rgba(229, 181, 88, 0.55); }
-.zh-forage-edible.zh-poison { color: #ef7a62; border-color: rgba(239, 122, 98, 0.6); }
+.zh-forage-edible.zh-edible { color: #a9cf86; border-color: #5d7a35; }
+.zh-forage-edible.zh-cooked { color: #e5b558; border-color: #8a7556; }
+.zh-forage-edible.zh-poison { color: #ef7a62; border-color: #8e3326; }
 .zh-forage-notes {
-  margin: 0.2rem 0 0; padding: 0 0 0 1.1em; color: #cfc9ba; font-size: 0.9rem; line-height: 1.45;
+  margin: 0.15em 0 0; padding: 0 0 0 1.1em; color: #e3dccb; font-size: 0.9em; line-height: 1.45;
   align-self: stretch;
 }
 .zh-forage-notes li { margin: 0 0 0.3em; }
+/* O botao e a OPCAO SELECIONADA do dialogo: o pergaminho claro com letra escura. */
 .zh-forage-go {
-  margin-top: 0.35rem; padding: 0.55rem 1.4rem;
-  border: 1px solid rgba(212, 200, 164, 0.6); background: rgba(42, 33, 21, 0.85);
-  color: #e7dcc4; font: inherit; font-size: 1rem; cursor: pointer;
+  margin-top: 0.3em; padding: 0.45em 1.3em; min-height: 44px;
+  border: 0; border-radius: 2px; background: #d4c8a4; color: #241d12;
+  font: inherit; font-size: 1em; cursor: pointer; text-shadow: none;
+  box-shadow: 0 0 0 2px #2a2118;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
-.zh-forage-go:active { background: rgba(212, 200, 164, 0.9); color: #241d12; }
+.zh-forage-go:active { transform: translateY(1px); }
 `;
 
 const ensureStyle = (): void => {
@@ -125,39 +142,61 @@ export interface ForagingCallbacks {
   onCancel: () => void;
 }
 
+/**
+ * O PEDAÇO DO MUNDO em volta do cogumelo: 5×5 tiles (dx/dy de -2 a 2), com o frame do chão já
+ * resolvido (`groundFrameAt`) e a decoração de cima. A cena monta; o close só desenha.
+ */
+export interface ForagingScenery {
+  tileset: CanvasImageSource;
+  /** Quantos frames de 16px o tileset tem por linha. */
+  columns: number;
+  tiles: ReadonlyArray<{ dx: number; dy: number; ground: number; upper: number | null; water: boolean }>;
+}
+
 type Stage = 'aim' | 'saw' | 'lift' | 'clean' | 'card';
 
-/** A grade lógica e onde a arte de 48px mora dentro dela. */
+/** A grade lógica: 64×64 pixels, quatro tiles de 16 de lado — a mesma escala do mundo. */
 const W = 64;
-const OX = (W - CLOSE_SIZE) / 2;
-const OY = 4;
-const SOIL_Y = Math.round(OY + SOIL_LINE * CLOSE_SIZE);
+const TILE = 16;
+/** O tile do cogumelo: centro em (32, 48) — ele fica embaixo, a mata em cima. */
+const TILE_CX = 32;
+const TILE_CY = 48;
+const OX = TILE_CX - CLOSE_SIZE / 2;
+/** A arte assenta o pé (a linha do solo) um pouco abaixo do centro do tile. */
+const SOIL_Y = TILE_CY + 3;
+const OY = Math.round(SOIL_Y - SOIL_LINE * CLOSE_SIZE);
 /** Onde a lâmina vira: do pé do chapéu até fundo na terra. */
 const AIM_TOP = OY + 0.46 * CLOSE_SIZE;
-const AIM_BOTTOM = OY + CLOSE_SIZE + 4;
+const AIM_BOTTOM = SOIL_Y + 5;
 /** Uma ida e volta inteira da lâmina, em segundos: devagar o bastante para o polegar. */
-const AIM_PERIOD = 2.6;
+const AIM_PERIOD = 3.2;
 const SAW_STROKES = 5;
 /** Quanto o dedo precisa correr (em pixels lógicos) para valer como uma passada. */
-const SAW_SWIPE = 3.5;
-const LIFT_PX = 11;
-const BRUSH_R = 5;
+const SAW_SWIPE = 3;
+const LIFT_PX = 9;
+const BRUSH_R = 4;
 /** Quanto de "esfregar" (pixels lógicos de escova passando) cada grão aguenta. */
-const SPECK_HP = 9;
-const BRUSH_SPEED = 34;
-const SPECK_COUNT = 9;
+const SPECK_HP = 7;
+const BRUSH_SPEED = 28;
+const SPECK_COUNT = 7;
+/** O montinho de terra revolvida no pé do cogumelo. */
+const MOUND_RX = 12;
+const MOUND_RY = 5;
 
 const ACTION_CODES = new Set(['KeyZ', 'KeyJ', 'Space', 'KeyX', 'KeyK', 'Enter', 'NumpadEnter']);
 
-/** A paleta do chão de cada tipo de sujeira — a borda do solo e os grãos usam a mesma. */
+/** A paleta do chão de cada tipo de sujeira — tirada dos tiles do jogo, não inventada. */
 const DIRT_COLORS: Readonly<Record<DirtKind, readonly [string, string]>> = {
-  soil: ['#4a3322', '#6a4a30'],
+  soil: ['#3b2a1e', '#5a4330'],
   needle: ['#6b5a32', '#8a7442'],
   leaf: ['#a8642c', '#7d4a22'],
-  grass: ['#5f8f3c', '#7fae4f'],
-  sand: ['#d2bf8e', '#b9a674'],
-  moss: ['#5d7a35', '#87a24c'],
+  grass: ['#4d6b2e', '#6f8f3c'],
+  sand: ['#c9b48a', '#a8956a'],
+  moss: ['#4f6a2c', '#7f9a44'],
 };
+
+/** O vime da cesta: os mesmos tons do vime de cozyTextures. */
+const WICKER = { dark: '#5e4126', base: '#8a6238', light: '#b0844e' };
 
 interface Speck {
   x: number;
@@ -185,6 +224,7 @@ const rng = (seed: number): (() => number) => {
 export class ForagingOverlay {
   private readonly root: HTMLDivElement;
   private readonly canvas: HTMLCanvasElement;
+  private readonly frameEl: HTMLDivElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly title: HTMLHeadingElement;
   private readonly hint: HTMLParagraphElement;
@@ -198,9 +238,11 @@ export class ForagingOverlay {
   private readonly spec: (typeof FUNGUS_SPECS)[MushroomKind];
   private readonly zoneTop: number;
   private readonly zoneBottom: number;
-  /** O chão do close: grãos de terra fixos e os tufos da borda (a espécie diz que chão é). */
-  private readonly soilDots: Array<{ x: number; y: number; c: string }> = [];
-  private readonly tufts: Array<{ x: number; h: number; c: string }> = [];
+  /** O pedaço do mundo pré-desenhado em dois planos: atrás do cogumelo e na frente dele. */
+  private readonly sceneBack: HTMLCanvasElement;
+  private readonly sceneFront: HTMLCanvasElement;
+  private readonly basket: HTMLCanvasElement;
+  private readonly moundDots: Array<{ x: number; y: number; c: string }> = [];
   private readonly mycelium: Array<{ x: number; y: number }> = [];
 
   private stage: Stage = 'aim';
@@ -231,6 +273,7 @@ export class ForagingOverlay {
     private readonly kind: MushroomKind,
     private readonly cb: ForagingCallbacks,
     private readonly touch: boolean,
+    scenery?: ForagingScenery,
   ) {
     ensureStyle();
     this.spec = FUNGUS_SPECS[kind];
@@ -239,6 +282,8 @@ export class ForagingOverlay {
     this.mask = close.mask;
     this.zoneTop = OY + this.spec.cut.from * CLOSE_SIZE;
     this.zoneBottom = OY + this.spec.cut.to * CLOSE_SIZE;
+    [this.sceneBack, this.sceneFront] = this.paintScenery(scenery);
+    this.basket = this.paintBasket();
     this.seedGround();
 
     this.root = document.createElement('div');
@@ -250,10 +295,13 @@ export class ForagingOverlay {
 
     this.title = document.createElement('h2');
     this.title.className = 'zh-forage-title';
+    this.frameEl = document.createElement('div');
+    this.frameEl.className = 'zh-forage-frame';
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'zh-forage-canvas';
     this.canvas.width = W;
     this.canvas.height = W;
+    this.frameEl.appendChild(this.canvas);
     const ctx = this.canvas.getContext('2d');
     if (!ctx) throw new Error('ForagingOverlay: no 2d context');
     this.ctx = ctx;
@@ -275,7 +323,7 @@ export class ForagingOverlay {
 
     this.card = this.buildCard(close.canvas);
 
-    panel.append(this.leave, this.title, this.canvas, this.hint, this.msg, this.tip, this.card);
+    panel.append(this.leave, this.title, this.frameEl, this.hint, this.msg, this.tip, this.card);
     this.root.appendChild(panel);
     document.body.appendChild(this.root);
 
@@ -326,17 +374,17 @@ export class ForagingOverlay {
         this.title.textContent = t('fungi.clean.title');
         this.hint.textContent = t(this.touch ? 'fungi.clean.touch' : 'fungi.clean.keys');
         this.tip.textContent = `${t(`${species}.clean`)} ${t('fungi.clean.why')}`;
-        // O que foi colhido vai para o MEIO da tabua: `lift` passa a ser o deslocamento que
+        // O que foi colhido vai para o MEIO da cesta: `lift` passa a ser o deslocamento que
         // centraliza a parte acima do corte (o toco ficou na terra).
         this.lift = OY - Math.round((W - (this.cutY - OY)) / 2);
         this.seedSpecks();
-        this.brush = { x: W / 2, y: OY + CLOSE_SIZE * 0.45 };
+        this.brush = { x: W / 2, y: W / 2 };
         this.brushVisible = !this.touch;
         this.canvas.style.cursor = 'none';
         break;
       case 'card':
         this.title.textContent = t('fungi.card.title');
-        this.canvas.style.display = 'none';
+        this.frameEl.style.display = 'none';
         this.hint.style.display = 'none';
         this.msg.style.display = 'none';
         this.tip.style.display = 'none';
@@ -408,13 +456,13 @@ export class ForagingOverlay {
     const d = dir === 0 ? (this.lastStroke === 1 ? -1 : 1) : dir;
     this.lastStroke = d;
     this.strokes += 1;
-    this.sawTarget = d * 3;
+    this.sawTarget = d * 2;
     this.cb.onStroke();
     const span = this.stemSpan(this.cutY);
     const at = span.left + ((span.right - span.left) * this.strokes) / SAW_STROKES;
     for (let i = 0; i < 3; i += 1) {
       this.fibers.push({
-        x: at, y: this.cutY, vx: (Math.random() - 0.5) * 20 + d * 10, vy: -Math.random() * 18 - 4, life: 0.5,
+        x: at, y: this.cutY, vx: (Math.random() - 0.5) * 16 + d * 8, vy: -Math.random() * 14 - 4, life: 0.5,
       });
     }
     if (this.strokes >= SAW_STROKES) {
@@ -479,7 +527,7 @@ export class ForagingOverlay {
     const p = this.toLogical(event);
     this.pointer = { id: event.pointerId, x: p.x, y: p.y, acc: 0 };
     try { this.canvas.setPointerCapture(event.pointerId); } catch { /* sem captura, segue igual */ }
-    if (this.stage === 'aim' || this.stage === 'lift' || this.stage === 'card') this.act();
+    if (this.stage === 'aim' || this.stage === 'lift') this.act();
     if (this.stage === 'clean') {
       this.brush = { x: p.x, y: p.y };
       this.brushVisible = true;
@@ -525,30 +573,102 @@ export class ForagingOverlay {
 
   // ── o mundo do close ───────────────────────────────────────────────────────
 
+  /**
+   * O pedaço do mundo, pré-desenhado UMA vez: o chão e a decoração das fileiras de trás num
+   * plano, a decoração das fileiras da frente em outro (ela passa na frente do cogumelo, como
+   * no mundo). Sem cenário, um chão de musgo liso no tom do tile de grama.
+   */
+  private paintScenery(scenery?: ForagingScenery): [HTMLCanvasElement, HTMLCanvasElement] {
+    const back = document.createElement('canvas');
+    const front = document.createElement('canvas');
+    back.width = W;
+    back.height = W;
+    front.width = W;
+    front.height = W;
+    const b = back.getContext('2d');
+    const f = front.getContext('2d');
+    if (!b || !f) return [back, front];
+    b.imageSmoothingEnabled = false;
+    f.imageSmoothingEnabled = false;
+    b.fillStyle = '#3f4f2a';
+    b.fillRect(0, 0, W, W);
+    if (!scenery) return [back, front];
+    const at = (dx: number, dy: number): [number, number] => [
+      TILE_CX - TILE / 2 + dx * TILE, TILE_CY - TILE / 2 + dy * TILE,
+    ];
+    const blit = (ctx: CanvasRenderingContext2D, frame: number, x: number, y: number): void => {
+      const sx = (frame % scenery.columns) * TILE;
+      const sy = Math.floor(frame / scenery.columns) * TILE;
+      ctx.drawImage(scenery.tileset, sx, sy, TILE, TILE, x, y, TILE, TILE);
+    };
+    for (const tile of scenery.tiles) {
+      const [x, y] = at(tile.dx, tile.dy);
+      if (tile.water) {
+        b.fillStyle = '#1f4552';
+        b.fillRect(x, y, TILE, TILE);
+        b.fillStyle = '#2e6070';
+        for (let i = 0; i < 4; i += 1) b.fillRect(x + ((i * 5 + tile.dx * 3) & 15), y + i * 4 + 1, 3, 1);
+      } else {
+        blit(b, tile.ground, x, y);
+      }
+    }
+    // A decoracao em ordem de fileira: a de tras primeiro. O tile do proprio cogumelo nunca tem
+    // (o mundo limpa o `upper` de quem guarda um item).
+    const ordered = [...scenery.tiles].sort((p, q) => p.dy - q.dy);
+    for (const tile of ordered) {
+      if (tile.upper === null || (tile.dx === 0 && tile.dy === 0)) continue;
+      const [x, y] = at(tile.dx, tile.dy);
+      blit(tile.dy > 0 ? f : b, tile.upper, x, y);
+    }
+    return [back, front];
+  }
+
+  /** O fundo da limpeza: o vime da cesta, trançado em fileiras desencontradas. */
+  private paintBasket(): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = W;
+    const ctx = c.getContext('2d');
+    if (!ctx) return c;
+    ctx.fillStyle = WICKER.dark;
+    ctx.fillRect(0, 0, W, W);
+    for (let row = 0; row < W / 4; row += 1) {
+      const y = row * 4;
+      const shift = row % 2 === 0 ? 0 : 4;
+      for (let x = -4 + shift; x < W; x += 8) {
+        ctx.fillStyle = WICKER.base;
+        ctx.fillRect(x, y, 7, 3);
+        ctx.fillStyle = WICKER.light;
+        ctx.fillRect(x + 1, y, 5, 1);
+      }
+    }
+    return c;
+  }
+
   private seedGround(): void {
     const rand = rng(this.kind.length * 7919 + this.kind.charCodeAt(0));
-    for (let i = 0; i < 70; i += 1) {
-      this.soilDots.push({
-        x: Math.floor(rand() * W),
-        y: SOIL_Y + 1 + Math.floor(rand() * (W - SOIL_Y - 1)),
-        c: rand() < 0.5 ? '#3a281a' : '#5c4130',
+    const [c0, c1] = DIRT_COLORS.soil;
+    for (let i = 0; i < 18; i += 1) {
+      const a = rand() * Math.PI;
+      const r = Math.sqrt(rand());
+      this.moundDots.push({
+        x: Math.round(TILE_CX + Math.cos(a) * (MOUND_RX - 1) * r),
+        y: Math.round(SOIL_Y + 1 + Math.sin(a) * (MOUND_RY - 2) * r),
+        c: rand() < 0.5 ? c0 : c1,
       });
     }
-    const [c0, c1] = DIRT_COLORS[this.spec.dirt[0]];
-    for (let x = 0; x < W; x += 1) {
-      if (rand() < 0.45) this.tufts.push({ x, h: 1 + Math.floor(rand() * 3), c: rand() < 0.5 ? c0 : c1 });
-    }
-    // O micelio: fios brancos que se ramificam a partir do pe, por baixo da terra.
-    const cx = W / 2;
-    for (let b = 0; b < 7; b += 1) {
-      let x = cx + (rand() - 0.5) * 4;
-      let y = SOIL_Y + 2 + rand() * 2;
+    // O micelio: fios brancos que se ramificam a partir do pe, por dentro da terra revolvida.
+    for (let b = 0; b < 6; b += 1) {
+      let x = TILE_CX + (rand() - 0.5) * 3;
+      let y = SOIL_Y + 1 + rand() * 1.5;
       const dir = rand() < 0.5 ? -1 : 1;
-      const len = 8 + Math.floor(rand() * 12);
+      const len = 5 + Math.floor(rand() * 7);
       for (let s = 0; s < len; s += 1) {
-        x += dir * (0.6 + rand() * 0.8);
-        y += (rand() - 0.35) * 1.1;
-        if (y > W - 1) break;
+        x += dir * (0.6 + rand() * 0.7);
+        y += (rand() - 0.4) * 0.9;
+        const nx = (x - TILE_CX) / MOUND_RX;
+        const ny = (y - SOIL_Y) / MOUND_RY;
+        if (y < SOIL_Y || nx * nx + ny * ny > 1) break;
         this.mycelium.push({ x: Math.round(x), y: Math.round(y) });
       }
     }
@@ -573,7 +693,7 @@ export class ForagingOverlay {
       }
       if (left >= 0) return { left: OX + left, right: OX + right + 1 };
     }
-    return { left: W / 2 - 3, right: W / 2 + 3 };
+    return { left: TILE_CX - 2, right: TILE_CX + 2 };
   }
 
   /** A sujeira nasce em cima do que foi colhido (acima do corte), nunca no contorno. */
@@ -586,13 +706,12 @@ export class ForagingOverlay {
         if (this.mask[y * CLOSE_SIZE + x]) spots.push({ x, y });
       }
     }
-    const lifted = this.lift;
     this.specks = [];
     for (let i = 0; i < SPECK_COUNT && spots.length > 0; i += 1) {
       const pick = spots.splice(Math.floor(rand() * spots.length), 1)[0];
       this.specks.push({
         x: OX + pick.x,
-        y: OY + pick.y - lifted,
+        y: OY + pick.y - this.lift,
         kind: this.spec.dirt[i % this.spec.dirt.length],
         hp: SPECK_HP,
       });
@@ -649,7 +768,7 @@ export class ForagingOverlay {
     if (this.stage === 'lift') {
       const k = Math.min(1, this.stageClock / 0.7);
       this.lift = LIFT_PX * (1 - (1 - k) * (1 - k));
-      if (this.stageClock > 2.6) this.enterStage('clean');
+      if (this.stageClock > 2.8) this.enterStage('clean');
     }
     if (this.stage === 'clean') {
       const vx = (this.held.has('right') ? 1 : 0) - (this.held.has('left') ? 1 : 0);
@@ -692,104 +811,120 @@ export class ForagingOverlay {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     if (this.stage === 'card') return;
-    const sx = this.shake > 0 ? Math.round(Math.sin(this.clock * 70) * 1) : 0;
+    const sx = this.shake > 0 ? Math.round(Math.sin(this.clock * 70)) : 0;
     ctx.translate(sx, 0);
-    if (this.stage === 'clean') this.drawBoard();
+    if (this.stage === 'clean') this.drawBasket();
     else this.drawForestFloor();
   }
 
-  /** O chão onde ele nasceu: sombra da mata, o cogumelo, a terra por cima do pé. */
+  /** O lugar onde ele nasceu: o chão do mundo, o cogumelo, o montinho de terra no pé. */
   private drawForestFloor(): void {
     const ctx = this.ctx;
-    this.px(-2, 0, W + 4, SOIL_Y, '#18200f');
-    for (let y = 0; y < SOIL_Y; y += 6) this.px(-2, y, W + 4, 3, '#1c2513');
+    ctx.drawImage(this.sceneBack, 0, 0);
+    // A sombra de contato do mundo (groundShadow): uma elipse escura sob o pé.
+    ctx.globalAlpha = 0.35;
+    this.ellipse(TILE_CX, SOIL_Y + 1, MOUND_RX + 2, MOUND_RY, '#10140a');
+    ctx.globalAlpha = 1;
 
     const lifted = this.stage === 'lift';
     if (lifted) {
       // O toco fica: so o que esta acima do corte sobe.
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, this.cutY, W, W - this.cutY);
-      ctx.clip();
-      ctx.drawImage(this.art, OX, OY);
-      ctx.restore();
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, W, this.cutY - this.lift);
-      ctx.clip();
-      ctx.drawImage(this.art, OX, OY - this.lift);
-      ctx.restore();
+      this.clipped(OY, this.cutY, W);
+      this.clipped(OY - this.lift, 0, this.cutY - this.lift);
     } else {
       ctx.drawImage(this.art, OX, OY);
     }
 
-    this.drawSoil();
-    if (lifted) {
-      const reveal = Math.min(1, this.stageClock / 0.9);
-      ctx.globalAlpha = reveal;
-      for (const m of this.mycelium) this.px(m.x, m.y, 1, 1, '#efe9da');
-      ctx.globalAlpha = 1;
-    }
+    this.drawMound(lifted);
 
     if (this.stage === 'aim' || this.stage === 'saw') {
-      // As marcas da faixa certa, na borda: o jogo mostra onde se corta, e diz por que (a dica).
-      ctx.globalAlpha = 0.55;
-      this.px(2, this.zoneTop, 3, 1, '#e5b558');
-      this.px(2, this.zoneBottom, 3, 1, '#e5b558');
-      this.px(2, this.zoneTop, 1, this.zoneBottom - this.zoneTop, '#e5b558');
+      // As marcas da faixa certa, na borda do talo: o jogo mostra onde se corta, a dica diz por que.
+      const mx = OX + 2;
+      ctx.globalAlpha = 0.9;
+      this.px(mx, this.zoneTop, 3, 1, '#e5b558');
+      this.px(mx, this.zoneBottom, 3, 1, '#e5b558');
+      this.px(mx, this.zoneTop, 1, this.zoneBottom - this.zoneTop + 1, '#e5b558');
       ctx.globalAlpha = 1;
     }
-
     if (this.stage === 'saw') {
       const span = this.stemSpan(this.cutY);
       const done = Math.min(1, this.strokes / SAW_STROKES);
-      this.px(span.left, this.cutY, Math.max(1, Math.round((span.right - span.left) * done)), 1, '#24180f');
+      this.px(span.left, this.cutY, Math.max(1, Math.round((span.right - span.left) * done)), 1, '#1b1d33');
     }
+    ctx.drawImage(this.sceneFront, 0, 0);
     if (this.stage === 'aim' || this.stage === 'saw') this.drawKnife(this.knifeY, this.sawX);
     for (const f of this.fibers) this.px(f.x, f.y, 1, 1, '#f3ecda');
   }
 
-  private drawSoil(): void {
-    this.px(-2, SOIL_Y, W + 4, W - SOIL_Y, '#4a3322');
-    for (const d of this.soilDots) this.px(d.x, d.y, 1, 1, d.c);
-    for (const tf of this.tufts) this.px(tf.x, SOIL_Y - tf.h + 1, 1, tf.h, tf.c);
-  }
-
-  /** A faca deitada: a lamina atravessa o talo, o cabo fica a direita. */
-  private drawKnife(y: number, dx: number): void {
-    const x0 = OX + 6 + dx;
-    const x1 = OX + CLOSE_SIZE - 10 + dx;
-    this.px(x0, y - 1, x1 - x0, 1, '#eef2f2');
-    this.px(x0 + 1, y, x1 - x0 - 1, 1, '#9aa3a8');
-    this.px(x0 - 1, y, 1, 1, '#9aa3a8');
-    this.px(x1, y - 2, 2, 4, '#c9a24a');
-    this.px(x1 + 2, y - 2, 9, 4, '#8a5a32');
-    this.px(x1 + 2, y + 1, 9, 1, '#5e3b1e');
-    this.px(x1 + 11, y - 3, 3, 6, '#3b2a1c');
-  }
-
-  /** A tabua de limpeza: madeira clara, o cogumelo deitado em pe sobre ela, e a escova. */
-  private drawBoard(): void {
+  /** Desenha a arte do cogumelo em `y`, recortada entre as linhas `top` e `bottom` da tela. */
+  private clipped(y: number, top: number, bottom: number): void {
     const ctx = this.ctx;
-    this.px(-2, 0, W + 4, W, '#6b4a2c');
-    for (let y = 9; y < W; y += 11) this.px(-2, y, W + 4, 1, '#5a3d23');
-    for (let y = 3; y < W; y += 11) this.px(-2, y, W + 4, 1, '#7a5634');
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, 0, W, this.cutY - this.lift);
+    ctx.rect(0, top, W, Math.max(0, bottom - top));
     ctx.clip();
-    ctx.drawImage(this.art, OX, OY - this.lift);
+    ctx.drawImage(this.art, OX, y);
     ctx.restore();
+  }
+
+  private ellipse(cx: number, cy: number, rx: number, ry: number, c: string): void {
+    for (let y = Math.ceil(cy - ry); y <= cy + ry; y += 1) {
+      const k = 1 - ((y - cy) / ry) ** 2;
+      if (k <= 0) continue;
+      const half = Math.round(rx * Math.sqrt(k));
+      this.px(cx - half, y, half * 2, 1, c);
+    }
+  }
+
+  /**
+   * A TERRA REVOLVIDA: meia elipse da linha do solo para baixo, cobrindo o pé (e a volva, na
+   * amanita). Solto o cogumelo, ela mostra os fios brancos do micélio por dentro.
+   */
+  private drawMound(lifted: boolean): void {
+    const ctx = this.ctx;
+    for (let y = SOIL_Y; y <= SOIL_Y + MOUND_RY; y += 1) {
+      const k = 1 - ((y - SOIL_Y) / MOUND_RY) ** 2;
+      const half = Math.round(MOUND_RX * Math.sqrt(Math.max(0, k)));
+      this.px(TILE_CX - half, y, half * 2, 1, y === SOIL_Y ? '#5a4330' : '#3b2a1e');
+    }
+    for (const d of this.moundDots) this.px(d.x, d.y, 1, 1, d.c);
+    // O contorno navy do jogo nas pontas do monte, como em toda arte que fica de pe no mundo.
+    this.px(TILE_CX - MOUND_RX, SOIL_Y, 1, 2, '#1b1d33');
+    this.px(TILE_CX + MOUND_RX - 1, SOIL_Y, 1, 2, '#1b1d33');
+    if (lifted) {
+      ctx.globalAlpha = Math.min(1, this.stageClock / 0.9);
+      for (const m of this.mycelium) this.px(m.x, m.y, 1, 1, '#efe9da');
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /** A faca deitada, na arte da faca da mochila: lâmina clara, virola de latão, cabo e escova. */
+  private drawKnife(y: number, dx: number): void {
+    const x0 = TILE_CX - 13 + dx;
+    const x1 = TILE_CX + 8 + dx;
+    this.px(x0 - 1, y - 2, x1 - x0 + 2, 4, '#1b1d33');
+    this.px(x0, y - 1, x1 - x0, 1, '#eef2f2');
+    this.px(x0, y, x1 - x0, 1, '#9aa3a8');
+    this.px(x1, y - 2, 2, 4, '#c9a24a');
+    this.px(x1 + 2, y - 2, 8, 4, '#8a5a32');
+    this.px(x1 + 2, y + 1, 8, 1, '#5e3b1e');
+    this.px(x1 + 10, y - 3, 3, 6, '#3b2a1c');
+  }
+
+  /** A limpeza acontece EM CIMA DA CESTA: o cogumelo na mão, o vime embaixo, a escova. */
+  private drawBasket(): void {
+    const ctx = this.ctx;
+    ctx.drawImage(this.basket, 0, 0);
+    this.clipped(OY - this.lift, 0, this.cutY - this.lift);
     for (const s of this.specks) this.drawSpeck(s);
     if (this.brushVisible && !this.cleaned) {
       const { x, y } = this.brush;
-      ctx.globalAlpha = 0.85;
-      for (let a = 0; a < 16; a += 1) {
-        const ang = (a / 16) * Math.PI * 2;
-        this.px(x + Math.cos(ang) * BRUSH_R, y + Math.sin(ang) * BRUSH_R, 1, 1, '#e7dcc4');
+      for (let a = 0; a < 14; a += 1) {
+        const ang = (a / 14) * Math.PI * 2;
+        this.px(x + Math.cos(ang) * BRUSH_R, y + Math.sin(ang) * BRUSH_R, 1, 1, '#f3ecdc');
       }
-      this.px(x - 1, y - 1, 3, 3, '#3b2a1c');
-      ctx.globalAlpha = 1;
+      this.px(x - 1, y - 1, 3, 3, '#1b1d33');
+      this.px(x, y, 1, 1, '#3b2a1c');
     }
   }
 
@@ -807,10 +942,10 @@ export class ForagingOverlay {
         this.px(x + 1, y, 1, 1, c1);
         break;
       case 'needle':
-        for (let i = 0; i < 4; i += 1) this.px(x + i, y + i * 0.5, 1, 1, i % 2 ? c1 : c0);
+        for (let i = 0; i < 3; i += 1) this.px(x + i, y + i * 0.5, 1, 1, i % 2 ? c1 : c0);
         break;
       case 'leaf':
-        this.px(x, y, 3, 2, c0);
+        this.px(x, y, 2, 2, c0);
         this.px(x + 1, y + 1, 1, 1, c1);
         break;
       case 'grass':
@@ -836,9 +971,12 @@ export class ForagingOverlay {
     const species = `fungi.species.${this.kind}`;
     const card = document.createElement('div');
     card.className = 'zh-forage-card';
+    const frame = document.createElement('div');
+    frame.className = 'zh-forage-frame';
     const img = document.createElement('img');
     img.src = art.toDataURL();
     img.alt = t(`items.name.${this.kind}`);
+    frame.appendChild(img);
     const name = document.createElement('p');
     name.className = 'zh-forage-name';
     name.textContent = t(`items.name.${this.kind}`);
@@ -860,7 +998,7 @@ export class ForagingOverlay {
     go.className = 'zh-forage-go';
     go.textContent = t('fungi.card.basket');
     go.addEventListener('click', () => this.finish());
-    card.append(img, name, latin, edible, notes, go);
+    card.append(frame, name, latin, edible, notes, go);
     return card;
   }
 }

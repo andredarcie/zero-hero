@@ -43,12 +43,12 @@ interface FungusSpec {
 }
 
 export const FUNGUS_SPECS: Readonly<Record<MushroomKind, FungusSpec>> = {
-  puffball: { edibility: 'edible', cut: { from: 0.8, to: 0.9 }, dirt: ['grass', 'soil', 'soil'] },
-  inkCap: { edibility: 'edible', cut: { from: 0.8, to: 0.9 }, dirt: ['grass', 'soil', 'sand'] },
-  morel: { edibility: 'cooked', cut: { from: 0.8, to: 0.9 }, dirt: ['sand', 'soil', 'leaf'] },
-  chanterelle: { edibility: 'edible', cut: { from: 0.8, to: 0.9 }, dirt: ['moss', 'needle', 'soil'] },
-  flyAgaric: { edibility: 'poison', cut: { from: 0.9, to: 0.98 }, dirt: ['needle', 'leaf', 'soil'] },
-  porcini: { edibility: 'edible', cut: { from: 0.8, to: 0.9 }, dirt: ['needle', 'soil', 'moss'] },
+  puffball: { edibility: 'edible', cut: { from: 0.76, to: 0.9 }, dirt: ['grass', 'soil', 'soil'] },
+  inkCap: { edibility: 'edible', cut: { from: 0.76, to: 0.9 }, dirt: ['grass', 'soil', 'sand'] },
+  morel: { edibility: 'cooked', cut: { from: 0.76, to: 0.9 }, dirt: ['sand', 'soil', 'leaf'] },
+  chanterelle: { edibility: 'edible', cut: { from: 0.76, to: 0.9 }, dirt: ['moss', 'needle', 'soil'] },
+  flyAgaric: { edibility: 'poison', cut: { from: 0.9, to: 1.04 }, dirt: ['needle', 'leaf', 'soil'] },
+  porcini: { edibility: 'edible', cut: { from: 0.76, to: 0.9 }, dirt: ['needle', 'soil', 'moss'] },
 };
 
 /** O que vai no espeto, na ordem em que o herói escolheria (o melhor primeiro). */
@@ -62,8 +62,8 @@ export const SOIL_LINE = 0.9;
 
 // ── o pintor ─────────────────────────────────────────────────────────────────────────────────
 
-/** O contorno de toda a arte do jogo: o marrom quase preto das madeiras e do carvão. */
-const OUTLINE = 0x24180f;
+/** O contorno de toda a arte do jogo: o navy de tinta do herói, do espeto e dos NPCs. */
+const OUTLINE = 0x1b1d33;
 
 interface PaintOpts {
   /** O "material" que o pixel pintado passa a ter — é o que as sombras miram depois. */
@@ -370,8 +370,12 @@ const PAINTERS: Readonly<Record<MushroomKind, (r: Raster) => void>> = {
   puffball: paintPuffball,
 };
 
-/** O CLOSE dos mini-games: 48px, com a máscara (onde há cogumelo) para semear a sujeira. */
-export const CLOSE_SIZE = 48;
+/**
+ * O CLOSE dos mini-games: 32px, com a máscara (onde há cogumelo) para semear a sujeira. 32 e não
+ * mais porque o close fica EM CIMA dos tiles de 16px do mundo: o pixel do cogumelo tem de ter o
+ * tamanho do pixel do chão, senão ele parece colado de outro jogo.
+ */
+export const CLOSE_SIZE = 32;
 
 export interface FungusCloseUp {
   canvas: HTMLCanvasElement;

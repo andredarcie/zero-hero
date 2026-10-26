@@ -25,6 +25,8 @@ import {
   SOLID_UPPER_FRAMES,
   UNIT_PACK_KINDS,
   BLOOM_BLOWS,
+  TILESET_FRAME_SIZE,
+  groundFrameAt,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
@@ -81,7 +83,7 @@ import {
   FUNGUS_SPECS, KNIFE_TEXTURE_KEY, MUSHROOM_KINDS, ROASTABLE_ORDER,
   fungusTextureKey, isMushroomKind, registerFungiTextures, type MushroomKind,
 } from '@/game/fungi/fungi';
-import { ForagingOverlay } from '@/game/runtime/ForagingOverlay';
+import { ForagingOverlay, type ForagingScenery } from '@/game/runtime/ForagingOverlay';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import {
   BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
@@ -2213,8 +2215,34 @@ export class GameScene extends Phaser.Scene {
       onClean: () => sound.playCozyChime(),
       onDone: () => this.basketMushroom(kind, wx, wy),
       onCancel: () => this.closeForaging(),
-    }, isTouchDevice());
+    }, isTouchDevice(), this.foragingScenery(wx, wy));
     return true;
+  }
+
+  /**
+   * O PEDAÇO DO MUNDO em volta do cogumelo, para o close da colheita: 5×5 tiles com o chão que o
+   * mundo 3D pinta ali (`groundFrameAt`, o mesmo do terreno) e a decoração de cima. A água é prop,
+   * não tile — ela entra marcada para o close pintar o espelho dela.
+   */
+  private foragingScenery(wx: number, wy: number): ForagingScenery | undefined {
+    const chunks = this.chunkManager;
+    if (!chunks || !this.textures.exists(ASSET_KEYS.forestTileset)) return undefined;
+    const tileset = this.textures.get(ASSET_KEYS.forestTileset).getSourceImage() as HTMLImageElement;
+    const tiles: ForagingScenery['tiles'][number][] = [];
+    for (let dy = -2; dy <= 2; dy += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        const x = wx + dx;
+        const y = wy + dy;
+        const tile = chunks.getTile(x, y);
+        tiles.push({
+          dx, dy,
+          ground: groundFrameAt(tile.ground, x, y),
+          upper: tile.upper,
+          water: this.getWaterAt(x, y)?.blocking ?? false,
+        });
+      }
+    }
+    return { tileset, columns: Math.max(1, Math.floor(tileset.width / TILESET_FRAME_SIZE)), tiles };
   }
 
   private closeForaging(): void {
