@@ -304,6 +304,11 @@ const TIMBER_MAX_SPAN = 3;
 const INTRO_CLOCK = 0.92;
 /** Quantos tiles o cavaleiro anda pela estrada antes de parar. */
 const INTRO_WALK_TILES = 3;
+/**
+ * NO LOCALHOST A ABERTURA NAO TOCA: testar nao pode custar a cutscene inteira a cada partida nova.
+ * O heroi nasce onde ela o deixaria (a espada fincada atras dele, o mago na estrada).
+ */
+const SKIP_INTRO_LOCALLY = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
 /** Um passo cansado: bem mais lento que o andar normal. */
 const INTRO_STEP_MS = 520;
 /**
@@ -612,9 +617,12 @@ export class GameScene extends Phaser.Scene {
     if (this.adventure) this.applyDugSpotDiff();
 
     let start = getPlayerStart();
+    const skipIntro = this.adventure && SKIP_INTRO_LOCALLY && !adventureState().introSeen;
     // "Continue de onde parou" e um PEDIDO (o Continue do titulo), nunca o padrao.
     if (this.adventure && consumeAdventureRespawn() && adventureState().respawn) {
       start = { ...adventureState().respawn! };
+    } else if (skipIntro) {
+      start = { ...start, worldY: start.worldY - INTRO_WALK_TILES };
     }
     const { worldX: startWorldX, worldY: startWorldY } = start;
 
@@ -671,7 +679,7 @@ export class GameScene extends Phaser.Scene {
     if (this.adventure) {
       // A historia e os dialogos ouvidos voltam do save.
       const st = adventureState();
-      this.introDone = st.introSeen;
+      this.introDone = st.introSeen || skipIntro;
       // O ultimo pedido grava ao ser ENTREGUE, mas o portao so abre quando o obrigado fecha. Um
       // jogo fechado nesse meio voltava com tudo cumprido e o jardim trancado para sempre.
       this.gateOpened = st.gateOpened || allQuestsDone();
@@ -906,6 +914,7 @@ export class GameScene extends Phaser.Scene {
     // A ABERTURA: a primeira vez no vale e uma cena, nao um controle. Ela toca uma vez por partida
     // (o save lembra), e continuar uma partida pula direto para o heroi parado na estrada.
     if (!this.introDone) void this.playIntro();
+    else if (skipIntro) this.showControlsHint();
   }
 
   /** Espera em ms presa ao relogio da CENA — pausar o jogo pausa a sequencia junto. */
