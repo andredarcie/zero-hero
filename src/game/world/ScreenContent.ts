@@ -1,3 +1,5 @@
+import type { MushroomKind } from '@/game/fungi/fungi';
+
 // Runtime types for per-chunk ("per-screen") content. The world is now finite and fully
 // authored in world.json; placement of NPCs/pickups is data, read through
 // WorldData.ts. The procedural generation that used to live here has moved to
@@ -24,8 +26,8 @@ export type PickupKind =
   | 'bloom'
   | 'charcoal'
   | 'bucket'
-  // O COGUMELO: a coleta do micologo, e o que o heroi espeta no graveto na fogueira do fim.
-  | 'mushroom';
+  // OS SEIS FUNGOS (fungi.ts): nascem no chao e so a faca os solta.
+  | MushroomKind;
 export type NpcKind =
   | 'blackCat'
   | 'mimic'

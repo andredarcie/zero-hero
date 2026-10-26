@@ -212,7 +212,13 @@ const gardenSpots = [...inside]
   .filter(([x, y]) => !occupied(x, y) && Math.abs(y - HEARTH.y) <= 2 && Math.abs(x - HEARTH.x) >= 1)
   .sort((a, b) => (Math.abs(a[0] - HEARTH.x) + Math.abs(a[1] - HEARTH.y + 1))
     - (Math.abs(b[0] - HEARTH.x) + Math.abs(b[1] - HEARTH.y + 1)) || a[0] - b[0] || a[1] - b[1]);
-const hasInside = (type) => allPickups().some((p) => p.type === type && inside.has(`${p.worldX},${p.worldY}`));
+// OS SEIS FUNGOS (src/game/fungi/fungi.ts, na mesma ordem): todo cogumelo do mundo e um deles.
+// 'mushroom' e o nome de antes de existirem especies — so aparece aqui de passagem, ate o passe
+// das especies no fim dar nome a cada um.
+const FUNGI = ['puffball', 'inkCap', 'morel', 'chanterelle', 'flyAgaric', 'porcini'];
+const isFungus = (type) => type === 'mushroom' || FUNGI.includes(type);
+const hasInside = (type) => allPickups().some((p) => (type === 'mushroom' ? isFungus(p.type) : p.type === type)
+  && inside.has(`${p.worldX},${p.worldY}`));
 if (!hasInside('wood')) {
   const spot = gardenSpots.find(([x]) => x < HEARTH.x);
   placePickup('wood', spot[0], spot[1]);
@@ -233,7 +239,7 @@ const shady = (x, y) => {
   }
   return n;
 };
-const wild = allPickups().filter((p) => p.type === 'mushroom' && !inside.has(`${p.worldX},${p.worldY}`));
+const wild = allPickups().filter((p) => isFungus(p.type) && !inside.has(`${p.worldX},${p.worldY}`));
 const candidates = [...reach]
   .map((k) => k.split(',').map(Number))
   .filter(([x, y]) => x > 0 && y > 0 && x < W - 1 && y < H - 1 && !occupied(x, y) && shady(x, y) >= 3)
@@ -247,6 +253,17 @@ for (const [x, y] of candidates) {
   wild.push({ worldX: x, worldY: y });
 }
 if (wild.length < MUSHROOMS) throw new Error(`so ${wild.length} cogumelos cabem no bosque`);
+
+// AS ESPECIES. Os do bosque, do mais perto da coletora ao mais longe, recebem as seis na ordem
+// das dicas dela (NpcQuests.hints) — o setimo repete a primeira. O do jardim e um porcini: o fim
+// assa um cogumelo, e ele tem de ser de comer.
+const collector = world.chunks.flatMap((c) => c.npcs).find((n) => n.type === 'radiationSuit');
+const wildPickups = allPickups()
+  .filter((p) => isFungus(p.type) && !inside.has(`${p.worldX},${p.worldY}`))
+  .sort((a, b) => Math.hypot(a.worldX - collector.worldX, a.worldY - collector.worldY)
+    - Math.hypot(b.worldX - collector.worldX, b.worldY - collector.worldY) || a.worldX - b.worldX || a.worldY - b.worldY);
+wildPickups.forEach((p, i) => { p.type = FUNGI[i % FUNGI.length]; });
+for (const p of allPickups()) if (isFungus(p.type) && inside.has(`${p.worldX},${p.worldY}`)) p.type = 'porcini';
 
 // ── 5. a prova: com o portao aberto, o jardim e alcancavel do ponto inicial ─────────────────
 const open = flood(start.worldX, start.worldY, false);

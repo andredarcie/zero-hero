@@ -37,7 +37,13 @@
       "bloom": "Hot iron. Hammer it.",
       "furnace": "A furnace.",
       "altar": "An altar.",
-      "mushroom": "A mushroom."
+      "knife": "A mushroom knife. The brush cleans.",
+      "puffball": "A common puffball.",
+      "inkCap": "A shaggy ink cap.",
+      "morel": "A yellow morel.",
+      "chanterelle": "A golden chanterelle.",
+      "flyAgaric": "A fly agaric.",
+      "porcini": "A porcini."
     },
     "name": {
       "sword": "Sword",
@@ -56,7 +62,13 @@
       "bucketFull": "Full Bucket",
       "charcoal": "Charcoal",
       "furnace": "Furnace",
-      "mushroom": "Mushroom",
+      "knife": "Mushroom Knife",
+      "puffball": "Common Puffball",
+      "inkCap": "Shaggy Ink Cap",
+      "morel": "Yellow Morel",
+      "chanterelle": "Golden Chanterelle",
+      "flyAgaric": "Fly Agaric",
+      "porcini": "Porcini",
       "altar": "Altar"
     }
   },
@@ -161,11 +173,19 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "I gather mushrooms."
+          "text": "I study the fungi of this valley."
         },
         {
           "speaker": "npc",
-          "text": "Bring me five? Blue caps, in the shade."
+          "text": "A mushroom is only the fruit. The fungus lives underground, as threads."
+        },
+        {
+          "speaker": "npc",
+          "text": "Six kinds grow here. Find them all. Take my knife."
+        },
+        {
+          "speaker": "npc",
+          "text": "Cut, don't pull. Brush, don't wash."
         }
       ]
     },
@@ -174,12 +194,32 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Five. Perfect."
+          "text": "All six. You know the forest floor now."
         },
         {
           "speaker": "npc",
-          "text": "Thank you. Keep the next one."
+          "text": "Keep them. Just never eat the red one."
         }
+      ]
+    },
+    "radiationSuitHint": {
+      "puffball": [
+        { "speaker": "npc", "text": "East, past the water: a white ball with no cap." }
+      ],
+      "inkCap": [
+        { "speaker": "npc", "text": "North-east, by the pond: tall and white, shaggy like a wig." }
+      ],
+      "morel": [
+        { "speaker": "npc", "text": "South, by the rocks: a cap like a honeycomb." }
+      ],
+      "chanterelle": [
+        { "speaker": "npc", "text": "Far north, under the pines: a golden funnel." }
+      ],
+      "flyAgaric": [
+        { "speaker": "npc", "text": "The north-west corner: red, with white spots. Look. Don't eat." }
+      ],
+      "porcini": [
+        { "speaker": "npc", "text": "Far south, by the west edge: a brown bun on a fat stem." }
       ]
     },
     "painter": {
@@ -288,7 +328,114 @@
     "open": "Bag (I)",
     "empty": "Empty",
     "keys": "← →  ·  X equip  ·  I close",
-    "keysEmpty": "I close"
+    "keysEmpty": "I close",
+    "keysToBasket": "↓ basket",
+    "keysBasket": "← → read  ·  ↑ tools  ·  I close"
+  },
+  "fungi": {
+    "basket": "Basket",
+    "notesTitle": "Field notes",
+    "leave": "Leave it",
+    "cut": {
+      "title": "Cut",
+      "aimKeys": "Z when the blade is between the marks",
+      "aimTouch": "Tap when the blade is between the marks",
+      "sawKeys": "← → to saw",
+      "sawTouch": "Swipe side to side to saw",
+      "tooHigh": "Too high. Cut close to the ground.",
+      "tooHighVolva": "Too high. Keep the cup at the base.",
+      "tooDeep": "Too deep. That tears the mycelium.",
+      "mycelium": "Those white threads are the fungus itself: the mycelium. Left in the soil, it fruits again."
+    },
+    "clean": {
+      "title": "Clean",
+      "keys": "Arrows brush  ·  Z flick",
+      "touch": "Drag to brush",
+      "why": "Brush, don't wash: mushrooms soak up water.",
+      "done": "Clean."
+    },
+    "card": {
+      "title": "Found",
+      "basket": "Into the basket"
+    },
+    "edibility": {
+      "edible": "Edible",
+      "cooked": "Edible only cooked",
+      "poison": "Poisonous"
+    },
+    "species": {
+      "puffball": {
+        "latin": "Lycoperdon perlatum",
+        "cut": "Cut under the ball, at the base.",
+        "clean": "Brush off the soil and loose spines.",
+        "notes": [
+          "No cap, no gills: the spores ripen inside the ball.",
+          "Its tiny cone-shaped spines rub off, leaving a net of scars.",
+          "Old ones turn brown and open a pore on top. A raindrop puffs out a cloud of spores.",
+          "Edible only while pure white inside. Cut it in half: a young amanita shows the outline of a cap."
+        ]
+      },
+      "inkCap": {
+        "latin": "Coprinus comatus",
+        "cut": "Cut low on the slim stem. It's hollow.",
+        "clean": "Be quick: once picked, it turns to ink within hours.",
+        "notes": [
+          "A tall white cap, shaggy with scales. Its other name: lawyer's wig.",
+          "As it ripens it digests itself from the rim, dripping black ink full of spores.",
+          "Grows in lawns and by roads, feeding on buried dead wood and roots.",
+          "It can even trap and digest tiny worms in the soil.",
+          "Edible only young and white, cooked the same day."
+        ]
+      },
+      "morel": {
+        "latin": "Morchella esculenta",
+        "cut": "Cut at the base. The whole thing is hollow.",
+        "clean": "Grit hides in the pits. Brush each one.",
+        "notes": [
+          "A honeycomb cap of pits and ridges, hollow from tip to base.",
+          "An ascomycete: its spores form in tiny sacs lining the pits, not on gills.",
+          "Morels come up in spring. Some kinds burst out after forest fires.",
+          "Poisonous raw. Edible only well cooked.",
+          "False morels are not hollow: they're stuffed with cottony tissue."
+        ]
+      },
+      "chanterelle": {
+        "latin": "Cantharellus cibarius",
+        "cut": "Cut at the base, just above the moss.",
+        "clean": "Dirt hides in the ridges. Brush them out.",
+        "notes": [
+          "Egg-yolk yellow, shaped like a funnel with a wavy rim.",
+          "No true gills: blunt, forked ridges run down the stem.",
+          "Smells faintly of apricots.",
+          "It lives joined to tree roots, trading minerals for sugar. That's why no one can farm it.",
+          "Look-alike: the jack-o'-lantern has sharp true gills and grows in clusters on wood. Poisonous."
+        ]
+      },
+      "flyAgaric": {
+        "latin": "Amanita muscaria",
+        "cut": "Cut below the soil line. The cup at the base, the volva, is how amanitas are told apart.",
+        "clean": "Brush gently: the white warts rub off.",
+        "notes": [
+          "The white warts are scraps of a veil that wrapped the young mushroom like an egg.",
+          "White gills, a skirt-like ring on the stem, a swollen cup at the base.",
+          "It lives joined to birch and pine roots. That partnership is called mycorrhiza.",
+          "Its name comes from an old trick: crumbled in milk, it kills flies.",
+          "Poisonous. Never eat it."
+        ]
+      },
+      "porcini": {
+        "latin": "Boletus edulis",
+        "cut": "Cut at the base of the thick stem.",
+        "clean": "Brush the cap. White pores underneath mean it's young.",
+        "notes": [
+          "A brown, bun-like cap on a fat, club-shaped stem.",
+          "No gills: underneath is a sponge of tiny pores that drop the spores.",
+          "A fine white net covers the top of the stem.",
+          "It partners with pine, spruce and birch roots.",
+          "Edible and prized. Old pores turn yellow-green and soft."
+        ]
+      }
+    }
   },
   "subscreen": {
     "title": "Pack",

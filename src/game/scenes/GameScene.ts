@@ -69,7 +69,7 @@ import type { WorldProp } from '@/game/objects/WorldProp';
 // viva com sprite e colisao) — dois tipos com o mesmo nome em modulos diferentes. Aqui os dois
 // se encontram, porque o mundo infinito converte um no outro enquanto o heroi anda.
 import type { PropDir } from '@/game/world/worldSchema';
-import { t, tLines } from '@/game/i18n/i18n';
+import { t, tLines, tWords } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
   FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE,
@@ -77,6 +77,11 @@ import {
 } from '@/game/render3d/World3D';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
+import {
+  FUNGUS_SPECS, KNIFE_TEXTURE_KEY, MUSHROOM_KINDS, ROASTABLE_ORDER,
+  fungusTextureKey, isMushroomKind, registerFungiTextures, type MushroomKind,
+} from '@/game/fungi/fungi';
+import { ForagingOverlay } from '@/game/runtime/ForagingOverlay';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import {
   BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
@@ -95,6 +100,7 @@ import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl, type SubScreenView } from '@/game/runtime/SubScreen';
 import { QuickBag, type QuickBagView } from '@/game/runtime/QuickBag';
+import type { FieldNoteEntry } from '@/game/runtime/SubScreen';
 import { FpsCounter } from '@/game/runtime/FpsCounter';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -153,6 +159,12 @@ import { FireVisitor } from '@/game/entities/FireVisitor';
 
 // The per-item 2D art (Phaser texture atlas keys): the swing arc, the overhead chop and the
 // death elegy's back item all draw from here. The 3D twin is BACK_ITEM_VISUAL_3D below.
+// Os seis fungos usam a MESMA arte de 16px em toda parte (chão, costas, bolsa, item-get) — ela é
+// gerada no boot por registerFungiTextures, nas duas pipelines, sob a mesma chave.
+const FUNGUS_VISUALS = Object.fromEntries(
+  MUSHROOM_KINDS.map((kind) => [kind, { texture: fungusTextureKey(kind), frame: 0 }]),
+) as Record<MushroomKind, { texture: string; frame: number }>;
+
 const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> = {
   sword: { texture: ASSET_KEYS.swordItemIcon, frame: 0 },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
@@ -171,7 +183,8 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   charcoal: { texture: 'charcoal-item', frame: 0 },
   furnace: { texture: ASSET_KEYS.furnace, frame: 0 },
   altar: { texture: ASSET_KEYS.altar, frame: 0 },
-  mushroom: { texture: ASSET_KEYS.mushroomItem, frame: 0 },
+  knife: { texture: KNIFE_TEXTURE_KEY, frame: 0 },
+  ...FUNGUS_VISUALS,
 };
 
 // The same per-item art resolved through the 3D texture registry (textures3d keys),
@@ -194,7 +207,8 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   charcoal: { texture: 'charcoal-item', frame: 0 },
   furnace: { texture: 'furnace', frame: 0 },
   altar: { texture: 'altar', frame: 0 },
-  mushroom: { texture: 'mushroom-item', frame: 0 },
+  knife: { texture: KNIFE_TEXTURE_KEY, frame: 0 },
+  ...FUNGUS_VISUALS,
 };
 
 
@@ -218,7 +232,8 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
   bloom: { texture: ASSET_KEYS.bloomItem, frame: 0 },
   furnace: { texture: ASSET_KEYS.furnace, frame: 0 },
   altar: { texture: ASSET_KEYS.altar, frame: 0 },
-  mushroom: { texture: ASSET_KEYS.mushroomItem, frame: 0 },
+  knife: { texture: KNIFE_TEXTURE_KEY, frame: 0 },
+  ...FUNGUS_VISUALS,
 };
 
 // ── OS DOIS BOTOES ───────────────────────────────────────────────────────────
@@ -422,6 +437,8 @@ export class GameScene extends Phaser.Scene {
   // O CATALOGO DA ENCOMENDA, e a bancada em que ele foi aberto. Ele congela o mundo como as
   // cartas de chunk (a bolsa e a unica tela deste jogo que roda com o mundo vivo).
   private orderOverlay?: ToolboxOrderOverlay;
+  /** A colheita de um cogumelo aberta (ver harvestMushroomAt). Congela o mundo como o catálogo. */
+  private foraging?: ForagingOverlay;
   private orderBox?: ToolboxObject;
   /** As marcas de "a peça cai aqui" — o quadrado no chão e o keycap (ver PlacementHints). */
   private placementHints?: PlacementHints;
@@ -618,6 +635,7 @@ export class GameScene extends Phaser.Scene {
     // prop/item is built (their billboards resolve their textures on construction below).
     registerBucketTextures(this);
     registerCharcoalTexture(this);
+    registerFungiTextures(this);
     registerPlacementTextures(this);
     registerCozyTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
@@ -935,6 +953,23 @@ export class GameScene extends Phaser.Scene {
    * data URL). Um inventario com desenho proprio seria uma segunda gramatica para os mesmos
    * objetos — o jogador tem de reconhecer na mochila o que viu no chao.
    */
+  /** A ficha de uma espécie, como a bolsa e a subtela a mostram (o texto mora no locale). */
+  private fieldNote(kind: MushroomKind, count: number): FieldNoteEntry {
+    const species = `fungi.species.${kind}`;
+    const edibility = FUNGUS_SPECS[kind].edibility;
+    return {
+      kind,
+      count,
+      icon: spriteDataUrl(this, fungusTextureKey(kind), 0),
+      label: t(`items.name.${kind}`),
+      latin: t(`${species}.latin`),
+      edibility,
+      edibilityLabel: t(`fungi.edibility.${edibility}`),
+      notes: tWords(`${species}.notes`),
+      found: this.seenItems.has(kind),
+    };
+  }
+
   private subScreenView(): SubScreenView {
     const row = ({ kind, count }: { kind: HeldItemKind; count: number }) => {
       const visual = ITEM_VISUAL_2D[kind];
@@ -951,9 +986,15 @@ export class GameScene extends Phaser.Scene {
       items: this.inventory.bag().map(row),
       // A mesma separação da bolsa (uma resposta só para "o que tem gesto?"): a grade escolhe, os
       // contadores apenas informam.
-      materials: this.inventory.materials().map(row),
+      materials: this.inventory.materials().filter(({ kind }) => !isMushroomKind(kind)).map(row),
       selected: this.heldItem,
       map: this.subScreenMap(),
+      // O CADERNO DE CAMPO: as seis espécies, as achadas com a ficha inteira e as que faltam
+      // apagadas — a lista do que o vale ainda tem para ensinar.
+      fieldNotes: {
+        title: t('fungi.notesTitle'),
+        rows: MUSHROOM_KINDS.map((kind) => this.fieldNote(kind, this.inventory.count(kind))),
+      },
       // A PAGINA DE PLANOS e o MESMO catalogo da bancada (`orderCatalogView`), so que em leitura.
       plans: this.toolboxes.length
         ? { title: t('subscreen.plansTitle'), rows: this.orderCatalogView().entries }
@@ -1312,6 +1353,8 @@ export class GameScene extends Phaser.Scene {
     this.orderOverlay?.destroy();
     this.orderOverlay = undefined;
     this.orderBox = undefined;
+    this.foraging?.destroy();
+    this.foraging = undefined;
     this.lootManager?.destroy();
     this.itemManager?.destroy();
     this.placementHints?.destroy();
@@ -1377,8 +1420,8 @@ export class GameScene extends Phaser.Scene {
       this.renderProps();
       return;
     }
-    // O CATALOGO de fabricacao congela igual.
-    if (this.orderOverlay) return;
+    // O CATALOGO de fabricacao congela igual, e a colheita de um cogumelo tambem.
+    if (this.orderOverlay || this.foraging) return;
 
     if (!this.movementController || !this.chunkManager || !this.camera) {
       return;
@@ -1853,6 +1896,8 @@ export class GameScene extends Phaser.Scene {
     }
     // PEDRA e VEIO são a mesma rocha, e a picareta é a resposta dos dois.
     if (this.getRockAt(wx, wy)?.blocking ?? false) return this.firstOwned(['pickaxe']);
+    // O COGUMELO NASCENDO pede a faca.
+    if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return this.firstOwned(['knife']);
     return null;
   }
 
@@ -2123,6 +2168,66 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * A COLHEITA DE UM COGUMELO (ver ForagingOverlay): cortar na altura certa, serrar, escovar, ler a
+   * ficha. O Z e o X trazem aqui diante de um cogumelo nascendo; sem a faca, o herói só pensa nela.
+   *
+   * O cogumelo SÓ SAI DO CHÃO quando entra na cesta (`basketMushroom`), no mesmo frame: uma
+   * colheita largada no meio (sair antes do corte, fechar o jogo) deixa o cogumelo onde estava.
+   */
+  private harvestMushroomAt(wx: number, wy: number): boolean {
+    const kind = this.itemManager?.kindAt(wx, wy);
+    if (!isMushroomKind(kind)) return false;
+    if (this.foraging) return true;
+    if (!this.inventory.has('knife')) {
+      this.heroThought?.show(KNIFE_TEXTURE_KEY);
+      return true;
+    }
+    // A faca vai para a mão (a tocha acesa é intocável — a mesma exceção de `equipToolFor`).
+    if (this.heldItem !== 'knife' && !this.heldOnFire) this.selectItem('knife');
+    this.useBufferMs = 0;
+    this.stopBreathing();
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.quickBag?.close();
+    this.quickBag?.setButtonVisible(false);
+    this.actionButtons?.setVisible(false);
+    // A tarja de teclas mentiria por cima da colheita (a tela diz os próprios botões).
+    this.controlsHint?.destroy();
+    this.controlsHint = undefined;
+    const sound = getSoundManager();
+    sound.playGrassCut();
+    this.foraging = new ForagingOverlay(kind, {
+      onStroke: () => sound.playGrassCut(),
+      onMiss: () => sound.playItemBonk(),
+      onDetach: () => sound.playItemStash(),
+      onSpeck: () => sound.playDialogBlip(720, 'sine'),
+      onClean: () => sound.playCozyChime(),
+      onDone: () => this.basketMushroom(kind, wx, wy),
+      onCancel: () => this.closeForaging(),
+    }, isTouchDevice());
+    return true;
+  }
+
+  private closeForaging(): void {
+    this.foraging = undefined;
+    this.quickBag?.setButtonVisible(true);
+    this.actionButtons?.setVisible(true);
+  }
+
+  /** O cogumelo limpo entra na CESTA — e a espécie, no caderno (seenItems). */
+  private basketMushroom(kind: MushroomKind, wx: number, wy: number): void {
+    this.closeForaging();
+    this.itemManager?.takeAt(wx, wy);
+    const first = !this.seenItems.has(kind);
+    this.inventory.stash(kind, 1);
+    this.seenItems.add(kind);
+    getSoundManager().playItemStash();
+    if (first) getSoundManager().playSingingBowl();
+    // A Hollis pede que se ENCONTRE cada espécie: a sexta fecha o pedido aqui mesmo, no mato.
+    this.questEvent({ type: 'gather', item: kind, units: 1 });
+    this.persistAdventure();
+  }
+
   private closeToolboxOrder(): void {
     this.orderOverlay = undefined;
     this.orderBox = undefined;
@@ -2245,6 +2350,9 @@ export class GameScene extends Phaser.Scene {
     if (this.npcManager?.hasNpcAt(wx, wy)) return true;
     if (this.plantedSwordTile?.x === wx && this.plantedSwordTile.y === wy) return true;
     if (this.isQuestMarkAt(wx, wy)) return true;
+    // O cogumelo nascendo e um corpo no caminho: o heroi encosta nele e fica DE FRENTE — que e a
+    // mira da faca. Pisa-lo para apanhar seria arranca-lo, e o jogo ensina o contrario.
+    if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return true;
     return false;
   }
 
@@ -2293,6 +2401,13 @@ export class GameScene extends Phaser.Scene {
       }
       for (const key of ['keydown-RIGHT', 'keydown-D']) {
         kb.on(key, (e: KeyboardEvent) => this.routeBagStep(e, 1));
+      }
+      // Cima/baixo trocam de fileira: as ferramentas, ou a CESTA dos cogumelos com as fichas.
+      for (const key of ['keydown-UP', 'keydown-W']) {
+        kb.on(key, (e: KeyboardEvent) => this.routeBagRow(e, -1));
+      }
+      for (const key of ['keydown-DOWN', 'keydown-S']) {
+        kb.on(key, (e: KeyboardEvent) => this.routeBagRow(e, 1));
       }
       kb.on('keydown-ENTER', () => { if (this.quickBag?.isOpen) this.quickBag.commit(); });
     }
@@ -2354,6 +2469,11 @@ export class GameScene extends Phaser.Scene {
     this.quickBag.step(delta);
   }
 
+  private routeBagRow(event: KeyboardEvent | undefined, delta: number): void {
+    if (!this.quickBag?.isOpen || event?.repeat) return;
+    this.quickBag.stepRow(delta);
+  }
+
   /**
    * A BOLSA ABRE E FECHA — e nada mais no jogo faz isso. Ela recusa exatamente onde o menu de
    * pausa recusa: nenhuma tela que já congelou o mundo pode ganhar uma segunda por cima.
@@ -2362,7 +2482,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.quickBag) return;
     if (this.quickBag.isOpen) { this.quickBag.close(); return; }
     if (this.pauseMenu || this.dialogOpen || this.camShifting
-      || this.itemGetOpen || this.cutsceneActive || this.orderOverlay) return;
+      || this.itemGetOpen || this.cutsceneActive || this.orderOverlay || this.foraging) return;
     this.quickBag.openBag();
   }
 
@@ -2394,10 +2514,14 @@ export class GameScene extends Phaser.Scene {
         label: t(`items.name.${entry.kind}`),
       };
     };
+    const mats = this.inventory.materials();
     return {
       items: this.inventory.bag().map(row),
       // A MATÉRIA-PRIMA não entra na fileira: ela é uma linha de contadores embaixo, sem cursor.
-      materials: this.inventory.materials().map(row),
+      materials: mats.filter(({ kind }) => !isMushroomKind(kind)).map(row),
+      // Os COGUMELOS são matéria-prima também (não têm gesto), mas ganham a fileira deles: a
+      // CESTA, onde o cursor desce para ler a ficha de cada espécie.
+      basket: mats.flatMap(({ kind, count }) => (isMushroomKind(kind) ? [this.fieldNote(kind, count)] : [])),
       equipped: this.heldItem,
       emptyLabel: t('bag.empty'),
     };
@@ -2413,7 +2537,7 @@ export class GameScene extends Phaser.Scene {
     return !this.dialogOpen && !this.camShifting
       && !this.itemGetOpen && !this.cutsceneActive
       && !this.pauseMenu && this.quickBag?.isOpen !== true
-      && !this.orderOverlay
+      && !this.orderOverlay && !this.foraging
       && this.movementController !== undefined;
   }
 
@@ -2489,6 +2613,8 @@ export class GameScene extends Phaser.Scene {
     if (!this.canAct()) return;
     const front = this.facingTile();
     if (this.talkToNpcAt(front.x, front.y)) return;
+    // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
+    if (this.harvestMushroomAt(front.x, front.y)) return;
     if (this.tendHearthAt(front.x, front.y)) return;
     if (this.restAtFireAt(front.x, front.y)) return;
     if (this.openCraftMenuAt(front.x, front.y)) return;
@@ -2835,6 +2961,8 @@ export class GameScene extends Phaser.Scene {
    * seria fogo que não está em lugar nenhum do mundo (a mesma lei do `selectItem`).
    */
   private collectUnderfoot(wx: number, wy: number): void {
+    // Cogumelo nao se apanha pisando — so a faca o solta (ver harvestMushroomAt).
+    if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return;
     const taken = this.itemManager?.takeAt(wx, wy);
     if (!taken) return;
     const handWasEmpty = this.heldItem === 'none';
@@ -2845,7 +2973,7 @@ export class GameScene extends Phaser.Scene {
       this.torchFuelMs = taken.fire?.fuelMs ?? 0;
     }
     this.updateBackItem();
-    if ((isBagItem(taken.kind) || taken.kind === 'mushroom') && !this.seenItems.has(taken.kind)) {
+    if (isBagItem(taken.kind) && !this.seenItems.has(taken.kind)) {
       this.seenItems.add(taken.kind);
       this.showItemGet(taken.kind, () => {});
     } else {
@@ -2911,6 +3039,8 @@ export class GameScene extends Phaser.Scene {
    * VAZIO (a lei do A). Pousar nao e mais o fallback disto: pousar mora no B.
    */
   private useItemAt(wx: number, wy: number): boolean {
+    // O COGUMELO NASCENDO vem primeiro: a faca e a resposta, e `equipToolFor` ja a sacou.
+    if (this.harvestMushroomAt(wx, wy)) return true;
     // A ESPONJA vem antes de tudo, e ela e o unico caso desta tabela que NAO olha QUAL item esta
     // na mao: martelar nao e usar uma ferramenta, e bater — serve o machado, a picareta, a pedra.
     // Mao vazia e espada empunhada nao chegam aqui (o A delas e combate, ver swingAttack), e isso
@@ -3240,6 +3370,12 @@ export class GameScene extends Phaser.Scene {
     // half a tile. Bumps aren't steps, so nothing else stops breathing here.
     this.stopBreathing();
 
+    // O COGUMELO NASCENDO sem faca na mochila: o heroi PENSA nela (a Hollis tem uma). O icone,
+    // nunca a palavra — a mesma lingua da fogueira do fim.
+    if (isMushroomKind(this.itemManager?.kindAt(wx, wy)) && !this.inventory.has('knife')) {
+      this.heroThought?.show(KNIFE_TEXTURE_KEY);
+      return;
+    }
 
     // (FALAR SAIU DAQUI. O esbarrao abria o dialogo, e com isso conversar era a unica coisa do jogo
     // que acontecia sem ninguem ter pedido: bastava a seta encostar no NPC — atravessando um vao,
@@ -5120,8 +5256,10 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
     if (this.inventory.count('wood') < 1) { this.heroThought?.show(ASSET_KEYS.woodIcon); return true; }
-    if (this.inventory.count('mushroom') < 1) { this.heroThought?.show(ASSET_KEYS.mushroomItem); return true; }
-    void this.playRoastEnding(hearth, wx, wy);
+    // So vai ao espeto o que se come assado: a amanita fica na cesta (ver ROASTABLE_ORDER).
+    const mushroom = ROASTABLE_ORDER.find((kind) => this.inventory.count(kind) > 0);
+    if (!mushroom) { this.heroThought?.show(fungusTextureKey('porcini')); return true; }
+    void this.playRoastEnding(hearth, wx, wy, mushroom);
     return true;
   }
 
@@ -5159,7 +5297,9 @@ export class GameScene extends Phaser.Scene {
    * O chapeu doura aos poucos, os vaga-lumes passam, a brisa mexe no mato. Ninguem diz nada por
    * um tempo — e entao o quadro escurece e os creditos sobem.
    */
-  private async playRoastEnding(hearth: CampfireObject, wx: number, wy: number): Promise<void> {
+  private async playRoastEnding(
+    hearth: CampfireObject, wx: number, wy: number, mushroom: MushroomKind,
+  ): Promise<void> {
     const w3 = this.world3d;
     const hb = this.heroBillboard;
     if (!w3 || !hb) return;
@@ -5167,7 +5307,7 @@ export class GameScene extends Phaser.Scene {
     this.roasting = true;
     this.roasted = true;
     this.inventory.remove('wood');
-    this.inventory.remove('mushroom');
+    this.inventory.remove(mushroom);
     this.extinguishTorch();
     this.updateBackItem();
     this.backItemBb?.setVisible(false);

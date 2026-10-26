@@ -131,6 +131,33 @@ const cleanMachines = (
 /** Itens que sairam do jogo: um save antigo que os guarde simplesmente os esquece. */
 const REMOVED_KINDS: ReadonlySet<string> = new Set(['greatAxe']);
 
+/**
+ * O COGUMELO GENERICO VIROU SEIS ESPECIES (fungi.ts). Um save de antes guarda 'mushroom' em dois
+ * lugares: na mochila (vira porcini — o de comer, para o fim continuar possivel) e na foto do chao,
+ * onde cada um ganha a especie que o world.json deu aquele tile (scripts/cozy-world.mjs).
+ */
+const LEGACY_MUSHROOM_AT: Readonly<Record<string, string>> = {
+  '1,1': 'flyAgaric', '11,2': 'chanterelle', '11,10': 'inkCap', '12,21': 'puffball',
+  '2,30': 'morel', '31,29': 'porcini', '1,36': 'porcini', '2,46': 'puffball',
+};
+
+const migrateInventory = (
+  list: Array<{ kind: HeldItemKind; count: number }>,
+): Array<{ kind: HeldItemKind; count: number }> => list.map((i) => (
+  (i.kind as string) === 'mushroom' ? { ...i, kind: 'porcini' as HeldItemKind } : i
+));
+
+const migrateGround = (
+  value: StoredSnapshot['groundItems'],
+): Map<string, AdventureGroundItem[]> => new Map(
+  Object.entries(value ?? {}).map(([scope, items]) => [
+    scope,
+    (Array.isArray(items) ? items : []).map((it) => ((it.kind as string) === 'mushroom'
+      ? { ...it, kind: (LEGACY_MUSHROOM_AT[`${it.worldX},${it.worldY}`] ?? 'porcini') as HeldItemKind }
+      : it)),
+  ]),
+);
+
 const load = (): AdventureSnapshot => {
   const base = defaultSnapshot();
   try {
@@ -143,7 +170,7 @@ const load = (): AdventureSnapshot => {
         ? { worldX: p.respawn.worldX, worldY: p.respawn.worldY }
         : null,
       inventory: Array.isArray(p.inventory)
-        ? p.inventory.filter((i) => i && typeof i.kind === 'string' && !REMOVED_KINDS.has(i.kind))
+        ? migrateInventory(p.inventory.filter((i) => i && typeof i.kind === 'string' && !REMOVED_KINDS.has(i.kind)))
         : [],
       selected: p.selected && !REMOVED_KINDS.has(p.selected) ? p.selected : 'none',
       introSeen: p.introSeen === true,
@@ -155,7 +182,7 @@ const load = (): AdventureSnapshot => {
       giftsGiven: new Set(p.giftsGiven ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
       machines: cleanMachines(p.machines),
-      groundItems: new Map(Object.entries(p.groundItems ?? {})),
+      groundItems: migrateGround(p.groundItems),
       visitedChunks: new Set(p.visitedChunks ?? []),
       questProgress: new Map(
         Object.entries(p.questProgress ?? {}).map(([key, n]) => [key, num(n, 0)]),

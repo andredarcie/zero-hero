@@ -9560,3 +9560,23 @@ Revisados contra Apple HIG / Material / Game Accessibility Guidelines, com print
 - **Pausa com 42px** → 48px. **Contraste**: fundo 52%, borda 2px a 60%, ícone opaco (era 34% / 1px a 32% / texto 72%).
 - **FPS na tela do jogador**: só no build de dev ou com `?fps` / `?prof` (`FpsCounter.wanted`).
 - **Opções novas na pausa, só no toque** (`runtime/touchSettings`, classes no `<body>`): botões para canhoto (par e bolsa à esquerda, A na beirada), botões grandes (80px), botões sólidos, e vibração curta no A/B (só onde `navigator.vibrate` existe — no iPhone a opção nem aparece).
+
+## A coleta de cogumelos — seis fungos reais, uma faca e dois mini-games (2026-10-25)
+
+- O cogumelo genérico ('mushroom') virou SEIS espécies reais (`src/game/fungi/fungi.ts`), cada uma
+  escolhida por ensinar uma coisa: amanita (véu, volva, veneno), cantarelo (falsas lamelas), porcini
+  (poros), coprino (deliquescência), morel (ascomiceto, oco) e bufa-de-lobo (esporos dentro da bola).
+- A arte é desenhada por código (formas normalizadas num raster) para sair igual em 16px (chão,
+  bolsa) e 48px (close dos mini-games). O texto científico mora no locale (`fungi.species.*`).
+- No chão o cogumelo é SÓLIDO e não se apanha pisando: o herói encosta, fica de frente, e Z ou X com
+  a faca (presente da Hollis) abre `ForagingOverlay`: mirar o corte na faixa (a amanita pede abaixo
+  do solo, pela volva), serrar no vai-e-vem, ver o micélio, escovar a sujeira, ler a ficha.
+- Sem falha e sem perda: sair antes do corte deixa o cogumelo; ele só sai do chão no frame em que
+  entra na cesta (`basketMushroom`).
+- A Hollis pede que se ENCONTRE cada espécie (seis `gather`), sem consumir; as dicas dela dizem onde
+  cada uma nasce. A bolsa ganhou a CESTA (↓) com a ficha; a subtela, o caderno de campo.
+- A fogueira do fim só assa o que se come (`ROASTABLE_ORDER`): a amanita fica na cesta.
+- `scripts/cozy-world.mjs` dá a espécie de cada cogumelo (do mais perto da Hollis ao mais longe) e o
+  do jardim é porcini. Saves antigos migram em `adventureState` (`LEGACY_MUSHROOM_AT`).
+- PENDENTE: o cenário `playtest/scenarios/zerar.mjs` ainda coleta "cinco cogumelos pisando" e não
+  passa mais — precisa aprender a colheita.

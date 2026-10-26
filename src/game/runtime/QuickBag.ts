@@ -1,4 +1,5 @@
 import { t } from '@/game/i18n/i18n';
+import type { FieldNoteEntry } from '@/game/runtime/SubScreen';
 
 /**
  * A BOLSA — a mochila aberta COM O JOGO RODANDO.
@@ -157,6 +158,49 @@ const CSS = `
   opacity: 0.92;
 }
 #${ROOT_ID} .zh-bag-mat span { text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
+/* A CESTA: os cogumelos, numa fileira PROPRIA abaixo dos contadores. Ela nao equipa nada (cogumelo
+   nao tem gesto); o cursor desce ate ela para LER — nome, nome cientifico e a ficha da especie. */
+#${ROOT_ID} .zh-bag-basket {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  max-width: min(88vw, 560px);
+}
+#${ROOT_ID} .zh-bag-basket-title {
+  color: rgba(216, 209, 192, 0.5); font-size: 12px; letter-spacing: 0.3em; text-indent: 0.3em;
+  text-transform: uppercase;
+}
+#${ROOT_ID} .zh-bag-basket-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+#${ROOT_ID} .zh-bag-fungus {
+  position: relative; width: 52px; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(216, 209, 192, 0.14); background: rgba(10, 8, 6, 0.45);
+  cursor: pointer; pointer-events: auto; opacity: 0.6;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: transform 110ms ease, opacity 110ms ease, border-color 110ms ease;
+}
+#${ROOT_ID} .zh-bag-fungus img {
+  width: 80%; height: 80%; object-fit: contain; image-rendering: pixelated; pointer-events: none;
+}
+#${ROOT_ID} .zh-bag-fungus.zh-at {
+  opacity: 1; transform: scale(1.15);
+  border-color: #d4c8a4; background: rgba(42, 33, 21, 0.86);
+}
+#${ROOT_ID} .zh-bag-row.zh-away { opacity: 0.45; }
+#${ROOT_ID} .zh-bag-note {
+  display: none; max-width: min(88vw, 520px); text-align: left;
+  color: #d8d1c0; font-size: 15px; line-height: 1.45;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+}
+#${ROOT_ID} .zh-bag-note.zh-on { display: block; }
+#${ROOT_ID} .zh-bag-note-head { text-align: center; margin: 0 0 4px; }
+#${ROOT_ID} .zh-bag-note-latin { color: #b9ae94; font-style: italic; }
+#${ROOT_ID} .zh-bag-note-ed { margin-left: 8px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+#${ROOT_ID} .zh-bag-note-ed.zh-edible { color: #a9cf86; }
+#${ROOT_ID} .zh-bag-note-ed.zh-cooked { color: #e5b558; }
+#${ROOT_ID} .zh-bag-note-ed.zh-poison { color: #ef7a62; }
+#${ROOT_ID} .zh-bag-note ul { margin: 0; padding: 0 0 0 1.1em; }
+#${ROOT_ID} .zh-bag-note li { margin: 0 0 2px; }
+/* Com a ficha aberta a coluna cresce, e a faixa de sombra cresce junto para a letra ler. */
+#${ROOT_ID}.zh-tall .zh-bag-veil { height: min(760px, 100vh); }
 /* O CONFIRMA do dedo. So no toque: no teclado quem confirma e a tecla, e dois desenhos dizendo
    a mesma coisa e mobilia. Ele fecha a fileira pela direita — nunca solto num canto, onde numa
    tela estreita colidiria com os proprios itens. */
@@ -220,6 +264,11 @@ export interface QuickBagView {
    * bancada; ele nao precisa poder "empunhar" ferro, porque empunhar ferro nao faz nada.
    */
   materials: QuickBagItem[];
+  /**
+   * A CESTA — os cogumelos, cada um com a ficha da especie. Fileira propria (cima/baixo), sem
+   * equipar: o cursor vem aqui para ler.
+   */
+  basket: FieldNoteEntry[];
   /** O item que o X usa AGORA — o ponto de brasa, e nao o cursor. */
   equipped: string;
   emptyLabel: string;
@@ -260,6 +309,15 @@ export class QuickBag {
   private readonly mats: HTMLDivElement;
   private readonly setBtn: HTMLButtonElement;
   private readonly toggleBtn?: HTMLButtonElement;
+  private readonly row: HTMLDivElement;
+  private readonly basketEl: HTMLDivElement;
+  private readonly basketTitle: HTMLDivElement;
+  private readonly basketRow: HTMLDivElement;
+  private readonly note: HTMLDivElement;
+  /** Em que fileira o cursor esta: as ferramentas, ou a cesta. */
+  private onRow: 'bag' | 'basket' = 'bag';
+  /** O cogumelo sob o cursor da cesta. */
+  private fungus = '';
 
   private open = false;
   private destroyed = false;
@@ -289,6 +347,7 @@ export class QuickBag {
 
     const row = document.createElement('div');
     row.className = 'zh-bag-row';
+    this.row = row;
 
     this.prev = this.navButton('‹', -1);
     this.next = this.navButton('›', 1);
@@ -319,7 +378,17 @@ export class QuickBag {
     this.mats = document.createElement('div');
     this.mats.className = 'zh-bag-mats';
 
-    strip.append(this.name, row, this.mats, this.keys);
+    this.basketEl = document.createElement('div');
+    this.basketEl.className = 'zh-bag-basket';
+    this.basketTitle = document.createElement('div');
+    this.basketTitle.className = 'zh-bag-basket-title';
+    this.basketRow = document.createElement('div');
+    this.basketRow.className = 'zh-bag-basket-row';
+    this.basketEl.append(this.basketTitle, this.basketRow);
+    this.note = document.createElement('div');
+    this.note.className = 'zh-bag-note';
+
+    strip.append(this.name, row, this.mats, this.basketEl, this.note, this.keys);
     this.root.append(veil, strip);
     document.body.appendChild(this.root);
 
@@ -355,7 +424,10 @@ export class QuickBag {
     // A leitura vem ANTES de `open = true` de proposito: se ela explodir (a cena e quem monta a
     // view), a bolsa fica FECHADA em vez de ficar "aberta" com o painel invisivel — um estado que
     // trava o I, o B e os pes do heroi de uma vez so, sem nada na tela dizendo por que.
-    this.cursor = this.cb.read().equipped;
+    const view = this.cb.read();
+    this.cursor = view.equipped;
+    // Sem ferramenta nenhuma e com cogumelo na cesta, a bolsa abre JA na cesta.
+    this.onRow = view.items.length === 0 && view.basket.length > 0 ? 'basket' : 'bag';
     this.open = true;
     this.root.style.display = '';
     this.render();
@@ -376,6 +448,14 @@ export class QuickBag {
   /** Andar com o cursor: -1 esquerda, +1 direita, SEM dar a volta (ver Inventory.step). */
   public step(delta: number): void {
     if (!this.open) return;
+    if (this.onRow === 'basket') {
+      const basket = this.cb.read().basket;
+      if (basket.length === 0) return;
+      const now = Math.max(0, basket.findIndex((it) => it.kind === this.fungus));
+      this.fungus = basket[Math.max(0, Math.min(basket.length - 1, now + delta))].kind;
+      this.render();
+      return;
+    }
     const items = this.cb.read().items;
     if (items.length === 0) return;
     const at = Math.max(0, Math.min(items.length - 1, this.resolveIndex(items) + delta));
@@ -383,10 +463,24 @@ export class QuickBag {
     this.render();
   }
 
-  /** CONFIRMAR: o item sob o cursor passa a ser o do B, e a bolsa fecha. */
+  /**
+   * TROCAR DE FILEIRA (cima/baixo): as ferramentas em cima, a cesta embaixo. So vai para uma
+   * fileira que tem alguma coisa.
+   */
+  public stepRow(delta: number): void {
+    if (!this.open) return;
+    const view = this.cb.read();
+    const want = delta > 0 ? 'basket' : 'bag';
+    if (want === 'basket' && view.basket.length === 0) return;
+    if (want === 'bag' && view.items.length === 0) return;
+    this.onRow = want;
+    this.render();
+  }
+
+  /** CONFIRMAR: o item sob o cursor passa a ser o do B, e a bolsa fecha. Na cesta, so fecha. */
   public commit(): void {
     if (!this.open) return;
-    if (this.cursor) this.cb.onSet(this.cursor);
+    if (this.cursor && this.onRow === 'bag') this.cb.onSet(this.cursor);
     this.close();
   }
 
@@ -424,13 +518,16 @@ export class QuickBag {
     // continua tendo o que dizer, e some-los junto com a fileira faria o jogador achar que o
     // minerio se perdeu.
     this.renderMaterials(view.materials);
+    if (view.basket.length === 0 && this.onRow === 'basket') this.onRow = 'bag';
+    this.renderBasket(view.basket);
+    this.row.classList.toggle('zh-away', this.onRow === 'basket');
 
     if (items.length === 0) {
       this.cursor = '';
       this.cursorAt = 0;
       this.track.replaceChildren();
-      this.name.textContent = view.emptyLabel;
-      this.keys.textContent = t('bag.keysEmpty');
+      this.name.textContent = this.onRow === 'basket' ? this.fungusLabel(view.basket) : view.emptyLabel;
+      this.keys.textContent = t(this.onRow === 'basket' ? 'bag.keysBasket' : 'bag.keysEmpty');
       this.prev.classList.add('zh-off');
       this.next.classList.add('zh-off');
       this.setBtn.classList.add('zh-off');
@@ -472,13 +569,79 @@ export class QuickBag {
       this.track.appendChild(slot);
     });
 
-    this.name.textContent = items[at].label;
-    this.keys.textContent = t('bag.keys');
+    this.name.textContent = this.onRow === 'basket' ? this.fungusLabel(view.basket) : items[at].label;
+    if (this.onRow === 'basket') this.keys.textContent = t('bag.keysBasket');
+    else this.keys.textContent = view.basket.length > 0 ? `${t('bag.keys')} · ${t('bag.keysToBasket')}` : t('bag.keys');
     this.prev.classList.toggle('zh-off', at === 0);
     this.next.classList.toggle('zh-off', at === items.length - 1);
     this.setBtn.classList.remove('zh-off');
 
     this.slide(at, items.length);
+  }
+
+  private fungusLabel(basket: FieldNoteEntry[]): string {
+    return basket.find((it) => it.kind === this.fungus)?.label ?? '';
+  }
+
+  /**
+   * A CESTA e a FICHA do cogumelo sob o cursor. A ficha so aparece com o cursor NA cesta: com ele
+   * nas ferramentas, a bolsa continua sendo a fileira curta de sempre.
+   */
+  private renderBasket(basket: FieldNoteEntry[]): void {
+    this.basketRow.replaceChildren();
+    this.note.replaceChildren();
+    this.basketEl.style.display = basket.length ? 'flex' : 'none';
+    if (basket.length === 0) {
+      this.note.classList.remove('zh-on');
+      this.root.classList.remove('zh-tall');
+      return;
+    }
+    if (!basket.some((it) => it.kind === this.fungus)) this.fungus = basket[0].kind;
+    this.basketTitle.textContent = t('fungi.basket');
+    const inBasket = this.onRow === 'basket';
+    for (const item of basket) {
+      const slot = document.createElement('div');
+      slot.className = inBasket && item.kind === this.fungus ? 'zh-bag-fungus zh-at' : 'zh-bag-fungus';
+      slot.title = item.label;
+      const img = document.createElement('img');
+      img.src = item.icon;
+      img.alt = item.label;
+      slot.appendChild(img);
+      if (item.count > 1) {
+        const count = document.createElement('span');
+        count.className = 'zh-bag-count';
+        count.textContent = String(item.count);
+        slot.appendChild(count);
+      }
+      // Tocar num cogumelo ABRE a ficha dele — ler e o unico gesto da cesta.
+      slot.addEventListener('click', () => {
+        this.onRow = 'basket';
+        this.fungus = item.kind;
+        this.render();
+      });
+      this.basketRow.appendChild(slot);
+    }
+    const chosen = basket.find((it) => it.kind === this.fungus);
+    const show = inBasket && chosen !== undefined;
+    this.note.classList.toggle('zh-on', show);
+    this.root.classList.toggle('zh-tall', show);
+    if (!show || !chosen) return;
+    const head = document.createElement('div');
+    head.className = 'zh-bag-note-head';
+    const latin = document.createElement('span');
+    latin.className = 'zh-bag-note-latin';
+    latin.textContent = chosen.latin;
+    const ed = document.createElement('span');
+    ed.className = `zh-bag-note-ed zh-${chosen.edibility}`;
+    ed.textContent = chosen.edibilityLabel;
+    head.append(latin, ed);
+    const list = document.createElement('ul');
+    for (const text of chosen.notes) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      list.appendChild(li);
+    }
+    this.note.append(head, list);
   }
 
   /** Icone + numero por material. Sem cursor, sem clique: e leitura, nao escolha. */

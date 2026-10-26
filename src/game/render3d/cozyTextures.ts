@@ -15,8 +15,8 @@ const PALETTE: Record<string, Rgba> = {
   // o espeto e o cogumelo
   t: [0x7a, 0x52, 0x2c, 255], // graveto
   u: [0xa8, 0x77, 0x44, 255], // graveto claro
-  c: [0x3f, 0x6f, 0xb8, 255], // chapeu azul do cogumelo (a mesma cor dos do bosque)
-  v: [0x7b, 0xa7, 0xe0, 255], // brilho do chapeu
+  c: [0x86, 0x53, 0x2a, 255], // chapeu castanho do cogumelo (o porcini de fungi.ts)
+  v: [0xb0, 0x7c, 0x45, 255], // brilho do chapeu
   n: [0xe8, 0xdc, 0xc0, 255], // pe do cogumelo
   r: [0xb5, 0x6a, 0x2e, 255], // chapeu ja tostado
   // as marcas do vale ajudado

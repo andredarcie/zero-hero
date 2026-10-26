@@ -530,17 +530,17 @@
       ],
       "pickups": [
         {
-          "type": "mushroom",
+          "type": "flyAgaric",
           "worldX": 1,
           "worldY": 1
         },
         {
-          "type": "mushroom",
+          "type": "chanterelle",
           "worldX": 11,
           "worldY": 2
         },
         {
-          "type": "mushroom",
+          "type": "inkCap",
           "worldX": 11,
           "worldY": 10
         }
@@ -3683,7 +3683,7 @@
           "worldY": 16
         },
         {
-          "type": "mushroom",
+          "type": "puffball",
           "worldX": 12,
           "worldY": 21
         }
@@ -5765,7 +5765,7 @@
       ],
       "pickups": [
         {
-          "type": "mushroom",
+          "type": "morel",
           "worldX": 2,
           "worldY": 30
         }
@@ -6808,7 +6808,7 @@
           "worldY": 29
         },
         {
-          "type": "mushroom",
+          "type": "porcini",
           "worldX": 31,
           "worldY": 29
         }
@@ -8362,12 +8362,12 @@
       ],
       "pickups": [
         {
-          "type": "mushroom",
+          "type": "porcini",
           "worldX": 1,
           "worldY": 36
         },
         {
-          "type": "mushroom",
+          "type": "puffball",
           "worldX": 2,
           "worldY": 46
         }

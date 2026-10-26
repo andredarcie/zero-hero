@@ -6,6 +6,7 @@ import {
   SOLID_UPPER_FRAMES, TOOLBOX_FRAMES,
 } from '@/game/constants';
 import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
+import { fungusTextureKey } from '@/game/fungi/fungi';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
 import type {
   PropDir, PropKind, WorldDialog,
@@ -111,7 +112,13 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'iron', label: 'Bloco de Ferro', key: ASSET_KEYS.ironItem },
   { type: 'seeds', label: 'Sementes', key: ASSET_KEYS.seedsItem },
   { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
-  { type: 'mushroom', label: 'Cogumelo', key: ASSET_KEYS.mushroomItem },
+  // Os seis fungos (arte gerada no boot, registerFungiTextures): nascem no chao, a faca solta.
+  { type: 'puffball', label: 'Bufa-de-lobo (Lycoperdon perlatum)', key: fungusTextureKey('puffball') },
+  { type: 'inkCap', label: 'Coprino-cabeludo (Coprinus comatus)', key: fungusTextureKey('inkCap') },
+  { type: 'morel', label: 'Morel (Morchella esculenta)', key: fungusTextureKey('morel') },
+  { type: 'chanterelle', label: 'Cantarelo (Cantharellus cibarius)', key: fungusTextureKey('chanterelle') },
+  { type: 'flyAgaric', label: 'Mata-moscas (Amanita muscaria)', key: fungusTextureKey('flyAgaric') },
+  { type: 'porcini', label: 'Porcini (Boletus edulis)', key: fungusTextureKey('porcini') },
 ];
 
 const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [

@@ -1,4 +1,5 @@
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
+import { MUSHROOM_KINDS } from '@/game/fungi/fungi';
 
 /**
  * AS MISSÕES DOS NPCs — a estrutura, não uma tela.
@@ -94,7 +95,7 @@ export const taskKey = (task: QuestTask): string => {
  * mago deixou a pergunta que sobra: e agora? A resposta do jogo é a gente do lugar, cada uma com
  * um afazer de todo dia. Nada aqui é urgente, nada se perde, e nenhum pedido tem prazo.
  *
- *   a coletora (radiationSuit) — um cesto de cogumelos do bosque
+ *   a coletora (radiationSuit) — conhecer os seis fungos do vale, colhidos com a faca dela
  *   a pintora  (painter)       — um canteiro que brote, para ela ter verde para pintar
  *   o lenhador (businessMan)   — lenha para a noite, cortada das árvores secas
  *   a astrônoma (astronaut)    — uma barra de ferro para o marco onde o céu é mais limpo
@@ -115,10 +116,15 @@ export const taskKey = (task: QuestTask): string => {
  *    (`gift`): o machado do lenhador, a picareta da astrônoma, as sementes e o balde da pintora.
  */
 export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
+  // A COLETORA não leva cogumelo nenhum: ela pede que o herói ENCONTRE e conheça as seis espécies
+  // do vale (uma tarefa `gather` por espécie, contada na cesta). A faca é o presente; as dicas,
+  // na ordem do caminho a partir dela, dizem onde cada fungo nasce e como reconhecê-lo.
   radiationSuit: {
     dialog: 'radiationSuit',
     doneDialog: 'radiationSuitDone',
-    tasks: [{ kind: 'deliver', item: 'mushroom', count: 5 }],
+    tasks: MUSHROOM_KINDS.map((item) => ({ kind: 'gather' as const, item, count: 1 })),
+    gift: [{ item: 'knife', count: 1 }],
+    hints: MUSHROOM_KINDS,
   },
   painter: {
     dialog: 'painter',

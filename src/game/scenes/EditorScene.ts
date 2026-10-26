@@ -10,6 +10,7 @@ import {
   EditorDomUi, PANEL_WIDTH, hasDirectionFrames, isDirectionalProp, type UiState, type ViewMode,
 } from '@/game/editor/EditorDomUi';
 import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
+import { registerFungiTextures, fungusTextureKey } from '@/game/fungi/fungi';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { GameScene } from '@/game/scenes/GameScene';
 import type { PickupKind } from '@/game/world/ScreenContent';
@@ -59,7 +60,12 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   ore: { key: ASSET_KEYS.oreItem },
   bloom: { key: ASSET_KEYS.bloomItem },
   charcoal: { key: 'charcoal-item' },
-  mushroom: { key: ASSET_KEYS.mushroomItem },
+  puffball: { key: fungusTextureKey('puffball') },
+  inkCap: { key: fungusTextureKey('inkCap') },
+  morel: { key: fungusTextureKey('morel') },
+  chanterelle: { key: fungusTextureKey('chanterelle') },
+  flyAgaric: { key: fungusTextureKey('flyAgaric') },
+  porcini: { key: fungusTextureKey('porcini') },
 };
 
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
@@ -150,6 +156,7 @@ export class EditorScene extends Phaser.Scene {
     // The bucket's pixel art is generated at boot (into the Phaser texture manager here so the
     // palette can show it, and the 3D registry for the live playtest).
     registerBucketTextures(this);
+    registerFungiTextures(this);
     // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);

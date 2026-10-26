@@ -1,6 +1,9 @@
 import type Phaser from 'phaser';
 
 import { ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
+import {
+  KNIFE_TEXTURE_KEY, MUSHROOM_KINDS, fungusTextureKey, isMushroomKind, type MushroomKind,
+} from '@/game/fungi/fungi';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -61,9 +64,13 @@ export type HeldItemKind =
   // As duas estações manuais podem ser fabricadas, instaladas e recolhidas pelo jogador.
   | 'furnace'
   | 'altar'
-  // O COGUMELO do bosque: o micologo pede um cesto deles, e o ultimo vai no espeto, na fogueira
-  // do fim. Nao tem gesto (nada no mundo responde a ele), entao e contador — ver MATERIAL_ITEM_KINDS.
-  | 'mushroom';
+  // A FACA DE COGUMELO, presente da Hollis: o X (ou o Z) diante de um cogumelo abre a colheita
+  // (ForagingOverlay). Tem escova no cabo, como as de verdade — e e ela que limpa.
+  | 'knife'
+  // OS SEIS FUNGOS (fungi.ts). No chao eles NASCEM — sao solidos e nao se apanham pisando: so a
+  // faca os solta. Na mochila sao contadores sem gesto, mostrados na CESTA da bolsa com a ficha
+  // de cada especie.
+  | MushroomKind;
 
 // The fire riding a wood item that is NOT in the hero's hand. Only `fuelMs` travels, so a lit
 // graveto on the ground keeps burning until it dies or is collected again.
@@ -93,7 +100,9 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   charcoal: { texture: 'charcoal-item', frame: 0 },
   furnace: { texture: 'furnace', frame: 0 },
   altar: { texture: 'altar', frame: 0 },
-  mushroom: { texture: 'mushroom-item', frame: 0 },
+  knife: { texture: KNIFE_TEXTURE_KEY, frame: 0 },
+  ...Object.fromEntries(MUSHROOM_KINDS.map((kind) => [kind, { texture: fungusTextureKey(kind), frame: 0 }])) as
+    Record<MushroomKind, { texture: string; frame: number }>,
 };
 
 /**
@@ -121,7 +130,7 @@ export const MACHINE_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKin
  * esponja tem gesto (o X a POUSA para ser martelada, ou a entrega na bigorna). Ela e peca de
  * trabalho, nao numero.
  */
-export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['ore', 'iron', 'charcoal', 'mushroom']);
+export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['ore', 'iron', 'charcoal', ...MUSHROOM_KINDS]);
 
 /**
  * O que pode ser SELECIONADO na bolsa. A espada saiu da mochila (ela e do heroi, e mora no
@@ -299,7 +308,8 @@ export class ItemPickup {
 
   public render(_tileSize: number, _camera: WorldCamera): void {
     if (this.collected) return;
-    const bob = this.collectable
+    // O COGUMELO NAO FLUTUA: ele esta nascendo ali, preso pelo pe. Todo o resto boia.
+    const bob = this.collectable && !isMushroomKind(this.kind)
       ? (Math.sin(this.scene.time.now * 0.0045) + 1) * 0.5 * BOB_TILES
       : 0;
     this.sprite.setElevation(bob);

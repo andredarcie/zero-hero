@@ -125,6 +125,30 @@ const CSS = `
    na cor da ARTE, senao um sprite redesenhado em cinza o apaga. */
 .zh-sub-plan-need.zh-lack.zh-makeable { outline-color: rgba(229, 181, 88, 0.8); }
 .zh-sub-plan-need.zh-lack.zh-makeable img { opacity: 0.6; }
+/* O CADERNO DE CAMPO: uma ficha por especie. A que falta aparece apagada e sem nome — o mesmo
+   "?" do catalogo, porque achar e o que ensina o nome. */
+.zh-sub-notes { display: grid; gap: 5px; }
+.zh-sub-note {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 6px 7px; border: 1px solid #241f19; background: #131009;
+}
+.zh-sub-note img {
+  flex: none; width: 36px; height: 36px; image-rendering: pixelated; object-fit: contain;
+}
+.zh-sub-note.zh-unknown img { filter: grayscale(1) brightness(0.5); opacity: 0.45; }
+.zh-sub-note-body { flex: 1; min-width: 0; }
+.zh-sub-note-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.zh-sub-note-name { color: #e7dcc4; font-size: 0.86em; }
+.zh-sub-note.zh-unknown .zh-sub-note-name { color: #5b554a; }
+.zh-sub-note-latin { color: #9d9581; font-size: 0.78em; font-style: italic; }
+.zh-sub-note-ed { font-size: 0.66em; letter-spacing: 0.1em; text-transform: uppercase; }
+.zh-sub-note-ed.zh-edible { color: #a9cf86; }
+.zh-sub-note-ed.zh-cooked { color: #e5b558; }
+.zh-sub-note-ed.zh-poison { color: #ef7a62; }
+.zh-sub-note ul {
+  margin: 0.25em 0 0; padding: 0 0 0 1.05em; color: #b8b1a0; font-size: 0.76em; line-height: 1.4;
+}
+.zh-sub-note-count { color: #e7dcc4; font-size: 0.78em; margin-left: auto; }
 .zh-sub-plan-need span {
   position: absolute; right: -3px; bottom: -4px;
   font-size: 9px; line-height: 1; color: #e7dcc4;
@@ -186,6 +210,23 @@ export interface SubScreenItem {
   label: string;
 }
 
+/**
+ * A FICHA DE UMA ESPECIE (fungi.ts) — a mesma na cesta da bolsa e no caderno da subtela. O texto
+ * ja chega traduzido: a subtela so desenha.
+ */
+export interface FieldNoteEntry {
+  kind: string;
+  icon: string;
+  count: number;
+  label: string;
+  latin: string;
+  edibility: 'edible' | 'cooked' | 'poison';
+  edibilityLabel: string;
+  notes: string[];
+  /** Ja colhida alguma vez (seenItems). As outras aparecem apagadas, sem nome nem ficha. */
+  found: boolean;
+}
+
 export interface SubScreenMapMark {
   cx: number;
   cy: number;
@@ -234,6 +275,8 @@ export interface SubScreenView {
   map?: SubScreenMap;
   /** A pagina de PLANOS (o catalogo da bancada, em leitura). Ausente = a secao nem existe. */
   plans?: { title: string; rows: SubScreenPlan[] };
+  /** O CADERNO DE CAMPO dos fungos. Ausente = a secao nem existe. */
+  fieldNotes?: { title: string; rows: FieldNoteEntry[] };
 }
 
 /**
@@ -251,6 +294,8 @@ export class SubScreenPanel {
   private readonly map: HTMLDivElement;
   private readonly plansTitle: HTMLHeadingElement;
   private readonly plans: HTMLDivElement;
+  private readonly notesTitle: HTMLHeadingElement;
+  private readonly notes: HTMLDivElement;
 
   public constructor(
     private readonly read: () => SubScreenView,
@@ -275,12 +320,16 @@ export class SubScreenPanel {
     this.plansTitle.className = 'zh-sub-map-title'; // o mesmo cabecalho do mapa: uma so voz
     this.plans = document.createElement('div');
     this.plans.className = 'zh-sub-plans';
+    this.notesTitle = document.createElement('h3');
+    this.notesTitle.className = 'zh-sub-map-title';
+    this.notes = document.createElement('div');
+    this.notes.className = 'zh-sub-notes';
 
     // Os PLANOS ficam entre a mochila e o mapa de proposito: eles falam do que esta na mochila
     // (o que falta para cada receita), e o mapa fala do mundo. A ordem e a de zoom crescente.
     this.el.append(
       this.title, this.grid, this.mats, this.name,
-      this.plansTitle, this.plans, this.mapTitle, this.map,
+      this.plansTitle, this.plans, this.notesTitle, this.notes, this.mapTitle, this.map,
     );
     this.render();
   }
@@ -306,6 +355,7 @@ export class SubScreenPanel {
     // Antes da porta de mochila vazia: uma bolsa sem ferramenta nenhuma e um bolso com minerio
     // continua tendo o que mostrar.
     this.renderMaterials(view.materials);
+    this.renderFieldNotes(view.fieldNotes);
 
     this.grid.replaceChildren();
     if (view.items.length === 0) {
@@ -366,6 +416,61 @@ export class SubScreenPanel {
       num.textContent = String(mat.count);
       cell.append(img, num);
       this.mats.appendChild(cell);
+    }
+  }
+
+  /** Uma ficha por especie, na ordem do caminho. Leitura pura, como os contadores. */
+  private renderFieldNotes(notes: SubScreenView['fieldNotes']): void {
+    this.notesTitle.replaceChildren();
+    this.notes.replaceChildren();
+    const hide = !notes || notes.rows.length === 0;
+    this.notesTitle.style.display = hide ? 'none' : '';
+    this.notes.style.display = hide ? 'none' : '';
+    if (!notes || hide) return;
+
+    const found = notes.rows.filter((row) => row.found).length;
+    this.notesTitle.textContent = `${notes.title} ${found}/${notes.rows.length}`;
+    for (const row of notes.rows) {
+      const line = document.createElement('div');
+      line.className = row.found ? 'zh-sub-note' : 'zh-sub-note zh-unknown';
+      const img = document.createElement('img');
+      img.src = row.icon;
+      img.alt = row.found ? row.label : '?';
+      const body = document.createElement('div');
+      body.className = 'zh-sub-note-body';
+      const head = document.createElement('div');
+      head.className = 'zh-sub-note-head';
+      const name = document.createElement('span');
+      name.className = 'zh-sub-note-name';
+      name.textContent = row.found ? row.label : '?';
+      head.appendChild(name);
+      if (row.found) {
+        const latin = document.createElement('span');
+        latin.className = 'zh-sub-note-latin';
+        latin.textContent = row.latin;
+        const ed = document.createElement('span');
+        ed.className = `zh-sub-note-ed zh-${row.edibility}`;
+        ed.textContent = row.edibilityLabel;
+        head.append(latin, ed);
+        if (row.count > 0) {
+          const count = document.createElement('span');
+          count.className = 'zh-sub-note-count';
+          count.textContent = `×${row.count}`;
+          head.appendChild(count);
+        }
+      }
+      body.appendChild(head);
+      if (row.found) {
+        const list = document.createElement('ul');
+        for (const text of row.notes) {
+          const li = document.createElement('li');
+          li.textContent = text;
+          list.appendChild(li);
+        }
+        body.appendChild(list);
+      }
+      line.append(img, body);
+      this.notes.appendChild(line);
     }
   }
 
