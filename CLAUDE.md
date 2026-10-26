@@ -85,6 +85,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
   repetição se filtra por `event.repeat`.
+- **A SERRA: a altura do chão é de `world/relief`** e `Billboard3D`/`projectTile` já a somam — nunca
+  somar de novo; passar de nível só por `canStep`. O campo `relief` do world.json é do `serra-world.mjs`.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
   (`fungi.ts`). Ele sai do chão no mesmo frame em que entra na cesta.
 - **O herói anda PRESO ao grid** (um tile por passo, 4 direções): o livre foi tentado e desfeito —

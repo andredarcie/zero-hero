@@ -16,6 +16,9 @@ import {
 import {
   getBridgeSpots, getChunkTerrain, getWaterTiles, getWorldBounds, isInsideWorld,
 } from '@/game/world/WorldData';
+import {
+  RELIEF_HEIGHT, RELIEF_HIGH, isHighTile, reliefAt, stairUp, terrainHeightAt,
+} from '@/game/world/relief';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
 import { ChunkShroud3D, shroudDayUniform } from './ChunkShroud3D';
@@ -1146,6 +1149,8 @@ export class World3D {
     solid: THREE.MeshLambertMaterial;
     /** A MONTANHA em cubo: o mesmo atlas, com o volume nas cores de vértice (ROCK_CUBE_SHADE). */
     rock: THREE.MeshLambertMaterial;
+    /** A ESCADA da serra: a pedra da montanha, dos dois lados (os degraus nao tem frente fixa). */
+    stair: THREE.MeshLambertMaterial;
     /** O topo do cubo de parede de dungeon: preto puro, sem luz. */
     wallTop: THREE.MeshBasicMaterial;
     /** A NÉVOA NEGRA que engole a mata de fora do mapa (ver makeVoidMistMaterial). */
@@ -1252,6 +1257,12 @@ export class World3D {
   /** As duas massas, guardadas para o rebuildCubes (a bomba tira um bloco e a poda muda em volta). */
   private wallCubes: SolidTileEntry[] = [];
   private rockCubes: SolidTileEntry[] = [];
+  /**
+   * A SERRA (ver world/relief): os blocos do planalto — cubos de rocha SEM teto, porque o teto
+   * deles e o chao de grama assado um nivel acima — e as escadas, cada uma com o rumo da subida.
+   */
+  private highTiles: SolidTileEntry[] = [];
+  private stairTiles: Array<{ x: number; z: number; ux: number; uz: number }> = [];
   private cubeMeshes: THREE.Mesh[] = [];
 
   public constructor() {
@@ -1672,6 +1683,8 @@ export class World3D {
     this.castableSolids.length = 0;
     this.massTiles.length = 0;
     this.massSet.clear();
+    this.highTiles = [];
+    this.stairTiles = [];
     this.lavaSpots.length = 0;
     this.grassQuads.clear();
     this.decorQuads.clear();
@@ -1716,6 +1729,11 @@ export class World3D {
     const seaTiles: Array<{ x: number; z: number; frame: number }> = [];
     const lavaBedTiles: Array<{ x: number; z: number; frame: number }> = [];
     const decorTiles: Array<{ x: number; z: number; frame: number }> = [];
+    // O chao do PLANALTO, um nivel acima (ver world/relief). A grama dele e a mesma do mundo; o
+    // que muda e a altura do quad.
+    const highGroundTiles: Array<{ x: number; z: number; frame: number }> = [];
+    this.highTiles = [];
+    this.stairTiles = [];
 
     // Os tiles FORA do mundo autorado, para a névoa negra saber onde deitar (ver buildVoidMist).
     // Só o de cima tem névoa: embaixo o "escuro gigante" é o teto preto do próprio muro.
@@ -1748,7 +1766,17 @@ export class World3D {
               // world.json moved, the editor still paints one "Terra", the shovel still keys off
               // 5) — what the tile WEARS is decided here, from the coordinate.
               tile.frame = groundFrameAt(tile.frame, wx, wy);
-              groundTiles.push(tile);
+              const relief = outside ? 0 : reliefAt(wx, wy);
+              if (relief === RELIEF_HIGH) {
+                highGroundTiles.push(tile);
+                this.highTiles.push({
+                  x: wx, z: wy, frame: CLIFF_WALL_FRAMES[terrainVariant(wx, wy, CLIFF_WALL_FRAMES.length)],
+                });
+              } else {
+                groundTiles.push(tile);
+                const up = stairUp(relief);
+                if (up) this.stairTiles.push({ x: wx, z: wy, ux: up[0], uz: up[1] });
+              }
             }
             const upper = chunk.upper[row][col];
             if (upper === null) continue;
@@ -1820,6 +1848,11 @@ export class World3D {
       const rock = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
       patchPixelMaterial(rock, { quantize: true, normalUp: true, texelAa: tileAa });
       rock.name = 'terrain-rock';
+      // A ESCADA: a mesma pedra, com os dois lados acesos. Os degraus sao montados em quatro rumos
+      // (norte, sul, leste, oeste) e a face de um degrau nao tem um "de fora" fixo como o cubo tem.
+      const stair = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true, side: THREE.DoubleSide });
+      patchPixelMaterial(stair, { quantize: true, normalUp: true, texelAa: tileAa });
+      stair.name = 'terrain-stair';
       // O TOPO DA PAREDE DE DUNGEON: PRETO PURO, e sem luz nenhuma.
       //
       // Foram tres tentativas antes desta, e todas erraram para o mesmo lado — claro demais. Um
@@ -1833,7 +1866,7 @@ export class World3D {
       // continua preto) e Basic e o caminho mais curto ate esse resultado.
       const wallTop = new THREE.MeshBasicMaterial({ color: 0x000000 });
       this.terrainMats = {
-        ground, sea, bank, lavaBank, pit, pitFloor, decor, solid, rock, wallTop,
+        ground, sea, bank, lavaBank, pit, pitFloor, decor, solid, rock, stair, wallTop,
         voidMist: makeVoidMistMaterial(),
         blob: makeShadowBlobMaterial(0.34),
       };
@@ -1841,6 +1874,9 @@ export class World3D {
     const mats = this.terrainMats;
 
     this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet), mats.ground));
+    if (highGroundTiles.length > 0) {
+      this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, RELIEF_HEIGHT, solidSet), mats.ground));
+    }
 
     // The sunken riverbed (the same dirt, dropped a level) + the earthen banks that
     // wall the channel where it meets the land — together they give the water its depth.
@@ -1921,8 +1957,11 @@ export class World3D {
       for (const t of pitTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
     }
 
+    // A decoracao do PLANALTO sobe com ele: a mesma malha (o indice dos quads e o do arbusto que
+    // farfalha), so a altura de cada quad muda.
     this.decorGeo = buildFlatTileGeometry(
-      decorTiles, 0.02, solidSet, undefined, (frame) => (WIND_STIR_FRAMES.has(frame) ? 1 : 0),
+      decorTiles, (x, z) => 0.02 + (isHighTile(x, z) ? RELIEF_HEIGHT : 0), solidSet, undefined,
+      (frame) => (WIND_STIR_FRAMES.has(frame) ? 1 : 0),
     );
     this.addTerrainMesh(new THREE.Mesh(this.decorGeo, mats.decor));
     decorTiles.forEach((tile, i) => {
@@ -2113,9 +2152,26 @@ export class World3D {
       ));
     }
 
-    // Os dois maciços entram na MESMA lista de sombra de propósito: um muro de dungeon e uma
-    // montanha são a mesma geometria, e dar a cada um a sua resposta seria a segunda voz de sempre.
-    this.massTiles = [...this.wallCubes, ...this.rockCubes];
+    // A SERRA: o cubo da montanha sem teto (o teto e a grama do planalto) e a escada. A face
+    // virada para uma escada nao nasce — a escada encosta nela e fecha o vao com os degraus.
+    if (this.highTiles.length > 0) {
+      const highSet = new Set(this.highTiles.map((t) => tileKey(t.x, t.z)));
+      const stairSet = new Set(this.stairTiles.map((t) => tileKey(t.x, t.z)));
+      push(new THREE.Mesh(
+        buildTileCubeGeometry(
+          this.highTiles,
+          (x, z) => highSet.has(tileKey(x, z)) || stairSet.has(tileKey(x, z)),
+          ROCK_CUBE_SHADE,
+          false,
+        ),
+        mats.rock,
+      ));
+    }
+    if (this.stairTiles.length > 0) push(new THREE.Mesh(buildStairGeometry(this.stairTiles), mats.stair));
+
+    // Os maciços entram na MESMA lista de sombra de propósito: um muro de dungeon, uma montanha e
+    // o planalto da serra são a mesma geometria, e dar a cada um a sua resposta seria a segunda voz.
+    this.massTiles = [...this.wallCubes, ...this.rockCubes, ...this.highTiles];
     this.massSet.clear();
     for (const t of this.massTiles) this.massSet.add(tileKey(t.x, t.z));
     this.rebuildMassShadow();
@@ -3624,8 +3680,12 @@ export class World3D {
    * Snaps every frame: camX/camY already animate smoothly (the movement tween),
    * and the hero must stay pinned at screen centre exactly like the 2D game.
    */
-  public follow(camX: number, camY: number, _snap = false): void {
-    this.camTarget.set(camX + this.viewOffsetX, 0, camY + this.viewOffsetY);
+  /**
+   * `elevation` e a altura do chao sob o heroi (a serra): a camera sobe e desce com ele, entao no
+   * planalto o quadro e o mesmo de embaixo, so que um nivel acima.
+   */
+  public follow(camX: number, camY: number, _snap = false, elevation = 0): void {
+    this.camTarget.set(camX + this.viewOffsetX, elevation, camY + this.viewOffsetY);
     // An impact kick: the camera TRANSLATES (target shifts with it), so the whole diorama
     // jolts as one instead of swinging on a pivot. Decays in render().
     const k = this.shakeMs > 0 ? this.shakeAmp * (this.shakeMs / this.shakeDurMs) : 0;
@@ -3887,7 +3947,10 @@ export class World3D {
    * overlay 2D ficaria até meio pixel do buffer fora do lugar que o mundo desenhou.
    */
   private projectRaw(worldX: number, worldY: number, elevationTiles = 0): { x: number; y: number } {
-    const v = this.projectScratch.set(worldX, elevationTiles, worldY).project(this.camera);
+    // A altura do chao (a serra) entra aqui: todo overlay 2D ancorado num tile do planalto — a
+    // pegada, o balao, o "!" — nasce em cima dele, sem que quem o ancora saiba que ha relevo.
+    const ground = terrainHeightAt(worldX, worldY);
+    const v = this.projectScratch.set(worldX, elevationTiles + ground, worldY).project(this.camera);
     const m = this.snapMarginCss;
     return {
       x: (v.x * 0.5 + 0.5) * (window.innerWidth + 2 * m) - m + this.snapShiftX,
@@ -5154,7 +5217,8 @@ const tileShoreCorners = (x: number, z: number, wet: ReadonlySet<number>): numbe
 
 const buildFlatTileGeometry = (
   tiles: Array<{ x: number; z: number; frame: number }>,
-  y: number,
+  /** A altura do quad: um numero, ou uma por tile (a decoracao que sobe com o planalto). */
+  yAt: number | ((x: number, z: number) => number),
   solids?: ReadonlySet<number>,
   /** Per-corner shore ramp, emitted as the `aShore` attribute the sea's material reads. */
   shore?: (x: number, z: number) => number[],
@@ -5175,6 +5239,7 @@ const buildFlatTileGeometry = (
   const idx: number[] = [];
   tiles.forEach(({ x, z, frame }, i) => {
     const f = tilesetFrameUv(frame);
+    const y = typeof yAt === 'number' ? yAt : yAt(x, z);
     pos.push(x - 0.5, y, z - 0.5, x + 0.5, y, z - 0.5, x + 0.5, y, z + 0.5, x - 0.5, y, z + 0.5);
     uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
     // Which frame of the atlas this quad may sample, so the texel-AA fetch cannot slide into the
@@ -5543,6 +5608,8 @@ const buildTileCubeGeometry = (
   tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
   isWall: (x: number, z: number) => boolean,
   shade?: CubeShade,
+  /** O teto. A serra o dispensa: o teto dela e o chao de grama assado um nivel acima. */
+  top = true,
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
@@ -5584,10 +5651,12 @@ const buildTileCubeGeometry = (
     // alvenaria do tamanho da dungeon competindo com o chao pela atencao. Na MONTANHA e o
     // contrario — o teto e o planalto, a face que a camera de cima mais ve, e a rocha ali e o que
     // faz a massa ler como terreno e nao como muro.
-    face(
-      f, [x0, 1, z0], [x1, 1, z0], [x1, 1, z1], [x0, 1, z1], [0, 1, 0],
-      shade ? sideIdx : topIdx, shade ? [shade.top, shade.top] : undefined,
-    );
+    if (top) {
+      face(
+        f, [x0, 1, z0], [x1, 1, z0], [x1, 1, z1], [x0, 1, z1], [0, 1, 0],
+        shade ? sideIdx : topIdx, shade ? [shade.top, shade.top] : undefined,
+      );
+    }
     // A face SUL: a frente do bloco, e a unica lateral que a camera enxerga de cheio.
     if (!isWall(x, z + 1)) {
       face(f, [x0, 1, z1], [x1, 1, z1], [x1, 0, z1], [x0, 0, z1], [0, 0, 1], sideIdx,
@@ -5803,6 +5872,74 @@ const buildUprightTileGeometry = (
   geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
+  geo.setIndex(idx);
+  return geo;
+};
+
+/**
+ * A ESCADA DA SERRA: quatro degraus que vencem um nivel (RELIEF_HEIGHT) dentro de um tile, no rumo
+ * da subida (`ux`, `uz`). Piso de calcamento (o frame da praca de pedra), espelho e paredes laterais
+ * na pedra da montanha — a escada e talhada no mesmo bloco do planalto.
+ *
+ * A arte de cada face e RECORTADA, nao esticada: um degrau de um quarto de tile mostra um quarto do
+ * frame, entao os quatro pisos juntos desenham o calcamento uma vez so, no grao do resto do mundo.
+ */
+const STAIR_STEPS = 4;
+/** O calcamento liso (as pracinhas de pedra do mundo). */
+const STAIR_TREAD_FRAME = 23;
+const STAIR_SHADE = { tread: 1, riser: 0.84, side: 0.72 };
+
+const buildStairGeometry = (
+  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number }>,
+): THREE.BufferGeometry => {
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const bounds: number[] = [];
+  const nrm: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  type Corner = readonly [number, number, number, number, number]; // x, y, z, a, b (a,b em 0..1)
+  const quad = (frame: number, corners: readonly [Corner, Corner, Corner, Corner], shade: number): void => {
+    const f = tilesetFrameUv(frame);
+    const base = pos.length / 3;
+    for (const [x, y, z, a, b] of corners) {
+      pos.push(x, y, z);
+      uv.push(f.u0 + a * (f.u1 - f.u0), f.v0 + b * (f.v1 - f.v0));
+      bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
+      nrm.push(0, 1, 0);
+      col.push(shade, shade, shade);
+    }
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  };
+  for (const { x, z, ux, uz } of stairs) {
+    // `s` corre na subida (0 na borda de baixo, 1 na de cima), `t` atravessa a escada.
+    const vx = -uz;
+    const vz = ux;
+    const at = (s0: number, t0: number, h: number, a: number, b: number): Corner => [
+      x + (s0 - 0.5) * ux + (t0 - 0.5) * vx, h * RELIEF_HEIGHT, z + (s0 - 0.5) * uz + (t0 - 0.5) * vz, a, b,
+    ];
+    const rock = CLIFF_WALL_FRAMES[terrainVariant(x, z, CLIFF_WALL_FRAMES.length)];
+    for (let k = 0; k < STAIR_STEPS; k += 1) {
+      const s0 = k / STAIR_STEPS;
+      const s1 = (k + 1) / STAIR_STEPS;
+      const h0 = k / STAIR_STEPS;
+      const h1 = (k + 1) / STAIR_STEPS;
+      quad(STAIR_TREAD_FRAME, [at(s0, 0, h1, 0, s0), at(s0, 1, h1, 1, s0), at(s1, 1, h1, 1, s1), at(s1, 0, h1, 0, s1)],
+        STAIR_SHADE.tread);
+      quad(rock, [at(s0, 0, h0, 0, h0), at(s0, 1, h0, 1, h0), at(s0, 1, h1, 1, h1), at(s0, 0, h1, 0, h1)],
+        STAIR_SHADE.riser);
+      for (const side of [0, 1]) {
+        quad(rock, [at(s0, side, 0, s0, 0), at(s1, side, 0, s1, 0), at(s1, side, h1, s1, h1), at(s0, side, h1, s0, h1)],
+          STAIR_SHADE.side);
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
   return geo;
 };

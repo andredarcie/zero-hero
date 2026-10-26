@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { makeShadowBlob } from './groundShadow';
 import { patchPixelMaterial } from './pixelArtLight';
 import { getTexture3D } from './textures3d';
+import { terrainHeightAt } from '@/game/world/relief';
 
 // ── A world sprite in the 3D renderer, with a Phaser-sprite-like surface ──────
 //
@@ -154,6 +155,8 @@ export class Billboard3D {
    * Sombra é consequência de corpo — quem some leva a sua.
    */
   private readonly groundShadowAlpha: number = 0;
+  /** A altura do blob sobre o chão — o chão em si vem da serra (`terrainHeightAt`) a cada apply. */
+  private groundShadowBaseY = 0;
   /** Ver `alpha` / `setBlinkAlpha`: o quanto o CORPO existe, que nao e o alpha do frame. */
   private bodyAlpha = 1;
   private readonly flat: boolean;
@@ -274,6 +277,7 @@ export class Billboard3D {
       this.groundShadowAlpha = cfg.alpha ?? 0.34;
       this.groundShadow = makeShadowBlob(cfg.rx ?? 0.44, cfg.rz ?? 0.4, this.groundShadowAlpha);
       this.groundShadowZBias = cfg.zBias ?? 0;
+      this.groundShadowBaseY = this.groundShadow.position.y;
       parent.add(this.groundShadow);
     }
 
@@ -286,7 +290,11 @@ export class Billboard3D {
     // The depth bias rides the view axis (see DEPTH_LAYER): ground clutter sits a hair behind
     // the actor plane so the two never tie in the depth test.
     const z = this.tileY - this.depthBias;
-    this.mesh.position.set(this.tileX, (this.flat ? this.flatY : 0) + this.elev, z);
+    // A SERRA: tudo que fica no mundo pisa no chão de onde está — um item no planalto, o corpo do
+    // herói subindo a escada. Lido aqui, e não por quem posiciona, para nenhum dono de sprite
+    // precisar saber que o chão tem altura (ver world/relief).
+    const ground = terrainHeightAt(this.tileX, this.tileY);
+    this.mesh.position.set(this.tileX, (this.flat ? this.flatY : 0) + this.elev + ground, z);
     this.mesh.scale.set(
       this.flipped ? -this.w : this.w,
       this.flat ? 1 : this.h,
@@ -296,7 +304,7 @@ export class Billboard3D {
     if (this.groundShadow) {
       // Stays pinned to the foot on the ground (ignores the sprite's elevation, so
       // a bobbing/lifted sprite still throws a steady blob), scaled by its width.
-      this.groundShadow.position.set(this.tileX, this.groundShadow.position.y, z + this.groundShadowZBias);
+      this.groundShadow.position.set(this.tileX, this.groundShadowBaseY + ground, z + this.groundShadowZBias);
       this.groundShadow.scale.set(this.w, 1, this.w);
       this.groundShadow.visible = this.visible;
     }

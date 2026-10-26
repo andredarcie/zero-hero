@@ -108,7 +108,11 @@ export class PlayerMovementController {
     private readonly scene: Phaser.Scene,
     private readonly hero: HeroView,
     private readonly camera: WorldCamera,
-    private readonly isBlockedCell: (worldX: number, worldY: number) => boolean,
+    /**
+     * O tile de destino barra o passo? `fromX`/`fromY` e o tile de onde ele sai: a serra decide
+     * pelo PAR (do chao para o planalto so pela escada — ver world/relief.canStep).
+     */
+    private readonly isBlockedCell: (worldX: number, worldY: number, fromX: number, fromY: number) => boolean,
     /**
      * Um tile foi ENTRADO — e `dx`/`dy` dizem POR ONDE. A direção vem no evento porque ela não
      * pode ser perguntada depois: `setFacing` só roda na linha seguinte a esta chamada, então
@@ -224,7 +228,7 @@ export class PlayerMovementController {
 
       const nx = wx + next.dx;
       const ny = wy + next.dy;
-      if (this.isBlockedCell(nx, ny)) {
+      if (this.isBlockedCell(nx, ny, wx, wy)) {
         const now = this.scene.time.now;
         if (next.fresh || now - this.lastBumpTime >= HELD_BUMP_COOLDOWN_MS) {
           this.lastBumpTime = now;

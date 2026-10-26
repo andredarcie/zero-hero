@@ -45,6 +45,11 @@ export type WorldChunk = {
   ground: number[][]; // [row][col], chunkRows x chunkColumns
   upper: Array<Array<number | null>>;
   collisions: boolean[][];
+  /**
+   * A SERRA (ver world/relief.ts): 0 chão, 1 planalto um nível acima, 2..5 a ESCADA que sobe para
+   * o norte, leste, sul ou oeste. Opcional — um chunk sem serra não carrega a grade.
+   */
+  relief?: number[][];
   pickups: WorldPickupSpawn[];
   npcs: WorldNpcSpawn[];
 };

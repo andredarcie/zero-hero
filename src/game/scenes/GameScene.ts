@@ -84,6 +84,7 @@ import {
   fungusTextureKey, isMushroomKind, registerFungiTextures, type MushroomKind,
 } from '@/game/fungi/fungi';
 import { ForagingOverlay, type ForagingScenery } from '@/game/runtime/ForagingOverlay';
+import { canStep, terrainHeightAt } from '@/game/world/relief';
 import { registerPlacementTextures } from '@/game/render3d/placementTexture';
 import {
   BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
@@ -730,7 +731,7 @@ export class GameScene extends Phaser.Scene {
     this.swordSlash = new SwordSlash(this);
     this.camera = new WorldCamera(startWorldX, startWorldY, 0, 0);
     this.camera.world3d = this.world3d;
-    this.world3d.follow(startWorldX, startWorldY, true);
+    this.world3d.follow(startWorldX, startWorldY, true, terrainHeightAt(startWorldX, startWorldY));
 
     // The hero's contact blob rides the billboard like every other actor's; zBias peeks the
     // shadow past his boots.
@@ -754,7 +755,8 @@ export class GameScene extends Phaser.Scene {
       this,
       this.hero,
       this.camera,
-      (wx, wy) => this.isSolidForEntities(wx, wy),
+      // A SERRA barra pelo PAR de tiles: do chao para o planalto, so pela escada (ver relief).
+      (wx, wy, fx, fy) => this.isSolidForEntities(wx, wy) || !canStep(fx, fy, wx, wy),
       // Fires once per tile ENTERED (never per frame): decor rustle + walk-on interactions.
       (wx, wy, dx, dy) => {
         this.world3d?.rustleDecor(wx, wy);
@@ -1067,7 +1069,9 @@ export class GameScene extends Phaser.Scene {
     const defCx = Math.floor(this.scale.width / 2);
     const defCy = Math.floor(this.scale.height / 2);
     w3.setViewOffset((defCx - cam.screenCenterX) / ts, (defCy - cam.screenCenterY) / ts);
-    w3.follow(cam.camX, cam.camY);
+    // A camera sobe e desce com o chao debaixo do heroi (a serra): no planalto o quadro e o mesmo,
+    // um nivel acima. A altura e continua na escada, entao a subida da camera e o proprio passo.
+    w3.follow(cam.camX, cam.camY, false, terrainHeightAt(cam.camX, cam.camY));
 
     // The projected size of one tile at screen centre IS the legacy "tileSize"
     // every remaining Phaser-side FX scales itself by.
@@ -2506,6 +2510,14 @@ export class GameScene extends Phaser.Scene {
     this.quickBag.step(delta);
   }
 
+  /**
+   * O tile da frente esta ao ALCANCE da mao? So nao esta quando a serra separa os dois: o heroi no
+   * planalto olhando o chao la embaixo, ou de baixo olhando o paredao. A escada, no rumo dela, liga.
+   */
+  private reachesFront(front: { x: number; y: number }): boolean {
+    return canStep(this.playerWorld.worldX, this.playerWorld.worldY, front.x, front.y);
+  }
+
   private routeBagRow(event: KeyboardEvent | undefined, delta: number): void {
     if (!this.quickBag?.isOpen || event?.repeat) return;
     this.quickBag.stepRow(delta);
@@ -2649,6 +2661,8 @@ export class GameScene extends Phaser.Scene {
     if (this.resting) { this.standUp(); return; }
     if (!this.canAct()) return;
     const front = this.facingTile();
+    // A BEIRA DA SERRA: entre o planalto e o chao de baixo nao ha mao que alcance (ver relief).
+    if (!this.reachesFront(front)) { this.petCat(); return; }
     if (this.talkToNpcAt(front.x, front.y)) return;
     // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
     if (this.harvestMushroomAt(front.x, front.y)) return;
@@ -2686,6 +2700,11 @@ export class GameScene extends Phaser.Scene {
     this.useCooldownMs = USE_COOLDOWN_MS;
     this.stopBreathing();
     const { x, y } = this.facingTile();
+    // A BEIRA DA SERRA: o X sai no vazio — a ferramenta nao alcanca o tile do outro nivel.
+    if (!this.reachesFront({ x, y })) {
+      if (this.heldItem !== 'none') this.swingHeld(x, y);
+      return;
+    }
     // 0. A FERRAMENTA CERTA SE APRESENTA SOZINHA: diante de um tronco só existe uma resposta, e
     //    fazer o jogador dizê-la em voz alta é cobrar burocracia por uma escolha que não existe.
     //    Ver `toolWantedAt`.

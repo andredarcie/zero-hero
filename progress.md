@@ -9580,3 +9580,21 @@ Revisados contra Apple HIG / Material / Game Accessibility Guidelines, com print
   do jardim é porcini. Saves antigos migram em `adventureState` (`LEGACY_MUSHROOM_AT`).
 - PENDENTE: o cenário `playtest/scenarios/zerar.mjs` ainda coleta "cinco cogumelos pisando" e não
   passa mais — precisa aprender a colheita.
+
+## A serra — planaltos de um nível, com escada (2026-10-26)
+
+- O mundo ganhou ALTURA: `WorldChunk.relief` (0 chão, 1 planalto, 2..5 escada subindo N/L/S/O).
+  `world/relief.ts` é a única resposta: `terrainHeightAt` (contínua — na escada cresce com o passo)
+  e `canStep` (só entre tiles do mesmo nível, ou pela escada no rumo dela; nunca pelos lados).
+- Ninguém soma altura à mão: `Billboard3D.apply` e `World3D.projectRaw` já leem o chão. Assim o
+  herói, o gato, itens, efeitos e todo overlay 2D (pegada, balão, "!") sobem sozinhos. A câmera
+  recebe a altura do chão sob o herói em `follow`.
+- Render: o planalto é o cubo da montanha SEM teto (o teto é a grama assada em y=1) e entra na
+  sombra de massa; a escada são 4 degraus (piso de calçamento, espelho e laterais de rocha); a
+  decoração rasteira do planalto sobe com ele.
+- Z e X não alcançam o tile do outro nível (`reachesFront`): do planalto não se fala nem se corta
+  nada lá embaixo.
+- `scripts/serra-world.mjs` é o dono do campo: elipses com borda de ruído de hash nos campos
+  abertos, lixa de dentes, maior pedaço, escada na face sul (e oeste nas largas). A PROVA descarta
+  a serra que cortaria qualquer caminho do chão — a do centro-leste caiu por isso. `--check` como
+  o cozy-world.

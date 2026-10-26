@@ -55,6 +55,14 @@ const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
 let world: WorldData | null = null;
 let chunkByKey = new Map<string, WorldChunk>();
 let bounds: WorldBounds | null = null;
+/**
+ * A SERRA do mundo inteiro numa grade plana (ver world/relief.ts). Ela é lida a cada `setPosition`
+ * de cada billboard do jogo, então a consulta não pode montar chave de string nem achar chunk:
+ * índice direto, e `null` quando o mundo não tem serra nenhuma (o caminho de todo mundo antigo).
+ */
+let reliefGrid: Uint8Array | null = null;
+let reliefWidth = 0;
+let reliefHeight = 0;
 
 const EMPTY_CONTENT: ScreenContent = { pickups: [], npcs: [] };
 
@@ -153,6 +161,19 @@ export const setWorldData = (raw: unknown): void => {
 
   world = data;
   chunkByKey = new Map(data.chunks.map((chunk) => [chunkKey(chunk.cx, chunk.cy), chunk]));
+  reliefWidth = data.meta.worldChunksX * CHUNK_COLUMNS;
+  reliefHeight = data.meta.worldChunksY * CHUNK_ROWS;
+  reliefGrid = null;
+  for (const chunk of data.chunks) {
+    if (!chunk.relief) continue;
+    reliefGrid ??= new Uint8Array(reliefWidth * reliefHeight);
+    for (let r = 0; r < CHUNK_ROWS; r += 1) {
+      for (let c = 0; c < CHUNK_COLUMNS; c += 1) {
+        const v = chunk.relief[r]?.[c] ?? 0;
+        if (v) reliefGrid[(chunk.cy * CHUNK_ROWS + r) * reliefWidth + chunk.cx * CHUNK_COLUMNS + c] = v;
+      }
+    }
+  }
   bounds = {
     minCx: 0,
     maxCx: data.meta.worldChunksX - 1,
@@ -166,6 +187,16 @@ export const setWorldData = (raw: unknown): void => {
 };
 
 export const isWorldDataReady = (): boolean => world !== null;
+
+/** O código de serra de um tile (0 fora do mundo, no mundo infinito e onde não há serra). */
+export const getTileRelief = (wx: number, wy: number): number => {
+  if (!reliefGrid || infinite) return 0;
+  if (wx < 0 || wy < 0 || wx >= reliefWidth || wy >= reliefHeight) return 0;
+  return reliefGrid[wy * reliefWidth + wx];
+};
+
+/** O mundo tem alguma serra? (o caminho rápido de quem pergunta altura a cada quadro) */
+export const worldHasRelief = (): boolean => reliefGrid !== null && !infinite;
 
 const requireWorld = (): WorldData => {
   if (!world) throw new Error('WorldData nao inicializado: chame setWorldData (PreloadScene) antes do jogo');
