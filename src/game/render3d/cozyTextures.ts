@@ -3,7 +3,7 @@ import type Phaser from 'phaser';
 
 import { registerTexture3D } from '@/game/render3d/textures3d';
 
-// A PECA DO FIM que nao tinha arte: o ESPETO com o cogumelo, cru e assado. Desenhadas uma vez e publicadas nas DUAS pipelines de textura,
+// A PECA DO FIM que nao tinha arte: o ESPETO com o MARSHMALLOW, cru e tostado, e o pacote dele. Desenhadas uma vez e publicadas nas DUAS pipelines de textura,
 // o mesmo esquema do bucketTexture/charcoalTexture: THREE (billboard no mundo) e Phaser.
 //
 type Rgba = readonly [number, number, number, number];
@@ -12,13 +12,12 @@ const PALETTE: Record<string, Rgba> = {
   '.': [0, 0, 0, 0],
   k: [0x1b, 0x1d, 0x33, 255], // contorno: o navy de tinta do jogo
   y: [0xe2, 0xbf, 0x6a, 255], // dourado (o chapeu assado)
-  // o espeto e o cogumelo
+  // o espeto e o marshmallow
   t: [0x7a, 0x52, 0x2c, 255], // graveto
   u: [0xa8, 0x77, 0x44, 255], // graveto claro
-  c: [0x86, 0x53, 0x2a, 255], // chapeu castanho do cogumelo (o porcini de fungi.ts)
-  v: [0xb0, 0x7c, 0x45, 255], // brilho do chapeu
-  n: [0xe8, 0xdc, 0xc0, 255], // pe do cogumelo
-  r: [0xb5, 0x6a, 0x2e, 255], // chapeu ja tostado
+  m: [0xf7, 0xf2, 0xea, 255], // marshmallow cru
+  l: [0xd8, 0xcd, 0xc6, 255], // marshmallow, a sombra do lado
+  r: [0xb5, 0x6a, 0x2e, 255], // a casca tostada
   // as marcas do vale ajudado
   g: [0x8d, 0x8a, 0x84, 255], // pedra
   G: [0xb3, 0xaf, 0xa6, 255], // pedra, brilho
@@ -43,14 +42,14 @@ const PALETTE: Record<string, Rgba> = {
   p: [0x3a, 0x2a, 0x22, 170], // a borda revolvida
 };
 
-// 16×16: o graveto com o cogumelo espetado na ponta, inclinado sobre o fogo.
+// 16×16: o graveto com o marshmallow espetado na ponta, inclinado sobre o fogo.
 const ROAST_STICK = [
   '................',
-  '...........kkk..',
-  '..........kcvck.',
-  '.........kccvcck',
-  '.........kkkkkk.',
-  '..........knnk..',
+  '..........kkkk..',
+  '.........kmmmlk.',
+  '.........kmmmlk.',
+  '.........kmmmlk.',
+  '..........kkkk..',
   '.........kutk...',
   '........kutk....',
   '.......kutk.....',
@@ -193,8 +192,28 @@ const LEAF = [
   '.kk..',
 ] as const;
 
-// O mesmo espeto depois de assado: o chapeu dourou.
-const ROAST_STICK_DONE = ROAST_STICK.map((row) => row.replace(/c/g, 'r').replace(/v/g, 'y'));
+// O mesmo espeto depois de assado: o marshmallow dourou, com a casca tostada do lado do fogo.
+const ROAST_STICK_DONE = ROAST_STICK.map((row) => row.replace(/m/g, 'y').replace(/l/g, 'r'));
+
+// 16×16, o PACOTE DE MARSHMALLOW que espera ao lado da fogueira do fim: papel cru, faixa rosa.
+const MARSHMALLOW_BAG = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '.....kkkkkk.....',
+  '....kaaaaaak....',
+  '....khhhhhhk....',
+  '....kammmmak....',
+  '....kmmlmmlk....',
+  '....kmmlmmlk....',
+  '....kaaaaaak....',
+  '....kaaaaaak....',
+  '.....kkkkkk.....',
+  '................',
+] as const;
 
 export const ROAST_STICK_TEXTURE = 'roast-stick';
 export const GROUND_CRACK_TEXTURE = 'ground-crack';
@@ -206,6 +225,7 @@ export const BASKET_TEXTURE = 'quest-basket';
 export const EASEL_GREY_TEXTURE = 'quest-easel-grey';
 export const EASEL_GREEN_TEXTURE = 'quest-easel-green';
 export const ROAST_STICK_DONE_TEXTURE = 'roast-stick-done';
+export const MARSHMALLOW_BAG_TEXTURE = 'marshmallow-bag';
 
 const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
   const h = rows.length;
@@ -246,6 +266,7 @@ export const registerCozyTextures = (scene: Phaser.Scene): void => {
     [EASEL_GREY_TEXTURE, EASEL_GREY],
     [EASEL_GREEN_TEXTURE, EASEL_GREEN],
     [ROAST_STICK_DONE_TEXTURE, ROAST_STICK_DONE],
+    [MARSHMALLOW_BAG_TEXTURE, MARSHMALLOW_BAG],
   ];
   for (const [key, rows] of sheets) {
     const needPhaser = !scene.textures.exists(key);

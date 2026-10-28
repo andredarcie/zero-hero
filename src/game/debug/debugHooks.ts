@@ -17,9 +17,9 @@ export interface GameDebugState {
   heldOnFire: boolean;
   /** O item do botao X — o que esta selecionado na bolsa agora (a espada nao entra aqui). */
   heldItem: 'none' | HeldItemKind;
-  /** A MOCHILA inteira, na ordem em que foi ganha: o que a subtela desenha. */
+  /** O que está na MÃO (uma coisa, ou nada): o que a subtela desenha. */
   inventory: Array<{ kind: HeldItemKind; count: number }>;
-  /** A BOLSA aberta? (ver QuickBag — a mochila que nao pausa o jogo) */
+  /** Sempre false: a bolsa acabou (o campo fica para os cenários antigos lerem). */
   bagOpen: boolean;
   groundItems: Array<{ kind: HeldItemKind; worldX: number; worldY: number }>;
   /** Os portoes de bater: abertos ou nao, e quantas vezes cada um ja tentou e bateu. */

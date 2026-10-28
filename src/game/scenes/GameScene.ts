@@ -69,7 +69,7 @@ import type { WorldProp } from '@/game/objects/WorldProp';
 // viva com sprite e colisao) — dois tipos com o mesmo nome em modulos diferentes. Aqui os dois
 // se encontram, porque o mundo infinito converte um no outro enquanto o heroi anda.
 import type { PropDir } from '@/game/world/worldSchema';
-import { t, tLines, tWords } from '@/game/i18n/i18n';
+import { t, tLines, tWords, type I18nLine } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
   FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE,
@@ -78,7 +78,7 @@ import {
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import {
-  FUNGUS_SPECS, KNIFE_TEXTURE_KEY, MUSHROOM_KINDS, ROASTABLE_ORDER,
+  FUNGUS_SPECS, KNIFE_TEXTURE_KEY, MUSHROOM_KINDS,
   fungusTextureKey, isMushroomKind, registerFungiTextures, type MushroomKind,
 } from '@/game/fungi/fungi';
 import { ForagingOverlay } from '@/game/runtime/ForagingOverlay';
@@ -90,7 +90,7 @@ import {
 import {
   BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
   BUTTERFLY_TEXTURE, LEAF_TEXTURE,
-  ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
+  MARSHMALLOW_BAG_TEXTURE, ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
 import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
@@ -103,7 +103,6 @@ import {
 import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl, type SubScreenView } from '@/game/runtime/SubScreen';
-import { QuickBag, type QuickBagView } from '@/game/runtime/QuickBag';
 import type { FieldNoteEntry } from '@/game/runtime/SubScreen';
 import { FpsCounter } from '@/game/runtime/FpsCounter';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
@@ -370,6 +369,8 @@ const SWING_HAND_ELEVATION = 0.55;
 const SWING_BACK_TURNED_NEAR = 0.3;
 /** Quanto uma pegada leva para sumir (era a duração do tween dela). */
 const FOOTPRINT_FADE_MS = 700;
+/** O roteiro da Hollis, a coletora: é ela quem guarda a faca e recebe os cogumelos. */
+const FORAGER_DIALOG = 'radiationSuit';
 
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
@@ -381,14 +382,12 @@ export class GameScene extends Phaser.Scene {
   private itemManager?: ItemManager;
   private swordSlash?: SwordSlash;
   /**
-   * A MOCHILA. O heroi carregava um item so, e pegar outro largava o primeiro; com dois botoes
-   * ele guarda tudo e ESCOLHE o que fica no B (ver Inventory).
+   * A MÃO. O herói carrega UMA coisa de cada vez, nas costas (ver Inventory): a mochila acabou.
+   * Pegar outra coisa pede largar a que está na mão (`takeIntoHand`), e o Z é a mão — pega,
+   * troca e pousa no tile da frente (`handAt`).
    *
-   * `heldItem` continua existindo, e continua querendo dizer exatamente o que sempre quis: o que
-   * esta na mao AGORA. Toda fechadura do mundo pergunta isso, e a resposta segue sendo uma so —
-   * o que mudou foi de onde ela vem. Por isso ele virou um getter sobre a selecao, e nao um
-   * campo que a mochila teria de manter em sincronia (dois lugares guardando a mesma verdade e
-   * a maneira certa de eles discordarem daqui a um mes).
+   * `heldItem` continua querendo dizer o que sempre quis: o que está na mão AGORA. Toda fechadura
+   * do mundo pergunta isso, e a resposta é uma só.
    */
   private readonly inventory = new Inventory();
   private get heldItem(): 'none' | HeldItemKind {
@@ -403,12 +402,10 @@ export class GameScene extends Phaser.Scene {
    * mochila — que e exatamente o que uma assercao de "bare-handed" quer dizer.
    */
   private set heldItem(kind: 'none' | HeldItemKind) {
-    // `'sword'` VIRA `'none'`, e não um no-op silencioso: a espada saiu da mochila, então "ponha a
-    // espada na mão" hoje significa "nenhum item selecionado — só a arma do herói". Sem esta
-    // tradução, um cenário antigo escreveria `heldItem = 'sword'` e continuaria com a picareta
-    // empunhada sem nada avisar.
-    if (kind === 'none' || kind === 'sword') this.inventory.select('none');
-    else this.inventory.add(kind);
+    // A porta de AUTORIA (debug e playtest) troca o que está na mão sem pôr nada no mundo.
+    // `'sword'` vira mão vazia: a espada não é item.
+    this.inventory.clear();
+    if (kind !== 'none' && kind !== 'sword') this.inventory.add(kind);
     this.updateBackItem();
   }
 
@@ -573,9 +570,6 @@ export class GameScene extends Phaser.Scene {
   /** O icone de cada item para o B do toque, tirado da textura uma vez (ver syncUseButtonIcon). */
   private readonly useIconCache = new Map<HeldItemKind, string>();
   private controlsHint?: ControlsHint;
-  // A BOLSA: a mochila aberta COM O JOGO RODANDO (ver QuickBag). Ela nao pausa nada — quem paga
-  // o preco de folhear e o heroi, de pes presos e sem os dois botoes enquanto ela estiver aberta.
-  private quickBag?: QuickBag;
   // Center chunk of the streamed window; NaN forces the first stream.
   private streamCenter = { cx: NaN, cy: NaN };
   private debugApi?: GameDebugApi;
@@ -723,8 +717,14 @@ export class GameScene extends Phaser.Scene {
     this.seenItems.clear();
     if (this.adventure) {
       const st = adventureState();
-      for (const it of st.inventory) this.inventory.add(it.kind, it.count);
-      this.inventory.select(st.selected);
+      // UM SAVE DA MOCHILA ANTIGA: a mão fica com o que estava escolhido, e o resto pousa em
+      // volta do herói — nada se perde, só deixa de caber nas costas.
+      const kept = st.inventory.find((it) => it.kind === st.selected) ?? st.inventory[0];
+      for (const it of st.inventory) {
+        if (it === kept) { this.inventory.add(it.kind, it.count); continue; }
+        const units = UNIT_PACK_KINDS.has(it.kind) ? [it.count] : Array.from({ length: it.count }, () => 1);
+        for (const n of units) this.dropNear(it.kind, n, startWorldX, startWorldY);
+      }
       st.seenItems.forEach((k) => this.seenItems.add(k as HeldItemKind));
       this.updateBackItem(); // o item selecionado volta as costas do heroi ja no primeiro frame
     }
@@ -787,6 +787,13 @@ export class GameScene extends Phaser.Scene {
     // jardim. Ela mora na MESMA classe das outras fogueiras (arte, luz, fumaca), so que fora da
     // lista que o dia acende e apaga sozinho.
     this.hearths = getHearths().map((h) => new CampfireObject(this, h.worldX, h.worldY, this.hearthLit));
+    // O PACOTE DE MARSHMALLOW mora no canto do tile da fogueira do fim (dentro dele: nenhum sprite
+    // vaza do seu tile). É dele que sai o que vai ao espeto — o herói só traz o graveto.
+    for (const h of getHearths()) {
+      this.world3d?.addBillboard(MARSHMALLOW_BAG_TEXTURE, 0)
+        .setPosition(h.worldX + 0.28, h.worldY + 0.28)
+        .setDisplaySize(0.42, 0.42);
+    }
     // O PORTAO DO JARDIM e a porta trancada sem chave: quem a abre e o ultimo pedido fechado.
     this.gardenGates = getGardenGates().map((g) => {
       const gate = new LockedDoorObject(this, g.worldX, g.worldY);
@@ -899,9 +906,8 @@ export class GameScene extends Phaser.Scene {
     if ((this.registry.get('appMode') as AppMode | undefined) === 'editor') {
       this.enableEditorReturn();
     } else {
-      // O ESC TEM UM DONO SÓ. Com a bolsa aberta ele a fecha e para por aí.
+      // O ESC TEM UM DONO SÓ: a pausa (sentado na fogueira, ele só levanta).
       this.input.keyboard?.on('keydown-ESC', () => {
-        if (this.quickBag?.isOpen) { this.quickBag.close(); return; }
         // Sentado na fogueira, o ESC so levanta: ele levantava E abria a pausa no mesmo toque.
         if (this.resting) { this.standUp(); return; }
         this.openPauseMenu();
@@ -936,8 +942,6 @@ export class GameScene extends Phaser.Scene {
       || this.itemGetOpen || this.cutsceneActive) return;
     // A bolsa e a pausa nunca convivem: uma congela o mundo e a outra existe justamente por nao
     // congelar. Quem abre a pausa fecha a bolsa (sem equipar nada — fechar nao e confirmar).
-    this.quickBag?.close();
-    this.quickBag?.setButtonVisible(false);
     this.pauseTouchButton?.setVisible(false);
     this.actionButtons?.setVisible(false);
     // scene.get('title') is undefined in the editor playtest config; without it "quit" would
@@ -999,17 +1003,16 @@ export class GameScene extends Phaser.Scene {
     return {
       title: t('subscreen.title'),
       emptyLabel: t('subscreen.empty'),
-      items: this.inventory.bag().map(row),
-      // A mesma separação da bolsa (uma resposta só para "o que tem gesto?"): a grade escolhe, os
-      // contadores apenas informam.
-      materials: this.inventory.materials().filter(({ kind }) => !isMushroomKind(kind)).map(row),
+      // O que está NA MÃO (a mochila acabou: é uma coisa só, ou nada).
+      items: this.inventory.list().map(row),
+      materials: [],
       selected: this.heldItem,
       map: this.subScreenMap(),
       // O CADERNO DE CAMPO: as seis espécies, as achadas com a ficha inteira e as que faltam
       // apagadas — a lista do que o vale ainda tem para ensinar.
       fieldNotes: {
         title: t('fungi.notesTitle'),
-        rows: MUSHROOM_KINDS.map((kind) => this.fieldNote(kind, this.inventory.count(kind))),
+        rows: MUSHROOM_KINDS.map((kind) => this.fieldNote(kind, this.seenItems.has(kind) ? 1 : 0)),
       },
       // A PAGINA DE PLANOS e o MESMO catalogo da bancada (`orderCatalogView`), so que em leitura.
       plans: this.toolboxes.length
@@ -1049,7 +1052,6 @@ export class GameScene extends Phaser.Scene {
     if (!this.pauseMenu) return;
     this.pauseMenu.destroy();
     this.pauseMenu = undefined;
-    this.quickBag?.setButtonVisible(true);
     this.pauseTouchButton?.setVisible(true);
     this.actionButtons?.setVisible(true);
     this.scene.resume();
@@ -1186,7 +1188,7 @@ export class GameScene extends Phaser.Scene {
         heldOnFire: this.heldOnFire,
         heldItem: this.heldItem,
         inventory: this.inventory.list(),
-        bagOpen: this.quickBag?.isOpen === true,
+        bagOpen: false,
         orderOpen: this.orderOverlay !== undefined,
         facing: { ...(this.movementController?.facing ?? { dx: 0, dy: 1 }) },
         groundItems: this.itemManager?.snapshot() ?? [],
@@ -1364,8 +1366,6 @@ export class GameScene extends Phaser.Scene {
     this.pauseTouchButton = undefined;
     this.actionButtons?.destroy();
     this.actionButtons = undefined;
-    this.quickBag?.destroy();
-    this.quickBag = undefined;
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
     this.orderOverlay?.destroy();
@@ -1578,7 +1578,6 @@ export class GameScene extends Phaser.Scene {
     this.resting = true;
     this.stopBreathing();
     this.movementController?.hold(true);
-    this.quickBag?.close();
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
     this.hero.frame = HERO_FRAMES.idleDown;
@@ -2022,8 +2021,6 @@ export class GameScene extends Phaser.Scene {
     if (this.orderOverlay) return true;
     this.useBufferMs = 0;
     this.stopBreathing();
-    this.quickBag?.close();
-    this.quickBag?.setButtonVisible(false);
     this.actionButtons?.setVisible(false);
     // A tarja de teclas do jogo desaparece, como a bolsa já faz: com o catálogo aberto ela fica
     // MENTINDO ("Z usa o que você segura") por cima de uma tela onde Z prega um plano — e o
@@ -2033,7 +2030,7 @@ export class GameScene extends Phaser.Scene {
     this.orderBox = box;
     getSoundManager().playToolboxOpen();
     this.orderOverlay = new ToolboxOrderOverlay({
-      read: () => this.orderCatalogView(station),
+      read: () => this.orderCatalogView(station, prop),
       onCraft: (kind) => this.craftAtStation(prop, station, kind as HeldItemKind),
       // A recusa SOA. Ela era só um tranco de 3px numa grade de onze cartas iguais, e um jogador
       // relatou exatamente o que isso vira na prática: "apertei Z e nada aconteceu". Todo o resto
@@ -2064,7 +2061,7 @@ export class GameScene extends Phaser.Scene {
     if (!recipe || recipeStation(recipe) !== station) return false;
     const cost = recipeCost(recipe);
     for (const [ingredient, need] of cost) {
-      if (this.inventory.count(ingredient) < need) return false;
+      if (this.stationCount(prop.worldX, prop.worldY, ingredient) < need) return false;
     }
     // O FORNO TRABALHA, e enquanto trabalha nao aceita outra fornada: ele tem uma boca so. A
     // recusa e o tranco da carta no catalogo, e ela e honesta — a maquina esta rugindo na tela.
@@ -2079,10 +2076,8 @@ export class GameScene extends Phaser.Scene {
       ? this.deliveryTileAround(prop.worldX, prop.worldY)
       : null;
     if (station === 'bench' && !landing) return false;
-    for (const [ingredient, need] of cost) this.inventory.remove(ingredient, need);
-    // Nada ENTRA na mochila agora, mas os insumos saíram — e gastar o último de um tipo move a
-    // seleção. As costas do herói têm de acompanhar, senão ele carrega o desenho de um item que
-    // não tem mais.
+    for (const [ingredient, need] of cost) this.stationSpend(prop.worldX, prop.worldY, ingredient, need);
+    // O insumo pode ter saído da mão: as costas do herói têm de acompanhar.
     this.updateBackItem();
     const units = recipe.units ?? 1;
     if (prop instanceof FurnaceObject) {
@@ -2113,6 +2108,45 @@ export class GameScene extends Phaser.Scene {
     this.seenItems.add(kind);
     this.persistAdventure();
     return true;
+  }
+
+  /**
+   * O ESTOQUE DE UMA MÁQUINA. Com uma mão só, a bancada e o forno trabalham com o que está NO CHÃO
+   * EM VOLTA deles (os oito vizinhos) mais o que está na mão: leva-se uma coisa de cada vez, pousa-se
+   * ao lado da mesa, e a carta acende quando o par está ali. Nada fica escondido dentro da máquina.
+   */
+  private stockAround(x: number, y: number, kind: HeldItemKind): Array<[number, number]> {
+    const tiles: Array<[number, number]> = [];
+    for (let oy = -1; oy <= 1; oy += 1) {
+      for (let ox = -1; ox <= 1; ox += 1) {
+        if ((ox !== 0 || oy !== 0) && this.itemManager?.kindAt(x + ox, y + oy) === kind) tiles.push([x + ox, y + oy]);
+      }
+    }
+    return tiles;
+  }
+
+  private stationCount(x: number, y: number, kind: HeldItemKind): number {
+    const ground = this.itemManager?.snapshot() ?? [];
+    let n = this.inventory.count(kind);
+    for (const [tx, ty] of this.stockAround(x, y, kind)) {
+      n += ground.find((it) => it.worldX === tx && it.worldY === ty)?.units ?? 1;
+    }
+    return n;
+  }
+
+  /** Gasta do chão em volta primeiro (a mão fica com o que tem), e só então da mão. */
+  private stationSpend(x: number, y: number, kind: HeldItemKind, need: number): void {
+    let left = need;
+    for (const [tx, ty] of this.stockAround(x, y, kind)) {
+      if (left <= 0) break;
+      const taken = this.itemManager?.takeAt(tx, ty);
+      if (!taken) continue;
+      const used = Math.min(left, taken.units);
+      left -= used;
+      // O pacote que sobra volta ao mesmo tile, com a conta que tinha menos o que foi usado.
+      if (taken.units > used) this.itemManager?.drop(kind, tx, ty, taken.fire, taken.units - used);
+    }
+    if (left > 0) this.inventory.remove(kind, left);
   }
 
   /**
@@ -2199,17 +2233,14 @@ export class GameScene extends Phaser.Scene {
     const kind = this.itemManager?.kindAt(wx, wy);
     if (!isMushroomKind(kind)) return false;
     if (this.foraging) return true;
-    if (!this.inventory.has('knife')) {
+    // A FACA PRECISA ESTAR NA MÃO (uma coisa de cada vez). Sem ela, o herói pensa nela.
+    if (this.heldItem !== 'knife') {
       this.heroThought?.show(KNIFE_TEXTURE_KEY);
       return true;
     }
-    // A faca vai para a mão (a tocha acesa é intocável — a mesma exceção de `equipToolFor`).
-    if (this.heldItem !== 'knife' && !this.heldOnFire) this.selectItem('knife');
     this.useBufferMs = 0;
     this.stopBreathing();
     this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
-    this.quickBag?.close();
-    this.quickBag?.setButtonVisible(false);
     this.actionButtons?.setVisible(false);
     // A tarja de teclas mentiria por cima da colheita (a tela diz os próprios botões).
     this.controlsHint?.destroy();
@@ -2238,7 +2269,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.camera) return;
     const front = this.facingTile();
     const show = !this.dialogOpen && !this.orderOverlay && !this.foraging && !this.cutsceneActive
-      && this.quickBag?.isOpen !== true && isMushroomKind(this.itemManager?.kindAt(front.x, front.y));
+      && isMushroomKind(this.itemManager?.kindAt(front.x, front.y));
     if (!show) { this.mushroomHint?.setVisible(false); return; }
     if (!this.mushroomHint) {
       ensurePlacementKeyTexture(this, isTouchDevice());
@@ -2254,28 +2285,55 @@ export class GameScene extends Phaser.Scene {
 
   private closeForaging(): void {
     this.foraging = undefined;
-    this.quickBag?.setButtonVisible(true);
     this.actionButtons?.setVisible(true);
   }
 
-  /** O cogumelo limpo entra na CESTA — e a espécie, no caderno (seenItems). */
+  /**
+   * O cogumelo limpo vai para as COSTAS, e a faca volta para a Hollis: uma coisa de cada vez. Ela a
+   * devolve quando o herói trouxer o cogumelo (ver `knifeWithHollis`). A espécie entra no caderno.
+   */
   private basketMushroom(kind: MushroomKind, wx: number, wy: number): void {
     this.closeForaging();
     this.itemManager?.takeAt(wx, wy);
     const first = !this.seenItems.has(kind);
-    this.inventory.stash(kind, 1);
+    this.inventory.clear();
+    this.inventory.add(kind, 1);
     this.seenItems.add(kind);
-    // (o som de guardar já tocou quando ele desceu para a bolsa, antes da ficha)
+    this.updateBackItem();
+    // (o som de guardar já tocou quando ele desceu para as costas, antes da ficha)
     if (first) getSoundManager().playSingingBowl();
-    // A Hollis pede que se ENCONTRE cada espécie: a sexta fecha o pedido aqui mesmo, no mato.
-    this.questEvent({ type: 'gather', item: kind, units: 1 });
     this.persistAdventure();
+  }
+
+  /**
+   * A FACA ESTÁ COM A HOLLIS? Ela é derivada, não guardada: depois do presente, a faca que não está
+   * na mão, nem no chão, nem num altar, voltou para ela (é o que o corte faz). Um booleano no save
+   * seria uma segunda verdade, e a faca largada num canto do mapa provaria que ele mente.
+   */
+  private knifeWithHollis(): boolean {
+    if (!this.adventure || !adventureState().giftsGiven.has(FORAGER_DIALOG)) return false;
+    if (this.heldItem === 'knife') return false;
+    if (this.altars.some((altar) => altar.carrying === 'knife')) return false;
+    return !(this.itemManager?.snapshot().some((it) => it.kind === 'knife') ?? false);
+  }
+
+  /** A Hollis devolve a faca: ela salta da mão dela para a do herói. */
+  private returnKnife(npcWorld?: { worldX: number; worldY: number }): void {
+    const { worldX: hx, worldY: hy } = this.playerWorld;
+    if (npcWorld) {
+      this.npcManager?.hop(npcWorld.worldX, npcWorld.worldY);
+      this.flingCraftedItem('knife', npcWorld.worldX, npcWorld.worldY, hx, hy);
+    }
+    this.time.delayedCall(200, () => {
+      this.takeIntoHand('knife');
+      getSoundManager().playSwordPickup();
+      this.persistAdventure();
+    });
   }
 
   private closeToolboxOrder(): void {
     this.orderOverlay = undefined;
     this.orderBox = undefined;
-    this.quickBag?.setButtonVisible(true);
     this.actionButtons?.setVisible(true);
   }
 
@@ -2297,7 +2355,9 @@ export class GameScene extends Phaser.Scene {
    *   • `ready`  — os dois insumos estão na mochila agora.
    *   • `have`   — por insumo, e comparado com `need` (o `iron+iron` pede dois).
    */
-  private orderCatalogView(station: CraftStation = 'bench'): OrderCatalogView {
+  private orderCatalogView(
+    station: CraftStation = 'bench', at?: { worldX: number; worldY: number },
+  ): OrderCatalogView {
     const goal = nextStep(station, this.seenItems);
     const entries = catalogSteps(station, this.seenItems).map((recipe) => {
       const cost = recipeCost(recipe);
@@ -2308,7 +2368,8 @@ export class GameScene extends Phaser.Scene {
           icon: spriteDataUrl(this, visual.texture, visual.frame),
           label: t(`items.name.${kind}`),
           need,
-          have: this.inventory.count(kind),
+          // Na máquina, o que está em volta dela e na mão; na página de planos, só a mão.
+          have: at ? this.stationCount(at.worldX, at.worldY, kind) : this.inventory.count(kind),
           // A bancada faz este insumo? E o que separa "procure no mundo" de "e aqui mesmo".
           craftable: isCraftable(kind),
         };
@@ -2423,37 +2484,11 @@ export class GameScene extends Phaser.Scene {
    */
   private installActionInput(): void {
     const touch = isTouchDevice();
-    // A BOLSA nasce antes das teclas porque as teclas perguntam por ela: com a bolsa aberta, o I,
-    // as setas e o X sao DELA, e so voltam a ser do heroi quando ela fecha.
-    this.quickBag = new QuickBag({
-      read: () => this.quickBagView(),
-      onSet: (kind) => { this.selectItem(kind as HeldItemKind); },
-      onToggleRequest: () => this.toggleBag(),
-      onOpenChange: (open) => this.onBagOpenChanged(open),
-    }, touch);
-
     const kb = this.input.keyboard;
     if (kb) {
-      kb.addCapture(['Z', 'X', 'J', 'K', 'SPACE', 'I']);
+      kb.addCapture(['Z', 'X', 'J', 'K', 'SPACE']);
       for (const key of ['keydown-Z', 'keydown-J', 'keydown-SPACE']) kb.on(key, this.pressAttack, this);
       for (const key of ['keydown-X', 'keydown-K']) kb.on(key, this.pressUse, this);
-      // I ABRE E FECHA A BOLSA. A bolsa nao age no mundo, ela so decide o que o X carrega.
-      kb.on('keydown-I', this.toggleBag, this);
-      // As setas so chegam aqui quando a bolsa esta aberta; fora dela quem as le e o andar.
-      for (const key of ['keydown-LEFT', 'keydown-A']) {
-        kb.on(key, (e: KeyboardEvent) => this.routeBagStep(e, -1));
-      }
-      for (const key of ['keydown-RIGHT', 'keydown-D']) {
-        kb.on(key, (e: KeyboardEvent) => this.routeBagStep(e, 1));
-      }
-      // Cima/baixo trocam de fileira: as ferramentas, ou a CESTA dos cogumelos com as fichas.
-      for (const key of ['keydown-UP', 'keydown-W']) {
-        kb.on(key, (e: KeyboardEvent) => this.routeBagRow(e, -1));
-      }
-      for (const key of ['keydown-DOWN', 'keydown-S']) {
-        kb.on(key, (e: KeyboardEvent) => this.routeBagRow(e, 1));
-      }
-      kb.on('keydown-ENTER', () => { if (this.quickBag?.isOpen) this.quickBag.commit(); });
     }
     // No telefone os dois botoes precisam de corpo; no teclado basta dizer uma vez quais sao as
     // teclas — e a tarja some sozinha (ver ControlsHint). No toque ela ensina o GESTO de andar,
@@ -2505,78 +2540,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** A seta, com a bolsa aberta: ela anda com o CURSOR e nao com o herói (que está de pés presos). */
-  private routeBagStep(event: KeyboardEvent | undefined, delta: number): void {
-    if (!this.quickBag?.isOpen) return;
-    // Tecla segurada repete no navegador — e uma fileira de itens percorrida a 30 passos por
-    // segundo não é uma escolha.
-    if (event?.repeat) return;
-    this.quickBag.step(delta);
-  }
-
   /**
    * O tile da frente esta ao ALCANCE da mao? So nao esta quando a serra separa os dois: o heroi no
    * planalto olhando o chao la embaixo, ou de baixo olhando o paredao. A escada, no rumo dela, liga.
    */
   private reachesFront(front: { x: number; y: number }): boolean {
     return canStep(this.playerWorld.worldX, this.playerWorld.worldY, front.x, front.y);
-  }
-
-  private routeBagRow(event: KeyboardEvent | undefined, delta: number): void {
-    if (!this.quickBag?.isOpen || event?.repeat) return;
-    this.quickBag.stepRow(delta);
-  }
-
-  /**
-   * A BOLSA ABRE E FECHA — e nada mais no jogo faz isso. Ela recusa exatamente onde o menu de
-   * pausa recusa: nenhuma tela que já congelou o mundo pode ganhar uma segunda por cima.
-   */
-  private toggleBag(): void {
-    if (!this.quickBag) return;
-    if (this.quickBag.isOpen) { this.quickBag.close(); return; }
-    if (this.pauseMenu || this.dialogOpen || this.camShifting
-      || this.itemGetOpen || this.cutsceneActive || this.orderOverlay || this.foraging) return;
-    this.quickBag.openBag();
-  }
-
-  /**
-   * Folhear a bolsa prende os pés (as setas são do cursor agora) e cala os dois botões (`canAct`)
-   * — o par do toque sai da tela junto, para que só exista um conjunto de controles de cada vez.
-   */
-  private onBagOpenChanged(open: boolean): void {
-    this.movementController?.hold(open);
-    this.actionButtons?.setVisible(!open);
-    if (!open) return;
-    // A tarja das teclas mora no MESMO rodapé da tela que a bolsa, e ela já cumpriu o trabalho.
-    this.controlsHint?.destroy();
-    this.controlsHint = undefined;
-    this.useBufferMs = 0;
-  }
-
-  /**
-   * O que a bolsa desenha: a mochila com a ARTE DO JOGO e o item que o X carrega AGORA — o cursor
-   * é da bolsa, o equipado é da cena.
-   */
-  private quickBagView(): QuickBagView {
-    const row = (entry: { kind: HeldItemKind; count: number }) => {
-      const visual = ITEM_VISUAL_2D[entry.kind];
-      return {
-        kind: entry.kind,
-        count: entry.count,
-        icon: spriteDataUrl(this, visual.texture, visual.frame),
-        label: t(`items.name.${entry.kind}`),
-      };
-    };
-    const mats = this.inventory.materials();
-    return {
-      items: this.inventory.bag().map(row),
-      // A MATÉRIA-PRIMA não entra na fileira: ela é uma linha de contadores embaixo, sem cursor.
-      materials: mats.filter(({ kind }) => !isMushroomKind(kind)).map(row),
-      // Os COGUMELOS são matéria-prima também (não têm gesto), mas ganham a fileira deles: a
-      // CESTA, onde o cursor desce para ler a ficha de cada espécie.
-      basket: mats.flatMap(({ kind, count }) => (isMushroomKind(kind) ? [this.fieldNote(kind, count)] : [])),
-      equipped: this.heldItem,
-      emptyLabel: t('bag.empty'),
-    };
   }
 
   /**
@@ -2588,7 +2557,7 @@ export class GameScene extends Phaser.Scene {
   private canAct(): boolean {
     return !this.dialogOpen && !this.camShifting
       && !this.itemGetOpen && !this.cutsceneActive
-      && !this.pauseMenu && this.quickBag?.isOpen !== true
+      && !this.pauseMenu
       && !this.orderOverlay && !this.foraging
       && this.movementController !== undefined;
   }
@@ -2599,7 +2568,6 @@ export class GameScene extends Phaser.Scene {
    * sozinho. Ver ACTION_BUFFER_MS.
    */
   private spendActionBuffers(delta: number): void {
-    if (this.quickBag?.isOpen) return;
     if (this.useBufferMs > 0) {
       this.useBufferMs = Math.max(0, this.useBufferMs - delta);
       if (this.useBufferMs > 0 && this.useCooldownMs <= 0) this.pressUse();
@@ -2674,6 +2642,8 @@ export class GameScene extends Phaser.Scene {
     if (this.openCraftMenuAt(front.x, front.y)) return;
     if (this.placeOnAltarAt(front.x, front.y)) return;
     if (this.strikeAltarAt(front.x, front.y)) return;
+    // A MÃO: pegar, trocar ou pousar a coisa do tile da frente.
+    if (this.handAt(front.x, front.y)) return;
     // Z NO VAZIO com o gato do lado e carinho. Ele anda atras e nao num tile, entao mira-lo
     // seria impossivel: basta estar perto e o Z nao ter mais nada a fazer.
     this.petCat();
@@ -2692,7 +2662,6 @@ export class GameScene extends Phaser.Scene {
     if (event?.repeat) return;
     if (this.resting) { this.standUp(); return; }
     // A BOLSA ABERTA SEQUESTRA O X — e este é o único lugar do código onde isso pode ser decidido.
-    if (this.quickBag?.isOpen) { this.quickBag.commit(); return; }
     if (!this.canAct()) return;
     // A cadencia adia, nao descarta (ver ACTION_BUFFER_MS).
     if (this.useCooldownMs > 0) {
@@ -2735,7 +2704,7 @@ export class GameScene extends Phaser.Scene {
     // garante que nada fique preso na laje — a mesma lei do baú e da bigorna, um aperto põe, o
     // seguinte devolve.
     const altar = this.getAltarAt(wx, wy);
-    if (altar?.carrying) {
+    if (altar?.carrying && this.heldItem === 'none') {
       const back = altar.take();
       if (back) {
         this.inventory.add(back);
@@ -2927,6 +2896,8 @@ export class GameScene extends Phaser.Scene {
    * SAVE (o mundo autorado ja mora no world.json; gravar tudo o duplicaria no proximo boot).
    */
   private pickUpMachineAt(wx: number, wy: number): boolean {
+    // A máquina recolhida vai para a MÃO, então ela precisa estar vazia.
+    if (this.heldItem !== 'none') return false;
     const furnace = this.getFurnaceAt(wx, wy);
     if (furnace) {
       // O FORNO TRABALHANDO nao sobe: a carga ja saiu da mochila e esta dentro dele, e recolher
@@ -2996,38 +2967,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * APANHAR o item deste tile. Devolve `false` quando nao havia nada — e ai o B segue pro resto
-   * da sua tabela.
-   *
-   * O jogo coletava por PISADA, e isso acabou: andar por cima de uma coisa nao e escolher pega-la.
-   * A regra vale nos dois sentidos e e o que torna o gesto reversivel — pousar com B e pegar de
-   * volta com B —, alem de resolver sozinho o acidente que o flag `armed` do ItemPickup existia
-   * para remendar (o item largado que voltava pra mao no mesmo frame).
-   *
-   * A mochila GUARDA em vez de trocar, entao pegar com a mao cheia e legitimo: o item novo entra
-   * na lista e vira a selecao (`onCollectItem`), porque apanhar uma coisa e sempre a intencao de
-   * usa-la.
-   */
-  /**
-   * APANHAR PISANDO — o único jeito de pegar uma coisa do chão agora.
-   *
-   * Ele guarda com `stash` (nunca rouba a seleção) e só empunha o que cai numa mão que estava
-   * vazia: quem atravessa o mapa com a picareta escolhida continua com a picareta.
-   * A cerimônia de item novo continua acontecendo — mas só para o que tem gesto: um "ITEM GET"
-   * de tela cheia para o terceiro minério do dia seria o jogo parando para nada.
-   *
-   * O FOGO só sobe junto com a peça se ela for parar na mão. Uma tocha acesa dentro da mochila
-   * seria fogo que não está em lugar nenhum do mundo (a mesma lei do `selectItem`).
+   * APANHAR PISANDO — só com a MÃO VAZIA (ou o mesmo pacote, que soma). Com a mão cheia, trocar é o
+   * Z (`handAt`). A cerimônia de item novo só acontece para o que tem gesto: um "ITEM GET" de tela
+   * cheia para o primeiro minério seria o jogo parando para nada. O fogo sobe junto com o graveto.
    */
   private collectUnderfoot(wx: number, wy: number): void {
     // Cogumelo nao se apanha pisando — so a faca o solta (ver harvestMushroomAt).
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return;
+    // UMA COISA DE CADA VEZ: com a mão cheia o pé passa por cima (trocar é o Z, de propósito —
+    // atravessar um campo não pode ir largando e pegando coisas). O mesmo PACOTE soma.
+    const kindHere = this.itemManager?.kindAt(wx, wy);
+    if (!kindHere) return;
+    if (this.heldItem !== 'none' && !(this.heldItem === kindHere && UNIT_PACK_KINDS.has(kindHere))) return;
     const taken = this.itemManager?.takeAt(wx, wy);
     if (!taken) return;
     const handWasEmpty = this.heldItem === 'none';
-    this.inventory.stash(taken.kind, taken.units ?? 1);
-    this.inventory.selectFirstIfEmpty();
-    if (handWasEmpty && this.heldItem === taken.kind) {
+    this.inventory.add(taken.kind, taken.units ?? 1);
+    if (handWasEmpty) {
       this.heldOnFire = taken.kind === 'wood' && taken.fire !== undefined;
       this.torchFuelMs = taken.fire?.fuelMs ?? 0;
     }
@@ -3037,22 +2993,92 @@ export class GameScene extends Phaser.Scene {
       this.showItemGet(taken.kind, () => {});
     } else {
       this.seenItems.add(taken.kind);
-      // O som de GUARDAR (ver playItemStash): grave e descendo, o couro da mochila. Aqui tocava
-      // um tilintar metálico de moeda, herdado de quando o jogo tinha carteira — e um graveto
-      // entrando na mochila soava como dinheiro entrando no bolso.
+      // O som de GUARDAR (ver playItemStash): grave e descendo, a coisa indo para as costas.
       getSoundManager().playItemStash();
     }
     this.persistAdventure();
   }
 
-  private pickUpItemAt(wx: number, wy: number): boolean {
-    const taken = this.itemManager?.takeAt(wx, wy);
-    if (!taken) return false;
-    this.onCollectItem({
-      kind: taken.kind, worldX: wx, worldY: wy,
-      fire: taken.fire, units: taken.units,
-    });
-    return true;
+  /**
+   * O Z É A MÃO, e com uma mão só ela tem três gestos contra o tile da frente:
+   *   • coisa no chão e mão vazia → PEGA;
+   *   • coisa no chão e mão cheia → TROCA (a da mão pousa onde a outra estava);
+   *   • chão livre e mão cheia    → POUSA.
+   * O cogumelo colhido não sai das costas: no chão ele voltaria a ser um cogumelo nascendo, que só
+   * a faca solta (ver `harvestMushroomAt`). Ele vai até a Hollis ou até a fogueira do fim.
+   */
+  private handAt(wx: number, wy: number): boolean {
+    if (!this.itemManager) return false;
+    const held = this.heldItem;
+    const there = this.itemManager.kindAt(wx, wy);
+    if (isMushroomKind(there)) return false; // nascendo: é da faca
+    const stuck = held !== 'none' && isMushroomKind(held);
+    if (there) {
+      if (stuck) { this.refuseMushroomDrop(); return true; }
+      const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
+      const out = this.inventory.takeAll();
+      this.heldOnFire = false;
+      this.torchFuelMs = 0;
+      const taken = this.itemManager.takeAt(wx, wy);
+      if (out) {
+        this.itemManager.drop(out.kind, wx, wy, fire, out.count);
+        if (fire) this.scheduleGroundTorchSpread(wx, wy);
+      }
+      if (taken) {
+        this.onCollectItem({ kind: taken.kind, worldX: wx, worldY: wy, fire: taken.fire, units: taken.units });
+      } else {
+        this.updateBackItem();
+      }
+      return true;
+    }
+    if (held === 'none') return false;
+    if (stuck) { this.refuseMushroomDrop(); return true; }
+    return this.placeItemAt(wx, wy);
+  }
+
+  /** O cogumelo colhido recusa o chão: um tranco e o som de recusa, nunca uma legenda. */
+  private refuseMushroomDrop(): void {
+    this.world3d?.shake(80, 0.002);
+    getSoundManager().playToolboxRefuse();
+  }
+
+  /**
+   * POUSAR PERTO: o tile livre mais perto de (x, y), ele mesmo primeiro. Para o que chega ao herói
+   * sem caber na mão (o segundo presente, a mochila de um save antigo). Sem chão livre em volta, a
+   * busca abre mais um anel — nada some.
+   */
+  private dropNear(kind: HeldItemKind, units: number, x: number, y: number): [number, number] | null {
+    if (!this.itemManager) return null;
+    for (let r = 0; r <= 4; r += 1) {
+      for (let oy = -r; oy <= r; oy += 1) {
+        for (let ox = -r; ox <= r; ox += 1) {
+          if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
+          const tx = x + ox;
+          const ty = y + oy;
+          if (this.isTileTaken(tx, ty)) continue;
+          if (tx === this.playerWorld.worldX && ty === this.playerWorld.worldY && r > 0) continue;
+          this.itemManager.drop(kind, tx, ty, undefined, units);
+          return [tx, ty];
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * PÔR NA MÃO o que chega de fora (presente, devolução): o que estava nela pousa perto do herói
+   * antes. É a lei de uma coisa só, num lugar só.
+   */
+  private takeIntoHand(kind: HeldItemKind, units = 1): void {
+    if (this.heldItem !== 'none' && this.heldItem !== kind) {
+      const out = this.inventory.takeAll();
+      if (this.heldOnFire) this.extinguishTorch();
+      this.heldOnFire = false;
+      this.torchFuelMs = 0;
+      if (out) this.dropNear(out.kind, out.count, this.playerWorld.worldX, this.playerWorld.worldY);
+    }
+    this.inventory.add(kind, units);
+    this.updateBackItem();
   }
 
   /**
@@ -3068,16 +3094,12 @@ export class GameScene extends Phaser.Scene {
     if (this.itemManager.hasItemAt(wx, wy) || this.isTileOccupied(wx, wy)) return false;
 
     const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
-    // O PACOTE pousa inteiro (semente e minério — ver UNIT_PACK_KINDS): o punhado da mochila
-    // vira um item só no chão, e pegá-lo de volta devolve a mesma contagem (ItemPickup.units).
-    // Pousar uma e pegar cinco seria uma máquina de imprimir semente — o pacote viaja.
-    const units = UNIT_PACK_KINDS.has(kind) ? this.inventory.count(kind) : 1;
-    if (UNIT_PACK_KINDS.has(kind)) {
-      this.inventory.remove(kind, units);
-      this.updateBackItem();
-    } else {
-      this.clearHeldItem();
-    }
+    // O PACOTE pousa inteiro (ver UNIT_PACK_KINDS), e pegá-lo de volta devolve a mesma contagem.
+    const units = this.inventory.count(kind);
+    this.inventory.takeAll();
+    this.heldOnFire = false;
+    this.torchFuelMs = 0;
+    this.updateBackItem();
     this.itemManager.drop(kind, wx, wy, fire, units);
     if (fire) this.scheduleGroundTorchSpread(wx, wy);
     getSoundManager().playFootstep(); // o baque surdo de pousar algo no chao
@@ -3431,7 +3453,7 @@ export class GameScene extends Phaser.Scene {
 
     // O COGUMELO NASCENDO sem faca na mochila: o heroi PENSA nela (a Hollis tem uma). O icone,
     // nunca a palavra — a mesma lingua da fogueira do fim.
-    if (isMushroomKind(this.itemManager?.kindAt(wx, wy)) && !this.inventory.has('knife')) {
+    if (isMushroomKind(this.itemManager?.kindAt(wx, wy)) && this.heldItem !== 'knife') {
       this.heroThought?.show(KNIFE_TEXTURE_KEY);
       return;
     }
@@ -5246,14 +5268,24 @@ export class GameScene extends Phaser.Scene {
    * POR O PRESENTE NA MAO: cada item entra na mochila, e o que o heroi nunca teve ganha a
    * cerimonia de item-get, um de cada vez (a fila e o callback do anterior).
    */
-  private handGift(dialogId: string, gift: Array<{ item: HeldItemKind; count: number }>): void {
+  private handGift(
+    dialogId: string,
+    gift: Array<{ item: HeldItemKind; count: number }>,
+    from?: { worldX: number; worldY: number },
+  ): void {
     adventureState().giftsGiven.add(dialogId);
-    for (const { item, count } of gift) this.inventory.add(item, count);
-    this.inventory.selectFirstIfEmpty();
-    // O presente vai para a mao: e a ferramenta do pedido que acabou de ser feito.
-    const first = gift.find(({ item }) => isBagItem(item));
-    if (first) this.selectItem(first.item);
-    this.updateBackItem();
+    // UMA COISA NA MÃO: o primeiro presente vai para ela (o que estava nela pousa ao lado), e o
+    // resto o NPC pousa no chão perto do herói, num arco que mostra de onde veio.
+    const [first, ...rest] = gift;
+    if (first) this.takeIntoHand(first.item, first.count);
+    const { worldX: hx, worldY: hy } = this.playerWorld;
+    for (const { item, count } of rest) {
+      const units = UNIT_PACK_KINDS.has(item) ? [count] : Array.from({ length: count }, () => 1);
+      for (const n of units) {
+        const at = this.dropNear(item, n, hx, hy);
+        if (at && from) this.flingCraftedItem(item, from.worldX, from.worldY, at[0], at[1]);
+      }
+    }
     this.persistAdventure();
     const fresh = gift.map(({ item }) => item).filter((item) => !this.seenItems.has(item));
     const next = (): void => {
@@ -5303,8 +5335,8 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * O Z NA FOGUEIRA DO FIM. Apagada, ele a ACENDE (sem tocha: ele tem pederneira, e este fogo e
-   * dele). Acesa, ele senta e assa — se tiver um graveto e um cogumelo. Sem um dos dois, o
-   * pensamento dele mostra o que falta (o icone, nunca a palavra).
+   * dele). Acesa, ele senta e assa um MARSHMALLOW — o pacote espera ao lado do fogo, e o herói só
+   * traz o espeto: um graveto NA MÃO. Sem ele, o pensamento mostra o graveto (o ícone, nunca a palavra).
    */
   private tendHearthAt(wx: number, wy: number): boolean {
     const hearth = this.getHearthAt(wx, wy);
@@ -5314,11 +5346,8 @@ export class GameScene extends Phaser.Scene {
       void this.lightHearth(hearth, wx, wy);
       return true;
     }
-    if (this.inventory.count('wood') < 1) { this.heroThought?.show(ASSET_KEYS.woodIcon); return true; }
-    // So vai ao espeto o que se come assado: a amanita fica na cesta (ver ROASTABLE_ORDER).
-    const mushroom = ROASTABLE_ORDER.find((kind) => this.inventory.count(kind) > 0);
-    if (!mushroom) { this.heroThought?.show(fungusTextureKey('porcini')); return true; }
-    void this.playRoastEnding(hearth, wx, wy, mushroom);
+    if (this.heldItem !== 'wood') { this.heroThought?.show(ASSET_KEYS.woodIcon); return true; }
+    void this.playRoastEnding(hearth, wx, wy);
     return true;
   }
 
@@ -5352,12 +5381,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O FIM. Ele senta na frente do fogo, espeta o cogumelo no graveto e o segura sobre a chama.
-   * O chapeu doura aos poucos, os vaga-lumes passam, a brisa mexe no mato. Ninguem diz nada por
+   * O FIM. Ele senta na frente do fogo, espeta um marshmallow no graveto e o segura sobre a chama.
+   * Ele doura aos poucos, os vaga-lumes passam, a brisa mexe no mato. Ninguem diz nada por
    * um tempo — e entao o quadro escurece e os creditos sobem.
    */
   private async playRoastEnding(
-    hearth: CampfireObject, wx: number, wy: number, mushroom: MushroomKind,
+    hearth: CampfireObject, wx: number, wy: number,
   ): Promise<void> {
     const w3 = this.world3d;
     const hb = this.heroBillboard;
@@ -5365,17 +5394,15 @@ export class GameScene extends Phaser.Scene {
     this.cutsceneActive = true;
     this.roasting = true;
     this.roasted = true;
-    this.inventory.remove('wood');
-    this.inventory.remove(mushroom);
+    this.inventory.remove('wood'); // o graveto vira o espeto
     this.extinguishTorch();
     this.updateBackItem();
     this.backItemBb?.setVisible(false);
-    this.quickBag?.setButtonVisible(false);
     this.actionButtons?.setVisible(false);
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
     // O SAVE SO APRENDE O FIM QUANDO OS CREDITOS SOBEM (la embaixo). Gravado aqui, um jogo
-    // fechado no meio da cena voltava "zerado", sem graveto, sem cogumelo e sem final para ver.
+    // fechado no meio da cena voltava "zerado", sem graveto e sem final para ver.
     this.stopBreathing();
     getSoundManager().fadeMusicOut();
 
@@ -5541,7 +5568,9 @@ export class GameScene extends Phaser.Scene {
     if (!base) return;
     // A ENTREGA VEM ANTES DA FALA. Cumprida a missão, `spokenDialogId` devolve o outro roteiro —
     // já nesta mesma conversa, que é o ponto: entregar e ouvir o obrigado é um gesto só.
-    const closedNow = this.settleQuestDelivery(askId);
+    // ENTREGAR É FALAR: o que está na mão vai para quem pediu (uma coisa de cada vez).
+    const delivery = this.settleQuestDelivery(askId);
+    const closedNow = delivery?.closed === true;
     const speakId = this.spokenDialogId(askId);
     // Roteiro alternativo sem entrada no world.json cai no de sempre: uma missão sem fala nova
     // não pode emudecer o NPC.
@@ -5555,6 +5584,14 @@ export class GameScene extends Phaser.Scene {
     const hint = this.questHint(askId);
     const hintLines = hint ? tLines(`npc.${askId}Hint.${hint}`) : [];
     if (hintLines.length > 0) script = { ...script, lines: gift ? [...script.lines, ...hintLines] : hintLines };
+    // O COGUMELO DEVOLVIDO: obrigado e uma curiosidade daquela espécie, antes do resto da conversa.
+    if (delivery && isMushroomKind(delivery.kind)) {
+      const said: I18nLine[] = [
+        { speaker: 'npc', text: t('fungi.thanks') },
+        { speaker: 'npc', text: t(`fungi.species.${delivery.kind}.curiosity`) },
+      ];
+      script = { ...script, lines: [...said, ...script.lines] };
+    }
     if (npcWorld) {
       const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY, scriptId);
       if (key) {
@@ -5562,10 +5599,14 @@ export class GameScene extends Phaser.Scene {
         this.persistAdventure(); // o "!" apagado fica apagado
       }
     }
-    this.openDialogScript(script, npcWorld, getDialogVoice(kind, speakId) ?? getDialogVoice(kind, askId), () => {
+    const open = (): void => this.openDialogScript(script, npcWorld, getDialogVoice(kind, speakId) ?? getDialogVoice(kind, askId), () => {
       if (gift) {
         if (npcWorld) this.npcManager?.hop(npcWorld.worldX, npcWorld.worldY);
-        this.handGift(askId, gift);
+        this.handGift(askId, gift, npcWorld);
+      }
+      // A FACA VOLTA à mão vazia de quem foi falar com a Hollis (ela a guardou no corte).
+      if (askId === FORAGER_DIALOG && !gift && this.heldItem === 'none' && this.knifeWithHollis()) {
+        this.returnKnife(npcWorld);
       }
       // O pedido fechou nesta conversa: um pulinho de alegria, coracoes, e o vale responde.
       if (closedNow) {
@@ -5575,6 +5616,22 @@ export class GameScene extends Phaser.Scene {
         }
         this.celebrateQuestDone(npcWorld);
       }
+    });
+    if (!delivery || !npcWorld) { open(); return; }
+    // A DEVOLUÇÃO tem corpo: a coisa salta das costas do herói para quem pediu, ele pula de
+    // alegria, e só então fala. Meio segundo de mundo parado, para o gesto ser visto.
+    this.cutsceneActive = true;
+    this.stopBreathing();
+    this.flingCraftedItem(delivery.kind, this.playerWorld.worldX, this.playerWorld.worldY, npcWorld.worldX, npcWorld.worldY);
+    getSoundManager().playItemStash();
+    this.time.delayedCall(200, () => {
+      this.npcManager?.hop(npcWorld.worldX, npcWorld.worldY, 0.34);
+      this.spawnHearts(npcWorld.worldX, npcWorld.worldY);
+      getSoundManager().playCozyChime();
+    });
+    this.time.delayedCall(560, () => {
+      this.cutsceneActive = false;
+      open();
     });
   }
 
@@ -5624,7 +5681,6 @@ export class GameScene extends Phaser.Scene {
     // A caixa de fala mora no MESMO rodapé que o par A/B e o botão da bolsa. Eles já estão
     // calados (`canAct`), então o que sobra deles é o pedaço que espia ao lado da caixa: saem
     // de cena junto, como saem quando a bolsa abre.
-    this.quickBag?.setButtonVisible(false);
     this.actionButtons?.setVisible(false);
     // Pan so the hero + NPC sit centered on the stage ABOVE the box.
     this.dialogNpcWorld = npcWorld;
@@ -5635,7 +5691,6 @@ export class GameScene extends Phaser.Scene {
       this.dialogOverlay?.destroy();
       this.dialogOverlay = undefined;
       this.dialogOpen = false;
-      this.quickBag?.setButtonVisible(true);
       this.actionButtons?.setVisible(true);
       this.endDialogCameraShift();
       getSoundManager().fadeMusicIn();
@@ -5679,22 +5734,25 @@ export class GameScene extends Phaser.Scene {
    * tudo-ou-nada, o único momento em que a mochila muda é o mesmo momento em que o NPC passa a
    * falar outra coisa: a resposta chega junto com o preço.
    */
-  private settleQuestDelivery(dialogId: string): boolean {
-    if (!this.adventure) return false;
-    let handed = false;
-    let closed = false;
-    for (const due of questDeliveriesDue(dialogId)) {
-      if (this.inventory.count(due.item) < due.missing) continue;
-      this.inventory.remove(due.item, due.missing);
-      const result = recordQuestEvent({ type: 'deliver', dialog: dialogId, item: due.item, units: due.missing });
-      if (result.closed.length > 0) closed = true;
-      handed = true;
-    }
-    if (!handed) return false;
-    // A entrega pode ter esvaziado a mão: as costas do herói têm de acompanhar.
+  private settleQuestDelivery(dialogId: string): { kind: HeldItemKind; closed: boolean } | null {
+    if (!this.adventure) return null;
+    const held = this.heldItem;
+    if (held === 'none') return null;
+    const due = questDeliveriesDue(dialogId).find((d) => d.item === held);
+    // A Hollis leva QUALQUER cogumelo, até o de uma espécie que ela já tem: o colhido não sai das
+    // costas (ver `handAt`), e sem ela ele ficaria preso nelas — com a faca do lado de lá.
+    // Fechado o pedido ela não aceita mais nenhum.
+    const forager = dialogId === FORAGER_DIALOG && isMushroomKind(held) && questDeliveriesDue(dialogId).length > 0;
+    if (!due && !forager) return null;
+    const units = due ? Math.min(due.missing, this.inventory.count(held)) : 1;
+    if (this.heldOnFire) this.extinguishTorch();
+    this.inventory.remove(held, units);
+    const closed = due
+      ? recordQuestEvent({ type: 'deliver', dialog: dialogId, item: held, units }).closed.length > 0
+      : false;
     this.updateBackItem();
     this.persistAdventure();
-    return closed;
+    return { kind: held, closed };
   }
 
   private nearestCampfireWithin(wx: number, wy: number, radius: number): CampfireObject | undefined {
@@ -5820,7 +5878,7 @@ export class GameScene extends Phaser.Scene {
     if (this.toolboxes.length || this.furnaces.length || this.altars.length) {
       const front = this.facingTile();
       const canTalk = !this.dialogOpen && !this.orderOverlay
-        && this.quickBag?.isOpen !== true;
+       ;
       for (const box of this.toolboxes) {
         const facing = canTalk && box.worldX === front.x && box.worldY === front.y;
         box.renderHint(this.tileSize, this.camera, facing, this.time.now);
@@ -5884,13 +5942,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O heroi pisou num item do chao. Ele GUARDA — nao troca mais.
-   *
-   * A troca ("o que estava na mao cai no tile do novo") era a lei de uma mao so, e caiu com o
-   * walk-only: com a mochila, pegar nunca mais custa largar. O item novo entra e passa a ser o
-   * selecionado, porque apanhar uma coisa e sempre a intencao de usa-la.
-   *
-   * Primeira vez de um tipo → a cerimonia do ItemGet; da segunda em diante, so o chime.
+   * Uma coisa do chão vai para a MÃO, que já está vazia (quem chama larga antes: a troca do Z, a
+   * máquina recolhida). Primeira vez de um tipo → a cerimonia do ItemGet; depois, so o chime.
    */
   private onCollectItem(item: CollectedItem): void {
     // O pacote entra inteiro (as sementes valem SEEDS_PER_PACK recém-colhidas; um punhado
@@ -5922,10 +5975,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * GASTAR o item selecionado (a bomba plantada, o graveto que virou ponte, a pedra que virou
-   * vau). Com a mochila isto deixou de esvaziar a mao e passou a tirar UMA unidade da lista: se
-   * ainda ha graveto, a mao continua com um graveto; se acabou, a selecao anda para o vizinho
-   * de slot (ver Inventory.remove).
+   * GASTAR o que está na mão (o graveto que virou ponte, a pedra que virou vau): sai UMA unidade —
+   * o pacote de sementes continua na mão até a última.
    */
   private clearHeldItem(): void {
     const kind = this.heldItem;
@@ -5937,13 +5988,8 @@ export class GameScene extends Phaser.Scene {
 
   /** Escolher o item do B (a subtela, e o playtest). Recusa o que nao esta na mochila. */
   private selectItem(kind: HeldItemKind | 'none'): boolean {
-    if (!this.inventory.select(kind)) return false;
-    // Trocar de item apaga a tocha da MAO: o fogo mora no graveto que estava sendo carregado, e
-    // ele acabou de ir para a mochila. Guardar uma tocha acesa dentro da mochila seria a unica
-    // maneira de o jogo ter fogo que nao esta em lugar nenhum do mundo.
-    if (this.heldOnFire && kind !== 'wood') this.extinguishTorch();
-    this.updateBackItem();
-    return true;
+    // Com uma mão só não há o que escolher: "selecionar" só confirma o que já está nela.
+    return kind === this.heldItem;
   }
 
   // Refresh the item slung on the hero's back to match the held item (hidden when empty). Uses
@@ -6129,22 +6175,12 @@ export class GameScene extends Phaser.Scene {
    * no meio da mineração, não pode ser roubada por cada bloco que cai).
    */
   private spawnOreLoot(rock: RockObject): void {
-    if (!this.lootManager || !this.chunkManager) return;
-    this.lootManager.spawnLoot(
-      rock.worldX, rock.worldY, this.chunkManager, 1,
-      // A arte do MINERIO, e nao a do ferro: ela ficou para tras quando a cadeia do ferro entrou,
-      // e o resultado eram dois "minerios" diferentes na tela — um com cara de bloco de metal
-      // (este) e outro com cara de pedra (o do chao). Mesma coisa, dois desenhos.
-      { key: 'ore-item', size: 0.6 },
-      () => {
-        this.inventory.stash('ore', 1);
-        // O MESMO som do minerio apanhado no chao (ver playItemStash). Um objeto que soa de dois
-        // jeitos conforme a procedencia e a mesma confusao que a arte errada fazia, so que pelo
-        // ouvido.
-        getSoundManager().playItemStash();
-        this.persistAdventure();
-      },
-    );
+    // A MÃO ESTÁ COM A PICARETA: o minério SALTA do veio para o chão ao lado e espera ser levado
+    // (ele corria até o herói e entrava na mochila, que não existe mais).
+    const at = this.dropNear('ore', 1, rock.worldX, rock.worldY);
+    if (at) this.flingCraftedItem('ore', rock.worldX, rock.worldY, at[0], at[1]);
+    getSoundManager().playItemStash();
+    this.persistAdventure();
   }
 
   // Dip the empty bucket in the river: it comes up full. Empty→full shows as the art the hero

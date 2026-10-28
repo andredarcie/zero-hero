@@ -9681,3 +9681,54 @@ Apple (papel) é cursiva corrida. Trocadas por **Alegreya** (livro antigo, olho 
 (mão clara), ambas variáveis e self-hosted; os arquivos antigos saíram. A Caveat é mais estreita e
 baixa: todo texto à mão subiu ~30% e usa peso 600–700; os contadores de 9–10px subiram para 12–13px
 e as legendas de teclas apagadas (alfa 0,5) foram a 0,75. Conferido no Chrome em desktop e celular.
+
+## A SERRA NO EDITOR (2026-10-27)
+
+O autor achou que as serras tinham sumido: estavam no world.json e no jogo, mas o /editor não tinha
+uma linha sobre `relief` e mostrava o mapa plano. Agora a serra é uma camada de célula do
+EditorStore (com desfazer, e a grade do chunk nasce na primeira escrita e some quando volta toda ao
+chão) e a ferramenta **Serra (A)** pinta planalto (pincel 1–3) ou põe escada; o botão direito volta
+ao chão e leva junto a escada que subia para aquele tile. A escada não tem direção escolhida à mão:
+o editor acha as que funcionam (planalto de um lado, chão do outro, a regra de `canStep`) e clicar
+de novo gira entre elas; tile com peça ou árvore é recusado. No mapa: planalto ocre com paredão
+escuro (mais grosso na face sul), escada clara com degraus e seta; escada que não leva a lugar
+nenhum fica com borda vermelha. A visão "Serras" (L) vem ligada.
+
+## UMA COISA DE CADA VEZ: a mochila acabou (2026-10-27)
+
+Pedido do autor: o herói carrega UMA coisa, pequena ou grande, nas costas — a mochila e a bolsa (tecla
+I, o botão de toque, `QuickBag`) saíram do jogo. `Inventory` virou a mão (uma coisa, ou um pacote de
+sementes). O Z é a mão: pega o que está no tile da frente, troca (a da mão pousa no lugar) ou pousa no
+chão livre; pisar só apanha com a mão vazia, senão atravessar um campo ia largando e pegando coisas.
+Tudo que chega com a mão cheia (presente, faca devolvida) passa por `takeIntoHand`, que pousa o antigo
+ao lado — e o segundo presente de um NPC (o balde da pintora) é pousado perto do herói num arco.
+
+**O cogumelo.** A faca tem de estar na mão para colher. Limpo, o cogumelo vai às costas e a faca VOLTA
+PARA A HOLLIS — derivado, não guardado (`knifeWithHollis`: depois do presente, a faca que não está na
+mão, no chão nem num altar está com ela). O pedido dela virou `deliver` por espécie (o save antigo tem
+o `gather` migrado). Falar com ela com o cogumelo nas costas é a entrega: ele salta das costas para ela,
+ela pula com coração, diz "Obrigada! Sabia disto?" e uma curiosidade daquela espécie
+(`fungi.species.<kind>.curiosity`, conferidas contra a espécie exata: o *Lycoperdon perlatum* solta
+esporos com a chuva, a *Morchella esculenta* é a dos olmos), e devolve a faca à mão vazia. O cogumelo
+colhido NÃO POUSA: no chão ele voltaria a ser um cogumelo nascendo, que só a faca solta. Por isso ela
+aceita qualquer cogumelo, até o de espécie que já tem (senão ele ficaria preso nas costas, com a faca do
+lado de lá). Há dois porcini e duas bufas no mundo, então sobra cogumelo para o fim.
+
+**As máquinas.** Sem mochila, a bancada e o forno usam o que está NO CHÃO EM VOLTA (8 vizinhos) mais a
+mão (`stationCount`/`stationSpend`, gasta do chão primeiro); o catálogo conta a mesma coisa. A fogueira
+do fim pede o cogumelo na mão e um graveto pousado ao lado. O minério do veio salta para o chão ao lado
+da rocha (corria até o herói, para dentro da mochila). Entregas a NPC são uma coisa por conversa — os
+quatro gravetos do lenhador são quatro viagens.
+
+Os cenários de playtest da mochila (`bolsa` e o que montava estado com a mochila cheia) estão
+desatualizados.
+
+## Cogumelos únicos, e o fim é um MARSHMALLOW (2026-10-27)
+
+Pedido do autor: cada espécie de cogumelo existe UMA vez no mundo. Saíram o segundo porcini (31,29) e
+a segunda bufa-de-lobo (2,46); ficaram os que batem com as dicas da Hollis (porcini na beira oeste,
+bufa a leste da água, contado do lugar antigo dela). Com seis únicos e todos entregues, o fim não
+podia mais assar cogumelo — e o autor corrigiu: **o fim sempre foi um marshmallow tostado**. O pacote
+de marshmallow mora no canto do tile da fogueira do fim, e o Z na fogueira acesa com um GRAVETO NA MÃO
+(o espeto) assa. O espeto ganhou arte de marshmallow (cru branco, tostado dourado com casca), e a
+linha do narrador virou "O marshmallow fica dourado". `ROASTABLE_ORDER` saiu de `fungi.ts`.

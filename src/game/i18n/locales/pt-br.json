@@ -125,7 +125,7 @@
       },
       {
         "speaker": "narrator",
-        "text": "Z fala · X usa · I bolsa"
+        "text": "Z fala e pega · X usa"
       }
     ],
     "guide": [
@@ -245,11 +245,15 @@
         },
         {
           "speaker": "npc",
-          "text": "Seis tipos crescem aqui. Encontre todos. Leve a minha faca."
+          "text": "Seis tipos crescem aqui. Traga um de cada vez. Leve a minha faca."
         },
         {
           "speaker": "npc",
           "text": "Corte, não arranque. Escove, não lave."
+        },
+        {
+          "speaker": "npc",
+          "text": "No corte, a faca volta para mim."
         }
       ]
     },
@@ -262,7 +266,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Pode ficar com eles. Só nunca coma o vermelho."
+          "text": "Só nunca coma o vermelho."
         }
       ]
     },
@@ -383,22 +387,15 @@
     }
   },
   "controls": {
-    "hint": "Z fala · X usa · I bolsa",
-    "touchHint": "Arraste para andar · A fala · B usa",
-    "attackTitle": "Falar (Z)",
+    "hint": "Z fala e pega · X usa",
+    "touchHint": "Arraste para andar · A fala e pega · B usa",
+    "attackTitle": "Mão (Z)",
     "useTitle": "Usar (X)"
-  },
-  "bag": {
-    "open": "Bolsa (I)",
-    "empty": "Vazia",
-    "keys": "← →  ·  X equipa  ·  I fecha",
-    "keysEmpty": "I fecha",
-    "keysToBasket": "↓ cesta",
-    "keysBasket": "← → lê  ·  ↑ ferramentas  ·  I fecha"
   },
   "fungi": {
     "basket": "Cesta",
     "notesTitle": "Caderno de campo",
+    "thanks": "Obrigada! Sabia disto?",
     "leave": "Deixar",
     "cut": {
       "title": "Cortar",
@@ -430,6 +427,7 @@
     "species": {
       "puffball": {
         "latin": "Lycoperdon perlatum",
+        "curiosity": "A chuva faz o trabalho: cada gota que bate nele solta um sopro de esporos.",
         "cut": "Corte embaixo da bola, na base.",
         "clean": "Escove a terra e os espinhos soltos.",
         "notes": [
@@ -439,6 +437,7 @@
       },
       "inkCap": {
         "latin": "Coprinus comatus",
+        "curiosity": "Em poucas horas ele se desfaz em tinta preta. Já se escreveu com ela.",
         "cut": "Corte embaixo, no pé fino. Ele é oco.",
         "clean": "Seja rápido: colhido, ele vira tinta em horas.",
         "notes": [
@@ -448,6 +447,7 @@
       },
       "morel": {
         "latin": "Morchella esculenta",
+        "curiosity": "Gosta de olmos morrendo e de pomares velhos de maçã.",
         "cut": "Corte na base. Ele é oco inteiro.",
         "clean": "A areia se esconde nos buracos. Escove cada um.",
         "notes": [
@@ -457,6 +457,7 @@
       },
       "chanterelle": {
         "latin": "Cantharellus cibarius",
+        "curiosity": "Cheira a damasco.",
         "cut": "Corte na base, logo acima do musgo.",
         "clean": "A terra se esconde nas dobras. Escove.",
         "notes": [
@@ -466,6 +467,7 @@
       },
       "flyAgaric": {
         "latin": "Amanita muscaria",
+        "curiosity": "Antigamente era posto no leite para matar moscas. Daí o nome.",
         "cut": "Corte abaixo da linha do solo. O copo da base, a volva, é o que distingue uma amanita.",
         "clean": "Escove com cuidado: as verrugas brancas saem.",
         "notes": [
@@ -475,6 +477,7 @@
       },
       "porcini": {
         "latin": "Boletus edulis",
+        "curiosity": "Um só pode passar de um quilo.",
         "cut": "Corte na base do pé grosso.",
         "clean": "Escove o chapéu. Poros brancos embaixo: ele é jovem.",
         "notes": [
@@ -485,7 +488,7 @@
     }
   },
   "subscreen": {
-    "title": "Mochila",
+    "title": "Na mão",
     "empty": "Vazia",
     "mapTitle": "Mundo",
     "plansTitle": "Planos"
@@ -514,7 +517,7 @@
     "lines": [
       {
         "speaker": "narrator",
-        "text": "O cogumelo fica dourado."
+        "text": "O marshmallow fica dourado."
       },
       {
         "speaker": "narrator",

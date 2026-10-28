@@ -185,7 +185,11 @@ const load = (): AdventureSnapshot => {
       groundItems: migrateGround(p.groundItems),
       visitedChunks: new Set(p.visitedChunks ?? []),
       questProgress: new Map(
-        Object.entries(p.questProgress ?? {}).map(([key, n]) => [key, num(n, 0)]),
+        // A Hollis pedia que se ENCONTRASSE cada espécie (`gather`); hoje ela pede que se ENTREGUE
+        // (`deliver`, uma de cada vez). O que já foi achado num save antigo vale como entregue.
+        Object.entries(p.questProgress ?? {}).map(([key, n]) => [
+          key.replace('radiationSuit/gather:', 'radiationSuit/deliver:'), num(n, 0),
+        ]),
       ),
     };
   } catch {

@@ -30,13 +30,10 @@ import { MUSHROOM_KINDS } from '@/game/fungi/fungi';
  * O QUE UM NPC PODE PEDIR. Cada tipo tem UM lugar no jogo que o alimenta (ver
  * `GameScene.questEvent`) — um tipo novo é uma linha aqui e uma linha lá, nunca um sistema novo.
  *
- *   deliver — ENTREGAR a este NPC. O único que consome da mochila, e ele cobra na hora de FALAR:
- *             conversar com quem pediu É o gesto de entregar. É TUDO OU NADA: o NPC leva os seis
- *             minérios de uma vez, ou não encosta nos quatro que o herói trouxe. Entrega parcial
- *             seria confisco silencioso — num sistema sem diário, o jogador não teria onde ver
- *             que quatro minérios viraram progresso, e a mochila esvaziaria sozinha ao passar
- *             por perto de quem pediu. Levar o que ele pede é o gesto; levar metade não é gesto
- *             nenhum.
+ *   deliver — ENTREGAR a este NPC, e ele cobra na hora de FALAR: conversar com quem pediu É o
+ *             gesto de entregar. Com uma mão só, a entrega é a coisa que está NELA, uma de cada
+ *             vez — quatro gravetos são quatro viagens, e cada uma tem corpo na tela (a coisa
+ *             salta das costas do herói, o NPC pula).
  *   gather  — APANHAR N unidades ao longo da partida. Não consome: contar é o pedido.
  *   craft   — FABRICAR N numa estação (bancada ou forno).
  *   grow    — fazer BROTAR N canteiros: semente na terra, água no monte, e esperar.
@@ -116,13 +113,14 @@ export const taskKey = (task: QuestTask): string => {
  *    (`gift`): o machado do lenhador, a picareta da astrônoma, as sementes e o balde da pintora.
  */
 export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
-  // A COLETORA não leva cogumelo nenhum: ela pede que o herói ENCONTRE e conheça as seis espécies
-  // do vale (uma tarefa `gather` por espécie, contada na cesta). A faca é o presente; as dicas,
-  // na ordem do caminho a partir dela, dizem onde cada fungo nasce e como reconhecê-lo.
+  // A COLETORA pede que o herói TRAGA as seis espécies do vale, uma de cada vez (uma tarefa
+  // `deliver` por espécie): o cogumelo colhido vai nas costas, e a faca volta para ela no corte —
+  // é devolvida quando ele chega com o cogumelo. A faca é o presente; as dicas, na ordem do caminho
+  // a partir dela, dizem onde cada fungo nasce e como reconhecê-lo.
   radiationSuit: {
     dialog: 'radiationSuit',
     doneDialog: 'radiationSuitDone',
-    tasks: MUSHROOM_KINDS.map((item) => ({ kind: 'gather' as const, item, count: 1 })),
+    tasks: MUSHROOM_KINDS.map((item) => ({ kind: 'deliver' as const, item, count: 1 })),
     gift: [{ item: 'knife', count: 1 }],
     hints: MUSHROOM_KINDS,
   },

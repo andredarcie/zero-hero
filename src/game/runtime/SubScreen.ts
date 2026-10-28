@@ -73,7 +73,7 @@ const CSS = `
 }
 .zh-sub-empty { text-align: center; color: #7d7666; font-size: 0.88em; padding: 0.6em 0; }
 /* OS CONTADORES da materia-prima, logo abaixo da grade: icone + numero, sem slot e sem cursor.
-   A mesma leitura da bolsa (ver QuickBag) — quem nao tem gesto nao ganha moldura de item. */
+   Quem nao tem gesto nao ganha moldura de item. */
 .zh-sub-mats {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px;
   padding: 0.1em 0 0.2em; color: #a49c8b; font-size: 0.84em;
@@ -284,7 +284,7 @@ export interface SubScreenView {
   title: string;
   emptyLabel: string;
   items: SubScreenItem[];
-  /** A materia-prima: contadores, nunca slots (ver MATERIAL_ITEM_KINDS e QuickBagView.materials). */
+  /** A materia-prima: contadores, nunca slots (ver MATERIAL_ITEM_KINDS). */
   materials: SubScreenItem[];
   selected: string;
   /** So na aventura (overworld): a subtela de level/explorador/dungeon nao tem mapa. */

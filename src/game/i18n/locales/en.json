@@ -125,7 +125,7 @@
       },
       {
         "speaker": "narrator",
-        "text": "Z talk · X use · I bag"
+        "text": "Z talk & take · X use"
       }
     ],
     "guide": [
@@ -245,11 +245,15 @@
         },
         {
           "speaker": "npc",
-          "text": "Six kinds grow here. Find them all. Take my knife."
+          "text": "Six kinds grow here. Bring me one at a time. Take my knife."
         },
         {
           "speaker": "npc",
           "text": "Cut, don't pull. Brush, don't wash."
+        },
+        {
+          "speaker": "npc",
+          "text": "After each cut, the knife comes back to me."
         }
       ]
     },
@@ -262,7 +266,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Keep them. Just never eat the red one."
+          "text": "Just never eat the red one."
         }
       ]
     },
@@ -383,22 +387,15 @@
     }
   },
   "controls": {
-    "hint": "Z talk · X use · I bag",
-    "touchHint": "Drag anywhere to walk · A talk · B use",
-    "attackTitle": "Talk (Z)",
+    "hint": "Z talk & take · X use",
+    "touchHint": "Drag anywhere to walk · A talk & take · B use",
+    "attackTitle": "Hand (Z)",
     "useTitle": "Use (X)"
-  },
-  "bag": {
-    "open": "Bag (I)",
-    "empty": "Empty",
-    "keys": "← →  ·  X equip  ·  I close",
-    "keysEmpty": "I close",
-    "keysToBasket": "↓ basket",
-    "keysBasket": "← → read  ·  ↑ tools  ·  I close"
   },
   "fungi": {
     "basket": "Basket",
     "notesTitle": "Field notes",
+    "thanks": "Thank you! Did you know?",
     "leave": "Leave it",
     "cut": {
       "title": "Cut",
@@ -430,6 +427,7 @@
     "species": {
       "puffball": {
         "latin": "Lycoperdon perlatum",
+        "curiosity": "Rain does the work: every drop that hits it puffs out spores.",
         "cut": "Cut under the ball, at the base.",
         "clean": "Brush off the soil and loose spines.",
         "notes": [
@@ -439,6 +437,7 @@
       },
       "inkCap": {
         "latin": "Coprinus comatus",
+        "curiosity": "Within hours it melts into black ink. People once wrote with it.",
         "cut": "Cut low on the slim stem. It's hollow.",
         "clean": "Be quick: once picked, it turns to ink within hours.",
         "notes": [
@@ -448,6 +447,7 @@
       },
       "morel": {
         "latin": "Morchella esculenta",
+        "curiosity": "It favors dying elms and old apple orchards.",
         "cut": "Cut at the base. The whole thing is hollow.",
         "clean": "Grit hides in the pits. Brush each one.",
         "notes": [
@@ -457,6 +457,7 @@
       },
       "chanterelle": {
         "latin": "Cantharellus cibarius",
+        "curiosity": "It smells of apricots.",
         "cut": "Cut at the base, just above the moss.",
         "clean": "Dirt hides in the ridges. Brush them out.",
         "notes": [
@@ -466,6 +467,7 @@
       },
       "flyAgaric": {
         "latin": "Amanita muscaria",
+        "curiosity": "It was once crumbled into milk to kill flies. Hence the name.",
         "cut": "Cut below the soil line. The cup at the base, the volva, is how amanitas are told apart.",
         "clean": "Brush gently: the white warts rub off.",
         "notes": [
@@ -475,6 +477,7 @@
       },
       "porcini": {
         "latin": "Boletus edulis",
+        "curiosity": "A single one can weigh over a kilo.",
         "cut": "Cut at the base of the thick stem.",
         "clean": "Brush the cap. White pores underneath mean it's young.",
         "notes": [
@@ -485,7 +488,7 @@
     }
   },
   "subscreen": {
-    "title": "Pack",
+    "title": "In hand",
     "empty": "Empty",
     "mapTitle": "World",
     "plansTitle": "Plans"
@@ -514,7 +517,7 @@
     "lines": [
       {
         "speaker": "narrator",
-        "text": "The mushroom turns golden."
+        "text": "The marshmallow turns golden."
       },
       {
         "speaker": "narrator",

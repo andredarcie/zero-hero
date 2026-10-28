@@ -7,8 +7,8 @@
 // (Phaser scene changes do not hot-reload — see CLAUDE.md).
 //
 // Key choice: SHIFT+I, EM TODA PARTE. Plain [I] used to work outside the editor, and it stopped
-// being free twice over: no editor ele já era o conta-gotas, e no JOGO ele passou a ser A BOLSA
-// (ver QuickBag). Uma tecla de ferramenta de dev não pode disputar a tecla de um gesto do jogo —
+// being free twice over: no editor ele já era o conta-gotas, e no JOGO ele foi a bolsa por um
+// tempo. Uma tecla de ferramenta de dev não pode disputar a tecla de um gesto do jogo —
 // nem por um frame, nem "só no localhost", que é exatamente onde o jogo é testado.
 
 const STYLE_ID = 'zh-launcher-style';

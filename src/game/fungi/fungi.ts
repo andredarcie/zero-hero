@@ -51,8 +51,6 @@ export const FUNGUS_SPECS: Readonly<Record<MushroomKind, FungusSpec>> = {
   porcini: { edibility: 'edible', cut: { from: 0.76, to: 0.9 }, dirt: ['needle', 'soil', 'moss'] },
 };
 
-/** O que vai no espeto, na ordem em que o herói escolheria (o melhor primeiro). */
-export const ROASTABLE_ORDER: readonly MushroomKind[] = ['porcini', 'chanterelle', 'morel', 'puffball', 'inkCap'];
 
 export const fungusTextureKey = (kind: MushroomKind): string => `fungus-${kind}`;
 export const KNIFE_TEXTURE_KEY = 'mushroom-knife';

@@ -19,10 +19,10 @@ import {
  *      novo no meio da tela. Errar só faz o cogumelo tremer e a faca recuar — nada se perde.
  *   2. LIMPAR. Manchas de terra com o contorno roxo de "pegue isto" do mundo; o cogumelo, sem
  *      contorno nenhum. A bucha APAGA a terra por onde passa, como a borracha do Paint, e cada
- *      pixel apagado escorre como areia. Limpo, o cogumelo brilha, dá um boing e cai girando na bolsa.
- *   3. A FICHA. Um papel velho e amassado sobe da bolsa, a foto cai em cima, o clipe a prende, e a
+ *      pixel apagado escorre como areia. Limpo, o cogumelo brilha, dá um boing e cai girando para as costas do herói.
+ *   3. A FICHA. Um papel velho e amassado sobe do fundo, a foto cai em cima, o clipe a prende, e a
  *      descrição vai sendo escrita à pena, linha por linha. Um toque termina a escrita; outro
- *      dobra o papel, e o cogumelo está na cesta.
+ *      dobra o papel, e o cogumelo está nas costas.
  *
  * NADA SE PERDE AQUI (a lei do jogo): sair antes do corte (ESC) deixa o cogumelo no chão; depois
  * do corte não há saída — o cogumelo já está na mão.
@@ -171,11 +171,11 @@ export interface ForagingCallbacks {
   onSand: () => void;
   /** Limpo. */
   onClean: () => void;
-  /** O cogumelo desce para a bolsa. */
+  /** O cogumelo desce para as costas do herói. */
   onStash: () => void;
   /** A ficha abre. */
   onNote: () => void;
-  /** A ficha fechou: o cogumelo vai para a cesta. */
+  /** A ficha fechou: o cogumelo vai para as costas. */
   onDone: () => void;
   /** Saiu antes do corte: o cogumelo continua no chão. */
   onCancel: () => void;
@@ -406,7 +406,7 @@ export class ForagingOverlay {
 
   /**
    * O toque na ficha: durante a escrita ele TERMINA a escrita; escrita pronta, ele dobra o
-   * papel, o embaçado volta ao foco, e só então o cogumelo entra na cesta.
+   * papel, o embaçado volta ao foco, e só então o cogumelo vai para as costas.
    */
   private closeNote(): void {
     if (this.stage !== 'note') return;
@@ -935,7 +935,7 @@ export class ForagingOverlay {
 
   /**
    * O PEDAÇO COLHIDO com o "juice" de cada momento: o pulinho do corte (estica subindo, amassa
-   * ao cair), a terra assentando, o boing de limpo, e a queda girando para dentro da bolsa.
+   * ao cair), a terra assentando, o boing de limpo, e a queda girando para as costas do herói.
    */
   private drawPiece(): void {
     const ctx = this.ctx;
@@ -974,7 +974,7 @@ export class ForagingOverlay {
       sy = 1 + w;
       dy = -Math.max(0, Math.sin(clamp01(tc / 0.32) * Math.PI)) * 4;
     } else if (this.stage === 'stash') {
-      // Um saltinho e cai girando, encolhendo, para dentro da bolsa (lá embaixo).
+      // Um saltinho e cai girando, encolhendo, para as costas do herói (lá embaixo).
       const k = clamp01(tc / STASH_TIME);
       const hop = Math.sin(clamp01(k / 0.35) * Math.PI) * (k < 0.35 ? 1 : 0);
       const fall = clamp01((k - 0.25) / 0.75);

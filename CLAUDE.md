@@ -17,7 +17,8 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
    no locale.
 3. **O portão** (`openGardenGate`): quando `allQuestsDone()`, o `gardenGate` do centro abre.
 4. **A fogueira do fim** (`hearth`, `tendHearthAt` → `playRoastEnding` → `rollCredits`): Z acende,
-   Z de novo com graveto + cogumelo assa, e os créditos voltam ao título.
+   Z de novo com um graveto na mão assa um MARSHMALLOW (o pacote mora ao lado do fogo), e os
+   créditos voltam ao título.
 
 `npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
 mora nos locales — `en.json` e `pt-br.json`, as MESMAS chaves nos dois** —, inclusive o roteiro
@@ -75,26 +76,29 @@ npx vite --port 5180 --strictPort
 PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 ```
 
-## Os dois botões, a mochila e a subtela
+## Os dois botões, a mão e a subtela
 
     Z (J / espaço)  →  a MÃO: fala com o NPC à frente, acende/assa na fogueira do fim, abre o
-                       catálogo da bancada/forno, põe e malha no altar. Nada no Z é golpe.
-    X (K)           →  USA o item selecionado no tile à frente (a tabela `useItemAt`).
-    pisar           →  APANHA (`collectUnderfoot`).
-    I               →  a BOLSA (não pausa o jogo).   ESC → a subtela (mochila + mapa).
+                       catálogo da bancada/forno, põe e malha no altar, e PEGA / TROCA / POUSA a
+                       coisa do tile da frente (`handAt`). Nada no Z é golpe.
+    X (K)           →  USA o que está na mão no tile à frente (a tabela `useItemAt`).
+    pisar           →  APANHA só com a mão vazia (`collectUnderfoot`).
+    ESC             →  a subtela (a mão + mapa + caderno). Não há bolsa.
 
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
   repetição se filtra por `event.repeat`.
 - **A SERRA: a altura do chão é de `world/relief`** e `Billboard3D`/`projectTile` já a somam — nunca
-  somar de novo; passar de nível só por `canStep`. O campo `relief` do world.json é do `serra-world.mjs`.
+  somar de novo; passar de nível só por `canStep`. O `relief` se edita no /editor (ferramenta Serra, A);
+  rodar `serra-world.mjs` de novo REGERA o campo e apaga o que foi feito à mão.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
-  (`fungi.ts`). Ele sai do chão no mesmo frame em que entra na cesta.
+  (`fungi.ts`), e cada espécie existe UMA vez no mundo. Colhido, vai às costas e NÃO pousa: só a Hollis
+  o tira (e devolve a faca).
 - **O herói anda PRESO ao grid** (um tile por passo, 4 direções): o livre foi tentado e desfeito —
   no celular o grid controla melhor. A posição lógica já é o tile de DESTINO durante o passo.
 - **A parede VIRA o herói** (`PlayerMovementController`): é assim que se mira. Contra tile LIVRE a
   seta anda — não há virar-no-lugar.
-- **A FERRAMENTA CERTA SE APRESENTA SOZINHA** (`toolWantedAt`) e a **MOCHILA SÓ GUARDA O QUE TEM
-  GESTO** (`isBagItem`; matéria-prima e cogumelo são contadores).
+- **O HERÓI CARREGA UMA COISA DE CADA VEZ** (`Inventory` é a mão; a mochila foi removida): o que chega
+  com a mão cheia passa por `takeIntoHand`, que pousa o antigo no chão — nada some.
 - **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica.
 - **Cutscene é `cutsceneActive`**: o `update` para, o `render3D` (POST_UPDATE) continua — por isso
   vaga-lumes e herói moram lá. Passo roteirizado = `scriptStep`, nunca o controlador.
@@ -161,8 +165,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **ESTAÇÃO É ITEM: o X instala no tile à frente, e o X recolhe — TUDO que se instala se recolhe**,
   inclusive o autorado. Instalar É
   usar, então mora na tabela `useItemAt`; a direção nasce de para onde o herói olha, nunca de um
-  menu. Recolher deixou de exigir mão vazia (esse estado sumiu com a bolsa sempre cheia): ele é o
-  degrau DEPOIS da tabela e da entrega, então ferramenta que tem o que fazer ali nunca desmonta.
+  menu. Recolher exige a mão vazia (a peça vai para ela) e é o degrau DEPOIS da tabela e da
+  entrega, então ferramenta que tem o que fazer ali nunca desmonta.
 - **O alvo de uma instalação é DESENHADO** (`PlacementHints`): quadrado branco no tile em que o
   botão vai agir + o keycap da tecla. A marca e o botão leem `canBuildMachineAt` — **uma pergunta
   só**, ou um quadrado branco
@@ -187,12 +191,12 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   Ele listava as onze receitas de uma vez, e onze cartas na primeira abertura não são ambição, são
   uma parede. Receita nova entra na escada, senão ela aparece no fim e fora de ordem. A mesma
   escada vale para a página de PLANOS da subtela — duas listas discordando é uma segunda voz.
-  Confirmar **gasta da mochila e a mesa ATIRA a peça no chão ao
+  Confirmar **gasta do CHÃO EM VOLTA da máquina e da mão** (`stationCount`/`stationSpend`) e a mesa ATIRA a peça no chão ao
   lado** — nunca direto na mochila: entregar por dentro fazia a mesa martelar para ninguém, e o
   gesto ficava sem nenhuma parte visível. O destino é o vizinho mais perto do herói **que não seja
   o tile dele** (o corpo esconde o que está sob os pés), e apanhar continua sendo o B. Sem material
   — ou sem chão livre em volta — a carta treme, o insumo que falta ACENDE e o painel FICA aberto.
-  Não existem bandejas funcionais: o catálogo e a mochila são o único caminho de fabricação.
+  Com uma mão só, o insumo se leva um de cada vez e se pousa ao lado da máquina.
 - **NO FORNO, CONFIRMAR NÃO ENTREGA: ACENDE** (`startHandSmelt`). A mesa martela e a peça salta no
   mesmo frame — uma martelada é um instante. Fundir é um PROCESSO, e o gesto tem os três tempos na
   tela: a carga voa da mão para a boca, o fole sopra sacudindo a alvenaria, a brasa esguicha e só
@@ -203,8 +207,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   eletrônicos. A caixa de correio/venda aérea também não existe. Saves antigos apenas descartam
   esses tipos durante a migração.
 
-`hearth` **a FOGUEIRA DO FIM: não segue o relógio, só o herói a acende (Z), e Z com graveto +
-cogumelo assa e fecha o jogo** · `gardenGate` (a porta sem chave: abre quando o último pedido
+`hearth` **a FOGUEIRA DO FIM: não segue o relógio, só o herói a acende (Z), e Z com um graveto na
+mão assa um marshmallow (nunca cogumelo) e fecha o jogo** · `gardenGate` (a porta sem chave: abre quando o último pedido
 fecha) · `toolbox` caixa de ferramentas manual (graveto+pedra=machado, graveto+ferro=foice,
 pedra+pedra=forno, pedra+minério=altar) · `furnace` forno manual (madeira+madeira=carvão,
 minério+carvão=bloom) · `altar` laje manual de martelar · `ironRock`/`iron` (mesma rocha,
@@ -302,7 +306,7 @@ por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd
 A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); bolsa → `bolsa`; machado → `machado`; pedra →
 `pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;
 menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; borboletas e folhas do dia → `dia`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
-Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`)
+Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`, e os da mochila)
 podem estar vermelhos: não "conserte" editando conteúdo.
 
 **Performance sempre contra a `main`** (`git stash`), e sempre com vsync livre
