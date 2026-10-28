@@ -1,120 +1,157 @@
 import {
-  CLOSE_SIZE, FUNGUS_SPECS, SOIL_LINE, fungusCloseUp,
+  CLOSE_SIZE, FUNGUS_SPECS, fungusCloseUp,
   type DirtKind, type MushroomKind,
 } from '@/game/fungi/fungi';
 import { t, tWords } from '@/game/i18n/i18n';
+import {
+  HAND_FONT as HAND, INK, INK_RED, SOFT_BLUR, paperTexture, seedOf, seededRandom, tornEdge,
+} from '@/game/runtime/uiStyle';
 
 /**
- * A COLHEITA DE UM COGUMELO — três gestos e uma ficha, numa tela que congela o mundo (como o
- * catálogo da bancada: colher não é um gesto de pressa).
+ * A COLHEITA DE UM COGUMELO — sem interface de jogo nenhuma. O mundo fica onde está, só que
+ * EMBAÇADO, e no meio dele aparece o cogumelo, sozinho e o maior que couber: sem moldura, sem
+ * fundo, sem texto. Tudo o que o jogador precisa saber está no próprio desenho.
  *
- *   1. MIRAR. A lâmina sobe e desce rente ao talo; o jogador corta quando ela passa entre as
- *      marcas. Alto demais desperdiça o pé (e, na amanita, perde a volva, que é como ela se
- *      identifica); fundo demais rasga o micélio. Errar não custa nada: a lâmina segue andando.
- *   2. SERRAR. Vai-e-vem — setas alternadas, ou o dedo de um lado para o outro — até o talo soltar.
- *      O cogumelo sobe, o toco fica, e a terra mostra os fios brancos do micélio: o fungo de
- *      verdade, que continua ali e frutifica de novo.
- *   3. ESCOVAR, em cima da cesta. A escova do cabo da faca tira terra, agulha e folha. Escova, não
- *      água: cogumelo encharca como esponja.
- *   4. A FICHA. Nome popular, nome científico, se se come, e o que aquele fungo ensina.
+ *   1. CORTAR. O cogumelo brota no meio da tela e a faca desliza para o lado dele. Ela sobe e
+ *      desce rente ao talo; a lâmina BRILHA quando está na altura certa (rente ao chão; na
+ *      amanita, abaixo dele, para levar a volva). O gesto corta na hora: um instante congelado,
+ *      um POP, migalhas, a faca passa direto, o toco cai, e o cogumelo dá um pulinho e assenta de
+ *      novo no meio da tela. Errar só faz o cogumelo tremer e a faca recuar — nada se perde.
+ *   2. LIMPAR. Manchas de terra com o contorno roxo de "pegue isto" do mundo; o cogumelo, sem
+ *      contorno nenhum. A bucha APAGA a terra por onde passa, como a borracha do Paint, e cada
+ *      pixel apagado escorre como areia. Limpo, o cogumelo brilha, dá um boing e cai girando na bolsa.
+ *   3. A FICHA. Um papel velho e amassado sobe da bolsa, a foto cai em cima, o clipe a prende, e a
+ *      descrição vai sendo escrita à pena, linha por linha. Um toque termina a escrita; outro
+ *      dobra o papel, e o cogumelo está na cesta.
  *
- * NADA SE PERDE AQUI (a lei do jogo): não há falha, não há tempo, e sair antes do corte deixa o
- * cogumelo no chão. Depois do corte não há saída — o cogumelo já está na mão.
- *
- * O CLOSE É O PRÓPRIO MUNDO, ampliado: o chão e a decoração em volta do cogumelo saem do tileset do
- * jogo (`ForagingScenery`, montado pela cena a partir do tile dele), e o cogumelo tem o mesmo
- * tamanho de pixel dos tiles. A moldura é a da caixa de diálogo. Uma tela com arte e moldura
- * próprias leria como um minigame colado de outro jogo.
+ * NADA SE PERDE AQUI (a lei do jogo): sair antes do corte (ESC) deixa o cogumelo no chão; depois
+ * do corte não há saída — o cogumelo já está na mão.
  */
 
 const STYLE_ID = 'zh-forage-style';
-const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
+
+/** O roxo do contorno de "dá para pegar" dos itens no chão (ItemPickup.OUTLINE_COLOR). */
+const PICK_OUTLINE = '#9d7bff';
+/** O navy de tinta de toda a arte do jogo (fungi.ts). */
+const NAVY = '#1b1d33';
 
 const CSS = `
 .zh-forage {
   position: fixed; inset: 0; z-index: 60;
-  display: flex; align-items: center; justify-content: center;
-  /* Sem cortina preta: o vale continua visivel em volta, como no dialogo. */
-  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.22) 75%);
-  font-family: ${SERIF};
-  opacity: 0; transition: opacity 160ms ease;
-  overflow-y: auto; padding: 1rem;
+  /* O mundo do jogo continua ali, so que fora de foco: o cogumelo e a unica coisa nitida. */
+  background: rgba(8, 10, 14, 0);
+  -webkit-backdrop-filter: blur(0px); backdrop-filter: blur(0px);
+  transition: backdrop-filter 420ms ease, -webkit-backdrop-filter 420ms ease, background 420ms ease;
   touch-action: none; user-select: none; -webkit-user-select: none;
+  overflow: hidden;
 }
-.zh-forage.zh-in { opacity: 1; }
-.zh-forage * { box-sizing: border-box; }
-/* A MOLDURA DO DIALOGO: madeira escura, filete dourado e o fio escuro por dentro. */
-.zh-forage-panel {
-  position: relative; width: min(400px, 94vw);
-  padding: 0.8em 0.9em 0.85em;
-  background: rgba(16, 12, 9, 0.96); color: #f3ecdc;
-  border: 3px solid #8a7556; border-radius: 4px;
-  box-shadow: inset 0 0 0 2px #2a2118, 0 8px 26px rgba(0, 0, 0, 0.6);
-  text-shadow: 0 1px 0 #000;
-  display: flex; flex-direction: column; align-items: center; gap: 0.5em;
-  transform: translateY(10px); transition: transform 160ms ease;
-}
-.zh-forage.zh-in .zh-forage-panel { transform: none; }
-.zh-forage-title {
-  margin: 0; align-self: flex-start;
-  font-weight: 700; letter-spacing: 0.04em; font-variant: small-caps; font-size: 1em;
-  color: #f3ecdc;
-}
-/* O quadro do close: o mesmo filete do retrato do dialogo, em volta do pedaco do mundo. */
-.zh-forage-frame {
-  border: 2px solid #d4c8a4; box-shadow: 0 0 0 2px #2a2118; line-height: 0;
-}
+.zh-forage.zh-in { ${SOFT_BLUR} }
 .zh-forage-canvas {
-  width: min(320px, 82vw, 50vh); aspect-ratio: 1; height: auto; display: block;
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
   image-rendering: pixelated; image-rendering: crisp-edges;
-  background: #2f3b22; cursor: crosshair; touch-action: none;
+  cursor: crosshair; transition: opacity 280ms ease;
 }
-.zh-forage-hint { margin: 0; color: #f3ecdc; font-size: 1em; text-align: center; min-height: 1.3em; }
-.zh-forage-msg {
-  margin: 0; color: #e5b558; font-size: 0.92em; text-align: center; min-height: 1.25em;
-  transition: opacity 200ms ease;
+.zh-forage.zh-cleaning .zh-forage-canvas { cursor: none; }
+.zh-forage.zh-reading { overflow-y: auto; touch-action: pan-y; cursor: pointer; }
+.zh-forage.zh-reading .zh-forage-canvas { opacity: 0; pointer-events: none; }
+
+/* ── a ficha: papel velho, amassado, escrito a pena ── */
+.zh-note-wrap {
+  position: relative; display: none; min-height: 100%; padding: 32px 14px;
+  align-items: center; justify-content: center;
 }
-.zh-forage-tip {
-  margin: 0; color: #c9d2e3; font-size: 0.88em; line-height: 1.4; text-align: center;
-  font-style: italic; max-width: 34em;
+.zh-forage.zh-reading .zh-note-wrap { display: flex; }
+.zh-note {
+  position: relative; width: min(400px, 90vw);
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.25)) drop-shadow(0 14px 22px rgba(0, 0, 0, 0.4));
+  transform: rotate(-1.4deg);
 }
-.zh-forage-leave {
-  position: absolute; top: 4px; right: 6px; width: 32px; height: 32px; padding: 0;
-  border: 0; background: none; color: #d4c8a4;
-  font: inherit; font-size: 22px; line-height: 1; cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+.zh-note.zh-on { animation: zh-paper-in 760ms cubic-bezier(0.18, 0.85, 0.25, 1) both; }
+.zh-note.zh-on.zh-off { animation: zh-paper-out 340ms cubic-bezier(0.5, 0, 0.8, 0.4) both; }
+@keyframes zh-paper-in {
+  0%   { opacity: 0; transform: perspective(900px) translateY(55vh) rotateX(62deg) rotate(-16deg) scale(0.62); }
+  55%  { opacity: 1; transform: perspective(900px) translateY(-12px) rotateX(-7deg) rotate(1.6deg) scale(1.03); }
+  78%  { transform: perspective(900px) translateY(3px) rotateX(2deg) rotate(-2deg) scale(0.995); }
+  100% { opacity: 1; transform: perspective(900px) rotate(-1.4deg); }
 }
-.zh-forage-leave:hover { color: #f3ecdc; }
-.zh-forage-card { display: none; flex-direction: column; align-items: center; gap: 0.45em; width: 100%; }
-.zh-forage-card.zh-on { display: flex; }
-.zh-forage-card .zh-forage-frame { background: #2f3b22; }
-.zh-forage-card img {
-  width: 112px; height: 112px; display: block;
-  image-rendering: pixelated; image-rendering: crisp-edges;
+@keyframes zh-paper-out {
+  0%   { opacity: 1; transform: perspective(900px) rotate(-1.4deg); }
+  30%  { opacity: 1; transform: perspective(900px) translateY(-14px) rotate(-3deg) scale(1.02); }
+  100% { opacity: 0; transform: perspective(900px) translateY(48vh) rotateX(50deg) rotate(10deg) scale(0.6); }
 }
-.zh-forage-name { margin: 0.2em 0 0; color: #f3ecdc; font-size: 1.3em; text-align: center; font-variant: small-caps; }
-.zh-forage-latin { margin: -0.3em 0 0; color: #d4c8a4; font-style: italic; font-size: 0.98em; }
-.zh-forage-edible {
-  padding: 1px 9px; border: 2px solid; border-radius: 2px;
-  font-size: 0.76em; letter-spacing: 0.1em; text-transform: uppercase;
+.zh-note-paper {
+  position: relative; padding: 26px 26px 30px;
+  color: ${INK}; font-family: ${HAND}; font-weight: 600;
+  background-color: #e3d1a4; background-size: max(100%, 440px) auto; background-position: center;
+  background-repeat: no-repeat;
+  text-shadow: 0 0 0.6px rgba(40, 24, 13, 0.55);
 }
-.zh-forage-edible.zh-edible { color: #a9cf86; border-color: #5d7a35; }
-.zh-forage-edible.zh-cooked { color: #e5b558; border-color: #8a7556; }
-.zh-forage-edible.zh-poison { color: #ef7a62; border-color: #8e3326; }
-.zh-forage-notes {
-  margin: 0.15em 0 0; padding: 0 0 0 1.1em; color: #e3dccb; font-size: 0.9em; line-height: 1.45;
-  align-self: stretch;
+.zh-note-photo {
+  float: left; position: relative; width: min(36%, 124px);
+  margin: 0 18px 10px -4px; padding: 6px 6px 18px;
+  background: linear-gradient(160deg, #f4ecd6 0%, #e7dcc0 100%);
+  box-shadow: 0 1px 1px rgba(40, 24, 8, 0.3), 0 4px 9px rgba(40, 24, 8, 0.32);
+  transform: rotate(-4.5deg);
+  animation: zh-photo-drop 520ms cubic-bezier(0.2, 0.9, 0.3, 1.25) 520ms both;
 }
-.zh-forage-notes li { margin: 0 0 0.3em; }
-/* O botao e a OPCAO SELECIONADA do dialogo: o pergaminho claro com letra escura. */
-.zh-forage-go {
-  margin-top: 0.3em; padding: 0.45em 1.3em; min-height: 44px;
-  border: 0; border-radius: 2px; background: #d4c8a4; color: #241d12;
-  font: inherit; font-size: 1em; cursor: pointer; text-shadow: none;
-  box-shadow: 0 0 0 2px #2a2118;
-  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+@keyframes zh-photo-drop {
+  0%   { opacity: 0; transform: translate(-10px, -46px) rotate(-22deg) scale(1.35); }
+  70%  { opacity: 1; transform: translate(0, 2px) rotate(-3deg) scale(0.98); }
+  100% { opacity: 1; transform: rotate(-4.5deg); }
 }
-.zh-forage-go:active { transform: translateY(1px); }
+.zh-note-shot {
+  background: radial-gradient(ellipse at 50% 62%, #cfc39b 0%, #a09372 70%, #857857 100%);
+  line-height: 0; box-shadow: inset 0 0 6px rgba(50, 34, 12, 0.45);
+}
+.zh-note-shot img {
+  width: 100%; display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+  filter: sepia(0.22) contrast(0.95) saturate(0.9);
+}
+.zh-note-clip {
+  position: absolute; top: -20px; left: 20%; width: 15px; height: 46px;
+  transform: rotate(7deg); overflow: visible;
+  animation: zh-clip-in 300ms cubic-bezier(0.3, 1.4, 0.5, 1) 900ms both;
+}
+@keyframes zh-clip-in {
+  0%   { opacity: 0; transform: translateY(-16px) rotate(18deg); }
+  100% { opacity: 1; transform: rotate(7deg); }
+}
+.zh-note-name { margin: 6px 0 2px; font-size: clamp(28px, 7.4vw, 36px); line-height: 1.1; font-weight: 700; }
+.zh-note-latin {
+  position: relative; display: inline-block; margin: 0;
+  font-size: clamp(19px, 4.8vw, 22px); line-height: 1.3; opacity: 0.85;
+}
+.zh-note-edible-row { margin: 10px 0 2px; }
+.zh-note-edible {
+  position: relative; display: inline-block; padding: 0 0.6em;
+  font-size: clamp(19px, 4.8vw, 22px); line-height: 1.35;
+}
+.zh-note-edible.zh-poison { color: ${INK_RED}; }
+.zh-note-notes {
+  clear: both; margin: 14px 0 0; padding: 0; list-style: none;
+  font-size: clamp(20px, 5.1vw, 23px); line-height: 1.3;
+}
+.zh-note-notes li { margin: 0 0 6px; }
+
+/* A PENA: cada linha aparece da esquerda para a direita, no ritmo de quem escreve. */
+.zh-ink { display: inline-block; animation: zh-write var(--d, 600ms) linear var(--at, 0ms) both; }
+@keyframes zh-write {
+  0%   { clip-path: inset(-40% 100% -40% -2%); }
+  100% { clip-path: inset(-40% -2% -40% -2%); }
+}
+.zh-stroke { position: absolute; overflow: visible; pointer-events: none; }
+.zh-stroke path {
+  fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1; stroke-dashoffset: 0;
+  animation: zh-draw var(--d, 420ms) cubic-bezier(0.4, 0, 0.6, 1) var(--at, 0ms) both;
+}
+@keyframes zh-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.zh-stroke.zh-under { left: -2%; width: 104%; bottom: -3px; height: 9px; }
+.zh-stroke.zh-ring { left: -10px; top: -7px; width: calc(100% + 22px); height: calc(100% + 13px); }
+/* Um toque durante a escrita termina tudo de uma vez: ninguem espera a pena para dobrar o papel. */
+.zh-note.zh-done .zh-ink, .zh-note.zh-done .zh-stroke path,
+.zh-note.zh-done .zh-note-photo, .zh-note.zh-done .zh-note-clip { animation: none; }
 `;
 
 const ensureStyle = (): void => {
@@ -126,144 +163,141 @@ const ensureStyle = (): void => {
 };
 
 export interface ForagingCallbacks {
-  /** Uma passada da serra mordeu o talo. */
-  onStroke: () => void;
-  /** O corte saiu fora da faixa (a lâmina segue andando). */
+  /** O gesto saiu fora da altura certa (a faca segue andando). */
   onMiss: () => void;
-  /** O talo soltou: o cogumelo está na mão. */
-  onDetach: () => void;
-  /** Um grão de sujeira caiu. */
-  onSpeck: () => void;
+  /** O corte: o pop. */
+  onCut: () => void;
+  /** Terra escorrendo da bucha (chamado no máximo algumas vezes por segundo). */
+  onSand: () => void;
   /** Limpo. */
   onClean: () => void;
+  /** O cogumelo desce para a bolsa. */
+  onStash: () => void;
+  /** A ficha abre. */
+  onNote: () => void;
   /** A ficha fechou: o cogumelo vai para a cesta. */
   onDone: () => void;
   /** Saiu antes do corte: o cogumelo continua no chão. */
   onCancel: () => void;
 }
 
-/**
- * O PEDAÇO DO MUNDO em volta do cogumelo: 5×5 tiles (dx/dy de -2 a 2), com o frame do chão já
- * resolvido (`groundFrameAt`) e a decoração de cima. A cena monta; o close só desenha.
- */
-export interface ForagingScenery {
-  tileset: CanvasImageSource;
-  /** Quantos frames de 16px o tileset tem por linha. */
-  columns: number;
-  tiles: ReadonlyArray<{ dx: number; dy: number; ground: number; upper: number | null; water: boolean }>;
-}
+type Stage = 'intro' | 'aim' | 'pop' | 'clean' | 'shine' | 'stash' | 'note' | 'closing';
 
-type Stage = 'aim' | 'saw' | 'lift' | 'clean' | 'card';
-
-/** A grade lógica: 64×64 pixels, quatro tiles de 16 de lado — a mesma escala do mundo. */
-const W = 64;
-const TILE = 16;
-/** O tile do cogumelo: centro em (32, 48) — ele fica embaixo, a mata em cima. */
-const TILE_CX = 32;
-const TILE_CY = 48;
-const OX = TILE_CX - CLOSE_SIZE / 2;
-/** A arte assenta o pé (a linha do solo) um pouco abaixo do centro do tile. */
-const SOIL_Y = TILE_CY + 3;
-const OY = Math.round(SOIL_Y - SOIL_LINE * CLOSE_SIZE);
-/** Onde a lâmina vira: do pé do chapéu até fundo na terra. */
-const AIM_TOP = OY + 0.46 * CLOSE_SIZE;
-const AIM_BOTTOM = SOIL_Y + 5;
-/** Uma ida e volta inteira da lâmina, em segundos: devagar o bastante para o polegar. */
-const AIM_PERIOD = 3.2;
-const SAW_STROKES = 5;
-/** Quanto o dedo precisa correr (em pixels lógicos) para valer como uma passada. */
-const SAW_SWIPE = 3;
-const LIFT_PX = 9;
-const BRUSH_R = 4;
-/** Quanto de "esfregar" (pixels lógicos de escova passando) cada grão aguenta. */
-const SPECK_HP = 7;
-const BRUSH_SPEED = 28;
-const SPECK_COUNT = 7;
-/** O montinho de terra revolvida no pé do cogumelo. */
-const MOUND_RX = 12;
-const MOUND_RY = 5;
+const CS = CLOSE_SIZE;
+const INTRO_TIME = 0.6;
+/** Uma ida e volta inteira da faca, em segundos: devagar o bastante para o polegar. */
+const AIM_PERIOD = 2.6;
+/** O quadro congelado do corte: o golpe "pesa" antes de explodir. */
+const HITSTOP = 0.07;
+const POP_TIME = 0.8;
+const SHINE_TIME = 1.0;
+const STASH_TIME = 0.5;
+/** A bucha: o tamanho que ela apaga (meia largura e meia altura, em pixels da arte). */
+const SPONGE_RX = 3.4;
+const SPONGE_RY = 2.4;
+const SPONGE_SPEED = 20;
+/** Quantos grãos de areia cada pixel de terra vira, e o tamanho de cada um (em pixels da arte). */
+const GRAINS_PER_PIXEL = 3;
+const GRAIN = 1 / 3;
+const GRAVITY = 70;
+/** Sobrando isto (fração da terra inicial), o resto cai sozinho: a última migalha não vira caça. */
+const CLEAN_LEFT = 0.03;
+/** Quando a pena começa (o papel já assentou) e o ritmo dela. */
+const WRITE_START_MS = 760;
+const WRITE_MS_PER_CHAR = 26;
 
 const ACTION_CODES = new Set(['KeyZ', 'KeyJ', 'Space', 'KeyX', 'KeyK', 'Enter', 'NumpadEnter']);
 
-/** A paleta do chão de cada tipo de sujeira — tirada dos tiles do jogo, não inventada. */
-const DIRT_COLORS: Readonly<Record<DirtKind, readonly [string, string]>> = {
-  soil: ['#3b2a1e', '#5a4330'],
-  needle: ['#6b5a32', '#8a7442'],
-  leaf: ['#a8642c', '#7d4a22'],
-  grass: ['#4d6b2e', '#6f8f3c'],
-  sand: ['#c9b48a', '#a8956a'],
-  moss: ['#4f6a2c', '#7f9a44'],
+/** A paleta de cada tipo de sujeira — tirada dos tiles do jogo, com um tom a mais de sombra. */
+const DIRT_COLORS: Readonly<Record<DirtKind, readonly [string, string, string]>> = {
+  soil: ['#3b2a1e', '#5a4330', '#2a1d14'],
+  needle: ['#6b5a32', '#8a7442', '#4f4224'],
+  leaf: ['#a8642c', '#7d4a22', '#5e3618'],
+  grass: ['#4d6b2e', '#6f8f3c', '#36501f'],
+  sand: ['#c9b48a', '#a8956a', '#8a7a55'],
+  moss: ['#4f6a2c', '#7f9a44', '#3a5020'],
 };
 
-/** O vime da cesta: os mesmos tons do vime de cozyTextures. */
-const WICKER = { dark: '#5e4126', base: '#8a6238', light: '#b0844e' };
+/** A bucha em pixels: '#' bucha, 'o' furo do trançado. */
+const SPONGE = [
+  '..#####..',
+  '.##o##o#.',
+  '#o##o##o#',
+  '.##o##o#.',
+  '..#####..',
+];
+const SPONGE_BASE = '#dcc78e';
+const SPONGE_HOLE = '#a88a52';
 
-interface Speck {
-  x: number;
-  y: number;
-  kind: DirtKind;
-  hp: number;
-  /** Caindo: a velocidade e o quanto já desceu. */
-  fall?: { vy: number; dy: number; alpha: number };
-}
+interface Grain { x: number; y: number; vx: number; vy: number; c: string; age: number }
+interface Spark { x: number; y: number; at: number; c: string }
+interface Crumb { x: number; y: number; vx: number; vy: number; c: string; life: number }
+interface Box { x0: number; y0: number; x1: number; y1: number }
 
-interface Fiber { x: number; y: number; vx: number; vy: number; life: number }
-
-/** Um pseudo-aleatório com semente: a mesma terra sempre que a mesma espécie é colhida. */
-const rng = (seed: number): (() => number) => {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let x = s;
-    x = Math.imul(x ^ (x >>> 15), x | 1);
-    x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
-    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
-  };
+const clamp01 = (k: number): number => Math.max(0, Math.min(1, k));
+const easeOut = (k: number): number => 1 - (1 - k) * (1 - k);
+const easeOutBack = (k: number): number => {
+  const c1 = 1.9;
+  return 1 + (c1 + 1) * (k - 1) ** 3 + c1 * (k - 1) ** 2;
 };
 
 export class ForagingOverlay {
   private readonly root: HTMLDivElement;
   private readonly canvas: HTMLCanvasElement;
-  private readonly frameEl: HTMLDivElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly title: HTMLHeadingElement;
-  private readonly hint: HTMLParagraphElement;
-  private readonly msg: HTMLParagraphElement;
-  private readonly tip: HTMLParagraphElement;
-  private readonly leave: HTMLButtonElement;
-  private readonly card: HTMLDivElement;
+  private readonly note: HTMLDivElement;
+  /** Quando a pena termina de escrever (ms desde que o papel abriu). */
+  private writeEndMs = 0;
 
   private readonly art: HTMLCanvasElement;
+  private readonly pixels: Uint8ClampedArray;
   private readonly mask: Uint8Array;
   private readonly spec: (typeof FUNGUS_SPECS)[MushroomKind];
+  private readonly artBox: Box;
   private readonly zoneTop: number;
   private readonly zoneBottom: number;
-  /** O pedaço do mundo pré-desenhado em dois planos: atrás do cogumelo e na frente dele. */
-  private readonly sceneBack: HTMLCanvasElement;
-  private readonly sceneFront: HTMLCanvasElement;
-  private readonly basket: HTMLCanvasElement;
-  private readonly moundDots: Array<{ x: number; y: number; c: string }> = [];
-  private readonly mycelium: Array<{ x: number; y: number }> = [];
+  private readonly aimTop: number;
+  private readonly aimBottom: number;
+  /** A faca: onde a lâmina começa e termina (x), e onde o cabo termina. */
+  private readonly bladeL: number;
+  private readonly bladeR: number;
+  private readonly handleR: number;
+  /** O que tem de caber na tela: o cogumelo inteiro e a faca, nas duas pontas do curso dela. */
+  private readonly fitBox: Box;
 
-  private stage: Stage = 'aim';
+  private stage: Stage = 'intro';
   private clock = 0;
   private stageClock = 0;
-  private knifeY = AIM_TOP;
+  private aimClock = 0;
+  private freeze = 0;
+  private knifeY: number;
   private cutY = 0;
-  private strokes = 0;
-  private lastStroke = 0;
-  private sawX = 0;
-  private sawTarget = 0;
   private shake = 0;
-  private lift = 0;
-  private readonly fibers: Fiber[] = [];
-  private specks: Speck[] = [];
-  private brush = { x: W / 2, y: W / 2 };
-  private brushVisible = false;
+  private bump = 0;
+  private recoil = 0;
+  private wobble = 0;
+  /** A vista: pixels do aparelho por pixel da arte, e o ponto da arte no centro da tela. */
+  private scale = 1;
+  private view = { x: CS / 2, y: CS / 2 };
+  private viewFrom = { x: CS / 2, y: CS / 2 };
+  private viewTo = { x: CS / 2, y: CS / 2 };
+
+  /** A terra sobre o cogumelo (null = nada, senão a cor); o contorno roxo é refeito ao apagar. */
+  private readonly dirt = new Array<string | null>(CS * CS).fill(null);
+  private readonly dirtEdge = new Uint8Array(CS * CS);
+  private dirtLeft = 0;
+  private dirtStart = 0;
+  private readonly grains: Grain[] = [];
+  private readonly crumbs: Crumb[] = [];
+  private readonly sparks: Spark[] = [];
+  private ring = -1;
+  private sponge = { x: 0, y: 0 };
+  /** Para onde e quão rápido a bucha anda: ela estica no sentido do movimento. */
+  private spongeVel = { x: 0, y: 0 };
+  private spongeShown = false;
+  private lastSand = -1;
   private readonly held = new Set<string>();
-  private pointer: { id: number; x: number; y: number; acc: number } | null = null;
-  private msgTimer = 0;
-  private cleaned = false;
+  private pointer: { id: number; down: boolean } | null = null;
 
   private raf = 0;
   private lastNow = 0;
@@ -273,69 +307,62 @@ export class ForagingOverlay {
     private readonly kind: MushroomKind,
     private readonly cb: ForagingCallbacks,
     private readonly touch: boolean,
-    scenery?: ForagingScenery,
   ) {
     ensureStyle();
+    // A letra da ficha vem de um arquivo: pedida agora, ela já chegou quando o papel abrir.
+    void document.fonts?.load(`16px ${HAND}`).catch(() => undefined);
     this.spec = FUNGUS_SPECS[kind];
     const close = fungusCloseUp(kind);
-    this.art = close.canvas;
+    this.art = close.bare;
     this.mask = close.mask;
-    this.zoneTop = OY + this.spec.cut.from * CLOSE_SIZE;
-    this.zoneBottom = OY + this.spec.cut.to * CLOSE_SIZE;
-    [this.sceneBack, this.sceneFront] = this.paintScenery(scenery);
-    this.basket = this.paintBasket();
-    this.seedGround();
+    this.pixels = this.art.getContext('2d')?.getImageData(0, 0, CS, CS).data ?? new Uint8ClampedArray(CS * CS * 4);
+    this.artBox = this.boxOfRows(0, CS);
+    this.zoneTop = this.spec.cut.from * CS;
+    this.zoneBottom = this.spec.cut.to * CS;
+    this.aimTop = Math.max(this.artBox.y0 + 2, 0.46 * CS);
+    this.aimBottom = Math.max(this.zoneBottom + 2, this.artBox.y1 + 1);
+    this.knifeY = this.aimTop;
+    const span = this.stemSpan(Math.round((this.zoneTop + this.zoneBottom) / 2));
+    this.bladeL = span.left - 6;
+    this.bladeR = span.right + 2;
+    this.handleR = this.bladeR + 13;
+    this.fitBox = {
+      x0: Math.min(this.artBox.x0, this.bladeL - 1), x1: Math.max(this.artBox.x1, this.handleR + 1),
+      y0: this.artBox.y0, y1: Math.max(this.artBox.y1, this.aimBottom + 3),
+    };
+    this.view = { x: (this.fitBox.x0 + this.fitBox.x1) / 2, y: (this.fitBox.y0 + this.fitBox.y1) / 2 };
+    this.viewFrom = { ...this.view };
+    this.viewTo = { ...this.view };
 
     this.root = document.createElement('div');
     this.root.className = 'zh-forage';
-    // O andar por toque escuta a JANELA; sem esta marca, serrar com o dedo plantaria a ancora.
+    // O andar por toque escuta a JANELA; sem esta marca, esfregar com o dedo plantaria a ancora.
     this.root.setAttribute('data-zh-ui', '');
-    const panel = document.createElement('div');
-    panel.className = 'zh-forage-panel';
-
-    this.title = document.createElement('h2');
-    this.title.className = 'zh-forage-title';
-    this.frameEl = document.createElement('div');
-    this.frameEl.className = 'zh-forage-frame';
+    this.root.setAttribute('role', 'dialog');
+    this.root.setAttribute('aria-label', t(`items.name.${kind}`));
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'zh-forage-canvas';
-    this.canvas.width = W;
-    this.canvas.height = W;
-    this.frameEl.appendChild(this.canvas);
     const ctx = this.canvas.getContext('2d');
     if (!ctx) throw new Error('ForagingOverlay: no 2d context');
     this.ctx = ctx;
-    this.ctx.imageSmoothingEnabled = false;
-    this.hint = document.createElement('p');
-    this.hint.className = 'zh-forage-hint';
-    this.msg = document.createElement('p');
-    this.msg.className = 'zh-forage-msg';
-    this.tip = document.createElement('p');
-    this.tip.className = 'zh-forage-tip';
-
-    this.leave = document.createElement('button');
-    this.leave.type = 'button';
-    this.leave.className = 'zh-forage-leave';
-    this.leave.textContent = '×';
-    this.leave.title = t('fungi.leave');
-    this.leave.setAttribute('aria-label', t('fungi.leave'));
-    this.leave.addEventListener('click', () => this.cancel());
-
-    this.card = this.buildCard(close.canvas);
-
-    panel.append(this.leave, this.title, this.frameEl, this.hint, this.msg, this.tip, this.card);
-    this.root.appendChild(panel);
+    this.note = this.buildNote();
+    const wrap = document.createElement('div');
+    wrap.className = 'zh-note-wrap';
+    wrap.appendChild(this.note);
+    this.root.append(this.canvas, wrap);
     document.body.appendChild(this.root);
+    this.resize();
 
-    this.canvas.addEventListener('pointerdown', this.onPointerDown);
-    this.canvas.addEventListener('pointermove', this.onPointerMove);
-    this.canvas.addEventListener('pointerup', this.onPointerUp);
-    this.canvas.addEventListener('pointercancel', this.onPointerUp);
-    this.canvas.addEventListener('pointerleave', this.onPointerLeave);
+    this.root.addEventListener('pointerdown', this.onPointerDown);
+    this.root.addEventListener('pointermove', this.onPointerMove);
+    this.root.addEventListener('pointerup', this.onPointerUp);
+    this.root.addEventListener('pointercancel', this.onPointerUp);
+    this.root.addEventListener('pointerleave', this.onPointerLeave);
+    this.root.addEventListener('click', this.onClick);
     window.addEventListener('keydown', this.onKeyDown, true);
     window.addEventListener('keyup', this.onKeyUp, true);
+    window.addEventListener('resize', this.resize);
 
-    this.enterStage('aim');
     requestAnimationFrame(() => { if (!this.closed) this.root.classList.add('zh-in'); });
     this.lastNow = performance.now();
     this.raf = requestAnimationFrame(this.frame);
@@ -347,133 +374,94 @@ export class ForagingOverlay {
     window.cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKeyDown, true);
     window.removeEventListener('keyup', this.onKeyUp, true);
+    window.removeEventListener('resize', this.resize);
     this.root.remove();
   }
 
   // ── estágios ───────────────────────────────────────────────────────────────
 
-  private enterStage(stage: Stage): void {
+  private enter(stage: Stage): void {
     this.stage = stage;
     this.stageClock = 0;
-    const species = `fungi.species.${this.kind}`;
-    this.leave.style.display = stage === 'aim' || stage === 'saw' ? '' : 'none';
-    switch (stage) {
-      case 'aim':
-        this.title.textContent = t('fungi.cut.title');
-        this.hint.textContent = t(this.touch ? 'fungi.cut.aimTouch' : 'fungi.cut.aimKeys');
-        this.tip.textContent = t(`${species}.cut`);
-        break;
-      case 'saw':
-        this.hint.textContent = t(this.touch ? 'fungi.cut.sawTouch' : 'fungi.cut.sawKeys');
-        break;
-      case 'lift':
-        this.hint.textContent = '';
-        this.tip.textContent = t('fungi.cut.mycelium');
-        break;
-      case 'clean':
-        this.title.textContent = t('fungi.clean.title');
-        this.hint.textContent = t(this.touch ? 'fungi.clean.touch' : 'fungi.clean.keys');
-        this.tip.textContent = `${t(`${species}.clean`)} ${t('fungi.clean.why')}`;
-        // O que foi colhido vai para o MEIO da cesta: `lift` passa a ser o deslocamento que
-        // centraliza a parte acima do corte (o toco ficou na terra).
-        this.lift = OY - Math.round((W - (this.cutY - OY)) / 2);
-        this.seedSpecks();
-        this.brush = { x: W / 2, y: W / 2 };
-        this.brushVisible = !this.touch;
-        this.canvas.style.cursor = 'none';
-        break;
-      case 'card':
-        this.title.textContent = t('fungi.card.title');
-        this.frameEl.style.display = 'none';
-        this.hint.style.display = 'none';
-        this.msg.style.display = 'none';
-        this.tip.style.display = 'none';
-        this.card.classList.add('zh-on');
-        break;
+    this.root.classList.toggle('zh-cleaning', stage === 'clean');
+    if (stage === 'note') {
+      this.root.classList.add('zh-reading');
+      this.note.classList.add('zh-on');
+      this.cb.onNote();
     }
   }
 
+  /** ESC antes do corte: o cogumelo encolhe de volta, o foco volta, e ele continua no chão. */
   private cancel(): void {
-    if (this.stage !== 'aim' && this.stage !== 'saw') return;
-    this.destroy();
-    this.cb.onCancel();
+    if (this.stage !== 'aim' && this.stage !== 'intro') return;
+    this.enter('closing');
+    this.root.classList.remove('zh-in');
+    this.canvas.style.opacity = '0';
+    window.setTimeout(() => {
+      if (this.closed) return;
+      this.destroy();
+      this.cb.onCancel();
+    }, 260);
   }
 
-  private finish(): void {
-    if (this.stage !== 'card') return;
-    this.destroy();
-    this.cb.onDone();
-  }
-
-  private say(text: string): void {
-    this.msg.textContent = text;
-    this.msg.style.opacity = '1';
-    this.msgTimer = 1.8;
+  /**
+   * O toque na ficha: durante a escrita ele TERMINA a escrita; escrita pronta, ele dobra o
+   * papel, o embaçado volta ao foco, e só então o cogumelo entra na cesta.
+   */
+  private closeNote(): void {
+    if (this.stage !== 'note') return;
+    const elapsed = this.stageClock * 1000;
+    if (elapsed < this.writeEndMs && !this.note.classList.contains('zh-done')) {
+      if (elapsed > 300) this.note.classList.add('zh-done');
+      return;
+    }
+    if (elapsed < 450) return;
+    this.enter('closing');
+    this.note.classList.add('zh-off');
+    this.root.classList.remove('zh-in');
+    window.setTimeout(() => {
+      if (this.closed) return;
+      this.destroy();
+      this.cb.onDone();
+    }, 340);
   }
 
   /** O gesto do botão: cada estágio o lê de um jeito. */
   private act(): void {
-    switch (this.stage) {
-      case 'aim': this.tryCut(); break;
-      case 'saw': this.stroke(0); break;
-      case 'lift': if (this.stageClock > 0.6) this.enterStage('clean'); break;
-      case 'clean': this.flick(); break;
-      // Uma trava curta: o Z que estava petelecando a sujeira nao pode pular a ficha sem le-la.
-      case 'card': if (this.stageClock > 0.8) this.finish(); break;
-    }
+    if (this.stage === 'aim') this.tryCut();
+    else if (this.stage === 'note') this.closeNote();
   }
 
   private tryCut(): void {
     const y = this.knifeY;
-    if (y < this.zoneTop) {
-      this.say(t(this.kind === 'flyAgaric' ? 'fungi.cut.tooHighVolva' : 'fungi.cut.tooHigh'));
-      this.shake = 0.25;
+    if (y < this.zoneTop || y > this.zoneBottom) {
+      this.shake = 0.3;
+      this.recoil = 1;
+      this.wobble = 1;
       this.cb.onMiss();
       return;
     }
-    if (y > this.zoneBottom) {
-      this.say(t('fungi.cut.tooDeep'));
-      this.shake = 0.25;
-      this.cb.onMiss();
-      return;
-    }
-    this.cutY = Math.round(y);
+    this.cutY = Math.max(this.artBox.y0 + 2, Math.min(CS, Math.round(y)));
     this.knifeY = this.cutY;
-    this.strokes = 0;
-    this.lastStroke = 0;
-    this.msg.textContent = '';
-    this.enterStage('saw');
-  }
-
-  /**
-   * UMA PASSADA. `dir` -1/+1 vem das setas e do dedo, e a serra só morde no VAI-E-VEM: a mesma
-   * direção duas vezes não corta. `0` é o botão de ação, que vale como uma passada qualquer —
-   * quem joga com um botão só também serra.
-   */
-  private stroke(dir: number): void {
-    if (this.stage !== 'saw') return;
-    if (dir !== 0 && dir === this.lastStroke) return;
-    const d = dir === 0 ? (this.lastStroke === 1 ? -1 : 1) : dir;
-    this.lastStroke = d;
-    this.strokes += 1;
-    this.sawTarget = d * 2;
-    this.cb.onStroke();
+    this.cb.onCut();
+    this.freeze = HITSTOP;
+    this.bump = 1;
+    // As migalhas saem da linha do corte, na cor da carne que a faca atravessou.
     const span = this.stemSpan(this.cutY);
-    const at = span.left + ((span.right - span.left) * this.strokes) / SAW_STROKES;
-    for (let i = 0; i < 3; i += 1) {
-      this.fibers.push({
-        x: at, y: this.cutY, vx: (Math.random() - 0.5) * 16 + d * 8, vy: -Math.random() * 14 - 4, life: 0.5,
+    for (let i = 0; i < 14; i += 1) {
+      const x = span.left + Math.random() * Math.max(1, span.right - span.left);
+      this.crumbs.push({
+        x, y: this.cutY,
+        vx: (Math.random() - 0.5) * 38, vy: -Math.random() * 30 - 8,
+        c: this.colorAt(Math.floor(x), this.cutY - 1) ?? '#efe6d2', life: 0.6 + Math.random() * 0.35,
       });
     }
-    if (this.strokes >= SAW_STROKES) {
-      this.cb.onDetach();
-      this.enterStage('lift');
-    }
-  }
-
-  /** O botão na limpeza: um peteleco onde a escova está — tira meio grão de uma vez. */
-  private flick(): void {
-    this.brushAt(this.brush.x, this.brush.y, SPECK_HP / 2);
+    this.ring = 0;
+    const piece = this.boxOfRows(0, this.cutY);
+    this.viewFrom = { ...this.view };
+    this.viewTo = { x: (piece.x0 + piece.x1) / 2, y: (piece.y0 + piece.y1) / 2 };
+    this.seedDirt();
+    this.enter('pop');
   }
 
   // ── entrada ────────────────────────────────────────────────────────────────
@@ -483,13 +471,14 @@ export class ForagingOverlay {
     const code = event.code;
     let handled = true;
     if (code === 'Escape') {
-      this.cancel();
+      if (this.stage === 'note') this.closeNote();
+      else this.cancel();
     } else if (ACTION_CODES.has(code)) {
       if (!event.repeat) this.act();
-    } else if (code === 'ArrowLeft' || code === 'KeyA' || code === 'ArrowRight' || code === 'KeyD') {
-      const dir = code === 'ArrowLeft' || code === 'KeyA' ? -1 : 1;
-      if (this.stage === 'saw' && !event.repeat) this.stroke(dir);
-      this.held.add(dir < 0 ? 'left' : 'right');
+    } else if (code === 'ArrowLeft' || code === 'KeyA') {
+      this.held.add('left');
+    } else if (code === 'ArrowRight' || code === 'KeyD') {
+      this.held.add('right');
     } else if (code === 'ArrowUp' || code === 'KeyW') {
       this.held.add('up');
     } else if (code === 'ArrowDown' || code === 'KeyS') {
@@ -514,228 +503,277 @@ export class ForagingOverlay {
     else if (code === 'ArrowDown' || code === 'KeyS') this.held.delete('down');
   };
 
-  private toLogical(event: PointerEvent): { x: number; y: number } {
-    const r = this.canvas.getBoundingClientRect();
+  /** Da tela para o pixel da arte. */
+  private toArt(event: PointerEvent): { x: number; y: number } {
+    const dpr = this.canvas.width / Math.max(1, this.root.clientWidth);
+    const o = this.origin();
     return {
-      x: ((event.clientX - r.left) / Math.max(1, r.width)) * W,
-      y: ((event.clientY - r.top) / Math.max(1, r.height)) * W,
+      x: (event.clientX * dpr - o.x) / this.scale,
+      y: (event.clientY * dpr - o.y) / this.scale,
     };
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    // Na ficha quem fecha e o CLIQUE (onClick): um dedo rolando um papel comprido nao pode dobra-lo.
+    if (this.stage === 'note' || this.stage === 'closing') return;
     event.preventDefault();
-    const p = this.toLogical(event);
-    this.pointer = { id: event.pointerId, x: p.x, y: p.y, acc: 0 };
-    try { this.canvas.setPointerCapture(event.pointerId); } catch { /* sem captura, segue igual */ }
-    if (this.stage === 'aim' || this.stage === 'lift') this.act();
+    this.pointer = { id: event.pointerId, down: true };
+    try { this.root.setPointerCapture(event.pointerId); } catch { /* sem captura, segue igual */ }
+    if (this.stage === 'aim') { this.act(); return; }
     if (this.stage === 'clean') {
-      this.brush = { x: p.x, y: p.y };
-      this.brushVisible = true;
+      const p = this.toArt(event);
+      // O dedo PEGA a bucha onde tocou (sem arrastar um rastro ate la); o mouse ja vinha com ela.
+      if (this.touch || event.pointerType !== 'mouse') this.sponge = p;
+      this.spongeShown = true;
+      this.scrubTo(p.x, p.y);
     }
   };
 
+  private readonly onClick = (): void => {
+    if (this.stage === 'note') this.closeNote();
+  };
+
   private readonly onPointerMove = (event: PointerEvent): void => {
-    const p = this.toLogical(event);
-    if (this.stage === 'clean' && event.pointerType === 'mouse' && !this.pointer) {
-      // O mouse mostra a escova sem apertar (mira); esfregar e arrastar com o botao.
-      this.brush = { x: p.x, y: p.y };
-      this.brushVisible = true;
+    if (this.stage !== 'clean') return;
+    const p = this.toArt(event);
+    const pressed = this.pointer?.id === event.pointerId && this.pointer.down;
+    if (event.pointerType === 'mouse' && !pressed) {
+      // O mouse carrega a bucha sem esfregar; esfrega com o botao apertado, como uma borracha.
+      this.trackSponge(p.x, p.y);
+      this.sponge = p;
+      this.spongeShown = true;
       return;
     }
-    const ptr = this.pointer;
-    if (!ptr || ptr.id !== event.pointerId) return;
-    const dx = p.x - ptr.x;
-    const dy = p.y - ptr.y;
-    if (this.stage === 'saw') {
-      // O vai-e-vem do dedo: acumula na direcao atual e conta uma passada quando ela vira.
-      if (Math.sign(dx) !== Math.sign(ptr.acc) && ptr.acc !== 0) ptr.acc = 0;
-      ptr.acc += dx;
-      if (Math.abs(ptr.acc) >= SAW_SWIPE) {
-        this.stroke(Math.sign(ptr.acc));
-        ptr.acc = 0;
-      }
-    } else if (this.stage === 'clean') {
-      this.brush = { x: p.x, y: p.y };
-      this.brushAt(p.x, p.y, Math.hypot(dx, dy));
-    }
-    ptr.x = p.x;
-    ptr.y = p.y;
+    if (pressed) this.scrubTo(p.x, p.y);
   };
 
   private readonly onPointerUp = (event: PointerEvent): void => {
     if (this.pointer?.id === event.pointerId) this.pointer = null;
-    if (this.touch && this.stage === 'clean') this.brushVisible = false;
   };
 
   private readonly onPointerLeave = (event: PointerEvent): void => {
-    if (event.pointerType === 'mouse' && !this.pointer) this.brushVisible = false;
+    if (event.pointerType === 'mouse' && !this.pointer && this.stage === 'clean') this.spongeShown = false;
   };
 
-  // ── o mundo do close ───────────────────────────────────────────────────────
+  // ── a arte ─────────────────────────────────────────────────────────────────
+
+  private colorAt(x: number, y: number): string | null {
+    if (x < 0 || y < 0 || x >= CS || y >= CS) return null;
+    const i = (y * CS + x) * 4;
+    if (this.pixels[i + 3] === 0) return null;
+    return `rgb(${this.pixels[i]},${this.pixels[i + 1]},${this.pixels[i + 2]})`;
+  }
+
+  /** A caixa do que está pintado entre as linhas `top` (inclusive) e `bottom` (exclusive). */
+  private boxOfRows(top: number, bottom: number): Box {
+    let x0 = CS;
+    let y0 = CS;
+    let x1 = 0;
+    let y1 = 0;
+    for (let y = Math.max(0, top); y < Math.min(CS, bottom); y += 1) {
+      for (let x = 0; x < CS; x += 1) {
+        if (this.pixels[(y * CS + x) * 4 + 3] === 0) continue;
+        x0 = Math.min(x0, x);
+        x1 = Math.max(x1, x + 1);
+        y0 = Math.min(y0, y);
+        y1 = Math.max(y1, y + 1);
+      }
+    }
+    if (x1 <= x0) return { x0: 0, y0: 0, x1: CS, y1: CS };
+    return { x0, y0, x1, y1 };
+  }
+
+  /** A largura do talo naquela linha da arte — por onde a faca passa e de onde saem as migalhas. */
+  private stemSpan(row: number): { left: number; right: number } {
+    const y = Math.max(0, Math.min(CS - 1, row));
+    let left = -1;
+    let right = -1;
+    for (let x = 0; x < CS; x += 1) {
+      if (this.pixels[(y * CS + x) * 4 + 3] === 0) continue;
+      if (left < 0) left = x;
+      right = x;
+    }
+    if (left < 0) return { left: CS / 2 - 2, right: CS / 2 + 2 };
+    return { left, right: right + 1 };
+  }
 
   /**
-   * O pedaço do mundo, pré-desenhado UMA vez: o chão e a decoração das fileiras de trás num
-   * plano, a decoração das fileiras da frente em outro (ela passa na frente do cogumelo, como
-   * no mundo). Sem cenário, um chão de musgo liso no tom do tile de grama.
+   * A TERRA: manchas irregulares por cima do que foi colhido, nunca fora do cogumelo. Gordas,
+   * para serem vistas de longe — elas são o jogo.
    */
-  private paintScenery(scenery?: ForagingScenery): [HTMLCanvasElement, HTMLCanvasElement] {
-    const back = document.createElement('canvas');
-    const front = document.createElement('canvas');
-    back.width = W;
-    back.height = W;
-    front.width = W;
-    front.height = W;
-    const b = back.getContext('2d');
-    const f = front.getContext('2d');
-    if (!b || !f) return [back, front];
-    b.imageSmoothingEnabled = false;
-    f.imageSmoothingEnabled = false;
-    b.fillStyle = '#3f4f2a';
-    b.fillRect(0, 0, W, W);
-    if (!scenery) return [back, front];
-    const at = (dx: number, dy: number): [number, number] => [
-      TILE_CX - TILE / 2 + dx * TILE, TILE_CY - TILE / 2 + dy * TILE,
-    ];
-    const blit = (ctx: CanvasRenderingContext2D, frame: number, x: number, y: number): void => {
-      const sx = (frame % scenery.columns) * TILE;
-      const sy = Math.floor(frame / scenery.columns) * TILE;
-      ctx.drawImage(scenery.tileset, sx, sy, TILE, TILE, x, y, TILE, TILE);
-    };
-    for (const tile of scenery.tiles) {
-      const [x, y] = at(tile.dx, tile.dy);
-      if (tile.water) {
-        b.fillStyle = '#1f4552';
-        b.fillRect(x, y, TILE, TILE);
-        b.fillStyle = '#2e6070';
-        for (let i = 0; i < 4; i += 1) b.fillRect(x + ((i * 5 + tile.dx * 3) & 15), y + i * 4 + 1, 3, 1);
-      } else {
-        blit(b, tile.ground, x, y);
-      }
+  private seedDirt(): void {
+    const rand = seededRandom((Date.now() & 0xffff) ^ (this.kind.length * 7919));
+    const spots: number[] = [];
+    for (let y = 1; y < this.cutY - 1; y += 1) {
+      for (let x = 1; x < CS - 1; x += 1) if (this.mask[y * CS + x]) spots.push(y * CS + x);
     }
-    // A decoracao em ordem de fileira: a de tras primeiro. O tile do proprio cogumelo nunca tem
-    // (o mundo limpa o `upper` de quem guarda um item).
-    const ordered = [...scenery.tiles].sort((p, q) => p.dy - q.dy);
-    for (const tile of ordered) {
-      if (tile.upper === null || (tile.dx === 0 && tile.dy === 0)) continue;
-      const [x, y] = at(tile.dx, tile.dy);
-      blit(tile.dy > 0 ? f : b, tile.upper, x, y);
-    }
-    return [back, front];
-  }
-
-  /** O fundo da limpeza: o vime da cesta, trançado em fileiras desencontradas. */
-  private paintBasket(): HTMLCanvasElement {
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = W;
-    const ctx = c.getContext('2d');
-    if (!ctx) return c;
-    ctx.fillStyle = WICKER.dark;
-    ctx.fillRect(0, 0, W, W);
-    for (let row = 0; row < W / 4; row += 1) {
-      const y = row * 4;
-      const shift = row % 2 === 0 ? 0 : 4;
-      for (let x = -4 + shift; x < W; x += 8) {
-        ctx.fillStyle = WICKER.base;
-        ctx.fillRect(x, y, 7, 3);
-        ctx.fillStyle = WICKER.light;
-        ctx.fillRect(x + 1, y, 5, 1);
-      }
-    }
-    return c;
-  }
-
-  private seedGround(): void {
-    const rand = rng(this.kind.length * 7919 + this.kind.charCodeAt(0));
-    const [c0, c1] = DIRT_COLORS.soil;
-    for (let i = 0; i < 18; i += 1) {
-      const a = rand() * Math.PI;
-      const r = Math.sqrt(rand());
-      this.moundDots.push({
-        x: Math.round(TILE_CX + Math.cos(a) * (MOUND_RX - 1) * r),
-        y: Math.round(SOIL_Y + 1 + Math.sin(a) * (MOUND_RY - 2) * r),
-        c: rand() < 0.5 ? c0 : c1,
-      });
-    }
-    // O micelio: fios brancos que se ramificam a partir do pe, por dentro da terra revolvida.
-    for (let b = 0; b < 6; b += 1) {
-      let x = TILE_CX + (rand() - 0.5) * 3;
-      let y = SOIL_Y + 1 + rand() * 1.5;
-      const dir = rand() < 0.5 ? -1 : 1;
-      const len = 5 + Math.floor(rand() * 7);
-      for (let s = 0; s < len; s += 1) {
-        x += dir * (0.6 + rand() * 0.7);
-        y += (rand() - 0.4) * 0.9;
-        const nx = (x - TILE_CX) / MOUND_RX;
-        const ny = (y - SOIL_Y) / MOUND_RY;
-        if (y < SOIL_Y || nx * nx + ny * ny > 1) break;
-        this.mycelium.push({ x: Math.round(x), y: Math.round(y) });
-      }
-    }
-  }
-
-  /** A largura do talo naquela linha do close — onde a serra começa e termina. */
-  private stemSpan(y: number): { left: number; right: number } {
-    const row = Math.round(y - OY);
-    if (row >= 0 && row < CLOSE_SIZE) {
-      let left = -1;
-      let right = -1;
-      // A linha do corte pode cair na volva (que nao entra na mascara de sujeira): a arte
-      // inteira serve aqui, entao le-se o canvas, e nao a mascara.
-      const ctx = this.art.getContext('2d');
-      const data = ctx?.getImageData(0, row, CLOSE_SIZE, 1).data;
-      if (data) {
-        for (let x = 0; x < CLOSE_SIZE; x += 1) {
-          if (data[x * 4 + 3] === 0) continue;
-          if (left < 0) left = x;
-          right = x;
+    if (spots.length === 0) return;
+    const patches = 5 + Math.floor(rand() * 3);
+    for (let p = 0; p < patches; p += 1) {
+      const seed = spots[Math.floor(rand() * spots.length)];
+      const cx = seed % CS;
+      const cy = Math.floor(seed / CS);
+      const pal = DIRT_COLORS[this.spec.dirt[p % this.spec.dirt.length]];
+      const r = 1.8 + rand() * 1.8;
+      for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y += 1) {
+        for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x += 1) {
+          if (x < 0 || y < 0 || x >= CS || y >= this.cutY) continue;
+          const i = y * CS + x;
+          if (!this.mask[i]) continue;
+          // A borda roída: a mancha é um borrão de terra, não um círculo.
+          const d = Math.hypot(x - cx, (y - cy) * 1.15) + (rand() - 0.5) * 1.6;
+          if (d > r) continue;
+          const roll = rand();
+          this.dirt[i] = roll < 0.5 ? pal[0] : roll < 0.8 ? pal[1] : pal[2];
         }
       }
-      if (left >= 0) return { left: OX + left, right: OX + right + 1 };
     }
-    return { left: TILE_CX - 2, right: TILE_CX + 2 };
+    this.dirtLeft = this.dirt.reduce((n, c) => n + (c ? 1 : 0), 0);
+    this.dirtStart = this.dirtLeft;
+    this.refreshEdge();
   }
 
-  /** A sujeira nasce em cima do que foi colhido (acima do corte), nunca no contorno. */
-  private seedSpecks(): void {
-    const rand = rng(Date.now() & 0xffff);
-    const spots: Array<{ x: number; y: number }> = [];
-    const cutRow = this.cutY - OY;
-    for (let y = 1; y < Math.min(CLOSE_SIZE - 1, cutRow - 1); y += 1) {
-      for (let x = 1; x < CLOSE_SIZE - 1; x += 1) {
-        if (this.mask[y * CLOSE_SIZE + x]) spots.push({ x, y });
+  /** O contorno roxo de "pegue isto" em volta de cada mancha: um pixel por fora da terra. */
+  private refreshEdge(): void {
+    this.dirtEdge.fill(0);
+    for (let y = 0; y < CS; y += 1) {
+      for (let x = 0; x < CS; x += 1) {
+        const i = y * CS + x;
+        if (this.dirt[i]) continue;
+        const near = (x > 0 && this.dirt[i - 1]) || (x < CS - 1 && this.dirt[i + 1])
+          || (y > 0 && this.dirt[i - CS]) || (y < CS - 1 && this.dirt[i + CS]);
+        if (near) this.dirtEdge[i] = 1;
       }
     }
-    this.specks = [];
-    for (let i = 0; i < SPECK_COUNT && spots.length > 0; i += 1) {
-      const pick = spots.splice(Math.floor(rand() * spots.length), 1)[0];
-      this.specks.push({
-        x: OX + pick.x,
-        y: OY + pick.y - this.lift,
-        kind: this.spec.dirt[i % this.spec.dirt.length],
-        hp: SPECK_HP,
+  }
+
+  private trackSponge(x: number, y: number): void {
+    const dx = x - this.sponge.x;
+    const dy = y - this.sponge.y;
+    this.spongeVel = { x: this.spongeVel.x * 0.5 + dx * 0.5, y: this.spongeVel.y * 0.5 + dy * 0.5 };
+  }
+
+  /** A bucha anda até (x, y) apagando tudo pelo caminho — a borracha do Paint. */
+  private scrubTo(x: number, y: number): void {
+    const from = this.sponge;
+    this.trackSponge(x, y);
+    const steps = Math.max(1, Math.ceil(Math.hypot(x - from.x, y - from.y) * 2));
+    let erased = 0;
+    for (let s = 1; s <= steps; s += 1) {
+      const k = s / steps;
+      erased += this.eraseAt(from.x + (x - from.x) * k, from.y + (y - from.y) * k, x - from.x);
+    }
+    this.sponge = { x, y };
+    if (erased > 0) this.afterErase(erased);
+  }
+
+  private eraseAt(cx: number, cy: number, dirX: number): number {
+    if (this.stage !== 'clean') return 0;
+    let n = 0;
+    for (let y = Math.floor(cy - SPONGE_RY); y <= Math.ceil(cy + SPONGE_RY); y += 1) {
+      for (let x = Math.floor(cx - SPONGE_RX); x <= Math.ceil(cx + SPONGE_RX); x += 1) {
+        if (x < 0 || y < 0 || x >= CS || y >= CS) continue;
+        const dx = (x + 0.5 - cx) / SPONGE_RX;
+        const dy = (y + 0.5 - cy) / SPONGE_RY;
+        if (dx * dx + dy * dy > 1) continue;
+        const i = y * CS + x;
+        const c = this.dirt[i];
+        if (!c) continue;
+        this.dirt[i] = null;
+        this.shed(x, y, c, dirX);
+        n += 1;
+      }
+    }
+    return n;
+  }
+
+  /** Um pixel de terra vira areia: grãozinhos que escorrem (alguns levantam um fio de pó) e caem. */
+  private shed(x: number, y: number, c: string, dirX: number): void {
+    if (this.grains.length > 900) this.grains.splice(0, this.grains.length - 900);
+    for (let g = 0; g < GRAINS_PER_PIXEL; g += 1) {
+      const puff = Math.random() < 0.18;
+      this.grains.push({
+        x: x + Math.floor(Math.random() * 3) * GRAIN,
+        y: y + Math.floor(Math.random() * 3) * GRAIN,
+        vx: (Math.random() - 0.5) * 5 + Math.sign(dirX) * Math.random() * 4,
+        vy: puff ? -4 - Math.random() * 6 : Math.random() * 3,
+        c, age: 0,
       });
     }
   }
 
-  private brushAt(x: number, y: number, amount: number): void {
-    if (this.stage !== 'clean' || amount <= 0) return;
-    for (const s of this.specks) {
-      if (s.fall || Math.hypot(s.x - x, s.y - y) > BRUSH_R + 1) continue;
-      s.hp -= amount;
-      if (s.hp <= 0) {
-        s.fall = { vy: 6 + Math.random() * 6, dy: 0, alpha: 1 };
-        this.cb.onSpeck();
-      }
+  private afterErase(erased: number): void {
+    this.dirtLeft = Math.max(0, this.dirtLeft - erased);
+    this.refreshEdge();
+    if (this.clock - this.lastSand > 0.07) {
+      this.lastSand = this.clock;
+      this.cb.onSand();
     }
+    if (this.dirtLeft <= Math.max(2, Math.floor(this.dirtStart * CLEAN_LEFT))) {
+      // A última migalha cai sozinha: limpar é gostoso, caçar o pixel que sobrou não é.
+      for (let i = 0; i < this.dirt.length; i += 1) {
+        const c = this.dirt[i];
+        if (!c) continue;
+        this.dirt[i] = null;
+        this.shed(i % CS, Math.floor(i / CS), c, 0);
+      }
+      this.dirtLeft = 0;
+      this.refreshEdge();
+      this.startShine();
+    }
+  }
+
+  private startShine(): void {
+    const piece = this.boxOfRows(0, this.cutY);
+    const colors = ['#ffffff', '#ffe066', '#fff6d0'];
+    for (let i = 0; i < 10; i += 1) {
+      const a = (i / 10) * Math.PI * 2 + Math.random() * 0.5;
+      const rx = (piece.x1 - piece.x0) / 2 + 3 + Math.random() * 4;
+      const ry = (piece.y1 - piece.y0) / 2 + 2 + Math.random() * 4;
+      this.sparks.push({
+        x: (piece.x0 + piece.x1) / 2 + Math.cos(a) * rx,
+        y: (piece.y0 + piece.y1) / 2 + Math.sin(a) * ry,
+        at: 0.05 + i * 0.06, c: colors[i % colors.length],
+      });
+    }
+    this.cb.onClean();
+    this.enter('shine');
   }
 
   // ── o quadro ───────────────────────────────────────────────────────────────
 
+  private readonly resize = (): void => {
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(this.root.clientWidth * dpr));
+    const h = Math.max(1, Math.round(this.root.clientHeight * dpr));
+    this.canvas.width = w;
+    this.canvas.height = h;
+    // O MAIOR QUE COUBER, em escala inteira (pixel art não aceita pixel quebrado): o cogumelo e a
+    // faca inteiros dentro da tela, com um respiro em volta.
+    const fw = this.fitBox.x1 - this.fitBox.x0;
+    const fh = this.fitBox.y1 - this.fitBox.y0;
+    this.scale = Math.max(1, Math.floor(Math.min((w * 0.92) / fw, (h * 0.84) / fh)));
+  };
+
+  /** Onde o pixel (0, 0) da arte cai na tela. */
+  private origin(): { x: number; y: number } {
+    const sx = this.shake > 0 ? Math.sin(this.clock * 70) * 0.7 * (this.shake / 0.3) : 0;
+    const sy = this.bump > 0 ? Math.sin(this.bump * Math.PI) * 0.8 : 0;
+    return {
+      x: Math.round(this.canvas.width / 2 - this.scale * (this.view.x - sx)),
+      y: Math.round(this.canvas.height / 2 - this.scale * (this.view.y - sy)),
+    };
+  }
+
   private readonly frame = (now: number): void => {
     if (this.closed) return;
-    const dt = Math.min(0.05, (now - this.lastNow) / 1000);
+    let dt = Math.min(0.05, (now - this.lastNow) / 1000);
     this.lastNow = now;
+    // O quadro congelado do corte: o mundo da colheita para um instante, e então tudo explode.
+    if (this.freeze > 0) {
+      this.freeze -= dt;
+      dt = 0;
+    }
     this.clock += dt;
     this.stageClock += dt;
     this.update(dt);
@@ -744,261 +782,502 @@ export class ForagingOverlay {
   };
 
   private update(dt: number): void {
-    if (this.msgTimer > 0) {
-      this.msgTimer -= dt;
-      if (this.msgTimer <= 0) this.msg.style.opacity = '0';
-    }
     this.shake = Math.max(0, this.shake - dt);
+    this.bump = Math.max(0, this.bump - dt * 5);
+    this.recoil = Math.max(0, this.recoil - dt * 4);
+    this.wobble = Math.max(0, this.wobble - dt * 3);
+    this.spongeVel = { x: this.spongeVel.x * (1 - Math.min(1, dt * 10)), y: this.spongeVel.y * (1 - Math.min(1, dt * 10)) };
+    if (this.stage === 'intro' && this.stageClock >= INTRO_TIME) this.enter('aim');
     if (this.stage === 'aim') {
-      // A lamina em vai-e-vem triangular: velocidade constante, nada de freada que engane o olho.
-      const phase = (this.clock % AIM_PERIOD) / AIM_PERIOD;
+      // A faca em vai-e-vem triangular: velocidade constante, nada de freada que engane o olho.
+      // Começa no alto, de onde ela entrou.
+      this.aimClock += dt;
+      const phase = (this.aimClock % AIM_PERIOD) / AIM_PERIOD;
       const tri = phase < 0.5 ? phase * 2 : 2 - phase * 2;
-      this.knifeY = AIM_TOP + (AIM_BOTTOM - AIM_TOP) * tri;
+      this.knifeY = this.aimTop + (this.aimBottom - this.aimTop) * tri;
     }
-    this.sawX += (this.sawTarget - this.sawX) * Math.min(1, dt * 18);
-    if (Math.abs(this.sawX - this.sawTarget) < 0.3) this.sawTarget = 0;
-    for (let i = this.fibers.length - 1; i >= 0; i -= 1) {
-      const f = this.fibers[i];
-      f.life -= dt;
-      f.vy += 60 * dt;
-      f.x += f.vx * dt;
-      f.y += f.vy * dt;
-      if (f.life <= 0) this.fibers.splice(i, 1);
+    if (this.stage === 'pop') {
+      const k = easeOut(clamp01((this.stageClock - 0.1) / 0.5));
+      this.view = {
+        x: this.viewFrom.x + (this.viewTo.x - this.viewFrom.x) * k,
+        y: this.viewFrom.y + (this.viewTo.y - this.viewFrom.y) * k,
+      };
+      if (this.stageClock >= POP_TIME) {
+        this.enter('clean');
+        const piece = this.boxOfRows(0, this.cutY);
+        // A bucha começa ao lado do cogumelo, na mão: vista, mas sem tapar a terra — e DENTRO da
+        // tela (no celular em pé o lado direito do cogumelo já é quase a borda).
+        const o = this.origin();
+        const rightEdge = (this.canvas.width - o.x) / this.scale - 6;
+        this.sponge = { x: Math.min(piece.x1 + 4, rightEdge), y: (piece.y0 + piece.y1) / 2 };
+        this.spongeShown = true;
+      }
     }
-    if (this.stage === 'lift') {
-      const k = Math.min(1, this.stageClock / 0.7);
-      this.lift = LIFT_PX * (1 - (1 - k) * (1 - k));
-      if (this.stageClock > 2.8) this.enterStage('clean');
+    if (this.ring >= 0) this.ring += dt;
+    if (this.ring > 0.45) this.ring = -1;
+    for (let i = this.crumbs.length - 1; i >= 0; i -= 1) {
+      const c = this.crumbs[i];
+      c.life -= dt;
+      c.vy += GRAVITY * dt;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      if (c.life <= 0) this.crumbs.splice(i, 1);
     }
     if (this.stage === 'clean') {
       const vx = (this.held.has('right') ? 1 : 0) - (this.held.has('left') ? 1 : 0);
       const vy = (this.held.has('down') ? 1 : 0) - (this.held.has('up') ? 1 : 0);
       if (vx || vy) {
         const len = Math.hypot(vx, vy);
-        const step = (BRUSH_SPEED * dt) / len;
-        this.brush.x = Math.max(0, Math.min(W, this.brush.x + vx * step));
-        this.brush.y = Math.max(0, Math.min(W, this.brush.y + vy * step));
-        this.brushVisible = true;
-        this.brushAt(this.brush.x, this.brush.y, BRUSH_SPEED * dt);
-      }
-      for (const s of this.specks) {
-        if (!s.fall) continue;
-        s.fall.vy += 80 * dt;
-        s.fall.dy += s.fall.vy * dt;
-        s.fall.alpha = Math.max(0, s.fall.alpha - dt * 1.6);
-      }
-      const left = this.specks.filter((s) => !s.fall || s.fall.alpha > 0).length;
-      const dirty = this.specks.filter((s) => !s.fall).length;
-      if (!this.cleaned && dirty === 0) {
-        this.cleaned = true;
-        this.say(t('fungi.clean.done'));
-        this.cb.onClean();
-      }
-      if (this.cleaned && left === 0 && this.stageClock > 0.3) {
-        this.stageClock = 0;
-        this.enterStage('card');
+        const step = (SPONGE_SPEED * dt) / len;
+        const x = Math.max(-6, Math.min(CS + 6, this.sponge.x + vx * step));
+        const y = Math.max(-6, Math.min(CS + 6, this.sponge.y + vy * step));
+        this.spongeShown = true;
+        this.scrubTo(x, y);
       }
     }
+    const bottom = (this.canvas.height - this.origin().y) / this.scale + 2;
+    for (let i = this.grains.length - 1; i >= 0; i -= 1) {
+      const g = this.grains[i];
+      g.age += dt;
+      g.vy += GRAVITY * dt;
+      g.vx *= 1 - Math.min(1, dt * 1.5);
+      g.x += g.vx * dt;
+      g.y += g.vy * dt;
+      if (g.y > bottom || g.age > 3) this.grains.splice(i, 1);
+    }
+    if (this.stage === 'shine' && this.stageClock >= SHINE_TIME) {
+      this.cb.onStash();
+      this.enter('stash');
+    }
+    if (this.stage === 'stash' && this.stageClock >= STASH_TIME) this.enter('note');
   }
 
   private px(x: number, y: number, w: number, h: number, c: string): void {
     this.ctx.fillStyle = c;
-    this.ctx.fillRect(Math.round(x), Math.round(y), w, h);
+    this.ctx.fillRect(x, y, w, h);
   }
 
   private draw(): void {
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
-    if (this.stage === 'card') return;
-    const sx = this.shake > 0 ? Math.round(Math.sin(this.clock * 70)) : 0;
-    ctx.translate(sx, 0);
-    if (this.stage === 'clean') this.drawBasket();
-    else this.drawForestFloor();
-  }
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    if (this.stage === 'note') return;
+    ctx.imageSmoothingEnabled = false;
+    const o = this.origin();
+    ctx.setTransform(this.scale, 0, 0, this.scale, o.x, o.y);
 
-  /** O lugar onde ele nasceu: o chão do mundo, o cogumelo, o montinho de terra no pé. */
-  private drawForestFloor(): void {
-    const ctx = this.ctx;
-    ctx.drawImage(this.sceneBack, 0, 0);
-    // A sombra de contato do mundo (groundShadow): uma elipse escura sob o pé.
-    ctx.globalAlpha = 0.35;
-    this.ellipse(TILE_CX, SOIL_Y + 1, MOUND_RX + 2, MOUND_RY, '#10140a');
+    if (this.stage === 'intro' || this.stage === 'aim' || (this.stage === 'closing' && this.cutY === 0)) {
+      this.drawWhole();
+      this.drawKnife();
+      return;
+    }
+
+    if (this.stage === 'pop') this.drawStub();
+    this.drawPiece();
+    if (this.stage === 'pop') this.drawKnife();
+    for (const c of this.crumbs) {
+      ctx.globalAlpha = Math.min(1, c.life * 2.5);
+      this.px(Math.round(c.x), Math.round(c.y), 1, 1, c.c);
+    }
     ctx.globalAlpha = 1;
-
-    const lifted = this.stage === 'lift';
-    if (lifted) {
-      // O toco fica: so o que esta acima do corte sobe.
-      this.clipped(OY, this.cutY, W);
-      this.clipped(OY - this.lift, 0, this.cutY - this.lift);
-    } else {
-      ctx.drawImage(this.art, OX, OY);
+    this.drawRing();
+    for (const g of this.grains) {
+      ctx.globalAlpha = g.age > 1.6 ? Math.max(0, 1 - (g.age - 1.6) / 1.4) : 1;
+      this.px(Math.round(g.x * 3) / 3, Math.round(g.y * 3) / 3, GRAIN, GRAIN, g.c);
     }
-
-    this.drawMound(lifted);
-
-    if (this.stage === 'aim' || this.stage === 'saw') {
-      // As marcas da faixa certa, na borda do talo: o jogo mostra onde se corta, a dica diz por que.
-      const mx = OX + 2;
-      ctx.globalAlpha = 0.9;
-      this.px(mx, this.zoneTop, 3, 1, '#e5b558');
-      this.px(mx, this.zoneBottom, 3, 1, '#e5b558');
-      this.px(mx, this.zoneTop, 1, this.zoneBottom - this.zoneTop + 1, '#e5b558');
-      ctx.globalAlpha = 1;
-    }
-    if (this.stage === 'saw') {
-      const span = this.stemSpan(this.cutY);
-      const done = Math.min(1, this.strokes / SAW_STROKES);
-      this.px(span.left, this.cutY, Math.max(1, Math.round((span.right - span.left) * done)), 1, '#1b1d33');
-    }
-    ctx.drawImage(this.sceneFront, 0, 0);
-    if (this.stage === 'aim' || this.stage === 'saw') this.drawKnife(this.knifeY, this.sawX);
-    for (const f of this.fibers) this.px(f.x, f.y, 1, 1, '#f3ecda');
-  }
-
-  /** Desenha a arte do cogumelo em `y`, recortada entre as linhas `top` e `bottom` da tela. */
-  private clipped(y: number, top: number, bottom: number): void {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, top, W, Math.max(0, bottom - top));
-    ctx.clip();
-    ctx.drawImage(this.art, OX, y);
-    ctx.restore();
-  }
-
-  private ellipse(cx: number, cy: number, rx: number, ry: number, c: string): void {
-    for (let y = Math.ceil(cy - ry); y <= cy + ry; y += 1) {
-      const k = 1 - ((y - cy) / ry) ** 2;
-      if (k <= 0) continue;
-      const half = Math.round(rx * Math.sqrt(k));
-      this.px(cx - half, y, half * 2, 1, c);
-    }
+    ctx.globalAlpha = 1;
+    if (this.stage === 'shine') this.drawSparks();
+    if (this.stage === 'clean' && this.spongeShown) this.drawSponge();
   }
 
   /**
-   * A TERRA REVOLVIDA: meia elipse da linha do solo para baixo, cobrindo o pé (e a volva, na
-   * amanita). Solto o cogumelo, ela mostra os fios brancos do micélio por dentro.
+   * O COGUMELO INTEIRO, antes do corte: na entrada ele BROTA (cresce do pé com um elástico que
+   * passa do ponto e volta), parado ele RESPIRA, e um erro o faz tremer. Sempre pelo pé: ele está
+   * plantado, nada nele sai do lugar.
    */
-  private drawMound(lifted: boolean): void {
+  private drawWhole(): void {
     const ctx = this.ctx;
-    for (let y = SOIL_Y; y <= SOIL_Y + MOUND_RY; y += 1) {
-      const k = 1 - ((y - SOIL_Y) / MOUND_RY) ** 2;
-      const half = Math.round(MOUND_RX * Math.sqrt(Math.max(0, k)));
-      this.px(TILE_CX - half, y, half * 2, 1, y === SOIL_Y ? '#5a4330' : '#3b2a1e');
+    const pivotX = (this.artBox.x0 + this.artBox.x1) / 2;
+    const pivotY = this.artBox.y1;
+    let sx = 1;
+    let sy = 1;
+    let alpha = 1;
+    if (this.stage === 'intro') {
+      const k = clamp01(this.stageClock / 0.5);
+      const grow = easeOutBack(k);
+      const squash = 0.16 * Math.sin(k * Math.PI);
+      sx = grow * (1 - squash);
+      sy = grow * (1 + squash);
+      alpha = clamp01(k * 4);
+    } else if (this.stage === 'closing') {
+      const k = clamp01(this.stageClock / 0.25);
+      sx = sy = 1 - easeOut(k);
+      alpha = 1 - k;
+    } else {
+      const b = Math.sin(this.clock * 2.4);
+      sx = 1 - 0.01 * b;
+      sy = 1 + 0.02 * b;
     }
-    for (const d of this.moundDots) this.px(d.x, d.y, 1, 1, d.c);
-    // O contorno navy do jogo nas pontas do monte, como em toda arte que fica de pe no mundo.
-    this.px(TILE_CX - MOUND_RX, SOIL_Y, 1, 2, '#1b1d33');
-    this.px(TILE_CX + MOUND_RX - 1, SOIL_Y, 1, 2, '#1b1d33');
-    if (lifted) {
-      ctx.globalAlpha = Math.min(1, this.stageClock / 0.9);
-      for (const m of this.mycelium) this.px(m.x, m.y, 1, 1, '#efe9da');
-      ctx.globalAlpha = 1;
+    if (this.wobble > 0) {
+      const w = Math.sin(this.clock * 42) * 0.07 * this.wobble;
+      sx += w;
+      sy -= w;
     }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(pivotX, pivotY);
+    ctx.scale(Math.max(0.001, sx), Math.max(0.001, sy));
+    ctx.translate(-pivotX, -pivotY);
+    ctx.drawImage(this.art, 0, 0);
+    ctx.restore();
   }
 
-  /** A faca deitada, na arte da faca da mochila: lâmina clara, virola de latão, cabo e escova. */
-  private drawKnife(y: number, dx: number): void {
-    const x0 = TILE_CX - 13 + dx;
-    const x1 = TILE_CX + 8 + dx;
-    this.px(x0 - 1, y - 2, x1 - x0 + 2, 4, '#1b1d33');
-    this.px(x0, y - 1, x1 - x0, 1, '#eef2f2');
-    this.px(x0, y, x1 - x0, 1, '#9aa3a8');
-    this.px(x1, y - 2, 2, 4, '#c9a24a');
-    this.px(x1 + 2, y - 2, 8, 4, '#8a5a32');
-    this.px(x1 + 2, y + 1, 8, 1, '#5e3b1e');
-    this.px(x1 + 10, y - 3, 3, 6, '#3b2a1c');
-  }
-
-  /** A limpeza acontece EM CIMA DA CESTA: o cogumelo na mão, o vime embaixo, a escova. */
-  private drawBasket(): void {
+  /**
+   * O PEDAÇO COLHIDO com o "juice" de cada momento: o pulinho do corte (estica subindo, amassa
+   * ao cair), a terra assentando, o boing de limpo, e a queda girando para dentro da bolsa.
+   */
+  private drawPiece(): void {
     const ctx = this.ctx;
-    ctx.drawImage(this.basket, 0, 0);
-    this.clipped(OY - this.lift, 0, this.cutY - this.lift);
-    for (const s of this.specks) this.drawSpeck(s);
-    if (this.brushVisible && !this.cleaned) {
-      const { x, y } = this.brush;
-      for (let a = 0; a < 14; a += 1) {
-        const ang = (a / 14) * Math.PI * 2;
-        this.px(x + Math.cos(ang) * BRUSH_R, y + Math.sin(ang) * BRUSH_R, 1, 1, '#f3ecdc');
+    const piece = this.boxOfRows(0, this.cutY);
+    const pivotX = (piece.x0 + piece.x1) / 2;
+    const pivotY = this.cutY;
+    let dx = 0;
+    let dy = 0;
+    let sx = 1;
+    let sy = 1;
+    let rot = 0;
+    let alpha = 1;
+    let dirtAlpha = 1;
+    const tc = this.stageClock;
+    if (this.stage === 'pop') {
+      const UP = 0.46;
+      if (tc < UP) {
+        const k = tc / UP;
+        dy = -10 * 4 * k * (1 - k);                      // parábola: sobe e volta
+        const stretch = 0.16 * (1 - k);
+        sx = 1 - stretch * 0.7;
+        sy = 1 + stretch;
+        rot = Math.sin(k * Math.PI) * 0.06;              // um tico de giro no ar
+      } else {
+        // Assenta com uma mola amortecida: amassa, estica de leve, para.
+        const k = tc - UP;
+        const spring = Math.exp(-k * 9) * Math.cos(k * 26);
+        sx = 1 + 0.17 * spring;
+        sy = 1 - 0.17 * spring;
       }
-      this.px(x - 1, y - 1, 3, 3, '#1b1d33');
-      this.px(x, y, 1, 1, '#3b2a1c');
+      // A terra "assenta" junto com o pouso, não antes.
+      dirtAlpha = clamp01((tc - UP + 0.05) / 0.2);
+    } else if (this.stage === 'shine') {
+      const w = 0.14 * Math.sin(tc * 19) * Math.exp(-tc * 4.5);
+      sx = 1 - w;
+      sy = 1 + w;
+      dy = -Math.max(0, Math.sin(clamp01(tc / 0.32) * Math.PI)) * 4;
+    } else if (this.stage === 'stash') {
+      // Um saltinho e cai girando, encolhendo, para dentro da bolsa (lá embaixo).
+      const k = clamp01(tc / STASH_TIME);
+      const hop = Math.sin(clamp01(k / 0.35) * Math.PI) * (k < 0.35 ? 1 : 0);
+      const fall = clamp01((k - 0.25) / 0.75);
+      const e = fall * fall;
+      dy = -hop * 4 + e * 34;
+      dx = e * 5;
+      rot = e * 1.4;
+      sx = sy = 1 - 0.85 * e;
+      alpha = 1 - e * e;
     }
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(pivotX + dx, pivotY + dy);
+    ctx.rotate(rot);
+    ctx.scale(sx, sy);
+    ctx.translate(-pivotX, -pivotY);
+    ctx.drawImage(this.art, 0, 0, CS, this.cutY, 0, 0, CS, this.cutY);
+    if ((this.stage === 'clean' || this.stage === 'pop') && dirtAlpha > 0) {
+      ctx.globalAlpha = alpha * dirtAlpha;
+      for (let i = 0; i < this.dirt.length; i += 1) {
+        const x = i % CS;
+        const y = Math.floor(i / CS);
+        const c = this.dirt[i];
+        if (c) this.px(x, y, 1, 1, c);
+        else if (this.dirtEdge[i]) this.px(x, y, 1, 1, PICK_OUTLINE);
+      }
+    }
+    if (this.stage === 'shine') {
+      // O brilho de limpo: um clarão branco por cima da arte, que se apaga.
+      const flash = Math.max(0, 0.6 - tc * 1.5);
+      if (flash > 0) {
+        ctx.globalAlpha = flash;
+        ctx.globalCompositeOperation = 'source-atop';
+        this.px(0, 0, CS, this.cutY, '#ffffff');
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+    ctx.restore();
   }
 
-  private drawSpeck(s: Speck): void {
+  /** O toco que ficou abaixo do corte: cai girando de leve e some (o chão não está na tela). */
+  private drawStub(): void {
     const ctx = this.ctx;
-    const fall = s.fall;
-    if (fall && fall.alpha <= 0) return;
-    ctx.globalAlpha = fall ? fall.alpha : 1;
-    const x = s.x;
-    const y = s.y + (fall?.dy ?? 0);
-    const [c0, c1] = DIRT_COLORS[s.kind];
-    switch (s.kind) {
-      case 'soil':
-        this.px(x, y, 2, 2, c0);
-        this.px(x + 1, y, 1, 1, c1);
-        break;
-      case 'needle':
-        for (let i = 0; i < 3; i += 1) this.px(x + i, y + i * 0.5, 1, 1, i % 2 ? c1 : c0);
-        break;
-      case 'leaf':
-        this.px(x, y, 2, 2, c0);
-        this.px(x + 1, y + 1, 1, 1, c1);
-        break;
-      case 'grass':
-        this.px(x, y, 1, 3, c0);
-        this.px(x, y, 1, 1, c1);
-        break;
-      case 'sand':
-        this.px(x, y, 1, 1, c0);
-        this.px(x + 2, y + 1, 1, 1, c1);
-        this.px(x + 1, y + 2, 1, 1, c0);
-        break;
-      case 'moss':
-        this.px(x, y, 2, 2, c0);
-        this.px(x, y, 1, 1, c1);
-        break;
+    const k = this.stageClock;
+    if (this.cutY >= CS) return;
+    const drop = 0.5 * GRAVITY * k * k;
+    const pivotX = (this.artBox.x0 + this.artBox.x1) / 2;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - k * 2);
+    ctx.translate(pivotX, this.cutY + drop);
+    ctx.rotate(-k * 0.5);
+    ctx.translate(-pivotX, -this.cutY);
+    ctx.drawImage(this.art, 0, this.cutY, CS, CS - this.cutY, 0, this.cutY, CS, CS - this.cutY);
+    ctx.restore();
+  }
+
+  /** O anel do POP: um aro claro que se abre a partir do corte, e o risco branco do fio. */
+  private drawRing(): void {
+    if (this.ring < 0) return;
+    const ctx = this.ctx;
+    const span = this.stemSpan(this.cutY - 1);
+    const cx = (span.left + span.right) / 2;
+    const k = this.ring / 0.45;
+    const r = 2 + easeOut(k) * 13;
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    const dots = 24;
+    for (let a = 0; a < dots; a += 1) {
+      const ang = (a / dots) * Math.PI * 2;
+      this.px(Math.round(cx + Math.cos(ang) * r), Math.round(this.cutY + Math.sin(ang) * r * 0.55), 1, 1, '#fff6d8');
+    }
+    // O risco do fio da faca atravessando, que se estica para os lados e some.
+    if (k < 0.35) {
+      const w = (span.right - span.left) + 4 + k * 30;
+      ctx.globalAlpha = 1 - k / 0.35;
+      this.px(cx - w / 2, this.cutY - 1, w, 1, '#ffffff');
     }
     ctx.globalAlpha = 1;
+  }
+
+  /** As estrelinhas de limpo: cruzinhas que piscam em volta, cada uma no seu tempo. */
+  private drawSparks(): void {
+    const ctx = this.ctx;
+    for (const s of this.sparks) {
+      const k = (this.stageClock - s.at) / 0.55;
+      if (k <= 0 || k >= 1) continue;
+      const size = k < 0.5 ? 1 + Math.round(k * 4) : 1 + Math.round((1 - k) * 4);
+      const x = Math.round(s.x);
+      const y = Math.round(s.y - k * 2);
+      ctx.globalAlpha = 1 - k * 0.3;
+      this.px(x - size, y, size * 2 + 1, 1, s.c);
+      this.px(x, y - size, 1, size * 2 + 1, s.c);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /**
+   * A faca deitada, na arte da faca da mochila. Entra deslizando da direita depois que o cogumelo
+   * brota; na altura certa a lâmina ACENDE e um brilho corre por ela (o único aviso, e ele mora na
+   * faca); um erro a faz recuar; o corte a leva direto, atravessando, e ela some.
+   */
+  private drawKnife(): void {
+    const ctx = this.ctx;
+    let ox = 0;
+    let alpha = 1;
+    if (this.stage === 'intro') {
+      const k = clamp01((this.stageClock - 0.18) / 0.42);
+      ox = (1 - easeOutBack(k)) * 34;
+      alpha = clamp01(k * 3);
+    } else if (this.stage === 'closing') {
+      const k = clamp01(this.stageClock / 0.25);
+      ox = easeOut(k) * 30;
+      alpha = 1 - k;
+    } else if (this.stage === 'pop') {
+      const k = clamp01(this.stageClock / 0.22);
+      if (k >= 1) return;
+      ox = -k * k * 40;
+      alpha = 1 - k;
+    }
+    ox += this.recoil * 5 * Math.abs(Math.sin(this.recoil * Math.PI));
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(Math.round(ox), 0);
+    const y = Math.round(this.knifeY);
+    const inZone = this.stage === 'aim' && this.knifeY >= this.zoneTop && this.knifeY <= this.zoneBottom;
+    const x0 = this.bladeL;
+    const x1 = this.bladeR;
+    this.px(x0 - 1, y - 2, x1 - x0 + 2, 4, NAVY);
+    this.px(x0, y - 1, x1 - x0, 1, inZone ? '#ffffff' : '#d7dee0');
+    this.px(x0, y, x1 - x0, 1, inZone ? '#e9f2f4' : '#98a2a7');
+    if (inZone) {
+      const glint = x0 + Math.floor((this.clock * 40) % Math.max(1, x1 - x0));
+      this.px(glint, y - 2, 1, 1, '#fffbe6');
+      this.px(glint - 1, y - 1, 3, 1, '#fffbe6');
+    }
+    this.px(x1, y - 2, 2, 4, '#c9a24a');                   // virola de latão
+    this.px(x1 + 2, y - 2, 9, 4, '#8a5a32');               // cabo
+    this.px(x1 + 2, y + 1, 9, 1, '#5e3b1e');
+    this.px(x1 + 11, y - 3, 2, 6, '#3b2a1c');              // a escova do cabo
+    this.px(x1 + 2, y - 3, 11, 1, NAVY);
+    this.px(x1 + 2, y + 2, 11, 1, NAVY);
+    this.px(x1 + 13, y - 3, 1, 6, NAVY);
+    ctx.restore();
+  }
+
+  /**
+   * A bucha na mão: um ovalzinho trançado, com o contorno de tinta do jogo. Ela ESTICA no sentido
+   * em que anda e amassa quando o dedo/botão aperta — é a massa dela que vende o esfregar.
+   */
+  private drawSponge(): void {
+    const ctx = this.ctx;
+    const w = SPONGE[0].length;
+    const h = SPONGE.length;
+    const cx = Math.round(this.sponge.x);
+    const cy = Math.round(this.sponge.y);
+    const speed = Math.min(1, Math.hypot(this.spongeVel.x, this.spongeVel.y) / 2.5);
+    const ang = Math.atan2(this.spongeVel.y, this.spongeVel.x);
+    const pressed = this.pointer?.down === true || this.held.size > 0;
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (speed > 0.02) {
+      // Esticar ao longo do movimento: gira para o rumo, escala, e desgira.
+      ctx.rotate(ang);
+      ctx.scale(1 + 0.22 * speed, 1 - 0.16 * speed);
+      ctx.rotate(-ang);
+    }
+    if (pressed) ctx.scale(1.08, 0.88);
+    ctx.translate(-w / 2, -h / 2);
+    const solid = (x: number, y: number): boolean => y >= 0 && y < h && x >= 0 && x < w && SPONGE[y][x] !== '.';
+    for (let y = -1; y <= h; y += 1) {
+      for (let x = -1; x <= w; x += 1) {
+        if (solid(x, y)) continue;
+        if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) this.px(x, y, 1, 1, NAVY);
+      }
+    }
+    for (let y = 0; y < h; y += 1) {
+      for (let x = 0; x < w; x += 1) {
+        const c = SPONGE[y][x];
+        if (c === '.') continue;
+        this.px(x, y, 1, 1, c === 'o' ? SPONGE_HOLE : SPONGE_BASE);
+      }
+    }
+    ctx.restore();
   }
 
   // ── a ficha ────────────────────────────────────────────────────────────────
 
-  private buildCard(art: HTMLCanvasElement): HTMLDivElement {
+  /**
+   * O PAPEL: velho, amassado, com a borda rasgada à mão, escrito com pena — e a fotinha do
+   * cogumelo presa por um clipe. Nada aqui é botão, moldura ou etiqueta de interface. Cada linha
+   * ganha o seu tempo de pena, em sequência, proporcional ao tamanho dela.
+   */
+  private buildNote(): HTMLDivElement {
     const species = `fungi.species.${this.kind}`;
-    const card = document.createElement('div');
-    card.className = 'zh-forage-card';
-    const frame = document.createElement('div');
-    frame.className = 'zh-forage-frame';
+    const note = document.createElement('div');
+    note.className = 'zh-note';
+    const paper = document.createElement('div');
+    paper.className = 'zh-note-paper';
+    paper.style.clipPath = tornEdge(seedOf(this.kind));
+    const texture = paperTexture();
+    if (texture) paper.style.backgroundImage = `url(${texture})`;
+
+    const photo = document.createElement('div');
+    photo.className = 'zh-note-photo';
+    const shot = document.createElement('div');
+    shot.className = 'zh-note-shot';
     const img = document.createElement('img');
-    img.src = art.toDataURL();
+    img.src = this.art.toDataURL();
     img.alt = t(`items.name.${this.kind}`);
-    frame.appendChild(img);
-    const name = document.createElement('p');
-    name.className = 'zh-forage-name';
-    name.textContent = t(`items.name.${this.kind}`);
+    shot.appendChild(img);
+    photo.append(shot, this.paperClip());
+
+    let at = WRITE_START_MS;
+    const ink = (el: HTMLElement, text: string): HTMLElement => {
+      const d = Math.max(280, Math.min(1100, text.length * WRITE_MS_PER_CHAR));
+      el.classList.add('zh-ink');
+      el.style.setProperty('--at', `${at}ms`);
+      el.style.setProperty('--d', `${d}ms`);
+      el.textContent = text;
+      at += d + 90;
+      return el;
+    };
+    const stroke = (cls: string, path: string, viewBox: string, d: number): SVGSVGElement => {
+      const svg = this.svgStroke(cls, path, viewBox);
+      svg.style.setProperty('--at', `${at}ms`);
+      svg.style.setProperty('--d', `${d}ms`);
+      at += d + 60;
+      return svg;
+    };
+
+    const name = document.createElement('h2');
+    name.className = 'zh-note-name';
+    name.appendChild(ink(document.createElement('span'), t(`items.name.${this.kind}`)));
     const latin = document.createElement('p');
-    latin.className = 'zh-forage-latin';
-    latin.textContent = t(`${species}.latin`);
+    latin.className = 'zh-note-latin';
+    latin.appendChild(ink(document.createElement('span'), t(`${species}.latin`)));
+    // O nome científico sublinhado à mão, como num caderno de campo.
+    latin.appendChild(stroke('zh-under', 'M1 6 C 18 3, 34 8, 52 5 S 84 3, 99 6', '0 0 100 10', 380));
+    const row = document.createElement('div');
+    row.className = 'zh-note-edible-row';
     const edible = document.createElement('span');
-    edible.className = `zh-forage-edible zh-${this.spec.edibility}`;
-    edible.textContent = t(`fungi.edibility.${this.spec.edibility}`);
+    edible.className = `zh-note-edible zh-${this.spec.edibility}`;
+    edible.appendChild(ink(document.createElement('span'), t(`fungi.edibility.${this.spec.edibility}`)));
+    // ...e a comestibilidade CIRCULADA, numa volta só, que passa do ponto onde começou.
+    edible.appendChild(stroke('zh-ring',
+      'M14 30 C 4 20, 14 6, 44 4 C 76 2, 98 10, 96 24 C 94 38, 60 44, 30 40 C 10 37, 4 28, 12 16 C 16 11, 24 8, 30 7',
+      '0 0 100 46', 520));
+    row.appendChild(edible);
     const notes = document.createElement('ul');
-    notes.className = 'zh-forage-notes';
+    notes.className = 'zh-note-notes';
     for (const line of tWords(`${species}.notes`)) {
       const li = document.createElement('li');
-      li.textContent = line;
+      li.appendChild(ink(document.createElement('span'), `~ ${line}`));
       notes.appendChild(li);
     }
-    const go = document.createElement('button');
-    go.type = 'button';
-    go.className = 'zh-forage-go';
-    go.textContent = t('fungi.card.basket');
-    go.addEventListener('click', () => this.finish());
-    card.append(frame, name, latin, edible, notes, go);
-    return card;
+    this.writeEndMs = at;
+    paper.append(photo, name, latin, row, notes);
+    note.appendChild(paper);
+    return note;
+  }
+
+  /** Um traço de pena em SVG (o sublinhado, o círculo), desenhado com stroke-dashoffset. */
+  private svgStroke(cls: string, path: string, viewBox: string): SVGSVGElement {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', `zh-stroke ${cls}`);
+    svg.setAttribute('viewBox', viewBox);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('aria-hidden', 'true');
+    const p = document.createElementNS(ns, 'path');
+    p.setAttribute('d', path);
+    p.setAttribute('pathLength', '1');
+    svg.appendChild(p);
+    return svg;
+  }
+
+  /** O clipe de papel: um arame dobrado, de metal fosco, por cima da beirada da foto. */
+  private paperClip(): SVGSVGElement {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'zh-note-clip');
+    svg.setAttribute('viewBox', '0 0 15 46');
+    svg.setAttribute('aria-hidden', 'true');
+    const wire = 'M4.5 32 V9 a4 4 0 0 1 8 0 V37 a5.5 5.5 0 0 1 -11 0 V5 a3.5 3.5 0 0 1 3.5 -3.5';
+    const shadow = document.createElementNS(ns, 'path');
+    shadow.setAttribute('d', wire);
+    shadow.setAttribute('transform', 'translate(0.9 1.4)');
+    shadow.setAttribute('fill', 'none');
+    shadow.setAttribute('stroke', 'rgba(40,24,8,0.35)');
+    shadow.setAttribute('stroke-width', '1.9');
+    const metal = document.createElementNS(ns, 'path');
+    metal.setAttribute('d', wire);
+    metal.setAttribute('fill', 'none');
+    metal.setAttribute('stroke', '#8e959b');
+    metal.setAttribute('stroke-width', '1.6');
+    metal.setAttribute('stroke-linecap', 'round');
+    const shine = document.createElementNS(ns, 'path');
+    shine.setAttribute('d', wire);
+    shine.setAttribute('fill', 'none');
+    shine.setAttribute('stroke', '#e4e8eb');
+    shine.setAttribute('stroke-width', '0.5');
+    shine.setAttribute('stroke-linecap', 'round');
+    svg.append(shadow, metal, shine);
+    return svg;
   }
 }

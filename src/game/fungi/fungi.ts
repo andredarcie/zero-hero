@@ -379,6 +379,8 @@ export const CLOSE_SIZE = 32;
 
 export interface FungusCloseUp {
   canvas: HTMLCanvasElement;
+  /** A mesma arte SEM o contorno: a colheita mostra o cogumelo nu, sozinho no meio da tela. */
+  bare: HTMLCanvasElement;
   /** 1 onde a arte é cogumelo (talo ou chapéu, sem o contorno). */
   mask: Uint8Array;
 }
@@ -392,8 +394,9 @@ export const fungusCloseUp = (kind: MushroomKind): FungusCloseUp => {
   PAINTERS[kind](r);
   const mask = new Uint8Array(CLOSE_SIZE * CLOSE_SIZE);
   for (let i = 0; i < mask.length; i += 1) mask[i] = r.color[i] >= 0 && r.mat[i] !== BASE ? 1 : 0;
+  const bare = r.toCanvas();
   r.outline();
-  const made = { canvas: r.toCanvas(), mask };
+  const made = { canvas: r.toCanvas(), bare, mask };
   closeCache.set(kind, made);
   return made;
 };

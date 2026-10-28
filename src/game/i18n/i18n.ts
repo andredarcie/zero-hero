@@ -1,22 +1,86 @@
 import en from './locales/en.json';
+import ptBr from './locales/pt-br.json';
 
-// All user-facing game text lives in the catalog (locales/en.json). This module is the single
-// runtime seam: look a string up by dot-path with t(). Dialog/array content (wizard beats, NPC
-// lines, title words) comes through tLines()/tWords()/localizedNpc(). The editor is a dev tool
-// and is intentionally NOT localized.
+// All user-facing game text lives in the catalogs — ONE JSON per language (locales/en.json,
+// locales/pt-br.json), with exactly the same keys. This module is the single runtime seam: look a
+// string up by dot-path with t(). Dialog/array content (wizard beats, NPC lines, title words)
+// comes through tLines()/tWords()/localizedNpc(). The editor is a dev tool and is intentionally
+// NOT localized.
 //
-// O JOGO E SO EM INGLES. Houve uma tela de idioma e um catalogo pt-br, e os dois sairam — nao ha
-// mais locale nenhum pra escolher, nem em runtime nem no menu de pausa. O SEAM ficou de pe assim
-// mesmo, e nao por nostalgia: ele e o unico lugar onde o texto do jogo mora fora do codigo, e a
-// fala de NPC depende dele pra ter um caminho que o world.json possa NAO cobrir (localizedNpc
-// devolve undefined e quem chama cai no texto autorado). Uma unica tabela, sem fallback nenhum.
+// O JOGO E EM INGLES E EM PORTUGUES. Qual dos dois:
+//   · rodando LOCAL (o dev server, ou localhost): SEMPRE pt-br ao abrir. Uma troca pelo menu de
+//     pausa vale para a aba (sessionStorage) e some na proxima vez que o jogo for aberto.
+//   · publicado: a escolha do jogador (localStorage); sem escolha, a lingua do navegador
+//     (portugues -> pt-br, o resto -> en).
+// A lingua e decidida UMA vez, no carregamento: trocar recarrega a pagina, porque o Phaser
+// rasteriza cada texto uma vez e o DOM das telas e montado com o texto da hora.
+// Chave que faltar no pt-br cai no ingles; que faltar nos dois aparece crua na tela (VISIVEL, nao
+// em branco).
 
 export interface I18nLine { speaker: 'npc' | 'narrator'; text: string }
 export interface I18nNpc { name: string; lines: I18nLine[] }
 
-// The catalog is looked up dynamically by dot-path, so its literal type doesn't matter here —
-// treat it as an opaque tree.
-const CATALOG: unknown = en;
+export type Lang = 'en' | 'pt-br';
+export const LANGS: readonly Lang[] = ['en', 'pt-br'];
+
+// The catalogs are looked up dynamically by dot-path, so their literal types don't matter here —
+// treat them as opaque trees.
+const CATALOGS: Readonly<Record<Lang, unknown>> = { en, 'pt-br': ptBr };
+
+const LANG_KEY = 'zh.lang';
+
+const isLocalRun = (): boolean => {
+  if (import.meta.env.DEV) return true;
+  try {
+    return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname);
+  } catch {
+    return false;
+  }
+};
+
+const isLang = (value: unknown): value is Lang => (LANGS as readonly unknown[]).includes(value);
+
+const readStored = (storage: () => Storage): Lang | undefined => {
+  try {
+    const value = storage().getItem(LANG_KEY);
+    return isLang(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveLang = (): Lang => {
+  if (isLocalRun()) return readStored(() => window.sessionStorage) ?? 'pt-br';
+  const chosen = readStored(() => window.localStorage);
+  if (chosen) return chosen;
+  try {
+    return navigator.language.toLowerCase().startsWith('pt') ? 'pt-br' : 'en';
+  } catch {
+    return 'en';
+  }
+};
+
+const LANG: Lang = resolveLang();
+const CATALOG: unknown = CATALOGS[LANG];
+const FALLBACK: unknown = CATALOGS.en;
+
+/** A lingua desta sessao. */
+export const getLang = (): Lang => LANG;
+
+/**
+ * Troca a lingua e RECARREGA (ver o cabecalho: o texto e montado uma vez). Local, a escolha vale
+ * para a aba; publicado, ela fica guardada.
+ */
+export const setLang = (lang: Lang): void => {
+  try {
+    const storage = isLocalRun() ? window.sessionStorage : window.localStorage;
+    storage.setItem(LANG_KEY, lang);
+  } catch { /* sem storage: a troca nao sobrevive ao reload */ }
+  window.location.reload();
+};
+
+/** A outra lingua (o jogo tem duas): o que o botao do menu oferece. */
+export const otherLang = (): Lang => (LANG === 'en' ? 'pt-br' : 'en');
 
 const lookup = (root: unknown, key: string): unknown =>
   key.split('.').reduce<unknown>(
@@ -24,16 +88,21 @@ const lookup = (root: unknown, key: string): unknown =>
     root,
   );
 
-// String lookup by dot-path (e.g. "shop.title"), falling back to the raw key (so a missing
-// string is VISIBLE on screen rather than blank).
-export const t = (key: string): string => {
+const find = (key: string): unknown => {
   const value = lookup(CATALOG, key);
+  return value === undefined ? lookup(FALLBACK, key) : value;
+};
+
+// String lookup by dot-path (e.g. "shop.title"), falling back to English, then to the raw key (so
+// a missing string is VISIBLE on screen rather than blank).
+export const t = (key: string): string => {
+  const value = find(key);
   return typeof value === 'string' ? value : key;
 };
 
 // Structured lookup (arrays/objects).
 const tRaw = <T>(key: string): T | undefined => {
-  const value = lookup(CATALOG, key);
+  const value = find(key);
   return value === undefined ? undefined : (value as T);
 };
 

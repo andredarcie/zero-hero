@@ -4,6 +4,7 @@ import { dialogBoxMetrics } from '@/game/constants';
 import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t } from '@/game/i18n/i18n';
+import { BOOK_FONT, PARCHMENT_ON, WOOD_PANEL } from '@/game/runtime/uiStyle';
 
 // A CAIXA DE FALA TRADICIONAL: uma barra no RODAPÉ, UMA mensagem por vez.
 //
@@ -29,7 +30,6 @@ import { t } from '@/game/i18n/i18n';
 const CHAR_DELAY_MS = 28;
 const STYLE_ID = 'zh-dialog-style';
 const ROOT_ID = 'zh-dialog-root';
-const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 
 type DialogOption = {
   label: string;
@@ -49,15 +49,12 @@ const CSS = `
   opacity: 0; transition: opacity 160ms ease;
 }
 /* O dock ocupa EXATAMENTE o retângulo da caixa; a janela de escolha se pendura acima dele. */
-#${ROOT_ID} .zh-dlg-dock { position: absolute; pointer-events: none; font-family: ${SERIF}; }
+#${ROOT_ID} .zh-dlg-dock { position: absolute; pointer-events: none; font-family: ${BOOK_FONT}; }
 #${ROOT_ID} .zh-dlg-panel {
   position: absolute; inset: 0; pointer-events: auto;
   display: flex; align-items: stretch; gap: 0.9em;
   padding: 0.8em 1.1em;
-  background: rgba(16, 12, 9, 0.96); color: #f3ecdc;
-  border: 3px solid #8a7556; border-radius: 4px;
-  box-shadow: inset 0 0 0 2px #2a2118, 0 8px 26px rgba(0, 0, 0, 0.6);
-  text-shadow: 0 1px 0 #000;
+  ${WOOD_PANEL}
   opacity: 0; transform: translateY(10px);
   transition: opacity 160ms ease, transform 160ms ease;
 }
@@ -72,8 +69,8 @@ const CSS = `
 }
 #${ROOT_ID} .zh-dlg-name {
   flex: 0 0 auto;
-  font-weight: 700; letter-spacing: 0.04em; font-variant: small-caps;
-  font-size: 0.9em; margin-bottom: 0.3em;
+  letter-spacing: 0.05em; font-variant: small-caps; color: #e5b558;
+  font-size: 0.98em; margin-bottom: 0.3em;
 }
 #${ROOT_ID} .zh-dlg-body {
   flex: 1 1 auto; min-height: 0; line-height: 1.45; letter-spacing: 0.01em;
@@ -100,9 +97,8 @@ const CSS = `
   pointer-events: auto; display: none;
   min-width: 14em; max-width: 100%;
   padding: 0.4em 0.45em;
-  background: #14100c; color: #d8d1c0;
-  border: 2px solid #6b5b45; border-radius: 2px;
-  box-shadow: inset 0 0 0 2px #2a2118, 0 8px 26px rgba(0, 0, 0, 0.55);
+  ${WOOD_PANEL}
+  color: #d8d1c0;
 }
 #${ROOT_ID} .zh-dlg-choices.zh-on { display: block; }
 #${ROOT_ID} .zh-dlg-opt {
@@ -113,7 +109,7 @@ const CSS = `
 }
 /* A seleção é UM estado só, alimentado por teclado (setas/WASD), mouse (hover) e toque —
    três entradas, um destaque, para o dedo e a seta nunca discordarem do Enter. */
-#${ROOT_ID} .zh-dlg-opt.is-selected { background: #d4c8a4; color: #241d12; }
+#${ROOT_ID} .zh-dlg-opt.is-selected { ${PARCHMENT_ON} }
 #${ROOT_ID} .zh-dlg-opt .zh-opt-num { opacity: 0.6; margin-right: 0.7em; }
 /* No dedo, alvo tem tamanho de dedo: as escolhas ocupam a largura inteira da caixa e crescem
    até o mínimo confortável (~44px) — a mesma conversa, só com mais carne onde o toque acerta. */

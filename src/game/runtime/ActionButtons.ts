@@ -1,5 +1,8 @@
 import { t } from '@/game/i18n/i18n';
 import { applyTouchSettings, haptic } from '@/game/runtime/touchSettings';
+import {
+  BOOK_FONT, KEY_BG, KEY_BORDER, KEY_GLYPH, PIXEL_FONT, WOOD_PANEL, pixelDisc, pixelFrame,
+} from '@/game/runtime/uiStyle';
 
 /**
  * OS DOIS BOTOES, para quem joga com o dedo.
@@ -26,7 +29,6 @@ const STYLE_ID = 'zh-action-style';
 const ROOT_ID = 'zh-action-pad';
 const HINT_ID = 'zh-controls-hint';
 const STICK_ID = 'zh-touch-stick';
-const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 
 /** A MAO aberta, em pixel art (12×12): falar, acender, abrir. */
 const HAND_SVG = `<svg viewBox="0 0 12 12" width="30" height="30" shape-rendering="crispEdges" aria-hidden="true" fill="currentColor">
@@ -52,52 +54,54 @@ const CSS = `
   bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   z-index: 45;
   display: flex; align-items: flex-end; gap: 14px;
-  font-family: ${SERIF};
+  font-family: ${PIXEL_FONT};
 }
 #${ROOT_ID} .zh-act {
   position: relative;
-  width: 62px; height: 62px; padding: 0;
+  /* 64 = 16 pixels de arte x 4: a tecla de pixel so fica nitida em multiplo inteiro da grade. */
+  width: 64px; height: 64px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; cursor: pointer;
-  /* Contraste de componente (WCAG 1.4.11, 3:1): o fundo escuro e a borda clara seguram o botao
+  cursor: pointer;
+  /* A TECLA DE PIXEL do mundo (o keycap sobre as coisas, ver uiStyle): fundo escuro, borda
+     amarela e canto vazado, em pixel quadrado. A borda amarela segura o contraste (WCAG 1.4.11)
      contra o chao claro do dia sem virar um disco opaco por cima do mundo. */
-  background: rgba(10, 8, 6, 0.52); border: 2px solid rgba(231, 220, 196, 0.6);
-  color: #e7dcc4;
+  border: 0; border-radius: 0; image-rendering: pixelated;
+  background: ${pixelFrame(16, 'rgba(36, 29, 15, 0.8)', KEY_BORDER, 2)} center / 100% 100% no-repeat;
+  color: ${KEY_GLYPH};
   -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none;
-  transition: background 90ms ease, color 90ms ease, transform 90ms ease;
+  transition: transform 70ms ease, filter 70ms ease;
 }
 #${ROOT_ID} .zh-act img {
   width: 34px; height: 34px; object-fit: contain; image-rendering: pixelated; pointer-events: none;
 }
 #${ROOT_ID} .zh-act .zh-key {
-  position: absolute; right: 7px; bottom: 5px;
-  font-size: 12px; font-weight: 700; line-height: 1; letter-spacing: 0;
-  color: rgba(231, 220, 196, 0.85); pointer-events: none;
+  position: absolute; right: 7px; bottom: 7px;
+  font-family: ${PIXEL_FONT}; font-size: 9px; line-height: 1; letter-spacing: 0;
+  color: ${KEY_BORDER}; pointer-events: none;
 }
 /* B fica um degrau mais baixo, como no controle: os dois botoes nunca sao a mesma coisa. */
 #${ROOT_ID} .zh-act.zh-b { margin-bottom: 14px; }
-#${ROOT_ID} .zh-act:active {
-  background: rgba(212, 200, 164, 0.92); color: #241d12; transform: scale(0.94);
-}
-#${ROOT_ID} .zh-act:active .zh-key { color: #241d12; }
+/* Apertar e a tecla AFUNDANDO (desce e clareia), nao um disco que muda de cor. */
+#${ROOT_ID} .zh-act:active { transform: translateY(3px); filter: brightness(1.3); }
 /* CANHOTO: o par vai para a esquerda, com o A na beirada (o polegar a alcanca primeiro). */
 body.zh-left-hand #${ROOT_ID} {
   right: auto; left: calc(14px + env(safe-area-inset-left, 0px)); flex-direction: row-reverse;
 }
 body.zh-big-btns #${ROOT_ID} .zh-act { width: 80px; height: 80px; }
 body.zh-big-btns #${ROOT_ID} .zh-act img { width: 44px; height: 44px; }
-body.zh-big-btns #${ROOT_ID} .zh-act .zh-key { font-size: 14px; right: 9px; bottom: 7px; }
+body.zh-big-btns #${ROOT_ID} .zh-act .zh-key { font-size: 11px; right: 9px; bottom: 9px; }
 body.zh-big-btns #${ROOT_ID} .zh-act.zh-b { margin-bottom: 18px; }
 body.zh-solid-btns #${ROOT_ID} .zh-act {
-  background: rgba(24, 19, 12, 0.9); border-color: #e7dcc4;
+  background: ${pixelFrame(16, KEY_BG, KEY_BORDER, 2)} center / 100% 100% no-repeat;
 }
 #${HINT_ID} {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   z-index: 45; pointer-events: none;
-  background: rgba(10, 8, 6, 0.78); border: 1px solid rgba(216, 209, 192, 0.3);
-  border-radius: 6px; padding: 0.4em 0.8em;
-  color: #d8d1c0; font-family: ${SERIF}; font-size: 13px; white-space: nowrap;
+  /* A dica e uma TABUINHA de madeira (a moldura do dialogo), nunca uma pilula. */
+  ${WOOD_PANEL}
+  border-width: 2px; padding: 0.35em 0.9em;
+  color: #d8d1c0; font-family: ${BOOK_FONT}; font-size: 15px; white-space: nowrap;
   opacity: 0; transition: opacity 320ms ease;
 }
 /* No toque a tarja sobe: embaixo moram os botoes, e uma dica por cima do botao que ela explica
@@ -109,14 +113,16 @@ body.zh-solid-btns #${ROOT_ID} .zh-act {
 /* O JOYSTICK QUE APARECE: um anel onde o polegar encostou e o pomo seguindo o dedo. */
 #${STICK_ID} {
   position: fixed; left: 0; top: 0; width: 96px; height: 96px; margin: -48px 0 0 -48px;
-  border-radius: 50%; border: 2px solid rgba(231, 220, 196, 0.38);
-  background: rgba(10, 8, 6, 0.2);
+  /* O anel e um CIRCULO DE PIXEL (ver uiStyle): redondo, mas de pixel quadrado como o mundo. */
+  border: 0; border-radius: 0; image-rendering: pixelated;
+  background: ${pixelDisc(24, 'rgba(36, 29, 15, 0.28)', 'rgba(255, 224, 102, 0.55)')} center / 100% 100% no-repeat;
   z-index: 44; pointer-events: none; opacity: 0; transition: opacity 120ms ease;
 }
 #${STICK_ID}.zh-on { opacity: 1; }
 #${STICK_ID} i {
-  position: absolute; left: 50%; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px;
-  border-radius: 50%; background: rgba(231, 220, 196, 0.5);
+  position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px;
+  border-radius: 0; image-rendering: pixelated;
+  background: ${pixelDisc(10, 'rgba(245, 239, 220, 0.6)', 'rgba(36, 29, 15, 0.7)')} center / 100% 100% no-repeat;
 }
 `;
 

@@ -25,8 +25,6 @@ import {
   SOLID_UPPER_FRAMES,
   UNIT_PACK_KINDS,
   BLOOM_BLOWS,
-  TILESET_FRAME_SIZE,
-  groundFrameAt,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
@@ -83,9 +81,12 @@ import {
   FUNGUS_SPECS, KNIFE_TEXTURE_KEY, MUSHROOM_KINDS, ROASTABLE_ORDER,
   fungusTextureKey, isMushroomKind, registerFungiTextures, type MushroomKind,
 } from '@/game/fungi/fungi';
-import { ForagingOverlay, type ForagingScenery } from '@/game/runtime/ForagingOverlay';
+import { ForagingOverlay } from '@/game/runtime/ForagingOverlay';
+import { BOOK_FONT, HAND_FONT } from '@/game/runtime/uiStyle';
 import { canStep, terrainHeightAt } from '@/game/world/relief';
-import { registerPlacementTextures } from '@/game/render3d/placementTexture';
+import {
+  PLACEMENT_KEY_TEXTURE, ensurePlacementKeyTexture, registerPlacementTextures,
+} from '@/game/render3d/placementTexture';
 import {
   BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
   BUTTERFLY_TEXTURE, LEAF_TEXTURE,
@@ -447,6 +448,8 @@ export class GameScene extends Phaser.Scene {
   private orderOverlay?: ToolboxOrderOverlay;
   /** A colheita de um cogumelo aberta (ver harvestMushroomAt). Congela o mundo como o catálogo. */
   private foraging?: ForagingOverlay;
+  /** O keycap sobre o cogumelo que o herói encara: o mesmo anúncio do NPC e da bancada. */
+  private mushroomHint?: Phaser.GameObjects.Image;
   private orderBox?: ToolboxObject;
   /** As marcas de "a peça cai aqui" — o quadrado no chão e o keycap (ver PlacementHints). */
   private placementHints?: PlacementHints;
@@ -1370,6 +1373,8 @@ export class GameScene extends Phaser.Scene {
     this.orderBox = undefined;
     this.foraging?.destroy();
     this.foraging = undefined;
+    this.mushroomHint?.destroy();
+    this.mushroomHint = undefined;
     this.lootManager?.destroy();
     this.itemManager?.destroy();
     this.placementHints?.destroy();
@@ -2209,44 +2214,42 @@ export class GameScene extends Phaser.Scene {
     // A tarja de teclas mentiria por cima da colheita (a tela diz os próprios botões).
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
+    this.mushroomHint?.setVisible(false);
     const sound = getSoundManager();
-    sound.playGrassCut();
     this.foraging = new ForagingOverlay(kind, {
-      onStroke: () => sound.playGrassCut(),
       onMiss: () => sound.playItemBonk(),
-      onDetach: () => sound.playItemStash(),
-      onSpeck: () => sound.playDialogBlip(720, 'sine'),
+      onCut: () => sound.playMushroomCut(),
+      onSand: () => sound.playSandTrickle(),
       onClean: () => sound.playCozyChime(),
+      onStash: () => sound.playItemStash(),
+      onNote: () => sound.playPaperUnfold(),
       onDone: () => this.basketMushroom(kind, wx, wy),
       onCancel: () => this.closeForaging(),
-    }, isTouchDevice(), this.foragingScenery(wx, wy));
+    }, isTouchDevice());
     return true;
   }
 
   /**
-   * O PEDAÇO DO MUNDO em volta do cogumelo, para o close da colheita: 5×5 tiles com o chão que o
-   * mundo 3D pinta ali (`groundFrameAt`, o mesmo do terreno) e a decoração de cima. A água é prop,
-   * não tile — ela entra marcada para o close pintar o espelho dela.
+   * O KEYCAP SOBRE O COGUMELO que o herói encara (adjacente e de frente, o mesmo `facingTile` que
+   * o Z e o X vão ler): Z no teclado, A no toque — a mesma textura da bancada e do forno. Sem ele
+   * a colheita seria um gesto invisível.
    */
-  private foragingScenery(wx: number, wy: number): ForagingScenery | undefined {
-    const chunks = this.chunkManager;
-    if (!chunks || !this.textures.exists(ASSET_KEYS.forestTileset)) return undefined;
-    const tileset = this.textures.get(ASSET_KEYS.forestTileset).getSourceImage() as HTMLImageElement;
-    const tiles: ForagingScenery['tiles'][number][] = [];
-    for (let dy = -2; dy <= 2; dy += 1) {
-      for (let dx = -2; dx <= 2; dx += 1) {
-        const x = wx + dx;
-        const y = wy + dy;
-        const tile = chunks.getTile(x, y);
-        tiles.push({
-          dx, dy,
-          ground: groundFrameAt(tile.ground, x, y),
-          upper: tile.upper,
-          water: this.getWaterAt(x, y)?.blocking ?? false,
-        });
-      }
+  private renderMushroomHint(): void {
+    if (!this.camera) return;
+    const front = this.facingTile();
+    const show = !this.dialogOpen && !this.orderOverlay && !this.foraging && !this.cutsceneActive
+      && this.quickBag?.isOpen !== true && isMushroomKind(this.itemManager?.kindAt(front.x, front.y));
+    if (!show) { this.mushroomHint?.setVisible(false); return; }
+    if (!this.mushroomHint) {
+      ensurePlacementKeyTexture(this, isTouchDevice());
+      this.mushroomHint = this.add.image(0, 0, PLACEMENT_KEY_TEXTURE).setOrigin(0.5, 1).setVisible(false);
     }
-    return { tileset, columns: Math.max(1, Math.floor(tileset.width / TILESET_FRAME_SIZE)), tiles };
+    const screen = this.camera.tileToScreen(front.x, front.y, this.tileSize);
+    const px = Math.max(1, Math.round(this.tileSize / 24));
+    const bob = Math.round(Math.sin(this.time.now / 280) * px);
+    // O cogumelo é baixo: o keycap fica logo acima do chapéu, não na altura de uma pessoa.
+    this.mushroomHint.setVisible(true).setScale(px)
+      .setPosition(screen.x, screen.y - Math.round(this.tileSize * 0.75) - px * 2 + bob);
   }
 
   private closeForaging(): void {
@@ -2262,7 +2265,7 @@ export class GameScene extends Phaser.Scene {
     const first = !this.seenItems.has(kind);
     this.inventory.stash(kind, 1);
     this.seenItems.add(kind);
-    getSoundManager().playItemStash();
+    // (o som de guardar já tocou quando ele desceu para a bolsa, antes da ficha)
     if (first) getSoundManager().playSingingBowl();
     // A Hollis pede que se ENCONTRE cada espécie: a sexta fecha o pedido aqui mesmo, no mato.
     this.questEvent({ type: 'gather', item: kind, units: 1 });
@@ -5449,19 +5452,20 @@ export class GameScene extends Phaser.Scene {
     root.style.cssText = [
       'position:fixed', 'inset:0', 'z-index:60', 'background:#000', 'opacity:0',
       'transition:opacity 2.4s ease', 'display:flex', 'flex-direction:column', 'align-items:center',
-      'overflow:hidden', "font-family:Georgia,'Times New Roman',serif", 'color:#e7dcc4',
+      'overflow:hidden', `font-family:${BOOK_FONT}`, 'color:#e7dcc4',
     ].join(';');
     const end = document.createElement('div');
     end.textContent = t('ending.theEnd');
-    end.style.cssText = 'position:absolute;top:40%;width:100%;text-align:center;font-style:italic;'
-      + 'font-size:clamp(28px,6vw,64px);opacity:0;transition:opacity 2.2s ease;';
+    // "The End" e escrito a pena, como a ultima linha do caderno do heroi (ver uiStyle).
+    end.style.cssText = `position:absolute;top:40%;width:100%;text-align:center;font-family:${HAND_FONT};`
+      + 'font-size:clamp(26px,5.4vw,58px);line-height:1.6;opacity:0;transition:opacity 2.2s ease;';
     const roll = document.createElement('div');
     roll.style.cssText = 'position:absolute;top:100%;width:100%;text-align:center;line-height:1.9;'
       + 'font-size:clamp(14px,2.4vw,22px);';
     for (const line of tLines('ending.credits')) {
       const p = document.createElement('div');
       p.textContent = line.text;
-      if (line.speaker === 'narrator') p.style.cssText = 'color:#8a8594;font-size:0.8em;margin-top:1.4em;';
+      if (line.speaker === 'narrator') p.style.cssText = 'color:#a89c7e;font-size:0.8em;margin-top:1.4em;font-variant:small-caps;letter-spacing:0.05em;';
       else p.style.cssText = 'color:#e7dcc4;';
       roll.appendChild(p);
     }
@@ -5808,6 +5812,7 @@ export class GameScene extends Phaser.Scene {
       // ancora e o corpo DESENHADO. O relogio dele corre no update (ver HeroThought.tick).
       this.heroThought?.render(this.tileSize, this.camera, this.time.now, at);
     }
+    this.renderMushroomHint();
     // O MESMO keycap sobre a BANCADA que o herói está encarando: sem ele o catálogo de fabricacao
     // seria um recurso invisível, que é justamente o defeito que ele veio consertar. A condição é
     // a precondição dos dois botões — adjacente E de frente —, lida do mesmo `facingTile` que o A

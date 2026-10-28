@@ -1,6 +1,6 @@
 # Zero the Hero
 
-Aventura **cozy** top-down em pixel art, **só em inglês**. **Phaser 3** cuida da lógica, input e
+Aventura **cozy** top-down em pixel art, **em inglês e pt-BR** (local abre sempre em pt-BR). **Phaser 3** cuida da lógica, input e
 UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
 `src/game/render3d/`). **O JOGO É 100% PACÍFICO: não existe combate, inimigo, dano, vida, morte
 nem game over** — e nada se perde. Combate, bestiário, subterrâneo, escadas, bombas, lava, pira e
@@ -20,8 +20,8 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
    Z de novo com graveto + cogumelo assa, e os créditos voltam ao título.
 
 `npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
-mora no locale (`en.json`)**, inclusive o roteiro `<id>Done`; o `world.json` guarda retrato,
-cor e voz. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
+mora nos locales — `en.json` e `pt-br.json`, as MESMAS chaves nos dois** —, inclusive o roteiro
+`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
 
 ## O save da aventura
 
@@ -313,6 +313,10 @@ Armadilha: o three gasta `Math.random()` em UUID, então alocar um número difer
 boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render ter mudado.
 
 ## Outras coisas fáceis de errar
+
+- **A interface é MADEIRA, PAPEL ou PIXEL — nunca "interface"** (`runtime/uiStyle.ts`): painel novo
+  usa `WOOD_PANEL`/fonte de livro, o que o herói escreve usa o papel e a pena, tecla/botão usa
+  `pixelFrame`. Fonte do sistema, pílula e painel preto de filete fino estão proibidos.
 
 - **O Phaser não chama `shutdown()` sozinho** — ligue via `events.once(SHUTDOWN, ...)`, ou um
   `scene.restart()` vaza listeners entre runs.

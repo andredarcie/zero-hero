@@ -1,5 +1,9 @@
 import type Phaser from 'phaser';
 
+import {
+  HAND_FONT, INK_RED, PAPER_SURFACE, WOOD_TITLE, WOOD_WELL, applyPaper, seedOf,
+} from '@/game/runtime/uiStyle';
+
 /**
  * A SUBTELA — o inventario do Zelda, e a unica tela do jogo que mostra numeros do heroi.
  *
@@ -20,15 +24,16 @@ import type Phaser from 'phaser';
 const STYLE_ID = 'zh-subscreen-style';
 
 const CSS = `
+/* A subtela e um REBAIXO na tabua do menu de pausa (ver uiStyle): madeira, nunca painel chapado. */
 .zh-sub {
   margin: 0 0 1.1em;
-  border: 1px solid #3d342a; background: #0f0c09;
+  ${WOOD_WELL}
   padding: 0.9em 0.9em 1em;
 }
 .zh-sub h2 {
   margin: 0 0 0.7em; text-align: center;
-  font-size: 0.85em; font-weight: 700; letter-spacing: 0.34em; text-indent: 0.34em;
-  color: #b9ae94;
+  ${WOOD_TITLE}
+  font-size: 1.1em; color: #cbbf9f;
 }
 .zh-sub-hearts {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 3px;
@@ -46,7 +51,8 @@ const CSS = `
 .zh-sub-slot {
   position: relative; aspect-ratio: 1;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid #2e2820; background: #171310;
+  border: 2px solid #2a2118; border-radius: 2px; background: rgba(5, 3, 2, 0.55);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.6);
   cursor: pointer; user-select: none;
   transition: border-color 90ms ease, background 90ms ease;
 }
@@ -61,7 +67,7 @@ const CSS = `
 }
 .zh-sub-count {
   position: absolute; right: 2px; bottom: 1px;
-  font-size: 10px; line-height: 1; color: #e7dcc4;
+  font-size: 13px; line-height: 1; color: #e7dcc4;
   text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
   pointer-events: none;
 }
@@ -80,12 +86,13 @@ const CSS = `
 }
 .zh-sub-map-title {
   margin: 1.0em 0 0.5em; text-align: center;
-  font-size: 0.72em; font-weight: 700; letter-spacing: 0.34em; text-indent: 0.34em;
-  color: #8d8672;
+  ${WOOD_TITLE}
+  font-size: 0.98em; color: #a89c7e;
 }
 .zh-sub-map {
   display: grid; gap: 1px; justify-content: center;
-  padding: 4px; background: #060504; border: 1px solid #2e2820;
+  padding: 4px; background: #060504; border: 2px solid #2a2118; border-radius: 2px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
 }
 .zh-sub-map-cell { position: relative; width: 13px; height: 13px; background: #0b0908; }
 .zh-sub-map-cell.zh-seen { background: #262019; }
@@ -106,7 +113,7 @@ const CSS = `
 .zh-sub-plans { display: grid; gap: 4px; }
 .zh-sub-plan {
   display: flex; align-items: center; gap: 7px;
-  padding: 4px 6px; border: 1px solid #241f19; background: #131009;
+  padding: 4px 6px; border: 2px solid #2a2118; border-radius: 2px; background: rgba(5, 3, 2, 0.45);
 }
 .zh-sub-plan.zh-ready { border-color: rgba(229, 181, 88, 0.5); }
 .zh-sub-plan img { image-rendering: pixelated; object-fit: contain; }
@@ -125,12 +132,20 @@ const CSS = `
    na cor da ARTE, senao um sprite redesenhado em cinza o apaga. */
 .zh-sub-plan-need.zh-lack.zh-makeable { outline-color: rgba(229, 181, 88, 0.8); }
 .zh-sub-plan-need.zh-lack.zh-makeable img { opacity: 0.6; }
-/* O CADERNO DE CAMPO: uma ficha por especie. A que falta aparece apagada e sem nome — o mesmo
-   "?" do catalogo, porque achar e o que ensina o nome. */
-.zh-sub-notes { display: grid; gap: 5px; }
+/* O CADERNO DE CAMPO: uma ficha por especie, e a ficha e o PAPEL da colheita (ver ForagingOverlay):
+   o mesmo papel amassado e a mesma pena. A que falta ainda nao tem papel — e um rebaixo vazio na
+   madeira com o "?" do catalogo, porque achar e o que ensina o nome. */
+.zh-sub-notes { display: grid; gap: 8px; }
 .zh-sub-note {
-  display: flex; gap: 9px; align-items: flex-start;
-  padding: 6px 7px; border: 1px solid #241f19; background: #131009;
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px 9px;
+  ${PAPER_SURFACE}
+}
+.zh-sub-note:nth-child(odd) { transform: rotate(-0.6deg); }
+.zh-sub-note:nth-child(even) { transform: rotate(0.5deg); }
+.zh-sub-note.zh-unknown {
+  ${WOOD_WELL}
+  color: #5b554a; font-family: inherit; text-shadow: none; transform: none; padding: 6px 7px;
 }
 .zh-sub-note img {
   flex: none; width: 36px; height: 36px; image-rendering: pixelated; object-fit: contain;
@@ -138,20 +153,21 @@ const CSS = `
 .zh-sub-note.zh-unknown img { filter: grayscale(1) brightness(0.5); opacity: 0.45; }
 .zh-sub-note-body { flex: 1; min-width: 0; }
 .zh-sub-note-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
-.zh-sub-note-name { color: #e7dcc4; font-size: 0.86em; }
+.zh-sub-note-name { font-size: 1.3em; line-height: 1.15; font-weight: 700; }
 .zh-sub-note.zh-unknown .zh-sub-note-name { color: #5b554a; }
-.zh-sub-note-latin { color: #9d9581; font-size: 0.78em; font-style: italic; }
-.zh-sub-note-ed { font-size: 0.66em; letter-spacing: 0.1em; text-transform: uppercase; }
-.zh-sub-note-ed.zh-edible { color: #a9cf86; }
-.zh-sub-note-ed.zh-cooked { color: #e5b558; }
-.zh-sub-note-ed.zh-poison { color: #ef7a62; }
+.zh-sub-note-latin { font-size: 1em; opacity: 0.85; text-decoration: underline; text-underline-offset: 4px; }
+/* A comestibilidade e escrita, nao etiquetada: a mesma pena, e o venenoso em tinta vermelha. */
+.zh-sub-note-ed { font-size: 1em; }
+.zh-sub-note-ed.zh-poison { color: ${INK_RED}; }
 .zh-sub-note ul {
-  margin: 0.25em 0 0; padding: 0 0 0 1.05em; color: #b8b1a0; font-size: 0.76em; line-height: 1.4;
+  margin: 0.35em 0 0; padding: 0; list-style: none; font-family: ${HAND_FONT};
+  font-size: 1.02em; line-height: 1.3;
 }
-.zh-sub-note-count { color: #e7dcc4; font-size: 0.78em; margin-left: auto; }
+.zh-sub-note li::before { content: '~ '; }
+.zh-sub-note-count { font-size: 0.78em; margin-left: auto; }
 .zh-sub-plan-need span {
   position: absolute; right: -3px; bottom: -4px;
-  font-size: 9px; line-height: 1; color: #e7dcc4;
+  font-size: 12px; line-height: 1; color: #e7dcc4;
   text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
 }
 `;
@@ -433,6 +449,7 @@ export class SubScreenPanel {
     for (const row of notes.rows) {
       const line = document.createElement('div');
       line.className = row.found ? 'zh-sub-note' : 'zh-sub-note zh-unknown';
+      if (row.found) applyPaper(line, seedOf(row.label), 2.2);
       const img = document.createElement('img');
       img.src = row.icon;
       img.alt = row.found ? row.label : '?';

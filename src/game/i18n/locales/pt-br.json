@@ -1,0 +1,560 @@
+{
+  "meta": {
+    "code": "pt-br",
+    "htmlLang": "pt-BR",
+    "name": "Português"
+  },
+  "loading": "Carregando…",
+  "title": {
+    "words": [
+      "ZERO",
+      "THE",
+      "HERO"
+    ],
+    "by": "POR",
+    "author": "ANDRÉ N. DARCIE",
+    "playAdventure": "Começar",
+    "continue": "Continuar",
+    "startOver": "Novo jogo"
+  },
+  "editorReturn": "[ESC] editor",
+  "items": {
+    "get": {
+      "sword": "Sua velha espada.",
+      "key": "Uma chave.",
+      "axe": "Um machado.",
+      "pickaxe": "Uma picareta. Quebra pedra.",
+      "scythe": "Uma foice. Corta capim.",
+      "shovel": "Uma pá. Cava buracos.",
+      "wood": "Um graveto.",
+      "stone": "Uma pedra.",
+      "seeds": "Sementes. Plante num buraco.",
+      "bucket": "Um balde. Encha na água.",
+      "bucketFull": "Água.",
+      "charcoal": "Carvão. Funde minério.",
+      "iron": "Ferro.",
+      "ore": "Minério de ferro. Funda.",
+      "bloom": "Ferro quente. Martele.",
+      "furnace": "Um forno.",
+      "altar": "Um altar.",
+      "knife": "Uma faca de cogumelo. A escova limpa.",
+      "puffball": "Uma bufa-de-lobo.",
+      "inkCap": "Um coprino-cabeludo.",
+      "morel": "Uma morchela-amarela.",
+      "chanterelle": "Um cantarelo-dourado.",
+      "flyAgaric": "Uma amanita-mata-moscas.",
+      "porcini": "Um porcini."
+    },
+    "name": {
+      "sword": "Espada",
+      "key": "Chave",
+      "axe": "Machado",
+      "pickaxe": "Picareta",
+      "scythe": "Foice",
+      "shovel": "Pá",
+      "wood": "Graveto",
+      "stone": "Pedra",
+      "iron": "Ferro",
+      "ore": "Minério de ferro",
+      "bloom": "Esponja de ferro",
+      "seeds": "Sementes",
+      "bucket": "Balde",
+      "bucketFull": "Balde cheio",
+      "charcoal": "Carvão",
+      "furnace": "Forno",
+      "knife": "Faca de cogumelo",
+      "puffball": "Bufa-de-lobo",
+      "inkCap": "Coprino-cabeludo",
+      "morel": "Morchela-amarela",
+      "chanterelle": "Cantarelo-dourado",
+      "flyAgaric": "Amanita-mata-moscas",
+      "porcini": "Porcini",
+      "altar": "Altar"
+    }
+  },
+  "dialog": {
+    "continue": "Próximo",
+    "close": "Fechar"
+  },
+  "pause": {
+    "title": "Pausa",
+    "resume": "Continuar",
+    "music": "Música",
+    "sfx": "Efeitos sonoros",
+    "dof": "Profundidade de campo",
+    "daylight": "Dia",
+    "nightfall": "Anoitecer",
+    "fullscreen": "Tela cheia",
+    "fullscreenExit": "Sair da tela cheia",
+    "restart": "Recomeçar",
+    "quit": "Sair",
+    "confirm": "Certeza?",
+    "sharpOn": "Nitidez: máxima",
+    "sharpOff": "Nitidez: econômica",
+    "leftHand": "Botões: mão esquerda",
+    "rightHand": "Botões: mão direita",
+    "bigButtons": "Botões: grandes",
+    "smallButtons": "Botões: tamanho normal",
+    "solidButtons": "Botões: sólidos",
+    "softButtons": "Botões: transparentes",
+    "hapticsOn": "Vibração: ligada",
+    "hapticsOff": "Vibração: desligada",
+    "switchLanguage": "Play in English"
+  },
+  "wizard": {
+    "intro": [
+      {
+        "speaker": "narrator",
+        "text": "A guerra acabou."
+      },
+      {
+        "speaker": "npc",
+        "text": "Deixe a espada. Você não vai precisar dela."
+      },
+      {
+        "speaker": "npc",
+        "text": "Você lutou contra a escuridão. E venceu."
+      },
+      {
+        "speaker": "npc",
+        "text": "Agora encontre o que vem depois."
+      },
+      {
+        "speaker": "npc",
+        "text": "Ajude quem mora aqui. Então o jardim se abre."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Z fala · X usa · I bolsa"
+      }
+    ],
+    "guide": [
+      {
+        "speaker": "npc",
+        "text": "Quatro vizinhos precisam de ajuda."
+      },
+      {
+        "speaker": "npc",
+        "text": "Hollis, a oeste. Iris, nos canteiros. Bram e Vega, ao norte."
+      }
+    ],
+    "gate": [
+      {
+        "speaker": "npc",
+        "text": "O jardim está aberto."
+      },
+      {
+        "speaker": "npc",
+        "text": "Vá até a fogueira no meio."
+      }
+    ],
+    "after": [
+      {
+        "speaker": "npc",
+        "text": "Você encontrou. Um lugar para sentar."
+      }
+    ]
+  },
+  "npc": {
+    "wizard": {
+      "name": "Mago",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Quatro vizinhos precisam de ajuda."
+        },
+        {
+          "speaker": "npc",
+          "text": "Hollis, a oeste. Iris, nos canteiros. Bram e Vega, ao norte."
+        }
+      ]
+    },
+    "blackCat": {
+      "name": "GATO",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Um herói. Que novidade. Eu estava cochilando."
+        },
+        {
+          "speaker": "npc",
+          "text": "Esse galho do meu lado? Pegue. Segure no meu fogo e ele acorda como TOCHA."
+        },
+        {
+          "speaker": "npc",
+          "text": "Duas fogueiras nesta clareira estão frias. Leve a chama até elas."
+        },
+        {
+          "speaker": "npc",
+          "text": "Mato queimado vira CARVÃO. Fogo alimentando fogo — pegue."
+        }
+      ]
+    },
+    "salesman": {
+      "name": "VENDEDOR",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Amigo! Você parece com sede. Ou seco. Tanto faz — oportunidade."
+        },
+        {
+          "speaker": "npc",
+          "text": "Amostra grátis: este BALDE. Encha no meu lago, logo a oeste da fogueira."
+        },
+        {
+          "speaker": "npc",
+          "text": "Balde cheio rega a plantação e afoga fogo pequeno. Mil usos. Não custa nada. Só hoje."
+        },
+        {
+          "speaker": "npc",
+          "text": "Conte aos seus amigos. Se achar algum por aí."
+        }
+      ]
+    },
+    "poet": {
+      "name": "POETA",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Os pinheiros cantam, mas apertam o verso."
+        },
+        {
+          "speaker": "npc",
+          "text": "Este GRANDE MACHADO derruba até árvore VIVA — o machado pequeno só conhece madeira morta."
+        },
+        {
+          "speaker": "npc",
+          "text": "Abra uma clareira no meu bosque. Escute como a canção muda onde a luz cai."
+        },
+        {
+          "speaker": "npc",
+          "text": "Todo bom verso precisa do seu silêncio. Corte um para mim."
+        }
+      ]
+    },
+    "radiationSuit": {
+      "name": "Hollis",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Eu estudo os fungos deste vale."
+        },
+        {
+          "speaker": "npc",
+          "text": "O cogumelo é só o fruto. O fungo vive debaixo da terra, em fios."
+        },
+        {
+          "speaker": "npc",
+          "text": "Seis tipos crescem aqui. Encontre todos. Leve a minha faca."
+        },
+        {
+          "speaker": "npc",
+          "text": "Corte, não arranque. Escove, não lave."
+        }
+      ]
+    },
+    "radiationSuitDone": {
+      "name": "Hollis",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Todos os seis. Agora você conhece o chão da floresta."
+        },
+        {
+          "speaker": "npc",
+          "text": "Pode ficar com eles. Só nunca coma o vermelho."
+        }
+      ]
+    },
+    "radiationSuitHint": {
+      "puffball": [
+        { "speaker": "npc", "text": "A leste, depois da água: uma bola branca sem chapéu." }
+      ],
+      "inkCap": [
+        { "speaker": "npc", "text": "A nordeste, perto do lago: alto e branco, desgrenhado como uma peruca." }
+      ],
+      "morel": [
+        { "speaker": "npc", "text": "Ao sul, perto das pedras: um chapéu de favo de mel." }
+      ],
+      "chanterelle": [
+        { "speaker": "npc", "text": "Bem ao norte, sob os pinheiros: um funil dourado." }
+      ],
+      "flyAgaric": [
+        { "speaker": "npc", "text": "No canto noroeste: vermelho, com pintas brancas. Olhe. Não coma." }
+      ],
+      "porcini": [
+        { "speaker": "npc", "text": "Bem ao sul, na beira oeste: um pãozinho marrom num pé grosso." }
+      ]
+    },
+    "painter": {
+      "name": "Iris",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Tudo o que eu pinto sai cinza."
+        },
+        {
+          "speaker": "npc",
+          "text": "Tome: sementes e um balde. Plante aqui embaixo e regue com água do lago."
+        }
+      ]
+    },
+    "painterDone": {
+      "name": "Iris",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Verde. Verde de verdade."
+        },
+        {
+          "speaker": "npc",
+          "text": "Muito obrigado."
+        }
+      ]
+    },
+    "businessMan": {
+      "name": "Bram",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Minha lenha acabou. Minhas mãos tremem."
+        },
+        {
+          "speaker": "npc",
+          "text": "Leve o meu machado. Quatro gravetos das árvores secas?"
+        }
+      ]
+    },
+    "businessManDone": {
+      "name": "Bram",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Noites quentes pela frente."
+        },
+        {
+          "speaker": "npc",
+          "text": "Valeu, amigo."
+        }
+      ]
+    },
+    "astronaut": {
+      "name": "Vega",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Quero um marco de pedras aqui, sob o céu mais limpo."
+        },
+        {
+          "speaker": "npc",
+          "text": "Leve esta picareta. Me traga uma barra de ferro."
+        }
+      ]
+    },
+    "astronautDone": {
+      "name": "Vega",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Ferro. Um lugar para onde voltar."
+        },
+        {
+          "speaker": "npc",
+          "text": "Muito obrigado."
+        }
+      ]
+    },
+    "astronautHint": {
+      "ore": [
+        { "speaker": "npc", "text": "Algumas pedras a leste daqui têm minério. Quebre uma." }
+      ],
+      "furnace": [
+        { "speaker": "npc", "text": "Minério precisa de forno. Construa um na bancada." }
+      ],
+      "charcoal": [
+        { "speaker": "npc", "text": "Instale o forno. Dois gravetos viram carvão." }
+      ],
+      "bloom": [
+        { "speaker": "npc", "text": "Agora minério e carvão, juntos." }
+      ],
+      "iron": [
+        { "speaker": "npc", "text": "Martele o bloco quente. Três golpes." }
+      ]
+    }
+  },
+  "controls": {
+    "hint": "Z fala · X usa · I bolsa",
+    "touchHint": "Arraste para andar · A fala · B usa",
+    "attackTitle": "Falar (Z)",
+    "useTitle": "Usar (X)"
+  },
+  "bag": {
+    "open": "Bolsa (I)",
+    "empty": "Vazia",
+    "keys": "← →  ·  X equipa  ·  I fecha",
+    "keysEmpty": "I fecha",
+    "keysToBasket": "↓ cesta",
+    "keysBasket": "← → lê  ·  ↑ ferramentas  ·  I fecha"
+  },
+  "fungi": {
+    "basket": "Cesta",
+    "notesTitle": "Caderno de campo",
+    "leave": "Deixar",
+    "cut": {
+      "title": "Cortar",
+      "aimKeys": "Z quando a lâmina estiver entre as marcas",
+      "aimTouch": "Toque quando a lâmina estiver entre as marcas",
+      "sawKeys": "← → para serrar",
+      "sawTouch": "Deslize de um lado para o outro para serrar",
+      "tooHigh": "Alto demais. Corte rente ao chão.",
+      "tooHighVolva": "Alto demais. Guarde o copo da base.",
+      "tooDeep": "Fundo demais. Isso rasga o micélio.",
+      "mycelium": "Esses fios brancos são o próprio fungo: o micélio. Deixado na terra, ele frutifica de novo."
+    },
+    "clean": {
+      "title": "Limpar",
+      "keys": "Setas escovam  ·  Z peteleco",
+      "touch": "Arraste para escovar",
+      "why": "Escove, não lave: cogumelo encharca.",
+      "done": "Limpo."
+    },
+    "card": {
+      "title": "Achado",
+      "basket": "Para a cesta"
+    },
+    "edibility": {
+      "edible": "Comestível",
+      "cooked": "Comestível só cozido",
+      "poison": "Venenoso"
+    },
+    "species": {
+      "puffball": {
+        "latin": "Lycoperdon perlatum",
+        "cut": "Corte embaixo da bola, na base.",
+        "clean": "Escove a terra e os espinhos soltos.",
+        "notes": [
+          "Os esporos amadurecem dentro da bola.",
+          "Os velhos soltam uma nuvem de esporos."
+        ]
+      },
+      "inkCap": {
+        "latin": "Coprinus comatus",
+        "cut": "Corte embaixo, no pé fino. Ele é oco.",
+        "clean": "Seja rápido: colhido, ele vira tinta em horas.",
+        "notes": [
+          "Derrete em tinta preta cheia de esporos.",
+          "Colha jovem. Vira tinta em horas."
+        ]
+      },
+      "morel": {
+        "latin": "Morchella esculenta",
+        "cut": "Corte na base. Ele é oco inteiro.",
+        "clean": "A areia se esconde nos buracos. Escove cada um.",
+        "notes": [
+          "Oco, com chapéu de favo de mel.",
+          "Os esporos nascem em saquinhos, não em lamelas."
+        ]
+      },
+      "chanterelle": {
+        "latin": "Cantharellus cibarius",
+        "cut": "Corte na base, logo acima do musgo.",
+        "clean": "A terra se esconde nas dobras. Escove.",
+        "notes": [
+          "Dobras, não lamelas de verdade.",
+          "Cheira a damasco."
+        ]
+      },
+      "flyAgaric": {
+        "latin": "Amanita muscaria",
+        "cut": "Corte abaixo da linha do solo. O copo da base, a volva, é o que distingue uma amanita.",
+        "clean": "Escove com cuidado: as verrugas brancas saem.",
+        "notes": [
+          "As verrugas são restos do véu que o envolvia como um ovo.",
+          "O copo na base marca uma amanita."
+        ]
+      },
+      "porcini": {
+        "latin": "Boletus edulis",
+        "cut": "Corte na base do pé grosso.",
+        "clean": "Escove o chapéu. Poros brancos embaixo: ele é jovem.",
+        "notes": [
+          "Poros embaixo, não lamelas.",
+          "Vive ligado às raízes das árvores."
+        ]
+      }
+    }
+  },
+  "subscreen": {
+    "title": "Mochila",
+    "empty": "Vazia",
+    "mapTitle": "Mundo",
+    "plansTitle": "Planos"
+  },
+  "toolbox": {
+    "title": "Construir",
+    "titleFurnace": "Fundir",
+    "tools": "Ferramentas",
+    "machines": "Máquinas",
+    "materials": "Fundição",
+    "keys": "Setas  ·  Z constrói  ·  X fecha",
+    "keysTouch": "Toque para escolher · toque para construir",
+    "keysFurnace": "Setas  ·  Z funde  ·  X fecha",
+    "keysTouchFurnace": "Toque para escolher · toque para fundir",
+    "unknown": "?"
+  },
+  "gate": {
+    "opened": [
+      {
+        "speaker": "narrator",
+        "text": "Um portão se abre no meio do vale."
+      }
+    ]
+  },
+  "ending": {
+    "lines": [
+      {
+        "speaker": "narrator",
+        "text": "O cogumelo fica dourado."
+      },
+      {
+        "speaker": "narrator",
+        "text": "A espada fica na estrada."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Nenhum lugar para ir. Enfim."
+      }
+    ],
+    "theEnd": "Fim",
+    "credits": [
+      {
+        "speaker": "npc",
+        "text": "Zero the Hero"
+      },
+      {
+        "speaker": "narrator",
+        "text": "por"
+      },
+      {
+        "speaker": "npc",
+        "text": "André N. Darcie"
+      },
+      {
+        "speaker": "narrator",
+        "text": "com"
+      },
+      {
+        "speaker": "npc",
+        "text": "Hollis · Iris · Bram · Vega"
+      },
+      {
+        "speaker": "npc",
+        "text": "e o mago"
+      },
+      {
+        "speaker": "narrator",
+        "text": "obrigado por jogar"
+      }
+    ]
+  }
+}

@@ -6,6 +6,7 @@ import {
   SCENE_DEPTHS,
 } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { HAND_FONT, paperTextureCanvas, seedOf, seededRandom } from '@/game/runtime/uiStyle';
 
 const GLOW_TEXTURE = '_itemget_glow';
 const MOTE_TEXTURE = '_itemget_mote';
@@ -41,7 +42,6 @@ const ensureTextures = (scene: Phaser.Scene): void => {
   }
 };
 
-const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 
 export type ItemGetConfig = { texture: string; frame: number; label: string };
 
@@ -57,6 +57,8 @@ export type ItemGetConfig = { texture: string; frame: number; label: string };
 export class ItemGetOverlay {
   private readonly objs: Phaser.GameObjects.GameObject[] = [];
   private readonly timers: Phaser.Time.TimerEvent[] = [];
+  /** As texturas de papel deste cartão: geradas na hora, apagadas junto com ele. */
+  private readonly paperKeys: string[] = [];
   private closing = false;
   private canSkip = false;
 
@@ -153,36 +155,81 @@ export class ItemGetOverlay {
     }
   }
 
-  /** A frase, num cartao de pergaminho que sobe um pouquinho ao assentar. */
+  /**
+   * A frase, ESCRITA À MÃO num pedaço de papel velho rasgado — o mesmo papel e a mesma pena da
+   * ficha do cogumelo (ver uiStyle). Ele sobe girando um tico e assenta torto, como um bilhete.
+   */
   private card(cx: number, y: number, unit: number, depth: number): void {
     if (this.closing) return;
     const scene = this.scene;
-    const fontPx = Math.max(15, Math.round(unit * 0.034));
+    const fontPx = Math.max(22, Math.round(unit * 0.045));
     const text = scene.add.text(cx, y, this.item.label, {
-      fontFamily: SERIF,
-      fontStyle: 'italic',
+      fontFamily: HAND_FONT,
+      fontStyle: '700',
       fontSize: `${fontPx}px`,
-      color: '#4a3220',
+      color: '#2b1a0e',
       align: 'center',
-      wordWrap: { width: Math.round(scene.scale.width * 0.7) },
+      wordWrap: { width: Math.round(scene.scale.width * 0.66) },
+      lineSpacing: Math.round(fontPx * 0.1),
+      // Folga para as hastes da letra a mao: sem ela o canvas do texto corta o topo e o rabo.
+      padding: { top: Math.round(fontPx * 0.2), bottom: Math.round(fontPx * 0.2) },
       resolution: 2,
     }).setOrigin(0.5).setDepth(depth + 1).setAlpha(0);
-    const padX = fontPx * 1.2;
-    const padY = fontPx * 0.7;
-    const w = text.width + padX * 2;
-    const h = text.height + padY * 2;
-    const bg = scene.add.graphics().setDepth(depth).setAlpha(0);
-    bg.fillStyle(0x2a1608, 0.25);
-    bg.fillRoundedRect(cx - w / 2 + 3, y - h / 2 + 4, w, h, fontPx * 0.6);
-    bg.fillStyle(0xf6ead0, 0.97);
-    bg.fillRoundedRect(cx - w / 2, y - h / 2, w, h, fontPx * 0.6);
-    bg.lineStyle(2, 0xc9a877, 1);
-    bg.strokeRoundedRect(cx - w / 2 + 4, y - h / 2 + 4, w - 8, h - 8, fontPx * 0.45);
+    const padX = fontPx * 1.3;
+    const padY = fontPx * 0.6;
+    const w = Math.round(text.width + padX * 2);
+    const h = Math.round(text.height + padY * 2);
+    const key = this.paperCard(w, h);
+    const bg = scene.add.image(cx, y, key).setDepth(depth).setAlpha(0);
     this.objs.push(bg, text);
-    const rise = fontPx * 0.6;
-    text.y += rise;
-    bg.y += rise;
-    scene.tweens.add({ targets: [bg, text], alpha: 1, y: `-=${rise}`, duration: 520, ease: 'Sine.easeOut' });
+    const rise = fontPx * 0.9;
+    for (const o of [bg, text]) {
+      o.y += rise;
+      o.setAngle(-6);
+    }
+    scene.tweens.add({
+      targets: [bg, text], alpha: 1, y: `-=${rise}`, angle: -1.5, duration: 560, ease: 'Back.easeOut',
+    });
+  }
+
+  /** O papel do cartão: a textura de papel recortada numa folha de borda rasgada, com sombra. */
+  private paperCard(w: number, h: number): string {
+    const key = `_itemget_paper_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    const m = 8;
+    const canvas = document.createElement('canvas');
+    canvas.width = w + m * 2;
+    canvas.height = h + m * 2;
+    const ctx = canvas.getContext('2d');
+    const paper = paperTextureCanvas();
+    if (ctx && paper) {
+      const rand = seededRandom(seedOf(this.item.label));
+      const pts: Array<[number, number]> = [];
+      const step = 9;
+      const jag = (): number => rand() * 2.4 + (rand() < 0.12 ? rand() * 3 : 0);
+      for (let x = 0; x <= w; x += step) pts.push([x, jag()]);
+      for (let yy = step; yy <= h; yy += step) pts.push([w - jag(), yy]);
+      for (let x = w; x >= 0; x -= step) pts.push([x, h - jag()]);
+      for (let yy = h - step; yy > 0; yy -= step) pts.push([jag(), yy]);
+      const path = (dx: number, dy: number): void => {
+        ctx.beginPath();
+        pts.forEach(([px, py], i) => (i ? ctx.lineTo(px + m + dx, py + m + dy) : ctx.moveTo(px + m + dx, py + m + dy)));
+        ctx.closePath();
+      };
+      ctx.fillStyle = 'rgba(30, 16, 6, 0.35)';
+      path(2, 4);
+      ctx.fill();
+      ctx.save();
+      path(0, 0);
+      ctx.clip();
+      // Um pedaço da folha, com o canto encardido junto (é a mesma folha, rasgada).
+      const sw = Math.min(paper.width, Math.max(160, w * 0.9));
+      const sh = Math.min(paper.height, sw * (h / w));
+      ctx.drawImage(paper, 0, paper.height - sh, sw, sh, m, m, w, h);
+      ctx.restore();
+    }
+    this.scene.textures.addCanvas(key, canvas);
+    this.paperKeys.push(key);
+    return key;
   }
 
   private after(ms: number, fn: () => void): void {
@@ -204,8 +251,14 @@ export class ItemGetOverlay {
       alpha: 0,
       duration: 420,
       ease: 'Sine.easeIn',
+      // Quem fecha chama destroy(): as imagens saem antes das texturas de papel delas.
       onComplete: () => this.onClose(),
     });
+  }
+
+  private dropPaper(): void {
+    for (const key of this.paperKeys) if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+    this.paperKeys.length = 0;
   }
 
   public destroy(): void {
@@ -218,5 +271,6 @@ export class ItemGetOverlay {
       o.destroy();
     }
     this.objs.length = 0;
+    this.dropPaper();
   }
 }

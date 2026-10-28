@@ -1,5 +1,9 @@
 import { t } from '@/game/i18n/i18n';
 import type { FieldNoteEntry } from '@/game/runtime/SubScreen';
+import {
+  BOOK_FONT, HAND_FONT, INK_RED, KEY_BG, KEY_BORDER, PAPER_SURFACE, WOOD_TITLE, applyPaper,
+  pixelFrame, seedOf,
+} from '@/game/runtime/uiStyle';
 
 /**
  * A BOLSA — a mochila aberta COM O JOGO RODANDO.
@@ -36,7 +40,6 @@ import type { FieldNoteEntry } from '@/game/runtime/SubScreen';
 const STYLE_ID = 'zh-bag-style';
 const ROOT_ID = 'zh-bag-root';
 const BTN_ID = 'zh-bag-btn';
-const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 
 /**
  * As medidas da fileira, EM UM LUGAR SO: a CSS as recebe daqui por interpolacao e a conta do
@@ -56,8 +59,8 @@ const PAD_Y = PAD_X + 8; // o transbordo do cursor MAIS o ponto de brasa por bai
 const CSS = `
 #${ROOT_ID} {
   position: fixed; inset: 0; z-index: 46; pointer-events: none;
-  font-family: ${SERIF};
-  opacity: 0; transition: opacity 130ms ease;
+  font-family: ${BOOK_FONT};
+  opacity: 0; transition: opacity 160ms ease;
 }
 #${ROOT_ID}.zh-in { opacity: 1; }
 /* A FAIXA de sombra, e ela e uma faixa e nao uma tela inteira: a bolsa mora no meio do quadro
@@ -82,7 +85,7 @@ const CSS = `
 }
 #${ROOT_ID}.zh-in .zh-bag-strip { transform: translate(-50%, -50%); }
 #${ROOT_ID} .zh-bag-name {
-  color: #e7dcc4; font-size: 23px; letter-spacing: 0.06em; white-space: nowrap;
+  color: #e7dcc4; font-size: 26px; letter-spacing: 0.03em; white-space: nowrap;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);
   min-height: 1.25em;
 }
@@ -100,7 +103,9 @@ const CSS = `
 #${ROOT_ID} .zh-bag-nav.zh-off { opacity: 0.12; pointer-events: none; }
 /* A JANELA e a BOBINA: a janela nao cresce, a fileira e que corre por dentro dela. */
 #${ROOT_ID} .zh-bag-window {
-  overflow: hidden; max-width: min(84vw, 760px);
+  /* Cabe a fileira INTEIRA na tela: as duas setas (2 x 40) e, no toque, o confirma (68 + 10) —
+     num telefone em pe (390px) a janela de 84vw empurrava o confirma para fora da borda. */
+  overflow: hidden; max-width: min(84vw, 760px, calc(100vw - 196px));
   padding: ${PAD_Y}px ${PAD_X}px; /* ver PAD_X/PAD_Y: o overflow corta cursor e brasa em silencio */
 }
 #${ROOT_ID} .zh-bag-track {
@@ -110,7 +115,9 @@ const CSS = `
 #${ROOT_ID} .zh-bag-slot {
   position: relative; flex: 0 0 auto; width: ${SLOT_PX}px; height: ${SLOT_PX}px;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(216, 209, 192, 0.16); background: rgba(10, 8, 6, 0.5);
+  /* O bolso: um rebaixo de madeira (ver uiStyle), nunca um quadrado de filete fino. */
+  border: 2px solid #2a2118; border-radius: 2px; background: rgba(7, 5, 3, 0.62);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
   cursor: pointer; pointer-events: auto; user-select: none;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   opacity: 0.5;
@@ -128,7 +135,7 @@ const CSS = `
 }
 #${ROOT_ID} .zh-bag-count {
   position: absolute; right: 4px; bottom: 2px;
-  font-size: 14px; line-height: 1; color: #e7dcc4;
+  font-size: 16px; line-height: 1; color: #e7dcc4;
   text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
   pointer-events: none;
 }
@@ -136,12 +143,12 @@ const CSS = `
    duas perguntas, e um desenho so para as duas apagaria a unica coisa que este modo separou. */
 #${ROOT_ID} .zh-bag-eq {
   position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%);
-  width: 6px; height: 6px; border-radius: 50%;
+  width: 6px; height: 6px; border-radius: 0;
   background: #e5b558; box-shadow: 0 0 7px rgba(229, 181, 88, 0.9);
   pointer-events: none;
 }
 #${ROOT_ID} .zh-bag-keys {
-  color: rgba(216, 209, 192, 0.42); font-size: 13px; letter-spacing: 0.1em;
+  color: rgba(216, 209, 192, 0.75); font-size: 16px; letter-spacing: 0.02em;
   white-space: nowrap;
 }
 /* OS CONTADORES: a materia-prima, EMBAIXO e sem moldura de slot. Eles tem de ler como outra
@@ -150,7 +157,7 @@ const CSS = `
 #${ROOT_ID} .zh-bag-mats {
   display: flex; align-items: center; justify-content: center;
   flex-wrap: wrap; gap: 4px 16px; max-width: min(84vw, 760px);
-  color: rgba(216, 209, 192, 0.72); font-size: 15px;
+  color: rgba(216, 209, 192, 0.78); font-size: 17px;
 }
 #${ROOT_ID} .zh-bag-mat { display: flex; align-items: center; gap: 5px; }
 #${ROOT_ID} .zh-bag-mat img {
@@ -165,14 +172,15 @@ const CSS = `
   max-width: min(88vw, 560px);
 }
 #${ROOT_ID} .zh-bag-basket-title {
-  color: rgba(216, 209, 192, 0.5); font-size: 12px; letter-spacing: 0.3em; text-indent: 0.3em;
-  text-transform: uppercase;
+  ${WOOD_TITLE}
+  color: rgba(216, 209, 192, 0.62); font-size: 16px;
 }
 #${ROOT_ID} .zh-bag-basket-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 #${ROOT_ID} .zh-bag-fungus {
   position: relative; width: 52px; height: 52px;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(216, 209, 192, 0.14); background: rgba(10, 8, 6, 0.45);
+  border: 2px solid #2a2118; border-radius: 2px; background: rgba(7, 5, 3, 0.55);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
   cursor: pointer; pointer-events: auto; opacity: 0.6;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   transition: transform 110ms ease, opacity 110ms ease, border-color 110ms ease;
@@ -185,20 +193,26 @@ const CSS = `
   border-color: #d4c8a4; background: rgba(42, 33, 21, 0.86);
 }
 #${ROOT_ID} .zh-bag-row.zh-away { opacity: 0.45; }
+/* A FICHA DA ESPECIE na cesta: o mesmo papel e a mesma pena da colheita (ver ForagingOverlay). */
 #${ROOT_ID} .zh-bag-note {
-  display: none; max-width: min(88vw, 520px); text-align: left;
-  color: #d8d1c0; font-size: 15px; line-height: 1.45;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+  display: none; max-width: min(88vw, 440px); text-align: left;
+  padding: 12px 18px 12px;
+  ${PAPER_SURFACE}
+  font-size: 21px; line-height: 1.3;
+  transform: rotate(-0.8deg);
 }
-#${ROOT_ID} .zh-bag-note.zh-on { display: block; }
-#${ROOT_ID} .zh-bag-note-head { text-align: center; margin: 0 0 4px; }
-#${ROOT_ID} .zh-bag-note-latin { color: #b9ae94; font-style: italic; }
-#${ROOT_ID} .zh-bag-note-ed { margin-left: 8px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
-#${ROOT_ID} .zh-bag-note-ed.zh-edible { color: #a9cf86; }
-#${ROOT_ID} .zh-bag-note-ed.zh-cooked { color: #e5b558; }
-#${ROOT_ID} .zh-bag-note-ed.zh-poison { color: #ef7a62; }
-#${ROOT_ID} .zh-bag-note ul { margin: 0; padding: 0 0 0 1.1em; }
-#${ROOT_ID} .zh-bag-note li { margin: 0 0 2px; }
+#${ROOT_ID} .zh-bag-note.zh-on { display: block; animation: zh-bag-note-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes zh-bag-note-in {
+  from { opacity: 0; transform: translateY(12px) rotate(-4deg) scale(0.94); }
+  to { opacity: 1; transform: rotate(-0.8deg); }
+}
+#${ROOT_ID} .zh-bag-note-head { text-align: center; margin: 0 0 2px; }
+#${ROOT_ID} .zh-bag-note-latin { text-decoration: underline; text-underline-offset: 4px; opacity: 0.85; }
+#${ROOT_ID} .zh-bag-note-ed { margin-left: 10px; }
+#${ROOT_ID} .zh-bag-note-ed.zh-poison { color: ${INK_RED}; }
+#${ROOT_ID} .zh-bag-note ul { margin: 0; padding: 0; list-style: none; font-family: ${HAND_FONT}; }
+#${ROOT_ID} .zh-bag-note li { margin: 0; }
+#${ROOT_ID} .zh-bag-note li::before { content: '~ '; }
 /* Com a ficha aberta a coluna cresce, e a faixa de sombra cresce junto para a letra ler. */
 #${ROOT_ID}.zh-tall .zh-bag-veil { height: min(760px, 100vh); }
 /* O CONFIRMA do dedo. So no toque: no teclado quem confirma e a tecla, e dois desenhos dizendo
@@ -207,15 +221,15 @@ const CSS = `
 #${ROOT_ID} .zh-bag-set {
   width: 68px; height: 68px; margin-left: 10px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; border: 1px solid rgba(212, 200, 164, 0.5);
-  background: rgba(42, 33, 21, 0.7); color: #e7dcc4;
+  /* A tecla de pixel do mundo (ver uiStyle), como os botoes A/B. */
+  border: 0; border-radius: 0; image-rendering: pixelated;
+  background: ${pixelFrame(17, 'rgba(36, 29, 15, 0.85)', KEY_BORDER)} center / 100% 100% no-repeat;
+  color: #f5efdc;
   cursor: pointer; pointer-events: auto;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   transition: background 90ms ease, color 90ms ease, transform 90ms ease, opacity 110ms ease;
 }
-#${ROOT_ID} .zh-bag-set:active {
-  background: rgba(212, 200, 164, 0.9); color: #241d12; transform: scale(0.93);
-}
+#${ROOT_ID} .zh-bag-set:active { transform: translateY(2px); filter: brightness(1.25); }
 #${ROOT_ID} .zh-bag-set.zh-off { opacity: 0.15; pointer-events: none; }
 /* O botao de bolsa (toque): logo acima do par A/B, no alcance do mesmo polegar. */
 #${BTN_ID} {
@@ -224,19 +238,23 @@ const CSS = `
   bottom: calc(98px + env(safe-area-inset-bottom, 0px));
   width: 48px; height: 48px; padding: 0;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; cursor: pointer;
-  background: rgba(10, 8, 6, 0.52); border: 2px solid rgba(231, 220, 196, 0.6);
-  color: #e7dcc4;
+  border: 0; border-radius: 0; cursor: pointer; image-rendering: pixelated;
+  background: ${pixelFrame(12, 'rgba(36, 29, 15, 0.78)', KEY_BORDER)} center / 100% 100% no-repeat;
+  color: #f5efdc;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
   transition: background 90ms ease, color 90ms ease, border-color 90ms ease;
 }
+#${BTN_ID}:active { transform: translateY(2px); }
 #${BTN_ID}.zh-on {
-  color: #e5b558; border-color: rgba(229, 181, 88, 0.8); background: rgba(56, 38, 10, 0.6);
+  color: #e5b558;
+  background: ${pixelFrame(12, 'rgba(56, 38, 10, 0.85)', '#e5b558')} center / 100% 100% no-repeat;
 }
 /* As preferencias de toque (touchSettings): o mesmo canto do par A/B, o mesmo tamanho a mais. */
 body.zh-left-hand #${BTN_ID} { right: auto; left: calc(14px + env(safe-area-inset-left, 0px)); }
-body.zh-big-btns #${BTN_ID} { width: 58px; height: 58px; bottom: calc(122px + env(safe-area-inset-bottom, 0px)); }
-body.zh-solid-btns #${BTN_ID}:not(.zh-on) { background: rgba(24, 19, 12, 0.9); border-color: #e7dcc4; }
+body.zh-big-btns #${BTN_ID} { width: 60px; height: 60px; bottom: calc(122px + env(safe-area-inset-bottom, 0px)); }
+body.zh-solid-btns #${BTN_ID}:not(.zh-on) {
+  background: ${pixelFrame(12, KEY_BG, KEY_BORDER)} center / 100% 100% no-repeat;
+}
 `;
 
 const ensureStyle = (): void => {
@@ -626,6 +644,7 @@ export class QuickBag {
     this.note.classList.toggle('zh-on', show);
     this.root.classList.toggle('zh-tall', show);
     if (!show || !chosen) return;
+    applyPaper(this.note, seedOf(chosen.kind), 1.6);
     const head = document.createElement('div');
     head.className = 'zh-bag-note-head';
     const latin = document.createElement('span');

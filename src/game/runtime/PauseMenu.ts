@@ -1,11 +1,14 @@
 import type Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { t } from '@/game/i18n/i18n';
+import { otherLang, setLang, t } from '@/game/i18n/i18n';
 import {
   getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
 } from '@/game/runtime/graphicsSettings';
 import { SubScreenPanel, type SubScreenView } from '@/game/runtime/SubScreen';
+import {
+  BOOK_FONT, KEY_BG, KEY_BORDER, KEY_GLYPH, PARCHMENT_ON, WOOD_PANEL, WOOD_TITLE, pixelFrame,
+} from '@/game/runtime/uiStyle';
 import {
   canVibrate, haptic, hasBigButtons, hasHaptics, hasSolidButtons, isLeftHanded,
   setBigButtons, setHaptics, setLeftHanded, setSolidButtons,
@@ -20,36 +23,42 @@ import {
 const STYLE_ID = 'zh-pause-style';
 const ROOT_ID = 'zh-pause-root';
 const TOUCH_BTN_ID = 'zh-pause-touch-btn';
-const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 // Destructive actions (restart / quit) arm on the first tap and only fire on the second;
 // the label snaps back after this long so a stray tap can't linger armed forever.
 const CONFIRM_RESET_MS = 2600;
 
 const CSS = `
-#${ROOT_ID} { position: fixed; inset: 0; z-index: 60; pointer-events: none; font-family: ${SERIF}; }
+#${ROOT_ID} { position: fixed; inset: 0; z-index: 60; pointer-events: none; font-family: ${BOOK_FONT}; }
 #${ROOT_ID} .zh-pause-scrim {
   position: absolute; inset: 0; pointer-events: auto;
-  background: rgba(0, 0, 0, 0.55);
-  opacity: 0; transition: opacity 140ms ease;
+  /* A pausa e a unica tela que PARA o mundo: ele escurece e sai de foco — e ainda esta la. */
+  background: rgba(6, 5, 4, 0.5);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  opacity: 0; transition: opacity 200ms ease;
 }
 #${ROOT_ID} .zh-pause-panel {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   pointer-events: auto;
   width: min(23em, calc(100vw - 2.5em));
   max-height: calc(100vh - 2em); overflow-y: auto;
-  background: #14100c; border: 1px solid #3d342a; color: #d8d1c0;
-  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.65);
-  padding: 1.5em 1.7em 1.4em;
-  font-size: clamp(13px, 2.4vh, 17px);
-  opacity: 0; transition: opacity 140ms ease;
+  ${WOOD_PANEL}
+  color: #d8d1c0;
+  padding: 1.3em 1.5em 1.2em;
+  font-size: clamp(14px, 2.6vh, 18px);
+  opacity: 0; transform: translate(-50%, calc(-50% + 12px));
+  transition: opacity 200ms ease, transform 240ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
 }
-#${ROOT_ID}.zh-in .zh-pause-scrim,
-#${ROOT_ID}.zh-in .zh-pause-panel { opacity: 1; }
+/* A rolagem da madeira: a do corpo do dialogo, nunca a barra cinza-clara do sistema. */
+#${ROOT_ID} .zh-pause-panel { scrollbar-width: thin; scrollbar-color: #5a4a35 transparent; }
+#${ROOT_ID} .zh-pause-panel::-webkit-scrollbar { width: 8px; }
+#${ROOT_ID} .zh-pause-panel::-webkit-scrollbar-track { background: transparent; }
+#${ROOT_ID} .zh-pause-panel::-webkit-scrollbar-thumb { background: #5a4a35; border-radius: 0; }
+#${ROOT_ID}.zh-in .zh-pause-scrim { opacity: 1; }
+#${ROOT_ID}.zh-in .zh-pause-panel { opacity: 1; transform: translate(-50%, -50%); }
 #${ROOT_ID} h1 {
-  margin: 0 0 1em; text-align: center;
-  font-size: 1.05em; font-weight: 700;
-  letter-spacing: 0.4em; text-indent: 0.4em; /* re-center: tracking pads the right edge */
-  color: #e7dcc4;
+  margin: 0 0 0.7em; text-align: center;
+  ${WOOD_TITLE}
+  font-size: 1.45em;
 }
 #${ROOT_ID} .zh-pause-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -60,13 +69,18 @@ const CSS = `
   display: block; box-sizing: border-box; width: 100%;
   padding: 0.5em 0.8em; margin: 0.55em 0;
   text-align: center; cursor: pointer; user-select: none;
-  border: 1px solid #3d342a; color: #d8d1c0;
+  border-radius: 2px; color: #d8d1c0;
   transition: background 90ms ease, color 90ms ease;
 }
-#${ROOT_ID} .zh-pause-btn:hover { background: #d4c8a4; color: #241d12; }
+/* A opcao e a do dialogo: texto solto na madeira, e o pergaminho claro na que esta sob a mao. */
+#${ROOT_ID} .zh-pause-btn:hover { ${PARCHMENT_ON} }
 #${ROOT_ID} .zh-pause-btn.zh-dim { color: #8b8474; font-size: 0.92em; }
-#${ROOT_ID} .zh-pause-btn.zh-dim:hover { background: #3d342a; color: #d8d1c0; }
-#${ROOT_ID} .zh-pause-sep { border: 0; border-top: 1px solid #3d342a; margin: 1em 0 0.8em; }
+#${ROOT_ID} .zh-pause-btn.zh-dim:hover { background: rgba(212, 200, 164, 0.16); color: #d8d1c0; }
+/* O veio entre as secoes: um sulco na tabua (sombra em cima, luz embaixo). */
+#${ROOT_ID} .zh-pause-sep {
+  border: 0; height: 2px; margin: 1em 0 0.8em;
+  background: linear-gradient(#0a0705 0 1px, rgba(255, 226, 180, 0.08) 1px 2px);
+}
 #${ROOT_ID} input[type=range] {
   width: 9.5em; accent-color: #d4c8a4; cursor: pointer;
 }
@@ -77,15 +91,19 @@ const CSS = `
   z-index: 45;
   /* 48px: o alvo mínimo de toque (48dp no Android, 44pt no iOS). Eram 42. */
   width: 48px; height: 48px; padding: 0;
-  display: flex; align-items: center; justify-content: center; gap: 5px;
-  background: rgba(10, 8, 6, 0.52); border: 2px solid rgba(231, 220, 196, 0.6);
-  border-radius: 9px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  /* A TECLA DE PIXEL do mundo (o keycap): fundo, borda amarela e canto vazado. */
+  background: ${pixelFrame(12, 'rgba(36, 29, 15, 0.78)', KEY_BORDER)} center / 100% 100% no-repeat;
+  image-rendering: pixelated; border: 0; border-radius: 0; cursor: pointer;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
 #${TOUCH_BTN_ID} span {
-  width: 4px; height: 16px; background: #e7dcc4; border-radius: 1px;
+  width: 8px; height: 20px; background: ${KEY_GLYPH}; border-radius: 0;
 }
-body.zh-solid-btns #${TOUCH_BTN_ID} { background: rgba(24, 19, 12, 0.9); border-color: #e7dcc4; }
+#${TOUCH_BTN_ID}:active { transform: translateY(2px); }
+body.zh-solid-btns #${TOUCH_BTN_ID} {
+  background: ${pixelFrame(12, KEY_BG, KEY_BORDER)} center / 100% 100% no-repeat;
+}
 `;
 
 const ensureStyle = (): void => {
@@ -127,6 +145,7 @@ export class PauseMenu {
   private readonly dofLabel: HTMLSpanElement;
   private readonly daylightBtn: HTMLDivElement;
   private readonly sharpBtn: HTMLDivElement;
+  private readonly languageBtn: HTMLDivElement;
   /** As opções de toque (ver touchSettings) — só existem num aparelho de toque. */
   private readonly touchBtns?: {
     hand: HTMLDivElement; size: HTMLDivElement; look: HTMLDivElement; haptics?: HTMLDivElement;
@@ -217,8 +236,10 @@ export class PauseMenu {
       };
     }
 
-    // (Havia um par de botoes de idioma aqui. O jogo e so em ingles agora — nao ha catalogo pra
-    // trocar, e um seletor de uma opcao so e mobilia.)
+    // O IDIOMA: o jogo tem dois, e o botao oferece o OUTRO — escrito na lingua de destino ("Play
+    // in English" no pt-br), para quem nao le a lingua atual achar a saida. Trocar recarrega a
+    // pagina (ver i18n.ts); a aventura ja esta salva a cada evento que muda o mundo.
+    this.languageBtn = this.button(panel, () => setLang(otherLang()));
 
     // Fullscreen is page-level (documentElement), not Phaser's ScaleManager: the canvas
     // already fills the window, so fullscreening the page is the whole job. Hidden where the
@@ -338,6 +359,7 @@ export class PauseMenu {
         ? t('pause.fullscreenExit')
         : t('pause.fullscreen');
     }
+    this.languageBtn.textContent = t('pause.switchLanguage');
     if (this.restartBtn) this.restartBtn.textContent = t('pause.restart');
     if (this.quitBtn) this.quitBtn.textContent = t('pause.quit');
   }

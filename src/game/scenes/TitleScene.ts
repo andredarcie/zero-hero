@@ -6,6 +6,7 @@ import { t, tWords } from '@/game/i18n/i18n';
 import {
   adventureState, hasAdventureSave, requestAdventureRespawn, resetAdventure,
 } from '@/game/runtime/adventureState';
+import { KEY_BG, KEY_BORDER } from '@/game/runtime/uiStyle';
 import { setWorldData } from '@/game/world/WorldData';
 
 // The game's start screen, and now the ONLY screen between the loader and the world: the title,
@@ -18,14 +19,16 @@ import { setWorldData } from '@/game/world/WorldData';
 //
 // Being the first screen, it also owns audio bring-up: the AudioContext stays locked until a user
 // gesture, so the menu bed is queued here and blooms on the first key/tap.
-const ACCENT = 0xf5d97a;
-const BTN_FILL = 0x14141f;
-const BTN_FILL_SEL = 0x22222f;
-const BTN_STROKE = 0x3a3a4a;
+// Os botoes sao TECLAS DE PIXEL na paleta do keycap do mundo (ver runtime/uiStyle): a tecla
+// apagada e a acesa. Eram retangulos lisos num cinza-azulado que nao existe em nenhum outro lugar.
+const BTN_DIM = { bg: 'rgba(36, 29, 15, 0.82)', border: '#6b5b2c' };
+const BTN_LIT = { bg: KEY_BG, border: KEY_BORDER };
 
 interface MenuButton {
   bg: Phaser.GameObjects.Rectangle;
+  key: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
+  textures: [string, string];
   activate: () => void;
 }
 
@@ -65,7 +68,7 @@ export class TitleScene extends Phaser.Scene {
 
     this.add
       .text(width / 2, Math.round(height * 0.46), `${t('title.by')} ${t('title.author')}`, {
-        fontFamily: FONT_FAMILY, fontSize: `${creditSize}px`, color: '#8a8594', resolution: TEXT_RESOLUTION,
+        fontFamily: FONT_FAMILY, fontSize: `${creditSize}px`, color: '#a89c7e', resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
       .setDepth(2);
@@ -75,10 +78,10 @@ export class TitleScene extends Phaser.Scene {
     const resumable = hasAdventureSave() && !adventureState().endingSeen;
     this.buttons = resumable
       ? [
-        this.makeButton(t('title.continue'), Math.round(height * 0.62), () => this.startAdventure(false)),
-        this.makeButton(t('title.startOver'), Math.round(height * 0.75), () => this.startAdventure(true)),
+        this.makeButton(0, t('title.continue'), Math.round(height * 0.62), () => this.startAdventure(false)),
+        this.makeButton(1, t('title.startOver'), Math.round(height * 0.75), () => this.startAdventure(true)),
       ]
-      : [this.makeButton(t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure(true))];
+      : [this.makeButton(0, t('title.playAdventure'), Math.round(height * 0.66), () => this.startAdventure(true))];
     this.applySelection();
 
     // Arm input a beat later so the key/tap that dismissed the loader can't fire the button.
@@ -90,15 +93,23 @@ export class TitleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
   }
 
-  private makeButton(text: string, y: number, activate: () => void): MenuButton {
+  // O indice vem de quem chama: os botoes nascem DENTRO do literal que vira this.buttons, entao
+  // this.buttons.length ainda vale 0 para todos eles (o hover do segundo acendia o primeiro).
+  private makeButton(index: number, text: string, y: number, activate: () => void): MenuButton {
     const { width } = this.scale;
     const w = Phaser.Math.Clamp(width * 0.42, 200, 360);
     const h = Phaser.Math.Clamp(this.scale.height * 0.09, 40, 64);
+    // O retangulo e so a area de toque; o que se ve e a tecla de pixel por cima dele.
     const bg = this.add
-      .rectangle(width / 2, y, w, h, BTN_FILL, 1)
-      .setStrokeStyle(2, BTN_STROKE)
+      .rectangle(width / 2, y, w, h, 0x000000, 0)
       .setDepth(1)
       .setInteractive({ useHandCursor: true });
+    const px = Math.max(2, Math.round(h / 14));
+    const textures: [string, string] = [
+      this.keyTexture(`title-key-${index}-dim`, Math.round(w / px), Math.round(h / px), BTN_DIM),
+      this.keyTexture(`title-key-${index}-lit`, Math.round(w / px), Math.round(h / px), BTN_LIT),
+    ];
+    const key = this.add.image(width / 2, y, textures[0]).setScale(px).setDepth(1);
     const label = this.add
       .text(width / 2, y, text, {
         fontFamily: FONT_FAMILY,
@@ -109,10 +120,30 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
-    const index = this.buttons.length;
     bg.on(Phaser.Input.Events.POINTER_OVER, () => this.setSelected(index));
     bg.on(Phaser.Input.Events.POINTER_DOWN, () => { this.unlockAudio(); this.setSelected(index); activate(); });
-    return { bg, label, activate };
+    return { bg, key, label, textures, activate };
+  }
+
+  /** A tecla de pixel: fundo, borda de 1 pixel e os cantos vazados em escada (o keycap do mundo). */
+  private keyTexture(name: string, gw: number, gh: number, c: { bg: string; border: string }): string {
+    if (this.textures.exists(name)) this.textures.remove(name);
+    const canvas = this.textures.createCanvas(name, gw, gh);
+    if (!canvas) return name;
+    const ctx = canvas.getContext();
+    for (let y = 0; y < gh; y += 1) {
+      for (let x = 0; x < gw; x += 1) {
+        const dx = Math.min(x, gw - 1 - x);
+        const dy = Math.min(y, gh - 1 - y);
+        if (dx === 0 && dy === 0) continue;              // o canto vazado
+        const edge = dx === 0 || dy === 0;
+        ctx.fillStyle = edge ? c.border : c.bg;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    canvas.refresh();
+    canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    return name;
   }
 
   // First gesture on this (the first) screen lifts the autoplay lock so the menu bed sounds.
@@ -130,9 +161,8 @@ export class TitleScene extends Phaser.Scene {
   private applySelection(): void {
     this.buttons.forEach((btn, i) => {
       const sel = i === this.selected;
-      btn.bg.setFillStyle(sel ? BTN_FILL_SEL : BTN_FILL, 1);
-      btn.bg.setStrokeStyle(sel ? 3 : 2, sel ? ACCENT : BTN_STROKE);
-      btn.label.setColor(sel ? '#fff2c8' : '#8a8594');
+      btn.key.setTexture(btn.textures[sel ? 1 : 0]);
+      btn.label.setColor(sel ? '#fff2c8' : '#b9ae94');
     });
   }
 
@@ -192,5 +222,9 @@ export class TitleScene extends Phaser.Scene {
   private teardown(): void {
     this.input.keyboard?.off('keydown', this.handleKey, this);
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.unlockAudio, this);
+    // As teclas sao texturas geradas para ESTA tela (o tamanho segue a janela): saem com ela.
+    for (const btn of this.buttons) {
+      for (const key of btn.textures) if (this.textures.exists(key)) this.textures.remove(key);
+    }
   }
 }

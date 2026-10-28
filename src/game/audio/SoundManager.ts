@@ -694,6 +694,35 @@ class SoundManager {
     this.noise('bandpass', 900, 1.2, 0.10, 0.10, 0.04);
   }
 
+  /**
+   * O CORTE DO COGUMELO: um "tic" seco de lâmina passando pela carne e, colado nele, o POP — a
+   * bolha de seno que sobe de tom rápido (o mesmo gesto do pingo d'água, mais curto e mais
+   * redondo). É o som da recompensa do mini-game, então é gostoso e nunca agudo demais.
+   */
+  public playMushroomCut(): void {
+    const d = detune();
+    this.noise('bandpass', 3200 * d, 2.2, 0.10, 0.035);        // o fio da lâmina
+    this.osc('sine', 260 * d, 820 * d, 0.22, 0.09, 0.012);     // o pop subindo
+    this.osc('sine', 520 * d, 1240 * d, 0.05, 0.06, 0.012);    // o brilho do pop, uma oitava acima
+    this.osc('triangle', 140 * d, 90 * d, 0.08, 0.08, 0.02);   // o corpo do cogumelo soltando
+  }
+
+  /**
+   * A TERRA ESCORRENDO da bucha: um chiado granulado e baixinho, filtrado em faixa estreita. Toca
+   * muitas vezes seguidas enquanto se esfrega, por isso é curto, quieto e varia de tom sozinho.
+   */
+  public playSandTrickle(): void {
+    const d = detune();
+    this.noise('bandpass', 1700 * d, 1.6, 0.05, 0.07);
+    this.noise('highpass', 4200 * d, 0.7, 0.02, 0.05, 0.02);
+  }
+
+  /** O PAPEL abrindo: dois farfalhos secos, o segundo mais grave (a folha assentando). */
+  public playPaperUnfold(): void {
+    this.noise('bandpass', 2400, 0.9, 0.09, 0.12);
+    this.noise('bandpass', 1300, 0.8, 0.07, 0.16, 0.1);
+  }
+
   // ── o bestiario que nao vem do chao ──────────────────────────────────────
   // A caveira tem o chao rachando (playGroundCrack) porque ela nasce de baixo. Bicho, gosma e
   // maquina chegam de outro jeito, e cada som abaixo e o par sonoro de um gesto que ja esta na

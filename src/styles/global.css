@@ -9,9 +9,39 @@
   font-display: block;
 }
 
+/* AS TRES VOZES DA INTERFACE (ver src/game/runtime/uiStyle.ts), todas daqui, nenhuma de CDN e
+   nenhuma do sistema (a Georgia nao existe no Android, e cada aparelho via uma letra diferente):
+   o PIXEL (titulo e teclas), o LIVRO (a madeira: dialogo, menus, bolsa) e a PENA (o papel).
+   O main.ts espera as tres antes de ligar o jogo.
+   LEGIBILIDADE PRIMEIRO: a IM Fell (letra "gasta") e a Homemade Apple (cursiva corrida) eram
+   bonitas e liam mal — trocadas por Alegreya (livro antigo de olho grande) e Caveat (mao clara).
+   As duas sao fontes variaveis: um arquivo cobre todos os pesos. */
+@font-face {
+  font-family: 'Alegreya';
+  font-style: normal;
+  font-weight: 400 900;
+  src: url('./fonts/Alegreya-latin.woff2') format('woff2');
+  font-display: block;
+}
+@font-face {
+  font-family: 'Alegreya';
+  font-style: italic;
+  font-weight: 400 900;
+  src: url('./fonts/Alegreya-italic-latin.woff2') format('woff2');
+  font-display: block;
+}
+/* A pena (Caveat, OFL): o heroi escreve a mao. */
+@font-face {
+  font-family: 'Caveat';
+  font-style: normal;
+  font-weight: 400 700;
+  src: url('./fonts/Caveat-latin.woff2') format('woff2');
+  font-display: block;
+}
+
 :root {
   color-scheme: dark;
-  font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  font-family: 'Alegreya', Georgia, serif;
   background: #000000;
   color: #f1faee;
 }

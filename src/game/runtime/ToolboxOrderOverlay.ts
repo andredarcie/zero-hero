@@ -1,4 +1,7 @@
 import { t } from '@/game/i18n/i18n';
+import {
+  BOOK_FONT, HAND_FONT, INK, PAPER_SURFACE, SOFT_BLUR, WOOD_PANEL, WOOD_TITLE, paperTexture,
+} from '@/game/runtime/uiStyle';
 
 /**
  * O CATALOGO DE FABRICACAO — a tela em que o jogador escolhe O QUE QUER, e a estacao passa a
@@ -32,15 +35,15 @@ import { t } from '@/game/i18n/i18n';
  */
 
 const STYLE_ID = 'zh-order-style';
-const SERIF = "Georgia, 'Times New Roman', 'Book Antiqua', serif";
 
 const CSS = `
 .zh-order-backdrop {
   position: fixed; inset: 0; z-index: 60;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(6, 5, 4, 0.82);
-  font-family: ${SERIF};
-  opacity: 0; transition: opacity 140ms ease;
+  /* A bancada nao para o mundo: ele fica ali, fora de foco (o mesmo embacado da colheita). */
+  ${SOFT_BLUR}
+  font-family: ${BOOK_FONT};
+  opacity: 0; transition: opacity 200ms ease;
   overflow-y: auto; padding: 1.2rem;
 }
 .zh-order-backdrop.zh-in { opacity: 1; }
@@ -51,47 +54,57 @@ const CSS = `
   width: fit-content;
   min-width: min(320px, 92vw);
   max-width: min(760px, 96vw);
-  border: 1px solid #3d342a; background: #0f0c09;
+  ${WOOD_PANEL}
   padding: 1.1rem 1.1rem 0.9rem;
-  transform: translateY(12px); transition: transform 140ms ease;
+  transform: translateY(14px) scale(0.98);
+  transition: transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
 }
 .zh-order-backdrop.zh-in .zh-order-panel { transform: none; }
 .zh-order-title {
   margin: 0 0 1rem; text-align: center;
-  font-size: 0.86rem; font-weight: 700; letter-spacing: 0.3em; text-indent: 0.3em;
-  color: #b9ae94;
+  ${WOOD_TITLE}
+  font-size: 1.3rem;
 }
 .zh-order-family {
   margin: 0 0 0.5rem; padding-top: 0.2rem;
-  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.34em; text-indent: 0.34em;
-  color: #6f6754;
+  ${WOOD_TITLE}
+  font-size: 0.95rem; color: #a89c7e;
 }
 .zh-order-grid {
   /* auto-FIT e nao auto-FILL: com uma carta so, "auto-fill" reserva as colunas vazias e a carta
      fica encolhida num canto de uma grade fantasma. (E crase nao entra aqui: este CSS mora dentro
      de um template literal, e uma delas fecha a string no meio do arquivo.) */
   display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 116px));
-  justify-content: center; gap: 8px; margin: 0 0 1rem;
+  justify-content: center; gap: 12px 10px; margin: 0 0 1rem;
 }
+/* A CARTA E UM PEDACO DE PAPEL pregado na tabua (ver uiStyle): o papel da colheita, a pena no
+   nome. Sem borda rasgada aqui — o clip-path cortaria a sombra e o contorno de selecao, que sao o
+   que a carta precisa mostrar. Cada uma pregada um tico torta. */
 .zh-order-card {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 9px 4px 7px;
-  border: 1px solid #2e2820; background: #171310;
-  cursor: pointer; user-select: none; font: inherit;
+  padding: 10px 5px 8px;
+  border: 0; border-radius: 1px;
+  ${PAPER_SURFACE}
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.45), 0 4px 10px rgba(0, 0, 0, 0.45);
+  cursor: pointer; user-select: none;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-  transition: border-color 90ms ease, background 90ms ease, transform 90ms ease;
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform 160ms cubic-bezier(0.2, 0.9, 0.3, 1.3), box-shadow 160ms ease, outline-color 120ms ease;
+  outline: 2px solid transparent; outline-offset: 3px;
 }
-.zh-order-card:hover { border-color: #6b5c46; background: #221b14; }
+.zh-order-card:hover { transform: rotate(var(--tilt, 0deg)) translateY(-2px); }
+/* Sob a mao: a carta levanta da tabua, endireita, e ganha o contorno de pergaminho do selecionado. */
 .zh-order-card.zh-at {
-  border-color: #d4c8a4; background: #2a2115; transform: translateY(-2px);
-  box-shadow: inset 0 0 0 1px rgba(212, 200, 164, 0.35), 0 6px 18px rgba(0, 0, 0, 0.6);
+  outline-color: #d4c8a4; transform: translateY(-4px) rotate(0deg) scale(1.04);
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4), 0 12px 22px rgba(0, 0, 0, 0.55);
 }
-/* PRONTO: os dois insumos estao na mochila agora. Uma brasa na moldura — a mesma cor do item
-   equipado na bolsa —, nunca um rotulo "craftable". */
-.zh-order-card.zh-ready { border-color: rgba(229, 181, 88, 0.72); }
-.zh-order-card.zh-ready::after {
-  content: ''; position: absolute; inset: -1px; pointer-events: none;
-  box-shadow: inset 0 0 12px rgba(229, 181, 88, 0.22);
+/* PRONTO: os dois insumos estao na mochila agora. Uma brasa em volta do papel — a mesma cor do
+   item equipado na bolsa —, nunca um rotulo "craftable". */
+.zh-order-card.zh-ready {
+  box-shadow: 0 0 0 2px rgba(229, 181, 88, 0.85), 0 0 14px rgba(229, 181, 88, 0.45), 0 4px 10px rgba(0, 0, 0, 0.45);
+}
+.zh-order-card.zh-ready.zh-at {
+  box-shadow: 0 0 0 2px rgba(229, 181, 88, 0.85), 0 0 16px rgba(229, 181, 88, 0.5), 0 12px 22px rgba(0, 0, 0, 0.55);
 }
 /* RECUSA: faltou material. A carta treme e o painel FICA aberto — a mesma gramatica de recusa
    fisica do resto do jogo, e ficar aberto e o que deixa escolher outra coisa sem reabrir.
@@ -131,10 +144,8 @@ const CSS = `
    senao a carta nova se perde no meio das velhas justamente quando ela e a unica novidade. Um
    contorno claro e uma respiracao lenta: nada de texto, e nada que compita com a brasa do
    "zh-ready" (que fala de MOCHILA, nao de progresso) — dentro do CSS nao entra crase. */
-.zh-order-card.zh-next { border-color: #cfc9ba; }
-.zh-order-card.zh-next .zh-order-name { color: #f4e7c8; }
 .zh-order-card.zh-next::after {
-  content: ''; position: absolute; inset: -3px; border: 1px solid #cfc9ba; border-radius: 4px;
+  content: ''; position: absolute; inset: -5px; border: 1px solid #f4e7c8; border-radius: 2px;
   opacity: 0.5; animation: zh-order-step 1.9s ease-in-out infinite; pointer-events: none;
 }
 @keyframes zh-order-step {
@@ -142,10 +153,10 @@ const CSS = `
   50% { opacity: 0.6; transform: scale(1.03); }
 }
 .zh-order-name {
-  font-size: 0.7rem; color: #cfc9ba; text-align: center; line-height: 1.15;
+  font-family: ${HAND_FONT}; font-weight: 700; font-size: 1.1rem; color: ${INK}; text-align: center; line-height: 1.1;
   min-height: 1.6em;
 }
-.zh-order-card.zh-unknown .zh-order-name { color: #4f4a40; }
+.zh-order-card.zh-unknown .zh-order-name { opacity: 0.35; }
 /* OS INSUMOS, na propria carta: a resposta a "do que eu preciso" aparece aqui. */
 .zh-order-needs { display: flex; align-items: center; justify-content: center; gap: 5px; }
 .zh-order-need { position: relative; width: 22px; height: 22px; }
@@ -159,7 +170,7 @@ const CSS = `
    Uma primeira versao separava os tres so por opacidade, e ai "tenho" e "a bancada faz" ficavam
    a um degrau de brilho um do outro — indistinguiveis num cartao cujo insumo custa UM, onde nao
    ha contador para desempatar. Dois eixos, uma pergunta cada. */
-.zh-order-need.zh-lack { outline: 1px dashed rgba(216, 209, 192, 0.34); outline-offset: 2px; }
+.zh-order-need.zh-lack { outline: 1px dashed rgba(60, 38, 18, 0.55); outline-offset: 2px; }
 .zh-order-need.zh-lack img { opacity: 0.34; }
 /* O SEGUNDO EIXO MORA NA MOLDURA, NAO NA ARTE — e isso foi aprendido derrubando a versao
    anterior. Ali, "a bancada faz" guardava a COR do sprite enquanto "procure no mundo" ia a cinza:
@@ -167,21 +178,21 @@ const CSS = `
    que depende da paleta da arte quebra quando a
    arte muda. A BRASA na moldura nao depende de nada: e a cor que este jogo ja usa para "isto e
    seu, esta aqui" (o item na mao, o plano pregado). */
-.zh-order-need.zh-lack.zh-makeable { outline-color: rgba(229, 181, 88, 0.85); }
+.zh-order-need.zh-lack.zh-makeable { outline-color: rgba(196, 128, 30, 0.95); }
 .zh-order-need.zh-lack.zh-makeable img { opacity: 0.6; }
 /* O CONTADOR so aparece quando ha o que contar (a receita pede mais de um), e entao ele diz
    SEMPRE a mesma coisa: quanto voce tem sobre quanto custa. Um "x2" solto responde "quanto custa"
    e cala sobre a unica pergunta que o jogador faz de verdade — "quanto falta". */
 .zh-order-need-n {
   position: absolute; right: -3px; bottom: -4px;
-  font-size: 10px; line-height: 1; color: #e7dcc4;
-  text-shadow: 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
+  font-family: ${BOOK_FONT}; font-weight: 700; font-size: 13px; line-height: 1; color: ${INK};
+  text-shadow: 0 0 2px rgba(240, 228, 196, 0.9);
 }
-.zh-order-need.zh-lack .zh-order-need-n { color: #9a8f78; }
+.zh-order-need.zh-lack .zh-order-need-n { color: rgba(122, 28, 14, 0.9); }
 .zh-order-foot {
-  margin: 0; padding-top: 0.5rem; border-top: 1px solid #241f19;
-  text-align: center; color: rgba(216, 209, 192, 0.42); font-size: 0.74rem;
-  letter-spacing: 0.06em;
+  margin: 0; padding-top: 0.5rem;
+  background: linear-gradient(#0a0705 0 1px, rgba(255, 226, 180, 0.08) 1px 2px) top / 100% 2px no-repeat;
+  text-align: center; color: rgba(216, 209, 192, 0.75); font-size: 0.95rem;
 }
 `;
 
@@ -320,6 +331,10 @@ export class ToolboxOrderOverlay {
     card.className = 'zh-order-card';
     card.dataset.kind = entry.kind;
     const index = this.cards.length;
+    // O papel da carta (a textura e gerada uma vez) e a inclinacao de quem a pregou na tabua.
+    const paper = paperTexture();
+    if (paper) card.style.backgroundImage = `url(${paper})`;
+    card.style.setProperty('--tilt', `${[-1.6, 1.1, -0.7, 1.5, -1.2, 0.8][index % 6]}deg`);
 
     const art = document.createElement('img');
     art.className = 'zh-order-art';

@@ -9598,3 +9598,86 @@ Revisados contra Apple HIG / Material / Game Accessibility Guidelines, com print
   abertos, lixa de dentes, maior pedaço, escada na face sul (e oeste nas largas). A PROVA descarta
   a serra que cortaria qualquer caminho do chão — a do centro-leste caiu por isso. `--check` como
   o cozy-world.
+
+## A COLHEITA SEM INTERFACE (2026-10-27)
+
+Pedido do autor: em nenhum momento a colheita pode parecer interface de jogo. `ForagingOverlay`
+foi reescrito em cima disso.
+- Encarar um cogumelo mostra o keycap de ação sobre ele (`renderMushroomHint`, a textura da
+  bancada: Z no teclado, A no toque), com a mesma condição do Z — adjacente e de frente.
+- A tela: o jogo continua lá, só que EMBAÇADO (`backdrop-filter`), e o cogumelo aparece sozinho no
+  meio, o maior que couber em escala INTEIRA (pixel art sem pixel quebrado), sem fundo, moldura,
+  texto nem contorno (`fungusCloseUp().bare`). A caixa que cabe na tela inclui a faca.
+- Cortar: a faca sobe e desce; o único aviso da altura certa é a própria lâmina ACENDER (com um
+  brilho correndo). O corte é imediato (a serra saiu): pop (`playMushroomCut`), migalhas na cor da
+  carne, anel branco, o toco cai, o pedaço pula esticando e assenta amassando, e a vista
+  recentraliza nele. Errar treme o cogumelo, mais nada. ESC antes do corte devolve ao chão.
+- Limpar: manchas gordas de terra só em cima do cogumelo, com o contorno ROXO de "dá para pegar"
+  do ItemPickup (#9d7bff); o cogumelo sem contorno. A bucha APAGA pixel a pixel por onde passa
+  (borracha do Paint, elipse 3.4×2.4 px da arte), e cada pixel vira 3 grãos de areia que caem
+  com gravidade (`playSandTrickle`, no máximo a cada 70 ms). Sobrando 3%, o resto cai sozinho.
+  Limpo: clarão, boing amortecido, estrelinhas, carrilhão; o cogumelo desce encolhendo para a bolsa.
+- A ficha: papel velho amassado (vincos = luz num ruído SVG, multiplicada; dobras e manchas em
+  gradiente; borda rasgada por `clip-path`), escrito à pena com Homemade Apple (self-hosted em
+  `src/styles/fonts`), e a fotinha pixel art presa por um clipe SVG. Fecha com clique/toque (não
+  pointerdown: rolar o papel no celular não pode dobrá-lo) ou Z; só então o cogumelo entra na cesta.
+- As chaves `fungi.cut.*`, `fungi.clean.*` e `fungi.card.*` do locale ficaram sem uso.
+- (mesmo dia, 2º passe) Descrições cortadas para DUAS linhas curtas por espécie (a comestibilidade já
+  é o rótulo circulado). Animação: o cogumelo BROTA (easeOutBack pelo pé) e respira; a faca entra
+  deslizando e recua no erro; o corte tem hitstop de 70 ms, a faca atravessa e some, o toco cai
+  girando, o pedaço assenta numa mola amortecida e a terra assenta junto; a bucha estica no rumo e
+  amassa ao apertar; limpo, cai girando na bolsa. ESC encolhe o cogumelo antes de sair. O papel é
+  uma textura PINTADA em canvas uma vez (`paperTexture`: relevo de ruído com vincos em V
+  iluminado, fibras, foxing, marca de caneca, beirada encardida), sobe da bolsa desdobrando
+  (keyframes com perspectiva), a foto cai, o clipe prende, e a pena escreve linha a linha
+  (`clip-path` + `--at/--d` por linha; sublinhado e círculo são SVG por `stroke-dashoffset`).
+  Toque na escrita termina a escrita (`zh-done`); outro toque dobra o papel.
+
+## A INTERFACE EM TRÊS MATERIAIS (2026-10-27)
+
+Revisão de direção de arte de todo o HUD e menus, a pedido do autor (a interface não pode parecer
+interface de jogo). Antes: três tipografias sem papel (Press Start no título, Georgia de sistema no
+resto, pena no cogumelo), dois tipos de painel (madeira no diálogo, preto chapado de filete 1px na
+pausa/subtela/bancada), botões de toque em círculo vetorial, cartão de item ganho em creme liso
+arredondado. Agora tudo sai de `runtime/uiStyle.ts`:
+- MADEIRA (IM Fell English, self-hosted): diálogo, escolhas, pausa, subtela, bancada, bolsa, dica de
+  controles, créditos. `WOOD_PANEL` é a moldura do diálogo com veio; `WOOD_WELL` é o rebaixo (slots,
+  seções); títulos em versalete de livro, sem o tracking de menu de jogo; o selecionado continua o
+  pergaminho claro (`PARCHMENT_ON`).
+- PAPEL + PENA: o cartão de item ganho (canvas de papel rasgado no Phaser, `paperTextureCanvas`),
+  a ficha do cogumelo, as notas de campo (subtela) e a ficha da cesta (bolsa), as cartas da bancada
+  (papel sem borda rasgada: o clip-path cortaria a sombra e o contorno de seleção) e o "The End".
+- PIXEL (Press Start + `pixelFrame`/`pixelDisc`): logo e botões do título, A/B, bolsa, pausa,
+  confirmar da bolsa e o joystick — a paleta e o canto vazado do keycap do mundo.
+- A bancada deixou de apagar o mundo: embaça (`SOFT_BLUR`), como a colheita. A pausa escurece e
+  embaça de leve (é a única que para o mundo).
+- main.ts espera as três fontes antes de ligar o jogo (o Phaser escreve com o livro e a pena).
+- (revisão no Chrome, desktop 1280×800 e celular 390×844, janela fora da tela e muda) Achados e
+  consertos: o papel com ganho de luz alto virava faixas de celofane cruzando a letra — a luz agora
+  é contida (0,88–1,08) e os vincos rasos; a folha deixou de ser espremida (`background-size:
+  max(100%, 440px) auto`: um pedaço em tamanho natural). No celular a fileira da bolsa empurrava o
+  confirma para fora da tela (a janela agora desconta setas e confirma) e a bucha nascia fora da
+  borda direita (presa à borda da vista). A pausa ganhou a rolagem de madeira. Zero erro de console
+  nas duas resoluções.
+
+## INGLÊS E PT-BR (2026-10-27)
+
+O catálogo pt-br tinha sido removido junto com a tela de idioma; voltou como `locales/pt-br.json`,
+com as mesmas 197 chaves do `en.json` (inclusive o tamanho de cada lista de falas). Os três
+roteiros que só existiam em inglês dentro do `world.json` (`blackCat`, `salesman`, `poet`) foram
+para os dois catálogos — agora TODO o texto que o jogo mostra mora nos JSON de idioma; o
+`NpcDialogs.ts` é só o padrão do editor. `i18n.ts` decide a língua uma vez no carregamento: local
+(dev server ou localhost) abre sempre em pt-br e uma troca vale só para a aba (sessionStorage);
+publicado vale a escolha guardada (localStorage) ou a língua do navegador. Chave faltando no pt-br
+cai no inglês. A pausa ganhou o botão do OUTRO idioma, escrito na língua de destino ("Play in
+English"), que recarrega a página — o Phaser rasteriza o texto uma vez. O título do jogo ("ZERO
+THE HERO") fica igual nas duas: é o nome.
+
+## LEGIBILIDADE: as fontes trocadas (2026-10-27)
+
+O autor achou o texto ainda difícil de ler. As duas fontes da direção de arte eram bonitas e liam
+mal: a IM Fell English (madeira) tem letra "gasta" e olho pequeno, e borrava em 13–16px; a Homemade
+Apple (papel) é cursiva corrida. Trocadas por **Alegreya** (livro antigo, olho grande) e **Caveat**
+(mão clara), ambas variáveis e self-hosted; os arquivos antigos saíram. A Caveat é mais estreita e
+baixa: todo texto à mão subiu ~30% e usa peso 600–700; os contadores de 9–10px subiram para 12–13px
+e as legendas de teclas apagadas (alfa 0,5) foram a 0,75. Conferido no Chrome em desktop e celular.

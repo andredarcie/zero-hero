@@ -98,7 +98,8 @@
     "solidButtons": "Buttons: solid",
     "softButtons": "Buttons: see-through",
     "hapticsOn": "Vibration: on",
-    "hapticsOff": "Vibration: off"
+    "hapticsOff": "Vibration: off",
+    "switchLanguage": "Jogar em português"
   },
   "wizard": {
     "intro": [
@@ -165,6 +166,69 @@
         {
           "speaker": "npc",
           "text": "Hollis, west. Iris, by the beds. Bram and Vega, north."
+        }
+      ]
+    },
+    "blackCat": {
+      "name": "CAT",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "A hero. How novel. I was napping."
+        },
+        {
+          "speaker": "npc",
+          "text": "That branch beside me? Take it. Hold it into my fire and it wakes as a TORCH."
+        },
+        {
+          "speaker": "npc",
+          "text": "Two hearths in this clearing sit cold. Carry the flame to them."
+        },
+        {
+          "speaker": "npc",
+          "text": "Burnt brush leaves CHARCOAL. Fire feeding fire — pick it up."
+        }
+      ]
+    },
+    "salesman": {
+      "name": "SALESMAN",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "Friend! You look thirsty. Or dry. Either way — opportunity."
+        },
+        {
+          "speaker": "npc",
+          "text": "Free sample: this BUCKET. Fill it in my pond, just west of the fire."
+        },
+        {
+          "speaker": "npc",
+          "text": "A full bucket waters crops and drowns small fires. Endless uses. Costs you nothing. Today only."
+        },
+        {
+          "speaker": "npc",
+          "text": "Tell your friends. If you find any out there."
+        }
+      ]
+    },
+    "poet": {
+      "name": "POET",
+      "lines": [
+        {
+          "speaker": "npc",
+          "text": "The pines sing, but they crowd the verse."
+        },
+        {
+          "speaker": "npc",
+          "text": "This GREAT AXE fells even LIVING trees — the small axe only knows dead wood."
+        },
+        {
+          "speaker": "npc",
+          "text": "Open a clearing in my grove. Listen how the song changes where light falls."
+        },
+        {
+          "speaker": "npc",
+          "text": "Every good line needs its silence. Cut me one."
         }
       ]
     },
@@ -369,10 +433,8 @@
         "cut": "Cut under the ball, at the base.",
         "clean": "Brush off the soil and loose spines.",
         "notes": [
-          "No cap, no gills: the spores ripen inside the ball.",
-          "Its tiny cone-shaped spines rub off, leaving a net of scars.",
-          "Old ones turn brown and open a pore on top. A raindrop puffs out a cloud of spores.",
-          "Edible only while pure white inside. Cut it in half: a young amanita shows the outline of a cap."
+          "Spores ripen inside the ball.",
+          "Old ones puff out a cloud of spores."
         ]
       },
       "inkCap": {
@@ -380,11 +442,8 @@
         "cut": "Cut low on the slim stem. It's hollow.",
         "clean": "Be quick: once picked, it turns to ink within hours.",
         "notes": [
-          "A tall white cap, shaggy with scales. Its other name: lawyer's wig.",
-          "As it ripens it digests itself from the rim, dripping black ink full of spores.",
-          "Grows in lawns and by roads, feeding on buried dead wood and roots.",
-          "It can even trap and digest tiny worms in the soil.",
-          "Edible only young and white, cooked the same day."
+          "It melts into black ink full of spores.",
+          "Pick it young. It inks within hours."
         ]
       },
       "morel": {
@@ -392,11 +451,8 @@
         "cut": "Cut at the base. The whole thing is hollow.",
         "clean": "Grit hides in the pits. Brush each one.",
         "notes": [
-          "A honeycomb cap of pits and ridges, hollow from tip to base.",
-          "An ascomycete: its spores form in tiny sacs lining the pits, not on gills.",
-          "Morels come up in spring. Some kinds burst out after forest fires.",
-          "Poisonous raw. Edible only well cooked.",
-          "False morels are not hollow: they're stuffed with cottony tissue."
+          "Hollow, with a honeycomb cap.",
+          "Spores grow in tiny sacs, not gills."
         ]
       },
       "chanterelle": {
@@ -404,11 +460,8 @@
         "cut": "Cut at the base, just above the moss.",
         "clean": "Dirt hides in the ridges. Brush them out.",
         "notes": [
-          "Egg-yolk yellow, shaped like a funnel with a wavy rim.",
-          "No true gills: blunt, forked ridges run down the stem.",
-          "Smells faintly of apricots.",
-          "It lives joined to tree roots, trading minerals for sugar. That's why no one can farm it.",
-          "Look-alike: the jack-o'-lantern has sharp true gills and grows in clusters on wood. Poisonous."
+          "Ridges, not true gills.",
+          "Smells of apricots."
         ]
       },
       "flyAgaric": {
@@ -416,11 +469,8 @@
         "cut": "Cut below the soil line. The cup at the base, the volva, is how amanitas are told apart.",
         "clean": "Brush gently: the white warts rub off.",
         "notes": [
-          "The white warts are scraps of a veil that wrapped the young mushroom like an egg.",
-          "White gills, a skirt-like ring on the stem, a swollen cup at the base.",
-          "It lives joined to birch and pine roots. That partnership is called mycorrhiza.",
-          "Its name comes from an old trick: crumbled in milk, it kills flies.",
-          "Poisonous. Never eat it."
+          "The warts are scraps of its egg-like veil.",
+          "The cup at the base marks an amanita."
         ]
       },
       "porcini": {
@@ -428,11 +478,8 @@
         "cut": "Cut at the base of the thick stem.",
         "clean": "Brush the cap. White pores underneath mean it's young.",
         "notes": [
-          "A brown, bun-like cap on a fat, club-shaped stem.",
-          "No gills: underneath is a sponge of tiny pores that drop the spores.",
-          "A fine white net covers the top of the stem.",
-          "It partners with pine, spruce and birch roots.",
-          "Edible and prized. Old pores turn yellow-green and soft."
+          "Pores underneath, not gills.",
+          "Lives joined to tree roots."
         ]
       }
     }
