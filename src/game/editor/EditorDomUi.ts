@@ -23,8 +23,10 @@ import {
 
 export const PANEL_WIDTH = 320;
 
-export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'entity' | 'spawn';
+export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'relief' | 'entity' | 'spawn';
 export type CollisionPaintMode = 'keep' | 'set' | 'clear';
+// O que a ferramenta Serra pinta: o planalto, ou a escada (que aponta sozinha para o planalto).
+export type ReliefPaintMode = 'high' | 'stair';
 export type PaletteTab = 'tiles' | 'npcs' | 'pickups' | 'props';
 
 export type EntitySelection =
@@ -40,10 +42,12 @@ export type UiState = {
   tile: number | null;
   brushSize: 1 | 2 | 3;
   collisionMode: CollisionPaintMode;
+  reliefMode: ReliefPaintMode;
   tab: PaletteTab;
   entity: EntitySelection;
   showGrid: boolean;
   showCollisions: boolean;
+  showRelief: boolean;
   showEntities: boolean;
   // A direcao com que o proximo prop direcional sera colocado.
   // Vive no estado da UI, e nao na selecao da paleta, porque e uma preferencia do PINCEL —
@@ -62,6 +66,7 @@ export type StatusInfo = {
   ground: number;
   upper: number | null;
   collision: boolean;
+  relief: number;
   entities: string[];
   zoom: number;
 };
@@ -286,9 +291,14 @@ const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: s
   { id: 'fill', label: 'Balde', kbd: 'F', hint: 'Preenche a regiao contigua com o tile' },
   { id: 'picker', label: 'Conta-gotas', kbd: 'I', hint: 'Copia o tile sob o cursor' },
   { id: 'collision', label: 'Colisao', kbd: 'C', hint: 'Pinta colisao (botao direito limpa)' },
+  { id: 'relief', label: 'Serra', kbd: 'A', hint: 'Planalto um nivel acima, ou escada para subir (botao direito volta ao chao)' },
   { id: 'entity', label: 'Entidade', kbd: '2-5', hint: 'Coloca a entidade escolhida na paleta' },
   { id: 'spawn', label: 'Ponto Inicial', kbd: 'S', hint: 'Obrigatorio: clique onde o jogador deve comecar' },
 ];
+
+const RELIEF_LABEL: Readonly<Record<number, string>> = {
+  1: 'planalto', 2: 'escada sobe N', 3: 'escada sobe L', 4: 'escada sobe S', 5: 'escada sobe O',
+};
 
 const TAB_DEFS: ReadonlyArray<{ id: PaletteTab; label: string; kbd: string }> = [
   { id: 'tiles', label: 'Tiles', kbd: '1' },
@@ -773,7 +783,32 @@ export class EditorDomUi {
       this.optionsEl.appendChild(hint);
     }
 
-    if (this.state.tool === 'brush' || this.state.tool === 'eraser' || this.state.tool === 'collision') {
+    if (this.state.tool === 'relief') {
+      const reliefSeg = document.createElement('div');
+      reliefSeg.className = 'zh-seg';
+      const modes: Array<{ id: ReliefPaintMode; label: string; hint: string }> = [
+        { id: 'high', label: 'Planalto', hint: 'Bloco um nivel acima do chao' },
+        { id: 'stair', label: 'Escada', hint: 'Encosta num planalto; clicar de novo gira' },
+      ];
+      modes.forEach((mode) => {
+        const btn = this.button(mode.label, mode.hint, () => {
+          this.state.reliefMode = mode.id;
+          this.changed();
+        });
+        btn.classList.toggle('active', this.state.reliefMode === mode.id);
+        reliefSeg.appendChild(btn);
+      });
+      this.optionsEl.appendChild(reliefSeg);
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size:10px;color:#d9a55a;margin:4px 0 6px;line-height:1.55;';
+      hint.textContent = this.state.reliefMode === 'high'
+        ? 'Pinte o planalto; a borda escura e o paredao. So se sobe por escada. Botao direito volta ao chao.'
+        : 'Clique num tile de chao encostado no planalto: a seta aponta para onde a escada sobe. Clique de novo para girar.';
+      this.optionsEl.appendChild(hint);
+    }
+
+    if (this.state.tool === 'brush' || this.state.tool === 'eraser' || this.state.tool === 'collision'
+      || (this.state.tool === 'relief' && this.state.reliefMode === 'high')) {
       const brushSeg = document.createElement('div');
       brushSeg.className = 'zh-seg';
       brushSeg.style.marginTop = '4px';
@@ -791,9 +826,10 @@ export class EditorDomUi {
     const checks = document.createElement('div');
     checks.className = 'zh-checks';
     checks.style.marginTop = '6px';
-    const toggles: Array<{ label: string; key: 'showGrid' | 'showCollisions' | 'showEntities'; kbd: string }> = [
+    const toggles: Array<{ label: string; key: 'showGrid' | 'showCollisions' | 'showRelief' | 'showEntities'; kbd: string }> = [
       { label: 'Grade', key: 'showGrid', kbd: 'G' },
       { label: 'Colisoes', key: 'showCollisions', kbd: 'V' },
+      { label: 'Serras', key: 'showRelief', kbd: 'L' },
       { label: 'Entidades', key: 'showEntities', kbd: 'T' },
     ];
     toggles.forEach((toggle) => {
@@ -935,6 +971,8 @@ export class EditorDomUi {
     const toolDef = TOOL_DEFS.find((def) => def.id === this.state.tool);
     const selection = this.state.tool === 'entity'
       ? `${this.state.entity.list}:${this.state.entity.type}`
+      : this.state.tool === 'relief'
+        ? (this.state.reliefMode === 'high' ? 'planalto' : 'escada')
       : this.state.tool === 'spawn'
         ? `(${this.store.spawn.worldX}, ${this.store.spawn.worldY})`
       : this.state.tile === null ? 'limpar' : `tile ${this.state.tile}`;
@@ -946,7 +984,7 @@ export class EditorDomUi {
       const cy = Math.floor(info.tileY / CHUNK_ROWS);
       lines.push(`Tile (${info.tileX}, ${info.tileY}) — chunk (${cx}, ${cy}) — zoom ${Math.round(info.zoom * 100)}%`);
       const upper = info.upper === null ? '-' : String(info.upper);
-      lines.push(`chao ${info.ground} | sup ${upper} | colisao ${info.collision ? 'sim' : 'nao'}${info.entities.length ? ` | ${info.entities.join(', ')}` : ''}`);
+      lines.push(`chao ${info.ground} | sup ${upper} | colisao ${info.collision ? 'sim' : 'nao'}${info.relief ? ` | serra ${RELIEF_LABEL[info.relief] ?? info.relief}` : ''}${info.entities.length ? ` | ${info.entities.join(', ')}` : ''}`);
     } else {
       lines.push(info ? `Fora do mundo — zoom ${Math.round(info.zoom * 100)}%` : 'Cursor fora do mapa');
       lines.push('Direito apaga, roda = zoom, meio/espaco = mover');
@@ -1125,7 +1163,7 @@ export class EditorDomUi {
     }
 
     const key = event.key.toLowerCase();
-    const toolByKey: Record<string, ToolId> = { b: 'brush', e: 'eraser', r: 'rect', f: 'fill', i: 'picker', c: 'collision', s: 'spawn' };
+    const toolByKey: Record<string, ToolId> = { b: 'brush', e: 'eraser', r: 'rect', f: 'fill', i: 'picker', c: 'collision', a: 'relief', s: 'spawn' };
     if (toolByKey[key]) {
       this.state.tool = toolByKey[key];
       this.changed();
@@ -1158,6 +1196,7 @@ export class EditorDomUi {
     }
     if (key === 'g') { this.state.showGrid = !this.state.showGrid; this.changed(); return; }
     if (key === 'v') { this.state.showCollisions = !this.state.showCollisions; this.changed(); return; }
+    if (key === 'l') { this.state.showRelief = !this.state.showRelief; this.changed(); return; }
     if (key === 't') { this.state.showEntities = !this.state.showEntities; this.changed(); return; }
     if (key === 'p') { this.cb.onPlaytest(); return; }
     if (key === '0') { this.cb.onFitView(); return; }

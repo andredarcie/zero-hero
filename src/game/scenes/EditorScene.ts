@@ -15,6 +15,7 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { GameScene } from '@/game/scenes/GameScene';
 import type { PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
+import { RELIEF_GROUND, RELIEF_HIGH, stairUp } from '@/game/world/relief';
 import { setWorldData } from '@/game/world/WorldData';
 import {
   loadWorld, saveWorld, worldFilePath,
@@ -37,7 +38,10 @@ const CAMERA_PAD = WORLD_TILE * 10;
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 8;
 // Bump whenever UiState changes so old brushes cannot restore retired entity configuration.
-const UI_STATE_KEY = 'worldEditorUi.v8';
+const UI_STATE_KEY = 'worldEditorUi.v9';
+// A ordem em que a escada procura o planalto ao ser posta: norte primeiro (sobe de frente para a
+// camera, como as do script da serra), depois leste, sul, oeste. Clicar de novo gira nesta ordem.
+const STAIR_CODES = [2, 3, 4, 5] as const;
 
 type CellCoord = { x: number; y: number };
 
@@ -116,12 +120,15 @@ export class EditorScene extends Phaser.Scene {
     tile: 5,
     brushSize: 1,
     collisionMode: 'keep',
+    reliefMode: 'high',
     tab: 'tiles',
     entity: { list: 'npcs', type: 'blackCat' },
     showGrid: true,
     // Off by default: the authored world marks every bush as collision, and the red
     // overlay drowns the terrain at low zoom. Selecting the collision tool re-enables it.
     showCollisions: false,
+    // Ligada: a serra muda onde se anda, e o mapa plano sem ela engana (foi assim que ela pareceu sumir).
+    showRelief: true,
     showEntities: true,
     propDir: 1, // leste
     viewMode: 'world',
@@ -133,6 +140,7 @@ export class EditorScene extends Phaser.Scene {
   private groundLayer?: Phaser.Tilemaps.TilemapLayer;
   private upperLayer?: Phaser.Tilemaps.TilemapLayer;
   private collisionLayer?: Phaser.Tilemaps.TilemapLayer;
+  private reliefGfx?: Phaser.GameObjects.Graphics;
   private gridGfx?: Phaser.GameObjects.Graphics;
   private chunkMaskGfx?: Phaser.GameObjects.Graphics;
   private hoverGfx?: Phaser.GameObjects.Graphics;
@@ -291,6 +299,7 @@ export class EditorScene extends Phaser.Scene {
 
     this.map?.destroy();
     this.gridGfx?.destroy();
+    this.reliefGfx?.destroy();
     this.chunkMaskGfx?.destroy();
     this.hoverGfx?.destroy();
     this.rectGfx?.destroy();
@@ -319,6 +328,8 @@ export class EditorScene extends Phaser.Scene {
       }
     }
 
+    this.reliefGfx = this.add.graphics().setDepth(1.5);
+    this.drawRelief();
     this.gridGfx = this.add.graphics().setDepth(3);
     this.drawGrid();
     this.entityContainer = this.add.container(0, 0).setDepth(4);
@@ -446,6 +457,7 @@ export class EditorScene extends Phaser.Scene {
   private applyViewToggles(): void {
     this.gridGfx?.setVisible(this.uiState.showGrid);
     this.collisionLayer?.setVisible(this.uiState.showCollisions);
+    this.reliefGfx?.setVisible(this.uiState.showRelief);
     this.entityContainer?.setVisible(this.uiState.showEntities);
   }
 
@@ -567,6 +579,7 @@ export class EditorScene extends Phaser.Scene {
         seen.add(key);
         this.refreshCell(cell.wx, cell.wy);
       });
+      this.drawRelief();
     }
     if (!change.structure && (change.entities || change.spawn)) this.renderEntities();
     if (change.cells || change.entities || change.spawn || change.structure) this.ui?.requestMinimapRedraw();
@@ -577,6 +590,10 @@ export class EditorScene extends Phaser.Scene {
   private handleUiStateChange(): void {
     if (this.uiState.tool === 'collision' && !this.uiState.showCollisions) {
       this.uiState.showCollisions = true;
+      this.ui?.syncFromState();
+    }
+    if (this.uiState.tool === 'relief' && !this.uiState.showRelief) {
+      this.uiState.showRelief = true;
       this.ui?.syncFromState();
     }
     this.syncViewMode();
@@ -668,7 +685,9 @@ export class EditorScene extends Phaser.Scene {
       const last = this.activeStroke.last;
       if (last.x !== cell.x || last.y !== cell.y) {
         const erase = this.activeStroke.erase;
-        this.lineCells(last.x, last.y, cell.x, cell.y, (x, y) => {
+        // A escada e posta um clique de cada vez: arrastar faria uma fileira de escadas.
+        const oneShot = !erase && this.uiState.tool === 'relief' && this.uiState.reliefMode === 'stair';
+        if (!oneShot) this.lineCells(last.x, last.y, cell.x, cell.y, (x, y) => {
           if (erase) this.applyEraseAt(x, y);
           else this.applyToolAt(x, y);
         });
@@ -737,6 +756,13 @@ export class EditorScene extends Phaser.Scene {
       this.forEachBrushCell(x, y, (cx, cy) => {
         if (this.isEditable(cx, cy)) this.store?.setCell('collision', cx, cy, true);
       });
+    } else if (tool === 'relief') {
+      if (this.uiState.reliefMode === 'stair') this.placeStair(x, y);
+      else {
+        this.forEachBrushCell(x, y, (cx, cy) => {
+          if (this.isEditable(cx, cy)) this.store?.setCell('relief', cx, cy, RELIEF_HIGH);
+        });
+      }
     } else if (tool === 'entity') this.placeSelectedEntity(x, y);
     else if (tool === 'spawn' && this.isEditable(x, y)) this.store?.setSpawn(x, y);
   }
@@ -748,7 +774,128 @@ export class EditorScene extends Phaser.Scene {
       });
       return;
     }
+    if (this.uiState.tool === 'relief') {
+      this.forEachBrushCell(x, y, (cx, cy) => this.clearRelief(cx, cy));
+      return;
+    }
     this.forEachBrushCell(x, y, (cx, cy) => this.eraseCell(cx, cy));
+  }
+
+  // ── Serra ───────────────────────────────────────────────────────────────
+
+  private reliefAt(x: number, y: number): number {
+    return (this.store?.readCell('relief', x, y) as number | undefined) ?? RELIEF_GROUND;
+  }
+
+  /** A escada em (x, y) leva ao planalto e sai no chao? (a mesma regra de canStep em relief.ts) */
+  private stairWorks(x: number, y: number, code: number): boolean {
+    const up = stairUp(code);
+    if (!up) return false;
+    return this.reliefAt(x + up[0], y + up[1]) === RELIEF_HIGH && this.reliefAt(x - up[0], y - up[1]) === RELIEF_GROUND;
+  }
+
+  /**
+   * Poe (ou GIRA) uma escada. Ela so vale encostada num planalto e com chao do outro lado, entao a
+   * direcao nao se escolhe na mao: o editor acha as que funcionam e clicar de novo passa para a
+   * proxima. Uma escada que nao leva a lugar nenhum nunca e criada aqui.
+   */
+  private placeStair(x: number, y: number): void {
+    const store = this.store;
+    if (!store || !this.isEditable(x, y)) return;
+    const current = this.reliefAt(x, y);
+    if (current === RELIEF_HIGH) {
+      this.ui?.toast('A escada vai no chao, encostada no planalto');
+      return;
+    }
+    // A escada e passagem: uma peca ou arvore em cima dela a tranca.
+    const upper = store.readCell('upper', x, y) as number | null;
+    if (store.entitiesAt(x, y).length > 0 || (upper !== null && SOLID_UPPER_FRAMES.has(upper))) {
+      this.ui?.toast('A escada precisa de um tile livre');
+      return;
+    }
+    const options = STAIR_CODES.filter((code) => this.stairWorks(x, y, code));
+    if (options.length === 0) {
+      this.ui?.toast('A escada precisa encostar num planalto, com chao do outro lado');
+      return;
+    }
+    const at = options.indexOf(current as (typeof STAIR_CODES)[number]);
+    const next = at < 0 ? options[0] : options[(at + 1) % options.length];
+    if (next === current) this.ui?.toast('So ha um jeito desta escada subir');
+    else store.setCell('relief', x, y, next);
+  }
+
+  /** Volta o tile ao chao; a escada que subia para ele cai junto (ficaria levando a lugar nenhum). */
+  private clearRelief(x: number, y: number): void {
+    const store = this.store;
+    if (!store || !this.isEditable(x, y)) return;
+    const was = this.reliefAt(x, y);
+    if (was === RELIEF_GROUND) return;
+    store.setCell('relief', x, y, RELIEF_GROUND);
+    if (was !== RELIEF_HIGH) return;
+    STAIR_CODES.forEach((code) => {
+      const up = stairUp(code)!;
+      const sx = x - up[0];
+      const sy = y - up[1];
+      if (this.reliefAt(sx, sy) === code && this.isEditable(sx, sy)) store.setCell('relief', sx, sy, RELIEF_GROUND);
+    });
+  }
+
+  /**
+   * A serra por cima do mapa: o planalto em ocre com o PAREDAO (borda escura) onde ele cai para o
+   * chao, e a escada clara com degraus e uma seta para onde ela sobe. Escada que nao funciona fica
+   * com borda vermelha. Redesenhada inteira a cada mudanca: sao poucos tiles.
+   */
+  private drawRelief(): void {
+    const store = this.store;
+    const gfx = this.reliefGfx;
+    if (!store || !gfx) return;
+    gfx.clear();
+    const T = WORLD_TILE;
+    // O planalto nao tem paredao do lado de outro planalto, nem do lado onde uma escada chega nele.
+    const joins = (x: number, y: number, dx: number, dy: number): boolean => {
+      const n = this.reliefAt(x + dx, y + dy);
+      if (n === RELIEF_HIGH) return true;
+      const up = stairUp(n);
+      return up !== undefined && up[0] === -dx && up[1] === -dy;
+    };
+    for (let y = 0; y < store.tilesY; y += 1) {
+      for (let x = 0; x < store.tilesX; x += 1) {
+        const code = this.reliefAt(x, y);
+        if (code === RELIEF_GROUND) continue;
+        const px = x * T;
+        const py = y * T;
+        if (code === RELIEF_HIGH) {
+          gfx.fillStyle(0xd9a55a, 0.34).fillRect(px, py, T, T);
+          gfx.lineStyle(1.5, 0x4a2e14, 0.95);
+          if (!joins(x, y, 0, -1)) gfx.lineBetween(px, py + 0.75, px + T, py + 0.75);
+          if (!joins(x, y, 1, 0)) gfx.lineBetween(px + T - 0.75, py, px + T - 0.75, py + T);
+          if (!joins(x, y, -1, 0)) gfx.lineBetween(px + 0.75, py, px + 0.75, py + T);
+          // A face sul e a que a camera do jogo ve: um paredao mais grosso.
+          if (!joins(x, y, 0, 1)) gfx.fillStyle(0x4a2e14, 0.55).fillRect(px, py + T - 3, T, 3);
+          continue;
+        }
+        const up = stairUp(code);
+        if (!up) continue;
+        const [dx, dy] = up;
+        const cx = px + T / 2;
+        const cy = py + T / 2;
+        gfx.fillStyle(0xf1e3b8, 0.62).fillRect(px + 1, py + 1, T - 2, T - 2);
+        gfx.lineStyle(1, 0x6b4a26, 0.9);
+        for (const s of [-4, 0, 4]) {
+          const ox = cx + dx * s;
+          const oy = cy + dy * s;
+          gfx.lineBetween(ox - dy * 5, oy - dx * 5, ox + dy * 5, oy + dx * 5);
+        }
+        gfx.fillStyle(0x4a2e14, 1).fillTriangle(
+          cx + dx * 6, cy + dy * 6,
+          cx - dy * 3.5 + dx * 1.5, cy - dx * 3.5 + dy * 1.5,
+          cx + dy * 3.5 + dx * 1.5, cy + dx * 3.5 + dy * 1.5,
+        );
+        if (!this.stairWorks(x, y, code)) {
+          gfx.lineStyle(1.5, 0xff4455, 1).strokeRect(px + 0.75, py + 0.75, T - 1.5, T - 1.5);
+        }
+      }
+    }
   }
 
   private paintTileCell(x: number, y: number): void {
@@ -877,7 +1024,8 @@ export class EditorScene extends Phaser.Scene {
     // In chunk view the outside is masked and read-only; only the picker still works there.
     if (!this.isEditable(cell.x, cell.y) && this.uiState.tool !== 'picker') return;
 
-    const size = (this.uiState.tool === 'brush' || this.uiState.tool === 'eraser' || this.uiState.tool === 'collision')
+    const size = (this.uiState.tool === 'brush' || this.uiState.tool === 'eraser' || this.uiState.tool === 'collision'
+      || (this.uiState.tool === 'relief' && this.uiState.reliefMode === 'high'))
       ? this.uiState.brushSize
       : 1;
     const from = size === 3 ? -1 : 0;
@@ -916,6 +1064,7 @@ export class EditorScene extends Phaser.Scene {
       ground: inside ? (store.readCell('ground', cell.x, cell.y) as number) : 0,
       upper: inside ? (store.readCell('upper', cell.x, cell.y) as number | null) : null,
       collision: inside ? (store.readCell('collision', cell.x, cell.y) as boolean) : false,
+      relief: inside ? this.reliefAt(cell.x, cell.y) : RELIEF_GROUND,
       entities: inside ? store.entitiesAt(cell.x, cell.y).map((e) => e.type) : [],
       zoom: this.cameras.main.zoom,
     });

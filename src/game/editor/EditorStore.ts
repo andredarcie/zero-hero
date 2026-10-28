@@ -13,7 +13,8 @@ const UNDO_LIMIT = 200;
 const MAX_WORLD_CHUNKS = 32;
 
 export type TileLayerId = 'ground' | 'upper';
-export type CellLayerId = 'ground' | 'upper' | 'collision';
+// `relief` é a SERRA (ver world/relief.ts): 0 chão, 1 planalto, 2..5 escada subindo N/L/S/O.
+export type CellLayerId = 'ground' | 'upper' | 'collision' | 'relief';
 export type CellValue = number | boolean | null;
 
 export type CellChange = { wx: number; wy: number; layer: CellLayerId; prev: CellValue; next: CellValue };
@@ -151,11 +152,15 @@ export class EditorStore {
 
   public readCell(layer: CellLayerId, wx: number, wy: number): CellValue {
     const chunk = this.chunkAt(wx, wy);
-    if (!chunk) return layer === 'collision' ? false : layer === 'upper' ? null : DEFAULT_GROUND_TILE;
+    if (!chunk) {
+      if (layer === 'relief') return 0;
+      return layer === 'collision' ? false : layer === 'upper' ? null : DEFAULT_GROUND_TILE;
+    }
     const lx = wx - chunk.cx * CHUNK_COLUMNS;
     const ly = wy - chunk.cy * CHUNK_ROWS;
     if (layer === 'ground') return chunk.ground[ly][lx];
     if (layer === 'upper') return chunk.upper[ly][lx];
+    if (layer === 'relief') return chunk.relief?.[ly]?.[lx] ?? 0;
     return chunk.collisions[ly][lx];
   }
 
@@ -166,7 +171,20 @@ export class EditorStore {
     const ly = wy - chunk.cy * CHUNK_ROWS;
     if (layer === 'ground') chunk.ground[ly][lx] = value as number;
     else if (layer === 'upper') chunk.upper[ly][lx] = value as number | null;
+    else if (layer === 'relief') this.writeRelief(chunk, lx, ly, value as number);
     else chunk.collisions[ly][lx] = value as boolean;
+  }
+
+  // A grade de serra é OPCIONAL no chunk (o schema diz: chunk sem serra não carrega a grade). Ela
+  // nasce na primeira escrita e some quando o último tile volta ao chão, então o world.json de um
+  // chunk plano continua sem o campo.
+  private writeRelief(chunk: WorldChunk, lx: number, ly: number, value: number): void {
+    if (!chunk.relief) {
+      if (value === 0) return;
+      chunk.relief = Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => 0));
+    }
+    chunk.relief[ly][lx] = value;
+    if (value === 0 && chunk.relief.every((row) => row.every((v) => v === 0))) delete chunk.relief;
   }
 
   /**
