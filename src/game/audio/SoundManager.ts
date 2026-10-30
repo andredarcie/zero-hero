@@ -1,3 +1,6 @@
+import { scheduleRadioClick, scheduleSyllable } from '@/game/audio/dialogVoice';
+import type { SpokenSyllable } from '@/game/dialogs/voicePersonas';
+
 
 const MASTER_VOL = 0.32;
 const MUSIC_VOL = 0.6; // music-bus duck level (under the SFX)
@@ -430,6 +433,17 @@ class SoundManager {
     const jitter = 1 + (Math.random() - 0.5) * 0.05;
     const soft: OscillatorType = wave === 'square' ? 'triangle' : wave === 'sawtooth' ? 'sine' : wave;
     this.osc(soft, freq * jitter, freq * jitter * 0.92, 0.075, 0.07);
+  }
+
+  /** Uma sílaba da fala de um NPC (ver dialogs/voicePersonas). */
+  public playDialogSyllable(syllable: SpokenSyllable): void {
+    const ctx = this.audio; // ensures sfxUserBus exists
+    scheduleSyllable(ctx, this.sfxUserBus, ctx.currentTime, syllable);
+  }
+
+  public playRadioClick(closing: boolean): void {
+    const ctx = this.audio; // ensures sfxUserBus exists
+    scheduleRadioClick(ctx, this.sfxUserBus, ctx.currentTime, closing);
   }
 
   // ── low-level procedural helpers (fallbacks) ──────────────────────────────

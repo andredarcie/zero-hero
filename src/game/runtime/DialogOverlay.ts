@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 
 import { dialogBoxMetrics } from '@/game/constants';
 import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
+import { personaFor, planSpeech, type SpokenChar, type VoicePersona } from '@/game/dialogs/voicePersonas';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t } from '@/game/i18n/i18n';
 import { BOOK_FONT, PARCHMENT_ON, WOOD_PANEL } from '@/game/runtime/uiStyle';
@@ -146,6 +147,10 @@ export class DialogOverlay {
   private destroyed = false;
   private closing = false;
   private typewriterEvent?: Phaser.Time.TimerEvent;
+  private readonly persona: VoicePersona;
+  /** A fala em curso, letra a letra: quanto cada uma espera e qual solta sílaba. */
+  private speech: SpokenChar[] = [];
+  private chars: string[] = [];
 
   private currentIsNarrator = false;
   /** O texto e o "e agora?" da linha em curso — a fala pode ser do roteiro OU injetada pelo caixa. */
@@ -165,6 +170,7 @@ export class DialogOverlay {
     private readonly voice?: DialogVoice,
   ) {
     this.canvas = scene.game.canvas;
+    this.persona = personaFor(script);
 
     if (!document.getElementById(STYLE_ID)) {
       const style = document.createElement('style');
@@ -296,24 +302,33 @@ export class DialogOverlay {
     this.currentOnDone = onDone;
     this.showLineFrame(line);
 
-    this.typewriterEvent = this.scene.time.addEvent({
-      delay: CHAR_DELAY_MS,
-      loop: true,
-      callback: () => {
-        this.charIndex++;
-        this.bodyEl.textContent = this.currentText.slice(0, this.charIndex);
-        // Old-RPG "talking" blip: one per couple of letters, skipping spaces and narration.
-        const ch = this.currentText[this.charIndex - 1];
-        if (this.voice && !this.currentIsNarrator && ch && ch !== ' ' && this.charIndex % 2 === 0) {
-          getSoundManager().playDialogBlip(this.voice.freq, this.voice.wave);
-        }
-        if (this.charIndex >= this.currentText.length) {
-          this.typewriterEvent?.remove();
-          this.typewriterEvent = undefined;
-          this.finishLine();
-        }
-      },
+    // A narração é a voz do jogo, e não de alguém: aparece no mesmo passo, em silêncio.
+    const speaks = Boolean(this.voice) && !this.currentIsNarrator;
+    this.speech = speaks ? planSpeech(line.text, this.persona, this.voice?.freq ?? 0) : [];
+    this.chars = [...line.text];
+    if (speaks && this.persona.radio) getSoundManager().playRadioClick(false);
+    this.typeNextChar(CHAR_DELAY_MS);
+  }
+
+  /** Uma letra de cada vez: a espera muda com quem fala e com a pontuação da letra anterior. */
+  private typeNextChar(delay: number): void {
+    this.typewriterEvent = this.scene.time.delayedCall(delay, () => {
+      this.charIndex++;
+      this.bodyEl.textContent = this.chars.slice(0, this.charIndex).join('');
+      const spoken = this.speech[this.charIndex - 1];
+      if (spoken?.syllable) getSoundManager().playDialogSyllable(spoken.syllable);
+      if (this.charIndex >= this.chars.length) {
+        this.typewriterEvent = undefined;
+        this.settleLine();
+        return;
+      }
+      this.typeNextChar(spoken?.delayMs ?? CHAR_DELAY_MS);
     });
+  }
+
+  private settleLine(): void {
+    if (this.persona.radio && this.voice && !this.currentIsNarrator) getSoundManager().playRadioClick(true);
+    this.finishLine();
   }
 
   private showLine(index: number): void {
@@ -423,7 +438,7 @@ export class DialogOverlay {
     this.typewriterEvent?.remove();
     this.typewriterEvent = undefined;
     this.bodyEl.textContent = this.currentText;
-    this.finishLine();
+    this.settleLine();
   }
 
   private readonly handlePointer = (): void => {

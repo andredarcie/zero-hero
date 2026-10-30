@@ -9732,3 +9732,9 @@ podia mais assar cogumelo — e o autor corrigiu: **o fim sempre foi um marshmal
 de marshmallow mora no canto do tile da fogueira do fim, e o Z na fogueira acesa com um GRAVETO NA MÃO
 (o espeto) assa. O espeto ganhou arte de marshmallow (cru branco, tostado dourado com casca), e a
 linha do narrador virou "O marshmallow fica dourado". `ROASTABLE_ORDER` saiu de `fungi.ts`.
+
+## A voz de cada NPC (2026-10-30)
+
+Pedido do autor: fala em máquina de escrever, estilo Animal Crossing, com um som que combine com a personalidade de cada NPC. `dialogs/voicePersonas.ts` guarda o jeito de falar (ritmo, pausa, melodia, tremor), e a altura continua em `voice.freq` do `world.json`. Soa a sílaba, não a letra (um bipe por letra vira metralhadora), e cada sílaba passa por duas formantes da vogal (`audio/dialogVoice.ts`), que é o que faz parecer boca. A pontuação dá a entonação: pergunta sobe, ponto desce. A língua é determinística, sem `Math.random()`: a mesma frase soa sempre igual.
+
+O NPC é achado pelo retrato (`personaFor`), então as falas `Done` e as dicas herdam a voz sem campo novo. A narração continua muda. O `gain` de cada voz é medido (pico de 0,13 no `OfflineAudioContext`): forma de onda e formantes mudam muito o quanto passa, e sem isso o mímico soava mais que o dobro do poeta.
