@@ -1,9 +1,11 @@
 import type Phaser from 'phaser';
 
-import { dialogBoxMetrics } from '@/game/constants';
+import { dialogBoxMetrics, isTallDialog } from '@/game/constants';
 import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { personaFor, planSpeech, type SpokenChar, type VoicePersona } from '@/game/dialogs/voicePersonas';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { TalkingBody } from '@/game/runtime/TalkingBody';
 import { t } from '@/game/i18n/i18n';
 import { BOOK_FONT, PARCHMENT_ON, WOOD_PANEL } from '@/game/runtime/uiStyle';
 
@@ -31,6 +33,11 @@ import { BOOK_FONT, PARCHMENT_ON, WOOD_PANEL } from '@/game/runtime/uiStyle';
 const CHAR_DELAY_MS = 28;
 const STYLE_ID = 'zh-dialog-style';
 const ROOT_ID = 'zh-dialog-root';
+/** Palavra em maiúsculas é o nome da coisa que importa (BALDE, TOCHA): ela entra com mais peso. */
+const EMPHASIS = /^\p{Lu}{3,}$/u;
+/** O retrato em ems por unidade de esticada: ele sobe enquanto estica. */
+const PORTRAIT_LIFT_EM = 0.9;
+const PORTRAIT_TILT_DEG = 170;
 
 type DialogOption = {
   label: string;
@@ -56,14 +63,15 @@ const CSS = `
   display: flex; align-items: stretch; gap: 0.9em;
   padding: 0.8em 1.1em;
   ${WOOD_PANEL}
-  opacity: 0; transform: translateY(10px);
-  transition: opacity 160ms ease, transform 160ms ease;
+  opacity: 0; transform: translateY(28px) scale(0.96);
+  transition: opacity 160ms ease, transform 300ms cubic-bezier(0.2, 1.5, 0.4, 1);
 }
 #${ROOT_ID}.zh-in .zh-dlg-panel { opacity: 1; transform: none; }
 #${ROOT_ID}.zh-in .zh-dlg-scrim { opacity: 1; }
 #${ROOT_ID} .zh-dlg-portrait {
   flex: 0 0 auto; width: 3.6em; height: 3.6em;
   image-rendering: pixelated; border: 2px solid #fff; background: #0b0906;
+  transform-origin: 50% 100%; will-change: transform;
 }
 #${ROOT_ID} .zh-dlg-col {
   flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column;
@@ -78,6 +86,69 @@ const CSS = `
   padding-right: 1.6em; /* o ▼ mora no canto: o texto não passa por baixo dele */
   overflow-y: auto; overflow-x: hidden;
   scrollbar-width: thin; scrollbar-color: #3d342a transparent;
+  position: relative;
+}
+/* CADA LETRA É UMA PEÇA, já no lugar desde o começo da fala: a palavra nunca pula de linha no meio
+   da datilografia. O jeito de entrar é de quem fala (data-letters). */
+#${ROOT_ID} .zh-word { display: inline-block; white-space: nowrap; }
+#${ROOT_ID} .zh-ch { display: inline-block; opacity: 0; white-space: pre; }
+#${ROOT_ID} .zh-ch.zh-on { opacity: 1; animation: zh-ch-pop 300ms cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+#${ROOT_ID} [data-letters="snap"] .zh-ch.zh-on { animation: zh-ch-snap 130ms ease-out both; }
+#${ROOT_ID} [data-letters="drop"] .zh-ch.zh-on { animation: zh-ch-drop 380ms cubic-bezier(0.3, 0.7, 0.3, 1) both; }
+#${ROOT_ID} [data-letters="drift"] .zh-ch.zh-on { animation: zh-ch-drift 520ms ease-out both; }
+#${ROOT_ID} [data-letters="stiff"] .zh-ch.zh-on { animation: none; }
+#${ROOT_ID} [data-letters="float"] .zh-ch.zh-on {
+  animation: zh-ch-drift 420ms ease-out both, zh-ch-wave 2400ms ease-in-out 420ms infinite;
+  animation-delay: 0ms, calc(420ms + var(--i) * -90ms);
+}
+#${ROOT_ID} [data-letters="shiver"] .zh-ch.zh-on {
+  animation: zh-ch-pop 300ms ease-out both, zh-ch-tremble 340ms linear 300ms infinite;
+  animation-delay: 0ms, calc(300ms + var(--i) * -47ms);
+}
+#${ROOT_ID} .zh-dlg-body.zh-narr .zh-ch.zh-on { animation: zh-ch-fade 360ms ease-out both; }
+/* O nome da coisa: dourado, e chega maior. */
+#${ROOT_ID} .zh-em .zh-ch { color: #ffd36b; font-weight: 700; }
+#${ROOT_ID} .zh-dlg-body:not(.zh-narr):not([data-letters="stiff"]) .zh-em .zh-ch.zh-on { animation: zh-ch-em 420ms cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+@keyframes zh-ch-pop {
+  0% { opacity: 0; transform: translateY(0.6em) scale(0.45); text-shadow: 0 0 0.5em var(--voice); }
+  55% { opacity: 1; transform: translateY(-0.16em) scale(1.14); text-shadow: 0 0 0.4em var(--voice); }
+  100% { opacity: 1; transform: none; text-shadow: none; }
+}
+@keyframes zh-ch-snap {
+  0% { opacity: 0; transform: scale(1.5); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes zh-ch-drop {
+  0% { opacity: 0; transform: translateY(-0.7em) rotate(10deg); }
+  60% { opacity: 1; transform: translateY(0.07em) rotate(-2deg); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes zh-ch-drift {
+  0% { opacity: 0; transform: translateY(0.35em); text-shadow: 0 0 0.7em var(--voice); }
+  100% { opacity: 1; transform: none; text-shadow: none; }
+}
+@keyframes zh-ch-fade {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes zh-ch-em {
+  0% { opacity: 0; transform: translateY(0.5em) scale(0.4); text-shadow: 0 0 0.8em #ffd36b; }
+  50% { opacity: 1; transform: translateY(-0.24em) scale(1.38); text-shadow: 0 0 0.6em #ffd36b; }
+  100% { opacity: 1; transform: none; text-shadow: none; }
+}
+@keyframes zh-ch-wave {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-0.07em); }
+}
+@keyframes zh-ch-tremble {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(0.018em, -0.014em); }
+  50% { transform: translate(-0.014em, 0.018em); }
+  75% { transform: translate(0.012em, 0.01em); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #${ROOT_ID} .zh-dlg-body .zh-ch.zh-on,
+  #${ROOT_ID} .zh-dlg-body:not(.zh-narr):not([data-letters="stiff"]) .zh-em .zh-ch.zh-on { animation: zh-ch-fade 120ms linear both; }
 }
 #${ROOT_ID} .zh-dlg-body::-webkit-scrollbar { width: 6px; }
 #${ROOT_ID} .zh-dlg-body::-webkit-scrollbar-thumb { background: #3d342a; border-radius: 3px; }
@@ -87,9 +158,10 @@ const CSS = `
   position: absolute; right: 0.6em; bottom: 0.3em;
   pointer-events: auto; cursor: pointer;
   color: #d4c8a4; font-size: 0.95em; line-height: 1;
-  animation: zh-dlg-bob 900ms ease-in-out infinite;
+  animation: zh-dlg-pop 260ms cubic-bezier(0.2, 1.8, 0.4, 1) both, zh-dlg-bob 900ms ease-in-out 260ms infinite;
   -webkit-tap-highlight-color: transparent; touch-action: manipulation;
 }
+@keyframes zh-dlg-pop { 0% { opacity: 0; transform: scale(0.2); } 100% { opacity: 1; transform: none; } }
 @keyframes zh-dlg-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(0.25em); } }
 /* A JANELA DE ESCOLHA: um quadro próprio pousado sobre a caixa, à direita — o formato de
    sempre. Ela não existe quando a fala tem uma saída só. */
@@ -125,6 +197,15 @@ const CSS = `
   #${ROOT_ID} .zh-dlg-panel { gap: 0.6em; padding: 0.6em 0.7em; }
   #${ROOT_ID} .zh-dlg-portrait { width: 2.7em; height: 2.7em; }
 }
+/* TELEFONE EM PÉ: o retrato sobe para a linha do nome e o texto ganha a largura inteira da caixa. */
+#${ROOT_ID}.zh-tall .zh-dlg-panel {
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 0.6em; row-gap: 0.45em; padding: 0.65em 0.8em;
+}
+#${ROOT_ID}.zh-tall .zh-dlg-col { display: contents; }
+#${ROOT_ID}.zh-tall .zh-dlg-portrait { width: 3em; height: 3em; grid-row: 1; grid-column: 1; }
+#${ROOT_ID}.zh-tall .zh-dlg-name { grid-row: 1; grid-column: 2; align-self: center; margin: 0; font-size: 1.15em; }
+#${ROOT_ID}.zh-tall .zh-dlg-body { grid-row: 2; grid-column: 1 / -1; line-height: 1.38; }
 `;
 
 export class DialogOverlay {
@@ -151,6 +232,9 @@ export class DialogOverlay {
   /** A fala em curso, letra a letra: quanto cada uma espera e qual solta sílaba. */
   private speech: SpokenChar[] = [];
   private chars: string[] = [];
+  /** A peça de cada letra da fala; espaço não tem peça. */
+  private letters: (HTMLSpanElement | null)[] = [];
+  private readonly talk: TalkingBody;
 
   private currentIsNarrator = false;
   /** O texto e o "e agora?" da linha em curso — a fala pode ser do roteiro OU injetada pelo caixa. */
@@ -168,9 +252,11 @@ export class DialogOverlay {
     private readonly script: DialogScript,
     private readonly onClose: () => void,
     private readonly voice?: DialogVoice,
+    speaker?: Billboard3D,
   ) {
     this.canvas = scene.game.canvas;
     this.persona = personaFor(script);
+    this.talk = new TalkingBody(speaker);
 
     if (!document.getElementById(STYLE_ID)) {
       const style = document.createElement('style');
@@ -225,6 +311,9 @@ export class DialogOverlay {
 
     this.layout();
     window.addEventListener('resize', this.layout);
+    // A conversa para o `update` do mundo, mas a cena continua emitindo este evento: é ele que
+    // move o corpo de quem fala, também na abertura, com a cutscene ativa.
+    this.scene.events.on('update', this.animateTalk);
     window.addEventListener('keydown', this.handleKeyDown, true);
 
     // Fade in, then reveal the first line. The pointer advance is armed a beat later so the
@@ -247,6 +336,8 @@ export class DialogOverlay {
     this.destroyed = true;
     this.typewriterEvent?.remove();
     this.typewriterEvent = undefined;
+    this.scene.events.off('update', this.animateTalk);
+    this.talk.restore();
     window.removeEventListener('resize', this.layout);
     window.removeEventListener('keydown', this.handleKeyDown, true);
     this.scrim.removeEventListener('click', this.handlePointer);
@@ -254,10 +345,23 @@ export class DialogOverlay {
     this.root.remove();
   }
 
+  /** A mola de quem fala, um passo por frame: o corpo no mundo e o retrato leem a mesma pose. */
+  private readonly animateTalk = (_time: number, delta: number): void => {
+    // O fechamento nasce num timer, DENTRO desta mesma emissão de `update`: sem a guarda, este
+    // passo ainda rodaria depois do `restore` e deixaria o NPC torto para sempre.
+    if (this.destroyed) return;
+    this.talk.update(delta);
+    const { stretch, lean } = this.talk;
+    this.portraitEl.style.transform = `translateY(${(-Math.max(0, stretch) * PORTRAIT_LIFT_EM).toFixed(3)}em) `
+      + `rotate(${(lean * PORTRAIT_TILT_DEG).toFixed(2)}deg) `
+      + `scale(${(1 - stretch * 0.6).toFixed(3)}, ${(1 + stretch).toFixed(3)})`;
+  };
+
   // ── Layout: a barra do rodapé, em pixels de viewport ───────────────────────
   private readonly layout = (): void => {
     const rect = this.canvas.getBoundingClientRect();
     const { boxHeight, fontSize, margin } = dialogBoxMetrics(rect.width, rect.height);
+    this.root.classList.toggle('zh-tall', isTallDialog(rect.width, rect.height));
 
     // Ancorada pelo PÉ da tela (e não pelo topo da caixa) para o entalhe do telefone caber:
     // `env(safe-area-inset-bottom)` empurra a caixa para cima onde existe barra de gestos.
@@ -306,6 +410,7 @@ export class DialogOverlay {
     const speaks = Boolean(this.voice) && !this.currentIsNarrator;
     this.speech = speaks ? planSpeech(line.text, this.persona, this.voice?.freq ?? 0) : [];
     this.chars = [...line.text];
+    this.buildLetters();
     if (speaks && this.persona.radio) getSoundManager().playRadioClick(false);
     this.typeNextChar(CHAR_DELAY_MS);
   }
@@ -314,9 +419,12 @@ export class DialogOverlay {
   private typeNextChar(delay: number): void {
     this.typewriterEvent = this.scene.time.delayedCall(delay, () => {
       this.charIndex++;
-      this.bodyEl.textContent = this.chars.slice(0, this.charIndex).join('');
+      this.revealLetter(this.charIndex - 1);
       const spoken = this.speech[this.charIndex - 1];
-      if (spoken?.syllable) getSoundManager().playDialogSyllable(spoken.syllable);
+      if (spoken?.syllable) {
+        getSoundManager().playDialogSyllable(spoken.syllable);
+        this.talk.kick(this.persona, spoken.syllable.accent);
+      }
       if (this.charIndex >= this.chars.length) {
         this.typewriterEvent = undefined;
         this.settleLine();
@@ -324,6 +432,46 @@ export class DialogOverlay {
       }
       this.typeNextChar(spoken?.delayMs ?? CHAR_DELAY_MS);
     });
+  }
+
+  /** Monta a fala inteira, invisível: o lugar de cada letra já é o definitivo. */
+  private buildLetters(): void {
+    this.letters = [];
+    const body = this.bodyEl;
+    body.textContent = '';
+    body.style.setProperty('--voice', this.script.npcColorHex);
+    body.dataset.letters = this.persona.letters;
+    const words = this.currentText.split(' ');
+    let index = 0;
+    words.forEach((word, position) => {
+      const box = document.createElement('span');
+      box.className = EMPHASIS.test(word.replace(/[^\p{L}]/gu, '')) ? 'zh-word zh-em' : 'zh-word';
+      for (const char of word) {
+        const letter = document.createElement('span');
+        letter.className = 'zh-ch';
+        letter.textContent = char;
+        letter.style.setProperty('--i', String(index));
+        box.appendChild(letter);
+        this.letters.push(letter);
+        index++;
+      }
+      body.appendChild(box);
+      if (position < words.length - 1) {
+        body.appendChild(document.createTextNode(' '));
+        this.letters.push(null);
+        index++;
+      }
+    });
+  }
+
+  private revealLetter(index: number): void {
+    const letter = this.letters[index];
+    if (!letter) return;
+    letter.classList.add('zh-on');
+    // A fala maior que a caixa rola para acompanhar a letra nova.
+    const body = this.bodyEl;
+    const bottom = letter.offsetTop + letter.offsetHeight;
+    if (bottom > body.scrollTop + body.clientHeight) body.scrollTop = bottom - body.clientHeight;
   }
 
   private settleLine(): void {
@@ -346,7 +494,6 @@ export class DialogOverlay {
     this.portraitEl.style.display = isNarrator ? 'none' : '';
     this.nameEl.style.display = isNarrator ? 'none' : '';
     this.bodyEl.className = isNarrator ? 'zh-dlg-body zh-narr' : 'zh-dlg-body';
-    this.bodyEl.textContent = '';
     this.bodyEl.scrollTop = 0;
   }
 
@@ -437,7 +584,7 @@ export class DialogOverlay {
   private skipTypewriter(): void {
     this.typewriterEvent?.remove();
     this.typewriterEvent = undefined;
-    this.bodyEl.textContent = this.currentText;
+    this.letters.forEach((letter) => letter?.classList.add('zh-on'));
     this.settleLine();
   }
 

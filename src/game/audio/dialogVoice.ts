@@ -11,6 +11,8 @@ const FORMANTS: Record<VowelSound, [number, number]> = {
 
 const FORMANT_Q = 5;
 const DRY = 0.3;
+// A segunda formante é a que sobrevive no alto-falante de celular, que quase não toca grave.
+const F2_LEVEL = 0.85;
 
 /** Agenda uma sílaba: fonte → duas formantes (mais um pouco do som seco, que segura a altura). */
 export const scheduleSyllable = (
@@ -43,7 +45,7 @@ export const scheduleSyllable = (
   }
 
   const [f1, f2] = FORMANTS[vowel];
-  for (const [center, level] of [[f1, 1], [f2, 0.55]] as const) {
+  for (const [center, level] of [[f1, 1], [f2, F2_LEVEL]] as const) {
     const band = ctx.createBiquadFilter();
     const gain = ctx.createGain();
     band.type = 'bandpass';
@@ -82,7 +84,7 @@ export const scheduleRadioClick = (ctx: BaseAudioContext, out: AudioNode, when: 
   source.frequency.setValueAtTime(pitch, when);
   source.frequency.exponentialRampToValueAtTime(pitch * 0.8, when + 0.035);
   envelope.gain.setValueAtTime(0.0001, when);
-  envelope.gain.exponentialRampToValueAtTime(0.05, when + 0.003);
+  envelope.gain.exponentialRampToValueAtTime(0.12, when + 0.003);
   envelope.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
   source.connect(envelope);
   envelope.connect(out);

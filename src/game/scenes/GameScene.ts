@@ -5695,7 +5695,7 @@ export class GameScene extends Phaser.Scene {
       this.endDialogCameraShift();
       getSoundManager().fadeMusicIn();
       onClosed?.();
-    }, voice);
+    }, voice, (npcWorld && this.npcManager?.bodyAt(npcWorld.worldX, npcWorld.worldY)) ?? this.wizardStandIn);
   }
 
   // ── AS MISSÕES DOS NPCs ────────────────────────────────────────────────────

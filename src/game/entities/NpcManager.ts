@@ -255,6 +255,10 @@ class NpcEntity {
     scene.tweens.add({ targets: this.sprite, elevation: height, duration: 160, yoyo: true, ease: 'Sine.easeOut', repeat: 1, repeatDelay: 40 });
   }
 
+  public get body(): Billboard3D {
+    return this.sprite;
+  }
+
   /** Some de cena (o corpo e as marcas) sem sair da lista — ver NpcManager.setKindHidden. */
   public setVisible(visible: boolean): void {
     this.sprite.setVisible(visible);
@@ -375,6 +379,11 @@ export class NpcManager {
   /** O roteiro próprio deste NPC, se ele tiver um (ver WorldNpcSpawn.dialog). */
   public getDialogIdAt(worldX: number, worldY: number): string | undefined {
     return this.present().find((n) => n.worldX === worldX && n.worldY === worldY)?.dialog;
+  }
+
+  /** O corpo do NPC deste tile: é ele que se mexe enquanto fala (ver runtime/TalkingBody). */
+  public bodyAt(worldX: number, worldY: number): Billboard3D | undefined {
+    return this.present().find((n) => n.worldX === worldX && n.worldY === worldY)?.body;
   }
 
   /** O NPC deste tile da um pulinho (ver NpcEntity.hop). */

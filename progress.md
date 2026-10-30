@@ -9738,3 +9738,13 @@ linha do narrador virou "O marshmallow fica dourado". `ROASTABLE_ORDER` saiu de 
 Pedido do autor: fala em máquina de escrever, estilo Animal Crossing, com um som que combine com a personalidade de cada NPC. `dialogs/voicePersonas.ts` guarda o jeito de falar (ritmo, pausa, melodia, tremor), e a altura continua em `voice.freq` do `world.json`. Soa a sílaba, não a letra (um bipe por letra vira metralhadora), e cada sílaba passa por duas formantes da vogal (`audio/dialogVoice.ts`), que é o que faz parecer boca. A pontuação dá a entonação: pergunta sobe, ponto desce. A língua é determinística, sem `Math.random()`: a mesma frase soa sempre igual.
 
 O NPC é achado pelo retrato (`personaFor`), então as falas `Done` e as dicas herdam a voz sem campo novo. A narração continua muda. O `gain` de cada voz é medido (pico de 0,13 no `OfflineAudioContext`): forma de onda e formantes mudam muito o quanto passa, e sem isso o mímico soava mais que o dobro do poeta.
+
+## A fala ganhou corpo (2026-10-30)
+
+Pedido do autor, jogando no celular: caixa maior no telefone em pé, texto mais animado, voz audível em todos e o NPC se mexendo ao falar.
+
+A caixa em pé (`isTallDialog`) ocupa cerca de um terço da tela, com fonte maior e o retrato na linha do nome, e a fala mais longa do jogo cabe sem rolar de 360×640 a 430×932. Cada letra agora é uma peça já no lugar desde o começo da fala, então a palavra não pula de linha no meio da datilografia. O jeito de entrar é da voz (`letters`), e a palavra em MAIÚSCULAS chega dourada e maior.
+
+O corpo é uma mola (`runtime/TalkingBody.ts`): cada sílaba empurra, mais forte no começo de palavra, e o sprite e o retrato leem a mesma pose. Armadilha: o fechamento nasce num timer, dentro da mesma emissão de `update` que move a mola, e sem a guarda de `destroyed` o último passo rodava depois do `restore` e deixava o NPC torto para sempre.
+
+O volume baixo vinha do alto-falante: celular quase não toca abaixo de 450 Hz, e medir pelo pico igualava vozes que soavam muito diferentes. As vozes passaram a sawtooth/square e o `gain` é medido com esse corte, RMS 0,1 em todas.

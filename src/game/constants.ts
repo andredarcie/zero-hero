@@ -27,16 +27,39 @@ export const TEXT_RESOLUTION = 1;
 // única serviria mal aos dois: sobra de barra vazia no monitor, texto cortado no telefone.
 // Piso e teto seguram os extremos (uma barra fina demais não é uma caixa de fala; metade da
 // tela num telefone deitado é a tela inteira).
+//
+// Telefone EM PÉ é o caso à parte: a tela é alta e estreita, e a barra baixinha deixava o texto miúdo
+// lá no pé, com a tela sobrando. Ali a fonte cresce com a largura, o retrato sobe para a linha do
+// nome (`isTallDialog`: o texto ganha a largura inteira) e a caixa assume um terço da tela.
 export const DIALOG_BOX_MIN_FONT = 17;
 export const DIALOG_BOX_MAX_FONT = 30;
 export const DIALOG_BOX_MIN_FRACTION = 0.2;
 export const DIALOG_BOX_MAX_FRACTION = 0.45;
 
+export const DIALOG_TALL_ASPECT = 1.35;
+export const DIALOG_TALL_MAX_WIDTH = 700;
+export const DIALOG_TALL_FONT_DIVISOR = 17;
+export const DIALOG_TALL_FRACTION = 0.32;
+/** Altura da caixa alta em ems: linha do retrato + quatro linhas de texto + respiro. */
+export const DIALOG_TALL_EMS = 11;
+
 export type DialogBoxMetrics = { boxHeight: number; fontSize: number; margin: number };
+
+export const isTallDialog = (width: number, height: number): boolean => (
+  width < DIALOG_TALL_MAX_WIDTH && height / width >= DIALOG_TALL_ASPECT
+);
 
 /** As medidas da caixa de fala, em pixels de tela, para um canvas de `width` × `height`. */
 export const dialogBoxMetrics = (width: number, height: number): DialogBoxMetrics => {
   const margin = Math.round(Math.min(20, Math.max(8, Math.min(width, height) * 0.02)));
+  if (isTallDialog(width, height)) {
+    const tallFont = Math.min(DIALOG_BOX_MAX_FONT, Math.max(DIALOG_BOX_MIN_FONT, Math.round(width / DIALOG_TALL_FONT_DIVISOR)));
+    return {
+      fontSize: tallFont,
+      margin,
+      boxHeight: Math.round(Math.min(height * DIALOG_BOX_MAX_FRACTION, Math.max(tallFont * DIALOG_TALL_EMS, height * DIALOG_TALL_FRACTION))),
+    };
+  }
   // A largura manda (a caixa é uma barra), mas a altura tem voto: num telefone deitado uma
   // fonte escolhida só pela largura empurraria a caixa por metade da tela.
   const fontSize = Math.max(DIALOG_BOX_MIN_FONT, Math.min(DIALOG_BOX_MAX_FONT,

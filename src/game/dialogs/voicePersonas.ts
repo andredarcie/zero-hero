@@ -8,6 +8,8 @@ import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 
 export type VowelSound = 'a' | 'e' | 'i' | 'o' | 'u';
 
+export type LetterStyle = 'pop' | 'snap' | 'float' | 'shiver' | 'drop' | 'drift' | 'stiff';
+
 export type VoicePersona = {
   /** Milissegundos por letra: a pressa de quem fala. */
   charMs: number;
@@ -17,7 +19,7 @@ export type VoicePersona = {
   wave: OscillatorType;
   /** Duração de cada sílaba em segundos: curta é seca, longa é ligada. */
   length: number;
-  /** Medido por voz: forma de onda e formantes mudam o quanto passa, e o pico tem de ficar igual. */
+  /** Medido por voz, pelo que passa num alto-falante de celular: quase nada abaixo de 450 Hz. */
   gain: number;
   /** Multiplica as formantes: abaixo de 1 é corpo grande, acima é corpo pequeno. */
   body: number;
@@ -34,34 +36,43 @@ export type VoicePersona = {
   vibrato: number;
   /** Rádio: faixa estreita e um clique de abrir e fechar o canal em cada fala. */
   radio?: boolean;
+  /** O quanto o corpo estica a cada sílaba. */
+  bounce: number;
+  /** O quanto o corpo balança de um lado para o outro, em tiles. */
+  lean: number;
+  /** O tremor do corpo enquanto fala, em tiles. */
+  shiver: number;
+  /** Como cada letra entra na caixa (as animações `zh-ch-*` do DialogOverlay). */
+  letters: LetterStyle;
 };
 
 const BASE: VoicePersona = {
-  charMs: 36, commaMs: 90, stopMs: 170, wave: 'triangle', length: 0.08, gain: 0.15, body: 1,
+  charMs: 36, commaMs: 90, stopMs: 170, wave: 'sawtooth', length: 0.08, gain: 0.3, body: 1,
   spread: 4, sway: 0, fall: 2, glide: 0, vibratoHz: 0, vibrato: 0,
+  bounce: 0.12, lean: 0.015, shiver: 0, letters: 'pop',
 };
 
 const PERSONAS: Record<string, VoicePersona> = {
-  // O mago: velho e solene. Devagar, grave, frases que assentam.
-  wizard: { ...BASE, gain: 0.18, charMs: 48, commaMs: 170, stopMs: 340, wave: 'sawtooth', length: 0.14, body: 0.82, spread: 2.5, fall: 4, vibratoHz: 4, vibrato: 0.2 },
+  // O mago: velho e solene. Devagar, grave, frases que assentam. Só acena com a cabeça.
+  wizard: { ...BASE, gain: 0.49, charMs: 48, commaMs: 170, stopMs: 340, length: 0.14, body: 0.82, spread: 2.5, fall: 4, vibratoHz: 4, vibrato: 0.2, bounce: 0.09, lean: 0.01, letters: 'drift' },
   // Hollis, a micóloga: precisa e medida. Sílaba seca, passo regular, para no ponto para pensar.
-  radiationSuit: { ...BASE, gain: 0.12, charMs: 34, commaMs: 110, stopMs: 280, length: 0.055, spread: 2, fall: 1 },
-  // Iris, a pintora: sonhadora. Aguda e ligada, a voz passeia como uma melodia.
-  painter: { ...BASE, gain: 0.22, charMs: 40, commaMs: 120, stopMs: 240, length: 0.13, body: 1.2, spread: 7, sway: 3, fall: 1 },
-  // Bram, com frio e sem lenha: "minhas mãos tremem". Devagar, cansado, a voz treme.
-  businessMan: { ...BASE, gain: 0.19, charMs: 54, commaMs: 200, stopMs: 330, wave: 'sawtooth', length: 0.12, body: 0.9, spread: 2, fall: 5, glide: -1, vibratoHz: 9, vibrato: 0.9 },
-  // Vega, a astronauta: fala pelo rádio. Curto, seco, com o clique do canal.
-  astronaut: { ...BASE, gain: 0.12, charMs: 30, commaMs: 70, stopMs: 150, wave: 'square', length: 0.05, body: 1.1, spread: 3, fall: 0, radio: true },
-  // O gato: com preguiça. Cada sílaba é um miado que escorrega para baixo.
-  blackCat: { ...BASE, gain: 0.14, charMs: 50, commaMs: 160, stopMs: 300, length: 0.15, body: 1.3, spread: 3, fall: 1, glide: -5 },
-  // O vendedor: não respira. Rápido, sobe em vez de cair, quase não pausa.
-  salesman: { ...BASE, gain: 0.12, charMs: 21, commaMs: 30, stopMs: 70, length: 0.05, body: 1.05, spread: 5, fall: -2, glide: 1 },
-  // O poeta: declama. Sobe e desce com regularidade, como quem conta a métrica.
-  poet: { ...BASE, gain: 0.28, charMs: 44, commaMs: 200, stopMs: 360, length: 0.13, spread: 1.5, sway: 5, fall: 1 },
-  // O mímico finge ser normal: nota única, metrônomo perfeito, nenhuma inflexão. É o que incomoda.
-  mimic: { ...BASE, gain: 0.095, charMs: 36, commaMs: 36, stopMs: 36, wave: 'square', length: 0.07, spread: 0, fall: 0 },
-  // A morte: fora de serviço e sem pressa. Muito grave, longa, sem subir nunca.
-  death: { ...BASE, gain: 0.2, charMs: 58, commaMs: 240, stopMs: 460, wave: 'sawtooth', length: 0.2, body: 0.7, spread: 1, fall: 3, glide: -1 },
+  radiationSuit: { ...BASE, gain: 0.51, charMs: 34, commaMs: 110, stopMs: 280, length: 0.055, spread: 2, fall: 1, bounce: 0.1, lean: 0, letters: 'snap' },
+  // Iris, a pintora: sonhadora. Aguda e ligada, a voz e o corpo passeiam como uma melodia.
+  painter: { ...BASE, gain: 0.38, charMs: 40, commaMs: 120, stopMs: 240, length: 0.13, body: 1.2, spread: 7, sway: 3, fall: 1, bounce: 0.15, lean: 0.05, letters: 'float' },
+  // Bram, com frio e sem lenha: "minhas mãos tremem". Devagar, cansado, voz, corpo e letra tremem.
+  businessMan: { ...BASE, gain: 0.5, charMs: 54, commaMs: 200, stopMs: 330, length: 0.12, body: 0.9, spread: 2, fall: 5, glide: -1, vibratoHz: 9, vibrato: 0.9, bounce: 0.08, lean: 0, shiver: 0.025, letters: 'shiver' },
+  // Vega, a astronauta: fala pelo rádio. Curto, seco, com o clique do canal. Pouco corpo.
+  astronaut: { ...BASE, gain: 0.31, charMs: 30, commaMs: 70, stopMs: 150, wave: 'square', length: 0.05, body: 1.1, spread: 3, fall: 0, radio: true, bounce: 0.07, lean: 0, letters: 'snap' },
+  // O gato: com preguiça. Cada sílaba é um miado que escorrega para baixo, e a letra cai junto.
+  blackCat: { ...BASE, gain: 0.35, charMs: 50, commaMs: 160, stopMs: 300, length: 0.15, body: 1.3, spread: 3, fall: 1, glide: -5, bounce: 0.13, lean: 0.035, letters: 'drop' },
+  // O vendedor: não respira. Rápido, sobe em vez de cair, quase não pausa, o corpo inteiro vende.
+  salesman: { ...BASE, gain: 0.3, charMs: 21, commaMs: 30, stopMs: 70, length: 0.05, body: 1.05, spread: 5, fall: -2, glide: 1, bounce: 0.19, lean: 0.03, letters: 'pop' },
+  // O poeta: declama. Sobe e desce com regularidade, e balança como quem conta a métrica.
+  poet: { ...BASE, gain: 0.42, charMs: 44, commaMs: 200, stopMs: 360, length: 0.13, spread: 1.5, sway: 5, fall: 1, bounce: 0.11, lean: 0.06, letters: 'float' },
+  // O mímico finge ser normal: nota única, metrônomo perfeito, corpo e letra duros. É o que incomoda.
+  mimic: { ...BASE, gain: 0.37, charMs: 36, commaMs: 36, stopMs: 36, wave: 'square', length: 0.07, spread: 0, fall: 0, bounce: 0.03, lean: 0, letters: 'stiff' },
+  // A morte: fora de serviço e sem pressa. Muito grave, longa, quase não se mexe.
+  death: { ...BASE, gain: 0.59, charMs: 58, commaMs: 240, stopMs: 460, length: 0.2, body: 0.7, spread: 1, fall: 3, glide: -1, bounce: 0.05, lean: 0.01, letters: 'drift' },
 };
 
 /** Quem fala, a partir do retrato: é ele que acompanha o NPC em todas as falas e pedidos. */
@@ -79,6 +90,8 @@ export type SpokenSyllable = {
   vowel: VowelSound;
   /** Consoante explosiva (p, t, k...) no começo da sílaba: o ataque é seco. */
   plosive: boolean;
+  /** O peso da sílaba: 1 no começo de palavra, menos no meio. O corpo mexe mais onde ela pesa. */
+  accent: number;
   persona: VoicePersona;
 };
 
@@ -89,6 +102,7 @@ const VOWELS = 'aeiou';
 const PLOSIVES = 'pbtdkgcq';
 const STOPS = '.!?…';
 const VOWEL_CYCLE: VowelSound[] = ['a', 'e', 'o', 'i', 'u'];
+const INNER_ACCENT = 0.6;
 
 // "ã" vira "a", "é" vira "e": a língua inventada só precisa saber a vogal.
 const plain = (char: string): string => char.normalize('NFD').charAt(0).toLowerCase();
@@ -143,10 +157,12 @@ export const planSpeech = (text: string, persona: VoicePersona, baseFreq: number
         semis += stop === '?' ? 5 : stop === '!' ? 2 : -1.5;
       }
 
+      const opensWord = order === 0 || chars.slice(onsets[order - 1], i).some(c => !isLetter(c));
       plan[i].syllable = {
         freq: baseFreq * 2 ** (semis / 12),
         vowel: isVowel(char) ? char as VowelSound : VOWEL_CYCLE[code % VOWEL_CYCLE.length],
         plosive: PLOSIVES.includes(prev),
+        accent: opensWord ? 1 : INNER_ACCENT,
         persona,
       };
     });
