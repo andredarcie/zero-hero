@@ -12,7 +12,7 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
 1. **A abertura** (`playIntro`): à noite, o cavaleiro chega pela estrada do sul com a espada nas
    costas, a finca no chão (ela fica ali para sempre e bloqueia o tile), olha em volta entre
    vaga-lumes, e o mago chega andando e fala. Toca uma vez por partida (`introSeen` no save).
-2. **A quest da Iris é em etapas** e tem dono próprio (`quests/PainterQuest.ts`). **Os outros vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
+2. **As quests da Iris e do Bram são em etapas** e têm dono próprio (`quests/`). **Os outros vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
    que o torna possível (`gift`). Pedido novo = uma entrada lá + falas `npc.<id>`/`npc.<id>Done`
    no locale.
 3. **O portão** (`openGardenGate`): quando `allQuestsDone()`, o `gardenGate` do centro abre.

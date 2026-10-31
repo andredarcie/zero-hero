@@ -360,7 +360,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Leve o meu machado. Quatro gravetos das árvores secas?"
+          "text": "Madeira verde só dá fumaça: é quase meia água. Leve o machado e traga quatro pedaços de madeira morta. Um de cada vez, no cepo."
         }
       ]
     },
@@ -373,7 +373,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Valeu, amigo."
+          "text": "Esse fogo é seu também."
         }
       ]
     },
@@ -580,6 +580,118 @@
         {
           "speaker": "npc",
           "text": "O pincel eu guardo. O quadro fica aqui."
+        }
+      ]
+    },
+    "businessManStep": {
+      "chop": [
+        {
+          "speaker": "npc",
+          "text": "Faltam {n} no cepo. Só madeira morta."
+        }
+      ],
+      "split": [
+        {
+          "speaker": "npc",
+          "text": "Quatro! Agora rachar: inteira, ela leva meses para secar."
+        },
+        {
+          "speaker": "npc",
+          "text": "Machado na mão, e no cepo. Bata no veio, longe do nó."
+        }
+      ],
+      "stack": [
+        {
+          "speaker": "npc",
+          "text": "Boas peças. Empilhe no suporte, fora do chão."
+        },
+        {
+          "speaker": "npc",
+          "text": "Deixe vãos entre elas: quem seca a lenha é o ar."
+        }
+      ],
+      "dry": [
+        {
+          "speaker": "npc",
+          "text": "Agora o vento trabalha. Dê uma volta."
+        }
+      ],
+      "dryFast": [
+        {
+          "speaker": "npc",
+          "text": "Essa pilha respira. O vento faz o resto. Dê uma volta."
+        }
+      ],
+      "drySlow": [
+        {
+          "speaker": "npc",
+          "text": "Apertada, viu? Vai demorar a secar. Dê uma volta longa."
+        }
+      ],
+      "lay": [
+        {
+          "speaker": "npc",
+          "text": "Clara e leve: está seca. Uma bate na outra e estala."
+        },
+        {
+          "speaker": "npc",
+          "text": "Monte o fogo: primeiro a isca, depois os gravetos, por fim a lenha."
+        }
+      ]
+    },
+    "businessManCraft": {
+      "leave": "Sair",
+      "aim": "Bata no veio, a linha escura. Longe do nó.",
+      "force": "Agora a força: a faixa verde.",
+      "clean": "Limpo, de um golpe só!",
+      "split": "Rachou!",
+      "knot": "No nó, a lâmina volta.",
+      "offGrain": "Fora do veio. Mas a fenda abriu.",
+      "weak": "Faltou força. Mas a fenda abriu.",
+      "strong": "Forte demais: a lâmina prende. Mas a fenda abriu.",
+      "lift": "Tirar",
+      "stackDone": "Pronto",
+      "stackHint": "Faltam {n}. Deixe vãos: veja o vento passar.",
+      "airGood": "O ar passa em tudo. Vai secar depressa.",
+      "airOk": "Passa algum ar. Dá para melhorar.",
+      "airBad": "Apertada demais: o ar não passa. Vai demorar.",
+      "tinder": "Isca",
+      "kindling": "Gravetos",
+      "fuel": "Lenha",
+      "light": "Acender",
+      "blow": "Soprar",
+      "layHint": "Da mais fina para a mais grossa.",
+      "wrongOrder": "Só fumaça. A chama nasce na isca, e cresce pelo fino.",
+      "blowHint": "Sopro longo e calmo. A brasa quer ar.",
+      "tooFast": "Devagar! Sopro afobado apaga.",
+      "died": "A brasa morreu. De novo, com calma.",
+      "caught0": "A isca está pegando.",
+      "caught1": "Os gravetos estão pegando.",
+      "caught2": "A lenha está pegando!",
+      "burning": "Pegou!"
+    },
+    "businessManReview": {
+      "split": {
+        "clean": "Rachou limpo. Mão boa.",
+        "rough": "Rachou torto, mas rachou. Machado se aprende batendo."
+      },
+      "air": {
+        "good": "A pilha respira. Lenha assim dura o inverno.",
+        "ok": "Pilha torta, mas respira.",
+        "bad": "Pilha apertada: secou devagar. Mas secou."
+      },
+      "fire": {
+        "first": "E acendeu de primeira!",
+        "worked": "O fogo deu trabalho. Todo fogo dá."
+      },
+      "thanks": [
+        {
+          "speaker": "npc",
+          "text": "Olha as minhas mãos: pararam de tremer."
+        },
+        {
+          "speaker": "npc",
+          "text": "Obrigado, amigo. O machado é seu."
         }
       ]
     }

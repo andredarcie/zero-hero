@@ -57,6 +57,23 @@ export interface PaintQuestSave {
   art?: string;
 }
 
+/** Em que ofício a quest do Bram está, e como cada um saiu: é sobre isso que ele comenta. */
+export interface LumberQuestSave {
+  stage: 'start' | 'chop' | 'split' | 'stack' | 'dry' | 'lay' | 'done';
+  /** Pedaços de madeira morta que já chegaram ao cepo. */
+  wood: number;
+  split: number;
+  /** Quantas toras racharam no primeiro golpe. */
+  clean: number;
+  /** A pilha montada: quantas peças em cada coluna do suporte. */
+  heights: number[];
+  /** Quanto ar a pilha deixa passar, de 0 a 1. Manda no tempo de secar. */
+  air: number;
+  dryMs: number;
+  /** Quantas vezes o fogo morreu antes de pegar. */
+  attempts: number;
+}
+
 export interface AdventureSnapshot {
   /** Vira true no primeiro persist de uma run de verdade — e o que o titulo le para o Continue. */
   started: boolean;
@@ -97,6 +114,7 @@ export interface AdventureSnapshot {
    */
   questProgress: Map<string, number>;
   paintQuest: PaintQuestSave;
+  lumberQuest: LumberQuestSave;
 }
 
 const defaultSnapshot = (): AdventureSnapshot => ({
@@ -117,6 +135,9 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   visitedChunks: new Set(),
   questProgress: new Map(),
   paintQuest: { stage: 'start', plots: [] },
+  lumberQuest: {
+    stage: 'start', wood: 0, split: 0, clean: 0, heights: [0, 0, 0, 0, 0], air: 0, dryMs: 0, attempts: 0,
+  },
 });
 
 type StoredSnapshot = {
@@ -137,6 +158,7 @@ type StoredSnapshot = {
   visitedChunks?: string[];
   questProgress?: Record<string, number>;
   paintQuest?: PaintQuestSave;
+  lumberQuest?: Partial<LumberQuestSave>;
 };
 
 const num = (value: unknown, fallback: number): number =>
@@ -219,6 +241,7 @@ const load = (): AdventureSnapshot => {
       paintQuest: p.paintQuest && typeof p.paintQuest.stage === 'string' && Array.isArray(p.paintQuest.plots)
         ? p.paintQuest
         : base.paintQuest,
+      lumberQuest: { ...base.lumberQuest, ...(p.lumberQuest ?? {}) },
     };
   } catch {
     return base;
@@ -259,6 +282,7 @@ export const saveAdventure = (): void => {
     visitedChunks: [...s.visitedChunks],
     questProgress: Object.fromEntries(s.questProgress),
     paintQuest: s.paintQuest,
+    lumberQuest: s.lumberQuest,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));

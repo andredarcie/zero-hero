@@ -38,6 +38,7 @@ import { MUSHROOM_KINDS } from '@/game/fungi/fungi';
  *   craft   — FABRICAR N numa estação (bancada ou forno).
  *   grow    — fazer BROTAR N canteiros: semente na terra, água no monte, e esperar.
  *   paint   — TERMINAR o quadro da Iris (o fim da quest em etapas dela: ver quests/PainterQuest).
+ *   fire    — ACENDER o fogo do Bram com a lenha que o herói preparou (ver quests/LumberQuest).
  *   light   — ACENDER N fogueiras do overworld.
  *   explore — PISAR em N telas diferentes (o mesmo fog of war do mapa).
  */
@@ -47,6 +48,7 @@ export type QuestTask =
   | { kind: 'craft'; item: HeldItemKind; count: number }
   | { kind: 'grow'; count: number }
   | { kind: 'paint'; count: number }
+  | { kind: 'fire'; count: number }
   | { kind: 'light'; count: number }
   | { kind: 'explore'; count: number };
 
@@ -96,7 +98,7 @@ export const taskKey = (task: QuestTask): string => {
  *
  *   a coletora (radiationSuit) — conhecer os seis fungos do vale, colhidos com a faca dela
  *   a pintora  (painter)       — quatro plantas de tinta, do buraco ao quadro (em etapas)
- *   o lenhador (businessMan)   — lenha para a noite, cortada das árvores secas
+ *   o lenhador (businessMan)   — um fogo que dura: cortar, rachar, empilhar, secar e acender
  *   a astrônoma (astronaut)    — uma barra de ferro para o marco onde o céu é mais limpo
  *
  * A BARRA DE FERRO É O PEDIDO INTEIRO DA VEGA, e o único que atravessa a cadeia toda: o mundo não tem ferro no
@@ -112,7 +114,7 @@ export const taskKey = (task: QuestTask): string => {
  * 1. **O pedido tem de estar na FALA do NPC** (locale `npc.<id>`). Sem diário, a fala é o único
  *    lugar onde o objetivo existe.
  * 2. **O pedido tem de ser cumprível com o mundo de HOJE e com o presente que o próprio NPC dá**
- *    (`gift`): o machado do lenhador, a picareta da astrônoma. A pintora dá uma coisa por etapa.
+ *    (`gift`): a picareta da astrônoma. A pintora e o lenhador dão uma coisa por etapa.
  */
 export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
   // A COLETORA pede que o herói TRAGA as seis espécies do vale, uma de cada vez (uma tarefa
@@ -134,8 +136,7 @@ export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
   businessMan: {
     dialog: 'businessMan',
     doneDialog: 'businessManDone',
-    tasks: [{ kind: 'deliver', item: 'wood', count: 4 }],
-    gift: [{ item: 'axe', count: 1 }],
+    tasks: [{ kind: 'fire', count: 1 }],
   },
   astronaut: {
     dialog: 'astronaut',

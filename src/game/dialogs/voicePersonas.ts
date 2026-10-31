@@ -75,13 +75,19 @@ const PERSONAS: Record<string, VoicePersona> = {
   death: { ...BASE, gain: 0.59, charMs: 58, commaMs: 240, stopMs: 460, length: 0.2, body: 0.7, spread: 1, fall: 3, glide: -1, bounce: 0.05, lean: 0.01, letters: 'drift' },
 };
 
+// A voz de quem parou de tremer: o Bram, com o fogo aceso. Sem vibrato, sem queda, mais à vontade.
+const CALM: Partial<VoicePersona> = {
+  charMs: 40, commaMs: 120, stopMs: 240, fall: 2, glide: 0, vibrato: 0, shiver: 0, bounce: 0.13, letters: 'pop',
+};
+
 /** Quem fala, a partir do retrato: é ele que acompanha o NPC em todas as falas e pedidos. */
-export const personaFor = (script: Pick<DialogScript, 'npcAssetKey' | 'npcFrame'>): VoicePersona => {
+export const personaFor = (script: Pick<DialogScript, 'npcAssetKey' | 'npcFrame' | 'calm'>): VoicePersona => {
   const kind = Object.keys(NPC_VISUALS).find((id) => {
     const visual = NPC_VISUALS[id];
     return visual.key === script.npcAssetKey && visual.frame === script.npcFrame;
   });
-  return (kind && PERSONAS[kind]) || BASE;
+  const persona = (kind && PERSONAS[kind]) || BASE;
+  return script.calm ? { ...persona, ...CALM } : persona;
 };
 
 export type SpokenSyllable = {

@@ -356,11 +356,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "My woodpile’s empty. My hands shake."
+          "text": "My firewood ran out. My hands are shaking."
         },
         {
           "speaker": "npc",
-          "text": "Take my axe. Four sticks from the dry trees?"
+          "text": "Green wood only smokes: it is nearly half water. Take the axe and bring four pieces of dead wood. One at a time, to the block."
         }
       ]
     },
@@ -373,7 +373,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Thank you, friend."
+          "text": "That fire is yours too."
         }
       ]
     },
@@ -580,6 +580,118 @@
         {
           "speaker": "npc",
           "text": "I will keep the brush. The painting stays here."
+        }
+      ]
+    },
+    "businessManStep": {
+      "chop": [
+        {
+          "speaker": "npc",
+          "text": "{n} to go on the block. Dead wood only."
+        }
+      ],
+      "split": [
+        {
+          "speaker": "npc",
+          "text": "Four! Now split them: whole, they take months to dry."
+        },
+        {
+          "speaker": "npc",
+          "text": "Axe in hand, at the block. Strike the grain, away from the knot."
+        }
+      ],
+      "stack": [
+        {
+          "speaker": "npc",
+          "text": "Good pieces. Stack them on the rack, off the ground."
+        },
+        {
+          "speaker": "npc",
+          "text": "Leave gaps between them: air is what dries firewood."
+        }
+      ],
+      "dry": [
+        {
+          "speaker": "npc",
+          "text": "Now the wind does the work. Take a walk."
+        }
+      ],
+      "dryFast": [
+        {
+          "speaker": "npc",
+          "text": "That stack breathes. The wind will do the rest. Take a walk."
+        }
+      ],
+      "drySlow": [
+        {
+          "speaker": "npc",
+          "text": "Tight, see? It will dry slowly. Take a long walk."
+        }
+      ],
+      "lay": [
+        {
+          "speaker": "npc",
+          "text": "Pale and light: it is dry. One knocks on the other and it rings."
+        },
+        {
+          "speaker": "npc",
+          "text": "Lay the fire: tinder first, then kindling, then the firewood."
+        }
+      ]
+    },
+    "businessManCraft": {
+      "leave": "Leave",
+      "aim": "Strike the grain, the dark line. Away from the knot.",
+      "force": "Now the force: the green band.",
+      "clean": "Clean, in one blow!",
+      "split": "Split!",
+      "knot": "On the knot, the blade bounces.",
+      "offGrain": "Off the grain. But the crack opened.",
+      "weak": "Too weak. But the crack opened.",
+      "strong": "Too hard: the blade sticks. But the crack opened.",
+      "lift": "Remove",
+      "stackDone": "Done",
+      "stackHint": "{n} to go. Leave gaps: watch the wind pass.",
+      "airGood": "Air reaches everything. It will dry fast.",
+      "airOk": "Some air gets through. It could be better.",
+      "airBad": "Too tight: no air gets through. It will take a while.",
+      "tinder": "Tinder",
+      "kindling": "Kindling",
+      "fuel": "Firewood",
+      "light": "Light",
+      "blow": "Blow",
+      "layHint": "From the finest to the thickest.",
+      "wrongOrder": "Only smoke. Flame is born in the tinder and grows through the thin.",
+      "blowHint": "A long, calm breath. The ember wants air.",
+      "tooFast": "Slowly! A hurried breath puts it out.",
+      "died": "The ember died. Again, calmly.",
+      "caught0": "The tinder is catching.",
+      "caught1": "The kindling is catching.",
+      "caught2": "The firewood is catching!",
+      "burning": "It caught!"
+    },
+    "businessManReview": {
+      "split": {
+        "clean": "Split clean. Good hands.",
+        "rough": "Split crooked, but split. You learn an axe by swinging it."
+      },
+      "air": {
+        "good": "The stack breathes. Wood like that lasts the winter.",
+        "ok": "A crooked stack, but it breathes.",
+        "bad": "A tight stack: it dried slowly. But it dried."
+      },
+      "fire": {
+        "first": "And it lit first try!",
+        "worked": "That fire took work. Every fire does."
+      },
+      "thanks": [
+        {
+          "speaker": "npc",
+          "text": "Look at my hands: they stopped shaking."
+        },
+        {
+          "speaker": "npc",
+          "text": "Thank you, friend. The axe is yours."
         }
       ]
     }

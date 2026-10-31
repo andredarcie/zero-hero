@@ -45,6 +45,7 @@ export class CampfireObject implements WorldProp {
   public readonly worldY: number;
   // Acesa ou morta, a fogueira é um corpo — o bump nela é a interação (loja/acender), nunca o passo.
   public readonly blocking = true;
+  private heldCold = false;
 
   private readonly scene: Phaser.Scene;
   private readonly sprite: Billboard3D;
@@ -160,7 +161,7 @@ export class CampfireObject implements WorldProp {
    * cold tint. Returns true only on the transition (so the caller can play the fanfare once).
    */
   public light(): boolean {
-    if (this.lit) return false;
+    if (this.lit || this.heldCold) return false;
     this.lit = true;
 
     this.sprite.clearTint().setAlpha(1);
@@ -215,6 +216,15 @@ export class CampfireObject implements WorldProp {
     else this.glow.setVisible(false).setAlpha(0); // daylight: wood only, no residual flame
 
     return true;
+  }
+
+  /**
+   * APAGADA ATÉ SEGUNDA ORDEM: a fogueira do Bram, antes da lenha dele. Nem o relógio, nem uma tocha,
+   * nem o fogo do vizinho a acendem: acender esta é o pedido inteiro (ver quests/LumberQuest).
+   */
+  public setHeldCold(cold: boolean): void {
+    this.heldCold = cold;
+    if (cold) this.extinguish(false);
   }
 
   /** The world clock owns ambient campfires: flame at night, bare logs during daylight. */

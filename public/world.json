@@ -2620,13 +2620,7 @@
           false
         ]
       ],
-      "pickups": [
-        {
-          "type": "axe",
-          "worldX": 52,
-          "worldY": 5
-        }
-      ],
+      "pickups": [],
       "npcs": [
         {
           "type": "businessMan",

@@ -104,6 +104,8 @@ import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl } from '@/game/runtime/spriteDataUrl';
 import { PainterQuest } from '@/game/quests/PainterQuest';
+import { LumberQuest } from '@/game/quests/LumberQuest';
+import { registerWoodTextures } from '@/game/render3d/woodTextures';
 import {
   BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE, registerPaintTextures,
 } from '@/game/render3d/paintTextures';
@@ -357,7 +359,7 @@ const CREDITS_SCROLL_MS = 26000;
 // ── AS MARCAS DO VALE AJUDADO ─────────────────────────────────────────────────
 // Uma por pedido: o que aparece (ou muda) ao lado do NPC quando ele fecha. `before` e a pose de
 // antes, se a marca ja existe desde o comeco (o cavalete da Iris, com a tela cinza).
-type QuestMarkDef = { dialog: string; npc: NpcKind; before?: string; after: string; keepFireLit?: boolean };
+type QuestMarkDef = { dialog: string; npc: NpcKind; before?: string; after: string };
 type QuestMarkState = {
   def: QuestMarkDef; tile: { x: number; y: number }; npcAt: { x: number; y: number }; done: boolean; bb?: Billboard3D;
 };
@@ -366,8 +368,6 @@ type AdventureGroundItemLike = { kind: HeldItemKind; worldX: number; worldY: num
 const QUEST_MARKS: readonly QuestMarkDef[] = [
   { dialog: 'astronaut', npc: 'astronaut', after: CAIRN_TEXTURE },
   { dialog: 'radiationSuit', npc: 'radiationSuit', after: BASKET_TEXTURE },
-  // a lenha do Bram e a fogueira dele, que passa a ficar acesa dia e noite
-  { dialog: 'businessMan', npc: 'businessMan', after: 'wood-item', keepFireLit: true },
 ];
 
 // How long to hide the back item during a swing (a touch longer than SwordSlash's arc + fade,
@@ -386,6 +386,8 @@ const FOOTPRINT_FADE_MS = 700;
 const FORAGER_DIALOG = 'radiationSuit';
 /** O roteiro da Iris: a quest dela é em etapas (ver quests/PainterQuest). */
 const PAINTER_DIALOG = 'painter';
+/** O roteiro do Bram: a quest dele também é em etapas (ver quests/LumberQuest). */
+const LUMBER_DIALOG = 'businessMan';
 
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
@@ -531,6 +533,7 @@ export class GameScene extends Phaser.Scene {
   private plantedSwordTile?: { x: number; y: number };
   private readonly questMarks: QuestMarkState[] = [];
   private painterQuest?: PainterQuest;
+  private lumberQuest?: LumberQuest;
   // Quem ja deu o "oi" (o pulinho quando o heroi chega perto) nesta sessao.
   private readonly greetedNpcs = new Set<string>();
   // Sentado numa fogueira (ver restAtFireAt): o tempo corre e o heroi descansa.
@@ -663,6 +666,7 @@ export class GameScene extends Phaser.Scene {
     registerPlacementTextures(this);
     registerCozyTextures(this);
     registerPaintTextures(this);
+    registerWoodTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -901,6 +905,7 @@ export class GameScene extends Phaser.Scene {
 
     this.keptLitFires.clear();
     this.buildPainterQuest();
+    this.buildLumberQuest();
     this.buildQuestMarks();
     this.streamChunks(true);
 
@@ -1242,6 +1247,8 @@ export class GameScene extends Phaser.Scene {
     this.questMarks.length = 0;
     this.painterQuest?.destroy();
     this.painterQuest = undefined;
+    this.lumberQuest?.destroy();
+    this.lumberQuest = undefined;
     this.greetedNpcs.clear();
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
@@ -1469,6 +1476,7 @@ export class GameScene extends Phaser.Scene {
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.updatePlantSpots();
     this.painterQuest?.update(delta);
+    this.lumberQuest?.update(delta);
     // A flor da lua le a luz das fogueiras e abre/fecha por conta dela.
     this.updateMoonflowers(delta);
     this.updateFurnaces(delta);
@@ -2206,7 +2214,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.camera) return;
     const front = this.facingTile();
     const show = !this.dialogOpen && !this.orderOverlay && !this.foraging && !this.cutsceneActive
-      && (isMushroomKind(this.itemManager?.kindAt(front.x, front.y)) || this.painterQuest?.wantsKey(front.x, front.y) === true);
+      && (isMushroomKind(this.itemManager?.kindAt(front.x, front.y)) || this.painterQuest?.wantsKey(front.x, front.y) === true || this.lumberQuest?.wantsKey(front.x, front.y) === true);
     if (!show) { this.mushroomHint?.setVisible(false); return; }
     if (!this.mushroomHint) {
       ensurePlacementKeyTexture(this, isTouchDevice());
@@ -2393,6 +2401,7 @@ export class GameScene extends Phaser.Scene {
     if (this.plantedSwordTile?.x === wx && this.plantedSwordTile.y === wy) return true;
     if (this.isQuestMarkAt(wx, wy)) return true;
     if (this.painterQuest?.isSolidAt(wx, wy)) return true;
+    if (this.lumberQuest?.isSolidAt(wx, wy)) return true;
     // O cogumelo nascendo e um corpo no caminho: o heroi encosta nele e fica DE FRENTE — que e a
     // mira da faca. Pisa-lo para apanhar seria arranca-lo, e o jogo ensina o contrario.
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return true;
@@ -2574,6 +2583,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.reachesFront(front)) { this.petCat(); return; }
     if (this.talkToNpcAt(front.x, front.y)) return;
     if (this.painterQuest?.interactAt(front.x, front.y)) return;
+    if (this.lumberQuest?.interactAt(front.x, front.y)) return;
     // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
     if (this.harvestMushroomAt(front.x, front.y)) return;
     if (this.tendHearthAt(front.x, front.y)) return;
@@ -3060,6 +3070,7 @@ export class GameScene extends Phaser.Scene {
    */
   private useItemAt(wx: number, wy: number): boolean {
     if (this.painterQuest?.useAt(wx, wy)) return true;
+    if (this.lumberQuest?.interactAt(wx, wy)) return true;
     // O COGUMELO NASCENDO vem primeiro: a faca e a resposta, e `equipToolFor` ja a sacou.
     if (this.harvestMushroomAt(wx, wy)) return true;
     // A ESPONJA vem antes de tudo, e ela e o unico caso desta tabela que NAO olha QUAL item esta
@@ -4480,6 +4491,74 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** O que uma quest em etapas pede da cena: a mão, o chão, os gestos e o congelar. */
+  private questHost() {
+    return {
+      scene: this as Phaser.Scene,
+      held: () => this.heldItem,
+      takeIntoHand: (kind: HeldItemKind, units: number) => this.takeIntoHand(kind, units),
+      removeFromHand: (kind: HeldItemKind, units: number) => {
+        if (this.heldOnFire) this.extinguishTorch();
+        this.inventory.remove(kind, units);
+        this.updateBackItem();
+      },
+      onGround: (kind: HeldItemKind) => (this.itemManager?.snapshot() ?? []).some((i) => i.kind === kind),
+      hero: () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }),
+      isFree: (x: number, y: number) => !this.isSolidForEntities(x, y) && !this.itemManager?.hasItemAt(x, y)
+        && !this.getPlantSpotAt(x, y) && !this.isOpenWaterAt(x, y),
+      fling: (kind: HeldItemKind, fromX: number, fromY: number, toX: number, toY: number) => this.flingCraftedItem(kind, fromX, fromY, toX, toY),
+      itemGet: (kind: HeldItemKind, onDone: () => void) => {
+        if (this.seenItems.has(kind)) { getSoundManager().playSwordPickup(); onDone(); return; }
+        this.seenItems.add(kind);
+        this.showItemGet(kind, onDone);
+      },
+      think: (texture: string) => this.heroThought?.show(texture),
+      hop: (x: number, y: number, height?: number) => { this.npcManager?.hop(x, y, height); },
+      hearts: (x: number, y: number) => this.spawnHearts(x, y),
+      sparkle: (x: number, y: number) => this.spawnGrowSparkle(x, y),
+      freeze: (frozen: boolean) => {
+        this.cutsceneActive = frozen;
+        if (frozen) {
+          this.stopBreathing();
+          this.controlsHint?.destroy();
+          this.controlsHint = undefined;
+        }
+      },
+      showButtons: (visible: boolean) => this.actionButtons?.setVisible(visible),
+      persist: () => this.persistAdventure(),
+    };
+  }
+
+  private buildLumberQuest(): void {
+    if (!this.adventure) return;
+    const bounds = getWorldBounds();
+    let npc: { worldX: number; worldY: number } | undefined;
+    for (let cy = bounds.minCy; cy <= bounds.maxCy; cy += 1) {
+      for (let cx = bounds.minCx; cx <= bounds.maxCx; cx += 1) {
+        const found = getChunkContent(cx, cy).npcs.find((n) => n.type === 'businessMan');
+        if (found) npc = { worldX: found.worldX, worldY: found.worldY };
+      }
+    }
+    if (!npc) return;
+    const quest = new LumberQuest({
+      ...this.questHost(),
+      say: (script, at, onClosed) => this.openDialogScript(script, at, getDialogVoice('businessMan'), onClosed),
+      closeQuest: () => this.questEvent({ type: 'fire' }),
+      markHeard: () => {
+        if (this.lumberQuest) this.seenDialogKeys.add(this.lumberQuest.talkKey());
+        this.persistAdventure();
+      },
+      fireNear: (x, y) => this.nearestCampfireWithin(x, y, 2.5),
+      keepFireLit: (fire) => {
+        this.keptLitFires.add(fire);
+        fire.light();
+      },
+    });
+    quest.setDialogBase(() => getDialog('businessMan', LUMBER_DIALOG) as DialogScript);
+    this.lumberQuest = quest;
+    quest.build(npc);
+  }
+
   /** A QUEST DA IRIS: tudo o que ela precisa da cena passa por aqui (ver PainterHost). */
   private buildPainterQuest(): void {
     if (!this.adventure) return;
@@ -4495,50 +4574,20 @@ export class GameScene extends Phaser.Scene {
     const dug = adventureState().dugSpots;
     const items = (): AdventureGroundItemLike[] => this.itemManager?.snapshot() ?? [];
     const quest = new PainterQuest({
-      scene: this,
-      held: () => this.heldItem,
+      ...this.questHost(),
       heldCount: (kind) => this.inventory.count(kind),
-      takeIntoHand: (kind, units) => this.takeIntoHand(kind, units),
-      removeFromHand: (kind, units) => {
-        this.inventory.remove(kind, units);
-        this.updateBackItem();
-      },
       takeFromGround: (kind) => {
         const it = items().find((i) => i.kind === kind);
         return it ? this.itemManager?.takeAt(it.worldX, it.worldY) !== undefined : false;
       },
-      onGround: (kind) => items().some((i) => i.kind === kind),
       dropAt: (kind, x, y) => {
         if (this.isTileOccupied(x, y)) this.dropNear(kind, 1, x, y);
         else this.itemManager?.drop(kind, x, y);
       },
-      hero: () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }),
-      isFree: (x, y) => !this.isSolidForEntities(x, y) && !this.itemManager?.hasItemAt(x, y)
-        && !this.getPlantSpotAt(x, y) && !this.isOpenWaterAt(x, y),
-      fling: (kind, fromX, fromY, toX, toY) => this.flingCraftedItem(kind, fromX, fromY, toX, toY),
       dugHoles: () => this.plantSpots.filter((spot) => spot.isHole && dug.has(`${spot.worldX},${spot.worldY}`)).length,
       spotAt: (x, y) => this.getPlantSpotAt(x, y),
       swing: (x, y) => this.swingHeld(x, y),
       say: (script, at, onClosed) => this.openDialogScript(script, at, getDialogVoice('painter'), onClosed),
-      itemGet: (kind, onDone) => {
-        if (this.seenItems.has(kind)) { getSoundManager().playSwordPickup(); onDone(); return; }
-        this.seenItems.add(kind);
-        this.showItemGet(kind, onDone);
-      },
-      think: (texture) => this.heroThought?.show(texture),
-      hop: (x, y, height) => { this.npcManager?.hop(x, y, height); },
-      hearts: (x, y) => this.spawnHearts(x, y),
-      sparkle: (x, y) => this.spawnGrowSparkle(x, y),
-      freeze: (frozen) => {
-        this.cutsceneActive = frozen;
-        if (frozen) {
-          this.stopBreathing();
-          this.controlsHint?.destroy();
-          this.controlsHint = undefined;
-        }
-      },
-      showButtons: (visible) => this.actionButtons?.setVisible(visible),
-      persist: () => this.persistAdventure(),
       closeQuest: () => this.questEvent({ type: 'paint' }),
       markHeard: () => {
         if (this.painterQuest) this.seenDialogKeys.add(this.painterQuest.talkKey());
@@ -4562,13 +4611,6 @@ export class GameScene extends Phaser.Scene {
         .setDisplaySize(0.9, 0.9);
     } else {
       mark.bb.setTexture(texture, 0);
-    }
-    if (mark.done && mark.def.keepFireLit) {
-      const fire = this.nearestCampfireWithin(mark.npcAt.x, mark.npcAt.y, 2.5);
-      if (fire) {
-        this.keptLitFires.add(fire);
-        fire.light();
-      }
     }
     if (!animate) return;
     // O SURGIMENTO: a peca brota do chao com um pulinho, um brilho e um sino.
@@ -5581,6 +5623,7 @@ export class GameScene extends Phaser.Scene {
     const base = getDialog(kind, askId);
     if (!base) return;
     if (askId === PAINTER_DIALOG && this.adventure && npcWorld && this.painterQuest?.talk(base, npcWorld)) return;
+    if (askId === LUMBER_DIALOG && this.adventure && npcWorld && this.lumberQuest?.talk(base, npcWorld)) return;
     // A ENTREGA VEM ANTES DA FALA. Cumprida a missão, `spokenDialogId` devolve o outro roteiro —
     // já nesta mesma conversa, que é o ponto: entregar e ouvir o obrigado é um gesto só.
     // ENTREGAR É FALAR: o que está na mão vai para quem pediu (uma coisa de cada vez).
@@ -5590,6 +5633,8 @@ export class GameScene extends Phaser.Scene {
     // Roteiro alternativo sem entrada no world.json cai no de sempre: uma missão sem fala nova
     // não pode emudecer o NPC.
     let script = speakId === askId ? base : (getDialog(kind, speakId) ?? base);
+    // Com o fogo aceso, as mãos do Bram pararam de tremer, e a voz também.
+    if (askId === LUMBER_DIALOG && speakId !== askId) script = { ...script, calm: true };
     // O PRESENTE: a primeira conversa com quem pede põe na mão do herói a ferramenta do pedido
     // (ver NpcQuest.gift). Ele chega DEPOIS da fala, quando a caixa fecha — primeiro o pedido,
     // depois o machado, que é a ordem em que alguém pede um favor de verdade.
@@ -5662,6 +5707,7 @@ export class GameScene extends Phaser.Scene {
     if (kind === 'wizard') return `wizard:${this.wizardLine()}`;
     if (!getDialog(kind, scriptId)) return null;
     if ((scriptId ?? kind) === PAINTER_DIALOG && this.adventure && this.painterQuest && !this.painterQuest.isDone) return this.painterQuest.talkKey();
+    if ((scriptId ?? kind) === LUMBER_DIALOG && this.adventure && this.lumberQuest && !this.lumberQuest.isDone) return this.lumberQuest.talkKey();
     // A chave é do ROTEIRO FALADO, não da espécie: três gatos com três aulas são três "!" a
     // apagar, e com a chave por espécie ouvir um deles apagaria a marca dos outros dois. Ela lê
     // o roteiro que a MISSÃO escolheu, e é assim que fechar um pedido reacende o "!" do NPC —

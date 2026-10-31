@@ -14,6 +14,8 @@ export type DialogScript = {
   lines: DialogLine[];
   /** Avisa quando cada linha entra: para o mundo trabalhar enquanto alguém conta o que faz. */
   onLine?: (index: number) => void;
+  /** Quem fala já não está aflito: a voz de quem resolveu o que o afligia (ver voicePersonas). */
+  calm?: boolean;
 };
 
 // Per-NPC "voice": a base frequency + waveform played as a blip on each typed letter, so

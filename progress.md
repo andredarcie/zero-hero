@@ -9766,3 +9766,13 @@ As plantas são reais e as cores são as delas: urucum, anil, cúrcuma e garanç
 Armadilhas: escrever `canvas.width` apaga o desenho, e o rascunho de quem saiu do quadro sumia assim. "Não sobrou um canto em branco" tem de ser verdade: com o limite em 45% de cobertura, ela dizia isso de um quadro meio vazio.
 
 Jogada de ponta a ponta em janela visível, com recarga no meio de cada etapa, itens largados e o dedo no quadro em telas de 360×640 a 844×390. O trecho da pintora em `playtest/scenarios/zerar.mjs` ainda é o da quest antiga, e esse cenário já estava desatualizado. `cozy-world.mjs --check` já falhava antes desta quest.
+
+## A quest do Bram: um fogo que dura (2026-10-30)
+
+Pedido do autor: elevar a quest do Bram ao nível das da Hollis e da Iris. Ele não pede gravetos, ensina lenha: madeira morta no cepo (verde é quase meia água), rachar no veio e longe do nó, empilhar fora do chão com vãos, secar no tempo e montar o fogo da isca para a lenha. Mora em `quests/LumberQuest.ts` e `runtime/WoodcraftOverlays.ts` (um minijogo por ofício, nenhum com derrota). A parte que a Hollis e a Iris dividem com ele está em `GameScene.questHost`.
+
+O que o jogador faz muda o jogo: o ar da pilha (`stackAir`) manda no tempo de secar, de 60 s a 150 s, e a pilha no mundo é a que ele montou, clareando enquanto seca. O comentário final lê as toras limpas, o ar e as vezes que o fogo morreu. Com o fogo aceso, a voz dele perde o tremor (`calm`).
+
+A fogueira dele fica fria até o fim (`CampfireObject.setHeldCold`): nem relógio, nem tocha, nem fogo vizinho a acendem, porque acendê-la é o pedido. Depois fica acesa para sempre. O machado que ficava ao lado dele saiu do `world.json`: é ele quem dá.
+
+Jogada de ponta a ponta em janela visível, mais erros de golpe, saída no meio, recarga em cada ofício, save antigo e os três minijogos com toque em telas de 360×640 a 844×390. `playtest/scenarios/marcas.mjs` e `zerar.mjs` ainda descrevem a quest antiga.
