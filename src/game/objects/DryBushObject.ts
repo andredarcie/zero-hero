@@ -6,8 +6,8 @@ import { world3d, type FireLight3D } from '@/game/render3d/World3D';
 import type { WorldProp } from './WorldProp';
 
 // A dry bush ("mato seco") blocks its tile until a flaming torch ignites it. It burns for
-// BURN_MS — charring from brown to ash while little flames flicker on top — then collapses
-// into a passable ash pile. Collision is owned here (see `blocking`) and resolved at runtime,
+// BURN_MS — charring from brown to black while little flames flicker on top — then collapses
+// into a low burnt stump you walk over. It drops nothing. Collision is owned here (see `blocking`) and resolved at runtime,
 // exactly like CampfireObject, so nothing has to touch the baked collision grid.
 
 const BURN_MS = 2200;
@@ -30,6 +30,10 @@ const FIRE_SPOTS = [
 
 const WHITE = new Phaser.Display.Color(255, 255, 255);
 const ASH = new Phaser.Display.Color(88, 84, 80);
+// O pé queimado: o que sobra do arbusto, preto e rente ao chão.
+const STUMP_TINT = 0x2f2a25;
+const STUMP_SCALE_X = 0.62;
+const STUMP_SCALE_Y = 0.3;
 
 type BushState = 'intact' | 'burning' | 'ash';
 
@@ -41,9 +45,6 @@ export class DryBushObject implements WorldProp {
   private readonly sprite: Billboard3D;
   private state: BushState = 'intact';
 
-  // Chamado quando a queima TERMINA (o arbusto assentou em cinza). A cena pendura aqui o
-  // drop de carvao — o objeto so anuncia o momento; produzir item e papel do GameScene.
-  public onBurnedOut?: () => void;
   private fires: Billboard3D[] = [];
   private fireLight?: FireLight3D;
   private fireTimer?: Phaser.Time.TimerEvent;
@@ -146,17 +147,15 @@ export class DryBushObject implements WorldProp {
     // The curve already faded it to zero by now — just release the light.
     this.fireLight?.destroy();
     this.fireLight = undefined;
-    // A low, greyed, half-faded smudge that reads as leftover ash.
-    this.sprite
-      .setTint(Phaser.Display.Color.GetColor(ASH.red, ASH.green, ASH.blue))
-      .setAlpha(0.7);
+    // O arbusto desaba e fica só o pé queimado, baixinho, no chão onde o herói pisa.
+    this.sprite.setTint(STUMP_TINT).setDepthLayer('ground');
     this.scene.tweens.add({
       targets: this.sprite,
-      scaleY: 0.5,
+      scaleX: this.sprite.scaleX * STUMP_SCALE_X,
+      scaleY: this.sprite.scaleY * STUMP_SCALE_Y,
       duration: 260,
       ease: 'Power2.easeIn',
     });
-    this.onBurnedOut?.();
   }
 
   public destroy(): void {

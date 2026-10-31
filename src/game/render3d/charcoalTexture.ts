@@ -7,8 +7,7 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
 // bucketTexture: desenhado uma vez e publicado nas DUAS pipelines de textura, THREE (billboard
 // de chao + costas do heroi + carga do braco) e Phaser (cerimonia de item-get e o swing).
 //
-// O carvao e o PRODUTO do fogo (um arbusto seco que terminou de arder as vezes o deixa) e o
-// alimento da tocha: pisar nele segurando o graveto ACESO o consome e enche o combustivel.
+// O carvao sai do forno (dois gravetos) e e o reagente do ferro. Tambem e o alimento da tocha: pisar nele segurando o graveto ACESO o consome e enche o combustivel.
 
 const PALETTE: Record<string, readonly [number, number, number, number]> = {
   '.': [0, 0, 0, 0], // transparente

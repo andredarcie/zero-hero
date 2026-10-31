@@ -34,6 +34,7 @@ const CHOPPING_BLOCK = [
 export const CHOP_BLOCK_TEXTURE = 'wood-block';
 export const FIRE_PIT_TEXTURE = 'wood-fire-pit';
 export const SPLIT_WOOD_TEXTURE = 'split-wood';
+export const WOOD_CRADLE_TEXTURE = 'wood-cradle';
 
 const blockCanvas = (): HTMLCanvasElement => {
   const canvas = document.createElement('canvas');
@@ -97,6 +98,30 @@ const splitWoodCanvas = (scene: Phaser.Scene): HTMLCanvasElement => {
   return canvas;
 };
 
+/** O graveto no colo: deitado, mais largo que o corpo do herói, e as duas luvas segurando por baixo. */
+const woodCradleCanvas = (scene: Phaser.Scene): HTMLCanvasElement => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 16;
+  const ctx = canvas.getContext('2d');
+  const source = scene.textures.get(ASSET_KEYS.woodIcon).getSourceImage() as CanvasImageSource;
+  if (!ctx) return canvas;
+  ctx.imageSmoothingEnabled = false;
+  // Um quarto de volta exato, para o pixel continuar pixel.
+  for (const shift of [-3, -1, 1]) {
+    ctx.setTransform(0, 1, -1, 0, 16 + shift, 0);
+    ctx.drawImage(source, 0, 0);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  for (const x of [3, 11]) {
+    ctx.fillStyle = '#1d2758';
+    ctx.fillRect(x, 8, 2, 3);
+    ctx.fillStyle = '#2f3e80';
+    ctx.fillRect(x, 8, 1, 1);
+  }
+  return canvas;
+};
+
 /** O sprite do graveto, para quem desenha fora do mundo (a tela de acender a fogueira). */
 export const woodSprite = (scene: Phaser.Scene): CanvasImageSource => scene.textures.get(ASSET_KEYS.woodIcon).getSourceImage() as CanvasImageSource;
 
@@ -116,6 +141,7 @@ export const registerWoodTextures = (scene: Phaser.Scene): void => {
     [CHOP_BLOCK_TEXTURE, blockCanvas()],
     [FIRE_PIT_TEXTURE, pitCanvas()],
     [SPLIT_WOOD_TEXTURE, splitWoodCanvas(scene)],
+    [WOOD_CRADLE_TEXTURE, woodCradleCanvas(scene)],
   ];
   for (const [key, canvas] of sheets) {
     if (!threeRegistered) publish3D(key, canvas);

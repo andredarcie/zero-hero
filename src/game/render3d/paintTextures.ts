@@ -70,6 +70,64 @@ const BUNDLE = [
   '................',
 ];
 
+// O ramo cresce nas costas, uma flor por vez. O de quatro é o `BUNDLE`.
+const BUNDLES: Readonly<Record<number, readonly string[]>> = {
+  1: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '......kkk.......',
+    '.....kIIIk......',
+    '.....kIrIk......',
+    '.....kkIkk......',
+    '......kgk.......',
+    '......kgk.......',
+    '......kWk.......',
+    '......kwk.......',
+    '......kgk.......',
+    '.......k........',
+    '................',
+  ],
+  2: [
+    '................',
+    '................',
+    '................',
+    '...kk...kkk.....',
+    '..kIIk..kaak....',
+    '..kIrIk.kAak....',
+    '..kkIkk.kaak....',
+    '...kgk..kgk.....',
+    '....kgk.kgk.....',
+    '.....kgkgk......',
+    '......kWk.......',
+    '......kwk.......',
+    '......kgk.......',
+    '.....kgkgk......',
+    '.....kk.kk......',
+    '................',
+  ],
+  3: [
+    '................',
+    '...kk..kkk..k...',
+    '..kIIk.kaak.kYk.',
+    '..kIrIkkaYakkYk.',
+    '..kkIkgkaakkkk..',
+    '...kgkgkkkkgk...',
+    '...kgggkgkggk...',
+    '....kgggggggk...',
+    '.....kgggggk....',
+    '......kWWWk.....',
+    '......kwwwk.....',
+    '......kgggk.....',
+    '.....kgkgkgk....',
+    '....kgk.g.kgk...',
+    '....kk..k..kk...',
+    '................',
+  ],
+};
+
 const BRUSH = [
   '................',
   '.............kk.',
@@ -242,6 +300,8 @@ export const DYE_BUD_TEXTURE = 'paint-plant-bud';
 export const EASEL_BLANK_TEXTURE = 'paint-easel-blank';
 export const EASEL_ART_TEXTURE = 'paint-easel-art';
 
+/** O ramo nas costas, com `flowers` flores (1 a 4). */
+export const dyeBundleTexture = (flowers: number): string => (BUNDLES[flowers] ? `${DYE_BUNDLE_TEXTURE}-${flowers}` : DYE_BUNDLE_TEXTURE);
 export const dyeFlowerTexture = (kind: DyeKind): string => `paint-plant-${kind}`;
 /** A mesa com `filled` potes prontos (0 a 4). */
 export const paintTableTexture = (filled: number): string => `paint-table-${filled}`;
@@ -315,6 +375,7 @@ export const registerPaintTextures = (scene: Phaser.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, HTMLCanvasElement]> = [
     [DYE_SEEDS_TEXTURE, rowsCanvas(SEED_PACK)],
     [DYE_BUNDLE_TEXTURE, rowsCanvas(BUNDLE)],
+    ...Object.entries(BUNDLES).map(([flowers, rows]) => [dyeBundleTexture(Number(flowers)), rowsCanvas(rows)] as const),
     [BRUSH_TEXTURE, rowsCanvas(BRUSH)],
     [DYE_SPROUT_TEXTURE, rowsCanvas(SPROUT)],
     [DYE_BUD_TEXTURE, rowsCanvas(BUD)],

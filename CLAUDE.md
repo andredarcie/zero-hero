@@ -3,7 +3,7 @@
 Aventura **cozy** top-down em pixel art, **em inglês e pt-BR** (local abre sempre em pt-BR). **Phaser 3** cuida da lógica, input e
 UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
 `src/game/render3d/`). **O JOGO É 100% PACÍFICO: não existe combate, inimigo, dano, vida, morte
-nem game over** — e nada se perde. Combate, bestiário, subterrâneo, escadas, bombas, lava, pira e
+nem game over** — e nada se perde. Combate, bestiário, subterrâneo, escadas, bombas, pira e
 planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `/` é o jogo e
 `/editor` é o editor; não há terceira rota.
 
@@ -12,7 +12,7 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
 1. **A abertura** (`playIntro`): à noite, o cavaleiro chega pela estrada do sul com a espada nas
    costas, a finca no chão (ela fica ali para sempre e bloqueia o tile), olha em volta entre
    vaga-lumes, e o mago chega andando e fala. Toca uma vez por partida (`introSeen` no save).
-2. **As quests da Iris e do Bram são em etapas** e têm dono próprio (`quests/`). **Os outros vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
+2. **As quests da Iris, do Bram e da Vega são em etapas** e têm dono próprio (`quests/`). **Os outros vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
    que o torna possível (`gift`). Pedido novo = uma entrada lá + falas `npc.<id>`/`npc.<id>Done`
    no locale.
 3. **O portão** (`openGardenGate`): quando `allQuestsDone()`, o `gardenGate` do centro abre.
@@ -90,6 +90,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **A SERRA: a altura do chão é de `world/relief`** e `Billboard3D`/`projectTile` já a somam — nunca
   somar de novo; passar de nível só por `canStep`. O `relief` se edita no /editor (ferramenta Serra, A);
   rodar `serra-world.mjs` de novo REGERA o campo e apaga o que foi feito à mão.
+- **Cada cogumelo tem a sua trilha** (`scripts/trilhas-cogumelos.mjs`: rode `--check` depois de mexer em volta deles).
+- **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Bram pede procurar. Não espalhe mais delas.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
   (`fungi.ts`), e cada espécie existe UMA vez no mundo. Colhido, vai às costas e NÃO pousa: só a Hollis
   o tira (e devolve a faca).
@@ -298,7 +300,7 @@ por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd
 
 A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); bolsa → `bolsa`; machado → `machado`; pedra →
 `pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;
-menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; borboletas e folhas do dia → `dia`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
+menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; borboletas e folhas do dia → `dia`; a quest inteira da Vega → `telescopio`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
 Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`, e os da mochila)
 podem estar vermelhos: não "conserte" editando conteúdo.
 

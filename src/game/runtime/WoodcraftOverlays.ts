@@ -41,10 +41,12 @@ const CSS = `
 `;
 
 /** O palco comum: o embaçado, o canvas transparente, a tecla e o relógio do desenho. */
-abstract class CraftOverlay {
+export abstract class CraftOverlay {
   protected readonly root: HTMLDivElement;
   protected readonly canvas: HTMLCanvasElement;
   protected readonly ctx: CanvasRenderingContext2D;
+  /** A tecla do gesto, no rodapé: quem não tem esse gesto a esconde. */
+  protected readonly keyHint: HTMLDivElement;
   private raf = 0;
   private last = 0;
   protected destroyed = false;
@@ -79,6 +81,7 @@ abstract class CraftOverlay {
       this.onLeave();
     });
     leave.addEventListener('pointerdown', (event) => event.stopPropagation());
+    this.keyHint = key;
     this.root.append(this.canvas, key, leave);
     this.root.addEventListener('pointerdown', (event) => {
       event.preventDefault();

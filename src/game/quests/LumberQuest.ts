@@ -16,13 +16,13 @@ import { FireLightOverlay, LOGS_TO_SPLIT, SplitOverlay } from '@/game/runtime/Wo
 
 /**
  * A QUEST DO BRAM: uma fogueira e uma noite. Não há fogueira nenhuma ao lado dele, só a terra
- * preparada. Bram dá o machado (nenhum mais fica solto no mundo), e são quatro voltas: cortar um
- * galho morto, levá-lo nas costas ao cepo, pô-lo em pé, rachá-lo no minijogo e atirar as duas metades
- * na terra, onde a fogueira vai crescendo. Com as quatro, ele manda acender. Aceso, é uma cena: ele vem
+ * preparada. Bram dá o machado (nenhum mais fica solto no mundo), e são quatro voltas: achar uma árvore
+ * seca, que é rara, cortar um galho, levá-lo no colo ao cepo, pô-lo em pé, e o minijogo de rachar já
+ * começa. As duas metades vão nas costas para a terra, onde a fogueira vai crescendo. Com as quatro, ele manda acender. Aceso, é uma cena: ele vem
  * sentar, o herói senta na frente do fogo, o mundo escurece, e ele conta como o fogo funciona.
  *
- * O MACHADO OCUPA A MÃO, como tudo (pedido do autor): pegar o galho deixa o machado no chão, e o herói
- * volta para buscá-lo. Ao rachar, as metades vêm para as costas e o machado fica ao lado do cepo.
+ * O MACHADO OCUPA A MÃO, como tudo (pedido do autor): pegar o galho deixa o machado no chão. Ao rachar,
+ * ele reaparece à esquerda do herói, com as metades nas costas: ninguém volta para buscá-lo.
  */
 
 export interface LumberHost {
@@ -30,6 +30,8 @@ export interface LumberHost {
   held: () => HeldItemKind | 'none';
   takeIntoHand: (kind: HeldItemKind, units: number) => void;
   onGround: (kind: HeldItemKind) => boolean;
+  takeFromGround: (kind: HeldItemKind) => boolean;
+  dropAt: (kind: HeldItemKind, x: number, y: number) => void;
   removeFromHand: (kind: HeldItemKind, units: number) => void;
   hero: () => { x: number; y: number };
   isFree: (x: number, y: number) => boolean;
@@ -62,6 +64,11 @@ const STICKS = LOGS_TO_SPLIT;
 const SIZE_BLOCK = 0.9;
 const SIZE_STICK = 1.05;
 const SIZE_PIT = 1.7;
+/** A altura do galho no colo e a do meio dele, em pé no cepo. */
+const LAP_ELEVATION = 0.36;
+const STANDING_MIDDLE = 0.9;
+/** O galho assenta, e o minijogo já vem. */
+const SPLIT_PAUSE_MS = 380;
 /** Onde cada galho pousa na terra, e a inclinação: quatro varas encostadas, formando a tenda. */
 const SLOTS: ReadonlyArray<{ x: number; y: number; angle: number }> = [
   { x: -0.26, y: 0.04, angle: 30 },
@@ -252,10 +259,7 @@ export class LumberQuest {
   public neededAt(x: number, y: number): HeldItemKind | null {
     if (this.save.stage !== 'gather') return null;
     const held = this.host.held();
-    if (this.blockTile?.x === x && this.blockTile.y === y) {
-      if (this.save.standing) return held === 'axe' ? null : 'axe';
-      return held === 'wood' ? null : 'wood';
-    }
+    if (this.blockTile?.x === x && this.blockTile.y === y) return this.save.standing || held === 'wood' ? null : 'wood';
     if (this.pitTile?.x === x && this.pitTile.y === y) return held === 'splitWood' ? null : 'splitWood';
     return null;
   }
@@ -263,50 +267,56 @@ export class LumberQuest {
   public wantsKey(x: number, y: number): boolean {
     const { stage } = this.save;
     const held = this.host.held();
-    if (this.blockTile?.x === x && this.blockTile.y === y) return stage === 'gather' && (this.save.standing ? held === 'axe' : held === 'wood');
+    if (this.blockTile?.x === x && this.blockTile.y === y) return stage === 'gather' && (this.save.standing || held === 'wood');
     if (this.pitTile?.x !== x || this.pitTile.y !== y) return false;
     return stage === 'light' || (stage === 'gather' && held === 'splitWood');
   }
 
   private useBlock(): boolean {
     if (this.save.stage !== 'gather' || this.busy) return true;
+    // Quem saiu do minijogo no meio volta direto: o machado não é pedido.
     if (this.save.standing) {
-      if (this.host.held() === 'axe') this.openSplit();
+      this.openSplit();
       return true;
     }
     if (this.host.held() === 'wood') this.standStick();
     return true;
   }
 
-  /** O galho sai das costas e cai em pé no cepo: sobe, gira e assenta com um baque. */
+  /** O galho sai do colo e fica em pé no cepo: sobe, gira um quarto de volta e assenta com um baque. */
   private standStick(): void {
     const tile = this.blockTile;
     if (!tile) return;
     const hero = this.host.hero();
     this.host.removeFromHand('wood', 1);
     this.busy = true;
+    this.host.freeze(true);
     const { scene } = this.host;
-    const ghost = world3d().addBillboard(ASSET_KEYS.woodIcon, 0, {})
+    const ghost = world3d().addBillboard(ASSET_KEYS.woodIcon, 0, { centered: true })
       .setPosition(hero.x, hero.y)
-      .setElevation(0.5)
+      .setElevation(LAP_ELEVATION)
+      .setAngle(90)
       .setDisplaySize(SIZE_STICK, SIZE_STICK);
     const k = { t: 0 };
     scene.tweens.add({
       targets: k,
       t: 1,
-      duration: 340,
-      ease: 'Sine.easeIn',
+      duration: 420,
+      ease: 'Sine.easeInOut',
       onUpdate: () => {
         ghost.setPosition(hero.x + (tile.x - hero.x) * k.t, hero.y + (tile.y - hero.y) * k.t);
-        ghost.setElevation(0.5 + Math.sin(k.t * Math.PI) * 0.75 - k.t * 0.12);
-        ghost.setAngle((1 - k.t) * 360);
+        ghost.setElevation(LAP_ELEVATION + (STANDING_MIDDLE - LAP_ELEVATION) * k.t + Math.sin(k.t * Math.PI) * 0.3);
+        ghost.setAngle((1 - k.t) * 90);
       },
       onComplete: () => {
         ghost.destroy();
         this.showStanding();
         this.save.standing = true;
-        this.busy = false;
         this.host.persist();
+        scene.time.delayedCall(SPLIT_PAUSE_MS, () => {
+          this.busy = false;
+          this.openSplit();
+        });
         getSoundManager().playBridgePlank();
         this.host.dust(tile.x, tile.y);
         const stick = this.standingStick;
@@ -352,13 +362,17 @@ export class LumberQuest {
     }, this.save.laid);
   }
 
-  /** As duas metades pulam do cepo para as costas. */
+  /** As duas metades pulam do cepo para as costas, e o machado fica à esquerda do herói. */
   private finishSplit(): void {
     const tile = this.blockTile;
     const hero = this.host.hero();
     this.standingStick?.destroy();
     this.standingStick = undefined;
     this.save.standing = false;
+    if (this.host.held() === 'axe') this.host.removeFromHand('axe', 1);
+    else this.host.takeFromGround('axe');
+    this.host.dropAt('axe', hero.x - 1, hero.y);
+    this.host.sparkle(hero.x - 1, hero.y);
     if (tile) this.host.fling('splitWood', tile.x, tile.y, hero.x, hero.y);
     this.host.takeIntoHand('splitWood', 1);
     this.host.itemGet('splitWood', () => {});

@@ -83,6 +83,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   ironRock: { key: ASSET_KEYS.ironRock, frame: 0 },
   tallGrass: { key: ASSET_KEYS.tallGrassUp, frame: 0 },
   water: { key: ASSET_KEYS.water },
+  lava: { key: ASSET_KEYS.lavaFloor },
   bridgeSpot: { key: ASSET_KEYS.bridge },
   // A pose ABERTA: e a que diz o que a peca faz (uma ponte de petalas). Ver MOONFLOWER_FRAMES.
   moonflower: { key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },

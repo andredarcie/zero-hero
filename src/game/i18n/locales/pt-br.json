@@ -45,9 +45,13 @@
       "flyAgaric": "Uma amanita-mata-moscas.",
       "porcini": "Um porcini.",
       "dyeSeeds": "Sementes sortidas. Quatro plantas de tinta.",
-      "dyeBundle": "As quatro flores de tinta.",
+      "dyeBundle": "As quatro flores. Leve à mesa.",
       "brush": "Um pincel. O quadro espera.",
-      "splitWood": "O galho, em dois. Leve à terra."
+      "splitWood": "O galho, em dois. Leve à terra.",
+      "sand": "Areia da margem.",
+      "ash": "Cinza da fogueira.",
+      "glass": "Vidro. Leve à Vega.",
+      "telescope": "O telescópio!"
     },
     "name": {
       "sword": "Espada",
@@ -77,7 +81,11 @@
       "dyeSeeds": "Sementes sortidas",
       "dyeBundle": "Flores de tinta",
       "brush": "Pincel",
-      "splitWood": "Galho rachado"
+      "splitWood": "Galho rachado",
+      "sand": "Areia",
+      "ash": "Cinza",
+      "glass": "Vidro",
+      "telescope": "Telescópio"
     }
   },
   "dialog": {
@@ -202,10 +210,6 @@
         {
           "speaker": "npc",
           "text": "Duas fogueiras nesta clareira estão frias. Leve a chama até elas."
-        },
-        {
-          "speaker": "npc",
-          "text": "Mato queimado vira CARVÃO. Fogo alimentando fogo — pegue."
         }
       ]
     },
@@ -290,40 +294,40 @@
       ]
     },
     "radiationSuitHint": {
-      "puffball": [
+      "porcini": [
         {
           "speaker": "npc",
-          "text": "A leste, depois da água: uma bola branca sem chapéu."
-        }
-      ],
-      "inkCap": [
-        {
-          "speaker": "npc",
-          "text": "A nordeste, perto do lago: alto e branco, desgrenhado como uma peruca."
+          "text": "A oeste, no fim do corredor: um pãozinho marrom num pé grosso. É só chegar."
         }
       ],
       "morel": [
         {
           "speaker": "npc",
-          "text": "Ao sul, perto das pedras: um chapéu de favo de mel."
+          "text": "Ao norte, numa ilha: um chapéu de favo de mel. Dois gravetos fazem uma ponte."
+        }
+      ],
+      "puffball": [
+        {
+          "speaker": "npc",
+          "text": "A nordeste, no mato alto: uma bola branca sem chapéu. Tem uma foice ali perto."
+        }
+      ],
+      "inkCap": [
+        {
+          "speaker": "npc",
+          "text": "Bem ao norte, atrás de arbustos secos: alto e branco, desgrenhado. Arbusto seco queima."
         }
       ],
       "chanterelle": [
         {
           "speaker": "npc",
-          "text": "Bem ao norte, sob os pinheiros: um funil dourado."
+          "text": "Ao norte, cercado de lava: um funil dourado. Pedra afunda e vira chão. Lava acende graveto."
         }
       ],
       "flyAgaric": [
         {
           "speaker": "npc",
-          "text": "No canto noroeste: vermelho, com pintas brancas. Olhe. Não coma."
-        }
-      ],
-      "porcini": [
-        {
-          "speaker": "npc",
-          "text": "Bem ao sul, na beira oeste: um pãozinho marrom num pé grosso."
+          "text": "No canto noroeste, atrás de mato morto: vermelho, com pintas brancas. Leve um machado. Não coma."
         }
       ]
     },
@@ -367,6 +371,10 @@
         {
           "speaker": "npc",
           "text": "Corte um galho morto e leve ao cepo. Ponha em pé e rache. As duas metades vão para a terra. Quatro vezes."
+        },
+        {
+          "speaker": "npc",
+          "text": "Árvore seca é rara por aqui. Ande e procure."
         }
       ]
     },
@@ -388,7 +396,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Quero um marco de pedras aqui, sob o céu mais limpo."
+          "text": "Meu telescópio quebrou na queda. Sobrou o tubo."
+        },
+        {
+          "speaker": "npc",
+          "text": "Sem tripé e sem lente, não acho o caminho no céu."
         },
         {
           "speaker": "npc",
@@ -401,11 +413,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Ferro. Um lugar para onde voltar."
+          "text": "O céu continua lá. Volte de noite."
         },
         {
           "speaker": "npc",
-          "text": "Muito obrigado."
+          "text": "Pus um marco de pedras aqui: um lugar para onde voltar."
         }
       ]
     },
@@ -425,7 +437,7 @@
       "charcoal": [
         {
           "speaker": "npc",
-          "text": "Instale o forno. Dois gravetos viram carvão."
+          "text": "Instale o forno. Dois gravetos viram carvão: deixei dois perto da bancada."
         }
       ],
       "bloom": [
@@ -497,13 +509,13 @@
         },
         {
           "speaker": "npc",
-          "text": "Colha com a faca da Hollis, a oeste. E traga as flores para mim."
+          "text": "Colha com as mãos, as quatro. Depois, para a mesa."
         }
       ],
       "bring": [
         {
           "speaker": "npc",
-          "text": "As flores! Traga aqui."
+          "text": "As flores vão para a mesa."
         }
       ],
       "easel": [
@@ -517,7 +529,7 @@
       "intro": [
         {
           "speaker": "npc",
-          "text": "As flores vão para a mesa. Veja como se faz."
+          "text": "Que flores! Veja como se faz."
         }
       ],
       "urucum": [
@@ -553,7 +565,11 @@
       "brush": [
         {
           "speaker": "npc",
-          "text": "Seu kit está pronto. Tome o pincel: o quadro em branco é seu."
+          "text": "Obrigada pelas tintas! Vou armar o quadro."
+        },
+        {
+          "speaker": "npc",
+          "text": "Tome o pincel: é seu."
         }
       ]
     },
@@ -593,7 +609,7 @@
       "gather": [
         {
           "speaker": "npc",
-          "text": "Faltam {n}. Galho morto, cepo, machado, terra."
+          "text": "Faltam {n}. Galho morto, cepo, terra. Árvore seca é rara: procure."
         }
       ],
       "ready": [
@@ -656,6 +672,84 @@
         {
           "speaker": "npc",
           "text": "Foi uma noite fantástica."
+        }
+      ]
+    },
+    "astronautStep": {
+      "tripod": [
+        {
+          "speaker": "npc",
+          "text": "Ferro! Isto vira o tripé."
+        },
+        {
+          "speaker": "npc",
+          "text": "Falta a lente, e lente é vidro."
+        },
+        {
+          "speaker": "npc",
+          "text": "Vidro nasce de areia e cinza: a cinza ajuda a areia a derreter."
+        },
+        {
+          "speaker": "npc",
+          "text": "Trouxe areia da lagoa: é aquele monte. A cinza está ao lado da fogueira. As duas no forno."
+        }
+      ],
+      "wait": [
+        {
+          "speaker": "npc",
+          "text": "Areia do monte, cinza da fogueira. As duas no forno."
+        }
+      ],
+      "polish": [
+        {
+          "speaker": "npc",
+          "text": "Bom vidro. Agora ele vira lente."
+        },
+        {
+          "speaker": "npc",
+          "text": "Primeiro a pedra áspera, que dá a curva. Depois a fina, que tira a névoa."
+        },
+        {
+          "speaker": "npc",
+          "text": "Esfregue em círculos."
+        }
+      ],
+      "carry": [
+        {
+          "speaker": "npc",
+          "text": "Ficou nítida!"
+        },
+        {
+          "speaker": "npc",
+          "text": "Leve o telescópio ao planalto, a sudoeste. Suba a escada e procure o marco. Lá o céu é mais limpo."
+        }
+      ],
+      "night": [
+        {
+          "speaker": "npc",
+          "text": "De dia não se vê nada."
+        },
+        {
+          "speaker": "npc",
+          "text": "Sente ao lado dele e espere a noite."
+        }
+      ],
+      "farewell": [
+        {
+          "speaker": "npc",
+          "text": "Você achou os quatro."
+        },
+        {
+          "speaker": "npc",
+          "text": "Galileu viu esse céu com uma lente assim, em 1610. Ninguém acreditou nele."
+        },
+        {
+          "speaker": "npc",
+          "text": "A luz que você viu já estava a caminho muito antes de você nascer."
+        },
+        {
+          "speaker": "npc",
+          "text": "Só faltava alguém olhar."
         }
       ]
     }
@@ -832,5 +926,27 @@
         "text": "obrigado por jogar"
       }
     ]
+  },
+  "sky": {
+    "moon": {
+      "name": "A Lua",
+      "seen": "Cada mancha clara é uma cratera. As escuras são mares de lava antiga.",
+      "fact": "A luz dela leva 1,3 segundo até aqui."
+    },
+    "jupiter": {
+      "name": "Júpiter",
+      "seen": "Quatro pontinhos em fila, ao lado dele. São luas.",
+      "fact": "Galileu as viu em 1610: nem tudo gira em volta da Terra."
+    },
+    "saturn": {
+      "name": "Saturno",
+      "seen": "Os anéis não são uma peça só.",
+      "fact": "São bilhões de pedaços de gelo e rocha, cada um na sua órbita."
+    },
+    "pleiades": {
+      "name": "As Plêiades",
+      "seen": "A olho nu, um borrão. Pela lente, dezenas de estrelas.",
+      "fact": "Essa luz saiu de lá há uns 440 anos."
+    }
   }
 }

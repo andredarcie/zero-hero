@@ -92,6 +92,9 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // Duas madeiras e nao uma: um carvao tem de custar mais que um graveto, senao a bancada acharia
   // que madeira e carvao sao a mesma coisa com nomes diferentes.
   { inputs: ['wood', 'wood'], output: 'charcoal', family: 'material', station: 'furnace' },
+  // O VIDRO DA VEGA: areia é sílica, que só derrete muito quente; a cinza de lenha traz o potássio
+  // que baixa esse ponto. É o vidro de cinza de verdade, o das janelas medievais.
+  { inputs: ['sand', 'ash'], output: 'glass', family: 'material', station: 'furnace' },
 ];
 
 /** A receita que produz este item. */
@@ -154,7 +157,7 @@ const LADDER: Record<CraftStation, readonly HeldItemKind[]> = {
   ],
   // O forno tem dois degraus, e a ordem é a da própria química: primeiro se faz o carvão (que só
   // pede lenha), e é com ele que o minério vira esponja.
-  furnace: ['charcoal', 'bloom'],
+  furnace: ['charcoal', 'bloom', 'glass'],
 };
 
 /**

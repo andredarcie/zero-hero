@@ -76,7 +76,7 @@ export type WorldChunk = {
 // acende, dentro do jardim que o portao fecha. `gardenGate` e esse portao: ele nao tem chave, ele
 // abre quando o ultimo pedido dos vizinhos fecha. Ver GameScene.openGardenGate.
 export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock'
-  | 'ironRock' | 'tallGrass' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower'
+  | 'ironRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower'
   | 'plantSpot' | 'toolbox' | 'furnace'
   | 'altar' | 'hearth' | 'gardenGate';
 

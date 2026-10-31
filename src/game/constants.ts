@@ -209,6 +209,7 @@ export const ASSET_KEYS = {
   oreItem: 'ore-item',
   bloomItem: 'bloom-item',
   water: 'water',
+  lavaFloor: 'lava-floor',
   water1: 'water-1',
   water2: 'water-2',
   water3: 'water-3',
@@ -449,12 +450,6 @@ export const TREE_UPPER_FRAMES: ReadonlySet<number> = new Set([
   3, 4, 14, 15, 16, 17, 18, 21, 36, 37,
 ]);
 
-// O SORTEIO DO CARVAO MORREU (2026-08-12): todo arbusto seco queimado deixa carvao, sempre. Era
-// 1 em 4, e a raridade metrificava o fogo enquanto o carvao era so comida de tocha e a unica
-// fonte dele era queimar mato. Hoje ele e o REAGENTE da cadeia do ferro e o forno tem a CARVOARIA
-// (madeira+madeira, renovavel): contra uma receita repetivel, o sorteio no arbusto deixou de ser
-// economia e virou imposto sobre quem escolheu o caminho do fogo. Ver GameScene.dropCharcoalFromBush.
-
 // Ground-layer frames that BLOCK, the mirror of SOLID_UPPER_FRAMES for the floor. The sea is
 // the only one: the border that no item in the game answers — collision here is implicit and
 // unconditional.
@@ -598,7 +593,7 @@ export const SEED_PACK_KINDS: ReadonlySet<string> = new Set(['seeds']);
 // contrato; o MINÉRIO DE FERRO entra porque a rocha-veio o produz aos montes e vendê-lo ao
 // astronauta é por quantidade. Lista SEPARADA de SEED_PACK_KINDS de propósito: o buraco de
 // plantio pergunta por SEMENTE, e um punhado de ferro não pode ser semeado num canteiro.
-export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set([...SEED_PACK_KINDS, 'iron', 'dyeSeeds']);
+export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set([...SEED_PACK_KINDS, 'iron', 'dyeSeeds', 'dyeBundle']);
 
 // O PUNHADO COM QUE UMA PECA NASCE NO CHAO. Isto vale so para o que nasce no mundo (pickup
 // autorado, drop sem contagem explicita). Um item

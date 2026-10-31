@@ -63,6 +63,7 @@ const DEFS: Record<string, SheetDef> = {
   // NAO sao uma animacao livre: cada um e um `t` de abertura (ver MOONFLOWER_FRAMES).
   moonflower: { url: `${A}/environment/props/moonflower.png`, frameW: 16, frameH: 16 },
   'dry-shrub': { url: `${A}/environment/props/dry_shrub.png` },
+  'lava-floor': { url: `${A}/environment/terrain/lava_floor.png` },
   rock: { url: `${A}/environment/props/rock.png` },
   // Sprite Factory: a pedra de ferro — frame 0 inteira, frame 1 rachada (a rocha comum guarda
   // esse par em dois arquivos; aqui e um sheet so).

@@ -154,7 +154,7 @@ const CSS = `
 .zh-note.zh-done .zh-note-photo, .zh-note.zh-done .zh-note-clip { animation: none; }
 `;
 
-const ensureStyle = (): void => {
+export const ensureNoteStyle = (): void => {
   if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
   style.id = STYLE_ID;
@@ -203,8 +203,8 @@ const GRAVITY = 70;
 /** Sobrando isto (fração da terra inicial), o resto cai sozinho: a última migalha não vira caça. */
 const CLEAN_LEFT = 0.03;
 /** Quando a pena começa (o papel já assentou) e o ritmo dela. */
-const WRITE_START_MS = 760;
-const WRITE_MS_PER_CHAR = 26;
+export const WRITE_START_MS = 760;
+export const WRITE_MS_PER_CHAR = 26;
 
 const ACTION_CODES = new Set(['KeyZ', 'KeyJ', 'Space', 'KeyX', 'KeyK', 'Enter', 'NumpadEnter']);
 
@@ -308,7 +308,7 @@ export class ForagingOverlay {
     private readonly cb: ForagingCallbacks,
     private readonly touch: boolean,
   ) {
-    ensureStyle();
+    ensureNoteStyle();
     // A letra da ficha vem de um arquivo: pedida agora, ela já chegou quando o papel abrir.
     void document.fonts?.load(`16px ${HAND}`).catch(() => undefined);
     this.spec = FUNGUS_SPECS[kind];
@@ -1185,7 +1185,7 @@ export class ForagingOverlay {
     img.src = this.art.toDataURL();
     img.alt = t(`items.name.${this.kind}`);
     shot.appendChild(img);
-    photo.append(shot, this.paperClip());
+    photo.append(shot, paperClip());
 
     let at = WRITE_START_MS;
     const ink = (el: HTMLElement, text: string): HTMLElement => {
@@ -1250,34 +1250,34 @@ export class ForagingOverlay {
     svg.appendChild(p);
     return svg;
   }
-
-  /** O clipe de papel: um arame dobrado, de metal fosco, por cima da beirada da foto. */
-  private paperClip(): SVGSVGElement {
-    const ns = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('class', 'zh-note-clip');
-    svg.setAttribute('viewBox', '0 0 15 46');
-    svg.setAttribute('aria-hidden', 'true');
-    const wire = 'M4.5 32 V9 a4 4 0 0 1 8 0 V37 a5.5 5.5 0 0 1 -11 0 V5 a3.5 3.5 0 0 1 3.5 -3.5';
-    const shadow = document.createElementNS(ns, 'path');
-    shadow.setAttribute('d', wire);
-    shadow.setAttribute('transform', 'translate(0.9 1.4)');
-    shadow.setAttribute('fill', 'none');
-    shadow.setAttribute('stroke', 'rgba(40,24,8,0.35)');
-    shadow.setAttribute('stroke-width', '1.9');
-    const metal = document.createElementNS(ns, 'path');
-    metal.setAttribute('d', wire);
-    metal.setAttribute('fill', 'none');
-    metal.setAttribute('stroke', '#8e959b');
-    metal.setAttribute('stroke-width', '1.6');
-    metal.setAttribute('stroke-linecap', 'round');
-    const shine = document.createElementNS(ns, 'path');
-    shine.setAttribute('d', wire);
-    shine.setAttribute('fill', 'none');
-    shine.setAttribute('stroke', '#e4e8eb');
-    shine.setAttribute('stroke-width', '0.5');
-    shine.setAttribute('stroke-linecap', 'round');
-    svg.append(shadow, metal, shine);
-    return svg;
-  }
 }
+
+/** O clipe de papel: um arame dobrado, de metal fosco, por cima da beirada da foto. */
+export const paperClip = (): SVGSVGElement => {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('class', 'zh-note-clip');
+  svg.setAttribute('viewBox', '0 0 15 46');
+  svg.setAttribute('aria-hidden', 'true');
+  const wire = 'M4.5 32 V9 a4 4 0 0 1 8 0 V37 a5.5 5.5 0 0 1 -11 0 V5 a3.5 3.5 0 0 1 3.5 -3.5';
+  const shadow = document.createElementNS(ns, 'path');
+  shadow.setAttribute('d', wire);
+  shadow.setAttribute('transform', 'translate(0.9 1.4)');
+  shadow.setAttribute('fill', 'none');
+  shadow.setAttribute('stroke', 'rgba(40,24,8,0.35)');
+  shadow.setAttribute('stroke-width', '1.9');
+  const metal = document.createElementNS(ns, 'path');
+  metal.setAttribute('d', wire);
+  metal.setAttribute('fill', 'none');
+  metal.setAttribute('stroke', '#8e959b');
+  metal.setAttribute('stroke-width', '1.6');
+  metal.setAttribute('stroke-linecap', 'round');
+  const shine = document.createElementNS(ns, 'path');
+  shine.setAttribute('d', wire);
+  shine.setAttribute('fill', 'none');
+  shine.setAttribute('stroke', '#e4e8eb');
+  shine.setAttribute('stroke-width', '0.5');
+  shine.setAttribute('stroke-linecap', 'round');
+  svg.append(shadow, metal, shine);
+  return svg;
+};

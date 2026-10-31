@@ -206,7 +206,7 @@
         [
           14,
           null,
-          7,
+          null,
           7,
           7,
           7,
@@ -214,7 +214,7 @@
           6,
           19,
           7,
-          0,
+          null,
           18
         ],
         [
@@ -228,7 +228,7 @@
           8,
           null,
           8,
-          19,
+          null,
           null
         ],
         [
@@ -243,7 +243,7 @@
           null,
           2,
           null,
-          0
+          null
         ],
         [
           13,
@@ -313,7 +313,7 @@
           null,
           null,
           10,
-          0
+          null
         ],
         [
           10,
@@ -325,9 +325,9 @@
           8,
           7,
           19,
-          1,
-          1,
-          8
+          null,
+          null,
+          null
         ],
         [
           14,
@@ -340,7 +340,7 @@
           0,
           7,
           17,
-          10,
+          null,
           null
         ],
         [
@@ -778,11 +778,11 @@
           4
         ],
         [
-          20,
+          null,
           4,
           4,
           7,
-          null,
+          4,
           null,
           null,
           13,
@@ -793,7 +793,7 @@
         ],
         [
           0,
-          7,
+          null,
           0,
           19,
           0,
@@ -806,13 +806,13 @@
           7
         ],
         [
-          19,
-          20,
-          20,
-          20,
-          9,
-          13,
           null,
+          20,
+          null,
+          null,
+          null,
+          13,
+          4,
           13,
           0,
           9,
@@ -853,7 +853,7 @@
           9,
           4,
           null,
-          null,
+          20,
           19,
           4,
           10,
@@ -1060,7 +1060,18 @@
           false
         ]
       ],
-      "pickups": [],
+      "pickups": [
+        {
+          "type": "pickaxe",
+          "worldX": 14,
+          "worldY": 6
+        },
+        {
+          "type": "wood",
+          "worldX": 13,
+          "worldY": 5
+        }
+      ],
       "npcs": []
     },
     {
@@ -1769,8 +1780,8 @@
         ],
         [
           null,
-          null,
-          null,
+          4,
+          14,
           null,
           null,
           null,
@@ -1778,7 +1789,7 @@
           null,
           12,
           null,
-          null,
+          14,
           14
         ],
         [
@@ -2092,13 +2103,7 @@
           false
         ]
       ],
-      "pickups": [
-        {
-          "type": "pickaxe",
-          "worldX": 40,
-          "worldY": 5
-        }
-      ],
+      "pickups": [],
       "npcs": [
         {
           "type": "astronaut",
@@ -2298,13 +2303,13 @@
         [
           14,
           14,
+          14,
           null,
-          null,
-          null,
+          14,
           14,
           14,
           0,
-          null,
+          14,
           14,
           14,
           14
@@ -2326,15 +2331,15 @@
         [
           14,
           14,
+          14,
           null,
-          null,
-          null,
+          14,
           2,
           8,
           19,
-          null,
+          14,
           19,
-          null,
+          14,
           14
         ],
         [
@@ -2352,7 +2357,7 @@
           null
         ],
         [
-          null,
+          14,
           7,
           20,
           7,
@@ -2366,7 +2371,7 @@
           null
         ],
         [
-          null,
+          14,
           null,
           1,
           10,
@@ -2380,7 +2385,7 @@
           14
         ],
         [
-          null,
+          14,
           null,
           20,
           20,
@@ -2424,15 +2429,15 @@
         [
           14,
           14,
-          null,
+          14,
           8,
-          null,
-          null,
+          14,
           null,
           null,
           null,
           14,
-          null,
+          14,
+          14,
           14
         ],
         [
@@ -2834,9 +2839,9 @@
         [
           8,
           10,
+          3,
           null,
-          null,
-          null,
+          3,
           null,
           null,
           null,
@@ -2864,9 +2869,9 @@
           null,
           null,
           null,
+          3,
           null,
-          null,
-          null,
+          4,
           10,
           null,
           7,
@@ -2907,21 +2912,7 @@
           null,
           null,
           null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          null,
-          7
-        ],
-        [
-          39,
-          null,
-          null,
-          null,
-          null,
-          null,
+          3,
           null,
           null,
           null,
@@ -2941,7 +2932,21 @@
           null,
           null,
           null,
-          7
+          null
+        ],
+        [
+          39,
+          null,
+          null,
+          3,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
         ],
         [
           39,
@@ -3411,7 +3416,7 @@
         ],
         [
           19,
-          0,
+          null,
           null,
           null,
           null,
@@ -3424,7 +3429,7 @@
           0
         ],
         [
-          8,
+          null,
           0,
           null,
           null,
@@ -3669,6 +3674,11 @@
           "type": "puffball",
           "worldX": 12,
           "worldY": 21
+        },
+        {
+          "type": "scythe",
+          "worldX": 13,
+          "worldY": 18
         }
       ],
       "npcs": [
@@ -5394,13 +5404,7 @@
           false
         ]
       ],
-      "pickups": [
-        {
-          "type": "scythe",
-          "worldX": 52,
-          "worldY": 17
-        }
-      ],
+      "pickups": [],
       "npcs": []
     },
     {
@@ -5708,7 +5712,7 @@
           2,
           13,
           13,
-          0,
+          null,
           8,
           7,
           0,
@@ -6091,6 +6095,16 @@
           "type": "morel",
           "worldX": 2,
           "worldY": 30
+        },
+        {
+          "type": "wood",
+          "worldX": 4,
+          "worldY": 32
+        },
+        {
+          "type": "wood",
+          "worldX": 4,
+          "worldY": 33
         }
       ],
       "npcs": []
@@ -8688,7 +8702,7 @@
           null,
           19,
           null,
-          null,
+          14,
           1,
           null,
           null
@@ -8702,7 +8716,7 @@
           19,
           20,
           null,
-          null,
+          14,
           null,
           null,
           null
@@ -8716,7 +8730,7 @@
           null,
           null,
           1,
-          null,
+          14,
           null,
           null,
           null
@@ -8730,7 +8744,7 @@
           0,
           null,
           19,
-          null,
+          14,
           0,
           null,
           null
@@ -8744,10 +8758,10 @@
           null,
           null,
           20,
-          null,
-          null,
-          null,
-          null
+          4,
+          4,
+          4,
+          4
         ],
         [
           1,
@@ -15258,41 +15272,6 @@
       "worldY": 3
     },
     {
-      "type": "dryTree",
-      "worldX": 50,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 52,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 56,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 50,
-      "worldY": 3
-    },
-    {
-      "type": "dryTree",
-      "worldX": 52,
-      "worldY": 3
-    },
-    {
-      "type": "dryTree",
-      "worldX": 56,
-      "worldY": 3
-    },
-    {
-      "type": "dryTree",
-      "worldX": 58,
-      "worldY": 3
-    },
-    {
       "type": "campfire",
       "lit": true,
       "worldX": 6,
@@ -15597,38 +15576,8 @@
     },
     {
       "type": "dryTree",
-      "worldX": 6,
-      "worldY": 16
-    },
-    {
-      "type": "dryTree",
-      "worldX": 4,
-      "worldY": 14
-    },
-    {
-      "type": "dryTree",
-      "worldX": 4,
-      "worldY": 16
-    },
-    {
-      "type": "dryTree",
-      "worldX": 5,
-      "worldY": 19
-    },
-    {
-      "type": "dryTree",
-      "worldX": 3,
-      "worldY": 21
-    },
-    {
-      "type": "dryTree",
       "worldX": 8,
       "worldY": 19
-    },
-    {
-      "type": "dryTree",
-      "worldX": 2,
-      "worldY": 14
     },
     {
       "type": "dryTree",
@@ -15652,22 +15601,12 @@
     },
     {
       "type": "moonflower",
-      "worldX": 10,
-      "worldY": 3
-    },
-    {
-      "type": "moonflower",
       "worldX": 4,
       "worldY": 10
     },
     {
       "type": "tallGrass",
       "worldX": 1,
-      "worldY": 4
-    },
-    {
-      "type": "tallGrass",
-      "worldX": 10,
       "worldY": 4
     },
     {
@@ -15738,26 +15677,6 @@
     {
       "type": "ironRock",
       "worldX": 46,
-      "worldY": 10
-    },
-    {
-      "type": "dryTree",
-      "worldX": 50,
-      "worldY": 10
-    },
-    {
-      "type": "dryTree",
-      "worldX": 52,
-      "worldY": 10
-    },
-    {
-      "type": "dryTree",
-      "worldX": 56,
-      "worldY": 10
-    },
-    {
-      "type": "dryTree",
-      "worldX": 58,
       "worldY": 10
     },
     {
@@ -15952,16 +15871,6 @@
       "worldY": 4
     },
     {
-      "type": "dryTree",
-      "worldX": 37,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
-      "worldX": 46,
-      "worldY": 1
-    },
-    {
       "type": "campfire",
       "worldX": 51,
       "worldY": 26
@@ -15973,11 +15882,6 @@
     },
     {
       "type": "dryTree",
-      "worldX": 38,
-      "worldY": 1
-    },
-    {
-      "type": "dryTree",
       "worldX": 45,
       "worldY": 2
     },
@@ -15985,16 +15889,6 @@
       "type": "dryTree",
       "worldX": 17,
       "worldY": 5
-    },
-    {
-      "type": "dryTree",
-      "worldX": 18,
-      "worldY": 6
-    },
-    {
-      "type": "dryTree",
-      "worldX": 16,
-      "worldY": 4
     },
     {
       "type": "dryTree",
@@ -16113,46 +16007,6 @@
       "type": "tallGrass",
       "worldX": 52,
       "worldY": 51
-    },
-    {
-      "type": "dryTree",
-      "worldX": 8,
-      "worldY": 36
-    },
-    {
-      "type": "dryTree",
-      "worldX": 8,
-      "worldY": 37
-    },
-    {
-      "type": "dryTree",
-      "worldX": 8,
-      "worldY": 38
-    },
-    {
-      "type": "dryTree",
-      "worldX": 8,
-      "worldY": 39
-    },
-    {
-      "type": "dryTree",
-      "worldX": 8,
-      "worldY": 40
-    },
-    {
-      "type": "dryTree",
-      "worldX": 9,
-      "worldY": 40
-    },
-    {
-      "type": "dryTree",
-      "worldX": 10,
-      "worldY": 40
-    },
-    {
-      "type": "dryTree",
-      "worldX": 11,
-      "worldY": 40
     },
     {
       "type": "campfire",
@@ -16521,21 +16375,6 @@
       "worldY": 56
     },
     {
-      "type": "dryTree",
-      "worldX": 48,
-      "worldY": 7
-    },
-    {
-      "type": "dryTree",
-      "worldX": 48,
-      "worldY": 6
-    },
-    {
-      "type": "dryTree",
-      "worldX": 48,
-      "worldY": 5
-    },
-    {
       "type": "dryBush",
       "worldX": 58,
       "worldY": 49
@@ -16589,6 +16428,141 @@
       "type": "gardenGate",
       "worldX": 30,
       "worldY": 35
+    },
+    {
+      "type": "water",
+      "worldX": 0,
+      "worldY": 29
+    },
+    {
+      "type": "water",
+      "worldX": 1,
+      "worldY": 29
+    },
+    {
+      "type": "water",
+      "worldX": 0,
+      "worldY": 30
+    },
+    {
+      "type": "water",
+      "worldX": 1,
+      "worldY": 30
+    },
+    {
+      "type": "water",
+      "worldX": 0,
+      "worldY": 31
+    },
+    {
+      "type": "water",
+      "worldX": 1,
+      "worldY": 31
+    },
+    {
+      "type": "water",
+      "worldX": 3,
+      "worldY": 31
+    },
+    {
+      "type": "bridgeSpot",
+      "worldX": 2,
+      "worldY": 31
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 12,
+      "worldY": 19
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 11,
+      "worldY": 20
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 12,
+      "worldY": 20
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 11,
+      "worldY": 21
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 10,
+      "worldY": 21
+    },
+    {
+      "type": "dryBush",
+      "worldX": 11,
+      "worldY": 8
+    },
+    {
+      "type": "dryBush",
+      "worldX": 11,
+      "worldY": 9
+    },
+    {
+      "type": "dryBush",
+      "worldX": 10,
+      "worldY": 9
+    },
+    {
+      "type": "dryBush",
+      "worldX": 9,
+      "worldY": 9
+    },
+    {
+      "type": "dryBush",
+      "worldX": 10,
+      "worldY": 10
+    },
+    {
+      "type": "lava",
+      "worldX": 11,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 10,
+      "worldY": 2
+    },
+    {
+      "type": "lava",
+      "worldX": 10,
+      "worldY": 1
+    },
+    {
+      "type": "lava",
+      "worldX": 12,
+      "worldY": 4
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 10,
+      "worldY": 4
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 10,
+      "worldY": 3
+    },
+    {
+      "type": "dryShrub",
+      "worldX": 2,
+      "worldY": 1
+    },
+    {
+      "type": "rock",
+      "worldX": 15,
+      "worldY": 6
+    },
+    {
+      "type": "rock",
+      "worldX": 16,
+      "worldY": 6
     }
   ],
   "dialogs": {

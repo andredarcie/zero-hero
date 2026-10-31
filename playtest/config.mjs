@@ -32,8 +32,13 @@ export const config = {
   autoStartServer: !externalBaseUrl,
 
   // Big enough that the board renders at its max tile size; black margins frame the canvas.
-  viewport: { width: 1280, height: 800 },
-  deviceScaleFactor: 2,
+  // PLAYTEST_VIEWPORT=540x960 joga em pé, como no celular. PLAYTEST_VIDEO=<pasta> grava a janela.
+  viewport: process.env.PLAYTEST_VIEWPORT
+    ? { width: Number(process.env.PLAYTEST_VIEWPORT.split('x')[0]), height: Number(process.env.PLAYTEST_VIEWPORT.split('x')[1]) }
+    : { width: 1280, height: 800 },
+  // Gravando, a escala é 1: com 2 o Chromium ora manda o quadro inteiro, ora só um canto dele.
+  deviceScaleFactor: process.env.PLAYTEST_VIDEO ? 1 : 2,
+  videoDir: process.env.PLAYTEST_VIDEO,
 
   // Boot = Vite up + first Phaser scene alive.
   serverReadyTimeoutMs: 40000,

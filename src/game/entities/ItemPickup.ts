@@ -6,6 +6,9 @@ import {
 } from '@/game/fungi/fungi';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE } from '@/game/render3d/paintTextures';
+import {
+  ASH_TEXTURE, GLASS_TEXTURE, SAND_TEXTURE, TELESCOPE_ITEM_TEXTURE,
+} from '@/game/render3d/skyTextures';
 import { SPLIT_WOOD_TEXTURE } from '@/game/render3d/woodTextures';
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -58,10 +61,9 @@ export type HeldItemKind =
   // pre-empts fuel). Empty vs full shows as the art the hero carries; there is no HUD.
   | 'bucket'
   | 'bucketFull'
-  // A lump of CHARCOAL — the fire itself finally PRODUCING: every burnt-out dry bush leaves one
-  // (o sorteio morreu, ver GameScene.dropCharcoalFromBush). It is torch food: stepping on it while holding the LIT
-  // graveto consumes it and refills the flame, which makes a long dark crossing plannable
-  // instead of a prayer for lava. Runtime-only, like bucketFull — never authored in a world.
+  // A lump of CHARCOAL, made in the furnace from two sticks: the reagent of the iron chain. It is
+  // also torch food: stepping on it while holding the LIT graveto consumes it and refills the
+  // flame. Runtime-only, like bucketFull — never authored in a world.
   | 'charcoal'
   // As duas estações manuais podem ser fabricadas, instaladas e recolhidas pelo jogador.
   | 'furnace'
@@ -76,6 +78,12 @@ export type HeldItemKind =
   | 'brush'
   // O GALHO RACHADO do Bram (quests/LumberQuest): vai das costas para a terra da fogueira.
   | 'splitWood'
+  // A QUEST DA VEGA (quests/AstronomerQuest): areia e cinza viram vidro no forno, e o vidro polido
+  // vira a lente do telescópio, que vai nas costas até o planalto.
+  | 'sand'
+  | 'ash'
+  | 'glass'
+  | 'telescope'
   // OS SEIS FUNGOS (fungi.ts). No chao eles NASCEM — sao solidos e nao se apanham pisando: so a
   // faca os solta. Na mochila sao contadores sem gesto, mostrados na CESTA da bolsa com a ficha
   // de cada especie.
@@ -114,6 +122,10 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
   brush: { texture: BRUSH_TEXTURE, frame: 0 },
   splitWood: { texture: SPLIT_WOOD_TEXTURE, frame: 0 },
+  sand: { texture: SAND_TEXTURE, frame: 0 },
+  ash: { texture: ASH_TEXTURE, frame: 0 },
+  glass: { texture: GLASS_TEXTURE, frame: 0 },
+  telescope: { texture: TELESCOPE_ITEM_TEXTURE, frame: 0 },
   ...Object.fromEntries(MUSHROOM_KINDS.map((kind) => [kind, { texture: fungusTextureKey(kind), frame: 0 }])) as
     Record<MushroomKind, { texture: string; frame: number }>,
 };

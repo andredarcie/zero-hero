@@ -9733,6 +9733,18 @@ de marshmallow mora no canto do tile da fogueira do fim, e o Z na fogueira acesa
 (o espeto) assa. O espeto ganhou arte de marshmallow (cru branco, tostado dourado com casca), e a
 linha do narrador virou "O marshmallow fica dourado". `ROASTABLE_ORDER` saiu de `fungi.ts`.
 
+## As trilhas dos cogumelos (2026-10-30)
+
+Cada fungo da Hollis pede um gesto (`scripts/trilhas-cogumelos.mjs`, idempotente, com prova de BFS a partir da Hollis): porcini só chegar; morel numa ilha, ponte de dois gravetos; puffball no mato alto, foice; inkCap atrás de arbustos secos, graveto aceso; chanterelle na lava, a pedra da picareta afunda e vira chão; flyAgaric atrás de mato morto, machado. Com uma mão só, pegar a ferramenta troca com a faca, que fica no chão até voltar para buscá-la. Por isso foice, machado e picareta mudaram para perto das trilhas (os presentes dos NPCs continuam iguais).
+
+A lava voltou (`LavaObject`, restaurado do git) porque o autor pediu. Ela só bloqueia, não fere: o jogo continua pacífico. Ela também acende o graveto de dia, quando as fogueiras comuns estão apagadas; (12,4) existe para isso, e continua acesa depois que a pedra fecha (11,3). Como todo prop consumido, ponte, mato e pedra voltam ao recarregar (o save não guarda).
+
+`npm run playtest -- cogumelos` joga a quest inteira e cronometra. Armadilha: o caminho precisa de `canStep`, porque `isSolidForEntities` não enxerga a Serra.
+
+## O arbusto queimado não solta mais nada (2026-10-30)
+
+Pedido do autor: queimado, ele vira só um pé preto e baixo, em que se pisa. O carvão agora só sai do forno (dois gravetos). A tocha ainda se alimenta de um carvão pisado.
+
 ## A voz de cada NPC (2026-10-30)
 
 Pedido do autor: fala em máquina de escrever, estilo Animal Crossing, com um som que combine com a personalidade de cada NPC. `dialogs/voicePersonas.ts` guarda o jeito de falar (ritmo, pausa, melodia, tremor), e a altura continua em `voice.freq` do `world.json`. Soa a sílaba, não a letra (um bipe por letra vira metralhadora), e cada sílaba passa por duas formantes da vogal (`audio/dialogVoice.ts`), que é o que faz parecer boca. A pontuação dá a entonação: pergunta sobe, ponto desce. A língua é determinística, sem `Math.random()`: a mesma frase soa sempre igual.
@@ -9800,3 +9812,33 @@ A sombra das massas saiu de "barra no chão" para campo de alturas (`buildMassSh
 A serra ganhou a curva da margem (`makeReliefField` / `buildReliefContourGeometry`): o mesmo campo de distância dos rios e lagos, por pixel de arte, com união suave nas quinas côncavas, canto arredondado nas convexas e ruído na largura do beiço. O dado continua por tile. Pedra, gramado do topo, trepadeiras e sombra saem todos do mesmo contorno; a sombra virou um campo de alturas por sub-célula.
 
 O contorno da serra é assado por chunk, e o frustum tira o que está fora da tela: a resolução da margem (16 células por tile) só cabe assim.
+
+## A Iris e o Bram, revistos (2026-10-31)
+
+Pedido do autor. **Iris:** o quadro só nasce depois das tintas (`placeEasel`, tile guardado em `save.easel`, nunca embaixo do herói: quem está na mesa muitas vezes está de pé no tile que seria dele). As flores vêm à mão, sem faca e com qualquer coisa na mão (o que estava nela pousa ao lado), e o ramo cresce nas costas, uma arte por flor; o ramo é pacote (`UNIT_PACK_KINDS`), e pegar flor com ele no chão o traz de volta. As tintas agora se fazem na MESA, com as quatro flores. Pintar não fecha mais a quest: etapa nova `review`, em que o comentário fica guardado até o herói falar com ela. O pincel continua vindo dela, junto com o quadro.
+
+**Bram:** o graveto vai no colo em todo o jogo, não só na quest (`WOOD_CRADLE_TEXTURE`, `positionBackItem`); aceso continua em pé. Pôr no cepo já abre o minijogo, que não pede machado. Ao rachar, o machado sai de onde estiver e pousa à esquerda do herói.
+
+**Árvores secas:** de 42 para 9 (`scripts/arvores-secas.mjs`, com prova de BFS). A mais perto do cepo fica a uns 36 passos. (1,13) segue seca só por ser a porta de um recanto do lago. As três de (48,5-7) eram um atalho aberto a machado entre o Bram e a Vega: viraram árvore, e o caminho agora é o de baixo.
+
+Armadilha: `trilhas-cogumelos.mjs --check` e `cozy-world.mjs --check` já falhavam ANTES desta mudança (o disco não é mais o ponto fixo deles; o primeiro ainda quer um machado solto em (12,6)). Não rode os dois sem `--check`: desfariam o que veio depois.
+
+## A quest da Vega: o telescópio (2026-10-31)
+
+Pedido do autor, a partir da proposta. Substitui "entregar uma barra de ferro". `quests/AstronomerQuest.ts`, etapas no save (`skyQuest`): start, iron, glass, polish, carry, night, done; o pedido fecha pelo evento `sky`. Saves antigos: quem já tinha entregue o ferro fica fechado; quem já tinha a picareta segue no ferro.
+
+O ferro vira tripé. Areia (monte fixo em 28,14, na margem) e cinza (monte ao lado da fogueira dela) viram vidro no forno: receita nova, último degrau da escada do forno. Os montes não acabam. O vidro polido vira lente (`LensOverlay`: pedra áspera e pedra fina; arrastar, ou tecla em espiral). O telescópio vai nas costas até o marco no planalto (32,20). De noite o Z abre a ocular (`SkyOverlay`); de dia ele senta o herói, o tempo corre e ela abre sozinha ao escurecer (`sitDown` + `onNightfall`). Fogueira comum não servia para isso: de dia ela está apagada, e não dá para sentar.
+
+Os quatro alvos: fixos no céu, setas ou arrastar; o foco fecha sozinho perto do centro, e uma setinha na borda aponta o próximo depois de 5 s. Ao fim, a Vega sobe (`playStarFarewell`). O marco de pedras ao lado dela (QUEST_MARKS) continua sendo a marca do pedido fechado.
+
+`npm run playtest -- telescopio` joga tudo sem teleporte. `PLAYTEST_VIEWPORT=540x960` joga em pé e `PLAYTEST_VIDEO=<pasta>` grava. Armadilha: gravar com deviceScaleFactor 2 alterna quadros inteiros e quadros só no canto.
+
+`zerar` ainda joga a Vega antiga e vai falhar nela. `marcas` semeia o contador antigo, e a migração do construtor o converte, mas não foi rodado.
+
+## A Vega: as buscas ficaram perto (2026-10-31)
+
+Pedido do autor: a quest ia longe demais para buscar coisas. A parede 48,5-7 fecha o acampamento dela do do Bram, então o machado custava 48 passos de cada lado. Agora ela deixa dois gravetos no chão (44,9 e 45,9) quando dá a picareta: só esses dois, uma vez (`sticksLaid`), porque um monte sem fim esvaziaria a procura de árvore seca do Bram. Quem os gastar em outra coisa volta ao machado. A areia saiu da margem (28,14) para um monte ao lado do tripé (39,6). Os tiles do acampamento agora se escolhem ao mostrar (`placeCamp`), não ao carregar: o forno ou o herói podem estar neles. O planalto continua longe de propósito: é o lugar da cena, não uma busca.
+
+Pela lente se vê o próprio mundo, vivo: o embaçado do palco vira uma camada com um furo redondo (`placeHole`), o canvas é transparente ali, e a câmera olha para o bosque a leste dela (`lookAcross`, coluna npc + 7) enquanto se pole. Uma foto reduzida não serviu: 112 pixels viravam outra pixel art. Grão e névoa são desenhados por cima do mundo. Polir de noite mostra o bosque de noite.
+
+A arte da Vega passou a seguir a das outras quests. A ficha do céu é a do cogumelo (`zh-note`: papel que sobe, foto com clipe, escrita à pena; um toque termina, outro dobra; a ocular some enquanto ela está aberta). Tripé e telescópio continuam nos sprites 16×16 de latão: um redesenho em 32×32 foi feito e o autor preferiu o anterior. 

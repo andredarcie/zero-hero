@@ -26,6 +26,8 @@ import vento from './vento.mjs';
 import prologo from './prologo.mjs';
 import semFabrica from './sem-fabrica.mjs';
 import zerar from './zerar.mjs';
+import cogumelos from './cogumelos.mjs';
+import telescopio from './telescopio.mjs';
 import abertura from './abertura.mjs';
 import semParede from './sem-parede.mjs';
 import itemGet from './item-get.mjs';
@@ -62,6 +64,8 @@ export const scenarios = {
   prologo,
   'sem-fabrica': semFabrica,
   zerar,
+  cogumelos,
+  telescopio,
   abertura,
   'sem-parede': semParede,
   'item-get': itemGet,

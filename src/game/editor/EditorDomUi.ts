@@ -137,6 +137,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'ironRock', label: 'Pedra de Ferro', key: ASSET_KEYS.ironRock, frame: 0 },
   { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassUp, frame: 0 },
   { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },
+  { type: 'lava', label: 'Lava (a pedra afunda e vira chao)', key: ASSET_KEYS.lavaFloor },
   { type: 'bridgeSpot', label: 'Ponto de Ponte', key: ASSET_KEYS.bridge },
   // A paleta mostra a flor ABERTA: e a pose que diz o que a peca faz (uma ponte de petalas), e o
   // botao fechado, sozinho num icone, so diria "tem uma planta aqui".

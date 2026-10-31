@@ -120,6 +120,7 @@ export class GameDriver {
     const context = await browser.newContext({
       viewport: config.viewport,
       deviceScaleFactor: config.deviceScaleFactor,
+      ...(config.videoDir ? { recordVideo: { dir: config.videoDir, size: config.viewport } } : {}),
     });
     // Os volumes entram ANTES de qualquer script da pagina: o SoundManager le as duas chaves no
     // construtor, entao setar depois do boot deixaria os primeiros segundos com som.

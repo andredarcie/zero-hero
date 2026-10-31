@@ -3,7 +3,6 @@
 //
 //   • as COVAS de inimigo somem (o campo `enemies` sai de todo chunk);
 //   • a ESCADA para o subterraneo, as marcas de BOMBA e a PIRA saem dos props;
-//   • a LAVA vira AGUA, tile por tile (a mesma forma: um lago onde havia um campo em brasa);
 //   • a MORTE sai do mapa (o resto dos vizinhos fica — eles ganharam pedidos novos);
 //   • o MAGO entra na beira da estrada do sul, ao lado de onde a espada e fincada;
 //   • o JARDIM DO CENTRO: a pira vira a FOGUEIRA DO FIM (`hearth`), a sebe de pinheiros que ja
@@ -50,11 +49,10 @@ const cell = (x, y) => {
   };
 };
 
-// ── 1. sem covas, sem escada, sem bomba, sem pira, sem lava ─────────────────────────────────
+// ── 1. sem covas, sem escada, sem bomba, sem pira ─────────────────────────────────
 for (const chunk of world.chunks) delete chunk.enemies;
 world.props = world.props
-  .filter((p) => p.type !== 'stairs' && p.type !== 'bombSpot' && p.type !== 'carnivorousPlant')
-  .map((p) => (p.type === 'lava' ? { type: 'water', worldX: p.worldX, worldY: p.worldY } : p));
+  .filter((p) => p.type !== 'stairs' && p.type !== 'bombSpot' && p.type !== 'carnivorousPlant');
 
 // ── 1b. sem parede invisivel ─────────────────────────────────────────────────────────────
 // Colisao PINTADA so vale onde ha algo de pe para justifica-la (um pinheiro, uma rocha). Os

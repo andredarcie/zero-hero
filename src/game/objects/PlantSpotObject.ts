@@ -217,13 +217,6 @@ export class PlantSpotObject implements WorldProp {
     });
   }
 
-  /** Bater sem a faca: a planta balança, e só. */
-  public shakeDye(): void {
-    if (!this.dyePlant) return;
-    const { x } = this.dyePlant;
-    this.scene.tweens.add({ targets: this.dyePlant, x: x + 0.05, duration: 50, yoyo: true, repeat: 2, onComplete: () => this.dyePlant?.setPosition(x, this.worldY) });
-  }
-
   /** Colhida: a planta sai, e o buraco reabre. */
   public clearDye(): void {
     if (this.dyePlant) {

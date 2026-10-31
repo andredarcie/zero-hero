@@ -19,7 +19,7 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
  */
 
 /** A ordem é a do caminho a partir da Hollis — e é a ordem das dicas dela (NpcQuests.hints). */
-export const MUSHROOM_KINDS = ['puffball', 'inkCap', 'morel', 'chanterelle', 'flyAgaric', 'porcini'] as const;
+export const MUSHROOM_KINDS = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric'] as const;
 export type MushroomKind = (typeof MUSHROOM_KINDS)[number];
 
 export const isMushroomKind = (kind: string | null | undefined): kind is MushroomKind =>

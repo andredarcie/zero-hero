@@ -288,6 +288,8 @@ export const getRocks = (): WorldProp[] => allProps().filter((prop) => prop.type
 export const getTallGrass = (): WorldProp[] => allProps().filter((prop) => prop.type === 'tallGrass');
 
 
+export const getLavaTiles = (): WorldProp[] => allProps().filter((prop) => prop.type === 'lava');
+
 export const getWaterTiles = (): WorldProp[] => allProps().filter((prop) => prop.type === 'water');
 
 export const getBridgeSpots = (): WorldProp[] => allProps().filter((prop) => prop.type === 'bridgeSpot');

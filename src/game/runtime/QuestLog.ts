@@ -36,6 +36,7 @@ export type QuestEvent =
   | { type: 'grow' }
   | { type: 'paint' }
   | { type: 'fire' }
+  | { type: 'sky' }
   | { type: 'light' }
   | { type: 'explore' };
 
@@ -99,6 +100,8 @@ const gain = (task: QuestTask, event: QuestEvent, dialogId: string): number => {
       return task.kind === 'paint' ? 1 : 0;
     case 'fire':
       return task.kind === 'fire' ? 1 : 0;
+    case 'sky':
+      return task.kind === 'sky' ? 1 : 0;
     case 'light':
       return task.kind === 'light' ? 1 : 0;
     case 'explore':

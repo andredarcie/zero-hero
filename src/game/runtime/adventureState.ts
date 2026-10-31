@@ -37,7 +37,7 @@ export interface AdventureMachine {
 }
 
 /** Em que conversa a quest da Iris está (ver quests/PainterQuest). */
-export type PaintStage = 'start' | 'dig' | 'sow' | 'water' | 'grow' | 'harvest' | 'paint' | 'done';
+export type PaintStage = 'start' | 'dig' | 'sow' | 'water' | 'grow' | 'harvest' | 'paint' | 'review' | 'done';
 
 export interface PaintPlot {
   x: number;
@@ -55,6 +55,18 @@ export interface PaintQuestSave {
   plots: PaintPlot[];
   /** O desenho do jogador (PNG em data URL): é ele que fica no quadro para sempre. */
   art?: string;
+  /** Onde ela armou o quadro: ele só existe depois das tintas. */
+  easel?: { x: number; y: number };
+  /** O que ela vai dizer do desenho quando o herói voltar a falar com ela. */
+  review?: { form: string; color: string };
+}
+
+/** Em que etapa a quest da Vega está, e quais dos quatro alvos o herói já achou no céu. */
+export interface SkyQuestSave {
+  stage: 'start' | 'iron' | 'glass' | 'polish' | 'carry' | 'night' | 'done';
+  found: string[];
+  /** Os dois gravetos dela já foram para o chão: são só esses, e não voltam. */
+  sticksLaid?: boolean;
 }
 
 /** Em que etapa a quest do Bram está, e como cada ofício saiu: é sobre isso que ele comenta. */
@@ -111,6 +123,7 @@ export interface AdventureSnapshot {
   questProgress: Map<string, number>;
   paintQuest: PaintQuestSave;
   lumberQuest: LumberQuestSave;
+  skyQuest: SkyQuestSave;
 }
 
 const defaultSnapshot = (): AdventureSnapshot => ({
@@ -134,6 +147,7 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   lumberQuest: {
     stage: 'start', standing: false, laid: 0, clean: 0, attempts: 0,
   },
+  skyQuest: { stage: 'start', found: [] },
 });
 
 type StoredSnapshot = {
@@ -155,6 +169,7 @@ type StoredSnapshot = {
   questProgress?: Record<string, number>;
   paintQuest?: PaintQuestSave;
   lumberQuest?: Partial<LumberQuestSave>;
+  skyQuest?: Partial<SkyQuestSave>;
 };
 
 const num = (value: unknown, fallback: number): number =>
@@ -238,6 +253,7 @@ const load = (): AdventureSnapshot => {
         ? p.paintQuest
         : base.paintQuest,
       lumberQuest: { ...base.lumberQuest, ...(p.lumberQuest ?? {}) },
+      skyQuest: { ...base.skyQuest, ...(p.skyQuest ?? {}) },
     };
   } catch {
     return base;
@@ -279,6 +295,7 @@ export const saveAdventure = (): void => {
     questProgress: Object.fromEntries(s.questProgress),
     paintQuest: s.paintQuest,
     lumberQuest: s.lumberQuest,
+    skyQuest: s.skyQuest,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));

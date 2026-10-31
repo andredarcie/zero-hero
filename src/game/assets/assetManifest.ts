@@ -179,6 +179,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.mushroomItem,   path: '/assets/items/collectibles/mushroom.png' },
   { key: ASSET_KEYS.plantMound,     path: '/assets/environment/props/plant_mound.png' },
   { key: ASSET_KEYS.water,          path: '/assets/environment/terrain/water_0.png' },
+  { key: ASSET_KEYS.lavaFloor,      path: '/assets/environment/terrain/lava_floor.png' },
   { key: ASSET_KEYS.water1,         path: '/assets/environment/terrain/water_1.png' },
   { key: ASSET_KEYS.water2,         path: '/assets/environment/terrain/water_2.png' },
   { key: ASSET_KEYS.water3,         path: '/assets/environment/terrain/water_3.png' },

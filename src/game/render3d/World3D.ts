@@ -14,7 +14,7 @@ import {
   SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import {
-  getBridgeSpots, getChunkTerrain, getWaterTiles, getWorldBounds, isInsideWorld,
+  getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds, isInsideWorld,
 } from '@/game/world/WorldData';
 import {
   RELIEF_HEIGHT, reliefAt, reliefLevelAt, stairUp, terrainHeightAt,
@@ -1726,10 +1726,10 @@ export class World3D {
       [...getWaterTiles(), ...getBridgeSpots()]
         .map((p) => `${p.worldX},${p.worldY}`),
     );
-    // A lava e o poço da escada sairam do mundo (o jogo é só a superfície, e nada nela queima).
-    // Os dois conjuntos ficam VAZIOS em vez de arrancar as bacias do assado: elas continuam sendo o
-    // caminho de um tile afundado, e um mundo autorado à mão pode voltar a pedir um.
-    const lavaSet = new Set<string>();
+    // A lava afunda na própria bacia, mais rasa que a do rio. O poço da escada saiu do mundo: o
+    // conjunto fica VAZIO em vez de arrancar a bacia do assado.
+    const lavaSet = new Set<string>(getLavaTiles().map((p) => `${p.worldX},${p.worldY}`));
+    for (const l of getLavaTiles()) this.lavaSpots.push({ x: l.worldX, y: l.worldY });
     const pitSet = new Set<string>();
     const pitTiles: Array<{ x: number; z: number; frame: number }> = [];
     // The SEA (the world's border, and any ocean painted inside it) is a ground FRAME, not a

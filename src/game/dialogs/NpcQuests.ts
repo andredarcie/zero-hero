@@ -39,6 +39,7 @@ import { MUSHROOM_KINDS } from '@/game/fungi/fungi';
  *   grow    — fazer BROTAR N canteiros: semente na terra, água no monte, e esperar.
  *   paint   — TERMINAR o quadro da Iris (o fim da quest em etapas dela: ver quests/PainterQuest).
  *   fire    — ACENDER o fogo do Bram com a lenha que o herói preparou (ver quests/LumberQuest).
+ *   sky     — ACHAR os quatro alvos no telescópio da Vega (ver quests/AstronomerQuest).
  *   light   — ACENDER N fogueiras do overworld.
  *   explore — PISAR em N telas diferentes (o mesmo fog of war do mapa).
  */
@@ -49,6 +50,7 @@ export type QuestTask =
   | { kind: 'grow'; count: number }
   | { kind: 'paint'; count: number }
   | { kind: 'fire'; count: number }
+  | { kind: 'sky'; count: number }
   | { kind: 'light'; count: number }
   | { kind: 'explore'; count: number };
 
@@ -99,12 +101,12 @@ export const taskKey = (task: QuestTask): string => {
  *   a coletora (radiationSuit) — conhecer os seis fungos do vale, colhidos com a faca dela
  *   a pintora  (painter)       — quatro plantas de tinta, do buraco ao quadro (em etapas)
  *   o lenhador (businessMan)   — um fogo que dura: cortar, rachar, empilhar, secar e acender
- *   a astrônoma (astronaut)    — uma barra de ferro para o marco onde o céu é mais limpo
+ *   a astrônoma (astronaut)    — o telescópio: tripé de ferro, lente de vidro, e uma noite no planalto
  *
- * A BARRA DE FERRO É O PEDIDO INTEIRO DA VEGA, e o único que atravessa a cadeia toda: o mundo não tem ferro no
+ * A BARRA DE FERRO É O COMEÇO DO PEDIDO DA VEGA, e o único que atravessa a cadeia toda: o mundo não tem ferro no
  * chão, então ela só existe fabricada — minério da picareta, forno (pedra+pedra) na bancada,
  * carvão (lenha+lenha) e esponja (minério+carvão) no forno, e as marteladas que fazem dela barra.
- * A picareta que a Vega dá é a chave: a pedra do forno e o minério saem dela.
+ * A picareta que a Vega dá é a chave: a pedra do forno e o minério saem dela. O resto é em etapas.
  *
  * Quando o último pedido fecha, o portão do jardim no centro do vale ABRE (ver
  * GameScene.openGardenGate) — e lá dentro está a fogueira do fim.
@@ -114,7 +116,7 @@ export const taskKey = (task: QuestTask): string => {
  * 1. **O pedido tem de estar na FALA do NPC** (locale `npc.<id>`). Sem diário, a fala é o único
  *    lugar onde o objetivo existe.
  * 2. **O pedido tem de ser cumprível com o mundo de HOJE e com o presente que o próprio NPC dá**
- *    (`gift`): a picareta da astrônoma. A pintora e o lenhador dão uma coisa por etapa.
+ *    (`gift`). A pintora, o lenhador e a astrônoma dão uma coisa por etapa.
  */
 export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
   // A COLETORA pede que o herói TRAGA as seis espécies do vale, uma de cada vez (uma tarefa
@@ -141,9 +143,7 @@ export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
   astronaut: {
     dialog: 'astronaut',
     doneDialog: 'astronautDone',
-    tasks: [{ kind: 'deliver', item: 'iron', count: 1 }],
-    gift: [{ item: 'pickaxe', count: 1 }],
-    hints: ['ore', 'furnace', 'charcoal', 'bloom', 'iron'],
+    tasks: [{ kind: 'sky', count: 1 }],
   },
 };
 

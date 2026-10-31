@@ -46,6 +46,7 @@ import { CampfireObject } from '@/game/objects/CampfireObject';
 import { DryBushObject } from '@/game/objects/DryBushObject';
 import { DryTreeObject } from '@/game/objects/DryTreeObject';
 import { DryShrubObject } from '@/game/objects/DryShrubObject';
+import { LavaObject } from '@/game/objects/LavaObject';
 import { WaterObject } from '@/game/objects/WaterObject';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { SwingGateObject } from '@/game/objects/SwingGateObject';
@@ -105,9 +106,13 @@ import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl } from '@/game/runtime/spriteDataUrl';
 import { PainterQuest } from '@/game/quests/PainterQuest';
 import { LumberQuest } from '@/game/quests/LumberQuest';
-import { SPLIT_WOOD_TEXTURE, registerWoodTextures } from '@/game/render3d/woodTextures';
+import { AstronomerQuest } from '@/game/quests/AstronomerQuest';
 import {
-  BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE, registerPaintTextures,
+  ASH_TEXTURE, GLASS_TEXTURE, SAND_TEXTURE, TELESCOPE_ITEM_TEXTURE, registerSkyTextures,
+} from '@/game/render3d/skyTextures';
+import { SPLIT_WOOD_TEXTURE, WOOD_CRADLE_TEXTURE, registerWoodTextures } from '@/game/render3d/woodTextures';
+import {
+  BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE, dyeBundleTexture, registerPaintTextures,
 } from '@/game/render3d/paintTextures';
 import { FpsCounter } from '@/game/runtime/FpsCounter';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
@@ -125,6 +130,7 @@ import {
   getDryTrees,
   getDryShrubs,
   getHeldItemPickups,
+  getLavaTiles,
   getWaterTiles,
   getBridgeSpots,
   getPlantSpots,
@@ -196,6 +202,10 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
   brush: { texture: BRUSH_TEXTURE, frame: 0 },
   splitWood: { texture: SPLIT_WOOD_TEXTURE, frame: 0 },
+  sand: { texture: SAND_TEXTURE, frame: 0 },
+  ash: { texture: ASH_TEXTURE, frame: 0 },
+  glass: { texture: GLASS_TEXTURE, frame: 0 },
+  telescope: { texture: TELESCOPE_ITEM_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -224,6 +234,10 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
   brush: { texture: BRUSH_TEXTURE, frame: 0 },
   splitWood: { texture: SPLIT_WOOD_TEXTURE, frame: 0 },
+  sand: { texture: SAND_TEXTURE, frame: 0 },
+  ash: { texture: ASH_TEXTURE, frame: 0 },
+  glass: { texture: GLASS_TEXTURE, frame: 0 },
+  telescope: { texture: TELESCOPE_ITEM_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -253,6 +267,10 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
   dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
   brush: { texture: BRUSH_TEXTURE, frame: 0 },
   splitWood: { texture: SPLIT_WOOD_TEXTURE, frame: 0 },
+  sand: { texture: SAND_TEXTURE, frame: 0 },
+  ash: { texture: ASH_TEXTURE, frame: 0 },
+  glass: { texture: GLASS_TEXTURE, frame: 0 },
+  telescope: { texture: TELESCOPE_ITEM_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -368,7 +386,6 @@ type QuestMarkDef = { dialog: string; npc: NpcKind; before?: string; after: stri
 type QuestMarkState = {
   def: QuestMarkDef; tile: { x: number; y: number }; npcAt: { x: number; y: number }; done: boolean; bb?: Billboard3D;
 };
-type AdventureGroundItemLike = { kind: HeldItemKind; worldX: number; worldY: number };
 
 const QUEST_MARKS: readonly QuestMarkDef[] = [
   { dialog: 'astronaut', npc: 'astronaut', after: CAIRN_TEXTURE },
@@ -393,6 +410,8 @@ const FORAGER_DIALOG = 'radiationSuit';
 const PAINTER_DIALOG = 'painter';
 /** O roteiro do Bram: a quest dele também é em etapas (ver quests/LumberQuest). */
 const LUMBER_DIALOG = 'businessMan';
+/** O roteiro da Vega: em etapas também (ver quests/AstronomerQuest). */
+const SKY_DIALOG = 'astronaut';
 
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
@@ -484,6 +503,7 @@ export class GameScene extends Phaser.Scene {
   private furnaces: FurnaceObject[] = [];
   private altars: AltarObject[] = [];
   private waterTiles: WaterObject[] = [];
+  private lavaTiles: LavaObject[] = [];
   // O registro único de props: referencia os MESMOS arrays tipados acima, então destruição,
   // colisão (isSolidForEntities) e reset atravessam todos os props num loop só — um prop novo
   // é uma entrada aqui, não seis edições espalhadas. Consequência: fora do create/shutdown os
@@ -539,6 +559,9 @@ export class GameScene extends Phaser.Scene {
   private readonly questMarks: QuestMarkState[] = [];
   private painterQuest?: PainterQuest;
   private lumberQuest?: LumberQuest;
+  private astronomerQuest?: AstronomerQuest;
+  /** Quem espera a noite sentado (o telescópio da Vega): roda quando ela chega. */
+  private onNightfall?: () => void;
   /** Quem está falando numa cena, quando ele não é o NPC de sempre (o Bram sentado à fogueira). */
   private dialogSpeaker?: Billboard3D;
   // Quem ja deu o "oi" (o pulinho quando o heroi chega perto) nesta sessao.
@@ -674,6 +697,7 @@ export class GameScene extends Phaser.Scene {
     registerCozyTextures(this);
     registerPaintTextures(this);
     registerWoodTextures(this);
+    registerSkyTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -828,12 +852,7 @@ export class GameScene extends Phaser.Scene {
       if (this.gateOpened) gate.unlock();
       return gate;
     });
-    this.dryBushes = getDryBushes().map((b) => {
-      const bush = new DryBushObject(this, b.worldX, b.worldY);
-      // O fogo PRODUZINDO: um arbusto que terminou de arder deixa carvao (comida da tocha).
-      bush.onBurnedOut = () => this.dropCharcoalFromBush(bush.worldX, bush.worldY);
-      return bush;
-    });
+    this.dryBushes = getDryBushes().map((b) => new DryBushObject(this, b.worldX, b.worldY));
     this.lockedDoors = getLockedDoors().map((d) => new LockedDoorObject(this, d.worldX, d.worldY, d.floodgate === true));
     this.swingGates = getSwingGates().map((g) => new SwingGateObject(this, g.worldX, g.worldY));
     this.dryTrees = getDryTrees().map((t) => new DryTreeObject(this, t.worldX, t.worldY));
@@ -881,6 +900,8 @@ export class GameScene extends Phaser.Scene {
         return w;
       }),
     ];
+    // A lava só existe em volta de um cogumelo (o do cantarelo): é a trava da pedra.
+    this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
     this.propRegistry = [
       { list: this.campfires },
       { list: this.hearths },
@@ -900,6 +921,7 @@ export class GameScene extends Phaser.Scene {
       // A agua continua no registro como hazard: o heroi so passa depois que o tile deixou de
       // bloquear (uma ponte).
       { list: this.waterTiles, hazard: true },
+      { list: this.lavaTiles, hazard: true },
     ];
     // A ESPADA FINCADA. Ela e o primeiro gesto da historia e fica onde o heroi a deixou, para
     // sempre: na abertura ela desce das costas para o chao (playIntro); quem continua uma partida
@@ -913,6 +935,7 @@ export class GameScene extends Phaser.Scene {
     this.keptLitFires.clear();
     this.buildPainterQuest();
     this.buildLumberQuest();
+    this.buildAstronomerQuest();
     this.buildQuestMarks();
     this.streamChunks(true);
 
@@ -1008,6 +1031,9 @@ export class GameScene extends Phaser.Scene {
   // included) and keeps running even when update() early-returns (dialog pan,
   // cut-scenes). Freezes with the scene on pause — a still backdrop for the menu.
 
+  /** Tiles que a câmera olha para o lado, sem o herói sair do lugar: é o que se vê pela lente da Vega. */
+  private cameraLookX = 0;
+
   private render3D(_time: number, delta: number): void {
     const w3 = this.world3d;
     const cam = this.camera;
@@ -1019,7 +1045,7 @@ export class GameScene extends Phaser.Scene {
     const ts = Math.max(1, this.tileSize);
     const defCx = Math.floor(this.scale.width / 2);
     const defCy = Math.floor(this.scale.height / 2);
-    w3.setViewOffset((defCx - cam.screenCenterX) / ts, (defCy - cam.screenCenterY) / ts);
+    w3.setViewOffset((defCx - cam.screenCenterX) / ts + this.cameraLookX, (defCy - cam.screenCenterY) / ts);
     // A camera sobe e desce com o chao debaixo do heroi (a serra): no planalto o quadro e o mesmo,
     // um nivel acima. A altura e continua na escada, entao a subida da camera e o proprio passo.
     w3.follow(cam.camX, cam.camY, false, terrainHeightAt(cam.camX, cam.camY));
@@ -1256,11 +1282,14 @@ export class GameScene extends Phaser.Scene {
     this.painterQuest = undefined;
     this.lumberQuest?.destroy();
     this.lumberQuest = undefined;
+    this.astronomerQuest?.destroy();
+    this.astronomerQuest = undefined;
     this.greetedNpcs.clear();
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
     this.resting = false;
     this.restFireTile = undefined;
+    this.onNightfall = undefined;
     setTimeScale(1);
     this.cat?.destroy();
     this.cat = undefined;
@@ -1386,6 +1415,13 @@ export class GameScene extends Phaser.Scene {
     // SENTADO NA FOGUEIRA: o mundo anda (o relogio acelerado, as fogueiras seguindo o ceu), o
     // heroi nao. Qualquer tecla o levanta (ver restAtFireAt).
     if (this.resting) {
+      // Sentado ao lado do telescópio, a noite chega e ele levanta sozinho.
+      if (this.onNightfall && isNightTime()) {
+        const nightfall = this.onNightfall;
+        this.standUp();
+        this.time.delayedCall(420, nightfall);
+        return;
+      }
       this.syncCampfiresToClock();
       if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
       this.updateCat(delta);
@@ -1528,6 +1564,13 @@ export class GameScene extends Phaser.Scene {
   private restAtFireAt(wx: number, wy: number): boolean {
     const fire = this.getCampfireAt(wx, wy);
     if (!fire?.isLit || this.resting) return false;
+    this.sitDown(wx, wy);
+    this.inviteFireVisitor(wx, wy);
+    return true;
+  }
+
+  /** Sentar: o corpo baixa, o tempo corre, e qualquer seta levanta. A fogueira e o telescópio usam. */
+  private sitDown(wx: number, wy: number): void {
     this.resting = true;
     this.stopBreathing();
     this.movementController?.hold(true);
@@ -1540,7 +1583,6 @@ export class GameScene extends Phaser.Scene {
     getSoundManager().playCozyChime();
     setTimeScale(REST_TIME_SCALE);
     this.restFireTile = { x: wx, y: wy };
-    this.inviteFireVisitor(wx, wy);
     // Seta ou qualquer tecla levanta — as setas nao passam por pressAttack/pressUse.
     this.restKeyListener = (event: KeyboardEvent): void => {
       if (event.repeat || !this.resting) return;
@@ -1551,7 +1593,6 @@ export class GameScene extends Phaser.Scene {
     };
     window.addEventListener('keydown', this.restKeyListener);
     this.persistAdventure();
-    return true;
   }
 
   /** Levantar da fogueira: o relogio volta ao normal e o corpo se estica. */
@@ -1559,6 +1600,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.resting) return;
     this.resting = false;
     this.restFireTile = undefined;
+    this.onNightfall = undefined;
     setTimeScale(1);
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
@@ -2222,7 +2264,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.camera) return;
     const front = this.facingTile();
     const show = !this.dialogOpen && !this.orderOverlay && !this.foraging && !this.cutsceneActive
-      && (isMushroomKind(this.itemManager?.kindAt(front.x, front.y)) || this.painterQuest?.wantsKey(front.x, front.y) === true || this.lumberQuest?.wantsKey(front.x, front.y) === true);
+      && (isMushroomKind(this.itemManager?.kindAt(front.x, front.y)) || this.painterQuest?.wantsKey(front.x, front.y) === true || this.lumberQuest?.wantsKey(front.x, front.y) === true || this.astronomerQuest?.wantsKey(front.x, front.y) === true);
     if (!show) { this.mushroomHint?.setVisible(false); return; }
     if (!this.mushroomHint) {
       ensurePlacementKeyTexture(this, isTouchDevice());
@@ -2365,6 +2407,10 @@ export class GameScene extends Phaser.Scene {
     return this.propAt(this.plantSpots, wx, wy);
   }
 
+  private getLavaAt(wx: number, wy: number): LavaObject | undefined {
+    return this.propAt(this.lavaTiles, wx, wy);
+  }
+
   private getWaterAt(wx: number, wy: number): WaterObject | undefined {
     return this.propAt(this.waterTiles, wx, wy);
   }
@@ -2410,6 +2456,7 @@ export class GameScene extends Phaser.Scene {
     if (this.isQuestMarkAt(wx, wy)) return true;
     if (this.painterQuest?.isSolidAt(wx, wy)) return true;
     if (this.lumberQuest?.isSolidAt(wx, wy)) return true;
+    if (this.astronomerQuest?.isSolidAt(wx, wy)) return true;
     // O cogumelo nascendo e um corpo no caminho: o heroi encosta nele e fica DE FRENTE — que e a
     // mira da faca. Pisa-lo para apanhar seria arranca-lo, e o jogo ensina o contrario.
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return true;
@@ -2590,9 +2637,10 @@ export class GameScene extends Phaser.Scene {
     // A BEIRA DA SERRA: entre o planalto e o chao de baixo nao ha mao que alcance (ver relief).
     if (!this.reachesFront(front)) { this.petCat(); return; }
     if (this.talkToNpcAt(front.x, front.y)) return;
-    if (this.painterQuest?.neededAt(front.x, front.y) || this.lumberQuest?.neededAt(front.x, front.y)) this.thinkOfNeed(front.x, front.y, true);
+    if (this.painterQuest?.neededAt(front.x, front.y) || this.lumberQuest?.neededAt(front.x, front.y) || this.astronomerQuest?.neededAt(front.x, front.y)) this.thinkOfNeed(front.x, front.y, true);
     if (this.painterQuest?.interactAt(front.x, front.y)) return;
     if (this.lumberQuest?.interactAt(front.x, front.y)) return;
+    if (this.astronomerQuest?.interactAt(front.x, front.y)) return;
     // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
     if (this.harvestMushroomAt(front.x, front.y)) return;
     if (this.tendHearthAt(front.x, front.y)) return;
@@ -2642,6 +2690,7 @@ export class GameScene extends Phaser.Scene {
     this.equipToolFor(x, y);
     this.thinkOfNeed(x, y, true);
     if (this.lumberQuest?.interactAt(x, y)) return;
+    if (this.astronomerQuest?.interactAt(x, y)) return;
     // 1. O ITEM ESCOLHIDO AGE — a tabela inteira (machado→árvore, picareta→rocha, balde→água,
     //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, estação→instala).
     if (this.heldItem !== 'none' && this.useItemAt(x, y)) return;
@@ -3141,6 +3190,25 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
+    // LAVA é fogo que não apaga: o graveto acende nela, de dia ou de noite (a fogueira comum só
+    // arde de noite). E ela bloqueia até uma PEDRA afundar e virar chão: a pedra vai embora, e o
+    // tile só se pisa depois que ela assentou.
+    const lava = this.getLavaAt(wx, wy);
+    if (lava && !lava.solidified) {
+      if (!lava.cooling) {
+        if (this.heldItem === 'stone') {
+          this.swingHeld(wx, wy);
+          this.clearHeldItem();
+          this.time.delayedCall(150, () => { this.solidifyLava(lava, wx, wy); });
+        } else if (this.isFlammableHeld) {
+          this.swingHeld(wx, wy);
+          if (!this.heldOnFire) this.time.delayedCall(150, () => { this.igniteHeldItem(); });
+          else this.refuelTorch();
+        }
+      }
+      return true;
+    }
+
     // River — only tiles marked with a `bridgeSpot` are buildable. Two things can span it, and
     // WHICH you choose is a real decision, not a formality:
     //   - two gravetos build a plank deck. It is wood: fire runs across it (and eats it).
@@ -3469,7 +3537,7 @@ export class GameScene extends Phaser.Scene {
    */
   private neededAt(wx: number, wy: number, pressed: boolean): HeldItemKind | 'torch' | null {
     const held = this.heldItem;
-    const quest = this.painterQuest?.neededAt(wx, wy) ?? this.lumberQuest?.neededAt(wx, wy);
+    const quest = this.painterQuest?.neededAt(wx, wy) ?? this.lumberQuest?.neededAt(wx, wy) ?? this.astronomerQuest?.neededAt(wx, wy);
     if (quest) return quest;
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return held === 'knife' ? null : 'knife';
     if (this.getDryTreeAt(wx, wy)?.blocking || this.getDryShrubAt(wx, wy)?.blocking) return this.holdsAnAxe ? null : 'axe';
@@ -3878,6 +3946,13 @@ export class GameScene extends Phaser.Scene {
     // Orange flash on the player as the fire transfers
     this.hero.tint = 0xff6600;
     this.time.delayedCall(250, () => { this.hero.tint = null; });
+  }
+
+  /** A pedra afunda na lava: fumaça, tranco, e o tile vira chão quando ela assenta. */
+  private solidifyLava(lava: LavaObject, worldX: number, worldY: number): void {
+    if (!lava.solidify()) return;
+    this.spawnSmokePuff(worldX, worldY);
+    this.world3d?.shake(90, 0.02);
   }
 
   /** Fill the carried flame back to full. */
@@ -4522,6 +4597,7 @@ export class GameScene extends Phaser.Scene {
    */
   private fireOnTile(wx: number, wy: number): boolean {
     if (this.getCampfireAt(wx, wy)?.isLit) return true;
+    if (this.getLavaAt(wx, wy)) return true;
     if (this.getDryBushAt(wx, wy)?.isBurning) return true;
     if (this.getTallGrassAt(wx, wy)?.isBurning) return true;
     return this.itemManager?.hasLitItemAt(wx, wy) ?? false;
@@ -4826,6 +4902,14 @@ export class GameScene extends Phaser.Scene {
         this.updateBackItem();
       },
       onGround: (kind: HeldItemKind) => (this.itemManager?.snapshot() ?? []).some((i) => i.kind === kind),
+      takeFromGround: (kind: HeldItemKind) => {
+        const it = this.itemManager?.snapshot().find((i) => i.kind === kind);
+        return it ? this.itemManager?.takeAt(it.worldX, it.worldY) !== undefined : false;
+      },
+      dropAt: (kind: HeldItemKind, x: number, y: number) => {
+        if (this.isTileOccupied(x, y)) this.dropNear(kind, 1, x, y);
+        else this.itemManager?.drop(kind, x, y);
+      },
       hero: () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }),
       isFree: (x: number, y: number) => !this.isSolidForEntities(x, y) && !this.itemManager?.hasItemAt(x, y)
         && !this.getPlantSpotAt(x, y) && !this.isOpenWaterAt(x, y),
@@ -4888,6 +4972,86 @@ export class GameScene extends Phaser.Scene {
     quest.build(npc);
   }
 
+  /** A QUEST DA VEGA: tudo o que ela precisa da cena passa por aqui (ver AstronomerHost). */
+  private buildAstronomerQuest(): void {
+    if (!this.adventure) return;
+    const bounds = getWorldBounds();
+    let npc: { worldX: number; worldY: number } | undefined;
+    for (let cy = bounds.minCy; cy <= bounds.maxCy; cy += 1) {
+      for (let cx = bounds.minCx; cx <= bounds.maxCx; cx += 1) {
+        const found = getChunkContent(cx, cy).npcs.find((n) => n.type === 'astronaut');
+        if (found) npc = { worldX: found.worldX, worldY: found.worldY };
+      }
+    }
+    if (!npc) return;
+    const quest = new AstronomerQuest({
+      ...this.questHost(),
+      say: (script, at, onClosed) => this.openDialogScript(script, at, getDialogVoice('astronaut'), onClosed),
+      closeQuest: () => this.questEvent({ type: 'sky' }),
+      markHeard: () => {
+        if (this.astronomerQuest) this.seenDialogKeys.add(this.astronomerQuest.talkKey());
+        this.persistAdventure();
+      },
+      hearts: (x, y) => this.spawnHearts(x, y),
+      lookAcross: (tileX) => { this.cameraLookX = tileX === null ? 0 : tileX - this.playerWorld.worldX; },
+      seen: (kind) => this.seenItems.has(kind),
+      isNight: () => isNightTime(),
+      waitForNight: (x, y, onNight) => {
+        this.sitDown(x, y);
+        this.onNightfall = onNight;
+      },
+      playFarewell: (farewell, onDone) => { void this.playStarFarewell(farewell, onDone); },
+    });
+    quest.setDialogBase(() => getDialog('astronaut', SKY_DIALOG) as DialogScript);
+    this.astronomerQuest = quest;
+    quest.build(npc);
+  }
+
+  /**
+   * O FIM DA QUEST DA VEGA: o último alvo saiu da ocular, e ela vem subindo a escada, senta ao lado do
+   * herói e fala. Depois um corte curto, e ela já está em casa. O céu continua, e a noite também.
+   */
+  private async playStarFarewell(
+    farewell: { from: readonly [number, number]; beside: { x: number; y: number }; script: DialogScript },
+    onDone: () => void,
+  ): Promise<void> {
+    const { from, beside, script } = farewell;
+    this.cutsceneActive = true;
+    this.mushroomHint?.setVisible(false);
+    this.stopBreathing();
+    this.actionButtons?.setVisible(false);
+    this.pauseTouchButton?.setVisible(false);
+    const hero: [number, number] = [this.playerWorld.worldX, this.playerWorld.worldY];
+    const seats = ([[1, 0], [0, -1], [0, 1], [-1, 0], [-1, 1], [1, 1]] as const)
+      .map(([dx, dy]) => [beside.x + dx, beside.y + dy] as [number, number])
+      .filter(([x, y]) => !(x === hero[0] && y === hero[1]) && !this.isSolidForEntities(x, y));
+    this.npcManager?.setKindAway('astronaut', true);
+    const path = this.findVisitPath(from, seats, hero, [beside.x, beside.y]);
+    const visitor = new FireVisitor(this, 'astronaut', path ?? [from, seats[0] ?? from]);
+    visitor.arrive();
+    for (let i = 0; i < 80 && !visitor.isSeated; i += 1) await this.wait(120);
+    await this.wait(500);
+    await new Promise<void>((resolve) => {
+      this.dialogSpeaker = visitor.bodySprite;
+      this.openDialogScript(script, undefined, getDialogVoice('astronaut'), () => {
+        this.dialogSpeaker = undefined;
+        resolve();
+      });
+    });
+    this.cutsceneActive = true;
+    await this.wait(700);
+    await this.fadeWorld(0, 1, 1100);
+    visitor.destroy();
+    this.npcManager?.setKindAway('astronaut', false);
+    onDone();
+    await this.wait(400);
+    await this.fadeWorld(1, 0, 1100);
+    this.cutsceneActive = false;
+    this.actionButtons?.setVisible(true);
+    this.pauseTouchButton?.setVisible(true);
+    this.persistAdventure();
+  }
+
   /** A QUEST DA IRIS: tudo o que ela precisa da cena passa por aqui (ver PainterHost). */
   private buildPainterQuest(): void {
     if (!this.adventure) return;
@@ -4901,18 +5065,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (!npc) return;
     const dug = adventureState().dugSpots;
-    const items = (): AdventureGroundItemLike[] => this.itemManager?.snapshot() ?? [];
     const quest = new PainterQuest({
       ...this.questHost(),
       heldCount: (kind) => this.inventory.count(kind),
-      takeFromGround: (kind) => {
-        const it = items().find((i) => i.kind === kind);
-        return it ? this.itemManager?.takeAt(it.worldX, it.worldY) !== undefined : false;
-      },
-      dropAt: (kind, x, y) => {
-        if (this.isTileOccupied(x, y)) this.dropNear(kind, 1, x, y);
-        else this.itemManager?.drop(kind, x, y);
-      },
       dugHoles: () => this.plantSpots.filter((spot) => spot.isHole && dug.has(`${spot.worldX},${spot.worldY}`)).length,
       spotAt: (x, y) => this.getPlantSpotAt(x, y),
       swing: (x, y) => this.swingHeld(x, y),
@@ -5953,6 +6108,7 @@ export class GameScene extends Phaser.Scene {
     if (!base) return;
     if (askId === PAINTER_DIALOG && this.adventure && npcWorld && this.painterQuest?.talk(base, npcWorld)) return;
     if (askId === LUMBER_DIALOG && this.adventure && npcWorld && this.lumberQuest?.talk(base, npcWorld)) return;
+    if (askId === SKY_DIALOG && this.adventure && npcWorld && this.astronomerQuest?.talk(base, npcWorld)) return;
     // A ENTREGA VEM ANTES DA FALA. Cumprida a missão, `spokenDialogId` devolve o outro roteiro —
     // já nesta mesma conversa, que é o ponto: entregar e ouvir o obrigado é um gesto só.
     // ENTREGAR É FALAR: o que está na mão vai para quem pediu (uma coisa de cada vez).
@@ -6037,6 +6193,7 @@ export class GameScene extends Phaser.Scene {
     if (!getDialog(kind, scriptId)) return null;
     if ((scriptId ?? kind) === PAINTER_DIALOG && this.adventure && this.painterQuest && !this.painterQuest.isDone) return this.painterQuest.talkKey();
     if ((scriptId ?? kind) === LUMBER_DIALOG && this.adventure && this.lumberQuest && !this.lumberQuest.isDone) return this.lumberQuest.talkKey();
+    if ((scriptId ?? kind) === SKY_DIALOG && this.adventure && this.astronomerQuest && !this.astronomerQuest.isDone) return this.astronomerQuest.talkKey();
     // A chave é do ROTEIRO FALADO, não da espécie: três gatos com três aulas são três "!" a
     // apagar, e com a chave por espécie ouvir um deles apagaria a marca dos outros dois. Ela lê
     // o roteiro que a MISSÃO escolheu, e é assim que fechar um pedido reacende o "!" do NPC —
@@ -6401,7 +6558,11 @@ export class GameScene extends Phaser.Scene {
     // A lit graveto is held upright in the hand; the separate pixel-flame effect supplies
     // the fire, so the carried sprite itself always remains the plain stick.
     const torchLit = this.isTorchLit;
-    const visual = BACK_ITEM_VISUAL_3D[carried];
+    // O graveto não vai nas costas: vai no colo, deitado, nas duas mãos. E o ramo cresce a cada flor.
+    const cradled = carried === 'wood' && !torchLit;
+    let visual = BACK_ITEM_VISUAL_3D[carried];
+    if (cradled) visual = { texture: WOOD_CRADLE_TEXTURE, frame: 0 };
+    else if (carried === 'dyeBundle') visual = { texture: dyeBundleTexture(this.inventory.count('dyeBundle')), frame: 0 };
     if (!this.backItemBb) {
       // CENTRED, unlike the standing sprites: a billboard's origin is normally its feet, and
       // setAngle pivots about that origin. A tree or an enemy SHOULD rock about its foot — but
@@ -6416,7 +6577,7 @@ export class GameScene extends Phaser.Scene {
     this.backItemBb
       .setTexture(visual.texture, visual.frame)
       .setDisplaySize(1, 1)
-      .setAngle(torchLit ? 0 : -35.5) // torch stands upright; other tools ride "meio cruzado"
+      .setAngle(torchLit || cradled ? 0 : -35.5) // torch stands upright; other tools ride "meio cruzado"
       .setVisible(true);
     this.positionBackItem();
   }
@@ -6452,6 +6613,11 @@ export class GameScene extends Phaser.Scene {
     // Facing comes from the movement controller (the sprite's own facing), so the item can never
     // get out of sync with the body the hero is actually showing.
     const facingUp = (this.movementController?.facing.dy ?? 1) < 0;
+    // No colo: na altura da cintura e à frente do corpo, então de costas é o corpo que o esconde.
+    if (this.heldItem === 'wood') {
+      bb.setPosition(hb.x + (this.movementController?.facing.dx ?? 0) * 0.08, hb.y + (facingUp ? -0.02 : 0.02)).setElevation(0.36 + bob);
+      return;
+    }
     bb.setPosition(hb.x - 0.10, hb.y + (facingUp ? 0.02 : -0.02)).setElevation(0.55 + bob);
   }
 
@@ -6512,24 +6678,6 @@ export class GameScene extends Phaser.Scene {
     // e o pacote já existe no jogo (o cabo sai de cinco em cinco).
     // Nas voltas do Bram é um galho por viagem: dois de uma vez deixariam o segundo sem ter onde ir.
     this.dropFallingStick(worldX, worldY, this.lumberQuest?.wantsOneStick ? 1 : TREE_STICK_YIELD);
-  }
-
-  /**
-   * TODO arbusto seco queimado deixa CARVÃO na cinza — o fogo produzindo, sem sorteio.
-   *
-   * Era 1 em 4 (`CHARCOAL_DROP_CHANCE`), e a razão da época fazia sentido: o carvão era a comida
-   * da tocha e a única fonte dele era queimar mato, então a raridade era o que metrificava o fogo.
-   * Duas coisas mudaram desde então — o carvão virou o REAGENTE da cadeia do ferro (nenhuma barra
-   * existe sem ele) e o forno ganhou a CARVOARIA (madeira+madeira), que é uma fonte renovável e
-   * previsível. Contra uma receita que se pode repetir a qualquer hora, um sorteio no arbusto não
-   * é economia: é um imposto sobre quem escolheu o caminho do fogo, e o jogador queima quatro
-   * arbustos para ter o que uma árvore dá de graça.
-   *
-   * Arbustos só, nunca mato alto: o mato é o pavio e o laço de plantio, e um item surpresa nascendo
-   * num pavio queimado cairia no caminho de quem está andando por cima dele.
-   */
-  private dropCharcoalFromBush(worldX: number, worldY: number): void {
-    this.dropProduct('charcoal', worldX, worldY);
   }
 
   // Mowing tall grass leaves a handful of SEEDS behind, on the stubble tile — the scythe's
