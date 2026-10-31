@@ -13728,12 +13728,6 @@
       "worldY": 3
     },
     {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 54,
-      "worldY": 5
-    },
-    {
       "type": "dryTree",
       "worldX": 50,
       "worldY": 1

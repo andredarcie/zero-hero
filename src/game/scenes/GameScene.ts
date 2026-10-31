@@ -41,7 +41,7 @@ import { isNpcAsleep, NpcManager } from '@/game/entities/NpcManager';
 import { ItemManager } from '@/game/entities/ItemManager';
 import type { CollectedItem } from '@/game/entities/ItemManager';
 import { MACHINE_ITEM_KINDS, isBagItem, type HeldItemKind } from '@/game/entities/ItemPickup';
-import { CHOP_DRIVE_AT_MS, CHOP_IMPACT_MS, CHOP_TOTAL_MS, SwordSlash } from '@/game/runtime/SwordOrbit';
+import { AXE_STUCK_MS, CHOP_DRIVE_AT_MS, CHOP_IMPACT_MS, CHOP_TOTAL_MS, SwordSlash } from '@/game/runtime/SwordOrbit';
 import { CampfireObject } from '@/game/objects/CampfireObject';
 import { DryBushObject } from '@/game/objects/DryBushObject';
 import { DryTreeObject } from '@/game/objects/DryTreeObject';
@@ -105,7 +105,7 @@ import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
 import { spriteDataUrl } from '@/game/runtime/spriteDataUrl';
 import { PainterQuest } from '@/game/quests/PainterQuest';
 import { LumberQuest } from '@/game/quests/LumberQuest';
-import { registerWoodTextures } from '@/game/render3d/woodTextures';
+import { SPLIT_WOOD_TEXTURE, registerWoodTextures } from '@/game/render3d/woodTextures';
 import {
   BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE, registerPaintTextures,
 } from '@/game/render3d/paintTextures';
@@ -195,6 +195,7 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   dyeSeeds: { texture: DYE_SEEDS_TEXTURE, frame: 0 },
   dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
   brush: { texture: BRUSH_TEXTURE, frame: 0 },
+  splitWood: { texture: SPLIT_WOOD_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -222,6 +223,7 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   dyeSeeds: { texture: DYE_SEEDS_TEXTURE, frame: 0 },
   dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
   brush: { texture: BRUSH_TEXTURE, frame: 0 },
+  splitWood: { texture: SPLIT_WOOD_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -250,6 +252,7 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
   dyeSeeds: { texture: DYE_SEEDS_TEXTURE, frame: 0 },
   dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
   brush: { texture: BRUSH_TEXTURE, frame: 0 },
+  splitWood: { texture: SPLIT_WOOD_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -319,6 +322,8 @@ const TIMBER_MAX_SPAN = 3;
 // ── A ABERTURA E O FIM ───────────────────────────────────────────────────────
 /** A hora em que a abertura e o fim acontecem: dez da noite, a hora dos vaga-lumes. */
 const INTRO_CLOCK = 0.92;
+/** A manhã depois da noite do Bram. */
+const MORNING_CLOCK = 0.34;
 /** Quantos tiles o cavaleiro anda pela estrada antes de parar. */
 const INTRO_WALK_TILES = 3;
 /**
@@ -534,6 +539,8 @@ export class GameScene extends Phaser.Scene {
   private readonly questMarks: QuestMarkState[] = [];
   private painterQuest?: PainterQuest;
   private lumberQuest?: LumberQuest;
+  /** Quem está falando numa cena, quando ele não é o NPC de sempre (o Bram sentado à fogueira). */
+  private dialogSpeaker?: Billboard3D;
   // Quem ja deu o "oi" (o pulinho quando o heroi chega perto) nesta sessao.
   private readonly greetedNpcs = new Set<string>();
   // Sentado numa fogueira (ver restAtFireAt): o tempo corre e o heroi descansa.
@@ -941,7 +948,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.placementHints = new PlacementHints(this);
-    this.heroThought = new HeroThought(this, ASSET_KEYS.thoughtTorch);
+    this.heroThought = new HeroThought(this);
     this.installActionInput();
 
     // O GATO de quem ja fez algum favor volta junto com a partida.
@@ -1363,11 +1370,13 @@ export class GameScene extends Phaser.Scene {
     // mentira que o balao de dica era. `syncPlacementHints` a reacende logo abaixo se o jogo
     // estiver mesmo correndo.
     this.placementHints?.clear();
-    this.heroThought?.clear();
 
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
     // world frozen here until it finishes — otherwise gameplay would fight the pan.
     if (this.dialogOpen || this.camShifting) {
+      // O balão some com a conversa. Fora dela ele vive o tempo dele (ver HeroThought.tick): apagá-lo
+      // a cada quadro fazia o pensamento nunca aparecer.
+      this.heroThought?.clear();
       this.dialogOverlay?.update();
       return;
     }
@@ -1476,7 +1485,6 @@ export class GameScene extends Phaser.Scene {
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.updatePlantSpots();
     this.painterQuest?.update(delta);
-    this.lumberQuest?.update(delta);
     // A flor da lua le a luz das fogueiras e abre/fecha por conta dela.
     this.updateMoonflowers(delta);
     this.updateFurnaces(delta);
@@ -2180,7 +2188,7 @@ export class GameScene extends Phaser.Scene {
     if (this.foraging) return true;
     // A FACA PRECISA ESTAR NA MÃO (uma coisa de cada vez). Sem ela, o herói pensa nela.
     if (this.heldItem !== 'knife') {
-      this.heroThought?.show(KNIFE_TEXTURE_KEY);
+      this.thinkOfNeed(wx, wy, true);
       return true;
     }
     this.useBufferMs = 0;
@@ -2582,6 +2590,7 @@ export class GameScene extends Phaser.Scene {
     // A BEIRA DA SERRA: entre o planalto e o chao de baixo nao ha mao que alcance (ver relief).
     if (!this.reachesFront(front)) { this.petCat(); return; }
     if (this.talkToNpcAt(front.x, front.y)) return;
+    if (this.painterQuest?.neededAt(front.x, front.y) || this.lumberQuest?.neededAt(front.x, front.y)) this.thinkOfNeed(front.x, front.y, true);
     if (this.painterQuest?.interactAt(front.x, front.y)) return;
     if (this.lumberQuest?.interactAt(front.x, front.y)) return;
     // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
@@ -2593,6 +2602,7 @@ export class GameScene extends Phaser.Scene {
     if (this.strikeAltarAt(front.x, front.y)) return;
     // A MÃO: pegar, trocar ou pousar a coisa do tile da frente.
     if (this.handAt(front.x, front.y)) return;
+    this.thinkOfNeed(front.x, front.y, true);
     // Z NO VAZIO com o gato do lado e carinho. Ele anda atras e nao num tile, entao mira-lo
     // seria impossivel: basta estar perto e o Z nao ter mais nada a fazer.
     this.petCat();
@@ -2630,6 +2640,8 @@ export class GameScene extends Phaser.Scene {
     //    fazer o jogador dizê-la em voz alta é cobrar burocracia por uma escolha que não existe.
     //    Ver `toolWantedAt`.
     this.equipToolFor(x, y);
+    this.thinkOfNeed(x, y, true);
+    if (this.lumberQuest?.interactAt(x, y)) return;
     // 1. O ITEM ESCOLHIDO AGE — a tabela inteira (machado→árvore, picareta→rocha, balde→água,
     //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, estação→instala).
     if (this.heldItem !== 'none' && this.useItemAt(x, y)) return;
@@ -3070,7 +3082,6 @@ export class GameScene extends Phaser.Scene {
    */
   private useItemAt(wx: number, wy: number): boolean {
     if (this.painterQuest?.useAt(wx, wy)) return true;
-    if (this.lumberQuest?.interactAt(wx, wy)) return true;
     // O COGUMELO NASCENDO vem primeiro: a faca e a resposta, e `equipToolFor` ja a sacou.
     if (this.harvestMushroomAt(wx, wy)) return true;
     // A ESPONJA vem antes de tudo, e ela e o unico caso desta tabela que NAO olha QUAL item esta
@@ -3178,7 +3189,6 @@ export class GameScene extends Phaser.Scene {
       // entregava a solução de um enigma; este só existe quando o item JÁ ESTÁ NA MÃO e o gesto
       // JÁ FOI FEITO. Sem ele o jogo respondia com um tremor idêntico ao de "isto é uma parede",
       // e as duas coisas não são a mesma — uma diz "não é aqui", a outra diz "falta uma faísca".
-      if (this.isFlammableHeld && !this.heldOnFire) this.heroThought?.show(ASSET_KEYS.thoughtTorch);
       if (this.isFlammableHeld && this.heldOnFire) {
         this.swingHeld(wx, wy);
         // Ignite when the flame reaches the bush (end of the main swing arc).
@@ -3202,9 +3212,9 @@ export class GameScene extends Phaser.Scene {
         // Capture the chop direction now (the hero is stopped, but a queued key could shift it).
         const px = this.playerWorld.worldX;
         const py = this.playerWorld.worldY;
-        this.time.delayedCall(150, () => {
+        this.time.delayedCall(CHOP_IMPACT_MS, () => {
           if (tree.chop()) {
-            getSoundManager().playWoodChop();
+            this.axeBite(wx, wy);
             if (!tree.blocking) {
               if (this.tryTimberBridge(tree.worldX, tree.worldY, wx - px, wy - py)) {
                 tree.cancelRegrow(); // its trunk became the bridge — no regrowth
@@ -3226,11 +3236,8 @@ export class GameScene extends Phaser.Scene {
     if (shrub?.blocking) {
       if (this.holdsAnAxe) {
         this.swingHeld(wx, wy);
-        this.time.delayedCall(150, () => {
-          if (shrub.chop()) {
-            getSoundManager().playWoodChop();
-            this.spawnBridgeChips(wx, wy, 4);
-          }
+        this.time.delayedCall(CHOP_IMPACT_MS, () => {
+          if (shrub.chop()) this.axeBite(wx, wy);
         });
       } else {
         shrub.shake();
@@ -3405,7 +3412,7 @@ export class GameScene extends Phaser.Scene {
     // O COGUMELO NASCENDO sem faca na mochila: o heroi PENSA nela (a Hollis tem uma). O icone,
     // nunca a palavra — a mesma lingua da fogueira do fim.
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy)) && this.heldItem !== 'knife') {
-      this.heroThought?.show(KNIFE_TEXTURE_KEY);
+      this.thinkOfNeed(wx, wy, false);
       return;
     }
 
@@ -3453,7 +3460,51 @@ export class GameScene extends Phaser.Scene {
    * botao B: o mundo responde ao corpo, sem nunca dizer qual e a chave (o balao de
    * item-que-falta foi arrancado do jogo e nao volta por esta porta).
    */
+  /**
+   * O QUE FALTA NA MÃO PARA AGIR NESTE TILE, ou nada. É a única resposta do jogo a essa pergunta: o
+   * balão (`thinkOfNeed`) lê daqui, e uma trava nova é uma linha aqui.
+   *
+   * `pressed` separa o botão do esbarrão: andar pela margem de um lago ou por cima de um buraco não é
+   * querer um balde nem uma semente, então esses dois só respondem a quem apertou.
+   */
+  private neededAt(wx: number, wy: number, pressed: boolean): HeldItemKind | 'torch' | null {
+    const held = this.heldItem;
+    const quest = this.painterQuest?.neededAt(wx, wy) ?? this.lumberQuest?.neededAt(wx, wy);
+    if (quest) return quest;
+    if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return held === 'knife' ? null : 'knife';
+    if (this.getDryTreeAt(wx, wy)?.blocking || this.getDryShrubAt(wx, wy)?.blocking) return this.holdsAnAxe ? null : 'axe';
+    if (this.getRockAt(wx, wy)?.blocking) return held === 'pickaxe' ? null : 'pickaxe';
+    if (this.getLockedDoorAt(wx, wy)?.blocking) return held === 'key' ? null : 'key';
+    if (this.getDryBushAt(wx, wy)?.blocking) return this.heldOnFire ? null : 'torch';
+    const grass = this.getTallGrassAt(wx, wy);
+    if (grass?.blocking && grass.isTall) return held === 'scythe' || this.heldOnFire ? null : 'scythe';
+    const spot = this.getPlantSpotAt(wx, wy);
+    if (spot?.isMound) return held === 'bucketFull' ? null : 'bucketFull';
+    if (!pressed) {
+      const bridge = this.getWaterAt(wx, wy);
+      return bridge?.blocking && bridge.canBuild && held !== 'wood' && held !== 'stone' ? 'wood' : null;
+    }
+    const hearth = this.getHearthAt(wx, wy);
+    if (hearth) return hearth.isLit && held !== 'wood' ? 'wood' : null;
+    const fire = this.getCampfireAt(wx, wy);
+    if (fire) return fire.isLit || fire.isHeldCold || this.heldOnFire ? null : 'torch';
+    const water = this.getWaterAt(wx, wy);
+    if (water?.blocking && water.canBuild) return held === 'wood' || held === 'stone' || held === 'bucket' ? null : 'wood';
+    if (water?.blocking || this.isOpenWaterAt(wx, wy)) return held === 'bucket' || held === 'bucketFull' ? null : 'bucket';
+    if (spot?.isHole) return SEED_PACK_KINDS.has(held) ? null : 'seeds';
+    return null;
+  }
+
+  /** O herói pensa no que falta, se faltar alguma coisa. */
+  private thinkOfNeed(wx: number, wy: number, pressed: boolean): void {
+    const need = this.neededAt(wx, wy, pressed);
+    if (!need) return;
+    const visual = ITEM_VISUAL_2D[need === 'torch' ? 'wood' : need];
+    this.heroThought?.show(visual.texture, visual.frame);
+  }
+
   private bumpRefusal(wx: number, wy: number): void {
+    this.thinkOfNeed(wx, wy, false);
     const toolbox = this.getToolboxAt(wx, wy);
     if (toolbox) { toolbox.bump(); getSoundManager().playToolboxRefuse(); return; }
 
@@ -3639,6 +3690,7 @@ export class GameScene extends Phaser.Scene {
    */
   private swingHeld(wx: number, wy: number): void {
     if (!this.swordSlash || !this.camera || this.heldItem === 'none') return;
+    if (this.heldItem === 'axe') { this.swingAxe(wx, wy); return; }
     getSoundManager().playSwordSlash();
     // The held item flies out in the swing arc, so hide the copy slung on the back for the
     // swing's duration — otherwise the item appears in two places at once.
@@ -3653,7 +3705,6 @@ export class GameScene extends Phaser.Scene {
       texture: visual.texture, // wood uses its single-stick icon (the "graveto")
       frame: visual.frame,
       onFire: this.heldItem === 'wood' && this.heldOnFire,
-      flipX: this.heldItem === 'axe', // the axe is single-edged — face its blade into the swing
     });
   }
 
@@ -3704,6 +3755,106 @@ export class GameScene extends Phaser.Scene {
     this.swordSlash.chop(screen.x, screen.y, dx, dy, this.tileSize, {
       texture: visual.texture,
       frame: visual.frame,
+    });
+  }
+
+  /**
+   * A MACHADADA, no ar ou na madeira. O corpo vai junto: recua para juntar força, joga o peso para a
+   * frente, e o que acontece depois é a resposta do mundo. No ar ele passa do ponto e cambaleia; no
+   * tronco ele para seco, levando o coice, e volta devagar enquanto puxa a lâmina.
+   */
+  private swingAxe(wx: number, wy: number): void {
+    if (!this.swordSlash || !this.camera) return;
+    const dx = Math.sign(wx - this.playerWorld.worldX);
+    const dy = Math.sign(wy - this.playerWorld.worldY);
+    const hit = Boolean(this.getDryTreeAt(wx, wy)?.blocking || this.getDryShrubAt(wx, wy)?.blocking);
+    const sound = getSoundManager();
+    this.time.delayedCall(CHOP_DRIVE_AT_MS, () => sound.playAxeWhoosh());
+    this.hideBackItemDuringSwing(CHOP_TOTAL_MS + AXE_STUCK_MS);
+    this.useCooldownMs = Math.max(this.useCooldownMs, CHOP_TOTAL_MS);
+    const screen = this.swingAnchor(dy);
+    const visual = ITEM_VISUAL_2D.axe;
+    this.swordSlash.chop(screen.x, screen.y, dx, dy, this.tileSize, { texture: visual.texture, frame: visual.frame }, { hit });
+
+    const hero = this.hero;
+    this.tweens.killTweensOf(hero);
+    const lean = (amount: number, duration: number, ease: string, onComplete?: () => void): void => {
+      this.tweens.add({ targets: hero, lungeX: dx * amount, lungeY: dy * amount, duration, ease, onComplete });
+    };
+    lean(-0.09, CHOP_DRIVE_AT_MS, 'Sine.easeOut', () => {
+      lean(0.15, CHOP_IMPACT_MS - CHOP_DRIVE_AT_MS, 'Cubic.easeIn', () => {
+        if (hit) {
+          // O COICE: o tronco devolve a força, o corpo trava, e só depois volta ao lugar.
+          this.time.delayedCall(AXE_STUCK_MS, () => lean(-0.07, 110, 'Back.easeOut', () => lean(0, 150, 'Sine.easeInOut')));
+        } else {
+          lean(0.24, 120, 'Sine.easeOut', () => lean(0, 240, 'Sine.easeInOut'));
+        }
+      });
+    });
+  }
+
+  /** O instante em que a lâmina entra na madeira: pancada, lascas e o tranco na câmera. */
+  private axeBite(wx: number, wy: number): void {
+    getSoundManager().playAxeBite();
+    this.spawnBridgeChips(wx, wy, 5);
+    const dx = Math.sign(wx - this.playerWorld.worldX);
+    const dy = Math.sign(wy - this.playerWorld.worldY);
+    this.world3d?.shake(90, 0.009, dx, dy);
+  }
+
+  /**
+   * O GALHO SOLTA: sai do alto da árvore, gira caindo, bate no chão, quica duas vezes e deita. Só
+   * então vira o item de verdade, no mesmo lugar: é uma coisa só caindo, nunca duas.
+   */
+  private dropFallingStick(wx: number, wy: number, units: number): void {
+    const w3 = this.world3d;
+    if (!w3) { this.dropProduct('wood', wx, wy, units); return; }
+    const stick = w3.addBillboard(ASSET_KEYS.woodIcon, 0, { groundShadow: { rx: 0.14, rz: 0.08, alpha: 0.24 } })
+      .setPosition(wx + 0.16, wy)
+      .setElevation(1.45)
+      .setDisplaySize(0.8, 0.8);
+    const sound = getSoundManager();
+    const k = { t: 0 };
+    this.tweens.add({
+      targets: k,
+      t: 1,
+      duration: 430,
+      ease: 'Quad.easeIn',
+      onUpdate: () => {
+        stick.setElevation(1.45 * (1 - k.t));
+        stick.setPosition(wx + 0.16 * (1 - k.t), wy);
+        stick.setAngle(k.t * 630);
+      },
+      onComplete: () => {
+        stick.setElevation(0).setAngle(90);
+        sound.playBridgePlank();
+        this.spawnDirtBurst(wx, wy, 7);
+        this.world3d?.shake(70, 0.006);
+        this.tweens.add({
+          targets: stick,
+          elevation: 0.32,
+          angle: 110,
+          duration: 130,
+          yoyo: true,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            sound.playFootstep();
+            this.spawnDirtBurst(wx, wy, 3);
+            this.tweens.add({
+              targets: stick,
+              elevation: 0.11,
+              angle: 86,
+              duration: 80,
+              yoyo: true,
+              ease: 'Sine.easeOut',
+              onComplete: () => {
+                stick.destroy();
+                this.dropProduct('wood', wx, wy, units);
+              },
+            });
+          },
+        });
+      },
     });
   }
 
@@ -4491,6 +4642,178 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * A NOITE DO BRAM. O fogo pega, ele vem andando e senta, o herói senta de frente, e o mundo apaga em
+   * volta: só a fogueira, os dois e os vaga-lumes. Ele conta como o fogo funciona, e depois ninguém diz
+   * nada por um tempo, só os grilos. Corta para o dia, com o fogo apagado e cada um no seu lugar.
+   *
+   * O save só aprende no fim (`onDone`): fechar o jogo no meio volta para o fogo ainda por acender.
+   */
+  private async playCampfireNight(
+    night: {
+      fire: CampfireObject;
+      pit: { x: number; y: number };
+      seat: { x: number; y: number };
+      npc: { worldX: number; worldY: number };
+      story: DialogScript;
+      farewell: DialogScript;
+    },
+    onDone: () => void,
+  ): Promise<void> {
+    const { fire, pit, seat, npc } = night;
+    const sound = getSoundManager();
+    this.cutsceneActive = true;
+    this.roasting = true; // os vaga-lumes valem de dia ou de noite, nesta cena
+    this.mushroomHint?.setVisible(false); // o update para aqui, e o keycap ficaria parado na tela
+    this.stopBreathing();
+    this.actionButtons?.setVisible(false);
+    this.pauseTouchButton?.setVisible(false);
+    this.controlsHint?.destroy();
+    this.controlsHint = undefined;
+    sound.fadeMusicOut(1500);
+
+    // O FOGO PEGA: um clarão, um tranco, faíscas, e a chama sobe.
+    this.keptLitFires.add(fire);
+    fire.light();
+    sound.playFurnaceIgnite();
+    sound.playIgnite();
+    this.world3d?.shake(180, 0.012);
+    this.softWash(0xffb060, 0.34, 900);
+    for (let i = 0; i < 4; i += 1) this.time.delayedCall(i * 170, () => this.spawnFireHitEffect(pit.x, pit.y));
+    await this.wait(1500);
+
+    // O herói vai para a frente do fogo, e o Bram vem de casa.
+    const walkHero = async (): Promise<void> => {
+      const goal = { x: pit.x, y: pit.y + 1 };
+      const visited = new Map<string, [number, number] | null>([[`${this.playerWorld.worldX},${this.playerWorld.worldY}`, null]]);
+      const queue: Array<[number, number]> = [[this.playerWorld.worldX, this.playerWorld.worldY]];
+      while (queue.length > 0) {
+        const [cx, cy] = queue.shift() as [number, number];
+        if (cx === goal.x && cy === goal.y) break;
+        for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]] as const) {
+          const key = `${cx + dx},${cy + dy}`;
+          if (visited.has(key) || this.isSolidForEntities(cx + dx, cy + dy)) continue;
+          visited.set(key, [cx, cy]);
+          queue.push([cx + dx, cy + dy]);
+        }
+      }
+      const steps: Array<[number, number]> = [];
+      let at: [number, number] | null | undefined = visited.has(`${goal.x},${goal.y}`) ? [goal.x, goal.y] : null;
+      while (at) {
+        steps.unshift(at);
+        at = visited.get(`${at[0]},${at[1]}`);
+      }
+      for (let i = 1; i < steps.length; i += 1) {
+        await this.scriptStep(steps[i][0] - steps[i - 1][0], steps[i][1] - steps[i - 1][1], 300);
+      }
+    };
+    this.npcManager?.setKindAway('businessMan', true);
+    const path = this.findVisitPath([npc.worldX, npc.worldY], [[seat.x, seat.y]], [pit.x, pit.y + 1], [pit.x, pit.y]);
+    const visitor = new FireVisitor(this, 'businessMan', path ?? [[npc.worldX, npc.worldY], [seat.x, seat.y]]);
+    visitor.arrive();
+    await walkHero();
+    this.scriptFace(0, -1);
+    await this.wait(250);
+    this.tweens.add({ targets: this.hero, scaleY: 0.84, scaleX: 1.05, duration: 380, ease: 'Sine.easeOut' });
+    for (let i = 0; i < 80 && !visitor.isSeated; i += 1) await this.wait(120);
+    await this.wait(500);
+
+    // A NOITE: o relógio vai para as dez, e o escuro fecha em volta do fogo.
+    setTimeOfDay(INTRO_CLOCK);
+    this.ambienceClockMs = 0;
+    this.campfiresFollowNight = !isNightTime();
+    this.syncCampfiresToClock();
+    void this.dollyTo(0.72, 3200);
+    const focus = document.createElement('div');
+    focus.style.cssText = 'position:fixed;inset:0;z-index:39;pointer-events:none;opacity:0;transition:opacity 3000ms ease;';
+    document.body.appendChild(focus);
+    const followFire = (): void => {
+      if (!this.camera) return;
+      const at = this.camera.tileToScreen(pit.x, pit.y, this.tileSize);
+      const near = this.tileSize * 2.5;
+      const far = this.tileSize * 5.4;
+      focus.style.background = `radial-gradient(circle at ${at.x}px ${at.y}px, rgba(4,3,8,0) ${near}px, rgba(4,3,8,0.72) ${(near + far) / 2}px, rgba(3,2,6,0.97) ${far}px)`;
+    };
+    followFire();
+    this.events.on('postupdate', followFire);
+    window.requestAnimationFrame(() => { focus.style.opacity = '1'; });
+
+    // Bastante vaga-lume, em volta do fogo. Pontos sem luz, como os de sempre.
+    const motes: Billboard3D[] = [];
+    const moteTweens: Phaser.Tweens.Tween[] = [];
+    if (this.world3d) {
+      for (let i = 0; i < 34; i += 1) {
+        const mote = this.world3d.addBillboard(FX_DOT_TEXTURE, 0, { ...FX_BILLBOARD, additive: true, emissiveBoost: 2.6 })
+          .setTint(i % 3 === 0 ? 0xfff2a0 : 0xd6ff8a)
+          .setPosition(pit.x + (Math.random() - 0.5) * 6, pit.y + (Math.random() - 0.5) * 4.5)
+          .setElevation(0.3 + Math.random() * 1.1)
+          .setDisplaySize(0.09, 0.09)
+          .setAlpha(0);
+        motes.push(mote);
+        moteTweens.push(this.tweens.add({
+          targets: mote,
+          x: mote.x + (Math.random() - 0.5) * 1.6,
+          y: mote.y + (Math.random() - 0.5) * 1.2,
+          elevation: mote.elevation + (Math.random() - 0.5) * 0.7,
+          alpha: { from: 0, to: 0.95 },
+          duration: 1300 + Math.random() * 2200,
+          delay: Math.random() * 2600,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        }));
+      }
+    }
+    await this.wait(3400);
+
+    // A história.
+    const say = (script: DialogScript): Promise<void> => new Promise<void>((resolve) => {
+      this.dialogSpeaker = visitor.bodySprite;
+      this.openDialogScript(script, undefined, getDialogVoice('businessMan'), () => {
+        this.dialogSpeaker = undefined;
+        resolve();
+      });
+    });
+    await say(night.story);
+    this.cutsceneActive = true;
+
+    // Ninguém diz nada: só os grilos, a lenha estalando e o fogo.
+    sound.setAmbienceMix(1, 0);
+    for (let i = 0; i < 7; i += 1) {
+      await this.wait(1300);
+      if (i % 2 === 0) this.spawnFireHitEffect(pit.x, pit.y);
+    }
+    await say(night.farewell);
+    this.cutsceneActive = true;
+    await this.wait(600);
+
+    // O CORTE: apaga, e volta de dia, com o fogo apagado e cada um no seu lugar.
+    await this.fadeWorld(0, 1, 1500);
+    for (const tween of moteTweens) tween.stop();
+    for (const mote of motes) mote.destroy();
+    this.events.off('postupdate', followFire);
+    focus.remove();
+    this.keptLitFires.delete(fire);
+    fire.extinguish(false);
+    visitor.destroy();
+    this.npcManager?.setKindAway('businessMan', false);
+    this.tweens.add({ targets: this.hero, scaleY: 1, scaleX: 1, duration: 120 });
+    this.roasting = false;
+    void this.dollyTo(1, 100);
+    setTimeOfDay(MORNING_CLOCK);
+    this.ambienceClockMs = 0;
+    this.campfiresFollowNight = !isNightTime();
+    onDone();
+    this.syncCampfiresToClock();
+    await this.wait(700);
+    await this.fadeWorld(1, 0, 1600);
+    sound.fadeMusicIn(1800);
+    this.cutsceneActive = false;
+    this.actionButtons?.setVisible(true);
+    this.pauseTouchButton?.setVisible(true);
+    this.persistAdventure();
+  }
+
   /** O que uma quest em etapas pede da cena: a mão, o chão, os gestos e o congelar. */
   private questHost() {
     return {
@@ -4512,7 +4835,6 @@ export class GameScene extends Phaser.Scene {
         this.seenItems.add(kind);
         this.showItemGet(kind, onDone);
       },
-      think: (texture: string) => this.heroThought?.show(texture),
       hop: (x: number, y: number, height?: number) => { this.npcManager?.hop(x, y, height); },
       hearts: (x: number, y: number) => this.spawnHearts(x, y),
       sparkle: (x: number, y: number) => this.spawnGrowSparkle(x, y),
@@ -4548,11 +4870,18 @@ export class GameScene extends Phaser.Scene {
         if (this.lumberQuest) this.seenDialogKeys.add(this.lumberQuest.talkKey());
         this.persistAdventure();
       },
-      fireNear: (x, y) => this.nearestCampfireWithin(x, y, 2.5),
-      keepFireLit: (fire) => {
-        this.keptLitFires.add(fire);
-        fire.light();
+      dust: (x, y) => {
+        this.spawnSmokePuff(x, y);
+        this.spawnDirtBurst(x, y, 6);
       },
+      shake: () => this.world3d?.shake(70, 0.006),
+      addFire: (x, y) => {
+        // In place: o propRegistry referencia este array.
+        const fire = new CampfireObject(this, x, y, false);
+        this.campfires.push(fire);
+        return fire;
+      },
+      playNight: (night, onDone) => { void this.playCampfireNight(night, onDone); },
     });
     quest.setDialogBase(() => getDialog('businessMan', LUMBER_DIALOG) as DialogScript);
     this.lumberQuest = quest;
@@ -5402,7 +5731,7 @@ export class GameScene extends Phaser.Scene {
       void this.lightHearth(hearth, wx, wy);
       return true;
     }
-    if (this.heldItem !== 'wood') { this.heroThought?.show(ASSET_KEYS.woodIcon); return true; }
+    if (this.heldItem !== 'wood') { this.thinkOfNeed(wx, wy, true); return true; }
     void this.playRoastEnding(hearth, wx, wy);
     return true;
   }
@@ -5757,7 +6086,7 @@ export class GameScene extends Phaser.Scene {
       this.endDialogCameraShift();
       getSoundManager().fadeMusicIn();
       onClosed?.();
-    }, voice, (npcWorld && this.npcManager?.bodyAt(npcWorld.worldX, npcWorld.worldY)) ?? this.wizardStandIn);
+    }, voice, this.dialogSpeaker ?? (npcWorld && this.npcManager?.bodyAt(npcWorld.worldX, npcWorld.worldY)) ?? this.wizardStandIn);
   }
 
   // ── AS MISSÕES DOS NPCs ────────────────────────────────────────────────────
@@ -6181,7 +6510,8 @@ export class GameScene extends Phaser.Scene {
   private dropTreeStick(worldX: number, worldY: number): void {
     // Um PACOTE de dois (ver TREE_STICK_YIELD), e não dois itens no chão: apanhar é um gesto só,
     // e o pacote já existe no jogo (o cabo sai de cinco em cinco).
-    this.dropProduct('wood', worldX, worldY, TREE_STICK_YIELD);
+    // Nas voltas do Bram é um galho por viagem: dois de uma vez deixariam o segundo sem ter onde ir.
+    this.dropFallingStick(worldX, worldY, this.lumberQuest?.wantsOneStick ? 1 : TREE_STICK_YIELD);
   }
 
   /**

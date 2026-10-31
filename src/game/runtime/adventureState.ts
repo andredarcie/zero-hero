@@ -57,20 +57,16 @@ export interface PaintQuestSave {
   art?: string;
 }
 
-/** Em que ofício a quest do Bram está, e como cada um saiu: é sobre isso que ele comenta. */
+/** Em que etapa a quest do Bram está, e como cada ofício saiu: é sobre isso que ele comenta. */
 export interface LumberQuestSave {
-  stage: 'start' | 'chop' | 'split' | 'stack' | 'dry' | 'lay' | 'done';
-  /** Pedaços de madeira morta que já chegaram ao cepo. */
-  wood: number;
-  split: number;
-  /** Quantas toras racharam no primeiro golpe. */
+  stage: 'start' | 'gather' | 'ready' | 'light' | 'done';
+  /** Há um galho em pé no cepo, esperando o machado. */
+  standing: boolean;
+  /** Quantos galhos já estão na terra. */
+  laid: number;
+  /** Quantos racharam no primeiro golpe. */
   clean: number;
-  /** A pilha montada: quantas peças em cada coluna do suporte. */
-  heights: number[];
-  /** Quanto ar a pilha deixa passar, de 0 a 1. Manda no tempo de secar. */
-  air: number;
-  dryMs: number;
-  /** Quantas vezes o fogo morreu antes de pegar. */
+  /** Quantas vezes a brasa morreu antes de pegar. */
   attempts: number;
 }
 
@@ -136,7 +132,7 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   questProgress: new Map(),
   paintQuest: { stage: 'start', plots: [] },
   lumberQuest: {
-    stage: 'start', wood: 0, split: 0, clean: 0, heights: [0, 0, 0, 0, 0], air: 0, dryMs: 0, attempts: 0,
+    stage: 'start', standing: false, laid: 0, clean: 0, attempts: 0,
   },
 });
 

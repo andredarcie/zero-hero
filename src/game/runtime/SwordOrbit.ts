@@ -117,6 +117,19 @@ const SPIN_FADE_MS = 90;
 /** Espacamento dos fantasmas ao longo do giro. Bem maior que o do golpe: aqui a lamina voa. */
 const SPIN_TRAIL_DEG = 26;
 
+// O MACHADO é o mesmo gesto da picareta, com o peso de outro jeito. Ele vem colado ao corpo, e o que
+// separa o golpe do vazio é o fim: no ar ele passa reto e leva o corpo junto; no tronco ele ENTRA e
+// fica, o tronco segura a lâmina um instante, e só então o braço a arranca de volta.
+const AXE_HAND_LIFT    = 0.1;
+const AXE_HAND_REAR    = -0.04;
+const AXE_HAND_STRIKE  = 0.26;
+const AXE_HAND_REST    = 0.16;
+const AXE_BITE_DEG     = 4;   // no tronco ela para quase onde mirou
+const AXE_FOLLOW_DEG   = 74;  // no ar ela segue, até quase apontar para baixo
+const AXE_FOLLOW_MS    = 150;
+/** Quanto o tronco segura a lâmina antes de soltar. */
+export const AXE_STUCK_MS = 120;
+
 /** When the head lands, counted from the swing starting: the blow belongs on this frame. */
 export const CHOP_IMPACT_MS = CHOP_REAR_MS + CHOP_HANG_MS + CHOP_DRIVE_MS;
 /** When the head starts falling — where the whoosh belongs, not at the sleepy wind-up. */
@@ -393,6 +406,7 @@ export class SwordSlash {
     dy: number,
     tileSize: number,
     item: { texture: string; frame: number },
+    axe?: { hit: boolean },
   ): void {
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.killTweensOf(this.chop$);
@@ -404,7 +418,7 @@ export class SwordSlash {
     // the pick would wind up ahead of the hero and scoop UP through the floor into the rock.
     const spin = attack >= 0 ? 1 : -1;
     const rear   = Phaser.Math.Clamp(attack - spin * CHOP_REAR_DEG, -CHOP_REAR_CAP, CHOP_REAR_CAP);
-    const bury   = attack + spin * CHOP_BURY_DEG;
+    const bury   = attack + spin * (axe ? AXE_BITE_DEG : CHOP_BURY_DEG);
     const recoil = attack - spin * CHOP_RECOIL_DEG;
 
     const size = Math.max(12, Math.floor(tileSize * SLASH_BLADE_FACTOR));
@@ -436,9 +450,9 @@ export class SwordSlash {
       t.setTexture(item.texture, item.frame).setFlipX(false).setTint(litTint).setAlpha(0).setVisible(false));
     this.applyChop();
 
-    const reared = hand(CHOP_HAND_REAR, CHOP_HAND_LIFT);
-    const struck = hand(CHOP_HAND_STRIKE);
-    const rested = hand(CHOP_HAND_REST, 0.04);
+    const reared = axe ? hand(AXE_HAND_REAR, AXE_HAND_LIFT) : hand(CHOP_HAND_REAR, CHOP_HAND_LIFT);
+    const struck = hand(axe ? AXE_HAND_STRIKE : CHOP_HAND_STRIKE);
+    const rested = hand(axe ? AXE_HAND_REST : CHOP_HAND_REST, 0.04);
 
     // 1. Rear back: slow, decelerating into the hang — the pick is heavy and he is winding up.
     //    It grows as it comes up over his head (it is nearer the camera up there).
@@ -467,29 +481,69 @@ export class SwordSlash {
           ease: 'Cubic.easeIn',
           onUpdate: () => this.applyChop(),
           onComplete: () => {
+            const fadeOut = (): void => {
+              this.scene.tweens.add({
+                targets: [this.sprite, ...this.trails],
+                alpha: 0,
+                duration: CHOP_FADE_MS,
+                onComplete: () => {
+                  this.sprite.setVisible(false);
+                  this.trails.forEach(t => t.setVisible(false));
+                },
+              });
+            };
             // 4. Recoil: the stone throws it back out. Back.easeOut overshoots — the wrists give.
-            this.scene.tweens.add({
-              targets: s,
-              angle: recoil,
-              handX: rested.x,
-              handY: rested.y,
-              size,
-              trail: 0,
-              duration: CHOP_RECOIL_MS,
-              ease: 'Back.easeOut',
-              onUpdate: () => this.applyChop(),
-              onComplete: () => {
-                this.scene.tweens.add({
-                  targets: [this.sprite, ...this.trails],
-                  alpha: 0,
-                  duration: CHOP_FADE_MS,
-                  onComplete: () => {
-                    this.sprite.setVisible(false);
-                    this.trails.forEach(t => t.setVisible(false));
-                  },
-                });
-              },
-            });
+            const pullOut = (): void => {
+              this.scene.tweens.add({
+                targets: s,
+                angle: recoil,
+                handX: rested.x,
+                handY: rested.y,
+                size,
+                trail: 0,
+                duration: CHOP_RECOIL_MS,
+                ease: 'Back.easeOut',
+                onUpdate: () => this.applyChop(),
+                onComplete: fadeOut,
+              });
+            };
+            if (axe && !axe.hit) {
+              // NO AR: nada segura. A lâmina segue pelo próprio peso até gastar o impulso.
+              const past = hand(AXE_HAND_STRIKE + 0.1, -0.12);
+              this.scene.tweens.add({
+                targets: s,
+                angle: attack + spin * AXE_FOLLOW_DEG,
+                handX: past.x,
+                handY: past.y,
+                trail: 0,
+                duration: AXE_FOLLOW_MS,
+                ease: 'Sine.easeOut',
+                onUpdate: () => this.applyChop(),
+                onComplete: fadeOut,
+              });
+              return;
+            }
+            if (axe) {
+              // NO TRONCO: a lâmina fica presa e vibra, e o braço precisa arrancá-la.
+              s.trail = 0;
+              this.flashHit();
+              const stuck = { x: s.handX, y: s.handY };
+              const shake = this.scene.tweens.addCounter({
+                from: 0,
+                to: 1,
+                duration: AXE_STUCK_MS,
+                onUpdate: (tw) => {
+                  const k = 1 - (tw.getValue() ?? 0);
+                  s.handX = stuck.x + Math.sin((tw.getValue() ?? 0) * 40) * 1.5 * k;
+                  s.handY = stuck.y;
+                  this.applyChop();
+                },
+                onComplete: pullOut,
+              });
+              void shake;
+              return;
+            }
+            pullOut();
           },
         });
       },

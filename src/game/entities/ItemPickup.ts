@@ -6,6 +6,7 @@ import {
 } from '@/game/fungi/fungi';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE } from '@/game/render3d/paintTextures';
+import { SPLIT_WOOD_TEXTURE } from '@/game/render3d/woodTextures';
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
@@ -73,6 +74,8 @@ export type HeldItemKind =
   | 'dyeSeeds'
   | 'dyeBundle'
   | 'brush'
+  // O GALHO RACHADO do Bram (quests/LumberQuest): vai das costas para a terra da fogueira.
+  | 'splitWood'
   // OS SEIS FUNGOS (fungi.ts). No chao eles NASCEM — sao solidos e nao se apanham pisando: so a
   // faca os solta. Na mochila sao contadores sem gesto, mostrados na CESTA da bolsa com a ficha
   // de cada especie.
@@ -110,6 +113,7 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   dyeSeeds: { texture: DYE_SEEDS_TEXTURE, frame: 0 },
   dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
   brush: { texture: BRUSH_TEXTURE, frame: 0 },
+  splitWood: { texture: SPLIT_WOOD_TEXTURE, frame: 0 },
   ...Object.fromEntries(MUSHROOM_KINDS.map((kind) => [kind, { texture: fungusTextureKey(kind), frame: 0 }])) as
     Record<MushroomKind, { texture: string; frame: number }>,
 };

@@ -222,6 +222,10 @@ export class CampfireObject implements WorldProp {
    * APAGADA ATÉ SEGUNDA ORDEM: a fogueira do Bram, antes da lenha dele. Nem o relógio, nem uma tocha,
    * nem o fogo do vizinho a acendem: acender esta é o pedido inteiro (ver quests/LumberQuest).
    */
+  public get isHeldCold(): boolean {
+    return this.heldCold;
+  }
+
   public setHeldCold(cold: boolean): void {
     this.heldCold = cold;
     if (cold) this.extinguish(false);

@@ -9776,3 +9776,17 @@ O que o jogador faz muda o jogo: o ar da pilha (`stackAir`) manda no tempo de se
 A fogueira dele fica fria até o fim (`CampfireObject.setHeldCold`): nem relógio, nem tocha, nem fogo vizinho a acendem, porque acendê-la é o pedido. Depois fica acesa para sempre. O machado que ficava ao lado dele saiu do `world.json`: é ele quem dá.
 
 Jogada de ponta a ponta em janela visível, mais erros de golpe, saída no meio, recarga em cada ofício, save antigo e os três minijogos com toque em telas de 360×640 a 844×390. `playtest/scenarios/marcas.mjs` e `zerar.mjs` ainda descrevem a quest antiga.
+
+## O herói pensa no que falta (2026-10-30)
+
+Pedido do autor: toda vez que ele tenta usar um item que não tem, um balão com o desenho do item. Isto revoga a lei antiga, que tinha arrancado o balão de item-que-falta para não entregar o enigma: agora ele vale para toda trava. `GameScene.neededAt` é a única resposta, e o X, o Z e o esbarrão leem dela. O esbarrão não pergunta por balde nem por semente: andar pela margem de um lago não é querer um balde. O balão ganhou placa própria em `HeroThought`; antes só a tocha tinha, e a faca e o graveto apareciam soltos no ar.
+
+## A quest do Bram, refeita: quatro voltas e uma noite (2026-10-30)
+
+Pedido do autor, substitui a versão com pilha e vento. Sem fogueira ao lado dele, só a terra preparada (`FIRE_PIT_TEXTURE`); sem machado solto no mundo. Quatro voltas: machado (ocupa a mão), cortar um galho morto, pegar o galho (o machado fica no chão), pôr em pé no cepo, buscar o machado, rachar no minijogo, atirar as metades na terra, onde a tenda vai crescendo. A árvore dá um galho só durante as voltas. Depois ele manda acender: riscar e soprar. Aceso, `GameScene.playCampfireNight`: ele vem andando e senta, o herói senta de frente, o relógio vai para a noite e um gradiente fecha o escuro em volta do fogo (`followFire`, seguindo a tela porque a câmera mexe com a fala). Conta como o fogo funciona, um tempo em silêncio, "foi uma noite fantástica", corta para a manhã com a fogueira apagada. A fogueira fica fria para sempre (`setHeldCold`).
+
+O balão usa o sprite do próprio item. A tocha pensa no graveto. `splitWood` é o sprite do graveto duas vezes, nada desenhado à parte. O balão nunca aparecia: `tick` o apagava em todo quadro, desde que ele existe.
+
+Armadilha: `CraftOverlay.stick()` é método; um campo `stick` na subclasse quebra o tipo.
+
+Depois, a pedido do autor: os dois minijogos ficaram no jeito da colheita do cogumelo (mundo embaçado, só a coisa no meio, nenhum texto; `WoodcraftOverlays`). O Bram senta do lado de cima do fogo, olho no olho com o herói. E a machadada ganhou gesto próprio (`SwordOrbit.chop` com `axe`, `GameScene.swingAxe`): colada ao corpo, com o peso do corpo indo junto; no ar ela passa reto, no tronco ela entra, fica presa e dá o coice, com som próprio. O galho cai girando do alto da árvore e quica antes de virar item (`dropFallingStick`).

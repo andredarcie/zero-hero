@@ -141,13 +141,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   madeira**. Pedra, água, lava e chão pelado são corta-fogo.
 - **Fogueira APAGADA pega fogo de um vizinho** (é o ponto: acender sem o herói ir lá). **Fogueira
   ACESA nunca espalha** (é sumidouro). **Mato alto barra o herói e conduz fogo.**
-- **O HERÓI PENSA ALTO em UM caso só** (`HeroThought`): bater num arbusto seco com o graveto
-  APAGADO acende um balão de ÍCONE (a tocha) sobre a cabeça dele. Não é o balão de
-  item-que-falta ressuscitado — aquele respondia a qualquer fechadura e entregava o enigma;
-  este só existe com o item JÁ na mão e o gesto JÁ feito, e mostra ícone, nunca palavra.
-- **Toda outra trava é uma fechadura com uma chave só, e ela responde com FÍSICA, nunca com
-  legenda.** O balão de item-que-falta foi arrancado. **Trava nova ganha um tremor, não um texto**
-  — se só uma legenda ensinaria o que fazer, o que precisa de conserto é a arte da peça.
+- **O HERÓI PENSA NO QUE FALTA** (pedido do autor, `GameScene.neededAt`): toda vez que ele tenta usar uma coisa que não tem, um balão mostra o DESENHO dela, nunca uma palavra. Trava nova é uma linha ali, e continua tremendo também.
 - **Itens devem PRODUZIR, não só apagar** (árvore→graveto/ponte, picareta→pedra, foice→sementes).
   Pergunte de qualquer item novo: o que ele *faz*?
 - **ÁRVORE VERDE NUNCA SAI DO LUGAR.** O `axe` só corta madeira MORTA (props `dryTree`/`dryShrub`);

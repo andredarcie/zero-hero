@@ -4,14 +4,13 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { t, tLines, type I18nLine } from '@/game/i18n/i18n';
-import { KNIFE_TEXTURE_KEY } from '@/game/fungi/fungi';
 import type { PlantSpotObject } from '@/game/objects/PlantSpotObject';
 import {
   DYE_KINDS, DYE_TINTS, GROW_LEVELS, GROW_STEP_MS, PLOT_COUNT, type DyeKind,
 } from '@/game/quests/dyePlants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
-  BRUSH_TEXTURE, DYE_BUD_TEXTURE, DYE_SPROUT_TEXTURE, EASEL_ART_TEXTURE, EASEL_BLANK_TEXTURE,
+  DYE_BUD_TEXTURE, DYE_SPROUT_TEXTURE, EASEL_ART_TEXTURE, EASEL_BLANK_TEXTURE,
   dyeFlowerTexture, paintTableTexture, publishEaselArt,
 } from '@/game/render3d/paintTextures';
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
@@ -46,7 +45,6 @@ export interface PainterHost {
   swing: (x: number, y: number) => void;
   say: (script: DialogScript, at: { worldX: number; worldY: number }, onClosed?: () => void) => void;
   itemGet: (kind: HeldItemKind, onDone: () => void) => void;
-  think: (texture: string) => void;
   hop: (x: number, y: number, height?: number) => void;
   hearts: (x: number, y: number) => void;
   sparkle: (x: number, y: number) => void;
@@ -304,6 +302,15 @@ export class PainterQuest {
     return this.openEaselAt(x, y);
   }
 
+  /** O que falta na mão para agir neste tile, nesta etapa. */
+  public neededAt(x: number, y: number): HeldItemKind | null {
+    const held = this.host.held();
+    if (this.easelTile?.x === x && this.easelTile.y === y) return this.save.stage === 'paint' && held !== 'brush' ? 'brush' : null;
+    if (this.save.plots.some((p) => p.x === x && p.y === y && !p.cut && p.level >= GROW_LEVELS)) return held === 'knife' ? null : 'knife';
+    if (this.save.stage === 'sow' && this.save.plots.length < PLOT_COUNT && this.host.spotAt(x, y)?.isHole) return held === 'dyeSeeds' ? null : 'dyeSeeds';
+    return null;
+  }
+
   /** O keycap flutua sobre o que este gesto alcança agora. */
   public wantsKey(x: number, y: number): boolean {
     const held = this.host.held();
@@ -341,7 +348,6 @@ export class PainterQuest {
     if (!plot || !spot) return false;
     if (this.host.held() !== 'knife') {
       spot.shakeDye();
-      this.host.think(KNIFE_TEXTURE_KEY);
       return true;
     }
     this.host.swing(x, y);
@@ -437,10 +443,7 @@ export class PainterQuest {
       if (this.save.stage !== 'done') this.host.scene.tweens.add({ targets: this.easel, elevation: 0.05, duration: 70, yoyo: true });
       return true;
     }
-    if (this.host.held() !== 'brush') {
-      this.host.think(BRUSH_TEXTURE);
-      return true;
-    }
+    if (this.host.held() !== 'brush') return true;
     if (this.overlay || this.busy) return true;
     this.host.freeze(true);
     this.host.showButtons(false);

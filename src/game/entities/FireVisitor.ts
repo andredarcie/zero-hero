@@ -39,6 +39,9 @@ export class FireVisitor {
     this.place();
   }
 
+  /** O corpo dele, para falar e se mexer em cena. */
+  public get bodySprite(): Billboard3D { return this.body; }
+
   /** Ja sentado ao pe do fogo? */
   public get isSeated(): boolean { return this.seated; }
 

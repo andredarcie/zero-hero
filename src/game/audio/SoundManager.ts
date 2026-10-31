@@ -610,6 +610,20 @@ class SoundManager {
     this.noise('highpass', 1800, 1.0, 0.08, 0.05, 0.02);
   }
 
+  /** A lâmina cortando o ar: sopro, sem pancada nenhuma. */
+  public playAxeWhoosh(): void {
+    this.noise('bandpass', 700, 0.9, 0.2, 0.17);
+    this.noise('bandpass', 1500, 1.4, 0.07, 0.1, 0.03);
+  }
+
+  /** A lâmina entrando no tronco: o baque surdo da madeira, e o estalo seco da fibra. */
+  public playAxeBite(): void {
+    this.playWoodChop();
+    this.osc('triangle', 210, 62, 0.34, 0.15);
+    this.noise('lowpass', 1100, 1.2, 0.32, 0.07);
+    this.noise('highpass', 2600, 1.0, 0.12, 0.03, 0.01);
+  }
+
   public playBridgePlank(): void {
     if (this.playSample('bridgePlank', 0.8)) return;
     // A wet wooden knock — a graveto laid onto the frame over the river.

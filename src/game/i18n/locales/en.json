@@ -46,7 +46,8 @@
       "porcini": "A porcini.",
       "dyeSeeds": "Mixed seeds. Four dye plants.",
       "dyeBundle": "The four dye flowers.",
-      "brush": "A brush. The canvas awaits."
+      "brush": "A brush. The canvas awaits.",
+      "splitWood": "The branch, in two. Take it to the dirt."
     },
     "name": {
       "sword": "Sword",
@@ -75,7 +76,8 @@
       "altar": "Altar",
       "dyeSeeds": "Mixed seeds",
       "dyeBundle": "Dye flowers",
-      "brush": "Brush"
+      "brush": "Brush",
+      "splitWood": "Split branch"
     }
   },
   "dialog": {
@@ -360,7 +362,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Green wood only smokes: it is nearly half water. Take the axe and bring four pieces of dead wood. One at a time, to the block."
+          "text": "Let's build a fire. Over there, on that dirt. Take the axe."
+        },
+        {
+          "speaker": "npc",
+          "text": "Cut a dead branch and bring it to the block. Stand it up and split it. Both halves go on the dirt. Four times."
         }
       ]
     },
@@ -369,11 +375,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Warm nights ahead."
+          "text": "I can still smell the smoke."
         },
         {
           "speaker": "npc",
-          "text": "That fire is yours too."
+          "text": "Thank you, friend. The axe is yours."
         }
       ]
     },
@@ -584,114 +590,72 @@
       ]
     },
     "businessManStep": {
-      "chop": [
+      "gather": [
         {
           "speaker": "npc",
-          "text": "{n} to go on the block. Dead wood only."
+          "text": "{n} to go. Dead branch, block, axe, dirt."
         }
       ],
-      "split": [
+      "ready": [
         {
           "speaker": "npc",
-          "text": "Four! Now split them: whole, they take months to dry."
+          "text": "Four. That's a fire already, it only lacks the flame."
         },
         {
           "speaker": "npc",
-          "text": "Axe in hand, at the block. Strike the grain, away from the knot."
+          "text": "Go and light it."
         }
       ],
-      "stack": [
+      "light": [
         {
           "speaker": "npc",
-          "text": "Good pieces. Stack them on the rack, off the ground."
-        },
-        {
-          "speaker": "npc",
-          "text": "Leave gaps between them: air is what dries firewood."
-        }
-      ],
-      "dry": [
-        {
-          "speaker": "npc",
-          "text": "Now the wind does the work. Take a walk."
-        }
-      ],
-      "dryFast": [
-        {
-          "speaker": "npc",
-          "text": "That stack breathes. The wind will do the rest. Take a walk."
-        }
-      ],
-      "drySlow": [
-        {
-          "speaker": "npc",
-          "text": "Tight, see? It will dry slowly. Take a long walk."
-        }
-      ],
-      "lay": [
-        {
-          "speaker": "npc",
-          "text": "Pale and light: it is dry. One knocks on the other and it rings."
-        },
-        {
-          "speaker": "npc",
-          "text": "Lay the fire: tinder first, then kindling, then the firewood."
+          "text": "Go and light it."
         }
       ]
     },
-    "businessManCraft": {
-      "leave": "Leave",
-      "aim": "Strike the grain, the dark line. Away from the knot.",
-      "force": "Now the force: the green band.",
-      "clean": "Clean, in one blow!",
-      "split": "Split!",
-      "knot": "On the knot, the blade bounces.",
-      "offGrain": "Off the grain. But the crack opened.",
-      "weak": "Too weak. But the crack opened.",
-      "strong": "Too hard: the blade sticks. But the crack opened.",
-      "lift": "Remove",
-      "stackDone": "Done",
-      "stackHint": "{n} to go. Leave gaps: watch the wind pass.",
-      "airGood": "Air reaches everything. It will dry fast.",
-      "airOk": "Some air gets through. It could be better.",
-      "airBad": "Too tight: no air gets through. It will take a while.",
-      "tinder": "Tinder",
-      "kindling": "Kindling",
-      "fuel": "Firewood",
-      "light": "Light",
-      "blow": "Blow",
-      "layHint": "From the finest to the thickest.",
-      "wrongOrder": "Only smoke. Flame is born in the tinder and grows through the thin.",
-      "blowHint": "A long, calm breath. The ember wants air.",
-      "tooFast": "Slowly! A hurried breath puts it out.",
-      "died": "The ember died. Again, calmly.",
-      "caught0": "The tinder is catching.",
-      "caught1": "The kindling is catching.",
-      "caught2": "The firewood is catching!",
-      "burning": "It caught!"
-    },
-    "businessManReview": {
+    "businessManNight": {
       "split": {
         "clean": "Split clean. Good hands.",
         "rough": "Split crooked, but split. You learn an axe by swinging it."
       },
-      "air": {
-        "good": "The stack breathes. Wood like that lasts the winter.",
-        "ok": "A crooked stack, but it breathes.",
-        "bad": "A tight stack: it dried slowly. But it dried."
-      },
       "fire": {
-        "first": "And it lit first try!",
+        "first": "And it lit first try.",
         "worked": "That fire took work. Every fire does."
       },
-      "thanks": [
+      "story": [
+        {
+          "speaker": "npc",
+          "text": "Sit. Watch the fire with me."
+        },
+        {
+          "speaker": "npc",
+          "text": "Fire is not a thing. It is a thing happening."
+        },
+        {
+          "speaker": "npc",
+          "text": "Heat makes the branch give off gas. The gas burns, not the wood."
+        },
+        {
+          "speaker": "npc",
+          "text": "The gas meets the air, and that burning gives off more heat. Which gives off more gas. That is why it keeps itself going."
+        },
+        {
+          "speaker": "npc",
+          "text": "And this light? Soot. Tiny grains, so hot they glow."
+        },
+        {
+          "speaker": "npc",
+          "text": "The tree spent its whole life storing sun. The fire only gives it back."
+        }
+      ],
+      "farewell": [
         {
           "speaker": "npc",
           "text": "Look at my hands: they stopped shaking."
         },
         {
           "speaker": "npc",
-          "text": "Thank you, friend. The axe is yours."
+          "text": "It was a fantastic night."
         }
       ]
     }
