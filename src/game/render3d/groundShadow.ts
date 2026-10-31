@@ -152,15 +152,17 @@ export class ShadowStrip {
  * all share a single draw call. Each quad is UV-mapped to the whole blob texture.
  */
 export const buildShadowBlobGeometry = (
-  centers: ReadonlyArray<{ x: number; z: number }>,
+  /** `lift` é a altura do chão daquele centro (a árvore em cima da serra). */
+  centers: ReadonlyArray<{ x: number; z: number; lift?: number }>,
   rx: number,
   rz: number,
-  y = 0.018,
+  baseY = 0.018,
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
   const idx: number[] = [];
-  centers.forEach(({ x, z }, i) => {
+  centers.forEach(({ x, z, lift = 0 }, i) => {
+    const y = baseY + lift;
     pos.push(x - rx, y, z - rz, x + rx, y, z - rz, x + rx, y, z + rz, x - rx, y, z + rz);
     uv.push(0, 0, 1, 0, 1, 1, 0, 1);
     const b = i * 4;

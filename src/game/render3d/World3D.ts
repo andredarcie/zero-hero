@@ -17,7 +17,7 @@ import {
   getBridgeSpots, getChunkTerrain, getWaterTiles, getWorldBounds, isInsideWorld,
 } from '@/game/world/WorldData';
 import {
-  RELIEF_HEIGHT, RELIEF_HIGH, isHighTile, reliefAt, stairUp, terrainHeightAt,
+  RELIEF_HEIGHT, reliefAt, reliefLevelAt, stairUp, terrainHeightAt,
 } from '@/game/world/relief';
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
@@ -39,6 +39,7 @@ import {
   type TexelAaUniforms,
 } from './pixelArtLight';
 import { DAY_SKY } from './skyPreset';
+import { VINE_VARIANTS, buildVineGeometry, vineTexture, type VineQuad } from './vineTexture';
 import {
   frameFootPad, frameUvWindow, getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv,
 } from './textures3d';
@@ -110,6 +111,13 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 // upright pine quad per tile (plus its blob and its cast shadow) and open water carries none.
 // That is the whole trade: the border got cheaper by becoming flat.
 const VOID_MARGIN_CHUNKS = 1;
+/**
+ * Mais uma faixa ao NORTE, só de morro: é para lá que a câmera olha, e o horizonte precisa de fundo.
+ * Sem árvore nenhuma (a conta acima é a do pinheiro por tile), então ela custa só as faces de pedra.
+ */
+const VOID_NORTH_EXTRA_CHUNKS = 1;
+/** Trepadeira em uma face a cada tantas (de cem), escolhidas pela coordenada. */
+const VINE_CHANCE = 42;
 // A altura da CORTINA de névoa. As árvores medem 1; 1.3 cobre a copa com folga, para nenhuma
 // ponta de pinheiro furar a névoa por cima.
 const VOID_MIST_HEIGHT = 1.3;
@@ -953,7 +961,7 @@ export class World3D {
     // de fora, então uma rampa de 6 mal começava (a mata saa como floresta normal) e uma de 1
     // cortava a preto na primeira fileira. Em 4 aparecem duas ou três fileiras de mata e a névoa
     // fecha antes da borda da tela — vê-se floresta, e vê-se ela ser engolida.
-    voidMist: 4,
+    voidMist: 16,
     // The hero's neutral self-glow is dim so that near a fire he takes the fire's
     // warm colour, and his white pixels (horns/eyes) don't glare under a bright glow.
     heroLight: 28,
@@ -1153,6 +1161,8 @@ export class World3D {
     stair: THREE.MeshLambertMaterial;
     /** O topo do cubo de parede de dungeon: preto puro, sem luz. */
     wallTop: THREE.MeshBasicMaterial;
+    /** As trepadeiras que descem pela pedra da serra (ver vineTexture). */
+    vines: THREE.MeshLambertMaterial;
     /** A NÉVOA NEGRA que engole a mata de fora do mapa (ver makeVoidMistMaterial). */
     voidMist: THREE.MeshBasicMaterial;
     blob: THREE.Material;
@@ -1244,16 +1254,18 @@ export class World3D {
   /** Ground heading a moon shadow points along (from the moon light's own position). */
   private moonCastRotY = 0;
   /** The knob values the moon field was last baked with; a live tune refills it. */
-  private readonly appliedMoonShadow = { alpha: -1, length: -1 };
+  private readonly appliedMoonShadow = { alpha: -1, length: -1, rotY: 0 };
   /**
    * A sombra das MASSAS — alvenaria de dungeon e montanha, os dois que viram CUBO. Elas saem do
    * campo instanciado da lua e do fogo e ganham esta malha só, assada sem sobreposição nenhuma:
    * ver buildMassShadowGeometry, que é onde mora o porquê.
    */
   private massTiles: SolidTileEntry[] = [];
-  private readonly massSet = new Set<number>();
+  /** A altura em níveis de todo tile que é massa: é o campo de que a sombra sai. */
+  private readonly massHeight = new Map<number, number>();
   private massShadowMesh?: THREE.Mesh;
-  private readonly appliedMassShadow = { alpha: -1, length: -1 };
+  private massBake?: Generator<void, THREE.BufferGeometry | null, void>;
+  private readonly appliedMassShadow = { alpha: -1, length: -1, rotY: 0 };
   /** As duas massas, guardadas para o rebuildCubes (a bomba tira um bloco e a poda muda em volta). */
   private wallCubes: SolidTileEntry[] = [];
   private rockCubes: SolidTileEntry[] = [];
@@ -1261,7 +1273,9 @@ export class World3D {
    * A SERRA (ver world/relief): os blocos do planalto — cubos de rocha SEM teto, porque o teto
    * deles e o chao de grama assado um nivel acima — e as escadas, cada uma com o rumo da subida.
    */
-  private highTiles: SolidTileEntry[] = [];
+  private reliefTiles: Array<{ x: number; z: number }> = [];
+  private reliefField?: ReliefPoint;
+  private massGrid: MassHeightGrid | null = null;
   private stairTiles: Array<{ x: number; z: number; ux: number; uz: number }> = [];
   private cubeMeshes: THREE.Mesh[] = [];
 
@@ -1682,8 +1696,10 @@ export class World3D {
     this.solidTiles.length = 0;
     this.castableSolids.length = 0;
     this.massTiles.length = 0;
-    this.massSet.clear();
-    this.highTiles = [];
+    this.massHeight.clear();
+    this.reliefTiles = [];
+    this.reliefField = undefined;
+    this.massGrid = null;
     this.stairTiles = [];
     this.lavaSpots.length = 0;
     this.grassQuads.clear();
@@ -1732,13 +1748,15 @@ export class World3D {
     // O chao do PLANALTO, um nivel acima (ver world/relief). A grama dele e a mesma do mundo; o
     // que muda e a altura do quad.
     const highGroundTiles: Array<{ x: number; z: number; frame: number }> = [];
-    this.highTiles = [];
+    // Quem o contorno da serra alcança: o tile alto e o vizinho dele (ver buildReliefContourGeometry).
+    const reliefNear: Array<{ x: number; z: number; frame: number; level: number; far: boolean }> = [];
+    this.reliefTiles = [];
     this.stairTiles = [];
 
     // Os tiles FORA do mundo autorado, para a névoa negra saber onde deitar (ver buildVoidMist).
     // Só o de cima tem névoa: embaixo o "escuro gigante" é o teto preto do próprio muro.
     const voidTiles: Array<{ x: number; z: number }> = [];
-    for (let cy = b.minCy - VOID_MARGIN_CHUNKS; cy <= b.maxCy + VOID_MARGIN_CHUNKS; cy++) {
+    for (let cy = b.minCy - VOID_MARGIN_CHUNKS - VOID_NORTH_EXTRA_CHUNKS; cy <= b.maxCy + VOID_MARGIN_CHUNKS; cy++) {
       for (let cx = b.minCx - VOID_MARGIN_CHUNKS; cx <= b.maxCx + VOID_MARGIN_CHUNKS; cx++) {
         const chunk = getChunkTerrain(cx, cy); // void filler outside the authored world
         const outside = !isInsideWorld(cx, cy);
@@ -1766,20 +1784,26 @@ export class World3D {
               // world.json moved, the editor still paints one "Terra", the shovel still keys off
               // 5) — what the tile WEARS is decided here, from the coordinate.
               tile.frame = groundFrameAt(tile.frame, wx, wy);
-              const relief = outside ? 0 : reliefAt(wx, wy);
-              if (relief === RELIEF_HIGH) {
-                highGroundTiles.push(tile);
-                this.highTiles.push({
-                  x: wx, z: wy, frame: CLIFF_WALL_FRAMES[terrainVariant(wx, wy, CLIFF_WALL_FRAMES.length)],
-                });
+              const level = reliefLevelAt(wx, wy);
+              let nearRelief = level > 0;
+              for (let dz = -1; dz <= 1 && !nearRelief; dz++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                  if (reliefLevelAt(wx + dx, wy + dz) > 0) { nearRelief = true; break; }
+                }
+              }
+              if (nearRelief) reliefNear.push({ ...tile, level, far: outside });
+              if (level > 0) {
+                this.reliefTiles.push({ x: wx, z: wy });
               } else {
                 groundTiles.push(tile);
-                const up = stairUp(relief);
+                const up = outside ? undefined : stairUp(reliefAt(wx, wy));
                 if (up) this.stairTiles.push({ x: wx, z: wy, ux: up[0], uz: up[1] });
               }
             }
             const upper = chunk.upper[row][col];
             if (upper === null) continue;
+            // A faixa extra do norte é só morro: ver VOID_NORTH_EXTRA_CHUNKS.
+            if (cy < b.minCy - VOID_MARGIN_CHUNKS) continue;
             if (chunk.collisions[row][col] || SOLID_UPPER_FRAMES.has(upper)) {
               this.solidTiles.push({ x: wx, z: wy, frame: upper });
             } else {
@@ -1865,17 +1889,58 @@ export class World3D {
       // Basic e nao Lambert porque com preto puro a luz e irrelevante (preto vezes o que for
       // continua preto) e Basic e o caminho mais curto ate esse resultado.
       const wallTop = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      // As trepadeiras: acesas como a pedra em que estão encostadas (`normalUp`), e sem mistura.
+      const vines = new THREE.MeshLambertMaterial({ map: vineTexture(), alphaTest: 0.5 });
+      patchPixelMaterial(vines, { quantize: true, normalUp: true });
+      vines.name = 'terrain-vines';
       this.terrainMats = {
-        ground, sea, bank, lavaBank, pit, pitFloor, decor, solid, rock, stair, wallTop,
+        ground, sea, bank, lavaBank, pit, pitFloor, decor, solid, rock, stair, wallTop, vines,
         voidMist: makeVoidMistMaterial(),
         blob: makeShadowBlobMaterial(0.34),
       };
     }
     const mats = this.terrainMats;
 
+    // A SERRA COM A CURVA DA MARGEM (ver makeReliefField). Antes do chão: um tile alto com a quina
+    // mordida precisa do chão de baixo por inteiro.
+    if (reliefNear.length > 0) {
+      const stairKeys = new Set(this.stairTiles.map((t) => tileKey(t.x, t.z)));
+      const wetKeysForRelief = new Set<number>();
+      for (const list of [bedTiles, seaTiles, lavaBedTiles, pitTiles]) {
+        for (const t of list) wetKeysForRelief.add(tileKey(t.x, t.z));
+      }
+      // O cubo de pedra tem teto na altura do planalto: um beiço entrando nele brigaria pelo mesmo plano.
+      for (const t of this.solidTiles) {
+        if (DUNGEON_WALL_SET.has(t.frame) || CLIFF_WALL_SET.has(t.frame)) wetKeysForRelief.add(tileKey(t.x, t.z));
+      }
+      const blocked = (x: number, z: number): boolean => {
+        const k = tileKey(x, z);
+        return stairKeys.has(k) || wetKeysForRelief.has(k);
+      };
+      this.reliefField = makeReliefField(reliefLevelAt, blocked);
+      const frameOf = new Map<number, number>();
+      for (const t of reliefNear) frameOf.set(tileKey(t.x, t.z), t.frame);
+      // UM PEDAÇO POR CHUNK, e a câmera só desenha os que estão à vista. A curva tem dezenas de milhares
+      // de faces, e a tela mostra uma fração delas: alguns draws a mais pagam muitos triângulos a menos.
+      const pieces = new Map<number, typeof reliefNear>();
+      for (const t of reliefNear) {
+        const k = tileKey(Math.floor(t.x / CHUNK_COLUMNS), Math.floor(t.z / CHUNK_ROWS));
+        const piece = pieces.get(k);
+        if (piece) piece.push(t);
+        else pieces.set(k, [t]);
+      }
+      for (const piece of pieces.values()) {
+        const contour = buildReliefContourGeometry(piece, frameOf, this.reliefField, reliefLevelAt, stairKeys, blocked);
+        highGroundTiles.push(...contour.whole.filter((t) => reliefLevelAt(t.x, t.z) > 0));
+        groundTiles.push(...contour.bases);
+        if (contour.tops.getIndex()?.count) this.addTerrainMesh(new THREE.Mesh(contour.tops, mats.ground));
+        if (contour.walls.getIndex()?.count) this.addTerrainMesh(new THREE.Mesh(contour.walls, mats.rock));
+        if (contour.vines.length > 0) this.addTerrainMesh(new THREE.Mesh(buildVineGeometry(contour.vines), mats.vines));
+      }
+    }
     this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet), mats.ground));
     if (highGroundTiles.length > 0) {
-      this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, RELIEF_HEIGHT, solidSet), mats.ground));
+      this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet), mats.ground));
     }
 
     // The sunken riverbed (the same dirt, dropped a level) + the earthen banks that
@@ -1960,7 +2025,7 @@ export class World3D {
     // A decoracao do PLANALTO sobe com ele: a mesma malha (o indice dos quads e o do arbusto que
     // farfalha), so a altura de cada quad muda.
     this.decorGeo = buildFlatTileGeometry(
-      decorTiles, (x, z) => 0.02 + (isHighTile(x, z) ? RELIEF_HEIGHT : 0), solidSet, undefined,
+      decorTiles, (x, z) => 0.02 + reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined,
       (frame) => (WIND_STIR_FRAMES.has(frame) ? 1 : 0),
     );
     this.addTerrainMesh(new THREE.Mesh(this.decorGeo, mats.decor));
@@ -2005,7 +2070,7 @@ export class World3D {
     // fora do centro do tile não lê como floresta natural, lê como peça solta — e desmente a única
     // coisa que todo tile deste jogo promete: que ali cabe exatamente um. A variedade da mata vem
     // dos SEIS frames de pinheiro, que é variação DENTRO do tile, e da névoa por cima.
-    this.addTerrainMesh(new THREE.Mesh(buildUprightTileGeometry(quadTiles), mats.solid));
+    this.addTerrainMesh(new THREE.Mesh(buildUprightTileGeometry(quadTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT), mats.solid));
 
     // Quem é CUBO é MASSA. As duas listas ficam guardadas porque a massa é a única geometria do
     // mundo que se REFAZ inteira quando um tile some (a bomba na parede rachada): a poda de faces
@@ -2053,7 +2118,10 @@ export class World3D {
     // CORTINA em pé por tile, no mesmo plano das árvores, um pouco mais alta que a copa. Uma
     // malha, um draw, e a rampa inteira mora no shader.
     if (voidTiles.length > 0) {
-      const mist = new THREE.Mesh(buildMistCurtainGeometry(voidTiles, VOID_MIST_HEIGHT), mats.voidMist);
+      const mist = new THREE.Mesh(
+        buildMistCurtainGeometry(voidTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT + VOID_MIST_HEIGHT),
+        mats.voidMist,
+      );
       mist.renderOrder = 4; // depois da poça de fogo e do blob: a névoa cobre o que vier antes
       const u = mats.voidMist.userData.mist as MistUniforms;
       // O retângulo é a BORDA do mundo, não o centro do último tile: um tile em `x` ocupa
@@ -2074,7 +2142,7 @@ export class World3D {
     // they read as standing up") — merged into one mesh, all sharing the soft blob texture.
     // A touch of forward (+z, toward camera) bias peeks the blob out at the tree's foot.
     const blobGeo = buildShadowBlobGeometry(
-      this.castableSolids.map((t) => ({ x: t.x, z: t.z + 0.06 })), 0.46, 0.42,
+      this.castableSolids.map((t) => ({ x: t.x, z: t.z + 0.06, lift: reliefLevelAt(t.x, t.z) * RELIEF_HEIGHT })), 0.46, 0.42,
     );
     const ellipses = new THREE.Mesh(blobGeo, mats.blob);
     ellipses.renderOrder = 3; // after the additive fire glow, so the blob isn't washed out
@@ -2152,28 +2220,23 @@ export class World3D {
       ));
     }
 
-    // A SERRA: o cubo da montanha sem teto (o teto e a grama do planalto) e a escada. A face
-    // virada para uma escada nao nasce — a escada encosta nela e fecha o vao com os degraus.
-    if (this.highTiles.length > 0) {
-      const highSet = new Set(this.highTiles.map((t) => tileKey(t.x, t.z)));
-      const stairSet = new Set(this.stairTiles.map((t) => tileKey(t.x, t.z)));
-      push(new THREE.Mesh(
-        buildTileCubeGeometry(
-          this.highTiles,
-          (x, z) => highSet.has(tileKey(x, z)) || stairSet.has(tileKey(x, z)),
-          ROCK_CUBE_SHADE,
-          false,
-        ),
-        mats.rock,
-      ));
-    }
+    // A escada. A pedra da serra sai pelo contorno, em buildTerrain: ela não muda com a bomba.
     if (this.stairTiles.length > 0) push(new THREE.Mesh(buildStairGeometry(this.stairTiles), mats.stair));
 
     // Os maciços entram na MESMA lista de sombra de propósito: um muro de dungeon, uma montanha e
     // o planalto da serra são a mesma geometria, e dar a cada um a sua resposta seria a segunda voz.
-    this.massTiles = [...this.wallCubes, ...this.rockCubes, ...this.highTiles];
-    this.massSet.clear();
-    for (const t of this.massTiles) this.massSet.add(tileKey(t.x, t.z));
+    // Toda a serra projeta, a de fora do mapa também: é da sombra dela que a borda do mundo vive.
+    this.massTiles = [...this.wallCubes, ...this.rockCubes];
+    this.massHeight.clear();
+    for (const t of this.massTiles) this.massHeight.set(tileKey(t.x, t.z), 1);
+    const stairKeys = new Set(this.stairTiles.map((t) => tileKey(t.x, t.z)));
+    this.massGrid = buildMassHeightGrid(
+      [...this.massTiles, ...this.reliefTiles],
+      (x, z) => this.massHeight.get(tileKey(x, z)) ?? 0,
+      reliefLevelAt,
+      this.reliefField,
+      (x, z) => this.sunkenTiles.has(tileKey(x, z)) || stairKeys.has(tileKey(x, z)),
+    );
     this.rebuildMassShadow();
   }
 
@@ -2187,35 +2250,57 @@ export class World3D {
    * texel de uma arte que não tem nada a ver com ela.
    */
   private rebuildMassShadow(): void {
-    const alpha = this.params.moonShadowAlpha;
-    const length = this.params.moonShadowLength;
-    this.appliedMassShadow.alpha = alpha;
-    this.appliedMassShadow.length = length;
+    const bake = this.startMassShadowBake();
+    let step = bake.next();
+    while (!step.done) step = bake.next();
+    this.massBake = undefined;
+    this.installMassShadow(step.value);
+  }
 
+  /**
+   * O sol anda, e a sombra anda com ele: re-assar o mundo inteiro de uma vez daria um tranco num
+   * celular a cada passo do relógio. Então este bake vem em fatias, e a sombra velha fica na tela até
+   * a nova ficar pronta. Um bake que perdeu o rumo no meio do caminho é trocado por outro.
+   */
+  private tickMassShadowBake(): void {
+    if (!this.massBake) return;
+    const until = performance.now() + MASS_BAKE_MS_PER_FRAME;
+    let step = this.massBake.next();
+    while (!step.done && performance.now() < until) step = this.massBake.next();
+    if (!step.done) return;
+    this.massBake = undefined;
+    this.installMassShadow(step.value);
+  }
+
+  private startMassShadowBake(): Generator<void, THREE.BufferGeometry | null, void> {
+    const length = this.params.moonShadowLength;
+    this.appliedMassShadow.length = length;
+    this.appliedMassShadow.rotY = this.moonCastRotY;
+
+    // O rumo da barra é o MESMO da silhueta esticada que ela substitui: o quad da lua aponta a
+    // cabeça em -Z antes de girar, então o rumo no chão é (-sen, -cos) do mesmo ângulo. Derivar
+    // daqui e não de um segundo número é o que impede a barra de apontar para um lado e a sombra
+    // de uma árvore ao lado dela para outro.
+    return bakeMassShadow(
+      this.massGrid,
+      this.stairTiles,
+      -Math.sin(this.moonCastRotY),
+      -Math.cos(this.moonCastRotY),
+      length,
+    );
+  }
+
+  private installMassShadow(geo: THREE.BufferGeometry | null): void {
+    const alpha = this.params.moonShadowAlpha;
+    this.appliedMassShadow.alpha = alpha;
     const old = this.massShadowMesh;
     if (old) {
       old.removeFromParent();
       old.geometry.dispose();
       this.massShadowMesh = undefined;
     }
-    if (this.massTiles.length === 0 || alpha <= 0.02) {
-      if (old) (old.material as THREE.Material).dispose();
-      return;
-    }
-
-    // O rumo da barra é o MESMO da silhueta esticada que ela substitui: o quad da lua aponta a
-    // cabeça em -Z antes de girar, então o rumo no chão é (-sen, -cos) do mesmo ângulo. Derivar
-    // daqui e não de um segundo número é o que impede a barra de apontar para um lado e a sombra
-    // de uma árvore ao lado dela para outro.
-    const geo = buildMassShadowGeometry(
-      this.massTiles,
-      (x, z) => this.massSet.has(tileKey(x, z)),
-      (x, z) => this.sunkenTiles.has(tileKey(x, z)),
-      -Math.sin(this.moonCastRotY),
-      -Math.cos(this.moonCastRotY),
-      length,
-    );
-    if (!geo) {
+    if (!geo || alpha <= 0.02) {
+      geo?.dispose();
       if (old) (old.material as THREE.Material).dispose();
       return;
     }
@@ -2459,11 +2544,14 @@ export class World3D {
         // vindo por aqui, que é para o que este campo foi feito — ela é um objeto solto, e a
         // silhueta dela é o desenho da copa.
         if (isMassFrame(tile.frame)) continue;
+        // A sombra deita no chão da árvore e para na beira dele: passar dali é flutuar no ar.
+        const clamped = this.clampCastAtSunken(tile.x, tile.z, this.moonCastRotY, length);
         field.add(
           tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
-          CAST_WIDTH_FACTOR, length, this.moonCastRotY, alpha,
+          CAST_WIDTH_FACTOR, clamped >= MIN_CAST_LEN ? clamped : length, this.moonCastRotY, alpha,
           frameFootPad('forest-tileset', tile.frame),
           tile, // handed back below with the slot the sort assigned — the handoff's handle
+          reliefLevelAt(tile.x, tile.z) * RELIEF_HEIGHT,
         );
       }
     }
@@ -2472,6 +2560,7 @@ export class World3D {
     this.moonDimmed.length = 0;
     this.appliedMoonShadow.alpha = alpha;
     this.appliedMoonShadow.length = length;
+    this.appliedMoonShadow.rotY = this.moonCastRotY;
   }
 
   /**
@@ -3356,15 +3445,17 @@ export class World3D {
    * clamp the length just short of the first SUNKEN tile (river/lava/sea bed) it would
    * cross — a ground-level quad over a sunken channel floats in mid-air otherwise. Starts
    * past the caster's own tile, so standing on a bridge (or wading with the boots) never
-   * self-clamps. Returns the (possibly shorter) length.
+   * self-clamps. The same goes for the edge of a higher ground: a shadow lying on a plateau ends
+   * where the plateau does. Returns the (possibly shorter) length.
    */
   private clampCastAtSunken(x: number, z: number, rotY: number, length: number): number {
     const dirX = -Math.sin(rotY);
     const dirZ = -Math.cos(rotY);
+    const own = reliefLevelAt(Math.round(x), Math.round(z));
     for (let s = 0.6; s < length; s += 0.5) {
       const tx = Math.round(x + dirX * s);
       const tz = Math.round(z + dirZ * s);
-      if (this.sunkenTiles.has(tileKey(tx, tz))) return Math.max(0.3, s - 0.25);
+      if (this.sunkenTiles.has(tileKey(tx, tz)) || reliefLevelAt(tx, tz) < own) return Math.max(0.3, s - 0.25);
     }
     return length;
   }
@@ -3402,14 +3493,21 @@ export class World3D {
     // exactly the old behaviour.
     const heightScale = 2.2 / Math.max(0.5, this.params.shadowHeight);
     // Live tuning (window.hd3d): the statics' moon field is baked, so a knob move re-bakes it.
-    if (moonAlpha !== this.appliedMoonShadow.alpha || moonLength !== this.appliedMoonShadow.length) {
+    if (moonAlpha !== this.appliedMoonShadow.alpha || moonLength !== this.appliedMoonShadow.length
+      || this.moonCastRotY !== this.appliedMoonShadow.rotY) {
       this.fillMoonCastField();
     }
     // A barra dos maciços tem os MESMOS dois knobs, e re-assa junto: se ela ficasse para trás, o
     // dia clarearia a sombra de uma árvore e deixaria a do muro ao lado na noite.
-    if (moonAlpha !== this.appliedMassShadow.alpha || moonLength !== this.appliedMassShadow.length) {
-      this.rebuildMassShadow();
+    // Só o rumo e o comprimento mudam a geometria; a escuridão é a opacidade do material, e o dia
+    // mexe nela sem parar.
+    if (moonLength !== this.appliedMassShadow.length || this.moonCastRotY !== this.appliedMassShadow.rotY) {
+      this.massBake = this.startMassShadowBake();
+    } else if (moonAlpha !== this.appliedMassShadow.alpha) {
+      this.appliedMassShadow.alpha = moonAlpha;
+      if (this.massShadowMesh) (this.massShadowMesh.material as THREE.MeshBasicMaterial).opacity = moonAlpha;
     }
+    this.tickMassShadowBake();
 
     // Restore the moon instances the statics' handoff dimmed last frame (2d) — the pass
     // below re-dims whichever still sit inside a lit pool.
@@ -3500,6 +3598,7 @@ export class World3D {
         c.mesh, ax, az, getTexture3D(c.bb.texKey, c.bb.frame), c.bb.flipX,
         width, length, rotY, a,
         frameFootPad(c.bb.texKey, c.bb.frame),
+        terrainHeightAt(c.bb.x, c.bb.y),
       );
     }
 
@@ -3609,6 +3708,8 @@ export class World3D {
       tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
       CAST_WIDTH_FACTOR, length, rotY, a,
       frameFootPad('forest-tileset', tile.frame),
+      undefined,
+      reliefLevelAt(tile.x, tile.z) * RELIEF_HEIGHT,
     );
 
     // The statics' fire→moon handoff (2d): inside a lit pool the tile's baked moon
@@ -5124,11 +5225,12 @@ const makeVoidMistMaterial = (): THREE.MeshBasicMaterial => {
  * posição de mundo (ver makeVoidMistMaterial).
  */
 const buildMistCurtainGeometry = (
-  tiles: ReadonlyArray<{ x: number; z: number }>, height: number,
+  tiles: ReadonlyArray<{ x: number; z: number }>, heightAt: (x: number, z: number) => number,
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const idx: number[] = [];
   tiles.forEach(({ x, z }, i) => {
+    const height = heightAt(x, z);
     // MEIO TILE À FRENTE (+z é a câmera). No próprio z a cortina fica na MESMA profundidade da
     // árvore daquele tile, e o teste de profundidade padrão (`less`) reprova o empate: a névoa
     // era descartada exatamente em cima do que ela existe para velar. Na borda da frente do
@@ -5608,8 +5710,6 @@ const buildTileCubeGeometry = (
   tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
   isWall: (x: number, z: number) => boolean,
   shade?: CubeShade,
-  /** O teto. A serra o dispensa: o teto dela e o chao de grama assado um nivel acima. */
-  top = true,
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
@@ -5651,12 +5751,10 @@ const buildTileCubeGeometry = (
     // alvenaria do tamanho da dungeon competindo com o chao pela atencao. Na MONTANHA e o
     // contrario — o teto e o planalto, a face que a camera de cima mais ve, e a rocha ali e o que
     // faz a massa ler como terreno e nao como muro.
-    if (top) {
-      face(
-        f, [x0, 1, z0], [x1, 1, z0], [x1, 1, z1], [x0, 1, z1], [0, 1, 0],
-        shade ? sideIdx : topIdx, shade ? [shade.top, shade.top] : undefined,
-      );
-    }
+    face(
+      f, [x0, 1, z0], [x1, 1, z0], [x1, 1, z1], [x0, 1, z1], [0, 1, 0],
+      shade ? sideIdx : topIdx, shade ? [shade.top, shade.top] : undefined,
+    );
     // A face SUL: a frente do bloco, e a unica lateral que a camera enxerga de cheio.
     if (!isWall(x, z + 1)) {
       face(f, [x0, 1, z1], [x1, 1, z1], [x1, 0, z1], [x0, 0, z1], [0, 0, 1], sideIdx,
@@ -5721,20 +5819,289 @@ const buildTileCubeGeometry = (
  * não tem por decisão.
  */
 const MASS_SHADOW_SUB = 8;
+/** Quanto do quadro o bake do rumo do sol pode gastar. */
+const MASS_BAKE_MS_PER_FRAME = 2;
+/** A folga do campo de alturas em volta do que projeta: a sombra mais longa, com qualquer knob razoável. */
+const MASS_SHADOW_PAD = 8;
 /** Acima do chão e da mancha de contato, abaixo da silhueta de fogo (que é `FOOT_Y` = 0.015). */
 const MASS_SHADOW_Y = 0.012;
 
-const buildMassShadowGeometry = (
+/**
+ * A SERRA COM A CURVA DA MARGEM — a mesma receita da margem orgânica (`buildShoreGeometry`), agora
+ * na pedra. O dado continua por tile (quem anda e quem colide não sabe disto); o que muda é o que se
+ * vê. Para cada nível, o contorno é um campo de distância lido por pixel de arte:
+ *
+ *   · a UNIÃO SUAVE das distâncias até os tiles daquele nível arredonda a quina côncava;
+ *   · a quina convexa de verdade (nenhum vizinho nos dois lados nem na diagonal) é um canto de raio
+ *     RELIEF_CORNER, que MORDE o próprio tile: só o canto, nunca o centro, onde o herói pisa;
+ *   · a largura do beiço anda no mesmo ruído da margem, então a beira ondula e é igual em todo boot.
+ *
+ * A escada e a água têm chão próprio e ficam de fora: o contorno para na beira delas.
+ */
+const RELIEF_CELLS = 16; // um pixel de arte, como a margem: com dois, a curva volta a ser escada
+const RELIEF_CELLS_FAR = 8; // fora do mundo ninguém chega perto: dois pixels, e um quarto das faces
+const RELIEF_LIP_MIN = 0.06;
+const RELIEF_LIP_VAR = 0.3;
+const RELIEF_ROUND = 0.5;
+const RELIEF_CORNER = 0.38;
+
+type ReliefPoint = (px: number, pz: number) => number;
+
+const makeReliefField = (
+  levelAt: (x: number, z: number) => number,
+  blocked: (x: number, z: number) => boolean,
+): ReliefPoint => {
+  const open = (x: number, z: number, level: number): boolean => levelAt(x, z) < level && !blocked(x, z);
+  const distanceToTile = (px: number, pz: number, x: number, z: number, level: number): number => {
+    const sx = px >= x ? 1 : -1;
+    const sz = pz >= z ? 1 : -1;
+    const qx = Math.abs(px - x);
+    const qz = Math.abs(pz - z);
+    const inner = 0.5 - RELIEF_CORNER;
+    if (qx > inner && qz > inner && open(x + sx, z, level) && open(x, z + sz, level) && open(x + sx, z + sz, level)) {
+      return Math.max(0, Math.hypot(qx - inner, qz - inner) - RELIEF_CORNER);
+    }
+    return Math.hypot(Math.max(qx - 0.5, 0), Math.max(qz - 0.5, 0));
+  };
+  return (px, pz) => {
+    const tx = Math.round(px);
+    const tz = Math.round(pz);
+    if (blocked(tx, tz)) return levelAt(tx, tz);
+    let top = 0;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) top = Math.max(top, levelAt(tx + dx, tz + dz));
+    }
+    for (let level = top; level >= 1; level--) {
+      let d = Infinity;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (levelAt(tx + dx, tz + dz) < level) continue;
+          const di = distanceToTile(px, pz, tx + dx, tz + dz, level);
+          d = d === Infinity ? di : smoothMin(d, di, RELIEF_ROUND);
+        }
+      }
+      // O nível de cima fica um fio para dentro: entre os dois sobra uma saliência, não uma parede só.
+      const lip = (RELIEF_LIP_MIN + RELIEF_LIP_VAR * shoreNoise(px * 1.3 + level * 17, pz * 1.3 + level * 5)) * (level > 1 ? 0.6 : 1);
+      if (d < lip) return level;
+    }
+    return 0;
+  };
+};
+
+/** O desenho do contorno: o gramado do topo, a pedra que desce por ele e as trepadeiras sobre a pedra. */
+const buildReliefContourGeometry = (
+  tiles: ReadonlyArray<{ x: number; z: number; frame: number; level: number; far: boolean }>,
+  /** A arte de todos os tiles da serra: o beiço de um pedaço pode vestir o tile do pedaço vizinho. */
+  frameOf: ReadonlyMap<number, number>,
+  field: ReliefPoint,
+  levelAt: (x: number, z: number) => number,
+  stairs: ReadonlySet<number>,
+  blocked: (x: number, z: number) => boolean,
+): {
+  tops: THREE.BufferGeometry; walls: THREE.BufferGeometry; vines: VineQuad[];
+  whole: Array<{ x: number; z: number; frame: number }>; bases: Array<{ x: number; z: number; frame: number }>;
+} => {
+  const whole: Array<{ x: number; z: number; frame: number }> = [];
+  const bases: Array<{ x: number; z: number; frame: number }> = [];
+  const vines: VineQuad[] = [];
+  const tp: number[] = [];
+  const tuv: number[] = [];
+  const tb: number[] = [];
+  const tn: number[] = [];
+  const tc: number[] = [];
+  const ti: number[] = [];
+  const wp: number[] = [];
+  const wuv: number[] = [];
+  const wb: number[] = [];
+  const wn: number[] = [];
+  const wc: number[] = [];
+  const wi: number[] = [];
+  const shade = ROCK_CUBE_SHADE;
+  const lip = 0.012; // a trepadeira, um fio à frente da pedra
+
+  for (const { x: tx, z: tz, frame, level, far } of tiles) {
+    const uniform = (() => {
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (levelAt(tx + dx, tz + dz) !== level || blocked(tx + dx, tz + dz)) return false;
+        }
+      }
+      return true;
+    })();
+    if (uniform) { whole.push({ x: tx, z: tz, frame }); continue; }
+    const N = far ? RELIEF_CELLS_FAR : RELIEF_CELLS;
+    const step = 1 / N;
+    const x0 = tx - 0.5;
+    const z0 = tz - 0.5;
+    const cells = new Int8Array((N + 2) * (N + 2));
+    for (let j = -1; j <= N; j++) {
+      for (let i = -1; i <= N; i++) cells[(j + 1) * (N + 2) + i + 1] = field(x0 + (i + 0.5) * step, z0 + (j + 0.5) * step);
+    }
+    const at = (i: number, j: number): number => cells[(j + 1) * (N + 2) + i + 1];
+    // O beiço veste a arte do tile mais perto daquele nível.
+    const artFor = (c: number): number => {
+      if (level >= c) return frame;
+      let best = frame;
+      let dist = Infinity;
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (levelAt(tx + dx, tz + dz) < c) continue;
+          const f = frameOf.get(tileKey(tx + dx, tz + dz));
+          const d = dx * dx + dz * dz;
+          if (f !== undefined && d < dist) { dist = d; best = f; }
+        }
+      }
+      return best;
+    };
+
+    // O TOPO: corridas de células do mesmo nível, esticadas para baixo enquanto a linha seguinte for
+    // igual. O miolo do tile é quase todo uma peça só, e é aqui que mora a maior parte da economia.
+    let opensToGround = false;
+    const used = new Uint8Array(N * N);
+    for (let j = 0; j < N; j++) {
+      let i = 0;
+      while (i < N) {
+        const c = at(i, j);
+        if (c <= 0) { if (level > 0) opensToGround = true; i++; continue; }
+        if (used[j * N + i]) { i++; continue; }
+        let e = i;
+        while (e + 1 < N && at(e + 1, j) === c && !used[j * N + e + 1]) e++;
+        let rows = 1;
+        grow: while (j + rows < N) {
+          for (let r = i; r <= e; r++) {
+            if (at(r, j + rows) !== c || used[(j + rows) * N + r]) break grow;
+          }
+          rows++;
+        }
+        for (let m = 0; m < rows; m++) used.fill(1, (j + m) * N + i, (j + m) * N + e + 1);
+        const f = tilesetFrameUv(artFor(c));
+        const ax = x0 + i * step;
+        const bx = x0 + (e + 1) * step;
+        const az = z0 + j * step;
+        const bz = az + rows * step;
+        const u = (px: number): number => f.u0 + (px - x0) * (f.u1 - f.u0);
+        const v = (pz: number): number => f.v1 - (pz - z0) * (f.v1 - f.v0);
+        const y = c * RELIEF_HEIGHT;
+        const b = tp.length / 3;
+        tp.push(ax, y, az, bx, y, az, bx, y, bz, ax, y, bz);
+        tuv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
+        for (let k = 0; k < 4; k++) {
+          tb.push(f.cu0, f.cv0, f.cu1, f.cv1);
+          tn.push(0, 1, 0);
+          tc.push(1, 1, 1);
+        }
+        ti.push(b, b + 3, b + 2, b, b + 2, b + 1);
+        i = e + 1;
+      }
+    }
+    if (opensToGround) bases.push({ x: tx, z: tz, frame });
+
+    // A PEDRA, por camada: `a`/`b` são o começo e o fim da corrida no chão, e s0/s1 onde ela cai na arte.
+    const face = (
+      ax: number, az: number, bx: number, bz: number, s0: number, s1: number,
+      high: number, low: number, nx: number, nz: number, lit: number,
+    ): void => {
+      for (let y = low; y < high; y++) {
+        const f = tilesetFrameUv(CLIFF_WALL_FRAMES[terrainVariant(tx, tz + y * 7, CLIFF_WALL_FRAMES.length)]);
+        const base = wp.length / 3;
+        const y0 = y * RELIEF_HEIGHT;
+        const y1 = (y + 1) * RELIEF_HEIGHT;
+        wp.push(ax, y1, az, bx, y1, bz, bx, y0, bz, ax, y0, az);
+        const u0 = f.u0 + s0 * (f.u1 - f.u0);
+        const u1 = f.u0 + s1 * (f.u1 - f.u0);
+        wuv.push(u0, f.v1, u1, f.v1, u1, f.v0, u0, f.v0);
+        for (let k = 0; k < 4; k++) {
+          wb.push(f.cu0, f.cv0, f.cu1, f.cv1);
+          wn.push(nx, 0, nz);
+          const s = k < 2 ? lit : lit * shade.foot;
+          wc.push(s, s, s);
+        }
+        wi.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      }
+      // A trepadeira é por tile e por lado: um trecho inteiro de mato, não uns fiapos soltos.
+      const salt = nz !== 0 ? 0 : nx < 0 ? 1 : 2;
+      const roll = Math.abs(Math.imul(tx * 73 + salt * 19 + 5, tz * 137 + 11)) % 100;
+      if (roll >= VINE_CHANCE) return;
+      vines.push({
+        x0: ax + nx * lip, z0: az + nz * lip, x1: bx + nx * lip, z1: bz + nz * lip,
+        top: high * RELIEF_HEIGHT, drop: (high - low) * RELIEF_HEIGHT,
+        variant: roll % VINE_VARIANTS, nx, nz, u0: s0, u1: s1,
+      });
+    };
+    const across = (i: number, j: number): boolean => {
+      const ax = Math.round(x0 + (i + 0.5) * step);
+      const az = Math.round(z0 + (j + 0.5) * step);
+      return stairs.has(tileKey(ax, az));
+    };
+    // A face SUL de cada corrida...
+    for (let j = 0; j < N; j++) {
+      let i = 0;
+      while (i < N) {
+        const c = at(i, j);
+        const n = at(i, j + 1);
+        if (c <= n || across(i, j + 1)) { i++; continue; }
+        let e = i;
+        while (e + 1 < N && at(e + 1, j) === c && at(e + 1, j + 1) === n && !across(e + 1, j + 1)) e++;
+        const z = z0 + (j + 1) * step;
+        face(x0 + i * step, z, x0 + (e + 1) * step, z, i * step, (e + 1) * step, c, n, 0, 1, shade.south);
+        i = e + 1;
+      }
+    }
+    // ...e as faces LESTE e OESTE, por coluna.
+    for (const side of [1, -1]) {
+      for (let i = 0; i < N; i++) {
+        let j = 0;
+        while (j < N) {
+          const c = at(i, j);
+          const n = at(i + side, j);
+          if (c <= n || across(i + side, j)) { j++; continue; }
+          let e = j;
+          while (e + 1 < N && at(i, e + 1) === c && at(i + side, e + 1) === n && !across(i + side, e + 1)) e++;
+          const x = x0 + (side > 0 ? i + 1 : i) * step;
+          const a = z0 + j * step;
+          const b = z0 + (e + 1) * step;
+          if (side > 0) face(x, b, x, a, (e + 1) * step, j * step, c, n, 1, 0, shade.east);
+          else face(x, a, x, b, j * step, (e + 1) * step, c, n, -1, 0, shade.west);
+          j = e + 1;
+        }
+      }
+    }
+  }
+
+  const tops = new THREE.BufferGeometry();
+  tops.setAttribute('position', new THREE.Float32BufferAttribute(tp, 3));
+  tops.setAttribute('uv', new THREE.Float32BufferAttribute(tuv, 2));
+  tops.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(tb, 4));
+  tops.setAttribute('normal', new THREE.Float32BufferAttribute(tn, 3));
+  tops.setAttribute('color', new THREE.Float32BufferAttribute(tc, 3));
+  tops.setIndex(ti);
+  const walls = new THREE.BufferGeometry();
+  walls.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
+  walls.setAttribute('uv', new THREE.Float32BufferAttribute(wuv, 2));
+  walls.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(wb, 4));
+  walls.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
+  walls.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
+  walls.setIndex(wi);
+  return { tops, walls, vines, whole, bases };
+};
+
+/**
+ * O RELEVO É QUE DITA A SOMBRA: um campo de alturas por sub-célula, o mesmo contorno que o desenho usa.
+ * Para cada altura que recebe sombra há uma varredura própria, e cada beira projeta `length` por nível
+ * de DIFERENÇA. A célula só escurece onde o chão está exatamente naquela altura, de modo que a sombra
+ * some dentro de um bloco porque ele a tapa, e volta do outro lado se ainda alcançar.
+ */
+type MassHeightGrid = { heights: Int8Array; minX: number; minZ: number; w: number; h: number; top: number };
+
+const buildMassHeightGrid = (
   tiles: ReadonlyArray<{ x: number; z: number }>,
-  isMass: (x: number, z: number) => boolean,
-  isSunken: (x: number, z: number) => boolean,
-  dirX: number,
-  dirZ: number,
-  length: number,
-): THREE.BufferGeometry | null => {
-  if (tiles.length === 0 || length <= 0.01) return null;
+  cubeHeight: (x: number, z: number) => number,
+  levelAt: (x: number, z: number) => number,
+  field: ReliefPoint | undefined,
+  isFloorless: (x: number, z: number) => boolean,
+): MassHeightGrid | null => {
+  if (tiles.length === 0) return null;
   const S = MASS_SHADOW_SUB;
-  // A caixa do raster: a massa mais o alcance da varredura, com um tile de folga de cada lado.
   let minX = Infinity; let maxX = -Infinity; let minZ = Infinity; let maxZ = -Infinity;
   for (const t of tiles) {
     if (t.x < minX) minX = t.x;
@@ -5742,95 +6109,149 @@ const buildMassShadowGeometry = (
     if (t.z < minZ) minZ = t.z;
     if (t.z > maxZ) maxZ = t.z;
   }
-  const pad = Math.ceil(length) + 1;
-  minX -= pad; maxX += pad; minZ -= pad; maxZ += pad;
+  minX -= MASS_SHADOW_PAD; maxX += MASS_SHADOW_PAD; minZ -= MASS_SHADOW_PAD; maxZ += MASS_SHADOW_PAD;
   const w = (maxX - minX + 1) * S;
   const h = (maxZ - minZ + 1) * S;
-  const grid = new Uint8Array(w * h);
-
-  // A VARREDURA. Cada tile da massa é um quadrado de S×S sub-células, empurrado ao longo do rumo
-  // em passos de meia sub-célula — meio passo porque um passo inteiro deixaria buraco na diagonal
-  // (o rumo é diagonal, e andar 1 em x e 1 em z de uma vez pula a célula do canto).
-  const steps = Math.ceil(length * S * 2);
-  // O MIOLO NÃO VARRE. Se tudo o que o primeiro passo da varredura alcança já é massa, a barra
-  // daquele tile cai inteira dentro do maciço — que é apagado logo abaixo —, então ele não
-  // acrescenta um pixel. Não é uma aproximação: é o mesmo desenho com menos trabalho, e é o que
-  // tira quatro quintos dos 4.500 blocos da dungeon da conta.
-  const sx = Math.sign(dirX);
-  const sz = Math.sign(dirZ);
-  const buried = (x: number, z: number): boolean => (
-    (sx === 0 || isMass(x + sx, z))
-    && (sz === 0 || isMass(x, z + sz))
-    && (sx === 0 || sz === 0 || isMass(x + sx, z + sz))
-  );
-  for (const t of tiles) {
-    if (buried(t.x, t.z)) continue;
-    const bx = (t.x - minX) * S;
-    const bz = (t.z - minZ) * S;
-    for (let s = 0; s <= steps; s += 1) {
-      const d = (s / steps) * length * S;
-      const ox = Math.round(bx + dirX * d);
-      const oz = Math.round(bz + dirZ * d);
-      for (let j = 0; j < S; j += 1) {
-        const gz = oz + j;
-        if (gz < 0 || gz >= h) continue;
-        const row = gz * w;
-        for (let i = 0; i < S; i += 1) {
-          const gx = ox + i;
-          if (gx < 0 || gx >= w) continue;
-          grid[row + gx] = 1;
+  const heights = new Int8Array(w * h);
+  let top = 0;
+  for (let tz = minZ; tz <= maxZ; tz++) {
+    for (let tx = minX; tx <= maxX; tx++) {
+      const cube = cubeHeight(tx, tz);
+      let near = false;
+      for (let dz = -1; dz <= 1 && !near; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (levelAt(tx + dx, tz + dz) > 0) { near = true; break; }
         }
       }
-    }
-  }
-
-  // O que a barra NÃO cobre: o chão sob a própria massa (o cubo está em cima, ninguém vê) e o leito
-  // afundado do rio/lava — uma sombra flutuando sobre o canal é o mesmo defeito que o
-  // `clampCastAtSunken` conserta no outro caminho.
-  for (let tz = minZ; tz <= maxZ; tz += 1) {
-    for (let tx = minX; tx <= maxX; tx += 1) {
-      if (!isMass(tx, tz) && !isSunken(tx, tz)) continue;
+      const floorless = isFloorless(tx, tz);
       const bx = (tx - minX) * S;
       const bz = (tz - minZ) * S;
-      for (let j = 0; j < S; j += 1) {
-        const row = (bz + j) * w;
-        for (let i = 0; i < S; i += 1) grid[row + bx + i] = 0;
+      for (let j = 0; j < S; j++) {
+        const row = (bz + j) * w + bx;
+        for (let i = 0; i < S; i++) {
+          let v = cube;
+          if (floorless) v = -1;
+          else if (near && field && cube === 0) v = field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S);
+          heights[row + i] = v;
+          if (v > top) top = v;
+        }
       }
     }
   }
+  return { heights, minX, minZ, w, h, top };
+};
 
-  // GREEDY MESH: corridas horizontais esticadas para baixo enquanto a linha seguinte for igual.
-  // É o que troca ~90 mil quads de sub-célula por alguns milhares de retângulos — e é o passo que
-  // torna "uma malha só, sem sobreposição" barato o bastante para ser a resposta.
+const bakeMassShadow = function* (
+  grid: MassHeightGrid | null,
+  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number }>,
+  dirX: number,
+  dirZ: number,
+  length: number,
+): Generator<void, THREE.BufferGeometry | null, void> {
+  if (!grid || length <= 0.01) return null;
+  const S = MASS_SHADOW_SUB;
+  const { heights, minX, minZ, w, h, top } = grid;
+  const cell = 1 / S;
   const pos: number[] = [];
   const idx: number[] = [];
-  const cell = 1 / S;
-  for (let gz = 0; gz < h; gz += 1) {
-    let gx = 0;
-    while (gx < w) {
-      if (grid[gz * w + gx] !== 1) { gx += 1; continue; }
-      let runW = 1;
-      while (gx + runW < w && grid[gz * w + gx + runW] === 1) runW += 1;
-      let runH = 1;
-      grow: while (gz + runH < h) {
-        for (let i = 0; i < runW; i += 1) {
-          if (grid[(gz + runH) * w + gx + i] !== 1) break grow;
+  const pushQuad = (x0: number, x1: number, z0: number, z1: number, y: number): void => {
+    const b = pos.length / 3;
+    pos.push(x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1);
+    idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
+  };
+  // O MIOLO NÃO VARRE: se os vizinhos no rumo da sombra são tão altos quanto a célula, a sombra dela
+  // cai inteira dentro da deles. Sobra a beira, que é um fio do mundo.
+  const sx = Math.sign(dirX);
+  const sz = Math.sign(dirZ);
+  const edges: number[] = [];
+  for (let gz = 1; gz < h - 1; gz++) {
+    if (gz % 48 === 0) yield;
+    for (let gx = 1; gx < w - 1; gx++) {
+      const v = heights[gz * w + gx];
+      if (v <= 0) continue;
+      if ((sx !== 0 && heights[gz * w + gx + sx] < v) || (sz !== 0 && heights[(gz + sz) * w + gx] < v)
+        || (sx !== 0 && sz !== 0 && heights[(gz + sz) * w + gx + sx] < v)) edges.push(gx, gz);
+    }
+  }
+  const out = new Uint8Array(w * h);
+  // Marca só o que cai no chão desta altura: o resto é pedra por cima, ou chão de outro nível.
+  const sweep = (gx0: number, gz0: number, size: number, rise: number, receiver: number): void => {
+    const reach = rise * length * S;
+    const steps = Math.ceil(reach * 2);
+    for (let s = 0; s <= steps; s++) {
+      const d = (s / steps) * reach;
+      const ox = Math.round(gx0 + dirX * d);
+      const oz = Math.round(gz0 + dirZ * d);
+      for (let j = 0; j < size; j++) {
+        const gz = oz + j;
+        if (gz < 0 || gz >= h) continue;
+        for (let i = 0; i < size; i++) {
+          const gx = ox + i;
+          if (gx >= 0 && gx < w && heights[gz * w + gx] === receiver) out[gz * w + gx] = 1;
         }
-        runH += 1;
       }
-      for (let j = 0; j < runH; j += 1) {
-        for (let i = 0; i < runW; i += 1) grid[(gz + j) * w + gx + i] = 2;
+    }
+  };
+  for (let receiver = 0; receiver < top; receiver++) {
+    out.fill(0);
+    for (let e = 0; e < edges.length; e += 2) {
+      if (e % 512 === 0) yield;
+      const rise = heights[edges[e + 1] * w + edges[e]] - receiver;
+      if (rise > 0) sweep(edges[e], edges[e + 1], 1, rise, receiver);
+    }
+    // A escada projeta da altura do meio dela: senão a parede teria um vão bem atrás dos degraus.
+    if (receiver === 0) {
+      for (const t of stairs) sweep((t.x - minX) * S, (t.z - minZ) * S, S, 0.6, 0);
+    }
+    // GREEDY MESH: corridas horizontais esticadas para baixo enquanto a linha seguinte for igual.
+    for (let gz = 0; gz < h; gz++) {
+      if (gz % 48 === 0) yield;
+      let gx = 0;
+      while (gx < w) {
+        if (out[gz * w + gx] !== 1) { gx += 1; continue; }
+        let runW = 1;
+        while (gx + runW < w && out[gz * w + gx + runW] === 1) runW += 1;
+        let runH = 1;
+        grow: while (gz + runH < h) {
+          for (let i = 0; i < runW; i += 1) {
+            if (out[(gz + runH) * w + gx + i] !== 1) break grow;
+          }
+          runH += 1;
+        }
+        for (let j = 0; j < runH; j += 1) out.fill(2, (gz + j) * w + gx, (gz + j) * w + gx + runW);
+        // Sub-célula → mundo: o tile (x,z) ocupa [x-0.5, x+0.5].
+        const x0 = minX - 0.5 + gx * cell;
+        const z0 = minZ - 0.5 + gz * cell;
+        pushQuad(x0, x0 + runW * cell, z0, z0 + runH * cell, receiver * RELIEF_HEIGHT + MASS_SHADOW_Y);
+        gx += runW;
       }
-      // Sub-célula → mundo. O tile (x,z) ocupa [x-0.5, x+0.5], então a origem da caixa é
-      // minX - 0.5 (a borda esquerda do primeiro tile), nunca o centro dele.
-      const x0 = minX - 0.5 + gx * cell;
-      const x1 = x0 + runW * cell;
-      const z0 = minZ - 0.5 + gz * cell;
-      const z1 = z0 + runH * cell;
-      const b = pos.length / 3;
-      pos.push(x0, MASS_SHADOW_Y, z0, x1, MASS_SHADOW_Y, z0, x1, MASS_SHADOW_Y, z1, x0, MASS_SHADOW_Y, z1);
-      idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
-      gx += runW;
+    }
+  }
+  // OS DEGRAUS têm altura própria: cada sub-célula pergunta se algo corta o raio que sobe dali.
+  const reachTiles = length * top;
+  for (const { x, z, ux, uz } of stairs) {
+    yield;
+    for (let j = 0; j < S; j += 1) {
+      for (let i = 0; i < S; i += 1) {
+        const px = x - 0.5 + (i + 0.5) * cell;
+        const pz = z - 0.5 + (j + 0.5) * cell;
+        const along = (px - x) * ux + (pz - z) * uz + 0.5;
+        const tread = (Math.min(STAIR_STEPS - 1, Math.floor(along * STAIR_STEPS)) + 1) / STAIR_STEPS;
+        let shaded = false;
+        for (let t = cell; t <= reachTiles && !shaded; t += cell) {
+          const qx = px - dirX * t;
+          const qz = pz - dirZ * t;
+          if (Math.round(qx) === x && Math.round(qz) === z) continue;
+          const gx = Math.floor((qx - minX + 0.5) * S);
+          const gz = Math.floor((qz - minZ + 0.5) * S);
+          if (gx < 0 || gz < 0 || gx >= w || gz >= h) continue;
+          shaded = heights[gz * w + gx] > tread + t / length;
+        }
+        if (!shaded) continue;
+        const x0 = px - cell / 2;
+        const z0 = pz - cell / 2;
+        pushQuad(x0, x0 + cell, z0, z0 + cell, tread * RELIEF_HEIGHT + MASS_SHADOW_Y);
+      }
     }
   }
   if (idx.length === 0) return null;
@@ -5844,6 +6265,8 @@ const buildMassShadowGeometry = (
 
 const buildUprightTileGeometry = (
   tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
+  /** O chão de cada árvore: a mata sobe o morro junto com ele (ver world/relief). */
+  liftAt: (x: number, z: number) => number = () => 0,
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
@@ -5855,7 +6278,8 @@ const buildUprightTileGeometry = (
     const f = tilesetFrameUv(frame);
     // Upright quad on the tile, facing the (fixed-yaw) camera direction (+z). NO CENTRO EXATO do
     // tile, sempre: o mundo é uma grade e a grade é o desenho (ver o chamador em buildTerrain).
-    pos.push(x - 0.5, 1, z, x + 0.5, 1, z, x + 0.5, 0, z, x - 0.5, 0, z);
+    const lift = liftAt(x, z);
+    pos.push(x - 0.5, lift + 1, z, x + 0.5, lift + 1, z, x + 0.5, lift, z, x - 0.5, lift, z);
     uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1);

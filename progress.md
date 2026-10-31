@@ -9790,3 +9790,13 @@ O balão usa o sprite do próprio item. A tocha pensa no graveto. `splitWood` é
 Armadilha: `CraftOverlay.stick()` é método; um campo `stick` na subclasse quebra o tipo.
 
 Depois, a pedido do autor: os dois minijogos ficaram no jeito da colheita do cogumelo (mundo embaçado, só a coisa no meio, nenhum texto; `WoodcraftOverlays`). O Bram senta do lado de cima do fogo, olho no olho com o herói. E a machadada ganhou gesto próprio (`SwordOrbit.chop` com `axe`, `GameScene.swingAxe`): colada ao corpo, com o peso do corpo indo junto; no ar ela passa reto, no tronco ela entra, fica presa e dá o coice, com som próprio. O galho cai girando do alto da árvore e quica antes de virar item (`dropFallingStick`).
+
+## O relevo do mundo (2026-10-30)
+
+Pedido do autor: o mapa era plano demais. O relevo agora tem até dois níveis, e o segundo é raro (`reliefLevelAt`). Nenhuma beira corre reta: a de fora tem um grão de ruído, e a dos planaltos leva mordidas até o maior trecho reto ser de 3 tiles. Fora do mundo a serra sai de ruído (`voidLevel`): sobe, afunda e volta, cresce com a distância da borda e nunca fica ao sul, onde mora a câmera. Dentro, `serra-world.mjs` sobe a mata fechada um nível, raramente dois (códigos 6-7) sem mudar caminho nenhum, porque ninguém pisa ali, e só o quanto a câmera deixa: um morro não pode tapar quem anda ao norte dele. Os planaltos andáveis aumentaram, ganharam árvores e continuam com a prova de BFS. As trepadeiras (`vineTexture`) descem das bordas pela pedra.
+
+A sombra das massas saiu de "barra no chão" para campo de alturas (`buildMassShadowGeometry`): uma varredura por altura que recebe sombra, comprimento por nível de diferença, a serra de fora projetando também, e degraus com altura própria. Herói e árvores em cima de planalto deitam a sombra no chão deles e param na beira. A sombra assada agora acompanha o rumo do sol (antes ficava no rumo do primeiro bake enquanto a dos personagens girava).
+
+A serra ganhou a curva da margem (`makeReliefField` / `buildReliefContourGeometry`): o mesmo campo de distância dos rios e lagos, por pixel de arte, com união suave nas quinas côncavas, canto arredondado nas convexas e ruído na largura do beiço. O dado continua por tile. Pedra, gramado do topo, trepadeiras e sombra saem todos do mesmo contorno; a sombra virou um campo de alturas por sub-célula.
+
+O contorno da serra é assado por chunk, e o frustum tira o que está fora da tela: a resolução da margem (16 células por tile) só cabe assim.

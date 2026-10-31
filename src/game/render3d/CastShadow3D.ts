@@ -191,6 +191,7 @@ export class SolidCastField {
   private readonly pendW: Float32Array;
   private readonly pendL: Float32Array;
   private readonly pendRot: Float32Array;
+  private readonly pendY: Float32Array;
   private readonly pendA: Float32Array;
   private readonly pendDepth: Float32Array;
   /** Caller tags (fillMoonCastField's tiles); only written when a ref is passed to add(). */
@@ -298,6 +299,7 @@ export class SolidCastField {
     this.pendW = new Float32Array(capacity);
     this.pendL = new Float32Array(capacity);
     this.pendRot = new Float32Array(capacity);
+    this.pendY = new Float32Array(capacity);
     this.pendA = new Float32Array(capacity);
     this.pendDepth = new Float32Array(capacity);
     this.pendRef = new Array(capacity).fill(undefined);
@@ -336,6 +338,8 @@ export class SolidCastField {
     alpha: number,
     footPad = 0,
     ref?: unknown,
+    /** A altura do chão de quem projeta: a sombra deita no chão dele, não no do nível zero. */
+    groundY = 0,
   ): void {
     const i = this.pendCount;
     if (i >= this.mesh.instanceMatrix.count) return;
@@ -343,6 +347,7 @@ export class SolidCastField {
     // anyway, and this keeps the instanced path and the single-mesh path the same transform.
     castAnchorInto(objX, objY, length, rotY, footPad);
     this.pendX[i] = anchorScratch.x;
+    this.pendY[i] = groundY;
     this.pendZ[i] = anchorScratch.y;
     this.pendUv[i * 4] = uv.offsetX;
     this.pendUv[i * 4 + 1] = uv.offsetY;
@@ -379,7 +384,7 @@ export class SolidCastField {
 
     for (let slot = 0; slot < n; slot += 1) {
       const p = this.order[slot];
-      this.position.set(this.pendX[p], FOOT_Y, this.pendZ[p]);
+      this.position.set(this.pendX[p], FOOT_Y + this.pendY[p], this.pendZ[p]);
       this.quaternion.setFromEuler(this.euler.set(0, this.pendRot[p], 0));
       this.scale.set(this.pendW[p], 1, this.pendL[p]);
       this.matrix.compose(this.position, this.quaternion, this.scale);
@@ -555,6 +560,7 @@ export const applyCast = (
   rotY: number,
   alpha: number,
   footPad = 0,
+  groundY = 0,
 ): void => {
   const mat = mesh.material as THREE.MeshBasicMaterial;
   // `needsUpdate` looks like waste here — it makes three rebuild the program's cache key, and the
@@ -571,7 +577,7 @@ export const applyCast = (
   // exactly as before (alphaTest is a live uniform in three — no recompile).
   mat.alphaTest = Math.max(0.01, 0.4 * alpha);
   castAnchorInto(objX, objY, length, rotY, footPad);
-  mesh.position.set(anchorScratch.x, FOOT_Y, anchorScratch.y);
+  mesh.position.set(anchorScratch.x, FOOT_Y + groundY, anchorScratch.y);
   // Base head direction is -Z; rotate it onto the shadow's heading.
   mesh.rotation.y = rotY;
   mesh.scale.set((flipX ? -1 : 1) * width * WIDTH_FACTOR, 1, length);
