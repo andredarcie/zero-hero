@@ -481,6 +481,7 @@ export class DialogOverlay {
 
   private showLine(index: number): void {
     this.lineIndex = index;
+    this.script.onLine?.(index);
     this.typeLine(this.script.lines[index], () => this.scriptLineDone());
   }
 

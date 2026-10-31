@@ -8,7 +8,7 @@ import type { TallGrassObject } from './TallGrassObject';
 import type { WorldProp } from './WorldProp';
 
 /** A semente que um canteiro aceita (ver growPlantedGrass). */
-export type PlantableSeed = 'seeds';
+export type PlantableSeed = 'seeds' | 'dye';
 /** O que um canteiro faz brotar: mato de verdade, que bloqueia e cai para a foice. */
 export type GrownPlant = TallGrassObject;
 
@@ -33,7 +33,7 @@ export type GrownPlant = TallGrassObject;
 // O spot possui so o buraco e o monte; o mato crescido pertence a GameScene.tallGrasses (fogo,
 // foice e colisao ja o encontram la). GameScene guarda o par spot↔mato e chama reopen().
 
-type SpotState = 'hole' | 'sown' | 'mound' | 'watered' | 'grown';
+type SpotState = 'hole' | 'sown' | 'mound' | 'watered' | 'grown' | 'dye';
 
 const HOLE_SIZE = 0.9;
 const MOUND_SIZE = 0.72; // domo baixo, dentro do tile (nada vaza do tile)
@@ -59,6 +59,8 @@ export class PlantSpotObject implements WorldProp {
   private readonly scene: Phaser.Scene;
   private readonly hole: Billboard3D;
   private mound?: Billboard3D;
+  /** A planta de tinta da Iris (quests/PainterQuest): três níveis, a arte vem de quem manda. */
+  private dyePlant?: Billboard3D;
   private state: SpotState = 'hole';
   /** Os tempos pendentes da cavada — removidos no destroy (um restart no meio nao pode avancar). */
   private readonly digTimers: Phaser.Time.TimerEvent[] = [];
@@ -124,7 +126,7 @@ export class PlantSpotObject implements WorldProp {
 
   /** O monte (seco ou regado) e um corpo no caminho — e o alvo do bump do balde. */
   public get blocking(): boolean {
-    return this.state === 'mound' || this.state === 'watered';
+    return this.state === 'mound' || this.state === 'watered' || this.state === 'dye';
   }
 
   /**
@@ -178,6 +180,80 @@ export class PlantSpotObject implements WorldProp {
     return true;
   }
 
+  /** A água da quest da Iris: o monte molha, e quem conta o tempo é a quest. */
+  public waterDye(): boolean {
+    if (this.state !== 'mound' || !this.mound) return false;
+    this.state = 'watered';
+    this.mound.setTint(WET_TINT);
+    this.scene.tweens.add({
+      targets: this.mound,
+      displayHeight: MOUND_SIZE * 0.92,
+      duration: 180,
+      yoyo: true,
+      ease: 'Sine.easeInOut',
+    });
+    return true;
+  }
+
+  /** Um nível novo: o monte some sob a planta, e cada troca de arte brota com um pulinho. */
+  public setDyeLevel(texture: string, size: number): void {
+    this.state = 'dye';
+    this.hole.setVisible(false);
+    this.mound?.destroy();
+    this.mound = undefined;
+    if (!this.dyePlant) {
+      this.dyePlant = world3d().addBillboard(texture, 0, { groundShadow: { rx: 0.3, rz: 0.18, alpha: 0.25 } })
+        .setPosition(this.worldX, this.worldY);
+    } else {
+      this.dyePlant.setTexture(texture, 0);
+    }
+    this.dyePlant.setDisplaySize(size * 0.7, size * 0.7);
+    this.scene.tweens.add({
+      targets: this.dyePlant,
+      displayWidth: size,
+      displayHeight: size,
+      duration: POP_MS * 1.4,
+      ease: 'Back.easeOut',
+    });
+  }
+
+  /** Bater sem a faca: a planta balança, e só. */
+  public shakeDye(): void {
+    if (!this.dyePlant) return;
+    const { x } = this.dyePlant;
+    this.scene.tweens.add({ targets: this.dyePlant, x: x + 0.05, duration: 50, yoyo: true, repeat: 2, onComplete: () => this.dyePlant?.setPosition(x, this.worldY) });
+  }
+
+  /** Colhida: a planta sai, e o buraco reabre. */
+  public clearDye(): void {
+    if (this.dyePlant) {
+      this.scene.tweens.killTweensOf(this.dyePlant);
+      this.dyePlant.destroy();
+      this.dyePlant = undefined;
+    }
+    this.sownKind = 'seeds';
+    this.reopen();
+  }
+
+  /** O save devolve o canteiro no tempo em que ele estava. */
+  public restoreDye(watered: boolean, level: number, texture: string | undefined, size: number): void {
+    this.sownKind = 'dye';
+    this.state = 'sown';
+    this.raiseMound();
+    this.mound?.setDisplaySize(MOUND_SIZE, MOUND_SIZE);
+    if (watered) {
+      this.state = 'watered';
+      this.mound?.setTint(WET_TINT);
+    }
+    if (level > 0 && texture) {
+      this.setDyeLevel(texture, size);
+      if (this.dyePlant) {
+        this.scene.tweens.killTweensOf(this.dyePlant);
+        this.dyePlant.setDisplaySize(size, size);
+      }
+    }
+  }
+
   /** A planta brotou (GameScene a criou e registrou): o monte ja fez seu papel e some sob ela. */
   public setGrown(grass: GrownPlant): void {
     this.state = 'grown';
@@ -200,6 +276,11 @@ export class PlantSpotObject implements WorldProp {
     this.digTimers.length = 0;
     this.scene.tweens.killTweensOf(this.hole);
     if (this.mound) this.scene.tweens.killTweensOf(this.mound);
+    if (this.dyePlant) {
+      this.scene.tweens.killTweensOf(this.dyePlant);
+      this.dyePlant.destroy();
+      this.dyePlant = undefined;
+    }
     this.hole.destroy();
     this.mound?.destroy();
     this.mound = undefined;

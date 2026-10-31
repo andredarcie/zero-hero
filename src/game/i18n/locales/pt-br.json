@@ -43,7 +43,10 @@
       "morel": "Uma morchela-amarela.",
       "chanterelle": "Um cantarelo-dourado.",
       "flyAgaric": "Uma amanita-mata-moscas.",
-      "porcini": "Um porcini."
+      "porcini": "Um porcini.",
+      "dyeSeeds": "Sementes sortidas. Quatro plantas de tinta.",
+      "dyeBundle": "As quatro flores de tinta.",
+      "brush": "Um pincel. O quadro espera."
     },
     "name": {
       "sword": "Espada",
@@ -69,7 +72,10 @@
       "chanterelle": "Cantarelo-dourado",
       "flyAgaric": "Amanita-mata-moscas",
       "porcini": "Porcini",
-      "altar": "Altar"
+      "altar": "Altar",
+      "dyeSeeds": "Sementes sortidas",
+      "dyeBundle": "Flores de tinta",
+      "brush": "Pincel"
     }
   },
   "dialog": {
@@ -77,29 +83,40 @@
     "close": "Fechar"
   },
   "pause": {
-    "title": "Pausa",
-    "resume": "Continuar",
-    "music": "Música",
-    "sfx": "Efeitos sonoros",
-    "dof": "Profundidade de campo",
-    "daylight": "Dia",
-    "nightfall": "Anoitecer",
-    "fullscreen": "Tela cheia",
-    "fullscreenExit": "Sair da tela cheia",
-    "restart": "Recomeçar",
+    "title": "PAUSA",
+    "resume": "Retornar ao jogo",
+    "options": "Opções",
     "quit": "Sair",
-    "confirm": "Certeza?",
-    "sharpOn": "Nitidez: máxima",
-    "sharpOff": "Nitidez: econômica",
-    "leftHand": "Botões: mão esquerda",
-    "rightHand": "Botões: mão direita",
-    "bigButtons": "Botões: grandes",
-    "smallButtons": "Botões: tamanho normal",
-    "solidButtons": "Botões: sólidos",
-    "softButtons": "Botões: transparentes",
-    "hapticsOn": "Vibração: ligada",
-    "hapticsOff": "Vibração: desligada",
-    "switchLanguage": "Play in English"
+    "back": "Voltar",
+    "previous": "Anterior",
+    "next": "Próximo",
+    "on": "Ligada",
+    "off": "Desligada",
+    "sectionSound": "Som",
+    "sectionImage": "Imagem",
+    "sectionTouch": "Botões na tela",
+    "sectionGame": "Jogo",
+    "music": "Música",
+    "sfx": "Efeitos",
+    "fullscreen": "Tela cheia",
+    "timeOfDay": "Hora do dia",
+    "night": "Noite",
+    "day": "Dia",
+    "sharpness": "Nitidez",
+    "sharpFull": "Máxima",
+    "sharpThrifty": "Econômica",
+    "blur": "Desfoque",
+    "hand": "Mão",
+    "handRight": "Direita",
+    "handLeft": "Esquerda",
+    "size": "Tamanho",
+    "sizeNormal": "Normal",
+    "sizeBig": "Grande",
+    "look": "Estilo",
+    "lookSoft": "Translúcida",
+    "lookSolid": "Sólida",
+    "vibration": "Vibração",
+    "language": "Idioma"
   },
   "wizard": {
     "intro": [
@@ -272,22 +289,40 @@
     },
     "radiationSuitHint": {
       "puffball": [
-        { "speaker": "npc", "text": "A leste, depois da água: uma bola branca sem chapéu." }
+        {
+          "speaker": "npc",
+          "text": "A leste, depois da água: uma bola branca sem chapéu."
+        }
       ],
       "inkCap": [
-        { "speaker": "npc", "text": "A nordeste, perto do lago: alto e branco, desgrenhado como uma peruca." }
+        {
+          "speaker": "npc",
+          "text": "A nordeste, perto do lago: alto e branco, desgrenhado como uma peruca."
+        }
       ],
       "morel": [
-        { "speaker": "npc", "text": "Ao sul, perto das pedras: um chapéu de favo de mel." }
+        {
+          "speaker": "npc",
+          "text": "Ao sul, perto das pedras: um chapéu de favo de mel."
+        }
       ],
       "chanterelle": [
-        { "speaker": "npc", "text": "Bem ao norte, sob os pinheiros: um funil dourado." }
+        {
+          "speaker": "npc",
+          "text": "Bem ao norte, sob os pinheiros: um funil dourado."
+        }
       ],
       "flyAgaric": [
-        { "speaker": "npc", "text": "No canto noroeste: vermelho, com pintas brancas. Olhe. Não coma." }
+        {
+          "speaker": "npc",
+          "text": "No canto noroeste: vermelho, com pintas brancas. Olhe. Não coma."
+        }
       ],
       "porcini": [
-        { "speaker": "npc", "text": "Bem ao sul, na beira oeste: um pãozinho marrom num pé grosso." }
+        {
+          "speaker": "npc",
+          "text": "Bem ao sul, na beira oeste: um pãozinho marrom num pé grosso."
+        }
       ]
     },
     "painter": {
@@ -295,11 +330,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Tudo o que eu pinto sai cinza."
+          "text": "Tudo o que eu pinto sai cinza. Tinta de verdade nasce da terra."
         },
         {
           "speaker": "npc",
-          "text": "Tome: sementes e um balde. Plante aqui embaixo e regue com água do lago."
+          "text": "Tome a pá: cave quatro buracos, aqui por perto."
         }
       ]
     },
@@ -308,11 +343,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Verde. Verde de verdade."
+          "text": "Fica aqui, o seu quadro."
         },
         {
           "speaker": "npc",
-          "text": "Muito obrigado."
+          "text": "Agora eu vejo cor em tudo."
         }
       ]
     },
@@ -370,19 +405,182 @@
     },
     "astronautHint": {
       "ore": [
-        { "speaker": "npc", "text": "Algumas pedras a leste daqui têm minério. Quebre uma." }
+        {
+          "speaker": "npc",
+          "text": "Algumas pedras a leste daqui têm minério. Quebre uma."
+        }
       ],
       "furnace": [
-        { "speaker": "npc", "text": "Minério precisa de forno. Construa um na bancada." }
+        {
+          "speaker": "npc",
+          "text": "Minério precisa de forno. Construa um na bancada."
+        }
       ],
       "charcoal": [
-        { "speaker": "npc", "text": "Instale o forno. Dois gravetos viram carvão." }
+        {
+          "speaker": "npc",
+          "text": "Instale o forno. Dois gravetos viram carvão."
+        }
       ],
       "bloom": [
-        { "speaker": "npc", "text": "Agora minério e carvão, juntos." }
+        {
+          "speaker": "npc",
+          "text": "Agora minério e carvão, juntos."
+        }
       ],
       "iron": [
-        { "speaker": "npc", "text": "Martele o bloco quente. Três golpes." }
+        {
+          "speaker": "npc",
+          "text": "Martele o bloco quente. Três golpes."
+        }
+      ]
+    },
+    "painterStep": {
+      "dig": [
+        {
+          "speaker": "npc",
+          "text": "Faltam {n}. Pá na terra."
+        }
+      ],
+      "seeds": [
+        {
+          "speaker": "npc",
+          "text": "Quatro buracos! A pá fica aqui do meu lado."
+        },
+        {
+          "speaker": "npc",
+          "text": "Sementes sortidas: uma em cada buraco."
+        }
+      ],
+      "sow": [
+        {
+          "speaker": "npc",
+          "text": "Faltam {n}. Uma semente em cada buraco."
+        }
+      ],
+      "bucket": [
+        {
+          "speaker": "npc",
+          "text": "Plantadas! Tome o balde."
+        },
+        {
+          "speaker": "npc",
+          "text": "Busque água na lagoa, a oeste, e regue as quatro."
+        }
+      ],
+      "water": [
+        {
+          "speaker": "npc",
+          "text": "Faltam {n}. Encha o balde na lagoa e regue."
+        }
+      ],
+      "wait": [
+        {
+          "speaker": "npc",
+          "text": "Agora é esperar."
+        },
+        {
+          "speaker": "npc",
+          "text": "Dê uma volta pelo vale. Elas crescem aos poucos."
+        }
+      ],
+      "harvest": [
+        {
+          "speaker": "npc",
+          "text": "Floresceram!"
+        },
+        {
+          "speaker": "npc",
+          "text": "Colha com a faca da Hollis, a oeste. E traga as flores para mim."
+        }
+      ],
+      "bring": [
+        {
+          "speaker": "npc",
+          "text": "As flores! Traga aqui."
+        }
+      ],
+      "easel": [
+        {
+          "speaker": "npc",
+          "text": "Pincel na mão, e o quadro é seu."
+        }
+      ]
+    },
+    "painterMake": {
+      "intro": [
+        {
+          "speaker": "npc",
+          "text": "As flores vão para a mesa. Veja como se faz."
+        }
+      ],
+      "urucum": [
+        {
+          "speaker": "npc",
+          "text": "Urucum: esfrego as sementes na água e o pó vermelho solta."
+        }
+      ],
+      "anil": [
+        {
+          "speaker": "npc",
+          "text": "Anil: as folhas fermentam na água. Bato, e o azul nasce no ar."
+        }
+      ],
+      "curcuma": [
+        {
+          "speaker": "npc",
+          "text": "Cúrcuma: a raiz seca e moída vira pó amarelo."
+        }
+      ],
+      "garanca": [
+        {
+          "speaker": "npc",
+          "text": "Garança: a raiz moída, em água morna. Fervida, o vermelho escurece."
+        }
+      ],
+      "binder": [
+        {
+          "speaker": "npc",
+          "text": "Pedra-ume fixa a cor. Goma arábica faz dela tinta."
+        }
+      ],
+      "brush": [
+        {
+          "speaker": "npc",
+          "text": "Seu kit está pronto. Tome o pincel: o quadro em branco é seu."
+        }
+      ]
+    },
+    "painterEasel": {
+      "done": "Terminei",
+      "leave": "Sair"
+    },
+    "painterReview": {
+      "form": {
+        "sparse": "Poucos traços, e já diz tudo.",
+        "middle": "Olha só o que você fez nessa tela!",
+        "full": "Não sobrou um canto em branco!"
+      },
+      "color": {
+        "all": "As quatro cores juntas. Nem eu teria essa coragem.",
+        "urucum": "Esse laranja parece fim de tarde.",
+        "anil": "Esse azul parece água funda.",
+        "curcuma": "Esse amarelo aquece a tela inteira.",
+        "garanca": "Esse vermelho tem coração."
+      },
+      "thanks": [
+        {
+          "speaker": "npc",
+          "text": "Você tem mão de pintor."
+        },
+        {
+          "speaker": "npc",
+          "text": "Eu só via cinza. Obrigada por tudo."
+        },
+        {
+          "speaker": "npc",
+          "text": "O pincel eu guardo. O quadro fica aqui."
+        }
       ]
     }
   },
@@ -394,7 +592,6 @@
   },
   "fungi": {
     "basket": "Cesta",
-    "notesTitle": "Caderno de campo",
     "thanks": "Obrigada! Sabia disto?",
     "leave": "Deixar",
     "cut": {
@@ -485,13 +682,13 @@
           "Vive ligado às raízes das árvores."
         ]
       }
+    },
+    "dye": {
+      "urucum": "Urucum",
+      "anil": "Anil",
+      "curcuma": "Cúrcuma",
+      "garanca": "Garança"
     }
-  },
-  "subscreen": {
-    "title": "Na mão",
-    "empty": "Vazia",
-    "mapTitle": "Mundo",
-    "plansTitle": "Planos"
   },
   "toolbox": {
     "title": "Construir",

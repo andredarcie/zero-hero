@@ -5,6 +5,7 @@ import {
   KNIFE_TEXTURE_KEY, MUSHROOM_KINDS, fungusTextureKey, isMushroomKind, type MushroomKind,
 } from '@/game/fungi/fungi';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE } from '@/game/render3d/paintTextures';
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
@@ -67,6 +68,11 @@ export type HeldItemKind =
   // A FACA DE COGUMELO, presente da Hollis: o X (ou o Z) diante de um cogumelo abre a colheita
   // (ForagingOverlay). Tem escova no cabo, como as de verdade — e e ela que limpa.
   | 'knife'
+  // A QUEST DA IRIS (quests/PainterQuest): o pacote de sementes sortidas, o ramo das quatro flores
+  // de tinta e o pincel. Os três têm dono: nenhum nasce no mundo, ela é quem dá.
+  | 'dyeSeeds'
+  | 'dyeBundle'
+  | 'brush'
   // OS SEIS FUNGOS (fungi.ts). No chao eles NASCEM — sao solidos e nao se apanham pisando: so a
   // faca os solta. Na mochila sao contadores sem gesto, mostrados na CESTA da bolsa com a ficha
   // de cada especie.
@@ -101,6 +107,9 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   furnace: { texture: 'furnace', frame: 0 },
   altar: { texture: 'altar', frame: 0 },
   knife: { texture: KNIFE_TEXTURE_KEY, frame: 0 },
+  dyeSeeds: { texture: DYE_SEEDS_TEXTURE, frame: 0 },
+  dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
+  brush: { texture: BRUSH_TEXTURE, frame: 0 },
   ...Object.fromEntries(MUSHROOM_KINDS.map((kind) => [kind, { texture: fungusTextureKey(kind), frame: 0 }])) as
     Record<MushroomKind, { texture: string; frame: number }>,
 };

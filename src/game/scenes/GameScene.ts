@@ -69,7 +69,7 @@ import type { WorldProp } from '@/game/objects/WorldProp';
 // viva com sprite e colisao) — dois tipos com o mesmo nome em modulos diferentes. Aqui os dois
 // se encontram, porque o mundo infinito converte um no outro enquanto o heroi anda.
 import type { PropDir } from '@/game/world/worldSchema';
-import { t, tLines, tWords, type I18nLine } from '@/game/i18n/i18n';
+import { t, tLines, type I18nLine } from '@/game/i18n/i18n';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
   FX_DOT_TEXTURE, FX_PUFF_TEXTURE, FX_RING_TEXTURE,
@@ -78,7 +78,7 @@ import {
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { registerCharcoalTexture } from '@/game/render3d/charcoalTexture';
 import {
-  FUNGUS_SPECS, KNIFE_TEXTURE_KEY, MUSHROOM_KINDS,
+  KNIFE_TEXTURE_KEY, MUSHROOM_KINDS,
   fungusTextureKey, isMushroomKind, registerFungiTextures, type MushroomKind,
 } from '@/game/fungi/fungi';
 import { ForagingOverlay } from '@/game/runtime/ForagingOverlay';
@@ -88,7 +88,7 @@ import {
   PLACEMENT_KEY_TEXTURE, ensurePlacementKeyTexture, registerPlacementTextures,
 } from '@/game/render3d/placementTexture';
 import {
-  BASKET_TEXTURE, CAIRN_TEXTURE, EASEL_GREEN_TEXTURE, EASEL_GREY_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
+  BASKET_TEXTURE, CAIRN_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
   BUTTERFLY_TEXTURE, LEAF_TEXTURE,
   MARSHMALLOW_BAG_TEXTURE, ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
@@ -102,8 +102,11 @@ import {
 } from '@/game/runtime/HeroView';
 import { Inventory } from '@/game/runtime/Inventory';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
-import { spriteDataUrl, type SubScreenView } from '@/game/runtime/SubScreen';
-import type { FieldNoteEntry } from '@/game/runtime/SubScreen';
+import { spriteDataUrl } from '@/game/runtime/spriteDataUrl';
+import { PainterQuest } from '@/game/quests/PainterQuest';
+import {
+  BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE, registerPaintTextures,
+} from '@/game/render3d/paintTextures';
 import { FpsCounter } from '@/game/runtime/FpsCounter';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -187,6 +190,9 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   furnace: { texture: ASSET_KEYS.furnace, frame: 0 },
   altar: { texture: ASSET_KEYS.altar, frame: 0 },
   knife: { texture: KNIFE_TEXTURE_KEY, frame: 0 },
+  dyeSeeds: { texture: DYE_SEEDS_TEXTURE, frame: 0 },
+  dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
+  brush: { texture: BRUSH_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -211,6 +217,9 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   furnace: { texture: 'furnace', frame: 0 },
   altar: { texture: 'altar', frame: 0 },
   knife: { texture: KNIFE_TEXTURE_KEY, frame: 0 },
+  dyeSeeds: { texture: DYE_SEEDS_TEXTURE, frame: 0 },
+  dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
+  brush: { texture: BRUSH_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -236,6 +245,9 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
   furnace: { texture: ASSET_KEYS.furnace, frame: 0 },
   altar: { texture: ASSET_KEYS.altar, frame: 0 },
   knife: { texture: KNIFE_TEXTURE_KEY, frame: 0 },
+  dyeSeeds: { texture: DYE_SEEDS_TEXTURE, frame: 0 },
+  dyeBundle: { texture: DYE_BUNDLE_TEXTURE, frame: 0 },
+  brush: { texture: BRUSH_TEXTURE, frame: 0 },
   ...FUNGUS_VISUALS,
 };
 
@@ -349,10 +361,11 @@ type QuestMarkDef = { dialog: string; npc: NpcKind; before?: string; after: stri
 type QuestMarkState = {
   def: QuestMarkDef; tile: { x: number; y: number }; npcAt: { x: number; y: number }; done: boolean; bb?: Billboard3D;
 };
+type AdventureGroundItemLike = { kind: HeldItemKind; worldX: number; worldY: number };
+
 const QUEST_MARKS: readonly QuestMarkDef[] = [
   { dialog: 'astronaut', npc: 'astronaut', after: CAIRN_TEXTURE },
   { dialog: 'radiationSuit', npc: 'radiationSuit', after: BASKET_TEXTURE },
-  { dialog: 'painter', npc: 'painter', before: EASEL_GREY_TEXTURE, after: EASEL_GREEN_TEXTURE },
   // a lenha do Bram e a fogueira dele, que passa a ficar acesa dia e noite
   { dialog: 'businessMan', npc: 'businessMan', after: 'wood-item', keepFireLit: true },
 ];
@@ -371,6 +384,8 @@ const SWING_BACK_TURNED_NEAR = 0.3;
 const FOOTPRINT_FADE_MS = 700;
 /** O roteiro da Hollis, a coletora: é ela quem guarda a faca e recebe os cogumelos. */
 const FORAGER_DIALOG = 'radiationSuit';
+/** O roteiro da Iris: a quest dela é em etapas (ver quests/PainterQuest). */
+const PAINTER_DIALOG = 'painter';
 
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
@@ -515,6 +530,7 @@ export class GameScene extends Phaser.Scene {
   private plantedSword?: Billboard3D;
   private plantedSwordTile?: { x: number; y: number };
   private readonly questMarks: QuestMarkState[] = [];
+  private painterQuest?: PainterQuest;
   // Quem ja deu o "oi" (o pulinho quando o heroi chega perto) nesta sessao.
   private readonly greetedNpcs = new Set<string>();
   // Sentado numa fogueira (ver restAtFireAt): o tempo corre e o heroi descansa.
@@ -646,6 +662,7 @@ export class GameScene extends Phaser.Scene {
     registerFungiTextures(this);
     registerPlacementTextures(this);
     registerCozyTextures(this);
+    registerPaintTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -883,6 +900,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.keptLitFires.clear();
+    this.buildPainterQuest();
     this.buildQuestMarks();
     this.streamChunks(true);
 
@@ -959,93 +977,9 @@ export class GameScene extends Phaser.Scene {
           this.scene.start('title');
         }
         : undefined,
-      // A SUBTELA. Ela e lida de novo a cada desenho do painel (nunca um retrato tirado ao
-      // abrir), entao escolher um item tem um caminho so.
-      readSubScreen: () => this.subScreenView(),
-      onSelectItem: (kind) => { this.selectItem(kind as HeldItemKind); },
     });
     this.useBufferMs = 0;
     this.scene.pause();
-  }
-
-  /**
-   * O que a subtela mostra: a mochila com a ARTE DO JOGO (os proprios frames do Phaser virados em
-   * data URL). Um inventario com desenho proprio seria uma segunda gramatica para os mesmos
-   * objetos — o jogador tem de reconhecer na mochila o que viu no chao.
-   */
-  /** A ficha de uma espécie, como a bolsa e a subtela a mostram (o texto mora no locale). */
-  private fieldNote(kind: MushroomKind, count: number): FieldNoteEntry {
-    const species = `fungi.species.${kind}`;
-    const edibility = FUNGUS_SPECS[kind].edibility;
-    return {
-      kind,
-      count,
-      icon: spriteDataUrl(this, fungusTextureKey(kind), 0),
-      label: t(`items.name.${kind}`),
-      latin: t(`${species}.latin`),
-      edibility,
-      edibilityLabel: t(`fungi.edibility.${edibility}`),
-      notes: tWords(`${species}.notes`),
-      found: this.seenItems.has(kind),
-    };
-  }
-
-  private subScreenView(): SubScreenView {
-    const row = ({ kind, count }: { kind: HeldItemKind; count: number }) => {
-      const visual = ITEM_VISUAL_2D[kind];
-      return {
-        kind,
-        count,
-        icon: spriteDataUrl(this, visual.texture, visual.frame),
-        label: t(`items.name.${kind}`),
-      };
-    };
-    return {
-      title: t('subscreen.title'),
-      emptyLabel: t('subscreen.empty'),
-      // O que está NA MÃO (a mochila acabou: é uma coisa só, ou nada).
-      items: this.inventory.list().map(row),
-      materials: [],
-      selected: this.heldItem,
-      map: this.subScreenMap(),
-      // O CADERNO DE CAMPO: as seis espécies, as achadas com a ficha inteira e as que faltam
-      // apagadas — a lista do que o vale ainda tem para ensinar.
-      fieldNotes: {
-        title: t('fungi.notesTitle'),
-        rows: MUSHROOM_KINDS.map((kind) => this.fieldNote(kind, this.seenItems.has(kind) ? 1 : 0)),
-      },
-      // A PAGINA DE PLANOS e o MESMO catalogo da bancada (`orderCatalogView`), so que em leitura.
-      plans: this.toolboxes.length
-        ? { title: t('subscreen.plansTitle'), rows: this.orderCatalogView().entries }
-        : undefined,
-    };
-  }
-
-  /**
-   * O mapa da subtela: um quadrado por chunk, fog of war vindo dos chunks PISADOS (o save), e
-   * so as marcas que o heroi ja viu — fogueiras em tela visitada, mais ele mesmo.
-   */
-  private subScreenMap(): SubScreenView['map'] {
-    if (!this.adventure) return undefined;
-    const bounds = getWorldBounds();
-    const st = adventureState();
-    const chunkOf = (wx: number, wy: number): { cx: number; cy: number } => (
-      { cx: Math.floor(wx / CHUNK_COLUMNS), cy: Math.floor(wy / CHUNK_ROWS) }
-    );
-    const visited = new Set(st.visitedChunks);
-    const marks: NonNullable<SubScreenView['map']>['marks'] = [];
-    for (const cf of [...this.campfires, ...this.hearths]) {
-      const { cx, cy } = chunkOf(cf.worldX, cf.worldY);
-      if (visited.has(`${cx},${cy}`)) marks.push({ cx, cy, kind: cf.isLit ? 'fireLit' : 'fireDead' });
-    }
-    marks.push({ ...chunkOf(this.playerWorld.worldX, this.playerWorld.worldY), kind: 'hero' });
-    return {
-      title: t('subscreen.mapTitle'),
-      chunksX: bounds.maxCx - bounds.minCx + 1,
-      chunksY: bounds.maxCy - bounds.minCy + 1,
-      visited: [...visited],
-      marks,
-    };
   }
 
   private closePauseMenu(): void {
@@ -1306,6 +1240,8 @@ export class GameScene extends Phaser.Scene {
     this.plantedSwordTile = undefined;
     for (const mark of this.questMarks) mark.bb?.destroy();
     this.questMarks.length = 0;
+    this.painterQuest?.destroy();
+    this.painterQuest = undefined;
     this.greetedNpcs.clear();
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
@@ -1532,6 +1468,7 @@ export class GameScene extends Phaser.Scene {
     }
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.updatePlantSpots();
+    this.painterQuest?.update(delta);
     // A flor da lua le a luz das fogueiras e abre/fecha por conta dela.
     this.updateMoonflowers(delta);
     this.updateFurnaces(delta);
@@ -2269,7 +2206,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.camera) return;
     const front = this.facingTile();
     const show = !this.dialogOpen && !this.orderOverlay && !this.foraging && !this.cutsceneActive
-      && isMushroomKind(this.itemManager?.kindAt(front.x, front.y));
+      && (isMushroomKind(this.itemManager?.kindAt(front.x, front.y)) || this.painterQuest?.wantsKey(front.x, front.y) === true);
     if (!show) { this.mushroomHint?.setVisible(false); return; }
     if (!this.mushroomHint) {
       ensurePlacementKeyTexture(this, isTouchDevice());
@@ -2455,6 +2392,7 @@ export class GameScene extends Phaser.Scene {
     if (this.npcManager?.hasNpcAt(wx, wy)) return true;
     if (this.plantedSwordTile?.x === wx && this.plantedSwordTile.y === wy) return true;
     if (this.isQuestMarkAt(wx, wy)) return true;
+    if (this.painterQuest?.isSolidAt(wx, wy)) return true;
     // O cogumelo nascendo e um corpo no caminho: o heroi encosta nele e fica DE FRENTE — que e a
     // mira da faca. Pisa-lo para apanhar seria arranca-lo, e o jogo ensina o contrario.
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return true;
@@ -2635,6 +2573,7 @@ export class GameScene extends Phaser.Scene {
     // A BEIRA DA SERRA: entre o planalto e o chao de baixo nao ha mao que alcance (ver relief).
     if (!this.reachesFront(front)) { this.petCat(); return; }
     if (this.talkToNpcAt(front.x, front.y)) return;
+    if (this.painterQuest?.interactAt(front.x, front.y)) return;
     // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
     if (this.harvestMushroomAt(front.x, front.y)) return;
     if (this.tendHearthAt(front.x, front.y)) return;
@@ -3120,6 +3059,7 @@ export class GameScene extends Phaser.Scene {
    * VAZIO (a lei do A). Pousar nao e mais o fallback disto: pousar mora no B.
    */
   private useItemAt(wx: number, wy: number): boolean {
+    if (this.painterQuest?.useAt(wx, wy)) return true;
     // O COGUMELO NASCENDO vem primeiro: a faca e a resposta, e `equipToolFor` ja a sacou.
     if (this.harvestMushroomAt(wx, wy)) return true;
     // A ESPONJA vem antes de tudo, e ela e o unico caso desta tabela que NAO olha QUAL item esta
@@ -4176,6 +4116,11 @@ export class GameScene extends Phaser.Scene {
   // The thrown water LANDED on a planted mound: the earth darkens, drinks, and germination
   // starts. (The bucket already emptied at the throw — see throwBucketWater.)
   private waterPlantSpot(spot: PlantSpotObject, wx: number, wy: number): void {
+    if (this.painterQuest?.waterAt(spot)) {
+      getSoundManager().playSplash();
+      this.spawnSmokePuff(wx, wy);
+      return;
+    }
     if (!spot.water(GameScene.PLANT_GROW_MS, () => this.growPlantedGrass(spot))) return;
     getSoundManager().playSplash();
     this.spawnSmokePuff(wx, wy); // the mist of the pour settling over the wet earth
@@ -4193,7 +4138,6 @@ export class GameScene extends Phaser.Scene {
     this.tallGrasses.push(grass);
     spot.setGrown(grass);
     getSoundManager().playGrassCut(); // the blades pushing out — the same dry rustle
-    // BROTOU — e é isto que a pintora pediu: verde que alguém plantou (ver NpcQuests).
     this.questEvent({ type: 'grow' });
     this.spawnGrowSparkle(spot.worldX, spot.worldY);
   }
@@ -4534,6 +4478,76 @@ export class GameScene extends Phaser.Scene {
       this.questMarks.push(mark);
       this.drawQuestMark(mark, false);
     }
+  }
+
+  /** A QUEST DA IRIS: tudo o que ela precisa da cena passa por aqui (ver PainterHost). */
+  private buildPainterQuest(): void {
+    if (!this.adventure) return;
+    const bounds = getWorldBounds();
+    let npc: { worldX: number; worldY: number } | undefined;
+    for (let cy = bounds.minCy; cy <= bounds.maxCy; cy += 1) {
+      for (let cx = bounds.minCx; cx <= bounds.maxCx; cx += 1) {
+        const found = getChunkContent(cx, cy).npcs.find((n) => n.type === 'painter');
+        if (found) npc = { worldX: found.worldX, worldY: found.worldY };
+      }
+    }
+    if (!npc) return;
+    const dug = adventureState().dugSpots;
+    const items = (): AdventureGroundItemLike[] => this.itemManager?.snapshot() ?? [];
+    const quest = new PainterQuest({
+      scene: this,
+      held: () => this.heldItem,
+      heldCount: (kind) => this.inventory.count(kind),
+      takeIntoHand: (kind, units) => this.takeIntoHand(kind, units),
+      removeFromHand: (kind, units) => {
+        this.inventory.remove(kind, units);
+        this.updateBackItem();
+      },
+      takeFromGround: (kind) => {
+        const it = items().find((i) => i.kind === kind);
+        return it ? this.itemManager?.takeAt(it.worldX, it.worldY) !== undefined : false;
+      },
+      onGround: (kind) => items().some((i) => i.kind === kind),
+      dropAt: (kind, x, y) => {
+        if (this.isTileOccupied(x, y)) this.dropNear(kind, 1, x, y);
+        else this.itemManager?.drop(kind, x, y);
+      },
+      hero: () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }),
+      isFree: (x, y) => !this.isSolidForEntities(x, y) && !this.itemManager?.hasItemAt(x, y)
+        && !this.getPlantSpotAt(x, y) && !this.isOpenWaterAt(x, y),
+      fling: (kind, fromX, fromY, toX, toY) => this.flingCraftedItem(kind, fromX, fromY, toX, toY),
+      dugHoles: () => this.plantSpots.filter((spot) => spot.isHole && dug.has(`${spot.worldX},${spot.worldY}`)).length,
+      spotAt: (x, y) => this.getPlantSpotAt(x, y),
+      swing: (x, y) => this.swingHeld(x, y),
+      say: (script, at, onClosed) => this.openDialogScript(script, at, getDialogVoice('painter'), onClosed),
+      itemGet: (kind, onDone) => {
+        if (this.seenItems.has(kind)) { getSoundManager().playSwordPickup(); onDone(); return; }
+        this.seenItems.add(kind);
+        this.showItemGet(kind, onDone);
+      },
+      think: (texture) => this.heroThought?.show(texture),
+      hop: (x, y, height) => { this.npcManager?.hop(x, y, height); },
+      hearts: (x, y) => this.spawnHearts(x, y),
+      sparkle: (x, y) => this.spawnGrowSparkle(x, y),
+      freeze: (frozen) => {
+        this.cutsceneActive = frozen;
+        if (frozen) {
+          this.stopBreathing();
+          this.controlsHint?.destroy();
+          this.controlsHint = undefined;
+        }
+      },
+      showButtons: (visible) => this.actionButtons?.setVisible(visible),
+      persist: () => this.persistAdventure(),
+      closeQuest: () => this.questEvent({ type: 'paint' }),
+      markHeard: () => {
+        if (this.painterQuest) this.seenDialogKeys.add(this.painterQuest.talkKey());
+        this.persistAdventure();
+      },
+    });
+    quest.setDialogBase(() => getDialog('painter', PAINTER_DIALOG) as DialogScript);
+    this.painterQuest = quest;
+    quest.build(npc);
   }
 
   /** Desenha (ou troca) a marca: antes do pedido, a pose `before` se houver; depois, a `after`. */
@@ -5566,6 +5580,7 @@ export class GameScene extends Phaser.Scene {
     const askId = scriptId ?? kind;
     const base = getDialog(kind, askId);
     if (!base) return;
+    if (askId === PAINTER_DIALOG && this.adventure && npcWorld && this.painterQuest?.talk(base, npcWorld)) return;
     // A ENTREGA VEM ANTES DA FALA. Cumprida a missão, `spokenDialogId` devolve o outro roteiro —
     // já nesta mesma conversa, que é o ponto: entregar e ouvir o obrigado é um gesto só.
     // ENTREGAR É FALAR: o que está na mão vai para quem pediu (uma coisa de cada vez).
@@ -5646,6 +5661,7 @@ export class GameScene extends Phaser.Scene {
   ): string | null {
     if (kind === 'wizard') return `wizard:${this.wizardLine()}`;
     if (!getDialog(kind, scriptId)) return null;
+    if ((scriptId ?? kind) === PAINTER_DIALOG && this.adventure && this.painterQuest && !this.painterQuest.isDone) return this.painterQuest.talkKey();
     // A chave é do ROTEIRO FALADO, não da espécie: três gatos com três aulas são três "!" a
     // apagar, e com a chave por espécie ouvir um deles apagaria a marca dos outros dois. Ela lê
     // o roteiro que a MISSÃO escolheu, e é assim que fechar um pedido reacende o "!" do NPC —

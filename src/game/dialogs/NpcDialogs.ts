@@ -12,6 +12,8 @@ export type DialogScript = {
   npcAssetKey: string;
   npcFrame?: number;
   lines: DialogLine[];
+  /** Avisa quando cada linha entra: para o mundo trabalhar enquanto alguém conta o que faz. */
+  onLine?: (index: number) => void;
 };
 
 // Per-NPC "voice": a base frequency + waveform played as a blip on each typed letter, so

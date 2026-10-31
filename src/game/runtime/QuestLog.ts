@@ -34,6 +34,7 @@ export type QuestEvent =
   | { type: 'gather'; item: HeldItemKind; units: number }
   | { type: 'craft'; item: HeldItemKind; units: number }
   | { type: 'grow' }
+  | { type: 'paint' }
   | { type: 'light' }
   | { type: 'explore' };
 
@@ -93,6 +94,8 @@ const gain = (task: QuestTask, event: QuestEvent, dialogId: string): number => {
       return task.kind === 'craft' && task.item === event.item ? event.units : 0;
     case 'grow':
       return task.kind === 'grow' ? 1 : 0;
+    case 'paint':
+      return task.kind === 'paint' ? 1 : 0;
     case 'light':
       return task.kind === 'light' ? 1 : 0;
     case 'explore':

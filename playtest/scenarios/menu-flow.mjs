@@ -82,12 +82,10 @@ export default {
     await driver.settle(500);
     const pause = await pauseButtons(driver);
     assert('A pausa abriu', pause !== null, 'nao ha zh-pause-root no DOM');
-    const langBtns = await driver.page.evaluate(
-      () => document.querySelectorAll('#zh-pause-root .zh-pause-lang').length,
-    );
-    assert('A pausa nao oferece idioma', langBtns === 0, `${langBtns} botoes de idioma`);
-    assert('A pausa esta em ingles', pause.includes('Resume') && pause.includes('Restart'),
-      JSON.stringify(pause));
-    await shot('pause-adventure', { note: 'Pausa da aventura: sem seletor de idioma', state: {} });
+    const visible = await driver.page.evaluate(() => Array.from(
+      document.querySelectorAll('#zh-pause-root .zh-main .zh-pause-btn'), (b) => b.textContent,
+    ));
+    assert('A pausa tem tres saidas e mais nada', visible.length === 3, JSON.stringify(visible));
+    await shot('pause-adventure', { note: 'A pausa: retornar, opcoes, sair', state: {} });
   },
 };

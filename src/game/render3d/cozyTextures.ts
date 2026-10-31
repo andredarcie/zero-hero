@@ -123,43 +123,6 @@ const BASKET = [
   '................',
 ];
 
-// O CAVALETE da Iris: a tela que ela pinta, cinza antes e verde depois.
-const EASEL_GREY = [
-  '................',
-  '..kkkkkkkkkkkk..',
-  '..kAAAAAAAAAAk..',
-  '..kAxAAAAAAAAk..',
-  '..kAAAAAxxAAAk..',
-  '..kAAAxxAAAAAk..',
-  '..kxxxAAAAxxxk..',
-  '..kAAAAAAAAAAk..',
-  '..kkkkkkkkkkkk..',
-  '....kzZkkZzk....',
-  '...kzZk..kZzk...',
-  '...kzk....kzk...',
-  '..kzZk....kZzk..',
-  '..kzk......kzk..',
-  '..kk........kk..',
-  '................',
-];
-const EASEL_GREEN = [
-  '................',
-  '..kkkkkkkkkkkk..',
-  '..kBBBBBBBffBk..',
-  '..kBBBBBBBffBk..',
-  '..kBBBBBeeBBBk..',
-  '..kBBeeeeEeBBk..',
-  '..keeEEeeeeeek..',
-  '..kEeefeEEeefk..',
-  '..kkkkkkkkkkkk..',
-  '....kzZkkZzk....',
-  '...kzZk..kZzk...',
-  '...kzk....kzk...',
-  '..kzZk....kZzk..',
-  '..kzk......kzk..',
-  '..kk........kk..',
-  '................',
-];
 
 // O CORACAO do obrigado: 9x8, rosa, com um brilho no canto.
 const HEART = [
@@ -222,8 +185,6 @@ export const HEART_TEXTURE = 'cozy-heart';
 export const BUTTERFLY_TEXTURE = 'cozy-butterfly';
 export const LEAF_TEXTURE = 'cozy-leaf';
 export const BASKET_TEXTURE = 'quest-basket';
-export const EASEL_GREY_TEXTURE = 'quest-easel-grey';
-export const EASEL_GREEN_TEXTURE = 'quest-easel-green';
 export const ROAST_STICK_DONE_TEXTURE = 'roast-stick-done';
 export const MARSHMALLOW_BAG_TEXTURE = 'marshmallow-bag';
 
@@ -263,8 +224,6 @@ export const registerCozyTextures = (scene: Phaser.Scene): void => {
     [BUTTERFLY_TEXTURE, BUTTERFLY],
     [LEAF_TEXTURE, LEAF],
     [BASKET_TEXTURE, BASKET],
-    [EASEL_GREY_TEXTURE, EASEL_GREY],
-    [EASEL_GREEN_TEXTURE, EASEL_GREEN],
     [ROAST_STICK_DONE_TEXTURE, ROAST_STICK_DONE],
     [MARSHMALLOW_BAG_TEXTURE, MARSHMALLOW_BAG],
   ];

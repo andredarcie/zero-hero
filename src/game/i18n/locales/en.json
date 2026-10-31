@@ -43,7 +43,10 @@
       "morel": "A yellow morel.",
       "chanterelle": "A golden chanterelle.",
       "flyAgaric": "A fly agaric.",
-      "porcini": "A porcini."
+      "porcini": "A porcini.",
+      "dyeSeeds": "Mixed seeds. Four dye plants.",
+      "dyeBundle": "The four dye flowers.",
+      "brush": "A brush. The canvas awaits."
     },
     "name": {
       "sword": "Sword",
@@ -69,7 +72,10 @@
       "chanterelle": "Golden Chanterelle",
       "flyAgaric": "Fly Agaric",
       "porcini": "Porcini",
-      "altar": "Altar"
+      "altar": "Altar",
+      "dyeSeeds": "Mixed seeds",
+      "dyeBundle": "Dye flowers",
+      "brush": "Brush"
     }
   },
   "dialog": {
@@ -77,29 +83,40 @@
     "close": "Close"
   },
   "pause": {
-    "title": "Paused",
-    "resume": "Resume",
-    "music": "Music",
-    "sfx": "Sound effects",
-    "dof": "Depth of field",
-    "daylight": "Daylight",
-    "nightfall": "Nightfall",
-    "fullscreen": "Fullscreen",
-    "fullscreenExit": "Exit fullscreen",
-    "restart": "Restart",
+    "title": "PAUSED",
+    "resume": "Resume game",
+    "options": "Options",
     "quit": "Quit",
-    "confirm": "Sure?",
-    "sharpOn": "Sharpness: full",
-    "sharpOff": "Sharpness: thrifty",
-    "leftHand": "Buttons: left hand",
-    "rightHand": "Buttons: right hand",
-    "bigButtons": "Buttons: large",
-    "smallButtons": "Buttons: normal size",
-    "solidButtons": "Buttons: solid",
-    "softButtons": "Buttons: see-through",
-    "hapticsOn": "Vibration: on",
-    "hapticsOff": "Vibration: off",
-    "switchLanguage": "Jogar em português"
+    "back": "Back",
+    "previous": "Previous",
+    "next": "Next",
+    "on": "On",
+    "off": "Off",
+    "sectionSound": "Sound",
+    "sectionImage": "Picture",
+    "sectionTouch": "On-screen buttons",
+    "sectionGame": "Game",
+    "music": "Music",
+    "sfx": "Effects",
+    "fullscreen": "Fullscreen",
+    "timeOfDay": "Time of day",
+    "night": "Night",
+    "day": "Day",
+    "sharpness": "Sharpness",
+    "sharpFull": "Full",
+    "sharpThrifty": "Thrifty",
+    "blur": "Blur",
+    "hand": "Hand",
+    "handRight": "Right",
+    "handLeft": "Left",
+    "size": "Size",
+    "sizeNormal": "Normal",
+    "sizeBig": "Large",
+    "look": "Look",
+    "lookSoft": "See-through",
+    "lookSolid": "Solid",
+    "vibration": "Vibration",
+    "language": "Language"
   },
   "wizard": {
     "intro": [
@@ -272,22 +289,40 @@
     },
     "radiationSuitHint": {
       "puffball": [
-        { "speaker": "npc", "text": "East, past the water: a white ball with no cap." }
+        {
+          "speaker": "npc",
+          "text": "East, past the water: a white ball with no cap."
+        }
       ],
       "inkCap": [
-        { "speaker": "npc", "text": "North-east, by the pond: tall and white, shaggy like a wig." }
+        {
+          "speaker": "npc",
+          "text": "North-east, by the pond: tall and white, shaggy like a wig."
+        }
       ],
       "morel": [
-        { "speaker": "npc", "text": "South, by the rocks: a cap like a honeycomb." }
+        {
+          "speaker": "npc",
+          "text": "South, by the rocks: a cap like a honeycomb."
+        }
       ],
       "chanterelle": [
-        { "speaker": "npc", "text": "Far north, under the pines: a golden funnel." }
+        {
+          "speaker": "npc",
+          "text": "Far north, under the pines: a golden funnel."
+        }
       ],
       "flyAgaric": [
-        { "speaker": "npc", "text": "The north-west corner: red, with white spots. Look. Don't eat." }
+        {
+          "speaker": "npc",
+          "text": "The north-west corner: red, with white spots. Look. Don't eat."
+        }
       ],
       "porcini": [
-        { "speaker": "npc", "text": "Far south, by the west edge: a brown bun on a fat stem." }
+        {
+          "speaker": "npc",
+          "text": "Far south, by the west edge: a brown bun on a fat stem."
+        }
       ]
     },
     "painter": {
@@ -295,11 +330,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Everything I paint is grey."
+          "text": "Everything I paint comes out grey. Real paint grows from the ground."
         },
         {
           "speaker": "npc",
-          "text": "Here: seeds and a bucket. Plant them below me, water from the pond."
+          "text": "Take the shovel: dig four holes, close by."
         }
       ]
     },
@@ -308,11 +343,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Green. Real green."
+          "text": "Your painting stays here."
         },
         {
           "speaker": "npc",
-          "text": "Thank you."
+          "text": "Now I see colour everywhere."
         }
       ]
     },
@@ -370,19 +405,182 @@
     },
     "astronautHint": {
       "ore": [
-        { "speaker": "npc", "text": "Some rocks east of here hold ore. Break one." }
+        {
+          "speaker": "npc",
+          "text": "Some rocks east of here hold ore. Break one."
+        }
       ],
       "furnace": [
-        { "speaker": "npc", "text": "Ore needs a furnace. Build one at the bench." }
+        {
+          "speaker": "npc",
+          "text": "Ore needs a furnace. Build one at the bench."
+        }
       ],
       "charcoal": [
-        { "speaker": "npc", "text": "Set the furnace down. Two sticks make charcoal." }
+        {
+          "speaker": "npc",
+          "text": "Set the furnace down. Two sticks make charcoal."
+        }
       ],
       "bloom": [
-        { "speaker": "npc", "text": "Now ore and charcoal, together." }
+        {
+          "speaker": "npc",
+          "text": "Now ore and charcoal, together."
+        }
       ],
       "iron": [
-        { "speaker": "npc", "text": "Hammer the hot lump. Three blows." }
+        {
+          "speaker": "npc",
+          "text": "Hammer the hot lump. Three blows."
+        }
+      ]
+    },
+    "painterStep": {
+      "dig": [
+        {
+          "speaker": "npc",
+          "text": "{n} to go. Shovel in the dirt."
+        }
+      ],
+      "seeds": [
+        {
+          "speaker": "npc",
+          "text": "Four holes! The shovel stays here beside me."
+        },
+        {
+          "speaker": "npc",
+          "text": "Mixed seeds: one in each hole."
+        }
+      ],
+      "sow": [
+        {
+          "speaker": "npc",
+          "text": "{n} to go. One seed in each hole."
+        }
+      ],
+      "bucket": [
+        {
+          "speaker": "npc",
+          "text": "Planted! Take the bucket."
+        },
+        {
+          "speaker": "npc",
+          "text": "Fetch water from the pond, to the west, and water all four."
+        }
+      ],
+      "water": [
+        {
+          "speaker": "npc",
+          "text": "{n} to go. Fill the bucket at the pond and water them."
+        }
+      ],
+      "wait": [
+        {
+          "speaker": "npc",
+          "text": "Now we wait."
+        },
+        {
+          "speaker": "npc",
+          "text": "Take a walk around the valley. They grow little by little."
+        }
+      ],
+      "harvest": [
+        {
+          "speaker": "npc",
+          "text": "They bloomed!"
+        },
+        {
+          "speaker": "npc",
+          "text": "Cut them with Hollis's knife, to the west. Then bring me the flowers."
+        }
+      ],
+      "bring": [
+        {
+          "speaker": "npc",
+          "text": "The flowers! Bring them here."
+        }
+      ],
+      "easel": [
+        {
+          "speaker": "npc",
+          "text": "Brush in hand, and the canvas is yours."
+        }
+      ]
+    },
+    "painterMake": {
+      "intro": [
+        {
+          "speaker": "npc",
+          "text": "The flowers go on the table. Watch how it is done."
+        }
+      ],
+      "urucum": [
+        {
+          "speaker": "npc",
+          "text": "Annatto: I rub the seeds in water and the red powder comes off."
+        }
+      ],
+      "anil": [
+        {
+          "speaker": "npc",
+          "text": "Indigo: the leaves ferment in water. I beat it, and the blue is born in the air."
+        }
+      ],
+      "curcuma": [
+        {
+          "speaker": "npc",
+          "text": "Turmeric: the root, dried and ground, becomes yellow powder."
+        }
+      ],
+      "garanca": [
+        {
+          "speaker": "npc",
+          "text": "Madder: the ground root, in warm water. Boiled, the red turns dull."
+        }
+      ],
+      "binder": [
+        {
+          "speaker": "npc",
+          "text": "Alum fixes the colour. Gum arabic makes it paint."
+        }
+      ],
+      "brush": [
+        {
+          "speaker": "npc",
+          "text": "Your kit is ready. Take the brush: the blank canvas is yours."
+        }
+      ]
+    },
+    "painterEasel": {
+      "done": "Finished",
+      "leave": "Leave"
+    },
+    "painterReview": {
+      "form": {
+        "sparse": "A few strokes, and it says everything.",
+        "middle": "Look what you did on this canvas!",
+        "full": "Not one blank corner left!"
+      },
+      "color": {
+        "all": "All four colours together. Even I would not dare.",
+        "urucum": "That orange looks like late afternoon.",
+        "anil": "That blue looks like deep water.",
+        "curcuma": "That yellow warms the whole canvas.",
+        "garanca": "That red has a heart."
+      },
+      "thanks": [
+        {
+          "speaker": "npc",
+          "text": "You have a painter's hand."
+        },
+        {
+          "speaker": "npc",
+          "text": "I only saw grey. Thank you for everything."
+        },
+        {
+          "speaker": "npc",
+          "text": "I will keep the brush. The painting stays here."
+        }
       ]
     }
   },
@@ -394,7 +592,6 @@
   },
   "fungi": {
     "basket": "Basket",
-    "notesTitle": "Field notes",
     "thanks": "Thank you! Did you know?",
     "leave": "Leave it",
     "cut": {
@@ -485,13 +682,13 @@
           "Lives joined to tree roots."
         ]
       }
+    },
+    "dye": {
+      "urucum": "Annatto",
+      "anil": "Indigo",
+      "curcuma": "Turmeric",
+      "garanca": "Madder"
     }
-  },
-  "subscreen": {
-    "title": "In hand",
-    "empty": "Empty",
-    "mapTitle": "World",
-    "plansTitle": "Plans"
   },
   "toolbox": {
     "title": "Build",

@@ -1,13 +1,12 @@
 import type Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { otherLang, setLang, t } from '@/game/i18n/i18n';
+import { getLang, setLang, t, type Lang } from '@/game/i18n/i18n';
 import {
   getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
 } from '@/game/runtime/graphicsSettings';
-import { SubScreenPanel, type SubScreenView } from '@/game/runtime/SubScreen';
 import {
-  BOOK_FONT, KEY_BG, KEY_BORDER, KEY_GLYPH, PARCHMENT_ON, WOOD_PANEL, WOOD_TITLE, pixelFrame,
+  KEY_BG, KEY_BORDER, KEY_GLYPH, PIXEL_FONT, pixelFrame,
 } from '@/game/runtime/uiStyle';
 import {
   canVibrate, haptic, hasBigButtons, hasHaptics, hasSolidButtons, isLeftHanded,
@@ -15,74 +14,112 @@ import {
 } from '@/game/runtime/touchSettings';
 
 // The pause screen is plain DOM layered over the Phaser canvas — the same approach as
-// DialogOverlay / EditorDomUi. That choice matters twice here: serif text and native range
-// sliders render crisply at device resolution, and DOM keeps receiving input while the
-// Phaser scene is hard-paused (scene.pause() freezes update/tweens/timers AND scene input,
-// so the menu must live outside the canvas to stay clickable).
+// DialogOverlay / EditorDomUi. That choice matters here because DOM keeps receiving input while the
+// Phaser scene is hard-paused (scene.pause() freezes update/tweens/timers AND scene input, so the
+// menu must live outside the canvas to stay clickable).
+//
+// A PAUSA É O TÍTULO DO JOGO, sem painel: letra de pixel solta sobre o mundo escurecido, e só três
+// saídas. Tudo o que se ajusta mora em Opções, como dado (`optionSections`): opção nova é uma linha
+// na tabela, e ela já nasce andando com teclado, mouse e dedo.
 
 const STYLE_ID = 'zh-pause-style';
 const ROOT_ID = 'zh-pause-root';
 const TOUCH_BTN_ID = 'zh-pause-touch-btn';
-// Destructive actions (restart / quit) arm on the first tap and only fire on the second;
-// the label snaps back after this long so a stray tap can't linger armed forever.
-const CONFIRM_RESET_MS = 2600;
+const SLIDER_STEPS = 10;
 
 const CSS = `
-#${ROOT_ID} { position: fixed; inset: 0; z-index: 60; pointer-events: none; font-family: ${BOOK_FONT}; }
+#${ROOT_ID} {
+  position: fixed; inset: 0; z-index: 60;
+  font-family: ${PIXEL_FONT}; color: #e7dcc4; text-shadow: 2px 2px 0 #000;
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+}
+#${ROOT_ID} * { box-sizing: border-box; }
 #${ROOT_ID} .zh-pause-scrim {
-  position: absolute; inset: 0; pointer-events: auto;
-  /* A pausa e a unica tela que PARA o mundo: ele escurece e sai de foco — e ainda esta la. */
-  background: rgba(6, 5, 4, 0.5);
+  position: absolute; inset: 0;
+  background: rgba(6, 5, 4, 0.66);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
-  opacity: 0; transition: opacity 200ms ease;
+  opacity: 0; transition: opacity 160ms ease;
 }
-#${ROOT_ID} .zh-pause-panel {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  pointer-events: auto;
-  width: min(23em, calc(100vw - 2.5em));
-  max-height: calc(100vh - 2em); overflow-y: auto;
-  ${WOOD_PANEL}
-  color: #d8d1c0;
-  padding: 1.3em 1.5em 1.2em;
-  font-size: clamp(14px, 2.6vh, 18px);
-  opacity: 0; transform: translate(-50%, calc(-50% + 12px));
-  transition: opacity 200ms ease, transform 240ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
-}
-/* A rolagem da madeira: a do corpo do dialogo, nunca a barra cinza-clara do sistema. */
-#${ROOT_ID} .zh-pause-panel { scrollbar-width: thin; scrollbar-color: #5a4a35 transparent; }
-#${ROOT_ID} .zh-pause-panel::-webkit-scrollbar { width: 8px; }
-#${ROOT_ID} .zh-pause-panel::-webkit-scrollbar-track { background: transparent; }
-#${ROOT_ID} .zh-pause-panel::-webkit-scrollbar-thumb { background: #5a4a35; border-radius: 0; }
 #${ROOT_ID}.zh-in .zh-pause-scrim { opacity: 1; }
-#${ROOT_ID}.zh-in .zh-pause-panel { opacity: 1; transform: translate(-50%, -50%); }
-#${ROOT_ID} h1 {
-  margin: 0 0 0.7em; text-align: center;
-  ${WOOD_TITLE}
-  font-size: 1.45em;
+#${ROOT_ID} .zh-pause-page {
+  position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px))
+    calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+  pointer-events: none;
 }
-#${ROOT_ID} .zh-pause-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 1.2em; margin: 0.75em 0;
+#${ROOT_ID} .zh-pause-page.zh-on { display: flex; }
+#${ROOT_ID} .zh-pause-page.zh-main { justify-content: center; }
+#${ROOT_ID} h1 { margin: 0; font-weight: 400; font-size: 40px; line-height: 1.2; color: ${KEY_GLYPH}; flex: 0 0 auto; }
+#${ROOT_ID} .zh-main h1 { margin-bottom: 40px; }
+#${ROOT_ID} .zh-pause-page.zh-options h1 { font-size: 24px; margin-bottom: 16px; }
+#${ROOT_ID} button {
+  appearance: none; border: 0; background: none; margin: 0; padding: 0;
+  font: inherit; color: inherit; text-shadow: inherit; cursor: pointer; touch-action: manipulation;
 }
-#${ROOT_ID} .zh-pause-label { color: #cfc9ba; white-space: nowrap; }
+/* AS SAÍDAS: o selecionado acende na cor do keycap, com o cursor de pixel ao lado. */
 #${ROOT_ID} .zh-pause-btn {
-  display: block; box-sizing: border-box; width: 100%;
-  padding: 0.5em 0.8em; margin: 0.55em 0;
-  text-align: center; cursor: pointer; user-select: none;
-  border-radius: 2px; color: #d8d1c0;
-  transition: background 90ms ease, color 90ms ease;
+  position: relative; display: block; flex: 0 0 auto; min-height: 56px; padding: 16px 40px;
+  font-size: 24px; line-height: 1; pointer-events: auto; color: #cfc6ad; white-space: nowrap;
 }
-/* A opcao e a do dialogo: texto solto na madeira, e o pergaminho claro na que esta sob a mao. */
-#${ROOT_ID} .zh-pause-btn:hover { ${PARCHMENT_ON} }
-#${ROOT_ID} .zh-pause-btn.zh-dim { color: #8b8474; font-size: 0.92em; }
-#${ROOT_ID} .zh-pause-btn.zh-dim:hover { background: rgba(212, 200, 164, 0.16); color: #d8d1c0; }
-/* O veio entre as secoes: um sulco na tabua (sombra em cima, luz embaixo). */
-#${ROOT_ID} .zh-pause-sep {
-  border: 0; height: 2px; margin: 1em 0 0.8em;
-  background: linear-gradient(#0a0705 0 1px, rgba(255, 226, 180, 0.08) 1px 2px);
+#${ROOT_ID} .zh-pause-btn.is-selected { color: ${KEY_BORDER}; }
+#${ROOT_ID} .zh-pause-btn.is-selected::before {
+  content: '>'; position: absolute; left: 8px; top: 16px;
+  animation: zh-pause-nudge 640ms steps(2, jump-none) infinite;
 }
-#${ROOT_ID} input[type=range] {
-  width: 9.5em; accent-color: #d4c8a4; cursor: pointer;
+#${ROOT_ID} .zh-pause-btn:active { transform: translateY(2px); }
+@keyframes zh-pause-nudge { 0% { transform: translateX(0); } 100% { transform: translateX(4px); } }
+/* AS OPÇÕES: a lista rola, o título e o Voltar ficam. */
+#${ROOT_ID} .zh-pause-list {
+  flex: 1 1 auto; min-height: 0; width: min(640px, 100%); overflow-y: auto; pointer-events: auto;
+  scrollbar-width: thin; scrollbar-color: #8a7556 transparent; overscroll-behavior: contain;
+}
+#${ROOT_ID} .zh-pause-list::-webkit-scrollbar { width: 8px; }
+#${ROOT_ID} .zh-pause-list::-webkit-scrollbar-thumb { background: #8a7556; }
+#${ROOT_ID} section { min-width: 0; padding-bottom: 8px; }
+#${ROOT_ID} h2 { margin: 0; padding: 16px 8px 8px; font-weight: 400; font-size: 16px; line-height: 1; color: #a89c7e; }
+#${ROOT_ID} .zh-pause-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; min-height: 48px; padding: 0 8px; font-size: 16px; line-height: 1.2; text-align: left;
+}
+#${ROOT_ID} .zh-pause-row.is-selected { color: ${KEY_BORDER}; background: rgba(255, 224, 102, 0.08); }
+#${ROOT_ID} .zh-pause-value { display: flex; align-items: center; flex: 0 0 auto; }
+#${ROOT_ID} .zh-pause-value b { font-weight: 400; min-width: 9em; text-align: center; }
+/* As setas têm alvo de dedo: a linha tem 48px, e cada seta ocupa a altura dela. */
+#${ROOT_ID} .zh-pause-arrow { width: 32px; height: 48px; flex: 0 0 auto; color: inherit; }
+#${ROOT_ID} .zh-pause-arrow:active { transform: translateY(2px); }
+/* O VOLUME É UMA FILA DE BLOCOS: o ajuste do jogo em pixel, nunca o deslizador do sistema. */
+#${ROOT_ID} .zh-pause-blocks {
+  display: flex; align-items: center; gap: 3px; height: 48px; padding: 0 4px;
+  flex: 0 0 auto; cursor: pointer; touch-action: none;
+}
+#${ROOT_ID} .zh-pause-blocks i { display: block; width: 14px; height: 20px; background: rgba(245, 239, 220, 0.16); }
+#${ROOT_ID} .zh-pause-blocks i.zh-full { background: currentColor; box-shadow: 2px 2px 0 #000; }
+/* Tela pequena: 12px dá três pixels de aparelho por pixel de arte num celular, e continua nítido. */
+@media (max-width: 560px), (max-height: 500px) {
+  #${ROOT_ID} h1 { font-size: 24px; }
+  #${ROOT_ID} .zh-main h1 { margin-bottom: 24px; }
+  #${ROOT_ID} .zh-pause-page.zh-options h1 { font-size: 16px; margin-bottom: 4px; }
+  #${ROOT_ID} .zh-pause-btn { font-size: 16px; min-height: 48px; padding-left: 28px; padding-right: 28px; }
+  #${ROOT_ID} .zh-pause-btn.is-selected::before { top: 16px; left: 4px; }
+  #${ROOT_ID} .zh-pause-row { font-size: 12px; gap: 8px; }
+  #${ROOT_ID} h2 { font-size: 12px; padding-top: 12px; }
+  #${ROOT_ID} .zh-pause-blocks i { width: 11px; }
+  #${ROOT_ID} .zh-pause-blocks { gap: 2px; }
+}
+@media (max-width: 340px) {
+  #${ROOT_ID} .zh-pause-btn { font-size: 12px; }
+  #${ROOT_ID} .zh-pause-btn.is-selected::before { top: 18px; }
+}
+/* Telefone deitado: duas colunas de seções, e o que não couber rola para baixo, nunca de lado. */
+@media (max-height: 500px) and (min-width: 640px) {
+  #${ROOT_ID} .zh-pause-list {
+    width: 100%; display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; align-content: start;
+  }
+  #${ROOT_ID} .zh-pause-arrow { width: 24px; }
+  #${ROOT_ID} .zh-pause-page.zh-main { padding-top: 8px; padding-bottom: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #${ROOT_ID} .zh-pause-btn.is-selected::before { animation: none; }
 }
 #${TOUCH_BTN_ID} {
   position: fixed;
@@ -116,165 +153,211 @@ const ensureStyle = (): void => {
 
 export interface PauseMenuCallbacks {
   onResume: () => void;
-  /**
-   * Ausente = sem botao de recomecar. A aventura nao tem: nada se perde neste jogo, entao nao ha
-   * de onde "recomecar" — o New game do titulo e a porta para uma partida limpa.
-   */
-  onRestart?: () => void;
   /** Absent (editor playtest — the title scene isn't registered) hides the quit entry. */
   onQuit?: () => void;
-  /**
-   * A SUBTELA (a mochila e o mapa), desenhada no topo do painel. Ela mora aqui, e nao
-   * numa tela propria, porque as duas obedecem a mesma lei: so existem enquanto o jogador as
-   * pediu. Uma segunda tela significaria uma segunda tecla, um segundo congelamento do jogo e
-   * duas coisas que o ESC poderia querer dizer.
-   *
-   * `readSubScreen` e lido a cada desenho (nunca um retrato tirado ao abrir), entao escolher um
-   * item e um caminho so: a cena troca o item do B e o painel pergunta de novo como ficou.
-   */
-  readSubScreen?: () => SubScreenView;
-  onSelectItem?: (kind: string) => void;
 }
+
+/** Uma escolha entre valores com nome, ou um nível de 0 a 1. É tudo o que uma opção pode ser. */
+type OptionDef =
+  | { kind: 'choice'; label: string; values: { text: () => string; apply: () => void; active: () => boolean }[] }
+  | { kind: 'level'; label: string; read: () => number; write: (v: number) => void; release?: () => void };
+
+type OptionSection = { title: string; options: OptionDef[] };
+
+const onOff = (read: () => boolean, write: (v: boolean) => void): Extract<OptionDef, { kind: 'choice' }>['values'] => [
+  { text: () => t('pause.on'), apply: () => write(true), active: read },
+  { text: () => t('pause.off'), apply: () => write(false), active: () => !read() },
+];
+
+const two = (
+  a: [string, () => void, () => boolean],
+  b: [string, () => void, () => boolean],
+): Extract<OptionDef, { kind: 'choice' }>['values'] => [a, b].map(([key, apply, active]) => ({
+  text: () => t(key), apply, active,
+}));
+
+const setFullscreen = (on: boolean): void => {
+  if (on) void document.documentElement.requestFullscreen();
+  else if (document.fullscreenElement) void document.exitFullscreen();
+};
+
+// Os nomes de idioma ficam na língua deles: é por eles que quem não lê a atual acha a saída.
+// Trocar recarrega a página (ver i18n.ts); a aventura já está salva a cada evento que muda o mundo.
+const LANGUAGES: { lang: Lang; name: string }[] = [
+  { lang: 'pt-br', name: 'Português' },
+  { lang: 'en', name: 'English' },
+];
+
+/** TODAS as opções do jogo. Só aparece o que este aparelho pode mudar. */
+const optionSections = (): OptionSection[] => {
+  const sound = getSoundManager();
+  const image: OptionDef[] = [];
+  // A tela cheia é da página, não do Phaser: o canvas já ocupa a janela. O iPhone não deixa.
+  if (document.fullscreenEnabled) {
+    image.push({ kind: 'choice', label: 'pause.fullscreen', values: onOff(() => Boolean(document.fullscreenElement), setFullscreen) });
+  }
+  image.push(
+    // A hora do dia e a nitidez são chaves: só dois estados valem a pena (ver graphicsSettings).
+    {
+      kind: 'choice',
+      label: 'pause.timeOfDay',
+      values: two(
+        ['pause.night', () => setDaylight(0), () => getDaylight() < 0.5],
+        ['pause.day', () => setDaylight(1), () => getDaylight() >= 0.5],
+      ),
+    },
+    {
+      kind: 'choice',
+      label: 'pause.sharpness',
+      values: two(
+        ['pause.sharpFull', () => setThriftyPixels(false), () => !isThriftyPixels()],
+        ['pause.sharpThrifty', () => setThriftyPixels(true), () => isThriftyPixels()],
+      ),
+    },
+    // O desfoque das bordas é a assinatura do visual, mas cansa a vista de alguns: zero o desliga.
+    { kind: 'level', label: 'pause.blur', read: getDofIntensity, write: setDofIntensity },
+  );
+
+  const sections: OptionSection[] = [
+    {
+      title: 'pause.sectionSound',
+      options: [
+        { kind: 'level', label: 'pause.music', read: () => sound.getMusicVolume(), write: (v) => sound.setMusicVolume(v) },
+        // O som ao soltar é o que deixa julgar o nível.
+        { kind: 'level', label: 'pause.sfx', read: () => sound.getSfxVolume(), write: (v) => sound.setSfxVolume(v), release: () => sound.playItemStash() },
+      ],
+    },
+    { title: 'pause.sectionImage', options: image },
+  ];
+
+  // Sem dedo não há botão na tela a mover, e a vibração só existe onde o navegador vibra.
+  if (isTouchDevice()) {
+    const touch: OptionDef[] = [
+      {
+        kind: 'choice',
+        label: 'pause.hand',
+        values: two(
+          ['pause.handRight', () => setLeftHanded(false), () => !isLeftHanded()],
+          ['pause.handLeft', () => setLeftHanded(true), isLeftHanded],
+        ),
+      },
+      {
+        kind: 'choice',
+        label: 'pause.size',
+        values: two(
+          ['pause.sizeNormal', () => setBigButtons(false), () => !hasBigButtons()],
+          ['pause.sizeBig', () => setBigButtons(true), hasBigButtons],
+        ),
+      },
+      {
+        kind: 'choice',
+        label: 'pause.look',
+        values: two(
+          ['pause.lookSoft', () => setSolidButtons(false), () => !hasSolidButtons()],
+          ['pause.lookSolid', () => setSolidButtons(true), hasSolidButtons],
+        ),
+      },
+    ];
+    if (canVibrate()) {
+      touch.push({ kind: 'choice', label: 'pause.vibration', values: onOff(hasHaptics, (v) => { setHaptics(v); if (v) haptic(20); }) });
+    }
+    sections.push({ title: 'pause.sectionTouch', options: touch });
+  }
+
+  sections.push({
+    title: 'pause.sectionGame',
+    options: [{
+      kind: 'choice',
+      label: 'pause.language',
+      values: LANGUAGES.map(({ lang, name }) => ({
+        text: () => name,
+        apply: () => setLang(lang),
+        active: () => getLang() === lang,
+      })),
+    }],
+  });
+  return sections;
+};
+
+/** Uma linha viva da lista de opções: quem a move (teclado, mouse ou dedo) chama a mesma coisa. */
+type OptionRow = {
+  el: HTMLElement;
+  /** Seta para a esquerda (-1) ou para a direita (+1). */
+  step: (direction: number) => void;
+  /** Enter/Z: a escolha gira; o nível não faz nada (é setas ou arrasto). */
+  activate: () => void;
+  refresh: () => void;
+};
 
 export class PauseMenu {
   private readonly root: HTMLDivElement;
-  private readonly title: HTMLHeadingElement;
-  private readonly resumeBtn: HTMLDivElement;
-  private readonly musicLabel: HTMLSpanElement;
-  private readonly sfxLabel: HTMLSpanElement;
-  private readonly dofLabel: HTMLSpanElement;
-  private readonly daylightBtn: HTMLDivElement;
-  private readonly sharpBtn: HTMLDivElement;
-  private readonly languageBtn: HTMLDivElement;
-  /** As opções de toque (ver touchSettings) — só existem num aparelho de toque. */
-  private readonly touchBtns?: {
-    hand: HTMLDivElement; size: HTMLDivElement; look: HTMLDivElement; haptics?: HTMLDivElement;
-  };
-  private readonly subScreen?: SubScreenPanel;
-  private readonly fullscreenBtn?: HTMLDivElement;
-  private readonly restartBtn?: HTMLDivElement;
-  private readonly quitBtn?: HTMLDivElement;
+  private readonly mainPage: HTMLDivElement;
+  private readonly optionsPage: HTMLDivElement;
+  private readonly list: HTMLDivElement;
+  private readonly mainButtons: HTMLButtonElement[] = [];
+  private readonly rows: OptionRow[] = [];
+  private readonly backBtn: HTMLButtonElement;
+  private page: 'main' | 'options' = 'main';
+  /** A linha acesa da página atual. Nas opções, a última posição é o Voltar. */
+  private selected = 0;
   private destroyed = false;
-  private confirmTimer?: number;
-  private armed?: HTMLDivElement;
 
   public constructor(scene: Phaser.Scene, private readonly cb: PauseMenuCallbacks) {
     void scene; // the menu is scene-agnostic DOM; kept in the signature for overlay parity
     ensureStyle();
-    const sound = getSoundManager();
 
     this.root = document.createElement('div');
     this.root.id = ROOT_ID;
 
     const scrim = document.createElement('div');
     scrim.className = 'zh-pause-scrim';
-    scrim.addEventListener('click', () => this.cb.onResume());
+    // Tocar fora volta ao jogo, mas só na primeira página: nas opções, o dedo que erra uma linha
+    // não pode jogar a pessoa de volta no mundo.
+    scrim.addEventListener('click', () => { if (this.page === 'main') this.cb.onResume(); });
     this.root.appendChild(scrim);
 
-    const panel = document.createElement('div');
-    panel.className = 'zh-pause-panel';
-    this.root.appendChild(panel);
-
-    this.title = document.createElement('h1');
-    panel.appendChild(this.title);
-
-    // A mochila vem ANTES das opcoes: quem apertou ESC no meio de uma expedicao veio ver o que
-    // tem e escolher o item do B; volume e idioma sao a segunda razao, nunca a primeira.
-    if (this.cb.readSubScreen && this.cb.onSelectItem) {
-      const onSelectItem = this.cb.onSelectItem;
-      this.subScreen = new SubScreenPanel(this.cb.readSubScreen, (kind) => onSelectItem(kind));
-      panel.appendChild(this.subScreen.el);
-    }
-
-    this.resumeBtn = this.button(panel, () => this.cb.onResume());
-
-    panel.appendChild(this.separator());
-
-    // Volume sliders write straight through to the SoundManager (already persisted there).
-    const music = this.sliderRow(panel, sound.getMusicVolume(), (v) => sound.setMusicVolume(v));
-    this.musicLabel = music;
-    const sfx = this.sliderRow(panel, sound.getSfxVolume(), (v) => {
-      sound.setSfxVolume(v);
-    }, () => sound.playItemStash()); // preview blip on release so the level is judgeable
-    this.sfxLabel = sfx;
-
-    // Depth of field: the tilt-shift blur is the HD-2D signature, but a permanently soft screen
-    // edge gives some players eye strain — so it's an accessibility slider (0 = a crisp diorama).
-    // The renderer reads it every frame, so it takes hold the moment the game resumes.
-    this.dofLabel = this.sliderRow(panel, getDofIntensity(), (v) => setDofIntensity(v));
-
-    // A HORA DO DIA. Botão e não deslizador porque não há meio-termo: o céu é uma chave que troca
-    // vinte knobs de uma vez (render3d/skyPreset.ts). Como o fullscreen, o rótulo diz o que o toque
-    // FAZ, não onde se está. O renderizador lê o ajuste todo frame, então ele pega no instante em
-    // que o jogo volta a andar — a cena está pausada aqui dentro, e o mundo congelado com ela.
-    this.daylightBtn = this.button(panel, () => {
-      setDaylight(getDaylight() >= 0.5 ? 0 : 1);
-      this.refreshTexts();
-    });
-
-    // A NITIDEZ. Chave e não deslizador pelo mesmo motivo da hora do dia: só há dois estados que
-    // valem a pena (a tela inteira, ou metade dela). Ela existe porque o jogo desenha em pixel de
-    // APARELHO desde que o serrilhado do celular foi consertado — e isso é caro exatamente onde o
-    // conserto mais importa. Quem decide se o aparelho aguenta é quem está segurando o aparelho:
-    // um detector de "é celular" já tentou decidir por todo mundo e foi ele que embaçou a tela.
-    this.sharpBtn = this.button(panel, () => {
-      setThriftyPixels(!isThriftyPixels());
-      this.refreshTexts();
-    });
-
-    // OS CONTROLES DE TOQUE: mão, tamanho, visibilidade e vibração (ver touchSettings). Só no
-    // toque — no teclado não há botão na tela a mover —, e a vibração só onde o navegador vibra.
-    if (isTouchDevice()) {
-      const flip = (toggle: () => void) => () => { toggle(); this.refreshTexts(); };
-      this.touchBtns = {
-        hand: this.button(panel, flip(() => setLeftHanded(!isLeftHanded()))),
-        size: this.button(panel, flip(() => setBigButtons(!hasBigButtons()))),
-        look: this.button(panel, flip(() => setSolidButtons(!hasSolidButtons()))),
-        haptics: canVibrate()
-          ? this.button(panel, flip(() => { setHaptics(!hasHaptics()); haptic(20); }))
-          : undefined,
-      };
-    }
-
-    // O IDIOMA: o jogo tem dois, e o botao oferece o OUTRO — escrito na lingua de destino ("Play
-    // in English" no pt-br), para quem nao le a lingua atual achar a saida. Trocar recarrega a
-    // pagina (ver i18n.ts); a aventura ja esta salva a cada evento que muda o mundo.
-    this.languageBtn = this.button(panel, () => setLang(otherLang()));
-
-    // Fullscreen is page-level (documentElement), not Phaser's ScaleManager: the canvas
-    // already fills the window, so fullscreening the page is the whole job. Hidden where the
-    // browser forbids it (iPhone Safari).
-    if (document.fullscreenEnabled) {
-      this.fullscreenBtn = this.button(panel, () => {
-        if (document.fullscreenElement) void document.exitFullscreen();
-        else void document.documentElement.requestFullscreen();
-      });
-      document.addEventListener('fullscreenchange', this.handleFullscreenChange);
-    }
-
-    panel.appendChild(this.separator());
-
-    if (this.cb.onRestart) {
-      const onRestart = this.cb.onRestart;
-      this.restartBtn = this.button(panel, () => this.confirmThen(this.restartBtn as HTMLDivElement, onRestart));
-      this.restartBtn.classList.add('zh-dim');
-    }
+    this.mainPage = this.pageEl('zh-main', t('pause.title'));
+    this.mainButton(t('pause.resume'), () => this.cb.onResume());
+    this.mainButton(t('pause.options'), () => this.showPage('options'));
     if (this.cb.onQuit) {
+      // Sem "certeza?": sair guarda a aventura, e o título oferece Continuar. Nada se perde.
       const onQuit = this.cb.onQuit;
-      this.quitBtn = this.button(panel, () => this.confirmThen(this.quitBtn as HTMLDivElement, onQuit));
-      this.quitBtn.classList.add('zh-dim');
+      this.mainButton(t('pause.quit'), onQuit);
     }
 
-    this.refreshTexts();
+    this.optionsPage = this.pageEl('zh-options', t('pause.options'));
+    this.list = document.createElement('div');
+    this.list.className = 'zh-pause-list';
+    this.optionsPage.appendChild(this.list);
+    for (const section of optionSections()) {
+      const box = document.createElement('section');
+      const title = document.createElement('h2');
+      title.textContent = t(section.title);
+      box.appendChild(title);
+      for (const def of section.options) {
+        const row = def.kind === 'choice' ? this.choiceRow(def) : this.levelRow(def);
+        const index = this.rows.length;
+        this.rows.push(row);
+        row.el.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(index); });
+        row.el.addEventListener('pointerdown', () => this.select(index));
+        row.refresh();
+        box.appendChild(row.el);
+      }
+      this.list.appendChild(box);
+    }
+    this.backBtn = this.pageButton(this.optionsPage, t('pause.back'), () => this.showPage('main'));
+    this.backBtn.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(this.rows.length); });
+
     document.body.appendChild(this.root);
     window.addEventListener('keydown', this.handleKeyDown, true);
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange);
+    this.showPage('main');
     requestAnimationFrame(() => { if (!this.destroyed) this.root.classList.add('zh-in'); });
   }
 
   public destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    if (this.confirmTimer) window.clearTimeout(this.confirmTimer);
     window.removeEventListener('keydown', this.handleKeyDown, true);
     document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
     this.root.remove();
@@ -282,104 +365,173 @@ export class PauseMenu {
 
   // ── building blocks ────────────────────────────────────────────────────────
 
-  private button(parent: HTMLElement, onClick: () => void): HTMLDivElement {
-    const btn = document.createElement('div');
+  private pageEl(variant: string, title: string): HTMLDivElement {
+    const page = document.createElement('div');
+    page.className = `zh-pause-page ${variant}`;
+    const heading = document.createElement('h1');
+    heading.textContent = title;
+    page.appendChild(heading);
+    this.root.appendChild(page);
+    return page;
+  }
+
+  private pageButton(parent: HTMLElement, label: string, onClick: () => void): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'zh-pause-btn';
+    btn.textContent = label;
     btn.addEventListener('click', onClick);
     parent.appendChild(btn);
     return btn;
   }
 
-  private separator(): HTMLHRElement {
-    const hr = document.createElement('hr');
-    hr.className = 'zh-pause-sep';
-    return hr;
+  private mainButton(label: string, onClick: () => void): void {
+    const index = this.mainButtons.length;
+    const btn = this.pageButton(this.mainPage, label, onClick);
+    btn.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(index); });
+    this.mainButtons.push(btn);
   }
 
-  private sliderRow(
-    parent: HTMLElement,
-    value: number,
-    onInput: (v: number) => void,
-    onRelease?: () => void,
-  ): HTMLSpanElement {
-    const row = document.createElement('div');
-    row.className = 'zh-pause-row';
-    const label = document.createElement('span');
-    label.className = 'zh-pause-label';
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.min = '0';
-    slider.max = '100';
-    slider.value = String(Math.round(value * 100));
-    slider.addEventListener('input', () => onInput(Number(slider.value) / 100));
-    if (onRelease) slider.addEventListener('change', onRelease);
-    row.append(label, slider);
-    parent.appendChild(row);
-    return label;
+  private rowEl(label: string): HTMLDivElement {
+    const el = document.createElement('div');
+    el.className = 'zh-pause-row';
+    const name = document.createElement('span');
+    name.textContent = t(label);
+    el.appendChild(name);
+    return el;
   }
 
-  /** Two-tap guard for destructive entries: first tap arms ("Are you sure?"), second fires. */
-  private confirmThen(btn: HTMLDivElement, action: () => void): void {
-    if (this.armed === btn) {
-      if (this.confirmTimer) window.clearTimeout(this.confirmTimer);
-      this.armed = undefined;
-      action();
-      return;
-    }
-    this.armed = btn;
-    if (this.confirmTimer) window.clearTimeout(this.confirmTimer);
-    this.refreshTexts();
-    btn.textContent = t('pause.confirm');
-    this.confirmTimer = window.setTimeout(() => {
-      this.armed = undefined;
-      if (!this.destroyed) this.refreshTexts();
-    }, CONFIRM_RESET_MS);
+  private choiceRow(def: Extract<OptionDef, { kind: 'choice' }>): OptionRow {
+    const el = this.rowEl(def.label);
+    const value = document.createElement('span');
+    value.className = 'zh-pause-value';
+    const text = document.createElement('b');
+    const arrow = (glyph: string, direction: number): HTMLButtonElement => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'zh-pause-arrow';
+      btn.textContent = glyph;
+      btn.setAttribute('aria-label', glyph === '<' ? t('pause.previous') : t('pause.next'));
+      btn.addEventListener('click', (event) => { event.stopPropagation(); row.step(direction); });
+      return btn;
+    };
+    const current = (): number => Math.max(0, def.values.findIndex((v) => v.active()));
+    const row: OptionRow = {
+      el,
+      step: (direction) => {
+        const n = def.values.length;
+        def.values[(current() + direction + n) % n].apply();
+        row.refresh();
+      },
+      activate: () => row.step(1),
+      refresh: () => { text.textContent = def.values[current()].text(); },
+    };
+    value.append(arrow('<', -1), text, arrow('>', 1));
+    el.appendChild(value);
+    // A linha inteira é alvo: o dedo não precisa acertar a seta.
+    el.addEventListener('click', () => row.step(1));
+    el.style.cursor = 'pointer';
+    return row;
   }
 
-  private refreshTexts(): void {
-    this.title.textContent = t('pause.title');
-    this.resumeBtn.textContent = t('pause.resume');
-    this.musicLabel.textContent = t('pause.music');
-    this.sfxLabel.textContent = t('pause.sfx');
-    this.dofLabel.textContent = t('pause.dof');
-    this.daylightBtn.textContent = getDaylight() >= 0.5 ? t('pause.nightfall') : t('pause.daylight');
-    // O rótulo diz o que o toque FAZ, como o do fullscreen e o do dia — nunca onde se está.
-    this.sharpBtn.textContent = isThriftyPixels() ? t('pause.sharpOn') : t('pause.sharpOff');
-    if (this.touchBtns) {
-      // O mesmo contrato: o rótulo diz o que o toque FAZ.
-      this.touchBtns.hand.textContent = isLeftHanded() ? t('pause.rightHand') : t('pause.leftHand');
-      this.touchBtns.size.textContent = hasBigButtons() ? t('pause.smallButtons') : t('pause.bigButtons');
-      this.touchBtns.look.textContent = hasSolidButtons() ? t('pause.softButtons') : t('pause.solidButtons');
-      if (this.touchBtns.haptics) {
-        this.touchBtns.haptics.textContent = hasHaptics() ? t('pause.hapticsOff') : t('pause.hapticsOn');
-      }
+  private levelRow(def: Extract<OptionDef, { kind: 'level' }>): OptionRow {
+    const el = this.rowEl(def.label);
+    const bar = document.createElement('div');
+    bar.className = 'zh-pause-blocks';
+    bar.setAttribute('role', 'slider');
+    bar.setAttribute('aria-label', t(def.label));
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', '100');
+    const blocks = Array.from({ length: SLIDER_STEPS }, () => bar.appendChild(document.createElement('i')));
+    el.appendChild(bar);
+    const refresh = (): void => {
+      const level = Math.round(def.read() * SLIDER_STEPS);
+      blocks.forEach((block, i) => block.classList.toggle('zh-full', i < level));
+      bar.setAttribute('aria-valuenow', String(level * SLIDER_STEPS));
+    };
+    const setLevel = (level: number): void => {
+      def.write(Math.max(0, Math.min(SLIDER_STEPS, level)) / SLIDER_STEPS);
+      refresh();
+    };
+    const fromPointer = (event: PointerEvent): void => {
+      const rect = bar.getBoundingClientRect();
+      setLevel(Math.round(((event.clientX - rect.left) / rect.width) * SLIDER_STEPS));
+    };
+    bar.addEventListener('pointerdown', (event) => {
+      bar.setPointerCapture(event.pointerId);
+      fromPointer(event);
+    });
+    bar.addEventListener('pointermove', (event) => { if (bar.hasPointerCapture(event.pointerId)) fromPointer(event); });
+    bar.addEventListener('pointerup', () => def.release?.());
+    return {
+      el,
+      step: (direction) => {
+        setLevel(Math.round(def.read() * SLIDER_STEPS) + direction);
+        def.release?.();
+      },
+      activate: () => { /* nível não gira */ },
+      refresh,
+    };
+  }
+
+  // ── a seleção: uma só, para teclado, mouse e dedo ──────────────────────────
+
+  private get selectable(): HTMLElement[] {
+    return this.page === 'main' ? this.mainButtons : [...this.rows.map((r) => r.el), this.backBtn];
+  }
+
+  private showPage(page: 'main' | 'options'): void {
+    const leaving = this.page;
+    this.page = page;
+    this.mainPage.classList.toggle('zh-on', page === 'main');
+    this.optionsPage.classList.toggle('zh-on', page === 'options');
+    if (page === 'options') this.list.scrollTop = 0;
+    // Voltar das opções reacende "Opções", de onde a pessoa veio.
+    this.select(page === 'main' && leaving === 'options' ? 1 : 0);
+  }
+
+  private select(index: number): void {
+    const items = this.selectable;
+    this.selected = (index + items.length) % items.length;
+    items.forEach((el, i) => el.classList.toggle('is-selected', i === this.selected));
+  }
+
+  private confirm(): void {
+    if (this.page === 'main') {
+      this.mainButtons[this.selected]?.click();
+    } else if (this.selected === this.rows.length) {
+      this.showPage('main');
+    } else {
+      this.rows[this.selected]?.activate();
     }
-    if (this.fullscreenBtn) {
-      this.fullscreenBtn.textContent = document.fullscreenElement
-        ? t('pause.fullscreenExit')
-        : t('pause.fullscreen');
-    }
-    this.languageBtn.textContent = t('pause.switchLanguage');
-    if (this.restartBtn) this.restartBtn.textContent = t('pause.restart');
-    if (this.quitBtn) this.quitBtn.textContent = t('pause.quit');
   }
 
   private readonly handleFullscreenChange = (): void => {
-    if (!this.destroyed) this.refreshTexts();
+    if (!this.destroyed) this.rows.forEach((row) => row.refresh());
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.destroyed) return;
-    if (event.code === 'Escape') {
-      event.preventDefault();
-      this.cb.onResume();
-      return;
-    }
-    // As setas andam na mochila enquanto ela esta aberta. A cena esta com `scene.pause()`, entao
-    // nada disto chega ao heroi — a mesma tecla que anda no mundo escolhe o item aqui dentro.
-    if (this.subScreen && (event.code === 'ArrowLeft' || event.code === 'ArrowRight')) {
-      event.preventDefault();
-      this.subScreen.step(event.code === 'ArrowRight' ? 1 : -1);
+    const code = event.code;
+    const up = code === 'ArrowUp' || code === 'KeyW';
+    const down = code === 'ArrowDown' || code === 'KeyS';
+    const left = code === 'ArrowLeft' || code === 'KeyA';
+    const right = code === 'ArrowRight' || code === 'KeyD';
+    const accept = code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'KeyZ' || code === 'KeyJ';
+    if (!(code === 'Escape' || up || down || left || right || accept)) return;
+    event.preventDefault();
+    // Andar pela lista com a seta segurada é bom; confirmar e sair segurando, nunca.
+    if (event.repeat && !(up || down || left || right)) return;
+    if (code === 'Escape') {
+      if (this.page === 'options') this.showPage('main');
+      else this.cb.onResume();
+    } else if (up || down) {
+      this.select(this.selected + (up ? -1 : 1));
+      this.selectable[this.selected].scrollIntoView({ block: 'nearest' });
+    } else if (left || right) {
+      if (this.page === 'options') this.rows[this.selected]?.step(left ? -1 : 1);
+    } else {
+      this.confirm();
     }
   };
 }

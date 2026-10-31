@@ -598,7 +598,7 @@ export const SEED_PACK_KINDS: ReadonlySet<string> = new Set(['seeds']);
 // contrato; o MINÉRIO DE FERRO entra porque a rocha-veio o produz aos montes e vendê-lo ao
 // astronauta é por quantidade. Lista SEPARADA de SEED_PACK_KINDS de propósito: o buraco de
 // plantio pergunta por SEMENTE, e um punhado de ferro não pode ser semeado num canteiro.
-export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set([...SEED_PACK_KINDS, 'iron']);
+export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set([...SEED_PACK_KINDS, 'iron', 'dyeSeeds']);
 
 // O PUNHADO COM QUE UMA PECA NASCE NO CHAO. Isto vale so para o que nasce no mundo (pickup
 // autorado, drop sem contagem explicita). Um item

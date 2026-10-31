@@ -1,4 +1,5 @@
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
+import type { DyeKind } from '@/game/quests/dyePlants';
 
 /**
  * A MEMORIA DA AVENTURA — o save.
@@ -33,6 +34,27 @@ export interface AdventureMachine {
   worldY: number;
   /** O forno usa a direção para definir sua saída visual. */
   dir?: number;
+}
+
+/** Em que conversa a quest da Iris está (ver quests/PainterQuest). */
+export type PaintStage = 'start' | 'dig' | 'sow' | 'water' | 'grow' | 'harvest' | 'paint' | 'done';
+
+export interface PaintPlot {
+  x: number;
+  y: number;
+  kind: DyeKind;
+  /** De 0 (só o monte) a 3 (em flor). */
+  level: number;
+  growMs: number;
+  watered: boolean;
+  cut: boolean;
+}
+
+export interface PaintQuestSave {
+  stage: PaintStage;
+  plots: PaintPlot[];
+  /** O desenho do jogador (PNG em data URL): é ele que fica no quadro para sempre. */
+  art?: string;
 }
 
 export interface AdventureSnapshot {
@@ -74,6 +96,7 @@ export interface AdventureSnapshot {
    * "fechou" para discordar da soma.
    */
   questProgress: Map<string, number>;
+  paintQuest: PaintQuestSave;
 }
 
 const defaultSnapshot = (): AdventureSnapshot => ({
@@ -93,6 +116,7 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   groundItems: new Map(),
   visitedChunks: new Set(),
   questProgress: new Map(),
+  paintQuest: { stage: 'start', plots: [] },
 });
 
 type StoredSnapshot = {
@@ -112,6 +136,7 @@ type StoredSnapshot = {
   groundItems?: Record<string, AdventureGroundItem[]>;
   visitedChunks?: string[];
   questProgress?: Record<string, number>;
+  paintQuest?: PaintQuestSave;
 };
 
 const num = (value: unknown, fallback: number): number =>
@@ -191,6 +216,9 @@ const load = (): AdventureSnapshot => {
           key.replace('radiationSuit/gather:', 'radiationSuit/deliver:'), num(n, 0),
         ]),
       ),
+      paintQuest: p.paintQuest && typeof p.paintQuest.stage === 'string' && Array.isArray(p.paintQuest.plots)
+        ? p.paintQuest
+        : base.paintQuest,
     };
   } catch {
     return base;
@@ -230,6 +258,7 @@ export const saveAdventure = (): void => {
     groundItems: Object.fromEntries(s.groundItems),
     visitedChunks: [...s.visitedChunks],
     questProgress: Object.fromEntries(s.questProgress),
+    paintQuest: s.paintQuest,
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));

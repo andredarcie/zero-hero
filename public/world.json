@@ -3672,11 +3672,6 @@
       ],
       "pickups": [
         {
-          "type": "shovel",
-          "worldX": 14,
-          "worldY": 16
-        },
-        {
           "type": "puffball",
           "worldX": 12,
           "worldY": 21
@@ -14133,26 +14128,6 @@
       "worldY": 22
     },
     {
-      "type": "plantSpot",
-      "worldX": 15,
-      "worldY": 19
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 17,
-      "worldY": 19
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 19,
-      "worldY": 20
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 19,
-      "worldY": 19
-    },
-    {
       "type": "moonflower",
       "worldX": 1,
       "worldY": 3
@@ -15041,16 +15016,6 @@
       "type": "dryTree",
       "worldX": 48,
       "worldY": 5
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 15,
-      "worldY": 20
-    },
-    {
-      "type": "plantSpot",
-      "worldX": 17,
-      "worldY": 20
     },
     {
       "type": "dryBush",

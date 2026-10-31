@@ -12,7 +12,7 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
 1. **A abertura** (`playIntro`): à noite, o cavaleiro chega pela estrada do sul com a espada nas
    costas, a finca no chão (ela fica ali para sempre e bloqueia o tile), olha em volta entre
    vaga-lumes, e o mago chega andando e fala. Toca uma vez por partida (`introSeen` no save).
-2. **Os vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
+2. **A quest da Iris é em etapas** e tem dono próprio (`quests/PainterQuest.ts`). **Os outros vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
    que o torna possível (`gift`). Pedido novo = uma entrada lá + falas `npc.<id>`/`npc.<id>Done`
    no locale.
 3. **O portão** (`openGardenGate`): quando `allQuestsDone()`, o `gardenGate` do centro abre.
@@ -76,14 +76,14 @@ npx vite --port 5180 --strictPort
 PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 ```
 
-## Os dois botões, a mão e a subtela
+## Os dois botões e a pausa
 
     Z (J / espaço)  →  a MÃO: fala com o NPC à frente, acende/assa na fogueira do fim, abre o
                        catálogo da bancada/forno, põe e malha no altar, e PEGA / TROCA / POUSA a
                        coisa do tile da frente (`handAt`). Nada no Z é golpe.
     X (K)           →  USA o que está na mão no tile à frente (a tabela `useItemAt`).
     pisar           →  APANHA só com a mão vazia (`collectUnderfoot`).
-    ESC             →  a subtela (a mão + mapa + caderno). Não há bolsa.
+    ESC             →  a pausa: retornar, opções, sair. Não há bolsa, mapa nem caderno (pedido do autor).
 
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
   repetição se filtra por `event.repeat`.
@@ -189,8 +189,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **A BANCADA É UMA MESA, e o A nela CONSTRÓI** — e o menu mostra o **MÍNIMO PARA CONTINUAR**: os
   degraus que o jogador já cumpriu, mais UM novo (`catalogSteps` + a `LADDER` de `toolboxRecipes`).
   Ele listava as onze receitas de uma vez, e onze cartas na primeira abertura não são ambição, são
-  uma parede. Receita nova entra na escada, senão ela aparece no fim e fora de ordem. A mesma
-  escada vale para a página de PLANOS da subtela — duas listas discordando é uma segunda voz.
+  uma parede. Receita nova entra na escada, senão ela aparece no fim e fora de ordem.
   Confirmar **gasta do CHÃO EM VOLTA da máquina e da mão** (`stationCount`/`stationSpend`) e a mesa ATIRA a peça no chão ao
   lado** — nunca direto na mochila: entregar por dentro fazia a mesa martelar para ninguém, e o
   gesto ficava sem nenhuma parte visível. O destino é o vizinho mais perto do herói **que não seja

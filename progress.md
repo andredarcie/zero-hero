@@ -9748,3 +9748,21 @@ A caixa em pé (`isTallDialog`) ocupa cerca de um terço da tela, com fonte maio
 O corpo é uma mola (`runtime/TalkingBody.ts`): cada sílaba empurra, mais forte no começo de palavra, e o sprite e o retrato leem a mesma pose. Armadilha: o fechamento nasce num timer, dentro da mesma emissão de `update` que move a mola, e sem a guarda de `destroyed` o último passo rodava depois do `restore` e deixava o NPC torto para sempre.
 
 O volume baixo vinha do alto-falante: celular quase não toca abaixo de 450 Hz, e medir pelo pico igualava vozes que soavam muito diferentes. As vozes passaram a sawtooth/square e o `gain` é medido com esse corte, RMS 0,1 em todas.
+
+## A pausa minimalista (2026-10-30)
+
+Pedido do autor: a pausa só com título, Retornar ao jogo, Opções e Sair, e tudo o que se ajusta dentro de Opções. Ela virou o título do jogo: letra de pixel solta sobre o mundo escurecido, sem painel. As opções são dados (`optionSections`): uma linha nova já anda com teclado, mouse e dedo, e só aparece o que o aparelho pode mudar. Sair não pede confirmação porque guarda a aventura.
+
+O mapa, o caderno de campo e a página de planos foram REMOVIDOS por escolha do autor: moravam na pausa, e a pausa ficou sem eles. `SubScreen.ts` saiu; só `spriteDataUrl` sobreviveu, em arquivo próprio. O save continua registrando `visitedChunks`, sem uso hoje. A ficha de cada cogumelo continua na colheita (`ForagingOverlay`).
+
+Armadilha: colunas CSS numa lista de altura limitada transbordam DE LADO e escondem o resto sem barra visível. O telefone deitado usa grid, que rola para baixo.
+
+## A quest da Iris, em etapas (2026-10-30)
+
+Pedido do autor: a quest inteira, do buraco ao quadro. A Iris dá a pá, recebe de volta e a deixa ao lado dela; dá o pacote de quatro sementes sortidas e depois o balde; as plantas crescem em três níveis no tempo de jogo (`GROW_STEP_MS`); a faca da Hollis colhe; a mesa faz as tintas, uma planta por fala; o pincel abre o quadro; ela comenta o desenho, agradece e pega o pincel de volta. Mora em `quests/PainterQuest.ts`, que só conhece a cena pelo `PainterHost`, e o estado é uma palavra no save mais os canteiros. Os seis canteiros autorados e a pá no chão perto dela saíram do `world.json`: os buracos são os que o herói cava.
+
+As plantas são reais e as cores são as delas: urucum, anil, cúrcuma e garança. Como a tinta sai de cada uma está nas falas da mesa: mantenha a precisão em texto novo. O comentário lê o quadro de verdade (`readPainting`): a cobertura e a cor que manda. O desenho fica salvo em data URL, e é ele que aparece no quadro do mundo.
+
+Armadilhas: escrever `canvas.width` apaga o desenho, e o rascunho de quem saiu do quadro sumia assim. "Não sobrou um canto em branco" tem de ser verdade: com o limite em 45% de cobertura, ela dizia isso de um quadro meio vazio.
+
+Jogada de ponta a ponta em janela visível, com recarga no meio de cada etapa, itens largados e o dedo no quadro em telas de 360×640 a 844×390. O trecho da pintora em `playtest/scenarios/zerar.mjs` ainda é o da quest antiga, e esse cenário já estava desatualizado. `cozy-world.mjs --check` já falhava antes desta quest.
