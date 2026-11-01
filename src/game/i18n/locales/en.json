@@ -904,6 +904,35 @@
       }
     ]
   },
+  "death": {
+    "name": "Death",
+    "visit": [
+      {
+        "speaker": "npc",
+        "text": "Don't get up. I didn't come for you."
+      },
+      {
+        "speaker": "npc",
+        "text": "I know you. I walked behind you the whole war."
+      },
+      {
+        "speaker": "npc",
+        "text": "You were a warrior. Wherever you went, I had work."
+      },
+      {
+        "speaker": "npc",
+        "text": "Now you sleep by a fire, and your sword stayed on the road."
+      },
+      {
+        "speaker": "npc",
+        "text": "Without the war, what is left of you? You've lost your meaning."
+      },
+      {
+        "speaker": "npc",
+        "text": "Sleep. I know how to wait."
+      }
+    ]
+  },
   "ending": {
     "lines": [
       {

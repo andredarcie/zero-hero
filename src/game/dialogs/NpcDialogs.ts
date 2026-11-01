@@ -152,11 +152,10 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcName: 'DEATH',
     npcColorHex: '#f3f4f6',
     npcAssetKey: NPC_VISUALS.death.key,
-    // Ela mora no descampado de mato alto do leste, com a foice no chão ao lado, e o que ela pede
-    // é a missão dela (`NPC_QUESTS.death`): cinco fogueiras e três cargas de carvão. A personagem
-    // mandada FECHAR este lugar cobrando fogo e fumaça é a melhor piada que a lore tem.
+    // Ela não mora no mapa: vem uma vez, na primeira noite dormida no colchão (ver
+    // GameScene.playDeathVisit). O que ela diz está no locale, em `death.visit`.
     lines: [
-      n('Take the SCYTHE — I am off duty. Light five cold hearths and burn me three loads of CHARCOAL, and you and I are even.'),
+      n('You were a warrior.'),
     ],
   },
 };

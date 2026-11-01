@@ -178,6 +178,7 @@ const STEAM = ['ww', 'ww'];
 export const SHIP_TEXTURE = 'sky-ship';
 export const SHIP_OPEN_TEXTURE = 'sky-ship-open';
 export const SHIP_FLAME_TEXTURE = 'sky-ship-flame';
+export const BED_TEXTURE = 'fire-bed';
 export const MUG_TEXTURE = 'sky-mug';
 export const EMPTY_MUG_TEXTURE = 'sky-mug-empty';
 export const STEAM_TEXTURE = 'sky-steam';
@@ -248,6 +249,17 @@ export const paintShipFlame = (rect: Paint): void => {
   }
 };
 
+/** O colchão visto de cima, com o travesseiro à esquerda: é para lá que a cabeça do herói cai. */
+const paintBed = (rect: Paint): void => {
+  rect(INK, 4, 9, 24, 14);
+  rect(RAMPS.plaster[1], 5, 10, 22, 12);
+  for (let x = 15; x < 27; x += 4) rect(RAMPS.blue[1], x, 10, 1, 12);
+  rect(RAMPS.plaster[2], 5, 20, 22, 2);
+  rect(RAMPS.plaster[0], 6, 11, 6, 9);
+  rect(RAMPS.plaster[2], 6, 19, 6, 1);
+  rect(RAMPS.plaster[3], 12, 10, 1, 12);
+};
+
 const paintedCanvas = (size: number, paint: (rect: Paint) => void): HTMLCanvasElement => {
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -291,6 +303,7 @@ export const registerSkyTextures = (scene: Phaser.Scene): void => {
     [SHIP_TEXTURE, paintedCanvas(32, (rect) => paintShip(rect, false))],
     [SHIP_OPEN_TEXTURE, paintedCanvas(32, (rect) => paintShip(rect, true))],
     [SHIP_FLAME_TEXTURE, paintedCanvas(16, paintShipFlame)],
+    [BED_TEXTURE, paintedCanvas(32, paintBed)],
     [MUG_TEXTURE, rowsCanvas(MUG)],
     [EMPTY_MUG_TEXTURE, rowsCanvas(EMPTY_MUG)],
     [STEAM_TEXTURE, rowsCanvas(STEAM)],

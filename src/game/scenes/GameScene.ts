@@ -27,7 +27,7 @@ import {
   BLOOM_BLOWS,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
-import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
+import { DIALOG_VOICES, NPC_DIALOGS, type DialogScript, type DialogVoice } from '@/game/dialogs/NpcDialogs';
 import {
   clearGameDebugApi,
   registerGameDebugApi,
@@ -35,9 +35,11 @@ import {
   type GameDebugApi,
 } from '@/game/debug/debugHooks';
 import { initProfiler, profiler } from '@/game/debug/Profiler';
-import { getTimeOfDay, isNightTime, setTimeOfDay, setTimeScale, timeOfDayLabel } from '@/game/runtime/timeOfDay';
+import { getTimeOfDay, isNightTime, isSleepTime, setTimeOfDay, setTimeScale, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import { LootManager } from '@/game/entities/LootManager';
-import { isNpcAsleep, NpcManager } from '@/game/entities/NpcManager';
+import {
+  ensureFireSleepTextures, isNpcAsleep, NpcManager, setHeroSleeping, SLEEP_KEY_TEXTURE,
+} from '@/game/entities/NpcManager';
 import { ItemManager } from '@/game/entities/ItemManager';
 import type { CollectedItem } from '@/game/entities/ItemManager';
 import { MACHINE_ITEM_KINDS, isBagItem, type HeldItemKind } from '@/game/entities/ItemPickup';
@@ -169,6 +171,8 @@ import {
 } from '@/game/runtime/QuestLog';
 import { NPC_QUESTS, questFor } from '@/game/dialogs/NpcQuests';
 import { CatCompanion } from '@/game/entities/CatCompanion';
+import { DeathVisit } from '@/game/entities/DeathVisit';
+import { FireBed } from '@/game/entities/FireBed';
 import { FireVisitor } from '@/game/entities/FireVisitor';
 import { TeaBreak } from '@/game/entities/TeaBreak';
 import { HearthReunion } from '@/game/entities/HearthReunion';
@@ -369,6 +373,10 @@ const WIZARD_WALK_TILES = 5;
  * vinte segundos — rapido o bastante para VER o ceu andar, devagar o bastante para nao piscar.
  */
 const REST_TIME_SCALE = 24;
+/** Dormindo o céu anda o dobro de sentado: do meio-dia ao amanhecer leva uns poucos segundos. */
+const SLEEP_TIME_SCALE = 48;
+/** A visita da Morte acontece uma vez só: a marca mora com as outras falas já ouvidas, no save. */
+const DEATH_VISIT_KEY = 'death/visit';
 /** De quantos tiles um vizinho atravessa o vale para sentar na fogueira com o heroi. */
 const VISIT_RADIUS = 12;
 /** Quantos vaga-lumes derivam em volta do heroi a noite. */
@@ -584,6 +592,14 @@ export class GameScene extends Phaser.Scene {
   private readonly greetedNpcs = new Set<string>();
   // Sentado numa fogueira (ver restAtFireAt): o tempo corre e o heroi descansa.
   private resting = false;
+  /** Deitado no colchão: é o mesmo descanso, com o corpo deitado e o relógio mais rápido. */
+  private sleeping = false;
+  /** Deitado aqui, o herói já passou pela hora de dormir? */
+  private sleptAtFire = false;
+  private fireBed?: FireBed;
+  private sleepKey?: Phaser.GameObjects.Image;
+  /** A Morte está falando: nenhuma tecla levanta o herói até ela sumir. */
+  private deathVisiting = false;
   private restKeyListener?: (event: KeyboardEvent) => void;
   /** A fogueira em que ele esta sentado (o gato se enrola do lado dele, de frente para ela). */
   private restFireTile?: { x: number; y: number };
@@ -1338,6 +1354,13 @@ export class GameScene extends Phaser.Scene {
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
     this.resting = false;
+    this.deathVisiting = false;
+    this.sleeping = false;
+    setHeroSleeping(false);
+    this.fireBed?.destroy();
+    this.fireBed = undefined;
+    this.sleepKey?.destroy();
+    this.sleepKey = undefined;
     this.restFireTile = undefined;
     this.onNightfall = undefined;
     setTimeScale(1);
@@ -1456,6 +1479,7 @@ export class GameScene extends Phaser.Scene {
     // mentira que o balao de dica era. `syncPlacementHints` a reacende logo abaixo se o jogo
     // estiver mesmo correndo.
     this.placementHints?.clear();
+    this.sleepKey?.setVisible(false);
 
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
     // world frozen here until it finishes — otherwise gameplay would fight the pan.
@@ -1472,6 +1496,22 @@ export class GameScene extends Phaser.Scene {
     // SENTADO NA FOGUEIRA: o mundo anda (o relogio acelerado, as fogueiras seguindo o ceu), o
     // heroi nao. Qualquer tecla o levanta (ver restAtFireAt).
     if (this.resting) {
+      if (this.sleeping) {
+        // A hora de dormir passou: a Morte vem na primeira vez, e o herói acorda quando clarear.
+        if (isSleepTime()) {
+          this.sleptAtFire = true;
+        } else if (this.sleptAtFire) {
+          if (this.adventure && !this.seenDialogKeys.has(DEATH_VISIT_KEY)) {
+            void this.playDeathVisit();
+            return;
+          }
+          if (!isNightTime()) {
+            this.standUp();
+            return;
+          }
+        }
+        this.tickSnore();
+      }
       // Sentado ao lado do telescópio, a noite chega e ele levanta sozinho.
       if (this.onNightfall && isNightTime()) {
         const nightfall = this.onNightfall;
@@ -1591,6 +1631,7 @@ export class GameScene extends Phaser.Scene {
 
     // As marcas de posicionamento seguem o corpo NO MESMO frame em que ele vira.
     this.syncPlacementHints();
+    this.syncSleepKey();
     profiler.begin('update.npcs');
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.greetNearbyNpcs();
@@ -1630,8 +1671,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Sentar: o corpo baixa, o tempo corre, e qualquer seta levanta. A fogueira e o telescópio usam. */
-  private sitDown(wx: number, wy: number): void {
+  private sitDown(wx: number, wy: number, timeScale = REST_TIME_SCALE): void {
     this.resting = true;
+    this.sleptAtFire = false;
     this.stopBreathing();
     this.movementController?.hold(true);
     this.controlsHint?.destroy();
@@ -1641,7 +1683,7 @@ export class GameScene extends Phaser.Scene {
     void this.dollyTo(0.82, 1600);
     this.setVignette(0.35, 1600);
     getSoundManager().playCozyChime();
-    setTimeScale(REST_TIME_SCALE);
+    setTimeScale(timeScale);
     this.restFireTile = { x: wx, y: wy };
     // Seta ou qualquer tecla levanta — as setas nao passam por pressAttack/pressUse.
     this.restKeyListener = (event: KeyboardEvent): void => {
@@ -1657,8 +1699,15 @@ export class GameScene extends Phaser.Scene {
 
   /** Levantar da fogueira: o relogio volta ao normal e o corpo se estica. */
   private standUp(): void {
-    if (!this.resting) return;
+    if (!this.resting || this.deathVisiting) return;
     this.resting = false;
+    if (this.sleeping) {
+      this.sleeping = false;
+      setHeroSleeping(false);
+      this.fireBed?.rise();
+      this.fireBed = undefined;
+      this.updateBackItem();
+    }
     this.restFireTile = undefined;
     this.onNightfall = undefined;
     this.clearMug();
@@ -1687,6 +1736,112 @@ export class GameScene extends Phaser.Scene {
     this.setVignette(0, 900);
     this.useBufferMs = 0;
     this.useCooldownMs = USE_COOLDOWN_MS;
+  }
+
+  /** O X nesta fogueira é do item na mão? A tocha acende nela, o balde a apaga e a chama reacende a morta. */
+  private heldActsOnFire(fire: CampfireObject): boolean {
+    if (fire.isLit) return this.heldItem === 'bucketFull' || this.isFlammableHeld;
+    return this.isFlammableHeld && this.heldOnFire;
+  }
+
+  /** O X na fogueira, acesa ou não: o colchão no chão, o corpo deitado e o tempo passando. */
+  private sleepAtFireAt(wx: number, wy: number): boolean {
+    const fire = this.getCampfireAt(wx, wy);
+    if (!fire || this.heldActsOnFire(fire)) return false;
+    this.sitDown(wx, wy, SLEEP_TIME_SCALE);
+    this.sleeping = true;
+    setHeroSleeping(true);
+    this.sleptAtFire = false;
+    // O sitDown baixa o corpo como quem senta; aqui quem manda no corpo é o colchão.
+    this.tweens.killTweensOf(this.hero);
+    this.hero.scaleX = 1;
+    this.hero.scaleY = 1;
+    this.backItemBb?.setVisible(false);
+    ensureFireSleepTextures(this);
+    this.fireBed = new FireBed({
+      scene: this,
+      hero: this.hero,
+      tile: { x: this.playerWorld.worldX, y: this.playerWorld.worldY },
+      dirt: (x, y, count) => this.spawnDirtBurst(x, y, count),
+    });
+    this.fireBed.layDown();
+    return true;
+  }
+
+  private tickSnore(): void {
+    if (!this.fireBed || !this.camera) return;
+    const at = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
+    const px = Math.max(1, Math.round(this.tileSize / 24));
+    this.fireBed.tick(this.time.now, { x: at.x - this.tileSize * 0.45, y: at.y - this.tileSize * 0.45 }, px);
+  }
+
+  /** A tecla de dormir sobre a fogueira encarada, enquanto o X for mesmo dormir. */
+  private syncSleepKey(): void {
+    if (!this.camera || !this.canAct()) return;
+    const front = this.facingTile();
+    const fire = this.getCampfireAt(front.x, front.y);
+    if (!fire || !this.reachesFront(front) || this.heldActsOnFire(fire)) return;
+    if (!this.sleepKey) {
+      ensureFireSleepTextures(this);
+      this.sleepKey = this.add.image(0, 0, SLEEP_KEY_TEXTURE).setOrigin(0.5, 1);
+    }
+    const screen = this.camera.tileToScreen(fire.worldX, fire.worldY, this.tileSize);
+    const px = Math.max(1, Math.round(this.tileSize / 24));
+    const bob = Math.round(Math.sin(this.time.now / 280) * px);
+    this.sleepKey.setVisible(true).setScale(px).setPosition(screen.x, screen.y - this.tileSize - px * 2 + bob);
+  }
+
+  /** Do outro lado do fogo, olhando para o herói; se ali não couber, de um dos lados. */
+  private deathSpot(): { x: number; y: number } {
+    const fire = this.restFireTile ?? { x: this.playerWorld.worldX, y: this.playerWorld.worldY - 1 };
+    const dx = Math.sign(fire.x - this.playerWorld.worldX);
+    const dy = Math.sign(fire.y - this.playerWorld.worldY);
+    const spots = [
+      { x: fire.x + dx, y: fire.y + dy },
+      { x: fire.x + dy, y: fire.y + dx },
+      { x: fire.x - dy, y: fire.y - dx },
+    ];
+    const guest = this.fireVisitor?.bodySprite;
+    return spots.find((spot) => !this.isSolidForEntities(spot.x, spot.y)
+      && !(guest && Math.hypot(guest.x - spot.x, guest.y - spot.y) < 0.8)) ?? spots[0];
+  }
+
+  private async playDeathVisit(): Promise<void> {
+    this.deathVisiting = true;
+    this.cutsceneActive = true;
+    this.mushroomHint?.setVisible(false);
+    this.actionButtons?.setVisible(false);
+    this.pauseTouchButton?.setVisible(false);
+    this.fireBed?.quiet();
+    // A conversa acontece no tempo dela: o céu para enquanto ela fala, ou quem lê devagar veria amanhecer.
+    setTimeScale(0);
+    this.setVignette(0.6, 1200);
+    // O quadro abre: de perto, a cabeça dela ficaria fora da tela.
+    void this.dollyTo(1, 1200);
+    await new DeathVisit({
+      scene: this,
+      at: this.deathSpot(),
+      smoke: (x, y) => this.spawnSmokePuff(x, y),
+      say: (body, onClosed) => {
+        this.dialogSpeaker = body;
+        const script = { ...NPC_DIALOGS.death, npcName: t('death.name'), lines: tLines('death.visit') };
+        this.openDialogScript(script, undefined, DIALOG_VOICES.death, () => {
+          this.dialogSpeaker = undefined;
+          this.cutsceneActive = true;
+          this.actionButtons?.setVisible(false);
+          onClosed();
+        });
+      },
+    }).run();
+    this.seenDialogKeys.add(DEATH_VISIT_KEY);
+    this.persistAdventure();
+    this.setVignette(0.35, 900);
+    void this.dollyTo(0.82, 900);
+    if (this.resting) setTimeScale(this.sleeping ? SLEEP_TIME_SCALE : REST_TIME_SCALE);
+    this.deathVisiting = false;
+    this.cutsceneActive = false;
+    this.actionButtons?.setVisible(true);
+    this.pauseTouchButton?.setVisible(true);
   }
 
   // ── A COMPANHIA ─────────────────────────────────────────────────────────────
@@ -2750,9 +2905,13 @@ export class GameScene extends Phaser.Scene {
     //    fazer o jogador dizê-la em voz alta é cobrar burocracia por uma escolha que não existe.
     //    Ver `toolWantedAt`.
     this.equipToolFor(x, y);
-    this.thinkOfNeed(x, y, true);
+    // Quem vai dormir numa fogueira apagada não precisa do balão pedindo graveto.
+    const fire = this.getCampfireAt(x, y);
+    if (!fire || this.heldActsOnFire(fire)) this.thinkOfNeed(x, y, true);
     if (this.lumberQuest?.interactAt(x, y)) return;
     if (this.astronomerQuest?.interactAt(x, y)) return;
+    // 0b. A FOGUEIRA É ONDE SE DORME, a não ser que o item na mão tenha o que fazer com ela.
+    if (this.sleepAtFireAt(x, y)) return;
     // 1. O ITEM ESCOLHIDO AGE — a tabela inteira (machado→árvore, picareta→rocha, balde→água,
     //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, estação→instala).
     if (this.heldItem !== 'none' && this.useItemAt(x, y)) return;

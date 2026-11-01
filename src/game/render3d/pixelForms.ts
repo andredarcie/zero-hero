@@ -24,7 +24,6 @@ export const RAMPS = {
   pink: ['#ea8ba6', '#c9628a', '#9c4474', '#6e2f5c'],
   cap: ['#de6a4a', '#a8452e', '#7a2c2c', '#521d28'],
   stem: ['#f2e6c4', '#ddd0ae', '#b0a282', '#7f786a'],
-  purple: ['#826cc0', '#55438e', '#3a2c6e', '#261d50'],
   door: ['#8a6038', '#6b4a2c', '#4c3224', '#33211f'],
   blue: ['#5a94b4', '#3a6e8e', '#2c5470', '#1f3a56'],
 } as const satisfies Record<string, Ramp>;

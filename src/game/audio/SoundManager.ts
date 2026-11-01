@@ -579,6 +579,18 @@ class SoundManager {
     this.osc('sine', 190 * d, 290 * d, 0.11, 0.05);
   }
 
+  /** A Morte chegando: um ar grave que desce e não tem pressa. */
+  public playDeathArrive(): void {
+    const d = detune();
+    this.noise('lowpass', 380 * d, 0.9, 0.09, 1.7);
+    this.osc('sine', 98 * d, 49 * d, 0.11, 1.9);
+  }
+
+  /** E indo embora: só o ar, sem o peso. */
+  public playDeathLeave(): void {
+    this.noise('lowpass', 300 * detune(), 1, 0.06, 1.2);
+  }
+
   public playItemBonk(): void {
     const d = detune();
     this.noise('lowpass', 380 * d, 1.2, 0.16, 0.07);

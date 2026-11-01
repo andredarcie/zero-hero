@@ -51,7 +51,7 @@ function ensureExclaimTexture(scene: Phaser.Scene): void {
 
 // O SONO: um "z" pequeno que sobe e some sobre quem dorme. Mesma técnica do "!" (glifo + contorno
 // escuro), e o mesmo lugar acima da cabeça — por isso os dois nunca aparecem juntos.
-const SLEEP_TEXTURE_KEY = 'npc-sleep-z';
+export const SLEEP_TEXTURE_KEY = 'npc-sleep-z';
 const SLEEP_GLYPH = [
   '####',
   '..#.',
@@ -88,14 +88,36 @@ function ensureSleepTexture(scene: Phaser.Scene): void {
 const SLEEPLESS: ReadonlySet<NpcKind> = new Set<NpcKind>(['wizard']);
 
 /** Este vizinho esta dormindo agora? Fica aqui para a cena perguntar o mesmo que o desenho mostra. */
-export const isNpcAsleep = (kind: NpcKind): boolean => isSleepTime() && !SLEEPLESS.has(kind);
+export const isNpcAsleep = (kind: NpcKind): boolean => heroSleeping || (isSleepTime() && !SLEEPLESS.has(kind));
+
+/** Quando o herói deita no colchão o vale inteiro dorme com ele, de dia também, e até o mago. */
+let heroSleeping = false;
+export const setHeroSleeping = (asleep: boolean): void => { heroSleeping = asleep; };
 
 // O AVISO DE CONVERSA: um keycap pixel-art com a tecla de AÇÃO (Z no teclado, A nos círculos
 // de toque), mostrado sobre o NPC que o herói está ENCARANDO de perto. É a resposta física ao
 // "como falo com ele?" — a tecla desenhada na cabeça de quem vai responder a ela. Mesma
 // técnica do "!": overlay Phaser projetado, nunca um corpo no mundo.
 const TALK_KEY_TEXTURE = 'npc-talk-key';
-const TALK_GLYPHS: Record<'Z' | 'A', string[]> = {
+const TALK_GLYPHS: Record<'Z' | 'A' | 'X' | 'B', string[]> = {
+  X: [
+    '#...#',
+    '#...#',
+    '.#.#.',
+    '..#..',
+    '.#.#.',
+    '#...#',
+    '#...#',
+  ],
+  B: [
+    '####.',
+    '#...#',
+    '#...#',
+    '####.',
+    '#...#',
+    '#...#',
+    '####.',
+  ],
   Z: [
     '#####',
     '....#',
@@ -119,16 +141,14 @@ const KEYCAP_BG = '#241d0f';
 const KEYCAP_BORDER = '#ffe066';
 const KEYCAP_GLYPH = '#f5efdc';
 
-function ensureTalkKeyTexture(scene: Phaser.Scene): void {
-  if (scene.textures.exists(TALK_KEY_TEXTURE)) return;
-  const glyph = TALK_GLYPHS[isTouchDevice() ? 'A' : 'Z'];
+const KEYCAP_W = 11; // o glifo + 1px de moldura + 2px de folga de cada lado
+const KEYCAP_H = 13;
+
+const drawKeycap = (ctx: CanvasRenderingContext2D, glyph: string[]): void => {
   const gRows = glyph.length;
   const gCols = glyph[0].length;
-  const w = gCols + 6; // 1px de moldura + 2px de folga de cada lado
-  const h = gRows + 6;
-  const canvas = scene.textures.createCanvas(TALK_KEY_TEXTURE, w, h);
-  if (!canvas) return;
-  const ctx = canvas.getContext();
+  const w = KEYCAP_W;
+  const h = KEYCAP_H;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const border = x === 0 || y === 0 || x === w - 1 || y === h - 1;
@@ -145,6 +165,34 @@ function ensureTalkKeyTexture(scene: Phaser.Scene): void {
       if (glyph[y][x] === '#') ctx.fillRect(x + 3, y + 3, 1, 1);
     }
   }
+};
+
+function ensureTalkKeyTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(TALK_KEY_TEXTURE)) return;
+  const canvas = scene.textures.createCanvas(TALK_KEY_TEXTURE, KEYCAP_W, KEYCAP_H);
+  if (!canvas) return;
+  drawKeycap(canvas.getContext(), TALK_GLYPHS[isTouchDevice() ? 'A' : 'Z']);
+  canvas.refresh();
+  canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+}
+
+// O AVISO DE DORMIR, sobre a fogueira encarada: a tecla de USAR com um "z" do lado. Sem palavra: a
+// tecla diz como e o "z" diz o quê.
+export const SLEEP_KEY_TEXTURE = 'fire-sleep-key';
+
+export function ensureFireSleepTextures(scene: Phaser.Scene): void {
+  ensureSleepTexture(scene);
+  if (scene.textures.exists(SLEEP_KEY_TEXTURE)) return;
+  const canvas = scene.textures.createCanvas(SLEEP_KEY_TEXTURE, KEYCAP_W + 7, KEYCAP_H);
+  if (!canvas) return;
+  const ctx = canvas.getContext();
+  drawKeycap(ctx, TALK_GLYPHS[isTouchDevice() ? 'B' : 'X']);
+  ctx.fillStyle = SLEEP_FILL;
+  SLEEP_GLYPH.forEach((row, y) => {
+    [...row].forEach((cell, x) => {
+      if (cell === '#') ctx.fillRect(KEYCAP_W + 2 + x, y + 1, 1, 1);
+    });
+  });
   canvas.refresh();
   canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
 }
@@ -404,8 +452,8 @@ export class NpcManager {
       npc.render(
         tileSize,
         camera,
-        this.hasNewDialog(npc.kind, npc.worldX, npc.worldY, npc.dialog),
-        this.isTalkTarget(npc.worldX, npc.worldY),
+        !heroSleeping && this.hasNewDialog(npc.kind, npc.worldX, npc.worldY, npc.dialog),
+        !heroSleeping && this.isTalkTarget(npc.worldX, npc.worldY),
         now,
         isNpcAsleep(npc.kind),
       );

@@ -10,10 +10,10 @@ import type { NpcKind } from '@/game/world/ScreenContent';
 
 // AS CASAS DOS VIZINHOS: 48×48, três tiles de largura na mesma densidade de pixel do resto. Cada uma diz
 // quem mora nela: a cápsula remendada da Vega, a cabana de toras do Bram, a casa manchada de tinta da
-// Iris, o cogumelo do Hollis e a torre torta do Mago. Cada casa tem uma segunda camada só com as janelas
+// Iris e o cogumelo do Hollis. Cada casa tem uma segunda camada só com as janelas
 // acesas, que entra de noite (ver NpcHomes).
 
-export type HomeKind = Extract<NpcKind, 'astronaut' | 'businessMan' | 'painter' | 'radiationSuit' | 'wizard'>;
+export type HomeKind = Extract<NpcKind, 'astronaut' | 'businessMan' | 'painter' | 'radiationSuit'>;
 
 const GLOW = '#ffd870';
 const GLOW_CORE = '#fff0b0';
@@ -249,59 +249,11 @@ const hollisHome = (rect: Paint, glow: boolean): void => {
   for (const [x, y, w] of [[3, 45, 9], [36, 45, 10], [7, 44, 3], [38, 44, 2], [1, 46, 3], [44, 46, 3]] as const) rect(RAMPS.stem[1], x, y, w, 1);
 };
 
-const wizardHome = (rect: Paint, glow: boolean): void => {
-  const lean = (y: number): number => 23 + (46 - y) * 0.09;
-  if (glow) {
-    windowPane(rect, true, 22, 22, 6, 8, RAMPS.stone[3]);
-    rect(GLOW, 21, 37, 6, 8);
-    rect(GLOW_CORE, 22, 38, 2, 6);
-    return;
-  }
-  // A torre: um cilindro de pedra, um pouco torto, mais largo no pé.
-  paintColumn(rect, lean, 14, 45, (y) => 11 + (y - 14) * 0.06, RAMPS.stone);
-  // As pedras: fiadas desencontradas, só com uma parte das juntas desenhada.
-  for (let course = 0; course < 8; course += 1) {
-    const y = 18 + course * 4;
-    const shift = course % 2 === 0 ? 0 : 4;
-    const inside = Math.round(lean(y) - 9);
-    const end = Math.round(lean(y) + 9);
-    for (let x = inside + shift; x + 5 < end; x += 8) {
-      const seam = x < lean(y) - 2 ? RAMPS.stone[1] : RAMPS.stone[3];
-      rect(seam, x, y, 5, 1);
-      rect(seam, x + 5, y - 2, 1, 2);
-    }
-  }
-  // O musgo do lado da sombra, em cima da base.
-  for (const [x, y, w] of [[12, 44, 5], [13, 43, 2], [31, 44, 4], [32, 43, 1]] as const) rect('#4c8a44', x, y, w, 1);
-  // A sombra do beiral.
-  for (let y = 18; y < 21; y += 1) rect(RAMPS.stone[3], Math.round(lean(y) - 10), y, 21, 1);
-  // O telhado é o chapéu dele: cone iluminado pela esquerda, com a ponta dobrada.
-  paintColumn(rect, () => 26, 2, 16, (y) => 1 + (y - 2) * 1.08, RAMPS.purple);
-  rect(INK, 7, 17, 38, 3);
-  for (let x = 8; x < 44; x += 1) rect(toneOf(RAMPS.purple, (x - 26) / 18 * -0.95 + 0.4), x, 17, 1, 2);
-  rect(INK, 25, 0, 8, 3);
-  rect(RAMPS.purple[1], 26, 1, 6, 1);
-  rect('#ffe066', 32, 3, 2, 2);
-  rect('#b48a24', 33, 4, 1, 1);
-  for (const [x, y] of [[23, 12], [29, 9], [19, 15], [33, 14]] as const) rect('#ffe066', x, y, 1, 1);
-  windowPane(rect, false, 22, 22, 6, 8, RAMPS.stone[3]);
-  // A porta em arco, com o degrau gasto.
-  rect(INK, 20, 37, 8, 9);
-  rect(INK, 21, 36, 6, 1);
-  rect(RAMPS.door[1], 21, 37, 3, 9);
-  rect(RAMPS.door[2], 24, 37, 3, 9);
-  rect('#ffe066', 25, 41, 1, 1);
-  rect(INK, 18, 46, 12, 1);
-  rect(RAMPS.stone[0], 19, 45, 5, 1);
-  rect(RAMPS.stone[1], 24, 45, 5, 1);
-};
-
 export const HOME_PAINTERS: Readonly<Record<HomeKind, (rect: Paint, glow: boolean) => void>> = {
   astronaut: vegaHome,
   businessMan: bramHome,
   painter: irisHome,
   radiationSuit: hollisHome,
-  wizard: wizardHome,
 };
 
 export const homeTexture = (kind: HomeKind): string => `home-${kind}`;

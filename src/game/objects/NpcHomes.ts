@@ -14,7 +14,7 @@ import { getChunkTerrain } from '@/game/world/WorldData';
  * vez quando ele vai embora.
  */
 
-const HOME_SIZE = 3;
+const HOME_SIZE = 2.5;
 /** A largura e o fundo do que é sólido, a partir do centro e da linha de baixo. */
 const HALF_WIDTH = 1;
 const DEPTH = 2;
@@ -27,7 +27,6 @@ const HOMES: Readonly<Record<HomeKind, { x: number; y: number }>> = {
   businessMan: { x: 50, y: 7 },
   painter: { x: 17, y: 13 },
   radiationSuit: { x: 5, y: 37 },
-  wizard: { x: 26, y: 51 },
 };
 
 /** O terreiro fica centrado um pouco à frente da casa: mais chão diante da porta do que atrás. */
@@ -71,7 +70,7 @@ export class NpcHomes {
         .setDisplaySize(YARD_WIDTH, YARD_DEPTH)
         .setPosition(x, y + YARD_FORWARD));
       this.bodies.push(world3d()
-        .addBillboard(homeTexture(kind), 0, { groundShadow: { rx: 1.5, rz: 0.7, alpha: 0.3 } })
+        .addBillboard(homeTexture(kind), 0, { groundShadow: { rx: 1.25, rz: 0.6, alpha: 0.3 } })
         .setDisplaySize(HOME_SIZE, HOME_SIZE)
         .setTint(kind === 'astronaut' ? WHITE_SAFE_TINT : HOME_TINT)
         .setPosition(x, y + 0.3));

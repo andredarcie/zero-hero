@@ -904,6 +904,35 @@
       }
     ]
   },
+  "death": {
+    "name": "Morte",
+    "visit": [
+      {
+        "speaker": "npc",
+        "text": "Não se levante. Não vim te buscar."
+      },
+      {
+        "speaker": "npc",
+        "text": "Eu te conheço. Andei atrás de você a guerra inteira."
+      },
+      {
+        "speaker": "npc",
+        "text": "Você era um guerreiro. Por onde passava, eu tinha trabalho."
+      },
+      {
+        "speaker": "npc",
+        "text": "Agora dorme ao pé do fogo, e a espada ficou na estrada."
+      },
+      {
+        "speaker": "npc",
+        "text": "Sem a guerra, o que sobra de você? Você perdeu o sentido."
+      },
+      {
+        "speaker": "npc",
+        "text": "Durma. Eu sei esperar."
+      }
+    ]
+  },
   "ending": {
     "lines": [
       {
