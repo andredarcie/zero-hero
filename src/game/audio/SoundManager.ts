@@ -530,6 +530,55 @@ class SoundManager {
    * Era a única resposta MUDA do botão B (nem swing, nem som, nem recusa), quebrando a lei de que
    * toda recusa tem desenho próprio. Um "toc" surdo, sem metal e sem dano: encostou, não mordeu.
    */
+  /** O chamado pelo rádio: dois bipes secos, subindo. */
+  public playShipCall(): void {
+    const d = detune();
+    this.osc('square', 620 * d, 620 * d, 0.07, 0.03);
+    this.osc('square', 830 * d, 830 * d, 0.16, 0.03);
+  }
+
+  /** A nave descendo: um sopro que vai ficando grave conforme freia. */
+  public playShipDescend(): void {
+    const d = detune();
+    this.noise('lowpass', 420 * d, 0.7, 2.2, 0.07);
+    this.osc('sine', 150 * d, 56 * d, 2.2, 0.05);
+  }
+
+  /** O pouso: o peso no chão. */
+  public playShipLand(): void {
+    const d = detune();
+    this.noise('lowpass', 240 * d, 1, 0.42, 0.13);
+    this.osc('sine', 92 * d, 38 * d, 0.34, 0.16);
+  }
+
+  /** A porta: um chiado de pressão e o trinco. */
+  public playShipDoor(): void {
+    const d = detune();
+    this.noise('bandpass', 1500 * d, 1.1, 0.24, 0.035);
+    this.osc('triangle', 240 * d, 170 * d, 0.09, 0.05);
+  }
+
+  /** A decolagem: o motor carrega subindo, e o estouro leva tudo embora. */
+  public playShipLift(): void {
+    const d = detune();
+    this.noise('lowpass', 520 * d, 0.8, 3.1, 0.1);
+    this.osc('sine', 48 * d, 210 * d, 3, 0.09);
+  }
+
+  /** O brinde: duas canecas de esmalte, um toque curto e sem brilho demais. */
+  public playMugClink(): void {
+    const d = detune();
+    this.osc('triangle', 1180 * d, 1140 * d, 0.14, 0.05);
+    this.osc('sine', 1760 * d, 1720 * d, 0.08, 0.025);
+  }
+
+  /** Um gole: líquido grave, subindo um pouco no fim da garganta. */
+  public playMugSip(): void {
+    const d = detune();
+    this.noise('lowpass', 520 * d, 1.4, 0.14, 0.04);
+    this.osc('sine', 190 * d, 290 * d, 0.11, 0.05);
+  }
+
   public playItemBonk(): void {
     const d = detune();
     this.noise('lowpass', 380 * d, 1.2, 0.16, 0.07);

@@ -734,6 +734,30 @@
           "text": "Sente ao lado dele e espere a noite."
         }
       ],
+      "reunion": [
+        {
+          "speaker": "npc",
+          "text": "Vi o fogo lá de cima. Sobrou marshmallow?"
+        }
+      ],
+      "goodbye": [
+        {
+          "speaker": "npc",
+          "text": "Com o céu de volta, a nave me achou."
+        },
+        {
+          "speaker": "npc",
+          "text": "Obrigado por tudo."
+        },
+        {
+          "speaker": "npc",
+          "text": "Mas preciso voltar para o meu planeta. Minha casa fica ali em cima."
+        },
+        {
+          "speaker": "npc",
+          "text": "Quando olhar para o céu, acene."
+        }
+      ],
       "farewell": [
         {
           "speaker": "npc",

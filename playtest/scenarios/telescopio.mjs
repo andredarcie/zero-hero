@@ -421,8 +421,8 @@ export default {
     // ── 8. A NOITE: o Z de dia senta o herói, e o tempo corre ──────────────────────────────
     st = await free();
     console.log(`[telescopio] hora ao chegar: ${st.timeOfDay.clock} (${st.timeOfDay.phase})`);
-    await press('z', 60, 900);
-    await shot('15-esperando', { note: 'Sentado, esperando a noite' });
+    await press('z', 60, 3600);
+    await shot('15-esperando', { note: 'Sentado com a caneca, e a Vega ao lado' });
     await pageWait(() => window.__scene.astronomerQuest?.overlay?.aim !== undefined, null, 'a ocular abrir de noite', 240000);
     mark('ocular abriu');
     await sleep(1500);
@@ -467,9 +467,8 @@ export default {
     await shot('20-fim', { note: 'O telescopio fica no planalto' });
     mark('quest fechada');
 
-    // O obrigado de depois, em casa, e o marco de pedras ao lado dela.
-    await talk(VEGA, 'o obrigado');
-    await shot('21-marco-vega', { note: 'O marco de pedras ao lado da Vega' });
+    // Vega foi embora: a casa dela fica vazia, e o tile, livre.
+    assert('A Vega nao esta mais em casa', !(await page.evaluate(([x, y]) => window.__scene.isSolidForEntities(x, y), [VEGA.x, VEGA.y])), 'o tile dela continua ocupado');
     mark('obrigado');
 
     // ── VOLTANDO DO SAVE: tudo continua lá ─────────────────────────────────────────────────
@@ -485,6 +484,7 @@ export default {
     }), [SPOT.x, SPOT.y]);
     assert('O save lembra a quest fechada', after.stage === 'done', JSON.stringify(after));
     assert('O telescopio continua no planalto', after.solid === true, JSON.stringify(after));
+    assert('O save lembra que ela foi embora', await page.evaluate(() => window.__scene.astronomerQuest?.save.departed === true), 'departed falso');
 
     fs.writeFileSync(path.resolve('playtest/results/telescopio-marcas.json'), JSON.stringify(marks, null, 2));
     assert('Sem erro no console', driver.consoleErrors.length === 0, driver.consoleErrors.slice(0, 3).join(' | '));

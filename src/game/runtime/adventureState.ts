@@ -67,6 +67,8 @@ export interface SkyQuestSave {
   found: string[];
   /** Os dois gravetos dela já foram para o chão: são só esses, e não voltam. */
   sticksLaid?: boolean;
+  /** Ela foi embora na nave. Quem fechou o pedido antes desta cena continua com ela em casa. */
+  departed?: boolean;
 }
 
 /** Em que etapa a quest do Bram está, e como cada ofício saiu: é sobre isso que ele comenta. */

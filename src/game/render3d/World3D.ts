@@ -1101,6 +1101,7 @@ export class World3D {
   private shakeDirY = 0;
   private viewOffsetX = 0;
   private viewOffsetY = 0;
+  private focusAtCentre = false;
   private appliedPixelScale = 0;
   /** A escala com que o buffer foi assado — o `uBlur` se mede nela (ver syncFinishUniforms). */
   private appliedRenderScale = 1;
@@ -4028,6 +4029,11 @@ export class World3D {
   }
 
   /** Dialog pan: shift what sits at screen centre, in tile units. */
+  /** O herói saiu do quadro de propósito (a lente da Vega): a faixa nítida fica no meio da tela, não nele. */
+  public setFocusAtCentre(on: boolean): void {
+    this.focusAtCentre = on;
+  }
+
   public setViewOffset(dxTiles: number, dyTiles: number): void {
     this.viewOffsetX = dxTiles;
     this.viewOffsetY = dyTiles;
@@ -4170,7 +4176,7 @@ export class World3D {
     // line so the sharp band stays on him. params.focusY biases it from centre.
     const heroX = this.camTarget.x - this.viewOffsetX;
     const heroZ = this.camTarget.z - this.viewOffsetY;
-    const heroScreen = this.projectTile(heroX, heroZ, 0.5);
+    const heroScreen = this.focusAtCentre ? this.projectTile(this.camTarget.x, this.camTarget.z, 0.5) : this.projectTile(heroX, heroZ, 0.5);
     const trackedFocusY = 1 - heroScreen.y / Math.max(1, window.innerHeight);
     this.finishPass.uniforms.uFocusY.value = trackedFocusY + (this.params.focusY - 0.52);
     // A NITIDEZ do menu de pausa entra por aqui, como a hora do dia: quem MEXEU desde o último

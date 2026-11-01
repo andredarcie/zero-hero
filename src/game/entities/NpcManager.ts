@@ -184,6 +184,7 @@ class NpcEntity {
       .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(size, size);
+    if (visual.tint !== undefined) this.sprite.setTint(visual.tint);
     ensureExclaimTexture(scene);
     this.exclaim = scene.add
       .image(0, 0, EXCLAIM_TEXTURE_KEY)

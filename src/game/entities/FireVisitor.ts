@@ -36,6 +36,7 @@ export class FireVisitor {
     this.body = world3d()
       .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
       .setDisplaySize(1, 1);
+    if (visual.tint !== undefined) this.body.setTint(visual.tint);
     this.place();
   }
 

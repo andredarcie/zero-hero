@@ -1,4 +1,6 @@
-﻿export const TILE_SIZE = 8;
+﻿import { WHITE_SAFE_TINT } from '@/game/render3d/pixelForms';
+
+export const TILE_SIZE = 8;
 export const CHARACTER_SIZE = 16;
 export const DEFAULT_GAME_WIDTH = 320;
 export const DEFAULT_GAME_HEIGHT = 240;
@@ -284,15 +286,17 @@ export const NPC_GATE_RADIUS_TILES = 3.2;
 type NpcVisual = {
   key: string;
   frame?: number;
+  /** Para a arte com branco ou amarelo puro, que a luz do mundo estouraria. */
+  tint?: number;
 };
 
 export const NPC_VISUALS: Record<string, NpcVisual> = {
   blackCat: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.blackCat },
   mimic: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.mimic },
-  astronaut: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.astronaut },
+  astronaut: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.astronaut, tint: WHITE_SAFE_TINT },
   businessMan: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.businessMan },
-  radiationSuit: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.radiationSuit },
-  painter: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.painter },
+  radiationSuit: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.radiationSuit, tint: WHITE_SAFE_TINT },
+  painter: { key: ASSET_KEYS.npcs, frame: NPC_FRAMES.painter, tint: WHITE_SAFE_TINT },
   salesman: { key: ASSET_KEYS.npcSalesman },
   poet: { key: ASSET_KEYS.npcPoet },
   wizard: { key: ASSET_KEYS.mage },

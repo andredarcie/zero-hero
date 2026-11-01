@@ -17,8 +17,8 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
    no locale.
 3. **O portão** (`openGardenGate`): quando `allQuestsDone()`, o `gardenGate` do centro abre.
 4. **A fogueira do fim** (`hearth`, `tendHearthAt` → `playRoastEnding` → `rollCredits`): Z acende,
-   Z de novo com um graveto na mão assa um MARSHMALLOW (o pacote mora ao lado do fogo), e os
-   créditos voltam ao título.
+   Z de novo com um graveto na mão assa um MARSHMALLOW (o pacote mora ao lado do fogo). Os amigos
+   chegam pelo portão, depois a nave traz a Vega (`entities/HearthReunion.ts`), e os créditos voltam ao título.
 
 `npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
 mora nos locales — `en.json` e `pt-br.json`, as MESMAS chaves nos dois** —, inclusive o roteiro

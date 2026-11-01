@@ -19,7 +19,8 @@ import { LensOverlay, SkyOverlay, SKY_TARGETS, type SkyTarget } from '@/game/run
  * bancada); areia e cinza, dos montes ao lado dela, viram vidro no forno; o
  * vidro, polido num minijogo, vira lente. Montado, o herói o leva nas costas ao planalto, onde o céu é
  * mais limpo. De noite, e só de noite, ele procura os quatro alvos que ela ensina. Ela sobe, os dois
- * conversam, e o pedido fecha. O telescópio fica lá para sempre.
+ * conversam, a nave pousa e leva Vega para casa (ver VegaDeparture), e o pedido fecha. O telescópio fica
+ * lá para sempre.
  *
  * Esta classe não conhece a cena, só o `AstronomerHost`.
  */
@@ -40,8 +41,8 @@ export interface AstronomerHost {
   hearts: (x: number, y: number) => void;
   sparkle: (x: number, y: number) => void;
   freeze: (frozen: boolean) => void;
-  /** A câmera olha para esta coluna de tiles, sem o herói sair do lugar. `null` volta para ele. */
-  lookAcross: (tileX: number | null) => void;
+  /** A câmera olha para este tile, sem o herói sair do lugar. `null` volta para ele. */
+  lookAt: (tile: { x: number; y: number } | null) => void;
   showButtons: (visible: boolean) => void;
   persist: () => void;
   closeQuest: () => void;
@@ -49,19 +50,28 @@ export interface AstronomerHost {
   /** Este item já passou pela mão do herói? É o que escolhe o próximo passo do ferro. */
   seen: (kind: HeldItemKind) => boolean;
   isNight: () => boolean;
-  /** O herói senta ao lado disto, o tempo corre, e `onNight` roda quando escurece. Uma seta desiste. */
-  waitForNight: (x: number, y: number, onNight: () => void) => void;
+  /**
+   * O herói senta ao lado disto, o tempo corre, e `onNight` roda quando escurece. Uma seta desiste.
+   * Com `company`, ela sobe a escada com uma caneca e fica ali até a noite.
+   */
+  waitForNight: (x: number, y: number, onNight: () => void, company?: { from: readonly [number, number]; beside: { x: number; y: number } }) => void;
+  /** Quem saiu da ocular antes do fim: ela desce e volta para casa. */
+  sendSkyVisitorHome: () => void;
   /** A cena final: ela sobe a escada, senta ao lado do herói e fala. `onDone` já é depois do corte. */
-  playFarewell: (scene: { from: readonly [number, number]; beside: { x: number; y: number }; script: DialogScript }, onDone: () => void) => void;
+  playFarewell: (scene: { from: readonly [number, number]; beside: { x: number; y: number }; script: DialogScript; goodbye: DialogScript; ship: { x: number; y: number } }, onDone: () => void) => void;
+  /** Ela não está mais no mundo: o tile dela fica livre. */
+  vegaGone: () => void;
 }
 
 /** Fora dos oito vizinhos da bancada, para os gravetos não entrarem nas receitas dela. */
 const STICK_OFFSETS = [[3, 4], [4, 4]] as const;
-/** Para onde a câmera olha enquanto se pole, em tiles a leste dela: o bosque que fecha o acampamento. */
-const LENS_LOOK_EAST = 7;
+/** Para onde a câmera olha enquanto se pole: o trecho mais fechado do bosque perto dela, a nordeste. */
+const LENS_LOOK_OFFSET = [7.5, -3.5] as const;
 /** O topo do planalto ao sul, e o pé da escada por onde se sobe. */
 const SPOT_TILE = { x: 32, y: 20 };
 const STAIR_FOOT = [31, 23] as const;
+/** Onde a nave pousa: no planalto, à esquerda do telescópio, sem encostar em quem estiver ao lado dele. */
+const SHIP_LANDING = { x: 29.3, y: 20 };
 const IRON_STEPS: readonly HeldItemKind[] = ['ore', 'furnace', 'charcoal', 'bloom', 'iron'];
 const SIZE_TRIPOD = 1;
 const SIZE_TELESCOPE = 1.15;
@@ -116,6 +126,7 @@ export class AstronomerQuest {
   public build(npc: { worldX: number; worldY: number }): void {
     this.npc = npc;
     const { stage } = this.save;
+    if (this.save.departed) this.host.vegaGone();
     if (stage === 'iron') this.laySticks();
     if (stage === 'glass' || stage === 'polish') this.placeCamp();
     if (stage === 'glass' || stage === 'polish') this.showTripod(false);
@@ -321,7 +332,7 @@ export class AstronomerQuest {
     }
     if (this.isTelescope(x, y)) {
       if (this.host.isNight()) this.openSky();
-      else this.host.waitForNight(x, y, () => this.openSky());
+      else this.host.waitForNight(x, y, () => this.openSky(), this.isDone ? undefined : { from: STAIR_FOOT, beside: SPOT_TILE });
       return true;
     }
     return false;
@@ -362,7 +373,7 @@ export class AstronomerQuest {
   private closeUi(): void {
     this.overlay?.destroy();
     this.overlay = undefined;
-    this.host.lookAcross(null);
+    this.host.lookAt(null);
     this.host.freeze(false);
     this.host.showButtons(true);
   }
@@ -382,7 +393,7 @@ export class AstronomerQuest {
     const npc = this.npc;
     if (!npc || !this.openUi()) return;
     const sound = getSoundManager();
-    this.host.lookAcross(npc.worldX + LENS_LOOK_EAST);
+    this.host.lookAt({ x: npc.worldX + LENS_LOOK_OFFSET[0], y: npc.worldY + LENS_LOOK_OFFSET[1] });
     this.overlay = new LensOverlay({
       onRub: () => sound.playSandTrickle(),
       onPhase: () => sound.playCozyChime(),
@@ -441,7 +452,10 @@ export class AstronomerQuest {
       },
       onFocus: () => sound.playItemBonk(),
       onCard: () => { sound.playPaperUnfold(); sound.playCozyChime(); },
-      onLeave: () => this.closeUi(),
+      onLeave: () => {
+        this.closeUi();
+        this.host.sendSkyVisitorHome();
+      },
       onDone: () => {
         this.overlay?.destroy();
         this.overlay = undefined;
@@ -458,8 +472,12 @@ export class AstronomerQuest {
       from: STAIR_FOOT,
       beside: SPOT_TILE,
       script: { ...this.dialogBase(), calm: true, lines: tLines('npc.astronautStep.farewell') },
+      goodbye: { ...this.dialogBase(), calm: true, lines: tLines('npc.astronautStep.goodbye') },
+      ship: SHIP_LANDING,
     }, () => {
       this.save.stage = 'done';
+      this.save.departed = true;
+      this.host.vegaGone();
       this.host.persist();
       this.host.closeQuest();
       this.host.markHeard();

@@ -170,6 +170,12 @@ import {
 import { NPC_QUESTS, questFor } from '@/game/dialogs/NpcQuests';
 import { CatCompanion } from '@/game/entities/CatCompanion';
 import { FireVisitor } from '@/game/entities/FireVisitor';
+import { TeaBreak } from '@/game/entities/TeaBreak';
+import { HearthReunion } from '@/game/entities/HearthReunion';
+import { clearHomeYards, NpcHomes } from '@/game/objects/NpcHomes';
+import { registerHomeTextures, type HomeKind } from '@/game/render3d/homeTextures';
+import { VegaDeparture } from '@/game/entities/VegaDeparture';
+import type { VegaShipHost } from '@/game/entities/VegaShip';
 
 // The per-item 2D art (Phaser texture atlas keys): the swing arc, the overhead chop and the
 // death elegy's back item all draw from here. The 3D twin is BACK_ITEM_VISUAL_3D below.
@@ -413,6 +419,16 @@ const LUMBER_DIALOG = 'businessMan';
 /** O roteiro da Vega: em etapas também (ver quests/AstronomerQuest). */
 const SKY_DIALOG = 'astronaut';
 
+/** A fogueira do fim: a nave desce ao norte do fogo, os amigos entram pelo portão do jardim. */
+const REUNION_SHIP_NORTH = 2.8;
+const REUNION_GATE = [30, 36] as const;
+const REUNION_DOLLY = 1.2;
+const VEGA_GONE: ReadonlySet<HomeKind> = new Set<HomeKind>(['astronaut']);
+const NOBODY_GONE: ReadonlySet<HomeKind> = new Set<HomeKind>();
+const CAMERA_LOOK_MS = 1100;
+const CAMERA_LOOK_DRIFT_TILES = 1.2;
+const CAMERA_LOOK_DRIFT_RATE = 0.00022;
+
 export class GameScene extends Phaser.Scene {
   public static readonly key = 'game';
 
@@ -574,6 +590,14 @@ export class GameScene extends Phaser.Scene {
   // A COMPANHIA: o gato que chega com o primeiro favor, e o vizinho que vem sentar na fogueira.
   private cat?: CatCompanion;
   private fireVisitor?: FireVisitor;
+  /** A Vega, sentada ao lado do telescópio: fica ali durante a ocular e é ela quem fala no fim. */
+  private skyVisitor?: FireVisitor;
+  /** As duas canecas e os goles, enquanto a noite não vem. */
+  private teaBreak?: TeaBreak;
+  /** A casa de cada vizinho, ao lado de onde ele fica. */
+  private npcHomes?: NpcHomes;
+  /** Todo mundo em volta da fogueira do fim. */
+  private reunion?: HearthReunion;
   // As fogueiras que um pedido deixou acesas para sempre (a do Bram): o relogio nao as apaga.
   private readonly keptLitFires = new Set<CampfireObject>();
   // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
@@ -664,6 +688,7 @@ export class GameScene extends Phaser.Scene {
     // Os buracos cavados voltam ao chao ANTES do World3D assar o terreno (o construtor le os
     // chunks): a cavada e um diff por cima do world.json, que volta limpo do disco a cada boot.
     if (this.adventure) this.applyDugSpotDiff();
+    if (this.adventure) clearHomeYards();
 
     let start = getPlayerStart();
     const skipIntro = this.adventure && SKIP_INTRO_LOCALLY && !adventureState().introSeen;
@@ -698,6 +723,7 @@ export class GameScene extends Phaser.Scene {
     registerPaintTextures(this);
     registerWoodTextures(this);
     registerSkyTextures(this);
+    registerHomeTextures(this);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the Phaser canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -936,6 +962,7 @@ export class GameScene extends Phaser.Scene {
     this.buildPainterQuest();
     this.buildLumberQuest();
     this.buildAstronomerQuest();
+    if (this.adventure) this.npcHomes = new NpcHomes();
     this.buildQuestMarks();
     this.streamChunks(true);
 
@@ -1031,8 +1058,28 @@ export class GameScene extends Phaser.Scene {
   // included) and keeps running even when update() early-returns (dialog pan,
   // cut-scenes). Freezes with the scene on pause — a still backdrop for the menu.
 
-  /** Tiles que a câmera olha para o lado, sem o herói sair do lugar: é o que se vê pela lente da Vega. */
-  private cameraLookX = 0;
+  /** O tile que a câmera olha sem o herói sair do lugar: é o que se vê pela lente da Vega. */
+  private cameraLook?: { x: number; y: number };
+  /** De 0 (no herói) a 1 (no `cameraLook`): a câmera vai e volta deslizando. */
+  private cameraLookBlend = 0;
+  /** O último alvo: é dele que a câmera volta, depois que o `cameraLook` já acabou. */
+  private cameraLookLast?: { x: number; y: number };
+
+  private cameraLookOffset(delta: number, camX: number, camY: number): { x: number; y: number } {
+    const goal = this.cameraLook ? 1 : 0;
+    const step = delta / CAMERA_LOOK_MS;
+    this.cameraLookBlend = goal > this.cameraLookBlend
+      ? Math.min(1, this.cameraLookBlend + step)
+      : Math.max(0, this.cameraLookBlend - step);
+    if (this.cameraLookBlend === 0) return { x: 0, y: 0 };
+    if (this.cameraLook) this.cameraLookLast = this.cameraLook;
+    const at = this.cameraLookLast;
+    if (!at) return { x: 0, y: 0 };
+    const eased = this.cameraLookBlend * this.cameraLookBlend * (3 - 2 * this.cameraLookBlend);
+    // Bem devagar, de um lado para o outro do bosque: é ele, vivo, e não uma foto.
+    const drift = Math.sin(this.time.now * CAMERA_LOOK_DRIFT_RATE) * CAMERA_LOOK_DRIFT_TILES;
+    return { x: (at.x + drift - camX) * eased, y: (at.y - camY) * eased };
+  }
 
   private render3D(_time: number, delta: number): void {
     const w3 = this.world3d;
@@ -1045,7 +1092,9 @@ export class GameScene extends Phaser.Scene {
     const ts = Math.max(1, this.tileSize);
     const defCx = Math.floor(this.scale.width / 2);
     const defCy = Math.floor(this.scale.height / 2);
-    w3.setViewOffset((defCx - cam.screenCenterX) / ts + this.cameraLookX, (defCy - cam.screenCenterY) / ts);
+    const look = this.cameraLookOffset(delta, cam.camX, cam.camY);
+    w3.setViewOffset((defCx - cam.screenCenterX) / ts + look.x, (defCy - cam.screenCenterY) / ts + look.y);
+    w3.setFocusAtCentre(this.cameraLookBlend > 0);
     // A camera sobe e desce com o chao debaixo do heroi (a serra): no planalto o quadro e o mesmo,
     // um nivel acima. A altura e continua na escada, entao a subida da camera e o proprio passo.
     w3.follow(cam.camX, cam.camY, false, terrainHeightAt(cam.camX, cam.camY));
@@ -1058,6 +1107,7 @@ export class GameScene extends Phaser.Scene {
 
     // The walk cycle ticks here (POST_UPDATE runs even when update() early-returns).
     tickHeroView(this.hero, delta);
+    this.npcHomes?.syncNight(isNightTime(), adventureState().skyQuest.departed ? VEGA_GONE : NOBODY_GONE);
     this.syncHeroBillboard();
     this.fadeFootprints();
     // Os vaga-lumes vivem aqui e nao no update: eles sao a moldura das cutscenes (a abertura e o
@@ -1293,6 +1343,13 @@ export class GameScene extends Phaser.Scene {
     setTimeScale(1);
     this.cat?.destroy();
     this.cat = undefined;
+    this.clearMug();
+    this.npcHomes?.destroy();
+    this.npcHomes = undefined;
+    this.reunion?.destroy();
+    this.reunion = undefined;
+    this.skyVisitor?.destroy();
+    this.skyVisitor = undefined;
     this.fireVisitor?.destroy();
     this.fireVisitor = undefined;
     this.keptLitFires.clear();
@@ -1418,6 +1475,9 @@ export class GameScene extends Phaser.Scene {
       // Sentado ao lado do telescópio, a noite chega e ele levanta sozinho.
       if (this.onNightfall && isNightTime()) {
         const nightfall = this.onNightfall;
+        // Ela fica: o `standUp` mandaria para casa quem está em `fireVisitor`.
+        this.skyVisitor = this.fireVisitor;
+        this.fireVisitor = undefined;
         this.standUp();
         this.time.delayedCall(420, nightfall);
         return;
@@ -1601,6 +1661,7 @@ export class GameScene extends Phaser.Scene {
     this.resting = false;
     this.restFireTile = undefined;
     this.onNightfall = undefined;
+    this.clearMug();
     setTimeScale(1);
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
@@ -2457,6 +2518,7 @@ export class GameScene extends Phaser.Scene {
     if (this.painterQuest?.isSolidAt(wx, wy)) return true;
     if (this.lumberQuest?.isSolidAt(wx, wy)) return true;
     if (this.astronomerQuest?.isSolidAt(wx, wy)) return true;
+    if (this.npcHomes?.isSolidAt(wx, wy)) return true;
     // O cogumelo nascendo e um corpo no caminho: o heroi encosta nele e fica DE FRENTE — que e a
     // mira da faca. Pisa-lo para apanhar seria arranca-lo, e o jogo ensina o contrario.
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return true;
@@ -4993,14 +5055,21 @@ export class GameScene extends Phaser.Scene {
         this.persistAdventure();
       },
       hearts: (x, y) => this.spawnHearts(x, y),
-      lookAcross: (tileX) => { this.cameraLookX = tileX === null ? 0 : tileX - this.playerWorld.worldX; },
+      lookAt: (tile) => { this.cameraLook = tile ?? undefined; },
       seen: (kind) => this.seenItems.has(kind),
       isNight: () => isNightTime(),
-      waitForNight: (x, y, onNight) => {
+      waitForNight: (x, y, onNight, company) => {
         this.sitDown(x, y);
         this.onNightfall = onNight;
+        if (company) void this.bringMug(company.from, company.beside);
+      },
+      sendSkyVisitorHome: () => {
+        const visitor = this.skyVisitor;
+        this.skyVisitor = undefined;
+        visitor?.leave(() => this.npcManager?.setKindAway('astronaut', false));
       },
       playFarewell: (farewell, onDone) => { void this.playStarFarewell(farewell, onDone); },
+      vegaGone: () => this.npcManager?.setKindHidden('astronaut', true),
     });
     quest.setDialogBase(() => getDialog('astronaut', SKY_DIALOG) as DialogScript);
     this.astronomerQuest = quest;
@@ -5011,16 +5080,8 @@ export class GameScene extends Phaser.Scene {
    * O FIM DA QUEST DA VEGA: o último alvo saiu da ocular, e ela vem subindo a escada, senta ao lado do
    * herói e fala. Depois um corte curto, e ela já está em casa. O céu continua, e a noite também.
    */
-  private async playStarFarewell(
-    farewell: { from: readonly [number, number]; beside: { x: number; y: number }; script: DialogScript },
-    onDone: () => void,
-  ): Promise<void> {
-    const { from, beside, script } = farewell;
-    this.cutsceneActive = true;
-    this.mushroomHint?.setVisible(false);
-    this.stopBreathing();
-    this.actionButtons?.setVisible(false);
-    this.pauseTouchButton?.setVisible(false);
+  /** Ela vem sentar ao lado disto: o corpo é um stand-in, e o de verdade fica fora de casa enquanto isso. */
+  private vegaComesTo(from: readonly [number, number], beside: { x: number; y: number }): FireVisitor {
     const hero: [number, number] = [this.playerWorld.worldX, this.playerWorld.worldY];
     const seats = ([[1, 0], [0, -1], [0, 1], [-1, 0], [-1, 1], [1, 1]] as const)
       .map(([dx, dy]) => [beside.x + dx, beside.y + dy] as [number, number])
@@ -5029,6 +5090,61 @@ export class GameScene extends Phaser.Scene {
     const path = this.findVisitPath(from, seats, hero, [beside.x, beside.y]);
     const visitor = new FireVisitor(this, 'astronaut', path ?? [from, seats[0] ?? from]);
     visitor.arrive();
+    return visitor;
+  }
+
+  /** ESPERAR A NOITE: ela sobe sem falar nada, senta, e os dois tomam o chá (ver TeaBreak). */
+  private async bringMug(from: readonly [number, number], beside: { x: number; y: number }): Promise<void> {
+    const visitor = this.vegaComesTo(from, beside);
+    this.fireVisitor = visitor;
+    for (let i = 0; i < 80 && !visitor.isSeated; i += 1) {
+      await this.wait(120);
+      if (!this.resting || this.fireVisitor !== visitor) return;
+    }
+    if (!this.resting || this.fireVisitor !== visitor) return;
+    // O corpo dela ainda está baixando para sentar: a escala de descanso só vale depois disso.
+    await this.wait(450);
+    if (!this.resting || this.fireVisitor !== visitor) return;
+    this.teaBreak = new TeaBreak({
+      scene: this,
+      heroBody: this.hero,
+      heroTile: { x: this.playerWorld.worldX, y: this.playerWorld.worldY },
+      vega: visitor.bodySprite,
+      sparkle: (x, y) => this.spawnGrowSparkle(x, y),
+      hearts: (x, y) => this.spawnHearts(x, y),
+    });
+  }
+
+  private clearMug(): void {
+    this.teaBreak?.destroy();
+    this.teaBreak = undefined;
+  }
+
+  /** O que a nave pede da cena, venha ela para buscar ou para trazer a Vega. */
+  private shipHost(at: { x: number; y: number }): VegaShipHost {
+    return {
+      scene: this,
+      at,
+      smoke: (x, y) => this.spawnSmokePuff(x, y),
+      dirt: (x, y, count) => this.spawnDirtBurst(x, y, count),
+      shake: (ms, amplitude) => this.world3d?.shake(ms, amplitude),
+      sparkle: (x, y) => this.spawnGrowSparkle(x, y),
+      project: (x, y, elevation) => this.world3d?.projectTile(x, y, elevation) ?? { x: 0, y: 0 },
+    };
+  }
+
+  private async playStarFarewell(
+    farewell: { from: readonly [number, number]; beside: { x: number; y: number }; script: DialogScript; goodbye: DialogScript; ship: { x: number; y: number } },
+    onDone: () => void,
+  ): Promise<void> {
+    const { from, beside, script, goodbye, ship } = farewell;
+    this.cutsceneActive = true;
+    this.mushroomHint?.setVisible(false);
+    this.stopBreathing();
+    this.actionButtons?.setVisible(false);
+    this.pauseTouchButton?.setVisible(false);
+    const visitor = this.skyVisitor ?? this.vegaComesTo(from, beside);
+    this.skyVisitor = undefined;
     for (let i = 0; i < 80 && !visitor.isSeated; i += 1) await this.wait(120);
     await this.wait(500);
     await new Promise<void>((resolve) => {
@@ -5039,13 +5155,26 @@ export class GameScene extends Phaser.Scene {
       });
     });
     this.cutsceneActive = true;
-    await this.wait(700);
-    await this.fadeWorld(0, 1, 1100);
+    await this.wait(500);
+    await new VegaDeparture({
+      ...this.shipHost(ship),
+      vega: visitor.bodySprite,
+      hero: { x: this.playerWorld.worldX, y: this.playerWorld.worldY },
+      heroBody: this.hero,
+      say: (onClosed) => {
+        this.dialogSpeaker = visitor.bodySprite;
+        this.openDialogScript(goodbye, undefined, getDialogVoice('astronaut'), () => {
+          this.dialogSpeaker = undefined;
+          this.cutsceneActive = true;
+          onClosed();
+        });
+      },
+      hearts: (x, y) => this.spawnHearts(x, y),
+      heroLooksUp: () => { this.hero.frame = HERO_FRAMES.idleUp; },
+    }).run();
     visitor.destroy();
     this.npcManager?.setKindAway('astronaut', false);
     onDone();
-    await this.wait(400);
-    await this.fadeWorld(1, 0, 1100);
     this.cutsceneActive = false;
     this.actionButtons?.setVisible(true);
     this.pauseTouchButton?.setVisible(true);
@@ -5954,6 +6083,14 @@ export class GameScene extends Phaser.Scene {
     this.campfiresFollowNight = !isNightTime();
     this.syncCampfiresToClock();
     if (!hearth.isLit) hearth.light();
+    // No corte para o escuro, ele já está acima do fogo, olhando para baixo: de frente para a câmera,
+    // e com a roda dos amigos à vista.
+    if (!this.isSolidForEntities(wx, wy - 1)) {
+      this.playerWorld.worldX = wx;
+      this.playerWorld.worldY = wy - 1;
+      this.movementController?.interruptMovement(wx, wy - 1);
+      await this.wait(60);
+    }
     // SENTADO: o corpo baixa e alarga um pouco (a pose de quem dobrou os joelhos na frente do
     // fogo), de frente para a chama.
     const toFire = { dx: Math.sign(wx - this.playerWorld.worldX), dy: Math.sign(wy - this.playerWorld.worldY) };
@@ -5972,13 +6109,46 @@ export class GameScene extends Phaser.Scene {
 
     // O espeto balanca devagar sobre a chama — a mao de quem nao tem pressa nenhuma.
     this.tweens.add({ targets: stick, elevation: 0.5, duration: 1400, ease: 'Sine.easeInOut', yoyo: true, repeat: -1 });
-    for (let i = 0; i < 6; i += 1) {
-      await this.wait(900);
-      stickAt();
-      if (i % 2 === 0) this.spawnFireHitEffect(wx, wy);
-      this.world3d?.rustleDecor(this.playerWorld.worldX - 1, this.playerWorld.worldY);
-      this.world3d?.rustleDecor(this.playerWorld.worldX + 1, this.playerWorld.worldY + 1);
-    }
+    const quietly = async (beats: number): Promise<void> => {
+      for (let i = 0; i < beats; i += 1) {
+        await this.wait(900);
+        stickAt();
+        if (i % 2 === 0) this.spawnFireHitEffect(wx, wy);
+        this.world3d?.rustleDecor(this.playerWorld.worldX - 1, this.playerWorld.worldY);
+        this.world3d?.rustleDecor(this.playerWorld.worldX + 1, this.playerWorld.worldY + 1);
+      }
+    };
+    await quietly(6);
+    // E então, sem aviso, os amigos. A câmera abre um pouco, para caber a roda inteira.
+    const reunion = new HearthReunion({
+      ...this.shipHost({ x: wx, y: wy - REUNION_SHIP_NORTH }),
+      fire: { x: wx, y: wy },
+      heroBody: this.hero,
+      gate: REUNION_GATE,
+      pathTo: (from, seats) => this.findVisitPath(from, seats, [this.playerWorld.worldX, this.playerWorld.worldY], [wx, wy]),
+      isFree: (x, y) => !this.isSolidForEntities(x, y),
+      away: (kind) => this.npcManager?.setKindAway(kind, true),
+      hearts: (x, y) => this.spawnHearts(x, y),
+      heroFaces: (dx, dy) => this.scriptFace(dx, dy),
+      say: (speaker, onClosed) => {
+        const base = getDialog('astronaut', SKY_DIALOG) as DialogScript;
+        this.dialogSpeaker = speaker;
+        this.openDialogScript({ ...base, calm: true, lines: tLines('npc.astronautStep.reunion') }, undefined, getDialogVoice('astronaut'), () => {
+          this.dialogSpeaker = undefined;
+          this.cutsceneActive = true;
+          onClosed();
+        });
+      },
+    }, { x: this.playerWorld.worldX, y: this.playerWorld.worldY });
+    this.reunion = reunion;
+    void this.dollyTo(REUNION_DOLLY, 2400);
+    await reunion.friends();
+    this.scriptFace(toFire.dx, toFire.dy);
+    // Falta a Vega. Ninguém comenta: o fogo estala, e passa um tempo.
+    await quietly(5);
+    await reunion.vega();
+    this.scriptFace(toFire.dx, toFire.dy);
+    await quietly(3);
     // Dourou.
     stick.setTexture(ROAST_STICK_DONE_TEXTURE, 0);
     getSoundManager().playSingingBowl();
@@ -5992,6 +6162,7 @@ export class GameScene extends Phaser.Scene {
       this.openDialogScript({ ...base, npcName: '', lines: tLines('ending.lines') }, undefined, undefined, resolve);
     });
     await this.wait(2600);
+    void this.dollyTo(1, 1200);
     this.persistAdventure();
     this.rollCredits();
   }

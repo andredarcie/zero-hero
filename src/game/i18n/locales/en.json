@@ -734,6 +734,30 @@
           "text": "Sit beside it and wait for the night."
         }
       ],
+      "reunion": [
+        {
+          "speaker": "npc",
+          "text": "I saw the fire from up there. Any marshmallows left?"
+        }
+      ],
+      "goodbye": [
+        {
+          "speaker": "npc",
+          "text": "With the sky back, my ship found me."
+        },
+        {
+          "speaker": "npc",
+          "text": "Thank you for everything."
+        },
+        {
+          "speaker": "npc",
+          "text": "But I have to go back to my home planet. Home is up there."
+        },
+        {
+          "speaker": "npc",
+          "text": "When you look at the sky, wave."
+        }
+      ],
       "farewell": [
         {
           "speaker": "npc",
