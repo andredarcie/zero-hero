@@ -38,7 +38,7 @@ export type HeldItemKind =
   // produz a semente, mas o buraco era autorado — só o editor plantava mato novo em lugar
   // novo. Com ela o canteiro vira decisão do jogador: cavar É produzir (um tile que aceita
   // semente), e por isso ela não é senha. Cavar é o botão X (o botão que USA o item selecionado
-  // — ver GameScene.pressUse); apanhá-la é pisar nela, como em qualquer item. Terra apenas:
+  // — ver GameScene.pressUse). Terra apenas:
   // pátio de pedra, laje, alvenaria de dungeon e mar recusam a lâmina.
   | 'shovel'
   | 'wood'
@@ -213,9 +213,7 @@ const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
 
 // A single held item sitting on the ground — authored in world.json, or put there by the world
 // (a felled tree's stick, the bench's finished piece, the furnace's bloom). It bobs while it
-// waits, and PISAR NELE O APANHA: o gesto voltou a ser a pisada quando o botao X virou "usar o
-// item selecionado" e o largar deixou de existir (ver GameScene.collectUnderfoot). Sem largar,
-// apanhar sem querer nao custa nada — que e o defeito que o flag `armed` existia para remendar.
+// waits. Pisar nele so faz aparecer o balao, e quem pega ou troca e o Z (ver GameScene.takeUnderfoot).
 export class ItemPickup {
   private readonly sprite: Billboard3D;
   private readonly outline: Billboard3D[];

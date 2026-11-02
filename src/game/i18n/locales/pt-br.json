@@ -783,6 +783,8 @@
   "controls": {
     "hint": "Z fala e pega · X usa",
     "touchHint": "Arraste para andar · A fala e pega · B usa",
+    "take": "Pegar",
+    "swap": "Trocar",
     "skipIntro": "Z pula a cena",
     "skipIntroTouch": "Toque de novo para pular",
     "attackTitle": "Mão (Z)",

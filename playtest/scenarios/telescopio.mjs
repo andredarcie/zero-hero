@@ -210,12 +210,12 @@ export default {
       return it ? { x: it.worldX, y: it.worldY } : null;
     };
 
-    /** A coisa do tile vai para a mão: com a mão cheia o Z TROCA; vazia, pisar apanha. */
+    /** A coisa do tile vai para a mão: com a mão cheia o Z TROCA; vazia, o Z pega o que está debaixo. */
     const take = async (kind, label) => {
       const target = await groundTile(kind);
       if (!target) throw new Error(`nao ha ${kind} no chao`);
       const st = await state();
-      if (st.heldItem === 'none') await walkTo([target], label);
+      if (st.heldItem === 'none') { await walkTo([target], label); await press('z', 60, 300); }
       else { await approachFree(target, label); await press('z', 60, 300); }
       await drain(`${label} (cerimonia)`);
       const now = await free();
@@ -313,12 +313,14 @@ export default {
 
     // ── 3. O CARVÃO: os dois gravetos que ela deixou perto da bancada ──────────────────────
     await walkTo([STICKS[0]], 'o 1o graveto');
+    await press('z', 60, 300);
     await drain('o 1o graveto');
     st = await free();
     assert('O 1o graveto na mao', st.heldItem === 'wood', `heldItem=${st.heldItem}`);
     await shot('03-galho-no-colo', { note: 'O graveto no colo' });
     await drop(BESIDE_FURNACE[0], 'o graveto ao lado do forno');
     await walkTo([STICKS[1]], 'o 2o graveto');
+    await press('z', 60, 300);
     await drain('o 2o graveto');
     st = await free();
     assert('O 2o graveto na mao', st.heldItem === 'wood', `heldItem=${st.heldItem}`);

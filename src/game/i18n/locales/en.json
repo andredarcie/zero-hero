@@ -783,6 +783,8 @@
   "controls": {
     "hint": "Z talk & take · X use",
     "touchHint": "Drag anywhere to walk · A talk & take · B use",
+    "take": "Take",
+    "swap": "Swap",
     "skipIntro": "Z skips the scene",
     "skipIntroTouch": "Tap again to skip",
     "attackTitle": "Hand (Z)",

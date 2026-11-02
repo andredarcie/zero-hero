@@ -20,7 +20,7 @@ import * as THREE from 'three';
 
 const FOOT_Y = 0.015; // sits just above the ground (over the contact blob)
 export const CAST_MAX_ALPHA = 0.6; // darkness right beside the flame
-export const WIDTH_FACTOR = 0.92; // shadows are a touch slimmer than the object
+export const WIDTH_FACTOR = 1; // o pé da sombra tem a largura exata do pé do objeto (ver writeCastMatrix)
 // A silhouette laid flat on the ground is foreshortened by the tilted camera, so it
 // must run LONGER than the 2D screen-space shadow to read the same. Even hugging the
 // flame it clearly reaches past the object's foot; at the light's edge it rakes long.
@@ -69,6 +69,40 @@ const castAnchorInto = (
   const back = footPad * length;
   anchorScratch.x = objX + Math.sin(rotY) * back;
   anchorScratch.y = objY + Math.cos(rotY) * back;
+};
+
+/** O máximo que a sombra se inclina em relação à base do objeto antes de a base começar a girar. */
+const MAX_SKEW = THREE.MathUtils.degToRad(62);
+
+/**
+ * A SOMBRA É INCLINADA, NÃO GIRADA: a base dela fica deitada sobre a base do objeto, e só o topo vai para
+ * onde a luz manda. Girar o quad inteiro levava o pé junto, e um canto saía para a frente do objeto e o
+ * outro para trás, o que soltava a sombra do pé (o relato do autor), tanto mais quanto mais largo o objeto.
+ *
+ * Só com a luz quase de lado a base gira, e só o que passar de MAX_SKEW: um objeto plano iluminado
+ * exatamente de lado teria uma sombra de espessura zero, e o herói ficaria sem nenhuma.
+ */
+const footEdgeYaw = (rotY: number): number => {
+  const r = rotY - Math.PI * Math.round(rotY / Math.PI);
+  return r - THREE.MathUtils.clamp(r, -MAX_SKEW, MAX_SKEW);
+};
+
+const writeCastMatrix = (
+  m: THREE.Matrix4,
+  x: number,
+  y: number,
+  z: number,
+  width: number,
+  length: number,
+  rotY: number,
+): void => {
+  const foot = footEdgeYaw(rotY);
+  m.set(
+    width * Math.cos(foot), 0, length * Math.sin(rotY), x,
+    0, 1, 0, y,
+    -width * Math.sin(foot), 0, length * Math.cos(rotY), z,
+    0, 0, 0, 1,
+  );
 };
 
 /**
@@ -140,6 +174,10 @@ export const makeCastMesh = (): THREE.Mesh => {
   // fire, exactly where the ground is brightest (user feedback: "invisible square").
   mesh.renderOrder = 4;
   mesh.visible = false;
+  // A inclinação não cabe em posição + giro + escala (ver writeCastMatrix): applyCast escreve a matriz de
+  // mundo direto, e pode, porque as duas cenas que recebem este quad (a normal e a da máscara) ficam na origem.
+  mesh.matrixAutoUpdate = false;
+  mesh.matrixWorldAutoUpdate = false;
   return mesh;
 };
 
@@ -177,10 +215,6 @@ export class SolidCastField {
   private readonly uvWindow: THREE.InstancedBufferAttribute;
   private readonly alpha: THREE.InstancedBufferAttribute;
   private readonly matrix = new THREE.Matrix4();
-  private readonly position = new THREE.Vector3();
-  private readonly quaternion = new THREE.Quaternion();
-  private readonly euler = new THREE.Euler();
-  private readonly scale = new THREE.Vector3();
   // Collected this frame, then sorted back-to-front in end() — as PRE-ALLOCATED flat
   // buffers, not an array of fresh objects. This begin/add/end cycle runs every frame for
   // every instance; the object-literal version it replaces was the shadow path's main
@@ -384,10 +418,9 @@ export class SolidCastField {
 
     for (let slot = 0; slot < n; slot += 1) {
       const p = this.order[slot];
-      this.position.set(this.pendX[p], FOOT_Y + this.pendY[p], this.pendZ[p]);
-      this.quaternion.setFromEuler(this.euler.set(0, this.pendRot[p], 0));
-      this.scale.set(this.pendW[p], 1, this.pendL[p]);
-      this.matrix.compose(this.position, this.quaternion, this.scale);
+      writeCastMatrix(
+        this.matrix, this.pendX[p], FOOT_Y + this.pendY[p], this.pendZ[p], this.pendW[p], this.pendL[p], this.pendRot[p],
+      );
       this.mesh.setMatrixAt(slot, this.matrix);
       this.uvWindow.setXYZW(
         slot, this.pendUv[p * 4], this.pendUv[p * 4 + 1], this.pendUv[p * 4 + 2], this.pendUv[p * 4 + 3],
@@ -577,9 +610,12 @@ export const applyCast = (
   // exactly as before (alphaTest is a live uniform in three — no recompile).
   mat.alphaTest = Math.max(0.01, 0.4 * alpha);
   castAnchorInto(objX, objY, length, rotY, footPad);
+  writeCastMatrix(
+    mesh.matrixWorld, anchorScratch.x, FOOT_Y + groundY, anchorScratch.y, (flipX ? -1 : 1) * width * WIDTH_FACTOR, length, rotY,
+  );
+  // A matriz não lê estes dois, mas o recorte do render lê (`World3D.cullFarChildren`): sem eles, toda sombra
+  // parece estar na origem do mapa, longe da tela, e não é desenhada.
   mesh.position.set(anchorScratch.x, FOOT_Y + groundY, anchorScratch.y);
-  // Base head direction is -Z; rotate it onto the shadow's heading.
-  mesh.rotation.y = rotY;
-  mesh.scale.set((flipX ? -1 : 1) * width * WIDTH_FACTOR, 1, length);
+  mesh.scale.set(width * WIDTH_FACTOR, 1, length);
   mesh.visible = true;
 };

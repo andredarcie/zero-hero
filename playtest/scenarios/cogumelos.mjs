@@ -215,10 +215,10 @@ export default {
       }
     };
 
-    /** A coisa do tile vai para a mão: com a mão cheia o Z TROCA; vazia, pisar apanha. */
+    /** A coisa do tile vai para a mão: com a mão cheia o Z TROCA; vazia, o Z pega o que está debaixo. */
     const takeItem = async (target, want, label) => {
       const st = await state();
-      if (st.heldItem === 'none') await walkTo([target], label);
+      if (st.heldItem === 'none') { await walkTo([target], label); await press('z', 60, 300); }
       else { await approachFree(target, label); await press('z', 60, 300); }
       await drain(`${label} (cerimonia)`);
       const now = await free();

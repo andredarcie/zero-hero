@@ -5822,8 +5822,8 @@ const buildTileCubeGeometry = (
  *     virar um bloco escuro. Numa massa de alvenaria ela faz o contrário do que promete: a fileira
  *     de fora de um maciço tem 5 vizinhos e NÃO projeta, enquanto a quina convexa ao lado projeta —
  *     então o que aparece no chão é um punhado de manchas soltas em vez de uma barra.
- *   · **A largura é 0,92 tile** (`WIDTH_FACTOR`, para a silhueta de uma árvore ser um sopro mais
- *     magra que ela). Entre dois tiles vizinhos isso é uma fresta de luz.
+ *   · **A largura era 0,92 tile** (`WIDTH_FACTOR`, para a silhueta de uma árvore ser um sopro mais
+ *     magra que ela). Entre dois tiles vizinhos isso era uma fresta de luz.
  *   · **A luz é DIRECIONAL e diagonal.** Duas cópias esticadas de tiles vizinhos não ladrilham: na
  *     perpendicular do rumo elas distam 0,55 tile e têm 1 de largura, então ou sobram frestas ou
  *     sobrepõem — e sobrepor DOBRA o escuro (a lei do campo: N camadas pretas dão 1-(1-a)^N).

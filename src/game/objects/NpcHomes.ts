@@ -33,8 +33,8 @@ const HOMES: Readonly<Record<HomeKind, { x: number; y: number }>> = {
 const YARD_FORWARD = 0.5;
 const YARD_Y = 0.012;
 /** Até onde o capim e as pedrinhas saem, um pouco menos que a mancha para a beira não ficar pelada. */
-const YARD_CLEAR_X = 3.1;
-const YARD_CLEAR_Y = 2.2;
+const YARD_CLEAR_X = 2.2;
+const YARD_CLEAR_Y = 1.5;
 
 /**
  * Tira o capim, as flores e as pedrinhas de enfeite do terreiro. É um diff por cima do world.json, como o

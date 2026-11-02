@@ -98,6 +98,7 @@ import {
   BUTTERFLY_TEXTURE, LEAF_TEXTURE,
   MARSHMALLOW_BAG_TEXTURE, ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
+import { HandOffer, type HandOfferView } from '@/game/runtime/HandOffer';
 import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
@@ -549,6 +550,7 @@ export class GameScene extends Phaser.Scene {
   private placementHints?: PlacementHints;
   /** O balao de PENSAMENTO do heroi: um icone, um instante. Ver HeroThought. */
   private heroThought?: HeroThought;
+  private handOffer?: HandOffer;
   // A CADEIA DO FERRO: o forno reduz minério com carvão; mão e altar malham a esponja.
   /**
    * Quantas marteladas a ESPONJA de cada tile ja levou. Ela e um item no chao, e itens no chao
@@ -1080,6 +1082,7 @@ export class GameScene extends Phaser.Scene {
 
     this.placementHints = new PlacementHints(this);
     this.heroThought = new HeroThought(this);
+    this.handOffer = new HandOffer(this, isTouchDevice());
     this.installActionInput();
 
     // O GATO de quem ja fez algum favor volta junto com a partida.
@@ -1306,6 +1309,7 @@ export class GameScene extends Phaser.Scene {
           busy: box.isBusy,
         })),
         thought: this.heroThought?.visibleIcon ?? null,
+        handOffer: this.handOffer?.visibleMode ?? null,
         furnaces: this.furnaces.map((f) => ({
           worldX: f.worldX,
           worldY: f.worldY,
@@ -1518,6 +1522,8 @@ export class GameScene extends Phaser.Scene {
     this.placementHints = undefined;
     this.heroThought?.destroy();
     this.heroThought = undefined;
+    this.handOffer?.destroy();
+    this.handOffer = undefined;
     this.swordSlash?.destroy();
     // Truncar in place (length = 0) esvazia também o array tipado — é o mesmo objeto — então
     // nenhum campo fica segurando props destruídos até o próximo create reatribuí-lo.
@@ -1680,10 +1686,6 @@ export class GameScene extends Phaser.Scene {
         this.time.delayedCall(250, () => { this.hero.tint = null; });
         this.persistAdventure(); // o carvao comido saiu do chao
       }
-      // PISAR APANHA. TUDO. `stash` e nunca `add`: guardar NÃO troca o item da mão.
-      const { worldX: px, worldY: py } = this.playerWorld;
-      const underfoot = this.itemManager.kindAt(px, py);
-      if (underfoot) this.collectUnderfoot(px, py);
       this.itemManager.render(this.tileSize, this.camera!);
     }
 
@@ -3004,6 +3006,8 @@ export class GameScene extends Phaser.Scene {
     if (this.resting) { this.standUp(); return; }
     if (!this.canAct()) return;
     const front = this.facingTile();
+    // O balão promete o Z para o que está debaixo do herói: conversar é a única coisa que passa na frente.
+    if (this.handOfferUnderfoot()) { this.takeUnderfoot(); return; }
     // A BEIRA DA SERRA: entre o planalto e o chao de baixo nao ha mao que alcance (ver relief).
     if (!this.reachesFront(front)) { this.petCat(); return; }
     if (this.talkToNpcAt(front.x, front.y)) return;
@@ -3358,19 +3362,50 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * APANHAR PISANDO — só com a MÃO VAZIA (ou o mesmo pacote, que soma). Com a mão cheia, trocar é o
-   * Z (`handAt`). A cerimônia de item novo só acontece para o que tem gesto: um "ITEM GET" de tela
-   * cheia para o primeiro minério seria o jogo parando para nada. O fogo sobe junto com o graveto.
+   * O Z PODE PEGAR O QUE ESTÁ DEBAIXO DO HERÓI? A mesma pergunta decide o balão e o botão, para o balão
+   * nunca prometer o que a tecla recusaria. Cogumelo é da faca, e o que enfeita é sólido. Duas coisas
+   * iguais não têm o que trocar, a não ser o PACOTE, que soma. Com um NPC na frente o Z é a conversa.
+   */
+  private handOfferUnderfoot(): HeldItemKind | null {
+    const { worldX, worldY } = this.playerWorld;
+    const kind = this.itemManager?.kindAt(worldX, worldY);
+    if (!kind || isMushroomKind(kind) || isDecorKind(kind)) return null;
+    const held = this.heldItem;
+    if (held !== 'none' && isMushroomKind(held)) return null;
+    if (held === kind && !UNIT_PACK_KINDS.has(kind)) return null;
+    const front = this.facingTile();
+    if (this.reachesFront(front) && this.npcManager?.hasNpcAt(front.x, front.y)) return null;
+    return kind;
+  }
+
+  /** O balão desta hora: só com o corpo já parado no tile e com as mãos livres para agir. */
+  private currentHandOffer(at: { readonly x: number; readonly y: number }): HandOfferView | null {
+    if (this.resting || !this.canAct() || this.heroThought?.visibleIcon) return null;
+    if (at.x !== this.playerWorld.worldX || at.y !== this.playerWorld.worldY) return null;
+    const kind = this.handOfferUnderfoot();
+    if (!kind) return null;
+    const held = this.heldItem;
+    return {
+      ground: ITEM_VISUAL_2D[kind],
+      held: held === 'none' || held === kind ? undefined : ITEM_VISUAL_2D[held],
+    };
+  }
+
+  /** Mão vazia ou o mesmo pacote: pega. Mão cheia: troca, e o que estava nela fica no lugar. */
+  private takeUnderfoot(): void {
+    const { worldX, worldY } = this.playerWorld;
+    const kindHere = this.itemManager?.kindAt(worldX, worldY);
+    if (this.heldItem === 'none' || this.heldItem === kindHere) this.collectUnderfoot(worldX, worldY);
+    else this.handAt(worldX, worldY);
+  }
+
+  /**
+   * APANHAR O QUE ESTÁ DEBAIXO DO HERÓI, sempre pelo Z (`pressAttack`): pisar não pega mais nada, e o
+   * balão (`HandOffer`) é quem avisa. A cerimônia de item novo só acontece para o que tem gesto: um
+   * "ITEM GET" de tela cheia para o primeiro minério seria o jogo parando para nada. O fogo sobe junto
+   * com o graveto.
    */
   private collectUnderfoot(wx: number, wy: number): void {
-    // Cogumelo nao se apanha pisando — so a faca o solta (ver harvestMushroomAt).
-    if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return;
-    if (isDecorKind(this.itemManager?.kindAt(wx, wy))) return;
-    // UMA COISA DE CADA VEZ: com a mão cheia o pé passa por cima (trocar é o Z, de propósito —
-    // atravessar um campo não pode ir largando e pegando coisas). O mesmo PACOTE soma.
-    const kindHere = this.itemManager?.kindAt(wx, wy);
-    if (!kindHere) return;
-    if (this.heldItem !== 'none' && !(this.heldItem === kindHere && UNIT_PACK_KINDS.has(kindHere))) return;
     const taken = this.itemManager?.takeAt(wx, wy);
     if (!taken) return;
     const handWasEmpty = this.heldItem === 'none';
@@ -7087,6 +7122,7 @@ export class GameScene extends Phaser.Scene {
       // O balao de pensamento monta no MESMO ponto do aviso de apanhar, e pelo mesmo motivo: a
       // ancora e o corpo DESENHADO. O relogio dele corre no update (ver HeroThought.tick).
       this.heroThought?.render(this.tileSize, this.camera, this.time.now, at);
+      this.handOffer?.render(this.currentHandOffer(at), this.tileSize, this.camera, this.time.now, at);
     }
     this.renderMushroomHint();
     // O MESMO keycap sobre a BANCADA que o herói está encarando: sem ele o catálogo de fabricacao

@@ -261,34 +261,139 @@ export const homeGlowTexture = (kind: HomeKind): string => `home-${kind}-glow`;
 export const homeYardTexture = (kind: HomeKind): string => `home-${kind}-yard`;
 
 /** O terreiro, em tiles: a mancha de terra batida em volta da casa. */
-export const YARD_WIDTH = 7;
-export const YARD_DEPTH = 5;
+export const YARD_WIDTH = 5;
+export const YARD_DEPTH = 3.5;
 const YARD_TEXELS = 16;
-const YARD_EARTH = '#77654a';
-const YARD_WORN = '#6c5b42';
-const YARD_PEBBLE = '#8a785a';
-const YARD_FRINGE = '#5f5a38';
+/** Da terra pisada, mais clara, até o fundo das rachaduras. */
+const YARD_TONES = ['#8f7a57', '#7c6849', '#6b593e', '#584930', '#433724'] as const;
+const YARD_LIT = 0;
+const YARD_MID = 1;
+const YARD_SHADE = 2;
+const YARD_DARK = 3;
+const YARD_DEEP = 4;
+const YARD_GRASS = ['#55702f', '#3f5a26'] as const;
+const YARD_PEBBLE = ['#a89a7c', '#837763', '#4c4231'] as const;
+const YARD_LEAF = '#a2652c';
+/** Até onde vai a terra inteira; dali até 1 ela se desfaz em torrões soltos no capim. */
+const YARD_SOLID_REACH = 0.86;
 
-const yardNoise = (x: number, y: number, seed: number): number => terrainVariant(x + seed * 31, y - seed * 17, 1000) / 999;
+const yardNoise = (x: number, y: number, seed: number): number => terrainVariant(x + seed * 31 + 400, y - seed * 17 + 400, 1000) / 999;
 
-/** Terra limpa: um tom só, com manchas gastas e poucas pedrinhas. A beira é irregular, nunca uma elipse exata. */
+/** Ruído liso: manchas de contorno orgânico, em vez do grão de um pixel ou das ondas regulares. */
+const yardBlotch = (x: number, y: number, seed: number, cell: number): number => {
+  const fx = x / cell;
+  const fy = y / cell;
+  const ix = Math.floor(fx);
+  const iy = Math.floor(fy);
+  const sx = (fx - ix) * (fx - ix) * (3 - 2 * (fx - ix));
+  const sy = (fy - iy) * (fy - iy) * (3 - 2 * (fy - iy));
+  const top = yardNoise(ix, iy, seed) * (1 - sx) + yardNoise(ix + 1, iy, seed) * sx;
+  const bottom = yardNoise(ix, iy + 1, seed) * (1 - sx) + yardNoise(ix + 1, iy + 1, seed) * sx;
+  return top * (1 - sy) + bottom * sy;
+};
+
+/**
+ * O TERREIRO, no mesmo nível de detalhe do capim e da terra da fogueira: pixel a pixel, com cinco tons
+ * em manchas, a beira comida por lobos e torrões, a borda de baixo escura (a terra é um degrau abaixo do
+ * capim), o caminho pisado que sai da porta, rachaduras, pedrinhas com luz e sombra, gravetos, folhas
+ * secas e tufos de capim voltando pela beira.
+ */
 const paintYard = (rect: Paint, seed: number): void => {
   const w = YARD_WIDTH * YARD_TEXELS;
   const h = YARD_DEPTH * YARD_TEXELS;
-  for (let by = 0; by < h; by += 2) {
-    for (let bx = 0; bx < w; bx += 2) {
-      const nx = (bx + 1 - w / 2) / (w / 2);
-      const ny = (by + 1 - h / 2) / (h / 2);
-      const reach = Math.hypot(nx, ny) + (yardNoise(bx >> 2, by >> 2, seed) - 0.5) * 0.14;
-      if (reach > 0.97) continue;
-      const fringe = reach > 0.88;
-      if (fringe && yardNoise(bx, by, seed + 1) < 0.4) continue;
-      // Por ondas e não por blocos: uma mancha quadrada vira tabuleiro de xadrez no chão.
-      const worn = Math.sin(bx * 0.11 + seed) + Math.sin(by * 0.17 + seed * 2) + Math.sin((bx + by) * 0.07) + yardNoise(bx, by, seed + 2) * 0.7 > 1.5;
-      rect(fringe ? YARD_FRINGE : worn ? YARD_WORN : YARD_EARTH, bx, by, 2, 2);
-      if (!fringe && yardNoise(bx, by, seed + 3) > 0.985) rect(YARD_PEBBLE, bx, by, 1, 1);
+  const reachAt = (x: number, y: number): number => {
+    const nx = (x + 0.5 - w / 2) / (w / 2);
+    const ny = (y + 0.5 - h / 2) / (h / 2);
+    return Math.hypot(nx, ny)
+      + (yardBlotch(x, y, seed + 4, 13) - 0.5) * 0.5
+      + (yardBlotch(x, y, seed + 5, 4) - 0.5) * 0.16;
+  };
+  const solid = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < w && y < h && reachAt(x, y) < YARD_SOLID_REACH;
+  // O caminho desce da porta com uma curva só dele, e abre um pouco antes de chegar no capim.
+  const doorY = Math.round(h * 0.3);
+  const pathX = (y: number): number => w / 2 + Math.sin(y * 0.09 + seed * 1.7) * 5;
+  const onPath = (x: number, y: number): number => {
+    if (y < doorY) return 2;
+    const half = 6 + (y - doorY) * 0.09 + (yardBlotch(x, y, seed + 6, 3) - 0.5) * 3;
+    return Math.abs(x - pathX(y)) / half;
+  };
+
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const reach = reachAt(x, y);
+      if (reach >= YARD_SOLID_REACH) {
+        // Os torrões soltos: cada vez mais raros para fora, e nunca um pixel só.
+        if (reach < 1 && yardBlotch(x, y, seed + 7, 2) > 0.5 + (reach - YARD_SOLID_REACH) * 1.6) {
+          rect(YARD_TONES[yardNoise(x, y, seed + 8) > 0.5 ? YARD_SHADE : YARD_DARK], x, y, 1, 1);
+        }
+        continue;
+      }
+      const stain = yardBlotch(x, y, seed + 1, 11) * 0.65 + yardBlotch(x, y, seed + 2, 4) * 0.35;
+      let tone = stain > 0.58 ? YARD_MID : stain > 0.45 ? YARD_SHADE : YARD_DARK;
+      const path = onPath(x, y);
+      if (path < 0.8) tone = YARD_LIT;
+      else if (path < 1.15) tone = Math.min(tone, YARD_MID);
+      // A terra afunda na beira, antes de virar capim.
+      if (reach > YARD_SOLID_REACH - 0.09) tone = Math.min(YARD_DARK, tone + 1);
+      // O grão: um ou outro pixel foge do tom da mancha.
+      const grain = yardNoise(x, y, seed + 3);
+      if (grain > 0.93) tone = Math.max(YARD_LIT, tone - 1);
+      else if (grain < 0.08) tone = Math.min(YARD_DARK, tone + 1);
+      // O degrau: embaixo a terra mostra o corte, em cima o capim faz sombra nela.
+      if (!solid(x, y + 1) || !solid(x, y + 2)) tone = YARD_DEEP;
+      else if (!solid(x, y - 1)) tone = YARD_DARK;
+      rect(YARD_TONES[tone], x, y, 1, 1);
     }
   }
+
+  /** Sorteia lugares de terra firme: `want` diz se aquele pixel serve. */
+  const scatter = (count: number, salt: number, want: (x: number, y: number) => boolean, draw: (x: number, y: number, i: number) => void): void => {
+    let placed = 0;
+    for (let i = 0; i < count * 12 && placed < count; i += 1) {
+      const x = Math.floor(yardNoise(i, salt, seed + 9) * w);
+      const y = Math.floor(yardNoise(salt, i, seed + 10) * h);
+      if (!want(x, y)) continue;
+      draw(x, y, i);
+      placed += 1;
+    }
+  };
+  const firm = (x: number, y: number): boolean => reachAt(x, y) < YARD_SOLID_REACH - 0.12 && y > doorY - 6;
+
+  // As rachaduras: passos curtos que mudam de rumo, sempre fora do caminho.
+  scatter(9, 1, (x, y) => firm(x, y) && onPath(x, y) > 1.4, (x, y, i) => {
+    let cx = x;
+    let cy = y;
+    for (let n = 0; n < 5 + (i % 5); n += 1) {
+      if (firm(cx, cy)) rect(YARD_TONES[YARD_DEEP], cx, cy, 1, 1);
+      if (yardNoise(n, i, seed + 11) > 0.45) cx += i % 2 === 0 ? 1 : -1;
+      else cy += 1;
+    }
+  });
+  // As pedrinhas: luz em cima à esquerda e a sombra colada embaixo, para não boiarem.
+  scatter(13, 2, firm, (x, y, i) => {
+    const big = i % 3 === 0;
+    rect(YARD_PEBBLE[2], x, y + 1, big ? 3 : 2, 1);
+    rect(YARD_PEBBLE[1], x, y, big ? 3 : 2, 1);
+    rect(YARD_PEBBLE[0], x, y, 1, 1);
+    if (big) { rect(YARD_PEBBLE[1], x + 1, y - 1, 1, 1); }
+  });
+  // Os gravetos caídos.
+  scatter(4, 3, (x, y) => firm(x, y) && onPath(x, y) > 1.2, (x, y, i) => {
+    const down = i % 2 === 0 ? 1 : -1;
+    rect(YARD_TONES[YARD_DEEP], x, y, 3, 1);
+    rect(YARD_TONES[YARD_DARK], x + 3, y + down, 2, 1);
+  });
+  // As folhas secas.
+  scatter(7, 4, firm, (x, y) => rect(YARD_LEAF, x, y, 1, 1));
+  // O capim voltando: tufos em V na beira, e um ou outro mais para dentro.
+  scatter(20, 5, (x, y) => {
+    const reach = reachAt(x, y);
+    return reach > YARD_SOLID_REACH - 0.34 && reach < YARD_SOLID_REACH - 0.02 && onPath(x, y) > 1.2 && y > 2;
+  }, (x, y, i) => {
+    rect(YARD_GRASS[1], x, y, 1, 2);
+    rect(YARD_GRASS[0], x + 1, y - 1, 1, 3);
+    if (i % 2 === 0) rect(YARD_GRASS[1], x + 2, y, 1, 2);
+  });
 };
 
 export const paintedCanvas = (paint: (rect: Paint) => void, width = 48, height = 48): HTMLCanvasElement => {

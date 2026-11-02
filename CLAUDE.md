@@ -82,7 +82,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
                        catálogo da bancada/forno, põe e malha no altar, e PEGA / TROCA / POUSA a
                        coisa do tile da frente (`handAt`). Nada no Z é golpe.
     X (K)           →  USA o que está na mão no tile à frente (a tabela `useItemAt`).
-    pisar           →  APANHA só com a mão vazia (`collectUnderfoot`).
+    pisar           →  não pega nada: o balão (`HandOffer`) anuncia, e o Z pega ou troca o que está
+                       debaixo do herói (`takeUnderfoot`), antes de tudo menos da conversa.
     ESC             →  a pausa: retornar, opções, sair. Não há bolsa, mapa nem caderno (pedido do autor).
 
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
