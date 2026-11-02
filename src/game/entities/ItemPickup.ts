@@ -24,6 +24,10 @@ export type HeldItemKind =
   // tres de "ferro" perde a unica etapa que explica por que forno e carvao existem.
   | 'ore'
   | 'bloom'
+  // O QUE ENFEITA: não serve para nada, e esse é o ponto. Pousado, fica onde o jogador quis (é sólido, e só o Z o pega de volta).
+  | 'stool'
+  | 'lantern'
+  | 'flowerPot'
   | 'sword'
   | 'key'
   | 'axe'
@@ -96,6 +100,9 @@ export type ItemFire = { fuelMs: number };
 // How each held item looks lying on the ground (textures3d keys). Tools without a dedicated
 // map sprite reuse their held-item icon — same 16x16 pixel-art scale.
 const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = {
+  stool: { texture: 'valley-find-stool', frame: 0 },
+  lantern: { texture: 'valley-find-lantern', frame: 0 },
+  flowerPot: { texture: 'valley-find-flowerPot', frame: 0 },
   sword: { texture: 'sword-item', frame: ITEM_FRAMES.swordIdle },
   key: { texture: 'key-item', frame: KEY_FRAMES.pickup },
   axe: { texture: 'axe-icon', frame: 0 },
@@ -161,6 +168,9 @@ export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKi
  * O que pode ser SELECIONADO na bolsa. A espada saiu da mochila (ela e do heroi, e mora no
  * botao Z), entao ela nunca e resposta desta pergunta — nem sequer chega a existir como item.
  */
+export const DECOR_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['stool', 'lantern', 'flowerPot']);
+export const isDecorKind = (kind: HeldItemKind | null | undefined): boolean => kind != null && DECOR_KINDS.has(kind);
+
 export const isBagItem = (kind: HeldItemKind): boolean =>
   kind !== 'sword' && !MATERIAL_ITEM_KINDS.has(kind);
 
@@ -241,9 +251,10 @@ export class ItemPickup {
     // coplanar and the item strobes under his feet (see DEPTH_LAYER). This one option is what
     // makes every collectible in the game safe, not each item kind remembering on its own.
     this.sprite = world3d()
-      .addBillboard(visual.texture, visual.frame, { emissive: true, depthLayer: 'ground' })
+      // O que enfeita é móvel, não coisa a pegar: tamanho de um tile, sem brilho nem aro (só a lanterna acende).
+      .addBillboard(visual.texture, visual.frame, { emissive: !isDecorKind(kind) || kind === 'lantern', depthLayer: 'ground' })
       .setPosition(tileX, tileY)
-      .setDisplaySize(GROUND_SIZE, GROUND_SIZE);
+      .setDisplaySize(isDecorKind(kind) ? 1 : GROUND_SIZE, isDecorKind(kind) ? 1 : GROUND_SIZE);
 
     // The purple rim: emissive like the item itself, so it also survives the dark.
     // Alpha/elevation are mirrored from the sprite every render (fade-in + bob).
@@ -334,8 +345,8 @@ export class ItemPickup {
   public render(_tileSize: number, _camera: WorldCamera): void {
     if (this.collected) return;
     // O COGUMELO NAO FLUTUA: ele esta nascendo ali, preso pelo pe. Todo o resto boia.
-    const bob = this.collectable && !isMushroomKind(this.kind)
-      ? (Math.sin(this.scene.time.now * 0.0045) + 1) * 0.5 * BOB_TILES
+    const bob = this.collectable && !isMushroomKind(this.kind) && !isDecorKind(this.kind)
+      ?(Math.sin(this.scene.time.now * 0.0045) + 1) * 0.5 * BOB_TILES
       : 0;
     this.sprite.setElevation(bob);
     // The rim rides the bob and the fade-in with the item. Downward copies clamp at the
@@ -344,7 +355,7 @@ export class ItemPickup {
     for (let i = 0; i < this.outline.length; i++) {
       this.outline[i]
         .setElevation(Math.max(0, bob + OUTLINE_DIRS[i][1] * OUTLINE_OFFSET_TILES))
-        .setAlpha(alpha);
+        .setAlpha(isDecorKind(this.kind) ? 0 : alpha);
     }
     // O calor da esponja cavalga o bob e PULSA: metal esfriando respira, aura magica nao.
     if (this.heatGlow) {

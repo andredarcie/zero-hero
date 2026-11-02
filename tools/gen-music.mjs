@@ -1,7 +1,7 @@
 // Generates the game's ORIGINAL soundtrack. The cozy set (music-valley, music-lullaby and the
 // day/night/water ambience beds) is what the game plays today; the dark-fantasy loops below
 // are the older set ("Dark Souls mood on SNES hardware"), kept for reference. Every loop is
-// rendered offline to public/assets/audio/:
+// rendered offline to tools/audio-masters/:
 //
 //   music-title.wav      Firelink-like: sparse harp, pp choir, church bell. A minor, 52 BPM.
 //   music-overworld.wav  exploration dirge: E-aeolian w/ phrygian borrowings, 64 BPM,
@@ -25,7 +25,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SR = 32000;
-const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'assets', 'audio');
+// Os WAV ficam fora do site: tools/encode-audio.mjs gera a partir deles os MP3 que o jogo baixa.
+const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'audio-masters');
 
 // ── note name -> frequency ─────────────────────────────────────────────────
 const SEMI = {
@@ -1137,6 +1138,82 @@ function renderWaterAmbience() {
   writeWav('ambience-water.wav', out.L, out.R);
 }
 
+// A CHUVA: chiado largo que respira devagar, e pingos esparsos por cima. Fica atrás de todo o resto.
+function renderRainAmbience() {
+  const LOOP_S = 16;
+  const total = Math.ceil((LOOP_S + 2) * SR);
+  const loopLen = LOOP_S * SR;
+  const L = new Float32Array(total), R = new Float32Array(total);
+  for (const [buf, seed] of [[L, 0.7], [R, 2.3]]) {
+    const svf = makeSVF();
+    for (let i = 0; i < total; i++) {
+      const t = i / SR;
+      const swell = 0.8 + 0.2 * Math.sin(2 * Math.PI * (2 / LOOP_S) * t + seed);
+      buf[i] = svf((Math.random() * 2 - 1) * 1.1, 3200, 0.6) * swell * 0.5;
+    }
+  }
+  const plips = stereo(total);
+  for (let t = 0.1; t < LOOP_S - 0.2; t += 0.05 + Math.random() * 0.16) {
+    const start = Math.floor(t * SR);
+    const len = Math.floor(0.03 * SR);
+    const f0 = 1500 + Math.random() * 2400;
+    const pa = (Math.random() * 1.6 - 0.8 + 1) * 0.25 * Math.PI;
+    let ph = 0;
+    for (let i = 0; i < len; i++) {
+      const k = i / len;
+      ph += f0 / SR;
+      const s = Math.sin(2 * Math.PI * ph) * Math.exp(-k * 6) * 0.05;
+      plips.L[start + i] += s * Math.cos(pa); plips.R[start + i] += s * Math.sin(pa);
+    }
+  }
+  for (let i = 0; i < total; i++) { L[i] += plips.L[i]; R[i] += plips.R[i]; }
+  const wrap = (buf) => { for (let i = loopLen; i < total; i++) buf[i - loopLen] += buf[i] * Math.max(0, 1 - (i - loopLen) / (0.5 * SR)); return buf.subarray(0, loopLen); };
+  writeWav('ambience-rain.wav', wrap(L), wrap(R));
+}
+
+// AS CAMADAS DO VALE. Seis compassos de "Little Hearth" (72 BPM, 20 s), só com notas da pentatônica de fá, para
+// caber em cima de qualquer acorde dela. O jogo as toca em cima da música, e o lugar decide o quanto.
+function renderLayer(name, notes, opts) {
+  const BPM = 72, SPB = 60 / BPM, BPB = 4, BARS = 6;
+  const loopLen = Math.round(BARS * BPB * SPB * SR);
+  const total = Math.ceil((BARS * BPB * SPB + 5) * SR);
+  const out = mixdown([{ buf: opts.render(notes(SPB, BPB), total), echoSend: opts.echo, revSend: opts.rev }], {
+    total, loopLen,
+    echo: { delayMs: 240, feedback: 0.32, lpHz: 3800, spreadMs: 12, gain: 0.65 },
+    reverb: { room: 0.86, damp: 0.55, gain: 0.9 },
+    lpHz: 7000, drive: 1.02,
+  });
+  writeWav(`${name}.wav`, out.L, out.R);
+}
+
+function renderWaterLayer() {
+  renderLayer('music-layer-water', (SPB, BPB) => {
+    const box = [];
+    barMelody(box, 0, [['C6', 1], [null, 1], ['A5', 1], ['G5', 1]], SPB, BPB);
+    barMelody(box, 1, [[null, 2], ['F5', 1], ['A5', 1]], SPB, BPB);
+    barMelody(box, 2, [['D6', 1.5], [null, 2.5]], SPB, BPB);
+    barMelody(box, 3, [['C6', 1], ['A5', 1], [null, 2]], SPB, BPB);
+    barMelody(box, 4, [[null, 1], ['G5', 1], ['A5', 1], ['C6', 1]], SPB, BPB);
+    barMelody(box, 5, [['A5', 2], [null, 2]], SPB, BPB);
+    return box;
+  }, { render: (n, total) => renderBell(n, total, { vol: 0.14, tau: 1.3, pan: -0.2 }), echo: 0.7, rev: 0.6 });
+}
+
+function renderFireLayer() {
+  renderLayer('music-layer-fire', (SPB, BPB) => {
+    const low = [];
+    for (let bar = 0; bar < 6; bar += 2) {
+      low.push({ t: bar * BPB * SPB, dur: 2 * BPB * SPB * 1.02, freq: freq('F3'), vel: 0.9 });
+      low.push({ t: bar * BPB * SPB, dur: 2 * BPB * SPB * 1.02, freq: freq('C4'), vel: 0.7 });
+    }
+    return low;
+  }, { render: (n, total) => renderInstrument(n, total, {
+    wave: 'triangle', unison: 3, detune: 5, spread: 0.5, vol: 0.2,
+    attack: 1.4, decay: 0.8, sustain: 0.9, release: 2,
+    cutoff: 1100, resonance: 0.5, vibRate: 4.2, vibDepth: 0.003, vibDelay: 1,
+  }), echo: 0.1, rev: 0.6 });
+}
+
 // Optional CLI filter: `node tools/gen-music.mjs menu-drips` regenerates only the named
 // loops. Handy because every renderer uses Math.random(), so a full run rewrites all the
 // .wav files (perceptually identical, but noisy in git) — pass names to touch just those.
@@ -1147,6 +1224,9 @@ const RENDERERS = {
   'ambience-wind': renderAmbience,
   'menu-drips': renderDrips,
   'music-valley': renderValley,
+  'ambience-rain': renderRainAmbience,
+  'music-layer-water': renderWaterLayer,
+  'music-layer-fire': renderFireLayer,
   'music-lullaby': renderLullaby,
   'ambience-day': renderDayAmbience,
   'ambience-night': renderNightAmbience,

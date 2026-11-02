@@ -51,7 +51,10 @@
       "sand": "Sand from the shore.",
       "ash": "Ash from the fire.",
       "glass": "Glass. Take it to Vega.",
-      "telescope": "The telescope!"
+      "telescope": "The telescope!",
+      "stool": "A stool. It does nothing. It looks nice.",
+      "lantern": "A lantern. Put it where you like.",
+      "flowerPot": "A pot with a flower. Put it where you like."
     },
     "name": {
       "sword": "Sword",
@@ -85,7 +88,10 @@
       "sand": "Sand",
       "ash": "Ash",
       "glass": "Glass",
-      "telescope": "Telescope"
+      "telescope": "Telescope",
+      "stool": "Stool",
+      "lantern": "Lantern",
+      "flowerPot": "Flower pot"
     }
   },
   "dialog": {
@@ -268,15 +274,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Six kinds grow here. Bring me one at a time. Take my knife."
+          "text": "Six kinds grow here. Take my knife and my basket. Bring them all at once, if you like."
         },
         {
           "speaker": "npc",
           "text": "Cut, don't pull. Brush, don't wash."
-        },
-        {
-          "speaker": "npc",
-          "text": "After each cut, the knife comes back to me."
         }
       ]
     },
@@ -781,6 +783,8 @@
   "controls": {
     "hint": "Z talk & take · X use",
     "touchHint": "Drag anywhere to walk · A talk & take · B use",
+    "skipIntro": "Z skips the scene",
+    "skipIntroTouch": "Tap again to skip",
     "attackTitle": "Hand (Z)",
     "useTitle": "Use (X)"
   },
@@ -904,6 +908,94 @@
       }
     ]
   },
+  "finds": {
+    "helmet": [
+      {
+        "speaker": "narrator",
+        "text": "A rusted helmet."
+      },
+      {
+        "speaker": "narrator",
+        "text": "A flower grew inside."
+      }
+    ],
+    "bottle": [
+      {
+        "speaker": "narrator",
+        "text": "A bottle with a note."
+      },
+      {
+        "speaker": "narrator",
+        "text": "“I made it. It's good here. Come.”"
+      },
+      {
+        "speaker": "narrator",
+        "text": "No name."
+      }
+    ],
+    "swing": [
+      {
+        "speaker": "narrator",
+        "text": "A swing."
+      },
+      {
+        "speaker": "narrator",
+        "text": "The rope is new. Someone still comes here."
+      }
+    ],
+    "door": {
+      "astronaut": [
+        {
+          "speaker": "npc",
+          "text": "The porch has the best view after the ship. Sit there."
+        },
+        {
+          "speaker": "npc",
+          "text": "I'll bring tea."
+        }
+      ],
+      "businessMan": [
+        {
+          "speaker": "npc",
+          "text": "The door sticks. The porch does not."
+        },
+        {
+          "speaker": "npc",
+          "text": "Sit. I'll bring tea."
+        }
+      ],
+      "painter": [
+        {
+          "speaker": "npc",
+          "text": "Everything in here is wet with paint."
+        },
+        {
+          "speaker": "npc",
+          "text": "Sit on the porch. I'll bring tea."
+        }
+      ],
+      "radiationSuit": [
+        {
+          "speaker": "npc",
+          "text": "Better stay out. There is fungus on everything."
+        },
+        {
+          "speaker": "npc",
+          "text": "The porch is yours. I'll bring tea."
+        }
+      ],
+      "empty": [
+        {
+          "speaker": "narrator",
+          "text": "Nobody home."
+        },
+        {
+          "speaker": "narrator",
+          "text": "The porch is still here."
+        }
+      ]
+    }
+  },
   "death": {
     "name": "Death",
     "visit": [
@@ -1001,5 +1093,11 @@
       "seen": "To the naked eye, a smudge. Through the lens, dozens of stars.",
       "fact": "That light left there some 440 years ago."
     }
+  },
+  "seasons": {
+    "spring": "Spring",
+    "summer": "Summer",
+    "autumn": "Autumn",
+    "winter": "Winter"
   }
 }

@@ -165,12 +165,12 @@ export default {
           const now = await state();
           if (now.itemGetOpen || now.dialogOpen) await drain(`${label} (no caminho)`);
           const after = await state();
-          if (after.player.worldX !== b.x || after.player.worldY !== b.y) { ok = false; break; }
+          if (after.player.worldX !== b.x || after.player.worldY !== b.y) { ok = false; console.log(`[telescopio] passo recusado: de ${a.x},${a.y} para ${b.x},${b.y}, parei em ${after.player.worldX},${after.player.worldY}, tentativa ${attempt}`); break; }
         }
         if (ok) return way[way.length - 1];
         await sleep(250);
       }
-      throw new Error(`nao consegui chegar em ${label}`);
+      throw new Error(`nao consegui chegar em ${label} (parei em ${JSON.stringify((await state()).player)}, faltava ${JSON.stringify(goals)})`);
     };
 
     const face = async (target) => {
@@ -278,7 +278,9 @@ export default {
     await drain('abertura');
     await free();
     reliefGrid = await page.evaluate(async () => {
-      const { getTileRelief } = await import('/src/game/world/WorldData.ts');
+      // A URL que o jogo carregou: outra (sem o ?t= do vite) daria uma segunda cópia do módulo, com o mundo vazio.
+      const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/world/WorldData.ts'));
+      const { getTileRelief } = await import(url);
       return Array.from({ length: 60 }, (_, y) => Array.from({ length: 60 }, (__, x) => getTileRelief(x, y)));
     });
     mark('abertura terminou');

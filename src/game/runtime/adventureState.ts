@@ -99,6 +99,12 @@ export interface AdventureSnapshot {
   hearthLit: boolean;
   /** O cogumelo foi assado e os creditos rolaram. */
   endingSeen: boolean;
+  /** O dia do relógio: as estações saem dele. */
+  day: number;
+  /** A hora do relógio: sem ela, toda volta seria meia-noite, e quem joga pouco nunca chegaria à próxima. */
+  clock: number | null;
+  /** Os cogumelos na cesta, a caminho da Hollis. */
+  basket: HeldItemKind[];
   seenDialogKeys: Set<string>;
   seenItems: Set<string>;
   /** As conversas que ja deram o presente do NPC (a ferramenta do pedido) — um presente, uma vez. */
@@ -137,6 +143,9 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   gateOpened: false,
   hearthLit: false,
   endingSeen: false,
+  day: 0,
+  clock: null,
+  basket: [],
   seenDialogKeys: new Set(),
   seenItems: new Set(),
   giftsGiven: new Set(),
@@ -161,6 +170,9 @@ type StoredSnapshot = {
   gateOpened?: boolean;
   hearthLit?: boolean;
   endingSeen?: boolean;
+  day?: number;
+  clock?: number | null;
+  basket?: HeldItemKind[];
   seenDialogKeys?: string[];
   seenItems?: string[];
   giftsGiven?: string[];
@@ -237,6 +249,9 @@ const load = (): AdventureSnapshot => {
       gateOpened: p.gateOpened === true,
       hearthLit: p.hearthLit === true,
       endingSeen: p.endingSeen === true,
+      day: typeof p.day === 'number' ? p.day : 0,
+      clock: typeof p.clock === 'number' ? p.clock : null,
+      basket: Array.isArray(p.basket) ? p.basket : [],
       seenDialogKeys: new Set(p.seenDialogKeys ?? []),
       seenItems: new Set(p.seenItems ?? []),
       giftsGiven: new Set(p.giftsGiven ?? []),
@@ -287,6 +302,9 @@ export const saveAdventure = (): void => {
     gateOpened: s.gateOpened,
     hearthLit: s.hearthLit,
     endingSeen: s.endingSeen,
+    day: s.day,
+    clock: s.clock,
+    basket: s.basket,
     seenDialogKeys: [...s.seenDialogKeys],
     seenItems: [...s.seenItems],
     giftsGiven: [...s.giftsGiven],

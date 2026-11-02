@@ -65,6 +65,10 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // logo depois do forno, comprado com o que o jogador ja tem na mao quando o forno acende.
   //
   { inputs: ['stone', 'ore'], output: 'altar', family: 'machine' },
+  // ── O QUE SÓ ENFEITA. Fora da escada de propósito (ver LADDER): sempre à vista, e ninguém precisa dele. ──
+  { inputs: ['wood', 'wood'], output: 'stool', family: 'material' },
+  { inputs: ['wood', 'charcoal'], output: 'lantern', family: 'material' },
+  { inputs: ['stone', 'seeds'], output: 'flowerPot', family: 'material' },
   // ── O FORNO, e ele e a UNICA receita de outra estacao ──────────────────────────────────────
   //
   // Minerio + CARVAO = esponja de ferro. O carvao aqui nao e combustivel: e o REAGENTE que rouba o

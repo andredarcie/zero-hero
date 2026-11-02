@@ -51,7 +51,10 @@
       "sand": "Areia da margem.",
       "ash": "Cinza da fogueira.",
       "glass": "Vidro. Leve à Vega.",
-      "telescope": "O telescópio!"
+      "telescope": "O telescópio!",
+      "stool": "Um banquinho. Não serve para nada. Fica bonito.",
+      "lantern": "Uma lanterna. Ponha onde quiser.",
+      "flowerPot": "Um vaso com uma flor. Ponha onde quiser."
     },
     "name": {
       "sword": "Espada",
@@ -85,7 +88,10 @@
       "sand": "Areia",
       "ash": "Cinza",
       "glass": "Vidro",
-      "telescope": "Telescópio"
+      "telescope": "Telescópio",
+      "stool": "Banquinho",
+      "lantern": "Lanterna",
+      "flowerPot": "Vaso"
     }
   },
   "dialog": {
@@ -268,15 +274,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Seis tipos crescem aqui. Traga um de cada vez. Leve a minha faca."
+          "text": "Seis tipos crescem aqui. Leve a minha faca e a minha cesta. Traga todos de uma vez, se quiser."
         },
         {
           "speaker": "npc",
           "text": "Corte, não arranque. Escove, não lave."
-        },
-        {
-          "speaker": "npc",
-          "text": "No corte, a faca volta para mim."
         }
       ]
     },
@@ -781,6 +783,8 @@
   "controls": {
     "hint": "Z fala e pega · X usa",
     "touchHint": "Arraste para andar · A fala e pega · B usa",
+    "skipIntro": "Z pula a cena",
+    "skipIntroTouch": "Toque de novo para pular",
     "attackTitle": "Mão (Z)",
     "useTitle": "Usar (X)"
   },
@@ -904,6 +908,94 @@
       }
     ]
   },
+  "finds": {
+    "helmet": [
+      {
+        "speaker": "narrator",
+        "text": "Um elmo enferrujado."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Nasceu uma flor dentro."
+      }
+    ],
+    "bottle": [
+      {
+        "speaker": "narrator",
+        "text": "Uma garrafa com um bilhete."
+      },
+      {
+        "speaker": "narrator",
+        "text": "“Cheguei. Aqui é bom. Venha.”"
+      },
+      {
+        "speaker": "narrator",
+        "text": "Sem nome."
+      }
+    ],
+    "swing": [
+      {
+        "speaker": "narrator",
+        "text": "Um balanço."
+      },
+      {
+        "speaker": "narrator",
+        "text": "A corda é nova. Alguém ainda vem aqui."
+      }
+    ],
+    "door": {
+      "astronaut": [
+        {
+          "speaker": "npc",
+          "text": "A varanda tem a melhor vista depois da nave. Senta lá."
+        },
+        {
+          "speaker": "npc",
+          "text": "Levo chá."
+        }
+      ],
+      "businessMan": [
+        {
+          "speaker": "npc",
+          "text": "A porta emperra. A varanda não."
+        },
+        {
+          "speaker": "npc",
+          "text": "Senta. Levo um chá."
+        }
+      ],
+      "painter": [
+        {
+          "speaker": "npc",
+          "text": "Aqui dentro está tudo molhado de tinta."
+        },
+        {
+          "speaker": "npc",
+          "text": "Senta na varanda. Levo chá."
+        }
+      ],
+      "radiationSuit": [
+        {
+          "speaker": "npc",
+          "text": "Melhor não entrar. Tem fungo em tudo."
+        },
+        {
+          "speaker": "npc",
+          "text": "A varanda é sua. Levo chá."
+        }
+      ],
+      "empty": [
+        {
+          "speaker": "narrator",
+          "text": "Ninguém em casa."
+        },
+        {
+          "speaker": "narrator",
+          "text": "A varanda continua aqui."
+        }
+      ]
+    }
+  },
   "death": {
     "name": "Morte",
     "visit": [
@@ -1001,5 +1093,11 @@
       "seen": "A olho nu, um borrão. Pela lente, dezenas de estrelas.",
       "fact": "Essa luz saiu de lá há uns 440 anos."
     }
+  },
+  "seasons": {
+    "spring": "Primavera",
+    "summer": "Verão",
+    "autumn": "Outono",
+    "winter": "Inverno"
   }
 }

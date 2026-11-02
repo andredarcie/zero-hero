@@ -4,7 +4,7 @@ import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t, tWords } from '@/game/i18n/i18n';
 import {
-  adventureState, hasAdventureSave, requestAdventureRespawn, resetAdventure,
+  hasAdventureSave, requestAdventureRespawn, resetAdventure,
 } from '@/game/runtime/adventureState';
 import { KEY_BG, KEY_BORDER } from '@/game/runtime/uiStyle';
 import { setWorldData } from '@/game/world/WorldData';
@@ -12,8 +12,8 @@ import { setWorldData } from '@/game/world/WorldData';
 // The game's start screen, and now the ONLY screen between the loader and the world: the title,
 // the credit, and the door in.
 //
-//   • Sem save (ou com a jornada ja terminada): um botao, Begin.
-//   • Com uma jornada em curso: Continue (de onde parou) e, discreto, New journey.
+//   • Sem save: um botao, Begin.
+//   • Com uma jornada, terminada ou nao: Continue (de onde parou) e, discreto, New journey.
 //
 // The former authored Zelda-like overworld is archived under backup/ and has no door here.
 //
@@ -73,9 +73,8 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(2);
 
-    // Uma jornada que ja viu os creditos nao tem de onde "continuar": o vale inteiro ja foi
-    // ajudado, e a porta certa e comecar de novo.
-    const resumable = hasAdventureSave() && !adventureState().endingSeen;
+    // Os creditos nao fecham o vale: quem terminou continua sentado na fogueira do fim.
+    const resumable = hasAdventureSave();
     this.buttons = resumable
       ? [
         this.makeButton(0, t('title.continue'), Math.round(height * 0.62), () => this.startAdventure(false)),

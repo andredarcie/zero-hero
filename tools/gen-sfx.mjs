@@ -312,7 +312,7 @@ const sounds = {
     osc({ wave: 'triangle', f0: note('C4'), dur: 0.42, vol: 0.4, attack: 0.03, curve: 3.5, at: 0.15, sub: 0.5 }),
   ]), { lpHz: 4400, echo: { delayMs: 160, feedback: 0.35, lpHz: 3600, mix: 0.22, tail: 0.6 }, reverb: { seconds: 1.1, wet: 0.16 }, drive: 1.0 }),
 
-  // NB: the item-get sound is NOT synthesized here — it uses public/assets/audio/item-pickup.wav
+  // NB: the item-get sound is NOT synthesized here — it uses tools/audio-masters/item-pickup.wav
   // (a Freesound recording, see CREDITS.md). SoundManager's `swordPickup` sample points at it.
 
   // Pained grunt — short, low, human-ish.
@@ -491,7 +491,9 @@ fs.mkdirSync(OUT, { recursive: true });
 for (const [name, gen] of selected) {
   const samples = gen();
   const wav = toWav(samples);
-  fs.writeFileSync(path.join(OUT, `${name}.wav`), wav);
+  // Só os passos vão direto para o site. O resto vai para os originais, e tools/encode-audio.mjs faz o MP3.
+  const dir = name.startsWith('footstep') ? OUT : path.join(path.dirname(fileURLToPath(import.meta.url)), 'audio-masters');
+  fs.writeFileSync(path.join(dir, `${name}.wav`), wav);
   console.log(`${name.padEnd(16)} ${(samples.length / SR).toFixed(2)}s  ${(wav.length / 1024).toFixed(1)}KB`);
 }
 console.log(`\nWrote ${selected.length} .wav file(s) to ${OUT}`);

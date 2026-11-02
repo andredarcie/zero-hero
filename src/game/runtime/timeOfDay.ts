@@ -11,6 +11,11 @@ const NIGHT_MS = 3 * 60 * 1000;
 
 let time = 0; // 0 = midnight, .25 = sunrise, .5 = noon, .75 = sunset
 let initialized = false;
+/** Quantas meias-noites passaram: é de onde saem as estações (ver seasons). */
+let day = 0;
+
+export const getDay = (): number => day;
+export const setDay = (value: number): void => { day = Math.max(0, Math.floor(value)); };
 
 /** Seed only the first renderer of a run; scene restarts keep the same sun position. */
 export const initializeTimeOfDay = (initial: number): void => {
@@ -44,7 +49,9 @@ export const setTimeScale = (scale: number): void => { restScale = Math.max(0, s
 export const advanceTimeOfDay = (ms: number): void => {
   // Meio mostrador (0.5) por DAY_MS de dia e por NIGHT_MS de noite.
   const half = isNightTime() ? NIGHT_MS : DAY_MS;
-  setTimeOfDay(time + (Math.max(0, ms) * restScale * 0.5) / half);
+  const next = time + (Math.max(0, ms) * restScale * 0.5) / half;
+  if (next >= 1) day += 1;
+  setTimeOfDay(next);
 };
 
 export const timeOfDayLabel = (): string => {

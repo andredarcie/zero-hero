@@ -98,7 +98,7 @@ export const setHeroSleeping = (asleep: boolean): void => { heroSleeping = aslee
 // de toque), mostrado sobre o NPC que o herói está ENCARANDO de perto. É a resposta física ao
 // "como falo com ele?" — a tecla desenhada na cabeça de quem vai responder a ela. Mesma
 // técnica do "!": overlay Phaser projetado, nunca um corpo no mundo.
-const TALK_KEY_TEXTURE = 'npc-talk-key';
+export const TALK_KEY_TEXTURE = 'npc-talk-key';
 const TALK_GLYPHS: Record<'Z' | 'A' | 'X' | 'B', string[]> = {
   X: [
     '#...#',
@@ -197,6 +197,13 @@ export function ensureFireSleepTextures(scene: Phaser.Scene): void {
   canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
 }
 
+// Quem dorme fica deitado, na mesma pose do herói no colchão (ver FireBed), em tiles por tamanho de corpo.
+const LIE_ANGLE = -90;
+const LIE_X = 0.5;
+const LIE_Y = 0.25;
+const LIE_LIFT = 0.45;
+const LIE_MS = 420;
+
 class NpcEntity {
   public readonly worldX: number;
   public readonly worldY: number;
@@ -211,6 +218,9 @@ class NpcEntity {
   private readonly exclaim: Phaser.GameObjects.Image;
   private readonly talkKey: Phaser.GameObjects.Image;
   private readonly sleepZ: Phaser.GameObjects.Image;
+  /** De 0 (em pé) a 1 (deitado). */
+  private lying = 0;
+  private poseAt = 0;
 
   public constructor(
     scene: Phaser.Scene,
@@ -265,6 +275,8 @@ class NpcEntity {
     const depth = asleep ? 1.8 : 1;
     const slump = asleep ? 0.94 : 1;
     this.sprite.setDisplaySize(this.size * (1 - 0.012 * b * depth), this.size * slump * (1 + 0.028 * b * depth));
+    // Encarado de perto ele se levanta para conversar: falar acorda.
+    this.layDown(asleep && !showTalkKey, timeMs);
     // O keycap manda: encarado de perto, o "como falo?" vale mais que o "tem assunto novo" —
     // os dois juntos seriam dois balões brigando pelo mesmo pixel. O "z" e o mais fraco dos três:
     // dormir não impede ninguém de conversar (falar acorda), então ele nunca esconde um aviso.
@@ -281,14 +293,32 @@ class NpcEntity {
     const anchorY = screen.y - tileSize * height - px * 2 + bob;
     if (showSleep) {
       // O "z" sobe de lado e some, e volta: um ciclo de 2,4s por vizinho, cada um no seu tempo.
+      // Deitado, a cabeça fica à esquerda e bem mais baixa.
       const cycle = ((timeMs / 2400) + this.breathPhase / (Math.PI * 2)) % 1;
+      const headX = screen.x - tileSize * 0.45 * this.lying;
+      const headY = anchorY + tileSize * height * 0.55 * this.lying;
       this.sleepZ.setScale(px)
-        .setPosition(Math.round(screen.x + px * (2 + cycle * 4)), Math.round(anchorY + px * 3 - cycle * tileSize * 0.35))
+        .setPosition(Math.round(headX + px * (2 + cycle * 4)), Math.round(headY + px * 3 - cycle * tileSize * 0.35))
         .setAlpha(Math.sin(cycle * Math.PI));
       return;
     }
     if (showTalkKey) this.talkKey.setScale(px).setPosition(screen.x, anchorY);
     else this.exclaim.setScale(px).setPosition(screen.x, anchorY);
+  }
+
+  /** Deita ou levanta aos poucos. A arte gira em torno dos pés, então o corpo sobe e anda até caber no tile. */
+  private layDown(down: boolean, timeMs: number): void {
+    const elapsed = Math.max(0, timeMs - this.poseAt);
+    this.poseAt = timeMs;
+    const target = down ? 1 : 0;
+    if (this.lying === target) return;
+    const step = elapsed / LIE_MS;
+    this.lying = down ? Math.min(1, this.lying + step) : Math.max(0, this.lying - step);
+    const pose = Phaser.Math.Easing.Sine.InOut(this.lying);
+    this.sprite
+      .setAngle(LIE_ANGLE * pose)
+      .setPosition(this.worldX + LIE_X * this.size * pose, this.worldY + LIE_Y * this.size * pose)
+      .setElevation(LIE_LIFT * this.size * pose);
   }
 
   public hideExclaim(): void {

@@ -204,7 +204,7 @@ export default {
         side: { x: target.x - dx, y: target.y - dy },
         back: { x: target.x - 2 * dx, y: target.y - 2 * dy },
         key: ARROW[`${dx},${dy}`],
-      })).filter((r) => grid[r.side.y]?.[r.side.x] === '.' && grid[r.back.y]?.[r.back.x] === '.');
+      })).filter((r) => grid[r.side.y]?.[r.side.x] === '.' && grid[r.back.y]?.[r.back.x] === '.' && canStep(r.side.x, r.side.y, target.x, target.y));
       if (!runs.length) throw new Error(`${label}: sem corredor para chegar de frente`);
       const at = await walkTo(runs.map((r) => r.back), label);
       const run = runs.find((r) => r.back.x === at.x && r.back.y === at.y);
@@ -294,7 +294,7 @@ export default {
       await press('x', 60, 300);
       await playForaging(kind);
       const now = await free();
-      assert(`O ${kind} foi as costas`, now.heldItem === kind, `heldItem=${now.heldItem}`);
+      assert(`O ${kind} foi para a cesta, e a faca ficou na mao`, now.heldItem === 'knife', `heldItem=${now.heldItem}`);
     };
 
     const NPC = { x: 5, y: 40 };
@@ -331,7 +331,7 @@ export default {
     await free();
     say('abertura terminou');
     reliefGrid = await page.evaluate(async () => {
-      const { getTileRelief } = await import('/src/game/world/WorldData.ts');
+      const { getTileRelief } = await import(performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/world/WorldData.ts')));
       return Array.from({ length: 60 }, (_, y) => Array.from({ length: 60 }, (__, x) => getTileRelief(x, y)));
     });
 

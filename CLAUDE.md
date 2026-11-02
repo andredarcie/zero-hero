@@ -93,8 +93,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **Cada cogumelo tem a sua trilha** (`scripts/trilhas-cogumelos.mjs`: rode `--check` depois de mexer em volta deles).
 - **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Bram pede procurar. Não espalhe mais delas.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
-  (`fungi.ts`), e cada espécie existe UMA vez no mundo. Colhido, vai às costas e NÃO pousa: só a Hollis
-  o tira (e devolve a faca).
+  (`fungi.ts`), e cada espécie existe UMA vez no mundo. Colhido, vai para a CESTA, que é a única exceção
+  à lei de uma coisa de cada vez, e a Hollis leva a cesta inteira.
 - **O herói anda PRESO ao grid** (um tile por passo, 4 direções): o livre foi tentado e desfeito —
   no celular o grid controla melhor. A posição lógica já é o tile de DESTINO durante o passo.
 - **A parede VIRA o herói** (`PlayerMovementController`): é assim que se mira. Contra tile LIVRE a

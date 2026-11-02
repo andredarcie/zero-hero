@@ -3,14 +3,15 @@
 // clock, water by distance. Playback itself can't be "heard" here (the run is muted by design),
 // but the audio graph still runs, so the gains it asks for are readable.
 const FILES = [
-  'music-valley.wav', 'music-lullaby.wav',
-  'ambience-day.wav', 'ambience-night.wav', 'ambience-water.wav',
-  'item-pickup.wav', 'heart.wav', 'shop-open.wav', 'shop-close.wav', 'ignite.wav',
-  'wood-chop.wav', 'rock-smash.wav', 'tree-fall.wav', 'splash.wav', 'grass-cut.wav',
-  'singing-bowl.wav', 'title-impact.wav', 'combat/sword-swing.wav', 'combat/fire-hit.wav',
+  'music-valley.mp3', 'music-lullaby.mp3',
+  'ambience-day.mp3', 'ambience-night.mp3', 'ambience-water.mp3', 'ambience-rain.mp3',
+  'music-layer-water.mp3', 'music-layer-fire.mp3',
+  'item-pickup.mp3', 'heart.mp3', 'shop-open.mp3', 'shop-close.mp3', 'ignite.mp3',
+  'wood-chop.mp3', 'rock-smash.mp3', 'tree-fall.mp3', 'splash.mp3', 'grass-cut.mp3',
+  'singing-bowl.mp3', 'title-impact.mp3', 'combat/sword-swing.wav', 'combat/fire-hit.wav',
 ];
 // Frequent events shouldn't use long clips (they'd pile up). One-shot moments may be longer.
-const MAX_SECONDS = { 'item-pickup.wav': 1.6, 'wood-chop.wav': 1.5, 'rock-smash.wav': 1.8 };
+const MAX_SECONDS = { 'item-pickup.mp3': 1.6, 'wood-chop.mp3': 1.5, 'rock-smash.mp3': 1.8 };
 
 export default {
   name: 'audio',
@@ -45,7 +46,7 @@ export default {
     assert('All audio files served + decoded', missing.length === 0, missing.join(', ') || `${probe.length} clips`);
     const tooLong = probe.filter((r) => MAX_SECONDS[r.f] && r.duration > MAX_SECONDS[r.f]).map((r) => r.f);
     assert('Frequent SFX are short enough', tooLong.length === 0, tooLong.join(', ') || 'ok');
-    const valley = probe.find((r) => r.f === 'music-valley.wav');
+    const valley = probe.find((r) => r.f === 'music-valley.mp3');
     assert('The valley theme is a real loop', Boolean(valley?.ok) && valley.duration > 30, `duration=${valley?.duration.toFixed(1)}s`);
 
     // The live mix, read from the game's own SoundManager (window.__sound, dev only).
@@ -59,11 +60,11 @@ export default {
       const sm = window.__sound;
       return { beds: sm.ambienceBeds.size, mix: { ...sm.ambienceMix }, track: sm.requestedTrack };
     }, [phase, at]);
-    await page.waitForFunction(() => window.__sound?.ambienceBeds.size === 3, null, { timeout: 15000 });
+    await page.waitForFunction(() => window.__sound?.ambienceBeds.size === 4, null, { timeout: 15000 });
     const dayDry = await mix(0.5, [30, 46]); // meio-dia, longe da agua
     const nightWet = await mix(0.0, [41, 51]); // meia-noite, na beira do lago do sul
     log(`  day/dry ${JSON.stringify(dayDry)}  night/wet ${JSON.stringify(nightWet)}`);
-    assert('The three ambience beds play together', dayDry.beds === 3, `beds=${dayDry.beds}`);
+    assert('The four ambience beds play together', dayDry.beds === 4, `beds=${dayDry.beds}`);
     assert('The adventure asks for the valley theme', dayDry.track === 'overworld', `track=${dayDry.track}`);
     assert('By day the birds lead and the crickets rest', dayDry.mix.day > 0.95 && dayDry.mix.night < 0.05, JSON.stringify(dayDry.mix));
     assert('By night the crickets lead', nightWet.mix.night > 0.95, JSON.stringify(nightWet.mix));

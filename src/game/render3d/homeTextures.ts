@@ -291,7 +291,7 @@ const paintYard = (rect: Paint, seed: number): void => {
   }
 };
 
-const paintedCanvas = (paint: (rect: Paint) => void, width = 48, height = 48): HTMLCanvasElement => {
+export const paintedCanvas = (paint: (rect: Paint) => void, width = 48, height = 48): HTMLCanvasElement => {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;

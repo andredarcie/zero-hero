@@ -1,5 +1,6 @@
 import { scheduleRadioClick, scheduleSyllable } from '@/game/audio/dialogVoice';
 import type { SpokenSyllable } from '@/game/dialogs/voicePersonas';
+import type { Material, Surface } from '@/game/audio/materials';
 
 
 const MASTER_VOL = 0.32;
@@ -38,23 +39,23 @@ const SAMPLES = {
   // remixado para baixo onde batia forte demais para um vale tranquilo — a rocha estourando, o
   // machado, a arvore caindo —, porque o volume desta coluna e uma decisao de jogo.
   swordSlash: { file: 'combat/sword-swing.wav', vol: 0.55 }, // o assobio da espada descendo (abertura)
-  heartPickup: { file: 'heart.wav', vol: 0.6 },
-  swordPickup: { file: 'item-pickup.wav', vol: 0.55 }, // item get (Freesound #37089, see CREDITS.md)
-  dropWater: { file: 'water-drop.wav', vol: 0.65 }, // a gota do titulo
-  titleImpact: { file: 'title-impact.wav', vol: 0.9 }, // a espada entrando na terra (abertura)
-  singingBowl: { file: 'singing-bowl.wav', vol: 0.75 }, // o sino dos momentos bons
-  shopOpen: { file: 'shop-open.wav', vol: 0.45 },
-  shopClose: { file: 'shop-close.wav', vol: 0.5 },
-  ignite: { file: 'ignite.wav', vol: 0.6 },
-  woodChop: { file: 'wood-chop.wav', vol: 0.5 },
-  treeFall: { file: 'tree-fall.wav', vol: 0.45 },
-  splash: { file: 'splash.wav', vol: 0.55 },
-  rockSmash: { file: 'rock-smash.wav', vol: 0.42 },
-  grassCut: { file: 'grass-cut.wav', vol: 0.5 },
+  heartPickup: { file: 'heart.mp3', vol: 0.6 },
+  swordPickup: { file: 'item-pickup.mp3', vol: 0.55 }, // item get (Freesound #37089, see CREDITS.md)
+  dropWater: { file: 'water-drop.mp3', vol: 0.65 }, // a gota do titulo
+  titleImpact: { file: 'title-impact.mp3', vol: 0.9 }, // a espada entrando na terra (abertura)
+  singingBowl: { file: 'singing-bowl.mp3', vol: 0.75 }, // o sino dos momentos bons
+  shopOpen: { file: 'shop-open.mp3', vol: 0.45 },
+  shopClose: { file: 'shop-close.mp3', vol: 0.5 },
+  ignite: { file: 'ignite.mp3', vol: 0.6 },
+  woodChop: { file: 'wood-chop.mp3', vol: 0.5 },
+  treeFall: { file: 'tree-fall.mp3', vol: 0.45 },
+  splash: { file: 'splash.mp3', vol: 0.55 },
+  rockSmash: { file: 'rock-smash.mp3', vol: 0.42 },
+  grassCut: { file: 'grass-cut.mp3', vol: 0.5 },
   fireHit: { file: 'combat/fire-hit.wav', vol: 0.45 },
-  bridgePlank: { file: 'bridge-plank.wav', vol: 0.55 },
-  bridgeBuilt: { file: 'bridge-built.wav', vol: 0.6 },
-  hammer: { file: 'hammer.wav', vol: 0.5 }, // nailing a plank home during a bridge build
+  bridgePlank: { file: 'bridge-plank.mp3', vol: 0.55 },
+  bridgeBuilt: { file: 'bridge-built.mp3', vol: 0.6 },
+  hammer: { file: 'hammer.mp3', vol: 0.5 }, // nailing a plank home during a bridge build
   footstep0: { file: 'footstep-0.wav', vol: 0.4 },
   footstep1: { file: 'footstep-1.wav', vol: 0.4 },
   footstep2: { file: 'footstep-2.wav', vol: 0.4 },
@@ -63,17 +64,31 @@ const SAMPLES = {
 
 type SampleKey = keyof typeof SAMPLES;
 
+/** O atraso de um decodificador de MP3 não passa disto, e nenhum efeito começa em silêncio de propósito. */
+const MAX_DECODER_DELAY_S = 0.06;
+const DECODER_SILENCE = 0.001;
+
 
 // A MUSICA E DO VALE, E SO DELE. 'overworld' e "Little Hearth" (music-valley, F maior, a
 // caixinha de musica sobre a harpa) do inicio ao fim da aventura; 'menu' e a cancao de ninar do
 // titulo e dos creditos (music-lullaby). As duas saem de tools/gen-music.mjs (que ainda sabe
 // renderizar a trilha sombria antiga, mas os arquivos dela sairam do jogo).
 export type MusicKey = 'title' | 'overworld' | 'menu';
-const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
-  title: { file: 'music-lullaby.wav', vol: 0.7 },
-  overworld: { file: 'music-valley.wav', vol: 0.8 },
-  menu: { file: 'music-lullaby.wav', vol: 0.7 },
+const LULLABY_SECONDS = 1645714 / 32000;
+const TRACKS: Record<MusicKey, { file: string; vol: number; seconds: number }> = {
+  title: { file: 'music-lullaby.mp3', vol: 0.7, seconds: LULLABY_SECONDS },
+  overworld: { file: 'music-valley.mp3', vol: 0.8, seconds: 80 },
+  menu: { file: 'music-lullaby.mp3', vol: 0.7, seconds: LULLABY_SECONDS },
 };
+
+/**
+ * Cada loop comprimido traz a própria cauda antes e o próprio começo depois (tools/encode-audio.mjs):
+ * o atraso do decodificador de MP3 cai nessa sobra, e o que toca é só o miolo, sem estalo na emenda.
+ */
+const LOOP_WRAP_S = 0.25;
+
+/** Os degraus de quem apanha em seguida, em semitons: a pentatônica de fá, sem nunca passar da oitava. */
+const PICK_SCALE = [0, 2, 4, 7, 9, 12];
 
 /**
  * OS LEITOS DE AMBIENTE. Eram um vento so; agora sao tres, tocando juntos o tempo todo, e o jogo
@@ -81,12 +96,23 @@ const TRACKS: Record<MusicKey, { file: string; vol: number }> = {
  * noite, e o marulho que cresce perto da agua. Misturar em vez de trocar e o que deixa o
  * amanhecer ACONTECER aos poucos, em vez de cortar de um arquivo para o outro.
  */
-type AmbienceBed = 'day' | 'night' | 'water';
-const AMBIENCE_FILES: Record<AmbienceBed, string> = {
-  day: 'ambience-day.wav',
-  night: 'ambience-night.wav',
-  water: 'ambience-water.wav',
+type AmbienceBed = 'day' | 'night' | 'water' | 'rain';
+const AMBIENCE_FILES: Record<AmbienceBed, { file: string; seconds: number }> = {
+  day: { file: 'ambience-day.mp3', seconds: 30 },
+  night: { file: 'ambience-night.mp3', seconds: 24 },
+  water: { file: 'ambience-water.mp3', seconds: 16 },
+  rain: { file: 'ambience-rain.mp3', seconds: 16 },
 };
+
+/**
+ * AS CAMADAS DA MÚSICA DO VALE. Pentatônica de fá sobre seis compassos, para caber em cima de qualquer
+ * acorde da música: a caixinha entra perto da água, o violoncelo perto do fogo. Tocam junto da música, no
+ * mesmo compasso, e o volume delas é o único que o lugar mexe.
+ */
+type MusicLayer = 'water' | 'fire';
+const LAYER_FILES: Record<MusicLayer, string> = { water: 'music-layer-water.mp3', fire: 'music-layer-fire.mp3' };
+const LAYER_SECONDS = 20;
+const LAYER_VOL = 0.9;
 
 const FOOTSTEP_KEYS: readonly SampleKey[] = ['footstep0', 'footstep1', 'footstep2', 'footstep3'];
 
@@ -108,6 +134,8 @@ class SoundManager {
   private sfxVol = loadVol(VOL_SFX_KEY);
   private readonly buffers = new Map<SampleKey, AudioBuffer>();
   private loadStarted = false;
+  /** Cada arquivo baixa uma vez só: o título e o menu tocam a mesma canção. */
+  private readonly downloads = new Map<string, Promise<AudioBuffer>>();
 
   // Music: one bus (ducked for dialogs) with at most two overlapping tracks while
   // crossfading. `wantTrack` survives until its buffer finishes decoding.
@@ -121,7 +149,11 @@ class SoundManager {
   // continua soando quando a musica baixa para um dialogo.
   private readonly ambienceBuffers = new Map<AmbienceBed, AudioBuffer>();
   private readonly ambienceBeds = new Map<AmbienceBed, { source: AudioBufferSourceNode; gain: GainNode }>();
-  private ambienceMix: Record<AmbienceBed, number> = { day: 1, night: 0, water: 0 };
+  private ambienceMix: Record<AmbienceBed, number> = { day: 1, night: 0, water: 0, rain: 0 };
+  private readonly layerBuffers = new Map<MusicLayer, AudioBuffer>();
+  private readonly layers = new Map<MusicLayer, { source: AudioBufferSourceNode; gain: GainNode }>();
+  private layerMix: Record<MusicLayer, number> = { water: 0, fire: 0 };
+  private musicStartedAt = 0;
   private wantAmbience = false;
 
   private lastFootstep = -1;
@@ -168,38 +200,65 @@ class SoundManager {
 
   // ── sample loading ─────────────────────────────────────────────────────────
 
-  /** Fetch + decode every sample and music loop once. Safe (and cheap) to call repeatedly. */
+  private fetchBuffer(file: string): Promise<AudioBuffer> {
+    let download = this.downloads.get(file);
+    if (!download) {
+      const ctx = this.audio;
+      download = fetch(`${import.meta.env.BASE_URL}assets/audio/${file}`)
+        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
+        .then((data) => ctx.decodeAudioData(data));
+      this.downloads.set(file, download);
+    }
+    return download;
+  }
+
+  /**
+   * Baixa os efeitos, que são pequenos e precisam estar prontos. Música e ambiente só vêm quando
+   * alguém pede (`startMusic`, `startAmbience`). Pode chamar quantas vezes quiser.
+   */
   public preload(): void {
     if (this.loadStarted) return;
     this.loadStarted = true;
-    const ctx = this.audio;
-    const base = import.meta.env.BASE_URL;
-    const fetchBuffer = (file: string): Promise<AudioBuffer> =>
-      fetch(`${base}assets/audio/${file}`)
-        .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
-        .then((data) => ctx.decodeAudioData(data));
-
     (Object.keys(SAMPLES) as SampleKey[]).forEach((key) => {
-      fetchBuffer(SAMPLES[key].file)
-        .then((buffer) => { this.buffers.set(key, buffer); })
+      this.fetchBuffer(SAMPLES[key].file)
+        .then((buffer) => { this.buffers.set(key, this.withoutDecoderDelay(SAMPLES[key].file, buffer)); })
         .catch((err) => { console.warn(`[audio] could not load ${SAMPLES[key].file}:`, err); });
     });
+  }
 
-    (Object.keys(TRACKS) as MusicKey[]).forEach((key) => {
-      fetchBuffer(TRACKS[key].file)
-        .then((buffer) => {
-          this.musicBuffers.set(key, buffer);
-          if (this.wantTrack === key && this.currentMusic?.key !== key) {
-            this.crossfadeTo(key, buffer, this.wantFadeMs);
-          }
-        })
-        .catch((err) => { console.warn(`[audio] could not load ${TRACKS[key].file}:`, err); });
-    });
+  /**
+   * O MP3 abre com um silêncio pequeno, de tamanho que varia por navegador, e um efeito tem de soar
+   * no instante do gesto. Em vez de confiar em cada decodificador, o silêncio do começo sai daqui.
+   */
+  private withoutDecoderDelay(file: string, buffer: AudioBuffer): AudioBuffer {
+    if (!file.endsWith('.mp3')) return buffer;
+    const channels = Array.from({ length: buffer.numberOfChannels }, (_, c) => buffer.getChannelData(c));
+    const limit = Math.min(buffer.length - 1, Math.round(MAX_DECODER_DELAY_S * buffer.sampleRate));
+    let start = 0;
+    while (start < limit && channels.every((data) => Math.abs(data[start]) < DECODER_SILENCE)) start += 1;
+    if (start === 0) return buffer;
+    const trimmed = this.audio.createBuffer(buffer.numberOfChannels, buffer.length - start, buffer.sampleRate);
+    channels.forEach((data, c) => trimmed.copyToChannel(data.subarray(start), c));
+    return trimmed;
+  }
 
+  private loadTrack(key: MusicKey): void {
+    this.fetchBuffer(TRACKS[key].file)
+      .then((buffer) => {
+        this.musicBuffers.set(key, buffer);
+        if (this.wantTrack === key && this.currentMusic?.key !== key) {
+          this.crossfadeTo(key, buffer, this.wantFadeMs);
+        }
+      })
+      .catch((err) => { console.warn(`[audio] could not load ${TRACKS[key].file}:`, err); });
+  }
+
+  private loadAmbience(): void {
     (Object.keys(AMBIENCE_FILES) as AmbienceBed[]).forEach((bed) => {
-      fetchBuffer(AMBIENCE_FILES[bed])
+      if (this.ambienceBuffers.has(bed)) return;
+      this.fetchBuffer(AMBIENCE_FILES[bed].file)
         .then((buffer) => { this.ambienceBuffers.set(bed, buffer); if (this.wantAmbience) this.startAmbienceNow(); })
-        .catch((err) => { console.warn(`[audio] could not load ${AMBIENCE_FILES[bed]}:`, err); });
+        .catch((err) => { console.warn(`[audio] could not load ${AMBIENCE_FILES[bed].file}:`, err); });
     });
   }
 
@@ -223,6 +282,55 @@ class SoundManager {
     if (this.currentMusic?.key === key) return;
     const buffer = this.musicBuffers.get(key);
     if (buffer) this.crossfadeTo(key, buffer, fadeMs);
+    else this.loadTrack(key);
+    if (key === 'overworld') this.loadLayers();
+  }
+
+  private loadLayers(): void {
+    (Object.keys(LAYER_FILES) as MusicLayer[]).forEach((layer) => {
+      if (this.layerBuffers.has(layer)) { this.startLayers(); return; }
+      this.fetchBuffer(LAYER_FILES[layer])
+        .then((buffer) => { this.layerBuffers.set(layer, buffer); this.startLayers(); })
+        .catch((err) => { console.warn(`[audio] could not load ${LAYER_FILES[layer]}:`, err); });
+    });
+  }
+
+  /** Só soa em cima da música do vale, e entra no ponto certo do compasso em que ela está. */
+  private startLayers(): void {
+    if (this.currentMusic?.key !== 'overworld') return;
+    const ctx = this.audio;
+    const bus = this.ensureMusicBus();
+    for (const [layer, buffer] of this.layerBuffers) {
+      if (this.layers.has(layer)) continue;
+      const gain = ctx.createGain();
+      gain.gain.value = LAYER_VOL * this.layerMix[layer];
+      gain.connect(bus);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.loopStart = LOOP_WRAP_S;
+      source.loopEnd = LOOP_WRAP_S + LAYER_SECONDS;
+      source.connect(gain);
+      source.start(0, LOOP_WRAP_S + Math.max(0, ctx.currentTime - this.musicStartedAt) % LAYER_SECONDS);
+      this.layers.set(layer, { source, gain });
+    }
+  }
+
+  private stopLayers(): void {
+    for (const { source, gain } of this.layers.values()) {
+      source.stop();
+      gain.disconnect();
+    }
+    this.layers.clear();
+  }
+
+  /** Quanto de cada camada o lugar pede agora (0..1). O ganho desliza sozinho. */
+  public setMusicLayers(water: number, fire: number): void {
+    this.layerMix = { water: clamp01(water), fire: clamp01(fire) };
+    if (!this.ctx) return;
+    for (const [layer, { gain }] of this.layers) {
+      gain.gain.setTargetAtTime(LAYER_VOL * this.layerMix[layer], this.ctx.currentTime, 1.4);
+    }
   }
 
   /**
@@ -232,6 +340,7 @@ class SoundManager {
    */
   public stopMusic(fadeMs = 0): void {
     this.wantTrack = null;
+    this.stopLayers();
     const cur = this.currentMusic;
     if (!cur) return;
     this.currentMusic = null;
@@ -279,9 +388,14 @@ class SoundManager {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
+    source.loopStart = LOOP_WRAP_S;
+    source.loopEnd = LOOP_WRAP_S + TRACKS[key].seconds;
     source.connect(gain);
-    source.start();
+    source.start(0, LOOP_WRAP_S);
     this.currentMusic = { key, source, gain };
+    this.musicStartedAt = now;
+    this.stopLayers();
+    if (key === 'overworld') this.startLayers();
 
     if (old) {
       old.gain.gain.cancelScheduledValues(now);
@@ -338,6 +452,7 @@ class SoundManager {
 
   public startAmbience(): void {
     this.wantAmbience = true;
+    this.loadAmbience();
     this.startAmbienceNow();
   }
 
@@ -354,8 +469,8 @@ class SoundManager {
    * proximidade da agua. Os ganhos deslizam (setTargetAtTime), entao chamar a cada frame e barato
    * e nunca estala.
    */
-  public setAmbienceMix(night: number, water: number): void {
-    this.ambienceMix = { day: 1 - clamp01(night), night: clamp01(night), water: clamp01(water) };
+  public setAmbienceMix(night: number, water: number, rain = 0): void {
+    this.ambienceMix = { day: 1 - clamp01(night), night: clamp01(night), water: clamp01(water), rain: clamp01(rain) };
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
     for (const [bed, { gain }] of this.ambienceBeds) {
@@ -373,11 +488,14 @@ class SoundManager {
       gain.connect(this.musicUserBus);
       const src = ctx.createBufferSource();
       src.buffer = buffer;
+      const { seconds } = AMBIENCE_FILES[bed];
       src.loop = true;
+      src.loopStart = LOOP_WRAP_S;
+      src.loopEnd = LOOP_WRAP_S + seconds;
       // Os tres leitos tem comprimentos diferentes e comecam em pontos diferentes: nunca se
       // alinham, e o vale nao "repete" a cada trinta segundos.
       src.connect(gain);
-      src.start(0, Math.random() * buffer.duration);
+      src.start(0, LOOP_WRAP_S + Math.random() * seconds);
       this.ambienceBeds.set(bed, { source: src, gain });
     }
   }
@@ -517,6 +635,102 @@ class SoundManager {
     this.lastFootstep = pick;
     if (this.playSample(FOOTSTEP_KEYS[pick], 1.2, 0.85 + Math.random() * 0.3)) return;
     this.noise('lowpass', 120, 1.0, 0.09, 0.06);
+  }
+
+  /** O pé no chão: a grama é a amostra de sempre, e o resto se faz aqui, porque um passo toca o tempo todo. */
+  public playStep(surface: Surface): void {
+    const d = 0.92 + Math.random() * 0.16;
+    if (surface === 'grass') { this.playFootstep(); return; }
+    if (surface === 'dirt') {
+      this.noise('lowpass', 420 * d, 0.9, 0.2, 0.07);
+    } else if (surface === 'stone') {
+      this.noise('bandpass', 2100 * d, 2.2, 0.09, 0.022);
+      this.noise('lowpass', 500 * d, 1, 0.14, 0.04);
+    } else {
+      this.osc('triangle', 210 * d, 130 * d, 0.13, 0.07);
+      this.noise('bandpass', 1100 * d, 2.5, 0.05, 0.02);
+    }
+  }
+
+  /** O corpo de cada material: é o que pegar e pousar têm em comum. */
+  private materialKnock(material: Material, pitch: number, vol: number): void {
+    switch (material) {
+      case 'wood':
+        this.osc('triangle', 330 * pitch, 190 * pitch, 0.16 * vol, 0.08);
+        this.noise('bandpass', 1300 * pitch, 2.5, 0.05 * vol, 0.02);
+        break;
+      case 'stone':
+        this.noise('bandpass', 1900 * pitch, 3, 0.13 * vol, 0.03);
+        this.noise('lowpass', 600 * pitch, 1, 0.16 * vol, 0.06);
+        break;
+      case 'metal':
+        this.osc('triangle', 980 * pitch, 960 * pitch, 0.07 * vol, 0.22);
+        this.osc('sine', 2470 * pitch, 2450 * pitch, 0.03 * vol, 0.14);
+        break;
+      case 'glass':
+        this.osc('sine', 2090 * pitch, 2080 * pitch, 0.07 * vol, 0.16);
+        this.osc('sine', 3136 * pitch, 3130 * pitch, 0.03 * vol, 0.1);
+        break;
+      default:
+        this.noise('lowpass', 700 * pitch, 0.8, 0.11 * vol, 0.07);
+        this.osc('sine', 260 * pitch, 180 * pitch, 0.07 * vol, 0.07);
+    }
+  }
+
+  /** Pegar sobe: cada coisa em seguida vai um degrau acima na pentatônica, e o ouvido percebe a série. */
+  public playPick(material: Material, streak = 0): void {
+    const step = PICK_SCALE[Math.min(streak, PICK_SCALE.length - 1)];
+    const pitch = Math.pow(2, step / 12);
+    this.materialKnock(material, pitch, 0.9);
+    this.osc('sine', 660 * pitch, 880 * pitch, 0.045, 0.08, 0.02);
+  }
+
+  /** Pousar desce e pesa: é o mesmo material, mais grave, com o baque do chão embaixo. */
+  public playPut(material: Material): void {
+    this.materialKnock(material, 0.78, 1);
+    this.noise('lowpass', 240, 1, 0.14, 0.07, 0.015);
+  }
+
+  /** A espada fincada, tocada: um anel longo que só ela tem. */
+  public playSwordHum(): void {
+    this.osc('sine', 880, 878, 0.05, 1.6);
+    this.osc('sine', 1318, 1316, 0.028, 1.2, 0.02);
+    this.osc('triangle', 220, 219, 0.04, 0.9);
+  }
+
+  /** A fogueira do fim pegando: o fogo de sempre, e por cima três notas que nenhuma outra fogueira tem. */
+  public playHearthCatch(): void {
+    this.playIgnite();
+    [349.2, 523.3, 698.5].forEach((f, i) => this.osc('triangle', f, f, 0.07, 1.4, 0.25 + i * 0.28));
+  }
+
+  /** Cada achado tem o seu toque, e é o que faz ele parecer uma coisa de verdade antes de qualquer texto. */
+  public playFindTouch(kind: string): void {
+    switch (kind) {
+      case 'helmet':
+        this.osc('triangle', 520, 505, 0.1, 0.4);
+        this.osc('sine', 1310, 1290, 0.03, 0.25);
+        break;
+      case 'bottle':
+        this.materialKnock('glass', 1, 1.1);
+        break;
+      case 'swing':
+        this.osc('sawtooth', 300, 420, 0.018, 0.34);
+        this.osc('sawtooth', 420, 310, 0.014, 0.3, 0.32);
+        break;
+      case 'door':
+        [0, 0.2, 0.4].forEach((at) => {
+          this.osc('triangle', 180, 120, 0.2, 0.08, at);
+          this.noise('bandpass', 900, 2, 0.05, 0.02, at);
+        });
+        break;
+      case 'log':
+        this.osc('sine', 150, 95, 0.2, 0.16);
+        this.noise('lowpass', 500, 1, 0.08, 0.1);
+        break;
+      default:
+        this.materialKnock('wood', 0.9, 1);
+    }
   }
 
   public playSwordSlash(): void {
@@ -740,9 +954,10 @@ class SoundManager {
     this.osc('sine', 130, 80, 0.075, 0.12, 0.06);
   }
 
-  public playHammer(): void {
+  /** `blow` é qual pancada esta é: a peça vai endurecendo, e o som sobe junto. */
+  public playHammer(blow = 0): void {
     // Nailing a plank home: a bright metallic tick over a short hollow-wood knock.
-    if (this.playSample('hammer', 0.9 + Math.random() * 0.25)) return;
+    if (this.playSample('hammer', 0.9 + Math.random() * 0.25, 1, 1 + blow * 0.09)) return;
     this.noise('bandpass', 3200, 4.0, 0.14, 0.03);
     this.osc('square', 220, 120, 0.12, 0.05, 0.005);
     this.osc('triangle', 520, 380, 0.05, 0.04, 0.005);

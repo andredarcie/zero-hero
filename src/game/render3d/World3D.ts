@@ -3949,6 +3949,16 @@ export class World3D {
     this.finishPass.uniforms.uFade.value = Math.max(0, Math.min(1, t));
   }
 
+  /** A cor da estação sobre o quadro inteiro. 1, 1, 1, 1 não muda um bit (ver runtime/seasons). */
+  public setSeasonGrade(r: number, g: number, b: number, saturation: number): void {
+    (this.finishPass.uniforms.uSeasonTint.value as THREE.Vector3).set(r, g, b);
+    this.finishPass.uniforms.uSeasonSat.value = saturation;
+  }
+
+  public get worldFade(): number {
+    return this.finishPass.uniforms.uFade.value as number;
+  }
+
   /** Last CSS string pushed into each live colour, so an unchanged knob costs nothing. */
   private readonly appliedColors: Record<string, string> = {};
 
@@ -4643,6 +4653,8 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
     uDanger: { value: 0 },
     uDangerColor: { value: new THREE.Color(0x2a3f6b) },
     uFade: { value: 0 },
+    uSeasonTint: { value: new THREE.Vector3(1, 1, 1) },
+    uSeasonSat: { value: 1 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -4674,6 +4686,8 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
     uniform float uDanger;
     uniform vec3 uDangerColor;
     uniform float uFade;
+    uniform vec3 uSeasonTint;
+    uniform float uSeasonSat;
     varying vec2 vUv;
     // O quadro com o bloom ja somado — a soma aditiva que o UnrealBloomPass fazia numa passada
     // de tela cheia, agora aqui, amostra por amostra (ver FusedBloomPass). O blend dele e
@@ -4714,6 +4728,7 @@ const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters 
       float luma = dot(col, vec3(0.299, 0.587, 0.114));
       vec3 toned = col * mix(uShadowTint, uHighTint, smoothstep(0.0, 0.55, luma));
       col = mix(col, toned, uGrade);
+      col = mix(vec3(luma), col, uSeasonSat) * uSeasonTint;
       // ── A CURVA DE TELA (uLift) — ver o doc de params.lift ───────────────────
       // Este jogo nao tem tone mapping (o mundo e desenhado num render target, e o three so monta
       // o ACES quando o alvo e a TELA), entao o linear vai cru para o canvas e nao ha ombro
