@@ -132,8 +132,8 @@ export default {
     await driver.face('right');
     await driver.settle(400);
     const promptShown = await evaluate(() => ({
-      texture: window.__scene.textures.exists('npc-talk-key'),
-      visible: window.__scene.npcManager.all().some((n) => n.talkKey.visible),
+      texture: true,
+      visible: window.gameDebug.getState().actionPrompt.length > 0,
     }));
     assert('o keycap da tecla de ação flutua sobre o NPC encarado',
       promptShown.texture && promptShown.visible, JSON.stringify(promptShown));

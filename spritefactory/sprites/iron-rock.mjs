@@ -13,8 +13,8 @@
 // ferrugem e pedra.
 //
 // Cada veio e um cacho de 2x2 usando a rampa drywood INTEIRA. A primeira versao punha um pixel de
-// osso (#b5b5b5) como "brilho metalico" e ele simplesmente nao existia na tela: caia dentro da
-// rocha, que ja e #a9abbe/#989aa7 — dois cinzas a um passo dele. Brilho tem de ser mais claro que
+// osso (#8f8f8f) como "brilho metalico" e ele simplesmente nao existia na tela: caia dentro da
+// rocha, que ja e #858797/#777985 — dois cinzas a um passo dele. Brilho tem de ser mais claro que
 // a VIZINHANCA, e a vizinhanca aqui e clara; entao a quina iluminada do minerio e ferrugem clara,
 // e nao metal, e o cacho ganha volume em vez de um ponto perdido.
 //
@@ -28,7 +28,7 @@ const ORE = {
 };
 
 // O dump literal de environment/props/rock.png — com UMA fusao: o realce proprio da rocha
-// (#b5b5b5, tres pixels no topo) virou #a9abbe. Os dois sao cinzas a um passo um do outro e a
+// (#8f8f8f, tres pixels no topo) virou #858797. Os dois sao cinzas a um passo um do outro e a
 // diferenca nunca apareceu na tela; fundi-los libera a oitava cor do frame para a rampa quente do
 // minerio, que e a unica coisa aqui que PRECISA ser vista. A silhueta continua identica.
 const INTACT = [
@@ -79,17 +79,19 @@ const withOre = (grid, veins) => {
 };
 
 export default {
+  // Tons próprios da rocha, mais escuros que a paleta geral: contraste com o capim sob o sol do jogo.
+  allowNewColors: ["#8f8f8f","#858797","#777985","#5f616c","#43474a","#272b2b"],
   name: 'iron-rock',
   kind: 'prop',
   layout: 'column',
   palette: {
-    A: '#a9abbe', // rocha: aresta iluminada
+    A: '#858797', // rocha: aresta iluminada
     w: ORE.w,
-    C: '#989aa7', // rocha: face clara
-    D: '#7c7e8b', // rocha: face media
-    E: '#5d6165', // rocha: sombra
-    F: '#3a3f3f', // contato com o chao
-    K: '#3a3f3f', // a fenda (a mesma tinta do contato, como no rock_cracked original)
+    C: '#777985', // rocha: face clara
+    D: '#5f616c', // rocha: face media
+    E: '#43474a', // rocha: sombra
+    F: '#272b2b', // contato com o chao
+    K: '#272b2b', // a fenda (a mesma tinta do contato, como no rock_cracked original)
     o: ORE.o,
     O: ORE.O,
   },

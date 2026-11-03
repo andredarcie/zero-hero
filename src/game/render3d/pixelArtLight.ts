@@ -246,6 +246,53 @@ const SEA_SHALLOW_GLSL = /* glsl */ `
   }
 `;
 
+/**
+ * A LAVA, COM A LÓGICA DA ÁGUA: a mesma corrente em passos de texel, na grade do mundo, e uma faixa que sobe e desce
+ * na beira. Em vez de espuma, crosta: placas escuras que derivam devagar com o calor nas frestas. `vShore` vale 1 na
+ * margem e 0 no meio (buildLavaSurface): a beira fica mais fria e escura, e o meio mais quente, o que dá fundo ao poço.
+ * Junto do barranco corre um fio incandescente, que avança e recua como a arrebentação. O miolo passa de 1 de
+ * propósito: é o que acende o bloom.
+ */
+const LAVA_FLOW_GLSL = /* glsl */ `
+  {
+    vec2 zhP = floor(vWorldFxPos.xz * 16.0) / 16.0;
+    vec2 zhW = zhP + 0.16 * vec2(sin(zhP.y * 3.1 + uFlowTime * 0.23), sin(zhP.x * 2.7 - uFlowTime * 0.19));
+    vec2 zhQ = zhW * 3.4 + vec2(uFlowTime * 0.05, uFlowTime * 0.03);
+    vec2 zhI = floor(zhQ);
+    vec2 zhF = fract(zhQ);
+    float zhD1 = 9.0;
+    float zhD2 = 9.0;
+    for (int zhY = -1; zhY <= 1; zhY++) {
+      for (int zhX = -1; zhX <= 1; zhX++) {
+        vec2 zhO = vec2(float(zhX), float(zhY));
+        vec2 zhC = zhI + zhO;
+        vec2 zhH = fract(sin(vec2(dot(zhC, vec2(127.1, 311.7)), dot(zhC, vec2(269.5, 183.3)))) * 43758.5453);
+        vec2 zhR = zhO + zhH - zhF;
+        float zhL = dot(zhR, zhR);
+        if (zhL < zhD1) { zhD2 = zhD1; zhD1 = zhL; } else if (zhL < zhD2) { zhD2 = zhL; }
+      }
+    }
+    float zhCrack = sqrt(zhD2) - sqrt(zhD1);
+    float zhEdge = fract(sin(dot(floor(vWorldFxPos.xz * 16.0), vec2(23.7, 91.3))) * 24634.6345) * 0.1;
+    float zhSwell = 0.5 + 0.5 * sin(zhW.x * 1.7 + zhW.y * 2.3 + uFlowTime * 0.7);
+    float zhCool = smoothstep(0.1, 0.8, vShore);
+    float zhOpen = 0.14 + 0.16 * zhSwell - 0.1 * zhCool + zhEdge * 0.5;
+    vec3 zhCol = vec3(0.022, 0.011, 0.010);
+    zhCol = mix(zhCol, vec3(0.07, 0.016, 0.008), step(0.5 + zhEdge, zhSwell * (1.0 - zhCool)));
+    zhCol = mix(zhCol, vec3(0.20, 0.022, 0.006), step(zhCrack, zhOpen * 1.9));
+    zhCol = mix(zhCol, vec3(0.86, 0.20, 0.022), step(zhCrack, zhOpen));
+    zhCol = mix(zhCol, vec3(1.7, 0.82, 0.12), step(zhCrack, zhOpen * 0.45) * (1.0 - zhCool));
+    float zhWave = 0.5 + 0.5 * sin(uFlowTime * 1.05 - (vWorldFxPos.x + vWorldFxPos.z) * 0.9);
+    zhCol = mix(zhCol, vec3(1.25, 0.42, 0.05), step(0.86 - 0.1 * zhWave + zhEdge, vShore));
+    vec2 zhCell = floor(vec2(vWorldFxPos.x * 8.0, vWorldFxPos.z * 16.0));
+    float zhRnd = fract(sin(dot(zhCell, vec2(41.3, 289.1))) * 43758.5453);
+    float zhFlash = smoothstep(0.93, 1.0, sin(fract(zhRnd + uFlowTime * 0.2) * 6.2831853) * 0.5 + 0.5);
+    zhCol += vec3(1.5, 0.75, 0.15) * zhFlash * step(0.97, fract(zhRnd * 7.31)) * (1.0 - zhCool);
+    diffuseColor.rgb = zhCol;
+    diffuseColor.a = 1.0;
+  }
+`;
+
 // ── THE SHADOW MASK (hd3d.shadowMask — plano.md fase 3) ──────────────────────
 //
 // The cast silhouettes stop being decals multiplied over the finished frame and become
@@ -660,13 +707,12 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       if (opts.worldFx === 'lavaFlow') {
         // Heat shimmer: a slow diagonal brightness wave over the molten crust,
         // multiplying the emissive so bright ridges push harder into the bloom.
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <map_fragment>',
-          `#include <map_fragment>
-           float lavaWave = 0.78 + 0.22 * sin(vWorldFxPos.x * 2.1 + vWorldFxPos.z * 1.6 + uFlowTime * 2.0)
-                                  + 0.10 * sin(vWorldFxPos.x * 5.3 - vWorldFxPos.z * 4.1 - uFlowTime * 3.3);
-           diffuseColor.rgb *= clamp(lavaWave, 0.55, 1.35);`,
-        );
+        shader.vertexShader = shader.vertexShader
+          .replace('void main() {', 'attribute float aShore;\nvarying float vShore;\nvoid main() {')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\n vShore = aShore;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', 'varying float vShore;\nvoid main() {')
+          .replace('#include <map_fragment>', `#include <map_fragment>\n${LAVA_FLOW_GLSL}`);
       } else {
         // Sky glint: sparse cells flash a highlight in turn — added to the FINAL colour
         // (post-lighting) so the ripples catch light in the dark. Shared by the river's

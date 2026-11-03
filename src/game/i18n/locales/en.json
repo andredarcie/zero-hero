@@ -99,6 +99,17 @@
     "close": "Close"
   },
   "pause": {
+    "sectionAccess": "Accessibility",
+    "textSize": "Text size",
+    "textNormal": "Normal",
+    "textLarge": "Large",
+    "textHuge": "Huge",
+    "reduceMotion": "Reduce motion and flashes",
+    "instantText": "Instant text",
+    "calmGames": "Unhurried mini-games",
+    "keyHand": "Hand key",
+    "keyUse": "Use key",
+    "pressKey": "Press a key",
     "title": "PAUSED",
     "resume": "Resume game",
     "options": "Options",
@@ -274,7 +285,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Six kinds grow here. Take my knife and my basket. Bring them all at once, if you like."
+          "text": "Six kinds grow here. I need four, the rest only if you like. Take my knife and my basket."
         },
         {
           "speaker": "npc",
@@ -287,14 +298,24 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "All six. You know the forest floor now."
+          "text": "Four is plenty. You know the forest floor now."
         },
         {
           "speaker": "npc",
-          "text": "Just never eat the red one."
+          "text": "The others only if you like. Just never eat the red one."
         }
       ]
     },
+    "radiationSuitAll": [
+      {
+        "speaker": "npc",
+        "text": "All six! Nobody knows this ground like you."
+      },
+      {
+        "speaker": "npc",
+        "text": "Just never eat the red one."
+      }
+    ],
     "radiationSuitHint": {
       "porcini": [
         {
@@ -780,11 +801,52 @@
       ]
     }
   },
+  "actions": {
+    "talk": "Talk",
+    "take": "Take",
+    "swap": "Swap",
+    "sit": "Sit",
+    "sleep": "Sleep",
+    "getUp": "Get up",
+    "knock": "Knock",
+    "read": "Read",
+    "look": "Look",
+    "touch": "Touch",
+    "light": "Light",
+    "roast": "Roast",
+    "craft": "Craft",
+    "smelt": "Smelt",
+    "put": "Place",
+    "hammer": "Hammer",
+    "harvest": "Harvest",
+    "paint": "Paint",
+    "mix": "Mix",
+    "pick": "Pick",
+    "sow": "Sow",
+    "split": "Split",
+    "stand": "Stand up",
+    "stack": "Stack",
+    "polish": "Polish",
+    "install": "Install",
+    "douse": "Douse",
+    "refuel": "Rekindle",
+    "burn": "Burn",
+    "chop": "Chop",
+    "break": "Break",
+    "water": "Water",
+    "fill": "Fill",
+    "ford": "Lay stone",
+    "bridge": "Build",
+    "cover": "Cover",
+    "mow": "Mow",
+    "unlock": "Unlock",
+    "dig": "Dig",
+    "takeBack": "Take out",
+    "pickUp": "Pick up"
+  },
   "controls": {
     "hint": "Z talk & take · X use",
     "touchHint": "Drag anywhere to walk · A talk & take · B use",
-    "take": "Take",
-    "swap": "Swap",
     "skipIntro": "Z skips the scene",
     "skipIntroTouch": "Tap again to skip",
     "attackTitle": "Hand (Z)",

@@ -1,37 +1,35 @@
-// Sementes de mato — o produto da foice (substitui a palha). Um punhado de tres graos
-// dourados em arranjo diagonal: a 1x le como "graozinhos", nao como uma bolota unica.
+// Sementes de mato — o produto da foice. Um punhado de graos pequenos cor de palha, em monte baixo,
+// com um germe verde num deles: o dourado cheio de antes lia como pepitas.
 // Ancoras de estilo: wood_icon (item pequeno, silhueta legivel), rock (luz esquerda dura).
-// Ramp gold inteira (sombra #c9c81b -> luz #f8e394) + a ponta do germe em wood escuro,
-// presa ao grao (nada de pixel orfao).
 
 export default {
   name: 'seeds',
   kind: 'item',
   palette: {
-    H: '#f8e394', // highlight — topo-esquerda de cada grao
-    B: '#f1cc36', // ouro base
-    S: '#c9c81b', // sombra do grao (fundo da ramp gold)
-    D: '#63452c', // a ponta do germe — wood escuro, o "ink" organico do grao
+    H: '#ccbd99', // a luz do grao, em cima e a esquerda
+    B: '#b48c63', // a casca
+    S: '#815938', // a sombra do grao
+    D: '#63452c', // o escuro entre os graos, que os separa
+    G: '#8a8d49', // o germe
   },
   frames: [[
     '................',
     '................',
     '................',
-    '....HBB.........',
-    '...HBBBS........',
-    '...BBBSS........',
-    '....BSSD..HBB...',
-    '.........HBBBS..',
-    '.........BBBSS..',
-    '...HBB....BSSD..',
-    '..HBBBS.........',
-    '..BBBSS.........',
-    '...BSSD.........',
+    '................',
+    '..........G.....',
+    '.........GG.....',
+    '.....HB...BH....',
+    '....HBBS.HBBS...',
+    '....BBSSDBBSS...',
+    '..HB.SSDHB.SSD..',
+    '.HBBS..HBBS.....',
+    '.BBSSD.BBSSD....',
+    '..SSD...SSD.....',
     '................',
     '................',
     '................',
   ]],
-  notes: 'Tres graos (nao um) para ler como PUNHADO de sementes; cada um com a mesma anatomia '
-    + '(highlight NW, base, sombra SE, germe na ponta) girada pelo arranjo diagonal. Ramp gold '
-    + 'completa para nao ficar chapado; o germe #63452c e o unico escuro, preso a silhueta.',
+  notes: 'Quatro graos em monte, cada um com luz NW, casca e sombra SE. Cor de palha para nao competir '
+    + 'com as flores; o germe verde diz "isto brota".',
 };

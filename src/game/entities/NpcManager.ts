@@ -3,8 +3,6 @@ import Phaser from 'phaser';
 import { NPC_VISUALS } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import { isTouchDevice } from '@/game/runtime/PauseMenu';
-import { isSleepTime } from '@/game/runtime/timeOfDay';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { NpcKind, ScreenContent } from '@/game/world/ScreenContent';
 
@@ -49,8 +47,8 @@ function ensureExclaimTexture(scene: Phaser.Scene): void {
   canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
 }
 
-// O SONO: um "z" pequeno que sobe e some sobre quem dorme. Mesma técnica do "!" (glifo + contorno
-// escuro), e o mesmo lugar acima da cabeça — por isso os dois nunca aparecem juntos.
+// O SONO DO HERÓI no colchão (ver FireBed): um "z" pequeno que sobe e some. Mesma técnica do "!" (glifo +
+// contorno escuro). Os vizinhos não dormem: ficam sempre onde estão, esperando o herói.
 export const SLEEP_TEXTURE_KEY = 'npc-sleep-z';
 const SLEEP_GLYPH = [
   '####',
@@ -60,7 +58,7 @@ const SLEEP_GLYPH = [
 ];
 const SLEEP_FILL = '#cfd8ff';
 
-function ensureSleepTexture(scene: Phaser.Scene): void {
+export function ensureSleepTexture(scene: Phaser.Scene): void {
   if (scene.textures.exists(SLEEP_TEXTURE_KEY)) return;
   const rows = SLEEP_GLYPH.length;
   const cols = SLEEP_GLYPH[0].length;
@@ -81,129 +79,6 @@ function ensureSleepTexture(scene: Phaser.Scene): void {
   canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
 }
 
-/**
- * QUEM NAO DORME: o mago. Ele e o guia do vale e a abertura acontece de noite — ele fala com o
- * heroi e, um instante depois, roncaria na beira da estrada.
- */
-const SLEEPLESS: ReadonlySet<NpcKind> = new Set<NpcKind>(['wizard']);
-
-/** Este vizinho esta dormindo agora? Fica aqui para a cena perguntar o mesmo que o desenho mostra. */
-export const isNpcAsleep = (kind: NpcKind): boolean => heroSleeping || (isSleepTime() && !SLEEPLESS.has(kind));
-
-/** Quando o herói deita no colchão o vale inteiro dorme com ele, de dia também, e até o mago. */
-let heroSleeping = false;
-export const setHeroSleeping = (asleep: boolean): void => { heroSleeping = asleep; };
-
-// O AVISO DE CONVERSA: um keycap pixel-art com a tecla de AÇÃO (Z no teclado, A nos círculos
-// de toque), mostrado sobre o NPC que o herói está ENCARANDO de perto. É a resposta física ao
-// "como falo com ele?" — a tecla desenhada na cabeça de quem vai responder a ela. Mesma
-// técnica do "!": overlay Phaser projetado, nunca um corpo no mundo.
-export const TALK_KEY_TEXTURE = 'npc-talk-key';
-const TALK_GLYPHS: Record<'Z' | 'A' | 'X' | 'B', string[]> = {
-  X: [
-    '#...#',
-    '#...#',
-    '.#.#.',
-    '..#..',
-    '.#.#.',
-    '#...#',
-    '#...#',
-  ],
-  B: [
-    '####.',
-    '#...#',
-    '#...#',
-    '####.',
-    '#...#',
-    '#...#',
-    '####.',
-  ],
-  Z: [
-    '#####',
-    '....#',
-    '...#.',
-    '..#..',
-    '.#...',
-    '#....',
-    '#####',
-  ],
-  A: [
-    '.###.',
-    '#...#',
-    '#...#',
-    '#####',
-    '#...#',
-    '#...#',
-    '#...#',
-  ],
-};
-const KEYCAP_BG = '#241d0f';
-const KEYCAP_BORDER = '#ffe066';
-const KEYCAP_GLYPH = '#f5efdc';
-
-const KEYCAP_W = 11; // o glifo + 1px de moldura + 2px de folga de cada lado
-const KEYCAP_H = 13;
-
-const drawKeycap = (ctx: CanvasRenderingContext2D, glyph: string[]): void => {
-  const gRows = glyph.length;
-  const gCols = glyph[0].length;
-  const w = KEYCAP_W;
-  const h = KEYCAP_H;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const border = x === 0 || y === 0 || x === w - 1 || y === h - 1;
-      // Cantos vazados: quatro pixels fora fazem o retângulo ler como TECLA, não etiqueta.
-      const corner = (x === 0 || x === w - 1) && (y === 0 || y === h - 1);
-      if (corner) continue;
-      ctx.fillStyle = border ? KEYCAP_BORDER : KEYCAP_BG;
-      ctx.fillRect(x, y, 1, 1);
-    }
-  }
-  ctx.fillStyle = KEYCAP_GLYPH;
-  for (let y = 0; y < gRows; y++) {
-    for (let x = 0; x < gCols; x++) {
-      if (glyph[y][x] === '#') ctx.fillRect(x + 3, y + 3, 1, 1);
-    }
-  }
-};
-
-function ensureTalkKeyTexture(scene: Phaser.Scene): void {
-  if (scene.textures.exists(TALK_KEY_TEXTURE)) return;
-  const canvas = scene.textures.createCanvas(TALK_KEY_TEXTURE, KEYCAP_W, KEYCAP_H);
-  if (!canvas) return;
-  drawKeycap(canvas.getContext(), TALK_GLYPHS[isTouchDevice() ? 'A' : 'Z']);
-  canvas.refresh();
-  canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
-}
-
-// O AVISO DE DORMIR, sobre a fogueira encarada: a tecla de USAR com um "z" do lado. Sem palavra: a
-// tecla diz como e o "z" diz o quê.
-export const SLEEP_KEY_TEXTURE = 'fire-sleep-key';
-
-export function ensureFireSleepTextures(scene: Phaser.Scene): void {
-  ensureSleepTexture(scene);
-  if (scene.textures.exists(SLEEP_KEY_TEXTURE)) return;
-  const canvas = scene.textures.createCanvas(SLEEP_KEY_TEXTURE, KEYCAP_W + 7, KEYCAP_H);
-  if (!canvas) return;
-  const ctx = canvas.getContext();
-  drawKeycap(ctx, TALK_GLYPHS[isTouchDevice() ? 'B' : 'X']);
-  ctx.fillStyle = SLEEP_FILL;
-  SLEEP_GLYPH.forEach((row, y) => {
-    [...row].forEach((cell, x) => {
-      if (cell === '#') ctx.fillRect(KEYCAP_W + 2 + x, y + 1, 1, 1);
-    });
-  });
-  canvas.refresh();
-  canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
-}
-
-// Quem dorme fica deitado, na mesma pose do herói no colchão (ver FireBed), em tiles por tamanho de corpo.
-const LIE_ANGLE = -90;
-const LIE_X = 0.5;
-const LIE_Y = 0.25;
-const LIE_LIFT = 0.45;
-const LIE_MS = 420;
-
 class NpcEntity {
   public readonly worldX: number;
   public readonly worldY: number;
@@ -216,11 +91,6 @@ class NpcEntity {
   /** A fase da respiracao: cada um respira no seu ritmo, ninguem em coro. */
   private readonly breathPhase: number;
   private readonly exclaim: Phaser.GameObjects.Image;
-  private readonly talkKey: Phaser.GameObjects.Image;
-  private readonly sleepZ: Phaser.GameObjects.Image;
-  /** De 0 (em pé) a 1 (deitado). */
-  private lying = 0;
-  private poseAt = 0;
 
   public constructor(
     scene: Phaser.Scene,
@@ -248,83 +118,25 @@ class NpcEntity {
       .image(0, 0, EXCLAIM_TEXTURE_KEY)
       .setOrigin(0.5, 1)
       .setVisible(false);
-    ensureTalkKeyTexture(scene);
-    this.talkKey = scene.add
-      .image(0, 0, TALK_KEY_TEXTURE)
-      .setOrigin(0.5, 1)
-      .setVisible(false);
-    ensureSleepTexture(scene);
-    this.sleepZ = scene.add
-      .image(0, 0, SLEEP_TEXTURE_KEY)
-      .setOrigin(0.5, 1)
-      .setVisible(false);
   }
 
-  public render(
-    tileSize: number,
-    camera: WorldCamera,
-    showExclaim: boolean,
-    showTalkKey: boolean,
-    timeMs: number,
-    asleep = false,
-  ): void {
+  public render(tileSize: number, camera: WorldCamera, showExclaim: boolean, timeMs: number): void {
     // A RESPIRACAO: o corpo cresce um fio para cima e afina um fio, devagar — a mesma do heroi
     // parado. Pela base: o billboard pisa no chao e cresce para cima, entao os pes nao saem do lugar.
-    // Dormindo ela fica mais lenta e mais funda, e o corpo um tico mais baixo.
-    const b = Math.sin(timeMs / (asleep ? 1700 : 900) + this.breathPhase);
-    const depth = asleep ? 1.8 : 1;
-    const slump = asleep ? 0.94 : 1;
-    this.sprite.setDisplaySize(this.size * (1 - 0.012 * b * depth), this.size * slump * (1 + 0.028 * b * depth));
-    // Encarado de perto ele se levanta para conversar: falar acorda.
-    this.layDown(asleep && !showTalkKey, timeMs);
-    // O keycap manda: encarado de perto, o "como falo?" vale mais que o "tem assunto novo" —
-    // os dois juntos seriam dois balões brigando pelo mesmo pixel. O "z" e o mais fraco dos três:
-    // dormir não impede ninguém de conversar (falar acorda), então ele nunca esconde um aviso.
-    const showSleep = asleep && !showExclaim && !showTalkKey;
-    this.exclaim.setVisible(showExclaim && !showTalkKey);
-    this.talkKey.setVisible(showTalkKey);
-    this.sleepZ.setVisible(showSleep);
-    if (!showExclaim && !showTalkKey && !showSleep) return;
+    const b = Math.sin(timeMs / 900 + this.breathPhase);
+    this.sprite.setDisplaySize(this.size * (1 - 0.012 * b), this.size * (1 + 0.028 * b));
+    this.exclaim.setVisible(showExclaim);
+    if (!showExclaim) return;
     const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
     // Chunky pixel scaling (integer multiple of the source texels) + a gentle bob.
     const px = Math.max(1, Math.round(tileSize / 24));
     const bob = Math.round(Math.sin(timeMs / 280) * px);
     const height = this.kind === 'death' ? 2 : 1;
-    const anchorY = screen.y - tileSize * height - px * 2 + bob;
-    if (showSleep) {
-      // O "z" sobe de lado e some, e volta: um ciclo de 2,4s por vizinho, cada um no seu tempo.
-      // Deitado, a cabeça fica à esquerda e bem mais baixa.
-      const cycle = ((timeMs / 2400) + this.breathPhase / (Math.PI * 2)) % 1;
-      const headX = screen.x - tileSize * 0.45 * this.lying;
-      const headY = anchorY + tileSize * height * 0.55 * this.lying;
-      this.sleepZ.setScale(px)
-        .setPosition(Math.round(headX + px * (2 + cycle * 4)), Math.round(headY + px * 3 - cycle * tileSize * 0.35))
-        .setAlpha(Math.sin(cycle * Math.PI));
-      return;
-    }
-    if (showTalkKey) this.talkKey.setScale(px).setPosition(screen.x, anchorY);
-    else this.exclaim.setScale(px).setPosition(screen.x, anchorY);
-  }
-
-  /** Deita ou levanta aos poucos. A arte gira em torno dos pés, então o corpo sobe e anda até caber no tile. */
-  private layDown(down: boolean, timeMs: number): void {
-    const elapsed = Math.max(0, timeMs - this.poseAt);
-    this.poseAt = timeMs;
-    const target = down ? 1 : 0;
-    if (this.lying === target) return;
-    const step = elapsed / LIE_MS;
-    this.lying = down ? Math.min(1, this.lying + step) : Math.max(0, this.lying - step);
-    const pose = Phaser.Math.Easing.Sine.InOut(this.lying);
-    this.sprite
-      .setAngle(LIE_ANGLE * pose)
-      .setPosition(this.worldX + LIE_X * this.size * pose, this.worldY + LIE_Y * this.size * pose)
-      .setElevation(LIE_LIFT * this.size * pose);
+    this.exclaim.setScale(px).setPosition(screen.x, screen.y - tileSize * height - px * 2 + bob);
   }
 
   public hideExclaim(): void {
     this.exclaim.setVisible(false);
-    this.talkKey.setVisible(false);
-    this.sleepZ.setVisible(false);
   }
 
   /** Um pulinho: oi, obrigado, toma aqui. A altura volta a zero sozinha. */
@@ -347,8 +159,6 @@ class NpcEntity {
   public destroy(): void {
     this.sprite.destroy();
     this.exclaim.destroy();
-    this.talkKey.destroy();
-    this.sleepZ.destroy();
   }
 }
 
@@ -379,7 +189,7 @@ export class NpcManager {
       worldY: number,
       dialog?: string,
     ) => boolean = () => false,
-    // O herói está ADJACENTE e DE FRENTE para este NPC — mostra o keycap "Z" (a tecla de ação).
+    // O herói está ADJACENTE e DE FRENTE para este NPC: quem fala agora é o balão de ação, e o "!" sai.
     private readonly isTalkTarget: (worldX: number, worldY: number) => boolean = () => false,
   ) {}
 
@@ -482,10 +292,8 @@ export class NpcManager {
       npc.render(
         tileSize,
         camera,
-        !heroSleeping && this.hasNewDialog(npc.kind, npc.worldX, npc.worldY, npc.dialog),
-        !heroSleeping && this.isTalkTarget(npc.worldX, npc.worldY),
+        !this.isTalkTarget(npc.worldX, npc.worldY) && this.hasNewDialog(npc.kind, npc.worldX, npc.worldY, npc.dialog),
         now,
-        isNpcAsleep(npc.kind),
       );
     }
   }

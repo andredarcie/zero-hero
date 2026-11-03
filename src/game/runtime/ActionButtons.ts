@@ -1,3 +1,4 @@
+import { getTextScale } from '@/game/runtime/accessibility';
 import { t } from '@/game/i18n/i18n';
 import { applyTouchSettings, haptic } from '@/game/runtime/touchSettings';
 import {
@@ -283,6 +284,7 @@ export class ControlsHint {
     this.el.id = HINT_ID;
     if (top) this.el.classList.add('zh-hint-top');
     this.el.textContent = text;
+    this.el.style.fontSize = `${15 * getTextScale()}px`;
     document.body.appendChild(this.el);
     requestAnimationFrame(() => this.el.classList.add('zh-show'));
     this.timer = window.setTimeout(() => this.el.classList.remove('zh-show'), showMs);

@@ -24,7 +24,7 @@ export interface VegaShipHost {
   project: (x: number, y: number, elevation: number) => { x: number; y: number };
 }
 
-const SHIP_SIZE = 2.2;
+const SHIP_SIZE = 2; // 32 pixels em 2 tiles: a densidade do chão
 /** De onde ela vem e para onde ela vai: longe, ao norte, e no alto. */
 const SKY_NORTH = 26;
 const SKY_HIGH = 9;

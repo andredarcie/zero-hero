@@ -41,7 +41,7 @@ import { ValleyWeather } from '@/game/entities/ValleyWeather';
 import { materialOf, type Surface } from '@/game/audio/materials';
 import { LootManager } from '@/game/entities/LootManager';
 import {
-  ensureFireSleepTextures, isNpcAsleep, NpcManager, setHeroSleeping, SLEEP_KEY_TEXTURE, TALK_KEY_TEXTURE,
+  ensureSleepTexture, NpcManager,
 } from '@/game/entities/NpcManager';
 import { ItemManager } from '@/game/entities/ItemManager';
 import type { CollectedItem } from '@/game/entities/ItemManager';
@@ -91,14 +91,16 @@ import { ForagingOverlay } from '@/game/runtime/ForagingOverlay';
 import { BOOK_FONT, HAND_FONT } from '@/game/runtime/uiStyle';
 import { canStep, terrainHeightAt } from '@/game/world/relief';
 import {
-  PLACEMENT_KEY_TEXTURE, ensurePlacementKeyTexture, registerPlacementTextures,
+  registerPlacementTextures,
 } from '@/game/render3d/placementTexture';
+import { OccludedSilhouette } from '@/game/render3d/OccludedSilhouette';
 import {
   BASKET_TEXTURE, CAIRN_TEXTURE, GROUND_CRACK_TEXTURE, HEART_TEXTURE,
   BUTTERFLY_TEXTURE, LEAF_TEXTURE,
   MARSHMALLOW_BAG_TEXTURE, ROAST_STICK_DONE_TEXTURE, ROAST_STICK_TEXTURE, registerCozyTextures,
 } from '@/game/render3d/cozyTextures';
-import { HandOffer, type HandOfferView } from '@/game/runtime/HandOffer';
+import { ActionPrompt, type ActionPromptView, type PromptRow } from '@/game/runtime/ActionPrompt';
+import { isReducedMotion } from '@/game/runtime/accessibility';
 import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
@@ -167,6 +169,7 @@ import {
 } from '@/game/runtime/adventureState';
 import {
   allQuestsDone,
+  isQuestComplete,
   isQuestDone,
   questDeliveriesDue,
   questDialogFor,
@@ -416,8 +419,19 @@ const VISIT_RADIUS = 12;
 /** Quantos vaga-lumes derivam em volta do heroi a noite. */
 const FIREFLY_COUNT = 18;
 /** Quantas borboletas passeiam em volta do heroi de dia (o turno dos vaga-lumes). */
+/** Até onde o herói vê o vizinho acendendo o fogo: além disso a fogueira só aparece acesa. */
+const FIRE_KEEPER_SEEN_TILES = 22;
+/** O vizinho abaixado, riscando o fogo, antes da primeira chama. */
+const FIRE_KEEPER_STRIKE_MS = 900;
+/** Da primeira chama até a fogueira inteira. */
+const FIRE_KINDLE_MS = 8000;
+/** Até onde o herói anda para buscar o que pousou perto dele. */
+const DROP_WALK_TILES = 12;
 const BUTTERFLY_COUNT = 5;
-const BUTTERFLY_TINTS = [0xfff6dc, 0xffe27a, 0xbfe0ff, 0xffc9a8, 0xf3f0ff] as const;
+const BUTTERFLY_TINTS = [0xb0a890, 0xb0a070, 0x8a9cb0, 0xb09080, 0xa8a4b0] as const;
+/** Três pixels de arte de largura, na densidade do chão. */
+const BUTTERFLY_SIZE = 3 / 16;
+const BUTTERFLY_ASPECT = 2 / 3;
 /** As folhas que se soltam das arvores perto do heroi, de dia: no maximo tantas ao mesmo tempo. */
 const LEAF_MAX = 6;
 /** Quanto tempo a folha descansa no chao antes de sumir (e quanto leva sumindo). */
@@ -544,13 +558,12 @@ export class GameScene extends Phaser.Scene {
   /** A colheita de um cogumelo aberta (ver harvestMushroomAt). Congela o mundo como o catálogo. */
   private foraging?: ForagingOverlay;
   /** O keycap sobre o cogumelo que o herói encara: o mesmo anúncio do NPC e da bancada. */
-  private mushroomHint?: Phaser.GameObjects.Image;
   private orderBox?: ToolboxObject;
   /** As marcas de "a peça cai aqui" — o quadrado no chão e o keycap (ver PlacementHints). */
   private placementHints?: PlacementHints;
   /** O balao de PENSAMENTO do heroi: um icone, um instante. Ver HeroThought. */
   private heroThought?: HeroThought;
-  private handOffer?: HandOffer;
+  private actionPrompt?: ActionPrompt;
   // A CADEIA DO FERRO: o forno reduz minério com carvão; mão e altar malham a esponja.
   /**
    * Quantas marteladas a ESPONJA de cada tile ja levou. Ela e um item no chao, e itens no chao
@@ -635,7 +648,6 @@ export class GameScene extends Phaser.Scene {
   /** Deitado aqui, o herói já passou pela hora de dormir? */
   private sleptAtFire = false;
   private fireBed?: FireBed;
-  private sleepKey?: Phaser.GameObjects.Image;
   /** A Morte está falando: nenhuma tecla levanta o herói até ela sumir. */
   private deathVisiting = false;
   private restKeyListener?: (event: KeyboardEvent) => void;
@@ -658,11 +670,12 @@ export class GameScene extends Phaser.Scene {
   private lastGatherMs = -Infinity;
   /** Sentado num achado: a câmera olha a vista até ele levantar (ver sitAtFind). */
   private sittingAtFind = false;
-  private findKey?: Phaser.GameObjects.Image;
   /** Todo mundo em volta da fogueira do fim. */
   private reunion?: HearthReunion;
   // As fogueiras que um pedido deixou acesas para sempre (a do Bram): o relogio nao as apaga.
   private readonly keptLitFires = new Set<CampfireObject>();
+  /** O vizinho indo acender a fogueira dele (ver fireKeeperLights). */
+  private readonly fireKeepers = new Map<CampfireObject, { visitor: FireVisitor; timers: Phaser.Time.TimerEvent[] }>();
   // A espada saiu das costas e esta nas maos (a abertura): positionBackItem a solta.
   private swordInHands = false;
   private letterbox?: [HTMLDivElement, HTMLDivElement];
@@ -733,6 +746,7 @@ export class GameScene extends Phaser.Scene {
   // code still drives it) is mirrored onto a 3D billboard every frame.
   private world3d?: World3D;
   private heroBillboard?: Billboard3D;
+  private heroSilhouette?: OccludedSilhouette;
 
   public constructor() {
     super(GameScene.key);
@@ -850,8 +864,7 @@ export class GameScene extends Phaser.Scene {
       const key = this.dialogKeyFor(kind, wx, wy, dialog);
       return key !== null && !this.seenDialogKeys.has(key);
     }, (wx, wy) => {
-      // O keycap "Z" só existe quando falar é o que o botão FARIA agora: mundo correndo e o NPC
-      // exatamente no tile encarado.
+      // Encarado de perto, quem fala é o balão de ação: ele já diz o que o Z faz, e o "!" sai.
       if (!this.canAct() || !this.movementController) return false;
       const front = this.facingTile();
       return front.x === wx && front.y === wy;
@@ -901,6 +914,7 @@ export class GameScene extends Phaser.Scene {
     })
       .setPosition(startWorldX, startWorldY)
       .setDisplaySize(1, 1);
+    this.heroSilhouette = new OccludedSilhouette(this.heroBillboard);
 
     // The 2D back-item image idles hidden (the in-world carried item is a billboard — see
     // updateBackItem).
@@ -1080,9 +1094,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.placementHints = new PlacementHints(this);
+    this.placementHints = new PlacementHints();
     this.heroThought = new HeroThought(this);
-    this.handOffer = new HandOffer(this, isTouchDevice());
+    this.actionPrompt = new ActionPrompt(this, isTouchDevice());
     this.installActionInput();
 
     // O GATO de quem ja fez algum favor volta junto com a partida.
@@ -1259,6 +1273,7 @@ export class GameScene extends Phaser.Scene {
     b.setFlipX(h.flipX);
     b.setAlpha(h.alpha);
     b.setAngle(h.spin);
+    this.heroSilhouette?.sync();
 
     // The carried item rides the just-synced hero position.
     this.positionBackItem();
@@ -1309,7 +1324,7 @@ export class GameScene extends Phaser.Scene {
           busy: box.isBusy,
         })),
         thought: this.heroThought?.visibleIcon ?? null,
-        handOffer: this.handOffer?.visibleMode ?? null,
+        actionPrompt: this.actionPrompt?.visibleLabels ?? [],
         furnaces: this.furnaces.map((f) => ({
           worldX: f.worldX,
           worldY: f.worldY,
@@ -1411,6 +1426,8 @@ export class GameScene extends Phaser.Scene {
     profiler.detach();
     this.fpsCounter?.destroy();
     this.fpsCounter = undefined;
+    this.heroSilhouette?.destroy();
+    this.heroSilhouette = undefined;
     this.heroBillboard?.destroy();
     this.heroBillboard = undefined;
     this.plantedSword?.destroy();
@@ -1430,11 +1447,8 @@ export class GameScene extends Phaser.Scene {
     this.resting = false;
     this.deathVisiting = false;
     this.sleeping = false;
-    setHeroSleeping(false);
     this.fireBed?.destroy();
     this.fireBed = undefined;
-    this.sleepKey?.destroy();
-    this.sleepKey = undefined;
     this.restFireTile = undefined;
     this.onNightfall = undefined;
     setTimeScale(1);
@@ -1449,14 +1463,14 @@ export class GameScene extends Phaser.Scene {
     this.weather = undefined;
     this.shownSeason = undefined;
     this.sittingAtFind = false;
-    this.findKey?.destroy();
-    this.findKey = undefined;
     this.reunion?.destroy();
     this.reunion = undefined;
     this.skyVisitor?.destroy();
     this.skyVisitor = undefined;
     this.fireVisitor?.destroy();
     this.fireVisitor = undefined;
+    for (const keeper of this.fireKeepers.values()) keeper.visitor.destroy();
+    this.fireKeepers.clear();
     this.keptLitFires.clear();
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
@@ -1514,16 +1528,14 @@ export class GameScene extends Phaser.Scene {
     this.orderBox = undefined;
     this.foraging?.destroy();
     this.foraging = undefined;
-    this.mushroomHint?.destroy();
-    this.mushroomHint = undefined;
     this.lootManager?.destroy();
     this.itemManager?.destroy();
     this.placementHints?.destroy();
     this.placementHints = undefined;
     this.heroThought?.destroy();
     this.heroThought = undefined;
-    this.handOffer?.destroy();
-    this.handOffer = undefined;
+    this.actionPrompt?.destroy();
+    this.actionPrompt = undefined;
     this.swordSlash?.destroy();
     // Truncar in place (length = 0) esvazia também o array tipado — é o mesmo objeto — então
     // nenhum campo fica segurando props destruídos até o próximo create reatribuí-lo.
@@ -1563,8 +1575,6 @@ export class GameScene extends Phaser.Scene {
     // mentira que o balao de dica era. `syncPlacementHints` a reacende logo abaixo se o jogo
     // estiver mesmo correndo.
     this.placementHints?.clear();
-    this.sleepKey?.setVisible(false);
-    this.findKey?.setVisible(false);
 
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
     // world frozen here until it finishes — otherwise gameplay would fight the pan.
@@ -1712,8 +1722,6 @@ export class GameScene extends Phaser.Scene {
 
     // As marcas de posicionamento seguem o corpo NO MESMO frame em que ele vira.
     this.syncPlacementHints();
-    this.syncSleepKey();
-    this.syncFindKey();
     profiler.begin('update.npcs');
     if (this.npcManager && this.camera) this.npcManager.render(this.tileSize, this.camera);
     this.greetNearbyNpcs();
@@ -1730,8 +1738,6 @@ export class GameScene extends Phaser.Scene {
     for (const n of npcs) {
       const key = `${n.worldX},${n.worldY}`;
       if (this.greetedNpcs.has(key)) continue;
-      // Quem dorme nao cumprimenta — e nem gasta o "oi": ele acontece quando o vizinho acordar.
-      if (isNpcAsleep(n.kind)) continue;
       if (Math.hypot(n.worldX - this.playerWorld.worldX, n.worldY - this.playerWorld.worldY) > 2.3) continue;
       this.greetedNpcs.add(key);
       this.npcManager?.hop(n.worldX, n.worldY, 0.16);
@@ -1785,7 +1791,6 @@ export class GameScene extends Phaser.Scene {
     this.resting = false;
     if (this.sleeping) {
       this.sleeping = false;
-      setHeroSleeping(false);
       this.fireBed?.rise();
       this.fireBed = undefined;
       this.updateBackItem();
@@ -1837,14 +1842,13 @@ export class GameScene extends Phaser.Scene {
     if (!fire || this.heldActsOnFire(fire)) return false;
     this.sitDown(wx, wy, SLEEP_TIME_SCALE);
     this.sleeping = true;
-    setHeroSleeping(true);
     this.sleptAtFire = false;
     // O sitDown baixa o corpo como quem senta; aqui quem manda no corpo é o colchão.
     this.tweens.killTweensOf(this.hero);
     this.hero.scaleX = 1;
     this.hero.scaleY = 1;
     this.backItemBb?.setVisible(false);
-    ensureFireSleepTextures(this);
+    ensureSleepTexture(this);
     this.fireBed = new FireBed({
       scene: this,
       hero: this.hero,
@@ -1860,35 +1864,6 @@ export class GameScene extends Phaser.Scene {
     const at = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
     const px = Math.max(1, Math.round(this.tileSize / 24));
     this.fireBed.tick(this.time.now, { x: at.x - this.tileSize * 0.45, y: at.y - this.tileSize * 0.45 }, px);
-  }
-
-  /** A tecla de dormir sobre a fogueira encarada, enquanto o X for mesmo dormir. */
-  private syncSleepKey(): void {
-    if (!this.camera || !this.canAct()) return;
-    const front = this.facingTile();
-    const fire = this.getRestFireAt(front.x, front.y);
-    if (!fire || !this.reachesFront(front) || this.heldActsOnFire(fire)) return;
-    if (!this.sleepKey) {
-      ensureFireSleepTextures(this);
-      this.sleepKey = this.add.image(0, 0, SLEEP_KEY_TEXTURE).setOrigin(0.5, 1);
-    }
-    const screen = this.camera.tileToScreen(fire.worldX, fire.worldY, this.tileSize);
-    const px = Math.max(1, Math.round(this.tileSize / 24));
-    const bob = Math.round(Math.sin(this.time.now / 280) * px);
-    this.sleepKey.setVisible(true).setScale(px).setPosition(screen.x, screen.y - this.tileSize - px * 2 + bob);
-  }
-
-  /** A tecla da mão sobre o achado encarado: é o único aviso que ele tem, e só de perto. */
-  private syncFindKey(): void {
-    if (!this.camera || !this.canAct() || this.resting) return;
-    const front = this.facingTile();
-    const find = this.valleyFinds?.at(front.x, front.y);
-    if (!find || !this.reachesFront(front)) return;
-    this.findKey ??= this.add.image(0, 0, TALK_KEY_TEXTURE).setOrigin(0.5, 1);
-    const screen = this.camera.tileToScreen(find.x, find.y, this.tileSize);
-    const px = Math.max(1, Math.round(this.tileSize / 24));
-    const bob = Math.round(Math.sin(this.time.now / 280) * px);
-    this.findKey.setVisible(true).setScale(px).setPosition(screen.x, screen.y - this.tileSize - px * 2 + bob);
   }
 
   /** O Z num achado: o que tem vista senta, o resto se lê. */
@@ -1933,7 +1908,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Na varanda de alguém, esse alguém vem: caminha até o banco, senta do lado e traz a caneca. Sem pedir nada. */
   private neighbourBringsTea(owner: HomeKind, seat: { x: number; y: number }): void {
-    if (isNpcAsleep(owner) || (owner === 'astronaut' && adventureState().skyQuest.departed)) return;
+    if (owner === 'astronaut' && adventureState().skyQuest.departed) return;
     const home = this.npcManager?.getActiveWorldPositions().find((n) => n.kind === owner);
     if (home) void this.bringMug([home.worldX, home.worldY], seat, owner);
   }
@@ -1956,7 +1931,6 @@ export class GameScene extends Phaser.Scene {
   private async playDeathVisit(): Promise<void> {
     this.deathVisiting = true;
     this.cutsceneActive = true;
-    this.mushroomHint?.setVisible(false);
     this.actionButtons?.setVisible(false);
     this.pauseTouchButton?.setVisible(false);
     this.fireBed?.quiet();
@@ -2118,6 +2092,7 @@ export class GameScene extends Phaser.Scene {
    * SOBE e ASSENTA — um terco do tempo para chegar, o resto para ir embora, sempre em seno.
    */
   private softWash(color: number, peak: number, durationMs: number): void {
+    if (isReducedMotion()) return;
     const { width, height } = this.scale;
     const wash = this.add.rectangle(0, 0, width, height, color, 0)
       .setOrigin(0).setScrollFactor(0).setDepth(SCENE_DEPTHS.toast - 1)
@@ -2608,7 +2583,6 @@ export class GameScene extends Phaser.Scene {
     // A tarja de teclas mentiria por cima da colheita (a tela diz os próprios botões).
     this.controlsHint?.destroy();
     this.controlsHint = undefined;
-    this.mushroomHint?.setVisible(false);
     const sound = getSoundManager();
     this.foraging = new ForagingOverlay(kind, {
       onMiss: () => sound.playItemBonk(),
@@ -2623,29 +2597,6 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  /**
-   * O KEYCAP SOBRE O COGUMELO que o herói encara (adjacente e de frente, o mesmo `facingTile` que
-   * o Z e o X vão ler): Z no teclado, A no toque — a mesma textura da bancada e do forno. Sem ele
-   * a colheita seria um gesto invisível.
-   */
-  private renderMushroomHint(): void {
-    if (!this.camera) return;
-    const front = this.facingTile();
-    const show = !this.dialogOpen && !this.orderOverlay && !this.foraging && !this.cutsceneActive
-      && (isMushroomKind(this.itemManager?.kindAt(front.x, front.y)) || this.painterQuest?.wantsKey(front.x, front.y) === true || this.lumberQuest?.wantsKey(front.x, front.y) === true || this.astronomerQuest?.wantsKey(front.x, front.y) === true);
-    if (!show) { this.mushroomHint?.setVisible(false); return; }
-    if (!this.mushroomHint) {
-      ensurePlacementKeyTexture(this, isTouchDevice());
-      this.mushroomHint = this.add.image(0, 0, PLACEMENT_KEY_TEXTURE).setOrigin(0.5, 1).setVisible(false);
-    }
-    const screen = this.camera.tileToScreen(front.x, front.y, this.tileSize);
-    const px = Math.max(1, Math.round(this.tileSize / 24));
-    const bob = Math.round(Math.sin(this.time.now / 280) * px);
-    // O cogumelo é baixo: o keycap fica logo acima do chapéu, não na altura de uma pessoa.
-    this.mushroomHint.setVisible(true).setScale(px)
-      .setPosition(screen.x, screen.y - Math.round(this.tileSize * 0.75) - px * 2 + bob);
-  }
-
   private closeForaging(): void {
     this.foraging = undefined;
     this.actionButtons?.setVisible(true);
@@ -2653,7 +2604,7 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * O cogumelo limpo vai para a CESTA da Hollis, e a faca fica na mão. É a única exceção à lei de uma
-   * coisa de cada vez: seis viagens de ida e volta não ensinavam nada, e era o trecho com mais cara de
+   * coisa de cada vez: tantas viagens de ida e volta não ensinavam nada, e era o trecho com mais cara de
    * tarefa do jogo. Ela leva tudo de uma vez ao falar com o herói (ver `settleBasket`).
    */
   private basketMushroom(kind: MushroomKind, wx: number, wy: number): void {
@@ -3378,17 +3329,129 @@ export class GameScene extends Phaser.Scene {
     return kind;
   }
 
-  /** O balão desta hora: só com o corpo já parado no tile e com as mãos livres para agir. */
-  private currentHandOffer(at: { readonly x: number; readonly y: number }): HandOfferView | null {
-    if (this.resting || !this.canAct() || this.heroThought?.visibleIcon) return null;
-    if (at.x !== this.playerWorld.worldX || at.y !== this.playerWorld.worldY) return null;
-    const kind = this.handOfferUnderfoot();
-    if (!kind) return null;
-    const held = this.heldItem;
-    return {
-      ground: ITEM_VISUAL_2D[kind],
-      held: held === 'none' || held === kind ? undefined : ITEM_VISUAL_2D[held],
+  /**
+   * O BALÃO DESTA HORA: o que o Z e o X fazem agora, em palavras. A ordem é a dos botões (`pressAttack` e
+   * `pressUse`), para ele nunca prometer um gesto que outro passaria na frente. Só aparece com o corpo já
+   * parado no tile. Pousar no chão livre e o carinho no gato ficam de fora: valem quase sempre, e o balão
+   * viraria parte da paisagem.
+   */
+  private currentPrompt(at: { readonly x: number; readonly y: number }): { view: ActionPromptView; at: { x: number; y: number } } | null {
+    const hero = { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
+    if (at.x !== hero.x || at.y !== hero.y || this.heroThought?.visibleIcon) return null;
+    if (!this.canAct()) return null;
+    if (this.resting) return { view: { rows: [{ label: t('actions.getUp'), key: 'hand' }] }, at: hero };
+    const front = this.facingTile();
+    const reach = this.reachesFront(front);
+    const under = this.handOfferUnderfoot();
+    const rows: PromptRow[] = [];
+    let icons: Pick<ActionPromptView, 'ground' | 'held'> = {};
+    const offerItem = (kind: HeldItemKind): void => {
+      const held = this.heldItem;
+      const swaps = held !== 'none' && held !== kind;
+      rows.push({ label: t(swaps ? 'actions.swap' : 'actions.take'), key: 'hand' });
+      icons = { ground: ITEM_VISUAL_2D[kind], held: swaps ? ITEM_VISUAL_2D[held] : undefined };
     };
+    if (under) {
+      offerItem(under);
+    } else if (reach) {
+      const verb = this.handVerbAt(front.x, front.y);
+      if (verb) rows.push({ label: t(`actions.${verb}`), key: 'hand' });
+      else {
+        const there = this.itemManager?.kindAt(front.x, front.y);
+        const held = this.heldItem;
+        if (there && !isMushroomKind(there) && there !== held && !(held !== 'none' && isMushroomKind(held))) offerItem(there);
+      }
+    }
+    const use = reach ? this.useVerbAt(front.x, front.y) : null;
+    if (use) rows.push({ label: t(`actions.${use}`), key: 'use' });
+    if (rows.length === 0) return null;
+    return { view: { rows, ...icons }, at: under || front.y > hero.y ? hero : front };
+  }
+
+  /** O que o Z faz no tile da frente, na ordem de `pressAttack`. Pegar e trocar são à parte: levam desenhos. */
+  private handVerbAt(x: number, y: number): string | null {
+    if (this.npcManager?.hasNpcAt(x, y)) return 'talk';
+    const quest = this.painterQuest?.actionAt(x, y) ?? this.lumberQuest?.actionAt(x, y) ?? this.astronomerQuest?.actionAt(x, y);
+    if (quest) return quest;
+    const there = this.itemManager?.kindAt(x, y);
+    if (isMushroomKind(there)) return this.heldItem === 'knife' ? 'harvest' : null;
+    const find = this.valleyFinds?.at(x, y);
+    if (find) {
+      if (find.view) return 'sit';
+      if (find.owner) return 'knock';
+      return find.kind === 'bottle' ? 'read' : 'look';
+    }
+    if (this.plantedSwordTile?.x === x && this.plantedSwordTile.y === y) return 'touch';
+    const hearth = this.getHearthAt(x, y);
+    if (hearth && !this.roasted) {
+      if (!hearth.isLit) return 'light';
+      return this.heldItem === 'wood' ? 'roast' : null;
+    }
+    if (this.getRestFireAt(x, y)?.isLit) return 'sit';
+    if (this.getToolboxAt(x, y)) return 'craft';
+    if (this.getFurnaceAt(x, y)) return 'smelt';
+    const altar = this.getAltarAt(x, y);
+    if (altar) {
+      if (altar.carrying === null) return this.heldItem !== 'none' ? 'put' : null;
+      return hammerResult(altar.carrying) !== undefined ? 'hammer' : null;
+    }
+    return null;
+  }
+
+  /** O que o X faz no tile da frente, na ordem de `pressUse` e da tabela de `useItemAt`. */
+  private useVerbAt(x: number, y: number): string | null {
+    const fire = this.getRestFireAt(x, y);
+    if (fire && !this.heldActsOnFire(fire)) return 'sleep';
+    const held = this.heldItem;
+    if (held === 'none') {
+      if (this.itemManager?.kindAt(x, y) === 'bloom') return 'hammer';
+      const altar = this.getAltarAt(x, y);
+      if (altar) return altar.carrying ? 'takeBack' : 'pickUp';
+      const furnace = this.getFurnaceAt(x, y);
+      return furnace && !furnace.isBusy ? 'pickUp' : null;
+    }
+    const spot = this.getPlantSpotAt(x, y);
+    if (held === 'dyeSeeds' && spot?.isHole) return 'sow';
+    if (isMushroomKind(this.itemManager?.kindAt(x, y))) return null;
+    if (this.itemManager?.kindAt(x, y) === 'bloom') return 'hammer';
+    const onAltar = this.getAltarAt(x, y)?.carrying;
+    if (onAltar && hammerResult(onAltar) !== undefined) return 'hammer';
+    if (this.canBuildMachineAt(held, x, y)) return 'install';
+    const lit = this.isFlammableHeld && this.heldOnFire;
+    const campfire = this.getCampfireAt(x, y);
+    if (campfire) {
+      if (!campfire.isLit) return lit ? 'light' : null;
+      if (held === 'bucketFull') return 'douse';
+      if (this.isFlammableHeld) return this.heldOnFire ? 'refuel' : 'light';
+      return null;
+    }
+    const lava = this.getLavaAt(x, y);
+    if (lava && !lava.solidified) {
+      if (lava.cooling) return null;
+      if (held === 'stone') return 'cover';
+      if (this.isFlammableHeld) return this.heldOnFire ? 'refuel' : 'light';
+      return null;
+    }
+    const water = this.getWaterAt(x, y);
+    if (water?.blocking) {
+      if (held === 'bucket') return 'fill';
+      if (!water.canBuild) return null;
+      if (held === 'stone') return 'ford';
+      return held === 'wood' ? 'bridge' : null;
+    }
+    if (held === 'bucket' && this.isOpenWaterAt(x, y)) return 'fill';
+    if (this.getDryBushAt(x, y)?.blocking) return lit ? 'burn' : null;
+    if (this.getDryTreeAt(x, y)?.blocking || this.getDryShrubAt(x, y)?.blocking) return this.holdsAnAxe ? 'chop' : null;
+    if (this.getRockAt(x, y)?.blocking) return held === 'pickaxe' ? 'break' : null;
+    if (spot?.blocking) return spot.isMound && held === 'bucketFull' ? 'water' : null;
+    const grass = this.getTallGrassAt(x, y);
+    if (grass?.blocking && grass.isTall) {
+      if (held === 'scythe') return 'mow';
+      return lit ? 'burn' : null;
+    }
+    if (this.getLockedDoorAt(x, y)?.blocking) return held === 'key' ? 'unlock' : null;
+    if (spot?.isHole && SEED_PACK_KINDS.has(held)) return 'sow';
+    return held === 'shovel' && this.canDigAt(x, y) ? 'dig' : null;
   }
 
   /** Mão vazia ou o mesmo pacote: pega. Mão cheia: troca, e o que estava nela fica no lugar. */
@@ -3442,10 +3505,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private releaseButterfly(wx: number, wy: number): void {
-    const size = 0.25 + Math.random() * 0.07;
+    const size = BUTTERFLY_SIZE;
     const bb = this.world3d?.addBillboard(BUTTERFLY_TEXTURE, 0, { centered: true, depthWrite: false })
       .setTint(BUTTERFLY_TINTS[Math.floor(Math.random() * BUTTERFLY_TINTS.length)])
-      .setDisplaySize(size, size * 0.86);
+      .setDisplaySize(size, size * BUTTERFLY_ASPECT);
     if (!bb) return;
     this.butterflies.push({ bb, x: wx, y: wy, tx: wx + 2, ty: wy - 2, phase: Math.random() * 10, size });
   }
@@ -3500,20 +3563,44 @@ export class GameScene extends Phaser.Scene {
    */
   private dropNear(kind: HeldItemKind, units: number, x: number, y: number): [number, number] | null {
     if (!this.itemManager) return null;
-    for (let r = 0; r <= 4; r += 1) {
-      for (let oy = -r; oy <= r; oy += 1) {
-        for (let ox = -r; ox <= r; ox += 1) {
-          if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
-          const tx = x + ox;
-          const ty = y + oy;
-          if (this.isTileTaken(tx, ty)) continue;
-          if (tx === this.playerWorld.worldX && ty === this.playerWorld.worldY && r > 0) continue;
-          this.itemManager.drop(kind, tx, ty, undefined, units);
-          return [tx, ty];
+    // SÓ ONDE O HERÓI CHEGA A PÉ. O tile livre mais perto pode ser um bolsão fechado: o machado do Bram caía atrás do
+    // cepo, e como ele só dá outro se não houver nenhum no chão, a partida travava para sempre, e o save lembrava.
+    const reachable = this.tilesWithinWalk(DROP_WALK_TILES);
+    for (const onlyReachable of [true, false]) {
+      for (let r = 0; r <= 4; r += 1) {
+        for (let oy = -r; oy <= r; oy += 1) {
+          for (let ox = -r; ox <= r; ox += 1) {
+            if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
+            const tx = x + ox;
+            const ty = y + oy;
+            if (this.isTileTaken(tx, ty)) continue;
+            if (tx === this.playerWorld.worldX && ty === this.playerWorld.worldY && r > 0) continue;
+            if (onlyReachable && !reachable.has(`${tx},${ty}`)) continue;
+            this.itemManager.drop(kind, tx, ty, undefined, units);
+            return [tx, ty];
+          }
         }
       }
     }
     return null;
+  }
+
+  /** Os tiles a até `steps` passos do herói, andando pelo chão livre. */
+  private tilesWithinWalk(steps: number): Set<string> {
+    const start: [number, number, number] = [this.playerWorld.worldX, this.playerWorld.worldY, 0];
+    const seen = new Set<string>([`${start[0]},${start[1]}`]);
+    const queue = [start];
+    for (let head = 0; head < queue.length; head += 1) {
+      const [x, y, walked] = queue[head];
+      if (walked >= steps) continue;
+      for (const [dx, dy] of CARDINAL_DIRS) {
+        const key = `${x + dx},${y + dy}`;
+        if (seen.has(key) || this.isSolidForEntities(x + dx, y + dy)) continue;
+        seen.add(key);
+        queue.push([x + dx, y + dy, walked + 1]);
+      }
+    }
+    return seen;
   }
 
   /**
@@ -5183,7 +5270,6 @@ export class GameScene extends Phaser.Scene {
     const sound = getSoundManager();
     this.cutsceneActive = true;
     this.roasting = true; // os vaga-lumes valem de dia ou de noite, nesta cena
-    this.mushroomHint?.setVisible(false); // o update para aqui, e o keycap ficaria parado na tela
     this.stopBreathing();
     this.actionButtons?.setVisible(false);
     this.pauseTouchButton?.setVisible(false);
@@ -5313,7 +5399,7 @@ export class GameScene extends Phaser.Scene {
     this.events.off('postupdate', followFire);
     focus.remove();
     this.keptLitFires.delete(fire);
-    fire.extinguish(false);
+    fire.extinguish();
     visitor.destroy();
     this.npcManager?.setKindAway('businessMan', false);
     this.tweens.add({ targets: this.hero, scaleY: 1, scaleX: 1, duration: 120 });
@@ -5524,7 +5610,6 @@ export class GameScene extends Phaser.Scene {
   ): Promise<void> {
     const { from, beside, script, goodbye, ship } = farewell;
     this.cutsceneActive = true;
-    this.mushroomHint?.setVisible(false);
     this.stopBreathing();
     this.actionButtons?.setVisible(false);
     this.pauseTouchButton?.setVisible(false);
@@ -5918,7 +6003,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.timeScale = 0; // hitstop: o mundo segura o quadro do golpe
     sound.playTitleImpact();
     sound.playRockSmash();
-    this.cameras.main.flash(150, 255, 246, 220);
+    if (!isReducedMotion()) this.cameras.main.flash(150, 255, 246, 220);
     this.world3d?.shake(420, 0.17, 0, 1);
     this.crackGroundAt(front.x, front.y, false);
     await new Promise<void>((resolve) => { window.setTimeout(resolve, 120); });
@@ -6265,10 +6350,10 @@ export class GameScene extends Phaser.Scene {
       for (let i = 0; i < BUTTERFLY_COUNT; i += 1) {
         const [x, y] = pickTarget();
         const [tx, ty] = pickTarget();
-        const size = 0.25 + Math.random() * 0.07;
+        const size = BUTTERFLY_SIZE;
         const bb = w3.addBillboard(BUTTERFLY_TEXTURE, 0, { centered: true, depthWrite: false })
           .setTint(BUTTERFLY_TINTS[i % BUTTERFLY_TINTS.length])
-          .setDisplaySize(size, size * 0.86);
+          .setDisplaySize(size, size * BUTTERFLY_ASPECT);
         this.butterflies.push({ bb, x, y, tx, ty, phase: Math.random() * 10, size });
       }
     }
@@ -6289,7 +6374,7 @@ export class GameScene extends Phaser.Scene {
       b.bb
         .setPosition(b.x, b.y)
         .setElevation(0.45 + 0.25 * Math.sin(b.phase * 1.7) + 0.06 * flap)
-        .setDisplaySize(b.size * (0.25 + 0.75 * flap), b.size * 0.86)
+        .setDisplaySize(b.size * (0.25 + 0.75 * flap), b.size * BUTTERFLY_ASPECT)
         .setAlpha(this.daylifeLevel);
     }
     if (want === 0 && this.daylifeLevel < 0.02) {
@@ -6793,6 +6878,8 @@ export class GameScene extends Phaser.Scene {
     const hint = this.questHint(askId);
     const hintLines = hint ? tLines(`npc.${askId}Hint.${hint}`) : [];
     if (hintLines.length > 0) script = { ...script, lines: gift ? [...script.lines, ...hintLines] : hintLines };
+    const optional = askId === FORAGER_DIALOG ? this.foragerOptionalLines(closedNow) : [];
+    if (optional.length > 0) script = { ...script, lines: optional };
     // O COGUMELO DEVOLVIDO: obrigado e uma curiosidade daquela espécie, antes do resto da conversa.
     if (delivery && isMushroomKind(delivery.kind)) {
       const said: I18nLine[] = [
@@ -6904,6 +6991,19 @@ export class GameScene extends Phaser.Scene {
     return steps.find((item) => !this.seenItems.has(item)) ?? steps[steps.length - 1];
   }
 
+  /**
+   * OS COGUMELOS OPCIONAIS: fechado o pedido, a Hollis continua dizendo onde nasce o próximo, sem cobrar. Quem traz
+   * os seis ouve o reconhecimento. O agradecimento da hora em que o pedido fecha continua sendo o `Done`.
+   */
+  private foragerOptionalLines(closedNow: boolean): I18nLine[] {
+    const quest = questFor(FORAGER_DIALOG);
+    if (!this.adventure || !quest || !isQuestDone(quest)) return [];
+    if (isQuestComplete(quest)) return tLines(`npc.${FORAGER_DIALOG}All`);
+    if (closedNow) return [];
+    const next = quest.hints?.find((item) => !this.seenItems.has(item));
+    return next ? tLines(`npc.${FORAGER_DIALOG}Hint.${next}`) : [];
+  }
+
   // Open the conversation panel for a ready-made script (pan the camera, dim the music), running
   // `onClosed` once the dialog is dismissed.
   private openDialogScript(
@@ -6976,15 +7076,14 @@ export class GameScene extends Phaser.Scene {
     const held = this.heldItem;
     if (held === 'none') return null;
     const due = questDeliveriesDue(dialogId).find((d) => d.item === held);
-    // A Hollis leva QUALQUER cogumelo, até o de uma espécie que ela já tem: o colhido não sai das
-    // costas (ver `handAt`), e sem ela ele ficaria preso nelas — com a faca do lado de lá.
-    // Fechado o pedido ela não aceita mais nenhum.
-    const forager = dialogId === FORAGER_DIALOG && isMushroomKind(held) && questDeliveriesDue(dialogId).length > 0;
+    // A Hollis leva QUALQUER cogumelo, até o de uma espécie que ela já tem, e também depois de fechado o pedido: o
+    // colhido não sai das costas (ver `handAt`), e sem ela ele ficaria preso nelas — com a faca do lado de lá.
+    const forager = dialogId === FORAGER_DIALOG && isMushroomKind(held);
     if (!due && !forager) return null;
     const units = due ? Math.min(due.missing, this.inventory.count(held)) : 1;
     if (this.heldOnFire) this.extinguishTorch();
     this.inventory.remove(held, units);
-    const closed = due
+    const closed = due || forager
       ? recordQuestEvent({ type: 'deliver', dialog: dialogId, item: held, units }).closed.length > 0
       : false;
     this.updateBackItem();
@@ -6992,7 +7091,7 @@ export class GameScene extends Phaser.Scene {
     return { kind: held, closed };
   }
 
-  /** A cesta inteira para a Hollis: cada espécie que ainda falta conta, e a repetida ela aceita igual. */
+  /** A cesta inteira para a Hollis, antes ou depois de fechar o pedido: as opcionais também contam. */
   private settleBasket(dialogId: string): { kinds: HeldItemKind[]; closed: boolean } | null {
     if (!this.adventure || dialogId !== FORAGER_DIALOG) return null;
     const st = adventureState();
@@ -7001,7 +7100,6 @@ export class GameScene extends Phaser.Scene {
     st.basket = [];
     let closed = false;
     for (const kind of kinds) {
-      if (!questDeliveriesDue(dialogId).some((due) => due.item === kind)) continue;
       if (recordQuestEvent({ type: 'deliver', dialog: dialogId, item: kind, units: 1 }).closed.length > 0) closed = true;
     }
     this.persistAdventure();
@@ -7112,8 +7210,6 @@ export class GameScene extends Phaser.Scene {
       w.setBuildHint(dist === 1 && !this.dialogOpen);
       w.render(this.tileSize, this.camera);
     }
-    // O keycap da marca de posicionamento e overlay 2D projetado, como o "!" do NPC.
-    if (this.camera) this.placementHints?.render(this.tileSize, this.camera, this.time.now);
     // O aviso de apanhar segue o corpo DESENHADO, e nao o tile logico: a logica salta para o
     // destino no primeiro frame do passo, e o nome sairia um tile na frente do heroi a cada passo.
     if (this.camera) {
@@ -7122,35 +7218,8 @@ export class GameScene extends Phaser.Scene {
       // O balao de pensamento monta no MESMO ponto do aviso de apanhar, e pelo mesmo motivo: a
       // ancora e o corpo DESENHADO. O relogio dele corre no update (ver HeroThought.tick).
       this.heroThought?.render(this.tileSize, this.camera, this.time.now, at);
-      this.handOffer?.render(this.currentHandOffer(at), this.tileSize, this.camera, this.time.now, at);
-    }
-    this.renderMushroomHint();
-    // O MESMO keycap sobre a BANCADA que o herói está encarando: sem ele o catálogo de fabricacao
-    // seria um recurso invisível, que é justamente o defeito que ele veio consertar. A condição é
-    // a precondição dos dois botões — adjacente E de frente —, lida do mesmo `facingTile` que o A
-    // vai usar, para o anúncio nunca prometer um gesto que o botão recusaria.
-    if (this.toolboxes.length || this.furnaces.length || this.altars.length) {
-      const front = this.facingTile();
-      const canTalk = !this.dialogOpen && !this.orderOverlay
-       ;
-      for (const box of this.toolboxes) {
-        const facing = canTalk && box.worldX === front.x && box.worldY === front.y;
-        box.renderHint(this.tileSize, this.camera, facing, this.time.now);
-      }
-      // O FORNO usa o MESMO anúncio: as duas máquinas que respondem ao A vestem o mesmo keycap,
-      // e uma terceira que respondesse teria de vestir o mesmo também.
-      for (const furnace of this.furnaces) {
-        const facing = canTalk && furnace.worldX === front.x && furnace.worldY === front.y;
-        furnace.renderHint(this.tileSize, this.camera, facing, this.time.now);
-      }
-      // ...e o ALTAR é a terceira. Com uma diferença: ele só anuncia o Z quando há o que PÔR nele
-      // (laje vazia + item selecionado). Cheia, o Z volta a ser a espada — e um keycap prometendo
-      // "põe" em cima de uma laje ocupada seria uma legenda mentindo sobre o próprio botão.
-      for (const altar of this.altars) {
-        const facing = canTalk && altar.worldX === front.x && altar.worldY === front.y
-          && altar.carrying === null && this.heldItem !== 'none';
-        altar.renderHint(this.tileSize, this.camera, facing, this.time.now);
-      }
+      const prompt = this.currentPrompt(at);
+      this.actionPrompt?.render(prompt?.view ?? null, this.tileSize, this.camera, this.time.now, prompt?.at ?? at);
     }
     // Bombs are world-anchored billboards; nothing to reproject here.
   }
@@ -7457,8 +7526,65 @@ export class GameScene extends Phaser.Scene {
     this.campfiresFollowNight = night;
     for (const campfire of this.campfires) {
       if (this.keptLitFires.has(campfire)) continue; // aceso por um pedido: o dia nao o apaga
-      campfire.setClockLit(night);
+      if (night) {
+        this.fireKeeperLights(campfire);
+      } else {
+        this.dismissFireKeeper(campfire);
+        campfire.setClockLit(false);
+      }
     }
+  }
+
+  /**
+   * QUANDO ANOITECE, O VIZINHO VAI ACENDER A FOGUEIRA DELE. Ele contorna até o lado oposto (colado no fogo como mora, sem
+   * isso não haveria caminhada, e na frente ele cobriria a chama), se abaixa, e o fogo pega aos poucos. Quem o herói não
+   * está vendo não anda: a fogueira só aparece acesa quando ele chegar.
+   */
+  private fireKeeperLights(fire: CampfireObject): void {
+    const hero = this.playerWorld;
+    const seen = Math.hypot(hero.worldX - fire.worldX, hero.worldY - fire.worldY) <= FIRE_KEEPER_SEEN_TILES;
+    const owner = seen && !fire.isLit && !fire.isHeldCold && !this.fireKeepers.has(fire)
+      ? this.npcManager?.getActiveWorldPositions().find(
+        (n) => Math.max(Math.abs(n.worldX - fire.worldX), Math.abs(n.worldY - fire.worldY)) === 1,
+      )
+      : undefined;
+    if (!owner) {
+      fire.setClockLit(true);
+      return;
+    }
+    const home: [number, number] = [owner.worldX, owner.worldY];
+    const across: [number, number] = [fire.worldX * 2 - home[0], fire.worldY * 2 - home[1]];
+    const seats: Array<[number, number]> = [across];
+    for (const [ox, oy] of [[0, 1], [1, 0], [-1, 0], [0, -1]] as const) seats.push([fire.worldX + ox, fire.worldY + oy]);
+    const free = seats.filter(([x, y]) => !(x === home[0] && y === home[1])
+      && !(x === hero.worldX && y === hero.worldY)
+      && !this.isSolidForEntities(x, y) && !this.itemManager?.hasItemAt(x, y));
+    const path = (free.length > 0 && this.findVisitPath(home, free, [hero.worldX, hero.worldY], [fire.worldX, fire.worldY])) || [home];
+    this.npcManager?.setKindAway(owner.kind, true);
+    const visitor = new FireVisitor(this, owner.kind, path);
+    const keeper = { visitor, timers: [] as Phaser.Time.TimerEvent[] };
+    this.fireKeepers.set(fire, keeper);
+    visitor.arrive(() => {
+      if (this.fireKeepers.get(fire) !== keeper) return;
+      keeper.timers.push(this.time.delayedCall(FIRE_KEEPER_STRIKE_MS, () => {
+        if (fire.kindle(FIRE_KINDLE_MS)) getSoundManager().playIgnite();
+        keeper.timers.push(this.time.delayedCall(FIRE_KINDLE_MS * 0.6, () => this.dismissFireKeeper(fire)));
+      }));
+    });
+  }
+
+  /** Ele levanta e volta para casa. Se a manhã chegou antes, a fogueira nem chega a acender. */
+  private dismissFireKeeper(fire: CampfireObject): void {
+    const keeper = this.fireKeepers.get(fire);
+    if (!keeper) return;
+    this.fireKeepers.delete(fire);
+    for (const timer of keeper.timers) timer.remove();
+    const { kind } = keeper.visitor;
+    keeper.visitor.leave(() => {
+      // A abertura de uma cena pode ter chamado este mesmo vizinho enquanto ele voltava.
+      if (this.fireVisitor?.kind === kind || this.skyVisitor?.kind === kind) return;
+      this.npcManager?.setKindAway(kind, false);
+    });
   }
 
   // The water leaves the bucket NOW — the hand empties with the throw, not with the landing —

@@ -5,6 +5,7 @@ import {
   KNIFE_TEXTURE_KEY, MUSHROOM_KINDS, fungusTextureKey, isMushroomKind, type MushroomKind,
 } from '@/game/fungi/fungi';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { GLINT_TEXTURE } from '@/game/render3d/cozyTextures';
 import { BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE } from '@/game/render3d/paintTextures';
 import {
   ASH_TEXTURE, GLASS_TEXTURE, SAND_TEXTURE, TELESCOPE_ITEM_TEXTURE,
@@ -180,7 +181,9 @@ export const isBagItem = (kind: HeldItemKind): boolean =>
 export const itemGroundVisual = (kind: HeldItemKind): { texture: string; frame: number } =>
   GROUND_VISUAL[kind];
 
-const GROUND_SIZE = 0.7; // tiles
+// Menor que o herói de propósito: em tile inteiro uma pá ficava da altura dele. O pixel do item sai um pouco
+// mais fino que o do chão, e essa é a única exceção à densidade de 16 por tile.
+const GROUND_SIZE = 0.75;
 const BOB_TILES = 0.09;
 
 // A chama cavalgando um graveto ACESO fora da mao: os mesmos frames tiny-fire dos arbustos,
@@ -197,15 +200,20 @@ const BLOOM_HEAT = 0xe7462a;
 const BLOOM_PULSE_MS = 1450;
 const FLAME_ELEV = 0.5; // lambe a ponta do graveto em pe (arte de 0.7 tile)
 
-// Fixed purple outline around every ground pickup — the hero's own indigo cloak, brightened
-// until it reads at night — so collectibles pop against the world at a glance. Same trick as
-// the hero's low-health outline: 8 solid-tinted copies of the item art offset one step around
-// it. The offsets live in the (worldX, elevation) plane — the billboard's screen plane — and
-// every copy is pushed a hair AWAY from the camera in worldY so the real art draws on top.
-// (That last nudge is the same idea the whole renderer now states as DEPTH_LAYER — this is
-// just the *inner* order, between the item and its own rim, inside the ground layer.)
-const OUTLINE_COLOR = 0x9d7bff;
-const OUTLINE_OFFSET_TILES = 0.05; // ≈1 art pixel at 16px-per-0.7-tile
+// O CONTORNO DE TINTA, só em quem nasceu sem ele: as ferramentas e o graveto são silhuetas chapadas, e o
+// resto da mochila já vem contornado. Assim todo item no chão tem a mesma linha, sem um segundo aro. O
+// aviso de "isto se pega" é a cintilância abaixo, e o balão de ação quando o herói chega perto.
+// Oito cópias pintadas da arte, a um pixel em volta. Os desvios ficam no plano do billboard, e cada cópia vai
+// um fio para longe da câmera, para a arte de verdade ficar por cima.
+const OUTLINE_COLOR = 0x1b1d33;
+const OUTLINE_OFFSET_TILES = GROUND_SIZE / 16;
+const UNINKED_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>([
+  'axe', 'pickaxe', 'scythe', 'shovel', 'wood', 'stone', 'seeds', 'sword', 'splitWood',
+]);
+// A CINTILÂNCIA: um brilho curto de vez em quando, cada item no seu tempo.
+const GLINT_CYCLE_MS = 2800;
+const GLINT_SHARE = 0.14;
+const GLINT_SIZE = 3 / 16;
 const OUTLINE_BEHIND_TILES = 0.02;
 const OUTLINE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1],
@@ -222,6 +230,7 @@ export class ItemPickup {
   private flame?: Billboard3D;
   /** O calor da esponja vazando no chao (so `bloom` tem). */
   private heatGlow?: Billboard3D;
+  private glint?: Billboard3D;
   private fireState?: ItemFire;
   /**
    * Quantas UNIDADES este item no chão vale ao ser apanhado (o pacote de sementes: 5 recém-
@@ -254,14 +263,21 @@ export class ItemPickup {
       .setPosition(tileX, tileY)
       .setDisplaySize(isDecorKind(kind) ? 1 : GROUND_SIZE, isDecorKind(kind) ? 1 : GROUND_SIZE);
 
-    // The purple rim: emissive like the item itself, so it also survives the dark.
-    // Alpha/elevation are mirrored from the sprite every render (fade-in + bob).
-    this.outline = OUTLINE_DIRS.map(([ox]) => world3d()
+    // Emissive like the item itself, so the line survives the dark. Alpha/elevation are mirrored from the
+    // sprite every render (fade-in + bob).
+    this.outline = UNINKED_KINDS.has(kind) ? OUTLINE_DIRS.map(([ox]) => world3d()
       .addBillboard(visual.texture, visual.frame, { emissive: true, depthLayer: 'ground' })
       .setTintFill(OUTLINE_COLOR)
       .setPosition(tileX + ox * OUTLINE_OFFSET_TILES, tileY - OUTLINE_BEHIND_TILES)
       .setDisplaySize(GROUND_SIZE, GROUND_SIZE)
-      .setAlpha(0));
+      .setAlpha(0)) : [];
+    if (!isDecorKind(kind) && !isMushroomKind(kind)) {
+      this.glint = world3d()
+        .addBillboard(GLINT_TEXTURE, 0, { centered: true, emissive: true, fog: false, depthWrite: false })
+        .setPosition(tileX + 0.18, tileY - 0.04)
+        .setDisplaySize(GLINT_SIZE, GLINT_SIZE)
+        .setAlpha(0);
+    }
 
     // Fade in via alpha only — render owns the bob each frame, so a scale tween would just be
     // clobbered.
@@ -337,6 +353,7 @@ export class ItemPickup {
     this.sprite.setVisible(false);
     this.flame?.setVisible(false);
     this.heatGlow?.setVisible(false);
+    this.glint?.setVisible(false);
     for (const copy of this.outline) copy.setVisible(false);
   }
 
@@ -353,7 +370,13 @@ export class ItemPickup {
     for (let i = 0; i < this.outline.length; i++) {
       this.outline[i]
         .setElevation(Math.max(0, bob + OUTLINE_DIRS[i][1] * OUTLINE_OFFSET_TILES))
-        .setAlpha(isDecorKind(this.kind) ? 0 : alpha);
+        .setAlpha(alpha);
+    }
+    if (this.glint) {
+      const phase = (this.scene.time.now / GLINT_CYCLE_MS + (this.tileX * 0.37 + this.tileY * 0.61)) % 1;
+      this.glint
+        .setElevation(0.52 + bob)
+        .setAlpha(phase < GLINT_SHARE ? alpha * 0.85 * Math.sin((phase / GLINT_SHARE) * Math.PI) : 0);
     }
     // O calor da esponja cavalga o bob e PULSA: metal esfriando respira, aura magica nao.
     if (this.heatGlow) {
@@ -377,6 +400,8 @@ export class ItemPickup {
     this.scene.tweens.killTweensOf(this.sprite);
     this.sprite.destroy();
     this.flame?.destroy();
+    this.heatGlow?.destroy();
+    this.glint?.destroy();
     for (const copy of this.outline) copy.destroy();
   }
 }

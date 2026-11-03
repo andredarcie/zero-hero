@@ -1,3 +1,4 @@
+import { calmDt } from '@/game/runtime/accessibility';
 import {
   CLOSE_SIZE, FUNGUS_SPECS, fungusCloseUp,
   type DirtKind, type MushroomKind,
@@ -791,7 +792,7 @@ export class ForagingOverlay {
     if (this.stage === 'aim') {
       // A faca em vai-e-vem triangular: velocidade constante, nada de freada que engane o olho.
       // Começa no alto, de onde ela entrou.
-      this.aimClock += dt;
+      this.aimClock += calmDt(dt);
       const phase = (this.aimClock % AIM_PERIOD) / AIM_PERIOD;
       const tri = phase < 0.5 ? phase * 2 : 2 - phase * 2;
       this.knifeY = this.aimTop + (this.aimBottom - this.aimTop) * tri;

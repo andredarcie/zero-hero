@@ -89,41 +89,59 @@ export const PLACEMENT_OK_TEXTURE = 'placement-ok';
 const KEYCAP_BG = '#241d0f';
 const KEYCAP_BORDER = '#ffe066';
 const KEYCAP_GLYPH_COLOR = '#f5efdc';
-const GLYPHS: Record<'Z' | 'A' | 'X' | 'B', readonly string[]> = {
-  Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+const GLYPHS: Readonly<Record<string, readonly string[]>> = {
   A: ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
-  X: ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
   B: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
+  C: ['.####', '#....', '#....', '#....', '#....', '#....', '.####'],
+  D: ['####.', '#...#', '#...#', '#...#', '#...#', '#...#', '####.'],
+  E: ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
+  F: ['#####', '#....', '#....', '####.', '#....', '#....', '#....'],
+  G: ['.####', '#....', '#....', '#.###', '#...#', '#...#', '.###.'],
+  H: ['#...#', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  I: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '#####'],
+  J: ['..###', '...#.', '...#.', '...#.', '...#.', '#..#.', '.##..'],
+  K: ['#...#', '#..#.', '#.#..', '##...', '#.#..', '#..#.', '#...#'],
+  L: ['#....', '#....', '#....', '#....', '#....', '#....', '#####'],
+  M: ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
+  N: ['#...#', '##..#', '#.#.#', '#.#.#', '#..##', '#...#', '#...#'],
+  O: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  P: ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
+  Q: ['.###.', '#...#', '#...#', '#...#', '#.#.#', '#..#.', '.##.#'],
+  R: ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#'],
+  S: ['.####', '#....', '#....', '.###.', '....#', '....#', '####.'],
+  T: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
+  U: ['#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  V: ['#...#', '#...#', '#...#', '#...#', '.#.#.', '.#.#.', '..#..'],
+  W: ['#...#', '#...#', '#...#', '#.#.#', '#.#.#', '##.##', '#...#'],
+  X: ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
+  Y: ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
+  Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+  0: ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'],
+  1: ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  2: ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
+  3: ['####.', '....#', '....#', '.###.', '....#', '....#', '####.'],
+  4: ['...#.', '..##.', '.#.#.', '#..#.', '#####', '...#.', '...#.'],
+  5: ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
+  6: ['.###.', '#....', '#....', '####.', '#...#', '#...#', '.###.'],
+  7: ['#####', '....#', '...#.', '..#..', '.#...', '.#...', '.#...'],
+  8: ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'],
+  9: ['.###.', '#...#', '#...#', '.####', '....#', '....#', '.###.'],
 };
-
-export const PLACEMENT_KEY_TEXTURE = 'action-key';
-/** O keycap do OUTRO botao — o que APANHA (X no teclado, B nos circulos de toque). */
-export const TAKE_KEY_TEXTURE = 'take-key';
 
 /**
- * Publica o keycap como textura do Phaser (ele é overlay 2D projetado, nunca um corpo no mundo —
- * a mesma técnica do "!" do NPC). Idempotente: a segunda chamada não faz nada.
+ * Publica a tecla com esta letra e devolve o nome da textura (é overlay 2D projetado, nunca um corpo no
+ * mundo). Uma textura por letra, porque a tecla de cada gesto pode ser trocada nas opções.
  */
-export const ensurePlacementKeyTexture = (scene: Phaser.Scene, touch: boolean): void => {
-  ensureKeycapTexture(scene, PLACEMENT_KEY_TEXTURE, touch ? 'A' : 'Z');
-};
-
-/** O keycap do botao de APANHAR. Mesmo desenho, outra letra — ver `ensurePlacementKeyTexture`. */
-export const ensureTakeKeyTexture = (scene: Phaser.Scene, touch: boolean): void => {
-  ensureKeycapTexture(scene, TAKE_KEY_TEXTURE, touch ? 'B' : 'X');
-};
-
-const ensureKeycapTexture = (
-  scene: Phaser.Scene, key: string, letter: keyof typeof GLYPHS,
-): void => {
-  if (scene.textures.exists(key)) return;
-  const glyph = GLYPHS[letter];
+export const keycapTexture = (scene: Phaser.Scene, letter: string): string => {
+  const key = `keycap-${letter}`;
+  if (scene.textures.exists(key)) return key;
+  const glyph = GLYPHS[letter] ?? GLYPHS.Z;
   const gRows = glyph.length;
   const gCols = glyph[0].length;
   const w = gCols + 6;
   const h = gRows + 6;
   const canvas = scene.textures.createCanvas(key, w, h);
-  if (!canvas) return;
+  if (!canvas) return key;
   const ctx = canvas.getContext();
   for (let y = 0; y < h; y += 1) {
     for (let x = 0; x < w; x += 1) {
@@ -142,6 +160,7 @@ const ensureKeycapTexture = (
   }
   canvas.refresh();
   canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  return key;
 };
 
 // O registro THREE e um mapa de modulo que sobrevive ao restart da cena: registrar uma vez so.

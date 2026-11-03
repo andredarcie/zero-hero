@@ -3,12 +3,7 @@ import type Phaser from 'phaser';
 import { ASSET_KEYS, BLOOM_BLOWS } from '@/game/constants';
 import { itemGroundVisual, type HeldItemKind } from '@/game/entities/ItemPickup';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import {
-  PLACEMENT_KEY_TEXTURE, ensurePlacementKeyTexture,
-} from '@/game/render3d/placementTexture';
 import { FX_DOT_TEXTURE, FX_RING_TEXTURE, world3d } from '@/game/render3d/World3D';
-import { isTouchDevice } from '@/game/runtime/PauseMenu';
-import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { WorldProp } from './WorldProp';
 import { hammerResult, isHammerable } from './hammering';
 
@@ -72,8 +67,6 @@ export class AltarObject implements WorldProp {
   private blows = 0;
   private hotMs = 0;
   private readonly sparks = new Set<Billboard3D>();
-  /** O keycap "Z" que anuncia que esta peça responde ao A — o mesmo da bancada e do forno. */
-  private hint?: Phaser.GameObjects.Image;
   /** Quantas peças ele terminou. Público: é o que o playtest observa da peça. */
   public forgeCount = 0;
 
@@ -177,24 +170,6 @@ export class AltarObject implements WorldProp {
     if (this.hotMs <= 0) return;
     this.hotMs = Math.max(0, this.hotMs - deltaMs);
     if (this.hotMs === 0) this.body.setTexture(ASSET_KEYS.altar, FRAME_COLD);
-  }
-
-  /**
-   * O keycap "Z" sobre a laje quando o herói a encara COM algo a pôr. Mora em `placementTexture`
-   * como o da bancada e o do forno: as peças que respondem ao A usam o mesmo anúncio, e uma quarta
-   * que respondesse teria de usar o mesmo também.
-   */
-  public renderHint(tileSize: number, camera: WorldCamera, show: boolean, timeMs: number): void {
-    if (!show) { this.hint?.setVisible(false); return; }
-    if (!this.hint) {
-      ensurePlacementKeyTexture(this.scene, isTouchDevice());
-      this.hint = this.scene.add.image(0, 0, PLACEMENT_KEY_TEXTURE).setOrigin(0.5, 1).setVisible(false);
-    }
-    const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    const px = Math.max(1, Math.round(tileSize / 24));
-    const bob = Math.round(Math.sin(timeMs / 280) * px);
-    this.hint.setVisible(true).setScale(px)
-      .setPosition(screen.x, screen.y - tileSize - px * 2 + bob);
   }
 
   private showLoad(kind: HeldItemKind): void {
@@ -312,8 +287,6 @@ export class AltarObject implements WorldProp {
       this.load.destroy();
       this.load = undefined;
     }
-    this.hint?.destroy();
-    this.hint = undefined;
     for (const spark of this.sparks) {
       this.scene.tweens.killTweensOf(spark);
       spark.destroy();

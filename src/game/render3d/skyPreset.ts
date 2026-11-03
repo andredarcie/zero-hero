@@ -149,15 +149,14 @@ export const DAY_SKY: Partial<World3DParams> = {
 
   // ── A FOGUEIRA RECUA ───────────────────────────────────────────────────────
   // Ela não deixa de existir — continua sendo a fechadura do jogo e o sprite da chama continua
-  // aceso —, mas ao meio-dia ela é uma mancha morna no chão, não a luz do mundo. Halo, silhueta,
-  // raios e brilho do herói encolhem JUNTOS; se só um encolhesse, sobraria uma fogueira que não
+  // aceso —, mas ao meio-dia ela é uma mancha morna no chão, não a luz do mundo. Halo, silhueta
+  // e brilho do herói encolhem JUNTOS; se só um encolhesse, sobraria uma fogueira que não
   // ilumina nada mas ainda risca o chão de sombras compridas. A curva ajuda de graça: ela é
   // côncava, então o mesmo tanto de brilho aditivo rende menos sobre um chão já claro.
   fireIntensity: 140,
   fireGlowStrength: 0.22,
   castShadowAlpha: 0.22,
   castShadowRadius: 4.5,
-  godRays: 0.1,
   heroLight: 0,
   // A VISTA some junto, e pelo mesmo motivo dos vaga-lumes: ela é um desenho do ESCURO. Ao
   // meio-dia não há grave nenhum para ela abrir — o `lift` do dia já levantou o quadro inteiro —,

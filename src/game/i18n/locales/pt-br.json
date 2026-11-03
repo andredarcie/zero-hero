@@ -99,6 +99,17 @@
     "close": "Fechar"
   },
   "pause": {
+    "sectionAccess": "Acessibilidade",
+    "textSize": "Tamanho do texto",
+    "textNormal": "Normal",
+    "textLarge": "Grande",
+    "textHuge": "Enorme",
+    "reduceMotion": "Reduzir movimento e clarões",
+    "instantText": "Texto instantâneo",
+    "calmGames": "Minijogos sem pressa",
+    "keyHand": "Tecla da mão",
+    "keyUse": "Tecla de usar",
+    "pressKey": "Aperte uma tecla",
     "title": "PAUSA",
     "resume": "Retornar ao jogo",
     "options": "Opções",
@@ -274,7 +285,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Seis tipos crescem aqui. Leve a minha faca e a minha cesta. Traga todos de uma vez, se quiser."
+          "text": "Seis tipos crescem aqui. Preciso de quatro, o resto é só se quiser. Leve a minha faca e a minha cesta."
         },
         {
           "speaker": "npc",
@@ -287,14 +298,24 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Todos os seis. Agora você conhece o chão da floresta."
+          "text": "Quatro já bastam. Agora você conhece o chão da floresta."
         },
         {
           "speaker": "npc",
-          "text": "Só nunca coma o vermelho."
+          "text": "Os outros, só se quiser. Só nunca coma o vermelho."
         }
       ]
     },
+    "radiationSuitAll": [
+      {
+        "speaker": "npc",
+        "text": "Todos os seis! Ninguém conhece este chão como você."
+      },
+      {
+        "speaker": "npc",
+        "text": "Só nunca coma o vermelho."
+      }
+    ],
     "radiationSuitHint": {
       "porcini": [
         {
@@ -780,11 +801,52 @@
       ]
     }
   },
+  "actions": {
+    "talk": "Conversar",
+    "take": "Pegar",
+    "swap": "Trocar",
+    "sit": "Sentar",
+    "sleep": "Dormir",
+    "getUp": "Levantar",
+    "knock": "Bater",
+    "read": "Ler",
+    "look": "Olhar",
+    "touch": "Tocar",
+    "light": "Acender",
+    "roast": "Assar",
+    "craft": "Fabricar",
+    "smelt": "Fundir",
+    "put": "Pôr",
+    "hammer": "Martelar",
+    "harvest": "Colher",
+    "paint": "Pintar",
+    "mix": "Misturar",
+    "pick": "Colher",
+    "sow": "Semear",
+    "split": "Rachar",
+    "stand": "Apoiar",
+    "stack": "Empilhar",
+    "polish": "Polir",
+    "install": "Instalar",
+    "douse": "Apagar",
+    "refuel": "Reavivar",
+    "burn": "Queimar",
+    "chop": "Cortar",
+    "break": "Quebrar",
+    "water": "Regar",
+    "fill": "Encher",
+    "ford": "Pôr pedra",
+    "bridge": "Construir",
+    "cover": "Cobrir",
+    "mow": "Ceifar",
+    "unlock": "Destrancar",
+    "dig": "Cavar",
+    "takeBack": "Tirar",
+    "pickUp": "Recolher"
+  },
   "controls": {
     "hint": "Z fala e pega · X usa",
     "touchHint": "Arraste para andar · A fala e pega · B usa",
-    "take": "Pegar",
-    "swap": "Trocar",
     "skipIntro": "Z pula a cena",
     "skipIntroTouch": "Toque de novo para pular",
     "attackTitle": "Mão (Z)",

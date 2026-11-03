@@ -164,7 +164,6 @@ export const ASSET_KEYS = {
   pickaxeIcon: 'pickaxe-icon',
   scytheIcon: 'scythe-icon',
   shovelIcon: 'shovel-icon',
-  woodItem: 'wood-item',
   woodIcon: 'wood-icon',
   lookedDoorObject: 'looked-door-object',
   swingGateObject: 'swing-gate-object',
@@ -180,7 +179,6 @@ export const ASSET_KEYS = {
    */
   // O irmao dele: o balao com o GRAVETO ACESO, que o heroi pensa ao bater num arbusto seco com o
   // graveto apagado na mao (ver HeroThought e GameScene.useItemAt).
-  thoughtTorch: 'thought-torch',
   // `mage` e a arte que o NPC "wizard" tambem usa (NPC_VISUALS). O mago INIMIGO nasce com um tom
   // frio por cima justamente por isso — ver MageEnemy: dois personagens nao podem ler igual.
   mage: 'mage',
@@ -199,7 +197,6 @@ export const ASSET_KEYS = {
   // top-down de fundo opaco, e um icone que nao e o objeto e uma mentira na paleta.
   tallGrassUp: 'tall-grass-up',
   seedsItem: 'seeds-item',
-  mushroomItem: 'mushroom-item',
   plantHole: 'plant-hole',
   plantMound: 'plant-mound',
   // A flor da lua (spritefactory): as 9 poses de UMA flor abrindo — ver MOONFLOWER_FRAMES.
@@ -557,6 +554,10 @@ const earthField = (x: number, y: number, grain: number, salt: number): number =
 const groundEarthiness = (x: number, y: number): number => (
   0.76 * earthField(x, y, GROUND_DETAIL_GRAIN, 0) + 0.24 * earthField(x, y, 1, 977)
 );
+/** As pinturas do calçamento, só arte: o mundo guarda 23 e 24, e a coordenada escolhe qual cada tile veste. */
+const STONE_FLOOR_VARIANTS: Readonly<Record<number, readonly number[]>> = { 23: [23, 57, 58], 24: [24, 59, 60] };
+export const STONE_FLOOR_FRAMES: ReadonlySet<number> = new Set(Object.values(STONE_FLOOR_VARIANTS).flat());
+
 /**
  * What a stored ground frame actually wears at (x, y) — identity for everything but the earth,
  * which opens into a patch of painted ground over roughly a fifth of the map.
@@ -566,6 +567,8 @@ const groundEarthiness = (x: number, y: number): number => (
  * tile wears — so a patch is never four copies of the same square.
  */
 export const groundFrameAt = (frame: number, x: number, y: number): number => {
+  const stones = STONE_FLOOR_VARIANTS[frame];
+  if (stones) return stones[terrainVariant(x, y, stones.length)];
   if (frame !== GROUND_TILE_FRAME) return frame;
   if (groundEarthiness(x, y) < GROUND_DETAIL_CUT) return frame;
   return GROUND_DETAIL_FRAMES[terrainVariant(x, y, GROUND_DETAIL_FRAMES.length)];

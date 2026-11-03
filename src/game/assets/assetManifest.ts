@@ -151,11 +151,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     path: '/assets/environment/structures/swing_gate.png',
   },
   {
-    // Sprite Factory: o mesmo balao com o GRAVETO ACESO dentro — o que falta para o arbusto pegar.
-    key: ASSET_KEYS.thoughtTorch,
-    path: '/assets/ui/icons/thought_torch.png',
-  },
-  {
     key: ASSET_KEYS.dryBush,
     path: '/assets/environment/props/bush.png',
   },
@@ -169,14 +164,12 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.scytheIcon,     path: '/assets/ui/icons/scythe_icon.png' },
   { key: ASSET_KEYS.shovelIcon,     path: '/assets/ui/icons/shovel_icon.png' },
   { key: ASSET_KEYS.woodIcon,       path: '/assets/ui/icons/wood_icon.png' },
-  { key: ASSET_KEYS.woodItem,       path: '/assets/items/collectibles/wood.png' },
   { key: ASSET_KEYS.rock,           path: '/assets/environment/props/rock.png' },
   { key: ASSET_KEYS.ironItem,       path: '/assets/items/collectibles/iron.png' },
   { key: ASSET_KEYS.oreItem,        path: '/assets/items/collectibles/ore.png' },
   { key: ASSET_KEYS.bloomItem,      path: '/assets/items/collectibles/bloom.png' },
   { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock_cracked.png' },
   { key: ASSET_KEYS.seedsItem,      path: '/assets/items/collectibles/seeds.png' },
-  { key: ASSET_KEYS.mushroomItem,   path: '/assets/items/collectibles/mushroom.png' },
   { key: ASSET_KEYS.plantMound,     path: '/assets/environment/props/plant_mound.png' },
   { key: ASSET_KEYS.water,          path: '/assets/environment/terrain/water_0.png' },
   { key: ASSET_KEYS.lavaFloor,      path: '/assets/environment/terrain/lava_floor.png' },

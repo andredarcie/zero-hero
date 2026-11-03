@@ -138,13 +138,17 @@ const HEART = [
 
 // A BORBOLETA: asas de tela crua (o tint escolhe a cor) e o corpo de tinta no meio. O bater das
 // asas e a largura do billboard respirando: uma arte so.
+// Um V de três pixels: o bloco cheio lia como um quadradinho solto, um defeito de pixel no chão.
 const BUTTERFLY = [
-  '.kk.kk.',
-  'kaakaak',
-  'kaakaak',
-  '.kakak.',
-  'kaakaak',
-  '.kk.kk.',
+  'a.a',
+  '.a.',
+] as const;
+
+// A CINTILÂNCIA de quem está no chão à espera de ser pego: uma cruz de pixels, nunca um brilho borrado.
+const GLINT = [
+  '.a.',
+  'aaa',
+  '.a.',
 ] as const;
 
 // A FOLHA que cai: clara, para o tint fazer dela verde, amarela ou ferrugem.
@@ -183,6 +187,7 @@ export const GROUND_CRACK_TEXTURE = 'ground-crack';
 export const CAIRN_TEXTURE = 'quest-cairn';
 export const HEART_TEXTURE = 'cozy-heart';
 export const BUTTERFLY_TEXTURE = 'cozy-butterfly';
+export const GLINT_TEXTURE = 'cozy-glint';
 export const LEAF_TEXTURE = 'cozy-leaf';
 export const BASKET_TEXTURE = 'quest-basket';
 export const ROAST_STICK_DONE_TEXTURE = 'roast-stick-done';
@@ -222,6 +227,7 @@ export const registerCozyTextures = (scene: Phaser.Scene): void => {
     [CAIRN_TEXTURE, CAIRN],
     [HEART_TEXTURE, HEART],
     [BUTTERFLY_TEXTURE, BUTTERFLY],
+    [GLINT_TEXTURE, GLINT],
     [LEAF_TEXTURE, LEAF],
     [BASKET_TEXTURE, BASKET],
     [ROAST_STICK_DONE_TEXTURE, ROAST_STICK_DONE],

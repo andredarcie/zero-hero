@@ -1,7 +1,6 @@
 import type Phaser from 'phaser';
 import * as THREE from 'three';
 
-import { terrainVariant } from '@/game/constants';
 import {
   INK, paintColumn, paintDome, RAMPS, toneOf, type Paint, type Ramp,
 } from '@/game/render3d/pixelForms';
@@ -277,7 +276,10 @@ const YARD_LEAF = '#a2652c';
 /** Até onde vai a terra inteira; dali até 1 ela se desfaz em torrões soltos no capim. */
 const YARD_SOLID_REACH = 0.86;
 
-const yardNoise = (x: number, y: number, seed: number): number => terrainVariant(x + seed * 31 + 400, y - seed * 17 + 400, 1000) / 999;
+const yardNoise = (x: number, y: number, seed: number): number => {
+  const s = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
+  return s - Math.floor(s);
+};
 
 /** Ruído liso: manchas de contorno orgânico, em vez do grão de um pixel ou das ondas regulares. */
 const yardBlotch = (x: number, y: number, seed: number, cell: number): number => {
@@ -328,7 +330,10 @@ const paintYard = (rect: Paint, seed: number): void => {
         }
         continue;
       }
-      const stain = yardBlotch(x, y, seed + 1, 11) * 0.65 + yardBlotch(x, y, seed + 2, 4) * 0.35;
+      // De dois em dois pixels, como os torrões do chão em volta: grão de um pixel só parecia areia fina.
+      const bx = x & ~1;
+      const by = y & ~1;
+      const stain = yardBlotch(bx, by, seed + 1, 13) * 0.7 + yardBlotch(bx, by, seed + 2, 5) * 0.3;
       let tone = stain > 0.58 ? YARD_MID : stain > 0.45 ? YARD_SHADE : YARD_DARK;
       const path = onPath(x, y);
       if (path < 0.8) tone = YARD_LIT;
@@ -336,7 +341,7 @@ const paintYard = (rect: Paint, seed: number): void => {
       // A terra afunda na beira, antes de virar capim.
       if (reach > YARD_SOLID_REACH - 0.09) tone = Math.min(YARD_DARK, tone + 1);
       // O grão: um ou outro pixel foge do tom da mancha.
-      const grain = yardNoise(x, y, seed + 3);
+      const grain = yardNoise(bx, by, seed + 3);
       if (grain > 0.93) tone = Math.max(YARD_LIT, tone - 1);
       else if (grain < 0.08) tone = Math.min(YARD_DARK, tone + 1);
       // O degrau: embaixo a terra mostra o corte, em cima o capim faz sombra nela.

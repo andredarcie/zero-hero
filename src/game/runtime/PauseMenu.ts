@@ -3,6 +3,10 @@ import type Phaser from 'phaser';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getLang, setLang, t, type Lang } from '@/game/i18n/i18n';
 import {
+  getKeyLetter, getTextScale, isBindableKey, isCalmGames, isInstantText, isReducedMotion, setCalmGames, setInstantText,
+  setKeyCapture, setKeyCode, setReducedMotion, setTextScale, TEXT_SCALES, type BoundAction,
+} from '@/game/runtime/accessibility';
+import {
   getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
 } from '@/game/runtime/graphicsSettings';
 import {
@@ -160,7 +164,8 @@ export interface PauseMenuCallbacks {
 /** Uma escolha entre valores com nome, ou um nível de 0 a 1. É tudo o que uma opção pode ser. */
 type OptionDef =
   | { kind: 'choice'; label: string; values: { text: () => string; apply: () => void; active: () => boolean }[] }
-  | { kind: 'level'; label: string; read: () => number; write: (v: number) => void; release?: () => void };
+  | { kind: 'level'; label: string; read: () => number; write: (v: number) => void; release?: () => void }
+  | { kind: 'key'; label: string; action: BoundAction };
 
 type OptionSection = { title: string; options: OptionDef[] };
 
@@ -228,6 +233,28 @@ const optionSections = (): OptionSection[] => {
       ],
     },
     { title: 'pause.sectionImage', options: image },
+    {
+      title: 'pause.sectionAccess',
+      options: [
+        {
+          kind: 'choice',
+          label: 'pause.textSize',
+          values: TEXT_SCALES.map((scale, i) => ({
+            text: () => t(['pause.textNormal', 'pause.textLarge', 'pause.textHuge'][i]),
+            apply: () => setTextScale(scale),
+            active: () => getTextScale() === scale,
+          })),
+        },
+        { kind: 'choice', label: 'pause.reduceMotion', values: onOff(isReducedMotion, setReducedMotion) },
+        { kind: 'choice', label: 'pause.instantText', values: onOff(isInstantText, setInstantText) },
+        { kind: 'choice', label: 'pause.calmGames', values: onOff(isCalmGames, setCalmGames) },
+        // Sem teclado não há tecla a trocar.
+        ...(isTouchDevice() ? [] : [
+          { kind: 'key', label: 'pause.keyHand', action: 'hand' },
+          { kind: 'key', label: 'pause.keyUse', action: 'use' },
+        ] as OptionDef[]),
+      ],
+    },
   ];
 
   // Sem dedo não há botão na tela a mover, e a vibração só existe onde o navegador vibra.
@@ -290,6 +317,7 @@ type OptionRow = {
 };
 
 export class PauseMenu {
+  private waitingKey?: (code: string | null) => void;
   private readonly root: HTMLDivElement;
   private readonly mainPage: HTMLDivElement;
   private readonly optionsPage: HTMLDivElement;
@@ -335,7 +363,7 @@ export class PauseMenu {
       title.textContent = t(section.title);
       box.appendChild(title);
       for (const def of section.options) {
-        const row = def.kind === 'choice' ? this.choiceRow(def) : this.levelRow(def);
+        const row = def.kind === 'choice' ? this.choiceRow(def) : def.kind === 'level' ? this.levelRow(def) : this.keyRow(def);
         const index = this.rows.length;
         this.rows.push(row);
         row.el.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(index); });
@@ -358,6 +386,7 @@ export class PauseMenu {
   public destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    setKeyCapture(false);
     window.removeEventListener('keydown', this.handleKeyDown, true);
     document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
     this.root.remove();
@@ -474,6 +503,32 @@ export class PauseMenu {
     };
   }
 
+  private keyRow(def: Extract<OptionDef, { kind: 'key' }>): OptionRow {
+    const el = this.rowEl(def.label);
+    const value = document.createElement('b');
+    value.className = 'zh-pause-value';
+    el.appendChild(value);
+    const row: OptionRow = {
+      el,
+      step: () => { /* a tecla não tem anterior nem próxima */ },
+      activate: () => {
+        value.textContent = t('pause.pressKey');
+        setKeyCapture(true);
+        this.waitingKey = (code) => {
+          this.waitingKey = undefined;
+          setKeyCapture(false);
+          if (code) setKeyCode(def.action, code);
+          // Trocar pode inverter com a outra tecla, então todas as linhas se redesenham.
+          this.rows.forEach((r) => r.refresh());
+        };
+      },
+      refresh: () => { value.textContent = getKeyLetter(def.action); },
+    };
+    el.addEventListener('click', () => row.activate());
+    el.style.cursor = 'pointer';
+    return row;
+  }
+
   // ── a seleção: uma só, para teclado, mouse e dedo ──────────────────────────
 
   private get selectable(): HTMLElement[] {
@@ -513,6 +568,15 @@ export class PauseMenu {
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.destroyed) return;
     const code = event.code;
+    // Esperando a tecla nova, só ela conta: Esc desiste, e o que não pode ser escolhido é ignorado.
+    if (this.waitingKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.repeat) return;
+      if (code === 'Escape') this.waitingKey(null);
+      else if (isBindableKey(code)) this.waitingKey(code);
+      return;
+    }
     const up = code === 'ArrowUp' || code === 'KeyW';
     const down = code === 'ArrowDown' || code === 'KeyS';
     const left = code === 'ArrowLeft' || code === 'KeyA';

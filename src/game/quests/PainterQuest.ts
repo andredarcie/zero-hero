@@ -359,12 +359,12 @@ export class PainterQuest {
     return null;
   }
 
-  /** O keycap flutua sobre o que este gesto alcança agora. */
-  public wantsKey(x: number, y: number): boolean {
+  /** O gesto da mão neste tile agora, se houver: a mesma pergunta que o botão faz. */
+  public actionAt(x: number, y: number): string | null {
     const held = this.host.held();
-    if (this.easelTile?.x === x && this.easelTile.y === y) return this.save.stage === 'paint' && held === 'brush';
-    if (this.tableTile?.x === x && this.tableTile.y === y) return this.flowersReady();
-    return this.save.plots.some((p) => p.x === x && p.y === y && !p.cut && p.level >= GROW_LEVELS);
+    if (this.easelTile?.x === x && this.easelTile.y === y) return this.save.stage === 'paint' && held === 'brush' ? 'paint' : null;
+    if (this.tableTile?.x === x && this.tableTile.y === y) return this.flowersReady() ? 'mix' : null;
+    return this.save.plots.some((p) => p.x === x && p.y === y && !p.cut && p.level >= GROW_LEVELS) ? 'pick' : null;
   }
 
   private sow(spot: PlantSpotObject, x: number, y: number): void {

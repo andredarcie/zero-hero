@@ -1,3 +1,4 @@
+import { getTextScale, isInstantText } from '@/game/runtime/accessibility';
 import type Phaser from 'phaser';
 
 import { dialogBoxMetrics, isTallDialog } from '@/game/constants';
@@ -208,6 +209,9 @@ const CSS = `
 #${ROOT_ID}.zh-tall .zh-dlg-body { grid-row: 2; grid-column: 1 / -1; line-height: 1.38; }
 `;
 
+/** O maior texto que cabe inteiro na caixa de um celular em pé (medido com a fala mais longa do jogo). */
+const TALL_TEXT_SCALE_MAX = Number(1.25);
+
 export class DialogOverlay {
   private readonly root: HTMLDivElement;
   private readonly dock: HTMLDivElement;
@@ -360,7 +364,14 @@ export class DialogOverlay {
   // ── Layout: a barra do rodapé, em pixels de viewport ───────────────────────
   private readonly layout = (): void => {
     const rect = this.canvas.getBoundingClientRect();
-    const { boxHeight, fontSize, margin } = dialogBoxMetrics(rect.width, rect.height);
+    const metrics = dialogBoxMetrics(rect.width, rect.height);
+    const { margin } = metrics;
+    // O texto maior leva a caixa junto, até metade da tela: a partir daí a conversa cobriria o mundo. A área
+    // cresce com o quadrado da escala, porque a letra fica mais larga e mais alta e a fala ganha linhas.
+    // Em tela estreita a caixa já é a mais alta que dá: passar disso cortaria a fala mais longa do jogo.
+    const scale = isTallDialog(rect.width, rect.height) ? Math.min(getTextScale(), TALL_TEXT_SCALE_MAX) : getTextScale();
+    const fontSize = Math.round(metrics.fontSize * scale);
+    const boxHeight = Math.round(Math.min(rect.height * 0.5, metrics.boxHeight * scale * scale));
     this.root.classList.toggle('zh-tall', isTallDialog(rect.width, rect.height));
 
     // Ancorada pelo PÉ da tela (e não pelo topo da caixa) para o entalhe do telefone caber:
@@ -412,6 +423,7 @@ export class DialogOverlay {
     this.chars = [...line.text];
     this.buildLetters();
     if (speaks && this.persona.radio) getSoundManager().playRadioClick(false);
+    if (isInstantText()) { this.skipTypewriter(); return; }
     this.typeNextChar(CHAR_DELAY_MS);
   }
 

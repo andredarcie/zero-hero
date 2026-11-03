@@ -28,6 +28,8 @@
 import { PALETTE } from './rock.mjs';
 
 export default {
+  // Os mesmos tons escurecidos da rocha inteira (rock.mjs).
+  allowNewColors: ['#8f8f8f', '#858797', '#777985', '#5f616c', '#43474a', '#272b2b'],
   name: 'rock-cracked',
   kind: 'prop',
   palette: PALETTE,

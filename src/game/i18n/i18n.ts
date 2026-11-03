@@ -1,3 +1,4 @@
+import { withKeyNames } from '@/game/runtime/accessibility';
 import en from './locales/en.json';
 import ptBr from './locales/pt-br.json';
 
@@ -97,7 +98,7 @@ const find = (key: string): unknown => {
 // a missing string is VISIBLE on screen rather than blank).
 export const t = (key: string): string => {
   const value = find(key);
-  return typeof value === 'string' ? value : key;
+  return typeof value === 'string' ? withKeyNames(value) : key;
 };
 
 // Structured lookup (arrays/objects).
@@ -109,14 +110,14 @@ const tRaw = <T>(key: string): T | undefined => {
 export const tWords = (key: string): string[] => tRaw<string[]>(key) ?? [];
 
 export const tLines = (key: string): I18nLine[] =>
-  (tRaw<I18nLine[]>(key) ?? []).map((line) => ({ speaker: line.speaker, text: line.text }));
+  (tRaw<I18nLine[]>(key) ?? []).map((line) => ({ speaker: line.speaker, text: withKeyNames(line.text) }));
 
 // NPC name + lines for a dialog kind, if the catalog defines it. Returns undefined when the kind
 // is unknown, so callers can fall back to the world.json text.
 export const localizedNpc = (kind: string): I18nNpc | undefined => {
   const node = tRaw<I18nNpc>(`npc.${kind}`);
   if (!node || typeof node.name !== 'string' || !Array.isArray(node.lines)) return undefined;
-  return { name: node.name, lines: node.lines.map((line) => ({ speaker: line.speaker, text: line.text })) };
+  return { name: node.name, lines: node.lines.map((line) => ({ speaker: line.speaker, text: withKeyNames(line.text) })) };
 };
 
 // Mirror the catalog's language onto <html lang> for a11y / correct hyphenation.

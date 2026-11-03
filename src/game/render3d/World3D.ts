@@ -1,4 +1,5 @@
-﻿import * as THREE from 'three';
+﻿import { isReducedMotion } from '@/game/runtime/accessibility';
+import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
@@ -11,7 +12,7 @@ import { ParticleBatch, type ParticleField } from './ParticleBatch';
 import {
   CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_TILES, DUNGEON_WALL_FRAMES, MASS_TILE_FRAMES,
   groundFrameAt, SEA_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant,
-  SOLID_UPPER_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
+  SOLID_UPPER_FRAMES, STONE_FLOOR_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
 import {
   getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds, isInsideWorld,
@@ -267,7 +268,7 @@ const PORTRAIT_FOV_CAP = 74;
 // Lava tiles sink into a well too, but a SHALLOWER one than the river — molten rock pools
 // in a low basin, not a deep channel. Same treatment (dropped bed + dark charred banks), less
 // deep. LavaObject sets its surface just above the bed at this depth.
-export const LAVA_DEPTH_TILES = 0.16;
+export const LAVA_DEPTH_TILES = 0.26;
 /**
  * O POÇO DA ESCADA: um buraco DE VERDADE no chão da superfície, pelo mesmo caminho do rio — o
  * quad de chão daquele tile desce, e paredes fecham o vão onde ele encontra a terra.
@@ -365,12 +366,6 @@ const GRADE_DAY_HIGH = new THREE.Vector3(1.24, 1.06, 0.72);
 const GRADE_LAVA_SHADOW = new THREE.Vector3(1.06, 0.92, 0.86); // even the dark runs warm here
 const GRADE_LAVA_HIGH = new THREE.Vector3(1.20, 0.98, 0.72); // molten amber
 
-// Fake god rays: a fan of tall additive quads leaning out of the nearest lit fire (see initGodRays).
-const GODRAY_COUNT = 5;
-const GODRAY_WIDTH = 0.42; // tiles — narrow, or the beams merge into one blob of glow
-const GODRAY_HEIGHT = 3.4; // tiles — tall enough to cross the tree line around a clearing
-const GODRAY_FAN = 1.15; // tiles between the outermost beams' feet
-const GODRAY_LEAN = 1.05; // radians across the whole fan (the beams splay as they climb)
 
 const EMBER_COUNT = 26;
 const DUST_COUNT = 140;
@@ -814,8 +809,6 @@ export interface World3DParams {
    */
   wind: number;
   /** Ambient particle brightness multipliers (0 = off): fireflies over the grass, low mist. */
-  /** Fake god rays leaning out of the nearest lit fire (0 = off). */
-  godRays: number;
   /** Idle handheld drift of the camera, in tiles (0 = a locked-off tripod). */
   camSway: number;
   /**
@@ -1006,7 +999,6 @@ export class World3D {
     grain: 0.02,
     // Occasional twinkles near lit fires + a faint low haze — tuned live to sit
     // just under "noticeable" so they never wash the dark or read as floating orbs.
-    godRays: 0.55,
     camSway: 0.022,
     pixelSnap: 1,
     wind: 1,
@@ -1055,8 +1047,6 @@ export class World3D {
   // Where the lava lies (for the per-region grade) and how molten the current frame reads, 0..1.
   private readonly lavaSpots: Array<{ x: number; y: number }> = [];
   private biomeHeat = 0;
-  private readonly godRays: THREE.Mesh[] = [];
-  private readonly godRaySeed: number[] = [];
   private particleBatch!: ParticleBatch;
   private embers!: ParticleField;
   private readonly emberState: EmberParticle[] = [];
@@ -1150,7 +1140,9 @@ export class World3D {
     /** O MAR: o mesmo atlas do chão, com a corrente e a arrebentação (worldFx 'seaFlow'). */
     sea: THREE.MeshLambertMaterial;
     bank: THREE.MeshLambertMaterial;
-    lavaBank: THREE.MeshLambertMaterial;
+    /** Sem luz: o barranco da lava é iluminado por ela, e isso vem pintado no vértice. */
+    lavaBank: THREE.MeshBasicMaterial;
+    lava: THREE.MeshBasicMaterial;
     /** As paredes do POÇO da escada, e o fundo dele: preto que não recebe luz (ver o bake). */
     pit: THREE.MeshBasicMaterial;
     pitFloor: THREE.MeshBasicMaterial;
@@ -1367,7 +1359,6 @@ export class World3D {
     this.initShadowMask();
     this.initPostProcessing();
     this.initParticles();
-    this.initGodRays();
 
     window.addEventListener('resize', this.handleResize);
   }
@@ -1505,35 +1496,6 @@ export class World3D {
   // ── ambient particles (embers + dust) ─────────────────────────────────────────
 
   /**
-   * God rays, the cheap Octopath way: no volumetrics, just a fan of tall additive quads leaning
-   * out of the nearest LIT fire, crossing the trees around the clearing. They breathe with the
-   * flame that casts them and feed the bloom, so the light in the air reads as light in the air.
-   * Unlit world = no shafts, which keeps them tied to the fantasy: fire is what carves the dark.
-   */
-  private initGodRays(): void {
-    const tex = makeShaftTexture();
-    for (let i = 0; i < GODRAY_COUNT; i++) {
-      const geo = new THREE.PlaneGeometry(1, 1);
-      geo.translate(0, 0.5, 0); // pivots at the fire's foot, so a lean swings the beam's top
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        fog: false,
-        opacity: 0,
-      });
-      mat.color.copy(FIRE_HOT);
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.visible = false;
-      mesh.renderOrder = 2; // over the ground glow, under nothing that matters
-      this.scene.add(mesh);
-      this.godRays.push(mesh);
-      this.godRaySeed.push(Math.random() * Math.PI * 2);
-    }
-  }
-
-  /**
    * Colour grading per REGION: the woodland is graded cool (blue shadows, faintly amber
    * highlights); a lava field bathes the whole frame in heat. "Where am I" is measured from the
    * ground itself — how much lava lies around the camera — and the tint eases between the two, so
@@ -1559,36 +1521,6 @@ export class World3D {
       .copy(GRADE_WOOD_HIGH)
       .lerp(GRADE_DAY_HIGH, this.params.daylight)
       .lerp(GRADE_LAVA_HIGH, this.biomeHeat);
-  }
-
-  private updateGodRays(fire: FireEntry | null): void {
-    const strength = this.params.godRays;
-    for (let i = 0; i < this.godRays.length; i++) {
-      const mesh = this.godRays[i];
-      const mat = mesh.material as THREE.MeshBasicMaterial;
-      if (!fire || strength <= 0) {
-        mesh.visible = false;
-        continue;
-      }
-      const seed = this.godRaySeed[i];
-      const t = this.elapsed;
-      // Fan the beams out around the flame, each leaning a little further than the last.
-      const spread = (i / Math.max(1, GODRAY_COUNT - 1)) - 0.5; // -0.5 … 0.5
-      const lean = spread * GODRAY_LEAN + Math.sin(t * 0.35 + seed) * 0.04; // slow breathing sway
-      mesh.position.set(
-        fire.worldX + spread * GODRAY_FAN,
-        0.12,
-        fire.worldY + Math.cos(seed) * 0.12,
-      );
-      mesh.rotation.z = lean;
-      // The middle beams stand tallest; the outer ones are stubbier, so the fan has a silhouette.
-      const height = GODRAY_HEIGHT * (0.62 + 0.76 * (0.5 - Math.abs(spread)));
-      mesh.scale.set(GODRAY_WIDTH * fire.scale, height * fire.scale, 1);
-      // The shafts ARE the flame's light: they swell and gutter with it, and die when it dies.
-      const breath = 0.75 + 0.25 * Math.sin(t * 1.7 + seed * 2.1);
-      mat.opacity = strength * 0.5 * fire.level * breath * (fire.lit ? 1 : 0);
-      mesh.visible = mat.opacity > 0.004;
-    }
   }
 
   private initParticles(): void {
@@ -1838,8 +1770,10 @@ export class World3D {
       // terra molhada. Era uma cor só, quase preta — o lago lia como um buraco de parede reta.
       const bank = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
       patchPixelMaterial(bank, { quantize: true });
-      const lavaBank = new THREE.MeshLambertMaterial({ color: 0x1a1008, side: THREE.DoubleSide });
-      patchPixelMaterial(lavaBank, { quantize: true });
+      const lavaBank = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      const lava = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      patchPixelMaterial(lava, { worldFx: 'lavaFlow' });
+      lava.name = 'terrain-lava';
       // AS PAREDES E O FUNDO DO POÇO DA ESCADA. `MeshBasicMaterial` de propósito, e não Lambert:
       // um buraco não é uma superfície, então ele não recebe luz nenhuma — nem a do dia, nem a da
       // tocha na mão do herói (ver o doc de STAIRS_PIT_DEPTH). A parede é um fio mais clara que o
@@ -1895,7 +1829,7 @@ export class World3D {
       patchPixelMaterial(vines, { quantize: true, normalUp: true });
       vines.name = 'terrain-vines';
       this.terrainMats = {
-        ground, sea, bank, lavaBank, pit, pitFloor, decor, solid, rock, stair, wallTop, vines,
+        ground, sea, bank, lavaBank, lava, pit, pitFloor, decor, solid, rock, stair, wallTop, vines,
         voidMist: makeVoidMistMaterial(),
         blob: makeShadowBlobMaterial(0.34),
       };
@@ -1985,14 +1919,58 @@ export class World3D {
     // A MARGEM, para o rio e o lago iguais (ver buildShoreGeometry): o chão avança sobre a água
     // num contorno orgânico, e o barranco desce por esse contorno — não pela linha reta do tile.
     const wetTiles = seaTiles.length > 0 ? [...bedTiles, ...seaTiles] : bedTiles;
+    const groundFrame = new Map<number, number>();
+    for (const t of groundTiles) groundFrame.set(tileKey(t.x, t.z), t.frame);
     if (wetTiles.length > 0) {
-      const groundFrame = new Map<number, number>();
-      for (const t of groundTiles) groundFrame.set(tileKey(t.x, t.z), t.frame);
       const shore = buildShoreGeometry(
         wetKeys, wetTiles, (x, z) => groundFrame.get(tileKey(x, z)) ?? null, WATER_DEPTH_TILES,
       );
       this.addTerrainMesh(new THREE.Mesh(shore.lip, mats.ground));
       this.addTerrainMesh(new THREE.Mesh(shore.walls, mats.bank));
+    }
+
+    // O CALÇAMENTO NÃO ACABA EM LINHA: o capim morde a beira dele, e pedras soltas avançam sobre o capim. Uma passada
+    // por nível, porque há calçamento no planalto, e `keep` segura a borda onde aquele nível tem chão de verdade.
+    const floorByLevel = new Map<number, Array<{ x: number; z: number; frame: number }>>();
+    // Tile alto em `groundTiles` é a base de uma beira de serra, no chão de baixo: não é piso daquele nível. O piso
+    // alto vem de `reliefNear`, que inclui os tiles desenhados pelo contorno, e não só os inteiros.
+    for (const t of [...groundTiles.filter((g) => reliefLevelAt(g.x, g.z) === 0), ...reliefNear.filter((n) => n.level > 0)]) {
+      const level = reliefLevelAt(t.x, t.z);
+      const list = floorByLevel.get(level);
+      if (list) list.push(t);
+      else floorByLevel.set(level, [t]);
+    }
+    for (const [level, floor] of floorByLevel) {
+      const stoneFloor = floor.filter((t) => STONE_FLOOR_FRAMES.has(t.frame));
+      if (stoneFloor.length === 0) continue;
+      const frames = new Map<number, number>();
+      for (const t of floor) frames.set(tileKey(t.x, t.z), t.frame);
+      const stoneKeys = new Set(stoneFloor.map((t) => tileKey(t.x, t.z)));
+      const ring = new Map<number, { x: number; z: number }>();
+      for (const t of stoneFloor) {
+        for (let dz = -1; dz <= 1; dz++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const k = tileKey(t.x + dx, t.z + dz);
+            if (!stoneKeys.has(k) && frames.has(k)) ring.set(k, { x: t.x + dx, z: t.z + dz });
+          }
+        }
+      }
+      const y = level * RELIEF_HEIGHT + STONE_LIP_Y;
+      const field = this.reliefField;
+      const keep = (px: number, pz: number): boolean => !field || field(px, pz) === level;
+      const inward = buildShoreGeometry(
+        stoneKeys, stoneFloor, (x, z) => frames.get(tileKey(x, z)) ?? null, 0,
+        { min: STONE_EDGE_MIN, variance: STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, keep },
+      );
+      inward.walls.dispose();
+      this.addTerrainMesh(new THREE.Mesh(inward.lip, mats.ground));
+      const outward = buildShoreGeometry(
+        new Set(ring.keys()), [...ring.values()],
+        (x, z) => (stoneKeys.has(tileKey(x, z)) ? frames.get(tileKey(x, z)) ?? null : null), 0,
+        { min: -STONE_EDGE_MIN, variance: -STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, sourceOnly: true, keep },
+      );
+      outward.walls.dispose();
+      this.addTerrainMesh(new THREE.Mesh(outward.lip, mats.ground));
     }
 
     // The lava basin: the same recipe, shallower — a dropped bed to close the well's bottom and
@@ -2001,9 +1979,19 @@ export class World3D {
       this.addTerrainMesh(new THREE.Mesh(
         buildFlatTileGeometry(lavaBedTiles, -LAVA_DEPTH_TILES, solidSet), mats.ground,
       ));
-      this.addTerrainMesh(new THREE.Mesh(
-        buildBankGeometry(lavaSet, lavaBedTiles, LAVA_DEPTH_TILES), mats.lavaBank,
-      ));
+      const lavaKeys = new Set(lavaBedTiles.map((t) => tileKey(t.x, t.z)));
+      // A MESMA MARGEM DA ÁGUA, mais funda e mais larga: um poço de um tile precisa de curva dentro dele.
+      const lavaShore = buildShoreGeometry(
+        lavaKeys, lavaBedTiles, (x, z) => groundFrame.get(tileKey(x, z)) ?? null, LAVA_DEPTH_TILES,
+        {
+          min: 0.03, variance: 0.2, round: 0.1, corner: 0.34, wobble: 4.2, bands: LAVA_BANK_BANDS, mud: 0x2a1006,
+          lipTint: LAVA_RIM_TINT,
+        },
+      );
+      this.addTerrainMesh(new THREE.Mesh(lavaShore.lip, mats.bank));
+      this.addTerrainMesh(new THREE.Mesh(lavaShore.walls, mats.lavaBank));
+      this.addTerrainMesh(new THREE.Mesh(buildLavaSurface(lavaKeys, lavaBedTiles), mats.lava));
+      this.addTerrainMesh(new THREE.Mesh(buildScorchGeometry(lavaKeys, lavaBedTiles), mats.bank));
     }
 
     // O POÇO DA ESCADA: o mesmo leito afundado + paredes do rio, com UMA diferença que é a peça
@@ -2213,12 +2201,18 @@ export class World3D {
     // A MONTANHA, pelo mesmo caminho e com duas diferencas: o teto e ROCHA iluminada (uma
     // montanha vista de cima e um planalto, nao o vazio entre duas salas) e as faces vem
     // sombreadas no vertice, que e de onde o volume vem quando a luz e sempre de cima.
-    if (this.rockCubes.length > 0) {
-      const rockSet = new Set(this.rockCubes.map((t) => tileKey(t.x, t.z)));
-      push(new THREE.Mesh(
-        buildTileCubeGeometry(this.rockCubes, (x, z) => rockSet.has(tileKey(x, z)), ROCK_CUBE_SHADE),
-        mats.rock,
-      ));
+    const stairSet = new Set(this.stairTiles.map((t) => tileKey(t.x, t.z)));
+    const rock = this.rockCubes.length > 0
+      ? shapeRock(this.rockCubes, (x, z) => this.sunkenTiles.has(tileKey(x, z)) || stairSet.has(tileKey(x, z)) || reliefLevelAt(x, z) > 0)
+      : null;
+    if (rock) {
+      const contour = buildReliefContourGeometry(rock.near, rock.frameOf, rock.field, rock.levelAt, stairSet, rock.blocked);
+      push(new THREE.Mesh(contour.tops, mats.ground));
+      push(new THREE.Mesh(contour.walls, mats.rock));
+      if (contour.vines.length > 0) push(new THREE.Mesh(buildVineGeometry(contour.vines), mats.vines));
+      if (contour.whole.length > 0) {
+        push(new THREE.Mesh(buildFlatTileGeometry(contour.whole, (x, z) => rock.levelAt(x, z) * RELIEF_HEIGHT), mats.ground));
+      }
     }
 
     // A escada. A pedra da serra sai pelo contorno, em buildTerrain: ela não muda com a bomba.
@@ -2229,7 +2223,7 @@ export class World3D {
     // Toda a serra projeta, a de fora do mapa também: é da sombra dela que a borda do mundo vive.
     this.massTiles = [...this.wallCubes, ...this.rockCubes];
     this.massHeight.clear();
-    for (const t of this.massTiles) this.massHeight.set(tileKey(t.x, t.z), 1);
+    for (const t of this.massTiles) this.massHeight.set(tileKey(t.x, t.z), rock?.levelAt(t.x, t.z) || 1);
     const stairKeys = new Set(this.stairTiles.map((t) => tileKey(t.x, t.z)));
     this.massGrid = buildMassHeightGrid(
       [...this.massTiles, ...this.reliefTiles],
@@ -2237,6 +2231,7 @@ export class World3D {
       reliefLevelAt,
       this.reliefField,
       (x, z) => this.sunkenTiles.has(tileKey(x, z)) || stairKeys.has(tileKey(x, z)),
+      rock,
     );
     this.rebuildMassShadow();
   }
@@ -3925,6 +3920,7 @@ export class World3D {
    * alem de "aconteceu" — mas exagerar isso vira enjoo de camera, que e o defeito oposto e pior.
    */
   public shake(durationMs: number, amplitudeTiles: number, dirX = 0, dirY = 0): void {
+    if (isReducedMotion()) return;
     // A landed hit during a fading shake must not cut it short — keep the stronger kick.
     if (this.shakeMs > 0 && amplitudeTiles < this.shakeAmp * (this.shakeMs / this.shakeDurMs)) return;
     this.shakeMs = durationMs;
@@ -4317,9 +4313,6 @@ export class World3D {
     profiler.begin('biome');
     this.updateBiomeGrade(dt);
     profiler.end('biome');
-    profiler.begin('godRays');
-    this.updateGodRays(nearest);
-    profiler.end('godRays');
     profiler.begin('particles');
     this.updateParticles(dt, nearest);
     profiler.end('particles');
@@ -4847,35 +4840,6 @@ const makeRingTexture = (): THREE.CanvasTexture => {
   return tex;
 };
 
-// A single shaft of light: brightest at the flame's mouth, thinning and dying as it climbs, and
-// feathered at the sides so the beam has no hard edge. Low-res + NEAREST, like every other glow
-// here, so it breaks into pixel blocks rather than a smooth airbrushed cone.
-const SHAFT_TEX_W = 16;
-const SHAFT_TEX_H = 48;
-const makeShaftTexture = (): THREE.DataTexture => {
-  const data = new Uint8Array(SHAFT_TEX_W * SHAFT_TEX_H * 4);
-  for (let y = 0; y < SHAFT_TEX_H; y++) {
-    // v = 0 at the foot (the fire) … 1 at the top: the beam fades out as it rises.
-    const v = y / (SHAFT_TEX_H - 1);
-    const rise = Math.pow(1 - v, 1.8);
-    for (let x = 0; x < SHAFT_TEX_W; x++) {
-      const i = (y * SHAFT_TEX_W + x) * 4;
-      const across = Math.abs((x + 0.5) / SHAFT_TEX_W - 0.5) * 2; // 0 centre … 1 edge
-      const feather = Math.pow(Math.max(0, 1 - across), 1.6);
-      data[i] = 255;
-      data[i + 1] = 255;
-      data[i + 2] = 255;
-      data[i + 3] = Math.round(rise * feather * 190);
-    }
-  }
-  const tex = new THREE.DataTexture(data, SHAFT_TEX_W, SHAFT_TEX_H, THREE.RGBAFormat);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-};
-
 // Smoke: the same soft disc as the dot, but written as raw pixels so the colour stays WHITE out
 // to the transparent rim (see the FX_PUFF_TEXTURE note). Canvas is deliberately not used here.
 const PUFF_TEX_RES = 32;
@@ -5308,16 +5272,22 @@ const AO_CORNERS: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1],
  * Split out of buildFlatTileGeometry because felling a tree TILE has to re-bake it: the shade
  * around a tree's feet is baked into its NEIGHBOURS' vertex colours, so a tree that vanished
  * without this would leave its own shadow printed on the clearing the player just opened.
+ *
+ * O CANTO É UM SÓ, e por isso a conta inclui o próprio tile: os quatro tiles que se encontram num ponto
+ * perguntam pelos mesmos quatro tiles e chegam ao mesmo tom. Sem isso, o tile da árvore não se contava,
+ * saía claro no canto em que o vizinho saía escuro, e a divisa virava um risco reto em volta dele (relato
+ * do autor).
  */
 const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<number>): number[] =>
   AO_CORNERS.map(([dx, dz]) => {
     let occluders = 0;
     if (solids) {
+      if (solids.has(tileKey(x, z))) occluders++;
       if (solids.has(tileKey(x + dx, z))) occluders++;
       if (solids.has(tileKey(x, z + dz))) occluders++;
       if (solids.has(tileKey(x + dx, z + dz))) occluders++;
     }
-    return 1 - AO_MAX * (occluders / 3);
+    return 1 - AO_MAX * Math.min(1, occluders / 3);
   });
 
 /**
@@ -5477,6 +5447,8 @@ const SHORE_CELLS = 16; // um pixel de arte
 const SHORE_MIN = 0.05; // em tiles: a largura mínima do beiço (cobre a borda do tile em todo lugar)
 const SHORE_VAR = 0.2; // quanto o ruído soma a ela
 const SHORE_ROUND = 0.45; // o raio da união suave: o tamanho da curva na quina côncava
+const SHORE_MUD = 0x3a2a18; // a terra molhada na linha da água
+const SHORE_MUD_Y = -0.012; // logo abaixo do beiço
 
 const shoreHash = (x: number, z: number): number => {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -5501,12 +5473,108 @@ const smoothMin = (a: number, b: number, k: number): number => {
   return Math.min(a, b) - h * h * k * 0.25;
 };
 
+type ShoreOptions = {
+  /** A largura do beiço, em tiles: o mínimo e quanto o ruído soma. */
+  min?: number;
+  variance?: number;
+  /** O quanto a união das distâncias arredonda. Num corredor estreito o padrão fecha a passagem inteira. */
+  round?: number;
+  /** Raio do canto, em tiles: dois lados de terra se encontrando viram curva. */
+  corner?: number;
+  /** A frequência da ondulação da beira: um poço pequeno precisa dela mais curta para mostrá-la. */
+  wobble?: number;
+  /** A altura do beiço, para quem pousa sobre um chão no mesmo plano. */
+  y?: number;
+  /** Só o beiço: sem barranco, para o que não tem desnível. */
+  flatOnly?: boolean;
+  /** Só a terra que tem arte conta como margem. */
+  sourceOnly?: boolean;
+  /** Só desenha o beiço onde isto responder sim. */
+  keep?: (px: number, pz: number) => boolean;
+  lipTint?: readonly [number, number, number];
+  bands?: ReadonlyArray<readonly [number, number, number]>;
+  mud?: number;
+};
+
+const STONE_LIP_Y = 0.004;
+/** A beira do calçamento: positivo o capim morde a pedra, negativo a pedra avança no capim. O mesmo ruído decide os dois lados. */
+const STONE_EDGE_MIN = -0.24;
+const STONE_EDGE_VAR = 0.5;
+const STONE_EDGE_WOBBLE = 2.6;
+
+/** A beira do poço é chão queimado, o mesmo tom do torrão em volta dele. */
+const LAVA_RIM = new THREE.Color(0x453826);
+const LAVA_RIM_TINT: readonly [number, number, number] = [LAVA_RIM.r, LAVA_RIM.g, LAVA_RIM.b];
+
+/** O barranco da lava: carvão em cima, e a parede vai acendendo até o fundo, de onde vem a luz. */
+const LAVA_BANK_BANDS: ReadonlyArray<readonly [number, number, number]> = [
+  [0, 0.4, 0x1c0f08],
+  [0.4, 0.75, 0x4e1a08],
+  [0.75, 1, 0xd4561a],
+];
+
+/**
+ * A SUPERFÍCIE DA LAVA, uma malha só e em células: `aShore` vale 1 na margem e 0 a meio tile dela. O canto por
+ * vizinho que a água usa não serve aqui: num poço de um tile de largura todo canto encosta na terra, e a lava
+ * inteira viraria beira.
+ */
+const buildLavaSurface = (lava: ReadonlySet<number>, tiles: ReadonlyArray<{ x: number; z: number }>): THREE.BufferGeometry => {
+  const N = 8;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const shore: number[] = [];
+  const idx: number[] = [];
+  const y = -LAVA_DEPTH_TILES + 0.02;
+  for (const { x, z } of tiles) {
+    const base = pos.length / 3;
+    for (let j = 0; j <= N; j++) {
+      for (let i = 0; i <= N; i++) {
+        const px = x - 0.5 + i / N;
+        const pz = z - 0.5 + j / N;
+        let d = Infinity;
+        for (let dz = -1; dz <= 1; dz++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (lava.has(tileKey(x + dx, z + dz))) continue;
+            d = Math.min(d, Math.hypot(Math.max(Math.abs(px - x - dx) - 0.5, 0), Math.max(Math.abs(pz - z - dz) - 0.5, 0)));
+          }
+        }
+        pos.push(px, y, pz);
+        uv.push(i / N, j / N);
+        shore.push(1 - Math.min(1, d / 0.5));
+      }
+    }
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const a = base + j * (N + 1) + i;
+        const b = a + 1;
+        const c = a + N + 1;
+        const e = c + 1;
+        idx.push(a, c, e, a, e, b);
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shore, 1));
+  geo.setIndex(idx);
+  return geo;
+};
+
 const buildShoreGeometry = (
   wet: ReadonlySet<number>,
   tiles: ReadonlyArray<{ x: number; z: number }>,
   landFrame: (x: number, z: number) => number | null,
   depth: number,
+  opts: ShoreOptions = {},
 ): { lip: THREE.BufferGeometry; walls: THREE.BufferGeometry } => {
+  const lipMin = opts.min ?? SHORE_MIN;
+  const lipVar = opts.variance ?? SHORE_VAR;
+  const lipY = opts.y ?? 0;
+  const round = opts.round ?? SHORE_ROUND;
+  const wobble = opts.wobble ?? 1.3;
+  const tint = opts.lipTint ?? [1, 1, 1];
+  const bands = opts.bands ?? BANK_BANDS;
   const N = SHORE_CELLS;
   const step = 1 / N;
   const memo = new Map<number, number>();
@@ -5531,17 +5599,28 @@ const buildShoreGeometry = (
           const lx = tx + dx;
           const lz = tz + dz;
           if ((dx === 0 && dz === 0) || wet.has(tileKey(lx, lz))) continue;
+          if (opts.sourceOnly && landFrame(lx, lz) === null) continue;
           const ex = Math.max(Math.abs(px - lx) - 0.5, 0);
           const ez = Math.max(Math.abs(pz - lz) - 0.5, 0);
           const di = Math.sqrt(ex * ex + ez * ez);
-          d = d === Infinity ? di : smoothMin(d, di, SHORE_ROUND);
+          d = d === Infinity ? di : smoothMin(d, di, round);
           if (di < best && landFrame(lx, lz) !== null) {
             best = di;
             src = tileKey(lx, lz);
           }
         }
       }
-      if (src >= 0 && d < SHORE_MIN + SHORE_VAR * shoreNoise(px * 1.3, pz * 1.3)) out = src + 1;
+      if (opts.corner) {
+        const r = opts.corner;
+        const fx = px - tx;
+        const fz = pz - tz;
+        const ex = 0.5 - Math.abs(fx);
+        const ez = 0.5 - Math.abs(fz);
+        const sideX = !wet.has(tileKey(tx + (fx >= 0 ? 1 : -1), tz));
+        const sideZ = !wet.has(tileKey(tx, tz + (fz >= 0 ? 1 : -1)));
+        if (sideX && sideZ && ex < r && ez < r) d = Math.min(d, r - Math.hypot(r - ex, r - ez));
+      }
+      if (src >= 0 && d < lipMin + lipVar * shoreNoise(px * wobble, pz * wobble) && (!opts.keep || opts.keep(px, pz))) out = src + 1;
     }
     memo.set(key, out);
     return out;
@@ -5559,9 +5638,10 @@ const buildShoreGeometry = (
   const wc: number[] = [];
   const wi: number[] = [];
   let wv = 0;
-  const bandColors = BANK_BANDS.map(([, , hex]) => new THREE.Color(hex)); // sRGB → linear
+  const bandColors = bands.map(([, , hex]) => new THREE.Color(hex)); // sRGB → linear
   const wall = (ax: number, az: number, bx: number, bz: number, nx: number, nz: number): void => {
-    BANK_BANDS.forEach(([from, to], band) => {
+    if (opts.flatOnly) return;
+    bands.forEach(([from, to], band) => {
       const top = -depth * from;
       const bottom = -depth * to;
       wp.push(ax, top, az, bx, top, bz, bx, bottom, bz, ax, bottom, az);
@@ -5605,12 +5685,14 @@ const buildShoreGeometry = (
         // A arte do chão de origem, pousada sobre o tile de água como se continuasse nele.
         const u = (px: number): number => f.u0 + (px - x0) * (f.u1 - f.u0);
         const v = (pz: number): number => f.v1 - (pz - z0) * (f.v1 - f.v0);
-        lp.push(ax, 0, az, bx, 0, az, bx, 0, bz, ax, 0, bz);
+        // Beiço erguido sobre o mesmo plano: sem esta sobra, a câmera vê por baixo da beira um fio do que ele cobre.
+        const g = opts.flatOnly ? 0.012 : 0;
+        lp.push(ax - g, lipY, az - g, bx + g, lipY, az - g, bx + g, lipY, bz + g, ax - g, lipY, bz + g);
         luv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
         for (let k = 0; k < 4; k++) {
           lb.push(f.cu0, f.cv0, f.cu1, f.cv1);
           ln.push(0, 1, 0);
-          lc.push(1, 1, 1);
+          lc.push(tint[0], tint[1], tint[2]);
         }
         li.push(lv, lv + 3, lv + 2, lv, lv + 2, lv + 1);
         lv += 4;
@@ -5629,6 +5711,26 @@ const buildShoreGeometry = (
         const z = z0 + (j + 1) * step;
         wall(x0 + i * step, z, x0 + (e + 1) * step, z, 0, 1);
         i = e + 1;
+      }
+    }
+    // A LAMA MOLHADA: um pixel de terra onde a água encosta na margem pelos lados e por baixo. Ali o barranco
+    // fica de costas para a câmera, e sem isto o capim acabava direto na água.
+    const mud = new THREE.Color(opts.mud ?? SHORE_MUD);
+    for (let j = 0; j < N && !opts.flatOnly; j++) {
+      for (let i = 0; i < N; i++) {
+        const gx = gx0 + i;
+        const gz = gz0 + j;
+        if (cellAt(gx, gz) !== 0) continue;
+        if (cellAt(gx, gz + 1) === 0 && cellAt(gx - 1, gz) === 0 && cellAt(gx + 1, gz) === 0) continue;
+        const ax = x0 + i * step;
+        const az = z0 + j * step;
+        wp.push(ax, SHORE_MUD_Y, az, ax + step, SHORE_MUD_Y, az, ax + step, SHORE_MUD_Y, az + step, ax, SHORE_MUD_Y, az + step);
+        for (let k = 0; k < 4; k++) {
+          wn.push(0, 1, 0);
+          wc.push(mud.r, mud.g, mud.b);
+        }
+        wi.push(wv, wv + 3, wv + 2, wv, wv + 2, wv + 1);
+        wv += 4;
       }
     }
     // ...e as faces LESTE e OESTE, por coluna.
@@ -5661,6 +5763,69 @@ const buildShoreGeometry = (
   walls.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
   walls.setIndex(wi);
   return { lip, walls };
+};
+
+/**
+ * O CHÃO QUEIMADO EM VOLTA DA LAVA: torrões de dois pixels de arte que se desfazem no capim. É geometria do
+ * terreno porque só ela sabe onde há lava: nada aqui cai dentro de um tile de lava.
+ */
+const SCORCH_REACH = 0.8; // em tiles, a partir da borda da lava
+const SCORCH_CELL = 1 / 8; // dois pixels de arte
+const SCORCH_Y = 0.006;
+const SCORCH_TONES = [0x352c20, 0x453826, 0x56482c] as const;
+
+const buildScorchGeometry = (
+  lava: ReadonlySet<number>,
+  tiles: ReadonlyArray<{ x: number; z: number }>,
+): THREE.BufferGeometry => {
+  const pos: number[] = [];
+  const nrm: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  const tones = SCORCH_TONES.map((hex) => new THREE.Color(hex));
+  const seen = new Set<number>();
+  const perTile = Math.round(1 / SCORCH_CELL);
+  const span = Math.ceil(SCORCH_REACH) + 1;
+  let v = 0;
+  for (const t of tiles) {
+    for (let gz = (t.z - span) * perTile; gz < (t.z + span + 1) * perTile; gz++) {
+      for (let gx = (t.x - span) * perTile; gx < (t.x + span + 1) * perTile; gx++) {
+        const key = (gx + 262144) * 524288 + (gz + 262144);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const cx = (gx + 0.5) * SCORCH_CELL - 0.5;
+        const cz = (gz + 0.5) * SCORCH_CELL - 0.5;
+        const tx = Math.round(cx);
+        const tz = Math.round(cz);
+        if (lava.has(tileKey(tx, tz))) continue;
+        let d = Infinity;
+        for (const o of tiles) {
+          const ex = Math.max(Math.abs(cx - o.x) - 0.5, 0);
+          const ez = Math.max(Math.abs(cz - o.z) - 0.5, 0);
+          d = Math.min(d, Math.hypot(ex, ez));
+        }
+        if (d >= SCORCH_REACH || shoreHash(gx, gz) < d / SCORCH_REACH) continue;
+        const c = tones[Math.min(tones.length - 1, Math.floor((d / SCORCH_REACH) * 2 + shoreHash(gz, gx)))];
+        const ax = gx * SCORCH_CELL - 0.5;
+        const az = gz * SCORCH_CELL - 0.5;
+        const bx = ax + SCORCH_CELL;
+        const bz = az + SCORCH_CELL;
+        pos.push(ax, SCORCH_Y, az, bx, SCORCH_Y, az, bx, SCORCH_Y, bz, ax, SCORCH_Y, bz);
+        for (let k = 0; k < 4; k++) {
+          nrm.push(0, 1, 0);
+          col.push(c.r, c.g, c.b);
+        }
+        idx.push(v, v + 3, v + 2, v, v + 2, v + 1);
+        v += 4;
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx);
+  return geo;
 };
 
 /**
@@ -5865,6 +6030,13 @@ const RELIEF_LIP_MIN = 0.06;
 const RELIEF_LIP_VAR = 0.3;
 const RELIEF_ROUND = 0.5;
 const RELIEF_CORNER = 0.38;
+const SHORT_STEP_RUN = 0.32;
+const VINE_MIN_RUN = 0.35;
+/** O muro: negativo morde o próprio tile, positivo avança sobre o vizinho. */
+const ROCK_LIP_MIN = -0.24;
+const ROCK_LIP_VAR = 0.56;
+/** O topo do muro mistura pedras grandes e pequenas: uma pintura só repetida lia como piso de pátio. */
+const ROCK_TOP_FRAMES: readonly number[] = [39, 40, 57, 58, 59, 60];
 
 type ReliefPoint = (px: number, pz: number) => number;
 
@@ -5906,6 +6078,86 @@ const makeReliefField = (
       if (d < lip) return level;
     }
     return 0;
+  };
+};
+
+/**
+ * O MURO DE PEDRA COM FORMA DE ROCHA. O dado continua por tile; o que muda é o desenho, pelo mesmo contorno da
+ * serra. A diferença é o sinal: a serra só cresce para fora, e aqui o ruído também morde para dentro do tile, senão
+ * o muro seria uma caixa de borda ondulada. No miolo de um maciço, parte dos tiles sobe mais um nível.
+ */
+const shapeRock = (
+  tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
+  blocked: (x: number, z: number) => boolean,
+) => {
+  const keys = new Set(tiles.map((t) => tileKey(t.x, t.z)));
+  const isRock = (x: number, z: number): boolean => keys.has(tileKey(x, z));
+  const levels = new Map<number, number>();
+  const frameOf = new Map<number, number>();
+  for (const { x, z } of tiles) {
+    const frame = ROCK_TOP_FRAMES[terrainVariant(x, z, ROCK_TOP_FRAMES.length)];
+    const inner = isRock(x + 1, z) && isRock(x - 1, z) && isRock(x, z + 1) && isRock(x, z - 1);
+    levels.set(tileKey(x, z), inner && shoreNoise(x * 0.7 + 3, z * 0.7 + 8) > 0.45 ? 2 : 1);
+    frameOf.set(tileKey(x, z), frame);
+  }
+  const levelAt = (x: number, z: number): number => levels.get(tileKey(x, z)) ?? 0;
+  const open = (x: number, z: number, level: number): boolean => levelAt(x, z) < level && !blocked(x, z);
+  const field: ReliefPoint = (px, pz) => {
+    const tx = Math.round(px);
+    const tz = Math.round(pz);
+    if (blocked(tx, tz)) return levelAt(tx, tz);
+    let top = 0;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) top = Math.max(top, levelAt(tx + dx, tz + dz));
+    }
+    for (let level = top; level >= 1; level--) {
+      const reach = ROCK_LIP_MIN - (level > 1 ? 0.14 : 0) + ROCK_LIP_VAR * shoreNoise(px * 1.25 + level * 17, pz * 1.25 + level * 5);
+      let edge: number;
+      if (levelAt(tx, tz) >= level) {
+        const fx = px - tx;
+        const fz = pz - tz;
+        edge = -Infinity;
+        if (open(tx + 1, tz, level)) edge = Math.max(edge, fx - 0.5);
+        if (open(tx - 1, tz, level)) edge = Math.max(edge, -fx - 0.5);
+        if (open(tx, tz + 1, level)) edge = Math.max(edge, fz - 0.5);
+        if (open(tx, tz - 1, level)) edge = Math.max(edge, -fz - 0.5);
+        const sx = fx >= 0 ? 1 : -1;
+        const sz = fz >= 0 ? 1 : -1;
+        const inner = 0.5 - RELIEF_CORNER;
+        if (Math.abs(fx) > inner && Math.abs(fz) > inner && open(tx + sx, tz, level) && open(tx, tz + sz, level) && open(tx + sx, tz + sz, level)) {
+          edge = Math.max(edge, Math.hypot(Math.abs(fx) - inner, Math.abs(fz) - inner) - RELIEF_CORNER);
+        }
+      } else {
+        edge = Infinity;
+        for (let dz = -1; dz <= 1; dz++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (levelAt(tx + dx, tz + dz) < level) continue;
+            const di = Math.hypot(Math.max(Math.abs(px - tx - dx) - 0.5, 0), Math.max(Math.abs(pz - tz - dz) - 0.5, 0));
+            edge = edge === Infinity ? di : smoothMin(edge, di, RELIEF_ROUND);
+          }
+        }
+      }
+      if (edge < reach) return level;
+    }
+    return 0;
+  };
+  const near = new Map<number, { x: number; z: number; frame: number; level: number; far: boolean }>();
+  for (const { x, z } of tiles) {
+    const frame = frameOf.get(tileKey(x, z)) ?? ROCK_TOP_FRAMES[0];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const k = tileKey(x + dx, z + dz);
+        if (!near.has(k)) near.set(k, { x: x + dx, z: z + dz, frame, level: levelAt(x + dx, z + dz), far: false });
+      }
+    }
+  }
+  return {
+    near: [...near.values()],
+    frameOf,
+    field,
+    levelAt,
+    blocked,
+    isNear: (x: number, z: number): boolean => near.has(tileKey(x, z)),
   };
 };
 
@@ -6039,7 +6291,9 @@ const buildReliefContourGeometry = (
         }
         wi.push(base, base + 2, base + 1, base, base + 3, base + 2);
       }
-      // A trepadeira é por tile e por lado: um trecho inteiro de mato, não uns fiapos soltos.
+      // A trepadeira é por tile e por lado: um trecho inteiro de mato, não uns fiapos soltos. Só na face sul e em
+      // trecho comprido: de lado ou num degrau da curva ela sobrava como pontas verdes soltas.
+      if (nz === 0 || Math.hypot(bx - ax, bz - az) < VINE_MIN_RUN) return;
       const salt = nz !== 0 ? 0 : nx < 0 ? 1 : 2;
       const roll = Math.abs(Math.imul(tx * 73 + salt * 19 + 5, tz * 137 + 11)) % 100;
       if (roll >= VINE_CHANCE) return;
@@ -6081,7 +6335,13 @@ const buildReliefContourGeometry = (
           const x = x0 + (side > 0 ? i + 1 : i) * step;
           const a = z0 + j * step;
           const b = z0 + (e + 1) * step;
-          if (side > 0) face(x, b, x, a, (e + 1) * step, j * step, c, n, 1, 0, shade.east);
+          // O DEGRAU CURTO DA CURVA NÃO É OUTRA FACE. Com arte e luz próprias, cada um lia como uma ripa, e a parede
+          // curva como uma cerca. Ele repete a coluna de arte onde está e a luz da face sul: a parede fica contínua.
+          if ((e + 1 - j) * step <= SHORT_STEP_RUN) {
+            const s = (i + 0.5) * step;
+            if (side > 0) face(x, b, x, a, s, s, c, n, 1, 0, shade.south);
+            else face(x, a, x, b, s, s, c, n, -1, 0, shade.south);
+          } else if (side > 0) face(x, b, x, a, (e + 1) * step, j * step, c, n, 1, 0, shade.east);
           else face(x, a, x, b, j * step, (e + 1) * step, c, n, -1, 0, shade.west);
           j = e + 1;
         }
@@ -6120,6 +6380,8 @@ const buildMassHeightGrid = (
   levelAt: (x: number, z: number) => number,
   field: ReliefPoint | undefined,
   isFloorless: (x: number, z: number) => boolean,
+  /** O muro curvo: a sombra dele segue o mesmo contorno do desenho. */
+  rock?: { isNear: (x: number, z: number) => boolean; field: ReliefPoint } | null,
 ): MassHeightGrid | null => {
   if (tiles.length === 0) return null;
   const S = MASS_SHADOW_SUB;
@@ -6145,6 +6407,7 @@ const buildMassHeightGrid = (
         }
       }
       const floorless = isFloorless(tx, tz);
+      const curved = rock?.isNear(tx, tz) ?? false;
       const bx = (tx - minX) * S;
       const bz = (tz - minZ) * S;
       for (let j = 0; j < S; j++) {
@@ -6152,6 +6415,7 @@ const buildMassHeightGrid = (
         for (let i = 0; i < S; i++) {
           let v = cube;
           if (floorless) v = -1;
+          else if (curved) v = rock!.field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S);
           else if (near && field && cube === 0) v = field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S);
           heights[row + i] = v;
           if (v > top) top = v;

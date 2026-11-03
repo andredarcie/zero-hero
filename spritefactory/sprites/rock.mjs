@@ -1,6 +1,6 @@
 // A PEDRA — o pedregulho que so a picareta abre (RockObject), no estado INTEIRO.
 //
-// A arte shipped era uma cunha de DUAS cores (#989aa7 claro / #7c7e8b escuro) partida por uma
+// A arte shipped era uma cunha de DUAS cores (#777985 claro / #5f616c escuro) partida por uma
 // diagonal: metade clara, metade escura, zero forma. Passava no linter (2 cores e o minimo legal)
 // e ainda assim e "chapada" pelo criterio do barril v3 — a rampa stone tem quatro degraus e a
 // pedra usava os DOIS DO MEIO, justamente os dois mais parecidos entre si (18 luma de diferenca).
@@ -28,17 +28,19 @@
 // roxo em volta, e nao so a 0.88 como prop.
 
 export const PALETTE = {
-  W: '#b5b5b5', // bone — o glint de quartzo no teto. A rampa stone acaba antes do branco, e uma
+  W: '#8f8f8f', // bone — o glint de quartzo no teto. A rampa stone acaba antes do branco, e uma
                 //   pedra precisa de um degrau acima dela para o teto virar TETO e nao mais parede.
-  H: '#a9abbe', // topo da rampa stone — o plano superior
-  M: '#989aa7', // stone base — a face frontal (a cor que a pedra antiga usava como "claro")
-  S: '#7c7e8b', // stone sombra — a face direita (o "escuro" da pedra antiga)
-  D: '#5d6165', // fundo da rampa stone — rebordo e barriga
-  K: '#3a3f3f', // slate — a linha de contato com o chao. NAO e o ink navy: navy embaixo de uma
+  H: '#858797', // topo da rampa stone — o plano superior
+  M: '#777985', // stone base — a face frontal (a cor que a pedra antiga usava como "claro")
+  S: '#5f616c', // stone sombra — a face direita (o "escuro" da pedra antiga)
+  D: '#43474a', // fundo da rampa stone — rebordo e barriga
+  K: '#272b2b', // slate — a linha de contato com o chao. NAO e o ink navy: navy embaixo de uma
                 //   pedra cinza le como buraco azul; o slate e o mesmo cinza, so que sem luz.
 };
 
 export default {
+  // Tons próprios da rocha, mais escuros que a paleta geral: contraste com o capim sob o sol do jogo.
+  allowNewColors: ["#8f8f8f","#858797","#777985","#5f616c","#43474a","#272b2b"],
   name: 'rock',
   kind: 'prop',
   palette: PALETTE,

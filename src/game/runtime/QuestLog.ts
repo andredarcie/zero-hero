@@ -51,8 +51,14 @@ export const taskProgress = (quest: NpcQuest, task: QuestTask): number => Math.m
 export const isTaskDone = (quest: NpcQuest, task: QuestTask): boolean =>
   taskProgress(quest, task) >= task.count;
 
-/** A missão fecha quando a ÚLTIMA tarefa fecha — não há ordem entre elas. */
-export const isQuestDone = (quest: NpcQuest): boolean => quest.tasks.every((t) => isTaskDone(quest, t));
+/** Quantas tarefas desta missão já fecharam. */
+const tasksDone = (quest: NpcQuest): number => quest.tasks.filter((t) => isTaskDone(quest, t)).length;
+
+/** A missão fecha quando a última tarefa obrigatória fecha — não há ordem entre elas. */
+export const isQuestDone = (quest: NpcQuest): boolean => tasksDone(quest) >= (quest.need ?? quest.tasks.length);
+
+/** Até as opcionais: o herói foi além do que foi pedido. */
+export const isQuestComplete = (quest: NpcQuest): boolean => tasksDone(quest) === quest.tasks.length;
 
 /**
  * O ROTEIRO QUE ESTE NPC FALA AGORA: o alternativo se ele já recebeu o que pediu, o de sempre
@@ -126,14 +132,14 @@ export type QuestEventResult = {
  * agradecer e conferir o portão do jardim (`GameScene.questEvent`). Agir por estado ("está
  * cumprida") em vez de por borda ("acabou de cumprir") repetiria o gesto a cada evento.
  *
- * Missão já cumprida não conta mais nada: o contador dela está no teto e ficar somando seria
- * trabalho para ninguém — e é o que garante que a borda aconteça uma vez só.
+ * Missão já cumprida ainda conta as tarefas opcionais, mas a borda acontece uma vez só: `closed` compara o antes
+ * com o depois. Nas outras o contador está no teto, e a soma não anda.
  */
 export const recordQuestEvent = (event: QuestEvent): QuestEventResult => {
   const progress = adventureState().questProgress;
   const result: QuestEventResult = { moved: false, closed: [] };
   for (const quest of Object.values(NPC_QUESTS)) {
-    if (isQuestDone(quest)) continue; // já cumprida: a borda dela já aconteceu
+    const wasDone = isQuestDone(quest);
     let touched = false;
     for (const task of quest.tasks) {
       const units = gain(task, event, quest.dialog);
@@ -146,7 +152,7 @@ export const recordQuestEvent = (event: QuestEvent): QuestEventResult => {
     }
     if (!touched) continue;
     result.moved = true;
-    if (isQuestDone(quest)) result.closed.push(quest.dialog);
+    if (!wasDone && isQuestDone(quest)) result.closed.push(quest.dialog);
   }
   return result;
 };

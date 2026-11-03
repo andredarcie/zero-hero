@@ -264,12 +264,18 @@ export class LumberQuest {
     return null;
   }
 
-  public wantsKey(x: number, y: number): boolean {
+  /** O gesto da mão neste tile agora, se houver: a mesma pergunta que o botão faz. */
+  public actionAt(x: number, y: number): string | null {
     const { stage } = this.save;
     const held = this.host.held();
-    if (this.blockTile?.x === x && this.blockTile.y === y) return stage === 'gather' && (this.save.standing || held === 'wood');
-    if (this.pitTile?.x !== x || this.pitTile.y !== y) return false;
-    return stage === 'light' || (stage === 'gather' && held === 'splitWood');
+    if (this.blockTile?.x === x && this.blockTile.y === y) {
+      if (stage !== 'gather') return null;
+      if (this.save.standing) return 'split';
+      return held === 'wood' ? 'stand' : null;
+    }
+    if (this.pitTile?.x !== x || this.pitTile.y !== y) return null;
+    if (stage === 'light') return 'light';
+    return stage === 'gather' && held === 'splitWood' ? 'stack' : null;
   }
 
   private useBlock(): boolean {

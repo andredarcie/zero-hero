@@ -7,7 +7,8 @@ export type Paint = (color: string, x: number, y: number, w: number, h: number) 
 /** Do mais claro ao mais escuro. */
 export type Ramp = readonly [string, string, string, string];
 
-export const INK = '#201812';
+/** A tinta do jogo, a mesma dos cogumelos e dos enfeites: nenhum contorno usa outro escuro. */
+export const INK = '#1b1d33';
 /**
  * O tom de quem tem branco na arte. O sol multiplica a cor por (1,96; 1,64; 1,33): acima da metade do
  * brilho a arte estoura, e um tom neutro deixa o branco bege. Este é mais frio na medida certa.

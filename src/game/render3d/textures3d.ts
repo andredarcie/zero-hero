@@ -81,13 +81,11 @@ const DEFS: Record<string, SheetDef> = {
   'plant-hole': { url: `${A}/environment/props/plant_hole.png`, frameW: 16, frameH: 16 },
   'plant-mound': { url: `${A}/environment/props/plant_mound.png` },
   'seeds-item': { url: `${A}/items/collectibles/seeds.png` },
-  'mushroom-item': { url: `${A}/items/collectibles/mushroom.png` },
   'water-0': { url: `${A}/environment/terrain/water_0.png` },
   'water-1': { url: `${A}/environment/terrain/water_1.png` },
   'water-2': { url: `${A}/environment/terrain/water_2.png` },
   'water-3': { url: `${A}/environment/terrain/water_3.png` },
   bridge: { url: `${A}/environment/terrain/bridge.png` },
-  'wood-item': { url: `${A}/items/collectibles/wood.png` },
   // key.png: 16×32 — top frame is the held key, bottom the map pickup.
   'key-item': { url: `${A}/items/collectibles/key.png`, frameW: 16, frameH: 16 },
   'sword-item': { url: `${A}/items/equipment/sword.png`, frameW: 16, frameH: 16 },

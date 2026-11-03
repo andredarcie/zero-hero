@@ -14,7 +14,8 @@ import { getChunkTerrain } from '@/game/world/WorldData';
  * vez quando ele vai embora.
  */
 
-const HOME_SIZE = 2.5;
+/** 48 pixels em 3 tiles: a mesma densidade do chão, e a mesma largura do que é sólido. */
+const HOME_SIZE = 3;
 /** A largura e o fundo do que é sólido, a partir do centro e da linha de baixo. */
 const HALF_WIDTH = 1;
 const DEPTH = 2;

@@ -59,8 +59,10 @@ export type NpcQuest = {
   dialog: string;
   /** O roteiro alternativo, falado a partir do instante em que a última tarefa cai. */
   doneDialog: string;
-  /** O conjunto de tarefas. Todas, sem ordem: a missão fecha quando a última fecha. */
+  /** O conjunto de tarefas, sem ordem. A missão fecha quando a última fecha, ou ao chegar em `need`. */
   tasks: QuestTask[];
+  /** Quantas tarefas bastam, quando nem todas são obrigatórias. O resto continua valendo, mas é opcional. */
+  need?: number;
   /**
    * O que o NPC PÕE NA MÃO do herói na primeira conversa — a ferramenta do próprio pedido. Um
    * pedido que exige um machado que o jogador não sabe onde achar não é um pedido, é um enigma.
@@ -98,7 +100,7 @@ export const taskKey = (task: QuestTask): string => {
  * mago deixou a pergunta que sobra: e agora? A resposta do jogo é a gente do lugar, cada uma com
  * um afazer de todo dia. Nada aqui é urgente, nada se perde, e nenhum pedido tem prazo.
  *
- *   a coletora (radiationSuit) — conhecer os seis fungos do vale, colhidos com a faca dela
+ *   a coletora (radiationSuit) — quatro dos seis fungos do vale, colhidos com a faca dela (os outros são opcionais)
  *   a pintora  (painter)       — quatro plantas de tinta, do buraco ao quadro (em etapas)
  *   o lenhador (businessMan)   — um fogo que dura: cortar, rachar, empilhar, secar e acender
  *   a astrônoma (astronaut)    — o telescópio: tripé de ferro, lente de vidro, e uma noite no planalto
@@ -119,14 +121,15 @@ export const taskKey = (task: QuestTask): string => {
  *    (`gift`). A pintora, o lenhador e a astrônoma dão uma coisa por etapa.
  */
 export const NPC_QUESTS: Readonly<Record<string, NpcQuest>> = {
-  // A COLETORA pede que o herói TRAGA as seis espécies do vale, uma de cada vez (uma tarefa
-  // `deliver` por espécie): o cogumelo colhido vai nas costas, e a faca volta para ela no corte —
+  // A COLETORA pede que o herói TRAGA quatro das seis espécies do vale, quaisquer (uma tarefa
+  // `deliver` por espécie; cada espécie existe uma vez no mundo): o cogumelo colhido vai nas costas, e a faca volta para ela no corte —
   // é devolvida quando ele chega com o cogumelo. A faca é o presente; as dicas, na ordem do caminho
   // a partir dela, dizem onde cada fungo nasce e como reconhecê-lo.
   radiationSuit: {
     dialog: 'radiationSuit',
     doneDialog: 'radiationSuitDone',
     tasks: MUSHROOM_KINDS.map((item) => ({ kind: 'deliver' as const, item, count: 1 })),
+    need: 4,
     gift: [{ item: 'knife', count: 1 }],
     hints: MUSHROOM_KINDS,
   },

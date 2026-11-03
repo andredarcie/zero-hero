@@ -344,12 +344,14 @@ export class AstronomerQuest {
     return null;
   }
 
-  public wantsKey(x: number, y: number): boolean {
-    if (this.isSand(x, y)) return this.host.held() !== 'sand';
-    if (this.isAsh(x, y)) return this.host.held() !== 'ash';
-    if (this.isTripod(x, y)) return this.save.stage === 'polish' || this.host.held() === 'glass';
-    if (this.isMark(x, y)) return this.host.held() === 'telescope';
-    return this.isTelescope(x, y);
+  /** O gesto da mão neste tile agora, se houver: a mesma pergunta que o botão faz. */
+  public actionAt(x: number, y: number): string | null {
+    const held = this.host.held();
+    if (this.isSand(x, y)) return held !== 'sand' ? 'take' : null;
+    if (this.isAsh(x, y)) return held !== 'ash' ? 'take' : null;
+    if (this.isTripod(x, y)) return this.save.stage === 'polish' || held === 'glass' ? 'polish' : null;
+    if (this.isMark(x, y)) return held === 'telescope' ? 'install' : null;
+    return this.isTelescope(x, y) ? 'look' : null;
   }
 
   /** Os dois montes não acabam: nada se perde, e quem largou o punhado volta e pega outro. */

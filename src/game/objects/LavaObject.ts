@@ -1,29 +1,15 @@
 import Phaser from 'phaser';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { getStoneTexture } from '@/game/render3d/stoneTexture';
+import { isReducedMotion } from '@/game/runtime/accessibility';
 import { FX_PUFF_TEXTURE, LAVA_DEPTH_TILES, world3d, type Box3D, type FireLight3D } from '@/game/render3d/World3D';
 import type { WorldProp } from './WorldProp';
 
-// A lava floor tile: a flat, self-lit quad on the 3D ground (the emissive material glows into the
-// bloom pass) that ALSO carries a fire light, because in this world lava is fire — you can relight
-// a dead torch at it. The surface is thick, slow and molten: a long viscous heat-swell rather than
-// a quick flicker, breathing between bright and deep amber so it reads as moving rock, not a
-// glowing sticker. It blocks every walking body until a stone settles into a basalt step.
-
-// A slow, soft swell — molten rock is heavy and moves lazily, so the pulse is long and gentle
-// (a quick flicker read as electric, not hot).
-const PULSE_MS = 1500;
-const SHIMMER_MS = 2000;
-// A tile of lava is a low, spread-out fire, not a bonfire: dimmer than a campfire, and there are
-// many of them in a field, so their pools sum into one glow instead of each blowing out the frame.
-const LIGHT_SCALE = 0.12;
-
-// The warm shimmer: the surface breathes between full-bright and a deeper amber. Both are ≤ white,
-// so this only ever DARKENS the art — it never pushes new bloom (the "neon lava" trap).
-const HOT = new Phaser.Display.Color(255, 255, 255);
-const DEEP = new Phaser.Display.Color(255, 178, 96);
+// Um tile de lava: quem desenha a superfície e a margem é o terreno (World3D.buildLavaSurface), como na água.
+// Este objeto é dono do que é do tile: a colisão, a luz e a pedra que afunda. Em LAVA a luz é fogo: um graveto
+// apagado acende aqui.
+const LIGHT_SCALE = 0.2;
 
 // ── The sinking stone ──────────────────────────────────────────────────────────
 // A stone dropped into the melt does NOT snap the tile into cold rock. The LAVA STAYS — it keeps
@@ -55,7 +41,6 @@ export class LavaObject implements WorldProp {
   public readonly worldY: number;
 
   private readonly scene: Phaser.Scene;
-  private readonly sprite: Billboard3D;
   private fireLight?: FireLight3D;
   // A stone dropped into the lava sinks to a central crown you step on — the lava twin of the stone
   // ford. The molten tile stays molten AROUND it; the stone just caps the middle. Three phases:
@@ -64,48 +49,14 @@ export class LavaObject implements WorldProp {
   //   solid   — the stone has fully settled; now walkable. One-way. See GameScene.solidifyLava.
   private phase: 'molten' | 'cooling' | 'solid' = 'molten';
   private crownParts: Box3D[] = [];
-  private pulseTween?: Phaser.Tweens.Tween;
-  private shimmerTween?: Phaser.Tweens.Tween;
 
   public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    this.sprite = world3d()
-      .addBillboard('lava-floor', 0, {
-        flat: true, emissive: true, flatY: SURFACE_Y, worldFx: 'lavaFlow', emissiveBoost: 3,
-      })
-      .setPosition(worldX, worldY)
-      .setDisplaySize(1, 1);
-
     const fireLight = world3d().addFireLight(worldX, worldY, true);
     fireLight.setIntensityScale(LIGHT_SCALE);
     this.fireLight = fireLight;
-
-    // Slow heat swell, desynchronized per tile so a lava field undulates instead of pulsing as one.
-    this.sprite.setAlpha(1);
-    this.pulseTween = scene.tweens.add({
-      targets: this.sprite,
-      alpha: 0.9, // a shallow, soft breath (was a hard flicker down to 0.82)
-      duration: PULSE_MS + Phaser.Math.Between(-180, 180),
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-    // Warm shimmer riding its own slower clock, so colour and brightness never beat in lockstep.
-    this.shimmerTween = scene.tweens.addCounter({
-      from: 0,
-      to: 100,
-      duration: SHIMMER_MS + Phaser.Math.Between(-220, 220),
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-      onUpdate: (tween) => {
-        const p = tween.getValue() ?? 0;
-        const c = Phaser.Display.Color.Interpolate.ColorWithColor(HOT, DEEP, 100, p);
-        this.sprite.setTint(Phaser.Display.Color.GetColor(c.r, c.g, c.b));
-      },
-    });
   }
 
   /** A stone is sinking in right now — capped, but NOT yet walkable (you cannot cross it mid-sink). */
@@ -161,7 +112,7 @@ export class LavaObject implements WorldProp {
         onComplete: () => {
           if (i === 0) {
             getSoundManager().playRockSmash();
-            this.scene.cameras.main.shake(120, 0.004);
+            if (!isReducedMotion()) this.scene.cameras.main.shake(120, 0.004);
             this.spawnLavaSplash();
           }
           // Phase 2 — the slow swallow, until only the crown remains above the melt.
@@ -207,11 +158,6 @@ export class LavaObject implements WorldProp {
   }
 
   public destroy(): void {
-    this.pulseTween?.stop();
-    this.pulseTween = undefined;
-    this.shimmerTween?.stop();
-    this.shimmerTween = undefined;
-    this.scene.tweens.killTweensOf(this.sprite);
     for (const part of this.crownParts) {
       this.scene.tweens.killTweensOf(part);
       part.destroy();
@@ -219,6 +165,5 @@ export class LavaObject implements WorldProp {
     this.crownParts = [];
     this.fireLight?.destroy();
     this.fireLight = undefined;
-    this.sprite.destroy();
   }
 }

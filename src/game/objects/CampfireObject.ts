@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
-import { FX_DOT_TEXTURE, world3d, type FireLight3D } from '@/game/render3d/World3D';
+import { world3d, type FireLight3D } from '@/game/render3d/World3D';
+import { LOG_PILE_TEXTURE } from '@/game/render3d/woodTextures';
 import type { WorldProp } from './WorldProp';
 
 const FRAME_DURATION = 140; // ms per animation frame
@@ -12,27 +13,10 @@ const FIRE_TEXTURES = ['campfire-0', 'campfire-1', 'campfire-2'] as const;
 const GLOW_TINT = 0xffbb33;
 const GLOW_ALPHA = 0.34;
 
-// An unlit campfire is cold, dead wood: the same fire sprite tinted dark ash-brown with no
-// flame and no animation, so it reads as charred logs waiting for a flame. Lifted from
-// #2a2016 — at that value the pile was a black smudge on the night ground, and the object
-// the whole loop is about FINDING had no visual presence at all.
-const DEAD_TINT = 0x3b2c1f;
-const DEAD_ALPHA = 0.9;
-
-// …and the logs are not entirely dead: a stubborn ember pulses deep in the pile — the same
-// additive glow mesh the lit fire uses, retextured to a soft dot and dimmed way down. It is
-// a beacon, not a light: it never touches the light pool, so the rule that nothing may add
-// a light at runtime stays intact, and it gives the player something to walk toward in the
-// dark. The pulse is slow — a heartbeat, not a flicker — so it cannot be confused with a
-// fire that is actually burning.
-const EMBER_TINT = 0xd44a1e;
-// Bright enough to read from across a dark clearing even at the pulse's LOW point —
-// at 0.05..0.13 the beacon only existed for half of each beat, which on a still frame
-// (or a quick glance) is the same as not existing.
-const EMBER_ALPHA_LOW = 0.11;
-const EMBER_ALPHA_HIGH = 0.24;
-const EMBER_PULSE_MS = 1400;
-const EMBER_SCALE = 1.4; // of SIZE — a small mound of warmth, far under the lit glow's 2.2
+// A chama cresce em degraus de um pixel de arte: pixel art não incha aos poucos.
+const FLAME_STEPS = 12;
+/** O menor fogo que se lê como fogo, e o fôlego dele enquanto pega. */
+const FLAME_MIN = 0.25;
 
 const SIZE = 0.88; // tiles
 const GLOW_SCALE = 2.2;
@@ -48,18 +32,26 @@ export class CampfireObject implements WorldProp {
   private heldCold = false;
 
   private readonly scene: Phaser.Scene;
+  /** Os galhos, sempre lá: a chama nasce no meio deles. */
+  private readonly logs: Billboard3D;
   private readonly sprite: Billboard3D;
   private readonly glow: Billboard3D;
   private readonly fireLight: FireLight3D;
   private frameIndex = 0;
   private animTimer?: Phaser.Time.TimerEvent;
   private lit: boolean;
+  private kindleTween?: Phaser.Tweens.Tween;
 
   public constructor(scene: Phaser.Scene, worldX: number, worldY: number, lit = true) {
     this.scene  = scene;
     this.worldX = worldX;
     this.worldY = worldY;
     this.lit    = lit;
+
+    this.logs = world3d()
+      .addBillboard(LOG_PILE_TEXTURE, 0)
+      .setPosition(worldX, worldY + 0.03) // na frente da chama: o fogo sai de dentro dos galhos
+      .setDisplaySize(SIZE, SIZE);
 
     // Soft warm glow behind the fire (additive blend). Hidden while unlit.
     this.glow = world3d()
@@ -75,68 +67,55 @@ export class CampfireObject implements WorldProp {
     this.sprite = world3d()
       .addBillboard(FIRE_TEXTURES[0], 0, { emissive: true, emissiveBoost: 4 })
       .setPosition(worldX, worldY)
-      .setDisplaySize(SIZE, SIZE);
+      .setDisplaySize(SIZE, SIZE)
+      .setVisible(lit);
     this.fireLight = world3d().addFireLight(worldX, worldY, lit);
 
-    if (lit) {
-      this.startAnim();
-    } else {
-      this.sprite.setTint(DEAD_TINT).setAlpha(DEAD_ALPHA);
-      this.startEmber();
-    }
+    if (lit) this.startAnim();
   }
 
-  /** The dead pile's pulsing ember (see EMBER_TINT above). Reuses the glow mesh. */
-  private startEmber(): void {
-    this.glow
-      .setTexture(FX_DOT_TEXTURE)
-      .setTint(EMBER_TINT)
-      .setDisplaySize(SIZE * EMBER_SCALE, SIZE * EMBER_SCALE)
-      .setAlpha(EMBER_ALPHA_LOW)
-      .setVisible(true);
-    this.scene.tweens.add({
-      targets: this.glow,
-      alpha: EMBER_ALPHA_HIGH,
-      duration: EMBER_PULSE_MS,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-  }
-
-  /** Back from ember duty to the lit fire's warm halo (texture, tint, size). */
-  private restoreGlow(): void {
-    this.scene.tweens.killTweensOf(this.glow);
-    this.glow
-      .setTexture(FIRE_TEXTURES[this.frameIndex])
-      .setTint(GLOW_TINT)
-      .setDisplaySize(SIZE * GLOW_SCALE, SIZE * GLOW_SCALE);
+  /** Quanto fogo há: 0 é só a lenha, 1 é a fogueira inteira. A chama, o halo e a luz sobem juntos. */
+  private setFlame(t: number): void {
+    const c = Phaser.Math.Clamp(t, 0, 1);
+    const step = Math.ceil(c * FLAME_STEPS) / FLAME_STEPS;
+    const size = SIZE * (FLAME_MIN + (1 - FLAME_MIN) * step);
+    this.sprite.setVisible(c > 0).setDisplaySize(size, size);
+    this.glow.setVisible(c > 0).setAlpha(GLOW_ALPHA * c).setDisplaySize(SIZE * GLOW_SCALE * step, SIZE * GLOW_SCALE * step);
+    this.fireLight.setLit(c > 0);
+    this.fireLight.setIntensityScale(c);
   }
 
   public get isLit(): boolean {
     return this.lit;
   }
 
-  // Cut-scene build-up only: drive a partial ignition (0 = cold ash, 1 = about to fully light).
-  // Starts the flames flickering, warms the cold tint toward full colour, and blooms the glow
-  // in by `t`. Call light() afterwards to finish the ignition with its flare.
+  // Cut-scene build-up only: drive a partial ignition (0 = só a lenha, 1 = about to fully light).
+  // Call light() afterwards to finish the ignition with its flare.
   public igniteProgress(t: number): void {
     if (this.lit) return;
-    const c = Phaser.Math.Clamp(t, 0, 1);
-    this.restoreGlow(); // the ember hands over to the warming halo
-    if (c > 0.02) this.startAnim();
-    const warm = Phaser.Display.Color.Interpolate.ColorWithColor(
-      Phaser.Display.Color.IntegerToColor(DEAD_TINT),
-      Phaser.Display.Color.IntegerToColor(0xffffff),
-      100,
-      Math.round(c * 100),
-    );
-    this.sprite
-      .setTint(Phaser.Display.Color.GetColor(warm.r, warm.g, warm.b))
-      .setAlpha(DEAD_ALPHA + (1 - DEAD_ALPHA) * c);
-    this.glow.setTint(GLOW_TINT).setVisible(c > 0.05).setAlpha(GLOW_ALPHA * c);
-    this.fireLight.setLit(c > 0.02);
-    this.fireLight.setIntensityScale(c);
+    if (t > 0.02) this.startAnim();
+    this.setFlame(t);
+  }
+
+  /**
+   * O FOGO PEGANDO AOS POUCOS: quem acende é o NPC (GameScene.fireKeeperLights). A fogueira já conta como acesa desde
+   * a primeira chama: é uma fogueira pequena, não uma apagada.
+   */
+  public kindle(durationMs: number): boolean {
+    if (this.lit || this.heldCold) return false;
+    this.lit = true;
+    this.startAnim();
+    this.setFlame(0.01);
+    const grow = { t: 0.01 };
+    this.kindleTween = this.scene.tweens.add({
+      targets: grow,
+      t: 1,
+      duration: durationMs,
+      ease: 'Sine.easeIn',
+      onUpdate: () => this.setFlame(grow.t),
+      onComplete: () => { this.kindleTween = undefined; this.setFlame(1); },
+    });
+    return true;
   }
 
   private startAnim(): void {
@@ -164,14 +143,9 @@ export class CampfireObject implements WorldProp {
     if (this.lit || this.heldCold) return false;
     this.lit = true;
 
-    this.sprite.clearTint().setAlpha(1);
     this.startAnim();
-    this.fireLight.setLit(true);
-    this.fireLight.setIntensityScale(1);
-
-    // Glow blooms in from nothing to its resting alpha (ember duty ends here).
-    this.restoreGlow();
-    this.glow.setVisible(true).setAlpha(0);
+    this.setFlame(1);
+    this.glow.setAlpha(0);
     this.scene.tweens.killTweensOf(this.glow);
     this.scene.tweens.add({
       targets: this.glow,
@@ -195,25 +169,22 @@ export class CampfireObject implements WorldProp {
   }
 
   /**
-   * Douse a lit campfire back to cold, dead logs (a thrown bucket of water). The inverse of
-   * light(): stop the flame, drop the heat-light, restore the dead tint, and hand the glow mesh
-   * back to its stubborn ember. Returns true only on the transition, so the caller plays the hiss
-   * once. The `litFires` game count reads `isLit` live, so it drops on its own.
+   * Douse a lit campfire back to bare logs (a thrown bucket of water, or the morning). The inverse of
+   * light(). Returns true only on the transition, so the caller plays the hiss once. The `litFires` game count reads `isLit` live, so it drops on its own.
    */
-  public extinguish(showEmber = true): boolean {
+  public extinguish(): boolean {
     if (!this.lit) return false;
     this.lit = false;
 
     this.animTimer?.destroy();
     this.animTimer = undefined;
     this.frameIndex = 0;
+    this.kindleTween?.remove();
+    this.kindleTween = undefined;
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.killTweensOf(this.glow);
-    this.sprite.setTexture(FIRE_TEXTURES[0]).setTint(DEAD_TINT).setAlpha(DEAD_ALPHA);
-    this.fireLight.setLit(false);
-    this.fireLight.setIntensityScale(0);
-    if (showEmber) this.startEmber();
-    else this.glow.setVisible(false).setAlpha(0); // daylight: wood only, no residual flame
+    this.sprite.setTexture(FIRE_TEXTURES[0]);
+    this.setFlame(0);
 
     return true;
   }
@@ -228,21 +199,22 @@ export class CampfireObject implements WorldProp {
 
   public setHeldCold(cold: boolean): void {
     this.heldCold = cold;
-    if (cold) this.extinguish(false);
+    if (cold) this.extinguish();
   }
 
   /** The world clock owns ambient campfires: flame at night, bare logs during daylight. */
   public setClockLit(lit: boolean): void {
     if (lit) this.light();
-    else this.extinguish(false);
+    else this.extinguish();
   }
 
   /** Called when the player hits the campfire — brief flare-up */
   public onHit(): void {
-    const flare = this.lit ? 2.0 : 1.4;
-    this.scene.tweens.killTweensOf(this.sprite);
+    const flare = this.lit ? 2.0 : 1.15;
+    const body = this.lit ? this.sprite : this.logs;
+    this.scene.tweens.killTweensOf(body);
     this.scene.tweens.add({
-      targets: this.sprite,
+      targets: body,
       displayWidth: SIZE * flare,
       displayHeight: SIZE * flare,
       duration: 90,
@@ -262,8 +234,11 @@ export class CampfireObject implements WorldProp {
   public destroy(): void {
     this.animTimer?.destroy();
     this.animTimer = undefined;
+    this.kindleTween?.remove();
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.killTweensOf(this.glow);
+    this.scene.tweens.killTweensOf(this.logs);
+    this.logs.destroy();
     this.sprite.destroy();
     this.glow.destroy();
     this.fireLight.destroy();

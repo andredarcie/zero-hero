@@ -1,3 +1,4 @@
+import { calmDt, isCalmGames } from '@/game/runtime/accessibility';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import {
   KEY_BG, KEY_BORDER, KEY_GLYPH, PIXEL_FONT, SOFT_BLUR, pixelFrame,
@@ -255,7 +256,7 @@ export class SplitOverlay extends CraftOverlay {
   }
 
   protected tick(dt: number): void {
-    this.time += dt;
+    this.time += calmDt(dt);
     if (this.phase === 'aim') this.aim = Math.sin(this.time * this.aimSpeed) * (LOG_R - 6);
     if (this.phase === 'force') this.force = 0.5 - Math.cos(this.time * 3.4) * 0.5;
     if (this.phase === 'swing') {
@@ -422,7 +423,7 @@ export class FireLightOverlay extends CraftOverlay {
     this.lastBlow = this.time;
     this.cb.onBlow();
     // Soprar demais apaga: é o sopro longo e calmo que dá ar à brasa, não a afobação.
-    this.tooFast = gap < BLOW_TOO_FAST_S;
+    this.tooFast = !isCalmGames() && gap < BLOW_TOO_FAST_S;
     if (this.tooFast) {
       this.ember -= 0.14;
       return;
@@ -441,7 +442,7 @@ export class FireLightOverlay extends CraftOverlay {
     this.time += dt;
     this.phaseT += dt;
     if (this.phase === 'blow') {
-      this.ember -= EMBER_DECAY * dt;
+      this.ember -= EMBER_DECAY * calmDt(dt);
       if (this.ember >= 1) {
         this.caught += 1;
         this.ember = 0.4;

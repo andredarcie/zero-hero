@@ -27,13 +27,31 @@ const post = (rect: Paint, x: number, top: number, bottom: number, ramp: Ramp): 
   rect(ramp[1], x, top, 1, bottom - top + 1);
 };
 
+/** A cadeira, de frente e um pouco de cima: encosto vazado, assento largo mostrando o tampo, e quatro pernas. */
 const bench = (rect: Paint): void => {
   const { wood } = RAMPS;
-  post(rect, 2, 4, 15, wood);
-  post(rect, 12, 4, 15, wood);
-  plank(rect, 1, 3, 14, 2, wood, 1);
-  plank(rect, 1, 7, 14, 1, wood, 2);
-  plank(rect, 1, 10, 14, 2, wood, 3);
+  // As pernas de trás, mais curtas e escuras porque ficam longe.
+  rect(INK, 4, 12, 3, 3);
+  rect(INK, 9, 12, 3, 3);
+  rect(wood[3], 5, 12, 1, 2);
+  rect(wood[3], 10, 12, 1, 2);
+  // O encosto: dois montantes, a travessa de cima e uma mais fina. Entre elas se vê o que está atrás.
+  post(rect, 3, 1, 9, wood);
+  post(rect, 11, 1, 9, wood);
+  plank(rect, 3, 1, 10, 2, wood, 1);
+  plank(rect, 5, 5, 6, 1, wood, 2);
+  // A trava entre as pernas da frente.
+  rect(INK, 5, 12, 6, 3);
+  rect(wood[2], 5, 13, 6, 1);
+  post(rect, 3, 12, 15, wood);
+  post(rect, 11, 12, 15, wood);
+  // O assento por cima de tudo: o tampo pega a luz, e a borda da frente fecha no escuro.
+  rect(INK, 1, 8, 14, 5);
+  rect(wood[0], 2, 9, 12, 2);
+  rect(wood[1], 8, 9, 6, 1);
+  rect(wood[1], 5, 9, 1, 2);
+  rect(wood[1], 11, 10, 1, 1);
+  rect(wood[2], 2, 11, 12, 1);
 };
 
 const log = (rect: Paint): void => {

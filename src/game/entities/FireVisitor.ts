@@ -47,9 +47,10 @@ export class FireVisitor {
   public get isSeated(): boolean { return this.seated; }
 
   /** Vai ate a fogueira e senta. */
-  public arrive(): void {
+  public arrive(onSeated?: () => void): void {
     this.walkTo(this.path.length - 1, () => {
       this.seated = true;
+      onSeated?.();
       // SENTAR e a mesma pose do heroi: o corpo baixa e alarga um pouco.
       this.scene.tweens.add({ targets: this.body, displayHeight: 0.86, displayWidth: 1.04, duration: 380, ease: 'Sine.easeOut' });
     });

@@ -82,8 +82,11 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
                        catálogo da bancada/forno, põe e malha no altar, e PEGA / TROCA / POUSA a
                        coisa do tile da frente (`handAt`). Nada no Z é golpe.
     X (K)           →  USA o que está na mão no tile à frente (a tabela `useItemAt`).
-    pisar           →  não pega nada: o balão (`HandOffer`) anuncia, e o Z pega ou troca o que está
-                       debaixo do herói (`takeUnderfoot`), antes de tudo menos da conversa.
+    pisar           →  não pega nada: o Z pega ou troca o que está debaixo do herói (`takeUnderfoot`),
+                       antes de tudo menos da conversa.
+    o balão         →  TODA interação nova ganha uma palavra em `actions.*` e uma linha em `handVerbAt`
+                       ou `useVerbAt`, na ordem dos botões. O balão é um só (`ActionPrompt`): nada de
+                       keycap solto sobre as coisas. Os vizinhos não dormem.
     ESC             →  a pausa: retornar, opções, sair. Não há bolsa, mapa nem caderno (pedido do autor).
 
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
@@ -94,7 +97,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **Cada cogumelo tem a sua trilha** (`scripts/trilhas-cogumelos.mjs`: rode `--check` depois de mexer em volta deles).
 - **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Bram pede procurar. Não espalhe mais delas.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
-  (`fungi.ts`), e cada espécie existe UMA vez no mundo. Colhido, vai para a CESTA, que é a única exceção
+  (`fungi.ts`), e cada espécie existe UMA vez no mundo. O pedido da Hollis fecha com 4 quaisquer (`need`), e as outras 2 são opcionais: ela continua aceitando e dando dicas. Colhido, vai para a CESTA, que é a única exceção
   à lei de uma coisa de cada vez, e a Hollis leva a cesta inteira.
 - **O herói anda PRESO ao grid** (um tile por passo, 4 direções): o livre foi tentado e desfeito —
   no celular o grid controla melhor. A posição lógica já é o tile de DESTINO durante o passo.
@@ -128,7 +131,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   heurística local de vizinhos já prendeu 1.700 tiles em bolsões. Faça um backup antes.
 - **Leia o JSON, nunca a documentação, para saber o que o mundo contém** — ele muda sempre que
   alguém abre o editor.
-- **As fogueiras comuns seguem o relógio** (acesas à noite); só a `hearth` é do herói.
+- **As fogueiras comuns seguem o relógio**, e só existem ao lado de um NPC: ao anoitecer ele contorna até ela, se abaixa e o fogo pega aos poucos (`fireKeeperLights`, `CampfireObject.kindle`). Longe do herói ela só aparece acesa; de manhã apaga sozinha. Apagada são galhos cruzados com pedras, nunca uma chama escura. Só a `hearth` é do herói.
 - **CHÃO + UMA COISA. Um tile tem o `ground` e, em cima dele, no máximo UMA — `upper`, prop, item,
   ou NPC.** O editor cumpre (colocar limpa o tile, pintar `upper` pula o tile ocupado); quem
   quebra é script e JSON à mão. `npm run audit:stacks` confere, `scripts/fix-tile-stacks.mjs` conserta.
@@ -165,7 +168,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   menu. Recolher exige a mão vazia (a peça vai para ela) e é o degrau DEPOIS da tabela e da
   entrega, então ferramenta que tem o que fazer ali nunca desmonta.
 - **O alvo de uma instalação é DESENHADO** (`PlacementHints`): quadrado branco no tile em que o
-  botão vai agir + o keycap da tecla. A marca e o botão leem `canBuildMachineAt` — **uma pergunta
+  botão vai agir; a palavra e a tecla são do balão de ação. A marca e o botão leem `canBuildMachineAt` — **uma pergunta
   só**, ou um quadrado branco
   promete um gesto que o botão recusa. Recusa = ausência de marca, nunca marca vermelha.
 - **MINÉRIO NÃO É FERRO.** O veio dá `ore` — pedra com óxido. O **forno manual** transforma

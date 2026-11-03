@@ -10,6 +10,10 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
 
 const COLORS: Readonly<Record<string, string>> = {
   k: '#201812', W: '#96683e', w: '#68462a', L: '#ceaa76', l: '#aa8456', B: '#5c3e26',
+  // A lenha: bem mais escura que o cepo, porque o sol quente do jogo dobra a cor e a pilha saía como barras de ouro.
+  T: '#6f5636', t: '#584226', R: '#46301d', D: '#2f2014', E: '#8c7048',
+  // As pedras em volta.
+  H: '#6d6d72', s: '#4c4c52',
 };
 
 const CHOPPING_BLOCK = [
@@ -31,18 +35,40 @@ const CHOPPING_BLOCK = [
   '................',
 ];
 
+// A FOGUEIRA APAGADA: dois galhos cruzados, baixos e largos, com pedras nas pontas, e o V aberto é onde o fogo nasce.
+// Lenha empilhada em pirâmide lia como um monte de tijolos: nas fogueiras de pixel art a base é rasa e a chama sai do meio.
+const LOG_PILE = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '..kk........kk..',
+  '.kETk......kRDk.',
+  '..kTTk....kRRk..',
+  '...kTTk..kRRk...',
+  '.kkkkTTkkRRkkkk.',
+  'kHHskkTTRRkkHHsk',
+  'kssskkkkkkkkkssk',
+];
+
 export const CHOP_BLOCK_TEXTURE = 'wood-block';
 export const FIRE_PIT_TEXTURE = 'wood-fire-pit';
+export const LOG_PILE_TEXTURE = 'wood-log-pile';
 export const SPLIT_WOOD_TEXTURE = 'split-wood';
 export const WOOD_CRADLE_TEXTURE = 'wood-cradle';
 
-const blockCanvas = (): HTMLCanvasElement => {
+const rowsCanvas = (rows: readonly string[]): HTMLCanvasElement => {
   const canvas = document.createElement('canvas');
   canvas.width = 16;
   canvas.height = 16;
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
-  CHOPPING_BLOCK.forEach((row, y) => {
+  rows.forEach((row, y) => {
     for (let x = 0; x < row.length; x += 1) {
       const color = COLORS[row[x]];
       if (!color) continue;
@@ -138,7 +164,8 @@ let threeRegistered = false;
 
 export const registerWoodTextures = (scene: Phaser.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, HTMLCanvasElement]> = [
-    [CHOP_BLOCK_TEXTURE, blockCanvas()],
+    [CHOP_BLOCK_TEXTURE, rowsCanvas(CHOPPING_BLOCK)],
+    [LOG_PILE_TEXTURE, rowsCanvas(LOG_PILE)],
     [FIRE_PIT_TEXTURE, pitCanvas()],
     [SPLIT_WOOD_TEXTURE, splitWoodCanvas(scene)],
     [WOOD_CRADLE_TEXTURE, woodCradleCanvas(scene)],

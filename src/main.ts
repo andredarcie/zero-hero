@@ -2,6 +2,7 @@ import '@/styles/global.css';
 import { ZeroTheHeroGame } from '@/game/ZeroTheHeroGame';
 import { installDevLauncher } from '@/game/debug/DevLauncher';
 import { applyHtmlLang } from '@/game/i18n/i18n';
+import { installKeyRemap } from '@/game/runtime/accessibility';
 import { warmPaper } from '@/game/runtime/uiStyle';
 
 // DUAS ROTAS, e só: `/` é o jogo e `/editor` é o editor do mundo aberto — os DOIS andares dele
@@ -13,6 +14,7 @@ const appMode = pathname.endsWith('/editor') ? 'editor' : 'game';
 // Reflect the detected/saved locale on <html lang> before the game boots (the language screen
 // updates it again once the player picks).
 applyHtmlLang();
+installKeyRemap();
 
 declare global {
   interface Window {

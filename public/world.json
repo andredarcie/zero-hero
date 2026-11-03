@@ -15274,19 +15274,7 @@
     {
       "type": "campfire",
       "lit": true,
-      "worldX": 6,
-      "worldY": 17
-    },
-    {
-      "type": "campfire",
-      "lit": true,
       "worldX": 18,
-      "worldY": 17
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 54,
       "worldY": 17
     },
     {
@@ -15871,16 +15859,6 @@
       "worldY": 4
     },
     {
-      "type": "campfire",
-      "worldX": 51,
-      "worldY": 26
-    },
-    {
-      "type": "campfire",
-      "worldX": 56,
-      "worldY": 26
-    },
-    {
       "type": "dryTree",
       "worldX": 45,
       "worldY": 2
@@ -15941,12 +15919,6 @@
       "worldY": 40
     },
     {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 3,
-      "worldY": 54
-    },
-    {
       "type": "rock",
       "worldX": 8,
       "worldY": 48
@@ -15962,12 +15934,6 @@
       "worldY": 51
     },
     {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 15,
-      "worldY": 54
-    },
-    {
       "type": "swingGate",
       "worldX": 20,
       "worldY": 49
@@ -15981,12 +15947,6 @@
       "type": "swingGate",
       "worldX": 20,
       "worldY": 50
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 51,
-      "worldY": 54
     },
     {
       "type": "tallGrass",
@@ -16007,12 +15967,6 @@
       "type": "tallGrass",
       "worldX": 52,
       "worldY": 51
-    },
-    {
-      "type": "campfire",
-      "lit": true,
-      "worldX": 15,
-      "worldY": 39
     },
     {
       "type": "dryBush",

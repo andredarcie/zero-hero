@@ -26,6 +26,8 @@ export const WIDTH_FACTOR = 1; // o pé da sombra tem a largura exata do pé do 
 // flame it clearly reaches past the object's foot; at the light's edge it rakes long.
 const NEAR_STRETCH = 1.3; // length multiplier hugging the flame
 const FAR_STRETCH = 3.2; // length multiplier at the edge of the light (long, grazing)
+/** O teto da sombra, em tiles: esticada além disso, a silhueta larga do herói vira uma faixa reta no chão. */
+const MAX_CAST_LENGTH = 2.2;
 
 /**
  * Where the quad's ORIGIN has to sit so the ART's own bottom edge lands on the object's foot.
@@ -139,6 +141,7 @@ export const makeCastMaskMaterial = (): THREE.MeshBasicMaterial => {
   applyMaxBlending(mat);
   mat.customProgramCacheKey = () => 'castMask';
   mat.onBeforeCompile = (shader) => {
+    fadeCastTail(shader);
     // The fragment's VALUE is its alpha (texel silhouette × opacity); colour is ignored.
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <opaque_fragment>',
@@ -146,6 +149,25 @@ export const makeCastMaskMaterial = (): THREE.MeshBasicMaterial => {
     );
   };
   return mat;
+};
+
+/**
+ * A sombra de quem anda afina e some em degraus até a ponta. O herói é largo e quase retangular: esticada sem isso,
+ * a silhueta dele vira uma faixa reta no chão, sobretudo perto da lava, onde a luz ao redor é forte.
+ */
+const fadeCastTail = (shader: { vertexShader: string; fragmentShader: string }): void => {
+  shader.vertexShader = shader.vertexShader
+    .replace('void main() {', 'varying vec2 vCastUv;\nvoid main() {')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n vCastUv = uv;');
+  shader.fragmentShader = shader.fragmentShader
+    .replace('void main() {', 'varying vec2 vCastUv;\nvoid main() {')
+    .replace(
+      '#include <alphatest_fragment>',
+      `#include <alphatest_fragment>
+       float zhAlong = floor(vCastUv.y * 12.0) / 12.0;
+       if (abs(floor(vCastUv.x * 16.0) / 15.0 - 0.5) * 2.0 > 1.0 - 0.7 * zhAlong) discard;
+       diffuseColor.a *= 0.75 * (1.0 - smoothstep(0.0, 1.0, zhAlong));`,
+    );
 };
 
 /** A flat ground silhouette quad: foot at the origin, body extending along -Z, unit sized. */
@@ -168,6 +190,8 @@ export const makeCastMesh = (): THREE.Mesh => {
     // quadro só um dos lados encara a câmera, e a outra passada não produzia um pixel.
     forceSinglePass: true,
   });
+  mat.customProgramCacheKey = () => 'castTail';
+  mat.onBeforeCompile = fadeCastTail;
   const mesh = new THREE.Mesh(geo, mat);
   // Draw AFTER the additive fire glow (renderOrder 2) so the silhouette darkens the lit
   // pool instead of being washed out by it — otherwise shadows vanish right around the
@@ -499,7 +523,7 @@ export const castTransformInto = (
   const a = alpha * (1 - t * t);
   if (a <= 0.02) return false;
 
-  out.length = height * distStretch * Math.max(0.4, flameStretch) * heightScale;
+  out.length = Math.min(MAX_CAST_LENGTH, height * distStretch * Math.max(0.4, flameStretch) * heightScale);
   out.rotY = Math.atan2(-dx / dist, -dz / dist);
   out.alpha = a;
   return true;
