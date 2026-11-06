@@ -11,6 +11,13 @@ import { HAND_FONT, paperTextureCanvas, seedOf, seededRandom } from '@/game/runt
 const GLOW_TEXTURE = '_itemget_glow';
 const MOTE_TEXTURE = '_itemget_mote';
 
+// A LUZ É MISTURA NORMAL, NUNCA ADD (pedido do autor: "a luz fica quadrada, como uma imagem cortada"). O
+// Phaser desenha num canvas TRANSPARENTE por cima do mundo 3D, e o ADD do Phaser (ONE, DST_ALPHA) também
+// soma no alfa: dentro do quadrado de cada imagem a vinheta âmbar de baixo era multiplicada pelo próprio
+// alfa e clareava — o halo e cada semente de luz apareciam como quadrados de borda reta. A textura já traz
+// a cor e a transparência, então a mistura normal brilha igual e some suave na borda. E é filtrada (LINEAR):
+// em NEAREST o degradê ampliado vira degraus.
+
 const ensureTextures = (scene: Phaser.Scene): void => {
   if (!scene.textures.exists(GLOW_TEXTURE)) {
     const size = 256;
@@ -24,7 +31,7 @@ const ensureTextures = (scene: Phaser.Scene): void => {
     grad.addColorStop(1, 'rgba(255,200,130,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
-    scene.textures.addCanvas(GLOW_TEXTURE, canvas);
+    scene.textures.addCanvas(GLOW_TEXTURE, canvas)?.setFilter(Phaser.Textures.FilterMode.LINEAR);
   }
   if (!scene.textures.exists(MOTE_TEXTURE)) {
     const size = 32;
@@ -38,7 +45,7 @@ const ensureTextures = (scene: Phaser.Scene): void => {
     grad.addColorStop(1, 'rgba(255,230,180,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
-    scene.textures.addCanvas(MOTE_TEXTURE, canvas);
+    scene.textures.addCanvas(MOTE_TEXTURE, canvas)?.setFilter(Phaser.Textures.FilterMode.LINEAR);
   }
 };
 
@@ -82,9 +89,9 @@ export class ItemGetOverlay {
     const warm = reg(scene.add.rectangle(0, 0, width, height, 0x2a1608, 0).setOrigin(0).setDepth(D).setInteractive());
     scene.tweens.add({ targets: warm, fillAlpha: 0.38, duration: 420, ease: 'Sine.easeOut' });
     const halo = reg(scene.add.image(cx, Math.round((heroY + itemTopY) / 2), GLOW_TEXTURE)
-      .setDepth(D + 1).setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(D + 1)
       .setDisplaySize(heroSize * 4.2, heroSize * 4.2).setAlpha(0));
-    scene.tweens.add({ targets: halo, alpha: 0.75, duration: 700, ease: 'Sine.easeOut' });
+    scene.tweens.add({ targets: halo, alpha: 0.6, duration: 700, ease: 'Sine.easeOut' });
     scene.tweens.add({ targets: halo, scale: halo.scale * 1.06, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     // ── o cavaleiro, de frente, com um pulinho de contente ─────────────────────────
@@ -138,7 +145,7 @@ export class ItemGetOverlay {
         const y0 = cy + itemSize * (0.2 + Math.random() * 0.5);
         const size = itemSize * (0.08 + Math.random() * 0.08);
         const mote = scene.add.image(x0, y0, MOTE_TEXTURE)
-          .setDepth(depth).setBlendMode(Phaser.BlendModes.ADD)
+          .setDepth(depth)
           .setTint(tints[i % tints.length]).setDisplaySize(size, size).setAlpha(0);
         this.objs.push(mote);
         const drift = (Math.random() - 0.5) * itemSize * 0.9;

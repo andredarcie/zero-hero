@@ -21,7 +21,6 @@ import {
   TREE_STICK_YIELD,
   TREE_UPPER_FRAMES,
   SEA_TILE_FRAMES,
-  SEED_PACK_KINDS,
   SOLID_UPPER_FRAMES,
   UNIT_PACK_KINDS,
   BLOOM_BLOWS,
@@ -51,13 +50,13 @@ import { CampfireObject } from '@/game/objects/CampfireObject';
 import { DryBushObject } from '@/game/objects/DryBushObject';
 import { DryTreeObject } from '@/game/objects/DryTreeObject';
 import { DryShrubObject } from '@/game/objects/DryShrubObject';
-import { LavaObject } from '@/game/objects/LavaObject';
+import { lavaLightScales, LavaObject } from '@/game/objects/LavaObject';
 import { WaterObject } from '@/game/objects/WaterObject';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { SwingGateObject } from '@/game/objects/SwingGateObject';
 import { RockObject } from '@/game/objects/RockObject';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
-import { PlantSpotObject, type PlantableSeed } from '@/game/objects/PlantSpotObject';
+import { PlantSpotObject } from '@/game/objects/PlantSpotObject';
 import { ToolboxObject } from '@/game/objects/ToolboxObject';
 import {
   catalogSteps, isCraftable, nextStep, recipeCost, recipeMaking, recipeStation,
@@ -89,7 +88,8 @@ import {
 } from '@/game/fungi/fungi';
 import { ForagingOverlay } from '@/game/runtime/ForagingOverlay';
 import { BOOK_FONT, HAND_FONT } from '@/game/runtime/uiStyle';
-import { canStep, terrainHeightAt } from '@/game/world/relief';
+import { canStep, RELIEF_HIGH, RELIEF_PEAK, reliefAt, terrainHeightAt } from '@/game/world/relief';
+import { NpcWave } from '@/game/entities/NpcWave';
 import {
   registerPlacementTextures,
 } from '@/game/render3d/placementTexture';
@@ -105,6 +105,9 @@ import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
+import { BagStash } from '@/game/runtime/BagStash';
+import { OldRoad } from '@/game/objects/OldRoad';
+import { GardenMist } from '@/game/objects/GardenMist';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import {
   createHeroView, heroFootY, resetHeroView, tickHeroView, type HeroView,
@@ -144,6 +147,7 @@ import {
   getPlantSpots,
   getToolboxes,
   getIronRocks,
+  getCoalRocks,
   getFurnaces,
   getAltars,
   getMoonflowers,
@@ -188,6 +192,7 @@ import { clearHomeYards, NpcHomes } from '@/game/objects/NpcHomes';
 import { registerHomeTextures, type HomeKind } from '@/game/render3d/homeTextures';
 import { registerFindTextures, ValleyFinds, type ValleyFind } from '@/game/objects/ValleyFinds';
 import { VegaDeparture } from '@/game/entities/VegaDeparture';
+import { isBareTreeAt } from '@/game/world/biomes';
 import type { VegaShipHost } from '@/game/entities/VegaShip';
 
 // The per-item 2D art (Phaser texture atlas keys): the swing arc, the overhead chop and the
@@ -213,7 +218,6 @@ const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> =
   iron: { texture: ASSET_KEYS.ironItem, frame: 0 },
   ore: { texture: ASSET_KEYS.oreItem, frame: 0 },
   bloom: { texture: ASSET_KEYS.bloomItem, frame: 0 },
-  seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
@@ -248,7 +252,6 @@ const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame: number
   iron: { texture: 'iron-item', frame: 0 },
   ore: { texture: 'ore-item', frame: 0 },
   bloom: { texture: 'bloom-item', frame: 0 },
-  seeds: { texture: 'seeds-item', frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
@@ -282,7 +285,6 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
   wood: { texture: ASSET_KEYS.woodIcon, frame: 0 },
   stone: { texture: ASSET_KEYS.rock, frame: 0 },
   iron: { texture: ASSET_KEYS.ironItem, frame: 0 },
-  seeds: { texture: ASSET_KEYS.seedsItem, frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
@@ -414,6 +416,8 @@ const REST_TIME_SCALE = 24;
 const SLEEP_TIME_SCALE = 48;
 /** A visita da Morte acontece uma vez só: a marca mora com as outras falas já ouvidas, no save. */
 const DEATH_VISIT_KEY = 'death/visit';
+/** A foice que a Morte deixou: o único jeito de ter uma. */
+const DEATH_SCYTHE_KEY = 'death/scythe';
 /** De quantos tiles um vizinho atravessa o vale para sentar na fogueira com o heroi. */
 const VISIT_RADIUS = 12;
 /** Quantos vaga-lumes derivam em volta do heroi a noite. */
@@ -563,6 +567,17 @@ export class GameScene extends Phaser.Scene {
   private placementHints?: PlacementHints;
   /** O balao de PENSAMENTO do heroi: um icone, um instante. Ver HeroThought. */
   private heroThought?: HeroThought;
+  /** O cogumelo colhido indo para a bolsa de couro (runtime/BagStash). */
+  private bagStash?: BagStash;
+  /** A estrada antiga da espada ao jardim do fim (objects/OldRoad). */
+  private oldRoad?: OldRoad;
+  /** A névoa do jardim alto, até o vento levá-la (objects/GardenMist, playMistClearing). */
+  private gardenMist?: GardenMist;
+  /** O tchau da Hollis lá de baixo (entities/NpcWave), e se ela já acenou nesta subida. */
+  private hollisWave?: NpcWave;
+  private hollisWaved = false;
+  /** O balão sobre o forno da Vega: o item que ele pede agora (ver AstronomerQuest.furnaceNeed). */
+  private furnaceAsk?: HeroThought;
   private actionPrompt?: ActionPrompt;
   // A CADEIA DO FERRO: o forno reduz minério com carvão; mão e altar malham a esponja.
   /**
@@ -650,6 +665,8 @@ export class GameScene extends Phaser.Scene {
   private fireBed?: FireBed;
   /** A Morte está falando: nenhuma tecla levanta o herói até ela sumir. */
   private deathVisiting = false;
+  /** Onde a Morte esteve: é ali que a foice aparece quando o herói levanta. */
+  private deathTile?: { x: number; y: number };
   private restKeyListener?: (event: KeyboardEvent) => void;
   /** A fogueira em que ele esta sentado (o gato se enrola do lado dele, de frente para ela). */
   private restFireTile?: { x: number; y: number };
@@ -838,9 +855,9 @@ export class GameScene extends Phaser.Scene {
       // A historia e os dialogos ouvidos voltam do save.
       const st = adventureState();
       this.introDone = st.introSeen || skipIntro;
-      // O ultimo pedido grava ao ser ENTREGUE, mas o portao so abre quando o obrigado fecha. Um
-      // jogo fechado nesse meio voltava com tudo cumprido e o jardim trancado para sempre.
-      this.gateOpened = st.gateOpened || allQuestsDone();
+      // O portão só abre com a CHAVE, que quem fecha o último pedido entrega. Um jogo fechado entre o último
+      // pedido e a entrega volta com tudo cumprido e sem chave: ela chega logo depois (ver create).
+      this.gateOpened = st.gateOpened;
       this.hearthLit = st.hearthLit;
       this.roasted = st.endingSeen;
       setDay(st.day);
@@ -966,8 +983,8 @@ export class GameScene extends Phaser.Scene {
     }
     // O PORTAO DO JARDIM e a porta trancada sem chave: quem a abre e o ultimo pedido fechado.
     this.gardenGates = getGardenGates().map((g) => {
-      const gate = new LockedDoorObject(this, g.worldX, g.worldY);
-      if (this.gateOpened) gate.unlock();
+      const gate = new LockedDoorObject(this, g.worldX, g.worldY, false, true);
+      if (this.gateOpened) gate.setOpenInstantly();
       return gate;
     });
     this.dryBushes = getDryBushes().map((b) => new DryBushObject(this, b.worldX, b.worldY));
@@ -979,7 +996,8 @@ export class GameScene extends Phaser.Scene {
     // atravessam `rocks`, e a unica coisa que a de minerio muda e a arte e o que ela deixa cair.
     this.rocks = [
       ...getRocks().map((r) => new RockObject(this, r.worldX, r.worldY)),
-      ...getIronRocks().map((r) => new RockObject(this, r.worldX, r.worldY, true)),
+      ...getIronRocks().map((r) => new RockObject(this, r.worldX, r.worldY, 'ore')),
+      ...getCoalRocks().map((r) => new RockObject(this, r.worldX, r.worldY, 'coal')),
     ];
     this.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this, g.worldX, g.worldY));
     this.moonflowers = getMoonflowers().map((m) => new MoonflowerObject(this, m.worldX, m.worldY));
@@ -1019,7 +1037,9 @@ export class GameScene extends Phaser.Scene {
       }),
     ];
     // A lava só existe em volta de um cogumelo (o do cantarelo): é a trava da pedra.
-    this.lavaTiles = getLavaTiles().map((l) => new LavaObject(this, l.worldX, l.worldY));
+    const lava = getLavaTiles();
+    const lavaLight = lavaLightScales(lava);
+    this.lavaTiles = lava.map((l, i) => new LavaObject(this, l.worldX, l.worldY, lavaLight[i]));
     this.propRegistry = [
       { list: this.campfires },
       { list: this.hearths },
@@ -1053,6 +1073,11 @@ export class GameScene extends Phaser.Scene {
     this.keptLitFires.clear();
     if (this.adventure) {
       this.valleyFinds = new ValleyFinds();
+      // Um jogo fechado entre o último pedido e a entrega da chave: ela chega agora.
+      if (allQuestsDone() && !adventureState().gardenKeyGiven) this.time.delayedCall(900, () => this.giveGardenKey(undefined));
+      this.oldRoad = new OldRoad();
+      const garden = getHearths()[0];
+      if (garden && !adventureState().mistCleared) this.gardenMist = new GardenMist(this, { x: garden.worldX, y: garden.worldY });
       this.weather = new ValleyWeather(this.world3d);
       this.shownSeason = this.weather.season;
     }
@@ -1096,6 +1121,7 @@ export class GameScene extends Phaser.Scene {
 
     this.placementHints = new PlacementHints();
     this.heroThought = new HeroThought(this);
+    this.furnaceAsk = new HeroThought(this);
     this.actionPrompt = new ActionPrompt(this, isTouchDevice());
     this.installActionInput();
 
@@ -1534,6 +1560,17 @@ export class GameScene extends Phaser.Scene {
     this.placementHints = undefined;
     this.heroThought?.destroy();
     this.heroThought = undefined;
+    this.bagStash?.destroy();
+    this.bagStash = undefined;
+    this.oldRoad?.destroy();
+    this.oldRoad = undefined;
+    this.gardenMist?.destroy();
+    this.gardenMist = undefined;
+    this.hollisWave?.destroy();
+    this.hollisWave = undefined;
+    this.hollisWaved = false;
+    this.furnaceAsk?.destroy();
+    this.furnaceAsk = undefined;
     this.actionPrompt?.destroy();
     this.actionPrompt = undefined;
     this.swordSlash?.destroy();
@@ -1660,7 +1697,9 @@ export class GameScene extends Phaser.Scene {
     this.streamChunks();
     profiler.end('update.chunks');
     this.updateFootprints();
+    this.tickHollisWave();
     this.heroThought?.tick(delta);
+    this.updateFurnaceAsk(delta);
 
     // Burn the carried flame down; snuff it when the fuel runs out. Re-igniting at a lit
     // campfire refills it.
@@ -1802,6 +1841,7 @@ export class GameScene extends Phaser.Scene {
       this.cameraLook = undefined;
     }
     this.clearMug();
+    this.leaveDeathScythe();
     setTimeScale(1);
     if (this.restKeyListener) window.removeEventListener('keydown', this.restKeyListener);
     this.restKeyListener = undefined;
@@ -1829,6 +1869,21 @@ export class GameScene extends Phaser.Scene {
     this.useCooldownMs = USE_COOLDOWN_MS;
   }
 
+  /**
+   * A FOICE É O PRESENTE DA MORTE (pedido do autor): ela não existe solta no vale nem na bancada. Ao levantar
+   * depois da visita, ela está no lugar onde a Morte esteve, como se tivesse deixado para ajudar. Uma vez só.
+   */
+  private leaveDeathScythe(): void {
+    if (!this.adventure || !this.seenDialogKeys.has(DEATH_VISIT_KEY) || this.seenDialogKeys.has(DEATH_SCYTHE_KEY)) return;
+    this.seenDialogKeys.add(DEATH_SCYTHE_KEY);
+    const at = this.deathTile ?? { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
+    this.deathTile = undefined;
+    const owned = this.heldItem === 'scythe' || (this.itemManager?.snapshot() ?? []).some((i) => i.kind === 'scythe');
+    const tile = owned ? null : this.dropNear('scythe', 1, at.x, at.y);
+    if (tile) this.spawnGrowSparkle(tile[0], tile[1]);
+    this.persistAdventure();
+  }
+
   /** O X nesta fogueira é do item na mão? A tocha acende nela, o balde a apaga e a chama reacende a morta. */
   private heldActsOnFire(fire: CampfireObject): boolean {
     if (this.hearths.includes(fire)) return false;
@@ -1836,10 +1891,18 @@ export class GameScene extends Phaser.Scene {
     return this.isFlammableHeld && this.heldOnFire;
   }
 
-  /** O X na fogueira, acesa ou não: o colchão no chão, o corpo deitado e o tempo passando. */
+  /**
+   * SÓ SE DORME COM FOGO (pedido do autor): apagada não, e nem enquanto o vizinho ainda está acendendo.
+   * O colchão aparece quando a chama terminou de crescer e ele já foi embora.
+   */
+  private canSleepAt(fire: CampfireObject): boolean {
+    return fire.isFullyLit && !this.fireKeepers.has(fire);
+  }
+
+  /** O X na fogueira acesa: o colchão no chão, o corpo deitado e o tempo passando. */
   private sleepAtFireAt(wx: number, wy: number): boolean {
     const fire = this.getRestFireAt(wx, wy);
-    if (!fire || this.heldActsOnFire(fire)) return false;
+    if (!fire || this.heldActsOnFire(fire) || !this.canSleepAt(fire)) return false;
     this.sitDown(wx, wy, SLEEP_TIME_SCALE);
     this.sleeping = true;
     this.sleptAtFire = false;
@@ -1875,7 +1938,9 @@ export class GameScene extends Phaser.Scene {
     if (find.owner) { this.knockAt(find.owner, { worldX: find.x, worldY: find.y }); return true; }
     const base = getDialog('wizard');
     if (!base) return true;
-    this.openDialogScript({ ...base, npcName: '', lines: tLines(`finds.${find.kind}`) }, undefined, undefined);
+    // A placa do jardim alto muda quando o portão abre.
+    const text = find.kind === 'sign' && this.gateOpened ? 'finds.signOpen' : `finds.${find.kind}`;
+    this.openDialogScript({ ...base, npcName: '', lines: tLines(text) }, undefined, undefined);
     return true;
   }
 
@@ -1939,9 +2004,11 @@ export class GameScene extends Phaser.Scene {
     this.setVignette(0.6, 1200);
     // O quadro abre: de perto, a cabeça dela ficaria fora da tela.
     void this.dollyTo(1, 1200);
+    const at = this.deathSpot();
+    this.deathTile = at;
     await new DeathVisit({
       scene: this,
-      at: this.deathSpot(),
+      at,
       smoke: (x, y) => this.spawnSmokePuff(x, y),
       say: (body, onClosed) => {
         this.dialogSpeaker = body;
@@ -2073,7 +2140,7 @@ export class GameScene extends Phaser.Scene {
         const k = keyOf(nx, ny);
         if (cameFrom.has(k)) continue;
         if (Math.abs(nx - fire[0]) > box || Math.abs(ny - fire[1]) > box) continue;
-        if ((nx === hero[0] && ny === hero[1]) || this.isSolidForEntities(nx, ny)) continue;
+        if ((nx === hero[0] && ny === hero[1]) || this.isSolidForEntities(nx, ny) || !canStep(x, y, nx, ny)) continue;
         cameFrom.set(k, keyOf(x, y));
         queue.push([nx, ny]);
       }
@@ -2293,8 +2360,9 @@ export class GameScene extends Phaser.Scene {
     return this.propAt(this.dryBushes, wx, wy);
   }
 
+  /** A porta trancada deste tile — as portas comuns e o portão do jardim alto, que também abre com a chave. */
   private getLockedDoorAt(wx: number, wy: number): LockedDoorObject | undefined {
-    return this.propAt(this.lockedDoors, wx, wy);
+    return this.propAt(this.lockedDoors, wx, wy) ?? this.propAt(this.gardenGates, wx, wy);
   }
 
   private getSwingGateAt(wx: number, wy: number): SwingGateObject | undefined {
@@ -2355,6 +2423,8 @@ export class GameScene extends Phaser.Scene {
     const furnace = box ? undefined : this.getFurnaceAt(wx, wy);
     const prop = box ?? furnace;
     if (!prop) return false;
+    // O FORNO NÃO TEM CATÁLOGO: ele é o guia da quest e só recebe o que pede (ver feedFurnaceAt).
+    if (furnace) return this.feedFurnaceAt(furnace);
     const station: CraftStation = box ? 'bench' : 'furnace';
     if (this.orderOverlay) return true;
     this.useBufferMs = 0;
@@ -2613,10 +2683,49 @@ export class GameScene extends Phaser.Scene {
     const first = !this.seenItems.has(kind);
     adventureState().basket.push(kind);
     this.seenItems.add(kind);
-    this.heroThought?.show(BASKET_TEXTURE, 0);
-    // (o som de guardar já tocou quando ele desceu para as costas, antes da ficha)
-    if (first) getSoundManager().playSingingBowl();
+    // GUARDAR NA BOLSA (pedido do autor): a bolsa de couro à direita, o cogumelo na mão esquerda, e ele passa
+    // de uma para a outra. Substituiu o balão de pensamento com a cesta.
+    const sound = getSoundManager();
+    const visual = ITEM_VISUAL_2D[kind];
+    this.bagStash?.destroy();
+    this.bagStash = new BagStash(this, visual.texture, visual.frame, {
+      open: () => sound.playBagOpen(),
+      toss: () => sound.playBagToss(),
+      land: () => sound.playBagLand(),
+      clasp: () => sound.playBagClasp(),
+    }, () => { this.bagStash = undefined; });
+    if (first) this.time.delayedCall(1200, () => getSoundManager().playSingingBowl());
     this.persistAdventure();
+  }
+
+  /**
+   * O TCHAU DE LÁ DE BAIXO (pedido do autor): o herói sobe a serra, para na BORDA do planalto olhando para a
+   * Hollis lá embaixo, e ela acena. Uma vez por subida: ela só acena de novo depois que ele desce ou se afasta.
+   */
+  private tickHollisWave(): void {
+    if (!this.adventure || this.cutsceneActive || this.dialogOpen || this.hollisWave) return;
+    const npc = this.npcManager?.getActiveWorldPositions().find((n) => n.kind === FORAGER_DIALOG);
+    if (!npc) return;
+    const hx = this.playerWorld.worldX;
+    const hy = this.playerWorld.worldY;
+    const dx = npc.worldX - hx;
+    const dy = npc.worldY - hy;
+    const dist = Math.abs(dx) + Math.abs(dy);
+    const onHigh = reliefAt(hx, hy) === RELIEF_HIGH;
+    if (!onHigh || dist > 12) { this.hollisWaved = false; return; }
+    if (this.hollisWaved || reliefAt(npc.worldX, npc.worldY) === RELIEF_HIGH || dist > 9) return;
+    const f = this.movementController?.facing ?? { dx: 0, dy: 1 };
+    // Olhando PARA ela (o eixo do olhar é o maior dos dois) e com o chão de baixo logo à frente: a borda.
+    const along = f.dx * dx + f.dy * dy;
+    const across = Math.abs(f.dx !== 0 ? dy : dx);
+    const atEdge = reliefAt(hx + f.dx, hy + f.dy) !== RELIEF_HIGH;
+    if (along <= 0 || across > along || !atEdge) return;
+    const body = this.npcManager?.bodyAt(npc.worldX, npc.worldY);
+    if (!body) return;
+    this.hollisWaved = true;
+    this.npcManager?.hop(npc.worldX, npc.worldY, 0.18);
+    getSoundManager().playFarWave();
+    this.hollisWave = new NpcWave(this, body, () => { this.hollisWave = undefined; });
   }
 
   /**
@@ -2969,10 +3078,13 @@ export class GameScene extends Phaser.Scene {
     // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
     if (this.harvestMushroomAt(front.x, front.y)) return;
     if (this.useFindAt(front.x, front.y)) return;
-    // A espada fincada não sai do chão. Tocada, ela só canta um pouco.
+    // A espada fincada não sai do chão. Tocada, ela canta um pouco, e o que ela fez aparece como um
+    // pensamento (pedido do autor).
     if (this.plantedSwordTile?.x === front.x && this.plantedSwordTile.y === front.y) {
       getSoundManager().playSwordHum();
       this.spawnGlint(front.x, front.y, SWORD_PLANTED_ELEV + 0.42, 0.5);
+      const base = getDialog('wizard');
+      if (base) this.openDialogScript({ ...base, npcName: '', lines: tLines('finds.sword') }, undefined, undefined);
       return;
     }
     if (this.tendHearthAt(front.x, front.y)) return;
@@ -3020,9 +3132,9 @@ export class GameScene extends Phaser.Scene {
     //    fazer o jogador dizê-la em voz alta é cobrar burocracia por uma escolha que não existe.
     //    Ver `toolWantedAt`.
     this.equipToolFor(x, y);
-    // Quem vai dormir numa fogueira apagada não precisa do balão pedindo graveto.
+    // Quem vai dormir numa fogueira acesa não precisa do balão.
     const fire = this.getRestFireAt(x, y);
-    if (!fire || this.heldActsOnFire(fire)) this.thinkOfNeed(x, y, true);
+    if (!fire || this.heldActsOnFire(fire) || !this.canSleepAt(fire)) this.thinkOfNeed(x, y, true);
     if (this.lumberQuest?.interactAt(x, y)) return;
     if (this.astronomerQuest?.interactAt(x, y)) return;
     // 0b. A FOGUEIRA É ONDE SE DORME, a não ser que o item na mão tenha o que fazer com ela.
@@ -3244,17 +3356,12 @@ export class GameScene extends Phaser.Scene {
   private pickUpMachineAt(wx: number, wy: number): boolean {
     // A máquina recolhida vai para a MÃO, então ela precisa estar vazia.
     if (this.heldItem !== 'none') return false;
+    // O FORNO DA VEGA É FIXO (pedido do autor): é o guia da quest e não sai do lugar. O tranco diz isso.
     const furnace = this.getFurnaceAt(wx, wy);
     if (furnace) {
-      // O FORNO TRABALHANDO nao sobe: a carga ja saiu da mochila e esta dentro dele, e recolher
-      // a maquina agora sumia com ela. A recusa e o tranco da alvenaria, como em toda trava.
-      if (furnace.isBusy) {
-        furnace.bump();
-        getSoundManager().playToolboxRefuse();
-        return true;
-      }
-      this.removeProp(this.furnaces, furnace);
-      return this.collectMachine('furnace', wx, wy);
+      furnace.bump();
+      getSoundManager().playToolboxRefuse();
+      return true;
     }
     // A LAJE VAZIA sobe; com uma peça em cima, não — o X ali é o gesto de tirar a peça (ver
     // `takeFromAltarAt`), e ele roda antes deste. É a mesma regra de um recipiente cheio, e pela mesma
@@ -3355,7 +3462,9 @@ export class GameScene extends Phaser.Scene {
       offerItem(under);
     } else if (reach) {
       const verb = this.handVerbAt(front.x, front.y);
-      if (verb) rows.push({ label: t(`actions.${verb}`), key: 'hand' });
+      // "Colocar minério de ferro": no forno o verbo leva o nome do que entra (pedido do autor)
+      if (verb === 'feed') rows.push({ label: `${t('actions.feed')} ${t(`items.name.${this.heldItem}`).toLowerCase()}`, key: 'hand' });
+      else if (verb) rows.push({ label: t(`actions.${verb}`), key: 'hand' });
       else {
         const there = this.itemManager?.kindAt(front.x, front.y);
         const held = this.heldItem;
@@ -3379,7 +3488,7 @@ export class GameScene extends Phaser.Scene {
     if (find) {
       if (find.view) return 'sit';
       if (find.owner) return 'knock';
-      return find.kind === 'bottle' ? 'read' : 'look';
+      return find.kind === 'bottle' || find.kind === 'sign' ? 'read' : 'look';
     }
     if (this.plantedSwordTile?.x === x && this.plantedSwordTile.y === y) return 'touch';
     const hearth = this.getHearthAt(x, y);
@@ -3389,7 +3498,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.getRestFireAt(x, y)?.isLit) return 'sit';
     if (this.getToolboxAt(x, y)) return 'craft';
-    if (this.getFurnaceAt(x, y)) return 'smelt';
+    if (this.getFurnaceAt(x, y)) {
+      const need = this.astronomerQuest?.furnaceNeed();
+      return need && this.heldItem === need ? 'feed' : null;
+    }
     const altar = this.getAltarAt(x, y);
     if (altar) {
       if (altar.carrying === null) return this.heldItem !== 'none' ? 'put' : null;
@@ -3401,14 +3513,14 @@ export class GameScene extends Phaser.Scene {
   /** O que o X faz no tile da frente, na ordem de `pressUse` e da tabela de `useItemAt`. */
   private useVerbAt(x: number, y: number): string | null {
     const fire = this.getRestFireAt(x, y);
-    if (fire && !this.heldActsOnFire(fire)) return 'sleep';
+    if (fire && !this.heldActsOnFire(fire)) return this.canSleepAt(fire) ? 'sleep' : null;
     const held = this.heldItem;
     if (held === 'none') {
       if (this.itemManager?.kindAt(x, y) === 'bloom') return 'hammer';
       const altar = this.getAltarAt(x, y);
       if (altar) return altar.carrying ? 'takeBack' : 'pickUp';
-      const furnace = this.getFurnaceAt(x, y);
-      return furnace && !furnace.isBusy ? 'pickUp' : null;
+      // o forno da Vega é fixo: não se recolhe
+      return null;
     }
     const spot = this.getPlantSpotAt(x, y);
     if (held === 'dyeSeeds' && spot?.isHole) return 'sow';
@@ -3450,7 +3562,6 @@ export class GameScene extends Phaser.Scene {
       return lit ? 'burn' : null;
     }
     if (this.getLockedDoorAt(x, y)?.blocking) return held === 'key' ? 'unlock' : null;
-    if (spot?.isHole && SEED_PACK_KINDS.has(held)) return 'sow';
     return held === 'shovel' && this.canDigAt(x, y) ? 'dig' : null;
   }
 
@@ -3901,9 +4012,8 @@ export class GameScene extends Phaser.Scene {
       if (this.heldItem === 'scythe') {
         this.swingHeld(wx, wy);
         getSoundManager().playGrassCut();
-        // The mow drops a handful of SEEDS on the stubble — the scythe's product. Plant them in
-        // a dug hole (plantSpot), water, and the grass grows back: the renewable fuel loop.
-        this.time.delayedCall(110, () => { if (grass.cut()) this.dropSeeds(grass.worldX, grass.worldY); });
+        // Corta rente ao talo e só (pedido do autor): o mato não dá semente, ele só abre a passagem.
+        this.time.delayedCall(110, () => { grass.cut(); });
       } else if (this.isFlammableHeld && this.heldOnFire) {
         this.swingHeld(wx, wy);
         this.time.delayedCall(150, () => {
@@ -3924,6 +4034,11 @@ export class GameScene extends Phaser.Scene {
     // in hand (no item is ever destroyed), so it can open more doors.
     const door = this.getLockedDoorAt(wx, wy);
     if (door?.blocking) {
+      // O PORTÃO DO JARDIM ALTO tem a cena dele: a chave entra, gira e fica (pedido do autor).
+      if (this.heldItem === 'key' && this.gardenGates.includes(door)) {
+        void this.playGardenUnlock(door);
+        return true;
+      }
       if (this.heldItem === 'key') {
         // Swing the key at the door with the sword's exact slash arc, then open when the
         // swing lands (same timing the flaming torch uses to ignite a bush).
@@ -3945,6 +4060,8 @@ export class GameScene extends Phaser.Scene {
           // A floodgate drains the water it dammed — a key that reshapes the map, not just opens
           // a tile: a new path AND a fresh firebreak where the river used to run.
           if (door.isFloodgate) this.openFloodgate(door.worldX, door.worldY);
+          // O PORTÃO DO JARDIM ALTO: a chave do último pedido o abre, e o save lembra.
+          if (this.gardenGates.includes(door)) this.openGardenGate();
         });
       } else {
         door.shake();
@@ -3962,20 +4079,7 @@ export class GameScene extends Phaser.Scene {
     // selecionada, o X nunca mais tiraria uma peça do altar nem recolheria uma estação. Ela é o
     // ÚLTIMO degrau do aperto, logo antes do gesto no vazio — ver `pressUse` e `bombDropTile`.
 
-    // A SEMENTE no buraco aberto — o plantio, no compasso da casa: o golpe desenha, a terra
-    // recebe no impacto, e a semente só é GASTA se entrou (o buraco teve 150ms pra deixar de
-    // ser buraco). As DUAS sementes plantam pelo mesmo gesto — o canteiro lembra qual recebeu
-    // (sownKind) e é isso que decide o broto: mato, ou a planta carnívora. Pousar uma semente
-    // EM CIMA do buraco continua possível — pelo B, como item.
-    const hole = this.getPlantSpotAt(wx, wy);
-    if (hole?.isHole && SEED_PACK_KINDS.has(this.heldItem)) {
-      const sowing = this.heldItem as PlantableSeed;
-      this.swingHeld(wx, wy);
-      this.time.delayedCall(150, () => {
-        if (this.heldItem === sowing && hole.isHole && hole.plant(sowing)) this.clearHeldItem();
-      });
-      return true;
-    }
+    // (Plantar é só a quest da Iris: as quatro sementes de tinta nos quatro buracos. Ver PainterQuest.)
 
     // A PÁ — a única ferramenta cuja fechadura é o CHÃO NU de terra (canDigAt): ela cava um
     // canteiro (plantSpot). Por último de propósito, depois de todo prop e de toda marca:
@@ -4067,6 +4171,11 @@ export class GameScene extends Phaser.Scene {
     const held = this.heldItem;
     const quest = this.painterQuest?.neededAt(wx, wy) ?? this.lumberQuest?.neededAt(wx, wy) ?? this.astronomerQuest?.neededAt(wx, wy);
     if (quest) return quest;
+    // o forno pede o próximo item da quest; com ele na mão, não falta nada
+    if (this.getFurnaceAt(wx, wy)) {
+      const need = this.astronomerQuest?.furnaceNeed();
+      return need && held !== need ? need : null;
+    }
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return held === 'knife' ? null : 'knife';
     if (this.getDryTreeAt(wx, wy)?.blocking || this.getDryShrubAt(wx, wy)?.blocking) return this.holdsAnAxe ? null : 'axe';
     if (this.getRockAt(wx, wy)?.blocking) return held === 'pickaxe' ? null : 'pickaxe';
@@ -4087,8 +4196,54 @@ export class GameScene extends Phaser.Scene {
     const water = this.getWaterAt(wx, wy);
     if (water?.blocking && water.canBuild) return held === 'wood' || held === 'stone' || held === 'bucket' ? null : 'wood';
     if (water?.blocking || this.isOpenWaterAt(wx, wy)) return held === 'bucket' || held === 'bucketFull' ? null : 'bucket';
-    if (spot?.isHole) return SEED_PACK_KINDS.has(held) ? null : 'seeds';
     return null;
+  }
+
+  /**
+   * O FORNO GUIA (pedido do autor): com o item que ele pede na mão, o Z o entrega — o item sai da mão e
+   * entra pela boca; quando a receita fecha, ele ruge e devolve o resultado pela boca. Com outra coisa (ou
+   * nada), o tranco de recusa e o herói pensa no que o forno pede. Nunca há escolha a fazer.
+   */
+  private feedFurnaceAt(furnace: FurnaceObject): boolean {
+    const quest = this.astronomerQuest;
+    const need = quest?.furnaceNeed() ?? null;
+    const held = this.heldItem;
+    if (!quest || !need || held !== need || furnace.isBusy) {
+      furnace.bump();
+      getSoundManager().playToolboxRefuse();
+      if (need && held !== need) {
+        const visual = ITEM_VISUAL_2D[need];
+        this.heroThought?.show(visual.texture, visual.frame);
+      }
+      return true;
+    }
+    const from: [number, number] = [this.playerWorld.worldX, this.playerWorld.worldY];
+    if (this.heldOnFire) this.extinguishTorch();
+    this.inventory.remove(held, 1);
+    this.updateBackItem();
+    furnace.swallow(held, from);
+    getSoundManager().playItemStash();
+    const result = quest.feedFurnace(held);
+    if (result.done) this.time.delayedCall(420, () => furnace.startHandSmelt(result.product, 1, [], from));
+    this.persistAdventure();
+    return true;
+  }
+
+  /** O balão do forno: o que ele pede, enquanto o herói está por perto e ele não está trabalhando. */
+  private updateFurnaceAsk(delta: number): void {
+    const ask = this.furnaceAsk;
+    if (!ask) return;
+    const oven = this.furnaces[0];
+    if (oven) oven.kindled = this.astronomerQuest?.furnaceKindled() ?? false;
+    const need = this.astronomerQuest?.furnaceNeed() ?? null;
+    const near = oven && Math.hypot(oven.worldX - this.playerWorld.worldX, oven.worldY - this.playerWorld.worldY) <= 3.5;
+    if (oven && need && near && !oven.isBusy && !this.dialogOpen) {
+      const visual = ITEM_VISUAL_2D[need];
+      ask.show(visual.texture, visual.frame);
+    } else if (!near) {
+      ask.clear();
+    }
+    ask.tick(delta);
   }
 
   /** O herói pensa no que falta, se faltar alguma coisa. */
@@ -4858,6 +5013,8 @@ export class GameScene extends Phaser.Scene {
    * trouxe o herói até aqui — zero quando alguém chamou isto de fora do andar (o debug).
    */
   private handleTileEntered(wx: number, wy: number, _dx = 0, _dy = 0): void {
+    // O CUME DO JARDIM ALTO, pela primeira vez: o vento leva a névoa.
+    if (this.gardenMist && !this.cutsceneActive && reliefAt(wx, wy) === RELIEF_PEAK) void this.playMistClearing();
     // O fog of war do mapa: o chunk pisado entra no save (176 chaves no maximo, um evento raro).
     if (this.adventure) {
       const chunkKey = `${Math.floor(wx / CHUNK_COLUMNS)},${Math.floor(wy / CHUNK_ROWS)}`;
@@ -6394,6 +6551,8 @@ export class GameScene extends Phaser.Scene {
         if (!chunks.hasChunkCoordinate(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS))) continue;
         const { upper } = chunks.getTile(wx, wy);
         if (upper === null || !TREE_UPPER_FRAMES.has(upper)) continue;
+        // A árvore DESENHADA manda (world/biomes): pinheiro que o bioma veste de árvore morta não solta folha.
+        if (isBareTreeAt(upper, wx, wy)) continue;
         const bb = w3.addBillboard(LEAF_TEXTURE, 0, { centered: true, depthWrite: false })
           .setTint(leafTints[Math.floor(Math.random() * leafTints.length)])
           .setDisplaySize(0.17, 0.13);
@@ -6552,7 +6711,51 @@ export class GameScene extends Phaser.Scene {
     this.spawnGrowSparkle(this.playerWorld.worldX, this.playerWorld.worldY);
     // O primeiro favor traz o gato: o vale decidiu que o cavaleiro fica.
     this.time.delayedCall(1200, () => this.ensureCat(true));
-    if (!this.gateOpened && allQuestsDone()) this.time.delayedCall(700, () => this.openGardenGate());
+    // O ÚLTIMO PEDIDO: quem o fechou acabou de dizer, na fala final, que o herói pode andar pelo jardim alto, e
+    // entrega a chave (isLastQuest). O portão não abre sozinho: abre com ela.
+    if (allQuestsDone() && !adventureState().gardenKeyGiven) this.time.delayedCall(500, () => this.giveGardenKey(_npcWorld));
+  }
+
+  /**
+   * O VENTO LEVA A NÉVOA (pedido do autor): o herói pisa no cume pela primeira vez, e a cena para o jogo. A câmera
+   * se afasta um pouco para caber o jardim, a rajada atravessa, a névoa corre para o leste e some em onda, e o
+   * jardim aparece limpo. Só então ele anda, acende a fogueira, e o resto do fim acontece.
+   */
+  private async playMistClearing(): Promise<void> {
+    const mist = this.gardenMist;
+    if (!mist || this.cutsceneActive) return;
+    this.cutsceneActive = true;
+    this.stopBreathing();
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.actionButtons?.setVisible(false);
+    const pause = (ms: number): Promise<void> => new Promise((resolve) => { this.time.delayedCall(ms, resolve); });
+    await this.dollyTo(1.45, 900);
+    await pause(250);
+    getSoundManager().playWindGust();
+    this.softWash(0xe8f0ea, 0.12, 2600);
+    await mist.blowAway();
+    this.gardenMist = undefined;
+    adventureState().mistCleared = true;
+    this.persistAdventure();
+    await pause(500);
+    await this.dollyTo(1, 1000);
+    this.actionButtons?.setVisible(true);
+    this.cutsceneActive = false;
+  }
+
+  /** A chave do jardim alto vai para a mão do herói, saltando de quem a entregou (se ele ainda está ali). */
+  private giveGardenKey(from: { worldX: number; worldY: number } | undefined): void {
+    const st = adventureState();
+    if (st.gardenKeyGiven) return;
+    st.gardenKeyGiven = true;
+    const { worldX: hx, worldY: hy } = this.playerWorld;
+    if (from) {
+      this.npcManager?.hop(from.worldX, from.worldY);
+      this.flingCraftedItem('key', from.worldX, from.worldY, hx, hy);
+    }
+    this.takeIntoHand('key');
+    this.persistAdventure();
+    this.showItemGet('key', () => {});
   }
 
   /**
@@ -6565,11 +6768,81 @@ export class GameScene extends Phaser.Scene {
     this.gateOpened = true;
     for (const gate of this.gardenGates) gate.unlock();
     this.persistAdventure();
-    getSoundManager().playGateSwing();
-    this.softWash(0xffecbe, 0.2, 1600);
-    const base = getDialog('wizard');
-    if (!base || this.dialogOpen) return;
-    this.openDialogScript({ ...base, npcName: '', lines: tLines('gate.opened') }, undefined, undefined);
+  }
+
+  /**
+   * A CHAVE NO PORTÃO DO JARDIM ALTO (pedido do autor): o herói tira a chave das costas, leva até a fechadura,
+   * enfia, gira em dois dentes, o trinco cede e o portão velho abre rangendo. A chave é GASTA aqui — fica na
+   * fechadura —, e o herói sobe com as costas vazias.
+   *
+   * A chave na fechadura é vista de trás do herói: de ponta para cima, ela entra encurtando (a haste some no
+   * tambor e sobra o anel), e o giro é o anel virando.
+   */
+  private async playGardenUnlock(door: LockedDoorObject): Promise<void> {
+    const hb = this.heroBillboard;
+    const w3 = this.world3d;
+    if (!hb || !w3 || this.cutsceneActive) return;
+    this.cutsceneActive = true;
+    this.stopBreathing();
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.actionButtons?.setVisible(false);
+    const sound = getSoundManager();
+    const pause = (ms: number): Promise<void> => new Promise((resolve) => { this.time.delayedCall(ms, resolve); });
+    const toDoorX = Math.sign(door.worldX - this.playerWorld.worldX);
+    const toDoorY = Math.sign(door.worldY - this.playerWorld.worldY);
+    this.movementController?.faceTo(toDoorX, toDoorY, false);
+    // A fechadura: a placa no meio da grade, na altura da cintura do portão.
+    const holeX = door.worldX;
+    const holeY = door.worldY + 0.06;
+    const holeH = 0.47;
+
+    // 1. PEGAR: a chave sai das costas para a mão. Ela é gasta já aqui: as costas ficam vazias.
+    const key = w3.addBillboard(ASSET_KEYS.keyItem, KEY_FRAMES.held, { centered: true })
+      .setPosition(hb.x - 0.1, hb.y + 0.02)
+      .setElevation(0.55)
+      .setDisplaySize(0.5, 0.5);
+    this.clearHeldItem();
+    this.persistAdventure();
+    sound.playKeyJingle();
+    await this.tweenTo({ targets: key, x: hb.x + 0.16, y: hb.y - 0.1, elevation: 0.66, angle: -90, duration: 340, ease: 'Quad.easeOut' });
+    await pause(120);
+
+    // 2. LEVAR: o corpo inclina para o portão e a mão leva a chave até a frente da fechadura.
+    this.hero.frame = toDoorY < 0 ? HERO_FRAMES.attackUp : HERO_FRAMES.attack;
+    this.tweens.add({ targets: this.hero, lungeX: toDoorX * 0.16, lungeY: toDoorY * 0.16, duration: 380, ease: 'Sine.easeInOut' });
+    await this.tweenTo({ targets: key, x: holeX, y: holeY, elevation: holeH + 0.2, duration: 380, ease: 'Sine.easeInOut' });
+    await pause(90);
+
+    // 3. ENFIAR: a haste some no tambor; sobra o anel encostado na placa.
+    sound.playKeyInsert();
+    await this.tweenTo({ targets: key, scaleX: 0.22, elevation: holeH + 0.07, duration: 240, ease: 'Cubic.easeIn' });
+    door.jolt();
+    await pause(260);
+
+    // 4. GIRAR: dois dentes, cada um com o seu estalo, e o anel deita.
+    for (const angle of [-45, 0]) {
+      sound.playLockTick();
+      await this.tweenTo({ targets: key, angle, duration: 170, ease: 'Back.easeOut' });
+      await pause(150);
+    }
+
+    // 5. O TRINCO CEDE: o baque de ferro, um brilho na fechadura, o portão dá um tranco.
+    sound.playLockClunk();
+    door.jolt();
+    this.spawnGlint(holeX, holeY, holeH + 0.07, 0.42);
+    this.tweens.add({ targets: this.hero, lungeX: 0, lungeY: 0, duration: 320, ease: 'Sine.easeOut' });
+    this.hero.frame = toDoorY < 0 ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
+    await pause(420);
+
+    // 6. ABRIR: o portão velho range e as folhas giram para dentro. A chave vai com a folha, presa na fechadura.
+    sound.playOldGateCreak();
+    this.tweens.add({ targets: key, alpha: 0, duration: 200, ease: 'Quad.easeIn', onComplete: () => key.destroy() });
+    this.openGardenGate();
+    this.softWash(0xffecbe, 0.14, 1400);
+    await pause(900);
+
+    this.actionButtons?.setVisible(true);
+    this.cutsceneActive = false;
   }
 
   /** As fogueiras do fim deste tile, se houver. */
@@ -6880,19 +7153,20 @@ export class GameScene extends Phaser.Scene {
     if (hintLines.length > 0) script = { ...script, lines: gift ? [...script.lines, ...hintLines] : hintLines };
     const optional = askId === FORAGER_DIALOG ? this.foragerOptionalLines(closedNow) : [];
     if (optional.length > 0) script = { ...script, lines: optional };
-    // O COGUMELO DEVOLVIDO: obrigado e uma curiosidade daquela espécie, antes do resto da conversa.
-    if (delivery && isMushroomKind(delivery.kind)) {
-      const said: I18nLine[] = [
-        { speaker: 'npc', text: t('fungi.thanks') },
-        { speaker: 'npc', text: t(`fungi.species.${delivery.kind}.curiosity`) },
-      ];
-      script = { ...script, lines: [...said, ...script.lines] };
-    }
-    if (basket) {
-      const said: I18nLine[] = [{ speaker: 'npc', text: t('fungi.thanks') }];
-      for (const kindIn of basket.kinds) said.push({ speaker: 'npc', text: t(`fungi.species.${kindIn}.curiosity`) });
-      script = { ...script, lines: [...said, ...script.lines] };
-    }
+    // O COGUMELO DEVOLVIDO (pedido do autor): para cada um, ela diz o NOME ("Ah, uma bufa-de-lobo!") e
+    // depois uma curiosidade daquela espécie; o obrigado fecha. Tudo antes do resto da conversa.
+    const named = (kinds: readonly HeldItemKind[]): I18nLine[] => [
+      ...kinds.flatMap((k): I18nLine[] => [
+        { speaker: 'npc', text: t(`fungi.species.${k}.named`) },
+        { speaker: 'npc', text: t(`fungi.species.${k}.curiosity`) },
+      ]),
+      { speaker: 'npc', text: t('fungi.thanks') },
+    ];
+    if (delivery && isMushroomKind(delivery.kind)) script = { ...script, lines: [...named([delivery.kind]), ...script.lines] };
+    if (basket) script = { ...script, lines: [...named(basket.kinds), ...script.lines] };
+    // O ÚLTIMO PEDIDO DO VALE fechou nesta conversa (pedido do autor): a fala termina com a chave do jardim alto,
+    // e ela chega depois que a caixa fecha (celebrateQuestDone → giveGardenKey).
+    if (closedNow && allQuestsDone() && !adventureState().gardenKeyGiven) script = { ...script, lines: [...script.lines, ...tLines('garden.key')] };
     if (npcWorld) {
       const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY, scriptId);
       if (key) {
@@ -7218,6 +7492,9 @@ export class GameScene extends Phaser.Scene {
       // O balao de pensamento monta no MESMO ponto do aviso de apanhar, e pelo mesmo motivo: a
       // ancora e o corpo DESENHADO. O relogio dele corre no update (ver HeroThought.tick).
       this.heroThought?.render(this.tileSize, this.camera, this.time.now, at);
+      this.bagStash?.render(this.tileSize, this.camera, at, this.game.loop.delta);
+      const oven = this.furnaces[0];
+      if (oven) this.furnaceAsk?.render(this.tileSize, this.camera, this.time.now, { x: oven.worldX, y: oven.worldY });
       const prompt = this.currentPrompt(at);
       this.actionPrompt?.render(prompt?.view ?? null, this.tileSize, this.camera, this.time.now, prompt?.at ?? at);
     }
@@ -7449,17 +7726,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private dropTreeStick(worldX: number, worldY: number): void {
-    // Um PACOTE de dois (ver TREE_STICK_YIELD), e não dois itens no chão: apanhar é um gesto só,
-    // e o pacote já existe no jogo (o cabo sai de cinco em cinco).
-    // Nas voltas do Bram é um galho por viagem: dois de uma vez deixariam o segundo sem ter onde ir.
-    this.dropFallingStick(worldX, worldY, this.lumberQuest?.wantsOneStick ? 1 : TREE_STICK_YIELD);
-  }
-
-  // Mowing tall grass leaves a handful of SEEDS behind, on the stubble tile — the scythe's
-  // product, and what makes it a producer, not a password: plant them in a plantSpot hole,
-  // water, and the grass returns. Like the graveto, they wait until the hero steps off and on.
-  private dropSeeds(worldX: number, worldY: number): void {
-    this.dropProduct('seeds', worldX, worldY);
+    // Um galho por árvore (TREE_STICK_YIELD).
+    this.dropFallingStick(worldX, worldY, TREE_STICK_YIELD);
   }
 
   // A shattered rock leaves a stone behind, on the tile it used to block. Wood's opposite:
@@ -7479,7 +7747,7 @@ export class GameScene extends Phaser.Scene {
   private dropRockSpoil(rock: RockObject): void {
     // A rocha de VEIO entrega MINERIO, nao ferro: o que sai de uma pedra e pedra com oxido
     // dentro. O metal so existe depois do forno — e essa etapa e a peca inteira desta cadeia.
-    this.dropProduct(rock.ore ? 'ore' : 'stone', rock.worldX, rock.worldY);
+    this.dropProduct(rock.product, rock.worldX, rock.worldY);
   }
 
   /**
@@ -7492,8 +7760,8 @@ export class GameScene extends Phaser.Scene {
   private spawnOreLoot(rock: RockObject): void {
     // A MÃO ESTÁ COM A PICARETA: o minério SALTA do veio para o chão ao lado e espera ser levado
     // (ele corria até o herói e entrava na mochila, que não existe mais).
-    const at = this.dropNear('ore', 1, rock.worldX, rock.worldY);
-    if (at) this.flingCraftedItem('ore', rock.worldX, rock.worldY, at[0], at[1]);
+    const at = this.dropNear(rock.product, 1, rock.worldX, rock.worldY);
+    if (at) this.flingCraftedItem(rock.product, rock.worldX, rock.worldY, at[0], at[1]);
     getSoundManager().playItemStash();
     this.persistAdventure();
   }

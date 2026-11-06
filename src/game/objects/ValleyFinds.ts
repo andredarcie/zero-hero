@@ -28,11 +28,13 @@ export interface ValleyFind {
 }
 
 const FINDS: readonly ValleyFind[] = [
-  { kind: 'bench', x: 36, y: 43, view: { x: 41, y: 53 } }, // no alto do morro, olhando o lago
-  { kind: 'log', x: 41, y: 50, view: { x: 42, y: 53 } }, // na beira do lago
+  // A cadeira da beira do lago é o ÚNICO lugar de olhar o lago (pedido do autor): o banco do alto do morro,
+  // que dava um zoom torto, e o balanço do extremo oeste saíram.
+  { kind: 'chair', x: 41, y: 50, view: { x: 42, y: 53 } },
+  // A placa ao lado do portão do jardim alto: fechado para preservação (finds.sign; aberto, finds.signOpen).
+  { kind: 'sign', x: 29, y: 36 },
   { kind: 'helmet', x: 54, y: 18 },
   { kind: 'bottle', x: 55, y: 54 },
-  { kind: 'swing', x: 4, y: 50 },
   // AS VARANDAS: um banco ao lado de cada porta, e quem mora ali vem sentar junto com uma caneca.
   { kind: 'bench', x: 39, y: 8, view: { x: 39, y: 9 }, owner: 'astronaut' },
   { kind: 'bench', x: 52, y: 7, view: { x: 52, y: 8 }, owner: 'businessMan' },

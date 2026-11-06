@@ -28,7 +28,6 @@
       "shovel": "A shovel. Digs holes.",
       "wood": "A stick.",
       "stone": "A stone.",
-      "seeds": "Seeds. Plant them in a hole.",
       "bucket": "A bucket. Fill it at the water.",
       "bucketFull": "Water.",
       "charcoal": "Charcoal. Smelts ore.",
@@ -68,7 +67,6 @@
       "iron": "Iron",
       "ore": "Iron Ore",
       "bloom": "Iron Bloom",
-      "seeds": "Seeds",
       "bucket": "Bucket",
       "bucketFull": "Full Bucket",
       "charcoal": "Charcoal",
@@ -115,6 +113,31 @@
     "options": "Options",
     "quit": "Quit",
     "back": "Back",
+    "musicPage": "Music",
+    "musicPick": "Pick a song",
+    "musicControls": "Play",
+    "musicPosition": "Position",
+    "musicRepeat": "Repeat",
+    "repeatAll": "All",
+    "repeatOne": "This one",
+    "repeatOff": "Off",
+    "musicShuffle": "Shuffle",
+    "musicVolume": "Volume",
+    "musicPrev": "Previous song",
+    "musicPlay": "Play",
+    "musicPause": "Pause",
+    "musicNext": "Next song",
+    "trackMorning": "Morning Dew",
+    "trackWaltz": "Garden Waltz",
+    "trackClouds": "Lazy Clouds",
+    "trackGolden": "Golden Hour",
+    "trackFireflies": "Fireflies",
+    "trackMoon": "Moon over the Lake",
+    "trackLullaby": "Lullaby",
+    "whenDay": "Day",
+    "whenDusk": "Dusk",
+    "whenNight": "Night",
+    "whenTitle": "Title",
     "previous": "Previous",
     "next": "Next",
     "on": "On",
@@ -153,11 +176,11 @@
       },
       {
         "speaker": "npc",
-        "text": "Leave the sword. You won’t need it."
+        "text": "Let go of the sword. Holding on to what has passed only weighs you down."
       },
       {
         "speaker": "npc",
-        "text": "You fought the dark. You won."
+        "text": "You defeated the dark. Even victory passes."
       },
       {
         "speaker": "npc",
@@ -165,7 +188,7 @@
       },
       {
         "speaker": "npc",
-        "text": "Help the people here. Then the garden opens."
+        "text": "Care for the people here. Then the garden opens."
       },
       {
         "speaker": "narrator",
@@ -175,11 +198,11 @@
     "guide": [
       {
         "speaker": "npc",
-        "text": "Four neighbours need a hand."
+        "text": "There is nothing left to fight."
       },
       {
         "speaker": "npc",
-        "text": "Hollis, west. Iris, by the beds. Bram and Vega, north."
+        "text": "Wander. Meaning is found along the way."
       }
     ],
     "gate": [
@@ -196,6 +219,10 @@
       {
         "speaker": "npc",
         "text": "You found it. A place to sit."
+      },
+      {
+        "speaker": "npc",
+        "text": "Suffering comes from wanting what doesn't stay. Here, just breathe."
       }
     ]
   },
@@ -205,11 +232,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Four neighbours need a hand."
+          "text": "There is nothing left to fight."
         },
         {
           "speaker": "npc",
-          "text": "Hollis, west. Iris, by the beds. Bram and Vega, north."
+          "text": "Wander. Meaning is found along the way."
         }
       ]
     },
@@ -218,7 +245,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "A hero. How novel. I was napping."
+          "text": "A hero. How novel. Out of my sun, I was napping."
         },
         {
           "speaker": "npc",
@@ -227,6 +254,10 @@
         {
           "speaker": "npc",
           "text": "Two hearths in this clearing sit cold. Carry the flame to them."
+        },
+        {
+          "speaker": "npc",
+          "text": "I own nothing and lack nothing. How much do you carry, hero?"
         }
       ]
     },
@@ -277,11 +308,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "I study the fungi of this valley."
+          "text": "I watch the fungi of this valley. They are never in a hurry."
         },
         {
           "speaker": "npc",
-          "text": "A mushroom is only the fruit. The fungus lives underground, as threads."
+          "text": "What you see is only the fruit. The fungus lives hidden, as threads, underground."
         },
         {
           "speaker": "npc",
@@ -289,7 +320,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Cut, don't pull. Brush, don't wash."
+          "text": "Don't force it: cut, don't pull. Brush, don't wash."
         }
       ]
     },
@@ -298,7 +329,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Four is plenty. You know the forest floor now."
+          "text": "Four is enough. Whoever knows what is enough has everything."
+        },
+        {
+          "speaker": "npc",
+          "text": "Be like water: soft, and still it wears down stone."
         },
         {
           "speaker": "npc",
@@ -309,7 +344,7 @@
     "radiationSuitAll": [
       {
         "speaker": "npc",
-        "text": "All six! Nobody knows this ground like you."
+        "text": "All six! You walked with the valley, not against it."
       },
       {
         "speaker": "npc",
@@ -326,13 +361,13 @@
       "morel": [
         {
           "speaker": "npc",
-          "text": "North, on an island: a cap like a honeycomb. Two sticks make a bridge."
+          "text": "North, on an island: a cap like a honeycomb. Two sticks make a bridge; Bram has the axe."
         }
       ],
       "puffball": [
         {
           "speaker": "npc",
-          "text": "North-east, in the tall grass: a white ball with no cap. There's a scythe close by."
+          "text": "North-east, in the tall grass: a white ball with no cap. Tall grass falls to a scythe or fire."
         }
       ],
       "inkCap": [
@@ -359,7 +394,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Everything I paint comes out grey. Real paint grows from the ground."
+          "text": "Everything I paint comes out grey. Colour doesn't come ready-made: we draw it from the ground."
         },
         {
           "speaker": "npc",
@@ -376,7 +411,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Now I see colour everywhere."
+          "text": "The world had no colour. Now it does, because we made it."
+        },
+        {
+          "speaker": "npc",
+          "text": "If I had to live it all again, the grey too, I would."
         }
       ]
     },
@@ -385,11 +424,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "My firewood ran out. My hands are shaking."
+          "text": "I lost the business, the firewood, everything. My hands are shaking."
         },
         {
           "speaker": "npc",
-          "text": "Let's build a fire. Over there, on that dirt. Take the axe."
+          "text": "The rest isn't up to me. A fire is. Over there, on that dirt. Take the axe."
         },
         {
           "speaker": "npc",
@@ -410,6 +449,10 @@
         },
         {
           "speaker": "npc",
+          "text": "It isn't what happens that weighs on us. It's what we think of it."
+        },
+        {
+          "speaker": "npc",
           "text": "Thank you, friend. The axe is yours."
         }
       ]
@@ -423,11 +466,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Without a tripod and a lens, I can't find my way in the sky."
+          "text": "No tripod, no lens, no sky. And everyone is born wanting to know."
         },
         {
           "speaker": "npc",
-          "text": "Take this pickaxe. Bring me one iron bar."
+          "text": "Take this pickaxe. Bring me an iron bar."
         }
       ]
     },
@@ -436,11 +479,15 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "The sky is still up there. Come back at night."
+          "text": "The sky is still up there. Looking at it is the best of life. Come back at night."
         },
         {
           "speaker": "npc",
           "text": "I built a cairn here: a place to come back to."
+        },
+        {
+          "speaker": "npc",
+          "text": "One swallow doesn't make a summer: happiness is a whole life, not a day."
         }
       ]
     },
@@ -448,25 +495,13 @@
       "ore": [
         {
           "speaker": "npc",
-          "text": "Some rocks east of here hold ore. Break one."
-        }
-      ],
-      "furnace": [
-        {
-          "speaker": "npc",
-          "text": "Ore needs a furnace. Build one at the bench."
-        }
-      ],
-      "charcoal": [
-        {
-          "speaker": "npc",
-          "text": "Set the furnace down. Two sticks make charcoal: I left two by the workbench."
+          "text": "Head west, to the lava lake. The black-veined rock gives charcoal, the red-veined one, ore. The furnace here asks for one at a time."
         }
       ],
       "bloom": [
         {
           "speaker": "npc",
-          "text": "Now ore and charcoal, together."
+          "text": "Take the charcoal and the ore to the furnace, right here. It asks for what it needs, one thing at a time."
         }
       ],
       "iron": [
@@ -544,7 +579,7 @@
       "easel": [
         {
           "speaker": "npc",
-          "text": "Brush in hand, and the canvas is yours."
+          "text": "Brush in hand. Paint the world you want."
         }
       ]
     },
@@ -592,7 +627,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Take the brush: it's yours."
+          "text": "Take the brush: now you're the one who creates."
         }
       ]
     },
@@ -620,7 +655,7 @@
         },
         {
           "speaker": "npc",
-          "text": "I only saw grey. Thank you for everything."
+          "text": "I only saw grey. We invented colour."
         },
         {
           "speaker": "npc",
@@ -690,11 +725,11 @@
       "farewell": [
         {
           "speaker": "npc",
-          "text": "Look at my hands: they stopped shaking."
+          "text": "I lost what was never mine. Look: my hands stopped shaking."
         },
         {
           "speaker": "npc",
-          "text": "It was a fantastic night."
+          "text": "Nobody can take this night from me."
         }
       ]
     },
@@ -714,13 +749,13 @@
         },
         {
           "speaker": "npc",
-          "text": "I hauled sand from the pond: that heap there. Ash is beside the fire. Both in the furnace."
+          "text": "The ash is by the fire. Sand only by the big lake, down south. Both into the furnace."
         }
       ],
       "wait": [
         {
           "speaker": "npc",
-          "text": "Sand from the heap, ash from the fire. Both in the furnace."
+          "text": "Sand from the big lake, down south. Ash from the fire. Both into the furnace."
         }
       ],
       "polish": [
@@ -842,7 +877,8 @@
     "unlock": "Unlock",
     "dig": "Dig",
     "takeBack": "Take out",
-    "pickUp": "Pick up"
+    "pickUp": "Pick up",
+    "feed": "Put in"
   },
   "controls": {
     "hint": "Z talk & take · X use",
@@ -854,7 +890,7 @@
   },
   "fungi": {
     "basket": "Basket",
-    "thanks": "Thank you! Did you know?",
+    "thanks": "Thank you!",
     "leave": "Leave it",
     "cut": {
       "title": "Cut",
@@ -886,6 +922,7 @@
     "species": {
       "puffball": {
         "latin": "Lycoperdon perlatum",
+        "named": "Ah, a common puffball!",
         "curiosity": "Rain does the work: every drop that hits it puffs out spores.",
         "cut": "Cut under the ball, at the base.",
         "clean": "Brush off the soil and loose spines.",
@@ -896,6 +933,7 @@
       },
       "inkCap": {
         "latin": "Coprinus comatus",
+        "named": "Ah, a shaggy ink cap!",
         "curiosity": "Within hours it melts into black ink. People once wrote with it.",
         "cut": "Cut low on the slim stem. It's hollow.",
         "clean": "Be quick: once picked, it turns to ink within hours.",
@@ -906,6 +944,7 @@
       },
       "morel": {
         "latin": "Morchella esculenta",
+        "named": "Ah, a yellow morel!",
         "curiosity": "It favors dying elms and old apple orchards.",
         "cut": "Cut at the base. The whole thing is hollow.",
         "clean": "Grit hides in the pits. Brush each one.",
@@ -916,7 +955,8 @@
       },
       "chanterelle": {
         "latin": "Cantharellus cibarius",
-        "curiosity": "It smells of apricots.",
+        "named": "Ah, a golden chanterelle!",
+        "curiosity": "It smells of apricots, and hardly any bug will eat it.",
         "cut": "Cut at the base, just above the moss.",
         "clean": "Dirt hides in the ridges. Brush them out.",
         "notes": [
@@ -926,6 +966,7 @@
       },
       "flyAgaric": {
         "latin": "Amanita muscaria",
+        "named": "Ah, a fly agaric!",
         "curiosity": "It was once crumbled into milk to kill flies. Hence the name.",
         "cut": "Cut below the soil line. The cup at the base, the volva, is how amanitas are told apart.",
         "clean": "Brush gently: the white warts rub off.",
@@ -936,6 +977,7 @@
       },
       "porcini": {
         "latin": "Boletus edulis",
+        "named": "Ah, a porcini!",
         "curiosity": "A single one can weigh over a kilo.",
         "cut": "Cut at the base of the thick stem.",
         "clean": "Brush the cap. White pores underneath mean it's young.",
@@ -964,14 +1006,6 @@
     "keysTouchFurnace": "Tap to pick · tap to smelt",
     "unknown": "?"
   },
-  "gate": {
-    "opened": [
-      {
-        "speaker": "narrator",
-        "text": "A gate opens in the middle of the valley."
-      }
-    ]
-  },
   "finds": {
     "helmet": [
       {
@@ -995,16 +1029,6 @@
       {
         "speaker": "narrator",
         "text": "No name."
-      }
-    ],
-    "swing": [
-      {
-        "speaker": "narrator",
-        "text": "A swing."
-      },
-      {
-        "speaker": "narrator",
-        "text": "The rope is new. Someone still comes here."
       }
     ],
     "door": {
@@ -1058,7 +1082,41 @@
           "text": "The porch is still here."
         }
       ]
-    }
+    },
+    "sword": [
+      {
+        "speaker": "narrator",
+        "text": "This blade felled the darkness."
+      },
+      {
+        "speaker": "narrator",
+        "text": "And gave the world back its light."
+      }
+    ],
+    "sign": [
+      {
+        "speaker": "narrator",
+        "text": "High Garden."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Closed for environmental preservation."
+      }
+    ],
+    "signOpen": [
+      {
+        "speaker": "narrator",
+        "text": "High Garden."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Closed for environmental preservation."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Someone has scratched out \"closed\"."
+      }
+    ]
   },
   "death": {
     "name": "Death",
@@ -1081,7 +1139,11 @@
       },
       {
         "speaker": "npc",
-        "text": "Without the war, what is left of you? You've lost your meaning."
+        "text": "Without the war, what is left of you? Nothing means anything. It never did."
+      },
+      {
+        "speaker": "npc",
+        "text": "Glory, honour, victory. I've seen what's left of them: nothing."
       },
       {
         "speaker": "npc",
@@ -1098,6 +1160,10 @@
       {
         "speaker": "narrator",
         "text": "The sword stays in the road."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Friends, fire, food. Nothing is missing."
       },
       {
         "speaker": "narrator",
@@ -1163,5 +1229,21 @@
     "summer": "Summer",
     "autumn": "Autumn",
     "winter": "Winter"
+  },
+  "garden": {
+    "key": [
+      {
+        "speaker": "npc",
+        "text": "You have shown yourself a true friend to everyone: the village and nature alike."
+      },
+      {
+        "speaker": "npc",
+        "text": "Now you may walk freely through the High Garden, with respect for nature."
+      },
+      {
+        "speaker": "npc",
+        "text": "Take the key."
+      }
+    ]
   }
 }

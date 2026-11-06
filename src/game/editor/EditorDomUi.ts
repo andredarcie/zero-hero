@@ -15,6 +15,7 @@ import {
   worldFilePath,
   type WorldFileId,
 } from '@/game/worldApi';
+import { biomeTintAt, decorFrameAt } from '@/game/world/biomes';
 
 // The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
 // world viewport, this module renders everything else (tools, palettes, minimap, modals).
@@ -26,7 +27,7 @@ export const PANEL_WIDTH = 320;
 export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'relief' | 'entity' | 'spawn';
 export type CollisionPaintMode = 'keep' | 'set' | 'clear';
 // O que a ferramenta Serra pinta: o planalto, ou a escada (que aponta sozinha para o planalto).
-export type ReliefPaintMode = 'high' | 'stair';
+export type ReliefPaintMode = 'high' | 'peak' | 'stair';
 export type PaletteTab = 'tiles' | 'npcs' | 'pickups' | 'props';
 
 export type EntitySelection =
@@ -115,7 +116,6 @@ const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string;
   { type: 'wood', label: 'Graveto', key: ASSET_KEYS.woodIcon },
   { type: 'stone', label: 'Pedra', key: ASSET_KEYS.rock },
   { type: 'iron', label: 'Bloco de Ferro', key: ASSET_KEYS.ironItem },
-  { type: 'seeds', label: 'Sementes', key: ASSET_KEYS.seedsItem },
   { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
   // Os seis fungos (arte gerada no boot, registerFungiTextures): nascem no chao, a faca solta.
   { type: 'puffball', label: 'Bufa-de-lobo (Lycoperdon perlatum)', key: fungusTextureKey('puffball') },
@@ -135,6 +135,7 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   { type: 'dryShrub', label: 'Arbusto Seco', key: ASSET_KEYS.dryShrub },
   { type: 'rock', label: 'Pedra', key: ASSET_KEYS.rock },
   { type: 'ironRock', label: 'Pedra de Ferro', key: ASSET_KEYS.ironRock, frame: 0 },
+  { type: 'coalRock', label: 'Pedra de Carvão', key: ASSET_KEYS.coalRock, frame: 0 },
   { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassUp, frame: 0 },
   { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },
   { type: 'lava', label: 'Lava (a pedra afunda e vira chao)', key: ASSET_KEYS.lavaFloor },
@@ -221,6 +222,35 @@ const TILE_GROUPS: ReadonlyArray<{
       { frame: 20, label: 'Folhagem 5', layer: 'upper' },
       { frame: 9, label: 'Gravetos', layer: 'upper' },
       { frame: 2, label: 'Graveto Solto', layer: 'upper' },
+    ],
+  },
+  {
+    // A FLORA DOS BIOMAS (spritefactory/sprites/biome-decor.mjs, world/biomes.ts). O bioma já veste a
+    // decoração genérica com elas sozinho; aqui é para pôr uma de propósito. Sem este grupo os frames
+    // cairiam em "Outros", sem camada, e pintar com o "Chão" ligado poria a planta no lugar do piso.
+    title: 'Flora dos Biomas',
+    tiles: [
+      { frame: 63, label: 'Samambaia', layer: 'upper' },
+      { frame: 64, label: 'Musgo Florido', layer: 'upper' },
+      { frame: 65, label: 'Trigo', layer: 'upper' },
+      { frame: 66, label: 'Margaridas', layer: 'upper' },
+      { frame: 67, label: 'Papoulas', layer: 'upper' },
+      { frame: 68, label: 'Campânulas', layer: 'upper' },
+      { frame: 69, label: 'Cristais', layer: 'upper' },
+      { frame: 70, label: 'Brasas', layer: 'upper' },
+      { frame: 71, label: 'Folhas e Pinha', layer: 'upper' },
+      { frame: 72, label: 'Trevos', layer: 'upper' },
+    ],
+  },
+  {
+    // A MATA ANTIGA DO JARDIM ALTO (spritefactory/sprites/ancient-grove.mjs). As árvores bloqueiam sozinhas
+    // (SOLID_UPPER_FRAMES), como o pinheiro.
+    title: 'Mata Antiga',
+    tiles: [
+      { frame: 73, label: 'Árvore Anciã', layer: 'upper' },
+      { frame: 74, label: 'Árvore Anciã (torta)', layer: 'upper' },
+      { frame: 75, label: 'Moita Velha', layer: 'upper' },
+      { frame: 76, label: 'Capim Antigo', layer: 'upper' },
     ],
   },
   {
@@ -789,7 +819,8 @@ export class EditorDomUi {
       reliefSeg.className = 'zh-seg';
       const modes: Array<{ id: ReliefPaintMode; label: string; hint: string }> = [
         { id: 'high', label: 'Planalto', hint: 'Bloco um nivel acima do chao' },
-        { id: 'stair', label: 'Escada', hint: 'Encosta num planalto; clicar de novo gira' },
+        { id: 'peak', label: 'Cume', hint: 'O segundo andar: dois niveis acima do chao, em cima do planalto' },
+        { id: 'stair', label: 'Escada', hint: 'Encosta num planalto (ou num cume); clicar de novo gira' },
       ];
       modes.forEach((mode) => {
         const btn = this.button(mode.label, mode.hint, () => {
@@ -804,12 +835,14 @@ export class EditorDomUi {
       hint.style.cssText = 'font-size:10px;color:#d9a55a;margin:4px 0 6px;line-height:1.55;';
       hint.textContent = this.state.reliefMode === 'high'
         ? 'Pinte o planalto; a borda escura e o paredao. So se sobe por escada. Botao direito volta ao chao.'
-        : 'Clique num tile de chao encostado no planalto: a seta aponta para onde a escada sobe. Clique de novo para girar.';
+        : this.state.reliefMode === 'peak'
+          ? 'Pinte o cume, o segundo andar, cercado de planalto. Do planalto ao cume, so por escada. Botao direito volta ao chao.'
+          : 'Clique num tile de chao encostado no planalto (ou de planalto encostado no cume): a seta aponta para onde a escada sobe. Clique de novo para girar.';
       this.optionsEl.appendChild(hint);
     }
 
     if (this.state.tool === 'brush' || this.state.tool === 'eraser' || this.state.tool === 'collision'
-      || (this.state.tool === 'relief' && this.state.reliefMode === 'high')) {
+      || (this.state.tool === 'relief' && this.state.reliefMode !== 'stair')) {
       const brushSeg = document.createElement('div');
       brushSeg.className = 'zh-seg';
       brushSeg.style.marginTop = '4px';
@@ -973,7 +1006,7 @@ export class EditorDomUi {
     const selection = this.state.tool === 'entity'
       ? `${this.state.entity.list}:${this.state.entity.type}`
       : this.state.tool === 'relief'
-        ? (this.state.reliefMode === 'high' ? 'planalto' : 'escada')
+        ? ({ high: 'planalto', peak: 'cume', stair: 'escada' } as const)[this.state.reliefMode]
       : this.state.tool === 'spawn'
         ? `(${this.store.spawn.worldX}, ${this.store.spawn.worldY})`
       : this.state.tile === null ? 'limpar' : `tile ${this.state.tile}`;
@@ -1047,9 +1080,16 @@ export class EditorDomUi {
         ctx.drawImage(source, groundFrame.cutX, groundFrame.cutY, groundFrame.width, groundFrame.height, wx * scale, wy * scale, scale, scale);
         const upper = this.store.readCell('upper', wx, wy) as number | null;
         if (upper !== null) {
-          const upperFrame = texture.get(upper);
+          const upperFrame = texture.get(decorFrameAt(upper, wx, wy));
           ctx.drawImage(source, upperFrame.cutX, upperFrame.cutY, upperFrame.width, upperFrame.height, wx * scale, wy * scale, scale, scale);
         }
+        // a cor do bioma por cima (multiplicar), como o tabuleiro e o jogo mostram (world/biomes.ts)
+        const [r, g, b] = biomeTintAt(wx, wy);
+        const k = 255 / Math.max(r, g, b, 1);
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = `rgb(${Math.round(r * k)}, ${Math.round(g * k)}, ${Math.round(b * k)})`;
+        ctx.fillRect(wx * scale, wy * scale, scale, scale);
+        ctx.globalCompositeOperation = 'source-over';
       }
     }
 

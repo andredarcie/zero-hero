@@ -4,6 +4,7 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { t, tLines, type I18nLine } from '@/game/i18n/i18n';
+import { isLastQuest } from '@/game/runtime/QuestLog';
 import type { PlantSpotObject } from '@/game/objects/PlantSpotObject';
 import {
   DYE_KINDS, DYE_TINTS, GROW_LEVELS, GROW_STEP_MS, PLOT_COUNT, type DyeKind,
@@ -294,7 +295,8 @@ export class PainterQuest {
         say(step('easel'), () => this.resupply('brush', at));
         return true;
       case 'review':
-        say(this.reviewLines(), () => this.finish(at));
+        // Se este é o último pedido do vale, a fala dela termina com a chave do jardim alto.
+        say([...this.reviewLines(), ...(isLastQuest('painter') ? tLines('garden.key') : [])], () => this.finish(at));
         return true;
       default:
         return false;

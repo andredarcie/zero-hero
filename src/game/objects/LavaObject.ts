@@ -10,6 +10,34 @@ import type { WorldProp } from './WorldProp';
 // Este objeto é dono do que é do tile: a colisão, a luz e a pedra que afunda. Em LAVA a luz é fogo: um graveto
 // apagado acende aqui.
 const LIGHT_SCALE = 0.2;
+/**
+ * A POÇA É A MEDIDA (pedido do autor: o lago de lava estourava a tela num amarelo chapado). Cada tile acende a
+ * sua luz, e no lago grande dezenas delas somavam até o branco. Numa poça de até `POOL_TILES` tiles cada um
+ * brilha inteiro; acima disso o brilho de cada tile cai com a raiz do tamanho, e o lago todo brilha como
+ * algumas poças pequenas espalhadas — quente, mas da cor da lava.
+ */
+const POOL_TILES = 4;
+
+/** A escala de luz de cada tile de lava, pelo tamanho da poça (4 vizinhos) em que ele está. */
+export const lavaLightScales = (tiles: readonly { worldX: number; worldY: number }[]): number[] => {
+  const key = (x: number, y: number): string => `${x},${y}`;
+  const index = new Map(tiles.map((t, i) => [key(t.worldX, t.worldY), i]));
+  const size = new Array<number>(tiles.length).fill(0);
+  for (let i = 0; i < tiles.length; i += 1) {
+    if (size[i]) continue;
+    const pool = [i];
+    const seen = new Set([i]);
+    for (let q = 0; q < pool.length; q += 1) {
+      const t = tiles[pool[q]];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const j = index.get(key(t.worldX + dx, t.worldY + dy));
+        if (j !== undefined && !seen.has(j)) { seen.add(j); pool.push(j); }
+      }
+    }
+    for (const j of pool) size[j] = pool.length;
+  }
+  return size.map((n) => LIGHT_SCALE * Math.sqrt(Math.min(1, POOL_TILES / n)));
+};
 
 // ── The sinking stone ──────────────────────────────────────────────────────────
 // A stone dropped into the melt does NOT snap the tile into cold rock. The LAVA STAYS — it keeps
@@ -50,12 +78,12 @@ export class LavaObject implements WorldProp {
   private phase: 'molten' | 'cooling' | 'solid' = 'molten';
   private crownParts: Box3D[] = [];
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, lightScale = LIGHT_SCALE) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
     const fireLight = world3d().addFireLight(worldX, worldY, true);
-    fireLight.setIntensityScale(LIGHT_SCALE);
+    fireLight.setIntensityScale(lightScale);
     this.fireLight = fireLight;
   }
 

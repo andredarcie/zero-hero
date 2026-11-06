@@ -165,6 +165,14 @@ export const recordQuestEvent = (event: QuestEvent): QuestEventResult => {
 /** Todos os pedidos do vale fecharam? É a chave do portão do jardim. */
 export const allQuestsDone = (): boolean => Object.values(NPC_QUESTS).every(isQuestDone);
 
+/**
+ * ESTE PEDIDO É O ÚLTIMO A FECHAR? (pedido do autor: em qualquer ordem, quem fecha o quarto pedido entrega a
+ * chave do jardim alto na própria fala final). Os outros já fecharam e a chave ainda não saiu. Quem pergunta é a
+ * fala de despedida de cada quest, antes de fechar — por isso este pedido ainda não conta como fechado.
+ */
+export const isLastQuest = (dialogId: string): boolean => !adventureState().gardenKeyGiven
+  && Object.values(NPC_QUESTS).every((quest) => quest.dialog === dialogId || isQuestDone(quest));
+
 export const questSnapshot = (): Array<{
   dialog: string;
   done: boolean;

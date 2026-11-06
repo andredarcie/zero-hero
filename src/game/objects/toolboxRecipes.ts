@@ -26,23 +26,8 @@ export type ToolboxRecipe = {
 };
 
 export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
-  // A REGRA: cabo + cabeca. Uma cabeca de cada material da uma ferramenta, e o jogador aprende
-  // isso com UM exemplo — o que e a unica forma de haver receita num jogo sem livro de receitas.
-  //
-  // Note a consequencia dessa regra: `graveto + X` so pode significar UMA coisa, entao o numero
-  // de ferramentas fabricaveis e o numero de MATERIAIS, nunca o numero de ideias. Duas hoje.
-  //
-  // Um cabo e uma cabeca de pedra. E a receita mais velha que existe, e e a que ensina a peca:
-  // os dois insumos ja sao produtos de OUTRAS ferramentas (a arvore da o graveto, a picareta da
-  // a pedra), entao a caixa fecha a cadeia em vez de comecar uma nova.
-  { inputs: ['wood', 'stone'], output: 'axe', family: 'tool' },
-  // Cabo e lamina de ferro. A FOICE, e nao a picareta, por um motivo que so aparece quando se
-  // desenha a cadeia inteira: o ferro sai de uma pedra de minerio, e pedra se quebra com
-  // picareta. Uma receita que fabricasse a picareta exigiria a picareta pra chegar nos insumos —
-  // circular, e portanto inutil em qualquer level que nao dependesse da bomba pra abrir a
-  // primeira rocha. A foice nao tem esse problema: picareta -> ferro -> foice e uma escada que
-  // sempre sobe. E a foice PRODUZ (sementes), que e o que se pede de qualquer coisa nova aqui.
-  { inputs: ['wood', 'iron'], output: 'scythe', family: 'tool' },
+  // NENHUMA FERRAMENTA SE FABRICA (pedido do autor): o machado só vem do Bram, e a foice só da
+  // Morte, depois de dormir na fogueira.
 
   // ── A CADEIA DO FERRO, e as duas pecas que ela pede ────────────────────────────────────────
   //
@@ -50,7 +35,8 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // qualquer receita que pedisse metal seria circular: precisaria de ferro para construir a coisa
   // que produz ferro. Duas pedras e o que o jogador tem antes de ter qualquer outra coisa, e por
   // isso o forno e a primeira estacao construivel da cadeia manual.
-  { inputs: ['stone', 'stone'], output: 'furnace', family: 'machine' },
+  // O FORNO NÃO SE CONSTRÓI (pedido do autor): o único do vale é o da Vega, fixo, e ele guia a quest
+  // (pede o próximo item e devolve o resultado). A receita pedra+pedra saiu daqui.
   // O ALTAR: pedra e MINERIO — a laje bruta e o veio de ferro dentro dela.
   //
   // Ele custou uma ESPONJA por um dia, e a receita era bonita no papel (para construir o lugar onde
@@ -68,7 +54,6 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // ── O QUE SÓ ENFEITA. Fora da escada de propósito (ver LADDER): sempre à vista, e ninguém precisa dele. ──
   { inputs: ['wood', 'wood'], output: 'stool', family: 'material' },
   { inputs: ['wood', 'charcoal'], output: 'lantern', family: 'material' },
-  { inputs: ['stone', 'seeds'], output: 'flowerPot', family: 'material' },
   // ── O FORNO, e ele e a UNICA receita de outra estacao ──────────────────────────────────────
   //
   // Minerio + CARVAO = esponja de ferro. O carvao aqui nao e combustivel: e o REAGENTE que rouba o
@@ -148,7 +133,7 @@ export const catalogOrder = (station: CraftStation = 'bench'): readonly ToolboxR
  * nova é sempre a próxima da escada, e ela só aparece quando a anterior saiu — de modo que abrir a
  * bancada nunca custa uma leitura de catálogo, e sim uma olhada.
  *
- * A ordem segue o caminho manual: forno, altar, machado e foice.
+ * A ordem segue o caminho manual: forno e altar.
  */
 const LADDER: Record<CraftStation, readonly HeldItemKind[]> = {
   bench: [
@@ -157,7 +142,7 @@ const LADDER: Record<CraftStation, readonly HeldItemKind[]> = {
     // lugar disso. Quem acabou de acender o primeiro forno tem exatamente o que a laje pede (uma
     // pedra e um minerio, os dois da mesma picareta), entao o segundo degrau da escada e sempre
     // pagavel no minuto em que aparece.
-    'furnace', 'altar', 'axe', 'scythe',
+    'altar',
   ],
   // O forno tem dois degraus, e a ordem é a da própria química: primeiro se faz o carvão (que só
   // pede lenha), e é com ele que o minério vira esponja.

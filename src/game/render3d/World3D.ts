@@ -18,9 +18,10 @@ import {
   getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds, isInsideWorld,
 } from '@/game/world/WorldData';
 import {
-  RELIEF_HEIGHT, reliefAt, reliefLevelAt, stairUp, terrainHeightAt,
+  RELIEF_HEIGHT, reliefAt, reliefLevelAt, stairBase, stairUp, terrainHeightAt,
 } from '@/game/world/relief';
 import { profiler } from '@/game/debug/Profiler';
+import { ANCIENT_GROVE, BIOME_DECOR, biomeTintAt, biomeTreeTintAt, decorFrameAt } from '@/game/world/biomes';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
 import { ChunkShroud3D, shroudDayUniform } from './ChunkShroud3D';
 import {
@@ -377,7 +378,12 @@ const MIST_COUNT = 48;
 // (graveto, seixo, osso): um enxame precisa dizer "aqui é verde", e piscar sobre cascalho não diz
 // nada. É o mesmo atlas que o editor pinta, então plantar mato numa carta (ver
 // scripts/enrich-chunk-cards.mjs) povoa a carta de vaga-lume sem tocar em código.
-const FIREFLY_HOST_FRAMES: ReadonlySet<number> = new Set([0, 1, 7, 8, 10, 11, 19, 20]);
+const FIREFLY_HOST_FRAMES: ReadonlySet<number> = new Set([
+  0, 1, 7, 8, 10, 11, 19, 20,
+  // a flora dos biomas que é planta (cristal, brasa e folha caída não seguram vaga-lume)
+  BIOME_DECOR.fern, BIOME_DECOR.mossBloom, BIOME_DECOR.wheat, BIOME_DECOR.daisies, BIOME_DECOR.poppies,
+  BIOME_DECOR.bluebells, BIOME_DECOR.clover, ANCIENT_GROVE.bush, ANCIENT_GROVE.grass,
+]);
 
 // ── O QUE O VENTO MOVE ────────────────────────────────────────────────────────────────────────
 // Duas listas, e as duas existem para dizer o que NÃO se mexe. As malhas do terreno são fundidas
@@ -387,10 +393,15 @@ const FIREFLY_HOST_FRAMES: ReadonlySet<number> = new Set([0, 1, 7, 8, 10, 11, 19
 //
 // A mata em pé: pinheiros (4/14-18), árvore seca (3/21) e os dois estágios de tombamento (36/37),
 // que continuam sendo madeira em pé. Fora ficam a cabeça na estaca (22) e o túmulo (25).
-const WIND_SWAY_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21, 36, 37]);
+const WIND_SWAY_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21, 36, 37, ANCIENT_GROVE.treeA, ANCIENT_GROVE.treeB]);
 // O mato deitado: capim, folhagem e o arbusto florido. Cogumelo, graveto, seixo, pedregulho e osso
 // ficam de fora — o que é rígido no mundo tem de ficar rígido na tela.
-const WIND_STIR_FRAMES: ReadonlySet<number> = new Set([0, 1, 7, 8, 19, 20]);
+const WIND_STIR_FRAMES: ReadonlySet<number> = new Set([
+  0, 1, 7, 8, 19, 20,
+  // a flora dos biomas que balança; cristal, brasa e folha caída ficam parados
+  BIOME_DECOR.fern, BIOME_DECOR.mossBloom, BIOME_DECOR.wheat, BIOME_DECOR.daisies, BIOME_DECOR.poppies,
+  BIOME_DECOR.bluebells, BIOME_DECOR.clover, ANCIENT_GROVE.bush, ANCIENT_GROVE.grass,
+]);
 // A caixa em que o enxame vive, em tiles a partir do alvo da câmera. Um pouco maior que a tela:
 // entrar no quadro voando é a metade do efeito, e um bicho que só existe dentro do enquadramento
 // aparece do nada na borda.
@@ -1137,6 +1148,8 @@ export class World3D {
    */
   private terrainMats?: {
     ground: THREE.MeshLambertMaterial;
+    /** As árvores em pé, com a cor do bioma no vértice. */
+    trees: THREE.MeshLambertMaterial;
     /** O MAR: o mesmo atlas do chão, com a corrente e a arrebentação (worldFx 'seaFlow'). */
     sea: THREE.MeshLambertMaterial;
     bank: THREE.MeshLambertMaterial;
@@ -1269,7 +1282,7 @@ export class World3D {
   private reliefTiles: Array<{ x: number; z: number }> = [];
   private reliefField?: ReliefPoint;
   private massGrid: MassHeightGrid | null = null;
-  private stairTiles: Array<{ x: number; z: number; ux: number; uz: number }> = [];
+  private stairTiles: Array<{ x: number; z: number; ux: number; uz: number; base: number }> = [];
   private cubeMeshes: THREE.Mesh[] = [];
 
   public constructor() {
@@ -1725,16 +1738,18 @@ export class World3D {
                 }
               }
               if (nearRelief) reliefNear.push({ ...tile, level, far: outside });
-              if (level > 0) {
-                this.reliefTiles.push({ x: wx, z: wy });
-              } else {
-                groundTiles.push(tile);
-                const up = outside ? undefined : stairUp(reliefAt(wx, wy));
-                if (up) this.stairTiles.push({ x: wx, z: wy, ux: up[0], uz: up[1] });
-              }
+              if (level > 0) this.reliefTiles.push({ x: wx, z: wy });
+              else groundTiles.push(tile);
+              // A escada mora no andar de onde sai: a do chão fica no chão, a do cume em cima do planalto.
+              const code = outside ? 0 : reliefAt(wx, wy);
+              const up = outside ? undefined : stairUp(code);
+              if (up) this.stairTiles.push({ x: wx, z: wy, ux: up[0], uz: up[1], base: stairBase(code) });
             }
-            const upper = chunk.upper[row][col];
-            if (upper === null) continue;
+            const stored = chunk.upper[row][col];
+            if (stored === null) continue;
+            // O BIOMA escolhe o que a decoração veste aqui (world/biomes.ts): só troca rasteiro por
+            // rasteiro e árvore sólida por árvore sólida, então colisão e jogo não mudam.
+            const upper = decorFrameAt(stored, wx, wy);
             // A faixa extra do norte é só morro: ver VOID_NORTH_EXTRA_CHUNKS.
             if (cy < b.minCy - VOID_MARGIN_CHUNKS) continue;
             if (chunk.collisions[row][col] || SOLID_UPPER_FRAMES.has(upper)) {
@@ -1797,6 +1812,11 @@ export class World3D {
       patchPixelMaterial(decor, { quantize: true, texelAa: tileAa, wind: 'stir' });
       const solid = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
       patchPixelMaterial(solid, { quantize: true, normalUp: true, texelAa: tileAa, wind: 'lean' });
+      // AS ÁRVORES EM PÉ: o `solid` com a cor do bioma no vértice (world/biomes, `treeTint`). Material
+      // próprio porque o `solid` também veste a alvenaria, cuja malha não traz cor.
+      const trees = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5, vertexColors: true });
+      patchPixelMaterial(trees, { quantize: true, normalUp: true, texelAa: tileAa, wind: 'lean' });
+      trees.name = 'terrain-trees';
       // A MONTANHA. Dois motivos para ela não usar `solid`, e os dois são o cubo:
       //   · vertexColors, porque `normalUp` acende TODA face como se ela olhasse para cima (é a lei
       //     de iluminação deste jogo, e o cubo de dungeon a segue) — então o volume do bloco não
@@ -1829,7 +1849,7 @@ export class World3D {
       patchPixelMaterial(vines, { quantize: true, normalUp: true });
       vines.name = 'terrain-vines';
       this.terrainMats = {
-        ground, sea, bank, lavaBank, lava, pit, pitFloor, decor, solid, rock, stair, wallTop, vines,
+        ground, sea, bank, lavaBank, lava, pit, pitFloor, decor, solid, trees, rock, stair, wallTop, vines,
         voidMist: makeVoidMistMaterial(),
         blob: makeShadowBlobMaterial(0.34),
       };
@@ -1865,7 +1885,7 @@ export class World3D {
         else pieces.set(k, [t]);
       }
       for (const piece of pieces.values()) {
-        const contour = buildReliefContourGeometry(piece, frameOf, this.reliefField, reliefLevelAt, stairKeys, blocked);
+        const contour = buildReliefContourGeometry(piece, frameOf, this.reliefField, reliefLevelAt, stairKeys, blocked, groundShadeAt(solidSet));
         highGroundTiles.push(...contour.whole.filter((t) => reliefLevelAt(t.x, t.z) > 0));
         groundTiles.push(...contour.bases);
         if (contour.tops.getIndex()?.count) this.addTerrainMesh(new THREE.Mesh(contour.tops, mats.ground));
@@ -1873,9 +1893,9 @@ export class World3D {
         if (contour.vines.length > 0) this.addTerrainMesh(new THREE.Mesh(buildVineGeometry(contour.vines), mats.vines));
       }
     }
-    this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet), mats.ground));
+    this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet, undefined, undefined, biomeTintAt), mats.ground));
     if (highGroundTiles.length > 0) {
-      this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet), mats.ground));
+      this.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined, undefined, biomeTintAt), mats.ground));
     }
 
     // The sunken riverbed (the same dirt, dropped a level) + the earthen banks that
@@ -1924,6 +1944,7 @@ export class World3D {
     if (wetTiles.length > 0) {
       const shore = buildShoreGeometry(
         wetKeys, wetTiles, (x, z) => groundFrame.get(tileKey(x, z)) ?? null, WATER_DEPTH_TILES,
+        { shadeAt: groundShadeAt(solidSet) },
       );
       this.addTerrainMesh(new THREE.Mesh(shore.lip, mats.ground));
       this.addTerrainMesh(new THREE.Mesh(shore.walls, mats.bank));
@@ -1960,14 +1981,14 @@ export class World3D {
       const keep = (px: number, pz: number): boolean => !field || field(px, pz) === level;
       const inward = buildShoreGeometry(
         stoneKeys, stoneFloor, (x, z) => frames.get(tileKey(x, z)) ?? null, 0,
-        { min: STONE_EDGE_MIN, variance: STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, keep },
+        { min: STONE_EDGE_MIN, variance: STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, keep, shadeAt: groundShadeAt(solidSet) },
       );
       inward.walls.dispose();
       this.addTerrainMesh(new THREE.Mesh(inward.lip, mats.ground));
       const outward = buildShoreGeometry(
         new Set(ring.keys()), [...ring.values()],
         (x, z) => (stoneKeys.has(tileKey(x, z)) ? frames.get(tileKey(x, z)) ?? null : null), 0,
-        { min: -STONE_EDGE_MIN, variance: -STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, sourceOnly: true, keep },
+        { min: -STONE_EDGE_MIN, variance: -STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, sourceOnly: true, keep, shadeAt: groundShadeAt(solidSet) },
       );
       outward.walls.dispose();
       this.addTerrainMesh(new THREE.Mesh(outward.lip, mats.ground));
@@ -2016,6 +2037,9 @@ export class World3D {
     this.decorGeo = buildFlatTileGeometry(
       decorTiles, (x, z) => 0.02 + reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined,
       (frame) => (WIND_STIR_FRAMES.has(frame) ? 1 : 0),
+      // a decoração leva METADE da cor do bioma: o chão carrega o lugar, e a flor mantém a cor dela
+      // (a margarida do prado continua branca, a campânula do planalto continua azul)
+      (x, z) => { const t = biomeTintAt(x, z); return [(1 + t[0]) / 2, (1 + t[1]) / 2, (1 + t[2]) / 2]; },
     );
     this.addTerrainMesh(new THREE.Mesh(this.decorGeo, mats.decor));
     decorTiles.forEach((tile, i) => {
@@ -2059,7 +2083,7 @@ export class World3D {
     // fora do centro do tile não lê como floresta natural, lê como peça solta — e desmente a única
     // coisa que todo tile deste jogo promete: que ali cabe exatamente um. A variedade da mata vem
     // dos SEIS frames de pinheiro, que é variação DENTRO do tile, e da névoa por cima.
-    this.addTerrainMesh(new THREE.Mesh(buildUprightTileGeometry(quadTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT), mats.solid));
+    this.addTerrainMesh(new THREE.Mesh(buildUprightTileGeometry(quadTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, biomeTreeTintAt), mats.trees));
 
     // Quem é CUBO é MASSA. As duas listas ficam guardadas porque a massa é a única geometria do
     // mundo que se REFAZ inteira quando um tile some (a bomba na parede rachada): a poda de faces
@@ -2206,12 +2230,16 @@ export class World3D {
       ? shapeRock(this.rockCubes, (x, z) => this.sunkenTiles.has(tileKey(x, z)) || stairSet.has(tileKey(x, z)) || reliefLevelAt(x, z) > 0)
       : null;
     if (rock) {
+      // O topo da montanha é PEDRA, não chão: fica sem a cor do bioma e sem a sombra de canto (a pedra conta a si
+      // mesma como obstáculo e escureceria inteira). O `whole` só leva o que está no alto — o chão em volta já é
+      // desenhado pelo terreno, e por cima dele saía uma segunda camada branca.
       const contour = buildReliefContourGeometry(rock.near, rock.frameOf, rock.field, rock.levelAt, stairSet, rock.blocked);
       push(new THREE.Mesh(contour.tops, mats.ground));
       push(new THREE.Mesh(contour.walls, mats.rock));
       if (contour.vines.length > 0) push(new THREE.Mesh(buildVineGeometry(contour.vines), mats.vines));
-      if (contour.whole.length > 0) {
-        push(new THREE.Mesh(buildFlatTileGeometry(contour.whole, (x, z) => rock.levelAt(x, z) * RELIEF_HEIGHT), mats.ground));
+      const highWhole = contour.whole.filter((t) => rock.levelAt(t.x, t.z) > 0);
+      if (highWhole.length > 0) {
+        push(new THREE.Mesh(buildFlatTileGeometry(highWhole, (x, z) => rock.levelAt(x, z) * RELIEF_HEIGHT), mats.ground));
       }
     }
 
@@ -5278,6 +5306,24 @@ const AO_CORNERS: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1],
  * saía claro no canto em que o vizinho saía escuro, e a divisa virava um risco reto em volta dele (relato
  * do autor).
  */
+/**
+ * A COR DO CHÃO NUM PONTO QUALQUER: o bioma vezes a sombra de canto (`tileAoCorners`), interpolada dentro do
+ * tile. Nos cantos dá exatamente o que `buildFlatTileGeometry` põe no vértice — é isso que faz o beiço da
+ * serra e da montanha (desenhado por `buildReliefContourGeometry`, em pedaços que não caem nos cantos)
+ * emendar no chão comum sem risco. Antes o beiço saía sem sombra de canto, e a montanha nem com o bioma:
+ * onde os dois se encostavam, a cor saltava numa linha reta.
+ */
+const groundShadeAt = (solids: ReadonlySet<number>) => (px: number, pz: number): readonly [number, number, number] => {
+  const tx = Math.round(px);
+  const tz = Math.round(pz);
+  const ao = tileAoCorners(tx, tz, solids);
+  const u = Math.min(1, Math.max(0, px - (tx - 0.5)));
+  const v = Math.min(1, Math.max(0, pz - (tz - 0.5)));
+  const shade = ao[0] * (1 - u) * (1 - v) + ao[1] * u * (1 - v) + ao[2] * u * v + ao[3] * (1 - u) * v;
+  const t = biomeTintAt(px, pz);
+  return [t[0] * shade, t[1] * shade, t[2] * shade];
+};
+
 const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<number>): number[] =>
   AO_CORNERS.map(([dx, dz]) => {
     let occluders = 0;
@@ -5321,6 +5367,11 @@ const buildFlatTileGeometry = (
    * meio megabyte para multiplicar por zero.
    */
   windMask?: (frame: number) => number,
+  /**
+   * A cor do BIOMA (world/biomes.ts), lida em cada CANTO do tile: dois tiles vizinhos perguntam pelo
+   * mesmo ponto e chegam à mesma cor, então a passagem de um bioma ao outro é um degradê, nunca um risco.
+   */
+  tintAt?: (x: number, z: number) => readonly [number, number, number],
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
@@ -5340,7 +5391,16 @@ const buildFlatTileGeometry = (
     // ground is a single draw and every quad in it windows onto a different tile.
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
-    for (const shade of tileAoCorners(x, z, solids)) col.push(shade, shade, shade);
+    const ao = tileAoCorners(x, z, solids);
+    if (tintAt) {
+      // os cantos na MESMA ordem das posições acima
+      [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].forEach(([dx, dz], k) => {
+        const t = tintAt(x + dx, z + dz);
+        col.push(ao[k] * t[0], ao[k] * t[1], ao[k] * t[2]);
+      });
+    } else {
+      for (const shade of ao) col.push(shade, shade, shade);
+    }
     if (shore) shr.push(...shore(x, z));
     if (windMask) {
       const stir = windMask(frame);
@@ -5492,6 +5552,12 @@ type ShoreOptions = {
   /** Só desenha o beiço onde isto responder sim. */
   keep?: (px: number, pz: number) => boolean;
   lipTint?: readonly [number, number, number];
+  /**
+   * A cor do chão em cada ponto do beiço (`groundShadeAt`: bioma × sombra de canto). O beiço é o chão de
+   * terra avançando sobre a água (ou o capim mordendo o calçamento), então tem de vestir a MESMA cor do chão
+   * de onde vem; branco, ele desenhava em volta de todo lago um anel de outra cor. Ganha de `lipTint`.
+   */
+  shadeAt?: (x: number, z: number) => readonly [number, number, number];
   bands?: ReadonlyArray<readonly [number, number, number]>;
   mud?: number;
 };
@@ -5689,10 +5755,11 @@ const buildShoreGeometry = (
         const g = opts.flatOnly ? 0.012 : 0;
         lp.push(ax - g, lipY, az - g, bx + g, lipY, az - g, bx + g, lipY, bz + g, ax - g, lipY, bz + g);
         luv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
-        for (let k = 0; k < 4; k++) {
+        for (const [cx, cz] of [[ax - g, az - g], [bx + g, az - g], [bx + g, bz + g], [ax - g, bz + g]]) {
           lb.push(f.cu0, f.cv0, f.cu1, f.cv1);
           ln.push(0, 1, 0);
-          lc.push(tint[0], tint[1], tint[2]);
+          const c = opts.shadeAt ? opts.shadeAt(cx, cz) : tint;
+          lc.push(c[0], c[1], c[2]);
         }
         li.push(lv, lv + 3, lv + 2, lv, lv + 2, lv + 1);
         lv += 4;
@@ -6170,6 +6237,11 @@ const buildReliefContourGeometry = (
   levelAt: (x: number, z: number) => number,
   stairs: ReadonlySet<number>,
   blocked: (x: number, z: number) => boolean,
+  /**
+   * A cor do chão no ponto (bioma × sombra de canto, `groundShadeAt`: a mesma do chão inteiro). Sem ela o beiço
+   * saía branco e o miolo tingido, e onde o beiço encosta no chão comum a cor saltava numa linha reta.
+   */
+  tintAt?: (x: number, z: number) => readonly [number, number, number],
 ): {
   tops: THREE.BufferGeometry; walls: THREE.BufferGeometry; vines: VineQuad[];
   whole: Array<{ x: number; z: number; frame: number }>; bases: Array<{ x: number; z: number; frame: number }>;
@@ -6258,10 +6330,11 @@ const buildReliefContourGeometry = (
         const b = tp.length / 3;
         tp.push(ax, y, az, bx, y, az, bx, y, bz, ax, y, bz);
         tuv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
-        for (let k = 0; k < 4; k++) {
+        for (const [cx, cz] of [[ax, az], [bx, az], [bx, bz], [ax, bz]]) {
           tb.push(f.cu0, f.cv0, f.cu1, f.cv1);
           tn.push(0, 1, 0);
-          tc.push(1, 1, 1);
+          const t = tintAt ? tintAt(cx, cz) : [1, 1, 1];
+          tc.push(t[0], t[1], t[2]);
         }
         ti.push(b, b + 3, b + 2, b, b + 2, b + 1);
         i = e + 1;
@@ -6428,7 +6501,7 @@ const buildMassHeightGrid = (
 
 const bakeMassShadow = function* (
   grid: MassHeightGrid | null,
-  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number }>,
+  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number; base: number }>,
   dirX: number,
   dirZ: number,
   length: number,
@@ -6460,14 +6533,14 @@ const bakeMassShadow = function* (
   }
   const out = new Uint8Array(w * h);
   // Marca só o que cai no chão desta altura: o resto é pedra por cima, ou chão de outro nível.
-  const sweep = (gx0: number, gz0: number, size: number, rise: number, receiver: number): void => {
+  const sweep = (gx0: number, gz0: number, size: number, rise: number, receiver: number, sizeZ = size): void => {
     const reach = rise * length * S;
     const steps = Math.ceil(reach * 2);
     for (let s = 0; s <= steps; s++) {
       const d = (s / steps) * reach;
       const ox = Math.round(gx0 + dirX * d);
       const oz = Math.round(gz0 + dirZ * d);
-      for (let j = 0; j < size; j++) {
+      for (let j = 0; j < sizeZ; j++) {
         const gz = oz + j;
         if (gz < 0 || gz >= h) continue;
         for (let i = 0; i < size; i++) {
@@ -6485,8 +6558,19 @@ const bakeMassShadow = function* (
       if (rise > 0) sweep(edges[e], edges[e + 1], 1, rise, receiver);
     }
     // A escada projeta da altura do meio dela: senão a parede teria um vão bem atrás dos degraus.
-    if (receiver === 0) {
-      for (const t of stairs) sweep((t.x - minX) * S, (t.z - minZ) * S, S, 0.6, 0);
+    // A ESCADA PROJETA DEGRAU POR DEGRAU, cada fatia da altura dela: um bloco inteiro na altura do meio saía como
+    // um retângulo duro, maior que os degraus de baixo e mais curto que os de cima (pedido do autor: nada de
+    // risco reto na sombra do chão). Sem ela a parede teria um vão bem atrás dos degraus.
+    for (const t of stairs) {
+      if (t.base !== receiver) continue;
+      const slice = S / STAIR_STEPS;
+      for (let k = 0; k < STAIR_STEPS; k++) {
+        // a fatia `k` (0 embaixo) ocupa, no rumo da subida, [k, k+1] de STAIR_STEPS
+        const along = t.ux + t.uz > 0 ? k : STAIR_STEPS - 1 - k;
+        const gx0 = (t.x - minX) * S + (t.ux !== 0 ? along * slice : 0);
+        const gz0 = (t.z - minZ) * S + (t.uz !== 0 ? along * slice : 0);
+        sweep(gx0, gz0, t.ux !== 0 ? slice : S, (k + 1) / STAIR_STEPS, receiver, t.uz !== 0 ? slice : S);
+      }
     }
     // GREEDY MESH: corridas horizontais esticadas para baixo enquanto a linha seguinte for igual.
     for (let gz = 0; gz < h; gz++) {
@@ -6514,14 +6598,14 @@ const bakeMassShadow = function* (
   }
   // OS DEGRAUS têm altura própria: cada sub-célula pergunta se algo corta o raio que sobe dali.
   const reachTiles = length * top;
-  for (const { x, z, ux, uz } of stairs) {
+  for (const { x, z, ux, uz, base } of stairs) {
     yield;
     for (let j = 0; j < S; j += 1) {
       for (let i = 0; i < S; i += 1) {
         const px = x - 0.5 + (i + 0.5) * cell;
         const pz = z - 0.5 + (j + 0.5) * cell;
         const along = (px - x) * ux + (pz - z) * uz + 0.5;
-        const tread = (Math.min(STAIR_STEPS - 1, Math.floor(along * STAIR_STEPS)) + 1) / STAIR_STEPS;
+        const tread = base + (Math.min(STAIR_STEPS - 1, Math.floor(along * STAIR_STEPS)) + 1) / STAIR_STEPS;
         let shaded = false;
         for (let t = cell; t <= reachTiles && !shaded; t += cell) {
           const qx = px - dirX * t;
@@ -6552,11 +6636,14 @@ const buildUprightTileGeometry = (
   tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
   /** O chão de cada árvore: a mata sobe o morro junto com ele (ver world/relief). */
   liftAt: (x: number, z: number) => number = () => 0,
+  /** A cor do bioma no pé da árvore (ver `trees` em terrainMats); sem ela, a arte crua. */
+  tintAt?: (x: number, z: number) => readonly [number, number, number],
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
   const bounds: number[] = [];
   const nrm: number[] = [];
+  const col: number[] = [];
   const wind: number[] = [];
   const idx: number[] = [];
   tiles.forEach(({ x, z, frame }, i) => {
@@ -6572,6 +6659,8 @@ const buildUprightTileGeometry = (
     // por vértice porque é UMA malha: a árvore que balança e o túmulo que não estão nela juntos.
     const sway = WIND_SWAY_FRAMES.has(frame) ? 1 : 0;
     for (let k = 0; k < 4; k++) wind.push(sway, x, z);
+    const t = tintAt ? tintAt(x, z) : [1, 1, 1];
+    for (let k = 0; k < 4; k++) col.push(t[0], t[1], t[2]);
     const b = i * 4;
     idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
   });
@@ -6581,25 +6670,39 @@ const buildUprightTileGeometry = (
   geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
   return geo;
 };
 
 /**
- * A ESCADA DA SERRA: quatro degraus que vencem um nivel (RELIEF_HEIGHT) dentro de um tile, no rumo
- * da subida (`ux`, `uz`). Piso de calcamento (o frame da praca de pedra), espelho e paredes laterais
- * na pedra da montanha — a escada e talhada no mesmo bloco do planalto.
+ * A ESCADA DA SERRA: quatro degraus que vencem um nível (RELIEF_HEIGHT) dentro de um tile, no rumo da subida
+ * (`ux`, `uz`). Ela era pedra bruta do paredão nos espelhos e nos lados, e lia como uma rampa enfiada na parede
+ * (pedido do autor: "melhore drasticamente o visual da escadaria"). Agora é PEDRA LAVRADA:
  *
- * A arte de cada face e RECORTADA, nao esticada: um degrau de um quarto de tile mostra um quarto do
- * frame, entao os quatro pisos juntos desenham o calcamento uma vez so, no grao do resto do mundo.
+ *  · o piso de cada degrau é o calçamento, com uma QUINA mais escura na frente — é a quina que faz o olho
+ *    contar degraus de cima;
+ *  · o espelho é a mesma pedra, em sombra (talhada do bloco, não o paredão);
+ *  · dos lados, uma MURETA que sobe com a escada e acaba num PILAR embaixo e em cima. Só pedra: lanternas em
+ *    cima dos pilares chegaram a existir e saíram a pedido do autor ("deixa a escada pura de pedra").
+ *
+ * Escadas lado a lado, no mesmo rumo e no mesmo andar, são UMA escadaria: entre elas não há mureta, e o piso
+ * corre inteiro. A arte de cada face é RECORTADA, não esticada, então os pisos juntos desenham o calçamento uma
+ * vez só, no grão do resto do mundo.
  */
 const STAIR_STEPS = 4;
-/** O calcamento liso (as pracinhas de pedra do mundo). */
+/** O calçamento liso (as pracinhas de pedra do mundo). */
 const STAIR_TREAD_FRAME = 23;
-const STAIR_SHADE = { tread: 1, riser: 0.84, side: 0.72 };
+const STAIR_SHADE = { tread: 1.14, nose: 0.62, riser: 0.46, wall: 0.68, cap: 1.16, post: 0.82 };
+/** A quina da frente de cada degrau, em fração do fundo do degrau. */
+const STAIR_NOSE = 0.22;
+/** A mureta: espessura (em tiles), altura acima da linha dos degraus, e o pilar das pontas. */
+const STAIR_WALL = 0.14;
+const STAIR_PARAPET = 0.3;
+const STAIR_POST = { len: 0.17, wide: 0.04, rise: 0.2 };
 
 const buildStairGeometry = (
-  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number }>,
+  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number; base: number }>,
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
@@ -6613,33 +6716,80 @@ const buildStairGeometry = (
     const base = pos.length / 3;
     for (const [x, y, z, a, b] of corners) {
       pos.push(x, y, z);
-      uv.push(f.u0 + a * (f.u1 - f.u0), f.v0 + b * (f.v1 - f.v0));
+      uv.push(f.u0 + Math.min(1, Math.max(0, a)) * (f.u1 - f.u0), f.v0 + Math.min(1, Math.max(0, b)) * (f.v1 - f.v0));
       bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
       nrm.push(0, 1, 0);
       col.push(shade, shade, shade);
     }
     idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   };
-  for (const { x, z, ux, uz } of stairs) {
-    // `s` corre na subida (0 na borda de baixo, 1 na de cima), `t` atravessa a escada.
+  // As escadas gêmeas: o mesmo rumo, o mesmo andar, encostadas de lado.
+  const keyOf = (t: { x: number; z: number; ux: number; uz: number; base: number }): string => `${t.x},${t.z},${t.ux},${t.uz},${t.base}`;
+  const all = new Set(stairs.map(keyOf));
+  const T = STAIR_TREAD_FRAME;
+  for (const st of stairs) {
+    const { x, z, ux, uz, base } = st;
+    // `s` corre na subida (0 na borda de baixo, 1 na de cima), `t` atravessa a escada. `h` conta a partir
+    // do andar de onde a escada sai (`base`): a do cume nasce em cima do planalto.
     const vx = -uz;
     const vz = ux;
     const at = (s0: number, t0: number, h: number, a: number, b: number): Corner => [
-      x + (s0 - 0.5) * ux + (t0 - 0.5) * vx, h * RELIEF_HEIGHT, z + (s0 - 0.5) * uz + (t0 - 0.5) * vz, a, b,
+      x + (s0 - 0.5) * ux + (t0 - 0.5) * vx, (base + h) * RELIEF_HEIGHT, z + (s0 - 0.5) * uz + (t0 - 0.5) * vz, a, b,
     ];
-    const rock = CLIFF_WALL_FRAMES[terrainVariant(x, z, CLIFF_WALL_FRAMES.length)];
+    // Gêmea do lado t=0 fica em -v, a do lado t=1 em +v.
+    const twin = [
+      all.has(keyOf({ ...st, x: x - vx, z: z - vz })),
+      all.has(keyOf({ ...st, x: x + vx, z: z + vz })),
+    ];
+    const t0 = twin[0] ? 0 : STAIR_WALL;
+    const t1 = twin[1] ? 1 : 1 - STAIR_WALL;
+
+    // OS DEGRAUS: piso com a quina escura na frente, e o espelho em sombra.
     for (let k = 0; k < STAIR_STEPS; k += 1) {
       const s0 = k / STAIR_STEPS;
       const s1 = (k + 1) / STAIR_STEPS;
+      const sn = s0 + (s1 - s0) * STAIR_NOSE;
       const h0 = k / STAIR_STEPS;
       const h1 = (k + 1) / STAIR_STEPS;
-      quad(STAIR_TREAD_FRAME, [at(s0, 0, h1, 0, s0), at(s0, 1, h1, 1, s0), at(s1, 1, h1, 1, s1), at(s1, 0, h1, 0, s1)],
-        STAIR_SHADE.tread);
-      quad(rock, [at(s0, 0, h0, 0, h0), at(s0, 1, h0, 1, h0), at(s0, 1, h1, 1, h1), at(s0, 0, h1, 0, h1)],
-        STAIR_SHADE.riser);
-      for (const side of [0, 1]) {
-        quad(rock, [at(s0, side, 0, s0, 0), at(s1, side, 0, s1, 0), at(s1, side, h1, s1, h1), at(s0, side, h1, s0, h1)],
-          STAIR_SHADE.side);
+      quad(T, [at(s0, t0, h1, t0, s0), at(s0, t1, h1, t1, s0), at(sn, t1, h1, t1, sn), at(sn, t0, h1, t0, sn)], STAIR_SHADE.nose);
+      quad(T, [at(sn, t0, h1, t0, sn), at(sn, t1, h1, t1, sn), at(s1, t1, h1, t1, s1), at(s1, t0, h1, t0, s1)], STAIR_SHADE.tread);
+      quad(T, [at(s0, t0, h0, t0, h0 * 4 % 1), at(s0, t1, h0, t1, h0 * 4 % 1), at(s0, t1, h1, t1, 1), at(s0, t0, h1, t0, 1)], STAIR_SHADE.riser);
+    }
+
+    // A MURETA de cada lado sem gêmea: sobe com a escada, a uma altura fixa acima da linha dos degraus.
+    for (const side of [0, 1] as const) {
+      if (twin[side]) continue;
+      const out = side === 0 ? 0 : 1;
+      const inn = side === 0 ? STAIR_WALL : 1 - STAIR_WALL;
+      const top = (sv: number): number => sv + STAIR_PARAPET;
+      // a face de fora, do chão até o topo inclinado
+      quad(T, [at(0, out, 0, 0, 0), at(1, out, 0, 1, 0), at(1, out, top(1), 1, 1), at(0, out, top(0), 0, 1)], STAIR_SHADE.wall);
+      // a face de dentro, dos degraus até o topo (por degrau, para não atravessar o piso)
+      for (let k = 0; k < STAIR_STEPS; k += 1) {
+        const s0 = k / STAIR_STEPS;
+        const s1 = (k + 1) / STAIR_STEPS;
+        const h1 = (k + 1) / STAIR_STEPS;
+        quad(T, [at(s0, inn, h1, s0, 0), at(s1, inn, h1, s1, 0), at(s1, inn, top(s1), s1, 1), at(s0, inn, top(s0), s0, 1)], STAIR_SHADE.wall);
+      }
+      // o capeamento, mais claro: é a linha que desenha a escadaria de cima
+      quad(T, [at(0, out, top(0), out, 0), at(0, inn, top(0), inn, 0), at(1, inn, top(1), inn, 1), at(1, out, top(1), out, 1)], STAIR_SHADE.cap);
+      // a ponta de baixo da mureta
+      quad(T, [at(0, out, 0, 0, 0), at(0, inn, 0, 1, 0), at(0, inn, top(0), 1, 1), at(0, out, top(0), 0, 1)], STAIR_SHADE.wall);
+      // OS PILARES, embaixo e em cima: um bloco um nada mais largo e mais alto que a mureta
+      const wide = STAIR_POST.wide;
+      const pOut = side === 0 ? -wide : 1 + wide;
+      const pIn = side === 0 ? STAIR_WALL + wide : 1 - STAIR_WALL - wide;
+      for (const [sa, sb, floor] of [[0, STAIR_POST.len, 0], [1 - STAIR_POST.len, 1, 1]] as const) {
+        const hTop = floor + STAIR_PARAPET + STAIR_POST.rise;
+        const hBot = floor === 0 ? 0 : 0.5;
+        const box = (ta: number, tb: number, s0: number, s1: number, shade: number): void => {
+          quad(T, [at(s0, ta, hBot, 0, 0), at(s1, tb, hBot, 1, 0), at(s1, tb, hTop, 1, 1), at(s0, ta, hTop, 0, 1)], shade);
+        };
+        box(pOut, pOut, sa, sb, STAIR_SHADE.post); // fora
+        box(pIn, pIn, sa, sb, STAIR_SHADE.post); // dentro
+        box(pOut, pIn, sa, sa, STAIR_SHADE.post * 0.92); // de frente (o lado de baixo da escada)
+        box(pOut, pIn, sb, sb, STAIR_SHADE.post * 0.92); // de trás
+        quad(T, [at(sa, pOut, hTop, 0, 0), at(sa, pIn, hTop, 1, 0), at(sb, pIn, hTop, 1, 1), at(sb, pOut, hTop, 0, 1)], STAIR_SHADE.cap);
       }
     }
   }

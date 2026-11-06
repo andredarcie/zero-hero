@@ -17,14 +17,17 @@ export class LockedDoorObject implements WorldProp {
   // A floodgate: opening it drains the water it holds back (GameScene.openFloodgate). It reads as
   // a water gate rather than a plain door — same lock, different consequence.
   private readonly floodgate: boolean;
+  /** O portão do jardim alto: arte própria (portão clássico coberto de ramos) e folhas que giram ao abrir. */
+  private readonly garden: boolean;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, floodgate = false) {
+  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, floodgate = false, garden = false) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
     this.floodgate = floodgate;
+    this.garden = garden;
     this.sprite = world3d()
-      .addBillboard('locked-door-object', 0, { groundShadow: true })
+      .addBillboard(garden ? 'garden-gate-object' : 'locked-door-object', 0, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.98, 0.98)
       // Same treatment as the rocks: the door's white bars bloomed under the night ambient.
@@ -51,6 +54,12 @@ export class LockedDoorObject implements WorldProp {
   public unlock(): boolean {
     if (this.open) return false;
     this.open = true;
+    if (this.garden) {
+      // As duas folhas giram para dentro do jardim: entreaberto, depois aberto. O arco e os ramos ficam.
+      this.sprite.setTexture('garden-gate-object', 1);
+      this.scene.time.delayedCall(170, () => this.sprite.setTexture('garden-gate-object', 2));
+      return true;
+    }
     // Swing open: fold thin and fade to a faint frame so the doorway reads as passable.
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.add({
@@ -61,6 +70,22 @@ export class LockedDoorObject implements WorldProp {
       ease: 'Back.easeIn',
     });
     return true;
+  }
+
+  /** O portão do jardim já aberto ao carregar o jogo: direto no último quadro, sem o gesto. */
+  public setOpenInstantly(): void {
+    this.open = true;
+    this.sprite.setTexture(this.garden ? 'garden-gate-object' : 'locked-door-object', this.garden ? 2 : 0);
+    if (!this.garden) this.sprite.setDisplaySize(0.2, 0.98).setAlpha(0.25);
+  }
+
+  /** O tranco do trinco cedendo: um sacolejo curto e pequeno, menor que o de um esbarrão. */
+  public jolt(): void {
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.scene.tweens.add({
+      targets: this.sprite, angle: { from: -1.6, to: 1.6 }, duration: 45, yoyo: true, repeat: 1,
+      ease: 'Sine.easeInOut', onComplete: () => this.sprite.setAngle(0),
+    });
   }
 
   /** Brief shake so bumping the shut door (without a key) reads as a solid obstacle. */

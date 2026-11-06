@@ -19,8 +19,7 @@ const OUT = path.join(ROOT, 'public', 'assets', 'audio');
 const WRAP_S = 0.25;
 
 const LOOPS = [
-  ['music-valley', '96k'],
-  ['music-lullaby', '96k'],
+  ['music-lullaby', '112k'],
   ['ambience-day', '64k'],
   ['ambience-night', '64k'],
   ['ambience-water', '64k'],
@@ -28,6 +27,11 @@ const LOOPS = [
   ['music-layer-water', '64k'],
   ['music-layer-fire', '64k'],
 ];
+// AS PEÇAS DO VALE (tools/gen-cozy-music.mjs) não são loops: têm começo e fim, e o jogo deixa um silêncio
+// entre uma e outra. Saem inteiras, sem a sobra de emenda. 112k porque são o que o jogador mais ouve, e
+// o jogo baixa uma de cada vez, só quando vai tocá-la.
+const PIECES = ['valley-morning', 'valley-waltz', 'valley-clouds', 'valley-golden', 'valley-fireflies', 'valley-moon'];
+
 // Os efeitos também: são mono, e 64k sobra. Só os passos ficam em WAV, porque têm 60 ms e o MP3 não
 // encolhe tão pouco. O SoundManager corta o silêncio do começo, para o som sair junto com o gesto.
 // O capim e a água são quase só ruído, que é o que o MP3 mais come, e por isso levam mais.
@@ -76,6 +80,11 @@ for (const [name, bitrate] of LOOPS) {
   fs.writeFileSync(input, wavBuffer(wav, wrapped));
   encode(input, name, bitrate);
   console.log(`  seconds: ${wav.pcm.length / (wav.channels * 2) / wav.rate}`);
+}
+for (const name of PIECES) {
+  encode(path.join(MASTERS, `${name}.wav`), name, '112k');
+  const wav = readWav(path.join(MASTERS, `${name}.wav`));
+  console.log(`  seconds: ${(wav.pcm.length / (wav.channels * 2) / wav.rate).toFixed(2)}`);
 }
 for (const [name, bitrate] of ONE_SHOTS) encode(path.join(MASTERS, `${name}.wav`), name, bitrate);
 fs.rmSync(temp, { recursive: true, force: true });

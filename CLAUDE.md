@@ -22,7 +22,7 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
 
 `npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
 mora nos locales — `en.json` e `pt-br.json`, as MESMAS chaves nos dois** —, inclusive o roteiro
-`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
+`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **Cada NPC segue uma escola filosófica** sobre o sentido da vida (campo `philosophy` em `dialogs/NpcDialogs.ts`, mais `HERO_PHILOSOPHY` e `ENDING_PHILOSOPHY`): fala nova tem de caber nela. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
 
 ## O save da aventura
 
@@ -92,7 +92,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
   repetição se filtra por `event.repeat`.
 - **A SERRA: a altura do chão é de `world/relief`** e `Billboard3D`/`projectTile` já a somam — nunca
-  somar de novo; passar de nível só por `canStep`. O `relief` se edita no /editor (ferramenta Serra, A);
+  somar de novo; passar de nível só por `canStep`. São DOIS andares onde se pisa (planalto e CUME, o do
+  jardim do fim), cada escada vence um; os scripts e playtests usam a mesma regra (`scripts/relevo.mjs`). O `relief` se edita no /editor (ferramenta Serra, A);
   rodar `serra-world.mjs` de novo REGERA o campo e apaga o que foi feito à mão.
 - **Cada cogumelo tem a sua trilha** (`scripts/trilhas-cogumelos.mjs`: rode `--check` depois de mexer em volta deles).
 - **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Bram pede procurar. Não espalhe mais delas.
@@ -148,8 +149,17 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **Fogueira APAGADA pega fogo de um vizinho** (é o ponto: acender sem o herói ir lá). **Fogueira
   ACESA nunca espalha** (é sumidouro). **Mato alto barra o herói e conduz fogo.**
 - **O HERÓI PENSA NO QUE FALTA** (pedido do autor, `GameScene.neededAt`): toda vez que ele tenta usar uma coisa que não tem, um balão mostra o DESENHO dela, nunca uma palavra. Trava nova é uma linha ali, e continua tremendo também.
-- **Itens devem PRODUZIR, não só apagar** (árvore→graveto/ponte, picareta→pedra, foice→sementes).
+- **Itens devem PRODUZIR, não só apagar** (árvore→graveto/ponte, picareta→pedra).
   Pergunte de qualquer item novo: o que ele *faz*?
+- **Ferramenta não se fabrica nem fica solta** (pedido do autor): o machado só vem do Bram, a foice só da
+  Morte (aparece onde ela esteve, quando o herói levanta depois da visita). A foice corta o mato rente e
+  não dá nada. **Semente só existe a de tinta da Iris**: o item `seeds` e o plantio genérico saíram.
+  Cada árvore seca dá **um** graveto; a ponte do morel pede duas (`scripts/ponte-do-morel.mjs`).
+- **A tela de título é só a mata** (pedido do autor: sem herói, NPC, casa, item ou fogo): `public/assets/ui/title_bg.jpg`
+  é uma foto do jogo tirada por `node scripts/capturar-titulo.mjs`; refaça quando o visual do mundo mudar. Por
+  cima, a `TitleScene` põe o luar, a névoa, os vaga-lumes e as folhas, o título em pixel e as teclas.
+- **Só se dorme com fogo**: o X na fogueira deita só com a chama inteira e o vizinho já de volta
+  (`GameScene.canSleepAt`, `CampfireObject.isFullyLit`).
 - **ÁRVORE VERDE NUNCA SAI DO LUGAR.** O `axe` só corta madeira MORTA (props `dryTree`/`dryShrub`);
   a árvore verde é **tile** assado na malha estática do terreno, escrita UMA vez na GPU, sem índice
   nem remendo. **Nenhum item edita terreno em pé** — o machado de aço que fazia isso foi removido.
@@ -201,6 +211,9 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   tela: a carga voa da mão para a boca, o fole sopra sacudindo a alvenaria, a brasa esguicha e só
   então a peça pula pela SAÍDA da frente. O produto entra no mundo no fim; morrer no meio perde a
   fornada.
+- **O FORNO É UM SÓ, FIXO, E GUIA A QUEST** (o da Vega): não se constrói, não se recolhe e não tem catálogo — pede o próximo item (`AstronomerQuest.furnaceNeed`). Picareta, só a que a Vega dá.
+- **CADA NPC É INDEPENDENTE** (pedido do autor): nenhum pedido precisa de ferramenta ou item de outro vizinho; o jogador faz na ordem que quiser.
+- **Nada solto no chão que uma ferramenta produz**: graveto só de árvore seca cortada, pedra só de rocha quebrada (`scripts/ajustes-do-vale.mjs`).
 - **A automação industrial foi removida por completo.** Não existem energia, cabos, esteiras,
   extratores, braços, baús de linha, martinete automático, bateria, caldeira, placas ou portões
   eletrônicos. A caixa de correio/venda aérea também não existe. Saves antigos apenas descartam
@@ -274,6 +287,7 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
   `hd3d.daylight` aplica sobre a noite): cor de luz, de céu ou de partícula que você cravar num
   arquivo só existe numa das duas — e some, ou fica preta, na outra. Ela é knob ou é dois valores.
 - **Nenhum sprite pode vazar do seu tile.** Profundidade vem do shader, nunca de escalar arte.
+- **TODA MALHA DE CHÃO PINTA COM `groundShadeAt`** (bioma × sombra de canto): uma que pinte por conta própria faz um risco reto onde encosta no chão comum. `chao-sem-risco` mede.
 - **Tudo em que o herói pisa declara `depthLayer: 'ground'`** (`Billboard3D`), senão dois quads
   coplanares piscam. Quads deitados (buracos, água, flor aberta) são isentos.
 - Material com `onBeforeCompile` **precisa** de `customProgramCacheKey`.
@@ -304,7 +318,7 @@ por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd
 
 A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); bolsa → `bolsa`; machado → `machado`; pedra →
 `pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;
-menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; borboletas e folhas do dia → `dia`; a quest inteira da Vega → `telescopio`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
+menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; dormir só com o fogo aceso e inteiro → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Vega → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
 Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`, e os da mochila)
 podem estar vermelhos: não "conserte" editando conteúdo.
 

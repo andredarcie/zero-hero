@@ -5,6 +5,7 @@ import { ASSET_KEYS } from '@/game/constants';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { t, tLines, type I18nLine } from '@/game/i18n/i18n';
+import { isLastQuest } from '@/game/runtime/QuestLog';
 import type { CampfireObject } from '@/game/objects/CampfireObject';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
@@ -171,11 +172,6 @@ export class LumberQuest {
 
   public get isDone(): boolean {
     return this.save.stage === 'done';
-  }
-
-  /** Nas voltas, cada árvore dá um galho só: é um por viagem. */
-  public get wantsOneStick(): boolean {
-    return this.save.stage === 'gather';
   }
 
   private stickAt(index: number): Billboard3D {
@@ -494,7 +490,8 @@ export class LumberQuest {
       seat,
       npc,
       story: { ...base, lines: (() => { const [sit, ...rest] = tLines('npc.businessManNight.story'); return [sit, ...open, ...rest]; })() },
-      farewell: { ...base, lines: tLines('npc.businessManNight.farewell') },
+      // Se este é o último pedido do vale, a despedida dele termina com a chave do jardim alto.
+      farewell: { ...base, lines: [...tLines('npc.businessManNight.farewell'), ...(isLastQuest('businessMan') ? tLines('garden.key') : [])] },
     }, () => {
       fire.setHeldCold(true);
       this.save.stage = 'done';

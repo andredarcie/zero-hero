@@ -1,4 +1,5 @@
 ﻿import { WHITE_SAFE_TINT } from '@/game/render3d/pixelForms';
+import { biomeEarthCutAt } from '@/game/world/biomes';
 
 export const TILE_SIZE = 8;
 export const CHARACTER_SIZE = 16;
@@ -191,12 +192,12 @@ export const ASSET_KEYS = {
   // A pedra de FERRO: mesma silhueta da rocha, com veio de minerio. Sheet de 2 frames
   // (inteira / rachada) — o par que a rocha comum guarda em dois arquivos soltos.
   ironRock: 'iron-rock',
+  coalRock: 'coal-rock',
   ironItem: 'iron-item',
   // O mato alto EM PE (spritefactory): 4 frames de vento + o toco cortado. E a arte que o
   // JOGO desenha, entao e a que o editor tem de mostrar — a antiga grass_wind0 era o tile
   // top-down de fundo opaco, e um icone que nao e o objeto e uma mentira na paleta.
   tallGrassUp: 'tall-grass-up',
-  seedsItem: 'seeds-item',
   plantHole: 'plant-hole',
   plantMound: 'plant-mound',
   // A flor da lua (spritefactory): as 9 poses de UMA flor abrindo — ver MOONFLOWER_FRAMES.
@@ -214,6 +215,7 @@ export const ASSET_KEYS = {
   water3: 'water-3',
   bridge: 'bridge',
   campfireFrame1: 'campfire-f1',
+  titleBg: 'title-bg',
 } as const;
 
 /**
@@ -337,7 +339,9 @@ export const TREE_REGROW_MS = 60000;
  * DOIS também é o número honesto: são quatro machadadas para pôr uma árvore no chão, e uma árvore
  * inteira dando um único graveto sempre foi a parte da física que ninguém acreditou.
  */
-export const TREE_STICK_YIELD = 2;
+// UM, agora (pedido do autor): a ponte do morel pede duas árvores, um galho de cada. O texto acima é o
+// histórico do dois.
+export const TREE_STICK_YIELD = 1;
 
 // O PONTO DE SPAWN AUTORADO: quanto tempo a cova espera, depois de o corpo dela cair, antes de
 // fazer outro (EnemySpawnerManager). O relogio conta mesmo com o heroi longe — se contasse so
@@ -436,6 +440,7 @@ export const wallTorchFaceIsClear = (southUpperFrame: number | null | undefined)
 export const SOLID_UPPER_FRAMES: ReadonlySet<number> = new Set([
   3, 4, 14, 15, 16, 17, 18, 21, 22, 25,
   36, 37, // the old tree-chop stages (crown gone, stump): nothing makes them now, but they still block
+  73, 74, // as árvores anciãs do jardim alto (ANCIENT_GROVE)
   ...CLIFF_WALL_FRAMES, // the mountain: standing rock, and the only vertical blocker that is not wood
   ...DUNGEON_WALL_FRAMES, // a alvenaria das dungeons
 ]);
@@ -570,9 +575,44 @@ export const groundFrameAt = (frame: number, x: number, y: number): number => {
   const stones = STONE_FLOOR_VARIANTS[frame];
   if (stones) return stones[terrainVariant(x, y, stones.length)];
   if (frame !== GROUND_TILE_FRAME) return frame;
-  if (groundEarthiness(x, y) < GROUND_DETAIL_CUT) return frame;
+  if (!isEarthAt(x, y)) return frame;
   return GROUND_DETAIL_FRAMES[terrainVariant(x, y, GROUND_DETAIL_FRAMES.length)];
 };
+
+/**
+ * O corte é do BIOMA (world/biomes.ts): a terra vulcânica abre em chão nu quase todo, o prado quase não
+ * abre. GROUND_DETAIL_CUT continua sendo a referência do vale de antes.
+ */
+const rawEarthAt = (x: number, y: number): boolean => groundEarthiness(x, y) >= biomeEarthCutAt(x, y);
+/** Tudo aqui é função só da coordenada (o mundo, o bioma, o ruído): o que já se calculou não muda nunca. */
+const remember = (fn: (x: number, y: number) => boolean) => {
+  const memo = new Map<number, boolean>();
+  return (x: number, y: number): boolean => {
+    const k = (x + 4096) * 8192 + (y + 4096);
+    let v = memo.get(k);
+    if (v === undefined) { v = fn(x, y); memo.set(k, v); }
+    return v;
+  };
+};
+/**
+ * NADA DE TILE ILHADO (pedido do autor: "o chão muda de cor de um tile para o outro, num risco reto"). Grama e
+ * terra são tiles inteiros, então um tile sozinho do outro tipo é um quadrado de quatro bordas retas — no
+ * chão de cinzas do lago de lava, a grama que sobrava virava selos verdes. Um tile só fica do seu tipo com
+ * pelo menos dois dos quatro vizinhos iguais a ele; isolado, ele vira o que está em volta.
+ */
+const NEIGHBORS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+const settle = (read: (x: number, y: number) => boolean) => remember((x: number, y: number): boolean => {
+  const around = NEIGHBORS.filter(([dx, dy]) => read(x + dx, y + dy)).length;
+  // Com dois iguais em volta ele fica; com três do outro tipo ele vira.
+  return read(x, y) ? around >= 2 : around >= 3;
+});
+// Duas passadas: a segunda lê o resultado da primeira, senão um vizinho que virou deixava o tile ilhado de novo.
+const settled = settle(settle(remember(rawEarthAt)));
+/** E o que AINDA ficou sem nenhum vizinho igual vira o tipo de todos em volta (isso não ilha ninguém). */
+const isEarthAt = remember((x: number, y: number): boolean => {
+  const me = settled(x, y);
+  return NEIGHBORS.some(([dx, dy]) => settled(x + dx, y + dy) === me) ? me : !me;
+});
 
 // Ground-layer frames the SHOVEL (swung with the A button) can dig a plantSpot hole into: the
 // two "Terra" paintings — the overworld's bare earth. A frame list and not "anything walkable"
@@ -585,29 +625,14 @@ export const DIGGABLE_GROUND_FRAMES: ReadonlySet<number> = new Set([5, 6]);
 // art is a dedicated tile (ASSET_KEYS.bridge = bridge.png).
 export const BRIDGE_GRAVETOS_REQUIRED = 2;
 
-// A SEMENTE anda em PACOTE: o punhado que a foice derruba (e o que um mundo autora) vale
-// CINCO sementes na mochila — plantar gasta uma por canteiro, então um corte de mato rende
-// uma fileira, não um buraco. O pacote VIAJA com o item no chão (ItemPickup.units): pousar põe o
-// punhado inteiro num item só, e pegá-lo devolve
-// a mesma contagem — sem isso, pousar 1 e pegar 5 seria uma máquina de imprimir semente.
-export const SEEDS_PER_PACK = 5;
-// Que tipos de item são SEMENTE-EM-PACOTE (a regra acima vale para todas — uma regra, nunca
-// um `if` por espécie de semente): a comum brota mato; a carnívora brota a planta-armadilha.
-export const SEED_PACK_KINDS: ReadonlySet<string> = new Set(['seeds']);
-
-// O punhado que VIAJA JUNTO: pousar com B põe a contagem INTEIRA da mochila num item só no
-// chão, e pegá-lo devolve a mesma contagem (ItemPickup.units). As sementes inauguraram o
-// contrato; o MINÉRIO DE FERRO entra porque a rocha-veio o produz aos montes e vendê-lo ao
-// astronauta é por quantidade. Lista SEPARADA de SEED_PACK_KINDS de propósito: o buraco de
-// plantio pergunta por SEMENTE, e um punhado de ferro não pode ser semeado num canteiro.
-export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set([...SEED_PACK_KINDS, 'iron', 'dyeSeeds', 'dyeBundle']);
+// O punhado que VIAJA JUNTO: pousar põe a contagem INTEIRA num item só no chão, e pegá-lo devolve
+// a mesma contagem (ItemPickup.units). Sementes só existem as de tinta da Iris (pedido do autor).
+export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set(['iron', 'dyeSeeds', 'dyeBundle']);
 
 // O PUNHADO COM QUE UMA PECA NASCE NO CHAO. Isto vale so para o que nasce no mundo (pickup
 // autorado, drop sem contagem explicita). Um item
 // que ja viajava com `units` mantem os dele: o punhado viaja, e essa lei nao muda.
-const SPAWN_PACK: ReadonlyMap<string, number> = new Map([
-  ...[...SEED_PACK_KINDS].map((k) => [k, SEEDS_PER_PACK] as const),
-]);
+const SPAWN_PACK: ReadonlyMap<string, number> = new Map();
 
 /** Com quantas unidades este tipo nasce no chao quando ninguem diz a contagem. */
 export const spawnPackSize = (kind: string): number => SPAWN_PACK.get(kind) ?? 1;

@@ -11,6 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { makeCanStep } from './relevo.mjs';
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worldPath = path.resolve(here, '../public/world.json');
 const check = process.argv.includes('--check');
@@ -22,11 +24,12 @@ const W = worldChunksX * CW;
 const H = worldChunksY * CH;
 
 // constants.SOLID_UPPER_FRAMES
-const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40]);
+const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
 const GREEN_FRAMES = new Set([3, 4, 14, 15]);
 const SEA = 33;
 
-const KEEP = [[43, 30], [40, 29], [39, 3], [45, 2], [21, 28], [14, 28], [17, 5], [8, 19]];
+// As duas últimas são as da ponte do morel (scripts/ponte-do-morel.mjs).
+const KEEP = [[43, 30], [40, 29], [39, 3], [45, 2], [21, 28], [14, 28], [17, 5], [8, 19], [7, 24], [11, 33]];
 const REPLACED = [
   [50, 1], [52, 1], [56, 1], [50, 3], [52, 3], [56, 3], [58, 3], [50, 10], [52, 10], [56, 10], [58, 10],
   [48, 5], [48, 6], [48, 7], [37, 1], [38, 1], [46, 1], [18, 6], [16, 4],
@@ -49,26 +52,8 @@ const terrainSolid = (x, y) => {
 // O PLANALTO (relief, ver world/relief.ts): 0 chão, 1 planalto, 2-5 escada subindo N/L/S/O. Só se
 // muda de nível pela escada, então a prova anda por `canStep` como o herói.
 const relief = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : chunkOf(x, y).relief?.[y % CH]?.[x % CW] ?? 0);
-const STAIR = { 2: [0, -1], 3: [1, 0], 4: [0, 1], 5: [-1, 0] };
-const canStep = (fx, fy, tx, ty) => {
-  const a = relief(fx, fy);
-  const b = relief(tx, ty);
-  if (a === b && !STAIR[a]) return true;
-  const dx = tx - fx;
-  const dy = ty - fy;
-  const ua = STAIR[a];
-  if (ua) {
-    if (dx === ua[0] && dy === ua[1]) return b === 1;
-    if (dx === -ua[0] && dy === -ua[1]) return b === 0;
-    return false;
-  }
-  const ub = STAIR[b];
-  if (ub) {
-    if (dx === ub[0] && dy === ub[1]) return a === 0;
-    if (dx === -ub[0] && dy === -ub[1]) return a === 1;
-  }
-  return false;
-};
+// A regra de passo é a do jogo, num lugar só (scripts/relevo.mjs): o cume e as escadas dele inclusive.
+const canStep = makeCanStep(relief);
 
 // A espécie da árvore que já cresce mais perto, para não destoar do bosque em volta.
 const nearestGreen = (x, y) => {

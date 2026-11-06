@@ -1,6 +1,6 @@
 # Audio
 
-The music, the ambience and every non-combat effect here are **generated** (not recorded) by the two
+The music, the ambience and every non-combat effect here are **generated** (not recorded) by the three
 offline synths in `tools/` — original output, free to use with no attribution. Two leftover CC0 samples live in `combat/` (see below), and the item-get sound
 (`item-pickup.mp3`) is third-party too (see **Third-party samples**).
 The design brief for the generated set is "Dark Souls weight,
@@ -12,20 +12,51 @@ warmth. Music renders at 32 kHz — the S-SMP's native output rate.
 Regenerate after tweaking the presets:
 
 ```
-node tools/gen-sfx.mjs     # sound effects (44.1 kHz mono); only the footsteps go straight to this folder
-node tools/gen-music.mjs   # music + ambience loops (32 kHz stereo, seamless)
+node tools/gen-sfx.mjs        # sound effects (44.1 kHz mono); only the footsteps go straight to this folder
+node tools/gen-cozy-music.mjs # the music: six valley pieces, the lullaby, the water/fire layers (44.1 kHz stereo)
+node tools/gen-music.mjs      # ambience loops (32 kHz stereo, seamless)
 node tools/encode-audio.mjs   # the MP3s the game downloads (music, ambience, effects), from the WAVs in tools/audio-masters/
 ```
 
-## Music (`tools/gen-music.mjs`)
+`node tools/gen-cozy-music.mjs --check` only reviews the written score: it fails on two notes a
+semitone (or a minor ninth) apart sounding together, a note outside F major, or a melody above A5.
 
-The game is a peaceful, cozy one; the dark-fantasy loops it used to play were deleted from this
-folder (their renderers still live in the generator).
+## Music (`tools/gen-cozy-music.mjs`)
+
+Written for a peaceful game, after what research on relaxing music actually supports: **low
+brightness** is the strongest marker of music people choose to relax and sleep to (Kirk & Timmers,
+2024), with slow tempi (56–96 BPM), little rhythmic and dynamic change, acoustic timbres and
+consonant harmony. So: felt piano, nylon guitar, wooden flute and clarinet in the middle register, a
+soft string bed and a pinch of felt celesta — no music box up high, no drums, no tension.
+
+Listener fatigue comes from short loops, so the adventure plays **whole pieces** (just under two to three and a
+half minutes, intro → A A B A A → slowing coda), chosen by the hour, with 35–75 s of silence —
+only the ambience — between them. Every piece is diatonic to F major (the colour comes from the
+mode), so the water and fire layers fit over any of them, and all are mastered to the same
+loudness (-18 LUFS) so no piece arrives louder than the last. Peaks are held close to the body of
+the music: every track's attacks are limited to 10 dB above its own level, and the mix to about
+10 dB above the level of the three seconds around it — a pluck never "hits" over a quiet passage.
+
+Every song can be heard in the pause menu (Music): a full player with play/pause, previous/next,
+seek, repeat, shuffle and volume (`src/game/audio/Jukebox.ts`).
+
+The instruments are physical models, not samples: modal synthesis for the piano (inharmonic
+partials, two detuned strings per note with a two-stage decay, felt hammer), Karplus-Strong with a
+fractional-delay tuner, pluck position and a wooden body for the guitar, breath-noise wind models
+with legato glides, and a convolution reverb with a generated room. Each track is balanced by its
+role (melody, accompaniment, bed, bass) measured in loudness, not by synth volume.
 
 | File | Plays | Piece |
 | --- | --- | --- |
-| `music-valley.mp3` | the whole adventure | "Little Hearth" — F major, 72 BPM; open harp triplets, warm triangle pad, sine bass, a music-box melody (F major pentatonic) that rests for four bars, a sine flute echo |
-| `music-lullaby.mp3` | title screen and credits | the lullaby — F major, 56 BPM; slow harp, pad and music box |
+| `valley-morning.mp3` | day | "Morning Dew" — F ionian, 76 BPM; nylon guitar arpeggios, felt piano melody, then flute |
+| `valley-waltz.mp3` | day | "Garden Waltz" — C mixolydian, 3/4 at 96 BPM; piano waltz, clarinet, guitar on the return |
+| `valley-clouds.mp3` | day, dusk | "Lazy Clouds" — B♭ lydian, 68 BPM; long flute over strings, piano takes over with a flute second voice |
+| `valley-golden.mp3` | dusk, night | "Golden Hour" — D aeolian, 64 BPM; fingerpicked guitar, low clarinet, then piano with clarinet below |
+| `valley-fireflies.mp3` | dusk, night | "Fireflies" — F major, 58 BPM; felt piano almost alone, a few celesta fireflies |
+| `valley-moon.mp3` | night | "Moon over the Lake" — G dorian, 56 BPM; low flute and slow piano arpeggios over strings |
+| `music-lullaby.mp3` | title screen and credits | the lullaby — F major in 6/8; rocking felt piano, celesta, then flute (seamless loop) |
+| `music-layer-water.mp3` | rises near water | sparse celesta drops, F pentatonic, no pulse (20 s loop) |
+| `music-layer-fire.mp3` | rises near a lit fire | a low string F–C breathing (20 s loop) |
 | `ambience-day.mp3` | under the world by day | soft breeze + scattered birdsong |
 | `ambience-night.mp3` | under the world by night | breeze + three crickets and a distant frog |
 | `ambience-water.mp3` | rises within six tiles of water | lapping water + small drops |

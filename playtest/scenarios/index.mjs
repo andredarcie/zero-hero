@@ -28,12 +28,17 @@ import semFabrica from './sem-fabrica.mjs';
 import zerar from './zerar.mjs';
 import cogumelos from './cogumelos.mjs';
 import telescopio from './telescopio.mjs';
+import ajustes from './ajustes.mjs';
+import jardimAlto from './jardim-alto.mjs';
+import chaoSemRisco from './chao-sem-risco.mjs';
 import abertura from './abertura.mjs';
 import semParede from './sem-parede.mjs';
 import itemGet from './item-get.mjs';
 import marcas from './marcas.mjs';
 import descanso from './descanso.mjs';
 import dia from './dia.mjs';
+import fogueiraDormir from './fogueira-dormir.mjs';
+import biomas from './biomas.mjs';
 
 export const scenarios = {
   smoke,
@@ -69,9 +74,14 @@ export const scenarios = {
   abertura,
   'sem-parede': semParede,
   'item-get': itemGet,
+  ajustes,
+  'jardim-alto': jardimAlto,
+  'chao-sem-risco': chaoSemRisco,
   marcas,
   descanso,
   dia,
+  'fogueira-dormir': fogueiraDormir,
+  biomas,
 };
 
 // What `npm run playtest` runs when no scenario is named.

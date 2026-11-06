@@ -1,9 +1,9 @@
-import { INK, paintDome, RAMPS, toneOf, type Paint, type Ramp } from '@/game/render3d/pixelForms';
+import { INK, paintDome, RAMPS, type Paint, type Ramp } from '@/game/render3d/pixelForms';
 
 // O QUE SE ACHA NO VALE (ver objects/ValleyFinds): 16×16, um tile só, na densidade de pixel das casas. A luz
 // vem de cima e da esquerda, como em todo o resto.
 
-export type FindKind = 'bench' | 'log' | 'helmet' | 'bottle' | 'swing';
+export type FindKind = 'bench' | 'chair' | 'helmet' | 'bottle' | 'sign';
 
 export const FIND_SIZE = 16;
 
@@ -54,22 +54,75 @@ const bench = (rect: Paint): void => {
   rect(wood[2], 2, 11, 12, 1);
 };
 
-const log = (rect: Paint): void => {
-  const { wood } = RAMPS;
-  rect(INK, 0, 7, 12, 9);
-  for (let y = 8; y <= 14; y += 1) rect(toneOf(wood, (11 - y) / 3), 1, y, 11, 1);
-  // As fendas da casca, desencontradas.
-  rect(wood[3], 3, 10, 4, 1);
-  rect(wood[3], 7, 12, 4, 1);
-  rect(wood[3], 2, 13, 3, 1);
-  // A ponta cortada, com os anéis.
-  rect(INK, 10, 6, 6, 10);
-  rect(RAMPS.stem[1], 11, 7, 4, 8);
-  rect(RAMPS.stem[2], 12, 9, 2, 4);
-  rect(wood[2], 12, 10, 1, 2);
-  // O musgo só em cima, onde a chuva fica.
-  rect(MOSS, 2, 8, 5, 1);
-  rect(MOSS_DARK, 4, 9, 2, 1);
+/** Um desenho pixel a pixel: `.` é vazio, `k` o contorno, `0`..`3` a rampa da madeira (claro → escuro). */
+const pixels = (rect: Paint, rows: readonly string[], ramp: Ramp): void => {
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; x += 1) {
+      const c = row[x];
+      if (c === 'k') rect(INK, x, y, 1, 1);
+      else if (c >= '0' && c <= '3') rect(ramp[Number(c)], x, y, 1, 1);
+    }
+  });
+};
+
+/**
+ * A CADEIRA DA BEIRA DO LAGO (pedido do autor: "uma cadeira de madeira, bem tradicional"), de frente: os
+ * dois montantes com o pináculo torneado, duas travessas no encosto (entre elas se vê o que está atrás), o
+ * assento largo mostrando o tampo, e as pernas da frente inteiras, com as de trás mais curtas e escuras.
+ */
+const CHAIR = [
+  '...kk......kk...',
+  '..k01k....k12k..',
+  '..k01kkkkkk12k..',
+  '..k0100000012k..',
+  '..k01kkkkkk12k..',
+  '..k01k....k12k..',
+  '..k01k....k12k..',
+  '..k01kkkkkk12k..',
+  '..k0111111112k..',
+  '.kkkkkkkkkkkkkk.',
+  '.k000000000000k.',
+  '.k001000000100k.',
+  '.k222222222222k.',
+  '.kkkkkkkkkkkkkk.',
+  '.k12k3....3k23k.',
+  '.k12k......k23k.',
+];
+const chair = (rect: Paint): void => pixels(rect, CHAIR, RAMPS.wood);
+
+/**
+ * A PLACA DO PORTÃO DO JARDIM ALTO (pedido do autor: "uma placa de madeira já bem velha e com mato em cima"). Madeira
+ * gasta, acinzentada pelo tempo, com os riscos das letras quase apagados, o musgo tomando o alto da tábua e o capim
+ * subindo pelo pé do poste.
+ */
+const OLD_WOOD: Ramp = ['#9c8a6c', '#76654c', '#574a38', '#3b3229'];
+const SIGN = [
+  '................',
+  '....G....g......',
+  '..gGGg.GgGG.g...',
+  '.kkkkkkkkkkkkkk.',
+  '.kG01001000100k.',
+  '.kg31213131311k.',
+  '.k113131213131k.',
+  '.k222232222322k.',
+  '.kkkkkkkkkkkkkk.',
+  '......k12k......',
+  '......k12k......',
+  '......k13k......',
+  '......k12k......',
+  '....g.k12k.g....',
+  '...gGgk12kGgG...',
+  '......kkkk......',
+];
+const sign = (rect: Paint): void => {
+  SIGN.forEach((row, y) => {
+    for (let x = 0; x < row.length; x += 1) {
+      const c = row[x];
+      const color = c === 'k' ? INK : c === 'G' ? MOSS : c === 'g' ? MOSS_DARK
+        : c >= '0' && c <= '3' ? OLD_WOOD[Number(c)] : null;
+      if (color) rect(color, x, y, 1, 1);
+    }
+  });
 };
 
 const helmet = (rect: Paint): void => {
@@ -104,17 +157,6 @@ const bottle = (rect: Paint): void => {
   rect(RAMPS.plaster[1], 4, 10, 5, 3);
   rect(RAMPS.plaster[2], 4, 12, 5, 1);
   rect(RAMPS.stone[3], 5, 11, 3, 1);
-};
-
-const swing = (rect: Paint): void => {
-  const { wood } = RAMPS;
-  post(rect, 1, 3, 15, wood);
-  post(rect, 13, 3, 15, wood);
-  plank(rect, 1, 1, 14, 2, wood, 2);
-  // A corda nova é a coisa mais clara do desenho.
-  rect(RAMPS.stem[1], 5, 4, 1, 7);
-  rect(RAMPS.stem[1], 10, 4, 1, 7);
-  plank(rect, 5, 11, 6, 1, wood, 1);
 };
 
 const stool = (rect: Paint): void => {
@@ -160,5 +202,5 @@ export const DECOR_PAINTERS: Readonly<Record<'stool' | 'lantern' | 'flowerPot', 
 };
 
 export const FIND_PAINTERS: Readonly<Record<FindKind, (rect: Paint) => void>> = {
-  bench, log, helmet, bottle, swing,
+  bench, chair, helmet, bottle, sign,
 };

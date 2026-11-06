@@ -89,6 +89,11 @@ export class CampfireObject implements WorldProp {
     return this.lit;
   }
 
+  /** Acesa e já inteira: o fogo que o vizinho acendeu terminou de pegar. */
+  public get isFullyLit(): boolean {
+    return this.lit && !this.kindleTween;
+  }
+
   // Cut-scene build-up only: drive a partial ignition (0 = só a lenha, 1 = about to fully light).
   // Call light() afterwards to finish the ignition with its flare.
   public igniteProgress(t: number): void {

@@ -6,21 +6,20 @@
 //   PLAYTEST_BASE_URL=http://localhost:5180 PLAYTEST_SLOWMO=0 npm run playtest -- telescopio
 import fs from 'node:fs';
 import path from 'node:path';
+import { canStepCodes } from '../../scripts/relevo.mjs';
 
 const ARROW = { '1,0': 'ArrowRight', '-1,0': 'ArrowLeft', '0,1': 'ArrowDown', '0,-1': 'ArrowUp' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
 const VEGA = { x: 41, y: 5 };
-const BENCH = { x: 43, y: 7 };
-const FURNACE = { x: 46, y: 6 };
-const STICKS = [{ x: 44, y: 9 }, { x: 45, y: 9 }];
+// O forno da Vega é FIXO, ao lado da bancada (scripts/forno-da-vega.mjs), e é ele que guia a quest.
+const FURNACE = { x: 44, y: 6 };
 const SPOT = { x: 32, y: 20 };
-const ROCKS = [{ x: 40, y: 3 }, { x: 38, y: 2 }];
-const VEIN = { x: 44, y: 2 };
-// Os tiles em que o herói pousa o que leva para as máquinas: os dois ficam nos oito vizinhos delas.
-const BESIDE_BENCH = { x: 44, y: 8 };
-const BESIDE_FURNACE = [{ x: 47, y: 7 }, { x: 45, y: 7 }];
+// O carvão e o minério moram na margem do lago de lava, a oeste (scripts/pedras-na-lava.mjs): o veio PRETO
+// dá carvão, o vermelho dá minério. Nada da Vega depende de outro vizinho (nem do machado do Bram).
+const COAL = { x: 10, y: 6 };
+const VEIN = { x: 11, y: 7 };
 
 export default {
   name: 'telescopio',
@@ -103,25 +102,9 @@ export default {
       return rows;
     });
     let reliefGrid = null;
-    const STAIR = { 2: [0, -1], 3: [1, 0], 4: [0, 1], 5: [-1, 0] };
-    const canStep = (fx, fy, tx, ty) => {
-      if (!reliefGrid) return true;
-      const a = reliefGrid[fy][fx]; const b = reliefGrid[ty][tx];
-      if (a === b && !STAIR[a]) return true;
-      const dx = tx - fx; const dy = ty - fy;
-      const ua = STAIR[a];
-      if (ua) {
-        if (dx === ua[0] && dy === ua[1]) return b === 1;
-        if (dx === -ua[0] && dy === -ua[1]) return b === 0;
-        return false;
-      }
-      const ub = STAIR[b];
-      if (ub) {
-        if (dx === ub[0] && dy === ub[1]) return a === 0;
-        if (dx === -ub[0] && dy === -ub[1]) return a === 1;
-      }
-      return false;
-    };
+    // A regra de passo do jogo (scripts/relevo.mjs, a mesma de world/relief.ts), com o cume e as escadas dele.
+    const canStep = (fx, fy, tx, ty) => (reliefGrid ? canStepCodes(reliefGrid[fy][fx], reliefGrid[ty][tx], tx - fx, ty - fy) : true);
+
     const bfs = (grid, from, goals, avoid = new Set()) => {
       const key = (x, y) => `${x},${y}`;
       const goalSet = new Set(goals.map((g) => key(g.x, g.y)));
@@ -216,18 +199,16 @@ export default {
       if (!target) throw new Error(`nao ha ${kind} no chao`);
       const st = await state();
       if (st.heldItem === 'none') { await walkTo([target], label); await press('z', 60, 300); }
-      else { await approachFree(target, label); await press('z', 60, 300); }
+      else {
+        // De frente, se houver corredor; senão, pisa em cima: o Z troca o que está debaixo do herói.
+        try { await approachFree(target, label); } catch { await walkTo([target], `${label} (por cima)`); }
+        await press('z', 60, 300);
+      }
       await drain(`${label} (cerimonia)`);
       const now = await free();
       assert(`Na mao: ${kind}`, now.heldItem === kind, `heldItem=${now.heldItem}`);
     };
 
-    const drop = async (tile, label) => {
-      await approachFree(tile, label);
-      await press('z', 60, 240);
-      const now = await free();
-      assert(`Pousou ${label}`, now.heldItem === 'none', `heldItem=${now.heldItem}`);
-    };
 
     const talk = async (who, label) => {
       await approachSolid(who, label);
@@ -237,16 +218,6 @@ export default {
       await free();
     };
 
-    /** Abre a máquina, confirma a carta que acende, e fecha. */
-    const craft = async (machine, label) => {
-      await approachSolid(machine, label);
-      await press('z', 60, 500);
-      await pageWait(() => Boolean(window.__scene.orderOverlay), null, `catalogo: ${label}`, 5000);
-      await shot(`catalogo-${label}`, { note: `Catalogo: ${label}` });
-      await press('z', 60, 500);
-      if (await page.evaluate(() => Boolean(window.__scene.orderOverlay))) await press('Escape', 60, 400);
-      await pageWait(() => !window.__scene.orderOverlay, null, `fechar catalogo: ${label}`, 5000);
-    };
 
     const waitGround = async (kind, label, timeout = 30000) => {
       const t0 = Date.now();
@@ -258,15 +229,6 @@ export default {
       }
     };
 
-    /** Bate até o tile abrir. */
-    const breakUntilFree = async (target, label, swings = 12) => {
-      await approachSolid(target, label);
-      for (let i = 0; i < swings; i += 1) {
-        if (!(await page.evaluate(([x, y]) => window.__scene.isSolidForEntities(x, y), [target.x, target.y]))) break;
-        await press('x', 60, 620);
-      }
-      await sleep(900);
-    };
 
     // ── TÍTULO → ABERTURA ──────────────────────────────────────────────────────────────────
     await page.evaluate(() => { localStorage.removeItem('zh.cozy.v1'); });
@@ -295,49 +257,56 @@ export default {
     assert('Etapa: ferro', (await stage()) === 'iron', await stage());
     mark('pedido feito');
 
-    // ── 2. O FORNO: duas pedras, na bancada ────────────────────────────────────────────────
-    await breakUntilFree(ROCKS[0], 'a 1a rocha');
-    await take('stone', 'a 1a pedra');
-    await drop(BESIDE_BENCH, 'a pedra ao lado da bancada');
-    await take('pickaxe', 'a picareta');
-    await breakUntilFree(ROCKS[1], 'a 2a rocha');
-    await take('stone', 'a 2a pedra');
-    await craft(BENCH, 'forno');
-    await drain('o forno');
-    await take('furnace', 'o forno');
-    await approachFree(FURNACE, 'o lugar do forno');
-    await press('x', 60, 500);
-    await pageWait(([x, y]) => window.__scene.isSolidForEntities(x, y), [FURNACE.x, FURNACE.y], 'o forno de pe', 4000);
-    await shot('02-forno', { note: 'O forno instalado' });
-    mark('forno instalado');
+    // O FORNO GUIA: com o que ele pede na mão, o Z entrega; ele nunca abre catálogo.
+    const ovenAsks = () => page.evaluate(() => window.__scene.astronomerQuest?.furnaceNeed() ?? null);
+    const feed = async (kind, label) => {
+      await approachSolid(FURNACE, `o forno (${label})`);
+      await sleep(300);
+      const icon = await page.evaluate(() => window.__scene.furnaceAsk?.visibleIcon ?? null);
+      assert(`O forno pede ${kind} no balão`, icon !== null, `icone=${icon}`);
+      await press('z', 60, 500);
+      await sleep(500);
+      const s2 = await free();
+      assert(`Entregou ${label} ao forno`, s2.heldItem === 'none', `heldItem=${s2.heldItem}`);
+    };
 
-    // ── 3. O CARVÃO: os dois gravetos que ela deixou perto da bancada ──────────────────────
-    await walkTo([STICKS[0]], 'o 1o graveto');
-    await press('z', 60, 300);
-    await drain('o 1o graveto');
+    // ── 2. O FORNO PEDE CARVÃO: com a picareta na mão ele recusa ───────────────────────────
+    const loose = (await state()).groundItems.filter((g) => g.kind === 'wood' || g.kind === 'stone');
+    assert('Nenhum graveto nem pedra solto no vale', loose.length === 0, JSON.stringify(loose));
+    assert('O forno pede carvão primeiro', (await ovenAsks()) === 'charcoal', String(await ovenAsks()));
+    await approachSolid(FURNACE, 'o forno com a picareta');
+    await shot('02-forno', { note: 'O forno fixo da Vega pedindo carvão' });
+    await press('z', 60, 500);
     st = await free();
-    assert('O 1o graveto na mao', st.heldItem === 'wood', `heldItem=${st.heldItem}`);
-    await shot('03-galho-no-colo', { note: 'O graveto no colo' });
-    await drop(BESIDE_FURNACE[0], 'o graveto ao lado do forno');
-    await walkTo([STICKS[1]], 'o 2o graveto');
-    await press('z', 60, 300);
-    await drain('o 2o graveto');
-    st = await free();
-    assert('O 2o graveto na mao', st.heldItem === 'wood', `heldItem=${st.heldItem}`);
-    await craft(FURNACE, 'carvao');
-    await waitGround('charcoal', 'o carvao sair', 30000);
-    await shot('04-carvao', { note: 'O carvao saiu do forno' });
+    assert('O forno recusa o que ele não pediu', st.heldItem === 'pickaxe', `heldItem=${st.heldItem}`);
+    const furnaceCatalog = await page.evaluate(() => Boolean(window.__scene.orderOverlay));
+    assert('O forno não abre catálogo', !furnaceCatalog, String(furnaceCatalog));
+
+    // ── 3. O CARVÃO, NO LAGO DE LAVA: o veio preto, a picareta ──────────────────────────────
+    const coalKind = await page.evaluate(([x, y]) => window.__scene.getRockAt(x, y)?.product ?? null, [COAL.x, COAL.y]);
+    assert('A pedra de veio preto dá carvão', coalKind === 'charcoal', String(coalKind));
+    await approachSolid(COAL, 'o veio de carvão');
+    await shot('03-veio-de-carvao', { note: 'A pedra de carvão na margem do lago de lava' });
+    for (let i = 0; i < 12 && !(await groundTile('charcoal')); i += 1) await press('x', 60, 620);
+    await sleep(900);
+    await take('charcoal', 'o carvão');
+    await feed('charcoal', 'o carvão');
+    await sleep(2500);
+    assert('Com o carvão aceso, ele pede o minério', (await ovenAsks()) === 'ore', String(await ovenAsks()));
+    assert('O forno fica em brasa esperando', await page.evaluate(() => window.__scene.furnaces[0]?.kindled === true), '');
+    await shot('04-carvao', { note: 'O carvao aceso dentro do forno' });
     mark('carvao');
 
-    // ── 4. O FERRO ─────────────────────────────────────────────────────────────────────────
+    // ── 4. O MINÉRIO, NO MESMO LAGO ─────────────────────────────────────────────────────────
     await take('pickaxe', 'a picareta');
     await approachSolid(VEIN, 'o veio');
     for (let i = 0; i < 12 && !(await groundTile('ore')); i += 1) await press('x', 60, 620);
     await sleep(900);
     await take('ore', 'o minerio');
-    await craft(FURNACE, 'esponja');
+    mark('minerio');
+    await feed('ore', 'o minério');
     const bloomAt = await waitGround('bloom', 'a esponja sair', 30000);
-    await shot('05-esponja', { note: 'A esponja de ferro' });
+    await shot('05-esponja', { note: 'A esponja de ferro saiu pela boca do forno' });
     await drain('a esponja');
     await approachFree(bloomAt, 'a esponja');
     for (let i = 0; i < 6 && !(await groundTile('iron')); i += 1) await press('x', 60, 520);
@@ -349,24 +318,28 @@ export default {
     await shot('06-tripe', { note: 'O tripe e a cinza ao lado da Vega' });
     mark('tripe');
 
-    // ── 5. O VIDRO ─────────────────────────────────────────────────────────────────────────
+    // ── 5. O VIDRO: areia só no lago grande do sul, cinza ao lado dela ─────────────────────
     const camp = await page.evaluate(() => {
       const q = window.__scene.astronomerQuest;
       return { sand: q.sandTile, ash: q.ashTile };
     });
+    assert('A areia está na beira do lago grande do sul', camp.sand && camp.sand.y >= 48, JSON.stringify(camp.sand));
+    assert('O forno pede areia', (await ovenAsks()) === 'sand', String(await ovenAsks()));
     await approachSolid(camp.sand, 'a areia');
-    await shot('07-areia', { note: 'O monte de areia no acampamento' });
+    await shot('07-areia', { note: 'O monte de areia na beira do lago grande' });
     await press('z', 60, 400);
     await drain('a areia');
     st = await free();
     assert('Areia na mao', st.heldItem === 'sand', `heldItem=${st.heldItem}`);
-    await drop(BESIDE_FURNACE[1], 'a areia ao lado do forno');
+    mark('areia');
+    await feed('sand', 'a areia');
+    assert('Depois da areia, ele pede a cinza', (await ovenAsks()) === 'ash', String(await ovenAsks()));
     await approachSolid(camp.ash, 'a cinza');
     await press('z', 60, 400);
     await drain('a cinza');
     st = await free();
     assert('Cinza na mao', st.heldItem === 'ash', `heldItem=${st.heldItem}`);
-    await craft(FURNACE, 'vidro');
+    await feed('ash', 'a cinza');
     await waitGround('glass', 'o vidro sair', 30000);
     await shot('08-vidro', { note: 'O vidro saiu do forno' });
     await take('glass', 'o vidro');

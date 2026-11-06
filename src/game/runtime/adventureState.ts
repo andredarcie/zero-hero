@@ -65,10 +65,13 @@ export interface PaintQuestSave {
 export interface SkyQuestSave {
   stage: 'start' | 'iron' | 'glass' | 'polish' | 'carry' | 'night' | 'done';
   found: string[];
-  /** Os dois gravetos dela já foram para o chão: são só esses, e não voltam. */
-  sticksLaid?: boolean;
   /** Ela foi embora na nave. Quem fechou o pedido antes desta cena continua com ela em casa. */
   departed?: boolean;
+  /**
+   * O FORNO DELA, que guia a quest (ver AstronomerQuest.furnaceNeed): se o carvão já está aceso lá dentro,
+   * o que ele já devolveu (a esponja, o vidro) e a areia que já está esperando a cinza.
+   */
+  furnace?: { charcoal: boolean; bloom: boolean; sand: boolean; glass: boolean };
 }
 
 /** Em que etapa a quest do Bram está, e como cada ofício saiu: é sobre isso que ele comenta. */
@@ -93,8 +96,12 @@ export interface AdventureSnapshot {
   selected: HeldItemKind | 'none';
   /** A abertura (a chegada, a espada fincada, o mago) ja tocou: ela acontece uma vez por partida. */
   introSeen: boolean;
-  /** O portao do jardim ja abriu (o ultimo pedido fechou e a cena dele tocou). */
+  /** O portao do jardim ja abriu (o heroi usou a chave nele). */
   gateOpened: boolean;
+  /** Quem fechou o ultimo pedido ja entregou a chave do jardim alto. */
+  gardenKeyGiven: boolean;
+  /** O vento ja levou a nevoa do jardim alto (a cena do cume tocou). */
+  mistCleared: boolean;
   /** A fogueira do fim ja foi acesa pelo heroi. */
   hearthLit: boolean;
   /** O cogumelo foi assado e os creditos rolaram. */
@@ -141,6 +148,8 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   selected: 'none',
   introSeen: false,
   gateOpened: false,
+  gardenKeyGiven: false,
+  mistCleared: false,
   hearthLit: false,
   endingSeen: false,
   day: 0,
@@ -168,6 +177,8 @@ type StoredSnapshot = {
   selected?: HeldItemKind | 'none';
   introSeen?: boolean;
   gateOpened?: boolean;
+  gardenKeyGiven?: boolean;
+  mistCleared?: boolean;
   hearthLit?: boolean;
   endingSeen?: boolean;
   day?: number;
@@ -201,7 +212,13 @@ const cleanMachines = (
 );
 
 /** Itens que sairam do jogo: um save antigo que os guarde simplesmente os esquece. */
-const REMOVED_KINDS: ReadonlySet<string> = new Set(['greatAxe']);
+const REMOVED_KINDS: ReadonlySet<string> = new Set(['greatAxe', 'seeds']);
+
+/**
+ * Itens que o world.json deixava soltos e saíram (pedido do autor): a foice, que agora só a Morte dá, e os
+ * dois gravetos ao lado da ponte do morel, que agora saem das árvores secas. O save antigo ainda os guarda.
+ */
+const REMOVED_PICKUPS: ReadonlySet<string> = new Set(['scythe@13,18', 'wood@4,32', 'wood@4,33']);
 
 /**
  * O COGUMELO GENERICO VIROU SEIS ESPECIES (fungi.ts). Um save de antes guarda 'mushroom' em dois
@@ -224,7 +241,8 @@ const migrateGround = (
 ): Map<string, AdventureGroundItem[]> => new Map(
   Object.entries(value ?? {}).map(([scope, items]) => [
     scope,
-    (Array.isArray(items) ? items : []).map((it) => ((it.kind as string) === 'mushroom'
+    (Array.isArray(items) ? items : []).filter((it) => !REMOVED_KINDS.has(it.kind as string)
+      && !REMOVED_PICKUPS.has(`${it.kind as string}@${it.worldX},${it.worldY}`)).map((it) => ((it.kind as string) === 'mushroom'
       ? { ...it, kind: (LEGACY_MUSHROOM_AT[`${it.worldX},${it.worldY}`] ?? 'porcini') as HeldItemKind }
       : it)),
   ]),
@@ -247,6 +265,8 @@ const load = (): AdventureSnapshot => {
       selected: p.selected && !REMOVED_KINDS.has(p.selected) ? p.selected : 'none',
       introSeen: p.introSeen === true,
       gateOpened: p.gateOpened === true,
+      gardenKeyGiven: p.gardenKeyGiven === true || p.gateOpened === true,
+      mistCleared: p.mistCleared === true || p.endingSeen === true,
       hearthLit: p.hearthLit === true,
       endingSeen: p.endingSeen === true,
       day: typeof p.day === 'number' ? p.day : 0,
@@ -300,6 +320,8 @@ export const saveAdventure = (): void => {
     selected: s.selected,
     introSeen: s.introSeen,
     gateOpened: s.gateOpened,
+    gardenKeyGiven: s.gardenKeyGiven,
+    mistCleared: s.mistCleared,
     hearthLit: s.hearthLit,
     endingSeen: s.endingSeen,
     day: s.day,

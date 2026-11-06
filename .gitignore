@@ -38,3 +38,7 @@ press/
 # Artefatos da Sprite Factory (out/): se reconstroem com `node spritefactory/factory.mjs build`.
 # O que vale e o que o install copia para public/.
 spritefactory/out/
+
+# OS MESTRES DAS PECAS DO VALE: 30 MB de WAV cada uma. tools/gen-cozy-music.mjs e deterministico (semente
+# fixa) e refaz os mesmos arquivos; o que o jogo baixa sao os MP3 de public/assets/audio/.
+tools/audio-masters/valley-*.wav

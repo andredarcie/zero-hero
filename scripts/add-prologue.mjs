@@ -295,7 +295,7 @@ const SEAM = (() => {
   }
   return out;
 })();
-const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40]);
+const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
 const BLOCKING = new Set([
   'dryBush', 'dryTree', 'dryShrub', 'rock', 'ironRock', 'tallGrass', 'lava', 'water', 'moonflower',
   'campfire', 'toolbox', 'furnace', 'altar', 'lockedDoor', 'swingGate', 'carnivorousPlant',

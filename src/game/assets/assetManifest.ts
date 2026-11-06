@@ -68,6 +68,13 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
+    // A pedra de CARVÃO: a mesma rocha, com as veias pretas no lugar do óxido (inteira 0, rachada 1).
+    key: ASSET_KEYS.coalRock,
+    path: '/assets/environment/props/coal_rock.png',
+    frameWidth: TILESET_FRAME_SIZE,
+    frameHeight: TILESET_FRAME_SIZE,
+  },
+  {
     // Sprite Factory: o buraco de plantio pronto (0) + os tres tempos da cavada da pa
     // (raspao 1, depressao 2, fundo 3). O frame final fica no TOPO da coluna para toda
     // referencia `frame: 0` antiga continuar apontando pro buraco de sempre.
@@ -169,7 +176,6 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.oreItem,        path: '/assets/items/collectibles/ore.png' },
   { key: ASSET_KEYS.bloomItem,      path: '/assets/items/collectibles/bloom.png' },
   { key: ASSET_KEYS.rockCracked,    path: '/assets/environment/props/rock_cracked.png' },
-  { key: ASSET_KEYS.seedsItem,      path: '/assets/items/collectibles/seeds.png' },
   { key: ASSET_KEYS.plantMound,     path: '/assets/environment/props/plant_mound.png' },
   { key: ASSET_KEYS.water,          path: '/assets/environment/terrain/water_0.png' },
   { key: ASSET_KEYS.lavaFloor,      path: '/assets/environment/terrain/lava_floor.png' },
@@ -183,6 +189,8 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
     path: '/assets/characters/enemies/mage/mage__1.png',
   },
   { key: ASSET_KEYS.campfireFrame1, path: '/assets/effects/fire/sprite_fire1.png' },
+  // O fundo da tela de título: o próprio vale, fotografado pelo jogo (scripts/capturar-titulo.mjs).
+  { key: ASSET_KEYS.titleBg, path: '/assets/ui/title_bg.jpg' },
 ] as const;
 
 export const preloadSharedAssets = (scene: Phaser.Scene): void => {

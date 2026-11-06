@@ -17,7 +17,6 @@ export type PickupKind =
   | 'wood'
   | 'stone'
   | 'iron'
-  | 'seeds'
   // A CADEIA DO FERRO tambem cai no chao: o forno cospe a esponja, a picareta cospe o minerio,
   // e o arbusto queimado deixa carvao. Os tres ja eram autorados em level (o level-4 planta os
   // tres) e ja nasciam em runtime — faltava so o TIPO reconhecer isso, e a falta derrubava o

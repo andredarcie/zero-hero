@@ -31,7 +31,7 @@ const W = worldChunksX * CW;
 const H = worldChunksY * CH;
 
 // The frames that stand up and block (constants.SOLID_UPPER_FRAMES), and the pines among them.
-const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40]);
+const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
 const TREE_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21]);
 const SEA = 33;
 

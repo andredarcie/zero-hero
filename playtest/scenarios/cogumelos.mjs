@@ -6,6 +6,7 @@
 //   PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- cogumelos
 import fs from 'node:fs';
 import path from 'node:path';
+import { canStepCodes } from '../../scripts/relevo.mjs';
 
 const ARROW = { '1,0': 'ArrowRight', '-1,0': 'ArrowLeft', '0,1': 'ArrowDown', '0,-1': 'ArrowUp' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -102,25 +103,9 @@ export default {
     });
     // A SERRA: entre chão e planalto só se passa pela escada (a mesma conta de world/relief.ts).
     let reliefGrid = null;
-    const STAIR = { 2: [0, -1], 3: [1, 0], 4: [0, 1], 5: [-1, 0] };
-    const canStep = (fx, fy, tx, ty) => {
-      if (!reliefGrid) return true;
-      const a = reliefGrid[fy][fx]; const b = reliefGrid[ty][tx];
-      if (a === b && !STAIR[a]) return true;
-      const dx = tx - fx; const dy = ty - fy;
-      const ua = STAIR[a];
-      if (ua) {
-        if (dx === ua[0] && dy === ua[1]) return b === 1;
-        if (dx === -ua[0] && dy === -ua[1]) return b === 0;
-        return false;
-      }
-      const ub = STAIR[b];
-      if (ub) {
-        if (dx === ub[0] && dy === ub[1]) return a === 0;
-        if (dx === -ub[0] && dy === -ub[1]) return a === 1;
-      }
-      return false;
-    };
+    // A regra de passo do jogo (scripts/relevo.mjs, a mesma de world/relief.ts), com o cume e as escadas dele.
+    const canStep = (fx, fy, tx, ty) => (reliefGrid ? canStepCodes(reliefGrid[fy][fx], reliefGrid[ty][tx], tx - fx, ty - fy) : true);
+
     const bfs = (grid, from, goals, avoid = new Set()) => {
       const key = (x, y) => `${x},${y}`;
       const goalSet = new Set(goals.map((g) => key(g.x, g.y)));

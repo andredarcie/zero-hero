@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
 import type { WorldProp } from './WorldProp';
@@ -21,6 +22,9 @@ import type { WorldProp } from './WorldProp';
 // O progresso do ciclo e a PROPRIA arte (a lei do estado que muda um pixel): 1a pancada racha,
 // 2a so recua (a rachadura segura o placar), 3a produz — e a pedra INTEIRA de novo e o desenho
 // de "recarregado". Quem solta o item e o GameScene (dropOreYield), nunca esta classe.
+//
+// A PEDRA DE CARVÃO (pedido do autor) é o mesmo veio, na margem do lago de lava: em vez do minério ela solta
+// CARVÃO, o fogo que o forno da Vega pede antes do minério. Assim ninguém depende do machado de outro vizinho.
 //
 // E uma classe so, e nao uma subclasse: a diferenca cabe num booleano, enquanto duas classes
 // significariam duas copias do recuo, do colapso e do contrato de colisao — que e exatamente a
@@ -44,7 +48,11 @@ const ORE_BLOWS_PER_YIELD = 3;
 const LOOK = {
   plain: { intact: ['rock', 0], cracked: ['rock-cracked', 0] },
   ore: { intact: ['iron-rock', 0], cracked: ['iron-rock', 1] },
+  coal: { intact: ['coal-rock', 0], cracked: ['coal-rock', 1] },
 } as const;
+
+/** O que a pedra é: comum (abre o tile e solta pedra), veio de minério ou veio de carvão (nunca abrem). */
+export type RockKind = keyof typeof LOOK;
 
 /** The rock's resting size in tiles — every squash and every collapse springs back to this. */
 const SIZE = 0.88;
@@ -59,15 +67,20 @@ export class RockObject implements WorldProp {
   /** O placar do veio: pancadas dadas dentro do ciclo atual (so a pedra de minerio conta). */
   private oreBlows = 0;
 
-  /** Minerio: a rocha que nunca quebra — a cada 3 picaretadas ela PRODUZ um bloco de ferro. */
+  /** Veio (minério ou carvão): a rocha que nunca quebra — a cada 3 picaretadas ela PRODUZ um bloco. */
   public readonly ore: boolean;
+  /** O que ela solta: a pedra comum, o minério do veio de ferro, ou o carvão. */
+  public readonly product: HeldItemKind;
+  private readonly look: (typeof LOOK)[RockKind];
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, ore = false) {
+  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, kind: RockKind = 'plain') {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    this.ore = ore;
-    const look = LOOK[ore ? 'ore' : 'plain'];
+    this.ore = kind !== 'plain';
+    this.product = kind === 'coal' ? 'charcoal' : kind === 'ore' ? 'ore' : 'stone';
+    const look = LOOK[kind];
+    this.look = look;
     this.sprite = world3d()
       .addBillboard(look.intact[0], look.intact[1], { groundShadow: true })
       .setPosition(worldX, worldY)
@@ -98,11 +111,11 @@ export class RockObject implements WorldProp {
       this.oreBlows += 1;
       if (this.oreBlows >= ORE_BLOWS_PER_YIELD) {
         this.oreBlows = 0;
-        this.sprite.setTexture(LOOK.ore.intact[0], LOOK.ore.intact[1]);
+        this.sprite.setTexture(this.look.intact[0], this.look.intact[1]);
         this.yieldPulse();
         return 'yielded';
       }
-      if (this.oreBlows === 1) this.sprite.setTexture(LOOK.ore.cracked[0], LOOK.ore.cracked[1]);
+      if (this.oreBlows === 1) this.sprite.setTexture(this.look.cracked[0], this.look.cracked[1]);
       this.recoil(dirX, dirY);
       return 'struck';
     }

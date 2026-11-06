@@ -39,7 +39,7 @@ const W = worldChunksX * CW;
 const H = worldChunksY * CH;
 
 // O mesmo SOLID_UPPER de cozy-world.mjs (constants.SOLID_UPPER_FRAMES).
-const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40]);
+const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
 const SEA = 33;
 const HIGH = 1;
 // Os codigos da escada (world/relief.ts): 2 sobe para o norte, 3 leste, 4 sul, 5 oeste.

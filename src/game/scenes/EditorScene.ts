@@ -15,12 +15,32 @@ import { registerBucketTextures } from '@/game/render3d/bucketTexture';
 import { GameScene } from '@/game/scenes/GameScene';
 import type { PickupKind } from '@/game/world/ScreenContent';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
-import { RELIEF_GROUND, RELIEF_HIGH, stairUp } from '@/game/world/relief';
+import {
+  RELIEF_GROUND, RELIEF_HIGH, RELIEF_PEAK, STAIR_CODES_GROUND, STAIR_CODES_HIGH, stairBase, stairUp,
+} from '@/game/world/relief';
+
+/** O código do andar `level` (0 chão, 1 planalto, 2 cume). */
+const floorCode = (level: number): number => (level === 0 ? RELIEF_GROUND : level === 1 ? RELIEF_HIGH : RELIEF_PEAK);
+/** Em que andar um código fica (a escada, no andar de onde sai). */
+const codeFloor = (code: number): number => (stairUp(code) ? stairBase(code) : code === RELIEF_HIGH ? 1 : code === RELIEF_PEAK ? 2 : 0);
 import { setWorldData } from '@/game/world/WorldData';
 import {
   loadWorld, saveWorld, worldFilePath,
   type WorldFileId,
 } from '@/game/worldApi';
+import { biomeTintAt, decorFrameAt } from '@/game/world/biomes';
+
+/**
+ * O BIOMA NO EDITOR: o tile veste a mesma decoração e leva a mesma cor que no jogo (world/biomes.ts),
+ * senão o editor mente sobre o mundo que se monta nele. O tint do Phaser só escurece, então a cor é
+ * normalizada pelo canal mais forte.
+ */
+const biomeTint = (tile: Phaser.Tilemaps.Tile | null, wx: number, wy: number): void => {
+  if (!tile) return;
+  const [r, g, b] = biomeTintAt(wx, wy);
+  const k = 1 / Math.max(r, g, b, 1);
+  tile.tint = (Math.round(r * k * 255) << 16) | (Math.round(g * k * 255) << 8) | Math.round(b * k * 255);
+};
 
 // World-editor scene: the Phaser side of the engine. It renders the whole authored world
 // as one pannable/zoomable tilemap and translates pointer gestures into EditorStore
@@ -39,9 +59,10 @@ const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 8;
 // Bump whenever UiState changes so old brushes cannot restore retired entity configuration.
 const UI_STATE_KEY = 'worldEditorUi.v9';
-// A ordem em que a escada procura o planalto ao ser posta: norte primeiro (sobe de frente para a
-// camera, como as do script da serra), depois leste, sul, oeste. Clicar de novo gira nesta ordem.
-const STAIR_CODES = [2, 3, 4, 5] as const;
+// A ordem em que a escada procura o andar de cima ao ser posta: norte primeiro (sobe de frente para a
+// camera, como as do script da serra), depois leste, sul, oeste. Clicar de novo gira nesta ordem. As do
+// chão sobem ao planalto; as do planalto, ao cume.
+const STAIR_CODES = [...STAIR_CODES_GROUND, ...STAIR_CODES_HIGH] as const;
 
 type CellCoord = { x: number; y: number };
 
@@ -55,7 +76,6 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   wood: { key: ASSET_KEYS.woodIcon },
   stone: { key: ASSET_KEYS.rock },
   iron: { key: ASSET_KEYS.ironItem },
-  seeds: { key: ASSET_KEYS.seedsItem },
   bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
   // A CADEIA DO FERRO como item de chao. Faltavam as tres, e a falta NAO era inofensiva: um
   // level que autora minerio no chao (as aulas do gato) derrubava o editor inteiro no boot —
@@ -81,6 +101,7 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   dryShrub: { key: ASSET_KEYS.dryShrub },
   rock: { key: ASSET_KEYS.rock },
   ironRock: { key: ASSET_KEYS.ironRock, frame: 0 },
+  coalRock: { key: ASSET_KEYS.coalRock, frame: 0 },
   tallGrass: { key: ASSET_KEYS.tallGrassUp, frame: 0 },
   water: { key: ASSET_KEYS.water },
   lava: { key: ASSET_KEYS.lavaFloor },
@@ -321,9 +342,9 @@ export class EditorScene extends Phaser.Scene {
 
     for (let wy = 0; wy < tilesY; wy += 1) {
       for (let wx = 0; wx < tilesX; wx += 1) {
-        this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false);
+        biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false), wx, wy);
         const upper = store.readCell('upper', wx, wy) as number | null;
-        if (upper !== null) this.upperLayer.putTileAt(upper, wx, wy, false);
+        if (upper !== null) biomeTint(this.upperLayer.putTileAt(decorFrameAt(upper, wx, wy), wx, wy, false), wx, wy);
         const collisionGid = this.collisionOverlayGid(wx, wy);
         if (collisionGid !== null) this.collisionLayer.putTileAt(collisionGid, wx, wy, false);
       }
@@ -372,10 +393,10 @@ export class EditorScene extends Phaser.Scene {
     if (!store || !this.groundLayer || !this.upperLayer || !this.collisionLayer) return;
     if (!store.isInside(wx, wy)) return;
 
-    this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false);
+    biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false), wx, wy);
     const upper = store.readCell('upper', wx, wy) as number | null;
     if (upper === null) this.upperLayer.removeTileAt(wx, wy, true, false);
-    else this.upperLayer.putTileAt(upper, wx, wy, false);
+    else biomeTint(this.upperLayer.putTileAt(decorFrameAt(upper, wx, wy), wx, wy, false), wx, wy);
     const collisionGid = this.collisionOverlayGid(wx, wy);
     if (collisionGid !== null) this.collisionLayer.putTileAt(collisionGid, wx, wy, false);
     else this.collisionLayer.removeTileAt(wx, wy, true, false);
@@ -760,8 +781,9 @@ export class EditorScene extends Phaser.Scene {
     } else if (tool === 'relief') {
       if (this.uiState.reliefMode === 'stair') this.placeStair(x, y);
       else {
+        const code = this.uiState.reliefMode === 'peak' ? RELIEF_PEAK : RELIEF_HIGH;
         this.forEachBrushCell(x, y, (cx, cy) => {
-          if (this.isEditable(cx, cy)) this.store?.setCell('relief', cx, cy, RELIEF_HIGH);
+          if (this.isEditable(cx, cy)) this.store?.setCell('relief', cx, cy, code);
         });
       }
     } else if (tool === 'entity') this.placeSelectedEntity(x, y);
@@ -788,11 +810,12 @@ export class EditorScene extends Phaser.Scene {
     return (this.store?.readCell('relief', x, y) as number | undefined) ?? RELIEF_GROUND;
   }
 
-  /** A escada em (x, y) leva ao planalto e sai no chao? (a mesma regra de canStep em relief.ts) */
+  /** A escada em (x, y) leva ao andar de cima e sai no de baixo? (a mesma regra de canStep em relief.ts) */
   private stairWorks(x: number, y: number, code: number): boolean {
     const up = stairUp(code);
     if (!up) return false;
-    return this.reliefAt(x + up[0], y + up[1]) === RELIEF_HIGH && this.reliefAt(x - up[0], y - up[1]) === RELIEF_GROUND;
+    const base = stairBase(code);
+    return this.reliefAt(x + up[0], y + up[1]) === floorCode(base + 1) && this.reliefAt(x - up[0], y - up[1]) === floorCode(base);
   }
 
   /**
@@ -804,19 +827,21 @@ export class EditorScene extends Phaser.Scene {
     const store = this.store;
     if (!store || !this.isEditable(x, y)) return;
     const current = this.reliefAt(x, y);
-    if (current === RELIEF_HIGH) {
-      this.ui?.toast('A escada vai no chao, encostada no planalto');
+    if (current === RELIEF_PEAK) {
+      this.ui?.toast('A escada vai no chao (ou no planalto), encostada no andar de cima');
       return;
     }
+    // O andar do tile escolhe que escada cabe: do chão ao planalto, ou do planalto ao cume.
+    const floor = codeFloor(current);
     // A escada e passagem: uma peca ou arvore em cima dela a tranca.
     const upper = store.readCell('upper', x, y) as number | null;
     if (store.entitiesAt(x, y).length > 0 || (upper !== null && SOLID_UPPER_FRAMES.has(upper))) {
       this.ui?.toast('A escada precisa de um tile livre');
       return;
     }
-    const options = STAIR_CODES.filter((code) => this.stairWorks(x, y, code));
+    const options = STAIR_CODES.filter((code) => stairBase(code) === floor && this.stairWorks(x, y, code));
     if (options.length === 0) {
-      this.ui?.toast('A escada precisa encostar num planalto, com chao do outro lado');
+      this.ui?.toast('A escada precisa encostar no andar de cima, com o andar de baixo do outro lado');
       return;
     }
     const at = options.indexOf(current as (typeof STAIR_CODES)[number]);
@@ -825,19 +850,23 @@ export class EditorScene extends Phaser.Scene {
     else store.setCell('relief', x, y, next);
   }
 
-  /** Volta o tile ao chao; a escada que subia para ele cai junto (ficaria levando a lugar nenhum). */
+  /**
+   * Volta o tile ao chao; a escada que subia para ele cai junto (ficaria levando a lugar nenhum) e vira o
+   * andar de onde ela saía.
+   */
   private clearRelief(x: number, y: number): void {
     const store = this.store;
     if (!store || !this.isEditable(x, y)) return;
     const was = this.reliefAt(x, y);
     if (was === RELIEF_GROUND) return;
     store.setCell('relief', x, y, RELIEF_GROUND);
-    if (was !== RELIEF_HIGH) return;
+    if (was !== RELIEF_HIGH && was !== RELIEF_PEAK) return;
     STAIR_CODES.forEach((code) => {
+      if (floorCode(stairBase(code) + 1) !== was) return;
       const up = stairUp(code)!;
       const sx = x - up[0];
       const sy = y - up[1];
-      if (this.reliefAt(sx, sy) === code && this.isEditable(sx, sy)) store.setCell('relief', sx, sy, RELIEF_GROUND);
+      if (this.reliefAt(sx, sy) === code && this.isEditable(sx, sy)) store.setCell('relief', sx, sy, floorCode(stairBase(code)));
     });
   }
 
@@ -852,12 +881,13 @@ export class EditorScene extends Phaser.Scene {
     if (!store || !gfx) return;
     gfx.clear();
     const T = WORLD_TILE;
-    // O planalto nao tem paredao do lado de outro planalto, nem do lado onde uma escada chega nele.
+    // O andar nao tem paredao do lado de outro tile do mesmo andar (ou mais alto), nem onde uma escada chega nele.
     const joins = (x: number, y: number, dx: number, dy: number): boolean => {
+      const mine = codeFloor(this.reliefAt(x, y));
       const n = this.reliefAt(x + dx, y + dy);
-      if (n === RELIEF_HIGH) return true;
       const up = stairUp(n);
-      return up !== undefined && up[0] === -dx && up[1] === -dy;
+      if (up) return (up[0] === -dx && up[1] === -dy && stairBase(n) + 1 === mine) || stairBase(n) >= mine;
+      return codeFloor(n) >= mine;
     };
     for (let y = 0; y < store.tilesY; y += 1) {
       for (let x = 0; x < store.tilesX; x += 1) {
@@ -865,8 +895,9 @@ export class EditorScene extends Phaser.Scene {
         if (code === RELIEF_GROUND) continue;
         const px = x * T;
         const py = y * T;
-        if (code === RELIEF_HIGH) {
-          gfx.fillStyle(0xd9a55a, 0.34).fillRect(px, py, T, T);
+        if (code === RELIEF_HIGH || code === RELIEF_PEAK) {
+          // O cume é o mesmo ocre, mais forte: dois níveis acima.
+          gfx.fillStyle(code === RELIEF_PEAK ? 0xb5702a : 0xd9a55a, code === RELIEF_PEAK ? 0.52 : 0.34).fillRect(px, py, T, T);
           gfx.lineStyle(1.5, 0x4a2e14, 0.95);
           if (!joins(x, y, 0, -1)) gfx.lineBetween(px, py + 0.75, px + T, py + 0.75);
           if (!joins(x, y, 1, 0)) gfx.lineBetween(px + T - 0.75, py, px + T - 0.75, py + T);

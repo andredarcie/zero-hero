@@ -22,7 +22,7 @@ export default {
     }
     const card = await page.evaluate(() => window.__scene.itemGetOverlay?.objs
       .filter((o) => o.type === 'Text').map((o) => o.text) ?? []);
-    assert('A frase vem do locale (sem caixa alta gritando)', card.some((t) => t.startsWith('An axe.')), JSON.stringify(card));
+    assert('A frase vem do locale (sem caixa alta gritando)', card.some((t) => t.startsWith('An axe.') || t.startsWith('Um machado.')), JSON.stringify(card));
     const dim = await page.evaluate(() => window.__scene.itemGetOverlay?.objs.find((o) => o.type === 'Rectangle')?.fillAlpha ?? 1);
     assert('O mundo continua visivel por baixo (nada de tela preta)', dim < 0.5, `fillAlpha=${dim}`);
     await page.waitForFunction(() => window.__itemGetDone === true, null, { timeout: 6000 });

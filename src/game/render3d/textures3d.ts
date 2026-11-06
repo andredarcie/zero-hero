@@ -27,6 +27,8 @@ const DEFS: Record<string, SheetDef> = {
   hero: { url: `${A}/characters/player/hero.png`, frameW: 16, frameH: 16 },
   'forest-tileset': { url: `${A}/environment/tilesets/forest_tile_set.png`, frameW: 16, frameH: 16 },
   npcs: { url: `${A}/characters/npcs/npcs.png`, frameW: 16, frameH: 16 },
+  // O aceno da Hollis: o quadro dela com SÓ o braço erguido, aberto (0) e reto (1). Ver entities/NpcWave.
+  'hollis-wave': { url: `${A}/characters/npcs/hollis_wave.png`, frameW: 16, frameH: 16 },
   'npc-salesman': { url: `${A}/characters/npcs/salesman.png` },
   'npc-poet': { url: `${A}/characters/npcs/poet.png` },
   'npc-death': { url: `${A}/ui/states/death.png` },
@@ -68,11 +70,14 @@ const DEFS: Record<string, SheetDef> = {
   // Sprite Factory: a pedra de ferro — frame 0 inteira, frame 1 rachada (a rocha comum guarda
   // esse par em dois arquivos; aqui e um sheet so).
   'iron-rock': { url: `${A}/environment/props/iron_rock.png`, frameW: 16, frameH: 16 },
+  'coal-rock': { url: `${A}/environment/props/coal_rock.png`, frameW: 16, frameH: 16 },
   'iron-item': { url: `${A}/items/collectibles/iron.png` },
   'ore-item': { url: `${A}/items/collectibles/ore.png` },
   'bloom-item': { url: `${A}/items/collectibles/bloom.png` },
   'rock-cracked': { url: `${A}/environment/props/rock_cracked.png` },
   'locked-door-object': { url: `${A}/environment/structures/locked_door.png` },
+  // Sprite Factory: o portão clássico do jardim alto, coberto de ramos — fechado (0), entreaberto (1), aberto (2).
+  'garden-gate-object': { url: `${A}/environment/structures/garden_gate.png`, frameW: 16, frameH: 16 },
   'swing-gate-object': { url: `${A}/environment/structures/swing_gate.png` },
   // O mato alto EM PE (spritefactory): touceira lateral p/ billboard upright, 2 frames de vento.
   'tall-grass-up': { url: `${A}/environment/props/tall_grass_up.png`, frameW: 16, frameH: 16 },
@@ -80,7 +85,6 @@ const DEFS: Record<string, SheetDef> = {
   // Sheet 16×64 em coluna: buraco pronto (0) + os três tempos da cavada da pá (1..3).
   'plant-hole': { url: `${A}/environment/props/plant_hole.png`, frameW: 16, frameH: 16 },
   'plant-mound': { url: `${A}/environment/props/plant_mound.png` },
-  'seeds-item': { url: `${A}/items/collectibles/seeds.png` },
   'water-0': { url: `${A}/environment/terrain/water_0.png` },
   'water-1': { url: `${A}/environment/terrain/water_1.png` },
   'water-2': { url: `${A}/environment/terrain/water_2.png` },

@@ -4,6 +4,7 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { tLines, type I18nLine } from '@/game/i18n/i18n';
+import { isLastQuest } from '@/game/runtime/QuestLog';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
   ASH_TEXTURE, SAND_TEXTURE, TELESCOPE_STAND_TEXTURE, TRIPOD_TEXTURE,
@@ -14,10 +15,13 @@ import { adventureState, type SkyQuestSave } from '@/game/runtime/adventureState
 import { LensOverlay, SkyOverlay, SKY_TARGETS, type SkyTarget } from '@/game/runtime/SkyOverlays';
 
 /**
- * A QUEST DA VEGA: o telescópio. O tubo sobrou; faltam o tripé e a lente. O ferro vira tripé (a mesma
- * cadeia de sempre: minério, forno, carvão, esponja, martelo, com os gravetos que ela deixa perto da
- * bancada); areia e cinza, dos montes ao lado dela, viram vidro no forno; o
- * vidro, polido num minijogo, vira lente. Montado, o herói o leva nas costas ao planalto, onde o céu é
+ * A QUEST DA VEGA: o telescópio. O tubo sobrou; faltam o tripé e a lente. Ela dá a picareta (a ÚNICA do
+ * vale) e manda o herói para oeste, ao lago de lava: na margem, a pedra de veio PRETO dá carvão e a de veio
+ * vermelho dá minério. NINGUÉM DEPENDE DE OUTRO VIZINHO (pedido do autor): nada aqui pede o machado do Bram
+ * nem coisa de outra quest, e o jogador faz os pedidos na ordem que quiser. O FORNO dela, fixo ao lado da
+ * nave, é o guia: ele pede um item de cada vez, na ordem certa (`furnaceNeed`), e devolve o resultado — o
+ * carvão (fica aceso lá dentro), o minério (sai a esponja, que o martelo vira ferro); depois areia (só na
+ * beira do lago grande, no sul) e cinza (ao lado dela), que viram vidro. O vidro, polido num minijogo, vira lente. Montado, o herói o leva nas costas ao planalto, onde o céu é
  * mais limpo. De noite, e só de noite, ele procura os quatro alvos que ela ensina. Ela sobe, os dois
  * conversam, a nave pousa e leva Vega para casa (ver VegaDeparture), e o pedido fecha. O telescópio fica
  * lá para sempre.
@@ -63,8 +67,6 @@ export interface AstronomerHost {
   vegaGone: () => void;
 }
 
-/** Fora dos oito vizinhos da bancada, para os gravetos não entrarem nas receitas dela. */
-const STICK_OFFSETS = [[3, 4], [4, 4]] as const;
 /** Para onde a câmera olha enquanto se pole: o trecho mais fechado do bosque perto dela, a nordeste. */
 const LENS_LOOK_OFFSET = [7.5, -3.5] as const;
 /** O topo do planalto ao sul, e o pé da escada por onde se sobe. */
@@ -72,7 +74,14 @@ const SPOT_TILE = { x: 32, y: 20 };
 const STAIR_FOOT = [31, 23] as const;
 /** Onde a nave pousa: no planalto, à esquerda do telescópio, sem encostar em quem estiver ao lado dele. */
 const SHIP_LANDING = { x: 29.3, y: 20 };
-const IRON_STEPS: readonly HeldItemKind[] = ['ore', 'furnace', 'charcoal', 'bloom', 'iron'];
+// O que a Vega lembra em cada degrau do ferro: buscar o minério, levar ao forno (ele pede o resto) e
+// martelar a esponja. O forno não se constrói mais, então não há degrau de forno nem de carvão.
+const IRON_STEPS: readonly HeldItemKind[] = ['ore', 'bloom', 'iron'];
+/**
+ * A AREIA SÓ EXISTE NA BEIRA DO LAGO GRANDE, no sul, ao lado do tronco onde se senta para olhar a água
+ * (pedido do autor): o herói desce o vale inteiro para buscá-la. O primeiro tile livre desta lista.
+ */
+const SAND_TILES = [[40, 50], [42, 50], [40, 51], [42, 51], [39, 50], [43, 50]] as const;
 const SIZE_TRIPOD = 1;
 const SIZE_TELESCOPE = 1.15;
 const SIZE_HEAP = 0.95;
@@ -127,7 +136,6 @@ export class AstronomerQuest {
     this.npc = npc;
     const { stage } = this.save;
     if (this.save.departed) this.host.vegaGone();
-    if (stage === 'iron') this.laySticks();
     if (stage === 'glass' || stage === 'polish') this.placeCamp();
     if (stage === 'glass' || stage === 'polish') this.showTripod(false);
     if (stage === 'glass') this.showHeaps(false);
@@ -152,16 +160,8 @@ export class AstronomerQuest {
       return found;
     };
     this.tripodTile = pick([[-1, 0], [-1, 1], [0, 1], [-2, 0]]);
-    this.sandTile = pick([[-2, 1], [-3, 1], [-2, 2], [-3, 2]]);
+    this.sandTile = SAND_TILES.map(([x, y]) => ({ x, y })).find((t) => this.host.isFree(t.x, t.y) && !(t.x === hero.x && t.y === hero.y));
     this.ashTile = pick([[2, 0], [2, 1], [1, 1], [2, -1]]);
-  }
-
-  private laySticks(): void {
-    const npc = this.npc;
-    if (!npc || this.save.sticksLaid) return;
-    this.save.sticksLaid = true;
-    for (const [dx, dy] of STICK_OFFSETS) this.host.dropAt('wood', npc.worldX + dx, npc.worldY + dy);
-    this.host.persist();
   }
 
   public destroy(): void {
@@ -242,6 +242,63 @@ export class AstronomerQuest {
     if (animate) this.pop(this.telescope, SIZE_TELESCOPE);
   }
 
+  // ── o forno guia ────────────────────────────────────────────────────────────────────────────────
+
+  private get oven(): NonNullable<SkyQuestSave['furnace']> {
+    this.save.furnace ??= { charcoal: false, bloom: false, sand: false, glass: false };
+    return this.save.furnace;
+  }
+
+  /**
+   * O QUE O FORNO PEDE AGORA, ou `null` se ele não tem nada a fazer nesta etapa. A ordem é a da química e
+   * a da quest: o carvão (fica aceso lá dentro), o minério (sai a esponja); depois a areia e a cinza (sai o
+   * vidro). Ele nunca abre escolha: o jogador só entrega o que ele pede.
+   */
+  public furnaceNeed(): HeldItemKind | null {
+    const oven = this.oven;
+    if (this.save.stage === 'iron') {
+      if (oven.bloom || this.host.seen('bloom')) return null;
+      return oven.charcoal ? 'ore' : 'charcoal';
+    }
+    if (this.save.stage === 'glass') {
+      if (oven.glass) return null;
+      return oven.sand ? 'ash' : 'sand';
+    }
+    return null;
+  }
+
+  /** Há fogo esperando dentro do forno: o carvão antes do minério, a areia antes da cinza. */
+  public furnaceKindled(): boolean {
+    const oven = this.oven;
+    if (this.save.stage === 'iron') return oven.charcoal && !oven.bloom;
+    if (this.save.stage === 'glass') return oven.sand && !oven.glass;
+    return false;
+  }
+
+  /**
+   * O herói entregou `kind` (que é o que `furnaceNeed` pedia). Devolve se a receita FECHOU e o que sai pela
+   * boca (`null` = a fornada não devolve peça: o carvão fica lá dentro esperando o minério).
+   */
+  public feedFurnace(kind: HeldItemKind): { done: boolean; product: HeldItemKind | null } {
+    const oven = this.oven;
+    let result: { done: boolean; product: HeldItemKind | null } = { done: false, product: null };
+    if (kind === 'charcoal') {
+      // O carvão acende e fica lá dentro, em brasa, esperando o minério.
+      oven.charcoal = true;
+      result = { done: true, product: null };
+    } else if (kind === 'ore') {
+      oven.bloom = true;
+      result = { done: true, product: 'bloom' };
+    } else if (kind === 'sand') {
+      oven.sand = true;
+    } else if (kind === 'ash') {
+      oven.glass = true;
+      result = { done: true, product: 'glass' };
+    }
+    this.host.persist();
+    return result;
+  }
+
   // ── as conversas ────────────────────────────────────────────────────────────────────────────────
 
   private ironStep(): HeldItemKind {
@@ -261,7 +318,6 @@ export class AstronomerQuest {
       case 'start':
         say([...base.lines, ...tLines('npc.astronautHint.ore')], () => {
           this.save.stage = 'iron';
-          this.laySticks();
           this.give('pickaxe', at);
         });
         return true;
@@ -474,7 +530,8 @@ export class AstronomerQuest {
       from: STAIR_FOOT,
       beside: SPOT_TILE,
       script: { ...this.dialogBase(), calm: true, lines: tLines('npc.astronautStep.farewell') },
-      goodbye: { ...this.dialogBase(), calm: true, lines: tLines('npc.astronautStep.goodbye') },
+      // Se este é o último pedido do vale, o adeus dela termina com a chave do jardim alto, antes da nave.
+      goodbye: { ...this.dialogBase(), calm: true, lines: [...tLines('npc.astronautStep.goodbye'), ...(isLastQuest('astronaut') ? tLines('garden.key') : [])] },
       ship: SHIP_LANDING,
     }, () => {
       this.save.stage = 'done';

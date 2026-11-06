@@ -29,7 +29,8 @@ const loadVol = (storageKey: string): number => {
 
 // All audio is generated offline ("Dark Souls weight, SNES timbre" — see
 // public/assets/audio/CREDITS.md): layered SFX with baked echo/reverb tails, plus four
-// seamless music/ambience loops at 32 kHz. This manager decodes and plays the samples;
+// seamless ambience loops at 32 kHz; the music comes from tools/gen-cozy-music.mjs (whole pieces at
+// 44.1 kHz, see VALLEY_PIECES). This manager decodes and plays the samples;
 // the procedural synth at the bottom is only a fallback for the first seconds before a
 // sample finishes decoding (or if one fails to load).
 
@@ -69,17 +70,54 @@ const MAX_DECODER_DELAY_S = 0.06;
 const DECODER_SILENCE = 0.001;
 
 
-// A MUSICA E DO VALE, E SO DELE. 'overworld' e "Little Hearth" (music-valley, F maior, a
-// caixinha de musica sobre a harpa) do inicio ao fim da aventura; 'menu' e a cancao de ninar do
-// titulo e dos creditos (music-lullaby). As duas saem de tools/gen-music.mjs (que ainda sabe
-// renderizar a trilha sombria antiga, mas os arquivos dela sairam do jogo).
+// A MUSICA E DO VALE, E SO DELE (tudo de tools/gen-cozy-music.mjs). 'title' e 'menu' sao a cancao de
+// ninar do titulo e dos creditos, um loop sem emenda. 'overworld' NAO e um loop: sao seis pecas
+// inteiras, de quase dois a tres minutos e meio, escolhidas pela hora do dia, com um silencio so de
+// ambiente entre uma e outra (ver VALLEY_PIECES). Loop curto e o que cansa numa trilha calma.
 export type MusicKey = 'title' | 'overworld' | 'menu';
-const LULLABY_SECONDS = 1645714 / 32000;
-const TRACKS: Record<MusicKey, { file: string; vol: number; seconds: number }> = {
-  title: { file: 'music-lullaby.mp3', vol: 0.7, seconds: LULLABY_SECONDS },
-  overworld: { file: 'music-valley.mp3', vol: 0.8, seconds: 80 },
-  menu: { file: 'music-lullaby.mp3', vol: 0.7, seconds: LULLABY_SECONDS },
+type LoopKey = Exclude<MusicKey, 'overworld'>;
+/**
+ * As pecas saem masterizadas a -18 LUFS com o pico preso a ~10 dB acima do nivel (ataque nenhum
+ * "bate" por cima da musica). No jogo elas soam como -10 LUFS: 1,5 dB acima da trilha antiga (-11,5),
+ * porque o autor achou a musica baixa demais com os picos altos — agora que os picos cairam, o corpo
+ * pode subir.
+ */
+const MUSIC_GAIN = 10 ** ((-10 - -18) / 20);
+const LULLABY_SECONDS = 3386880 / 44100;
+const TRACKS: Record<LoopKey, { file: string; vol: number; seconds: number }> = {
+  title: { file: 'music-lullaby.mp3', vol: 0.7 * MUSIC_GAIN, seconds: LULLABY_SECONDS },
+  menu: { file: 'music-lullaby.mp3', vol: 0.7 * MUSIC_GAIN, seconds: LULLABY_SECONDS },
 };
+
+/** Dia, entardecer e noite, lidos da mistura dos leitos de ambiente (`setAmbienceMix`). */
+type ValleyTime = 'day' | 'dusk' | 'night';
+const VALLEY_PIECES: readonly { file: string; when: readonly ValleyTime[] }[] = [
+  { file: 'valley-morning.mp3', when: ['day'] }, // Morning Dew: fa maior, violao e piano
+  { file: 'valley-waltz.mp3', when: ['day'] }, // Garden Waltz: valsa, clarinete
+  { file: 'valley-clouds.mp3', when: ['day', 'dusk'] }, // Lazy Clouds: lidio, flauta longa
+  { file: 'valley-golden.mp3', when: ['dusk', 'night'] }, // Golden Hour: eolio, clarinete grave
+  { file: 'valley-fireflies.mp3', when: ['dusk', 'night'] }, // Fireflies: piano de feltro quase sozinho
+  { file: 'valley-moon.mp3', when: ['night'] }, // Moon over the Lake: dorico, flauta e cordas
+];
+const VALLEY_VOL = 0.8 * MUSIC_GAIN;
+
+/**
+ * Tudo o que dá para ouvir no player do menu de pausa (`Jukebox`), com o ganho com que cada faixa
+ * toca no jogo: no player ela soa no mesmo nível em que se ouve no vale.
+ */
+export const LISTENING_TRACKS: readonly { file: string; vol: number; when: readonly (ValleyTime | 'title')[] }[] = [
+  ...VALLEY_PIECES.map((p) => ({ file: p.file, vol: VALLEY_VOL, when: p.when })),
+  { file: TRACKS.title.file, vol: TRACKS.title.vol, when: ['title'] },
+];
+/** A primeira peca entra pouco depois do jogo; entre as outras, so o vale (passaros, grilos, agua). */
+const VALLEY_FIRST_DELAY_S = 3;
+const VALLEY_GAP_S = [35, 75] as const;
+/**
+ * Uma peca de tres minutos e meio decodificada a 48 kHz ocupa uns 80 MB. A trilha nao tem nada acima de
+ * 9 kHz, entao decodificar a 32 kHz nao perde nada que se ouca e cabe num celular. So a peca que toca
+ * (e a proxima, enquanto baixa) fica na memoria.
+ */
+const VALLEY_DECODE_RATE = 32000;
 
 /**
  * Cada loop comprimido traz a própria cauda antes e o próprio começo depois (tools/encode-audio.mjs):
@@ -105,14 +143,15 @@ const AMBIENCE_FILES: Record<AmbienceBed, { file: string; seconds: number }> = {
 };
 
 /**
- * AS CAMADAS DA MÚSICA DO VALE. Pentatônica de fá sobre seis compassos, para caber em cima de qualquer
- * acorde da música: a caixinha entra perto da água, o violoncelo perto do fogo. Tocam junto da música, no
- * mesmo compasso, e o volume delas é o único que o lugar mexe.
+ * AS CAMADAS DO LUGAR. Vinte segundos sem pulso, só com a pentatônica de fá, que cabe em todas as peças
+ * (todas ficam dentro de fá maior): gotas de celesta perto da água, cordas graves perto do fogo. Tocam o
+ * tempo todo na aventura, também no silêncio entre as peças, e o lugar só mexe no volume. Saem a -27
+ * LUFS; no máximo ficam 4 dB abaixo da música.
  */
 type MusicLayer = 'water' | 'fire';
 const LAYER_FILES: Record<MusicLayer, string> = { water: 'music-layer-water.mp3', fire: 'music-layer-fire.mp3' };
 const LAYER_SECONDS = 20;
-const LAYER_VOL = 0.9;
+const LAYER_VOL = 10 ** ((-14 - -27) / 20);
 
 const FOOTSTEP_KEYS: readonly SampleKey[] = ['footstep0', 'footstep1', 'footstep2', 'footstep3'];
 
@@ -140,8 +179,14 @@ class SoundManager {
   // Music: one bus (ducked for dialogs) with at most two overlapping tracks while
   // crossfading. `wantTrack` survives until its buffer finishes decoding.
   private musicBus: GainNode | null = null;
-  private readonly musicBuffers = new Map<MusicKey, AudioBuffer>();
-  private currentMusic: { key: MusicKey; source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private readonly musicBuffers = new Map<LoopKey, AudioBuffer>();
+  private currentMusic: { key: LoopKey; source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  /** A aventura: a peça que toca agora (ou null no silêncio), o relógio da próxima e as últimas tocadas. */
+  private valley: {
+    timer: number | null;
+    piece: { file: string; source: AudioBufferSourceNode; gain: GainNode } | null;
+    recent: string[];
+  } | null = null;
   private wantTrack: MusicKey | null = null;
   private wantFadeMs = 1600;
 
@@ -153,7 +198,6 @@ class SoundManager {
   private readonly layerBuffers = new Map<MusicLayer, AudioBuffer>();
   private readonly layers = new Map<MusicLayer, { source: AudioBufferSourceNode; gain: GainNode }>();
   private layerMix: Record<MusicLayer, number> = { water: 0, fire: 0 };
-  private musicStartedAt = 0;
   private wantAmbience = false;
 
   private lastFootstep = -1;
@@ -242,7 +286,7 @@ class SoundManager {
     return trimmed;
   }
 
-  private loadTrack(key: MusicKey): void {
+  private loadTrack(key: LoopKey): void {
     this.fetchBuffer(TRACKS[key].file)
       .then((buffer) => {
         this.musicBuffers.set(key, buffer);
@@ -279,11 +323,131 @@ class SoundManager {
   public startMusic(key: MusicKey, fadeMs = 1600): void {
     this.wantTrack = key;
     this.wantFadeMs = fadeMs;
+    if (key === 'overworld') {
+      this.fadeOutLoop(fadeMs);
+      if (this.valley) return;
+      this.startValley(fadeMs);
+      this.loadLayers();
+      return;
+    }
+    this.stopValley(fadeMs);
     if (this.currentMusic?.key === key) return;
     const buffer = this.musicBuffers.get(key);
     if (buffer) this.crossfadeTo(key, buffer, fadeMs);
     else this.loadTrack(key);
-    if (key === 'overworld') this.loadLayers();
+  }
+
+  /** A peça do vale tocando agora (null no silêncio entre elas). Leitura de playtest. */
+  public get valleyPiece(): string | null {
+    return this.valley?.piece?.file ?? null;
+  }
+
+  // ── a música da aventura: peças inteiras, silêncio entre elas ──────────────
+
+  private startValley(fadeMs: number): void {
+    const bus = this.ensureMusicBus();
+    if (!this.currentMusic) {
+      // começo do zero (boot da cena): um abaixar de diálogo esquecido não pode calar o vale
+      const now = this.audio.currentTime;
+      bus.gain.cancelScheduledValues(now);
+      bus.gain.setValueAtTime(MUSIC_VOL, now);
+    }
+    this.valley = { timer: null, piece: null, recent: [] };
+    this.scheduleValley(fadeMs / 1000 + VALLEY_FIRST_DELAY_S);
+  }
+
+  private stopValley(fadeMs: number): void {
+    const v = this.valley;
+    if (!v) return;
+    this.valley = null;
+    if (v.timer !== null) window.clearTimeout(v.timer);
+    this.stopLayers();
+    if (v.piece) this.fadeOut(v.piece.source, v.piece.gain, fadeMs);
+  }
+
+  private valleyTime(): ValleyTime {
+    const n = this.ambienceMix.night;
+    return n < 0.3 ? 'day' : n > 0.7 ? 'night' : 'dusk';
+  }
+
+  /** Uma peça da hora certa que não tenha tocado nas duas últimas vezes. */
+  private pickValleyPiece(recent: readonly string[]): string {
+    const time = this.valleyTime();
+    const fits = VALLEY_PIECES.filter((p) => p.when.includes(time));
+    const fresh = fits.filter((p) => !recent.includes(p.file));
+    const pool = fresh.length ? fresh : fits;
+    return pool[Math.floor(Math.random() * pool.length)].file;
+  }
+
+  /** Baixa e decodifica sem guardar no cache dos efeitos: a peça sai da memória quando acaba. */
+  private decodeValley(file: string): Promise<AudioBuffer> {
+    return fetch(`${import.meta.env.BASE_URL}assets/audio/${file}`)
+      .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data) => {
+        // O decodificador desanexa o ArrayBuffer; a cópia é para a segunda tentativa, no contexto do
+        // jogo (na taxa dele), se o navegador recusar decodificar fora dele ou nessa taxa.
+        const spare = data.slice(0);
+        return SoundManager.decodeIn(() => new OfflineAudioContext(2, 1, VALLEY_DECODE_RATE), data)
+          .catch(() => SoundManager.decodeIn(() => this.audio, spare));
+      });
+  }
+
+  /** decodeAudioData nas duas formas que os navegadores já tiveram (promessa e callbacks). */
+  private static decodeIn(make: () => BaseAudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
+    return new Promise((resolve, reject) => {
+      try {
+        const ret = make().decodeAudioData(data, resolve, reject);
+        if (ret && typeof ret.then === 'function') ret.then(resolve, reject);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  /**
+   * A próxima peça daqui a `delayS`. Ela já começa a baixar agora; se na hora de tocar a hora do dia tiver
+   * mudado (anoiteceu durante o silêncio), troca por uma que caiba.
+   */
+  private scheduleValley(delayS: number): void {
+    const v = this.valley;
+    if (!v) return;
+    if (v.timer !== null) window.clearTimeout(v.timer);
+    const planned = this.pickValleyPiece(v.recent);
+    const download = this.decodeValley(planned);
+    download.catch(() => { /* tratado na hora de tocar */ });
+    v.timer = window.setTimeout(() => {
+      v.timer = null;
+      if (this.valley !== v) return;
+      const stillFits = VALLEY_PIECES.find((p) => p.file === planned)?.when.includes(this.valleyTime());
+      const file = stillFits ? planned : this.pickValleyPiece(v.recent);
+      (file === planned ? download : this.decodeValley(file))
+        .then((buffer) => { if (this.valley === v && !v.piece) this.playValley(v, file, buffer); })
+        .catch((err) => {
+          // sem rede (ou arquivo quebrado): o vale segue só com o ambiente e tenta de novo daqui a um minuto
+          console.warn(`[audio] could not load ${file}:`, err);
+          if (this.valley === v) this.scheduleValley(60);
+        });
+    }, Math.max(0, delayS) * 1000);
+  }
+
+  private playValley(v: NonNullable<SoundManager['valley']>, file: string, buffer: AudioBuffer): void {
+    const ctx = this.audio;
+    const gain = ctx.createGain();
+    gain.gain.value = VALLEY_VOL;
+    gain.connect(this.ensureMusicBus());
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(gain);
+    source.onended = () => {
+      gain.disconnect();
+      if (this.valley !== v || v.piece?.source !== source) return;
+      v.piece = null;
+      const [min, max] = VALLEY_GAP_S;
+      this.scheduleValley(min + Math.random() * (max - min));
+    };
+    source.start();
+    v.piece = { file, source, gain };
+    v.recent = [file, ...v.recent].slice(0, 2);
   }
 
   private loadLayers(): void {
@@ -295,9 +459,9 @@ class SoundManager {
     });
   }
 
-  /** Só soa em cima da música do vale, e entra no ponto certo do compasso em que ela está. */
+  /** Só na aventura. Não têm pulso, então entram em qualquer ponto. */
   private startLayers(): void {
-    if (this.currentMusic?.key !== 'overworld') return;
+    if (!this.valley) return;
     const ctx = this.audio;
     const bus = this.ensureMusicBus();
     for (const [layer, buffer] of this.layerBuffers) {
@@ -311,7 +475,7 @@ class SoundManager {
       source.loopStart = LOOP_WRAP_S;
       source.loopEnd = LOOP_WRAP_S + LAYER_SECONDS;
       source.connect(gain);
-      source.start(0, LOOP_WRAP_S + Math.max(0, ctx.currentTime - this.musicStartedAt) % LAYER_SECONDS);
+      source.start(0, LOOP_WRAP_S + Math.random() * LAYER_SECONDS);
       this.layers.set(layer, { source, gain });
     }
   }
@@ -341,20 +505,30 @@ class SoundManager {
   public stopMusic(fadeMs = 0): void {
     this.wantTrack = null;
     this.stopLayers();
+    this.stopValley(fadeMs);
+    this.fadeOutLoop(fadeMs);
+  }
+
+  /** O loop do título/créditos sai (com `fadeMs` > 0, morrendo devagar). */
+  private fadeOutLoop(fadeMs: number): void {
     const cur = this.currentMusic;
     if (!cur) return;
     this.currentMusic = null;
+    this.fadeOut(cur.source, cur.gain, fadeMs);
+  }
+
+  private fadeOut(source: AudioBufferSourceNode, gain: GainNode, fadeMs: number): void {
+    source.onended = null;
     if (fadeMs <= 0) {
-      try { cur.source.stop(); } catch { /* already stopped */ }
+      try { source.stop(); } catch { /* already stopped */ }
       return;
     }
-    const ctx = this.audio;
-    const now = ctx.currentTime;
+    const now = this.audio.currentTime;
     const fadeS = Math.max(0.05, fadeMs / 1000);
-    cur.gain.gain.cancelScheduledValues(now);
-    cur.gain.gain.setValueAtTime(Math.max(cur.gain.gain.value, 0.0001), now);
-    cur.gain.gain.exponentialRampToValueAtTime(0.0001, now + fadeS);
-    try { cur.source.stop(now + fadeS + 0.1); } catch { /* already stopped */ }
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(Math.max(gain.gain.value, 0.0001), now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + fadeS);
+    try { source.stop(now + fadeS + 0.1); } catch { /* already stopped */ }
   }
 
   private ensureMusicBus(): GainNode {
@@ -367,7 +541,7 @@ class SoundManager {
     return this.musicBus;
   }
 
-  private crossfadeTo(key: MusicKey, buffer: AudioBuffer, fadeMs: number): void {
+  private crossfadeTo(key: LoopKey, buffer: AudioBuffer, fadeMs: number): void {
     const ctx = this.audio;
     const bus = this.ensureMusicBus();
     const now = ctx.currentTime;
@@ -393,9 +567,6 @@ class SoundManager {
     source.connect(gain);
     source.start(0, LOOP_WRAP_S);
     this.currentMusic = { key, source, gain };
-    this.musicStartedAt = now;
-    this.stopLayers();
-    if (key === 'overworld') this.startLayers();
 
     if (old) {
       old.gain.gain.cancelScheduledValues(now);
@@ -437,6 +608,34 @@ class SoundManager {
 
   /** Bring the music back up to full. */
   public fadeMusicIn(ms = 800): void { this.rampMusicBus(MUSIC_VOL, ms); }
+
+  // ── o player do menu de pausa (ver Jukebox) ───────────────────────────────
+
+  private listenBus: GainNode | null = null;
+
+  /** Onde o player toca: no mesmo nível da música do jogo e debaixo do volume de música da pessoa. */
+  public listeningOutput(): { ctx: AudioContext; out: AudioNode } {
+    const ctx = this.audio;
+    if (!this.listenBus) {
+      this.listenBus = ctx.createGain();
+      this.listenBus.gain.value = MUSIC_VOL;
+      this.listenBus.connect(this.musicUserBus);
+    }
+    return { ctx, out: this.listenBus };
+  }
+
+  /**
+   * Ouvindo no player, o vale se cala (a música do jogo e os leitos de ambiente), para a faixa escolhida
+   * soar sozinha; ao sair, tudo volta devagar ao que o lugar pede.
+   */
+  public setListening(on: boolean): void {
+    if (!this.ctx) return;
+    this.rampMusicBus(on ? 0 : MUSIC_VOL, on ? 400 : 1200);
+    const now = this.ctx.currentTime;
+    for (const [bed, { gain }] of this.ambienceBeds) {
+      gain.gain.setTargetAtTime(on ? 0 : AMBIENCE_VOL * this.ambienceMix[bed], now, on ? 0.12 : 0.6);
+    }
+  }
 
   private rampMusicBus(target: number, ms: number): void {
     if (!this.musicBus) return;
@@ -714,19 +913,20 @@ class SoundManager {
       case 'bottle':
         this.materialKnock('glass', 1, 1.1);
         break;
-      case 'swing':
-        this.osc('sawtooth', 300, 420, 0.018, 0.34);
-        this.osc('sawtooth', 420, 310, 0.014, 0.3, 0.32);
-        break;
       case 'door':
         [0, 0.2, 0.4].forEach((at) => {
           this.osc('triangle', 180, 120, 0.2, 0.08, at);
           this.noise('bandpass', 900, 2, 0.05, 0.02, at);
         });
         break;
-      case 'log':
-        this.osc('sine', 150, 95, 0.2, 0.16);
-        this.noise('lowpass', 500, 1, 0.08, 0.1);
+      case 'sign':
+        // A madeira velha e oca da placa: um toque surdo, e o musgo abafa o resto.
+        this.materialKnock('wood', 0.7, 0.8);
+        break;
+      case 'chair':
+        // A madeira da cadeira range sob o peso: um nó grave e um estalo curto.
+        this.materialKnock('wood', 0.8, 0.9);
+        this.osc('triangle', 210, 160, 0.05, 0.14, 0.06);
         break;
       default:
         this.materialKnock('wood', 0.9, 1);
@@ -824,6 +1024,35 @@ class SoundManager {
    * Sintetizada e sem amostra de propósito: ela toca dezenas de vezes por minuto numa mineração, e
    * som que se repete tanto tem de ser barato de tocar e fácil de reafinar quando incomodar.
    */
+  /** O tchau de longe (entities/NpcWave): dois assobios curtos, o segundo descendo — "oi!". */
+  public playFarWave(): void {
+    this.osc('sine', 880, 1180, 0.035, 0.14);
+    this.osc('sine', 1180, 880, 0.035, 0.2, 0.18);
+  }
+
+  // ── A BOLSA DE COURO (runtime/BagStash): abrir, lançar, cair dentro, fechar o fecho ──
+  public playBagOpen(): void {
+    this.noise('bandpass', 1100, 1.6, 0.05, 0.14);          // o couro farfalhando
+    this.osc('triangle', 240, 300, 0.04, 0.09, 0.02);       // a aba subindo
+  }
+
+  public playBagToss(): void {
+    this.noise('bandpass', 1400, 2.2, 0.035, 0.22);         // o sopro do arco
+    this.osc('sine', 520, 880, 0.03, 0.18, 0.02);           // subindo junto com ele
+  }
+
+  public playBagLand(): void {
+    this.noise('lowpass', 380, 0.9, 0.11, 0.13);            // o baque surdo no fundo do couro
+    this.osc('sine', 150, 95, 0.12, 0.16);                  // o peso assentando
+    this.osc('triangle', 660, 620, 0.035, 0.06, 0.04);      // "guardou"
+  }
+
+  public playBagClasp(): void {
+    this.noise('bandpass', 2600, 7, 0.06, 0.035);           // o estalo do fecho de latão
+    this.osc('triangle', 1180, 1150, 0.045, 0.07, 0.02);
+    this.osc('sine', 1760, 1740, 0.03, 0.18, 0.07);         // e um brilho curto, de coisa bem feita
+  }
+
   public playItemStash(): void {
     this.noise('lowpass', 620, 1.0, 0.09, 0.055);   // o baque surdo da coisa entrando
     this.osc('triangle', 300, 190, 0.10, 0.075);    // o peso dela assentando, descendo
@@ -1054,6 +1283,65 @@ class SoundManager {
   // Os dois sons sao o MESMO gesto com finais diferentes, e e isso que ensina a regra sem uma
   // linha de texto: a dobradica range igual nos dois, so que um termina em vao aberto e o
   // outro numa batida seca contra o que esta atras.
+
+  /**
+   * O VENTO QUE LEVA A NÉVOA DO JARDIM ALTO: uma rajada que entra baixa, sobe, atravessa e vai embora — ar
+   * filtrado em faixas que se sobrepõem, mais agudo no meio, e um sopro grave por baixo. Uns três segundos.
+   */
+  public playWindGust(): void {
+    const bands: ReadonlyArray<readonly [number, number, number]> = [
+      // [freq, volume, atraso]
+      [260, 0.05, 0], [380, 0.08, 0.35], [560, 0.11, 0.75], [820, 0.12, 1.15],
+      [700, 0.1, 1.55], [520, 0.08, 1.95], [360, 0.05, 2.35],
+    ];
+    for (const [freq, vol, at] of bands) this.noise('bandpass', freq, 0.9, vol, 1.3, at);
+    this.noise('lowpass', 180, 0.7, 0.07, 3.2);
+    this.osc('sine', 70, 52, 0.04, 3, 0.2);
+  }
+
+  // ── a chave do jardim alto ────────────────────────────────────────────────
+  // A cena inteira da fechadura (GameScene.playGardenUnlock), em cinco sons curtos de metal: tirar a chave das
+  // costas, enfiar no tambor, cada dente do giro, o trinco cedendo e o portão velho rangendo ao abrir.
+
+  /** A chave saindo das costas: um tilintar pequeno de metal. */
+  public playKeyJingle(): void {
+    this.osc('triangle', 2350, 2300, 0.022, 0.07);
+    this.osc('triangle', 3050, 3000, 0.016, 0.06, 0.05);
+    this.noise('bandpass', 4200, 6, 0.015, 0.05, 0.02);
+  }
+
+  /** A chave entrando no tambor: o raspar do metal nos pinos, e o encosto no fundo. */
+  public playKeyInsert(): void {
+    this.noise('bandpass', 2600, 3, 0.05, 0.2);
+    this.noise('bandpass', 1700, 4, 0.03, 0.16, 0.04);
+    this.osc('square', 820, 640, 0.02, 0.025, 0.21);
+    this.noise('lowpass', 900, 1.2, 0.05, 0.04, 0.21);
+  }
+
+  /** Um dente do giro: o estalo seco de um pino caindo no lugar. */
+  public playLockTick(): void {
+    this.osc('square', 1250, 1050, 0.022, 0.018);
+    this.noise('bandpass', 2800, 5, 0.04, 0.03);
+  }
+
+  /** O trinco cedendo: um baque grave de ferro pesado, com o eco curto da lingueta. */
+  public playLockClunk(): void {
+    this.noise('lowpass', 420, 1, 0.16, 0.12);
+    this.osc('sine', 150, 82, 0.11, 0.2);
+    this.osc('triangle', 690, 520, 0.035, 0.06, 0.01);
+    this.noise('bandpass', 1500, 4, 0.03, 0.05, 0.09);
+  }
+
+  /** O portão velho abrindo: a dobradiça seca rangendo em duas puxadas, e a folha assentando no fim. */
+  public playOldGateCreak(): void {
+    this.osc('triangle', 185, 262, 0.05, 0.45);
+    this.osc('triangle', 372, 520, 0.018, 0.45);
+    this.noise('bandpass', 950, 7, 0.04, 0.45);
+    this.osc('triangle', 262, 168, 0.045, 0.5, 0.42);
+    this.osc('triangle', 520, 336, 0.015, 0.5, 0.42);
+    this.noise('bandpass', 760, 7, 0.035, 0.5, 0.42);
+    this.noise('lowpass', 320, 1, 0.09, 0.14, 0.95);
+  }
 
   /** A folha girando livre: dobradica rangendo e o batente soltando. */
   public playGateSwing(): void {

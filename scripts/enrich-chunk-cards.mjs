@@ -47,7 +47,7 @@ const ROWS = 12;
 // ── o atlas (forest_tile_set.png, 3 colunas) ────────────────────────────────────────────────
 // Só os frames que este script planta. Os sólidos são o espelho de SOLID_UPPER_FRAMES: se um
 // frame novo entrar lá e não aqui, a prova de BFS passa a mentir.
-const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40]);
+const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
 const SEA_TILE = 33;
 
 const GRASS_TUFT = 0; // o único capim que RESPONDE ao pisão (LOW_GRASS_TILE, no World3D)

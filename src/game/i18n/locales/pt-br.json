@@ -28,7 +28,6 @@
       "shovel": "Uma pá. Cava buracos.",
       "wood": "Um graveto.",
       "stone": "Uma pedra.",
-      "seeds": "Sementes. Plante num buraco.",
       "bucket": "Um balde. Encha na água.",
       "bucketFull": "Água.",
       "charcoal": "Carvão. Funde minério.",
@@ -68,7 +67,6 @@
       "iron": "Ferro",
       "ore": "Minério de ferro",
       "bloom": "Esponja de ferro",
-      "seeds": "Sementes",
       "bucket": "Balde",
       "bucketFull": "Balde cheio",
       "charcoal": "Carvão",
@@ -115,6 +113,31 @@
     "options": "Opções",
     "quit": "Sair",
     "back": "Voltar",
+    "musicPage": "Músicas",
+    "musicPick": "Escolha uma música",
+    "musicControls": "Tocar",
+    "musicPosition": "Posição",
+    "musicRepeat": "Repetir",
+    "repeatAll": "Todas",
+    "repeatOne": "Esta",
+    "repeatOff": "Não",
+    "musicShuffle": "Aleatório",
+    "musicVolume": "Volume",
+    "musicPrev": "Música anterior",
+    "musicPlay": "Tocar",
+    "musicPause": "Pausar",
+    "musicNext": "Próxima música",
+    "trackMorning": "Orvalho da Manhã",
+    "trackWaltz": "Valsa da Horta",
+    "trackClouds": "Nuvens Preguiçosas",
+    "trackGolden": "Hora Dourada",
+    "trackFireflies": "Vaga-lumes",
+    "trackMoon": "Lua sobre o Lago",
+    "trackLullaby": "Canção de Ninar",
+    "whenDay": "Dia",
+    "whenDusk": "Entardecer",
+    "whenNight": "Noite",
+    "whenTitle": "Título",
     "previous": "Anterior",
     "next": "Próximo",
     "on": "Ligada",
@@ -153,11 +176,11 @@
       },
       {
         "speaker": "npc",
-        "text": "Deixe a espada. Você não vai precisar dela."
+        "text": "Solte a espada. Segurar o que passou só pesa."
       },
       {
         "speaker": "npc",
-        "text": "Você lutou contra a escuridão. E venceu."
+        "text": "Você venceu a escuridão. Até a vitória passa."
       },
       {
         "speaker": "npc",
@@ -165,7 +188,7 @@
       },
       {
         "speaker": "npc",
-        "text": "Ajude quem mora aqui. Então o jardim se abre."
+        "text": "Cuide de quem mora aqui. Então o jardim se abre."
       },
       {
         "speaker": "narrator",
@@ -175,11 +198,11 @@
     "guide": [
       {
         "speaker": "npc",
-        "text": "Quatro vizinhos precisam de ajuda."
+        "text": "Não há mais o que combater."
       },
       {
         "speaker": "npc",
-        "text": "Hollis, a oeste. Iris, nos canteiros. Bram e Vega, ao norte."
+        "text": "Ande por aí. O sentido se encontra no caminho."
       }
     ],
     "gate": [
@@ -196,6 +219,10 @@
       {
         "speaker": "npc",
         "text": "Você encontrou. Um lugar para sentar."
+      },
+      {
+        "speaker": "npc",
+        "text": "Sofrer vem de querer o que não fica. Aqui, só respire."
       }
     ]
   },
@@ -205,11 +232,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Quatro vizinhos precisam de ajuda."
+          "text": "Não há mais o que combater."
         },
         {
           "speaker": "npc",
-          "text": "Hollis, a oeste. Iris, nos canteiros. Bram e Vega, ao norte."
+          "text": "Ande por aí. O sentido se encontra no caminho."
         }
       ]
     },
@@ -218,7 +245,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Um herói. Que novidade. Eu estava cochilando."
+          "text": "Um herói. Que novidade. Saia do meu sol, eu estava cochilando."
         },
         {
           "speaker": "npc",
@@ -227,6 +254,10 @@
         {
           "speaker": "npc",
           "text": "Duas fogueiras nesta clareira estão frias. Leve a chama até elas."
+        },
+        {
+          "speaker": "npc",
+          "text": "Não tenho nada e não me falta nada. Quanto você carrega, herói?"
         }
       ]
     },
@@ -277,11 +308,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Eu estudo os fungos deste vale."
+          "text": "Eu observo os fungos deste vale. Eles não têm pressa."
         },
         {
           "speaker": "npc",
-          "text": "O cogumelo é só o fruto. O fungo vive debaixo da terra, em fios."
+          "text": "O que se vê é só o fruto. O fungo vive escondido, em fios, debaixo da terra."
         },
         {
           "speaker": "npc",
@@ -289,7 +320,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Corte, não arranque. Escove, não lave."
+          "text": "Não force: corte, não arranque. Escove, não lave."
         }
       ]
     },
@@ -298,7 +329,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Quatro já bastam. Agora você conhece o chão da floresta."
+          "text": "Quatro já bastam. Quem sabe o que basta já tem tudo."
+        },
+        {
+          "speaker": "npc",
+          "text": "Seja como a água: mole, e ainda assim vence a pedra."
         },
         {
           "speaker": "npc",
@@ -309,7 +344,7 @@
     "radiationSuitAll": [
       {
         "speaker": "npc",
-        "text": "Todos os seis! Ninguém conhece este chão como você."
+        "text": "Todos os seis! Você andou com o vale, não contra ele."
       },
       {
         "speaker": "npc",
@@ -326,13 +361,13 @@
       "morel": [
         {
           "speaker": "npc",
-          "text": "Ao norte, numa ilha: um chapéu de favo de mel. Dois gravetos fazem uma ponte."
+          "text": "Ao norte, numa ilha: um chapéu de favo de mel. Dois gravetos fazem uma ponte; o machado é do Bram."
         }
       ],
       "puffball": [
         {
           "speaker": "npc",
-          "text": "A nordeste, no mato alto: uma bola branca sem chapéu. Tem uma foice ali perto."
+          "text": "A nordeste, no mato alto: uma bola branca sem chapéu. Mato alto cai com foice ou fogo."
         }
       ],
       "inkCap": [
@@ -359,7 +394,7 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Tudo o que eu pinto sai cinza. Tinta de verdade nasce da terra."
+          "text": "Tudo o que eu pinto sai cinza. A cor não vem pronta: a gente tira da terra."
         },
         {
           "speaker": "npc",
@@ -376,7 +411,11 @@
         },
         {
           "speaker": "npc",
-          "text": "Agora eu vejo cor em tudo."
+          "text": "O mundo não tinha cor. Agora tem, porque a gente fez."
+        },
+        {
+          "speaker": "npc",
+          "text": "Se eu tivesse de viver tudo de novo, o cinza também, eu viveria."
         }
       ]
     },
@@ -385,11 +424,11 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "Minha lenha acabou. Minhas mãos tremem."
+          "text": "Perdi o negócio, a lenha, tudo. Minhas mãos tremem."
         },
         {
           "speaker": "npc",
-          "text": "Vamos fazer uma fogueira. Ali, naquela terra. Tome o machado."
+          "text": "O resto não depende de mim. Uma fogueira, sim. Ali, naquela terra. Tome o machado."
         },
         {
           "speaker": "npc",
@@ -410,6 +449,10 @@
         },
         {
           "speaker": "npc",
+          "text": "Não é o que acontece que pesa. É o que a gente pensa disso."
+        },
+        {
+          "speaker": "npc",
           "text": "Obrigado, amigo. O machado é seu."
         }
       ]
@@ -423,7 +466,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Sem tripé e sem lente, não acho o caminho no céu."
+          "text": "Sem tripé e sem lente, não vejo o céu. E todo mundo nasce querendo saber."
         },
         {
           "speaker": "npc",
@@ -436,11 +479,15 @@
       "lines": [
         {
           "speaker": "npc",
-          "text": "O céu continua lá. Volte de noite."
+          "text": "O céu continua lá. Olhar para ele é o melhor da vida. Volte de noite."
         },
         {
           "speaker": "npc",
           "text": "Pus um marco de pedras aqui: um lugar para onde voltar."
+        },
+        {
+          "speaker": "npc",
+          "text": "Uma andorinha só não faz verão: ser feliz é a vida inteira, não um dia."
         }
       ]
     },
@@ -448,25 +495,13 @@
       "ore": [
         {
           "speaker": "npc",
-          "text": "Algumas pedras a leste daqui têm minério. Quebre uma."
-        }
-      ],
-      "furnace": [
-        {
-          "speaker": "npc",
-          "text": "Minério precisa de forno. Construa um na bancada."
-        }
-      ],
-      "charcoal": [
-        {
-          "speaker": "npc",
-          "text": "Instale o forno. Dois gravetos viram carvão: deixei dois perto da bancada."
+          "text": "Siga para oeste, até o lago de lava. A pedra de veio preto dá carvão, a de veio vermelho, minério. O forno aqui do lado pede um de cada vez."
         }
       ],
       "bloom": [
         {
           "speaker": "npc",
-          "text": "Agora minério e carvão, juntos."
+          "text": "Leve o carvão e o minério ao forno, aqui do lado. Ele pede o que falta, uma coisa de cada vez."
         }
       ],
       "iron": [
@@ -544,7 +579,7 @@
       "easel": [
         {
           "speaker": "npc",
-          "text": "Pincel na mão, e o quadro é seu."
+          "text": "Pincel na mão. Pinte o mundo que você quiser."
         }
       ]
     },
@@ -592,7 +627,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Tome o pincel: é seu."
+          "text": "Tome o pincel: agora é você quem cria."
         }
       ]
     },
@@ -620,7 +655,7 @@
         },
         {
           "speaker": "npc",
-          "text": "Eu só via cinza. Obrigada por tudo."
+          "text": "Eu só via cinza. A gente inventou a cor."
         },
         {
           "speaker": "npc",
@@ -690,11 +725,11 @@
       "farewell": [
         {
           "speaker": "npc",
-          "text": "Olha as minhas mãos: pararam de tremer."
+          "text": "Perdi o que nunca foi meu. Olha: as mãos pararam de tremer."
         },
         {
           "speaker": "npc",
-          "text": "Foi uma noite fantástica."
+          "text": "Esta noite ninguém me tira."
         }
       ]
     },
@@ -714,13 +749,13 @@
         },
         {
           "speaker": "npc",
-          "text": "Trouxe areia da lagoa: é aquele monte. A cinza está ao lado da fogueira. As duas no forno."
+          "text": "A cinza está ao lado da fogueira. Areia, só na beira do lago grande, lá no sul. As duas no forno."
         }
       ],
       "wait": [
         {
           "speaker": "npc",
-          "text": "Areia do monte, cinza da fogueira. As duas no forno."
+          "text": "Areia da beira do lago grande, no sul. Cinza da fogueira. As duas no forno."
         }
       ],
       "polish": [
@@ -842,7 +877,8 @@
     "unlock": "Destrancar",
     "dig": "Cavar",
     "takeBack": "Tirar",
-    "pickUp": "Recolher"
+    "pickUp": "Recolher",
+    "feed": "Colocar"
   },
   "controls": {
     "hint": "Z fala e pega · X usa",
@@ -854,7 +890,7 @@
   },
   "fungi": {
     "basket": "Cesta",
-    "thanks": "Obrigada! Sabia disto?",
+    "thanks": "Obrigada!",
     "leave": "Deixar",
     "cut": {
       "title": "Cortar",
@@ -886,6 +922,7 @@
     "species": {
       "puffball": {
         "latin": "Lycoperdon perlatum",
+        "named": "Ah, uma bufa-de-lobo!",
         "curiosity": "A chuva faz o trabalho: cada gota que bate nele solta um sopro de esporos.",
         "cut": "Corte embaixo da bola, na base.",
         "clean": "Escove a terra e os espinhos soltos.",
@@ -896,6 +933,7 @@
       },
       "inkCap": {
         "latin": "Coprinus comatus",
+        "named": "Ah, um coprino-cabeludo!",
         "curiosity": "Em poucas horas ele se desfaz em tinta preta. Já se escreveu com ela.",
         "cut": "Corte embaixo, no pé fino. Ele é oco.",
         "clean": "Seja rápido: colhido, ele vira tinta em horas.",
@@ -906,6 +944,7 @@
       },
       "morel": {
         "latin": "Morchella esculenta",
+        "named": "Ah, uma morchela-amarela!",
         "curiosity": "Gosta de olmos morrendo e de pomares velhos de maçã.",
         "cut": "Corte na base. Ele é oco inteiro.",
         "clean": "A areia se esconde nos buracos. Escove cada um.",
@@ -916,7 +955,8 @@
       },
       "chanterelle": {
         "latin": "Cantharellus cibarius",
-        "curiosity": "Cheira a damasco.",
+        "named": "Ah, um cantarelo-dourado!",
+        "curiosity": "Cheira a damasco, e quase nenhum bicho o come.",
         "cut": "Corte na base, logo acima do musgo.",
         "clean": "A terra se esconde nas dobras. Escove.",
         "notes": [
@@ -926,6 +966,7 @@
       },
       "flyAgaric": {
         "latin": "Amanita muscaria",
+        "named": "Ah, uma amanita-mata-moscas!",
         "curiosity": "Antigamente era posto no leite para matar moscas. Daí o nome.",
         "cut": "Corte abaixo da linha do solo. O copo da base, a volva, é o que distingue uma amanita.",
         "clean": "Escove com cuidado: as verrugas brancas saem.",
@@ -936,6 +977,7 @@
       },
       "porcini": {
         "latin": "Boletus edulis",
+        "named": "Ah, um porcini!",
         "curiosity": "Um só pode passar de um quilo.",
         "cut": "Corte na base do pé grosso.",
         "clean": "Escove o chapéu. Poros brancos embaixo: ele é jovem.",
@@ -964,14 +1006,6 @@
     "keysTouchFurnace": "Toque para escolher · toque para fundir",
     "unknown": "?"
   },
-  "gate": {
-    "opened": [
-      {
-        "speaker": "narrator",
-        "text": "Um portão se abre no meio do vale."
-      }
-    ]
-  },
   "finds": {
     "helmet": [
       {
@@ -995,16 +1029,6 @@
       {
         "speaker": "narrator",
         "text": "Sem nome."
-      }
-    ],
-    "swing": [
-      {
-        "speaker": "narrator",
-        "text": "Um balanço."
-      },
-      {
-        "speaker": "narrator",
-        "text": "A corda é nova. Alguém ainda vem aqui."
       }
     ],
     "door": {
@@ -1058,7 +1082,41 @@
           "text": "A varanda continua aqui."
         }
       ]
-    }
+    },
+    "sword": [
+      {
+        "speaker": "narrator",
+        "text": "Esta lâmina derrubou a escuridão."
+      },
+      {
+        "speaker": "narrator",
+        "text": "E devolveu a luz ao mundo."
+      }
+    ],
+    "sign": [
+      {
+        "speaker": "narrator",
+        "text": "Jardim Alto."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Fechado para preservação ambiental."
+      }
+    ],
+    "signOpen": [
+      {
+        "speaker": "narrator",
+        "text": "Jardim Alto."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Fechado para preservação ambiental."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Alguém riscou o \"fechado\"."
+      }
+    ]
   },
   "death": {
     "name": "Morte",
@@ -1081,7 +1139,11 @@
       },
       {
         "speaker": "npc",
-        "text": "Sem a guerra, o que sobra de você? Você perdeu o sentido."
+        "text": "Sem a guerra, o que sobra de você? Nada tem sentido. Nunca teve."
+      },
+      {
+        "speaker": "npc",
+        "text": "Glória, honra, vitória. Eu vi o que sobra delas: nada."
       },
       {
         "speaker": "npc",
@@ -1098,6 +1160,10 @@
       {
         "speaker": "narrator",
         "text": "A espada fica na estrada."
+      },
+      {
+        "speaker": "narrator",
+        "text": "Amigos, fogo, comida. Não falta nada."
       },
       {
         "speaker": "narrator",
@@ -1163,5 +1229,21 @@
     "summer": "Verão",
     "autumn": "Outono",
     "winter": "Inverno"
+  },
+  "garden": {
+    "key": [
+      {
+        "speaker": "npc",
+        "text": "Você se mostrou um grande amigo de todos: da vila e da natureza."
+      },
+      {
+        "speaker": "npc",
+        "text": "Agora pode caminhar livremente pelo Jardim Alto, respeitando a natureza."
+      },
+      {
+        "speaker": "npc",
+        "text": "Tome a chave."
+      }
+    ]
   }
 }

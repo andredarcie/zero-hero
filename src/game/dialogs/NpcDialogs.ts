@@ -38,12 +38,56 @@ export const DIALOG_VOICES: Record<NpcKind, DialogVoice> = {
 const n = (text: string): DialogLine => ({ speaker: 'npc', text });
 const r = (text: string): DialogLine => ({ speaker: 'narrator', text });
 
-export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
+/**
+ * A ESCOLA FILOSÓFICA DE CADA UM (pedido do autor). O jogo é sobre o sentido da vida: a guerra acabou e o
+ * herói perdeu o dele. Cada vizinho responde à pergunta do seu jeito, e é isso que as falas dele seguem.
+ * Texto novo de um NPC tem de caber na escola dele: releia `idea` e `voice` antes de escrever.
+ */
+export type NpcPhilosophy = {
+  /** A escola, pelo nome mais conhecido. */
+  school: string;
+  /** Quem a pensou: é a quem se volta para conferir uma fala. */
+  thinkers: string;
+  /** Onde, para essa escola, está o sentido da vida. */
+  idea: string;
+  /** Como isso aparece no que o personagem diz. */
+  voice: string;
+};
+
+/** O roteiro base de um NPC, e a escola que as falas dele seguem. */
+export type NpcDefinition = DialogScript & {
+  /** Ausente só nos NPCs que saíram do mundo (vendedor, poeta, mímico) e não falam mais. */
+  philosophy?: NpcPhilosophy;
+};
+
+/** O herói não é NPC, mas tem escola também: a dele é a pergunta que o jogo inteiro faz. */
+export const HERO_PHILOSOPHY: NpcPhilosophy = {
+  school: 'Existencialismo',
+  thinkers: 'Jean-Paul Sartre',
+  idea: 'A existência vem antes da essência: ninguém nasce com sentido, ele se faz pelo que se faz.',
+  voice: 'O herói não fala. Era só guerreiro; sem a guerra, se refaz ajudando cada vizinho.',
+};
+
+/** O fim, no jardim: os amigos em volta do fogo. */
+export const ENDING_PHILOSOPHY: NpcPhilosophy = {
+  school: 'Epicurismo',
+  thinkers: 'Epicuro (a escola dele se chamava "O Jardim")',
+  idea: 'Felicidade é amizade, prazeres simples e a paz de não precisar de mais nada.',
+  voice: 'Narração curta e calma: marshmallow, fogo, "Nenhum lugar para ir. Enfim."',
+};
+
+export const NPC_DIALOGS: Record<NpcKind, NpcDefinition> = {
   blackCat: {
     npcName: 'CAT',
     npcColorHex: '#cc99ff',
     npcAssetKey: NPC_VISUALS.blackCat.key,
     npcFrame: NPC_VISUALS.blackCat.frame,
+    philosophy: {
+      school: 'Cinismo',
+      thinkers: 'Diógenes de Sinope ("o cão")',
+      idea: 'Viver com o mínimo, segundo a natureza, rindo da fama e das convenções.',
+      voice: 'Debochado, preguiçoso ao sol, nada impressionado com heróis. "Saia do meu sol."',
+    },
     lines: [
       n('You must be the hero who seeks to find the sword?'),
       n('Yes. I am a talking cat'),
@@ -71,6 +115,13 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcColorHex: '#44ccff',
     npcAssetKey: NPC_VISUALS.astronaut.key,
     npcFrame: NPC_VISUALS.astronaut.frame,
+    // Vega.
+    philosophy: {
+      school: 'Aristotelismo',
+      thinkers: 'Aristóteles',
+      idea: 'Todo ser humano deseja saber; a vida mais feliz é a da contemplação.',
+      voice: 'Curiosa e paciente: o céu, a lente, Galileu. O sentido está em olhar e entender.',
+    },
     // UMA FALA SÓ, como todo NPC plantado no mapa: o presente que está no chão ao lado dele mais
     // o pedido, na mesma frase. O que ele nomeia em maiúsculo existe NA CARTA dele (a picareta, os
     // veios) — mandar procurar o que não está ali seria uma missão impossível contada com toda a
@@ -85,6 +136,13 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcColorHex: '#ffdd44',
     npcAssetKey: NPC_VISUALS.businessMan.key,
     npcFrame: NPC_VISUALS.businessMan.frame,
+    // Bram.
+    philosophy: {
+      school: 'Estoicismo',
+      thinkers: 'Epicteto, Sêneca, Marco Aurélio',
+      idea: 'Separar o que depende de nós do que não depende, e viver de acordo com a natureza.',
+      voice: 'Perdeu o que não controlava; agarra o que controla, uma fogueira. Frases secas, de trabalho.',
+    },
     lines: [
       n('The AXE is yours, an advance — it fells DEAD wood in two chops. Clear my dry ranks and bring me six STICKS: timber is the only market left.'),
     ],
@@ -95,6 +153,13 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcColorHex: '#66ff44',
     npcAssetKey: NPC_VISUALS.radiationSuit.key,
     npcFrame: NPC_VISUALS.radiationSuit.frame,
+    // Hollis.
+    philosophy: {
+      school: 'Taoísmo',
+      thinkers: 'Lao-Tsé, Zhuangzi',
+      idea: 'Seguir o caminho da natureza sem forçar (wu wei), e saber quando já basta.',
+      voice: 'Calma, observa o que não se vê. Não força nada: corte, não arranque; quatro já bastam.',
+    },
     lines: [
       n('Take this STONE — thrown into lava it cools into a step. Something metal sank past the molten pool: walk one bar of IRON back to me.'),
     ],
@@ -105,6 +170,13 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcColorHex: '#ff88aa',
     npcAssetKey: NPC_VISUALS.painter.key,
     npcFrame: NPC_VISUALS.painter.frame,
+    // Iris.
+    philosophy: {
+      school: 'Filosofia de Nietzsche',
+      thinkers: 'Friedrich Nietzsche',
+      idea: 'O mundo não traz sentido pronto; vence-se o niilismo criando valores, como um artista.',
+      voice: 'Começa no cinza e termina na cor que ela mesma fez. Celebra a coragem de quem cria.',
+    },
     lines: [
       n('Take the SHOVEL and dig the beds south of me. Green is a colour you GROW, so bring me six SEEDS and paint this field.'),
     ],
@@ -141,6 +213,12 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcName: 'MAGO',
     npcColorHex: '#a97bff',
     npcAssetKey: NPC_VISUALS.wizard.key,
+    philosophy: {
+      school: 'Budismo',
+      thinkers: 'Sidarta Gautama',
+      idea: 'O sofrimento vem do apego; tudo passa, e o caminho é soltar e ter compaixão.',
+      voice: 'Poucas palavras, sem pressa. Manda soltar a espada e cuidar dos outros.',
+    },
     lines: [
       n('Ah, o escolhido. Senti teus passos ondularem pela trama do destino.'),
       n('Eu poderia conjurar a espada que buscas... mas meu grimório só compila na versão completa.'),
@@ -152,6 +230,12 @@ export const NPC_DIALOGS: Record<NpcKind, DialogScript> = {
     npcName: 'DEATH',
     npcColorHex: '#f3f4f6',
     npcAssetKey: NPC_VISUALS.death.key,
+    philosophy: {
+      school: 'Niilismo',
+      thinkers: 'Friedrich Nietzsche (o diagnóstico), Arthur Schopenhauer',
+      idea: 'Nada tem sentido em si. Ela não responde: faz a pergunta que os outros respondem.',
+      voice: 'Calma, sem ameaça. Aponta o vazio e espera. Ainda assim, deixa a foice para ajudar.',
+    },
     // Ela não mora no mapa: vem uma vez, na primeira noite dormida no colchão (ver
     // GameScene.playDeathVisit). O que ela diz está no locale, em `death.visit`.
     lines: [

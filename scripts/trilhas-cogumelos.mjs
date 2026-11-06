@@ -20,6 +20,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { makeCanStep } from './relevo.mjs';
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worldPath = path.resolve(here, '../public/world.json');
 const check = process.argv.includes('--check');
@@ -31,7 +33,7 @@ const W = worldChunksX * CW;
 const H = worldChunksY * CH;
 
 // constants.SOLID_UPPER_FRAMES
-const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40]);
+const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
 const SEA = 33;
 
 const chunkOf = (x, y) => world.chunks.find((c) => c.cx === Math.floor(x / CW) && c.cy === Math.floor(y / CH));
@@ -73,26 +75,8 @@ const pickupTiles = new Set([
 // O PLANALTO (relief, ver world/relief.ts): 0 chão, 1 planalto, 2-5 escada subindo N/L/S/O. Só se
 // muda de nível pela escada, então a prova anda por `canStep` como o herói.
 const relief = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : chunkOf(x, y).relief?.[y % CH]?.[x % CW] ?? 0);
-const STAIR = { 2: [0, -1], 3: [1, 0], 4: [0, 1], 5: [-1, 0] };
-const canStep = (fx, fy, tx, ty) => {
-  const a = relief(fx, fy);
-  const b = relief(tx, ty);
-  if (a === b && !STAIR[a]) return true;
-  const dx = tx - fx;
-  const dy = ty - fy;
-  const ua = STAIR[a];
-  if (ua) {
-    if (dx === ua[0] && dy === ua[1]) return b === 1;
-    if (dx === -ua[0] && dy === -ua[1]) return b === 0;
-    return false;
-  }
-  const ub = STAIR[b];
-  if (ub) {
-    if (dx === ub[0] && dy === ub[1]) return a === 0;
-    if (dx === -ub[0] && dy === -ub[1]) return a === 1;
-  }
-  return false;
-};
+// A regra de passo é a do jogo, num lugar só (scripts/relevo.mjs): o cume e as escadas dele inclusive.
+const canStep = makeCanStep(relief);
 
 // Terreno sólido nesses tiles seria um pinheiro apagado em silêncio: melhor parar aqui.
 for (const k of [...placed.keys(), ...pickupTiles]) {

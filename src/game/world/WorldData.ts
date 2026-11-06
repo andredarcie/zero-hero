@@ -282,6 +282,7 @@ export const getDryShrubs = (): WorldProp[] => allProps().filter((prop) => prop.
 // deixa no chao e um bloco de ferro em vez de uma pedra. Vira RockObject como qualquer outra
 // (com `ore: true`), entao colisao, bomba e picareta valem sem uma linha a mais.
 export const getIronRocks = (): WorldProp[] => allProps().filter((prop) => prop.type === 'ironRock');
+export const getCoalRocks = (): WorldProp[] => allProps().filter((prop) => prop.type === 'coalRock');
 
 export const getRocks = (): WorldProp[] => allProps().filter((prop) => prop.type === 'rock');
 

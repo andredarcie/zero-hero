@@ -19,6 +19,11 @@ import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
  *   5  ... para o OESTE
  *   6-7  SERRA DE MATA, um ou dois níveis acima (o dois é raro): só embaixo de árvore fechada. Ninguém pisa ali, então
  *        ela não muda caminho nenhum: é a mata subindo o morro.
+ *   8  CUME: o segundo andar onde se pisa, DOIS níveis acima do chão (o alto do jardim do fim).
+ *   9-12 escada do planalto para o CUME, subindo N/L/S/O: fica num tile de planalto (a base dela é o nível 1).
+ *
+ * Uma escada vence UM nível: do chão ao planalto (2-5) ou do planalto ao cume (9-12). Duas escadas
+ * seguidas não se emendam — entre elas há sempre um tile do andar do meio.
  *
  * Fora do mundo a altura não mora em dado nenhum: sai de ruído (`voidLevel`), e é só paisagem.
  *
@@ -28,6 +33,8 @@ import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 
 export const RELIEF_GROUND = 0;
 export const RELIEF_HIGH = 1;
+/** O segundo andar onde se pisa (ver a tabela acima). */
+export const RELIEF_PEAK = 8;
 /** A altura de um nível, em tiles: a mesma do cubo da montanha (um bloco é um tile de lado). */
 export const RELIEF_HEIGHT = 1;
 /** O código da serra de mata é este mais o nível dela (ver a tabela acima). */
@@ -41,10 +48,28 @@ const STAIR_UP: Readonly<Record<number, readonly [number, number]>> = {
   3: [1, 0],
   4: [0, 1],
   5: [-1, 0],
+  9: [0, -1],
+  10: [1, 0],
+  11: [0, 1],
+  12: [-1, 0],
 };
+/** O código da escada de cada andar, na mesma ordem (N, L, S, O). */
+export const STAIR_CODES_GROUND = [2, 3, 4, 5] as const;
+export const STAIR_CODES_HIGH = [9, 10, 11, 12] as const;
 
 /** Para onde esta escada sobe (dx, dy), ou `undefined` se o código não é escada. */
 export const stairUp = (code: number): readonly [number, number] | undefined => STAIR_UP[code];
+/** O nível de onde esta escada sai: 0 (chão → planalto) ou 1 (planalto → cume). */
+export const stairBase = (code: number): number => (code >= 9 && code <= 12 ? 1 : 0);
+/** O código do andar de baixo e do de cima de uma escada que sai do nível `base`. */
+const floorCode = (level: number): number => (level === 0 ? RELIEF_GROUND : level === 1 ? RELIEF_HIGH : RELIEF_PEAK);
+/** A altura, em níveis, de um código que NÃO é escada. */
+const codeLevel = (code: number): number => {
+  if (code === RELIEF_HIGH) return 1;
+  if (code === RELIEF_PEAK) return 2;
+  if (code === RELIEF_SCENIC_BASE + 1 || code === RELIEF_SCENIC_BASE + 2) return code - RELIEF_SCENIC_BASE;
+  return 0;
+};
 
 export const reliefAt = (wx: number, wy: number): number => getTileRelief(wx, wy);
 
@@ -161,8 +186,8 @@ export const reliefLevelAt = (wx: number, wy: number): number => {
   const cy = Math.floor(wy / CHUNK_ROWS);
   if (!isInsideWorld(cx, cy)) return voidLevel(wx, wy);
   const code = getTileRelief(wx, wy);
-  if (code === RELIEF_HIGH) return 1;
-  return code > RELIEF_SCENIC_BASE ? code - RELIEF_SCENIC_BASE : 0;
+  // A escada mora no andar de onde ela sai: o tile embaixo dos degraus é desse nível.
+  return STAIR_UP[code] ? stairBase(code) : codeLevel(code);
 };
 
 export const isHighTile = (wx: number, wy: number): boolean => getTileRelief(wx, wy) === RELIEF_HIGH;
@@ -177,37 +202,35 @@ export const terrainHeightAt = (fx: number, fy: number): number => {
   const x = Math.floor(fx + 0.5);
   const y = Math.floor(fy + 0.5);
   const code = getTileRelief(x, y);
-  if (code === RELIEF_HIGH) return RELIEF_HEIGHT;
-  if (code > RELIEF_SCENIC_BASE) return (code - RELIEF_SCENIC_BASE) * RELIEF_HEIGHT;
   const up = STAIR_UP[code];
-  if (!up) return 0;
+  if (!up) return codeLevel(code) * RELIEF_HEIGHT;
   const along = (fx - x) * up[0] + (fy - y) * up[1]; // -0.5 na borda de baixo, +0.5 na de cima
-  return Math.max(0, Math.min(1, along + 0.5)) * RELIEF_HEIGHT;
+  return (stairBase(code) + Math.max(0, Math.min(1, along + 0.5))) * RELIEF_HEIGHT;
 };
 
 /**
- * PODE-SE ANDAR de um tile para o vizinho? Só entre tiles do MESMO nível, ou pela escada no
- * sentido dela: entra-se nela pela ponta de baixo (vindo do chão) ou pela de cima (vindo do
- * planalto), e sai-se pelas mesmas duas pontas. Pelos lados, nunca — a escada tem parede.
+ * PODE-SE ANDAR de um tile para o vizinho, dados os CÓDIGOS dos dois? Só entre tiles do MESMO código,
+ * ou pela escada no sentido dela: entra-se nela pela ponta de baixo (vindo do andar de baixo) ou pela
+ * de cima (vindo do andar de cima), e sai-se pelas mesmas duas pontas. Pelos lados, nunca — a escada
+ * tem parede. É a regra pura, sem o mundo: os scripts e os playtests a copiam ao pé da letra.
  */
+export const canStepCodes = (a: number, b: number, dx: number, dy: number): boolean => {
+  const ua = STAIR_UP[a];
+  const ub = STAIR_UP[b];
+  if (!ua && !ub) return a === b;
+  if (ua) {
+    const base = stairBase(a);
+    if (dx === ua[0] && dy === ua[1]) return b === floorCode(base + 1);
+    if (dx === -ua[0] && dy === -ua[1]) return b === floorCode(base);
+    return false;
+  }
+  const base = stairBase(b);
+  if (dx === ub![0] && dy === ub![1]) return a === floorCode(base);
+  if (dx === -ub![0] && dy === -ub![1]) return a === floorCode(base + 1);
+  return false;
+};
+
 export const canStep = (fromX: number, fromY: number, toX: number, toY: number): boolean => {
   if (!worldHasRelief()) return true;
-  const a = getTileRelief(fromX, fromY);
-  const b = getTileRelief(toX, toY);
-  if (a === b && !STAIR_UP[a]) return true;
-  const dx = toX - fromX;
-  const dy = toY - fromY;
-  const ua = STAIR_UP[a];
-  if (ua) {
-    if (dx === ua[0] && dy === ua[1]) return b === RELIEF_HIGH;
-    if (dx === -ua[0] && dy === -ua[1]) return b === RELIEF_GROUND;
-    return false;
-  }
-  const ub = STAIR_UP[b];
-  if (ub) {
-    if (dx === ub[0] && dy === ub[1]) return a === RELIEF_GROUND;
-    if (dx === -ub[0] && dy === -ub[1]) return a === RELIEF_HIGH;
-    return false;
-  }
-  return a === b;
+  return canStepCodes(getTileRelief(fromX, fromY), getTileRelief(toX, toY), toX - fromX, toY - fromY);
 };

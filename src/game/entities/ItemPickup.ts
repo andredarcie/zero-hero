@@ -54,12 +54,6 @@ export type HeldItemKind =
   // ferro NAO tem uso proprio: ele e materia-prima das receitas manuais da bancada. Sai de uma
   // `ironRock`, que e a mesma pedra da picareta com veio de minerio dentro.
   | 'iron'
-  // A handful of SEEDS ("sementes"), cut from tall grass with the scythe. The grass made
-  // renewable and PORTABLE: planted in a dug hole (plantSpot), watered with the bucket, it
-  // sprouts REAL tall grass — the first fire conductor the player grows, not one baked into
-  // the map. Cutting the grown grass yields seeds again: a farming loop, and what turns the
-  // scythe from a password (grass -> nothing) into a producer.
-  | 'seeds'
   // An EMPTY bucket, and the same bucket once FILLED at the river. The counter to the whole fire
   // system: dip it in a river to fill it, then pour it on any lit campfire to put it out — one
   // use, then go back for more water. The one deliberate way to UNDO fire (the scythe only ever
@@ -116,8 +110,6 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   iron: { texture: 'iron-item', frame: 0 },
   ore: { texture: 'ore-item', frame: 0 },
   bloom: { texture: 'bloom-item', frame: 0 },
-  // The seeds sprite comes from the sprite factory (spritefactory/sprites/seeds.mjs).
-  seeds: { texture: 'seeds-item', frame: 0 },
   // The bucket art is generated at boot (bucketTexture.ts) into both pipelines.
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
@@ -208,7 +200,7 @@ const FLAME_ELEV = 0.5; // lambe a ponta do graveto em pe (arte de 0.7 tile)
 const OUTLINE_COLOR = 0x1b1d33;
 const OUTLINE_OFFSET_TILES = GROUND_SIZE / 16;
 const UNINKED_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>([
-  'axe', 'pickaxe', 'scythe', 'shovel', 'wood', 'stone', 'seeds', 'sword', 'splitWood',
+  'axe', 'pickaxe', 'scythe', 'shovel', 'wood', 'stone', 'sword', 'splitWood',
 ]);
 // A CINTILÂNCIA: um brilho curto de vez em quando, cada item no seu tempo.
 const GLINT_CYCLE_MS = 2800;

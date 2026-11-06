@@ -8,8 +8,10 @@ import type { PropDir } from '@/game/world/worldSchema';
 import type { WorldProp } from './WorldProp';
 
 /**
- * O forno manual reduz minerio com carvao. A receita e escolhida no catalogo e paga diretamente
- * pela mochila; itens largados ao redor nunca iniciam uma fornada.
+ * O FORNO DA VEGA — o único do vale, fixo ao lado dela, e o GUIA da quest (pedido do autor). Não há
+ * catálogo: ele sabe a ordem certa (AstronomerQuest.furnaceNeed), pede um item de cada vez (o balão
+ * sobre ele), engole o que o herói entrega (`swallow`) e, quando a receita fecha, ruge e devolve o
+ * resultado pela boca (`startHandSmelt`). Não se recolhe.
  */
 
 const DIR_VEC: ReadonlyArray<readonly [number, number]> = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -63,6 +65,8 @@ export class FurnaceObject implements WorldProp {
   private glow?: Billboard3D;
   private readonly flying: Billboard3D[] = [];
   private readonly sparks = new Set<Billboard3D>();
+  /** Os itens a caminho da boca (ver swallow). */
+  private readonly swallowing = new Set<Billboard3D>();
 
   private phase: FurnacePhase = 'idle';
   private elapsed = 0;
@@ -70,6 +74,11 @@ export class FurnaceObject implements WorldProp {
   private frame = FRAME_COLD;
   private breathsPlayed = 0;
 
+  /**
+   * Há fogo esperando lá dentro (o carvão aceso à espera do minério, a areia à espera da cinza): parado, ele
+   * fica com a boca em brasa, e não com cara de apagado. Quem diz é a quest, a cada quadro.
+   */
+  public kindled = false;
   /** Quantas fornadas ele fez. Publico: e o que o playtest observa da peca. */
   public smeltCount = 0;
   /** O que a fornada manual esta produzindo e quantas unidades ela entrega. */
@@ -127,8 +136,9 @@ export class FurnaceObject implements WorldProp {
 
     switch (this.phase) {
       case 'idle': {
-        this.pose(FRAME_COLD);
-        this.fadeGlow(deltaMs);
+        this.pose(this.kindled ? FRAME_LIT : FRAME_COLD);
+        if (this.kindled) this.pulseGlow(0.3 + 0.06 * Math.sin(this.aliveMs * 0.004), effectsVisible);
+        else this.fadeGlow(deltaMs);
         break;
       }
 
@@ -157,6 +167,13 @@ export class FurnaceObject implements WorldProp {
         }
         if (t >= 1) {
           this.clearFlying();
+          // Fornada sem peça (o carvão que fica aceso lá dentro, à espera do minério): ela pega, ruge
+          // e assenta, e nada pula da boca.
+          if (!this.handProduct) {
+            this.smeltCount += 1;
+            this.enter('idle');
+            break;
+          }
           this.enter('deliver');
           if (this.handProduct) this.spawnProduct(this.handProduct);
           // A BRASA ESGUICHA DA BOCA quando a peca nasce: e o instante que o jogador esta esperando
@@ -212,7 +229,7 @@ export class FurnaceObject implements WorldProp {
    * na mochila dele. Sem isso, dois itens apareceriam do nada no ar em frente a boca.
    */
   public startHandSmelt(
-    product: HeldItemKind,
+    product: HeldItemKind | null,
     units: number,
     inputs: readonly HeldItemKind[],
     from: readonly [number, number],
@@ -246,6 +263,40 @@ export class FurnaceObject implements WorldProp {
     const [ox, oy] = this.outputTile;
     if (!port.occupied(ox, oy)) return [ox, oy];
     return port.landing(this.worldX, this.worldY);
+  }
+
+  /**
+   * O FORNO GUIA ENGOLE UM ITEM (pedido do autor: o herói só entrega, um de cada vez, o que ele pede).
+   * O item sai da mão do herói, faz um arco até a boca e some lá dentro; a alvenaria dá o tranco e cospe
+   * duas brasas. Nada disto muda o jogo: quem guarda o que entrou é a quest (AstronomerQuest).
+   */
+  public swallow(kind: HeldItemKind, from: readonly [number, number]): void {
+    const visual = itemGroundVisual(kind);
+    const bb = world3d()
+      .addBillboard(visual.texture, visual.frame, { emissive: true, centered: true })
+      .setPosition(from[0], from[1] + DEPTH_ITEM)
+      .setElevation(HAND_ELEV)
+      .setDisplaySize(ITEM_SIZE, ITEM_SIZE);
+    this.swallowing.add(bb);
+    const k = { t: 0 };
+    this.scene.tweens.add({
+      targets: k,
+      t: 1,
+      duration: 380,
+      ease: 'Sine.easeIn',
+      onUpdate: () => {
+        const t = k.t;
+        bb.setPosition(from[0] + (this.worldX - from[0]) * t, from[1] + (this.worldY - from[1]) * t + DEPTH_ITEM)
+          .setElevation(HAND_ELEV + (MOUTH_ELEV - HAND_ELEV) * t + 0.25 * arc(t))
+          .setDisplaySize(ITEM_SIZE * (1 - 0.9 * t), ITEM_SIZE * (1 - 0.9 * t));
+      },
+      onComplete: () => {
+        this.swallowing.delete(bb);
+        bb.destroy();
+        this.bump();
+        this.spawnSparks(2, MOUTH_ELEV);
+      },
+    });
   }
 
   public bump(): void {
@@ -401,5 +452,7 @@ export class FurnaceObject implements WorldProp {
       spark.destroy();
     }
     this.sparks.clear();
+    for (const bb of this.swallowing) bb.destroy();
+    this.swallowing.clear();
   }
 }
