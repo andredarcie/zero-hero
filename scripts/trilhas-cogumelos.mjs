@@ -1,6 +1,6 @@
 // AS TRILHAS DOS COGUMELOS — cada um dos seis fungos da Hollis pede um gesto diferente:
 //
-//   porcini     (1,36)   só chegar e colher
+//   porcini     (2,40)   só chegar e colher (ao lado da Hollis: scripts/porcini-da-hollis.mjs)
 //   morel       (2,30)   ilha num lago: dois gravetos fazem a ponte em (2,31)
 //   puffball    (12,21)  mato alto em volta: a foice abre
 //   inkCap      (11,10)  arbustos secos em volta: o graveto aceso queima
@@ -115,7 +115,7 @@ const BLOCKING = new Set(['campfire', 'hearth', 'gardenGate', 'dryBush', 'locked
   'ironRock', 'tallGrass', 'moonflower', 'plantSpot', 'toolbox', 'furnace', 'altar', 'water', 'bridgeSpot', 'lava']);
 const propAt = new Map(world.props.map((p) => [`${p.worldX},${p.worldY}`, p.type]));
 const npcs = new Set(world.chunks.flatMap((c) => c.npcs.map((n) => `${n.worldX},${n.worldY}`)));
-const SHROOMS = { porcini: [1, 36], morel: [2, 30], puffball: [12, 21], inkCap: [11, 10], chanterelle: [11, 2], flyAgaric: [1, 1] };
+const SHROOMS = { porcini: [2, 40], morel: [2, 30], puffball: [12, 21], inkCap: [11, 10], chanterelle: [11, 2], flyAgaric: [1, 1] };
 const shroomTiles = new Set(Object.values(SHROOMS).map(([x, y]) => `${x},${y}`));
 
 /** Os tiles que um herói alcança a pé a partir da Hollis, com estes tipos de prop abertos. */

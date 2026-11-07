@@ -59,6 +59,8 @@ const DEFS: Record<string, SheetDef> = {
   furnace: { url: `${A}/environment/props/furnace.png`, frameW: 16, frameH: 16 },
   // O ALTAR: laje fria (0) e com o tampo em brasa (1) — o calor que a pancada deixa na pedra.
   altar: { url: `${A}/environment/props/altar.png`, frameW: 16, frameH: 16 },
+  // Sprite Factory: o martelinho da bigorna (forge-hammer.mjs) — fica no toco e vai para a mão do herói ao malhar.
+  'forge-hammer': { url: `${A}/environment/props/forge_hammer.png` },
   // Sprite Factory: a caixa de ferramentas manual (TOOLBOX_FRAMES).
   workbench: { url: `${A}/environment/props/workbench.png`, frameW: 16, frameH: 16 },
   // Sprite Factory: a flor da lua — 9 poses de UMA flor abrindo, 5 em pe + 4 deitadas. Os frames

@@ -192,7 +192,7 @@
         [
           14,
           14,
-          0,
+          null,
           19,
           8,
           2,
@@ -200,14 +200,14 @@
           7,
           7,
           4,
-          7,
+          null,
           19
         ],
         [
           14,
           null,
           null,
-          7,
+          null,
           7,
           7,
           8,
@@ -222,7 +222,7 @@
           18,
           19,
           19,
-          7,
+          null,
           0,
           0,
           8,
@@ -351,10 +351,10 @@
           19,
           null,
           19,
-          19,
+          null,
           7,
           11,
-          1,
+          null,
           4
         ]
       ],
@@ -736,7 +736,7 @@
           4
         ],
         [
-          0,
+          null,
           4,
           4,
           9,
@@ -834,7 +834,7 @@
           4
         ],
         [
-          2,
+          null,
           8,
           4,
           9,
@@ -876,7 +876,7 @@
           4
         ],
         [
-          19,
+          null,
           4,
           4,
           20,
@@ -3398,7 +3398,7 @@
           7
         ],
         [
-          19,
+          null,
           null,
           null,
           null,
@@ -5618,7 +5618,7 @@
         [
           39,
           39,
-          13,
+          null,
           13,
           3,
           8,
@@ -8703,7 +8703,7 @@
           null,
           null,
           null,
-          0,
+          null,
           null,
           19,
           14,
@@ -8715,7 +8715,7 @@
           4,
           null,
           null,
-          20,
+          null,
           null,
           null,
           null,
@@ -8727,9 +8727,9 @@
         ],
         [
           1,
-          19,
-          20,
-          0,
+          null,
+          null,
+          null,
           null,
           19,
           20,
@@ -8759,7 +8759,7 @@
           null,
           19,
           null,
-          0,
+          null,
           null,
           4,
           20,
@@ -8782,7 +8782,7 @@
           4
         ],
         [
-          1,
+          null,
           4,
           20,
           0,
@@ -9167,8 +9167,8 @@
       "pickups": [
         {
           "type": "porcini",
-          "worldX": 1,
-          "worldY": 36
+          "worldX": 2,
+          "worldY": 40
         }
       ],
       "npcs": [
@@ -11557,9 +11557,9 @@
           0,
           0,
           null,
-          20,
           null,
-          4,
+          null,
+          null,
           4,
           4,
           4,
@@ -11570,10 +11570,10 @@
           4,
           4,
           4,
-          4,
-          4,
-          4,
-          4,
+          null,
+          null,
+          null,
+          null,
           4,
           4,
           4,
@@ -13549,8 +13549,8 @@
           20,
           null,
           1,
-          19,
-          20,
+          null,
+          null,
           0
         ],
         [
@@ -13564,7 +13564,7 @@
           null,
           null,
           null,
-          0,
+          null,
           null
         ],
         [
@@ -13578,8 +13578,8 @@
           null,
           20,
           null,
-          1,
-          4
+          null,
+          null
         ],
         [
           4,
@@ -13591,9 +13591,9 @@
           0,
           null,
           null,
-          1,
-          19,
-          4
+          0,
+          null,
+          null
         ],
         [
           4,
@@ -14062,7 +14062,7 @@
           null
         ],
         [
-          1,
+          null,
           19,
           20,
           null,
@@ -14072,8 +14072,8 @@
           null,
           null,
           null,
-          20,
-          0
+          null,
+          null
         ],
         [
           null,
@@ -14090,7 +14090,7 @@
           null
         ],
         [
-          4,
+          null,
           0,
           null,
           null,
@@ -14104,7 +14104,7 @@
           null
         ],
         [
-          4,
+          null,
           null,
           null,
           20,
@@ -14684,7 +14684,7 @@
           4,
           null,
           null,
-          19,
+          null,
           null,
           null,
           null,
@@ -14696,60 +14696,60 @@
           4,
           null,
           0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          4,
+          null,
+          null
+        ],
+        [
+          4,
+          4,
+          0,
+          1,
+          null,
+          null,
+          null,
           1,
           19,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          19,
+          null,
+          0,
+          null,
+          19,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          0,
+          null,
+          20,
+          0,
+          4,
+          null,
           20,
           null,
           null,
-          4,
-          null,
-          null
-        ],
-        [
-          4,
-          4,
-          0,
-          1,
-          null,
-          null,
-          null,
-          1,
-          19,
-          null,
           null,
           null
         ],
         [
           null,
-          null,
-          null,
-          19,
-          null,
           0,
-          null,
-          19,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          0,
-          0,
-          null,
-          20,
-          0,
-          4,
-          null,
-          20,
-          null,
-          null,
-          null,
-          null
-        ],
-        [
-          1,
-          19,
           20,
           0,
           1,
@@ -15739,12 +15739,6 @@
       "worldY": 26
     },
     {
-      "type": "toolbox",
-      "worldX": 43,
-      "worldY": 7,
-      "dir": 2
-    },
-    {
       "type": "dryBush",
       "worldX": 38,
       "worldY": 4
@@ -16674,6 +16668,11 @@
       "worldX": 44,
       "worldY": 6,
       "dir": 2
+    },
+    {
+      "type": "altar",
+      "worldX": 43,
+      "worldY": 7
     },
     {
       "type": "dryTree",

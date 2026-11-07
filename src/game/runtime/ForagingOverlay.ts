@@ -4,6 +4,7 @@ import {
   type DirtKind, type MushroomKind,
 } from '@/game/fungi/fungi';
 import { t, tWords } from '@/game/i18n/i18n';
+import { MinigameCaption } from '@/game/runtime/MinigameCaption';
 import {
   HAND_FONT as HAND, INK, INK_RED, SOFT_BLUR, paperTexture, seedOf, seededRandom, tornEdge,
 } from '@/game/runtime/uiStyle';
@@ -62,8 +63,12 @@ const CSS = `
   align-items: center; justify-content: center;
 }
 .zh-forage.zh-reading .zh-note-wrap { display: flex; }
+/* O PAPEL OCUPA A TELA (pedido do autor): o maior que couber, com margem em volta e inteiro na altura; tudo dentro
+   dele cresce junto (unidades cqw do contêiner), então a ficha é a mesma no celular, no notebook e na TV. */
 .zh-note {
-  position: relative; width: min(400px, 90vw);
+  position: relative; width: min(92vw, 1000px, calc((100vh - 64px) * 0.74));
+  width: min(92vw, 1000px, calc((100dvh - 64px) * 0.74));
+  container-type: inline-size;
   filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.25)) drop-shadow(0 14px 22px rgba(0, 0, 0, 0.4));
   transform: rotate(-1.4deg);
 }
@@ -81,15 +86,15 @@ const CSS = `
   100% { opacity: 0; transform: perspective(900px) translateY(48vh) rotateX(50deg) rotate(10deg) scale(0.6); }
 }
 .zh-note-paper {
-  position: relative; padding: 26px 26px 30px;
+  position: relative; padding: 6.5cqw 6.5cqw 7.5cqw;
   color: ${INK}; font-family: ${HAND}; font-weight: 600;
-  background-color: #e3d1a4; background-size: max(100%, 440px) auto; background-position: center;
+  background-color: #e3d1a4; background-size: 100% auto; background-position: center;
   background-repeat: no-repeat;
   text-shadow: 0 0 0.6px rgba(40, 24, 13, 0.55);
 }
 .zh-note-photo {
-  float: left; position: relative; width: min(36%, 124px);
-  margin: 0 18px 10px -4px; padding: 6px 6px 18px;
+  float: left; position: relative; width: 36%;
+  margin: 0 4.5cqw 2.5cqw -1cqw; padding: 1.5cqw 1.5cqw 4.5cqw;
   background: linear-gradient(160deg, #f4ecd6 0%, #e7dcc0 100%);
   box-shadow: 0 1px 1px rgba(40, 24, 8, 0.3), 0 4px 9px rgba(40, 24, 8, 0.32);
   transform: rotate(-4.5deg);
@@ -109,7 +114,7 @@ const CSS = `
   filter: sepia(0.22) contrast(0.95) saturate(0.9);
 }
 .zh-note-clip {
-  position: absolute; top: -20px; left: 20%; width: 15px; height: 46px;
+  position: absolute; top: -5cqw; left: 20%; width: 3.8cqw; height: 11.5cqw;
   transform: rotate(7deg); overflow: visible;
   animation: zh-clip-in 300ms cubic-bezier(0.3, 1.4, 0.5, 1) 900ms both;
 }
@@ -117,22 +122,22 @@ const CSS = `
   0%   { opacity: 0; transform: translateY(-16px) rotate(18deg); }
   100% { opacity: 1; transform: rotate(7deg); }
 }
-.zh-note-name { margin: 6px 0 2px; font-size: clamp(28px, 7.4vw, 36px); line-height: 1.1; font-weight: 700; }
+.zh-note-name { margin: 1.5cqw 0 0.5cqw; font-size: clamp(26px, 9cqw, 76px); line-height: 1.1; font-weight: 700; }
 .zh-note-latin {
   position: relative; display: inline-block; margin: 0;
-  font-size: clamp(19px, 4.8vw, 22px); line-height: 1.3; opacity: 0.85;
+  font-size: clamp(17px, 5.4cqw, 44px); line-height: 1.3; opacity: 0.85;
 }
-.zh-note-edible-row { margin: 10px 0 2px; }
+.zh-note-edible-row { margin: 2.5cqw 0 0.5cqw; }
 .zh-note-edible {
   position: relative; display: inline-block; padding: 0 0.6em;
-  font-size: clamp(19px, 4.8vw, 22px); line-height: 1.35;
+  font-size: clamp(17px, 5.4cqw, 44px); line-height: 1.35;
 }
 .zh-note-edible.zh-poison { color: ${INK_RED}; }
 .zh-note-notes {
-  clear: both; margin: 14px 0 0; padding: 0; list-style: none;
-  font-size: clamp(20px, 5.1vw, 23px); line-height: 1.3;
+  clear: both; margin: 3.5cqw 0 0; padding: 0; list-style: none;
+  font-size: clamp(18px, 5.7cqw, 46px); line-height: 1.3;
 }
-.zh-note-notes li { margin: 0 0 6px; }
+.zh-note-notes li { margin: 0 0 1.5cqw; }
 
 /* A PENA: cada linha aparece da esquerda para a direita, no ritmo de quem escreve. */
 .zh-ink { display: inline-block; animation: zh-write var(--d, 600ms) linear var(--at, 0ms) both; }
@@ -154,6 +159,26 @@ const CSS = `
 .zh-note.zh-done .zh-ink, .zh-note.zh-done .zh-stroke path,
 .zh-note.zh-done .zh-note-photo, .zh-note.zh-done .zh-note-clip { animation: none; }
 `;
+
+/**
+ * O PAPEL DO TAMANHO DA TELA (pedido do autor): mede a ficha numa largura de referência e a escala até a altura dela
+ * caber no espaço livre (a margem e a legenda do rodapé descontadas), sem passar de 92% da largura. Tudo dentro do
+ * papel cresce junto (cqw), então a altura é proporcional à largura e uma medida basta. Refaz no resize.
+ */
+export const fitNotePaper = (paper: HTMLElement): void => {
+  const REF = 400;
+  const fit = (): void => {
+    if (!paper.isConnected) { window.removeEventListener('resize', fit); return; }
+    paper.style.width = `${REF}px`;
+    const h = paper.offsetHeight;
+    if (h <= 0) return;
+    const room = window.innerHeight - 128;
+    const w = Math.min(window.innerWidth * 0.92, 1200, (REF * room) / h);
+    paper.style.width = `${Math.max(260, Math.floor(w))}px`;
+  };
+  fit();
+  window.addEventListener('resize', fit);
+};
 
 export const ensureNoteStyle = (): void => {
   if (document.getElementById(STYLE_ID)) return;
@@ -243,6 +268,8 @@ const easeOutBack = (k: number): number => {
 };
 
 export class ForagingOverlay {
+  /** O que fazer, no rodapé (pedido do autor). */
+  private readonly caption = new MinigameCaption();
   private readonly root: HTMLDivElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -377,6 +404,7 @@ export class ForagingOverlay {
     window.removeEventListener('keyup', this.onKeyUp, true);
     window.removeEventListener('resize', this.resize);
     this.root.remove();
+    this.caption.destroy();
   }
 
   // ── estágios ───────────────────────────────────────────────────────────────
@@ -384,10 +412,13 @@ export class ForagingOverlay {
   private enter(stage: Stage): void {
     this.stage = stage;
     this.stageClock = 0;
+    // A LEGENDA do rodapé: cortar, limpar, ler a ficha (runtime/MinigameCaption).
+    this.caption.show(stage === 'aim' ? 'forage.cut' : stage === 'clean' ? 'forage.clean' : stage === 'note' ? 'card' : null);
     this.root.classList.toggle('zh-cleaning', stage === 'clean');
     if (stage === 'note') {
       this.root.classList.add('zh-reading');
       this.note.classList.add('zh-on');
+      fitNotePaper(this.note);
       this.cb.onNote();
     }
   }
@@ -1076,6 +1107,11 @@ export class ForagingOverlay {
    * brota; na altura certa a lâmina ACENDE e um brilho corre por ela (o único aviso, e ele mora na
    * faca); um erro a faz recuar; o corte a leva direto, atravessando, e ela some.
    */
+  /**
+   * A FACA (pedido do autor: "que pareça mesmo uma faca"). De lado, deitada, com a PONTA para o cogumelo: o dorso
+   * em cima desce até a ponta, o FIO claro embaixo é a linha exata do corte (`knifeY`), a virola de latão separa a
+   * lâmina do cabo de madeira, e dois rebites no cabo. Entre as marcas, o fio acende e um brilho corre por ele.
+   */
   private drawKnife(): void {
     const ctx = this.ctx;
     let ox = 0;
@@ -1103,21 +1139,37 @@ export class ForagingOverlay {
     const inZone = this.stage === 'aim' && this.knifeY >= this.zoneTop && this.knifeY <= this.zoneBottom;
     const x0 = this.bladeL;
     const x1 = this.bladeR;
-    this.px(x0 - 1, y - 2, x1 - x0 + 2, 4, NAVY);
-    this.px(x0, y - 1, x1 - x0, 1, inZone ? '#ffffff' : '#d7dee0');
-    this.px(x0, y, x1 - x0, 1, inZone ? '#e9f2f4' : '#98a2a7');
+    // A LÂMINA, coluna a coluna: perto da ponta o dorso desce até o fio (a ponta afiada).
+    const TIP = 7;
+    for (let x = x0; x < x1; x += 1) {
+      const fromTip = x - x0;
+      const lift = fromTip >= TIP ? 3 : Math.floor((fromTip * 3) / TIP); // altura do dorso acima do fio
+      const top = y - lift;
+      this.px(x, top - 1, 1, 1, NAVY);                                     // o contorno de cima
+      if (lift >= 3) this.px(x, top, 1, 1, '#eef3f4');                     // o dorso iluminado
+      for (let yy = top + (lift >= 3 ? 1 : 0); yy < y; yy += 1) this.px(x, yy, 1, 1, '#aeb8bd'); // o corpo
+      this.px(x, y, 1, 1, inZone ? '#ffffff' : '#dfe6e8');                // o FIO: a linha do corte
+      this.px(x, y + 1, 1, 1, NAVY);                                       // o contorno de baixo
+    }
+    this.px(x0 - 1, y, 1, 1, NAVY);                                        // a ponta
     if (inZone) {
       const glint = x0 + Math.floor((this.clock * 40) % Math.max(1, x1 - x0));
-      this.px(glint, y - 2, 1, 1, '#fffbe6');
+      this.px(glint, y, 1, 1, '#fffbe6');
       this.px(glint - 1, y - 1, 3, 1, '#fffbe6');
     }
-    this.px(x1, y - 2, 2, 4, '#c9a24a');                   // virola de latão
-    this.px(x1 + 2, y - 2, 9, 4, '#8a5a32');               // cabo
-    this.px(x1 + 2, y + 1, 9, 1, '#5e3b1e');
-    this.px(x1 + 11, y - 3, 2, 6, '#3b2a1c');              // a escova do cabo
-    this.px(x1 + 2, y - 3, 11, 1, NAVY);
-    this.px(x1 + 2, y + 2, 11, 1, NAVY);
-    this.px(x1 + 13, y - 3, 1, 6, NAVY);
+    // A VIROLA de latão, um pouco mais alta que a lâmina.
+    this.px(x1, y - 4, 2, 6, NAVY);
+    this.px(x1, y - 3, 2, 4, '#c9a24a');
+    this.px(x1, y - 3, 1, 1, '#f0d27a');
+    // O CABO de madeira, com dois rebites e a ponta arredondada.
+    this.px(x1 + 2, y - 4, 11, 1, NAVY);
+    this.px(x1 + 2, y + 1, 11, 1, NAVY);
+    this.px(x1 + 2, y - 3, 11, 4, '#8a5a32');
+    this.px(x1 + 2, y - 3, 11, 1, '#a8743f');
+    this.px(x1 + 2, y, 11, 1, '#5e3b1e');
+    this.px(x1 + 5, y - 2, 1, 1, '#e6d2a0');
+    this.px(x1 + 10, y - 2, 1, 1, '#e6d2a0');
+    this.px(x1 + 13, y - 3, 1, 4, NAVY);
     ctx.restore();
   }
 

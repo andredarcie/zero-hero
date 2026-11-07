@@ -1,4 +1,5 @@
 import { calmDt, isCalmGames } from '@/game/runtime/accessibility';
+import { MinigameCaption } from '@/game/runtime/MinigameCaption';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import {
   KEY_BG, KEY_BORDER, KEY_GLYPH, PIXEL_FONT, SOFT_BLUR, pixelFrame,
@@ -48,6 +49,8 @@ export abstract class CraftOverlay {
   protected readonly ctx: CanvasRenderingContext2D;
   /** A tecla do gesto, no rodapé: quem não tem esse gesto a esconde. */
   protected readonly keyHint: HTMLDivElement;
+  /** A frase do rodapé: o que fazer e com que tecla (runtime/MinigameCaption). Ela leva a tecla no texto. */
+  protected readonly caption = new MinigameCaption();
   private raf = 0;
   private last = 0;
   protected destroyed = false;
@@ -83,6 +86,8 @@ export abstract class CraftOverlay {
     });
     leave.addEventListener('pointerdown', (event) => event.stopPropagation());
     this.keyHint = key;
+    // A tecla solta saiu do rodapé: a legenda diz a frase inteira, com a tecla dentro dela.
+    key.style.display = 'none';
     this.root.append(this.canvas, key, leave);
     this.root.addEventListener('pointerdown', (event) => {
       event.preventDefault();
@@ -106,6 +111,7 @@ export abstract class CraftOverlay {
     window.removeEventListener('keydown', this.handleKeyEvent, true);
     window.removeEventListener('resize', this.layout);
     this.root.remove();
+    this.caption.destroy();
   }
 
   protected rect(color: string, x: number, y: number, w: number, h: number): void {
@@ -122,9 +128,12 @@ export abstract class CraftOverlay {
     }
   }
 
-  /** O maior que couber, deixando o rodapé para a tecla. */
+  /** O maior que couber, deixando o rodapé para a legenda (runtime/MinigameCaption). */
   private readonly layout = (): void => {
-    const scale = Math.max(1, Math.floor(Math.min((window.innerWidth - 16) / VIEW_W, (window.innerHeight - 96) / VIEW_H) * 8) / 8);
+    const caption = 96;
+    this.root.style.paddingBottom = `${caption}px`;
+    this.root.style.boxSizing = 'border-box';
+    const scale = Math.max(1, Math.floor(Math.min((window.innerWidth - 16) / VIEW_W, (window.innerHeight - 40 - caption) / VIEW_H) * 8) / 8);
     this.canvas.style.width = `${VIEW_W * scale}px`;
     this.canvas.style.height = `${VIEW_H * scale}px`;
   };
@@ -256,6 +265,7 @@ export class SplitOverlay extends CraftOverlay {
   }
 
   protected tick(dt: number): void {
+    this.caption.show(this.phase === 'aim' ? 'split.aim' : this.phase === 'force' ? 'split.force' : null);
     this.time += calmDt(dt);
     if (this.phase === 'aim') this.aim = Math.sin(this.time * this.aimSpeed) * (LOG_R - 6);
     if (this.phase === 'force') this.force = 0.5 - Math.cos(this.time * 3.4) * 0.5;
@@ -439,6 +449,7 @@ export class FireLightOverlay extends CraftOverlay {
   }
 
   protected tick(dt: number): void {
+    this.caption.show(this.phase === 'strike' ? 'fire.strike' : this.phase === 'blow' ? 'fire.blow' : null);
     this.time += dt;
     this.phaseT += dt;
     if (this.phase === 'blow') {

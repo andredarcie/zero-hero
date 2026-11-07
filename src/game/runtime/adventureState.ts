@@ -130,6 +130,8 @@ export interface AdventureSnapshot {
   groundItems: Map<string, AdventureGroundItem[]>;
   /** "cx,cy" dos chunks que o heroi ja pisou — o fog of war do mapa. */
   visitedChunks: Set<string>;
+  /** As falas que o jogador já leu inteiras (resumo de cada texto): aparecem de uma vez (runtime/readLines). */
+  readLines: Set<string>;
   /**
    * O CADERNO DE MISSOES: um contador por tarefa, chaveado `<roteiro>/<tarefa>` (ver
    * runtime/QuestLog). O numero so SOBE, e "cumprida" e lido dele: nao ha um segundo booleano de
@@ -162,6 +164,7 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   machines: new Map(),
   groundItems: new Map(),
   visitedChunks: new Set(),
+  readLines: new Set(),
   questProgress: new Map(),
   paintQuest: { stage: 'start', plots: [] },
   lumberQuest: {
@@ -191,6 +194,7 @@ type StoredSnapshot = {
   machines?: Record<string, AdventureMachine[]>;
   groundItems?: Record<string, AdventureGroundItem[]>;
   visitedChunks?: string[];
+  readLines?: string[];
   questProgress?: Record<string, number>;
   paintQuest?: PaintQuestSave;
   lumberQuest?: Partial<LumberQuestSave>;
@@ -279,6 +283,7 @@ const load = (): AdventureSnapshot => {
       machines: cleanMachines(p.machines),
       groundItems: migrateGround(p.groundItems),
       visitedChunks: new Set(p.visitedChunks ?? []),
+      readLines: new Set(p.readLines ?? []),
       questProgress: new Map(
         // A Hollis pedia que se ENCONTRASSE cada espécie (`gather`); hoje ela pede que se ENTREGUE
         // (`deliver`, uma de cada vez). O que já foi achado num save antigo vale como entregue.
@@ -334,6 +339,7 @@ export const saveAdventure = (): void => {
     machines: Object.fromEntries(s.machines),
     groundItems: Object.fromEntries(s.groundItems),
     visitedChunks: [...s.visitedChunks],
+    readLines: [...s.readLines],
     questProgress: Object.fromEntries(s.questProgress),
     paintQuest: s.paintQuest,
     lumberQuest: s.lumberQuest,

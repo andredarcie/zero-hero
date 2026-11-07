@@ -1,0 +1,608 @@
+{
+  "_leia": "TODAS AS FALAS DOS PERSONAGENS, em português. Edite aqui: o jogo lê este arquivo (src/game/i18n/i18n.ts junta ele ao locales/pt-br.json). Cada personagem tem a 'filosofia' (só referência: o jogo não lê) e as 'falas', pelo caminho que o código pede (ex.: 'wizard.intro'). Cada fala é uma linha; '[narrador] ' no começo faz dela narração. {n} é trocado por um número. O inglês (en.json) tem de ter os mesmos caminhos e o mesmo número de linhas em cada fala.",
+  "heroi": {
+    "nome": "Zero",
+    "filosofia": {
+      "escola": "Existencialismo",
+      "livros": "Jean-Paul Sartre: O Existencialismo é um Humanismo (a existência precede a essência; o homem não é nada além do que faz de si), O Ser e o Nada (condenado a ser livre). O herói não fala: o narrador diz isso na espada fincada e no fim.",
+      "ideia": "Ninguém nasce com sentido: ele se faz pelo que se faz.",
+      "voz": "O herói não fala. Era só guerreiro; sem a guerra, se refaz ajudando cada vizinho.",
+      "nome": "Zero: o homem de Sartre começa sem essência, do nada (O Ser e o Nada), e só depois é o que fizer de si. Largada a espada, ele recomeça do zero."
+    },
+    "nota": "Não fala.",
+    "falas": {}
+  },
+  "mago": {
+    "nome": "Sati",
+    "filosofia": {
+      "escola": "Budismo",
+      "livros": "Sidarta Gautama: o Dhammapada (276 os Budas só apontam o caminho), o Majjhima Nikaya 22 (a parábola da balsa: serve para atravessar, não para carregar nas costas), o Anattalakkhana Sutta (o não-eu: nenhum papel é o que somos), o Sermão de Benares (as quatro nobres verdades: sofrer vem do desejo), o Anapanasati Sutta (a respiração)",
+      "ideia": "O sofrimento vem do apego; tudo passa, e o caminho é soltar e ter compaixão.",
+      "voz": "Poucas palavras, sem pressa. Manda soltar a espada e cuidar dos outros.",
+      "nome": "Sati é \"atenção plena\" em páli, a primeira palavra do Anapanasati Sutta, a respiração que ele ensina ao herói. É estar no que existe agora, sem a guerra que passou."
+    },
+    "falas": {
+      "wizard": {
+        "intro": [
+          "[narrador] A guerra acabou.",
+          "A espada foi a sua balsa. Já atravessou. Não precisa levá-la nas costas.",
+          "Agora encontre o que vem depois.",
+          "Cuide de quem mora aqui. Então o jardim se abre.",
+          "Você não dorme de verdade desde que a guerra começou.",
+          "Seu acampamento ainda está lá, a leste do lago. Vá descansar.",
+          "[narrador] Z fala e pega · X usa"
+        ],
+        "guide": [
+          "Não há mais o que combater.",
+          "O guerreiro não era você. Era só o que você fazia.",
+          "Eu só aponto o caminho. O sentido, você faz andando."
+        ],
+        "again": [
+          "Ela volta. Durma de novo.",
+          "Eu só aponto o caminho. O sentido, você faz andando."
+        ],
+        "gate": [
+          "O jardim está aberto.",
+          "Vá até a fogueira no meio."
+        ],
+        "after": [
+          "Você encontrou. Um lugar para sentar.",
+          "Sofrer vem de querer o que não fica. Aqui, só respire."
+        ],
+        "tent": [
+          "Não há mais o que combater.",
+          "O guerreiro não era você. Era só o que você fazia.",
+          "Descanse no seu acampamento, a leste do lago. Eu só aponto o caminho; o sentido, você faz andando."
+        ]
+      },
+      "npc.wizard": {
+        "name": "Sati",
+        "lines": [
+          "Não há mais o que combater.",
+          "O guerreiro não era você. Era só o que você fazia.",
+          "Eu só aponto o caminho. O sentido, você faz andando."
+        ]
+      }
+    }
+  },
+  "hollis": {
+    "nome": "Shui",
+    "filosofia": {
+      "escola": "Taoísmo",
+      "livros": "Lao-Tsé: Tao Te Ching (33 e 46 quem sabe o que basta é rico; 78 a água vence a pedra). Zhuangzi (cap. 1 e 4 a árvore inútil, que vive muito porque ninguém a corta; cap. 3 o cozinheiro Ding, que corta pelas juntas e a faca nunca cega)",
+      "ideia": "Seguir o caminho da natureza sem forçar (wu wei), e saber quando já basta.",
+      "voz": "Calma, observa o que não se vê. Não força nada: corte, não arranque; quatro já bastam.",
+      "nome": "Shui é \"água\" em chinês (水): \"o bem supremo é como a água\", que serve a tudo sem disputar (Tao Te Ching 8), e \"nada é mais macio que a água, e nada vence melhor a pedra\" (78)."
+    },
+    "falas": {
+      "npc.radiationSuit": {
+        "name": "Shui",
+        "lines": [
+          "Eu observo os fungos deste vale. Eles não têm pressa.",
+          "O que se vê é só o fruto. O fungo vive escondido, em fios, debaixo da terra.",
+          "Seis tipos crescem aqui. Preciso de quatro, o resto é só se quiser. Leve a minha faca e a minha cesta.",
+          "Não force: corte por onde ele já se abre, e a faca nunca cega. Escove, não lave."
+        ]
+      },
+      "npc.radiationSuitDone": {
+        "name": "Shui",
+        "lines": [
+          "Quatro já bastam. Quem sabe o que basta já tem tudo.",
+          "Seja como a água: mole, e ainda assim vence a pedra.",
+          "Os outros, só se quiser. Só nunca coma o vermelho."
+        ]
+      },
+      "npc.radiationSuitAll": [
+        "Todos os seis! Você andou com o vale, não contra ele.",
+        "O vermelho não serve para nada. Por isso vive tanto. Nunca coma."
+      ],
+      "npc.radiationSuitHint": {
+        "porcini": [
+          "Aqui do meu lado esquerdo, esse cogumelo: corte ele para aprender como se faz."
+        ],
+        "morel": [
+          "Ao norte, numa ilha: um chapéu de favo de mel. Dois gravetos fazem uma ponte; o machado é do Marco."
+        ],
+        "puffball": [
+          "A nordeste, no mato alto: uma bola branca sem chapéu. Mato alto cai com foice ou fogo."
+        ],
+        "inkCap": [
+          "Bem ao norte, atrás de arbustos secos: alto e branco, desgrenhado. Arbusto seco queima."
+        ],
+        "chanterelle": [
+          "Ao norte, cercado de lava: um funil dourado. Pedra afunda e vira chão. Lava acende graveto."
+        ],
+        "flyAgaric": [
+          "No canto noroeste, atrás de mato morto: vermelho, com pintas brancas. Leve um machado. Não coma."
+        ]
+      },
+      "finds.door.radiationSuit": [
+        "Melhor não entrar. Tem fungo em tudo.",
+        "A varanda é sua. Levo chá."
+      ]
+    }
+  },
+  "iris": {
+    "nome": "Sisi",
+    "filosofia": {
+      "escola": "Absurdismo",
+      "livros": "Albert Camus: O Mito de Sísifo (o absurdo: o mundo calado diante de quem pede sentido; a revolta, a liberdade e a paixão; a liberdade de quem vive sem esperança; o capítulo \"A criação absurda\": \"criar é viver duas vezes\"; \"é preciso imaginar Sísifo feliz\"), O Verão (\"Retorno a Tipasa\": \"no meio do inverno, aprendi que havia em mim um verão invencível\")",
+      "ideia": "O mundo não responde a quem pede sentido: isso é o absurdo. Não se foge dele, nem pela esperança nem pelo desespero: vive-se e cria-se dentro dele, de olhos abertos. A obra não salva nada, e por isso vale.",
+      "voz": "Começa no cinza e termina na cor que ela mesma fez, sem prometer que o cinza não volta. Celebra quem cria mesmo assim.",
+      "nome": "Sisi, apelido de Sísifo: \"é preciso imaginar Sísifo feliz\" (O Mito de Sísifo). Ela vive o ir e voltar do balde."
+    },
+    "falas": {
+      "npc.painter": {
+        "name": "Sisi",
+        "lines": [
+          "Tudo o que eu pinto sai cinza. A cor não vem pronta: a gente tira da terra.",
+          "Tome a pá: cave quatro buracos, aqui por perto."
+        ]
+      },
+      "npc.painterDone": {
+        "name": "Sisi",
+        "lines": [
+          "Fica aqui, o seu quadro.",
+          "O mundo continua cinza. A cor é a minha revolta.",
+          "Criar é viver duas vezes.",
+          "No meio do inverno, achei em mim um verão invencível."
+        ]
+      },
+      "npc.painterStep": {
+        "dig": [
+          "Faltam {n}. Pá na terra."
+        ],
+        "seeds": [
+          "Quatro buracos! A pá fica aqui do meu lado.",
+          "Sementes sortidas: uma em cada buraco."
+        ],
+        "sow": [
+          "Faltam {n}. Uma semente em cada buraco."
+        ],
+        "bucket": [
+          "Plantadas! Tome o balde.",
+          "Busque água na lagoa, a oeste, e regue as quatro.",
+          "Ir e voltar, ir e voltar. Dá para ser feliz assim."
+        ],
+        "water": [
+          "Faltam {n}. Encha o balde na lagoa e regue."
+        ],
+        "wait": [
+          "Agora é esperar.",
+          "Ou durma uma noite: elas amanhecem prontas."
+        ],
+        "harvest": [
+          "Floresceram!",
+          "Colha com as mãos, as quatro. Depois, para a mesa."
+        ],
+        "bring": [
+          "As flores vão para a mesa."
+        ],
+        "easel": [
+          "Pincel na mão. Pinte o mundo que você quiser."
+        ]
+      },
+      "npc.painterMake": {
+        "intro": [
+          "Que flores! Veja como se faz."
+        ],
+        "urucum": [
+          "Urucum: esfrego as sementes na água e o pó vermelho solta."
+        ],
+        "anil": [
+          "Anil: as folhas fermentam na água. Bato, e o azul nasce no ar."
+        ],
+        "curcuma": [
+          "Cúrcuma: a raiz seca e moída vira pó amarelo."
+        ],
+        "garanca": [
+          "Garança: a raiz moída, em água morna. Fervida, o vermelho escurece."
+        ],
+        "binder": [
+          "Pedra-ume fixa a cor. Goma arábica faz dela tinta."
+        ],
+        "brush": [
+          "Obrigada pelas tintas! Vou armar o quadro.",
+          "Tome o pincel: agora é você quem cria.",
+          "Pinte sem esperar nada. É isso que te deixa livre."
+        ]
+      },
+      "npc.painterReview": {
+        "form": {
+          "sparse": "Poucos traços, e já diz tudo.",
+          "middle": "Olha só o que você fez nessa tela!",
+          "full": "Não sobrou um canto em branco!"
+        },
+        "color": {
+          "all": "As quatro cores juntas. Nem eu teria essa coragem.",
+          "urucum": "Esse laranja parece fim de tarde.",
+          "anil": "Esse azul parece água funda.",
+          "curcuma": "Esse amarelo aquece a tela inteira.",
+          "garanca": "Esse vermelho tem coração."
+        },
+        "thanks": [
+          "Você tem mão de pintor.",
+          "Eu só via cinza. A gente inventou a cor.",
+          "O pincel eu guardo. O quadro fica aqui."
+        ]
+      },
+      "finds.door.painter": [
+        "Aqui dentro está tudo molhado de tinta.",
+        "Senta na varanda. Levo chá."
+      ]
+    }
+  },
+  "bram": {
+    "nome": "Marco",
+    "filosofia": {
+      "escola": "Estoicismo",
+      "livros": "Epicteto: Manual (1 o que depende de nós; 5 os juízos, não as coisas; 11 \"devolvi\", nunca \"perdi\"). Sêneca: Cartas a Lucílio (1 só o tempo é nosso). Marco Aurélio: Meditações (4.1 o fogo forte faz do que cai nele mais chama; 5.20 o obstáculo vira caminho) Marco Aurélio também: Meditações 4.40 (um só universo, uma só natureza).",
+      "ideia": "Separar o que depende de nós do que não depende, e viver de acordo com a natureza.",
+      "voz": "Perdeu o que não controlava; agarra o que controla, uma fogueira. Frases secas, de trabalho.",
+      "nome": "Marco, de Marco Aurélio, o imperador estoico das Meditações, que ele cita no fogo (4.1) e na natureza única (4.40)."
+    },
+    "falas": {
+      "npc.businessMan": {
+        "name": "Marco",
+        "lines": [
+          "Perdi o negócio, a lenha, tudo. Minhas mãos tremem.",
+          "O resto não depende de mim. Uma fogueira, sim. Ali, naquela terra. Tome o machado.",
+          "Corte um galho morto e leve ao cepo. Ponha em pé e rache. As duas metades vão para a terra. Quatro vezes.",
+          "Árvore seca é rara por aqui. Ande e procure."
+        ]
+      },
+      "npc.businessManDone": {
+        "name": "Marco",
+        "lines": [
+          "Ainda sinto o cheiro da fumaça.",
+          "Não é o que acontece que pesa. É o que a gente pensa disso.",
+          "A Thea olha o céu; eu, o fogo. É tudo a mesma natureza.",
+          "Obrigado, amigo. O machado é seu."
+        ]
+      },
+      "npc.businessManStep": {
+        "gather": [
+          "Faltam {n}. Galho morto, cepo, terra. Árvore seca é rara: procure."
+        ],
+        "ready": [
+          "Quatro. Isso já é uma fogueira, só falta o fogo.",
+          "Vá lá e acenda."
+        ],
+        "light": [
+          "Vá lá e acenda."
+        ]
+      },
+      "npc.businessManNight": {
+        "split": {
+          "clean": "Rachou limpo. Mão boa.",
+          "rough": "Rachou torto, mas rachou. Machado se aprende batendo."
+        },
+        "fire": {
+          "first": "E acendeu de primeira.",
+          "worked": "O fogo deu trabalho. Todo fogo dá."
+        },
+        "story": [
+          "Senta. Olha o fogo comigo.",
+          "Fogo não é uma coisa. É uma coisa acontecendo.",
+          "O calor faz o galho soltar gás. É o gás que queima, não a madeira.",
+          "O gás encontra o ar, e essa queima solta mais calor. Que solta mais gás. É por isso que ele não para sozinho.",
+          "E essa luz? É fuligem. Grãos minúsculos, tão quentes que brilham.",
+          "A árvore passou a vida inteira guardando sol. A fogueira só devolve.",
+          "Fogo forte faz do que cai nele mais chama. O que atrapalha vira lenha."
+        ],
+        "farewell": [
+          "Nunca diga 'perdi'. Diga 'devolvi'. Olha: as mãos pararam de tremer.",
+          "Esta noite ninguém me tira."
+        ]
+      },
+      "finds.door.businessMan": [
+        "A porta emperra. A varanda não.",
+        "Senta. Levo um chá."
+      ]
+    }
+  },
+  "vega": {
+    "nome": "Thea",
+    "filosofia": {
+      "escola": "Aristotelismo",
+      "livros": "Aristóteles: Metafísica (I.1 todos os homens desejam saber; I.2 o espanto com a lua e os astros), Física (II.3 as quatro causas: matéria, forma, quem faz e o fim), Ética a Nicômaco (I.7 uma andorinha não faz verão; II.1 vira-se construtor construindo; IX.4 o amigo é um outro eu; X.7-8 a vida de olhar e a de fazer, as duas atrás de viver bem)",
+      "ideia": "Todo ser humano deseja saber; a vida mais feliz é a da contemplação.",
+      "voz": "Curiosa e paciente: o céu, a lente, Galileu. O sentido está em olhar e entender.",
+      "nome": "Thea, de theoria, a contemplação, a vida de olhar da Ética a Nicômaco X.7. Theia é também a titã grega da visão e da luz."
+    },
+    "falas": {
+      "npc.astronaut": {
+        "name": "Thea",
+        "lines": [
+          "Meu telescópio quebrou na queda. Sobrou o tubo.",
+          "Sem tripé e sem lente, não vejo o céu. E todo mundo nasce querendo saber.",
+          "Leve esta picareta. Me traga uma barra de ferro."
+        ]
+      },
+      "npc.astronautDone": {
+        "name": "Thea",
+        "lines": [
+          "O céu continua lá. Olhar para ele é o melhor da vida. Volte de noite.",
+          "Pus um marco de pedras aqui: um lugar para onde voltar.",
+          "O Marco vive de fazer; eu, de olhar. Os dois procuram viver bem.",
+          "Uma andorinha só não faz verão: ser feliz é a vida inteira, não um dia."
+        ]
+      },
+      "npc.astronautHint": {
+        "ore": [
+          "Siga para oeste, até o lago de lava. A pedra de veio preto dá carvão, a de veio vermelho, minério. O forno aqui do lado pede um de cada vez."
+        ],
+        "bloom": [
+          "Leve o carvão e o minério ao forno, aqui do lado. Ele pede o que falta, uma coisa de cada vez."
+        ],
+        "iron": [
+          "Ponha o bloco quente na bigorna, aqui do lado, e martele."
+        ]
+      },
+      "npc.astronautStep": {
+        "tripod": [
+          "Ferro! Isto vira o tripé.",
+          "Falta a lente, e lente é vidro.",
+          "Vidro nasce de areia e cinza: a cinza ajuda a areia a derreter.",
+          "A cinza está ao lado da fogueira. Areia, só na beira do lago grande, lá no sul. As duas no forno."
+        ],
+        "wait": [
+          "Areia da beira do lago grande, no sul. Cinza da fogueira. As duas no forno."
+        ],
+        "polish": [
+          "Bom vidro. Agora ele vira lente.",
+          "Primeiro a pedra áspera, que dá a curva. Depois a fina, que tira a névoa.",
+          "Esfregue em círculos."
+        ],
+        "carry": [
+          "Ficou nítida!",
+          "A areia é a matéria. A lente, a forma. Você, quem fez. E ver, o fim.",
+          "Leve o telescópio ao planalto, a sudoeste. Suba a escada e procure o marco. Lá o céu é mais limpo."
+        ],
+        "night": [
+          "De dia não se vê nada.",
+          "Sente ao lado dele e espere a noite."
+        ],
+        "reunion": [
+          "Vi o fogo lá de cima. Sobrou marshmallow?"
+        ],
+        "goodbye": [
+          "Com o céu de volta, a nave me achou.",
+          "Obrigada por tudo.",
+          "Um amigo é um outro eu.",
+          "Mas preciso voltar para o meu planeta. Minha casa fica ali em cima.",
+          "Quando olhar para o céu, acene."
+        ],
+        "farewell": [
+          "Você achou os quatro.",
+          "Foi o espanto com a lua e as estrelas que fez a gente começar a pensar.",
+          "A luz que você viu já estava a caminho muito antes de você nascer.",
+          "Só faltava alguém olhar.",
+          "As estrelas de antes do amanhecer são outras. Durma, e acorde para elas."
+        ],
+        "anvil": [
+          "A barra! Ninguém nasce ferreiro: vira malhando.",
+          "Vou construir o tripé."
+        ]
+      },
+      "finds.door.astronaut": [
+        "A varanda tem a melhor vista depois da nave. Senta lá.",
+        "Levo chá."
+      ]
+    }
+  },
+  "morte": {
+    "nome": "Morte",
+    "filosofia": {
+      "escola": "Niilismo, e a superação dele (Nietzsche, à risca)",
+      "livros": "Friedrich Nietzsche: A Gaia Ciência (§125 a morte de Deus; §341 o eterno retorno), Assim Falou Zaratustra (as três metamorfoses; a estrela dançante), Ecce Homo (amor fati; \"torna-te quem tu és\")",
+      "ideia": "Os valores mais altos se desvalorizaram: nada tem sentido dado. O niilista passivo para aí; o ativo derruba os ídolos (o leão) e cria valores novos brincando (a criança), e ama o destino a ponto de querê-lo de novo, sem fim.",
+      "voz": "Calma, sem ameaça. Três noites: diagnostica, testa, abençoa. Nunca consola; pergunta. Deixa a foice na primeira."
+    },
+    "falas": {
+      "death": {
+        "name": "Morte",
+        "visit": [
+          "Não se levante. Não vim te buscar.",
+          "Eu te conheço. Andei atrás de você a guerra inteira.",
+          "Você era um guerreiro. Por onde passava, eu tinha trabalho.",
+          "Agora dorme sob as estrelas, e a espada ficou na estrada.",
+          "Glória, honra, vitória: eram os seus deuses. E eles morreram.",
+          "Agora nada vale nada. E ninguém virá te dizer o que vale.",
+          "Durma. Eu sei esperar."
+        ],
+        "visit2": [
+          "De novo aqui. Eu disse que sabia esperar.",
+          "Você carregou ordens a vida inteira, como um camelo carrega peso.",
+          "No deserto, o camelo vira leão. E o leão diz: não.",
+          "Não aos velhos deuses. Mas o leão ainda não cria nada.",
+          "Agora uma pergunta. Não minta para mim.",
+          "E se esta vida, exatamente como é, voltasse sem fim? Cada dor, cada noite, esta conversa.",
+          "Você me amaldiçoaria? Ou diria: nunca ouvi nada mais divino?",
+          "Durma com isso."
+        ],
+        "visit3": [
+          "Última noite. Depois desta, não venho mais.",
+          "O leão vira criança. A criança brinca, esquece e começa de novo.",
+          "Ela diz sim. Cria os próprios valores, brincando.",
+          "Ninguém te deu um sentido. Você está fazendo um, com as mãos.",
+          "Não queira nada diferente. Nem para trás, nem para frente. Ame o que é.",
+          "Torna-te quem você é.",
+          "É preciso ter caos dentro de si para dar à luz uma estrela que dança.",
+          "Adeus, criança."
+        ]
+      }
+    }
+  },
+  "ultimo_pedido": {
+    "nota": "Quem fecha o último pedido diz isto no fim da própria fala, e entrega a chave do Jardim Alto.",
+    "falas": {
+      "garden.key": [
+        "Você se mostrou um grande amigo de todos: da vila e da natureza.",
+        "Agora pode caminhar livremente pelo Jardim Alto, respeitando a natureza.",
+        "Tome a chave."
+      ]
+    }
+  },
+  "fim": {
+    "filosofia": {
+      "escola": "Epicurismo",
+      "livros": "Epicuro (a escola dele se chamava \"O Jardim\"): Carta a Meneceu (a morte não é nada para nós: quando ela está, nós não estamos), Máximas Principais (27 a amizade é o maior bem), Sentenças Vaticanas (33 sem fome, sem sede, sem frio, rivaliza com Zeus em felicidade)",
+      "ideia": "Felicidade é amizade, prazeres simples e a paz de não precisar de mais nada.",
+      "voz": "Narração curta e calma."
+    },
+    "falas": {
+      "ending.lines": [
+        "[narrador] O marshmallow fica dourado.",
+        "[narrador] A espada fica na estrada.",
+        "[narrador] Ninguém escolheu por ele.",
+        "[narrador] Sem fome, sem frio, entre amigos. Nem um deus tem mais.",
+        "[narrador] A morte não é nada para nós: quando ela está, nós não estamos.",
+        "[narrador] Nenhum lugar para ir. Enfim."
+      ]
+    }
+  },
+  "narrador": {
+    "nota": "Não é NPC: são as coisas do vale lidas com o Z (achados, acampamento).",
+    "falas": {
+      "finds.helmet": [
+        "[narrador] Um elmo enferrujado.",
+        "[narrador] Nasceu uma flor dentro."
+      ],
+      "finds.bottle": [
+        "[narrador] Uma garrafa com um bilhete.",
+        "[narrador] “Cheguei. Aqui é bom. Venha.”",
+        "[narrador] Sem nome."
+      ],
+      "finds.sword": [
+        "[narrador] Esta lâmina derrubou a escuridão.",
+        "[narrador] E devolveu a luz ao mundo.",
+        "[narrador] Ele já não é isto. É o que fizer agora."
+      ],
+      "finds.sign": [
+        "[narrador] Jardim Alto.",
+        "[narrador] Fechado para preservação ambiental."
+      ],
+      "finds.signOpen": [
+        "[narrador] Jardim Alto.",
+        "[narrador] Fechado para preservação ambiental.",
+        "[narrador] Alguém riscou o \"fechado\"."
+      ],
+      "finds.door.empty": [
+        "[narrador] Ninguém em casa.",
+        "[narrador] A varanda continua aqui."
+      ],
+      "camp": {
+        "ring": [
+          "[narrador] Pedras de fogueira. Frias."
+        ],
+        "rack": [
+          "[narrador] Cogumelos secando. Lembrança da Shui."
+        ],
+        "easel": [
+          "[narrador] O quadro da Sisi."
+        ],
+        "woodpile": [
+          "[narrador] Lenha seca do Marco."
+        ],
+        "chart": [
+          "[narrador] O mapa de estrelas da Thea."
+        ]
+      },
+      "cat.barrel": [
+        "[narrador] Um barril deitado, com palha dentro.",
+        "[narrador] Quem mora aqui não precisa de mais nada."
+      ]
+    }
+  },
+  "gato": {
+    "nome": "Sinope",
+    "filosofia": {
+      "escola": "Cinismo",
+      "livros": "Diógenes de Sinope (\"o cão\"): pelas Vidas e Doutrinas dos Filósofos Ilustres, de Diógenes Laércio, livro VI (20-21 falsificar a moeda; 22 o rato; 37 a tigela; 38 Alexandre e o sol; 40 o homem de Platão; 41 a lanterna; 49 a estátua; 60 o cão; 63 cidadão do mundo e \"pronto para qualquer sorte\"; 105 os deuses não precisam de nada) E Diógenes Laércio, livro VII.2: Zenão, que fundou o estoicismo, aprendeu com Crates, aluno de Diógenes.",
+      "ideia": "A felicidade é bastar-se (autarkeia) e viver segundo a natureza. O costume, a fama e a riqueza são moeda falsa: risque. Treina-se o corpo e a vontade para precisar de pouco, e diz-se a verdade na cara (parrhesia), sem vergonha.",
+      "voz": "Debochado, preguiçoso ao sol, nada impressionado com heróis. Fala curto e na cara. Aceita carinho e responde com uma lição.",
+      "nome": "Sinope é a cidade de Diógenes, a que o expulsou. Ele respondeu que era cidadão do mundo (Diógenes Laércio VI.63): o gato carrega o nome da terra de que não precisa."
+    },
+    "falas": {
+      "npc.blackCat": {
+        "name": "Sinope",
+        "lines": [
+          "Um herói. Que novidade.",
+          "Quer me dar alguma coisa? Então saia do meu sol."
+        ]
+      },
+      "cat.talk": {
+        "1": [
+          "Um herói. Que novidade.",
+          "Quer me dar alguma coisa? Então saia do meu sol."
+        ],
+        "2": [
+          "Aprendi a viver olhando um rato.",
+          "Não procura cama, não tem medo do escuro, não quer banquete."
+        ],
+        "3": [
+          "Vi uma criança beber água com as mãos.",
+          "Joguei fora a minha tigela. Ela me venceu em simplicidade."
+        ],
+        "4": [
+          "Os deuses não precisam de nada. Quem precisa de pouco é quase um deus.",
+          "Quanto você carrega, herói?"
+        ],
+        "5": [
+          "De onde eu sou? Do mundo."
+        ],
+        "6": [
+          "Me chamam de cão. Sou gato. Tanto faz o nome.",
+          "Ronrono para quem me dá, bufo para quem não dá, e arranho os maus."
+        ],
+        "7": [
+          "Andei de dia com uma lanterna, procurando um homem.",
+          "Achei muitos heróis. Um homem, nenhum."
+        ],
+        "8": [
+          "Um conselho: falsifique a moeda.",
+          "Glória, honra, costume: risque tudo e veja o que sobra."
+        ],
+        "9": [
+          "Eu peço comida às estátuas.",
+          "Treino para não receber."
+        ],
+        "10": [
+          "Platão disse que o homem é um bípede sem penas.",
+          "Depenei uma galinha e levei para ele: eis o homem de Platão."
+        ],
+        "11": [
+          "O que a filosofia me deu? Estar pronto para qualquer sorte."
+        ],
+        "12": [
+          "O lenhador perdeu tudo e aprendeu a precisar de pouco.",
+          "Um aluno do meu aluno ensinou isso a muita gente."
+        ]
+      }
+    }
+  },
+  "fora_do_jogo": {
+    "nota": "NPCs de uma versão antiga: não estão no mundo de hoje.",
+    "falas": {
+      "npc.salesman": {
+        "name": "VENDEDOR",
+        "lines": [
+          "Amigo! Você parece com sede. Ou seco. Tanto faz — oportunidade.",
+          "Amostra grátis: este BALDE. Encha no meu lago, logo a oeste da fogueira.",
+          "Balde cheio rega a plantação e afoga fogo pequeno. Mil usos. Não custa nada. Só hoje.",
+          "Conte aos seus amigos. Se achar algum por aí."
+        ]
+      },
+      "npc.poet": {
+        "name": "POETA",
+        "lines": [
+          "Os pinheiros cantam, mas apertam o verso.",
+          "Este GRANDE MACHADO derruba até árvore VIVA — o machado pequeno só conhece madeira morta.",
+          "Abra uma clareira no meu bosque. Escute como a canção muda onde a luz cai.",
+          "Todo bom verso precisa do seu silêncio. Corte um para mim."
+        ]
+      }
+    }
+  }
+}

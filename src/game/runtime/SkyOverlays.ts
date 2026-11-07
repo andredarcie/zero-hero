@@ -1,6 +1,6 @@
 import { t } from '@/game/i18n/i18n';
 import {
-  ensureNoteStyle, paperClip, WRITE_MS_PER_CHAR, WRITE_START_MS,
+  ensureNoteStyle, fitNotePaper, paperClip, WRITE_MS_PER_CHAR, WRITE_START_MS,
 } from '@/game/runtime/ForagingOverlay';
 import { CraftOverlay } from '@/game/runtime/WoodcraftOverlays';
 import {
@@ -197,6 +197,7 @@ export class LensOverlay extends CraftOverlay {
   }
 
   protected tick(dt: number): void {
+    this.caption.show(this.phase === 'shine' ? null : 'lens');
     this.time += dt;
     this.flash = Math.max(0, this.flash - dt * 2.4);
     if (this.tapLeft > 0 && this.phase !== 'shine') {
@@ -588,11 +589,13 @@ export class SkyOverlay extends CraftOverlay {
     paper.appendChild(sheet);
     wrap.appendChild(paper);
     this.root.appendChild(wrap);
+    fitNotePaper(paper);
     paper.classList.add('zh-on');
     this.note = { wrap, paper, openedAt: performance.now(), writeMs: at };
   }
 
   protected tick(dt: number): void {
+    this.caption.show(this.note ? 'card' : 'sky');
     this.time += dt;
     if (this.reading) {
       this.draw();

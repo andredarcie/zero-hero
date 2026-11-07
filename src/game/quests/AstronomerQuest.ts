@@ -372,6 +372,23 @@ export class AstronomerQuest {
     this.host.say({ ...base, lines: tLines('npc.astronautStep.tripod') }, at, () => this.host.markHeard());
   }
 
+  /** A Vega está esperando a barra de ferro (é ela quem vem buscá-la na bigorna). */
+  public wantsIronAtAnvil(): boolean {
+    return this.save.stage === 'iron';
+  }
+
+  /**
+   * A BARRA FOI BUSCADA NA BIGORNA (pedido do autor): a Vega veio correndo, pegou a barra e voltou dizendo que vai
+   * construir o tripé — o que `deliverIron` fazia quando o herói levava a barra, sem a barra passar pela mão dele.
+   */
+  public ironFromAnvil(): void {
+    this.placeCamp();
+    this.showTripod(true);
+    this.showHeaps(true);
+    this.save.stage = 'glass';
+    this.host.persist();
+  }
+
   // ── os gestos no mundo ──────────────────────────────────────────────────────────────────────────
 
   public interactAt(x: number, y: number): boolean {

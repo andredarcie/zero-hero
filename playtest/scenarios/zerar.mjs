@@ -1,399 +1,521 @@
-// ZERAR — joga a aventura inteira, do titulo aos creditos, com o TECLADO de verdade.
+// ZERAR — joga a aventura inteira, do título aos créditos, numa partida só, com o teclado (e o mouse nos
+// mini-games), do jeito que um jogador joga. Só LÊ o jogo para achar caminho. Ver playtest/lib/player.mjs.
 //
-// Nada aqui escreve estado no jogo: o cenario so LE o mundo (onde esta cada NPC, cada cogumelo,
-// cada canteiro — e o que e solido, para achar caminho) e aperta as teclas que um jogador
-// apertaria. Setas andam um tile por vez, Z fala e cuida, X usa o item, I abre a bolsa. Se um
-// pedido, o portao, a fogueira ou os creditos quebrarem, e aqui que a partida para.
+//   abertura → Iris → Bram → Vega → o colchão do acampamento (a Morte e a foice) → Hollis
+//   → a chave do jardim → o portão → a fogueira do fim → os créditos → o título
 //
-//   abertura → coletora (5 cogumelos) → pintora (2 canteiros regados) → lenhador (4 gravetos)
-//   → astronoma (3 pedras) → o portao abre → graveto e cogumelo do jardim → acender → assar
-//   → creditos → titulo
-import { stepTile } from '../lib/GameDriver.mjs';
+// ZERAR_FROM=<fase> recomeça de um save gravado no fim da fase anterior (playtest/results/zerar-saves/),
+// para depurar uma fase sem jogar tudo de novo. A prova de verdade é a partida inteira, sem ZERAR_FROM.
+import fs from 'node:fs';
+import path from 'node:path';
+import { makePlayer, sleep } from '../lib/player.mjs';
+import { playVega } from './telescopio.mjs';
 
-const ARROW = { '1,0': 'ArrowRight', '-1,0': 'ArrowLeft', '0,1': 'ArrowDown', '0,-1': 'ArrowUp' };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SAVES = path.resolve('playtest/results/zerar-saves');
+const PHASES = ['abertura', 'recon', 'iris', 'bram', 'vega', 'noite', 'hollis', 'fim'];
 
 export default {
   name: 'zerar',
-  description: 'Joga do titulo ao fim: abertura, os quatro pedidos, o portao, a fogueira e os creditos.',
+  description: 'Joga do título ao fim numa partida só: abertura, os pedidos, a primeira noite, o portão, a fogueira e os créditos.',
   needsGame: false,
   async run({ driver, shot, assert }) {
     const { page } = driver;
-    const state = () => page.evaluate(() => window.gameDebug?.getState() ?? null);
-    const press = async (key, hold = 70, after = 140) => {
-      if (key.startsWith('Arrow')) { await stepTile(page, key); await sleep(after); return; }
-      await page.keyboard.down(key);
-      await sleep(hold);
-      await page.keyboard.up(key);
-      await sleep(after);
-    };
-    const waitFor = async (pred, label, timeout = 30000) => {
-      const t0 = Date.now();
-      for (;;) {
-        const st = await state();
-        if (st && pred(st)) return st;
-        if (Date.now() - t0 > timeout) throw new Error(`timeout esperando: ${label}`);
-        await sleep(120);
-      }
-    };
-    const free = async () => waitFor((s) => !s.dialogOpen && !s.itemGetOpen && !s.cutsceneActive && !s.bagOpen, 'jogo livre', 60000);
+    const T0 = Date.now();
+    const say = (m) => console.log(`[zerar ${((Date.now() - T0) / 1000).toFixed(0)}s] ${m}`);
+    const P = makePlayer({ page, log: say });
+    const from = process.env.ZERAR_FROM ?? PHASES[0];
+    const fromIndex = PHASES.indexOf(from);
+    if (fromIndex < 0) throw new Error(`ZERAR_FROM desconhecida: ${from}`);
 
-    // Avanca qualquer dialogo e cerimonia de item que estiver na tela, ate o jogo voltar.
-    const drain = async (label) => {
-      for (let i = 0; i < 80; i += 1) {
-        const st = await state();
-        if (!st) return;
-        if (!st.dialogOpen && !st.itemGetOpen && !st.cutsceneActive) return;
-        if (st.dialogOpen || st.itemGetOpen) await press('z', 60, 380);
-        else await sleep(250);
-      }
-      throw new Error(`dialogo/cena nao terminou: ${label}`);
+    const checkpoint = async (name) => {
+      fs.mkdirSync(SAVES, { recursive: true });
+      const save = await page.evaluate(() => localStorage.getItem('zh.cozy.v1'));
+      fs.writeFileSync(path.join(SAVES, `${name}.json`), save ?? 'null');
+      say(`checkpoint: ${name}`);
+    };
+    const resume = async (phase) => {
+      const prev = PHASES[PHASES.indexOf(phase) - 1];
+      const save = fs.readFileSync(path.join(SAVES, `${prev}.json`), 'utf8');
+      await page.addInitScript((s) => { if (!sessionStorage.getItem('zerar.loaded')) { localStorage.setItem('zh.cozy.v1', s); sessionStorage.setItem('zerar.loaded', '1'); } }, save);
+      await driver.open('/');
+      await sleep(2600);
+      await P.press('Enter', 80, 600);
+      await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
+      await sleep(1500);
+      await P.drain('retomar');
+      await P.loadRelief();
     };
 
-    // O MAPA DE SOLIDOS, lido do jogo (a mesma pergunta que o andar faz).
-    const solidGrid = () => page.evaluate(() => {
-      const s = window.__scene;
-      const rows = [];
-      for (let y = 0; y < 60; y += 1) {
-        let row = '';
-        for (let x = 0; x < 60; x += 1) row += s.isSolidForEntities(x, y) ? '#' : '.';
-        rows.push(row);
-      }
-      return rows;
-    });
-    const bfs = (grid, from, goals) => {
-      const key = (x, y) => `${x},${y}`;
-      const goalSet = new Set(goals.map((g) => key(g.x, g.y)));
-      const prev = new Map([[key(from.x, from.y), null]]);
-      const q = [from];
-      while (q.length) {
-        const c = q.shift();
-        if (goalSet.has(key(c.x, c.y))) {
-          const path = [];
-          let k = key(c.x, c.y);
-          while (k) { const [x, y] = k.split(',').map(Number); path.unshift({ x, y }); k = prev.get(k); }
-          return path;
+    const phases = {
+      async abertura() {
+        await page.evaluate(() => localStorage.removeItem('zh.cozy.v1'));
+        await driver.open('/');
+        await sleep(2600);
+        await shot('00-titulo', { note: 'O título' });
+        await P.press('Enter', 80, 600);
+        await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
+        await P.waitFor((s) => s.dialogOpen || (s.introDone && !s.cutsceneActive), 'a abertura', 120000);
+        await shot('01-abertura', { note: 'A abertura' });
+        await P.drain('abertura');
+        const st = await P.free();
+        assert('A abertura terminou e o herói está livre', st.introDone, JSON.stringify({ introDone: st.introDone, at: st.player }));
+        await P.loadRelief();
+      },
+      async recon() {
+        const info = await page.evaluate(() => {
+          const s = window.__scene;
+          s.streamChunks(true);
+          return {
+            npcs: s.npcManager.getActiveWorldPositions().map((n) => [n.kind, n.worldX, n.worldY]),
+            quests: window.gameDebug.quests().map((q) => [q.dialog, q.done, q.speaks, q.tasks]),
+            st: window.gameDebug.getState(),
+          };
+        });
+        say(JSON.stringify(info.npcs));
+        say(JSON.stringify(info.quests));
+        say(JSON.stringify({ at: info.st.player, held: info.st.heldItem, items: info.st.groundItems, clock: info.st.timeOfDay }));
+        const homes = {};
+        for (const k of ['radiationSuit', 'painter', 'businessMan', 'astronaut', 'wizard']) homes[k] = await P.homeOf(k);
+        say(`casas: ${JSON.stringify(homes)}`);
+      },
+
+      // ── A IRIS: a pá, quatro buracos, as sementes, o balde, a espera, as flores, a mesa e o quadro ──
+      async iris() {
+        const stage = () => page.evaluate(() => window.__scene.painterQuest.save.stage);
+        const held = async () => (await P.state()).heldItem;
+        const home = await P.homeOf('painter');
+        const near = { near: home, radius: 7 };
+        await P.talk('painter', 'a Iris');
+        assert('A Iris dá a pá', (await held()) === 'shovel' && (await stage()) === 'dig', `${await held()} / ${await stage()}`);
+        for (let i = 0; i < 4; i += 1) {
+          await P.doVerb('x', 'dig', `cavar ${i + 1}`, near);
+          await sleep(500);
+          await P.drain('cavar');
         }
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = c.x + dx; const ny = c.y + dy;
-          if (nx < 0 || ny < 0 || nx >= 60 || ny >= 60) continue;
-          const k = key(nx, ny);
-          if (prev.has(k) || grid[ny][nx] === '#') continue;
-          prev.set(k, key(c.x, c.y));
-          q.push({ x: nx, y: ny });
+        await shot('10-iris-buracos', { note: 'Os quatro buracos' });
+        await P.talk('painter', 'a Iris (buracos prontos)');
+        assert('Com os buracos, ela dá as sementes', (await held()) === 'dyeSeeds' && (await stage()) === 'sow', `${await held()} / ${await stage()}`);
+        for (let i = 0; i < 4; i += 1) {
+          await P.doVerb('x', 'sow', `semear ${i + 1}`, near);
+          await sleep(450);
         }
-      }
-      return null;
-    };
-
-    const dryTreeTiles = () => page.evaluate(() => window.__scene.dryTrees
-      .filter((t) => t.blocking).map((t) => `${t.worldX},${t.worldY}`));
-
-    /**
-     * Anda ate um dos tiles `goals`, uma seta por tile, conferindo a posicao a cada passo. Se o
-     * caminho estiver fechado por ARVORE SECA (elas rebrotam), e com o machado na mochila, ele
-     * abre caminho do jeito que um jogador abriria: encara a arvore e corta.
-     */
-    const walkTo = async (goals, label) => {
-      for (let attempt = 0; attempt < 10; attempt += 1) {
-        await free();
-        const st = await state();
-        const from = { x: st.player.worldX, y: st.player.worldY };
-        if (goals.some((g) => g.x === from.x && g.y === from.y)) return from;
-        const grid = await solidGrid();
-        let path = bfs(grid, from, goals);
-        let trees = new Set();
-        if (!path && st.inventory.some((i) => i.kind === 'axe')) {
-          trees = new Set(await dryTreeTiles());
-          const open = grid.map((row, y) => [...row].map((c, x) => (trees.has(`${x},${y}`) ? '.' : c)).join(''));
-          path = bfs(open, from, goals);
+        await P.talk('painter', 'a Iris (semeado)');
+        assert('Semeado, ela dá o balde', ['bucket', 'bucketFull'].includes(await held()) && (await stage()) === 'water', `${await held()} / ${await stage()}`);
+        for (let i = 0; i < 12 && (await stage()) === 'water'; i += 1) {
+          if ((await held()) === 'bucket') await P.doVerb('x', 'fill', 'encher o balde');
+          else await P.doVerb('x', 'water', 'regar', near);
+          await sleep(700);
+          await P.drain('balde');
         }
-        if (!path) throw new Error(`sem caminho ate ${label}`);
-        let ok = true;
-        for (let i = 1; i < path.length; i += 1) {
-          const a = path[i - 1]; const b = path[i];
-          if (trees.has(`${b.x},${b.y}`)) {
-            await face(b);
-            for (let hit = 0; hit < 8; hit += 1) {
-              const still = await page.evaluate(([x, y]) => window.__scene.dryTrees.some((t) => t.worldX === x && t.worldY === y && t.blocking), [b.x, b.y]);
-              if (!still) break;
-              await press('x', 60, 420);
+        assert('Os quatro canteiros regados: as tintas crescem', (await stage()) === 'grow', await stage());
+        await shot('11-iris-regado', { note: 'Os canteiros regados' });
+        say('esperando as flores crescerem (tempo de jogo)');
+        await P.pageWait(() => window.__scene.painterQuest.save.stage === 'harvest', null, 'as flores crescerem', 240000);
+        for (let i = 0; i < 4; i += 1) {
+          await P.doVerb('z', 'pick', `colher flor ${i + 1}`, near);
+          await sleep(500);
+          await P.drain('flor');
+        }
+        assert('As quatro flores na mão', (await held()) === 'dyeBundle', await held());
+        await P.doVerb('z', 'mix', 'a mesa de tintas', near);
+        await P.drain('a mesa de tintas');
+        await sleep(900);
+        await P.drain('o pincel');
+        assert('As tintas prontas: o quadro armado e o pincel na mão', (await stage()) === 'paint' && (await held()) === 'brush', `${await held()} / ${await stage()}`);
+        await P.doVerb('z', 'paint', 'o quadro', near);
+        await page.waitForSelector('#zh-paint-root canvas', { timeout: 8000 });
+        await sleep(500);
+        await shot('12-iris-quadro', { note: 'O quadro aberto' });
+        const box = await page.locator('#zh-paint-root canvas').boundingBox();
+        const pots = page.locator('#zh-paint-root .zh-paint-pot');
+        for (let k = 0; k < 4; k += 1) {
+          await pots.nth(k).click();
+          const y0 = box.y + box.height * (0.2 + k * 0.18);
+          await page.mouse.move(box.x + box.width * 0.15, y0);
+          await page.mouse.down();
+          for (let s = 1; s <= 12; s += 1) await page.mouse.move(box.x + box.width * (0.15 + s * 0.06), y0 + Math.sin(s) * 12, { steps: 2 });
+          await page.mouse.up();
+        }
+        await shot('13-iris-pintado', { note: 'O quadro pintado' });
+        await page.keyboard.press('Enter');
+        await P.pageWait(() => !document.getElementById('zh-paint-root'), null, 'o quadro fechar', 8000);
+        assert('Pintado, a Iris vai olhar', (await stage()) === 'review', await stage());
+        await P.talk('painter', 'a Iris (o quadro)');
+        const q = await P.quest('painter');
+        assert('A quest da Iris fechou', q?.done === true && (await stage()) === 'done', JSON.stringify(q));
+        await shot('14-iris-fim', { note: 'A Iris viu o quadro' });
+      },
+
+      // ── O BRAM: o machado, quatro galhos de árvore seca rachados no cepo, a tenda, e acender ──
+      async bram() {
+        const L = () => page.evaluate(() => { const q = window.__scene.lumberQuest; return { stage: q.save.stage, laid: q.save.laid, standing: q.save.standing, ui: !!q.overlay }; });
+        const held = async () => (await P.state()).heldItem;
+        const home = await P.homeOf('businessMan');
+        const near = { near: home, radius: 8 };
+        await P.talk('businessMan', 'o Bram');
+        assert('O Bram dá o machado', (await held()) === 'axe' && (await L()).stage === 'gather', `${await held()} / ${JSON.stringify(await L())}`);
+        /** Pega o item do chão: de mão vazia, pisa nele; de mão cheia, encara e troca (Z). */
+        const pickUp = async (kind) => {
+          const st = await P.state();
+          const it = st.groundItems.filter((g) => g.kind === kind)
+            .sort((a, b) => Math.abs(a.worldX - st.player.worldX) + Math.abs(a.worldY - st.player.worldY) - Math.abs(b.worldX - st.player.worldX) - Math.abs(b.worldY - st.player.worldY))[0];
+          if (!it) throw new Error(`nenhum ${kind} no chão`);
+          await P.approachFree({ x: it.worldX, y: it.worldY }, `pegar ${kind}`);
+          await P.press('z', 60, 400);
+          await P.drain(`pegar ${kind}`);
+          return P.free();
+        };
+        const split = async () => {
+          await P.pageWait(() => !!window.__scene.lumberQuest.overlay, null, 'o cepo abrir', 8000);
+          await shot(`20-bram-cepo-${(await L()).laid}`, { note: 'Rachar no cepo' });
+          await page.evaluate(() => new Promise((resolve) => {
+            const q = window.__scene.lumberQuest;
+            const fire = () => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyZ', key: 'z', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyZ', key: 'z', bubbles: true })); };
+            let cool = 0;
+            const t0 = performance.now();
+            const tick = () => {
+              const o = q.overlay;
+              if (!o || performance.now() - t0 > 60000) { resolve(); return; }
+              cool -= 1;
+              if (cool <= 0) {
+                if (o.phase === 'aim' && Math.abs(o.aim - o.grainX) < 2.5 && Math.abs(o.aim - o.knotX) >= 8) { fire(); cool = 4; }
+                else if (o.phase === 'force' && o.force >= 0.7 && o.force <= 0.8) { fire(); cool = 4; }
+              }
+              requestAnimationFrame(tick);
+            };
+            tick();
+          }));
+          await P.drain('as metades');
+          return P.free();
+        };
+        for (let n = 0; n < 4; n += 1) {
+          if ((await held()) !== 'axe') await pickUp('axe');
+          const trees = await page.evaluate(() => window.__scene.dryTrees.filter((t) => t.blocking).map((t) => ({ x: t.worldX, y: t.worldY })));
+          await P.doVerb('x', 'chop', `cortar árvore seca ${n + 1}`, { radius: 60, only: trees, repeat: true });
+          await sleep(900);
+          await P.drain('o galho');
+          let st = await P.free();
+          if (st.heldItem !== 'wood') st = await pickUp('wood');
+          assert(`Galho ${n + 1} no colo`, st.heldItem === 'wood', st.heldItem);
+          await P.doVerb('z', 'stand', 'o cepo', near);
+          st = await split();
+          assert(`Galho ${n + 1} rachado: as metades nas costas`, st.heldItem === 'splitWood', st.heldItem);
+          await P.doVerb('z', 'stack', 'a tenda', near);
+          await sleep(1200);
+          await P.free();
+        }
+        assert('Os quatro galhos na tenda', (await L()).stage === 'ready', JSON.stringify(await L()));
+        await shot('21-bram-tenda', { note: 'A tenda pronta' });
+        await P.talk('businessMan', 'o Bram (pronta)');
+        assert('Ele manda acender', (await L()).stage === 'light', JSON.stringify(await L()));
+        await P.doVerb('z', 'light', 'acender', near);
+        await P.pageWait(() => !!window.__scene.lumberQuest.overlay, null, 'o fogo abrir', 8000);
+        await shot('22-bram-acender', { note: 'Acender' });
+        for (let i = 0; i < 80 && (await L()).ui; i += 1) {
+          const phase = await page.evaluate(() => window.__scene.lumberQuest.overlay?.phase);
+          if (phase === 'strike') await P.press('z', 50, 250);
+          else if (phase === 'blow') await P.press('z', 50, 450);
+          else await sleep(300);
+        }
+        await P.drain('a noite do Bram', 200);
+        await P.free();
+        const q = await P.quest('businessMan');
+        assert('A quest do Bram fechou', q?.done === true && (await L()).stage === 'done', JSON.stringify(q));
+        await shot('23-bram-fim', { note: 'Depois da noite' });
+      },
+
+      // ── A VEGA: a picareta, carvão e minério no lago de lava, a bigorna, areia e vidro, a lente, o planalto e a noite ──
+      async vega() {
+        await playVega({ driver, shot, assert, skipOpening: true });
+        await P.free();
+      },
+
+      // ── A PRIMEIRA NOITE: o colchão do acampamento, a Morte, e a foice que ela deixa ──
+      async noite() {
+        await P.doVerb('z', 'sleep', 'o colchão do acampamento', { near: { x: 53, y: 48 }, radius: 3 });
+        await P.waitFor((s) => s.resting, 'deitar', 8000);
+        const lying = await page.evaluate(() => ({ sleeping: window.__scene.sleeping, camp: window.__scene.sleepingAtCamp }));
+        assert('O herói dorme no colchão do acampamento', lying.sleeping && lying.camp, JSON.stringify(lying));
+        await shot('30-noite-colchao', { note: 'Dormindo no acampamento' });
+        say('esperando a noite passar');
+        await P.waitFor((s) => s.dialogOpen, 'a Morte aparecer', 300000);
+        await shot('31-noite-morte', { note: 'A primeira visita da Morte' });
+        await P.drain('a Morte', 200);
+        const visited = await page.evaluate(() => window.__scene.seenDialogKeys.has('death/visit'));
+        assert('A Morte veio na primeira noite no acampamento', visited, '');
+        for (let i = 0; i < 40 && (await P.state()).resting; i += 1) { await P.press('ArrowDown', 60, 400); await P.drain('levantar'); }
+        await sleep(1500);
+        const st = await P.free();
+        const scythe = st.groundItems.find((g) => g.kind === 'scythe');
+        assert('A foice ficou no acampamento', !!scythe && Math.abs(scythe.worldX - 53) <= 4 && Math.abs(scythe.worldY - 48) <= 4, JSON.stringify(scythe));
+        assert('O mago deixa de lembrar do acampamento', (await page.evaluate(() => window.__scene.wizardLine())) !== 'tent', '');
+      },
+
+      // ── A HOLLIS: a faca e os seis cogumelos, cada um atrás de uma coisa que só uma ferramenta tira ──
+      async hollis() {
+        const held = async () => (await P.state()).heldItem;
+        const DIRS4 = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+        /** A coisa vai para a mão: a mais perto no chão; com a mão cheia, o Z troca (a de antes fica no lugar). */
+        const hold = async (kind) => {
+          if ((await held()) === kind) return;
+          const st = await P.state();
+          const it = st.groundItems.filter((g) => g.kind === kind)
+            .sort((a2, b2) => Math.abs(a2.worldX - st.player.worldX) + Math.abs(a2.worldY - st.player.worldY) - Math.abs(b2.worldX - st.player.worldX) - Math.abs(b2.worldY - st.player.worldY))[0];
+          if (!it) throw new Error(`nenhum ${kind} no chão (na mão: ${st.heldItem})`);
+          if (st.heldItem === 'none') { await P.walkTo([{ x: it.worldX, y: it.worldY }], `pegar ${kind}`); await P.press('z', 60, 350); }
+          else { await P.approachFree({ x: it.worldX, y: it.worldY }, `pegar ${kind}`); await P.press('z', 60, 350); }
+          await P.drain(`pegar ${kind}`);
+          const now = await P.free();
+          assert(`Na mão: ${kind}`, now.heldItem === kind, now.heldItem);
+        };
+
+        /** Um graveto novo: o machado numa árvore seca, e o galho no colo. */
+        const freshStick = async () => {
+          await hold('axe');
+          const trees = await page.evaluate(() => window.__scene.dryTrees.filter((t) => t.blocking).map((t) => ({ x: t.worldX, y: t.worldY })));
+          await P.doVerb('x', 'chop', 'árvore seca', { radius: 60, only: trees, repeat: true });
+          await sleep(900);
+          await P.drain('o galho');
+          await hold('wood');
+        };
+
+        /**
+         * ABRE O CAMINHO até `target` com o gesto `verb` do X: o BFS passa pelos tiles que aceitariam o gesto, e o herói
+         * vai tirando o primeiro deles do caminho. `ensure` põe na mão o que o gesto pede antes de cada golpe.
+         */
+        const clearTo = async (target, verb, ensure, label) => {
+          for (let round = 0; round < 20; round += 1) {
+            await ensure();
+            const grid = await P.solidGrid();
+            const open = await page.evaluate(([v, cx, cy]) => {
+              const sc = window.__scene;
+              const out = [];
+              for (let y = Math.max(0, cy - 14); y <= Math.min(59, cy + 14); y += 1) for (let x = Math.max(0, cx - 14); x <= Math.min(59, cx + 14); x += 1) if (sc.useVerbAt(x, y) === v) out.push(`${x},${y}`);
+              return out;
+            }, [verb, target.x, target.y]);
+            const openSet = new Set(open);
+            const g2 = grid.map((row, y) => [...row].map((c, x) => (openSet.has(`${x},${y}`) ? '.' : c)).join(''));
+            const st = await P.state();
+            const from = { x: st.player.worldX, y: st.player.worldY };
+            const goals = DIRS4.map(([dx, dy]) => ({ x: target.x + dx, y: target.y + dy })).filter((q) => grid[q.y]?.[q.x] === '.' || openSet.has(`${q.x},${q.y}`));
+            const way = P.bfs(g2, from, goals);
+            if (!way) {
+              // o fogo ainda está andando: o arbusto que arde não aceita mais o gesto, e ainda não abriu
+              if (verb === 'burn' && round < 19) { await sleep(3000); continue; }
+              throw new Error(`${label}: nem com ${verb} há caminho`);
             }
-            ok = false; // re-planeja: o toco abriu e talvez tenha caido um graveto no caminho
-            break;
+            const i = way.findIndex((q) => grid[q.y][q.x] === '#');
+            if (i < 0) { say(`  ${label}: caminho aberto`); return; }
+            const block = way[i];
+            await P.walkTo([way[i - 1]], `${label}: diante de ${block.x},${block.y}`);
+            await ensure();
+            if ((await P.state()).player.worldX !== way[i - 1].x || (await P.state()).player.worldY !== way[i - 1].y) await P.walkTo([way[i - 1]], `${label}: de volta`);
+            if (!(await page.evaluate(([x, y]) => window.__scene.isSolidForEntities(x, y), [block.x, block.y]))) continue; // abriu sozinho (o fogo anda)
+            try { await P.face(block); } catch (e) { say(`  ${label}: ${e.message}`); continue; }
+            const v = await page.evaluate(([x, y]) => window.__scene.useVerbAt(x, y), [block.x, block.y]);
+            if (v !== verb) { say(`  ${label}: ${block.x},${block.y} diz ${v}`); await sleep(500); continue; }
+            await P.press('x', 60, 450);
+            for (let k = 0; k < 10 && (await page.evaluate(([x, y]) => window.__scene.useVerbAt(x, y), [block.x, block.y])) === verb; k += 1) await P.press('x', 60, 450);
+            await P.drain(label);
+            // o que cai (o fogo, a pedra afundando, a ponte) leva um tempo
+            try { await P.pageWait(([x, y]) => !window.__scene.isSolidForEntities(x, y), [block.x, block.y], `${label}: ${block.x},${block.y} abrir`, verb === 'burn' ? 40000 : 6000); } catch (e) { say(`  ${e.message}`); }
           }
-          await press(ARROW[`${b.x - a.x},${b.y - a.y}`], 60, 150);
-          const now = await state();
-          if (now.itemGetOpen || now.dialogOpen) await drain(`${label} (no caminho)`);
-          const after = await state();
-          if (after.player.worldX !== b.x || after.player.worldY !== b.y) { ok = false; break; }
+          throw new Error(`${label}: não abriu`);
+        };
+
+        /** O mini-game da colheita, jogado: a faca na faixa, a bucha na terra com o mouse, a ficha. */
+        const forage = async (kind) => {
+          await P.pageWait(() => window.__scene.foraging?.stage === 'aim', null, 'faca em posicao', 8000);
+          await page.evaluate(() => new Promise((resolve) => {
+            const o = window.__scene.foraging;
+            const fire = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: 'KeyZ', key: 'z', bubbles: true }));
+            const mid = (o.zoneTop + o.zoneBottom) / 2;
+            const tick = () => {
+              if (o.stage !== 'aim') { resolve(); return; }
+              if (Math.abs(o.knifeY - mid) < (o.zoneBottom - o.zoneTop) * 0.3) { fire('keydown'); fire('keyup'); }
+              requestAnimationFrame(tick);
+            };
+            tick();
+          }));
+          await P.pageWait(() => window.__scene.foraging?.stage === 'clean', null, 'a bucha', 6000);
+          await sleep(300);
+          const toScreen = (x, y) => page.evaluate(([ax, ay]) => {
+            const o = window.__scene.foraging;
+            const dpr = o.canvas.width / Math.max(1, o.root.clientWidth);
+            const q = o.origin();
+            return { x: (q.x + ax * o.scale) / dpr, y: (q.y + ay * o.scale) / dpr };
+          }, [x, y]);
+          const nextDirt = () => page.evaluate(() => {
+            const o = window.__scene.foraging;
+            if (!o || o.stage !== 'clean') return null;
+            const i = o.dirt.findIndex((c) => c);
+            const cs = Math.sqrt(o.dirt.length);
+            return i < 0 ? null : { x: i % cs, y: Math.floor(i / cs) };
+          });
+          let d = await nextDirt();
+          if (d) {
+            const start = await toScreen(d.x, d.y);
+            await page.mouse.move(start.x, start.y);
+            await page.mouse.down();
+            for (let i = 0; i < 400 && d; i += 1) {
+              const at = await toScreen(d.x + 0.5, d.y + 0.5);
+              await page.mouse.move(at.x, at.y, { steps: 2 });
+              d = await nextDirt();
+            }
+            await page.mouse.up();
+          }
+          await P.pageWait(() => window.__scene.foraging?.stage === 'note', null, 'a ficha', 10000);
+          await shot(`40-ficha-${kind}`, { note: `A ficha do ${kind}` });
+          for (let i = 0; i < 30 && !(await page.evaluate(() => !window.__scene.foraging)); i += 1) await P.press('z', 50, 500);
+          await P.pageWait(() => !window.__scene.foraging, null, 'a colheita fechar', 8000);
+          await P.drain('depois da ficha');
+        };
+
+        const spot = async (kind) => {
+          const it = (await P.state()).groundItems.find((g) => g.kind === kind);
+          if (!it) throw new Error(`o ${kind} não está no mapa`);
+          return { x: it.worldX, y: it.worldY };
+        };
+        const harvest = async (kind) => {
+          const at = await spot(kind);
+          await hold('knife');
+          await P.approachSolid(at, `o ${kind}`);
+          await P.press('x', 60, 300);
+          await forage(kind);
+          await P.free();
+          const gone = !(await P.state()).groundItems.some((g) => g.kind === kind);
+          assert(`O ${kind} foi colhido`, gone, '');
+        };
+
+        await P.talk('radiationSuit', 'a Hollis');
+        assert('A Hollis dá a faca', (await held()) === 'knife', await held());
+
+        // PORCINI: só chegar.
+        await harvest('porcini');
+        // MOREL: dois gravetos fazem a ponte até a ilha.
+        await clearTo(await spot('morel'), 'bridge', async () => { if ((await held()) !== 'wood') await freshStick(); }, 'a ponte do morel');
+        await shot('41-morel-ponte', { note: 'A ponte do morel' });
+        await harvest('morel');
+        // PUFFBALL: a foice abre o mato alto.
+        await clearTo(await spot('puffball'), 'mow', () => hold('scythe'), 'o mato do puffball');
+        await harvest('puffball');
+        // INKCAP: um graveto aceso na lava põe fogo nos arbustos secos.
+        await clearTo(await spot('inkCap'), 'burn', async () => {
+          const st = await P.state();
+          if (st.heldItem === 'wood' && st.heldOnFire) return;
+          if (st.heldItem !== 'wood') await freshStick();
+          await P.doVerb('x', 'light', 'acender o graveto na lava', { radius: 60 });
+          await P.waitFor((s2) => s2.heldOnFire, 'o graveto pegar fogo', 4000);
+        }, 'os arbustos do inkCap');
+        await shot('42-inkcap-fogo', { note: 'O fogo abriu o caminho' });
+        await harvest('inkCap');
+        // CHANTERELLE: a pedra da picareta afunda na lava e vira passagem.
+        await clearTo(await spot('chanterelle'), 'cover', async () => {
+          if ((await held()) === 'stone') return;
+          await hold('pickaxe');
+          const plain = await page.evaluate(() => window.__scene.rocks.filter((r) => r.blocking && !r.ore).map((r) => ({ x: r.worldX, y: r.worldY })));
+          const t = await P.doVerb('x', 'break', 'a rocha', { radius: 60, repeat: true, only: plain });
+          await sleep(700);
+          await P.drain('a pedra');
+          await P.pageWait(([x, y]) => !window.__scene.isSolidForEntities(x, y), [t.x, t.y], 'a rocha abrir', 6000).catch(() => {});
+          await hold('stone');
+        }, 'a lava do chanterelle');
+        await harvest('chanterelle');
+        // FLY AGARIC: o machado abre o mato morto.
+        await clearTo(await spot('flyAgaric'), 'chop', () => hold('axe'), 'o mato morto do flyAgaric');
+        await harvest('flyAgaric');
+
+        await shot('43-cesta', { note: 'Os seis na cesta' });
+        await hold('knife').catch(() => {});
+        await P.talk('radiationSuit', 'a Hollis (a cesta)');
+        const q = await P.quest('radiationSuit');
+        assert('A quest da Hollis fechou', q?.done === true, JSON.stringify(q));
+        const st = await P.waitFor((s2) => s2.heldItem === 'key' && !s2.itemGetOpen && !s2.dialogOpen && !s2.cutsceneActive, 'a chave do jardim', 15000).catch(async () => P.state());
+        assert('A última quest dá a chave do jardim', st.heldItem === 'key', st.heldItem);
+        await shot('44-hollis-fim', { note: 'A Hollis fechou: a chave' });
+      },
+
+      // ── O FIM: a chave no portão, o jardim alto, a névoa, a fogueira, o marshmallow, os créditos e o título ──
+      async fim() {
+        let st = await P.free();
+        assert('A chave do jardim na mão', st.heldItem === 'key', st.heldItem);
+        await P.doVerb('x', 'unlock', 'o portão do jardim', { radius: 60 });
+        await P.waitFor((s2) => s2.cutsceneActive, 'a cena da chave', 6000).catch(() => {});
+        await shot('50-portao-chave', { note: 'A chave no portão' });
+        await P.drain('o portão abrir', 200);
+        st = await P.free();
+        assert('O portão abriu e a chave foi gasta', st.ending.gateOpen && st.heldItem !== 'key' && !st.groundItems.some((g) => g.kind === 'key'), JSON.stringify({ ending: st.ending, held: st.heldItem }));
+        // Um graveto para o marshmallow: o que estiver no chão, senão o machado numa árvore seca.
+        const hold = async (kind) => {
+          if ((await P.state()).heldItem === kind) return;
+          const s3 = await P.state();
+          const it = s3.groundItems.filter((g) => g.kind === kind)
+            .sort((a2, b2) => Math.abs(a2.worldX - s3.player.worldX) + Math.abs(a2.worldY - s3.player.worldY) - Math.abs(b2.worldX - s3.player.worldX) - Math.abs(b2.worldY - s3.player.worldY))[0];
+          if (!it) throw new Error(`nenhum ${kind} no chão`);
+          const all = s3.groundItems.filter((g) => g.kind === kind);
+          let got = false;
+          for (const g of [it, ...all.filter((x) => x !== it)]) {
+            try {
+              if (s3.heldItem === 'none') await P.walkTo([{ x: g.worldX, y: g.worldY }], `pegar ${kind}`);
+              else await P.approachFree({ x: g.worldX, y: g.worldY }, `pegar ${kind}`);
+              got = true;
+              break;
+            } catch (e) { say(`  ${kind} em ${g.worldX},${g.worldY}: ${e.message}`); }
+          }
+          if (!got) throw new Error(`nenhum ${kind} alcançável`);
+          await P.press('z', 60, 350);
+          await P.drain(`pegar ${kind}`);
+          await P.free();
+        };
+        await hold('wood');
+        assert('Um graveto na mão para o fim', (await P.state()).heldItem === 'wood', (await P.state()).heldItem);
+        // Subir o jardim: a primeira pisada no cume é o vento levando a névoa (cena).
+        const hearth = await page.evaluate(() => { const h = window.__scene.hearths[0]; return h ? { x: h.worldX, y: h.worldY } : null; });
+        assert('A fogueira do fim existe', !!hearth, '');
+        try { await P.approachSolid(hearth, 'a fogueira do fim'); } catch (e) { say(`  1a tentativa: ${e.message}`); await P.drain('a névoa', 200); await P.approachSolid(hearth, 'a fogueira do fim'); }
+        await P.drain('a névoa', 200);
+        st = await P.free();
+        const mist = await page.evaluate(() => window.__scene.gardenMist === undefined);
+        assert('O vento levou a névoa', mist, '');
+        await shot('51-jardim', { note: 'O jardim alto, diante da fogueira' });
+        await P.approachSolid(hearth, 'a fogueira do fim');
+        assert('Diante da fogueira, o Z acende', (await page.evaluate(([x, y]) => window.__scene.handVerbAt(x, y), [hearth.x, hearth.y])) === 'light', '');
+        await P.press('z', 60, 600);
+        await P.drain('acender', 200);
+        st = await P.free();
+        assert('A fogueira do fim acesa', st.ending.hearthLit, JSON.stringify(st.ending));
+        await shot('52-fogueira', { note: 'A fogueira acesa' });
+        if (st.heldItem !== 'wood') await hold('wood');
+        await P.approachSolid(hearth, 'a fogueira (assar)');
+        const verb = await page.evaluate(([x, y]) => window.__scene.handVerbAt(x, y), [hearth.x, hearth.y]);
+        assert('Com o graveto, o Z assa', verb === 'roast', String(verb));
+        await P.press('z', 60, 600);
+        say('o fim: assando, os amigos, a nave, os créditos');
+        for (let i = 0; i < 600; i += 1) {
+          const s4 = await page.evaluate(() => ({ scene: window.gameDebug?.getState()?.scene ?? null, active: window.__scene?.scene?.isActive?.() ?? null, dialog: window.gameDebug?.getState()?.dialogOpen ?? false, keys: [...(window.__game?.scene?.getScenes?.(true) ?? [])].map((x) => x.scene.key) }));
+          if (i % 40 === 0) say(`  ${JSON.stringify(s4)}`);
+          if (i === 30) await shot('53-reencontro', { note: 'O reencontro na fogueira' });
+          if (s4.dialog) await P.press('z', 60, 400);
+          const title = await page.evaluate(() => !window.gameDebug || window.gameDebug.getState()?.scene !== 'game');
+          if (title && i > 5) break;
+          await sleep(500);
         }
-        if (ok) return path[path.length - 1];
-        await sleep(300);
-      }
-      throw new Error(`nao consegui chegar em ${label}`);
+        await sleep(3000);
+        await shot('54-creditos-ou-titulo', { note: 'Depois do fim' });
+        const save = await page.evaluate(() => JSON.parse(localStorage.getItem('zh.cozy.v1') ?? 'null'));
+        assert('O save marca o fim visto', save?.endingSeen === true, JSON.stringify({ endingSeen: save?.endingSeen }));
+        const onTitle = await page.evaluate(() => !window.gameDebug || window.gameDebug.getState()?.scene !== 'game');
+        assert('Os créditos voltam ao título', onTitle, '');
+      },
     };
 
-    /** Vira para um tile vizinho sem andar (a parede/NPC vira o heroi). */
-    const face = async (target) => {
-      const st = await state();
-      const dx = target.x - st.player.worldX; const dy = target.y - st.player.worldY;
-      if (Math.abs(dx) + Math.abs(dy) !== 1) throw new Error(`face: ${JSON.stringify(target)} nao e vizinho`);
-      if (st.facing.dx === dx && st.facing.dy === dy) return;
-      await press(ARROW[`${dx},${dy}`], 40, 200);
-      const now = await state();
-      if (now.player.worldX !== st.player.worldX || now.player.worldY !== st.player.worldY) {
-        throw new Error('face: o heroi andou em vez de virar');
-      }
-    };
-
-    /**
-     * Vai para o lado de um tile alvo e o encara. Contra um tile SOLIDO a seta so vira o heroi;
-     * contra um tile LIVRE (o buraco do canteiro) ela anda — entao ali ele chega andando NA
-     * direcao do alvo, e o ultimo passo ja o deixa de frente.
-     */
-    const approach = async (target, label, solid = false) => {
-      const grid = await solidGrid();
-      const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-      // Um NPC fora da janela de streaming nao aparece no mapa de solidos: quem chama sabe.
-      if (solid || grid[target.y][target.x] === '#') {
-        const sides = dirs.map(([dx, dy]) => ({ x: target.x + dx, y: target.y + dy }))
-          .filter((p) => grid[p.y]?.[p.x] === '.');
-        await walkTo(sides, label);
-        await face(target);
-        return;
-      }
-      const runs = dirs.map(([dx, dy]) => ({
-        side: { x: target.x - dx, y: target.y - dy },
-        back: { x: target.x - 2 * dx, y: target.y - 2 * dy },
-        key: ARROW[`${dx},${dy}`],
-      })).filter((r) => grid[r.side.y]?.[r.side.x] === '.' && grid[r.back.y]?.[r.back.x] === '.');
-      const at = await walkTo(runs.map((r) => r.back), label);
-      const run = runs.find((r) => r.back.x === at.x && r.back.y === at.y);
-      await press(run.key, 60, 260);
-      const now = await state();
-      if (now.player.worldX !== run.side.x || now.player.worldY !== run.side.y) {
-        throw new Error(`approach: nao cheguei de frente em ${label}`);
-      }
-    };
-
-    const NPC = {};
-
-    const talk = async (kind, label) => {
-      await approach(NPC[kind], label, true);
-      await press('z', 60, 400);
-      await waitFor((s) => s.dialogOpen, `dialogo de ${label}`, 8000);
-      await drain(label);
-    };
-    const quest = async (id) => (await page.evaluate((d) => window.gameDebug.quests().find((q) => q.dialog === d), id));
-    const count = async (kind) => ((await state()).inventory.find((i) => i.kind === kind)?.count ?? 0);
-    const ground = async (kind) => (await state()).groundItems.filter((g) => g.kind === kind);
-
-    /** Escolhe um item na BOLSA: I abre, setas andam, X confirma. */
-    const pick = async (kind) => {
-      const st = await state();
-      if (st.heldItem === kind) return;
-      await press('i', 60, 250);
-      await waitFor((s) => s.bagOpen, 'bolsa aberta', 4000);
-      for (let i = 0; i < 12; i += 1) {
-        const order = (await state()).inventory.map((it) => it.kind).filter((k) => !['ore', 'iron', 'charcoal', 'mushroom'].includes(k));
-        const want = order.indexOf(kind);
-        const cursor = await page.evaluate(() => window.__scene.quickBag.cursor);
-        const at = order.indexOf(cursor);
-        if (want < 0) throw new Error(`a bolsa nao tem ${kind}`);
-        if (at === want) break;
-        await press(want > at ? 'ArrowRight' : 'ArrowLeft', 50, 160);
-      }
-      await press('x', 60, 300);
-      const after = await waitFor((s) => !s.bagOpen, 'bolsa fechada', 4000);
-      assert(`Bolsa equipa ${kind}`, after.heldItem === kind, `heldItem=${after.heldItem}`);
-    };
-
-    // ── 0. TITULO → JOGO ───────────────────────────────────────────────────────────────────
-    await page.evaluate(() => { localStorage.removeItem('zh.cozy.v1'); });
-    await driver.open('/');
-    await sleep(2600);
-    await shot('titulo', { note: 'A tela de titulo' });
-    await press('Enter', 80, 600);
-    await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
-    // Ler o mundo e so ler: o mapa de NPCs vem do mesmo arquivo que o jogo carregou.
-    await page.evaluate(async () => { window.__worldData = await (await fetch('/world.json')).json(); });
-    Object.assign(NPC, await page.evaluate(() => {
-      const out = {};
-      for (const c of window.__worldData.chunks) for (const n of c.npcs) out[n.type] = { x: n.worldX, y: n.worldY };
-      return out;
-    }));
-
-    // ── 1. A ABERTURA ──────────────────────────────────────────────────────────────────────
-    const born = await state();
-    assert('A abertura toca ao comecar uma jornada', born.cutsceneActive && !born.introDone, JSON.stringify({ cut: born.cutsceneActive, intro: born.introDone }));
-    assert('Nao ha vida, nem morte, no estado do jogo', born.health === undefined && born.isDead === undefined, '');
-    await sleep(6000);
-    await shot('abertura-espada', { note: 'A espada fincada na estrada' });
-    await waitFor((s) => s.dialogOpen, 'o mago falar', 30000);
-    await sleep(1200);
-    await shot('abertura-mago', { note: 'O mago chega e fala' });
-    await drain('abertura');
-    const afterIntro = await free();
-    assert('A abertura termina com o controle de volta', afterIntro.introDone === true, '');
-    await shot('abertura-fim', { note: 'O controle volta, o mago fica na estrada' });
-
-    // ── 2. A COLETORA: cinco cogumelos ─────────────────────────────────────────────────────
-    await talk('radiationSuit', 'a coletora');
-    for (let n = 0; n < 6 && (await count('mushroom')) < 5; n += 1) {
-      const st = await state();
-      const shrooms = (await ground('mushroom'))
-        // o do jardim fica para o fim (e o portao ainda esta fechado)
-        .filter((m) => !(Math.abs(m.worldX - 30) <= 5 && Math.abs(m.worldY - 30) <= 5))
-        .sort((a, b) => Math.hypot(a.worldX - st.player.worldX, a.worldY - st.player.worldY)
-          - Math.hypot(b.worldX - st.player.worldX, b.worldY - st.player.worldY));
-      if (!shrooms.length) break;
-      await walkTo([{ x: shrooms[0].worldX, y: shrooms[0].worldY }], 'um cogumelo');
-      await sleep(250);
-      await drain('cerimonia do cogumelo');
+    if (fromIndex > 0) await resume(from);
+    for (const name of PHASES.slice(fromIndex)) {
+      say(`── fase: ${name}`);
+      await phases[name]();
+      await checkpoint(name);
     }
-    assert('Cinco cogumelos na mochila', (await count('mushroom')) >= 5, `mushroom=${await count('mushroom')}`);
-    await talk('radiationSuit', 'a coletora (entrega)');
-    assert('O pedido da coletora fechou', (await quest('radiationSuit')).done, JSON.stringify(await quest('radiationSuit')));
-    await shot('coletora-ok', { note: 'A coletora agradece' });
-
-    // ── 3. A PINTORA: dois canteiros que brotam ────────────────────────────────────────────
-    await talk('painter', 'a pintora');
-    assert('A pintora deu sementes e balde', (await count('seeds')) >= 2 && (await count('bucket')) >= 1, JSON.stringify((await state()).inventory));
-    const holes = (await state()).plantSpots.filter((p) => p.state === 'hole').slice(0, 2);
-    for (const hole of holes) {
-      await pick('seeds');
-      await approach({ x: hole.worldX, y: hole.worldY }, 'um buraco');
-      await press('x', 60, 500);
-    }
-    // sai de cima/da frente para o monte se erguer, e rega cada um com agua do lago
-    const findWater = () => page.evaluate(() => {
-      const s = window.__scene; const out = [];
-      for (let y = 0; y < 60; y += 1) for (let x = 0; x < 60; x += 1) if (s.isOpenWaterAt(x, y)) out.push({ x, y });
-      return out;
-    });
-    const water = await findWater();
-    for (const hole of holes) {
-      await pick('bucket');
-      const st = await state();
-      const grid = await solidGrid();
-      // o lado seco de alguma agua, o mais perto
-      const shores = [];
-      for (const w of water) {
-        for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
-          const p = { x: w.x + dx, y: w.y + dy };
-          if (grid[p.y]?.[p.x] === '.') shores.push({ ...p, w });
-        }
-      }
-      shores.sort((a, b) => Math.hypot(a.x - st.player.worldX, a.y - st.player.worldY) - Math.hypot(b.x - st.player.worldX, b.y - st.player.worldY));
-      const shore = await walkTo(shores.slice(0, 40), 'a beira da agua');
-      const w = shores.find((s) => s.x === shore.x && s.y === shore.y).w;
-      await face(w);
-      await press('x', 60, 600);
-      assert('O balde encheu', (await state()).heldItem === 'bucketFull', `held=${(await state()).heldItem}`);
-      await waitFor((s) => s.plantSpots.some((p) => p.worldX === hole.worldX && p.worldY === hole.worldY && p.state === 'mound'), 'o monte subir', 10000);
-      await approach({ x: hole.worldX, y: hole.worldY }, 'o monte');
-      await press('x', 60, 900);
-    }
-    await waitFor((s) => s.plantSpots.filter((p) => p.state === 'grown').length >= 2, 'os canteiros brotarem', 20000);
-    await shot('pintora-canteiros', { note: 'Os dois canteiros brotaram' });
-    await drain('brotou');
-    await talk('painter', 'a pintora (obrigado)');
-    assert('O pedido da pintora fechou', (await quest('painter')).done, JSON.stringify(await quest('painter')));
-
-    // ── 4. O LENHADOR: quatro gravetos ─────────────────────────────────────────────────────
-    await talk('businessMan', 'o lenhador');
-    assert('O lenhador deu o machado', (await count('axe')) >= 1, '');
-    const dryTrees = () => page.evaluate(() => window.__scene.dryTrees
-      .filter((t) => t.blocking).map((t) => ({ x: t.worldX, y: t.worldY })));
-    for (let n = 0; n < 8 && (await count('wood')) < 4; n += 1) {
-      const st = await state();
-      // gravetos ja caidos primeiro
-      const sticks = (await ground('wood')).filter((w) => Math.hypot(w.worldX - st.player.worldX, w.worldY - st.player.worldY) < 14
-        && !(Math.abs(w.worldX - 30) <= 5 && Math.abs(w.worldY - 30) <= 5));
-      if (sticks.length) {
-        sticks.sort((a, b) => Math.hypot(a.worldX - st.player.worldX, a.worldY - st.player.worldY) - Math.hypot(b.worldX - st.player.worldX, b.worldY - st.player.worldY));
-        await walkTo([{ x: sticks[0].worldX, y: sticks[0].worldY }], 'um graveto');
-        await drain('graveto');
-        continue;
-      }
-      const trees = (await dryTrees()).sort((a, b) => Math.hypot(a.x - st.player.worldX, a.y - st.player.worldY) - Math.hypot(b.x - st.player.worldX, b.y - st.player.worldY));
-      await approach(trees[0], 'uma arvore seca');
-      for (let hit = 0; hit < 8; hit += 1) {
-        const still = await page.evaluate(([x, y]) => window.__scene.dryTrees.some((t) => t.worldX === x && t.worldY === y && t.blocking), [trees[0].x, trees[0].y]);
-        if (!still) break;
-        await press('x', 60, 420);
-      }
-      await sleep(600);
-    }
-    assert('Quatro gravetos na mochila', (await count('wood')) >= 4, `wood=${await count('wood')}`);
-    await talk('businessMan', 'o lenhador (entrega)');
-    assert('O pedido do lenhador fechou', (await quest('businessMan')).done, JSON.stringify(await quest('businessMan')));
-
-    // ── 5. A ASTRONOMA: tres pedras ────────────────────────────────────────────────────────
-    await talk('astronaut', 'a astronoma');
-    assert('A astronoma deu a picareta', (await count('pickaxe')) >= 1, '');
-    const rocks = () => page.evaluate(() => window.__scene.rocks
-      .filter((r) => r.blocking && !r.ore).map((r) => ({ x: r.worldX, y: r.worldY })));
-    for (let n = 0; n < 10 && (await count('stone')) < 3; n += 1) {
-      const st = await state();
-      const stones = (await ground('stone')).filter((w) => Math.hypot(w.worldX - st.player.worldX, w.worldY - st.player.worldY) < 14);
-      if (stones.length) {
-        await walkTo([{ x: stones[0].worldX, y: stones[0].worldY }], 'uma pedra');
-        await drain('pedra');
-        continue;
-      }
-      const list = (await rocks()).sort((a, b) => Math.hypot(a.x - st.player.worldX, a.y - st.player.worldY) - Math.hypot(b.x - st.player.worldX, b.y - st.player.worldY));
-      await approach(list[0], 'uma rocha');
-      for (let hit = 0; hit < 6; hit += 1) {
-        const still = await page.evaluate(([x, y]) => window.__scene.rocks.some((r) => r.worldX === x && r.worldY === y && r.blocking), [list[0].x, list[0].y]);
-        if (!still) break;
-        await press('x', 60, 650);
-      }
-      await sleep(600);
-    }
-    assert('Tres pedras na mochila', (await count('stone')) >= 3, `stone=${await count('stone')}`);
-    await talk('astronaut', 'a astronoma (entrega)');
-    await sleep(1200);
-    await drain('o portao');
-    const gate = await state();
-    assert('O ultimo pedido abriu o portao do jardim', gate.ending.gateOpen === true, JSON.stringify(gate.ending));
-    assert('Todos os pedidos fecharam', (await page.evaluate(() => window.gameDebug.quests().every((q) => q.done))), '');
-
-    // ── 6. O JARDIM ────────────────────────────────────────────────────────────────────────
-    const garden = await page.evaluate(() => ({
-      hearth: window.__worldData.props.find((p) => p.type === 'hearth'),
-    }));
-    const hearth = { x: garden.hearth.worldX, y: garden.hearth.worldY };
-    for (const kind of ['wood', 'mushroom']) {
-      const inside = (await ground(kind)).filter((g) => Math.abs(g.worldX - hearth.x) <= 4 && Math.abs(g.worldY - hearth.y) <= 4);
-      if (inside.length) {
-        await walkTo([{ x: inside[0].worldX, y: inside[0].worldY }], `o ${kind} do jardim`);
-        await drain(kind);
-      }
-    }
-    await approach(hearth, 'a fogueira do fim');
-    await shot('jardim', { note: 'Diante da fogueira apagada, dentro do jardim' });
-    await press('z', 60, 300);
-    await waitFor((s) => s.ending.hearthLit && !s.cutsceneActive, 'a fogueira acender', 15000);
-    await shot('fogueira-acesa', { note: 'A fogueira do fim acesa' });
-    await press('z', 60, 300);
-    await waitFor((s) => s.ending.roasted, 'comecar a assar', 8000);
-    await sleep(6500);
-    await shot('assando', { note: 'O cogumelo no espeto, sobre a chama' });
-    await waitFor((s) => s.dialogOpen, 'a ultima fala', 30000);
-    // A cena do fim nao "termina": ela emenda nos creditos. Avanca so a fala.
-    for (let i = 0; i < 20 && (await state())?.dialogOpen; i += 1) await press('z', 60, 450);
-    await page.waitForFunction(() => Boolean(document.querySelector('.zh-credits')), null, { timeout: 20000 });
-    await sleep(4200);
-    await shot('the-end', { note: 'The End' });
-    await sleep(9000);
-    await shot('creditos', { note: 'Os creditos subindo' });
-    await page.waitForFunction(() => window.gameDebug?.getState()?.scene !== 'game' && !document.querySelector('.zh-credits'), null, { timeout: 60000 });
-    await sleep(1500);
-    await shot('titulo-depois', { note: 'De volta ao titulo' });
-    assert('Os creditos terminam no titulo', !(await page.evaluate(() => Boolean(window.gameDebug))), '');
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('zh.cozy.v1') ?? '{}'));
-    assert('O fim fica no save', saved.endingSeen === true, JSON.stringify({ endingSeen: saved.endingSeen }));
+    assert('Sem erro no console', driver.consoleErrors.length === 0, driver.consoleErrors.slice(0, 3).join(' | '));
   },
 };

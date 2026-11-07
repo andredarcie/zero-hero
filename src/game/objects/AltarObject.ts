@@ -8,6 +8,13 @@ import type { WorldProp } from './WorldProp';
 import { hammerResult, isHammerable } from './hammering';
 
 /**
+ * A BIGORNA DA VEGA (pedido do autor): fixa, ao lado do forno, e o ÚNICO lugar onde a esponja de ferro vira barra —
+ * a martelada no chão saiu. Uma bigorna de ferreiro de verdade sobre um toco (spritefactory/sprites/altar.mjs), com
+ * o MARTELINHO encostado nela: o herói põe a peça em cima, pega o martelinho e malha; saindo de perto, o martelinho
+ * volta para o lugar (GameScene.forgeStrike / returnForgeHammer). O nome "altar" ficou no código e no mapa.
+ *
+ * O texto abaixo é da laje antiga e continua valendo no que diz da peça e das pancadas.
+ *
  * O ALTAR — a bigorna que não é máquina.
  *
  * A esponja de ferro podia ser martelada no chão, exatamente onde rolou. O altar torna o gesto
@@ -38,8 +45,8 @@ const FRAME_HOT = 1;
 
 const STONE_TINT = 0xd8d8d8;
 
-/** Onde a peça fica: a altura do tampo na arte, e um fio à frente da pedra para não sumir nela. */
-const LOAD_ELEV = 0.44;
+/** Onde a peça fica: a altura da MESA da bigorna na arte (fileira 5 de 16), e um fio à frente para não sumir nela. */
+export const LOAD_ELEV = 0.68;
 const LOAD_DEPTH = 0.02;
 const LOAD_SIZE = 0.5;
 
@@ -57,10 +64,20 @@ const SPARKS = 9;
 const SPARKS_LAST = 18;
 const SPARKS_DULL = 4;
 
+/** O martelinho encostado no toco: à direita da bigorna, um pouco à frente, inclinado. */
+const HAMMER_REST = { dx: 0.4, dy: 0.12, elev: 0.04, angle: 16, size: 0.46 };
+export const FORGE_HAMMER_TEXTURE = 'forge-hammer';
+export const FORGE_HAMMER_SIZE = HAMMER_REST.size;
+/** As pedrinhas de escória que a pancada solta e caem em volta do toco. */
+const PEBBLE_TINTS = [0x3c3330, 0x55473d, 0x6b5a4c];
+
 export class AltarObject implements WorldProp {
   public readonly blocking = true;
 
   private readonly body: Billboard3D;
+  /** O martelinho encostado no toco (some enquanto está na mão do herói). */
+  private readonly restHammer: Billboard3D;
+  private readonly pebbles = new Set<Billboard3D>();
   /** O que está sobre a laje AGORA. Estado de partida: não vem do mapa e não volta pra ele. */
   private loaded: HeldItemKind | null = null;
   private load?: Billboard3D;
@@ -81,6 +98,23 @@ export class AltarObject implements WorldProp {
       .setPosition(worldX, worldY)
       .setDisplaySize(1, 1)
       .setTint(STONE_TINT);
+    this.restHammer = world3d()
+      .addBillboard(FORGE_HAMMER_TEXTURE, 0, {})
+      .setPosition(worldX + HAMMER_REST.dx, worldY + HAMMER_REST.dy)
+      .setElevation(HAMMER_REST.elev)
+      .setDisplaySize(HAMMER_REST.size, HAMMER_REST.size)
+      .setAngle(HAMMER_REST.angle)
+      .setTint(STONE_TINT);
+  }
+
+  /** Onde o martelinho descansa (o herói o pega dali e o devolve para lá). */
+  public get hammerRest(): { x: number; y: number; elevation: number; angle: number } {
+    return { x: this.worldX + HAMMER_REST.dx, y: this.worldY + HAMMER_REST.dy, elevation: HAMMER_REST.elev, angle: HAMMER_REST.angle };
+  }
+
+  /** O martelinho saiu do toco (está na mão do herói) ou voltou para ele. */
+  public setHammerAway(away: boolean): void {
+    this.restHammer.setVisible(!away);
   }
 
   /** O que está sobre a laje — o que o botão e o playtest leem antes de decidir o gesto. */
@@ -148,6 +182,7 @@ export class AltarObject implements WorldProp {
     this.hotMs = last ? HOT_MS_LAST : HOT_MS;
     this.body.setTexture(ASSET_KEYS.altar, FRAME_HOT);
     this.spawnSparks(last ? SPARKS_LAST : SPARKS, SPARK, last);
+    this.spawnPebbles(last ? 7 : 4);
     if (last) this.spawnShock();
     this.punchLoad();
     this.bump();
@@ -258,6 +293,56 @@ export class AltarObject implements WorldProp {
     }
   }
 
+  /**
+   * AS PEDRINHAS (pedido do autor): a escória que a pancada arranca da esponja não é só faísca — são lascas escuras
+   * que pulam da mesa, quicam uma vez no chão em volta do toco e somem.
+   */
+  private spawnPebbles(count: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const pebble = world3d()
+        .addBillboard(FX_DOT_TEXTURE, 0, { centered: true, fog: false })
+        .setTint(PEBBLE_TINTS[i % PEBBLE_TINTS.length])
+        .setPosition(this.worldX, this.worldY - 0.02)
+        .setElevation(LOAD_ELEV)
+        .setDisplaySize(0.05 + Math.random() * 0.03, 0.05 + Math.random() * 0.03);
+      this.pebbles.add(pebble);
+      const angle = Math.random() * Math.PI * 2;
+      const reach = 0.35 + Math.random() * 0.45;
+      const vx = Math.cos(angle) * reach;
+      const vy = Math.sin(angle) * reach * 0.6;
+      const up = 0.2 + Math.random() * 0.25;
+      const fall = up + LOAD_ELEV;
+      const arc = { t: 0 };
+      this.scene.tweens.add({
+        targets: arc,
+        t: 1,
+        duration: 380 + Math.random() * 160,
+        ease: 'Linear',
+        onUpdate: () => {
+          const { t } = arc;
+          pebble.x = this.worldX + vx * t;
+          pebble.y = this.worldY - 0.02 + vy * t;
+          pebble.elevation = Math.max(0.01, LOAD_ELEV + up * t - fall * t * t);
+        },
+        onComplete: () => {
+          // o quique, e o fade no chão
+          this.scene.tweens.add({
+            targets: pebble,
+            elevation: { from: 0.01, to: 0.06 },
+            yoyo: true,
+            duration: 90,
+            onComplete: () => {
+              this.scene.tweens.add({
+                targets: pebble, alpha: 0, delay: 500, duration: 400,
+                onComplete: () => { this.pebbles.delete(pebble); pebble.destroy(); },
+              });
+            },
+          });
+        },
+      });
+    }
+  }
+
   /** O anel da última pancada, deitado no chão: o mesmo "acabou" do resto do jogo. */
   private spawnShock(): void {
     const ring = world3d()
@@ -282,6 +367,12 @@ export class AltarObject implements WorldProp {
   public destroy(): void {
     this.scene.tweens.killTweensOf(this.body);
     this.body.destroy();
+    this.restHammer.destroy();
+    for (const pebble of this.pebbles) {
+      this.scene.tweens.killTweensOf(pebble);
+      pebble.destroy();
+    }
+    this.pebbles.clear();
     if (this.load) {
       this.scene.tweens.killTweensOf(this.load);
       this.load.destroy();

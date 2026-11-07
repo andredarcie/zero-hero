@@ -49,7 +49,7 @@
       "splitWood": "O galho, em dois. Leve à terra.",
       "sand": "Areia da margem.",
       "ash": "Cinza da fogueira.",
-      "glass": "Vidro. Leve à Vega.",
+      "glass": "Vidro. Leve à Thea.",
       "telescope": "O telescópio!",
       "stool": "Um banquinho. Não serve para nada. Fica bonito.",
       "lantern": "Uma lanterna. Ponha onde quiser.",
@@ -168,672 +168,10 @@
     "vibration": "Vibração",
     "language": "Idioma"
   },
-  "wizard": {
-    "intro": [
-      {
-        "speaker": "narrator",
-        "text": "A guerra acabou."
-      },
-      {
-        "speaker": "npc",
-        "text": "Solte a espada. Segurar o que passou só pesa."
-      },
-      {
-        "speaker": "npc",
-        "text": "Você venceu a escuridão. Até a vitória passa."
-      },
-      {
-        "speaker": "npc",
-        "text": "Agora encontre o que vem depois."
-      },
-      {
-        "speaker": "npc",
-        "text": "Cuide de quem mora aqui. Então o jardim se abre."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Z fala e pega · X usa"
-      }
-    ],
-    "guide": [
-      {
-        "speaker": "npc",
-        "text": "Não há mais o que combater."
-      },
-      {
-        "speaker": "npc",
-        "text": "Ande por aí. O sentido se encontra no caminho."
-      }
-    ],
-    "gate": [
-      {
-        "speaker": "npc",
-        "text": "O jardim está aberto."
-      },
-      {
-        "speaker": "npc",
-        "text": "Vá até a fogueira no meio."
-      }
-    ],
-    "after": [
-      {
-        "speaker": "npc",
-        "text": "Você encontrou. Um lugar para sentar."
-      },
-      {
-        "speaker": "npc",
-        "text": "Sofrer vem de querer o que não fica. Aqui, só respire."
-      }
-    ]
-  },
   "npc": {
-    "wizard": {
-      "name": "Mago",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Não há mais o que combater."
-        },
-        {
-          "speaker": "npc",
-          "text": "Ande por aí. O sentido se encontra no caminho."
-        }
-      ]
-    },
-    "blackCat": {
-      "name": "GATO",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Um herói. Que novidade. Saia do meu sol, eu estava cochilando."
-        },
-        {
-          "speaker": "npc",
-          "text": "Esse galho do meu lado? Pegue. Segure no meu fogo e ele acorda como TOCHA."
-        },
-        {
-          "speaker": "npc",
-          "text": "Duas fogueiras nesta clareira estão frias. Leve a chama até elas."
-        },
-        {
-          "speaker": "npc",
-          "text": "Não tenho nada e não me falta nada. Quanto você carrega, herói?"
-        }
-      ]
-    },
-    "salesman": {
-      "name": "VENDEDOR",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Amigo! Você parece com sede. Ou seco. Tanto faz — oportunidade."
-        },
-        {
-          "speaker": "npc",
-          "text": "Amostra grátis: este BALDE. Encha no meu lago, logo a oeste da fogueira."
-        },
-        {
-          "speaker": "npc",
-          "text": "Balde cheio rega a plantação e afoga fogo pequeno. Mil usos. Não custa nada. Só hoje."
-        },
-        {
-          "speaker": "npc",
-          "text": "Conte aos seus amigos. Se achar algum por aí."
-        }
-      ]
-    },
-    "poet": {
-      "name": "POETA",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Os pinheiros cantam, mas apertam o verso."
-        },
-        {
-          "speaker": "npc",
-          "text": "Este GRANDE MACHADO derruba até árvore VIVA — o machado pequeno só conhece madeira morta."
-        },
-        {
-          "speaker": "npc",
-          "text": "Abra uma clareira no meu bosque. Escute como a canção muda onde a luz cai."
-        },
-        {
-          "speaker": "npc",
-          "text": "Todo bom verso precisa do seu silêncio. Corte um para mim."
-        }
-      ]
-    },
-    "radiationSuit": {
-      "name": "Hollis",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Eu observo os fungos deste vale. Eles não têm pressa."
-        },
-        {
-          "speaker": "npc",
-          "text": "O que se vê é só o fruto. O fungo vive escondido, em fios, debaixo da terra."
-        },
-        {
-          "speaker": "npc",
-          "text": "Seis tipos crescem aqui. Preciso de quatro, o resto é só se quiser. Leve a minha faca e a minha cesta."
-        },
-        {
-          "speaker": "npc",
-          "text": "Não force: corte, não arranque. Escove, não lave."
-        }
-      ]
-    },
-    "radiationSuitDone": {
-      "name": "Hollis",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Quatro já bastam. Quem sabe o que basta já tem tudo."
-        },
-        {
-          "speaker": "npc",
-          "text": "Seja como a água: mole, e ainda assim vence a pedra."
-        },
-        {
-          "speaker": "npc",
-          "text": "Os outros, só se quiser. Só nunca coma o vermelho."
-        }
-      ]
-    },
-    "radiationSuitAll": [
-      {
-        "speaker": "npc",
-        "text": "Todos os seis! Você andou com o vale, não contra ele."
-      },
-      {
-        "speaker": "npc",
-        "text": "Só nunca coma o vermelho."
-      }
-    ],
-    "radiationSuitHint": {
-      "porcini": [
-        {
-          "speaker": "npc",
-          "text": "A oeste, no fim do corredor: um pãozinho marrom num pé grosso. É só chegar."
-        }
-      ],
-      "morel": [
-        {
-          "speaker": "npc",
-          "text": "Ao norte, numa ilha: um chapéu de favo de mel. Dois gravetos fazem uma ponte; o machado é do Bram."
-        }
-      ],
-      "puffball": [
-        {
-          "speaker": "npc",
-          "text": "A nordeste, no mato alto: uma bola branca sem chapéu. Mato alto cai com foice ou fogo."
-        }
-      ],
-      "inkCap": [
-        {
-          "speaker": "npc",
-          "text": "Bem ao norte, atrás de arbustos secos: alto e branco, desgrenhado. Arbusto seco queima."
-        }
-      ],
-      "chanterelle": [
-        {
-          "speaker": "npc",
-          "text": "Ao norte, cercado de lava: um funil dourado. Pedra afunda e vira chão. Lava acende graveto."
-        }
-      ],
-      "flyAgaric": [
-        {
-          "speaker": "npc",
-          "text": "No canto noroeste, atrás de mato morto: vermelho, com pintas brancas. Leve um machado. Não coma."
-        }
-      ]
-    },
-    "painter": {
-      "name": "Iris",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Tudo o que eu pinto sai cinza. A cor não vem pronta: a gente tira da terra."
-        },
-        {
-          "speaker": "npc",
-          "text": "Tome a pá: cave quatro buracos, aqui por perto."
-        }
-      ]
-    },
-    "painterDone": {
-      "name": "Iris",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Fica aqui, o seu quadro."
-        },
-        {
-          "speaker": "npc",
-          "text": "O mundo não tinha cor. Agora tem, porque a gente fez."
-        },
-        {
-          "speaker": "npc",
-          "text": "Se eu tivesse de viver tudo de novo, o cinza também, eu viveria."
-        }
-      ]
-    },
-    "businessMan": {
-      "name": "Bram",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Perdi o negócio, a lenha, tudo. Minhas mãos tremem."
-        },
-        {
-          "speaker": "npc",
-          "text": "O resto não depende de mim. Uma fogueira, sim. Ali, naquela terra. Tome o machado."
-        },
-        {
-          "speaker": "npc",
-          "text": "Corte um galho morto e leve ao cepo. Ponha em pé e rache. As duas metades vão para a terra. Quatro vezes."
-        },
-        {
-          "speaker": "npc",
-          "text": "Árvore seca é rara por aqui. Ande e procure."
-        }
-      ]
-    },
-    "businessManDone": {
-      "name": "Bram",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Ainda sinto o cheiro da fumaça."
-        },
-        {
-          "speaker": "npc",
-          "text": "Não é o que acontece que pesa. É o que a gente pensa disso."
-        },
-        {
-          "speaker": "npc",
-          "text": "Obrigado, amigo. O machado é seu."
-        }
-      ]
-    },
-    "astronaut": {
-      "name": "Vega",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Meu telescópio quebrou na queda. Sobrou o tubo."
-        },
-        {
-          "speaker": "npc",
-          "text": "Sem tripé e sem lente, não vejo o céu. E todo mundo nasce querendo saber."
-        },
-        {
-          "speaker": "npc",
-          "text": "Leve esta picareta. Me traga uma barra de ferro."
-        }
-      ]
-    },
-    "astronautDone": {
-      "name": "Vega",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "O céu continua lá. Olhar para ele é o melhor da vida. Volte de noite."
-        },
-        {
-          "speaker": "npc",
-          "text": "Pus um marco de pedras aqui: um lugar para onde voltar."
-        },
-        {
-          "speaker": "npc",
-          "text": "Uma andorinha só não faz verão: ser feliz é a vida inteira, não um dia."
-        }
-      ]
-    },
-    "astronautHint": {
-      "ore": [
-        {
-          "speaker": "npc",
-          "text": "Siga para oeste, até o lago de lava. A pedra de veio preto dá carvão, a de veio vermelho, minério. O forno aqui do lado pede um de cada vez."
-        }
-      ],
-      "bloom": [
-        {
-          "speaker": "npc",
-          "text": "Leve o carvão e o minério ao forno, aqui do lado. Ele pede o que falta, uma coisa de cada vez."
-        }
-      ],
-      "iron": [
-        {
-          "speaker": "npc",
-          "text": "Martele o bloco quente. Três golpes."
-        }
-      ]
-    },
-    "painterStep": {
-      "dig": [
-        {
-          "speaker": "npc",
-          "text": "Faltam {n}. Pá na terra."
-        }
-      ],
-      "seeds": [
-        {
-          "speaker": "npc",
-          "text": "Quatro buracos! A pá fica aqui do meu lado."
-        },
-        {
-          "speaker": "npc",
-          "text": "Sementes sortidas: uma em cada buraco."
-        }
-      ],
-      "sow": [
-        {
-          "speaker": "npc",
-          "text": "Faltam {n}. Uma semente em cada buraco."
-        }
-      ],
-      "bucket": [
-        {
-          "speaker": "npc",
-          "text": "Plantadas! Tome o balde."
-        },
-        {
-          "speaker": "npc",
-          "text": "Busque água na lagoa, a oeste, e regue as quatro."
-        }
-      ],
-      "water": [
-        {
-          "speaker": "npc",
-          "text": "Faltam {n}. Encha o balde na lagoa e regue."
-        }
-      ],
-      "wait": [
-        {
-          "speaker": "npc",
-          "text": "Agora é esperar."
-        },
-        {
-          "speaker": "npc",
-          "text": "Dê uma volta pelo vale. Elas crescem aos poucos."
-        }
-      ],
-      "harvest": [
-        {
-          "speaker": "npc",
-          "text": "Floresceram!"
-        },
-        {
-          "speaker": "npc",
-          "text": "Colha com as mãos, as quatro. Depois, para a mesa."
-        }
-      ],
-      "bring": [
-        {
-          "speaker": "npc",
-          "text": "As flores vão para a mesa."
-        }
-      ],
-      "easel": [
-        {
-          "speaker": "npc",
-          "text": "Pincel na mão. Pinte o mundo que você quiser."
-        }
-      ]
-    },
-    "painterMake": {
-      "intro": [
-        {
-          "speaker": "npc",
-          "text": "Que flores! Veja como se faz."
-        }
-      ],
-      "urucum": [
-        {
-          "speaker": "npc",
-          "text": "Urucum: esfrego as sementes na água e o pó vermelho solta."
-        }
-      ],
-      "anil": [
-        {
-          "speaker": "npc",
-          "text": "Anil: as folhas fermentam na água. Bato, e o azul nasce no ar."
-        }
-      ],
-      "curcuma": [
-        {
-          "speaker": "npc",
-          "text": "Cúrcuma: a raiz seca e moída vira pó amarelo."
-        }
-      ],
-      "garanca": [
-        {
-          "speaker": "npc",
-          "text": "Garança: a raiz moída, em água morna. Fervida, o vermelho escurece."
-        }
-      ],
-      "binder": [
-        {
-          "speaker": "npc",
-          "text": "Pedra-ume fixa a cor. Goma arábica faz dela tinta."
-        }
-      ],
-      "brush": [
-        {
-          "speaker": "npc",
-          "text": "Obrigada pelas tintas! Vou armar o quadro."
-        },
-        {
-          "speaker": "npc",
-          "text": "Tome o pincel: agora é você quem cria."
-        }
-      ]
-    },
     "painterEasel": {
       "done": "Terminei",
       "leave": "Sair"
-    },
-    "painterReview": {
-      "form": {
-        "sparse": "Poucos traços, e já diz tudo.",
-        "middle": "Olha só o que você fez nessa tela!",
-        "full": "Não sobrou um canto em branco!"
-      },
-      "color": {
-        "all": "As quatro cores juntas. Nem eu teria essa coragem.",
-        "urucum": "Esse laranja parece fim de tarde.",
-        "anil": "Esse azul parece água funda.",
-        "curcuma": "Esse amarelo aquece a tela inteira.",
-        "garanca": "Esse vermelho tem coração."
-      },
-      "thanks": [
-        {
-          "speaker": "npc",
-          "text": "Você tem mão de pintor."
-        },
-        {
-          "speaker": "npc",
-          "text": "Eu só via cinza. A gente inventou a cor."
-        },
-        {
-          "speaker": "npc",
-          "text": "O pincel eu guardo. O quadro fica aqui."
-        }
-      ]
-    },
-    "businessManStep": {
-      "gather": [
-        {
-          "speaker": "npc",
-          "text": "Faltam {n}. Galho morto, cepo, terra. Árvore seca é rara: procure."
-        }
-      ],
-      "ready": [
-        {
-          "speaker": "npc",
-          "text": "Quatro. Isso já é uma fogueira, só falta o fogo."
-        },
-        {
-          "speaker": "npc",
-          "text": "Vá lá e acenda."
-        }
-      ],
-      "light": [
-        {
-          "speaker": "npc",
-          "text": "Vá lá e acenda."
-        }
-      ]
-    },
-    "businessManNight": {
-      "split": {
-        "clean": "Rachou limpo. Mão boa.",
-        "rough": "Rachou torto, mas rachou. Machado se aprende batendo."
-      },
-      "fire": {
-        "first": "E acendeu de primeira.",
-        "worked": "O fogo deu trabalho. Todo fogo dá."
-      },
-      "story": [
-        {
-          "speaker": "npc",
-          "text": "Senta. Olha o fogo comigo."
-        },
-        {
-          "speaker": "npc",
-          "text": "Fogo não é uma coisa. É uma coisa acontecendo."
-        },
-        {
-          "speaker": "npc",
-          "text": "O calor faz o galho soltar gás. É o gás que queima, não a madeira."
-        },
-        {
-          "speaker": "npc",
-          "text": "O gás encontra o ar, e essa queima solta mais calor. Que solta mais gás. É por isso que ele não para sozinho."
-        },
-        {
-          "speaker": "npc",
-          "text": "E essa luz? É fuligem. Grãos minúsculos, tão quentes que brilham."
-        },
-        {
-          "speaker": "npc",
-          "text": "A árvore passou a vida inteira guardando sol. A fogueira só devolve."
-        }
-      ],
-      "farewell": [
-        {
-          "speaker": "npc",
-          "text": "Perdi o que nunca foi meu. Olha: as mãos pararam de tremer."
-        },
-        {
-          "speaker": "npc",
-          "text": "Esta noite ninguém me tira."
-        }
-      ]
-    },
-    "astronautStep": {
-      "tripod": [
-        {
-          "speaker": "npc",
-          "text": "Ferro! Isto vira o tripé."
-        },
-        {
-          "speaker": "npc",
-          "text": "Falta a lente, e lente é vidro."
-        },
-        {
-          "speaker": "npc",
-          "text": "Vidro nasce de areia e cinza: a cinza ajuda a areia a derreter."
-        },
-        {
-          "speaker": "npc",
-          "text": "A cinza está ao lado da fogueira. Areia, só na beira do lago grande, lá no sul. As duas no forno."
-        }
-      ],
-      "wait": [
-        {
-          "speaker": "npc",
-          "text": "Areia da beira do lago grande, no sul. Cinza da fogueira. As duas no forno."
-        }
-      ],
-      "polish": [
-        {
-          "speaker": "npc",
-          "text": "Bom vidro. Agora ele vira lente."
-        },
-        {
-          "speaker": "npc",
-          "text": "Primeiro a pedra áspera, que dá a curva. Depois a fina, que tira a névoa."
-        },
-        {
-          "speaker": "npc",
-          "text": "Esfregue em círculos."
-        }
-      ],
-      "carry": [
-        {
-          "speaker": "npc",
-          "text": "Ficou nítida!"
-        },
-        {
-          "speaker": "npc",
-          "text": "Leve o telescópio ao planalto, a sudoeste. Suba a escada e procure o marco. Lá o céu é mais limpo."
-        }
-      ],
-      "night": [
-        {
-          "speaker": "npc",
-          "text": "De dia não se vê nada."
-        },
-        {
-          "speaker": "npc",
-          "text": "Sente ao lado dele e espere a noite."
-        }
-      ],
-      "reunion": [
-        {
-          "speaker": "npc",
-          "text": "Vi o fogo lá de cima. Sobrou marshmallow?"
-        }
-      ],
-      "goodbye": [
-        {
-          "speaker": "npc",
-          "text": "Com o céu de volta, a nave me achou."
-        },
-        {
-          "speaker": "npc",
-          "text": "Obrigado por tudo."
-        },
-        {
-          "speaker": "npc",
-          "text": "Mas preciso voltar para o meu planeta. Minha casa fica ali em cima."
-        },
-        {
-          "speaker": "npc",
-          "text": "Quando olhar para o céu, acene."
-        }
-      ],
-      "farewell": [
-        {
-          "speaker": "npc",
-          "text": "Você achou os quatro."
-        },
-        {
-          "speaker": "npc",
-          "text": "Galileu viu esse céu com uma lente assim, em 1610. Ninguém acreditou nele."
-        },
-        {
-          "speaker": "npc",
-          "text": "A luz que você viu já estava a caminho muito antes de você nascer."
-        },
-        {
-          "speaker": "npc",
-          "text": "Só faltava alguém olhar."
-        }
-      ]
     }
   },
   "actions": {
@@ -878,7 +216,8 @@
     "dig": "Cavar",
     "takeBack": "Tirar",
     "pickUp": "Recolher",
-    "feed": "Colocar"
+    "feed": "Colocar",
+    "pet": "Fazer carinho"
   },
   "controls": {
     "hint": "Z fala e pega · X usa",
@@ -1006,170 +345,7 @@
     "keysTouchFurnace": "Toque para escolher · toque para fundir",
     "unknown": "?"
   },
-  "finds": {
-    "helmet": [
-      {
-        "speaker": "narrator",
-        "text": "Um elmo enferrujado."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Nasceu uma flor dentro."
-      }
-    ],
-    "bottle": [
-      {
-        "speaker": "narrator",
-        "text": "Uma garrafa com um bilhete."
-      },
-      {
-        "speaker": "narrator",
-        "text": "“Cheguei. Aqui é bom. Venha.”"
-      },
-      {
-        "speaker": "narrator",
-        "text": "Sem nome."
-      }
-    ],
-    "door": {
-      "astronaut": [
-        {
-          "speaker": "npc",
-          "text": "A varanda tem a melhor vista depois da nave. Senta lá."
-        },
-        {
-          "speaker": "npc",
-          "text": "Levo chá."
-        }
-      ],
-      "businessMan": [
-        {
-          "speaker": "npc",
-          "text": "A porta emperra. A varanda não."
-        },
-        {
-          "speaker": "npc",
-          "text": "Senta. Levo um chá."
-        }
-      ],
-      "painter": [
-        {
-          "speaker": "npc",
-          "text": "Aqui dentro está tudo molhado de tinta."
-        },
-        {
-          "speaker": "npc",
-          "text": "Senta na varanda. Levo chá."
-        }
-      ],
-      "radiationSuit": [
-        {
-          "speaker": "npc",
-          "text": "Melhor não entrar. Tem fungo em tudo."
-        },
-        {
-          "speaker": "npc",
-          "text": "A varanda é sua. Levo chá."
-        }
-      ],
-      "empty": [
-        {
-          "speaker": "narrator",
-          "text": "Ninguém em casa."
-        },
-        {
-          "speaker": "narrator",
-          "text": "A varanda continua aqui."
-        }
-      ]
-    },
-    "sword": [
-      {
-        "speaker": "narrator",
-        "text": "Esta lâmina derrubou a escuridão."
-      },
-      {
-        "speaker": "narrator",
-        "text": "E devolveu a luz ao mundo."
-      }
-    ],
-    "sign": [
-      {
-        "speaker": "narrator",
-        "text": "Jardim Alto."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Fechado para preservação ambiental."
-      }
-    ],
-    "signOpen": [
-      {
-        "speaker": "narrator",
-        "text": "Jardim Alto."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Fechado para preservação ambiental."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Alguém riscou o \"fechado\"."
-      }
-    ]
-  },
-  "death": {
-    "name": "Morte",
-    "visit": [
-      {
-        "speaker": "npc",
-        "text": "Não se levante. Não vim te buscar."
-      },
-      {
-        "speaker": "npc",
-        "text": "Eu te conheço. Andei atrás de você a guerra inteira."
-      },
-      {
-        "speaker": "npc",
-        "text": "Você era um guerreiro. Por onde passava, eu tinha trabalho."
-      },
-      {
-        "speaker": "npc",
-        "text": "Agora dorme ao pé do fogo, e a espada ficou na estrada."
-      },
-      {
-        "speaker": "npc",
-        "text": "Sem a guerra, o que sobra de você? Nada tem sentido. Nunca teve."
-      },
-      {
-        "speaker": "npc",
-        "text": "Glória, honra, vitória. Eu vi o que sobra delas: nada."
-      },
-      {
-        "speaker": "npc",
-        "text": "Durma. Eu sei esperar."
-      }
-    ]
-  },
   "ending": {
-    "lines": [
-      {
-        "speaker": "narrator",
-        "text": "O marshmallow fica dourado."
-      },
-      {
-        "speaker": "narrator",
-        "text": "A espada fica na estrada."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Amigos, fogo, comida. Não falta nada."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Nenhum lugar para ir. Enfim."
-      }
-    ],
     "theEnd": "Fim",
     "credits": [
       {
@@ -1190,11 +366,11 @@
       },
       {
         "speaker": "npc",
-        "text": "Hollis · Iris · Bram · Vega"
+        "text": "Shui · Sisi · Marco · Thea"
       },
       {
         "speaker": "npc",
-        "text": "e o mago"
+        "text": "e Sati, o mago"
       },
       {
         "speaker": "narrator",
@@ -1230,20 +406,53 @@
     "autumn": "Outono",
     "winter": "Inverno"
   },
-  "garden": {
-    "key": [
-      {
-        "speaker": "npc",
-        "text": "Você se mostrou um grande amigo de todos: da vila e da natureza."
+  "garden": {},
+  "minigame": {
+    "forage": {
+      "cut": {
+        "keys": "Aperte {Z} quando a faca estiver entre as marcas, para cortar.",
+        "touch": "Toque quando a faca estiver entre as marcas, para cortar."
       },
-      {
-        "speaker": "npc",
-        "text": "Agora pode caminhar livremente pelo Jardim Alto, respeitando a natureza."
-      },
-      {
-        "speaker": "npc",
-        "text": "Tome a chave."
+      "clean": {
+        "keys": "Segure o botão do mouse e esfregue a bucha no cogumelo para limpar.",
+        "touch": "Arraste a bucha no cogumelo para limpar."
       }
-    ]
+    },
+    "card": {
+      "keys": "Aperte {Z} para continuar.",
+      "touch": "Toque para continuar."
+    },
+    "split": {
+      "aim": {
+        "keys": "Aperte {Z} quando a mira estiver no veio da madeira, longe do nó.",
+        "touch": "Toque quando a mira estiver no veio da madeira, longe do nó."
+      },
+      "force": {
+        "keys": "Aperte {Z} quando a força estiver na faixa marcada.",
+        "touch": "Toque quando a força estiver na faixa marcada."
+      }
+    },
+    "fire": {
+      "strike": {
+        "keys": "Aperte {Z} várias vezes para tirar faísca.",
+        "touch": "Toque várias vezes para tirar faísca."
+      },
+      "blow": {
+        "keys": "Aperte {Z} devagar, um sopro de cada vez, para a brasa pegar.",
+        "touch": "Toque devagar, um sopro de cada vez, para a brasa pegar."
+      }
+    },
+    "lens": {
+      "keys": "Segure o botão do mouse e esfregue a lente para polir (ou aperte {Z}).",
+      "touch": "Esfregue a lente com o dedo para polir."
+    },
+    "sky": {
+      "keys": "Use {←} {↑} {↓} {→} ou arraste o céu com o mouse para encontrar os planetas.",
+      "touch": "Arraste o céu com o dedo para encontrar os planetas."
+    },
+    "paint": {
+      "keys": "Escolha a tinta ({1} a {4} ou clique no pote) e pinte arrastando o mouse. {Enter} termina.",
+      "touch": "Toque num pote e pinte arrastando o dedo."
+    }
   }
 }

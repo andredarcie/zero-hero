@@ -53,6 +53,9 @@ export const FUNGUS_SPECS: Readonly<Record<MushroomKind, FungusSpec>> = {
 
 
 export const fungusTextureKey = (kind: MushroomKind): string => `fungus-${kind}`;
+/** Os cogumelinhos-filhos (objects/MushroomKin): a mesma receita da espécie, em 7px. */
+export const FUNGUS_KIN_SIZE = 7;
+export const fungusKinTextureKey = (kind: MushroomKind): string => `fungus-kin-${kind}`;
 export const KNIFE_TEXTURE_KEY = 'mushroom-knife';
 
 /** A linha do solo no close: abaixo dela a arte fica coberta de terra até o corte a soltar. */
@@ -401,8 +404,8 @@ export const fungusCloseUp = (kind: MushroomKind): FungusCloseUp => {
 
 const ICON_SIZE = 16;
 
-const iconCanvas = (paint: (r: Raster) => void): HTMLCanvasElement => {
-  const r = new Raster(ICON_SIZE);
+const iconCanvas = (paint: (r: Raster) => void, size = ICON_SIZE): HTMLCanvasElement => {
+  const r = new Raster(size);
   paint(r);
   return r.outline().toCanvas();
 };
@@ -434,6 +437,8 @@ export const registerFungiTextures = (scene: Phaser.Scene): void => {
     if (!three && scene.textures.exists(key)) continue;
     publish(scene, key, iconCanvas(PAINTERS[kind]), three);
   }
+  // Os filhos só vivem no chão 3D.
+  if (three) for (const kind of MUSHROOM_KINDS) publish(scene, fungusKinTextureKey(kind), iconCanvas(PAINTERS[kind], FUNGUS_KIN_SIZE), true);
   if (three || !scene.textures.exists(KNIFE_TEXTURE_KEY)) {
     publish(scene, KNIFE_TEXTURE_KEY, iconCanvas(paintKnife), three);
   }

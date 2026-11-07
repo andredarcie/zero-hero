@@ -234,6 +234,11 @@ export class NpcManager {
     }
   }
 
+  /** Esta espécie saiu de cena (a Vega que foi embora na nave, por exemplo). */
+  public isKindHidden(kind: NpcKind): boolean {
+    return this.hiddenKinds.has(kind);
+  }
+
   /** Vizinho saiu para a fogueira (ou voltou). Vale tambem para os chunks que ainda vao chegar. */
   public setKindAway(kind: NpcKind, away: boolean): void {
     if (away) this.awayKinds.add(kind);

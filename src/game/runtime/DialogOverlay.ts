@@ -1,4 +1,5 @@
 import { getTextScale, isInstantText } from '@/game/runtime/accessibility';
+import { markLineRead, wasLineRead } from '@/game/runtime/readLines';
 import type Phaser from 'phaser';
 
 import { dialogBoxMetrics, isTallDialog } from '@/game/constants';
@@ -423,7 +424,8 @@ export class DialogOverlay {
     this.chars = [...line.text];
     this.buildLetters();
     if (speaks && this.persona.radio) getSoundManager().playRadioClick(false);
-    if (isInstantText()) { this.skipTypewriter(); return; }
+    // Fala já lida (runtime/readLines) aparece inteira: quem volta para relembrar não espera a datilografia.
+    if (isInstantText() || wasLineRead(line.text)) { this.skipTypewriter(); return; }
     this.typeNextChar(CHAR_DELAY_MS);
   }
 
@@ -512,6 +514,7 @@ export class DialogOverlay {
 
   private finishLine(): void {
     this.isTyping = false;
+    markLineRead(this.currentText); // inteira na tela: da próxima vez ela aparece de uma vez
     this.currentOnDone?.();
   }
 

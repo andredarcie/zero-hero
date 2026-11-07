@@ -50,7 +50,8 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // renovaveis (o veio nunca acaba). O altar passou a ser o que ele precisa ser: o SEGUNDO degrau,
   // logo depois do forno, comprado com o que o jogador ja tem na mao quando o forno acende.
   //
-  { inputs: ['stone', 'ore'], output: 'altar', family: 'machine' },
+  // A BIGORNA NÃO SE CONSTRÓI MAIS (pedido do autor): a única é a da Vega, fixa ao lado do forno
+  // (scripts/bigorna-da-vega.mjs). A receita pedra+minério saiu daqui; o texto acima fica como história.
   // ── O QUE SÓ ENFEITA. Fora da escada de propósito (ver LADDER): sempre à vista, e ninguém precisa dele. ──
   { inputs: ['wood', 'wood'], output: 'stool', family: 'material' },
   { inputs: ['wood', 'charcoal'], output: 'lantern', family: 'material' },

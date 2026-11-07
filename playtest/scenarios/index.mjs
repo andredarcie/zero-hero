@@ -26,11 +26,16 @@ import vento from './vento.mjs';
 import prologo from './prologo.mjs';
 import semFabrica from './sem-fabrica.mjs';
 import zerar from './zerar.mjs';
-import cogumelos from './cogumelos.mjs';
 import telescopio from './telescopio.mjs';
 import ajustes from './ajustes.mjs';
 import jardimAlto from './jardim-alto.mjs';
 import chaoSemRisco from './chao-sem-risco.mjs';
+import dicas from './dicas.mjs';
+import frenteDoNpc from './frente-do-npc.mjs';
+import falasLidas from './falas-lidas.mjs';
+import legendas from './legendas.mjs';
+import acampamento from './acampamento.mjs';
+import barraca from './barraca.mjs';
 import abertura from './abertura.mjs';
 import semParede from './sem-parede.mjs';
 import itemGet from './item-get.mjs';
@@ -38,6 +43,10 @@ import marcas from './marcas.mjs';
 import descanso from './descanso.mjs';
 import dia from './dia.mjs';
 import fogueiraDormir from './fogueira-dormir.mjs';
+import irisDormir from './iris-dormir.mjs';
+import morteTresNoites from './morte-tres-noites.mjs';
+import gatoCinico from './gato-cinico.mjs';
+import gatoBarril from './gato-barril.mjs';
 import biomas from './biomas.mjs';
 
 export const scenarios = {
@@ -69,7 +78,6 @@ export const scenarios = {
   prologo,
   'sem-fabrica': semFabrica,
   zerar,
-  cogumelos,
   telescopio,
   abertura,
   'sem-parede': semParede,
@@ -77,10 +85,20 @@ export const scenarios = {
   ajustes,
   'jardim-alto': jardimAlto,
   'chao-sem-risco': chaoSemRisco,
+  dicas,
+  'frente-do-npc': frenteDoNpc,
+  'falas-lidas': falasLidas,
+  legendas,
+  acampamento,
+  barraca,
   marcas,
   descanso,
   dia,
   'fogueira-dormir': fogueiraDormir,
+  'iris-dormir': irisDormir,
+  'morte-tres-noites': morteTresNoites,
+  'gato-cinico': gatoCinico,
+  'gato-barril': gatoBarril,
   biomas,
 };
 

@@ -202,6 +202,16 @@ export class PainterQuest {
 
   // ── o tempo ─────────────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * UMA NOITE DE SONO (pedido do autor): o herói acorda e as plantas regadas amanheceram prontas. Só adianta o
+   * relógio delas; o `update` sobe os níveis com o brilho de sempre e passa a etapa para a colheita.
+   */
+  public growOvernight(): void {
+    for (const plot of this.save.plots) {
+      if (plot.watered && !plot.cut) plot.growMs = Math.max(plot.growMs, GROW_LEVELS * GROW_STEP_MS);
+    }
+  }
+
   /** As plantas crescem no tempo do jogo: três níveis, e cada um avisa com um brilho. */
   public update(delta: number): void {
     let changed = false;

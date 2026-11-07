@@ -23,7 +23,6 @@ import {
   SEA_TILE_FRAMES,
   SOLID_UPPER_FRAMES,
   UNIT_PACK_KINDS,
-  BLOOM_BLOWS,
 } from '@/game/constants';
 import type { AppMode } from '@/game/config';
 import { DIALOG_VOICES, NPC_DIALOGS, type DialogScript, type DialogVoice } from '@/game/dialogs/NpcDialogs';
@@ -67,7 +66,7 @@ import {
 } from '@/game/runtime/ToolboxOrderOverlay';
 import { MoonflowerObject } from '@/game/objects/MoonflowerObject';
 import { FurnaceObject, type FurnaceWorldPort } from '@/game/objects/FurnaceObject';
-import { AltarObject } from '@/game/objects/AltarObject';
+import { AltarObject, FORGE_HAMMER_SIZE, FORGE_HAMMER_TEXTURE, LOAD_ELEV as ANVIL_FACE_ELEV } from '@/game/objects/AltarObject';
 import { hammerResult } from '@/game/objects/hammering';
 import type { WorldProp } from '@/game/objects/WorldProp';
 // O DEF de um prop (o registro de dados: tipo + tile + flags) contra o OBJETO de prop (a coisa
@@ -108,6 +107,10 @@ import { PauseMenu, PauseTouchButton, isTouchDevice } from '@/game/runtime/Pause
 import { BagStash } from '@/game/runtime/BagStash';
 import { OldRoad } from '@/game/objects/OldRoad';
 import { GardenMist } from '@/game/objects/GardenMist';
+import { MushroomKin } from '@/game/objects/MushroomKin';
+import { CatBarrel } from '@/game/objects/CatBarrel';
+import { CAMP_BED, CAMP_RING, HeroCamp } from '@/game/objects/HeroCamp';
+import { npcFacing, npcFrontKeys, npcSideTiles, type NpcTile } from '@/game/world/npcFront';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
 import {
   createHeroView, heroFootY, resetHeroView, tickHeroView, type HeroView,
@@ -161,6 +164,9 @@ import {
   getPlayerStart,
   getHearths,
   getGardenGates,
+  getNpcHome,
+  getNpcTiles,
+  getOccupiedTiles,
   getWorldName,
 } from '@/game/world/WorldData';
 import {
@@ -202,6 +208,24 @@ import type { VegaShipHost } from '@/game/entities/VegaShip';
 const FUNGUS_VISUALS = Object.fromEntries(
   MUSHROOM_KINDS.map((kind) => [kind, { texture: fungusTextureKey(kind), frame: 0 }]),
 ) as Record<MushroomKind, { texture: string; frame: number }>;
+
+/**
+ * AS FERRAMENTAS ÚNICAS e quem as dá: a pontinha do balão aponta para lá (GameScene.uniqueItemSource). A foice não
+ * tem quem dê (a Morte aparece onde o herói dorme): ela só ganha pontinha quando está largada no chão.
+ */
+const UNIQUE_TOOL_GIVERS: Partial<Record<HeldItemKind, NpcKind | null>> = {
+  axe: 'businessMan',
+  shovel: 'painter',
+  bucket: 'painter',
+  pickaxe: 'astronaut',
+  knife: 'radiationSuit',
+  scythe: null,
+};
+/** A Vega vindo buscar a barra na bigorna: ela corre (o passo de visita é 420 ms). */
+const VEGA_RUN_STEP_MS = 230;
+/** O olhar da câmera para o porcini na fala da Hollis: ida e volta, e quanto ela segura nele. */
+const GLANCE_PAN_MS = 700;
+const GLANCE_HOLD_MS = 1500;
 
 const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: number }> = {
   stool: { texture: 'valley-find-stool', frame: 0 },
@@ -416,6 +440,16 @@ const REST_TIME_SCALE = 24;
 const SLEEP_TIME_SCALE = 48;
 /** A visita da Morte acontece uma vez só: a marca mora com as outras falas já ouvidas, no save. */
 const DEATH_VISIT_KEY = 'death/visit';
+/**
+ * AS TRÊS NOITES DA MORTE (pedido do autor), uma por noite dormida no acampamento, no caminho de Nietzsche: o
+ * diagnóstico (os deuses do guerreiro morreram), a travessia (camelo e leão, e a pergunta do eterno retorno) e a
+ * afirmação (a criança, o amor fati, "torna-te quem tu és"). Cada uma é uma chave no save e um texto no locale.
+ */
+const DEATH_VISITS: ReadonlyArray<{ key: string; lines: string }> = [
+  { key: DEATH_VISIT_KEY, lines: 'death.visit' },
+  { key: 'death/visit2', lines: 'death.visit2' },
+  { key: 'death/visit3', lines: 'death.visit3' },
+];
 /** A foice que a Morte deixou: o único jeito de ter uma. */
 const DEATH_SCYTHE_KEY = 'death/scythe';
 /** De quantos tiles um vizinho atravessa o vale para sentar na fogueira com o heroi. */
@@ -573,6 +607,10 @@ export class GameScene extends Phaser.Scene {
   private oldRoad?: OldRoad;
   /** A névoa do jardim alto, até o vento levá-la (objects/GardenMist, playMistClearing). */
   private gardenMist?: GardenMist;
+  /** Os cogumelinhos-filhos em volta de cada cogumelo ainda não colhido (objects/MushroomKin). */
+  private mushroomKin?: MushroomKin;
+  /** As casas dos NPCs do mapa (lidas uma vez): de quem é a frente proibida para item. */
+  private npcHouseTiles?: NpcTile[];
   /** O tchau da Hollis lá de baixo (entities/NpcWave), e se ela já acenou nesta subida. */
   private hollisWave?: NpcWave;
   private hollisWaved = false;
@@ -580,14 +618,13 @@ export class GameScene extends Phaser.Scene {
   private furnaceAsk?: HeroThought;
   private actionPrompt?: ActionPrompt;
   // A CADEIA DO FERRO: o forno reduz minério com carvão; mão e altar malham a esponja.
-  /**
-   * Quantas marteladas a ESPONJA de cada tile ja levou. Ela e um item no chao, e itens no chao
-   * nao tem estado proprio neste jogo — entao a contagem mora aqui, por tile, e some quando o
-   * tile deixa de ter uma esponja. `BLOOM_BLOWS` é a fonte única para a mão e o altar.
-   */
-  private readonly bloomBlows = new Map<string, number>();
   private furnaces: FurnaceObject[] = [];
   private altars: AltarObject[] = [];
+  /**
+   * O HERÓI MALHANDO NA BIGORNA: o martelinho saiu do toco para a mão dele. Ao sair de perto (andar, virar,
+   * conversar), ele volta para o lugar — é da bigorna, não da bolsa (ver forgeStrike / returnForgeHammer).
+   */
+  private forging?: { altar: AltarObject; hammer: Billboard3D; at: string; busy: boolean };
   private waterTiles: WaterObject[] = [];
   private lavaTiles: LavaObject[] = [];
   // O registro único de props: referencia os MESMOS arrays tipados acima, então destruição,
@@ -665,6 +702,10 @@ export class GameScene extends Phaser.Scene {
   private fireBed?: FireBed;
   /** A Morte está falando: nenhuma tecla levanta o herói até ela sumir. */
   private deathVisiting = false;
+  /** Dormindo na barraca do acampamento (e não numa fogueira de vizinho): é lá que a Morte vem pela primeira vez. */
+  private sleepingAtCamp = false;
+  /** A Morte já veio nesta noite: uma visita por noite, nunca duas no mesmo sono. */
+  private deathCameTonight = false;
   /** Onde a Morte esteve: é ali que a foice aparece quando o herói levanta. */
   private deathTile?: { x: number; y: number };
   private restKeyListener?: (event: KeyboardEvent) => void;
@@ -680,6 +721,10 @@ export class GameScene extends Phaser.Scene {
   /** A casa de cada vizinho, ao lado de onde ele fica. */
   private npcHomes?: NpcHomes;
   private valleyFinds?: ValleyFinds;
+  /** O acampamento do herói, com as lembranças dos pedidos fechados (objects/HeroCamp). */
+  private heroCamp?: HeroCamp;
+  /** A casa do gato, o barril de Diógenes (objects/CatBarrel): ele vai para lá quando cansa de seguir. */
+  private catBarrel?: CatBarrel;
   private weather?: ValleyWeather;
   private shownSeason?: Season;
   /** Quantas coisas ele apanhou em seguida: a nota sobe, e de tanto em tanto o vale responde. */
@@ -1073,11 +1118,19 @@ export class GameScene extends Phaser.Scene {
     this.keptLitFires.clear();
     if (this.adventure) {
       this.valleyFinds = new ValleyFinds();
+      this.heroCamp = new HeroCamp(this, (quest) => {
+        const q = questFor(quest);
+        return q !== undefined && isQuestDone(q);
+      });
+      this.catBarrel = new CatBarrel();
       // Um jogo fechado entre o último pedido e a entrega da chave: ela chega agora.
       if (allQuestsDone() && !adventureState().gardenKeyGiven) this.time.delayedCall(900, () => this.giveGardenKey(undefined));
       this.oldRoad = new OldRoad();
       const garden = getHearths()[0];
       if (garden && !adventureState().mistCleared) this.gardenMist = new GardenMist(this, { x: garden.worldX, y: garden.worldY });
+      this.mushroomKin = this.makeMushroomKin();
+      this.enforceNpcFrontRule();
+      this.freeTrappedItems();
       this.weather = new ValleyWeather(this.world3d);
       this.shownSeason = this.weather.season;
     }
@@ -1473,6 +1526,7 @@ export class GameScene extends Phaser.Scene {
     this.resting = false;
     this.deathVisiting = false;
     this.sleeping = false;
+    this.sleepingAtCamp = false;
     this.fireBed?.destroy();
     this.fireBed = undefined;
     this.restFireTile = undefined;
@@ -1483,8 +1537,13 @@ export class GameScene extends Phaser.Scene {
     this.clearMug();
     this.npcHomes?.destroy();
     this.npcHomes = undefined;
+    this.npcHouseTiles = undefined;
     this.valleyFinds?.destroy();
     this.valleyFinds = undefined;
+    this.heroCamp?.destroy();
+    this.heroCamp = undefined;
+    this.catBarrel?.destroy();
+    this.catBarrel = undefined;
     this.weather?.destroy();
     this.weather = undefined;
     this.shownSeason = undefined;
@@ -1566,6 +1625,10 @@ export class GameScene extends Phaser.Scene {
     this.oldRoad = undefined;
     this.gardenMist?.destroy();
     this.gardenMist = undefined;
+    this.mushroomKin?.destroy();
+    this.mushroomKin = undefined;
+    this.forging?.hammer.destroy();
+    this.forging = undefined;
     this.hollisWave?.destroy();
     this.hollisWave = undefined;
     this.hollisWaved = false;
@@ -1619,12 +1682,18 @@ export class GameScene extends Phaser.Scene {
       // O balão some com a conversa. Fora dela ele vive o tempo dele (ver HeroThought.tick): apagá-lo
       // a cada quadro fazia o pensamento nunca aparecer.
       this.heroThought?.clear();
+      if (this.camera && !this.camShifting) this.actionPrompt?.render(null, this.tileSize, this.camera, this.time.now, { x: this.playerWorld.worldX, y: this.playerWorld.worldY });
       this.dialogOverlay?.update();
       return;
     }
 
     // The item-get and the cut-scenes freeze gameplay; only their own tweens run.
-    if (this.itemGetOpen || this.cutsceneActive) return;
+    if (this.itemGetOpen || this.cutsceneActive) {
+      // O balão de ação é redesenhado só aqui embaixo (renderProps): sem isto ele ficava congelado na tela a cena
+      // inteira — o "Assar Z" pairava sobre o herói durante o fim todo.
+      if (this.camera) this.actionPrompt?.render(null, this.tileSize, this.camera, this.time.now, { x: this.playerWorld.worldX, y: this.playerWorld.worldY });
+      return;
+    }
     // SENTADO NA FOGUEIRA: o mundo anda (o relogio acelerado, as fogueiras seguindo o ceu), o
     // heroi nao. Qualquer tecla o levanta (ver restAtFireAt).
     if (this.resting) {
@@ -1633,8 +1702,13 @@ export class GameScene extends Phaser.Scene {
         if (isSleepTime()) {
           this.sleptAtFire = true;
         } else if (this.sleptAtFire) {
-          if (this.adventure && !this.seenDialogKeys.has(DEATH_VISIT_KEY)) {
-            void this.playDeathVisit();
+          // A noite passou: as tintas da Iris amanheceram prontas (a dica está na fala dela).
+          this.painterQuest?.growOvernight();
+          // A PRIMEIRA VISITA DA MORTE é na barraca (pedido do autor): o mago manda o herói dormir lá, e é ali, na
+          // primeira noite de sono desde a guerra, que ela aparece. Nas fogueiras dos vizinhos ela não vem antes disso.
+          const visit = DEATH_VISITS.find((v) => !this.seenDialogKeys.has(v.key));
+          if (this.adventure && visit && this.sleepingAtCamp && !this.deathCameTonight) {
+            void this.playDeathVisit(visit);
             return;
           }
           if (!isNightTime()) {
@@ -1756,6 +1830,7 @@ export class GameScene extends Phaser.Scene {
     this.updateFurnaces(delta);
     // O ALTAR não tem ciclo: o único relógio dele é o da brasa que a pancada deixou no tampo.
     for (const altar of this.altars) altar.update(delta);
+    this.tickForging();
     this.updateToolboxes(delta);
     profiler.end('update.world');
 
@@ -1828,6 +1903,7 @@ export class GameScene extends Phaser.Scene {
   private standUp(): void {
     if (!this.resting || this.deathVisiting) return;
     this.resting = false;
+    this.sleepingAtCamp = false;
     if (this.sleeping) {
       this.sleeping = false;
       this.fireBed?.rise();
@@ -1892,19 +1968,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * SÓ SE DORME COM FOGO (pedido do autor): apagada não, e nem enquanto o vizinho ainda está acendendo.
-   * O colchão aparece quando a chama terminou de crescer e ele já foi embora.
+   * DEITAR PARA DORMIR, com `fire` sendo o fogo que o corpo encara (a Morte e o gato se arrumam em volta dele): o
+   * corpo deitado e o tempo correndo até a manhã. SÓ SE DORME NO ACAMPAMENTO (pedido do autor): nas fogueiras dos
+   * vizinhos o herói só senta; o único lugar onde ele dorme de fato é o colchão dele (sleepAtCamp).
    */
-  private canSleepAt(fire: CampfireObject): boolean {
-    return fire.isFullyLit && !this.fireKeepers.has(fire);
-  }
-
-  /** O X na fogueira acesa: o colchão no chão, o corpo deitado e o tempo passando. */
-  private sleepAtFireAt(wx: number, wy: number): boolean {
-    const fire = this.getRestFireAt(wx, wy);
-    if (!fire || this.heldActsOnFire(fire) || !this.canSleepAt(fire)) return false;
-    this.sitDown(wx, wy, SLEEP_TIME_SCALE);
+  private layDownToSleep(fireX: number, fireY: number, fixedBed = false): void {
+    this.sitDown(fireX, fireY, SLEEP_TIME_SCALE);
     this.sleeping = true;
+    this.deathCameTonight = false;
     this.sleptAtFire = false;
     // O sitDown baixa o corpo como quem senta; aqui quem manda no corpo é o colchão.
     this.tweens.killTweensOf(this.hero);
@@ -1917,9 +1988,26 @@ export class GameScene extends Phaser.Scene {
       hero: this.hero,
       tile: { x: this.playerWorld.worldX, y: this.playerWorld.worldY },
       dirt: (x, y, count) => this.spawnDirtBurst(x, y, count),
+      fixed: fixedBed,
     });
     this.fireBed.layDown();
-    return true;
+  }
+
+  /**
+   * DORMIR NO COLCHÃO DO ACAMPAMENTO (pedido do autor): o mago manda o herói descansar ali, e o Z diante do colchão o
+   * leva para cima dele e o deita, com as pedras do acampamento ao lado. Não precisa de fogo aceso: é a casa dele. A
+   * primeira noite aqui é quando a Morte aparece pela primeira vez.
+   */
+  private async sleepAtCamp(): Promise<void> {
+    if (this.resting || this.cutsceneActive) return;
+    this.cutsceneActive = true;
+    await this.scriptStep(CAMP_BED.x - this.playerWorld.worldX, CAMP_BED.y - this.playerWorld.worldY, FIND_STEP_MS);
+    this.movementController?.interruptMovement(CAMP_BED.x, CAMP_BED.y);
+    this.cutsceneActive = false;
+    this.sleepingAtCamp = true;
+    this.layDownToSleep(CAMP_RING.x, CAMP_RING.y, true);
+    this.seenDialogKeys.add('wizard:tent');
+    this.persistAdventure();
   }
 
   private tickSnore(): void {
@@ -1927,6 +2015,26 @@ export class GameScene extends Phaser.Scene {
     const at = this.camera.tileToScreen(this.playerWorld.worldX, this.playerWorld.worldY, this.tileSize);
     const px = Math.max(1, Math.round(this.tileSize / 24));
     this.fireBed.tick(this.time.now, { x: at.x - this.tileSize * 0.45, y: at.y - this.tileSize * 0.45 }, px);
+  }
+
+  /** O Z numa peça do acampamento: uma linha curta, do que ela é (e de quem é a lembrança). */
+  private useCampAt(wx: number, wy: number): boolean {
+    const piece = this.heroCamp?.at(wx, wy);
+    if (!piece) return false;
+    getSoundManager().playFindTouch('bench');
+    // O COLCHÃO: deitar e dormir.
+    if (piece === 'bed') {
+      void this.sleepAtCamp();
+      return true;
+    }
+    // O TRONCO é lugar de sentar: o herói senta nele e fica olhando as pedras do fogo.
+    if (piece === 'log') {
+      void this.sitAtFind({ kind: 'bench', x: wx, y: wy }, { x: CAMP_RING.x, y: CAMP_RING.y });
+      return true;
+    }
+    const base = getDialog('wizard');
+    if (base) this.openDialogScript({ ...base, npcName: '', lines: tLines(`camp.${piece}`) }, undefined, undefined);
+    return true;
   }
 
   /** O Z num achado: o que tem vista senta, o resto se lê. */
@@ -1980,6 +2088,12 @@ export class GameScene extends Phaser.Scene {
 
   /** Do outro lado do fogo, olhando para o herói; se ali não couber, de um dos lados. */
   private deathSpot(): { x: number; y: number } {
+    // NO ACAMPAMENTO ela senta ao lado das pedras, no chão livre da clareira (do outro lado das pedras é mato alto).
+    if (this.sleepingAtCamp) {
+      const spot = [{ x: 55, y: 49 }, { x: 54, y: 49 }, { x: 55, y: 50 }]
+        .find((t) => !this.isSolidForEntities(t.x, t.y) && !(t.x === this.playerWorld.worldX && t.y === this.playerWorld.worldY));
+      if (spot) return spot;
+    }
     const fire = this.restFireTile ?? { x: this.playerWorld.worldX, y: this.playerWorld.worldY - 1 };
     const dx = Math.sign(fire.x - this.playerWorld.worldX);
     const dy = Math.sign(fire.y - this.playerWorld.worldY);
@@ -1993,8 +2107,9 @@ export class GameScene extends Phaser.Scene {
       && !(guest && Math.hypot(guest.x - spot.x, guest.y - spot.y) < 0.8)) ?? spots[0];
   }
 
-  private async playDeathVisit(): Promise<void> {
+  private async playDeathVisit(visit: { key: string; lines: string }): Promise<void> {
     this.deathVisiting = true;
+    this.deathCameTonight = true;
     this.cutsceneActive = true;
     this.actionButtons?.setVisible(false);
     this.pauseTouchButton?.setVisible(false);
@@ -2012,7 +2127,7 @@ export class GameScene extends Phaser.Scene {
       smoke: (x, y) => this.spawnSmokePuff(x, y),
       say: (body, onClosed) => {
         this.dialogSpeaker = body;
-        const script = { ...NPC_DIALOGS.death, npcName: t('death.name'), lines: tLines('death.visit') };
+        const script = { ...NPC_DIALOGS.death, npcName: t('death.name'), lines: tLines(visit.lines) };
         this.openDialogScript(script, undefined, DIALOG_VOICES.death, () => {
           this.dialogSpeaker = undefined;
           this.cutsceneActive = true;
@@ -2021,7 +2136,7 @@ export class GameScene extends Phaser.Scene {
         });
       },
     }).run();
-    this.seenDialogKeys.add(DEATH_VISIT_KEY);
+    this.seenDialogKeys.add(visit.key);
     this.persistAdventure();
     this.setVignette(0.35, 900);
     void this.dollyTo(0.82, 900);
@@ -2059,7 +2174,9 @@ export class GameScene extends Phaser.Scene {
       const fy = Math.sign(fire.y - this.playerWorld.worldY);
       beside = { x: hero.x - fy * 0.55 + fx * 0.1, y: hero.y + fx * 0.55 + fy * 0.1 };
     }
-    this.cat.update(delta, this.heroVisualTile(), beside);
+    // Em casa ele dorme no barril; vai para lá só com o jogo correndo (fora de cena, conversa e descanso).
+    const free = !this.cutsceneActive && !this.dialogOpen && !this.resting;
+    this.cat.update(delta, this.heroVisualTile(), beside, this.catBarrel?.bed ?? null, free);
   }
 
   /** O carinho: so com o gato perto. Devolve se havia gato para afagar. */
@@ -2074,7 +2191,36 @@ export class GameScene extends Phaser.Scene {
     const voice = getDialogVoice('blackCat');
     getSoundManager().playDialogBlip(voice?.freq ?? 540, voice?.wave ?? 'triangle');
     this.time.delayedCall(120, () => getSoundManager().playDialogBlip((voice?.freq ?? 540) * 0.8, voice?.wave ?? 'triangle'));
+    // E RESPONDE COM UMA LIÇÃO (pedido do autor): o gato é Diógenes, o cínico. Aceita o carinho e diz uma das
+    // passagens das Vidas de Diógenes Laércio (livro VI), em ordem; depois de todas, qualquer uma.
+    this.time.delayedCall(450, () => this.catSays());
     return true;
+  }
+
+  /**
+   * O Z NO BARRIL: com o gato dormindo lá dentro, é carinho e lição (o mesmo do gato que segue); vazio, uma linha
+   * do narrador. Devolve se o tile era o barril.
+   */
+  private useCatBarrelAt(x: number, y: number): boolean {
+    if (!this.catBarrel?.at(x, y)) return false;
+    if (this.cat?.atHome && this.petCat()) return true;
+    const base = getDialog('wizard');
+    if (base) this.openDialogScript({ ...base, npcName: '', lines: tLines('cat.barrel') }, undefined, undefined);
+    return true;
+  }
+
+  /** A próxima fala do gato (`cat.talk.<n>` em dialogos/<lang>.json). O save lembra quais ele já disse. */
+  private catSays(): void {
+    if (!this.canAct()) return;
+    const talks: number[] = [];
+    for (let n = 1; tLines(`cat.talk.${n}`).length > 0; n += 1) talks.push(n);
+    if (talks.length === 0) return;
+    const unsaid = talks.find((n) => !this.seenDialogKeys.has(`cat/talk/${n}`));
+    const n = unsaid ?? talks[Math.floor(Math.random() * talks.length)];
+    this.seenDialogKeys.add(`cat/talk/${n}`);
+    this.persistAdventure();
+    const script = { ...NPC_DIALOGS.blackCat, npcName: t('npc.blackCat.name'), lines: tLines(`cat.talk.${n}`) };
+    this.openDialogScript(script, undefined, getDialogVoice('blackCat'));
   }
 
   /**
@@ -2504,8 +2650,8 @@ export class GameScene extends Phaser.Scene {
       // NASCE NO CHÃO, e não na mochila — a mochila era a entrega mais curta possível e por isso
       // mesmo não se via nada: a mesa martelava para ninguém. O item entra no mundo AGORA (o arco é
       // só o desenho por cima), então nem morrer no meio do voo o apaga.
-      this.itemManager?.drop(kind, landing![0], landing![1], undefined, units);
-      this.flingCraftedItem(kind, prop.worldX, prop.worldY, landing![0], landing![1]);
+      const at = this.dropItem(kind, landing![0], landing![1], undefined, units) ?? landing!;
+      this.flingCraftedItem(kind, prop.worldX, prop.worldY, at[0], at[1]);
       prop.playCraft();
       getSoundManager().playHammer();
       this.time.delayedCall(140, () => getSoundManager().playToolboxDeliver());
@@ -2680,6 +2826,7 @@ export class GameScene extends Phaser.Scene {
   private basketMushroom(kind: MushroomKind, wx: number, wy: number): void {
     this.closeForaging();
     this.itemManager?.takeAt(wx, wy);
+    this.mushroomKin?.wither(kind); // a trilha levava a ele: sem ele, ela some
     const first = !this.seenItems.has(kind);
     adventureState().basket.push(kind);
     this.seenItems.add(kind);
@@ -2887,6 +3034,8 @@ export class GameScene extends Phaser.Scene {
     if (this.astronomerQuest?.isSolidAt(wx, wy)) return true;
     if (this.npcHomes?.isSolidAt(wx, wy)) return true;
     if (this.valleyFinds?.at(wx, wy)) return true;
+    if (this.heroCamp?.at(wx, wy)) return true;
+    if (this.catBarrel?.at(wx, wy)) return true;
     // O cogumelo nascendo e um corpo no caminho: o heroi encosta nele e fica DE FRENTE — que e a
     // mira da faca. Pisa-lo para apanhar seria arranca-lo, e o jogo ensina o contrario.
     if (isMushroomKind(this.itemManager?.kindAt(wx, wy))) return true;
@@ -3078,6 +3227,8 @@ export class GameScene extends Phaser.Scene {
     // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
     if (this.harvestMushroomAt(front.x, front.y)) return;
     if (this.useFindAt(front.x, front.y)) return;
+    if (this.useCampAt(front.x, front.y)) return;
+    if (this.useCatBarrelAt(front.x, front.y)) return;
     // A espada fincada não sai do chão. Tocada, ela canta um pouco, e o que ela fez aparece como um
     // pensamento (pedido do autor).
     if (this.plantedSwordTile?.x === front.x && this.plantedSwordTile.y === front.y) {
@@ -3091,7 +3242,7 @@ export class GameScene extends Phaser.Scene {
     if (this.restAtFireAt(front.x, front.y)) return;
     if (this.openCraftMenuAt(front.x, front.y)) return;
     if (this.placeOnAltarAt(front.x, front.y)) return;
-    if (this.strikeAltarAt(front.x, front.y)) return;
+    if (this.workAltarAt(front.x, front.y)) return;
     // A MÃO: pegar, trocar ou pousar a coisa do tile da frente.
     if (this.handAt(front.x, front.y)) return;
     this.thinkOfNeed(front.x, front.y, true);
@@ -3132,20 +3283,14 @@ export class GameScene extends Phaser.Scene {
     //    fazer o jogador dizê-la em voz alta é cobrar burocracia por uma escolha que não existe.
     //    Ver `toolWantedAt`.
     this.equipToolFor(x, y);
-    // Quem vai dormir numa fogueira acesa não precisa do balão.
-    const fire = this.getRestFireAt(x, y);
-    if (!fire || this.heldActsOnFire(fire) || !this.canSleepAt(fire)) this.thinkOfNeed(x, y, true);
+    this.thinkOfNeed(x, y, true);
     if (this.lumberQuest?.interactAt(x, y)) return;
     if (this.astronomerQuest?.interactAt(x, y)) return;
-    // 0b. A FOGUEIRA É ONDE SE DORME, a não ser que o item na mão tenha o que fazer com ela.
-    if (this.sleepAtFireAt(x, y)) return;
     // 1. O ITEM ESCOLHIDO AGE — a tabela inteira (machado→árvore, picareta→rocha, balde→água,
     //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, estação→instala).
     if (this.heldItem !== 'none' && this.useItemAt(x, y)) return;
-    // 1b. MARTELAR A ESPONJA continua valendo com a bolsa VAZIA.
-    if (this.heldItem === 'none' && this.strikeBloomAt(x, y)) return;
-    // 2. O ALTAR CHEIO devolve a peca para a mochila.
-    if (this.takeFromAltarAt(x, y)) return;
+    // 2. A BIGORNA: malha a peça que trabalha, ou devolve a que não trabalha (a martelada no chão saiu).
+    if (this.workAltarAt(x, y)) return;
     // 3. RECOLHER a máquina que o JOGADOR construiu.
     if (this.pickUpMachineAt(x, y)) return;
     // 4. O gesto sai NO VAZIO: um botão que só se mexe quando acerta esconde do jogador o que ele
@@ -3154,25 +3299,164 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * O X contra um altar ocupado devolve a peca guardada nele para a mochila.
+   * A BIGORNA (pedido do autor): com uma peça que a pancada trabalha (a esponja), é malhar — o herói pega o
+   * martelinho do toco e bate (forgeStrike). Com outra coisa (a barra pronta, uma pedra posta por engano), o gesto
+   * a devolve para a mão. Devolve `false` quando não há bigorna com peça ali.
    */
-  private takeFromAltarAt(wx: number, wy: number): boolean {
-    // O ALTAR devolve o que está em cima dele. Só chega aqui o que a pancada NÃO trabalha (a peça
-    // malhável virou golpe lá atrás, na tabela): é a metade simétrica do Z que pôs, e o que
-    // garante que nada fique preso na laje — a mesma lei do baú e da bigorna, um aperto põe, o
-    // seguinte devolve.
+  private workAltarAt(wx: number, wy: number): boolean {
     const altar = this.getAltarAt(wx, wy);
-    if (altar?.carrying && this.heldItem === 'none') {
-      const back = altar.take();
-      if (back) {
-        this.inventory.add(back);
-        this.updateBackItem();
-        getSoundManager().playSwordPickup();
-        this.persistAdventure();
-        return true;
-      }
+    if (!altar?.carrying) return false;
+    if (hammerResult(altar.carrying) !== undefined) {
+      void this.forgeStrike(altar);
+      return true;
     }
-    return false;
+    const back = altar.take();
+    if (!back) return false;
+    this.takeIntoHand(back);
+    getSoundManager().playSwordPickup();
+    this.persistAdventure();
+    return true;
+  }
+
+  /**
+   * UMA MARTELADA NA BIGORNA. Na primeira, o herói pega o martelinho do toco; cada aperto depois dela é uma
+   * pancada inteira: o martelo sobe por cima do ombro, desce seco na mesa (faísca, pedrinhas de escória, a mesa em
+   * brasa, o toque do ferro), quica e fica pronto para a próxima. Na última, a esponja vira barra — e, se a Vega
+   * está esperando por ela, ela vem buscar.
+   */
+  private async forgeStrike(altar: AltarObject): Promise<void> {
+    const hb = this.heroBillboard;
+    const w3 = this.world3d;
+    if (!hb || !w3) return;
+    if (this.forging && this.forging.altar !== altar) this.returnForgeHammer();
+    const hero = this.playerWorld;
+    const dx = Math.sign(altar.worldX - hero.worldX);
+    const dy = Math.sign(altar.worldY - hero.worldY);
+    if (!this.forging) {
+      const rest = altar.hammerRest;
+      altar.setHammerAway(true);
+      const hammer = w3.addBillboard(FORGE_HAMMER_TEXTURE, 0, { centered: true })
+        .setPosition(rest.x, rest.y)
+        .setElevation(rest.elevation + FORGE_HAMMER_SIZE / 2)
+        .setDisplaySize(FORGE_HAMMER_SIZE, FORGE_HAMMER_SIZE)
+        .setAngle(rest.angle)
+        .setTint(0xd8d8d8);
+      this.forging = { altar, hammer, at: `${hero.worldX},${hero.worldY}`, busy: true };
+      getSoundManager().playForgeHammerPickup();
+      await this.tweenTo({
+        targets: hammer, x: hb.x + 0.16, y: hb.y - dy * 0.05, elevation: 0.75, angle: -20, duration: 200, ease: 'Quad.easeOut',
+      });
+      this.forging.busy = false;
+    }
+    const f = this.forging;
+    if (!f || f.busy) return;
+    f.busy = true;
+    const hammer = f.hammer;
+    // ERGUER: por cima do ombro, a cabeça para trás.
+    this.hero.frame = dy < 0 ? HERO_FRAMES.attackUp : HERO_FRAMES.attack;
+    await this.tweenTo({
+      targets: hammer, x: hb.x + 0.12 - dx * 0.08, y: hb.y - dy * 0.04, elevation: 1.3, angle: -70, duration: 150, ease: 'Sine.easeOut',
+    });
+    // DESCER: seco, na mesa da bigorna (um fio à frente dela, para desenhar por cima).
+    this.tweens.add({ targets: this.hero, lungeX: dx * 0.1, lungeY: dy * 0.1, duration: 90, ease: 'Quad.easeIn' });
+    await this.tweenTo({
+      targets: hammer, x: altar.worldX - dx * 0.16, y: altar.worldY + 0.1, elevation: ANVIL_FACE_ELEV + 0.12, angle: 28, duration: 85, ease: 'Quad.easeIn',
+    });
+    const result = altar.strike();
+    getSoundManager().playAnvilStrike(result === 'forged');
+    if (result === 'forged') {
+      const made = altar.carrying;
+      if (made) this.seenItems.add(made);
+      this.persistAdventure();
+    }
+    // O QUIQUE: o martelo volta um pouco no rebote do ferro, e o corpo também.
+    this.tweens.add({ targets: this.hero, lungeX: 0, lungeY: 0, duration: 200, ease: 'Sine.easeOut' });
+    await this.tweenTo({
+      targets: hammer, elevation: ANVIL_FACE_ELEV + 0.45, angle: -12, duration: 130, ease: 'Quad.easeOut',
+    });
+    this.hero.frame = dy < 0 ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
+    f.busy = false;
+    if (result === 'forged' && altar.carrying === 'iron' && this.astronomerQuest?.wantsIronAtAnvil()) {
+      await this.wait(500);
+      this.returnForgeHammer();
+      void this.vegaFetchesBar(altar);
+    }
+  }
+
+  /** O martelinho volta para o toco da bigorna (o herói saiu de perto, ou a peça ficou pronta). */
+  private returnForgeHammer(): void {
+    const f = this.forging;
+    if (!f) return;
+    this.forging = undefined;
+    const rest = f.altar.hammerRest;
+    this.tweens.killTweensOf(f.hammer);
+    this.tweens.add({
+      targets: f.hammer,
+      x: rest.x,
+      y: rest.y,
+      elevation: rest.elevation + FORGE_HAMMER_SIZE / 2,
+      angle: rest.angle,
+      duration: 220,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        f.hammer.destroy();
+        f.altar.setHammerAway(false);
+        getSoundManager().playForgeHammerSetDown();
+      },
+    });
+  }
+
+  /** O martelinho só fica na mão enquanto o herói está parado de frente para a bigorna, fora de conversa. */
+  private tickForging(): void {
+    const f = this.forging;
+    if (!f || f.busy) return;
+    const front = this.facingTile();
+    const here = `${this.playerWorld.worldX},${this.playerWorld.worldY}`;
+    if (here !== f.at || front.x !== f.altar.worldX || front.y !== f.altar.worldY || this.dialogOpen) this.returnForgeHammer();
+  }
+
+  /**
+   * A VEGA VEM BUSCAR A BARRA (pedido do autor): a barra pronta na bigorna, ela sai correndo de casa, chega ao lado
+   * da bigorna, pega a barra, diz que vai construir o tripé e volta — e o tripé aparece no acampamento dela.
+   */
+  private async vegaFetchesBar(altar: AltarObject): Promise<void> {
+    const quest = this.astronomerQuest;
+    const home = getNpcHome('astronaut');
+    if (!quest || !home || !quest.wantsIronAtAnvil() || this.cutsceneActive) return;
+    this.cutsceneActive = true;
+    this.stopBreathing();
+    this.movementController?.interruptMovement(this.playerWorld.worldX, this.playerWorld.worldY);
+    this.actionButtons?.setVisible(false);
+    const hero: [number, number] = [this.playerWorld.worldX, this.playerWorld.worldY];
+    const seats = CARDINAL_DIRS
+      .map(([dx, dy]): [number, number] => [altar.worldX + dx, altar.worldY + dy])
+      .filter(([x, y]) => !(x === hero[0] && y === hero[1]) && !this.isSolidForEntities(x, y));
+    const path = this.findVisitPath([home.worldX, home.worldY], seats, hero, [altar.worldX, altar.worldY])
+      ?? [[home.worldX, home.worldY], seats[0] ?? [home.worldX, home.worldY]];
+    const end = path[path.length - 1];
+    this.npcManager?.setKindAway('astronaut', true);
+    const runner = new FireVisitor(this, 'astronaut', path, VEGA_RUN_STEP_MS);
+    await new Promise<void>((resolve) => runner.arrive(resolve, false));
+    // Ela pega a barra da mesa.
+    altar.take();
+    this.flingCraftedItem('iron', altar.worldX, altar.worldY, end[0], end[1]);
+    getSoundManager().playItemStash();
+    this.tweens.add({ targets: runner.bodySprite, elevation: 0.3, duration: 140, yoyo: true, ease: 'Quad.easeOut' });
+    await this.wait(350);
+    const base = getDialog('astronaut');
+    if (base) {
+      this.dialogSpeaker = runner.bodySprite;
+      await new Promise<void>((resolve) => {
+        this.openDialogScript({ ...base, lines: tLines('npc.astronautStep.anvil') }, { worldX: end[0], worldY: end[1] }, getDialogVoice('astronaut'), resolve);
+      });
+      this.dialogSpeaker = undefined;
+    }
+    await new Promise<void>((resolve) => runner.leave(resolve));
+    this.npcManager?.setKindAway('astronaut', false);
+    quest.ironFromAnvil();
+    this.persistAdventure();
+    this.actionButtons?.setVisible(true);
+    this.cutsceneActive = false;
   }
 
   private getAltarAt(wx: number, wy: number): AltarObject | undefined {
@@ -3197,33 +3481,6 @@ export class GameScene extends Phaser.Scene {
     this.clearHeldItem();
     getSoundManager().playToolboxDeliver();
     this.persistAdventure();
-    return true;
-  }
-
-  /**
-   * A PANCADA NA LAJE — a mesma para a espada (Z) e para a ferramenta (X).
-   *
-   * A esponja recém-saída do forno é ferro poroso encharcado de escória, e só vira metal depois de
-   * apanhar quente: são `BLOOM_BLOWS` pancadas, como na martelada no chão.
-   *
-   * Bater no que a pancada não trabalha continua sendo possível e não faz nada — pedido explícito
-   * do usuário, e a laje se defende de mentir por outro caminho: o que trabalha cospe brasa, o que
-   * não trabalha solta lasca cinzenta e um baque seco (ver AltarObject.strike).
-   */
-  private strikeAltarAt(wx: number, wy: number): boolean {
-    const altar = this.getAltarAt(wx, wy);
-    if (!altar || altar.carrying === null) return false;
-    const result = altar.strike();
-    if (result === 'none') return false;
-    getSoundManager().playHammer();
-    if (result === 'forged') {
-      // O ITEM NOVO se apresenta uma vez, como qualquer outro que o jogador vê pela primeira vez —
-      // e ele foi VISTO nascer na laje, mesmo que ainda não tenha sido apanhado.
-      const made = altar.carrying;
-      if (made) this.seenItems.add(made);
-      getSoundManager().playToolboxForge();
-      this.persistAdventure();
-    }
     return true;
   }
 
@@ -3364,10 +3621,10 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
     // A LAJE VAZIA sobe; com uma peça em cima, não — o X ali é o gesto de tirar a peça (ver
-    // `takeFromAltarAt`), e ele roda antes deste. É a mesma regra de um recipiente cheio, e pela mesma
+    // `workAltarAt`), e ele roda antes deste. É a mesma regra de um recipiente cheio, e pela mesma
     // razão: recolher um móvel com carga dentro é a carga sumindo em silêncio.
     const altar = this.getAltarAt(wx, wy);
-    if (altar && altar.carrying === null) {
+    if (altar && altar.carrying === null && altar.playerBuilt) {
       this.removeProp(this.altars, altar);
       return this.collectMachine('altar', wx, wy);
     }
@@ -3384,38 +3641,6 @@ export class GameScene extends Phaser.Scene {
   /** A peca recolhida volta para a mochila pelo caminho de qualquer item apanhado. */
   private collectMachine(kind: HeldItemKind, wx: number, wy: number): boolean {
     this.onCollectItem({ kind, worldX: wx, worldY: wy });
-    return true;
-  }
-
-  /**
-   * MARTELAR A ESPONJA no chão.
-   *
-   * Uma lupa recem-saida do forno e ferro poroso encharcado de escoria: so vira metal util
-   * depois de apanhar quente, ate a escoria espirrar fora. Sao `BLOOM_BLOWS` pancadas.
-   *
-   * A contagem morre junto com a esponja: se o item sai do tile,
-   * o proximo bolo que chegar ali comeca do zero. Guardar pancadas de uma peca que nao esta mais
-   * la faria a esponja seguinte sair pronta pela metade sem nada no mundo explicando por que.
-   */
-  private strikeBloomAt(wx: number, wy: number): boolean {
-    if (this.itemManager?.kindAt(wx, wy) !== 'bloom') return false;
-    const key = `${wx},${wy}`;
-    const blows = (this.bloomBlows.get(key) ?? 0) + 1;
-    this.swingHeld(wx, wy);
-    getSoundManager().playHammer(blows - 1);
-    this.world3d?.shake(60, 0.002);
-    if (blows < BLOOM_BLOWS) {
-      this.bloomBlows.set(key, blows);
-      return true;
-    }
-    // A ULTIMA pancada: a escoria sai e o que fica e barra. A troca acontece no MESMO tile —
-    // uma bigorna não move a peça. O resultado sai da tabela compartilhada (`hammering.ts`),
-    // usada também pelo altar.
-    this.bloomBlows.delete(key);
-    const made = hammerResult('bloom') ?? 'iron';
-    this.itemManager?.takeAt(wx, wy);
-    this.itemManager?.drop(made, wx, wy);
-    this.world3d?.shake(90, 0.003);
     return true;
   }
 
@@ -3484,6 +3709,9 @@ export class GameScene extends Phaser.Scene {
     if (quest) return quest;
     const there = this.itemManager?.kindAt(x, y);
     if (isMushroomKind(there)) return this.heldItem === 'knife' ? 'harvest' : null;
+    if (this.catBarrel?.at(x, y)) return this.cat?.atHome ? 'pet' : 'look';
+    const camp = this.heroCamp?.at(x, y);
+    if (camp) return camp === 'log' ? 'sit' : camp === 'bed' ? 'sleep' : 'look';
     const find = this.valleyFinds?.at(x, y);
     if (find) {
       if (find.view) return 'sit';
@@ -3505,7 +3733,7 @@ export class GameScene extends Phaser.Scene {
     const altar = this.getAltarAt(x, y);
     if (altar) {
       if (altar.carrying === null) return this.heldItem !== 'none' ? 'put' : null;
-      return hammerResult(altar.carrying) !== undefined ? 'hammer' : null;
+      return hammerResult(altar.carrying) !== undefined ? 'hammer' : 'takeBack';
     }
     return null;
   }
@@ -3513,19 +3741,18 @@ export class GameScene extends Phaser.Scene {
   /** O que o X faz no tile da frente, na ordem de `pressUse` e da tabela de `useItemAt`. */
   private useVerbAt(x: number, y: number): string | null {
     const fire = this.getRestFireAt(x, y);
-    if (fire && !this.heldActsOnFire(fire)) return this.canSleepAt(fire) ? 'sleep' : null;
+    // Na fogueira de vizinho não se dorme: só no acampamento.
+    if (fire && !this.heldActsOnFire(fire)) return null;
     const held = this.heldItem;
     if (held === 'none') {
-      if (this.itemManager?.kindAt(x, y) === 'bloom') return 'hammer';
       const altar = this.getAltarAt(x, y);
-      if (altar) return altar.carrying ? 'takeBack' : 'pickUp';
+      if (altar) return altar.carrying ? (hammerResult(altar.carrying) !== undefined ? 'hammer' : 'takeBack') : null;
       // o forno da Vega é fixo: não se recolhe
       return null;
     }
     const spot = this.getPlantSpotAt(x, y);
     if (held === 'dyeSeeds' && spot?.isHole) return 'sow';
     if (isMushroomKind(this.itemManager?.kindAt(x, y))) return null;
-    if (this.itemManager?.kindAt(x, y) === 'bloom') return 'hammer';
     const onAltar = this.getAltarAt(x, y)?.carrying;
     if (onAltar && hammerResult(onAltar) !== undefined) return 'hammer';
     if (this.canBuildMachineAt(held, x, y)) return 'install';
@@ -3672,11 +3899,21 @@ export class GameScene extends Phaser.Scene {
    * sem caber na mão (o segundo presente, a mochila de um save antigo). Sem chão livre em volta, a
    * busca abre mais um anel — nada some.
    */
-  private dropNear(kind: HeldItemKind, units: number, x: number, y: number): [number, number] | null {
+  private dropNear(
+    kind: HeldItemKind, units: number | undefined, x: number, y: number, fire?: { fuelMs: number },
+  ): [number, number] | null {
     if (!this.itemManager) return null;
     // SÓ ONDE O HERÓI CHEGA A PÉ. O tile livre mais perto pode ser um bolsão fechado: o machado do Bram caía atrás do
     // cepo, e como ele só dá outro se não houver nenhum no chão, a partida travava para sempre, e o save lembrava.
     const reachable = this.tilesWithinWalk(DROP_WALK_TILES);
+    // A FRENTE DO NPC (world/npcFront): o que ia cair ali — o herói conversando de mão cheia e ganhando outra
+    // coisa — vai para a direita do NPC, depois a esquerda, depois para trás dele.
+    const facing = this.itemForbiddenAt(x, y) ? npcFacing(x, y, this.npcTiles()) : null;
+    for (const side of facing ? npcSideTiles(facing) : []) {
+      if (!this.itemFreeAt(side.x, side.y) || !reachable.has(`${side.x},${side.y}`)) continue;
+      this.itemManager.drop(kind, side.x, side.y, fire, units);
+      return [side.x, side.y];
+    }
     for (const onlyReachable of [true, false]) {
       for (let r = 0; r <= 4; r += 1) {
         for (let oy = -r; oy <= r; oy += 1) {
@@ -3684,16 +3921,88 @@ export class GameScene extends Phaser.Scene {
             if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
             const tx = x + ox;
             const ty = y + oy;
-            if (this.isTileTaken(tx, ty)) continue;
+            if (this.isTileTaken(tx, ty) || this.itemForbiddenAt(tx, ty)) continue;
             if (tx === this.playerWorld.worldX && ty === this.playerWorld.worldY && r > 0) continue;
             if (onlyReachable && !reachable.has(`${tx},${ty}`)) continue;
-            this.itemManager.drop(kind, tx, ty, undefined, units);
+            this.itemManager.drop(kind, tx, ty, fire, units);
             return [tx, ty];
           }
         }
       }
     }
     return null;
+  }
+
+  /** Os NPCs do mapa (a casa de cada um) e os que estão de pé agora — de quem é a frente proibida. */
+  private npcTiles(): NpcTile[] {
+    this.npcHouseTiles ??= getNpcTiles();
+    return [...this.npcHouseTiles, ...(this.npcManager?.getActiveWorldPositions() ?? [])];
+  }
+
+  /** A FRENTE DE UM NPC: nenhum item fica ali (world/npcFront). */
+  private itemForbiddenAt(x: number, y: number): boolean {
+    return npcFrontKeys(this.npcTiles()).has(`${x},${y}`);
+  }
+
+  /** Um item pode cair aqui: chão livre, sem item, fora da frente de NPC e fora do herói. */
+  private itemFreeAt(x: number, y: number): boolean {
+    return !this.isTileTaken(x, y) && !this.itemForbiddenAt(x, y)
+      && !(x === this.playerWorld.worldX && y === this.playerWorld.worldY);
+  }
+
+  /**
+   * O PONTO ÚNICO POR ONDE UM ITEM NOVO CAI NO CHÃO. Fora da frente de NPC, cai onde pediram; na frente, vai para o
+   * lado do NPC (dropNear). Devolve onde caiu — o arco do item desenha até lá.
+   */
+  private dropItem(
+    kind: HeldItemKind, x: number, y: number, fire?: { fuelMs: number }, units?: number,
+  ): [number, number] | null {
+    if (!this.itemManager) return null;
+    if (!this.itemForbiddenAt(x, y)) {
+      this.itemManager.drop(kind, x, y, fire, units);
+      return [x, y];
+    }
+    return this.dropNear(kind, units, x, y, fire);
+  }
+
+  /**
+   * Um save de antes da regra (ou um mundo autorado errado) com item na frente de um NPC: ele vai para o lado.
+   * Devolve quantos mudaram de lugar.
+   */
+  private enforceNpcFrontRule(): number {
+    if (!this.itemManager) return 0;
+    let moved = 0;
+    for (const item of this.itemManager.snapshot()) {
+      if (!this.itemForbiddenAt(item.worldX, item.worldY)) continue;
+      const taken = this.itemManager.takeAt(item.worldX, item.worldY);
+      if (!taken) continue;
+      this.dropItem(taken.kind, item.worldX, item.worldY, taken.fire, taken.units);
+      moved += 1;
+    }
+    if (moved > 0) this.persistAdventure();
+    return moved;
+  }
+
+  /**
+   * NADA PRESO DENTRO DE UMA COISA SÓLIDA: o save guarda os itens do chão, mas não as árvores secas derrubadas — no
+   * load elas estão de pé de novo, e um graveto que ficou no tile de uma delas sumia dentro do tronco para sempre. O
+   * que estiver debaixo de um prop sólido vai para o tile livre mais perto. Devolve quantos mudaram de lugar.
+   */
+  private freeTrappedItems(): number {
+    if (!this.itemManager) return 0;
+    let moved = 0;
+    for (const item of this.itemManager.snapshot()) {
+      if (isMushroomKind(item.kind) || isDecorKind(item.kind)) continue;
+      const trapped = this.chunkManager?.isCellBlocked(item.worldX, item.worldY)
+        || this.propRegistry.some((entry) => this.propAt(entry.list, item.worldX, item.worldY)?.blocking);
+      if (!trapped) continue;
+      const taken = this.itemManager.takeAt(item.worldX, item.worldY);
+      if (!taken) continue;
+      this.dropNear(taken.kind, taken.units, item.worldX, item.worldY, taken.fire);
+      moved += 1;
+    }
+    if (moved > 0) this.persistAdventure();
+    return moved;
   }
 
   /** Os tiles a até `steps` passos do herói, andando pelo chão livre. */
@@ -3740,7 +4049,7 @@ export class GameScene extends Phaser.Scene {
   private placeItemAt(wx: number, wy: number): boolean {
     const kind = this.heldItem;
     if (kind === 'none' || !this.itemManager) return false;
-    if (this.itemManager.hasItemAt(wx, wy) || this.isTileOccupied(wx, wy)) return false;
+    if (this.itemManager.hasItemAt(wx, wy) || this.isTileOccupied(wx, wy) || this.itemForbiddenAt(wx, wy)) return false;
 
     const fire = this.isTorchLit ? { fuelMs: this.torchFuelMs } : undefined;
     // O PACOTE pousa inteiro (ver UNIT_PACK_KINDS), e pegá-lo de volta devolve a mesma contagem.
@@ -3772,22 +4081,12 @@ export class GameScene extends Phaser.Scene {
     if (this.painterQuest?.useAt(wx, wy)) return true;
     // O COGUMELO NASCENDO vem primeiro: a faca e a resposta, e `equipToolFor` ja a sacou.
     if (this.harvestMushroomAt(wx, wy)) return true;
-    // A ESPONJA vem antes de tudo, e ela e o unico caso desta tabela que NAO olha QUAL item esta
-    // na mao: martelar nao e usar uma ferramenta, e bater — serve o machado, a picareta, a pedra.
-    // Mao vazia e espada empunhada nao chegam aqui (o A delas e combate, ver swingAttack), e isso
-    // esta certo nas duas pontas: ninguem soca ferro quente, e ninguem malha uma lupa com o fio
-    // de uma lamina.
-    if (this.strikeBloomAt(wx, wy)) return true;
     // A PEÇA NO ALTAR, pela mesma regra e no mesmo degrau: se a laje segura algo que a pancada
     // TRABALHA, o X é uma pancada — não importa o que esteja na mão (a picareta, o machado, uma
     // pedra), porque malhar não é usar uma ferramenta, é bater. O que ela segura e a pancada não
     // trabalha cai adiante, na ENTREGA, onde o X vira o gesto de tirar de volta: assim todo aperto
     // contra o altar faz alguma coisa, e o jogador nunca fica com uma peça presa na mesa.
-    const onAltar = this.getAltarAt(wx, wy)?.carrying;
-    if (onAltar && hammerResult(onAltar) !== undefined) {
-      this.swingHeld(wx, wy);
-      return this.strikeAltarAt(wx, wy);
-    }
+    if (this.getAltarAt(wx, wy)?.carrying && this.workAltarAt(wx, wy)) return true;
     // INSTALAR UMA ESTAÇÃO é usar — a tabela inteira já é "o que este item faz contra o tile à
     // frente", e forno/altar viram props no chão.
     // Não é um modo de construção, não é um menu, não é um botão novo — é a mesma linha da tabela
@@ -4250,8 +4549,93 @@ export class GameScene extends Phaser.Scene {
   private thinkOfNeed(wx: number, wy: number, pressed: boolean): void {
     const need = this.neededAt(wx, wy, pressed);
     if (!need) return;
-    const visual = ITEM_VISUAL_2D[need === 'torch' ? 'wood' : need];
-    this.heroThought?.show(visual.texture, visual.frame);
+    const kind = need === 'torch' ? 'wood' : need;
+    const visual = ITEM_VISUAL_2D[kind];
+    this.heroThought?.show(visual.texture, visual.frame, this.uniqueItemSource(kind));
+  }
+
+  /**
+   * ONDE ESTÁ A FERRAMENTA ÚNICA (pedido do autor): a pontinha do balão aponta para ela. Primeiro o chão (o herói
+   * a largou em algum lugar, ou a trocou por outra), depois quem a dá. A foice não tem quem dê: a Morte aparece
+   * onde o herói dorme, então sem pontinha até ela estar no chão.
+   */
+  private uniqueItemSource(kind: HeldItemKind): { x: number; y: number } | null {
+    if (!(kind in UNIQUE_TOOL_GIVERS)) return null;
+    const hero = this.playerWorld;
+    const onGround = (this.itemManager?.snapshot() ?? [])
+      .filter((item) => item.kind === kind)
+      .sort((a, b) => Math.hypot(a.worldX - hero.worldX, a.worldY - hero.worldY) - Math.hypot(b.worldX - hero.worldX, b.worldY - hero.worldY))[0];
+    if (onGround) return { x: onGround.worldX, y: onGround.worldY };
+    const giver = UNIQUE_TOOL_GIVERS[kind];
+    if (!giver || this.npcManager?.isKindHidden(giver)) return null;
+    const home = getNpcHome(giver);
+    return home ? { x: home.worldX, y: home.worldY } : null;
+  }
+
+  /**
+   * OS COGUMELINHOS-FILHOS: em volta de cada cogumelo do mapa ainda não colhido (cada espécie existe uma vez e não
+   * renasce, então "já teve na mão" é "já saiu do chão"). Um filho só nasce em chão limpo — sem enfeite,
+   * árvore, peça, item ou NPC — e no mesmo nível do cogumelo: nada na encosta, na escada ou do outro lado da serra.
+   */
+  private makeMushroomKin(): MushroomKin | undefined {
+    if (!this.adventure) return undefined;
+    const mothers = getHeldItemPickups()
+      .filter((p) => isMushroomKind(p.type) && !this.seenItems.has(p.type as HeldItemKind))
+      .map((p) => ({ kind: p.type as MushroomKind, worldX: p.worldX, worldY: p.worldY }));
+    if (mothers.length === 0) return undefined;
+    const taken = getOccupiedTiles();
+    return new MushroomKin(this, mothers, (x, y, mother) => {
+      if (taken.has(`${x},${y}`)) return false;
+      if (reliefAt(x, y) !== reliefAt(mother.worldX, mother.worldY)) return false;
+      const terrain = getChunkTerrain(Math.floor(x / CHUNK_COLUMNS), Math.floor(y / CHUNK_ROWS));
+      const lx = ((x % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+      const ly = ((y % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+      // SÓ EM CHÃO LIMPO (pedido do autor): em cima de arbusto, flor ou mato alto o filho parecia defeito. O
+      // world.json já deixa liso o chão sorteado para eles (scripts/chao-dos-filhos.mjs, com a mesma conta).
+      return !terrain.collisions[ly]?.[lx] && terrain.upper[ly]?.[lx] == null;
+    });
+  }
+
+  /**
+   * O PORCINI NA FALA DA HOLLIS (pedido do autor): na linha em que ela diz "aqui do meu lado esquerdo", a câmera
+   * vai devagar até o cogumelo, ele brilha, e ela volta para a conversa. É o primeiro corte do jogo: tem de ser óbvio.
+   */
+  private withPorciniGlance(script: DialogScript, npcWorld: { worldX: number; worldY: number }): DialogScript {
+    const text = tLines(`npc.${FORAGER_DIALOG}Hint.porcini`)[0]?.text;
+    const index = text ? script.lines.findIndex((line) => line.text === text) : -1;
+    if (index < 0) return script;
+    const spot = (this.itemManager?.snapshot() ?? [])
+      .filter((item) => item.kind === 'porcini' && Math.hypot(item.worldX - npcWorld.worldX, item.worldY - npcWorld.worldY) <= 6)[0];
+    if (!spot) return script;
+    const before = script.onLine;
+    return {
+      ...script,
+      onLine: (i) => {
+        before?.(i);
+        if (i === index) this.glanceAt({ x: spot.worldX, y: spot.worldY }, npcWorld);
+      },
+    };
+  }
+
+  /** A câmera da conversa olha para um ponto do mundo, segura e volta para o NPC (só se a conversa continua). */
+  private glanceAt(spot: { x: number; y: number }, npcWorld: { worldX: number; worldY: number }): void {
+    if (!this.camera) return;
+    const base = this.baseScreenCenter();
+    const { boxHeight, margin } = dialogBoxMetrics(this.scale.width, this.scale.height);
+    const stageCenterY = Math.floor((this.scale.height - boxHeight - margin) / 2);
+    const dx = spot.x - this.playerWorld.worldX;
+    const dy = spot.y - this.playerWorld.worldY;
+    this.animateScreenCenter(Math.round(base.x - dx * this.tileSize), Math.round(stageCenterY - dy * this.tileSize), GLANCE_PAN_MS);
+    this.time.delayedCall(GLANCE_PAN_MS, () => {
+      if (!this.dialogOpen) return;
+      this.spawnGlint(spot.x, spot.y, 0.32, 0.6);
+      getSoundManager().playKeyJingle();
+    });
+    this.time.delayedCall(GLANCE_PAN_MS + GLANCE_HOLD_MS, () => {
+      if (!this.dialogOpen || this.dialogNpcWorld !== npcWorld) return;
+      const back = this.dialogScreenCenter(npcWorld);
+      this.animateScreenCenter(back.x, back.y, GLANCE_PAN_MS);
+    });
   }
 
   private bumpRefusal(wx: number, wy: number): void {
@@ -5083,7 +5467,39 @@ export class GameScene extends Phaser.Scene {
     for (const entry of this.propRegistry) {
       if (this.propAt(entry.list, wx, wy)) return false;
     }
-    return true;
+    // NINGUÉM FICA CERCADO: o canteiro semeado é sólido, e quatro em volta de um vizinho (ou dois, com a mesa e a
+    // fogueira dele) o trancavam para sempre — a Iris não recebia mais ninguém e a quest dela travava. Ao lado de
+    // um NPC, onde ele está ou onde ele mora, a pá não cava.
+    const nextTo = (x: number, y: number): boolean => Math.abs(x - wx) + Math.abs(y - wy) === 1;
+    if (this.npcManager?.getActiveWorldPositions().some((n) => nextTo(n.worldX, n.worldY))) return false;
+    if (getNpcTiles().some((n) => nextTo(n.worldX, n.worldY))) return false;
+    return !this.digWouldTrap(wx, wy);
+  }
+
+  /**
+   * O BURACO QUE TRANCA: cada buraco vira um monte sólido quando semeado, e não há como desfazer. Se este buraco,
+   * somado aos que já estão abertos, deixasse o herói num cercadinho (a casa, o vizinho e os montes em volta), a
+   * pá não cava. A conta é uma inundação curta a partir do herói: se ela não sai para o mundo, é cerca.
+   */
+  private digWouldTrap(wx: number, wy: number): boolean {
+    const blocked = new Set<string>([`${wx},${wy}`]);
+    for (const spot of this.plantSpots) if (spot.isHole) blocked.add(`${spot.worldX},${spot.worldY}`);
+    const start = { x: this.playerWorld.worldX, y: this.playerWorld.worldY };
+    const seen = new Set<string>([`${start.x},${start.y}`]);
+    const queue = [start];
+    const ENOUGH = 40;
+    while (queue.length && seen.size < ENOUGH) {
+      const c = queue.shift()!;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const nx = c.x + dx;
+        const ny = c.y + dy;
+        const k = `${nx},${ny}`;
+        if (seen.has(k) || blocked.has(k) || this.isSolidForEntities(nx, ny) || !canStep(c.x, c.y, nx, ny)) continue;
+        seen.add(k);
+        queue.push({ x: nx, y: ny });
+      }
+    }
+    return seen.size < ENOUGH;
   }
 
   /**
@@ -5149,7 +5565,7 @@ export class GameScene extends Phaser.Scene {
   private updateFurnaces(delta: number): void {
     if (!this.furnaces.length) return;
     const port: FurnaceWorldPort = {
-      put: (kind, x, y, units) => this.itemManager?.drop(kind, x, y, undefined, units),
+      put: (kind, x, y, units) => { this.dropItem(kind, x, y, undefined, units); },
       occupied: (x, y) => this.isTileOccupied(x, y),
       // O mesmo vizinho livre que a bancada usa, escolhido pela distancia ate o heroi.
       landing: (x, y) => this.deliveryTileAround(x, y),
@@ -5595,7 +6011,7 @@ export class GameScene extends Phaser.Scene {
       },
       dropAt: (kind: HeldItemKind, x: number, y: number) => {
         if (this.isTileOccupied(x, y)) this.dropNear(kind, 1, x, y);
-        else this.itemManager?.drop(kind, x, y);
+        else this.dropItem(kind, x, y);
       },
       hero: () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }),
       isFree: (x: number, y: number) => !this.isSolidForEntities(x, y) && !this.itemManager?.hasItemAt(x, y)
@@ -6318,6 +6734,8 @@ export class GameScene extends Phaser.Scene {
     const wizardAt = { worldX: this.playerWorld.worldX + 1, worldY: this.playerWorld.worldY };
     await new Promise<void>((resolve) => {
       if (!base) { resolve(); return; }
+      // A abertura já manda o herói para a barraca: a lembrança do mago não acende o "!" de novo.
+      this.seenDialogKeys.add('wizard:tent');
       this.openDialogScript({ ...base, lines: tLines('wizard.intro') }, wizardAt, getDialogVoice('wizard'), resolve);
     });
 
@@ -6643,9 +7061,13 @@ export class GameScene extends Phaser.Scene {
    * que ha gente esperando; com o portao aberto ele manda o heroi para o centro do vale; depois
    * do fim ele so fica feliz.
    */
-  private wizardLine(): 'guide' | 'gate' | 'after' {
+  private wizardLine(): 'tent' | 'again' | 'guide' | 'gate' | 'after' {
     if (this.roasted) return 'after';
     if (this.gateOpened) return 'gate';
+    // Antes da primeira noite na barraca (a visita da Morte é dessa noite), ele lembra dela.
+    if (this.adventure && !this.seenDialogKeys.has(DEATH_VISIT_KEY)) return 'tent';
+    // Entre a primeira visita e a última, ele sabe que ela volta e manda dormir de novo: não consola.
+    if (this.adventure && DEATH_VISITS.some((v) => !this.seenDialogKeys.has(v.key))) return 'again';
     return 'guide';
   }
 
@@ -6706,6 +7128,8 @@ export class GameScene extends Phaser.Scene {
    * ultimo, o portao do jardim se abre.
    */
   private celebrateQuestDone(_npcWorld: { worldX: number; worldY: number } | undefined): void {
+    // O ACAMPAMENTO: a lembrança de quem pediu aparece no canto do herói (objects/HeroCamp).
+    this.time.delayedCall(1500, () => this.heroCamp?.refresh(true));
     this.refreshQuestMarks();
     getSoundManager().playSingingBowl();
     this.spawnGrowSparkle(this.playerWorld.worldX, this.playerWorld.worldY);
@@ -7167,6 +7591,7 @@ export class GameScene extends Phaser.Scene {
     // O ÚLTIMO PEDIDO DO VALE fechou nesta conversa (pedido do autor): a fala termina com a chave do jardim alto,
     // e ela chega depois que a caixa fecha (celebrateQuestDone → giveGardenKey).
     if (closedNow && allQuestsDone() && !adventureState().gardenKeyGiven) script = { ...script, lines: [...script.lines, ...tLines('garden.key')] };
+    if (askId === FORAGER_DIALOG && npcWorld) script = this.withPorciniGlance(script, npcWorld);
     if (npcWorld) {
       const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY, scriptId);
       if (key) {
@@ -7305,6 +7730,8 @@ export class GameScene extends Phaser.Scene {
       this.actionButtons?.setVisible(true);
       this.endDialogCameraShift();
       getSoundManager().fadeMusicIn();
+      // As falas lidas nesta conversa entram no save (runtime/readLines): da próxima vez, aparecem de uma vez.
+      if (this.adventure) this.persistAdventure();
       onClosed?.();
     }, voice, this.dialogSpeaker ?? (npcWorld && this.npcManager?.bodyAt(npcWorld.worldX, npcWorld.worldY)) ?? this.wizardStandIn);
   }
@@ -7429,7 +7856,7 @@ export class GameScene extends Phaser.Scene {
     this.animateScreenCenter(base.x, base.y);
   }
 
-  private animateScreenCenter(tx: number, ty: number): void {
+  private animateScreenCenter(tx: number, ty: number, duration = 300): void {
     if (!this.camera) return;
     this.camShiftTween?.stop();
     this.camShifting = true;
@@ -7438,7 +7865,7 @@ export class GameScene extends Phaser.Scene {
       targets: state,
       x: tx,
       y: ty,
-      duration: 300,
+      duration,
       ease: 'Cubic.easeInOut',
       onUpdate: () => {
         if (!this.camera) return;
@@ -7708,7 +8135,7 @@ export class GameScene extends Phaser.Scene {
     kind: HeldItemKind, worldX: number, worldY: number, units?: number,
   ): void {
     if (!this.itemManager) return;
-    if (!this.itemManager.hasItemAt(worldX, worldY)) {
+    if (!this.itemManager.hasItemAt(worldX, worldY) && !this.itemForbiddenAt(worldX, worldY)) {
       this.itemManager.drop(kind, worldX, worldY, undefined, units);
       this.persistAdventure();
       return;
@@ -7718,7 +8145,7 @@ export class GameScene extends Phaser.Scene {
       const ny = worldY + dy;
       // O produto nunca cai num rio, na lava ou dentro de um corpo solido — um item so pousa
       // onde o heroi pode pisar pra busca-lo.
-      if (this.isSolidForEntities(nx, ny) || this.itemManager.hasItemAt(nx, ny)) continue;
+      if (this.isSolidForEntities(nx, ny) || this.itemManager.hasItemAt(nx, ny) || this.itemForbiddenAt(nx, ny)) continue;
       this.itemManager.drop(kind, nx, ny, undefined, units);
       this.persistAdventure();
       return;

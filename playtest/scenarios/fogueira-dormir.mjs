@@ -1,12 +1,11 @@
-// FOGUEIRA E DORMIR — só se dorme com fogo (pedido do autor). De dia a fogueira é lenha apagada: o X não
-// oferece nem faz dormir. Ao anoitecer o vizinho vai lá e acende, e enquanto o fogo cresce continua sem
-// dormir. Só quando a chama terminou de pegar e ele foi embora o balão mostra "dormir" e o X deita.
+// FOGUEIRA E DORMIR — só se dorme no acampamento do herói (pedido do autor). Na fogueira de um vizinho o X
+// nunca faz dormir: nem apagada de dia, nem pegando fogo, nem com a chama inteira e o vizinho já de volta.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tap = async (page, key) => { await page.keyboard.down(key); await sleep(50); await page.keyboard.up(key); await sleep(250); };
 
 export default {
   name: 'fogueira-dormir',
-  description: 'Dormir só aparece e só funciona depois que o vizinho acendeu a fogueira e o fogo terminou de pegar.',
+  description: 'Na fogueira de vizinho o herói nunca dorme, nem com o fogo aceso e inteiro: só no acampamento.',
   needsGame: false,
   async run({ driver, shot, assert }) {
     const { page } = driver;
@@ -82,7 +81,7 @@ export default {
       await shot('acendendo', { note: 'O fogo crescendo: ainda sem dormir' });
     }
 
-    // ── 3. O fogo terminou de pegar e o vizinho voltou: agora dorme ──
+    // ── 3. O fogo terminou de pegar e o vizinho voltou: mesmo assim não dorme ──
     const ready = await page.waitForFunction(() => {
       const s = window.__scene;
       const f = window.__fire;
@@ -90,11 +89,11 @@ export default {
     }, null, { timeout: 30000, polling: 100 }).then(() => true, () => false);
     st = await look();
     assert('O fogo termina de pegar e o vizinho vai embora', ready, JSON.stringify(st));
-    assert('Com o fogo inteiro, o balão oferece dormir', st.verb === 'sleep', JSON.stringify(st));
+    assert('Com o fogo inteiro, o balão não oferece dormir', st.verb !== 'sleep', JSON.stringify(st));
     await tap(page, 'x');
     await sleep(800);
     st = await look();
-    assert('Com o fogo inteiro, o X faz dormir', st.sleeping, JSON.stringify(st));
-    await shot('dormindo', { note: 'Fogo aceso: o herói dorme' });
+    assert('Com o fogo inteiro, o X não faz dormir', !st.sleeping, JSON.stringify(st));
+    await shot('acesa', { note: 'Fogo aceso de vizinho: o herói não dorme aqui' });
   },
 };

@@ -14,6 +14,9 @@
 // - Determinístico (hash da coordenada, zero Math.random) e idempotente: o conjunto de tiles escolhidos é
 //   sempre o mesmo, e rodar duas vezes dá o mesmo mundo que rodar uma.
 // - Fica longe das portas: nada nasce a menos de 2 tiles de NPC, prop ou item, nem em escada da serra.
+import { kinTiles } from './chao-dos-filhos.mjs';
+import { CAMP_TILES } from './acampamento.mjs';
+import { BARREL_TILE } from './barril-do-gato.mjs';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { biomeAt } from '../src/game/world/biomes.ts';
@@ -68,6 +71,8 @@ const road = gate && gate.worldX === start.worldX
   ? { x: gate.worldX, from: start.worldY - 3 + 1 - 3, to: gate.worldY }
   : null;
 const onRoad = (x, y) => road !== null && x === road.x && y >= road.to && y <= road.from;
+// O CHÃO DOS COGUMELINHOS-FILHOS (scripts/chao-dos-filhos.mjs): fica liso, para cada filho ter onde nascer.
+const kin = kinTiles(world);
 
 let added = 0;
 const perBiome = {};
@@ -78,7 +83,7 @@ for (const c of world.chunks) {
       if (c.ground[ly][lx] !== GROUND) continue;
       if (c.upper[ly][lx] !== null || c.collisions[ly][lx]) continue;
       if (!STAIRS_FREE.has(c.relief?.[ly]?.[lx] ?? 0)) continue;
-      if (busy.has(`${wx},${wy}`) || onRoad(wx, wy)) continue;
+      if (busy.has(`${wx},${wy}`) || onRoad(wx, wy) || kin.has(`${wx},${wy}`) || CAMP_TILES.has(`${wx},${wy}`) || (wx === BARREL_TILE.x && wy === BARREL_TILE.y)) continue;
       const biome = biomeAt(wx, wy);
       const chance = DENSITY[biome] * (0.35 + 1.3 * smooth(wx, wy));
       if (hash(wx, wy, 7) >= chance) continue;

@@ -258,6 +258,34 @@ export const getChunkContent = (cx: number, cy: number): ScreenContent => {
   return { pickups: chunk.pickups, npcs: chunk.npcs };
 };
 
+/** Os tiles que já têm alguma coisa do mapa: peça, item no chão ou NPC (chave "x,y"). */
+export const getOccupiedTiles = (): Set<string> => {
+  const out = new Set<string>();
+  for (const prop of allProps()) out.add(`${prop.worldX},${prop.worldY}`);
+  if (infinite || !world) return out;
+  for (const chunk of world.chunks) {
+    for (const p of chunk.pickups) out.add(`${p.worldX},${p.worldY}`);
+    for (const n of chunk.npcs ?? []) out.add(`${n.worldX},${n.worldY}`);
+  }
+  return out;
+};
+
+/** O tile de cada NPC do mapa (a casa dele no world.json). */
+export const getNpcTiles = (): Array<{ kind: NpcKind; worldX: number; worldY: number }> => {
+  if (infinite || !world) return [];
+  return world.chunks.flatMap((chunk) => (chunk.npcs ?? []).map((n) => ({ kind: n.type, worldX: n.worldX, worldY: n.worldY })));
+};
+
+/** A casa de um NPC no mapa (o tile dele no world.json), ou null se ele não existe neste mundo. */
+export const getNpcHome = (kind: NpcKind): { worldX: number; worldY: number } | null => {
+  if (infinite || !world) return null;
+  for (const chunk of world.chunks) {
+    const npc = chunk.npcs?.find((n) => n.type === kind);
+    if (npc) return { worldX: npc.worldX, worldY: npc.worldY };
+  }
+  return null;
+};
+
 export const getPlayerStart = (): { worldX: number; worldY: number } => (
   infinite ? infinite.playerStart : requireWorld().meta.playerStart
 );

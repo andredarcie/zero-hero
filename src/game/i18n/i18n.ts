@@ -1,9 +1,12 @@
 import { withKeyNames } from '@/game/runtime/accessibility';
+import dialogosEn from './dialogos/en.json';
+import dialogosPtBr from './dialogos/pt-br.json';
 import en from './locales/en.json';
 import ptBr from './locales/pt-br.json';
 
 // All user-facing game text lives in the catalogs — ONE JSON per language (locales/en.json,
-// locales/pt-br.json), with exactly the same keys. This module is the single runtime seam: look a
+// locales/pt-br.json), with exactly the same keys. The characters' lines (and their philosophy notes) live apart, in
+// dialogos/en.json and dialogos/pt-br.json, grouped by character. This module is the single runtime seam: look a
 // string up by dot-path with t(). Dialog/array content (wizard beats, NPC lines, title words)
 // comes through tLines()/tWords()/localizedNpc(). The editor is a dev tool and is intentionally
 // NOT localized.
@@ -24,9 +27,43 @@ export interface I18nNpc { name: string; lines: I18nLine[] }
 export type Lang = 'en' | 'pt-br';
 export const LANGS: readonly Lang[] = ['en', 'pt-br'];
 
+// AS FALAS DOS PERSONAGENS moram à parte, em dialogos/<lang>.json, um arquivo por língua agrupado por personagem
+// (com a ficha filosófica de cada um, que o jogo não lê): é lá que se edita o que eles dizem. Cada fala é um texto
+// por linha, e "[narrador] " / "[narrator] " no começo faz dela narração. Aqui elas voltam para o caminho que o
+// código pede (`falas` → "wizard.intro", "npc.painterStep"...) e o catálogo fica como sempre foi.
+type Tree = Record<string, unknown>;
+const NARRATOR_TAG = /^\[(narrador|narrator)\] /u;
+const toLines = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((line) => {
+      const text = String(line);
+      const tag = NARRATOR_TAG.exec(text);
+      return tag ? { speaker: 'narrator', text: text.slice(tag[0].length) } : { speaker: 'npc', text };
+    });
+  }
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toLines(v)]));
+  return value;
+};
+const withDialogs = (locale: unknown, dialogs: unknown): unknown => {
+  const root = JSON.parse(JSON.stringify(locale)) as Tree;
+  for (const [id, entry] of Object.entries(dialogs as Tree)) {
+    if (!entry || typeof entry !== 'object') continue; // o "_leia"
+    const falas = (entry as { falas?: Tree }).falas ?? {};
+    for (const [path, value] of Object.entries(falas)) {
+      const keys = path.split('.');
+      const last = keys.pop();
+      if (!last) throw new Error(`dialogos/${id}: caminho vazio`);
+      let node = root;
+      for (const key of keys) node = (node[key] ??= {}) as Tree;
+      node[last] = toLines(value);
+    }
+  }
+  return root;
+};
+
 // The catalogs are looked up dynamically by dot-path, so their literal types don't matter here —
 // treat them as opaque trees.
-const CATALOGS: Readonly<Record<Lang, unknown>> = { en, 'pt-br': ptBr };
+const CATALOGS: Readonly<Record<Lang, unknown>> = { en: withDialogs(en, dialogosEn), 'pt-br': withDialogs(ptBr, dialogosPtBr) };
 
 const LANG_KEY = 'zh.lang';
 

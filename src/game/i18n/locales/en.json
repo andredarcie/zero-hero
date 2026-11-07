@@ -49,7 +49,7 @@
       "splitWood": "The branch, in two. Take it to the dirt.",
       "sand": "Sand from the shore.",
       "ash": "Ash from the fire.",
-      "glass": "Glass. Take it to Vega.",
+      "glass": "Glass. Take it to Thea.",
       "telescope": "The telescope!",
       "stool": "A stool. It does nothing. It looks nice.",
       "lantern": "A lantern. Put it where you like.",
@@ -168,672 +168,10 @@
     "vibration": "Vibration",
     "language": "Language"
   },
-  "wizard": {
-    "intro": [
-      {
-        "speaker": "narrator",
-        "text": "The war is over."
-      },
-      {
-        "speaker": "npc",
-        "text": "Let go of the sword. Holding on to what has passed only weighs you down."
-      },
-      {
-        "speaker": "npc",
-        "text": "You defeated the dark. Even victory passes."
-      },
-      {
-        "speaker": "npc",
-        "text": "Now find what comes after."
-      },
-      {
-        "speaker": "npc",
-        "text": "Care for the people here. Then the garden opens."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Z talk & take · X use"
-      }
-    ],
-    "guide": [
-      {
-        "speaker": "npc",
-        "text": "There is nothing left to fight."
-      },
-      {
-        "speaker": "npc",
-        "text": "Wander. Meaning is found along the way."
-      }
-    ],
-    "gate": [
-      {
-        "speaker": "npc",
-        "text": "The garden is open."
-      },
-      {
-        "speaker": "npc",
-        "text": "Go to the fire in the middle."
-      }
-    ],
-    "after": [
-      {
-        "speaker": "npc",
-        "text": "You found it. A place to sit."
-      },
-      {
-        "speaker": "npc",
-        "text": "Suffering comes from wanting what doesn't stay. Here, just breathe."
-      }
-    ]
-  },
   "npc": {
-    "wizard": {
-      "name": "Wizard",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "There is nothing left to fight."
-        },
-        {
-          "speaker": "npc",
-          "text": "Wander. Meaning is found along the way."
-        }
-      ]
-    },
-    "blackCat": {
-      "name": "CAT",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "A hero. How novel. Out of my sun, I was napping."
-        },
-        {
-          "speaker": "npc",
-          "text": "That branch beside me? Take it. Hold it into my fire and it wakes as a TORCH."
-        },
-        {
-          "speaker": "npc",
-          "text": "Two hearths in this clearing sit cold. Carry the flame to them."
-        },
-        {
-          "speaker": "npc",
-          "text": "I own nothing and lack nothing. How much do you carry, hero?"
-        }
-      ]
-    },
-    "salesman": {
-      "name": "SALESMAN",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Friend! You look thirsty. Or dry. Either way — opportunity."
-        },
-        {
-          "speaker": "npc",
-          "text": "Free sample: this BUCKET. Fill it in my pond, just west of the fire."
-        },
-        {
-          "speaker": "npc",
-          "text": "A full bucket waters crops and drowns small fires. Endless uses. Costs you nothing. Today only."
-        },
-        {
-          "speaker": "npc",
-          "text": "Tell your friends. If you find any out there."
-        }
-      ]
-    },
-    "poet": {
-      "name": "POET",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "The pines sing, but they crowd the verse."
-        },
-        {
-          "speaker": "npc",
-          "text": "This GREAT AXE fells even LIVING trees — the small axe only knows dead wood."
-        },
-        {
-          "speaker": "npc",
-          "text": "Open a clearing in my grove. Listen how the song changes where light falls."
-        },
-        {
-          "speaker": "npc",
-          "text": "Every good line needs its silence. Cut me one."
-        }
-      ]
-    },
-    "radiationSuit": {
-      "name": "Hollis",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "I watch the fungi of this valley. They are never in a hurry."
-        },
-        {
-          "speaker": "npc",
-          "text": "What you see is only the fruit. The fungus lives hidden, as threads, underground."
-        },
-        {
-          "speaker": "npc",
-          "text": "Six kinds grow here. I need four, the rest only if you like. Take my knife and my basket."
-        },
-        {
-          "speaker": "npc",
-          "text": "Don't force it: cut, don't pull. Brush, don't wash."
-        }
-      ]
-    },
-    "radiationSuitDone": {
-      "name": "Hollis",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Four is enough. Whoever knows what is enough has everything."
-        },
-        {
-          "speaker": "npc",
-          "text": "Be like water: soft, and still it wears down stone."
-        },
-        {
-          "speaker": "npc",
-          "text": "The others only if you like. Just never eat the red one."
-        }
-      ]
-    },
-    "radiationSuitAll": [
-      {
-        "speaker": "npc",
-        "text": "All six! You walked with the valley, not against it."
-      },
-      {
-        "speaker": "npc",
-        "text": "Just never eat the red one."
-      }
-    ],
-    "radiationSuitHint": {
-      "porcini": [
-        {
-          "speaker": "npc",
-          "text": "West, at the end of the corridor: a brown bun on a fat stem. Just walk up to it."
-        }
-      ],
-      "morel": [
-        {
-          "speaker": "npc",
-          "text": "North, on an island: a cap like a honeycomb. Two sticks make a bridge; Bram has the axe."
-        }
-      ],
-      "puffball": [
-        {
-          "speaker": "npc",
-          "text": "North-east, in the tall grass: a white ball with no cap. Tall grass falls to a scythe or fire."
-        }
-      ],
-      "inkCap": [
-        {
-          "speaker": "npc",
-          "text": "Far north, behind dry bushes: tall and white, shaggy. Dry bushes burn."
-        }
-      ],
-      "chanterelle": [
-        {
-          "speaker": "npc",
-          "text": "North, ringed by lava: a golden funnel. A stone sinks and becomes floor. Lava lights a stick."
-        }
-      ],
-      "flyAgaric": [
-        {
-          "speaker": "npc",
-          "text": "The north-west corner, behind dead scrub: red, with white spots. Bring an axe. Don't eat."
-        }
-      ]
-    },
-    "painter": {
-      "name": "Iris",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Everything I paint comes out grey. Colour doesn't come ready-made: we draw it from the ground."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the shovel: dig four holes, close by."
-        }
-      ]
-    },
-    "painterDone": {
-      "name": "Iris",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "Your painting stays here."
-        },
-        {
-          "speaker": "npc",
-          "text": "The world had no colour. Now it does, because we made it."
-        },
-        {
-          "speaker": "npc",
-          "text": "If I had to live it all again, the grey too, I would."
-        }
-      ]
-    },
-    "businessMan": {
-      "name": "Bram",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "I lost the business, the firewood, everything. My hands are shaking."
-        },
-        {
-          "speaker": "npc",
-          "text": "The rest isn't up to me. A fire is. Over there, on that dirt. Take the axe."
-        },
-        {
-          "speaker": "npc",
-          "text": "Cut a dead branch and bring it to the block. Stand it up and split it. Both halves go on the dirt. Four times."
-        },
-        {
-          "speaker": "npc",
-          "text": "Dead trees are rare around here. Walk and look."
-        }
-      ]
-    },
-    "businessManDone": {
-      "name": "Bram",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "I can still smell the smoke."
-        },
-        {
-          "speaker": "npc",
-          "text": "It isn't what happens that weighs on us. It's what we think of it."
-        },
-        {
-          "speaker": "npc",
-          "text": "Thank you, friend. The axe is yours."
-        }
-      ]
-    },
-    "astronaut": {
-      "name": "Vega",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "My telescope broke in the fall. Only the tube is left."
-        },
-        {
-          "speaker": "npc",
-          "text": "No tripod, no lens, no sky. And everyone is born wanting to know."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take this pickaxe. Bring me an iron bar."
-        }
-      ]
-    },
-    "astronautDone": {
-      "name": "Vega",
-      "lines": [
-        {
-          "speaker": "npc",
-          "text": "The sky is still up there. Looking at it is the best of life. Come back at night."
-        },
-        {
-          "speaker": "npc",
-          "text": "I built a cairn here: a place to come back to."
-        },
-        {
-          "speaker": "npc",
-          "text": "One swallow doesn't make a summer: happiness is a whole life, not a day."
-        }
-      ]
-    },
-    "astronautHint": {
-      "ore": [
-        {
-          "speaker": "npc",
-          "text": "Head west, to the lava lake. The black-veined rock gives charcoal, the red-veined one, ore. The furnace here asks for one at a time."
-        }
-      ],
-      "bloom": [
-        {
-          "speaker": "npc",
-          "text": "Take the charcoal and the ore to the furnace, right here. It asks for what it needs, one thing at a time."
-        }
-      ],
-      "iron": [
-        {
-          "speaker": "npc",
-          "text": "Hammer the hot lump. Three blows."
-        }
-      ]
-    },
-    "painterStep": {
-      "dig": [
-        {
-          "speaker": "npc",
-          "text": "{n} to go. Shovel in the dirt."
-        }
-      ],
-      "seeds": [
-        {
-          "speaker": "npc",
-          "text": "Four holes! The shovel stays here beside me."
-        },
-        {
-          "speaker": "npc",
-          "text": "Mixed seeds: one in each hole."
-        }
-      ],
-      "sow": [
-        {
-          "speaker": "npc",
-          "text": "{n} to go. One seed in each hole."
-        }
-      ],
-      "bucket": [
-        {
-          "speaker": "npc",
-          "text": "Planted! Take the bucket."
-        },
-        {
-          "speaker": "npc",
-          "text": "Fetch water from the pond, to the west, and water all four."
-        }
-      ],
-      "water": [
-        {
-          "speaker": "npc",
-          "text": "{n} to go. Fill the bucket at the pond and water them."
-        }
-      ],
-      "wait": [
-        {
-          "speaker": "npc",
-          "text": "Now we wait."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take a walk around the valley. They grow little by little."
-        }
-      ],
-      "harvest": [
-        {
-          "speaker": "npc",
-          "text": "They bloomed!"
-        },
-        {
-          "speaker": "npc",
-          "text": "Pick them by hand, all four. Then to the table."
-        }
-      ],
-      "bring": [
-        {
-          "speaker": "npc",
-          "text": "The flowers go on the table."
-        }
-      ],
-      "easel": [
-        {
-          "speaker": "npc",
-          "text": "Brush in hand. Paint the world you want."
-        }
-      ]
-    },
-    "painterMake": {
-      "intro": [
-        {
-          "speaker": "npc",
-          "text": "What flowers! Watch how it's done."
-        }
-      ],
-      "urucum": [
-        {
-          "speaker": "npc",
-          "text": "Annatto: I rub the seeds in water and the red powder comes off."
-        }
-      ],
-      "anil": [
-        {
-          "speaker": "npc",
-          "text": "Indigo: the leaves ferment in water. I beat it, and the blue is born in the air."
-        }
-      ],
-      "curcuma": [
-        {
-          "speaker": "npc",
-          "text": "Turmeric: the root, dried and ground, becomes yellow powder."
-        }
-      ],
-      "garanca": [
-        {
-          "speaker": "npc",
-          "text": "Madder: the ground root, in warm water. Boiled, the red turns dull."
-        }
-      ],
-      "binder": [
-        {
-          "speaker": "npc",
-          "text": "Alum fixes the colour. Gum arabic makes it paint."
-        }
-      ],
-      "brush": [
-        {
-          "speaker": "npc",
-          "text": "Thank you for the paints! I'll set up the canvas."
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the brush: now you're the one who creates."
-        }
-      ]
-    },
     "painterEasel": {
       "done": "Finished",
       "leave": "Leave"
-    },
-    "painterReview": {
-      "form": {
-        "sparse": "A few strokes, and it says everything.",
-        "middle": "Look what you did on this canvas!",
-        "full": "Not one blank corner left!"
-      },
-      "color": {
-        "all": "All four colours together. Even I would not dare.",
-        "urucum": "That orange looks like late afternoon.",
-        "anil": "That blue looks like deep water.",
-        "curcuma": "That yellow warms the whole canvas.",
-        "garanca": "That red has a heart."
-      },
-      "thanks": [
-        {
-          "speaker": "npc",
-          "text": "You have a painter's hand."
-        },
-        {
-          "speaker": "npc",
-          "text": "I only saw grey. We invented colour."
-        },
-        {
-          "speaker": "npc",
-          "text": "I will keep the brush. The painting stays here."
-        }
-      ]
-    },
-    "businessManStep": {
-      "gather": [
-        {
-          "speaker": "npc",
-          "text": "{n} to go. Dead branch, block, dirt. Dead trees are rare: search."
-        }
-      ],
-      "ready": [
-        {
-          "speaker": "npc",
-          "text": "Four. That's a fire already, it only lacks the flame."
-        },
-        {
-          "speaker": "npc",
-          "text": "Go and light it."
-        }
-      ],
-      "light": [
-        {
-          "speaker": "npc",
-          "text": "Go and light it."
-        }
-      ]
-    },
-    "businessManNight": {
-      "split": {
-        "clean": "Split clean. Good hands.",
-        "rough": "Split crooked, but split. You learn an axe by swinging it."
-      },
-      "fire": {
-        "first": "And it lit first try.",
-        "worked": "That fire took work. Every fire does."
-      },
-      "story": [
-        {
-          "speaker": "npc",
-          "text": "Sit. Watch the fire with me."
-        },
-        {
-          "speaker": "npc",
-          "text": "Fire is not a thing. It is a thing happening."
-        },
-        {
-          "speaker": "npc",
-          "text": "Heat makes the branch give off gas. The gas burns, not the wood."
-        },
-        {
-          "speaker": "npc",
-          "text": "The gas meets the air, and that burning gives off more heat. Which gives off more gas. That is why it keeps itself going."
-        },
-        {
-          "speaker": "npc",
-          "text": "And this light? Soot. Tiny grains, so hot they glow."
-        },
-        {
-          "speaker": "npc",
-          "text": "The tree spent its whole life storing sun. The fire only gives it back."
-        }
-      ],
-      "farewell": [
-        {
-          "speaker": "npc",
-          "text": "I lost what was never mine. Look: my hands stopped shaking."
-        },
-        {
-          "speaker": "npc",
-          "text": "Nobody can take this night from me."
-        }
-      ]
-    },
-    "astronautStep": {
-      "tripod": [
-        {
-          "speaker": "npc",
-          "text": "Iron! This becomes the tripod."
-        },
-        {
-          "speaker": "npc",
-          "text": "The lens is missing, and a lens is glass."
-        },
-        {
-          "speaker": "npc",
-          "text": "Glass is born from sand and ash: the ash helps the sand melt."
-        },
-        {
-          "speaker": "npc",
-          "text": "The ash is by the fire. Sand only by the big lake, down south. Both into the furnace."
-        }
-      ],
-      "wait": [
-        {
-          "speaker": "npc",
-          "text": "Sand from the big lake, down south. Ash from the fire. Both into the furnace."
-        }
-      ],
-      "polish": [
-        {
-          "speaker": "npc",
-          "text": "Good glass. Now it becomes a lens."
-        },
-        {
-          "speaker": "npc",
-          "text": "First the rough stone, for the curve. Then the fine one, to clear the haze."
-        },
-        {
-          "speaker": "npc",
-          "text": "Rub in circles."
-        }
-      ],
-      "carry": [
-        {
-          "speaker": "npc",
-          "text": "It came out sharp!"
-        },
-        {
-          "speaker": "npc",
-          "text": "Take the telescope to the plateau, to the south-west. Climb the stairs and look for the cairn. The sky is cleaner up there."
-        }
-      ],
-      "night": [
-        {
-          "speaker": "npc",
-          "text": "You can't see anything by day."
-        },
-        {
-          "speaker": "npc",
-          "text": "Sit beside it and wait for the night."
-        }
-      ],
-      "reunion": [
-        {
-          "speaker": "npc",
-          "text": "I saw the fire from up there. Any marshmallows left?"
-        }
-      ],
-      "goodbye": [
-        {
-          "speaker": "npc",
-          "text": "With the sky back, my ship found me."
-        },
-        {
-          "speaker": "npc",
-          "text": "Thank you for everything."
-        },
-        {
-          "speaker": "npc",
-          "text": "But I have to go back to my home planet. Home is up there."
-        },
-        {
-          "speaker": "npc",
-          "text": "When you look at the sky, wave."
-        }
-      ],
-      "farewell": [
-        {
-          "speaker": "npc",
-          "text": "You found all four."
-        },
-        {
-          "speaker": "npc",
-          "text": "Galileo saw this sky through a lens like that, in 1610. Nobody believed him."
-        },
-        {
-          "speaker": "npc",
-          "text": "The light you saw was on its way long before you were born."
-        },
-        {
-          "speaker": "npc",
-          "text": "It only needed someone to look."
-        }
-      ]
     }
   },
   "actions": {
@@ -878,7 +216,8 @@
     "dig": "Dig",
     "takeBack": "Take out",
     "pickUp": "Pick up",
-    "feed": "Put in"
+    "feed": "Put in",
+    "pet": "Pet"
   },
   "controls": {
     "hint": "Z talk & take · X use",
@@ -1006,170 +345,7 @@
     "keysTouchFurnace": "Tap to pick · tap to smelt",
     "unknown": "?"
   },
-  "finds": {
-    "helmet": [
-      {
-        "speaker": "narrator",
-        "text": "A rusted helmet."
-      },
-      {
-        "speaker": "narrator",
-        "text": "A flower grew inside."
-      }
-    ],
-    "bottle": [
-      {
-        "speaker": "narrator",
-        "text": "A bottle with a note."
-      },
-      {
-        "speaker": "narrator",
-        "text": "“I made it. It's good here. Come.”"
-      },
-      {
-        "speaker": "narrator",
-        "text": "No name."
-      }
-    ],
-    "door": {
-      "astronaut": [
-        {
-          "speaker": "npc",
-          "text": "The porch has the best view after the ship. Sit there."
-        },
-        {
-          "speaker": "npc",
-          "text": "I'll bring tea."
-        }
-      ],
-      "businessMan": [
-        {
-          "speaker": "npc",
-          "text": "The door sticks. The porch does not."
-        },
-        {
-          "speaker": "npc",
-          "text": "Sit. I'll bring tea."
-        }
-      ],
-      "painter": [
-        {
-          "speaker": "npc",
-          "text": "Everything in here is wet with paint."
-        },
-        {
-          "speaker": "npc",
-          "text": "Sit on the porch. I'll bring tea."
-        }
-      ],
-      "radiationSuit": [
-        {
-          "speaker": "npc",
-          "text": "Better stay out. There is fungus on everything."
-        },
-        {
-          "speaker": "npc",
-          "text": "The porch is yours. I'll bring tea."
-        }
-      ],
-      "empty": [
-        {
-          "speaker": "narrator",
-          "text": "Nobody home."
-        },
-        {
-          "speaker": "narrator",
-          "text": "The porch is still here."
-        }
-      ]
-    },
-    "sword": [
-      {
-        "speaker": "narrator",
-        "text": "This blade felled the darkness."
-      },
-      {
-        "speaker": "narrator",
-        "text": "And gave the world back its light."
-      }
-    ],
-    "sign": [
-      {
-        "speaker": "narrator",
-        "text": "High Garden."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Closed for environmental preservation."
-      }
-    ],
-    "signOpen": [
-      {
-        "speaker": "narrator",
-        "text": "High Garden."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Closed for environmental preservation."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Someone has scratched out \"closed\"."
-      }
-    ]
-  },
-  "death": {
-    "name": "Death",
-    "visit": [
-      {
-        "speaker": "npc",
-        "text": "Don't get up. I didn't come for you."
-      },
-      {
-        "speaker": "npc",
-        "text": "I know you. I walked behind you the whole war."
-      },
-      {
-        "speaker": "npc",
-        "text": "You were a warrior. Wherever you went, I had work."
-      },
-      {
-        "speaker": "npc",
-        "text": "Now you sleep by a fire, and your sword stayed on the road."
-      },
-      {
-        "speaker": "npc",
-        "text": "Without the war, what is left of you? Nothing means anything. It never did."
-      },
-      {
-        "speaker": "npc",
-        "text": "Glory, honour, victory. I've seen what's left of them: nothing."
-      },
-      {
-        "speaker": "npc",
-        "text": "Sleep. I know how to wait."
-      }
-    ]
-  },
   "ending": {
-    "lines": [
-      {
-        "speaker": "narrator",
-        "text": "The marshmallow turns golden."
-      },
-      {
-        "speaker": "narrator",
-        "text": "The sword stays in the road."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Friends, fire, food. Nothing is missing."
-      },
-      {
-        "speaker": "narrator",
-        "text": "Nowhere to be. At last."
-      }
-    ],
     "theEnd": "The End",
     "credits": [
       {
@@ -1190,11 +366,11 @@
       },
       {
         "speaker": "npc",
-        "text": "Hollis · Iris · Bram · Vega"
+        "text": "Shui · Sisi · Marco · Thea"
       },
       {
         "speaker": "npc",
-        "text": "and the wizard"
+        "text": "and Sati, the wizard"
       },
       {
         "speaker": "narrator",
@@ -1230,20 +406,53 @@
     "autumn": "Autumn",
     "winter": "Winter"
   },
-  "garden": {
-    "key": [
-      {
-        "speaker": "npc",
-        "text": "You have shown yourself a true friend to everyone: the village and nature alike."
+  "garden": {},
+  "minigame": {
+    "forage": {
+      "cut": {
+        "keys": "Press {Z} when the knife is between the marks, to cut.",
+        "touch": "Tap when the knife is between the marks, to cut."
       },
-      {
-        "speaker": "npc",
-        "text": "Now you may walk freely through the High Garden, with respect for nature."
-      },
-      {
-        "speaker": "npc",
-        "text": "Take the key."
+      "clean": {
+        "keys": "Hold the mouse button and rub the sponge on the mushroom to clean it.",
+        "touch": "Drag the sponge over the mushroom to clean it."
       }
-    ]
+    },
+    "card": {
+      "keys": "Press {Z} to continue.",
+      "touch": "Tap to continue."
+    },
+    "split": {
+      "aim": {
+        "keys": "Press {Z} when the aim is on the wood grain, away from the knot.",
+        "touch": "Tap when the aim is on the wood grain, away from the knot."
+      },
+      "force": {
+        "keys": "Press {Z} when the strength is in the marked band.",
+        "touch": "Tap when the strength is in the marked band."
+      }
+    },
+    "fire": {
+      "strike": {
+        "keys": "Press {Z} several times to strike a spark.",
+        "touch": "Tap several times to strike a spark."
+      },
+      "blow": {
+        "keys": "Press {Z} slowly, one breath at a time, so the ember catches.",
+        "touch": "Tap slowly, one breath at a time, so the ember catches."
+      }
+    },
+    "lens": {
+      "keys": "Hold the mouse button and rub the lens to polish it (or press {Z}).",
+      "touch": "Rub the lens with your finger to polish it."
+    },
+    "sky": {
+      "keys": "Use {←} {↑} {↓} {→} or drag the sky with the mouse to find the planets.",
+      "touch": "Drag the sky with your finger to find the planets."
+    },
+    "paint": {
+      "keys": "Pick a paint ({1} to {4} or click a pot) and paint by dragging the mouse. {Enter} finishes.",
+      "touch": "Tap a pot and paint by dragging your finger."
+    }
   }
 }

@@ -7,7 +7,8 @@ import { world3d } from '@/game/render3d/World3D';
 /**
  * O GATO — a companhia que o vale da depois do primeiro favor.
  *
- * Ele NAO e um NPC: nao ocupa tile, nao bloqueia, nao conversa. E um corpo que anda atras do
+ * Ele NAO e um NPC: nao ocupa tile e nao bloqueia (o carinho dele responde com uma licao de Diogenes, ver
+ * GameScene.catSays). Quando cansa de seguir, vai dormir no barril dele (objects/CatBarrel). E um corpo que anda atras do
  * heroi pelo RASTRO dele (os pontos por onde o heroi passou), e e isso que o impede de
  * atravessar parede sem pathfinding nenhum: todo ponto do rastro ja foi chao livre um instante
  * antes. Parado, ele fica onde o rastro termina, um passo atras; sentado na fogueira, ele vem
@@ -29,6 +30,19 @@ const TRAIL_MAX = 64;
 /** Mais longe que isto (o Continue, um corte de cena) ele reaparece atras do heroi. */
 const LOST_TILES = 6;
 const SIZE = 0.7;
+/**
+ * O GATO É CÍNICO (pedido do autor: "às vezes segue o herói, às vezes não"): segue por um tempo (entre estes dois,
+ * em ms de jogo) e, quando cansa, volta para o barril dele (objects/CatBarrel) e dorme. Lá ele fica pelo menos
+ * HOME_MIN_MS; depois disso, o herói passando colado no barril o acorda, e ele volta a segui-lo.
+ */
+const FOLLOW_MIN_MS = 90_000;
+const FOLLOW_MAX_MS = 180_000;
+const HOME_MIN_MS = 40_000;
+/** O herói a esta distância do barril (em tiles) acorda o gato que já descansou. */
+const WAKE_TILES = 1.6;
+const LEAVE_FADE_MS = 600;
+
+type CatMode = 'follow' | 'leaving' | 'home';
 
 export class CatCompanion {
   private readonly body: Billboard3D;
@@ -38,6 +52,12 @@ export class CatCompanion {
   private walkPhase = 0;
   private curl = 0;
   private readonly breathPhase = Math.random() * Math.PI * 2;
+  private mode: CatMode = 'follow';
+  /** Quanto tempo ele já seguiu nesta vez, e quanto vai seguir antes de ir para casa. */
+  private followMs = 0;
+  private followSpellMs = FOLLOW_MIN_MS + Math.random() * (FOLLOW_MAX_MS - FOLLOW_MIN_MS);
+  /** Quanto tempo ele está no barril. */
+  private homeMs = 0;
 
   public constructor(private readonly scene: Phaser.Scene, x: number, y: number, arriving: boolean) {
     this.x = x;
@@ -58,12 +78,39 @@ export class CatCompanion {
   /** Onde ele esta desenhado, em tiles fracionarios. */
   public get position(): { x: number; y: number } { return { x: this.x, y: this.y }; }
 
+  /** Ele está em casa, dormindo no barril. */
+  public get atHome(): boolean { return this.mode === 'home'; }
+
   /**
    * Um passo do gato. `hero` e a posicao VISUAL do heroi (a que desliza durante o passo);
    * `restingBeside`, quando o heroi esta sentado, e o lugar ao lado dele onde o gato se enrola.
+   * `home` é onde ele dorme no barril; `free` diz se agora ele pode ir embora (fora de cena, conversa e descanso).
    */
-  public update(deltaMs: number, hero: { x: number; y: number }, restingBeside: { x: number; y: number } | null): void {
+  public update(
+    deltaMs: number,
+    hero: { x: number; y: number },
+    restingBeside: { x: number; y: number } | null,
+    home: { x: number; y: number } | null = null,
+    free = true,
+  ): void {
     const k = Math.min(1, deltaMs / 1000);
+    if (this.mode === 'leaving') return; // o tween da saída manda no corpo
+    if (this.mode === 'home' && home) {
+      // EM CASA: enrolado na palha do barril, respirando. Descansado, o herói passando colado o acorda.
+      this.homeMs += deltaMs;
+      this.x = home.x;
+      this.y = home.y;
+      this.curl = Math.min(1, this.curl + k * 1.5);
+      this.draw(false);
+      if (this.homeMs >= HOME_MIN_MS && Math.hypot(hero.x - home.x, hero.y - home.y) <= WAKE_TILES) this.wakeUp();
+      return;
+    }
+    // SEGUINDO: o tempo dele conta só andando junto; sentado com o herói ele não vai embora.
+    if (!restingBeside) this.followMs += deltaMs;
+    if (home && free && !restingBeside && this.followMs >= this.followSpellMs) {
+      this.goHome(home);
+      return;
+    }
     if (Math.hypot(hero.x - this.x, hero.y - this.y) > LOST_TILES) {
       // Perdido (o heroi apareceu longe): volta a nascer no rastro, sem atravessar o mundo.
       this.trail.length = 0;
@@ -105,13 +152,48 @@ export class CatCompanion {
       }
     }
     if (moving) this.walkPhase += deltaMs / 95;
-    // O PASSO e um quique curto; parado ele respira; enrolado ele fica baixo e largo.
+    this.draw(moving);
+  }
+
+  /** O corpo: o passo é um quique curto; parado ele respira; enrolado ele fica baixo e largo. */
+  private draw(moving: boolean): void {
     const step = moving ? Math.abs(Math.sin(this.walkPhase)) * 0.06 : 0;
     const b = Math.sin(this.scene.time.now / 1100 + this.breathPhase);
     const w = SIZE * (1 + 0.14 * this.curl - 0.01 * b);
     const h = SIZE * (1 - 0.3 * this.curl + 0.025 * b);
     this.body.setPosition(this.x, this.y).setDisplaySize(w, h);
     if (!this.scene.tweens.isTweening(this.body)) this.body.setElevation(step);
+  }
+
+  /** Cansou: some andando (o corpo some aos poucos) e reaparece no barril, já enrolado. */
+  private goHome(home: { x: number; y: number }): void {
+    this.mode = 'leaving';
+    this.scene.tweens.killTweensOf(this.body);
+    this.scene.tweens.add({
+      targets: this.body,
+      alpha: 0,
+      duration: LEAVE_FADE_MS,
+      ease: 'Sine.easeIn',
+      onComplete: () => {
+        this.trail.length = 0;
+        this.x = home.x;
+        this.y = home.y;
+        this.curl = 1;
+        this.homeMs = 0;
+        this.mode = 'home';
+        this.draw(false);
+        this.scene.tweens.add({ targets: this.body, alpha: 1, duration: LEAVE_FADE_MS, ease: 'Sine.easeOut' });
+      },
+    });
+  }
+
+  /** Descansou e o herói passou: sai do barril com um pulinho e volta a seguir. */
+  private wakeUp(): void {
+    this.mode = 'follow';
+    this.followMs = 0;
+    this.followSpellMs = FOLLOW_MIN_MS + Math.random() * (FOLLOW_MAX_MS - FOLLOW_MIN_MS);
+    this.trail.length = 0;
+    this.hop(0);
   }
 
   /** O carinho: um pulinho de contente. */

@@ -31,6 +31,8 @@ export class FireVisitor {
     private readonly scene: Phaser.Scene,
     public readonly kind: NpcKind,
     private readonly path: VisitPath,
+    /** O passo, em ms por tile (a Vega vindo buscar a barra corre: passo mais curto). */
+    private readonly stepMs = STEP_MS,
   ) {
     const visual = NPC_VISUALS[kind];
     this.body = world3d()
@@ -46,11 +48,12 @@ export class FireVisitor {
   /** Ja sentado ao pe do fogo? */
   public get isSeated(): boolean { return this.seated; }
 
-  /** Vai ate a fogueira e senta. */
-  public arrive(onSeated?: () => void): void {
+  /** Vai ate a fogueira e senta (ou só chega, com `sit` falso: quem veio buscar alguma coisa fica de pé). */
+  public arrive(onSeated?: () => void, sit = true): void {
     this.walkTo(this.path.length - 1, () => {
       this.seated = true;
       onSeated?.();
+      if (!sit) return;
       // SENTAR e a mesma pose do heroi: o corpo baixa e alarga um pouco.
       this.scene.tweens.add({ targets: this.body, displayHeight: 0.86, displayWidth: 1.04, duration: 380, ease: 'Sine.easeOut' });
     });
@@ -81,7 +84,7 @@ export class FireVisitor {
     this.tween = this.scene.tweens.add({
       targets: k,
       t: target,
-      duration: steps * STEP_MS,
+      duration: steps * this.stepMs,
       ease: 'Linear',
       onUpdate: () => { this.t = k.t; this.place(); },
       onComplete: () => {

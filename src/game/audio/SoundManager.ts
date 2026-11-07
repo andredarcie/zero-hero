@@ -1303,6 +1303,34 @@ class SoundManager {
   // A cena inteira da fechadura (GameScene.playGardenUnlock), em cinco sons curtos de metal: tirar a chave das
   // costas, enfiar no tambor, cada dente do giro, o trinco cedendo e o portão velho rangendo ao abrir.
 
+  // ── a bigorna da Vega ─────────────────────────────────────────────────────────────────────
+  // Uma bigorna de verdade TOCA: o golpe é um estalo curto de impacto e, por cima, as parciais inarmônicas do ferro
+  // grosso (não um tom só, nem harmônicas certinhas), que somem em menos de um segundo. Por baixo, o baque do toco.
+
+  /** Uma martelada na bigorna. A última toca mais cheia e mais longa. */
+  public playAnvilStrike(last = false): void {
+    const ring = last ? 1.1 : 0.7;
+    this.noise('highpass', 2400, 0.8, 0.09, 0.03);
+    this.noise('bandpass', 1300, 2, 0.07, 0.05);
+    for (const [freq, vol] of [[905, 0.05], [1489, 0.04], [2210, 0.028], [3080, 0.018]] as const) {
+      this.osc('sine', freq, freq * 0.998, vol, ring);
+    }
+    this.osc('sine', 150, 80, 0.09, 0.16);
+    this.noise('lowpass', 260, 1, 0.08, 0.1);
+  }
+
+  /** Pegar o martelinho do toco: o cabo de madeira raspando e o ferro tocando de leve. */
+  public playForgeHammerPickup(): void {
+    this.noise('bandpass', 900, 3, 0.04, 0.06);
+    this.osc('triangle', 1850, 1820, 0.015, 0.12, 0.04);
+  }
+
+  /** Devolver o martelinho: ele encosta no toco. */
+  public playForgeHammerSetDown(): void {
+    this.noise('lowpass', 500, 1, 0.07, 0.06);
+    this.osc('triangle', 1600, 1580, 0.012, 0.1, 0.03);
+  }
+
   /** A chave saindo das costas: um tilintar pequeno de metal. */
   public playKeyJingle(): void {
     this.osc('triangle', 2350, 2300, 0.022, 0.07);

@@ -22,7 +22,7 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
 
 `npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
 mora nos locales — `en.json` e `pt-br.json`, as MESMAS chaves nos dois** —, inclusive o roteiro
-`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **Cada NPC segue uma escola filosófica** sobre o sentido da vida (campo `philosophy` em `dialogs/NpcDialogs.ts`, mais `HERO_PHILOSOPHY` e `ENDING_PHILOSOPHY`): fala nova tem de caber nela. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
+`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **AS FALAS DOS PERSONAGENS moram em `src/game/i18n/dialogos/pt-br.json` e `en.json`**, uma seção por personagem com a `filosofia` (escola e LIVROS: só referência) e as `falas` pelo caminho que o código pede; o `i18n.ts` as junta ao locale. Fala de personagem nova entra LÁ, nunca nos `locales/`. **Cada personagem segue UMA escola filosófica, só dele** (nenhuma escola nem pensador principal repetido) sobre o sentido da vida: fala nova tem de caber nela e sair dos livros dela. `node scripts/dialogos.mjs --check` confere isso e que pt-br e en têm a mesma forma. **Os nomes também saem da escola** (`filosofia.nome` diz de onde): Zero (Sartre, começa do nada), Sati (o mago: a atenção plena), Sinope (o gato: a cidade de Diógenes), Shui (Taoísmo, a água), Sisi (Camus, Sísifo), Marco (estoicismo, Marco Aurélio), Thea (Aristóteles, theoria). O código, os comentários, os testes e as seções do `dialogos` ainda usam os nomes antigos (Hollis = Shui, Iris = Sisi, Bram = Marco, Vega = Thea): só o texto do jogo mudou. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
 
 ## O save da aventura
 
@@ -158,8 +158,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **A tela de título é só a mata** (pedido do autor: sem herói, NPC, casa, item ou fogo): `public/assets/ui/title_bg.jpg`
   é uma foto do jogo tirada por `node scripts/capturar-titulo.mjs`; refaça quando o visual do mundo mudar. Por
   cima, a `TitleScene` põe o luar, a névoa, os vaga-lumes e as folhas, o título em pixel e as teclas.
-- **Só se dorme com fogo**: o X na fogueira deita só com a chama inteira e o vizinho já de volta
-  (`GameScene.canSleepAt`, `CampfireObject.isFullyLit`).
+- **Só se dorme no acampamento** (pedido do autor): o único lugar onde o herói dorme é o colchão fixo dele; nas fogueiras dos vizinhos ele só senta (o X nelas não deita).
 - **ÁRVORE VERDE NUNCA SAI DO LUGAR.** O `axe` só corta madeira MORTA (props `dryTree`/`dryShrub`);
   a árvore verde é **tile** assado na malha estática do terreno, escrita UMA vez na GPU, sem índice
   nem remendo. **Nenhum item edita terreno em pé** — o machado de aço que fazia isso foi removido.
@@ -213,6 +212,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   fornada.
 - **O FORNO É UM SÓ, FIXO, E GUIA A QUEST** (o da Vega): não se constrói, não se recolhe e não tem catálogo — pede o próximo item (`AstronomerQuest.furnaceNeed`). Picareta, só a que a Vega dá.
 - **CADA NPC É INDEPENDENTE** (pedido do autor): nenhum pedido precisa de ferramenta ou item de outro vizinho; o jogador faz na ordem que quiser.
+- **O ACAMPAMENTO DO HERÓI** (`objects/HeroCamp.ts`): o colchão fixo (onde ele dorme; a primeira noite nele é a da primeira visita da Morte), as pedras frias e as quatro lembranças, uma por pedido fechado, do lado direito do laguinho (margem nordeste). O chão é de `scripts/acampamento.mjs` (a mesma tabela de tiles: mudou num, muda no outro).
+- **NADA NA FRENTE DO NPC** (pedido do autor): o tile exatamente de frente para um NPC (o sul dele) nunca guarda item no chão, para a conversa não se misturar com o pegar. Todo item novo cai pelo ponto único `GameScene.dropItem`/`dropNear`, e o que ia cair na frente vai para a DIREITA do NPC, depois a ESQUERDA, depois para TRÁS (`world/npcFront.ts`). O herói não pousa ali, e um save antigo com item ali é corrigido ao carregar (`enforceNpcFrontRule`). Nunca chamar `itemManager.drop` direto para um item novo. O cenário `frente-do-npc` confere.
 - **Nada solto no chão que uma ferramenta produz**: graveto só de árvore seca cortada, pedra só de rocha quebrada (`scripts/ajustes-do-vale.mjs`).
 - **A automação industrial foi removida por completo.** Não existem energia, cabos, esteiras,
   extratores, braços, baús de linha, martinete automático, bateria, caldeira, placas ou portões
@@ -318,7 +319,7 @@ por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd
 
 A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); bolsa → `bolsa`; machado → `machado`; pedra →
 `pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;
-menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; dormir só com o fogo aceso e inteiro → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Vega → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
+menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; fogueira de vizinho nunca faz dormir → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Vega → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
 Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`, e os da mochila)
 podem estar vermelhos: não "conserte" editando conteúdo.
 

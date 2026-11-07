@@ -91,7 +91,7 @@ export default {
     const wizardSays = (await dialogLines()) ?? [];
     log(`  mago: ${wizardSays.join(' / ')}`);
     assert('2. O mago fala da 2ª vez', wizardSays.length > 0, '');
-    assert('2. Sem nome de vizinho nem lista de tarefa', !wizardSays.some((l) => /Hollis|Iris|Bram|Vega|vizinhos/.test(l)), wizardSays.join(' / '));
+    assert('2. Sem nome de vizinho nem lista de tarefa', !wizardSays.some((l) => /Shui|Sisi|Marco|Thea|vizinhos/.test(l)), wizardSays.join(' / '));
     assert('2. Ele fala de encontrar um sentido', wizardSays.some((l) => /sentido|meaning/i.test(l)), wizardSays.join(' / '));
     await shot('02-mago', { note: 'A 2ª conversa do mago' });
     await closeDialog();

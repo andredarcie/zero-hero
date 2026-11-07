@@ -1,0 +1,608 @@
+{
+  "_leia": "ALL CHARACTER LINES, in English. Edit here: the game reads this file (src/game/i18n/i18n.ts merges it into locales/en.json). Each character has a 'filosofia' (reference only: the game does not read it) and the 'falas', keyed by the path the code asks for (e.g. 'wizard.intro'). Each line is one string; a leading '[narrator] ' makes it narration. {n} is replaced by a number. The Portuguese file (pt-br.json) must have the same paths and the same number of lines in each speech.",
+  "heroi": {
+    "nome": "Zero",
+    "filosofia": {
+      "escola": "Existentialism",
+      "livros": "Jean-Paul Sartre: Existentialism Is a Humanism (existence precedes essence; man is nothing but what he makes of himself), Being and Nothingness (condemned to be free). The hero does not speak: the narrator says it at the planted sword and at the end.",
+      "ideia": "No one is born with a meaning: you make it by what you do.",
+      "voz": "The hero does not speak. He was only a warrior; without the war, he remakes himself helping each neighbour.",
+      "nome": "Zero: Sartre's man begins with no essence, from nothing (Being and Nothingness), and only then is what he makes of himself. Sword laid down, he starts again from zero."
+    },
+    "nota": "Does not speak.",
+    "falas": {}
+  },
+  "mago": {
+    "nome": "Sati",
+    "filosofia": {
+      "escola": "Buddhism",
+      "livros": "Siddhartha Gautama: the Dhammapada (276 the Buddhas only point the way), Majjhima Nikaya 22 (the parable of the raft: it is for crossing, not for carrying on your back), the Anattalakkhana Sutta (non-self: no role is what we are), the Benares sermon (the four noble truths: suffering comes from craving), the Anapanasati Sutta (the breath)",
+      "ideia": "Suffering comes from attachment; everything passes, and the way is to let go and be compassionate.",
+      "voz": "Few words, unhurried. Tells him to let go of the sword and care for others.",
+      "nome": "Sati is \"mindfulness\" in Pali, the first word of the Anapanasati Sutta, the breath he teaches the hero. It is being in what is here now, without the war that passed."
+    },
+    "falas": {
+      "wizard": {
+        "intro": [
+          "[narrator] The war is over.",
+          "The sword was your raft. You have crossed. No need to carry it on your back.",
+          "Now find what comes after.",
+          "Care for the people here. Then the garden opens.",
+          "You haven't truly slept since the war began.",
+          "Your camp is still there, east of the lake. Go and rest.",
+          "[narrator] Z talk & take · X use"
+        ],
+        "guide": [
+          "There is nothing left to fight.",
+          "The warrior was not you. It was only what you did.",
+          "I only point the way. The meaning, you make by walking."
+        ],
+        "again": [
+          "She comes back. Sleep again.",
+          "I only point the way. The meaning, you make by walking."
+        ],
+        "gate": [
+          "The garden is open.",
+          "Go to the fire in the middle."
+        ],
+        "after": [
+          "You found it. A place to sit.",
+          "Suffering comes from wanting what doesn't stay. Here, just breathe."
+        ],
+        "tent": [
+          "There is nothing left to fight.",
+          "The warrior was not you. It was only what you did.",
+          "Rest at your camp, east of the lake. I only point the way; the meaning, you make by walking."
+        ]
+      },
+      "npc.wizard": {
+        "name": "Sati",
+        "lines": [
+          "There is nothing left to fight.",
+          "The warrior was not you. It was only what you did.",
+          "I only point the way. The meaning, you make by walking."
+        ]
+      }
+    }
+  },
+  "hollis": {
+    "nome": "Shui",
+    "filosofia": {
+      "escola": "Taoism",
+      "livros": "Laozi: Tao Te Ching (33 and 46 who knows enough is rich; 78 water overcomes stone). Zhuangzi (ch. 1 and 4 the useless tree, which lives long because no one cuts it; ch. 3 Cook Ding, who cuts along the joints and his knife never dulls)",
+      "ideia": "Follow the way of nature without forcing (wu wei), and know when it is enough.",
+      "voz": "Calm, watches what is unseen. Forces nothing: cut, do not pull; four are enough.",
+      "nome": "Shui is \"water\" in Chinese (水): \"the highest good is like water\", serving all without contending (Tao Te Ching 8), and \"nothing is softer than water, yet nothing better overcomes stone\" (78)."
+    },
+    "falas": {
+      "npc.radiationSuit": {
+        "name": "Shui",
+        "lines": [
+          "I watch the fungi of this valley. They are never in a hurry.",
+          "What you see is only the fruit. The fungus lives hidden, as threads, underground.",
+          "Six kinds grow here. I need four, the rest only if you like. Take my knife and my basket.",
+          "Don't force it: cut where it already opens, and the knife never dulls. Brush, don't wash."
+        ]
+      },
+      "npc.radiationSuitDone": {
+        "name": "Shui",
+        "lines": [
+          "Four is enough. Whoever knows what is enough has everything.",
+          "Be like water: soft, and still it wears down stone.",
+          "The others only if you like. Just never eat the red one."
+        ]
+      },
+      "npc.radiationSuitAll": [
+        "All six! You walked with the valley, not against it.",
+        "The red one is good for nothing. That is why it lives so long. Never eat it."
+      ],
+      "npc.radiationSuitHint": {
+        "porcini": [
+          "Right here on my left, this mushroom: cut it to learn how it’s done."
+        ],
+        "morel": [
+          "North, on an island: a cap like a honeycomb. Two sticks make a bridge; Marco has the axe."
+        ],
+        "puffball": [
+          "North-east, in the tall grass: a white ball with no cap. Tall grass falls to a scythe or fire."
+        ],
+        "inkCap": [
+          "Far north, behind dry bushes: tall and white, shaggy. Dry bushes burn."
+        ],
+        "chanterelle": [
+          "North, ringed by lava: a golden funnel. A stone sinks and becomes floor. Lava lights a stick."
+        ],
+        "flyAgaric": [
+          "The north-west corner, behind dead scrub: red, with white spots. Bring an axe. Don't eat."
+        ]
+      },
+      "finds.door.radiationSuit": [
+        "Better stay out. There is fungus on everything.",
+        "The porch is yours. I'll bring tea."
+      ]
+    }
+  },
+  "iris": {
+    "nome": "Sisi",
+    "filosofia": {
+      "escola": "Absurdism",
+      "livros": "Albert Camus: The Myth of Sisyphus (the absurd: the silent world facing the one who asks for meaning; revolt, freedom and passion; the freedom of living without hope; the chapter \"Absurd Creation\": \"to create is to live twice\"; \"one must imagine Sisyphus happy\"), Summer (\"Return to Tipasa\": \"in the midst of winter, I found there was, within me, an invincible summer\")",
+      "ideia": "The world does not answer whoever asks it for meaning: that is the absurd. You do not escape it, neither by hope nor by despair: you live and create inside it, eyes open. The work saves nothing, and that is why it matters.",
+      "voz": "Starts in grey and ends in the colour she made herself, without promising the grey will not return. Celebrates those who create anyway.",
+      "nome": "Sisi, a nickname from Sisyphus: \"one must imagine Sisyphus happy\" (The Myth of Sisyphus). She lives the back and forth of the bucket."
+    },
+    "falas": {
+      "npc.painter": {
+        "name": "Sisi",
+        "lines": [
+          "Everything I paint comes out grey. Colour doesn't come ready-made: we draw it from the ground.",
+          "Take the shovel: dig four holes, close by."
+        ]
+      },
+      "npc.painterDone": {
+        "name": "Sisi",
+        "lines": [
+          "Your painting stays here.",
+          "The world is still grey. Colour is my revolt.",
+          "To create is to live twice.",
+          "In the midst of winter, I found within me an invincible summer."
+        ]
+      },
+      "npc.painterStep": {
+        "dig": [
+          "{n} to go. Shovel in the dirt."
+        ],
+        "seeds": [
+          "Four holes! The shovel stays here beside me.",
+          "Mixed seeds: one in each hole."
+        ],
+        "sow": [
+          "{n} to go. One seed in each hole."
+        ],
+        "bucket": [
+          "Planted! Take the bucket.",
+          "Fetch water from the pond, to the west, and water all four.",
+          "Back and forth, back and forth. One can be happy like that."
+        ],
+        "water": [
+          "{n} to go. Fill the bucket at the pond and water them."
+        ],
+        "wait": [
+          "Now we wait.",
+          "Or sleep one night: they'll be ready by morning."
+        ],
+        "harvest": [
+          "They bloomed!",
+          "Pick them by hand, all four. Then to the table."
+        ],
+        "bring": [
+          "The flowers go on the table."
+        ],
+        "easel": [
+          "Brush in hand. Paint the world you want."
+        ]
+      },
+      "npc.painterMake": {
+        "intro": [
+          "What flowers! Watch how it's done."
+        ],
+        "urucum": [
+          "Annatto: I rub the seeds in water and the red powder comes off."
+        ],
+        "anil": [
+          "Indigo: the leaves ferment in water. I beat it, and the blue is born in the air."
+        ],
+        "curcuma": [
+          "Turmeric: the root, dried and ground, becomes yellow powder."
+        ],
+        "garanca": [
+          "Madder: the ground root, in warm water. Boiled, the red turns dull."
+        ],
+        "binder": [
+          "Alum fixes the colour. Gum arabic makes it paint."
+        ],
+        "brush": [
+          "Thank you for the paints! I'll set up the canvas.",
+          "Take the brush: now you're the one who creates.",
+          "Paint without hoping for anything. That is what makes you free."
+        ]
+      },
+      "npc.painterReview": {
+        "form": {
+          "sparse": "A few strokes, and it says everything.",
+          "middle": "Look what you did on this canvas!",
+          "full": "Not one blank corner left!"
+        },
+        "color": {
+          "all": "All four colours together. Even I would not dare.",
+          "urucum": "That orange looks like late afternoon.",
+          "anil": "That blue looks like deep water.",
+          "curcuma": "That yellow warms the whole canvas.",
+          "garanca": "That red has a heart."
+        },
+        "thanks": [
+          "You have a painter's hand.",
+          "I only saw grey. We invented colour.",
+          "I will keep the brush. The painting stays here."
+        ]
+      },
+      "finds.door.painter": [
+        "Everything in here is wet with paint.",
+        "Sit on the porch. I'll bring tea."
+      ]
+    }
+  },
+  "bram": {
+    "nome": "Marco",
+    "filosofia": {
+      "escola": "Stoicism",
+      "livros": "Epictetus: Enchiridion (1 what is up to us; 5 judgements, not things; 11 \"I gave it back\", never \"I lost it\"). Seneca: Letters to Lucilius (1 only time is ours). Marcus Aurelius: Meditations (4.1 a strong fire turns what falls on it into more flame; 5.20 the obstacle becomes the way) Marcus Aurelius too: Meditations 4.40 (one universe, one nature).",
+      "ideia": "Separate what is up to us from what is not, and live in accordance with nature.",
+      "voz": "Lost what he did not control; holds on to what he does, a fire. Dry, working sentences.",
+      "nome": "Marco, after Marcus Aurelius, the Stoic emperor of the Meditations, whom he quotes on fire (4.1) and on the one nature (4.40)."
+    },
+    "falas": {
+      "npc.businessMan": {
+        "name": "Marco",
+        "lines": [
+          "I lost the business, the firewood, everything. My hands are shaking.",
+          "The rest isn't up to me. A fire is. Over there, on that dirt. Take the axe.",
+          "Cut a dead branch and bring it to the block. Stand it up and split it. Both halves go on the dirt. Four times.",
+          "Dead trees are rare around here. Walk and look."
+        ]
+      },
+      "npc.businessManDone": {
+        "name": "Marco",
+        "lines": [
+          "I can still smell the smoke.",
+          "It isn't what happens that weighs on us. It's what we think of it.",
+          "Thea watches the sky; I, the fire. It is all the same nature.",
+          "Thank you, friend. The axe is yours."
+        ]
+      },
+      "npc.businessManStep": {
+        "gather": [
+          "{n} to go. Dead branch, block, dirt. Dead trees are rare: search."
+        ],
+        "ready": [
+          "Four. That's a fire already, it only lacks the flame.",
+          "Go and light it."
+        ],
+        "light": [
+          "Go and light it."
+        ]
+      },
+      "npc.businessManNight": {
+        "split": {
+          "clean": "Split clean. Good hands.",
+          "rough": "Split crooked, but split. You learn an axe by swinging it."
+        },
+        "fire": {
+          "first": "And it lit first try.",
+          "worked": "That fire took work. Every fire does."
+        },
+        "story": [
+          "Sit. Watch the fire with me.",
+          "Fire is not a thing. It is a thing happening.",
+          "Heat makes the branch give off gas. The gas burns, not the wood.",
+          "The gas meets the air, and that burning gives off more heat. Which gives off more gas. That is why it keeps itself going.",
+          "And this light? Soot. Tiny grains, so hot they glow.",
+          "The tree spent its whole life storing sun. The fire only gives it back.",
+          "A strong fire turns whatever falls on it into more flame. What gets in the way becomes firewood."
+        ],
+        "farewell": [
+          "Never say 'I lost it'. Say 'I gave it back'. Look: my hands stopped shaking.",
+          "No one can take this night from me."
+        ]
+      },
+      "finds.door.businessMan": [
+        "The door sticks. The porch does not.",
+        "Sit. I'll bring tea."
+      ]
+    }
+  },
+  "vega": {
+    "nome": "Thea",
+    "filosofia": {
+      "escola": "Aristotelianism",
+      "livros": "Aristotle: Metaphysics (I.1 all men by nature desire to know; I.2 wonder at the moon and the stars), Physics (II.3 the four causes: matter, form, maker and end), Nicomachean Ethics (I.7 one swallow does not make a summer; II.1 we become builders by building; IX.4 a friend is another self; X.7-8 the life of looking and the life of making, both after living well)",
+      "ideia": "Every human being desires to know; the happiest life is the contemplative one.",
+      "voz": "Curious and patient: the sky, the lens, Galileo. Meaning is in looking and understanding.",
+      "nome": "Thea, from theoria, contemplation, the life of looking in Nicomachean Ethics X.7. Theia is also the Greek titaness of sight and light."
+    },
+    "falas": {
+      "npc.astronaut": {
+        "name": "Thea",
+        "lines": [
+          "My telescope broke in the fall. Only the tube is left.",
+          "No tripod, no lens, no sky. And everyone is born wanting to know.",
+          "Take this pickaxe. Bring me an iron bar."
+        ]
+      },
+      "npc.astronautDone": {
+        "name": "Thea",
+        "lines": [
+          "The sky is still up there. Looking at it is the best of life. Come back at night.",
+          "I built a cairn here: a place to come back to.",
+          "Marco lives by making; I, by looking. Both of us seek to live well.",
+          "One swallow doesn't make a summer: happiness is a whole life, not a day."
+        ]
+      },
+      "npc.astronautHint": {
+        "ore": [
+          "Head west, to the lava lake. The black-veined rock gives charcoal, the red-veined one, ore. The furnace here asks for one at a time."
+        ],
+        "bloom": [
+          "Take the charcoal and the ore to the furnace, right here. It asks for what it needs, one thing at a time."
+        ],
+        "iron": [
+          "Put the hot lump on the anvil, right here, and hammer it."
+        ]
+      },
+      "npc.astronautStep": {
+        "tripod": [
+          "Iron! This becomes the tripod.",
+          "The lens is missing, and a lens is glass.",
+          "Glass is born from sand and ash: the ash helps the sand melt.",
+          "The ash is by the fire. Sand only by the big lake, down south. Both into the furnace."
+        ],
+        "wait": [
+          "Sand from the big lake, down south. Ash from the fire. Both into the furnace."
+        ],
+        "polish": [
+          "Good glass. Now it becomes a lens.",
+          "First the rough stone, for the curve. Then the fine one, to clear the haze.",
+          "Rub in circles."
+        ],
+        "carry": [
+          "It came out sharp!",
+          "Sand is the matter. The lens, the form. You, the one who made it. And seeing, the end.",
+          "Take the telescope to the plateau, to the south-west. Climb the stairs and look for the cairn. The sky is cleaner up there."
+        ],
+        "night": [
+          "You can't see anything by day.",
+          "Sit beside it and wait for the night."
+        ],
+        "reunion": [
+          "I saw the fire from up there. Any marshmallows left?"
+        ],
+        "goodbye": [
+          "With the sky back, my ship found me.",
+          "Thank you for everything.",
+          "A friend is another self.",
+          "But I have to go back to my home planet. Home is up there.",
+          "When you look at the sky, wave."
+        ],
+        "farewell": [
+          "You found all four.",
+          "It was wonder at the moon and the stars that made us start to think.",
+          "The light you saw was on its way long before you were born.",
+          "It only needed someone to look.",
+          "The stars before dawn are different ones. Sleep, and wake for them."
+        ],
+        "anvil": [
+          "The bar! No one is born a smith: you become one by hammering.",
+          "I'll build the tripod."
+        ]
+      },
+      "finds.door.astronaut": [
+        "The porch has the best view after the ship. Sit there.",
+        "I'll bring tea."
+      ]
+    }
+  },
+  "morte": {
+    "nome": "Morte",
+    "filosofia": {
+      "escola": "Nihilism, and its overcoming (Nietzsche, to the letter)",
+      "livros": "Friedrich Nietzsche: The Gay Science (§125 the death of God; §341 the eternal return), Thus Spoke Zarathustra (the three metamorphoses; the dancing star), Ecce Homo (amor fati; \"become who you are\")",
+      "ideia": "The highest values devalue themselves: nothing has a given meaning. The passive nihilist stops there; the active one tears down the idols (the lion) and creates new values playing (the child), and loves fate so much as to want it again, without end.",
+      "voz": "Calm, unthreatening. Three nights: diagnoses, tests, blesses. Never consoles; asks. Leaves the scythe on the first."
+    },
+    "falas": {
+      "death": {
+        "name": "Death",
+        "visit": [
+          "Don't get up. I didn't come for you.",
+          "I know you. I walked behind you the whole war.",
+          "You were a warrior. Wherever you went, I had work.",
+          "Now you sleep under the stars, and your sword stayed on the road.",
+          "Glory, honour, victory: they were your gods. And they are dead.",
+          "Now nothing is worth anything. And no one will come to tell you what is.",
+          "Sleep. I know how to wait."
+        ],
+        "visit2": [
+          "Here again. I said I knew how to wait.",
+          "You carried orders all your life, the way a camel carries weight.",
+          "In the desert, the camel becomes a lion. And the lion says: no.",
+          "No to the old gods. But the lion still creates nothing.",
+          "Now a question. Don't lie to me.",
+          "What if this life, exactly as it is, came back without end? Every pain, every night, this talk.",
+          "Would you curse me? Or would you say: I never heard anything more divine?",
+          "Sleep on that."
+        ],
+        "visit3": [
+          "Last night. After this one, I won't come again.",
+          "The lion becomes a child. The child plays, forgets and begins again.",
+          "It says yes. It creates its own values, playing.",
+          "No one gave you a meaning. You are making one, with your hands.",
+          "Want nothing different. Not backward, not forward. Love what is.",
+          "Become who you are.",
+          "One must have chaos within to give birth to a dancing star.",
+          "Goodbye, child."
+        ]
+      }
+    }
+  },
+  "ultimo_pedido": {
+    "nota": "Whoever closes the last request says this at the end of their own speech, and hands over the High Garden key.",
+    "falas": {
+      "garden.key": [
+        "You have shown yourself a true friend to everyone: the village and nature alike.",
+        "Now you may walk freely through the High Garden, with respect for nature.",
+        "Take the key."
+      ]
+    }
+  },
+  "fim": {
+    "filosofia": {
+      "escola": "Epicureanism",
+      "livros": "Epicurus (his school was called \"The Garden\"): Letter to Menoeceus (death is nothing to us: when it is, we are not), Principal Doctrines (27 friendship is the greatest good), Vatican Sayings (33 not hungry, not thirsty, not cold, rivals Zeus in happiness)",
+      "ideia": "Happiness is friendship, simple pleasures and the peace of needing nothing more.",
+      "voz": "Short, calm narration."
+    },
+    "falas": {
+      "ending.lines": [
+        "[narrator] The marshmallow turns golden.",
+        "[narrator] The sword stays in the road.",
+        "[narrator] No one chose for him.",
+        "[narrator] No hunger, no cold, among friends. Not even a god has more.",
+        "[narrator] Death is nothing to us: when it is, we are not.",
+        "[narrator] Nowhere to be. At last."
+      ]
+    }
+  },
+  "narrador": {
+    "nota": "Not an NPC: things in the valley read with Z (finds, the camp).",
+    "falas": {
+      "finds.helmet": [
+        "[narrator] A rusted helmet.",
+        "[narrator] A flower grew inside."
+      ],
+      "finds.bottle": [
+        "[narrator] A bottle with a note.",
+        "[narrator] “I made it. It's good here. Come.”",
+        "[narrator] No name."
+      ],
+      "finds.sword": [
+        "[narrator] This blade felled the darkness.",
+        "[narrator] And gave the world back its light.",
+        "[narrator] He is no longer this. He is what he does now."
+      ],
+      "finds.sign": [
+        "[narrator] High Garden.",
+        "[narrator] Closed for environmental preservation."
+      ],
+      "finds.signOpen": [
+        "[narrator] High Garden.",
+        "[narrator] Closed for environmental preservation.",
+        "[narrator] Someone has scratched out \"closed\"."
+      ],
+      "finds.door.empty": [
+        "[narrator] Nobody home.",
+        "[narrator] The porch is still here."
+      ],
+      "camp": {
+        "ring": [
+          "[narrator] Fire stones. Cold."
+        ],
+        "rack": [
+          "[narrator] Mushrooms drying. A keepsake from Shui."
+        ],
+        "easel": [
+          "[narrator] Sisi's painting."
+        ],
+        "woodpile": [
+          "[narrator] Marco's dry firewood."
+        ],
+        "chart": [
+          "[narrator] Thea's star chart."
+        ]
+      },
+      "cat.barrel": [
+        "[narrator] A barrel on its side, with straw inside.",
+        "[narrator] Whoever lives here needs nothing more."
+      ]
+    }
+  },
+  "gato": {
+    "nome": "Sinope",
+    "filosofia": {
+      "escola": "Cynicism",
+      "livros": "Diogenes of Sinope (\"the dog\"): through Diogenes Laertius, Lives and Opinions of Eminent Philosophers, book VI (20-21 deface the currency; 22 the mouse; 37 the bowl; 38 Alexander and the sun; 40 Plato's man; 41 the lantern; 49 the statue; 60 the dog; 63 citizen of the world and \"ready for any fortune\"; 105 the gods need nothing) And Diogenes Laertius, book VII.2: Zeno, who founded Stoicism, learned from Crates, a student of Diogenes.",
+      "ideia": "Happiness is self-sufficiency (autarkeia) and living according to nature. Custom, fame and wealth are false currency: deface them. Train body and will to need little, and speak the truth to anyone's face (parrhesia), without shame.",
+      "voz": "Mocking, lazy in the sun, unimpressed by heroes. Short and blunt. Accepts a pet and answers with a lesson.",
+      "nome": "Sinope is the city of Diogenes, the one that exiled him. He answered that he was a citizen of the world (Diogenes Laertius VI.63): the cat carries the name of the land he does not need."
+    },
+    "falas": {
+      "npc.blackCat": {
+        "name": "Sinope",
+        "lines": [
+          "A hero. How new.",
+          "Want to give me something? Then stand out of my sun."
+        ]
+      },
+      "cat.talk": {
+        "1": [
+          "A hero. How new.",
+          "Want to give me something? Then stand out of my sun."
+        ],
+        "2": [
+          "I learned how to live by watching a mouse.",
+          "It seeks no bed, fears no dark, wants no feast."
+        ],
+        "3": [
+          "I saw a child drink water from its hands.",
+          "I threw my bowl away. It beat me at simplicity."
+        ],
+        "4": [
+          "The gods need nothing. Whoever needs little is almost a god.",
+          "How much are you carrying, hero?"
+        ],
+        "5": [
+          "Where am I from? The world."
+        ],
+        "6": [
+          "They call me a dog. I'm a cat. The name doesn't matter.",
+          "I purr at those who give, hiss at those who don't, and scratch the wicked."
+        ],
+        "7": [
+          "I walked in daylight with a lantern, looking for a man.",
+          "I found many heroes. A man, none."
+        ],
+        "8": [
+          "Some advice: deface the currency.",
+          "Glory, honour, custom: scratch it all out and see what is left."
+        ],
+        "9": [
+          "I beg the statues for food.",
+          "I am practising not getting any."
+        ],
+        "10": [
+          "Plato said man is a featherless biped.",
+          "I plucked a chicken and brought it to him: here is Plato's man."
+        ],
+        "11": [
+          "What did philosophy give me? To be ready for any fortune."
+        ],
+        "12": [
+          "The woodcutter lost everything and learned to need little.",
+          "A student of my student taught that to a lot of people."
+        ]
+      }
+    }
+  },
+  "fora_do_jogo": {
+    "nota": "NPCs from an old version: not in the current world.",
+    "falas": {
+      "npc.salesman": {
+        "name": "SALESMAN",
+        "lines": [
+          "Friend! You look thirsty. Or dry. Either way — opportunity.",
+          "Free sample: this BUCKET. Fill it in my pond, just west of the fire.",
+          "A full bucket waters crops and drowns small fires. Endless uses. Costs you nothing. Today only.",
+          "Tell your friends. If you find any out there."
+        ]
+      },
+      "npc.poet": {
+        "name": "POET",
+        "lines": [
+          "The pines sing, but they crowd the verse.",
+          "This GREAT AXE fells even LIVING trees — the small axe only knows dead wood.",
+          "Open a clearing in my grove. Listen how the song changes where light falls.",
+          "Every good line needs its silence. Cut me one."
+        ]
+      }
+    }
+  }
+}

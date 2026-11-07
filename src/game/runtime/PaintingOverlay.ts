@@ -1,5 +1,6 @@
 import { DYE_COLORS, DYE_KINDS, type DyeKind } from '@/game/quests/dyePlants';
 import { t } from '@/game/i18n/i18n';
+import { MinigameCaption } from '@/game/runtime/MinigameCaption';
 import { KEY_BORDER, KEY_GLYPH, PIXEL_FONT } from '@/game/runtime/uiStyle';
 
 // O QUADRO: o minigame de pintar. DOM por cima do mundo, como a colheita e a pausa. O desenho é feito
@@ -96,6 +97,8 @@ export const readPainting = (canvas: HTMLCanvasElement): PaintingReading => {
 };
 
 export class PaintingOverlay {
+  /** O que fazer, no rodapé (pedido do autor). */
+  private readonly caption = new MinigameCaption();
   private readonly root: HTMLDivElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -176,6 +179,7 @@ export class PaintingOverlay {
     this.layout();
     window.addEventListener('resize', this.layout);
     window.addEventListener('keydown', this.handleKey, true);
+    this.caption.show('paint');
   }
 
   public destroy(): void {
@@ -184,6 +188,7 @@ export class PaintingOverlay {
     window.removeEventListener('resize', this.layout);
     window.removeEventListener('keydown', this.handleKey, true);
     this.root.remove();
+    this.caption.destroy();
   }
 
   /** O maior quadro que couber, em oitavos: na densidade de um celular a conta quebrada não aparece. */
@@ -192,9 +197,12 @@ export class PaintingOverlay {
     const sideW = landscape ? this.root.querySelector<HTMLElement>('.zh-paint-side')?.offsetWidth ?? 0 : 0;
     const sideH = landscape ? 0 : this.root.querySelector<HTMLElement>('.zh-paint-side')?.offsetHeight ?? 0;
     const frame = 18; // moldura + contorno, dos dois lados
+    // O rodapé é da legenda (runtime/MinigameCaption): o quadro não desce até lá.
+    const caption = 104;
+    this.root.style.paddingBottom = `${caption}px`;
     const room = 24 + (landscape ? 24 : 12);
     const w = window.innerWidth - frame - sideW - (landscape ? room : 24);
-    const h = window.innerHeight - frame - sideH - (landscape ? 24 : room);
+    const h = window.innerHeight - frame - sideH - caption - (landscape ? 24 : room);
     const scale = Math.max(1, Math.min(w / PAINT_W, h / PAINT_H));
     const cssScale = Math.max(1, Math.floor(scale * 8) / 8);
     this.canvas.style.width = `${PAINT_W * cssScale + 12}px`;
