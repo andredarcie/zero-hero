@@ -96,6 +96,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   jardim do fim), cada escada vence um; os scripts e playtests usam a mesma regra (`scripts/relevo.mjs`). O `relief` se edita no /editor (ferramenta Serra, A);
   rodar `serra-world.mjs` de novo REGERA o campo e apaga o que foi feito à mão.
 - **Cada cogumelo tem a sua trilha** (`scripts/trilhas-cogumelos.mjs`: rode `--check` depois de mexer em volta deles).
+- **A CACHOEIRA do acampamento** (`objects/Waterfall.ts` + `scripts/cachoeira.mjs`, as mesmas coordenadas nos dois): beira sólida em (53,55), com o riacho do alto (olho d'água em (52,54), leito em (53,54), sólidos; a água no planalto é desenho deitado `paintStream`, o World3D só faz água no nível baixo); o pé da queda e o laguinho do acampamento são UM lago de 5×3 tiles, (52..56, 56..58), com as carpas de `objects/KoiPond.ts` (mesmo retângulo em `KOI_POND`). A beira de olhar é (51,58). Rode `--check` depois de mexer em volta.
 - **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Bram pede procurar. Não espalhe mais delas.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
   (`fungi.ts`), e cada espécie existe UMA vez no mundo. O pedido da Hollis fecha com 4 quaisquer (`need`), e as outras 2 são opcionais: ela continua aceitando e dando dicas. Colhido, vai para a CESTA, que é a única exceção

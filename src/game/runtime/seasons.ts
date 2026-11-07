@@ -29,6 +29,24 @@ export const weatherAt = (day: number, phase: number): Weather => {
   return season === 'winter' ? 'snow' : 'rain';
 };
 
+/**
+ * QUANTO chove agora, de 0 a 1 (0 fora da chuva). Chuva de verdade não liga e desliga: começa em garoa, engrossa,
+ * e afina antes de parar. O primeiro quarto da chuva é a subida, o último terço a descida, e o miolo é o forte.
+ * Cada dia tem a sua força (de uma chuvinha a um temporal), sempre a mesma para o mesmo dia.
+ */
+export const rainAmountAt = (day: number, phase: number): number => {
+  if (weatherAt(day, phase) === 'clear') return 0;
+  const start = 0.3 + hash(day + 0.5) * 0.35;
+  const t = (phase - start) / SPELL;
+  const smooth = (e0: number, e1: number, x: number): number => {
+    const k = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+    return k * k * (3 - 2 * k);
+  };
+  const envelope = smooth(0, 0.25, t) * (1 - smooth(0.67, 1, t));
+  const strength = 0.55 + hash(day + 0.25) * 0.45;
+  return Math.max(0.12, envelope) * strength;
+};
+
 export interface SeasonGrade { r: number; g: number; b: number; saturation: number }
 
 /** A primavera é o quadro de sempre (o neutro): as outras três só se medem contra ela. */

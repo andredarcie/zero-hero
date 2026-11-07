@@ -109,6 +109,8 @@ import { OldRoad } from '@/game/objects/OldRoad';
 import { GardenMist } from '@/game/objects/GardenMist';
 import { MushroomKin } from '@/game/objects/MushroomKin';
 import { CatBarrel } from '@/game/objects/CatBarrel';
+import { KoiPond } from '@/game/objects/KoiPond';
+import { WATERFALL_POOL, Waterfall } from '@/game/objects/Waterfall';
 import { CAMP_BED, CAMP_RING, HeroCamp } from '@/game/objects/HeroCamp';
 import { npcFacing, npcFrontKeys, npcSideTiles, type NpcTile } from '@/game/world/npcFront';
 import { ItemGetOverlay, type ItemGetConfig } from '@/game/runtime/ItemGetOverlay';
@@ -725,6 +727,10 @@ export class GameScene extends Phaser.Scene {
   private heroCamp?: HeroCamp;
   /** A casa do gato, o barril de Diógenes (objects/CatBarrel): ele vai para lá quando cansa de seguir. */
   private catBarrel?: CatBarrel;
+  /** A cachoeira do acampamento (objects/Waterfall): a nascente do lago do herói. */
+  private waterfall?: Waterfall;
+  /** O laguinho das carpas no pé da cachoeira (objects/KoiPond). */
+  private koiPond?: KoiPond;
   private weather?: ValleyWeather;
   private shownSeason?: Season;
   /** Quantas coisas ele apanhou em seguida: a nota sobe, e de tanto em tanto o vale responde. */
@@ -1123,6 +1129,8 @@ export class GameScene extends Phaser.Scene {
         return q !== undefined && isQuestDone(q);
       });
       this.catBarrel = new CatBarrel();
+      this.waterfall = new Waterfall(this);
+      this.koiPond = new KoiPond(this, () => ({ x: this.playerWorld.worldX, y: this.playerWorld.worldY }));
       // Um jogo fechado entre o último pedido e a entrega da chave: ela chega agora.
       if (allQuestsDone() && !adventureState().gardenKeyGiven) this.time.delayedCall(900, () => this.giveGardenKey(undefined));
       this.oldRoad = new OldRoad();
@@ -1131,7 +1139,7 @@ export class GameScene extends Phaser.Scene {
       this.mushroomKin = this.makeMushroomKin();
       this.enforceNpcFrontRule();
       this.freeTrappedItems();
-      this.weather = new ValleyWeather(this.world3d);
+      this.weather = new ValleyWeather(this.world3d, (x, y) => this.isOpenWaterAt(x, y));
       this.shownSeason = this.weather.season;
     }
     this.buildPainterQuest();
@@ -1544,6 +1552,10 @@ export class GameScene extends Phaser.Scene {
     this.heroCamp = undefined;
     this.catBarrel?.destroy();
     this.catBarrel = undefined;
+    this.waterfall?.destroy();
+    this.waterfall = undefined;
+    this.koiPond?.destroy();
+    this.koiPond = undefined;
     this.weather?.destroy();
     this.weather = undefined;
     this.shownSeason = undefined;
@@ -7030,7 +7042,12 @@ export class GameScene extends Phaser.Scene {
         if (d < nearest && this.isOpenWaterAt(hx + dx, hy + dy)) nearest = d;
       }
     }
-    const water = Number.isFinite(nearest) ? Math.min(1, Math.max(0, 1 - (nearest - 1) / 5)) : 0;
+    let water = Number.isFinite(nearest) ? Math.min(1, Math.max(0, 1 - (nearest - 1) / 5)) : 0;
+    // A CACHOEIRA se ouve de mais longe que a água parada: o marulho cheio a três tiles e ainda algum a doze.
+    if (this.waterfall) {
+      const d = Math.hypot(WATERFALL_POOL.x - hx, WATERFALL_POOL.y - hy);
+      water = Math.max(water, Math.min(1, Math.max(0, 1 - (d - 3) / 9)));
+    }
     const sound = getSoundManager();
     sound.setAmbienceMix(night, water, this.weather?.rain ?? 0);
     // A MÚSICA OUVE O LUGAR: a caixinha entra perto da água, e o violoncelo perto do fogo ou de quem senta.

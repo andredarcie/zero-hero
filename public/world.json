@@ -14767,7 +14767,7 @@
           0,
           null,
           null,
-          0,
+          null,
           null,
           null,
           4,
@@ -14794,7 +14794,7 @@
           null,
           null,
           20,
-          0,
+          null,
           null,
           null,
           null,
@@ -14809,7 +14809,7 @@
           null,
           0,
           null,
-          4,
+          null,
           null,
           null,
           null,
@@ -14823,10 +14823,10 @@
           null,
           null,
           null,
-          20,
           null,
           null,
-          19,
+          null,
+          null,
           null,
           4,
           1
@@ -14936,8 +14936,8 @@
           false,
           false,
           false,
-          false,
-          false,
+          true,
+          true,
           false,
           false,
           false,
@@ -14951,7 +14951,7 @@
           false,
           false,
           false,
-          false,
+          true,
           false,
           false,
           false,
@@ -16683,6 +16683,61 @@
       "type": "dryTree",
       "worldX": 11,
       "worldY": 33
+    },
+    {
+      "type": "water",
+      "worldX": 53,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 53,
+      "worldY": 57
+    },
+    {
+      "type": "water",
+      "worldX": 52,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 52,
+      "worldY": 57
+    },
+    {
+      "type": "water",
+      "worldX": 52,
+      "worldY": 58
+    },
+    {
+      "type": "water",
+      "worldX": 53,
+      "worldY": 58
+    },
+    {
+      "type": "water",
+      "worldX": 54,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 55,
+      "worldY": 56
+    },
+    {
+      "type": "water",
+      "worldX": 54,
+      "worldY": 58
+    },
+    {
+      "type": "water",
+      "worldX": 55,
+      "worldY": 58
+    },
+    {
+      "type": "water",
+      "worldX": 56,
+      "worldY": 58
     }
   ],
   "dialogs": {

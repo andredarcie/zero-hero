@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { World3DParams } from '@/game/render3d/World3D';
-import { getTimeOfDay, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
+import { getDay, getTimeOfDay, setDay, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import type { NpcKind } from '@/game/world/ScreenContent';
 
 /**
@@ -109,7 +109,7 @@ declare global {
     /** Live 3D-renderer knobs, present only while the GameScene is active (see render3d/World3D.ts). */
     hd3d?: World3DParams;
     /** Read or set the persistent game clock (0 = midnight, .5 = noon). */
-    gameTime?: { get: () => { phase: number; clock: string }; set: (phase: number) => void };
+    gameTime?: { get: () => { phase: number; clock: string; day: number }; set: (phase: number) => void; setDay: (day: number) => void };
   }
 }
 
@@ -135,8 +135,10 @@ export const registerSceneDebugHooks = (
   window.render_game_to_text = renderGameToText;
   window.advanceTime = advanceTime;
   window.gameTime = {
-    get: () => ({ phase: getTimeOfDay(), clock: timeOfDayLabel() }),
+    get: () => ({ phase: getTimeOfDay(), clock: timeOfDayLabel(), day: getDay() }),
     set: (phase: number) => setTimeOfDay(phase),
+    // O dia do relógio (estação e chuva saem dele): os playtests do tempo pulam para um dia de chuva.
+    setDay: (value: number) => setDay(value),
   };
 
   // GameScene temporarily replaces the sleeping editor's hooks during live play. Restore the

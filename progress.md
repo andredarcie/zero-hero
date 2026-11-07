@@ -10071,3 +10071,44 @@ TESTES (2026-11-07):
 - O cenário `cogumelos` saiu: ele pegava gravetos soltos em (4,32) e (4,33), uma foice solta em (13,18) e um graveto em (13,5), e nada disso existe mais (graveto só de árvore seca, foice só da Morte). A quest inteira da Shui é jogada pelo `zerar` (fase `hollis`, `ZERAR_FROM=hollis`).
 - `barraca`: o Z no colchão agora espera o herói deitar (até 6 s) em vez de olhar 1,5 s depois. Numa das falhas, o JavaScript da página respondia mas o passo animado ficou parado mais de 20 s; a suspeita é o navegador headless parar de desenhar quadros. A asserção agora mostra `probe` (cutscene, diálogo, escala dos tweens) e o contador de quadros duas vezes (`frame` e `frameAgain`): se os dois forem iguais, o jogo não desenhou nada, e é o navegador do teste, não o jogo.
 
+A CACHOEIRA DO ACAMPAMENTO (pedido do autor, 2026-11-07: "veja um lugar ideal, faça uma fonte da água caindo tipo cachoeira"). O lugar: o planalto baixo logo ao sul do acampamento do Zero, cuja parede sul fica de frente para a câmera, a um passo do laguinho. Uma nascente brota entre duas pedras de musgo na beira (53,55), cai a parede e enche um poço (53,56) que escorre por (53,57) até o laguinho (54,57): a cachoeira é de onde vem a água do lago do herói.
+- MAPA (`scripts/cachoeira.mjs`, idempotente, com `--check` e prova de BFS): as duas peças de água do poço e a nascente sólida. Em (52,55) a nascente fechava um bolso do planalto, e a prova reprovou; por isso ela está em (53,55). `biomas-flora.mjs` pula esses tiles. Backup em `backup/world-pre-cachoeira.json`.
+- O QUE SE VÊ (`objects/Waterfall.ts`, pixel a pixel, 4 quadros de 90 ms): a nascente com o olho d'água borbulhando; a queda com a crista na beira, luz à esquerda, sombra à direita e fios de brilho descendo; um pedaço curto de "mergulho" já dentro do poço (a margem de terra do leito escondia o pé da queda); a espuma; os anéis no poço; e o borrifo que sobe. A água do poço fica afundada no leito como a de todo rio (`WATER_DEPTH_TILES`), e tudo do pé se assenta nessa superfície, não na grama.
+- O SOM: a cachoeira se ouve de mais longe que a água parada. O leito de água e a caixinha da música tocam cheios a 3 tiles dela e ainda um pouco a 12 (`updateAmbienceMix`).
+- `npm run playtest -- cachoeira` confere a nascente e o poço sólidos, o poço como água, a beira livre para olhar e os quadros andando, e fotografa de dia, do acampamento e de noite.
+- `trilhas-cogumelos.mjs --check` já reprovava ANTES desta mudança (conferido com o world.json do commit anterior): fica para outra passada.
+
+A CACHOEIRA REFEITA "BASEADA EM CACHOEIRAS REAIS" (pedido do autor, 2026-11-07). `objects/Waterfall.ts` agora é uma peça grande só (rochedo + rego + beira + parede molhada + queda, 32×36 px, 8 quadros), para tudo casar pixel com pixel:
+- ROCHEDO em cima do planalto: pedras com musgo e samambaias pendendo sobre a beira; a queda sobe ~2 tiles na tela em vez de 1.
+- LÍNGUA: a água chega lisa e escura pelo rego e espelha o céu na dobra; só depois de 2-4 px vira água BRANCA (ar).
+- ACELERAÇÃO: o fio de brilho é periódico em √(altura), então é curto em cima e longo embaixo, e anda mais rápido embaixo. Fios de 2 px com sulcos fixos (estria vertical); as bordas se quebram e mostram a pedra molhada (escura, limo, brilhos piscando, um fio d'água de lado).
+- PÉ: fervura mais larga que a queda + gotas em arco (16 partículas com gravidade).
+- POÇO: espuma levada pela corrente em manchas que afinam e viram para o leste (o laguinho), no lugar dos anéis; duas pedras molhadas com a água lambendo.
+- NÉVOA mais alta e levada pelo vento; ARCO-ÍRIS fraquinho só com sol (`params.daylight`).
+- Lição das fotos: a luz quente do dia puxa o branco para creme e estoura; os brancos da água são azulados e um tom abaixo de propósito.
+
+CACHOEIRA, MELHORIAS + O LAGO DAS CARPAS (pedidos do autor, 2026-11-07: "veja melhorias", "a parte de baixo faça um lago com carpas", "lago maior").
+- Melhorias da queda (vistas nas fotos ampliadas): a beira lia como uma moldura oca (faixa clara de ponta a ponta + língua escura) → uma linha só de reflexo, do lado da luz; gotas de 2 px viravam quadradões soltos → 1 px e menos; a pedra do poço lia como tora → tirada; mais espuma onde a queda bate; de dia a água recebe um tom mais frio (`DAY_TINT`, por `params.daylight`) para não virar creme.
+- O LAGO: `scripts/cachoeira.mjs` enche o retângulo 5×3 (52..56, 56..58), juntando o pé da queda ao laguinho do acampamento; a beira de olhar passou para (51,58). Prova de BFS ok ((52,56) sozinho ficava ilhado entre a parede e a água, por isso o lago o inclui).
+- AS CARPAS (`objects/KoiPond.ts`): 7, de 6 raças reais (kohaku, ogon, showa, laranja de cabeça branca, bekko, asagi), pixel a pixel em 16 direções × 2 quadros de cauda. Nadam devagar em curvas (viram no máximo 1,4 rad/s), fogem da fervura, e com o herói na beira (até 1,6 tile) vêm para perto e sobem para beliscar, deixando um anel. 6 vitórias-régias em ilhas, uma com flor. Folga de 0,3 tile da margem, 0,62 do lado sul (a margem de terra mais perto da câmera esconde a água afundada).
+- `npm run playtest -- cachoeira` confere também o lago 5×3, as 7 carpas, que elas nadam sem sair e que se juntam perto do herói.
+
+O RIACHO DO ALTO (pedido do autor, 2026-11-07: "faça água em cima pra parecer realista"). A água agora chega à queda por um riacho em cima do planalto: um olho d'água borbulhando entre pedras de musgo em (52,54), o leito fazendo uma curva por (53,54) e chegando à beira em (53,55). O World3D só desenha água no nível baixo (o leito afundado é global), então o riacho é uma peça DEITADA no planalto (`Waterfall.paintStream`, 2×2 tiles, 8 quadros): fundo no meio e raso na borda, margem de terra molhada e musgo, seixos, correnteza mais rápida perto da beira, uma pedra no leito com a corredeira branca em V, e os últimos pixels lisos e espelhados. O rochedo da peça grande abriu no meio (pedras só dos lados) para o riacho aparecer. `scripts/cachoeira.mjs` torna (52,54) e (53,54) sólidos (STREAM_TILES); a prova de BFS passa. O playtest confere os dois sólidos.
+
+REVISÃO DA CACHOEIRA E DO LAGO (pedido do autor, 2026-11-07: "revise tudo e melhore").
+- ORDEM NA ÁGUA (`KoiPond.WATER_LAYER`): nenhuma peça da água escreve profundidade, então a ordem é declarada — carpas por baixo da espuma, das vitórias-régias e do anel. Antes uma carpa passava POR CIMA da folha.
+- A zona que as carpas evitam era a faixa norte inteira do lago grande (sobra do laguinho 2×3); agora é só em volta da fervura (52,35..53,75 × <56,85).
+- As carpas percebem o herói ao CHEGAR à beira e vão todas na hora; o ponto perto dele é trazido para dentro da água nadável (antes, perto de uma quina, quase todo sorteio caía fora da folga e elas desistiam: o playtest pegou isso ao aumentar o lago). E uma dá espaço à outra (`KOI_SPACE`), senão se empilhavam num peixe só na quina.
+- TABOAS: três touceiras cheias, em leque, com espigas marrons, balançando ao vento, em cantos diferentes (em fila na margem leste liam como um poste). As carpas desviam delas.
+- Vitórias-régias tiradas de rente à margem sul (a terra as cortava); bekko com pintas menores.
+- O playtest troca a foto "do acampamento" (a câmera olha para o norte, a queda nem aparecia) por "do sul", com o lago inteiro.
+
+A CHUVA NOVA (pedido do autor, 2026-11-07: "melhore a qualidade da chuva"). Antes: 70 riscos iguais, azuis, todos na mesma inclinação, sem respingo, ligando cheios de uma vez.
+- INTENSIDADE (`seasons.rainAmountAt`): garoa no primeiro quarto da chuva, forte no miolo, afinando no último terço; cada dia tem a sua força (0,55 a 1). `ValleyWeather.rain` segue esse valor, então o som (`setAmbienceMix`) e as borboletas também. A cauda para em 0,03 (senão ficava pingando para sempre).
+- DENSIDADE: até 240 pingos, com curva level^0,75 (a garoa já se vê). Medido no dia 1: garoa 60, forte 161.
+- PROFUNDIDADE: 3 camadas (perto longo/nítido/rápido, meio, longe curto/fraco/lento); o risco tem cabeça clara embaixo e rastro sumindo em cima; claro (#dce9f4/branco) para se ver contra a grama — o azul sumia.
+- VENTO em rajadas (`wind()`): inclina a chuva, e cada risco é girado na direção do movimento.
+- RESPINGOS: coroinha de 3 quadros no chão, anel pequeno (desenhado à mão; o de 10 px fechava um quadrado) na água — `isWater` vem do GameScene (`isOpenWaterAt`).
+- O céu fecha mais quanto mais forte a chuva (`STORM_DARK`).
+- `window.gameTime.setDay(n)` (debugHooks) para os playtests pularem para um dia de chuva. Playtest novo `chuva`: garoa < forte, pingos >= 60, respingos e anéis, e o céu abrindo depois.
+
