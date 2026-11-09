@@ -18,6 +18,7 @@ import { kinTiles } from './chao-dos-filhos.mjs';
 import { CAMP_TILES } from './acampamento.mjs';
 import { BARREL_TILE } from './barril-do-gato.mjs';
 import { WATERFALL_TILES } from './cachoeira.mjs';
+import { bosqueTiles } from './bosque.mjs';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { biomeAt } from '../src/game/world/biomes.ts';
@@ -84,7 +85,7 @@ for (const c of world.chunks) {
       if (c.ground[ly][lx] !== GROUND) continue;
       if (c.upper[ly][lx] !== null || c.collisions[ly][lx]) continue;
       if (!STAIRS_FREE.has(c.relief?.[ly]?.[lx] ?? 0)) continue;
-      if (busy.has(`${wx},${wy}`) || onRoad(wx, wy) || kin.has(`${wx},${wy}`) || CAMP_TILES.has(`${wx},${wy}`) || (wx === BARREL_TILE.x && wy === BARREL_TILE.y) || WATERFALL_TILES.some((t) => t.x === wx && t.y === wy)) continue;
+      if (busy.has(`${wx},${wy}`) || onRoad(wx, wy) || kin.has(`${wx},${wy}`) || CAMP_TILES.has(`${wx},${wy}`) || (wx === BARREL_TILE.x && wy === BARREL_TILE.y) || WATERFALL_TILES.some((t) => t.x === wx && t.y === wy) || bosqueTiles(world).some((t) => t.x === wx && t.y === wy)) continue;
       const biome = biomeAt(wx, wy);
       const chance = DENSITY[biome] * (0.35 + 1.3 * smooth(wx, wy));
       if (hash(wx, wy, 7) >= chance) continue;

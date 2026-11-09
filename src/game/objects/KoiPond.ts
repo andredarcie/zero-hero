@@ -1,9 +1,11 @@
-import Phaser from 'phaser';
+import { profiler } from '@/game/debug/Profiler';
+import * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import { WATER_DEPTH_TILES, world3d } from '@/game/render3d/World3D';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * O LAGO DAS CARPAS (pedido do autor: "a parte de baixo faça um lago com carpas", e depois "lago maior"). O pé da
@@ -21,8 +23,8 @@ import { WATER_DEPTH_TILES, world3d } from '@/game/render3d/World3D';
  * Pixel a pixel, em 16 direções pré-desenhadas (rodar um sprite de pixel o borraria) × 2 quadros de cauda.
  */
 export const KOI_POND = { x0: 52, y0: 56, x1: 56, y1: 58 } as const;
-/** Quantas carpas: as raças se repetem, cada uma com o seu nado. */
-const KOI_COUNT = 7;
+/** Quantas carpas (pedido do autor: 4). Cada uma pega a próxima raça de BREEDS: kohaku, ogon, showa e a laranja. */
+const KOI_COUNT = 4;
 /** A distância mínima entre duas carpas (o meio corpo de cada uma). */
 const KOI_SPACE = 0.42;
 
@@ -39,7 +41,7 @@ const hash = (a: number, b: number, seed: number): number => {
 
 type Put = (x: number, y: number, color: string, alpha?: number) => void;
 const canvas = (w: number, h: number, paint: (put: Put) => void): HTMLCanvasElement => {
-  const c = document.createElement('canvas');
+  const c = createCanvas();
   c.width = w;
   c.height = h;
   const ctx = c.getContext('2d');
@@ -261,7 +263,7 @@ export class KoiPond {
   private heroWasNear = false;
   private seed = 3;
 
-  public constructor(private readonly scene: Phaser.Scene, private readonly heroAt: () => { x: number; y: number }) {
+  public constructor(private readonly scene: Engine.Scene, private readonly heroAt: () => { x: number; y: number }) {
     register();
     const w3 = world3d();
     // As vitórias-régias, boiando longe da fervura, em ilhas de duas ou três como num lago de verdade.
@@ -304,7 +306,7 @@ export class KoiPond {
       this.koi.push(k);
     }
     this.tick(0);
-    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.onFrame, this);
+    scene.events.on(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
   }
 
   /** Onde estão as carpas (a janela do playtest). */
@@ -312,7 +314,14 @@ export class KoiPond {
     return this.koi.map((k) => ({ x: k.x, y: k.y }));
   }
 
+  /** O quadro, medido (debug/Profiler: seção `life.koi`; desligado, não custa nada). */
   private onFrame(): void {
+    profiler.begin('life.koi');
+    this.frameTick();
+    profiler.end('life.koi');
+  }
+
+  private frameTick(): void {
     this.tick(this.scene.game.loop.delta);
   }
 
@@ -419,7 +428,7 @@ export class KoiPond {
   }
 
   public destroy(): void {
-    this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.onFrame, this);
+    this.scene.events.off(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
     for (const b of [this.ring, ...this.pads, ...this.reeds, ...this.koi.map((k) => k.bb)]) b.destroy();
     this.koi.length = 0;
     this.pads.length = 0;

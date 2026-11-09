@@ -109,7 +109,7 @@ export const paintLog = (rect: Paint): void => grid(rect, LOG, WOOD);
 
 // ── AS LEMBRANÇAS ─────────────────────────────────────────────────────────────────────────────────
 
-/** A LEMBRANÇA DA IRIS: o quadro dela num cavalete, com as quatro tintas de planta. */
+/** A LEMBRANÇA DA SISI: o quadro dela num cavalete, com as quatro tintas de planta. */
 const EASEL = [
   '................',
   '.......kk.......',
@@ -132,7 +132,7 @@ export const paintEasel = (rect: Paint): void => grid(rect, EASEL, {
   ...WOOD, w: '#efe6cf', o: '#d9682a', b: '#3f5fae', y: '#e3b53a', r: '#b8323b',
 });
 
-/** A LEMBRANÇA DA VEGA: o mapa de estrelas dela, preso num poste — e Saturno, com o anel. */
+/** A LEMBRANÇA DA THEA: o mapa de estrelas dela, preso num poste — e Saturno, com o anel. */
 const CHART = [
   '................',
   '..kkkkkkkkkkk...',
@@ -153,7 +153,7 @@ const CHART = [
 ];
 export const paintChart = (rect: Paint): void => grid(rect, CHART, { ...WOOD, n: '#1d2b53', y: '#f3e6a0', a: '#d9a35a' });
 
-/** A LEMBRANÇA DA HOLLIS: um varal de cogumelos secando, em dois fios entre dois paus. */
+/** A LEMBRANÇA DA SHUI: um varal de cogumelos secando, em dois fios entre dois paus. */
 const RACK = [
   '................',
   '.kk..........kk.',
@@ -174,7 +174,7 @@ const RACK = [
 ];
 export const paintRack = (rect: Paint): void => grid(rect, RACK, { ...WOOD, m: '#c9b48a', c: '#86532a', e: '#e8dcbf' });
 
-/** A LEMBRANÇA DO BRAM: a lenha rachada e empilhada, as pontas das achas à mostra. */
+/** A LEMBRANÇA DO MARCO: a lenha rachada e empilhada, as pontas das achas à mostra. */
 const WOODPILE = [
   '................',
   '................',

@@ -1,6 +1,6 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
-export class BootScene extends Phaser.Scene {
+export class BootScene extends Engine.Scene {
   public static readonly key = 'boot';
 
   public constructor() {

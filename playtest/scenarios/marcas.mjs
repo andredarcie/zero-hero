@@ -1,6 +1,6 @@
-// MARCAS — o vale MUDA quando um pedido fecha: o marco da Vega, o cesto da Hollis, a lenha do Bram
-// (e a fogueira dele acesa de dia) e o cavalete da Iris com a tela verde. Sem pedidos, so o
-// cavalete cinza existe. E ao vivo: entregar as pedras a Vega faz o marco surgir ali.
+// MARCAS — o vale MUDA quando um pedido fecha: o marco da Thea, o cesto da Shui, a lenha do Marco
+// (e a fogueira dele acesa de dia) e o cavalete da Sisi com a tela verde. Sem pedidos, so o
+// cavalete cinza existe. E ao vivo: entregar as pedras a Thea faz o marco surgir ali.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ALL_DONE = {
   'radiationSuit/deliver:mushroom': 5, 'painter/grow': 2, 'businessMan/deliver:wood': 4, 'astronaut/deliver:iron': 1,
@@ -39,19 +39,19 @@ export default {
       const s = window.__scene;
       return [...s.keptLitFires].map((f) => ({ x: f.worldX, y: f.worldY, lit: f.isLit }));
     });
-    assert('A fogueira do Bram fica acesa ao meio-dia', fire.length === 1 && fire[0].lit, JSON.stringify(fire));
+    assert('A fogueira do Marco fica acesa ao meio-dia', fire.length === 1 && fire[0].lit, JSON.stringify(fire));
     for (const m of all) {
       await page.evaluate(([x, y]) => { const s = window.__scene; s.playerWorld.worldX = x; s.playerWorld.worldY = y + 2; s.movementController.interruptMovement(x, y + 2); s.streamChunks(true); }, [m.tile.x, m.tile.y]);
       await sleep(900);
       await shot(`marca-${m.dialog}`, { note: m.dialog });
     }
 
-    // Ao vivo: tres pedras na mochila, falar com a Vega, e o marco surge.
+    // Ao vivo: tres pedras na mochila, falar com a Thea, e o marco surge.
     const live = await boot(driver, {
       started: true, introSeen: true, questProgress: {}, giftsGiven: ['astronaut'],
       inventory: [{ kind: 'stone', count: 3 }], selected: 'none',
     });
-    const vega = await page.evaluate(async () => {
+    const thea = await page.evaluate(async () => {
       const w = await (await fetch('/world.json')).json();
       for (const c of w.chunks) for (const n of c.npcs) if (n.type === 'astronaut') return { x: n.worldX, y: n.worldY };
       return null;
@@ -62,10 +62,10 @@ export default {
       const orig = s.spawnHearts.bind(s);
       s.spawnHearts = (x, y) => { window.__hearts += 1; orig(x, y); };
     });
-    await page.evaluate(([x, y]) => { const s = window.__scene; s.playerWorld.worldX = x; s.playerWorld.worldY = y + 1; s.movementController.interruptMovement(x, y + 1); s.streamChunks(true); }, [vega.x, vega.y]);
+    await page.evaluate(([x, y]) => { const s = window.__scene; s.playerWorld.worldX = x; s.playerWorld.worldY = y + 1; s.movementController.interruptMovement(x, y + 1); s.streamChunks(true); }, [thea.x, thea.y]);
     await sleep(500);
-    const greeted = await page.evaluate(([x, y]) => window.__scene.greetedNpcs.has(`${x},${y}`), [vega.x, vega.y]);
-    assert('Chegar perto faz a Vega dar oi (pulinho)', greeted, '');
+    const greeted = await page.evaluate(([x, y]) => window.__scene.greetedNpcs.has(`${x},${y}`), [thea.x, thea.y]);
+    assert('Chegar perto faz a Thea dar oi (pulinho)', greeted, '');
     const breath = await page.evaluate(async () => {
       const sizes = [];
       for (let i = 0; i < 6; i += 1) {
@@ -85,7 +85,7 @@ export default {
       await page.keyboard.down('z'); await sleep(50); await page.keyboard.up('z'); await sleep(450);
     }
     await sleep(450);
-    await shot('marco-surgindo', { note: 'O marco da Vega surge, e ela agradece' });
+    await shot('marco-surgindo', { note: 'O marco da Thea surge, e ela agradece' });
     assert('O obrigado vem com coracoes', (await page.evaluate(() => window.__hearts)) === 1, '');
     const after = await page.evaluate(() => window.__scene.questMarks.find((m) => m.def.dialog === 'astronaut'));
     assert('Entregar as pedras faz o marco surgir', after?.done === true && Boolean(after.bb), JSON.stringify({ done: after?.done }));

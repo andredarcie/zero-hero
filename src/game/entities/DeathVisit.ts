@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { ASSET_KEYS } from '@/game/constants';
@@ -12,7 +12,7 @@ import { world3d } from '@/game/render3d/World3D';
  */
 
 export interface DeathVisitHost {
-  scene: Phaser.Scene;
+  scene: Engine.Scene;
   at: { x: number; y: number };
   smoke: (x: number, y: number) => void;
   /** Ela fala, e `onClosed` roda com a cena de novo congelada. */
@@ -52,7 +52,7 @@ export class DeathVisit {
     this.body.destroy();
   }
 
-  private to(config: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> {
+  private to(config: Engine.Types.Tweens.TweenBuilderConfig): Promise<void> {
     return new Promise((resolve) => {
       this.host.scene.tweens.add({ ...config, onComplete: () => resolve() });
     });

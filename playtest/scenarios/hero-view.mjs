@@ -1,4 +1,4 @@
-// The hero has no Phaser GameObject any more: he is plain state (HeroView) drawn by the 3D
+// The hero has no 2D GameObject any more: he is plain state (HeroView) drawn by the 3D
 // billboard alone. Everything the old invisible sprite used to carry — the walk cycle, the
 // facing flip, the knockback shove, the hurt blink, the idle breathing and the death pose —
 // now has to come from that state. This walks each one and watches the billboard.
@@ -23,7 +23,7 @@ export default {
     });
 
     // ── Walk cycle ───────────────────────────────────────────────────────────
-    // Phaser's animation component used to cycle the frame; a hand-rolled ticker does it now.
+    // The engine's animation component used to cycle the frame; a hand-rolled ticker does it now.
     // Sample the frame across a horizontal step: it must actually move through the walk frames.
     const frames = await page.evaluate(async () => {
       const s = window.__scene;

@@ -26,7 +26,7 @@ export default {
           if ([[0, 0], [0, 1], [1, 0], [-1, 0], [0, -1]].every(([dx, dy]) => !s.isSolidForEntities(x + dx, y + dy))
             && !s.itemManager.hasItemAt(x, y + 1) && !s.handVerbAt(x, y + 1)) {
             s.playerWorld.worldX = x; s.playerWorld.worldY = y; s.movementController.interruptMovement(x, y); s.movementController.faceTo(0, 1);
-            s.ensureCat(false);
+            s.catCare.ensure(false);
             return { x, y };
           }
         }

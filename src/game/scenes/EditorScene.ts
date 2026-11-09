@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import {
   ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES,
@@ -18,6 +18,7 @@ import type { PropDir, PropKind } from '@/game/world/worldSchema';
 import {
   RELIEF_GROUND, RELIEF_HIGH, RELIEF_PEAK, STAIR_CODES_GROUND, STAIR_CODES_HIGH, stairBase, stairUp,
 } from '@/game/world/relief';
+import { sessionStore } from '@/game/platform/platform';
 
 /** O código do andar `level` (0 chão, 1 planalto, 2 cume). */
 const floorCode = (level: number): number => (level === 0 ? RELIEF_GROUND : level === 1 ? RELIEF_HIGH : RELIEF_PEAK);
@@ -29,20 +30,26 @@ import {
   type WorldFileId,
 } from '@/game/worldApi';
 import { biomeTintAt, decorFrameAt } from '@/game/world/biomes';
+import { ensureFixtureTexture, recordFixtures, type FixtureSprite } from '@/game/editor/EditorFixtures';
+import { bosqueIconKey, registerBosqueTextures } from '@/game/objects/BigTrees';
+import { fenceIconKey, registerFenceTextures } from '@/game/objects/WoodFence';
+import { YARD_KINDS, registerYardTextures, yardIconKey } from '@/game/objects/LumberYard';
+import { FORGE_KINDS, forgeIconKey, registerForgeTextures } from '@/game/objects/OldForge';
+import { CRASH_KINDS, crashIconKey, registerCrashTextures } from '@/game/objects/CrashSite';
 
 /**
  * O BIOMA NO EDITOR: o tile veste a mesma decoração e leva a mesma cor que no jogo (world/biomes.ts),
- * senão o editor mente sobre o mundo que se monta nele. O tint do Phaser só escurece, então a cor é
+ * senão o editor mente sobre o mundo que se monta nele. O tint do motor 2D só escurece, então a cor é
  * normalizada pelo canal mais forte.
  */
-const biomeTint = (tile: Phaser.Tilemaps.Tile | null, wx: number, wy: number): void => {
+const biomeTint = (tile: Engine.Tilemaps.Tile | null, wx: number, wy: number): void => {
   if (!tile) return;
   const [r, g, b] = biomeTintAt(wx, wy);
   const k = 1 / Math.max(r, g, b, 1);
   tile.tint = (Math.round(r * k * 255) << 16) | (Math.round(g * k * 255) << 8) | Math.round(b * k * 255);
 };
 
-// World-editor scene: the Phaser side of the engine. It renders the whole authored world
+// World-editor scene: the 2D side of the game. It renders the whole authored world
 // as one pannable/zoomable tilemap and translates pointer gestures into EditorStore
 // operations; every panel, palette and modal lives in EditorDomUi (plain DOM).
 
@@ -114,6 +121,24 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   altar: { key: ASSET_KEYS.altar, frame: 0 },
   hearth: { key: ASSET_KEYS.campfireFrame1 },
   gardenGate: { key: ASSET_KEYS.lookedDoorObject },
+  // O bosque: o ícone é o desenho da própria árvore (registerBosqueTextures, no create).
+  oakTree: { key: bosqueIconKey('oak') },
+  birchTree: { key: bosqueIconKey('birch') },
+  youngOak: { key: bosqueIconKey('sapling') },
+  fallenLog: { key: bosqueIconKey('log') },
+  woodFence: { key: fenceIconKey },
+  woodpile: { key: yardIconKey('woodpile') },
+  sawhorse: { key: yardIconKey('sawhorse') },
+  stump: { key: yardIconKey('stump') },
+  axeStump: { key: yardIconKey('axeStump') },
+  wheelbarrow: { key: yardIconKey('wheelbarrow') },
+  yardSign: { key: yardIconKey('yardSign') },
+  forgeRubble: { key: forgeIconKey('forgeRubble') },
+  forgeRack: { key: forgeIconKey('forgeRack') },
+  crashCrater: { key: crashIconKey('crashCrater') },
+  shipHull: { key: crashIconKey('shipHull') },
+  shipThruster: { key: crashIconKey('shipThruster') },
+  shipFin: { key: crashIconKey('shipFin') },
 };
 
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
@@ -129,7 +154,7 @@ const SPAWN_COLOR = 0x00e0ff;
 
 type PersistedUi = { state: UiState; cam?: { centerX: number; centerY: number; zoom: number } };
 
-export class EditorScene extends Phaser.Scene {
+export class EditorScene extends Engine.Scene {
   public static readonly key = 'editor';
 
   private store?: EditorStore;
@@ -152,23 +177,27 @@ export class EditorScene extends Phaser.Scene {
     // Ligada: a serra muda onde se anda, e o mapa plano sem ela engana (foi assim que ela pareceu sumir).
     showRelief: true,
     showEntities: true,
+    showFixtures: true,
     propDir: 1, // leste
     viewMode: 'world',
     chunkX: 0,
     chunkY: 0,
   };
 
-  private map?: Phaser.Tilemaps.Tilemap;
-  private groundLayer?: Phaser.Tilemaps.TilemapLayer;
-  private upperLayer?: Phaser.Tilemaps.TilemapLayer;
-  private collisionLayer?: Phaser.Tilemaps.TilemapLayer;
-  private reliefGfx?: Phaser.GameObjects.Graphics;
-  private gridGfx?: Phaser.GameObjects.Graphics;
-  private chunkMaskGfx?: Phaser.GameObjects.Graphics;
-  private hoverGfx?: Phaser.GameObjects.Graphics;
-  private rectGfx?: Phaser.GameObjects.Graphics;
-  private entityContainer?: Phaser.GameObjects.Container;
-  private loadingText?: Phaser.GameObjects.Text;
+  private map?: Engine.Tilemaps.Tilemap;
+  private groundLayer?: Engine.Tilemaps.TilemapLayer;
+  private upperLayer?: Engine.Tilemaps.TilemapLayer;
+  private collisionLayer?: Engine.Tilemaps.TilemapLayer;
+  private reliefGfx?: Engine.GameObjects.Graphics;
+  private gridGfx?: Engine.GameObjects.Graphics;
+  private chunkMaskGfx?: Engine.GameObjects.Graphics;
+  private hoverGfx?: Engine.GameObjects.Graphics;
+  private rectGfx?: Engine.GameObjects.Graphics;
+  private entityContainer?: Engine.GameObjects.Container;
+  /** As peças do jogo (EditorFixtures): gravadas uma vez — são fixas, o editor não as move. */
+  private fixtureContainer?: Engine.GameObjects.Container;
+  private fixtures?: FixtureSprite[];
+  private loadingText?: Engine.GameObjects.Text;
 
   private hovered: CellCoord | null = null;
   private activeStroke: { erase: boolean; last: CellCoord } | null = null;
@@ -183,19 +212,34 @@ export class EditorScene extends Phaser.Scene {
   }
 
   public create(): void {
-    // The bucket's pixel art is generated at boot (into the Phaser texture manager here so the
+    // The bucket's pixel art is generated at boot (into the 2D texture manager here so the
     // palette can show it, and the 3D registry for the live playtest).
     registerBucketTextures(this);
     registerFungiTextures(this);
-    // Phaser never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
+    // As árvores do bosque são props: a paleta e os chips mostram o desenho delas, então ele entra no motor 2D já.
+    registerBosqueTextures();
+    for (const kind of ['oak', 'birch', 'sapling', 'log'] as const) ensureFixtureTexture(this, bosqueIconKey(kind));
+    registerFenceTextures();
+    ensureFixtureTexture(this, fenceIconKey);
+    registerYardTextures();
+    for (const kind of YARD_KINDS) ensureFixtureTexture(this, yardIconKey(kind));
+    ensureFixtureTexture(this, 'yard-chips-0');
+    ensureFixtureTexture(this, 'yard-chips-1');
+    ensureFixtureTexture(this, 'yard-woodpile-1');
+    registerForgeTextures();
+    for (const kind of FORGE_KINDS) ensureFixtureTexture(this, forgeIconKey(kind));
+    ensureFixtureTexture(this, 'forge-floor');
+    registerCrashTextures();
+    for (const kind of CRASH_KINDS) ensureFixtureTexture(this, crashIconKey(kind));
+    // The engine never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    this.events.on(Phaser.Scenes.Events.WAKE, this.handleWake, this);
-    this.events.on(Phaser.Scenes.Events.SLEEP, this.handleSleep, this);
+    this.events.once(Engine.Scenes.Events.SHUTDOWN, this.shutdown, this);
+    this.events.on(Engine.Scenes.Events.WAKE, this.handleWake, this);
+    this.events.on(Engine.Scenes.Events.SLEEP, this.handleSleep, this);
 
     this.cameras.main.setBackgroundColor('#0a1013');
     this.input.mouse?.disableContextMenu();
-    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+    this.scale.on(Engine.Scale.Events.RESIZE, this.handleResize, this);
     this.handleResize({ width: this.scale.width, height: this.scale.height });
 
     this.registerPointerInput();
@@ -205,9 +249,9 @@ export class EditorScene extends Phaser.Scene {
   }
 
   public shutdown(): void {
-    this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
-    this.events.off(Phaser.Scenes.Events.WAKE, this.handleWake, this);
-    this.events.off(Phaser.Scenes.Events.SLEEP, this.handleSleep, this);
+    this.scale.off(Engine.Scale.Events.RESIZE, this.handleResize, this);
+    this.events.off(Engine.Scenes.Events.WAKE, this.handleWake, this);
+    this.events.off(Engine.Scenes.Events.SLEEP, this.handleSleep, this);
     this.unlistenStore?.();
     this.unlistenStore = undefined;
     this.ui?.destroy();
@@ -248,7 +292,7 @@ export class EditorScene extends Phaser.Scene {
       this.loadingText.setText(
         `Falha ao carregar ${this.worldFileId}.json\n${error instanceof Error ? error.message : String(error)}\n\nClique para tentar de novo`,
       );
-      this.input.once(Phaser.Input.Events.POINTER_DOWN, () => void this.bootstrap());
+      this.input.once(Engine.Input.Events.POINTER_DOWN, () => void this.bootstrap());
       return;
     }
 
@@ -326,6 +370,7 @@ export class EditorScene extends Phaser.Scene {
     this.hoverGfx?.destroy();
     this.rectGfx?.destroy();
     this.entityContainer?.destroy();
+    this.fixtureContainer?.destroy();
     this.ensureCollisionTexture();
 
     const tilesX = store.tilesX;
@@ -356,6 +401,10 @@ export class EditorScene extends Phaser.Scene {
     this.drawGrid();
     this.entityContainer = this.add.container(0, 0).setDepth(4);
     this.renderEntities();
+    // As peças do jogo POR CIMA dos marcadores de entidade: no lago das carpas, embaixo deles, as vitórias-régias,
+    // as taboas e as carpas sumiam debaixo dos chips de água. Não são clicáveis; a tecla O as esconde para editar.
+    this.fixtureContainer = this.add.container(0, 0).setDepth(4.5);
+    this.renderFixtures();
     this.chunkMaskGfx = this.add.graphics().setDepth(5);
     this.hoverGfx = this.add.graphics().setDepth(6);
     this.rectGfx = this.add.graphics().setDepth(7);
@@ -416,6 +465,41 @@ export class EditorScene extends Phaser.Scene {
       return { key: PROP_VISUAL[entity.type].key, frame: entity.dir };
     }
     return PROP_VISUAL[entity.type];
+  }
+
+  /**
+   * AS PEÇAS DO JOGO, desenhadas como o jogo as monta (EditorFixtures): o que está deitado no chão (a clareira do
+   * acampamento, a estrada, o riacho, a espuma, as vitórias-régias) fica embaixo; o que está em pé (árvores, a queda,
+   * o barril, as casas) vai por cima, com o PÉ no tile dele e os de mais ao sul na frente — a mesma ordem do jogo.
+   */
+  private renderFixtures(): void {
+    const container = this.fixtureContainer;
+    if (!container) return;
+    container.removeAll(true);
+    if (!this.fixtures) {
+      // Algumas peças leem o mapa (a estrada velha procura os portões do jardim): o mesmo retrato que o Testar usa.
+      if (this.store) setWorldData(this.store.snapshotWorld());
+      this.fixtures = recordFixtures(this);
+    }
+    const T = WORLD_TILE;
+    const ordered = [...this.fixtures].sort((a, b) => Number(b.flat) - Number(a.flat) || a.y - b.y);
+    for (const f of ordered) {
+      if (!ensureFixtureTexture(this, f.key)) continue;
+      const sprite = this.add.image((f.x + 0.5) * T, (f.y + 0.5) * T - f.elevation * T, f.key)
+        .setDisplaySize(f.w * T, f.h * T)
+        .setOrigin(0.5, f.flat || f.centered ? 0.5 : 1)
+        .setFlipX(f.flipX)
+        .setAngle(f.angle)
+        .setAlpha(f.alpha);
+      if (f.additive) sprite.setBlendMode(Engine.BlendModes.ADD);
+      // A cor do bioma que o jogo põe nas árvores, na mesma conta dos tiles do editor (biomeTint).
+      if (f.color) {
+        const [r, g, b] = f.color;
+        const k = 1 / Math.max(r, g, b, 1);
+        sprite.setTint((Math.round(r * k * 255) << 16) | (Math.round(g * k * 255) << 8) | Math.round(b * k * 255));
+      }
+      container.add(sprite);
+    }
   }
 
   private renderEntities(): void {
@@ -481,6 +565,7 @@ export class EditorScene extends Phaser.Scene {
     this.collisionLayer?.setVisible(this.uiState.showCollisions);
     this.reliefGfx?.setVisible(this.uiState.showRelief);
     this.entityContainer?.setVisible(this.uiState.showEntities);
+    this.fixtureContainer?.setVisible(this.uiState.showFixtures);
   }
 
   // ── View mode (mundo x chunk) ───────────────────────────────────────────
@@ -559,7 +644,7 @@ export class EditorScene extends Phaser.Scene {
   private fitChunk(): void {
     const cam = this.cameras.main;
     const rect = this.chunkRect();
-    const zoom = Phaser.Math.Clamp(Math.min(cam.width / rect.w, cam.height / rect.h) * 0.94, MIN_ZOOM, MAX_ZOOM);
+    const zoom = Engine.Math.Clamp(Math.min(cam.width / rect.w, cam.height / rect.h) * 0.94, MIN_ZOOM, MAX_ZOOM);
     cam.setZoom(zoom);
     cam.centerOn(rect.x + rect.w / 2, rect.y + rect.h / 2);
   }
@@ -603,7 +688,14 @@ export class EditorScene extends Phaser.Scene {
       });
       this.drawRelief();
     }
-    if (!change.structure && (change.entities || change.spawn)) this.renderEntities();
+    if (!change.structure && (change.entities || change.spawn)) {
+      this.renderEntities();
+      // Um prop do bosque posto ou apagado muda as peças do jogo: grava de novo (o mapa mudou).
+      if (change.entities) {
+        this.fixtures = undefined;
+        this.renderFixtures();
+      }
+    }
     if (change.cells || change.entities || change.spawn || change.structure) this.ui?.requestMinimapRedraw();
     this.ui?.refreshHeader();
     this.refreshHoverStatus();
@@ -627,18 +719,18 @@ export class EditorScene extends Phaser.Scene {
   // ── Pointer input ───────────────────────────────────────────────────────
 
   private registerPointerInput(): void {
-    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => this.onPointerDown(pointer));
-    this.input.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => this.onPointerMove(pointer));
-    this.input.on(Phaser.Input.Events.POINTER_UP, (pointer: Phaser.Input.Pointer) => this.onPointerUp(pointer));
-    this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, (pointer: Phaser.Input.Pointer) => this.onPointerUp(pointer));
-    this.input.on(Phaser.Input.Events.GAME_OUT, () => {
+    this.input.on(Engine.Input.Events.POINTER_DOWN, (pointer: Engine.Input.Pointer) => this.onPointerDown(pointer));
+    this.input.on(Engine.Input.Events.POINTER_MOVE, (pointer: Engine.Input.Pointer) => this.onPointerMove(pointer));
+    this.input.on(Engine.Input.Events.POINTER_UP, (pointer: Engine.Input.Pointer) => this.onPointerUp(pointer));
+    this.input.on(Engine.Input.Events.POINTER_UP_OUTSIDE, (pointer: Engine.Input.Pointer) => this.onPointerUp(pointer));
+    this.input.on(Engine.Input.Events.GAME_OUT, () => {
       this.hovered = null;
       this.drawHover();
       this.ui?.setStatus(null);
     });
     this.input.on(
-      Phaser.Input.Events.POINTER_WHEEL,
-      (pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => this.onWheel(pointer, dy),
+      Engine.Input.Events.POINTER_WHEEL,
+      (pointer: Engine.Input.Pointer, _over: unknown, _dx: number, dy: number) => this.onWheel(pointer, dy),
     );
   }
 
@@ -649,7 +741,7 @@ export class EditorScene extends Phaser.Scene {
     return { x: Math.floor(worldX / WORLD_TILE), y: Math.floor(worldY / WORLD_TILE) };
   }
 
-  private onPointerDown(pointer: Phaser.Input.Pointer): void {
+  private onPointerDown(pointer: Engine.Input.Pointer): void {
     if (!this.store || pointer.x < PANEL_WIDTH) return;
 
     if (pointer.middleButtonDown() || (this.ui?.spaceHeld && pointer.leftButtonDown())) {
@@ -687,7 +779,7 @@ export class EditorScene extends Phaser.Scene {
     this.applyToolAt(cell.x, cell.y);
   }
 
-  private onPointerMove(pointer: Phaser.Input.Pointer): void {
+  private onPointerMove(pointer: Engine.Input.Pointer): void {
     if (this.panning) {
       const cam = this.cameras.main;
       cam.scrollX -= (pointer.x - this.panning.lastX) / cam.zoom;
@@ -720,7 +812,7 @@ export class EditorScene extends Phaser.Scene {
     if (this.rectDrag) this.drawRectPreview(cell);
   }
 
-  private onPointerUp(pointer: Phaser.Input.Pointer): void {
+  private onPointerUp(pointer: Engine.Input.Pointer): void {
     if (this.panning) {
       this.panning = null;
       this.persistUi();
@@ -739,11 +831,11 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
-  private onWheel(pointer: Phaser.Input.Pointer, dy: number): void {
+  private onWheel(pointer: Engine.Input.Pointer, dy: number): void {
     if (pointer.x < PANEL_WIDTH) return;
     const cam = this.cameras.main;
     const factor = dy > 0 ? 1 / 1.2 : 1.2;
-    const zoom = Phaser.Math.Clamp(cam.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    const zoom = Engine.Math.Clamp(cam.zoom * factor, MIN_ZOOM, MAX_ZOOM);
     if (zoom === cam.zoom) return;
 
     // Zoom towards the cursor: keep the world point under the pointer fixed on screen.
@@ -1130,7 +1222,7 @@ export class EditorScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const worldW = store.tilesX * WORLD_TILE;
     const worldH = store.tilesY * WORLD_TILE;
-    const zoom = Phaser.Math.Clamp(Math.min(cam.width / worldW, cam.height / worldH) * 0.95, MIN_ZOOM, MAX_ZOOM);
+    const zoom = Engine.Math.Clamp(Math.min(cam.width / worldW, cam.height / worldH) * 0.95, MIN_ZOOM, MAX_ZOOM);
     cam.setZoom(zoom);
     cam.centerOn(worldW / 2, worldH / 2);
     this.persistUi();
@@ -1243,13 +1335,13 @@ export class EditorScene extends Phaser.Scene {
         state: this.uiState,
         cam: { centerX: cam.midPoint.x, centerY: cam.midPoint.y, zoom: cam.zoom },
       };
-      window.sessionStorage.setItem(this.uiStateKey, JSON.stringify(persisted));
+      sessionStore().setItem(this.uiStateKey, JSON.stringify(persisted));
     } catch { /* ignore */ }
   }
 
   private restoreUi(): void {
     try {
-      const raw = window.sessionStorage.getItem(this.uiStateKey);
+      const raw = sessionStore().getItem(this.uiStateKey);
       if (!raw) return;
       const persisted = JSON.parse(raw) as Partial<PersistedUi>;
       if (persisted.state && typeof persisted.state === 'object') {
@@ -1260,12 +1352,12 @@ export class EditorScene extends Phaser.Scene {
 
   private restoreCamera(): boolean {
     try {
-      const raw = window.sessionStorage.getItem(this.uiStateKey);
+      const raw = sessionStore().getItem(this.uiStateKey);
       if (!raw) return false;
       const persisted = JSON.parse(raw) as Partial<PersistedUi>;
       if (!persisted.cam) return false;
       const cam = this.cameras.main;
-      cam.setZoom(Phaser.Math.Clamp(persisted.cam.zoom, MIN_ZOOM, MAX_ZOOM));
+      cam.setZoom(Engine.Math.Clamp(persisted.cam.zoom, MIN_ZOOM, MAX_ZOOM));
       cam.centerOn(persisted.cam.centerX, persisted.cam.centerY);
       return true;
     } catch {

@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -12,6 +12,7 @@ import { paintedCanvas } from '@/game/render3d/homeTextures';
 import type { Paint } from '@/game/render3d/pixelForms';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import { world3d } from '@/game/render3d/World3D';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * O ACAMPAMENTO DO HERÓI (pedido do autor: um lugar que é dele, "uma cabana improvisada tipo acampamento").
@@ -19,13 +20,13 @@ import { world3d } from '@/game/render3d/World3D';
  * Fica bem à direita do laguinho, a nordeste dele, no chão plano antes do outro lago. Sem barraca (pedido do autor): o
  * COLCHÃO fica no chão, ao lado das PEDRAS de um fogo frio com o tripé e a panela (a fogueira acesa é dos vizinhos —
  * lei do CLAUDE.md), o TRONCO de sentar e a CLAREIRA de terra batida embaixo de tudo; e quatro lugares vazios que se
- * enchem sozinhos: cada pedido fechado deixa ali uma LEMBRANÇA de quem pediu — o varal de cogumelos da Hollis, o
- * quadro da Iris, a lenha do Bram e o mapa de estrelas da Vega. O mago manda o herói dormir aqui, e a primeira noite
+ * enchem sozinhos: cada pedido fechado deixa ali uma LEMBRANÇA de quem pediu — o varal de cogumelos da Shui, o
+ * quadro da Sisi, a lenha do Marco e o mapa de estrelas da Thea. O mago manda o herói dormir aqui, e a primeira noite
  * no colchão é a da primeira visita da Morte (GameScene.sleepAtCamp).
  *
  *          x52              x53              x54        x55
- *   y47   mapa da Vega       .                .        quadro da Iris
- *   y48   varal da Hollis   COLCHÃO         (o Z daqui) lenha do Bram
+ *   y47   mapa da Thea       .                .        quadro da Sisi
+ *   y48   varal da Shui   COLCHÃO         (o Z daqui) lenha do Marco
  *   y49   tronco            pedras            .        (a entrada vem do sudeste, pelo 55,50)
  *
  * O chão do acampamento fica limpo no world.json (scripts/acampamento.mjs, com a mesma tabela de tiles), e as peças
@@ -74,7 +75,7 @@ const registerTextures = (): void => {
     tex.needsUpdate = true;
     registerTexture3D(texture(kind as CampPieceKind), tex);
   }
-  const ground = document.createElement('canvas');
+  const ground = createCanvas();
   ground.width = CLEARING_W;
   ground.height = CLEARING_H;
   const ctx = ground.getContext('2d');
@@ -92,7 +93,7 @@ export class HeroCamp {
   private readonly bodies: Billboard3D[] = [];
   private readonly mementos = new Map<string, Billboard3D>();
 
-  public constructor(private readonly scene: Phaser.Scene, private readonly questDone: (quest: string) => boolean) {
+  public constructor(private readonly scene: Engine.Scene, private readonly questDone: (quest: string) => boolean) {
     registerTextures();
     const w3 = world3d();
     // A clareira de terra batida: pintura no chão, por baixo das sombras (como a estrada antiga).

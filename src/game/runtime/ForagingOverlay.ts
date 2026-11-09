@@ -8,6 +8,7 @@ import { MinigameCaption } from '@/game/runtime/MinigameCaption';
 import {
   HAND_FONT as HAND, INK, INK_RED, SOFT_BLUR, paperTexture, seedOf, seededRandom, tornEdge,
 } from '@/game/runtime/uiStyle';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * A COLHEITA DE UM COGUMELO — sem interface de jogo nenhuma. O mundo fica onde está, só que
@@ -368,7 +369,7 @@ export class ForagingOverlay {
     this.root.setAttribute('data-zh-ui', '');
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-label', t(`items.name.${kind}`));
-    this.canvas = document.createElement('canvas');
+    this.canvas = createCanvas();
     this.canvas.className = 'zh-forage-canvas';
     const ctx = this.canvas.getContext('2d');
     if (!ctx) throw new Error('ForagingOverlay: no 2d context');
@@ -519,7 +520,7 @@ export class ForagingOverlay {
       handled = false;
     }
     if (handled) {
-      // So o KEYDOWN e engolido. O keyup segue para o Phaser: uma seta que estava apertada
+      // So o KEYDOWN e engolido. O keyup segue para o motor: uma seta que estava apertada
       // quando a tela abriu (o heroi encostado no cogumelo) precisa soltar la tambem, senao ele
       // sai andando sozinho quando a tela fecha.
       event.preventDefault();

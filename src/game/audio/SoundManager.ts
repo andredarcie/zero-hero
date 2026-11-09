@@ -1,6 +1,7 @@
 import { scheduleRadioClick, scheduleSyllable } from '@/game/audio/dialogVoice';
 import type { SpokenSyllable } from '@/game/dialogs/voicePersonas';
 import type { Material, Surface } from '@/game/audio/materials';
+import { localStore, platform } from '@/game/platform/platform';
 
 
 const MASTER_VOL = 0.32;
@@ -18,7 +19,7 @@ const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 const loadVol = (storageKey: string): number => {
   try {
-    const raw = localStorage.getItem(storageKey);
+    const raw = localStore().getItem(storageKey);
     if (raw !== null) {
       const v = Number(raw);
       if (Number.isFinite(v)) return clamp01(v);
@@ -162,6 +163,9 @@ const FOOTSTEP_KEYS: readonly SampleKey[] = ['footstep0', 'footstep1', 'footstep
  */
 const detune = (): number => 1 + (Math.random() * 2 - 1) * 0.04;
 
+/** Os temporizadores do escopo global (no navegador, a própria janela): o som não precisa de `window`. */
+const timers = globalThis as unknown as Pick<Window, 'setTimeout' | 'clearTimeout'>;
+
 class SoundManager {
   private ctx: AudioContext | null = null;
   private master!: GainNode; // gain -> "SNES" lowpass -> compressor -> destination
@@ -202,13 +206,16 @@ class SoundManager {
 
   private lastFootstep = -1;
 
-  // O zumbido da lamina juntando forca (ver startSpinChargeHum) — guardado para poder ser
-  // cortado no instante em que a carga morre (soltar cedo, apanhar segurando, pausar).
-  private chargeHum: { oscs: OscillatorNode[]; gain: GainNode } | null = null;
 
-  private get audio(): AudioContext {
+  /**
+   * O contexto de áudio, criado na primeira vez que alguém toca algo — ou `null` quando a plataforma não tem som
+   * (ver platform.ts): aí o jogo segue mudo, e cada efeito simplesmente não toca.
+   */
+  private get audio(): AudioContext | null {
     if (!this.ctx) {
-      this.ctx = new AudioContext();
+      const created = platform().createAudioContext();
+      if (!created) return null;
+      this.ctx = created;
       this.master = this.ctx.createGain();
       this.master.gain.value = MASTER_VOL;
       // Master chain: a gentle low-pass fakes the S-SMP's gaussian-interpolation warmth
@@ -248,7 +255,8 @@ class SoundManager {
     let download = this.downloads.get(file);
     if (!download) {
       const ctx = this.audio;
-      download = fetch(`${import.meta.env.BASE_URL}assets/audio/${file}`)
+      if (!ctx) return Promise.reject(new Error('sem áudio'));
+      download = platform().fetch(`${import.meta.env.BASE_URL}assets/audio/${file}`)
         .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
         .then((data) => ctx.decodeAudioData(data));
       this.downloads.set(file, download);
@@ -262,6 +270,7 @@ class SoundManager {
    */
   public preload(): void {
     if (this.loadStarted) return;
+    if (!this.audio) return; // sem som (ver o getter): nada a baixar
     this.loadStarted = true;
     (Object.keys(SAMPLES) as SampleKey[]).forEach((key) => {
       this.fetchBuffer(SAMPLES[key].file)
@@ -281,12 +290,15 @@ class SoundManager {
     let start = 0;
     while (start < limit && channels.every((data) => Math.abs(data[start]) < DECODER_SILENCE)) start += 1;
     if (start === 0) return buffer;
-    const trimmed = this.audio.createBuffer(buffer.numberOfChannels, buffer.length - start, buffer.sampleRate);
+    const ctx = this.audio;
+    if (!ctx) return buffer;
+    const trimmed = ctx.createBuffer(buffer.numberOfChannels, buffer.length - start, buffer.sampleRate);
     channels.forEach((data, c) => trimmed.copyToChannel(data.subarray(start), c));
     return trimmed;
   }
 
   private loadTrack(key: LoopKey): void {
+    if (!this.audio) return;
     this.fetchBuffer(TRACKS[key].file)
       .then((buffer) => {
         this.musicBuffers.set(key, buffer);
@@ -298,6 +310,7 @@ class SoundManager {
   }
 
   private loadAmbience(): void {
+    if (!this.audio) return;
     (Object.keys(AMBIENCE_FILES) as AmbienceBed[]).forEach((bed) => {
       if (this.ambienceBuffers.has(bed)) return;
       this.fetchBuffer(AMBIENCE_FILES[bed].file)
@@ -345,10 +358,12 @@ class SoundManager {
   // ── a música da aventura: peças inteiras, silêncio entre elas ──────────────
 
   private startValley(fadeMs: number): void {
-    const bus = this.ensureMusicBus();
+    const ctx = this.audio;
+    if (!ctx) return;
+    const bus = this.ensureMusicBus(ctx);
     if (!this.currentMusic) {
       // começo do zero (boot da cena): um abaixar de diálogo esquecido não pode calar o vale
-      const now = this.audio.currentTime;
+      const now = ctx.currentTime;
       bus.gain.cancelScheduledValues(now);
       bus.gain.setValueAtTime(MUSIC_VOL, now);
     }
@@ -360,7 +375,7 @@ class SoundManager {
     const v = this.valley;
     if (!v) return;
     this.valley = null;
-    if (v.timer !== null) window.clearTimeout(v.timer);
+    if (v.timer !== null) timers.clearTimeout(v.timer);
     this.stopLayers();
     if (v.piece) this.fadeOut(v.piece.source, v.piece.gain, fadeMs);
   }
@@ -381,22 +396,24 @@ class SoundManager {
 
   /** Baixa e decodifica sem guardar no cache dos efeitos: a peça sai da memória quando acaba. */
   private decodeValley(file: string): Promise<AudioBuffer> {
-    return fetch(`${import.meta.env.BASE_URL}assets/audio/${file}`)
+    return platform().fetch(`${import.meta.env.BASE_URL}assets/audio/${file}`)
       .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`))))
       .then((data) => {
         // O decodificador desanexa o ArrayBuffer; a cópia é para a segunda tentativa, no contexto do
         // jogo (na taxa dele), se o navegador recusar decodificar fora dele ou nessa taxa.
         const spare = data.slice(0);
-        return SoundManager.decodeIn(() => new OfflineAudioContext(2, 1, VALLEY_DECODE_RATE), data)
+        return SoundManager.decodeIn(() => platform().createOfflineAudioContext(2, 1, VALLEY_DECODE_RATE), data)
           .catch(() => SoundManager.decodeIn(() => this.audio, spare));
       });
   }
 
   /** decodeAudioData nas duas formas que os navegadores já tiveram (promessa e callbacks). */
-  private static decodeIn(make: () => BaseAudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
+  private static decodeIn(make: () => BaseAudioContext | null, data: ArrayBuffer): Promise<AudioBuffer> {
     return new Promise((resolve, reject) => {
       try {
-        const ret = make().decodeAudioData(data, resolve, reject);
+        const ctx = make();
+        if (!ctx) throw new Error('sem áudio');
+        const ret = ctx.decodeAudioData(data, resolve, reject);
         if (ret && typeof ret.then === 'function') ret.then(resolve, reject);
       } catch (err) {
         reject(err);
@@ -411,11 +428,11 @@ class SoundManager {
   private scheduleValley(delayS: number): void {
     const v = this.valley;
     if (!v) return;
-    if (v.timer !== null) window.clearTimeout(v.timer);
+    if (v.timer !== null) timers.clearTimeout(v.timer);
     const planned = this.pickValleyPiece(v.recent);
     const download = this.decodeValley(planned);
     download.catch(() => { /* tratado na hora de tocar */ });
-    v.timer = window.setTimeout(() => {
+    v.timer = timers.setTimeout(() => {
       v.timer = null;
       if (this.valley !== v) return;
       const stillFits = VALLEY_PIECES.find((p) => p.file === planned)?.when.includes(this.valleyTime());
@@ -432,9 +449,10 @@ class SoundManager {
 
   private playValley(v: NonNullable<SoundManager['valley']>, file: string, buffer: AudioBuffer): void {
     const ctx = this.audio;
+    if (!ctx) return;
     const gain = ctx.createGain();
     gain.gain.value = VALLEY_VOL;
-    gain.connect(this.ensureMusicBus());
+    gain.connect(this.ensureMusicBus(ctx));
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(gain);
@@ -451,6 +469,7 @@ class SoundManager {
   }
 
   private loadLayers(): void {
+    if (!this.audio) return;
     (Object.keys(LAYER_FILES) as MusicLayer[]).forEach((layer) => {
       if (this.layerBuffers.has(layer)) { this.startLayers(); return; }
       this.fetchBuffer(LAYER_FILES[layer])
@@ -463,7 +482,8 @@ class SoundManager {
   private startLayers(): void {
     if (!this.valley) return;
     const ctx = this.audio;
-    const bus = this.ensureMusicBus();
+    if (!ctx) return;
+    const bus = this.ensureMusicBus(ctx);
     for (const [layer, buffer] of this.layerBuffers) {
       if (this.layers.has(layer)) continue;
       const gain = ctx.createGain();
@@ -523,7 +543,9 @@ class SoundManager {
       try { source.stop(); } catch { /* already stopped */ }
       return;
     }
-    const now = this.audio.currentTime;
+    const ctx = this.audio;
+    if (!ctx) return;
+    const now = ctx.currentTime;
     const fadeS = Math.max(0.05, fadeMs / 1000);
     gain.gain.cancelScheduledValues(now);
     gain.gain.setValueAtTime(Math.max(gain.gain.value, 0.0001), now);
@@ -531,8 +553,7 @@ class SoundManager {
     try { source.stop(now + fadeS + 0.1); } catch { /* already stopped */ }
   }
 
-  private ensureMusicBus(): GainNode {
-    const ctx = this.audio;
+  private ensureMusicBus(ctx: AudioContext): GainNode {
     if (!this.musicBus) {
       this.musicBus = ctx.createGain();
       this.musicBus.gain.value = MUSIC_VOL;
@@ -543,7 +564,8 @@ class SoundManager {
 
   private crossfadeTo(key: LoopKey, buffer: AudioBuffer, fadeMs: number): void {
     const ctx = this.audio;
-    const bus = this.ensureMusicBus();
+    if (!ctx) return;
+    const bus = this.ensureMusicBus(ctx);
     const now = ctx.currentTime;
     const fadeS = Math.max(0.05, fadeMs / 1000);
 
@@ -584,14 +606,14 @@ class SoundManager {
   /** Set the player's music+ambience volume (0..1), persisted across sessions. */
   public setMusicVolume(vol: number): void {
     this.musicVol = clamp01(vol);
-    try { localStorage.setItem(VOL_MUSIC_KEY, String(this.musicVol)); } catch { /* storage unavailable */ }
+    try { localStore().setItem(VOL_MUSIC_KEY, String(this.musicVol)); } catch { /* storage unavailable */ }
     this.rampUserBus(this.musicUserBus, this.musicVol);
   }
 
   /** Set the player's sound-effects volume (0..1), persisted across sessions. */
   public setSfxVolume(vol: number): void {
     this.sfxVol = clamp01(vol);
-    try { localStorage.setItem(VOL_SFX_KEY, String(this.sfxVol)); } catch { /* storage unavailable */ }
+    try { localStore().setItem(VOL_SFX_KEY, String(this.sfxVol)); } catch { /* storage unavailable */ }
     this.rampUserBus(this.sfxUserBus, this.sfxVol);
   }
 
@@ -614,8 +636,10 @@ class SoundManager {
   private listenBus: GainNode | null = null;
 
   /** Onde o player toca: no mesmo nível da música do jogo e debaixo do volume de música da pessoa. */
-  public listeningOutput(): { ctx: AudioContext; out: AudioNode } {
+  /** `null` sem som (ver o getter `audio`). */
+  public listeningOutput(): { ctx: AudioContext; out: AudioNode } | null {
     const ctx = this.audio;
+    if (!ctx) return null;
     if (!this.listenBus) {
       this.listenBus = ctx.createGain();
       this.listenBus.gain.value = MUSIC_VOL;
@@ -640,6 +664,7 @@ class SoundManager {
   private rampMusicBus(target: number, ms: number): void {
     if (!this.musicBus) return;
     const ctx = this.audio;
+    if (!ctx) return;
     const now = ctx.currentTime;
     const gain = this.musicBus.gain;
     gain.cancelScheduledValues(now);
@@ -680,6 +705,7 @@ class SoundManager {
   private startAmbienceNow(): void {
     if (!this.wantAmbience) return;
     const ctx = this.audio;
+    if (!ctx) return;
     for (const [bed, buffer] of this.ambienceBuffers) {
       if (this.ambienceBeds.has(bed)) continue;
       const gain = ctx.createGain();
@@ -710,6 +736,7 @@ class SoundManager {
     const buffer = this.buffers.get(key);
     if (!buffer) return false;
     const ctx = this.audio; // ensures this.master exists
+    if (!ctx) return true; // sem som: o efeito "tocou" mudo (não cai no sintetizador)
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     // `rate` e a altura FIXA de quem fala (a voz por especie, ver ENEMY_VOICE); o jitter aleatorio
@@ -755,11 +782,13 @@ class SoundManager {
   /** Uma sílaba da fala de um NPC (ver dialogs/voicePersonas). */
   public playDialogSyllable(syllable: SpokenSyllable): void {
     const ctx = this.audio; // ensures sfxUserBus exists
+    if (!ctx) return;
     scheduleSyllable(ctx, this.sfxUserBus, ctx.currentTime, syllable);
   }
 
   public playRadioClick(closing: boolean): void {
     const ctx = this.audio; // ensures sfxUserBus exists
+    if (!ctx) return;
     scheduleRadioClick(ctx, this.sfxUserBus, ctx.currentTime, closing);
   }
 
@@ -777,6 +806,7 @@ class SoundManager {
     delay = 0,
   ): void {
     const ctx = this.audio; // ensures this.master is initialised
+    if (!ctx) return;
     const t = ctx.currentTime + delay;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
@@ -801,6 +831,7 @@ class SoundManager {
     delay = 0,
   ): void {
     const ctx = this.audio; // ensures this.master is initialised
+    if (!ctx) return;
     const t = ctx.currentTime + delay;
     const len = Math.ceil(ctx.sampleRate * (duration + 0.02));
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
@@ -939,11 +970,6 @@ class SoundManager {
     this.osc('sawtooth', 150, 45, 0.16, 0.12);
   }
 
-  /**
-   * O ITEM QUE NÃO É ARMA batendo num corpo — o balde, a bomba, as botas cutucando uma caveira.
-   * Era a única resposta MUDA do botão B (nem swing, nem som, nem recusa), quebrando a lei de que
-   * toda recusa tem desenho próprio. Um "toc" surdo, sem metal e sem dano: encostou, não mordeu.
-   */
   /** O chamado pelo rádio: dois bipes secos, subindo. */
   public playShipCall(): void {
     const d = detune();
@@ -1208,6 +1234,27 @@ class SoundManager {
     this.noise('lowpass', 700, 0.8, 0.20, 0.34, 0.16);
   }
 
+  /**
+   * O "plop" do sapo pulando na água (objects/nature/Frogs): a gota do título, mais grave e baixa — um corpo
+   * pequeno entrando na água, não uma pedra.
+   */
+  public playFrogPlop(): void {
+    if (this.playSample('dropWater', 1, 0.5, 0.72)) return;
+    this.osc('sine', 520, 260, 0.14, 0.05);
+  }
+
+  /** O peixe voltando para a água (objects/nature/FishJumps): o splash, baixo e agudo, um peixe e não um balde. */
+  public playFishSplash(): void {
+    if (this.playSample('splash', 1, 0.32, 1.25)) return;
+    this.noise('lowpass', 1400, 0.6, 0.12, 0.05);
+  }
+
+  /** O pé na poça (objects/nature/Puddles): o splash curto e agudo, quase um "chap". */
+  public playPuddleSplash(): void {
+    if (this.playSample('splash', 1.5, 0.28, 1.55)) return;
+    this.noise('lowpass', 1800, 0.6, 0.09, 0.05);
+  }
+
   public playSplash(): void {
     if (this.playSample('splash', 0.5)) return;
     this.noise('lowpass', 1100, 0.6, 0.24, 0.16);
@@ -1256,10 +1303,9 @@ class SoundManager {
     this.noise('bandpass', 1300, 0.8, 0.07, 0.16, 0.1);
   }
 
-  // ── o bestiario que nao vem do chao ──────────────────────────────────────
-  // A caveira tem o chao rachando (playGroundCrack) porque ela nasce de baixo. Bicho, gosma e
-  // maquina chegam de outro jeito, e cada som abaixo e o par sonoro de um gesto que ja esta na
-  // tela — nenhum deles existe para "avisar" sozinho.
+  // ── os gestos do mundo ───────────────────────────────────────────────────
+  // Cada som abaixo e o par sonoro de um gesto que ja esta na tela — nenhum deles existe para
+  // "avisar" sozinho.
 
   public playFireHit(): void {
     if (this.playSample('fireHit', 0.9)) return;
@@ -1303,7 +1349,7 @@ class SoundManager {
   // A cena inteira da fechadura (GameScene.playGardenUnlock), em cinco sons curtos de metal: tirar a chave das
   // costas, enfiar no tambor, cada dente do giro, o trinco cedendo e o portão velho rangendo ao abrir.
 
-  // ── a bigorna da Vega ─────────────────────────────────────────────────────────────────────
+  // ── a bigorna da Thea ─────────────────────────────────────────────────────────────────────
   // Uma bigorna de verdade TOCA: o golpe é um estalo curto de impacto e, por cima, as parciais inarmônicas do ferro
   // grosso (não um tom só, nem harmônicas certinhas), que somem em menos de um segundo. Por baixo, o baque do toco.
 
@@ -1435,7 +1481,7 @@ export const getSoundManager = (): SoundManager => {
   if (!_instance) {
     _instance = new SoundManager();
     // Dev-only handle for the playtest (the same instance the game plays through).
-    if (import.meta.env.DEV) (window as unknown as { __sound?: SoundManager }).__sound = _instance;
+    if (import.meta.env.DEV) (globalThis as unknown as { __sound?: SoundManager }).__sound = _instance;
   }
   return _instance;
 };

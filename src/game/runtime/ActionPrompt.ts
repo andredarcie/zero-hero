@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { FONT_FAMILY, SCENE_DEPTHS } from '@/game/constants';
 import { keycapTexture } from '@/game/render3d/placementTexture';
@@ -52,21 +52,21 @@ const ARROWS = [
   '..#......',
 ];
 
-const color = (hex: string): number => Phaser.Display.Color.HexStringToColor(hex).color;
+const color = (hex: string): number => Engine.Display.Color.HexStringToColor(hex).color;
 
 export class ActionPrompt {
-  private readonly bubble: Phaser.GameObjects.Container;
-  private readonly plate: Phaser.GameObjects.Graphics;
-  private readonly heldIcon: Phaser.GameObjects.Image;
-  private readonly groundIcon: Phaser.GameObjects.Image;
-  private readonly keys: Phaser.GameObjects.Image[] = [];
-  private readonly labels: Phaser.GameObjects.Text[] = [];
+  private readonly bubble: Engine.GameObjects.Container;
+  private readonly plate: Engine.GameObjects.Graphics;
+  private readonly heldIcon: Engine.GameObjects.Image;
+  private readonly groundIcon: Engine.GameObjects.Image;
+  private readonly keys: Engine.GameObjects.Image[] = [];
+  private readonly labels: Engine.GameObjects.Text[] = [];
   private shown: string | null = null;
   private shownRows: readonly string[] = [];
   private laidOutPx = 0;
-  private popTween?: Phaser.Tweens.Tween;
+  private popTween?: Engine.Tweens.Tween;
 
-  public constructor(private readonly scene: Phaser.Scene, private readonly touch: boolean) {
+  public constructor(private readonly scene: Engine.Scene, private readonly touch: boolean) {
     const blank = keycapTexture(scene, this.letterOf('hand'));
     this.plate = scene.add.graphics();
     this.heldIcon = scene.add.image(0, 0, blank);
@@ -127,7 +127,7 @@ export class ActionPrompt {
     this.popTween = this.scene.tweens.add({ targets: this.bubble, scale: 1, duration: 160, ease: 'Back.easeOut' });
   }
 
-  private placeIcon(icon: Phaser.GameObjects.Image, source: PromptIcon, cx: number, cy: number, px: number): void {
+  private placeIcon(icon: Engine.GameObjects.Image, source: PromptIcon, cx: number, cy: number, px: number): void {
     icon.setTexture(source.texture, source.frame);
     const fit = (ICON * px) / Math.max(icon.frame.realWidth, icon.frame.realHeight);
     icon.setDisplaySize(icon.frame.realWidth * fit, icon.frame.realHeight * fit).setPosition(cx, cy).setVisible(true);

@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { spawnPackSize } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -20,7 +20,7 @@ export type CollectedItem = {
 export class ItemManager {
   private items: ItemPickup[] = [];
 
-  public constructor(private readonly scene: Phaser.Scene) {}
+  public constructor(private readonly scene: Engine.Scene) {}
 
   public loadAuthored(
     list: ReadonlyArray<{ type: HeldItemKind; worldX: number; worldY: number; units?: number }>,

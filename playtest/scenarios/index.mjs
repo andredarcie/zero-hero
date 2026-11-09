@@ -43,12 +43,16 @@ import marcas from './marcas.mjs';
 import descanso from './descanso.mjs';
 import dia from './dia.mjs';
 import fogueiraDormir from './fogueira-dormir.mjs';
-import irisDormir from './iris-dormir.mjs';
+import sisiDormir from './sisi-dormir.mjs';
 import morteTresNoites from './morte-tres-noites.mjs';
 import gatoCinico from './gato-cinico.mjs';
 import gatoBarril from './gato-barril.mjs';
 import cachoeira from './cachoeira.mjs';
 import chuva from './chuva.mjs';
+import bosque from './bosque.mjs';
+import natureza from './natureza.mjs';
+import cerca from './cerca.mjs';
+import forja from './forja.mjs';
 import biomas from './biomas.mjs';
 
 export const scenarios = {
@@ -97,12 +101,16 @@ export const scenarios = {
   descanso,
   dia,
   'fogueira-dormir': fogueiraDormir,
-  'iris-dormir': irisDormir,
+  'sisi-dormir': sisiDormir,
   'morte-tres-noites': morteTresNoites,
   'gato-cinico': gatoCinico,
   'gato-barril': gatoBarril,
   cachoeira,
   chuva,
+  bosque,
+  natureza,
+  cerca,
+  forja,
   biomas,
 };
 

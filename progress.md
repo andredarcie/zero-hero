@@ -1,9 +1,9 @@
-﻿Original prompt: Crie a estrutura do projeto em phaser, com ts e vite, usando as boas praticas
+﻿Original prompt: Crie a estrutura do projeto, com ts e vite, usando as boas praticas
 
 - Projeto inicialmente continha apenas assets e README.
-- Vou criar uma base limpa com Phaser + TypeScript + Vite, organizada para expansao.
+- Vou criar uma base limpa com motor 2D + TypeScript + Vite, organizada para expansao.
 - Objetivo inicial: cena bootstrap, configuracao central, aliases, pasta public para assets e scripts de qualidade.
-- Estrutura inicial criada com Vite + Phaser + TypeScript + ESLint.
+- Estrutura inicial criada com Vite + motor 2D + TypeScript + ESLint.
 - Assets movidos para public/assets para servir arquivos estaticos no Vite.
 - Validacao local: typecheck, lint e build passaram.
 - Proximo passo: inspecao visual da cena inicial no navegador.
@@ -119,14 +119,14 @@ pm run build passaram apos a refatoracao.
 - Pickup3D deixou de usar planos: espada, machado e graveto agora sao modelos Three.js low-poly reais, formados respectivamente por caixa/cilindro/esfera (lamina, guarda e punho), caixa+cilindro (cabeca unica e cabo) e cilindro+ponteira. Cada parte recebe o sprite original como mapa de textura, responde a iluminacao e projeta sombra; todos continuam girando no eixo Y enquanto estao no chao. Validacao: cliente Playwright executou sem erros; lint dos tres arquivos e npm run build passaram.
 
 - Em andamento: mecanismos de puzzle sem tecla de uso. O schema/editor agora suportam `woodenCrate`, `pressurePlate`, o campo `variable` da placa e `globalVariables` booleanas opcionais no mundo. O editor ganhou modal de variaveis, seletor contextual por placa, validacao e undo/redo; os campos extras sobrevivem a place/erase/undo.
-- Runtime implementado: caixa solida empurrada por bump cardinal (recusa destinos ocupados), placa walkable acionada por heroi/inimigo/caixa e placas com o mesmo nome combinadas por OR. Estado e mecanismos foram expostos no debug para playtest. Arte pixel procedural foi registrada nos pipelines Phaser e Three.
+- Runtime implementado: caixa solida empurrada por bump cardinal (recusa destinos ocupados), placa walkable acionada por heroi/inimigo/caixa e placas com o mesmo nome combinadas por OR. Estado e mecanismos foram expostos no debug para playtest. Arte pixel procedural foi registrada nos pipelines 2D e Three.
 - Validacao final dos mecanismos: `npm run typecheck`, ESLint direcionado e `npm run build` passaram. `npm run playtest -- caixa-placa` passou todas as assercoes em Chromium headed: autoria/vinculo no editor, caixa pressionando, heroi pressionando, caixa recusada por rocha e inimigo pressionando; capturas foram inspecionadas e mostram caixa/placa legiveis e o estado pressionado verde.
 
 - Arte do caixote e da placa refeita integralmente na Sprite Factory nativa, estritamente com a paleta oficial: caixote = ramps `wood` + `ink`; placa = `stone` + `ink` + `heroGreen/meadow` no circuito ativo. Specs versionadas em `spritefactory/sprites/wooden-crate.mjs` e `pressure-plate.mjs`; PNGs instalados em `public/assets/environment/props/`. A primeira iteracao foi rejeitada visualmente (X do caixote parecia buraco; placa parecia um L) e redesenhada: X inequívoco, tampa iluminada, bevel completo, quatro parafusos e miolo rebaixado/verde. Ambos os assets passaram com 0 FAIL e 0 WARN, inclusive zero cor off-palette.
-- O antigo gerador procedural `mechanismTextures.ts` foi removido; Phaser e Three.js agora carregam os PNGs auditados da fábrica, com a placa como sheet 16x32 (solta/pressionada). Typecheck, ESLint direcionado e build passaram. `npm run playtest -- caixa-placa` passou novamente no run `2026-07-19T22-11-00`; screenshots do editor, caixa na placa e inimigo na placa foram inspecionados e aprovados.
+- O antigo gerador procedural `mechanismTextures.ts` foi removido; o motor 2D e o Three.js agora carregam os PNGs auditados da fábrica, com a placa como sheet 16x32 (solta/pressionada). Typecheck, ESLint direcionado e build passaram. `npm run playtest -- caixa-placa` passou novamente no run `2026-07-19T22-11-00`; screenshots do editor, caixa na placa e inimigo na placa foram inspecionados e aprovados.
 
 - Em andamento: roda d'agua geradora pedida pelo usuario. A arte `water-wheel` foi criada na Sprite Factory como sheet 16x16 de 16 frames (8 orientacoes fisicas do rotor em bancos desligado/ligado), com roda/cavalete de madeira, eixo/carcaca de pedra e indicador verde. O loop build→preview→correcao removeu pixels diagonais orfaos; relatorio final da fabrica: 0 FAIL, 0 WARN. PNG instalado em `public/assets/environment/props/water_wheel.png`; falta integrar ao editor/runtime e validar no jogo.
-- Integracao base da roda concluida: novo prop `waterWheel`, asset carregado por Phaser/Three, paleta do editor e seletor contextual de saida. O editor valida roda sem variavel e roda sem rio ortogonal adjacente. Runtime modela aceleracao, coast e limiar real de geracao; placas+rodas agregam fontes por OR na mesma variavel. Braco robotico agora aceita alimentacao opcional (sem vinculo preserva compatibilidade; vinculado congela/escurece sem energia). Debug expoe roda/velocidade/frame/geracao e energia dos bracos. `npm run typecheck` e ESLint direcionado passaram.
+- Integracao base da roda concluida: novo prop `waterWheel`, asset carregado pelo 2D e pelo Three, paleta do editor e seletor contextual de saida. O editor valida roda sem variavel e roda sem rio ortogonal adjacente. Runtime modela aceleracao, coast e limiar real de geracao; placas+rodas agregam fontes por OR na mesma variavel. Braco robotico agora aceita alimentacao opcional (sem vinculo preserva compatibilidade; vinculado congela/escurece sem energia). Debug expoe roda/velocidade/frame/geracao e energia dos bracos. `npm run typecheck` e ESLint direcionado passaram.
 
 - Correcao de requisito da roda d'agua: ela deixou de ser um billboard bancario e agora ocupa o PROPRIO tile de rio. O editor recusa terreno seco e permite substituir apenas `water`/`bridgeSpot`; o runtime cria agua ativa sob a roda e exige continuidade ortogonal. `World3D` inclui `waterWheel` na malha rebaixada do canal, portanto a agua fica realmente visivel sob as pas; drenar o tile da maquina corta a corrente.
 - Rotor refeito em 3D real com Three.js: aro low-poly, seis raios conectados, oito pas volumetricas, cubo, eixo, cavalete parcialmente submerso, carcaca e lampada fisica do dinamo. A hierarquia gira continuamente em `rotation.z`, com aceleracao, inercia/coast e limiar de geracao. A folha da Sprite Factory (0 FAIL/0 WARN) permanece como icone/editor e referencia de paleta.
@@ -274,7 +274,7 @@ pm run build passaram apos a refatoracao.
 - Arte `level-portal` criada na Sprite Factory: quatro frames 16x16, oito cores oficiais, arco de
   pedra estavel, energia roxa em fluxo e motes embutidos. O build da fabrica passou com 0 FAIL e
   0 WARN; PNG instalado em `public/assets/environment/props/level_portal.png`.
-- Integracao runtime concluida: sheet carregado por Phaser/Three, animacao de 4 frames, glifo de
+- Integracao runtime concluida: sheet carregado pelo 2D e pelo Three, animacao de 4 frames, glifo de
   soleira pulsante e oito particulas pixeladas ascendentes/orbitais. Debug agora expoe frame e
   numero de particulas visiveis para validacao deterministica.
 - Primeiro playtest encontrou uma defasagem no proprio cenario: ele tentava andar durante a nova
@@ -449,7 +449,7 @@ floresta, o porque de cada refusal ser fisica e nao legenda, o contrato de cada 
 
 # Zero the Hero
 
-Top-down pixel-art adventure. Phaser 3 drives the game logic, input and UI on a **transparent**
+Top-down pixel-art adventure. The 2D engine drives the game logic, input and UI on a **transparent**
 canvas; the world underneath it is **real 3D** (Three.js). Three modes on the title screen — the
 adventure, the puzzle levels and the **explorer** (all three are `GameScene`) — plus a
 Vampire-Survivors mode (`SurvivorsScene`, still the hidden `[S]`).
@@ -503,7 +503,7 @@ e mata duas leis que este arquivo repetia em meia dúzia de lugares (*walk-only*
 - **A subtela não é HUD** (`runtime/SubScreen.ts`): só existe enquanto foi pedida, mora dentro do
   menu de pausa (que já congela a cena) e some. Corações **desenhados** (`ui/hearts.png`, arte que
   dormia no repositório desde sempre porque o jogo não tem HUD: cheio e vazio são dois frames, nunca
-  o mesmo coração com opacidade), a mochila com os **próprios ícones do jogo** (frames do Phaser
+  o mesmo coração com opacidade), a mochila com os **próprios ícones do jogo** (frames do motor 2D
   virados em data URL) e o clique que troca o item do B. Setas ← → andam na grade.
 - **Consequências assumidas.** O kit do explorador (espada/machado/picareta no chão do acampamento)
   era "uma mão só, a primeira decisão do modo" — com a mochila o herói leva os três, e essa aposta
@@ -578,7 +578,7 @@ cerco de caveiras é metade da aventura. Custa meio segundo parado no meio da ma
 de 460 ms depois, e por isso é uma decisão e não um golpe melhor. Pede a espada (um punho não
 rodopia). O arco passa de **uma volta e meia**: uma volta exata começa e termina no mesmo ângulo e o
 olho lê "a espada tremeu". O ângulo é tweenado num objeto de rascunho pela armadilha que o `chop` já
-documenta (o getter do Phaser embrulha em [-180, 180] e o tween volta pelo caminho longo).
+documenta (o getter do motor embrulha em [-180, 180] e o tween volta pelo caminho longo).
 
 **6. O feixe da vida cheia foi ARRANCADO** (`runtime/SwordBeam.ts`, deletado). Ele era a barra de
 vida sem HUD — vida cheia, cada golpe mandava uma lâmina de luz voando — e a ideia continua boa no
@@ -1779,7 +1779,7 @@ and dynamo housing. The whole rotor is one hierarchy and turns continuously thro
   while that circuit is live; an old unbound arm remains self-powered for compatibility.
 - **Sprite Factory still owns the authored pixel asset.** `spritefactory/sprites/water-wheel.mjs`
   builds 8 rotor phases in off/on banks with the official wood/stone/green palette (0 FAIL,
-  0 WARN). Phaser uses it for the editor palette and placement icon; gameplay uses the 3D model.
+  0 WARN). The 2D engine uses it for the editor palette and placement icon; gameplay uses the 3D model.
 - Juice is stateful: water spray follows the detected flow, paddles have a repeating splash SFX,
   startup shakes, the dynamo emits a green pulse/sparks and its physical lamp changes colour.
 - `npm run playtest -- roda-agua` guards dry-placement rejection, in-river authoring, continuous
@@ -2003,7 +2003,7 @@ between them.
 2. **O vazio** (620ms). The portal spinning alone in the dark it just made. Without the pause the
    trip starts on top of the hero disappearing and neither beat is seen.
 3. **O túnel** (`render3d/PortalTunnel.ts`). Owns its own canvas, renderer and rAF loop at
-   `z-index: 3` — it has to, because World3D and the Phaser scene are both destroyed underneath
+   `z-index: 3` — it has to, because World3D and the 2D scene are both destroyed underneath
    it. Low-res backing store stretched with NEAREST, sized so one tunnel pixel matches one pixel
    of the world's ART (`tileScreenSize() / 16`): the trip is the only non-16px frame in the game
    and it must not read as another game's screen. Wall = an open cylinder seen from inside with a
@@ -2025,7 +2025,7 @@ between them.
   **`params.exposure` is inert here**: the world is drawn into an EffectComposer render target and
   three only applies tone mapping when drawing straight to the canvas — the same bound-target trap
   `prewarmShaders` documents. A test that watched the knob passed on an effect that did not exist.
-- **The hero's view state must be RESET on create** (`resetHeroView`). Phaser reuses the scene
+- **The hero's view state must be RESET on create** (`resetHeroView`). The engine reuses the scene
   instance across `restart()`, and `hero` is a `readonly` field — so the scale-0.001 the suck left
   behind arrived in the next level and the hero was born invisible.
 - `npm run playtest -- portal-travessia` guards all four beats where each happens, including the
@@ -2265,11 +2265,11 @@ Oito coisas, e a primeira é a que dói mais quando se vê:
   que aviso nenhum: ensina que bater é seguro justamente no instante em que não é.
 - **A lâmina não reagia ao conectar.** O hitstop já CONGELAVA o arco no meio do gesto — a pose parada
   existia e faltava a cor. Um lampejo quente no sprite da arma é o *impact frame* clássico, e aqui
-  sai de graça: o arco é um sprite 2D do Phaser por cima do canvas, não um billboard `emissive`, então
+  sai de graça: o arco é um sprite 2D do motor por cima do canvas, não um billboard `emissive`, então
   a lei que proíbe acender um corpo atingido não alcança a arma.
 
 Duas notas de método que valem mais que os itens: o `flashHit` guarda a cor da lâmina num campo
-próprio em vez de ler `tintTopLeft` de volta do Phaser (depender da representação interna do motor
+próprio em vez de ler `tintTopLeft` de volta do sprite (depender da representação interna do motor
 para uma ida-e-volta é o que uma versão menor quebra em silêncio), e as duas vozes do gesto — a do
 acerto e a da recusa — têm **orçamentos separados** em `sweepArc`, ou um resvalo no primeiro tile do
 arco cala o som da morte no segundo.
@@ -2291,7 +2291,7 @@ do herói sai mesmo sem acertar — é assim que o jogador vê que sair do tile 
 
 Duas decisões que não são óbvias:
 
-- **É um `Billboard3D`, e não o caminho do herói.** O arco do herói é um sprite 2D do Phaser
+- **É um `Billboard3D`, e não o caminho do herói.** O arco do herói é um sprite 2D do motor
   desenhado POR CIMA do canvas 3D: não é ocluído por nada e precisa que a cena lhe conte quanta luz
   existe onde ele está. Isso é aceitável para quem está sempre no centro da tela e sempre na frente
   de tudo; para um inimigo não é — ele pode estar atrás de uma árvore, e um osso desenhado por cima
@@ -2825,9 +2825,9 @@ telegrafo com anel), mas **a régua não estava aplicada por igual**. Quatro fre
 ### 1. Apanhar pesava menos que bater
 
 - **O golpe recebido não sacudia o mundo.** O herói acertando move o mundo 3D
-  (`world3d.shake` 90/0.09, 150/0.15 na morte); o herói apanhando só tremia a câmera Phaser da UI
+  (`world3d.shake` 90/0.09, 150/0.15 na morte); o herói apanhando só tremia a câmera 2D da UI
   (`cameras.main.shake(200, 0.01)`) — o mundo ficava parado. Nos elogiados, apanhar é o momento
-  mais pesado. Agora: `shake(170, 0.14)` direcional, entre o acerto e a morte, e o Phaser-shake
+  mais pesado. Agora: `shake(170, 0.14)` direcional, entre o acerto e a morte, e o tremor 2D
   saiu (dois sistemas de tremor no mesmo golpe dessincronizavam as camadas). O flash vermelho fica.
 - **Golpe inimigo no herói invencível evaporava mudo** (early-return no `handleEnemyAttackPlayer`)
   — leitura de bug ("a clava me atravessou"). Agora RESVALA com o pacote frio dos i-frames
@@ -2908,9 +2908,9 @@ real state. Add a scenario in `playtest/scenarios/` and register it in `index.mj
 
 - Always enter the game with **`?play`** (dev-only; skips the title — keying past it is flaky,
   since its input only arms 300ms in).
-- Do **not** drive the game through an MCP browser tab: a hidden tab freezes Phaser's rAF, so
+- Do **not** drive the game through an MCP browser tab: a hidden tab freezes the engine's rAF, so
   nothing advances and every timing is meaningless.
-- Live handles in dev: `window.__scene` (the Phaser scene), `window.__game`, `window.hd3d` (every
+- Live handles in dev: `window.__scene` (the 2D scene), `window.__game`, `window.hd3d` (every
   3D render knob, live-tunable), `window.gameDebug`, `window.__prof`.
 
 **Test EXACTLY what you changed, and nothing else.** Write (or extend) the one scenario that
@@ -3004,9 +3004,9 @@ lights cannot. `npm run playtest -- perf-burn` guards this.
 
 ## Other things that are easy to get wrong
 
-- **Phaser does not auto-call `shutdown()`** — wire it via `events.once(SHUTDOWN, ...)` or a
+- **The engine does not auto-call `shutdown()`** — wire it via `events.once(SHUTDOWN, ...)` or a
   `scene.restart()` (death) leaks listeners across runs.
-- **Scene edits do not hot-reload.** Phaser scene changes need a hard reload; the editor's
+- **Scene edits do not hot-reload.** Scene changes need a hard reload; the editor's
   `beforeunload` blocks the auto-reload, so you can sit there looking at stale code.
 - **No sprite may overflow its tile.** 3D depth comes from the shader, never from scaling art up.
 - **Anything the hero can STAND ON must declare `depthLayer: 'ground'`** (`DEPTH_LAYER` in
@@ -3393,7 +3393,7 @@ andar até o fim. Copiar isso proceduralmente daria labirinto, e labirinto grand
 10.000 pratos de aveia. Então o gerador não gera *plantas*: ele gera **missões**, e só depois as
 embute num mapa.
 
-### As cinco camadas (`src/game/dungeon/`, TypeScript puro — nada de Phaser, nada de Three)
+### As cinco camadas (`src/game/dungeon/`, TypeScript puro — nada de motor 2D, nada de Three)
 
 1. **O brief** (`dungeonBriefs`) — o que o gerador NÃO tem permissão de sortear: o tesouro (a
    escada picareta→balde→foice→machado de aço, de que o overworld depende), o pool de espécies, o
@@ -3545,7 +3545,7 @@ linha que o A já tinha, e ela também deixa os dois botões coerentes: quem que
 aperta duas vezes, e a cadência (`USE_COOLDOWN_MS`) continua separando os apertos.
 
 Pela mesma razão, a bolsa **não escuta tecla nenhuma**: a cena está VIVA por baixo dela, então todo
-teclado continua chegando ao Phaser, e um segundo ouvinte faria cada tecla acontecer duas vezes
+teclado continua chegando ao motor, e um segundo ouvinte faria cada tecla acontecer duas vezes
 (confirmar o item e, meio milissegundo depois, usá-lo). `I`, `←`, `→`, `X` e `ESC` são roteados num
 lugar só, na `GameScene`, antes de decidir o que o herói faz.
 
@@ -5064,8 +5064,8 @@ jogador podia agir.
 
 Tirado o `brightness(0)`, o forno e o martinete apareceram como `<img>` sem src — o placeholder de
 imagem quebrada do navegador. Eles entraram no `textures3d` (o lado 3D) e **não** no
-`assetManifest` (o lado Phaser), e toda arte que a UI 2D desenha pede um data URL do frame pelo
-Phaser. É a regra que já estava anotada — *textura nova = assetManifest E textures3d* — e ela custou
+`assetManifest` (o lado 2D), e toda arte que a UI 2D desenha pede um data URL do frame pelo
+motor 2D. É a regra que já estava anotada — *textura nova = assetManifest E textures3d* — e ela custou
 duas peças invisíveis no catálogo.
 
 **A lição que vale além disto:** uma imagem quebrada chapada de preto é indistinguível de uma
@@ -6307,7 +6307,7 @@ trabalho que faltava entre os dois.
 
 **A arte** saiu da sprite factory (`spritefactory/sprites/altar.mjs` → `factory build altar`,
 0 fail / 0 warn, instalada em `environment/props/altar.png`) e entrou nas duas pipelines pelo
-caminho de sempre: `ASSET_KEYS` + `assetManifest` (o lado Phaser, que o ícone do editor e qualquer
+caminho de sempre: `ASSET_KEYS` + `assetManifest` (o lado 2D, que o ícone do editor e qualquer
 UI 2D leem) + `textures3d` (o billboard). O contorno usa TRÊS tons de ink — fio de cima claro,
 lateral navy, barriga escura —, que foi o conserto do primeiro build: com uma cor só o linter
 reprova por "chapado", e ele tem razão, um contorno de tom único lê como adesivo.
@@ -6801,7 +6801,7 @@ qualquer luz nova tem de seguir:
   mesma razão; a paleta noturna acesa num mundo de dia devolvia exatamente o buraco preto que os
   quatro tons existem para evitar. Duas paletas em `mix` por uniform — sem recompilação.
 - **O piso do `lightLevelAt`** era 0. A conta só conhece a chama, o que está certo à noite, mas ao
-  meio-dia devolvia 0 no campo aberto e a espada (desenhada no canvas Phaser, ACIMA do 3D, sem luz
+  meio-dia devolvia 0 no campo aberto e a espada (desenhada no canvas 2D, ACIMA do 3D, sem luz
   nenhuma) saía como um borrão escuro sobre um mundo batido de sol — o "branco estourado" ao
   contrário. O sol não tem posição a consultar, então ele é um PISO (0.82, não 1: a fogueira
   precisa continuar tendo para onde subir).
@@ -7895,7 +7895,7 @@ sombra.
 
 **1. O conserto do alpha estava no lugar errado, e cobria só metade dos casos.** Eu tinha posto a
 regra em `Billboard3D.setAlpha`. Mas existe um par `get/set alpha` ali do lado — a superfície que
-imita o sprite do Phaser —, e **é por ele que passa todo sumiço tweenado**:
+imita o sprite 2D —, e **é por ele que passa todo sumiço tweenado**:
 `tweens.add({ targets: this.sprite, alpha: 0 })` escreve na propriedade e nunca chama o método. O
 desmanche do bicho ao morrer (`EnemyBase`, 240ms de `alpha: 0` com encolhimento) é exatamente isso:
 o corpo virava nada e o blob de contato ficava inteiro no chão até o sprite ser destruído. A regra
@@ -9455,7 +9455,7 @@ são do autor.
 ## 2026-10-23 — Medidor de desempenho, FPS fixo na tela, e as quedas que ele achou
 
 - **FPS fixo** (`runtime/FpsCounter`): canto superior esquerdo, 10px, meio transparente. Mostra o pior quadro da janela (`▼48ms`) quando passa de 25ms — a média esconde o tranco. Fica âmbar abaixo de 55fps ou com tranco, vermelho abaixo de 30.
-- **Painel do profiler** (`debug/ProfilerPanel`, F3 alterna compacto → top → fechado): o modo top tem o gráfico de 240 quadros (com a GPU por cima e as linhas de 60/30), fps, 1% low, p50/p99/max, CPU x GPU, a tabela de seções ANINHADAS (avg/p99/max/fatia do quadro, mais o que ficou fora: browser/GC/vsync), GL, heap com tendência, todos os gauges e os últimos picos com a causa. Vale no build publicado. Seções novas: `update` (`.move .chunks .items .world .npcs .props`) e `ui2d`; o quadro agora fecha no POST_RENDER do Phaser, então a UI 2D entra na conta.
+- **Painel do profiler** (`debug/ProfilerPanel`, F3 alterna compacto → top → fechado): o modo top tem o gráfico de 240 quadros (com a GPU por cima e as linhas de 60/30), fps, 1% low, p50/p99/max, CPU x GPU, a tabela de seções ANINHADAS (avg/p99/max/fatia do quadro, mais o que ficou fora: browser/GC/vsync), GL, heap com tendência, todos os gauges e os últimos picos com a causa. Vale no build publicado. Seções novas: `update` (`.move .chunks .items .world .npcs .props`) e `ui2d`; o quadro agora fecha no POST_RENDER do motor, então a UI 2D entra na conta.
 - **A queda de 312ms ao ver água**: o shader do rio estava "compilado" no prewarm, mas o ANGLE só gera o executável no primeiro DRAW (depende do layout dos atributos e do alvo). `prewarmShaders` agora desenha a cena inteira uma vez sem frustum culling (`drawEverythingOnce`). Medido: nenhuma chamada GL acima de 1ms andando pelo mundo.
 - **O maior lixo era do three**: sombra = quad transparente + `DoubleSide` → o three desenha duas vezes e liga `needsUpdate` antes de cada uma, remontando a chave do programa (`getParameters`) ~900 vezes por segundo. `forceSinglePass` nos três materiais de sombra (num quad plano só um lado encara a câmera; a outra passada não produzia pixel). Pixel a pixel: 0 diferenças.
 - **Bloom fundido** (`render3d/FusedBloomPass`): a soma aditiva do bloom deixou de ser uma passada de tela cheia e virou uma amostra a mais no shader de acabamento. ATENÇÃO à conta: o `blendMaterial` do three é pré-multiplicado (`ONE, ONE`) — é cena + bloom, NÃO bloom × alfa (a primeira versão errou isso e o teste de pixel pegou). Conferido contra o caminho antigo no mesmo quadro: diferença máxima 1/255 em 0,6% dos pixels (o arredondamento do meio-float).
@@ -9644,14 +9644,14 @@ arredondado. Agora tudo sai de `runtime/uiStyle.ts`:
   controles, créditos. `WOOD_PANEL` é a moldura do diálogo com veio; `WOOD_WELL` é o rebaixo (slots,
   seções); títulos em versalete de livro, sem o tracking de menu de jogo; o selecionado continua o
   pergaminho claro (`PARCHMENT_ON`).
-- PAPEL + PENA: o cartão de item ganho (canvas de papel rasgado no Phaser, `paperTextureCanvas`),
+- PAPEL + PENA: o cartão de item ganho (canvas de papel rasgado no motor 2D, `paperTextureCanvas`),
   a ficha do cogumelo, as notas de campo (subtela) e a ficha da cesta (bolsa), as cartas da bancada
   (papel sem borda rasgada: o clip-path cortaria a sombra e o contorno de seleção) e o "The End".
 - PIXEL (Press Start + `pixelFrame`/`pixelDisc`): logo e botões do título, A/B, bolsa, pausa,
   confirmar da bolsa e o joystick — a paleta e o canto vazado do keycap do mundo.
 - A bancada deixou de apagar o mundo: embaça (`SOFT_BLUR`), como a colheita. A pausa escurece e
   embaça de leve (é a única que para o mundo).
-- main.ts espera as três fontes antes de ligar o jogo (o Phaser escreve com o livro e a pena).
+- main.ts espera as três fontes antes de ligar o jogo (o motor 2D escreve com o livro e a pena).
 - (revisão no Chrome, desktop 1280×800 e celular 390×844, janela fora da tela e muda) Achados e
   consertos: o papel com ganho de luz alto virava faixas de celofane cruzando a letra — a luz agora
   é contida (0,88–1,08) e os vincos rasos; a folha deixou de ser espremida (`background-size:
@@ -9670,7 +9670,7 @@ para os dois catálogos — agora TODO o texto que o jogo mostra mora nos JSON d
 (dev server ou localhost) abre sempre em pt-br e uma troca vale só para a aba (sessionStorage);
 publicado vale a escolha guardada (localStorage) ou a língua do navegador. Chave faltando no pt-br
 cai no inglês. A pausa ganhou o botão do OUTRO idioma, escrito na língua de destino ("Play in
-English"), que recarrega a página — o Phaser rasteriza o texto uma vez. O título do jogo ("ZERO
+English"), que recarrega a página — o motor 2D rasteriza o texto uma vez. O título do jogo ("ZERO
 THE HERO") fica igual nas duas: é o nome.
 
 ## LEGIBILIDADE: as fontes trocadas (2026-10-27)
@@ -9930,7 +9930,7 @@ OS AJUSTES JOGANDO (lista do autor, 2026-11-06). Cada um provado por `npm run pl
 - O mago, da 2ª vez, não lista tarefa nem nome de vizinho: a luta acabou, ande e ache um sentido. A espada fincada, tocada, se descreve num pensamento do narrador (`finds.sword`).
 - O bolsão sem saída dos dois portões e da pedra a noroeste do mago virou pinheiro (`scripts/ajustes-do-vale.mjs`, com prova de BFS); o mesmo script tira TODO graveto e pedra soltos (graveto só de árvore seca cortada, pedra só de rocha quebrada) e o mato da cadeira.
 - A Hollis acena (`entities/NpcWave`) quando o herói para na BORDA do planalto olhando para ela — uma vez por subida. O aceno é ANIMAÇÃO DO PRÓPRIO SPRITE (`hollis_wave.png`: dois quadros feitos do quadro original mudando só os 6 pixels do braço, aberto e reto, alternados no corpo dela). Um braço avulso colado por cima foi tentado e o autor recusou: lia como outro boneco. Animação de NPC nova = quadros editados do sprite dele, nunca peça sobreposta.
-- A luz de ganhar item era quadrada porque o ADD do Phaser (ONE, DST_ALPHA) soma também no alfa do canvas TRANSPARENTE: dentro do quadrado de cada imagem a vinheta de baixo clareava. Mistura normal e textura LINEAR resolvem. Vale para qualquer brilho novo na camada do Phaser sobre o mundo.
+- A luz de ganhar item era quadrada porque o ADD do motor 2D (ONE, DST_ALPHA) soma também no alfa do canvas TRANSPARENTE: dentro do quadrado de cada imagem a vinheta de baixo clareava. Mistura normal e textura LINEAR resolvem. Vale para qualquer brilho novo na camada 2D sobre o mundo.
 - Colhido, o cogumelo vai para uma BOLSA DE COURO (`runtime/BagStash`, ancorada no corpo desenhado): a bolsa à direita, o cogumelo na mão esquerda, o arco por cima da cabeça, o tranco, a poeirinha, o fecho de latão — com quatro sons próprios. Substituiu o balão da cesta. Na entrega, a Hollis diz o NOME de cada um (`fungi.species.*.named`), a curiosidade e só então o obrigado.
 - A VEGA NÃO DEPENDE DE NINGUÉM (o autor mudou de ideia no meio: primeiro o forno ia pedir os gravetos do machado do Bram; depois, cada NPC independente). O carvão vem de uma pedra nova, `coalRock` (a do minério com veias pretas, `coal_rock.png`), na margem do lago de lava: três picaretadas, um carvão, como o veio de ferro. O forno pede carvão → minério. O 1º lugar do veio (9,7) estava num bolsão fechado por lava, arbustos e pedras; foi para (10,6), ao lado do minério.
 - O lago de lava estourava em amarelo porque cada tile acende a sua luz e dezenas somavam: `lavaLightScales` divide pelo tamanho da poça (raiz), e o lago brilha como poucas poças.
@@ -10111,4 +10111,102 @@ A CHUVA NOVA (pedido do autor, 2026-11-07: "melhore a qualidade da chuva"). Ante
 - RESPINGOS: coroinha de 3 quadros no chão, anel pequeno (desenhado à mão; o de 10 px fechava um quadrado) na água — `isWater` vem do GameScene (`isOpenWaterAt`).
 - O céu fecha mais quanto mais forte a chuva (`STORM_DARK`).
 - `window.gameTime.setDay(n)` (debugHooks) para os playtests pularem para um dia de chuva. Playtest novo `chuva`: garoa < forte, pingos >= 60, respingos e anéis, e o céu abrindo depois.
+
+O BOSQUE E OS PÁSSAROS (pedido do autor, 2026-11-07: itens 2 e 5 da lista "o que falta para ser floresta").
+- ÁRVORES (`objects/BigTrees.ts`, `scripts/bosque.mjs`): 4 carvalhos velhos (44×44 px), 3 bétulas, 3 carvalhinhos e 2 troncos caídos, em volta do acampamento, dos lagos e no pinhal do oeste (38..45, 44..49). Copa balança (2 quadros), fica translúcida com o herói atrás.
+- A PRIMEIRA VERSÃO NÃO COMBINAVA (o autor: "não seguem cores e estilos das árvores já existentes"): verdes vivos, degradê, contorno, tom de cenário 0xb4b0aa. Refeita pelo tileset, pixel a pixel da árvore antiga (73/74) e do pinheiro (4): paleta #626439/#4d4f2c/#3a3f3f/#272b2d/#8a8d49 + tronco #815938/#63452c + sombra preta; textura granulada por faixa (topo folha, miolo folha escura e ardósia, fundo ardósia); fios de musgo pendurados; tronco em colunas que abre em raízes com vãos; e a cor do BIOMA (`biomeTreeTintAt`) no material, como o World3D faz no vértice das árvores do mapa. A casca branca da bétula virava amarelo-gema com o tom dos campos: agora é o cinza das pedras do tileset.
+- O SCRIPT APAGAVA PINHEIROS: três peças caíram em tiles com pinheiro do tileset (quadros 4 e 14) e `upper = null` os apagou. Mapa restaurado do backup; o script agora recusa tile com árvore do mapa; conferido: 0 árvores do mapa perdidas.
+- PÁSSAROS (`objects/BirdLife.ts`): o canto já estava no leito de ambiente do dia; faltava vê-los. Bandinhos de 3-4 (pardal, pisco, chapim, cores do tileset) descem voando, ciscam (bicam, pulam, viram) e levantam todos juntos quando o herói chega a 2,4 tiles; bandos cruzam o céu no voo ondulado (bate asa, fecha, plana), a no máximo 2,4 tiles de altura (mais alto, perto da câmera, viravam borrões). Só de dia e sem chuva forte.
+- Playtest `bosque`: as 12 peças com o pé sólido, a copa translúcida com o herói atrás, o bandinho descendo, a revoada, nenhum pássaro de noite; fotos do pinhal e do carvalho.
+
+A NATUREZA DO VALE (pedido do autor, 2026-11-08: "adicione exatamente todas as suas sugestões... alto padrão de qualidade"). Os 15 detalhes, cada um num arquivo de `objects/nature/`, regidos por `NatureLife` (um quadro por frame com hora, dia, estação, chuva, `sinceRainEnded`, vento e as árvores perto); arte no traço e na paleta do tileset (`nature/kit.ts`, PROP_TINT nas peças, `biomeTintAt` nas flores), e os passarinhos refeitos.
+1. Esquilo (Squirrel): mora no carvalho velho mais perto; desce de cabeça para baixo aos trancos, cata, senta e rói a noz; foge e sobe com o herói a 2,8.
+2. Sapos (Frogs): na margem, virados para a água, papo inflando; pulam na margem; saltam na água com o herói a 2,3 ("plop" = dropWater grave, anel, gotas). Não no inverno.
+3. Libélulas (Dragonflies): azul e vermelha, param no ar e dão arrancos sobre a água; asas translúcidas. Dia, sem chuva.
+4. Lebre (Hares): só de manhãzinha e no fim da tarde, perto de árvores; pasta, alerta de orelhas em pé, foge em zigue-zague. Uma por janela.
+5. Peixe (FishJumps): salta da água ABERTA, gira no arco, anel e gotas na saída e na entrada; mais no fim da tarde.
+6. Folhas no chão (LeafLitter): debaixo das árvores do bosque; quantidade e cor pela estação (muitas no 2º dia de outono, bolotas sob carvalho); tom do chão do bioma.
+7. Cogumelos depois da chuva (RainMushrooms): pardo, branco e vermelho de pintas; nascem no pé das árvores depois da chuva, duram 1,6 dia, murcham. Só enfeite (não se colhem).
+8. Margaridas (Daisies): touceiras fixas por tile; abrem de dia, fecham ao anoitecer e na chuva, balançam com o vento; a cruz das florzinhas do tileset.
+9. Teias de orvalho: feitas e TIRADAS a pedido do autor ("pode tirar 9").
+10. Neblina do amanhecer (MorningMist): rente ao chão, mais sobre água e árvores, escorrega com a brisa; mais densa depois de chuva.
+11. Manchas de sol (SunDapples): sombra da copa salpicada de discos dourados que dançam com o vento; só com sol.
+12. Sementes no vento (Seeds): penugens de dente-de-leão na primavera/verão, muitas nos dias de vento (`isWindyDay`), seguindo as rajadas (`runtime/wind.ts`, o mesmo vento da chuva).
+13. Arco-íris (AfterRainRainbow): ~1h40 do jogo depois da chuva, de dia; anda com o herói (como o de verdade).
+14. Poças (Puddles): nos mesmos tiles, enchem na chuva (anéis dos pingos), secam de fora para dentro em ~3 h; o herói pisa e espirra (anel, gotas, "chap" = splash agudo e baixo).
+15. Gotas das folhas (CanopyDrips): depois da chuva a gota brilha pendurada, cai e respinga; rareia em ~1h10.
+16. Passarinhos REFEITOS (BirdLife): 10×8, cabeça redonda com o olho dentro, bico separado, cara de cada espécie, asa sobre o dorso, o corpo inteiro inclina para bicar; chegam pelo lado oposto ao herói (vindo pelo lado dele o bando se espantava antes de pousar: o playtest era intermitente por isso).
+- SHADERS: cada formato novo de billboard que nasce tarde entrou no `prewarmShaders` (World3D); medido: o pior quadro durante um salto de peixe é ~70 ms (o ambiente headless já tem picos de 59–73 ms sem a natureza). As fotos com "1 fps" eram a trava da foto anterior, não o jogo.
+- `depthLayer: 'ground'` em tudo que se pisa deitado (folhas, poças, sombra da copa): sem isso o herói saía listrado.
+- Playtest `natureza`: monta cada coisa na sua hora (dias 1-5), confere o comportamento (fugir, saltar, espirrar, abrir/fechar...), congela a natureza (`nature.frozen`) para a foto e registra o FOCO em pixels (`projectTile`). `perf-profile` reprova na regra de quadro patológico também no commit anterior (p99 ~29-30 ms nos dois).
+
+O EDITOR FIEL AO MAPA (pedido do autor, 2026-11-08: "revise se o editor tem tudo que temos de novo no mapa e se ele é fiel totalmente"). O editor só via o world.json (tiles, colisões, entidades); o que o JOGO monta por código em lugar fixo não aparecia: a cachoeira e o riacho do alto, o lago das carpas (vitórias-régias, taboas, carpas), o bosque, e também — de antes — o acampamento, o barril do gato, a estrada velha, as casas dos vizinhos e os achados do vale.
+- `editor/EditorFixtures.ts`: o editor CRIA esses mesmos objetos, com o código do jogo, sobre um World3D de mentira que só anota cada billboard pedido (textura, posição, tamanho, altura, espelho, cor do bioma, transparência), e desenha o anotado em 2D com as mesmas texturas. Peça que mudar no jogo muda no editor sozinha.
+- Camada "Pecas do jogo" (tecla O), ligada por padrão, acima dos marcadores de entidade (embaixo deles o lago das carpas sumia sob os chips de água); não é clicável.
+- A estrada velha lê o WorldData (portões do jardim): o editor dá a ela o mesmo retrato do mapa que o botão Testar usa (`store.snapshotWorld()`).
+- Fora do editor, de propósito: o que é TEMPO e não lugar (a natureza de objects/nature, os passarinhos, a chuva). O acampamento aparece com todas as lembranças (como fica com as quests feitas).
+- O editor só funciona no servidor de desenvolvimento (`npm run dev`): o `/api/world` que ele usa para ler e salvar não existe no `vite preview`.
+
+AS ÁRVORES DO BOSQUE VIRARAM PROPS (o autor: "não consegui apagar uma árvore nova colocada"). As posições estavam no código (BigTrees.TREES) e o editor só as desenhava: a borracha não tinha o que apagar. Agora são props do world.json (`oakTree`, `birchTree`, `youngOak`, `fallenLog`), na aba Props do editor, com o desenho da própria árvore de ícone; põe, move, apaga e desfaz como qualquer prop.
+- O pé bloqueia pelo prop (`BigTrees.at` no isSolidForEntities), não por colisão pintada: apagou a árvore, o chão fica livre junto. A migração tirou a colisão que o bosque.mjs antigo tinha pintado (backup/world-pre-bosque-props.json).
+- A variante de cada árvore sai do lugar (hash), não da ordem: apagar uma não muda a cara das outras.
+- `scripts/bosque.mjs` agora só confere o que está no mapa (nunca replanta o que o autor apagou); biomas-flora usa `bosqueTiles(world)`.
+- A natureza (esquilo, folhas, sol entre as copas) lê as árvores do mapa (`bosqueTrees()`).
+- O editor regrava as peças do jogo a cada mudança de entidade, para a árvore sumir/aparecer na hora.
+
+CADA VIDA NO SEU BIOMA + A CERCA DO LENHADOR (pedido do autor: "restringindo tudo a biomas fica mais focado e menos poluído"; "o lenhador… faça ser cercado por uma cerca de madeira").
+- `world/biomeLife.ts` (LIFE_HOMES): prado = margaridas, sementes, lebre, libélulas (lago do prado); geada = névoa, vaga-lumes; mata = passarinhos (pouso e bando), pingos; musgo = sapos (laguinho do oeste), cogumelos de chuva, vaga-lumes; jardim = poças e arco-íris; outono (bosque, cachoeira, carpas) = esquilo, folhas, sol entre as copas, peixes; cinzas = nada. Bicho de água foi para onde há água.
+- Os vaga-lumes do World3D (antigos) também: só pousam em moita de geada e musgo.
+- Playtest `natureza` refeito: cada coisa testada no lar dela + a assinatura (no bosque de outono não há margarida, sapo, libélula, semente nem passarinho).
+- A CERCA: `objects/WoodFence.ts` (prop `woodFence`, aba Props do editor), 40 tiles em volta do quintal do Bram (48..59 × 1..11), portão no sul (53-54), pinheiros de dentro tirados. `scripts/cerca-do-lenhador.mjs` (idempotente, --check, BFS). Playtest `cerca`.
+- BUG ACHADO: o BFS do bosque.mjs ignorava os pinheiros (bloqueiam pelo quadro, não pela colisão). Com o BFS certo, o bosque prendia 46 tiles no sudeste (incluindo o sul do lago das carpas). Quatro árvores mudaram de tile (carvalho 57,53→58,53; bétulas 59,56→55,55 e 49,58→49,56; carvalhinho 41,57→41,58). Backups: backup/world-pre-cerca.json.
+
+O QUINTAL DO LENHADOR (o autor: "adicione mais coisas pra tornar o lugar que o lenhador mora mais único"). `objects/LumberYard.ts`: props `woodpile` (toras de ponta, estacas), `sawhorse` (cavalete, serra de arco no corte), `stump`, `axeStump` (machado cravado), `wheelbarrow` (carrinho com lenha), `yardSign` (placa clara com machado queimado, fora do portão); serragem deitada em volta do cavalete e dos tocos. `scripts/quintal-do-lenhador.mjs` (idempotente, --check, BFS) põe 8 peças longe do que a quest do Bram usa (cepo 52,5; fogueira 56,7 e assentos; banco 52,7; casa). O cenário `cerca` confere que a quest ainda acha o cepo e a fogueira. Backup: backup/world-pre-quintal.json.
+
+A THEA NÃO TEM CASA + A FORJA VELHA (o autor: "ela é o único NPC que não tem casa… a busca dela é voltar pra casa dela"; o forno e a bigorna "tem que ser algo de alguém que ficou para trás"). A casa da astronauta saiu de NpcHomes (HOMES sem `astronaut`), e com ela o terreiro, a porta (37,8) e o banco da varanda (39,8) dos ValleyFinds; ela vive no acampamento (fogueira). O forno (44,6) e a bigorna (43,7) agora são o que sobrou da oficina de um FERREIRO que foi embora há muito tempo: `objects/OldForge.ts` (props `forgeRubble` = chaminé caída, `forgeRack` = suporte com tenaz, martelo e ferradura enferrujados, e o piso de lajes debaixo do forno), e o achado `smithy` em 45,3 (parede com a boca da lareira e a placa da bigorna; Z lê "A forja velha. / O ferreiro foi embora há muito tempo. / O forno ainda puxa bem."). `scripts/forja-velha.mjs` (idempotente, --check, BFS, forno e bigorna livres dos 4 lados). Playtests `forja` e `telescopio` passam. Ficaram sem uso as falas `finds.door.astronaut` e `finds.door.empty` (e o ramo `gone` do knockAt).
+
+A CRATERA DA NAVE + A PRIMEIRA FALA DA THEA (o autor: ela diz logo de cara que a nave caiu, que precisa voltar para o lar, e que com o telescópio consertado acha a posição dos astros e sabe para onde mandar o sinal para os amigos virem buscá-la; e "no lugar exato onde era a casa dele, faça uma cratera com peças quebradas da nave", storytelling pelo cenário). `npc.astronaut` ganhou 4 falas no começo (pt-br e en). `objects/CrashSite.ts`: props `crashCrater` (o buraco deitado, 4 × 3,25 tiles: anel de terra jogada, fundo queimado com cacos, riscos de fuligem; o centro é sólido), `shipHull` (chapa branca com a faixa laranja), `shipThruster` (propulsor caído, ainda soltando um fio de fumaça), `shipFin` (aleta cravada com a vigia azul) — as cores da casa-nave antiga. `scripts/cratera-da-nave.mjs` põe tudo em 36..39 × 6..9 (onde era a casa), tira o capim do raio da queda, prova de BFS. Cenário `forja` confere a fala e fotografa. Backup: backup/world-pre-cratera.json.
+
+O PIXEL ART DO MINIJOGO DE RACHAR LENHA (pedido do autor). Só o desenho de runtime/WoodcraftOverlays.ts (SplitOverlay) mudou; a regra (mira, veio, nó, força) é a mesma. A tora agora fica EM PÉ num cepo, vista um pouco de cima: o topo cortado em elipse (anéis de crescimento tortos, cerne e alburno, câmbio claro, miolo, duas rachaduras de secar, luz de cima-esquerda, granulado) e a casca de lado em sulcos com musgo; o nó com anéis próprios; o cepo embaixo, mais largo, de madeira acinzentada com marcas de machadadas antigas, e a sombra no chão (tudo desenhado uma vez, em `paintStanding`). O machado visto pelo fio (a cunha que entra na fenda), com cabo de três tons, empunhadura enrolada, castão, fio claro com um brilho que corre, e a sombra dele no topo da tora, menor e mais escura quanto mais perto. A fenda do veio desce pela casca da frente; rachada, cada metade mostra a madeira clara de dentro. Régua de força de madeira com as faixas fraca/boa/forte demais e uma seta; lascas de três cores e tamanhos.
+
+DESEMPENHO SEM MUDAR O VISUAL (pedido do autor, 2026-11-08: "sem afetar o visual do jogo, aplique grandes melhorias de performance"). Medido no `perf-profile` com vsync livre: parado 59,8 → 83,1 fps (p99 30,7 → 20,6 ms, 29 → 1 pico); andando 57,4 → 79,7 fps (p99 36,7 → 21,7 ms, máx 65,9 ms, 64 → 1 pico); GPU ~12 → 9,9 ms; CPU 6,9 → 4,4 ms; o engasgo da primeira sombra ~900 → 0,2 ms; boot do terreno 1036 → 677 ms. Provado pixel a pixel com o `visual-ref` contra uma cópia sem as mudanças (forja e cratera variam entre duas rodadas da própria base, pela luz do fogo).
+- Reflexo da água com tesoura (só o retângulo que muda é redesenhado, `reflectDirty` + `reflectBodiesRect`); o passe de cena não limpa quando o fundo é cor; `cullFarChildren` lê a vista uma vez e não reclassifica luz/grupo a cada quadro.
+- Os pixels das texturas pintadas vêm do próprio `paint()` (`zhPixels`) e os canvas lidos com frequência nascem com `willReadFrequently` — nada de `getImageData` no registro (custava 538 ms no boot).
+- Relevo do terreno: nível por tile memorizado no assado e vizinhança 5×5 em cache no `makeReliefField`.
+- Vento pelo relógio do mundo (`world.elapsedMs`), não pelo `performance.now()` — é também o que deixa o `visual-ref` determinístico.
+- NatureLife com quadros reaproveitados e filtro de árvores numa passada; o profiler ganhou as seções `life.*`.
+- O `visual-ref` agora fotografa também carpas, cachoeira, bosque, lenhador, forja e cratera, e fixa tudo que tinha ruído (fogos pela posição, o fpsCounter, a dica de controles, as partículas, o delta do laço).
+
+MOTOR PRÓPRIO (pedidos do autor, 2026-11-08: trocar a dependência de motor por um motor próprio "mantendo o jogo idêntico como é", e depois: o projeto não cita nem depende de nenhum outro motor). O motor é `src/game/engine/` (~10 mil linhas); o jogo importa `import * as Engine from '@/game/engine'` e o resto do código não mudou (`Engine.Scene`, `this.tweens`, `this.time`, `this.add.*`, `Engine.Math.Between`…). O aviso de licença do código de terceiros fica só em `src/game/engine/LICENSES.md`.
+- Contas e ordem FIXAS: o laço (TimeStep: média de 10 deltas, teto de 200 ms, 120 quadros de esfriamento) e o quadro (PRE_STEP → cenas → POST_STEP → desenho); o SceneManager (trocas em fila para o quadro seguinte, cenas atualizando de trás para frente) e os sistemas de cada cena criados numa ordem fixa (é ela que decide quem anda primeiro no quadro); o relógio e os TimerEvents; os tweens inteiros (relógio próprio por `Date.now()` em passos de 1/240 s, `yoyo/hold/repeat/delay`, `from/to`, `+=`, os easings com o tropeço do 'Power2.easeOut' → linear); teclado (fila, filtro de duplicata, `keydown-X`, captura, solta tudo ao perder o foco), mouse e toque (ponteiros, `pointerdownoutside/pointerupoutside`, acerto em objeto interativo); texturas (alfa pré-multiplicado, NEAREST, REPEAT + mipmap em lado potência de dois, folha de sprite); o carregador; a câmera (rolagem arredondada, zoom, viewport, fade/flash/shake); o ScaleManager no modo NONE.
+- O desenho 2D é WebGL: contexto sem antialias e pré-multiplicado, um shader de quad, as matrizes em Float32Array, o arredondamento do sprite (`roundPixels`), as misturas (o ADD é ONE, DST_ALPHA). Image/Sprite, Container (alfa e rolagem do pai), Text (medida, quebra de linha, contorno, sombra e resolução), Graphics (e o `generateTexture` pelo caminho de canvas), Rectangle/Arc/Ellipse (preenchidos em leque: num polígono convexo cobre os mesmos pixels), o emissor de partículas do título e o tilemap do editor.
+- Os sorteios ficam sempre nos mesmos pontos: 1 `Math.random` ao criar o jogo, 31 por Text (o UUID da textura), os das partículas numa ordem fixa, os do tremor de câmera — a sequência do jogo segue a mesma.
+- A limpeza preguiçosa no `Renderer`: quando a interface 2D não tem nada na tela, o canvas dela não é limpo e reapresentado a cada quadro; os pixels são os mesmos.
+- Pacote do build: 1,66 MB (era 2,70 MB; 501 kB comprimido, era 784 kB).
+- O GABARITO DO MOTOR (`src/game/engine/__tests__/`): 21 roteiros (tweens de toda forma, o gerenciador de tweens com o relógio próprio, os temporizadores, o emissor de eventos, as curvas, a matemática e as cores) gravados no motor de antes da troca, em 2026-11-08, e rodados no de hoje pelo `npm test`: batem número por número. O gabarito não se regera; vermelho ali = o motor mudou de comportamento. Provado que acusa: um estrago de 0,0001 numa curva e um `>=` trocado por `>` no temporizador ficaram vermelhos.
+- Para conferir jogando (o autor roda): `visual-ref` contra a `main` (`git stash`) + `compare-visual`; `menu-flow` (título e botões), `item-get` (texto, papel, sementes de luz), `abertura` e `zerar` (o arco inteiro); `/editor` (tilemap, zoom/arrasto, Testar).
+
+TESTES DE UNIDADE E CI (pedido do autor, 2026-11-08: "como fazer pra melhorar a qualidade do código" → o passo 1, a rede de proteção). Vitest 5 (`npm test`, ~1 s, Node, sem navegador), 43 testes: o gabarito do motor (acima) e a varredura das curvas que o jogo escreve; os catálogos (`i18n.test.ts`: mesmas chaves en/pt-br, nenhum texto vazio, mesmas falas com o mesmo número de linhas e a narração nas mesmas linhas, toda chave escrita no código existe); os biomas (`biomes.test.ts`: pesos somando 1, os sete no mapa, decoração trocando só por coisa do mesmo tipo, árvore sempre sólida, nenhum graveto desenhado, cada vida em 1–2 biomas e nenhuma nas cinzas); o `world.json` (`world.test.ts`: forma da grade, nada fora do mapa, cada cogumelo uma vez, cada NPC uma vez, uma fogueira do fim e um portão, todo roteiro apontado existe). Os dois deploys (Pages e itch) rodam `lint` + `test` antes do build, em Node 22 (o Vitest pede).
+- Das 27 conferências `scripts/*.mjs --check`, 17 passam hoje. As 10 vermelhas são de scripts que mudanças posteriores (pedidas pelo autor) passaram por cima, e não bugs do jogo — exceto duas que valem olhar: `audit:world` (`cozy-world.mjs`) diz que o ponto inicial alcança a fogueira do fim sem o portão (o BFS dele não conhece a serra, então pode ser falso), e `audit:stacks` acusa 4 tiles de decoração embaixo de prop (dois embaixo das peças da nave da Thea, dois embaixo de carvalhos). Nada disso foi para o CI.
+
+COBERTURA E AS PORTAS (pedido do autor, 2026-11-08: relatório de cobertura e ~60% do código coberto; no meio, ele apontou: "o código não deveria depender de coisas assim, é um erro de engenharia" — testar exigia fingir um navegador inteiro). Escolhido corrigir o acoplamento em vez de fingir o navegador: 3,5% → 62% de comandos (22 mil de 35,5 mil), 164 testes em ~13 s.
+- O motor ganhou o anfitrião (`engine/host.ts` + `browserHost.ts`): relógio, quadro, canvas, imagem, JSON, renderizador (`null` = sem GPU: o quadro anda e o PRE/POST_RENDER saem igual) e a página (teclado, mouse, foco, tamanho, cursor). O relógio de parede das animações também (`wallNow`, era `Date.now()` direto). O navegador faz as mesmas chamadas de antes, inclusive a ordem das contas.
+- O jogo ganhou a plataforma (`game/platform/`): `createCanvas()` no lugar dos 56 `document.createElement('canvas')`, `localStore()/sessionStore()` no lugar do storage, `fetch`, áudio (`null` = mudo: nenhum efeito quebra e nada é baixado), o renderizador 3D (o World3D não cria WebGL sozinho) e a janela (`display`). Instalada pelo primeiro import do `main.ts` (o idioma e a acessibilidade leem o storage ao serem importados). As texturas 3D vêm da imagem da plataforma (era o TextureLoader, com o DOM por dentro).
+- Achado e consertado pelos testes: o fim do minijogo de acender (e o de rachar) chamava o `onDone` A CADA QUADRO enquanto a tela estivesse aberta — o LumberQuest fecha a tela no primeiro, então o jogo não sofria, mas o aviso agora sai uma vez só por conta do próprio minijogo.
+- Os testes: o motor sozinho (cenas, laço, objetos, texto real medido, graphics com pixel conferido, texturas, carregador de `public/`, teclado e ponteiro por evento, câmera e efeitos, partículas, tilemap), o jogo inteiro (`bootGame`, jsdom: a abertura, andar e esbarrar, diálogo, pausa, hora do dia, quests, janela), o editor (atalhos, pincel e borracha pelo ponteiro, Ctrl+Z, janelas, salvar pela API, o "testar" e a volta), os minijogos com relógio falso (colheita inteira, rachar, acender e afobar, polir, o céu com os quatro astros), o som com contexto que só anota e o jogo mudo, o armazém do editor (as leis do tabuleiro).
+- Mexeu no código do jogo (sem mudar o que se vê ou ouve): rodar `visual-ref` contra a `main` + `compare-visual`, `audio`, `menu-flow`, `movement-feel`, `item-get`, `zerar`, e o `/editor` à mão.
+- O PORTÃO DO DEPLOY (pedido do autor, 2026-11-08: "os testes unitários têm que passar na pipeline do GitHub para só assim ter deploy no GitHub Pages e itch.io"): os dois workflows ganharam o job "Lint e testes de unidade"; o build/deploy do Pages e o deploy do itch dependem dele (`needs: test`). Antes os testes já eram um passo antes do build no mesmo job; agora o portão é um job à parte, que aparece sozinho na tela do Actions.
+
+ORGANIZAÇÃO DO CÓDIGO (pedido do autor, 2026-11-08: "Sim faça tudo isso" — o plano de quatro passos que saiu da avaliação da organização). Nada do que se vê ou se ouve mudou, a não ser onde está dito.
+- AS SOBRAS DO JOGO ANTIGO saíram: o mundo infinito do `WorldData`; o `LootManager`/`LootDrop` (o minério cai pelo `dropNear`); 7 constantes e uma dúzia de campos e métodos privados que ninguém lia; as texturas de gelo e de rachadura do World3D; o `puzzle` do esquema; a vinheta de perigo do pós (`uDanger`/`setDangerVignette`, e o trecho do `hd2d-fx` que a provava); o comentário órfão das borboletas; os comentários que descreviam inimigo, caveira e dano de contato como se existissem (os que CONTAM a história ficaram); a ajuda do editor, que falava de 5 abas ("Inimigos"). O `tsconfig` ganhou `noUnusedLocals`/`noUnusedParameters`: o que ficar sem uso agora não compila.
+- OS NOMES DO CÓDIGO SÃO OS DO JOGO: Hollis→Shui, Iris→Sisi, Bram→Marco, Vega→Thea em identificadores, arquivos (`TheaShip`, `TheaDeparture`, `shui_wave.png`), comentários, cenários (`iris-dormir` → `sisi-dormir`) e nas seções de `dialogos/*.json` (elas só agrupam; o código lê pelo caminho de cada fala). Nenhum texto salvo tinha esses nomes (o save e o `world.json` usam o papel: `painter`, `astronaut`…), então não havia o que migrar. Ficaram com o nome antigo os scripts de migração do mundo (`scripts/forno-da-vega.mjs`, `bigorna-da-vega.mjs`, `porcini-da-hollis.mjs`): são comandos, com histórico. O `ZERAR_FROM` agora pede as fases pelos nomes novos (`sisi`, `marco`, `thea`, `shui`); os saves de fase já gravados em `playtest/results/zerar-saves/` foram copiados para os nomes novos (os antigos ficaram).
+- A GAMESCENE (8.609 → 8.243 linhas) ganhou sistemas no molde das quests — um `Host` pequeno que a cena implementa e um teste com host falso: `systems/CatCare` (o gato e o barril, que nascem por `CatParts`), `systems/Resting` (sentar, levantar, dormir, a noite do telescópio, as três visitas da Morte e a foice; o colchão e a Morte por `RestParts`), `world/visitPath` (os lugares em volta do fogo e o caminho de quem vem sentar, puro), `runtime/CreditsRoll` (a tela dos créditos) e `runtime/introSkip` (a regra dos dois toques para pular a abertura). A linha de narrador repetida virou `narrate()`.
+  - De propósito: os créditos tirados antes da hora não deixam mais temporizador nem escuta de tecla vivos (antes um deles ainda podia levar ao título depois), e sentar de novo sem levantar não empilha escuta de tecla.
+  - Ficaram na cena: a interação com tiles (`pressAttack`/`pressUse`/`handVerbAt`/`useVerbAt` chamam 42 métodos dela; um host desse tamanho só mudaria o despacho de arquivo) e as sequências da abertura e do fim (orquestram ~15 primitivas da cena: passo, olhar, fade, faixas, câmera, falas).
+- O WORLD3D (6.804 → 4.146 linhas) foi dividido: a geometria do terreno (`terrainGeometry.ts`: chão com AO, margens, lava e terra queimada, cubos, relevo, escadas, sombra de massa), as poças de luz e a névoa (`glowMaterials.ts`), as texturas de efeito (`fxTextures.ts`), o shader de acabamento (`finishShader.ts`), as partículas do ar (`AmbientParticles.ts`), o espelho d'água (`WaterMirror.ts`) e o culling da lista de render (`sceneCull.ts`, puro, com teste). Os blocos foram MOVIDOS, não reescritos: o que ficou no World3D é o que estava, tirando os blocos e os imports (conferido linha a linha contra uma cópia de antes de cada movimento), e as partículas nascem no mesmo ponto do boot (a ordem dos `Math.random` é a mesma).
+  - Ficaram no World3D: o assado do terreno (`buildTerrain`, um método de ~540 linhas que escreve em muitos campos), as luzes de fogo e as sombras projetadas (~700 linhas muito acopladas), a câmera e a montagem da cadeia de pós (o `finishPass` é tocado de seis lugares).
+- Achado no caminho: o `pixelArtLight.ts` publicava `__shaderCompiles` em `window` ao ser importado, então importar o World3D fora do navegador quebrava. Agora vai em `globalThis` (no navegador, o mesmo objeto).
+- 197 testes em ~15 s (eram 164); cobertura 62,9% dos comandos / 65,1% das linhas.
+- Os cenários que liam pelo `window.__scene` campos que mudaram de dono foram acertados (só o caminho: `s.rest.*`, `s.catCare.*`, `s.visitPath`, `w3.particles.*`): `visual-ref`, `barraca`, `fogueira-dormir`, `gato-barril`, `gato-cinico`, `jardim-alto`, `morte-tres-noites`, `zerar`.
+- Para conferir jogando (o autor roda): `visual-ref` contra a `main` + `compare-visual` (o World3D foi dividido; sem a vinheta de perigo o quadro é o mesmo, porque ela estava sempre em zero); `descanso`, `fogueira-dormir`, `barraca`, `sisi-dormir` e `morte-tres-noites` (o descanso, o sono e a Morte saíram da cena); `gato-barril` e `gato-cinico` (o gato); `abertura` (o pulo de dois toques); `telescopio` (a noite ao lado do telescópio); `jardim-alto` (o caminho da visita); `zerar` (os créditos no fim); `audio`. O `hd2d-fx` (chama `spawnHitSpark`, `triggerDeath`…, que não existem mais) e o `ferro` (lia o LootManager) já estavam desatualizados.
 

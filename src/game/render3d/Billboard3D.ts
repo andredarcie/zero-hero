@@ -5,11 +5,11 @@ import { patchPixelMaterial } from './pixelArtLight';
 import { getTexture3D } from './textures3d';
 import { terrainHeightAt } from '@/game/world/relief';
 
-// ── A world sprite in the 3D renderer, with a Phaser-sprite-like surface ──────
+// ── A world sprite in the 3D renderer, with a 2D-sprite-like surface ──────
 //
 // The game's object classes render by calling sprite methods every frame
 // (setPosition / setDisplaySize / setTint / setAlpha / setVisible / setTexture)
-// and juice their sprites with Phaser tweens that mutate plain numeric props
+// and juice their sprites with engine tweens that mutate plain numeric props
 // (scaleX, scaleY, alpha, angle, x, y). This adapter exposes the same surface
 // over a THREE mesh, so the migration mostly swaps the object a class holds —
 // the render/tween code keeps its shape.
@@ -45,7 +45,7 @@ import { terrainHeightAt } from '@/game/world/relief';
  * the item reads as sitting a touch behind the hero's feet, which is exactly the truth.
  */
 export const DEPTH_LAYER = {
-  /** Owns its tile: hero, enemies, NPCs, trees, rocks, standing grass. The default. */
+  /** Owns its tile: hero, NPCs, trees, rocks, standing grass. The default. */
   actor: 0,
   /** Walkable clutter: ground items, spot marks, planted bombs, cut stubble. */
   ground: 0.06,
@@ -101,7 +101,7 @@ export interface Billboard3DOptions {
    */
   depthWrite?: boolean;
   /**
-   * The 2D grounding blob under a standing object (trees, NPCs, enemies, props):
+   * The 2D grounding blob under a standing object (trees, NPCs, props):
    * a soft dark contact shadow that follows the billboard's foot. Pass `true` for
    * a sensible default, or override the blob radii (tiles) / darkness. Ignored on
    * flat/emissive/additive billboards (ground, water, flames, glows, pickups).
@@ -161,7 +161,7 @@ export class Billboard3D {
   private bodyAlpha = 1;
   private readonly flat: boolean;
   private readonly flatY: number;
-  // Phaser's setTintFill paints the sprite a SOLID colour (keeping only the
+  // The 2D engine's setTintFill paints the sprite a SOLID colour (keeping only the
   // texture's alpha). A multiply material can't do that, so the fragment shader
   // gets a fill mix uniform patched in (see pixelArtLight.ts).
   private readonly uFillColor: THREE.IUniform = { value: new THREE.Color(0x000000) };
@@ -310,7 +310,7 @@ export class Billboard3D {
     }
   }
 
-  // ── Phaser-sprite-like surface (all chainable) ──────────────────────────────
+  // ── 2D-sprite-like surface (all chainable) ──────────────────────────────
 
   /** Position in TILE coordinates (worldX, worldY). */
   public setPosition(worldX: number, worldY: number): this {
@@ -365,7 +365,7 @@ export class Billboard3D {
     return this;
   }
 
-  /** Solid-colour fill keeping only the texture alpha — Phaser's setTintFill. */
+  /** Solid-colour fill keeping only the texture alpha — the 2D engine's setTintFill. */
   public setTintFill(color: number): this {
     (this.uFillColor.value as THREE.Color).set(color);
     this.uFillMix.value = 1;
@@ -437,7 +437,7 @@ export class Billboard3D {
     return this;
   }
 
-  // ── tweenable plain properties (Phaser tweens mutate these directly) ────────
+  // ── tweenable plain properties (engine tweens mutate these directly) ────────
 
   public get x(): number { return this.tileX; }
   public set x(v: number) { this.tileX = v; this.apply(); }
@@ -452,7 +452,7 @@ export class Billboard3D {
    * A OPACIDADE DO CORPO — e a das sombras dele junto.
    *
    * A regra mora no SETTER e nao em `setAlpha` porque este par de propriedades e a porta de
-   * entrada de verdade: metade do jogo apaga um sprite com um tween do Phaser
+   * entrada de verdade: metade do jogo apaga um sprite com um tween do motor
    * (`tweens.add({ targets: bb, alpha: 0 })`), que escreve aqui e nunca chama o metodo. Com a
    * regra so no metodo, todo sumico tweenado continuaria deixando a sombra para tras — que era
    * exatamente o defeito.
@@ -483,7 +483,7 @@ export class Billboard3D {
   public get displayHeight(): number { return this.h; }
   public set displayHeight(v: number) { this.h = v; this.apply(); }
 
-  /** Spin around the axis facing the camera (bomb wobble, poof FX). Radians-free: degrees, like Phaser. */
+  /** Spin around the axis facing the camera (bomb wobble, poof FX). Radians-free: degrees, like the 2D engine. */
   public get angle(): number { return -THREE.MathUtils.radToDeg(this.mesh.rotation.z); }
   public set angle(deg: number) { this.mesh.rotation.z = -THREE.MathUtils.degToRad(deg); }
 
@@ -492,7 +492,7 @@ export class Billboard3D {
     return this;
   }
 
-  /** Parity with Phaser's GameObject.active (true until destroyed). */
+  /** Parity with the 2D GameObject.active (true until destroyed). */
   public get active(): boolean {
     return !this.destroyed;
   }

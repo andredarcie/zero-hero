@@ -1,3 +1,4 @@
+import { localStore } from '@/game/platform/platform';
 // OS CONTROLES DE TOQUE do jogador (o menu de pausa escreve, os botões leem).
 //
 // Tudo aqui é acessibilidade, e por isso é ESCOLHA do jogador e nunca um detector decidindo por
@@ -21,7 +22,7 @@ const HAPTICS_KEY = 'zh.haptics';
 
 const readFlag = (key: string, fallback: boolean): boolean => {
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = localStore().getItem(key);
     return raw === null ? fallback : raw === '1';
   } catch {
     return fallback; // modo privado / storage desligado: vale para a sessão, só não sobrevive
@@ -30,7 +31,7 @@ const readFlag = (key: string, fallback: boolean): boolean => {
 
 const writeFlag = (key: string, value: boolean): void => {
   try {
-    window.localStorage.setItem(key, value ? '1' : '0');
+    localStore().setItem(key, value ? '1' : '0');
   } catch {
     // ignore
   }

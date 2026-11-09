@@ -47,6 +47,37 @@ export const rainAmountAt = (day: number, phase: number): number => {
   return Math.max(0.12, envelope) * strength;
 };
 
+/** A chuva do dia `day` (início e fim, no mostrador), ou null se o dia é seco. A neve do inverno não conta. */
+export const rainSpellOf = (day: number): { start: number; end: number } | null => {
+  if (day === 0) return null;
+  const season = seasonOf(day);
+  if (season === 'winter' || hash(day) > CHANCE[season]) return null;
+  const start = 0.3 + hash(day + 0.5) * 0.35;
+  return { start, end: start + SPELL };
+};
+
+/**
+ * Quanto tempo faz que a ÚLTIMA chuva parou, em dias de mostrador (0,5 = meio dia). 0 enquanto chove; Infinity se
+ * não choveu nos últimos 3 dias. É o relógio de tudo que a chuva deixa para trás: as poças secando, as gotas
+ * pingando das folhas, o arco-íris, os cogumelos que nascem no dia seguinte.
+ */
+export const sinceRainEnded = (day: number, phase: number): number => {
+  for (let back = 0; back <= 3; back += 1) {
+    const spell = rainSpellOf(day - back);
+    if (!spell) continue;
+    if (back === 0) {
+      if (phase < spell.start) continue;
+      if (phase <= spell.end) return 0;
+      return phase - spell.end;
+    }
+    return back - spell.end + phase;
+  }
+  return Infinity;
+};
+
+/** Os dias de VENTO: em um de cada três, mais ou menos, o vale venta de verdade (as sementes voam). */
+export const isWindyDay = (day: number): boolean => hash(day + 0.75) < 0.38;
+
 export interface SeasonGrade { r: number; g: number; b: number; saturation: number }
 
 /** A primavera é o quadro de sempre (o neutro): as outras três só se medem contra ela. */

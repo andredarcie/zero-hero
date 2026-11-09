@@ -71,7 +71,7 @@ const main = async () => {
         const sel = selector;
         if (region) clip = await driver.canvasRegion(region);
         // Default: the whole viewport. The game renders across TWO stacked canvases now
-        // (the 3D world under the transparent Phaser UI layer), so shooting a single
+        // (the 3D world under the transparent 2D UI layer), so shooting a single
         // canvas element would capture only half the frame.
         await driver.screenshot(file, { clip, selector: sel });
         const snapshot = state ?? (await driver.getState());

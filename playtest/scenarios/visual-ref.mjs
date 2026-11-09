@@ -6,7 +6,7 @@
 //
 //   · Math.random is replaced (before any game code runs) with a seeded generator, so every flame
 //     draws the same "random" numbers in the same order.
-//   · Phaser's own loop is stopped and the game is stepped by hand at a fixed delta, so `elapsed`
+//   · The engine's own loop is stopped and the game is stepped by hand at a fixed delta, so `elapsed`
 //     — which drives every sine in the fire dance — lands on the same value on both sides.
 //
 // Two runs then agree bit for bit, and any difference in the output is a real difference in the
@@ -66,22 +66,29 @@ const SETTLE = `async (tileX, tileY, steps) => {
   // flame gets a different seed, and the fires flicker to a different rhythm. That reaches the
   // picture: a shadow's LENGTH is driven by its flame's instantaneous brightness. Two identical
   // renderers would then "fail" the diff for a reason that has nothing to do with rendering.
-  w3.fires.forEach((f, i) => {
-    f.seed = i * 1.7;
+  // A lista numa ordem fixa (pela posicao): o tremor de cada fogo sorteia na ordem da lista, e um fogo aceso durante
+  // o boot entra nela numa ordem que varia entre rodadas — os sorteios de um iam parar no outro.
+  w3.fires.sort((a, b) => a.worldX - b.worldX || a.worldY - b.worldY);
+  w3.fires.forEach((f) => {
+    // Pela POSICAO do fogo, e nao pelo lugar dele na lista: um fogo aceso durante o boot entra na lista numa ordem
+    // que varia entre rodadas (o vizinho que acende a fogueira ao anoitecer), e a semente de um ia parar no outro.
+    f.seed = (f.worldX * 7.31 + f.worldY * 1.7) % 50;
     f.noise = 0; f.flare = 0; f.flareTarget = 0; f.flareTimer = 0.9; f.flicker = 0; f.level = 1;
   });
-  for (const p of w3.emberState) { p.life = 0; p.maxLife = 1.2; p.vx = 0; p.vy = 0; p.vz = 0; }
-  w3.embers.pos.fill(0);
-  w3.dustSeeded = false;        // re-scatter the motes from the reseeded generator
-  w3.atmosphereSeeded = false;
+  // As partículas do ar moram em World3D.particles (AmbientParticles).
+  const air = w3.particles;
+  for (const p of air.emberState) { p.life = 0; p.maxLife = 1.2; p.vx = 0; p.vy = 0; p.vz = 0; }
+  air.embers.pos.fill(0);
+  air.dustSeeded = false;        // re-scatter the motes from the reseeded generator
+  air.atmosphereSeeded = false;
   // The dust's phase and height are drawn at construction and never re-seeded, so they carry the
   // same boot-time generator drift the flames did. Pin them off the index instead.
-  for (let i = 0; i < w3.dustSeed.length; i++) {
-    w3.dustSeed[i] = (i * 0.37) % 6.2831853;
-    w3.dust.pos[i * 3 + 1] = 0.2 + ((i * 0.137) % 1) * 2.4;
+  for (let i = 0; i < air.dustSeed.length; i++) {
+    air.dustSeed[i] = (i * 0.37) % 6.2831853;
+    air.dust.pos[i * 3 + 1] = 0.2 + ((i * 0.137) % 1) * 2.4;
   }
 
-  // The hero's idle breathing is a Phaser tween, and its PHASE is set by the wall-clock moment it
+  // The hero's idle breathing is an engine tween, and its PHASE is set by the wall-clock moment it
   // happened to start during boot — so the two runs caught him mid-breath a pixel apart. Dropping
   // it and letting the stepped clock restart it was NOT enough: the restart path still landed on
   // a different phase between runs (two shots of the SAME build differed by ~0.3% of the frame,
@@ -112,12 +119,18 @@ const SETTLE = `async (tileX, tileY, steps) => {
     w3.composer.passes[0].renderToScreen = true;
   }
 
-  // The flame billboards flip through their frames on a Phaser timer whose phase was set during
+  // The flame billboards flip through their frames on an engine timer whose phase was set during
   // boot — the same class of drift. Freeze them on frame 0; the fire's LIGHT (which is what a
   // renderer change could plausibly move) is pinned above and still very much live.
   for (const cf of (s.campfires ?? [])) {
     cf.animTimer?.remove(false);
     cf.animTimer = undefined;
+    // A fogueira que o vizinho acende ao anoitecer cresce por um tween que começou no boot: chama inteira já.
+    if (cf.kindleTween) {
+      cf.kindleTween.remove();
+      cf.kindleTween = undefined;
+      cf.setFlame(1);
+    }
   }
 
   // And the drifting motes come out of the reference altogether.
@@ -130,10 +143,49 @@ const SETTLE = `async (tileX, tileY, steps) => {
   // regression under a blizzard of specks; taking them out is the difference between a diff that
   // means something and a diff that reads 5% every time.
   w3.scene.traverse((o) => { if (o.isPoints) o.layers.set(31); });
+  // Os campos de partículas deixaram de ser Points (ParticleBatch: um quad instanciado, um draw só) e o filtro acima
+  // parou de pegá-los. Fora da foto, pelo mesmo motivo.
+  if (w3.particles?.batch?.mesh) w3.particles.batch.mesh.layers.set(31);
+
+  // O contador de fps (um elemento da página, no canto) entra na foto e muda a cada rodada.
+  const fps = document.getElementById('zh-fps');
+  if (fps) fps.style.display = 'none';
+  // E o aviso de controles/estação do rodapé, que aparece e some no tempo dele (o boot decide em que ponto).
+  const hint = document.getElementById('zh-controls-hint');
+  if (hint) hint.style.display = 'none';
+
+  // A VIDA DO VALE (os peixes, a queda d'água, o bosque, os passarinhos, a natureza, a fumaça da cratera, a névoa do
+  // jardim, as borboletas e os vaga-lumes) anda desde o boot, e o boot não dura o mesmo em duas rodadas: cada um
+  // chegava à foto num instante diferente. Então cada sistema nasce de novo aqui, de uma semente fixada só para ele
+  // (o número de sorteios de um não mexe no do outro), e anda os mesmos passos que o resto.
+  const rebuild = (field, make) => {
+    const o = s[field];
+    if (!o) return;
+    o.destroy();
+    window.__reseed();
+    s[field] = make(o);
+  };
+  rebuild('bigTrees', (o) => new o.constructor(s, o.heroAt));
+  rebuild('koiPond', (o) => new o.constructor(s, o.heroAt));
+  rebuild('waterfall', (o) => new o.constructor(s));
+  rebuild('crashSite', (o) => new o.constructor(s));
+  rebuild('birdLife', (o) => new o.constructor(s, o.host));
+  rebuild('nature', (o) => new o.constructor(s, o.world));
+  if (s.gardenMist) s.gardenMist.clock = 0;
+  for (const list of [s.fireflies, s.butterflies, s.leaves]) {
+    for (const it of list ?? []) it.bb?.destroy();
+    if (list) list.length = 0;
+  }
+  s.fireflyLevel = 0;
+  s.daylifeLevel = 0;
 
   window.__reseed();            // last, so the sequence the steps consume is identical
 
   // A fixed 60Hz step, run long enough for the fire dance and the shadows to settle into a pose.
+  // Quem lê o passo em game.loop.delta (a vida do vale) via o ÚLTIMO intervalo real do boot com o laço parado — um
+  // número diferente a cada rodada. O passo à mão é o mesmo para todos.
+  g.loop.delta = 16.6667;
+  g.loop.rawDelta = 16.6667;
   let t = 0;
   for (let i = 0; i < steps; i++) {
     t += 16.6667;
@@ -184,6 +236,14 @@ export default {
       { name: 'home', x: home.worldX, y: home.worldY },
       { name: 'east', x: home.worldX + 3, y: home.worldY },
       { name: 'south', x: home.worldX, y: home.worldY + 3 },
+      // Os lugares feitos depois (2026-11): cada um com as suas peças desenhadas em código e o que anima nelas.
+      // O herói na margem NORTE do lago das carpas: o reflexo dele cai na água (WaterMirror).
+      { name: 'koi-reflexo', x: 54, y: 55 },
+      { name: 'cachoeira', x: 51, y: 57 },
+      { name: 'bosque', x: 47, y: 56 },
+      { name: 'lenhador', x: 53, y: 8 },
+      { name: 'forja', x: 44, y: 9 },
+      { name: 'cratera', x: 37, y: 11 },
     ];
 
     for (const spot of spots) {

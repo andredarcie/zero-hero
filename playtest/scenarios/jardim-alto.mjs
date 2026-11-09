@@ -184,7 +184,7 @@ export default {
     assert('Da borda do cume não se pula para baixo', edge.x === hx - 2 && edge.y === hy + 1, JSON.stringify(edge));
 
     // Os amigos da cena final: do portão até um lugar em volta do fogo, pelas mesmas escadas.
-    const path = await page.evaluate(([x, y]) => window.__scene.findVisitPath([x, y + 6], [[x - 1, y + 1], [x + 1, y + 1]], [99, 99], [x, y]), [hx, hy]);
+    const path = await page.evaluate(([x, y]) => window.__scene.visitPath([x, y + 6], [[x - 1, y + 1], [x + 1, y + 1]], [99, 99], [x, y]), [hx, hy]);
     log(`  amigos: ${JSON.stringify(path)}`);
     assert('Os amigos sobem pelas escadas até a fogueira', Array.isArray(path) && path.some(([px, py]) => px === hx && py === hy + 2), JSON.stringify(path));
 

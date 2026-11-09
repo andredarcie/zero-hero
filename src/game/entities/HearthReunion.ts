@@ -1,17 +1,17 @@
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { FireVisitor, type VisitPath } from '@/game/entities/FireVisitor';
-import { squashBounce, VegaShip, type VegaShipHost } from '@/game/entities/VegaShip';
+import { squashBounce, TheaShip, type TheaShipHost } from '@/game/entities/TheaShip';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import type { NpcKind } from '@/game/world/ScreenContent';
 
 /**
  * A FOGUEIRA DO FIM, COM TODO MUNDO. Zero está sozinho assando o marshmallow quando os amigos entram pelo
- * portão, um a um, e sentam em volta do fogo, sem dizer nada. Falta Vega. Passa um tempo, a nave desce
- * ali dentro do jardim, e Vega sai dela e senta também. Os corpos são stand-ins, como os de FireVisitor:
+ * portão, um a um, e sentam em volta do fogo, sem dizer nada. Falta Thea. Passa um tempo, a nave desce
+ * ali dentro do jardim, e Thea sai dela e senta também. Os corpos são stand-ins, como os de FireVisitor:
  * o fim leva aos créditos, e ninguém volta para casa.
  */
 
-export interface HearthReunionHost extends VegaShipHost {
+export interface HearthReunionHost extends TheaShipHost {
   fire: { x: number; y: number };
   heroBody: { scaleX: number; scaleY: number };
   /** Por onde os amigos entram. */
@@ -22,7 +22,7 @@ export interface HearthReunionHost extends VegaShipHost {
   away: (kind: NpcKind) => void;
   hearts: (x: number, y: number) => void;
   heroFaces: (dx: number, dy: number) => void;
-  /** Vega fala com este corpo, e `onClosed` roda com a cena de novo congelada. */
+  /** Thea fala com este corpo, e `onClosed` roda com a cena de novo congelada. */
   say: (speaker: Billboard3D, onClosed: () => void) => void;
 }
 
@@ -39,12 +39,12 @@ const SEATED_H = 0.86;
 export class HearthReunion {
   private readonly visitors: FireVisitor[] = [];
   private readonly seats: Array<readonly [number, number]>;
-  private ship?: VegaShip;
+  private ship?: TheaShip;
 
   public constructor(private readonly host: HearthReunionHost, hero: { x: number; y: number }) {
     const { fire } = host;
     // Zero fica acima do fogo, de frente para a câmera: a roda se abre embaixo dele, sem ninguém bem
-    // atrás da chama, e Vega, que chega por último, senta ao lado dele.
+    // atrás da chama, e Thea, que chega por último, senta ao lado dele.
     this.seats = SEAT_OFFSETS
       .map(([dx, dy]) => [fire.x + dx, fire.y + dy] as const)
       .filter(([x, y]) => !(x === hero.x && y === hero.y) && host.isFree(x, y));
@@ -103,12 +103,12 @@ export class HearthReunion {
     await Promise.all(arriving);
   }
 
-  /** A nave desce no jardim, Vega sai, e a roda inteira comemora. */
-  public async vega(): Promise<void> {
+  /** A nave desce no jardim, Thea sai, e a roda inteira comemora. */
+  public async thea(): Promise<void> {
     const { host } = this;
     const { at } = host;
     host.heroFaces(0, -1);
-    const ship = new VegaShip(host);
+    const ship = new TheaShip(host);
     this.ship = ship;
     await ship.land();
     for (const visitor of this.visitors) squashBounce(host.scene, visitor.bodySprite, SEATED_W, SEATED_H, 0.16);
@@ -116,11 +116,11 @@ export class HearthReunion {
     await this.pause(700);
     ship.openDoor();
     await this.pause(500);
-    const vega = this.send('astronaut', [Math.round(at.x), Math.round(at.y)]);
-    await this.seated(vega);
-    this.greet(vega);
+    const thea = this.send('astronaut', [Math.round(at.x), Math.round(at.y)]);
+    await this.seated(thea);
+    this.greet(thea);
     await this.pause(350);
-    await new Promise<void>((resolve) => host.say(vega.bodySprite, resolve));
+    await new Promise<void>((resolve) => host.say(thea.bodySprite, resolve));
     ship.closeDoor();
     // Agora sim, todo mundo: um pulinho em onda em volta do fogo, e os corações.
     this.visitors.forEach((visitor, i) => {
@@ -129,7 +129,7 @@ export class HearthReunion {
         host.scene.tweens.add({ targets: body, elevation: 0.34, duration: 170, ease: 'Sine.easeOut', yoyo: true });
       });
     });
-    host.hearts(vega.bodySprite.x, vega.bodySprite.y);
+    host.hearts(thea.bodySprite.x, thea.bodySprite.y);
     host.hearts(host.fire.x, host.fire.y);
     getSoundManager().playSingingBowl();
     await this.pause(1500);

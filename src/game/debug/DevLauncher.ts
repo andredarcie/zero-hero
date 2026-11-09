@@ -3,8 +3,8 @@
 // ships (the whole module no-ops unless DEV).
 //
 // Plain DOM, like DialogOverlay / PauseMenu / EditorDomUi: it must keep working across scene
-// swaps and while a Phaser scene is paused, and every jump is a full page load anyway
-// (Phaser scene changes do not hot-reload — see CLAUDE.md).
+// swaps and while a scene is paused, and every jump is a full page load anyway
+// (scene changes do not hot-reload — see CLAUDE.md).
 //
 // Key choice: SHIFT+I, EM TODA PARTE. Plain [I] used to work outside the editor, and it stopped
 // being free twice over: no editor ele já era o conta-gotas, e no JOGO ele foi a bolsa por um
@@ -127,7 +127,7 @@ class DevLauncher {
 
   private onKeyDown = (event: KeyboardEvent): void => {
     if (this.isOpen) {
-      // While the menu is up it owns the keyboard: nothing may leak into Phaser or the editor.
+      // While the menu is up it owns the keyboard: nothing may leak into the game or the editor.
       const key = event.key.toLowerCase();
       if (key === 'escape' || key === 'i') {
         event.preventDefault();
@@ -267,7 +267,7 @@ class DevLauncher {
 
   private go(entry: Entry): void {
     if (!entry || this.isCurrent(entry)) return;
-    // A full load, not a history push: Phaser scene sets are decided at boot (config.ts),
+    // A full load, not a history push: the scene set is decided at boot (config.ts),
     // so switching between game / editor / lab has to re-create the game instance.
     window.location.href = `${this.base}${entry.url}`;
   }

@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { ASSET_KEYS } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
@@ -56,16 +56,16 @@ export class PlantSpotObject implements WorldProp {
   /** O compasso de um tempo. Publico: a GameScene sincroniza os torroes e o baque final nele. */
   public static readonly DIG_STAGE_MS = 110;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   private readonly hole: Billboard3D;
   private mound?: Billboard3D;
-  /** A planta de tinta da Iris (quests/PainterQuest): três níveis, a arte vem de quem manda. */
+  /** A planta de tinta da Sisi (quests/PainterQuest): três níveis, a arte vem de quem manda. */
   private dyePlant?: Billboard3D;
   private state: SpotState = 'hole';
   /** Os tempos pendentes da cavada — removidos no destroy (um restart no meio nao pode avancar). */
-  private readonly digTimers: Phaser.Time.TimerEvent[] = [];
+  private readonly digTimers: Engine.Time.TimerEvent[] = [];
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, opts?: { dug?: boolean }) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number, opts?: { dug?: boolean }) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
@@ -180,7 +180,7 @@ export class PlantSpotObject implements WorldProp {
     return true;
   }
 
-  /** A água da quest da Iris: o monte molha, e quem conta o tempo é a quest. */
+  /** A água da quest da Sisi: o monte molha, e quem conta o tempo é a quest. */
   public waterDye(): boolean {
     if (this.state !== 'mound' || !this.mound) return false;
     this.state = 'watered';

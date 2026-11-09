@@ -6,8 +6,9 @@ import { CraftOverlay } from '@/game/runtime/WoodcraftOverlays';
 import {
   paperTexture, seededRandom, seedOf, SOFT_BLUR, tornEdge,
 } from '@/game/runtime/uiStyle';
+import { createCanvas } from '@/game/platform/platform';
 
-// OS DOIS OFÍCIOS DA VEGA, no mesmo palco dos do Bram (ver CraftOverlay): o mundo embaçado, a coisa
+// OS DOIS OFÍCIOS DA THEA, no mesmo palco dos do Marco (ver CraftOverlay): o mundo embaçado, a coisa
 // sozinha no meio, nada escrito na tela e nenhuma derrota. Polir é esfregar até enxergar; observar é
 // procurar no escuro e esperar o foco.
 
@@ -49,12 +50,12 @@ export interface LensCallbacks {
 
 /** O vidro bruto: grão de pixel, com os riscos da pedra. Fica por cima da paisagem até ser polido. */
 const frostOf = (size: number): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
-  const random = seededRandom(seedOf('vega-glass'));
+  const random = seededRandom(seedOf('thea-glass'));
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
       const grain = 150 + Math.floor(random() * 4) * 12;
@@ -335,7 +336,7 @@ export interface SkyCallbacks {
 
 /** O desenho de cada alvo, visto pela lente boa: em 64×64 e pixel inteiro. */
 const targetArt = (target: SkyTarget): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = ART_SIZE;
   canvas.height = ART_SIZE;
   const ctx = canvas.getContext('2d');
@@ -426,7 +427,7 @@ export class SkyOverlay extends CraftOverlay {
   };
   private readonly arts = new Map<SkyTarget, HTMLCanvasElement>();
   private readonly icons = new Map<SkyTarget, HTMLCanvasElement>();
-  private readonly mosaic = document.createElement('canvas');
+  private readonly mosaic = createCanvas();
   private readonly stars: Array<{ x: number; y: number; bright: number; phase: number; blue: boolean }> = [];
   private readonly held = new Set<string>();
   private drag: { x: number; y: number } | null = null;
@@ -439,14 +440,14 @@ export class SkyOverlay extends CraftOverlay {
   public constructor(private readonly cb: SkyCallbacks, found: readonly SkyTarget[]) {
     super(cb.onLeave);
     this.found = new Set(found);
-    const random = seededRandom(seedOf('vega-sky'));
+    const random = seededRandom(seedOf('thea-sky'));
     for (let i = 0; i < STAR_COUNT; i += 1) {
       this.stars.push({ x: random() * SKY_W, y: random() * SKY_H, bright: random(), phase: random() * 6.28, blue: random() > 0.7 });
     }
     for (const target of SKY_TARGETS) {
       const art = targetArt(target);
       this.arts.set(target, art);
-      const icon = document.createElement('canvas');
+      const icon = createCanvas();
       icon.width = 16;
       icon.height = 16;
       const ctx = icon.getContext('2d');
@@ -544,7 +545,7 @@ export class SkyOverlay extends CraftOverlay {
     const texture = paperTexture();
     if (texture) sheet.style.backgroundImage = `url(${texture})`;
 
-    const night = document.createElement('canvas');
+    const night = createCanvas();
     night.width = ART_SIZE;
     night.height = ART_SIZE;
     const nightCtx = night.getContext('2d');

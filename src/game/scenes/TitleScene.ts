@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { ASSET_KEYS, FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
@@ -8,6 +8,7 @@ import {
 } from '@/game/runtime/adventureState';
 import { KEY_BG, KEY_BORDER, KEY_GLYPH } from '@/game/runtime/uiStyle';
 import { setWorldData } from '@/game/world/WorldData';
+import { createCanvas, platform } from '@/game/platform/platform';
 
 // The game's start screen, and now the ONLY screen between the loader and the world: the title,
 // the credit, and the door in.
@@ -34,14 +35,14 @@ const BG_OVERSCAN = 1.14;
 const FIREFLIES = 26;
 
 interface MenuButton {
-  bg: Phaser.GameObjects.Rectangle;
-  key: Phaser.GameObjects.Image;
-  label: Phaser.GameObjects.Text;
+  bg: Engine.GameObjects.Rectangle;
+  key: Engine.GameObjects.Image;
+  label: Engine.GameObjects.Text;
   textures: [string, string];
   activate: () => void;
 }
 
-export class TitleScene extends Phaser.Scene {
+export class TitleScene extends Engine.Scene {
   public static readonly key = 'title';
 
   private buttons: MenuButton[] = [];
@@ -67,8 +68,8 @@ export class TitleScene extends Phaser.Scene {
 
     this.buildValley();
 
-    const titleSize = Phaser.Math.Clamp(Math.floor(Math.min(width / 13, height / 7)), 24, 84);
-    const creditSize = Phaser.Math.Clamp(Math.floor(width / 52), 10, 18);
+    const titleSize = Engine.Math.Clamp(Math.floor(Math.min(width / 13, height / 7)), 24, 84);
+    const creditSize = Engine.Math.Clamp(Math.floor(width / 52), 10, 18);
     const titleY = Math.round(height * 0.17);
 
     // O título é PIXEL (ver uiStyle): a letra do keycap, contornada com a tinta dos sprites, e a sombra
@@ -108,10 +109,10 @@ export class TitleScene extends Phaser.Scene {
     // Arm input a beat later so the key/tap that dismissed the loader can't fire the button.
     this.time.delayedCall(300, () => {
       this.input.keyboard?.on('keydown', this.handleKey, this);
-      this.input.on(Phaser.Input.Events.POINTER_DOWN, this.unlockAudio, this);
+      this.input.on(Engine.Input.Events.POINTER_DOWN, this.unlockAudio, this);
     });
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
+    this.events.once(Engine.Scenes.Events.SHUTDOWN, this.teardown, this);
   }
 
   /**
@@ -130,8 +131,8 @@ export class TitleScene extends Phaser.Scene {
     const cover = Math.max(width / frame.width, height / frame.height) * BG_OVERSCAN;
     const artW = frame.width * cover;
     const artH = frame.height * cover;
-    const ox = Phaser.Math.Clamp(-(GLADE_IN_ART.x - 0.5) * artW, -(artW - width) / 2, (artW - width) / 2);
-    const oy = Phaser.Math.Clamp(-(GLADE_IN_ART.y - 0.5) * artH, -(artH - height) / 2, (artH - height) / 2);
+    const ox = Engine.Math.Clamp(-(GLADE_IN_ART.x - 0.5) * artW, -(artW - width) / 2, (artW - width) / 2);
+    const oy = Engine.Math.Clamp(-(GLADE_IN_ART.y - 0.5) * artH, -(artH - height) / 2, (artH - height) / 2);
     const valley = this.add.container(width / 2, height / 2).setDepth(-3);
     const bg = this.add.image(ox, oy, ASSET_KEYS.titleBg).setScale(cover);
     // A clareira, no espaço da foto (a mesma conta da escala e do deslocamento).
@@ -140,7 +141,7 @@ export class TitleScene extends Phaser.Scene {
     // O luar: um halo frio sobre a clareira que respira devagar, como nuvem passando na frente da lua.
     const moonR = Math.max(120, artH * 0.42);
     const moon = this.add.image(gx, gy, MOON_TEXTURE).setDisplaySize(moonR * 2.4, moonR * 1.6)
-      .setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.32);
+      .setBlendMode(Engine.BlendModes.ADD).setAlpha(0.32);
     this.tweens.add({ targets: moon, alpha: 0.18, duration: 5200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     valley.add([bg, moon]);
 
@@ -157,25 +158,25 @@ export class TitleScene extends Phaser.Scene {
 
     // Os vaga-lumes: quadradinhos que vagam em curvas lentas e acendem e apagam cada um no seu tempo.
     for (let i = 0; i < FIREFLIES; i += 1) {
-      const fx = Phaser.Math.Between(-width * 0.55, width * 0.55);
-      const fy = Phaser.Math.Between(-height * 0.12, height * 0.5);
+      const fx = Engine.Math.Between(-width * 0.55, width * 0.55);
+      const fy = Engine.Math.Between(-height * 0.12, height * 0.5);
       const fly = this.add.image(fx, fy, PIXEL_TEXTURE).setDisplaySize(px * 1.5, px * 1.5)
-        .setTint(i % 3 === 0 ? 0xfff6a8 : 0xd8f57a).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
+        .setTint(i % 3 === 0 ? 0xfff6a8 : 0xd8f57a).setBlendMode(Engine.BlendModes.ADD).setAlpha(0);
       const halo = this.add.image(fx, fy, MOON_TEXTURE).setDisplaySize(px * 12, px * 12)
-        .setTint(0xd8f57a).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
+        .setTint(0xd8f57a).setBlendMode(Engine.BlendModes.ADD).setAlpha(0);
       valley.add([halo, fly]);
       const wander = (): void => {
-        const nx = fly.x + Phaser.Math.Between(-90, 90) * cover;
-        const ny = Phaser.Math.Clamp(fly.y + Phaser.Math.Between(-60, 60) * cover, -height * 0.2, height * 0.55);
+        const nx = fly.x + Engine.Math.Between(-90, 90) * cover;
+        const ny = Engine.Math.Clamp(fly.y + Engine.Math.Between(-60, 60) * cover, -height * 0.2, height * 0.55);
         this.tweens.add({
-          targets: [fly, halo], x: nx, y: ny, duration: Phaser.Math.Between(3200, 6400), ease: 'Sine.easeInOut', onComplete: wander,
+          targets: [fly, halo], x: nx, y: ny, duration: Engine.Math.Between(3200, 6400), ease: 'Sine.easeInOut', onComplete: wander,
         });
       };
       wander();
       const blink = (): void => {
         this.tweens.add({
-          targets: fly, alpha: { from: 0, to: 1 }, duration: Phaser.Math.Between(700, 1300), yoyo: true,
-          hold: Phaser.Math.Between(300, 1400), delay: Phaser.Math.Between(200, 3800), onComplete: blink,
+          targets: fly, alpha: { from: 0, to: 1 }, duration: Engine.Math.Between(700, 1300), yoyo: true,
+          hold: Engine.Math.Between(300, 1400), delay: Engine.Math.Between(200, 3800), onComplete: blink,
           onUpdate: () => halo.setAlpha(fly.alpha * 0.55),
         });
       };
@@ -218,7 +219,7 @@ export class TitleScene extends Phaser.Scene {
     }
     const soft = (key: string, w: number, h: number, stops: Array<[number, number]>): void => {
       if (this.textures.exists(key)) return;
-      const canvas = document.createElement('canvas');
+      const canvas = createCanvas();
       canvas.width = w;
       canvas.height = h;
       const ctx = canvas.getContext('2d');
@@ -230,7 +231,7 @@ export class TitleScene extends Phaser.Scene {
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, 2 * r, 2 * r);
       }
-      this.textures.addCanvas(key, canvas)?.setFilter(Phaser.Textures.FilterMode.LINEAR);
+      this.textures.addCanvas(key, canvas)?.setFilter(Engine.Textures.FilterMode.LINEAR);
     };
     soft(MOON_TEXTURE, 128, 128, [[0, 1], [0.4, 0.45], [1, 0]]);
     soft(MIST_TEXTURE, 256, 64, [[0, 0.9], [0.55, 0.4], [1, 0]]);
@@ -240,8 +241,8 @@ export class TitleScene extends Phaser.Scene {
   // this.buttons.length ainda vale 0 para todos eles (o hover do segundo acendia o primeiro).
   private makeButton(index: number, text: string, y: number, activate: () => void): MenuButton {
     const { width } = this.scale;
-    const w = Phaser.Math.Clamp(width * 0.42, 200, 360);
-    const h = Phaser.Math.Clamp(this.scale.height * 0.09, 40, 64);
+    const w = Engine.Math.Clamp(width * 0.42, 200, 360);
+    const h = Engine.Math.Clamp(this.scale.height * 0.09, 40, 64);
     // O retangulo e so a area de toque; o que se ve e a tecla de pixel por cima dele.
     const bg = this.add
       .rectangle(width / 2, y, w, h, 0x000000, 0)
@@ -256,15 +257,15 @@ export class TitleScene extends Phaser.Scene {
     const label = this.add
       .text(width / 2, y, text, {
         fontFamily: FONT_FAMILY,
-        fontSize: `${Phaser.Math.Clamp(Math.floor(width / 40), 11, 22)}px`,
+        fontSize: `${Engine.Math.Clamp(Math.floor(width / 40), 11, 22)}px`,
         color: '#cfc9bd',
         resolution: TEXT_RESOLUTION,
       })
       .setOrigin(0.5)
       .setDepth(2);
 
-    bg.on(Phaser.Input.Events.POINTER_OVER, () => this.setSelected(index));
-    bg.on(Phaser.Input.Events.POINTER_DOWN, () => { this.unlockAudio(); this.setSelected(index); activate(); });
+    bg.on(Engine.Input.Events.POINTER_OVER, () => this.setSelected(index));
+    bg.on(Engine.Input.Events.POINTER_DOWN, () => { this.unlockAudio(); this.setSelected(index); activate(); });
     return { bg, key, label, textures, activate };
   }
 
@@ -285,7 +286,7 @@ export class TitleScene extends Phaser.Scene {
       }
     }
     canvas.refresh();
-    canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    canvas.setFilter(Engine.Textures.FilterMode.NEAREST);
     return name;
   }
 
@@ -342,7 +343,7 @@ export class TitleScene extends Phaser.Scene {
     this.starting = true;
     getSoundManager().unlock();
     this.cameras.main.fadeOut(400, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, go);
+    this.cameras.main.once(Engine.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, go);
   }
 
   /**
@@ -354,7 +355,7 @@ export class TitleScene extends Phaser.Scene {
     this.fadeThen(() => {
       if (fresh) resetAdventure();
       else requestAdventureRespawn();
-      void window.fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
+      void platform().fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
         .then((res) => (res.ok ? res.json() : undefined))
         .then((json) => { if (json) setWorldData(json); })
         .catch(() => undefined)
@@ -364,7 +365,7 @@ export class TitleScene extends Phaser.Scene {
 
   private teardown(): void {
     this.input.keyboard?.off('keydown', this.handleKey, this);
-    this.input.off(Phaser.Input.Events.POINTER_DOWN, this.unlockAudio, this);
+    this.input.off(Engine.Input.Events.POINTER_DOWN, this.unlockAudio, this);
     // As teclas sao texturas geradas para ESTA tela (o tamanho segue a janela): saem com ela.
     for (const btn of this.buttons) {
       for (const key of btn.textures) if (this.textures.exists(key)) this.textures.remove(key);

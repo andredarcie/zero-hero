@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { registerTexture3D } from '@/game/render3d/textures3d';
+import { createCanvas } from '@/game/platform/platform';
 
 // Carvao procedural em pixel-art, na mesma paleta queimada do jogo — o mesmo esquema do
 // bucketTexture: desenhado uma vez e publicado nas DUAS pipelines de textura, THREE (billboard
-// de chao + costas do heroi + carga do braco) e Phaser (cerimonia de item-get e o swing).
+// de chao + costas do heroi + carga do braco) e o motor 2D (cerimonia de item-get e o swing).
 //
 // O carvao sai do forno (dois gravetos) e e o reagente do ferro. Tambem e o alimento da tocha: pisar nele segurando o graveto ACESO o consome e enche o combustivel.
 
@@ -40,10 +41,10 @@ export const CHARCOAL_TEXTURE_KEY = 'charcoal-item';
 const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
   const h = rows.length;
   const w = rows[0].length;
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas;
   const img = ctx.createImageData(w, h);
   for (let y = 0; y < h; y += 1) {
@@ -67,10 +68,10 @@ let threeRegistered = false;
  * Publica a textura do carvao nas duas pipelines sob a chave `charcoal-item`. Chamar no boot da
  * cena, DEPOIS do loader 3D (GameScene.create). Idempotente por pipeline, como o balde.
  */
-export const registerCharcoalTexture = (scene: Phaser.Scene): void => {
+export const registerCharcoalTexture = (scene: Engine.Scene): void => {
   const needThree = !threeRegistered;
-  const needPhaser = !scene.textures.exists(CHARCOAL_TEXTURE_KEY);
-  if (!needThree && !needPhaser) return;
+  const need2d = !scene.textures.exists(CHARCOAL_TEXTURE_KEY);
+  if (!needThree && !need2d) return;
   const canvas = makeCanvas(LUMP);
   if (needThree) {
     const tex = new THREE.CanvasTexture(canvas);
@@ -80,6 +81,6 @@ export const registerCharcoalTexture = (scene: Phaser.Scene): void => {
     tex.needsUpdate = true;
     registerTexture3D(CHARCOAL_TEXTURE_KEY, tex);
   }
-  if (needPhaser) scene.textures.addCanvas(CHARCOAL_TEXTURE_KEY, canvas);
+  if (need2d) scene.textures.addCanvas(CHARCOAL_TEXTURE_KEY, canvas);
   threeRegistered = true;
 };

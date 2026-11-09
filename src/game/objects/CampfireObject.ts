@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d, type FireLight3D } from '@/game/render3d/World3D';
@@ -31,18 +31,18 @@ export class CampfireObject implements WorldProp {
   public readonly blocking = true;
   private heldCold = false;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   /** Os galhos, sempre lá: a chama nasce no meio deles. */
   private readonly logs: Billboard3D;
   private readonly sprite: Billboard3D;
   private readonly glow: Billboard3D;
   private readonly fireLight: FireLight3D;
   private frameIndex = 0;
-  private animTimer?: Phaser.Time.TimerEvent;
+  private animTimer?: Engine.Time.TimerEvent;
   private lit: boolean;
-  private kindleTween?: Phaser.Tweens.Tween;
+  private kindleTween?: Engine.Tweens.Tween;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, lit = true) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number, lit = true) {
     this.scene  = scene;
     this.worldX = worldX;
     this.worldY = worldY;
@@ -76,7 +76,7 @@ export class CampfireObject implements WorldProp {
 
   /** Quanto fogo há: 0 é só a lenha, 1 é a fogueira inteira. A chama, o halo e a luz sobem juntos. */
   private setFlame(t: number): void {
-    const c = Phaser.Math.Clamp(t, 0, 1);
+    const c = Engine.Math.Clamp(t, 0, 1);
     const step = Math.ceil(c * FLAME_STEPS) / FLAME_STEPS;
     const size = SIZE * (FLAME_MIN + (1 - FLAME_MIN) * step);
     this.sprite.setVisible(c > 0).setDisplaySize(size, size);
@@ -195,7 +195,7 @@ export class CampfireObject implements WorldProp {
   }
 
   /**
-   * APAGADA ATÉ SEGUNDA ORDEM: a fogueira do Bram, antes da lenha dele. Nem o relógio, nem uma tocha,
+   * APAGADA ATÉ SEGUNDA ORDEM: a fogueira do Marco, antes da lenha dele. Nem o relógio, nem uma tocha,
    * nem o fogo do vizinho a acendem: acender esta é o pedido inteiro (ver quests/LumberQuest).
    */
   public get isHeldCold(): boolean {

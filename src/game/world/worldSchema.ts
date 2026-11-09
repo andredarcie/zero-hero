@@ -16,11 +16,6 @@ export type WorldMeta = {
   tileSize: number;
   tilesetKey: string;
   playerStart: { worldX: number; worldY: number };
-  // A puzzle world (the /levels files) — the undead siege is suppressed for it, the way it
-  // already is in the lab. Absent/false on the real overworld. NOTE: apenas o CERCO (ambiente,
-  // em volta do heroi) morre aqui; pontos de spawn autorados valem em todo mundo, e e num level
-  // que eles mais valem — ver GameScene.create.
-  puzzle?: boolean;
   exportedAt: string;
 };
 
@@ -78,7 +73,22 @@ export type WorldChunk = {
 export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dryTree' | 'rock'
   | 'ironRock' | 'coalRock' | 'tallGrass' | 'lava' | 'water' | 'dryShrub' | 'bridgeSpot' | 'moonflower'
   | 'plantSpot' | 'toolbox' | 'furnace'
-  | 'altar' | 'hearth' | 'gardenGate';
+  | 'altar' | 'hearth' | 'gardenGate'
+  // O BOSQUE (objects/BigTrees): o carvalho velho, a bétula, o carvalhinho e o tronco caído (este deita em dois
+  // tiles, x e x+1). São props, e não posições no código, para o editor poder pôr, mover e APAGAR — o autor tentou
+  // apagar uma e não conseguiu. Bloqueiam a passagem pelo próprio prop (BigTrees.at), sem colisão pintada.
+  | 'oakTree' | 'birchTree' | 'youngOak' | 'fallenLog'
+  // A CERCA DE MADEIRA (objects/WoodFence): um prop por tile, que se liga sozinho aos vizinhos; a ponta é pilar de portão.
+  | 'woodFence'
+  // O QUINTAL DO LENHADOR (objects/LumberYard): pilha de lenha, cavalete com serra, tocos, carrinho de mão, placa.
+  | 'woodpile' | 'sawhorse' | 'stump' | 'axeStump' | 'wheelbarrow' | 'yardSign'
+  // A FORJA VELHA (objects/OldForge): a chaminé caída e o suporte de ferramentas do ferreiro que foi embora.
+  | 'forgeRubble' | 'forgeRack'
+  // A CRATERA DA NAVE DA THEA (objects/CrashSite): o buraco da queda e os pedaços da nave, onde era a casa dela.
+  | 'crashCrater' | 'shipHull' | 'shipThruster' | 'shipFin';
+
+/** Os props do bosque (ver acima). */
+export const BOSQUE_PROP_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['oakTree', 'birchTree', 'youngOak', 'fallenLog']);
 
 // Which way a prop faces. Clockwise from north, and the SAME order as the frames in a directional
 // sheet, so `dir` indexes the art directly: 0=N 1=L 2=S 3=O.

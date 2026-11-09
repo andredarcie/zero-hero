@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -24,7 +24,7 @@ import type { WorldProp } from './WorldProp';
 // de "recarregado". Quem solta o item e o GameScene (dropOreYield), nunca esta classe.
 //
 // A PEDRA DE CARVÃO (pedido do autor) é o mesmo veio, na margem do lago de lava: em vez do minério ela solta
-// CARVÃO, o fogo que o forno da Vega pede antes do minério. Assim ninguém depende do machado de outro vizinho.
+// CARVÃO, o fogo que o forno da Thea pede antes do minério. Assim ninguém depende do machado de outro vizinho.
 //
 // E uma classe so, e nao uma subclasse: a diferenca cabe num booleano, enquanto duas classes
 // significariam duas copias do recuo, do colapso e do contrato de colisao — que e exatamente a
@@ -61,7 +61,7 @@ export class RockObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   private readonly sprite: Billboard3D;
   private state: RockState = 'intact';
   /** O placar do veio: pancadas dadas dentro do ciclo atual (so a pedra de minerio conta). */
@@ -73,7 +73,7 @@ export class RockObject implements WorldProp {
   public readonly product: HeldItemKind;
   private readonly look: (typeof LOOK)[RockKind];
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, kind: RockKind = 'plain') {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number, kind: RockKind = 'plain') {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;

@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
@@ -11,7 +11,7 @@ export class LockedDoorObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   private readonly sprite: Billboard3D;
   private open = false;
   // A floodgate: opening it drains the water it holds back (GameScene.openFloodgate). It reads as
@@ -20,7 +20,7 @@ export class LockedDoorObject implements WorldProp {
   /** O portão do jardim alto: arte própria (portão clássico coberto de ramos) e folhas que giram ao abrir. */
   private readonly garden: boolean;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, floodgate = false, garden = false) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number, floodgate = false, garden = false) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;

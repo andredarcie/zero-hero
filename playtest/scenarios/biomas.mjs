@@ -6,11 +6,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SPOTS = [
   { biome: 'ash', x: 12, y: 8, label: 'cinzas-noroeste' },
   { biome: 'ash', x: 6, y: 10, label: 'lago-de-lava' },
-  { biome: 'stars', x: 42, y: 7, label: 'area-da-vega' },
-  { biome: 'meadow', x: 20, y: 22, label: 'prado-da-iris' },
-  { biome: 'stars', x: 39, y: 11, label: 'planalto-da-vega' },
-  { biome: 'woods', x: 52, y: 12, label: 'mata-do-bram' },
-  { biome: 'moss', x: 9, y: 44, label: 'bosque-da-hollis' },
+  { biome: 'stars', x: 42, y: 7, label: 'area-da-thea' },
+  { biome: 'meadow', x: 20, y: 22, label: 'prado-da-sisi' },
+  { biome: 'stars', x: 39, y: 11, label: 'planalto-da-thea' },
+  { biome: 'woods', x: 52, y: 12, label: 'mata-do-marco' },
+  { biome: 'moss', x: 9, y: 44, label: 'bosque-da-shui' },
   { biome: 'garden', x: 30, y: 27, label: 'jardim-do-centro' },
   { biome: 'fields', x: 30, y: 47, label: 'campos-do-sul' },
   // as FRONTEIRAS (BIOMAS=fronteira): o olho confere que a passagem é um degradê, não uma emenda

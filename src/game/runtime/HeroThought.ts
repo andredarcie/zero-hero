@@ -1,7 +1,8 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { SCENE_DEPTHS } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * O PENSAMENTO DO HERÓI: um balão com o desenho da coisa que falta, sobre a cabeça dele, por um
@@ -38,9 +39,9 @@ const POINTER_HALF_BASE = 1.7;
 const INK = 0x2a2118;
 const PAPER = 0xf3ecd8;
 
-const ensureThoughtArt = (scene: Phaser.Scene): void => {
+const ensureThoughtArt = (scene: Engine.Scene): void => {
   if (!scene.textures.exists(PLATE_TEXTURE)) {
-    const canvas = document.createElement('canvas');
+    const canvas = createCanvas();
     canvas.width = PLATE_W;
     canvas.height = PLATE_H;
     const ctx = canvas.getContext('2d');
@@ -72,21 +73,21 @@ const SIZE = 1.15;
 const LINGER_MS = 1500;
 /** O fade final — ele SOME, nunca corta. */
 const FADE_MS = 220;
-/** A respiração: um pensamento é uma coisa viva (a mesma cadência do balão da caveira). */
+/** A respiração: um pensamento é uma coisa viva. */
 const BOB_MS = 900;
 
 export class HeroThought {
-  private readonly bubble: Phaser.GameObjects.Container;
-  private readonly plate: Phaser.GameObjects.Image;
-  private readonly icon: Phaser.GameObjects.Image;
-  private readonly pointer: Phaser.GameObjects.Graphics;
+  private readonly bubble: Engine.GameObjects.Container;
+  private readonly plate: Engine.GameObjects.Image;
+  private readonly icon: Engine.GameObjects.Image;
+  private readonly pointer: Engine.GameObjects.Graphics;
   /** Para onde a pontinha aponta (tile do mundo), ou null: sem pontinha. */
   private pointTo: { x: number; y: number } | null = null;
   private leftMs = 0;
-  private popTween?: Phaser.Tweens.Tween;
+  private popTween?: Engine.Tweens.Tween;
   private current = '';
 
-  public constructor(private readonly scene: Phaser.Scene) {
+  public constructor(private readonly scene: Engine.Scene) {
     ensureThoughtArt(scene);
     this.plate = scene.add.image(0, 0, PLATE_TEXTURE).setOrigin(0.5, 1);
     this.icon = scene.add.image(0, 0, PLATE_TEXTURE);
@@ -111,7 +112,7 @@ export class HeroThought {
     this.bubble.setAlpha(1).setVisible(true);
     if (!fresh) return;
     // O POP: ele nasce do nada e assenta. `Back.easeOut` passa do tamanho e volta — é o gesto de
-    // uma ideia chegando, e é o mesmo do balão da caveira.
+    // uma ideia chegando.
     this.popTween?.stop();
     this.bubble.setScale(0);
     this.popTween = this.scene.tweens.add({

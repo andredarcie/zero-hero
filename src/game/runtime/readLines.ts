@@ -2,7 +2,7 @@ import { adventureState } from '@/game/runtime/adventureState';
 
 /**
  * AS FALAS JÁ LIDAS (pedido do autor: qualidade de vida). Uma linha que o jogador já viu inteira aparece inteira
- * de uma vez da próxima vez — quem volta à Hollis para relembrar onde nasce o próximo cogumelo não espera a
+ * de uma vez da próxima vez — quem volta à Shui para relembrar onde nasce o próximo cogumelo não espera a
  * datilografia de novo. A fala nova continua com o ritmo e a voz de sempre.
  *
  * O save guarda um RESUMO curto de cada texto (hash + tamanho), não o texto: são centenas de linhas, e o save é

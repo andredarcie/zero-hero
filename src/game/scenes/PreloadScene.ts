@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { FONT_FAMILY, TEXT_RESOLUTION } from '@/game/constants';
 import { preloadSharedAssets } from '@/game/assets/assetManifest';
@@ -10,7 +10,7 @@ import { setWorldData } from '@/game/world/WorldData';
 
 const WORLD_JSON_KEY = 'world';
 
-export class PreloadScene extends Phaser.Scene {
+export class PreloadScene extends Engine.Scene {
   public static readonly key = 'preload';
 
   public constructor() {

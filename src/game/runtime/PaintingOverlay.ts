@@ -2,12 +2,13 @@ import { DYE_COLORS, DYE_KINDS, type DyeKind } from '@/game/quests/dyePlants';
 import { t } from '@/game/i18n/i18n';
 import { MinigameCaption } from '@/game/runtime/MinigameCaption';
 import { KEY_BORDER, KEY_GLYPH, PIXEL_FONT } from '@/game/runtime/uiStyle';
+import { createCanvas } from '@/game/platform/platform';
 
 // O QUADRO: o minigame de pintar. DOM por cima do mundo, como a colheita e a pausa. O desenho é feito
 // em poucos pixels e ampliado sem suavizar, para ele ter a mesma cara de todo o resto do jogo.
 //
 // O traço é por ponteiro, então dedo e mouse são o mesmo caminho. Pintar exige ao menos um traço:
-// é sobre o desenho que a Iris vai comentar.
+// é sobre o desenho que a Sisi vai comentar.
 
 const STYLE_ID = 'zh-paint-style';
 const ROOT_ID = 'zh-paint-root';
@@ -67,7 +68,7 @@ export interface PaintingOverlayCallbacks {
   onPick: () => void;
 }
 
-/** O que a Iris enxerga no quadro: quanto foi coberto e quanto de cada cor. */
+/** O que a Sisi enxerga no quadro: quanto foi coberto e quanto de cada cor. */
 export type PaintingReading = { coverage: number; dominant: DyeKind; used: DyeKind[] };
 
 export const readPainting = (canvas: HTMLCanvasElement): PaintingReading => {
@@ -121,7 +122,7 @@ export class PaintingOverlay {
     this.root.id = ROOT_ID;
     this.root.setAttribute('data-zh-ui', '');
 
-    this.canvas = earlier ?? document.createElement('canvas');
+    this.canvas = earlier ?? createCanvas();
     // Só no quadro novo: escrever o tamanho apaga o canvas, e o rascunho de quem saiu tem de voltar.
     if (!earlier) {
       this.canvas.width = PAINT_W;
@@ -237,7 +238,7 @@ export class PaintingOverlay {
     };
   }
 
-  /** Um carimbo redondo em pixel inteiro: sem antialias, a cor fica pura e a Iris consegue lê-la. */
+  /** Um carimbo redondo em pixel inteiro: sem antialias, a cor fica pura e a Sisi consegue lê-la. */
   private stamp(x: number, y: number): void {
     this.ctx.fillStyle = DYE_COLORS[this.color];
     for (let dy = -BRUSH_RADIUS; dy <= BRUSH_RADIUS; dy += 1) {

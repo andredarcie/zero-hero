@@ -1,7 +1,7 @@
 // ZERAR — joga a aventura inteira, do título aos créditos, numa partida só, com o teclado (e o mouse nos
 // mini-games), do jeito que um jogador joga. Só LÊ o jogo para achar caminho. Ver playtest/lib/player.mjs.
 //
-//   abertura → Iris → Bram → Vega → o colchão do acampamento (a Morte e a foice) → Hollis
+//   abertura → Sisi → Marco → Thea → o colchão do acampamento (a Morte e a foice) → Shui
 //   → a chave do jardim → o portão → a fogueira do fim → os créditos → o título
 //
 // ZERAR_FROM=<fase> recomeça de um save gravado no fim da fase anterior (playtest/results/zerar-saves/),
@@ -9,10 +9,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { makePlayer, sleep } from '../lib/player.mjs';
-import { playVega } from './telescopio.mjs';
+import { playThea } from './telescopio.mjs';
 
 const SAVES = path.resolve('playtest/results/zerar-saves');
-const PHASES = ['abertura', 'recon', 'iris', 'bram', 'vega', 'noite', 'hollis', 'fim'];
+const PHASES = ['abertura', 'recon', 'sisi', 'marco', 'thea', 'noite', 'shui', 'fim'];
 
 export default {
   name: 'zerar',
@@ -79,27 +79,27 @@ export default {
         say(`casas: ${JSON.stringify(homes)}`);
       },
 
-      // ── A IRIS: a pá, quatro buracos, as sementes, o balde, a espera, as flores, a mesa e o quadro ──
-      async iris() {
+      // ── A SISI: a pá, quatro buracos, as sementes, o balde, a espera, as flores, a mesa e o quadro ──
+      async sisi() {
         const stage = () => page.evaluate(() => window.__scene.painterQuest.save.stage);
         const held = async () => (await P.state()).heldItem;
         const home = await P.homeOf('painter');
         const near = { near: home, radius: 7 };
-        await P.talk('painter', 'a Iris');
-        assert('A Iris dá a pá', (await held()) === 'shovel' && (await stage()) === 'dig', `${await held()} / ${await stage()}`);
+        await P.talk('painter', 'a Sisi');
+        assert('A Sisi dá a pá', (await held()) === 'shovel' && (await stage()) === 'dig', `${await held()} / ${await stage()}`);
         for (let i = 0; i < 4; i += 1) {
           await P.doVerb('x', 'dig', `cavar ${i + 1}`, near);
           await sleep(500);
           await P.drain('cavar');
         }
-        await shot('10-iris-buracos', { note: 'Os quatro buracos' });
-        await P.talk('painter', 'a Iris (buracos prontos)');
+        await shot('10-sisi-buracos', { note: 'Os quatro buracos' });
+        await P.talk('painter', 'a Sisi (buracos prontos)');
         assert('Com os buracos, ela dá as sementes', (await held()) === 'dyeSeeds' && (await stage()) === 'sow', `${await held()} / ${await stage()}`);
         for (let i = 0; i < 4; i += 1) {
           await P.doVerb('x', 'sow', `semear ${i + 1}`, near);
           await sleep(450);
         }
-        await P.talk('painter', 'a Iris (semeado)');
+        await P.talk('painter', 'a Sisi (semeado)');
         assert('Semeado, ela dá o balde', ['bucket', 'bucketFull'].includes(await held()) && (await stage()) === 'water', `${await held()} / ${await stage()}`);
         for (let i = 0; i < 12 && (await stage()) === 'water'; i += 1) {
           if ((await held()) === 'bucket') await P.doVerb('x', 'fill', 'encher o balde');
@@ -108,7 +108,7 @@ export default {
           await P.drain('balde');
         }
         assert('Os quatro canteiros regados: as tintas crescem', (await stage()) === 'grow', await stage());
-        await shot('11-iris-regado', { note: 'Os canteiros regados' });
+        await shot('11-sisi-regado', { note: 'Os canteiros regados' });
         say('esperando as flores crescerem (tempo de jogo)');
         await P.pageWait(() => window.__scene.painterQuest.save.stage === 'harvest', null, 'as flores crescerem', 240000);
         for (let i = 0; i < 4; i += 1) {
@@ -125,7 +125,7 @@ export default {
         await P.doVerb('z', 'paint', 'o quadro', near);
         await page.waitForSelector('#zh-paint-root canvas', { timeout: 8000 });
         await sleep(500);
-        await shot('12-iris-quadro', { note: 'O quadro aberto' });
+        await shot('12-sisi-quadro', { note: 'O quadro aberto' });
         const box = await page.locator('#zh-paint-root canvas').boundingBox();
         const pots = page.locator('#zh-paint-root .zh-paint-pot');
         for (let k = 0; k < 4; k += 1) {
@@ -136,24 +136,24 @@ export default {
           for (let s = 1; s <= 12; s += 1) await page.mouse.move(box.x + box.width * (0.15 + s * 0.06), y0 + Math.sin(s) * 12, { steps: 2 });
           await page.mouse.up();
         }
-        await shot('13-iris-pintado', { note: 'O quadro pintado' });
+        await shot('13-sisi-pintado', { note: 'O quadro pintado' });
         await page.keyboard.press('Enter');
         await P.pageWait(() => !document.getElementById('zh-paint-root'), null, 'o quadro fechar', 8000);
-        assert('Pintado, a Iris vai olhar', (await stage()) === 'review', await stage());
-        await P.talk('painter', 'a Iris (o quadro)');
+        assert('Pintado, a Sisi vai olhar', (await stage()) === 'review', await stage());
+        await P.talk('painter', 'a Sisi (o quadro)');
         const q = await P.quest('painter');
-        assert('A quest da Iris fechou', q?.done === true && (await stage()) === 'done', JSON.stringify(q));
-        await shot('14-iris-fim', { note: 'A Iris viu o quadro' });
+        assert('A quest da Sisi fechou', q?.done === true && (await stage()) === 'done', JSON.stringify(q));
+        await shot('14-sisi-fim', { note: 'A Sisi viu o quadro' });
       },
 
-      // ── O BRAM: o machado, quatro galhos de árvore seca rachados no cepo, a tenda, e acender ──
-      async bram() {
+      // ── O MARCO: o machado, quatro galhos de árvore seca rachados no cepo, a tenda, e acender ──
+      async marco() {
         const L = () => page.evaluate(() => { const q = window.__scene.lumberQuest; return { stage: q.save.stage, laid: q.save.laid, standing: q.save.standing, ui: !!q.overlay }; });
         const held = async () => (await P.state()).heldItem;
         const home = await P.homeOf('businessMan');
         const near = { near: home, radius: 8 };
-        await P.talk('businessMan', 'o Bram');
-        assert('O Bram dá o machado', (await held()) === 'axe' && (await L()).stage === 'gather', `${await held()} / ${JSON.stringify(await L())}`);
+        await P.talk('businessMan', 'o Marco');
+        assert('O Marco dá o machado', (await held()) === 'axe' && (await L()).stage === 'gather', `${await held()} / ${JSON.stringify(await L())}`);
         /** Pega o item do chão: de mão vazia, pisa nele; de mão cheia, encara e troca (Z). */
         const pickUp = async (kind) => {
           const st = await P.state();
@@ -167,7 +167,7 @@ export default {
         };
         const split = async () => {
           await P.pageWait(() => !!window.__scene.lumberQuest.overlay, null, 'o cepo abrir', 8000);
-          await shot(`20-bram-cepo-${(await L()).laid}`, { note: 'Rachar no cepo' });
+          await shot(`20-marco-cepo-${(await L()).laid}`, { note: 'Rachar no cepo' });
           await page.evaluate(() => new Promise((resolve) => {
             const q = window.__scene.lumberQuest;
             const fire = () => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyZ', key: 'z', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyZ', key: 'z', bubbles: true })); };
@@ -205,28 +205,28 @@ export default {
           await P.free();
         }
         assert('Os quatro galhos na tenda', (await L()).stage === 'ready', JSON.stringify(await L()));
-        await shot('21-bram-tenda', { note: 'A tenda pronta' });
-        await P.talk('businessMan', 'o Bram (pronta)');
+        await shot('21-marco-tenda', { note: 'A tenda pronta' });
+        await P.talk('businessMan', 'o Marco (pronta)');
         assert('Ele manda acender', (await L()).stage === 'light', JSON.stringify(await L()));
         await P.doVerb('z', 'light', 'acender', near);
         await P.pageWait(() => !!window.__scene.lumberQuest.overlay, null, 'o fogo abrir', 8000);
-        await shot('22-bram-acender', { note: 'Acender' });
+        await shot('22-marco-acender', { note: 'Acender' });
         for (let i = 0; i < 80 && (await L()).ui; i += 1) {
           const phase = await page.evaluate(() => window.__scene.lumberQuest.overlay?.phase);
           if (phase === 'strike') await P.press('z', 50, 250);
           else if (phase === 'blow') await P.press('z', 50, 450);
           else await sleep(300);
         }
-        await P.drain('a noite do Bram', 200);
+        await P.drain('a noite do Marco', 200);
         await P.free();
         const q = await P.quest('businessMan');
-        assert('A quest do Bram fechou', q?.done === true && (await L()).stage === 'done', JSON.stringify(q));
-        await shot('23-bram-fim', { note: 'Depois da noite' });
+        assert('A quest do Marco fechou', q?.done === true && (await L()).stage === 'done', JSON.stringify(q));
+        await shot('23-marco-fim', { note: 'Depois da noite' });
       },
 
-      // ── A VEGA: a picareta, carvão e minério no lago de lava, a bigorna, areia e vidro, a lente, o planalto e a noite ──
-      async vega() {
-        await playVega({ driver, shot, assert, skipOpening: true });
+      // ── A THEA: a picareta, carvão e minério no lago de lava, a bigorna, areia e vidro, a lente, o planalto e a noite ──
+      async thea() {
+        await playThea({ driver, shot, assert, skipOpening: true });
         await P.free();
       },
 
@@ -234,7 +234,7 @@ export default {
       async noite() {
         await P.doVerb('z', 'sleep', 'o colchão do acampamento', { near: { x: 53, y: 48 }, radius: 3 });
         await P.waitFor((s) => s.resting, 'deitar', 8000);
-        const lying = await page.evaluate(() => ({ sleeping: window.__scene.sleeping, camp: window.__scene.sleepingAtCamp }));
+        const lying = await page.evaluate(() => ({ sleeping: window.__scene.rest.isSleeping, camp: window.__scene.rest.sleepingAtCamp }));
         assert('O herói dorme no colchão do acampamento', lying.sleeping && lying.camp, JSON.stringify(lying));
         await shot('30-noite-colchao', { note: 'Dormindo no acampamento' });
         say('esperando a noite passar');
@@ -251,8 +251,8 @@ export default {
         assert('O mago deixa de lembrar do acampamento', (await page.evaluate(() => window.__scene.wizardLine())) !== 'tent', '');
       },
 
-      // ── A HOLLIS: a faca e os seis cogumelos, cada um atrás de uma coisa que só uma ferramenta tira ──
-      async hollis() {
+      // ── A SHUI: a faca e os seis cogumelos, cada um atrás de uma coisa que só uma ferramenta tira ──
+      async shui() {
         const held = async () => (await P.state()).heldItem;
         const DIRS4 = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
@@ -388,8 +388,8 @@ export default {
           assert(`O ${kind} foi colhido`, gone, '');
         };
 
-        await P.talk('radiationSuit', 'a Hollis');
-        assert('A Hollis dá a faca', (await held()) === 'knife', await held());
+        await P.talk('radiationSuit', 'a Shui');
+        assert('A Shui dá a faca', (await held()) === 'knife', await held());
 
         // PORCINI: só chegar.
         await harvest('porcini');
@@ -428,12 +428,12 @@ export default {
 
         await shot('43-cesta', { note: 'Os seis na cesta' });
         await hold('knife').catch(() => {});
-        await P.talk('radiationSuit', 'a Hollis (a cesta)');
+        await P.talk('radiationSuit', 'a Shui (a cesta)');
         const q = await P.quest('radiationSuit');
-        assert('A quest da Hollis fechou', q?.done === true, JSON.stringify(q));
+        assert('A quest da Shui fechou', q?.done === true, JSON.stringify(q));
         const st = await P.waitFor((s2) => s2.heldItem === 'key' && !s2.itemGetOpen && !s2.dialogOpen && !s2.cutsceneActive, 'a chave do jardim', 15000).catch(async () => P.state());
         assert('A última quest dá a chave do jardim', st.heldItem === 'key', st.heldItem);
-        await shot('44-hollis-fim', { note: 'A Hollis fechou: a chave' });
+        await shot('44-shui-fim', { note: 'A Shui fechou: a chave' });
       },
 
       // ── O FIM: a chave no portão, o jardim alto, a névoa, a fogueira, o marshmallow, os créditos e o título ──

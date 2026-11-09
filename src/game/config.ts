@@ -1,4 +1,5 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
+import { platform } from '@/game/platform/platform';
 
 import {
   DEFAULT_GAME_HEIGHT,
@@ -31,22 +32,24 @@ export const getCanvasSizeForMode = (mode: AppMode): { width: number; height: nu
   return getGameCanvasSize();
 };
 
-export const createGameConfig = (parent: string, mode: AppMode): Phaser.Types.Core.GameConfig => ({
-  type: Phaser.AUTO,
+export const createGameConfig = (parent: string, mode: AppMode): Engine.Types.Core.GameConfig => ({
+  // O motor roda onde a plataforma manda (o navegador, ou o Node nos testes): ver game/platform/platform.ts.
+  host: platform().engineHost,
+  type: Engine.AUTO,
   parent,
   width: getCanvasSizeForMode(mode).width,
   height: getCanvasSizeForMode(mode).height,
   backgroundColor: '#1d3557',
   // The world itself renders on a Three.js canvas UNDERNEATH this one (see
-  // render3d/World3D.ts): Phaser draws logic-side FX + canvas UI over it, so
+  // render3d/World3D.ts): the 2D engine draws logic-side FX + canvas UI over it, so
   // its canvas must be transparent. Scenes that want a solid backdrop (title,
   // editor) set their own camera background color.
   transparent: true,
   pixelArt: true,
   roundPixels: true,
   scale: {
-    mode: Phaser.Scale.NONE,
-    autoCenter: Phaser.Scale.NO_CENTER,
+    mode: Engine.Scale.NONE,
+    autoCenter: Engine.Scale.NO_CENTER,
     width: getCanvasSizeForMode(mode).width,
     height: getCanvasSizeForMode(mode).height,
   },

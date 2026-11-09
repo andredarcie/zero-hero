@@ -37,9 +37,9 @@ import { MUSHROOM_KINDS } from '@/game/fungi/fungi';
  *   gather  — APANHAR N unidades ao longo da partida. Não consome: contar é o pedido.
  *   craft   — FABRICAR N numa estação (bancada ou forno).
  *   grow    — fazer BROTAR N canteiros: semente na terra, água no monte, e esperar.
- *   paint   — TERMINAR o quadro da Iris (o fim da quest em etapas dela: ver quests/PainterQuest).
- *   fire    — ACENDER o fogo do Bram com a lenha que o herói preparou (ver quests/LumberQuest).
- *   sky     — ACHAR os quatro alvos no telescópio da Vega (ver quests/AstronomerQuest).
+ *   paint   — TERMINAR o quadro da Sisi (o fim da quest em etapas dela: ver quests/PainterQuest).
+ *   fire    — ACENDER o fogo do Marco com a lenha que o herói preparou (ver quests/LumberQuest).
+ *   sky     — ACHAR os quatro alvos no telescópio da Thea (ver quests/AstronomerQuest).
  *   light   — ACENDER N fogueiras do overworld.
  *   explore — PISAR em N telas diferentes (o mesmo fog of war do mapa).
  */
@@ -105,10 +105,10 @@ export const taskKey = (task: QuestTask): string => {
  *   o lenhador (businessMan)   — um fogo que dura: cortar, rachar, empilhar, secar e acender
  *   a astrônoma (astronaut)    — o telescópio: tripé de ferro, lente de vidro, e uma noite no planalto
  *
- * A BARRA DE FERRO É O COMEÇO DO PEDIDO DA VEGA, e o único que atravessa a cadeia toda: o mundo não tem ferro no
+ * A BARRA DE FERRO É O COMEÇO DO PEDIDO DA THEA, e o único que atravessa a cadeia toda: o mundo não tem ferro no
  * chão, então ela só existe fabricada — minério da picareta, forno (pedra+pedra) na bancada,
  * carvão (lenha+lenha) e esponja (minério+carvão) no forno, e as marteladas que fazem dela barra.
- * A picareta que a Vega dá é a chave: a pedra do forno e o minério saem dela. O resto é em etapas.
+ * A picareta que a Thea dá é a chave: a pedra do forno e o minério saem dela. O resto é em etapas.
  *
  * Quando o último pedido fecha, o portão do jardim no centro do vale ABRE (ver
  * GameScene.openGardenGate) — e lá dentro está a fogueira do fim.

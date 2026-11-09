@@ -1,5 +1,5 @@
 // DICAS — o que deixa óbvio o que fazer (pedido do autor):
-//   1. o porcini, o primeiro corte do jogo, nasce três tiles à esquerda da Hollis (scripts/porcini-da-hollis.mjs);
+//   1. o porcini, o primeiro corte do jogo, nasce três tiles à esquerda da Shui (scripts/porcini-da-hollis.mjs);
 //      na fala "aqui do meu lado esquerdo", a câmera vai até ele e volta para ela;
 //   2. o balão de pensamento de uma FERRAMENTA ÚNICA ganha uma pontinha virada para onde ela está: quem a dá, ou
 //      o chão onde ela ficou. A foice (a Morte não tem casa) só aponta quando está no chão;
@@ -8,7 +8,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default {
   name: 'dicas',
-  description: 'O porcini ao lado da Hollis com o olhar da câmera, e a pontinha do balão das ferramentas únicas.',
+  description: 'O porcini ao lado da Shui com o olhar da câmera, e a pontinha do balão das ferramentas únicas.',
   needsGame: false,
   async run({ driver, shot, assert, log }) {
     const { page } = driver;
@@ -26,15 +26,15 @@ export default {
       const s = window.__scene; window.gameTime.set(0.45);
       s.playerWorld.worldX = 5; s.playerWorld.worldY = 41; s.movementController.interruptMovement(5, 41); s.movementController.faceTo(0, -1); s.streamChunks(true);
       const porcini = s.itemManager.snapshot().filter((i) => i.kind === 'porcini');
-      const hollis = s.npcManager.getActiveWorldPositions().find((n) => n.kind === 'radiationSuit');
-      return { porcini, hollis };
+      const shui = s.npcManager.getActiveWorldPositions().find((n) => n.kind === 'radiationSuit');
+      return { porcini, shui };
     });
-    const near = place.porcini.find((p) => place.hollis && p.worldY === place.hollis.worldY && p.worldX === place.hollis.worldX - 3);
-    assert('O porcini nasce três tiles à esquerda da Hollis, na mesma linha', Boolean(near), JSON.stringify(place));
+    const near = place.porcini.find((p) => place.shui && p.worldY === place.shui.worldY && p.worldX === place.shui.worldX - 3);
+    assert('O porcini nasce três tiles à esquerda da Shui, na mesma linha', Boolean(near), JSON.stringify(place));
     await sleep(800);
-    await shot('00-porcini', { note: 'O porcini à vista, à esquerda da Hollis' });
+    await shot('00-porcini', { note: 'O porcini à vista, à esquerda da Shui' });
 
-    // A conversa: a câmera fica na Hollis até a linha do porcini, vai até ele e volta.
+    // A conversa: a câmera fica na Shui até a linha do porcini, vai até ele e volta.
     await page.keyboard.press('z');
     const hintText = await page.evaluate(async () => {
       const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/i18n/i18n.ts'));
@@ -62,7 +62,7 @@ export default {
     }
     log(`  câmera: repouso ${rest}, maior desvio ${farthest}, voltou em ${backAt}`);
     assert('Na linha do porcini a câmera vai até ele', farthest > 100, String(farthest));
-    assert('E volta para a Hollis, com a conversa aberta', backAt !== null, String(backAt));
+    assert('E volta para a Shui, com a conversa aberta', backAt !== null, String(backAt));
     for (let i = 0; i < 20 && (await state()).dialogOpen; i += 1) { await page.keyboard.press('z'); await sleep(400); }
     for (let i = 0; i < 10 && ((await state()).itemGetOpen || (await state()).cutsceneActive); i += 1) { await page.keyboard.press('z'); await sleep(400); }
 
@@ -75,11 +75,11 @@ export default {
       const scythe = s.uniqueItemSource('scythe');
       const wood = s.uniqueItemSource('wood');
       s.itemManager.dropAt?.('scythe', 30, 50);
-      return { axe, shovel, scythe, wood, bram: home('businessMan'), iris: home('painter') };
+      return { axe, shovel, scythe, wood, marco: home('businessMan'), sisi: home('painter') };
     });
     log(`  pontinha: ${JSON.stringify(point)}`);
-    assert('O machado aponta para o Bram', point.axe && point.axe.x === 53 && point.axe.y === 5, JSON.stringify(point.axe));
-    assert('A pá aponta para a Iris', point.shovel && point.shovel.x === 17 && point.shovel.y === 17, JSON.stringify(point.shovel));
+    assert('O machado aponta para o Marco', point.axe && point.axe.x === 53 && point.axe.y === 5, JSON.stringify(point.axe));
+    assert('A pá aponta para a Sisi', point.shovel && point.shovel.x === 17 && point.shovel.y === 17, JSON.stringify(point.shovel));
     assert('A foice, que a Morte entrega, não tem pontinha', point.scythe === null, JSON.stringify(point.scythe));
     assert('Coisa comum (graveto) não tem pontinha', point.wood === null, JSON.stringify(point.wood));
 
@@ -98,8 +98,8 @@ export default {
       return { icon: s.heroThought.visibleIcon, to: s.heroThought.pointing };
     }, shown);
     await sleep(250);
-    await shot('02-pontinha', { note: 'O balão do machado, com a pontinha virada para o Bram' });
-    assert('Sem machado, diante da árvore seca, o herói pensa no machado com a pontinha no Bram', balloon.icon === 'axe-icon' && balloon.to?.x === 53 && balloon.to?.y === 5, JSON.stringify(balloon));
+    await shot('02-pontinha', { note: 'O balão do machado, com a pontinha virada para o Marco' });
+    assert('Sem machado, diante da árvore seca, o herói pensa no machado com a pontinha no Marco', balloon.icon === 'axe-icon' && balloon.to?.x === 53 && balloon.to?.y === 5, JSON.stringify(balloon));
 
     // ── 3. OS COGUMELINHOS-FILHOS ─────────────────────────────────────────────────────────────
     const kinds = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric'];

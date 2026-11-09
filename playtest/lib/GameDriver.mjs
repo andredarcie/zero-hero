@@ -141,7 +141,7 @@ export class GameDriver {
     await this.waitForBoot();
   }
 
-  /** Phaser instance is alive (first scene running). */
+  /** The game instance is alive (first scene running). */
   async waitForBoot() {
     await this.page.waitForFunction(() => Boolean(window.zeroTheHeroGame), null, {
       timeout: config.bootTimeoutMs,
@@ -182,7 +182,7 @@ export class GameDriver {
 
   // ── Input ────────────────────────────────────────────────────────────────
   // IMPORTANT: Playwright's instantaneous press() (down+up same frame) is missed by the
-  // game, which polls Phaser's JustDown() inside update(). We must HOLD the key for a few
+  // game, which polls the engine's JustDown() inside update(). We must HOLD the key for a few
   // frames so the scene observes the press, then wait for the move tween to settle.
   async press(key, { count = 1, delay = config.stepIntervalMs, holdMs = 70 } = {}) {
     if (STEP_KEYS[key] && (await this.getState())?.scene === 'game') {
@@ -300,7 +300,7 @@ export class GameDriver {
   }
 
   // ── Screenshots ──────────────────────────────────────────────────────────
-  // The Phaser canvas — the 3D world canvas sits under it at the same size/position, so
+  // The 2D canvas — the 3D world canvas sits under it at the same size/position, so
   // either one frames the board; naming it explicitly keeps the locator unambiguous.
   async canvasBox() {
     const box = await this.page.locator('#app canvas').boundingBox();

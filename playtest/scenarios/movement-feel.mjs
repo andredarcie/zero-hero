@@ -245,7 +245,7 @@ export default {
     // ── A tap during a step is not eaten ─────────────────────────────────────
     // Input used to be ignored outright while a step was in flight: `if (isMoving) return`.
     //
-    // The taps have to be HELD for a few frames. Phaser's Key.onUp clears `_justDown`, so a
+    // The taps have to be HELD for a few frames. The engine's Key.onUp clears `_justDown`, so a
     // press and release inside one frame is erased before the game's JustDown() poll can ever
     // see it — see the same warning in GameDriver.press. A real thumb holds a key for dozens of
     // frames; only a synthetic one can be this fast.

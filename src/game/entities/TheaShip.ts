@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -9,13 +9,13 @@ import {
 import { world3d } from '@/game/render3d/World3D';
 
 /**
- * A NAVE DA VEGA: desce do fundo do quadro freando no fogo, pousa com o baque e a poeira, abre e fecha a
+ * A NAVE DA THEA: desce do fundo do quadro freando no fogo, pousa com o baque e a poeira, abre e fecha a
  * porta, carrega e dispara. É cena, sem colisão: nada dela fica no mundo. Quem a usa decide o que
- * acontece entre uma coisa e outra (ver VegaDeparture e HearthReunion).
+ * acontece entre uma coisa e outra (ver TheaDeparture e HearthReunion).
  */
 
-export interface VegaShipHost {
-  scene: Phaser.Scene;
+export interface TheaShipHost {
+  scene: Engine.Scene;
   at: { x: number; y: number };
   smoke: (x: number, y: number) => void;
   dirt: (x: number, y: number, count: number) => void;
@@ -39,7 +39,7 @@ const FLICKER_MS = 45;
 const DUST_RING = 8;
 
 /** O corpo baixa e volta passando do ponto. */
-export const squashBounce = (scene: Phaser.Scene, body: { scaleX: number; scaleY: number }, restX: number, restY: number, depth = 0.14): void => {
+export const squashBounce = (scene: Engine.Scene, body: { scaleX: number; scaleY: number }, restX: number, restY: number, depth = 0.14): void => {
   scene.tweens.killTweensOf(body);
   scene.tweens.add({
     targets: body,
@@ -53,15 +53,15 @@ export const squashBounce = (scene: Phaser.Scene, body: { scaleX: number; scaleY
   });
 };
 
-export class VegaShip {
+export class TheaShip {
   private readonly ship: Billboard3D;
   private readonly flame: Billboard3D;
   /** De 0 (apagado) a 1 (cheio). */
   private flamePower = 0;
-  private readonly flicker: Phaser.Time.TimerEvent;
+  private readonly flicker: Engine.Time.TimerEvent;
   private jitter = 0;
 
-  public constructor(private readonly host: VegaShipHost) {
+  public constructor(private readonly host: TheaShipHost) {
     const { at } = host;
     this.ship = world3d()
       .addBillboard(SHIP_TEXTURE, 0, { groundShadow: { rx: 0.95, rz: 0.42, alpha: 0.32 } })
@@ -82,7 +82,7 @@ export class VegaShip {
     this.ship.destroy();
   }
 
-  private to(config: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> {
+  private to(config: Engine.Types.Tweens.TweenBuilderConfig): Promise<void> {
     return new Promise((resolve) => {
       this.host.scene.tweens.add({ ...config, onComplete: () => resolve() });
     });

@@ -4,8 +4,9 @@ import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import {
   KEY_BG, KEY_BORDER, KEY_GLYPH, PIXEL_FONT, SOFT_BLUR, pixelFrame,
 } from '@/game/runtime/uiStyle';
+import { createCanvas } from '@/game/platform/platform';
 
-// OS DOIS OFÍCIOS DO BRAM, no jeito da colheita do cogumelo (ver ForagingOverlay): o mundo fica onde
+// OS DOIS OFÍCIOS DO MARCO, no jeito da colheita do cogumelo (ver ForagingOverlay): o mundo fica onde
 // está, só que embaçado, e no meio dele aparece a coisa, sozinha e o maior que couber. Sem moldura, sem
 // fundo, sem texto. Tudo o que o jogador precisa saber está no próprio desenho e numa tecla só: o toque
 // em qualquer lugar da tela. Nenhum dos dois tem derrota, e o erro responde com um tremor.
@@ -65,7 +66,7 @@ export abstract class CraftOverlay {
     this.root = document.createElement('div');
     this.root.id = ROOT_ID;
     this.root.setAttribute('data-zh-ui', '');
-    this.canvas = document.createElement('canvas');
+    this.canvas = createCanvas();
     this.canvas.width = VIEW_W;
     this.canvas.height = VIEW_H;
     const ctx = this.canvas.getContext('2d');
@@ -170,7 +171,6 @@ const KNOT_RADIUS = 7;
 const FORCE_MIN = 0.62;
 const FORCE_MAX = 0.88;
 const LOG_CX = 100;
-const LOG_CY = 68;
 const LOG_R = 42;
 
 type SplitPhase = 'aim' | 'force' | 'swing' | 'apart';
@@ -201,9 +201,15 @@ export class SplitOverlay extends CraftOverlay {
   private hitsOnLog = 0;
   private crackWide = 0;
   private shake = 0;
-  private chips: Array<{ x: number; y: number; vx: number; vy: number; life: number }> = [];
+  private chips: Array<{ x: number; y: number; vx: number; vy: number; life: number; color: string; w: number; h: number }> = [];
+  /** A tora e o cepo, desenhados uma vez (ver paintStanding). */
+  private readonly logArt: HTMLCanvasElement;
+  private readonly blockArt: HTMLCanvasElement;
 
   /** `done` é quantos galhos já foram: o veio muda, e o vaivém acelera. Esta tela racha um. */
+  /** O galho já rachou e avisou (ver o fim do `tick`). */
+  private finished = false;
+
   public constructor(private readonly cb: SplitCallbacks, private readonly done: number) {
     super(cb.onLeave);
     // O veio e o nó mudam de galho para galho, sempre do mesmo jeito: a mesma partida é justa.
@@ -211,6 +217,9 @@ export class SplitOverlay extends CraftOverlay {
     this.grainX = side * (6 + this.done * 3);
     this.knotX = -side * (10 + this.done * 2);
     this.knotY = this.done % 2 === 0 ? -14 : 12;
+    // O nó no topo achatado: o mesmo lugar da regra, com o fundo pela metade (a tora é vista um pouco de cima).
+    this.logArt = paintStanding(LOG_R, TOP_RY, LOG_SIDE, this.done + 1, false, { x: this.knotX, y: Math.round(this.knotY * (TOP_RY / LOG_R)), r: KNOT_RADIUS });
+    this.blockArt = paintStanding(BLOCK_RX, BLOCK_RY, BLOCK_SIDE, 9, true);
     this.start();
   }
 
@@ -260,7 +269,14 @@ export class SplitOverlay extends CraftOverlay {
 
   private spawnChips(count: number): void {
     for (let i = 0; i < count; i += 1) {
-      this.chips.push({ x: LOG_CX + this.aim, y: LOG_CY - 10, vx: (Math.random() - 0.5) * 130, vy: -50 - Math.random() * 90, life: 0.75 });
+      // Lascas de tamanhos e cores diferentes: madeira clara de dentro, a média, e um pedaço de casca.
+      const kind = Math.random();
+      const color = kind < 0.45 ? '#ecca93' : kind < 0.8 ? '#c09158' : '#4a321c';
+      const long = Math.random() < 0.4;
+      this.chips.push({
+        x: LOG_CX + this.aim, y: TOP_CY - 2, vx: (Math.random() - 0.5) * 130, vy: -50 - Math.random() * 90, life: 0.75,
+        color, w: long ? 3 : 1 + Math.round(Math.random()), h: long ? 1 : 1 + Math.round(Math.random()),
+      });
     }
   }
 
@@ -279,7 +295,11 @@ export class SplitOverlay extends CraftOverlay {
     if (this.phase === 'apart') {
       this.apartT += dt / 0.6;
       if (this.apartT >= 1) {
-        this.cb.onDone();
+        // UMA vez só, como o fogo (ver FireLightOverlay.tick): o aviso não depende de quem abriu fechar a tela.
+        if (!this.finished) {
+          this.finished = true;
+          this.cb.onDone();
+        }
         return;
       }
     }
@@ -289,24 +309,25 @@ export class SplitOverlay extends CraftOverlay {
 
   private draw(dt: number): void {
     const shakeX = Math.sin(this.time * 70) * this.shake * 3;
+    const { ctx } = this;
+    // O cepo e a sombra dele no chão, sempre parados: a tora treme em cima deles.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+    for (let y = -5; y <= 5; y += 1) {
+      const w = Math.round(BLOCK_RX * 1.08 * Math.sqrt(1 - (y / 5.5) ** 2));
+      ctx.fillRect(LOG_CX - w, BLOCK_CY + BLOCK_SIDE + BLOCK_RY - 2 + y, w * 2, 1);
+    }
+    ctx.drawImage(this.blockArt, LOG_CX - BLOCK_RX - ART_PAD, BLOCK_CY - BLOCK_RY - ART_PAD);
     if (this.phase === 'apart') {
-      const off = this.apartT * 62;
-      this.drawLog(LOG_CX - off, LOG_CY + this.apartT * 22, -1);
-      this.drawLog(LOG_CX + off, LOG_CY + this.apartT * 22, 1);
+      // As duas metades caem cada uma para um lado, por cima do cepo.
+      const off = this.apartT * 48;
+      const drop = Math.min(1, this.apartT * 1.6) * 10;
+      this.drawLog(LOG_CX - off, TOP_CY + drop, -1);
+      this.drawLog(LOG_CX + off, TOP_CY + drop, 1);
     } else {
-      this.drawLog(LOG_CX + shakeX, LOG_CY, 0);
+      this.drawLog(LOG_CX + shakeX, TOP_CY, 0);
       this.drawMarks(shakeX);
     }
-    // A força: só uma barra e a faixa boa.
-    if (this.phase === 'force' || this.phase === 'swing') {
-      const barX = 168;
-      const barH = 90;
-      const barY = 22;
-      this.rect('#201812', barX - 2, barY - 2, 14, barH + 4);
-      this.rect('#3b2c1c', barX, barY, 10, barH);
-      this.rect('#6fa83c', barX, barY + barH * (1 - FORCE_MAX), 10, barH * (FORCE_MAX - FORCE_MIN));
-      this.rect('#ffe066', barX - 2, barY + barH * (1 - this.force) - 1, 14, 3);
-    }
+    if (this.phase === 'force' || this.phase === 'swing') this.drawForce();
     this.drawAxe();
     this.chips = this.chips.filter((chip) => chip.life > 0);
     for (const chip of this.chips) {
@@ -314,63 +335,290 @@ export class SplitOverlay extends CraftOverlay {
       chip.y += chip.vy * dt;
       chip.vy += 260 * dt;
       chip.life -= dt;
-      this.rect('#d7b67e', chip.x, chip.y, 2, 2);
+      this.rect(chip.color, chip.x, chip.y, chip.w, chip.h);
     }
   }
 
-  /** O galho de topo: anéis, o veio (a rachadura) e o nó. `half` desenha só um lado. */
+  /**
+   * A tora em pé no cepo, vista um pouco de cima (o desenho pronto em `logArt`), e por cima o que muda: a fenda do
+   * veio, que abre a cada golpe errado. `half` desenha só um lado — o corte é o próprio veio.
+   */
   private drawLog(cx: number, cy: number, half: number): void {
     const { ctx } = this;
-    const fill = (radius: number, color: string): void => {
-      ctx.fillStyle = color;
-      for (let y = -radius; y <= radius; y += 1) {
-        const w = Math.round(Math.sqrt(radius * radius - y * y));
-        const left = half > 0 ? 0 : -w;
-        const span = half === 0 ? w * 2 : w;
-        ctx.fillRect(Math.round(cx + left), Math.round(cy + y), span, 1);
+    const left = Math.round(cx - LOG_R - ART_PAD);
+    const top = Math.round(cy - TOP_RY - ART_PAD);
+    if (half === 0) {
+      ctx.drawImage(this.logArt, left, top);
+    } else {
+      // Cada metade é o desenho cortado no veio.
+      const cut = LOG_R + ART_PAD + this.grainX;
+      const sx = half < 0 ? 0 : cut;
+      const sw = half < 0 ? cut : this.logArt.width - cut;
+      ctx.drawImage(this.logArt, sx, 0, sw, this.logArt.height, left + sx, top, sw, this.logArt.height);
+      // A cara de dentro, recém-aberta: madeira clara ao longo do corte.
+      const faceX = Math.round(cx + this.grainX) + (half < 0 ? -1 : 0);
+      for (let y = -TOP_RY + 2; y < TOP_RY + LOG_SIDE; y += 1) {
+        const inTop = y <= TOP_RY * Math.sqrt(Math.max(0, 1 - (this.grainX / LOG_R) ** 2));
+        if (!inTop && y > LOG_SIDE) continue;
+        this.rect(y % 4 === 0 ? '#c09158' : '#e1bd85', faceX, cy + y, 1, 1);
       }
-    };
-    fill(LOG_R + 2, '#201812');
-    fill(LOG_R, '#5c3f24');
-    fill(LOG_R - 4, '#c79f68');
-    fill(LOG_R - 12, '#b58c58');
-    fill(LOG_R - 20, '#c79f68');
-    fill(LOG_R - 28, '#a97f4d');
-    if (half !== 0) return;
-    // O nó: duro e escuro. A lâmina não entra.
-    this.disc(cx + this.knotX, cy + this.knotY, KNOT_RADIUS, '#4a2f18');
-    ctx.fillStyle = '#7a5530';
-    ctx.fillRect(Math.round(cx + this.knotX - 2), Math.round(cy + this.knotY - 2), 4, 4);
-    // O veio: a linha por onde ele quer abrir.
+      return;
+    }
+    // A FENDA do veio: escura, ondulada, mais larga a cada golpe que não rachou. Só no topo (é por onde ele abre).
     const wide = 1 + Math.floor(this.crackWide / 5);
-    ctx.fillStyle = '#3a2614';
-    for (let y = -LOG_R + 3; y < LOG_R - 2; y += 1) {
-      const wiggle = Math.round(Math.sin(y * 0.35) * 1.5);
-      ctx.fillRect(Math.round(cx + this.grainX + wiggle - wide / 2), Math.round(cy + y), wide, 1);
+    for (let y = -TOP_RY + 2; y < TOP_RY - 1; y += 1) {
+      const half2 = LOG_R * Math.sqrt(1 - (y / TOP_RY) ** 2);
+      const wiggle = Math.round(Math.sin(y * 0.7) * 1.2);
+      const x = cx + this.grainX + wiggle;
+      if (Math.abs(x - cx) > half2 - 3) continue;
+      this.rect('#2a180c', x - wide / 2, cy + y, wide, 1);
+      // A borda de cima da fenda pega luz.
+      this.rect('#e1bd85', x - wide / 2 - 1, cy + y, 1, 1);
+    }
+    // A fenda desce pela casca da frente.
+    for (let y = TOP_RY - 1; y < TOP_RY + Math.min(LOG_SIDE, 4 + this.crackWide); y += 1) {
+      this.rect('#1c1008', cx + this.grainX - wide / 2, cy + y, wide, 1);
     }
   }
 
+  /** A mira: uma linha de pontos no topo da tora, onde o machado vai cair (a sombra dele cai no mesmo lugar). */
   private drawMarks(shakeX: number): void {
-    const x = LOG_CX + this.aim + shakeX;
-    this.rect('rgba(255, 224, 102, 0.28)', x - 1, LOG_CY - LOG_R, 2, LOG_R * 2);
-    this.rect('#ffe066', x - 1, LOG_CY + LOG_R + 2, 2, 6);
+    const x = Math.round(LOG_CX + this.aim + shakeX);
+    for (let y = -TOP_RY + 2; y < TOP_RY - 1; y += 2) {
+      const half = LOG_R * Math.sqrt(1 - (y / TOP_RY) ** 2);
+      if (Math.abs(x - LOG_CX - shakeX) > half - 2) continue;
+      this.rect('rgba(255, 224, 102, 0.55)', x, TOP_CY + y, 1, 1);
+    }
   }
 
+  /** A força: uma régua de madeira com a faixa fraca, a boa e a forte demais, e a seta que sobe e desce. */
+  private drawForce(): void {
+    const barX = 172;
+    const barH = 92;
+    const barY = 18;
+    const w = 10;
+    this.rect('#201812', barX - 3, barY - 3, w + 6, barH + 6);
+    this.rect('#6b4524', barX - 2, barY - 2, w + 4, barH + 4);
+    this.rect('#8e623a', barX - 2, barY - 2, w + 4, 1);
+    this.rect('#8e623a', barX - 2, barY - 2, 1, barH + 4);
+    this.rect('#2a1d12', barX, barY, w, barH);
+    const yOf = (f: number): number => barY + barH * (1 - f);
+    // Forte demais (em cima), a boa, e a fraca (embaixo).
+    this.rect('#7a2e22', barX, barY, w, yOf(FORCE_MAX) - barY);
+    this.rect('#a8452e', barX, barY, w, 1);
+    this.rect('#5c8f30', barX, yOf(FORCE_MAX), w, yOf(FORCE_MIN) - yOf(FORCE_MAX));
+    this.rect('#9fd36a', barX, yOf(FORCE_MAX), w, 1);
+    this.rect('#3f6b22', barX + w - 1, yOf(FORCE_MAX), 1, yOf(FORCE_MIN) - yOf(FORCE_MAX));
+    this.rect('#4a3423', barX, yOf(FORCE_MIN), w, barY + barH - yOf(FORCE_MIN));
+    // Riscos da régua.
+    for (let i = 1; i < 8; i += 1) this.rect('rgba(0, 0, 0, 0.35)', barX, barY + (barH * i) / 8, 3, 1);
+    // A seta, do lado de fora, apontando para a régua.
+    const my = Math.round(yOf(this.force));
+    for (let i = 0; i < 4; i += 1) {
+      this.rect('#201812', barX - 5 - i - 1, my - i - 1, 1, i * 2 + 3);
+      this.rect('#ffe066', barX - 5 - i, my - i, 1, i * 2 + 1);
+    }
+    this.rect('#ffe066', barX - 1, my, 2, 1);
+  }
+
+  /** O machado em cima da tora: cabo de madeira com a empunhadura enrolada, a cabeça de aço com o fio claro. */
   private drawAxe(): void {
     if (this.phase === 'apart' && this.apartT > 0.5) return;
     const rest = this.phase === 'swing' ? 1 - this.swingT : 1;
-    const x = LOG_CX + this.aim;
-    const y = 2 + (LOG_CY - 30) * (1 - rest);
-    this.rect('#201812', x - 2, y - 24, 5, 28);
-    this.rect('#8e623a', x - 1, y - 24, 3, 27);
-    // A cunha: larga em cima, fina no fio.
-    for (let row = 0; row < 12; row += 1) {
-      const half = 11 - Math.floor(row * 0.72);
-      this.rect('#201812', x - half - 1, y + row, half * 2 + 3, 1);
-      this.rect(row > 8 ? '#f4f4ea' : '#b9b9b0', x - half, y + row, half * 2 + 1, 1);
+    const x = Math.round(LOG_CX + this.aim);
+    // A cabeça encosta no topo da tora no fim do golpe.
+    const headH = 15;
+    const restY = 21;
+    const hitY = TOP_CY - headH + 1;
+    const y = Math.round(restY + (hitY - restY) * (1 - rest));
+    // A sombra do machado no topo da tora: menor e mais escura quanto mais perto.
+    if (this.phase !== 'apart') {
+      const near = 1 - (hitY - y) / (hitY - restY);
+      const sw = Math.round(5 + near * 5);
+      this.ctx.fillStyle = `rgba(20, 10, 4, ${0.18 + near * 0.3})`;
+      for (let r = -1; r <= 1; r += 1) this.ctx.fillRect(x - sw + Math.abs(r) * 2, TOP_CY + r, (sw - Math.abs(r) * 2) * 2 + 1, 1);
     }
+    // O CABO: 3 px de madeira (luz, meio, sombra) com contorno, a empunhadura enrolada no alto e o castão.
+    const handleTop = y - 19;
+    this.rect('#201812', x - 2, handleTop, 5, 20);
+    for (let yy = handleTop + 1; yy < y + 1; yy += 1) {
+      const grip = yy < handleTop + 8;
+      if (grip) {
+        const band = Math.floor((yy - handleTop) / 2) % 2 === 0;
+        this.rect(band ? '#7a4a33' : '#4e2e20', x - 1, yy, 3, 1);
+        if (band) this.rect('#9c6a4a', x - 1, yy, 1, 1);
+      } else {
+        this.rect('#d6a468', x - 1, yy, 1, 1);
+        this.rect((yy % 7) === 0 ? '#6b4524' : '#9a6a3c', x, yy, 1, 1);
+        this.rect('#6b4524', x + 1, yy, 1, 1);
+      }
+    }
+    this.rect('#201812', x - 3, handleTop - 2, 7, 3);
+    this.rect('#8e623a', x - 2, handleTop - 1, 5, 1);
+    // A CABEÇA, vista pelo fio (o fio corre ao longo do veio, de frente para trás): uma cunha grossa no olho que
+    // afina até o fio claro — é ela que entra na fenda e abre a tora.
+    for (let row = 0; row < headH; row += 1) {
+      const half = row < 3 ? 7 : Math.max(1, 7 - Math.round((row - 2) * 0.55));
+      const yy = y + row;
+      this.rect('#1b1a1e', x - half - 1, yy, half * 2 + 3, 1);
+      for (let dx = -half; dx <= half; dx += 1) {
+        let c: string;
+        if (row >= headH - 2) c = row === headH - 1 ? '#f4f4ea' : '#dcdcd2';
+        else if (row === headH - 4) c = '#c9c9c0';
+        else if (dx <= -half + 1) c = '#c9c9c0';
+        else if (dx >= half - 1) c = '#5a5f66';
+        else c = row < 3 ? '#6e737a' : '#9a9ca2';
+        this.rect(c, x + dx, yy, 1, 1);
+      }
+    }
+    // O olho do machado: o cabo aparecendo por cima, e a cunha de ferro.
+    this.rect('#9a6a3c', x - 1, y, 3, 2);
+    this.rect('#3a3c42', x, y + 4, 1, 1);
+    // O brilho no fio, que corre devagar.
+    const gleam = Math.round(((this.time * 0.7) % 1) * 18) - 9;
+    if (Math.abs(gleam) <= 8) this.rect('#ffffff', x + gleam, y + headH - 1, 2, 1);
   }
 }
+
+// ── O DESENHO DA TORA E DO CEPO ─────────────────────────────────────────────────────────────────────
+// Feitos uma vez, pixel a pixel, num canvas à parte: a tora em pé vista um pouco de cima (o topo cortado em elipse,
+// com os anéis, o cerne, o alburno, o miolo e as rachaduras de secar; a casca de lado, em sulcos), e o cepo velho
+// embaixo dela, mais largo, de madeira acinzentada e cheio de marcas de machado.
+
+/** O topo da tora: centro, raio de lado (o da regra do jogo) e de fundo (vista de cima, achatado pela metade). */
+const TOP_CY = 64;
+const TOP_RY = 21;
+const LOG_SIDE = 24;
+const BLOCK_CY = TOP_CY + LOG_SIDE + 3;
+const BLOCK_RX = 58;
+const BLOCK_RY = 26;
+const BLOCK_SIDE = 15;
+const ART_PAD = 2;
+
+const hash2 = (x: number, y: number, s: number): number => {
+  const v = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453;
+  return v - Math.floor(v);
+};
+
+type Pix = (x: number, y: number, c: string) => void;
+const artCanvas = (w: number, h: number, draw: (put: Pix) => void): HTMLCanvasElement => {
+  const canvas = createCanvas();
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  draw((x, y, c) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  });
+  return canvas;
+};
+
+/** A madeira do topo, do claro ao escuro (6 tons) — a luz vem de cima e da esquerda. */
+const END_GRAIN = ['#ecca93', '#e1bd85', '#d2a96e', '#c09158', '#a87a45', '#8c6236'];
+const BARK = ['#7d5a37', '#5c3f24', '#4a321c', '#3a2614'];
+const OUTLINE = '#201812';
+
+/** Uma tora (ou o cepo) em pé: o lado de casca e o topo cortado. `old` = o cepo: madeira acinzentada, cheia de marca. */
+const paintStanding = (
+  rx: number, ry: number, side: number, seed: number, old: boolean,
+  knot?: { x: number; y: number; r: number },
+): HTMLCanvasElement => {
+  const W = rx * 2 + ART_PAD * 2 + 1;
+  const H = ry * 2 + side + ART_PAD * 2 + 1;
+  const cx = rx + ART_PAD;
+  const cy = ry + ART_PAD;
+  const grain = old ? ['#c4ae8c', '#b39c79', '#a08a68', '#8e7a5c', '#7a684e', '#665640'] : END_GRAIN;
+  return artCanvas(W, H, (put) => {
+    // O LADO: a casca em sulcos verticais, mais clara à esquerda (luz) e escura à direita, e a sombra no pé.
+    for (let dx = -rx; dx <= rx; dx += 1) {
+      const t = dx / rx;
+      const bottom = side + ry * Math.sqrt(Math.max(0, 1 - t * t));
+      for (let y = 0; y <= bottom; y += 1) {
+        const ridge = hash2(dx, Math.floor((y + hash2(dx, 0, seed) * 6) / 5), seed + 1) < 0.5;
+        let shade = (t + 1) / 2 * 2.4 + (ridge ? 0 : 0.9);
+        if (y > bottom - 3) shade += 0.8;
+        const c = BARK[Math.min(3, Math.max(0, Math.floor(shade)))];
+        put(cx + dx, cy + y, c);
+      }
+      // O contorno de baixo.
+      put(cx + dx, cy + bottom + 1, OUTLINE);
+    }
+    // Musgo na casca (só a tora; o cepo é velho e seco).
+    if (!old) {
+      for (let i = 0; i < 18; i += 1) {
+        const dx = Math.round(-rx + 3 + hash2(i, 1, seed) * rx * 0.9);
+        const y = Math.round(side * 0.4 + hash2(i, 2, seed) * side * 0.9);
+        put(cx + dx, cy + y + ry * 0.4, hash2(i, 3, seed) < 0.5 ? '#6f8f3e' : '#4c6a32');
+      }
+    }
+    // Os contornos de lado.
+    for (let y = 0; y <= side; y += 1) { put(cx - rx - 1, cy + y, OUTLINE); put(cx + rx + 1, cy + y, OUTLINE); }
+    // O TOPO cortado.
+    for (let dy = -ry - 1; dy <= ry + 1; dy += 1) {
+      for (let dx = -rx - 1; dx <= rx + 1; dx += 1) {
+        const r = Math.hypot(dx / rx, dy / ry);
+        const ang = Math.atan2(dy / ry, dx / rx);
+        const wob = Math.sin(ang * 3 + seed) * 0.018 + Math.sin(ang * 7 + seed * 2) * 0.012;
+        const rr = r + wob;
+        if (rr > 1.04) continue;
+        if (rr > 0.97) { put(cx + dx, cy + dy, OUTLINE); continue; }
+        // A casca vista de cima: um anel escuro e granulado.
+        if (rr > 0.89) {
+          put(cx + dx, cy + dy, hash2(dx, dy, seed + 2) < 0.4 ? BARK[3] : BARK[2]);
+          continue;
+        }
+        // O câmbio (a linha clara logo dentro da casca), o alburno e o cerne.
+        let tone = rr > 0.84 ? 0 : rr > 0.55 ? 1 : 3;
+        // Os anéis de crescimento: linhas finas mais escuras, um pouco tortas.
+        const rings = old ? 9 : 12;
+        const ring = (rr * rings + Math.sin(ang * 5 + seed) * 0.08) % 1;
+        if (rr < 0.84 && ring < 0.16) tone += 1;
+        // A luz: cima e esquerda clareiam, baixo e direita escurecem.
+        const light = (-dx / rx - dy / ry) * 0.7;
+        tone -= Math.round(light);
+        // O granulado.
+        if (hash2(dx, dy, seed + 3) < 0.12) tone += 1;
+        let c = grain[Math.min(5, Math.max(0, tone))];
+        // O miolo e as rachaduras de secar, saindo do meio.
+        if (rr < 0.07) c = old ? '#4a3c2c' : '#5c3f24';
+        // Duas rachaduras de secar, curtas, que não chegam ao miolo (encontrando-se nele, viravam um desenho).
+        for (const a of [0.9 + seed, 3.7 + seed]) {
+          const da = Math.abs(((ang - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+          if (da < 0.03 && rr > 0.22 && rr < 0.42) c = old ? '#4a3c2c' : '#6f4a28';
+        }
+        put(cx + dx, cy + dy, c);
+      }
+    }
+    // O NÓ (só na tora): um olho escuro com anéis próprios. A lâmina não entra nele.
+    if (knot) {
+      const kx = cx + knot.x;
+      const ky = cy + knot.y;
+      for (let dy = -knot.r; dy <= knot.r; dy += 1) {
+        for (let dx = -knot.r; dx <= knot.r; dx += 1) {
+          const r = Math.hypot(dx / knot.r, dy / (knot.r * 0.62));
+          if (r > 1) continue;
+          const c = r > 0.82 ? '#3a2614' : r > 0.6 ? '#6b4524' : r > 0.35 ? '#4a2f18' : r > 0.15 ? '#7a5530' : '#2e1c0e';
+          put(kx + dx, ky + dy, c);
+        }
+      }
+    }
+    // O CEPO: as marcas de machadadas antigas no topo, cortes curtos e retos.
+    if (old) {
+      for (let i = 0; i < 9; i += 1) {
+        const mx = Math.round((hash2(i, 5, seed) - 0.5) * rx * 1.5);
+        const my = Math.round((hash2(i, 6, seed) - 0.5) * ry * 1.3);
+        if (Math.hypot(mx / rx, my / ry) > 0.8) continue;
+        const len = 3 + Math.floor(hash2(i, 7, seed) * 4);
+        const dir = hash2(i, 8, seed) < 0.5 ? 1 : -1;
+        for (let k = 0; k < len; k += 1) {
+          put(cx + mx + k, cy + my + dir * Math.floor(k / 2), '#4a3c2c');
+          put(cx + mx + k, cy + my + dir * Math.floor(k / 2) - 1, '#d6c4a2');
+        }
+      }
+    }
+  });
+};
 
 // ── ACENDER ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -405,6 +653,8 @@ export class FireLightOverlay extends CraftOverlay {
   private lastBlow = -1;
   private failures = 0;
   private phaseT = 0;
+  /** O fogo já acendeu e avisou (ver o fim do `tick`). */
+  private finished = false;
   private sparks: Array<{ x: number; y: number; vy: number; vx: number; life: number; color: string }> = [];
 
   public constructor(private readonly cb: FireCallbacks, private readonly stickSprite: CanvasImageSource) {
@@ -472,7 +722,12 @@ export class FireLightOverlay extends CraftOverlay {
     } else if (this.phase === 'smoke' && this.phaseT > 1.2) {
       this.phase = 'strike';
     } else if (this.phase === 'burn' && this.phaseT > 1.3) {
-      this.cb.onDone(this.failures);
+      // UMA vez só: quem abriu fecha a tela no onDone, mas o aviso não pode depender disso (a cada quadro aberto,
+      // o fogo "acenderia" de novo).
+      if (!this.finished) {
+        this.finished = true;
+        this.cb.onDone(this.failures);
+      }
       return;
     }
     this.draw(dt);

@@ -1,5 +1,7 @@
 ﻿import * as THREE from 'three';
 
+import { createCanvas, platform } from '@/game/platform/platform';
+
 // ── Texture registry for the 3D world renderer ────────────────────────────────
 //
 // Resolves the SAME art the 2D game uses (public/assets/…) into THREE textures,
@@ -8,7 +10,7 @@
 // inside the smoothly lit 3D world.
 //
 // All base images are loaded up front by preloadTextures3D() (PreloadScene
-// awaits it alongside Phaser's own loader), so frame lookups afterwards are
+// awaits it alongside the 2D engine's own loader), so frame lookups afterwards are
 // synchronous and safe.
 
 type SheetDef = {
@@ -27,8 +29,8 @@ const DEFS: Record<string, SheetDef> = {
   hero: { url: `${A}/characters/player/hero.png`, frameW: 16, frameH: 16 },
   'forest-tileset': { url: `${A}/environment/tilesets/forest_tile_set.png`, frameW: 16, frameH: 16 },
   npcs: { url: `${A}/characters/npcs/npcs.png`, frameW: 16, frameH: 16 },
-  // O aceno da Hollis: o quadro dela com SÓ o braço erguido, aberto (0) e reto (1). Ver entities/NpcWave.
-  'hollis-wave': { url: `${A}/characters/npcs/hollis_wave.png`, frameW: 16, frameH: 16 },
+  // O aceno da Shui: o quadro dela com SÓ o braço erguido, aberto (0) e reto (1). Ver entities/NpcWave.
+  'shui-wave': { url: `${A}/characters/npcs/shui_wave.png`, frameW: 16, frameH: 16 },
   'npc-salesman': { url: `${A}/characters/npcs/salesman.png` },
   'npc-poet': { url: `${A}/characters/npcs/poet.png` },
   'npc-death': { url: `${A}/ui/states/death.png` },
@@ -116,10 +118,15 @@ let loaded: Promise<void> | null = null;
 /** Kick (or reuse) the one-time load of every registered image. */
 export const preloadTextures3D = (): Promise<void> => {
   if (loaded) return loaded;
-  const manager = new THREE.LoadingManager();
-  const loader = new THREE.TextureLoader(manager);
+  // O que o TextureLoader fazia, pela plataforma (ver platform.ts): a textura nasce na hora e ganha a imagem quando
+  // ela chega; o "pronto" sai quando todas chegaram — ou na primeira que falhar.
+  const images: Array<Promise<unknown>> = [];
   for (const [key, def] of Object.entries(DEFS)) {
-    const t = loader.load(def.url);
+    const t = new THREE.Texture();
+    images.push(platform().loadImage(def.url).then((image) => {
+      t.image = image;
+      t.needsUpdate = true;
+    }));
     // The TILESET alone is filtered LINEAR — everything else stays NEAREST.
     //
     // Not a softening: the tile materials never sample between two texels except inside the
@@ -138,8 +145,11 @@ export const preloadTextures3D = (): Promise<void> => {
     baseTextures.set(key, t);
   }
   loaded = new Promise((resolve) => {
-    manager.onLoad = () => resolve();
-    manager.onError = () => resolve(); // a missing file should not soft-lock the boot
+    let left = images.length;
+    for (const image of images) {
+      // a missing file should not soft-lock the boot
+      image.then(() => { if (--left === 0) resolve(); }, () => resolve());
+    }
   });
   return loaded;
 };
@@ -152,6 +162,28 @@ export const preloadTextures3D = (): Promise<void> => {
 export const registerTexture3D = (key: string, texture: THREE.Texture): void => {
   DEFS[key] = { url: '' }; // whole-image "sheet": a frame lookup just returns the base
   baseTextures.set(key, texture);
+  snapshotCanvasPixels(key, texture);
+};
+
+/**
+ * Um canvas desenhado em código que já traz os PRÓPRIOS pixels (o `paint` da natureza os tem na mão: ele pinta num
+ * ImageData e o põe no canvas). Ver `snapshotCanvasPixels`.
+ */
+export type PixelCanvas = HTMLCanvasElement & { zhPixels?: ImageData };
+
+/**
+ * OS PIXELS DE UM DESENHO FEITO EM CÓDIGO, sem ler o canvas de volta. Ler um canvas que já virou textura do WebGL (o
+ * `sheetPixels` de uma sombra que aparece no meio do jogo) custava até 900 ms: o navegador só devolve os pixels
+ * esperando a GPU terminar TUDO o que está na fila, e o jogo congelava na primeira vez que uma peça desenhada entrava
+ * no alcance da luz de uma fogueira. Quem pinta pixel a pixel entrega os pixels junto (`zhPixels`); os outros
+ * pintores de peças que fazem sombra usam canvas `willReadFrequently`, que mora na memória e se lê na hora. Os
+ * pixels são os mesmos, a conta da margem é a mesma: só o caminho muda. Um registro repetido na mesma chave (o quadro
+ * do cavalete) mantém o primeiro, como o cache sempre fez.
+ */
+const snapshotCanvasPixels = (key: string, texture: THREE.Texture): void => {
+  if (framePixels.has(key)) return;
+  const pixels = (texture.image as PixelCanvas | undefined)?.zhPixels;
+  if (pixels) framePixels.set(key, pixels);
 };
 
 /**
@@ -212,8 +244,12 @@ const sheetPixels = (key: string): ImageData | null => {
   let data: ImageData | null = null;
   try {
     const img = baseTextures.get(key)?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
-    if (img?.width && img.height) {
-      const canvas = document.createElement('canvas');
+    // Um canvas se lê pelo PRÓPRIO contexto (sem a cópia num canvas novo): o `willReadFrequently` dele vale.
+    const own = typeof HTMLCanvasElement !== 'undefined' && img instanceof HTMLCanvasElement ? img.getContext('2d') : null;
+    if (own && img?.width && img.height) {
+      data = own.getImageData(0, 0, img.width, img.height);
+    } else if (img?.width && img.height) {
+      const canvas = createCanvas();
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -278,7 +314,7 @@ export const frameFootPad = (key: string, frame = 0): number => {
 
 /**
  * A texture for `key`, optionally narrowed to a spritesheet `frame` (row-major,
- * like Phaser's). Frame variants are cached clones sharing the base image.
+ * like the 2D engine's). Frame variants are cached clones sharing the base image.
  */
 export const getTexture3D = (key: string, frame = 0): THREE.Texture => {
   const def = DEFS[key];

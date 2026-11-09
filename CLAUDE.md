@@ -1,8 +1,13 @@
 # Zero the Hero
 
-Aventura **cozy** top-down em pixel art, **em inglês e pt-BR** (local abre sempre em pt-BR). **Phaser 3** cuida da lógica, input e
-UI num canvas **transparente**; o mundo embaixo dele é **3D de verdade** (Three.js,
-`src/game/render3d/`). **O JOGO É 100% PACÍFICO: não existe combate, inimigo, dano, vida, morte
+Aventura **cozy** top-down em pixel art, **em inglês e pt-BR** (local abre sempre em pt-BR). O **motor próprio**
+(`src/game/engine/`, `import * as Engine from '@/game/engine'`) cuida da lógica, input e UI num canvas
+**transparente**; o mundo embaixo dele é **3D de verdade** (Three.js, `src/game/render3d/`). O motor (cenas, laço,
+tweens, relógio, teclado/toque, texturas, desenho WebGL 2D, texto) tem contas e ordem de eventos FIXAS, travadas pelo
+gabarito de `src/game/engine/__tests__/` (que não se regera) — mudar uma conta dele muda o jogo. API nova que o jogo
+pedir entra no motor, no estilo dele e com teste. **O projeto não depende nem fala de nenhum outro motor** (pedido do
+autor): nada de pacote, import, comentário ou doc citando outro; o aviso de licença do código de terceiros fica só em
+`src/game/engine/LICENSES.md`. **O JOGO É 100% PACÍFICO: não existe combate, inimigo, dano, vida, morte
 nem game over** — e nada se perde. Combate, bestiário, subterrâneo, escadas, bombas, pira e
 planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `/` é o jogo e
 `/editor` é o editor; não há terceira rota.
@@ -12,17 +17,17 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
 1. **A abertura** (`playIntro`): à noite, o cavaleiro chega pela estrada do sul com a espada nas
    costas, a finca no chão (ela fica ali para sempre e bloqueia o tile), olha em volta entre
    vaga-lumes, e o mago chega andando e fala. Toca uma vez por partida (`introSeen` no save).
-2. **As quests da Iris, do Bram e da Vega são em etapas** e têm dono próprio (`quests/`). **Os outros vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
+2. **As quests da Sisi, do Marco e da Thea são em etapas** e têm dono próprio (`quests/`). **Os outros vizinhos** (`dialogs/NpcQuests.ts`): um pedido pequeno por NPC, cada um com o PRESENTE
    que o torna possível (`gift`). Pedido novo = uma entrada lá + falas `npc.<id>`/`npc.<id>Done`
    no locale.
 3. **O portão** (`openGardenGate`): quando `allQuestsDone()`, o `gardenGate` do centro abre.
 4. **A fogueira do fim** (`hearth`, `tendHearthAt` → `playRoastEnding` → `rollCredits`): Z acende,
    Z de novo com um graveto na mão assa um MARSHMALLOW (o pacote mora ao lado do fogo). Os amigos
-   chegam pelo portão, depois a nave traz a Vega (`entities/HearthReunion.ts`), e os créditos voltam ao título.
+   chegam pelo portão, depois a nave traz a Thea (`entities/HearthReunion.ts`), e os créditos voltam ao título.
 
 `npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
 mora nos locales — `en.json` e `pt-br.json`, as MESMAS chaves nos dois** —, inclusive o roteiro
-`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **AS FALAS DOS PERSONAGENS moram em `src/game/i18n/dialogos/pt-br.json` e `en.json`**, uma seção por personagem com a `filosofia` (escola e LIVROS: só referência) e as `falas` pelo caminho que o código pede; o `i18n.ts` as junta ao locale. Fala de personagem nova entra LÁ, nunca nos `locales/`. **Cada personagem segue UMA escola filosófica, só dele** (nenhuma escola nem pensador principal repetido) sobre o sentido da vida: fala nova tem de caber nela e sair dos livros dela. `node scripts/dialogos.mjs --check` confere isso e que pt-br e en têm a mesma forma. **Os nomes também saem da escola** (`filosofia.nome` diz de onde): Zero (Sartre, começa do nada), Sati (o mago: a atenção plena), Sinope (o gato: a cidade de Diógenes), Shui (Taoísmo, a água), Sisi (Camus, Sísifo), Marco (estoicismo, Marco Aurélio), Thea (Aristóteles, theoria). O código, os comentários, os testes e as seções do `dialogos` ainda usam os nomes antigos (Hollis = Shui, Iris = Sisi, Bram = Marco, Vega = Thea): só o texto do jogo mudou. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
+`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **AS FALAS DOS PERSONAGENS moram em `src/game/i18n/dialogos/pt-br.json` e `en.json`**, uma seção por personagem com a `filosofia` (escola e LIVROS: só referência) e as `falas` pelo caminho que o código pede; o `i18n.ts` as junta ao locale. Fala de personagem nova entra LÁ, nunca nos `locales/`. **Cada personagem segue UMA escola filosófica, só dele** (nenhuma escola nem pensador principal repetido) sobre o sentido da vida: fala nova tem de caber nela e sair dos livros dela. `node scripts/dialogos.mjs --check` confere isso e que pt-br e en têm a mesma forma. **Os nomes também saem da escola** (`filosofia.nome` diz de onde): Zero (Sartre, começa do nada), Sati (o mago: a atenção plena), Sinope (o gato: a cidade de Diógenes), Shui (Taoísmo, a água), Sisi (Camus, Sísifo), Marco (estoicismo, Marco Aurélio), Thea (Aristóteles, theoria). O código, os comentários, os testes e as seções do `dialogos` ainda usam os nomes antigos (Shui = Shui, Sisi = Sisi, Marco = Marco, Thea = Thea): só o texto do jogo mudou. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
 
 ## O save da aventura
 
@@ -97,10 +102,17 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   rodar `serra-world.mjs` de novo REGERA o campo e apaga o que foi feito à mão.
 - **Cada cogumelo tem a sua trilha** (`scripts/trilhas-cogumelos.mjs`: rode `--check` depois de mexer em volta deles).
 - **A CACHOEIRA do acampamento** (`objects/Waterfall.ts` + `scripts/cachoeira.mjs`, as mesmas coordenadas nos dois): beira sólida em (53,55), com o riacho do alto (olho d'água em (52,54), leito em (53,54), sólidos; a água no planalto é desenho deitado `paintStream`, o World3D só faz água no nível baixo); o pé da queda e o laguinho do acampamento são UM lago de 5×3 tiles, (52..56, 56..58), com as carpas de `objects/KoiPond.ts` (mesmo retângulo em `KOI_POND`). A beira de olhar é (51,58). Rode `--check` depois de mexer em volta.
-- **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Bram pede procurar. Não espalhe mais delas.
+- **O BOSQUE** (`objects/BigTrees.ts`): carvalhos velhos, bétulas, carvalhinhos e troncos caídos são PROPS do world.json (`oakTree`, `birchTree`, `youngOak`, `fallenLog`), postos e apagados no editor (aba Props). O pé bloqueia pelo próprio prop (`BigTrees.at`, sem colisão pintada); o tronco caído ocupa o tile dele e o da direita. Nada de posição de árvore no código. `scripts/bosque.mjs` só CONFERE (chão plano, nunca sobre árvore do tileset — quadros 3/4/14-18/21/36/37/73/74 —, BFS) e nunca replanta. Os passarinhos de dia são `objects/BirdLife.ts`.
+- **O EDITOR mostra as peças que o jogo monta por código** (`editor/EditorFixtures.ts`, camada "Pecas do jogo", tecla O): ele cria os MESMOS objetos sobre um World3D que só anota os billboards. Objeto novo de mapa em lugar fixo entra na lista de `recordFixtures`; ele só pode usar do World3D o `addBillboard` e o `params` (o resto, o gravador não tem). Editor só no `npm run dev` (o `/api/world` não existe no preview).
+- **CADA VIDA MORA NUM BIOMA** (`world/biomeLife.ts`, pedido do autor: a tela poluída com tudo ao mesmo tempo): bicho, planta e luz da natureza, passarinhos e vaga-lumes só nascem no bioma da tabela `LIFE_HOMES` (um, no máximo dois). O NatureLife dá a cada sistema um host que só acha chão/água/árvore no lar dele; quem segue o herói multiplica por `home()`. Coisa nova de natureza ganha uma linha na tabela, nunca o vale inteiro.
+- **A THEA (astronaut) NÃO TEM CASA** (pedido do autor): é a única vizinha sem casa — caiu do céu, e a busca dela é voltar para a casa lá em cima. O forno e a bigorna ao lado dela são a FORJA VELHA de um ferreiro que foi embora (`objects/OldForge.ts`, achado `smithy`, `scripts/forja-velha.mjs`). Nunca dar casa a ela: onde era a casa fica a CRATERA da queda da nave (`objects/CrashSite.ts`, `scripts/cratera-da-nave.mjs`).
+- **A CERCA DE MADEIRA** (`objects/WoodFence.ts`, prop `woodFence` por tile): liga sozinha nos vizinhos; o trecho norte-sul é tábua DEITADA na altura do trilho (o quad em pé não gira); a ponta é pilar de portão. Bloqueia pelo prop. As coisas de dentro (lenha, cavalete, tocos, carrinho, placa) são `objects/LumberYard.ts` + `scripts/quintal-do-lenhador.mjs`, que nunca põe peça nos tiles da quest do Marco. O quintal do lenhador: `scripts/cerca-do-lenhador.mjs`, que exporta o BFS de verdade (`reachable`, conta os quadros sólidos do tileset — o do bosque antigo não contava e deixou 46 tiles presos).
+- **A NATUREZA** (`objects/nature/`, maestro `NatureLife`): esquilo, sapos, libélulas, lebre, peixe, folhas no chão, cogumelos depois da chuva, margaridas, neblina, manchas de sol, sementes, arco-íris, poças, gotas das folhas — um sistema por arquivo, todos lendo o mesmo `NatureFrame`. Billboard novo que nasce TARDE entra no `prewarmShaders` do World3D (senão compila na hora e trava ~0,8 s); o que se pisa deitado usa `depthLayer: 'ground'`. Playtest: `natureza`.
+- **Arte nova SEGUE O TILESET** (o autor: "não seguem cores e estilos das árvores já existentes"): a paleta do `forest_tile_set.png` (cores novas só se combinarem com ela), a mesma densidade (16 px por tile, mais pixels e não pixels maiores), textura granulada sem degradê nem contorno, e a cor do bioma (`biomeTreeTintAt`) no material das árvores, como o World3D faz nas do mapa.
+- **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Marco pede procurar. Não espalhe mais delas.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
-  (`fungi.ts`), e cada espécie existe UMA vez no mundo. O pedido da Hollis fecha com 4 quaisquer (`need`), e as outras 2 são opcionais: ela continua aceitando e dando dicas. Colhido, vai para a CESTA, que é a única exceção
-  à lei de uma coisa de cada vez, e a Hollis leva a cesta inteira.
+  (`fungi.ts`), e cada espécie existe UMA vez no mundo. O pedido da Shui fecha com 4 quaisquer (`need`), e as outras 2 são opcionais: ela continua aceitando e dando dicas. Colhido, vai para a CESTA, que é a única exceção
+  à lei de uma coisa de cada vez, e a Shui leva a cesta inteira.
 - **O herói anda PRESO ao grid** (um tile por passo, 4 direções): o livre foi tentado e desfeito —
   no celular o grid controla melhor. A posição lógica já é o tile de DESTINO durante o passo.
 - **A parede VIRA o herói** (`PlayerMovementController`): é assim que se mira. Contra tile LIVRE a
@@ -152,9 +164,9 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **O HERÓI PENSA NO QUE FALTA** (pedido do autor, `GameScene.neededAt`): toda vez que ele tenta usar uma coisa que não tem, um balão mostra o DESENHO dela, nunca uma palavra. Trava nova é uma linha ali, e continua tremendo também.
 - **Itens devem PRODUZIR, não só apagar** (árvore→graveto/ponte, picareta→pedra).
   Pergunte de qualquer item novo: o que ele *faz*?
-- **Ferramenta não se fabrica nem fica solta** (pedido do autor): o machado só vem do Bram, a foice só da
+- **Ferramenta não se fabrica nem fica solta** (pedido do autor): o machado só vem do Marco, a foice só da
   Morte (aparece onde ela esteve, quando o herói levanta depois da visita). A foice corta o mato rente e
-  não dá nada. **Semente só existe a de tinta da Iris**: o item `seeds` e o plantio genérico saíram.
+  não dá nada. **Semente só existe a de tinta da Sisi**: o item `seeds` e o plantio genérico saíram.
   Cada árvore seca dá **um** graveto; a ponte do morel pede duas (`scripts/ponte-do-morel.mjs`).
 - **A tela de título é só a mata** (pedido do autor: sem herói, NPC, casa, item ou fogo): `public/assets/ui/title_bg.jpg`
   é uma foto do jogo tirada por `node scripts/capturar-titulo.mjs`; refaça quando o visual do mundo mudar. Por
@@ -211,7 +223,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   tela: a carga voa da mão para a boca, o fole sopra sacudindo a alvenaria, a brasa esguicha e só
   então a peça pula pela SAÍDA da frente. O produto entra no mundo no fim; morrer no meio perde a
   fornada.
-- **O FORNO É UM SÓ, FIXO, E GUIA A QUEST** (o da Vega): não se constrói, não se recolhe e não tem catálogo — pede o próximo item (`AstronomerQuest.furnaceNeed`). Picareta, só a que a Vega dá.
+- **O FORNO É UM SÓ, FIXO, E GUIA A QUEST** (o da Thea): não se constrói, não se recolhe e não tem catálogo — pede o próximo item (`AstronomerQuest.furnaceNeed`). Picareta, só a que a Thea dá.
 - **CADA NPC É INDEPENDENTE** (pedido do autor): nenhum pedido precisa de ferramenta ou item de outro vizinho; o jogador faz na ordem que quiser.
 - **O ACAMPAMENTO DO HERÓI** (`objects/HeroCamp.ts`): o colchão fixo (onde ele dorme; a primeira noite nele é a da primeira visita da Morte), as pedras frias e as quatro lembranças, uma por pedido fechado, do lado direito do laguinho (margem nordeste). O chão é de `scripts/acampamento.mjs` (a mesma tabela de tiles: mudou num, muda no outro).
 - **NADA NA FRENTE DO NPC** (pedido do autor): o tile exatamente de frente para um NPC (o sul dele) nunca guarda item no chão, para a conversa não se misturar com o pegar. Todo item novo cai pelo ponto único `GameScene.dropItem`/`dropNear`, e o que ia cair na frente vai para a DIREITA do NPC, depois a ESQUERDA, depois para TRÁS (`world/npcFront.ts`). O herói não pousa ali, e um save antigo com item ali é corrigido ao carregar (`enforceNpcFrontRule`). Nunca chamar `itemManager.drop` direto para um item novo. O cenário `frente-do-npc` confere.
@@ -310,8 +322,44 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
 ## Verificando uma mudança
 
 **QUEM RODA OS TESTES É O AUTOR, SEMPRE.** Não rode `npm run playtest` por conta própria e não
-escreva cenário sem ele pedir: implemente, rode `typecheck`/`lint`/`build`, diga **qual cenário
+escreva cenário sem ele pedir: implemente, rode `typecheck`/`lint`/`test`/`build`, diga **qual cenário
 guarda o que mudou** e pare.
+
+**O JOGO NÃO CHAMA O NAVEGADOR DIRETO.** Tudo o que vem de fora passa por uma porta:
+- **O motor 2D:** `src/game/engine/host.ts`, chegando pela config (`new Game({ host })`). Por ela vêm
+  o relógio, o quadro, o canvas, a imagem, o JSON, o desenho na GPU e a página (teclado, mouse,
+  foco e tamanho).
+- **O jogo:** `src/game/platform/platform.ts`, que o `main.ts` instala como primeiro import. Por ela
+  vêm canvas de pintar (`createCanvas()`), armazenamento (`localStore()`/`sessionStore()`), `fetch`,
+  áudio (`null` = jogo mudo), o renderizador 3D e a janela (`display`).
+
+Código novo usa essas portas, nunca `document.createElement('canvas')`, `localStorage`,
+`new AudioContext()`, `new THREE.WebGLRenderer` ou `window.innerWidth`. As telas em DOM (diálogo,
+pausa, minijogos, editor) continuam no DOM: o DOM é o meio delas.
+
+**Testes de unidade** (`npm test`, Vitest, ~15 s, sem navegador). Cada teste roda numa plataforma de
+teste (`src/test-support/`) instalada pelo `setup.ts`: canvas 2D de verdade (o pacote `canvas`),
+arquivos de `public/`, armazenamento em memória, sem som e sem GPU (o 3D desenha num renderizador
+nulo).
+- **O motor contra o gabarito** (`src/game/engine/__tests__/`, que **não se regera**: teste vermelho
+  ali é o motor mudando de comportamento). O gabarito já tem toda curva de easing que o motor conhece:
+  um nome fora dele cairia no Linear sem aviso, e o teste acusa.
+- **O motor sozinho:** cenas, objetos, texto, entrada, câmera e carregador (`bootEngine`).
+- **O JOGO INTEIRO** (`bootGame`, em arquivo com `// @vitest-environment jsdom`): o mesmo
+  `ZeroTheHeroGame`, jogado por teclado e lido pelo `gameDebug`. Exemplos: a abertura, andar, o
+  diálogo, a pausa e o editor (pincel, salvar, o "testar").
+- **Os minijogos** (colheita, lenha, fogo, lente, céu) com relógio falso (`vi.useFakeTimers`).
+- **O som** com um contexto que só anota (`recordingAudio.ts`).
+- **As regras:** catálogos de texto, biomas, `world.json` e o armazém do editor.
+- **Os sistemas da cena** (`systems/`, `world/visitPath`, `render3d/sceneCull`) com host falso e dublês (`CatParts`, `RestParts`).
+
+`npm run test:coverage` gera o relatório (`coverage/index.html`), com piso de 60% de comandos.
+
+**O DEPLOY TEM PORTÃO** (pedido do autor): nos dois workflows (`deploy-pages.yml` e
+`deploy-itch.yml`), o job **"Lint e testes de unidade"** roda primeiro. O build e o deploy só rodam
+se ele passar (`needs: test`). Com um teste vermelho, nada vai ao ar, nem no GitHub Pages nem no
+itch.io. Não tire esse `needs` nem pule os testes para "destravar" um deploy: conserte o teste ou o
+código.
 
 **Rodar o jogo para testar é SEMPRE mudo** (o `GameDriver` garante: `--mute-audio` + volumes
 zerados). O harness (`playtest/`) é Playwright com cabeça; entre com `?play`; não dirija o jogo
@@ -320,8 +368,8 @@ por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd
 
 A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); bolsa → `bolsa`; machado → `machado`; pedra →
 `pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;
-menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; fogueira de vizinho nunca faz dormir → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Vega → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
-Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`, e os da mochila)
+menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; fogueira de vizinho nunca faz dormir → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Thea → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
+Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`, `hd2d-fx`, e os da mochila)
 podem estar vermelhos: não "conserte" editando conteúdo.
 
 **Performance sempre contra a `main`** (`git stash`), e sempre com vsync livre
@@ -333,12 +381,17 @@ boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render
 
 ## Outras coisas fáceis de errar
 
+- **A GameScene e o World3D não crescem.** Sistema novo (estado + decisões) vai para `src/game/systems/` no molde
+  das quests: um `Host` pequeno que a cena implementa e um teste com host falso. Peça de render nova, módulo próprio em `render3d/`.
 - **A interface é MADEIRA, PAPEL ou PIXEL — nunca "interface"** (`runtime/uiStyle.ts`): painel novo
   usa `WOOD_PANEL`/fonte de livro, o que o herói escreve usa o papel e a pena, tecla/botão usa
   `pixelFrame`. Fonte do sistema, pílula e painel preto de filete fino estão proibidos.
 
-- **O Phaser não chama `shutdown()` sozinho** — ligue via `events.once(SHUTDOWN, ...)`, ou um
+- **A cena não chama `shutdown()` sozinha** — ligue via `events.once(SHUTDOWN, ...)`, ou um
   `scene.restart()` vaza listeners entre runs.
+- **O motor gasta `Math.random()` sempre nos mesmos pontos** (31 por texto criado, no UUID da textura; 1 no boot; os
+  sorteios das partículas e do tremor de câmera): é o que mantém a sequência de sorteios do jogo igual. Não troque
+  esses sorteios por outra coisa.
 - **Mudança em cena não faz hot-reload**; o `beforeunload` do editor bloqueia o reload automático,
   então você fica olhando código velho.
 - **Fala de NPC vive no `public/world.json`**, não só em `NPC_DIALOGS` — NPC novo precisa dos dois.

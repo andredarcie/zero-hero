@@ -7,7 +7,7 @@ import type { World3D } from '@/game/render3d/World3D';
  * and the world scrolls underneath as `camX`/`camY` follow them.
  *
  * With the 3D world renderer attached (`world3d`), tileToScreen projects through
- * the real perspective camera — every Phaser-side overlay/FX that anchors to a
+ * the real perspective camera — every 2D-side overlay/FX that anchors to a
  * tile (heal motes, hint balloon, pips, dialog pan targets) lands exactly on the
  * 3D world without knowing it exists.
  */

@@ -47,6 +47,13 @@ export default [
     },
   },
   {
+    // Os testes de unidade (Vitest) e o apoio deles (src/test-support) rodam no Node.
+    files: ['src/**/*.test.ts', 'src/**/__tests__/**/*.ts', 'src/test-support/**/*.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
     // O gerador de mundo (scripts/*.ts) roda no Node via tsx e fica FORA do tsconfig, que e so
     // do jogo. Sem `project` o parser le o arquivo sozinho — as regras recomendadas nao precisam
     // de tipos.

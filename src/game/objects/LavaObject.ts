@@ -1,9 +1,10 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getStoneTexture } from '@/game/render3d/stoneTexture';
 import { isReducedMotion } from '@/game/runtime/accessibility';
-import { FX_PUFF_TEXTURE, LAVA_DEPTH_TILES, world3d, type Box3D, type FireLight3D } from '@/game/render3d/World3D';
+import { LAVA_DEPTH_TILES } from '@/game/render3d/terrainGeometry';
+import { FX_PUFF_TEXTURE, world3d, type Box3D, type FireLight3D } from '@/game/render3d/World3D';
 import type { WorldProp } from './WorldProp';
 
 // Um tile de lava: quem desenha a superfície e a margem é o terreno (World3D.buildLavaSurface), como na água.
@@ -68,7 +69,7 @@ export class LavaObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   private fireLight?: FireLight3D;
   // A stone dropped into the lava sinks to a central crown you step on — the lava twin of the stone
   // ford. The molten tile stays molten AROUND it; the stone just caps the middle. Three phases:
@@ -78,7 +79,7 @@ export class LavaObject implements WorldProp {
   private phase: 'molten' | 'cooling' | 'solid' = 'molten';
   private crownParts: Box3D[] = [];
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, lightScale = LIGHT_SCALE) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number, lightScale = LIGHT_SCALE) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;

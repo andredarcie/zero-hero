@@ -1,4 +1,4 @@
-// TELESCOPIO — joga a quest inteira da Vega, de um jogo novo até o obrigado, com as teclas de um
+// TELESCOPIO — joga a quest inteira da Thea, de um jogo novo até o obrigado, com as teclas de um
 // jogador (setas, Z, X) e o mouse no polimento. Só LÊ o jogo para achar caminho e saber o que está na
 // mão. Nada é teleportado nem dado de graça: ferro, vidro e noite saem do jeito que o jogador faz.
 // O tempo de cada etapa fica em playtest/results/telescopio-marcas.json.
@@ -12,20 +12,20 @@ const ARROW = { '1,0': 'ArrowRight', '-1,0': 'ArrowLeft', '0,1': 'ArrowDown', '0
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 
-const VEGA = { x: 41, y: 5 };
-// O forno da Vega é FIXO, ao lado da bancada (scripts/forno-da-vega.mjs), e é ele que guia a quest.
+const THEA = { x: 41, y: 5 };
+// O forno da Thea é FIXO, ao lado da bancada (scripts/forno-da-vega.mjs), e é ele que guia a quest.
 const FURNACE = { x: 44, y: 6 };
 const SPOT = { x: 32, y: 20 };
 // O carvão e o minério moram na margem do lago de lava, a oeste (scripts/pedras-na-lava.mjs): o veio PRETO
-// dá carvão, o vermelho dá minério. Nada da Vega depende de outro vizinho (nem do machado do Bram).
+// dá carvão, o vermelho dá minério. Nada da Thea depende de outro vizinho (nem do machado do Marco).
 const COAL = { x: 10, y: 6 };
 const VEIN = { x: 11, y: 7 };
 
 /**
- * A QUEST DA VEGA INTEIRA, jogada: o `telescopio` a joga numa partida nova, e o `zerar` no meio da partida dele
+ * A QUEST DA THEA INTEIRA, jogada: o `telescopio` a joga numa partida nova, e o `zerar` no meio da partida dele
  * (`skipOpening`: o herói já está livre no mundo, onde estiver).
  */
-export const playVega = async ({ driver, shot, assert, skipOpening = false }) => {
+export const playThea = async ({ driver, shot, assert, skipOpening = false }) => {
   const { page } = driver;
   const T0 = Date.now();
   const marks = [];
@@ -250,12 +250,12 @@ export const playVega = async ({ driver, shot, assert, skipOpening = false }) =>
   });
 
   // ── 1. O PEDIDO ────────────────────────────────────────────────────────────────────────
-  await walkTo([{ x: VEGA.x, y: VEGA.y + 2 }], 'perto da Vega');
-  mark('chegou na Vega');
-  await shot('01-vega-antes', { note: 'A Vega, sem nada em volta' });
-  await talk(VEGA, 'o pedido');
+  await walkTo([{ x: THEA.x, y: THEA.y + 2 }], 'perto da Thea');
+  mark('chegou na Thea');
+  await shot('01-thea-antes', { note: 'A Thea, sem nada em volta' });
+  await talk(THEA, 'o pedido');
   let st = await free();
-  assert('A Vega deu a picareta', st.heldItem === 'pickaxe', `heldItem=${st.heldItem}`);
+  assert('A Thea deu a picareta', st.heldItem === 'pickaxe', `heldItem=${st.heldItem}`);
   assert('Etapa: ferro', (await stage()) === 'iron', await stage());
   mark('pedido feito');
 
@@ -277,7 +277,7 @@ export const playVega = async ({ driver, shot, assert, skipOpening = false }) =>
   assert('Nenhum graveto nem pedra solto no vale', loose.length === 0, JSON.stringify(loose));
   assert('O forno pede carvão primeiro', (await ovenAsks()) === 'charcoal', String(await ovenAsks()));
   await approachSolid(FURNACE, 'o forno com a picareta');
-  await shot('02-forno', { note: 'O forno fixo da Vega pedindo carvão' });
+  await shot('02-forno', { note: 'O forno fixo da Thea pedindo carvão' });
   await press('z', 60, 500);
   st = await free();
   assert('O forno recusa o que ele não pediu', st.heldItem === 'pickaxe', `heldItem=${st.heldItem}`);
@@ -322,17 +322,17 @@ export const playVega = async ({ driver, shot, assert, skipOpening = false }) =>
   for (let i = 0; i < 8 && (await onAnvil()) === 'bloom'; i += 1) await press('x', 60, 700);
   assert('Malhada na bigorna, a esponja virou barra', (await onAnvil()) === 'iron' || (await stage()) === 'glass', String(await onAnvil()));
   mark('barra de ferro');
-  // A Vega vem buscar a barra na bigorna, diz que vai fazer o tripé e volta.
+  // A Thea vem buscar a barra na bigorna, diz que vai fazer o tripé e volta.
   for (let i = 0; i < 60 && (await stage()) !== 'glass'; i += 1) {
     const st = await state();
     if (st.dialogOpen) await press('z', 60, 300);
     else await sleep(300);
   }
-  await drain('a Vega buscando a barra');
+  await drain('a Thea buscando a barra');
   for (let i = 0; i < 40 && (await state()).cutsceneActive; i += 1) await sleep(300);
-  assert('A Vega buscou a barra na bigorna (etapa: vidro)', (await stage()) === 'glass', await stage());
+  assert('A Thea buscou a barra na bigorna (etapa: vidro)', (await stage()) === 'glass', await stage());
   assert('A bigorna ficou vazia e o martelinho voltou para o toco', (await onAnvil()) === null && !(await page.evaluate(() => Boolean(window.__scene.forging))), String(await onAnvil()));
-  await shot('06-tripe', { note: 'O tripe e a cinza ao lado da Vega' });
+  await shot('06-tripe', { note: 'O tripe e a cinza ao lado da Thea' });
   mark('tripe');
 
   // ── 5. O VIDRO: areia só no lago grande do sul, cinza ao lado dela ─────────────────────
@@ -363,9 +363,9 @@ export const playVega = async ({ driver, shot, assert, skipOpening = false }) =>
   mark('vidro');
 
   // ── 6. A LENTE: o mouse esfrega de verdade ─────────────────────────────────────────────
-  await approachSolid(VEGA, 'o vidro para a Vega');
+  await approachSolid(THEA, 'o vidro para a Thea');
   await press('z', 60, 400);
-  await waitFor((s) => s.dialogOpen, 'a Vega falar do vidro', 8000);
+  await waitFor((s) => s.dialogOpen, 'a Thea falar do vidro', 8000);
   // Fechada a fala, o polimento abre com o mundo congelado: aqui o Z não pode mais ir para o jogo.
   for (let i = 0; i < 40 && (await state()).dialogOpen; i += 1) await press('z', 60, 380);
   await pageWait(() => Boolean(window.__scene.astronomerQuest?.overlay), null, 'o polimento abrir', 6000);
@@ -416,7 +416,7 @@ export const playVega = async ({ driver, shot, assert, skipOpening = false }) =>
   st = await free();
   console.log(`[telescopio] hora ao chegar: ${st.timeOfDay.clock} (${st.timeOfDay.phase})`);
   await press('z', 60, 3600);
-  await shot('15-esperando', { note: 'Sentado com a caneca, e a Vega ao lado' });
+  await shot('15-esperando', { note: 'Sentado com a caneca, e a Thea ao lado' });
   await pageWait(() => window.__scene.astronomerQuest?.overlay?.aim !== undefined, null, 'a ocular abrir de noite', 240000);
   mark('ocular abriu');
   await sleep(1500);
@@ -448,21 +448,21 @@ export const playVega = async ({ driver, shot, assert, skipOpening = false }) =>
     await press('z', 60, 500);
   }
 
-  // ── 10. A VEGA SOBE ────────────────────────────────────────────────────────────────────
-  await waitFor((s) => s.dialogOpen, 'a Vega falar', 60000);
-  await shot('19-vega-subiu', { note: 'A Vega subiu e sentou' });
-  mark('vega subiu');
+  // ── 10. A THEA SOBE ────────────────────────────────────────────────────────────────────
+  await waitFor((s) => s.dialogOpen, 'a Thea falar', 60000);
+  await shot('19-thea-subiu', { note: 'A Thea subiu e sentou' });
+  mark('thea subiu');
   await drain('a despedida');
   await pageWait(() => window.__scene.astronomerQuest?.isDone === true, null, 'a quest fechar', 15000);
   st = await free();
   const quest = await page.evaluate(() => window.gameDebug.quests().find((q) => q.dialog === 'astronaut'));
-  assert('A quest da Vega fechou', quest.done === true, JSON.stringify(quest));
+  assert('A quest da Thea fechou', quest.done === true, JSON.stringify(quest));
   await sleep(1200);
   await shot('20-fim', { note: 'O telescopio fica no planalto' });
   mark('quest fechada');
 
-  // Vega foi embora: a casa dela fica vazia, e o tile, livre.
-  assert('A Vega nao esta mais em casa', !(await page.evaluate(([x, y]) => window.__scene.isSolidForEntities(x, y), [VEGA.x, VEGA.y])), 'o tile dela continua ocupado');
+  // Thea foi embora: a casa dela fica vazia, e o tile, livre.
+  assert('A Thea nao esta mais em casa', !(await page.evaluate(([x, y]) => window.__scene.isSolidForEntities(x, y), [THEA.x, THEA.y])), 'o tile dela continua ocupado');
   mark('obrigado');
 
   return { marks, state, press, free };
@@ -470,11 +470,11 @@ export const playVega = async ({ driver, shot, assert, skipOpening = false }) =>
 
 export default {
   name: 'telescopio',
-  description: 'A quest da Vega completa, do título ao obrigado, com polimento e observação jogados.',
+  description: 'A quest da Thea completa, do título ao obrigado, com polimento e observação jogados.',
   needsGame: false,
   async run({ driver, shot, assert }) {
     const { page } = driver;
-    const { marks, press, free } = await playVega({ driver, shot, assert });
+    const { marks, press, free } = await playThea({ driver, shot, assert });
     // ── VOLTANDO DO SAVE: tudo continua lá ─────────────────────────────────────────────────
     await page.evaluate(() => window.__scene.persistAdventure());
     await driver.open('/');

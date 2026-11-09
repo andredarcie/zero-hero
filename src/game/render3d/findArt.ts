@@ -3,7 +3,7 @@ import { INK, paintDome, RAMPS, type Paint, type Ramp } from '@/game/render3d/pi
 // O QUE SE ACHA NO VALE (ver objects/ValleyFinds): 16×16, um tile só, na densidade de pixel das casas. A luz
 // vem de cima e da esquerda, como em todo o resto.
 
-export type FindKind = 'bench' | 'chair' | 'helmet' | 'bottle' | 'sign';
+export type FindKind = 'bench' | 'chair' | 'helmet' | 'bottle' | 'sign' | 'smithy';
 
 export const FIND_SIZE = 16;
 
@@ -201,6 +201,42 @@ export const DECOR_PAINTERS: Readonly<Record<'stool' | 'lantern' | 'flowerPot', 
   stool, lantern, flowerPot,
 };
 
+/**
+ * A FORJA VELHA: o que sobrou da parede da oficina de um ferreiro que foi embora há muito tempo. Pedras na paleta do
+ * tileset (sem contorno, como a arte nova do vale), o alto quebrado em degraus e tomado de musgo, a BOCA DA LAREIRA
+ * ainda preta de fuligem, e uma plaquinha de madeira com a bigorna queimada.
+ */
+const SMITHY = [
+  '................',
+  '..mM......Mm....',
+  '.mSSs....mSSsm..',
+  '.dsSsd..mdsSssd.',
+  '.lllllm.lllllll.',
+  '.sdSsdssSsdlsSd.',
+  '.lllllllllllll..',
+  '.dsSsdoooodwWWW.',
+  '.llllooooo.WffW.',
+  '.sSsdooooodWbbW.',
+  '.llllooooo.WffW.',
+  '.dSsdoooood.WW..',
+  '.lllloooool.ll..',
+  '.sdsSoooooSsdsd.',
+  '.mMllkkkkkllMmM.',
+  '..kkkkkkkkkkkk..',
+];
+const SMITHY_COLORS: Readonly<Record<string, string>> = {
+  s: '#8e897d', d: '#7b776d', S: '#cdcdcd', l: '#3a3f3f', o: '#191817', k: '#111214',
+  m: '#8a8d49', M: '#626439', w: '#815938', W: '#63452c', f: '#b7916a', b: '#674325',
+};
+const smithy = (rect: Paint): void => {
+  SMITHY.forEach((row, y) => {
+    for (let x = 0; x < row.length; x += 1) {
+      const color = SMITHY_COLORS[row[x]];
+      if (color) rect(color, x, y, 1, 1);
+    }
+  });
+};
+
 export const FIND_PAINTERS: Readonly<Record<FindKind, (rect: Paint) => void>> = {
-  bench, chair, helmet, bottle, sign,
+  bench, chair, helmet, bottle, sign, smithy,
 };

@@ -1,6 +1,6 @@
 import { getTextScale, isInstantText } from '@/game/runtime/accessibility';
 import { markLineRead, wasLineRead } from '@/game/runtime/readLines';
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { dialogBoxMetrics, isTallDialog } from '@/game/constants';
 import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
@@ -13,7 +13,7 @@ import { BOOK_FONT, PARCHMENT_ON, WOOD_PANEL } from '@/game/runtime/uiStyle';
 
 // A CAIXA DE FALA TRADICIONAL: uma barra no RODAPÉ, UMA mensagem por vez.
 //
-// Ela é DOM por cima do canvas do Phaser (o mesmo caminho do editor, ver EditorDomUi): o canvas
+// Ela é DOM por cima do canvas 2D (o mesmo caminho do editor, ver EditorDomUi): o canvas
 // é um buffer de pixel art escalado com NEAREST (image-rendering: pixelated), então texto
 // serifado desenhado DENTRO dele nunca pode ser nítido. No DOM o navegador rasteriza a fonte na
 // resolução do aparelho — afiada, antialiasada, e responsiva de graça.
@@ -232,7 +232,7 @@ export class DialogOverlay {
   private pointerArmed = false;
   private destroyed = false;
   private closing = false;
-  private typewriterEvent?: Phaser.Time.TimerEvent;
+  private typewriterEvent?: Engine.Time.TimerEvent;
   private readonly persona: VoicePersona;
   /** A fala em curso, letra a letra: quanto cada uma espera e qual solta sílaba. */
   private speech: SpokenChar[] = [];
@@ -253,7 +253,7 @@ export class DialogOverlay {
   private selected = 0;
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     private readonly script: DialogScript,
     private readonly onClose: () => void,
     private readonly voice?: DialogVoice,

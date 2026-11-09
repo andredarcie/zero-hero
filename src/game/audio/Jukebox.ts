@@ -64,7 +64,9 @@ class Jukebox {
     el.addEventListener('ended', () => this.onEnded());
     el.addEventListener('error', () => { console.warn('[jukebox] não tocou', el.src); this.emit(); });
     try {
-      const { ctx, out } = getSoundManager().listeningOutput();
+      const output = getSoundManager().listeningOutput();
+      if (!output) throw new Error('sem áudio');
+      const { ctx, out } = output;
       this.gain = ctx.createGain();
       ctx.createMediaElementSource(el).connect(this.gain);
       this.gain.connect(out);

@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
@@ -19,7 +19,7 @@ import { adventureState, type PaintQuestSave } from '@/game/runtime/adventureSta
 import { PaintingOverlay, readPainting } from '@/game/runtime/PaintingOverlay';
 
 /**
- * A QUEST DA IRIS, a única do jogo em etapas: a pá, as sementes, o balde, a espera, a colheita com as
+ * A QUEST DA SISI, a única do jogo em etapas: a pá, as sementes, o balde, a espera, a colheita com as
  * mãos, a mesa de tintas e o quadro, que ela só arma com as tintas prontas. Cada etapa é uma conversa, e
  * a próxima só existe depois da anterior: o estado é uma palavra no save (`stage`), mais os canteiros. Fechada, ela volta ao caminho comum das missões
  * (o evento `paint`, e daí o obrigado e o portão).
@@ -28,7 +28,7 @@ import { PaintingOverlay, readPainting } from '@/game/runtime/PaintingOverlay';
  */
 
 export interface PainterHost {
-  scene: Phaser.Scene;
+  scene: Engine.Scene;
   held: () => HeldItemKind | 'none';
   heldCount: (kind: HeldItemKind) => number;
   takeIntoHand: (kind: HeldItemKind, units: number) => void;
@@ -75,7 +75,7 @@ const ring = (r: number): Array<readonly [number, number]> => {
   }
   return tiles;
 };
-// Nada diretamente atrás dela: o "!" e o keycap sobre a cabeça da Iris cairiam em cima do quadro.
+// Nada diretamente atrás dela: o "!" e o keycap sobre a cabeça da Sisi cairiam em cima do quadro.
 // Depois dos lugares bons, qualquer canto em volta: sem tile livre a quest travaria.
 const EASEL_SPOTS: ReadonlyArray<readonly [number, number]> = [[-2, 0], [2, 0], [-2, -1], [2, -1], [-2, 1], [2, 1], ...ring(3), ...ring(4)];
 
@@ -92,7 +92,7 @@ export class PainterQuest {
 
   public constructor(private readonly host: PainterHost) {
     this.save = adventureState().paintQuest;
-    // Um save de quando a Iris só pedia dois canteiros: quem fechou aquele pedido está fechado.
+    // Um save de quando a Sisi só pedia dois canteiros: quem fechou aquele pedido está fechado.
     const progress = adventureState().questProgress;
     if ((progress.get('painter/grow') ?? 0) >= 2 && this.save.stage === 'start') {
       progress.set('painter/paint', 1);

@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { SLEEP_TEXTURE_KEY } from '@/game/entities/NpcManager';
@@ -14,7 +14,7 @@ import type { HeroView } from '@/game/runtime/HeroView';
  */
 
 export interface FireBedHost {
-  scene: Phaser.Scene;
+  scene: Engine.Scene;
   hero: HeroView;
   tile: { x: number; y: number };
   dirt: (x: number, y: number, count: number) => void;
@@ -41,7 +41,7 @@ const SNORE_MS = 2400;
 
 export class FireBed {
   private readonly bed?: Billboard3D;
-  private readonly snore: Phaser.GameObjects.Image;
+  private readonly snore: Engine.GameObjects.Image;
   private asleep = false;
 
   public constructor(private readonly host: FireBedHost) {

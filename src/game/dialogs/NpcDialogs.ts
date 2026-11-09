@@ -78,7 +78,7 @@ export const NPC_DIALOGS: Record<NpcKind, NpcDefinition> = {
     npcColorHex: '#44ccff',
     npcAssetKey: NPC_VISUALS.astronaut.key,
     npcFrame: NPC_VISUALS.astronaut.frame,
-    // Vega.
+    // Thea.
     // UMA FALA SÓ, como todo NPC plantado no mapa: o presente que está no chão ao lado dele mais
     // o pedido, na mesma frase. O que ele nomeia em maiúsculo existe NA CARTA dele (a picareta, os
     // veios) — mandar procurar o que não está ali seria uma missão impossível contada com toda a
@@ -93,7 +93,7 @@ export const NPC_DIALOGS: Record<NpcKind, NpcDefinition> = {
     npcColorHex: '#ffdd44',
     npcAssetKey: NPC_VISUALS.businessMan.key,
     npcFrame: NPC_VISUALS.businessMan.frame,
-    // Bram.
+    // Marco.
     lines: [
       n('The AXE is yours, an advance — it fells DEAD wood in two chops. Clear my dry ranks and bring me six STICKS: timber is the only market left.'),
     ],
@@ -104,7 +104,7 @@ export const NPC_DIALOGS: Record<NpcKind, NpcDefinition> = {
     npcColorHex: '#66ff44',
     npcAssetKey: NPC_VISUALS.radiationSuit.key,
     npcFrame: NPC_VISUALS.radiationSuit.frame,
-    // Hollis.
+    // Shui.
     lines: [
       n('Take this STONE — thrown into lava it cools into a step. Something metal sank past the molten pool: walk one bar of IRON back to me.'),
     ],
@@ -115,7 +115,7 @@ export const NPC_DIALOGS: Record<NpcKind, NpcDefinition> = {
     npcColorHex: '#ff88aa',
     npcAssetKey: NPC_VISUALS.painter.key,
     npcFrame: NPC_VISUALS.painter.frame,
-    // Iris.
+    // Sisi.
     lines: [
       n('Take the SHOVEL and dig the beds south of me. Green is a colour you GROW, so bring me six SEEDS and paint this field.'),
     ],

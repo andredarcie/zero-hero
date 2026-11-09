@@ -5,10 +5,10 @@
 // bioma é esse tema virando lugar:
 //
 //   ash     o noroeste da lava: terra queimada, pedregulho, árvore morta, nada florido
-//   meadow  a Iris, a pintora: o prado de flores, a grama quente
-//   stars   a Vega e o planalto do telescópio: campo alto e frio, pedra e flor roxa
-//   woods   o Bram, o lenhador (e o leste): mata fechada, verde fundo
-//   moss    a Hollis e os cogumelos: o bosque úmido, verde azulado de musgo
+//   meadow  a Sisi, a pintora: o prado de flores, a grama quente
+//   stars   a Thea e o planalto do telescópio: campo alto e frio, pedra e flor roxa
+//   woods   o Marco, o lenhador (e o leste): mata fechada, verde fundo
+//   moss    a Shui e os cogumelos: o bosque úmido, verde azulado de musgo
 //   garden  o jardim da fogueira do fim, no centro: a grama cuidada, neutra
 //   fields  o sul, onde a aventura chega: campo de palha dourada
 //
@@ -124,6 +124,8 @@ const valueNoise = (x: number, y: number, salt: number): number => {
 };
 
 const IDS = Object.keys(BIOMES) as BiomeId[];
+/** Os biomas na ordem dos pesos de `biomeWeightsAt`. */
+export const BIOME_IDS: readonly BiomeId[] = IDS;
 const cache = new Map<number, Float32Array>();
 
 /**

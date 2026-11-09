@@ -1,14 +1,15 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
+import { createCanvas } from '@/game/platform/platform';
 
 const urlCache = new Map<string, string>();
 
 /**
- * Um frame do Phaser como data URL, ampliado com NEAREST (o jeito pixel-art). Serve para
+ * Um frame do motor 2D como data URL, ampliado com NEAREST (o jeito pixel-art). Serve para
  * qualquer textura carregada OU gerada em runtime (o balde e o carvao sao desenhados no boot),
  * porque as duas terminam como imagem/canvas dentro do TextureManager.
  */
 export const spriteDataUrl = (
-  scene: Phaser.Scene,
+  scene: Engine.Scene,
   key: string,
   frame: number,
   scale = 4,
@@ -19,7 +20,7 @@ export const spriteDataUrl = (
 
   const texture = scene.textures.get(key);
   const f = texture.get(frame);
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = Math.max(1, f.cutWidth * scale);
   canvas.height = Math.max(1, f.cutHeight * scale);
   const ctx = canvas.getContext('2d');

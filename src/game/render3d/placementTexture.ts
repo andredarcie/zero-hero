@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { registerTexture3D } from '@/game/render3d/textures3d';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * A MARCA DE POSICIONAMENTO — o quadrado branco que diz "a peça cai AQUI".
@@ -51,7 +52,7 @@ const FRAME = [
 const makeCanvas = (hex: string): HTMLCanvasElement => {
   const h = FRAME.length;
   const w = FRAME[0].length;
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
@@ -132,7 +133,7 @@ const GLYPHS: Readonly<Record<string, readonly string[]>> = {
  * Publica a tecla com esta letra e devolve o nome da textura (é overlay 2D projetado, nunca um corpo no
  * mundo). Uma textura por letra, porque a tecla de cada gesto pode ser trocada nas opções.
  */
-export const keycapTexture = (scene: Phaser.Scene, letter: string): string => {
+export const keycapTexture = (scene: Engine.Scene, letter: string): string => {
   const key = `keycap-${letter}`;
   if (scene.textures.exists(key)) return key;
   const glyph = GLYPHS[letter] ?? GLYPHS.Z;
@@ -159,7 +160,7 @@ export const keycapTexture = (scene: Phaser.Scene, letter: string): string => {
     }
   }
   canvas.refresh();
-  canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  canvas.setFilter(Engine.Textures.FilterMode.NEAREST);
   return key;
 };
 
@@ -167,14 +168,14 @@ export const keycapTexture = (scene: Phaser.Scene, letter: string): string => {
 let threeRegistered = false;
 
 /** Publica a marca nas duas pipelines. Idempotente, como o balde e o carvao. */
-export const registerPlacementTextures = (scene: Phaser.Scene): void => {
+export const registerPlacementTextures = (scene: Engine.Scene): void => {
   const pairs: ReadonlyArray<readonly [string, string]> = [
     [PLACEMENT_OK_TEXTURE, OK],
   ];
   for (const [key, hex] of pairs) {
     const needThree = !threeRegistered;
-    const needPhaser = !scene.textures.exists(key);
-    if (!needThree && !needPhaser) continue;
+    const need2d = !scene.textures.exists(key);
+    if (!needThree && !need2d) continue;
     const canvas = makeCanvas(hex);
     if (needThree) {
       const tex = new THREE.CanvasTexture(canvas);
@@ -184,7 +185,7 @@ export const registerPlacementTextures = (scene: Phaser.Scene): void => {
       tex.needsUpdate = true;
       registerTexture3D(key, tex);
     }
-    if (needPhaser) scene.textures.addCanvas(key, canvas);
+    if (need2d) scene.textures.addCanvas(key, canvas);
   }
   threeRegistered = true;
 };

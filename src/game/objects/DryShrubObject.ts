@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
@@ -12,11 +12,11 @@ export class DryShrubObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   private readonly sprite: Billboard3D;
   private cleared = false;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;

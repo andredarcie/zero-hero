@@ -1,11 +1,11 @@
-// A BIGORNA DA VEGA (pedido do autor) — fixa ao lado do forno, e o ÚNICO lugar onde a esponja vira barra.
+// A BIGORNA DA THEA (pedido do autor) — fixa ao lado do forno, e o ÚNICO lugar onde a esponja vira barra.
 //
 // O que este cenário prova, na ordem:
 //   1. o mapa tem UMA bigorna, ao lado do forno, e nenhuma mesa de ferramentas;
 //   2. a esponja no CHÃO não se malha mais;
 //   3. com a esponja na mão, o Z diante da bigorna a PÕE em cima;
 //   4. a primeira pancada tira o martelinho do toco (ele vai para a mão do herói);
-//   5. três pancadas viram a esponja em BARRA, em cima da bigorna (a Vega não está esperando: a barra fica);
+//   5. três pancadas viram a esponja em BARRA, em cima da bigorna (a Thea não está esperando: a barra fica);
 //   6. dar um passo para longe devolve o martelinho ao toco — ele é da bigorna, não da bolsa;
 //   7. o Z tira a barra pronta para a mão; uma pedra posta por engano volta para a mão do mesmo jeito;
 //   8. a bigorna não se recolhe.
@@ -13,7 +13,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default {
   name: 'altar',
-  description: 'A bigorna fixa da Vega: pôr a esponja, pegar o martelinho, três pancadas, barra; o chão não malha.',
+  description: 'A bigorna fixa da Thea: pôr a esponja, pegar o martelinho, três pancadas, barra; o chão não malha.',
   needsGame: false,
   async run({ driver, shot, assert, log }) {
     const { page } = driver;

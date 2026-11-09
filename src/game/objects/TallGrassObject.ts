@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d, type FireLight3D } from '@/game/render3d/World3D';
@@ -61,8 +61,8 @@ const BURN_LIGHT_SCALE = 0.42; // under the bush's 0.55: grass burns low and fas
 const grassLightCurve = (p: number): number =>
   (p < 15 ? p / 15 : p < 70 ? 1 : Math.max(0, (100 - p) / 30));
 
-const WHITE = new Phaser.Display.Color(255, 255, 255);
-const ASH = new Phaser.Display.Color(88, 84, 80);
+const WHITE = new Engine.Display.Color(255, 255, 255);
+const ASH = new Engine.Display.Color(88, 84, 80);
 const CHARRED_TINT = 0x585450;
 
 type GrassState = 'tall' | 'cutting' | 'burning' | 'cut';
@@ -71,18 +71,17 @@ export class TallGrassObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   private readonly sprite: Billboard3D; // the standing tuft — and, after the cut, its stubs
   private fires: Billboard3D[] = [];
   private fireLight?: FireLight3D;
   private fireFrame = 0;
   private state: GrassState = 'tall';
-  private charred = false;
   private windFrame = 0;
-  private windTimer: Phaser.Time.TimerEvent;
-  private actionTimer?: Phaser.Time.TimerEvent;
+  private windTimer: Engine.Time.TimerEvent;
+  private actionTimer?: Engine.Time.TimerEvent;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
@@ -96,10 +95,10 @@ export class TallGrassObject implements WorldProp {
       .setDisplaySize(TUFT_W, TUFT_H);
 
     // Desynchronize neighbouring tufts so a field doesn't sway in lockstep.
-    this.windFrame = Phaser.Math.Between(0, TALL_WIND_FRAMES - 1);
+    this.windFrame = Engine.Math.Between(0, TALL_WIND_FRAMES - 1);
     this.sprite.setTexture(TALL_SHEET, this.windFrame);
     this.windTimer = scene.time.addEvent({
-      delay: WIND_FRAME_MS + Phaser.Math.Between(-60, 60),
+      delay: WIND_FRAME_MS + Engine.Math.Between(-60, 60),
       callback: this.advanceWind,
       callbackScope: this,
       loop: true,
@@ -175,8 +174,8 @@ export class TallGrassObject implements WorldProp {
       duration: BURN_MS,
       onUpdate: (tween) => {
         const progress = tween.getValue() ?? 0;
-        const c = Phaser.Display.Color.Interpolate.ColorWithColor(WHITE, ASH, 100, progress);
-        this.sprite.setTint(Phaser.Display.Color.GetColor(c.r, c.g, c.b));
+        const c = Engine.Display.Color.Interpolate.ColorWithColor(WHITE, ASH, 100, progress);
+        this.sprite.setTint(Engine.Display.Color.GetColor(c.r, c.g, c.b));
         this.sprite.setDisplaySize(TUFT_W, TUFT_H * (1 - WILT_FRAC * (progress / 100)));
         for (let i = 0; i < this.fires.length; i += 1) {
           this.fires[i].setElevation(FIRE_SPOTS[i].elev + FIRE_SPOTS[i].climb * (progress / 100));
@@ -232,7 +231,6 @@ export class TallGrassObject implements WorldProp {
   // fell in the collapse/burn; the frame swap is what remains standing. Stubs don't sway.
   private toCut(charred: boolean): void {
     this.state = 'cut';
-    this.charred = charred;
     this.actionTimer?.destroy();
     this.actionTimer = undefined;
     this.fires.forEach((fire) => fire.destroy());

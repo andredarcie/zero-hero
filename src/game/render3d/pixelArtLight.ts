@@ -583,7 +583,7 @@ type PatchOpts = {
    * the one lit billboard in the game sampling light from inside a light.
    */
   footAnchorY?: number;
-  /** Wire the solid-colour fill uniforms (Phaser's setTintFill). */
+  /** Wire the solid-colour fill uniforms (the 2D engine's setTintFill). */
   fill?: { color: THREE.IUniform; mix: THREE.IUniform };
   /**
    * Animated surface effect keyed off world position + the shared flow clock:
@@ -637,7 +637,9 @@ type PatchOpts = {
  */
 const compileLog: Array<{ key: string; atMs: number; createdBy: string }> = [];
 if (import.meta.env.DEV) {
-  (window as unknown as { __shaderCompiles: typeof compileLog }).__shaderCompiles = compileLog;
+  // globalThis, não window: no navegador é o mesmo objeto (o console lê `__shaderCompiles`), e fora dele (os testes)
+  // importar este módulo não pode quebrar.
+  (globalThis as unknown as { __shaderCompiles: typeof compileLog }).__shaderCompiles = compileLog;
 }
 
 /** Compose every shader patch a lit pixel-art material needs (single onBeforeCompile). */

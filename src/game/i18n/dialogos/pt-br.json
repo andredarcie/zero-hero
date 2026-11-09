@@ -65,7 +65,7 @@
       }
     }
   },
-  "hollis": {
+  "shui": {
     "nome": "Shui",
     "filosofia": {
       "escola": "Taoísmo",
@@ -122,7 +122,7 @@
       ]
     }
   },
-  "iris": {
+  "sisi": {
     "nome": "Sisi",
     "filosofia": {
       "escola": "Absurdismo",
@@ -232,7 +232,7 @@
       ]
     }
   },
-  "bram": {
+  "marco": {
     "nome": "Marco",
     "filosofia": {
       "escola": "Estoicismo",
@@ -301,7 +301,7 @@
       ]
     }
   },
-  "vega": {
+  "thea": {
     "nome": "Thea",
     "filosofia": {
       "escola": "Aristotelismo",
@@ -314,7 +314,11 @@
       "npc.astronaut": {
         "name": "Thea",
         "lines": [
-          "Meu telescópio quebrou na queda. Sobrou o tubo.",
+          "Olá. Minha nave caiu e quebrou.",
+          "Preciso voltar para o meu lar. Preciso da sua ajuda.",
+          "Com o telescópio consertado, eu acho a posição dos astros e sei exatamente para onde mandar um sinal.",
+          "Aí meus amigos vêm me buscar.",
+          "Mas o telescópio também quebrou na queda. Sobrou o tubo.",
           "Sem tripé e sem lente, não vejo o céu. E todo mundo nasce querendo saber.",
           "Leve esta picareta. Me traga uma barra de ferro."
         ]
@@ -478,6 +482,11 @@
         "[narrador] Esta lâmina derrubou a escuridão.",
         "[narrador] E devolveu a luz ao mundo.",
         "[narrador] Ele já não é isto. É o que fizer agora."
+      ],
+      "finds.smithy": [
+        "[narrador] A forja velha.",
+        "[narrador] O ferreiro foi embora há muito tempo.",
+        "[narrador] O forno ainda puxa bem."
       ],
       "finds.sign": [
         "[narrador] Jardim Alto.",

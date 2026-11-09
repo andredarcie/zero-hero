@@ -35,12 +35,12 @@ export default {
     await page.keyboard.press('z');
     // O passo até o colchão é animado: com a máquina carregada ele atrasa, então espera ele deitar (até 6 s), em vez
     // de olhar num instante fixo (era isso que fazia o cenário falhar às vezes com o herói já no colchão, de pé).
-    await page.waitForFunction(() => window.__scene.resting && window.__scene.sleeping, null, { timeout: 6000 }).catch(() => {});
+    await page.waitForFunction(() => window.__scene.rest.isResting && window.__scene.rest.isSleeping, null, { timeout: 6000 }).catch(() => {});
     await sleep(300);
     const lying = await page.evaluate(() => {
       const s = window.__scene;
       return {
-        resting: s.resting, sleeping: s.sleeping, camp: s.sleepingAtCamp, at: [s.playerWorld.worldX, s.playerWorld.worldY],
+        resting: s.rest.isResting, sleeping: s.rest.isSleeping, camp: s.rest.sleepingAtCamp, at: [s.playerWorld.worldX, s.playerWorld.worldY],
         probe: { cutscene: s.cutsceneActive, dialog: s.dialogOpen, tScale: s.tweens.timeScale, paused: s.tweens.paused, tweens: s.tweens.getTweens?.().length, sceneTime: s.time.timeScale, frame: s.game.loop.frame },
       };
     });
@@ -62,7 +62,7 @@ export default {
     }
     const after = await page.evaluate(() => ({
       visited: window.__scene.seenDialogKeys.has('death/visit'),
-      death: window.__scene.deathTile ?? null,
+      death: window.__scene.rest.deathTile ?? null,
       line: window.__scene.wizardLine(),
     }));
     log(`  depois da noite: ${JSON.stringify(after)}`);
@@ -78,7 +78,7 @@ export default {
 
     // Acordado em cima do colchão, ele sai dele andando (o colchão é sólido para quem chega, não para quem está nele).
     for (let i = 0; i < 10 && (await state()).cutsceneActive; i += 1) await sleep(300);
-    const from = await page.evaluate(() => [window.__scene.playerWorld.worldX, window.__scene.playerWorld.worldY, window.__scene.resting]);
+    const from = await page.evaluate(() => [window.__scene.playerWorld.worldX, window.__scene.playerWorld.worldY, window.__scene.rest.isResting]);
     await page.keyboard.down('ArrowUp'); await sleep(250); await page.keyboard.up('ArrowUp');
     await sleep(700);
     const to = await page.evaluate(() => [window.__scene.playerWorld.worldX, window.__scene.playerWorld.worldY]);

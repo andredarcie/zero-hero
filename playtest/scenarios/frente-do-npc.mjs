@@ -2,7 +2,7 @@
 // item no chão, para não misturar a conversa com o pegar. O que ia cair ali vai para a DIREITA do NPC, depois a
 // ESQUERDA, depois para TRÁS — e, sem nenhum dos três, para qualquer lugar que não seja a frente.
 //
-// Confere: o mapa autorado; a troca de verdade (conversar de mão cheia com a Hollis e ganhar a faca); os lados
+// Confere: o mapa autorado; a troca de verdade (conversar de mão cheia com a Shui e ganhar a faca); os lados
 // ocupados um a um; o herói tentando pousar ali; o save antigo com item ali; e o caminho das quests (dropAt).
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -45,7 +45,7 @@ export default {
     const start = await ground();
     assert('O mapa não tem item na frente de nenhum NPC', start.inFront.length === 0, JSON.stringify(start.inFront));
 
-    // A Hollis está em (5,40): a frente é (5,41); direita (6,40), esquerda (4,40), atrás (5,39).
+    // A Shui está em (5,40): a frente é (5,41); direita (6,40), esquerda (4,40), atrás (5,39).
     const H = { x: 5, y: 40 };
     const FRONT = `${H.x},${H.y + 1}`;
     const RIGHT = `${H.x + 1},${H.y}`;
@@ -68,9 +68,9 @@ export default {
     const swap = await ground();
     const held = await page.evaluate(() => window.__scene.heldItem);
     log(`  troca: na mão ${held}, pedra em ${at(swap, 'stone')}`);
-    assert('A Hollis deu a faca', held === 'knife', held);
-    assert('A pedra que estava na mão caiu à DIREITA da Hollis, e não na frente dela', at(swap, 'stone').includes(RIGHT) && swap.inFront.length === 0, JSON.stringify({ stone: at(swap, 'stone'), inFront: swap.inFront }));
-    await shot('00-troca', { note: 'A pedra à direita da Hollis; a frente dela, livre' });
+    assert('A Shui deu a faca', held === 'knife', held);
+    assert('A pedra que estava na mão caiu à DIREITA da Shui, e não na frente dela', at(swap, 'stone').includes(RIGHT) && swap.inFront.length === 0, JSON.stringify({ stone: at(swap, 'stone'), inFront: swap.inFront }));
+    await shot('00-troca', { note: 'A pedra à direita da Shui; a frente dela, livre' });
 
     // ── 3. OS LADOS OCUPADOS, UM A UM ─────────────────────────────────────────────────────────
     // Direita ocupada (a pedra de agora): a próxima troca cai à esquerda.

@@ -40,7 +40,7 @@ export const config = {
   deviceScaleFactor: process.env.PLAYTEST_VIDEO ? 1 : 2,
   videoDir: process.env.PLAYTEST_VIDEO,
 
-  // Boot = Vite up + first Phaser scene alive.
+  // Boot = Vite up + first 2D scene alive.
   serverReadyTimeoutMs: 40000,
   bootTimeoutMs: 30000,
   // How long to wait for the GameScene to become active after skipping the intro.

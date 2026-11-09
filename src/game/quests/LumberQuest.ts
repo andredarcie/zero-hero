@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { ASSET_KEYS } from '@/game/constants';
@@ -16,8 +16,8 @@ import { adventureState, type LumberQuestSave } from '@/game/runtime/adventureSt
 import { FireLightOverlay, LOGS_TO_SPLIT, SplitOverlay } from '@/game/runtime/WoodcraftOverlays';
 
 /**
- * A QUEST DO BRAM: uma fogueira e uma noite. Não há fogueira nenhuma ao lado dele, só a terra
- * preparada. Bram dá o machado (nenhum mais fica solto no mundo), e são quatro voltas: achar uma árvore
+ * A QUEST DO MARCO: uma fogueira e uma noite. Não há fogueira nenhuma ao lado dele, só a terra
+ * preparada. Marco dá o machado (nenhum mais fica solto no mundo), e são quatro voltas: achar uma árvore
  * seca, que é rara, cortar um galho, levá-lo no colo ao cepo, pô-lo em pé, e o minijogo de rachar já
  * começa. As duas metades vão nas costas para a terra, onde a fogueira vai crescendo. Com as quatro, ele manda acender. Aceso, é uma cena: ele vem
  * sentar, o herói senta na frente do fogo, o mundo escurece, e ele conta como o fogo funciona.
@@ -27,7 +27,7 @@ import { FireLightOverlay, LOGS_TO_SPLIT, SplitOverlay } from '@/game/runtime/Wo
  */
 
 export interface LumberHost {
-  scene: Phaser.Scene;
+  scene: Engine.Scene;
   held: () => HeldItemKind | 'none';
   takeIntoHand: (kind: HeldItemKind, units: number) => void;
   onGround: (kind: HeldItemKind) => boolean;

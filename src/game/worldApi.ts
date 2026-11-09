@@ -1,3 +1,4 @@
+import { platform } from '@/game/platform/platform';
 import type { WorldData } from '@/game/world/worldSchema';
 
 // Editor-side client for the dev-server world API (see vite.config.ts). Loads the current world
@@ -14,7 +15,7 @@ export const worldFilePath = (_file: WorldFileId): string => 'public/world.json'
 const buildApiUrl = (path: string): string => `${import.meta.env.BASE_URL}${path.replace(/^\/+/u, '')}`;
 
 export const loadWorld = async (file: WorldFileId = 'world'): Promise<WorldData> => {
-  const response = await window.fetch(buildApiUrl(`api/world?file=${file}`));
+  const response = await platform().fetch(buildApiUrl(`api/world?file=${file}`));
   if (!response.ok) {
     throw new Error(`Falha ao carregar ${file}.json`);
   }
@@ -22,7 +23,7 @@ export const loadWorld = async (file: WorldFileId = 'world'): Promise<WorldData>
 };
 
 export const saveWorld = async (world: WorldData, file: WorldFileId = 'world'): Promise<void> => {
-  const response = await window.fetch(buildApiUrl(`api/world?file=${file}`), {
+  const response = await platform().fetch(buildApiUrl(`api/world?file=${file}`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(world),

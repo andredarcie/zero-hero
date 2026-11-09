@@ -57,7 +57,7 @@ export default {
       // A fogueira e o interruptor da flor. Ela nasce ACESA porque e a mais perto do spawn (a
       // regra do runtime pra qual fogueira comeca viva), e e isso que faz a flor nascer fechada.
       store.placeEntity({ list: 'props', type: 'campfire', worldX: fire.x, worldY: fire.y });
-      // A folha tem de existir no lado PHASER tambem (paleta e chip do tabuleiro), com os 9 frames
+      // A folha tem de existir no lado 2D tambem (paleta e chip do tabuleiro), com os 9 frames
       // fatiados. Um erro de frameWidth no assetManifest nao quebra o jogo — ele so desenha a folha
       // inteira espremida num tile, e ninguem repara ate abrir o editor.
       const tex = window.__scene?.textures?.get('moonflower');
@@ -71,7 +71,7 @@ export default {
       JSON.stringify(authored));
     assert('e a fogueira que a mantem fechada esta posta', authored.fires === 1,
       JSON.stringify(authored));
-    assert('a folha da flor entrou no Phaser fatiada em 9 poses', authored.sheetFrames === 9,
+    assert('a folha da flor entrou no motor 2D fatiada em 9 poses', authored.sheetFrames === 9,
       JSON.stringify(authored));
 
     log('LAB: P joga o mundo editado');

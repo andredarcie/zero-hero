@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { NPC_VISUALS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -24,14 +24,14 @@ export class FireVisitor {
   private readonly body: Billboard3D;
   /** Onde ele esta no caminho, em passos fracionarios (0 = casa, fim = ao pe do fogo). */
   private t = 0;
-  private tween?: Phaser.Tweens.Tween;
+  private tween?: Engine.Tweens.Tween;
   private seated = false;
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     public readonly kind: NpcKind,
     private readonly path: VisitPath,
-    /** O passo, em ms por tile (a Vega vindo buscar a barra corre: passo mais curto). */
+    /** O passo, em ms por tile (a Thea vindo buscar a barra corre: passo mais curto). */
     private readonly stepMs = STEP_MS,
   ) {
     const visual = NPC_VISUALS[kind];

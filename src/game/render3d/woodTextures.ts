@@ -1,10 +1,11 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import { ASSET_KEYS } from '@/game/constants';
 import { registerTexture3D } from '@/game/render3d/textures3d';
+import { createCanvas } from '@/game/platform/platform';
 
-// A ARTE DA QUEST DO BRAM: o cepo, a terra preparada para a fogueira e o galho cortado em dois. O galho
+// A ARTE DA QUEST DO MARCO: o cepo, a terra preparada para a fogueira e o galho cortado em dois. O galho
 // cortado é o PRÓPRIO sprite do graveto, duas vezes: a fidelidade é pedido do autor, e um desenho
 // paralelo do mesmo objeto seria uma segunda gramática para ele.
 
@@ -63,10 +64,10 @@ export const SPLIT_WOOD_TEXTURE = 'split-wood';
 export const WOOD_CRADLE_TEXTURE = 'wood-cradle';
 
 const rowsCanvas = (rows: readonly string[]): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = 16;
   canvas.height = 16;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas;
   rows.forEach((row, y) => {
     for (let x = 0; x < row.length; x += 1) {
@@ -82,10 +83,10 @@ const rowsCanvas = (rows: readonly string[]): HTMLCanvasElement => {
 /** A terra limpa onde a fogueira vai nascer: um círculo de chão batido, de beira irregular. */
 const pitCanvas = (): HTMLCanvasElement => {
   const size = 32;
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = size;
   canvas.height = size;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas;
   // Uma semente fixa: a mesma terra em toda partida.
   let seed = 41;
@@ -110,11 +111,11 @@ const pitCanvas = (): HTMLCanvasElement => {
 };
 
 /** O galho cortado em dois: o sprite do graveto, duas vezes, um pouco afastados. */
-const splitWoodCanvas = (scene: Phaser.Scene): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+const splitWoodCanvas = (scene: Engine.Scene): HTMLCanvasElement => {
+  const canvas = createCanvas();
   canvas.width = 16;
   canvas.height = 16;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const source = scene.textures.get(ASSET_KEYS.woodIcon).getSourceImage() as CanvasImageSource;
   if (!ctx) return canvas;
   ctx.imageSmoothingEnabled = false;
@@ -125,11 +126,11 @@ const splitWoodCanvas = (scene: Phaser.Scene): HTMLCanvasElement => {
 };
 
 /** O graveto no colo: deitado, mais largo que o corpo do herói, e as duas luvas segurando por baixo. */
-const woodCradleCanvas = (scene: Phaser.Scene): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+const woodCradleCanvas = (scene: Engine.Scene): HTMLCanvasElement => {
+  const canvas = createCanvas();
   canvas.width = 16;
   canvas.height = 16;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const source = scene.textures.get(ASSET_KEYS.woodIcon).getSourceImage() as CanvasImageSource;
   if (!ctx) return canvas;
   ctx.imageSmoothingEnabled = false;
@@ -149,7 +150,7 @@ const woodCradleCanvas = (scene: Phaser.Scene): HTMLCanvasElement => {
 };
 
 /** O sprite do graveto, para quem desenha fora do mundo (a tela de acender a fogueira). */
-export const woodSprite = (scene: Phaser.Scene): CanvasImageSource => scene.textures.get(ASSET_KEYS.woodIcon).getSourceImage() as CanvasImageSource;
+export const woodSprite = (scene: Engine.Scene): CanvasImageSource => scene.textures.get(ASSET_KEYS.woodIcon).getSourceImage() as CanvasImageSource;
 
 const publish3D = (key: string, canvas: HTMLCanvasElement): void => {
   const tex = new THREE.CanvasTexture(canvas);
@@ -162,7 +163,7 @@ const publish3D = (key: string, canvas: HTMLCanvasElement): void => {
 
 let threeRegistered = false;
 
-export const registerWoodTextures = (scene: Phaser.Scene): void => {
+export const registerWoodTextures = (scene: Engine.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, HTMLCanvasElement]> = [
     [CHOP_BLOCK_TEXTURE, rowsCanvas(CHOPPING_BLOCK)],
     [LOG_PILE_TEXTURE, rowsCanvas(LOG_PILE)],

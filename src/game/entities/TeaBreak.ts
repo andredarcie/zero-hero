@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -7,18 +7,18 @@ import { EMPTY_MUG_TEXTURE, MUG_TEXTURE, STEAM_TEXTURE } from '@/game/render3d/s
 import { world3d } from '@/game/render3d/World3D';
 
 /**
- * O CHÁ DA ESPERA. A Vega sentou ao lado do herói com duas canecas: uma salta para a mão dele, as duas
+ * O CHÁ DA ESPERA. A Thea sentou ao lado do herói com duas canecas: uma salta para a mão dele, as duas
  * brindam, e cada um bebe no seu tempo, em goles alternados, até acabar. Só presença: sem fala, sem item
  * na mão e sem nada que se possa errar. A noite pode chegar no meio de um gole, e aí `destroy` limpa tudo.
  */
 
 export interface TeaBreakHost {
-  scene: Phaser.Scene;
+  scene: Engine.Scene;
   /** O corpo do herói: só a escala é mexida aqui, e quem levanta devolve ela ao normal. */
   heroBody: { scaleX: number; scaleY: number };
   heroTile: { x: number; y: number };
   /** O corpo sentado dela. */
-  vega: Billboard3D;
+  thea: Billboard3D;
   sparkle: (x: number, y: number) => void;
   hearts: (x: number, y: number) => void;
 }
@@ -57,25 +57,25 @@ const STEAM_EVERY_MS = 340;
 
 export class TeaBreak {
   private readonly hero: Drinker;
-  private readonly vega: Drinker;
-  private readonly timers: Phaser.Time.TimerEvent[] = [];
-  private steam?: Phaser.Time.TimerEvent;
+  private readonly thea: Drinker;
+  private readonly timers: Engine.Time.TimerEvent[] = [];
+  private steam?: Engine.Time.TimerEvent;
   private alive = true;
 
   public constructor(private readonly host: TeaBreakHost) {
-    const { heroTile, vega } = host;
-    const side = Math.sign(vega.x - heroTile.x) || 1;
+    const { heroTile, thea } = host;
+    const side = Math.sign(thea.x - heroTile.x) || 1;
     const heroX = heroTile.x + side * MUG_SIDE_OFFSET;
-    const vegaX = vega.x - side * MUG_SIDE_OFFSET;
+    const theaX = thea.x - side * MUG_SIDE_OFFSET;
     this.hero = {
-      body: host.heroBody, restX: host.heroBody.scaleX, restY: host.heroBody.scaleY, mug: this.newMug(vega.x, vega.y), x: heroX, y: heroTile.y + 0.04, side,
+      body: host.heroBody, restX: host.heroBody.scaleX, restY: host.heroBody.scaleY, mug: this.newMug(thea.x, thea.y), x: heroX, y: heroTile.y + 0.04, side,
     };
-    this.vega = {
-      body: vega, restX: vega.scaleX, restY: vega.scaleY, mug: this.newMug(vega.x, vega.y), x: vegaX, y: vega.y + 0.04, side: -side,
+    this.thea = {
+      body: thea, restX: thea.scaleX, restY: thea.scaleY, mug: this.newMug(thea.x, thea.y), x: theaX, y: thea.y + 0.04, side: -side,
     };
-    this.vega.mug.setPosition(vegaX, this.vega.y).setFlipX(side > 0);
+    this.thea.mug.setPosition(theaX, this.thea.y).setFlipX(side > 0);
     this.hero.mug.setFlipX(side < 0);
-    this.popIn(this.vega.mug);
+    this.popIn(this.thea.mug);
     this.passMug();
   }
 
@@ -85,14 +85,14 @@ export class TeaBreak {
     this.steam?.remove();
     for (const timer of this.timers) timer.remove();
     const { tweens } = this.host.scene;
-    for (const who of [this.hero, this.vega]) {
+    for (const who of [this.hero, this.thea]) {
       tweens.killTweensOf(who.mug);
       tweens.killTweensOf(who.body);
       who.mug.destroy();
     }
     // O herói volta pelo `standUp`, com o tween dele; ela não tem quem a endireite.
-    this.vega.body.scaleX = this.vega.restX;
-    this.vega.body.scaleY = this.vega.restY;
+    this.thea.body.scaleX = this.thea.restX;
+    this.thea.body.scaleY = this.thea.restY;
   }
 
   private newMug(x: number, y: number): Billboard3D {
@@ -103,7 +103,7 @@ export class TeaBreak {
     this.timers.push(this.host.scene.time.delayedCall(ms, () => { if (this.alive) run(); }));
   }
 
-  private tween(config: Phaser.Types.Tweens.TweenBuilderConfig): void {
+  private tween(config: Engine.Types.Tweens.TweenBuilderConfig): void {
     this.host.scene.tweens.add(config);
   }
 
@@ -146,7 +146,7 @@ export class TeaBreak {
       loop: true,
       callback: () => {
         turn += 1;
-        const who = turn % 2 === 0 ? this.hero : this.vega;
+        const who = turn % 2 === 0 ? this.hero : this.thea;
         // A caneca na boca não solta vapor para o lado: ele só sai da que está no colo.
         if (who.mug.texKey === MUG_TEXTURE && who.mug.elevation < MUG_REST_ELEVATION + 0.05) this.puff(who.x, who.y, MUG_REST_ELEVATION + 0.42);
       },
@@ -182,8 +182,8 @@ export class TeaBreak {
 
   /** O brinde: as duas vão uma até a outra e voltam, com o tilintar e as faíscas no encontro. */
   private clink(): void {
-    const dx = this.vega.x - this.hero.x;
-    const dy = this.vega.y - this.hero.y;
+    const dx = this.thea.x - this.hero.x;
+    const dy = this.thea.y - this.hero.y;
     const go = (who: Drinker, sign: number): void => {
       this.tween({
         targets: who.mug,
@@ -198,14 +198,14 @@ export class TeaBreak {
       });
     };
     go(this.hero, 1);
-    go(this.vega, -1);
+    go(this.thea, -1);
     this.after(CLINK_MS, () => {
       getSoundManager().playMugClink();
-      this.host.sparkle((this.hero.x + this.vega.x) / 2, (this.hero.y + this.vega.y) / 2);
+      this.host.sparkle((this.hero.x + this.thea.x) / 2, (this.hero.y + this.thea.y) / 2);
     });
     this.after(CLINK_MS * 2 + 90 + 260, () => {
       this.drink(this.hero, SIPS);
-      this.after(SIP_TURN_MS, () => this.drink(this.vega, SIPS));
+      this.after(SIP_TURN_MS, () => this.drink(this.thea, SIPS));
     });
   }
 
@@ -236,7 +236,7 @@ export class TeaBreak {
       mug.setTexture(EMPTY_MUG_TEXTURE, 0);
       this.host.hearts(headX, who.y);
       getSoundManager().playCozyChime();
-      if (who === this.vega) this.steam?.remove();
+      if (who === this.thea) this.steam?.remove();
     });
   }
 }

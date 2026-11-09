@@ -1,4 +1,5 @@
 import type { FrameSample, Spike } from './Profiler';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * O PAINEL DO PROFILER (F3) — o "top" do jogo.
@@ -99,7 +100,7 @@ export class ProfilerPanel {
     const root = document.createElement('div');
     root.id = 'zh-prof-hud';
     this.head = document.createElement('pre');
-    this.graph = document.createElement('canvas');
+    this.graph = createCanvas();
     // O buffer do gráfico acompanha a densidade da tela: um canvas de 360px numa retina
     // borraria as barras de 1px que são o ponto dele.
     const dpr = Math.min(2, window.devicePixelRatio || 1);

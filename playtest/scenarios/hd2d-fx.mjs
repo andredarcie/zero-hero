@@ -1,13 +1,13 @@
 // HD-2D phase 5: the FX that moved out of the 2D overlay and into the 3D pipeline —
-// the torch flame (an emissive billboard on the stick's tip), the danger vignette and
-// the death fade (both post-chain uniforms). Each one used to be a flat image pasted
+// the torch flame (an emissive billboard on the stick's tip) and the death fade (a
+// post-chain uniform). Each one used to be a flat image pasted
 // over the canvas, outside the bloom, the grade and the tone mapping.
 //
 // Drives the scene straight through its own fields (window.__scene is the live GameScene
 // in dev) instead of walking the hero to a torch and waiting for a siege to build.
 export default {
   name: 'hd2d-fx',
-  description: 'Torch-flame billboard, danger vignette and death fade in the 3D post chain.',
+  description: 'Torch-flame billboard and death fade in the 3D post chain.',
   needsGame: true,
   async run({ driver, shot, assert }) {
     const { page } = driver;
@@ -31,7 +31,7 @@ export default {
     assert('Torch flame uses the tiny-fire art', String(torch?.tex).startsWith('tiny-fire'), `tex=${torch?.tex}`);
 
     // ── One-shot world FX (sparks, shockwaves, motes, smoke) ─────────────────
-    // They used to be Phaser circles/rectangles drawn over the canvas; now they are billboards
+    // They used to be 2D circles/rectangles drawn over the canvas; now they are billboards
     // living in the world. Fired straight at the scene so we don't have to stage a fight.
     const fx = await page.evaluate(() => {
       const s = window.__scene;
@@ -53,19 +53,6 @@ export default {
     await page.evaluate(() => window.__scene.scene.resume());
     assert('One-shot FX spawned into the 3D world', fx.after > fx.before, JSON.stringify(fx));
 
-    // ── Danger vignette (post uniform) ──
-    // O cerco ambiente que levantava este medidor saiu do jogo (so existem covas autoradas), entao
-    // quem prova o uniforme aqui e a propria API do post — que continua sendo a via de qualquer
-    // vinheta futura.
-    await page.evaluate(() => { window.__scene.world3d.setDangerVignette(0.95, 0x3d0a12); });
-    await driver.settle(150);
-    await shot('danger-vignette', { note: 'setDangerVignette(0.95) → red vignette inside the post' });
-
-    const danger = await page.evaluate(
-      () => window.__scene.world3d.finishPass.uniforms.uDanger.value,
-    );
-    assert('Danger vignette reached the post uniform', danger > 0.1, `uDanger=${danger}`);
-
     // ── Frame rate ────────────────────────────────────────────────────────────
     // The post chain (bloom + DoF/finish pass) roughly doubles the fill rate, which was the
     // headline risk of the HD-2D plan. Measure it instead of assuming.
@@ -82,16 +69,13 @@ export default {
     assert('Renders at 55+ fps with the full post chain', fps >= 55, `fps=${fps.toFixed(1)}`);
 
     // ── Death fade (post uniform, replacing the 2D black rectangle) ───────────
-    await page.evaluate(() => window.__scene.world3d.setDangerVignette(0, 0x0a0d24));
     await page.evaluate(() => window.__scene.triggerDeath());
     await driver.settle(1800);
     await shot('death-fade', { note: 'Death: the world drains and sinks to black in the post' });
 
     const after = await page.evaluate(() => ({
       fade: window.__scene.world3d.finishPass.uniforms.uFade.value,
-      danger: window.__scene.world3d.finishPass.uniforms.uDanger.value,
     }));
     assert('World faded to black', after.fade > 0.98, `uFade=${after.fade}`);
-    assert('Danger vignette back to zero', after.danger === 0, `uDanger=${after.danger}`);
   },
 };

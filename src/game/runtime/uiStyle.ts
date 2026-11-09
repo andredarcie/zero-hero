@@ -1,4 +1,5 @@
 import { FONT_FAMILY } from '@/game/constants';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * A DIREÇÃO DE ARTE DA INTERFACE — três materiais, cada um com a sua voz, e nada fora deles.
@@ -99,7 +100,7 @@ export const paperTextureCanvas = (): HTMLCanvasElement | null => {
   if (paperCanvas) return paperCanvas;
   const W = 440;
   const H = 520;
-  const c = document.createElement('canvas');
+  const c = createCanvas();
   c.width = W;
   c.height = H;
   const ctx = c.getContext('2d');
@@ -296,7 +297,7 @@ export const pixelFrame = (n: number, bg: string, border: string, notch = 1): st
   const key = `${n}|${bg}|${border}|${notch}`;
   const hit = frameCache.get(key);
   if (hit) return hit;
-  const c = document.createElement('canvas');
+  const c = createCanvas();
   c.width = n;
   c.height = n;
   const ctx = c.getContext('2d');
@@ -324,7 +325,7 @@ export const pixelDisc = (n: number, fill: string, border: string): string => {
   const key = `disc|${n}|${fill}|${border}`;
   const hit = frameCache.get(key);
   if (hit) return hit;
-  const c = document.createElement('canvas');
+  const c = createCanvas();
   c.width = n;
   c.height = n;
   const ctx = c.getContext('2d');

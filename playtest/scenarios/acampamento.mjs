@@ -52,7 +52,7 @@ export default {
     });
     assert('Do começo, o herói chega ao lado do colchão', reach, String(reach));
 
-    // O pedido da Iris fecha (pelo mesmo evento do jogo): o quadro dela aparece no acampamento.
+    // O pedido da Sisi fecha (pelo mesmo evento do jogo): o quadro dela aparece no acampamento.
     await page.evaluate(() => {
       const s = window.__scene; window.gameTime.set(0.45);
       s.playerWorld.worldX = 54; s.playerWorld.worldY = 51; s.movementController.interruptMovement(54, 51); s.movementController.faceTo(0, -1); s.streamChunks(true);
@@ -64,8 +64,8 @@ export default {
       await sleep(250);
     }
     const after = await page.evaluate(() => ({ mementos: window.__scene.heroCamp.mementoCount, easel: window.__scene.heroCamp.at(55, 47), solid: window.__scene.isSolidForEntities(55, 47) }));
-    assert('Fechado o pedido da Iris, o quadro dela aparece no acampamento', after.mementos === 1 && after.easel === 'easel' && after.solid, JSON.stringify(after));
-    await shot('00-acampamento', { note: 'O acampamento com o quadro da Iris' });
+    assert('Fechado o pedido da Sisi, o quadro dela aparece no acampamento', after.mementos === 1 && after.easel === 'easel' && after.solid, JSON.stringify(after));
+    await shot('00-acampamento', { note: 'O acampamento com o quadro da Sisi' });
 
   },
 };

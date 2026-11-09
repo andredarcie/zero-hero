@@ -10,7 +10,7 @@ import { getChunkTerrain } from '@/game/world/WorldData';
 /**
  * A CASA DE CADA VIZINHO, ao lado de onde ele fica. Três tiles de largura por dois de fundo são sólidos, e
  * o desenho sobe a partir daí. Os lugares foram escolhidos no mapa, um a um, para não fechar passagem nem
- * esconder pedra, árvore ou o que as quests põem no chão. De noite as janelas acendem; a da Vega apaga de
+ * esconder pedra, árvore ou o que as quests põem no chão. De noite as janelas acendem; a da Thea apaga de
  * vez quando ele vai embora.
  */
 
@@ -22,9 +22,12 @@ const DEPTH = 2;
 /** A luz do mundo estoura os tons claros de uma parede grande; o tom abaixa antes da luz, não a rampa. */
 const HOME_TINT = 0xa8a4a0;
 
-/** O tile do meio da linha de baixo da casa. */
-const HOMES: Readonly<Record<HomeKind, { x: number; y: number }>> = {
-  astronaut: { x: 37, y: 8 },
+/**
+ * O tile do meio da linha de baixo da casa. A THEA (astronaut) NÃO TEM CASA (pedido do autor): ela é a única
+ * vizinha que caiu do céu, e a busca dela é justamente voltar para a casa dela, lá em cima. Ela vive no
+ * acampamento, ao lado da forja velha que um ferreiro deixou para trás (objects/OldForge).
+ */
+const HOMES: Readonly<Partial<Record<HomeKind, { x: number; y: number }>>> = {
   businessMan: { x: 50, y: 7 },
   painter: { x: 17, y: 13 },
   radiationSuit: { x: 5, y: 37 },
@@ -65,7 +68,9 @@ export class NpcHomes {
 
   public constructor() {
     for (const kind of Object.keys(HOME_PAINTERS) as HomeKind[]) {
-      const { x, y } = HOMES[kind];
+      const home = HOMES[kind];
+      if (!home) continue;
+      const { x, y } = home;
       this.bodies.push(world3d()
         .addBillboard(homeYardTexture(kind), 0, { flat: true, flatY: YARD_Y })
         .setDisplaySize(YARD_WIDTH, YARD_DEPTH)

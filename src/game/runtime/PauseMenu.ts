@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { formatTime, getJukebox, JUKEBOX_TRACKS } from '@/game/audio/Jukebox';
 import { getSoundManager } from '@/game/audio/SoundManager';
@@ -18,9 +18,9 @@ import {
   setBigButtons, setHaptics, setLeftHanded, setSolidButtons,
 } from '@/game/runtime/touchSettings';
 
-// The pause screen is plain DOM layered over the Phaser canvas — the same approach as
+// The pause screen is plain DOM layered over the 2D canvas — the same approach as
 // DialogOverlay / EditorDomUi. That choice matters here because DOM keeps receiving input while the
-// Phaser scene is hard-paused (scene.pause() freezes update/tweens/timers AND scene input, so the
+// game scene is hard-paused (scene.pause() freezes update/tweens/timers AND scene input, so the
 // menu must live outside the canvas to stay clickable).
 //
 // A PAUSA É O TÍTULO DO JOGO, sem painel: letra de pixel solta sobre o mundo escurecido, e só três
@@ -222,7 +222,7 @@ const LANGUAGES: { lang: Lang; name: string }[] = [
 const optionSections = (): OptionSection[] => {
   const sound = getSoundManager();
   const image: OptionDef[] = [];
-  // A tela cheia é da página, não do Phaser: o canvas já ocupa a janela. O iPhone não deixa.
+  // A tela cheia é da página, não do motor: o canvas já ocupa a janela. O iPhone não deixa.
   if (document.fullscreenEnabled) {
     image.push({ kind: 'choice', label: 'pause.fullscreen', values: onOff(() => Boolean(document.fullscreenElement), setFullscreen) });
   }
@@ -360,7 +360,7 @@ export class PauseMenu {
   private selected = 0;
   private destroyed = false;
 
-  public constructor(scene: Phaser.Scene, private readonly cb: PauseMenuCallbacks) {
+  public constructor(scene: Engine.Scene, private readonly cb: PauseMenuCallbacks) {
     void scene; // the menu is scene-agnostic DOM; kept in the signature for overlay parity
     ensureStyle();
 

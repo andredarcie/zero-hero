@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
@@ -15,22 +15,22 @@ import { adventureState, type SkyQuestSave } from '@/game/runtime/adventureState
 import { LensOverlay, SkyOverlay, SKY_TARGETS, type SkyTarget } from '@/game/runtime/SkyOverlays';
 
 /**
- * A QUEST DA VEGA: o telescópio. O tubo sobrou; faltam o tripé e a lente. Ela dá a picareta (a ÚNICA do
+ * A QUEST DA THEA: o telescópio. O tubo sobrou; faltam o tripé e a lente. Ela dá a picareta (a ÚNICA do
  * vale) e manda o herói para oeste, ao lago de lava: na margem, a pedra de veio PRETO dá carvão e a de veio
- * vermelho dá minério. NINGUÉM DEPENDE DE OUTRO VIZINHO (pedido do autor): nada aqui pede o machado do Bram
+ * vermelho dá minério. NINGUÉM DEPENDE DE OUTRO VIZINHO (pedido do autor): nada aqui pede o machado do Marco
  * nem coisa de outra quest, e o jogador faz os pedidos na ordem que quiser. O FORNO dela, fixo ao lado da
  * nave, é o guia: ele pede um item de cada vez, na ordem certa (`furnaceNeed`), e devolve o resultado — o
  * carvão (fica aceso lá dentro), o minério (sai a esponja, que o martelo vira ferro); depois areia (só na
  * beira do lago grande, no sul) e cinza (ao lado dela), que viram vidro. O vidro, polido num minijogo, vira lente. Montado, o herói o leva nas costas ao planalto, onde o céu é
  * mais limpo. De noite, e só de noite, ele procura os quatro alvos que ela ensina. Ela sobe, os dois
- * conversam, a nave pousa e leva Vega para casa (ver VegaDeparture), e o pedido fecha. O telescópio fica
+ * conversam, a nave pousa e leva Thea para casa (ver TheaDeparture), e o pedido fecha. O telescópio fica
  * lá para sempre.
  *
  * Esta classe não conhece a cena, só o `AstronomerHost`.
  */
 
 export interface AstronomerHost {
-  scene: Phaser.Scene;
+  scene: Engine.Scene;
   held: () => HeldItemKind | 'none';
   takeIntoHand: (kind: HeldItemKind, units: number) => void;
   removeFromHand: (kind: HeldItemKind, units: number) => void;
@@ -64,7 +64,7 @@ export interface AstronomerHost {
   /** A cena final: ela sobe a escada, senta ao lado do herói e fala. `onDone` já é depois do corte. */
   playFarewell: (scene: { from: readonly [number, number]; beside: { x: number; y: number }; script: DialogScript; goodbye: DialogScript; ship: { x: number; y: number } }, onDone: () => void) => void;
   /** Ela não está mais no mundo: o tile dela fica livre. */
-  vegaGone: () => void;
+  theaGone: () => void;
 }
 
 /** Para onde a câmera olha enquanto se pole: o trecho mais fechado do bosque perto dela, a nordeste. */
@@ -74,7 +74,7 @@ const SPOT_TILE = { x: 32, y: 20 };
 const STAIR_FOOT = [31, 23] as const;
 /** Onde a nave pousa: no planalto, à esquerda do telescópio, sem encostar em quem estiver ao lado dele. */
 const SHIP_LANDING = { x: 29.3, y: 20 };
-// O que a Vega lembra em cada degrau do ferro: buscar o minério, levar ao forno (ele pede o resto) e
+// O que a Thea lembra em cada degrau do ferro: buscar o minério, levar ao forno (ele pede o resto) e
 // martelar a esponja. O forno não se constrói mais, então não há degrau de forno nem de carvão.
 const IRON_STEPS: readonly HeldItemKind[] = ['ore', 'bloom', 'iron'];
 /**
@@ -135,7 +135,7 @@ export class AstronomerQuest {
   public build(npc: { worldX: number; worldY: number }): void {
     this.npc = npc;
     const { stage } = this.save;
-    if (this.save.departed) this.host.vegaGone();
+    if (this.save.departed) this.host.theaGone();
     if (stage === 'glass' || stage === 'polish') this.placeCamp();
     if (stage === 'glass' || stage === 'polish') this.showTripod(false);
     if (stage === 'glass') this.showHeaps(false);
@@ -372,13 +372,13 @@ export class AstronomerQuest {
     this.host.say({ ...base, lines: tLines('npc.astronautStep.tripod') }, at, () => this.host.markHeard());
   }
 
-  /** A Vega está esperando a barra de ferro (é ela quem vem buscá-la na bigorna). */
+  /** A Thea está esperando a barra de ferro (é ela quem vem buscá-la na bigorna). */
   public wantsIronAtAnvil(): boolean {
     return this.save.stage === 'iron';
   }
 
   /**
-   * A BARRA FOI BUSCADA NA BIGORNA (pedido do autor): a Vega veio correndo, pegou a barra e voltou dizendo que vai
+   * A BARRA FOI BUSCADA NA BIGORNA (pedido do autor): a Thea veio correndo, pegou a barra e voltou dizendo que vai
    * construir o tripé — o que `deliverIron` fazia quando o herói levava a barra, sem a barra passar pela mão dele.
    */
   public ironFromAnvil(): void {
@@ -553,7 +553,7 @@ export class AstronomerQuest {
     }, () => {
       this.save.stage = 'done';
       this.save.departed = true;
-      this.host.vegaGone();
+      this.host.theaGone();
       this.host.persist();
       this.host.closeQuest();
       this.host.markHeard();

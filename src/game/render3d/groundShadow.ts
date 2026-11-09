@@ -1,8 +1,9 @@
 import * as THREE from 'three';
+import { createCanvas } from '@/game/platform/platform';
 
 // ── Soft contact-shadow blobs (the 2D game's grounding ellipses) ──────────────
 //
-// In the 2D game EVERY standing thing — trees, the hero, NPCs, enemies, props —
+// In the 2D game EVERY standing thing — trees, the hero, NPCs, props —
 // sat on a soft dark ground ellipse ("anchors lifted obstacles so they read as
 // standing up"). This module recreates that exact look in 3D: a soft radial
 // dark blob laid flat on the ground under each object.
@@ -29,7 +30,7 @@ let sharedTexture: THREE.CanvasTexture | undefined;
 const BLOB_TEX_RES = 22;
 export const getShadowBlobTexture = (): THREE.CanvasTexture => {
   if (sharedTexture) return sharedTexture;
-  const c = document.createElement('canvas');
+  const c = createCanvas();
   c.width = c.height = BLOB_TEX_RES;
   const ctx = c.getContext('2d')!;
   const r = BLOB_TEX_RES / 2;

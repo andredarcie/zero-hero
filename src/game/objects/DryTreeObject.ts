@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { TREE_REGROW_MS } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -19,12 +19,12 @@ export class DryTreeObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   private readonly sprite: Billboard3D;
   private stage = 0;
   private regrowMs = -1; // < 0 = not regrowing (standing tree or freshly chopped-and-waiting)
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
@@ -68,10 +68,10 @@ export class DryTreeObject implements WorldProp {
   }
 
   // Tick the regrow clock on a felled tree. `tileClear` (from GameScene) is false whenever the
-  // tile is occupied — by the hero, an enemy, OR an item sitting on it (e.g. the graveto the
+  // tile is occupied — by the hero OR an item sitting on it (e.g. the graveto the
   // tree just dropped). The clock only counts down while the tile is clear, so the timer truly
   // starts only once that item is picked up. Returns true when it's ready AND clear to sprout,
-  // so it never grows over the player, an enemy, or a dropped item.
+  // so it never grows over the player or a dropped item.
   public updateRegrow(deltaMs: number, tileClear: boolean): boolean {
     if (this.regrowMs < 0 || this.blocking || !tileClear) return false;
     if (this.regrowMs > 0) this.regrowMs -= deltaMs;

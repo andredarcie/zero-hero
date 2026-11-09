@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { registerTexture3D } from '@/game/render3d/textures3d';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * OS SEIS FUNGOS DO VALE — e a faca que os colhe.
@@ -18,7 +19,7 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
  * espécie seriam duas espécies diferentes na primeira vez que alguém retocasse uma delas.
  */
 
-/** A ordem é a do caminho a partir da Hollis — e é a ordem das dicas dela (NpcQuests.hints). */
+/** A ordem é a do caminho a partir da Shui — e é a ordem das dicas dela (NpcQuests.hints). */
 export const MUSHROOM_KINDS = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric'] as const;
 export type MushroomKind = (typeof MUSHROOM_KINDS)[number];
 
@@ -185,10 +186,10 @@ class Raster {
 
   public toCanvas(): HTMLCanvasElement {
     const { n } = this;
-    const canvas = document.createElement('canvas');
+    const canvas = createCanvas();
     canvas.width = n;
     canvas.height = n;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return canvas;
     const img = ctx.createImageData(n, n);
     for (let i = 0; i < n * n; i += 1) {
@@ -413,7 +414,7 @@ const iconCanvas = (paint: (r: Raster) => void, size = ICON_SIZE): HTMLCanvasEle
 // O registro THREE e um mapa de modulo que sobrevive ao restart da cena: registrar uma vez so.
 let threeRegistered = false;
 
-const publish = (scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement, three: boolean): void => {
+const publish = (scene: Engine.Scene, key: string, canvas: HTMLCanvasElement, three: boolean): void => {
   if (three) {
     const tex = new THREE.CanvasTexture(canvas);
     tex.magFilter = THREE.NearestFilter;
@@ -427,10 +428,10 @@ const publish = (scene: Phaser.Scene, key: string, canvas: HTMLCanvasElement, th
 
 /**
  * Publica as seis espécies e a faca nas DUAS pipelines (THREE: o chão e o pensamento do herói;
- * Phaser: a bolsa, a subtela, o item-get). O mesmo contrato do carvão: no boot da cena, depois do
+ * motor 2D: a bolsa, a subtela, o item-get). O mesmo contrato do carvão: no boot da cena, depois do
  * loader 3D, idempotente por pipeline.
  */
-export const registerFungiTextures = (scene: Phaser.Scene): void => {
+export const registerFungiTextures = (scene: Engine.Scene): void => {
   const three = !threeRegistered;
   for (const kind of MUSHROOM_KINDS) {
     const key = fungusTextureKey(kind);

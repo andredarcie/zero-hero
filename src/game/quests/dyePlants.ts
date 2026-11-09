@@ -1,5 +1,5 @@
-// AS QUATRO PLANTAS DE TINTA DA IRIS, na ordem em que as sementes saem do pacote. São plantas reais e
-// a cor é a que cada uma dá de verdade; como a tinta sai de cada uma está nas falas da Iris (locale
+// AS QUATRO PLANTAS DE TINTA DA SISI, na ordem em que as sementes saem do pacote. São plantas reais e
+// a cor é a que cada uma dá de verdade; como a tinta sai de cada uma está nas falas da Sisi (locale
 // `npc.painterMake.<kind>`). A cor daqui é a mesma da mesa e da paleta do quadro.
 
 export type DyeKind = 'urucum' | 'anil' | 'curcuma' | 'garanca';
@@ -20,7 +20,7 @@ export const DYE_TINTS: Readonly<Record<DyeKind, number>> = {
   garanca: 0xb3203a,
 };
 
-/** Quantos canteiros a Iris pede, e o que brota neles. */
+/** Quantos canteiros a Sisi pede, e o que brota neles. */
 export const PLOT_COUNT = DYE_KINDS.length;
 /** Quanto tempo de jogo entre um nível de crescimento e o próximo. São três níveis. */
 export const GROW_STEP_MS = 40000;

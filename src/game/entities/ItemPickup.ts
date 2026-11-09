@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { ITEM_FRAMES, KEY_FRAMES } from '@/game/constants';
 import {
@@ -67,17 +67,17 @@ export type HeldItemKind =
   // As duas estações manuais podem ser fabricadas, instaladas e recolhidas pelo jogador.
   | 'furnace'
   | 'altar'
-  // A FACA DE COGUMELO, presente da Hollis: o X (ou o Z) diante de um cogumelo abre a colheita
+  // A FACA DE COGUMELO, presente da Shui: o X (ou o Z) diante de um cogumelo abre a colheita
   // (ForagingOverlay). Tem escova no cabo, como as de verdade — e e ela que limpa.
   | 'knife'
-  // A QUEST DA IRIS (quests/PainterQuest): o pacote de sementes sortidas, o ramo das quatro flores
+  // A QUEST DA SISI (quests/PainterQuest): o pacote de sementes sortidas, o ramo das quatro flores
   // de tinta e o pincel. Os três têm dono: nenhum nasce no mundo, ela é quem dá.
   | 'dyeSeeds'
   | 'dyeBundle'
   | 'brush'
-  // O GALHO RACHADO do Bram (quests/LumberQuest): vai das costas para a terra da fogueira.
+  // O GALHO RACHADO do Marco (quests/LumberQuest): vai das costas para a terra da fogueira.
   | 'splitWood'
-  // A QUEST DA VEGA (quests/AstronomerQuest): areia e cinza viram vidro no forno, e o vidro polido
+  // A QUEST DA THEA (quests/AstronomerQuest): areia e cinza viram vidro no forno, e o vidro polido
   // vira a lente do telescópio, que vai nas costas até o planalto.
   | 'sand'
   | 'ash'
@@ -232,7 +232,7 @@ export class ItemPickup {
   public readonly units: number;
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     public readonly kind: HeldItemKind,
     public readonly tileX: number,
     public readonly tileY: number,

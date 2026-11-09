@@ -1,3 +1,4 @@
+import { localStore } from '@/game/platform/platform';
 /**
  * AS OPÇÕES DE ACESSIBILIDADE, todas num lugar só: quem desenha ou reage pergunta aqui.
  *
@@ -21,11 +22,11 @@ const GAME_CODE: Readonly<Record<BoundAction, string>> = { hand: 'KeyZ', use: 'K
 const GAME_KEYCODE: Readonly<Record<BoundAction, number>> = { hand: 90, use: 88 };
 
 const read = (key: string): string | null => {
-  try { return window.localStorage.getItem(key); } catch { return null; }
+  try { return localStore().getItem(key); } catch { return null; }
 };
 const write = (key: string, value: string): void => {
   // Sem armazenamento a opção vale até fechar a página.
-  try { window.localStorage.setItem(key, value); } catch { /* ignore */ }
+  try { localStore().setItem(key, value); } catch { /* ignore */ }
 };
 
 const systemAsksLessMotion = (): boolean => {

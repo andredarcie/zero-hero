@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createCanvas } from '@/game/platform/platform';
 
 // AS TREPADEIRAS: o mato que desce da beira da serra pela pedra. Pixel desenhado aqui, por semente: uma
 // franja de capim na crista e, dela, ramos que descem com folhas. Quatro variações em fila, todas com o
@@ -17,10 +18,10 @@ let texture: THREE.CanvasTexture | undefined;
 
 export const vineTexture = (): THREE.Texture => {
   if (texture) return texture;
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = CELL_W * VINE_VARIANTS;
   canvas.height = CELL_H;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (ctx) {
     let seed = 2026;
     const rand = (): number => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };

@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -35,13 +35,14 @@ const FINDS: readonly ValleyFind[] = [
   { kind: 'sign', x: 29, y: 36 },
   { kind: 'helmet', x: 54, y: 18 },
   { kind: 'bottle', x: 55, y: 54 },
+  // A FORJA VELHA (pedido do autor): o forno e a bigorna ao lado da Thea são de um ferreiro que morou ali muito antes e
+  // foi embora. O que sobrou da oficina é este pedaço de parede, com a boca da lareira e a placa (finds.smithy).
+  { kind: 'smithy', x: 45, y: 3 },
   // AS VARANDAS: um banco ao lado de cada porta, e quem mora ali vem sentar junto com uma caneca.
-  { kind: 'bench', x: 39, y: 8, view: { x: 39, y: 9 }, owner: 'astronaut' },
   { kind: 'bench', x: 52, y: 7, view: { x: 52, y: 8 }, owner: 'businessMan' },
   { kind: 'bench', x: 15, y: 13, view: { x: 15, y: 14 }, owner: 'painter' },
   // Do lado oeste: o tile do leste, (7, 37), é a passagem para o morro do morel, e um banco ali fecha o pedido dela.
   { kind: 'bench', x: 3, y: 37, view: { x: 3, y: 38 }, owner: 'radiationSuit' },
-  { kind: 'door', x: 37, y: 8, owner: 'astronaut' },
   { kind: 'door', x: 50, y: 7, owner: 'businessMan' },
   { kind: 'door', x: 17, y: 13, owner: 'painter' },
   { kind: 'door', x: 5, y: 37, owner: 'radiationSuit' },
@@ -58,7 +59,7 @@ const findTexture = (kind: FindKind): string => `valley-find-${kind}`;
 // O registro THREE é um mapa de módulo que sobrevive ao restart da cena: registrar uma vez só.
 let threeRegistered = false;
 
-export const registerFindTextures = (scene: Phaser.Scene): void => {
+export const registerFindTextures = (scene: Engine.Scene): void => {
   for (const [kind, paint] of Object.entries({ ...FIND_PAINTERS, ...DECOR_PAINTERS })) {
     const key = `valley-find-${kind}`;
     const canvas = paintedCanvas(paint, FIND_SIZE, FIND_SIZE);

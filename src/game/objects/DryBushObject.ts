@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { profiler } from '@/game/debug/Profiler';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -28,8 +28,8 @@ const FIRE_SPOTS = [
   { ox: 0.0, oy: 0.0, scale: 0.6, phase: 2 },
 ] as const;
 
-const WHITE = new Phaser.Display.Color(255, 255, 255);
-const ASH = new Phaser.Display.Color(88, 84, 80);
+const WHITE = new Engine.Display.Color(255, 255, 255);
+const ASH = new Engine.Display.Color(88, 84, 80);
 // O pé queimado: o que sobra do arbusto, preto e rente ao chão.
 const STUMP_TINT = 0x2f2a25;
 const STUMP_SCALE_X = 0.62;
@@ -41,16 +41,16 @@ export class DryBushObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   private readonly sprite: Billboard3D;
   private state: BushState = 'intact';
 
   private fires: Billboard3D[] = [];
   private fireLight?: FireLight3D;
-  private fireTimer?: Phaser.Time.TimerEvent;
+  private fireTimer?: Engine.Time.TimerEvent;
   private fireFrame = 0;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
@@ -105,8 +105,8 @@ export class DryBushObject implements WorldProp {
       duration: BURN_MS,
       onUpdate: (tween) => {
         const progress = tween.getValue() ?? 0;
-        const c = Phaser.Display.Color.Interpolate.ColorWithColor(WHITE, ASH, 100, progress);
-        this.sprite.setTint(Phaser.Display.Color.GetColor(c.r, c.g, c.b));
+        const c = Engine.Display.Color.Interpolate.ColorWithColor(WHITE, ASH, 100, progress);
+        this.sprite.setTint(Engine.Display.Color.GetColor(c.r, c.g, c.b));
         this.fireLight?.setIntensityScale(BUSH_LIGHT_SCALE * bushLightCurve(progress));
       },
       onComplete: () => this.toAsh(),

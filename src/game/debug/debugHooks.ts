@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { World3DParams } from '@/game/render3d/World3D';
 import { getDay, getTimeOfDay, setDay, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
@@ -114,7 +114,7 @@ declare global {
 }
 
 export const registerSceneDebugHooks = (
-  scene: Phaser.Scene,
+  scene: Engine.Scene,
   renderGameToText: () => string,
 ): (() => void) => {
   const previousRender = window.render_game_to_text;
@@ -131,7 +131,7 @@ export const registerSceneDebugHooks = (
   };
 
   // Dev-only escape hatch: the live scene for console inspection (playtests/debugging).
-  if (import.meta.env.DEV) (window as unknown as { __scene?: Phaser.Scene }).__scene = scene;
+  if (import.meta.env.DEV) (window as unknown as { __scene?: Engine.Scene }).__scene = scene;
   window.render_game_to_text = renderGameToText;
   window.advanceTime = advanceTime;
   window.gameTime = {
@@ -150,11 +150,11 @@ export const registerSceneDebugHooks = (
   };
 };
 
-export const registerGameDebugApi = (api: GameDebugApi, scene?: Phaser.Scene): void => {
+export const registerGameDebugApi = (api: GameDebugApi, scene?: Engine.Scene): void => {
   window.gameDebug = api;
   // Dev-only escape hatch: the live scene for console inspection (playtests/debugging).
   if (scene && import.meta.env.DEV) {
-    (window as unknown as { __scene?: Phaser.Scene }).__scene = scene;
+    (window as unknown as { __scene?: Engine.Scene }).__scene = scene;
   }
 };
 

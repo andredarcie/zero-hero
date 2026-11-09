@@ -1,13 +1,14 @@
 import * as THREE from 'three';
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { registerTexture3D } from '@/game/render3d/textures3d';
+import { createCanvas } from '@/game/platform/platform';
 
 // Procedural pixel-art water bucket, painted in the game's own wood/iron/water palette — the same
 // approach as stoneTexture.ts / woodTexture.ts, so a new item looks authored, not bolted on.
 //
 // Two states, EMPTY and FULL, drawn once and published into BOTH texture pipelines: THREE (the
-// 3D back-item + ground-pickup billboards) and Phaser (the item-get ceremony and the swing sprite).
+// 3D back-item + ground-pickup billboards) and the 2D engine (the item-get ceremony and the swing sprite).
 // The game has no HUD — the empty/full state simply reads as the art the hero carries on his back.
 
 const PALETTE: Record<string, readonly [number, number, number, number]> = {
@@ -48,10 +49,10 @@ const BUCKET_KEY = { empty: 'bucket-icon', full: 'bucket-full-icon' } as const;
 const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
   const h = rows.length;
   const w = rows[0].length;
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas;
   const img = ctx.createImageData(w, h);
   for (let y = 0; y < h; y += 1) {
@@ -72,16 +73,16 @@ const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
 let threeRegistered = false;
 
 /**
- * Publish the two bucket textures into the THREE (3D) and Phaser (2D) registries under the keys
+ * Publish the two bucket textures into the THREE (3D) and 2D registries under the keys
  * `bucket-icon` and `bucket-full-icon`. Call once at scene boot, AFTER the 3D loader has run
  * (GameScene.create). Idempotent per pipeline — safe across scene restarts.
  */
-export const registerBucketTextures = (scene: Phaser.Scene): void => {
+export const registerBucketTextures = (scene: Engine.Scene): void => {
   for (const state of ['empty', 'full'] as const) {
     const key = BUCKET_KEY[state];
     const needThree = !threeRegistered;
-    const needPhaser = !scene.textures.exists(key);
-    if (!needThree && !needPhaser) continue;
+    const need2d = !scene.textures.exists(key);
+    if (!needThree && !need2d) continue;
     const canvas = makeCanvas(state === 'empty' ? EMPTY : FULL);
     if (needThree) {
       const tex = new THREE.CanvasTexture(canvas);
@@ -91,7 +92,7 @@ export const registerBucketTextures = (scene: Phaser.Scene): void => {
       tex.needsUpdate = true;
       registerTexture3D(key, tex);
     }
-    if (needPhaser) scene.textures.addCanvas(key, canvas);
+    if (need2d) scene.textures.addCanvas(key, canvas);
   }
   threeRegistered = true;
 };

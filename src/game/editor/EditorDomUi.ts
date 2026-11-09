@@ -1,4 +1,9 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
+import { bosqueIconKey } from '@/game/objects/BigTrees';
+import { fenceIconKey } from '@/game/objects/WoodFence';
+import { yardIconKey } from '@/game/objects/LumberYard';
+import { forgeIconKey } from '@/game/objects/OldForge';
+import { crashIconKey } from '@/game/objects/CrashSite';
 
 import {
   ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES,
@@ -16,10 +21,11 @@ import {
   type WorldFileId,
 } from '@/game/worldApi';
 import { biomeTintAt, decorFrameAt } from '@/game/world/biomes';
+import { createCanvas } from '@/game/platform/platform';
 
-// The editor shell is plain DOM layered over the Phaser canvas: the canvas renders the
+// The editor shell is plain DOM layered over the 2D canvas: the canvas renders the
 // world viewport, this module renders everything else (tools, palettes, minimap, modals).
-// DOM gives us scrolling, text inputs and tooltips that Phaser UI can't do well — and the
+// DOM gives us scrolling, text inputs and tooltips that canvas UI can't do well — and the
 // editor is dev-only, so there is no shipping cost.
 
 export const PANEL_WIDTH = 320;
@@ -50,6 +56,8 @@ export type UiState = {
   showCollisions: boolean;
   showRelief: boolean;
   showEntities: boolean;
+  /** As peças que o JOGO monta por código em lugar fixo (cachoeira, bosque, acampamento...): ver EditorFixtures. */
+  showFixtures: boolean;
   // A direcao com que o proximo prop direcional sera colocado.
   // Vive no estado da UI, e nao na selecao da paleta, porque e uma preferencia do PINCEL —
   // igual ao tamanho do brush: escolhe-se uma vez e vale pras proximas colocadas.
@@ -153,6 +161,28 @@ const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; fra
   // pedido dos vizinhos fecha. Um de cada, no centro do vale.
   { type: 'hearth', label: 'Fogueira do Fim — o heroi acende e assa o cogumelo', key: ASSET_KEYS.campfireFrame1 },
   { type: 'gardenGate', label: 'Portao do Jardim — abre quando todos os pedidos fecham', key: ASSET_KEYS.lookedDoorObject },
+  // O BOSQUE (objects/BigTrees): bloqueiam pelo proprio prop; o tronco caido deita em dois tiles (o posto e o da direita).
+  { type: 'oakTree', label: 'Carvalho velho (bosque)', key: bosqueIconKey('oak') },
+  { type: 'birchTree', label: 'Betula (bosque)', key: bosqueIconKey('birch') },
+  { type: 'youngOak', label: 'Carvalhinho (bosque)', key: bosqueIconKey('sapling') },
+  { type: 'fallenLog', label: 'Tronco caido (bosque) — ocupa este tile e o da direita', key: bosqueIconKey('log') },
+  // Liga sozinha nos vizinhos; a ponta (um vizinho so) vira pilar de portao.
+  { type: 'woodFence', label: 'Cerca de madeira — liga nos vizinhos; a ponta vira pilar de portao', key: fenceIconKey },
+  // O quintal do lenhador (objects/LumberYard).
+  { type: 'woodpile', label: 'Pilha de lenha', key: yardIconKey('woodpile') },
+  { type: 'sawhorse', label: 'Cavalete com serra', key: yardIconKey('sawhorse') },
+  { type: 'stump', label: 'Toco', key: yardIconKey('stump') },
+  { type: 'axeStump', label: 'Toco com machado cravado', key: yardIconKey('axeStump') },
+  { type: 'wheelbarrow', label: 'Carrinho de mao com lenha', key: yardIconKey('wheelbarrow') },
+  { type: 'yardSign', label: 'Placa do lenhador', key: yardIconKey('yardSign') },
+  // A forja velha (objects/OldForge): perto de um forno, ele ganha o piso de lajes da oficina.
+  { type: 'forgeRubble', label: 'Chamine caida (forja velha)', key: forgeIconKey('forgeRubble') },
+  { type: 'forgeRack', label: 'Suporte de ferramentas velhas (forja velha)', key: forgeIconKey('forgeRack') },
+  // A cratera da nave da Thea (objects/CrashSite).
+  { type: 'crashCrater', label: 'Cratera da nave (o buraco; o centro e solido)', key: crashIconKey('crashCrater') },
+  { type: 'shipHull', label: 'Chapa do casco da nave', key: crashIconKey('shipHull') },
+  { type: 'shipThruster', label: 'Propulsor da nave (solta fumaca)', key: crashIconKey('shipThruster') },
+  { type: 'shipFin', label: 'Aleta da nave', key: crashIconKey('shipFin') },
 ];
 
 // Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
@@ -487,7 +517,7 @@ export class EditorDomUi {
   };
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     private readonly store: EditorStore,
     private readonly state: UiState,
     private readonly cb: EditorUiCallbacks,
@@ -587,10 +617,10 @@ export class EditorDomUi {
     // Minimap
     const minimapWrap = document.createElement('div');
     minimapWrap.className = 'zh-minimap';
-    this.minimapCanvas = document.createElement('canvas');
+    this.minimapCanvas = createCanvas();
     minimapWrap.appendChild(this.minimapCanvas);
     this.panel.appendChild(minimapWrap);
-    this.minimapBase = document.createElement('canvas');
+    this.minimapBase = createCanvas();
     this.bindMinimapInput();
 
     // Status
@@ -860,11 +890,12 @@ export class EditorDomUi {
     const checks = document.createElement('div');
     checks.className = 'zh-checks';
     checks.style.marginTop = '6px';
-    const toggles: Array<{ label: string; key: 'showGrid' | 'showCollisions' | 'showRelief' | 'showEntities'; kbd: string }> = [
+    const toggles: Array<{ label: string; key: 'showGrid' | 'showCollisions' | 'showRelief' | 'showEntities' | 'showFixtures'; kbd: string }> = [
       { label: 'Grade', key: 'showGrid', kbd: 'G' },
       { label: 'Colisoes', key: 'showCollisions', kbd: 'V' },
       { label: 'Serras', key: 'showRelief', kbd: 'L' },
       { label: 'Entidades', key: 'showEntities', kbd: 'T' },
+      { label: 'Pecas do jogo', key: 'showFixtures', kbd: 'O' },
     ];
     toggles.forEach((toggle) => {
       const label = document.createElement('label');
@@ -1239,6 +1270,7 @@ export class EditorDomUi {
     if (key === 'v') { this.state.showCollisions = !this.state.showCollisions; this.changed(); return; }
     if (key === 'l') { this.state.showRelief = !this.state.showRelief; this.changed(); return; }
     if (key === 't') { this.state.showEntities = !this.state.showEntities; this.changed(); return; }
+    if (key === 'o') { this.state.showFixtures = !this.state.showFixtures; this.changed(); return; }
     if (key === 'p') { this.cb.onPlaytest(); return; }
     if (key === '0') { this.cb.onFitView(); return; }
     if (key === 'tab') {
@@ -1498,12 +1530,12 @@ export class EditorDomUi {
       ['Botao do meio / Espaco + arrastar', 'Move a camera'],
       ['Roda do mouse', 'Zoom no cursor'],
       ['B / E / R / F / I / C / S', 'Pincel, Borracha, Retangulo, Balde, Conta-gotas, Colisao, Ponto Inicial'],
-      ['1..5', 'Abas: Tiles, NPCs, Itens, Props, Inimigos'],
+      ['1..4', 'Abas: Tiles, NPCs, Itens, Props'],
       ['Tab', 'Alterna camada chao/superior'],
       ['[ e ]', 'Tamanho do pincel'],
       ['M', 'Alterna visao mundo / chunk'],
       ['Setas', 'Na visao chunk: muda o chunk selecionado'],
-      ['G / V / T', 'Mostrar grade / colisoes / entidades'],
+      ['G / V / T / O', 'Mostrar grade / colisoes / entidades / pecas do jogo'],
       ['Ctrl+Z / Ctrl+Y', 'Desfazer / refazer'],
       ['Ctrl+S', 'Salvar world.json'],
       ['P', 'Testar o mundo em edicao (ESC volta ao editor)'],

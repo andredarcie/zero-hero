@@ -9,7 +9,7 @@ import { adventureState } from '@/game/runtime/adventureState';
  *
  * Ele é o par de `NpcQuests.ts` (que é dado puro): aqui mora o estado, que é um número por
  * tarefa dentro do save da aventura. O caderno **não fala com o mundo**: ele não conhece a
- * mochila, o inimigo nem a fogueira. Quem viu a coisa acontecer chama `recordQuestEvent`, e é o
+ * mão, o NPC nem a fogueira. Quem viu a coisa acontecer chama `recordQuestEvent`, e é o
  * único caminho de entrada — um segundo lugar somando contador seria a segunda verdade que
  * desmente a primeira.
  *

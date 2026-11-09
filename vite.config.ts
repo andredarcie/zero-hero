@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import fs from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
@@ -104,5 +105,25 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+  },
+  // Os testes de unidade (`npm test`): a lógica que não precisa de tela, em Node. O jogo jogado é com o playtest/.
+  test: {
+    include: ['src/**/*.test.ts'],
+    environment: 'node',
+    // A plataforma dos testes (src/test-support/testPlatform.ts) entra antes de cada arquivo.
+    setupFiles: ['src/test-support/setup.ts'],
+    // O jsdom carrega imagem (de data URL) e desenha nos canvas pelo pacote `canvas`.
+    environmentOptions: { jsdom: { resources: 'usable', pretendToBeVisual: true } },
+    // A cobertura (`npm run test:coverage`) mede TODO o src — inclusive o arquivo que nenhum teste carrega, que entra
+    // com 0% — para a porcentagem dizer quanto do jogo de verdade os testes passam. Relatório em coverage/index.html.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/__tests__/**', 'src/**/*.d.ts', 'src/test-support/**'],
+      reporter: ['text-summary', 'html', 'json-summary', 'json'],
+      reportsDirectory: 'coverage',
+      // O piso pedido pelo autor (2026-11-08): o relatório falha se a cobertura cair abaixo dele.
+      thresholds: { statements: 60, lines: 60 },
+    },
   },
 });

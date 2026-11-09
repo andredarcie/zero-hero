@@ -111,9 +111,8 @@ export const HERO_FRAMES = {
    * lados (espelhado) e tem uma unica frame de costas para cima, entao uma pose so apareceria de
    * barriga enquanto ele golpeia para o norte.
    *
-   * Existem porque o heroi era o unico corpo do combate que nao se mexia ao atacar: todo bicho se
-   * agacha ao armar, a caveira levanta um osso, a espada tem arco e investida — e o sprite dele
-   * ficava na pose de parado enquanto o gesto inteiro acontecia ao lado.
+   * São as poses do GESTO (o machado, a picareta, a foice, a chave na porta): sem elas o sprite do
+   * herói ficava na pose de parado enquanto o golpe inteiro acontecia ao lado.
    */
   attack: 5,
   attackUp: 6,
@@ -180,8 +179,7 @@ export const ASSET_KEYS = {
    */
   // O irmao dele: o balao com o GRAVETO ACESO, que o heroi pensa ao bater num arbusto seco com o
   // graveto apagado na mao (ver HeroThought e GameScene.useItemAt).
-  // `mage` e a arte que o NPC "wizard" tambem usa (NPC_VISUALS). O mago INIMIGO nasce com um tom
-  // frio por cima justamente por isso — ver MageEnemy: dois personagens nao podem ler igual.
+  // `mage` e a arte do NPC "wizard" (NPC_VISUALS).
   mage: 'mage',
   swordOnFire: 'sword-on-fire',
   dryBush: 'dry-bush',
@@ -261,26 +259,10 @@ export const TOOLBOX_FRAMES = { closed: 0, forging: 1 } as const;
 // Quantas marteladas uma esponja aguenta antes de virar ferro, na mão ou sobre o altar.
 export const BLOOM_BLOWS = 3;
 
-// ONDE MONSTRO NÃO NASCE. Este raio já foi a parede de movimento e hoje é só isto: uma cova (ou o
-// cerco) não abre dentro da luz de um fogo aceso, e é por isso que acender a fogueira do corredor
-// CALA a cova dele. A caveira também não marcha para dentro do fogo de propósito. Continua sendo
-// a alavanca do balde e da tocha; o que
-// mudou é que ela não empurra mais ninguém, ela só impede que alguém apareça ali.
-//
-// A SEGURANÇA DO HERÓI é outro número (`CAMPFIRE_SAFE_RADIUS_TILES`): o anel em que ele descansa,
-// cura e acorda. Ele continua maior que os dois — mas atenção, ele deixou de ser intransponível
-// para monstro: quem quiser chegar até o herói na fogueira consegue, e paga com o corpo em chamas.
-export const LIGHT_RADIUS_TILES = 3.15;
-export const CAMPFIRE_SAFE_RADIUS_TILES = 3.65;
-
 // How long a carried flame (a lit sword or wood club) lasts before it burns out in the dark.
 // Re-igniting at any living fire — a lit campfire or a lava pool — resets it. Short enough
 // that a long dark crossing is tense; tune against shrine spacing.
 export const TORCH_BURN_MS = 5000;
-
-// An NPC standing this close (in tiles) to a still-dead campfire won't hold a real
-// conversation until that fire is lit and the ground around it is safe.
-export const NPC_GATE_RADIUS_TILES = 3.2;
 
 type NpcVisual = {
   key: string;
@@ -313,20 +295,8 @@ export const KEY_FRAMES = {
   pickup: 1,
 } as const;
 
-// heart.png is a 16x32 sheet built on the same convention as key.png: the top heart is the plain
-// one (ink navy, for a lit UI slot), the bottom one carries a bone outline so it reads lying on
-// the dark ground — which is the only place the game shows a heart, so `pickup` is what it uses.
-export const HEART_FRAMES = {
-  plain: 0,
-  pickup: 1,
-} as const;
-
-// woods.png is a 16x96 sheet: the dry tree shrinking one stage per axe chop, frame 0 (full
-// tree) through frame 5 (passable stump).
-export const DRY_TREE_FRAME_COUNT = 6;
-
 // A felled tree grows back after this long, so the player can never run out of gravetos (the
-// fuel for fire) and soft-lock. It only regrows once its tile is clear of the hero and enemies.
+// fuel for fire) and soft-lock. It only regrows once its tile is clear of the hero.
 export const TREE_REGROW_MS = 60000;
 
 /**
@@ -342,16 +312,6 @@ export const TREE_REGROW_MS = 60000;
 // UM, agora (pedido do autor): a ponte do morel pede duas árvores, um galho de cada. O texto acima é o
 // histórico do dois.
 export const TREE_STICK_YIELD = 1;
-
-// O PONTO DE SPAWN AUTORADO: quanto tempo a cova espera, depois de o corpo dela cair, antes de
-// fazer outro (EnemySpawnerManager). O relogio conta mesmo com o heroi longe — se contasse so
-// perto, voltar a uma sala limpa daria uma sala vazia e a cova viraria decoracao.
-//
-// O numero e o que separa esta peca de um cerco: menos que isto e a sala nunca fica limpa (o
-// jogador para de lutar e passa correndo), muito mais e a cova deixa de ser uma cova e vira um
-// inimigo que se mata uma vez. 25s e perto do dobro do que se leva pra cruzar um chunk 12x12
-// andando — atravessar de volta encontra a caveira de pe, ficar por perto nao.
-export const ENEMY_RESPAWN_MS = 25000;
 
 // A MONTANHA — a rocha em pe, e o primeiro bloqueio VERTICAL do jogo que nao e madeira.
 //
@@ -409,27 +369,10 @@ export const MASS_TILE_FRAMES: ReadonlySet<number> = new Set([
   ...DUNGEON_WALL_FRAMES, ...CLIFF_WALL_FRAMES,
 ]);
 
-/**
- * A PRECONDICAO DA TOCHA DE PAREDE: o tile ao SUL dela nao pode ser um bloco macico.
- *
- * Nao e gosto, e geometria. `Billboard3D` nao gira — todo quad deste jogo e vertical e olha para o
- * sul, porque a camera esta em +z. Uma tocha desenhada na face oeste de um bloco cai DENTRO do
- * intervalo em z do proprio bloco, e a face sul dele, mais perto da camera, a oclui inteira; com
- * alvenaria ao sul acontece o mesmo, um tile adiante. Ou seja: quando o vizinho de baixo e macico
- * nao existe lugar visivel para a chama, e a tocha nao pode desenhar nada.
- *
- * Ela mora aqui, e nao no `WallTorchObject`, para o `EditorStore` poder fazer a MESMA pergunta no
- * Salvar sem arrastar o renderer 3D para dentro do editor — o aviso e o desenho discordarem seria
- * uma segunda verdade, e a peca ficaria prometendo o que o jogo recusa.
- */
-export const wallTorchFaceIsClear = (southUpperFrame: number | null | undefined): boolean => (
-  southUpperFrame === null || southUpperFrame === undefined || !MASS_TILE_FRAMES.has(southUpperFrame)
-);
-
 // Upper-layer tileset frames that stand UP off the ground. Being listed here means three
 // things at once, which is why it is the only switch a standing tile needs:
 //   1. ChunkManager.isCellBlocked treats the cell as collision even with none painted, so the
-//      tile blocks the hero and enemies alike (both consult isCellBlocked);
+//      tile blocks the hero (who consults isCellBlocked);
 //   2. World3D.buildTerrain builds it as an upright quad that casts a shadow, instead of the
 //      flat sticker every other upper tile becomes;
 //   3. the editor paints its implicit collision in amber (vs the red of hand-painted).
@@ -626,7 +569,7 @@ export const DIGGABLE_GROUND_FRAMES: ReadonlySet<number> = new Set([5, 6]);
 export const BRIDGE_GRAVETOS_REQUIRED = 2;
 
 // O punhado que VIAJA JUNTO: pousar põe a contagem INTEIRA num item só no chão, e pegá-lo devolve
-// a mesma contagem (ItemPickup.units). Sementes só existem as de tinta da Iris (pedido do autor).
+// a mesma contagem (ItemPickup.units). Sementes só existem as de tinta da Sisi (pedido do autor).
 export const UNIT_PACK_KINDS: ReadonlySet<string> = new Set(['iron', 'dyeSeeds', 'dyeBundle']);
 
 // O PUNHADO COM QUE UMA PECA NASCE NO CHAO. Isto vale so para o que nasce no mundo (pickup

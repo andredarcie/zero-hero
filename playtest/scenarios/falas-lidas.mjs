@@ -43,7 +43,7 @@ export default {
       await sleep(180);
     };
 
-    // A primeira conversa com a Hollis: tudo novo, então a primeira fala vem letra por letra.
+    // A primeira conversa com a Shui: tudo novo, então a primeira fala vem letra por letra.
     await talk();
     const first = await line();
     log(`  1ª conversa, logo ao abrir: ${JSON.stringify(first)}`);

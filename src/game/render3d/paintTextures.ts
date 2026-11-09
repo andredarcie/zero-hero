@@ -1,12 +1,13 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import type { DyeKind } from '@/game/quests/dyePlants';
 import { registerTexture3D } from '@/game/render3d/textures3d';
+import { createCanvas } from '@/game/platform/platform';
 
-// A ARTE DA QUEST DA IRIS: as três coisas que ela dá, os três tempos das plantas de tinta, a mesa em
+// A ARTE DA QUEST DA SISI: as três coisas que ela dá, os três tempos das plantas de tinta, a mesa em
 // que as tintas nascem e o quadro. Pixel desenhado aqui, como o resto da arte gerada no boot, nas
-// duas pipelines (o Phaser para o item na tela, o THREE para o mundo).
+// duas pipelines (o motor 2D para o item na tela, o THREE para o mundo).
 
 const PALETTE: Readonly<Record<string, readonly [number, number, number, number]>> = {
   '.': [0, 0, 0, 0],
@@ -264,7 +265,7 @@ const FLOWERS: Readonly<Record<DyeKind, readonly string[]>> = {
   ],
 };
 
-// A MESA DA IRIS: o pilão no meio e os quatro potes. `1`-`4` são os potes, trocados pela cor quando
+// A MESA DA SISI: o pilão no meio e os quatro potes. `1`-`4` são os potes, trocados pela cor quando
 // a tinta fica pronta (ver `tableRows`).
 const TABLE = [
   '................',
@@ -307,10 +308,10 @@ export const dyeFlowerTexture = (kind: DyeKind): string => `paint-plant-${kind}`
 export const paintTableTexture = (filled: number): string => `paint-table-${filled}`;
 
 const rowsCanvas = (rows: readonly string[]): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = rows[0].length;
   canvas.height = rows.length;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas;
   const img = ctx.createImageData(canvas.width, canvas.height);
   rows.forEach((row, y) => {
@@ -331,7 +332,7 @@ const CANVAS_W = 24;
 const CANVAS_H = 18;
 
 const easelCanvas = (art?: CanvasImageSource): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = EASEL_SIZE;
   canvas.height = EASEL_SIZE;
   const ctx = canvas.getContext('2d');
@@ -371,7 +372,7 @@ const publish3D = (key: string, canvas: HTMLCanvasElement): void => {
 // O registro THREE é um mapa de módulo que sobrevive ao restart da cena: registrar uma vez só.
 let threeRegistered = false;
 
-export const registerPaintTextures = (scene: Phaser.Scene): void => {
+export const registerPaintTextures = (scene: Engine.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, HTMLCanvasElement]> = [
     [DYE_SEEDS_TEXTURE, rowsCanvas(SEED_PACK)],
     [DYE_BUNDLE_TEXTURE, rowsCanvas(BUNDLE)],

@@ -1,3 +1,4 @@
+import { localStore, sessionStore, type KeyValueStore } from '@/game/platform/platform';
 import { withKeyNames } from '@/game/runtime/accessibility';
 import dialogosEn from './dialogos/en.json';
 import dialogosPtBr from './dialogos/pt-br.json';
@@ -16,7 +17,7 @@ import ptBr from './locales/pt-br.json';
 //     pausa vale para a aba (sessionStorage) e some na proxima vez que o jogo for aberto.
 //   · publicado: a escolha do jogador (localStorage); sem escolha, a lingua do navegador
 //     (portugues -> pt-br, o resto -> en).
-// A lingua e decidida UMA vez, no carregamento: trocar recarrega a pagina, porque o Phaser
+// A lingua e decidida UMA vez, no carregamento: trocar recarrega a pagina, porque o motor 2D
 // rasteriza cada texto uma vez e o DOM das telas e montado com o texto da hora.
 // Chave que faltar no pt-br cai no ingles; que faltar nos dois aparece crua na tela (VISIVEL, nao
 // em branco).
@@ -78,7 +79,7 @@ const isLocalRun = (): boolean => {
 
 const isLang = (value: unknown): value is Lang => (LANGS as readonly unknown[]).includes(value);
 
-const readStored = (storage: () => Storage): Lang | undefined => {
+const readStored = (storage: () => KeyValueStore): Lang | undefined => {
   try {
     const value = storage().getItem(LANG_KEY);
     return isLang(value) ? value : undefined;
@@ -88,8 +89,8 @@ const readStored = (storage: () => Storage): Lang | undefined => {
 };
 
 const resolveLang = (): Lang => {
-  if (isLocalRun()) return readStored(() => window.sessionStorage) ?? 'pt-br';
-  const chosen = readStored(() => window.localStorage);
+  if (isLocalRun()) return readStored(sessionStore) ?? 'pt-br';
+  const chosen = readStored(localStore);
   if (chosen) return chosen;
   try {
     return navigator.language.toLowerCase().startsWith('pt') ? 'pt-br' : 'en';
@@ -111,7 +112,7 @@ export const getLang = (): Lang => LANG;
  */
 export const setLang = (lang: Lang): void => {
   try {
-    const storage = isLocalRun() ? window.sessionStorage : window.localStorage;
+    const storage = isLocalRun() ? sessionStore() : localStore();
     storage.setItem(LANG_KEY, lang);
   } catch { /* sem storage: a troca nao sobrevive ao reload */ }
   window.location.reload();

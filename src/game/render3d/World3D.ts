@@ -7,10 +7,12 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FusedBloomPass } from './FusedBloomPass';
 import { GroundLightMap } from './GroundLightMap';
 import { installLazyMatrices } from './lazyMatrices';
-import { ParticleBatch, type ParticleField } from './ParticleBatch';
+import { AmbientParticles } from './AmbientParticles';
+import { cullFarChildren } from './sceneCull';
+import { WaterMirror } from './WaterMirror';
 
 import {
-  CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_TILES, DUNGEON_WALL_FRAMES, MASS_TILE_FRAMES,
+  CHUNK_COLUMNS, CHUNK_ROWS, CLIFF_WALL_FRAMES, DUNGEON_TILES,
   groundFrameAt, SEA_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant,
   SOLID_UPPER_FRAMES, STONE_FLOOR_FRAMES, TILESET_FRAME_SIZE, TIMINGS,
 } from '@/game/constants';
@@ -21,6 +23,7 @@ import {
   RELIEF_HEIGHT, reliefAt, reliefLevelAt, stairBase, stairUp, terrainHeightAt,
 } from '@/game/world/relief';
 import { profiler } from '@/game/debug/Profiler';
+import { isLifeHome } from '@/game/world/biomeLife';
 import { ANCIENT_GROVE, BIOME_DECOR, biomeTintAt, biomeTreeTintAt, decorFrameAt } from '@/game/world/biomes';
 import { Billboard3D, type Billboard3DOptions } from './Billboard3D';
 import { ChunkShroud3D, shroudDayUniform } from './ChunkShroud3D';
@@ -34,18 +37,31 @@ import {
 } from '@/game/runtime/graphicsSettings';
 import { advanceTimeOfDay, getTimeOfDay, initializeTimeOfDay, setTimeOfDay } from '@/game/runtime/timeOfDay';
 import {
-  FIRE_WOBBLE_GLSL, flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, windUniform,
-  lightWobbleUniform, patchPixelMaterial, reflectionMapUniform, reflectionMatrixUniform,
-  reflectionOnUniform, reflectionStrengthUniform, reflectionTexelUniform, seaFlowUniform, SHADOW_MASK_GLSL, shadowMaskOnUniform,
-  shadowMaskRectUniform, shadowMaskUniform, syncTexelAaUniforms, texelAaUniform, waterGlintUniform,
-  type TexelAaUniforms,
+  flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, lightWobbleUniform, patchPixelMaterial,
+  reflectionStrengthUniform, seaFlowUniform, shadowMaskOnUniform, shadowMaskRectUniform, shadowMaskUniform,
+  syncTexelAaUniforms, texelAaUniform, type TexelAaUniforms, waterGlintUniform, windUniform,
 } from './pixelArtLight';
 import { DAY_SKY } from './skyPreset';
-import { VINE_VARIANTS, buildVineGeometry, vineTexture, type VineQuad } from './vineTexture';
+import { buildVineGeometry, vineTexture } from './vineTexture';
 import {
-  frameFootPad, frameUvWindow, getBaseTexture3D, getTexture3D, registerTexture3D, tilesetFrameUv,
+  frameFootPad, frameUvWindow, getBaseTexture3D, getTexture3D, registerTexture3D,
 } from './textures3d';
 import { getWoodTexture } from './woodTexture';
+import { createCanvas, platform } from '@/game/platform/platform';
+import {
+  bakeMassShadow, bucketKey, buildBankGeometry, buildFlatTileGeometry, buildLavaSurface, buildMassHeightGrid,
+  buildReliefContourGeometry, buildScorchGeometry, buildShoreGeometry, buildStairGeometry, buildTileCubeGeometry,
+  buildUprightTileGeometry, CLIFF_WALL_SET, collapseQuad, DUNGEON_WALL_SET, groundShadeAt, isMassFrame, LAVA_BANK_BANDS,
+  LAVA_DEPTH_TILES, LAVA_RIM_TINT, makeReliefField, MASS_BAKE_MS_PER_FRAME, type MassHeightGrid, type ReliefPoint,
+  ROCK_CUBE_SHADE, shapeRock, STONE_EDGE_MIN, STONE_EDGE_VAR, STONE_EDGE_WOBBLE, STONE_LIP_Y, tileKey, tileShoreCorners,
+  WIND_STIR_FRAMES,
+} from './terrainGeometry';
+import { makePuffTexture, makeRingTexture, makeSoftDotTexture } from './fxTextures';
+import { makeFinishShader } from './finishShader';
+import {
+  buildMistCurtainGeometry, fireGlowResUniform, fireRampCoreUniform, fireRampMidUniform, fireRampRimUniform,
+  makeFireGlowMaterial, makeVoidMistMaterial, type MistUniforms, setFireGlow,
+} from './glowMaterials';
 
 // The shapes every one-shot world FX is built from — a glowing dot (sparks, embers, motes), a
 // hollow ring (impact shockwaves) and a soft puff (smoke). Registered as textures at init; spawn
@@ -60,19 +76,17 @@ import { getWoodTexture } from './woodTexture';
 export const FX_DOT_TEXTURE = 'fx-dot';
 export const FX_RING_TEXTURE = 'fx-ring';
 export const FX_PUFF_TEXTURE = 'fx-puff';
-export const FX_ICE_TEXTURE = 'fx-ice';
-export const FX_CRACK_TEXTURE = 'fx-crack';
 
 // ── The 3D world renderer (pixel-art lit) ─────────────────────────────────────
 //
-// Owns a Three.js canvas layered UNDER the (transparent) Phaser canvas and
+// Owns a Three.js canvas layered UNDER the (transparent) 2D canvas and
 // renders the whole authored world in true 3D:
 //
 //   · terrain: every chunk's ground + flat decor merged into single meshes,
 //     UV-mapped into the same forest_tile_set.png the 2D game uses; solid
 //     upper tiles (trees/walls) become one merged upright-billboard mesh,
 //     each with the ambient ground ellipse that anchored them in 2D
-//   · dynamic actors join through Billboard3D (Phaser-sprite-like adapter)
+//   · dynamic actors join through Billboard3D (2D-sprite-like adapter)
 //   · campfires are REAL lights — warm point lights that flicker; one shared
 //     "shadow light" snaps to the lit fire nearest the hero and its height bobs
 //     with the flame, which is what makes the cast shadows breathe
@@ -101,9 +115,9 @@ export const FX_CRACK_TEXTURE = 'fx-crack';
 // Points give the air brasas (embers) and drifting dust. Every stage is
 // live-tunable through window.hd3d.
 //
-// Phaser keeps running on top: game logic, input, canvas UI and DOM overlays.
+// The 2D engine keeps running on top: game logic, input, canvas UI and DOM overlays.
 // GameScene drives this renderer once per frame (render(dt)) and projects any
-// remaining screen-space Phaser FX through projectTile().
+// remaining screen-space 2D FX through projectTile().
 
 // How far past the authored world to mesh the out-of-bounds filler (now open sea).
 //
@@ -118,8 +132,6 @@ const VOID_MARGIN_CHUNKS = 1;
  * Sem árvore nenhuma (a conta acima é a do pinheiro por tile), então ela custa só as faces de pedra.
  */
 const VOID_NORTH_EXTRA_CHUNKS = 1;
-/** Trepadeira em uma face a cada tantas (de cem), escolhidas pela coordenada. */
-const VINE_CHANCE = 42;
 // A altura da CORTINA de névoa. As árvores medem 1; 1.3 cobre a copa com folga, para nenhuma
 // ponta de pinheiro furar a névoa por cima.
 const VOID_MIST_HEIGHT = 1.3;
@@ -171,45 +183,12 @@ const MIN_CAST_LEN = 0.9;
  * isto da área visível não tem como pôr sombra na tela, e não é calculado (ver updateCastShadows).
  */
 const CAST_REACH_TILES = 8;
-/** Só objetos com raio menor que isto (tiles) saem da lista de render quando longe (cullFarChildren). */
-const CULL_SMALL_TILES = 4;
 /**
  * Folga além da área de chão visível, em tiles. A área já vem com 2 de folga; isto cobre a altura
  * de um sprite em pé (o pé fora da tela, a cabeça dentro) e a sombra de chão mais comprida.
  */
 const CULL_PAD_TILES = CAST_REACH_TILES;
 
-/** O que cullFarChildren guarda em cada filho da cena (calculado uma vez por geometria). */
-type CullTagged = THREE.Object3D & {
-  zhCullGeo?: THREE.BufferGeometry | null;
-  /** Raio da esfera da geometria; 0 = nunca sai da lista (luz, grande, instanciada, sem culling). */
-  zhCullR: number;
-  zhCullCx: number;
-  zhCullCz: number;
-};
-
-const classifyForCull = (o: CullTagged): void => {
-  const mesh = o as unknown as THREE.Mesh;
-  const geo = mesh.geometry as THREE.BufferGeometry | undefined;
-  o.zhCullGeo = geo ?? null;
-  o.zhCullR = 0;
-  o.zhCullCx = 0;
-  o.zhCullCz = 0;
-  if (!mesh.isMesh || !geo || !mesh.frustumCulled || (mesh as THREE.InstancedMesh).isInstancedMesh) return;
-  if (!geo.boundingSphere) geo.computeBoundingSphere();
-  const sphere = geo.boundingSphere!;
-  o.zhCullR = sphere.radius;
-  o.zhCullCx = sphere.center.x;
-  o.zhCullCz = sphere.center.z;
-};
-// NUMERIC tile/bucket keys for the shadow pass's lookups. A `${x},${z}` string key would
-// allocate on every probe of the hottest loops; these fold the coordinate into one number.
-// The +4096 offset keeps negatives (the void ring runs past the world bounds) positive.
-const tileKey = (x: number, z: number): number => (x + 4096) * 16384 + (z + 4096);
-const bucketKey = (x: number, z: number): number => ((x + 4096) >> 2) * 16384 + ((z + 4096) >> 2);
-/** Os baldes de água têm 8×8 tiles (x >> 3); a chave recebe as coordenadas JÁ divididas. */
-const WATER_BUCKET_SHIFT = 3;
-const waterBucketKey = (bx: number, bz: number): number => (bx + 1024) * 4096 + (bz + 1024);
 /**
  * How many real PointLights the scene keeps for fires. FIXED for the whole run, and
  * deliberately SMALL — a fire does not own a light, it BORROWS one.
@@ -228,16 +207,6 @@ const waterBucketKey = (bx: number, bz: number): number => (bx + 1024) * 4096 + 
  * distance where a range-limited point light was contributing almost nothing anyway.
  */
 const FIRE_LIGHT_SLOTS = 8;
-/**
- * Distancia no chao. `Math.hypot` daria o mesmo numero, mas aloca um array de argumentos por
- * chamada — e as particulas pedem isto centenas de vezes por quadro (era o 5º maior gerador de
- * lixo do jogo).
- */
-const planarDist = (ax: number, az: number, bx: number, bz: number): number => {
-  const dx = ax - bx;
-  const dz = az - bz;
-  return Math.sqrt(dx * dx + dz * dz);
-};
 // How far a full-strength flame still counts as "lighting" a point, for lightLevelAt. Tiles.
 const LIGHT_SAMPLE_REACH = 5.5;
 /**
@@ -266,10 +235,6 @@ const REFLECT_PLANE_Y = -WATER_DEPTH_TILES + RIVER_SURFACE_LIFT / 2;
 // que a tela em pé pode pedir para alcançá-lo.
 const PORTRAIT_MIN_HALF_TAN_X = 0.34;
 const PORTRAIT_FOV_CAP = 74;
-// Lava tiles sink into a well too, but a SHALLOWER one than the river — molten rock pools
-// in a low basin, not a deep channel. Same treatment (dropped bed + dark charred banks), less
-// deep. LavaObject sets its surface just above the bed at this depth.
-export const LAVA_DEPTH_TILES = 0.26;
 /**
  * O POÇO DA ESCADA: um buraco DE VERDADE no chão da superfície, pelo mesmo caminho do rio — o
  * quad de chão daquele tile desce, e paredes fecham o vão onde ele encontra a terra.
@@ -295,14 +260,6 @@ const FIRE_COLOR = '#ffc873';
 // firelight lerps between these by its instantaneous brightness.
 const FIRE_COOL = new THREE.Color(1.0, 0.5, 0.2);
 const FIRE_HOT = new THREE.Color(1.0, 0.87, 0.62);
-// The fire pool's AUTHORED colour ramp (the A Short Hike lesson: each light band is a
-// colour a painter chose, not one colour darkened by math). Stops sampled from the
-// flame sprite's own palette (#F1CC36 yellow core / #C83E3E red body): a pale-gold
-// heart, a golden-orange mid band, an ember-red rim. Shared by every fire glow and the
-// carried torch; live-tunable via window.hd3d.fireRampCore/Mid/Rim.
-const fireRampCoreUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#ffe6a2') };
-const fireRampMidUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#f9a04e') };
-const fireRampRimUniform: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#a34e2e') };
 /**
  * A rampa da VISTA DO HERÓI — a mesma pintura de bandas, na cor OPOSTA à do fogo.
  *
@@ -321,12 +278,6 @@ const SIGHT_RAMP_RIM: THREE.IUniform<THREE.Color> = { value: new THREE.Color('#4
  * carregar uma tocha invisível; ela é firme porque é o olho dele, não uma chama.
  */
 const zeroWobbleUniform: THREE.IUniform = { value: 0 };
-// The pool's own paint resolution, in texels per tile — COARSER than the art (8 = one
-// light block per 2×2 art pixels, cleanly aligned to the art grid). This is A Short
-// Hike's low-res trick applied to the light alone: the smooth authored gradient
-// crunches into subtle chunky blocks while the frame and the sprites stay sharp.
-// 2×2 approved live by the user; 4×4 was tried and read too coarse.
-const fireGlowResUniform: THREE.IUniform = { value: 8 };
 
 // Ambient particle counts (additive Points — brasas rising off the fire, dust in the air,
 // fireflies drifting in lit clearings, low mist wisps veiling the dark ground).
@@ -340,9 +291,6 @@ const fireGlowResUniform: THREE.IUniform = { value: 8 };
  * subi-lo para 3 devolveria blocos de 3×3, que já é o mundo quadriculado de antes.
  */
 const MAX_DEVICE_PIXEL_RATIO = 2;
-
-// Baked AO: how dark a ground corner goes when all three tiles touching it are standing solids.
-const AO_MAX = 0.5;
 
 // Per-region colour grading (see updateBiomeGrade): the split-tone the frame is graded with in the
 // woodland, and the one a lava basin drags it toward, plus how far the lava's influence reaches.
@@ -367,12 +315,6 @@ const GRADE_DAY_HIGH = new THREE.Vector3(1.24, 1.06, 0.72);
 const GRADE_LAVA_SHADOW = new THREE.Vector3(1.06, 0.92, 0.86); // even the dark runs warm here
 const GRADE_LAVA_HIGH = new THREE.Vector3(1.20, 0.98, 0.72); // molten amber
 
-
-const EMBER_COUNT = 26;
-const DUST_COUNT = 140;
-const FIREFLY_COUNT = 44;
-const MIST_COUNT = 48;
-
 // O VAGA-LUME MORA NO MATO. Estes são os frames de decoração que contam como vegetação viva —
 // capim, folhagem, o arbusto florido e os cogumelos —, e deliberadamente NÃO a serrapilheira
 // (graveto, seixo, osso): um enxame precisa dizer "aqui é verde", e piscar sobre cascalho não diz
@@ -385,31 +327,7 @@ const FIREFLY_HOST_FRAMES: ReadonlySet<number> = new Set([
   BIOME_DECOR.bluebells, BIOME_DECOR.clover, ANCIENT_GROVE.bush, ANCIENT_GROVE.grass,
 ]);
 
-// ── O QUE O VENTO MOVE ────────────────────────────────────────────────────────────────────────
-// Duas listas, e as duas existem para dizer o que NÃO se mexe. As malhas do terreno são fundidas
-// por camada, não por assunto: a mesma malha em pé carrega o pinheiro e o TÚMULO, e a mesma malha
-// deitada carrega o capim e os OSSOS. Sem estas listas, o vento sacudiria a pedra do cemitério —
-// e uma lápide balançando desmente, num quadro, a solidez de tudo o mais que está parado.
-//
-// A mata em pé: pinheiros (4/14-18), árvore seca (3/21) e os dois estágios de tombamento (36/37),
-// que continuam sendo madeira em pé. Fora ficam a cabeça na estaca (22) e o túmulo (25).
-const WIND_SWAY_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21, 36, 37, ANCIENT_GROVE.treeA, ANCIENT_GROVE.treeB]);
-// O mato deitado: capim, folhagem e o arbusto florido. Cogumelo, graveto, seixo, pedregulho e osso
-// ficam de fora — o que é rígido no mundo tem de ficar rígido na tela.
-const WIND_STIR_FRAMES: ReadonlySet<number> = new Set([
-  0, 1, 7, 8, 19, 20,
-  // a flora dos biomas que balança; cristal, brasa e folha caída ficam parados
-  BIOME_DECOR.fern, BIOME_DECOR.mossBloom, BIOME_DECOR.wheat, BIOME_DECOR.daisies, BIOME_DECOR.poppies,
-  BIOME_DECOR.bluebells, BIOME_DECOR.clover, ANCIENT_GROVE.bush, ANCIENT_GROVE.grass,
-]);
-// A caixa em que o enxame vive, em tiles a partir do alvo da câmera. Um pouco maior que a tela:
-// entrar no quadro voando é a metade do efeito, e um bicho que só existe dentro do enquadramento
-// aparece do nada na borda.
-const FIREFLY_BOX = 10;
-/** Quanto um vaga-lume se afasta da moita que escolheu, em tiles. */
-const FIREFLY_ROAM = 1.9;
-
-// Module-level handle so world object classes (props, NPCs, enemies, items)
+// Module-level handle so world object classes (props, NPCs, items)
 // can create their billboards without threading the renderer everywhere.
 let currentWorld3D: World3D | undefined;
 export const setCurrentWorld3D = (w: World3D | undefined): void => { currentWorld3D = w; };
@@ -453,7 +371,7 @@ export interface FireLight3D {
  * Same Lambert + quantized/capped firelight as the merged terrain, so it belongs to
  * the diorama instead of reading as a foreign smooth-shaded object. Position is the
  * box CENTRE in tile coordinates; `elevation` is its centre height in tiles (0 =
- * ground plane). x/y/elevation/alpha/scaleY are plain properties so Phaser tweens
+ * ground plane). x/y/elevation/alpha/scaleY are plain properties so engine tweens
  * can drive them, exactly like Billboard3D.
  */
 export interface Box3D {
@@ -1026,6 +944,8 @@ export class World3D {
   /** A mortalha dos chunks não-comprados do construtor de mundo (vazia fora dele). */
   public readonly chunkShroud = new ChunkShroud3D(this.scene);
   private readonly renderer: THREE.WebGLRenderer;
+  /** Desliga o `resize` da janela (a janela é a da plataforma, ver platform.ts). */
+  private stopWatchingResize: (() => void) | null = null;
   private readonly canvas: HTMLCanvasElement;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly ambientLight: THREE.AmbientLight;
@@ -1049,29 +969,28 @@ export class World3D {
 
   // ── HD-2D post chain ──
   private composer!: EffectComposer;
+  /** A passada da cena (ver o `clear` dela em render). */
+  private scenePass!: RenderPass;
   private bloomPass!: FusedBloomPass;
   private finishPass!: ShaderPass;
   private appliedFov = 0;
   private elapsed = 0;
+  /**
+   * O relógio do mundo (ms desde que ele nasceu, avançado pelo próprio render). O vento lê ESTE relógio, e não o do
+   * navegador: no jogo os dois andam juntos, e nas fotos de referência (visual-ref) só este é fixado.
+   */
+  public get elapsedMs(): number {
+    return this.elapsed * 1000;
+  }
 
   // ── ambient particles ──
   // Where the lava lies (for the per-region grade) and how molten the current frame reads, 0..1.
   private readonly lavaSpots: Array<{ x: number; y: number }> = [];
   private biomeHeat = 0;
-  private particleBatch!: ParticleBatch;
-  private embers!: ParticleField;
-  private readonly emberState: EmberParticle[] = [];
-  private dust!: ParticleField;
-  private dustSeed!: Float32Array;
-  private dustSeeded = false;
-  private fireflies!: ParticleField;
-  private fireflySeed!: Float32Array;
-  private readonly fireflyState: FireflyParticle[] = [];
+  /** As brasas, a poeira, os vaga-lumes e a névoa (ver AmbientParticles). */
+  private particles!: AmbientParticles;
   /** Os tiles de vegetação da janela assada (x + z empacotados) — onde o enxame pousa. */
   private readonly greenTiles: number[] = [];
-  private mist!: ParticleField;
-  private mistSeed!: Float32Array;
-  private atmosphereSeeded = false;
   private dotTexture?: THREE.CanvasTexture;
 
   private readonly fires: FireEntry[] = [];
@@ -1183,7 +1102,7 @@ export class World3D {
   private terrainBakes = 0;
 
   // ── firelight cast shadows (2D ground silhouettes) ──
-  // One persistent silhouette per dynamic caster (hero, props, NPCs, enemies)…
+  // One persistent silhouette per dynamic caster (hero, props, NPCs)…
   private readonly castCasters: Array<{
     bb: Billboard3D;
     mesh: THREE.Mesh;
@@ -1231,22 +1150,11 @@ export class World3D {
   private castFrameId = 0;
   /** Sunken ground tiles (river/lava/sea beds) — where a cast silhouette must stop (2b). */
   private readonly sunkenTiles = new Set<number>();
-  /** Os baldes de 8×8 tiles que têm ÁGUA (rio ou mar) — a passada do espelho só roda com um à vista. */
-  private readonly waterBuckets = new Set<number>();
   /** A superfície assada dos rios (o material do mar) e o quad de cada tile nela — ver drainRiverSurface. */
   private riverSurfaceGeo?: THREE.BufferGeometry;
   private readonly riverQuads = new Map<number, number>(); // tileKey → vertex start
-  /** ── O espelho d'água (ver renderReflection e pixelArtLight.WATER_REFLECT_GLSL) ── */
-  private reflectTarget!: THREE.WebGLRenderTarget;
-  private readonly mirrorCamera = new THREE.PerspectiveCamera();
-  /** Os corpos que aparecem na água (Billboard3DOptions.reflected). Saem sozinhos ao morrer. */
-  private readonly reflectedMeshes = new Set<THREE.Object3D>();
-  /** A lista de filhos da passada do espelho: as luzes (todas, ver renderReflection) + os corpos. */
-  private readonly reflectChildren: THREE.Object3D[] = [];
-  private readonly reflectScratch = {
-    pos: new THREE.Vector3(), dir: new THREE.Vector3(), up: new THREE.Vector3(),
-    plane: new THREE.Plane(), clip: new THREE.Vector4(), q: new THREE.Vector4(), clear: new THREE.Color(),
-  };
+  /** O espelho d'água (ver WaterMirror e pixelArtLight.WATER_REFLECT_GLSL). */
+  private mirror!: WaterMirror;
   /** Moon-field instances dimmed by the statics' handoff, to restore next frame. */
   private readonly moonDimmed: SolidTileEntry[] = [];
   /** Invisible stand-ins that hold the runtime shaders' programs alive. See prewarmShaders. */
@@ -1295,18 +1203,18 @@ export class World3D {
     initializeTimeOfDay(getDaylight() >= 0.5 ? 0.5 : 0);
     this.applySky(getTimeOfDay());
 
-    this.canvas = document.createElement('canvas');
+    this.canvas = createCanvas();
     this.canvas.id = 'world3d';
     // The canvas backing store is LOW resolution (see applyPixelScale); CSS stretches it
     // over the window and `pixelated` upscales with NEAREST — the chunky pixel-art frame.
     this.canvas.style.cssText =
       'position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block;image-rendering:pixelated;';
-    document.body.prepend(this.canvas);
+    platform().display.mountBehind(this.canvas);
 
     // NEAREST pixel art wants no MSAA (it would soften the tile edges), and the
     // post chain renders through offscreen targets where MSAA would be lost anyway.
     installLazyMatrices();
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false });
+    this.renderer = platform().createRenderer3D(this.canvas);
     this.renderer.setPixelRatio(1);
     // Real shadow-maps are OFF: billboards face the camera, so a mapped shadow of
     // them is a thin sliver. Cast shadows are the 2D game's ground silhouettes,
@@ -1362,6 +1270,7 @@ export class World3D {
     // them landing exactly when the player lit the torch.
     this.createFireLights();
     this.groundLight = new GroundLightMap(this.renderer, () => this.livePointLights());
+    this.mirror = new WaterMirror(this.renderer, this.scene, this.camera, this.groundLight.view, REFLECT_PLANE_Y);
     this.ensureHeroLight();
     this.ensureTorchLight();
     // O disco da vista nasce aqui pelo mesmo motivo que a tocha: ele usa o programa do
@@ -1373,7 +1282,7 @@ export class World3D {
     this.initPostProcessing();
     this.initParticles();
 
-    window.addEventListener('resize', this.handleResize);
+    this.stopWatchingResize = platform().display.onResize(this.handleResize);
   }
 
   // ── HD-2D post-processing chain ───────────────────────────────────────────────
@@ -1398,7 +1307,7 @@ export class World3D {
    */
   private renderScale(): number {
     const ps = Math.max(1, Math.round(this.params.pixelScale));
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const dpr = Math.max(1, platform().display.pixelRatio);
     // `blocks` = quantos PIXELS DE APARELHO um pixel desenhado ocupa, e ele é INTEIRO. Essa é a
     // outra metade do conserto, e ela é de graça: com um fator quebrado (1,5, que é o que um teto
     // de 2 dá num telefone de 3×) o navegador amplia uns pixels para 1 e outros para 2, e o que se
@@ -1418,8 +1327,8 @@ export class World3D {
     const scale = this.renderScale();
     const pad = this.snapPadPx();
     return {
-      w: Math.max(1, Math.round(window.innerWidth * scale)) + 2 * pad,
-      h: Math.max(1, Math.round(window.innerHeight * scale)) + 2 * pad,
+      w: Math.max(1, Math.round(platform().display.width * scale)) + 2 * pad,
+      h: Math.max(1, Math.round(platform().display.height * scale)) + 2 * pad,
     };
   }
 
@@ -1441,7 +1350,7 @@ export class World3D {
    * desenhado ocupa mais de um pixel do aparelho, 0 no desktop (onde não há sobra a esconder).
    */
   private snapPadPx(): number {
-    const blocks = Math.round((window.devicePixelRatio || 1) / this.renderScale());
+    const blocks = Math.round((platform().display.pixelRatio) / this.renderScale());
     return blocks > 1 ? 1 : 0;
   }
 
@@ -1454,7 +1363,8 @@ export class World3D {
   private initPostProcessing(): void {
     const { w, h } = this.renderSize();
     this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.scenePass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(this.scenePass);
 
     this.bloomPass = new FusedBloomPass(
       new THREE.Vector2(w, h),
@@ -1470,17 +1380,7 @@ export class World3D {
     this.composer.addPass(this.finishPass);
     this.syncFinishUniforms();
 
-    // O alvo do ESPELHO é um clone do alvo do compositor, e não um alvo "qualquer": o three assa o
-    // color space do alvo na chave do programa, e o ANGLE só termina o executável no primeiro draw
-    // num FORMATO de saída — mesmo formato, mesmo programa, nenhuma compilação no meio do jogo.
-    // NEAREST e do tamanho do quadro: um pixel do reflexo é um pixel do mundo.
-    this.reflectTarget = this.composer.renderTarget1.clone();
-    this.reflectTarget.texture.minFilter = THREE.NearestFilter;
-    this.reflectTarget.texture.magFilter = THREE.NearestFilter;
-    this.reflectTarget.texture.generateMipmaps = false;
-    this.reflectTarget.setSize(w, h);
-    reflectionMapUniform.value = this.reflectTarget.texture;
-    reflectionTexelUniform.value.set(1 / w, 1 / h);
+    this.mirror.createTarget(this.composer.renderTarget1, w, h);
   }
 
   /** Push the live post knobs into the shader/pass uniforms. */
@@ -1545,52 +1445,14 @@ export class World3D {
     registerTexture3D(FX_DOT_TEXTURE, dot);
     registerTexture3D(FX_RING_TEXTURE, makeRingTexture());
     registerTexture3D(FX_PUFF_TEXTURE, makePuffTexture());
-    registerTexture3D(FX_ICE_TEXTURE, makeIceTexture());
-    registerTexture3D(FX_CRACK_TEXTURE, makeCrackTexture());
-    // Os quatro campos ambientes saem num draw só, como quads (ver ParticleBatch).
-    this.particleBatch = new ParticleBatch(
-      this.scene, EMBER_COUNT + DUST_COUNT + FIREFLY_COUNT + MIST_COUNT, dot,
-    );
-    this.embers = this.particleBatch.field(EMBER_COUNT, 0.12);
-    for (let i = 0; i < EMBER_COUNT; i++) {
-      this.emberState.push({ life: Math.random(), maxLife: 0.9 + Math.random() * 0.9, vx: 0, vy: 0, vz: 0 });
-    }
-    this.dust = this.particleBatch.field(DUST_COUNT, 0.06);
-    this.dustSeed = new Float32Array(DUST_COUNT);
-    for (let i = 0; i < DUST_COUNT; i++) {
-      this.dust.pos[i * 3 + 1] = 0.2 + Math.random() * 2.4;
-      this.dustSeed[i] = Math.random() * Math.PI * 2;
-    }
-    // Fireflies: bigger, brighter motes that hover knee-to-head high over the vegetation.
-    // 0,18 tile: o bicho é um PONTO de luz, não uma bola. Ele nasceu em 0,16 (invisível), passou
-    // por 0,34 (uma bolha amarela maior que um cogumelo — o relato foi "muito grande") e parou
-    // aqui: o que o faz enxergar não é o tamanho, é o bloom em volta de um núcleo aceso.
-    this.fireflies = this.particleBatch.field(FIREFLY_COUNT, 0.18);
-    this.fireflySeed = new Float32Array(FIREFLY_COUNT);
-    for (let i = 0; i < FIREFLY_COUNT; i++) {
-      this.fireflySeed[i] = Math.random() * Math.PI * 2;
-      this.fireflyState.push({
-        hx: 0, hz: 0, vx: 0, vz: 0,
-        dart: Math.random() * 2.5,
-        blink: Math.random() * Math.PI * 2,
-        // Cada um pisca no SEU ritmo: com um só, trinta bichos acendem no mesmo quadro e o
-        // enxame vira um estrobo. O espalhamento é o que faz parecer trinta bichos.
-        rate: 1.5 + Math.random() * 1.9,
-        settle: Math.random() * 0.5,
-        homed: false,
-      });
-    }
-    // Mist: many large, dim, cool wisps clinging low to the ground in the dark.
-    this.mist = this.particleBatch.field(MIST_COUNT, 1.6);
-    this.mistSeed = new Float32Array(MIST_COUNT);
-    for (let i = 0; i < MIST_COUNT; i++) this.mistSeed[i] = Math.random() * Math.PI * 2;
+    this.particles = new AmbientParticles(this.scene, dot, this.greenTiles);
   }
 
   /** Resize the backing store to the current window × renderScale (ver renderSize). */
   private applyPixelScale(): void {
     this.appliedPixelScale = Math.max(1, Math.round(this.params.pixelScale));
     this.appliedRenderScale = this.renderScale();
-    this.appliedBlocks = Math.max(1, Math.round((window.devicePixelRatio || 1) / this.appliedRenderScale));
+    this.appliedBlocks = Math.max(1, Math.round((platform().display.pixelRatio) / this.appliedRenderScale));
     // A MESMA conta do `renderSize`, e não uma segunda cópia dela: enquanto eram duas, mexer numa
     // deixava a outra desenhando com o tamanho antigo até o primeiro resize.
     const { w, h } = this.renderSize();
@@ -1612,8 +1474,7 @@ export class World3D {
     // The post chain's offscreen targets must track the render resolution too.
     if (this.composer) {
       this.composer.setSize(w, h);
-      this.reflectTarget.setSize(w, h);
-      reflectionTexelUniform.value.set(1 / w, 1 / h);
+      this.mirror.resize(w, h);
       this.bloomPass.setSize(w, h);
       (this.finishPass.uniforms.uResolution.value as THREE.Vector2).set(w, h);
     }
@@ -1653,7 +1514,7 @@ export class World3D {
     this.greenTiles.length = 0; // as moitas da janela velha não existem mais
     this.solidBuckets.clear();
     this.sunkenTiles.clear();
-    this.waterBuckets.clear();
+    this.mirror.clearWater();
     this.riverQuads.clear();
     this.riverSurfaceGeo = undefined;
     this.activeRustles.clear();
@@ -1872,7 +1733,21 @@ export class World3D {
         const k = tileKey(x, z);
         return stairKeys.has(k) || wetKeysForRelief.has(k);
       };
-      this.reliefField = makeReliefField(reliefLevelAt, blocked);
+      // O nível de cada tile, contado UMA vez por montagem: o campo lê os 9 vizinhos de cada pixel de arte (16×16 por
+      // tile), várias vezes por nível, e cada leitura refazia o ruído da serra — o mesmo tile, milhares de vezes. O
+      // relevo não muda durante a montagem (nem depois: ninguém o escreve com o jogo rodando), e o campo nasce de
+      // novo a cada montagem: o número guardado é o mesmo que a conta daria.
+      const levelMemo = new Map<number, number>();
+      const levelAtOnce = (x: number, z: number): number => {
+        const k = tileKey(x, z);
+        let v = levelMemo.get(k);
+        if (v === undefined) {
+          v = reliefLevelAt(x, z);
+          levelMemo.set(k, v);
+        }
+        return v;
+      };
+      this.reliefField = makeReliefField(levelAtOnce, blocked);
       const frameOf = new Map<number, number>();
       for (const t of reliefNear) frameOf.set(tileKey(t.x, t.z), t.frame);
       // UM PEDAÇO POR CHUNK, e a câmera só desenha os que estão à vista. A curva tem dezenas de milhares
@@ -2048,7 +1923,8 @@ export class World3D {
       // Onde o enxame de vaga-lumes pode pousar. Sai da MESMA varredura da decoração porque é a
       // mesma pergunta ("que tile é verde?"): um segundo passo sobre o mundo seria uma segunda
       // resposta, livre para discordar.
-      if (FIREFLY_HOST_FRAMES.has(tile.frame)) this.greenTiles.push(tile.x, tile.z);
+      // E só onde eles moram (world/biomeLife): a geada e o musgo. A luz que vem de todo canto polui a noite.
+      if (FIREFLY_HOST_FRAMES.has(tile.frame) && isLifeHome('fireflies', tile.x, tile.z)) this.greenTiles.push(tile.x, tile.z);
     });
 
     // A alvenaria de dungeon e a MONTANHA saem da malha dos quads e viram CUBO (ver
@@ -2147,7 +2023,7 @@ export class World3D {
 
     for (const t of wetTiles) {
       this.sunkenTiles.add(tileKey(t.x, t.z));
-      this.waterBuckets.add(waterBucketKey(t.x >> WATER_BUCKET_SHIFT, t.z >> WATER_BUCKET_SHIFT));
+      this.mirror.addWaterTile(t.x, t.z);
     }
     for (const t of lavaBedTiles) this.sunkenTiles.add(tileKey(t.x, t.z));
 
@@ -2288,9 +2164,10 @@ export class World3D {
    */
   private tickMassShadowBake(): void {
     if (!this.massBake) return;
-    const until = performance.now() + MASS_BAKE_MS_PER_FRAME;
+    const clock = platform();
+    const until = clock.now() + MASS_BAKE_MS_PER_FRAME;
     let step = this.massBake.next();
-    while (!step.done && performance.now() < until) step = this.massBake.next();
+    while (!step.done && clock.now() < until) step = this.massBake.next();
     if (!step.done) return;
     this.massBake = undefined;
     this.installMassShadow(step.value);
@@ -2419,104 +2296,6 @@ export class World3D {
   }
 
   /**
-   * O ESPELHO D'ÁGUA: os personagens desenhados por uma câmera espelhada no plano da água, num alvo
-   * que o mar e o rio amostram (pixelArtLight.WATER_REFLECT_GLSL). A técnica é a do `Reflector` do
-   * three, com o recorte oblíquo do Lengyel ("Oblique View Frustum Depth Projection and Clipping"):
-   *
-   *   1. a câmera virtual é a do jogo refletida no plano y = REFLECT_PLANE_Y — posição, direção de
-   *      visão e "para cima" espelhados — e olha o mundo de baixo da água;
-   *   2. `uReflMatrix` leva um ponto do mundo ao UV desse alvo (bias · projeção · vista virtual):
-   *      cada fragmento de água pergunta "o que a câmera virtual vê através de mim", que é
-   *      exatamente o que a água de verdade devolve ao olho;
-   *   3. o plano próximo da projeção virtual é inclinado até o plano da água, para que nada ABAIXO
-   *      dela entre no reflexo (com a câmera embaixo, o chão ficaria entre ela e o herói).
-   *
-   * Barato porque desenha quase nada: só os corpos marcados `reflected` perto da tela, e só quando
-   * há água à vista. As luzes vão TODAS para a lista, sempre — o three assa a contagem de luzes na
-   * chave do programa, e uma passada com menos luzes compilaria o herói de novo (a lei do pool).
-   */
-  private renderReflection(): void {
-    const kept = this.reflectChildren;
-    kept.length = 0;
-    let bodies = 0;
-    if (this.params.reflection > 0.001 && this.waterInView()) {
-      for (const o of this.scene.children) {
-        if ((o as THREE.Light).isLight) kept.push(o);
-      }
-      for (const m of this.reflectedMeshes) {
-        if (!m.parent) { this.reflectedMeshes.delete(m); continue; } // o corpo morreu
-        if (!m.visible || !this.isNearView(m.position.x, m.position.z, 2)) continue;
-        kept.push(m);
-        bodies++;
-      }
-    }
-    reflectionOnUniform.value = bodies > 0 ? 1 : 0;
-    if (bodies === 0) return;
-
-    // ── 1. a câmera virtual ──
-    const s = this.reflectScratch;
-    const cam = this.camera;
-    const mirror = this.mirrorCamera;
-    const h = REFLECT_PLANE_Y;
-    cam.updateMatrixWorld();
-    s.pos.setFromMatrixPosition(cam.matrixWorld);
-    s.dir.set(0, 0, -1).transformDirection(cam.matrixWorld);
-    s.up.set(0, 1, 0).transformDirection(cam.matrixWorld);
-    mirror.position.set(s.pos.x, 2 * h - s.pos.y, s.pos.z);
-    mirror.up.set(s.up.x, -s.up.y, s.up.z);
-    mirror.lookAt(s.pos.x + s.dir.x, 2 * h - (s.pos.y + s.dir.y), s.pos.z + s.dir.z);
-    mirror.far = cam.far;
-    mirror.updateMatrixWorld();
-    mirror.projectionMatrix.copy(cam.projectionMatrix);
-    mirror.projectionMatrixInverse.copy(cam.projectionMatrixInverse);
-
-    // ── 2. mundo → UV do alvo (antes do recorte: ele só mexe na linha do z) ──
-    reflectionMatrixUniform.value
-      .set(
-        0.5, 0.0, 0.0, 0.5,
-        0.0, 0.5, 0.0, 0.5,
-        0.0, 0.0, 0.5, 0.5,
-        0.0, 0.0, 0.0, 1.0,
-      )
-      .multiply(mirror.projectionMatrix)
-      .multiply(mirror.matrixWorldInverse);
-
-    // ── 3. o plano próximo deitado na água (Lengyel; o mesmo código do Reflector) ──
-    s.plane.set(s.up.set(0, 1, 0), -h).applyMatrix4(mirror.matrixWorldInverse);
-    s.clip.set(s.plane.normal.x, s.plane.normal.y, s.plane.normal.z, s.plane.constant);
-    const e = mirror.projectionMatrix.elements;
-    s.q.set(
-      (Math.sign(s.clip.x) + e[8]) / e[0],
-      (Math.sign(s.clip.y) + e[9]) / e[5],
-      -1.0,
-      (1.0 + e[10]) / e[14],
-    );
-    s.clip.multiplyScalar(2.0 / s.clip.dot(s.q));
-    e[2] = s.clip.x;
-    e[6] = s.clip.y;
-    e[10] = s.clip.z + 1.0;
-    e[14] = s.clip.w;
-
-    // ── o desenho: só a lista, sem o céu, sobre transparente ──
-    const r = this.renderer;
-    const prevTarget = r.getRenderTarget();
-    r.getClearColor(s.clear);
-    const prevAlpha = r.getClearAlpha();
-    const all = this.scene.children;
-    const background = this.scene.background;
-    this.scene.children = kept;
-    this.scene.background = null;
-    r.setRenderTarget(this.reflectTarget);
-    r.setClearColor(0x000000, 0);
-    r.clear(true, true, false);
-    r.render(this.scene, mirror);
-    this.scene.children = all;
-    this.scene.background = background;
-    r.setRenderTarget(prevTarget);
-    r.setClearColor(s.clear, prevAlpha);
-  }
-
-  /**
    * O tile de rio ESVAZIOU (a comporta abriu): a superfície dele some da malha assada e o leito
    * aparece embaixo. Os quatro vértices dobram num ponto — o mesmo truque do capim cavado
    * (removeDecorTile): nada realoca, e o tile some no quadro em que a onda do esvaziamento chega.
@@ -2527,22 +2306,6 @@ export class World3D {
     if (start === undefined || !this.riverSurfaceGeo) return;
     this.riverQuads.delete(key);
     collapseQuad(this.riverSurfaceGeo, start);
-  }
-
-  /** Há água (rio ou mar) na área de chão visível do último quadro? Uma consulta por balde 8×8. */
-  private waterInView(): boolean {
-    const v = this.groundLight.view;
-    if (!Number.isFinite(v.minX) || this.waterBuckets.size === 0) return false;
-    const bx0 = Math.floor(v.minX) >> WATER_BUCKET_SHIFT;
-    const bx1 = Math.floor(v.maxX) >> WATER_BUCKET_SHIFT;
-    const bz0 = Math.floor(v.minZ) >> WATER_BUCKET_SHIFT;
-    const bz1 = Math.floor(v.maxZ) >> WATER_BUCKET_SHIFT;
-    for (let bx = bx0; bx <= bx1; bx++) {
-      for (let bz = bz0; bz <= bz1; bz++) {
-        if (this.waterBuckets.has(waterBucketKey(bx, bz))) return true;
-      }
-    }
-    return false;
   }
 
   /**
@@ -2630,7 +2393,7 @@ export class World3D {
       }
       this.castCasters.push({ bb, mesh, sceneMat, maskMat, lastFire: null });
     }
-    if (opts.reflected) this.reflectedMeshes.add(bb.mesh);
+    if (opts.reflected) this.mirror.addBody(bb.mesh);
     return bb;
   }
 
@@ -2680,7 +2443,7 @@ export class World3D {
   /**
    * How LIT a world point is: 0 = moonlight only, 1 = standing in a flame.
    *
-   * This exists for the 2D overlay, which is drawn on the Phaser canvas ABOVE the 3D world and
+   * This exists for the 2D overlay, which is drawn on the 2D canvas ABOVE the 3D world and
    * therefore receives none of its lighting, none of its tone mapping and none of the night
    * grade. The swing arc is the last world object still living there, and unlit it renders at
    * FULL art brightness over a night-dark world — which is why the steel axe, whose palette is
@@ -2893,6 +2656,22 @@ export class World3D {
       // it and the first bloom of the run would pay for the link.
       { groundShadow: true, alphaTest: 0.02 },
       { flat: true, alphaTest: 0.02 },
+      // A NATUREZA (objects/nature, a cachoeira, o lago das carpas, a chuva): quase tudo dela nasce TARDE — o anel
+      // do sapo que pulou, a gota que pingou da folha, a neblina do amanhecer, a primeira poça — e cada formato novo
+      // compilado na hora congelava o jogo ~0,8 s (a foto do peixe pulando saiu com "1 fps ▼819ms").
+      { flat: true, depthWrite: false, alphaTest: 0.01 },               // poças, anéis na água, sombra da copa, espuma
+      { flat: true, depthWrite: false, alphaTest: 0.01, fog: false },   // o anel do pingo de chuva
+      { flat: true, depthWrite: false, alphaTest: 0.01, additive: true }, // as manchas de sol
+      { flat: true, depthWrite: false, alphaTest: 0.5 },                // as folhas no chão
+      { flat: true, depthWrite: false, alphaTest: 0.2 },                // as carpas
+      { flat: true, depthWrite: false },                                // as vitórias-régias
+      { centered: true, depthWrite: false, alphaTest: 0.01 },           // gotas, sementes, respingos
+      { centered: true, depthWrite: false, alphaTest: 0.01, fog: false }, // a neblina, o borrifo da cachoeira
+      { centered: true, additive: true, alphaTest: 0.01 },              // o arco-íris da cachoeira
+      { centered: true, additive: true, alphaTest: 0.01, fog: false },  // o arco-íris depois da chuva
+      { centered: true, depthWrite: false },                            // as libélulas
+      { depthWrite: false },                                            // a queda e o pé da cachoeira
+      { depthWrite: false, alphaTest: 0.01, fog: false, emissive: true }, // a coroinha do pingo de chuva
     ];
     for (const opts of runtimeVariants) {
       this.warmups.push(new Billboard3D(this.scene, FX_DOT_TEXTURE, 0, opts).setDisplaySize(0.001, 0.001));
@@ -2955,10 +2734,9 @@ export class World3D {
     // não pode ser o quadro em que o ANGLE termina o programa do herói.
     // (A água sai deste desenho sem o espelho: amostrar o alvo em que se desenha é um laço de
     // realimentação, e o WebGL recusa o draw.)
-    reflectionMapUniform.value = null;
-    this.renderer.setRenderTarget(this.reflectTarget);
+    this.renderer.setRenderTarget(this.mirror.warmTarget());
     this.drawEverythingOnce();
-    reflectionMapUniform.value = this.reflectTarget.texture;
+    this.mirror.afterWarm();
 
     // The shadow mask's material variants too (castMask / solidCastFieldMask): flip the
     // silhouettes into mask mode for one compile pass so toggling hd3d.shadowMask later
@@ -3012,50 +2790,6 @@ export class World3D {
   public isNearView(x: number, y: number, extra = 0): boolean {
     const v = this.groundLight.view;
     return x >= v.minX - extra && x <= v.maxX + extra && y >= v.minZ - extra && y <= v.maxZ + extra;
-  }
-
-  /**
-   * O RENDER SÓ PERCORRE O QUE PODE APARECER.
-   *
-   * O three percorre a cena inteira duas vezes por quadro — matrizes (`updateMatrixWorld`) e a
-   * lista de desenho (`projectObject`, com um teste de frustum por objeto) — e ela tem ~860 filhos:
-   * o sprite, o blob e a sombra de cada prop do MAPA INTEIRO, invisíveis incluídos. Num quadro de
-   * celular são desenhados ~30. No celular simulado (CPU 6× mais lenta) as duas voltas eram 16%.
-   *
-   * Durante o render (e só nele), a lista de filhos da cena vira a dos que podem aparecer: saem os
-   * invisíveis (o three não os desenharia) e os objetos PEQUENOS longe da área visível (fora até do
-   * alcance de uma sombra projetada). O `parent` de ninguém muda e a lista original volta logo depois
-   * — para o resto do jogo nada aconteceu. Ficam sempre: luzes (mexer na contagem recompila o mundo),
-   * malhas grandes ou instanciadas (terreno, mar, campos de sombra e de partículas) e quem desligou
-   * o frustum culling. Quem volta à tela tem a matriz recalculada no quadro em que volta.
-   */
-  private cullFarChildren(): THREE.Object3D[] {
-    const all = this.scene.children;
-    const kept = this.renderChildren;
-    kept.length = 0;
-    for (let i = 0; i < all.length; i++) {
-      const o = all[i] as CullTagged;
-      if (!o.visible && !(o as unknown as THREE.Light).isLight) continue;
-      // A classificação (pequeno e com culling, ou não) é da GEOMETRIA: refeita só quando ela troca.
-      const geo = (o as unknown as THREE.Mesh).geometry;
-      if (o.zhCullGeo !== geo || geo === undefined) classifyForCull(o);
-      if (o.zhCullR > 0 && o.children.length === 0) {
-        const sc = o.scale;
-        const ax = sc.x < 0 ? -sc.x : sc.x;
-        const ay = sc.y < 0 ? -sc.y : sc.y;
-        const az = sc.z < 0 ? -sc.z : sc.z;
-        const scale = ax > ay ? (ax > az ? ax : az) : (ay > az ? ay : az);
-        const reach = o.zhCullR * scale;
-        if (reach < CULL_SMALL_TILES
-          && !this.isNearView(o.position.x + o.zhCullCx * scale, o.position.z + o.zhCullCz * scale,
-            reach + CULL_PAD_TILES)) {
-          continue;
-        }
-      }
-      kept.push(o);
-    }
-    this.scene.children = kept;
-    return all;
   }
 
   /** As luzes pontuais que existem agora (a tocha e a do herói nascem no primeiro uso). */
@@ -3351,8 +3085,8 @@ export class World3D {
     ) / 2;
     // Em UV do CANVAS, que pode ter a margem e o deslocamento da câmera de pixel suave.
     const m = this.snapMarginCss;
-    const w = Math.max(1, window.innerWidth + 2 * m);
-    const h = Math.max(1, window.innerHeight + 2 * m);
+    const w = Math.max(1, platform().display.width + 2 * m);
+    const h = Math.max(1, platform().display.height + 2 * m);
     u.uSight.value = amount;
     (u.uSightAt.value as THREE.Vector2).set(
       (at.x + m - this.snapShiftX) / w, 1 - (at.y + m - this.snapShiftY) / h,
@@ -3504,7 +3238,7 @@ export class World3D {
   /**
    * Lay down each caster's black silhouette pointing away from its nearest flame —
    * or along the moon's heading where no flame reaches (see CastShadow3D.ts).
-   * Dynamic casters (hero/props/NPCs/enemies) each own a mesh; static solid tiles
+   * Dynamic casters (hero/props/NPCs) each own a mesh; static solid tiles
    * borrow from a pool, so only those near a lit fire this frame consume one.
    */
   private updateCastShadows(): void {
@@ -3884,7 +3618,7 @@ export class World3D {
         p.z += dz;
         this.camera.updateMatrixWorld();
         // …e o canvas devolve a sobra (a câmera andou dx: o mundo foi -dx na tela), no grão do aparelho.
-        const dpr = window.devicePixelRatio || 1;
+        const dpr = platform().display.pixelRatio;
         const k = this.appliedBlocks;
         shiftX = Math.round(dx * ppx * k) / dpr;
         shiftY = Math.round(dz * ppz * k) / dpr;
@@ -3935,7 +3669,7 @@ export class World3D {
 
   /**
    * Impact kick on the world camera, in TILES (a hit ~0.05, death ~0.3). The 3D world is
-   * the diorama now, so a Phaser camera shake would only jolt the UI layer above it.
+   * the diorama now, so a 2D camera shake would only jolt the UI layer above it.
    */
   /**
    * O baque de impacto. `dirX/dirY` sao OPCIONAIS e vem em espaco de TILE (o mesmo par que o golpe
@@ -3957,15 +3691,6 @@ export class World3D {
     const len = Math.hypot(dirX, dirY);
     this.shakeDirX = len > 1e-4 ? dirX / len : 0;
     this.shakeDirY = len > 1e-4 ? dirY / len : 0;
-  }
-
-  /**
-   * The danger vignette (0 = off): the dark closing in as the undead siege builds. Colour
-   * is the cold→blood ramp the spawn director drives; both land as post uniforms.
-   */
-  public setDangerVignette(amount: number, color: number): void {
-    this.finishPass.uniforms.uDanger.value = Math.max(0, amount);
-    (this.finishPass.uniforms.uDangerColor.value as THREE.Color).set(color);
   }
 
   /** Death fade (0 = normal, 1 = black): the world drains and sinks, in the post. */
@@ -4063,7 +3788,7 @@ export class World3D {
   }
 
   /** Dialog pan: shift what sits at screen centre, in tile units. */
-  /** O herói saiu do quadro de propósito (a lente da Vega): a faixa nítida fica no meio da tela, não nele. */
+  /** O herói saiu do quadro de propósito (a lente da Thea): a faixa nítida fica no meio da tela, não nele. */
   public setFocusAtCentre(on: boolean): void {
     this.focusAtCentre = on;
   }
@@ -4073,7 +3798,7 @@ export class World3D {
     this.viewOffsetY = dyTiles;
   }
 
-  /** World tile → CSS pixel position on screen (for Phaser-side overlays/FX). */
+  /** World tile → CSS pixel position on screen (for 2D-side overlays/FX). */
   public projectTile(worldX: number, worldY: number, elevationTiles = 0): { x: number; y: number } {
     // Scratch, not a fresh Vector3: every 2D overlay in the game (footprints, pips, balloons, the
     // fire compass) projects through here several times a frame, and the garbage adds up into the
@@ -4094,8 +3819,8 @@ export class World3D {
     const v = this.projectScratch.set(worldX, elevationTiles + ground, worldY).project(this.camera);
     const m = this.snapMarginCss;
     return {
-      x: (v.x * 0.5 + 0.5) * (window.innerWidth + 2 * m) - m + this.snapShiftX,
-      y: (-v.y * 0.5 + 0.5) * (window.innerHeight + 2 * m) - m + this.snapShiftY,
+      x: (v.x * 0.5 + 0.5) * (platform().display.width + 2 * m) - m + this.snapShiftX,
+      y: (-v.y * 0.5 + 0.5) * (platform().display.height + 2 * m) - m + this.snapShiftY,
     };
   }
 
@@ -4120,8 +3845,8 @@ export class World3D {
     elevationTiles = 0,
   ): { worldX: number; worldY: number } {
     const m = this.snapMarginCss;
-    const ndcX = ((pixelX + m - this.snapShiftX) / Math.max(1, window.innerWidth + 2 * m)) * 2 - 1;
-    const ndcY = -(((pixelY + m - this.snapShiftY) / Math.max(1, window.innerHeight + 2 * m)) * 2 - 1);
+    const ndcX = ((pixelX + m - this.snapShiftX) / Math.max(1, platform().display.width + 2 * m)) * 2 - 1;
+    const ndcY = -(((pixelY + m - this.snapShiftY) / Math.max(1, platform().display.height + 2 * m)) * 2 - 1);
     const dir = this.projectScratch.set(ndcX, ndcY, 0.5).unproject(this.camera).sub(this.camera.position);
     // Camera olhando pra baixo: `dir.y` e sempre negativo na pratica. O guarda e pro caso
     // degenerado (raio paralelo ao plano), em que nao ha intersecao nenhuma — devolver o alvo da
@@ -4211,7 +3936,7 @@ export class World3D {
     const heroX = this.camTarget.x - this.viewOffsetX;
     const heroZ = this.camTarget.z - this.viewOffsetY;
     const heroScreen = this.focusAtCentre ? this.projectTile(this.camTarget.x, this.camTarget.z, 0.5) : this.projectTile(heroX, heroZ, 0.5);
-    const trackedFocusY = 1 - heroScreen.y / Math.max(1, window.innerHeight);
+    const trackedFocusY = 1 - heroScreen.y / Math.max(1, platform().display.height);
     this.finishPass.uniforms.uFocusY.value = trackedFocusY + (this.params.focusY - 0.52);
     // A NITIDEZ do menu de pausa entra por aqui, como a hora do dia: quem MEXEU desde o último
     // frame manda. Assim o botão pega no instante em que o jogo volta a andar, e `hd3d.pixelScale`
@@ -4342,7 +4067,7 @@ export class World3D {
     this.updateBiomeGrade(dt);
     profiler.end('biome');
     profiler.begin('particles');
-    this.updateParticles(dt, nearest);
+    this.particles.update(dt, this.elapsed, this.camTarget, nearest, this.params);
     profiler.end('particles');
 
     this.finishPass.uniforms.uTime.value = this.elapsed;
@@ -4358,240 +4083,21 @@ export class World3D {
     this.groundLight.update(this.renderer, this.camera);
     profiler.end('groundLight');
     profiler.begin('reflection');
-    this.renderReflection();
+    this.mirror.render(this.params.reflection);
     profiler.end('reflection');
     profiler.begin('compose');
     profiler.gpuBegin();
-    const allChildren = this.cullFarChildren();
+    // UMA LIMPEZA SÓ. Com o fundo da cena sendo uma COR (o céu), o three limpa o alvo inteiro — cor, profundidade e
+    // stencil, com a cor do céu — ao desenhar o fundo (WebGLBackground: `forceClear`), logo depois da limpeza que a
+    // passada da cena faz. A primeira era sobrescrita por inteiro: ~1,2 ms de GPU por quadro numa tela de retina em
+    // meio-float, jogados fora. Sem fundo de cor, a passada volta a limpar.
+    this.scenePass.clear = !(this.scene.background as THREE.Color | null)?.isColor;
+    // O render só percorre o que pode aparecer (ver sceneCull); a lista da cena volta inteira logo depois.
+    const allChildren = cullFarChildren(this.scene, this.groundLight.view, this.renderChildren, CULL_PAD_TILES);
     this.composer.render();
     this.scene.children = allChildren;
     profiler.gpuEnd();
     profiler.end('compose');
-  }
-
-  /** Embers rise from the nearest lit fire; dust drifts in the air around the hero. */
-  private updateParticles(dt: number, fire: FireEntry | null): void {
-    const t = this.elapsed;
-
-    // First frame with a real camera target: spread the dust across a box around
-    // the hero (before follow() runs camTarget is the origin, which would stack
-    // every mote on one edge when it wraps).
-    if (!this.dustSeeded) {
-      for (let i = 0; i < DUST_COUNT; i++) {
-        this.dust.pos[i * 3] = this.camTarget.x + (Math.random() - 0.5) * 30;
-        this.dust.pos[i * 3 + 2] = this.camTarget.z + (Math.random() - 0.5) * 30;
-      }
-      this.dustSeeded = true;
-    }
-    if (!this.atmosphereSeeded) {
-      for (let i = 0; i < FIREFLY_COUNT; i++) {
-        this.fireflies.pos[i * 3 + 1] = -10; // fora do chão até achar mato (ver rehomeFirefly)
-      }
-      for (let i = 0; i < MIST_COUNT; i++) {
-        this.mist.pos[i * 3] = this.camTarget.x + (Math.random() - 0.5) * 30;
-        this.mist.pos[i * 3 + 1] = 0.05 + Math.random() * 0.3;
-        this.mist.pos[i * 3 + 2] = this.camTarget.z + (Math.random() - 0.5) * 30;
-      }
-      this.atmosphereSeeded = true;
-    }
-
-    // Embers: reborn at the lit fire, fading amber as they climb. With no lit
-    // fire in view they park below the ground (invisible) rather than pop.
-    for (let i = 0; i < EMBER_COUNT; i++) {
-      const p = this.emberState[i];
-      p.life += dt;
-      if (p.life >= p.maxLife) {
-        p.life = 0;
-        p.maxLife = 0.9 + Math.random() * 0.9;
-        if (fire) {
-          this.embers.pos[i * 3] = fire.worldX + (Math.random() - 0.5) * 0.35;
-          this.embers.pos[i * 3 + 1] = 0.5 + Math.random() * 0.2;
-          this.embers.pos[i * 3 + 2] = fire.worldY + (Math.random() - 0.5) * 0.35;
-        } else {
-          this.embers.pos[i * 3 + 1] = -10;
-        }
-        p.vx = (Math.random() - 0.5) * 0.35;
-        p.vy = 0.9 + Math.random() * 0.7;
-        p.vz = (Math.random() - 0.5) * 0.35;
-      }
-      this.embers.pos[i * 3] += p.vx * dt;
-      this.embers.pos[i * 3 + 1] += p.vy * dt;
-      this.embers.pos[i * 3 + 2] += p.vz * dt;
-      const a = fire ? 1 - p.life / p.maxLife : 0;
-      this.embers.col[i * 3] = 1.6 * a;
-      this.embers.col[i * 3 + 1] = 0.75 * a;
-      this.embers.col[i * 3 + 2] = 0.3 * a * a;
-    }
-    this.embers.mark();
-
-    // Dust: a slow twinkling haze that stays boxed around the camera target and
-    // glints brighter near the fire pool.
-    const cx = this.camTarget.x;
-    const cz = this.camTarget.z;
-    for (let i = 0; i < DUST_COUNT; i++) {
-      const s = this.dustSeed[i];
-      let x = this.dust.pos[i * 3] + Math.sin(t * 0.35 + s) * 0.0009;
-      let z = this.dust.pos[i * 3 + 2] + Math.cos(t * 0.28 + s) * 0.0009;
-      // Wrap the drifting motes back into a box that follows the hero.
-      if (x < cx - 15) x = cx + 15; else if (x > cx + 15) x = cx - 15;
-      if (z < cz - 15) z = cz + 15; else if (z > cz + 15) z = cz - 15;
-      this.dust.pos[i * 3] = x;
-      this.dust.pos[i * 3 + 1] += Math.cos(t * 0.22 + s * 2.0) * 0.0011;
-      this.dust.pos[i * 3 + 2] = z;
-      const glow = fire
-        ? Math.max(0.06, 1 - planarDist(x, z, fire.worldX, fire.worldY) / 9)
-        : 0.1;
-      const tw = 0.55 + 0.45 * Math.sin(t * 1.7 + s * 5.0);
-      this.dust.col[i * 3] = 0.5 * glow * tw;
-      this.dust.col[i * 3 + 1] = 0.42 * glow * tw;
-      this.dust.col[i * 3 + 2] = 0.3 * glow * tw;
-    }
-    this.dust.mark();
-
-    this.updateFireflies(dt, fire, cx, cz);
-
-    // Mist: slow cool wisps hugging the ground; thins right at the fire (heat burns
-    // it off) so the lit clearing stays clear while the dark stays veiled.
-    //
-    // De DIA a mesma névoa é POEIRA: motes dourados boiando no ar batido de sol. É o mesmo campo
-    // de partículas, com a mesma deriva e a mesma abertura junto do fogo — só a cor troca, porque
-    // o que se vê boiando ao meio-dia não é vapor frio, é pó pegando luz. (Um segundo campo só
-    // para isto seriam 48 Points a mais desenhados sempre, para metade deles estar sempre invisível.)
-    const mistAmt = Math.max(0, this.params.mist);
-    const dayMix = this.params.daylight;
-    const mistR = 0.32 + (0.66 - 0.32) * dayMix;
-    const mistG = 0.4 + (0.56 - 0.4) * dayMix;
-    const mistB = 0.6 + (0.34 - 0.6) * dayMix;
-    for (let i = 0; i < MIST_COUNT; i++) {
-      const s = this.mistSeed[i];
-      let x = this.mist.pos[i * 3] + Math.sin(t * 0.12 + s) * 0.004;
-      let z = this.mist.pos[i * 3 + 2] + Math.cos(t * 0.09 + s * 1.4) * 0.004;
-      if (x < cx - 16) x = cx + 16; else if (x > cx + 16) x = cx - 16;
-      if (z < cz - 16) z = cz + 16; else if (z > cz + 16) z = cz - 16;
-      this.mist.pos[i * 3] = x;
-      this.mist.pos[i * 3 + 2] = z;
-      const clear = fire ? Math.min(1, planarDist(x, z, fire.worldX, fire.worldY) / 4) : 1;
-      const tw = 0.6 + 0.4 * Math.sin(t * 0.5 + s * 3.0);
-      const a = mistAmt * 0.045 * clear * tw;
-      this.mist.col[i * 3] = mistR * a;
-      this.mist.col[i * 3 + 1] = mistG * a;
-      this.mist.col[i * 3 + 2] = mistB * a;
-    }
-    this.mist.mark();
-  }
-
-  /**
-   * O ENXAME. Ele mudou de dono: antes o vaga-lume só acendia dentro do halo de uma fogueira
-   * ACESA, e no construtor de mundo (onde toda fogueira de carta nasce apagada) isso queria dizer
-   * que ele não existia — a única luz do mundo era o acampamento. Agora quem o chama é o MATO:
-   * cada bicho escolhe uma moita real da janela assada (`greenTiles`) e orbita ali. É uma regra
-   * que o mundo ensina sem legenda — onde pisca, é verde — e é o que faz plantar flor numa carta
-   * povoá-la de vaga-lume sem tocar em código.
-   *
-   * A fogueira não sumiu da conta: perto dela o enxame ADENSA (o brilho sobe), que é o resquício
-   * da recompensa antiga sem ela ser a condição de existir.
-   *
-   * Nada aqui cria luz THREE: são Points aditivos. A lei do jogo é que a CONTAGEM de luzes está
-   * selada — um vaga-lume que iluminasse o chão recompilaria o mundo inteiro (~550ms) na primeira
-   * vez que acendesse.
-   */
-  private updateFireflies(dt: number, fire: FireEntry | null, cx: number, cz: number): void {
-    const amount = Math.max(0, this.params.fireflies);
-    for (let i = 0; i < FIREFLY_COUNT; i++) {
-      const p = this.fireflyState[i];
-      const px = this.fireflies.pos[i * 3];
-      const pz = this.fireflies.pos[i * 3 + 2];
-
-      // Longe demais do quadro (ou ainda sem casa): procura outra moita. O relógio existe para
-      // que um mundo de pedra — onde a busca sempre falha — não pague a varredura todo quadro.
-      const strayed = Math.abs(p.hx - cx) > FIREFLY_BOX || Math.abs(p.hz - cz) > FIREFLY_BOX;
-      p.settle -= dt;
-      if ((!p.homed || strayed) && p.settle <= 0) {
-        p.settle = 0.45;
-        this.rehomeFirefly(i, cx, cz);
-      }
-      if (!p.homed) {
-        this.fireflies.pos[i * 3 + 1] = -10; // sem mato por perto não há vaga-lume: some inteiro
-        this.fireflies.col[i * 3] = 0;
-        this.fireflies.col[i * 3 + 1] = 0;
-        this.fireflies.col[i * 3 + 2] = 0;
-        continue;
-      }
-
-      // O voo: uma arrancada curta de vez em quando, atrito no resto do tempo e uma mola fraca
-      // puxando de volta para a moita. Um seno puro (o que havia antes) lê como partícula; o que
-      // lê como bicho é a mudança BRUSCA de direção entre trechos de deriva.
-      p.dart -= dt;
-      if (p.dart <= 0) {
-        p.dart = 0.5 + Math.random() * 1.9;
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 0.5 + Math.random() * 1.3;
-        p.vx += Math.cos(angle) * speed;
-        p.vz += Math.sin(angle) * speed;
-      }
-      const drag = Math.exp(-2.6 * dt);
-      p.vx = p.vx * drag + (p.hx - px) * 1.5 * dt;
-      p.vz = p.vz * drag + (p.hz - pz) * 1.5 * dt;
-      let x = px + p.vx * dt;
-      let z = pz + p.vz * dt;
-      // A coleira: nunca mais que FIREFLY_ROAM da moita, ou o enxame se dissolve na tela.
-      const dx = x - p.hx; const dz = z - p.hz;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist > FIREFLY_ROAM) {
-        x = p.hx + (dx / dist) * FIREFLY_ROAM;
-        z = p.hz + (dz / dist) * FIREFLY_ROAM;
-        p.vx *= -0.35; p.vz *= -0.35;
-      }
-      this.fireflies.pos[i * 3] = x;
-      this.fireflies.pos[i * 3 + 2] = z;
-      // A altura acompanha a velocidade: quem corre, sobe. Sem isso o bicho voa numa mesa de
-      // vidro, e é a subida na arrancada que dá volume ao enxame.
-      const climb = Math.min(1, Math.sqrt(p.vx * p.vx + p.vz * p.vz) * 0.55);
-      const s = this.fireflySeed[i];
-      this.fireflies.pos[i * 3 + 1] = 0.3 + 0.35 * climb
-        + 0.34 * (0.5 + 0.5 * Math.sin(this.elapsed * 0.7 + s * 1.7));
-
-      // O pisca: aceso curto, apagado longo — a assinatura do bicho. `blink` corre no ritmo dele,
-      // e o expoente é o que separa "acende e apaga" de "pulsa".
-      p.blink += dt * p.rate;
-      const pulse = Math.max(0, Math.sin(p.blink));
-      const near = fire ? Math.max(0, 1 - planarDist(x, z, fire.worldX, fire.worldY) / 8) : 0;
-      // O expoente 3 apagava o enxame: com ele o bicho passa ~85% do ciclo escuro, e com 44
-      // deles espalhados numa caixa maior que a tela sobravam dois pontos por quadro. Quadrado
-      // (mais um resto de brasa, que é o corpo dele visto de perto) mantém o pisca e devolve o
-      // enxame — foi medido em foto, não no papel.
-      const a = amount * (0.5 + 0.5 * near) * (0.12 + 0.88 * pulse * pulse);
-      this.fireflies.col[i * 3] = 0.75 * a;
-      this.fireflies.col[i * 3 + 1] = 1.0 * a;
-      this.fireflies.col[i * 3 + 2] = 0.3 * a;
-    }
-    this.fireflies.mark();
-  }
-
-  /**
-   * Sorteia uma moita dentro do quadro para este vaga-lume. Amostragem por REJEIÇÃO sobre o índice
-   * inteiro da janela (que tem milhares de tiles) em vez de um índice espacial: são 18 tentativas
-   * no pior caso, para no máximo 34 bichos, e só quando um deles perdeu a casa. Falhar é uma
-   * resposta legítima — quer dizer "não há verde aqui", e o bicho fica invisível.
-   */
-  private rehomeFirefly(index: number, cx: number, cz: number): void {
-    const p = this.fireflyState[index];
-    const count = this.greenTiles.length / 2;
-    p.homed = false;
-    if (count === 0) return;
-    for (let attempt = 0; attempt < 18; attempt++) {
-      const t = Math.floor(Math.random() * count) * 2;
-      const gx = this.greenTiles[t];
-      const gz = this.greenTiles[t + 1];
-      if (Math.abs(gx - cx) > FIREFLY_BOX || Math.abs(gz - cz) > FIREFLY_BOX) continue;
-      p.hx = gx + (Math.random() - 0.5) * 0.6;
-      p.hz = gz + (Math.random() - 0.5) * 0.6;
-      p.vx = 0; p.vz = 0;
-      p.homed = true;
-      this.fireflies.pos[index * 3] = p.hx;
-      this.fireflies.pos[index * 3 + 2] = p.hz;
-      return;
-    }
   }
 
   private readonly handleResize = (): void => {
@@ -4599,7 +4105,8 @@ export class World3D {
   };
 
   public dispose(): void {
-    window.removeEventListener('resize', this.handleResize);
+    this.stopWatchingResize?.();
+    this.stopWatchingResize = null;
     // `material` pode ser ARRAY (a alvenaria de cubo das dungeons agrupa teto/lados): um
     // `material?.dispose()` direto estoura "dispose is not a function" no meio do teardown e
     // deixa a cena que vem depois (o editor acordando do ESC) sem o wake. Ninguém viu por anos
@@ -4637,2168 +4144,3 @@ export class World3D {
   }
 }
 
-// ── HD-2D post: the finish shader (tilt-shift DoF + vignette + grain) ─────────
-//
-// Ported from the old 3D prototype. A screen-space fake depth-of-field: a
-// sharp horizontal band at uFocusY (the hero's line) stays crisp while the top
-// (distant background) and bottom (foreground) blur out — the "miniature
-// diorama" tilt-shift. Then a soft vignette and a touch of film grain.
-const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialParameters & {
-  uniforms: Record<string, THREE.IUniform>;
-} => ({
-  uniforms: {
-    tDiffuse: { value: null },
-    tBloom: { value: null },
-    uResolution: { value: new THREE.Vector2(w, h) },
-    uTime: { value: 0 },
-    uFocusY: { value: 0.52 },
-    uBand: { value: 0.16 },
-    uBlur: { value: 3.2 },
-    uNear: { value: 0.55 },
-    uVignette: { value: 0.24 },
-    uLift: { value: 1 },
-    // A VISTA DO HERÓI (ver setHeroSight): a curva local, onde ela cai na tela, e os dois
-    // semi-eixos da elipse que um disco de chão vira aos 48° da câmera. Escritos por
-    // updateHeroSight; em 0 o quadro é literalmente o de antes.
-    uSight: { value: 0 },
-    uSightAt: { value: new THREE.Vector2(0.5, 0.5) },
-    uSightR: { value: new THREE.Vector2(0.2, 0.2) },
-    uGrain: { value: 0.02 },
-    uGrade: { value: 0.5 },
-    // The split-tone the grade lerps between, per region (see updateBiomeGrade): cool woodland by
-    // default, amber where the ground runs molten.
-    uShadowTint: { value: new THREE.Vector3(0.88, 0.95, 1.10) },
-    uHighTint: { value: new THREE.Vector3(1.12, 1.02, 0.86) },
-    uSaturation: { value: 1.1 },
-    uContrast: { value: 1.0 },
-    uDanger: { value: 0 },
-    uDangerColor: { value: new THREE.Color(0x2a3f6b) },
-    uFade: { value: 0 },
-    uSeasonTint: { value: new THREE.Vector3(1, 1, 1) },
-    uSeasonSat: { value: 1 },
-  },
-  vertexShader: /* glsl */ `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse;
-    uniform sampler2D tBloom;
-    uniform vec2 uResolution;
-    uniform float uTime;
-    uniform float uFocusY;
-    uniform float uBand;
-    uniform float uBlur;
-    uniform float uNear;
-    uniform float uVignette;
-    uniform float uLift;
-    uniform float uSight;
-    uniform vec2 uSightAt;
-    uniform vec2 uSightR;
-    uniform float uGrain;
-    uniform float uGrade;
-    uniform vec3 uShadowTint;
-    uniform vec3 uHighTint;
-    uniform float uSaturation;
-    uniform float uContrast;
-    uniform float uDanger;
-    uniform vec3 uDangerColor;
-    uniform float uFade;
-    uniform vec3 uSeasonTint;
-    uniform float uSeasonSat;
-    varying vec2 vUv;
-    // O quadro com o bloom ja somado — a soma aditiva que o UnrealBloomPass fazia numa passada
-    // de tela cheia, agora aqui, amostra por amostra (ver FusedBloomPass). O blend dele e
-    // pre-multiplicado (ONE, ONE): cena + bloom, SEM pesar pelo alfa.
-    vec3 frameAt(vec2 uv) {
-      return texture2D(tDiffuse, uv).rgb + texture2D(tBloom, uv).rgb;
-    }
-    void main() {
-      // Tilt-shift, asymmetric on purpose: the DISTANCE behind the hero (up the screen) melts
-      // away hard, while the foreground under him only softens — Octopath blurs the background
-      // far more than the front, and blurring the near edge as hard just hides the ground the
-      // player is walking on. uNear scales the near side's ramp.
-      float dy = vUv.y - uFocusY;
-      float far = smoothstep(uBand, uBand + 0.30, dy);          // above the band = distance
-      float near = smoothstep(uBand, uBand + 0.46, -dy) * uNear; // below = foreground
-      float t = max(far, near);
-      // Quantise the radius to half a pixel: a continuously-varying blur makes the pixel art
-      // "boil" as the hero walks, because every frame resamples the same texels differently.
-      float radius = floor(uBlur * t * 2.0 + 0.5) * 0.5;
-      // Na faixa nitida o raio e ZERO e as sete amostras caem no mesmo texel (os pesos somam 1):
-      // uma leitura so da o mesmo pixel. E a faixa e a maior parte da tela — o chao do heroi.
-      vec3 col;
-      if (radius == 0.0) {
-        col = frameAt(vUv);
-      } else {
-        vec2 px = radius / uResolution;
-        col = frameAt(vUv) * 0.30;
-        col += frameAt(vUv + vec2( 1.0,  0.6) * px) * 0.12;
-        col += frameAt(vUv + vec2(-1.0,  0.6) * px) * 0.12;
-        col += frameAt(vUv + vec2( 1.0, -0.6) * px) * 0.12;
-        col += frameAt(vUv + vec2(-1.0, -0.6) * px) * 0.12;
-        col += frameAt(vUv + vec2( 0.0,  1.4) * px) * 0.11;
-        col += frameAt(vUv + vec2( 0.0, -1.4) * px) * 0.11;
-      }
-
-      // ── cinematic grade: split-tone (cool shadows / warm highlights), then
-      //    saturation and contrast — the HD-2D "diorama photograph" look.
-      float luma = dot(col, vec3(0.299, 0.587, 0.114));
-      vec3 toned = col * mix(uShadowTint, uHighTint, smoothstep(0.0, 0.55, luma));
-      col = mix(col, toned, uGrade);
-      col = mix(vec3(luma), col, uSeasonSat) * uSeasonTint;
-      // ── A CURVA DE TELA (uLift) — ver o doc de params.lift ───────────────────
-      // Este jogo nao tem tone mapping (o mundo e desenhado num render target, e o three so monta
-      // o ACES quando o alvo e a TELA), entao o linear vai cru para o canvas e nao ha ombro
-      // nenhum segurando o alto: subir luz estoura o branco antes de clarear a sombra. O pow e o
-      // ombro que falta — monotono, leva 1 em 1, abre os graves. O DIA vive dela.
-      //
-      // Ela entra DEPOIS do split-tone de proposito: o grade classifica sombra x luz por luma, e
-      // levantar antes faria o quadro inteiro passar por "luz" — o dia perderia justamente a
-      // sombra azul que o faz parecer dia. luma sobe junto, senao a saturacao abaixo giraria em
-      // torno de um cinza que nao existe mais.
-      //
-      // O if e o que garante que a NOITE nao muda um bit: em uLift = 1 nada disto roda.
-      if (uLift < 0.999) {
-        col = pow(max(col, vec3(0.0)), vec3(uLift));
-        luma = pow(max(luma, 0.0), uLift);
-      }
-      // ── A VISTA DO HEROI (uSight) — ver setHeroSight ─────────────────────────
-      // A MESMA curva de cima, so que LOCAL: um pow centrado nos pes dele e pendendo para onde ele
-      // olha. Ela abre os graves em volta e deixa o 1 onde esta, entao dentro da poca de uma
-      // fogueira ela quase nao soma — a vista mostra o tile em que ele pisa, o fogo e que abre a
-      // regiao. E ela e LISA de proposito: todo desenho de luz deste jogo e escadinha de pixel art
-      // (o disco da fogueira, uLightSteps), mas isto nao e luz caindo no chao, e o olho.
-      //
-      // O nucleo e chato ate 35% do raio e so entao cai: um pico no centro seguiria o heroi como
-      // uma mancha de lente. E a saturacao sobe AMARRADA a ela, nunca por um knob proprio: pow
-      // comprime razao entre canais, e um quadro local mais claro e menos colorido que a vizinhanca
-      // le como neblina (a licao inteira do skyPreset.ts).
-      float sight = 0.0;
-      if (uSight > 0.0) {
-        vec2 sd = (vUv - uSightAt) / max(uSightR, vec2(0.0001));
-        sight = uSight * (1.0 - smoothstep(0.35, 1.0, length(sd)));
-        // Fora da elipse a vista vale 0 e o pow vira pow(x, 1) = x: a maior parte da tela pagava
-        // dois pow por pixel para nao mudar nada.
-        if (sight > 0.0) {
-          float sexp = 1.0 - sight;
-          col = pow(max(col, vec3(0.0)), vec3(sexp));
-          luma = pow(max(luma, 0.0), sexp);
-        }
-      }
-      col = mix(vec3(luma), col, uSaturation + sight * 0.35); // saturation around luma
-      col = (col - 0.5) * uContrast + 0.5;           // contrast around mid-grey
-      col = max(col, 0.0);
-
-      vec2 vuv = (vUv - 0.5) * vec2(1.0, 1.2);
-      col *= 1.0 - smoothstep(0.5, 0.95, length(vuv)) * uVignette;
-
-      // The undead siege made visible: a radial wash creeping in from the screen edge,
-      // cold blue while the meter fills and bleeding to red as it peaks (setDangerVignette
-      // owns colour and amount). It lives inside the post — graded and grained with the
-      // rest of the frame — instead of the flat 2D image it used to be.
-      if (uDanger > 0.0) {
-        float dr = length((vUv - 0.5) * 2.0);
-        float dmask = dr < 0.78
-          ? mix(0.0, 0.45, clamp((dr - 0.52) / 0.26, 0.0, 1.0))
-          : mix(0.45, 1.0, clamp((dr - 0.78) / 0.22, 0.0, 1.0));
-        col = mix(col, uDangerColor, dmask * uDanger);
-      }
-
-      float n = fract(sin(dot(vUv * uResolution + uTime, vec2(12.9898, 78.233))) * 43758.5453);
-      col += (n - 0.5) * uGrain;
-
-      // Death: the whole diorama drains of colour and sinks to black from inside the post,
-      // so the fade takes the world, its grain and its glow with it (setWorldFade).
-      if (uFade > 0.0) {
-        float fadeLuma = dot(col, vec3(0.299, 0.587, 0.114));
-        col = mix(col, vec3(fadeLuma), uFade * 0.85);
-        col *= 1.0 - uFade;
-      }
-
-      gl_FragColor = vec4(col, 1.0);
-    }
-  `,
-});
-
-// ── ambient particle fields (additive Points) ─────────────────────────────────
-
-interface EmberParticle { life: number; maxLife: number; vx: number; vy: number; vz: number }
-
-/**
- * Um vaga-lume. `hx/hz` é a MOITA que ele escolheu (ele orbita ali, não a caixa da câmera), e o
- * resto é o voo: velocidade própria, um relógio até a próxima arrancada, e a fase/ritmo do
- * pisca. `settle` é o tempo até tentar achar mato de novo quando não há nenhum por perto.
- */
-interface FireflyParticle {
-  hx: number; hz: number;
-  vx: number; vz: number;
-  dart: number;
-  blink: number; rate: number;
-  settle: number;
-  homed: boolean;
-}
-
-// A soft round glow (white opaque centre → transparent rim) so additive Points
-// read as soft motes instead of hard squares — shared by every particle field.
-// The expanding shockwave of an impact (a landed hit, a deflected blow, a heal tick): a hollow
-// ring, laid FLAT on the ground so it reads as a wave washing over the floor of the diorama.
-// Low-res + NEAREST like the fire glow, so it breaks into chunky pixels instead of a smooth HD arc.
-const RING_TEX_RES = 48;
-const makeRingTexture = (): THREE.CanvasTexture => {
-  const c = document.createElement('canvas');
-  c.width = c.height = RING_TEX_RES;
-  const ctx = c.getContext('2d')!;
-  const r = RING_TEX_RES / 2;
-  const g = ctx.createRadialGradient(r, r, 0, r, r, r);
-  g.addColorStop(0.00, 'rgba(255,255,255,0)');
-  g.addColorStop(0.62, 'rgba(255,255,255,0)');
-  g.addColorStop(0.80, 'rgba(255,255,255,1)'); // the band itself
-  g.addColorStop(0.96, 'rgba(255,255,255,0.25)');
-  g.addColorStop(1.00, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, RING_TEX_RES, RING_TEX_RES);
-  const tex = new THREE.CanvasTexture(c);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-};
-
-// Smoke: the same soft disc as the dot, but written as raw pixels so the colour stays WHITE out
-// to the transparent rim (see the FX_PUFF_TEXTURE note). Canvas is deliberately not used here.
-const PUFF_TEX_RES = 32;
-const makePuffTexture = (): THREE.DataTexture => {
-  const size = PUFF_TEX_RES;
-  const data = new Uint8Array(size * size * 4);
-  const r = size / 2;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4;
-      const d = Math.hypot(x + 0.5 - r, y + 0.5 - r) / r;
-      // Full in the core, easing to nothing at the rim — alpha only; rgb never darkens.
-      const a = Math.max(0, Math.min(1, 1 - d));
-      data[i] = 255;
-      data[i + 1] = 255;
-      data[i + 2] = 255;
-      data[i + 3] = Math.round(Math.pow(a, 1.4) * 255);
-    }
-  }
-  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-};
-
-// O BLOCO DE GELO (o congelamento — ver FreezeManager): um cristal facetado, desenhado BRANCO
-// como todo FX desta casa para o tint do billboard decidir a cor. Low-res + NEAREST para quebrar
-// em degraus de pixel como o resto da arte. O corpo é translúcido de propósito — o que congela
-// continua VISÍVEL dentro do bloco (a informação é "aquilo ali, travado", nunca "um cubo novo") —
-// e a faceta clara fica no alto-esquerdo, de onde a luz desta arte sempre vem.
-const ICE_TEX_RES = 28;
-const makeIceTexture = (): THREE.CanvasTexture => {
-  const c = document.createElement('canvas');
-  c.width = c.height = ICE_TEX_RES;
-  const ctx = c.getContext('2d')!;
-  const s = ICE_TEX_RES;
-  const m = s / 2;
-
-  // O corpo do cristal: um hexágono irregular, mais estreito no topo (gelo empilha pra cima).
-  const body: Array<[number, number]> = [
-    [m, 1.5], [s - 3.5, m * 0.72], [s - 2.5, s - m * 0.5], [m, s - 1.5], [2.5, s - m * 0.5], [3.5, m * 0.72],
-  ];
-  ctx.beginPath();
-  ctx.moveTo(body[0][0], body[0][1]);
-  for (let i = 1; i < body.length; i++) ctx.lineTo(body[i][0], body[i][1]);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(255,255,255,0.44)';
-  ctx.fill();
-  ctx.lineWidth = 1.6;
-  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-  ctx.stroke();
-
-  // A faceta de luz do alto-esquerdo: um quarto do corpo, mais denso.
-  ctx.beginPath();
-  ctx.moveTo(m, 2.5);
-  ctx.lineTo(4.5, m * 0.78);
-  ctx.lineTo(m * 0.7, m);
-  ctx.lineTo(m, m * 0.62);
-  ctx.closePath();
-  ctx.fillStyle = 'rgba(255,255,255,0.34)';
-  ctx.fill();
-
-  // Duas arestas internas: o que separa "cristal" de "bolha".
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.beginPath();
-  ctx.moveTo(m, 2.5);
-  ctx.lineTo(m * 0.72, s - m * 0.55);
-  ctx.moveTo(m, 2.5);
-  ctx.lineTo(s - m * 0.6, s - m * 0.7);
-  ctx.stroke();
-
-  // Três brilhos de um pixel, o glint que a arte 16×16 desta casa usa para dizer "liso e frio".
-  ctx.fillStyle = 'rgba(255,255,255,1)';
-  ctx.fillRect(Math.round(m * 0.62), Math.round(m * 0.62), 1, 1);
-  ctx.fillRect(Math.round(s - m * 0.8), Math.round(m * 0.95), 1, 1);
-  ctx.fillRect(Math.round(m * 0.9), Math.round(s - m * 0.75), 1, 1);
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-};
-
-// The undead spawn telegraph: jagged fissures radiating from a point, drawn WHITE so the
-// billboard's tint decides the colour (a cold under-glow, not a brown crack — in the dark
-// where skulls rise, a dark decal on dark ground would be invisible). Low-res + NEAREST so
-// the fissures break into chunky pixel steps like every other FX here.
-const CRACK_TEX_RES = 48;
-const makeCrackTexture = (): THREE.CanvasTexture => {
-  const c = document.createElement('canvas');
-  c.width = c.height = CRACK_TEX_RES;
-  const ctx = c.getContext('2d')!;
-  const r = CRACK_TEX_RES / 2;
-  ctx.strokeStyle = 'rgba(255,255,255,1)';
-  ctx.lineWidth = 2;
-  const arms = 6;
-  for (let a = 0; a < arms; a++) {
-    // Each arm is a random walk outward: step, kink sideways, step — a lightning fork, not a ray.
-    let ang = (a / arms) * Math.PI * 2 + (Math.random() - 0.5) * 0.7;
-    let x = r;
-    let y = r;
-    const reach = r * (0.55 + Math.random() * 0.4);
-    const steps = 4;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    for (let s = 0; s < steps; s++) {
-      const len = (reach / steps) * (0.7 + Math.random() * 0.6);
-      ang += (Math.random() - 0.5) * 0.9;
-      x += Math.cos(ang) * len;
-      y += Math.sin(ang) * len;
-      ctx.lineTo(x, y);
-      // A short side-branch halfway out on some arms sells "shattering", not "asterisk".
-      if (s === 1 && Math.random() < 0.6) {
-        const bAng = ang + (Math.random() < 0.5 ? 1 : -1) * (0.7 + Math.random() * 0.6);
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + Math.cos(bAng) * len * 0.6, y + Math.sin(bAng) * len * 0.6);
-        ctx.moveTo(x, y);
-      }
-    }
-    ctx.stroke();
-  }
-  // A dim pool at the heart of the fissure, so the centre reads hotter than the tips.
-  const g = ctx.createRadialGradient(r, r, 0, r, r, r * 0.5);
-  g.addColorStop(0, 'rgba(255,255,255,0.5)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, CRACK_TEX_RES, CRACK_TEX_RES);
-  const tex = new THREE.CanvasTexture(c);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-};
-
-const makeSoftDotTexture = (): THREE.CanvasTexture => {
-  const c = document.createElement('canvas');
-  c.width = c.height = 32;
-  const ctx = c.getContext('2d')!;
-  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.4, 'rgba(255,255,255,0.55)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 32, 32);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-};
-
-// The additive campfire glow laid over the ground. Evaluated on the art's own pixel
-// grid and banded into flat tiers (lightSteps), so the warm pool reads as a hand-shaded
-// pixel-art circle of light — chunky stepped rings — instead of a smooth HD gradient.
-/** The uniforms a fire's warm pool needs to place itself, kept on the material. */
-type GlowUniforms = { center: THREE.IUniform<THREE.Vector2>; radius: THREE.IUniform<number> };
-
-/**
- * The warm POOL a fire pours on the ground — as pixel art.
- *
- * It used to be a smooth 34×34 canvas gradient stretched across ~15 TILES with a NEAREST
- * filter: every texel of it landed as a ~half-tile square, so the pool came out as a coarse
- * checkerboard whose blocks had nothing to do with the art's own pixels ("quadriculada, não
- * pixel art"). Here the falloff is evaluated per fragment instead and snapped to the ART's
- * pixel grid (lightRes texels per tile = the tileset's 16), so the light steps in exactly the
- * pixels it lights. The snap is in WORLD space, so the blocks stay pinned to the ground and
- * never swim as the camera pans or the flame jitters — only their brightness dances.
- */
-const makeFireGlowMaterial = (opts: {
-  /** A rampa de bandas desta poça. Omitida = a do FOGO (o padrão de sempre). */
-  ramp?: { core: THREE.IUniform<THREE.Color>; mid: THREE.IUniform<THREE.Color>; rim: THREE.IUniform<THREE.Color> };
-  /** O ruído que amassa os anéis. Omitido = o do fogo; a vista do herói passa o zero. */
-  wobble?: THREE.IUniform;
-} = {}): THREE.MeshBasicMaterial => {
-  // Colour comes from the authored band ramp in the shader (fireRamp* uniforms), so the
-  // material's own colour stays white.
-  const mat = new THREE.MeshBasicMaterial({
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    fog: false,
-    opacity: 0,
-  });
-  const glow: GlowUniforms = {
-    center: { value: new THREE.Vector2() },
-    radius: { value: 1 },
-  };
-  mat.userData.glow = glow;
-  mat.customProgramCacheKey = () => 'fireGlow';
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uGlowCenter = glow.center;
-    shader.uniforms.uGlowRadius = glow.radius;
-    shader.uniforms.uLightRes = fireGlowResUniform; // the pool paints COARSER than the art
-    shader.uniforms.uLightSteps = lightStepsUniform;
-    shader.uniforms.uLightWobble = opts.wobble ?? lightWobbleUniform;
-    shader.uniforms.uFlowTime = flowTimeUniform;
-    shader.uniforms.uRampCore = opts.ramp?.core ?? fireRampCoreUniform;
-    shader.uniforms.uRampMid = opts.ramp?.mid ?? fireRampMidUniform;
-    shader.uniforms.uRampRim = opts.ramp?.rim ?? fireRampRimUniform;
-    // The mask shades the glow POOL too (hd3d.shadowMask): with the decal silhouettes
-    // gone from the scene, the additive haze must dim itself where a cast falls — same
-    // data, same place, instead of a black quad drawn over it.
-    shader.uniforms.uShadowMask = shadowMaskUniform;
-    shader.uniforms.uMaskRect = shadowMaskRectUniform;
-    shader.uniforms.uMaskOn = shadowMaskOnUniform;
-    shader.vertexShader = shader.vertexShader
-      .replace('void main() {', 'varying vec2 vGlowPos;\nvoid main() {')
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-         vGlowPos = (modelMatrix * vec4(transformed, 1.0)).xz;`,
-      );
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        'void main() {',
-        `uniform vec2 uGlowCenter;
-         uniform float uGlowRadius;
-         uniform float uLightRes;
-         uniform float uLightSteps;
-         uniform float uLightWobble;
-         uniform float uFlowTime;
-         uniform vec3 uRampCore;
-         uniform vec3 uRampMid;
-         uniform vec3 uRampRim;
-         ${FIRE_WOBBLE_GLSL}
-         ${SHADOW_MASK_GLSL}
-         varying vec2 vGlowPos;
-         // The falloff the canvas gradient used to bake: a hot core that drops away fast,
-         // then a long soft skirt out to the rim.
-         float glowCurve(float r) {
-           if (r >= 1.0) return 0.0;
-           if (r < 0.18) return mix(0.95, 0.60, r / 0.18);
-           if (r < 0.45) return mix(0.60, 0.25, (r - 0.18) / 0.27);
-           if (r < 0.75) return mix(0.25, 0.06, (r - 0.45) / 0.30);
-           return mix(0.06, 0.0, (r - 0.75) / 0.25);
-         }
-         void main() {`,
-      )
-      .replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
-         vec2 glowTexel = floor(vGlowPos * uLightRes);
-         vec2 glowPos = uLightRes > 0.0
-           ? (glowTexel + 0.5) / uLightRes
-           : vGlowPos;
-         // Imperfect firelight: dent the rings with the shared wobble field (the same
-         // one warping the direct light, so all the contours lobe together). The dents
-         // grow from the core to the rim — up close a flame's pool is roundish; its far
-         // skirt is what breaks up.
-         float rBase = distance(glowPos, uGlowCenter) / max(0.0001, uGlowRadius);
-         glowPos += vec2(
-           fireWobble(glowPos, uFlowTime),
-           fireWobble(glowPos.yx + 31.7, uFlowTime)
-         ) * (uLightWobble * (0.35 + 0.65 * min(rBase, 1.0)));
-         float glowA = glowCurve(distance(glowPos, uGlowCenter) / max(0.0001, uGlowRadius));
-         // Retro banding: the pool falls off in FLAT TIERS (the stepped pixel-art lantern)
-         // rather than a silky HD ramp. Quantised straight — no dither: the tier edges are
-         // already stair-stepped by the art-pixel snap above, which is exactly how a pixel
-         // artist draws a circle of light (a Bayer dither here read as dirty stipple).
-         if (uLightSteps >= 1.0) {
-           glowA = floor(glowA * uLightSteps + 0.5) / uLightSteps;
-         }
-         // The A Short Hike lighting ramp: each band wears its own AUTHORED colour —
-         // ember-red rim, golden-orange mid, pale-gold heart — the way a pixel artist
-         // paints a pool of firelight, instead of one colour fading by alpha alone.
-         // With uLightSteps bands the stops land exactly on rim/mid/core.
-         float rampT = uLightSteps >= 2.0
-           ? clamp((glowA * uLightSteps - 1.0) / (uLightSteps - 1.0), 0.0, 1.0)
-           : glowA;
-         diffuseColor.rgb *= rampT < 0.5
-           ? mix(uRampRim, uRampMid, rampT * 2.0)
-           : mix(uRampMid, uRampCore, rampT * 2.0 - 1.0);
-         diffuseColor.a *= glowA * (1.0 - zhShadowMask(vGlowPos, vec2(0.0)));`,
-      );
-  };
-  return mat;
-};
-
-/**
- * A NÉVOA NEGRA que cobre a floresta de fora do mapa.
- *
- * O fora do mundo deixou de ser mar e virou floresta (ver `WorldData.buildVoidChunk`), e uma
- * floresta iluminada como qualquer outra não diz "aqui acaba o mundo" — diz "tem mais mapa ali".
- * Quem diz é a névoa: ela nasce em ZERO na fronteira autorada e fecha em preto alguns tiles
- * adiante, então a mata desaparece dentro dela em vez de terminar numa régua.
- *
- * Três decisões que a fazem ler como névoa e não como uma tampa preta:
- *
- *   · **A alfa vem da distância ao RETÂNGULO do mundo**, medida no fragmento (`uMistRect`), e não
- *     de uma máscara por vértice. É a fronteira do mundo, que é uma caixa — e uma conta de caixa
- *     em quatro linhas dá a rampa exata em qualquer formato de mapa, sem re-assar nada.
- *   · **A borda é ROÍDA por ruído** no mesmo campo de valor que o fogo usa (`fireWobble`), com o
- *     tempo escorrendo devagar. Sem isso a rampa é um degradê de photoshop, e degradê nenhum é
- *     névoa.
- *   · **Ela é quantizada no grid da ARTE** (`uLightRes`), como todo desenho de luz deste jogo. Uma
- *     rampa lisa num mundo de pixel art é o único objeto da tela com resolução infinita.
- *
- * Preto com mistura normal, e não `AdditiveBlending`: aditivo só clareia — o preto aditivo é
- * literalmente nada. Aqui a névoa TAPA, então ela é alfa por cima.
- */
-type MistUniforms = { rect: THREE.IUniform<THREE.Vector4>; depth: THREE.IUniform<number> };
-
-const makeVoidMistMaterial = (): THREE.MeshBasicMaterial => {
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0x000000,
-    transparent: true,
-    depthWrite: false,
-    fog: false, // ela JÁ é a distância; um fog por cima a lavaria na cor do céu
-    opacity: 1,
-  });
-  const mist: MistUniforms = {
-    rect: { value: new THREE.Vector4(0, 0, 0, 0) },
-    depth: { value: 6 },
-  };
-  mat.userData.mist = mist;
-  mat.customProgramCacheKey = () => 'voidMist';
-  mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uMistRect = mist.rect;
-    shader.uniforms.uMistDepth = mist.depth;
-    shader.uniforms.uLightRes = fireGlowResUniform;
-    shader.uniforms.uFlowTime = flowTimeUniform;
-    shader.vertexShader = shader.vertexShader
-      .replace('void main() {', 'varying vec2 vMistPos;\nvoid main() {')
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-         vMistPos = (modelMatrix * vec4(transformed, 1.0)).xz;`,
-      );
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        'void main() {',
-        `uniform vec4 uMistRect;
-         uniform float uMistDepth;
-         uniform float uLightRes;
-         uniform float uFlowTime;
-         ${FIRE_WOBBLE_GLSL}
-         varying vec2 vMistPos;
-         void main() {`,
-      )
-      .replace(
-        '#include <map_fragment>',
-        `#include <map_fragment>
-         // Snap no grid da arte: a névoa engrossa em blocos de pixel, como a poça da fogueira.
-         vec2 mistTexel = floor(vMistPos * uLightRes);
-         vec2 mistPos = uLightRes > 0.0 ? (mistTexel + 0.5) / uLightRes : vMistPos;
-         // Distância ao retângulo do mundo: 0 lá dentro, crescendo para fora (a conta de caixa).
-         vec2 outside = max(uMistRect.xy - mistPos, mistPos - uMistRect.zw);
-         float d = length(max(outside, vec2(0.0)));
-         // A frente da névoa não é reta: o mesmo ruído das chamas, andando devagar, come a borda.
-         d += fireWobble(mistPos * 0.35, uFlowTime * 0.25) * uMistDepth * 0.5;
-         diffuseColor.a *= smoothstep(0.0, max(0.5, uMistDepth), d);`,
-      );
-  };
-  return mat;
-};
-
-/**
- * A CORTINA da névoa: um quad EM PÉ por tile, no mesmo plano em que as árvores são desenhadas.
- *
- * A primeira versão era uma TAMPA — quads deitados acima da copa — e a geometria a derrubou: com
- * a câmera a 48°, um plano horizontal sobre o tile (x,z) projeta ACIMA do lugar onde a árvore
- * daquele mesmo tile desenha. Ou seja, a tampa velava o tile de TRÁS e deixava a árvore da frente
- * exposta; o que aparecia na tela era um degradê deslocado, nunca a mata sumindo dentro da névoa.
- * Em pé, no mesmo z e um pouco mais alta que a copa, ela cobre exatamente o que está atrás dela.
- *
- * Sem uv, sem atlas e sem normal: a cortina é uma cor só, e quem a desenha é o shader a partir da
- * posição de mundo (ver makeVoidMistMaterial).
- */
-const buildMistCurtainGeometry = (
-  tiles: ReadonlyArray<{ x: number; z: number }>, heightAt: (x: number, z: number) => number,
-): THREE.BufferGeometry => {
-  const pos: number[] = [];
-  const idx: number[] = [];
-  tiles.forEach(({ x, z }, i) => {
-    const height = heightAt(x, z);
-    // MEIO TILE À FRENTE (+z é a câmera). No próprio z a cortina fica na MESMA profundidade da
-    // árvore daquele tile, e o teste de profundidade padrão (`less`) reprova o empate: a névoa
-    // era descartada exatamente em cima do que ela existe para velar. Na borda da frente do
-    // tile ela fica meio tile à frente da sua árvore e meio atrás da próxima — sem empate nenhum.
-    const zf = z + 0.5;
-    pos.push(x - 0.5, height, zf, x + 0.5, height, zf, x + 0.5, 0, zf, x - 0.5, 0, zf);
-    const b = i * 4;
-    idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
-  });
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setIndex(idx);
-  return geo;
-};
-
-/** Place a fire's pool: the disc's rim sits at half the quad, centred on the dancing flame. */
-const setFireGlow = (
-  mesh: THREE.Mesh, x: number, z: number, size: number, opacity: number,
-): void => {
-  const mat = mesh.material as THREE.MeshBasicMaterial;
-  const glow = mat.userData.glow as GlowUniforms;
-  mat.opacity = opacity;
-  glow.center.value.set(x, z);
-  glow.radius.value = size / 2;
-  mesh.scale.set(size, 1, size);
-  mesh.position.set(x, 0.07, z);
-};
-
-// ── merged tile geometry builders ─────────────────────────────────────────────
-
-/**
- * Erase one quad from a merged, indexed geometry by folding its four vertices onto a single
- * point: both its triangles become degenerate and rasterize zero pixels. The alternative —
- * rebuilding the buffer without that quad — reallocates and re-uploads the whole mesh, which
- * for the ~6000-quad forest is a visible hitch on a single axe swing.
- */
-const collapseQuad = (geo: THREE.BufferGeometry, vertStart: number): void => {
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const x = pos.getX(vertStart);
-  const y = pos.getY(vertStart);
-  const z = pos.getZ(vertStart);
-  for (let i = 0; i < 4; i++) pos.setXYZ(vertStart + i, x, y, z);
-  pos.needsUpdate = true;
-};
-
-// Corner order of a flat quad, as (dx, dz) in half-tiles — the order positions are pushed in.
-const AO_CORNERS: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-
-/**
- * Baked ambient occlusion for one flat tile, as four corner shades: a corner hemmed in by
- * standing tiles (trees, walls) sees less of the sky, so it goes darker. This is depth from
- * LIGHT, not from geometry — the rule of the project is that nothing may grow out of its tile.
- *
- * Split out of buildFlatTileGeometry because felling a tree TILE has to re-bake it: the shade
- * around a tree's feet is baked into its NEIGHBOURS' vertex colours, so a tree that vanished
- * without this would leave its own shadow printed on the clearing the player just opened.
- *
- * O CANTO É UM SÓ, e por isso a conta inclui o próprio tile: os quatro tiles que se encontram num ponto
- * perguntam pelos mesmos quatro tiles e chegam ao mesmo tom. Sem isso, o tile da árvore não se contava,
- * saía claro no canto em que o vizinho saía escuro, e a divisa virava um risco reto em volta dele (relato
- * do autor).
- */
-/**
- * A COR DO CHÃO NUM PONTO QUALQUER: o bioma vezes a sombra de canto (`tileAoCorners`), interpolada dentro do
- * tile. Nos cantos dá exatamente o que `buildFlatTileGeometry` põe no vértice — é isso que faz o beiço da
- * serra e da montanha (desenhado por `buildReliefContourGeometry`, em pedaços que não caem nos cantos)
- * emendar no chão comum sem risco. Antes o beiço saía sem sombra de canto, e a montanha nem com o bioma:
- * onde os dois se encostavam, a cor saltava numa linha reta.
- */
-const groundShadeAt = (solids: ReadonlySet<number>) => (px: number, pz: number): readonly [number, number, number] => {
-  const tx = Math.round(px);
-  const tz = Math.round(pz);
-  const ao = tileAoCorners(tx, tz, solids);
-  const u = Math.min(1, Math.max(0, px - (tx - 0.5)));
-  const v = Math.min(1, Math.max(0, pz - (tz - 0.5)));
-  const shade = ao[0] * (1 - u) * (1 - v) + ao[1] * u * (1 - v) + ao[2] * u * v + ao[3] * (1 - u) * v;
-  const t = biomeTintAt(px, pz);
-  return [t[0] * shade, t[1] * shade, t[2] * shade];
-};
-
-const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<number>): number[] =>
-  AO_CORNERS.map(([dx, dz]) => {
-    let occluders = 0;
-    if (solids) {
-      if (solids.has(tileKey(x, z))) occluders++;
-      if (solids.has(tileKey(x + dx, z))) occluders++;
-      if (solids.has(tileKey(x, z + dz))) occluders++;
-      if (solids.has(tileKey(x + dx, z + dz))) occluders++;
-    }
-    return 1 - AO_MAX * Math.min(1, occluders / 3);
-  });
-
-/**
- * A COSTA, por canto — o degrau que a arrebentação do mar sobe e desce (SEA_SHALLOW_GLSL).
- *
- * Mesma leitura de três vizinhos que a oclusão-ambiente do chão faz, e de propósito: as duas
- * perguntam "o que encosta neste canto?", e se discordassem a espuma nasceria meio tile fora da
- * praia que a sombra desenha. 0 = mar aberto, 1 = um canto cercado de terra (o fundo de uma
- * enseada); a beira de uma costa reta chega a 2/3, que é a faixa em que os limiares do shader
- * estão calibrados.
- */
-const tileShoreCorners = (x: number, z: number, wet: ReadonlySet<number>): number[] =>
-  AO_CORNERS.map(([dx, dz]) => {
-    let land = 0;
-    if (!wet.has(tileKey(x + dx, z))) land++;
-    if (!wet.has(tileKey(x, z + dz))) land++;
-    if (!wet.has(tileKey(x + dx, z + dz))) land++;
-    return land / 3;
-  });
-
-const buildFlatTileGeometry = (
-  tiles: Array<{ x: number; z: number; frame: number }>,
-  /** A altura do quad: um numero, ou uma por tile (a decoracao que sobe com o planalto). */
-  yAt: number | ((x: number, z: number) => number),
-  solids?: ReadonlySet<number>,
-  /** Per-corner shore ramp, emitted as the `aShore` attribute the sea's material reads. */
-  shore?: (x: number, z: number) => number[],
-  /**
-   * Emite o atributo `aWind` (ver WIND_WAVE_GLSL). Só a malha de DECORAÇÃO passa isto: o chão, o
-   * leito e o mar não têm vegetação nenhuma, e um atributo a mais em 11 mil quads de oceano seria
-   * meio megabyte para multiplicar por zero.
-   */
-  windMask?: (frame: number) => number,
-  /**
-   * A cor do BIOMA (world/biomes.ts), lida em cada CANTO do tile: dois tiles vizinhos perguntam pelo
-   * mesmo ponto e chegam à mesma cor, então a passagem de um bioma ao outro é um degradê, nunca um risco.
-   */
-  tintAt?: (x: number, z: number) => readonly [number, number, number],
-): THREE.BufferGeometry => {
-  const pos: number[] = [];
-  const uv: number[] = [];
-  const bounds: number[] = [];
-  const nrm: number[] = [];
-  const col: number[] = [];
-  const shr: number[] = [];
-  const wind: number[] = [];
-  const idx: number[] = [];
-  tiles.forEach(({ x, z, frame }, i) => {
-    const f = tilesetFrameUv(frame);
-    const y = typeof yAt === 'number' ? yAt : yAt(x, z);
-    pos.push(x - 0.5, y, z - 0.5, x + 0.5, y, z - 0.5, x + 0.5, y, z + 0.5, x - 0.5, y, z + 0.5);
-    uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
-    // Which frame of the atlas this quad may sample, so the texel-AA fetch cannot slide into the
-    // next tile's art (pixelArtLight/zhTexelUv). Per vertex because it is ONE mesh: the whole
-    // ground is a single draw and every quad in it windows onto a different tile.
-    for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
-    nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
-    const ao = tileAoCorners(x, z, solids);
-    if (tintAt) {
-      // os cantos na MESMA ordem das posições acima
-      [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].forEach(([dx, dz], k) => {
-        const t = tintAt(x + dx, z + dz);
-        col.push(ao[k] * t[0], ao[k] * t[1], ao[k] * t[2]);
-      });
-    } else {
-      for (const shade of ao) col.push(shade, shade, shade);
-    }
-    if (shore) shr.push(...shore(x, z));
-    if (windMask) {
-      const stir = windMask(frame);
-      for (let k = 0; k < 4; k++) wind.push(stir, x, z);
-    }
-    const b = i * 4;
-    idx.push(b, b + 3, b + 2, b, b + 2, b + 1);
-  });
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  if (shore) geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shr, 1));
-  if (windMask) geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
-  geo.setIndex(idx);
-  return geo;
-};
-
-/**
- * As FAIXAS da margem, de cima para baixo: [onde começa, onde acaba] em fração da profundidade, e
- * a cor. Faixas CHAPADAS e não um degradê — um degradê seria a única aresta lisa do jogo, a mesma
- * razão da espuma serrilhada do mar. O friso de capim de cima é o chão dobrando a borda (sem ele a
- * grama acaba num corte de faca); a terra do meio é a cor do leito; a de baixo é a terra MOLHADA,
- * que é o que diz onde a água bate.
- */
-const BANK_BANDS: ReadonlyArray<readonly [number, number, number]> = [
-  [0, 0.22, 0x2e4720],
-  [0.22, 0.68, 0x4a3520],
-  [0.68, 1, 0x21180e],
-];
-
-// Vertical walls closing the sunken river channel: one strip per band on every edge where a
-// water tile meets a non-water tile, from the land (y=0) down to the bed (y=-depth).
-const buildBankGeometry = (
-  water: ReadonlySet<string>,
-  bedTiles: ReadonlyArray<{ x: number; z: number }>,
-  depth: number,
-): THREE.BufferGeometry => {
-  const pos: number[] = [];
-  const nrm: number[] = [];
-  const col: number[] = [];
-  const idx: number[] = [];
-  const sides: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-  const bandColors = BANK_BANDS.map(([, , hex]) => new THREE.Color(hex)); // sRGB → linear
-  let v = 0;
-  for (const { x, z } of bedTiles) {
-    for (const [dx, dz] of sides) {
-      if (water.has(`${x + dx},${z + dz}`)) continue; // neighbour is also water → no bank here
-      // The shared edge, as two endpoints (a → b) on the ground plane.
-      let ax: number; let az: number; let bx: number; let bz: number;
-      if (dx !== 0) { ax = bx = x + dx * 0.5; az = z - 0.5; bz = z + 0.5; }
-      else { az = bz = z + dz * 0.5; ax = x - 0.5; bx = x + 0.5; }
-      BANK_BANDS.forEach(([from, to], band) => {
-        const top = -depth * from;
-        const bottom = -depth * to;
-        // Strip: (a,b at its top) down to (b,a at its bottom).
-        pos.push(ax, top, az, bx, top, bz, bx, bottom, bz, ax, bottom, az);
-        const c = bandColors[band];
-        for (let k = 0; k < 4; k++) {
-          nrm.push(dx, 0, dz); // horizontal; DoubleSide lights both faces
-          col.push(c.r, c.g, c.b);
-        }
-        idx.push(v, v + 1, v + 2, v, v + 2, v + 3);
-        v += 4;
-      });
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  return geo;
-};
-
-/**
- * A MARGEM ORGÂNICA — onde a terra encontra a água, sem a linha reta do tile.
- *
- * O lago e o rio são tiles, e a margem era a borda do tile: paredes retas, quinas de 90°, o chão
- * acabando num corte de faca. Nada disso muda no DADO (a colisão continua por tile); muda o que se
- * vê. Em cada tile de água encostado na terra, o chão AVANÇA sobre a água por um "beiço" cujo
- * contorno é um campo de distância, decidido pixel de arte a pixel de arte (SHORE_CELLS por tile):
- *
- *   · a distância de cada pixel até a terra vizinha é uma UNIÃO SUAVE (smooth-min) das distâncias
- *     até cada tile de terra — é ela que arredonda a quina CÔNCAVA (a água fazendo um canto);
- *   · a distância até um tile de terra é euclidiana fora dele, então a ponta de terra que entra na
- *     água (o píer, uma quina convexa) sai arredondada sozinha;
- *   · a largura do beiço anda num ruído de valor por coordenada (SHORE_MIN..+SHORE_VAR): a margem
- *     ondula, e é sempre a mesma em todo boot.
- *
- * O beiço é pixel de arte inteiro, em degraus — a margem é serrilhada por texel como a espuma do
- * mar, nunca uma curva lisa que seria a única aresta suave do jogo. Ele veste a arte do tile de
- * chão de onde vem (o mesmo material do chão, então a luz e o AA de texel são os do chão), e o
- * barranco desce pelo CONTORNO dele com as faixas de BANK_BANDS. Faces viradas para o norte não
- * nascem: o próprio beiço as esconde da câmera, que nunca gira.
- *
- * Custo: zero por quadro. É geometria estática nos dois materiais que já existiam (sem programa
- * novo), assada no boot: as células viram faixas por linha (um quad por corrida), e o rio e o lago
- * do mundo inteiro somam poucos milhares de quads — menos que um canto da floresta.
- */
-const SHORE_CELLS = 16; // um pixel de arte
-const SHORE_MIN = 0.05; // em tiles: a largura mínima do beiço (cobre a borda do tile em todo lugar)
-const SHORE_VAR = 0.2; // quanto o ruído soma a ela
-const SHORE_ROUND = 0.45; // o raio da união suave: o tamanho da curva na quina côncava
-const SHORE_MUD = 0x3a2a18; // a terra molhada na linha da água
-const SHORE_MUD_Y = -0.012; // logo abaixo do beiço
-
-const shoreHash = (x: number, z: number): number => {
-  const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
-  return s - Math.floor(s);
-};
-/** Ruído de valor suave em (x, z), 0..1 — determinístico: a mesma margem em todo boot. */
-const shoreNoise = (x: number, z: number): number => {
-  const ix = Math.floor(x);
-  const iz = Math.floor(z);
-  const fx = x - ix;
-  const fz = z - iz;
-  const ux = fx * fx * (3 - 2 * fx);
-  const uz = fz * fz * (3 - 2 * fz);
-  const a = shoreHash(ix, iz);
-  const b = shoreHash(ix + 1, iz);
-  const c = shoreHash(ix, iz + 1);
-  const d = shoreHash(ix + 1, iz + 1);
-  return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
-};
-const smoothMin = (a: number, b: number, k: number): number => {
-  const h = Math.max(k - Math.abs(a - b), 0) / k;
-  return Math.min(a, b) - h * h * k * 0.25;
-};
-
-type ShoreOptions = {
-  /** A largura do beiço, em tiles: o mínimo e quanto o ruído soma. */
-  min?: number;
-  variance?: number;
-  /** O quanto a união das distâncias arredonda. Num corredor estreito o padrão fecha a passagem inteira. */
-  round?: number;
-  /** Raio do canto, em tiles: dois lados de terra se encontrando viram curva. */
-  corner?: number;
-  /** A frequência da ondulação da beira: um poço pequeno precisa dela mais curta para mostrá-la. */
-  wobble?: number;
-  /** A altura do beiço, para quem pousa sobre um chão no mesmo plano. */
-  y?: number;
-  /** Só o beiço: sem barranco, para o que não tem desnível. */
-  flatOnly?: boolean;
-  /** Só a terra que tem arte conta como margem. */
-  sourceOnly?: boolean;
-  /** Só desenha o beiço onde isto responder sim. */
-  keep?: (px: number, pz: number) => boolean;
-  lipTint?: readonly [number, number, number];
-  /**
-   * A cor do chão em cada ponto do beiço (`groundShadeAt`: bioma × sombra de canto). O beiço é o chão de
-   * terra avançando sobre a água (ou o capim mordendo o calçamento), então tem de vestir a MESMA cor do chão
-   * de onde vem; branco, ele desenhava em volta de todo lago um anel de outra cor. Ganha de `lipTint`.
-   */
-  shadeAt?: (x: number, z: number) => readonly [number, number, number];
-  bands?: ReadonlyArray<readonly [number, number, number]>;
-  mud?: number;
-};
-
-const STONE_LIP_Y = 0.004;
-/** A beira do calçamento: positivo o capim morde a pedra, negativo a pedra avança no capim. O mesmo ruído decide os dois lados. */
-const STONE_EDGE_MIN = -0.24;
-const STONE_EDGE_VAR = 0.5;
-const STONE_EDGE_WOBBLE = 2.6;
-
-/** A beira do poço é chão queimado, o mesmo tom do torrão em volta dele. */
-const LAVA_RIM = new THREE.Color(0x453826);
-const LAVA_RIM_TINT: readonly [number, number, number] = [LAVA_RIM.r, LAVA_RIM.g, LAVA_RIM.b];
-
-/** O barranco da lava: carvão em cima, e a parede vai acendendo até o fundo, de onde vem a luz. */
-const LAVA_BANK_BANDS: ReadonlyArray<readonly [number, number, number]> = [
-  [0, 0.4, 0x1c0f08],
-  [0.4, 0.75, 0x4e1a08],
-  [0.75, 1, 0xd4561a],
-];
-
-/**
- * A SUPERFÍCIE DA LAVA, uma malha só e em células: `aShore` vale 1 na margem e 0 a meio tile dela. O canto por
- * vizinho que a água usa não serve aqui: num poço de um tile de largura todo canto encosta na terra, e a lava
- * inteira viraria beira.
- */
-const buildLavaSurface = (lava: ReadonlySet<number>, tiles: ReadonlyArray<{ x: number; z: number }>): THREE.BufferGeometry => {
-  const N = 8;
-  const pos: number[] = [];
-  const uv: number[] = [];
-  const shore: number[] = [];
-  const idx: number[] = [];
-  const y = -LAVA_DEPTH_TILES + 0.02;
-  for (const { x, z } of tiles) {
-    const base = pos.length / 3;
-    for (let j = 0; j <= N; j++) {
-      for (let i = 0; i <= N; i++) {
-        const px = x - 0.5 + i / N;
-        const pz = z - 0.5 + j / N;
-        let d = Infinity;
-        for (let dz = -1; dz <= 1; dz++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (lava.has(tileKey(x + dx, z + dz))) continue;
-            d = Math.min(d, Math.hypot(Math.max(Math.abs(px - x - dx) - 0.5, 0), Math.max(Math.abs(pz - z - dz) - 0.5, 0)));
-          }
-        }
-        pos.push(px, y, pz);
-        uv.push(i / N, j / N);
-        shore.push(1 - Math.min(1, d / 0.5));
-      }
-    }
-    for (let j = 0; j < N; j++) {
-      for (let i = 0; i < N; i++) {
-        const a = base + j * (N + 1) + i;
-        const b = a + 1;
-        const c = a + N + 1;
-        const e = c + 1;
-        idx.push(a, c, e, a, e, b);
-      }
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shore, 1));
-  geo.setIndex(idx);
-  return geo;
-};
-
-const buildShoreGeometry = (
-  wet: ReadonlySet<number>,
-  tiles: ReadonlyArray<{ x: number; z: number }>,
-  landFrame: (x: number, z: number) => number | null,
-  depth: number,
-  opts: ShoreOptions = {},
-): { lip: THREE.BufferGeometry; walls: THREE.BufferGeometry } => {
-  const lipMin = opts.min ?? SHORE_MIN;
-  const lipVar = opts.variance ?? SHORE_VAR;
-  const lipY = opts.y ?? 0;
-  const round = opts.round ?? SHORE_ROUND;
-  const wobble = opts.wobble ?? 1.3;
-  const tint = opts.lipTint ?? [1, 1, 1];
-  const bands = opts.bands ?? BANK_BANDS;
-  const N = SHORE_CELLS;
-  const step = 1 / N;
-  const memo = new Map<number, number>();
-  /** −1 = terra (fora da água), 0 = água aberta, >0 = beiço: o tileKey do chão de onde ele vem, +1. */
-  const cellAt = (gx: number, gz: number): number => {
-    const key = (gx + 262144) * 524288 + (gz + 262144);
-    const hit = memo.get(key);
-    if (hit !== undefined) return hit;
-    const tx = Math.floor(gx / N);
-    const tz = Math.floor(gz / N);
-    let out = 0;
-    if (!wet.has(tileKey(tx, tz))) {
-      out = -1;
-    } else {
-      const px = (gx + 0.5) / N - 0.5;
-      const pz = (gz + 0.5) / N - 0.5;
-      let d = Infinity;
-      let best = Infinity;
-      let src = -1;
-      for (let dz = -1; dz <= 1; dz++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const lx = tx + dx;
-          const lz = tz + dz;
-          if ((dx === 0 && dz === 0) || wet.has(tileKey(lx, lz))) continue;
-          if (opts.sourceOnly && landFrame(lx, lz) === null) continue;
-          const ex = Math.max(Math.abs(px - lx) - 0.5, 0);
-          const ez = Math.max(Math.abs(pz - lz) - 0.5, 0);
-          const di = Math.sqrt(ex * ex + ez * ez);
-          d = d === Infinity ? di : smoothMin(d, di, round);
-          if (di < best && landFrame(lx, lz) !== null) {
-            best = di;
-            src = tileKey(lx, lz);
-          }
-        }
-      }
-      if (opts.corner) {
-        const r = opts.corner;
-        const fx = px - tx;
-        const fz = pz - tz;
-        const ex = 0.5 - Math.abs(fx);
-        const ez = 0.5 - Math.abs(fz);
-        const sideX = !wet.has(tileKey(tx + (fx >= 0 ? 1 : -1), tz));
-        const sideZ = !wet.has(tileKey(tx, tz + (fz >= 0 ? 1 : -1)));
-        if (sideX && sideZ && ex < r && ez < r) d = Math.min(d, r - Math.hypot(r - ex, r - ez));
-      }
-      if (src >= 0 && d < lipMin + lipVar * shoreNoise(px * wobble, pz * wobble) && (!opts.keep || opts.keep(px, pz))) out = src + 1;
-    }
-    memo.set(key, out);
-    return out;
-  };
-
-  const lp: number[] = [];
-  const luv: number[] = [];
-  const lb: number[] = [];
-  const ln: number[] = [];
-  const lc: number[] = [];
-  const li: number[] = [];
-  let lv = 0;
-  const wp: number[] = [];
-  const wn: number[] = [];
-  const wc: number[] = [];
-  const wi: number[] = [];
-  let wv = 0;
-  const bandColors = bands.map(([, , hex]) => new THREE.Color(hex)); // sRGB → linear
-  const wall = (ax: number, az: number, bx: number, bz: number, nx: number, nz: number): void => {
-    if (opts.flatOnly) return;
-    bands.forEach(([from, to], band) => {
-      const top = -depth * from;
-      const bottom = -depth * to;
-      wp.push(ax, top, az, bx, top, bz, bx, bottom, bz, ax, bottom, az);
-      const c = bandColors[band];
-      for (let k = 0; k < 4; k++) {
-        wn.push(nx, 0, nz);
-        wc.push(c.r, c.g, c.b);
-      }
-      wi.push(wv, wv + 1, wv + 2, wv, wv + 2, wv + 3);
-      wv += 4;
-    });
-  };
-
-  for (const { x: tx, z: tz } of tiles) {
-    let nearLand = false;
-    for (let dz = -1; dz <= 1 && !nearLand; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (!wet.has(tileKey(tx + dx, tz + dz))) { nearLand = true; break; }
-      }
-    }
-    if (!nearLand) continue;
-    const gx0 = tx * N;
-    const gz0 = tz * N;
-    const x0 = tx - 0.5;
-    const z0 = tz - 0.5;
-
-    // O beiço: uma faixa por corrida de células da mesma origem, em cada linha.
-    for (let j = 0; j < N; j++) {
-      let i = 0;
-      while (i < N) {
-        const code = cellAt(gx0 + i, gz0 + j);
-        if (code <= 0) { i++; continue; }
-        let e = i;
-        while (e + 1 < N && cellAt(gx0 + e + 1, gz0 + j) === code) e++;
-        const src = code - 1;
-        const f = tilesetFrameUv(landFrame(Math.floor(src / 16384) - 4096, (src % 16384) - 4096) as number);
-        const ax = x0 + i * step;
-        const bx = x0 + (e + 1) * step;
-        const az = z0 + j * step;
-        const bz = az + step;
-        // A arte do chão de origem, pousada sobre o tile de água como se continuasse nele.
-        const u = (px: number): number => f.u0 + (px - x0) * (f.u1 - f.u0);
-        const v = (pz: number): number => f.v1 - (pz - z0) * (f.v1 - f.v0);
-        // Beiço erguido sobre o mesmo plano: sem esta sobra, a câmera vê por baixo da beira um fio do que ele cobre.
-        const g = opts.flatOnly ? 0.012 : 0;
-        lp.push(ax - g, lipY, az - g, bx + g, lipY, az - g, bx + g, lipY, bz + g, ax - g, lipY, bz + g);
-        luv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
-        for (const [cx, cz] of [[ax - g, az - g], [bx + g, az - g], [bx + g, bz + g], [ax - g, bz + g]]) {
-          lb.push(f.cu0, f.cv0, f.cu1, f.cv1);
-          ln.push(0, 1, 0);
-          const c = opts.shadeAt ? opts.shadeAt(cx, cz) : tint;
-          lc.push(c[0], c[1], c[2]);
-        }
-        li.push(lv, lv + 3, lv + 2, lv, lv + 2, lv + 1);
-        lv += 4;
-        i = e + 1;
-      }
-    }
-
-    // O barranco pelo contorno: a face SUL de cada corrida que dá para água aberta...
-    for (let j = 0; j < N; j++) {
-      let i = 0;
-      while (i < N) {
-        const open = (c: number): boolean => cellAt(gx0 + c, gz0 + j) > 0 && cellAt(gx0 + c, gz0 + j + 1) === 0;
-        if (!open(i)) { i++; continue; }
-        let e = i;
-        while (e + 1 < N && open(e + 1)) e++;
-        const z = z0 + (j + 1) * step;
-        wall(x0 + i * step, z, x0 + (e + 1) * step, z, 0, 1);
-        i = e + 1;
-      }
-    }
-    // A LAMA MOLHADA: um pixel de terra onde a água encosta na margem pelos lados e por baixo. Ali o barranco
-    // fica de costas para a câmera, e sem isto o capim acabava direto na água.
-    const mud = new THREE.Color(opts.mud ?? SHORE_MUD);
-    for (let j = 0; j < N && !opts.flatOnly; j++) {
-      for (let i = 0; i < N; i++) {
-        const gx = gx0 + i;
-        const gz = gz0 + j;
-        if (cellAt(gx, gz) !== 0) continue;
-        if (cellAt(gx, gz + 1) === 0 && cellAt(gx - 1, gz) === 0 && cellAt(gx + 1, gz) === 0) continue;
-        const ax = x0 + i * step;
-        const az = z0 + j * step;
-        wp.push(ax, SHORE_MUD_Y, az, ax + step, SHORE_MUD_Y, az, ax + step, SHORE_MUD_Y, az + step, ax, SHORE_MUD_Y, az + step);
-        for (let k = 0; k < 4; k++) {
-          wn.push(0, 1, 0);
-          wc.push(mud.r, mud.g, mud.b);
-        }
-        wi.push(wv, wv + 3, wv + 2, wv, wv + 2, wv + 1);
-        wv += 4;
-      }
-    }
-    // ...e as faces LESTE e OESTE, por coluna.
-    for (const side of [1, -1]) {
-      for (let i = 0; i < N; i++) {
-        let j = 0;
-        while (j < N) {
-          const open = (r: number): boolean => cellAt(gx0 + i, gz0 + r) > 0 && cellAt(gx0 + i + side, gz0 + r) === 0;
-          if (!open(j)) { j++; continue; }
-          let e = j;
-          while (e + 1 < N && open(e + 1)) e++;
-          const x = x0 + (side > 0 ? i + 1 : i) * step;
-          wall(x, z0 + j * step, x, z0 + (e + 1) * step, side, 0);
-          j = e + 1;
-        }
-      }
-    }
-  }
-
-  const lip = new THREE.BufferGeometry();
-  lip.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
-  lip.setAttribute('uv', new THREE.Float32BufferAttribute(luv, 2));
-  lip.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(lb, 4));
-  lip.setAttribute('normal', new THREE.Float32BufferAttribute(ln, 3));
-  lip.setAttribute('color', new THREE.Float32BufferAttribute(lc, 3));
-  lip.setIndex(li);
-  const walls = new THREE.BufferGeometry();
-  walls.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
-  walls.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
-  walls.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
-  walls.setIndex(wi);
-  return { lip, walls };
-};
-
-/**
- * O CHÃO QUEIMADO EM VOLTA DA LAVA: torrões de dois pixels de arte que se desfazem no capim. É geometria do
- * terreno porque só ela sabe onde há lava: nada aqui cai dentro de um tile de lava.
- */
-const SCORCH_REACH = 0.8; // em tiles, a partir da borda da lava
-const SCORCH_CELL = 1 / 8; // dois pixels de arte
-const SCORCH_Y = 0.006;
-const SCORCH_TONES = [0x352c20, 0x453826, 0x56482c] as const;
-
-const buildScorchGeometry = (
-  lava: ReadonlySet<number>,
-  tiles: ReadonlyArray<{ x: number; z: number }>,
-): THREE.BufferGeometry => {
-  const pos: number[] = [];
-  const nrm: number[] = [];
-  const col: number[] = [];
-  const idx: number[] = [];
-  const tones = SCORCH_TONES.map((hex) => new THREE.Color(hex));
-  const seen = new Set<number>();
-  const perTile = Math.round(1 / SCORCH_CELL);
-  const span = Math.ceil(SCORCH_REACH) + 1;
-  let v = 0;
-  for (const t of tiles) {
-    for (let gz = (t.z - span) * perTile; gz < (t.z + span + 1) * perTile; gz++) {
-      for (let gx = (t.x - span) * perTile; gx < (t.x + span + 1) * perTile; gx++) {
-        const key = (gx + 262144) * 524288 + (gz + 262144);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const cx = (gx + 0.5) * SCORCH_CELL - 0.5;
-        const cz = (gz + 0.5) * SCORCH_CELL - 0.5;
-        const tx = Math.round(cx);
-        const tz = Math.round(cz);
-        if (lava.has(tileKey(tx, tz))) continue;
-        let d = Infinity;
-        for (const o of tiles) {
-          const ex = Math.max(Math.abs(cx - o.x) - 0.5, 0);
-          const ez = Math.max(Math.abs(cz - o.z) - 0.5, 0);
-          d = Math.min(d, Math.hypot(ex, ez));
-        }
-        if (d >= SCORCH_REACH || shoreHash(gx, gz) < d / SCORCH_REACH) continue;
-        const c = tones[Math.min(tones.length - 1, Math.floor((d / SCORCH_REACH) * 2 + shoreHash(gz, gx)))];
-        const ax = gx * SCORCH_CELL - 0.5;
-        const az = gz * SCORCH_CELL - 0.5;
-        const bx = ax + SCORCH_CELL;
-        const bz = az + SCORCH_CELL;
-        pos.push(ax, SCORCH_Y, az, bx, SCORCH_Y, az, bx, SCORCH_Y, bz, ax, SCORCH_Y, bz);
-        for (let k = 0; k < 4; k++) {
-          nrm.push(0, 1, 0);
-          col.push(c.r, c.g, c.b);
-        }
-        idx.push(v, v + 3, v + 2, v, v + 2, v + 1);
-        v += 4;
-      }
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  return geo;
-};
-
-/**
- * OS BLOCOS MACICOS, em CUBO — a alvenaria da dungeon e a MONTANHA do mundo aberto.
- *
- * Todo o resto que fica em pe aqui e um quad vertical: uma arvore, uma lapide. Isso funciona
- * porque sao objetos com silhueta, vistos de frente por uma camera que nunca gira — um pinheiro
- * nao tem "lado". Uma parede de masmorra tem: ela e um bloco macico, e o corredor que ela forma so
- * le como corredor se a espessura aparecer. Com quad, uma sala de dungeon vira um desenho de sala;
- * com cubo, vira uma sala. A montanha entrou aqui pela mesma frase: um penhasco desenhado como
- * carta em pe e o adesivo de uma montanha — o mapa fica com paredes de papel, e o topo, que e a
- * metade dela que a camera de cima realmente ve, nao existe.
- *
- * ── Faces escondidas nao entram ─────────────────────────────────────────────────────────────
- * Um cubo cheio custaria 20 vertices por tile, e a dungeon 9 tem ~8 mil tiles de parede: 160 mil
- * vertices para uma masmorra em que a esmagadora maioria dos blocos esta cercada de blocos e nao
- * mostra lado nenhum. Entao cada face lateral so e emitida quando o vizinho daquele lado NAO e
- * parede — a mesma poda que qualquer engine de voxel faz, e aqui ela derruba a conta para perto
- * do que o quad ja custava. Medido na montanha do overworld: 6.147 tiles dao 9.321 faces, ou seja
- * 1,52x os triangulos que os quads em pe custavam — e em troca a malha ficou opaca (o quad em pe
- * era alphaTest, que descarta fragmento e estraga o early-Z).
- *
- * A face NORTE nunca e emitida: a camera esta em (0, camHeight, camBack) olhando o alvo e o mundo
- * nao tem yaw, entao o lado -z de um bloco e sempre o lado de tras. Emiti-la seria pagar geometria
- * para nunca ser vista.
- *
- * ── Uma malha nova, o MESMO material ────────────────────────────────────────────────────────
- * A dungeon reaproveita `mats.solid` tal e qual, e a montanha usa `mats.rock`, que existe desde o
- * primeiro bake e nunca e recriado (terrainMats): material novo em runtime recompilaria todo shader
- * do mundo (a lei do projeto). O que muda a cada bake e so a geometria — e geometria pode nascer e
- * morrer a vontade.
- *
- * ── O VOLUME e PINTADO, nao iluminado ───────────────────────────────────────────────────────
- * `mats.solid`/`mats.rock` levam `normalUp`: toda face e acesa como se olhasse para cima. Isso e a
- * lei de iluminacao deste jogo (uma tocha atras de um plano nunca pode apagar o plano), mas a conta
- * de um cubo: com a mesma luz nas seis faces, teto e frente saem no MESMO tom e o cubo volta a ler
- * como adesivo. Entao a diferenca entre as faces vem em cor de VERTICE (`shade`), com a luz do alto
- * a esquerda que o resto do jogo usa: teto cheio, oeste quase cheio, sul um degrau abaixo, leste no
- * escuro — e um degrade para o PE de cada face lateral, que e a sombra propria do bloco.
- *
- * A dungeon nao leva `shade` de proposito: o teto dela e preto puro (ver mats.wallTop — foram tres
- * tentativas de sombrear aquele teto e todas competiram com o chao), e sombrear as laterais de uma
- * massa que ja e quase preta nao acrescenta leitura nenhuma.
- */
-/** Os frames que viram cubo. Set porque a consulta roda por tile no bake. */
-const DUNGEON_WALL_SET: ReadonlySet<number> = new Set(DUNGEON_WALL_FRAMES);
-const CLIFF_WALL_SET: ReadonlySet<number> = new Set(CLIFF_WALL_FRAMES);
-/** Este frame e MASSA (vira cubo)? Uma pergunta so — a sombra e o bake leem dela. */
-// A mesma lista que a precondicao da tocha de parede consulta (ver `wallTorchFaceIsClear`): duas
-// respostas para "este tile e um bloco macico?" ja seriam uma a mais.
-const isMassFrame = (frame: number): boolean => MASS_TILE_FRAMES.has(frame);
-
-/** Quanto cada face de um cubo vale de luz, e quanto o PE de uma face lateral escurece. */
-type CubeShade = {
-  top: number; south: number; west: number; east: number; foot: number;
-};
-
-/**
- * A MONTANHA iluminada do alto-a-esquerda. Numeros modestos de proposito: a arte de pedra ja e
- * escura (37% dela e a argamassa em #3b3b3b) e a noite deste jogo escurece por cima disto — o
- * bastante para as quinas se separarem, nunca o bastante para a face leste virar um buraco.
- */
-const ROCK_CUBE_SHADE: CubeShade = {
-  top: 1, south: 0.84, west: 0.95, east: 0.72, foot: 0.78,
-};
-
-const buildTileCubeGeometry = (
-  tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
-  isWall: (x: number, z: number) => boolean,
-  shade?: CubeShade,
-): THREE.BufferGeometry => {
-  const pos: number[] = [];
-  const uv: number[] = [];
-  const bounds: number[] = [];
-  const nrm: number[] = [];
-  const col: number[] = [];
-  const topIdx: number[] = [];
-  const sideIdx: number[] = [];
-  const face = (
-    f: ReturnType<typeof tilesetFrameUv>,
-    a: readonly [number, number, number], b: readonly [number, number, number],
-    c: readonly [number, number, number], d: readonly [number, number, number],
-    n: readonly [number, number, number],
-    into: number[],
-    /** Luz na dupla de cima e na dupla de baixo da face — o degrade que assenta o bloco no chao. */
-    lit?: readonly [number, number],
-  ): void => {
-    const base = pos.length / 3;
-    pos.push(...a, ...b, ...c, ...d);
-    // a=cima-esq, b=cima-dir, c=baixo-dir, d=baixo-esq — a mesma ordem do quad em pe, para a
-    // arte cair de pe em toda face e o `aUvBounds` continuar sendo a janela certa do texel-AA.
-    uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
-    for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
-    for (let k = 0; k < 4; k++) nrm.push(...n);
-    if (lit) {
-      for (const s of [lit[0], lit[0], lit[1], lit[1]]) col.push(s, s, s);
-    }
-    into.push(base, base + 2, base + 1, base, base + 3, base + 2);
-  };
-  for (const { x, z, frame } of tiles) {
-    const f = tilesetFrameUv(frame);
-    const [x0, x1] = [x - 0.5, x + 0.5];
-    const [z0, z1] = [z - 0.5, z + 0.5];
-    const side = (s: number): readonly [number, number] | undefined =>
-      (shade ? [s, s * shade.foot] : undefined);
-    // O TETO, sempre — sem ele o bloco fica oco por cima (a face de tras e descartada pelo
-    // backface culling, entao o buraco mostraria o nada). Na dungeon ele vai para o GRUPO PRETO:
-    // uma parede vista de cima nao e uma parede, e desenhar o tijolo ali punha um campo de
-    // alvenaria do tamanho da dungeon competindo com o chao pela atencao. Na MONTANHA e o
-    // contrario — o teto e o planalto, a face que a camera de cima mais ve, e a rocha ali e o que
-    // faz a massa ler como terreno e nao como muro.
-    face(
-      f, [x0, 1, z0], [x1, 1, z0], [x1, 1, z1], [x0, 1, z1], [0, 1, 0],
-      shade ? sideIdx : topIdx, shade ? [shade.top, shade.top] : undefined,
-    );
-    // A face SUL: a frente do bloco, e a unica lateral que a camera enxerga de cheio.
-    if (!isWall(x, z + 1)) {
-      face(f, [x0, 1, z1], [x1, 1, z1], [x1, 0, z1], [x0, 0, z1], [0, 0, 1], sideIdx,
-        side(shade?.south ?? 1));
-    }
-    if (!isWall(x - 1, z)) {
-      face(f, [x0, 1, z0], [x0, 1, z1], [x0, 0, z1], [x0, 0, z0], [-1, 0, 0], sideIdx,
-        side(shade?.west ?? 1));
-    }
-    if (!isWall(x + 1, z)) {
-      face(f, [x1, 1, z1], [x1, 1, z0], [x1, 0, z0], [x1, 0, z1], [1, 0, 0], sideIdx,
-        side(shade?.east ?? 1));
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setIndex([...topIdx, ...sideIdx]);
-  if (shade) {
-    // Um material so, um grupo so: o teto entrou na mesma lista das laterais.
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-    return geo;
-  }
-  // Dois grupos, dois materiais, UMA malha: o teto preto e os lados texturizados. Continua sendo
-  // uma geometria so — o custo de um material a mais aqui e um bind, nao um draw call por bloco.
-  geo.addGroup(0, topIdx.length, 0);
-  geo.addGroup(topIdx.length, sideIdx.length, 1);
-  return geo;
-};
-
-/**
- * A SOMBRA DE UMA MASSA — a lei: **um bloco de alvenaria não é um monte de tiles, e a sombra dele
- * não pode ser um monte de sombras.**
- *
- * O campo instanciado da lua (`fillMoonCastField`) desenha, por tile em pé, uma cópia esticada da
- * arte daquele tile. Para uma ÁRVORE isso é a coisa certa e é o que ele existe para fazer: a
- * silhueta é o desenho da copa, e uma árvore é um objeto solto. Para um MURO é o defeito que o
- * autor viu na dungeon — cada tile de parede largando o seu losango, e o olho contando os tiles do
- * muro pelo chão. Três coisas o produziam ao mesmo tempo, e nenhuma se conserta sozinha:
- *
- *   · **A regra do "só quem está exposto"** (≤ 4 vizinhos sólidos) existe para a mata fechada não
- *     virar um bloco escuro. Numa massa de alvenaria ela faz o contrário do que promete: a fileira
- *     de fora de um maciço tem 5 vizinhos e NÃO projeta, enquanto a quina convexa ao lado projeta —
- *     então o que aparece no chão é um punhado de manchas soltas em vez de uma barra.
- *   · **A largura era 0,92 tile** (`WIDTH_FACTOR`, para a silhueta de uma árvore ser um sopro mais
- *     magra que ela). Entre dois tiles vizinhos isso era uma fresta de luz.
- *   · **A luz é DIRECIONAL e diagonal.** Duas cópias esticadas de tiles vizinhos não ladrilham: na
- *     perpendicular do rumo elas distam 0,55 tile e têm 1 de largura, então ou sobram frestas ou
- *     sobrepõem — e sobrepor DOBRA o escuro (a lei do campo: N camadas pretas dão 1-(1-a)^N).
- *
- * Por isso a sombra de uma massa não sai de quad por tile: ela é **assada como UMA malha sem
- * sobreposição nenhuma**. O desenho é literalmente o que a física manda — a pegada da massa varrida
- * ao longo do rumo da luz (a soma de Minkowski da pegada com o segmento de luz) —, e a UNIÃO é
- * calculada de verdade, num raster de sub-tiles, em vez de ser aproximada empilhando transparências.
- * Sem sobreposição, o escuro é o mesmo em toda a barra: é isso que faz ela ler como UMA sombra.
- *
- * Ela é assada uma vez (a lua não anda) e sai num draw call. O passo do raster é 1/8 de tile — dois
- * texels da arte —, então a borda é uma escadinha de dois pixels, que é o vocabulário desta casa
- * (as sombras são "jagged, and that is fine") e não a curva lisa de um shadow map, que este jogo
- * não tem por decisão.
- */
-const MASS_SHADOW_SUB = 8;
-/** Quanto do quadro o bake do rumo do sol pode gastar. */
-const MASS_BAKE_MS_PER_FRAME = 2;
-/** A folga do campo de alturas em volta do que projeta: a sombra mais longa, com qualquer knob razoável. */
-const MASS_SHADOW_PAD = 8;
-/** Acima do chão e da mancha de contato, abaixo da silhueta de fogo (que é `FOOT_Y` = 0.015). */
-const MASS_SHADOW_Y = 0.012;
-
-/**
- * A SERRA COM A CURVA DA MARGEM — a mesma receita da margem orgânica (`buildShoreGeometry`), agora
- * na pedra. O dado continua por tile (quem anda e quem colide não sabe disto); o que muda é o que se
- * vê. Para cada nível, o contorno é um campo de distância lido por pixel de arte:
- *
- *   · a UNIÃO SUAVE das distâncias até os tiles daquele nível arredonda a quina côncava;
- *   · a quina convexa de verdade (nenhum vizinho nos dois lados nem na diagonal) é um canto de raio
- *     RELIEF_CORNER, que MORDE o próprio tile: só o canto, nunca o centro, onde o herói pisa;
- *   · a largura do beiço anda no mesmo ruído da margem, então a beira ondula e é igual em todo boot.
- *
- * A escada e a água têm chão próprio e ficam de fora: o contorno para na beira delas.
- */
-const RELIEF_CELLS = 16; // um pixel de arte, como a margem: com dois, a curva volta a ser escada
-const RELIEF_CELLS_FAR = 8; // fora do mundo ninguém chega perto: dois pixels, e um quarto das faces
-const RELIEF_LIP_MIN = 0.06;
-const RELIEF_LIP_VAR = 0.3;
-const RELIEF_ROUND = 0.5;
-const RELIEF_CORNER = 0.38;
-const SHORT_STEP_RUN = 0.32;
-const VINE_MIN_RUN = 0.35;
-/** O muro: negativo morde o próprio tile, positivo avança sobre o vizinho. */
-const ROCK_LIP_MIN = -0.24;
-const ROCK_LIP_VAR = 0.56;
-/** O topo do muro mistura pedras grandes e pequenas: uma pintura só repetida lia como piso de pátio. */
-const ROCK_TOP_FRAMES: readonly number[] = [39, 40, 57, 58, 59, 60];
-
-type ReliefPoint = (px: number, pz: number) => number;
-
-const makeReliefField = (
-  levelAt: (x: number, z: number) => number,
-  blocked: (x: number, z: number) => boolean,
-): ReliefPoint => {
-  const open = (x: number, z: number, level: number): boolean => levelAt(x, z) < level && !blocked(x, z);
-  const distanceToTile = (px: number, pz: number, x: number, z: number, level: number): number => {
-    const sx = px >= x ? 1 : -1;
-    const sz = pz >= z ? 1 : -1;
-    const qx = Math.abs(px - x);
-    const qz = Math.abs(pz - z);
-    const inner = 0.5 - RELIEF_CORNER;
-    if (qx > inner && qz > inner && open(x + sx, z, level) && open(x, z + sz, level) && open(x + sx, z + sz, level)) {
-      return Math.max(0, Math.hypot(qx - inner, qz - inner) - RELIEF_CORNER);
-    }
-    return Math.hypot(Math.max(qx - 0.5, 0), Math.max(qz - 0.5, 0));
-  };
-  return (px, pz) => {
-    const tx = Math.round(px);
-    const tz = Math.round(pz);
-    if (blocked(tx, tz)) return levelAt(tx, tz);
-    let top = 0;
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) top = Math.max(top, levelAt(tx + dx, tz + dz));
-    }
-    for (let level = top; level >= 1; level--) {
-      let d = Infinity;
-      for (let dz = -1; dz <= 1; dz++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (levelAt(tx + dx, tz + dz) < level) continue;
-          const di = distanceToTile(px, pz, tx + dx, tz + dz, level);
-          d = d === Infinity ? di : smoothMin(d, di, RELIEF_ROUND);
-        }
-      }
-      // O nível de cima fica um fio para dentro: entre os dois sobra uma saliência, não uma parede só.
-      const lip = (RELIEF_LIP_MIN + RELIEF_LIP_VAR * shoreNoise(px * 1.3 + level * 17, pz * 1.3 + level * 5)) * (level > 1 ? 0.6 : 1);
-      if (d < lip) return level;
-    }
-    return 0;
-  };
-};
-
-/**
- * O MURO DE PEDRA COM FORMA DE ROCHA. O dado continua por tile; o que muda é o desenho, pelo mesmo contorno da
- * serra. A diferença é o sinal: a serra só cresce para fora, e aqui o ruído também morde para dentro do tile, senão
- * o muro seria uma caixa de borda ondulada. No miolo de um maciço, parte dos tiles sobe mais um nível.
- */
-const shapeRock = (
-  tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
-  blocked: (x: number, z: number) => boolean,
-) => {
-  const keys = new Set(tiles.map((t) => tileKey(t.x, t.z)));
-  const isRock = (x: number, z: number): boolean => keys.has(tileKey(x, z));
-  const levels = new Map<number, number>();
-  const frameOf = new Map<number, number>();
-  for (const { x, z } of tiles) {
-    const frame = ROCK_TOP_FRAMES[terrainVariant(x, z, ROCK_TOP_FRAMES.length)];
-    const inner = isRock(x + 1, z) && isRock(x - 1, z) && isRock(x, z + 1) && isRock(x, z - 1);
-    levels.set(tileKey(x, z), inner && shoreNoise(x * 0.7 + 3, z * 0.7 + 8) > 0.45 ? 2 : 1);
-    frameOf.set(tileKey(x, z), frame);
-  }
-  const levelAt = (x: number, z: number): number => levels.get(tileKey(x, z)) ?? 0;
-  const open = (x: number, z: number, level: number): boolean => levelAt(x, z) < level && !blocked(x, z);
-  const field: ReliefPoint = (px, pz) => {
-    const tx = Math.round(px);
-    const tz = Math.round(pz);
-    if (blocked(tx, tz)) return levelAt(tx, tz);
-    let top = 0;
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) top = Math.max(top, levelAt(tx + dx, tz + dz));
-    }
-    for (let level = top; level >= 1; level--) {
-      const reach = ROCK_LIP_MIN - (level > 1 ? 0.14 : 0) + ROCK_LIP_VAR * shoreNoise(px * 1.25 + level * 17, pz * 1.25 + level * 5);
-      let edge: number;
-      if (levelAt(tx, tz) >= level) {
-        const fx = px - tx;
-        const fz = pz - tz;
-        edge = -Infinity;
-        if (open(tx + 1, tz, level)) edge = Math.max(edge, fx - 0.5);
-        if (open(tx - 1, tz, level)) edge = Math.max(edge, -fx - 0.5);
-        if (open(tx, tz + 1, level)) edge = Math.max(edge, fz - 0.5);
-        if (open(tx, tz - 1, level)) edge = Math.max(edge, -fz - 0.5);
-        const sx = fx >= 0 ? 1 : -1;
-        const sz = fz >= 0 ? 1 : -1;
-        const inner = 0.5 - RELIEF_CORNER;
-        if (Math.abs(fx) > inner && Math.abs(fz) > inner && open(tx + sx, tz, level) && open(tx, tz + sz, level) && open(tx + sx, tz + sz, level)) {
-          edge = Math.max(edge, Math.hypot(Math.abs(fx) - inner, Math.abs(fz) - inner) - RELIEF_CORNER);
-        }
-      } else {
-        edge = Infinity;
-        for (let dz = -1; dz <= 1; dz++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (levelAt(tx + dx, tz + dz) < level) continue;
-            const di = Math.hypot(Math.max(Math.abs(px - tx - dx) - 0.5, 0), Math.max(Math.abs(pz - tz - dz) - 0.5, 0));
-            edge = edge === Infinity ? di : smoothMin(edge, di, RELIEF_ROUND);
-          }
-        }
-      }
-      if (edge < reach) return level;
-    }
-    return 0;
-  };
-  const near = new Map<number, { x: number; z: number; frame: number; level: number; far: boolean }>();
-  for (const { x, z } of tiles) {
-    const frame = frameOf.get(tileKey(x, z)) ?? ROCK_TOP_FRAMES[0];
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const k = tileKey(x + dx, z + dz);
-        if (!near.has(k)) near.set(k, { x: x + dx, z: z + dz, frame, level: levelAt(x + dx, z + dz), far: false });
-      }
-    }
-  }
-  return {
-    near: [...near.values()],
-    frameOf,
-    field,
-    levelAt,
-    blocked,
-    isNear: (x: number, z: number): boolean => near.has(tileKey(x, z)),
-  };
-};
-
-/** O desenho do contorno: o gramado do topo, a pedra que desce por ele e as trepadeiras sobre a pedra. */
-const buildReliefContourGeometry = (
-  tiles: ReadonlyArray<{ x: number; z: number; frame: number; level: number; far: boolean }>,
-  /** A arte de todos os tiles da serra: o beiço de um pedaço pode vestir o tile do pedaço vizinho. */
-  frameOf: ReadonlyMap<number, number>,
-  field: ReliefPoint,
-  levelAt: (x: number, z: number) => number,
-  stairs: ReadonlySet<number>,
-  blocked: (x: number, z: number) => boolean,
-  /**
-   * A cor do chão no ponto (bioma × sombra de canto, `groundShadeAt`: a mesma do chão inteiro). Sem ela o beiço
-   * saía branco e o miolo tingido, e onde o beiço encosta no chão comum a cor saltava numa linha reta.
-   */
-  tintAt?: (x: number, z: number) => readonly [number, number, number],
-): {
-  tops: THREE.BufferGeometry; walls: THREE.BufferGeometry; vines: VineQuad[];
-  whole: Array<{ x: number; z: number; frame: number }>; bases: Array<{ x: number; z: number; frame: number }>;
-} => {
-  const whole: Array<{ x: number; z: number; frame: number }> = [];
-  const bases: Array<{ x: number; z: number; frame: number }> = [];
-  const vines: VineQuad[] = [];
-  const tp: number[] = [];
-  const tuv: number[] = [];
-  const tb: number[] = [];
-  const tn: number[] = [];
-  const tc: number[] = [];
-  const ti: number[] = [];
-  const wp: number[] = [];
-  const wuv: number[] = [];
-  const wb: number[] = [];
-  const wn: number[] = [];
-  const wc: number[] = [];
-  const wi: number[] = [];
-  const shade = ROCK_CUBE_SHADE;
-  const lip = 0.012; // a trepadeira, um fio à frente da pedra
-
-  for (const { x: tx, z: tz, frame, level, far } of tiles) {
-    const uniform = (() => {
-      for (let dz = -1; dz <= 1; dz++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (levelAt(tx + dx, tz + dz) !== level || blocked(tx + dx, tz + dz)) return false;
-        }
-      }
-      return true;
-    })();
-    if (uniform) { whole.push({ x: tx, z: tz, frame }); continue; }
-    const N = far ? RELIEF_CELLS_FAR : RELIEF_CELLS;
-    const step = 1 / N;
-    const x0 = tx - 0.5;
-    const z0 = tz - 0.5;
-    const cells = new Int8Array((N + 2) * (N + 2));
-    for (let j = -1; j <= N; j++) {
-      for (let i = -1; i <= N; i++) cells[(j + 1) * (N + 2) + i + 1] = field(x0 + (i + 0.5) * step, z0 + (j + 0.5) * step);
-    }
-    const at = (i: number, j: number): number => cells[(j + 1) * (N + 2) + i + 1];
-    // O beiço veste a arte do tile mais perto daquele nível.
-    const artFor = (c: number): number => {
-      if (level >= c) return frame;
-      let best = frame;
-      let dist = Infinity;
-      for (let dz = -1; dz <= 1; dz++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (levelAt(tx + dx, tz + dz) < c) continue;
-          const f = frameOf.get(tileKey(tx + dx, tz + dz));
-          const d = dx * dx + dz * dz;
-          if (f !== undefined && d < dist) { dist = d; best = f; }
-        }
-      }
-      return best;
-    };
-
-    // O TOPO: corridas de células do mesmo nível, esticadas para baixo enquanto a linha seguinte for
-    // igual. O miolo do tile é quase todo uma peça só, e é aqui que mora a maior parte da economia.
-    let opensToGround = false;
-    const used = new Uint8Array(N * N);
-    for (let j = 0; j < N; j++) {
-      let i = 0;
-      while (i < N) {
-        const c = at(i, j);
-        if (c <= 0) { if (level > 0) opensToGround = true; i++; continue; }
-        if (used[j * N + i]) { i++; continue; }
-        let e = i;
-        while (e + 1 < N && at(e + 1, j) === c && !used[j * N + e + 1]) e++;
-        let rows = 1;
-        grow: while (j + rows < N) {
-          for (let r = i; r <= e; r++) {
-            if (at(r, j + rows) !== c || used[(j + rows) * N + r]) break grow;
-          }
-          rows++;
-        }
-        for (let m = 0; m < rows; m++) used.fill(1, (j + m) * N + i, (j + m) * N + e + 1);
-        const f = tilesetFrameUv(artFor(c));
-        const ax = x0 + i * step;
-        const bx = x0 + (e + 1) * step;
-        const az = z0 + j * step;
-        const bz = az + rows * step;
-        const u = (px: number): number => f.u0 + (px - x0) * (f.u1 - f.u0);
-        const v = (pz: number): number => f.v1 - (pz - z0) * (f.v1 - f.v0);
-        const y = c * RELIEF_HEIGHT;
-        const b = tp.length / 3;
-        tp.push(ax, y, az, bx, y, az, bx, y, bz, ax, y, bz);
-        tuv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
-        for (const [cx, cz] of [[ax, az], [bx, az], [bx, bz], [ax, bz]]) {
-          tb.push(f.cu0, f.cv0, f.cu1, f.cv1);
-          tn.push(0, 1, 0);
-          const t = tintAt ? tintAt(cx, cz) : [1, 1, 1];
-          tc.push(t[0], t[1], t[2]);
-        }
-        ti.push(b, b + 3, b + 2, b, b + 2, b + 1);
-        i = e + 1;
-      }
-    }
-    if (opensToGround) bases.push({ x: tx, z: tz, frame });
-
-    // A PEDRA, por camada: `a`/`b` são o começo e o fim da corrida no chão, e s0/s1 onde ela cai na arte.
-    const face = (
-      ax: number, az: number, bx: number, bz: number, s0: number, s1: number,
-      high: number, low: number, nx: number, nz: number, lit: number,
-    ): void => {
-      for (let y = low; y < high; y++) {
-        const f = tilesetFrameUv(CLIFF_WALL_FRAMES[terrainVariant(tx, tz + y * 7, CLIFF_WALL_FRAMES.length)]);
-        const base = wp.length / 3;
-        const y0 = y * RELIEF_HEIGHT;
-        const y1 = (y + 1) * RELIEF_HEIGHT;
-        wp.push(ax, y1, az, bx, y1, bz, bx, y0, bz, ax, y0, az);
-        const u0 = f.u0 + s0 * (f.u1 - f.u0);
-        const u1 = f.u0 + s1 * (f.u1 - f.u0);
-        wuv.push(u0, f.v1, u1, f.v1, u1, f.v0, u0, f.v0);
-        for (let k = 0; k < 4; k++) {
-          wb.push(f.cu0, f.cv0, f.cu1, f.cv1);
-          wn.push(nx, 0, nz);
-          const s = k < 2 ? lit : lit * shade.foot;
-          wc.push(s, s, s);
-        }
-        wi.push(base, base + 2, base + 1, base, base + 3, base + 2);
-      }
-      // A trepadeira é por tile e por lado: um trecho inteiro de mato, não uns fiapos soltos. Só na face sul e em
-      // trecho comprido: de lado ou num degrau da curva ela sobrava como pontas verdes soltas.
-      if (nz === 0 || Math.hypot(bx - ax, bz - az) < VINE_MIN_RUN) return;
-      const salt = nz !== 0 ? 0 : nx < 0 ? 1 : 2;
-      const roll = Math.abs(Math.imul(tx * 73 + salt * 19 + 5, tz * 137 + 11)) % 100;
-      if (roll >= VINE_CHANCE) return;
-      vines.push({
-        x0: ax + nx * lip, z0: az + nz * lip, x1: bx + nx * lip, z1: bz + nz * lip,
-        top: high * RELIEF_HEIGHT, drop: (high - low) * RELIEF_HEIGHT,
-        variant: roll % VINE_VARIANTS, nx, nz, u0: s0, u1: s1,
-      });
-    };
-    const across = (i: number, j: number): boolean => {
-      const ax = Math.round(x0 + (i + 0.5) * step);
-      const az = Math.round(z0 + (j + 0.5) * step);
-      return stairs.has(tileKey(ax, az));
-    };
-    // A face SUL de cada corrida...
-    for (let j = 0; j < N; j++) {
-      let i = 0;
-      while (i < N) {
-        const c = at(i, j);
-        const n = at(i, j + 1);
-        if (c <= n || across(i, j + 1)) { i++; continue; }
-        let e = i;
-        while (e + 1 < N && at(e + 1, j) === c && at(e + 1, j + 1) === n && !across(e + 1, j + 1)) e++;
-        const z = z0 + (j + 1) * step;
-        face(x0 + i * step, z, x0 + (e + 1) * step, z, i * step, (e + 1) * step, c, n, 0, 1, shade.south);
-        i = e + 1;
-      }
-    }
-    // ...e as faces LESTE e OESTE, por coluna.
-    for (const side of [1, -1]) {
-      for (let i = 0; i < N; i++) {
-        let j = 0;
-        while (j < N) {
-          const c = at(i, j);
-          const n = at(i + side, j);
-          if (c <= n || across(i + side, j)) { j++; continue; }
-          let e = j;
-          while (e + 1 < N && at(i, e + 1) === c && at(i + side, e + 1) === n && !across(i + side, e + 1)) e++;
-          const x = x0 + (side > 0 ? i + 1 : i) * step;
-          const a = z0 + j * step;
-          const b = z0 + (e + 1) * step;
-          // O DEGRAU CURTO DA CURVA NÃO É OUTRA FACE. Com arte e luz próprias, cada um lia como uma ripa, e a parede
-          // curva como uma cerca. Ele repete a coluna de arte onde está e a luz da face sul: a parede fica contínua.
-          if ((e + 1 - j) * step <= SHORT_STEP_RUN) {
-            const s = (i + 0.5) * step;
-            if (side > 0) face(x, b, x, a, s, s, c, n, 1, 0, shade.south);
-            else face(x, a, x, b, s, s, c, n, -1, 0, shade.south);
-          } else if (side > 0) face(x, b, x, a, (e + 1) * step, j * step, c, n, 1, 0, shade.east);
-          else face(x, a, x, b, j * step, (e + 1) * step, c, n, -1, 0, shade.west);
-          j = e + 1;
-        }
-      }
-    }
-  }
-
-  const tops = new THREE.BufferGeometry();
-  tops.setAttribute('position', new THREE.Float32BufferAttribute(tp, 3));
-  tops.setAttribute('uv', new THREE.Float32BufferAttribute(tuv, 2));
-  tops.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(tb, 4));
-  tops.setAttribute('normal', new THREE.Float32BufferAttribute(tn, 3));
-  tops.setAttribute('color', new THREE.Float32BufferAttribute(tc, 3));
-  tops.setIndex(ti);
-  const walls = new THREE.BufferGeometry();
-  walls.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3));
-  walls.setAttribute('uv', new THREE.Float32BufferAttribute(wuv, 2));
-  walls.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(wb, 4));
-  walls.setAttribute('normal', new THREE.Float32BufferAttribute(wn, 3));
-  walls.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3));
-  walls.setIndex(wi);
-  return { tops, walls, vines, whole, bases };
-};
-
-/**
- * O RELEVO É QUE DITA A SOMBRA: um campo de alturas por sub-célula, o mesmo contorno que o desenho usa.
- * Para cada altura que recebe sombra há uma varredura própria, e cada beira projeta `length` por nível
- * de DIFERENÇA. A célula só escurece onde o chão está exatamente naquela altura, de modo que a sombra
- * some dentro de um bloco porque ele a tapa, e volta do outro lado se ainda alcançar.
- */
-type MassHeightGrid = { heights: Int8Array; minX: number; minZ: number; w: number; h: number; top: number };
-
-const buildMassHeightGrid = (
-  tiles: ReadonlyArray<{ x: number; z: number }>,
-  cubeHeight: (x: number, z: number) => number,
-  levelAt: (x: number, z: number) => number,
-  field: ReliefPoint | undefined,
-  isFloorless: (x: number, z: number) => boolean,
-  /** O muro curvo: a sombra dele segue o mesmo contorno do desenho. */
-  rock?: { isNear: (x: number, z: number) => boolean; field: ReliefPoint } | null,
-): MassHeightGrid | null => {
-  if (tiles.length === 0) return null;
-  const S = MASS_SHADOW_SUB;
-  let minX = Infinity; let maxX = -Infinity; let minZ = Infinity; let maxZ = -Infinity;
-  for (const t of tiles) {
-    if (t.x < minX) minX = t.x;
-    if (t.x > maxX) maxX = t.x;
-    if (t.z < minZ) minZ = t.z;
-    if (t.z > maxZ) maxZ = t.z;
-  }
-  minX -= MASS_SHADOW_PAD; maxX += MASS_SHADOW_PAD; minZ -= MASS_SHADOW_PAD; maxZ += MASS_SHADOW_PAD;
-  const w = (maxX - minX + 1) * S;
-  const h = (maxZ - minZ + 1) * S;
-  const heights = new Int8Array(w * h);
-  let top = 0;
-  for (let tz = minZ; tz <= maxZ; tz++) {
-    for (let tx = minX; tx <= maxX; tx++) {
-      const cube = cubeHeight(tx, tz);
-      let near = false;
-      for (let dz = -1; dz <= 1 && !near; dz++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (levelAt(tx + dx, tz + dz) > 0) { near = true; break; }
-        }
-      }
-      const floorless = isFloorless(tx, tz);
-      const curved = rock?.isNear(tx, tz) ?? false;
-      const bx = (tx - minX) * S;
-      const bz = (tz - minZ) * S;
-      for (let j = 0; j < S; j++) {
-        const row = (bz + j) * w + bx;
-        for (let i = 0; i < S; i++) {
-          let v = cube;
-          if (floorless) v = -1;
-          else if (curved) v = rock!.field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S);
-          else if (near && field && cube === 0) v = field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S);
-          heights[row + i] = v;
-          if (v > top) top = v;
-        }
-      }
-    }
-  }
-  return { heights, minX, minZ, w, h, top };
-};
-
-const bakeMassShadow = function* (
-  grid: MassHeightGrid | null,
-  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number; base: number }>,
-  dirX: number,
-  dirZ: number,
-  length: number,
-): Generator<void, THREE.BufferGeometry | null, void> {
-  if (!grid || length <= 0.01) return null;
-  const S = MASS_SHADOW_SUB;
-  const { heights, minX, minZ, w, h, top } = grid;
-  const cell = 1 / S;
-  const pos: number[] = [];
-  const idx: number[] = [];
-  const pushQuad = (x0: number, x1: number, z0: number, z1: number, y: number): void => {
-    const b = pos.length / 3;
-    pos.push(x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1);
-    idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
-  };
-  // O MIOLO NÃO VARRE: se os vizinhos no rumo da sombra são tão altos quanto a célula, a sombra dela
-  // cai inteira dentro da deles. Sobra a beira, que é um fio do mundo.
-  const sx = Math.sign(dirX);
-  const sz = Math.sign(dirZ);
-  const edges: number[] = [];
-  for (let gz = 1; gz < h - 1; gz++) {
-    if (gz % 48 === 0) yield;
-    for (let gx = 1; gx < w - 1; gx++) {
-      const v = heights[gz * w + gx];
-      if (v <= 0) continue;
-      if ((sx !== 0 && heights[gz * w + gx + sx] < v) || (sz !== 0 && heights[(gz + sz) * w + gx] < v)
-        || (sx !== 0 && sz !== 0 && heights[(gz + sz) * w + gx + sx] < v)) edges.push(gx, gz);
-    }
-  }
-  const out = new Uint8Array(w * h);
-  // Marca só o que cai no chão desta altura: o resto é pedra por cima, ou chão de outro nível.
-  const sweep = (gx0: number, gz0: number, size: number, rise: number, receiver: number, sizeZ = size): void => {
-    const reach = rise * length * S;
-    const steps = Math.ceil(reach * 2);
-    for (let s = 0; s <= steps; s++) {
-      const d = (s / steps) * reach;
-      const ox = Math.round(gx0 + dirX * d);
-      const oz = Math.round(gz0 + dirZ * d);
-      for (let j = 0; j < sizeZ; j++) {
-        const gz = oz + j;
-        if (gz < 0 || gz >= h) continue;
-        for (let i = 0; i < size; i++) {
-          const gx = ox + i;
-          if (gx >= 0 && gx < w && heights[gz * w + gx] === receiver) out[gz * w + gx] = 1;
-        }
-      }
-    }
-  };
-  for (let receiver = 0; receiver < top; receiver++) {
-    out.fill(0);
-    for (let e = 0; e < edges.length; e += 2) {
-      if (e % 512 === 0) yield;
-      const rise = heights[edges[e + 1] * w + edges[e]] - receiver;
-      if (rise > 0) sweep(edges[e], edges[e + 1], 1, rise, receiver);
-    }
-    // A escada projeta da altura do meio dela: senão a parede teria um vão bem atrás dos degraus.
-    // A ESCADA PROJETA DEGRAU POR DEGRAU, cada fatia da altura dela: um bloco inteiro na altura do meio saía como
-    // um retângulo duro, maior que os degraus de baixo e mais curto que os de cima (pedido do autor: nada de
-    // risco reto na sombra do chão). Sem ela a parede teria um vão bem atrás dos degraus.
-    for (const t of stairs) {
-      if (t.base !== receiver) continue;
-      const slice = S / STAIR_STEPS;
-      for (let k = 0; k < STAIR_STEPS; k++) {
-        // a fatia `k` (0 embaixo) ocupa, no rumo da subida, [k, k+1] de STAIR_STEPS
-        const along = t.ux + t.uz > 0 ? k : STAIR_STEPS - 1 - k;
-        const gx0 = (t.x - minX) * S + (t.ux !== 0 ? along * slice : 0);
-        const gz0 = (t.z - minZ) * S + (t.uz !== 0 ? along * slice : 0);
-        sweep(gx0, gz0, t.ux !== 0 ? slice : S, (k + 1) / STAIR_STEPS, receiver, t.uz !== 0 ? slice : S);
-      }
-    }
-    // GREEDY MESH: corridas horizontais esticadas para baixo enquanto a linha seguinte for igual.
-    for (let gz = 0; gz < h; gz++) {
-      if (gz % 48 === 0) yield;
-      let gx = 0;
-      while (gx < w) {
-        if (out[gz * w + gx] !== 1) { gx += 1; continue; }
-        let runW = 1;
-        while (gx + runW < w && out[gz * w + gx + runW] === 1) runW += 1;
-        let runH = 1;
-        grow: while (gz + runH < h) {
-          for (let i = 0; i < runW; i += 1) {
-            if (out[(gz + runH) * w + gx + i] !== 1) break grow;
-          }
-          runH += 1;
-        }
-        for (let j = 0; j < runH; j += 1) out.fill(2, (gz + j) * w + gx, (gz + j) * w + gx + runW);
-        // Sub-célula → mundo: o tile (x,z) ocupa [x-0.5, x+0.5].
-        const x0 = minX - 0.5 + gx * cell;
-        const z0 = minZ - 0.5 + gz * cell;
-        pushQuad(x0, x0 + runW * cell, z0, z0 + runH * cell, receiver * RELIEF_HEIGHT + MASS_SHADOW_Y);
-        gx += runW;
-      }
-    }
-  }
-  // OS DEGRAUS têm altura própria: cada sub-célula pergunta se algo corta o raio que sobe dali.
-  const reachTiles = length * top;
-  for (const { x, z, ux, uz, base } of stairs) {
-    yield;
-    for (let j = 0; j < S; j += 1) {
-      for (let i = 0; i < S; i += 1) {
-        const px = x - 0.5 + (i + 0.5) * cell;
-        const pz = z - 0.5 + (j + 0.5) * cell;
-        const along = (px - x) * ux + (pz - z) * uz + 0.5;
-        const tread = base + (Math.min(STAIR_STEPS - 1, Math.floor(along * STAIR_STEPS)) + 1) / STAIR_STEPS;
-        let shaded = false;
-        for (let t = cell; t <= reachTiles && !shaded; t += cell) {
-          const qx = px - dirX * t;
-          const qz = pz - dirZ * t;
-          if (Math.round(qx) === x && Math.round(qz) === z) continue;
-          const gx = Math.floor((qx - minX + 0.5) * S);
-          const gz = Math.floor((qz - minZ + 0.5) * S);
-          if (gx < 0 || gz < 0 || gx >= w || gz >= h) continue;
-          shaded = heights[gz * w + gx] > tread + t / length;
-        }
-        if (!shaded) continue;
-        const x0 = px - cell / 2;
-        const z0 = pz - cell / 2;
-        pushQuad(x0, x0 + cell, z0, z0 + cell, tread * RELIEF_HEIGHT + MASS_SHADOW_Y);
-      }
-    }
-  }
-  if (idx.length === 0) return null;
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setIndex(idx);
-  geo.computeBoundingSphere();
-  return geo;
-};
-
-
-const buildUprightTileGeometry = (
-  tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
-  /** O chão de cada árvore: a mata sobe o morro junto com ele (ver world/relief). */
-  liftAt: (x: number, z: number) => number = () => 0,
-  /** A cor do bioma no pé da árvore (ver `trees` em terrainMats); sem ela, a arte crua. */
-  tintAt?: (x: number, z: number) => readonly [number, number, number],
-): THREE.BufferGeometry => {
-  const pos: number[] = [];
-  const uv: number[] = [];
-  const bounds: number[] = [];
-  const nrm: number[] = [];
-  const col: number[] = [];
-  const wind: number[] = [];
-  const idx: number[] = [];
-  tiles.forEach(({ x, z, frame }, i) => {
-    const f = tilesetFrameUv(frame);
-    // Upright quad on the tile, facing the (fixed-yaw) camera direction (+z). NO CENTRO EXATO do
-    // tile, sempre: o mundo é uma grade e a grade é o desenho (ver o chamador em buildTerrain).
-    const lift = liftAt(x, z);
-    pos.push(x - 0.5, lift + 1, z, x + 0.5, lift + 1, z, x + 0.5, lift, z, x - 0.5, lift, z);
-    uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
-    for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
-    nrm.push(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1);
-    // Quem obedece ao VENTO, e o centro do tile de onde a onda é lida (ver WIND_WAVE_GLSL). É
-    // por vértice porque é UMA malha: a árvore que balança e o túmulo que não estão nela juntos.
-    const sway = WIND_SWAY_FRAMES.has(frame) ? 1 : 0;
-    for (let k = 0; k < 4; k++) wind.push(sway, x, z);
-    const t = tintAt ? tintAt(x, z) : [1, 1, 1];
-    for (let k = 0; k < 4; k++) col.push(t[0], t[1], t[2]);
-    const b = i * 4;
-    idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
-  });
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  return geo;
-};
-
-/**
- * A ESCADA DA SERRA: quatro degraus que vencem um nível (RELIEF_HEIGHT) dentro de um tile, no rumo da subida
- * (`ux`, `uz`). Ela era pedra bruta do paredão nos espelhos e nos lados, e lia como uma rampa enfiada na parede
- * (pedido do autor: "melhore drasticamente o visual da escadaria"). Agora é PEDRA LAVRADA:
- *
- *  · o piso de cada degrau é o calçamento, com uma QUINA mais escura na frente — é a quina que faz o olho
- *    contar degraus de cima;
- *  · o espelho é a mesma pedra, em sombra (talhada do bloco, não o paredão);
- *  · dos lados, uma MURETA que sobe com a escada e acaba num PILAR embaixo e em cima. Só pedra: lanternas em
- *    cima dos pilares chegaram a existir e saíram a pedido do autor ("deixa a escada pura de pedra").
- *
- * Escadas lado a lado, no mesmo rumo e no mesmo andar, são UMA escadaria: entre elas não há mureta, e o piso
- * corre inteiro. A arte de cada face é RECORTADA, não esticada, então os pisos juntos desenham o calçamento uma
- * vez só, no grão do resto do mundo.
- */
-const STAIR_STEPS = 4;
-/** O calçamento liso (as pracinhas de pedra do mundo). */
-const STAIR_TREAD_FRAME = 23;
-const STAIR_SHADE = { tread: 1.14, nose: 0.62, riser: 0.46, wall: 0.68, cap: 1.16, post: 0.82 };
-/** A quina da frente de cada degrau, em fração do fundo do degrau. */
-const STAIR_NOSE = 0.22;
-/** A mureta: espessura (em tiles), altura acima da linha dos degraus, e o pilar das pontas. */
-const STAIR_WALL = 0.14;
-const STAIR_PARAPET = 0.3;
-const STAIR_POST = { len: 0.17, wide: 0.04, rise: 0.2 };
-
-const buildStairGeometry = (
-  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number; base: number }>,
-): THREE.BufferGeometry => {
-  const pos: number[] = [];
-  const uv: number[] = [];
-  const bounds: number[] = [];
-  const nrm: number[] = [];
-  const col: number[] = [];
-  const idx: number[] = [];
-  type Corner = readonly [number, number, number, number, number]; // x, y, z, a, b (a,b em 0..1)
-  const quad = (frame: number, corners: readonly [Corner, Corner, Corner, Corner], shade: number): void => {
-    const f = tilesetFrameUv(frame);
-    const base = pos.length / 3;
-    for (const [x, y, z, a, b] of corners) {
-      pos.push(x, y, z);
-      uv.push(f.u0 + Math.min(1, Math.max(0, a)) * (f.u1 - f.u0), f.v0 + Math.min(1, Math.max(0, b)) * (f.v1 - f.v0));
-      bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
-      nrm.push(0, 1, 0);
-      col.push(shade, shade, shade);
-    }
-    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-  };
-  // As escadas gêmeas: o mesmo rumo, o mesmo andar, encostadas de lado.
-  const keyOf = (t: { x: number; z: number; ux: number; uz: number; base: number }): string => `${t.x},${t.z},${t.ux},${t.uz},${t.base}`;
-  const all = new Set(stairs.map(keyOf));
-  const T = STAIR_TREAD_FRAME;
-  for (const st of stairs) {
-    const { x, z, ux, uz, base } = st;
-    // `s` corre na subida (0 na borda de baixo, 1 na de cima), `t` atravessa a escada. `h` conta a partir
-    // do andar de onde a escada sai (`base`): a do cume nasce em cima do planalto.
-    const vx = -uz;
-    const vz = ux;
-    const at = (s0: number, t0: number, h: number, a: number, b: number): Corner => [
-      x + (s0 - 0.5) * ux + (t0 - 0.5) * vx, (base + h) * RELIEF_HEIGHT, z + (s0 - 0.5) * uz + (t0 - 0.5) * vz, a, b,
-    ];
-    // Gêmea do lado t=0 fica em -v, a do lado t=1 em +v.
-    const twin = [
-      all.has(keyOf({ ...st, x: x - vx, z: z - vz })),
-      all.has(keyOf({ ...st, x: x + vx, z: z + vz })),
-    ];
-    const t0 = twin[0] ? 0 : STAIR_WALL;
-    const t1 = twin[1] ? 1 : 1 - STAIR_WALL;
-
-    // OS DEGRAUS: piso com a quina escura na frente, e o espelho em sombra.
-    for (let k = 0; k < STAIR_STEPS; k += 1) {
-      const s0 = k / STAIR_STEPS;
-      const s1 = (k + 1) / STAIR_STEPS;
-      const sn = s0 + (s1 - s0) * STAIR_NOSE;
-      const h0 = k / STAIR_STEPS;
-      const h1 = (k + 1) / STAIR_STEPS;
-      quad(T, [at(s0, t0, h1, t0, s0), at(s0, t1, h1, t1, s0), at(sn, t1, h1, t1, sn), at(sn, t0, h1, t0, sn)], STAIR_SHADE.nose);
-      quad(T, [at(sn, t0, h1, t0, sn), at(sn, t1, h1, t1, sn), at(s1, t1, h1, t1, s1), at(s1, t0, h1, t0, s1)], STAIR_SHADE.tread);
-      quad(T, [at(s0, t0, h0, t0, h0 * 4 % 1), at(s0, t1, h0, t1, h0 * 4 % 1), at(s0, t1, h1, t1, 1), at(s0, t0, h1, t0, 1)], STAIR_SHADE.riser);
-    }
-
-    // A MURETA de cada lado sem gêmea: sobe com a escada, a uma altura fixa acima da linha dos degraus.
-    for (const side of [0, 1] as const) {
-      if (twin[side]) continue;
-      const out = side === 0 ? 0 : 1;
-      const inn = side === 0 ? STAIR_WALL : 1 - STAIR_WALL;
-      const top = (sv: number): number => sv + STAIR_PARAPET;
-      // a face de fora, do chão até o topo inclinado
-      quad(T, [at(0, out, 0, 0, 0), at(1, out, 0, 1, 0), at(1, out, top(1), 1, 1), at(0, out, top(0), 0, 1)], STAIR_SHADE.wall);
-      // a face de dentro, dos degraus até o topo (por degrau, para não atravessar o piso)
-      for (let k = 0; k < STAIR_STEPS; k += 1) {
-        const s0 = k / STAIR_STEPS;
-        const s1 = (k + 1) / STAIR_STEPS;
-        const h1 = (k + 1) / STAIR_STEPS;
-        quad(T, [at(s0, inn, h1, s0, 0), at(s1, inn, h1, s1, 0), at(s1, inn, top(s1), s1, 1), at(s0, inn, top(s0), s0, 1)], STAIR_SHADE.wall);
-      }
-      // o capeamento, mais claro: é a linha que desenha a escadaria de cima
-      quad(T, [at(0, out, top(0), out, 0), at(0, inn, top(0), inn, 0), at(1, inn, top(1), inn, 1), at(1, out, top(1), out, 1)], STAIR_SHADE.cap);
-      // a ponta de baixo da mureta
-      quad(T, [at(0, out, 0, 0, 0), at(0, inn, 0, 1, 0), at(0, inn, top(0), 1, 1), at(0, out, top(0), 0, 1)], STAIR_SHADE.wall);
-      // OS PILARES, embaixo e em cima: um bloco um nada mais largo e mais alto que a mureta
-      const wide = STAIR_POST.wide;
-      const pOut = side === 0 ? -wide : 1 + wide;
-      const pIn = side === 0 ? STAIR_WALL + wide : 1 - STAIR_WALL - wide;
-      for (const [sa, sb, floor] of [[0, STAIR_POST.len, 0], [1 - STAIR_POST.len, 1, 1]] as const) {
-        const hTop = floor + STAIR_PARAPET + STAIR_POST.rise;
-        const hBot = floor === 0 ? 0 : 0.5;
-        const box = (ta: number, tb: number, s0: number, s1: number, shade: number): void => {
-          quad(T, [at(s0, ta, hBot, 0, 0), at(s1, tb, hBot, 1, 0), at(s1, tb, hTop, 1, 1), at(s0, ta, hTop, 0, 1)], shade);
-        };
-        box(pOut, pOut, sa, sb, STAIR_SHADE.post); // fora
-        box(pIn, pIn, sa, sb, STAIR_SHADE.post); // dentro
-        box(pOut, pIn, sa, sa, STAIR_SHADE.post * 0.92); // de frente (o lado de baixo da escada)
-        box(pOut, pIn, sb, sb, STAIR_SHADE.post * 0.92); // de trás
-        quad(T, [at(sa, pOut, hTop, 0, 0), at(sa, pIn, hTop, 1, 0), at(sb, pIn, hTop, 1, 1), at(sb, pOut, hTop, 0, 1)], STAIR_SHADE.cap);
-      }
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  return geo;
-};

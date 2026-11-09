@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { ASSET_KEYS, MOONFLOWER_FRAMES } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
@@ -103,7 +103,7 @@ export class MoonflowerObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  private readonly scene: Phaser.Scene;
+  private readonly scene: Engine.Scene;
   /** The upright bank (closed → half open): blocks, casts a shadow. */
   private readonly bud: Billboard3D;
   /** The lying bank (half open → open): the walkable petal-bridge. */
@@ -125,10 +125,9 @@ export class MoonflowerObject implements WorldProp {
   private glowOwned = false;
   private budFrame = -1;
   private bloomFrame = -1;
-  private pulseTween?: Phaser.Tweens.Tween;
   private bumpMs = 0;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
@@ -275,7 +274,7 @@ export class MoonflowerObject implements WorldProp {
 
     // Which bank, and how much of each. Inside the dissolve window both are drawn; outside it
     // exactly one is, so a flower at rest costs one quad like any other prop.
-    const mix = Phaser.Math.Clamp((o - (handoff - DISSOLVE)) / (DISSOLVE * 2), 0, 1);
+    const mix = Engine.Math.Clamp((o - (handoff - DISSOLVE)) / (DISSOLVE * 2), 0, 1);
     const budAlpha = 1 - mix;
     const bloomAlpha = mix;
 
@@ -290,7 +289,7 @@ export class MoonflowerObject implements WorldProp {
       this.poseBud(this.nearest(openAt.standing, standing, o));
       // A closed bud sways in the wind; a bumped one trembles on top of that. Both die out as it
       // opens — a flower lying on the ground has nothing to sway.
-      const still = 1 - Phaser.Math.Clamp(o / handoff, 0, 1);
+      const still = 1 - Engine.Math.Clamp(o / handoff, 0, 1);
       const bump = this.bumpMs > 0 ? Math.sin(this.bumpMs * 0.09) * (this.bumpMs / BUMP_MS) * BUMP_DEG : 0;
       this.bud.setAngle(
         bump + Math.sin((this.aliveMs * 2 * Math.PI) / SWAY_MS) * SWAY_DEG * still,
@@ -306,7 +305,7 @@ export class MoonflowerObject implements WorldProp {
       this.bloom.setVisible(true).setAlpha(bloomAlpha);
       this.poseBloom(this.nearest(openAt.lying, lying, o));
       // Fades in ELEVATED and settles: the petals are still falling at the handoff (see LAND_ELEV).
-      const drop = Phaser.Math.Clamp((o - handoff) / (1 - handoff), 0, 1);
+      const drop = Engine.Math.Clamp((o - handoff) / (1 - handoff), 0, 1);
       this.bloom.setElevation(LAND_ELEV * (1 - drop));
       const size = BLOOM_SIZE * (1 - squash);
       this.bloom.setDisplaySize(size, size);
@@ -388,7 +387,7 @@ export class MoonflowerObject implements WorldProp {
     this.releaseGlow();
     this.glow.setVisible(true);
     this.glowOwned = true;
-    this.pulseTween = this.scene.tweens.add({
+    this.scene.tweens.add({
       targets: this.glow,
       alpha: { from: GLOW_ALPHA, to: GLOW_ALPHA * 0.55 },
       duration: PULSE_MS,
@@ -400,7 +399,6 @@ export class MoonflowerObject implements WorldProp {
 
   /** Hand the halo's alpha back to render(): stops the flash and the breathing pulse alike. */
   private releaseGlow(): void {
-    this.pulseTween = undefined;
     if (!this.glowOwned) return;
     this.scene.tweens.killTweensOf(this.glow);
     this.glowOwned = false;

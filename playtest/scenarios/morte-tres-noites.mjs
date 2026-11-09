@@ -28,7 +28,7 @@ export default {
       await sleep(600);
       await page.keyboard.press('z');
       await sleep(1500);
-      const lying = await page.evaluate(() => window.__scene.sleeping && window.__scene.sleepingAtCamp);
+      const lying = await page.evaluate(() => window.__scene.rest.isSleeping && window.__scene.rest.sleepingAtCamp);
       assert(`Noite ${n}: deitado no colchão`, lying, '');
       const before = await page.evaluate((keys) => keys.filter((k) => window.__scene.seenDialogKeys.has(k)), KEYS);
       // A noite passa: a hora de dormir, e depois a manhã.

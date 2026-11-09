@@ -44,7 +44,7 @@ export default {
     assert('A nascente e o poço são sólidos, e o poço é água', map.springSolid && map.poolSolid && map.poolWater, JSON.stringify(map));
     assert('A beira do laguinho (51,58) continua livre para o herói olhar', map.sideFree, JSON.stringify(map));
     assert('O riacho do alto (52,54)-(53,54) é sólido', map.streamSolid, JSON.stringify(map));
-    assert('O lago das carpas (5×3) é água, com 7 carpas', map.pondWater && map.koi === 7, JSON.stringify(map));
+    assert('O lago das carpas (5×3) é água, com 4 carpas', map.pondWater && map.koi === 4, JSON.stringify(map));
 
     const frames = new Set();
     for (let i = 0; i < 12; i += 1) {

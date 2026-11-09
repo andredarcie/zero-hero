@@ -5,6 +5,8 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
 import { FX_DOT_TEXTURE, WATER_DEPTH_TILES, type World3D } from '@/game/render3d/World3D';
 import { OVERCAST, SEASON_GRADE, rainAmountAt, seasonOf, weatherAt, type Season, type Weather } from '@/game/runtime/seasons';
 import { getDay, getTimeOfDay } from '@/game/runtime/timeOfDay';
+import { windAt } from '@/game/runtime/wind';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * O CÉU DO VALE: a cor da estação no quadro inteiro e a chuva ou a neve em volta do herói. Os pingos são
@@ -53,7 +55,7 @@ let texturesReady = false;
 const registerRainTextures = (): void => {
   if (texturesReady) return;
   const add = (key: string, w: number, h: number, paint: (put: (x: number, y: number, a: number, c?: string) => void) => void): void => {
-    const c = document.createElement('canvas');
+    const c = createCanvas();
     c.width = w;
     c.height = h;
     const ctx = c.getContext('2d');
@@ -166,11 +168,9 @@ export class ValleyWeather {
     );
   }
 
-  /** O vento agora (tiles/ms para o leste): uma brisa que vai e vem, com rajadas por cima. */
+  /** O vento agora (tiles/ms para o leste): o mesmo do vale inteiro (runtime/wind), que as sementes também leem. */
   private wind(): number {
-    const t = this.clock / 1000;
-    const gust = Math.max(0, Math.sin(t * 0.37) * Math.sin(t * 0.11 + 1.3));
-    return 0.0007 + 0.0005 * Math.sin(t * 0.21) + 0.0016 * gust * gust;
+    return windAt(this.world.elapsedMs);
   }
 
   private spawn(snowy: boolean, at: { x: number; y: number }, anywhere: boolean): Drop {

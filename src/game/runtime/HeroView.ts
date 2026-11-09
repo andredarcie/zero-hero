@@ -1,18 +1,18 @@
 import { HERO_FRAMES, TIMINGS } from '@/game/constants';
 
 /**
- * The hero's whole visual state — plain data, no Phaser GameObject.
+ * The hero's whole visual state — plain data, no 2D GameObject.
  *
- * The hero used to be an INVISIBLE Phaser sprite that drew nothing: it carried the state
+ * The hero used to be an INVISIBLE 2D sprite that drew nothing: it carried the state
  * (position, frame, flip, tint, alpha) and `syncHeroBillboard` mirrored it onto the 3D
  * billboard the player actually sees. Now the state simply IS the state, and the billboard
- * is its only view. Phaser still animates it — tweens take any object, not just GameObjects —
- * so the knockback shove, the hurt blink, the breathing and the death fade are untouched.
- * The one thing a plain object cannot borrow from Phaser is the animation component, so the
+ * is its only view. The engine still animates it — tweens take any object, not just GameObjects —
+ * so the breathing, the lunge of a swing and every cut-scene move keep working.
+ * The one thing a plain object cannot borrow from the engine is the animation component, so the
  * walk cycle is ticked here (see tickHeroView).
  */
 export interface HeroView {
-  /** Screen px: the centre pin the hero is nailed to, displaced by a knockback shove. */
+  /** Screen px: the centre pin the hero is nailed to. */
   x: number;
   y: number;
   /** One tile on screen. The hero's FEET sit half a tile below (x, y). */
@@ -118,7 +118,7 @@ export const createHeroView = (): HeroView => ({
 /**
  * Devolve o heroi ao estado de nascenca, sem trocar o OBJETO.
  *
- * O `hero` da GameScene e um campo `readonly` inicializado uma vez — e o Phaser REUSA a mesma
+ * O `hero` da GameScene e um campo `readonly` inicializado uma vez — e o motor REUSA a mesma
  * instancia de cena num `scene.restart()`. Entao tudo o que uma cena escreveu aqui (o alpha da
  * morte, o tint do dano, e agora a escala 0.001 e o giro que a succao do portal deixam) chega
  * inteiro na cena seguinte. O heroi do level novo nascia invisivel.
@@ -160,7 +160,7 @@ const BOB_LIFT_TILES = 0.055;
 const BOB_RISE = 0.35;
 
 /**
- * Advance the walk cycle — what Phaser's animation component used to do for the sprite.
+ * Advance the walk cycle — what the engine's animation component used to do for the sprite.
  *
  * Driven by `walkDist`, so it is the hero's *movement* that turns his legs over rather than a
  * wall clock that happens to run alongside it.

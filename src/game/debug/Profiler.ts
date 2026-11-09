@@ -53,7 +53,7 @@ export interface FrameSample {
   textures: number;
   /** JS heap in MB (Chrome only, 0 elsewhere). A staircase here is a leak. */
   heapMb: number;
-  /** Renderer + gameplay gauges (fires, enemies, tweens…). */
+  /** Renderer + gameplay gauges (fires, tweens…). */
   gauges: Record<string, number>;
   marks: string[];
 }
@@ -228,7 +228,7 @@ class Profiler {
   }
 
   /**
-   * Record a gameplay counter for this frame (enemies alive, tweens running…). Correlating a
+   * Record a gameplay counter for this frame (fires burning, tweens running…). Correlating a
    * spike with what the game was DOING is usually faster than reading any timing.
    */
   public gauge(name: string, value: number): void {
@@ -449,7 +449,7 @@ class Profiler {
       })
       .sort((a, b) => b.avgMs - a.avgMs);
 
-    // Gauges: min/avg/max of every counter (fires, lights in use, enemies, draw calls…).
+    // Gauges: min/avg/max of every counter (fires, lights in use, draw calls…).
     const byGauge = new Map<string, number[]>();
     const addGauge = (k: string, v: number): void => {
       const arr = byGauge.get(k) ?? [];

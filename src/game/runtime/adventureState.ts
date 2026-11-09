@@ -1,5 +1,6 @@
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { DyeKind } from '@/game/quests/dyePlants';
+import { localStore } from '@/game/platform/platform';
 
 /**
  * A MEMORIA DA AVENTURA — o save.
@@ -36,7 +37,7 @@ export interface AdventureMachine {
   dir?: number;
 }
 
-/** Em que conversa a quest da Iris está (ver quests/PainterQuest). */
+/** Em que conversa a quest da Sisi está (ver quests/PainterQuest). */
 export type PaintStage = 'start' | 'dig' | 'sow' | 'water' | 'grow' | 'harvest' | 'paint' | 'review' | 'done';
 
 export interface PaintPlot {
@@ -61,7 +62,7 @@ export interface PaintQuestSave {
   review?: { form: string; color: string };
 }
 
-/** Em que etapa a quest da Vega está, e quais dos quatro alvos o herói já achou no céu. */
+/** Em que etapa a quest da Thea está, e quais dos quatro alvos o herói já achou no céu. */
 export interface SkyQuestSave {
   stage: 'start' | 'iron' | 'glass' | 'polish' | 'carry' | 'night' | 'done';
   found: string[];
@@ -74,7 +75,7 @@ export interface SkyQuestSave {
   furnace?: { charcoal: boolean; bloom: boolean; sand: boolean; glass: boolean };
 }
 
-/** Em que etapa a quest do Bram está, e como cada ofício saiu: é sobre isso que ele comenta. */
+/** Em que etapa a quest do Marco está, e como cada ofício saiu: é sobre isso que ele comenta. */
 export interface LumberQuestSave {
   stage: 'start' | 'gather' | 'ready' | 'light' | 'done';
   /** Há um galho em pé no cepo, esperando o machado. */
@@ -110,7 +111,7 @@ export interface AdventureSnapshot {
   day: number;
   /** A hora do relógio: sem ela, toda volta seria meia-noite, e quem joga pouco nunca chegaria à próxima. */
   clock: number | null;
-  /** Os cogumelos na cesta, a caminho da Hollis. */
+  /** Os cogumelos na cesta, a caminho da Shui. */
   basket: HeldItemKind[];
   seenDialogKeys: Set<string>;
   seenItems: Set<string>;
@@ -255,7 +256,7 @@ const migrateGround = (
 const load = (): AdventureSnapshot => {
   const base = defaultSnapshot();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStore().getItem(STORAGE_KEY);
     if (!raw) return base;
     const p = JSON.parse(raw) as StoredSnapshot;
     return {
@@ -285,7 +286,7 @@ const load = (): AdventureSnapshot => {
       visitedChunks: new Set(p.visitedChunks ?? []),
       readLines: new Set(p.readLines ?? []),
       questProgress: new Map(
-        // A Hollis pedia que se ENCONTRASSE cada espécie (`gather`); hoje ela pede que se ENTREGUE
+        // A Shui pedia que se ENCONTRASSE cada espécie (`gather`); hoje ela pede que se ENTREGUE
         // (`deliver`, uma de cada vez). O que já foi achado num save antigo vale como entregue.
         Object.entries(p.questProgress ?? {}).map(([key, n]) => [
           key.replace('radiationSuit/gather:', 'radiationSuit/deliver:'), num(n, 0),
@@ -346,7 +347,7 @@ export const saveAdventure = (): void => {
     skyQuest: s.skyQuest,
   };
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    localStore().setItem(STORAGE_KEY, JSON.stringify(stored));
   } catch {
     // Storage cheio/bloqueado: o modulo continua valendo nesta aba, so nao sobrevive a ela.
   }
@@ -357,7 +358,7 @@ export const resetAdventure = (): void => {
   state = defaultSnapshot();
   respawnRequested = false;
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStore().removeItem(STORAGE_KEY);
   } catch { /* nada a apagar */ }
 };
 

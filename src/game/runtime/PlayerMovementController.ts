@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { HERO_FRAMES, TIMINGS } from '@/game/constants';
 import { TouchStick } from './ActionButtons';
@@ -39,7 +39,7 @@ const INPUT_BUFFER_SLACK_MS = 30;
 const SWIPE_THRESHOLD_PX = 11;
 /** The drag anchor trails the finger on a leash this long, so turning around stays cheap. */
 const SWIPE_ANCHOR_LEASH_PX = 18;
-/** Throttle repeated bumps (holding into a wall or an enemy) so they don't fire every frame. */
+/** Throttle repeated bumps (holding into a wall) so they don't fire every frame. */
 const HELD_BUMP_COOLDOWN_MS = 220;
 /**
  * A stall (a shader compile, a backgrounded tab) must not fling the hero across the map. It can
@@ -54,12 +54,12 @@ interface Dir {
 }
 
 export class PlayerMovementController {
-  private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | undefined;
+  private readonly cursors: Engine.Types.Input.Keyboard.CursorKeys | undefined;
   private readonly wasd: {
-    up?: Phaser.Input.Keyboard.Key;
-    down?: Phaser.Input.Keyboard.Key;
-    left?: Phaser.Input.Keyboard.Key;
-    right?: Phaser.Input.Keyboard.Key;
+    up?: Engine.Input.Keyboard.Key;
+    down?: Engine.Input.Keyboard.Key;
+    left?: Engine.Input.Keyboard.Key;
+    right?: Engine.Input.Keyboard.Key;
   };
 
   private lastBumpTime = 0;
@@ -105,7 +105,7 @@ export class PlayerMovementController {
   private readonly boundTouchEnd: (e: TouchEvent) => void;
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     private readonly hero: HeroView,
     private readonly camera: WorldCamera,
     /**
@@ -125,17 +125,17 @@ export class PlayerMovementController {
     const keyboard = scene.input.keyboard;
     this.cursors = keyboard?.createCursorKeys();
     this.wasd = {
-      up: keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      down: keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      left: keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      right: keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      up: keyboard?.addKey(Engine.Input.Keyboard.KeyCodes.W),
+      down: keyboard?.addKey(Engine.Input.Keyboard.KeyCodes.S),
+      left: keyboard?.addKey(Engine.Input.Keyboard.KeyCodes.A),
+      right: keyboard?.addKey(Engine.Input.Keyboard.KeyCodes.D),
     };
 
     // Mouse fallback (non-touch devices)
-    this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handlePointerDown, this);
-    this.scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.handlePointerMove, this);
-    this.scene.input.on(Phaser.Input.Events.POINTER_UP, this.handlePointerUpOrCancel, this);
-    this.scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUpOrCancel, this);
+    this.scene.input.on(Engine.Input.Events.POINTER_DOWN, this.handlePointerDown, this);
+    this.scene.input.on(Engine.Input.Events.POINTER_MOVE, this.handlePointerMove, this);
+    this.scene.input.on(Engine.Input.Events.POINTER_UP, this.handlePointerUpOrCancel, this);
+    this.scene.input.on(Engine.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUpOrCancel, this);
 
     // Window-level touch listeners so the drag works anywhere on screen, not just inside the canvas
     this.boundTouchStart = this.handleTouchStart.bind(this);
@@ -146,8 +146,8 @@ export class PlayerMovementController {
     window.addEventListener('touchend', this.boundTouchEnd, { passive: true });
     window.addEventListener('touchcancel', this.boundTouchEnd, { passive: true });
 
-    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.removeWindowListeners, this);
-    this.scene.events.once(Phaser.Scenes.Events.DESTROY, this.removeWindowListeners, this);
+    this.scene.events.once(Engine.Scenes.Events.SHUTDOWN, this.removeWindowListeners, this);
+    this.scene.events.once(Engine.Scenes.Events.DESTROY, this.removeWindowListeners, this);
   }
 
   /**
@@ -166,7 +166,7 @@ export class PlayerMovementController {
    * É `root` sem relógio, e por isso passa pela mesma porta: o passo em curso TERMINA no tile
    * (parar o herói em cima de uma aresta seria um soluço), só o próximo não começa. E é diferente
    * de simplesmente não chamar `update`: o mundo continua correndo atrás da bolsa, e um herói
-   * congelado no meio do tile enquanto a caveira anda seria um bug com data marcada.
+   * congelado no meio do tile enquanto o resto do mundo anda seria um bug com data marcada.
    */
   public hold(held: boolean): void {
     this.heldStill = held;
@@ -307,9 +307,9 @@ export class PlayerMovementController {
   private readJustPressed(): Dir | null {
     const c = this.cursors;
     const w = this.wasd;
-    const just = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean => {
-      const ja = a ? Phaser.Input.Keyboard.JustDown(a) : false;
-      const jb = b ? Phaser.Input.Keyboard.JustDown(b) : false;
+    const just = (a?: Engine.Input.Keyboard.Key, b?: Engine.Input.Keyboard.Key): boolean => {
+      const ja = a ? Engine.Input.Keyboard.JustDown(a) : false;
+      const jb = b ? Engine.Input.Keyboard.JustDown(b) : false;
       return ja || jb;
     };
 
@@ -331,7 +331,7 @@ export class PlayerMovementController {
   private readHeld(): Dir | null {
     const c = this.cursors;
     const w = this.wasd;
-    const held = (a?: Phaser.Input.Keyboard.Key, b?: Phaser.Input.Keyboard.Key): boolean =>
+    const held = (a?: Engine.Input.Keyboard.Key, b?: Engine.Input.Keyboard.Key): boolean =>
       Boolean(a?.isDown) || Boolean(b?.isDown);
 
     if (held(c?.left, w.left)) return { dx: -1, dy: 0 };
@@ -434,19 +434,19 @@ export class PlayerMovementController {
   // revólver estava na mão. O revólver foi arrancado inteiro — nada neste jogo se aponta —, e a
   // chave foi junto: o mouse voltou a ter um trabalho só, ser o dedo de quem não tem tela de toque.)
 
-  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
+  private handlePointerDown(pointer: Engine.Input.Pointer): void {
     if (pointer.wasTouch) return;
     this.touchAnchor = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
   }
 
-  private handlePointerMove(pointer: Phaser.Input.Pointer): void {
+  private handlePointerMove(pointer: Engine.Input.Pointer): void {
     if (pointer.wasTouch) return;
     const anchor = this.touchAnchor;
     if (!pointer.isDown || !anchor || anchor.pointerId !== pointer.id) return;
     this.trackDrag(anchor, pointer.x, pointer.y);
   }
 
-  private handlePointerUpOrCancel(pointer: Phaser.Input.Pointer): void {
+  private handlePointerUpOrCancel(pointer: Engine.Input.Pointer): void {
     if (pointer.wasTouch) return;
     if (!this.touchAnchor || this.touchAnchor.pointerId !== pointer.id) return;
     this.touchDir = null;
@@ -506,8 +506,8 @@ export class PlayerMovementController {
    * logica que o GameScene guarda.
    *
    * A posicao logica pula para o tile de destino no instante em que o passo comeca (ver
-   * `stepFrom`), de proposito: o wind-up da caveira trava naquele tile e a esquiva e decidida
-   * contra ele. Mas o corpo desenhado ainda esta atras, deslizando — o heroi fica preso no
+   * `stepFrom`), de proposito: e contra ele que a colisao e tudo o que pergunta pelo tile do heroi
+   * decidem. Mas o corpo desenhado ainda esta atras, deslizando — o heroi fica preso no
    * centro da tela e e o mundo que escorrega. Entao qualquer overlay 2D que se ancore no tile
    * logico enquanto ele anda nasce ATE UM TILE A FRENTE do proprio heroi: foi assim que o arco
    * da espada apareceu flutuando na frente de quem corria e batia ao mesmo tempo.

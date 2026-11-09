@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { ASSET_KEYS, TOOLBOX_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -19,7 +19,7 @@ export class ToolboxObject implements WorldProp {
   private frame: number = TOOLBOX_FRAMES.closed;
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     public readonly worldX: number,
     public readonly worldY: number,
     public readonly dir: PropDir = 1,

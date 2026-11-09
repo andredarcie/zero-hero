@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { ASSET_KEYS, ITEM_FRAMES, SCENE_DEPTHS } from '@/game/constants';
 
@@ -36,7 +36,7 @@ const TRAIL_DEPTH  = SCENE_DEPTHS.player; // behind main sprite
 
 // ── Standing in the world's light ────────────────────────────────────────────
 //
-// The swing is the last WORLD object drawn on the Phaser canvas, which sits ABOVE the 3D one:
+// The swing is the last WORLD object drawn on the 2D canvas, which sits ABOVE the 3D one:
 // it gets no lighting, no tone mapping and no night grade. Left alone it renders at full art
 // brightness over a night-dark world, so a light-palette tool (the steel axe is greys and bone)
 // swung like a lightbulb while the hero holding it stood in shadow — the "branco estourado".
@@ -51,7 +51,7 @@ const SWING_DARK = 0x5a5c78; // the multiply tint under moonlight alone — cool
 const HIT_FLASH_TINT = 0xfff0c4;
 /** Curto o bastante para caber dentro do hitstop mais leve (60ms) e morrer com ele. */
 const HIT_FLASH_MS = 70;
-/** Blend the night tint toward white by `level` (0..1) and pack it back into a Phaser tint. */
+/** Blend the night tint toward white by `level` (0..1) and pack it back into a 2D tint. */
 const swingLitTint = (level: number): number => {
   const t = Math.max(0, Math.min(1, level));
   const lerp = (dark: number): number => Math.round(dark + (255 - dark) * t);
@@ -70,7 +70,7 @@ const swingLitTint = (level: number): number => {
 //
 // The head always travels OVER the hero and never up through the ground: it sweeps in ONE
 // direction, from a wind-up behind him to the strike. The rotation is driven through a scratch
-// object rather than the sprite's own `angle`, because Phaser wraps that getter into [-180, 180]
+// object rather than the sprite's own `angle`, because the engine wraps that getter into [-180, 180]
 // — a tween reading it back would take the long way round (the same trap the slash documents).
 const CHOP_REAR_MS    = 125;  // hauling it up and back: the slow beat that gives it weight
 const CHOP_HANG_MS    = 50;   // held at the top of the swing
@@ -138,9 +138,9 @@ export const CHOP_DRIVE_AT_MS = CHOP_REAR_MS + CHOP_HANG_MS;
 export const CHOP_TOTAL_MS = CHOP_IMPACT_MS + CHOP_RECOIL_MS + CHOP_FADE_MS;
 
 export class SwordSlash {
-  private readonly scene: Phaser.Scene;
-  private readonly sprite: Phaser.GameObjects.Sprite;
-  private readonly trails: Phaser.GameObjects.Sprite[];
+  private readonly scene: Engine.Scene;
+  private readonly sprite: Engine.GameObjects.Sprite;
+  private readonly trails: Engine.GameObjects.Sprite[];
   private onFire = false;
   /** Light where the swing happens, 0..1 — see SWING_DARK. Set by the caller before each swing. */
   private lightLevel = 1;
@@ -159,7 +159,7 @@ export class SwordSlash {
   // `trail` is how far the motion blur has faded in (0 on the wind-up, 1 through the drive).
   private readonly chop$ = { angle: 0, handX: 0, handY: 0, size: 0, trail: 0, spin: 1 };
 
-  public constructor(scene: Phaser.Scene) {
+  public constructor(scene: Engine.Scene) {
     this.scene = scene;
 
     const makeSprite = (depth: number) =>
@@ -195,7 +195,7 @@ export class SwordSlash {
    * `delayedCall` e não tween, porque um tween seria congelado pelo mesmo hitstop que este lampejo
    * existe para pintar, e a lâmina ficaria acesa até o mundo voltar a andar.
    *
-   * Aqui isso é de graça, e é o único lugar do combate onde é: o arco é um sprite 2D do Phaser
+   * Aqui isso é de graça, e é o único gesto do herói em que é: o arco é um sprite 2D do motor
    * DESENHADO POR CIMA do canvas 3D, não um billboard `emissive` — então a lei que proíbe acender
    * um corpo atingido (silhueta chapada que o bloom espalha e o hitstop segura acesa) não alcança
    * a arma. Ela não passa pelo bloom.
@@ -203,7 +203,7 @@ export class SwordSlash {
   public flashHit(): void {
     if (!this.sprite.visible) return;
     // A cor de volta sai de `bladeTint`, e não de ler `tintTopLeft` do sprite: aquele campo é a
-    // representação INTERNA do Phaser (quatro cantos, formato dele), e depender dela para uma
+    // representação INTERNA do motor (quatro cantos, formato dele), e depender dela para uma
     // ida-e-volta é o tipo de coisa que uma versão menor do motor quebra em silêncio. Quem pintou
     // a lâmina sabe de que cor ela é.
     this.flashUntilId += 1;
@@ -236,7 +236,7 @@ export class SwordSlash {
     this.trails.forEach(t => this.scene.tweens.killTweensOf(t));
 
     // blade points "up" in sprite-space → +90° rotates it to face attack direction
-    // Normalize to [-180, 180] so startAngle stays in that range — Phaser's angle
+    // Normalize to [-180, 180] so startAngle stays in that range — the engine's angle
     // getter wraps to [-180, 180], so if startAngle > 180 the tween reads a wrapped
     // value and rotates the long way around (full spin bug on left-facing attacks).
     let attackAngleDeg = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
@@ -326,7 +326,7 @@ export class SwordSlash {
    * com o punho no centro dele e os fantasmas abertos atras do gume.
    *
    * O angulo e tweenado num objeto de rascunho, e nao no `angle` do sprite, pela mesma armadilha
-   * que o `chop` documenta: o getter do Phaser embrulha em [-180, 180], entao um tween que passa
+   * que o `chop` documenta: o getter do motor embrulha em [-180, 180], entao um tween que passa
    * de 180 le um valor embrulhado no frame seguinte e volta girando pelo caminho longo.
    */
   public spin(playerScreenX: number, playerScreenY: number, tileSize: number): void {
@@ -417,7 +417,7 @@ export class SwordSlash {
     // Which way round the head travels. Mirrored for a westward blow: with a single fixed spin
     // the pick would wind up ahead of the hero and scoop UP through the floor into the rock.
     const spin = attack >= 0 ? 1 : -1;
-    const rear   = Phaser.Math.Clamp(attack - spin * CHOP_REAR_DEG, -CHOP_REAR_CAP, CHOP_REAR_CAP);
+    const rear   = Engine.Math.Clamp(attack - spin * CHOP_REAR_DEG, -CHOP_REAR_CAP, CHOP_REAR_CAP);
     const bury   = attack + spin * (axe ? AXE_BITE_DEG : CHOP_BURY_DEG);
     const recoil = attack - spin * CHOP_RECOIL_DEG;
 

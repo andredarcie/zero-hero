@@ -20,7 +20,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy-itch:
+  # O PORTÃO DO DEPLOY: lint e testes de unidade. O deploy só roda se este job passar
+  # (`needs: test`); com um teste vermelho, nada vai ao ar no itch.io.
+  test:
+    name: Lint e testes de unidade
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,7 +32,30 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # O Vitest pede Node 22 ou mais novo.
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+  deploy-itch:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
           cache: npm
 
       - name: Install dependencies

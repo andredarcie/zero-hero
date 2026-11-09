@@ -1,13 +1,14 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import {
   INK, paintColumn, RAMPS, toneOf, type Paint,
 } from '@/game/render3d/pixelForms';
 import { registerTexture3D } from '@/game/render3d/textures3d';
+import { createCanvas } from '@/game/platform/platform';
 
-// A ARTE DA QUEST DA VEGA: a areia, a cinza, o vidro, o tripé e o telescópio. Pixel desenhado aqui, nas
-// duas pipelines, como a arte da Iris (ver paintTextures).
+// A ARTE DA QUEST DA THEA: a areia, a cinza, o vidro, o tripé e o telescópio. Pixel desenhado aqui, nas
+// duas pipelines, como a arte da Sisi (ver paintTextures).
 
 const PALETTE: Readonly<Record<string, readonly [number, number, number, number]>> = {
   '.': [0, 0, 0, 0],
@@ -150,7 +151,7 @@ const TELESCOPE_STAND = [
   '.....kk......kk.',
 ];
 
-// A caneca de esmalte da Vega, e o fiapo de vapor que sobe dela.
+// A caneca de esmalte da Thea, e o fiapo de vapor que sobe dela.
 const MUG = [
   '................',
   '................',
@@ -189,7 +190,7 @@ export const TELESCOPE_ITEM_TEXTURE = 'sky-telescope-item';
 export const TRIPOD_TEXTURE = 'sky-tripod';
 export const TELESCOPE_STAND_TEXTURE = 'sky-telescope-stand';
 
-/** A nave da Vega, em 32×32: um corpo redondo, com a luz vindo da esquerda, como as casas (ver pixelForms). */
+/** A nave da Thea, em 32×32: um corpo redondo, com a luz vindo da esquerda, como as casas (ver pixelForms). */
 export const paintShip = (rect: Paint, open: boolean): void => {
   // As aletas ficam atrás do casco.
   for (let i = 0; i < 8; i += 1) {
@@ -261,7 +262,7 @@ const paintBed = (rect: Paint): void => {
 };
 
 const paintedCanvas = (size: number, paint: (rect: Paint) => void): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
@@ -274,7 +275,7 @@ const paintedCanvas = (size: number, paint: (rect: Paint) => void): HTMLCanvasEl
 };
 
 const rowsCanvas = (rows: readonly string[]): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = rows[0].length;
   canvas.height = rows.length;
   const ctx = canvas.getContext('2d');
@@ -293,7 +294,7 @@ const rowsCanvas = (rows: readonly string[]): HTMLCanvasElement => {
 // O registro THREE é um mapa de módulo que sobrevive ao restart da cena: registrar uma vez só.
 let threeRegistered = false;
 
-export const registerSkyTextures = (scene: Phaser.Scene): void => {
+export const registerSkyTextures = (scene: Engine.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, HTMLCanvasElement]> = [
     [SAND_TEXTURE, rowsCanvas(SAND)],
     [ASH_TEXTURE, rowsCanvas(ASH)],

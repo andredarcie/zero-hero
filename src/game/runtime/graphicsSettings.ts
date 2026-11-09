@@ -1,3 +1,4 @@
+import { localStore } from '@/game/platform/platform';
 // Player-facing graphics settings (the pause menu writes them, the renderer reads them).
 //
 // · The tilt-shift depth of field. It is the signature of the HD-2D look, but a permanently
@@ -14,7 +15,7 @@ const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 
 const read = (key: string, fallback: number): number => {
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = localStore().getItem(key);
     if (raw === null) return fallback;
     const value = Number(raw);
     return Number.isFinite(value) ? clamp01(value) : fallback;
@@ -25,7 +26,7 @@ const read = (key: string, fallback: number): number => {
 
 const write = (key: string, value: number): void => {
   try {
-    window.localStorage.setItem(key, String(value));
+    localStore().setItem(key, String(value));
   } catch {
     // ignore: the session still honours the setting, it just won't survive a reload
   }

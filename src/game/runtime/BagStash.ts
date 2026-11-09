@@ -1,7 +1,8 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { SCENE_DEPTHS } from '@/game/constants';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * GUARDAR NA BOLSA DE COURO (pedido do autor): colhido o cogumelo, o herói mostra a bolsa do lado direito e
@@ -10,7 +11,7 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
  * fecha a aba com o fecho dourado, balança e some. É o lugar onde o jogador VÊ que a colheita foi guardada —
  * por isso substituiu o balão de pensamento com a cesta.
  *
- * Como o balão de pensamento, mora no Phaser e se ancora no corpo DESENHADO do herói (`visualWorld`): a
+ * Como o balão de pensamento, mora no motor 2D e se ancora no corpo DESENHADO do herói (`visualWorld`): a
  * cena chama `render` a cada quadro com essa âncora. O relógio é dos tweens; `render` só posiciona.
  * Os sons vêm por callback, para esta classe não conhecer o áudio.
  */
@@ -65,10 +66,10 @@ const paintBag = (ctx: CanvasRenderingContext2D, open: boolean): void => {
   }
 };
 
-const ensureArt = (scene: Phaser.Scene): void => {
+const ensureArt = (scene: Engine.Scene): void => {
   for (const [key, open] of [[BAG_OPEN, true], [BAG_SHUT, false]] as const) {
     if (scene.textures.exists(key)) continue;
-    const canvas = document.createElement('canvas');
+    const canvas = createCanvas();
     canvas.width = ART;
     canvas.height = ART;
     const ctx = canvas.getContext('2d');
@@ -76,7 +77,7 @@ const ensureArt = (scene: Phaser.Scene): void => {
     scene.textures.addCanvas(key, canvas);
   }
   if (!scene.textures.exists(DUST)) {
-    const canvas = document.createElement('canvas');
+    const canvas = createCanvas();
     canvas.width = 2;
     canvas.height = 2;
     const ctx = canvas.getContext('2d');
@@ -114,11 +115,11 @@ export interface BagStashSounds {
   clasp: () => void;
 }
 
-interface Mote { img: Phaser.GameObjects.Image; x: number; y: number; vx: number; vy: number; age: number; life: number }
+interface Mote { img: Engine.GameObjects.Image; x: number; y: number; vx: number; vy: number; age: number; life: number }
 
 export class BagStash {
-  private readonly bag: Phaser.GameObjects.Image;
-  private readonly item: Phaser.GameObjects.Image;
+  private readonly bag: Engine.GameObjects.Image;
+  private readonly item: Engine.GameObjects.Image;
   private readonly motes: Mote[] = [];
   /** Posições em frações de tile, relativas ao pé do herói. A cena projeta a cada quadro. */
   private readonly itemPos = { x: HAND_AT.x, y: HAND_AT.y };
@@ -128,10 +129,10 @@ export class BagStash {
   private bagTilt = 0;
   private alpha = 1;
   private done = false;
-  private readonly timers: Phaser.Time.TimerEvent[] = [];
+  private readonly timers: Engine.Time.TimerEvent[] = [];
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     itemTexture: string,
     itemFrame: number,
     private readonly sounds: BagStashSounds,

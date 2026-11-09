@@ -1,10 +1,10 @@
 # Zero the Hero
 
-Zero the Hero is a pixel-art action game built with Phaser 3, TypeScript, Three.js, and Vite. The player earns coins from the undead and spends them to build the open world one chunk at a time.
+Zero the Hero is a pixel-art action game built with its own small 2D engine (`src/game/engine`), TypeScript, Three.js, and Vite. The player earns coins from the undead and spends them to build the open world one chunk at a time.
 
 ## Stack
 
-- `Phaser 3`
+- own 2D engine (`src/game/engine`)
 - `Three.js`
 - `TypeScript`
 - `Vite`

@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import {
   ASSET_KEYS,
@@ -7,21 +7,22 @@ import {
 } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { HAND_FONT, paperTextureCanvas, seedOf, seededRandom } from '@/game/runtime/uiStyle';
+import { createCanvas } from '@/game/platform/platform';
 
 const GLOW_TEXTURE = '_itemget_glow';
 const MOTE_TEXTURE = '_itemget_mote';
 
 // A LUZ É MISTURA NORMAL, NUNCA ADD (pedido do autor: "a luz fica quadrada, como uma imagem cortada"). O
-// Phaser desenha num canvas TRANSPARENTE por cima do mundo 3D, e o ADD do Phaser (ONE, DST_ALPHA) também
+// motor 2D desenha num canvas TRANSPARENTE por cima do mundo 3D, e o ADD dele (ONE, DST_ALPHA) também
 // soma no alfa: dentro do quadrado de cada imagem a vinheta âmbar de baixo era multiplicada pelo próprio
 // alfa e clareava — o halo e cada semente de luz apareciam como quadrados de borda reta. A textura já traz
 // a cor e a transparência, então a mistura normal brilha igual e some suave na borda. E é filtrada (LINEAR):
 // em NEAREST o degradê ampliado vira degraus.
 
-const ensureTextures = (scene: Phaser.Scene): void => {
+const ensureTextures = (scene: Engine.Scene): void => {
   if (!scene.textures.exists(GLOW_TEXTURE)) {
     const size = 256;
-    const canvas = document.createElement('canvas');
+    const canvas = createCanvas();
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;
@@ -31,11 +32,11 @@ const ensureTextures = (scene: Phaser.Scene): void => {
     grad.addColorStop(1, 'rgba(255,200,130,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
-    scene.textures.addCanvas(GLOW_TEXTURE, canvas)?.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    scene.textures.addCanvas(GLOW_TEXTURE, canvas)?.setFilter(Engine.Textures.FilterMode.LINEAR);
   }
   if (!scene.textures.exists(MOTE_TEXTURE)) {
     const size = 32;
-    const canvas = document.createElement('canvas');
+    const canvas = createCanvas();
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;
@@ -45,7 +46,7 @@ const ensureTextures = (scene: Phaser.Scene): void => {
     grad.addColorStop(1, 'rgba(255,230,180,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
-    scene.textures.addCanvas(MOTE_TEXTURE, canvas)?.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    scene.textures.addCanvas(MOTE_TEXTURE, canvas)?.setFilter(Engine.Textures.FilterMode.LINEAR);
   }
 };
 
@@ -62,15 +63,15 @@ export type ItemGetConfig = { texture: string; frame: number; label: string };
  * assenta num cartao de pergaminho, com um carrilhao baixinho. Nada pisca, nada treme.
  */
 export class ItemGetOverlay {
-  private readonly objs: Phaser.GameObjects.GameObject[] = [];
-  private readonly timers: Phaser.Time.TimerEvent[] = [];
+  private readonly objs: Engine.GameObjects.GameObject[] = [];
+  private readonly timers: Engine.Time.TimerEvent[] = [];
   /** As texturas de papel deste cartão: geradas na hora, apagadas junto com ele. */
   private readonly paperKeys: string[] = [];
   private closing = false;
   private canSkip = false;
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     private readonly item: ItemGetConfig,
     private readonly onClose: () => void,
   ) {
@@ -83,7 +84,7 @@ export class ItemGetOverlay {
     const itemTopY = Math.round(heroY - heroSize * 1.18);
     const D = SCENE_DEPTHS.toast + 30;
 
-    const reg = <T extends Phaser.GameObjects.GameObject>(o: T): T => { this.objs.push(o); return o; };
+    const reg = <T extends Engine.GameObjects.GameObject>(o: T): T => { this.objs.push(o); return o; };
 
     // ── o mundo fica, so aquece: uma vinheta ambar suave, nunca preto ─────────────
     const warm = reg(scene.add.rectangle(0, 0, width, height, 0x2a1608, 0).setOrigin(0).setDepth(D).setInteractive());
@@ -96,7 +97,7 @@ export class ItemGetOverlay {
 
     // ── o cavaleiro, de frente, com um pulinho de contente ─────────────────────────
     const hero = reg(scene.add.sprite(cx, heroY, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
-      .setOrigin(0.5).setDepth(D + 2).setDisplaySize(heroSize, heroSize).setAlpha(0)) as Phaser.GameObjects.Sprite;
+      .setOrigin(0.5).setDepth(D + 2).setDisplaySize(heroSize, heroSize).setAlpha(0)) as Engine.GameObjects.Sprite;
     scene.tweens.add({ targets: hero, alpha: 1, duration: 260, ease: 'Sine.easeOut' });
     this.after(300, () => {
       scene.tweens.add({ targets: hero, y: heroY - heroSize * 0.12, duration: 170, yoyo: true, ease: 'Sine.easeOut' });
@@ -130,7 +131,7 @@ export class ItemGetOverlay {
 
     scene.input.keyboard?.on('keydown', this.handleSkip, this);
     this.after(500, () => {
-      if (!this.closing) scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.handleSkip, this);
+      if (!this.closing) scene.input.on(Engine.Input.Events.POINTER_DOWN, this.handleSkip, this);
     });
   }
 
@@ -203,7 +204,7 @@ export class ItemGetOverlay {
   private paperCard(w: number, h: number): string {
     const key = `_itemget_paper_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     const m = 8;
-    const canvas = document.createElement('canvas');
+    const canvas = createCanvas();
     canvas.width = w + m * 2;
     canvas.height = h + m * 2;
     const ctx = canvas.getContext('2d');
@@ -252,7 +253,7 @@ export class ItemGetOverlay {
     this.closing = true;
     for (const t of this.timers) t.remove();
     this.scene.input.keyboard?.off('keydown', this.handleSkip, this);
-    this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.handleSkip, this);
+    this.scene.input.off(Engine.Input.Events.POINTER_DOWN, this.handleSkip, this);
     this.scene.tweens.add({
       targets: this.objs,
       alpha: 0,
@@ -272,7 +273,7 @@ export class ItemGetOverlay {
     this.closing = true;
     for (const t of this.timers) t.remove();
     this.scene.input.keyboard?.off('keydown', this.handleSkip, this);
-    this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.handleSkip, this);
+    this.scene.input.off(Engine.Input.Events.POINTER_DOWN, this.handleSkip, this);
     for (const o of this.objs) {
       this.scene.tweens.killTweensOf(o);
       o.destroy();

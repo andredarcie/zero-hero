@@ -1,3 +1,5 @@
+// A plataforma (ver game/platform/platform.ts) entra antes de tudo: é por ela que o jogo fala com o navegador.
+import '@/game/platform/installBrowser';
 import '@/styles/global.css';
 import { ZeroTheHeroGame } from '@/game/ZeroTheHeroGame';
 import { installDevLauncher } from '@/game/debug/DevLauncher';
@@ -22,7 +24,7 @@ declare global {
   }
 }
 
-// Phaser rasterizes each Text to a canvas the first time it renders and caches it. If the
+// The 2D engine rasterizes each Text to a canvas the first time it renders and caches it. If the
 // pixel font isn't loaded yet, that first render uses the monospace fallback and is never
 // refreshed — which is exactly the "blurry / wrong" text. So we wait for the self-hosted
 // font to be ready, then boot the game.
@@ -37,7 +39,7 @@ installDevLauncher();
 
 const fonts = document.fonts;
 if (fonts && typeof fonts.load === 'function') {
-  // As tres vozes da interface (ver runtime/uiStyle.ts): o pixel, o livro e a pena. O Phaser
+  // As tres vozes da interface (ver runtime/uiStyle.ts): o pixel, o livro e a pena. O motor 2D
   // tambem escreve com as duas ultimas (o cartao de item ganho), entao todas esperam aqui.
   Promise.all([
     fonts.load('8px "Press Start 2P"'), fonts.load('16px "Press Start 2P"'),

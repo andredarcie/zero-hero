@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { ASSET_KEYS, BLOOM_BLOWS } from '@/game/constants';
 import { itemGroundVisual, type HeldItemKind } from '@/game/entities/ItemPickup';
@@ -8,7 +8,7 @@ import type { WorldProp } from './WorldProp';
 import { hammerResult, isHammerable } from './hammering';
 
 /**
- * A BIGORNA DA VEGA (pedido do autor): fixa, ao lado do forno, e o ÚNICO lugar onde a esponja de ferro vira barra —
+ * A BIGORNA DA THEA (pedido do autor): fixa, ao lado do forno, e o ÚNICO lugar onde a esponja de ferro vira barra —
  * a martelada no chão saiu. Uma bigorna de ferreiro de verdade sobre um toco (spritefactory/sprites/altar.mjs), com
  * o MARTELINHO encostado nela: o herói põe a peça em cima, pega o martelinho e malha; saindo de perto, o martelinho
  * volta para o lugar (GameScene.forgeStrike / returnForgeHammer). O nome "altar" ficou no código e no mapa.
@@ -88,7 +88,7 @@ export class AltarObject implements WorldProp {
   public forgeCount = 0;
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     public readonly worldX: number,
     public readonly worldY: number,
     public readonly playerBuilt = false,

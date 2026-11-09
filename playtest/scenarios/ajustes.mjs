@@ -2,11 +2,11 @@
 // um pedido no jogo de verdade e tira a foto que o olho confere:
 //
 //  1. a cadeira de madeira na beira do lago, sem mato na frente     8. guardar o cogumelo na bolsa de couro
-//  2. a 2ª conversa do mago sem tarefa nem nome de vizinho           9. a Hollis diz o nome e a curiosidade
+//  2. a 2ª conversa do mago sem tarefa nem nome de vizinho           9. a Shui diz o nome e a curiosidade
 //  3. a espada fincada se descreve num pensamento                   10. nada de graveto nem pedra soltos
 //  4. sem os portões e a pedra perto do mago                         11. sem o banco do morro que dava zoom
 //  5. sem o balanço                                                  12. (pedra solta: junto do 10)
-//  6. a Hollis acena para quem aparece na borda da serra             13. a Vega independente: carvão no lago de lava
+//  6. a Shui acena para quem aparece na borda da serra             13. a Thea independente: carvão no lago de lava
 //  7. a luz de ganhar item sem borda quadrada                        14. o lago de lava sem estourar
 //                                                                    15. a tela de título só com a mata
 //
@@ -15,7 +15,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default {
   name: 'ajustes',
-  description: 'Os ajustes do autor jogando: cadeira do lago, mago, espada, portões, balanço, aceno da Hollis, luz do item, bolsa de couro, nomes dos cogumelos, sem soltos, carvão da Vega, lava, título.',
+  description: 'Os ajustes do autor jogando: cadeira do lago, mago, espada, portões, balanço, aceno da Shui, luz do item, bolsa de couro, nomes dos cogumelos, sem soltos, carvão da Thea, lava, título.',
   needsGame: false,
   async run({ driver, shot, assert, log }) {
     const { page } = driver;
@@ -133,10 +133,10 @@ export default {
     await page.waitForFunction(() => !window.__scene.bagStash, null, { timeout: 5000 });
     assert('8. A animação termina sozinha', true, '');
 
-    // ── 9. A HOLLIS DIZ O NOME E A CURIOSIDADE ────────────────────────────────────────────────
-    // A Hollis mora em (5, 40) (world.json); o NPC só existe na cena quando o pedaço do mapa dela está carregado.
-    const hollis = world.chunks.flatMap((c) => c.npcs).find((n) => n.type === 'radiationSuit');
-    await put(hollis.worldX, hollis.worldY + 1, 0, -1);
+    // ── 9. A SHUI DIZ O NOME E A CURIOSIDADE ────────────────────────────────────────────────
+    // A Shui mora em (5, 40) (world.json); o NPC só existe na cena quando o pedaço do mapa dela está carregado.
+    const shui = world.chunks.flatMap((c) => c.npcs).find((n) => n.type === 'radiationSuit');
+    await put(shui.worldX, shui.worldY + 1, 0, -1);
     await sleep(800);
     await press('z', 60, 900); // a 1ª conversa: o pedido e a faca
     await closeDialog();
@@ -147,39 +147,39 @@ export default {
     });
     await press('z', 60, 300);
     await page.waitForFunction(() => window.gameDebug?.getState()?.dialogOpen === true, null, { timeout: 8000 }).catch(() => {});
-    const hollisSays = (await dialogLines()) ?? [];
-    log(`  Hollis: ${hollisSays.join(' / ')}`);
-    const named = hollisSays.findIndex((l) => /Ah, uma? (porcini|morchela)|Ah, an? (porcini|yellow morel)/i.test(l));
-    assert('9. Ela diz o nome do cogumelo', named >= 0, hollisSays.join(' / '));
-    assert('9. E logo depois a curiosidade dele', named >= 0 && hollisSays[named + 1] && !/^Ah,/.test(hollisSays[named + 1]), hollisSays.join(' / '));
-    await shot('09-hollis-nomeia', { note: 'A Hollis dizendo o nome do cogumelo' });
+    const shuiSays = (await dialogLines()) ?? [];
+    log(`  Shui: ${shuiSays.join(' / ')}`);
+    const named = shuiSays.findIndex((l) => /Ah, uma? (porcini|morchela)|Ah, an? (porcini|yellow morel)/i.test(l));
+    assert('9. Ela diz o nome do cogumelo', named >= 0, shuiSays.join(' / '));
+    assert('9. E logo depois a curiosidade dele', named >= 0 && shuiSays[named + 1] && !/^Ah,/.test(shuiSays[named + 1]), shuiSays.join(' / '));
+    await shot('09-shui-nomeia', { note: 'A Shui dizendo o nome do cogumelo' });
     await closeDialog();
 
-    // ── 6. O TCHAU DA HOLLIS, DA BORDA DA SERRA ───────────────────────────────────────────────
-    await page.evaluate(() => { window.__scene.hollisWaved = false; });
+    // ── 6. O TCHAU DA SHUI, DA BORDA DA SERRA ───────────────────────────────────────────────
+    await page.evaluate(() => { window.__scene.shuiWaved = false; });
     await put(4, 44, 0, -1);
     await sleep(600);
-    const wave = await page.evaluate(() => window.__scene.hollisWave?.active === true);
+    const wave = await page.evaluate(() => window.__scene.shuiWave?.active === true);
     const where = await page.evaluate(async () => {
       const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/world/relief.ts'));
       const { reliefAt } = await import(url);
       return { hero: reliefAt(4, 44), front: reliefAt(4, 43) };
     });
     log(`  serra: herói no nível ${where.hero}, à frente ${where.front}`);
-    assert('6. Na borda da serra, olhando para ela, a Hollis acena', wave, JSON.stringify(where));
+    assert('6. Na borda da serra, olhando para ela, a Shui acena', wave, JSON.stringify(where));
     await sleep(150);
-    await shot('06-hollis-acena', { note: 'A Hollis acenando lá de baixo' });
+    await shot('06-shui-acena', { note: 'A Shui acenando lá de baixo' });
     const waveFrame = await page.evaluate(() => window.__scene.npcManager.bodyAt(5, 40)?.texKey ?? null);
-    assert('6. O aceno é o próprio sprite dela, com o braço erguido (nada colado por cima)', waveFrame === 'hollis-wave', String(waveFrame));
-    await page.waitForFunction(() => !window.__scene.hollisWave, null, { timeout: 5000 });
+    assert('6. O aceno é o próprio sprite dela, com o braço erguido (nada colado por cima)', waveFrame === 'shui-wave', String(waveFrame));
+    await page.waitForFunction(() => !window.__scene.shuiWave, null, { timeout: 5000 });
     const restFrame = await page.evaluate(() => window.__scene.npcManager.bodyAt(5, 40)?.texKey ?? null);
     assert('6. Depois do aceno ela volta ao quadro de sempre', restFrame === 'npcs', String(restFrame));
     await sleep(600);
-    const again = await page.evaluate(() => Boolean(window.__scene.hollisWave));
+    const again = await page.evaluate(() => Boolean(window.__scene.shuiWave));
     assert('6. Uma vez por subida (não fica acenando sem parar)', !again, '');
     await put(5, 47, 0, 1);
     await sleep(500);
-    const fromBelow = await page.evaluate(() => Boolean(window.__scene.hollisWave));
+    const fromBelow = await page.evaluate(() => Boolean(window.__scene.shuiWave));
     assert('6. Sem subir a serra, ela não acena', !fromBelow, '');
 
     // ── 14. O LAGO DE LAVA ────────────────────────────────────────────────────────────────────

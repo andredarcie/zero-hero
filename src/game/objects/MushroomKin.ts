@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { FUNGUS_KIN_SIZE, fungusKinTextureKey, type MushroomKind } from '@/game/fungi/fungi';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -7,7 +7,7 @@ import { world3d } from '@/game/render3d/World3D';
 /**
  * OS COGUMELINHOS-FILHOS (pedido do autor: uma ajuda sutil para achar os cogumelos, sem mostrar na cara).
  *
- * É a biologia: o fungo vive em fios debaixo da terra (o micélio, como a Hollis ensina na primeira conversa), e
+ * É a biologia: o fungo vive em fios debaixo da terra (o micélio, como a Shui ensina na primeira conversa), e
  * em volta do cogumelo grande ele solta outros, pequenos, da mesma espécie. Aqui eles são enfeite (não se colhem),
  * ficam mais juntos perto do cogumelo e rareiam com a distância — quem repara num deles aprende a seguir os
  * pequenos até o grande, e quem não repara só vê um chão mais vivo.
@@ -49,7 +49,7 @@ const hash = (x: number, y: number, seed: number): number => {
 export class MushroomKin {
   private readonly byKind = new Map<MushroomKind, Billboard3D[]>();
 
-  public constructor(private readonly scene: Phaser.Scene, mushrooms: readonly KinMushroom[], free: KinTileFree) {
+  public constructor(private readonly scene: Engine.Scene, mushrooms: readonly KinMushroom[], free: KinTileFree) {
     const w3 = world3d();
     for (const mother of mushrooms) {
       const kids: Billboard3D[] = [];

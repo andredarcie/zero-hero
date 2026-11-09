@@ -1,9 +1,11 @@
-import Phaser from 'phaser';
+import { profiler } from '@/game/debug/Profiler';
+import * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import { world3d } from '@/game/render3d/World3D';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * A NÉVOA DO JARDIM ALTO (pedido do autor: a mata mais antiga do vale guarda um mistério, com a neblina das
@@ -39,7 +41,7 @@ const noise = (x: number, y: number, seed: number): number => {
 
 /** Uma nuvem macia: a borda some aos poucos, e o miolo tem grumos, para não ler como um disco. */
 const paintCloud = (w: number, h: number, seed: number): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
@@ -110,7 +112,7 @@ export class GardenMist {
   private clock = 0;
   private blowing = false;
 
-  public constructor(private readonly scene: Phaser.Scene, center: { x: number; y: number }) {
+  public constructor(private readonly scene: Engine.Scene, center: { x: number; y: number }) {
     ensureTextures();
     const w3 = world3d();
     let n = 0;
@@ -145,10 +147,17 @@ export class GardenMist {
     }
     this.tick(0);
     // No fim de cada quadro, e não no update da cena: numa cena (a do vento, inclusive) o update para.
-    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.onFrame, this);
+    scene.events.on(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
   }
 
+  /** O quadro, medido (debug/Profiler: seção `life.gardenMist`; desligado, não custa nada). */
   private onFrame(): void {
+    profiler.begin('life.gardenMist');
+    this.frameTick();
+    profiler.end('life.gardenMist');
+  }
+
+  private frameTick(): void {
     this.tick(this.scene.game.loop.delta);
   }
 
@@ -198,7 +207,7 @@ export class GardenMist {
   }
 
   public destroy(): void {
-    this.scene.events?.off(Phaser.Scenes.Events.POST_UPDATE, this.onFrame, this);
+    this.scene.events?.off(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
     for (const p of this.puffs) {
       this.scene.tweens?.killTweensOf(p);
       p.bb.destroy();

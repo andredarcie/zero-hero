@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { NPC_VISUALS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -59,7 +59,7 @@ export class CatCompanion {
   /** Quanto tempo ele está no barril. */
   private homeMs = 0;
 
-  public constructor(private readonly scene: Phaser.Scene, x: number, y: number, arriving: boolean) {
+  public constructor(private readonly scene: Engine.Scene, x: number, y: number, arriving: boolean) {
     this.x = x;
     this.y = y;
     const visual = NPC_VISUALS.blackCat;

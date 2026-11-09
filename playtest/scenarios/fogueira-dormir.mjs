@@ -18,7 +18,7 @@ export default {
     await page.evaluate(() => window.gameTime.set(0.5));
     await sleep(900);
 
-    // A fogueira da Vega (42,5), com ela ao lado: o herói fica ao sul, olhando para o norte. Os vizinhos só
+    // A fogueira da Thea (42,5), com ela ao lado: o herói fica ao sul, olhando para o norte. Os vizinhos só
     // existem com o chunk carregado, então primeiro o herói vai até lá.
     await page.evaluate(() => {
       const s = window.__scene;
@@ -49,8 +49,8 @@ export default {
         full: f.isFullyLit,
         keeper: s.fireKeepers.has(f),
         verb: s.useVerbAt(f.worldX, f.worldY),
-        sleeping: s.sleeping === true,
-        resting: s.resting === true,
+        sleeping: s.rest.isSleeping === true,
+        resting: s.rest.isResting === true,
       };
     });
 

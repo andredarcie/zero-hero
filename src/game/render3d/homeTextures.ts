@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import {
@@ -6,10 +6,11 @@ import {
 } from '@/game/render3d/pixelForms';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import type { NpcKind } from '@/game/world/ScreenContent';
+import { createCanvas } from '@/game/platform/platform';
 
 // AS CASAS DOS VIZINHOS: 48×48, três tiles de largura na mesma densidade de pixel do resto. Cada uma diz
-// quem mora nela: a cápsula remendada da Vega, a cabana de toras do Bram, a casa manchada de tinta da
-// Iris e o cogumelo do Hollis. Cada casa tem uma segunda camada só com as janelas
+// quem mora nela: a cápsula remendada da Thea, a cabana de toras do Marco, a casa manchada de tinta da
+// Sisi e o cogumelo do Shui. Cada casa tem uma segunda camada só com as janelas
 // acesas, que entra de noite (ver NpcHomes).
 
 export type HomeKind = Extract<NpcKind, 'astronaut' | 'businessMan' | 'painter' | 'radiationSuit'>;
@@ -54,7 +55,7 @@ const paintGable = (rect: Paint, cx: number, top: number, rows: number, startHal
   rect(INK, cx - Math.round(startHalf + (rows - 1) * grow) - 1, top + rows, Math.round(startHalf + (rows - 1) * grow) * 2 + 2, 1);
 };
 
-const vegaHome = (rect: Paint, glow: boolean): void => {
+const theaHome = (rect: Paint, glow: boolean): void => {
   if (glow) {
     windowPane(rect, true, 13, 22, 8, 7, '#535668');
     rect(GLOW, 26, 34, 6, 10);
@@ -100,7 +101,7 @@ const vegaHome = (rect: Paint, glow: boolean): void => {
   }
 };
 
-const bramHome = (rect: Paint, glow: boolean): void => {
+const marcoHome = (rect: Paint, glow: boolean): void => {
   if (glow) {
     windowPane(rect, true, 10, 28, 6, 6, RAMPS.door[3]);
     windowPane(rect, true, 33, 28, 6, 6, RAMPS.door[3]);
@@ -159,7 +160,7 @@ const bramHome = (rect: Paint, glow: boolean): void => {
   }
 };
 
-const irisHome = (rect: Paint, glow: boolean): void => {
+const sisiHome = (rect: Paint, glow: boolean): void => {
   if (glow) {
     windowPane(rect, true, 8, 26, 14, 9, RAMPS.door[3]);
     return;
@@ -215,7 +216,7 @@ const irisHome = (rect: Paint, glow: boolean): void => {
   }
 };
 
-const hollisHome = (rect: Paint, glow: boolean): void => {
+const shuiHome = (rect: Paint, glow: boolean): void => {
   if (glow) {
     windowPane(rect, true, 16, 11, 6, 5, RAMPS.cap[3]);
     rect(GLOW, 20, 36, 6, 9);
@@ -249,10 +250,10 @@ const hollisHome = (rect: Paint, glow: boolean): void => {
 };
 
 export const HOME_PAINTERS: Readonly<Record<HomeKind, (rect: Paint, glow: boolean) => void>> = {
-  astronaut: vegaHome,
-  businessMan: bramHome,
-  painter: irisHome,
-  radiationSuit: hollisHome,
+  astronaut: theaHome,
+  businessMan: marcoHome,
+  painter: sisiHome,
+  radiationSuit: shuiHome,
 };
 
 export const homeTexture = (kind: HomeKind): string => `home-${kind}`;
@@ -402,10 +403,10 @@ const paintYard = (rect: Paint, seed: number): void => {
 };
 
 export const paintedCanvas = (paint: (rect: Paint) => void, width = 48, height = 48): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas;
   paint((color, x, y, w, h) => {
     ctx.fillStyle = color;
@@ -417,7 +418,7 @@ export const paintedCanvas = (paint: (rect: Paint) => void, width = 48, height =
 // O registro THREE é um mapa de módulo que sobrevive ao restart da cena: registrar uma vez só.
 let threeRegistered = false;
 
-export const registerHomeTextures = (scene: Phaser.Scene): void => {
+export const registerHomeTextures = (scene: Engine.Scene): void => {
   (Object.keys(HOME_PAINTERS) as HomeKind[]).forEach((kind, seed) => {
     const painter = HOME_PAINTERS[kind];
     const sheets: ReadonlyArray<readonly [string, HTMLCanvasElement]> = [

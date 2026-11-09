@@ -1,10 +1,12 @@
-import Phaser from 'phaser';
+import { profiler } from '@/game/debug/Profiler';
+import * as Engine from '@/game/engine';
 import * as THREE from 'three';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import { WATER_LAYER } from '@/game/objects/KoiPond';
 import { WATER_DEPTH_TILES, world3d } from '@/game/render3d/World3D';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * A CACHOEIRA DO ACAMPAMENTO (pedido do autor: "veja um lugar ideal, faça uma fonte da água caindo tipo cachoeira";
@@ -96,7 +98,7 @@ const frac = (v: number): number => v - Math.floor(v);
 type Put = (x: number, y: number, color: string, alpha?: number) => void;
 
 const canvas = (w: number, h: number, paint: (put: Put) => void): HTMLCanvasElement => {
-  const c = document.createElement('canvas');
+  const c = createCanvas();
   c.width = w;
   c.height = h;
   const ctx = c.getContext('2d');
@@ -504,7 +506,7 @@ export class Waterfall {
   private seed = 1;
   private lastDay = -1;
 
-  public constructor(private readonly scene: Phaser.Scene) {
+  public constructor(private readonly scene: Engine.Scene) {
     register();
     const w3 = world3d();
     const { x, y } = WATERFALL_SPRING;
@@ -554,7 +556,7 @@ export class Waterfall {
       .setAlpha(0);
     this.tick(0);
     // No fim de cada quadro, como a névoa do jardim: a água corre mesmo com a cena parada num diálogo.
-    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.onFrame, this);
+    scene.events.on(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
   }
 
   /** O quadro da animação agora (a janela do playtest). */
@@ -562,7 +564,14 @@ export class Waterfall {
     return this.frame;
   }
 
+  /** O quadro, medido (debug/Profiler: seção `life.waterfall`; desligado, não custa nada). */
   private onFrame(): void {
+    profiler.begin('life.waterfall');
+    this.frameTick();
+    profiler.end('life.waterfall');
+  }
+
+  private frameTick(): void {
     this.tick(this.scene.game.loop.delta);
   }
 
@@ -627,7 +636,7 @@ export class Waterfall {
   }
 
   public destroy(): void {
-    this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.onFrame, this);
+    this.scene.events.off(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
     for (const b of [this.cascade, this.foot, this.pool, this.stream, this.rainbow, ...this.puffs.map((p) => p.bb), ...this.drops.map((d) => d.bb)]) b.destroy();
     this.puffs.length = 0;
     this.drops.length = 0;

@@ -4,6 +4,7 @@ import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import { world3d } from '@/game/render3d/World3D';
 import { getGardenGates, getPlayerStart } from '@/game/world/WorldData';
+import { createCanvas } from '@/game/platform/platform';
 
 /**
  * A ESTRADA ANTIGA (pedido do autor): da espada fincada, reto para o norte, até a escada do jardim do fim. Ela diz,
@@ -51,7 +52,7 @@ const blotch = (x: number, y: number, seed: number, cell: number): number => {
  * trilhas de roda chegaram a existir e saíram a pedido do autor ("faça apenas uma linha").
  */
 const paintRoad = (w: number, h: number): HTMLCanvasElement => {
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');

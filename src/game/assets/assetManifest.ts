@@ -1,4 +1,4 @@
-﻿import type Phaser from 'phaser';
+﻿import type * as Engine from '@/game/engine';
 
 import { ASSET_KEYS, TILESET_FRAME_SIZE } from '@/game/constants';
 
@@ -33,7 +33,7 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     // Sprite Factory: o forno — a boca em quatro direcoes, e o mesmo par apagado/aceso.
     //
     // Ele nao esta aqui por causa do mundo 3D (aquele le `textures3d`), e sim porque TODA arte que
-    // a UI 2D desenha precisa passar pelo Phaser: o catalogo da bancada, a bolsa e a subtela pedem
+    // a UI 2D desenha precisa passar pelo motor 2D: o catalogo da bancada, a bolsa e a subtela pedem
     // um data URL do frame (`spriteDataUrl`), e uma textura que so existe no lado 3D devolve
     // imagem QUEBRADA. Foi o que aconteceu com estas duas — e a silhueta preta do catalogo
     // escondeu o defeito por um bom tempo, porque uma imagem quebrada chapada de preto e
@@ -44,7 +44,7 @@ const SHARED_SPRITESHEETS: readonly SpritesheetAsset[] = [
     frameHeight: TILESET_FRAME_SIZE,
   },
   {
-    // Sprite Factory: o ALTAR — laje fria (0) e com o tampo em brasa (1). Precisa do lado Phaser
+    // Sprite Factory: o ALTAR — laje fria (0) e com o tampo em brasa (1). Precisa do lado 2D
     // como o forno e o altar: o icone do editor e qualquer UI 2D leem o frame por aqui.
     key: ASSET_KEYS.altar,
     path: '/assets/environment/props/altar.png',
@@ -193,7 +193,7 @@ const SHARED_IMAGES: readonly ImageAsset[] = [
   { key: ASSET_KEYS.titleBg, path: '/assets/ui/title_bg.jpg' },
 ] as const;
 
-export const preloadSharedAssets = (scene: Phaser.Scene): void => {
+export const preloadSharedAssets = (scene: Engine.Scene): void => {
   SHARED_SPRITESHEETS.forEach((asset) => {
     scene.load.spritesheet(asset.key, resolveAssetUrl(asset.path), {
       frameWidth: asset.frameWidth,

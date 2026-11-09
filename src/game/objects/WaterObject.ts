@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
@@ -92,9 +92,9 @@ export class WaterObject implements WorldProp {
   // Fired once when the bridge finishes building (GameScene uses it for a scene-level flash).
   public onBuilt?: () => void;
 
-  private readonly scene: Phaser.Scene;
-  private readonly pips: Phaser.GameObjects.Container;
-  private readonly pipDots: Phaser.GameObjects.Arc[] = [];
+  private readonly scene: Engine.Scene;
+  private readonly pips: Engine.GameObjects.Container;
+  private readonly pipDots: Engine.GameObjects.Arc[] = [];
   private planks: DeckPart[] = [];
   private frame: DeckPart[] = []; // 4 legs + 2 stringers, slammed in by the first deposit
   private deposited = 0;
@@ -113,7 +113,7 @@ export class WaterObject implements WorldProp {
   // Only tiles marked with a `bridgeSpot` prop can be bridged; plain river tiles just block.
   private readonly buildable: boolean;
 
-  public constructor(scene: Phaser.Scene, worldX: number, worldY: number, buildable: boolean) {
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number, buildable: boolean) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
@@ -152,7 +152,7 @@ export class WaterObject implements WorldProp {
     return this.drained;
   }
 
-  /** Water blocks the hero and enemies; a finished bridge, a stone ford, or a drained bed is walkable. */
+  /** Water blocks the hero; a finished bridge, a stone ford, or a drained bed is walkable. */
   public get blocking(): boolean {
     return !this.isBridge && !this.forded && !this.drained;
   }
@@ -411,7 +411,7 @@ export class WaterObject implements WorldProp {
         elevation: part.restElev - WATER_DEPTH_TILES,
         alpha: 0,
         duration: 900,
-        delay: Phaser.Math.Between(0, 260),
+        delay: Engine.Math.Between(0, 260),
         ease: 'Quad.easeIn',
       });
     }

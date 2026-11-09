@@ -1,10 +1,11 @@
 import * as THREE from 'three';
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { registerTexture3D } from '@/game/render3d/textures3d';
+import { createCanvas } from '@/game/platform/platform';
 
 // A PECA DO FIM que nao tinha arte: o ESPETO com o MARSHMALLOW, cru e tostado, e o pacote dele. Desenhadas uma vez e publicadas nas DUAS pipelines de textura,
-// o mesmo esquema do bucketTexture/charcoalTexture: THREE (billboard no mundo) e Phaser.
+// o mesmo esquema do bucketTexture/charcoalTexture: THREE (billboard no mundo) e Engine.
 //
 type Rgba = readonly [number, number, number, number];
 
@@ -83,7 +84,7 @@ const GROUND_CRACK = [
   '................',
 ] as const;
 
-// O MARCO da Vega: tres pedras empilhadas, a de baixo com musgo.
+// O MARCO da Thea: tres pedras empilhadas, a de baixo com musgo.
 const CAIRN = [
   '................',
   '................',
@@ -103,7 +104,7 @@ const CAIRN = [
   '................',
 ];
 
-// O CESTO da Hollis, cheio de chapeuzinhos azuis.
+// O CESTO da Shui, cheio de chapeuzinhos azuis.
 const BASKET = [
   '................',
   '................',
@@ -196,10 +197,10 @@ export const MARSHMALLOW_BAG_TEXTURE = 'marshmallow-bag';
 const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
   const h = rows.length;
   const w = rows[0].length;
-  const canvas = document.createElement('canvas');
+  const canvas = createCanvas();
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas;
   const img = ctx.createImageData(w, h);
   for (let y = 0; y < h; y += 1) {
@@ -220,7 +221,7 @@ const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
 let threeRegistered = false;
 
 /** Publica as tres texturas nas duas pipelines. Chamar no boot da cena (GameScene.create). */
-export const registerCozyTextures = (scene: Phaser.Scene): void => {
+export const registerCozyTextures = (scene: Engine.Scene): void => {
   const sheets: ReadonlyArray<readonly [string, readonly string[]]> = [
     [ROAST_STICK_TEXTURE, ROAST_STICK],
     [GROUND_CRACK_TEXTURE, GROUND_CRACK],
@@ -234,8 +235,8 @@ export const registerCozyTextures = (scene: Phaser.Scene): void => {
     [MARSHMALLOW_BAG_TEXTURE, MARSHMALLOW_BAG],
   ];
   for (const [key, rows] of sheets) {
-    const needPhaser = !scene.textures.exists(key);
-    if (threeRegistered && !needPhaser) continue;
+    const need2d = !scene.textures.exists(key);
+    if (threeRegistered && !need2d) continue;
     const canvas = makeCanvas(rows);
     if (!threeRegistered) {
       const tex = new THREE.CanvasTexture(canvas);
@@ -245,7 +246,7 @@ export const registerCozyTextures = (scene: Phaser.Scene): void => {
       tex.needsUpdate = true;
       registerTexture3D(key, tex);
     }
-    if (needPhaser) scene.textures.addCanvas(key, canvas);
+    if (need2d) scene.textures.addCanvas(key, canvas);
   }
   threeRegistered = true;
 };

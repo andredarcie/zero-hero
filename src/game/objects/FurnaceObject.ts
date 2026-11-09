@@ -1,4 +1,4 @@
-import type Phaser from 'phaser';
+import type * as Engine from '@/game/engine';
 
 import { ASSET_KEYS } from '@/game/constants';
 import { itemGroundVisual, type HeldItemKind } from '@/game/entities/ItemPickup';
@@ -8,7 +8,7 @@ import type { PropDir } from '@/game/world/worldSchema';
 import type { WorldProp } from './WorldProp';
 
 /**
- * O FORNO DA VEGA — o único do vale, fixo ao lado dela, e o GUIA da quest (pedido do autor). Não há
+ * O FORNO DA THEA — o único do vale, fixo ao lado dela, e o GUIA da quest (pedido do autor). Não há
  * catálogo: ele sabe a ordem certa (AstronomerQuest.furnaceNeed), pede um item de cada vez (o balão
  * sobre ele), engole o que o herói entrega (`swallow`) e, quando a receita fecha, ruge e devolve o
  * resultado pela boca (`startHandSmelt`). Não se recolhe.
@@ -94,7 +94,7 @@ export class FurnaceObject implements WorldProp {
   private chargeFrom: Array<readonly [number, number, number]> = [];
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     public readonly worldX: number,
     public readonly worldY: number,
     public readonly dir: PropDir = 1,

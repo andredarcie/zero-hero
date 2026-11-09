@@ -65,7 +65,7 @@
       }
     }
   },
-  "hollis": {
+  "shui": {
     "nome": "Shui",
     "filosofia": {
       "escola": "Taoism",
@@ -122,7 +122,7 @@
       ]
     }
   },
-  "iris": {
+  "sisi": {
     "nome": "Sisi",
     "filosofia": {
       "escola": "Absurdism",
@@ -232,7 +232,7 @@
       ]
     }
   },
-  "bram": {
+  "marco": {
     "nome": "Marco",
     "filosofia": {
       "escola": "Stoicism",
@@ -301,7 +301,7 @@
       ]
     }
   },
-  "vega": {
+  "thea": {
     "nome": "Thea",
     "filosofia": {
       "escola": "Aristotelianism",
@@ -314,7 +314,11 @@
       "npc.astronaut": {
         "name": "Thea",
         "lines": [
-          "My telescope broke in the fall. Only the tube is left.",
+          "Hello. My ship crashed and broke.",
+          "I have to go back home. I need your help.",
+          "With the telescope fixed, I can find where the stars are and know exactly where to send a signal.",
+          "Then my friends will come for me.",
+          "But the telescope broke in the fall too. Only the tube is left.",
           "No tripod, no lens, no sky. And everyone is born wanting to know.",
           "Take this pickaxe. Bring me an iron bar."
         ]
@@ -478,6 +482,11 @@
         "[narrator] This blade felled the darkness.",
         "[narrator] And gave the world back its light.",
         "[narrator] He is no longer this. He is what he does now."
+      ],
+      "finds.smithy": [
+        "[narrator] The old forge.",
+        "[narrator] The smith left long ago.",
+        "[narrator] The furnace still draws well."
       ],
       "finds.sign": [
         "[narrator] High Garden.",

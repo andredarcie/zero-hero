@@ -26,7 +26,7 @@ export type ToolboxRecipe = {
 };
 
 export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
-  // NENHUMA FERRAMENTA SE FABRICA (pedido do autor): o machado só vem do Bram, e a foice só da
+  // NENHUMA FERRAMENTA SE FABRICA (pedido do autor): o machado só vem do Marco, e a foice só da
   // Morte, depois de dormir na fogueira.
 
   // ── A CADEIA DO FERRO, e as duas pecas que ela pede ────────────────────────────────────────
@@ -35,7 +35,7 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // qualquer receita que pedisse metal seria circular: precisaria de ferro para construir a coisa
   // que produz ferro. Duas pedras e o que o jogador tem antes de ter qualquer outra coisa, e por
   // isso o forno e a primeira estacao construivel da cadeia manual.
-  // O FORNO NÃO SE CONSTRÓI (pedido do autor): o único do vale é o da Vega, fixo, e ele guia a quest
+  // O FORNO NÃO SE CONSTRÓI (pedido do autor): o único do vale é o da Thea, fixo, e ele guia a quest
   // (pede o próximo item e devolve o resultado). A receita pedra+pedra saiu daqui.
   // O ALTAR: pedra e MINERIO — a laje bruta e o veio de ferro dentro dela.
   //
@@ -50,7 +50,7 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // renovaveis (o veio nunca acaba). O altar passou a ser o que ele precisa ser: o SEGUNDO degrau,
   // logo depois do forno, comprado com o que o jogador ja tem na mao quando o forno acende.
   //
-  // A BIGORNA NÃO SE CONSTRÓI MAIS (pedido do autor): a única é a da Vega, fixa ao lado do forno
+  // A BIGORNA NÃO SE CONSTRÓI MAIS (pedido do autor): a única é a da Thea, fixa ao lado do forno
   // (scripts/bigorna-da-vega.mjs). A receita pedra+minério saiu daqui; o texto acima fica como história.
   // ── O QUE SÓ ENFEITA. Fora da escada de propósito (ver LADDER): sempre à vista, e ninguém precisa dele. ──
   { inputs: ['wood', 'wood'], output: 'stool', family: 'material' },
@@ -82,7 +82,7 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   // Duas madeiras e nao uma: um carvao tem de custar mais que um graveto, senao a bancada acharia
   // que madeira e carvao sao a mesma coisa com nomes diferentes.
   { inputs: ['wood', 'wood'], output: 'charcoal', family: 'material', station: 'furnace' },
-  // O VIDRO DA VEGA: areia é sílica, que só derrete muito quente; a cinza de lenha traz o potássio
+  // O VIDRO DA THEA: areia é sílica, que só derrete muito quente; a cinza de lenha traz o potássio
   // que baixa esse ponto. É o vidro de cinza de verdade, o das janelas medievais.
   { inputs: ['sand', 'ash'], output: 'glass', family: 'material', station: 'furnace' },
 ];

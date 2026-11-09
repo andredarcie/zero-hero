@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import * as Engine from '@/game/engine';
 
 import { NPC_VISUALS } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -8,7 +8,7 @@ import type { NpcKind, ScreenContent } from '@/game/world/ScreenContent';
 
 // Tiny pixel-art "!" shown above an NPC whose current dialog the player hasn't heard yet.
 // Core glyph only — a dark outline is added programmatically around every filled pixel.
-// Stays a Phaser overlay sprite: it is a UI marker, not a body in the world, and the
+// Stays a 2D overlay sprite: it is a UI marker, not a body in the world, and the
 // projected tileToScreen keeps it glued above the 3D NPC.
 const EXCLAIM_TEXTURE_KEY = 'npc-exclaim';
 const EXCLAIM_GLYPH = [
@@ -23,7 +23,7 @@ const EXCLAIM_GLYPH = [
 const EXCLAIM_FILL = '#ffe066';
 const EXCLAIM_OUTLINE = '#241d0f';
 
-function ensureExclaimTexture(scene: Phaser.Scene): void {
+function ensureExclaimTexture(scene: Engine.Scene): void {
   if (scene.textures.exists(EXCLAIM_TEXTURE_KEY)) return;
   const rows = EXCLAIM_GLYPH.length;
   const cols = EXCLAIM_GLYPH[0].length;
@@ -44,7 +44,7 @@ function ensureExclaimTexture(scene: Phaser.Scene): void {
     }
   }
   canvas.refresh();
-  canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  canvas.setFilter(Engine.Textures.FilterMode.NEAREST);
 }
 
 // O SONO DO HERÓI no colchão (ver FireBed): um "z" pequeno que sobe e some. Mesma técnica do "!" (glifo +
@@ -58,7 +58,7 @@ const SLEEP_GLYPH = [
 ];
 const SLEEP_FILL = '#cfd8ff';
 
-export function ensureSleepTexture(scene: Phaser.Scene): void {
+export function ensureSleepTexture(scene: Engine.Scene): void {
   if (scene.textures.exists(SLEEP_TEXTURE_KEY)) return;
   const rows = SLEEP_GLYPH.length;
   const cols = SLEEP_GLYPH[0].length;
@@ -76,7 +76,7 @@ export function ensureSleepTexture(scene: Phaser.Scene): void {
     }
   }
   canvas.refresh();
-  canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  canvas.setFilter(Engine.Textures.FilterMode.NEAREST);
 }
 
 class NpcEntity {
@@ -90,10 +90,10 @@ class NpcEntity {
   private readonly size: number;
   /** A fase da respiracao: cada um respira no seu ritmo, ninguem em coro. */
   private readonly breathPhase: number;
-  private readonly exclaim: Phaser.GameObjects.Image;
+  private readonly exclaim: Engine.GameObjects.Image;
 
   public constructor(
-    scene: Phaser.Scene,
+    scene: Engine.Scene,
     worldX: number,
     worldY: number,
     kind: NpcKind,
@@ -140,7 +140,7 @@ class NpcEntity {
   }
 
   /** Um pulinho: oi, obrigado, toma aqui. A altura volta a zero sozinha. */
-  public hop(scene: Phaser.Scene, height = 0.22): void {
+  public hop(scene: Engine.Scene, height = 0.22): void {
     scene.tweens.killTweensOf(this.sprite);
     this.sprite.setElevation(0);
     scene.tweens.add({ targets: this.sprite, elevation: height, duration: 160, yoyo: true, ease: 'Sine.easeOut', repeat: 1, repeatDelay: 40 });
@@ -178,7 +178,7 @@ export class NpcManager {
   private readonly awayKinds = new Set<NpcKind>();
 
   public constructor(
-    private readonly scene: Phaser.Scene,
+    private readonly scene: Engine.Scene,
     private readonly getContent: (cx: number, cy: number) => ScreenContent,
     // Whether this NPC's current dialog is still unheard — drives the "!" marker above it.
     // `dialog` é o roteiro próprio da instância: sem ele aqui, o "!" perguntaria pela fala da
@@ -234,7 +234,7 @@ export class NpcManager {
     }
   }
 
-  /** Esta espécie saiu de cena (a Vega que foi embora na nave, por exemplo). */
+  /** Esta espécie saiu de cena (a Thea que foi embora na nave, por exemplo). */
   public isKindHidden(kind: NpcKind): boolean {
     return this.hiddenKinds.has(kind);
   }
@@ -304,7 +304,7 @@ export class NpcManager {
   }
 
   /**
-   * Drop every "!" marker. The markers are Phaser overlay sprites, so they do NOT sink with
+   * Drop every "!" marker. The markers are 2D overlay sprites, so they do NOT sink with
    * the world when the death fade darkens the 3D canvas — and render() stops running once the
    * hero is dead, which would otherwise leave one hanging over the black.
    */

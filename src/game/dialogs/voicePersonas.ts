@@ -55,13 +55,13 @@ const BASE: VoicePersona = {
 const PERSONAS: Record<string, VoicePersona> = {
   // O mago: velho e solene. Devagar, grave, frases que assentam. Só acena com a cabeça.
   wizard: { ...BASE, gain: 0.49, charMs: 48, commaMs: 170, stopMs: 340, length: 0.14, body: 0.82, spread: 2.5, fall: 4, vibratoHz: 4, vibrato: 0.2, bounce: 0.09, lean: 0.01, letters: 'drift' },
-  // Hollis, a micóloga: precisa e medida. Sílaba seca, passo regular, para no ponto para pensar.
+  // Shui, a micóloga: precisa e medida. Sílaba seca, passo regular, para no ponto para pensar.
   radiationSuit: { ...BASE, gain: 0.51, charMs: 34, commaMs: 110, stopMs: 280, length: 0.055, spread: 2, fall: 1, bounce: 0.1, lean: 0, letters: 'snap' },
-  // Iris, a pintora: sonhadora. Aguda e ligada, a voz e o corpo passeiam como uma melodia.
+  // Sisi, a pintora: sonhadora. Aguda e ligada, a voz e o corpo passeiam como uma melodia.
   painter: { ...BASE, gain: 0.38, charMs: 40, commaMs: 120, stopMs: 240, length: 0.13, body: 1.2, spread: 7, sway: 3, fall: 1, bounce: 0.15, lean: 0.05, letters: 'float' },
-  // Bram, com frio e sem lenha: "minhas mãos tremem". Devagar, cansado, voz, corpo e letra tremem.
+  // Marco, com frio e sem lenha: "minhas mãos tremem". Devagar, cansado, voz, corpo e letra tremem.
   businessMan: { ...BASE, gain: 0.5, charMs: 54, commaMs: 200, stopMs: 330, length: 0.12, body: 0.9, spread: 2, fall: 5, glide: -1, vibratoHz: 9, vibrato: 0.9, bounce: 0.08, lean: 0, shiver: 0.025, letters: 'shiver' },
-  // Vega, a astronauta: fala pelo rádio. Curto, seco, com o clique do canal. Pouco corpo.
+  // Thea, a astronauta: fala pelo rádio. Curto, seco, com o clique do canal. Pouco corpo.
   astronaut: { ...BASE, gain: 0.31, charMs: 30, commaMs: 70, stopMs: 150, wave: 'square', length: 0.05, body: 1.1, spread: 3, fall: 0, radio: true, bounce: 0.07, lean: 0, letters: 'snap' },
   // O gato: com preguiça. Cada sílaba é um miado que escorrega para baixo, e a letra cai junto.
   blackCat: { ...BASE, gain: 0.35, charMs: 50, commaMs: 160, stopMs: 300, length: 0.15, body: 1.3, spread: 3, fall: 1, glide: -5, bounce: 0.13, lean: 0.035, letters: 'drop' },
@@ -75,7 +75,7 @@ const PERSONAS: Record<string, VoicePersona> = {
   death: { ...BASE, gain: 0.59, charMs: 58, commaMs: 240, stopMs: 460, length: 0.2, body: 0.7, spread: 1, fall: 3, glide: -1, bounce: 0.05, lean: 0.01, letters: 'drift' },
 };
 
-// A voz de quem parou de tremer: o Bram, com o fogo aceso. Sem vibrato, sem queda, mais à vontade.
+// A voz de quem parou de tremer: o Marco, com o fogo aceso. Sem vibrato, sem queda, mais à vontade.
 const CALM: Partial<VoicePersona> = {
   charMs: 40, commaMs: 120, stopMs: 240, fall: 2, glide: 0, vibrato: 0, shiver: 0, bounce: 0.13, letters: 'pop',
 };
