@@ -14,6 +14,7 @@ import { ASH_TEXTURE, GLASS_TEXTURE, SAND_TEXTURE, TELESCOPE_ITEM_TEXTURE } from
 import { SPLIT_WOOD_TEXTURE } from '@/game/render3d/woodTextures';
 import { BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE } from '@/game/render3d/paintTextures';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { BUTTERFLY_ASPECT, BUTTERFLY_SIZE, BUTTERFLY_TINTS, FUNGUS_VISUALS } from './sceneDefs';
 
@@ -54,6 +55,13 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
 const GATHER_STREAK_MS = 6000;
 const BUTTERFLY_RELEASE_MAX = 8;
 
+/** O que HandItems usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type HandItemsHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'carry' | 'delivery' | 'fire' | 'forage' | 'groundItems' | 'heldItem' | 'inventory'
+  | 'itemManager' | 'life' | 'movementController' | 'npcManager' | 'playerWorld' | 'query' | 'save'
+  | 'seenItems' | 'sparkle' | 'swing' | 'time' | 'torch' | 'verbs' | 'view' | 'world3d'
+>;
+
 export class HandItems {
   /** Quantas coisas ele apanhou em seguida: a nota sobe, e de tanto em tanto o vale responde. */
   private gatherStreak = 0;
@@ -62,7 +70,7 @@ export class HandItems {
   public itemGetOpen = false;
   public itemGetOverlay?: ItemGetOverlay;
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: HandItemsHost) {}
 
   /**
    * O Z PODE PEGAR O QUE ESTÁ DEBAIXO DO HERÓI? A mesma pergunta decide o balão e o botão, para o balão

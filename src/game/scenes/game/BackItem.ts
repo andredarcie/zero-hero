@@ -15,7 +15,7 @@ const SWING_HIDE_MS = 240;
 
 /** O que BackItem usa de GameScene. */
 export type BackItemHost = Pick<GameScene,
-  'actions' | 'hand' | 'heldItem' | 'hero' | 'heroBillboard' | 'introDone' | 'inventory' | 'movementController'
+  'actions' | 'hand' | 'heldItem' | 'hero' | 'heroBillboard' | 'arc' | 'inventory' | 'movementController'
   | 'swordPlanting' | 'time' | 'torch' | 'world3d'
 >;
 
@@ -36,7 +36,7 @@ export class BackItem {
     // botão X vai usar, e é isso que o jogador precisa ler no corpo.
     // Ate a espada ficar fincada, as costas mostram ELA; depois disso, de maos vazias, nada.
     this.host.actions.syncUseButtonIcon(); // o B do toque desenha o mesmo item que as costas
-    const carried: HeldItemKind | null = this.host.heldItem === 'none' ? (this.host.introDone ? null : 'sword') : this.host.heldItem;
+    const carried: HeldItemKind | null = this.host.heldItem === 'none' ? (this.host.arc.has('intro') ? null : 'sword') : this.host.heldItem;
     if (!carried) {
       this.backItemBb?.setVisible(false);
       return;

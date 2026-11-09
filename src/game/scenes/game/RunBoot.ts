@@ -27,6 +27,7 @@ import { ChunkManager } from '@/game/world/ChunkManager';
 import type { ScreenContent } from '@/game/world/ScreenContent';
 import { getChunkContent, getHeldItemPickups, getPlayerStart } from '@/game/world/WorldData';
 import { adventureState, consumeAdventureRespawn, saveAdventure } from '@/game/runtime/adventureState';
+import { adventureArcStore, memoryArcStore } from '@/game/systems/RunArc';
 import { clearHomeYards } from '@/game/objects/NpcHomes';
 import { registerHomeTextures } from '@/game/render3d/homeTextures';
 import { registerFindTextures } from '@/game/objects/ValleyFinds';
@@ -41,6 +42,15 @@ import { INTRO_WALK_TILES, OPENING_TALK_KEY } from './sceneDefs';
 const SKIP_INTRO_LOCALLY = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(window.location.hostname)
   && !new URLSearchParams(window.location.search).has('intro');
 
+/** O que RunBoot usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type RunBootHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'add' | 'adventure' | 'arc' | 'bumps' | 'camera' | 'carry' | 'chunkManager' | 'cutsceneActive'
+  | 'dialog' | 'events' | 'game' | 'garden' | 'groundItems' | 'handleTileEntered' | 'hero' | 'heroBillboard'
+  | 'intro' | 'inventory' | 'itemManager' | 'movementController' | 'npcManager' | 'playerWorld' | 'query'
+  | 'registry' | 'save' | 'scale' | 'seenDialogKeys' | 'seenItems' | 'streamCenter' | 'swing' | 'teardown'
+  | 'torch' | 'tweens' | 'verbs' | 'view' | 'world3d'
+>;
+
 export class RunBoot {
   // The held item, slung diagonally on the hero's back like it's tucked in a satchel.
   // In-world it's a 3D billboard riding the hero billboard (so the body occludes it
@@ -48,7 +58,7 @@ export class RunBoot {
   public backItem?: Engine.GameObjects.Image;
   public keepClockOnLeave?: () => void;
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: RunBootHost) {}
 
   /** A partida começa: aventura ou playtest, de onde se nasce, o mundo 3D, as texturas geradas, o som. */
   public prepareRun(): { startWorldX: number; startWorldY: number; skipIntro: boolean } {
@@ -131,19 +141,13 @@ export class RunBoot {
     this.host.cutsceneActive = false;
     this.host.view.cutsceneHeroLight = 1;
     this.host.seenDialogKeys.clear();
-    this.host.introDone = false;
-    this.host.gateOpened = false;
-    this.host.hearthLit = false;
-    this.host.roasted = false;
     if (this.host.adventure) {
-      // A historia e os dialogos ouvidos voltam do save.
+      // A historia e os dialogos ouvidos voltam do save: a jornada mora nele (ver systems/RunArc). O portão só abre
+      // com a CHAVE, que quem fecha o último pedido entrega. Um jogo fechado entre o último pedido e a entrega volta
+      // com tudo cumprido e sem chave: ela chega logo depois (ver create).
       const st = adventureState();
-      this.host.introDone = st.introSeen || skipIntro;
-      // O portão só abre com a CHAVE, que quem fecha o último pedido entrega. Um jogo fechado entre o último
-      // pedido e a entrega volta com tudo cumprido e sem chave: ela chega logo depois (ver create).
-      this.host.gateOpened = st.gateOpened;
-      this.host.hearthLit = st.hearthLit;
-      this.host.roasted = st.endingSeen;
+      this.host.arc.load(adventureArcStore());
+      if (skipIntro) this.host.arc.reach('intro');
       setDay(st.day);
       if (st.clock !== null) setTimeOfDay(st.clock);
       // Fechar a aba não passa por nenhum gesto: a hora se guarda sozinha. Só a hora, porque a cena do
@@ -158,8 +162,8 @@ export class RunBoot {
       window.addEventListener('pagehide', this.keepClockOnLeave);
       st.seenDialogKeys.forEach((k) => this.host.seenDialogKeys.add(k));
     } else {
-      // O playtest do editor nao tem abertura: quem aperta P quer testar o tile, nao a historia.
-      this.host.introDone = true;
+      // O playtest do editor nao tem abertura: quem aperta P quer testar o tile, nao a historia. E nao grava nada.
+      this.host.arc.load(memoryArcStore('intro'));
     }
   }
 
@@ -176,7 +180,7 @@ export class RunBoot {
       return front.x === wx && front.y === wy;
     });
     // O mago so entra em cena DURANTE a abertura: ate la o lugar dele na estrada fica vazio.
-    if (!this.host.introDone) this.host.npcManager.setKindHidden('wizard', true);
+    if (!this.host.arc.has('intro')) this.host.npcManager.setKindHidden('wizard', true);
     this.host.itemManager = new ItemManager(this.host);
     // O chao tambem lembra: a foto salva dos itens substitui a lista autorada — um item largado
     // fica onde ficou, um cogumelo colhido nao renasce. Sem foto, vale o autorado.

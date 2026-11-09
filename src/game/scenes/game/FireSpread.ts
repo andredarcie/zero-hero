@@ -20,13 +20,19 @@ const FIRE_KEEPER_STRIKE_MS = 900;
 /** Da primeira chama até a fogueira inteira. */
 const FIRE_KINDLE_MS = 8000;
 
+/** O que FireSpread usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type FireSpreadHost = Engine.Scene & Pick<GameScene,
+  'camp' | 'delivery' | 'itemManager' | 'npcManager' | 'playerWorld' | 'props' | 'query' | 'questSetup'
+  | 'sparkle' | 'time'
+>;
+
 export class FireSpread {
   // As fogueiras que um pedido deixou acesas para sempre (a do Marco): o relogio nao as apaga.
   public readonly keptLitFires = new Set<CampfireObject>();
   /** O vizinho indo acender a fogueira dele (ver fireKeeperLights). */
   public readonly fireKeepers = new Map<CampfireObject, { visitor: FireVisitor; timers: Engine.Time.TimerEvent[] }>();
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: FireSpreadHost) {}
 
   public lightCampfire(cf: CampfireObject, wx: number, wy: number): void {
     if (cf.isLit) return;

@@ -4,12 +4,11 @@
 import { ASSET_KEYS, HERO_FRAMES, KEY_FRAMES } from '@/game/constants';
 import { LockedDoorObject } from '@/game/objects/LockedDoorObject';
 import { getSoundManager } from '@/game/audio/SoundManager';
-import { adventureState } from '@/game/runtime/adventureState';
 import type { GameScene } from '../GameScene';
 
 /** O que GardenUnlock usa de GameScene. */
 export type GardenUnlockHost = Pick<GameScene,
-  'actions' | 'cinema' | 'cutsceneActive' | 'gateOpened' | 'hand' | 'hero' | 'heroBillboard'
+  'actions' | 'cinema' | 'cutsceneActive' | 'arc' | 'hand' | 'hero' | 'heroBillboard'
   | 'movementController' | 'npcManager' | 'orders' | 'playerWorld' | 'props' | 'save' | 'sparkle' | 'steps'
   | 'time' | 'tweens' | 'valley' | 'world3d'
 >;
@@ -36,7 +35,7 @@ export class GardenUnlock {
     this.host.sparkle.softWash(0xe8f0ea, 0.12, 2600);
     await mist.blowAway();
     this.host.valley.gardenMist = undefined;
-    adventureState().mistCleared = true;
+    this.host.arc.reach('mist');
     this.host.save.persistAdventure();
     await pause(500);
     await this.host.cinema.dollyTo(1, 1000);
@@ -46,9 +45,7 @@ export class GardenUnlock {
 
   /** A chave do jardim alto vai para a mão do herói, saltando de quem a entregou (se ele ainda está ali). */
   public giveGardenKey(from: { worldX: number; worldY: number } | undefined): void {
-    const st = adventureState();
-    if (st.gardenKeyGiven) return;
-    st.gardenKeyGiven = true;
+    if (!this.host.arc.reach('gardenKey')) return;
     const { worldX: hx, worldY: hy } = this.host.playerWorld;
     if (from) {
       this.host.npcManager?.hop(from.worldX, from.worldY);
@@ -65,8 +62,7 @@ export class GardenUnlock {
    * disso tambem — ele e o mapa deste jogo.
    */
   public openGardenGate(): void {
-    if (this.host.gateOpened) return;
-    this.host.gateOpened = true;
+    if (!this.host.arc.reach('gate')) return;
     for (const gate of this.host.props.gardenGates) gate.unlock();
     this.host.save.persistAdventure();
   }

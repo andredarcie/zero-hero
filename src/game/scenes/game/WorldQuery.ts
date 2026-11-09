@@ -28,7 +28,7 @@ import type { GameScene } from '../GameScene';
 /** O que WorldQuery usa de GameScene. */
 export type WorldQueryHost = Pick<GameScene,
   'camp' | 'chunkManager' | 'itemManager' | 'marks' | 'npcManager' | 'playerWorld' | 'props' | 'questSetup'
-  | 'roasted' | 'swordPlanting' | 'valley'
+  | 'arc' | 'swordPlanting' | 'valley'
 >;
 
 export class WorldQuery {
@@ -50,7 +50,7 @@ export class WorldQuery {
 
   /** Onde se senta e se dorme: toda fogueira comum e, depois dos creditos, tambem a do fim. */
   public getRestFireAt(wx: number, wy: number): CampfireObject | undefined {
-    return this.getCampfireAt(wx, wy) ?? (this.host.roasted ? this.getHearthAt(wx, wy) : undefined);
+    return this.getCampfireAt(wx, wy) ?? (this.host.arc.has('ending') ? this.getHearthAt(wx, wy) : undefined);
   }
 
   public getDryBushAt(wx: number, wy: number): DryBushObject | undefined {

@@ -22,6 +22,14 @@ import { LUMBER_DIALOG, PAINTER_DIALOG, SKY_DIALOG } from './sceneDefs';
 const PORCH_SEATS = [[1, 0], [-1, 0], [1, 1], [-1, 1], [0, 1]] as const;
 const TELESCOPE_SEATS = [[1, 0], [0, -1], [0, 1], [-1, 0], [-1, 1], [1, 1]] as const;
 
+/** O que QuestSetup usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type QuestSetupHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'adventure' | 'cameraLook' | 'camp' | 'campfireNight' | 'carry' | 'cinema' | 'cutsceneActive'
+  | 'debris' | 'delivery' | 'dialog' | 'groundItems' | 'hand' | 'heldItem' | 'hero' | 'inventory'
+  | 'itemManager' | 'marks' | 'npcManager' | 'orders' | 'playerWorld' | 'props' | 'query' | 'save'
+  | 'seenDialogKeys' | 'seenItems' | 'sparkle' | 'steps' | 'swing' | 'torch' | 'world3d'
+>;
+
 export class QuestSetup {
   /** As duas canecas e os goles, enquanto a noite não vem. */
   private teaBreak?: TeaBreak;
@@ -33,7 +41,7 @@ export class QuestSetup {
   /** A Thea, sentada ao lado do telescópio: fica ali durante a ocular e é ela quem fala no fim. */
   public skyVisitor?: FireVisitor;
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: QuestSetupHost) {}
 
   /** O que uma quest em etapas pede da cena: a mão, o chão, os gestos e o congelar. */
   private questHost() {

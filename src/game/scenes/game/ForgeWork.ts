@@ -9,6 +9,7 @@ import { tLines } from '@/game/i18n/i18n';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getDialog, getDialogVoice, getNpcHome } from '@/game/world/WorldData';
 import { FireVisitor } from '@/game/entities/FireVisitor';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { HeroThought } from '@/game/runtime/HeroThought';
@@ -16,6 +17,14 @@ import { CARDINAL_DIRS, ITEM_VISUAL_2D } from './sceneDefs';
 
 /** A Thea vindo buscar a barra na bigorna: ela corre (o passo de visita é 420 ms). */
 const THEA_RUN_STEP_MS = 230;
+
+/** O que ForgeWork usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type ForgeWorkHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'bumps' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive' | 'dialog' | 'groundItems' | 'hand'
+  | 'heldItem' | 'hero' | 'heroBillboard' | 'inventory' | 'movementController' | 'npcManager' | 'orders'
+  | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'save' | 'seenItems' | 'steps' | 'time' | 'torch'
+  | 'tweens' | 'verbs' | 'world3d'
+>;
 
 export class ForgeWork {
   /** O balão sobre o forno da Thea: o item que ele pede agora (ver AstronomerQuest.furnaceNeed). */
@@ -26,7 +35,7 @@ export class ForgeWork {
    */
   public forging?: { altar: AltarObject; hammer: Billboard3D; at: string; busy: boolean };
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: ForgeWorkHost) {}
 
   /**
    * A BIGORNA (pedido do autor): com uma peça que a pancada trabalha (a esponja), é malhar — o herói pega o

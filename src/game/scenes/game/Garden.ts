@@ -8,6 +8,7 @@ import { canStep } from '@/game/world/relief';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getChunkTerrain, getWorldBounds, getNpcTiles } from '@/game/world/WorldData';
 import { adventureState } from '@/game/runtime/adventureState';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 
 // O canteiro (ver waterPlantSpot): quanto o capim plantado leva para brotar depois de regado, e quanto o buraco leva
@@ -15,8 +16,14 @@ import type { GameScene } from '../GameScene';
 const PLANT_GROW_MS = 3500;
 const PLANT_REOPEN_MS = 2600;
 
+/** O que Garden usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type GardenHost = Engine.Scene & Pick<GameScene,
+  'adventure' | 'chunkManager' | 'debris' | 'delivery' | 'npcManager' | 'playerWorld' | 'props' | 'query'
+  | 'questSetup' | 'save' | 'sparkle' | 'time' | 'world3d'
+>;
+
 export class Garden {
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: GardenHost) {}
 
   /**
    * A superfície sob um buraco CAVADO também não volta: a pá limpou a grama baixa (decor da

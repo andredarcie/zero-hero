@@ -8,8 +8,17 @@ import { setTimeScale } from '@/game/runtime/timeOfDay';
 import { setCurrentWorld3D } from '@/game/render3d/World3D';
 import type { GameScene } from '../GameScene';
 
+/** O que SceneTeardown usa de GameScene. */
+export type SceneTeardownHost = Pick<GameScene,
+  'actions' | 'boot' | 'bumps' | 'camera' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive' | 'debug'
+  | 'dialog' | 'dialogCam' | 'events' | 'fire' | 'forage' | 'forge' | 'game' | 'groundItems' | 'hand'
+  | 'heroBillboard' | 'intro' | 'itemManager' | 'life' | 'machines' | 'marks' | 'npcManager' | 'orders'
+  | 'pause' | 'props' | 'questSetup' | 'roastEnding' | 'scale' | 'steps' | 'swing' | 'swordPlanting' | 'torch'
+  | 'tweens' | 'valley' | 'verbs' | 'view' | 'world3d'
+>;
+
 export class SceneTeardown {
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: SceneTeardownHost) {}
 
   public shutdown(): void {
     this.host.debug.clearDebugHooks?.();

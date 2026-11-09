@@ -14,7 +14,7 @@ import { ITEM_VISUAL_2D } from './sceneDefs';
 /** O que ActionVerbs usa de GameScene. */
 export type ActionVerbsHost = Pick<GameScene,
   'actions' | 'bumps' | 'camp' | 'garden' | 'hand' | 'heldItem' | 'itemManager' | 'machines'
-  | 'movementController' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'roasted' | 'swing'
+  | 'movementController' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'arc' | 'swing'
   | 'swordPlanting' | 'torch' | 'valley'
 >;
 
@@ -114,7 +114,7 @@ export class ActionVerbs {
     }
     if (this.host.swordPlanting.plantedSwordTile?.x === x && this.host.swordPlanting.plantedSwordTile.y === y) return 'touch';
     const hearth = this.host.query.getHearthAt(x, y);
-    if (hearth && !this.host.roasted) {
+    if (hearth && !this.host.arc.has('ending')) {
       if (!hearth.isLit) return 'light';
       return this.host.heldItem === 'wood' ? 'roast' : null;
     }

@@ -15,8 +15,15 @@ import { FX_BILLBOARD, INTRO_CLOCK } from './sceneDefs';
 /** A manhã depois da noite do Marco. */
 const MORNING_CLOCK = 0.34;
 
+/** O que CampfireNight usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type CampfireNightHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'camera' | 'camp' | 'cinema' | 'cutsceneActive' | 'dialog' | 'events' | 'fire' | 'hero' | 'life'
+  | 'npcManager' | 'pause' | 'playerWorld' | 'props' | 'query' | 'roastEnding' | 'save' | 'sparkle' | 'steps'
+  | 'tileSize' | 'time' | 'tweens' | 'world3d'
+>;
+
 export class CampfireNight {
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: CampfireNightHost) {}
 
   /**
    * A NOITE DO MARCO. O fogo pega, ele vem andando e senta, o herói senta de frente, e o mundo apaga em

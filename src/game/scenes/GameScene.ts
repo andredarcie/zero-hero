@@ -35,6 +35,7 @@ import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { ChunkManager } from '@/game/world/ChunkManager';
 
 import { adventureState, saveAdventure } from '@/game/runtime/adventureState';
+import { RunArc } from '@/game/systems/RunArc';
 
 
 
@@ -137,12 +138,9 @@ export class GameScene extends Engine.Scene {
   // memoria persistente (adventureState). Explorador e levels nunca ligam isto.
   public adventure = false;
   public cutsceneActive = false;
-  // A ABERTURA e o FIM: a espada fincada na entrada do vale, o mago, o portao do jardim e a
-  // fogueira que so o heroi acende (ver playIntro / openGardenGate / playRoastEnding).
-  public introDone = false;
-  public gateOpened = false;
-  public hearthLit = false;
-  public roasted = false;
+  // A JORNADA: da abertura ao fim, os marcos da partida num lugar só (ver systems/RunArc). O boot a liga ao save
+  // da aventura, ou à memória no playtest do editor.
+  public readonly arc = new RunArc();
   // Center chunk of the streamed window; NaN forces the first stream.
   public streamCenter = { cx: NaN, cy: NaN };
 

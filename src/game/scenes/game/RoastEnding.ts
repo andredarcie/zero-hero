@@ -20,9 +20,9 @@ const REUNION_DOLLY = 1.2;
 
 /** O que RoastEnding usa de GameScene. */
 export type RoastEndingHost = Pick<GameScene,
-  'actions' | 'bumps' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive' | 'dialog' | 'fire' | 'hearthLit'
+  'actions' | 'bumps' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive' | 'dialog' | 'fire' | 'arc'
   | 'heldItem' | 'hero' | 'heroBillboard' | 'inventory' | 'life' | 'movementController' | 'npcManager'
-  | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'roasted' | 'save' | 'sparkle' | 'steps' | 'torch'
+  | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'save' | 'sparkle' | 'steps' | 'torch'
   | 'tweens' | 'world3d'
 >;
 
@@ -43,7 +43,7 @@ export class RoastEnding {
     const hearth = this.host.query.getHearthAt(wx, wy);
     if (!hearth) return false;
     // Depois dos creditos ela vira uma fogueira como as outras: quem cuida dela e restAtFireAt.
-    if (this.host.roasted) return false;
+    if (this.host.arc.has('ending')) return false;
     if (this.host.cutsceneActive) return true;
     if (!hearth.isLit) {
       void this.lightHearth(hearth, wx, wy);
@@ -75,7 +75,7 @@ export class RoastEnding {
       });
     });
     hearth.light();
-    this.host.hearthLit = true;
+    this.host.arc.reach('hearth');
     getSoundManager().nature.playHearthCatch();
     this.host.sparkle.spawnFireHitEffect(wx, wy);
     this.host.sparkle.softWash(0xffd28c, 0.22, 1400);
@@ -96,7 +96,7 @@ export class RoastEnding {
     if (!w3 || !hb) return;
     this.host.cutsceneActive = true;
     this.roasting = true;
-    this.host.roasted = true;
+    this.host.arc.reach('ending');
     this.host.inventory.remove('wood'); // o graveto vira o espeto
     this.host.torch.extinguishTorch();
     this.host.carry.updateBackItem();

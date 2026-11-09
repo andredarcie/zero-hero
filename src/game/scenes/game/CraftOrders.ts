@@ -6,16 +6,23 @@ import { catalogSteps, isCraftable, nextStep, recipeCost, type CraftStation } fr
 import type { OrderCatalogView } from '@/game/runtime/ToolboxOrderOverlay';
 import { t } from '@/game/i18n/i18n';
 import { spriteDataUrl } from '@/game/runtime/spriteDataUrl';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import type { ToolboxOrderOverlay } from '@/game/runtime/ToolboxOrderOverlay';
 import { ITEM_VISUAL_2D } from './sceneDefs';
+
+/** O que CraftOrders usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type CraftOrdersHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'craft' | 'inventory' | 'itemManager' | 'playerWorld' | 'props' | 'query' | 'seenItems'
+  | 'tweens' | 'world3d'
+>;
 
 export class CraftOrders {
   // O CATALOGO DA ENCOMENDA, e a bancada em que ele foi aberto. Ele congela o mundo como as
   // cartas de chunk (a bolsa e a unica tela deste jogo que roda com o mundo vivo).
   public orderOverlay?: ToolboxOrderOverlay;
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: CraftOrdersHost) {}
 
   /**
    * ONDE A BANCADA LARGA O QUE ACABOU DE FAZER.

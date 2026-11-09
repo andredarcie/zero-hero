@@ -11,6 +11,7 @@ import { adventureState } from '@/game/runtime/adventureState';
 import { FireVisitor } from '@/game/entities/FireVisitor';
 import type { HomeKind } from '@/game/render3d/homeTextures';
 import type { ValleyFind } from '@/game/objects/ValleyFinds';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
 import { isNightTime, isSleepTime, setTimeScale } from '@/game/runtime/timeOfDay';
@@ -22,6 +23,14 @@ import { USE_COOLDOWN_MS } from './sceneDefs';
 /** O passo para cima do banco: sem pressa, mas sem a cerimônia da abertura. */
 const FIND_STEP_MS = 300;
 
+/** O que CampLife usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type CampLifeHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'adventure' | 'arc' | 'camera' | 'cameraLook' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive'
+  | 'debris' | 'dialog' | 'groundItems' | 'heldItem' | 'hero' | 'itemManager' | 'movementController'
+  | 'npcManager' | 'pause' | 'playerWorld' | 'query' | 'questSetup' | 'save' | 'seenDialogKeys' | 'sparkle'
+  | 'steps' | 'tileSize' | 'valley' | 'verbs' | 'world3d'
+>;
+
 export class CampLife {
   // O DESCANSO (systems/Resting): sentado numa fogueira, num banco com vista, ao lado do telescópio, ou dormindo no
   // colchão do acampamento — com a Morte vindo nas noites de lá.
@@ -29,7 +38,7 @@ export class CampLife {
   // A COMPANHIA: o gato que chega com o primeiro favor (e o barril dele), e o vizinho que vem sentar na fogueira.
   public readonly catCare: CatCare;
 
-  public constructor(private readonly host: GameScene) {
+  public constructor(private readonly host: CampLifeHost) {
     this.rest = new Resting({
       scene: this.host,
       hero: this.host.hero,
@@ -193,7 +202,7 @@ export class CampLife {
     if (find.view) { void this.sitAtFind(find, find.view); return true; }
     if (find.owner) { this.knockAt(find.owner, { worldX: find.x, worldY: find.y }); return true; }
     // A placa do jardim alto muda quando o portão abre.
-    this.narrate(tLines(find.kind === 'sign' && this.host.gateOpened ? 'finds.signOpen' : `finds.${find.kind}`));
+    this.narrate(tLines(find.kind === 'sign' && this.host.arc.has('gate') ? 'finds.signOpen' : `finds.${find.kind}`));
     return true;
   }
 

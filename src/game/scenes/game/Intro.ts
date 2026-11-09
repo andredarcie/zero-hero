@@ -22,7 +22,7 @@ const WIZARD_WALK_TILES = 5;
 
 /** O que Intro usa de GameScene. */
 export type IntroHost = Pick<GameScene,
-  'actions' | 'camera' | 'carry' | 'cinema' | 'cutsceneActive' | 'delivery' | 'dialog' | 'fire' | 'introDone'
+  'actions' | 'camera' | 'carry' | 'cinema' | 'cutsceneActive' | 'delivery' | 'dialog' | 'fire' | 'arc'
   | 'life' | 'npcManager' | 'playerWorld' | 'props' | 'registry' | 'save' | 'scene' | 'seenDialogKeys'
   | 'swordPlanting' | 'time' | 'tweens' | 'view' | 'world3d'
 >;
@@ -105,7 +105,7 @@ export class Intro {
     this.host.npcManager?.setKindHidden('wizard', false);
     this.wizardStandIn?.destroy();
     this.wizardStandIn = undefined;
-    this.host.introDone = true;
+    this.host.arc.reach('intro');
     void this.host.cinema.dollyTo(1, 1800);
     const shaft = this.host.cinema.moonShaft;
     this.host.cinema.moonShaft = undefined;
@@ -168,7 +168,7 @@ export class Intro {
       if (k < 1) { requestAnimationFrame(darken); return; }
       const road = getPlayerStart();
       this.host.playerWorld = { worldX: road.worldX, worldY: road.worldY - INTRO_WALK_TILES - 1 };
-      this.host.introDone = true;
+      this.host.arc.reach('intro');
       this.host.save.persistAdventure();
       requestAdventureRespawn();
       this.host.registry.set(OPENING_TALK_KEY, true);

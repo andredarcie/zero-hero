@@ -16,8 +16,8 @@ import { FORAGER_DIALOG } from './sceneDefs';
 
 /** O que QuestDelivery usa de GameScene. */
 export type QuestDeliveryHost = Pick<GameScene,
-  'adventure' | 'camp' | 'carry' | 'dialog' | 'gardenUnlock' | 'gateOpened' | 'groundItems' | 'hand'
-  | 'heldItem' | 'inventory' | 'marks' | 'orders' | 'playerWorld' | 'roasted' | 'save' | 'seenDialogKeys'
+  'adventure' | 'camp' | 'carry' | 'dialog' | 'gardenUnlock' | 'arc' | 'groundItems' | 'hand'
+  | 'heldItem' | 'inventory' | 'marks' | 'orders' | 'playerWorld' | 'save' | 'seenDialogKeys'
   | 'seenItems' | 'sparkle' | 'time' | 'torch' | 'valley'
 >;
 
@@ -30,8 +30,8 @@ export class QuestDelivery {
    * do fim ele so fica feliz.
    */
   public wizardLine(): 'tent' | 'again' | 'guide' | 'gate' | 'after' {
-    if (this.host.roasted) return 'after';
-    if (this.host.gateOpened) return 'gate';
+    if (this.host.arc.has('ending')) return 'after';
+    if (this.host.arc.has('gate')) return 'gate';
     // Antes da primeira noite na barraca (a visita da Morte é dessa noite), ele lembra dela.
     if (this.host.adventure && !this.host.seenDialogKeys.has(DEATH_VISIT_KEY)) return 'tent';
     // Entre a primeira visita e a última, ele sabe que ela volta e manda dormir de novo: não consola.
@@ -105,7 +105,7 @@ export class QuestDelivery {
     this.host.time.delayedCall(1200, () => this.host.camp.catCare.ensure(true));
     // O ÚLTIMO PEDIDO: quem o fechou acabou de dizer, na fala final, que o herói pode andar pelo jardim alto, e
     // entrega a chave (isLastQuest). O portão não abre sozinho: abre com ela.
-    if (allQuestsDone() && !adventureState().gardenKeyGiven) this.host.time.delayedCall(500, () => this.host.gardenUnlock.giveGardenKey(_npcWorld));
+    if (allQuestsDone() && !this.host.arc.has('gardenKey')) this.host.time.delayedCall(500, () => this.host.gardenUnlock.giveGardenKey(_npcWorld));
   }
 
   /**

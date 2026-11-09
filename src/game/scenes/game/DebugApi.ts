@@ -110,8 +110,8 @@ export class DebugApi {
           visitor: this.host.questSetup.fireVisitor ? { kind: this.host.questSetup.fireVisitor.kind, seated: this.host.questSetup.fireVisitor.isSeated } : null,
         },
         litFires: this.host.props.campfires.filter((cf) => cf.isLit).length,
-        ending: { gateOpen: this.host.gateOpened, hearthLit: this.host.hearthLit, roasted: this.host.roasted },
-        introDone: this.host.introDone,
+        ending: { gateOpen: this.host.arc.has('gate'), hearthLit: this.host.arc.has('hearth'), roasted: this.host.arc.has('ending') },
+        introDone: this.host.arc.has('intro'),
         // A trilha que o jogo esta PEDINDO (null = vento/silencio). Ela e escolhida uma vez, no
         // create — e por aqui que um cenario cobra isso.
         music: getSoundManager().music.requestedTrack,

@@ -8,6 +8,7 @@ import type { WorldProp } from '@/game/objects/WorldProp';
 import type { PropDir } from '@/game/world/worldSchema';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { adventureState, type AdventureMachine } from '@/game/runtime/adventureState';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
 
@@ -20,11 +21,17 @@ const asPropDir = (value: number | undefined): PropDir => {
   return (Number.isFinite(n) ? (((n % 4) + 4) % 4) : 1) as PropDir;
 };
 
+/** O que Machines usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type MachinesHost = Engine.Scene & Pick<GameScene,
+  'adventure' | 'carry' | 'chunkManager' | 'hand' | 'heldItem' | 'inventory' | 'props' | 'query' | 'save'
+  | 'swing' | 'verbs'
+>;
+
 export class Machines {
   /** As marcas de "a peça cai aqui" — o quadrado no chão e o keycap (ver PlacementHints). */
   public placementHints?: PlacementHints;
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: MachinesHost) {}
 
   /**
    * Há uma estação manual neste tile? Uma pergunta só para construção e restauração do save.

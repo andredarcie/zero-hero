@@ -50,8 +50,16 @@ import { ValleyFinds } from '@/game/objects/ValleyFinds';
 import type { GameScene } from '../GameScene';
 import { INTRO_WALK_TILES } from './sceneDefs';
 
+/** O que WorldBoot usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type WorldBootHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'adventure' | 'arc' | 'bumps' | 'camp' | 'chunkManager' | 'cinema' | 'cutsceneActive' | 'debug'
+  | 'events' | 'fire' | 'forage' | 'forge' | 'game' | 'gardenUnlock' | 'groundItems' | 'input' | 'intro'
+  | 'machines' | 'marks' | 'pause' | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'registry' | 'sparkle'
+  | 'streamChunks' | 'swordPlanting' | 'time' | 'valley' | 'verbs' | 'view' | 'world3d'
+>;
+
 export class WorldBoot {
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: WorldBootHost) {}
 
   /** As peças do mapa (world.json): fogueiras, portões, arbustos, pedras, água, lava, estações. */
   public spawnProps(startWorldX: number, startWorldY: number): void {
@@ -70,7 +78,7 @@ export class WorldBoot {
     // A FOGUEIRA DO FIM nao segue o relogio: ela nasce apagada e so o heroi a acende, dentro do
     // jardim. Ela mora na MESMA classe das outras fogueiras (arte, luz, fumaca), so que fora da
     // lista que o dia acende e apaga sozinho.
-    this.host.props.hearths = getHearths().map((h) => new CampfireObject(this.host, h.worldX, h.worldY, this.host.hearthLit));
+    this.host.props.hearths = getHearths().map((h) => new CampfireObject(this.host, h.worldX, h.worldY, this.host.arc.has('hearth')));
     // O PACOTE DE MARSHMALLOW mora no canto do tile da fogueira do fim (dentro dele: nenhum sprite
     // vaza do seu tile). É dele que sai o que vai ao espeto — o herói só traz o graveto.
     for (const h of getHearths()) {
@@ -81,7 +89,7 @@ export class WorldBoot {
     // O PORTAO DO JARDIM e a porta trancada sem chave: quem a abre e o ultimo pedido fechado.
     this.host.props.gardenGates = getGardenGates().map((g) => {
       const gate = new LockedDoorObject(this.host, g.worldX, g.worldY, false, true);
-      if (this.host.gateOpened) gate.setOpenInstantly();
+      if (this.host.arc.has('gate')) gate.setOpenInstantly();
       return gate;
     });
     this.host.props.dryBushes = getDryBushes().map((b) => new DryBushObject(this.host, b.worldX, b.worldY));
@@ -161,7 +169,7 @@ export class WorldBoot {
     // A ESPADA FINCADA. Ela e o primeiro gesto da historia e fica onde o heroi a deixou, para
     // sempre: na abertura ela desce das costas para o chao (playIntro); quem continua uma partida
     // a encontra ja de pe ali.
-    if (this.host.introDone && this.host.adventure) {
+    if (this.host.arc.has('intro') && this.host.adventure) {
       const ps = getPlayerStart();
       this.host.swordPlanting.plantSwordAt(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1);
       this.host.cinema.crackGroundAt(ps.worldX, ps.worldY - INTRO_WALK_TILES + 1, false);
@@ -201,10 +209,10 @@ export class WorldBoot {
         busy: () => this.host.cutsceneActive,
       });
       // Um jogo fechado entre o último pedido e a entrega da chave: ela chega agora.
-      if (allQuestsDone() && !adventureState().gardenKeyGiven) this.host.time.delayedCall(900, () => this.host.gardenUnlock.giveGardenKey(undefined));
+      if (allQuestsDone() && !this.host.arc.has('gardenKey')) this.host.time.delayedCall(900, () => this.host.gardenUnlock.giveGardenKey(undefined));
       this.host.valley.oldRoad = new OldRoad();
       const garden = getHearths()[0];
-      if (garden && !adventureState().mistCleared) this.host.valley.gardenMist = new GardenMist(this.host, { x: garden.worldX, y: garden.worldY });
+      if (garden && !this.host.arc.has('mist')) this.host.valley.gardenMist = new GardenMist(this.host, { x: garden.worldX, y: garden.worldY });
       this.host.forage.mushroomKin = this.host.forage.makeMushroomKin();
       this.host.groundItems.enforceNpcFrontRule();
       this.host.groundItems.freeTrappedItems();
@@ -264,7 +272,7 @@ export class WorldBoot {
 
     // A ABERTURA: a primeira vez no vale e uma cena, nao um controle. Ela toca uma vez por partida
     // (o save lembra), e continuar uma partida pula direto para o heroi parado na estrada.
-    if (!this.host.introDone) void this.host.intro.playIntro();
+    if (!this.host.arc.has('intro')) void this.host.intro.playIntro();
     else if (this.host.intro.openingTalk) void this.host.intro.playOpeningTalk();
     else if (skipIntro) this.host.actions.showControlsHint();
   }

@@ -15,12 +15,20 @@ import { MushroomKin } from '@/game/objects/MushroomKin';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getChunkTerrain, getHeldItemPickups, getOccupiedTiles } from '@/game/world/WorldData';
 import { adventureState } from '@/game/runtime/adventureState';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { FORAGER_DIALOG, ITEM_VISUAL_2D } from './sceneDefs';
 
 /** O olhar da câmera para o porcini na fala da Shui: ida e volta, e quanto ela segura nele. */
 const GLANCE_PAN_MS = 700;
 const GLANCE_HOLD_MS = 1500;
+
+/** O que ForagingWork usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type ForagingWorkHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'adventure' | 'bumps' | 'camera' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'hand'
+  | 'heldItem' | 'itemManager' | 'movementController' | 'npcManager' | 'orders' | 'playerWorld' | 'props'
+  | 'save' | 'scale' | 'seenItems' | 'sparkle' | 'steps' | 'tileSize' | 'time' | 'world3d'
+>;
 
 export class ForagingWork {
   /** A colheita de um cogumelo aberta (ver harvestMushroomAt). Congela o mundo como o catálogo. */
@@ -33,7 +41,7 @@ export class ForagingWork {
   public shuiWave?: NpcWave;
   public shuiWaved = false;
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: ForagingWorkHost) {}
 
   /**
    * A COLHEITA DE UM COGUMELO (ver ForagingOverlay): cortar na altura certa, serrar, escovar, ler a

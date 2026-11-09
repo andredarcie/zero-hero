@@ -2,8 +2,14 @@
 
 import { PauseMenu } from '@/game/runtime/PauseMenu';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { PauseTouchButton } from '@/game/runtime/PauseMenu';
+
+/** O que PauseControl usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type PauseControlHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'hand' | 'save' | 'scene'
+>;
 
 export class PauseControl {
   // Pause: the DOM menu (only while open) + the always-there touch button on mobile. While
@@ -12,7 +18,7 @@ export class PauseControl {
   public pauseMenu?: PauseMenu;
   public pauseTouchButton?: PauseTouchButton;
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: PauseControlHost) {}
 
   public openPauseMenu(): void {
     // Never pause over another modal state — their overlays own ESC/scrim already, and the

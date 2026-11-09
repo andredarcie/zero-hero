@@ -6,8 +6,8 @@ import type { GameScene } from '../GameScene';
 
 /** O que RunSave usa de GameScene. */
 export type RunSaveHost = Pick<GameScene,
-  'adventure' | 'gateOpened' | 'hearthLit' | 'introDone' | 'inventory' | 'itemManager' | 'machines'
-  | 'playerWorld' | 'props' | 'roasted' | 'seenDialogKeys' | 'seenItems'
+  'adventure' | 'arc' | 'inventory' | 'itemManager' | 'machines'
+  | 'playerWorld' | 'props' | 'seenDialogKeys' | 'seenItems'
 >;
 
 export class RunSave {
@@ -29,15 +29,12 @@ export class RunSave {
     st.started = true;
     st.inventory = this.host.inventory.list();
     st.selected = this.host.inventory.selected;
-    st.introSeen = this.host.introDone;
-    st.gateOpened = this.host.gateOpened;
-    st.hearthLit = this.host.hearthLit;
-    st.endingSeen = this.host.roasted;
+    // (A jornada — abertura, chave, portão, névoa, fogueira, fim — já mora no save: ver systems/RunArc.)
     st.day = getDay();
     st.clock = getTimeOfDay();
     // De onde ele CONTINUA: o tile em que esta agora. Durante a abertura ele ainda nao chegou a
     // lugar nenhum, entao o retrato nao anda (o Continue o poria no meio da caminhada).
-    if (this.host.introDone) st.respawn = { worldX: this.host.playerWorld.worldX, worldY: this.host.playerWorld.worldY };
+    if (this.host.arc.has('intro')) st.respawn = { worldX: this.host.playerWorld.worldX, worldY: this.host.playerWorld.worldY };
     st.seenDialogKeys = new Set(this.host.seenDialogKeys);
     st.seenItems = new Set(this.host.seenItems);
     if (this.host.itemManager) {

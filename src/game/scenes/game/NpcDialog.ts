@@ -8,12 +8,19 @@ import { isMushroomKind } from '@/game/fungi/fungi';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getDialog, getDialogVoice } from '@/game/world/WorldData';
-import { adventureState } from '@/game/runtime/adventureState';
 import { allQuestsDone, isQuestComplete, isQuestDone, questDialogFor } from '@/game/runtime/QuestLog';
 import { questFor } from '@/game/dialogs/NpcQuests';
+import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
 import { FORAGER_DIALOG, LUMBER_DIALOG, PAINTER_DIALOG, SKY_DIALOG } from './sceneDefs';
+
+/** O que NpcDialog usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
+export type NpcDialogHost = Engine.Scene & Pick<GameScene,
+  'actions' | 'adventure' | 'arc' | 'cutsceneActive' | 'delivery' | 'dialogCam' | 'forage' | 'heldItem'
+  | 'intro' | 'npcManager' | 'orders' | 'playerWorld' | 'questSetup' | 'save' | 'seenDialogKeys' | 'seenItems'
+  | 'sparkle' | 'steps' | 'time'
+>;
 
 export class NpcDialog {
   public dialogOpen = false;
@@ -24,7 +31,7 @@ export class NpcDialog {
   // Quem ja deu o "oi" (o pulinho quando o heroi chega perto) nesta sessao.
   public readonly greetedNpcs = new Set<string>();
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: NpcDialogHost) {}
 
   /** O "OI": o NPC da um pulinho na primeira vez que o heroi chega a dois passos dele. */
   public greetNearbyNpcs(): void {
@@ -110,7 +117,7 @@ export class NpcDialog {
     if (basket) script = { ...script, lines: [...named(basket.kinds), ...script.lines] };
     // O ÚLTIMO PEDIDO DO VALE fechou nesta conversa (pedido do autor): a fala termina com a chave do jardim alto,
     // e ela chega depois que a caixa fecha (celebrateQuestDone → giveGardenKey).
-    if (closedNow && allQuestsDone() && !adventureState().gardenKeyGiven) script = { ...script, lines: [...script.lines, ...tLines('garden.key')] };
+    if (closedNow && allQuestsDone() && !this.host.arc.has('gardenKey')) script = { ...script, lines: [...script.lines, ...tLines('garden.key')] };
     if (askId === FORAGER_DIALOG && npcWorld) script = this.host.forage.withPorciniGlance(script, npcWorld);
     if (npcWorld) {
       const key = this.dialogKeyFor(kind, npcWorld.worldX, npcWorld.worldY, scriptId);

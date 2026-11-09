@@ -16,6 +16,14 @@ import { ITEM_VISUAL_2D, SWORD_PLANTED_ELEV, USE_COOLDOWN_MS } from './sceneDefs
  */
 const ACTION_BUFFER_MS = 130;
 
+/** O que ActionInput usa de GameScene. */
+export type ActionInputHost = Pick<GameScene,
+  'arc' | 'bumps' | 'camp' | 'craft' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'forage' | 'forge' | 'hand'
+  | 'heldItem' | 'input' | 'intro' | 'machines' | 'movementController' | 'orders' | 'pause' | 'playerWorld'
+  | 'questSetup' | 'roastEnding' | 'sparkle' | 'steps' | 'swing' | 'swordPlanting' | 'textures' | 'use'
+  | 'verbs'
+>;
+
 export class ActionInput {
   /** O icone de cada item para o B do toque, tirado da textura uma vez (ver syncUseButtonIcon). */
   private readonly useIconCache = new Map<HeldItemKind, string>();
@@ -27,7 +35,7 @@ export class ActionInput {
   public actionButtons?: ActionButtons;
   public controlsHint?: ControlsHint;
 
-  public constructor(private readonly host: GameScene) {}
+  public constructor(private readonly host: ActionInputHost) {}
 
   /**
    * Liga os dois botoes. No teclado sao Z/J/espaco (falar e cuidar) e X/K (o item) — o par do NES
@@ -56,7 +64,7 @@ export class ActionInput {
       });
       this.syncUseButtonIcon();
     }
-    if (this.host.introDone && !this.host.intro.openingTalk) this.showControlsHint();
+    if (this.host.arc.has('intro') && !this.host.intro.openingTalk) this.showControlsHint();
   }
 
   /** A tarja dos controles: as teclas no teclado, o gesto e os botoes no toque (no alto da tela). */
