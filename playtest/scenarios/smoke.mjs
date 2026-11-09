@@ -6,8 +6,8 @@
 // medida e tirada DUAS vezes, antes e depois de um passo: so a segunda leitura prova que a
 // primeira nao estava sendo consertada pelo movimento.
 const heroMetrics = (driver) => driver.page.evaluate(() => {
-  const s = window.__scene;
-  return { sizePx: s?.hero?.sizePx ?? null, tileSize: s?.tileSize ?? null };
+  const g = window.gameDebug;
+  return { sizePx: g?.hero?.view().sizePx ?? null, tileSize: g?.hero?.tileSize() ?? null };
 });
 
 export default {
@@ -22,9 +22,8 @@ export default {
     await driver.settle(400);
     await shot('game-boot', { note: 'GameScene first frame', state });
 
+    // (O herói não tem mais vida nem HUD de corações: as duas asserções delas saíram com o combate.)
     assert('GameScene is active', state?.scene === 'game', `scene=${state?.scene}`);
-    assert('Player starts with health', (state?.health ?? 0) > 0, `health=${state?.health}`);
-    assert('HUD max health is set', (state?.maxHealth ?? 0) > 0, `maxHealth=${state?.maxHealth}`);
 
     // ── O heroi mede um tile desde o primeiro frame ──────────────────────────
     const born = await heroMetrics(driver);

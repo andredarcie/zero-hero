@@ -9,8 +9,9 @@
 //
 //   node playtest/run.mjs aa-truth              # writes playtest/results/aa/{native,truth}.png + a score
 //
-// The measurement runs entirely from the page — it resizes the renderer and re-renders the SAME
-// frozen scene — so it needs nothing compiled in, and an older build measures on identical terms:
+// The measurement resizes the renderer and re-renders the SAME frozen scene; the freezing and the
+// frame reads go through `gameDebug.reference` (src/game/debug/probes/referenceProbe.ts), so a build
+// from before that probe existed cannot be scored this way. Any later one can:
 //
 //   git checkout HEAD~1 -- src && npm run playtest -- aa-truth   # score the build before the change
 //   git checkout HEAD -- src
@@ -47,65 +48,26 @@ const SS = 4;
  *   between the shots, and the ground is lit differently in the two images.)
  */
 const MEASURE = `async (tileX, tileY, steps, ss) => {
-  const s = window.__scene;
-  const g = window.__game;
-  const w3 = s.world3d;
-  g.loop.stop();
-
-  s.enemyManager?.despawnAll();
-  s.playerWorld = { worldX: tileX, worldY: tileY };
-  s.movementController.syncPlayerToWorld(tileX, tileY, s.tileSize);
-
-  w3.elapsed = 0;
-  w3.cam.shakeMs = 0;
-  w3.lights.fires.forEach((f, i) => {
-    f.seed = i * 1.7;
-    f.noise = 0; f.flare = 0; f.flareTarget = 0; f.flareTimer = 0.9; f.flicker = 0; f.level = 1;
-  });
-  s.steps.stopBreathing();
-  s.hero.scaleX = 1; s.hero.scaleY = 1; s.frame.lastStepTime = 0;
-  for (const cf of (s.props.campfires ?? [])) { cf.animTimer?.remove(false); cf.animTimer = undefined; }
-
+  const ref = window.gameDebug.reference;
+  ref.pose(tileX, tileY);
   // Tiles only, and no post chain. A tile mesh is a merged BufferGeometry with a mapped Lambert
   // material: billboards are PlaneGeometry, the bridge is BoxGeometry, the shadow field is an
   // InstancedMesh with a Basic material, and the river banks carry a colour and no map.
-  const isTile = (o) => o.isMesh && !o.isInstancedMesh
-    && o.geometry?.type === 'BufferGeometry'
-    && o.material?.type === 'MeshLambertMaterial' && !!o.material.map;
-  w3.scene.traverse((o) => {
-    if ((o.isMesh || o.isPoints) && !isTile(o)) o.layers.set(31);
-  });
-  w3.screen.composer.passes = [w3.screen.composer.passes[0]];
-  w3.screen.composer.passes[0].renderToScreen = true;
-
+  ref.isolate('tiles');
   window.__reseed();
-
-  let t = 0;
-  for (let i = 0; i < steps; i++) {
-    t += 16.6667;
-    g.step(t, 16.6667);
-    await new Promise((r) => requestAnimationFrame(r));
-  }
+  await ref.step(steps);
 
   // ── the two renders ────────────────────────────────────────────────────────
-  const gl = w3.renderer.getContext();
-  const W = w3.renderer.domElement.width;
-  const H = w3.renderer.domElement.height;
-
   // readPixels straight after the draw, in the same task: the default framebuffer still holds the
   // frame (it is only discarded once we hand control back to the compositor), so this needs no
-  // preserveDrawingBuffer — which would have meant a source edit, and the old build hasn't got one.
-  const shoot = (w, h) => {
-    w3.renderer.setSize(w, h, false);
-    w3.screen.composer.render();
-    const buf = new Uint8Array(w * h * 4);
-    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
-    return buf;
-  };
-
-  const native = shoot(W, H);
-  const big = shoot(W * ss, H * ss);
-  w3.renderer.setSize(W, H, false);
+  // preserveDrawingBuffer.
+  const { w: W, h: H } = ref.frameSize();
+  // A 2560×1600 (tela 2×), 4× pede um framebuffer de 10240×6400, que o navegador pode não dar: ele encolhe calado, e a
+  // "verdade" sairia de um canto da foto. O fator é o maior que cabe.
+  ss = ref.fitSupersample(W, H, ss);
+  const native = ref.readFrame(W, H);
+  const big = ref.readFrame(W * ss, H * ss);
+  ref.restoreSize(W, H);
 
   // Box-filter the supersampled frame back down. The average is taken on the values as they leave
   // the framebuffer (already tone-mapped and sRGB-encoded), which is exactly where the hardware
@@ -228,7 +190,11 @@ export default {
     const outDir = path.join('playtest', 'results', 'aa');
     fs.mkdirSync(outDir, { recursive: true });
 
-    const home = await page.evaluate(() => ({ ...window.__scene.playerWorld }));
+    // Meio-dia: o relógio do vale pode nascer de noite, e uma foto noturna só de tiles (sem a cadeia de pós) é quase
+    // chapada — o "a foto tem tiles" reprovava por isso, não pelo isolamento.
+    await page.evaluate(() => window.gameTime.set(0.5));
+    await driver.settle(800);
+    const home = await page.evaluate(() => { const at = window.gameDebug.hero.at(); return { worldX: at.x, worldY: at.y }; });
     const r = await page.evaluate(
       `(${MEASURE})(${home.worldX}, ${home.worldY}, 90, ${SS})`,
     );

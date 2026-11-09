@@ -1,6 +1,7 @@
 import * as Engine from '@/game/engine';
 
 import { createGameConfig, getCanvasSizeForMode, type AppMode } from '@/game/config';
+import { buildAppProbes } from '@/game/debug/probes/appProbe';
 
 declare global {
   interface Window {
@@ -22,6 +23,8 @@ export class ZeroTheHeroGame {
     // freezes RAF, and stepping the game manually needs the Game BEFORE any scene registers
     // its hooks (e.g. to drive the preloader forward).
     if (import.meta.env.DEV) (window as unknown as { __game?: Engine.Game }).__game = this.game;
+    // A porta dos playtests para as cenas (debug/probes/appProbe): o título e os créditos não têm `gameDebug`.
+    if (import.meta.env.DEV) window.appDebug = buildAppProbes(this.game);
     this.game.registry.set('appMode', mode);
     this.handleResizeBound = () => {
       const { width, height } = getCanvasSizeForMode(this.mode);

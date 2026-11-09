@@ -15,15 +15,11 @@ import uiTour from './ui-tour.mjs';
 import menuFlow from './menu-flow.mjs';
 import machado from './machado.mjs';
 import pedra from './pedra.mjs';
-import ferro from './ferro.mjs';
 import florDaLua from './flor-da-lua.mjs';
 import sombras from './sombras.mjs';
-import bolsa from './bolsa.mjs';
-import pa from './pa.mjs';
 import montanha from './montanha.mjs';
 import altar from './altar.mjs';
 import vento from './vento.mjs';
-import prologo from './prologo.mjs';
 import semFabrica from './sem-fabrica.mjs';
 import zerar from './zerar.mjs';
 import telescopio from './telescopio.mjs';
@@ -73,15 +69,11 @@ export const scenarios = {
   'menu-flow': menuFlow,
   machado,
   pedra,
-  ferro,
   'flor-da-lua': florDaLua,
   sombras,
-  bolsa,
-  pa,
   montanha,
   altar,
   vento,
-  prologo,
   'sem-fabrica': semFabrica,
   zerar,
   telescopio,

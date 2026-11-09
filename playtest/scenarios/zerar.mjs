@@ -63,10 +63,10 @@ export default {
       },
       async recon() {
         const info = await page.evaluate(() => {
-          const s = window.__scene;
-          s.streamChunks(true);
+          const g = window.gameDebug;
+          g.world.stream();
           return {
-            npcs: s.npcManager.getActiveWorldPositions().map((n) => [n.kind, n.worldX, n.worldY]),
+            npcs: g.npcs.list().map((n) => [n.kind, n.worldX, n.worldY]),
             quests: window.gameDebug.quests().map((q) => [q.dialog, q.done, q.speaks, q.tasks]),
             st: window.gameDebug.getState(),
           };
@@ -81,7 +81,7 @@ export default {
 
       // ── A SISI: a pá, quatro buracos, as sementes, o balde, a espera, as flores, a mesa e o quadro ──
       async sisi() {
-        const stage = () => page.evaluate(() => window.__scene.questSetup.painterQuest.save.stage);
+        const stage = () => page.evaluate(() => window.gameDebug.quest.painter().stage);
         const held = async () => (await P.state()).heldItem;
         const home = await P.homeOf('painter');
         const near = { near: home, radius: 7 };
@@ -110,7 +110,7 @@ export default {
         assert('Os quatro canteiros regados: as tintas crescem', (await stage()) === 'grow', await stage());
         await shot('11-sisi-regado', { note: 'Os canteiros regados' });
         say('esperando as flores crescerem (tempo de jogo)');
-        await P.pageWait(() => window.__scene.questSetup.painterQuest.save.stage === 'harvest', null, 'as flores crescerem', 240000);
+        await P.pageWait(() => window.gameDebug.quest.painter().stage === 'harvest', null, 'as flores crescerem', 240000);
         for (let i = 0; i < 4; i += 1) {
           await P.doVerb('z', 'pick', `colher flor ${i + 1}`, near);
           await sleep(500);
@@ -148,7 +148,7 @@ export default {
 
       // ── O MARCO: o machado, quatro galhos de árvore seca rachados no cepo, a tenda, e acender ──
       async marco() {
-        const L = () => page.evaluate(() => { const q = window.__scene.questSetup.lumberQuest; return { stage: q.save.stage, laid: q.save.laid, standing: q.save.standing, ui: !!q.overlay }; });
+        const L = () => page.evaluate(() => { const q = window.gameDebug.quest.lumber(); return { stage: q.stage, laid: q.laid, standing: q.standing, ui: q.overlayOpen }; });
         const held = async () => (await P.state()).heldItem;
         const home = await P.homeOf('businessMan');
         const near = { near: home, radius: 8 };
@@ -166,16 +166,16 @@ export default {
           return P.free();
         };
         const split = async () => {
-          await P.pageWait(() => !!window.__scene.questSetup.lumberQuest.overlay, null, 'o cepo abrir', 8000);
+          await P.pageWait(() => window.gameDebug.quest.lumber().overlayOpen, null, 'o cepo abrir', 8000);
           await shot(`20-marco-cepo-${(await L()).laid}`, { note: 'Rachar no cepo' });
           await page.evaluate(() => new Promise((resolve) => {
-            const q = window.__scene.questSetup.lumberQuest;
+            const q = window.gameDebug.quest;
             const fire = () => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyZ', key: 'z', bubbles: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyZ', key: 'z', bubbles: true })); };
             let cool = 0;
             const t0 = performance.now();
             const tick = () => {
-              const o = q.overlay;
-              if (!o || performance.now() - t0 > 60000) { resolve(); return; }
+              const o = q.lumberOverlay();
+              if (o?.kind !== 'split' || performance.now() - t0 > 60000) { resolve(); return; }
               cool -= 1;
               if (cool <= 0) {
                 if (o.phase === 'aim' && Math.abs(o.aim - o.grainX) < 2.5 && Math.abs(o.aim - o.knotX) >= 8) { fire(); cool = 4; }
@@ -190,7 +190,7 @@ export default {
         };
         for (let n = 0; n < 4; n += 1) {
           if ((await held()) !== 'axe') await pickUp('axe');
-          const trees = await page.evaluate(() => window.__scene.props.dryTrees.filter((t) => t.blocking).map((t) => ({ x: t.worldX, y: t.worldY })));
+          const trees = await page.evaluate(() => window.gameDebug.props.dryTrees().filter((t) => t.blocking).map((t) => ({ x: t.x, y: t.y })));
           await P.doVerb('x', 'chop', `cortar árvore seca ${n + 1}`, { radius: 60, only: trees, repeat: true });
           await sleep(900);
           await P.drain('o galho');
@@ -209,10 +209,10 @@ export default {
         await P.talk('businessMan', 'o Marco (pronta)');
         assert('Ele manda acender', (await L()).stage === 'light', JSON.stringify(await L()));
         await P.doVerb('z', 'light', 'acender', near);
-        await P.pageWait(() => !!window.__scene.questSetup.lumberQuest.overlay, null, 'o fogo abrir', 8000);
+        await P.pageWait(() => window.gameDebug.quest.lumber().overlayOpen, null, 'o fogo abrir', 8000);
         await shot('22-marco-acender', { note: 'Acender' });
         for (let i = 0; i < 80 && (await L()).ui; i += 1) {
-          const phase = await page.evaluate(() => window.__scene.questSetup.lumberQuest.overlay?.phase);
+          const phase = await page.evaluate(() => window.gameDebug.quest.lumberOverlay()?.phase);
           if (phase === 'strike') await P.press('z', 50, 250);
           else if (phase === 'blow') await P.press('z', 50, 450);
           else await sleep(300);
@@ -234,21 +234,21 @@ export default {
       async noite() {
         await P.doVerb('z', 'sleep', 'o colchão do acampamento', { near: { x: 53, y: 48 }, radius: 3 });
         await P.waitFor((s) => s.resting, 'deitar', 8000);
-        const lying = await page.evaluate(() => ({ sleeping: window.__scene.camp.rest.isSleeping, camp: window.__scene.camp.rest.sleepingAtCamp }));
+        const lying = await page.evaluate(() => ({ sleeping: window.gameDebug.camp.rest().sleeping, camp: window.gameDebug.camp.rest().atCamp }));
         assert('O herói dorme no colchão do acampamento', lying.sleeping && lying.camp, JSON.stringify(lying));
         await shot('30-noite-colchao', { note: 'Dormindo no acampamento' });
         say('esperando a noite passar');
         await P.waitFor((s) => s.dialogOpen, 'a Morte aparecer', 300000);
         await shot('31-noite-morte', { note: 'A primeira visita da Morte' });
         await P.drain('a Morte', 200);
-        const visited = await page.evaluate(() => window.__scene.seenDialogKeys.has('death/visit'));
+        const visited = await page.evaluate(() => window.gameDebug.dialog.heard('death/visit'));
         assert('A Morte veio na primeira noite no acampamento', visited, '');
         for (let i = 0; i < 40 && (await P.state()).resting; i += 1) { await P.press('ArrowDown', 60, 400); await P.drain('levantar'); }
         await sleep(1500);
         const st = await P.free();
         const scythe = st.groundItems.find((g) => g.kind === 'scythe');
         assert('A foice ficou no acampamento', !!scythe && Math.abs(scythe.worldX - 53) <= 4 && Math.abs(scythe.worldY - 48) <= 4, JSON.stringify(scythe));
-        assert('O mago deixa de lembrar do acampamento', (await page.evaluate(() => window.__scene.delivery.wizardLine())) !== 'tent', '');
+        assert('O mago deixa de lembrar do acampamento', (await page.evaluate(() => window.gameDebug.dialog.wizardLine())) !== 'tent', '');
       },
 
       // ── A SHUI: a faca e os seis cogumelos, cada um atrás de uma coisa que só uma ferramenta tira ──
@@ -273,7 +273,7 @@ export default {
         /** Um graveto novo: o machado numa árvore seca, e o galho no colo. */
         const freshStick = async () => {
           await hold('axe');
-          const trees = await page.evaluate(() => window.__scene.props.dryTrees.filter((t) => t.blocking).map((t) => ({ x: t.worldX, y: t.worldY })));
+          const trees = await page.evaluate(() => window.gameDebug.props.dryTrees().filter((t) => t.blocking).map((t) => ({ x: t.x, y: t.y })));
           await P.doVerb('x', 'chop', 'árvore seca', { radius: 60, only: trees, repeat: true });
           await sleep(900);
           await P.drain('o galho');
@@ -289,9 +289,9 @@ export default {
             await ensure();
             const grid = await P.solidGrid();
             const open = await page.evaluate(([v, cx, cy]) => {
-              const sc = window.__scene;
+              const g = window.gameDebug;
               const out = [];
-              for (let y = Math.max(0, cy - 14); y <= Math.min(59, cy + 14); y += 1) for (let x = Math.max(0, cx - 14); x <= Math.min(59, cx + 14); x += 1) if (sc.verbs.useVerbAt(x, y) === v) out.push(`${x},${y}`);
+              for (let y = Math.max(0, cy - 14); y <= Math.min(59, cy + 14); y += 1) for (let x = Math.max(0, cx - 14); x <= Math.min(59, cx + 14); x += 1) if (g.verbs.use(x, y) === v) out.push(`${x},${y}`);
               return out;
             }, [verb, target.x, target.y]);
             const openSet = new Set(open);
@@ -311,47 +311,42 @@ export default {
             await P.walkTo([way[i - 1]], `${label}: diante de ${block.x},${block.y}`);
             await ensure();
             if ((await P.state()).player.worldX !== way[i - 1].x || (await P.state()).player.worldY !== way[i - 1].y) await P.walkTo([way[i - 1]], `${label}: de volta`);
-            if (!(await page.evaluate(([x, y]) => window.__scene.query.isSolidForEntities(x, y), [block.x, block.y]))) continue; // abriu sozinho (o fogo anda)
+            if (!(await page.evaluate(([x, y]) => window.gameDebug.world.solid(x, y), [block.x, block.y]))) continue; // abriu sozinho (o fogo anda)
             try { await P.face(block); } catch (e) { say(`  ${label}: ${e.message}`); continue; }
-            const v = await page.evaluate(([x, y]) => window.__scene.verbs.useVerbAt(x, y), [block.x, block.y]);
+            const v = await page.evaluate(([x, y]) => window.gameDebug.verbs.use(x, y), [block.x, block.y]);
             if (v !== verb) { say(`  ${label}: ${block.x},${block.y} diz ${v}`); await sleep(500); continue; }
             await P.press('x', 60, 450);
-            for (let k = 0; k < 10 && (await page.evaluate(([x, y]) => window.__scene.verbs.useVerbAt(x, y), [block.x, block.y])) === verb; k += 1) await P.press('x', 60, 450);
+            for (let k = 0; k < 10 && (await page.evaluate(([x, y]) => window.gameDebug.verbs.use(x, y), [block.x, block.y])) === verb; k += 1) await P.press('x', 60, 450);
             await P.drain(label);
             // o que cai (o fogo, a pedra afundando, a ponte) leva um tempo
-            try { await P.pageWait(([x, y]) => !window.__scene.query.isSolidForEntities(x, y), [block.x, block.y], `${label}: ${block.x},${block.y} abrir`, verb === 'burn' ? 40000 : 6000); } catch (e) { say(`  ${e.message}`); }
+            try { await P.pageWait(([x, y]) => !window.gameDebug.world.solid(x, y), [block.x, block.y], `${label}: ${block.x},${block.y} abrir`, verb === 'burn' ? 40000 : 6000); } catch (e) { say(`  ${e.message}`); }
           }
           throw new Error(`${label}: não abriu`);
         };
 
         /** O mini-game da colheita, jogado: a faca na faixa, a bucha na terra com o mouse, a ficha. */
         const forage = async (kind) => {
-          await P.pageWait(() => window.__scene.forage.foraging?.stage === 'aim', null, 'faca em posicao', 8000);
+          await P.pageWait(() => window.gameDebug.forage.overlay()?.stage === 'aim', null, 'faca em posicao', 8000);
           await page.evaluate(() => new Promise((resolve) => {
-            const o = window.__scene.forage.foraging;
             const fire = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: 'KeyZ', key: 'z', bubbles: true }));
-            const mid = (o.zoneTop + o.zoneBottom) / 2;
             const tick = () => {
-              if (o.stage !== 'aim') { resolve(); return; }
+              const o = window.gameDebug.forage.overlay();
+              if (o?.stage !== 'aim') { resolve(); return; }
+              const mid = (o.zoneTop + o.zoneBottom) / 2;
               if (Math.abs(o.knifeY - mid) < (o.zoneBottom - o.zoneTop) * 0.3) { fire('keydown'); fire('keyup'); }
               requestAnimationFrame(tick);
             };
             tick();
           }));
-          await P.pageWait(() => window.__scene.forage.foraging?.stage === 'clean', null, 'a bucha', 6000);
+          await P.pageWait(() => window.gameDebug.forage.overlay()?.stage === 'clean', null, 'a bucha', 6000);
           await sleep(300);
           const toScreen = (x, y) => page.evaluate(([ax, ay]) => {
-            const o = window.__scene.forage.foraging;
-            const dpr = o.canvas.width / Math.max(1, o.root.clientWidth);
-            const q = o.screen.origin();
-            return { x: (q.x + ax * o.scale) / dpr, y: (q.y + ay * o.scale) / dpr };
+            const p = window.gameDebug.forage.overlay().page;
+            return { x: p.originX + ax * p.unit, y: p.originY + ay * p.unit };
           }, [x, y]);
           const nextDirt = () => page.evaluate(() => {
-            const o = window.__scene.forage.foraging;
-            if (!o || o.stage !== 'clean') return null;
-            const i = o.dirt.findIndex((c) => c);
-            const cs = Math.sqrt(o.dirt.length);
-            return i < 0 ? null : { x: i % cs, y: Math.floor(i / cs) };
+            const o = window.gameDebug.forage.overlay();
+            return o?.stage === 'clean' ? o.nextDirt : null;
           });
           let d = await nextDirt();
           if (d) {
@@ -365,10 +360,10 @@ export default {
             }
             await page.mouse.up();
           }
-          await P.pageWait(() => window.__scene.forage.foraging?.stage === 'note', null, 'a ficha', 10000);
+          await P.pageWait(() => window.gameDebug.forage.overlay()?.stage === 'note', null, 'a ficha', 10000);
           await shot(`40-ficha-${kind}`, { note: `A ficha do ${kind}` });
-          for (let i = 0; i < 30 && !(await page.evaluate(() => !window.__scene.forage.foraging)); i += 1) await P.press('z', 50, 500);
-          await P.pageWait(() => !window.__scene.forage.foraging, null, 'a colheita fechar', 8000);
+          for (let i = 0; i < 30 && !(await page.evaluate(() => window.gameDebug.forage.overlay() === null)); i += 1) await P.press('z', 50, 500);
+          await P.pageWait(() => window.gameDebug.forage.overlay() === null, null, 'a colheita fechar', 8000);
           await P.drain('depois da ficha');
         };
 
@@ -414,11 +409,11 @@ export default {
         await clearTo(await spot('chanterelle'), 'cover', async () => {
           if ((await held()) === 'stone') return;
           await hold('pickaxe');
-          const plain = await page.evaluate(() => window.__scene.props.rocks.filter((r) => r.blocking && !r.ore).map((r) => ({ x: r.worldX, y: r.worldY })));
+          const plain = await page.evaluate(() => window.gameDebug.props.rocks().filter((r) => r.blocking && !r.ore).map((r) => ({ x: r.x, y: r.y })));
           const t = await P.doVerb('x', 'break', 'a rocha', { radius: 60, repeat: true, only: plain });
           await sleep(700);
           await P.drain('a pedra');
-          await P.pageWait(([x, y]) => !window.__scene.query.isSolidForEntities(x, y), [t.x, t.y], 'a rocha abrir', 6000).catch(() => {});
+          await P.pageWait(([x, y]) => !window.gameDebug.world.solid(x, y), [t.x, t.y], 'a rocha abrir', 6000).catch(() => {});
           await hold('stone');
         }, 'a lava do chanterelle');
         await harvest('chanterelle');
@@ -471,16 +466,16 @@ export default {
         await hold('wood');
         assert('Um graveto na mão para o fim', (await P.state()).heldItem === 'wood', (await P.state()).heldItem);
         // Subir o jardim: a primeira pisada no cume é o vento levando a névoa (cena).
-        const hearth = await page.evaluate(() => { const h = window.__scene.props.hearths[0]; return h ? { x: h.worldX, y: h.worldY } : null; });
+        const hearth = await page.evaluate(() => { const h = window.gameDebug.props.hearths()[0]; return h ? { x: h.x, y: h.y } : null; });
         assert('A fogueira do fim existe', !!hearth, '');
         try { await P.approachSolid(hearth, 'a fogueira do fim'); } catch (e) { say(`  1a tentativa: ${e.message}`); await P.drain('a névoa', 200); await P.approachSolid(hearth, 'a fogueira do fim'); }
         await P.drain('a névoa', 200);
         st = await P.free();
-        const mist = await page.evaluate(() => window.__scene.valley.gardenMist === undefined);
+        const mist = await page.evaluate(() => window.gameDebug.valley.gardenMist() === null);
         assert('O vento levou a névoa', mist, '');
         await shot('51-jardim', { note: 'O jardim alto, diante da fogueira' });
         await P.approachSolid(hearth, 'a fogueira do fim');
-        assert('Diante da fogueira, o Z acende', (await page.evaluate(([x, y]) => window.__scene.verbs.handVerbAt(x, y), [hearth.x, hearth.y])) === 'light', '');
+        assert('Diante da fogueira, o Z acende', (await page.evaluate(([x, y]) => window.gameDebug.verbs.hand(x, y), [hearth.x, hearth.y])) === 'light', '');
         await P.press('z', 60, 600);
         await P.drain('acender', 200);
         st = await P.free();
@@ -488,12 +483,12 @@ export default {
         await shot('52-fogueira', { note: 'A fogueira acesa' });
         if (st.heldItem !== 'wood') await hold('wood');
         await P.approachSolid(hearth, 'a fogueira (assar)');
-        const verb = await page.evaluate(([x, y]) => window.__scene.verbs.handVerbAt(x, y), [hearth.x, hearth.y]);
+        const verb = await page.evaluate(([x, y]) => window.gameDebug.verbs.hand(x, y), [hearth.x, hearth.y]);
         assert('Com o graveto, o Z assa', verb === 'roast', String(verb));
         await P.press('z', 60, 600);
         say('o fim: assando, os amigos, a nave, os créditos');
         for (let i = 0; i < 600; i += 1) {
-          const s4 = await page.evaluate(() => ({ scene: window.gameDebug?.getState()?.scene ?? null, active: window.__scene?.scene?.isActive?.() ?? null, dialog: window.gameDebug?.getState()?.dialogOpen ?? false, keys: [...(window.__game?.scene?.getScenes?.(true) ?? [])].map((x) => x.scene.key) }));
+          const s4 = await page.evaluate(() => ({ scene: window.gameDebug?.getState()?.scene ?? null, active: window.appDebug?.isActive('game') ?? null, dialog: window.gameDebug?.getState()?.dialogOpen ?? false, keys: window.appDebug?.activeScenes() ?? [] }));
           if (i % 40 === 0) say(`  ${JSON.stringify(s4)}`);
           if (i === 30) await shot('53-reencontro', { note: 'O reencontro na fogueira' });
           if (s4.dialog) await P.press('z', 60, 400);

@@ -55,45 +55,41 @@ const STEP_KEYS = {
 };
 
 /**
- * UM TILE POR SETA, num heroi que anda livre do grid. O passo deixou de ser um tile por toque: a
- * seta segurada move o corpo continuamente, entao "andar um tile" e segurar ate o CENTRO do
- * proximo tile e soltar. Quem segura e solta e a propria pagina, no requestAnimationFrame: do
- * Node, a latencia de cada keyup passaria do alvo por uma fracao diferente a cada passo.
+ * UM TILE POR SETA. O heroi anda preso ao grid: a seta fica apertada so ate o passo COMECAR (o tile
+ * logico muda no inicio do passo) e solta — segurada ate o corpo CHEGAR, o controlador ja tinha
+ * engatado o passo seguinte, e o heroi parava um tile adiante (era o que deixava o `flor-da-lua`
+ * vermelho). Depois espera o desenho assentar no tile. Quem segura e solta e a propria pagina, no
+ * requestAnimationFrame: do Node, a latencia de cada keyup variaria a cada passo. (O mesmo gesto do
+ * `gridStep` de lib/player.mjs.)
  *
- * Contra parede o corpo nao anda e a seta solta em ~120ms: e o mesmo "encarar sem entrar" de
- * antes. Devolve a posicao desenhada onde o heroi parou.
+ * Contra parede o passo nunca comeca e a seta solta em ~220ms: e o "encarar sem entrar". Devolve a
+ * posicao desenhada onde o heroi parou.
  */
 export const stepTile = (page, key, timeoutMs = 1500) => {
-  const [dx, dy, keyCode] = STEP_KEYS[key];
-  return page.evaluate(([name, sx, sy, code, timeout]) => new Promise((resolve) => {
-    const s = window.__scene;
+  const [, , keyCode] = STEP_KEYS[key];
+  return page.evaluate(([name, code, timeout]) => new Promise((resolve) => {
+    const g = window.gameDebug;
     const fire = (type) => {
       const e = new KeyboardEvent(type, { key: name, code: name, bubbles: true });
       Object.defineProperty(e, 'keyCode', { get: () => code });
       window.dispatchEvent(e);
     };
-    const at = () => s.verbs.heroVisualTile();
-    const from = at();
-    const target = { x: Math.round(from.x) + sx, y: Math.round(from.y) + sy };
+    const from = g.hero.at();
     const t0 = performance.now();
-    let last = from;
-    let stillSince = t0;
     fire('keydown');
+    const settle = () => {
+      const v = g.hero.visualTile();
+      const at = g.hero.at();
+      if ((Math.abs(v.x - at.x) < 0.02 && Math.abs(v.y - at.y) < 0.02) || performance.now() - t0 > timeout) resolve(v);
+      else requestAnimationFrame(settle);
+    };
     const tick = () => {
-      const p = at();
-      const now = performance.now();
-      if (p.x !== last.x || p.y !== last.y) stillSince = now;
-      last = p;
-      const along = sx !== 0 ? (p.x - target.x) * sx : (p.y - target.y) * sy;
-      if (along >= -0.02 || now - stillSince > 120 || now - t0 > timeout) {
-        fire('keyup');
-        resolve(p);
-        return;
-      }
+      const at = g.hero.at();
+      if (at.x !== from.x || at.y !== from.y || performance.now() - t0 > 220) { fire('keyup'); settle(); return; }
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }), [key, dx, dy, keyCode, timeoutMs]);
+  }), [key, keyCode, timeoutMs]);
 };
 
 export class GameDriver {

@@ -101,7 +101,7 @@ export default {
     // imovel). Um save que ja viu a abertura entra direto no mundo jogavel.
     await page.evaluate(() => localStorage.setItem('zh.cozy.v1', JSON.stringify({ introSeen: true })));
     await driver.open('/?play');
-    await page.waitForFunction(() => window.__scene?.playerWorld && !window.__scene.cutsceneActive, null, { timeout: 30000 });
+    await page.waitForFunction(() => window.gameDebug?.hero && !window.gameDebug.getState().cutsceneActive, null, { timeout: 30000 });
     await driver.settle(1200); // let the world stream in and the fires settle
 
     const idle = await profile(3000, false);

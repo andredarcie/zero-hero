@@ -19,10 +19,9 @@ export default {
     const { page } = driver;
     for (const spot of SPOTS) {
       await page.evaluate(([x, y]) => {
-        const s = window.__scene;
-        s.enemyManager?.despawnAll();
-        s.playerWorld = { worldX: x, worldY: y };
-        s.movementController.syncPlayerToWorld(x, y, s.tileSize);
+        const g = window.gameDebug;
+        g.hero.place(x, y);
+        g.hero.snapView();
       }, [spot.x, spot.y]);
       // A step in place makes the streamer notice the new chunk; then let props settle in.
       await driver.walk('down', 1);

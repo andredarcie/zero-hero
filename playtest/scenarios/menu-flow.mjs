@@ -9,24 +9,14 @@
 // A segunda metade guarda o menu de pausa: ela NAO tem mais seletor de idioma, e nao tem mais a
 // volta para a lista de levels — os levels isolados foram removidos, e com eles a lista.
 
-const activeScenes = (driver) => driver.page.evaluate(
-  () => (window.__game?.scene?.getScenes(true) ?? []).map((s) => s.scene.key),
-);
+const activeScenes = (driver) => driver.page.evaluate(() => window.appDebug?.activeScenes() ?? []);
 
-const registeredScenes = (driver) => driver.page.evaluate(
-  () => (window.__game?.scene?.scenes ?? []).map((s) => s.scene.key),
-);
+const registeredScenes = (driver) => driver.page.evaluate(() => window.appDebug?.registeredScenes() ?? []);
 
-const sceneTexts = (driver, key) => driver.page.evaluate(
-  (k) => {
-    const s = window.__game?.scene?.getScene(k);
-    return (s?.children?.list ?? []).filter((o) => o.type === 'Text').map((o) => o.text);
-  },
-  key,
-);
+const sceneTexts = (driver, key) => driver.page.evaluate((k) => window.appDebug?.sceneTexts(k) ?? [], key);
 
 const waitScene = (driver, key, timeout = 9000) => driver.page.waitForFunction(
-  (k) => (window.__game?.scene?.getScenes(true) ?? []).some((s) => s.scene.key === k),
+  (k) => window.appDebug?.isActive(k) === true,
   key,
   { timeout },
 );
@@ -85,7 +75,10 @@ export default {
     const visible = await driver.page.evaluate(() => Array.from(
       document.querySelectorAll('#zh-pause-root .zh-main .zh-pause-btn'), (b) => b.textContent,
     ));
-    assert('A pausa tem tres saidas e mais nada', visible.length === 3, JSON.stringify(visible));
-    await shot('pause-adventure', { note: 'A pausa: retornar, opcoes, sair', state: {} });
+    // Quatro saidas: retornar, opcoes, as musicas (a vitrola, que entrou depois deste cenario) e sair. Nenhuma delas
+    // e idioma nem lista de levels.
+    assert('A pausa tem quatro saidas e mais nada', visible.length === 4, JSON.stringify(visible));
+    assert('E nenhuma delas e idioma nem levels', !visible.some((t) => /idioma|language|level/i.test(t)), JSON.stringify(visible));
+    await shot('pause-adventure', { note: 'A pausa: retornar, opcoes, musicas, sair', state: {} });
   },
 };

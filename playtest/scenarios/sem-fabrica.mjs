@@ -22,7 +22,9 @@ export default {
     await driver.settle(900);
     const audit = await driver.page.evaluate(async ({ retiredProps, retiredItems, retiredDebug }) => {
       const world = await (await fetch('/world.json', { cache: 'no-store' })).json();
-      const index = await (await fetch('/levels/index.json', { cache: 'no-store' })).json();
+      // Os levels isolados sairam do jogo: sem o indice (o servidor devolve a pagina do jogo), nao ha level a auditar.
+      const indexRes = await fetch('/levels/index.json', { cache: 'no-store' });
+      const index = (indexRes.headers.get('content-type') ?? '').includes('json') ? await indexRes.json() : [];
       const levels = await Promise.all(index
         .filter((entry) => /^level-\d+\.json$/u.test(entry.file))
         .map(async (entry) => ({
@@ -78,83 +80,13 @@ export default {
       audit.manualStations.furnace > 0 && audit.manualStations.altar > 0,
       JSON.stringify(audit.manualStations));
 
-    const manual = await driver.page.evaluate(() => {
-      const s = window.__scene;
-      const freeRow = (startY) => {
-        for (let dy = 0; dy < 10; dy += 1) {
-          const y = startY + dy;
-          for (let dx = -4; dx <= 4; dx += 1) {
-            const x = s.playerWorld.worldX + dx;
-            if ([x - 2, x - 1, x, x + 1].every((tx) => !s.query.isTileOccupied(tx, y))) return { x, y };
-          }
-        }
-        return null;
-      };
-      const searchY = s.playerWorld.worldY - 4;
-      const furnaceAt = freeRow(searchY);
-      if (!furnaceAt) return { error: 'sem fileira livre para o forno da fixture' };
-      s.spawnStreamedProps([{ type: 'furnace', worldX: furnaceAt.x, worldY: furnaceAt.y, dir: 1 }]);
-      const benchAt = freeRow(searchY);
-      if (!benchAt) return { error: 'sem fileira livre para a bancada da fixture' };
-      s.spawnStreamedProps([{ type: 'toolbox', worldX: benchAt.x, worldY: benchAt.y, dir: 1 }]);
-      const furnace = s.props.furnaces.find((f) => f.worldX === furnaceAt.x && f.worldY === furnaceAt.y);
-      const bench = s.props.toolboxes.find((b) => b.worldX === benchAt.x && b.worldY === benchAt.y);
-      if (!furnace || !bench) return { error: 'estacoes da fixture nao nasceram' };
-
-      // Os quatro itens ocupam as antigas posicoes de entrada. Cinco segundos nao podem iniciar
-      // nada: o chao deixou de ser uma interface de fabricacao.
-      s.itemManager.drop('ore', furnaceAt.x - 1, furnaceAt.y);
-      s.itemManager.drop('charcoal', furnaceAt.x - 2, furnaceAt.y);
-      s.itemManager.drop('wood', benchAt.x - 1, benchAt.y);
-      s.itemManager.drop('stone', benchAt.x - 2, benchAt.y);
-      window.advanceTime(5000);
-      const at = (kind, x, y) => s.itemManager.snapshot()
-        .some((item) => item.kind === kind && item.worldX === x && item.worldY === y);
-      const floorUntouched = at('ore', furnaceAt.x - 1, furnaceAt.y)
-        && at('charcoal', furnaceAt.x - 2, furnaceAt.y)
-        && at('wood', benchAt.x - 1, benchAt.y)
-        && at('stone', benchAt.x - 2, benchAt.y);
-      const autoIdle = !furnace.isBusy && !bench.isBusy;
-
-      s.inventory.clear();
-      s.inventory.add('wood', 1);
-      s.inventory.add('stone', 1);
-      s.seenItems.add('axe');
-      const axesBefore = s.itemManager.snapshot().filter((item) => item.kind === 'axe').length;
-      const benchStarted = s.craft.craftAtStation(bench, 'bench', 'axe');
-      const axesAfter = s.itemManager.snapshot().filter((item) => item.kind === 'axe').length;
-      const benchManual = benchStarted && s.inventory.count('wood') === 0
-        && s.inventory.count('stone') === 0 && axesAfter === axesBefore + 1;
-
-      s.inventory.clear();
-      s.inventory.add('wood', 2);
-      s.seenItems.add('charcoal');
-      const charcoalBefore = s.itemManager.snapshot().filter((item) => item.kind === 'charcoal').length;
-      const furnaceStarted = s.craft.craftAtStation(furnace, 'furnace', 'charcoal');
-      const busyAfterConfirm = furnace.isBusy;
-      window.advanceTime(2500);
-      const charcoalAfter = s.itemManager.snapshot().filter((item) => item.kind === 'charcoal').length;
-      const furnaceManual = furnaceStarted && busyAfterConfirm && s.inventory.count('wood') === 0
-        && charcoalAfter === charcoalBefore + 1;
-      return {
-        floorUntouched, autoIdle, benchManual, furnaceManual,
-        furnaceAt, benchAt,
-      };
-    });
-
-    assert('Itens largados nas antigas entradas não alimentam bancada nem forno',
-      manual.floorUntouched === true && manual.autoIdle === true, JSON.stringify(manual));
-    assert('A bancada ainda fabrica manualmente pelo catálogo e pela mochila',
-      manual.benchManual === true, JSON.stringify(manual));
-    assert('O forno ainda executa a fornada manual confirmada no catálogo',
-      manual.furnaceManual === true, JSON.stringify(manual));
-
+    // (A segunda metade — bancada e forno montados na hora, fabricando com a mochila — saiu: a mochila acabou e o
+    // jogo não monta mais estação fora do mapa. O que sobra é o contrato de remoção, que é o nome do cenário.)
     log(`AUDITADO: mundo + ${audit.contentCount - 1} levels, sem automação e sem venda aérea`);
     await shot('sem-fabrica', {
       note: 'O jogo ativo sem componentes industriais; fornalha e altar manuais preservados.',
       state: {
         manualStations: audit.manualStations,
-        manualRegression: manual,
         retiredDebug: audit.retiredDebug,
         player: audit.state.player,
       },

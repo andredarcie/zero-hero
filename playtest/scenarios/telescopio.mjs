@@ -31,25 +31,25 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   const marks = [];
   const mark = (name) => { marks.push({ name, s: (Date.now() - T0) / 1000 }); console.log(`[telescopio ${((Date.now() - T0) / 1000).toFixed(1)}s] ${name}`); };
   const state = () => page.evaluate(() => window.gameDebug?.getState() ?? null);
-  const stage = () => page.evaluate(() => window.__scene.questSetup.astronomerQuest?.save.stage);
+  const stage = () => page.evaluate(() => window.gameDebug.quest.astronomer()?.stage);
 
   const gridStep = (key) => page.evaluate(([name, code]) => new Promise((resolve) => {
-    const s = window.__scene;
+    const g = window.gameDebug;
     const fire = (type) => {
       const e = new KeyboardEvent(type, { key: name, code: name, bubbles: true });
       Object.defineProperty(e, 'keyCode', { get: () => code });
       window.dispatchEvent(e);
     };
-    const fromX = s.playerWorld.worldX; const fromY = s.playerWorld.worldY;
+    const fromX = g.hero.at().x; const fromY = g.hero.at().y;
     const t0 = performance.now();
     fire('keydown');
     const settle = () => {
-      const v = s.verbs.heroVisualTile();
-      if ((Math.abs(v.x - s.playerWorld.worldX) < 0.02 && Math.abs(v.y - s.playerWorld.worldY) < 0.02) || performance.now() - t0 > 1500) resolve();
+      const v = g.hero.visualTile();
+      if ((Math.abs(v.x - g.hero.at().x) < 0.02 && Math.abs(v.y - g.hero.at().y) < 0.02) || performance.now() - t0 > 1500) resolve();
       else requestAnimationFrame(settle);
     };
     const tick = () => {
-      const moved = s.playerWorld.worldX !== fromX || s.playerWorld.worldY !== fromY;
+      const moved = g.hero.at().x !== fromX || g.hero.at().y !== fromY;
       if (moved || performance.now() - t0 > 220) { fire('keyup'); settle(); return; }
       requestAnimationFrame(tick);
     };
@@ -92,11 +92,11 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   };
 
   const solidGrid = () => page.evaluate(() => {
-    const s = window.__scene;
+    const g = window.gameDebug;
     const rows = [];
     for (let y = 0; y < 60; y += 1) {
       let row = '';
-      for (let x = 0; x < 60; x += 1) row += s.query.isSolidForEntities(x, y) ? '#' : '.';
+      for (let x = 0; x < 60; x += 1) row += g.world.solid(x, y) ? '#' : '.';
       rows.push(row);
     }
     return rows;
@@ -242,12 +242,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await free();
   mark('abertura terminou');
   }
-  reliefGrid = await page.evaluate(async () => {
-    // A URL que o jogo carregou: outra (sem o ?t= do vite) daria uma segunda cópia do módulo, com o mundo vazio.
-    const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/world/WorldData.ts'));
-    const { getTileRelief } = await import(url);
-    return Array.from({ length: 60 }, (_, y) => Array.from({ length: 60 }, (__, x) => getTileRelief(x, y)));
-  });
+  reliefGrid = await page.evaluate(() => window.gameDebug.world.reliefGrid(60));
 
   // ── 1. O PEDIDO ────────────────────────────────────────────────────────────────────────
   await walkTo([{ x: THEA.x, y: THEA.y + 2 }], 'perto da Thea');
@@ -260,11 +255,11 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   mark('pedido feito');
 
   // O FORNO GUIA: com o que ele pede na mão, o Z entrega; ele nunca abre catálogo.
-  const ovenAsks = () => page.evaluate(() => window.__scene.questSetup.astronomerQuest?.furnaceNeed() ?? null);
+  const ovenAsks = () => page.evaluate(() => window.gameDebug.quest.astronomer()?.furnaceNeed ?? null);
   const feed = async (kind, label) => {
     await approachSolid(FURNACE, `o forno (${label})`);
     await sleep(300);
-    const icon = await page.evaluate(() => window.__scene.forge.furnaceAsk?.visibleIcon ?? null);
+    const icon = await page.evaluate(() => window.gameDebug.scene.furnaceAsk());
     assert(`O forno pede ${kind} no balão`, icon !== null, `icone=${icon}`);
     await press('z', 60, 500);
     await sleep(500);
@@ -281,11 +276,11 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await press('z', 60, 500);
   st = await free();
   assert('O forno recusa o que ele não pediu', st.heldItem === 'pickaxe', `heldItem=${st.heldItem}`);
-  const furnaceCatalog = await page.evaluate(() => Boolean(window.__scene.orders.orderOverlay));
+  const furnaceCatalog = await page.evaluate(() => window.gameDebug.getState().orderOpen);
   assert('O forno não abre catálogo', !furnaceCatalog, String(furnaceCatalog));
 
   // ── 3. O CARVÃO, NO LAGO DE LAVA: o veio preto, a picareta ──────────────────────────────
-  const coalKind = await page.evaluate(([x, y]) => window.__scene.query.getRockAt(x, y)?.product ?? null, [COAL.x, COAL.y]);
+  const coalKind = await page.evaluate(([x, y]) => window.gameDebug.props.rocks().find((r) => r.x === x && r.y === y)?.product ?? null, [COAL.x, COAL.y]);
   assert('A pedra de veio preto dá carvão', coalKind === 'charcoal', String(coalKind));
   await approachSolid(COAL, 'o veio de carvão');
   await shot('03-veio-de-carvao', { note: 'A pedra de carvão na margem do lago de lava' });
@@ -295,7 +290,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await feed('charcoal', 'o carvão');
   await sleep(2500);
   assert('Com o carvão aceso, ele pede o minério', (await ovenAsks()) === 'ore', String(await ovenAsks()));
-  assert('O forno fica em brasa esperando', await page.evaluate(() => window.__scene.props.furnaces[0]?.kindled === true), '');
+  assert('O forno fica em brasa esperando', await page.evaluate(() => window.gameDebug.props.furnaces()[0]?.kindled === true), '');
   await shot('04-carvao', { note: 'O carvao aceso dentro do forno' });
   mark('carvao');
 
@@ -313,10 +308,10 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   void bloomAt;
   // A BIGORNA (pedido do autor): a esponja só vira barra na bigorna fixa ao lado do forno — no chão, não.
   await take('bloom', 'a esponja');
-  const ANVIL = await page.evaluate(() => ({ x: window.__scene.props.altars[0].worldX, y: window.__scene.props.altars[0].worldY }));
+  const ANVIL = await page.evaluate(() => { const a = window.gameDebug.props.altars()[0]; return { x: a.x, y: a.y }; });
   await approachSolid(ANVIL, 'a bigorna');
   await press('z', 60, 500);
-  const onAnvil = () => page.evaluate(() => window.__scene.props.altars[0].carrying);
+  const onAnvil = () => page.evaluate(() => window.gameDebug.props.altars()[0].carrying);
   assert('A esponja está em cima da bigorna', (await onAnvil()) === 'bloom', String(await onAnvil()));
   await shot('05b-bigorna', { note: 'A esponja em cima da bigorna, ao lado do forno' });
   for (let i = 0; i < 8 && (await onAnvil()) === 'bloom'; i += 1) await press('x', 60, 700);
@@ -331,13 +326,13 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await drain('a Thea buscando a barra');
   for (let i = 0; i < 40 && (await state()).cutsceneActive; i += 1) await sleep(300);
   assert('A Thea buscou a barra na bigorna (etapa: vidro)', (await stage()) === 'glass', await stage());
-  assert('A bigorna ficou vazia e o martelinho voltou para o toco', (await onAnvil()) === null && !(await page.evaluate(() => Boolean(window.__scene.forge.forging))), String(await onAnvil()));
+  assert('A bigorna ficou vazia e o martelinho voltou para o toco', (await onAnvil()) === null && !(await page.evaluate(() => window.gameDebug.scene.forging())), String(await onAnvil()));
   await shot('06-tripe', { note: 'O tripe e a cinza ao lado da Thea' });
   mark('tripe');
 
   // ── 5. O VIDRO: areia só no lago grande do sul, cinza ao lado dela ─────────────────────
   const camp = await page.evaluate(() => {
-    const q = window.__scene.questSetup.astronomerQuest;
+    const q = window.gameDebug.quest.astronomer();
     return { sand: q.sandTile, ash: q.ashTile };
   });
   assert('A areia está na beira do lago grande do sul', camp.sand && camp.sand.y >= 48, JSON.stringify(camp.sand));
@@ -368,12 +363,12 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await waitFor((s) => s.dialogOpen, 'a Thea falar do vidro', 8000);
   // Fechada a fala, o polimento abre com o mundo congelado: aqui o Z não pode mais ir para o jogo.
   for (let i = 0; i < 40 && (await state()).dialogOpen; i += 1) await press('z', 60, 380);
-  await pageWait(() => Boolean(window.__scene.questSetup.astronomerQuest?.overlay), null, 'o polimento abrir', 6000);
+  await pageWait(() => window.gameDebug.quest.astronomerOverlay()?.kind === 'lens', null, 'o polimento abrir', 6000);
   mark('polimento abriu');
   await sleep(500);
   await shot('09-lente-bruta', { note: 'O vidro bruto' });
   const box = await page.evaluate(() => {
-    const r = window.__scene.questSetup.astronomerQuest.overlay.canvas.getBoundingClientRect();
+    const r = window.gameDebug.quest.astronomerOverlay().box;
     return { x: r.left, y: r.top, s: r.width / 200 };
   });
   const lens = (px, py) => ({ x: box.x + px * box.s, y: box.y + py * box.s });
@@ -383,8 +378,8 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   let shotFine = false;
   for (let i = 0; i < 2400; i += 1) {
     const live = await page.evaluate(() => {
-      const o = window.__scene.questSetup.astronomerQuest?.overlay;
-      return o ? { phase: o.phase, left: o.remaining } : null;
+      const o = window.gameDebug.quest.astronomerOverlay();
+      return o?.kind === 'lens' ? { phase: o.phase, left: o.remaining } : null;
     });
     if (!live || live.phase === 'shine') break;
     if (live.phase === 'fine' && !shotFine) { shotFine = true; await shot('10-lente-fina', { note: 'Pedra fina: a nevoa' }); }
@@ -396,7 +391,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await page.mouse.up();
   await sleep(400);
   await shot('11-lente-pronta', { note: 'A lente nitida' });
-  await pageWait(() => !window.__scene.questSetup.astronomerQuest?.overlay, null, 'o polimento acabar', 6000);
+  await pageWait(() => !window.gameDebug.quest.astronomer()?.overlayOpen, null, 'o polimento acabar', 6000);
   await drain('o telescopio');
   st = await free();
   assert('O telescopio nas costas', st.heldItem === 'telescope', `heldItem=${st.heldItem}`);
@@ -417,7 +412,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   console.log(`[telescopio] hora ao chegar: ${st.timeOfDay.clock} (${st.timeOfDay.phase})`);
   await press('z', 60, 3600);
   await shot('15-esperando', { note: 'Sentado com a caneca, e a Thea ao lado' });
-  await pageWait(() => window.__scene.questSetup.astronomerQuest?.overlay?.aim !== undefined, null, 'a ocular abrir de noite', 240000);
+  await pageWait(() => window.gameDebug.quest.astronomerOverlay()?.kind === 'sky', null, 'a ocular abrir de noite', 240000);
   mark('ocular abriu');
   await sleep(1500);
   await shot('16-ocular', { note: 'A ocular, antes de achar nada' });
@@ -430,7 +425,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
     await page.keyboard.up(key);
   };
   const aim = () => page.evaluate(() => {
-    const o = window.__scene.questSetup.astronomerQuest.overlay;
+    const o = window.gameDebug.quest.astronomerOverlay();
     return { x: o.aim.x, y: o.aim.y };
   });
   for (const target of ['saturn', 'moon', 'pleiades', 'jupiter']) {
@@ -441,7 +436,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
     if (Math.abs(a.y - pos.y) > 5) await hold(a.y < pos.y ? 'ArrowDown' : 'ArrowUp', async () => Math.abs((await aim()).y - pos.y) <= 5);
     await sleep(350);
     await shot(`17-foco-${target}`, { note: `Focando: ${target}` });
-    await pageWait((id) => window.__scene.questSetup.astronomerQuest?.overlay?.reading === id, target, `a ficha: ${target}`, 6000);
+    await pageWait((id) => window.gameDebug.quest.astronomerOverlay()?.reading === id, target, `a ficha: ${target}`, 6000);
     await sleep(4500);
     await shot(`18-ficha-${target}`, { note: `A ficha: ${target}` });
     mark(`achou ${target}`);
@@ -453,7 +448,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await shot('19-thea-subiu', { note: 'A Thea subiu e sentou' });
   mark('thea subiu');
   await drain('a despedida');
-  await pageWait(() => window.__scene.questSetup.astronomerQuest?.isDone === true, null, 'a quest fechar', 15000);
+  await pageWait(() => window.gameDebug.quest.astronomer()?.done === true, null, 'a quest fechar', 15000);
   st = await free();
   const quest = await page.evaluate(() => window.gameDebug.quests().find((q) => q.dialog === 'astronaut'));
   assert('A quest da Thea fechou', quest.done === true, JSON.stringify(quest));
@@ -462,7 +457,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   mark('quest fechada');
 
   // Thea foi embora: a casa dela fica vazia, e o tile, livre.
-  assert('A Thea nao esta mais em casa', !(await page.evaluate(([x, y]) => window.__scene.query.isSolidForEntities(x, y), [THEA.x, THEA.y])), 'o tile dela continua ocupado');
+  assert('A Thea nao esta mais em casa', !(await page.evaluate(([x, y]) => window.gameDebug.world.solid(x, y), [THEA.x, THEA.y])), 'o tile dela continua ocupado');
   mark('obrigado');
 
   return { marks, state, press, free };
@@ -476,19 +471,19 @@ export default {
     const { page } = driver;
     const { marks, press, free } = await playThea({ driver, shot, assert });
     // ── VOLTANDO DO SAVE: tudo continua lá ─────────────────────────────────────────────────
-    await page.evaluate(() => window.__scene.save.persistAdventure());
+    await page.evaluate(() => window.gameDebug.quest.persist());
     await driver.open('/');
     await sleep(2600);
     await press('Enter', 80, 1200);
     await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
     await free();
     const after = await page.evaluate(([x, y]) => ({
-      stage: window.__scene.questSetup.astronomerQuest?.save.stage,
-      solid: window.__scene.query.isSolidForEntities(x, y),
+      stage: window.gameDebug.quest.astronomer()?.stage,
+      solid: window.gameDebug.world.solid(x, y),
     }), [SPOT.x, SPOT.y]);
     assert('O save lembra a quest fechada', after.stage === 'done', JSON.stringify(after));
     assert('O telescopio continua no planalto', after.solid === true, JSON.stringify(after));
-    assert('O save lembra que ela foi embora', await page.evaluate(() => window.__scene.questSetup.astronomerQuest?.save.departed === true), 'departed falso');
+    assert('O save lembra que ela foi embora', await page.evaluate(() => window.gameDebug.quest.astronomer()?.departed === true), 'departed falso');
 
     fs.writeFileSync(path.resolve('playtest/results/telescopio-marcas.json'), JSON.stringify(marks, null, 2));
     assert('Sem erro no console', driver.consoleErrors.length === 0, driver.consoleErrors.slice(0, 3).join(' | '));

@@ -15,35 +15,34 @@ export default {
     await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
     // O tile andavel com mais arvores em volta: e la que as folhas tem de onde cair.
     const spot = await page.evaluate(() => {
-      const s = window.__scene;
+      const g = window.gameDebug;
       const trees = (x, y) => {
         let n = 0;
         for (let dy = -3; dy <= 3; dy += 1) for (let dx = -4; dx <= 4; dx += 1) {
-          if (s.query.isTreeTileAt(x + dx, y + dy)) n += 1;
+          if (g.world.tree(x + dx, y + dy)) n += 1;
         }
         return n;
       };
       let best = null;
       for (let y = 4; y < 56; y += 2) for (let x = 4; x < 56; x += 2) {
-        if (s.query.isSolidForEntities(x, y)) continue;
+        if (g.world.solid(x, y)) continue;
         const n = trees(x, y);
         if (!best || n > best.n) best = { x, y, n };
       }
-      s.playerWorld.worldX = best.x; s.playerWorld.worldY = best.y;
-      s.movementController.interruptMovement(best.x, best.y);
-      s.streamChunks(true);
+      g.hero.teleport(best.x, best.y);
       window.gameTime.set(0.5);
       return best;
     });
     await sleep(6000);
     const day = await page.evaluate(() => {
-      const s = window.__scene;
+      const life = window.gameDebug.valley.life();
+      const widths = life.butterflies.map((b) => b.width);
       return {
-        level: s.life.daylifeLevel,
-        butterflies: s.life.butterflies.length,
-        spread: Math.max(...s.life.butterflies.map((b) => b.bb.displayWidth)) - Math.min(...s.life.butterflies.map((b) => b.bb.displayWidth)),
-        leaves: s.life.leaves.length,
-        falling: s.life.leaves.filter((l) => l.landedMs < 0).length,
+        level: life.daylife,
+        butterflies: life.butterflies.length,
+        spread: Math.max(...widths) - Math.min(...widths),
+        leaves: life.leaves.length,
+        falling: life.leaves.filter((l) => l.landedMs < 0).length,
       };
     });
     await shot('meio-dia', { note: 'Borboletas e folhas ao meio-dia' });
@@ -53,9 +52,8 @@ export default {
     assert('As arvores perto soltam folhas', day.leaves > 0, JSON.stringify({ ...day, spot }));
 
     const landed = await page.evaluate(async () => {
-      const s = window.__scene;
       for (let i = 0; i < 40; i += 1) {
-        if (s.life.leaves.some((l) => l.landedMs >= 0)) return true;
+        if (window.gameDebug.valley.life().leaves.some((l) => l.landedMs >= 0)) return true;
         await new Promise((r) => setTimeout(r, 250));
       }
       return false;
@@ -64,11 +62,10 @@ export default {
 
     await page.evaluate(() => window.gameTime.set(0.0));
     await sleep(7000);
-    const night = await page.evaluate(() => ({
-      butterflies: window.__scene.life.butterflies.length,
-      level: window.__scene.life.daylifeLevel,
-      fireflies: window.__scene.life.fireflyLevel,
-    }));
+    const night = await page.evaluate(() => {
+      const life = window.gameDebug.valley.life();
+      return { butterflies: life.butterflies.length, level: life.daylife, fireflies: life.fireflies };
+    });
     assert('De noite as borboletas vao embora', night.butterflies === 0 && night.level < 0.05, JSON.stringify(night));
     assert('E os vaga-lumes assumem', night.fireflies > 0.9, JSON.stringify(night));
   },

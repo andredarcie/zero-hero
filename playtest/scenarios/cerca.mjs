@@ -15,15 +15,15 @@ export default {
     await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
     await sleep(1200);
     const put = (x, y, fx = 0, fy = -1) => page.evaluate(([px, py, dx, dy]) => {
-      const s = window.__scene;
-      s.playerWorld.worldX = px; s.playerWorld.worldY = py; s.movementController.interruptMovement(px, py); s.movementController.faceTo(dx, dy); s.streamChunks(true);
+      const g = window.gameDebug;
+      g.hero.teleport(px, py, dx, dy);
     }, [x, y, fx, fy]);
     await page.evaluate(() => { window.gameTime.setDay(2); window.gameTime.set(0.45); });
 
     const solid = await page.evaluate(() => {
-      const s = window.__scene;
+      const g = window.gameDebug;
       const fence = [[48, 5], [52, 11], [55, 11], [59, 8], [50, 1]];
-      return { fence: fence.every(([x, y]) => s.query.isSolidForEntities(x, y)), gate: !s.query.isSolidForEntities(53, 11) && !s.query.isSolidForEntities(54, 11) };
+      return { fence: fence.every(([x, y]) => g.world.solid(x, y)), gate: !g.world.solid(53, 11) && !g.world.solid(54, 11) };
     });
     assert('Cerca: os tiles da cerca barram o passo', solid.fence, JSON.stringify(solid));
     assert('Cerca: o portão (53-54, 11) deixa passar', solid.gate, JSON.stringify(solid));
@@ -40,9 +40,9 @@ export default {
 
     // ── O QUINTAL (objects/LumberYard): as peças e a quest do Marco, que ainda acha onde pôr o cepo e a fogueira ──
     const yard = await page.evaluate(() => {
-      const s = window.__scene;
-      const q = s.questSetup.lumberQuest;
-      return { solid: [[49, 2], [54, 2], [58, 9], [58, 6], [52, 12]].every(([x, y]) => s.query.isSolidForEntities(x, y)), block: q?.blockTile ?? null, pit: q?.pitTile ?? null };
+      const g = window.gameDebug;
+      const q = g.quest.lumber();
+      return { solid: [[49, 2], [54, 2], [58, 9], [58, 6], [52, 12]].every(([x, y]) => g.world.solid(x, y)), block: q?.blockTile ?? null, pit: q?.pitTile ?? null };
     });
     assert('Quintal: as peças barram o passo', yard.solid, JSON.stringify(yard));
     assert('Quintal: a quest do lenhador ainda acha o cepo e a fogueira', !!yard.block && !!yard.pit, JSON.stringify(yard));

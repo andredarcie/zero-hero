@@ -22,15 +22,15 @@ export default {
     const night = async (n) => {
       // Ao lado do colchão, de frente para ele: o Z deita.
       await page.evaluate(() => {
-        const s = window.__scene; window.gameTime.set(0.6);
-        s.playerWorld.worldX = 54; s.playerWorld.worldY = 48; s.movementController.interruptMovement(54, 48); s.movementController.faceTo(-1, 0); s.streamChunks(true);
+        const g = window.gameDebug; window.gameTime.set(0.6);
+        g.hero.teleport(54, 48, -1, 0);
       });
       await sleep(600);
       await page.keyboard.press('z');
       await sleep(1500);
-      const lying = await page.evaluate(() => window.__scene.camp.rest.isSleeping && window.__scene.camp.rest.sleepingAtCamp);
+      const lying = await page.evaluate(() => window.gameDebug.camp.rest().sleeping && window.gameDebug.camp.rest().atCamp);
       assert(`Noite ${n}: deitado no colchão`, lying, '');
-      const before = await page.evaluate((keys) => keys.filter((k) => window.__scene.seenDialogKeys.has(k)), KEYS);
+      const before = await page.evaluate((keys) => keys.filter((k) => window.gameDebug.dialog.heard(k)), KEYS);
       // A noite passa: a hora de dormir, e depois a manhã.
       await page.evaluate(() => window.gameTime.set(0.95));
       await sleep(800);
@@ -48,7 +48,7 @@ export default {
         }
         await sleep(300);
       }
-      const after = await page.evaluate((keys) => keys.filter((k) => window.__scene.seenDialogKeys.has(k)), KEYS);
+      const after = await page.evaluate((keys) => keys.filter((k) => window.gameDebug.dialog.heard(k)), KEYS);
       log(`  noite ${n}: ${JSON.stringify(before)} → ${JSON.stringify(after)} | ${first}`);
       // Levanta e se afasta do colchão.
       for (let i = 0; i < 10 && (await state()).resting; i += 1) { await page.keyboard.press('ArrowUp'); await sleep(400); }
@@ -63,7 +63,7 @@ export default {
     }
     const r4 = await night(4);
     assert('Noite 4: ela não vem mais', !r4.came && r4.after.length === 3, JSON.stringify(r4));
-    const scythes = await page.evaluate(() => window.__scene.itemManager.snapshot().filter((i) => i.kind === 'scythe').length);
+    const scythes = await page.evaluate(() => window.gameDebug.items.ground().filter((i) => i.kind === 'scythe').length);
     assert('Só uma foice no mundo (a da primeira noite)', scythes === 1, String(scythes));
   },
 };

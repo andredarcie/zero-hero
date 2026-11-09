@@ -23,6 +23,6 @@ export default {
     // least once (a fully walled-in spawn would be a real bug).
     assert('Hero moved at least one tile', anyMovement, 'tracked across 4 directions');
     assert('Still in GameScene after walking', end?.scene === 'game', `scene=${end?.scene}`);
-    assert('Survived the walk', (end?.health ?? 0) > 0, `health=${end?.health}`);
+    // (O "sobreviveu à caminhada" saiu com a vida do herói: não há mais dano no jogo.)
   },
 };

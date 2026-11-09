@@ -14,22 +14,24 @@ export const makePlayer = ({ page, log = console.log }) => {
   // UM TILE POR TOQUE (o herói anda preso ao grid): a seta fica apertada até o passo COMEÇAR e solta, senão
   // o controlador engata o passo seguinte. Contra uma parede o passo nunca começa e o toque só vira o herói.
   const gridStep = (key) => page.evaluate(([name, code]) => new Promise((resolve) => {
-    const s = window.__scene;
+    const g = window.gameDebug;
     const fire = (type) => {
       const e = new KeyboardEvent(type, { key: name, code: name, bubbles: true });
       Object.defineProperty(e, 'keyCode', { get: () => code });
       window.dispatchEvent(e);
     };
-    const fromX = s.playerWorld.worldX; const fromY = s.playerWorld.worldY;
+    const from = g.hero.at();
     const t0 = performance.now();
     fire('keydown');
     const settle = () => {
-      const v = s.verbs.heroVisualTile();
-      if ((Math.abs(v.x - s.playerWorld.worldX) < 0.02 && Math.abs(v.y - s.playerWorld.worldY) < 0.02) || performance.now() - t0 > 1500) resolve();
+      const v = g.hero.visualTile();
+      const at = g.hero.at();
+      if ((Math.abs(v.x - at.x) < 0.02 && Math.abs(v.y - at.y) < 0.02) || performance.now() - t0 > 1500) resolve();
       else requestAnimationFrame(settle);
     };
     const tick = () => {
-      const moved = s.playerWorld.worldX !== fromX || s.playerWorld.worldY !== fromY;
+      const at = g.hero.at();
+      const moved = at.x !== from.x || at.y !== from.y;
       if (moved || performance.now() - t0 > 220) { fire('keyup'); settle(); return; }
       requestAnimationFrame(tick);
     };
@@ -75,25 +77,12 @@ export const makePlayer = ({ page, log = console.log }) => {
     throw new Error(`dialogo/cena nao terminou: ${label}`);
   };
 
-  const solidGrid = () => page.evaluate((n) => {
-    const s = window.__scene;
-    const rows = [];
-    for (let y = 0; y < n; y += 1) {
-      let row = '';
-      for (let x = 0; x < n; x += 1) row += s.query.isSolidForEntities(x, y) ? '#' : '.';
-      rows.push(row);
-    }
-    return rows;
-  }, WORLD);
+  const solidGrid = () => page.evaluate((n) => window.gameDebug.world.solidRows(n), WORLD);
 
   // A SERRA: entre chão e planalto só se passa pela escada (a mesma conta de world/relief.ts).
   let reliefGrid = null;
   const loadRelief = async () => {
-    reliefGrid = await page.evaluate(async (n) => {
-      const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/world/WorldData.ts'));
-      const { getTileRelief } = await import(url);
-      return Array.from({ length: n }, (_, y) => Array.from({ length: n }, (__, x) => getTileRelief(x, y)));
-    }, WORLD);
+    reliefGrid = await page.evaluate((n) => window.gameDebug.world.reliefGrid(n), WORLD);
   };
   const canStep = (fx, fy, tx, ty) => (reliefGrid ? canStepCodes(reliefGrid[fy][fx], reliefGrid[ty][tx], tx - fx, ty - fy) : true);
 
@@ -187,22 +176,18 @@ export const makePlayer = ({ page, log = console.log }) => {
     const now = await state();
     const dx = target.x - now.player.worldX; const dy = target.y - now.player.worldY;
     if (!(now.facing && now.facing.dx === dx && now.facing.dy === dy)) {
-      await page.evaluate(([fx, fy]) => window.__scene.movementController.faceTo(fx, fy), [dx, dy]);
+      await page.evaluate(([fx, fy]) => window.gameDebug.hero.face(fx, fy), [dx, dy]);
       await sleep(120);
     }
     return run;
   };
 
-  const npcAt = (kind) => page.evaluate((k) => window.__scene.npcManager.getActiveWorldPositions().find((n) => n.kind === k) ?? null, kind);
+  /** O vizinho `kind` nos chunks carregados ({ worldX, worldY, kind }), ou null. */
+  const npcAt = (kind) => page.evaluate((k) => window.gameDebug.npcs.find(k), kind);
   const quest = (dialog) => page.evaluate((d) => window.gameDebug.quests().find((q) => q.dialog === d) ?? null, dialog);
 
   /** Vai até o NPC (pelo sul, o lado de conversa, se der), aperta Z e lê a conversa até o fim. */
-  const homeOf = (kind) => page.evaluate(async (k) => {
-    const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/world/WorldData.ts'));
-    const { getNpcHome } = await import(url);
-    const h = getNpcHome(k);
-    return h ? { x: h.worldX, y: h.worldY } : null;
-  }, kind);
+  const homeOf = (kind) => page.evaluate((k) => window.gameDebug.world.npcHome(k), kind);
 
   /** O NPC só existe com o chunk carregado: sem ele à vista, o herói anda até perto da casa dele. */
   const findNpc = async (kind) => {
@@ -239,7 +224,7 @@ export const makePlayer = ({ page, log = console.log }) => {
     throw new Error(`talk: nao consegui falar com ${kind}`);
   };
 
-  const stream = () => page.evaluate(() => window.__scene.streamChunks(true));
+  const stream = () => page.evaluate(() => window.gameDebug.world.stream());
 
   /**
    * OS TILES ONDE UM BOTÃO FAZ `verb` AGORA, perguntados ao jogo (`useVerbAt` para o X, `handVerbAt` para o Z:
@@ -248,20 +233,12 @@ export const makePlayer = ({ page, log = console.log }) => {
   const verbTiles = async (button, verb, { near = null, radius = 60 } = {}) => {
     const st = await state();
     const c = near ?? { x: st.player.worldX, y: st.player.worldY };
-    return page.evaluate(([b, v, cx, cy, r, n]) => {
-      const s = window.__scene;
-      const ask = b === 'x' ? (x, y) => s.verbs.useVerbAt(x, y) : (x, y) => s.verbs.handVerbAt(x, y);
-      const out = [];
-      for (let y = Math.max(0, cy - r); y <= Math.min(n - 1, cy + r); y += 1) {
-        for (let x = Math.max(0, cx - r); x <= Math.min(n - 1, cx + r); x += 1) if (ask(x, y) === v) out.push({ x, y, d: Math.abs(x - cx) + Math.abs(y - cy) });
-      }
-      return out.sort((a, bb) => a.d - bb.d);
-    }, [button, verb, c.x, c.y, radius, WORLD]);
+    return page.evaluate(([b, v, cx, cy, r, n]) => window.gameDebug.verbs.tiles(b, v, cx, cy, r, n), [button, verb, c.x, c.y, radius, WORLD]);
   };
 
   /** Chega diante de `target` (sólido ou livre) e o encara. */
   const reach = async (target, label) => {
-    const solid = await page.evaluate(([x, y]) => window.__scene.query.isSolidForEntities(x, y), [target.x, target.y]);
+    const solid = await page.evaluate(([x, y]) => window.gameDebug.world.solid(x, y), [target.x, target.y]);
     if (solid) await approachSolid(target, label);
     else await approachFree(target, label);
   };
@@ -274,13 +251,13 @@ export const makePlayer = ({ page, log = console.log }) => {
     if (!tiles.length) throw new Error(`nenhum tile aceita ${button}:${verb} (${label})`);
     for (const t of tiles) {
       try { await reach(t, `${label} @${t.x},${t.y}`); } catch (e) { log(`  (${label}: ${t.x},${t.y} sem caminho: ${e.message})`); continue; }
-      const now = await page.evaluate(([b, x, y]) => (b === 'x' ? window.__scene.verbs.useVerbAt(x, y) : window.__scene.verbs.handVerbAt(x, y)), [button, t.x, t.y]);
+      const now = await page.evaluate(([b, x, y]) => window.gameDebug.verbs.at(b, x, y), [button, t.x, t.y]);
       if (now !== verb) { log(`  (${label}: ${t.x},${t.y} agora diz ${now})`); continue; }
       await press(button, 60, 350);
       // `repeat`: bate de novo enquanto o tile ainda aceita o gesto (a árvore seca cai em etapas, a rocha racha antes).
       for (let i = 0; opts.repeat && i < 12; i += 1) {
         await sleep(250);
-        const again = await page.evaluate(([b, x, y]) => (b === 'x' ? window.__scene.verbs.useVerbAt(x, y) : window.__scene.verbs.handVerbAt(x, y)), [button, t.x, t.y]);
+        const again = await page.evaluate(([b, x, y]) => window.gameDebug.verbs.at(b, x, y), [button, t.x, t.y]);
         if (again !== verb) break;
         await press(button, 60, 350);
       }

@@ -51,24 +51,37 @@ npm run playtest:clean                            # encerra sobras de rodadas in
 
 Saída: 0 tudo passou, 1 alguma asserção falhou, 3 incompleta (o log diz como continuar). Uma rodada por vez: duas em paralelo dobram a conta.
 
-## How it plays the game
+## How it plays the game — the probes (a interface de teste)
 
-Walking blindly to a procedurally-placed NPC is flaky, so the GameScene exposes a small
-deterministic control surface on `window.gameDebug` (defined in
-`src/game/debug/debugHooks.ts`, wired up in `GameScene`):
+Os cenários falam com o jogo **só pelas sondas**, nunca lendo a cena por dentro:
 
-```ts
-window.gameDebug = {
-  getState(),              // { scene, player, health, inventory, dialogOpen, ... }
-  openDialog(kind?),       // pop an NPC dialog (default: long-text "blackCat")
-  closeDialog(),
-  listNpcKinds(),
-}
+| Porta | Onde existe | O que tem |
+| --- | --- | --- |
+| `window.gameDebug` | a partida (`GameScene`) | `getState()`, `openDialog()`, `quests()`… e as sondas: `hero`, `world`, `verbs`, `items`, `npcs`, `dialog`, `camp`, `props`, `valley`, `quest`, `scene`, `sound`, `fire`, `forage`, `minigames`, `render`, `shadows`, `reference` |
+| `window.appDebug` | sempre (o título, os créditos) | as cenas ativas e registradas, o texto de uma cena |
+| `window.editorDebug` | o `/editor` | montar a fixture: limpar área, pintar tile, pôr peça, spawn |
+
+Cada sonda é TypeScript em `src/game/debug/probes/` (um módulo por assunto), conferido pelo tsc
+contra as classes de verdade: quem muda um membro de lugar acerta a sonda na hora, e o cenário,
+que só conhece os nomes dela, não quebra. Leitura de membro privado numa sonda usa colchetes
+(`obj['campo']`), que o tsc continua conferindo. As sondas só existem no modo de desenvolvimento
+(o build de produção não as leva).
+
+```js
+await page.evaluate(() => {
+  const g = window.gameDebug;
+  g.hero.teleport(30, 41, 0, -1);           // o herói parado no tile, virado para o norte
+  return { solid: g.world.solid(30, 40), verb: g.verbs.hand(30, 40), held: g.items.held() };
+});
 ```
 
-It is only present while the GameScene is active and is cleared on scene shutdown. Real
-keyboard input (arrow keys for movement, `Space` to advance dialog) is sent through
-Playwright so movement and the typewriter are exercised authentically.
+**O guarda** é `src/game/__tests__/playtestContract.test.ts` (roda no `npm test`): reprova cenário
+que lê `window.__scene`, `__game`, `__sound` ou `__jukebox`, que importa módulo de `src/` dentro da
+página, ou que chama uma sonda que não existe. Precisou ler algo novo do jogo? Escreva a sonda.
+
+Real keyboard input (arrow keys for movement, `z`/`x` for the two buttons) is sent through
+Playwright so movement and the typewriter are exercised authentically; one arrow press is one
+tile (`stepTile` releases the key as soon as the step starts, like `lib/player.mjs`).
 
 ## Structure
 
@@ -105,10 +118,13 @@ export default {
     const state = await driver.getState();
     await shot('after-walk', { state });               // full canvas
     await shot('hud', { region: 'hud' });               // 'hud' | 'dialog' | 'full' crop
-    assert('Still alive', state.health > 0, `hp=${state.health}`);
+    const ahead = await driver.page.evaluate(([x, y]) => window.gameDebug.world.solid(x, y), [state.player.worldX + 1, state.player.worldY]);
+    assert('Still in the game', state.scene === 'game', `scene=${state.scene} solid-ahead=${ahead}`);
   },
 };
 ```
+
+Tudo que o cenário lê ou faz no jogo passa pelas sondas (ver acima); o `npm test` reprova o resto.
 
 Register it in `scenarios/index.mjs`.
 

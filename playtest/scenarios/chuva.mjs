@@ -17,13 +17,13 @@ export default {
     await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
     await sleep(1200);
     await page.evaluate(() => {
-      const s = window.__scene;
-      s.playerWorld.worldX = 51; s.playerWorld.worldY = 58; s.movementController.interruptMovement(51, 58); s.movementController.faceTo(1, 0); s.streamChunks(true);
+      const g = window.gameDebug;
+      g.hero.teleport(51, 58, 1, 0);
       window.gameTime.setDay(1);
     });
     const read = () => page.evaluate(() => {
-      const w = window.__scene.valley.weather;
-      return { rain: +w.rain.toFixed(2), drops: w.dropCount, splash: w.splashCount, rings: w.ringCount, weather: w.weather };
+      const w = window.gameDebug.valley.weather();
+      return { rain: +w.rain.toFixed(2), drops: w.drops, splash: w.splash, rings: w.rings, weather: w.weather };
     });
 
     // A garoa do começo (a chuva começa às 0,625).

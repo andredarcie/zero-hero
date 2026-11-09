@@ -80,31 +80,31 @@ export default {
     // ── 2. As duas picaretadas ──────────────────────────────────────────────
     log('PICARETA: primeira golpada racha e AINDA bloqueia; a segunda abre o tile');
     const rock = await evaluate(() => {
-      const r = window.__scene.props.rocks?.[0];
-      return r ? { x: r.worldX, y: r.worldY } : null;
+      const r = window.gameDebug.props.rocks()[0];
+      return r ? { x: r.x, y: r.y } : null;
     });
-    assert('o mundo tem pelo menos uma pedra', rock !== null, 'nenhuma pedra em __scene.rocks');
+    assert('o mundo tem pelo menos uma pedra', rock !== null, 'nenhuma pedra em gameDebug.props.rocks()');
 
     // ── O ESBARRAO DE MAOS VAZIAS ──────────────────────────────────────────
     // O jogo tinha um balao que aparecia aqui e mostrava o icone da picareta. Ele foi removido:
     // a trava responde FISICAMENTE (a pedra estremece) e nunca com legenda. Sem esta assercao,
     // alguem religa o balao numa trava nova e ninguem percebe.
     await evaluate(([px, py]) => {
-      const s = window.__scene;
-      s.playerWorld.worldX = px; s.playerWorld.worldY = py;
-      s.movementController.interruptMovement(px, py);
-      s.heldItem = 'none';
+      const g = window.gameDebug;
+      g.hero.teleport(px, py);
+      g.items.hold('none');
     }, [rock.x - 1, rock.y]);
     await driver.settle(300);
     await driver.press('ArrowRight', { count: 1 });
     await driver.settle(500);
     const bare = await evaluate(() => {
-      const r = window.__scene.props.rocks?.[0];
+      const g = window.gameDebug;
+      const r = g.props.rocks()[0];
       return {
-        texture: r?.sprite?.texKey ?? null,
+        texture: r?.texKey ?? null,
         blocking: r?.blocking ?? null,
         // A arte do balao nao e mais nem CARREGADA — saiu do manifesto de boot.
-        balloonLoaded: window.__scene.textures.exists('hint-balloon'),
+        balloonLoaded: g.render.textureLoaded('hint-balloon'),
       };
     });
     assert('esbarrar de maos vazias nao quebra nada (a pedra so aguenta)',
@@ -114,13 +114,13 @@ export default {
 
     // Fica a OESTE da pedra, ENCARA e usa a picareta com o B: andar contra a pedra nao a
     // arranha mais (o jogo ganhou dois botoes — ver o cenario `combate`).
-    await evaluate(() => { window.__scene.heldItem = 'pickaxe'; });
+    await evaluate(() => { window.gameDebug.items.hold('pickaxe'); });
     await driver.settle(200);
     await shot('pedra-inteira');
 
     const texOf = () => evaluate(() => {
-      const r = window.__scene.props.rocks?.[0];
-      return { texture: r?.sprite?.texKey ?? null, blocking: r?.blocking ?? null };
+      const r = window.gameDebug.props.rocks()[0];
+      return { texture: r?.texKey ?? null, blocking: r?.blocking ?? null };
     });
     const before = await texOf();
 

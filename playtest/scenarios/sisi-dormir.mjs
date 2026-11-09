@@ -19,7 +19,7 @@ export default {
     await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
     await sleep(1200);
     await P.loadRelief();
-    const stage = () => page.evaluate(() => window.__scene.questSetup.painterQuest.save.stage);
+    const stage = () => page.evaluate(() => window.gameDebug.quest.painter().stage);
     const held = async () => (await P.state()).heldItem;
     const near = { near: await P.homeOf('painter'), radius: 7 };
 
@@ -38,15 +38,11 @@ export default {
     assert('Regadas: as tintas estão crescendo', (await stage()) === 'grow', await stage());
 
     // A dica: a fala dela na espera manda dormir.
-    const hint = await page.evaluate(async () => {
-      const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/i18n/i18n.ts'));
-      const { tLines } = await import(url);
-      return tLines('npc.painterStep.wait').map((l) => l.text).join(' ');
-    });
+    const hint = await page.evaluate(() => window.gameDebug.world.lines('npc.painterStep.wait').join(' '));
     assert('Na espera, a Sisi dá a dica de dormir', /durma/i.test(hint), hint);
 
     // Dormir no colchão do acampamento, de dia mesmo: o relógio corre até a noite e a manhã seguinte.
-    const levels0 = await page.evaluate(() => window.__scene.questSetup.painterQuest.save.plots.map((p) => p.level));
+    const levels0 = await page.evaluate(() => window.gameDebug.quest.painter().plots);
     await P.doVerb('z', 'sleep', 'o colchão', { near: { x: 53, y: 48 }, radius: 3 });
     await P.waitFor((s) => s.resting, 'deitar', 8000);
     await P.waitFor((s) => s.dialogOpen || !s.resting, 'a manhã (ou a Morte)', 300000);
@@ -54,7 +50,7 @@ export default {
     for (let i = 0; i < 40 && (await P.state()).resting; i += 1) { await P.press('ArrowDown', 60, 400); await P.drain('levantar'); }
     await P.free();
     await sleep(800);
-    const after = await page.evaluate(() => ({ stage: window.__scene.questSetup.painterQuest.save.stage, levels: window.__scene.questSetup.painterQuest.save.plots.map((p) => p.level) }));
+    const after = await page.evaluate(() => { const q = window.gameDebug.quest.painter(); return { stage: q.stage, levels: q.plots }; });
     assert('Antes de dormir as plantas não estavam prontas', levels0.some((l) => l < 3), JSON.stringify(levels0));
     assert('Depois de uma noite, as quatro amanheceram prontas', after.stage === 'harvest' && after.levels.every((l) => l === 3), JSON.stringify(after));
     await P.walkTo([{ x: 17, y: 19 }], 'de volta à Sisi').catch(() => {});

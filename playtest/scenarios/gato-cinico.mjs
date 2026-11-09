@@ -20,13 +20,13 @@ export default {
     // O gato chega com o primeiro favor feito; aqui ele é chamado direto, e o herói fica num chão aberto,
     // olhando para um tile livre (o Z não tem outra coisa a fazer).
     const setup = await page.evaluate(() => {
-      const s = window.__scene;
+      const g = window.gameDebug;
       for (let y = 40; y < 58; y += 1) {
         for (let x = 20; x < 40; x += 1) {
-          if ([[0, 0], [0, 1], [1, 0], [-1, 0], [0, -1]].every(([dx, dy]) => !s.query.isSolidForEntities(x + dx, y + dy))
-            && !s.itemManager.hasItemAt(x, y + 1) && !s.verbs.handVerbAt(x, y + 1)) {
-            s.playerWorld.worldX = x; s.playerWorld.worldY = y; s.movementController.interruptMovement(x, y); s.movementController.faceTo(0, 1);
-            s.camp.catCare.ensure(false);
+          if ([[0, 0], [0, 1], [1, 0], [-1, 0], [0, -1]].every(([dx, dy]) => !g.world.solid(x + dx, y + dy))
+            && !g.items.hasAt(x, y + 1) && !g.verbs.hand(x, y + 1)) {
+            g.hero.teleport(x, y, 0, 1);
+            g.camp.ensureCat(false);
             return { x, y };
           }
         }
@@ -40,12 +40,8 @@ export default {
       await page.keyboard.press('z');
       await sleep(900);
       const st = await state();
-      const said = await page.evaluate((k) => window.__scene.seenDialogKeys.has(k), `cat/talk/${n}`);
-      const text = await page.evaluate(async (k) => {
-        const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/i18n/i18n.ts'));
-        const { tLines } = await import(url);
-        return tLines(k).map((l) => l.text).join(' / ');
-      }, `cat.talk.${n}`);
+      const said = await page.evaluate((k) => window.gameDebug.dialog.heard(k), `cat/talk/${n}`);
+      const text = await page.evaluate((k) => window.gameDebug.world.lines(k).join(' / '), `cat.talk.${n}`);
       log(`  carinho ${n}: ${text}`);
       assert(`Carinho ${n}: o gato fala a lição ${n}`, st.dialogOpen && said && text.length > 0, JSON.stringify({ dialog: st.dialogOpen, said }));
       await sleep(1200);

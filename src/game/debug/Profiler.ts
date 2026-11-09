@@ -374,6 +374,16 @@ export class Profiler {
     return this.frames;
   }
 
+  /** O resumo da rodada (fps, percentis, cada pico com a causa) — o `__prof.report()` do console e dos playtests. */
+  public report(): ProfilerReport {
+    return this.reporter.report();
+  }
+
+  /** As amostras em CSV, quadro a quadro (`__prof.csv()`). */
+  public csv(): string {
+    return this.reporter.csv();
+  }
+
   /** Profile a fixed window, then report. Returns the report — what the playtest awaits. */
   public async record(ms = 3000): Promise<ProfilerReport> {
     this.start();

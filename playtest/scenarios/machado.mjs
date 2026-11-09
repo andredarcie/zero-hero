@@ -5,7 +5,8 @@
 // removido do jogo, e e essa garantia que deixa a floresta ser escrita uma vez so na GPU.
 //
 // O que este cenario prova:
-//   1. A BORDA E MAR e ninguem passa — nem voadores, que ignoram hazards autorados.
+//   1. A BORDA e intransponivel — mata fechada (o vale de hoje) ou mar — e ninguem passa, nem voadores,
+//      que ignoram hazards autorados.
 //   2. O machado encostado na fronteira nao abre nada.
 //   3. O machado nao derruba arvore verde: ela segue de pe e segue bloqueando.
 //   4. O machado derruba a arvore SECA.
@@ -16,7 +17,7 @@ const DIR_KEY = { '1,0': 'right', '-1,0': 'left', '0,1': 'down', '0,-1': 'up' };
 
 export default {
   name: 'machado',
-  description: 'Machado derruba arvore seca, nunca a verde; e o mar fecha a fronteira.',
+  description: 'Machado derruba arvore seca, nunca a verde; e a borda do mundo nao abre.',
   // Aventura de verdade (`/?play`), nao um level: os pinheiros-tile e a fronteira do mundo so
   // existem no mundo autorado. Um level e um chunk 12x12 solto, sem borda para testar.
   needsGame: true,
@@ -29,38 +30,36 @@ export default {
     // Teleporte: o cenario e sobre CORTAR, nao sobre caminhar. Andar do spawn ate uma arvore
     // especifica atravessaria meio mundo procedural e reprovaria por um obstaculo no caminho.
     const teleport = (x, y) => evaluate(([px, py]) => {
-      const s = window.__scene;
-      s.playerWorld.worldX = px;
-      s.playerWorld.worldY = py;
-      s.movementController.interruptMovement(px, py);
+      const g = window.gameDebug;
+      g.hero.teleport(px, py);
     }, [x, y]);
 
-    const give = (kind) => evaluate((k) => { window.__scene.heldItem = k; }, kind);
+    const give = (kind) => evaluate((k) => { window.gameDebug.items.hold(k); }, kind);
 
     const solidAt = (x, y, hazardsPassable = false) => evaluate(
-      ([px, py, pass]) => window.__scene.query.isSolidForEntities(px, py, pass), [x, y, hazardsPassable],
+      ([px, py, pass]) => window.gameDebug.world.solid(px, py, pass), [x, y, hazardsPassable],
     );
 
     const tileAt = (x, y) => evaluate(([px, py]) => {
-      const t = window.__scene.chunkManager.getTile(px, py);
+      const t = window.gameDebug.world.tile(px, py);
       return { ground: t.ground, upper: t.upper, collision: t.collision };
     }, [x, y]);
 
-    // ── 1. A fronteira e mar, e o mar bloqueia ate quem ignora hazards ───────
-    log('MAR: a borda do mundo tem de ser agua intransponivel');
+    // ── 1. A fronteira bloqueia ate quem ignora hazards ───────────────────────
+    // (Era MAR; o vale de hoje e cercado de mata fechada. O que importa e o mesmo: a borda nao abre.)
+    log('BORDA: fora do mundo e intransponivel');
     // O mundo autorado comeca em (0,0), entao o tile logo fora dele e sempre (-1, y) —
     // vale para qualquer tamanho de mundo, sem depender de metadado nenhum.
     const outside = await tileAt(-1, 5);
-    assert('fora do mundo o chao e MAR (frame 33)', outside.ground === 33, JSON.stringify(outside));
-    assert('e o mar nao tem camada upper (nada de muralha de pinheiro)', outside.upper === null,
-      JSON.stringify(outside));
-    assert('o mar bloqueia', (await solidAt(-1, 5)) === true);
-    // A trava que importa: voadores ignoram rio e lava autorados. Se ignorassem o mar de terreno,
+    const forestOrSea = (t) => t.ground === 33 || [4, 14, 15, 16, 17, 18].includes(t.upper);
+    assert('fora do mundo e mata fechada ou mar (nunca chao livre)', forestOrSea(outside), JSON.stringify(outside));
+    assert('a borda bloqueia', (await solidAt(-1, 5)) === true);
+    // A trava que importa: voadores ignoram rio e lava autorados. Se ignorassem a borda de terreno,
     // a fronteira teria uma saida.
-    assert('o mar bloqueia MESMO quem ignora hazards', (await solidAt(-1, 5, true)) === true);
+    assert('a borda bloqueia MESMO quem ignora hazards', (await solidAt(-1, 5, true)) === true);
 
-    // ── 2. O mar nao e madeira: o machado nao abre a fronteira ───────────────
-    log('MAR: o machado encostado na fronteira nao pode abrir nada');
+    // ── 2. O machado nao abre a fronteira ────────────────────────────────────
+    log('BORDA: o machado encostado na fronteira nao pode abrir nada');
     await teleport(0, 5);
     await give('axe');
     await driver.settle(200);
@@ -69,8 +68,8 @@ export default {
     await driver.faceAndUse('left', 3);
     await driver.settle(600);
     const seaAfter = await tileAt(-1, 5);
-    assert('depois de machadadas, a fronteira continua mar',
-      seaAfter.ground === 33 && seaAfter.upper === null, JSON.stringify(seaAfter));
+    assert('depois de machadadas, a fronteira continua igual',
+      seaAfter.ground === outside.ground && seaAfter.upper === outside.upper, JSON.stringify(seaAfter));
     assert('e continua bloqueando', (await solidAt(-1, 5)) === true);
     const posAfterSea = (await state()).player;
     assert('o heroi NAO saiu do mundo', posAfterSea.worldX >= 0, JSON.stringify(posAfterSea));
@@ -82,18 +81,19 @@ export default {
     // heroi vai bater. Feito no jogo (e nao com coordenadas fixas) porque o mundo e autorado:
     // uma constante escrita a mao envelheceria no primeiro save do editor.
     const target = await evaluate(() => {
-      const s = window.__scene;
+      const g = window.gameDebug;
       const TREES = new Set([4, 14, 15, 16, 17, 18]);
-      const start = s.playerWorld;
+      const hero = g.hero.at();
+      const start = { worldX: hero.x, worldY: hero.y };
       let best = null;
       for (let y = 1; y < 95; y++) {
         for (let x = 1; x < 95; x++) {
-          const t = s.chunkManager.getTile(x, y);
+          const t = g.world.tile(x, y);
           if (t.upper === null || !TREES.has(t.upper)) continue;
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const nx = x + dx;
             const ny = y + dy;
-            if (s.query.isSolidForEntities(nx, ny, false)) continue;
+            if (g.world.solid(nx, ny, false)) continue;
             const d = Math.abs(nx - start.worldX) + Math.abs(ny - start.worldY);
             if (!best || d < best.d) best = { x, y, nx, ny, dx: -dx, dy: -dy, frame: t.upper, d };
           }
@@ -130,12 +130,12 @@ export default {
     // ── 4. O machado derruba a arvore SECA ───────────────────────────────────
     log('MACHADO: derruba arvore seca');
     const dry = await evaluate(() => {
-      const s = window.__scene;
-      const t = (s.props.dryTrees ?? []).find((d) => d.blocking);
+      const g = window.gameDebug;
+      const t = g.props.dryTrees().find((d) => d.blocking);
       if (!t) return null;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (!s.query.isSolidForEntities(t.worldX + dx, t.worldY + dy, false)) {
-          return { x: t.worldX, y: t.worldY, nx: t.worldX + dx, ny: t.worldY + dy, dx: -dx, dy: -dy };
+        if (!g.world.solid(t.x + dx, t.y + dy, false)) {
+          return { x: t.x, y: t.y, nx: t.x + dx, ny: t.y + dy, dx: -dx, dy: -dy };
         }
       }
       return null;
@@ -150,7 +150,7 @@ export default {
       await driver.faceAndUse(DIR_KEY[`${dry.dx},${dry.dy}`], 8);
       await driver.settle(900);
       const stillBlocking = await evaluate(([x, y]) => {
-        const t = window.__scene.props.dryTrees.find((d) => d.worldX === x && d.worldY === y);
+        const t = window.gameDebug.props.dryTrees().find((d) => d.x === x && d.y === y);
         return t ? t.blocking : null;
       }, [dry.x, dry.y]);
       assert('o machado derrubou a arvore seca', stillBlocking === false,

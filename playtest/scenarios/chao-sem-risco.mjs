@@ -23,61 +23,16 @@ export default {
     await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
     await sleep(1500);
 
-    const seams = await page.evaluate(() => {
-      const w3 = window.__scene.world3d;
-      const meshes = w3.tiles.terrainMeshes.filter((m) => {
-        const mat = Array.isArray(m.material) ? m.material[0] : m.material;
-        return mat?.vertexColors && m.geometry.getAttribute('color') && m.geometry.getAttribute('normal');
-      });
-      // O material do chão é o que mais vértices tem.
-      const weight = new Map();
-      for (const m of meshes) {
-        const mat = Array.isArray(m.material) ? m.material[0] : m.material;
-        weight.set(mat, (weight.get(mat) ?? 0) + m.geometry.getAttribute('position').count);
-      }
-      const ground = [...weight.entries()].sort((a, b) => b[1] - a[1])[0][0];
-      const pts = new Map();
-      for (const m of meshes) {
-        if ((Array.isArray(m.material) ? m.material[0] : m.material) !== ground) continue;
-        const pos = m.geometry.getAttribute('position');
-        const col = m.geometry.getAttribute('color');
-        const nrm = m.geometry.getAttribute('normal');
-        for (let i = 0; i < pos.count; i += 1) {
-          if (nrm.getY(i) < 0.9) continue;
-          const x = pos.getX(i); const y = pos.getY(i); const z = pos.getZ(i);
-          if (x < -0.5 || x > 59.5 || z < -0.5 || z > 59.5) continue;
-          const k = `${Math.round(x * 1000)},${Math.round(y * 100)},${Math.round(z * 1000)}`;
-          const at = pts.get(k) ?? { x, y, z, list: [] };
-          at.list.push([col.getX(i), col.getY(i), col.getZ(i)]);
-          pts.set(k, at);
-        }
-      }
-      const bad = [];
-      for (const { x, y, z, list } of pts.values()) {
-        let worst = 0;
-        for (let a = 0; a < list.length; a += 1) for (let b = a + 1; b < list.length; b += 1) {
-          worst = Math.max(worst, ...[0, 1, 2].map((j) => Math.abs(list[a][j] - list[b][j])));
-        }
-        if (worst > 0.03) bad.push({ x, y, z, worst });
-      }
-      return bad;
-    });
+    // As emendas da malha de chão, vértice a vértice (ver gameDebug.render.groundSeams).
+    const seams = await page.evaluate(() => window.gameDebug.render.groundSeams());
     // A pedra de cima de uma montanha encostada na grama de um planalto: dois materiais, não um risco.
-    const material = await page.evaluate((list) => {
-      const s = window.__scene;
-      return list.map((p) => {
-        const near = [[0, 0], [-0.5, 0], [0.5, 0], [0, -0.5], [0, 0.5]].map(([dx, dz]) => [Math.round(p.x + dx), Math.round(p.z + dz)]);
-        return near.some(([x, z]) => s.world3d.tiles.solidTiles?.some((t) => t.x === x && t.z === z && (t.frame === 39 || t.frame === 40)));
-      });
-    }, seams);
+    const material = await page.evaluate((list) => list.map((p) => window.gameDebug.render.solidFrameNear(p.x, p.z, [39, 40])), seams);
     const real = seams.filter((_, i) => !material[i]);
     log(`  emendas: ${seams.length} pontos com cor diferente, ${seams.length - real.length} são pedra encostada em grama`);
     assert('1. Onde o chão se encosta, a cor é a mesma (nenhum risco reto de cor ou de sombra)', real.length === 0, JSON.stringify(real.slice(0, 8)));
 
     const tiles = await page.evaluate(async () => {
-      const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/game/constants.ts'));
-      const { groundFrameAt } = await import(url);
-      const earth = (x, y) => groundFrameAt(5, x, y) !== 5;
+      const earth = (x, y) => window.gameDebug.render.groundFrame(5, x, y) !== 5;
       const isolated = [];
       for (let y = 1; y < 59; y += 1) {
         for (let x = 1; x < 59; x += 1) {
@@ -102,10 +57,10 @@ export default {
     // As fotos: o lago de lava (os selos verdes), a borda de um planalto com escada e o jardim do fim.
     for (const [name, x, y] of [['lago-de-lava', 6, 6], ['planalto-e-escada', 6, 46], ['jardim-alto', 30, 33]]) {
       await page.evaluate(([px, py]) => {
-        const s = window.__scene; window.gameTime.set(0.5);
-        s.playerWorld.worldX = px; s.playerWorld.worldY = py; s.movementController.interruptMovement(px, py); s.streamChunks(true);
-        s.verbs.actionPrompt?.destroy(); s.verbs.actionPrompt = undefined;
-        void s.cinema.dollyTo(1.5, 100);
+        const g = window.gameDebug; window.gameTime.set(0.5);
+        g.hero.teleport(px, py);
+        g.verbs.hidePrompt();
+        g.scene.dollyTo(1.5, 100);
       }, [x, y]);
       await sleep(1800);
       await shot(name, { note: `o chão em volta de (${x}, ${y})` });

@@ -26,6 +26,11 @@ const HERO = { x: 5, y: 5 };
 // escuro ela tem de JA estar aberta. Sem essa, o unico caso testado seria o trivial (nasce fechada
 // e o alvo tambem e fechado), e uma flor que animasse por cima da carta de titulo do level passaria.
 const DARK_FLOWER = { x: 4, y: 8 };
+// O editor abre o VALE inteiro (que tem outras flores e fogueiras): as do cenario se acham pela posicao, nunca pela
+// ordem da lista. (As funcoes que rodam na pagina repetem o (7, 5) da FLOWER.)
+const AREA = { x0: 3, y0: 2, x1: 10, y1: 8 };
+const mine = (st) => st.moonflowers.find((m) => m.worldX === FLOWER.x && m.worldY === FLOWER.y);
+const darkOf = (st) => st.moonflowers.find((m) => m.worldX === DARK_FLOWER.x && m.worldY === DARK_FLOWER.y);
 
 export default {
   name: 'flor-da-lua',
@@ -37,36 +42,23 @@ export default {
     const page = driver.page;
 
     log('EDITOR: uma flor, uma fogueira perto dela, e um corredor limpo pro heroi');
-    const authored = await page.evaluate(({ flower, fire, hero, dark }) => {
-      const store = window.__scene?.store;
-      if (!store) return { error: 'sem store no editor' };
-
-      // O level 1 e um puzzle cheio: limpa a area antes ou o teste mede a mobilia do vizinho.
-      for (let x = 3; x <= 10; x += 1) {
-        for (let y = 2; y <= 8; y += 1) {
-          store.entities.eraseEntitiesAt(x, y);
-          store.setCell('upper', x, y, null);
-          store.setCell('collision', x, y, false);
-        }
-      }
-      store.meta.setSpawn(hero.x, hero.y);
-      // A perto PRIMEIRO: a ordem de colocacao e a ordem em que o runtime as constroi, e o resto do
-      // cenario le moonflowers[0] como "a que a fogueira controla".
-      store.entities.placeEntity({ list: 'props', type: 'moonflower', worldX: flower.x, worldY: flower.y });
-      store.entities.placeEntity({ list: 'props', type: 'moonflower', worldX: dark.x, worldY: dark.y });
+    await page.waitForFunction(() => window.editorDebug?.ready(), null, { timeout: 30000 });
+    const authored = await page.evaluate(({ flower, fire, hero, dark, area }) => {
+      const ed = window.editorDebug;
+      // O mapa e cheio: limpa a area antes ou o teste mede a mobilia do vizinho.
+      ed.clearArea(area.x0, area.y0, area.x1, area.y1);
+      ed.setSpawn(hero.x, hero.y);
+      // A perto da fogueira (a que ela controla) e a do escuro; o resto do cenario acha cada uma pela posicao.
+      ed.place({ list: 'props', type: 'moonflower', worldX: flower.x, worldY: flower.y });
+      ed.place({ list: 'props', type: 'moonflower', worldX: dark.x, worldY: dark.y });
       // A fogueira e o interruptor da flor. Ela nasce ACESA porque e a mais perto do spawn (a
       // regra do runtime pra qual fogueira comeca viva), e e isso que faz a flor nascer fechada.
-      store.entities.placeEntity({ list: 'props', type: 'campfire', worldX: fire.x, worldY: fire.y });
+      ed.place({ list: 'props', type: 'campfire', worldX: fire.x, worldY: fire.y });
       // A folha tem de existir no lado 2D tambem (paleta e chip do tabuleiro), com os 9 frames
       // fatiados. Um erro de frameWidth no assetManifest nao quebra o jogo — ele so desenha a folha
       // inteira espremida num tile, e ninguem repara ate abrir o editor.
-      const tex = window.__scene?.textures?.get('moonflower');
-      return {
-        flowers: store.entities.allEntities().filter((e) => e.type === 'moonflower').length,
-        fires: store.entities.allEntities().filter((e) => e.type === 'campfire').length,
-        sheetFrames: tex ? tex.getFrameNames().length : 0,
-      };
-    }, { flower: FLOWER, fire: FIRE, hero: HERO, dark: DARK_FLOWER });
+      return { flowers: ed.count('moonflower', area), fires: ed.count('campfire', area), sheetFrames: ed.sheetFrames('moonflower') };
+    }, { flower: FLOWER, fire: FIRE, hero: HERO, dark: DARK_FLOWER, area: AREA });
     assert('a flor da lua e autoravel pelo editor', authored.flowers === 2,
       JSON.stringify(authored));
     assert('e a fogueira que a mantem fechada esta posta', authored.fires === 1,
@@ -77,15 +69,17 @@ export default {
     log('LAB: P joga o mundo editado');
     await driver.press('p', { count: 1 });
     await driver.settle(2200);
-    await page.waitForFunction(() => window.gameDebug?.getState()?.levelIntroOpen === false,
+    // (Esperava a carta de título do level fechar — `levelIntroOpen`, que saiu do jogo junto com os levels; era esta
+    // espera que deixava o cenário vermelho. Agora: a partida rodando e sem cena de cinema.)
+    await page.waitForFunction(() => { const st = window.gameDebug?.getState(); return st?.scene === 'game' && !st.cutsceneActive; },
       null, { timeout: 15000 });
     await driver.settle(400);
 
     // ── 1. NA LUZ: fechada, e parede ───────────────────────────────────────
     const born = await driver.getState();
-    const shut = born.moonflowers[0];
-    const dark = born.moonflowers[1];
-    assert('na luz da fogueira a flor nasce FECHADA', born.moonflowers.length === 2
+    const shut = mine(born);
+    const dark = darkOf(born);
+    assert('na luz da fogueira a flor nasce FECHADA', Boolean(shut && dark)
       && shut.open === false && shut.openness === 0, JSON.stringify(born.moonflowers));
     assert('e ela nasce parada na pose, sem animar no boot', shut.standingFrame === 0,
       JSON.stringify(shut));
@@ -97,10 +91,8 @@ export default {
     await shot('flor-fechada-na-luz');
 
     const teleport = (x, y) => page.evaluate(([px, py]) => {
-      const s = window.__scene;
-      s.playerWorld.worldX = px;
-      s.playerWorld.worldY = py;
-      s.movementController.interruptMovement(px, py);
+      const g = window.gameDebug;
+      g.hero.teleport(px, py);
     }, [x, y]);
 
     log('TRAVA: bare-handed, o botao recusa o heroi (a trava, nao so a solucao)');
@@ -118,11 +110,10 @@ export default {
     // Amostra a animacao INTEIRA enquanto ela roda. E a unica forma de provar que existe
     // travessia: um estado final aberto e compativel com um corte seco de um frame.
     const arc = await page.evaluate(async () => {
-      const fires = window.__scene?.props.campfires ?? [];
-      for (const cf of fires) if (cf.isLit) cf.extinguish();
+      window.gameDebug.camp.setAllFires(false);
       const seen = [];
       for (let i = 0; i < 120; i += 1) {
-        const mf = window.gameDebug?.getState()?.moonflowers?.[0];
+        const mf = window.gameDebug?.getState()?.moonflowers?.find((m) => m.worldX === 7 && m.worldY === 5);
         if (mf) {
           seen.push({
             o: mf.openness,
@@ -197,35 +188,34 @@ export default {
     await teleport(FLOWER.x - 4, FLOWER.y); // 4 tiles: fora do alcance
     await driver.settle(300);
     await page.evaluate(() => {
-      const s = window.__scene;
-      s.heldItem = 'wood';
-      s.torch.heldOnFire = true;
-      s.torch.torchFuelMs = 30000; // combustivel de sobra: o teste e sobre a flor, nao sobre a tocha
+      const g = window.gameDebug;
+      g.items.hold('wood');
+      g.fire.setOnFire(30000); // combustivel de sobra: o teste e sobre a flor, nao sobre a tocha
     });
     await driver.settle(600);
     const farTorch = await driver.getState();
     assert('com a tocha LONGE (4 tiles) a flor segue aberta',
-      farTorch.moonflowers[0].openness === 1 && farTorch.moonflowers[0].blocking === false,
-      JSON.stringify(farTorch.moonflowers[0]));
+      mine(farTorch).openness === 1 && mine(farTorch).blocking === false,
+      JSON.stringify(mine(farTorch)));
 
     // Anda de verdade, tile a tile, ate o vizinho da flor: e o gesto do pedido. Espera pelo ESTADO
     // e nao por um relogio — o fechamento comeca quando o heroi cruza os 2.6 tiles, e cronometrar
     // isso mediria a velocidade da caminhada.
     await driver.press('ArrowRight', { count: 3 });
     await page.waitForFunction(
-      () => window.gameDebug?.getState()?.moonflowers?.[0]?.openness === 0,
+      () => window.gameDebug?.getState()?.moonflowers?.find((m) => m.worldX === 7 && m.worldY === 5)?.openness === 0,
       null, { timeout: 10000 },
     );
     const walkedIn = await driver.getState();
     assert('chegando perto com a tocha acesa, a flor FECHA',
-      walkedIn.moonflowers[0].openness === 0, JSON.stringify(walkedIn.moonflowers[0]));
-    assert('e a ponte volta a ser parede', walkedIn.moonflowers[0].blocking === true,
-      JSON.stringify(walkedIn.moonflowers[0]));
+      mine(walkedIn).openness === 0, JSON.stringify(mine(walkedIn)));
+    assert('e a ponte volta a ser parede', mine(walkedIn).blocking === true,
+      JSON.stringify(mine(walkedIn)));
     // O controle: a outra flor, a 3+ tiles do caminho, nao sentiu nada. A regra e um raio em volta
     // da chama, nunca um estado global do heroi — sem este assert, "tocha acesa = toda flor
     // fechada" passaria igual.
     assert('a flor LONGE do caminho continuou aberta (e raio, nao um interruptor global)',
-      walkedIn.moonflowers[1].openness === 1, JSON.stringify(walkedIn.moonflowers[1]));
+      darkOf(walkedIn).openness === 1, JSON.stringify(darkOf(walkedIn)));
     assert('o heroi chegou ate o vizinho da flor',
       walkedIn.player.worldX === FLOWER.x - 1 && walkedIn.player.worldY === FLOWER.y,
       JSON.stringify(walkedIn.player));
@@ -238,26 +228,25 @@ export default {
     await shot('flor-fecha-na-tocha');
 
     log('TOCHA APAGADA: mesma posicao, sem chama — a flor reabre');
-    await page.evaluate(() => { window.__scene.torch.heldOnFire = false; });
+    await page.evaluate(() => window.gameDebug.fire.douse());
     await page.waitForFunction(
-      () => window.gameDebug?.getState()?.moonflowers?.[0]?.openness === 1,
+      () => window.gameDebug?.getState()?.moonflowers?.find((m) => m.worldX === 7 && m.worldY === 5)?.openness === 1,
       null, { timeout: 8000 },
     );
     const doused = await driver.getState();
     assert('apagada a tocha, a flor reabre com o heroi parado onde estava',
-      doused.moonflowers[0].blocking === false, JSON.stringify(doused.moonflowers[0]));
-    await page.evaluate(() => { window.__scene.heldItem = 'none'; });
+      mine(doused).blocking === false, JSON.stringify(mine(doused)));
+    await page.evaluate(() => { window.gameDebug.items.hold('none'); });
     await driver.settle(300);
 
     // ── 4. A LUZ DE VOLTA: fecha pelo mesmo ladder ─────────────────────────
     log('LUZ: reacende a fogueira; a flor recolhe as petalas e volta a bloquear');
     await teleport(HERO.x, HERO.y);
     const closeArc = await page.evaluate(async () => {
-      const fires = window.__scene?.props.campfires ?? [];
-      for (const cf of fires) if (!cf.isLit) cf.light();
+      window.gameDebug.camp.setAllFires(true);
       const seen = [];
       for (let i = 0; i < 120; i += 1) {
-        const mf = window.gameDebug?.getState()?.moonflowers?.[0];
+        const mf = window.gameDebug?.getState()?.moonflowers?.find((m) => m.worldX === 7 && m.worldY === 5);
         if (mf) {
           seen.push({ o: mf.openness, sf: mf.standingFrame, sa: Number(mf.standingAlpha.toFixed(2)) });
           if (mf.openness <= 0) break;
@@ -267,9 +256,9 @@ export default {
       return seen;
     });
     const closed = await driver.getState();
-    assert('a flor fechou de novo', closed.moonflowers[0].openness === 0,
+    assert('a flor fechou de novo', mine(closed).openness === 0,
       JSON.stringify(closed.moonflowers));
-    assert('e voltou a bloquear o tile', closed.moonflowers[0].blocking === true,
+    assert('e voltou a bloquear o tile', mine(closed).blocking === true,
       JSON.stringify(closed.moonflowers));
     const closePoses = [...new Set(closeArc.filter((s) => s.sa > 0).map((s) => s.sf))];
     assert('o fechamento tambem passou pelo ladder (nao foi um corte)', closePoses.length >= 3,
@@ -288,10 +277,9 @@ export default {
     // Melhor-esforco: a animacao nao para pra ser fotografada.
     log('RETRATO: mais uma abertura, fotografada no meio da dissolvencia');
     await page.evaluate(async () => {
-      const fires = window.__scene?.props.campfires ?? [];
-      for (const cf of fires) if (cf.isLit) cf.extinguish();
+      window.gameDebug.camp.setAllFires(false);
       for (let i = 0; i < 80; i += 1) {
-        const o = window.gameDebug?.getState()?.moonflowers?.[0]?.openness ?? 0;
+        const o = window.gameDebug?.getState()?.moonflowers?.find((m) => m.worldX === 7 && m.worldY === 5)?.openness ?? 0;
         if (o >= 0.45) return;
         await new Promise((r) => setTimeout(r, 20));
       }

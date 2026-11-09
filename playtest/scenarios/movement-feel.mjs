@@ -19,7 +19,7 @@
  * `useTouch` drives the same run through a synthetic drag instead of the keyboard.
  */
 const SAMPLE = `async (dir, tiles, useTouch) => {
-  const s = window.__scene;
+  const g = window.gameDebug;
   const KEY = {
     left:  ['ArrowLeft', 37, -1, 0], right: ['ArrowRight', 39, 1, 0],
     up:    ['ArrowUp',   38, 0, -1], down:  ['ArrowDown', 40, 0, 1],
@@ -48,8 +48,8 @@ const SAMPLE = `async (dir, tiles, useTouch) => {
   }
 
   const horizontal = dx !== 0;
-  const camAt = () => (horizontal ? s.camera.camX : s.camera.camY);
-  const tileAt = () => (horizontal ? s.playerWorld.worldX : s.playerWorld.worldY);
+  const camAt = () => (horizontal ? g.scene.camera().x : g.scene.camera().y);
+  const tileAt = () => (horizontal ? g.hero.at().x : g.hero.at().y);
 
   const startTile = tileAt();
   const samples = [];
@@ -64,24 +64,26 @@ const SAMPLE = `async (dir, tiles, useTouch) => {
   const onFrame = (_t, delta) => {
     const at = camAt();
     if (delta > 0) samples.push({ dist: Math.abs(at - prev), dt: delta });
-    frames.add(s.hero.frame);
-    bobs.push(s.hero.bobLift);
+    const view = g.hero.view();
+    frames.add(view.frame);
+    bobs.push(view.bobLift);
     prev = at;
   };
-  s.events.on('postupdate', onFrame);
+  const off = g.scene.onFrame(onFrame);
 
   // Budget from the walk's real step duration, so re-tuning the speed never silently truncates
   // a run (a run cut short reads as a hero who stopped, which is exactly what we are testing for).
-  const stepMs = s.movementController.stepMs;
+  const stepMs = g.hero.stepMs();
   const deadline = performance.now() + tiles * stepMs * 1.3 + 200;
   while (performance.now() < deadline) {
     // Stop the moment a wall comes into view. A hero jammed against rock reads exactly like a
     // hero who has stalled, and it would poison every number below.
-    if (s.query.isSolidForEntities(s.playerWorld.worldX + dx, s.playerWorld.worldY + dy, false)) break;
+    const hero = g.hero.at();
+    if (g.hero.stepBlocked(hero.x, hero.y, dx, dy)) break;
     await new Promise((r) => requestAnimationFrame(r));
   }
 
-  s.events.off('postupdate', onFrame);
+  off();
   const tilesMoved = Math.abs(tileAt() - startTile);
   if (useTouch) touch('touchend', ox + dx * 48, oy + dy * 48);
   else key('keyup');
@@ -105,13 +107,12 @@ const SAMPLE = `async (dir, tiles, useTouch) => {
 
 /** The longest clear run, in tiles, in each cardinal direction from where the hero stands. */
 const CLEAR_RUNS = `(max) => {
-  const s = window.__scene;
+  const g = window.gameDebug;
+  const hero = g.hero.at();
   const out = {};
   for (const [dir, dx, dy] of [['right', 1, 0], ['left', -1, 0], ['down', 0, 1], ['up', 0, -1]]) {
     let n = 0;
-    while (n < max && !s.query.isSolidForEntities(
-      s.playerWorld.worldX + dx * (n + 1), s.playerWorld.worldY + dy * (n + 1), false,
-    )) n++;
+    while (n < max && !g.hero.stepBlocked(hero.x + dx * n, hero.y + dy * n, dx, dy)) n++;
     out[dir] = n;
   }
   return out;
@@ -127,20 +128,36 @@ export default {
       page.evaluate(`(${SAMPLE})('${dir}', ${tiles}, ${touch})`);
     const clearRuns = (max = 10) => page.evaluate(`(${CLEAR_RUNS})(${max})`);
 
-    // A skeleton wandering into the lane blocks the hero, and a blocked hero reads exactly like a
-    // stalled one. Clear them out; this scenario is about the walk, not about combat.
-    await page.evaluate(() => window.__scene.enemyManager?.despawnAll());
     await driver.settle(300);
 
     // Each run below leaves the hero wherever the wall stopped him, which would leave the next one
     // measuring a lane it never checked. So every phase starts from the same measured tile: put him
     // back on it first, and no run has to reason about what the one before it did.
-    const home = await page.evaluate(() => ({ ...window.__scene.playerWorld }));
+    // O tile de casa: o livre mais perto do começo com corredor nos quatro sentidos (o herói nasce com a espada da
+    // abertura fincada logo ao sul, e ali não há passo para baixo a medir).
+    const home = await page.evaluate(() => {
+      const g = window.gameDebug;
+      const start = g.hero.at();
+      // O passo barrado é o do controlador: o sólido E o degrau da serra (o relevo também para o herói).
+      const lane = (x, y, dx, dy) => { let n = 0; while (n < 7 && !g.hero.stepBlocked(x + dx * n, y + dy * n, dx, dy)) n++; return n; };
+      // Três tiles livres para cima e para baixo (o passo vertical), cinco para um dos lados (a caminhada medida).
+      const fits = (x, y) => lane(x, y, 0, 1) >= 3 && lane(x, y, 0, -1) >= 3 && Math.max(lane(x, y, 1, 0), lane(x, y, -1, 0)) >= 5;
+      for (let r = 0; r <= 15; r += 1) {
+        for (let dy = -r; dy <= r; dy += 1) for (let dx = -r; dx <= r; dx += 1) {
+          const x = start.x + dx; const y = start.y + dy;
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r || g.world.solid(x, y)) continue;
+          if (fits(x, y)) return { x, y };
+        }
+      }
+      return start;
+    });
+    await page.evaluate((h) => { window.gameDebug.hero.place(h.x, h.y); window.gameDebug.hero.snapView(); }, home);
+    await driver.settle(400);
     const goHome = async () => {
       await page.evaluate((h) => {
-        const s = window.__scene;
-        s.playerWorld = { worldX: h.worldX, worldY: h.worldY };
-        s.movementController.syncPlayerToWorld(h.worldX, h.worldY, s.tileSize);
+        const g = window.gameDebug;
+        g.hero.place(h.x, h.y);
+        g.hero.snapView();
       }, home);
       await driver.settle(250); // and let the last walk's stride settle, so it can't bleed onward
     };
@@ -251,7 +268,7 @@ export default {
     // frames; only a synthetic one can be this fast.
     await goHome();
     const buffered = await page.evaluate(async () => {
-      const s = window.__scene;
+      const g = window.gameDebug;
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const key = (type, name, code) => {
         const e = new KeyboardEvent(type, { key: name, code: name, bubbles: true });
@@ -263,8 +280,8 @@ export default {
         await wait(holdMs);
         key('keyup', name, code);
       };
-      const free = (dx, dy) => !s.query.isSolidForEntities(
-        s.playerWorld.worldX + dx, s.playerWorld.worldY + dy, false,
+      const free = (dx, dy) => !g.world.solid(
+        g.hero.at().x + dx, g.hero.at().y + dy, false,
       );
       // Pick a horizontal opener with a free tile below it, so neither leg can hit a wall.
       const openers = [[1, 0, 'ArrowRight', 39], [-1, 0, 'ArrowLeft', 37]]
@@ -272,12 +289,12 @@ export default {
       if (openers.length === 0) return { skipped: true };
       const [, , name, code] = openers[0];
 
-      const before = { x: s.playerWorld.worldX, y: s.playerWorld.worldY };
+      const before = { x: g.hero.at().x, y: g.hero.at().y };
       await tap(name, code);
       // DOWN lands squarely inside the ~100ms step the tap above has just started.
       await tap('ArrowDown', 40);
       await wait(600);
-      return { before, after: { x: s.playerWorld.worldX, y: s.playerWorld.worldY } };
+      return { before, after: { x: g.hero.at().x, y: g.hero.at().y } };
     });
     if (buffered.skipped) {
       assert('Tap-during-step: no clear corner to test it in', true, 'skipped');
@@ -291,10 +308,10 @@ export default {
 
     // ── Standing still is standing still ─────────────────────────────────────
     await driver.settle(400);
-    const idle = await page.evaluate(() => ({
-      walking: window.__scene.hero.walking,
-      bob: window.__scene.hero.bobLift,
-    }));
+    const idle = await page.evaluate(() => {
+      const view = window.gameDebug.hero.view();
+      return { walking: view.walking, bob: view.bobLift };
+    });
     assert(
       'The bob drops when the walk ends',
       idle.walking === false && idle.bob === 0,

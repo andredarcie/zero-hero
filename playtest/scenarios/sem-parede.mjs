@@ -1,10 +1,12 @@
 // SEM PAREDE INVISIVEL — todo tile que barra o heroi tem de ter um MOTIVO DESENHADO: arvore ou
 // rocha de pe, mar, uma peca que bloqueia (arbusto, rocha, agua, fogueira, portao...), um NPC, a
-// espada fincada ou a marca de um pedido. Colisao pintada em chao vazio e a recusa que o jogador nao consegue ler.
-const SOLID_UPPER = [3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40];
-const PROP_LISTS = ['campfires', 'hearths', 'gardenGates', 'dryBushes', 'lockedDoors', 'swingGates',
-  'dryTrees', 'dryShrubs', 'rocks', 'tallGrasses', 'moonflowers', 'plantSpots', 'toolboxes', 'furnaces',
-  'altars', 'waterTiles'];
+// espada fincada, a marca de um pedido ou uma peca do vale (o quintal do lenhador, a cratera, a
+// cerca...). Colisao pintada em chao vazio e a recusa que o jogador nao consegue ler.
+//
+// O jogo diz POR QUE cada tile barra (gameDebug.world.solidReason): toda peca e desenhada por
+// construcao, e o mapa so barra com a arte de um solido no tile (arvore, montanha, mar — a regra do
+// proprio ChunkManager). O que sobra, e e isso que este cenario reprova, e a colisao pintada em chao
+// vazio ('terrain:painted') e uma fonte de solido que a sonda nao conhece ('unknown').
 
 export default {
   name: 'sem-parede',
@@ -18,24 +20,18 @@ export default {
     await driver.open('/?play');
     await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
     await page.waitForTimeout(800);
-    const odd = await page.evaluate(([solidUpper, lists]) => {
-      const s = window.__scene;
+    const odd = await page.evaluate(() => {
+      const g = window.gameDebug;
       const out = [];
       for (let y = 0; y < 60; y += 1) {
         for (let x = 0; x < 60; x += 1) {
-          if (!s.query.isSolidForEntities(x, y)) continue;
-          const t = s.chunkManager.getTile(x, y);
-          if (t.upper !== null && solidUpper.includes(t.upper)) continue;
-          if (t.ground === 33) continue;
-          if (s.swordPlanting.plantedSwordTile?.x === x && s.swordPlanting.plantedSwordTile?.y === y) continue;
-          if (s.npcManager.hasNpcAt(x, y)) continue;
-          if (s.marks.isQuestMarkAt(x, y)) continue; // a marca de um pedido (o cavalete, o marco...)
-          if (lists.some((n) => s.props[n].some((o) => o.worldX === x && o.worldY === y && o.blocking))) continue;
-          out.push(`${x},${y}${t.collision ? ' (colisao pintada)' : ''}`);
+          const why = g.world.solidReason(x, y);
+          if (why === 'terrain:painted') out.push(`${x},${y} (colisao pintada)`);
+          else if (why === 'unknown') out.push(`${x},${y} (fonte desconhecida)`);
         }
       }
       return out;
-    }, [SOLID_UPPER, PROP_LISTS]);
+    });
     assert('Nenhuma parede invisivel no mundo', odd.length === 0, odd.slice(0, 20).join(' '));
   },
 };

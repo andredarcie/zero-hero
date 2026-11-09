@@ -20,46 +20,40 @@ export default {
     const { page } = driver;
 
     const staged = await page.evaluate(() => {
-      const s = window.__scene;
-      const bush = s.props.dryBushes.find((b) => !b.isAsh);
-      if (!bush) return null;
-      s.__bush = bush;
-      return { worldX: bush.worldX, worldY: bush.worldY, bushes: s.props.dryBushes.length };
+      const bushes = window.gameDebug.props.dryBushes();
+      const bush = bushes.find((b) => !b.ash);
+      return bush ? { worldX: bush.x, worldY: bush.y, bushes: bushes.length } : null;
     });
     assert('Found an unburnt bush to set alight', staged !== null, JSON.stringify(staged));
     if (!staged) return;
 
     await shot('before', { note: 'Before the sequence' });
 
-    const run = await page.evaluate(async () => {
-      const s = window.__scene;
-      const w3 = s.world3d;
-      const bush = s.__bush;
+    const run = await page.evaluate(async ([bx, by]) => {
+      const g = window.gameDebug;
       const frame = () => new Promise((r) => requestAnimationFrame(r));
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
       window.__prof.spikeMs = 24;
       window.__prof.start();
       await frame();
-      const lights0 = w3.lightCount;
-      const programs0 = w3.rendererInfo.programs.length;
+      const lights0 = g.render.lightCount();
+      const programs0 = g.render.programs();
 
       // The real player sequence, through the real code paths.
       window.__prof.mark('pickup.wood');
-      s.hand.onCollectItem({ kind: 'wood', worldX: s.playerWorld.worldX, worldY: s.playerWorld.worldY });
+      g.items.collect('wood');
       await wait(900);
 
       // Lighting the torch is where the FIRST stall lived: the torch PointLight was lazy.
       window.__prof.mark('torch.light');
-      s.torch.igniteHeldItem();
+      g.fire.ignite();
       await wait(900);
 
-      s.playerWorld = { worldX: bush.worldX, worldY: bush.worldY + 1 };
+      g.hero.place(bx, by + 1);
       await frame();
       window.__prof.mark('bush.ignite');
-      s.swing.swingHeld(bush.worldX, bush.worldY);
-      bush.ignite();
-      s.sparkle.spawnFireHitEffect(bush.worldX, bush.worldY);
+      g.fire.burnBush(bx, by);
 
       // Hold past BURN_MS (2200) so the burnout — which used to stall a THIRD time, when the
       // light was removed — is inside the profiled window too.
@@ -70,13 +64,13 @@ export default {
       return {
         report,
         lights0,
-        lights1: w3.lightCount,
+        lights1: g.render.lightCount(),
         programs0,
-        programs1: w3.rendererInfo.programs.length,
-        isAsh: bush.isAsh,
-        torchLit: s.torch.isTorchLit,
+        programs1: g.render.programs(),
+        isAsh: g.props.dryBushes().find((b) => b.x === bx && b.y === by)?.ash ?? null,
+        torchLit: g.fire.torch().lit,
       };
-    });
+    }, [staged.worldX, staged.worldY]);
 
     await shot('after', { note: 'The bush has burned down to ash' });
 

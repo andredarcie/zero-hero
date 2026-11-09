@@ -21,38 +21,35 @@ export default {
     // A fogueira da Thea (42,5), com ela ao lado: o herói fica ao sul, olhando para o norte. Os vizinhos só
     // existem com o chunk carregado, então primeiro o herói vai até lá.
     await page.evaluate(() => {
-      const s = window.__scene;
-      s.playerWorld.worldX = 42; s.playerWorld.worldY = 6;
-      s.movementController.interruptMovement(42, 6);
-      s.streamChunks(true);
+      const g = window.gameDebug;
+      g.hero.teleport(42, 6);
     });
     await sleep(900);
     const spot = await page.evaluate(() => {
-      const s = window.__scene;
-      const npcs = s.npcManager.getActiveWorldPositions();
-      const f = s.props.campfires.find((c) => c.worldX === 42 && c.worldY === 5);
-      if (!f || s.query.isSolidForEntities(42, 6)) return null;
-      const owner = npcs.some((n) => Math.max(Math.abs(n.worldX - f.worldX), Math.abs(n.worldY - f.worldY)) === 1);
-      window.__fire = f;
-      return owner ? { x: f.worldX, y: f.worldY } : null;
+      const g = window.gameDebug;
+      const npcs = g.npcs.list();
+      const f = g.camp.campfire(42, 5);
+      if (!f || g.world.solid(42, 6)) return null;
+      const owner = npcs.some((n) => Math.max(Math.abs(n.worldX - f.x), Math.abs(n.worldY - f.y)) === 1);
+      return owner ? { x: f.x, y: f.y } : null;
     });
     assert('Há uma fogueira de vizinho para testar', spot !== null, JSON.stringify(spot));
     if (!spot) return;
     await sleep(400);
     await tap(page, 'ArrowUp');
 
-    const look = () => page.evaluate(() => {
-      const s = window.__scene;
-      const f = window.__fire;
+    const look = () => page.evaluate(([x, y]) => {
+      const g = window.gameDebug;
+      const f = g.camp.campfire(x, y);
       return {
-        lit: f.isLit,
-        full: f.isFullyLit,
-        keeper: s.fire.fireKeepers.has(f),
-        verb: s.verbs.useVerbAt(f.worldX, f.worldY),
-        sleeping: s.camp.rest.isSleeping === true,
-        resting: s.camp.rest.isResting === true,
+        lit: f.lit,
+        full: f.full,
+        keeper: f.keeper,
+        verb: g.verbs.use(x, y),
+        sleeping: g.camp.rest().sleeping === true,
+        resting: g.camp.rest().resting === true,
       };
-    });
+    }, [spot.x, spot.y]);
 
     // ── 1. De dia, apagada ──
     let st = await look();
@@ -66,10 +63,10 @@ export default {
 
     // ── 2. Anoitece: o vizinho vai acender, e o fogo cresce aos poucos ──
     await page.evaluate(() => window.gameTime.set(0.85));
-    const kindling = await page.waitForFunction(() => {
-      const f = window.__fire;
-      return f.isLit && !f.isFullyLit;
-    }, null, { timeout: 30000, polling: 50 }).then(() => true, () => false);
+    const kindling = await page.waitForFunction(([x, y]) => {
+      const f = window.gameDebug.camp.campfire(x, y);
+      return f.lit && !f.full;
+    }, [spot.x, spot.y], { timeout: 30000, polling: 50 }).then(() => true, () => false);
     assert('O vizinho acende e o fogo começa pequeno', kindling, JSON.stringify(await look()));
     if (kindling) {
       st = await look();
@@ -82,11 +79,10 @@ export default {
     }
 
     // ── 3. O fogo terminou de pegar e o vizinho voltou: mesmo assim não dorme ──
-    const ready = await page.waitForFunction(() => {
-      const s = window.__scene;
-      const f = window.__fire;
-      return f.isFullyLit && !s.fire.fireKeepers.has(f);
-    }, null, { timeout: 30000, polling: 100 }).then(() => true, () => false);
+    const ready = await page.waitForFunction(([x, y]) => {
+      const f = window.gameDebug.camp.campfire(x, y);
+      return f.full && !f.keeper;
+    }, [spot.x, spot.y], { timeout: 30000, polling: 100 }).then(() => true, () => false);
     st = await look();
     assert('O fogo termina de pegar e o vizinho vai embora', ready, JSON.stringify(st));
     assert('Com o fogo inteiro, o balão não oferece dormir', st.verb !== 'sleep', JSON.stringify(st));

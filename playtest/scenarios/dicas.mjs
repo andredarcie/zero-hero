@@ -23,10 +23,10 @@ export default {
 
     // ── 1. O PORCINI ──────────────────────────────────────────────────────────────────────────
     const place = await page.evaluate(() => {
-      const s = window.__scene; window.gameTime.set(0.45);
-      s.playerWorld.worldX = 5; s.playerWorld.worldY = 41; s.movementController.interruptMovement(5, 41); s.movementController.faceTo(0, -1); s.streamChunks(true);
-      const porcini = s.itemManager.snapshot().filter((i) => i.kind === 'porcini');
-      const shui = s.npcManager.getActiveWorldPositions().find((n) => n.kind === 'radiationSuit');
+      const g = window.gameDebug; window.gameTime.set(0.45);
+      g.hero.teleport(5, 41, 0, -1);
+      const porcini = g.items.ground().filter((i) => i.kind === 'porcini');
+      const shui = g.npcs.list().find((n) => n.kind === 'radiationSuit');
       return { porcini, shui };
     });
     const near = place.porcini.find((p) => place.shui && p.worldY === place.shui.worldY && p.worldX === place.shui.worldX - 3);
@@ -36,11 +36,7 @@ export default {
 
     // A conversa: a câmera fica na Shui até a linha do porcini, vai até ele e volta.
     await page.keyboard.press('z');
-    const hintText = await page.evaluate(async () => {
-      const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/i18n/i18n.ts'));
-      const { tLines } = await import(url);
-      return tLines('npc.radiationSuitHint.porcini')[0].text;
-    });
+    const hintText = await page.evaluate(() => window.gameDebug.world.lines('npc.radiationSuitHint.porcini')[0]);
     assert('A dica do porcini fala do lado esquerdo e do corte', /esquerdo/i.test(hintText) && /corte/i.test(hintText), hintText);
     let rest = null;
     let farthest = 0;
@@ -50,7 +46,11 @@ export default {
       await sleep(200);
       const st = await state();
       if (!st.dialogOpen) break;
-      const now = await page.evaluate(() => ({ cx: window.__scene.camera.screenCenterX, line: window.__scene.dialog.dialogOverlay.writer.lineIndex, text: window.__scene.dialog.dialogOverlay.script?.lines[window.__scene.dialog.dialogOverlay.writer.lineIndex]?.text }));
+      const now = await page.evaluate(() => {
+        const g = window.gameDebug;
+        const line = g.dialog.box()?.line ?? null;
+        return { cx: g.scene.cameraCentreX(), line, text: line === null ? null : g.dialog.lines()?.[line] };
+      });
       if (now.text !== hintText) {
         if (rest === null && i > 3) rest = now.cx;
         if (i % 4 === 3) await page.keyboard.press('z');
@@ -68,13 +68,9 @@ export default {
 
     // ── 2. A PONTINHA ─────────────────────────────────────────────────────────────────────────
     const point = await page.evaluate(() => {
-      const s = window.__scene;
-      const home = (kind) => s.npcManager.getActiveWorldPositions().find((n) => n.kind === kind) ?? null;
-      const axe = s.bumps.uniqueItemSource('axe');
-      const shovel = s.bumps.uniqueItemSource('shovel');
-      const scythe = s.bumps.uniqueItemSource('scythe');
-      const wood = s.bumps.uniqueItemSource('wood');
-      s.itemManager.dropAt?.('scythe', 30, 50);
+      const g = window.gameDebug;
+      const home = (kind) => g.npcs.list().find((n) => n.kind === kind) ?? null;
+      const [axe, shovel, scythe, wood] = ['axe', 'shovel', 'scythe', 'wood'].map((k) => g.forage.toolSource(k));
       return { axe, shovel, scythe, wood, marco: home('businessMan'), sisi: home('painter') };
     });
     log(`  pontinha: ${JSON.stringify(point)}`);
@@ -85,17 +81,17 @@ export default {
 
     // O balão na tela, apontando: o herói diante de uma árvore seca, sem machado.
     const shown = await page.evaluate(() => {
-      const s = window.__scene; window.gameTime.set(0.45);
-      const t = s.props.dryTrees[0];
-      s.playerWorld.worldX = t.worldX; s.playerWorld.worldY = t.worldY + 1;
-      s.movementController.interruptMovement(t.worldX, t.worldY + 1); s.movementController.faceTo(0, -1); s.streamChunks(true);
-      return [t.worldX, t.worldY];
+      const g = window.gameDebug; window.gameTime.set(0.45);
+      const t = g.props.dryTrees()[0];
+      g.hero.teleport(t.x, t.y + 1, 0, -1);
+      return [t.x, t.y];
     });
     await sleep(600);
     const balloon = await page.evaluate(([x, y]) => {
-      const s = window.__scene;
-      s.bumps.thinkOfNeed(x, y, true);
-      return { icon: s.bumps.heroThought.visibleIcon, to: s.bumps.heroThought.pointing };
+      const g = window.gameDebug;
+      g.forage.thinkOfNeed(x, y);
+      const th = g.forage.thought();
+      return { icon: th.icon, to: th.pointing };
     }, shown);
     await sleep(250);
     await shot('02-pontinha', { note: 'O balão do machado, com a pontinha virada para o Marco' });
@@ -103,18 +99,18 @@ export default {
 
     // ── 3. OS COGUMELINHOS-FILHOS ─────────────────────────────────────────────────────────────
     const kinds = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric'];
-    const kin = await page.evaluate((ks) => Object.fromEntries(ks.map((k) => [k, window.__scene.forage.mushroomKin?.count(k) ?? 0])), kinds);
+    const kin = await page.evaluate((ks) => Object.fromEntries(ks.map((k) => [k, window.gameDebug.forage.kin(k)])), kinds);
     log(`  filhos: ${JSON.stringify(kin)}`);
     assert('Cada cogumelo tem cogumelinhos-filhos em volta (a trilha que leva a ele)', kinds.every((k) => kin[k] >= 2), JSON.stringify(kin));
     await page.evaluate(() => {
-      const s = window.__scene; window.gameTime.set(0.45);
-      s.playerWorld.worldX = 2; s.playerWorld.worldY = 43; s.movementController.interruptMovement(2, 43); s.movementController.faceTo(0, -1); s.streamChunks(true);
+      const g = window.gameDebug; window.gameTime.set(0.45);
+      g.hero.teleport(2, 43, 0, -1);
     });
     await sleep(900);
     await shot('03-filhos', { note: 'Os cogumelinhos-filhos em volta do porcini' });
-    await page.evaluate(() => window.__scene.forage.basketMushroom('porcini', 2, 40));
+    await page.evaluate(() => window.gameDebug.forage.basket('porcini', 2, 40));
     await sleep(2500);
-    const after = await page.evaluate(() => window.__scene.forage.mushroomKin?.count('porcini') ?? 0);
+    const after = await page.evaluate(() => window.gameDebug.forage.kin('porcini'));
     assert('Colhido o porcini, os filhos dele somem', after === 0, String(after));
   },
 };

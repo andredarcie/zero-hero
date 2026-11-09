@@ -364,15 +364,16 @@ código.
 
 **Rodar o jogo para testar é SEMPRE mudo** (o `GameDriver` garante: `--mute-audio` + volumes
 zerados). O harness (`playtest/`) é Playwright com cabeça; entre com `?play`; não dirija o jogo
-por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd3d`, `gameDebug`,
-`__prof`. **Teste EXATAMENTE o que você mudou** — o `zerar` leva ~5 minutos.
+por aba MCP (aba oculta congela o rAF). **Cenário fala com o jogo só pelas sondas** (`gameDebug`, `appDebug`, `editorDebug`:
+`src/game/debug/probes/`, TypeScript conferido pelo tsc), mais `hd3d`, `gameTime` e `__prof`; ler `window.__scene` ou importar `src/` na página
+reprova o `playtestContract.test.ts`. Membro novo que um cenário precisa ler vira sonda. **Teste EXATAMENTE o que você mudou** — o `zerar` leva ~10 minutos.
 **Uma rodada de playtest por vez, em lotes** (`--budget=8`, depois `--resume`): cada cenário usa um navegador novo, com guarda de memória e relatório gravado a cada cenário (`playtest/README.md`, "A memória").
 
-A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); bolsa → `bolsa`; machado → `machado`; pedra →
-`pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;
+A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); machado → `machado`; pedra →
+`pedra`; altar → `altar`; flor da lua → `flor-da-lua`; montanha → `montanha`; vento na mata → `vento`;
 menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; fogueira de vizinho nunca faz dormir → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Thea → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
-Cenários que ainda citam o mundo antigo (`prologo`, `vento`, `sem-fabrica`, `ferro`, `tour`, `hd2d-fx`, e os da mochila)
-podem estar vermelhos: não "conserte" editando conteúdo.
+A suíte inteira está verde (2026-11-09): um cenário vermelho é regressão, ou um cenário que precisa acompanhar uma mudança
+de desenho — nunca "conserte" editando conteúdo do jogo para o teste passar.
 
 **Performance sempre contra a `main`** (`git stash`), e sempre com vsync livre
 (`PLAYTEST_UNTHROTTLED=1 PLAYTEST_SLOWMO=0`) — com vsync a GPU só *reduz o clock* e toda variante

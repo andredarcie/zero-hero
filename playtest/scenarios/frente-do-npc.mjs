@@ -31,9 +31,9 @@ export default {
 
     /** Os itens do chão nas frentes de NPC, e onde estão os de um tipo. */
     const ground = () => page.evaluate(() => {
-      const s = window.__scene;
-      const fronts = new Set(s.groundItems.npcTiles().map((n) => `${n.worldX},${n.worldY + 1}`));
-      const items = s.itemManager.snapshot();
+      const g = window.gameDebug;
+      const fronts = new Set(g.items.npcTiles().map((n) => `${n.x},${n.y + 1}`));
+      const items = g.items.ground();
       return {
         inFront: items.filter((i) => fronts.has(`${i.worldX},${i.worldY}`)).map((i) => `${i.kind}@${i.worldX},${i.worldY}`),
         items: items.map((i) => ({ kind: i.kind, x: i.worldX, y: i.worldY })),
@@ -52,21 +52,20 @@ export default {
     const LEFT = `${H.x - 1},${H.y}`;
     const BACK = `${H.x},${H.y - 1}`;
     const standInFront = () => page.evaluate(([x, y]) => {
-      const s = window.__scene; window.gameTime.set(0.45);
-      s.playerWorld.worldX = x; s.playerWorld.worldY = y + 1;
-      s.movementController.interruptMovement(x, y + 1); s.movementController.faceTo(0, -1); s.streamChunks(true);
+      const g = window.gameDebug; window.gameTime.set(0.45);
+      g.hero.teleport(x, y + 1, 0, -1);
     }, [H.x, H.y]);
 
     // ── 2. A TROCA DE VERDADE: conversar com a pedra na mão e ganhar a faca ─────────────────────
     await standInFront();
-    await page.evaluate(() => window.__scene.hand.takeIntoHand('stone'));
+    await page.evaluate(() => window.gameDebug.items.take('stone'));
     await sleep(600);
     await page.keyboard.press('z');
     await sleep(500);
     await drain();
     await sleep(600);
     const swap = await ground();
-    const held = await page.evaluate(() => window.__scene.heldItem);
+    const held = await page.evaluate(() => window.gameDebug.items.held());
     log(`  troca: na mão ${held}, pedra em ${at(swap, 'stone')}`);
     assert('A Shui deu a faca', held === 'knife', held);
     assert('A pedra que estava na mão caiu à DIREITA da Shui, e não na frente dela', at(swap, 'stone').includes(RIGHT) && swap.inFront.length === 0, JSON.stringify({ stone: at(swap, 'stone'), inFront: swap.inFront }));
@@ -75,39 +74,38 @@ export default {
     // ── 3. OS LADOS OCUPADOS, UM A UM ─────────────────────────────────────────────────────────
     // Direita ocupada (a pedra de agora): a próxima troca cai à esquerda.
     await standInFront();
-    await page.evaluate(() => window.__scene.hand.takeIntoHand('wood'));
+    await page.evaluate(() => window.gameDebug.items.take('wood'));
     const left = await ground();
     assert('Com a direita ocupada, o que cai vai para a ESQUERDA do NPC', at(left, 'knife').includes(LEFT) && left.inFront.length === 0, JSON.stringify({ knife: at(left, 'knife'), inFront: left.inFront }));
     // Direita e esquerda ocupadas: vai para trás.
-    await page.evaluate(() => window.__scene.hand.takeIntoHand('bucket'));
+    await page.evaluate(() => window.gameDebug.items.take('bucket'));
     const back = await ground();
     assert('Com os dois lados ocupados, vai para TRÁS do NPC', at(back, 'wood').includes(BACK) && back.inFront.length === 0, JSON.stringify({ wood: at(back, 'wood'), inFront: back.inFront }));
     // Os três ocupados: qualquer lugar, menos a frente.
-    await page.evaluate(() => window.__scene.hand.takeIntoHand('shovel'));
+    await page.evaluate(() => window.gameDebug.items.take('shovel'));
     const any = await ground();
     assert('Com direita, esquerda e trás ocupados, cai em outro lugar — nunca na frente', at(any, 'bucket').length === 1 && !at(any, 'bucket').includes(FRONT) && any.inFront.length === 0, JSON.stringify({ bucket: at(any, 'bucket'), inFront: any.inFront }));
 
     // ── 4. O HERÓI TENTANDO POUSAR NA FRENTE ──────────────────────────────────────────────────
     const placed = await page.evaluate(([x, y]) => {
-      const s = window.__scene;
-      s.playerWorld.worldX = x; s.playerWorld.worldY = y + 2;
-      s.movementController.interruptMovement(x, y + 2); s.movementController.faceTo(0, -1);
-      return s.hand.placeItemAt(x, y + 1);
+      const g = window.gameDebug;
+      g.hero.teleport(x, y + 2, 0, -1);
+      return g.items.place(x, y + 1);
     }, [H.x, H.y]);
     const afterPlace = await ground();
     assert('O herói não consegue pousar um item na frente do NPC', placed === false && afterPlace.inFront.length === 0, JSON.stringify({ placed, inFront: afterPlace.inFront }));
 
     // ── 5. O SAVE ANTIGO, COM ITEM NA FRENTE ──────────────────────────────────────────────────
     const moved = await page.evaluate(([x, y]) => {
-      const s = window.__scene;
-      s.itemManager.drop('stool', x, y + 1); // direto no gerente, como um save de antes da regra
-      return s.groundItems.enforceNpcFrontRule();
+      const g = window.gameDebug;
+      g.items.drop('stool', x, y + 1); // direto no gerente, como um save de antes da regra
+      return g.items.enforceNpcFrontRule();
     }, [H.x, H.y]);
     const afterLoad = await ground();
     assert('Um item que estava na frente (save antigo) é tirado de lá ao carregar', moved === 1 && afterLoad.inFront.length === 0 && at(afterLoad, 'stool').length === 1, JSON.stringify({ moved, stool: at(afterLoad, 'stool'), inFront: afterLoad.inFront }));
 
     // ── 6. O CAMINHO DAS QUESTS E DA BANCADA (o ponto único de drop) ──────────────────────────
-    const dropped = await page.evaluate(([x, y]) => window.__scene.groundItems.dropItem('lantern', x, y + 1), [H.x, H.y]);
+    const dropped = await page.evaluate(([x, y]) => window.gameDebug.items.dropByRule('lantern', x, y + 1), [H.x, H.y]);
     const afterDrop = await ground();
     assert('Pedir para largar na frente do NPC larga em outro lugar', dropped && `${dropped[0]},${dropped[1]}` !== FRONT && afterDrop.inFront.length === 0, JSON.stringify({ dropped, inFront: afterDrop.inFront }));
 

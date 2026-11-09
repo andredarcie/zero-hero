@@ -1,6 +1,7 @@
 import * as Engine from '@/game/engine';
 
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
+import { buildEditorProbes } from '@/game/debug/probes/editorProbe';
 import { EditorDomUi, PANEL_WIDTH, type UiState, type ViewMode } from '@/game/editor/EditorDomUi';
 import { EditorStore, type StoreChange } from '@/game/editor/EditorStore';
 import { registerFungiTextures } from '@/game/fungi/fungi';
@@ -130,6 +131,8 @@ export class EditorScene extends Engine.Scene {
 
     this.pointer.registerPointerInput();
     registerSceneDebugHooks(this, () => this.session.renderSnapshot());
+    // A porta dos playtests no editor (debug/probes/editorProbe), só no desenvolvimento.
+    if (import.meta.env.DEV) window.editorDebug = buildEditorProbes(this);
 
     void this.bootstrap();
   }

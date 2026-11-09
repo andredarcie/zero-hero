@@ -10,6 +10,7 @@ import { getDialogKinds, getWorldName } from '@/game/world/WorldData';
 import { questSnapshot } from '@/game/runtime/QuestLog';
 import type { GameScene } from '../GameScene';
 import { type GameDebugApi } from '@/game/debug/debugHooks';
+import { buildProbes } from '@/game/debug/probes';
 import { GAME_SCENE_KEY } from './sceneDefs';
 
 
@@ -135,6 +136,8 @@ export class DebugApi {
       // seria um sistema que ninguém consegue provar que funciona (ver runtime/QuestLog).
       quests: () => questSnapshot(),
     };
+    // As sondas dos playtests (debug/probes) só no desenvolvimento: no build de produção este ramo some, e elas junto.
+    if (import.meta.env.DEV) Object.assign(this.debugApi, buildProbes(this.host));
     registerGameDebugApi(this.debugApi, this.host);
     this.clearDebugHooks?.();
     this.clearDebugHooks = registerSceneDebugHooks(this.host, () => JSON.stringify({

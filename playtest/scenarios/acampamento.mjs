@@ -19,14 +19,14 @@ export default {
     await sleep(1200);
 
     const camp = await page.evaluate(() => {
-      const s = window.__scene;
+      const g = window.gameDebug;
       return {
-        bed: s.valley.heroCamp.at(53, 48),
-        ring: s.valley.heroCamp.at(53, 49),
-        solid: [s.query.isSolidForEntities(53, 48), s.query.isSolidForEntities(53, 49), s.query.isSolidForEntities(52, 49)],
-        front: [s.query.isSolidForEntities(54, 48)],
-        mementos: s.valley.heroCamp.mementoCount,
-        easel: s.valley.heroCamp.at(55, 47),
+        bed: g.valley.campAt(53, 48),
+        ring: g.valley.campAt(53, 49),
+        solid: [g.world.solid(53, 48), g.world.solid(53, 49), g.world.solid(52, 49)],
+        front: [g.world.solid(54, 48)],
+        mementos: g.valley.mementos(),
+        easel: g.valley.campAt(55, 47),
       };
     });
     log(`  acampamento: ${JSON.stringify(camp)}`);
@@ -36,15 +36,16 @@ export default {
 
     // O herói chega a pé, do começo, até a frente da cabana.
     const reach = await page.evaluate(() => {
-      const s = window.__scene;
-      const start = [s.playerWorld.worldX, s.playerWorld.worldY];
+      const g = window.gameDebug;
+      const hero = g.hero.at();
+      const start = [hero.x, hero.y];
       const seen = new Set([start.join(',')]);
       const q = [start];
       while (q.length) {
         const [x, y] = q.shift();
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const k = `${x + dx},${y + dy}`;
-          if (seen.has(k) || s.query.isSolidForEntities(x + dx, y + dy) || seen.size > 4000) continue;
+          if (seen.has(k) || g.world.solid(x + dx, y + dy) || seen.size > 4000) continue;
           seen.add(k); q.push([x + dx, y + dy]);
         }
       }
@@ -54,16 +55,16 @@ export default {
 
     // O pedido da Sisi fecha (pelo mesmo evento do jogo): o quadro dela aparece no acampamento.
     await page.evaluate(() => {
-      const s = window.__scene; window.gameTime.set(0.45);
-      s.playerWorld.worldX = 54; s.playerWorld.worldY = 51; s.movementController.interruptMovement(54, 51); s.movementController.faceTo(0, -1); s.streamChunks(true);
-      s.delivery.questEvent({ type: 'paint' });
+      const g = window.gameDebug; window.gameTime.set(0.45);
+      g.hero.teleport(54, 51, 0, -1);
+      g.quest.event({ type: 'paint' });
     });
     for (let i = 0; i < 20; i += 1) {
       const st = await state();
       if (st.dialogOpen || st.itemGetOpen) await page.keyboard.press('z');
       await sleep(250);
     }
-    const after = await page.evaluate(() => ({ mementos: window.__scene.valley.heroCamp.mementoCount, easel: window.__scene.valley.heroCamp.at(55, 47), solid: window.__scene.query.isSolidForEntities(55, 47) }));
+    const after = await page.evaluate(() => ({ mementos: window.gameDebug.valley.mementos(), easel: window.gameDebug.valley.campAt(55, 47), solid: window.gameDebug.world.solid(55, 47) }));
     assert('Fechado o pedido da Sisi, o quadro dela aparece no acampamento', after.mementos === 1 && after.easel === 'easel' && after.solid, JSON.stringify(after));
     await shot('00-acampamento', { note: 'O acampamento com o quadro da Sisi' });
 

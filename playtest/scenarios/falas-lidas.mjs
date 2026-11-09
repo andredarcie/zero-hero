@@ -11,10 +11,8 @@ export default {
     const state = () => page.evaluate(() => window.gameDebug?.getState() ?? null);
     /** A linha na caixa agora: o texto, se ainda está sendo datilografada, e quantas letras já apareceram. */
     const line = () => page.evaluate(() => {
-      const o = window.__scene.dialog.dialogOverlay;
-      if (!o) return null;
-      const letters = o.writer.letters.filter(Boolean);
-      return { text: o.writer.currentText, typing: o.isTyping, shown: letters.filter((l) => l.classList.contains('zh-on')).length, total: letters.length };
+      const box = window.gameDebug.dialog.box();
+      return box ? { text: box.text, typing: box.typing, shown: box.shown, total: box.total } : null;
     });
     const closeAll = async () => {
       for (let i = 0; i < 40; i += 1) {
@@ -34,9 +32,8 @@ export default {
 
     const talk = async () => {
       await page.evaluate(() => {
-        const s = window.__scene; window.gameTime.set(0.45);
-        s.playerWorld.worldX = 5; s.playerWorld.worldY = 41;
-        s.movementController.interruptMovement(5, 41); s.movementController.faceTo(0, -1); s.streamChunks(true);
+        const g = window.gameDebug; window.gameTime.set(0.45);
+        g.hero.teleport(5, 41, 0, -1);
       });
       await sleep(500);
       await page.keyboard.press('z');

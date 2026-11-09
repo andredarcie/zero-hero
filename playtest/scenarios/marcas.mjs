@@ -1,94 +1,73 @@
-// MARCAS — o vale MUDA quando um pedido fecha: o marco da Thea, o cesto da Shui, a lenha do Marco
-// (e a fogueira dele acesa de dia) e o cavalete da Sisi com a tela verde. Sem pedidos, so o
-// cavalete cinza existe. E ao vivo: entregar as pedras a Thea faz o marco surgir ali.
+// MARCAS — o vale MUDA quando um pedido fecha: o marco de pedras da Thea e o cesto da Shui (ver
+// scenes/game/QuestMarks). Sem pedidos fechados nenhuma marca aparece; com eles, as duas; e ao vivo,
+// o pedido da Shui fechando faz o cesto surgir na hora. E os NPCs tem vida: cumprimentam e respiram.
+//
+// (A versao anterior cobrava quatro marcas — o cavalete da Sisi e a lenha do Marco com a fogueira
+// acesa de dia — e a Thea recebendo pedras. Esse desenho dos pedidos mudou: hoje a Thea pede o
+// telescopio, e so os dois pedidos acima deixam marca.)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const ALL_DONE = {
-  'radiationSuit/deliver:mushroom': 5, 'painter/grow': 2, 'businessMan/deliver:wood': 4, 'astronaut/deliver:iron': 1,
+const SHUI_THREE = {
+  'radiationSuit/deliver:porcini': 1, 'radiationSuit/deliver:morel': 1, 'radiationSuit/deliver:puffball': 1,
 };
+const ALL_DONE = { ...SHUI_THREE, 'radiationSuit/deliver:inkCap': 1, 'astronaut/sky': 1 };
+const TEXTURE = { astronaut: 'quest-cairn', radiationSuit: 'quest-basket' };
 
 const boot = async (driver, save) => {
   const { page } = driver;
+  // O save e gravado FORA do jogo (numa pagina do mesmo servidor sem ele): com a partida aberta, ela grava o
+  // proprio save ao sair e apaga o que o cenario escreveu — era por isso que o "tudo feito" nascia vazio.
+  await page.goto(new URL('/world.json', page.url()).href);
   await page.evaluate((s) => localStorage.setItem('zh.cozy.v1', JSON.stringify(s)), save);
   await driver.open('/?play');
   await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
   await sleep(700);
-  return page.evaluate(() => window.__scene.marks.questMarks.map((m) => ({
-    dialog: m.def.dialog, done: m.done, texture: m.bb ? m.def[m.done ? 'after' : 'before'] : null, tile: m.tile,
-  })));
+  return page.evaluate(() => window.gameDebug.quest.marks());
 };
 
 export default {
   name: 'marcas',
-  description: 'O vale responde aos pedidos (marco, cesto, lenha + fogo, cavalete) e os NPCs tem vida.',
+  description: 'O vale responde aos pedidos (o marco da Thea, o cesto da Shui) e os NPCs tem vida.',
   needsGame: false,
   async run({ driver, shot, assert }) {
     const { page } = driver;
     await driver.open('/');
     const fresh = await boot(driver, { started: true, introSeen: true, questProgress: {} });
-    assert('Antes dos pedidos so o cavalete cinza existe',
-      fresh.filter((m) => m.texture).map((m) => m.texture).join() === 'quest-easel-grey', JSON.stringify(fresh));
-    assert('Toda marca achou um tile', fresh.length === 4 && fresh.every((m) => m.tile), JSON.stringify(fresh));
+    assert('Antes dos pedidos nenhuma marca aparece', fresh.length === 2 && fresh.every((m) => !m.done && m.texture === null), JSON.stringify(fresh));
+    assert('Toda marca achou um tile', fresh.every((m) => m.tile), JSON.stringify(fresh));
 
     const all = await boot(driver, { started: true, introSeen: true, questProgress: ALL_DONE });
-    assert('Com tudo feito, as quatro marcas aparecem',
-      all.every((m) => m.done && m.texture === { astronaut: 'quest-cairn', radiationSuit: 'quest-basket', painter: 'quest-easel-green', businessMan: 'wood-item' }[m.dialog]),
-      JSON.stringify(all));
-    await page.evaluate(() => window.gameTime.set(0.5));
-    await sleep(600);
-    const fire = await page.evaluate(() => {
-      const s = window.__scene;
-      return [...s.fire.keptLitFires].map((f) => ({ x: f.worldX, y: f.worldY, lit: f.isLit }));
-    });
-    assert('A fogueira do Marco fica acesa ao meio-dia', fire.length === 1 && fire[0].lit, JSON.stringify(fire));
+    assert('Com os pedidos fechados, as duas marcas aparecem',
+      all.length === 2 && all.every((m) => m.done && m.texture === TEXTURE[m.dialog]), JSON.stringify(all));
     for (const m of all) {
-      await page.evaluate(([x, y]) => { const s = window.__scene; s.playerWorld.worldX = x; s.playerWorld.worldY = y + 2; s.movementController.interruptMovement(x, y + 2); s.streamChunks(true); }, [m.tile.x, m.tile.y]);
+      await page.evaluate(([x, y]) => window.gameDebug.hero.teleport(x, y + 2), [m.tile.x, m.tile.y]);
       await sleep(900);
       await shot(`marca-${m.dialog}`, { note: m.dialog });
     }
 
-    // Ao vivo: tres pedras na mochila, falar com a Thea, e o marco surge.
-    const live = await boot(driver, {
-      started: true, introSeen: true, questProgress: {}, giftsGiven: ['astronaut'],
-      inventory: [{ kind: 'stone', count: 3 }], selected: 'none',
-    });
-    const thea = await page.evaluate(async () => {
-      const w = await (await fetch('/world.json')).json();
-      for (const c of w.chunks) for (const n of c.npcs) if (n.type === 'astronaut') return { x: n.worldX, y: n.worldY };
-      return null;
-    });
-    await page.evaluate(() => {
-      const s = window.__scene;
-      window.__hearts = 0;
-      const orig = s.sparkle.spawnHearts.bind(s);
-      s.sparkle.spawnHearts = (x, y) => { window.__hearts += 1; orig(x, y); };
-    });
-    await page.evaluate(([x, y]) => { const s = window.__scene; s.playerWorld.worldX = x; s.playerWorld.worldY = y + 1; s.movementController.interruptMovement(x, y + 1); s.streamChunks(true); }, [thea.x, thea.y]);
+    // Ao vivo: a Shui com tres cogumelos de quatro; o quarto chega e o cesto surge ali.
+    await boot(driver, { started: true, introSeen: true, questProgress: SHUI_THREE });
+    const thea = await page.evaluate(() => window.gameDebug.world.npcHome('astronaut'));
+    await page.evaluate(([x, y]) => window.gameDebug.hero.teleport(x, y + 1), [thea.x, thea.y]);
     await sleep(500);
-    const greeted = await page.evaluate(([x, y]) => window.__scene.dialog.greetedNpcs.has(`${x},${y}`), [thea.x, thea.y]);
+    const greeted = await page.evaluate(([x, y]) => window.gameDebug.npcs.greeted(x, y), [thea.x, thea.y]);
     assert('Chegar perto faz a Thea dar oi (pulinho)', greeted, '');
     const breath = await page.evaluate(async () => {
       const sizes = [];
       for (let i = 0; i < 6; i += 1) {
-        const npc = [...window.__scene.npcManager.byChunk.values()].flat().find((n) => n.kind === 'astronaut');
-        sizes.push(npc.sprite.displayHeight);
+        sizes.push(window.gameDebug.npcs.bodyHeight('astronaut'));
         await new Promise((r) => setTimeout(r, 300));
       }
       return sizes;
     });
-    assert('Os NPCs respiram', Math.max(...breath) - Math.min(...breath) > 0.01, JSON.stringify(breath.map((v) => v.toFixed(3))));
-    await page.keyboard.down('ArrowUp'); await sleep(40); await page.keyboard.up('ArrowUp'); await sleep(300);
-    await page.keyboard.down('z'); await sleep(50); await page.keyboard.up('z');
-    await page.waitForFunction(() => window.gameDebug.getState().dialogOpen, null, { timeout: 5000 });
-    await sleep(700);
-    await shot('fala', { note: 'A placa do nome, sem gritar' });
-    for (let i = 0; i < 20 && (await driver.getState()).dialogOpen; i += 1) {
-      await page.keyboard.down('z'); await sleep(50); await page.keyboard.up('z'); await sleep(450);
-    }
-    await sleep(450);
-    await shot('marco-surgindo', { note: 'O marco da Thea surge, e ela agradece' });
-    assert('O obrigado vem com coracoes', (await page.evaluate(() => window.__hearts)) === 1, '');
-    const after = await page.evaluate(() => window.__scene.marks.questMarks.find((m) => m.def.dialog === 'astronaut'));
-    assert('Entregar as pedras faz o marco surgir', after?.done === true && Boolean(after.bb), JSON.stringify({ done: after?.done }));
-    void live;
+    assert('Os NPCs respiram', Math.max(...breath) - Math.min(...breath) > 0.01, JSON.stringify(breath.map((v) => v?.toFixed(3))));
+
+    const before = await page.evaluate(() => window.gameDebug.quest.marks().find((m) => m.dialog === 'radiationSuit'));
+    await page.evaluate(() => window.gameDebug.quest.event({ type: 'deliver', dialog: 'radiationSuit', item: 'inkCap', units: 1 }));
+    await sleep(1200);
+    const after = await page.evaluate(() => window.gameDebug.quest.marks().find((m) => m.dialog === 'radiationSuit'));
+    assert('Fechado o pedido da Shui, o cesto surge na hora', !before.done && after.done && after.texture === TEXTURE.radiationSuit, JSON.stringify({ before, after }));
+    await page.evaluate(([x, y]) => window.gameDebug.hero.teleport(x, y + 2), [after.tile.x, after.tile.y]);
+    await sleep(900);
+    await shot('cesto-surgindo', { note: 'O cesto da Shui, que acabou de aparecer' });
   },
 };

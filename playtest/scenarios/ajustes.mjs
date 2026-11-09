@@ -21,11 +21,8 @@ export default {
     const { page } = driver;
     const state = () => page.evaluate(() => window.gameDebug?.getState() ?? null);
     const put = (x, y, dx, dy) => page.evaluate(([px, py, fx, fy]) => {
-      const s = window.__scene;
-      s.playerWorld.worldX = px; s.playerWorld.worldY = py;
-      s.movementController.interruptMovement(px, py);
-      s.movementController.faceTo(fx, fy);
-      s.streamChunks(true);
+      const g = window.gameDebug;
+      g.hero.teleport(px, py, fx, fy);
     }, [x, y, dx, dy]);
     const press = async (key, hold = 70, after = 200) => {
       await page.keyboard.down(key);
@@ -33,7 +30,7 @@ export default {
       await page.keyboard.up(key);
       await sleep(after);
     };
-    const dialogLines = () => page.evaluate(() => window.__scene.dialog.dialogOverlay?.script?.lines?.map((l) => l.text) ?? null);
+    const dialogLines = () => page.evaluate(() => (window.gameDebug.dialog.lines() ?? null));
     const closeDialog = async () => {
       for (let i = 0; i < 40; i += 1) {
         const st = await state();
@@ -59,7 +56,7 @@ export default {
     assert('10. Nenhum graveto nem pedra solto no mapa', loose.length === 0, JSON.stringify(loose));
     assert('4. Os dois portões de metal saíram', !world.props.some((p) => p.type === 'swingGate'), '');
     assert('4. A pedra ao lado dos portões saiu', !at(21, 49).includes('rock'), at(21, 49).join());
-    const pocketTrees = await page.evaluate(() => [[20, 49], [21, 49], [20, 50], [22, 50]].every(([x, y]) => window.__scene.query.isSolidForEntities(x, y)));
+    const pocketTrees = await page.evaluate(() => [[20, 49], [21, 49], [20, 50], [22, 50]].every(([x, y]) => window.gameDebug.world.solid(x, y)));
     assert('4. No lugar deles, árvores', pocketTrees, '');
     assert('1. Nada de mato alto na frente da cadeira do lago', !at(42, 51).includes('tallGrass'), at(42, 51).join());
     assert('13. Os veios de carvão estão na margem do lago de lava', at(10, 6).includes('coalRock') && at(4, 9).includes('coalRock'), `${at(10, 6)} ${at(4, 9)}`);
@@ -68,15 +65,15 @@ export default {
 
     // ── 1/5/11. OS ACHADOS: a cadeira, sem balanço e sem o banco do morro ────────────────────
     const finds = await page.evaluate(() => {
-      const f = window.__scene.valley.valleyFinds;
-      return { lake: f.at(41, 50)?.kind ?? null, hill: f.at(36, 43)?.kind ?? null, swing: f.at(4, 50)?.kind ?? null };
+      const v = window.gameDebug.valley;
+      return { lake: v.findAt(41, 50), hill: v.findAt(36, 43), swing: v.findAt(4, 50) };
     });
     assert('1. Na beira do lago há uma cadeira', finds.lake === 'chair', String(finds.lake));
     assert('5. O balanço saiu', finds.swing === null, String(finds.swing));
     assert('11. O banco do alto do morro (o zoom torto) saiu', finds.hill === null, String(finds.hill));
     await put(41, 51, 0, -1);
     await sleep(1500);
-    const lakeVerb = await page.evaluate(() => window.__scene.verbs.currentPrompt({ x: 41, y: 51 })?.view?.rows?.map((r) => r.label) ?? []);
+    const lakeVerb = await page.evaluate(() => window.gameDebug.verbs.prompt(41, 51));
     assert('1. Diante da cadeira o balão oferece sentar, e nada de foice', lakeVerb.length > 0 && !lakeVerb.some((l) => /cortar|foice|cut/i.test(l)), JSON.stringify(lakeVerb));
     await shot('01-cadeira-do-lago', { note: 'A cadeira de madeira na beira do lago, sem mato na frente' });
     await press('z', 60, 2600);
@@ -97,7 +94,7 @@ export default {
     await closeDialog();
 
     // ── 3. A ESPADA ───────────────────────────────────────────────────────────────────────────
-    const sword = await page.evaluate(() => window.__scene.swordPlanting.plantedSwordTile ?? null);
+    const sword = await page.evaluate(() => window.gameDebug.scene.sword().tile);
     assert('3. A espada está fincada', sword !== null, '');
     await put(sword.x, sword.y + 1, 0, -1);
     await sleep(800);
@@ -109,19 +106,19 @@ export default {
     await closeDialog();
 
     // ── 7. A LUZ DE GANHAR ITEM ───────────────────────────────────────────────────────────────
-    await page.evaluate(() => { window.__itemGetDone = false; window.__scene.hand.showItemGet('axe', () => { window.__itemGetDone = true; }); });
+    await page.evaluate(() => window.gameDebug.items.showItemGet('axe'));
     await sleep(1500);
-    const blends = await page.evaluate(() => window.__scene.hand.itemGetOverlay?.objs.filter((o) => o.type === 'Image').map((o) => o.blendMode) ?? []);
+    const blends = await page.evaluate(() => window.gameDebug.items.itemGetCard().imageBlends);
     assert('7. Nenhuma luz da cerimônia usa ADD (era o que desenhava o quadrado)', blends.length > 0 && blends.every((b) => b !== 1), JSON.stringify(blends));
     await shot('07-luz-do-item', { note: 'O halo some redondo, sem borda reta' });
-    await page.waitForFunction(() => window.__itemGetDone === true, null, { timeout: 8000 });
+    await page.waitForFunction(() => window.gameDebug.items.itemGetClosed(), null, { timeout: 8000 });
 
     // ── 8. A BOLSA DE COURO ───────────────────────────────────────────────────────────────────
     await put(30, 40, 0, 1);
     await sleep(800);
-    await page.evaluate(() => window.__scene.forage.basketMushroom('porcini', 30, 41));
+    await page.evaluate(() => window.gameDebug.forage.basket('porcini', 30, 41));
     await sleep(120);
-    const bag = await page.evaluate(() => ({ active: window.__scene.forage.bagStash?.active === true, thought: window.__scene.bumps.heroThought?.visibleIcon ?? null }));
+    const bag = await page.evaluate(() => ({ active: window.gameDebug.forage.bagStashActive(), thought: window.gameDebug.forage.thought().icon }));
     assert('8. Colhido, o cogumelo vai para a bolsa de couro', bag.active, '');
     assert('8. Sem o balão de pensamento da cesta', bag.thought === null, String(bag.thought));
     await sleep(250);
@@ -130,7 +127,7 @@ export default {
     await shot('08b-cogumelo-voando', { note: 'O cogumelo em arco, por cima da cabeça' });
     await sleep(500);
     await shot('08c-bolsa-fecha', { note: 'A bolsa engole, fecha o fecho e balança' });
-    await page.waitForFunction(() => !window.__scene.forage.bagStash, null, { timeout: 5000 });
+    await page.waitForFunction(() => !window.gameDebug.forage.bagStashOpen(), null, { timeout: 5000 });
     assert('8. A animação termina sozinha', true, '');
 
     // ── 9. A SHUI DIZ O NOME E A CURIOSIDADE ────────────────────────────────────────────────
@@ -140,11 +137,7 @@ export default {
     await sleep(800);
     await press('z', 60, 900); // a 1ª conversa: o pedido e a faca
     await closeDialog();
-    await page.evaluate(async () => {
-      const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/runtime/adventureState.ts'));
-      const { adventureState } = await import(url);
-      adventureState().basket.push('morel');
-    });
+    await page.evaluate(() => window.gameDebug.forage.addToBasket('morel'));
     await press('z', 60, 300);
     await page.waitForFunction(() => window.gameDebug?.getState()?.dialogOpen === true, null, { timeout: 8000 }).catch(() => {});
     const shuiSays = (await dialogLines()) ?? [];
@@ -156,39 +149,33 @@ export default {
     await closeDialog();
 
     // ── 6. O TCHAU DA SHUI, DA BORDA DA SERRA ───────────────────────────────────────────────
-    await page.evaluate(() => { window.__scene.forage.shuiWaved = false; });
+    await page.evaluate(() => window.gameDebug.forage.resetShuiWave());
     await put(4, 44, 0, -1);
     await sleep(600);
-    const wave = await page.evaluate(() => window.__scene.forage.shuiWave?.active === true);
-    const where = await page.evaluate(async () => {
-      const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/world/relief.ts'));
-      const { reliefAt } = await import(url);
-      return { hero: reliefAt(4, 44), front: reliefAt(4, 43) };
-    });
+    const wave = await page.evaluate(() => window.gameDebug.forage.shuiWaving());
+    const where = await page.evaluate(() => ({ hero: window.gameDebug.world.relief(4, 44), front: window.gameDebug.world.relief(4, 43) }));
     log(`  serra: herói no nível ${where.hero}, à frente ${where.front}`);
     assert('6. Na borda da serra, olhando para ela, a Shui acena', wave, JSON.stringify(where));
     await sleep(150);
     await shot('06-shui-acena', { note: 'A Shui acenando lá de baixo' });
-    const waveFrame = await page.evaluate(() => window.__scene.npcManager.bodyAt(5, 40)?.texKey ?? null);
+    const waveFrame = await page.evaluate(() => window.gameDebug.npcs.bodyFrame(5, 40) ?? null);
     assert('6. O aceno é o próprio sprite dela, com o braço erguido (nada colado por cima)', waveFrame === 'shui-wave', String(waveFrame));
-    await page.waitForFunction(() => !window.__scene.forage.shuiWave, null, { timeout: 5000 });
-    const restFrame = await page.evaluate(() => window.__scene.npcManager.bodyAt(5, 40)?.texKey ?? null);
+    await page.waitForFunction(() => !window.gameDebug.forage.shuiWaveOpen(), null, { timeout: 5000 });
+    const restFrame = await page.evaluate(() => window.gameDebug.npcs.bodyFrame(5, 40) ?? null);
     assert('6. Depois do aceno ela volta ao quadro de sempre', restFrame === 'npcs', String(restFrame));
     await sleep(600);
-    const again = await page.evaluate(() => Boolean(window.__scene.forage.shuiWave));
+    const again = await page.evaluate(() => window.gameDebug.forage.shuiWaveOpen());
     assert('6. Uma vez por subida (não fica acenando sem parar)', !again, '');
     await put(5, 47, 0, 1);
     await sleep(500);
-    const fromBelow = await page.evaluate(() => Boolean(window.__scene.forage.shuiWave));
+    const fromBelow = await page.evaluate(() => window.gameDebug.forage.shuiWaveOpen());
     assert('6. Sem subir a serra, ela não acena', !fromBelow, '');
 
     // ── 14. O LAGO DE LAVA ────────────────────────────────────────────────────────────────────
-    const lava = await page.evaluate(async () => {
-      const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/objects/LavaObject.ts'));
-      const { lavaLightScales } = await import(url);
-      const tiles = window.__scene.props.lavaTiles.map((l) => ({ worldX: l.worldX, worldY: l.worldY }));
-      const scales = lavaLightScales(tiles);
-      const lake = scales.filter((_, i) => tiles[i].worldX <= 10 && tiles[i].worldY <= 9);
+    const lava = await page.evaluate(() => {
+      const tiles = window.gameDebug.props.lavaLight();
+      const scales = tiles.map((t) => t.scale);
+      const lake = tiles.filter((t) => t.x <= 10 && t.y <= 9).map((t) => t.scale);
       const single = Math.max(...scales);
       return { lakeTotal: lake.reduce((a, b) => a + b, 0), before: lake.length * single, single };
     });
@@ -203,11 +190,11 @@ export default {
 
     // ── 15. A TELA DE TÍTULO ──────────────────────────────────────────────────────────────────
     await driver.open('/');
-    await page.waitForFunction(() => window.__game?.scene?.isActive?.('title'), null, { timeout: 30000 }).catch(() => {});
+    await page.waitForFunction(() => window.appDebug?.isActive('title'), null, { timeout: 30000 }).catch(() => {});
     await sleep(4500);
     const title = await page.evaluate(() => {
-      const sc = window.__game.scene.getScene('title');
-      return { fire: sc.textures.exists('title-ember'), fireflies: sc.children.list.length };
+      const st = window.appDebug.sceneStats('title', 'title-ember');
+      return { fire: st.texture, fireflies: st.objects };
     });
     assert('15. A tela de título não tem mais a fogueira', !title.fire, '');
     await shot('15-titulo', { note: 'A tela de título: só a mata, com vaga-lumes, névoa e folhas' });

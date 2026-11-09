@@ -3,6 +3,9 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { World3DParams } from '@/game/render3d/World3D';
 import { getDay, getTimeOfDay, setDay, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import type { NpcKind } from '@/game/world/ScreenContent';
+import type { GameProbes } from './probes';
+import type { EditorProbes } from './probes/editorProbe';
+import type { AppProbes } from './probes/appProbe';
 
 /**
  * Snapshot of the live GameScene, consumed by the playtest harness (see /playtest)
@@ -79,8 +82,11 @@ export interface GameDebugState {
  * Deterministic control surface the harness uses to *play* the game. Walking blindly to
  * a procedurally-placed NPC is flaky, so we let the agent open the exact UI it wants to
  * inspect (dialog / shop) straight away.
+ *
+ * No modo de desenvolvimento ela ganha as SONDAS (`hero`, `world`, `items`...; ver debug/probes): a única porta dos
+ * playtests para o interior do jogo.
  */
-export interface GameDebugApi {
+export interface GameDebugApi extends Partial<GameProbes> {
   getState: () => GameDebugState;
   /** Open an NPC dialog by kind (defaults to a long-text NPC, good for legibility checks). */
   openDialog: (kind?: NpcKind) => boolean;
@@ -106,6 +112,10 @@ declare global {
     last_exported_level_json?: string;
     /** Live game control/inspection API, present only while the GameScene is active. */
     gameDebug?: GameDebugApi;
+    /** As sondas do editor (montar a fixture de um cenário), só no desenvolvimento. */
+    editorDebug?: EditorProbes;
+    /** As sondas das cenas (o título, os créditos: onde não há `gameDebug`), só no desenvolvimento. */
+    appDebug?: AppProbes;
     /** Live 3D-renderer knobs, present only while the GameScene is active (see render3d/World3D.ts). */
     hd3d?: World3DParams;
     /** Read or set the persistent game clock (0 = midnight, .5 = noon). */

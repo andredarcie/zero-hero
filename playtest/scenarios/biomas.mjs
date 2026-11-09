@@ -34,22 +34,20 @@ export default {
     const hour = Number(process.env.BIOMAS_HORA ?? 0.5);
     for (const spot of SPOTS.filter((s) => (only.length ? only.includes(s.biome) : s.biome !== 'fronteira'))) {
       const at = await page.evaluate(([sx, sy, h]) => {
-        const s = window.__scene;
+        const g = window.gameDebug;
         let best = null;
         for (let r = 0; r <= 6 && !best; r += 1) {
           for (let dy = -r; dy <= r && !best; dy += 1) for (let dx = -r; dx <= r; dx += 1) {
-            if (!s.query.isSolidForEntities(sx + dx, sy + dy)) { best = { x: sx + dx, y: sy + dy }; break; }
+            if (!g.world.solid(sx + dx, sy + dy)) { best = { x: sx + dx, y: sy + dy }; break; }
           }
         }
         best ??= { x: sx, y: sy };
-        s.playerWorld.worldX = best.x; s.playerWorld.worldY = best.y;
-        s.movementController.interruptMovement(best.x, best.y);
-        s.streamChunks(true);
+        g.hero.teleport(best.x, best.y);
         window.gameTime.set(h);
         return best;
       }, [spot.x, spot.y, hour]);
       await sleep(2500);
-      const biome = await page.evaluate(async ([x, y]) => (await import('/src/game/world/biomes.ts')).biomeAt(x, y), [at.x, at.y]);
+      const biome = await page.evaluate(([x, y]) => window.gameDebug.world.biome(x, y), [at.x, at.y]);
       log(`  ${spot.label}: herói em (${at.x}, ${at.y}), bioma ${biome}`);
       if (spot.biome === 'fronteira') { await shot(spot.label, { note: `fronteira em (${at.x}, ${at.y}), bioma ${biome}` }); continue; }
       assert(`${spot.label} fica no bioma ${spot.biome}`, biome === spot.biome, `bioma=${biome}`);

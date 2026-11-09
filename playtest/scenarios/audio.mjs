@@ -58,22 +58,21 @@ export default {
     assert('The lullaby is a real loop', Boolean(lullaby?.ok) && lullaby.duration > 60, `duration=${lullaby?.duration.toFixed(1)}s`);
 
     // A first piece starts a few seconds into the adventure (download + decode included).
-    const firstPiece = await page.waitForFunction(() => window.__sound?.music.valleyMusic.valleyPiece, null, { timeout: 30000 })
+    const firstPiece = await page.waitForFunction(() => window.gameDebug?.sound?.mix().piece, null, { timeout: 30000 })
       .then((h) => h.jsonValue()).catch(() => null);
     assert('A valley piece starts playing', Boolean(firstPiece && firstPiece in PIECES), String(firstPiece));
 
-    // The live mix, read from the game's own SoundManager (window.__sound, dev only).
+    // The live mix, read from the game's own SoundManager (gameDebug.sound, dev only).
     const mix = async (phase, at) => page.evaluate(async ([p, xy]) => {
       window.gameTime.set(p);
-      const s = window.__scene;
-      s.playerWorld.worldX = xy[0]; s.playerWorld.worldY = xy[1];
-      s.movementController.interruptMovement(xy[0], xy[1]);
-      s.life.ambienceClockMs = 0;
+      const g = window.gameDebug;
+      g.hero.teleport(xy[0], xy[1]);
+      g.valley.resetAmbienceClock();
       await new Promise((r) => setTimeout(r, 700));
-      const sm = window.__sound;
-      return { beds: sm.ambienceBeds.size, mix: { ...sm.ambienceMix }, track: sm.music.requestedTrack };
+      const m = g.sound.mix();
+      return { beds: m.beds, mix: m.mix, track: m.track };
     }, [phase, at]);
-    await page.waitForFunction(() => window.__sound?.ambienceBeds.size === 4, null, { timeout: 15000 });
+    await page.waitForFunction(() => window.gameDebug?.sound?.mix().beds === 4, null, { timeout: 15000 });
     const dayDry = await mix(0.5, [30, 46]); // meio-dia, longe da agua
     const nightWet = await mix(0.0, [41, 51]); // meia-noite, na beira do lago do sul
     log(`  day/dry ${JSON.stringify(dayDry)}  night/wet ${JSON.stringify(nightWet)}`);
@@ -87,10 +86,9 @@ export default {
     // The hour picks the piece: at midnight only night pieces, at noon only day pieces.
     const picks = async (phase) => page.evaluate(async (p) => {
       window.gameTime.set(p);
-      window.__scene.life.ambienceClockMs = 0;
+      window.gameDebug.valley.resetAmbienceClock();
       await new Promise((r) => setTimeout(r, 700));
-      const sm = window.__sound;
-      return Array.from({ length: 24 }, () => sm.music.valleyMusic.pickValleyPiece([]));
+      return window.gameDebug.sound.pickPieces(24);
     }, phase);
     const atNight = await picks(0.0);
     const atNoon = await picks(0.5);
@@ -100,39 +98,40 @@ export default {
 
     // When a piece ends the valley goes quiet (ambience only) and the next one is already on the clock.
     const gap = await page.evaluate(async () => {
-      const sm = window.__sound;
-      const before = sm.music.valleyMusic.valleyPiece;
-      sm.music.valley.piece.source.stop();
+      const sound = window.gameDebug.sound;
+      const before = sound.mix().piece;
+      sound.endPiece();
       await new Promise((r) => setTimeout(r, 400));
-      return { before, after: sm.music.valleyMusic.valleyPiece, nextScheduled: sm.music.valley.timer !== null, beds: sm.ambienceBeds.size };
+      const m = sound.mix();
+      return { before, after: m.piece, nextScheduled: m.nextPieceScheduled, beds: m.beds };
     });
     assert('After a piece: silence with the ambience, next one scheduled', Boolean(gap.before) && gap.after === null && gap.nextScheduled && gap.beds === 4, JSON.stringify(gap));
 
     // THE PLAYER (pause → Music): every song listed, a click plays one (the valley goes quiet under it),
     // the transport moves on, and resuming the game stops the player and brings the valley back.
-    await page.evaluate(() => window.__scene.pause.openPauseMenu());
+    await page.evaluate(() => window.gameDebug.scene.openPause());
     await page.locator('#zh-pause-root .zh-main .zh-pause-btn').nth(2).click();
     const listed = await page.locator('#zh-pause-root .zh-music-track').count();
     assert('Pause → Music lists every song', listed === 7, `rows=${listed}`);
     await page.locator('#zh-pause-root .zh-music-track').nth(3).click();
-    const playing = await page.waitForFunction(() => window.__jukebox?.playing && window.__jukebox.time > 0.5, null, { timeout: 15000 })
-      .then(() => page.evaluate(() => ({ file: window.__jukebox.track.file, bus: window.__sound.musicBus.gain.value })))
+    const playing = await page.waitForFunction(() => { const jb = window.gameDebug.sound.jukebox(); return jb.playing && jb.time > 0.5; }, null, { timeout: 15000 })
+      .then(() => page.evaluate(() => ({ file: window.gameDebug.sound.jukebox().file, bus: window.gameDebug.sound.mix().musicBus })))
       .catch(() => null);
     assert('Clicking a song plays it, the valley music hushes', Boolean(playing && playing.file === 'valley-golden.mp3'), JSON.stringify(playing));
     await shot('music-player');
     const moved = await page.evaluate(async () => {
-      const jb = window.__jukebox;
-      jb.seek(60);
-      const t = jb.time;
-      jb.next();
+      const sound = window.gameDebug.sound;
+      sound.jukeboxSeek(60);
+      const t = sound.jukebox().time;
+      sound.jukeboxNext();
       await new Promise((r) => setTimeout(r, 300));
-      return { seekedTo: Math.round(t), next: jb.track.file };
+      return { seekedTo: Math.round(t), next: sound.jukebox().file };
     });
     assert('Seek and next work', moved.seekedTo === 60 && moved.next === 'valley-fireflies.mp3', JSON.stringify(moved));
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(1500);
-    const after = await page.evaluate(() => ({ menu: Boolean(document.getElementById('zh-pause-root')), playing: window.__jukebox.playing, bus: window.__sound.musicBus.gain.value }));
+    const after = await page.evaluate(() => ({ menu: Boolean(document.getElementById('zh-pause-root')), playing: window.gameDebug.sound.jukebox().playing, bus: window.gameDebug.sound.mix().musicBus }));
     assert('Back in the game the player stops and the valley returns', !after.menu && !after.playing && after.bus > 0.3, JSON.stringify(after));
 
     const opened = await driver.openDialog('painter');
