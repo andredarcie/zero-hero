@@ -32,6 +32,25 @@ results/run-2026-06-24T13-05-22/
 
 Open `report.md` to see each captured step inline.
 
+## A memória (a rodada longa não derruba a máquina)
+
+O jogo no Chromium mais o Vite ocupam ~2 GB por cenário (medido: 1,7–2,2 GB). Com um navegador só para a rodada inteira, cada recarga do jogo deixava um pouco, e uma suíte longa acabava com a memória — o sistema matava tudo, relatório junto. Agora (`lib/memoryGuard.mjs`, `lib/processes.mjs`):
+
+- **cada cenário roda num navegador novo**, fechado no fim (o próximo começa com a memória de volta, e sem o save do anterior: cada cenário é o mesmo que rodá-lo sozinho);
+- **um cenário só começa com memória livre** acima do piso de partida (espera até 30 s; se não voltar, a rodada para limpa, com o resto pendente);
+- **abaixo do piso de aborto, o navegador fecha na hora** e o cenário fica marcado como abortado;
+- **o relatório é gravado a cada cenário**, com a tabela de memória (livre no início, menor livre, pico navegador+servidor);
+- **todo navegador leva `--zh-playtest-owner=<pid>`** e o Vite fica em `results/.processes.json`: a rodada seguinte encerra o que uma rodada morta deixou (só processos cujo dono morreu).
+
+```bash
+npm run playtest -- zerar telescopio --budget=8   # não começa cenário novo depois de 8 min
+npm run playtest -- --resume                      # continua a última rodada (só o que não terminou)
+npm run playtest -- --resume=run-2026-11-09T15-17-39
+npm run playtest:clean                            # encerra sobras de rodadas interrompidas
+```
+
+Saída: 0 tudo passou, 1 alguma asserção falhou, 3 incompleta (o log diz como continuar). Uma rodada por vez: duas em paralelo dobram a conta.
+
 ## How it plays the game
 
 Walking blindly to a procedurally-placed NPC is flaky, so the GameScene exposes a small
@@ -101,6 +120,9 @@ Register it in `scenarios/index.mjs`.
 | `PLAYTEST_PORT` | `5173` | Port for the auto-started dev server. |
 | `PLAYTEST_SLOWMO` | `50` | Playwright `slowMo` (ms) — higher = easier to watch. |
 | `PLAYTEST_KEEP_OPEN` | `0` | Keep the window open this many ms after the run. |
+| `PLAYTEST_MIN_FREE_MB` | 18% da RAM (≥ 2500) | Memória livre para COMEÇAR um cenário. |
+| `PLAYTEST_ABORT_FREE_MB` | 10% da RAM (≥ 1500) | Abaixo disto, o cenário em curso é abortado (navegador fechado). |
+| `PLAYTEST_BUDGET_MIN` | `0` (sem limite) | O mesmo que `--budget`: minutos até parar de começar cenários. |
 
 Tip for a fast loop: run `npm run dev` in one terminal, then
 `set PLAYTEST_BASE_URL=http://localhost:5173 && npm run playtest` in another — the harness

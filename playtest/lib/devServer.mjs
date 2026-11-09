@@ -4,8 +4,10 @@
 // so you can `npm run dev` in one terminal and `npm run playtest` in another for a fast loop.
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import path from 'node:path';
 
 import { config } from '../config.mjs';
+import { registerChild, unregisterChild } from './processes.mjs';
 import { log } from './report.mjs';
 
 const ping = (url) =>
@@ -67,16 +69,18 @@ export const startDevServer = async () => {
   }
 
   log(`Starting Vite dev server on port ${config.port}...`);
-  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  // O Vite direto pelo node (o mesmo que `npm run dev`), sem npm nem shell no meio: o pid que fica no registro é o do
+  // próprio servidor, e uma rodada morta deixa um processo só para a próxima encerrar (ver processes.cleanLeftovers).
   const child = spawn(
-    npm,
-    ['run', 'dev', '--', '--port', String(config.port), '--strictPort'],
+    process.execPath,
+    [path.join(config.paths.projectRoot, 'node_modules', 'vite', 'bin', 'vite.js'), '--port', String(config.port), '--strictPort'],
     {
       cwd: config.paths.projectRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: process.platform === 'win32',
+      windowsHide: true,
     },
   );
+  registerChild(child.pid, 'vite');
 
   child.stdout.on('data', (chunk) => {
     const line = String(chunk).trim();
@@ -90,15 +94,18 @@ export const startDevServer = async () => {
   const ok = await waitForServer(config.baseUrl, config.serverReadyTimeoutMs);
   if (!ok) {
     await killTree(child);
+    unregisterChild(child.pid);
     throw new Error('Vite dev server did not become ready in time.');
   }
   log(`Dev server ready at ${config.baseUrl}.`);
 
   return {
     reused: false,
+    pid: child.pid,
     stop: async () => {
       log('Stopping Vite dev server...');
       await killTree(child);
+      unregisterChild(child.pid);
     },
   };
 };

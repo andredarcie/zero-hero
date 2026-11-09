@@ -366,6 +366,7 @@ código.
 zerados). O harness (`playtest/`) é Playwright com cabeça; entre com `?play`; não dirija o jogo
 por aba MCP (aba oculta congela o rAF). Handles: `window.__scene`, `__game`, `hd3d`, `gameDebug`,
 `__prof`. **Teste EXATAMENTE o que você mudou** — o `zerar` leva ~5 minutos.
+**Uma rodada de playtest por vez, em lotes** (`--budget=8`, depois `--resume`): cada cenário usa um navegador novo, com guarda de memória e relatório gravado a cada cenário (`playtest/README.md`, "A memória").
 
 A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); bolsa → `bolsa`; machado → `machado`; pedra →
 `pedra`; pá → `pa`; altar → `altar`; flor da lua → `flor-da-lua`; montanha e água → `montanha`;

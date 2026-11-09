@@ -19,7 +19,8 @@
     "lint": "eslint . --ext .ts",
     "playtest": "node playtest/run.mjs",
     "playtest:text": "node playtest/run.mjs text-legibility",
-    "playtest:all": "node playtest/run.mjs all"
+    "playtest:all": "node playtest/run.mjs all",
+    "playtest:clean": "node playtest/clean.mjs"
   },
   "dependencies": {
     "three": "^0.185.1"

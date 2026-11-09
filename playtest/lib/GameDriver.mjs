@@ -35,6 +35,7 @@ const UNTHROTTLED_ARGS = [
 const MUTE_ARGS = ['--mute-audio'];
 
 import { config } from '../config.mjs';
+import { ownerArg } from './processes.mjs';
 import { log } from './report.mjs';
 
 const ARROW = {
@@ -115,7 +116,9 @@ export class GameDriver {
     const browser = await chromium.launch({
       headless: config.headless,
       slowMo: config.slowMoMs,
-      args: [...MUTE_ARGS, ...(config.unthrottled ? UNTHROTTLED_ARGS : [])],
+      // A marca do dono (o Chromium ignora a chave): é por ela que a guarda de memória mede a árvore deste navegador e
+      // que a próxima rodada reconhece um navegador órfão (ver lib/processes.mjs).
+      args: [...MUTE_ARGS, ownerArg(), ...(config.unthrottled ? UNTHROTTLED_ARGS : [])],
     });
     const context = await browser.newContext({
       viewport: config.viewport,
@@ -357,8 +360,15 @@ export class GameDriver {
     return filePath;
   }
 
-  async close() {
-    await this.context.close().catch(() => {});
-    await this.browser.close().catch(() => {});
+  /** Fecha o navegador (uma vez só, mesmo chamado de dois lugares), sem esperar mais que alguns segundos. */
+  close() {
+    this.closing ??= Promise.race([
+      (async () => {
+        await this.context.close().catch(() => {});
+        await this.browser.close().catch(() => {});
+      })(),
+      sleep(8000),
+    ]);
+    return this.closing;
   }
 }

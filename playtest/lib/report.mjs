@@ -20,6 +20,40 @@ export class Report {
     this.startedAt = new Date();
     this.steps = [];
     this.asserts = [];
+    /** A memória de cada cenário (ver lib/memoryGuard.mjs). */
+    this.memory = [];
+    /** Os cenários que terminaram (passando ou falhando); o que falta é o que `--resume` roda. */
+    this.completed = new Set();
+    this.pending = [];
+    this.stopReason = null;
+    /** Os erros de console de todos os cenários, cada um com o nome do cenário na frente. */
+    this.consoleErrors = [];
+  }
+
+  /** O relatório de uma rodada anterior, para continuar dela (`--resume`). */
+  static async load(runDir) {
+    const raw = JSON.parse(await fs.readFile(path.join(runDir, 'report.json'), 'utf8'));
+    const r = new Report(runDir, raw.meta);
+    r.startedAt = new Date(raw.startedAt);
+    r.steps = raw.steps ?? [];
+    r.asserts = raw.asserts ?? [];
+    r.memory = raw.memory ?? [];
+    r.completed = new Set(raw.completed ?? []);
+    r.consoleErrors = raw.consoleErrors ?? [];
+    try { logBuffer.push(...(await fs.readFile(path.join(runDir, 'run.log'), 'utf8')).split('\n')); } catch { /* sem log */ }
+    return r;
+  }
+
+  /** Um cenário que vai rodar de novo (abortado ou interrompido) começa sem o que a tentativa anterior anotou. */
+  resetScenario(scenario) {
+    this.steps = this.steps.filter((s) => s.scenario !== scenario);
+    this.asserts = this.asserts.filter((a) => a.scenario !== scenario);
+    this.memory = this.memory.filter((m) => m.scenario !== scenario);
+    this.consoleErrors = this.consoleErrors.filter((e) => !e.startsWith(`[${scenario}] `));
+  }
+
+  addMemory(entry) {
+    this.memory.push(entry);
   }
 
   /** A captured moment: screenshot + (optional) live game state. */
@@ -44,7 +78,7 @@ export class Report {
     return this.asserts.filter((a) => !a.ok);
   }
 
-  async write({ consoleErrors = [] } = {}) {
+  async write({ consoleErrors = this.consoleErrors } = {}) {
     const md = [];
     md.push(`# Playtest report`);
     md.push('');
@@ -57,7 +91,22 @@ export class Report {
       `- Assertions: ${this.asserts.length - this.failures.length}/${this.asserts.length} passed`,
     );
     md.push(`- Console errors: ${consoleErrors.length}`);
+    if (this.pending.length) {
+      md.push(`- **Incompleta** (${this.stopReason ?? 'interrompida'}): faltam ${this.pending.join(', ')}`);
+      md.push(`  — continuar com \`npm run playtest -- --resume=${path.basename(this.runDir)}\``);
+    }
     md.push('');
+
+    if (this.memory.length) {
+      md.push('## Memória');
+      md.push('');
+      md.push('| Cenário | Livre no início (MB) | Menor livre (MB) | Pico navegador+servidor (MB) | |');
+      md.push('| --- | --- | --- | --- | --- |');
+      for (const m of this.memory) {
+        md.push(`| ${m.scenario} | ${m.freeStartMB} | ${m.minFreeMB} | ${m.peakTreeMB} | ${m.aborted ? 'abortado pela guarda' : ''} |`);
+      }
+      md.push('');
+    }
 
     if (this.asserts.length) {
       md.push(`## Assertions`);
@@ -109,6 +158,10 @@ export class Report {
         {
           meta: this.meta,
           startedAt: this.startedAt.toISOString(),
+          completed: [...this.completed],
+          pending: this.pending,
+          stopReason: this.stopReason,
+          memory: this.memory,
           steps: this.steps,
           asserts: this.asserts,
           consoleErrors,
